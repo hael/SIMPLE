@@ -206,12 +206,11 @@ contains
         endif
         call build%init_params_and_build_general_tbox(cline,params)
         call build%build_rec_eo_tbox(params) ! reconstruction toolbox built
-        call build%eorecvol%kill_exp         ! reduced meory usage
+        call build%eorecvol%kill_exp         ! reduced memory usage
         allocate(res05s(params%nstates), res0143s(params%nstates))
         res0143s = 0.
         res05s   = 0.
-        call eorecvol_read%new( build%spproj)
-        call eorecvol_read%kill_exp ! reduced memory usage
+        call eorecvol_read%new( build%spproj, expand=.false.)
         n = params%nstates*params%nparts
         l_euclid_regularization = params%l_ml_reg
         if( L_BENCH_GLOB )then

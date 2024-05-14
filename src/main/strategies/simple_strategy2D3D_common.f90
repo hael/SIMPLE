@@ -579,12 +579,6 @@ contains
             ! call vol_ptr%apply_filter(filter)
             !!!!!!!!!!!!!!!!!!!!!! PUT BACK ORIGTINAL LOW-PASS FILTER FOR TESTING NANOX
             call vol_ptr%bp(0., params_glob%lp)
-            if( trim(params_glob%force_optlp).eq.'yes' )then
-                if( any(build_glob%fsc(s,:) > 0.25) )then
-                    call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter,merged=.true.)
-                    call vol_ptr%apply_filter(filter)
-                endif
-            endif
         else if( params_glob%l_nonuniform )then
             ! filtering done in read_and_filter_refvols
         else
@@ -701,14 +695,18 @@ contains
         integer, optional, intent(in)    :: which_iter
         type(fplane),    allocatable :: fpls(:), prev_fpls(:)
         type(ctfparams), allocatable :: ctfparms(:)
-        type(ori)        :: orientation
-        real             :: shift(2), sdev_noise
-        integer          :: batchlims(2), iptcl, i, i_batch, ibatch
-        integer,          allocatable :: pops(:)
-        integer :: istate
+        integer,         allocatable :: pops(:)
+        type(ori) :: orientation
+        real      :: shift(2), sdev_noise
+        integer   :: updates(nptcls2update), batchlims(2), iptcl, i, i_batch, ibatch, istate
         if( params_glob%l_ml_reg )then
             THROW_HARD('BATCH ML_REG NOT IMPLEMENTED YET!')
         endif
+        !$omp parallel do default(shared) schedule(static) proc_bind(close)
+        do i = 1,nptcls2update
+            updates(i) = prev_oris%get_updatecnt(pinds(i))
+        enddo
+        !$omp end parallel do
         ! init volumes
         call build_glob%spproj_field%get_pops(pops, 'state')
         do istate = 1, params_glob%nstates
@@ -725,7 +723,7 @@ contains
         ! allocate arrays
         allocate(prev_fpls(MAXIMGBATCHSZ),fpls(MAXIMGBATCHSZ),ctfparms(MAXIMGBATCHSZ))
         ! gridding batch loop
-        do i_batch=1,nptcls2update,MAXIMGBATCHSZ
+        do i_batch = 1,nptcls2update,MAXIMGBATCHSZ
             batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
             call discrete_read_imgbatch( nptcls2update, pinds, batchlims)
             !$omp parallel do default(shared) private(i,iptcl,ibatch,shift,sdev_noise) schedule(static) proc_bind(close)
@@ -738,7 +736,7 @@ contains
                 ctfparms(ibatch) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
                 shift = build_glob%spproj_field%get_2Dshift(iptcl)
                 call fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), shift, iptcl=iptcl)
-                if( prev_oris%get_updatecnt(iptcl) > 1 )then
+                if( updates(i) > 1 )then
                     if( .not.prev_fpls(ibatch)%does_exist() ) call prev_fpls(ibatch)%new(build_glob%imgbatch(1))
                     shift = prev_oris%get_2Dshift(iptcl)
                     call prev_fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), shift, iptcl=iptcl)
@@ -748,13 +746,13 @@ contains
             !$omp end parallel do
             ! gridding
             do i=batchlims(1),batchlims(2)
-                iptcl       = pinds(i)
-                ibatch      = i - batchlims(1) + 1
+                iptcl  = pinds(i)
+                ibatch = i - batchlims(1) + 1
                 call build_glob%spproj_field%get_ori(iptcl, orientation)
                 if( orientation%isstatezero() ) cycle
                 call grid_ptcl(fpls(ibatch), build_glob%pgrpsyms, orientation)
-                call prev_oris%get_ori(iptcl, orientation)
-                if( orientation%get_updatecnt() > 1 )then
+                if( updates(i) > 1 )then
+                    call prev_oris%get_ori(iptcl, orientation)
                     call grid_ptcl(prev_fpls(ibatch), build_glob%pgrpsyms, orientation)
                 endif
             end do

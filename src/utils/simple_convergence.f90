@@ -393,7 +393,7 @@ contains
         projs  = nint(build_glob%spproj_field%get_all('proj'))
         nprojs = max(params_glob%nspace,maxval(projs,mask=ptcl_mask))
         ! gather populations & euler angles
-        allocate(phi(nprojs),psi(nprojs),pops(nprojs))
+        allocate(phi(nprojs),psi(nprojs),pops(nprojs), logpops(nprojs))
         pops = 0
         phi  = -2.
         psi  = -2.
@@ -422,16 +422,24 @@ contains
         call os%write('projdir_pops.txt')
         call os%kill
         ! sorting
-        logpops = log10(1.+real(pops))
+        where( pops==0 )
+            logpops = 0
+        else where
+            logpops = log10(real(pops)+0.1)
+        end where
         logpops = logpops / maxval(logpops)
         inds = (/(proj,proj=1,nprojs)/)
         call hpsort(logpops,inds)
         ! Plot
-        call CPlot2D__new(figure, 'Polar Projection Directions Distribution'//C_NULL_CHAR)
+        call CPlot2D__new(figure, 'Projection Directions Distribution'//C_NULL_CHAR)
         call CPlot2D__SetDrawXAxisGridLines(figure, C_FALSE)
         call CPlot2D__SetDrawYAxisGridLines(figure, C_FALSE)
         call CPlot2D__SetXAxisSize(figure, 400._c_double)
         call CPlot2D__SetYAxisSize(figure, 400._c_double)
+        title%str = 'Phi'//C_NULL_CHAR
+        call CPlot2D__SetXAxisTitle(figure, title%str)
+        title%str = 'Psi'//C_NULL_CHAR
+        call CPlot2D__SetYAxisTitle(figure, title%str)
         call CPlot2D__SetDrawLegend(figure, C_FALSE)
         ! axes
         call CDataSet__new(axis)
@@ -446,7 +454,7 @@ contains
         call CDataSet__SetDrawMarker(axis, C_FALSE)
         call CDataSet__SetDrawLine(axis, C_TRUE)
         call CDataSet__SetDatasetColor(axis, 0.d0,0.d0,0.d0)
-        call CDataSet_addpoint(axis, 0.,-180.)
+        call CDataSet_addpoint(axis, 0., 0.)
         call CDataSet_addpoint(axis, 0., 180.)
         call CPlot2D__AddDataSet(figure, axis)
         call CDataSet__delete(axis)
@@ -454,10 +462,10 @@ contains
         do ind = 1,nprojs
             proj = inds(ind)
             if( pops(proj) == 0 ) cycle
-            sz    = 9.d0 * real(logpops(ind),dp)
+            sz    = 8.d0 * real(logpops(ind),dp)
             color = 1.d0 - real(logpops(ind),dp)
-            x     = real(cos(deg2rad(phi(proj))) * psi(proj),dp)
-            y     = real(sin(deg2rad(phi(proj))) * psi(proj),dp)
+            x     = real(phi(proj)-180.,dp)
+            y     = real(psi(proj),dp)
             call CDataSet__new(center)
             call CDataSet__SetDrawMarker(center, C_TRUE)
             call CDataSet__SetMarkerSize(center, sz)

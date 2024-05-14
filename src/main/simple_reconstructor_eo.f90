@@ -74,14 +74,12 @@ contains
     ! CONSTRUCTOR
 
     !>  \brief  is a constructor
-    subroutine new( self,  spproj )
+    subroutine new( self,  spproj, expand )
         class(reconstructor_eo), intent(inout) :: self   !< instance
         class(sp_project),       intent(inout) :: spproj !< project description
-        logical     :: neg
+        logical,       optional, intent(in)    :: expand
         call self%kill
         ! set constants
-        neg = .false.
-        if( params_glob%neg .eq. 'yes' ) neg = .true.
         self%box        = params_glob%box_crop
         self%boxpd      = params_glob%box_croppd
         self%smpd       = params_glob%smpd_crop
@@ -103,11 +101,10 @@ contains
             call self%envmask%read(params_glob%mskfile)
         endif
         call self%even%new(self%ldim, params_glob%smpd)
-        call self%even%alloc_rho(spproj)
+        call self%even%alloc_rho(spproj, expand=expand)
         call self%even%set_ft(.true.)
         call self%odd%new(self%ldim, params_glob%smpd)
-        call self%odd%new(self%ldim, params_glob%smpd)
-        call self%odd%alloc_rho(spproj)
+        call self%odd%alloc_rho(spproj, expand=expand)
         call self%odd%set_ft(.true.)
         call self%eosum%new(self%ldim, params_glob%smpd)
         call self%eosum%alloc_rho(spproj, expand=.false.)

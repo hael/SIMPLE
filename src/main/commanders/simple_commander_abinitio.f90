@@ -1201,8 +1201,10 @@ contains
         integer, parameter :: NSTAGES = 15
         integer, parameter :: ITERS_PER_STAGE = 5
         integer, parameter :: BATCHSZ = 500
-        integer, parameter :: NSPACE1=500, NSPACE2=1000, NSPACE3=1500
+        integer, parameter :: NSPACE1=500, NSPACE2=1000, NSPACE3=1500, NSPACE_FINAL=2000
         integer, parameter :: SHIFT_STAGE_DEFAULT = NSTAGES-5
+        integer, parameter :: MIN_NPTCLS = 5000
+        integer, parameter :: MAX_NPTCLS = 100000
         ! commanders
         type(refine3D_commander_distr)      :: xrefine3D_distr
         type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
@@ -1232,10 +1234,10 @@ contains
         call cline%set('refine',       'prob')
         call cline%set('mkdir',        'yes')
         call cline%set('sigma_est',    'global')
+        call cline%set('center',       'no')
         if( .not. cline%defined('prob_sh')      ) call cline%set('prob_sh',     'yes')
         if( .not. cline%defined('prob_norm')    ) call cline%set('prob_norm',   'yes')
         if( .not. cline%defined('prob_athres')  ) call cline%set('prob_athres', 10.)
-        if( .not. cline%defined('center')       ) call cline%set('center',      'no')
         if( .not. cline%defined('objfun')       ) call cline%set('objfun',      'euclid')
         if( .not. cline%defined('shift_stage')  ) call cline%set('shift_stage', SHIFT_STAGE_DEFAULT)
         ! resolution limit strategy
@@ -1280,8 +1282,7 @@ contains
                     endif
                     vol_type = 'vol'
                     call spproj%os_ptcl3D%rnd_oris
-                    call spproj%os_ptcl3D%set_all2single('sampled',  0.)
-                    call spproj%os_ptcl3D%set_all2single('updatecnt',0.)
+                    call spproj%os_ptcl3D%clean_updatecnt_sampled
                     if( spproj%os_ptcl3D%get_nevenodd() == 0 ) call spproj%os_ptcl3D%partition_eo
                     call spproj%write_segment_inside(params%oritype, params%projfile)
                 case DEFAULT
@@ -1309,7 +1310,6 @@ contains
         cline_postprocess         = cline
         call cline_refine3D%set('prg',                'refine3D')
         call cline_refine3D%set('projfile',      params%projfile)
-        call cline_refine3D%set('center',                   'no')
         call cline_refine3D%set('pgrp',              params%pgrp)
         call cline_refine3D%set('lp_iters',                 9999)
         call cline_refine3D%set('ml_reg',                   'no')
@@ -1341,9 +1341,8 @@ contains
         ! Batch plan
         states       = nint(spproj%os_ptcl3D%get_all('state'))
         nptcls_sel   = count(states==1)
-        final_nptcls = min(nptcls_sel,max(200000, BATCHSZ * ITERS_PER_STAGE * NSTAGES))
-        ini_nptcls   = min(nptcls_sel, 10000)
-        ! TODO: when nptcls_sel > 200000
+        final_nptcls = min(nptcls_sel,min(MAX_NPTCLS, BATCHSZ * ITERS_PER_STAGE * NSTAGES))
+        ini_nptcls   = min(nptcls_sel, MIN_NPTCLS)
         allocate(vec(nptcls_sel),source=0)
         do it = NSTAGES,1,-1
             nptcls = ini_nptcls + nint(real((it-1)*(final_nptcls-ini_nptcls)) / real(NSTAGES-1))
@@ -1376,9 +1375,12 @@ contains
             call spproj%read_segment('ptcl3D', params%projfile)
             call spproj%os_ptcl3D%set_all('state',   real(vec))
             call spproj%os_ptcl3D%set_all2single('sampled', 0.)
-            ! if( it == 1 ) call spproj%os_ptcl3D%set_all('updatecnt', real(vec))
-            call spproj%write_segment_inside('ptcl3D', params%projfile)
+            if( it == 1 )then
+                where( vec==1 ) vec = 2
+                call spproj%os_ptcl3D%set_all('updatecnt', real(vec))
+            endif
             deallocate(vec)
+            call spproj%write_segment_inside('ptcl3D', params%projfile)
             write(logfhandle,'(A,I3,A12,F6.1)')'>>> STAGE ',it,' WITH LP  : ',params%lp
             write(logfhandle,'(A,I6)'         )'>>> PARTICLES PER BATCH: ',nptcls_batch / ITERS_PER_STAGE
             write(logfhandle,'(A,I3,A1,I3)'   )'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
@@ -1387,28 +1389,24 @@ contains
                 call cline_reconstruct3D%set('smpd_crop', params%smpd_crop)
                 call cline_reconstruct3D%set('box_crop',  params%box_crop)
                 call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D)
-                vol = trim(VOL_FBODY)//int2str_pad(1,2)//'_part'
-                do i = 1,params%nparts
-                    call del_file(trim(vol)//int2str_pad(i,params%numlen)//'_even'//trim(params%ext))
-                    call del_file(trim(vol)//int2str_pad(i,params%numlen)//'_odd'//trim(params%ext))
-                enddo
+                ! call simple_copy_file('recvol_state01.mrc','startvol.mrc')
+                ! call simple_copy_file('recvol_state01_even.mrc','startvol_even.mrc')
+                ! call simple_copy_file('recvol_state01_odd.mrc','startvol_odd.mrc')
             endif
             ! Stage updates
-            if( it <= 2 )then
-                params%batchfrac = 0.5
-                call cline_refine3D%set('batchfrac', params%batchfrac)
-                call cline_refine3D%set('maxits', 10)
+            params%batchfrac = 1. / ITERS_PER_STAGE
+            call cline_refine3D%set('batchfrac', params%batchfrac)
+            if( it <= 3 )then
+                call cline_refine3D%set('maxits', 3*ITERS_PER_STAGE)
             else
-                params%batchfrac = 1. / ITERS_PER_STAGE
-                call cline_refine3D%set('batchfrac', params%batchfrac)
-                call cline_refine3D%set('maxits', ITERS_PER_STAGE)
+                call cline_refine3D%set('maxits', 2*ITERS_PER_STAGE)
             endif
             if( it >= params%shift_stage )then
                 call cline_refine3D%set('trs', trslim)
             else
                 call cline_refine3D%set('trs', 0.)
             endif
-            if( params%lp > 10. )then
+            if( params%lp > 12. )then
                 call cline_refine3D%set('nspace', NSPACE1)
             elseif ( params%lp > 8. )then
                 call cline_refine3D%set('nspace', NSPACE2)
@@ -1416,8 +1414,8 @@ contains
                 call cline_refine3D%set('nspace', NSPACE3)
             endif
             if( it == NSTAGES )then
-                call cline_refine3D%set('maxits', 2*ITERS_PER_STAGE)
-                call cline_refine3D%set('nspace', NSPACE3)
+                call cline_refine3D%set('maxits', 3*ITERS_PER_STAGE)
+                call cline_refine3D%set('nspace', NSPACE_FINAL)
             endif
             ! execution
             call exec_refine3D(iter)
