@@ -989,12 +989,12 @@ contains
         integer :: nptcls, ipart
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-        if( params%startit == 1 ) call build%spproj_field%clean_updatecnt_sampled
         allocate(ptcl_mask(1:params%nptcls))
         if( params%batchfrac < 0.99 )then
             call build%spproj_field%sample4update_rnd2([params%fromp,params%top],&
             &params%batchfrac, nptcls, pinds, ptcl_mask, .true.)
         else
+            if( params%startit == 1 ) call build%spproj_field%clean_updatecnt_sampled
             if( params%l_frac_update )then
                 if( params%l_stoch_update )then
                     call build%spproj_field%sample4update_rnd([1,params%nptcls],&

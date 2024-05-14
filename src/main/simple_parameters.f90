@@ -37,7 +37,6 @@ type :: parameters
     character(len=3)          :: even='no'            !< even orientation distribution(yes|no){no}
     character(len=3)          :: extractfrommov='no'  !< whether to extract particles from the movie(yes|no){no}
     character(len=3)          :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
-    character(len=3)          :: force_optlp='no'
     character(len=3)          :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
     character(len=3)          :: guinier='no'         !< calculate Guinier plot(yes|no){no}
     character(len=3)          :: graphene_filt='no'   !< filter out graphene bands in correcation search
@@ -533,7 +532,6 @@ contains
         call check_carg('fbody',          self%fbody)
         call check_carg('fill_holes',     self%fill_holes)
         call check_carg('filter',         self%filter)
-        call check_carg('force_optlp',    self%force_optlp)
         call check_carg('groupframes',    self%groupframes)
         call check_carg('ft2img',         self%ft2img)
         call check_carg('guinier',        self%guinier)

@@ -194,8 +194,9 @@ contains
         binfname = 'init_pspec_part'//trim(int2str(params%part))//'.dat'
         call binfile%new(binfname,params%fromp,params%top,kfromto)
         call binfile%write(sigma2)
-        call killimgbatch
         call binfile%kill
+        call killimgbatch
+        call sum_img%kill
         ! end gracefully
         call qsys_job_finished('simple_commander_euclid :: exec_calc_pspec')
         call simple_end('**** SIMPLE_CALC_PSPEC NORMAL STOP ****', print_simple=.false.)
@@ -321,8 +322,10 @@ contains
             deallocate(sigma2_arrays(ipart)%fname)
             deallocate(sigma2_arrays(ipart)%sigma2)
         end do
-        call simple_touch('CALC_PSPEC_FINISHED',errmsg='In: commander_euclid::calc_pspec_assemble')
+        deallocate(sigma2_arrays)
+        call binfile%kill
         call build%kill_general_tbox
+        call simple_touch('CALC_PSPEC_FINISHED',errmsg='In: commander_euclid::calc_pspec_assemble')
         call simple_end('**** SIMPLE_CALC_PSPEC_ASSEMBLE NORMAL STOP ****', print_simple=.false.)
 
     contains
@@ -402,6 +405,7 @@ contains
             pspecs(:,fromp:top) = sigma2_array%sigma2(:,:)
             deallocate(sigma2_array%sigma2)
         end do
+        call binfile%kill
         ngroups = 0
         !$omp parallel do default(shared) private(iptcl,igroup)&
         !$omp schedule(static) proc_bind(close) reduction(max:ngroups)
@@ -445,6 +449,7 @@ contains
             starfile_fname = trim(SIGMA2_GROUP_FBODY)//trim(int2str(params_glob%which_iter))//'.star'
             call write_groups_starfile(starfile_fname, group_pspecs, ngroups)
         endif
+        call build%kill_general_tbox
         call simple_touch('CALC_GROUP_SIGMAS_FINISHED',errmsg='In: commander_euclid::calc_group_sigmas')
         call simple_end('**** SIMPLE_CALC_GROUP_SIGMAS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_calc_group_sigmas
