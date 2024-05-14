@@ -308,7 +308,6 @@ contains
     procedure          :: mirror
     procedure          :: norm
     procedure          :: norm_minmax
-    procedure          :: norm_bin
     procedure, private :: norm4viz
     procedure          :: norm_ext
     procedure          :: norm_noise
@@ -2729,9 +2728,9 @@ contains
             rmsk = real( self%ldim(1) )/2. - 5. ! 5 pixels outer width
         endif
         call tmp%mask(rmsk, 'hard')
-        ! such that norm_bin will neglect everything < 0. and preserve zero
+        ! such that norm_minmax will neglect everything < 0. and preserve zero
         where(tmp%rmat < TINY) tmp%rmat=0.
-        call tmp%norm_bin
+        call tmp%norm_minmax
         call tmp%masscen(xyz)
         call tmp%kill
     end function calc_shiftcen
@@ -2758,7 +2757,7 @@ contains
             call thread_safe_tmp_imgs(ithr)%ifft()
             call thread_safe_tmp_imgs(ithr)%mask(msk, 'hard')
             where(thread_safe_tmp_imgs(ithr)%rmat < TINY) thread_safe_tmp_imgs(ithr)%rmat = 0.
-            call thread_safe_tmp_imgs(ithr)%norm_bin
+            call thread_safe_tmp_imgs(ithr)%norm_minmax
             call thread_safe_tmp_imgs(ithr)%masscen(xyz)
         else
             THROW_HARD('Incompatible dimensions bwetween self and thread_safe_tmp_imgs; calc_shiftcen_serial')
@@ -6394,7 +6393,7 @@ contains
         logical, intent(in)         :: pos(:,:)
         integer :: ipix, jpix
         if( .not. self%is_2d() ) THROW_HARD('only for 2D images; salt_n_pepper')
-        call self%norm_bin
+        call self%norm_minmax
         do ipix=1,self%ldim(1)
             do jpix=1,self%ldim(2)
                 if( pos(ipix,jpix) )then
@@ -7595,21 +7594,6 @@ contains
         &(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - smin)/delta
     end subroutine norm_minmax
 
-    !>  \brief  is for [0,1] interval normalization of an image
-    subroutine norm_bin( self )
-        class(image), intent(inout) :: self
-        real                        :: smin, smax
-        if( self%ft ) THROW_HARD('image assumed to be real not FTed; norm_bin')
-        ! find minmax
-        smin  = minval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
-        smax  = maxval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
-        ! create [0,1]-normalized image
-        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
-            &(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - smin)  / (smax-smin)
-        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
-            &(exp(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))-1.) / (exp(1.)-1.)
-    end subroutine norm_bin
-
     subroutine norm4viz( self, brightness)
         class(image),   intent(inout) :: self
         real, optional, intent(in)    :: brightness
@@ -8228,7 +8212,7 @@ contains
             write(logfhandle,'(a)') '**info(simple_image_unit_test, part 14): testing binary imgproc routines'
             passed = .false.
             call img%gauimg(20)
-            call img%norm_bin
+            call img%norm_minmax
             if( doplot ) call img%vis
             call img%binarize(0.5)
             if( doplot ) call img%vis
