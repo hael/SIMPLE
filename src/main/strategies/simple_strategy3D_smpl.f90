@@ -37,8 +37,8 @@ contains
     subroutine srch_smpl( self, ithr )
         class(strategy3D_smpl), intent(inout) :: self
         integer,                intent(in)    :: ithr
-        integer :: iref, locs(self%s%nrefs), inds(self%s%nrots), irot
-        real    :: inpl_corrs(self%s%nrots), ref_corrs(self%s%nrefs), sorted_corrs(self%s%nrots), corr
+        integer :: iref, locs(self%s%nrefs), inds(self%s%nrots), inds_ref(self%s%nrefs), irot
+        real    :: inpl_corrs(self%s%nrots), ref_corrs(self%s%nrefs), sorted_corrs(self%s%nrots), sorted_ref(self%s%nrefs), corr
         ! execute search
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! init threaded search arrays
@@ -46,16 +46,18 @@ contains
             call self%s%prep4srch
             ! search
             ref_corrs = TINY
-            do iref=1,self%s%nrefs
+            do iref=1,self%s%nprojs
                 if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                    irot = angle_sampling(eulprob_dist_switch(inpl_corrs), sorted_corrs, inds, s3D%smpl_inpl_athres(s3D%proj_space_state(iref)))
+                    irot = angle_sampling(eulprob_dist_switch(inpl_corrs), sorted_corrs, inds,&
+                          &s3D%smpl_inpl_athres(s3D%proj_space_state(iref)))
                     locs(iref)      = irot
                     ref_corrs(iref) = inpl_corrs(irot)
                 endif
             enddo
             self%s%nrefs_eval = self%s%nrefs
-            iref = angle_sampling(eulprob_dist_switch(ref_corrs), 'dist')
+            iref = angle_sampling(eulprob_dist_switch(ref_corrs), sorted_ref, inds_ref,&
+                   &s3D%smpl_refs_athres(build_glob%spproj_field%get_state(self%s%iptcl)))
             irot = locs(iref)
             corr = ref_corrs(iref)
             if( self%s%doshift )then
