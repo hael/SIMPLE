@@ -46,7 +46,7 @@ contains
             call self%s%prep4srch
             ! search
             ref_corrs = TINY
-            do iref=1,self%s%nprojs
+            do iref=1,self%s%nrefs
                 if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
                     irot = angle_sampling(eulprob_dist_switch(inpl_corrs), sorted_corrs, inds,&
