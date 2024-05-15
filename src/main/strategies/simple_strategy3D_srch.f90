@@ -229,12 +229,14 @@ contains
         endif
     end subroutine inpl_srch_peaks
 
-    subroutine store_solution( self, ref, inpl_ind, corr, sh )
+    subroutine store_solution( self, ref, inpl_ind, corr, sh, w )
         class(strategy3D_srch), intent(inout) :: self
         integer,                intent(in)    :: ref, inpl_ind
         real,                   intent(in)    :: corr
         real,       optional,   intent(in)    :: sh(2)
+        real,       optional,   intent(in)    :: w
         if( present(sh) ) s3D%proj_space_shift(:,ref,self%ithr) = sh
+        if( present(w)  ) s3D%proj_space_w(      ref,self%ithr) = w
         s3D%proj_space_inplinds(ref,self%ithr) = inpl_ind
         s3D%proj_space_euls(  3,ref,self%ithr) = 360. - pftcc_glob%get_rot(inpl_ind)
         s3D%proj_space_corrs(   ref,self%ithr) = corr

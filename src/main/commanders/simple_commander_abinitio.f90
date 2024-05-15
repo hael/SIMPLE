@@ -726,6 +726,7 @@ contains
         if( .not. cline%defined('icm')          ) call cline%set('icm',           'no')
         if( .not. cline%defined('icm_stage')    ) call cline%set('icm_stage', ICM_STAGE_DEFAULT)
         if( .not. cline%defined('lambda')       ) call cline%set('lambda',          1.)
+        if( .not. cline%defined('ptclw')        ) call cline%set('ptclw',         'no')
         ! resolution limit strategy
         l_lpset       = .false.
         l_lpstop_set  = cline%defined('lpstop')
