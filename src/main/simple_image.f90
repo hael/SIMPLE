@@ -4275,7 +4275,7 @@ contains
         real        :: transl_tab_even(NQUANTA), transl_tab_odd(NQUANTA)
         real        :: sy(2), syy(2), y(2), pot_term(2), pix(2), minv(2), proba(2), sigma2t2, x, xmin(2), eucl, diff(2), rnsz
         if( even%is_2d() ) THROW_HARD('3D images only; ICM3D_eo')
-        if( even%ft )      THROW_HARD('Real space only; ICM3D_eo')
+        if( even%ft      ) THROW_HARD('Real space only; ICM3D_eo')
         call noise%copy(even)
         call noise%subtr(odd)
         call noise%loc_var3D(noise_var)
@@ -4301,11 +4301,10 @@ contains
                         sy  = 0.
                         syy = 0.
                         do j = 1, nsz
-                            y(2)   = even_prev%rmat(n_4(1,j),n_4(2,j),n_4(3,j))
-                            y(1)   = odd_prev%rmat( n_4(1,j),n_4(2,j),n_4(3,j))
-                            sy     = sy  + y
-                            syy(1) = syy(1) + y(1)*y(1)
-                            syy(2) = syy(2) + y(2)*y(2)
+                            y(2) = even_prev%rmat(n_4(1,j),n_4(2,j),n_4(3,j))
+                            y(1) = odd_prev%rmat( n_4(1,j),n_4(2,j),n_4(3,j))
+                            sy   = sy  + y
+                            syy  = syy + y *y
                         end do
                         xmin     = 0.
                         pot_term = syy ! x=0
