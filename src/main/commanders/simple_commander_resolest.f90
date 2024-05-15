@@ -248,51 +248,63 @@ contains
         class(icm3D_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(parameters)  :: params
-        type(image)       :: even, odd, noise, avg
-        real, allocatable :: fsc(:), res(:)
+        type(image)       :: even, odd, even_icm, odd_icm, avg, avg_icm
+        real, allocatable :: fsc(:), res(:), pspec(:), pspec_icm(:)
         character(len=90) :: file_tag
+        real              :: mskrad
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         call odd %new([params%box,params%box,params%box], params%smpd)
         call even%new([params%box,params%box,params%box], params%smpd)
         call odd %read(params%vols(1))
         call even%read(params%vols(2))
-        call noise%copy(even)
-        call noise%subtr(odd)
         call avg%copy(even)
         call avg%add(odd)
         call avg%mul(0.5)
+        call even_icm%copy(even)
+        call odd_icm%copy(odd)
+        call even_icm%ICM3D_eo(odd_icm, params%lambda)
+        call avg_icm%copy(even_icm)
+        call avg_icm%add(odd_icm)
+        call avg_icm%mul(0.5)
         file_tag = 'icm_3D_filter'
+        call even_icm%write(trim(file_tag)//'_even.mrc')
+        call odd_icm%write(trim(file_tag)//'_odd.mrc')
+        call avg_icm%write(trim(file_tag)//'_avg.mrc')
+        mskrad = real(params%box/2)-COSMSKHALFWIDTH-1
+        call even%mask(mskrad,'soft')
+        call odd%mask(mskrad,'soft')
+        call avg%mask(mskrad,'soft')
+        call even_icm%mask(mskrad,'soft')
+        call odd_icm%mask(mskrad,'soft')
+        call avg_icm%mask(mskrad,'soft')
+        call even%fft
+        call odd%fft
+        call avg%fft
+        call even_icm%fft
+        call odd_icm%fft
+        call avg_icm%fft
         res = avg%get_res()
         allocate(fsc(fdim(params%box)-1),source=0.)
-        call apply(avg,  noise, trim(file_tag)//'_avg')
-        call apply(even, noise, trim(file_tag)//'_even')
-        call apply(odd,  noise, trim(file_tag)//'_odd')
+        call even%fsc(even_icm, fsc)
+        call plot_fsc(size(fsc), fsc, res, params%smpd, trim(file_tag)//'_even_fsc')
+        call odd%fsc(odd_icm, fsc)
+        call plot_fsc(size(fsc), fsc, res, params%smpd, trim(file_tag)//'_odd_fsc')
+        call avg%fsc(avg_icm, fsc)
+        call plot_fsc(size(fsc), fsc, res, params%smpd, trim(file_tag)//'_avg_fsc')
+        call even%spectrum('power',pspec,.false.)
+        call even_icm%spectrum('power',pspec_icm, .false.)
+        pspec_icm = sqrt(pspec_icm / pspec)
+        call plot_fsc(size(pspec_icm), pspec_icm, res, params%smpd, trim(file_tag)//'_even_')
+        call odd%spectrum('power',pspec,.false.)
+        call odd_icm%spectrum('power',pspec_icm, .false.)
+        pspec_icm = sqrt(pspec_icm / pspec)
+        call plot_fsc(size(pspec_icm), pspec_icm, res, params%smpd, trim(file_tag)//'_odd_modulation')
+        call avg%spectrum('power',pspec,.false.)
+        call avg_icm%spectrum('power',pspec_icm, .false.)
+        pspec_icm = sqrt(pspec_icm / pspec)
+        call plot_fsc(size(pspec_icm), pspec_icm, res, params%smpd, trim(file_tag)//'_avg_modulation')
         call simple_end('**** SIMPLE_ICM3D NORMAL STOP ****')
-        contains
-
-            subroutine apply(vol, noisevol, string)
-                class(image),     intent(inout) :: vol, noisevol
-                character(len=*), intent(in)    :: string
-                real, allocatable :: pspec(:), pspec_icm(:)
-                type(image)       :: vol_icm
-                call vol_icm%copy(vol)
-                call vol_icm%icm3D(noisevol, params%lambda)
-                call vol_icm%write(trim(string)//'.mrc')
-                call vol%mask(real(params%box/2)-COSMSKHALFWIDTH-1,'soft')
-                call vol_icm%mask(real(params%box/2)-COSMSKHALFWIDTH-1,'soft')
-                call vol%fft
-                call vol_icm%fft
-                call vol%fsc(vol_icm, fsc)
-                call plot_fsc(size(fsc), fsc, res, params%smpd, trim(string)//'_fsc')
-                call vol%spectrum('power',pspec,.false.)
-                call vol_icm%spectrum('power',pspec_icm, .false.)
-                pspec_icm = sqrt(pspec_icm / pspec)
-                call plot_fsc(size(pspec_icm), pspec_icm, res, params%smpd, trim(string)//'_modulation')
-                call vol_icm%kill
-                deallocate(pspec, pspec_icm)
-            end subroutine apply
-
     end subroutine exec_icm3D
 
     subroutine exec_nununiform_filter2D( self, cline )

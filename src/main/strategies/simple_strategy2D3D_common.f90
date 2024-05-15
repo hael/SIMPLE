@@ -533,14 +533,18 @@ contains
             call mskvol%kill
             call build_glob%vol%fft
             call build_glob%vol_odd%fft
-        else if( params_glob%l_icm .and. params_glob%l_lpset )then
-            call noise%copy(build_glob%vol)
-            call noise%subtr(build_glob%vol_odd)
-            call build_glob%vol%add(build_glob%vol_odd)
-            call build_glob%vol%mul(0.5)
-            call build_glob%vol%icm3D(noise, params_glob%lambda)
-            call build_glob%vol_odd%copy(build_glob%vol)
-            call noise%kill
+        else if( params_glob%l_icm )then
+            if( params_glob%l_lpset )then
+                call noise%copy(build_glob%vol)
+                call noise%subtr(build_glob%vol_odd)
+                call build_glob%vol%add(build_glob%vol_odd)
+                call build_glob%vol%mul(0.5)
+                call build_glob%vol%icm3D(noise, params_glob%lambda)
+                call build_glob%vol_odd%copy(build_glob%vol)
+                call noise%kill
+            else
+                call build_glob%vol%ICM3D_eo(build_glob%vol_odd, params_glob%lambda)
+            endif
         else
             call build_glob%vol%fft
             call build_glob%vol_odd%fft
@@ -551,13 +555,13 @@ contains
     subroutine preprefvol( cline, s, do_center, xyz, iseven )
         use simple_projector,  only: projector
         use simple_opt_filter, only: butterworth_filter, exponential_reg
-        class(cmdline),          intent(inout) :: cline
-        integer,                 intent(in)    :: s
-        logical,                 intent(in)    :: do_center
-        real,                    intent(in)    :: xyz(3)
-        logical,                 intent(in)    :: iseven
-        type(projector),  pointer :: vol_ptr => null()
-        type(image)               :: mskvol
+        class(cmdline), intent(inout) :: cline
+        integer,        intent(in)    :: s
+        logical,        intent(in)    :: do_center
+        real,           intent(in)    :: xyz(3)
+        logical,        intent(in)    :: iseven
+        type(projector), pointer :: vol_ptr => null()
+        type(image)              :: mskvol
         real    :: filter(build_glob%vol%get_filtsz())
         integer :: filtsz
         if( iseven )then
@@ -573,18 +577,16 @@ contains
         filtsz = build_glob%vol%get_filtsz()
         if( params_glob%l_ml_reg )then
             ! no filtering
-        else if( params_glob%l_lpset )then
-            if( params_glob%l_icm )then
-                ! filtering done in read_and_filter_refvols
-            else
-                ! Butterworth low-pass filter
-                ! call butterworth_filter(calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd), filter)
-                ! call vol_ptr%apply_filter(filter)
-                !!!!!!!!!!!!!!!!!!!!!! PUT BACK ORIGTINAL LOW-PASS FILTER FOR TESTING NANOX
-                call vol_ptr%bp(0., params_glob%lp)
-            endif
+        else if( params_glob%l_icm )then
+            ! filtering done in read_and_filter_refvols
         else if( params_glob%l_nonuniform )then
             ! filtering done in read_and_filter_refvols
+        else if( params_glob%l_lpset )then
+            ! Butterworth low-pass filter
+            ! call butterworth_filter(calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd), filter)
+            ! call vol_ptr%apply_filter(filter)
+            !!!!!!!!!!!!!!!!!!!!!! PUT BACK ORIGTINAL LOW-PASS FILTER FOR TESTING NANOX
+            call vol_ptr%bp(0., params_glob%lp)
         else
             call vol_ptr%fft()
             if( any(build_glob%fsc(s,:) > 0.143) )then
