@@ -47,6 +47,7 @@ type :: parameters
     character(len=3)          :: iterstats='no'       !< Whether to keep track alignment stats throughout iterations
     character(len=3)          :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
     character(len=3)          :: loc_sdev='no'        !< Whether to calculate local standard deviations(yes|no){no}
+    character(len=3)          :: lp_est='no'          !< estimate lp(yes|no){no}
     character(len=3)          :: makemovie='no'
     character(len=3)          :: masscen='no'         !< center to center of gravity(yes|no){no}
     character(len=3)          :: mcpatch='yes'        !< whether to perform patch-based alignment during motion correction
@@ -547,6 +548,7 @@ contains
         call check_carg('iterstats',      self%iterstats)
         call check_carg('keepvol',        self%keepvol)
         call check_carg('loc_sdev',       self%loc_sdev)
+        call check_carg('lp_est',         self%lp_est)
         call check_carg('kweight',        self%kweight)
         call check_carg('kweight_chunk',  self%kweight_chunk)
         call check_carg('kweight_pool',   self%kweight_pool)

@@ -67,6 +67,7 @@ type(batch_abinitio_3Dmodel_commander)      :: xbatch_abinitio_3Dmodel
 
 ! REFINE3D WORKFLOWS
 type(calc_pspec_commander_distr)            :: xcalc_pspec_distr
+type(pspec_lp_commander)                    :: xpspec_lp
 type(refine3D_commander_distr)              :: xrefine3D_distr
 type(reconstruct3D_commander_distr)         :: xreconstruct3D
 
@@ -253,6 +254,8 @@ select case(trim(prg))
     ! REFINE3D WORKFLOWS
     case( 'calc_pspec' )
         call xcalc_pspec_distr%execute(cline)
+    case( 'pspec_lp' )
+        call xpspec_lp%execute(cline)
     case( 'refine3D' )
         call xrefine3D_distr%execute(cline)
     case( 'reconstruct3D' )
