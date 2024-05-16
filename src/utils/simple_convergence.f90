@@ -199,7 +199,7 @@ contains
         class(convergence), intent(inout) :: self
         class(cmdline),     intent(inout) :: cline
         real,               intent(in)    :: msk
-        real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), states(:), scores(:), sampled(:)
+        real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), states(:), scores(:), sampled(:), selected(:)
         logical, allocatable :: mask(:)
         real    :: min_state_mi_joint, overlap_lim, fracsrch_lim
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
@@ -213,18 +213,27 @@ contains
         sampled        = build_glob%spproj_field%get_all('sampled')
         n              = size(states)
         nptcls         = count(states > 0.5)
-        sampled_lb     = maxval(sampled) - 0.5
-        percen_sampled = (real(count(sampled    > sampled_lb .and. states > 0.5)) / real(nptcls)) * 100.
-        percen_updated = (real(count(updatecnts > 0.5        .and. states > 0.5)) / real(nptcls)) * 100.
-        percen_avg     = percen_sampled
-        if( params_glob%l_frac_update )then
-            allocate(mask(n), source=sampled    > sampled_lb .and. states > 0.5)
-             if( params_glob%it_history > 0 )then
-                call build_glob%spproj_field%sample4update_history(params_glob%it_history, nsamples)
-                percen_avg = (real(nsamples) / real(nptcls)) * 100.  
-            endif
+        if( params_glob%l_batchfrac )then
+            allocate(mask(n), source=sampled > 0.5 .and. states > 0.5)
+            selected       = build_glob%spproj_field%get_all('batch')
+            percen_sampled = (real(count(selected > 0.5)) / real(nptcls)) * 100.
+            percen_updated = (real(count(mask)) / real(nptcls)) * 100.
+            percen_avg     = percen_updated
+            deallocate(selected)
         else
-            allocate(mask(n), source=updatecnts > 0.5 .and. states > 0.5)
+            sampled_lb     = maxval(sampled) - 0.5
+            percen_sampled = (real(count(sampled    > sampled_lb .and. states > 0.5)) / real(nptcls)) * 100.
+            percen_updated = (real(count(updatecnts > 0.5        .and. states > 0.5)) / real(nptcls)) * 100.
+            percen_avg     = percen_sampled
+            if( params_glob%l_frac_update )then
+                allocate(mask(n), source=sampled    > sampled_lb .and. states > 0.5)
+                if( params_glob%it_history > 0 )then
+                    call build_glob%spproj_field%sample4update_history(params_glob%it_history, nsamples)
+                    percen_avg = (real(nsamples) / real(nptcls)) * 100.
+                endif
+            else
+                allocate(mask(n), source=updatecnts > 0.5 .and. states > 0.5)
+            endif
         endif
         call build_glob%spproj_field%stats('corr',       self%score,      mask=mask)
         call build_glob%spproj_field%stats('dist',       self%dist,       mask=mask)

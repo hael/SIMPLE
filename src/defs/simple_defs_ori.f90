@@ -47,8 +47,8 @@ enum, bind(c)
     enumerator :: I_FRAC_SH    = 43
     enumerator :: I_BETTER_L   = 44
     enumerator :: I_SAMPLED    = 45
+    enumerator :: I_BATCH      = 46
     ! empties
-    enumerator :: I_EMPTY6     = 46
     enumerator :: I_EMPTY7     = 47
     enumerator :: I_EMPTY8     = 48
     enumerator :: I_EMPTY9     = 49
@@ -56,7 +56,7 @@ enum, bind(c)
 end enum
 
 integer, parameter :: N_PTCL_ORIPARAMS = 50
-integer, parameter :: N_NON_EMPTY      = 45
+integer, parameter :: N_NON_EMPTY      = 46
 
 contains
 
@@ -154,6 +154,8 @@ contains
                 get_oriparam_ind = I_BETTER_L
             case('sampled')
                 get_oriparam_ind = I_SAMPLED
+            case('batch')
+                get_oriparam_ind = I_BATCH
         end select
     end function get_oriparam_ind
 
@@ -251,6 +253,8 @@ contains
                 flag ='better_l'
             case(I_SAMPLED)
                 flag ='sampled'
+            case(I_BATCH)
+                flag ='batch'
             case DEFAULT
                 flag = 'empty'
         end select

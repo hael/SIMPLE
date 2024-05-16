@@ -738,51 +738,6 @@ contains
         call simple_end('**** SIMPLE_REFINE3D NORMAL STOP ****')
     end subroutine exec_refine3D
 
-    subroutine calc_iterative_fsc( prev_fname, curr_fname, iter, state )
-        use simple_image, only: image
-        use simple_fsc,   only: plot_fsc
-        character(len=*),  intent(in) :: prev_fname, curr_fname
-        integer,           intent(in) :: iter, state
-        type(image)                   :: prev_vol, curr_vol
-        character(len=:), allocatable :: ftmpl
-        real,             allocatable :: fsc(:), res(:)
-        real    :: prev_smpd, curr_smpd, smpd, msk
-        integer :: prev_ldim(3), curr_ldim(3), n
-        call find_ldim_nptcls(prev_fname, prev_ldim, n, smpd=prev_smpd)
-        call find_ldim_nptcls(curr_fname, curr_ldim, n, smpd=curr_smpd)
-        call prev_vol%new(prev_ldim,prev_smpd)
-        call curr_vol%new(curr_ldim,curr_smpd)
-        call prev_vol%read(prev_fname)
-        call curr_vol%read(curr_fname)
-        if( prev_ldim(1) > curr_ldim(1) )then
-            call curr_vol%fft
-            call curr_vol%pad_inplace(prev_ldim)
-            call curr_vol%ifft
-            smpd = prev_smpd
-        else if( prev_ldim(1) < curr_ldim(1) )then
-            call prev_vol%fft
-            call prev_vol%pad_inplace(curr_ldim)
-            call prev_vol%ifft
-            smpd = curr_smpd
-        else
-            smpd = curr_smpd
-        endif
-        msk = (real(curr_ldim(1))-2.*COSMSKHALFWIDTH)/2 - 1.
-        call prev_vol%mask(msk, 'soft')
-        call curr_vol%mask(msk, 'soft')
-        call curr_vol%fft
-        call prev_vol%fft
-        n = fdim(curr_ldim(1))-1
-        allocate(fsc(n),source=0.)
-        call curr_vol%fsc(prev_vol, fsc)
-        res = get_resarr(curr_ldim(1), smpd)
-        ftmpl = 'fsc_state'//int2str_pad(state,2)//'_iter2iter'//int2str_pad(iter,3)
-        call plot_fsc(n, fsc, res, smpd, ftmpl)
-        call arr2file(fsc, trim(ftmpl)//trim(BIN_EXT))
-        call prev_vol%kill
-        call curr_vol%kill
-    end subroutine calc_iterative_fsc
-
     subroutine exec_check_3Dconv( self, cline )
         use simple_convergence, only: convergence
         use simple_parameters,  only: params_glob
@@ -869,9 +824,9 @@ contains
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         allocate(ptcl_mask(params%fromp:params%top))
-        if( params%batchfrac < 0.99 )then
+        if( params%l_batchfrac )then
             if( build%spproj_field%has_been_sampled() )then
-                call build%spproj_field%sample4update_reprod([params%fromp,params%top],&
+                call build%spproj_field%sample4batchupdate_reprod([params%fromp,params%top],&
                 &nptcls, pinds, ptcl_mask)
             else
                 THROW_HARD('error')
@@ -990,8 +945,8 @@ contains
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         allocate(ptcl_mask(1:params%nptcls))
-        if( params%batchfrac < 0.99 )then
-            call build%spproj_field%sample4update_rnd2([params%fromp,params%top],&
+        if( params%l_batchfrac )then
+            call build%spproj_field%sample4batchupdate([params%fromp,params%top],&
             &params%batchfrac, nptcls, pinds, ptcl_mask, .true.)
         else
             if( params%startit == 1 ) call build%spproj_field%clean_updatecnt_sampled

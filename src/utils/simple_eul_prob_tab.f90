@@ -479,7 +479,11 @@ contains
         integer, optional, intent(in) :: state
         real, allocatable :: vals(:)
         real :: athres, dist_thres
-        vals       = build_glob%spproj_field%get_all_sampled(trim(field_str), state)
+        if( params_glob%l_batchfrac )then
+            vals = build_glob%spproj_field%get_all_sampled(trim(field_str), state=state, lowerbound=0.5)
+        else
+            vals = build_glob%spproj_field%get_all_sampled(trim(field_str), state=state)
+        endif
         dist_thres = sum(vals) / real(size(vals))
         athres     = params_glob%prob_athres
         if( dist_thres > TINY ) athres = min(athres, dist_thres)
