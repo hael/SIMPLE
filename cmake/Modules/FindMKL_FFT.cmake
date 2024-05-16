@@ -1,15 +1,12 @@
 #Look for MKL_FFT libraries ( amd FFTE for Fortran in the future)
-find_package(MKL)
-${MKLROOT}
-MKLLIB /lib/intel64
-module load comp-intel/2018.0.128
-
+#find_package(MKL)
+#${MKLROOT}
+#MKLLIB /lib/intel64
 # Make sure that the MKL wrapper is compatible with FFTW version
 #LIB_DIRS += -L/opt/intel/mkl/$(MKL_VER)/lib/$(MKL_ARCH)
 #INC_DIRS += -I/opt/intel/mkl/$(MKL_VER)/include
 #INC_DIRS += -I/opt/intel/mkl/$(MKL_VER)/include/fftw
 #LIB_FILES += -lpthread -lfftw3xc_intel -lmkl -lm
-
 #ifort -O3                                                 \
 #      -o fftw_example.exe fftw_example.f                  \
 #      -I/nasa/intel/Compiler/2018.0.128/mkl/include/fftw  \
@@ -31,33 +28,15 @@ MKL_FFT_LIBRARIES MKL_FFT_INCLUDE_DIRS )
 )
 mark_as_advanced(MKL_FFT_INCLUDE_DIRS)
 
-find_library(MKL_FFT_SINGLE_PRECISION_LIBRARIES
-    NAMES fftw3f libfftw3f libfftw3f-3
-    HINTS
-        ${MKLROOT}share/mkl/interfaces/fftw2xf/wrappers/
-# Interfaces
-/mkl/2024.1/share/mkl/interfaces
-        ${FFTW_ROOT}/lib
-        ${FFTW_ROOT}/.libs
-        ${FFTW_ROOT}
-        ${FFTWDIR}/lib
-        $ENV{FFTW_ROOT}/lib
-        $ENV{FFTW_ROOT}/.libs
-        $ENV{FFTWLIB}
-        $ENV{FFTWDIR}/lib
-        ENV FFTW_ROOT
-        ENV FFTWLIB
-    PATHS
-        ${FFTWDIR}/lib
-        /usr/lib
-        /usr/lib/x86_64-linux-gnu
-        /usr/local/lib               # Homebrew
-        /opt/local/lib               # Macports
-        /usr/opt/local/lib
-        /sw/lib                      # Fink
-    DOC "FFTW dynamic library -- single precision, serial"
-)
-mark_as_advanced(FFTW_SINGLE_PRECISION_LIBRARIES)
+#find_library(MKL_FFT_SINGLE_PRECISION_LIBRARIES
+#    NAMES fftw3f libfftw3f libfftw3f-3
+#    HINTS
+#        # Interfaces share/mkl/interfaces
+#        ${MKLROOT}share/mkl/interfaces/fftw2xf/wrappers/
+#    PATHS
+#    DOC "MKL-FFT dynamic library -- single precision, serial"
+#)
+#mark_as_advanced(MKL_FFT_SINGLE_PRECISION_LIBRARIES)
 
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args( MKL_FFT DEFAULT_MSG MKL_FFT_LIBRARIES MKL_FFT_INCLUDE_DIRS )
