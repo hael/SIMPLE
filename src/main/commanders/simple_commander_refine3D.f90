@@ -405,13 +405,6 @@ contains
                 ! reading corrs from all parts into one table
                 call xprob_align%execute( cline_prob_align )
             endif
-            if( trim(params%lp_est) .eq. 'yes' )then
-                cline_pspec_lp = cline
-                call cline_pspec_lp%set('which_iter', params%which_iter)
-                call cline_pspec_lp%set('vol1',       params%vols(1))
-                call cline_pspec_lp%delete('lp')
-                call xpspec_lp%execute( cline_pspec_lp )
-            endif
             ! exponential cooling of the randomization rate
             params%extr_iter = params%extr_iter + 1
             call job_descr%set( 'extr_iter',  trim(int2str(params%extr_iter)))
@@ -441,6 +434,16 @@ contains
             if( L_BENCH_GLOB )then
                 rt_merge_algndocs = toc(t_merge_algndocs)
                 t_volassemble = tic()
+            endif
+            if( trim(params%lp_est) .eq. 'yes' )then
+                cline_pspec_lp = cline
+                call cline_pspec_lp%set('which_iter', params%which_iter)
+                call cline_pspec_lp%set('vol1',       params%vols(1))
+                call cline_pspec_lp%set('icm',        'no')
+                call cline_pspec_lp%set('nonuniform', 'no')
+                call cline_pspec_lp%set('nparts',     1)
+                call cline_pspec_lp%delete('lp')
+                call xpspec_lp%execute_shmem( cline_pspec_lp )
             endif
             ! ASSEMBLE VOLUMES
             select case(trim(params%refine))
@@ -710,16 +713,19 @@ contains
                     if( params%l_lpset ) call cline_prob_align%set('lp', params%lp)
                     call xprob_align%execute_shmem( cline_prob_align )
                 endif
+                ! in strategy3D_matcher:
+                call refine3D_exec(cline, params%which_iter, converged)
                 if( trim(params%lp_est) .eq. 'yes' )then
                     cline_pspec_lp = cline
                     call cline_pspec_lp%set('prg',       'pspec_lp')
                     call cline_pspec_lp%set('which_iter', params%which_iter)
                     call cline_pspec_lp%set('vol1',       params%vols(1))
                     call cline_pspec_lp%set('nparts',     1)
+                    call cline_pspec_lp%set('icm',        'no')
+                    call cline_pspec_lp%set('nonuniform', 'no')
+                    call cline_pspec_lp%delete('lp')
                     call xpspec_lp%execute_shmem( cline_pspec_lp )
                 endif
-                ! in strategy3D_matcher:
-                call refine3D_exec(cline, params%which_iter, converged)
                 if( converged .or. i == params%maxits )then
                     ! report the last iteration on exit
                     call cline%delete( 'startit' )
