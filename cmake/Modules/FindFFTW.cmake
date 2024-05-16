@@ -83,7 +83,6 @@ find_path(FFTW_INCLUDE_DIRS
         ENV FFTW_ROOT
         ${FFTWDIR}/include
         $ENV{FFTWDIR}/include
-        $ENV{PGIHOME}/src/fftw/include
     PATHS
         ${FFTWDIR}/include
         /usr/include
@@ -107,7 +106,6 @@ find_library(FFTW_SINGLE_PRECISION_LIBRARIES
         $ENV{FFTWDIR}/lib
         ENV FFTW_ROOT
         ENV FFTWLIB
-        $ENV{PGIHOME}/src/fftw/lib  # PGI local build
     PATHS
         ${FFTWDIR}/lib
         /usr/lib
@@ -133,7 +131,6 @@ find_library(FFTW_DOUBLE_PRECISION_LIBRARIES
         $ENV{FFTWDIR}/lib
         ENV FFTW_ROOT
         ENV FFTWLIB
-        $ENV{PGIHOME}/src/fftw/lib  # PGI local build
     PATHS
         ${FFTWDIR}/lib
         /usr/lib
@@ -148,7 +145,7 @@ mark_as_advanced(FFTW_DOUBLE_PRECISION_LIBRARIES)
 
 find_library( FFTW_SINGLE_PRECISION_THREADED_LIBRARIES
     NAMES fftw3f_threads libfftw3f_threads libfftw3f-3_threads
-    fftw3f_omp libfftw3f_omp  libfftw3f-3_omp
+          fftw3f_omp     libfftw3f_omp     libfftw3f-3_omp
     HINTS
         ${FFTW_ROOT}/lib
         ${FFTW_ROOT}/.libs
@@ -175,51 +172,50 @@ find_library( FFTW_SINGLE_PRECISION_THREADED_LIBRARIES
 )
 mark_as_advanced( FFTW_SINGLE_PRECISION_THREADED_LIBRARIES )
 
-# find_library( FFTW_DOUBLE_PRECISION_THREADED_LIBRARIES
-#     NAMES fftw3_threads
-# 	  libfftw3_threads
-#     fftw3_omp
-# 	  libfftw3_omp
-#     HINTS
-#         ${FFTW_ROOT}/lib
-#         ${FFTW_ROOT}/.libs
-#         ${FFTW_ROOT}
-#         ${FFTWDIR}/lib
-#         $ENV{FFTW_ROOT}/lib
-#         $ENV{FFTW_ROOT}/.libs
-#         ENV FFTW_ROOT
-#         $ENV{FFTWLIB}
-#         $ENV{FFTWDIR}/lib
-#         ENV FFTW_ROOT
-#         ENV FFTWLIB
-#     PATHS
-#         ${FFTWDIR}/lib
-#         /usr/lib
-#         /usr/lib/x86_64-linux-gnu
-#         /usr/local/lib               # Homebrew
-#         /opt/local/lib               # Macports
-#         /usr/opt/local/lib
-#         /sw/lib                      # Fink
-#         /usr/local/pgi/src/fftw/lib  # PGI local build
-#         ${FFTWDIR}/lib
-#     DOC "FFTW dynamic library -- double threaded"
-# )
-# mark_as_advanced( FFTW_DOUBLE_PRECISION_THREADED_LIBRARIES )
+find_library( FFTW_DOUBLE_PRECISION_THREADED_LIBRARIES
+    NAMES fftw3_threads libfftw3_threads
+          fftw3_omp     libfftw3_omp
+    HINTS
+        ${FFTW_ROOT}/lib
+        ${FFTW_ROOT}/.libs
+        ${FFTW_ROOT}
+        ${FFTWDIR}/lib
+        $ENV{FFTW_ROOT}/lib
+        $ENV{FFTW_ROOT}/.libs
+        ENV FFTW_ROOT
+        $ENV{FFTWLIB}
+        $ENV{FFTWDIR}/lib
+        ENV FFTW_ROOT
+        ENV FFTWLIB
+    PATHS
+        ${FFTWDIR}/lib
+        /usr/lib
+        /usr/lib/x86_64-linux-gnu
+        /usr/local/lib               # Homebrew
+        /opt/local/lib               # Macports
+        /usr/opt/local/lib
+        /sw/lib                      # Fink
+        /usr/local/pgi/src/fftw/lib  # PGI local build
+        ${FFTWDIR}/lib
+    DOC "FFTW dynamic library -- double threaded"
+)
+mark_as_advanced( FFTW_DOUBLE_PRECISION_THREADED_LIBRARIES )
 
-set(FFTW_LIBRARIES ${FFTW_SINGLE_PRECISION_LIBRARIES}
+set(FFTW_LIBRARIES 
+  ${FFTW_SINGLE_PRECISION_LIBRARIES}
   ${FFTW_DOUBLE_PRECISION_LIBRARIES}
   ${FFTW_SINGLE_PRECISION_THREADED_LIBRARIES}
-  #${FFTW_DOUBLE_PRECISION_THREADED_LIBRARIES}
-  )
+  ${FFTW_DOUBLE_PRECISION_THREADED_LIBRARIES}
+)
 mark_as_advanced(FFTW_LIBRARIES)
 
-include(FindPackageHandleStandardArgs )
-FIND_PACKAGE_HANDLE_STANDARD_ARGS( FFTW DEFAULT_MSG FFTW_LIBRARIES FFTW_INCLUDE_DIRS )
+include(FindPackageHandleStandardArgs)
+find_package_handle_standard_args( FFTW DEFAULT_MSG FFTW_LIBRARIES FFTW_INCLUDE_DIRS )
 
 if(NOT FFTW_FOUND)
     message( STATUS "Error FFTW not found")
     message( STATUS "FindFFTW looked for single precision libraries -- :  ${FFTW_SINGLE_PRECISION_LIBRARIES}" )
     message( STATUS "FindFFTW looked for double precision libraries -- :  ${FFTW_DOUBLE_PRECISION_LIBRARIES}" )
     message( STATUS "FindFFTW looked for single precision threaded libraries -- :  ${FFTW_SINGLE_PRECISION_THREADED_LIBRARIES}" )
-    #message( STATUS "FindFFTW looked for double precision threaded libraries -- :  ${FFTW_DOUBLE_PRECISION_THREADED_LIBRARIES}" )
+    message( STATUS "FindFFTW looked for double precision threaded libraries -- :  ${FFTW_DOUBLE_PRECISION_THREADED_LIBRARIES}" )
 endif()
