@@ -86,6 +86,7 @@ contains
         type(refine3D_commander)              :: xrefine3D_shmem
         type(estimate_first_sigmas_commander) :: xfirst_sigmas
         type(prob_align_commander)            :: xprob_align
+        type(pspec_lp_commander)              :: xpspec_lp
         type(automask_commander)              :: xautomask
         ! command lines
         type(cmdline) :: cline_reconstruct3D_distr
@@ -95,6 +96,7 @@ contains
         type(cmdline) :: cline_volassemble
         type(cmdline) :: cline_postprocess
         type(cmdline) :: cline_prob_align
+        type(cmdline) :: cline_pspec_lp
         type(cmdline) :: cline_tmp
         type(cmdline) :: cline_automask
         integer(timer_int_kind) :: t_init,   t_scheduled,  t_merge_algndocs,  t_volassemble,  t_tot
@@ -173,10 +175,12 @@ contains
         cline_postprocess         = cline
         cline_calc_sigma          = cline
         cline_prob_align          = cline
+        cline_pspec_lp            = cline
         ! initialise static command line parameters and static job description parameter
         call cline_reconstruct3D_distr%set( 'prg', 'reconstruct3D' )     ! required for distributed call
         call cline_calc_pspec_distr%set(    'prg', 'calc_pspec' )        ! required for distributed call
         call cline_prob_align%set(          'prg', 'prob_align' )        ! required for distributed call
+        call cline_pspec_lp%set(            'prg', 'pspec_lp' )          ! required for distributed call
         call cline_postprocess%set(         'prg', 'postprocess' )       ! required for local call
         call cline_calc_sigma%set(          'prg', 'calc_group_sigmas' ) ! required for local call
         call cline_postprocess%set('mirr',    'no')
@@ -400,6 +404,13 @@ contains
                 if( cline%defined('lp') ) call cline_prob_align%set('lp',params%lp)
                 ! reading corrs from all parts into one table
                 call xprob_align%execute( cline_prob_align )
+            endif
+            if( trim(params%lp_est) .eq. 'yes' )then
+                cline_pspec_lp = cline
+                call cline_pspec_lp%set('which_iter', params%which_iter)
+                call cline_pspec_lp%set('vol1',       params%vols(1))
+                call cline_pspec_lp%delete('lp')
+                call xpspec_lp%execute( cline_pspec_lp )
             endif
             ! exponential cooling of the randomization rate
             params%extr_iter = params%extr_iter + 1

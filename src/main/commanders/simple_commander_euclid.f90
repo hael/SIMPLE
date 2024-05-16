@@ -508,84 +508,94 @@ contains
     end subroutine exec_estimate_first_sigmas
 
     subroutine exec_pspec_lp( self, cline )
-        use simple_strategy2D3D_common, only: prepimgbatch, discrete_read_imgbatch, killimgbatch
+        !$ use omp_lib
+        !$ use omp_lib_kinds
+        use simple_strategy2D3D_common, only: prepimgbatch, prepimg4align, calcrefvolshift_and_mapshifts2ptcls,killimgbatch,&
+                                             &read_and_filter_refvols, preprefvol, discrete_read_imgbatch
+        use simple_polarft_corrcalc,    only: polarft_corrcalc
+        use simple_fsc,                 only: plot_fsc
+        use simple_image
         class(pspec_lp_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
-        type(parameters)              :: params
-        type(image)                   :: sum_img
+        integer,          allocatable :: pinds(:)
+        logical,          allocatable :: ptcl_mask(:)
+        real,             allocatable :: res(:), pspec(:)
+        type(image),      allocatable :: tmp_imgs(:)
+        type(polarft_corrcalc)        :: pftcc
         type(builder)                 :: build
-        type(sigma2_binfile)          :: binfile
-        complex,          pointer     :: cmat(:,:,:), cmat_sum(:,:,:)
-        integer,          allocatable :: pinds(:), states(:)
-        real,             allocatable :: pspec(:), sigma2(:,:)
-        character(len=:), allocatable :: binfname
-        real    :: sdev_noise
-        integer :: batchlims(2),kfromto(2)
-        integer :: i,iptcl,imatch,nyq,nptcls_part,nptcls_part_sel,batchsz_max,nbatch
+        type(parameters)              :: params
+        type(ori)                     :: o_tmp
+        character(len=90)             :: filename
+        integer  :: nptcls, iptcl, s, ithr, iref, i
+        logical  :: l_ctf, do_center
+        real     :: xyz(3)
         call cline%set('mkdir', 'no')
-        call cline%set('stream','no')
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
-        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
-        ! init
-        nyq         = build%img%get_nyq()
-        batchsz_max = 50 * nthr_glob
-        ! indices of particles with state=1
-        states          = nint(build%spproj_field%get_all('state',[params%fromp,params%top]))
-        nptcls_part_sel = count(states>0)
-        nptcls_part     = size(states)
-        allocate(pinds(nptcls_part_sel),source=0)
-        imatch = 0
-        do i = 1,nptcls_part
-            if( states(i) > 0 )then
-                imatch = imatch + 1
-                pinds(imatch) = params%fromp+i-1
-            endif
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
+        params%kfromto(1) = 1
+        params%kfromto(2) = build%img%get_nyq()
+        allocate(ptcl_mask(params%fromp:params%top))
+        call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls, pinds, ptcl_mask, .false.)
+        ! more prep
+        call pftcc%new(params%nspace * params%nstates, [1,nptcls], params%kfromto)
+        call prepimgbatch(nptcls)
+        call discrete_read_imgbatch(nptcls, pinds, [1,nptcls])
+        call pftcc%reallocate_ptcls(nptcls, pinds)
+        call build%img_crop_polarizer%init_polarizer(pftcc, params%alpha)
+        allocate(tmp_imgs(nthr_glob))
+        !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
+        do ithr = 1,nthr_glob
+            call tmp_imgs(ithr)%new([params%box_crop,params%box_crop,1], params%smpd_crop, wthreads=.false.)
         enddo
-        allocate(sigma2(nyq,params%fromp:params%top),pspec(nyq),source=0.)
-        call prepimgbatch(batchsz_max)
-        call sum_img%new([params%box,params%box,1],params%smpd)
-        call sum_img%zero_and_flag_ft
-        call sum_img%get_cmat_ptr(cmat_sum)
-        do i = 1,nptcls_part_sel,batchsz_max
-            batchlims = [i, min(i+batchsz_max-1,nptcls_part_sel)]
-            nbatch    = batchlims(2) - batchlims(1) + 1
-            call discrete_read_imgbatch(nbatch, pinds(batchlims(1):batchlims(2)), [1,nbatch])
-            !$omp parallel do default(shared) private(iptcl,imatch,pspec)&
-            !$omp schedule(static) proc_bind(close)
-            do imatch = 1,nbatch
-                iptcl = pinds(batchlims(1)+imatch-1)
-                ! normalize
-                call build%imgbatch(imatch)%norm_noise(build%lmsk, sdev_noise)
-                !  mask
-                if( params%l_focusmsk )then
-                    call build%imgbatch(imatch)%mask(params%focusmsk, 'softavg')
-                else
-                    call build%imgbatch(imatch)%mask(params%msk, 'softavg')
-                endif
-                ! power spectrum
-                call build%imgbatch(imatch)%fft
-                call build%imgbatch(imatch)%power_spectrum(pspec)
-                sigma2(:,iptcl) = pspec / 2.0
+        !$omp end parallel do
+        ! read reference volumes and create polar projections
+        do s=1,params%nstates
+            call calcrefvolshift_and_mapshifts2ptcls( cline, s, params%vols(s), do_center, xyz)
+            call read_and_filter_refvols( cline, params%vols(s), params%vols(s) )
+            ! PREPARE E/O VOLUMES
+            call preprefvol(cline, s, do_center, xyz, .false.)
+            call preprefvol(cline, s, do_center, xyz, .true.)
+            ! PREPARE REFERENCES
+            !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
+            do iref=1, params%nspace
+                call build%eulspace%get_ori(iref, o_tmp)
+                call build%vol_odd%fproject_polar((s - 1) * params%nspace + iref,&
+                    &o_tmp, pftcc, iseven=.false., mask=build%l_resmsk)
+                call build%vol%fproject_polar(    (s - 1) * params%nspace + iref,&
+                    &o_tmp, pftcc, iseven=.true.,  mask=build%l_resmsk)
+                call o_tmp%kill
             end do
             !$omp end parallel do
-            ! global average
-            do imatch = 1,nbatch
-                call build%imgbatch(imatch)%get_cmat_ptr(cmat)
-                !$omp workshare
-                cmat_sum(:,:,:) = cmat_sum(:,:,:) + cmat(:,:,:)
-                !$omp end workshare
-            enddo
         end do
-        ! call sum_img%write('sum_img_part'//int2str_pad(params%part,params%numlen)//params%ext)
-        ! write to disk
-        ! kfromto(1) = 1
-        ! kfromto(2) = nyq
-        ! binfname = 'init_pspec_part'//trim(int2str(params%part))//'.dat'
-        ! call binfile%new(binfname,params%fromp,params%top,kfromto)
-        ! call binfile%write(sigma2)
-        ! call binfile%kill
+        call pftcc%memoize_refs
+        ! PREPARATION OF PARTICLES
+        !$omp parallel do default(shared) private(i,iptcl,ithr) schedule(static) proc_bind(close)
+        do i = 1,nptcls
+            ithr  = omp_get_thread_num()+1
+            iptcl = pinds(i)
+            if( .not.ptcl_mask(iptcl) ) cycle
+            ! prep
+            call prepimg4align(iptcl, build%imgbatch(i), tmp_imgs(ithr))
+            ! transfer to polar coordinates
+            call build%img_crop_polarizer%polarize(pftcc, tmp_imgs(ithr), iptcl, .true., .true., mask=build%l_resmsk)
+            ! e/o flags
+            call pftcc%set_eo(iptcl, mod(iptcl, 2)==0)
+        enddo
+        !$omp end parallel do
+        ! getting the ctfs
+        l_ctf = build%spproj%get_ctfflag(params%oritype,iptcl=pinds(1)).ne.'no'
+        ! make CTFs
+        if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, params%oritype)
+        call pftcc%memoize_ptcls
         call killimgbatch
-        call sum_img%kill
+        ! spectrum of current volume
+        call build%vol%spectrum('power', pspec, .false.)    ! assuming one state
+        pspec    = sqrt(pspec)
+        filename = 'pspec_vol_iter'//int2str(params%which_iter)
+        res      = build%vol%get_res()
+        call plot_fsc(size(pspec), pspec, res, params%smpd, trim(filename))
+        ! ending
+        call pftcc%kill
+        call build%kill_general_tbox
         ! end gracefully
         call qsys_job_finished('simple_commander_euclid :: exec_pspec_lp')
         call simple_end('**** SIMPLE_PSEC_LP NORMAL STOP ****', print_simple=.false.)
