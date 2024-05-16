@@ -7,30 +7,30 @@
 # variables.
 
 
-### Override CMakeDetermineFortranCompiler default fortran of f95
+# Override CMakeDetermineFortranCompiler default fortran of f95
 #if(NOT $ENV{FC} STREQUAL "")
 #    set(CMAKE_Fortran_COMPILER_NAMES $ENV{FC})
 #else()
 #    set(CMAKE_Fortran_COMPILER_NAMES gfortran ifx nvfortran ifort pgfortran mpif90 mpiifx mpifort)
 #endif()
 
-### Override preprocessor in CMakeDetermineCompiler default cpp
+# Override preprocessor in CMakeDetermineCompiler default cpp
 #if(NOT $ENV{CPP} STREQUAL "")
 #    set(CMAKE_CPP_COMPILER_NAMES $ENV{CPP})
 #else()
 #    find_file(CMAKE_CPP_COMPILER_NAMES
 #        NAMES cpp- cpp-6 cpp6 cpp-5 cpp5 cpp-4.9 cpp
 #        PATHS /sw/bin /usr/local/bin /opt/local/bin /usr/bin
-#        #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
+##        #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
 #        DOC "GNU cpp preprocessor "
-#        #  [NO_DEFAULT_PATH]
-#        #  [NO_CMAKE_ENVIRONMENT_PATH]
-#        #  [NO_CMAKE_PATH]
-#        # NO_SYSTEM_ENVIRONMENT_PATH
-#        #  [NO_CMAKE_SYSTEM_PATH]
-#        #  [CMAKE_FIND_ROOT_PATH_BOTH |
-#        #   ONLY_CMAKE_FIND_ROOT_PATH |
-#        #   NO_CMAKE_FIND_ROOT_PATH]
+##        #  [NO_DEFAULT_PATH]
+##        #  [NO_CMAKE_ENVIRONMENT_PATH]
+##        #  [NO_CMAKE_PATH]
+##        # NO_SYSTEM_ENVIRONMENT_PATH
+##        #  [NO_CMAKE_SYSTEM_PATH]
+##        #  [CMAKE_FIND_ROOT_PATH_BOTH |
+##        #   ONLY_CMAKE_FIND_ROOT_PATH |
+##        #   NO_CMAKE_FIND_ROOT_PATH]
 #    )
 #    if(NOT EXISTS ${CMAKE_CPP_COMPILER_NAMES})
 #        set(CMAKE_CPP_COMPILER_NAMES cpp-5)
@@ -38,9 +38,10 @@
 #    set(ENV{CPP} ${CMAKE_CPP_COMPILER_NAMES})
 #endif()
 
-include(CMakeDetermineFortranCompiler)
-include(CMakeDetermineCompiler)
-include(CMakeFortranInformation)
+#enable_language(Fortran C CXX)
+#include(CMakeDetermineFortranCompiler)
+#include(CMakeDetermineCompiler)
+#include(CMakeFortranInformation)
 
 # Try to identify the ABI and configure it into CMakeFortranCompiler.cmake
 #include(${CMAKE_ROOT}/Modules/CMakeDetermineCompilerABI.cmake)
