@@ -1,9 +1,5 @@
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
-
-message( STATUS " Fortran compiler version" CMAKE_Fortran_COMPILER_VERSION)
-   if(gfortran_compiler AND (CMAKE_Fortran_COMPILER_VERSION VERSION_LESS 5.4.0))
-   return()
-endif()
+cmake_policy(VERSION 3.19...3.23)
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 include(FortranOverride)
@@ -13,6 +9,15 @@ project(SIMPLE
         DESCRIPTION "SIMPLE is a program package for cryo-EM image processing (https://github.com/hael/SIMPLE)"
         HOMEPAGE_URL "https://github.com/hael/SIMPLE"
         LANGUAGES Fortran C CXX)
+) 
+enable_language(Fortran C CXX)
+
+#message( STATUS " Fortran compiler version" CMAKE_Fortran_COMPILER_VERSION)
+   #   if(gfortran_compiler AND (CMAKE_Fortran_COMPILER_VERSION VERSION_LESS 5.4.0))
+       #   return()
+   #endif()
+#return()
+>>>>>>> 670d0456 (update FFTW libraries and start work with MLK FFT libraries)
 
 # CTest
 enable_testing()
@@ -60,10 +65,13 @@ option(LATEX_USE_SYNCTEX           "If on, have LaTeX generate a synctex file, w
 option(LATEX_SMALL_IMAGES          "If on, the raster images will be converted to 1/6 the original size.  This is because papers usually require 600 dpi images whereas most monitors only require at most 96 dpi.  Thus, smaller images make smaller files for web distribution and can make it faster to read dvi files." OFF)
 
 # Find packages
-find_package(Coarray REQUIRED)
-if(USE_CUDA) 
-    find_package(NVHPC REQUIRED COMPONENTS CUDA MATH)
-endif()
+#find(Git REQUIRED)
+#find_package(Coarray REQUIRED)
+# ifx -coarray
+#if(USE_CUDA) 
+#    find_package(NVHPC REQUIRED COMPONENTS CUDA MATH)
+#    enable_language(CUDA)
+#endif()
 #check_fortran_source_compiles("program test
 #error stop
 #end program"
@@ -96,14 +104,14 @@ set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 # Have the .mod files placed in the lib folder
 include_directories(${CMAKE_Fortran_MODULE_DIRECTORY})
 set(EXECUTABLE_OUTPUT_DIRECTORY "${CMAKE_INSTALL_BINDIR}")
-set(LIBRARY_OUTPUT_DIRECTORY "${CMAKE_INSTALL_LIBDIR}")
-set(SCRIPTS_OUTPUT_DIRECTORY "${CMAKE_INSTALL_PREFIX}/scripts")
+set(LIBRARY_OUTPUT_DIRECTORY    "${CMAKE_INSTALL_LIBDIR}")
+set(SCRIPTS_OUTPUT_DIRECTORY    "${CMAKE_INSTALL_PREFIX}/scripts")
 
 # Define the executable names
-set(SIMPLE_EXE simple_exec)
-set(SINGLE_EXE single_exec)
-set(STREAM_EXE simple_stream)
-set(SIMPLE_PRIVATE_EXE simple_private_exec)
+set(SIMPLE_EXE          simple_exec)
+set(SINGLE_EXE          single_exec)
+set(STREAM_EXE          simple_stream)
+set(SIMPLE_PRIVATE_EXE  simple_private_exec)
 set(SIMPLE_MAIN_TARGETS ${SIMPLE_EXE} ${SINGLE_EXE} ${STREAM_EXE} ${SIMPLE_PRIVATE_EXE})
 
 # Define the library name lib<name>.so
