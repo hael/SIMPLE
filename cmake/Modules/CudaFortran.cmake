@@ -1,40 +1,41 @@
 ################################################################
 # Set CUDA
 ################################################################
+return()
 find_package(CUDA QUIET REQUIRED)
 set(CUDA_USE_STATIC_CUDA_RUNTIME OFF)
 if(CUDA_FOUND)
-  try_run(RUN_RESULT_VAR COMPILE_RESULT_VAR
-    ${CMAKE_BINARY_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules/has_cuda_gpu.c
-    CMAKE_FLAGS
-    -DINCLUDE_DIRECTORIES:STRING=${CUDA_TOOLKIT_INCLUDE}
-    -DLINK_LIBRARIES:STRING=${CUDA_CUDART_LIBRARY}
-    COMPILE_OUTPUT_VARIABLE COMPILE_OUTPUT_VAR
-    RUN_OUTPUT_VARIABLE RUN_OUTPUT_VAR)
-  message(STATUS "${RUN_OUTPUT_VAR}") # Display number of GPUs found
-  # COMPILE_RESULT_VAR is TRUE when compile succeeds
-  # RUN_RESULT_VAR is zero when a GPU is found
-  if(COMPILE_RESULT_VAR AND NOT RUN_RESULT_VAR)
-    set(CUDA_HAVE_GPU TRUE CACHE BOOL "Whether CUDA-capable GPU is present")
-  else()
-    set(CUDA_HAVE_GPU FALSE CACHE BOOL "Whether CUDA-capable GPU is present")
-  endif()
+    try_run(RUN_RESULT_VAR COMPILE_RESULT_VAR
+        ${CMAKE_BINARY_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules/has_cuda_gpu.c
+        CMAKE_FLAGS
+       -DINCLUDE_DIRECTORIES:STRING=${CUDA_TOOLKIT_INCLUDE}
+       -DLINK_LIBRARIES:STRING=${CUDA_CUDART_LIBRARY}
+        COMPILE_OUTPUT_VARIABLE COMPILE_OUTPUT_VAR
+        RUN_OUTPUT_VARIABLE RUN_OUTPUT_VAR)
+    message(STATUS "${RUN_OUTPUT_VAR}") # Display number of GPUs found
+    # COMPILE_RESULT_VAR is TRUE when compile succeeds
+    # RUN_RESULT_VAR is zero when a GPU is found
+    if(COMPILE_RESULT_VAR AND NOT RUN_RESULT_VAR)
+        set(CUDA_HAVE_GPU TRUE CACHE BOOL "Whether CUDA-capable GPU is present")
+    else()
+        set(CUDA_HAVE_GPU FALSE CACHE BOOL "Whether CUDA-capable GPU is present")
+    endif()
 
-  find_program(_nvidia_smi "nvidia-smi")
-  if(_nvidia_smi)
-    set(DETECT_GPU_COUNT_NVIDIA_SMI 0)
-    # execute nvidia-smi -L to get a short list of GPUs available
-    exec_program(${_nvidia_smi_path} ARGS -L
-      OUTPUT_VARIABLE _nvidia_smi_out
-      RETURN_VALUE    _nvidia_smi_ret)
-    # process the stdout of nvidia-smi
-    if(_nvidia_smi_ret EQUAL 0)
-      # convert string with newlines to list of strings
-      string(REGEX REPLACE "\n" ";" _nvidia_smi_out "${_nvidia_smi_out}")
-      foreach(_line ${_nvidia_smi_out})
-        if (_line MATCHES "^GPU [0-9]+:")
-          math(EXPR DETECT_GPU_COUNT_NVIDIA_SMI "${DETECT_GPU_COUNT_NVIDIA_SMI}+1")
+    find_program(_nvidia_smi "nvidia-smi")
+    if(_nvidia_smi)
+        set(DETECT_GPU_COUNT_NVIDIA_SMI 0)
+        # execute nvidia-smi -L to get a short list of GPUs available
+        exec_program(${_nvidia_smi_path} ARGS -L
+        OUTPUT_VARIABLE _nvidia_smi_out
+        RETURN_VALUE    _nvidia_smi_ret)
+        # process the stdout of nvidia-smi
+        if(_nvidia_smi_ret EQUAL 0)
+            # convert string with newlines to list of strings
+            string(REGEX REPLACE "\n" ";" _nvidia_smi_out "${_nvidia_smi_out}")
+            foreach(_line ${_nvidia_smi_out})
+            if (_line MATCHES "^GPU [0-9]+:")
+            math(EXPR DETECT_GPU_COUNT_NVIDIA_SMI "${DETECT_GPU_COUNT_NVIDIA_SMI}+1")
           # the UUID is not very useful for the user, remove it
           string(REGEX REPLACE " \\(UUID:.*\\)" "" _gpu_info "${_line}")
           if (NOT _gpu_info STREQUAL "")
