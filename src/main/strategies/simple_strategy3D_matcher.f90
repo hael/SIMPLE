@@ -77,7 +77,7 @@ contains
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz
         integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map
         integer :: ibatch, iextr_lim, lpind_anneal, lpind_start
-        logical :: doprint, do_extr, l_batch_update
+        logical :: doprint, do_extr
         if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = t_init
@@ -105,9 +105,14 @@ contains
         allocate(ptcl_mask(params_glob%fromp:params_glob%top))
         if( trim(params_glob%refine).eq.'prob' )then
             ! generation of random sample and incr of updatecnts delegated to prob_align
-            call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
-            &nptcls2update, pinds, ptcl_mask )
-            if( params_glob%batchfrac < 0.99 ) call prev_oris%copy(build_glob%spproj_field,.true.)
+            if( params_glob%l_batchfrac )then
+                call build_glob%spproj_field%sample4batchupdate_reprod([params_glob%fromp,params_glob%top],&
+                &nptcls2update, pinds, ptcl_mask )
+                call prev_oris%copy(build_glob%spproj_field, build_glob%spproj_field%is_particle())
+            else
+                call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
+                &nptcls2update, pinds, ptcl_mask )
+            endif
         else
             if( params_glob%l_frac_update )then
                 if( params_glob%l_stoch_update )then
@@ -364,7 +369,7 @@ contains
                         params_glob%it_history, nptcls2update, pinds, ptcl_mask)
                     endif
                 endif
-                if( params_glob%batchfrac < 0.99 )then
+                if( params_glob%l_batchfrac )then
                     call calc_3Dbatchrec( cline, nptcls2update, pinds, prev_oris, which_iter )
                     call prev_oris%kill
                 else

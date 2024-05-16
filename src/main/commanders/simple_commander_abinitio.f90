@@ -1198,13 +1198,13 @@ contains
         real,    parameter :: CENLP_DEFAULT = 30.
         real,    parameter :: LP_DEFAULT    = 6.
         real,    parameter :: LPSTART_DEFAULT = 30., LPSTOP_DEFAULT=LP_DEFAULT
+        real,    parameter :: BATCHFRAC_DEFAULT = 0.2
         integer, parameter :: MINBOX  = 88
-        integer, parameter :: NSTAGES = 15
-        integer, parameter :: ITERS_PER_STAGE = 5
-        integer, parameter :: BATCHSZ = 500
+        integer, parameter :: NSTAGES = 12
         integer, parameter :: NSPACE1=500, NSPACE2=1000, NSPACE3=1500, NSPACE_FINAL=2000
-        integer, parameter :: SHIFT_STAGE_DEFAULT = NSTAGES-5
-        integer, parameter :: MIN_NPTCLS = 5000
+        integer, parameter :: SHIFT_STAGE_DEFAULT = NSTAGES-4
+        integer, parameter :: ICM_STAGE_DEFAULT   = 2       ! in [1;NSTAGES]
+        integer, parameter :: MIN_NPTCLS = 8000
         integer, parameter :: MAX_NPTCLS = 100000
         ! commanders
         type(refine3D_commander_distr)      :: xrefine3D_distr
@@ -1220,13 +1220,14 @@ contains
         type(image)                   :: final_vol, reprojs
         type(ran_tabu)                :: rt
         character(len=:), allocatable :: vol_type, str_state, vol, vol_pproc, vol_pproc_mirr
-        integer,          allocatable :: vec(:), states(:), batches(:)
+        integer,          allocatable :: vec(:), states(:), batches(:), pinds(:), sampled(:), cnts(:)
+        logical,          allocatable :: mask(:)
         character(len=LONGSTRLEN)     :: vol_str
         real    :: lps(NSTAGES), smpds(NSTAGES)
         integer :: boxs(NSTAGES)
         real    :: smpd_target, lp_target, scale, trslim, cenlp, symlp, dummy
         integer :: iter, it, prev_box_crop, maxits, state, i,j, final_nptcls, nptcls_sel
-        integer :: ind, startind, stopind, nptcls_batch, ini_nptcls, nptcls
+        integer :: ind, startind, stopind, ini_nptcls, nptcls, iters_per_stage
         logical :: l_lpset, l_err, l_lpstop_set, l_lpstart_set
         call cline%set('ml_reg',       'no')
         call cline%set('stoch_update', 'no')
@@ -1241,6 +1242,9 @@ contains
         if( .not. cline%defined('prob_athres')  ) call cline%set('prob_athres', 10.)
         if( .not. cline%defined('objfun')       ) call cline%set('objfun',      'euclid')
         if( .not. cline%defined('shift_stage')  ) call cline%set('shift_stage', SHIFT_STAGE_DEFAULT)
+        if( .not. cline%defined('batchfrac')    ) call cline%set('batchfrac',   BATCHFRAC_DEFAULT)
+        if( .not. cline%defined('icm')          ) call cline%set('icm',         'no')
+        if( .not. cline%defined('icm_stage')    ) call cline%set('icm_stage',   ICM_STAGE_DEFAULT)
         ! resolution limit strategy
         l_lpset       = .false.
         l_lpstop_set  = cline%defined('lpstop')
@@ -1261,6 +1265,13 @@ contains
         call cline%delete('lpstop')
         call cline%delete('lp')
         call cline%delete('shift_stage')
+        call cline%delete('icm_stage')
+        call cline%delete('icm')
+        call cline%delete('lambda')
+        if( params%l_icm .and. (params%icm_stage < 1 .or. params%icm_stage > NSTAGES) )then
+            params%icm_stage = min(NSTAGES,max(1,params%icm_stage))
+            THROW_WARN('ICM_STAGE out of range, defaulting to: '//int2str(params%icm_stage))
+        endif
         if( l_lpset )then
             params%lpstop  = params%lp
             params%lpstart = params%lp
@@ -1284,6 +1295,7 @@ contains
                     vol_type = 'vol'
                     call spproj%os_ptcl3D%rnd_oris
                     call spproj%os_ptcl3D%clean_updatecnt_sampled
+                    call spproj%os_ptcl3D%set_all2single('batch',0.)
                     if( spproj%os_ptcl3D%get_nevenodd() == 0 ) call spproj%os_ptcl3D%partition_eo
                     call spproj%write_segment_inside(params%oritype, params%projfile)
                 case DEFAULT
@@ -1340,15 +1352,17 @@ contains
             call autoscale(params%box, params%smpd, smpd_target, boxs(it), smpds(it), scale, minbox=MINBOX)
         enddo
         ! Batch plan
-        states       = nint(spproj%os_ptcl3D%get_all('state'))
-        nptcls_sel   = count(states==1)
-        final_nptcls = min(nptcls_sel,min(MAX_NPTCLS, BATCHSZ * ITERS_PER_STAGE * NSTAGES))
-        ini_nptcls   = min(nptcls_sel, MIN_NPTCLS)
+        iters_per_stage = nint(1./params%batchfrac)
+        states          = nint(spproj%os_ptcl3D%get_all('state'))
+        nptcls_sel      = count(states==1)
+        final_nptcls    = min(nptcls_sel, MAX_NPTCLS)
+        ini_nptcls      = min(nptcls_sel, MIN_NPTCLS)
         allocate(vec(nptcls_sel),source=0)
         do it = NSTAGES,1,-1
             nptcls = ini_nptcls + nint(real((it-1)*(final_nptcls-ini_nptcls)) / real(NSTAGES-1))
             vec(1:nptcls) = it
         enddo
+        call seed_rnd
         rt = ran_tabu(nptcls_sel)
         call rt%shuffle(vec)
         call rt%kill
@@ -1365,48 +1379,51 @@ contains
         iter = 0
         do it = 1,NSTAGES
             write(logfhandle,'(A)') '>>>'
-            ! dimensions & resolution limit
+            ! Dimensions & resolution limit
             params%box_crop  = boxs(it)
             params%smpd_crop = smpds(it)
             params%lp        = lps(it)
-            ! particles sampling
+            ! Particles sampling
             allocate(vec(params%nptcls),source=0)
             where( (batches>0) .and. (batches<=it) ) vec = 1
-            nptcls_batch = count(vec==1)
-            call spproj%read_segment('ptcl3D', params%projfile)
-            call spproj%os_ptcl3D%set_all('state',   real(vec))
+            nptcls = count(vec==1)
+            call spproj%read_segment('ptcl3D',     params%projfile)
+            call spproj%os_ptcl3D%set_all('state', real(vec))
+            if( it == 1 ) call spproj%os_ptcl3D%set_all('updatecnt', real(vec))
             call spproj%os_ptcl3D%set_all2single('sampled', 0.)
-            if( it == 1 )then
-                where( vec==1 ) vec = 2
-                call spproj%os_ptcl3D%set_all('updatecnt', real(vec))
-            endif
-            deallocate(vec)
             call spproj%write_segment_inside('ptcl3D', params%projfile)
+            deallocate(vec)
             write(logfhandle,'(A,I3,A12,F6.1)')'>>> STAGE ',it,' WITH LP  : ',params%lp
-            write(logfhandle,'(A,I6)'         )'>>> PARTICLES PER BATCH: ',nptcls_batch / ITERS_PER_STAGE
+            write(logfhandle,'(A,I6)'         )'>>> MINIBATCH SIZE: ', nint(real(nptcls) / real(iters_per_stage))
             write(logfhandle,'(A,I3,A1,I3)'   )'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
             ! Starting reconstruction
             if( it == 1 )then
                 call cline_reconstruct3D%set('smpd_crop', params%smpd_crop)
                 call cline_reconstruct3D%set('box_crop',  params%box_crop)
                 call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D)
-                ! call simple_copy_file('recvol_state01.mrc','startvol.mrc')
-                ! call simple_copy_file('recvol_state01_even.mrc','startvol_even.mrc')
-                ! call simple_copy_file('recvol_state01_odd.mrc','startvol_odd.mrc')
             endif
-            ! Stage updates
-            params%batchfrac = 1. / ITERS_PER_STAGE
+            ! Minibatch size
             call cline_refine3D%set('batchfrac', params%batchfrac)
-            if( it <= 3 )then
-                call cline_refine3D%set('maxits', 3*ITERS_PER_STAGE)
+            ! Iterations per minibatch
+            if( it < 3 )then
+                call cline_refine3D%set('maxits', 3*iters_per_stage)
+            else if( it > NSTAGES-2 )then
+                call cline_refine3D%set('maxits', 3*iters_per_stage)
             else
-                call cline_refine3D%set('maxits', 2*ITERS_PER_STAGE)
+                call cline_refine3D%set('maxits', 2*iters_per_stage)
             endif
+            ! Shift search
             if( it >= params%shift_stage )then
                 call cline_refine3D%set('trs', trslim)
             else
                 call cline_refine3D%set('trs', 0.)
             endif
+            ! ICM filter
+            if( params%l_icm .and. (it >= params%icm_stage) )then
+                call cline_refine3D%set('icm',   'yes')
+                call cline_refine3D%set('lambda', params%lambda)
+            endif
+            ! Projection directions
             if( params%lp > 12. )then
                 call cline_refine3D%set('nspace', NSPACE1)
             elseif ( params%lp > 8. )then
@@ -1414,17 +1431,16 @@ contains
             else
                 call cline_refine3D%set('nspace', NSPACE3)
             endif
-            if( it == NSTAGES )then
-                call cline_refine3D%set('maxits', 3*ITERS_PER_STAGE)
-                call cline_refine3D%set('nspace', NSPACE_FINAL)
-            endif
-            ! execution
+            if( it == NSTAGES ) call cline_refine3D%set('nspace', NSPACE_FINAL)
+            ! Execution
             call exec_refine3D(iter)
             ! Reconstruction
-            if( it < NSTAGES .and. boxs(it+1) /= boxs(it) )then
-                call cline_reconstruct3D%set('smpd_crop', smpds(it+1))
-                call cline_reconstruct3D%set('box_crop',  boxs(it+1))
-                call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D)
+            if( it < NSTAGES )then
+                if( boxs(it+1) /= boxs(it) )then
+                    call cline_reconstruct3D%set('smpd_crop', smpds(it+1))
+                    call cline_reconstruct3D%set('box_crop',  boxs(it+1))
+                    call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D)
+                endif
             endif
         enddo
         ! for visualization
@@ -1459,7 +1475,7 @@ contains
         call spproj%write_segment_inside('out',params%projfile)
         ! post-processing
         do state = 1, params%nstates
-            call cline_postprocess%delete('lp') ! so as to obtain optimal filtration
+            call cline_postprocess%delete('lp')
             call cline_postprocess%set('state', real(state))
             call xpostprocess%execute(cline_postprocess)
         enddo

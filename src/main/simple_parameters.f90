@@ -428,6 +428,7 @@ type :: parameters
     real    :: zsh=0.              !< z shift(in pixels){0}
     ! logical variables in (roughly) ascending alphabetical order
     logical :: l_autoscale    = .false.
+    logical :: l_batchfrac    = .false.
     logical :: l_bfac         = .false.
     logical :: l_corrw        = .false.
     logical :: l_distr_exec   = .false.
@@ -1244,6 +1245,7 @@ contains
         else
             self%it_history = 0
         endif
+        self%l_batchfrac = self%batchfrac < 0.99
         ! trailing volume
         if( self%l_stoch_update )then
             if( cline%defined('mov_avg_vol') )then
