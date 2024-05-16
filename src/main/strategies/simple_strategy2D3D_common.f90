@@ -534,17 +534,7 @@ contains
             call build_glob%vol%fft
             call build_glob%vol_odd%fft
         else if( params_glob%l_icm )then
-            if( params_glob%l_lpset )then
-                call noise%copy(build_glob%vol)
-                call noise%subtr(build_glob%vol_odd)
-                call build_glob%vol%add(build_glob%vol_odd)
-                call build_glob%vol%mul(0.5)
-                call build_glob%vol%icm3D(noise, params_glob%lambda)
-                call build_glob%vol_odd%copy(build_glob%vol)
-                call noise%kill
-            else
-                call build_glob%vol%ICM3D_eo(build_glob%vol_odd, params_glob%lambda)
-            endif
+            call build_glob%vol%ICM3D_eo(build_glob%vol_odd, params_glob%lambda)
         else
             call build_glob%vol%fft
             call build_glob%vol_odd%fft
