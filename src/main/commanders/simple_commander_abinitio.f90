@@ -875,6 +875,10 @@ contains
         call cline_refine3D%set('projfile',      params%projfile)
         call cline_refine3D%set('center',                   'no')
         call cline_refine3D%set('pgrp',        params%pgrp_start)
+        if( trim(params%lp_est) .eq. 'yes' )then
+            call cline_refine3D%set('lpstart', params%lpstart)
+            call cline_refine3D%set('lpstop',  params%lpstop)
+        endif
         call cline_reconstruct3D%set('prg',      'reconstruct3D')
         call cline_reconstruct3D%set('box',     real(params%box))
         call cline_reconstruct3D%set('projfile', params%projfile)
