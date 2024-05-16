@@ -513,26 +513,28 @@ contains
         use simple_strategy2D3D_common, only: prepimgbatch, prepimg4align, calcrefvolshift_and_mapshifts2ptcls,killimgbatch,&
                                              &read_and_filter_refvols, preprefvol, discrete_read_imgbatch
         use simple_polarft_corrcalc,    only: polarft_corrcalc
-        use simple_fsc,                 only: plot_fsc
+        use simple_fsc,                 only: plot_fsc2
+        use simple_eul_prob_tab,        only: eul_prob_tab
         use simple_image
         class(pspec_lp_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         integer,          allocatable :: pinds(:)
         logical,          allocatable :: ptcl_mask(:)
-        real,             allocatable :: res(:), pspec(:)
+        real,             allocatable :: res(:), pspec1(:), pspec2(:), sigma2(:,:)
         type(image),      allocatable :: tmp_imgs(:)
         type(polarft_corrcalc)        :: pftcc
+        type(eul_prob_tab)            :: eulprob_obj_glob
         type(builder)                 :: build
         type(parameters)              :: params
         type(ori)                     :: o_tmp
         character(len=90)             :: filename
-        integer  :: nptcls, iptcl, s, ithr, iref, i
+        integer  :: nptcls, iptcl, s, ithr, iref, i, irot
         logical  :: l_ctf, do_center
-        real     :: xyz(3)
+        real     :: xyz(3), shvec(2)
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         params%kfromto(1) = 1
-        params%kfromto(2) = build%img%get_nyq()
+        params%kfromto(2) = build%vol%get_nyq()
         allocate(ptcl_mask(params%fromp:params%top))
         call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls, pinds, ptcl_mask, .false.)
         ! more prep
@@ -588,13 +590,32 @@ contains
         call pftcc%memoize_ptcls
         call killimgbatch
         ! spectrum of current volume
-        call build%vol%spectrum('power', pspec, .false.)    ! assuming one state
-        pspec    = sqrt(pspec)
-        filename = 'pspec_vol_iter'//int2str(params%which_iter)
-        res      = build%vol%get_res()
-        call plot_fsc(size(pspec), pspec, res, params%smpd, trim(filename))
+        call build%vol%spectrum('power', pspec1, .false.)    ! assuming one state
+        pspec1 = sqrt(pspec1)
+        pspec1 = pspec1 / sum(pspec1)
+        res    = build%vol%get_res()
+        ! total sigma of all ptcls
+        call eulprob_obj_glob%new(pinds)
+        call eulprob_obj_glob%read_assignment(trim(ASSIGNMENT_FBODY)//'.dat')
+        allocate(sigma2(params%kfromto(1):params%kfromto(2), nptcls), source=0.)
+        !$omp parallel do default(shared) private(i,iptcl,ithr,iref,irot,shvec) schedule(static) proc_bind(close)
+        do i = 1,nptcls
+            ithr  = omp_get_thread_num()+1
+            iptcl = pinds(i)
+            iref  = eulprob_obj_glob%assgn_map(iptcl)%iproj
+            irot  = eulprob_obj_glob%assgn_map(iptcl)%inpl
+            shvec = [eulprob_obj_glob%assgn_map(iptcl)%x, eulprob_obj_glob%assgn_map(iptcl)%y]
+            call pftcc%gencorr_sigma_contrib( iref, iptcl, shvec, irot, sigma2(:,i))
+        enddo
+        !$omp end parallel do
+        sigma2   = sigma2 / real(nptcls)
+        pspec2   = sqrt(sum(sigma2, dim=2))
+        pspec2   = pspec2 / sum(pspec2)
+        filename = 'pspec_vol_sigma_iter'//int2str(params%which_iter)
+        call plot_fsc2(size(pspec1), pspec1, pspec2, res, params%smpd_crop, trim(filename))
         ! ending
         call pftcc%kill
+        call eulprob_obj_glob%kill
         call build%kill_general_tbox
         ! end gracefully
         call qsys_job_finished('simple_commander_euclid :: exec_pspec_lp')
