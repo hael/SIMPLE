@@ -47,6 +47,7 @@ contains
     procedure          :: get_movies_table
     procedure          :: get_mics_table
     procedure          :: get_micparams
+    procedure          :: get_micname
     ! os_stk related methods
     procedure          :: add_stk
     procedure, private :: add_stktab_1
@@ -1433,6 +1434,25 @@ contains
         call simple_rmdir(tmp_dir,errmsg="sp_project::split_stk")
         call orig_stk%kill
     end subroutine split_stk
+
+    function get_micname( self, iptcl ) result( micname )
+        class(sp_project), intent(inout) :: self
+        integer,           intent(in)    :: iptcl
+        character(len=:), allocatable    :: micname
+        integer :: imic
+        if(iptcl < 1 .or. iptcl > self%os_ptcl2D%get_noris()) then
+            write(logfhandle,*) 'iptcl : ',  iptcl
+            write(logfhandle,*) 'nptcl2D: ', self%os_ptcl2D%get_noris()
+            THROW_HARD('iptcl index out of range; get_micname')
+        end if
+        imic = self%os_ptcl2D%get(iptcl, 'stkind')
+        if(imic < 1 .or. imic > self%os_mic%get_noris()) then
+            write(logfhandle,*) 'imic : ', imic
+            write(logfhandle,*) 'nmics: ', self%os_mic%get_noris()
+            THROW_HARD('imic index out of range; get_micname')
+        end if
+        micname = trim(self%os_mic%get_static(imic, 'intg'))
+    end function get_micname
 
     function get_stkname( self, imic ) result( stkname )
         class(sp_project), intent(inout) :: self

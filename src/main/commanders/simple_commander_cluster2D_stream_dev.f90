@@ -1,18 +1,19 @@
 ! concrete commander: dev cluster2D_stream for streaming 2D alignment and clustering of single-particle images
 module simple_commander_cluster2D_stream_dev
 include 'simple_lib.f08'
-use simple_cmdline,          only: cmdline
-use simple_commander_base,   only: commander_base
-use simple_parameters,       only: parameters, params_glob
-use simple_sp_project,       only: sp_project
-use simple_qsys_env,         only: qsys_env
-use simple_image,            only: image
-use simple_stream_chunk,     only: stream_chunk, micproj_record, DIR_CHUNK
-use simple_class_frcs,       only: class_frcs
-use simple_stack_io,         only: stack_io
-use simple_starproject,      only: starproject
-use simple_euclid_sigma2,    only: consolidate_sigma2_groups, split_sigma2_into_groups, sigma2_star_from_iter
-use simple_guistats,         only: guistats
+use simple_cmdline,            only: cmdline
+use simple_commander_base,     only: commander_base
+use simple_parameters,         only: parameters, params_glob
+use simple_sp_project,         only: sp_project
+use simple_qsys_env,           only: qsys_env
+use simple_image,              only: image
+use simple_stream_chunk,       only: stream_chunk, micproj_record, DIR_CHUNK
+use simple_class_frcs,         only: class_frcs
+use simple_stack_io,           only: stack_io
+use simple_starproject,        only: starproject
+use simple_starproject_stream, only: starproject_stream
+use simple_euclid_sigma2,      only: consolidate_sigma2_groups, split_sigma2_into_groups, sigma2_star_from_iter
+use simple_guistats,           only: guistats
 use simple_qsys_funs
 use simple_commander_cluster2D
 use FoX_dom
@@ -79,9 +80,11 @@ contains
         class(sp_project), intent(inout) :: spproj
         integer,           intent(in)    :: box_in
         character(len=*),  intent(in)    :: projfilegui ! to go?
-        character(len=:), allocatable :: carg
+        character(len=:), allocatable    :: carg
+        character(len=STDLEN)            :: chunk_nthr_env, pool_nthr_env, pool_part_env
         real    :: SMPD_TARGET = MAX_SMPD  ! target sampling distance
-        integer :: ichunk
+        real    :: chunk_nthr, pool_nthr
+        integer :: ichunk, envlen
         call seed_rnd
         ! general parameters
         call mskdiam2lplimits(params_glob%mskdiam, lpstart, lpstop, lpcen)
@@ -131,7 +134,6 @@ contains
         call cline_cluster2D_chunk%set('startit',   1.)
         call cline_cluster2D_chunk%set('mskdiam',   params_glob%mskdiam)
         call cline_cluster2D_chunk%set('ncls',      real(params_glob%ncls_start))
-        call cline_cluster2D_chunk%set('nthr',      real(params_glob%nthr))
         call cline_cluster2D_chunk%set('nonuniform',params_glob%nonuniform)
         call cline_cluster2D_chunk%set('nsearch',   real(params_glob%nsearch))
         call cline_cluster2D_chunk%set('smooth_ext',real(params_glob%smooth_ext))
@@ -147,6 +149,14 @@ contains
         else
             call cline_cluster2D_chunk%set('rnd_cls_init','no')
         endif
+        ! EV override
+        call get_environment_variable(SIMPLE_STREAM_CHUNK_NTHR, chunk_nthr_env, envlen)
+        if(envlen > 0) then
+            read(chunk_nthr_env,*) chunk_nthr
+            call cline_cluster2D_chunk%set('nthr', chunk_nthr)
+        else
+            call cline_cluster2D_chunk%set('nthr', real(params_glob%nthr))
+        end if
         allocate(chunks(params_glob%nchunks))
         do ichunk = 1,params_glob%nchunks
             call chunks(ichunk)%init(ichunk, pool_proj)
@@ -177,10 +187,23 @@ contains
         call cline_cluster2D_pool%set('mskdiam',   params_glob%mskdiam)
         call cline_cluster2D_pool%set('async',     'yes') ! to enable hard termination
         call cline_cluster2D_pool%set('stream',    'yes') ! use for dual CTF treatment
-        call cline_cluster2D_pool%set('nthr',     real(params_glob%nthr))
         call cline_cluster2D_pool%set('nparts',   real(params_glob%nparts_pool))
         if( l_update_sigmas ) call cline_cluster2D_pool%set('cc_iters', 0.0)
-        call qenv_pool%new(params_glob%nparts_pool,exec_bin='simple_private_exec',qsys_name='local')
+        ! EV override
+        call get_environment_variable(SIMPLE_STREAM_POOL_NTHR, pool_nthr_env, envlen)
+        if(envlen > 0) then
+            read(pool_nthr_env,*) pool_nthr
+            call cline_cluster2D_pool%set('nthr', pool_nthr)
+        else
+            call cline_cluster2D_pool%set('nthr', real(params_glob%nthr))
+        end if
+        ! EV override
+        call get_environment_variable(SIMPLE_STREAM_POOL_PARTITION, pool_part_env, envlen)
+        if(envlen > 0) then
+            call qenv_pool%new(params_glob%nparts_pool,exec_bin='simple_private_exec',qsys_name='local', qsys_partition=trim(pool_part_env))
+        else
+            call qenv_pool%new(params_glob%nparts_pool,exec_bin='simple_private_exec',qsys_name='local')
+        end if
         ! objective function
         select case(params_glob%cc_objfun)
         case(OBJFUN_CC)
@@ -1133,7 +1156,9 @@ contains
     end subroutine write_project_stream2D_dev
 
     subroutine terminate_stream2D_dev
-        integer :: ichunk, ipart
+        type(starproject_stream) :: starproj_stream
+        integer                  :: ichunk, ipart
+        logical,     parameter   :: DEBUG_HERE      = .true.
         do ichunk = 1,params_glob%nchunks
             call chunks(ichunk)%terminate
         enddo
@@ -1149,6 +1174,10 @@ contains
         endif
         call write_project_stream2D_dev
         if( pool_iter >= 1 ) call rank_cavgs
+        ! write starfiles
+        call copy_micrographs_optics
+        call write_migrographs_starfile(optics_set=.true.)
+        call write_particles_starfile(optics_set=.true.)
         ! cleanup
         call simple_rmdir(SIGMAS_DIR)
         call del_file(trim(POOL_DIR)//trim(PROJFILE_POOL))
@@ -1156,6 +1185,60 @@ contains
         if( .not.debug_here )then
             call qsys_cleanup
         endif
+
+        contains
+
+        subroutine copy_micrographs_optics
+                integer(timer_int_kind) ::ms0
+                real(timer_int_kind)    :: ms_copy_optics
+                type(sp_project)        :: spproj_optics
+                if( params_glob%projfile_optics .ne. '' .and. file_exists('../' // trim(params_glob%projfile_optics)) ) then
+                    if( DEBUG_HERE ) ms0 = tic()
+                    call spproj_optics%read('../' // trim(params_glob%projfile_optics))
+                    call starproj_stream%copy_optics(pool_proj, spproj_optics)
+                    call spproj_optics%kill()
+                    if( DEBUG_HERE )then
+                        ms_copy_optics = toc(ms0)
+                        print *,'ms_copy_optics  : ', ms_copy_optics; call flush(6)
+                    endif
+                end if
+            end subroutine copy_micrographs_optics
+
+            !>  write starfile snapshot
+            subroutine write_migrographs_starfile( optics_set )
+                logical, optional, intent(in) :: optics_set
+                integer(timer_int_kind)       :: ms0
+                real(timer_int_kind)          :: ms_export
+                logical                       :: l_optics_set
+                l_optics_set = .false.
+                if( present(optics_set) ) l_optics_set = optics_set
+                if (pool_proj%os_mic%get_noris() > 0) then
+                    if( DEBUG_HERE ) ms0 = tic()
+                    call starproj_stream%stream_export_micrographs(pool_proj, params_glob%outdir, optics_set=l_optics_set)
+                    if( DEBUG_HERE )then
+                        ms_export = toc(ms0)
+                        print *,'ms_export  : ', ms_export; call flush(6)
+                    endif
+                end if
+            end subroutine write_migrographs_starfile
+
+            subroutine write_particles_starfile( optics_set )
+                logical, optional, intent(in) :: optics_set
+                integer(timer_int_kind)       :: ptcl0
+                real(timer_int_kind)          :: ptcl_export
+                logical                       :: l_optics_set
+                l_optics_set = .false.
+                if( present(optics_set) ) l_optics_set = optics_set
+                if (pool_proj%os_ptcl2D%get_noris() > 0) then
+                    if( DEBUG_HERE ) ptcl0 = tic()
+                    call starproj_stream%stream_export_particles_2D(pool_proj, params_glob%outdir, optics_set=l_optics_set)
+                    if( DEBUG_HERE )then
+                        ptcl_export = toc(ptcl0)
+                        print *,'ptcl_export  : ', ptcl_export; call flush(6)
+                    endif
+                end if
+            end subroutine write_particles_starfile
+
     end subroutine terminate_stream2D_dev
 
     !

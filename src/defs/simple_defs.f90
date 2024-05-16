@@ -2,6 +2,7 @@ module simple_defs
 use, intrinsic :: iso_fortran_env
 use, intrinsic :: iso_c_binding
 use simple_defs_fname
+use simple_defs_environment
 implicit none
 integer,  parameter :: MAXS         = 99 !< maximum number of states
 integer,  parameter :: short        = selected_int_kind(4)

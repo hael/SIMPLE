@@ -70,11 +70,12 @@ contains
         type(starproject_stream)               :: starproj_stream
         character(len=LONGSTRLEN), allocatable :: movies(:)
         character(len=:),          allocatable :: output_dir, output_dir_ctf_estimate, output_dir_motion_correct
-        integer                                :: movies_set_counter
+        character(len=STDLEN)                  :: preproc_nthr_env, preproc_part_env
+        integer                                :: movies_set_counter, import_counter
         integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection, nsets, i,j
-        integer                                :: cnt, n_imported, n_added, n_failed_jobs, n_fail_iter, nmic_star, iset
+        integer                                :: cnt, n_imported, n_added, n_failed_jobs, n_fail_iter, nmic_star, iset, envlen
         logical                                :: l_movies_left, l_haschanged
-        real                                   :: avg_tmp
+        real                                   :: avg_tmp, preproc_nthr
         call cline%set('oritype',     'mic')
         call cline%set('mkdir',       'yes')
         call cline%set('reject_mics', 'no')
@@ -99,6 +100,12 @@ contains
         if( .not. cline%defined('dfmin')            ) call cline%set('dfmin',           DFMIN_DEFAULT)
         if( .not. cline%defined('dfmax')            ) call cline%set('dfmax',           DFMAX_DEFAULT)
         if( .not. cline%defined('ctfpatch')         ) call cline%set('ctfpatch',        'yes')
+        ! ev overrides
+        call get_environment_variable(SIMPLE_STREAM_PREPROC_NTHR, preproc_nthr_env, envlen)
+        if(envlen > 0) then
+            read(preproc_nthr_env,*) preproc_nthr
+            call cline%set('nthr', preproc_nthr)
+        end if
         ! write cmdline for GUI
         call cline%writeline(".cline")
         ! sanity check for restart
@@ -130,6 +137,7 @@ contains
         call gui_stats%set('compute',     'compute_in_use',       int2str(0) // '/' // int2str(params%nparts), primary=.true.)
         ! restart
         movies_set_counter = 0  ! global number of movies set
+        import_counter     = 0  ! global import id
         nmic_star          = 0
         if( cline%defined('dir_exec') )then
             call del_file(TERM_STREAM)
@@ -185,7 +193,12 @@ contains
         ! initialise progress monitor
         call progressfile_init()
         ! setup the environment for distributed execution
-        call qenv%new(1,stream=.true.)
+        call get_environment_variable(SIMPLE_STREAM_PREPROC_PARTITION, preproc_part_env, envlen)
+        if(envlen > 0) then
+            call qenv%new(1,stream=.true.,qsys_partition=trim(preproc_part_env))
+        else
+            call qenv%new(1,stream=.true.)
+        end if
         ! Infinite loop
         last_injection = simple_gettime()
         prev_stacksz   = 0
@@ -331,7 +344,7 @@ contains
         end do
         ! termination
         call update_user_params(cline)
-        call write_mic_star_and_field(write_field=.true.)
+        call write_mic_star_and_field(write_field=.true., copy_optics=.true.)
         ! final stats
         call gui_stats%hide('compute', 'compute_in_use')
         call gui_stats%write_json
@@ -343,25 +356,52 @@ contains
         call simple_end('**** SIMPLE_STREAM_PREPROC NORMAL STOP ****')
         contains
 
-            subroutine write_mic_star_and_field( write_field )
-                logical, optional, intent(in) :: write_field
-                logical :: l_wfield
-                l_wfield = .false.
-                if( present(write_field) ) l_wfield = write_field
-                call write_migrographs_starfile
+            subroutine write_mic_star_and_field( write_field, copy_optics )
+                logical, optional, intent(in) :: write_field, copy_optics
+                logical :: l_wfield, l_copy_optics
+                l_wfield      = .false.
+                l_copy_optics = .false.
+                if( present(write_field) ) l_wfield      = write_field
+                if( present(copy_optics) ) l_copy_optics = copy_optics
+                if(l_copy_optics) then
+                    call copy_micrographs_optics()
+                    call write_migrographs_starfile(optics_set = .true.)
+                else
+                    call write_migrographs_starfile
+                end if
                 if( l_wfield )then
                     call spproj_glob%write_segment_inside('mic', params%projfile)
                     call spproj_glob%write_non_data_segments(params%projfile)
                 endif
             end subroutine write_mic_star_and_field
 
+            subroutine copy_micrographs_optics
+                integer(timer_int_kind) ::ms0
+                real(timer_int_kind)    :: ms_copy_optics
+                type(sp_project)        :: spproj_optics
+                if( params%projfile_optics .ne. '' .and. file_exists('../' // trim(params%projfile_optics)) ) then
+                    if( DEBUG_HERE ) ms0 = tic()
+                    call spproj_optics%read('../' // trim(params%projfile_optics))
+                    call starproj_stream%copy_optics(spproj_glob, spproj_optics)
+                    call spproj_optics%kill()
+                    if( DEBUG_HERE )then
+                        ms_copy_optics = toc(ms0)
+                        print *,'ms_copy_optics  : ', ms_copy_optics; call flush(6)
+                    endif
+                end if
+            end subroutine copy_micrographs_optics
+
             !>  write starfile snapshot
-            subroutine write_migrographs_starfile
-                integer(timer_int_kind)      :: ms0
-                real(timer_int_kind)         :: ms_export
+            subroutine write_migrographs_starfile( optics_set )
+                logical, optional, intent(in) :: optics_set
+                integer(timer_int_kind)       :: ms0
+                real(timer_int_kind)          :: ms_export
+                logical                       :: l_optics_set
+                l_optics_set = .false.
+                if( present(optics_set) ) l_optics_set = optics_set
                 if (spproj_glob%os_mic%get_noris() > 0) then
                     if( DEBUG_HERE ) ms0 = tic()
-                    call starproj_stream%stream_export_micrographs(spproj_glob, params%outdir)
+                    call starproj_stream%stream_export_micrographs(spproj_glob, params%outdir, optics_set=l_optics_set)
                     if( DEBUG_HERE )then
                         ms_export = toc(ms0)
                         print *,'ms_export  : ', ms_export; call flush(6)
@@ -492,10 +532,12 @@ contains
                 ctfvars%l_phaseplate = params%phaseplate.eq.'yes'
                 call spproj_here%add_movies(movie_names(1:NMOVS_SET), ctfvars, verbose = .false.)
                 do imov = 1,NMOVS_SET
-                    call spproj_here%os_mic%set(imov, "tiltgrp", 0.0)
-                    call spproj_here%os_mic%set(imov, "shiftx",  0.0)
-                    call spproj_here%os_mic%set(imov, "shifty",  0.0)
-                    call spproj_here%os_mic%set(imov, "flsht",   0.0)
+                    import_counter = import_counter + 1
+                    call spproj_here%os_mic%set(imov, "importind", real(import_counter))
+                    call spproj_here%os_mic%set(imov, "tiltgrp",   0.0)
+                    call spproj_here%os_mic%set(imov, "shiftx",    0.0)
+                    call spproj_here%os_mic%set(imov, "shifty",    0.0)
+                    call spproj_here%os_mic%set(imov, "flsht",     0.0)
                     if(cline%defined('dir_meta')) then
                         xmldir = cline%get_carg('dir_meta')
                         xmlfile = basename(trim(movie_names(imov)))
@@ -568,6 +610,8 @@ contains
                     call str2int(fname, iostat, id)
                     if( iostat==0 ) movies_set_counter = max(movies_set_counter, id)
                 enddo
+                ! update import id counter
+                import_counter = spproj_glob%os_mic%get_noris()
                 ! add previous movies to history
                 do imic = 1,spproj_glob%os_mic%get_noris()
                     moviename = spproj_glob%os_mic%get_static(imic,'movie')
@@ -588,7 +632,7 @@ contains
         type(parameters)                       :: params
         type(guistats)                         :: gui_stats
         integer,                   parameter   :: INACTIVE_TIME   = 900  ! inactive time triggers writing of project file
-        logical,                   parameter   :: DEBUG_HERE      = .false.
+        logical,                   parameter   :: DEBUG_HERE      = .true.
         class(cmdline),            allocatable :: completed_jobs_clines(:), failed_jobs_clines(:)
         type(micproj_record),      allocatable :: micproj_records(:)
         type(qsys_env)                         :: qenv
@@ -600,10 +644,12 @@ contains
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=:),          allocatable :: output_dir, output_dir_extract, output_dir_picker
         character(len=LONGSTRLEN)              :: cwd_job, latest_boxfile
+        character(len=STDLEN)                  :: pick_nthr_env, pick_part_env
         real,                      allocatable :: moldiams(:)
+        real                                   :: pick_nthr
         integer                                :: pick_extract_set_counter    ! Internal counter of projects to be processed
         integer                                :: nmics_sel, nmics_rej, nmics_rejected_glob
-        integer                                :: nmics, nprojects, stacksz, prev_stacksz, iter, last_injection, iproj
+        integer                                :: nmics, nprojects, stacksz, prev_stacksz, iter, last_injection, iproj, envlen
         integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, nmic_star
         logical                                :: l_templates_provided, l_projects_left, l_haschanged, l_multipick, l_extract
         integer(timer_int_kind) :: t0
@@ -625,6 +671,12 @@ contains
         ! extraction
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',        'black')
         if( .not. cline%defined('extractfrommov')  ) call cline%set('extractfrommov',   'no')
+        ! ev overrides
+        call get_environment_variable(SIMPLE_STREAM_PICK_NTHR, pick_nthr_env, envlen)
+        if(envlen > 0) then
+            read(pick_nthr_env,*) pick_nthr
+            call cline%set('nthr', pick_nthr)
+        end if
         ! write cmdline for GUI
         call cline%writeline(".cline")
         ! sanity check for restart
@@ -709,15 +761,20 @@ contains
         ! initialise progress monitor
         call progressfile_init()
         ! setup the environment for distributed execution
-        call qenv%new(1,stream=.true.)
+        call get_environment_variable(SIMPLE_STREAM_PICK_PARTITION, pick_part_env, envlen)
+        if(envlen > 0) then
+            call qenv%new(1,stream=.true.,qsys_partition=trim(pick_part_env))
+        else
+            call qenv%new(1,stream=.true.)
+        end if
         ! prepares picking references
         if( l_templates_provided )then
             cline_make_pickrefs = cline
             call cline_make_pickrefs%set('prg','make_pickrefs')
             call cline_make_pickrefs%set('stream','no')
             call cline_make_pickrefs%delete('ncls')
-            call cline_make_pickrefs%delete('moldiam')
             call cline_make_pickrefs%delete('mskdiam')
+            if(.not.cline%defined('moldiam')) call cline_make_pickrefs%delete('moldiam')
             call xmake_pickrefs%execute_shmem(cline_make_pickrefs)
             call cline%set('pickrefs', '../'//trim(PICKREFS_FBODY)//trim(params%ext))
             write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
@@ -862,7 +919,12 @@ contains
         ! termination
         call write_project
         call update_user_params(cline)
-        call write_migrographs_starfile
+        call copy_micrographs_optics
+        call write_migrographs_starfile(optics_set=.true.)
+        call write_particles_starfile(optics_set=.true.)
+        ! kill ptcls now starfiles written
+        call spproj_glob%os_stk%kill
+        call spproj_glob%os_ptcl2D%kill
         ! final stats
         call gui_stats%hide('compute', 'compute_in_use')
         call gui_stats%write_json
@@ -874,19 +936,57 @@ contains
         call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT NORMAL STOP ****')
         contains
 
+            subroutine copy_micrographs_optics
+                integer(timer_int_kind) ::ms0
+                real(timer_int_kind)    :: ms_copy_optics
+                type(sp_project)        :: spproj_optics
+                if( params%projfile_optics .ne. '' .and. file_exists('../' // trim(params%projfile_optics)) ) then
+                    if( DEBUG_HERE ) ms0 = tic()
+                    call spproj_optics%read('../' // trim(params%projfile_optics))
+                    call starproj_stream%copy_optics(spproj_glob, spproj_optics)
+                    call spproj_optics%kill()
+                    call spproj_glob%write
+                    if( DEBUG_HERE )then
+                        ms_copy_optics = toc(ms0)
+                        print *,'ms_copy_optics  : ', ms_copy_optics; call flush(6)
+                    endif
+                end if
+            end subroutine copy_micrographs_optics
+
             !>  write starfile snapshot
-            subroutine write_migrographs_starfile
-                integer(timer_int_kind)      :: ms0
-                real(timer_int_kind)         :: ms_export
+            subroutine write_migrographs_starfile( optics_set )
+                logical, optional, intent(in) :: optics_set
+                integer(timer_int_kind)       :: ms0
+                real(timer_int_kind)          :: ms_export
+                logical                       :: l_optics_set
+                l_optics_set = .false.
+                if( present(optics_set) ) l_optics_set = optics_set
                 if (spproj_glob%os_mic%get_noris() > 0) then
                     if( DEBUG_HERE ) ms0 = tic()
-                    call starproj_stream%stream_export_micrographs(spproj_glob, params%outdir)
+                    call starproj_stream%stream_export_micrographs(spproj_glob, params%outdir, optics_set=l_optics_set)
                     if( DEBUG_HERE )then
                         ms_export = toc(ms0)
                         print *,'ms_export  : ', ms_export; call flush(6)
                     endif
                 end if
             end subroutine write_migrographs_starfile
+
+            subroutine write_particles_starfile( optics_set )
+                logical, optional, intent(in) :: optics_set
+                integer(timer_int_kind)       :: ptcl0
+                real(timer_int_kind)          :: ptcl_export
+                logical                       :: l_optics_set
+                l_optics_set = .false.
+                if( present(optics_set) ) l_optics_set = optics_set
+                if (spproj_glob%os_ptcl2D%get_noris() > 0) then
+                    if( DEBUG_HERE ) ptcl0 = tic()
+                    call starproj_stream%stream_export_particles_2D(spproj_glob, params%outdir, optics_set=l_optics_set)
+                    if( DEBUG_HERE )then
+                        ptcl_export = toc(ptcl0)
+                        print *,'ptcl_export  : ', ptcl_export; call flush(6)
+                    endif
+                end if
+            end subroutine write_particles_starfile
 
             subroutine write_project()
                 integer, allocatable :: fromps(:)
@@ -921,7 +1021,6 @@ contains
                         call spproj_glob%os_stk%set(imic, 'top',  real(top))
                     enddo
                     call spproj_glob%write_segment_inside('stk', params%projfile)
-                    call spproj_glob%os_stk%kill
                     ! particles
                     call spproj_glob%os_ptcl2D%new(nptcls, is_ptcl=.true.)
                     iptcl         = 0
@@ -944,7 +1043,6 @@ contains
                     write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:          ',spproj_glob%os_ptcl2D%get_noris()
                     call spproj_glob%write_segment_inside('ptcl2D', params%projfile)
                     spproj_glob%os_ptcl3D = spproj_glob%os_ptcl2D
-                    call spproj_glob%os_ptcl2D%kill
                     call spproj_glob%os_ptcl3D%delete_2Dclustering
                     call spproj_glob%write_segment_inside('ptcl3D', params%projfile)
                     call spproj_glob%os_ptcl3D%kill
@@ -1278,6 +1376,7 @@ contains
                 enddo
                 write(logfhandle,'(A,I4,A,A)')'>>> ' , nprojects * NMOVS_SET, ' NEW MICROGRAPHS IMPORTED; ',cast_time_char(simple_gettime())
                 call starproj_stream%stream_export_optics(spproj, params%outdir)
+                call starproj_stream%stream_export_micrographs(spproj, params%outdir, optics_set=.true.)
                 ! guistats
                 call gui_stats%set('micrographs', 'micrographs_imported', int2str(0), primary=.true.)
                 call gui_stats%set('groups', 'optics_group_assigned', spproj%os_optics%get_noris(), primary=.true.)
@@ -1297,6 +1396,7 @@ contains
         call gui_stats%write_json
         call gui_stats%kill
         ! cleanup
+        call spproj%write
         call spproj%kill
         ! end gracefully
         call simple_end('**** SIMPLE_STREAM_ASSIGN_OPTICS NORMAL STOP ****')
@@ -1310,7 +1410,7 @@ contains
         type(parameters)                       :: params
         type(guistats)                         :: gui_stats
         integer,                   parameter   :: INACTIVE_TIME   = 900  ! inactive time trigger for writing project file
-        logical,                   parameter   :: DEBUG_HERE      = .false.
+        logical,                   parameter   :: DEBUG_HERE      = .true.
         type(micproj_record),      allocatable :: micproj_records(:)
         type(moviewatcher)                     :: project_buff
         type(sp_project)                       :: spproj_glob
@@ -1371,8 +1471,6 @@ contains
             call del_file(micspproj_fname)
             call cleanup_root_folder
         endif
-        ! Only required for compatibility with old version (chunk)
-        params%nthr2D = params%nthr
         ! initialise progress monitor
         call progressfile_init()
         ! master project file

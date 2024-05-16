@@ -142,6 +142,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: pickrefs=''          !< picking references
     character(len=LONGSTRLEN) :: plaintexttab=''      !< plain text file of input parameters
     character(len=LONGSTRLEN) :: projfile=''          !< SIMPLE *.simple project file
+    character(len=LONGSTRLEN) :: projfile_optics=''   !< SIMPLE *.simple project file containing optics group definitions
     character(len=LONGSTRLEN) :: projfile_target=''   !< another SIMPLE *.simple project file
     character(len=LONGSTRLEN) :: refs=''              !< initial2Dreferences.ext
     character(len=LONGSTRLEN) :: refs_even=''
@@ -604,6 +605,7 @@ contains
         call check_carg('randomise',      self%randomise)
         call check_carg('prob_sh',        self%prob_sh)
         call check_carg('prob_norm',      self%prob_norm)
+        call check_carg('projfile_optics',self%projfile_optics)
         call check_carg('remap_cls',      self%remap_cls)
         call check_carg('roavg',          self%roavg)
         call check_carg('silence_fsc',    self%silence_fsc)
