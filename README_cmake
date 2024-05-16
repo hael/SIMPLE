@@ -1,0 +1,15 @@
+# FindFFTW
+
+    # Input variables
+    FFTW_ROOT
+    FFTWDIR
+    PGIHOME
+    MKLROOT
+
+    # Output variables
+    FFTW_FOUND        <TRUE|FALSE>
+    FFTW_LIBRARIES    <PATH>
+    FFTW_INCLUDE_DIRS <PATH>
+
+
+
