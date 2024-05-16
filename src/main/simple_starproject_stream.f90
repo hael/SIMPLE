@@ -28,6 +28,7 @@ contains
     ! export
     procedure          :: stream_export_micrographs
     procedure          :: stream_export_optics
+    procedure          :: stream_export_particles_2D
     !starfile
     procedure, private :: starfile_init
     procedure, private :: starfile_deinit
@@ -35,10 +36,11 @@ contains
     procedure, private :: starfile_set_optics_table
     procedure, private :: starfile_set_optics_group_table
     procedure, private :: starfile_set_micrographs_table
+    procedure, private :: starfile_set_particles2D_table
     !optics
     procedure, private :: assign_optics_single
     procedure, private :: assign_optics
-
+    procedure          :: copy_optics
 
 end type starproject_stream
 
@@ -191,13 +193,66 @@ contains
 
     end subroutine starfile_set_micrographs_table
 
+    subroutine starfile_set_particles2D_table( self, spproj )
+        class(starproject_stream), intent(inout) :: self
+        class(sp_project),         intent(inout) :: spproj
+        character(len=:),          allocatable   :: stkname
+        integer                                  :: i, ind_in_stk, stkind, pathtrim, half_boxsize
+        pathtrim = 0
+        call starfile_table__clear(self%starfile)
+        call starfile_table__new(self%starfile)
+        call starfile_table__setIsList(self%starfile, .false.)
+        call starfile_table__setname(self%starfile, 'particles')
+        do i=1,spproj%os_ptcl2d%get_noris()
+            call starfile_table__addObject(self%starfile)
+            if(spproj%os_ptcl2d%get(i, 'state') .eq. 0.0 ) cycle
+            call spproj%get_stkname_and_ind('ptcl2D', i, stkname, ind_in_stk)
+            stkind = floor(spproj%os_ptcl2d%get(ind_in_stk, 'stkind'))
+            half_boxsize = floor(spproj%os_stk%get(stkind, 'box') / 2.0)
+            ! ints
+            if(spproj%os_ptcl2d%isthere(i, 'ogid'   )) call starfile_table__setValue_int(self%starfile, EMDL_IMAGE_OPTICS_GROUP, int(spproj%os_ptcl2d%get(i, 'ogid' )))
+            if(spproj%os_ptcl2d%isthere(i, 'class'  )) call starfile_table__setValue_int(self%starfile, EMDL_PARTICLE_CLASS,     int(spproj%os_ptcl2d%get(i, 'class')))
+            if(spproj%os_ptcl2d%isthere(i, 'gid'    )) call starfile_table__setValue_int(self%starfile, EMDL_MLMODEL_GROUP_NO,   int(spproj%os_ptcl2d%get(i, 'gid'  )))
+            ! doubles
+            if(spproj%os_ptcl2d%isthere(i, 'dfx'    )) call starfile_table__setValue_double(self%starfile,  EMDL_CTF_DEFOCUSU,              real(spproj%os_ptcl2d%get(i, 'dfx') / 0.0001,        dp))
+            if(spproj%os_ptcl2d%isthere(i, 'dfy'    )) call starfile_table__setValue_double(self%starfile,  EMDL_CTF_DEFOCUSV,              real(spproj%os_ptcl2d%get(i, 'dfy') / 0.0001,        dp))
+            if(spproj%os_ptcl2d%isthere(i, 'angast' )) call starfile_table__setValue_double(self%starfile,  EMDL_CTF_DEFOCUS_ANGLE,         real(spproj%os_ptcl2d%get(i, 'angast'),              dp))
+            if(spproj%os_ptcl2d%isthere(i, 'phshift')) call starfile_table__setValue_double(self%starfile,  EMDL_CTF_PHASESHIFT,            real(spproj%os_ptcl2d%get(i, 'phshift'),             dp))
+            if(spproj%os_ptcl2d%isthere(i, 'e3'     )) call starfile_table__setValue_double(self%starfile,  EMDL_ORIENT_PSI,                real(spproj%os_ptcl2d%get(i, 'e3'),                  dp))
+            if(spproj%os_ptcl2d%isthere(i, 'xpos'   )) call starfile_table__setValue_double(self%starfile,  EMDL_IMAGE_COORD_X,             real(spproj%os_ptcl2d%get(i, 'xpos') + half_boxsize, dp))
+            if(spproj%os_ptcl2d%isthere(i, 'ypos'   )) call starfile_table__setValue_double(self%starfile,  EMDL_IMAGE_COORD_Y,             real(spproj%os_ptcl2d%get(i, 'ypos') + half_boxsize, dp))
+            if(spproj%os_ptcl2d%isthere(i, 'x'      )) call starfile_table__setValue_double(self%starfile,  EMDL_ORIENT_ORIGIN_X_ANGSTROM,  real(spproj%os_ptcl2d%get(i, 'x'),                   dp))
+            if(spproj%os_ptcl2d%isthere(i, 'y'      )) call starfile_table__setValue_double(self%starfile,  EMDL_ORIENT_ORIGIN_Y_ANGSTROM,  real(spproj%os_ptcl2d%get(i, 'y'),                   dp))
+            ! strings
+            if(stkname .ne. '' .and. ind_in_stk .gt. 0) then
+                call starfile_table__setValue_string(self%starfile, EMDL_IMAGE_NAME,      int2str(ind_in_stk) // '@' // trim(get_relative_path(stkname)))
+                call starfile_table__setValue_string(self%starfile, EMDL_MICROGRAPH_NAME, trim(get_relative_path(spproj%get_micname(i))))
+            end if
+
+        end do
+        if(allocated(stkname)) deallocate(stkname)
+
+        contains
+
+            function get_relative_path ( path ) result ( newpath )
+                character(len=*),           intent(in) :: path
+                character(len=STDLEN)                  :: newpath
+                if(pathtrim .eq. 0) pathtrim = index(path, trim(self%rootpath)) 
+                newpath = trim(path(pathtrim:)) 
+            end function get_relative_path
+
+    end subroutine starfile_set_particles2D_table
     ! export
 
-    subroutine stream_export_micrographs( self, spproj, outdir)
+    subroutine stream_export_micrographs( self, spproj, outdir, optics_set)
         class(starproject_stream),  intent(inout) :: self
         class(sp_project),          intent(inout) :: spproj
         character(len=LONGSTRLEN),  intent(in)    :: outdir
-        call self%assign_optics_single(spproj)
+        logical,         optional,  intent(in)    :: optics_set
+        logical  :: l_optics_set
+        l_optics_set = .false.
+        if(present(optics_set)) l_optics_set = optics_set
+        if(.not. l_optics_set) call self%assign_optics_single(spproj)
         call self%starfile_init('micrographs.star', outdir)
         call self%starfile_set_optics_table(spproj)
         call self%starfile_write_table(append = .false.)
@@ -206,7 +261,7 @@ contains
         call self%starfile_deinit()
     end subroutine stream_export_micrographs
  
-    subroutine stream_export_optics( self, spproj, outdir)
+    subroutine stream_export_optics( self, spproj, outdir )
         class(starproject_stream),            intent(inout) :: self
         class(sp_project),                    intent(inout) :: spproj
         character(len=LONGSTRLEN),            intent(in)    :: outdir
@@ -226,6 +281,24 @@ contains
         end do
         call self%starfile_deinit()
     end subroutine stream_export_optics
+
+    subroutine stream_export_particles_2D( self, spproj, outdir, optics_set)
+        class(starproject_stream),            intent(inout) :: self
+        class(sp_project),                    intent(inout) :: spproj
+        character(len=LONGSTRLEN),            intent(in)    :: outdir
+        logical,         optional,            intent(in)    :: optics_set
+        logical                                             :: l_optics_set
+        integer                                             :: ioptics
+        l_optics_set = .false.
+        if(present(optics_set)) l_optics_set = optics_set
+        if(.not. l_optics_set) call self%assign_optics_single(spproj)
+        call self%starfile_init('particles2D.star', outdir)
+        call self%starfile_set_optics_table(spproj)
+        call self%starfile_write_table(append = .false.)
+        call self%starfile_set_particles2D_table(spproj)
+        call self%starfile_write_table(append = .true.)
+        call self%starfile_deinit()
+    end subroutine stream_export_particles_2D
 
     ! optics
 
@@ -462,5 +535,40 @@ contains
             end subroutine h_clust
 
     end subroutine assign_optics
+
+    subroutine copy_optics( self, spproj, spproj_src )
+        class(starproject_stream),  intent(inout) :: self
+        class(sp_project),          intent(inout) :: spproj, spproj_src
+        real, allocatable                         :: ogmap(:)
+        real    :: min_importind, max_importind
+        integer :: i, stkind
+        call spproj%os_mic%minmax('importind', min_importind, max_importind)
+        call spproj%os_optics%copy(spproj_src%os_optics, is_ptcl=.false.)
+        allocate(ogmap(int(max_importind)))
+        do i=1, int(max_importind)
+            ogmap(i) = 1
+        end do
+        do i=1, spproj_src%os_mic%get_noris()
+            if(spproj_src%os_mic%isthere(i, 'importind') .and. spproj_src%os_mic%isthere(i, 'ogid') .and. .not. spproj_src%os_mic%get(i, 'importind') .gt. max_importind) then
+               ogmap(int(spproj_src%os_mic%get(i, 'importind'))) = spproj_src%os_mic%get(i, 'ogid')
+            end if
+        end do
+        do i=1, spproj%os_mic%get_noris()
+            if(spproj%os_mic%isthere(i, 'importind')) then
+                call spproj%os_mic%set(i, 'ogid', ogmap(int(spproj%os_mic%get(i, 'importind'))))
+            end if
+        end do
+        if(spproj%os_ptcl2d%get_noris() .gt. 0) then
+            do i=1, spproj%os_ptcl2d%get_noris()
+                if(spproj%os_ptcl2d%isthere(i, 'stkind')) then
+                    stkind = int(spproj%os_ptcl2d%get(i, 'stkind'))
+                    call spproj%os_ptcl2d%set(i, 'ogid', spproj%os_mic%get(stkind, 'ogid'))
+                end if
+            end do
+        end if
+        if(allocated(ogmap)) deallocate(ogmap)
+    end subroutine copy_optics  
+
+
 
 end module simple_starproject_stream

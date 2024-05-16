@@ -40,7 +40,7 @@ end type qsys_env
 
 contains
 
-    subroutine new( self, nparts, stream, numlen, nptcls, exec_bin, qsys_name, qsys_nthr )
+    subroutine new( self, nparts, stream, numlen, nptcls, exec_bin, qsys_name, qsys_nthr, qsys_partition )
         use simple_sp_project, only: sp_project
         class(qsys_env),             intent(inout) :: self
         integer,                     intent(in)    :: nparts
@@ -48,6 +48,7 @@ contains
         integer,           optional, intent(in)    :: numlen, nptcls, qsys_nthr
         character(len=*),  optional, intent(in)    :: exec_bin
         character(len=*),  optional, intent(in)    :: qsys_name ! to override the qsys read in
+        character(len=*),  optional, intent(in)    :: qsys_partition ! to override the qsys read in
         type(ori)                     :: compenv_o
         type(sp_project)              :: spproj
         character(len=:), allocatable :: qsnam, tpi, hrs_str, mins_str, secs_str
@@ -122,6 +123,7 @@ contains
         else
             call self%qdescr%set('job_cpus_per_task', int2str(params_glob%nthr))  ! overrides env file
         endif
+        if(present(qsys_partition)) call self%qdescr%set('qsys_partition', trim(qsys_partition))         ! overrides env file and params_glob
         call self%qdescr%set('job_nparts', int2str(params_glob%nparts)) ! overrides env file
         deallocate(qsnam)
         call compenv_o%kill

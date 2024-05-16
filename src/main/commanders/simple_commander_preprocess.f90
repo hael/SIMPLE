@@ -2396,9 +2396,11 @@ contains
         real    :: ang, rot, smpd_here, xyz(3), lp, diam_max
         integer :: nrots, iref, irot, ldim_clip(3), ldim(3), ncavgs, icavg
         integer :: cnt, norefs, new_box
+        logical :: l_moldiam = .false.
         ! error check
         if( cline%defined('vol1') ) THROW_HARD('vol1 input no longer supported, use prg=reproject to generate 20 2D references')
         if( .not.cline%defined('pickrefs') ) THROW_HARD('PICKREFS must be informed!')
+        if( cline%defined('moldiam') ) l_moldiam = .true.
         ! set defaults
         call set_automask2D_defaults(cline)
         call cline%set('oritype', 'mic')
@@ -2431,7 +2433,11 @@ contains
             call projs(icavg)%shift(xyz)
         end do
         ! estimate new box size and clip
-        diam_max = maxval(diams)
+        if(l_moldiam) then
+            diam_max = params%moldiam
+        else
+            diam_max = maxval(diams)
+        end if
         lp       = min(max(LP_LB,MSKDIAM2LP * diam_max),LP_UB)
         new_box = round2even(diam_max / smpd_here + 2. * COSMSKHALFWIDTH)
         write(logfhandle,'(A,1X,I4)') 'ESTIMATED BOX SIXE: ', new_box

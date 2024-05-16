@@ -76,6 +76,8 @@ contains
         class(stream_chunk), intent(inout) :: self
         integer,             intent(in)    :: id
         class(sp_project),   intent(in)    :: master_spproj
+        character(len=STDLEN)              :: chunk_part_env
+        integer                            :: envlen
         call debug_print('in chunk%init '//int2str(id))
         call self%spproj%kill
         self%id        = id
@@ -92,7 +94,12 @@ contains
             call self%spproj%compenv%set(1,'qsys_name','local')
         else
             ! we need to override the qsys_name for non local distributed execution
-            call self%qenv%new(params_glob%nparts_chunk, exec_bin='simple_private_exec', qsys_name='local')
+            call get_environment_variable(SIMPLE_STREAM_CHUNK_PARTITION, chunk_part_env, envlen)
+            if(envlen > 0) then
+                call self%qenv%new(params_glob%nparts_chunk, exec_bin='simple_private_exec', qsys_name='local', qsys_partition=trim(chunk_part_env))
+            else
+                call self%qenv%new(params_glob%nparts_chunk, exec_bin='simple_private_exec', qsys_name='local')
+            end if
         endif
         call self%spproj%projinfo%delete_entry('projname')
         call self%spproj%projinfo%delete_entry('projfile')
