@@ -16,6 +16,7 @@ public :: calc_pspec_commander
 public :: calc_pspec_assemble_commander
 public :: calc_group_sigmas_commander
 public :: estimate_first_sigmas_commander
+public :: pspec_lp_commander
 private
 #include "simple_local_flags.inc"
 
@@ -43,6 +44,11 @@ type, extends(commander_base) :: estimate_first_sigmas_commander
   contains
     procedure :: execute      => exec_estimate_first_sigmas
 end type estimate_first_sigmas_commander
+
+type, extends(commander_base) :: pspec_lp_commander
+  contains
+    procedure :: execute      => exec_pspec_lp
+end type pspec_lp_commander
 
 type :: sigma_array
     character(len=:), allocatable :: fname
@@ -500,5 +506,89 @@ contains
         call build%spproj%kill
         call simple_end('**** SIMPLE_ESTIMATE_FIRST_SIGMAS NORMAL STOP ****')
     end subroutine exec_estimate_first_sigmas
+
+    subroutine exec_pspec_lp( self, cline )
+        use simple_strategy2D3D_common, only: prepimgbatch, discrete_read_imgbatch, killimgbatch
+        class(pspec_lp_commander), intent(inout) :: self
+        class(cmdline),            intent(inout) :: cline
+        type(parameters)              :: params
+        type(image)                   :: sum_img
+        type(builder)                 :: build
+        type(sigma2_binfile)          :: binfile
+        complex,          pointer     :: cmat(:,:,:), cmat_sum(:,:,:)
+        integer,          allocatable :: pinds(:), states(:)
+        real,             allocatable :: pspec(:), sigma2(:,:)
+        character(len=:), allocatable :: binfname
+        real    :: sdev_noise
+        integer :: batchlims(2),kfromto(2)
+        integer :: i,iptcl,imatch,nyq,nptcls_part,nptcls_part_sel,batchsz_max,nbatch
+        call cline%set('mkdir', 'no')
+        call cline%set('stream','no')
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
+        ! init
+        nyq         = build%img%get_nyq()
+        batchsz_max = 50 * nthr_glob
+        ! indices of particles with state=1
+        states          = nint(build%spproj_field%get_all('state',[params%fromp,params%top]))
+        nptcls_part_sel = count(states>0)
+        nptcls_part     = size(states)
+        allocate(pinds(nptcls_part_sel),source=0)
+        imatch = 0
+        do i = 1,nptcls_part
+            if( states(i) > 0 )then
+                imatch = imatch + 1
+                pinds(imatch) = params%fromp+i-1
+            endif
+        enddo
+        allocate(sigma2(nyq,params%fromp:params%top),pspec(nyq),source=0.)
+        call prepimgbatch(batchsz_max)
+        call sum_img%new([params%box,params%box,1],params%smpd)
+        call sum_img%zero_and_flag_ft
+        call sum_img%get_cmat_ptr(cmat_sum)
+        do i = 1,nptcls_part_sel,batchsz_max
+            batchlims = [i, min(i+batchsz_max-1,nptcls_part_sel)]
+            nbatch    = batchlims(2) - batchlims(1) + 1
+            call discrete_read_imgbatch(nbatch, pinds(batchlims(1):batchlims(2)), [1,nbatch])
+            !$omp parallel do default(shared) private(iptcl,imatch,pspec)&
+            !$omp schedule(static) proc_bind(close)
+            do imatch = 1,nbatch
+                iptcl = pinds(batchlims(1)+imatch-1)
+                ! normalize
+                call build%imgbatch(imatch)%norm_noise(build%lmsk, sdev_noise)
+                !  mask
+                if( params%l_focusmsk )then
+                    call build%imgbatch(imatch)%mask(params%focusmsk, 'softavg')
+                else
+                    call build%imgbatch(imatch)%mask(params%msk, 'softavg')
+                endif
+                ! power spectrum
+                call build%imgbatch(imatch)%fft
+                call build%imgbatch(imatch)%power_spectrum(pspec)
+                sigma2(:,iptcl) = pspec / 2.0
+            end do
+            !$omp end parallel do
+            ! global average
+            do imatch = 1,nbatch
+                call build%imgbatch(imatch)%get_cmat_ptr(cmat)
+                !$omp workshare
+                cmat_sum(:,:,:) = cmat_sum(:,:,:) + cmat(:,:,:)
+                !$omp end workshare
+            enddo
+        end do
+        ! call sum_img%write('sum_img_part'//int2str_pad(params%part,params%numlen)//params%ext)
+        ! write to disk
+        ! kfromto(1) = 1
+        ! kfromto(2) = nyq
+        ! binfname = 'init_pspec_part'//trim(int2str(params%part))//'.dat'
+        ! call binfile%new(binfname,params%fromp,params%top,kfromto)
+        ! call binfile%write(sigma2)
+        ! call binfile%kill
+        call killimgbatch
+        call sum_img%kill
+        ! end gracefully
+        call qsys_job_finished('simple_commander_euclid :: exec_pspec_lp')
+        call simple_end('**** SIMPLE_PSEC_LP NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_pspec_lp
 
 end module simple_commander_euclid

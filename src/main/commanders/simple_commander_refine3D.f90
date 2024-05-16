@@ -621,10 +621,11 @@ contains
         type(estimate_first_sigmas_commander) :: xfirst_sigmas
         type(calc_group_sigmas_commander)     :: xcalc_group_sigmas
         type(calc_pspec_commander)            :: xcalc_pspec
+        type(pspec_lp_commander)              :: xpspec_lp
         type(prob_align_commander)            :: xprob_align
         type(parameters)                      :: params
         type(builder)                         :: build
-        type(cmdline)                         :: cline_calc_sigma, cline_prob_align
+        type(cmdline)                         :: cline_calc_sigma, cline_prob_align, cline_pspec_lp
         character(len=STDLEN)                 :: str_state, fsc_file, vol, vol_iter
         integer                               :: startit, i, state
         real                                  :: corr, corr_prev
@@ -691,12 +692,20 @@ contains
                 endif
                 if( str_has_substr(params%refine, 'prob') )then
                     cline_prob_align = cline
-                    call cline_prob_align%set('prg',        'prob_align')
+                    call cline_prob_align%set('prg',       'prob_align')
                     call cline_prob_align%set('which_iter', params%which_iter)
                     call cline_prob_align%set('vol1',       params%vols(1))
                     call cline_prob_align%set('nparts',     1)
                     if( params%l_lpset ) call cline_prob_align%set('lp', params%lp)
                     call xprob_align%execute_shmem( cline_prob_align )
+                endif
+                if( trim(params%lp_est) .eq. 'yes' )then
+                    cline_pspec_lp = cline
+                    call cline_pspec_lp%set('prg',       'pspec_lp')
+                    call cline_pspec_lp%set('which_iter', params%which_iter)
+                    call cline_pspec_lp%set('vol1',       params%vols(1))
+                    call cline_pspec_lp%set('nparts',     1)
+                    call xpspec_lp%execute_shmem( cline_pspec_lp )
                 endif
                 ! in strategy3D_matcher:
                 call refine3D_exec(cline, params%which_iter, converged)
