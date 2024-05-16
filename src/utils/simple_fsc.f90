@@ -4,7 +4,7 @@ use simple_image, only: image
 use CPlot2D_wrapper_module
 implicit none
 
-public :: phase_rand_fsc, plot_fsc, plot_phrand_fsc, phaseplate_correct_fsc
+public :: phase_rand_fsc, plot_fsc, plot_fsc2, plot_phrand_fsc, phaseplate_correct_fsc
 private
 #include "simple_local_flags.inc"
 
@@ -106,6 +106,50 @@ contains
         call exec_cmdline(trim(adjustl(ps2pdf_cmd)), suppress_errors=.true., exitstat=iostat)
         if( iostat == 0 ) call del_file(fname_eps)
     end subroutine plot_fsc
+
+    subroutine plot_fsc2( n, fsc1, fsc2, res, smpd, tmpl_fname )
+        integer,           intent(in) :: n
+        real,              intent(in) :: fsc1(n), fsc2(n), res(n), smpd
+        character(len=*),  intent(in) :: tmpl_fname
+        type(str4arr)             :: title
+        type(CPlot2D_type)        :: plot2D
+        type(CDataSet_type)       :: dataSet1
+        type(CDataSet_type)       :: dataSet2
+        character(len=LONGSTRLEN) :: ps2pdf_cmd, fname_pdf, fname_eps
+        integer  :: k,iostat
+        if( n == 0 ) THROW_HARD('Empty FSC vector; plot_fsc')
+        fname_eps  = trim(tmpl_fname)//'.eps'
+        fname_pdf  = trim(tmpl_fname)//'.pdf'
+        call CPlot2D__new(plot2D, trim(tmpl_fname)//C_NULL_CHAR)
+        call CPlot2D__SetXAxisSize(plot2D, 400.d0)
+        call CPlot2D__SetYAxisSize(plot2D, 400.d0)
+        call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
+        call CPlot2D__SetFlipY(plot2D, C_FALSE)
+        call CDataSet__new(dataSet1)
+        do k = 1,n
+            call CDataSet_addpoint(dataSet1, 1.0/res(k), fsc1(k))
+        end do
+        call CPlot2D__AddDataSet(plot2D, dataSet1)
+        call CDataSet__delete(dataSet1)
+        call CDataSet__new(dataSet2)
+        call CDataSet__SetDatasetColor(dataSet2, 0.d0,0.d0,1.d0)
+        do k = 1,n
+            call CDataSet_addpoint(dataSet2, 1.0/res(k), fsc2(k))
+        end do
+        call CPlot2D__AddDataSet(plot2D, dataSet2)
+        call CDataSet__delete(dataSet2)
+        title%str = 'Resolution (Angstroms^-1)'//C_NULL_CHAR
+        call CPlot2D__SetXAxisTitle(plot2D, title%str)
+        title%str = 'Fourier Shell Correlations'//C_NULL_CHAR
+        call CPlot2D__SetYAxisTitle(plot2D, title%str)
+        call CPlot2D__OutputPostScriptPlot(plot2D, trim(fname_eps)//C_NULL_CHAR)
+        call CPlot2D__delete(plot2D)
+        ! conversion to PDF
+        ps2pdf_cmd = 'gs -q -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=600 -dDEVICEHEIGHTPOINTS=600 -sOutputFile='&
+            &//trim(fname_pdf)//' '//trim(fname_eps)
+        call exec_cmdline(trim(adjustl(ps2pdf_cmd)), suppress_errors=.true., exitstat=iostat)
+        if( iostat == 0 ) call del_file(fname_eps)
+    end subroutine plot_fsc2
 
     subroutine plot_phrand_fsc( n, fsc, fsc_t, fsc_n, res, smpd, tmpl_fname )
         integer,           intent(in) :: n
