@@ -304,7 +304,8 @@ contains
                 ! calculate sigma2 for ML-based refinement
                 if ( params_glob%l_needs_sigma ) then
                     call build_glob%spproj_field%get_ori(iptcl, orientation)
-                    call eucl_sigma%calc_sigma2(pftcc, iptcl, orientation, 'proj')
+                    call eucl_sigma%calc_sigma2(pftcc, iptcl, orientation,&
+                                iref=build_glob%eulspace%find_closest_proj(orientation))
                 end if
             enddo ! Particles loop
             !$omp end parallel do

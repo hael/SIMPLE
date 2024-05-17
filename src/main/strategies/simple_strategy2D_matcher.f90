@@ -311,7 +311,7 @@ contains
                 if ( params_glob%l_needs_sigma ) then
                     call build_glob%spproj_field%get_ori(iptcl, orientation)
                     call orientation%set_shift(strategy2Dsrch(iptcl_batch)%ptr%s%best_shvec) ! incremental shift
-                    call eucl_sigma%calc_sigma2(pftcc, iptcl, orientation, 'class')
+                    call eucl_sigma%calc_sigma2(pftcc, iptcl, orientation, iref=nint(orientation%get('class')))
                 end if
                 ! cleanup
                 call strategy2Dsrch(iptcl_batch)%ptr%kill
