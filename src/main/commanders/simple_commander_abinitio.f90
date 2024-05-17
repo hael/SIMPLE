@@ -1208,7 +1208,7 @@ contains
         integer, parameter :: NSPACE1=500, NSPACE2=1000, NSPACE3=1500, NSPACE_FINAL=2000
         integer, parameter :: SHIFT_STAGE_DEFAULT = NSTAGES-4
         integer, parameter :: ICM_STAGE_DEFAULT   = 2       ! in [1;NSTAGES]
-        integer, parameter :: MIN_NPTCLS = 8000
+        integer, parameter :: MIN_NPTCLS = 10000
         integer, parameter :: MAX_NPTCLS = 100000
         ! commanders
         type(refine3D_commander_distr)      :: xrefine3D_distr
@@ -1412,7 +1412,7 @@ contains
             if( it < 3 )then
                 call cline_refine3D%set('maxits', 3*iters_per_stage)
             else if( it > NSTAGES-2 )then
-                call cline_refine3D%set('maxits', 3*iters_per_stage)
+                call cline_refine3D%set('maxits', 4*iters_per_stage)
             else
                 call cline_refine3D%set('maxits', 2*iters_per_stage)
             endif
