@@ -24,7 +24,8 @@ interface read_imgbatch
 end interface read_imgbatch
 
 real, parameter :: SHTHRESH  = 0.001
-real, parameter :: CENTHRESH = 0.5 ! threshold for performing volume/cavg centering in pixels
+real, parameter :: CENTHRESH = 0.5                    ! threshold for performing volume/cavg centering in pixels
+character(len=*), parameter :: L_LPSET_FILTER = 'COS' ! <BW|COS|NONE>
 type(stack_io)  :: stkio_r
 
 contains
@@ -572,11 +573,19 @@ contains
         else if( params_glob%l_nonuniform )then
             ! filtering done in read_and_filter_refvols
         else if( params_glob%l_lpset )then
-            ! Butterworth low-pass filter
-            ! call butterworth_filter(calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd), filter)
-            ! call vol_ptr%apply_filter(filter)
-            !!!!!!!!!!!!!!!!!!!!!! PUT BACK ORIGTINAL LOW-PASS FILTER FOR TESTING NANOX
-            call vol_ptr%bp(0., params_glob%lp)
+            select case(L_LPSET_FILTER)
+                case('BW')
+                    ! Butterworth low-pass filter
+                    call butterworth_filter(calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd), filter)
+                    call vol_ptr%apply_filter(filter)
+                case('COS')
+                    ! Cosine low-pass filter, works best for nanoparticles
+                    call vol_ptr%bp(0., params_glob%lp)
+                case('NONE')
+                    ! nothing to do
+                case DEFAULT
+                    THROW_HARD('Unsupported L_LPSET_FILTER flag')
+            end select  
         else
             call vol_ptr%fft()
             if( any(build_glob%fsc(s,:) > 0.143) )then
