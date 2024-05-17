@@ -524,7 +524,7 @@ contains
         write(logfhandle,'(a)') '>>> APPLYING ICM REGULARIZATION TO IMAGES'
         !$omp parallel do schedule(static) default(shared) private(i) proc_bind(close)
         do i=1,n
-            call imgs(i)%icm(lambda)
+            call imgs(i)%icm2D(lambda)
         end do
         !$omp end parallel do
         ! write images

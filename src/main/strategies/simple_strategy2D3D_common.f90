@@ -24,7 +24,7 @@ interface read_imgbatch
 end interface read_imgbatch
 
 real, parameter :: SHTHRESH  = 0.001
-real, parameter :: CENTHRESH = 0.5    ! threshold for performing volume/cavg centering in pixels
+real, parameter :: CENTHRESH = 0.5 ! threshold for performing volume/cavg centering in pixels
 type(stack_io)  :: stkio_r
 
 contains
@@ -489,7 +489,7 @@ contains
         class(cmdline),   intent(in) :: cline
         character(len=*), intent(in) :: fname_even
         character(len=*), intent(in) :: fname_odd
-        type(image)       :: mskvol, noise
+        type(image)       :: mskvol
         real, allocatable :: filter(:)
         ! Read & ensure correct volumes dimensions
         call build_glob%vol%read_and_crop(fname_even, params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
