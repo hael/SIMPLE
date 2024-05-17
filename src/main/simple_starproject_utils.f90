@@ -132,6 +132,8 @@ contains
                 end if
             end if
         end do
+        if( allocated(keys) ) deallocate(keys)
+        call testori%kill
     end subroutine enable_splflags
 
     subroutine get_rlnflagindex(rlnflag, flags, flagindex)

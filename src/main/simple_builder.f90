@@ -36,7 +36,6 @@ type :: builder
     integer,                allocatable :: subspace_inds(:)       !< indices of eulspace_sub in eulspace
     ! STRATEGY2D TOOLBOX
     type(class_frcs)                    :: clsfrcs                !< projection FRC's used cluster2D
-    type(image),            allocatable :: env_masks(:)           !< 2D envelope masks
     ! RECONSTRUCTION TOOLBOX
     type(reconstructor_eo)              :: eorecvol               !< object for eo reconstruction
     ! STRATEGY3D TOOLBOX
@@ -353,10 +352,6 @@ contains
         integer :: i
         call self%kill_strategy2D_tbox
         call self%clsfrcs%new(params%ncls, params%box_crop, params%smpd_crop, params%nstates)
-        allocate(self%env_masks(params%ncls))
-        do i = 1,params%ncls
-            call self%env_masks(i)%new([params%box_crop,params%box_crop,1], params%smpd_crop)
-        end do
         if( .not. associated(build_glob) ) build_glob => self
         self%strategy2D_tbox_exists = .true.
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DONE BUILDING STRATEGY2D TOOLBOX'
@@ -367,12 +362,6 @@ contains
         integer :: i
         if( self%strategy2D_tbox_exists )then
             call self%clsfrcs%kill
-            if( allocated(self%env_masks) )then
-                do i = 1,size(self%env_masks)
-                    call self%env_masks(i)%kill
-                end do
-                deallocate(self%env_masks)
-            endif
             self%strategy2D_tbox_exists = .false.
         endif
     end subroutine kill_strategy2D_tbox
