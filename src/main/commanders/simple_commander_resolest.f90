@@ -408,7 +408,7 @@ contains
         class(icm2D_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         character(len=:), allocatable :: file_tag
-        type(image),      allocatable :: odd(:), even(:), noise(:)
+        type(image),      allocatable :: odd(:), even(:)
         logical,          allocatable :: mask(:)
         type(parameters) :: params
         real             :: minmax(2)
@@ -420,16 +420,13 @@ contains
         params%ldim(3) = 1 ! because we operate on stacks
         file_tag = 'icm_2D_filter'
         ! allocate
-        allocate(odd(params%nptcls), even(params%nptcls), noise(params%nptcls), mask(params%nptcls))
+        allocate(odd(params%nptcls), even(params%nptcls), mask(params%nptcls))
         ! construct & read
         do iptcl = 1, params%nptcls
             call odd  (iptcl)%new( params%ldim, params%smpd, .false.)
             call odd  (iptcl)%read(params%stk,  iptcl)
             call even (iptcl)%new( params%ldim, params%smpd, .false.)
             call even (iptcl)%read(params%stk2, iptcl)
-            call noise(iptcl)%copy(even(iptcl))
-            call noise(iptcl)%subtr(odd(iptcl))
-            call even (iptcl)%add(odd(iptcl))
             minmax      = even(iptcl)%minmax()
             mask(iptcl) = .not.is_equal(minmax(2)-minmax(1),0.) ! empty image
             if( mask(iptcl) ) call even(iptcl)%mul(0.5)
@@ -437,15 +434,18 @@ contains
         ! filter
         !$omp parallel do schedule(static) default(shared) private(iptcl) proc_bind(close)
         do iptcl = 1, params%nptcls
-            if( mask(iptcl) ) call even(iptcl)%icm(noise(iptcl), params%lambda)
+            if( mask(iptcl) ) call even(iptcl)%ICM2D_eo(odd(iptcl), params%lambda)
         enddo
         !$omp end parallel do
         ! write output and destruct
         do iptcl = 1, params%nptcls
+            call even (iptcl)%write(trim(file_tag)//'_even.mrc', iptcl)
+            call odd  (iptcl)%write(trim(file_tag)//'_odd.mrc',  iptcl)
+            call even (iptcl)%add(odd(iptcl))
+            call even (iptcl)%mul(0.5)
             call even (iptcl)%write(trim(file_tag)//'_avg.mrc', iptcl)
             call odd  (iptcl)%kill()
             call even (iptcl)%kill()
-            call noise(iptcl)%kill()
         end do
         ! end gracefully
         call simple_end('**** SIMPLE_ICM2D NORMAL STOP ****')
