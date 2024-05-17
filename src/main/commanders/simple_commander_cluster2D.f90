@@ -1455,6 +1455,7 @@ contains
             call build%spproj%os_cls3D%new(params%ncls, is_ptcl=.false.)
             states = build%spproj%os_cls2D%get_all('state')
             call build%spproj%os_cls3D%set_all('state',states)
+            deallocate(states)
             if( trim(params%oritype).eq.'ptcl2D' )then
                 call build%spproj%write_segment_inside('cls2D', params%projfile)
             endif
@@ -1474,6 +1475,10 @@ contains
             THROW_HARD('Unsupported ORITYPE: '//trim(params%oritype))
         end select
         ! end gracefully
+        call starproj%kill
+        call build%spproj%kill
+        call build%kill_general_tbox
+        call build%kill_strategy2D_tbox
         call simple_end('**** SIMPLE_CAVGASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)
         call simple_touch('CAVGASSEMBLE_FINISHED', errmsg='In: commander_rec :: eo_cavgassemble ')

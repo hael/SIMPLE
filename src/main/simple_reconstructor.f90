@@ -363,6 +363,7 @@ contains
         use simple_gridding, only: mul_w_instr
         class(reconstructor),    intent(inout) :: self
         logical, optional,       intent(in)    :: do_gridcorr
+        complex(kind=c_float_complex), pointer :: pcmat(:,:,:)    =>null()
         complex(kind=c_float_complex), pointer :: cmatW(:,:,:)    =>null()
         complex(kind=c_float_complex), pointer :: cmatWprev(:,:,:)=>null()
         complex, parameter :: one   = cmplx(1.,0.)
@@ -370,7 +371,7 @@ contains
         type(kbinterpol)   :: kbwin
         type(image)        :: W_img, Wprev_img
         real, allocatable  :: antialw(:)
-        real               :: winsz, val_prev, val, invrho, rsh_sq
+        real               :: winsz, val_prev, val, invrho, rsh_sq, rho
         integer            :: h,k,m, phys(3), iter, sh, cmat_shape(3), i,j,l
         logical            :: l_gridcorr, l_lastiter
         logical, parameter :: skip_pipemenon = .false.
@@ -470,23 +471,49 @@ contains
             call W_img%kill
         else
             ! division by rho
-            !$omp parallel do collapse(3) default(shared) schedule(static)&
-            !$omp private(h,k,m,phys,sh) proc_bind(close)
-            do h = self%lims(1,1),self%lims(1,2)
-                do k = self%lims(2,1),self%lims(2,2)
-                    do m = self%lims(3,1),self%lims(3,2)
-                        sh   = nint(sqrt(real(h*h + k*k + m*m)))
-                        phys = self%comp_addr_phys(h, k, m )
-                        if( sh > self%sh_lim )then
-                            ! outside Nyqvist, zero
-                            call self%set_cmat_at(phys(1),phys(2),phys(3), zero)
-                        else
-                            call self%div_cmat_at(phys, self%rho(phys(1),phys(2),phys(3)))
-                        endif
+            if( params_glob%l_batchfrac )then
+                call self%get_cmat_ptr(pcmat)
+                !$omp parallel do collapse(3) default(shared) schedule(static)&
+                !$omp private(h,k,m,phys,sh,rho) proc_bind(close)
+                do h = self%lims(1,1),self%lims(1,2)
+                    do k = self%lims(2,1),self%lims(2,2)
+                        do m = self%lims(3,1),self%lims(3,2)
+                            sh   = nint(sqrt(real(h*h + k*k + m*m)))
+                            phys = self%comp_addr_phys(h, k, m )
+                            if( sh > self%sh_lim )then
+                                pcmat(phys(1),phys(2),phys(3)) = zero
+                            else
+                                rho = self%rho(phys(1),phys(2),phys(3))
+                                if( rho > 1.e-6 )then
+                                    pcmat(phys(1),phys(2),phys(3)) = pcmat(phys(1),phys(2),phys(3)) / rho
+                                else
+                                    print *,h,k,m,sh,rho,csq_fast(pcmat(phys(1),phys(2),phys(3)))
+                                    pcmat(phys(1),phys(2),phys(3)) = zero
+                                endif
+                            endif
+                        end do
                     end do
                 end do
-            end do
-            !$omp end parallel do
+                !$omp end parallel do
+            else
+                !$omp parallel do collapse(3) default(shared) schedule(static)&
+                !$omp private(h,k,m,phys,sh) proc_bind(close)
+                do h = self%lims(1,1),self%lims(1,2)
+                    do k = self%lims(2,1),self%lims(2,2)
+                        do m = self%lims(3,1),self%lims(3,2)
+                            sh   = nint(sqrt(real(h*h + k*k + m*m)))
+                            phys = self%comp_addr_phys(h, k, m )
+                            if( sh > self%sh_lim )then
+                                ! outside Nyqvist, zero
+                                call self%set_cmat_at(phys(1),phys(2),phys(3), zero)
+                            else
+                                call self%div_cmat_at(phys, self%rho(phys(1),phys(2),phys(3)))
+                            endif
+                        end do
+                    end do
+                end do
+                !$omp end parallel do
+            endif
         endif
     end subroutine sampl_dens_correct
 
