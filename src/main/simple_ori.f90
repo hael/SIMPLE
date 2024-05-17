@@ -1190,18 +1190,36 @@ contains
         class(ori),                 intent(in)  :: self
         type(str4arr),              allocatable :: hkeys(:)
         character(len=XLONGSTRLEN), allocatable :: keys(:)
-        integer :: sz_chash, sz_hash, i
+        integer :: sz_chash, sz_hash, i, j
         sz_chash = self%chtab%size_of()
-        sz_hash  = self%htab%size_of()
-        allocate(keys(sz_chash + sz_hash))
-        hkeys = self%htab%get_keys()
-        do i = 1,sz_chash
-            keys(i) = trim(adjustl(self%chtab%get_key(i)))
-        end do
-        do i=1, sz_hash
-            keys(i + sz_chash) = trim(adjustl(hkeys(i)%str))
-        end do
-        if(allocated(hkeys)) deallocate(hkeys)
+        if( self%is_ptcl )then
+            sz_hash = 0
+            do i = 1,N_PTCL_ORIPARAMS
+                if( oriparam_isthere(i, self%pparms(i)) ) sz_hash = sz_hash + 1
+            enddo
+            allocate(keys(sz_chash + sz_hash))
+            do i = 1,sz_chash
+                keys(i) = trim(adjustl(self%chtab%get_key(i)))
+            end do
+            j = 0
+            do i = 1,N_PTCL_ORIPARAMS
+                if( oriparam_isthere(i, self%pparms(i)) )then
+                    j = j+1
+                    keys(sz_chash+j) = trim(adjustl(get_oriparam_flag(i)))
+                endif
+            enddo
+        else
+            sz_hash  = self%htab%size_of()
+            allocate(keys(sz_chash + sz_hash))
+            hkeys = self%htab%get_keys()
+            do i = 1,sz_chash
+                keys(i) = trim(adjustl(self%chtab%get_key(i)))
+            end do
+            do i = 1, sz_hash
+                keys(i + sz_chash) = trim(adjustl(hkeys(i)%str))
+            end do
+            if(allocated(hkeys)) deallocate(hkeys)
+        endif
     end function get_keys
 
     !<  \brief  to print the rotation matrix
