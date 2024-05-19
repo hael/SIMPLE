@@ -275,6 +275,8 @@ contains
                         allocate(strategy3D_shift                :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('sigma')
                         ! first sigma estimation (done below)
+                        call build_glob%spproj_field%get_ori(iptcl, orientation)
+                        call build_glob%spproj_field%set(iptcl, 'proj', real(build_glob%eulspace%find_closest_proj(orientation)))
                     case DEFAULT
                         THROW_HARD('refinement mode: '//trim(params_glob%refine)//' unsupported')
                 end select
@@ -304,8 +306,7 @@ contains
                 ! calculate sigma2 for ML-based refinement
                 if ( params_glob%l_needs_sigma ) then
                     call build_glob%spproj_field%get_ori(iptcl, orientation)
-                    call eucl_sigma%calc_sigma2(pftcc, iptcl, orientation,&
-                                iref=build_glob%eulspace%find_closest_proj(orientation))
+                    call eucl_sigma%calc_sigma2(pftcc, iptcl, orientation, 'proj')
                 end if
             enddo ! Particles loop
             !$omp end parallel do

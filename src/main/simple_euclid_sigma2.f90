@@ -157,17 +157,18 @@ contains
     end subroutine allocate_ptcls
 
     !>  Calculates and updates sigma2 within search resolution range
-    subroutine calc_sigma2_1( self, pftcc, iptcl, o, iref )
+    subroutine calc_sigma2_1( self, pftcc, iptcl, o, refkind )
         class(euclid_sigma2),    intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
         class(ori),              intent(in)    :: o
-        integer,                 intent(in)    :: iref
-        integer :: irot
+        character(len=*),        intent(in)    :: refkind ! 'proj' or 'class'
+        integer :: iref, irot
         real    :: sigma_contrib(params_glob%kfromto(1):params_glob%kfromto(2))
         real    :: shvec(2)
         if ( o%isstatezero() ) return
         shvec = o%get_2Dshift()
+        iref  = nint(o%get(trim(refkind)))
         irot  = pftcc_glob%get_roind(360. - o%e3get())
         call pftcc%gencorr_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib)
         self%sigma2_part(params_glob%kfromto(1):params_glob%kfromto(2),iptcl) = sigma_contrib
