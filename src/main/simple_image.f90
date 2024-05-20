@@ -909,7 +909,7 @@ contains
                 if( self%ldim(3) > 1 )then
                     do u = k - winsz, k + winsz
                         vec_displ = real([s,t,u]) - vec_cen
-                        if( sum(vec_displ)**2. <= maxradsq )then
+                        if( sum(vec_displ**2.) <= maxradsq )then
                             uu               = cyci_1d_static(self%ldim(3), u)
                             pixels(npix_out) = self%rmat(ss,tt,uu)
                             npix_out         = npix_out + 1
@@ -2680,7 +2680,7 @@ contains
                 ck = -real(self%ldim(3))/2.
                 do k=1,self%ldim(3)
                     xyz  = xyz  + self%rmat(i,j,k) * [ci, cj, ck]
-                    spix = spix + self%rmat(i,j,k)
+                    spix = spix + self%rmat(i,j,k) 
                     ck   = ck + 1.
                 end do
                 cj = cj + 1.

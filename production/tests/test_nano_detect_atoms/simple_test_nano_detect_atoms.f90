@@ -110,6 +110,7 @@ module nano_detect_atoms
     !$ use omp_lib_kinds
     include 'simple_lib.f08'
     use simple_image
+    use simple_binimage
     use simple_atoms
     use simple_nanoparticle
     use simple_parameters
@@ -125,13 +126,14 @@ module nano_detect_atoms
     
     type :: nano_picker
         private
-        character(len=2)   :: element
-        integer :: boxsize, ldim(3), nxyz_offset(3), offset, peak_thres_level
-        integer, allocatable :: inds_offset(:,:,:)
-        type(image) :: simulated_atom, nano_img
+        character(len=2)         :: element
+        character(len=100)       :: raw_filename, pdb_filename
+        integer                  :: boxsize, ldim(3), nxyz_offset(3), offset, peak_thres_level
+        integer, allocatable     :: inds_offset(:,:,:)
+        type(image)              :: simulated_atom, nano_img, sim_img
         type(image), allocatable :: convolved_atoms(:)
-        real :: smpd, thres, temp_thres
-        real, allocatable :: box_scores(:,:,:), loc_sdevs(:,:,:), positions(:,:), initial_positions(:,:)
+        real                     :: smpd, thres, temp_thres, radius
+        real, allocatable        :: box_scores(:,:,:), loc_sdevs(:,:,:), positions(:,:), initial_positions(:,:)
 
     contains
         procedure :: new
@@ -151,46 +153,54 @@ module nano_detect_atoms
         procedure :: write_positions
         procedure :: write_NP_image
         procedure :: write_corr_dist
+        procedure :: compare_pick
         procedure :: refine_threshold
         procedure :: refine_threshold_otsu
-        procedure :: compare_pick
         procedure :: kill
 
     end type nano_picker
 
     contains
 
-    subroutine new(self, smpd, element, filename, peak_thres_level)
+    subroutine new(self, smpd, element, filename, peak_thres_level, denoise)
         class(nano_picker), intent(inout) :: self
-        real, intent(in)                  :: smpd
-        character(len=*), intent(in)      :: element
+        real,               intent(in)    :: smpd
+        character(len=*),   intent(in)    :: element
         character(len=100), intent(in)    :: filename
-        integer, intent(in)               :: peak_thres_level
+        integer,            intent(in)    :: peak_thres_level
+        logical, optional,  intent(in)    :: denoise
         type(nanoparticle)       :: nano
         type(parameters), target :: params
         self%smpd = smpd
         self%element = element
+        self%raw_filename = filename
         ! retrieve nano_img from filename and find ldim
         params_glob => params
         params_glob%element = self%element
         params_glob%smpd = self%smpd
         call nano%new(filename)
         call nano%get_img(self%nano_img)
+        self%sim_img = self%nano_img
         self%ldim = self%nano_img%get_ldim()
         self%peak_thres_level = peak_thres_level
         self%temp_thres = 0.
+        ! denoise nano_img if requested
+        if (present(denoise)) then
+            if (denoise) then
+                call phasecorr_one_atom(self%nano_img, self%nano_img, self%element)
+            end if
+        end if
     end subroutine new
 
     subroutine simulate_atom(self)
         class(nano_picker), intent(inout) :: self
-        real        :: radius
         integer     :: Z, ldim_box(3)
         type(atoms) :: atom
         logical     :: l_err_atom
-        call get_element_Z_and_radius(self%element, Z, radius)
+        call get_element_Z_and_radius(self%element, Z, self%radius)
         call atom%new(1)
         call atom%set_element(1,trim(self%element))
-        self%boxsize = round2even(radius / self%smpd) * 2
+        self%boxsize = round2even(self%radius / self%smpd) * 2
         ldim_box = [self%boxsize,self%boxsize,self%boxsize]
         call atom%set_coord(1,(self%smpd*real(ldim_box)/2.)) ! make sure atom is in center of box
         call self%simulated_atom%new(ldim_box,self%smpd)
@@ -247,34 +257,75 @@ module nano_detect_atoms
     subroutine match_boxes(self)
         class(nano_picker), intent(inout) :: self
         type(image), allocatable :: boximgs(:)
-        integer                  :: xoff, yoff, zoff, pos(3), ithr, nthr
+        integer                  :: xoff, yoff, zoff, pos(3), pos_center(3), ithr, nthr, winsz, npix_in, npix_out1, npix_out2
         logical                  :: l_err_box
+        real                     :: maxrad, xyz(3)
+        real, allocatable        :: pixels1(:), pixels2(:)
         ! construct array of boximgs
+        print *, 'inside match boxes'
         !$ nthr = omp_get_max_threads()
         allocate(boximgs(nthr))
         do ithr = 1,nthr
             call boximgs(ithr)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
         end do
         ! iterate through positions in nanoparticle image, compare to simulated atom 
-        !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,ithr,pos,l_err_box) proc_bind(close)
+        ! !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,ithr,pos,l_err_box) proc_bind(close)
+        ! do xoff = 1, self%nxyz_offset(1)
+        !     do yoff = 1, self%nxyz_offset(2)
+        !         do zoff = 1, self%nxyz_offset(3)
+        !             ithr = omp_get_thread_num() + 1
+        !             pos = self%positions(self%inds_offset(xoff,yoff,zoff),:)
+        !             call window_slim_3D(self%nano_img, pos, self%boxsize, boximgs(ithr))
+        !             call boximgs(ithr)%prenorm4real_corr(l_err_box)
+        !             self%box_scores(xoff,yoff,zoff) = self%simulated_atom%real_corr_prenorm(boximgs(ithr))
+        !             self%loc_sdevs( xoff,yoff,zoff) = avg_loc_sdev_3D(boximgs(ithr),self%offset)
+        !         end do 
+        !     end do 
+        ! end do
+        ! !$omp end parallel do
+        ! circular correlation
+        maxrad    = (self%radius * 1.5) / self%smpd ! in pixels
+        winsz     = ceiling(maxrad)
+        npix_in   = (2 * winsz + 1)**3
+        allocate(pixels1(npix_in), pixels2(npix_in), source=0.)
+        ! !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,ithr,pos,pos_center,xyz,l_err_box) proc_bind(close)
         do xoff = 1, self%nxyz_offset(1)
             do yoff = 1, self%nxyz_offset(2)
                 do zoff = 1, self%nxyz_offset(3)
-                    ithr = omp_get_thread_num() + 1
                     pos = self%positions(self%inds_offset(xoff,yoff,zoff),:)
+                    !pos_center = pos + [self%boxsize/2,self%boxsize/2,self%boxsize/2]
+                    ithr = omp_get_thread_num() + 1
                     call window_slim_3D(self%nano_img, pos, self%boxsize, boximgs(ithr))
-                    call boximgs(ithr)%prenorm4real_corr(l_err_box)
-                    self%box_scores(xoff,yoff,zoff) = self%simulated_atom%real_corr_prenorm(boximgs(ithr))
+                    call boximgs(ithr)%norm_minmax
+                    call boximgs(ithr)%masscen(xyz)
+                    pos_center = pos + anint(xyz) + [self%boxsize/2,self%boxsize/2,self%boxsize/2]
+                    do 
+                        if (pos_center(1)-winsz < 1 .or. pos_center(2)-winsz < 1 .or. pos_center(3)-winsz < 1) then
+                            pos_center = pos_center + [1,1,1]
+                        else
+                            exit
+                        end if
+                    end do
+                    do 
+                        if (pos_center(1)+winsz > self%ldim(1) .or. pos_center(2)+winsz > self%ldim(2) .or. pos_center(3)+winsz > self%ldim(3)) then
+                            pos_center = pos_center - [1,1,1]
+                        else
+                            exit
+                        end if
+                    end do
+                    call self%nano_img%win2arr_rad(      pos_center(1),  pos_center(2),  pos_center(3),  winsz, npix_in, maxrad, npix_out1, pixels1)
+                    call self%simulated_atom%win2arr_rad(self%boxsize/2, self%boxsize/2, self%boxsize/2, winsz, npix_in, maxrad, npix_out2, pixels2)
+                    self%box_scores(xoff,yoff,zoff) = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))
                     self%loc_sdevs( xoff,yoff,zoff) = avg_loc_sdev_3D(boximgs(ithr),self%offset)
                 end do 
             end do 
         end do
-        !$omp end parallel do
+        ! !$omp end parallel do
         ! kill boximgs
         do ithr = 1,nthr
             call boximgs(ithr)%kill
         end do
-        deallocate(boximgs)
+        ! deallocate(boximgs)
     end subroutine match_boxes
 
     subroutine identify_threshold(self,min_thres)
@@ -654,19 +705,24 @@ module nano_detect_atoms
         character(len=*), optional, intent(in)    :: filename
         integer, allocatable :: pos_inds(:)
         real,    allocatable :: coords(:,:)
-        integer :: nbox, iimg, pos(3)
+        integer :: nbox, iimg
+        real :: pos(3)
         ! make array of images containing the images of identified atoms and extract coordinates of peaks
         pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
         nbox = size(pos_inds, dim=1)
+        !print *, 'NBOX = ', nbox
         allocate(coords(nbox,3))
         do iimg = 1, nbox
             pos = self%positions(pos_inds(iimg),:)
             coords(iimg,:) = pos
+            !print *, coords(iimg,:)
         end do
         if (present(filename)) then
             call write_centers(filename,coords,self%smpd)
+            self%pdb_filename = trim(filename)//'.pdb'
         else
             call write_centers('test_atomic_centers',coords,self%smpd)
+            self%pdb_filename = 'test_atomic_centers.pdb'
         end if
         deallocate(coords)
         deallocate(pos_inds)
@@ -699,10 +755,11 @@ module nano_detect_atoms
         nbox = size(pos_inds)
         allocate(coords(nbox,3))
         do ipos = 1, nbox
-            coords(ipos,:) = self%positions(pos_inds(ipos),:)
+            coords(ipos,:) = self%positions(pos_inds(ipos),:) * self%smpd
         end do
         open(unit=25, file=filename, status='replace', action='write')
         do i = 1, nbox
+            write(25, '(I9,a)', advance='no') pos_inds(i), ','
             do j = 1, 3
                 if (j /= 1) write(25, '(A)', advance='no') ', '
                 write(25, '(F10.3)', advance='no') coords(i, j)
@@ -716,7 +773,7 @@ module nano_detect_atoms
         class(nano_picker), intent(inout) :: self
         character(len=*),   intent(in)    :: ref_img_name, sim_img_name
         type(nanoparticle) :: nano
-        type(image) :: nano_img
+        type(image) :: sim_img
         type(parameters), target :: params
         params_glob => params
         params_glob%element = self%element
@@ -724,8 +781,9 @@ module nano_detect_atoms
         call self%write_pdb('simulate_NP')
         call nano%new(trim(ref_img_name))
         call nano%set_atomic_coords('simulate_NP.pdb')
-        call nano%simulate_atoms(simatms=nano_img)
-        call nano_img%write(sim_img_name)
+        call nano%simulate_atoms(simatms=sim_img)
+        call sim_img%write(sim_img_name)
+        self%sim_img = sim_img
         call nano%kill
     end subroutine write_NP_image
 
@@ -745,7 +803,7 @@ module nano_detect_atoms
         Q3   = median(upper_half_scores)
         IQR  = Q3 - Q1
         mean = sum(pos_scores) / size(pos_scores)
-        print *, 'SUMMARY STATISTICS OF CORRELATION SCORES'
+        print *, 'SUMMARY STATISTICS OF ATOMIC CORRELATION SCORES'
         print *, 'Q1 = ', Q1
         print *, 'MEDIAN = ', mid
         print *, 'Q3 = ', Q3
@@ -758,6 +816,32 @@ module nano_detect_atoms
         close(99)
     end subroutine write_corr_dist
 
+    ! input both pdbfile_* with .pdb extension
+    subroutine compare_pick(self, pdbfile_ref, pdbfile_exp )
+        class(nano_picker),         intent(inout) :: self
+        character(len=*),           intent(in)    :: pdbfile_ref
+        character(len=*), optional, intent(in)    :: pdbfile_exp
+        real, allocatable    :: pdb_ref_coords(:,:), pdb_exp_coords(:,:), distances(:)
+        integer, allocatable :: pos_inds(:)
+        integer              :: iostat, i
+        call read_pdb2matrix(trim(pdbfile_ref), pdb_ref_coords)
+        if (present(pdbfile_exp)) then 
+            call read_pdb2matrix(trim(pdbfile_exp),pdb_exp_coords)
+        else
+            open(unit = 40, file='test_atomic_centers.pdb', iostat=iostat)
+            if (iostat /= 0) then
+                print *, 'compare_pick: test_atomic_centers.pdb does not exist, please enter valid filename for pdbfile_exp'
+                close(40)
+                return
+            end if
+            call read_pdb2matrix('test_atomic_centers.pdb',pdb_exp_coords)
+            close(40)
+        end if
+        allocate(distances(max(size(pdb_ref_coords,dim=2),size(pdb_exp_coords,dim=2))))
+        call find_closest(pdb_ref_coords,pdb_exp_coords,size(pdb_ref_coords,dim=2),size(pdb_exp_coords,dim=2),distances)
+        print *, 'AVG DISTANCE = ', sum(distances)/size(distances)
+    end subroutine compare_pick
+    
     subroutine refine_threshold(self, num_thres, ref_pdb_name, ref_img_name, max_thres)
         class(nano_picker), intent(inout) :: self
         integer,            intent(in)    :: num_thres
@@ -800,10 +884,6 @@ module nano_detect_atoms
         ! 3. use the resulting pdb file to simulate nanoparticle
         ! 4. calculate correlation between this simulated nanoparticle and original? simulated nanoparticle
         ! 5. save correlations in array, at end will find maximum and return corresponding threshold
-        ! additional considerations:
-        ! 6. should we consider number of positions produced for each threshold?
-        ! 7. should we do thresholding and distance filtering in the same subroutine?
-        ! 8. instead of fixing thresholds at even distances over an interval, should we run Otsu's method multiple times?
         do i = 1, num_thres
             self%thres = thresholds(i) ! need to set self%thres because it is called in multiple subroutines
             self%positions = self%initial_positions
@@ -824,6 +904,9 @@ module nano_detect_atoms
         call self%find_centers ! call again to set positions to the optimal
         pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
         num_pos = size(pos_inds)
+        ! do i = 1, num_pos
+        !     print *, self%positions(pos_inds(i),:)
+        ! end do
         print *, 'OPTIMAL THRESHOLD = ', self%thres
         print *, 'OPTIMAL CORRELATION = ', thres_corrs(optimal_index(1))
         print *, 'NUMBER POSITIONS = ', num_pos
@@ -885,31 +968,6 @@ module nano_detect_atoms
         call nano_ref%kill
     end subroutine refine_threshold_otsu
 
-    ! input both pdbfile_* with .pdb extension
-    subroutine compare_pick(self, pdbfile_ref, pdbfile_exp )
-        class(nano_picker),         intent(inout) :: self
-        character(len=*),           intent(in)    :: pdbfile_ref
-        character(len=*), optional, intent(in)    :: pdbfile_exp
-        real, allocatable :: pdb_ref_coords(:,:), pdb_exp_coords(:,:), distances(:)
-        integer           :: iostat
-        call read_pdb2matrix(trim(pdbfile_ref), pdb_ref_coords)
-        if (present(pdbfile_exp)) then 
-            call read_pdb2matrix(trim(pdbfile_exp),pdb_exp_coords)
-        else
-            open(unit = 40, file='test_atomic_centers.pdb', iostat=iostat)
-            if (iostat /= 0) then
-                print *, 'compare_pick: test_atomic_centers.pdb does not exist, please enter valid filename for pdbfile_exp'
-                close(40)
-                return
-            end if
-            call read_pdb2matrix('test_atomic_centers.pdb',pdb_exp_coords)
-            close(40)
-        end if
-        allocate(distances(max(size(pdb_ref_coords,dim=2),size(pdb_exp_coords,dim=2))))
-        call find_closest(pdb_ref_coords,pdb_exp_coords,size(pdb_ref_coords,dim=2),size(pdb_exp_coords,dim=2),distances)
-        print *, 'AVG DISTANCE = ', sum(distances)/size(distances)
-    end subroutine compare_pick
-
     subroutine kill(self)
         class(nano_picker), intent(inout) :: self
         if (allocated(self%positions)) deallocate(self%positions)
@@ -923,12 +981,15 @@ end module nano_detect_atoms
 program simple_test_nano_detect_atoms
     include 'simple_lib.f08'
     use nano_detect_atoms
+    use nano_picker_utils
     use simple_nanoparticle
+    use simple_nanoparticle_utils
     use simple_image
     use simple_parameters
+    use simple_strings, only: int2str
 
-    type(nano_picker) :: test_sim, test_sim2, test_sim3
-    type(nano_picker) :: test_exp, test_exp2, test_exp3, test_exp4
+    type(nano_picker) :: test_sim
+    type(nano_picker) :: test_exp4
     type(nanoparticle) :: nano
     real :: smpd, dist_thres
     character(len=2) :: element
@@ -946,7 +1007,7 @@ program simple_test_nano_detect_atoms
     filename_exp = 'rec_merged.mrc'
     filename_sim = 'simulated_NP.mrc'
     !pdbfile_ref = 'ATMS.pdb'
-    pdbfile_ref = 'rec_merged_ATMS.pdb'
+    pdbfile_ref = 'reference.pdb'
     element = 'PT'
     smpd = 0.358
     offset = 2
@@ -975,15 +1036,21 @@ program simple_test_nano_detect_atoms
     call test_exp4%refine_threshold(100,pdbfile_ref,filename_sim,max_thres=0.75)
     ! print *, '-----'
     ! call test_exp4%refine_threshold_otsu(100,pdbfile_ref,filename_sim)
-    call test_exp4%remove_outliers(3.)
-    call test_exp4%write_pdb('experimental_centers_4')
-    call test_exp4%compare_pick(trim(pdbfile_ref),'experimental_centers_4.pdb')
+    !call test_exp4%remove_outliers(3.)
     ! OUTPUT FILES
+    call test_exp4%write_pdb('experimental_centers_5')
+    call test_exp4%compare_pick('experimental_centers_5.pdb',trim(pdbfile_ref))
     call test_exp4%write_NP_image(filename_sim,'result.mrc')
-    call test_exp4%write_corr_dist('correlation_scores.csv')
-    !call test_exp4%write_boximgs()
+    !call test_exp4%write_corr_dist('correlation_scores.csv')
+    call test_exp4%write_positions('positions.csv')
+    call test_exp4%write_boximgs()
+    call test_exp4%kill
     subStop = real(time())
-    print *, 'TEST 7 RUNTIME = ', (subStop - subStart), ' s'
+    print *, 'TEST 1 RUNTIME = ', (subStop - subStart), ' s'
+
+    print *, ' '
+
+    
 
     stopTime = time()
     print *, 'TOTAL RUNTIME = ', (stopTime - startTime), ' s'
