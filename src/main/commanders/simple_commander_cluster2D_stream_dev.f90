@@ -1079,11 +1079,17 @@ contains
     end subroutine classify_pool_dev
 
     !> produces consolidated project at original scale
-    subroutine write_project_stream2D_dev( )
+    subroutine write_project_stream2D_dev( write_star )
+        logical, optional, intent(in) :: write_star
         type(class_frcs)              :: frcs, frcs_sc
         type(oris)                    :: os_backup
+        type(starproject_stream)      :: starproj_stream
         character(len=:), allocatable :: projfile,projfname, cavgsfname, frcsfname, src, dest
         character(len=:), allocatable :: pool_refs
+        logical                       :: l_write_star
+        logical,     parameter        :: DEBUG_HERE      = .true.
+        l_write_star = .false.
+        if(present(write_star)) l_write_star = write_star
         ! file naming
         projfname  = get_fbody(orig_projfile, METADATA_EXT, separator=.false.)
         cavgsfname = get_fbody(refs_glob, params_glob%ext, separator=.false.)
@@ -1150,41 +1156,15 @@ contains
             call pool_proj%write(projfile)
             call pool_proj%os_ptcl3D%kill
         endif
-        ! classes export
-        call starproj%export_cls2D(pool_proj)
-        call pool_proj%os_cls2D%delete_entry('stk')
-    end subroutine write_project_stream2D_dev
-
-    subroutine terminate_stream2D_dev
-        type(starproject_stream) :: starproj_stream
-        integer                  :: ichunk, ipart
-        logical,     parameter   :: DEBUG_HERE      = .true.
-        do ichunk = 1,params_glob%nchunks
-            call chunks(ichunk)%terminate
-        enddo
-        if( .not.pool_available )then
-            pool_iter = pool_iter-1 ! iteration pool_iter not complete so fall back on previous iteration
-            refs_glob = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter,3))//trim(params_glob%ext)
-            ! tricking the asynchronous master process to come to a hard stop
-            call simple_touch(trim(POOL_DIR)//trim(TERM_STREAM))
-            do ipart = 1,params_glob%nparts_pool
-                call simple_touch(trim(POOL_DIR)//trim(JOB_FINISHED_FBODY)//int2str_pad(ipart,numlen))
-            enddo
-            call simple_touch(trim(POOL_DIR)//'CAVGASSEMBLE_FINISHED')
-        endif
-        call write_project_stream2D_dev
-        if( pool_iter >= 1 ) call rank_cavgs
         ! write starfiles
-        call copy_micrographs_optics
-        call write_migrographs_starfile(optics_set=.true.)
-        call write_particles_starfile(optics_set=.true.)
-        ! cleanup
-        call simple_rmdir(SIGMAS_DIR)
-        call del_file(trim(POOL_DIR)//trim(PROJFILE_POOL))
-        call del_file(projfile4gui)
-        if( .not.debug_here )then
-            call qsys_cleanup
-        endif
+        call starproj%export_cls2D(pool_proj)
+        if(l_write_star) then
+            call copy_micrographs_optics
+            call write_migrographs_starfile(optics_set=.true.)
+            call write_particles_starfile(optics_set=.true.)
+        end if 
+
+        call pool_proj%os_cls2D%delete_entry('stk')
 
         contains
 
@@ -1238,7 +1218,33 @@ contains
                     endif
                 end if
             end subroutine write_particles_starfile
+    end subroutine write_project_stream2D_dev
 
+    subroutine terminate_stream2D_dev
+        integer                  :: ichunk, ipart
+        do ichunk = 1,params_glob%nchunks
+            call chunks(ichunk)%terminate
+        enddo
+        if( .not.pool_available )then
+            pool_iter = pool_iter-1 ! iteration pool_iter not complete so fall back on previous iteration
+            refs_glob = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter,3))//trim(params_glob%ext)
+            ! tricking the asynchronous master process to come to a hard stop
+            call simple_touch(trim(POOL_DIR)//trim(TERM_STREAM))
+            do ipart = 1,params_glob%nparts_pool
+                call simple_touch(trim(POOL_DIR)//trim(JOB_FINISHED_FBODY)//int2str_pad(ipart,numlen))
+            enddo
+            call simple_touch(trim(POOL_DIR)//'CAVGASSEMBLE_FINISHED')
+        endif
+        call write_project_stream2D_dev(write_star=.true.)
+        ! rank cavgs
+        if( pool_iter >= 1 ) call rank_cavgs
+        ! cleanup
+        call simple_rmdir(SIGMAS_DIR)
+        call del_file(trim(POOL_DIR)//trim(PROJFILE_POOL))
+        call del_file(projfile4gui)
+        if( .not.debug_here )then
+            call qsys_cleanup
+        endif
     end subroutine terminate_stream2D_dev
 
     !
