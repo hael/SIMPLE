@@ -526,7 +526,7 @@ contains
         type(parameters)              :: params
         type(ori)                     :: o_tmp
         character(len=90)             :: filename
-        integer  :: nptcls, iptcl, s, ithr, iref, i, irot, find_start, find_stop, find, fhandle
+        integer  :: nptcls, iptcl, s, ithr, iref, i, irot, find_start, find_stop, find, fhandle, Nk, k
         logical  :: l_ctf, do_center, l_exist
         real     :: xyz(3), shvec(2), vol_dens, sig_dens
         call cline%set('mkdir', 'no')
@@ -591,13 +591,16 @@ contains
         find_stop  = min(params%kfromto(2), calc_fourier_index(params%lpstop,  params%box_crop, params%smpd_crop))
         ! spectrum of current volume
         call build%vol%spectrum('power', vol_pspec, .false.)    ! assuming one state
+        Nk        = size(vol_pspec)
         res       = build%vol%get_res()
         vol_pspec = sqrt(vol_pspec)
+        do k = 1, Nk
+            vol_pspec(k) = vol_pspec(k) * real(k)
+        enddo
         vol_pspec = vol_pspec / sum(vol_pspec)
         vol_dens  = sum(vol_pspec(find_start:find_stop))
         ! total sigma of all ptcls
-        allocate(sigma2(params%kfromto(1):params%kfromto(2), nptcls),     source=0.)
-        allocate(sig_pspec(size(vol_pspec)), diff_pspec(size(vol_pspec)), source=0.)
+        allocate(sigma2(params%kfromto(1):params%kfromto(2), nptcls), sig_pspec(Nk), diff_pspec(Nk), source=0.)
         !$omp parallel do default(shared) private(i,iptcl,iref,irot,shvec,o_tmp) schedule(static) proc_bind(close)
         do i = 1,nptcls
             iptcl = pinds(i)
@@ -611,12 +614,15 @@ contains
         !$omp end parallel do
         sigma2    = sigma2 / real(nptcls)
         sig_pspec = sqrt(sum(sigma2, dim=2))
+        do k = 1, Nk
+            sig_pspec(k) = sig_pspec(k) * real(k)
+        enddo
         sig_pspec = sig_pspec / sum(sig_pspec)
         sig_dens  = sum(sig_pspec(find_start:find_stop))
         ! energy normalization of the spectrum power between lpstart and lpstop
         sig_pspec = sig_pspec * vol_dens / sig_dens
         filename  = 'pspec_vol_sigma_iter'//int2str(params%which_iter)
-        call plot_fsc2(size(vol_pspec), vol_pspec, sig_pspec, res, params%smpd_crop, trim(filename))
+        call plot_fsc2(Nk, vol_pspec, sig_pspec, res, params%smpd_crop, trim(filename))
         ! estimate the next lp (first cross from the right)
         diff_pspec = sig_pspec - vol_pspec
         do find = find_stop, find_start+1, -1
