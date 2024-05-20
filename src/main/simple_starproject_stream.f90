@@ -56,12 +56,10 @@ contains
         character(len=:),           allocatable   :: stem
         self%starfile_name = fname
         self%starfile_tmp  = fname // '.tmp'
-        if(len_trim(outdir) > 0) then
-            call simple_getcwd(cwd)
-            stem = basename(stemname(cwd))
-            self%rootpath = trim(stem)
-            self%nicestream = .true.
-        end if
+        call simple_getcwd(cwd)
+        stem = basename(stemname(cwd))
+        self%rootpath = trim(stem)
+        self%nicestream = .true.
         call starfile_table__new(self%starfile)
         if(allocated(stem)) deallocate(stem)
     end subroutine starfile_init
@@ -95,8 +93,8 @@ contains
         call starfile_table__setIsList(self%starfile, .false.)
         call starfile_table__setname(self%starfile, 'optics')
         do i=1,spproj%os_optics%get_noris()
-            call starfile_table__addObject(self%starfile)
             if(spproj%os_optics%get(i, 'state') .eq. 0.0 ) cycle
+            call starfile_table__addObject(self%starfile)
             ! ints
             if(spproj%os_optics%isthere(i, 'ogid'))   call starfile_table__setValue_int(self%starfile, EMDL_IMAGE_OPTICS_GROUP, int(spproj%os_optics%get(i, 'ogid')))
             if(spproj%os_optics%isthere(i, 'pop'))    call starfile_table__setValue_int(self%starfile, SMPL_OPTICS_POPULATION,  int(spproj%os_optics%get(i, 'pop' )))
@@ -123,8 +121,8 @@ contains
         call starfile_table__setname(self%starfile, 'opticsgroup_' // int2str(ogid))
         do i=1,spproj%os_mic%get_noris()
             if(spproj%os_mic%isthere(i, 'ogid') .and. int(spproj%os_mic%get(i, 'ogid')) == ogid) then
-                call starfile_table__addObject(self%starfile)
                 if(spproj%os_mic%get(i, 'state') .eq. 0.0 ) cycle
+                call starfile_table__addObject(self%starfile)
                 ! ints
                 call starfile_table__setValue_int(self%starfile, EMDL_IMAGE_OPTICS_GROUP, int(spproj%os_mic%get(i, 'ogid')))
                 ! doubles
@@ -137,14 +135,15 @@ contains
     subroutine starfile_set_micrographs_table( self, spproj )
         class(starproject_stream),  intent(inout) :: self
         class(sp_project),          intent(inout) :: spproj
-        integer                                   :: i
+        integer                                   :: i, pathtrim
+        pathtrim = 0
         call starfile_table__clear(self%starfile)
         call starfile_table__new(self%starfile)
         call starfile_table__setIsList(self%starfile, .false.)
         call starfile_table__setname(self%starfile, 'micrographs')
         do i=1,spproj%os_mic%get_noris()
-            call starfile_table__addObject(self%starfile)
             if(spproj%os_mic%get(i, 'state') .eq. 0.0 ) cycle
+            call starfile_table__addObject(self%starfile)
             ! ints
             if(spproj%os_mic%isthere(i, 'ogid'   )) call starfile_table__setValue_int(self%starfile, EMDL_IMAGE_OPTICS_GROUP, int(spproj%os_mic%get(i, 'ogid'   )))
             if(spproj%os_mic%isthere(i, 'xdim'   )) call starfile_table__setValue_int(self%starfile, EMDL_IMAGE_SIZE_X,       int(spproj%os_mic%get(i, 'xdim'   )))           
@@ -162,34 +161,20 @@ contains
             if(spproj%os_mic%isthere(i, 'icefrac')) call starfile_table__setValue_double(self%starfile,  SMPL_ICE_FRAC,          real(spproj%os_mic%get(i, 'icefrac'),      dp))
             if(spproj%os_mic%isthere(i, 'astig'  )) call starfile_table__setValue_double(self%starfile,  SMPL_ASTIGMATISM,       real(spproj%os_mic%get(i, 'astig'),        dp))
             ! strings
-            if(spproj%os_mic%isthere(i, 'movie'      )) call starfile_table__setValue_string(self%starfile, EMDL_MICROGRAPH_MOVIE_NAME,    trim(get_root_path(trim(spproj%os_mic%get_static(i, 'movie'      )))))
-            if(spproj%os_mic%isthere(i, 'intg'       )) call starfile_table__setValue_string(self%starfile, EMDL_MICROGRAPH_NAME,          trim(get_root_path(trim(spproj%os_mic%get_static(i, 'intg'       )))))
-            if(spproj%os_mic%isthere(i, 'mc_starfile')) call starfile_table__setValue_string(self%starfile, EMDL_MICROGRAPH_METADATA_NAME, trim(get_root_path(trim(spproj%os_mic%get_static(i, 'mc_starfile')))))
-            if(spproj%os_mic%isthere(i, 'boxfile'    )) call starfile_table__setValue_string(self%starfile, EMDL_MICROGRAPH_COORDINATES,   trim(get_root_path(trim(spproj%os_mic%get_static(i, 'boxfile')), 'reference_pick_extract')))
+            if(spproj%os_mic%isthere(i, 'movie'      )) call starfile_table__setValue_string(self%starfile, EMDL_MICROGRAPH_MOVIE_NAME,    trim(spproj%os_mic%get_static(i, 'movie')))
+            if(spproj%os_mic%isthere(i, 'intg'       )) call starfile_table__setValue_string(self%starfile, EMDL_MICROGRAPH_NAME,          trim(get_relative_path(trim(spproj%os_mic%get_static(i, 'intg'       )))))
+            if(spproj%os_mic%isthere(i, 'mc_starfile')) call starfile_table__setValue_string(self%starfile, EMDL_MICROGRAPH_METADATA_NAME, trim(get_relative_path(trim(spproj%os_mic%get_static(i, 'mc_starfile')))))
+            if(spproj%os_mic%isthere(i, 'boxfile'    )) call starfile_table__setValue_string(self%starfile, EMDL_MICROGRAPH_COORDINATES,   trim(get_relative_path(trim(spproj%os_mic%get_static(i, 'boxfile'    )))))
         end do
 
         contains
 
-            function get_root_path ( path, addpath) result ( newpath )
+            function get_relative_path ( path ) result ( newpath )
                 character(len=*),           intent(in) :: path
-                character(len=*), optional, intent(in) :: addpath
-                character(len=STDLEN)                  :: newpath, l_addpath
-                newpath = ''
-                l_addpath = ''
-                if(present(addpath)) l_addpath = addpath
-                if( len_trim(path) > 3 ) then
-                    if( path(1:3) == '../' ) then
-                        if(self%nicestream) then
-                            ! nice stream
-                            newpath = trim(self%rootpath) // '/' // trim(l_addpath) // '/' // trim(path(3:))
-                        else
-                            newpath = trim(path(4:))
-                        end if
-                    else
-                       newpath = trim(path) 
-                    end if
-                end if
-            end function get_root_path
+                character(len=STDLEN)                  :: newpath
+                if(pathtrim .eq. 0) pathtrim = index(path, trim(self%rootpath)) 
+                newpath = trim(path(pathtrim:))
+            end function get_relative_path
 
     end subroutine starfile_set_micrographs_table
 
@@ -204,8 +189,8 @@ contains
         call starfile_table__setIsList(self%starfile, .false.)
         call starfile_table__setname(self%starfile, 'particles')
         do i=1,spproj%os_ptcl2d%get_noris()
-            call starfile_table__addObject(self%starfile)
             if(spproj%os_ptcl2d%get(i, 'state') .eq. 0.0 ) cycle
+            call starfile_table__addObject(self%starfile)
             call spproj%get_stkname_and_ind('ptcl2D', i, stkname, ind_in_stk)
             stkind = floor(spproj%os_ptcl2d%get(ind_in_stk, 'stkind'))
             half_boxsize = floor(spproj%os_stk%get(stkind, 'box') / 2.0)
@@ -238,7 +223,7 @@ contains
                 character(len=*),           intent(in) :: path
                 character(len=STDLEN)                  :: newpath
                 if(pathtrim .eq. 0) pathtrim = index(path, trim(self%rootpath)) 
-                newpath = trim(path(pathtrim:)) 
+                newpath = trim(path(pathtrim:))
             end function get_relative_path
 
     end subroutine starfile_set_particles2D_table
