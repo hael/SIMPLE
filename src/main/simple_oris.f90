@@ -1294,18 +1294,17 @@ contains
         end do
     end subroutine sample4update_all
 
-    subroutine sample4batchupdate( self, fromto, update_frac, nsamples, inds, mask, incr_sampled )
+    subroutine sample4batchupdate( self, fromto, update_frac, nsamples, inds, mask )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
         real,                 intent(in)    :: update_frac
         integer,              intent(inout) :: nsamples
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(inout) :: mask(fromto(1):fromto(2))
-        logical,              intent(in)    :: incr_sampled
         type(ran_tabu)       :: rt
         integer, allocatable :: sampled(:), vec(:)
         logical, allocatable :: l_states(:)
-        integer :: i, cnt, nptcls, n_nonzero, s, n2sample, ns, nsampled, mins, maxs
+        integer :: i, cnt, nptcls, n_nonzero, n2sample, ns, nsampled, mins, maxs
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
         allocate(inds(nptcls), sampled(nptcls), source=0)
@@ -1319,56 +1318,50 @@ contains
         end do
         mask      = .false.
         n_nonzero = count(l_states)
-        n2sample  = max(1, min(n_nonzero, nint(update_frac*real(n_nonzero))))
-        nsamples  = n2sample
-        mins      = minval(sampled, mask=l_states)
-        maxs      = maxval(sampled, mask=l_states)
-        do s = mins,maxs
-            nsampled = count(mask)                  ! sampled so far
-            n2sample = n2sample - nsampled          ! needed
-            if( n2sample < 1 ) exit
-            ns = count(sampled==s .and. l_states)   ! available to sample
-            if( ns <= n2sample )then
-                ! less particles available then needed: take all
-                do i = 1,nptcls
-                    if( .not.l_states(i) ) cycle
-                    if( sampled(inds(i))==s ) mask(inds(i)) = .true.
-                enddo
-            else
-                ! more particles than needed: select randomly
-                rt = ran_tabu(ns)
-                allocate(vec(ns),source=0)
-                cnt = 0
-                do i = 1,nptcls
-                    if( .not.l_states(i) ) cycle
-                    if( sampled(i)==s )then
-                        cnt      = cnt + 1
-                        vec(cnt) = i
-                    endif
-                enddo
-                call rt%shuffle(vec)
-                call rt%kill
-                mask(inds(vec(1:n2sample))) = .true.
-                deallocate(vec)
-            endif
-        enddo
+        ! use of ceiling to remove rounding errors spawning from iterations
+        n2sample = max(1, min(n_nonzero, ceiling(update_frac*real(n_nonzero))))
+        mins     = minval(sampled, mask=l_states)
+        maxs     = maxval(sampled, mask=l_states)
+        ! available to sample from the lowest values of 'sampled'
+        ns       = count(sampled==mins .and. l_states)
+        if( ns <= n2sample )then
+            ! less particles available then needed: take all
+            do i = 1,nptcls
+                if( .not.l_states(i) ) cycle
+                if( sampled(inds(i))==mins ) mask(inds(i)) = .true.
+            enddo
+        else
+            ! more particles than needed: select randomly
+            rt = ran_tabu(ns)
+            allocate(vec(ns),source=0)
+            cnt = 0
+            do i = 1,nptcls
+                if( .not.l_states(i) ) cycle
+                if( sampled(i)==mins )then
+                    cnt      = cnt + 1
+                    vec(cnt) = i
+                endif
+            enddo
+            call rt%shuffle(vec)
+            call rt%kill
+            mask(inds(vec(1:n2sample))) = .true.
+            deallocate(vec)
+        endif
         deallocate(inds)
-        allocate(inds(nsamples))
+        nsamples = count(mask)
+        allocate(inds(nsamples),source=0)
         cnt = 0
         do i = fromto(1), fromto(2)
             if( mask(i) )then
-                cnt = cnt+1
+                cnt       = cnt+1
                 inds(cnt) = i
-                if( incr_sampled )then
-                    s = nint(self%o(i)%get('sampled'))
-                    call self%o(i)%set('sampled', real(s+1))
-                endif
+                call self%o(i)%set('sampled', real(nint(self%o(i)%get('sampled'))+1))
                 call self%o(i)%set('batch', 1.)
             else
                 call self%o(i)%set('batch', 0.)
             endif
         end do
-        deallocate(sampled)
+        deallocate(sampled, l_states)
     end subroutine sample4batchupdate
 
     subroutine sample4batchupdate_reprod( self, fromto, nsamples, inds, mask )
@@ -1392,7 +1385,7 @@ contains
         if( nsamples == 0 ) THROW_HARD('requires prior selection')
         inds  = pack(inds, mask=selected==1)
         mask  = .false.
-        mask(inds(1:nsamples)) = .true.
+        mask(inds(:)) = .true.
         deallocate(selected)
     end subroutine sample4batchupdate_reprod
 

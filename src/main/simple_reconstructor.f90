@@ -44,7 +44,7 @@ type, extends(image) :: reconstructor
     procedure          :: get_kbwin
     procedure          :: get_rho_ptr
     ! I/O
-    procedure          :: write_rho, write_rho_as_mrc
+    procedure          :: write_rho, write_rho_as_mrc, write_absfc_as_mrc
     procedure          :: read_rho
     ! CONVOLUTION INTERPOLATION
     procedure          :: insert_plane
@@ -366,16 +366,18 @@ contains
         complex(kind=c_float_complex), pointer :: pcmat(:,:,:)    =>null()
         complex(kind=c_float_complex), pointer :: cmatW(:,:,:)    =>null()
         complex(kind=c_float_complex), pointer :: cmatWprev(:,:,:)=>null()
-        complex, parameter :: one   = cmplx(1.,0.)
-        complex, parameter :: zero  = cmplx(0.,0.)
-        type(kbinterpol)   :: kbwin
-        type(image)        :: W_img, Wprev_img
-        real, allocatable  :: antialw(:)
-        real               :: winsz, val_prev, val, invrho, rsh_sq, rho
-        integer            :: h,k,m, phys(3), iter, sh, cmat_shape(3), i,j,l
-        logical            :: l_gridcorr, l_lastiter
-        logical, parameter :: skip_pipemenon = .false.
-        logical, parameter :: do_hann_window = .true.
+        complex,    parameter :: one   = cmplx(1.,0.)
+        complex,    parameter :: zero  = cmplx(0.,0.)
+        logical,    parameter :: skip_pipemenon = .false.
+        logical,    parameter :: do_hann_window = .true.
+        type(kbinterpol)      :: kbwin
+        type(image)           :: W_img, Wprev_img
+        real,     allocatable :: antialw(:)
+        real(dp), allocatable :: rho_average(:)
+        integer,  allocatable :: counts(:)
+        real    :: winsz, val_prev, val, invrho, rsh_sq, rho
+        integer :: h,k,m, phys(3), physc(3),iter, sh, cmat_shape(3), i,j,l
+        logical :: l_gridcorr, l_lastiter
         ! kernel
         winsz   = max(1., 2.*self%kbwin%get_winsz())
         kbwin   = kbinterpol(winsz, self%alpha)
@@ -473,6 +475,24 @@ contains
             ! division by rho
             if( params_glob%l_batchfrac )then
                 call self%get_cmat_ptr(pcmat)
+                allocate(rho_average(0:self%sh_lim),source=0.d0)
+                allocate(counts(0:self%sh_lim),source=0)
+                !$omp parallel do collapse(3) default(shared) schedule(static)&
+                !$omp private(h,k,m,phys,sh) proc_bind(close) reduction(+:rho_average,counts)
+                do h = self%lims(1,1),self%lims(1,2)
+                    do k = self%lims(2,1),self%lims(2,2)
+                        do m = self%lims(3,1),self%lims(3,2)
+                            sh   = nint(sqrt(real(h*h + k*k + m*m)))
+                            if( sh <= self%sh_lim )then
+                                phys = self%comp_addr_phys(h, k, m )
+                                rho_average(sh) = rho_average(sh) + self%rho(phys(1), phys(2), phys(3))
+                                counts(sh)      = counts(sh) + 1
+                            endif
+                        end do
+                    end do
+                end do
+                !$omp end parallel do
+                where( counts > 0 ) rho_average = rho_average / real(counts,dp)
                 !$omp parallel do collapse(3) default(shared) schedule(static)&
                 !$omp private(h,k,m,phys,sh,rho) proc_bind(close)
                 do h = self%lims(1,1),self%lims(1,2)
@@ -483,13 +503,8 @@ contains
                             if( sh > self%sh_lim )then
                                 pcmat(phys(1),phys(2),phys(3)) = zero
                             else
-                                rho = self%rho(phys(1),phys(2),phys(3))
-                                if( rho > 1.e-6 )then
-                                    pcmat(phys(1),phys(2),phys(3)) = pcmat(phys(1),phys(2),phys(3)) / rho
-                                else
-                                    print *,h,k,m,sh,rho,csq_fast(pcmat(phys(1),phys(2),phys(3)))
-                                    pcmat(phys(1),phys(2),phys(3)) = zero
-                                endif
+                                rho = max(real(rho_average(sh)/1.d3),self%rho(phys(1),phys(2),phys(3)))
+                                pcmat(phys(1),phys(2),phys(3)) = pcmat(phys(1),phys(2),phys(3)) / rho
                             endif
                         end do
                     end do
@@ -519,33 +534,59 @@ contains
 
     subroutine compress_exp( self )
         class(reconstructor), intent(inout) :: self
+        real    :: rho
         integer :: phys(3), h, k, m
         if(.not. allocated(self%cmat_exp) .or. .not.allocated(self%rho_exp))then
             THROW_HARD('expanded complex or rho matrices do not exist; compress_exp')
         endif
-        call self%reset
         ! Fourier components & rho matrices compression
-        !$omp parallel do collapse(3) private(h,k,m,phys) schedule(static) default(shared) proc_bind(close)
-        do h = self%lims(1,1),self%lims(1,2)
-            do k = self%lims(2,1),self%lims(2,2)
-                do m = self%lims(3,1),self%lims(3,2)
-                    if(abs(self%cmat_exp(h,k,m)) < TINY) cycle
-                    if (h > 0) then
-                        phys(1) = h + 1
-                        phys(2) = k + 1 + MERGE(self%ldim_img(2),0,k < 0)
-                        phys(3) = m + 1 + MERGE(self%ldim_img(3),0,m < 0)
-                        call self%set_cmat_at(phys(1),phys(2),phys(3), self%cmat_exp(h,k,m))
-                    else
-                        phys(1) = -h + 1
-                        phys(2) = -k + 1 + MERGE(self%ldim_img(2),0,-k < 0)
-                        phys(3) = -m + 1 + MERGE(self%ldim_img(3),0,-m < 0)
-                        call self%set_cmat_at(phys(1),phys(2),phys(3), conjg(self%cmat_exp(h,k,m)))
-                    endif
-                    self%rho(phys(1),phys(2),phys(3)) = self%rho_exp(h,k,m)
+        call self%reset
+        if( params_glob%l_batchfrac )then
+            !$omp parallel do collapse(3) private(h,k,m,rho,phys) schedule(static) default(shared) proc_bind(close)
+            do h = self%lims(1,1),self%lims(1,2)
+                do k = self%lims(2,1),self%lims(2,2)
+                    do m = self%lims(3,1),self%lims(3,2)
+                        rho = self%rho_exp(h,k,m)
+                        if( rho < 0. ) cycle
+                        if (h > 0) then
+                            phys(1) = h + 1
+                            phys(2) = k + 1 + MERGE(self%ldim_img(2),0,k < 0)
+                            phys(3) = m + 1 + MERGE(self%ldim_img(3),0,m < 0)
+                            call self%set_cmat_at(phys(1),phys(2),phys(3), self%cmat_exp(h,k,m))
+                        else
+                            phys(1) = -h + 1
+                            phys(2) = -k + 1 + MERGE(self%ldim_img(2),0,-k < 0)
+                            phys(3) = -m + 1 + MERGE(self%ldim_img(3),0,-m < 0)
+                            call self%set_cmat_at(phys(1),phys(2),phys(3), conjg(self%cmat_exp(h,k,m)))
+                        endif
+                        self%rho(phys(1),phys(2),phys(3)) = rho
+                    end do
                 end do
             end do
-        end do
-        !$omp end parallel do
+            !$omp end parallel do
+        else
+            !$omp parallel do collapse(3) private(h,k,m,phys) schedule(static) default(shared) proc_bind(close)
+            do h = self%lims(1,1),self%lims(1,2)
+                do k = self%lims(2,1),self%lims(2,2)
+                    do m = self%lims(3,1),self%lims(3,2)
+                        if(abs(self%cmat_exp(h,k,m)) < TINY) cycle
+                        if (h > 0) then
+                            phys(1) = h + 1
+                            phys(2) = k + 1 + MERGE(self%ldim_img(2),0,k < 0)
+                            phys(3) = m + 1 + MERGE(self%ldim_img(3),0,m < 0)
+                            call self%set_cmat_at(phys(1),phys(2),phys(3), self%cmat_exp(h,k,m))
+                        else
+                            phys(1) = -h + 1
+                            phys(2) = -k + 1 + MERGE(self%ldim_img(2),0,-k < 0)
+                            phys(3) = -m + 1 + MERGE(self%ldim_img(3),0,-m < 0)
+                            call self%set_cmat_at(phys(1),phys(2),phys(3), conjg(self%cmat_exp(h,k,m)))
+                        endif
+                        self%rho(phys(1),phys(2),phys(3)) = self%rho_exp(h,k,m)
+                    end do
+                end do
+            end do
+            !$omp end parallel do
+        endif
     end subroutine compress_exp
 
     subroutine expand_exp( self )
@@ -600,6 +641,35 @@ contains
         call img%write(fname)
         call img%kill
     end subroutine write_rho_as_mrc
+
+    subroutine write_absfc_as_mrc( self, fname )
+        class(reconstructor), intent(inout) :: self
+        character(len=*), intent(in) :: fname
+        type(image) :: img
+        integer :: c,phys(3),h,k,m
+        call img%new([self%rho_shape(2),self%rho_shape(2),self%rho_shape(2)], 1.0)
+        c = self%rho_shape(2)/2+1
+        !$omp parallel do collapse(3) private(h,k,m,phys) schedule(static) default(shared) proc_bind(close)
+        do h = 0,self%lims(1,2)
+            do k = self%lims(2,1),self%lims(2,2)
+                do m = self%lims(3,1),self%lims(3,2)
+                    if (h > 0) then
+                        phys(1) = h + 1
+                        phys(2) = k + 1 + MERGE(self%ldim_img(2),0,k < 0)
+                        phys(3) = m + 1 + MERGE(self%ldim_img(3),0,m < 0)
+                    else
+                        phys(1) = -h + 1
+                        phys(2) = -k + 1 + MERGE(self%ldim_img(2),0,-k < 0)
+                        phys(3) = -m + 1 + MERGE(self%ldim_img(3),0,-m < 0)
+                    endif
+                    call img%set([1+h,k+c,m+c], abs(self%get_cmat_at(phys)))
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        call img%write(fname)
+        call img%kill
+    end subroutine write_absfc_as_mrc
 
     ! SUMMATION
 
