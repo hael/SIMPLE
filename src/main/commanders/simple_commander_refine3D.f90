@@ -651,7 +651,7 @@ contains
             case('prob')
                 ! random sampling and updatecnt dealt with in prob_align
             case DEFAULT
-                if( startit == 1 ) call build%spproj_field%clean_updatecnt_sampled
+                if( (startit == 1) .and. (.not.params%l_batchfrac) ) call build%spproj_field%clean_updatecnt_sampled
         end select
         if( params%l_distr_exec )then
             if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
@@ -973,7 +973,7 @@ contains
         allocate(ptcl_mask(1:params%nptcls))
         if( params%l_batchfrac )then
             call build%spproj_field%sample4batchupdate([params%fromp,params%top],&
-            &params%batchfrac, nptcls, pinds, ptcl_mask, .true.)
+            &params%batchfrac, nptcls, pinds, ptcl_mask)
         else
             if( params%startit == 1 ) call build%spproj_field%clean_updatecnt_sampled
             if( params%l_frac_update )then

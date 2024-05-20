@@ -707,7 +707,7 @@ contains
         if( params_glob%l_ml_reg )then
             THROW_HARD('BATCH ML_REG NOT IMPLEMENTED YET!')
         endif
-        !$omp parallel do default(shared) schedule(static) proc_bind(close)
+        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i = 1,nptcls2update
             updates(i) = prev_oris%get_updatecnt(pinds(i))
         enddo
