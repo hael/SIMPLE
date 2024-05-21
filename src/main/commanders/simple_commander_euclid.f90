@@ -514,21 +514,28 @@ contains
                                              &read_and_filter_refvols, preprefvol, discrete_read_imgbatch
         use simple_polarft_corrcalc,    only: polarft_corrcalc
         use simple_fsc,                 only: plot_fsc2
+        use simple_optimizer,           only: optimizer
+        use simple_opt_factory,         only: opt_factory
+        use simple_opt_spec,            only: opt_spec
         use simple_image
         class(pspec_lp_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         integer,          allocatable :: pinds(:)
         logical,          allocatable :: ptcl_mask(:)
-        real,             allocatable :: res(:), vol_pspec(:), sig_pspec(:), diff_pspec(:), sigma2(:,:)
+        real,             allocatable :: res(:), vol_pspec(:), sig_pspec(:), sigma2(:,:)
         type(image),      allocatable :: tmp_imgs(:)
+        class(optimizer), pointer     :: opt_ptr=>null()
         type(polarft_corrcalc)        :: pftcc
         type(builder)                 :: build
         type(parameters)              :: params
         type(ori)                     :: o_tmp
+        type(opt_factory)             :: ofac
+        type(opt_spec)                :: spec
         character(len=90)             :: filename
+        character(len=8)              :: str_opts
         integer  :: nptcls, iptcl, s, ithr, iref, i, irot, find_start, find_stop, find, fhandle, Nk, k
         logical  :: l_ctf, do_center, l_exist
-        real     :: xyz(3), shvec(2), vol_dens, sig_dens
+        real     :: xyz(3), shvec(2), vol_dens, sig_dens, lims(2), lowest_cost
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         params%kfromto(1) = 1
@@ -600,7 +607,7 @@ contains
         vol_pspec = vol_pspec / sum(vol_pspec)
         vol_dens  = sum(vol_pspec(find_start:find_stop))
         ! total sigma of all ptcls
-        allocate(sigma2(params%kfromto(1):params%kfromto(2), nptcls), sig_pspec(Nk), diff_pspec(Nk), source=0.)
+        allocate(sigma2(params%kfromto(1):params%kfromto(2), nptcls), sig_pspec(Nk), source=0.)
         !$omp parallel do default(shared) private(i,iptcl,iref,irot,shvec,o_tmp) schedule(static) proc_bind(close)
         do i = 1,nptcls
             iptcl = pinds(i)
@@ -623,11 +630,18 @@ contains
         sig_pspec = sig_pspec * vol_dens / sig_dens
         filename  = 'pspec_vol_sigma_iter'//int2str(params%which_iter)
         call plot_fsc2(Nk, vol_pspec, sig_pspec, res, params%smpd_crop, trim(filename))
-        ! estimate the next lp (first cross from the right)
-        diff_pspec = sig_pspec - vol_pspec
-        do find = find_stop, find_start+1, -1
-            if( diff_pspec(find-1) * diff_pspec(find) < 0. ) exit
-        enddo
+        ! estimate the next lp using 2-segment regression
+        str_opts = 'de'
+        lims(1)  = 1
+        lims(2)  = real(Nk)
+        call spec%specify(str_opts, ndim=1, limits=lims, limits_init=lims, nrestarts=1)
+        call spec%set_costfun(costfun)
+        call ofac%new(spec, opt_ptr)
+        spec%x = real(lims(1) + lims(2)) / 2.
+        call opt_ptr%minimize(spec, opt_ptr, lowest_cost)
+        find = int(spec%x(1))
+        call opt_ptr%kill
+        deallocate(opt_ptr)
         ! write estimated lp to a text file
         filename = 'estimated_lp.txt'
         inquire(file=trim(filename), exist=l_exist)
@@ -644,6 +658,43 @@ contains
         ! end gracefully
         call qsys_job_finished('simple_commander_euclid :: exec_pspec_lp')
         call simple_end('**** SIMPLE_PSEC_LP NORMAL STOP ****', print_simple=.false.)
+
+      contains
+
+        function costfun( func_self, vec, D ) result( cost )
+            class(*), intent(inout) :: func_self
+            integer,  intent(in)    :: D
+            real,     intent(in)    :: vec(D)
+            real(dp) :: mean_x, mean_y, a, b, dcost, denom
+            real     :: cost
+            integer  :: mid
+            mid    = floor(vec(1))
+            ! linear fitting (y = a + bx ) from 1 to mid
+            mean_x = sum(real(params%kfromto(1:mid), dp)) / real(mid, dp)
+            mean_y = sum(vol_pspec(1:mid)) / real(mid, dp)
+            denom  = sum((real(params%kfromto(1:mid), dp) - mean_x)**2)
+            if( denom > TINY )then
+                b  = sum( (real(params%kfromto(1:mid), dp) - mean_x) * (vol_pspec(1:mid) - mean_y) ) / denom
+            else
+                b  = 0.
+            endif
+            a      = mean_y - b * mean_x
+            dcost  = sum( ((a + b * real(params%kfromto(1:mid), dp)) -  vol_pspec(1:mid))**2 ) / real(mid, dp)
+            ! linear fitting from mid+1 to Nk
+            if( mid < Nk )then
+                mean_x = sum(real(params%kfromto(mid+1:Nk), dp)) / real(Nk-mid, dp)
+                mean_y = sum(vol_pspec(mid+1:Nk)) / real(Nk-mid, dp)
+                denom  = sum((real(params%kfromto(mid+1:Nk), dp) - mean_x)**2)
+                if( denom > TINY )then
+                    b  = sum( (real(params%kfromto(mid+1:Nk), dp) - mean_x) * (vol_pspec(mid+1:Nk) - mean_y) ) / denom
+                else
+                    b  = 0.
+                endif
+                a      = mean_y - b * mean_x
+                dcost  = dcost + sum( ((a + b * real(params%kfromto(mid+1:Nk), dp)) -  vol_pspec(mid+1:Nk))**2 ) / real(Nk-mid, dp)
+            endif
+            cost = real(dcost)
+        end function costfun
     end subroutine exec_pspec_lp
 
 end module simple_commander_euclid
