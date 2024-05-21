@@ -1552,7 +1552,6 @@ contains
         if( self%l_ml_reg )then
             self%l_ml_reg = self%l_needs_sigma .or. self%cc_objfun==OBJFUN_EUCLID
         endif
-        if( self%l_nonuniform .or. self%l_icm ) self%l_ml_reg = .false.
         ! resolution limit
         self%l_incrreslim = trim(self%incrreslim) == 'yes' .and. .not.self%l_lpset
         ! B-facor
