@@ -773,9 +773,6 @@ contains
             params%icm_stage = min(NSTAGES+1,max(1,params%icm_stage))
             THROW_WARN('ICM_STAGE out of range, defaulting to: '//int2str(params%icm_stage))
         endif
-        if( params%l_ml_reg .and. params%l_icm )then
-            THROW_HARD('ML_REG & ICM are exclusive!')
-        endif
         ! read project
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
