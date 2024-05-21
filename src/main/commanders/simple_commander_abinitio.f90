@@ -675,18 +675,19 @@ contains
         use simple_class_frcs,  only: class_frcs
         class(abinitio_3Dmodel_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
-        real,    parameter :: SCALEFAC      = 0.667
-        real,    parameter :: CENLP_DEFAULT = 30.
-        real,    parameter :: LP_DEFAULT    = 6.
+        real,    parameter :: SCALEFAC        = 0.667
+        real,    parameter :: CENLP_DEFAULT   = 30.
+        real,    parameter :: LP_DEFAULT      = 6.
         real,    parameter :: LPSTART_DEFAULT = 30., LPSTOP_DEFAULT=LP_DEFAULT
+        real,    parameter :: TAU_ABINI       = 2.
         integer, parameter :: MINBOX  = 88
         integer, parameter :: NSTAGES = 5
-        integer, parameter :: MAXITS1=100, MAXITS2=30, MAXITS_SHORT1=15, MAXITS_SHORT2=25
-        integer, parameter :: NSPACE1=500, NSPACE2=1000, NSPACE3=2000
+        integer, parameter :: MAXITS1 = 100, MAXITS2 = 30, MAXITS_SHORT1 = 15, MAXITS_SHORT2 = 25
+        integer, parameter :: NSPACE1 = 500, NSPACE2 = 1000, NSPACE3 = 2000
         integer, parameter :: SYMSEARCH_ITER = 3
-        integer, parameter :: MLREG_ITER     = 2 ! in [2;5]
+        integer, parameter :: MLREG_ITER     = 1
         integer, parameter :: SHIFT_STAGE_DEFAULT = NSTAGES ! in [1;NSTAGES+1]
-        integer, parameter :: ICM_STAGE_DEFAULT   = 2       ! in [1;NSTAGES+1]
+        integer, parameter :: ICM_STAGE_DEFAULT   = NSTAGES ! in [1;NSTAGES+1]
         ! commanders
         type(refine3D_commander_distr)      :: xrefine3D_distr
         type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
@@ -726,6 +727,7 @@ contains
         if( .not. cline%defined('icm')          ) call cline%set('icm',           'no')
         if( .not. cline%defined('icm_stage')    ) call cline%set('icm_stage', ICM_STAGE_DEFAULT)
         if( .not. cline%defined('lambda')       ) call cline%set('lambda',          1.)
+        if( .not. cline%defined('tau')          ) call cline%set('tau',      TAU_ABINI)
         if( .not. cline%defined('ptclw')        ) call cline%set('ptclw',         'no')
         ! resolution limit strategy
         l_lpset       = .false.
