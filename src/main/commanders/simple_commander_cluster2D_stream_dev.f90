@@ -20,7 +20,7 @@ use FoX_dom
 implicit none
 
 public :: cluster2D_commander_subsets
-public :: init_cluster2D_stream_dev, terminate_stream2D_dev, cleanup_root_folder
+public :: init_cluster2D_stream_dev, terminate_stream2D_dev, cleanup_root_folder, import_records_into_pool
 public :: update_pool_status_dev, update_pool_dev, reject_from_pool_dev, reject_from_pool_user_dev
 public :: classify_pool_dev, update_chunks_dev, classify_new_chunks_dev, import_chunks_into_pool_dev
 public :: is_pool_available_dev, update_user_params_dev, read_pool_xml_beamtilts_dev, assign_pool_optics_dev
@@ -119,49 +119,51 @@ contains
         endif
         call pool_proj%write(trim(POOL_DIR)//trim(PROJFILE_POOL))
         ! initialize chunks parameters and objects
-        if( params_glob%nparts_chunk > 1 )then
-            call cline_cluster2D_chunk%set('prg',    'cluster2D_distr')
-            call cline_cluster2D_chunk%set('nparts', real(params_glob%nparts_chunk))
-        else
-            ! shared memory execution
-            call cline_cluster2D_chunk%set('prg',       'cluster2D')
+        if( params_glob%nchunks > 0 )then
+            if( params_glob%nparts_chunk > 1 )then
+                call cline_cluster2D_chunk%set('prg',    'cluster2D_distr')
+                call cline_cluster2D_chunk%set('nparts', real(params_glob%nparts_chunk))
+            else
+                ! shared memory execution
+                call cline_cluster2D_chunk%set('prg',       'cluster2D')
+            endif
+            call cline_cluster2D_chunk%set('oritype',   'ptcl2D')
+            call cline_cluster2D_chunk%set('center',    'no')
+            call cline_cluster2D_chunk%set('autoscale', 'no')
+            call cline_cluster2D_chunk%set('mkdir',     'no')
+            call cline_cluster2D_chunk%set('stream',    'no')
+            call cline_cluster2D_chunk%set('startit',   1.)
+            call cline_cluster2D_chunk%set('mskdiam',   params_glob%mskdiam)
+            call cline_cluster2D_chunk%set('ncls',      real(params_glob%ncls_start))
+            call cline_cluster2D_chunk%set('nonuniform',params_glob%nonuniform)
+            call cline_cluster2D_chunk%set('nsearch',   real(params_glob%nsearch))
+            call cline_cluster2D_chunk%set('smooth_ext',real(params_glob%smooth_ext))
+            call cline_cluster2D_chunk%set('lpstart_nonuni', real(params_glob%lpstart_nonuni))
+            call cline_cluster2D_chunk%set('minits',    CHUNK_MINITS)
+            call cline_cluster2D_chunk%set('maxits',    CHUNK_MAXITS)
+            call cline_cluster2D_chunk%set('extr_iter', CHUNK_EXTR_ITER)
+            if( l_update_sigmas ) call cline_cluster2D_chunk%set('cc_iters', CHUNK_CC_ITERS)
+            call cline_cluster2D_chunk%set('kweight',   params_glob%kweight_chunk)
+            if( l_wfilt ) call cline_cluster2D_chunk%set('wiener', 'partial')
+            if( cline%defined('rnd_cls_init') )then
+                call cline_cluster2D_chunk%set('rnd_cls_init', params_glob%rnd_cls_init)
+            else
+                call cline_cluster2D_chunk%set('rnd_cls_init','no')
+            endif
+            ! EV override
+            call get_environment_variable(SIMPLE_STREAM_CHUNK_NTHR, chunk_nthr_env, envlen)
+            if(envlen > 0) then
+                read(chunk_nthr_env,*) chunk_nthr
+                call cline_cluster2D_chunk%set('nthr', chunk_nthr)
+            else
+                call cline_cluster2D_chunk%set('nthr', real(params_glob%nthr))
+            end if
+            allocate(chunks(params_glob%nchunks))
+            do ichunk = 1,params_glob%nchunks
+                call chunks(ichunk)%init(ichunk, pool_proj)
+            enddo
+            glob_chunk_id = params_glob%nchunks
         endif
-        call cline_cluster2D_chunk%set('oritype',   'ptcl2D')
-        call cline_cluster2D_chunk%set('center',    'no')
-        call cline_cluster2D_chunk%set('autoscale', 'no')
-        call cline_cluster2D_chunk%set('mkdir',     'no')
-        call cline_cluster2D_chunk%set('stream',    'no')
-        call cline_cluster2D_chunk%set('startit',   1.)
-        call cline_cluster2D_chunk%set('mskdiam',   params_glob%mskdiam)
-        call cline_cluster2D_chunk%set('ncls',      real(params_glob%ncls_start))
-        call cline_cluster2D_chunk%set('nonuniform',params_glob%nonuniform)
-        call cline_cluster2D_chunk%set('nsearch',   real(params_glob%nsearch))
-        call cline_cluster2D_chunk%set('smooth_ext',real(params_glob%smooth_ext))
-        call cline_cluster2D_chunk%set('lpstart_nonuni', real(params_glob%lpstart_nonuni))
-        call cline_cluster2D_chunk%set('minits',    CHUNK_MINITS)
-        call cline_cluster2D_chunk%set('maxits',    CHUNK_MAXITS)
-        call cline_cluster2D_chunk%set('extr_iter', CHUNK_EXTR_ITER)
-        if( l_update_sigmas ) call cline_cluster2D_chunk%set('cc_iters', CHUNK_CC_ITERS)
-        call cline_cluster2D_chunk%set('kweight',   params_glob%kweight_chunk)
-        if( l_wfilt ) call cline_cluster2D_chunk%set('wiener', 'partial')
-        if( cline%defined('rnd_cls_init') )then
-            call cline_cluster2D_chunk%set('rnd_cls_init', params_glob%rnd_cls_init)
-        else
-            call cline_cluster2D_chunk%set('rnd_cls_init','no')
-        endif
-        ! EV override
-        call get_environment_variable(SIMPLE_STREAM_CHUNK_NTHR, chunk_nthr_env, envlen)
-        if(envlen > 0) then
-            read(chunk_nthr_env,*) chunk_nthr
-            call cline_cluster2D_chunk%set('nthr', chunk_nthr)
-        else
-            call cline_cluster2D_chunk%set('nthr', real(params_glob%nthr))
-        end if
-        allocate(chunks(params_glob%nchunks))
-        do ichunk = 1,params_glob%nchunks
-            call chunks(ichunk)%init(ichunk, pool_proj)
-        enddo
-        glob_chunk_id = params_glob%nchunks
         ! initialize pool parameters and objects
         call cline_cluster2D_pool%set('prg',       'cluster2D_distr')
         call cline_cluster2D_pool%set('oritype',   'ptcl2D')
@@ -579,6 +581,71 @@ contains
         call frcs_chunk%kill
         call debug_print('end import_chunks_into_pool')
     end subroutine import_chunks_into_pool_dev
+
+    subroutine import_records_into_pool( records )
+        type(micproj_record), allocatable, intent(inout) :: records(:)
+        type(sp_project)                   :: spproj
+        character(LONGSTRLEN), allocatable :: tmp(:)
+        integer,               allocatable :: cls_pop(:), pinds(:), states(:)
+        character(LONGSTRLEN) :: projname
+        real    :: smpd_here
+        integer :: nptcls2import, nmics2import, nptcls, imic, iproj, nrecords
+        integer :: ncls_tmp, fromp_prev, fromp, ii, jptcl, i, poolind, n_remap, pop, nptcls_sel
+        integer :: nmics_imported, nptcls_imported, iptcl, ind, ncls_here, icls, irec
+        logical :: l_maxed
+        if( .not. allocated(records) ) return
+        if( .not. stream2D_active )    return
+        if( .not.pool_available )      return
+        if( all(records(:)%included) ) return
+        nrecords        = size(records)
+        nmics_imported  = pool_proj%os_mic%get_noris()
+        nptcls_imported = pool_proj%os_ptcl2D%get_noris()
+        nmics2import    = count(.not.records(:)%included)
+        nptcls2import   = sum(records(:)%nptcls, mask=.not.records(:)%included)
+        ! reallocations
+        nmics_imported  = pool_proj%os_mic%get_noris()
+        nptcls_imported = pool_proj%os_ptcl2D%get_noris()
+        if( nmics_imported == 0 )then
+            call pool_proj%os_mic%new(nmics2import, is_ptcl=.false.)
+            call pool_proj%os_stk%new(nmics2import, is_ptcl=.false.)
+            call pool_proj%os_ptcl2D%new(nptcls2import, is_ptcl=.true.)
+            fromp = 1
+        else
+            call pool_proj%os_mic%reallocate(nmics_imported+nmics2import)
+            call pool_proj%os_stk%reallocate(nmics_imported+nmics2import)
+            call pool_proj%os_ptcl2D%reallocate(nptcls_imported+nptcls2import)
+            fromp = nint(pool_proj%os_stk%get(nmics_imported,'top'))+1
+        endif
+        imic     = nmics_imported
+        iptcl    = nptcls_imported
+        projname = ''
+        do irec = 1,nrecords
+            if( records(irec)%included ) cycle
+            if( trim(projname) /= records(irec)%projname )then
+                call spproj%read_mic_stk_ptcl2D_segments(records(irec)%projname)
+                projname = trim(records(irec)%projname)
+            endif
+            ! mic & stack
+            imic = imic + 1
+            call pool_proj%os_mic%transfer_ori(imic, spproj%os_mic, records(irec)%micind)
+            call pool_proj%os_stk%transfer_ori(imic, spproj%os_stk, records(irec)%micind)
+            call pool_proj%os_stk%set(imic, 'fromp', real(fromp))
+            call pool_proj%os_stk%set(imic, 'top',   real(fromp+records(irec)%nptcls-1))
+            ! particles
+            do jptcl = 1,nptcls
+                iptcl = iptcl + 1
+                call pool_proj%os_ptcl2D%transfer_ori(iptcl, spproj%os_ptcl2D, jptcl)
+                call pool_proj%os_ptcl2D%set_stkind(iptcl, imic)
+                call pool_proj%os_ptcl2D%set(iptcl, 'updatecnt', 0.) ! new particle
+                call pool_proj%os_ptcl2D%set(iptcl, 'frac',      0.) ! new particle
+            enddo
+            fromp = fromp + records(irec)%nptcls
+            records(irec)%included = .true. ! record update
+        enddo
+        call spproj%kill
+        ! TODO: remapping!
+        print *,'total number of particles imported: ',pool_proj%os_ptcl2D%get_noris()
+    end subroutine import_records_into_pool
 
     subroutine update_pool_status_dev
         if( .not. stream2D_active ) return

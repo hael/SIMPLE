@@ -12,6 +12,7 @@ implicit none
 ! PROGRAMS
 type(commander_stream_preprocess)           :: xpreprocess
 type(commander_stream_pick_extract)         :: xpick_extract
+type(commander_stream_gen_picking_refs)     :: xgen_picking_refs
 type(commander_stream_assign_optics)        :: xassign_optics
 type(commander_stream_cluster2D)            :: xcluster2D_stream
 
@@ -46,6 +47,8 @@ select case(trim(prg))
         call xpreprocess%execute(cline)
     case( 'pick_extract' )
         call xpick_extract%execute(cline)
+    case( 'gen_picking_refs' )
+        call xgen_picking_refs%execute(cline)
     case( 'assign_optics' )
         call xassign_optics%execute(cline)
     case( 'cluster2D_stream' )
