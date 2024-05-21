@@ -520,7 +520,7 @@ contains
         use simple_image
         class(pspec_lp_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
-        integer,          allocatable :: pinds(:)
+        integer,          allocatable :: pinds(:), kinds(:)
         logical,          allocatable :: ptcl_mask(:)
         real,             allocatable :: res(:), vol_pspec(:), sig_pspec(:), sigma2(:,:)
         type(image),      allocatable :: tmp_imgs(:)
@@ -634,6 +634,7 @@ contains
         str_opts = 'de'
         lims(1)  = 1
         lims(2)  = real(Nk)
+        kinds    = (/(i,i=1,Nk)/)
         call spec%specify(str_opts, ndim=1, limits=lims, limits_init=lims, nrestarts=1)
         call spec%set_costfun(costfun)
         call ofac%new(spec, opt_ptr)
@@ -670,28 +671,28 @@ contains
             integer  :: mid
             mid    = floor(vec(1))
             ! linear fitting (y = a + bx ) from 1 to mid
-            mean_x = sum(real(params%kfromto(1:mid), dp)) / real(mid, dp)
-            mean_y = sum(vol_pspec(1:mid)) / real(mid, dp)
-            denom  = sum((real(params%kfromto(1:mid), dp) - mean_x)**2)
+            mean_x = sum(real(kinds(1:mid), dp)) / real(mid, dp)
+            mean_y = sum(vol_pspec( 1:mid))      / real(mid, dp)
+            denom  = sum((real(kinds(1:mid), dp) - mean_x)**2)
             if( denom > TINY )then
-                b  = sum( (real(params%kfromto(1:mid), dp) - mean_x) * (vol_pspec(1:mid) - mean_y) ) / denom
+                b  = sum( (real(kinds(1:mid), dp) - mean_x) * (vol_pspec(1:mid) - mean_y) ) / denom
             else
                 b  = 0.
             endif
             a      = mean_y - b * mean_x
-            dcost  = sum( ((a + b * real(params%kfromto(1:mid), dp)) -  vol_pspec(1:mid))**2 ) / real(mid, dp)
+            dcost  = sum( ((a + b * real(kinds(1:mid), dp)) -  vol_pspec(1:mid))**2 ) / real(mid, dp)
             ! linear fitting from mid+1 to Nk
             if( mid < Nk )then
-                mean_x = sum(real(params%kfromto(mid+1:Nk), dp)) / real(Nk-mid, dp)
+                mean_x = sum(real(kinds(mid+1:Nk), dp)) / real(Nk-mid, dp)
                 mean_y = sum(vol_pspec(mid+1:Nk)) / real(Nk-mid, dp)
-                denom  = sum((real(params%kfromto(mid+1:Nk), dp) - mean_x)**2)
+                denom  = sum((real(kinds(mid+1:Nk), dp) - mean_x)**2)
                 if( denom > TINY )then
-                    b  = sum( (real(params%kfromto(mid+1:Nk), dp) - mean_x) * (vol_pspec(mid+1:Nk) - mean_y) ) / denom
+                    b  = sum( (real(kinds(mid+1:Nk), dp) - mean_x) * (vol_pspec(mid+1:Nk) - mean_y) ) / denom
                 else
                     b  = 0.
                 endif
                 a      = mean_y - b * mean_x
-                dcost  = dcost + sum( ((a + b * real(params%kfromto(mid+1:Nk), dp)) -  vol_pspec(mid+1:Nk))**2 ) / real(Nk-mid, dp)
+                dcost  = dcost + sum( ((a + b * real(kinds(mid+1:Nk), dp)) -  vol_pspec(mid+1:Nk))**2 ) / real(Nk-mid, dp)
             endif
             cost = real(dcost)
         end function costfun
