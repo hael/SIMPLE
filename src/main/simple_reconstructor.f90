@@ -503,7 +503,7 @@ contains
                             if( sh > self%sh_lim )then
                                 pcmat(phys(1),phys(2),phys(3)) = zero
                             else
-                                rho = max(real(rho_average(sh)/1.d3),self%rho(phys(1),phys(2),phys(3)))
+                                rho = max(real(rho_average(sh)/1.d2),self%rho(phys(1),phys(2),phys(3)))
                                 pcmat(phys(1),phys(2),phys(3)) = pcmat(phys(1),phys(2),phys(3)) / rho
                             endif
                         end do

@@ -1208,7 +1208,7 @@ contains
         integer, parameter :: NSPACE1=500, NSPACE2=1000, NSPACE3=1500, NSPACE_FINAL=2000
         integer, parameter :: SHIFT_STAGE_DEFAULT = NSTAGES-2
         integer, parameter :: ICM_STAGE_DEFAULT   = 2       ! in [1;NSTAGES]
-        integer, parameter :: MIN_NPTCLS = 5000
+        integer, parameter :: MIN_NPTCLS = 20000
         integer, parameter :: MAX_NPTCLS = 100000
         ! commanders
         type(refine3D_commander_distr)      :: xrefine3D_distr
@@ -1358,85 +1358,164 @@ contains
         ! Batch plan
         iters_per_stage  = ceiling(1./params%batchfrac)
         params%batchfrac = 1./real(iters_per_stage)
-        states          = nint(spproj%os_ptcl3D%get_all('state'))
-        nptcls_sel      = count(states==1)
-        final_nptcls    = min(nptcls_sel, MAX_NPTCLS)
-        ini_nptcls      = min(nptcls_sel, MIN_NPTCLS)
-        allocate(vec(nptcls_sel),source=0)
-        vec(1:ini_nptcls) = 1
-        call seed_rnd
-        rt = ran_tabu(nptcls_sel)
-        call rt%shuffle(vec)
-        call rt%kill
-        batches = states
-        j = 0
-        do i = 1,params%nptcls
-            if( batches(i) == 1 )then
-                j = j + 1
-                batches(i) = vec(j)
-            endif
-        enddo
-        deallocate(vec)
-        ! Main loop
-        iter = 0
-        do it = 1,NSTAGES
-            write(logfhandle,'(A)') '>>>'
-            ! Dimensions & resolution limit
-            params%box_crop  = boxs(it)
-            params%smpd_crop = smpds(it)
-            params%lp        = lps(it)
-            write(logfhandle,'(A,I3,A12,F6.1)')'>>> STAGE ',it,' WITH LP  : ',params%lp
-            write(logfhandle,'(A,I6)'         )'>>> MINIBATCH SIZE: ', nint(real(nptcls_sel) / real(iters_per_stage))
-            write(logfhandle,'(A,I3,A1,I3)'   )'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
-            ! Starting reconstruction
-            if( it == 1 )then
-                call cline_reconstruct3D%set('smpd_crop', params%smpd_crop)
-                call cline_reconstruct3D%set('box_crop',  params%box_crop)
-                call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D)
-                call spproj%os_ptcl3D%set_all2single('updatecnt',1.)
+        states           = nint(spproj%os_ptcl3D%get_all('state'))
+        nptcls_sel       = count(states==1)
+        select case(trim(params%algorithm))
+        case('fast')
+            ! Number of particles increases throughout optimization
+            final_nptcls = min(nptcls_sel, MAX_NPTCLS)
+            ini_nptcls   = min(nptcls_sel, MIN_NPTCLS)
+            allocate(vec(nptcls_sel),source=0)
+            do it = NSTAGES,1,-1
+                nptcls = ini_nptcls + nint(real((it-1)*(final_nptcls-ini_nptcls)) / real(NSTAGES-1))
+                vec(1:nptcls) = it
+            enddo
+            call seed_rnd
+            rt = ran_tabu(nptcls_sel)
+            call rt%shuffle(vec)
+            call rt%kill
+            batches = states
+            j = 0
+            do i = 1,params%nptcls
+                if( batches(i) == 1 )then
+                    j = j + 1
+                    batches(i) = vec(j)
+                endif
+            enddo
+            deallocate(vec)
+            ! Main loop
+            iter = 0
+            do it = 1,NSTAGES
+                write(logfhandle,'(A)') '>>>'
+                ! Dimensions & resolution limit
+                params%box_crop  = boxs(it)
+                params%smpd_crop = smpds(it)
+                params%lp        = lps(it)
+                ! Particles sampling
+                allocate(vec(params%nptcls),source=0)
+                where( (batches>0) .and. (batches<=it) ) vec = 1
+                nptcls = count(vec==1)
+                call spproj%read_segment('ptcl3D',     params%projfile)
+                call spproj%os_ptcl3D%set_all('state', real(vec))
+                if( it == 1 ) call spproj%os_ptcl3D%set_all('updatecnt', real(vec))
+                call spproj%os_ptcl3D%set_all2single('sampled', 0.)
                 call spproj%write_segment_inside('ptcl3D', params%projfile)
-            endif
-            ! Minibatch size
-            call cline_refine3D%set('batchfrac', params%batchfrac)
-            ! Iterations per minibatch
-            if( it < 2 )then
-                call cline_refine3D%set('maxits', 3*iters_per_stage)
-            else if( it > NSTAGES-1 )then
-                call cline_refine3D%set('maxits', 3*iters_per_stage)
-            else
-                call cline_refine3D%set('maxits', 3*iters_per_stage)
-            endif
-            ! Shift search
-            if( it >= params%shift_stage )then
-                call cline_refine3D%set('trs', trslim)
-            else
-                call cline_refine3D%set('trs', 0.)
-            endif
-            ! ICM filter
-            if( params%l_icm .and. (it >= params%icm_stage) )then
-                call cline_refine3D%set('icm',   'yes')
-                call cline_refine3D%set('lambda', params%lambda)
-            endif
-            ! Projection directions
-            if( params%lp > 12. )then
-                call cline_refine3D%set('nspace', NSPACE1)
-            elseif ( params%lp > 8. )then
-                call cline_refine3D%set('nspace', NSPACE2)
-            else
-                call cline_refine3D%set('nspace', NSPACE3)
-            endif
-            if( it == NSTAGES ) call cline_refine3D%set('nspace', NSPACE_FINAL)
-            ! Execution
-            call exec_refine3D(iter)
-            ! Reconstruction
-            if( it < NSTAGES )then
-                if( boxs(it+1) /= boxs(it) )then
-                    call cline_reconstruct3D%set('smpd_crop', smpds(it+1))
-                    call cline_reconstruct3D%set('box_crop',  boxs(it+1))
+                deallocate(vec)
+                write(logfhandle,'(A,I3,A12,F6.1)')'>>> STAGE ',it,' WITH LP  : ',params%lp
+                write(logfhandle,'(A,I6)'         )'>>> MINIBATCH SIZE: ', nint(real(nptcls) / real(iters_per_stage))
+                write(logfhandle,'(A,I3,A1,I3)'   )'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
+                ! Starting reconstruction
+                if( it == 1 )then
+                    call cline_reconstruct3D%set('smpd_crop', params%smpd_crop)
+                    call cline_reconstruct3D%set('box_crop',  params%box_crop)
                     call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D)
                 endif
-            endif
-        enddo
+                ! Minibatch size
+                call cline_refine3D%set('batchfrac', params%batchfrac)
+                ! Iterations per minibatch
+                if( it < 3 )then
+                    call cline_refine3D%set('maxits', 4*iters_per_stage)
+                else if( it > NSTAGES-2 )then
+                    call cline_refine3D%set('maxits', 5*iters_per_stage)
+                else
+                    call cline_refine3D%set('maxits', 4*iters_per_stage)
+                endif
+                ! Shift search
+                if( it >= params%shift_stage )then
+                    call cline_refine3D%set('trs', trslim)
+                else
+                    call cline_refine3D%set('trs', 0.)
+                endif
+                ! ICM filter
+                if( params%l_icm .and. (it >= params%icm_stage) )then
+                    call cline_refine3D%set('icm',   'yes')
+                    call cline_refine3D%set('lambda', params%lambda)
+                endif
+                ! Projection directions
+                if( params%lp > 12. )then
+                    call cline_refine3D%set('nspace', NSPACE1)
+                elseif ( params%lp > 8. )then
+                    call cline_refine3D%set('nspace', NSPACE2)
+                else
+                    call cline_refine3D%set('nspace', NSPACE3)
+                endif
+                if( it == NSTAGES ) call cline_refine3D%set('nspace', NSPACE_FINAL)
+                ! Execution
+                call exec_refine3D(iter)
+                ! Reconstruction
+                if( it < NSTAGES )then
+                    if( boxs(it+1) /= boxs(it) )then
+                        call cline_reconstruct3D%set('smpd_crop', smpds(it+1))
+                        call cline_reconstruct3D%set('box_crop',  boxs(it+1))
+                        call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D)
+                    endif
+                endif
+            enddo
+            deallocate(batches)
+        case DEFAULT
+            ! Constant number of particles
+            deallocate(states)
+            ! Main loop
+            iter = 0
+            do it = 1,NSTAGES
+                write(logfhandle,'(A)') '>>>'
+                ! Dimensions & resolution limit
+                params%box_crop  = boxs(it)
+                params%smpd_crop = smpds(it)
+                params%lp        = lps(it)
+                write(logfhandle,'(A,I3,A12,F6.1)')'>>> STAGE ',it,' WITH LP  : ',params%lp
+                write(logfhandle,'(A,I6)'         )'>>> MINIBATCH SIZE: ', nint(real(nptcls_sel) / real(iters_per_stage))
+                write(logfhandle,'(A,I3,A1,I3)'   )'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
+                ! Starting reconstruction
+                if( it == 1 )then
+                    call cline_reconstruct3D%set('smpd_crop', params%smpd_crop)
+                    call cline_reconstruct3D%set('box_crop',  params%box_crop)
+                    call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D)
+                    call spproj%os_ptcl3D%set_all2single('updatecnt',1.)
+                    call spproj%write_segment_inside('ptcl3D', params%projfile)
+                endif
+                ! Minibatch size
+                call cline_refine3D%set('batchfrac', params%batchfrac)
+                ! Iterations per minibatch
+                if( it < 3 )then
+                    call cline_refine3D%set('maxits', 4*iters_per_stage)
+                else if( it > NSTAGES-2 )then
+                    call cline_refine3D%set('maxits', 5*iters_per_stage)
+                else
+                    call cline_refine3D%set('maxits', 4*iters_per_stage)
+                endif
+                ! Shift search
+                if( it >= params%shift_stage )then
+                    call cline_refine3D%set('trs', trslim)
+                else
+                    call cline_refine3D%set('trs', 0.)
+                endif
+                ! ICM filter
+                if( params%l_icm .and. (it >= params%icm_stage) )then
+                    call cline_refine3D%set('icm',   'yes')
+                    call cline_refine3D%set('lambda', params%lambda)
+                endif
+                ! Projection directions
+                if( params%lp > 12. )then
+                    call cline_refine3D%set('nspace', NSPACE1)
+                elseif ( params%lp > 8. )then
+                    call cline_refine3D%set('nspace', NSPACE2)
+                else
+                    call cline_refine3D%set('nspace', NSPACE3)
+                endif
+                if( it == NSTAGES ) call cline_refine3D%set('nspace', NSPACE_FINAL)
+                ! Execution
+                call exec_refine3D(iter)
+                ! Reconstruction
+                if( it < NSTAGES )then
+                    if( boxs(it+1) /= boxs(it) )then
+                        call cline_reconstruct3D%set('smpd_crop', smpds(it+1))
+                        call cline_reconstruct3D%set('box_crop',  boxs(it+1))
+                        call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D)
+                    endif
+                endif
+            enddo
+        end select
         ! for visualization
         do state = 1, params%nstates
             str_state = int2str_pad(state,2)
@@ -1482,6 +1561,13 @@ contains
             if( file_exists(vol_pproc)      ) call simple_rename(vol_pproc,      trim(REC_PPROC_FBODY)     //trim(str_state)//trim(params%ext))
             if( file_exists(vol_pproc_mirr) ) call simple_rename(vol_pproc_mirr, trim(REC_PPROC_MIRR_FBODY)//trim(str_state)//trim(params%ext))
         enddo
+        if( trim(params%algorithm) == 'fast' )then
+            ! restore states
+            call spproj%read_segment('ptcl3D', params%projfile)
+            call spproj%os_ptcl3D%set_all('state', real(states))
+            call spproj%write_segment_inside('ptcl3D', params%projfile)
+            deallocate(states)
+        endif
         ! cleanup
         call spproj%kill
         call qsys_cleanup
