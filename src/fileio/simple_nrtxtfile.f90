@@ -163,7 +163,7 @@ contains
         endif
         ! write out the line..
         do record_counter = 1,self%recs_per_line
-            write(self%funit, '(g14.7,a)', advance='no', iostat=ios) real(data_to_write(record_counter)), ' '
+            write(self%funit, '(I7,a)', advance='no', iostat=ios) data_to_write(record_counter), ' '
             if( ios .ne. 0 )then
                 call fileiochk('simple_nrtxtfile::writeNextDataLine; Encountered error',ios)
             endif

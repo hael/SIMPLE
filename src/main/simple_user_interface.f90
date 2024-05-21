@@ -107,6 +107,7 @@ type(simple_program), target :: extract
 type(simple_program), target :: filter
 type(simple_program), target :: fsc
 type(simple_program), target :: gen_pspecs_and_thumbs
+type(simple_program), target :: gen_picking_refs
 type(simple_program), target :: icm2D
 type(simple_program), target :: icm3D
 type(simple_program), target :: import_boxes
@@ -396,6 +397,7 @@ contains
         call new_fractionate_movies
         call new_fsc
         call new_gen_pspecs_and_thumbs
+        call new_gen_picking_refs
         call new_icm2D
         call new_icm3D
         call new_info_image
@@ -514,6 +516,7 @@ contains
         call push2prg_ptr_array(fractionate_movies)
         call push2prg_ptr_array(fsc)
         call push2prg_ptr_array(gen_pspecs_and_thumbs)
+        call push2prg_ptr_array(gen_picking_refs)
         call push2prg_ptr_array(icm2D)
         call push2prg_ptr_array(icm3D)
         call push2prg_ptr_array(info_image)
@@ -677,6 +680,8 @@ contains
                 ptr2prg => fsc
             case('gen_pspecs_and_thumbs')
                 ptr2prg => gen_pspecs_and_thumbs
+            case('gen_picking_refs')
+                ptr2prg => gen_picking_refs
             case('icm2D')
                 ptr2prg => icm2D
             case('icm3D')
@@ -937,6 +942,7 @@ contains
 
     subroutine list_stream_prgs_in_ui
         write(logfhandle,'(A)') cluster2D_stream%name
+        write(logfhandle,'(A)') gen_picking_refs%name
         write(logfhandle,'(A)') preproc%name
         write(logfhandle,'(A)') pick_extract%name
         write(logfhandle,'(A)') assign_optics%name
@@ -2363,6 +2369,63 @@ contains
         call gen_pspecs_and_thumbs%set_input('comp_ctrls', 1, nparts)
         call gen_pspecs_and_thumbs%set_input('comp_ctrls', 2, nthr)
     end subroutine new_gen_pspecs_and_thumbs
+
+    subroutine new_gen_picking_refs
+        ! PROGRAM SPECIFICATION
+        call gen_picking_refs%new(&
+        &'gen_picking_refs', &                                                           ! name
+        &'Generation of picking references in streaming mode',&                          ! descr_short
+        &'is a distributed workflow that executes picking and extraction'//&             ! descr_long
+        &' in streaming mode as the microscope collects the data',&
+        &'simple_stream',&                                                               ! executable
+        &1, 4, 0, 0, 3, 0, 3, .true.)                                                    ! # entries in each group, requires sp_project
+        gen_picking_refs%gui_submenu_list = "data,picking,extract,compute"
+        gen_picking_refs%advanced = .false.
+        ! image input/output
+        call gen_picking_refs%set_input('img_ios', 1, 'dir_exec', 'file', 'Previous run directory',&
+            &'Directory where a previous pick_extract application was run', 'e.g. 2_pick_extract', .false., '')
+        call gen_picking_refs%set_gui_params('img_ios', 1, submenu="data")
+        ! parameter input/output
+        call gen_picking_refs%set_input('parm_ios', 1, pcontrast)
+        call gen_picking_refs%set_gui_params('parm_ios', 1, submenu="picking")
+        call gen_picking_refs%set_input('parm_ios', 2, box_extract)
+        call gen_picking_refs%set_gui_params('parm_ios', 2, submenu="extract")
+        call gen_picking_refs%set_input('parm_ios', 3, moldiam)
+        call gen_picking_refs%set_gui_params('parm_ios', 3, submenu="picking")
+        call gen_picking_refs%set_input('parm_ios', 4, 'dir_target', 'file', 'Target directory',&
+        &'Directory where the preprocess_stream application is running', 'e.g. 1_preproc', .true., '')
+        call gen_picking_refs%set_gui_params('parm_ios', 4, submenu="data")
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call gen_picking_refs%set_input('filt_ctrls', 1, ctfresthreshold)
+        gen_picking_refs%filt_ctrls(1)%descr_long        = 'Micrographs with a CTF resolution above the threshold (in Angs) will be ignored from further processing{10}'
+        gen_picking_refs%filt_ctrls(1)%descr_placeholder = 'CTF resolution threshold(in Angstroms){10.}'
+        gen_picking_refs%filt_ctrls(1)%rval_default      = CTFRES_THRESHOLD_STREAM
+        call gen_picking_refs%set_gui_params('filt_ctrls', 1, submenu="data")
+        call gen_picking_refs%set_input('filt_ctrls', 2, icefracthreshold)
+        gen_picking_refs%filt_ctrls(2)%descr_long        = 'Micrographs with an ice ring/1st pspec maxima fraction above the threshold will be ignored from further processing{1.0}'
+        gen_picking_refs%filt_ctrls(2)%descr_placeholder = 'Ice fraction threshold{1.0}'
+        gen_picking_refs%filt_ctrls(2)%rval_default      = ICEFRAC_THRESHOLD_STREAM
+        call gen_picking_refs%set_gui_params('filt_ctrls', 2, submenu="data")
+        call gen_picking_refs%set_input('filt_ctrls', 3, astigthreshold)
+        gen_picking_refs%filt_ctrls(3)%descr_long        = 'Micrographs with an astigmatism (%) above the threshold will be ignored from further processing{10.0}'
+        gen_picking_refs%filt_ctrls(3)%descr_placeholder = 'Astigmatism threshold{10.0}'
+        gen_picking_refs%filt_ctrls(3)%rval_default      = ASTIG_THRESHOLD_STREAM
+        call gen_picking_refs%set_gui_params('filt_ctrls', 3, submenu="data")
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call gen_picking_refs%set_input('comp_ctrls', 1, nthr)
+        call gen_picking_refs%set_gui_params('comp_ctrls', 1, submenu="compute", advanced=.false.)
+        call gen_picking_refs%set_input('comp_ctrls', 2, nparts)
+        call gen_picking_refs%set_gui_params('comp_ctrls', 2, submenu="compute", advanced=.false.)
+        call gen_picking_refs%set_input('comp_ctrls', 3, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
+        &'in seconds(29mins){1740}', .false., 1740.)
+        call gen_picking_refs%set_gui_params('comp_ctrls', 3, submenu="compute")
+    end subroutine new_gen_picking_refs
 
     subroutine new_import_starproject
         ! PROGRAM SPECIFICATION
