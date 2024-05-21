@@ -29,8 +29,7 @@ lims(2)  = real(N)
 call spec%specify(str_opts, ndim=NDIM, limits=lims, limits_init=lims, nrestarts=NRESTARTS)
 call spec%set_costfun(costfun)
 call ofac%new(spec, opt_ptr)
-! spec%x = (1. + real(N))/2.
-spec%x = 30.
+spec%x = (1. + real(N))/2.
 call opt_ptr%minimize(spec, opt_ptr, lowest_cost)
 
 print *, lowest_cost, spec%x
@@ -39,9 +38,9 @@ deallocate(opt_ptr)
 
 contains
     function costfun( self, vec, D ) result( cost )
-        class(*), intent(inout)  :: self
-        integer,  intent(in)     :: D
-        real,     intent(in)     :: vec(D)
+        class(*), intent(inout) :: self
+        integer,  intent(in)    :: D
+        real,     intent(in)    :: vec(D)
         real(dp) :: mean_x, mean_y, a, b, dcost, denom
         real     :: cost
         integer  :: mid
