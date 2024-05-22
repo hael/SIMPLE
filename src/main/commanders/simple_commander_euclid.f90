@@ -632,8 +632,8 @@ contains
         call plot_fsc2(Nk, vol_pspec, sig_pspec, res, params%smpd_crop, trim(filename))
         ! estimate the next lp using 2-segment regression
         str_opts = 'de'
-        lims(1)  = 1
-        lims(2)  = real(Nk)
+        lims(1)  = find_start
+        lims(2)  = find_stop
         kinds    = (/(i,i=1,Nk)/)
         call spec%specify(str_opts, ndim=1, limits=lims, limits_init=lims, nrestarts=1)
         call spec%set_costfun(costfun)
@@ -671,28 +671,28 @@ contains
             integer  :: mid
             mid    = floor(vec(1))
             ! linear fitting (y = a + bx ) from 1 to mid
-            mean_x = sum(real(kinds(1:mid), dp)) / real(mid, dp)
-            mean_y = sum(vol_pspec( 1:mid))      / real(mid, dp)
-            denom  = sum((real(kinds(1:mid), dp) - mean_x)**2)
+            mean_x = sum( real(kinds(find_start:mid), dp)) / real(mid, dp)
+            mean_y = sum( vol_pspec( find_start:mid))      / real(mid, dp)
+            denom  = sum((real(kinds(find_start:mid), dp) - mean_x)**2)
             if( denom > TINY )then
-                b  = sum( (real(kinds(1:mid), dp) - mean_x) * (vol_pspec(1:mid) - mean_y) ) / denom
+                b  = sum( (real(kinds(find_start:mid), dp) - mean_x) * (vol_pspec(find_start:mid) - mean_y) ) / denom
             else
                 b  = 0.
             endif
             a      = mean_y - b * mean_x
-            dcost  = sum( ((a + b * real(kinds(1:mid), dp)) -  vol_pspec(1:mid))**2 ) / real(mid, dp)
-            ! linear fitting from mid+1 to Nk
-            if( mid < Nk )then
-                mean_x = sum(real(kinds(mid+1:Nk), dp)) / real(Nk-mid, dp)
-                mean_y = sum(vol_pspec(mid+1:Nk)) / real(Nk-mid, dp)
-                denom  = sum((real(kinds(mid+1:Nk), dp) - mean_x)**2)
+            dcost  = sum( ((a + b * real(kinds(find_start:mid), dp)) -  vol_pspec(find_start:mid))**2 )
+            ! linear fitting from mid+1 to find_stop
+            if( mid < find_stop )then
+                mean_x = sum( real(kinds(mid+1:find_stop), dp)) / real(find_stop-mid, dp)
+                mean_y = sum(  vol_pspec(mid+1:find_stop))      / real(find_stop-mid, dp)
+                denom  = sum((real(kinds(mid+1:find_stop), dp) - mean_x)**2)
                 if( denom > TINY )then
-                    b  = sum( (real(kinds(mid+1:Nk), dp) - mean_x) * (vol_pspec(mid+1:Nk) - mean_y) ) / denom
+                    b  = sum( (real(kinds(mid+1:find_stop), dp) - mean_x) * (vol_pspec(mid+1:find_stop) - mean_y) ) / denom
                 else
                     b  = 0.
                 endif
                 a      = mean_y - b * mean_x
-                dcost  = dcost + sum( ((a + b * real(kinds(mid+1:Nk), dp)) -  vol_pspec(mid+1:Nk))**2 ) / real(Nk-mid, dp)
+                dcost  = dcost + sum( ((a + b * real(kinds(mid+1:find_stop), dp)) -  vol_pspec(mid+1:find_stop))**2 )
             endif
             cost = real(dcost)
         end function costfun
