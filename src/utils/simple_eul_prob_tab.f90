@@ -12,8 +12,6 @@ public :: calc_num2sample, calc_athres, eulprob_dist_switch, eulprob_corr_switch
 private
 #include "simple_local_flags.inc"
 
-logical, parameter :: DEBUG = .false.
-
 interface angle_sampling
     module procedure angle_sampling_1
     module procedure angle_sampling_2
@@ -58,10 +56,6 @@ contains
         call self%kill
         self%nptcls  = size(pinds)
         self%nstates = params_glob%nstates
-        if( DEBUG )then
-            print *, 'nptcls = ', self%nptcls
-            print *, 'pinds  = ', pinds
-        endif
         allocate(self%pinds(self%nptcls), source=pinds)
         allocate(self%loc_tab(params_glob%nspace,self%nptcls,self%nstates), self%assgn_map(self%nptcls),&
                     &self%state_tab(self%nstates,self%nptcls))
@@ -404,15 +398,6 @@ contains
         write(unit=funit,pos=1)          self%nptcls
         write(unit=funit,pos=headsz + 1) self%assgn_map
         call fclose(funit)
-        if( DEBUG )then
-            print *, 'MASTER ----'
-            print *, 'pinds  = ', self%assgn_map(:)%pind
-            print *, 'istate = ', self%assgn_map(:)%istate
-            print *, 'iproj  = ', self%assgn_map(:)%iproj
-            print *, 'inpls  = ', self%assgn_map(:)%inpl
-            print *, 'xs     = ', self%assgn_map(:)%x
-            print *, 'ys     = ', self%assgn_map(:)%y
-        endif
     end subroutine write_assignment
 
     ! read from the global assignment map to local partition for shift search and further refinement
@@ -441,15 +426,6 @@ contains
             end do
         end do
         !$omp end parallel do
-        if( DEBUG )then
-            print *, 'PARTITION ----'
-            print *, 'pinds  = ', self%assgn_map(:)%pind
-            print *, 'istate = ', self%assgn_map(:)%istate
-            print *, 'iproj  = ', self%assgn_map(:)%iproj
-            print *, 'inpls  = ', self%assgn_map(:)%inpl
-            print *, 'xs     = ', self%assgn_map(:)%x
-            print *, 'ys     = ', self%assgn_map(:)%y
-        endif
     end subroutine read_assignment
 
     ! DESTRUCTOR
