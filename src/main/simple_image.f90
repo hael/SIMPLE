@@ -4030,17 +4030,21 @@ contains
     end subroutine NLmean3D
 
     ! uniform noise variance (sigma2 constant, set to 5)
-    subroutine ICM2D( self, lambda )
+    subroutine ICM2D( self, lambda, verbose )
         use simple_neighs
-        class(image), intent(inout) :: self
-        real,         intent(in)    :: lambda
+        class(image),      intent(inout) :: self
+        real,              intent(in)    :: lambda
+        logical, optional, intent(in)    :: verbose
         integer, parameter :: MAXITS    = 3
         integer, parameter :: NQUANTA   = 256
         integer     :: n_8(3,8), nsz, i, j, k, m, n
         real        :: pot_term, pix, min, proba, sigma2t2, x, xmin, transl_tab(NQUANTA), eucl, y, sy, syy, diff, rnsz
         type(image) :: self_prev
+        logical     :: l_verbose
         if( self%is_3d() ) THROW_HARD('2D images only; ICM')
         if( self%ft )      THROW_HARD('Real space only; ICM')
+        l_verbose = .true.
+        if( present(verbose) ) l_verbose = verbose
         call self%quantize_fwd(NQUANTA, transl_tab)
         call self_prev%copy(self)
         sigma2t2 = 10.
@@ -4074,19 +4078,22 @@ contains
                     self%rmat(n,m,1) = xmin
                 end do
             end do
-            eucl = self%euclid_norm(self_prev)
-            write(logfhandle,'(A,I2,A,F8.4)') 'ICM Iteration ', i, ', Euclidean distance ', eucl
-            call self_prev%copy(self)
+            if( l_verbose )then
+                eucl = self%euclid_norm(self_prev)
+                write(logfhandle,'(A,I2,A,F8.4)') 'ICM Iteration ', i, ', Euclidean distance ', eucl
+            endif
+            if( i < MAXITS ) self_prev%rmat = self%rmat
         end do
         call self%quantize_bwd(NQUANTA, transl_tab)
         call self_prev%kill
     end subroutine ICM2D
 
     ! nonuniform
-    subroutine ICM2D_eo( even, odd, lambda )
+    subroutine ICM2D_eo( even, odd, lambda, verbose )
         use simple_neighs
-        class(image), intent(inout) :: even, odd
-        real,         intent(in)    :: lambda
+        class(image),      intent(inout) :: even, odd
+        real,              intent(in)    :: lambda
+        logical, optional, intent(in)    :: verbose
         integer, parameter :: MAXITS    = 3
         integer, parameter :: NQUANTA   = 256
         type(image) :: even_prev, odd_prev, noise, noise_var
@@ -4094,8 +4101,11 @@ contains
         real        :: transl_tab_even(NQUANTA), transl_tab_odd(NQUANTA)
         real        :: pot_term(2), pix(2), minv(2), proba(2), sigma2t2
         real        :: x, xmin(2), eucl, y(2), sy(2), syy(2), diff(2), rnsz
+        logical     :: l_verbose
         if( even%is_3d() ) THROW_HARD('2D images only; ICM2D_eo')
         if( even%ft )      THROW_HARD('Real space only; ICM2D_eo')
+        l_verbose = .true.
+        if( present(verbose) ) l_verbose = verbose
         call noise%copy(even)
         call noise%subtr(odd)
         call noise%loc_var(noise_var)
@@ -4142,10 +4152,14 @@ contains
                     even%rmat(n,m,1) = xmin(2)
                 end do
             end do
-            eucl = (even%euclid_norm(even_prev) + odd%euclid_norm(odd_prev)) / 2.
-            write(logfhandle,'(A,I2,A,F8.4)') 'ICM Iteration ', i, ', Euclidean distance ', eucl
-            call even_prev%copy(even)
-            call odd_prev%copy(odd)
+            if( l_verbose )then
+                eucl = (even%euclid_norm(even_prev) + odd%euclid_norm(odd_prev)) / 2.
+                write(logfhandle,'(A,I2,A,F8.4)') 'ICM Iteration ', i, ', Euclidean distance ', eucl
+            endif
+            if( i < MAXITS)then
+                even_prev%rmat = even%rmat
+                odd_prev%rmat  = odd%rmat
+            endif
         end do
         call even%quantize_bwd(NQUANTA, transl_tab_even)
         call odd%quantize_bwd(NQUANTA, transl_tab_odd)

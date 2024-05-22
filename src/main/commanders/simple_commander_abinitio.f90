@@ -1205,7 +1205,7 @@ contains
         integer, parameter :: MINBOX  = 88
         integer, parameter :: NSTAGES = 10
         integer, parameter :: NSPACE1=500, NSPACE2=1000, NSPACE3=1500, NSPACE_FINAL=2000
-        integer, parameter :: SHIFT_STAGE_DEFAULT = NSTAGES-2
+        integer, parameter :: SHIFT_STAGE_DEFAULT = NSTAGES-1
         integer, parameter :: ICM_STAGE_DEFAULT   = 2       ! in [1;NSTAGES]
         integer, parameter :: MIN_NPTCLS = 20000
         integer, parameter :: MAX_NPTCLS = 100000
@@ -1419,26 +1419,20 @@ contains
                 else
                     call cline_refine3D%set('maxits', 4*iters_per_stage)
                 endif
-                ! Shift search
+                ! Shift search & projection directions
                 if( it >= params%shift_stage )then
                     call cline_refine3D%set('trs', trslim)
+                    call cline_refine3D%set('nspace', NSPACE2)
                 else
                     call cline_refine3D%set('trs', 0.)
+                    call cline_refine3D%set('nspace', NSPACE1)
                 endif
+                if( it >= NSTAGES-1 ) call cline_refine3D%set('nspace', NSPACE_FINAL)
                 ! ICM filter
                 if( params%l_icm .and. (it >= params%icm_stage) )then
                     call cline_refine3D%set('icm',   'yes')
                     call cline_refine3D%set('lambda', params%lambda)
                 endif
-                ! Projection directions
-                if( params%lp > 12. )then
-                    call cline_refine3D%set('nspace', NSPACE1)
-                elseif ( params%lp > 8. )then
-                    call cline_refine3D%set('nspace', NSPACE2)
-                else
-                    call cline_refine3D%set('nspace', NSPACE3)
-                endif
-                if( it == NSTAGES ) call cline_refine3D%set('nspace', NSPACE_FINAL)
                 ! Execution
                 call exec_refine3D(iter)
                 ! Reconstruction
@@ -1483,26 +1477,21 @@ contains
                 else
                     call cline_refine3D%set('maxits', 4*iters_per_stage)
                 endif
-                ! Shift search
+                ! Shift search & projection directions
                 if( it >= params%shift_stage )then
                     call cline_refine3D%set('trs', trslim)
+                    call cline_refine3D%set('nspace', NSPACE2)
                 else
                     call cline_refine3D%set('trs', 0.)
+                    call cline_refine3D%set('nspace', NSPACE1)
                 endif
+                if( it >= NSTAGES-1 ) call cline_refine3D%set('nspace', NSPACE_FINAL)
                 ! ICM filter
                 if( params%l_icm .and. (it >= params%icm_stage) )then
                     call cline_refine3D%set('icm',   'yes')
                     call cline_refine3D%set('lambda', params%lambda)
                 endif
                 ! Projection directions
-                if( params%lp > 12. )then
-                    call cline_refine3D%set('nspace', NSPACE1)
-                elseif ( params%lp > 8. )then
-                    call cline_refine3D%set('nspace', NSPACE2)
-                else
-                    call cline_refine3D%set('nspace', NSPACE3)
-                endif
-                if( it == NSTAGES ) call cline_refine3D%set('nspace', NSPACE_FINAL)
                 ! Execution
                 call exec_refine3D(iter)
                 ! Reconstruction

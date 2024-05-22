@@ -1571,7 +1571,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm&
         & suitable for the first pass of cleanup after picking',&               ! descr_long
         &'simple_exec',&                                                        ! executable
-        &0, 0, 0, 6, 4, 1, 2, .true.)                                           ! # entries in each group, requires sp_project
+        &0, 0, 0, 6, 5, 1, 2, .true.)                                           ! # entries in each group, requires sp_project
         cleanup2D%gui_submenu_list = "search,mask,filter,compute"
         cleanup2D%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1610,6 +1610,8 @@ contains
         cleanup2D%filt_ctrls(4)%descr_placeholder = '(yes|no){no}'
         cleanup2D%filt_ctrls(4)%cval_default      = 'no'
         call cleanup2D%set_gui_params('filt_ctrls', 4, submenu="filter")
+        call cleanup2D%set_input('filt_ctrls', 5, icm)
+        call cleanup2D%set_gui_params('filt_ctrls', 5, submenu="filter")
         ! mask controls
         call cleanup2D%set_input('mask_ctrls', 1, mskdiam)
         call cleanup2D%set_gui_params('mask_ctrls', 1, submenu="mask", advanced=.false.)
@@ -1693,7 +1695,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_exec',&                                                        ! executable
-        &1, 0, 0, 12, 8, 1, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &1, 0, 0, 12, 9, 1, 2, .true.)                                          ! # entries in each group, requires sp_project
         cluster2D%gui_submenu_list = "search,mask,filter,compute"
         cluster2D%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1759,6 +1761,8 @@ contains
         call cluster2D%set_gui_params('filt_ctrls', 7, submenu="filter")
         call cluster2D%set_input('filt_ctrls', 8, hp)
         call cluster2D%set_gui_params('filt_ctrls', 8, submenu="filter")
+        call cluster2D%set_input('filt_ctrls', 9, icm)
+        call cluster2D%set_gui_params('filt_ctrls', 9, submenu="filter")
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, mskdiam)
         call cluster2D%set_gui_params('mask_ctrls', 1, submenu="mask", advanced=.false.)
