@@ -54,6 +54,7 @@ type(starproject)                      :: starproj
 logical,                   allocatable :: pool_stacks_mask(:)
 integer                                :: pool_iter
 logical                                :: pool_available
+logical                                :: l_no_chunks
 ! Chunk related
 type(stream_chunk),        allocatable :: chunks(:), converged_chunks(:)
 type(cmdline)                          :: cline_cluster2D_chunk
@@ -163,6 +164,10 @@ contains
                 call chunks(ichunk)%init(ichunk, pool_proj)
             enddo
             glob_chunk_id = params_glob%nchunks
+            l_no_chunks = .false.
+        else
+            l_no_chunks = .true.
+            ncls_glob   = params_glob%ncls
         endif
         ! initialize pool parameters and objects
         call cline_cluster2D_pool%set('prg',       'cluster2D_distr')
@@ -184,13 +189,21 @@ contains
             call cline_cluster2D_pool%set('center','yes')
         endif
         if( l_wfilt ) call cline_cluster2D_pool%set('wiener', 'partial')
-        call cline_cluster2D_pool%set('extr_iter', 100.)
+        call cline_cluster2D_pool%set('extr_iter', 99999)
         call cline_cluster2D_pool%set('mkdir',     'no')
         call cline_cluster2D_pool%set('mskdiam',   params_glob%mskdiam)
         call cline_cluster2D_pool%set('async',     'yes') ! to enable hard termination
         call cline_cluster2D_pool%set('stream',    'yes') ! use for dual CTF treatment
-        call cline_cluster2D_pool%set('nparts',   real(params_glob%nparts_pool))
+        call cline_cluster2D_pool%set('nparts',    params_glob%nparts_pool)
         if( l_update_sigmas ) call cline_cluster2D_pool%set('cc_iters', 0.0)
+        ! when the classification is started without chunks, without pre-classification
+        if( l_no_chunks )then
+            params_glob%mskdiam = 0.85 * real(params_glob%box) * params_glob%smpd
+            call cline_cluster2D_pool%set('mskdiam',   params_glob%mskdiam)
+            call cline_cluster2D_pool%delete('extr_iter')
+            if( l_update_sigmas ) call cline_cluster2D_pool%set('cc_iters', CHUNK_CC_ITERS)
+            l_update_sigmas = .false. !!
+        endif
         ! EV override
         call get_environment_variable(SIMPLE_STREAM_POOL_NTHR, pool_nthr_env, envlen)
         if(envlen > 0) then
@@ -632,19 +645,19 @@ contains
             call pool_proj%os_stk%set(imic, 'fromp', real(fromp))
             call pool_proj%os_stk%set(imic, 'top',   real(fromp+records(irec)%nptcls-1))
             ! particles
-            do jptcl = 1,nptcls
+            do jptcl = 1,records(irec)%nptcls
                 iptcl = iptcl + 1
                 call pool_proj%os_ptcl2D%transfer_ori(iptcl, spproj%os_ptcl2D, jptcl)
                 call pool_proj%os_ptcl2D%set_stkind(iptcl, imic)
-                call pool_proj%os_ptcl2D%set(iptcl, 'updatecnt', 0.) ! new particle
-                call pool_proj%os_ptcl2D%set(iptcl, 'frac',      0.) ! new particle
+                call pool_proj%os_ptcl2D%set(iptcl, 'updatecnt', 0.)
+                call pool_proj%os_ptcl2D%set(iptcl, 'frac',      0.)
+                call pool_proj%os_ptcl2D%set(iptcl, 'eo',  merge(0., 1., is_even(iptcl)))
+                call pool_proj%os_ptcl2D%set_class(iptcl, irnd_uni(params_glob%ncls))
             enddo
             fromp = fromp + records(irec)%nptcls
             records(irec)%included = .true. ! record update
         enddo
         call spproj%kill
-        ! TODO: remapping!
-        print *,'total number of particles imported: ',pool_proj%os_ptcl2D%get_noris()
     end subroutine import_records_into_pool
 
     subroutine update_pool_status_dev
@@ -972,6 +985,7 @@ contains
 
     subroutine classify_pool_dev
         use simple_ran_tabu
+        use simple_procimgstk, only: random_selection_from_imgfile
         logical,                   parameter   :: L_BENCH = .false.
         type(ran_tabu)                         :: random_generator
         type(sp_project)                       :: spproj
@@ -987,18 +1001,31 @@ contains
         if( .not. stream2D_active ) return
         if( .not.pool_available )   return
         if( L_BENCH ) t_tot  = tic()
-        !poolstats init
-        call pool_stats%init
         nptcls_tot           = pool_proj%os_ptcl2D%get_noris()
         nptcls_glob          = nptcls_tot
         nptcls_rejected_glob = 0
         if( nptcls_tot == 0 ) return
         pool_iter = pool_iter + 1
+        call pool_stats%init
         call cline_cluster2D_pool%set('refs',    refs_glob)
         call cline_cluster2D_pool%set('ncls',    real(ncls_glob))
         call cline_cluster2D_pool%set('startit', real(pool_iter))
         call cline_cluster2D_pool%set('maxits',  real(pool_iter))
         call cline_cluster2D_pool%set('frcs',    trim(FRCS_FILE))
+        if( l_no_chunks )then
+            if( pool_iter == 1 )then
+                call cline_cluster2D_pool%set('center','no')
+                call cline_cluster2D_pool%delete('frcs')
+                call random_selection_from_imgfile(pool_proj, refs_glob, params_glob%box_crop, ncls_glob)
+                call simple_copy_file(refs_glob, add2fbody(refs_glob, params_glob%ext, '_even'))
+                call simple_copy_file(refs_glob, add2fbody(refs_glob, params_glob%ext, '_odd') )
+            endif
+            if( pool_iter < 5 )then
+                call cline_cluster2D_pool%set('trs',0.)
+            else
+                call cline_cluster2D_pool%set('trs',MINSHIFT)
+            endif
+        endif
         spproj%projinfo = pool_proj%projinfo
         spproj%compenv  = pool_proj%compenv
         call spproj%projinfo%delete_entry('projname')
