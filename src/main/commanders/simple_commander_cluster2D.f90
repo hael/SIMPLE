@@ -293,6 +293,8 @@ contains
         if( .not. cline%defined('ml_reg')    ) call cline%set('ml_reg',      'no')
         if( .not. cline%defined('nonuniform')) call cline%set('nonuniform',  'no')
         if( .not. cline%defined('smooth_ext')) call cline%set('smooth_ext',   20.)
+        if( .not. cline%defined('icm')       ) call cline%set('icm',         'no')
+        if( .not. cline%defined('lambda')    ) call cline%set('lambda',       1.0)
         call cline%set('stream', 'no')
         ! set shared-memory flag
         if( cline%defined('nparts') )then
@@ -557,6 +559,8 @@ contains
         integer  :: last_iter_stage1, last_iter_stage2
         logical  :: l_scaling, l_shmem, l_euclid, l_cc_iters
         call set_cluster2D_defaults( cline )
+        if( .not.cline%defined('icm')    ) call cline%set('icm',    'no')
+        if( .not.cline%defined('lambda') ) call cline%set('lambda',  1.0)
         if( .not.cline%defined('objfun') ) call cline%set('objfun', 'cc')
         call cline%delete('clip')
         ! set shared-memory flag
@@ -886,6 +890,7 @@ contains
         call qenv%new(params%nparts)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
+        call job_descr%delete('icm')
         ! splitting
         call build%spproj%split_stk(params%nparts)
         ! prepare command lines from prototype master
@@ -1022,6 +1027,8 @@ contains
             call job_descr%set('startit', trim(int2str(iter)))
             ! the only FRC we have is from the previous iteration, hence the iter - 1
             call job_descr%set('frcs', trim(FRCS_FILE))
+            ! ICM filter
+            if( params%l_icm .and. iter >= LPLIM1ITERBOUND ) call job_descr%set('icm', 'yes')
             ! schedule
             if( L_BENCH_GLOB )then
                 rt_init = toc(t_init)
