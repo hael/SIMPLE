@@ -671,11 +671,11 @@ contains
             integer  :: mid
             mid   = floor(vec(1))
             ! least-square fitting (y = a + bx ) from 1 to mid
-            lx    = sum(real(kinds(    find_start:mid), dp))
-            ly    = sum(     vol_pspec(find_start:mid))
-            la    = sum(real(kinds(    find_start:mid), dp)**2)
-            lb    = sum(real(kinds(    find_start:mid), dp) * vol_pspec(find_start:mid))
-            lc    = sum(     vol_pspec(find_start:mid)**2)
+            lx    = sum(real(kinds(find_start:mid), dp))
+            ly    = sum(vol_pspec( find_start:mid))
+            la    = sum(real(kinds(find_start:mid), dp)**2)
+            lb    = sum(real(kinds(find_start:mid), dp) * vol_pspec(find_start:mid))
+            lc    = sum(vol_pspec( find_start:mid)**2)
             denom = real(mid,dp) * la - lx**2
             if( denom > TINY )then
                 b = (real(mid,dp) * lb - lx * ly) / denom
@@ -686,11 +686,11 @@ contains
             dcost = sum( ((a + b * real(kinds(find_start:mid), dp)) -  vol_pspec(find_start:mid))**2 ) / real(mid, dp)
             ! least-square fitting from mid+1 to find_stop
             if( mid < find_stop )then
-                lx    = sum(real(kinds(    mid+1:find_stop), dp))
-                ly    = sum(     vol_pspec(mid+1:find_stop))
-                la    = sum(real(kinds(    mid+1:find_stop), dp)**2)
-                lb    = sum(real(kinds(    mid+1:find_stop), dp) * vol_pspec(mid+1:find_stop))
-                lc    = sum(     vol_pspec(mid+1:find_stop)**2)
+                lx    = sum(real(kinds(mid+1:find_stop), dp))
+                ly    = sum(vol_pspec( mid+1:find_stop))
+                la    = sum(real(kinds(mid+1:find_stop), dp)**2)
+                lb    = sum(real(kinds(mid+1:find_stop), dp) * vol_pspec(mid+1:find_stop))
+                lc    = sum(vol_pspec( mid+1:find_stop)**2)
                 denom = real(find_stop-mid,dp) * la - lx**2
                 if( denom > TINY )then
                     b = (real(find_stop-mid,dp) * lb - lx * ly) / denom
@@ -698,7 +698,7 @@ contains
                     b = 0._dp
                 endif
                 a     = (ly - b * lx) / real(find_stop-mid, dp)
-                dcost  = dcost + sum( ((a + b * real(kinds(mid+1:find_stop), dp)) -  vol_pspec(mid+1:find_stop))**2 ) / real(find_stop-mid, dp)
+                dcost = dcost + sum( ((a + b * real(kinds(mid+1:find_stop), dp)) -  vol_pspec(mid+1:find_stop))**2 ) / real(find_stop-mid, dp)
             endif
             cost = real(dcost)
         end function costfun
