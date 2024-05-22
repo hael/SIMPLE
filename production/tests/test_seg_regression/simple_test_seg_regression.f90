@@ -41,32 +41,38 @@ contains
         class(*), intent(inout) :: self
         integer,  intent(in)    :: D
         real,     intent(in)    :: vec(D)
-        real(dp) :: mean_x, mean_y, a, b, dcost, denom
+        real(dp) :: a, b, dcost, denom, lx, ly, la, lb, lc
         real     :: cost
         integer  :: mid
-        mid    = floor(vec(1))
-        ! linear fitting (y = a + bx ) from 1 to mid
-        mean_x = sum(real(inds(    1:mid), dp)) / real(mid, dp)
-        mean_y = sum(     data_ori(1:mid)     ) / real(mid, dp)
-        denom  = sum((real(inds(1:mid), dp) - mean_x)**2)
+        mid   = floor(vec(1))
+        ! least-square fitting (y = a + bx ) from 1 to mid
+        lx    = sum(real(inds(    1:mid), dp))
+        ly    = sum(     data_ori(1:mid))
+        la    = sum(real(inds(    1:mid), dp)**2)
+        lb    = sum(real(inds(    1:mid), dp) * data_ori(1:mid))
+        lc    = sum(     data_ori(1:mid)**2)
+        denom = real(mid,dp) * la - lx**2
         if( denom > TINY )then
-            b  = sum( (real(inds(1:mid), dp) - mean_x) * (data_ori(1:mid) - mean_y) ) / denom
+            b = (real(mid,dp) * lb - lx * ly) / denom
         else
-            b  = 0.
+            b = 0._dp
         endif
-        a      = mean_y - b * mean_x
-        dcost  = sum( ((a + b * real(inds(1:mid), dp)) -  data_ori(1:mid))**2 ) / real(mid, dp)
-        ! linear fitting from mid+1 to N
+        a     = (ly - b * lx) / real(mid, dp)
+        dcost = sum( ((a + b * real(inds(1:mid), dp)) -  data_ori(1:mid))**2 ) / real(mid, dp)
+        ! least-square fitting from mid+1 to N
         if( mid < N )then
-            mean_x = sum(real(inds(    mid+1:N), dp)) / real(N-mid, dp)
-            mean_y = sum(     data_ori(mid+1:N)     ) / real(N-mid, dp)
-            denom  = sum((real(inds(mid+1:N), dp) - mean_x)**2)
+            lx    = sum(real(inds(    mid+1:N), dp))
+            ly    = sum(     data_ori(mid+1:N))
+            la    = sum(real(inds(    mid+1:N), dp)**2)
+            lb    = sum(real(inds(    mid+1:N), dp) * data_ori(mid+1:N))
+            lc    = sum(     data_ori(mid+1:N)**2)
+            denom = real(N-mid,dp) * la - lx**2
             if( denom > TINY )then
-                b  = sum( (real(inds(mid+1:N), dp) - mean_x) * (data_ori(mid+1:N) - mean_y) ) / denom
+                b = (real(N-mid,dp) * lb - lx * ly) / denom
             else
-                b  = 0.
+                b = 0._dp
             endif
-            a      = mean_y - b * mean_x
+            a     = (ly - b * lx) / real(N-mid, dp)
             dcost  = dcost + sum( ((a + b * real(inds(mid+1:N), dp)) -  data_ori(mid+1:N))**2 ) / real(N-mid, dp)
         endif
         cost = real(dcost)

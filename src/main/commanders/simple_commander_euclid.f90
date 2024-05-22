@@ -666,33 +666,39 @@ contains
             class(*), intent(inout) :: func_self
             integer,  intent(in)    :: D
             real,     intent(in)    :: vec(D)
-            real(dp) :: mean_x, mean_y, a, b, dcost, denom
+            real(dp) :: a, b, dcost, denom, lx, ly, la, lb, lc
             real     :: cost
             integer  :: mid
-            mid    = floor(vec(1))
-            ! linear fitting (y = a + bx ) from 1 to mid
-            mean_x = sum( real(kinds(find_start:mid), dp)) / real(mid, dp)
-            mean_y = sum( vol_pspec( find_start:mid))      / real(mid, dp)
-            denom  = sum((real(kinds(find_start:mid), dp) - mean_x)**2)
+            mid   = floor(vec(1))
+            ! least-square fitting (y = a + bx ) from 1 to mid
+            lx    = sum(real(kinds(    find_start:mid), dp))
+            ly    = sum(     vol_pspec(find_start:mid))
+            la    = sum(real(kinds(    find_start:mid), dp)**2)
+            lb    = sum(real(kinds(    find_start:mid), dp) * vol_pspec(find_start:mid))
+            lc    = sum(     vol_pspec(find_start:mid)**2)
+            denom = real(mid,dp) * la - lx**2
             if( denom > TINY )then
-                b  = sum( (real(kinds(find_start:mid), dp) - mean_x) * (vol_pspec(find_start:mid) - mean_y) ) / denom
+                b = (real(mid,dp) * lb - lx * ly) / denom
             else
-                b  = 0.
+                b = 0._dp
             endif
-            a      = mean_y - b * mean_x
-            dcost  = sum( ((a + b * real(kinds(find_start:mid), dp)) -  vol_pspec(find_start:mid))**2 )
-            ! linear fitting from mid+1 to find_stop
+            a     = (ly - b * lx) / real(mid, dp)
+            dcost = sum( ((a + b * real(kinds(find_start:mid), dp)) -  vol_pspec(find_start:mid))**2 ) / real(mid, dp)
+            ! least-square fitting from mid+1 to find_stop
             if( mid < find_stop )then
-                mean_x = sum( real(kinds(mid+1:find_stop), dp)) / real(find_stop-mid, dp)
-                mean_y = sum(  vol_pspec(mid+1:find_stop))      / real(find_stop-mid, dp)
-                denom  = sum((real(kinds(mid+1:find_stop), dp) - mean_x)**2)
+                lx    = sum(real(kinds(    mid+1:find_stop), dp))
+                ly    = sum(     vol_pspec(mid+1:find_stop))
+                la    = sum(real(kinds(    mid+1:find_stop), dp)**2)
+                lb    = sum(real(kinds(    mid+1:find_stop), dp) * vol_pspec(mid+1:find_stop))
+                lc    = sum(     vol_pspec(mid+1:find_stop)**2)
+                denom = real(find_stop-mid,dp) * la - lx**2
                 if( denom > TINY )then
-                    b  = sum( (real(kinds(mid+1:find_stop), dp) - mean_x) * (vol_pspec(mid+1:find_stop) - mean_y) ) / denom
+                    b = (real(find_stop-mid,dp) * lb - lx * ly) / denom
                 else
-                    b  = 0.
+                    b = 0._dp
                 endif
-                a      = mean_y - b * mean_x
-                dcost  = dcost + sum( ((a + b * real(kinds(mid+1:find_stop), dp)) -  vol_pspec(mid+1:find_stop))**2 )
+                a     = (ly - b * lx) / real(find_stop-mid, dp)
+                dcost  = dcost + sum( ((a + b * real(kinds(mid+1:find_stop), dp)) -  vol_pspec(mid+1:find_stop))**2 ) / real(find_stop-mid, dp)
             endif
             cost = real(dcost)
         end function costfun
