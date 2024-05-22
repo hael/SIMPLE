@@ -514,9 +514,6 @@ contains
                                              &read_and_filter_refvols, preprefvol, discrete_read_imgbatch
         use simple_polarft_corrcalc,    only: polarft_corrcalc
         use simple_fsc,                 only: plot_fsc2
-        use simple_optimizer,           only: optimizer
-        use simple_opt_factory,         only: opt_factory
-        use simple_opt_spec,            only: opt_spec
         use simple_image
         class(pspec_lp_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
@@ -524,18 +521,14 @@ contains
         logical,          allocatable :: ptcl_mask(:)
         real,             allocatable :: res(:), vol_pspec(:), sig_pspec(:), sigma2(:,:)
         type(image),      allocatable :: tmp_imgs(:)
-        class(optimizer), pointer     :: opt_ptr=>null()
         type(polarft_corrcalc)        :: pftcc
         type(builder)                 :: build
         type(parameters)              :: params
         type(ori)                     :: o_tmp
-        type(opt_factory)             :: ofac
-        type(opt_spec)                :: spec
         character(len=90)             :: filename
-        character(len=8)              :: str_opts
         integer  :: nptcls, iptcl, s, ithr, iref, i, irot, find_start, find_stop, find, fhandle, Nk, k
         logical  :: l_ctf, do_center, l_exist
-        real     :: xyz(3), shvec(2), vol_dens, sig_dens, lims(2), lowest_cost
+        real     :: xyz(3), shvec(2), vol_dens, sig_dens
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         params%kfromto(1) = 1
@@ -630,19 +623,10 @@ contains
         sig_pspec = sig_pspec * vol_dens / sig_dens
         filename  = 'pspec_vol_sigma_iter'//int2str(params%which_iter)
         call plot_fsc2(Nk, vol_pspec, sig_pspec, res, params%smpd_crop, trim(filename))
-        ! estimate the next lp using 2-segment regression
-        str_opts = 'de'
-        lims(1)  = find_start
-        lims(2)  = find_stop
-        kinds    = (/(i,i=1,Nk)/)
-        call spec%specify(str_opts, ndim=1, limits=lims, limits_init=lims, nrestarts=1)
-        call spec%set_costfun(costfun)
-        call ofac%new(spec, opt_ptr)
-        spec%x = real(lims(1) + lims(2)) / 2.
-        call opt_ptr%minimize(spec, opt_ptr, lowest_cost)
-        find = int(spec%x(1))
-        call opt_ptr%kill
-        deallocate(opt_ptr)
+        ! estimate the next lp (first middle-ruled slope change from the right)
+        do find = find_stop-1, find_start+2, -1
+            if( (vol_pspec(find+1) - vol_pspec(find-1))  * (vol_pspec(find) - vol_pspec(find-2)) < 0. ) exit
+        enddo
         ! write estimated lp to a text file
         filename = 'estimated_lp.txt'
         inquire(file=trim(filename), exist=l_exist)
@@ -659,51 +643,6 @@ contains
         ! end gracefully
         call qsys_job_finished('simple_commander_euclid :: exec_pspec_lp')
         call simple_end('**** SIMPLE_PSEC_LP NORMAL STOP ****', print_simple=.false.)
-
-      contains
-
-        function costfun( func_self, vec, D ) result( cost )
-            class(*), intent(inout) :: func_self
-            integer,  intent(in)    :: D
-            real,     intent(in)    :: vec(D)
-            real(dp) :: a, b, dcost, denom, lx, ly, la, lb, lc, num
-            real     :: cost
-            integer  :: mid
-            mid   = floor(vec(1))
-            ! least-square fitting (y = a + bx ) from find_start to mid
-            lx    = sum(real(kinds(find_start:mid), dp))
-            ly    = sum(vol_pspec( find_start:mid))
-            la    = sum(real(kinds(find_start:mid), dp)**2)
-            lb    = sum(real(kinds(find_start:mid), dp) * vol_pspec(find_start:mid))
-            lc    = sum(vol_pspec( find_start:mid)**2)
-            num   = real(mid-find_start+1, dp)
-            denom = num * la - lx**2
-            if( denom > TINY )then
-                b = (num * lb - lx * ly) / denom
-            else
-                b = 0._dp
-            endif
-            a     = (ly - b * lx) / num
-            dcost = sum( ((a + b * real(kinds(find_start:mid), dp)) -  vol_pspec(find_start:mid))**2 ) / num
-            ! least-square fitting from mid+1 to find_stop
-            if( mid < find_stop )then
-                lx    = sum(real(kinds(mid+1:find_stop), dp))
-                ly    = sum(vol_pspec( mid+1:find_stop))
-                la    = sum(real(kinds(mid+1:find_stop), dp)**2)
-                lb    = sum(real(kinds(mid+1:find_stop), dp) * vol_pspec(mid+1:find_stop))
-                lc    = sum(vol_pspec( mid+1:find_stop)**2)
-                num   = real(find_stop-mid, dp)
-                denom = num * la - lx**2
-                if( denom > TINY )then
-                    b = (num * lb - lx * ly) / denom
-                else
-                    b = 0._dp
-                endif
-                a     = (ly - b * lx) / num
-                dcost = dcost + sum( ((a + b * real(kinds(mid+1:find_stop), dp)) -  vol_pspec(mid+1:find_stop))**2 ) / num
-            endif
-            cost = real(dcost)
-        end function costfun
     end subroutine exec_pspec_lp
 
 end module simple_commander_euclid
