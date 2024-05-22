@@ -2634,14 +2634,13 @@ contains
 
     !>  \brief cendist produces an image holding the distances from the centre of the image or from an arbitrary input point
     subroutine cendist( self, c_point )
-        class(image), intent(inout) :: self
+        class(image),   intent(inout) :: self
+        real, optional, intent(in)    :: c_point(3)
         real    :: centre(3)
         integer :: i
-        real, intent(in), optional :: c_point(3)
         if( self%ft ) THROW_HARD('real space only; cendist')
         ! Builds square distance image
         self   = 0.
-        centre = real(self%ldim)/2.+1.
         if( present(c_point) )then
             centre = c_point
         else
