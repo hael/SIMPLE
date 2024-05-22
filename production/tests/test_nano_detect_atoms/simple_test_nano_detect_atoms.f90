@@ -148,6 +148,7 @@ module nano_detect_atoms
         procedure :: remove_outliers
         procedure :: set_positions
         procedure :: find_centers
+        procedure :: calc_atom_stats
         procedure :: write_pdb
         procedure :: write_boximgs
         procedure :: write_positions
@@ -254,72 +255,81 @@ module nano_detect_atoms
         allocate(self%loc_sdevs( self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3)), source = -1.)
     end subroutine setup_iterators
 
-    subroutine match_boxes(self)
+    subroutine match_boxes(self, circle)
         class(nano_picker), intent(inout) :: self
+        logical, optional,  intent(in)    :: circle
         type(image), allocatable :: boximgs(:)
         integer                  :: xoff, yoff, zoff, pos(3), pos_center(3), ithr, nthr, winsz, npix_in, npix_out1, npix_out2
-        logical                  :: l_err_box
+        logical                  :: l_err_box, circle_here
         real                     :: maxrad, xyz(3)
         real, allocatable        :: pixels1(:), pixels2(:)
+        if (present(circle)) then
+            circle_here = circle
+        else
+            circle_here = .false.
+        end if
         ! construct array of boximgs
-        print *, 'inside match boxes'
         !$ nthr = omp_get_max_threads()
         allocate(boximgs(nthr))
         do ithr = 1,nthr
             call boximgs(ithr)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
         end do
-        ! iterate through positions in nanoparticle image, compare to simulated atom 
-        ! !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,ithr,pos,l_err_box) proc_bind(close)
-        ! do xoff = 1, self%nxyz_offset(1)
-        !     do yoff = 1, self%nxyz_offset(2)
-        !         do zoff = 1, self%nxyz_offset(3)
-        !             ithr = omp_get_thread_num() + 1
-        !             pos = self%positions(self%inds_offset(xoff,yoff,zoff),:)
-        !             call window_slim_3D(self%nano_img, pos, self%boxsize, boximgs(ithr))
-        !             call boximgs(ithr)%prenorm4real_corr(l_err_box)
-        !             self%box_scores(xoff,yoff,zoff) = self%simulated_atom%real_corr_prenorm(boximgs(ithr))
-        !             self%loc_sdevs( xoff,yoff,zoff) = avg_loc_sdev_3D(boximgs(ithr),self%offset)
-        !         end do 
-        !     end do 
-        ! end do
-        ! !$omp end parallel do
-        ! circular correlation
-        maxrad    = (self%radius * 1.5) / self%smpd ! in pixels
-        winsz     = ceiling(maxrad)
-        npix_in   = (2 * winsz + 1)**3
-        allocate(pixels1(npix_in), pixels2(npix_in), source=0.)
-        ! !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,ithr,pos,pos_center,xyz,l_err_box) proc_bind(close)
-        do xoff = 1, self%nxyz_offset(1)
-            do yoff = 1, self%nxyz_offset(2)
-                do zoff = 1, self%nxyz_offset(3)
-                    pos = self%positions(self%inds_offset(xoff,yoff,zoff),:)
-                    !pos_center = pos + [self%boxsize/2,self%boxsize/2,self%boxsize/2]
-                    ithr = omp_get_thread_num() + 1
-                    call window_slim_3D(self%nano_img, pos, self%boxsize, boximgs(ithr))
-                    call boximgs(ithr)%norm_minmax
-                    call boximgs(ithr)%masscen(xyz)
-                    pos_center = pos + anint(xyz) + [self%boxsize/2,self%boxsize/2,self%boxsize/2]
-                    do 
-                        if (pos_center(1)-winsz < 1 .or. pos_center(2)-winsz < 1 .or. pos_center(3)-winsz < 1) then
-                            pos_center = pos_center + [1,1,1]
-                        else
-                            exit
-                        end if
-                    end do
-                    do 
-                        if (pos_center(1)+winsz > self%ldim(1) .or. pos_center(2)+winsz > self%ldim(2) .or. pos_center(3)+winsz > self%ldim(3)) then
-                            pos_center = pos_center - [1,1,1]
-                        else
-                            exit
-                        end if
-                    end do
-                    call self%nano_img%win2arr_rad(      pos_center(1),  pos_center(2),  pos_center(3),  winsz, npix_in, maxrad, npix_out1, pixels1)
-                    call self%simulated_atom%win2arr_rad(self%boxsize/2, self%boxsize/2, self%boxsize/2, winsz, npix_in, maxrad, npix_out2, pixels2)
-                    self%box_scores(xoff,yoff,zoff) = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))
-                    self%loc_sdevs( xoff,yoff,zoff) = avg_loc_sdev_3D(boximgs(ithr),self%offset)
+        if (.not. circle_here) then
+            ! use entire boxes for correlation scores
+            ! iterate through positions in nanoparticle image, compare to simulated atom 
+            !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,ithr,pos,l_err_box) proc_bind(close)
+            do xoff = 1, self%nxyz_offset(1)
+                do yoff = 1, self%nxyz_offset(2)
+                    do zoff = 1, self%nxyz_offset(3)
+                        ithr = omp_get_thread_num() + 1
+                        pos = self%positions(self%inds_offset(xoff,yoff,zoff),:)
+                        call window_slim_3D(self%nano_img, pos, self%boxsize, boximgs(ithr))
+                        call boximgs(ithr)%prenorm4real_corr(l_err_box)
+                        self%box_scores(xoff,yoff,zoff) = self%simulated_atom%real_corr_prenorm(boximgs(ithr))
+                        self%loc_sdevs( xoff,yoff,zoff) = avg_loc_sdev_3D(boximgs(ithr),self%offset)
+                    end do 
                 end do 
-            end do 
-        end do
+            end do
+            !$omp end parallel do
+        else
+        ! circular correlation
+            maxrad    = (self%radius * 1.5) / self%smpd ! in pixels
+            winsz     = ceiling(maxrad)
+            npix_in   = (2 * winsz + 1)**3
+            allocate(pixels1(npix_in), pixels2(npix_in), source=0.)
+            ! !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,ithr,pos,pos_center,xyz,l_err_box) proc_bind(close)
+            do xoff = 1, self%nxyz_offset(1)
+                do yoff = 1, self%nxyz_offset(2)
+                    do zoff = 1, self%nxyz_offset(3)
+                        pos = self%positions(self%inds_offset(xoff,yoff,zoff),:)
+                        !pos_center = pos + [self%boxsize/2,self%boxsize/2,self%boxsize/2]
+                        ithr = omp_get_thread_num() + 1
+                        call window_slim_3D(self%nano_img, pos, self%boxsize, boximgs(ithr))
+                        call boximgs(ithr)%norm_minmax
+                        call boximgs(ithr)%masscen(xyz)
+                        pos_center = pos + anint(xyz) + [self%boxsize/2,self%boxsize/2,self%boxsize/2]
+                        do 
+                            if (pos_center(1)-winsz < 1 .or. pos_center(2)-winsz < 1 .or. pos_center(3)-winsz < 1) then
+                                pos_center = pos_center + [1,1,1]
+                            else
+                                exit
+                            end if
+                        end do
+                        do 
+                            if (pos_center(1)+winsz > self%ldim(1) .or. pos_center(2)+winsz > self%ldim(2) .or. pos_center(3)+winsz > self%ldim(3)) then
+                                pos_center = pos_center - [1,1,1]
+                            else
+                                exit
+                            end if
+                        end do
+                        call self%nano_img%win2arr_rad(      pos_center(1),  pos_center(2),  pos_center(3),  winsz, npix_in, maxrad, npix_out1, pixels1)
+                        call self%simulated_atom%win2arr_rad(self%boxsize/2, self%boxsize/2, self%boxsize/2, winsz, npix_in, maxrad, npix_out2, pixels2)
+                        self%box_scores(xoff,yoff,zoff) = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))
+                        self%loc_sdevs( xoff,yoff,zoff) = avg_loc_sdev_3D(boximgs(ithr),self%offset)
+                    end do 
+                end do 
+            end do
+        end if
         ! !$omp end parallel do
         ! kill boximgs
         do ithr = 1,nthr
@@ -699,6 +709,41 @@ module nano_detect_atoms
         deallocate(pos_inds)
     end subroutine find_centers
 
+    subroutine calc_atom_stats(self)
+        class(nano_picker), intent(inout) :: self
+        type(nanoparticle) :: nano
+        type(parameters), target :: params
+        integer, allocatable :: pos_inds(:), imat(:,:,:)
+        integer :: nbox, ibox, int_pos(3), x, y, z, rad
+        params_glob => params
+        params_glob%element = self%element
+        params_glob%smpd = self%smpd
+        pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
+        nbox = size(pos_inds, dim=1)
+        allocate(imat(self%ldim(1),self%ldim(2),self%ldim(3)),source=0)
+        ! set imat, sphere around each center is atom
+        rad = anint((self%radius * 1.5) / self%smpd) ! need to convert to pixels, give wiggle room
+        do ibox = 1, nbox
+            int_pos = anint(self%positions(pos_inds(ibox),:))
+            do x = int_pos(1) - rad, int_pos(1) + rad
+                do y = int_pos(2) - rad, int_pos(2) + rad
+                    do z = int_pos(3) - rad, int_pos(3) + rad
+                        if (euclid(real(int_pos),real([x,y,z])) <= rad) then
+                            imat(x,y,z) = ibox
+                        end if
+                    end do
+                end do
+            end do
+        end do
+        ! create new nanoparticle object
+        call nano%new(trim(self%raw_filename))
+        call nano%set_atomic_coords(trim(self%pdb_filename))
+        call nano%set_img(trim(self%raw_filename),'img_raw')
+        call nano%fillin_atominfo(imat=imat)
+        call nano%write_csv_files
+        call nano%kill
+    end subroutine calc_atom_stats
+
     ! input filename with no extension
     subroutine write_pdb(self,filename)
         class(nano_picker),         intent(inout) :: self
@@ -1025,22 +1070,24 @@ program simple_test_nano_detect_atoms
     call simulated_NP%write(trim(filename_sim))
 
     subStart = real(time())
-    call test_exp4%new(smpd, element, filename_exp, peak_thres_level)
+    call test_exp4%new(smpd, element, filename_exp, peak_thres_level, denoise=.false.)
     call test_exp4%simulate_atom
     call test_exp4%setup_iterators(offset)
-    call test_exp4%match_boxes
+    call test_exp4%match_boxes(circle=.true.)
     call test_exp4%identify_threshold
     call test_exp4%set_positions
     call test_exp4%find_centers
+    !call test_exp4%refine_threshold(100,pdbfile_ref,filename_sim,max_thres=0.75)
     call test_exp4%distance_filter(dist_thres)
     call test_exp4%refine_threshold(100,pdbfile_ref,filename_sim,max_thres=0.75)
     ! print *, '-----'
     ! call test_exp4%refine_threshold_otsu(100,pdbfile_ref,filename_sim)
     !call test_exp4%remove_outliers(3.)
     ! OUTPUT FILES
-    call test_exp4%write_pdb('experimental_centers_5')
-    call test_exp4%compare_pick('experimental_centers_5.pdb',trim(pdbfile_ref))
+    call test_exp4%write_pdb('experimental_centers_6')
+    call test_exp4%compare_pick('experimental_centers_6.pdb',trim(pdbfile_ref))
     call test_exp4%write_NP_image(filename_sim,'result.mrc')
+    call test_exp4%calc_atom_stats
     !call test_exp4%write_corr_dist('correlation_scores.csv')
     call test_exp4%write_positions('positions.csv')
     call test_exp4%write_boximgs()
