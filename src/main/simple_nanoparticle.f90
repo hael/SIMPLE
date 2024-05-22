@@ -1152,9 +1152,10 @@ contains
     end subroutine discard_lowly_coordinated
 
     ! calc stats
-    subroutine fillin_atominfo( self, a0 )
+    subroutine fillin_atominfo( self, a0, imat )
         class(nanoparticle),        intent(inout) :: self
         real,             optional, intent(in)    :: a0(3) ! lattice parameters
+        integer,          optional, intent(in)    :: imat(:,:,:)
         type(image)          :: simatms, fit_isotropic, fit_anisotropic
         logical, allocatable :: mask(:,:,:)
         real,    allocatable :: centers_A(:,:), tmpcens(:,:), strain_array(:,:)
@@ -1199,8 +1200,13 @@ contains
         ! extract atominfo
         allocate(mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), source = .false.)
         call self%img_raw%get_rmat_ptr(rmat_raw)
-        call self%img_cc%get_imat(imat_cc)
-
+        if (present(imat)) then
+            imat_cc = imat
+            call self%img_cc%new_bimg(self%ldim, self%smpd)
+            call self%img_cc%set_imat(imat_cc)
+        else
+            call self%img_cc%get_imat(imat_cc)
+        end if
         call fit_isotropic%new(self%img_raw%get_ldim(), self%img_raw%get_smpd())
         call fit_anisotropic%new(self%img_raw%get_ldim(), self%img_raw%get_smpd())
         max_size = 0
@@ -1214,7 +1220,7 @@ contains
             ! distance from the centre of mass of the nanoparticle
             self%atominfo(cc)%cendist = euclid(self%atominfo(cc)%center(:), self%NPcen) * self%smpd
             ! atom diameter
-            call self%calc_longest_atm_dist(cc, self%atominfo(cc)%diam)
+            call self%calc_longest_atm_dist(cc, self%atominfo(cc)%diam, imat=imat)
             self%atominfo(cc)%diam = 2.*self%atominfo(cc)%diam ! radius --> diameter in A
             ! whether atom is neighbors with an atom of CN > 12
             if (maxval(self%atominfo(:)%cn_std) > 12) then
@@ -1272,6 +1278,7 @@ contains
         call calc_stats(  self%atominfo(:)%isocorr,       self%isocorr_stats       )
         call calc_stats(  self%atominfo(:)%anisocorr,     self%anisocorr_stats,     mask=.not.self%atominfo(:)%tossADP )
         call calc_stats(  self%atominfo(:)%radial_strain, self%radial_strain_stats )
+        
         ! CALCULATE CN-DEPENDENT STATS & WRITE CN-ATOMS
         do cn = CNMIN, CNMAX
             call calc_cn_stats( cn )
@@ -1335,6 +1342,7 @@ contains
                 call calc_stats( self%atominfo(:)%radial_strain, self%radial_strain_stats_cns(cn), mask=cn_mask   )
             end subroutine calc_cn_stats
 
+            ! work around with imat
             subroutine write_cn_atoms( cn_std )
                 integer, intent(in)  :: cn_std
                 type(binimage)       :: img_atom
@@ -1413,15 +1421,20 @@ contains
        m = m / real(self%n_cc)
     end function masscen
 
-    subroutine calc_longest_atm_dist( self, label, longest_dist )
+    subroutine calc_longest_atm_dist( self, label, longest_dist, imat )
        class(nanoparticle), intent(inout) :: self
        integer,             intent(in)    :: label
        real,                intent(out)   :: longest_dist
+       integer, optional,   intent(in)    :: imat(:,:,:)
        integer, allocatable :: pos(:,:)
        integer, allocatable :: imat_cc(:,:,:)
        logical, allocatable :: mask_dist(:) ! for min and max dist calculation
        integer :: location(1)               ! location of vxls of the atom farthest from its center
-       call self%img_cc%get_imat(imat_cc)
+       if (present(imat)) then
+            imat_cc = imat
+       else
+            call self%img_cc%get_imat(imat_cc)
+       end if
        where(imat_cc.eq.label)
            imat_cc = 1
        elsewhere
