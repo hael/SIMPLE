@@ -2632,15 +2632,21 @@ contains
         end where
     end subroutine binarize_3
 
-    !>  \brief cendist produces an image holding the distances from the centre of the image
-    subroutine cendist( self )
+    !>  \brief cendist produces an image holding the distances from the centre of the image or from an arbitrary input point
+    subroutine cendist( self, c_point )
         class(image), intent(inout) :: self
         real    :: centre(3)
         integer :: i
+        real, intent(in), optional :: c_point(3)
         if( self%ft ) THROW_HARD('real space only; cendist')
         ! Builds square distance image
         self   = 0.
         centre = real(self%ldim)/2.+1.
+        if( present(c_point) )then
+            centre = c_point
+        else
+            centre = real(self%ldim)/2.+1.
+        endif
         if( self%is_2d() )then
             ! 2D
             do i=1,self%ldim(1)
