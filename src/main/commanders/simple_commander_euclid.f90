@@ -624,8 +624,8 @@ contains
         filename  = 'pspec_vol_sigma_iter'//int2str(params%which_iter)
         call plot_fsc2(Nk, vol_pspec, sig_pspec, res, params%smpd_crop, trim(filename))
         ! estimate the next lp (first middle-ruled slope change from the right)
-        do find = find_stop-1, find_start+2, -1
-            if( (vol_pspec(find+1) - vol_pspec(find-1))  * (vol_pspec(find) - vol_pspec(find-2)) < 0. ) exit
+        do find = find_stop-2, find_start+2, -1
+            if( (vol_pspec(find+1) - vol_pspec(find-1)) * (vol_pspec(find) - vol_pspec(find-2)) < 0. ) exit
         enddo
         ! write estimated lp to a text file
         filename = 'estimated_lp.txt'
