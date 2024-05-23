@@ -3,14 +3,11 @@ program simple_test_picker_comp
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_picker_utils
-!use simple_pickgau, only: pickgau, read_mic_raw, gaupick_multi
-!use simple_linalg
-!use simple_image
 use simple_parameters
 
 implicit none
 character(len = 200) :: micname 
-real, parameter :: SMPD = 1.72, MOLDIAM = 150.
+real, parameter :: SMPD = 1.72, MOLDIAM = 150. ! edit these based on your data
 integer :: nthr, nptcls, iostat
 real :: moldiams_optimal(2)
 character(len=LONGSTRLEN) :: cwd
@@ -21,7 +18,6 @@ type(parameters), target :: params
 !$ call omp_set_num_threads(nthr)
 nthr_glob = nthr
 
-!dir_out = PATH_HERE
 call simple_getcwd(cwd)
 allocate(CWD_GLOB, source=trim(cwd))
 
@@ -43,7 +39,7 @@ end if
 close(16)
 
 ! perform picking
-! see simple_picker_utils for details on how this 
+! see simple_picker_utils for details on how this works 
 call exec_gaupick(micname=micname, boxfile_out=boxfile_out, smpd=SMPD, nptcls=nptcls)
 
 
