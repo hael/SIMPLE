@@ -141,10 +141,7 @@ module nano_detect_atoms
         procedure :: setup_iterators
         procedure :: match_boxes
         procedure :: identify_threshold
-        procedure :: center_filter
         procedure :: distance_filter
-        procedure :: cluster_filter
-        procedure :: aff_prop_filter
         procedure :: remove_outliers
         procedure :: set_positions
         procedure :: find_centers
@@ -156,7 +153,6 @@ module nano_detect_atoms
         procedure :: write_corr_dist
         procedure :: compare_pick
         procedure :: refine_threshold
-        procedure :: refine_threshold_otsu
         procedure :: kill
 
     end type nano_picker
@@ -353,50 +349,6 @@ module nano_detect_atoms
         deallocate(tmp)
     end subroutine identify_threshold
 
-    subroutine center_filter(self)
-        class(nano_picker), intent(inout) :: self
-        real, allocatable        :: scores_cen(:,:,:)
-        integer                  :: xoff, yoff, zoff, pos(3), npeaks, ithr, nthr
-        type(image), allocatable :: boximgs(:)
-        ! construct array of boximgs
-        !$ nthr = omp_get_max_threads()
-        allocate(boximgs(nthr))
-        do ithr = 1,nthr
-            call boximgs(ithr)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
-        end do
-        allocate(scores_cen(self%nxyz_offset(1), self%nxyz_offset(2), self%nxyz_offset(3)))
-        !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,ithr,pos) proc_bind(close)
-        do xoff = 1, self%nxyz_offset(1)
-            do yoff = 1, self%nxyz_offset(2)
-                do zoff = 1, self%nxyz_offset(3)
-                if( self%box_scores(xoff,yoff,zoff) >= self%thres )then
-                    ithr = omp_get_thread_num() + 1
-                    pos  = self%positions(self%inds_offset(xoff,yoff,zoff),:)
-                    call window_slim_3D(self%nano_img, pos, self%boxsize, boximgs(ithr))
-                    scores_cen(xoff, yoff, zoff) = boximgs(ithr)%box_cen_arg(boximgs(ithr))
-                else
-                    scores_cen(xoff,yoff,zoff) = real(self%offset) + 1.
-                endif
-                end do
-            end do
-        end do
-        !$omp end parallel do
-        ! kill boximgs
-        do ithr = 1,nthr
-            call boximgs(ithr)%kill
-        end do
-        deallocate(boximgs)
-        print *, 'NPEAKS BEFORE CENTER FILTER = ', count(self%box_scores >= self%thres)
-        npeaks = count(scores_cen <= real(self%offset))
-        where( scores_cen <= real(self%offset))
-            ! there's a peak
-        elsewhere
-            self%box_scores = -1.
-        endwhere
-        print *, 'NPEAKS AFTER CENTER FILTER = ', npeaks
-        deallocate(scores_cen)
-    end subroutine center_filter
-
     subroutine distance_filter(self, dist_thres)
         class(nano_picker), intent(inout) :: self
         real,   optional,   intent(in)    :: dist_thres
@@ -458,179 +410,6 @@ module nano_detect_atoms
         !$omp end parallel do
         deallocate(pos_inds, pos_scores, mask, selected_pos)
     end subroutine distance_filter
-
-    ! implementation of Rodriguez & Laio (2014): "Clustering by fast search and find density of peaks"
-    subroutine cluster_filter(self,dist_thres)
-        class(nano_picker), intent(inout) :: self
-        real,               intent(in)    :: dist_thres
-        real, allocatable    :: deltas(:), pos_scores(:), upper_half_deltas(:), lower_half_deltas(:)
-        real                 :: E, dist, min_dist, avg_d, sdev_d, max_box_score, score
-        integer, allocatable :: pos_inds(:), rhos_higher_inds(:), rhos(:), cluster_inds(:), clusters(:), this_clusters_boxes(:)
-        integer              :: nbox, ibox, jbox, n_rhos_higher, xoff, yoff, zoff
-        integer              :: ipeak, npeaks, nclusters, icluster, box_cluster, box_index(3), this_clusters_size, box_id(1)
-        logical, allocatable :: mask(:)
-        logical              :: is_peak
-        E = 2.7182818284590452353602874713527
-        pos_inds   = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
-        pos_scores = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= self%thres)
-        nbox       = size(pos_inds)
-        print *, 'NPEAKS BEFORE CLUSTER FILTER = ', nbox
-        allocate(rhos(nbox),   source = 0 )
-        allocate(deltas(nbox), source = 0.)
-        allocate(clusters(nbox))
-        ! first loop calculates rho values for all boxes
-        do ibox = 1, nbox
-            ! find distances to all other boxes
-            do jbox = 1, nbox
-                dist = euclid(real(self%positions(pos_inds(ibox),:)),real(self%positions(pos_inds(jbox),:)))
-                if (dist < dist_thres) rhos(ibox) = rhos(ibox) + E**((dist / dist_thres)**2)
-            end do
-        end do
-        ! second loop finds min distance between each box and the boxes with higher rho values than it (delta value)
-        do ibox = 1, nbox
-            min_dist = 1000
-            rhos_higher_inds = pack(pos_inds(:), rhos(:) > rhos(ibox))
-            n_rhos_higher = size(rhos_higher_inds)
-            ! iterate through only the rhos with higher rho values
-            do jbox = 1, n_rhos_higher
-                dist = euclid(real(self%positions(pos_inds(ibox),:)),real(self%positions(rhos_higher_inds(jbox),:)))
-                if (dist < min_dist) min_dist = dist
-            end do
-            deltas(ibox) = min_dist
-            deallocate(rhos_higher_inds)
-        end do
-        ! the boxes with high delta values are centers of clusters
-        call avg_sdev(deltas, avg_d, sdev_d)
-        ! find positions with outlier delta scores - these are cluster centers
-        cluster_inds = pack(pos_inds, mask= deltas(:) >= avg_d + 2*sdev_d)
-        nclusters = size(cluster_inds)
-        print *, 'NPEAKS AFTER CLUSTER FILTER = ', nclusters
-        ! assign all boxes to a cluster
-        ! ultimately want to pick box with highest box score within each cluster
-        do ibox = 1, nbox
-            min_dist = 1000
-            do icluster = 1, nclusters
-                dist = euclid(real(self%positions(pos_inds(ibox),:)),real(self%positions(cluster_inds(icluster),:)))
-                if (dist < min_dist) then
-                    min_dist = dist
-                    box_cluster = icluster
-                end if
-            end do
-            clusters(ibox) = box_cluster !this array contains integer id of the cluster each box belongs to
-        end do
-        ! clustering is finished
-        ! after assigning each box to a cluster, iterate through all clusters and find box with highest box score in cluster
-        allocate(mask(nbox)) 
-        mask = .false.
-        do icluster = 1, nclusters
-            this_clusters_boxes = pack(pos_inds, mask=clusters(:) == icluster)
-            this_clusters_size = size(this_clusters_boxes)
-            max_box_score = 0
-            do ibox = 1, this_clusters_size
-                box_index = findloc(array=self%inds_offset, value=this_clusters_boxes(ibox))
-                score = self%box_scores(box_index(1), box_index(2), box_index(3))
-                if (score > max_box_score) then
-                    max_box_score = score
-                    ! find position in mask
-                    box_id = findloc(pos_inds, this_clusters_boxes(ibox))
-                end if
-            end do
-            mask(box_id(1)) = .true.
-            deallocate(this_clusters_boxes)
-        end do
-        ! update box scores
-        npeaks   = count(mask)
-        pos_inds = pack(pos_inds, mask=mask)
-        !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,is_peak,ipeak)
-        do xoff = 1, self%nxyz_offset(1)
-            do yoff = 1, self%nxyz_offset(2)
-                do zoff = 1, self%nxyz_offset(3)
-                    is_peak = .false.
-                    do ipeak = 1,npeaks
-                        if( pos_inds(ipeak) == self%inds_offset(xoff,yoff,zoff) )then
-                            is_peak = .true.
-                            exit
-                        endif
-                    end do
-                    if( .not. is_peak ) self%box_scores(xoff,yoff,zoff) = -1.
-                end do
-            end do
-        end do
-        !$omp end parallel do  
-    end subroutine cluster_filter
-
-    ! implementation of affinity propagation clustering
-    subroutine aff_prop_filter(self)
-        class(nano_picker), intent(inout) :: self
-        type(aff_prop) :: apcls
-        integer, allocatable :: pos_inds(:), centers(:), labels(:), this_clusters_boxes(:)
-        integer :: nbox, ibox, jbox, ncls, icluster, this_clusters_size, box_index(3), box_id(1)
-        integer :: xoff, yoff, zoff, npeaks, ipeak
-        real, allocatable :: coords(:,:), simmat(:,:)
-        real :: simsum, score, max_box_score
-        logical, allocatable :: mask(:)
-        logical :: is_peak
-        ! find coordinates
-        pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
-        nbox = size(pos_inds, dim=1)
-        print *, 'NPEAKS BEFORE AFF_PROP FILTER = ', nbox
-        allocate(coords(nbox,3))
-        allocate(simmat(nbox,nbox))
-        do ibox = 1, nbox
-            coords(ibox,:) = self%positions(pos_inds(ibox),:)
-        end do
-        ! build similarity matrix
-        do ibox = 1, nbox-1
-            do jbox = ibox+1, nbox
-                simmat(ibox,jbox) = -euclid(coords(ibox,:),coords(jbox,:))
-                simmat(jbox,ibox) = simmat(ibox,jbox)
-            end do
-        end do
-        call apcls%new(nbox, simmat)
-        call apcls%propagate(centers, labels, simsum)
-        ncls = size(centers)
-        print *, 'NPEAKS AFTER AFF_PROP FILTER = ', ncls
-        ! after assigning each box to a cluster, iterate through all clusters and find box with highest box score in cluster
-        allocate(mask(nbox)) 
-        mask = .false.
-        do icluster = 1, ncls
-            this_clusters_boxes = pack(pos_inds, mask=labels(:) == icluster)
-            this_clusters_size = size(this_clusters_boxes)
-            max_box_score = 0
-            do ibox = 1, this_clusters_size
-                box_index = findloc(array=self%inds_offset, value=this_clusters_boxes(ibox))
-                score = self%box_scores(box_index(1), box_index(2), box_index(3))
-                if (score > max_box_score) then
-                    max_box_score = score
-                    ! find position in mask
-                    box_id = findloc(pos_inds, this_clusters_boxes(ibox))
-                end if
-            end do
-            mask(box_id(1)) = .true.
-            deallocate(this_clusters_boxes)
-        end do
-        ! update box scores
-        npeaks = count(mask)
-        pos_inds = pack(pos_inds, mask=mask)
-        !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,is_peak,ipeak)
-        do xoff = 1, self%nxyz_offset(1)
-            do yoff = 1, self%nxyz_offset(2)
-                do zoff = 1, self%nxyz_offset(3)
-                    is_peak = .false.
-                    do ipeak = 1,npeaks
-                        if( pos_inds(ipeak) == self%inds_offset(xoff,yoff,zoff) )then
-                            is_peak = .true.
-                            exit
-                        endif
-                    end do
-                    if( .not. is_peak ) self%box_scores(xoff,yoff,zoff) = -1.
-                end do
-            end do
-        end do
-        !$omp end parallel do 
-        deallocate(mask)
-        deallocate(coords)
-    end subroutine aff_prop_filter
 
     subroutine remove_outliers(self, ndev)
         class(nano_picker), intent(inout) :: self
@@ -958,61 +737,6 @@ module nano_detect_atoms
         call nano_ref%kill
     end subroutine refine_threshold
 
-    ! this subroutine is similar to refine_threshold in that its aim is to find an optimal correlation threshold
-    ! it differs in that it uses Otsu's method to find a set of potential thresholds instead of iterating over a pre-defined range
-    subroutine refine_threshold_otsu(self, num_thres, ref_pdb_name, ref_img_name)
-        class(nano_picker), intent(inout) :: self
-        integer,            intent(in)    :: num_thres
-        character(len=*),   intent(in)    :: ref_pdb_name, ref_img_name
-        type(nanoparticle)       :: nano_ref, nano_exp
-        type(image)              :: ref_NP,   exp_NP
-        type(parameters), target :: params
-        real                     :: starting_thres(num_thres), thresholds(num_thres), thres_corrs(num_thres), step
-        integer                  :: i, j, optimal_index(1), num_pos
-        integer, allocatable     :: pos_inds(:)
-        print *, 'REFINE_THRESHOLD_OTSU'
-        ! simulate nanoparticle with initial pdb file (for reference / comparison)
-        ! params_glob has to be set because of the way simple_nanoparticle is set up
-        params_glob => params
-        params_glob%element = self%element
-        params_glob%smpd = self%smpd
-        call nano_ref%new(trim(ref_img_name))
-        call nano_ref%set_atomic_coords(trim(ref_pdb_name))
-        call nano_ref%simulate_atoms(simatms=ref_NP)
-        ! set intial threshold
-        if (self%temp_thres > 0.) then
-            starting_thres(1) = self%temp_thres - 0.1
-        else
-            starting_thres(1) = self%thres - 0.1
-        end if
-        step = (0.3 - starting_thres(1)) / (num_thres - 1)
-        do j = 2, num_thres
-            starting_thres(j) = starting_thres(1) + step * (j-1)
-        end do
-        do i = 1, num_thres
-            call self%identify_threshold(min_thres=starting_thres(i))
-            thresholds(i) = self%thres 
-            call self%find_centers
-            call self%write_pdb('sim_centers_otsu')
-            call nano_exp%new(trim(ref_img_name))
-            call nano_exp%set_atomic_coords('sim_centers_otsu.pdb')
-            call nano_exp%simulate_atoms(simatms=exp_NP)
-            thres_corrs(i) = ref_NP%real_corr(exp_NP)
-            call nano_exp%kill
-        end do
-        optimal_index = maxloc(thres_corrs)
-        ! do i = 1, num_thres
-        !     print *, thresholds(i), thres_corrs(i)
-        ! end do
-        self%thres = thresholds(optimal_index(1))
-        pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
-        num_pos = size(pos_inds)
-        print *, 'OPTIMAL THRESHOLD = ', self%thres
-        print *, 'OPTIMAL CORRELATION = ', thres_corrs(optimal_index(1))
-        print *, 'NUMBER POSITIONS = ', num_pos
-        call nano_ref%kill
-    end subroutine refine_threshold_otsu
-
     subroutine kill(self)
         class(nano_picker), intent(inout) :: self
         if (allocated(self%positions)) deallocate(self%positions)
@@ -1048,7 +772,6 @@ program simple_test_nano_detect_atoms
     startTime= real(time())
 
     ! Inputs
-    !filename_exp = 'recvol_state01_iter005.mrc' ! first draft of 3D reconstruction
     filename_exp = 'rec_merged.mrc'
     filename_sim = 'simulated_NP.mrc'
     !pdbfile_ref = 'ATMS.pdb'
@@ -1077,28 +800,20 @@ program simple_test_nano_detect_atoms
     call test_exp4%identify_threshold
     call test_exp4%set_positions
     call test_exp4%find_centers
-    !call test_exp4%refine_threshold(100,pdbfile_ref,filename_sim,max_thres=0.75)
     call test_exp4%distance_filter(dist_thres)
     call test_exp4%refine_threshold(100,pdbfile_ref,filename_sim,max_thres=0.75)
-    ! print *, '-----'
-    ! call test_exp4%refine_threshold_otsu(100,pdbfile_ref,filename_sim)
-    !call test_exp4%remove_outliers(3.)
+    call test_exp4%remove_outliers(3.)
     ! OUTPUT FILES
-    call test_exp4%write_pdb('experimental_centers_6')
-    call test_exp4%compare_pick('experimental_centers_6.pdb',trim(pdbfile_ref))
+    call test_exp4%write_pdb('experimental_centers')
+    call test_exp4%compare_pick('experimental_centers.pdb',trim(pdbfile_ref))
     call test_exp4%write_NP_image(filename_sim,'result.mrc')
     call test_exp4%calc_atom_stats
-    !call test_exp4%write_corr_dist('correlation_scores.csv')
     call test_exp4%write_positions('positions.csv')
-    call test_exp4%write_boximgs()
     call test_exp4%kill
     subStop = real(time())
     print *, 'TEST 1 RUNTIME = ', (subStop - subStart), ' s'
 
     print *, ' '
-
-    
-
     stopTime = time()
     print *, 'TOTAL RUNTIME = ', (stopTime - startTime), ' s'
     
