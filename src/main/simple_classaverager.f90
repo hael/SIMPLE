@@ -936,9 +936,9 @@ contains
         integer,  allocatable :: cnt(:)
         real(dp), allocatable :: rsum(:)
         complex,      pointer :: pctfsqsum(:,:,:)
-        real,     parameter   :: fudge = 1.0
-        real    :: cc, scale, pad_factor, invtau2
+        real    :: cc, scale, pad_factor, invtau2, fudge
         integer :: flims(3,2), phys(2), h, k, sh, sz, reslim_ind
+        fudge = params_glob%tau
         call ctfsqsum%get_cmat_ptr(pctfsqsum)
         flims = ctfsqsum%loop_lims(3)
         sz = size(frc)

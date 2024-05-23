@@ -4,26 +4,26 @@ module simple_strategy2D_matcher
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_binoris_io
-use simple_polarft_corrcalc,    only: polarft_corrcalc
-use simple_cmdline,             only: cmdline
-use simple_builder,             only: build_glob
-use simple_parameters,          only: params_glob
-use simple_image,               only: image
-use simple_qsys_funs,           only: qsys_job_finished
-use simple_convergence,         only: convergence
-use simple_strategy2D3D_common, only: set_bp_range2d, prepimgbatch, killimgbatch
-use simple_strategy2D,          only: strategy2D, strategy2D_per_ptcl
-use simple_strategy2D_srch,     only: strategy2D_spec
 use simple_strategy2D_alloc
-use simple_strategy2D_greedy,   only: strategy2D_greedy
+use simple_polarft_corrcalc,       only: polarft_corrcalc
+use simple_cmdline,                only: cmdline
+use simple_builder,                only: build_glob
+use simple_parameters,             only: params_glob
+use simple_image,                  only: image
+use simple_qsys_funs,              only: qsys_job_finished
+use simple_convergence,            only: convergence
+use simple_strategy2D3D_common,    only: set_bp_range2d, prepimgbatch, killimgbatch
+use simple_strategy2D,             only: strategy2D, strategy2D_per_ptcl
+use simple_strategy2D_srch,        only: strategy2D_spec
+use simple_strategy2D_greedy,      only: strategy2D_greedy
 use simple_strategy2D_greedy_smpl, only: strategy2D_greedy_smpl
-use simple_strategy2D_tseries,  only: strategy2D_tseries
-use simple_strategy2D_snhc,     only: strategy2D_snhc
-use simple_strategy2D_snhc_smpl,only: strategy2D_snhc_smpl
-use simple_strategy2D_eval,     only: strategy2D_eval
-use simple_euclid_sigma2,       only: euclid_sigma2
-use simple_masker,              only: automask2D
-use simple_opt_filter,          only: uni_filt2D_sub, nonuni_filt2D_sub
+use simple_strategy2D_tseries,     only: strategy2D_tseries
+use simple_strategy2D_snhc,        only: strategy2D_snhc
+use simple_strategy2D_snhc_smpl,   only: strategy2D_snhc_smpl
+use simple_strategy2D_eval,        only: strategy2D_eval
+use simple_euclid_sigma2,          only: euclid_sigma2
+use simple_masker,                 only: automask2D
+use simple_opt_filter,             only: uni_filt2D_sub, nonuni_filt2D_sub
 use simple_classaverager
 use simple_progress
 implicit none
@@ -85,14 +85,14 @@ contains
         else if( params_glob%extr_iter <= MAX_EXTRLIM2D )then
             ! no fractional update
             select case(trim(params_glob%refine))
-            case('snhc')
-                l_snhc      = .true.
-            case('snhc_smpl')
-                l_snhc_smpl = .true.
-            case('greedy')
-                l_greedy    = .true.
-            case('greedy_smpl')
-                l_greedy_smpl = .true.
+                case('snhc')
+                    l_snhc      = .true.
+                case('snhc_smpl')
+                    l_snhc_smpl = .true.
+                case('greedy')
+                    l_greedy    = .true.
+                case('greedy_smpl')
+                    l_greedy_smpl = .true.
             end select
         else
             ! optional fractional update and shc optimization (=snhc with all classes)
@@ -269,13 +269,13 @@ contains
                     ! online mode, based on history
                     if( updatecnt==1 .or. (.not.build_glob%spproj_field%has_been_searched(iptcl)) )then
                         ! brand new particles
-                        allocate(strategy2D_greedy          :: strategy2Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy2D_greedy              :: strategy2Dsrch(iptcl_batch)%ptr)
                     else
                         ! other particles
                         if( l_greedy )then
-                            allocate(strategy2D_greedy      :: strategy2Dsrch(iptcl_batch)%ptr)
+                            allocate(strategy2D_greedy          :: strategy2Dsrch(iptcl_batch)%ptr)
                         else
-                            allocate(strategy2D_snhc        :: strategy2Dsrch(iptcl_batch)%ptr)
+                            allocate(strategy2D_snhc            :: strategy2Dsrch(iptcl_batch)%ptr)
                         endif
                     endif
                 else
