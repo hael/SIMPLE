@@ -1347,6 +1347,7 @@ contains
         call cline%set('mkdir',     'yes')
         call cline%set('picker',    'new')
         call cline%set('sigma_est', 'glob')
+        call cline%set('reject_cls','no')
         if( .not. cline%defined('outdir')          ) call cline%set('outdir',           '')
         if( .not. cline%defined('walltime')        ) call cline%set('walltime',         29*60) ! 29 minutes
         ! micrograph selection
