@@ -204,7 +204,9 @@ type :: nanoparticle
     procedure          :: get_valid_corrs
     procedure          :: get_img
     procedure          :: set_img
-    procedure          :: set_atomic_coords
+    procedure, private :: set_atomic_coords_from_pdb
+    procedure, private :: set_atomic_coords_from_xyz
+    generic            :: set_atomic_coords => set_atomic_coords_from_pdb, set_atomic_coords_from_xyz
     procedure          :: set_coords4stats
     procedure, private :: pack_instance4stats
     ! utils
@@ -324,13 +326,31 @@ contains
         end select
     end subroutine set_img
 
+    subroutine set_atomic_coords_from_xyz( self, xyz )
+        class(nanoparticle), intent(inout) :: self
+        real,                intent(in)    :: xyz(:,:)
+        type(atoms) :: a
+        integer :: N, i
+        if( size(xyz,dim=2) /= 3 ) THROW_HARD("Error! Non-conforming dimensions of xyz; set_atomic_coords_from_xyz")
+        if( allocated(self%atominfo) ) deallocate(self%atominfo)
+        N = size(xyz, dim=1)
+        allocate(self%atominfo(N))
+        call a%new(N)
+        do i = 1, N
+            call a%set_coord(i,xyz(i,:))
+            self%atominfo(i)%center = a%get_coord(i)
+        enddo
+        self%n_cc = N
+        call a%kill
+    end subroutine set_atomic_coords_from_xyz
+
     ! sets the atom positions to be the ones in the inputted PDB file.
-    subroutine set_atomic_coords( self, pdb_file )
+    subroutine set_atomic_coords_from_pdb( self, pdb_file )
         class(nanoparticle), intent(inout) :: self
         character(len=*),    intent(in)    :: pdb_file
         type(atoms) :: a
         integer     :: i, N
-        if( fname2ext(pdb_file) .ne. 'pdb' ) THROW_HARD('Inputted filename has to have pdb extension; set_atomic_coords')
+        if( fname2ext(pdb_file) .ne. 'pdb' ) THROW_HARD('Inputted filename has to have pdb extension; set_atomic_coords_from_pdb')
         if( allocated(self%atominfo) ) deallocate(self%atominfo)
         call a%new(pdb_file)
         N = a%get_n() ! number of atoms
@@ -340,7 +360,7 @@ contains
         enddo
         self%n_cc = N
         call a%kill
-    end subroutine set_atomic_coords
+    end subroutine set_atomic_coords_from_pdb
 
     subroutine set_coords4stats( self, pdb_file )
         class(nanoparticle), intent(inout) :: self
