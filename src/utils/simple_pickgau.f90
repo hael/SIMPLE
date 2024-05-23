@@ -1467,7 +1467,7 @@ contains
         do i = 1,npick
             npos = picker(i)%get_nboxes()
             if( npos == 0 ) cycle
-            call picker(i)%get_positions(pos)
+            call picker(i)%get_positions(pos, smpd_new=smpd_raw)
             call picker(i)%get_scores(scores)
             call picker(i)%get_loc_sdevs(loc_sdevs)
             box     = picker(i)%get_box()
