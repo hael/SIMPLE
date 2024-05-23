@@ -1733,7 +1733,7 @@ contains
         call cluster2D%set_gui_params('srch_ctrls', 7, submenu="search")
         call cluster2D%set_input('srch_ctrls', 8, objfun)
         call cluster2D%set_gui_params('srch_ctrls', 8, submenu="search")
-        call cluster2D%set_input('srch_ctrls', 9, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|greedy){snhc}', '(snhc|greedy){snhc}', .false., 'snhc')
+        call cluster2D%set_input('srch_ctrls', 9, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|greedy|snhc_smpl|greedy_smpl){snhc}', '(snhc|greedy|snhc_smpl|greedy_smpl){snhc}', .false., 'snhc')
         call cluster2D%set_gui_params('srch_ctrls', 9, submenu="search")
         call cluster2D%set_input('srch_ctrls', 10, sigma_est)
         call cluster2D%set_gui_params('srch_ctrls', 10, submenu="search")
