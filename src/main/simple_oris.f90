@@ -195,7 +195,6 @@ type :: oris
     procedure          :: spiral_2
     generic            :: spiral => spiral_1, spiral_2
     procedure          :: order
-    procedure          :: order_corr
     procedure          :: order_cls
     procedure          :: calc_hard_weights
     procedure          :: calc_soft_weights
@@ -387,14 +386,11 @@ contains
         character(len=*),  intent(in) :: key
         integer, optional, intent(in) :: fromto(2)
         real, allocatable :: arr(:)
-        integer :: i, ffromto(2)
+        integer :: ffromto(2)
         ffromto(1) = 1
         ffromto(2) = self%n
         if( present(fromto) ) ffromto = fromto
-        allocate( arr(ffromto(1):ffromto(2)) )
-        do i=ffromto(1),ffromto(2)
-            arr(i) = self%o(i)%get(key)
-        enddo
+        allocate( arr(ffromto(1):ffromto(2)), source=self%o(ffromto(1):ffromto(2))%get(key) )
     end function get_all
 
     !>  \brief  is for getting an array of 'key' values
@@ -2784,32 +2780,18 @@ contains
 
     end subroutine spiral_2
 
-    !>  \brief  orders oris according to specscore
+    !>  \brief  orders oris according to alignment score
     function order( self ) result( inds )
         class(oris), intent(inout) :: self
-        real,    allocatable :: specscores(:)
+        real,    allocatable :: scores(:)
         integer, allocatable :: inds(:)
         integer :: i
-        allocate( inds(self%n) )
-        specscores = self%get_all('specscore')
-        inds = (/(i,i=1,self%n)/)
-        call hpsort(specscores, inds)
+        inds   = (/(i,i=1,self%n)/)
+        scores = self%get_all('corr')
+        call hpsort(scores, inds)
         call reverse(inds)
-        if( allocated(specscores) ) deallocate( specscores )
+        deallocate( scores )
     end function order
-
-    !>  \brief  orders oris according to corr
-    function order_corr( self ) result( inds )
-        class(oris), intent(inout) :: self
-        real,    allocatable :: corrs(:)
-        integer, allocatable :: inds(:)
-        integer :: i
-        allocate( inds(self%n) )
-        corrs = self%get_all('corr')
-        inds = (/(i,i=1,self%n)/)
-        call hpsort(corrs, inds)
-        call reverse(inds)
-    end function order_corr
 
     !>  \brief  orders clusters according to population
     function order_cls( self, ncls ) result( inds )
@@ -3051,35 +3033,44 @@ contains
     subroutine calc_hard_weights( self, frac )
         class(oris), intent(inout) :: self
         real,        intent(in)    :: frac
-        integer, allocatable :: order(:)
-        integer :: i, lim, ind
+        integer, allocatable :: order(:), states(:)
+        integer :: i, j, lim, ind, n
         if( frac < 0.99 )then
-            lim   = nint(frac*real(self%n))
-            order = self%order() ! specscore ranking
-            do i=1,self%n
+            states = nint(self%get_all('state'))
+            n      = count(states>0)
+            lim    = nint(frac*real(n))
+            order  = self%order() ! score ranking
+            j = 0
+            do i = 1,self%n
                 ind = order(i)
-                if( i <= lim )then
-                    call self%o(ind)%set('w', 1.)
-                else
+                if( states(ind) == 0 )then
                     call self%o(ind)%set('w', 0.)
+                else
+                    j = j+1
+                    if( j <= lim )then
+                        call self%o(ind)%set('w', 1.)
+                    else
+                        call self%o(ind)%set('w', 0.)
+                    endif
                 endif
             end do
+            deallocate(states,order)
         else
             call self%set_all2single('w', 1.)
         endif
     end subroutine calc_hard_weights
 
-    !>  \brief  calculates soft weights based on specscore
+    !>  \brief  calculates soft weights based on score
     subroutine calc_soft_weights( self, frac )
         class(oris), intent(inout) :: self
         real,        intent(in)    :: frac
-        real,    allocatable :: specscores(:), states(:), weights(:), weights_glob(:)
+        real,    allocatable :: scores(:), states(:), weights(:), weights_glob(:)
         integer, allocatable :: order(:), states_int(:)
         real    :: minw, mins
         integer :: i, lim, state, nstates
-        if( self%isthere('specscore') )then
-            specscores = self%get_all('specscore')
-            mins       = minval(specscores, mask=specscores > TINY)
+        if( self%isthere('corr') )then
+            scores = self%get_all('score')
+            mins       = minval(scores, mask=scores > TINY)
             if( mins >= 0.8 )then
                 call self%set_all2single('w', 1.0)
                 return
@@ -3091,9 +3082,9 @@ contains
             endif
             nstates = nint(maxval(states))
             if( nstates == 1 )then
-                weights = z_scores(specscores, mask=specscores > TINY .and. states > 0.5)
-                minw    = minval(weights,      mask=specscores > TINY .and. states > 0.5)
-                where( specscores > TINY .and. states > 0.5 )
+                weights = z_scores(scores, mask=scores > TINY .and. states > 0.5)
+                minw    = minval(weights,      mask=scores > TINY .and. states > 0.5)
+                where( scores > TINY .and. states > 0.5 )
                     weights = weights + abs(minw)
                 elsewhere
                     weights = 0. ! nuke
@@ -3104,9 +3095,9 @@ contains
                 allocate(states_int(self%n),   source=nint(states))
                 allocate(weights_glob(self%n), source=0.)
                 do state=1,nstates
-                    weights = z_scores(specscores, mask=specscores > TINY .and. states_int == state)
-                    minw    = minval(weights,      mask=specscores > TINY .and. states_int == state)
-                    where( specscores > TINY .and. states_int == state ) weights_glob = weights + abs(minw)
+                    weights = z_scores(scores, mask=scores > TINY .and. states_int == state)
+                    minw    = minval(weights,      mask=scores > TINY .and. states_int == state)
+                    where( scores > TINY .and. states_int == state ) weights_glob = weights + abs(minw)
                     deallocate(weights)
                 end do
                 call self%set_all('w', weights_glob)
@@ -3115,13 +3106,13 @@ contains
             if( frac < 0.99 )then
                 ! in 3D frac operates globally, independent of state
                 lim   = nint(frac*real(self%n))
-                order = self%order() ! specscore ranking
+                order = self%order() ! score ranking
                 do i=1,self%n
                     if( i > lim ) call self%o(order(i))%set('w', 0.) ! nuke
                 end do
                 deallocate(order)
             endif
-            deallocate(specscores, states)
+            deallocate(scores, states)
         else
             call self%set_all2single('w', 1.0)
         endif
@@ -3159,16 +3150,16 @@ contains
         call os%kill
     end subroutine calc_hard_weights2D
 
-    !>  \brief  calculates soft weights based on specscore
+    !>  \brief  calculates soft weights based on score
     subroutine calc_soft_weights2D( self )
         class(oris), intent(inout) :: self
-        real,    allocatable :: specscores(:), states(:)
+        real,    allocatable :: scores(:), states(:)
         real,    allocatable :: weights(:), weights_glob(:)
         integer, allocatable :: classes(:)
         integer :: icls, pop, ncls
         real    :: minw
-        if( self%isthere('specscore') )then
-            specscores = self%get_all('specscore')
+        if( self%isthere('score') )then
+            scores = self%get_all('score')
             classes    = nint(self%get_all('class'))
             if( self%isthere('states') )then
                 states = self%get_all('states')
@@ -3182,20 +3173,20 @@ contains
                 if( pop == 0 )then
                     cycle
                 else if( pop <= MINCLSPOPLIM )then
-                    where( specscores > TINY .and. (classes == icls .and. states > 0.5) ) weights_glob = 1.0
+                    where( scores > TINY .and. (classes == icls .and. states > 0.5) ) weights_glob = 1.0
                 else
-                    if( count(specscores > TINY .and. (classes == icls .and. states > 0.5)) <= MINCLSPOPLIM )then
-                        where( specscores > TINY .and. (classes == icls .and. states > 0.5) ) weights_glob = 1.0
+                    if( count(scores > TINY .and. (classes == icls .and. states > 0.5)) <= MINCLSPOPLIM )then
+                        where( scores > TINY .and. (classes == icls .and. states > 0.5) ) weights_glob = 1.0
                     else
-                        weights = z_scores(specscores, mask=specscores > TINY .and. (classes == icls .and. states > 0.5))
-                        minw    = minval(weights,      mask=specscores > TINY .and. (classes == icls .and. states > 0.5))
-                        where( specscores > TINY .and. (classes == icls .and. states > 0.5) ) weights_glob = weights + abs(minw)
+                        weights = z_scores(scores, mask=scores > TINY .and. (classes == icls .and. states > 0.5))
+                        minw    = minval(weights,      mask=scores > TINY .and. (classes == icls .and. states > 0.5))
+                        where( scores > TINY .and. (classes == icls .and. states > 0.5) ) weights_glob = weights + abs(minw)
                         deallocate(weights)
                     endif
                 endif
             end do
             call self%set_all('w', weights_glob)
-            deallocate(specscores, classes, states, weights_glob)
+            deallocate(scores, classes, states, weights_glob)
         else
             call self%set_all2single('w', 1.)
         endif
@@ -3369,34 +3360,18 @@ contains
     end function find_angres
 
     !>  \brief  to find the correlation bound in extremal search
-    function extremal_bound( self, thresh, which ) result( score_bound )
+    function extremal_bound( self, thresh ) result( score_bound )
         class(oris),             intent(inout) :: self
         real,                    intent(in)    :: thresh ! is a fraction
-        character(len=*), optional, intent(in) :: which
         real,    allocatable  :: scores(:), scores_incl(:)
         logical, allocatable  :: incl(:)
-        character(len=KEYLEN) :: which_here
         integer :: n_incl, thresh_ind
         real    :: score_bound
-        if( present(which) )then
-            which_here = trim(which)
-        else
-            which_here = 'corr'
-        endif
-        select case(trim(which_here))
-            case('corr')
-                ! to use in conjunction with objfun=cc
-            case('specscore')
-                ! to be tested, should be amenable to any objective function
-            case DEFAULT
-                write(logfhandle,*)'Invalid metric: ', trim(which_here)
-                THROW_HARD('extremal_bound')
-        end select
-        if( .not.self%isthere(which_here) )then
-            THROW_HARD('Metric: '//trim(which_here)//' is unpopulated; extremal_bound')
+        if( .not.self%isthere('corr') )then
+            THROW_HARD('Metric: corr is unpopulated; extremal_bound')
         endif
         ! fetch scores
-        scores      = self%get_all(which_here)
+        scores      = self%get_all('corr')
         incl        = self%included()
         scores_incl = pack(scores, mask=incl)
         ! sort & determine threshold

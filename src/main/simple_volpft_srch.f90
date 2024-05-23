@@ -147,7 +147,7 @@ contains
         end do
         ! refine local optima
         ! order the local optima according to correlation
-        order = cand_oris%order_corr()
+        order = cand_oris%order()
         call cand_oris%get_ori(order(1), orientation_best)
         !$omp parallel do schedule(static) default(shared) private(iloc,ithr,prev_cost,cost) proc_bind(close)
         do iloc=1,NBEST
@@ -162,7 +162,7 @@ contains
         end do
         !$omp end parallel do
         ! order the local optima according to correlation
-        order = cand_oris%order_corr()
+        order = cand_oris%order()
         ! update global ori
         call cand_oris%get_ori(order(1), e_glob)
         ! return best
