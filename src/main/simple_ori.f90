@@ -788,7 +788,7 @@ contains
         mat  = euler2m(euls)
     end function get_mat
 
-    pure function get( self, key ) result( val )
+    elemental function get( self, key ) result( val )
         class(ori),       intent(in) :: self
         character(len=*), intent(in) :: key
         integer :: ind

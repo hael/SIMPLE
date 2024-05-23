@@ -148,7 +148,7 @@ contains
                 if( do_extr )then
                     anneal_ratio      = max(0., cos(PI/2.*real(params_glob%extr_iter-1)/real(iextr_lim)))
                     extr_thresh       = params_glob%extr_init * anneal_ratio
-                    extr_score_thresh = build_glob%spproj_field%extremal_bound(extr_thresh, 'corr')
+                    extr_score_thresh = build_glob%spproj_field%extremal_bound(extr_thresh)
                     if( cline%defined('lpstart') )then
                         ! resolution limit update
                         lpind_start       = calc_fourier_index(params_glob%lpstart,params_glob%box,params_glob%smpd)
@@ -323,7 +323,9 @@ contains
         if( params_glob%l_needs_sigma ) call eucl_sigma%write_sigma2
 
         ! CALCULATE PARTICLE WEIGHTS
-        call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
+        if( .not.(trim(params_glob%ptclw).eq.'yes') )then
+            call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
+        endif
 
         ! CLEAN
         call clean_strategy3D ! deallocate s3D singleton

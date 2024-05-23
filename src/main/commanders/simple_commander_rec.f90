@@ -81,7 +81,7 @@ contains
         ! eo partitioning
         if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
         ! particle weights
-        call build%spproj_field%calc_hard_weights(params%frac)
+        if( .not.(trim(params%ptclw).eq.'yes') ) call build%spproj_field%calc_hard_weights(params%frac)
         ! to update eo flags and weights
         call build%spproj%write_segment_inside(params%oritype)
         ! setup the environment for distributed execution
@@ -145,7 +145,7 @@ contains
             ! eo partitioning
             if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
             ! particle weights
-            call build%spproj_field%calc_hard_weights(params%frac)
+            if( .not.(trim(params%ptclw).eq.'yes') ) call build%spproj_field%calc_hard_weights(params%frac)
             ! to update eo flags and weights
             call build%spproj%write_segment_inside(params%oritype)
         endif

@@ -142,7 +142,7 @@ contains
         end do
         ! refine local optima
         ! order the local optima according to correlation
-        order = cand_axes%order_corr()
+        order = cand_axes%order()
         ! determine end of range
         istop = min(fromto(2) - fromto(1) + 1,NBEST)
         !$omp parallel do schedule(static) default(shared) private(iloc,ithr,cost) proc_bind(close)
@@ -155,7 +155,7 @@ contains
         end do
         !$omp end parallel do
         ! order the local optima according to correlation
-        order = cand_axes%order_corr()
+        order = cand_axes%order()
         ! update global symaxis
         call cand_axes%get_ori(order(1), saxis_glob)
         ! return best
