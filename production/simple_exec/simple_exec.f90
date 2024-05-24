@@ -403,11 +403,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-<<<<<<< HEAD
-call simple_print_git_version('dd58e90c')
-=======
 call simple_print_git_version('78d5dd5e')
->>>>>>> 2d972291 (ICM regularization in 2D only on towards the end, after shifts are turned on)
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
