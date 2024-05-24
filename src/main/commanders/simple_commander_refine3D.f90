@@ -435,7 +435,7 @@ contains
                 rt_merge_algndocs = toc(t_merge_algndocs)
                 t_volassemble = tic()
             endif
-            if( trim(params%lp_est) .eq. 'yes' )then
+            if( params%l_lp_est )then
                 cline_pspec_lp = cline
                 call cline_pspec_lp%set('which_iter', params%which_iter)
                 call cline_pspec_lp%set('vol1',       params%vols(1))
@@ -715,7 +715,7 @@ contains
                 endif
                 ! in strategy3D_matcher:
                 call refine3D_exec(cline, params%which_iter, converged)
-                if( trim(params%lp_est) .eq. 'yes' )then
+                if( params%l_lp_est )then
                     cline_pspec_lp = cline
                     call cline_pspec_lp%set('prg',       'pspec_lp')
                     call cline_pspec_lp%set('which_iter', params%which_iter)

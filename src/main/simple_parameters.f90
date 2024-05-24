@@ -450,6 +450,7 @@ type :: parameters
     logical :: l_kweight_rot  = .false.
     logical :: l_icm          = .false.
     logical :: l_incrreslim   = .true.
+    logical :: l_lp_est       = .false.
     logical :: l_lpset        = .false.
     logical :: l_ml_reg       = .true.
     logical :: l_needs_sigma  = .false.
@@ -1545,6 +1546,8 @@ contains
             case DEFAULT
                 THROW_HARD('INVALID KWEIGHT_POOL ARGUMENT')
         end select
+        ! estimated lp
+        self%l_lp_est       = trim(self%lp_est      ).eq.'yes'
         ! reg options
         self%l_prob_sh      = trim(self%prob_sh     ).eq.'yes'
         self%l_prob_norm    = trim(self%prob_norm   ).eq.'yes'
