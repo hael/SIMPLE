@@ -510,85 +510,29 @@ contains
     subroutine exec_pspec_lp( self, cline )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        use simple_strategy2D3D_common, only: prepimgbatch, prepimg4align, calcrefvolshift_and_mapshifts2ptcls,killimgbatch,&
-                                             &read_and_filter_refvols, preprefvol, discrete_read_imgbatch
-        use simple_polarft_corrcalc,    only: polarft_corrcalc
-        use simple_fsc,                 only: plot_fsc2
+        use simple_strategy2D3D_common, only: calcrefvolshift_and_mapshifts2ptcls, read_and_filter_refvols, preprefvol
+        use simple_fsc,                 only: plot_fsc
         use simple_image
         class(pspec_lp_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
-        integer,          allocatable :: pinds(:), kinds(:)
-        logical,          allocatable :: ptcl_mask(:)
-        real,             allocatable :: res(:), vol_pspec(:), sig_pspec(:), sigma2(:,:)
-        type(image),      allocatable :: tmp_imgs(:)
-        type(polarft_corrcalc)        :: pftcc
+        real,             allocatable :: res(:), vol_pspec(:)
         type(builder)                 :: build
         type(parameters)              :: params
-        type(ori)                     :: o_tmp
         character(len=90)             :: filename
-        integer  :: nptcls, iptcl, s, ithr, iref, i, irot, find_start, find_stop, find, fhandle, Nk, k
-        logical  :: l_ctf, do_center, l_exist
-        real     :: xyz(3), shvec(2), vol_dens, sig_dens
+        integer  :: s, find_start, find_stop, find, fhandle, Nk, k
+        logical  :: do_center, l_exist
+        real     :: vol_dens, xyz(3)
         call cline%set('mkdir', 'no')
-        call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-        params%kfromto(1) = 1
-        params%kfromto(2) = build%vol%get_nyq()
-        allocate(ptcl_mask(params%fromp:params%top))
-        call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls, pinds, ptcl_mask, .false.)
-        ! more prep
-        call pftcc%new(params%nspace * params%nstates, [1,nptcls], params%kfromto)
-        call prepimgbatch(nptcls)
-        call discrete_read_imgbatch(nptcls, pinds, [1,nptcls])
-        call pftcc%reallocate_ptcls(nptcls, pinds)
-        call build%img_crop_polarizer%init_polarizer(pftcc, params%alpha)
-        allocate(tmp_imgs(nthr_glob))
-        !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
-        do ithr = 1,nthr_glob
-            call tmp_imgs(ithr)%new([params%box_crop,params%box_crop,1], params%smpd_crop, wthreads=.false.)
-        enddo
-        !$omp end parallel do
-        ! read reference volumes and create polar projections
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
+        ! read reference volume
         do s=1,params%nstates
             call calcrefvolshift_and_mapshifts2ptcls( cline, s, params%vols(s), do_center, xyz)
             call read_and_filter_refvols( cline, params%vols(s), params%vols(s) )
             ! PREPARE E/O VOLUMES
             call preprefvol(cline, s, do_center, xyz, .false.)
-            call preprefvol(cline, s, do_center, xyz, .true.)
-            ! PREPARE REFERENCES
-            !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
-            do iref=1, params%nspace
-                call build%eulspace%get_ori(iref, o_tmp)
-                call build%vol_odd%fproject_polar((s - 1) * params%nspace + iref,&
-                    &o_tmp, pftcc, iseven=.false., mask=build%l_resmsk)
-                call build%vol%fproject_polar(    (s - 1) * params%nspace + iref,&
-                    &o_tmp, pftcc, iseven=.true.,  mask=build%l_resmsk)
-                call o_tmp%kill
-            end do
-            !$omp end parallel do
         end do
-        call pftcc%memoize_refs
-        ! PREPARATION OF PARTICLES
-        !$omp parallel do default(shared) private(i,iptcl,ithr) schedule(static) proc_bind(close)
-        do i = 1,nptcls
-            ithr  = omp_get_thread_num()+1
-            iptcl = pinds(i)
-            if( .not.ptcl_mask(iptcl) ) cycle
-            ! prep
-            call prepimg4align(iptcl, build%imgbatch(i), tmp_imgs(ithr))
-            ! transfer to polar coordinates
-            call build%img_crop_polarizer%polarize(pftcc, tmp_imgs(ithr), iptcl, .true., .true., mask=build%l_resmsk)
-            ! e/o flags
-            call pftcc%set_eo(iptcl, mod(iptcl, 2)==0)
-        enddo
-        !$omp end parallel do
-        ! getting the ctfs
-        l_ctf = build%spproj%get_ctfflag(params%oritype,iptcl=pinds(1)).ne.'no'
-        ! make CTFs
-        if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, params%oritype)
-        call pftcc%memoize_ptcls
-        call killimgbatch
-        find_start = max(params%kfromto(1), calc_fourier_index(params%lpstart, params%box_crop, params%smpd_crop))
-        find_stop  = min(params%kfromto(2), calc_fourier_index(params%lpstop,  params%box_crop, params%smpd_crop))
+        find_start = max(1,                   calc_fourier_index(params%lpstart, params%box_crop, params%smpd_crop))
+        find_stop  = min(build%vol%get_nyq(), calc_fourier_index(params%lpstop,  params%box_crop, params%smpd_crop))
         ! spectrum of current volume
         call build%vol%spectrum('power', vol_pspec, .false.)    ! assuming one state
         Nk        = size(vol_pspec)
@@ -598,31 +542,8 @@ contains
             vol_pspec(k) = vol_pspec(k) * real(k)
         enddo
         vol_pspec = vol_pspec / sum(vol_pspec)
-        vol_dens  = sum(vol_pspec(find_start:find_stop))
-        ! total sigma of all ptcls
-        allocate(sigma2(params%kfromto(1):params%kfromto(2), nptcls), sig_pspec(Nk), source=0.)
-        !$omp parallel do default(shared) private(i,iptcl,iref,irot,shvec,o_tmp) schedule(static) proc_bind(close)
-        do i = 1,nptcls
-            iptcl = pinds(i)
-            if( .not.ptcl_mask(iptcl) ) cycle
-            call build%spproj_field%get_ori(iptcl, o_tmp)
-            irot  = pftcc%get_roind(360. - o_tmp%e3get())
-            shvec = o_tmp%get_2Dshift()
-            iref  = build%eulspace%find_closest_proj(o_tmp)
-            call pftcc%gencorr_sigma_contrib( iref, iptcl, shvec, irot, sigma2(:,i))
-        enddo
-        !$omp end parallel do
-        sigma2    = sigma2 / real(nptcls)
-        sig_pspec = sqrt(sum(sigma2, dim=2))
-        do k = 1, Nk
-            sig_pspec(k) = sig_pspec(k) * real(k)
-        enddo
-        sig_pspec = sig_pspec / sum(sig_pspec)
-        sig_dens  = sum(sig_pspec(find_start:find_stop))
-        ! energy normalization of the spectrum power between lpstart and lpstop
-        sig_pspec = sig_pspec * vol_dens / sig_dens
-        filename  = 'pspec_vol_sigma_iter'//int2str(params%which_iter)
-        call plot_fsc2(Nk, vol_pspec, sig_pspec, res, params%smpd_crop, trim(filename))
+        filename  = 'pspec_vol_iter'//int2str(params%which_iter)
+        call plot_fsc(Nk, vol_pspec, res, params%smpd_crop, trim(filename))
         ! estimate the next lp (first middle-ruled slope change from the right)
         do find = find_stop-2, find_start+2, -1
             if( (vol_pspec(find+1) - vol_pspec(find-1)) * (vol_pspec(find) - vol_pspec(find-2)) < 0. ) exit
@@ -638,7 +559,6 @@ contains
         write(fhandle, *) res(find)
         close(fhandle)
         ! ending
-        call pftcc%kill
         call build%kill_general_tbox
         ! end gracefully
         call qsys_job_finished('simple_commander_euclid :: exec_pspec_lp')

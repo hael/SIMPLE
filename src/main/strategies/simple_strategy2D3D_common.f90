@@ -494,7 +494,6 @@ contains
         real, allocatable :: filter(:)
         ! Read & ensure correct volumes dimensions
         call build_glob%vol%read_and_crop(fname_even, params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
-        if( params_glob%l_lp_est ) call build_glob%vol_estimate_lp(params_glob)
         if( trim(fname_even) == trim(fname_odd) )then
             call build_glob%vol_odd%copy(build_glob%vol)
         else
