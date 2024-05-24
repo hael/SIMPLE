@@ -48,6 +48,7 @@ type qsys_ctrl
     ! SETTERS
     procedure          :: free_all_cunits
     procedure          :: set_jobs_status
+    procedure          :: clear_stack
     ! SCRIPT GENERATORS
     procedure          :: generate_scripts
     procedure          :: generate_array_script
@@ -190,6 +191,12 @@ contains
         self%jobs_done(:size(jobs_done)) = jobs_done
         self%jobs_submitted(:size(jobs_submitted)) = jobs_submitted
     end subroutine set_jobs_status
+
+    subroutine clear_stack( self )
+        class(qsys_ctrl), intent(inout) :: self
+        if( allocated(self%stream_cline_stack)) deallocate(self%stream_cline_stack)
+        self%cline_stacksz = 0
+    end subroutine clear_stack
 
     ! SCRIPT GENERATORS
 

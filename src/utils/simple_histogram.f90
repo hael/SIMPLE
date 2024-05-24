@@ -23,7 +23,7 @@ type :: histogram
     procedure          :: zero
     procedure          :: quantize
     ! Getters
-    procedure          :: get, get_x, get_bin
+    procedure          :: get, get_x, get_bin, get_nbins
     ! Arithmetics
     procedure          :: add
     procedure          :: div
@@ -263,6 +263,11 @@ contains
             get_bin = min(self%nbins,max(1, ceiling(v)))
         endif
     end function get_bin
+
+    elemental integer function get_nbins( self )
+        class(histogram), intent(in) :: self
+        get_nbins = self%nbins
+    end function get_nbins
 
     !> Arithmetics
 

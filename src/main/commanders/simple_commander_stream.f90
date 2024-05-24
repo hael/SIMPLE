@@ -709,6 +709,11 @@ contains
             moldiams = equispaced_vals(params%moldiam, params%moldiam_max, params%nmoldiams)
             call histogram_moldiams%new(moldiams)
             deallocate(moldiams)
+            ! remove existing files (restart)
+            if(file_exists("micrographs.star")) call del_file("micrographs.star")
+            if(file_exists("micrographs_pre_refine.star")) call del_file("micrographs_pre_refine.star")
+            if(file_exists("pick.star")) call del_file("pick.star")
+            if(file_exists("pick_pre_refine.star")) call del_file("pick_pre_refine.star")
         else
             l_extract            = .true.
             l_templates_provided = cline%defined('pickrefs')
@@ -731,6 +736,10 @@ contains
         call gui_stats%set('micrographs', 'micrographs_imported', int2str(0), primary=.true.)
         call gui_stats%set('micrographs', 'micrographs_rejected', int2str(0), primary=.true.)
         call gui_stats%set('micrographs', 'micrographs_picked',   int2str(0), primary=.true.)
+        if( l_multipick ) then
+            call gui_stats%set('current_search', 'type', 'global')
+            call gui_stats%set('current_search', 'range', int2str(floor(params%moldiam)) // 'Å - ' // int2str(floor(params%moldiam_max)) // 'Å')
+        endif
         call gui_stats%set('compute',     'compute_in_use',       int2str(0) // '/' // int2str(params%nparts), primary=.true.)
         ! restart
         pick_extract_set_counter = 0
@@ -746,10 +755,10 @@ contains
                 nmic_star   = spproj_glob%os_mic%get_noris()
                 call gui_stats%set('micrographs', 'micrographs_imported', int2str(nmic_star),              primary=.true.)
                 call gui_stats%set('micrographs', 'micrographs_picked',   int2str(nmic_star) // ' (100%)', primary=.true.)
-                if(spproj_glob%os_mic%isthere("nptcls")) then
+                if(spproj_glob%os_mic%isthere("nptcls") .and. .not. l_multipick) then
                     call gui_stats%set('micrographs', 'avg_number_picks', ceiling(spproj_glob%os_mic%get_avg("nptcls")), primary=.true.)
                 end if
-                call gui_stats%set('particles', 'total_extracted_particles', nptcls_glob, primary=.true.)
+                if(.not. l_multipick) call gui_stats%set('particles', 'total_extracted_particles', nptcls_glob, primary=.true.)
                 if(spproj_glob%os_mic%isthere('intg') .and. spproj_glob%os_mic%isthere('boxfile')) then
                     latest_boxfile = trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'boxfile'))
                     if(file_exists(trim(latest_boxfile))) call gui_stats%set('latest', '', trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'intg')), thumbnail=.true., boxfile=trim(latest_boxfile))
@@ -765,6 +774,8 @@ contains
         if( l_extract ) output_dir_extract = filepath(trim(PATH_HERE), trim(DIR_EXTRACT))
         call simple_mkdir(output_dir_picker, errmsg="commander_stream :: exec_stream_pick_extract;  ")
         if( l_extract ) call simple_mkdir(output_dir_extract,errmsg="commander_stream :: exec_stream_pick_extract;  ")
+        ! Cleanup on restart
+        if( l_multipick .and. dir_exists(output_dir_picker //"_pre_refine")) call simple_rmdir(output_dir_picker //"_pre_refine")
         ! initialise progress monitor
         call progressfile_init()
         ! setup the environment for distributed execution
@@ -814,6 +825,50 @@ contains
                 exit
             endif
             iter = iter + 1
+            ! switch to diameter refinement
+            if( l_multipick .and. params_glob%updated .eq. 'yes' .and. params%moldiam .ne. params_glob%moldiam_refine) then
+                params_glob%updated = 'no'
+                params%moldiam      = params_glob%moldiam_refine - 50.0
+                params%moldiam_max  = params_glob%moldiam_refine + 50.0
+                params%nmoldiams    = 11.0
+                write(logfhandle,'(A,I3)') '>>> REFINING MOLECULAR DIAMETER        : ', int(params_glob%moldiam_refine)
+                call cline_pick_extract%set('moldiam',     params%moldiam)
+                call cline_pick_extract%set('moldiam_max', params%moldiam_max)
+                call cline_pick_extract%set('nmoldiams',   params%nmoldiams)
+                ! undo already processed micrographs
+                call project_buff%clear_history()
+                call qenv%qscripts%clear_stack()
+                call spproj_glob%os_mic%kill()
+                if(allocated(micproj_records)) deallocate(micproj_records)
+                ! remove existing files
+                call simple_rmdir(trim(PATH_HERE)//trim(DIR_STREAM_COMPLETED))
+                call simple_mkdir(trim(PATH_HERE)//trim(DIR_STREAM_COMPLETED))
+                call simple_rename(output_dir_picker, output_dir_picker//"_pre_refine")
+                call simple_mkdir(output_dir_picker, errmsg="commander_stream :: exec_stream_pick_extract;  ")
+                if(file_exists("micrographs.star")) then
+                    if(file_exists("micrographs_pre_refine.star")) then
+                        call del_file("micrographs.star")
+                    else
+                        call simple_rename("micrographs.star", "micrographs_pre_refine.star")
+                    end if
+                end if
+                if(file_exists("pick.star")) then
+                    if(file_exists("pick_pre_refine.star")) then
+                        call del_file("pick.star")
+                    else
+                        call simple_rename("pick.star", "pick_pre_refine.star")
+                    end if
+                end if
+                ! reset histogram
+                moldiams = equispaced_vals(params%moldiam, params%moldiam_max, params%nmoldiams)
+                call histogram_moldiams%kill
+                call histogram_moldiams%new(moldiams)
+                deallocate(moldiams)
+                call gui_stats%set('current_search', 'type', 'refinement')
+                call gui_stats%set('current_search', 'range', int2str(floor(params%moldiam)) // 'Å - ' // int2str(floor(params%moldiam_max)) // 'Å')
+                call gui_stats%set('current_search', 'estimated_diameter', '')
+                call gui_stats%set('latest', '', '')
+            endif
             ! detection of new projects
             call project_buff%watch( nprojects, projects, max_nmovies=params%nparts )
             ! append projects to processing stack
@@ -874,21 +929,23 @@ contains
             ! project update
             if( n_imported > 0 )then
                 n_imported = spproj_glob%os_mic%get_noris()
-                write(logfhandle,'(A,I8)')       '>>> # MICROGRAPS PROCESSED & IMPORTED   : ',n_imported
+                write(logfhandle,'(A,I8)')       '>>> # MICROGRAPHS PROCESSED & IMPORTED   : ',n_imported
                 if( l_extract ) write(logfhandle,'(A,I8)')   '>>> # PARTICLES EXTRACTED               : ',nptcls_glob
                 if( l_multipick )then
                     call histogram_moldiams%plot('moldiams')
+                    call starproj_stream%stream_export_pick_diameters(params%outdir, histogram_moldiams)
                     write(logfhandle,'(A,F8.2)') '>>> ESTIMATED MOLECULAR DIAMETER        : ',histogram_moldiams%mean()
+                    call gui_stats%set('current_search', 'estimated_diameter', int2str(floor(histogram_moldiams%mean())) // 'Å')
                 endif
                 write(logfhandle,'(A,I3,A2,I3)') '>>> # OF COMPUTING UNITS IN USE/TOTAL   : ',qenv%get_navail_computing_units(),'/ ',params%nparts
                 if( n_failed_jobs > 0 ) write(logfhandle,'(A,I8)') '>>> # DESELECTED MICROGRAPHS/FAILED JOBS: ',n_failed_jobs
                 ! guistats
                 call gui_stats%set('micrographs', 'micrographs_picked', int2str(n_imported) // ' (' // int2str(ceiling(100.0 * real(n_imported) / real(project_buff%n_history * NMOVS_SET))) // '%)', primary=.true.)
                 if( n_failed_jobs > 0 ) call gui_stats%set('micrographs', 'micrographs_rejected', n_failed_jobs, primary=.true.)
-                if(spproj_glob%os_mic%isthere("nptcls")) then
+                if(spproj_glob%os_mic%isthere("nptcls") .and. .not. l_multipick) then
                     call gui_stats%set('micrographs', 'avg_number_picks', ceiling(spproj_glob%os_mic%get_avg("nptcls")), primary=.true.)
                 end if
-                call gui_stats%set('particles', 'total_extracted_particles', nptcls_glob, primary=.true.)
+                if(.not. l_multipick) call gui_stats%set('particles', 'total_extracted_particles', nptcls_glob, primary=.true.)
                 if(spproj_glob%os_mic%isthere('intg') .and. spproj_glob%os_mic%isthere('boxfile')) then
                     latest_boxfile = trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'boxfile'))
                     if(file_exists(trim(latest_boxfile))) call gui_stats%set('latest', '', trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'intg')), thumbnail=.true., boxfile=trim(latest_boxfile))
@@ -919,6 +976,7 @@ contains
                     endif
                 endif
             endif
+            call update_user_params(cline)
             ! guistats
             call gui_stats%write_json
             call sleep(WAITTIME)
@@ -1069,6 +1127,7 @@ contains
                 type(sp_project),     allocatable :: spprojs(:)
                 type(micproj_record), allocatable :: old_records(:)
                 character(len=:),     allocatable :: fname, abs_fname, new_fname
+                type(sp_project)                  :: tmpproj
                 integer :: n_spprojs, n_old, j, nprev_imports, n_completed, nptcls, nmics, imic
                 n_completed = 0
                 nimported   = 0
@@ -1084,8 +1143,12 @@ contains
                 nmics = 0
                 do iproj = 1,n_spprojs
                     fname = trim(output_dir)//trim(completed_jobs_clines(iproj)%get_carg('projfile'))
-                    call spprojs(iproj)%read_segment('mic', fname)
-                    nmics = nmics + spprojs(iproj)%os_mic%get_noris()
+                    call tmpproj%read_segment('projinfo', fname)
+                    if(tmpproj%projinfo%isthere("pickdiam") .and. tmpproj%projinfo%get(1, "pickdiam") .eq. real(params%moldiam)) then
+                        call spprojs(iproj)%read_segment('mic', fname)
+                        call spprojs(iproj)%read_segment('projinfo', fname)
+                        nmics = nmics + spprojs(iproj)%os_mic%get_noris()
+                    endif
                 enddo
                 if( nmics == 0 )then
                     ! nothing to import
@@ -1109,25 +1172,29 @@ contains
                     j = n_old
                     do iproj = 1,n_spprojs
                         if( spprojs(iproj)%os_mic%get_noris() == 0 ) cycle
-                        ! move project to appropriate directory
-                        fname     = trim(output_dir)//trim(completed_jobs_clines(iproj)%get_carg('projfile'))
-                        new_fname = trim(DIR_STREAM_COMPLETED)//trim(completed_jobs_clines(iproj)%get_carg('projfile'))
-                        call simple_rename(fname, new_fname)
-                        abs_fname = simple_abspath(new_fname, errmsg='stream pick_extract :: update_projects_list 1')
-                        ! records & project
-                        do imic = 1,spprojs(iproj)%os_mic%get_noris()
-                            j = j + 1
-                            micproj_records(j)%projname = trim(abs_fname)
-                            micproj_records(j)%micind   = imic
-                            if( l_multipick )then
-                                micproj_records(j)%nptcls = 0
-                            else
-                                nptcls      = nint(spprojs(iproj)%os_mic%get(imic,'nptcls'))
-                                nptcls_glob = nptcls_glob + nptcls ! global update
-                                micproj_records(j)%nptcls = nptcls
-                            endif
-                            call spproj_glob%os_mic%transfer_ori(j, spprojs(iproj)%os_mic, imic)
-                        enddo
+                        if(spprojs(iproj)%projinfo%isthere("pickdiam") .and. spprojs(iproj)%projinfo%get(1, "pickdiam") .eq. real(params%moldiam)) then
+                            ! move project to appropriate directory
+                            fname     = trim(output_dir)//trim(completed_jobs_clines(iproj)%get_carg('projfile'))
+                            new_fname = trim(DIR_STREAM_COMPLETED)//trim(completed_jobs_clines(iproj)%get_carg('projfile'))
+                            call simple_rename(fname, new_fname)
+                            abs_fname = simple_abspath(new_fname, errmsg='stream pick_extract :: update_projects_list 1')
+                            ! records & project
+                            do imic = 1,spprojs(iproj)%os_mic%get_noris()
+                                j = j + 1
+                                micproj_records(j)%projname = trim(abs_fname)
+                                micproj_records(j)%micind   = imic
+                                if( l_multipick )then
+                                    micproj_records(j)%nptcls = 0
+                                else
+                                    nptcls      = nint(spprojs(iproj)%os_mic%get(imic,'nptcls'))
+                                    nptcls_glob = nptcls_glob + nptcls ! global update
+                                    micproj_records(j)%nptcls = nptcls
+                                endif
+                                call spproj_glob%os_mic%transfer_ori(j, spprojs(iproj)%os_mic, imic)
+                            enddo
+                        else
+                            call del_file(fname)
+                        endif
                     enddo
                     if( l_multipick )then
                         ! update molecular diameters
@@ -1198,6 +1265,7 @@ contains
                 call spproj_here%projinfo%set(1,'projname', trim(projname))
                 call spproj_here%projinfo%set(1,'projfile', trim(projfile))
                 call spproj_here%projinfo%set(1,'cwd',      trim(path))
+                call spproj_here%projinfo%set(1,'pickdiam', params%moldiam)
                 ! from current global project
                 spproj_here%compenv = spproj_glob%compenv
                 spproj_here%jobproc = spproj_glob%jobproc
@@ -2286,6 +2354,7 @@ contains
         type(cmdline), intent(inout) :: cline_here
         type(oris) :: os
         real       :: tilt_thres, beamtilt, astigthreshold, ctfresthreshold, icefracthreshold
+        real       :: moldiam_refine
         call os%new(1, is_ptcl=.false.)
         if( file_exists(USER_PARAMS) )then
             call os%read(USER_PARAMS)
@@ -2362,6 +2431,21 @@ contains
                          params_glob%updated    = 'yes'
                          call cline_here%set('icefracthreshold', params_glob%icefracthreshold)
                          write(logfhandle,'(A,F8.2)')'>>> ICE FRACTION THRESHOLD UPDATED TO: ',icefracthreshold
+                     endif
+                endif
+            endif
+            if( os%isthere(1,'moldiam_refine') ) then
+                moldiam_refine = os%get(1,'moldiam_refine')
+                if( abs(moldiam_refine-params_glob%moldiam_refine) > 0.001) then
+                     if(moldiam_refine < 10)then
+                         write(logfhandle,'(A,F8.2)')'>>> MULTIPICK REFINE DIAMETER TOO LOW: ' , moldiam_refine
+                     else if(moldiam_refine > 1000) then
+                         write(logfhandle,'(A,F8.2)')'>>> MULTIPICK REFINE DIAMETER TOO HIGH: ', moldiam_refine
+                     else
+                         params_glob%moldiam_refine = moldiam_refine
+                         params_glob%updated          = 'yes'
+                     !    call cline_here%set('icefracthreshold', params_glob%icefracthreshold)
+                         write(logfhandle,'(A,F8.2)')'>>> MULTIPICK REFINE DIAMETER UPDATED TO: ', moldiam_refine
                      endif
                 endif
             endif

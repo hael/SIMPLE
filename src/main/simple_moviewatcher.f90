@@ -33,6 +33,7 @@ contains
     procedure, private :: add2history_1
     procedure, private :: add2history_2
     generic            :: add2history => add2history_1, add2history_2
+    procedure          :: clear_history
     procedure          :: is_past
     procedure, private :: add2watchdirs
     procedure, private :: check4dirs
@@ -193,6 +194,13 @@ contains
         ! write(logfhandle,'(A,A,A,A)')'>>> NEW MOVIE ADDED: ',trim(adjustl(abs_fname)), '; ', cast_time_char(simple_gettime())
         !call lastfoundfile_update()
     end subroutine add2history_2
+
+    !>  \brief  is for clearing the history of imported files
+    subroutine clear_history( self )
+        class(moviewatcher), intent(inout) :: self
+        if( allocated(self%history) ) deallocate(self%history)
+        self%n_history    = 0
+    end subroutine clear_history
 
     !>  \brief  is for checking a file has already been reported
     !>          absolute path is implied

@@ -4,6 +4,7 @@ include 'simple_lib.f08'
 use simple_sp_project, only: sp_project
 use simple_cmdline,    only: cmdline
 use simple_parameters, only: params_glob
+use simple_histogram,  only: histogram
 use simple_starfile_wrappers
 use simple_math
 use CPlot2D_wrapper_module
@@ -29,6 +30,7 @@ contains
     procedure          :: stream_export_micrographs
     procedure          :: stream_export_optics
     procedure          :: stream_export_particles_2D
+    procedure          :: stream_export_pick_diameters
     !starfile
     procedure, private :: starfile_init
     procedure, private :: starfile_deinit
@@ -37,6 +39,7 @@ contains
     procedure, private :: starfile_set_optics_group_table
     procedure, private :: starfile_set_micrographs_table
     procedure, private :: starfile_set_particles2D_table
+    procedure, private :: starfile_set_pick_diameters_table
     !optics
     procedure, private :: assign_optics_single
     procedure, private :: assign_optics
@@ -131,6 +134,23 @@ contains
             end if
         end do
     end subroutine starfile_set_optics_group_table
+
+    subroutine starfile_set_pick_diameters_table( self, histogram_moldiams)
+        class(starproject_stream),  intent(inout) :: self
+        type(histogram),            intent(in)    :: histogram_moldiams
+        integer                                   :: i
+        call starfile_table__clear(self%starfile)
+        call starfile_table__new(self%starfile)
+        call starfile_table__setIsList(self%starfile, .false.)
+        call starfile_table__setname(self%starfile, 'pick_diameters')
+        do i=1, histogram_moldiams%get_nbins()
+            call starfile_table__addObject(self%starfile)
+            ! ints
+            call starfile_table__setValue_int(self%starfile,    SMPL_PICK_POPULATION, int(histogram_moldiams%get(i)))
+            ! doubles
+            call starfile_table__setValue_double(self%starfile, SMPL_PICK_DIAMETER,   real(histogram_moldiams%get_x(i), dp))
+        end do
+    end subroutine starfile_set_pick_diameters_table
 
     subroutine starfile_set_micrographs_table( self, spproj )
         class(starproject_stream),  intent(inout) :: self
@@ -284,6 +304,16 @@ contains
         call self%starfile_write_table(append = .true.)
         call self%starfile_deinit()
     end subroutine stream_export_particles_2D
+
+    subroutine stream_export_pick_diameters( self, outdir, histogram_moldiams)
+        class(starproject_stream),            intent(inout) :: self
+        type(histogram),                      intent(inout) :: histogram_moldiams
+        character(len=LONGSTRLEN),            intent(in)    :: outdir
+        call self%starfile_init('pick.star', outdir)
+        call self%starfile_set_pick_diameters_table(histogram_moldiams)
+        call self%starfile_write_table(append = .true.)
+        call self%starfile_deinit()
+    end subroutine stream_export_pick_diameters
 
     ! optics
 

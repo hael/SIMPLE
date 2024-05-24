@@ -448,6 +448,8 @@ enum EMDLabel
     SMPL_OPTICS_CENTROIDY,
     SMPL_OPTICS_SHIFTX,
     SMPL_OPTICS_SHIFTY,
+    SMPL_PICK_DIAMETER,
+    SMPL_PICK_POPULATION,
 
     EMDL_LAST_LABEL                       // **** NOTE ****: Do keep this label always at the end
     // it is here for looping purposes
@@ -916,6 +918,8 @@ private:
         EMDL::addLabel(SMPL_OPTICS_CENTROIDY,   EMDL_DOUBLE, "splCentroidY",        "Optics group shift centroid y");
         EMDL::addLabel(SMPL_OPTICS_SHIFTX,      EMDL_DOUBLE, "splBeamshiftX",       "Beam shift x");
         EMDL::addLabel(SMPL_OPTICS_SHIFTY,      EMDL_DOUBLE, "splBeamshiftY",       "Beamshift y");
+        EMDL::addLabel(SMPL_PICK_DIAMETER,      EMDL_DOUBLE, "splPickDiam",         "Pick diameter");
+        EMDL::addLabel(SMPL_PICK_POPULATION,    EMDL_INT,    "splPickPop",          "Pick diameter population");
 
     }
 
