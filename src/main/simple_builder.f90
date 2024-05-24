@@ -72,6 +72,7 @@ type :: builder
     procedure                           :: kill_strategy3D_tbox
     procedure, private                  :: build_strategy2D_tbox
     procedure                           :: kill_strategy2D_tbox
+    procedure                           :: vol_estimate_lp
 end type builder
 
 class(builder), pointer :: build_glob  => null()
@@ -222,18 +223,15 @@ contains
     end subroutine build_spproj
 
     subroutine build_general_tbox( self, params, cline, do3d)
-        use simple_fsc, only: plot_fsc
         class(builder), target, intent(inout) :: self
         class(parameters),      intent(inout) :: params
         class(cmdline),         intent(inout) :: cline
         logical, optional,      intent(in)    :: do3d
-        real,                   allocatable   :: res(:), vol_pspec(:)
-        character(len=90)                     :: filename
         type(oris)  :: eulspace_sub !< discrete projection direction search space, reduced
         type(image) :: mskimg
         type(ori)   :: o
-        integer     :: lfny, i, find_start, find_stop, fhandle, Nk, k, find
-        logical     :: ddo3d, l_exist
+        integer     :: lfny, i
+        logical     :: ddo3d
         call self%kill_general_tbox
         ddo3d = .true.
         if( present(do3d) ) ddo3d = do3d
@@ -286,37 +284,6 @@ contains
                 call self%vol%new(    [params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
                 call self%vol_odd%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
                 call self%vol2%new(   [params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
-                if( params%l_lp_est )then
-                    ! estimating lp of the current volume
-                    find_start = max(                 1, calc_fourier_index(params%lpstart, params%box_crop, params%smpd_crop))
-                    find_stop  = min(self%vol%get_nyq(), calc_fourier_index(params%lpstop,  params%box_crop, params%smpd_crop))
-                    ! spectrum of current volume
-                    call self%vol%spectrum('power', vol_pspec, .false.)    ! assuming one state
-                    Nk        = size(vol_pspec)
-                    res       = self%vol%get_res()
-                    vol_pspec = sqrt(vol_pspec)
-                    do k = 1, Nk
-                        vol_pspec(k) = vol_pspec(k) * real(k)
-                    enddo
-                    vol_pspec = vol_pspec / sum(vol_pspec)
-                    filename  = 'pspec_vol_iter'//int2str(params%which_iter)
-                    call plot_fsc(Nk, vol_pspec, res, params%smpd_crop, trim(filename))
-                    ! estimate the next lp (first middle-ruled slope change from the right)
-                    do find = find_stop-2, find_start+2, -1
-                        if( (vol_pspec(find+1) - vol_pspec(find-1)) * (vol_pspec(find) - vol_pspec(find-2)) < 0. ) exit
-                    enddo
-                    ! write estimated lp to a text file
-                    filename = 'builder_estimated_lp.txt'
-                    inquire(file=trim(filename), exist=l_exist)
-                    if( l_exist )then
-                        open(fhandle, file=trim(filename), status="old", position="append", action="write")
-                    else
-                        open(fhandle, file=trim(filename), status="new", action="write")
-                    end if
-                    write(fhandle, *) res(find)
-                    close(fhandle)
-                    self%est_lp = find
-                endif
             endif
             call mskimg%disc([params%box_crop,params%box_crop,1], params%smpd_crop, params%msk_crop, self%lmsk_crop)
             call mskimg%kill
@@ -332,6 +299,45 @@ contains
         self%general_tbox_exists = .true.
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DONE BUILDING GENERAL TOOLBOX'
     end subroutine build_general_tbox
+
+    subroutine vol_estimate_lp( self, params )
+        use simple_fsc, only: plot_fsc
+        class(builder), target, intent(inout) :: self
+        class(parameters),      intent(inout) :: params
+        real,                   allocatable   :: res(:), vol_pspec(:)
+        character(len=90)                     :: filename
+        integer     :: find_start, find_stop, fhandle, Nk, k, find
+        logical     :: l_exist
+        ! estimating lp of the current volume
+        find_start = max(                 1, calc_fourier_index(params%lpstart, params%box_crop, params%smpd_crop))
+        find_stop  = min(self%vol%get_nyq(), calc_fourier_index(params%lpstop,  params%box_crop, params%smpd_crop))
+        ! spectrum of current volume
+        call self%vol%spectrum('power', vol_pspec, .false.)    ! assuming one state
+        Nk        = size(vol_pspec)
+        res       = self%vol%get_res()
+        vol_pspec = sqrt(vol_pspec)
+        do k = 1, Nk
+            vol_pspec(k) = vol_pspec(k) * real(k)
+        enddo
+        vol_pspec = vol_pspec / sum(vol_pspec)
+        filename  = 'pspec_vol_iter'//int2str(params%which_iter)
+        call plot_fsc(Nk, vol_pspec, res, params%smpd_crop, trim(filename))
+        ! estimate the next lp (first middle-ruled slope change from the right)
+        do find = find_stop-2, find_start+2, -1
+            if( (vol_pspec(find+1) - vol_pspec(find-1)) * (vol_pspec(find) - vol_pspec(find-2)) < 0. ) exit
+        enddo
+        ! write estimated lp to a text file
+        filename = 'builder_estimated_lp.txt'
+        inquire(file=trim(filename), exist=l_exist)
+        if( l_exist )then
+            open(fhandle, file=trim(filename), status="old", position="append", action="write")
+        else
+            open(fhandle, file=trim(filename), status="new", action="write")
+        end if
+        write(fhandle, *) res(find)
+        close(fhandle)
+        self%est_lp = find
+    end subroutine vol_estimate_lp
 
     subroutine kill_general_tbox( self )
         class(builder), intent(inout)  :: self
