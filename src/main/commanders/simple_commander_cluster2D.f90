@@ -1027,8 +1027,6 @@ contains
             call job_descr%set('startit', trim(int2str(iter)))
             ! the only FRC we have is from the previous iteration, hence the iter - 1
             call job_descr%set('frcs', trim(FRCS_FILE))
-            ! ICM filter
-            if( params%l_icm .and. iter >= LPLIM1ITERBOUND ) call job_descr%set('icm', 'yes')
             ! schedule
             if( L_BENCH_GLOB )then
                 rt_init = toc(t_init)

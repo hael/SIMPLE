@@ -41,7 +41,6 @@ real(timer_int_kind)         :: rt_init, rt_prep_pftcc, rt_align, rt_cavg, rt_pr
 integer(timer_int_kind)      ::  t_init,  t_prep_pftcc,  t_align,  t_cavg,  t_projio,  t_tot
 character(len=STDLEN)        :: benchfname
 logical                      :: l_stream = .false.
-logical                      :: l_icm    = .false.
 logical                      :: l_ctf    = .false.
 
 contains
@@ -72,7 +71,6 @@ contains
         frac_srch_space = build_glob%spproj_field%get_avg('frac')
 
         ! SWITCHES
-        l_icm          = params_glob%l_icm .and. frac_srch_space > FRAC_SH_LIM
         l_partial_sums = .false.
         l_snhc         = .false.
         l_greedy       = .false.
@@ -495,7 +493,6 @@ contains
                 call prep2Dref(cavgs_merged(icls), match_imgs(icls), icls, iseven=.false., center=do_center, xyz_out=xyz)
                 if( .not.params_glob%l_lpset )then
                     if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
-                        if( l_icm ) call cavgs_even(icls)%ICM2D_eo(cavgs_odd(icls), params_glob%lambda, verbose=.false.)
                         ! here we are passing in the shifts and do NOT map them back to classes
                         call prep2Dref(cavgs_even(icls), match_imgs(icls), icls, iseven=.true., center=do_center, xyz_in=xyz)
                         call build_glob%img_crop_polarizer%polarize(pftcc, match_imgs(icls), icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
@@ -503,16 +500,11 @@ contains
                         call prep2Dref(cavgs_odd(icls), match_imgs(icls), icls, iseven=.false., center=do_center, xyz_in=xyz)
                         call build_glob%img_crop_polarizer%polarize(pftcc, match_imgs(icls), icls, isptcl=.false., iseven=.false., mask=build_glob%l_resmsk)  ! 2 polar coords
                     else
-                        if( l_icm )then
-                            call cavgs_merged(icls)%ICM2D(params_glob%lambda, verbose=.false.)
-                            call prep2Dref(cavgs_merged(icls), match_imgs(icls), icls, iseven=.false., center=do_center, xyz_in=xyz)
-                        endif
                         ! put the merged class average in both even and odd positions
                         call build_glob%img_crop_polarizer%polarize(pftcc, match_imgs(icls), icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
                         call pftcc%cp_even2odd_ref(icls)
                     endif
                 else
-                    if( l_icm ) call cavgs_merged(icls)%ICM2D(params_glob%lambda, verbose=.false.)
                     call prep2Dref(cavgs_merged(icls), match_imgs(icls), icls, iseven=.false., center=do_center, xyz_in=xyz)
                     call build_glob%img_crop_polarizer%polarize(pftcc, match_imgs(icls), icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
                     call pftcc%cp_even2odd_ref(icls)
