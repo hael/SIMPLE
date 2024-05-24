@@ -256,8 +256,9 @@ contains
         ! noise estimates
         if( calc_pspec )then
             call cline_pspec%set('prg',     'calc_pspec_distr')
+            call cline_pspec%set('oritype',  'ptcl2D')
             call cline_pspec%set('projfile', self%projfile_out)
-            call cline_pspec%set('nthr',     real(params_glob%nthr2D))
+            call cline_pspec%set('nthr',     cline_classify%get_rarg('nthr'))
             call cline_pspec%set('mkdir',    'yes')
             call cline_pspec%set('nparts',   1.)
             if( params_glob%nparts_chunk > 1 ) call cline_pspec%set('nparts',real(params_glob%nparts_chunk))
@@ -283,9 +284,7 @@ contains
         ! cleanup
         call self%spproj%kill
         call cline_pspec%kill
-        do i = 1,nclines
-            call clines(i)%kill
-        enddo
+        call clines(:)%kill
         deallocate(clines)
         call self%qenv%kill
         ! chunk is now busy

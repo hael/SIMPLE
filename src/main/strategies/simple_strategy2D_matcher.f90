@@ -161,18 +161,14 @@ contains
 
         ! SNHC LOGICS
         neigh_frac = 0.
-        if( l_stream )then
+        if( params_glob%extr_iter > MAX_EXTRLIM2D )then
             ! done
         else
-            if( params_glob%extr_iter > MAX_EXTRLIM2D )then
-                ! done
-            else
-                if( l_snhc .or. l_snhc_smpl )then
-                    ! factorial decay, -2 because first step is always greedy
-                    neigh_frac = min(SNHC2D_INITFRAC,&
-                        &max(0.,SNHC2D_INITFRAC*(1.-SNHC2D_DECAY)**real(params_glob%extr_iter-2)))
-                    if( L_VERBOSE_GLOB ) write(logfhandle,'(A,F8.2)') '>>> STOCHASTIC NEIGHBOURHOOD SIZE(%):', 100.*(1.-neigh_frac)
-                endif
+            if( l_snhc .or. l_snhc_smpl )then
+                ! factorial decay, -2 because first step is always greedy
+                neigh_frac = min(SNHC2D_INITFRAC,&
+                    &max(0.,SNHC2D_INITFRAC*(1.-SNHC2D_DECAY)**real(params_glob%extr_iter-2)))
+                if( L_VERBOSE_GLOB ) write(logfhandle,'(A,F8.2)') '>>> STOCHASTIC NEIGHBOURHOOD SIZE(%):', 100.*(1.-neigh_frac)
             endif
         endif
 

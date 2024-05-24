@@ -2388,8 +2388,8 @@ contains
         &'is a distributed workflow that executes picking and extraction'//&             ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_stream',&                                                               ! executable
-        &1, 4, 0, 0, 3, 0, 3, .true.)                                                    ! # entries in each group, requires sp_project
-        gen_picking_refs%gui_submenu_list = "data,picking,extract,compute"
+        &1, 4, 0, 2, 3, 1, 5, .true.)                                                    ! # entries in each group, requires sp_project
+        gen_picking_refs%gui_submenu_list = "data,picking,extract,cluster 2D,compute"
         gen_picking_refs%advanced = .false.
         ! image input/output
         call gen_picking_refs%set_input('img_ios', 1, 'dir_exec', 'file', 'Previous run directory',&
@@ -2408,7 +2408,12 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        ! <empty>
+        call gen_picking_refs%set_input('srch_ctrls',1, nptcls_per_cls)
+        call gen_picking_refs%set_gui_params('srch_ctrls', 1, submenu="cluster 2D", advanced=.false.)
+        gen_picking_refs%srch_ctrls(1)%rval_default = 500.
+        call gen_picking_refs%set_input('srch_ctrls', 2, ncls)
+        gen_picking_refs%srch_ctrls(2)%required = .false.
+        call gen_picking_refs%set_gui_params('srch_ctrls', 2, submenu="cluster 2D", advanced=.false.)
         ! filter controls
         call gen_picking_refs%set_input('filt_ctrls', 1, ctfresthreshold)
         gen_picking_refs%filt_ctrls(1)%descr_long        = 'Micrographs with a CTF resolution above the threshold (in Angs) will be ignored from further processing{10}'
@@ -2426,15 +2431,22 @@ contains
         gen_picking_refs%filt_ctrls(3)%rval_default      = ASTIG_THRESHOLD_STREAM
         call gen_picking_refs%set_gui_params('filt_ctrls', 3, submenu="data")
         ! mask controls
-        ! <empty>
+        call gen_picking_refs%set_input('mask_ctrls', 1, mskdiam)
+        gen_picking_refs%mask_ctrls(1)%required = .false.
+        call gen_picking_refs%set_gui_params('mask_ctrls', 1, submenu="cluster 2D")
         ! computer controls
         call gen_picking_refs%set_input('comp_ctrls', 1, nthr)
         call gen_picking_refs%set_gui_params('comp_ctrls', 1, submenu="compute", advanced=.false.)
-        call gen_picking_refs%set_input('comp_ctrls', 2, nparts)
-        call gen_picking_refs%set_gui_params('comp_ctrls', 2, submenu="compute", advanced=.false.)
-        call gen_picking_refs%set_input('comp_ctrls', 3, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
+        call gen_picking_refs%set_input('comp_ctrls', 2, 'nthr2D', 'num', 'Number of threads/node for 2D classification', 'Number of threads per node allocated to 2D classification',&
+        &'# of threads for per node', .true., 1.)
+        call gen_picking_refs%set_gui_params('comp_ctrls', 2, submenu="compute")
+        call gen_picking_refs%set_input('comp_ctrls', 3, nparts)
+        call gen_picking_refs%set_gui_params('comp_ctrls', 3, submenu="compute", advanced=.false.)
+        call gen_picking_refs%set_input('comp_ctrls', 4, nparts_pool)
+        call gen_picking_refs%set_gui_params('comp_ctrls', 4, submenu="compute", advanced=.false.)
+        call gen_picking_refs%set_input('comp_ctrls', 5, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
         &'in seconds(29mins){1740}', .false., 1740.)
-        call gen_picking_refs%set_gui_params('comp_ctrls', 3, submenu="compute")
+        call gen_picking_refs%set_gui_params('comp_ctrls', 5, submenu="compute")
     end subroutine new_gen_picking_refs
 
     subroutine new_import_starproject
@@ -3894,7 +3906,7 @@ contains
         preprocess_stream_dev%comp_ctrls(5)%descr_short = 'Number of threads/node for preprocessing'
         preprocess_stream_dev%comp_ctrls(5)%descr_long  = 'Number of threads per node allocated to preprocessing steps (motion correction, CTF estimation, picking)'
         call preprocess_stream_dev%set_input('comp_ctrls', 6, 'nthr2D', 'num', 'Number of threads/node for 2D classification', 'Number of threads per node allocated to 2D classification',&
-        &'# of threads for per', .true., 1.)
+        &'# of threads for per node', .true., 1.)
         call preprocess_stream_dev%set_gui_params('comp_ctrls', 6, submenu="compute")
         call preprocess_stream_dev%set_input('comp_ctrls', 7, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
         &'in seconds(29mins){1740}', .false., 1740.)
