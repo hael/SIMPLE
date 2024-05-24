@@ -395,6 +395,7 @@ type :: parameters
     real    :: min_rad=100.        !< particle shortest dim (in pixels)
     real    :: moldiam=140.        !< molecular diameter(in A)
     real    :: moldiam_max=200.    !< upper bound molecular diameter(in A)
+    real    :: moldiam_refine=0.   !< upper bound molecular diameter(in A)
     real    :: moment=0.
     real    :: msk=0.              !< mask radius(in pixels)
     real    :: msk_crop=0.         !< mask radius(in pixels)
@@ -830,6 +831,7 @@ contains
         call check_rarg('max_dose',       self%max_dose)
         call check_rarg('moldiam',        self%moldiam)
         call check_rarg('moldiam_max',    self%moldiam_max)
+        call check_rarg('moldiam_refine', self%moldiam_refine)
         call check_rarg('msk',            self%msk)
         call check_rarg('msk_crop',       self%msk_crop)
         call check_rarg('mskdiam',        self%mskdiam)
