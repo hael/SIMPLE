@@ -214,6 +214,7 @@ contains
         self%kfromto      = 0
         self%fromp        = 0
         self%top          = 0
+        if( allocated(self%fname) ) deallocate(self%fname)
         self%exists       = .false.
     end subroutine kill
 

@@ -1320,8 +1320,7 @@ contains
         class(commander_stream_gen_picking_refs), intent(inout) :: self
         class(cmdline),                           intent(inout) :: cline
         character(len=STDLEN),     parameter   :: micspproj_fname = './streamdata.simple'
-        integer,                   parameter   :: INACTIVE_TIME   = 900  ! inactive time triggers writing of project file
-        logical,                   parameter   :: DEBUG_HERE      = .true.
+        logical,                   parameter   :: DEBUG_HERE      = .FALSE.
         type(parameters)                       :: params
         type(guistats)                         :: gui_stats
         class(cmdline),            allocatable :: completed_jobs_clines(:), failed_jobs_clines(:)
@@ -1338,16 +1337,22 @@ contains
         real                                   :: pick_nthr
         integer                                :: extract_set_counter    ! Internal counter of projects to be processed
         integer                                :: nmics_sel, nmics_rej, nmics_rejected_glob
-        integer                                :: nmics, nprojects, stacksz, prev_stacksz, iter, last_injection, iproj, envlen
+        integer                                :: nmics, nprojects, stacksz, prev_stacksz, iter, iproj, envlen
         integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, nmic_star
-        logical                                :: l_templates_provided, l_projects_left, l_haschanged, l_once
+        logical                                :: l_haschanged, l_once
         integer(timer_int_kind) :: t0
         real(timer_int_kind)    :: rt_write
-        call cline%set('oritype',   'mic')
-        call cline%set('mkdir',     'yes')
-        call cline%set('picker',    'new')
-        call cline%set('sigma_est', 'glob')
-        call cline%set('reject_cls','no')
+        call cline%set('oritype',      'mic')
+        call cline%set('mkdir',        'yes')
+        call cline%set('picker',       'new')
+        call cline%set('reject_cls',   'no')
+        call cline%set('autoscale',    'yes')
+        call cline%set('kweight_chunk','default')
+        call cline%set('kweight_pool', 'default')
+        call cline%set('prune',        'no')
+        call cline%set('nonuniform',   'no')
+        call cline%set('ml_reg',       'no')
+        call cline%set('wiener',       'full')
         if( .not. cline%defined('outdir')          ) call cline%set('outdir',           '')
         if( .not. cline%defined('walltime')        ) call cline%set('walltime',         29*60) ! 29 minutes
         ! micrograph selection
@@ -1392,7 +1397,7 @@ contains
         project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true.)
         ! 2D parameters
         params%nchunks    = 0
-        params%ncls_start = params%ncls        
+        params%ncls_start = params%ncls
         ! guistats init
         call gui_stats%init
         call gui_stats%set('micrographs', 'micrographs_imported', int2str(0), primary=.true.)
@@ -1432,21 +1437,21 @@ contains
         call cline_extract%set('prg','extract')
         call cline_extract%set('dir','../'//trim(trim(DIR_EXTRACT)))
         call cline_extract%set('extract','yes')
-        ! ugly single use flag for backwards compatibility, will need to go
-        call cline_extract%set('newstream','yes')
-        ! Infinite loop
         if( cline%defined('box_extract') )then
             params%box = params%box_extract
+            call cline_extract%delete('box_extract')
+            call cline_extract%set('box', params%box)
         else
             params%box = 0
         endif
-        last_injection        = simple_gettime()
+        ! ugly single use flag for backwards compatibility, will need to go
+        call cline_extract%set('newstream','yes')
+        ! Infinite loop
         prev_stacksz          = 0
         iter                  = 0
         n_imported            = 0   ! global number of imported processed micrographs
         n_failed_jobs         = 0
         n_added               = 0   ! global number of micrographs added to processing stack
-        l_projects_left       = .false.
         l_haschanged          = .false.
         l_once                = .true.
         do
@@ -1478,12 +1483,10 @@ contains
                 if( nmics > 0 )then
                     write(logfhandle,'(A,I4,A,A)')'>>> ',nmics,' NEW MICROGRAPHS ADDED; ',cast_time_char(simple_gettime())
                 endif
-                l_projects_left = cnt .ne. nprojects
                 ! guistats
                 call gui_stats%set('micrographs', 'micrographs_imported', int2str(project_buff%n_history * NMOVS_SET), primary=.true.)
                 call gui_stats%set_now('micrographs', 'last_micrograph_imported')
             else
-                l_projects_left = .false.
             endif
             ! submit jobs
             call qenv%qscripts%schedule_streaming( qenv%qdescr, path=output_dir )
@@ -1515,26 +1518,25 @@ contains
             endif
             ! ! project update
             if( n_imported > 0 )then
-            !     n_imported = spproj_glob%os_mic%get_noris()
+                n_imported = spproj_glob%os_mic%get_noris()
                 write(logfhandle,'(A,I8)')       '>>> # MICROGRAPS PROCESSED & IMPORTED   : ',n_imported
-                write(logfhandle,'(A,I8)')   '>>> # PARTICLES EXTRACTED               : ',nptcls_glob
+                write(logfhandle,'(A,I8)')       '>>> # PARTICLES EXTRACTED               : ',nptcls_glob
                 write(logfhandle,'(A,I3,A2,I3)') '>>> # OF COMPUTING UNITS IN USE/TOTAL   : ',qenv%get_navail_computing_units(),'/ ',params%nparts
                 if( n_failed_jobs > 0 ) write(logfhandle,'(A,I8)') '>>> # DESELECTED MICROGRAPHS/FAILED JOBS: ',n_failed_jobs
                 ! guistats
-            !     call gui_stats%set('micrographs', 'micrographs_picked', int2str(n_imported) // ' (' // int2str(ceiling(100.0 * real(n_imported) / real(project_buff%n_history * NMOVS_SET))) // '%)', primary=.true.)
-            !     if( n_failed_jobs > 0 ) call gui_stats%set('micrographs', 'micrographs_rejected', n_failed_jobs, primary=.true.)
-            !     if(spproj_glob%os_mic%isthere("nptcls")) then
-            !         call gui_stats%set('micrographs', 'avg_number_picks', ceiling(spproj_glob%os_mic%get_avg("nptcls")), primary=.true.)
-            !     end if
-            !     call gui_stats%set('particles', 'total_extracted_particles', nptcls_glob, primary=.true.)
-            !     if(spproj_glob%os_mic%isthere('intg') .and. spproj_glob%os_mic%isthere('boxfile')) then
-            !         latest_boxfile = trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'boxfile'))
-            !         if(file_exists(trim(latest_boxfile))) call gui_stats%set('latest', '', trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'intg')), thumbnail=.true., boxfile=trim(latest_boxfile))
-            !     end if
+                call gui_stats%set('micrographs', 'micrographs_picked', int2str(n_imported) // ' (' // int2str(ceiling(100.0 * real(n_imported) / real(project_buff%n_history * NMOVS_SET))) // '%)', primary=.true.)
+                if( n_failed_jobs > 0 ) call gui_stats%set('micrographs', 'micrographs_rejected', n_failed_jobs, primary=.true.)
+                if(spproj_glob%os_mic%isthere("nptcls")) then
+                    call gui_stats%set('micrographs', 'avg_number_picks', ceiling(spproj_glob%os_mic%get_avg("nptcls")), primary=.true.)
+                end if
+                call gui_stats%set('particles', 'total_extracted_particles', nptcls_glob, primary=.true.)
+                if(spproj_glob%os_mic%isthere('intg') .and. spproj_glob%os_mic%isthere('boxfile')) then
+                    latest_boxfile = trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'boxfile'))
+                    if(file_exists(trim(latest_boxfile))) call gui_stats%set('latest', '', trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'intg')), thumbnail=.true., boxfile=trim(latest_boxfile))
+                end if
                 ! update progress monitor
                 call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
                 ! write project for gui, micrographs field only
-                last_injection = simple_gettime()
                 l_haschanged = .true.
                 ! always write micrographs snapshot if less than 1000 mics, else every 100
                 if( n_imported < 1000 .and. l_haschanged )then
@@ -1548,10 +1550,12 @@ contains
             endif
             ! 2D section
             if( l_once .and. (nptcls_glob > params%nptcls_per_cls*params%ncls) )then
+                if( .not.cline%defined('mskdiam') ) params%mskdiam = 0.85 * real(params%box) * params%smpd
                 call init_cluster2D_stream_dev( cline, spproj_glob, params%box, micspproj_fname )
                 l_once = .false.
             endif
             call update_pool_status_dev
+            call update_pool_dev
             call import_records_into_pool( micproj_records )
             call classify_pool_dev
             ! guistats
@@ -1575,7 +1579,7 @@ contains
         call spproj_glob%kill
         call qsys_cleanup
         ! end gracefully
-        call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT NORMAL STOP ****')
+        call simple_end('**** SIMPLE_STREAM_GEERATE_PICKING_REFERENCES NORMAL STOP ****')
         contains
 
             subroutine copy_micrographs_optics
@@ -2075,6 +2079,7 @@ contains
         call cline%set('numlen', 5.)
         call cline%set('stream','yes')
         call params%new(cline)
+        params%nthr2D = params%nthr
         call simple_getcwd(cwd_job)
         call cline%set('mkdir', 'no')
         if( ncls_in > 0 ) call cline%set('ncls', real(ncls_in))

@@ -1213,7 +1213,7 @@ contains
         real,    parameter :: BATCHFRAC_DEFAULT = 0.2
         integer, parameter :: MINBOX  = 88
         integer, parameter :: NSTAGES = 6
-        integer, parameter :: NSPACE1=500, NSPACE2=1000, NSPACE3=1500, NSPACE_FINAL=2000
+        integer, parameter :: NSPACE1=500, NSPACE2=1000, NSPACE3=1500
         integer, parameter :: SHIFT_STAGE_DEFAULT = NSTAGES-1
         integer, parameter :: ICM_STAGE_DEFAULT   = 2       ! in [1;NSTAGES]
         integer, parameter :: MIN_NPTCLS = 20000
@@ -1436,7 +1436,7 @@ contains
                     call cline_refine3D%set('trs', 0.)
                     call cline_refine3D%set('nspace', NSPACE1)
                 endif
-                if( it == NSTAGES ) call cline_refine3D%set('nspace', NSPACE_FINAL)
+                if( it == NSTAGES ) call cline_refine3D%set('nspace', NSPACE3)
                 ! ICM filter
                 if( params%l_icm .and. (it >= params%icm_stage) )then
                     call cline_refine3D%set('icm',   'yes')
@@ -1478,9 +1478,9 @@ contains
                 ! Minibatch size
                 call cline_refine3D%set('batchfrac', params%batchfrac)
                 ! Iterations per minibatch
-                if( it < 3 )then
+                if( it == 1 )then
                     call cline_refine3D%set('maxits', (params%maxits_between+1)*iters_per_stage)
-                else if( it > NSTAGES-2 )then
+                else if( it == NSTAGES )then
                     call cline_refine3D%set('maxits', (params%maxits_between+1)*iters_per_stage)
                 else
                     call cline_refine3D%set('maxits', params%maxits_between*iters_per_stage)
@@ -1493,7 +1493,7 @@ contains
                     call cline_refine3D%set('trs', 0.)
                     call cline_refine3D%set('nspace', NSPACE1)
                 endif
-                if( it == NSTAGES ) call cline_refine3D%set('nspace', NSPACE_FINAL)
+                if( it == NSTAGES ) call cline_refine3D%set('nspace', NSPACE3)
                 ! ICM filter
                 if( params%l_icm .and. (it >= params%icm_stage) )then
                     call cline_refine3D%set('icm',   'yes')
