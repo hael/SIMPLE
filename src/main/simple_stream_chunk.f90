@@ -94,12 +94,9 @@ contains
             call self%spproj%compenv%set(1,'qsys_name','local')
         else
             ! we need to override the qsys_name for non local distributed execution
+            call self%qenv%new(params_glob%nparts_chunk, exec_bin='simple_private_exec', qsys_name='local')
             call get_environment_variable(SIMPLE_STREAM_CHUNK_PARTITION, chunk_part_env, envlen)
-            if(envlen > 0) then
-                call self%qenv%new(params_glob%nparts_chunk, exec_bin='simple_private_exec', qsys_name='local', qsys_partition=trim(chunk_part_env))
-            else
-                call self%qenv%new(params_glob%nparts_chunk, exec_bin='simple_private_exec', qsys_name='local')
-            end if
+            if(envlen > 0) call self%spproj%compenv%set(1,'qsys_partition',trim(chunk_part_env))
         endif
         call self%spproj%projinfo%delete_entry('projname')
         call self%spproj%projinfo%delete_entry('projfile')

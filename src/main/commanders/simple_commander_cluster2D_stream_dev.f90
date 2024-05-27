@@ -276,7 +276,7 @@ contains
         call del_file(PROJFILE_POOL)
         call del_file(DISTR_EXEC_FNAME)
         call del_file(TERM_STREAM)
-        call simple_list_files_regexp('.', '\.mrc$|\.mrcs$|\.txt$|\.star$|\.eps$|\.jpeg$|\.dat$|\.bin$', files)
+        call simple_list_files_regexp('.', '\.mrc$|\.mrcs$|\.txt$|\.star$|\.eps$|\.jpeg$|\.jpg$|\.dat$|\.bin$', files)
         if( allocated(files) )then
             do i = 1,size(files)
                 call del_file(files(i))
@@ -1116,7 +1116,7 @@ contains
         ! poolstats
         call pool_stats%set('particles', 'particles_processed', nptcls_glob,          primary=.true.)
         call pool_stats%set('particles', 'particles_assigned',  int2str(nptcls_sel)           // '_(' // int2str(ceiling(100.0 * real(nptcls_sel)           / real(nptcls_glob))) // '%)')
-        call pool_stats%set('particles', 'particles_rejected',  int2str(nptcls_rejected_glob) // '_(' // int2str(ceiling(100.0 * real(nptcls_rejected_glob) / real(nptcls_glob))) // '%)')
+        call pool_stats%set('particles', 'particles_rejected',  int2str(nptcls_rejected_glob) // '_(' // int2str(floor(100.0 * real(nptcls_rejected_glob) / real(nptcls_glob))) // '%)')
         call pool_stats%set('2D', 'iteration',                  pool_iter - 1,        primary=.true.)
         call pool_stats%set('2D', 'number_classes',             ncls_glob,            primary=.true.)
         call pool_stats%set('2D', 'number_classes_rejected',    ncls_rejected_glob,   primary=.true.)

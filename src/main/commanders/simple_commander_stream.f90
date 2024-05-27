@@ -941,7 +941,7 @@ contains
                 if( n_failed_jobs > 0 ) write(logfhandle,'(A,I8)') '>>> # DESELECTED MICROGRAPHS/FAILED JOBS: ',n_failed_jobs
                 ! guistats
                 call gui_stats%set('micrographs', 'micrographs_picked', int2str(n_imported) // ' (' // int2str(ceiling(100.0 * real(n_imported) / real(project_buff%n_history * NMOVS_SET))) // '%)', primary=.true.)
-                if( n_failed_jobs > 0 ) call gui_stats%set('micrographs', 'micrographs_rejected', n_failed_jobs, primary=.true.)
+                call gui_stats%set('micrographs', 'micrographs_rejected', int2str(n_failed_jobs + nmics_rejected_glob) // ' (' // int2str(floor(100.0 * real(n_failed_jobs + nmics_rejected_glob) / real(project_buff%n_history * NMOVS_SET))) // '%)', primary=.true.)
                 if(spproj_glob%os_mic%isthere("nptcls") .and. .not. l_multipick) then
                     call gui_stats%set('micrographs', 'avg_number_picks', ceiling(spproj_glob%os_mic%get_avg("nptcls")), primary=.true.)
                 end if
@@ -2444,7 +2444,6 @@ contains
                      else
                          params_glob%moldiam_refine = moldiam_refine
                          params_glob%updated          = 'yes'
-                     !    call cline_here%set('icefracthreshold', params_glob%icefracthreshold)
                          write(logfhandle,'(A,F8.2)')'>>> MULTIPICK REFINE DIAMETER UPDATED TO: ', moldiam_refine
                      endif
                 endif
