@@ -43,6 +43,7 @@ character(len=STDLEN), parameter   :: PROJFILE_POOL       = 'cluster2D.simple'
 character(len=STDLEN), parameter   :: POOL_DIR            = '' ! should be './pool/' for tidyness but difficult with gui
 character(len=STDLEN), parameter   :: SIGMAS_DIR          = './sigma2/'
 character(len=STDLEN), parameter   :: DISTR_EXEC_FNAME    = './distr_cluster2D_pool'
+character(len=STDLEN), parameter   :: LOGFILE             = 'simple_log_cluster2D_pool'
 logical,               parameter   :: DEBUG_HERE          = .false.
 integer(timer_int_kind)            :: t
 
@@ -61,8 +62,9 @@ type(cmdline)                          :: cline_cluster2D_chunk
 integer                                :: glob_chunk_id
 ! Book-keeping
 character(len=:),          allocatable :: orig_projfile
-real                                   :: conv_score=0., conv_mi_class=0., conv_frac=0., current_resolution=0.
+real                                   :: conv_score=0., conv_mi_class=0., conv_frac=0., current_resolution=999.
 integer                                :: nptcls_glob=0, nptcls_rejected_glob=0, ncls_rejected_glob=0
+integer                                :: iterswitch2euclid = 0
 logical                                :: stream2D_active = .false.
 integer                                :: numlen
 ! GUI-related
@@ -166,8 +168,9 @@ contains
             glob_chunk_id = params_glob%nchunks
             l_no_chunks = .false.
         else
-            l_no_chunks = .true.
-            ncls_glob   = params_glob%ncls
+            l_no_chunks       = .true.
+            ncls_glob         = params_glob%ncls
+            iterswitch2euclid = 0
         endif
         ! initialize pool parameters and objects
         call cline_cluster2D_pool%set('prg',       'cluster2D_distr')
@@ -266,11 +269,12 @@ contains
     end subroutine init_cluster2D_stream_dev
 
     ! remove previous files from folder to restart
-    subroutine cleanup_root_folder
+    subroutine cleanup_root_folder( all )
+        logical, optional, intent(in)  :: all
         character(len=LONGSTRLEN), allocatable :: files(:)
         character(len=STDLEN),     allocatable :: folders(:)
-        integer :: i
-        call qsys_cleanup
+        integer :: i,n
+        call qsys_cleanup(nparts=params_glob%nparts_pool)
         call simple_rmdir(SIGMAS_DIR)
         call del_file(USER_PARAMS)
         call del_file(PROJFILE_POOL)
@@ -287,6 +291,13 @@ contains
             do i = 1,size(folders)
                 if( str_has_substr(folders(i),trim(DIR_CHUNK)) ) call simple_rmdir(folders(i))
             enddo
+        endif
+        if( present(all) )then
+            if( all )then
+                call del_file(LOGFILE)
+                call del_file(CLUSTER2D_FINISHED)
+                call del_file('simple_script_single')
+            endif
         endif
     end subroutine cleanup_root_folder
 
@@ -992,7 +1003,7 @@ contains
         character(len=:),          allocatable :: stack_fname, ext, fbody
         character(len=LONGSTRLEN), allocatable :: sigma_fnames(:)
         real                    :: frac_update
-        integer                 :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl, iterswitch2euclid
+        integer                 :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl
         integer                 :: eo, icls, nptcls_sel, istk, nptcls2update, nstks2update, jjptcl
         integer(timer_int_kind) :: t_tot
         if( .not. stream2D_active ) return
@@ -1004,7 +1015,6 @@ contains
         if( nptcls_tot == 0 ) return
         pool_iter = pool_iter + 1
         call pool_stats%init
-        iterswitch2euclid = 0
         call cline_cluster2D_pool%set('refs',    refs_glob)
         call cline_cluster2D_pool%set('ncls',    real(ncls_glob))
         call cline_cluster2D_pool%set('startit', real(pool_iter))
@@ -1025,21 +1035,25 @@ contains
             else
                 call cline_cluster2D_pool%set('trs',    MINSHIFT)
                 call cline_cluster2D_pool%set('center', params_glob%center)
-                call cline_cluster2D_pool%set('lpstart',lpstart)
-                call cline_cluster2D_pool%set('lpstop', params_glob%lpstop)
             endif
             call cline_cluster2D_pool%set('needs_sigma', 'no')
             call cline_cluster2D_pool%set('objfun',      'cc')
             call cline_cluster2D_pool%delete('cc_iters')
             if( params_glob%cc_objfun .eq. OBJFUN_EUCLID )then
-                if( pool_iter <= CHUNK_CC_ITERS )then
-                    ! as per correlation
-                elseif( pool_iter == CHUNK_CC_ITERS+1 )then
-                    iterswitch2euclid = pool_iter
+                if( iterswitch2euclid == 0 )then
+                    ! switch to objfun=euclid when good enough resolution
+                    if( current_resolution < lpstart .and. pool_iter > CHUNK_CC_ITERS )then
+                        iterswitch2euclid = pool_iter+1
+                    endif
+                else if( iterswitch2euclid == pool_iter )then
+                    ! switch
                     call cline_cluster2D_pool%set('needs_sigma','yes')
                     call cline_cluster2D_pool%set('objfun',     'euclid')
                     call cline_cluster2D_pool%set('cc_iters',   0)
                     call cline_cluster2D_pool%set('sigma_est', 'global')
+                    call cline_cluster2D_pool%set('lpstart',lpstart)
+                    call cline_cluster2D_pool%set('lpstop', params_glob%lpstop)
+                    call cline_cluster2D_pool%delete('lp')
                     allocate(clines(2))
                     call clines(1)%set('prg',        'calc_pspec_distr')
                     call clines(1)%set('oritype',    'ptcl2D')
@@ -1051,13 +1065,23 @@ contains
                     call clines(1)%set('nparts',     params_glob%nparts_pool)
                     clines(2) = cline_cluster2D_pool
                 else
+                    ! after switch
                     call cline_cluster2D_pool%set('needs_sigma','yes')
                     call cline_cluster2D_pool%set('objfun',     'euclid')
                     call cline_cluster2D_pool%set('cc_iters',   0)
-                    call cline_cluster2D_pool%set('sigma_est',  'global')
+                    call cline_cluster2D_pool%set('sigma_est', 'global')
+                    call cline_cluster2D_pool%set('lpstart',lpstart)
+                    call cline_cluster2D_pool%set('lpstop', params_glob%lpstop)
                     do i = 1,params_glob%nparts_pool
                         call del_file(SIGMA2_FBODY//int2str_pad(i,numlen)//'.dat')
                     enddo
+                endif
+            else
+                ! objfun = cc
+                if( current_resolution < lpstart .and. pool_iter > CHUNK_CC_ITERS )then
+                    call cline_cluster2D_pool%set('lpstart',lpstart)
+                    call cline_cluster2D_pool%set('lpstop', params_glob%lpstop)
+                    call cline_cluster2D_pool%delete('lp')
                 endif
             endif
         endif
@@ -1200,11 +1224,12 @@ contains
         call pool_stats%kill
         ! execution
         if( l_no_chunks .and. pool_iter == iterswitch2euclid )then
-            call qenv_pool%exec_simple_prgs_in_queue_async(clines, DISTR_EXEC_FNAME, 'simple_log_cluster2D_pool')
+            write(logfhandle,'(A)')'>>> SWITCHING TO OBJFUN=EUCLID'
+            call qenv_pool%exec_simple_prgs_in_queue_async(clines, DISTR_EXEC_FNAME, LOGFILE)
             call clines(:)%kill
             deallocate(clines)
         else
-            call qenv_pool%exec_simple_prg_in_queue_async(cline_cluster2D_pool, DISTR_EXEC_FNAME, 'simple_log_cluster2D_pool')
+            call qenv_pool%exec_simple_prg_in_queue_async(cline_cluster2D_pool, DISTR_EXEC_FNAME, LOGFILE)
         endif
         pool_available = .false.
         write(logfhandle,'(A,I6,A,I8,A3,I8,A)')'>>> POOL         INITIATED ITERATION ',pool_iter,' WITH ',nptcls_sel,&

@@ -1394,7 +1394,7 @@ contains
         class(cmdline),            allocatable :: completed_jobs_clines(:), failed_jobs_clines(:)
         type(micproj_record),      allocatable :: micproj_records(:)
         type(qsys_env)                         :: qenv
-        type(cmdline)                          :: cline_extract
+        type(cmdline)                          :: cline_extract, cline_pick_extract
         type(moviewatcher)                     :: project_buff
         type(sp_project)                       :: spproj_glob, stream_spproj
         type(starproject_stream)               :: starproj_stream
@@ -1407,7 +1407,7 @@ contains
         integer                                :: nmics_sel, nmics_rej, nmics_rejected_glob
         integer                                :: nmics, nprojects, stacksz, prev_stacksz, iter, iproj, envlen
         integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, nmic_star
-        logical                                :: l_haschanged, l_once
+        logical                                :: l_haschanged, l_once, l_pick_extract
         integer(timer_int_kind) :: t0
         real(timer_int_kind)    :: rt_write
         call cline%set('oritype',      'mic')
@@ -1457,6 +1457,18 @@ contains
         params%ncunits    = params%nparts
         call simple_getcwd(cwd_job)
         call cline%set('mkdir', 'no')
+        ! determine whether we are picking/extracting or extracting only
+        if( .not.dir_exists(trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED)) )then
+            THROW_HARD('Invalid DIR_TARGET 1')
+        endif
+        l_pick_extract = .false.
+        if( dir_exists(trim(params%dir_target)//'/'//trim(DIR_MOTION_CORRECT)) )then
+            l_pick_extract = .true.
+        else
+            if( .not.dir_exists(trim(params%dir_target)//'/'//trim(DIR_PICKER)) )then
+                THROW_HARD('Invalid DIR_TARGET 2')
+            endif
+        endif
         ! master project file
         call spproj_glob%read( params%projfile )
         call spproj_glob%update_projinfo(cline)
@@ -1472,23 +1484,31 @@ contains
         call gui_stats%set('micrographs', 'micrographs_rejected', int2str(0), primary=.true.)
         call gui_stats%set('micrographs', 'micrographs_picked',   int2str(0), primary=.true.)
         call gui_stats%set('compute',     'compute_in_use',       int2str(0) // '/' // int2str(params%nparts), primary=.true.)
+        ! directories
+        output_dir         = trim(PATH_HERE)//trim(DIR_STREAM)
+        output_dir_picker  = filepath(trim(PATH_HERE), trim(DIR_PICKER))
+        output_dir_extract = filepath(trim(PATH_HERE), trim(DIR_EXTRACT))
         ! restart
         extract_set_counter = 0
         nptcls_glob         = 0     ! global number of particles
         nmics_rejected_glob = 0     ! global number of micrographs rejected
         nmic_star           = 0
         if( cline%defined('dir_exec') )then
-            call del_file(TERM_STREAM)
+            ! no restart here, the folder is wiped
             call cline%delete('dir_exec')
-            ! TODO: remove all files, no restart here
+            call cleanup_root_folder(all=.true.)
+            call del_file(micspproj_fname)
+            call simple_rmdir(output_dir)
+            call simple_rmdir(STDERROUT_DIR)
+            call simple_rmdir(trim(output_dir)//trim(STDERROUT_DIR))
+            call simple_rmdir(trim(PATH_HERE)//trim(DIR_STREAM_COMPLETED))
+            call simple_rmdir(output_dir_picker)
+            call simple_rmdir(output_dir_extract)
         endif
         ! output directories
-        output_dir = trim(PATH_HERE)//trim(DIR_STREAM)
         call simple_mkdir(output_dir)
         call simple_mkdir(trim(output_dir)//trim(STDERROUT_DIR))
         call simple_mkdir(trim(PATH_HERE)//trim(DIR_STREAM_COMPLETED))
-        output_dir_picker  = filepath(trim(PATH_HERE), trim(DIR_PICKER))
-        output_dir_extract = filepath(trim(PATH_HERE), trim(DIR_EXTRACT))
         call simple_mkdir(output_dir_picker, errmsg="commander_stream :: exec_stream_pick_extract;  ")
         call simple_mkdir(output_dir_extract,errmsg="commander_stream :: exec_stream_pick_extract;  ")
         ! initialise progress monitor
@@ -1501,19 +1521,35 @@ contains
             call qenv%new(1,stream=.true.)
         end if
         ! command line for execution
-        cline_extract = cline
-        call cline_extract%set('prg','extract')
-        call cline_extract%set('dir','../'//trim(trim(DIR_EXTRACT)))
-        call cline_extract%set('extract','yes')
-        if( cline%defined('box_extract') )then
-            params%box = params%box_extract
-            call cline_extract%delete('box_extract')
-            call cline_extract%set('box', params%box)
+        if( l_pick_extract )then
+            cline_pick_extract = cline
+            call cline_pick_extract%set('prg','pick_extract')
+            call cline_pick_extract%set('dir','../')
+            call cline_pick_extract%set('extract','yes')
+            if( cline%defined('box_extract') )then
+                params%box = params%box_extract
+                call cline_pick_extract%delete('box_extract')
+                call cline_pick_extract%set('box', params%box)
+            else
+                params%box = 0
+            endif
+            ! ugly single use flag for backwards compatibility, will need to go
+            call cline_pick_extract%set('newstream','yes')
         else
-            params%box = 0
+            cline_extract = cline
+            call cline_extract%set('prg','extract')
+            call cline_extract%set('dir','../'//trim(trim(DIR_EXTRACT)))
+            call cline_extract%set('extract','yes')
+            if( cline%defined('box_extract') )then
+                params%box = params%box_extract
+                call cline_extract%delete('box_extract')
+                call cline_extract%set('box', params%box)
+            else
+                params%box = 0
+            endif
+            ! ugly single use flag for backwards compatibility, will need to go
+            call cline_extract%set('newstream','yes')
         endif
-        ! ugly single use flag for backwards compatibility, will need to go
-        call cline_extract%set('newstream','yes')
         ! Infinite loop
         prev_stacksz          = 0
         iter                  = 0
@@ -1539,7 +1575,11 @@ contains
                     call create_individual_project(projects(iproj), nmics_sel, nmics_rej)
                     call project_buff%add2history(projects(iproj))
                     if( nmics_sel > 0 )then
-                        call qenv%qscripts%add_to_streaming(cline_extract)
+                        if( l_pick_extract )then
+                            call qenv%qscripts%add_to_streaming(cline_pick_extract)
+                        else
+                            call qenv%qscripts%add_to_streaming(cline_extract)
+                        endif
                         call qenv%qscripts%schedule_streaming( qenv%qdescr, path=output_dir )
                         cnt   = cnt   + 1
                         nmics = nmics + nmics_sel
@@ -1587,7 +1627,7 @@ contains
             ! ! project update
             if( n_imported > 0 )then
                 n_imported = spproj_glob%os_mic%get_noris()
-                write(logfhandle,'(A,I8)')       '>>> # MICROGRAPS PROCESSED & IMPORTED   : ',n_imported
+                write(logfhandle,'(A,I8)')       '>>> # MICROGRAPHS PROCESSED & IMPORTED  : ',n_imported
                 write(logfhandle,'(A,I8)')       '>>> # PARTICLES EXTRACTED               : ',nptcls_glob
                 write(logfhandle,'(A,I3,A2,I3)') '>>> # OF COMPUTING UNITS IN USE/TOTAL   : ',qenv%get_navail_computing_units(),'/ ',params%nparts
                 if( n_failed_jobs > 0 ) write(logfhandle,'(A,I8)') '>>> # DESELECTED MICROGRAPHS/FAILED JOBS: ',n_failed_jobs
@@ -1631,14 +1671,14 @@ contains
             call sleep(WAITTIME)
         end do
         ! termination
-        call write_project
-        call update_user_params(cline)
+        if( l_once )then
+            ! nothing to write
+        else
+            call terminate_stream2D_dev
+        endif
         ! call copy_micrographs_optics
         ! call write_migrographs_starfile(optics_set=.true.)
         ! call write_particles_starfile(optics_set=.true.)
-        ! kill ptcls now starfiles written
-        call spproj_glob%os_stk%kill
-        call spproj_glob%os_ptcl2D%kill
         ! final stats
         call gui_stats%hide('compute', 'compute_in_use')
         call gui_stats%write_json
@@ -1647,7 +1687,7 @@ contains
         call spproj_glob%kill
         call qsys_cleanup
         ! end gracefully
-        call simple_end('**** SIMPLE_STREAM_GEERATE_PICKING_REFERENCES NORMAL STOP ****')
+        call simple_end('**** SIMPLE_STREAM_GENERATE_PICKING_REFERENCES NORMAL STOP ****')
         contains
 
             subroutine copy_micrographs_optics
@@ -1701,71 +1741,6 @@ contains
                     endif
                 end if
             end subroutine write_particles_starfile
-
-            subroutine write_project()
-                integer, allocatable :: fromps(:)
-                integer              :: nptcls,fromp,top,i,iptcl,nmics,imic,micind
-                character(len=:), allocatable :: prev_projname
-                write(logfhandle,'(A)')'>>> PROJECT UPDATE'
-                if( DEBUG_HERE ) t0 = tic()
-                ! micrographs
-                nmics = spproj_glob%os_mic%get_noris()
-                call spproj_glob%write_segment_inside('mic', params%projfile)
-                ! stacks
-                allocate(fromps(nmics), source=0)
-                call spproj_glob%os_stk%new(nmics, is_ptcl=.false.)
-                nptcls        = 0
-                fromp         = 0
-                top           = 0
-                prev_projname = ''
-                do imic = 1,nmics
-                    if( trim(micproj_records(imic)%projname) /= trim(prev_projname) )then
-                        call stream_spproj%kill
-                        call stream_spproj%read_segment('stk', micproj_records(imic)%projname)
-                        prev_projname = trim(micproj_records(imic)%projname)
-                    endif
-                    micind = micproj_records(imic)%micind
-                    fromps(imic) = nint(stream_spproj%os_stk%get(micind,'fromp')) ! fromp from individual project
-                    fromp        = nptcls + 1
-                    nptcls       = nptcls + micproj_records(imic)%nptcls
-                    top          = nptcls
-                    call spproj_glob%os_stk%transfer_ori(imic, stream_spproj%os_stk, micind)
-                    call spproj_glob%os_stk%set(imic, 'fromp',real(fromp))
-                    call spproj_glob%os_stk%set(imic, 'top',  real(top))
-                enddo
-                call spproj_glob%write_segment_inside('stk', params%projfile)
-                ! particles
-                call spproj_glob%os_ptcl2D%new(nptcls, is_ptcl=.true.)
-                iptcl         = 0
-                prev_projname = ''
-                do imic = 1,nmics
-                    if( trim(micproj_records(imic)%projname) /= prev_projname )then
-                        call stream_spproj%kill
-                        call stream_spproj%read_segment('ptcl2D', micproj_records(imic)%projname)
-                        prev_projname = trim(micproj_records(imic)%projname)
-                    endif
-                    fromp = fromps(imic)
-                    top   = fromp + micproj_records(imic)%nptcls - 1
-                    do i = fromp,top
-                        iptcl = iptcl + 1
-                        call spproj_glob%os_ptcl2D%transfer_ori(iptcl, stream_spproj%os_ptcl2D, i)
-                        call spproj_glob%os_ptcl2D%set_stkind(iptcl, imic)
-                    enddo
-                enddo
-                call stream_spproj%kill
-                write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:          ',spproj_glob%os_ptcl2D%get_noris()
-                call spproj_glob%write_segment_inside('ptcl2D', params%projfile)
-                spproj_glob%os_ptcl3D = spproj_glob%os_ptcl2D
-                call spproj_glob%os_ptcl3D%delete_2Dclustering
-                call spproj_glob%write_segment_inside('ptcl3D', params%projfile)
-                call spproj_glob%os_ptcl3D%kill
-                call spproj_glob%write_non_data_segments(params%projfile)
-                ! benchmark
-                if( DEBUG_HERE )then
-                    rt_write = toc(t0)
-                    print *,'rt_write  : ', rt_write; call flush(6)
-                endif
-            end subroutine write_project
 
             ! updates global project, returns records of processed micrographs
             subroutine update_records_with_project( records, nimported )
@@ -1888,77 +1863,85 @@ contains
                         return ! nothing to add to queue
                     endif
                 endif
-                ! select diameter
-                ! multi moldiam boxfile format: pick_gau%report_multipick
-                if( .not.tmp_proj%os_mic%isthere('boxfile') ) return
-                do imic = 1,tmp_proj%os_mic%get_noris()
-                    if( states(imic) /= 1 ) cycle
-                    boxfname = trim(tmp_proj%os_mic%get_static(imic,'boxfile'))
-                    if( .not. file_exists(boxfname) )then
-                        THROW_WARN('FILE NOT FOUND: '//trim(boxfname))
-                        cycle
-                    endif
-                    call boxfile_multi%new(boxfname, 1)
-                    if( boxfile_multi%get_nrecs_per_line() /= 6 )then
-                        THROW_WARN('INVALID FORMAT FOR: '//trim(boxfname))
-                        states(imic) = 0
-                        call boxfile_multi%kill
-                        cycle
-                    endif
-                    nl = boxfile_multi%get_ndatalines()
-                    if(allocated(entries)) deallocate(entries,dists)
-                    allocate(entries(6,nl),dists(nl),source=0.)
-                    do l = 1,nl
-                        call boxfile_multi%readNextDataLine(entries(:,l))
+                if( l_pick_extract )then
+                    do imic = 1,tmp_proj%os_mic%get_noris()
+                        if( states(imic) == 1 )then
+                            params%smpd = tmp_proj%os_mic%get(imic, 'smpd')
+                            exit
+                        endif
                     enddo
-                    call boxfile_multi%kill
-                    dists = entries(4,:) - params%moldiam
-                    if( any(dists > 0.) )then
-                        selected_moldiam = minval(entries(4,:), mask=dists>-0.001)
-                    else
-                        selected_moldiam = maxval(entries(4,:))
-                    endif
-                    allocate(mask(nl),source=.false.)
-                    mask = abs(entries(4,:)-selected_moldiam) < 0.001
-                    nb   = count(mask)
-                    if( nb < 1 )then
-                        states(imic) = 0
-                    else
-                        ! update to global extraction box size
-                        if( .not.cline%defined('box_extract') )then
-                            ind = 0
-                            do j = 1,nl
-                                if( mask(j) )then
-                                    ind = j
-                                    exit
+                else
+                    ! select diameter, multi moldiam boxfile format: pick_gau%report_multipick
+                    if( .not.tmp_proj%os_mic%isthere('boxfile') ) return
+                    do imic = 1,tmp_proj%os_mic%get_noris()
+                        if( states(imic) /= 1 ) cycle
+                        boxfname = trim(tmp_proj%os_mic%get_static(imic,'boxfile'))
+                        if( .not. file_exists(boxfname) )then
+                            THROW_WARN('FILE NOT FOUND: '//trim(boxfname))
+                            cycle
+                        endif
+                        call boxfile_multi%new(boxfname, 1)
+                        if( boxfile_multi%get_nrecs_per_line() /= 6 )then
+                            THROW_WARN('INVALID FORMAT FOR: '//trim(boxfname))
+                            states(imic) = 0
+                            call boxfile_multi%kill
+                            cycle
+                        endif
+                        nl = boxfile_multi%get_ndatalines()
+                        if(allocated(entries)) deallocate(entries,dists)
+                        allocate(entries(6,nl),dists(nl),source=0.)
+                        do l = 1,nl
+                            call boxfile_multi%readNextDataLine(entries(:,l))
+                        enddo
+                        call boxfile_multi%kill
+                        dists = entries(4,:) - params%moldiam
+                        if( any(dists > 0.) )then
+                            selected_moldiam = minval(entries(4,:), mask=dists>-0.001)
+                        else
+                            selected_moldiam = maxval(entries(4,:))
+                        endif
+                        allocate(mask(nl),source=.false.)
+                        mask = abs(entries(4,:)-selected_moldiam) < 0.001
+                        nb   = count(mask)
+                        if( nb < 1 )then
+                            states(imic) = 0
+                        else
+                            ! update to global extraction box size
+                            if( .not.cline%defined('box_extract') )then
+                                ind = 0
+                                do j = 1,nl
+                                    if( mask(j) )then
+                                        ind = j
+                                        exit
+                                    endif
+                                enddo
+                                if( ind == 0 ) THROW_HARD('BOX SIZE ERROR')
+                                if( params%box==0 )then
+                                    params%box  = nint(entries(3,ind)) ! first time
+                                else
+                                    if( nint(entries(3,ind)) /= params%box )then
+                                        THROW_HARD('INCONSISTENT EXTRACTION BOX SIZES')
+                                    endif
+                                endif
+                            endif
+                            params%smpd = tmp_proj%os_mic%get(imic, 'smpd')
+                            ! write new boxfile
+                            path = trim(cwd_glob)//'/'//trim(output_dir_picker)//'/'//basename(boxfname)
+                            call boxfile%new(path, 2, wanted_recs_per_line=5)
+                            vals(5) = -3
+                            do i = 1,nl
+                                if( mask(i) )then
+                                    vals(1:2) = nint(entries(1:2,i))
+                                    vals(3:4) = nint(entries(3,i))
+                                    call boxfile%write(vals)
                                 endif
                             enddo
-                            if( ind == 0 ) THROW_HARD('BOX SIZE ERROR')
-                            if( params%box==0 )then
-                                params%box  = nint(entries(3,ind)) ! first time
-                            else
-                                if( nint(entries(3,ind)) /= params%box )then
-                                    THROW_HARD('INCONSISTENT EXTRACTION BOX SIZES')
-                                endif
-                            endif
+                            call boxfile%kill
+                            call tmp_proj%os_mic%set(imic,'boxfile',path)
                         endif
-                        params%smpd = tmp_proj%os_mic%get(imic, 'smpd')
-                        ! write new boxfile
-                        path = trim(cwd_glob)//'/'//trim(output_dir_picker)//'/'//basename(boxfname)
-                        call boxfile%new(path, 2, wanted_recs_per_line=5)
-                        vals(5) = -3
-                        do i = 1,nl
-                            if( mask(i) )then
-                                vals(1:2) = nint(entries(1:2,i))
-                                vals(3:4) = nint(entries(3,i))
-                                call boxfile%write(vals)
-                            endif
-                        enddo
-                        call boxfile%kill
-                        call tmp_proj%os_mic%set(imic,'boxfile',path)
-                    endif
-                    deallocate(mask)
-                enddo
+                        deallocate(mask)
+                    enddo
+                endif
                 if( all(states==0) )then
                     call tmp_proj%kill
                     return
@@ -1989,10 +1972,17 @@ contains
                 extract_set_counter = extract_set_counter + 1
                 projname = int2str_pad(extract_set_counter,params%numlen)
                 projfile = trim(projname)//trim(METADATA_EXT)
-                call cline_extract%set('projname', trim(projname))
-                call cline_extract%set('projfile', trim(projfile))
-                call cline_extract%set('fromp',    1)
-                call cline_extract%set('top',      nselected)
+                if( l_pick_extract )then
+                    call cline_pick_extract%set('projname', trim(projname))
+                    call cline_pick_extract%set('projfile', trim(projfile))
+                    call cline_pick_extract%set('fromp',    1)
+                    call cline_pick_extract%set('top',      nselected)
+                else
+                    call cline_extract%set('projname', trim(projname))
+                    call cline_extract%set('projfile', trim(projfile))
+                    call cline_extract%set('fromp',    1)
+                    call cline_extract%set('top',      nselected)
+                endif
                 call spproj_here%write(trim(path)//'/'//trim(projfile))
                 call spproj_here%kill
                 call tmp_proj%kill

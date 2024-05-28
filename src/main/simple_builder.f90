@@ -5,13 +5,10 @@ module simple_builder
 include 'simple_lib.f08'
 use simple_binoris_io
 use simple_image,            only: image
-use simple_binimage,         only: binimage
 use simple_sp_project,       only: sp_project
-use simple_reconstructor,    only: reconstructor
 use simple_reconstructor_eo, only: reconstructor_eo
 use simple_projector,        only: projector
 use simple_polarizer,        only: polarizer
-use simple_masker,           only: masker
 use simple_class_frcs,       only: class_frcs
 use simple_parameters,       only: parameters
 use simple_cmdline,          only: cmdline
@@ -47,13 +44,9 @@ type :: builder
     logical,                allocatable :: l_resmsk(:)            !< logical resolution mask
     ! PRIVATE EXISTENCE VARIABLES
     logical, private                    :: general_tbox_exists    = .false.
-    logical, private                    :: cluster_tbox_exists    = .false.
-    logical, private                    :: rec_tbox_exists        = .false.
     logical, private                    :: eo_rec_tbox_exists     = .false.
-    logical, private                    :: eo_ref_tbox_exists     = .false.
     logical, private                    :: strategy3D_tbox_exists = .false.
     logical, private                    :: strategy2D_tbox_exists = .false.
-    logical, private                    :: extremal3D_tbox_exists = .false.
   contains
     ! HIGH-LEVEL BUILDERS
     procedure                           :: init_params_spproj_tbox2D
@@ -334,7 +327,6 @@ contains
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         if( .not. associated(build_glob) ) build_glob => self
         self%eo_rec_tbox_exists = .true.
-        self%eo_ref_tbox_exists = .true.
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
     end subroutine build_rec_eo_tbox
 
