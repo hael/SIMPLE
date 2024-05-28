@@ -8,7 +8,7 @@ use simple_parameters, only: params_glob
 implicit none
 #include "simple_local_flags.inc"
 
-public :: nonuni_filt2D_sub, nonuni_filt2D, nonuni_filt3D, butterworth_filter, uni_filt2D, uni_filt2D_sub, uni_filt3D, exponential_reg
+public :: nonuni_filt3D, butterworth_filter, uni_filt2D, uni_filt2D_sub, uni_filt3D, exponential_reg
 public :: test_filt2D
 private
 
@@ -30,179 +30,6 @@ end type optfilt2Dvars
 logical :: TEST = .false.
 
 contains
-
-    subroutine nonuni_filt2D_sub( even, odd, mask )
-        use simple_class_frcs, only: class_frcs
-        class(image),           intent(inout) :: even(:), odd(:)
-        class(image), optional, intent(inout) :: mask(:)
-        character(len=:),       allocatable   :: frcs_fname
-        type(optfilt2Dvars),    allocatable   :: optf2Dvars(:)
-        real,                   allocatable   :: frc(:)
-        type(class_frcs) :: clsfrcs
-        type(image)      :: weights_img
-        type(kbinterpol) :: kb
-        real             :: smpd, lpstart, lp, val, rk, dk, scale, s
-        integer          :: iptcl, box, box_pd, filtsz, ldim(3), ldim_pd(3), smooth_ext
-        integer          :: nptcls, hpind_fsc, find, m, n, k, lk, uk
-        logical          :: lpstart_fallback, l_phaseplate, have_mask
-        write(logfhandle,'(A)') '>>> 2D NONUNIFORM FILTERING'
-        ! init
-        filtsz       = even(1)%get_filtsz()
-        smooth_ext   = params_glob%smooth_ext
-        ldim         = even(1)%get_ldim()
-        ldim(3)      = 1 ! because we operate on stacks
-        box          = ldim(1)
-        box_pd       = find_larger_magic_box(box + 2 * smooth_ext)
-        ldim_pd      = [box_pd, box_pd, 1]
-        frcs_fname   = trim(params_glob%frcs)
-        smpd         = even(1)%get_smpd()
-        nptcls       = size(even)
-        lpstart      = params_glob%lpstart
-        hpind_fsc    = params_glob%hpind_fsc
-        l_phaseplate = params_glob%l_phaseplate
-        have_mask    = present(mask)
-        ! retrieve FRCs
-        lpstart_fallback = .false.
-        if( file_exists(frcs_fname) )then
-            call clsfrcs%read(frcs_fname)
-            if( clsfrcs%get_filtsz().ne.even(1)%get_filtsz() )then
-                write(logfhandle,*) 'img filtsz:  ', even(1)%get_filtsz()
-                write(logfhandle,*) 'frcs filtsz: ', clsfrcs%get_filtsz()
-                THROW_HARD('Inconsistent filter dimensions; nonuni_filt2D_sub')
-            endif
-        else
-            THROW_WARN('Class average FRCs file '//frcs_fname//' does not exist, falling back on lpstart: '//real2str(lpstart))
-            lpstart_fallback = .true.
-        endif
-        filtsz = clsfrcs%get_filtsz()
-        ! allocate
-        allocate(optf2Dvars(nptcls), frc(filtsz))
-        frc = 0.
-        ! calculate high-res low-pass limits
-        if( lpstart_fallback )then
-            optf2Dvars(:)%lplim_hres = calc_fourier_index(lpstart, box_pd, smpd)
-        else
-            ! the below required to retrieve the right Fourier index limit when we are padding
-            do iptcl = 1, nptcls
-                call clsfrcs%frc_getter(iptcl, hpind_fsc, l_phaseplate, frc)
-                find = get_lplim_at_corr(frc, 0.1)          ! little overshoot, resolution is limited in polarft_corrcalc anyway
-                lp   = calc_lowpass_lim(find, box, smpd)    ! resolution limit in original image
-                optf2Dvars(iptcl)%lplim_hres = calc_fourier_index(lp, box_pd, smpd) ! this is the Fourier index limit for the padded image
-                if( TEST )then
-                    ! frc interpolation to padded dimensions
-                    allocate(optf2Dvars(iptcl)%frc(1:box_pd/2),source=0.)
-                    scale = real(box) / real(box_pd)
-                    do k = 1,box_pd/2
-                        rk = scale * real(k)
-                        lk = floor(rk)
-                        dk = rk - real(lk)
-                        uk = lk+1
-                        if( lk == 0 )then
-                            optf2Dvars(iptcl)%frc(k) = (1.0-dk)
-                        else
-                            optf2Dvars(iptcl)%frc(k) = (1.0-dk)*frc(lk)
-                        endif
-                        if( uk < box/2 ) optf2Dvars(iptcl)%frc(k) = optf2Dvars(iptcl)%frc(k) + dk*frc(uk)
-                    enddo
-                endif
-
-            end do
-        endif
-        ! fill up optf2Dvars struct
-        !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
-        do iptcl = 1, nptcls
-            call even(iptcl)%pad_mirr(ldim_pd)
-            call odd(iptcl)%pad_mirr(ldim_pd)
-            call optf2Dvars(iptcl)%even_filt%copy(even(iptcl))
-            call optf2Dvars(iptcl)%odd_filt %copy( odd(iptcl))
-            call optf2Dvars(iptcl)%diff_img_odd    %new(ldim_pd, smpd, .false.)
-            call optf2Dvars(iptcl)%diff_img_even   %new(ldim_pd, smpd, .false.)
-            call optf2Dvars(iptcl)%diff_img_opt_odd %new(ldim_pd, smpd, .false.)
-            call optf2Dvars(iptcl)%diff_img_opt_even%new(ldim_pd, smpd, .false.)
-            call optf2Dvars(iptcl)%odd_copy_rmat%copy(odd(iptcl))
-            call optf2Dvars(iptcl)%odd_copy_cmat%copy(odd(iptcl))
-            call optf2Dvars(iptcl)%odd_copy_cmat%fft
-            call optf2Dvars(iptcl)%even_copy_rmat%copy(even(iptcl))
-            call optf2Dvars(iptcl)%even_copy_cmat%copy(even(iptcl))
-            call optf2Dvars(iptcl)%even_copy_cmat%fft
-            optf2Dvars(iptcl)%have_mask = .false.
-            allocate(optf2Dvars(iptcl)%cur_fil(box_pd), source=0.)
-            if( have_mask )then
-                if( mask(iptcl)%nforeground() > 0 )then
-                    optf2Dvars(iptcl)%have_mask = .true.
-                    call mask(iptcl)%pad_inplace(ldim_pd)
-                endif
-            endif
-        end do
-        !$omp end parallel do
-        ! make weight image for diff convolution
-        call weights_img%new(ldim_pd, smpd, .false.)
-        call weights_img%zero_and_unflag_ft()
-        if( TEST )then
-            kb = kbinterpol(1.5,1.)
-            s  = 0.0
-            do m = -min(2*params_glob%smooth_ext,box_pd/2-1), min(2*params_glob%smooth_ext,box_pd/2-1)
-                do n = -min(2*params_glob%smooth_ext,box_pd/2-1), min(2*params_glob%smooth_ext,box_pd/2-1)
-                    val = kb%apod(hyp(m,n)/real(params_glob%smooth_ext)) / kb%apod(0.)
-                    s   = s + val
-                    call weights_img%set_rmat_at(box_pd/2+m+1, box_pd/2+n+1, 1, val)
-                enddo
-            enddo
-            call weights_img%div(s)
-        else
-            do m = -params_glob%smooth_ext, params_glob%smooth_ext
-                do n = -params_glob%smooth_ext, params_glob%smooth_ext
-                    val = -hyp(m,n) / (params_glob%smooth_ext + 1) + 1.
-                    if( val > 0 ) call weights_img%set_rmat_at(box_pd/2+m+1, box_pd/2+n+1, 1, val)
-                enddo
-            enddo
-        endif
-        call weights_img%fft()
-        ! filter
-        if( have_mask )then
-            !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
-            do iptcl = 1, nptcls
-                call nonuni_filt2D_masked(odd(iptcl), even(iptcl), mask(iptcl), weights_img, optf2Dvars(iptcl))
-            enddo
-            !$omp end parallel do
-        else
-            !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
-            do iptcl = 1, nptcls
-                if( TEST )then
-                    call test_filt2D(odd(iptcl), even(iptcl), weights_img, optf2Dvars(iptcl))
-                else
-                    call nonuni_filt2D(odd(iptcl), even(iptcl), weights_img, optf2Dvars(iptcl))
-                endif
-            enddo
-            !$omp end parallel do
-        endif
-        ! destruct
-        call clsfrcs%kill
-        call weights_img%kill
-        do iptcl = 1, nptcls
-            call optf2Dvars(iptcl)%odd_copy_rmat%kill
-            call optf2Dvars(iptcl)%even_copy_rmat%kill
-            call optf2Dvars(iptcl)%odd_copy_cmat%kill
-            call optf2Dvars(iptcl)%even_copy_cmat%kill
-            call optf2Dvars(iptcl)%even_filt%kill
-            call optf2Dvars(iptcl)%odd_filt%kill
-            call optf2Dvars(iptcl)%diff_img_odd%kill
-            call optf2Dvars(iptcl)%diff_img_even%kill
-            call optf2Dvars(iptcl)%diff_img_opt_odd%kill
-            call optf2Dvars(iptcl)%diff_img_opt_even%kill
-            if( allocated(optf2Dvars(iptcl)%frc) )     deallocate(optf2Dvars(iptcl)%frc)
-            if( allocated(optf2Dvars(iptcl)%cur_fil) ) deallocate(optf2Dvars(iptcl)%cur_fil)
-        enddo
-        do iptcl = 1, nptcls
-            call even(iptcl)%clip_inplace(ldim)
-            call odd( iptcl)%clip_inplace(ldim)
-            if( have_mask )then
-                if( optf2Dvars(iptcl)%have_mask )then
-                    call mask(iptcl)%clip_inplace(ldim)
-                endif
-            endif
-        enddo
-    end subroutine nonuni_filt2D_sub
 
     ! Compute the value of the Butterworth transfer function of order n(th)
     ! at a given frequency s, with the cut-off frequency fc
@@ -378,167 +205,6 @@ contains
             enddo
         enddo
     end subroutine test_filt2D
-
-    subroutine nonuni_filt2D(odd, even, weights_img, optf2Dvars)
-        class(image),        intent(inout) :: odd, even, weights_img
-        type(optfilt2Dvars), intent(inout) :: optf2Dvars
-        real(kind=c_float),        pointer :: rmat_odd(:,:,:), rmat_even(:,:,:), rmat_odd_filt(:,:,:), rmat_even_filt(:,:,:)
-        integer         :: k,l, box, ldim(3), find_start, find_stop, iter_no, ext, cutoff_find, lb(3), ub(3)
-        real            :: find_stepsz, val
-        type(image_ptr) :: pdiff_opt_odd, pdiff_opt_even, pdiff_odd, pdiff_even, pweights
-        ! init
-        ldim        = odd%get_ldim()
-        box         = ldim(1)
-        if( ldim(3) > 1 ) THROW_HARD('This nonuni_filt2D is strictly for 2D!')
-        ext         = params_glob%smooth_ext
-        find_stop   = optf2Dvars%lplim_hres
-        find_start  = calc_fourier_index(params_glob%lpstart_nonuni, box, even%get_smpd())
-        find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
-        lb          = (/ ext+1  , ext+1  , 1/)
-        ub          = (/ box-ext, box-ext, 1/)
-        ! searching for the best fourier index from here and generating the optimized filter
-        call weights_img%get_mat_ptrs(pweights)
-        call optf2Dvars%diff_img_odd %get_mat_ptrs(pdiff_odd)
-        call optf2Dvars%diff_img_even%get_mat_ptrs(pdiff_even)
-        call optf2Dvars%diff_img_opt_odd %get_mat_ptrs(pdiff_opt_odd)
-        call optf2Dvars%diff_img_opt_even%get_mat_ptrs(pdiff_opt_even)
-        pdiff_opt_odd %rmat = huge(val)
-        pdiff_opt_even%rmat = huge(val)
-        call odd%get_rmat_ptr(rmat_odd)
-        call even%get_rmat_ptr(rmat_even)
-        call optf2Dvars%odd_filt%get_rmat_ptr(rmat_odd_filt)
-        call optf2Dvars%even_filt%get_rmat_ptr(rmat_even_filt)
-        rmat_odd  = 0.
-        rmat_even = 0.
-        do iter_no = 1, params_glob%nsearch
-            cutoff_find = nint(find_start + (iter_no - 1)*find_stepsz)
-            ! filtering odd/even
-            call optf2Dvars%odd_filt%copy_fast(optf2Dvars%odd_copy_cmat)
-            call optf2Dvars%even_filt%copy_fast(optf2Dvars%even_copy_cmat)
-            call butterworth_filter(optf2Dvars%odd_filt,  cutoff_find, optf2Dvars%cur_fil)
-            call butterworth_filter(optf2Dvars%even_filt, cutoff_find, optf2Dvars%cur_fil)
-            call optf2Dvars%even_filt%ifft
-            call optf2Dvars%odd_filt%ifft
-            call optf2Dvars% odd_filt%sqeuclid_matrix(optf2Dvars%even_copy_rmat, optf2Dvars%diff_img_odd)
-            call optf2Dvars%even_filt%sqeuclid_matrix(optf2Dvars% odd_copy_rmat, optf2Dvars%diff_img_even)
-            ! do the non-uniform, i.e. optimizing at each voxel=
-            call optf2Dvars%diff_img_odd%fft
-            call optf2Dvars%diff_img_even%fft
-            pdiff_odd %cmat  = pdiff_odd %cmat * pweights%cmat
-            pdiff_even%cmat  = pdiff_even%cmat * pweights%cmat
-            call optf2Dvars%diff_img_odd%ifft
-            call optf2Dvars%diff_img_even%ifft
-            do l = lb(2),ub(2)
-                do k = lb(1),ub(1)
-                    if( pdiff_odd%rmat(k,l,1) < pdiff_opt_odd%rmat(k,l,1) )then
-                        rmat_odd(          k,l,1) = rmat_odd_filt( k,l,1)
-                        pdiff_opt_odd%rmat(k,l,1) = pdiff_odd%rmat(k,l,1)
-                    endif
-                    if( pdiff_even%rmat(k,l,1) < pdiff_opt_even%rmat(k,l,1) )then
-                        rmat_even(          k,l,1) = rmat_even_filt(k,l,1)
-                        pdiff_opt_even%rmat(k,l,1) = pdiff_even%rmat(k,l,1)
-                    endif
-                enddo
-            enddo
-        enddo
-    end subroutine nonuni_filt2D
-
-    subroutine nonuni_filt2D_masked(odd, even, mask, weights_img, optf2Dvars)
-        class(image),        intent(inout) :: odd, even, mask, weights_img
-        type(optfilt2Dvars), intent(inout) :: optf2Dvars
-        real(kind=c_float),        pointer :: rmat_odd(:,:,:), rmat_even(:,:,:), rmat_odd_filt(:,:,:), rmat_even_filt(:,:,:)
-        real(kind=c_float),        pointer :: rmat_mask(:,:,:), rmat_odd_lowres(:,:,:), rmat_even_lowres(:,:,:)
-        type(image)     :: odd_filt_lowres, even_filt_lowres
-        integer         :: k, l, box, ldim(3), find_start, find_stop, iter_no, ext, cutoff_find, lb(3), ub(3)
-        real            :: find_stepsz, val, m
-        type(image_ptr) :: pdiff_opt_odd, pdiff_opt_even, pdiff_odd, pdiff_even, pweights
-        if( .not. optf2Dvars%have_mask )then
-            call nonuni_filt2D(odd, even, weights_img, optf2Dvars)
-            return
-        endif
-        ! init
-        ldim        = odd%get_ldim()
-        box         = ldim(1)
-        if( ldim(3) > 1 ) THROW_HARD('This nonuni_filt2D is strictly for 2D!')
-        ext         = params_glob%smooth_ext
-        find_stop   = optf2Dvars%lplim_hres
-        find_start  = calc_fourier_index(params_glob%lpstart_nonuni, box, even%get_smpd())
-        find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
-        lb          = (/ ext+1  , ext+1  , 1/)
-        ub          = (/ box-ext, box-ext, 1/)
-        ! searching for the best fourier index from here and generating the optimized filter
-        call weights_img%get_mat_ptrs(pweights)
-        call optf2Dvars%diff_img_odd %get_mat_ptrs(pdiff_odd)
-        call optf2Dvars%diff_img_even%get_mat_ptrs(pdiff_even)
-        call optf2Dvars%diff_img_opt_odd %get_mat_ptrs(pdiff_opt_odd)
-        call optf2Dvars%diff_img_opt_even%get_mat_ptrs(pdiff_opt_even)
-        pdiff_opt_odd %rmat = huge(val)
-        pdiff_opt_even%rmat = huge(val)
-        call odd%get_rmat_ptr(rmat_odd)
-        call even%get_rmat_ptr(rmat_even)
-        call optf2Dvars%odd_filt%get_rmat_ptr(rmat_odd_filt)
-        call optf2Dvars%even_filt%get_rmat_ptr(rmat_even_filt)
-        rmat_odd  = 0.
-        rmat_even = 0.
-        ! generate the e/o images with the lowest resolution cutoff frequency applied
-        call odd_filt_lowres%copy(optf2Dvars%odd_copy_cmat)
-        call even_filt_lowres%copy(optf2Dvars%even_copy_cmat)
-        call butterworth_filter(odd_filt_lowres,  find_start, optf2Dvars%cur_fil)
-        call butterworth_filter(even_filt_lowres, find_start, optf2Dvars%cur_fil)
-        call even_filt_lowres%ifft
-        call odd_filt_lowres%ifft
-        ! set pointers to e/o lowres and mask
-        call odd_filt_lowres%get_rmat_ptr(rmat_odd_lowres)
-        call even_filt_lowres%get_rmat_ptr(rmat_even_lowres)
-        call mask%get_rmat_ptr(rmat_mask)
-        do iter_no = 1, params_glob%nsearch
-            cutoff_find = nint(find_start + (iter_no - 1)*find_stepsz)
-            ! filtering odd/even
-            call optf2Dvars%odd_filt%copy_fast(optf2Dvars%odd_copy_cmat)
-            call optf2Dvars%even_filt%copy_fast(optf2Dvars%even_copy_cmat)
-            call butterworth_filter(optf2Dvars%odd_filt,  cutoff_find, optf2Dvars%cur_fil)
-            call butterworth_filter(optf2Dvars%even_filt, cutoff_find, optf2Dvars%cur_fil)
-            call optf2Dvars%even_filt%ifft
-            call optf2Dvars%odd_filt%ifft
-            call optf2Dvars% odd_filt%sqeuclid_matrix(optf2Dvars%even_copy_rmat, optf2Dvars%diff_img_odd)
-            call optf2Dvars%even_filt%sqeuclid_matrix(optf2Dvars% odd_copy_rmat, optf2Dvars%diff_img_even)
-            ! do the non-uniform, i.e. optimizing at each voxel
-            call optf2Dvars%diff_img_odd%fft
-            call optf2Dvars%diff_img_even%fft
-            pdiff_odd %cmat  = pdiff_odd %cmat * pweights%cmat
-            pdiff_even%cmat  = pdiff_even%cmat * pweights%cmat
-            call optf2Dvars%diff_img_odd%ifft
-            call optf2Dvars%diff_img_even%ifft
-            do l = lb(2),ub(2)
-                do k = lb(1),ub(1)
-                    if( pdiff_odd%rmat(k,l,1) < pdiff_opt_odd%rmat(k,l,1) )then
-                        m = rmat_mask(k,l,1)
-                        if( m > 0.99 )then
-                            rmat_odd( k,l,1) = rmat_odd_filt( k,l,1)
-                        else if( m < 0.01 )then
-                            rmat_odd( k,l,1) = rmat_odd_lowres( k,l,1)
-                        else
-                            rmat_odd( k,l,1) = m * rmat_odd_filt( k,l,1) + (1. - m) * rmat_odd_lowres( k,l,1)
-                        endif
-                        pdiff_opt_odd%rmat(k,l,1) = pdiff_odd%rmat(k,l,1)
-                    endif
-                    if( pdiff_even%rmat(k,l,1) < pdiff_opt_even%rmat(k,l,1) )then
-                        m = rmat_mask(k,l,1)
-                        if( m > 0.99 )then
-                            rmat_even(k,l,1) = rmat_even_filt(k,l,1)
-                        else if( m < 0.01 )then
-                            rmat_even(k,l,1) = rmat_even_lowres(k,l,1)
-                        else
-                            rmat_even(k,l,1) = m * rmat_even_filt(k,l,1) + (1. - m) * rmat_even_lowres(k,l,1)
-                        endif
-                        pdiff_opt_even%rmat(k,l,1) = pdiff_even%rmat(k,l,1)
-                    endif
-                enddo
-            enddo
-        enddo
-        call odd_filt_lowres%kill
-        call even_filt_lowres%kill
-    end subroutine nonuni_filt2D_masked
 
     ! 3D optimization(search)-based nonuniform filter, paralellized version
     subroutine nonuni_filt3D(odd, even, mskimg, lpstop)
@@ -837,7 +503,7 @@ contains
         ldim        = odd%get_ldim()
         box         = ldim(1)
         dim3        = ldim(3)
-        if( dim3 > 1 ) THROW_HARD('This nonuni_filt2D is strictly for 2D!')
+        if( dim3 > 1 ) THROW_HARD('This uni_filt2D is strictly for 2D!')
         find_stop   = optf2Dvars%lplim_hres
         find_start  = calc_fourier_index(params_glob%lpstart_nonuni, box, even%get_smpd())
         find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
@@ -909,7 +575,7 @@ contains
             if( clsfrcs%get_filtsz().ne.even(1)%get_filtsz() )then
                 write(logfhandle,*) 'img filtsz:  ', even(1)%get_filtsz()
                 write(logfhandle,*) 'frcs filtsz: ', clsfrcs%get_filtsz()
-                THROW_HARD('Inconsistent filter dimensions; nonuni_filt2D_sub')
+                THROW_HARD('Inconsistent filter dimensions; uni_filt2D_sub')
             endif
         else
             THROW_WARN('Class average FRCs file '//frcs_fname//' does not exist, falling back on lpstart: '//real2str(lpstart))
