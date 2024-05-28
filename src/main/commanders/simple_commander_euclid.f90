@@ -528,8 +528,6 @@ contains
         do s=1,params%nstates
             call calcrefvolshift_and_mapshifts2ptcls( cline, s, params%vols(s), do_center, xyz)
             call read_and_filter_refvols( cline, params%vols(s), params%vols(s) )
-            ! PREPARE E/O VOLUMES
-            call preprefvol(cline, s, do_center, xyz, .false.)
         end do
         find_start = max(1,                   calc_fourier_index(params%lpstart, params%box_crop, params%smpd_crop))
         find_stop  = min(build%vol%get_nyq(), calc_fourier_index(params%lpstop,  params%box_crop, params%smpd_crop))
