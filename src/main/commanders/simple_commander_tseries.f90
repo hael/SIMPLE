@@ -932,7 +932,6 @@ contains
         if( .not. cline%defined('lpstop')         ) call cline%set('lpstop',          0.5)
         if( .not. cline%defined('maxits')         ) call cline%set('maxits',          30.)
         if( .not. cline%defined('refine')         ) call cline%set('refine',      'neigh')
-        if( .not. cline%defined('nonuniform')     ) call cline%set('nonuniform',     'no') ! nonuniform filtering does not work for this kind of data
         if( .not. cline%defined('oritype')        ) call cline%set('oritype',    'ptcl3D')
         if( .not. cline%defined('trs')            ) call cline%set('trs',             5.0)
         if( .not. cline%defined('objfun')         ) call cline%set('objfun',         'cc') ! best objfun for this kind of data

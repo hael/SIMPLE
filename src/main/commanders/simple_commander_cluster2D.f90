@@ -291,10 +291,7 @@ contains
         if( .not. cline%defined('wiener')    ) call cline%set('wiener',    'full')
         if( .not. cline%defined('objfun')    ) call cline%set('objfun',  'euclid')
         if( .not. cline%defined('ml_reg')    ) call cline%set('ml_reg',      'no')
-        if( .not. cline%defined('nonuniform')) call cline%set('nonuniform',  'no')
         if( .not. cline%defined('smooth_ext')) call cline%set('smooth_ext',   20.)
-        if( .not. cline%defined('icm')       ) call cline%set('icm',         'no')
-        if( .not. cline%defined('lambda')    ) call cline%set('lambda',       1.0)
         call cline%set('stream', 'no')
         ! set shared-memory flag
         if( cline%defined('nparts') )then
@@ -396,7 +393,6 @@ contains
         call cline_cluster2D1%set('center',     'no')
         call cline_cluster2D1%set('autoscale',  'no')
         call cline_cluster2D1%set('objfun',     'cc')
-        call cline_cluster2D1%set('nonuniform', 'no')
         call cline_cluster2D1%set('ml_reg','no')
         if( l_euclid ) call cline_cluster2D1%set('cc_iters', MINITS)
         call cline_cluster2D1%delete('update_frac')
@@ -558,8 +554,6 @@ contains
         integer  :: last_iter_stage1, last_iter_stage2
         logical  :: l_scaling, l_shmem, l_euclid, l_cc_iters
         call set_cluster2D_defaults( cline )
-        if( .not.cline%defined('icm')    ) call cline%set('icm',    'no')
-        if( .not.cline%defined('lambda') ) call cline%set('lambda',  1.0)
         if( .not.cline%defined('objfun') ) call cline%set('objfun', 'cc')
         call cline%delete('clip')
         ! set shared-memory flag
@@ -659,7 +653,6 @@ contains
         endif
         call cline_cluster2D_stage1%set('lpstop',     params%lpstart)
         call cline_cluster2D_stage1%set('ml_reg',     'no')
-        call cline_cluster2D_stage1%set('nonuniform', 'no')
         if( params%l_frac_update )then
             if( params%l_stoch_update )then
                 call cline_cluster2D_stage1%set('it_history',  1)
@@ -887,7 +880,6 @@ contains
         call qenv%new(params%nparts)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
-        call job_descr%delete('icm')
         ! splitting
         call build%spproj%split_stk(params%nparts)
         ! prepare command lines from prototype master
