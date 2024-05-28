@@ -14,7 +14,6 @@ implicit none
 
 public :: fsc_commander
 public :: nununiform_filter3D_commander
-public :: nununiform_filter2D_commander
 public :: uniform_filter2D_commander
 public :: uniform_filter3D_commander
 public :: icm3D_commander
@@ -29,11 +28,6 @@ type, extends(commander_base) :: fsc_commander
   contains
     procedure :: execute      => exec_fsc
 end type fsc_commander
-
-type, extends(commander_base) :: nununiform_filter2D_commander
-  contains
-    procedure :: execute      => exec_nununiform_filter2D
-end type nununiform_filter2D_commander
 
 type, extends(commander_base) :: uniform_filter2D_commander
   contains
@@ -306,53 +300,6 @@ contains
         call plot_fsc(size(pspec_icm), pspec_icm, res, params%smpd, trim(file_tag)//'_avg_modulation')
         call simple_end('**** SIMPLE_ICM3D NORMAL STOP ****')
     end subroutine exec_icm3D
-
-    subroutine exec_nununiform_filter2D( self, cline )
-        use simple_opt_filter, only: nonuni_filt2D_sub
-        use simple_masker,     only: automask2D
-        use simple_default_clines
-        class(nununiform_filter2D_commander), intent(inout) :: self
-        class(cmdline),                       intent(inout) :: cline
-        character(len=:), allocatable :: file_tag
-        type(image),      allocatable :: even(:), odd(:), mask(:)
-        real,             allocatable :: diams(:)
-        type(parameters) :: params
-        integer          :: iptcl
-        ! init
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        call set_automask2D_defaults(cline)
-        call params%new(cline)
-        call find_ldim_nptcls(params%stk, params%ldim, params%nptcls)
-        params%ldim(3) = 1 ! because we operate on stacks
-        file_tag = 'nonuniform_filter2D_ext_'//int2str(params%smooth_ext)
-        ! allocate
-        allocate(odd(params%nptcls), even(params%nptcls), mask(params%nptcls))
-        ! construct & read
-        do iptcl = 1, params%nptcls
-            call odd( iptcl)%new(params%ldim, params%smpd, .false.)
-            call even(iptcl)%new(params%ldim, params%smpd, .false.)
-            call odd( iptcl)%read(params%stk,  iptcl)
-            call even(iptcl)%read(params%stk2, iptcl)
-            call mask(iptcl)%copy(odd(iptcl))
-            call mask(iptcl)%add(even(iptcl))
-            call mask(iptcl)%mul(0.5)
-        enddo
-        ! filter
-        call nonuni_filt2D_sub(even, odd)
-        ! write output and destruct
-        do iptcl = 1, params%nptcls
-            call odd( iptcl)%write(trim(file_tag)//'_odd.mrc',  iptcl)
-            call even(iptcl)%write(trim(file_tag)//'_even.mrc', iptcl)
-            call odd(iptcl)%add(even(iptcl))
-            call odd(iptcl)%mul(0.5)
-            call odd(iptcl)%write(trim(file_tag)//'_avg.mrc', iptcl)
-            call odd( iptcl)%kill()
-            call even(iptcl)%kill()
-        end do
-        if( allocated(diams) ) deallocate(diams)
-        ! end gracefully
-        call simple_end('**** SIMPLE_nununiform_filter2D NORMAL STOP ****')
-    end subroutine exec_nununiform_filter2D
 
     subroutine exec_uniform_filter2D( self, cline )
         use simple_opt_filter, only: uni_filt2D_sub

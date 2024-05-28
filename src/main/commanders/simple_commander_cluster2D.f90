@@ -420,7 +420,6 @@ contains
             call cline_cluster2D2%set('objfun', 'cc')
         endif
         ! optional non-uniform filtering
-        if( params%l_nonuniform ) call cline_cluster2D2%set('smooth_ext', real(ceiling(params%smooth_ext * scale_factor)))
         if( cline%defined('update_frac') )call cline_cluster2D2%set('update_frac',params%update_frac)
         ! scale references
         if( l_scaling )then
@@ -731,8 +730,6 @@ contains
         trs_stage2 = MSK_FRAC * params%mskdiam / (2. * params%smpd_targets2D(2))
         trs_stage2 = min(MAXSHIFT,max(MINSHIFT,trs_stage2))
         call cline_cluster2D_stage2%set('trs', trs_stage2)
-        ! optional non-uniform filtering
-        if( params%l_nonuniform ) call cline_cluster2D_stage2%set('smooth_ext', real(ceiling(params%smooth_ext * scale)))
         ! for testing
         if( cline%defined('extr_iter') )then
             call cline_cluster2D_stage2%set('extr_iter', cline_cluster2D_stage1%get_rarg('extr_iter'))

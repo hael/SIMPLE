@@ -389,7 +389,7 @@ contains
                 if( present(xyz_out) ) xyz_out = xyz
             endif
         endif
-        if( params_glob%l_ml_reg .or. params_glob%l_nonuniform )then
+        if( params_glob%l_ml_reg )then
             ! no filtering
         else
             call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)

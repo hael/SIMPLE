@@ -131,7 +131,6 @@ type(simple_program), target :: mkdir_
 type(simple_program), target :: motion_correct
 type(simple_program), target :: multipick_cleanup2D
 type(simple_program), target :: new_project
-type(simple_program), target :: nununiform_filter2D
 type(simple_program), target :: nununiform_filter3D
 type(simple_program), target :: normalize_
 type(simple_program), target :: orisops
@@ -420,7 +419,6 @@ contains
         call new_motion_correct
         call new_multipick_cleanup2D
         call new_new_project
-        call new_nununiform_filter2D
         call new_nununiform_filter3D
         call new_normalize
         call new_orisops
@@ -540,7 +538,6 @@ contains
         call push2prg_ptr_array(motion_correct)
         call push2prg_ptr_array(multipick_cleanup2D)
         call push2prg_ptr_array(new_project)
-        call push2prg_ptr_array(nununiform_filter2D)
         call push2prg_ptr_array(nununiform_filter3D)
         call push2prg_ptr_array(normalize_)
         call push2prg_ptr_array(orisops)
@@ -727,8 +724,6 @@ contains
                 ptr2prg => multipick_cleanup2D
             case('new_project')
                 ptr2prg => new_project
-            case('nununiform_filter2D')
-                ptr2prg => nununiform_filter2D
             case('nununiform_filter3D')
                 ptr2prg => nununiform_filter3D
             case('normalize')
@@ -899,7 +894,6 @@ contains
         write(logfhandle,'(A)') motion_correct%name
         write(logfhandle,'(A)') multipick_cleanup2D%name
         write(logfhandle,'(A)') new_project%name
-        write(logfhandle,'(A)') nununiform_filter2D%name
         write(logfhandle,'(A)') nununiform_filter3D%name
         write(logfhandle,'(A)') normalize_%name
         write(logfhandle,'(A)') orisops%name
@@ -3315,37 +3309,6 @@ contains
         call multipick_cleanup2D%set_input('comp_ctrls', 2, nthr)
         call multipick_cleanup2D%set_gui_params('comp_ctrls', 2, submenu="compute", advanced=.false.)
     end subroutine new_multipick_cleanup2D
-
-    subroutine new_nununiform_filter2D
-        ! PROGRAM SPECIFICATION
-        call nununiform_filter2D%new(&
-        &'nununiform_filter2D',&                                                  ! name
-        &'Optimization (search) based 2D filter (uniform/nonuniform)',&     ! descr_short
-        &'is a program for 2D uniform/nonuniform filter by minimizing/searching the fourier index of the CV cost function',& ! descr_long
-        &'simple_exec',&                                                    ! executable
-        &3, 1, 0, 0, 4, 0, 1, .false.)                                      ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call nununiform_filter2D%set_input('img_ios', 1, 'stk',  'file', 'Odd stack',  'Odd stack',  'stack_even.mrc file', .true., '')
-        call nununiform_filter2D%set_input('img_ios', 2, 'stk2', 'file', 'Even stack', 'Even stack', 'stack_odd.mrc file',  .true., '')
-        call nununiform_filter2D%set_input('img_ios', 3, 'stk3', 'file', 'Mask stack', 'Mask stack', 'stack_mask.mrc file',  .false., '')
-        ! parameter input/output
-        call nununiform_filter2D%set_input('parm_ios', 1, smpd)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        call nununiform_filter2D%set_input('filt_ctrls', 1, smooth_ext)
-        call nununiform_filter2D%set_input('filt_ctrls', 2, lpstart_nonuni)
-        call nununiform_filter2D%set_input('filt_ctrls', 3, nsearch)
-        frcs%required = .true.
-        call nununiform_filter2D%set_input('filt_ctrls', 4, frcs)
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call nununiform_filter2D%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_nununiform_filter2D
 
     subroutine new_nununiform_filter3D
         ! PROGRAM SPECIFICATION
