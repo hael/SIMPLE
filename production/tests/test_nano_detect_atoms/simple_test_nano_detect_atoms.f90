@@ -203,7 +203,7 @@ module nano_detect_atoms
         call self%simulated_atom%new(ldim_box,self%smpd)
         call atom%convolve(self%simulated_atom, cutoff=8*self%smpd)
         call self%simulated_atom%write('simulated_atom.mrc')
-        call self%simulated_atom%prenorm4real_corr(l_err_atom)
+        !call self%simulated_atom%prenorm4real_corr(l_err_atom)
     end subroutine simulate_atom
 
     subroutine setup_iterators(self, offset)
@@ -280,8 +280,8 @@ module nano_detect_atoms
                         ithr = omp_get_thread_num() + 1
                         pos = self%positions(self%inds_offset(xoff,yoff,zoff),:)
                         call window_slim_3D(self%nano_img, pos, self%boxsize, boximgs(ithr))
-                        call boximgs(ithr)%prenorm4real_corr(l_err_box)
-                        self%box_scores(xoff,yoff,zoff) = self%simulated_atom%real_corr_prenorm(boximgs(ithr))
+                        !call boximgs(ithr)%prenorm4real_corr(l_err_box)
+                        self%box_scores(xoff,yoff,zoff) = self%simulated_atom%real_corr(boximgs(ithr))
                         self%loc_sdevs( xoff,yoff,zoff) = avg_loc_sdev_3D(boximgs(ithr),self%offset)
                     end do 
                 end do 
@@ -457,7 +457,6 @@ module nano_detect_atoms
         ! make array of images containing the images of identified atoms and extract coordinates of peaks
         pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
         nbox = size(pos_inds, dim=1)
-        !print *, self%thres, nbox
         allocate(coords(nbox,3))
         allocate(atms_array(nbox))
         if (allocated(self%convolved_atoms)) deallocate(self%convolved_atoms)
@@ -490,37 +489,75 @@ module nano_detect_atoms
 
     subroutine calc_atom_stats(self)
         class(nano_picker), intent(inout) :: self
-        type(nanoparticle) :: nano
+        type(nanoparticle)       :: nano
+        type(image), allocatable :: boximgs(:)
+        type(binimage)           :: bimg
         type(parameters), target :: params
-        integer, allocatable :: pos_inds(:), imat(:,:,:)
-        integer :: nbox, ibox, int_pos(3), x, y, z, rad
+        integer, allocatable     :: pos_inds(:), imat(:,:,:), imat_adj(:,:,:)
+        integer                  :: nbox, ibox, int_pos(3), edge_pos(3), x, y, z, rad, xbox, ybox, zbox, nthr, ithr
+        real, allocatable        :: rmat(:,:,:), rmat_flat(:)
+        real                     :: local_thres
         params_glob => params
         params_glob%element = self%element
         params_glob%smpd = self%smpd
         pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
         nbox = size(pos_inds, dim=1)
-        allocate(imat(self%ldim(1),self%ldim(2),self%ldim(3)),source=0)
-        ! set imat, sphere around each center is atom
-        rad = anint((self%radius * 1.5) / self%smpd) ! need to convert to pixels, give wiggle room
+        allocate(imat(    self%ldim(1),self%ldim(2),self%ldim(3)),source=0)
+        allocate(imat_adj(self%ldim(1),self%ldim(2),self%ldim(3)),source=0)
+        !$ nthr = omp_get_max_threads()
+        allocate(boximgs(nthr))
+        do ithr = 1,nthr
+            call boximgs(ithr)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
+        end do
+        rad = anint((self%radius * 1.) / self%smpd) ! need to convert to pixels, give wiggle room
+        ! !$omp parallel do schedule(static) default(shared) private(ibox,x,y,z,xbox,ybox,zbox) proc_bind(close)
         do ibox = 1, nbox
             int_pos = anint(self%positions(pos_inds(ibox),:))
+            edge_pos = int_pos - [rad,rad,rad]
+            ithr = omp_get_thread_num() + 1
+            call window_slim_3D( self%nano_img, edge_pos, 2*rad, boximgs(ithr))
+            rmat = boximgs(ithr)%get_rmat()
+            rmat_flat = pack(rmat, mask=.true.)
+            call detect_peak_thres(size(rmat_flat), 2, rmat_flat, local_thres)
+            xbox = 0
+            ybox = 0
+            zbox = 0
             do x = int_pos(1) - rad, int_pos(1) + rad
+                xbox = xbox + 1 ! keeps count of position in box, while iterator keeps track of position in larger image
                 do y = int_pos(2) - rad, int_pos(2) + rad
+                    ybox = ybox + 1
                     do z = int_pos(3) - rad, int_pos(3) + rad
+                        zbox = zbox + 1
                         if (euclid(real(int_pos),real([x,y,z])) <= rad) then
-                            imat(x,y,z) = ibox
+                            if (rmat(xbox,ybox,zbox) >= local_thres) then
+                                imat(x,y,z) = ibox
+                            end if
                         end if
                     end do
+                    zbox = 0
                 end do
+                ybox = 0
             end do
+            xbox = 0
+            deallocate(rmat,rmat_flat)
         end do
+        ! !$omp end parallel do
+        call bimg%new_bimg(self%ldim,self%smpd)
+        where (imat >= 1)
+            imat_adj = 1
+        elsewhere
+            imat_adj = 0
+        end where
+        call bimg%set_imat(imat_adj)
+        call bimg%write_bimg('CC.mrc')
         ! create new nanoparticle object
         call nano%new(trim(self%raw_filename))
         call nano%set_atomic_coords(trim(self%pdb_filename))
         call nano%set_img(trim(self%raw_filename),'img_raw')
-        call nano%fillin_atominfo(imat=imat)
+        call nano%fillin_atominfo(imat=imat) ! should imat be in pixels or Angstroms? i think pixels
         call nano%write_csv_files
         call nano%kill
+        deallocate(imat,boximgs)
     end subroutine calc_atom_stats
 
     ! input filename with no extension
@@ -534,12 +571,10 @@ module nano_detect_atoms
         ! make array of images containing the images of identified atoms and extract coordinates of peaks
         pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
         nbox = size(pos_inds, dim=1)
-        !print *, 'NBOX = ', nbox
         allocate(coords(nbox,3))
         do iimg = 1, nbox
             pos = self%positions(pos_inds(iimg),:)
             coords(iimg,:) = pos
-            !print *, coords(iimg,:)
         end do
         if (present(filename)) then
             call write_centers(filename,coords,self%smpd)
@@ -717,20 +752,15 @@ module nano_detect_atoms
             call nano_exp%set_atomic_coords('sim_centers.pdb')
             call nano_exp%simulate_atoms(simatms=exp_NP)
             thres_corrs(i) = ref_NP%real_corr(exp_NP)
+            !thres_corrs(i) = self%nano_img%real_corr(exp_NP) ! see if correlating with raw img helps
             call nano_exp%kill
         end do
         optimal_index = maxloc(thres_corrs)
-        ! do i = 1, num_thres
-        !     print *, thresholds(i), thres_corrs(i)
-        ! end do
         self%thres = thresholds(optimal_index(1))
         self%positions = self%initial_positions
         call self%find_centers ! call again to set positions to the optimal
         pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
         num_pos = size(pos_inds)
-        ! do i = 1, num_pos
-        !     print *, self%positions(pos_inds(i),:)
-        ! end do
         print *, 'OPTIMAL THRESHOLD = ', self%thres
         print *, 'OPTIMAL CORRELATION = ', thres_corrs(optimal_index(1))
         print *, 'NUMBER POSITIONS = ', num_pos
@@ -780,7 +810,7 @@ program simple_test_nano_detect_atoms
     smpd = 0.358
     offset = 2
     peak_thres_level = 2
-    dist_thres = 2.
+    dist_thres = 3.
     
     ! simulate nanoparticle
     ! params_glob has to be set because of the way simple_nanoparticle is set up
@@ -797,9 +827,10 @@ program simple_test_nano_detect_atoms
     call test_exp4%simulate_atom
     call test_exp4%setup_iterators(offset)
     call test_exp4%match_boxes(circle=.true.)
-    call test_exp4%identify_threshold
+    call test_exp4%identify_threshold()
     call test_exp4%set_positions
     call test_exp4%find_centers
+    !call test_exp4%refine_threshold(100,pdbfile_ref,filename_sim,max_thres=0.75)
     call test_exp4%distance_filter(dist_thres)
     call test_exp4%refine_threshold(100,pdbfile_ref,filename_sim,max_thres=0.75)
     call test_exp4%remove_outliers(3.)
