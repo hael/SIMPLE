@@ -2393,7 +2393,7 @@ contains
         real,        allocatable :: diams(:), shifts(:,:)
         real,    parameter :: MSKDIAM2LP = 0.15, lP_LB = 30., LP_UB = 15.
         integer, parameter :: NREFS=100
-        real    :: ang, rot, smpd_here, xyz(3), lp, diam_max
+        real    :: ang, rot, xyz(3), lp, diam_max
         integer :: nrots, iref, irot, ldim_clip(3), ldim(3), ncavgs, icavg
         integer :: cnt, norefs, new_box
         logical :: l_moldiam = .false.
@@ -2410,13 +2410,13 @@ contains
         call params%new(cline)
         if( params%stream.eq.'yes' ) THROW_HARD('not a streaming application')
         ! read selected cavgs
-        call find_ldim_nptcls(params%pickrefs, ldim, ncavgs, smpd=smpd_here)
-        if( smpd_here < 0.01 ) THROW_HARD('Invalid sampling distance for the cavgs (should be in MRC format)')
+        call find_ldim_nptcls(params%pickrefs, ldim, ncavgs, smpd=params%smpd)
+        if( params%smpd < 0.01 ) THROW_HARD('Invalid sampling distance for the cavgs (should be in MRC format)')
         ldim(3) = 1
         allocate( projs(ncavgs), masks(ncavgs) )
         call stkio_r%open(params%pickrefs, params%smpd, 'read', bufsz=ncavgs)
         do icavg=1,ncavgs
-            call projs(icavg)%new(ldim, smpd_here)
+            call projs(icavg)%new(ldim, params%smpd)
             call stkio_r%read(icavg, projs(icavg))
             call masks(icavg)%copy(projs(icavg))
         end do
@@ -2439,7 +2439,7 @@ contains
             diam_max = maxval(diams)
         end if
         lp       = min(max(LP_LB,MSKDIAM2LP * diam_max),LP_UB)
-        new_box = round2even(diam_max / smpd_here + 2. * COSMSKHALFWIDTH)
+        new_box = round2even(diam_max / params%smpd + 2. * COSMSKHALFWIDTH)
         write(logfhandle,'(A,1X,I4)') 'ESTIMATED BOX SIXE: ', new_box
         ldim_clip(1) = new_box
         ldim_clip(2) = new_box
