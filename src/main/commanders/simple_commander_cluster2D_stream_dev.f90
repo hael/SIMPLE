@@ -224,11 +224,22 @@ contains
         case(OBJFUN_EUCLID)
             call cline_cluster2D_chunk%set('objfun', 'euclid')
             call cline_cluster2D_pool%set('objfun',  'euclid')
+            call cline_cluster2D_chunk%set('ml_reg', params_glob%ml_reg_chunk)
+            call cline_cluster2D_pool%set('ml_reg',  params_glob%ml_reg_pool)
+            call cline_cluster2D_chunk%set('tau',    params_glob%tau)
+            call cline_cluster2D_pool%set('tau',     params_glob%tau)
         end select
-        if( .not.cline%defined('ml_reg') )then
-            call cline_cluster2D_chunk%set('ml_reg', 'no')
-            call cline_cluster2D_pool%set('ml_reg', 'no')
-        endif
+        ! refinement
+        select case(trim(params_glob%refine))
+        case('snhc')
+            call cline_cluster2D_chunk%set('refine', 'snhc')
+            call cline_cluster2D_pool%set('refine',  'snhc')
+        case('snhc_smpl')
+            call cline_cluster2D_chunk%set('refine', 'snhc_smpl')
+            call cline_cluster2D_pool%set('refine',  'snhc_smpl')
+        case DEFAULT
+            THROW_HARD('UNSUPPORTED REFINE PARAMETER!')
+        end select
         ! auto-scaling
         if( params_glob%box == 0 ) THROW_HARD('FATAL ERROR')
         ! scaling (fourier cropping)
@@ -308,7 +319,7 @@ contains
             if( chunks(ichunk)%has_converged() )then
                 call chunks(ichunk)%display_iter
                 ! rejection
-                if( trim(params_glob%reject_cls).eq.'yes' )then
+                if( trim(params_glob%reject_cls).ne.'no' )then
                     call chunks(ichunk)%reject(params_glob%lpthres, params_glob%ndev, box)
                 endif
                 ! updates list of chunks to import
@@ -763,17 +774,16 @@ contains
         integer              :: icls, cnt
         if( .not. stream2D_active ) return
         if( .not.pool_available )   return
-        if( trim(params_glob%reject_cls).ne.'yes' ) return
+        if( trim(params_glob%reject_cls).eq.'no' ) return
         ! rejection frequency
         if( pool_iter <= 2*FREQ_POOL_REJECTION .or. mod(pool_iter,FREQ_POOL_REJECTION)/=0 ) return
         if( pool_proj%os_cls2D%get_noris() == 0 ) return
         ncls_rejected   = 0
         nptcls_rejected = 0
         allocate(cls_mask(ncls_glob),moments_mask(ncls_glob),corres_mask(ncls_glob),source=.true.)
-        ! total variation distance
-        if( L_CLS_REJECT_DEV )then
+        ! moments & total variation distance
+        if( trim(params_glob%reject_cls).eq.'dev' )then
             call pool_proj%os_cls2D%class_moments_rejection(moments_mask)
-            call pool_proj%os_cls2D%class_corres_rejection(ndev_here, corres_mask)
         endif
         ! correlation & resolution
         ndev_here = 1.25*params_glob%ndev ! less stringent rejection than chunk
@@ -810,7 +820,7 @@ contains
                     if( cls_mask(icls) ) cycle
                     cnt = cnt+1
                     ncls_rejected_glob = ncls_rejected_glob + 1
-                    if( debug_here .or. L_CLS_REJECT_DEV )then
+                    if( debug_here .or. trim(params_glob%reject_cls).eq.'dev' )then
                         call img%read(trim(POOL_DIR)//trim(refs_glob),icls)
                         call img%write(trim(POOL_DIR)//'cls_rejected_pool.mrc',ncls_rejected_glob)
                     endif
@@ -1036,6 +1046,7 @@ contains
             endif
             call cline_cluster2D_pool%set('needs_sigma', 'no')
             call cline_cluster2D_pool%set('objfun',      'cc')
+            call cline_cluster2D_pool%set('ml_reg',      'no')
             call cline_cluster2D_pool%delete('cc_iters')
             if( params_glob%cc_objfun .eq. OBJFUN_EUCLID )then
                 if( iterswitch2euclid == 0 )then
@@ -1047,10 +1058,11 @@ contains
                     ! switch
                     call cline_cluster2D_pool%set('needs_sigma','yes')
                     call cline_cluster2D_pool%set('objfun',     'euclid')
-                    call cline_cluster2D_pool%set('cc_iters',   0)
-                    call cline_cluster2D_pool%set('sigma_est', 'global')
-                    call cline_cluster2D_pool%set('lpstart',lpstart)
-                    call cline_cluster2D_pool%set('lpstop', params_glob%lpstop)
+                    call cline_cluster2D_pool%set('cc_iters',    0)
+                    call cline_cluster2D_pool%set('sigma_est',  'global')
+                    call cline_cluster2D_pool%set('ml_reg',     params_glob%ml_reg_pool)
+                    call cline_cluster2D_pool%set('lpstart',    lpstart)
+                    call cline_cluster2D_pool%set('lpstop',     params_glob%lpstop)
                     call cline_cluster2D_pool%delete('lp')
                     allocate(clines(2))
                     call clines(1)%set('prg',        'calc_pspec_distr')
@@ -1067,9 +1079,10 @@ contains
                     call cline_cluster2D_pool%set('needs_sigma','yes')
                     call cline_cluster2D_pool%set('objfun',     'euclid')
                     call cline_cluster2D_pool%set('cc_iters',   0)
-                    call cline_cluster2D_pool%set('sigma_est', 'global')
-                    call cline_cluster2D_pool%set('lpstart',lpstart)
-                    call cline_cluster2D_pool%set('lpstop', params_glob%lpstop)
+                    call cline_cluster2D_pool%set('sigma_est',  'global')
+                    call cline_cluster2D_pool%set('ml_reg',      params_glob%ml_reg_pool)
+                    call cline_cluster2D_pool%set('lpstart',     lpstart)
+                    call cline_cluster2D_pool%set('lpstop',      params_glob%lpstop)
                     do i = 1,params_glob%nparts_pool
                         call del_file(SIGMA2_FBODY//int2str_pad(i,numlen)//'.dat')
                     enddo
@@ -2078,7 +2091,6 @@ contains
             call cline_cluster2D_chunk%delete('lp')
             call cline_cluster2D_chunk%set('lpstart', lpstart)
             call cline_cluster2D_chunk%set('lpstop',  lpstart)
-            call cline_cluster2D_chunk%set('refine',  'snhc')
         endif
         call cline_cluster2D_pool%set('lpstart',  lpstart)
         call cline_cluster2D_pool%set('lpstop',   params_glob%lpstop)

@@ -2957,18 +2957,17 @@ contains
         endif
         has_mean = self%isthere('mean')
         has_var  = self%isthere('var')
-        has_skew = self%isthere('skew')
         has_tvd  = self%isthere('tvd')
         if( has_mean )then
             vals = self%get_all('mean')
             call normalize_vals(vals, l_err)
             if( .not.l_err )then
                 do icls = 1,self%n
-                    if( abs(vals(icls)) > 5. ) msk(icls) = .false.
+                    if( msk(icls) ) msk(icls) = vals(icls) > -5.0
                 enddo
             endif
         endif
-        if( has_mean )then
+        if( has_var )then
             vals = self%get_all('var')
             call normalize_vals(vals, l_err)
             if( .not.l_err )then
@@ -2976,12 +2975,6 @@ contains
                     if( msk(icls) ) msk(icls) = vals(icls) < 5.0
                 enddo
             endif
-        endif
-        if( has_skew )then
-            vals = self%get_all('skew')
-            do icls = 1,self%n
-                if( msk(icls) ) msk(icls) = vals(icls) > 0.0
-            enddo
         endif
         if( has_tvd )then
             vals = self%get_all('tvd')
@@ -3023,6 +3016,8 @@ contains
                         else
                             x = x / sqrt(var)
                         endif
+                    else
+                        l_err = .true.
                     endif
                 endif
             end subroutine normalize_vals

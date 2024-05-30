@@ -53,7 +53,6 @@ logical,          parameter   :: L_USE_AUTO_MEM     = .false.  !< auto estmate m
 logical,          parameter   :: L_DEV_GLOB         = .false.  !< global development flag
 logical,          parameter   :: L_VERBOSE_GLOB     = .false.  !< verbose output or not
 real,             parameter   :: HPLIM_GUINIER      = 20.      !< high-pass limit for Guinier plot
-logical,          parameter   :: L_CLS_REJECT_DEV   = .false.
 
 ! type for arrays of allocatable strings
 type str4arr

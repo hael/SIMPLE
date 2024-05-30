@@ -7386,13 +7386,14 @@ contains
         endif
     end subroutine pad
 
-    subroutine pad_inplace( self, ldim, backgr )
+    subroutine pad_inplace( self, ldim, backgr, antialiasing )
         class(image),   intent(inout) :: self
-        integer,        intent(in)    :: ldim(3)
-        real, optional, intent(in)    :: backgr
+        integer,           intent(in) :: ldim(3)
+        real,    optional, intent(in) :: backgr
+        logical, optional, intent(in) :: antialiasing
         type(image) :: tmp
         call tmp%new(ldim, self%smpd, wthreads=self%wthreads)
-        call self%pad(tmp, backgr)
+        call self%pad(tmp, backgr=backgr, antialiasing=antialiasing)
         call self%copy(tmp)
         call tmp%kill()
     end subroutine pad_inplace

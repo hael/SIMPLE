@@ -438,10 +438,9 @@ contains
         call self%spproj%get_cavgs_stk(cavgs, ncls, smpd_here)
         cavgs = trim(self%path)//basename(cavgs)
         allocate(cls_mask(ncls),moments_mask(ncls),corres_mask(ncls),source=.true.)
-        ! total variation distance
-        if( L_CLS_REJECT_DEV )then
+        ! moments & total variation distance
+        if( trim(params_glob%reject_cls).eq.'dev' )then
             call self%spproj%os_cls2D%class_moments_rejection(moments_mask)
-            call self%spproj%os_cls2D%class_corres_rejection(ndev, corres_mask)
         endif
         ! correlation and resolution
         call self%spproj%os_cls2D%find_best_classes(box, smpd_here, res_thresh, corres_mask, ndev)
@@ -478,7 +477,7 @@ contains
             i = 0
             do icls=1,ncls
                 if( cls_mask(icls) ) cycle
-                if( L_CLS_REJECT_DEV )then
+                if( trim(params_glob%reject_cls).eq.'dev' )then
                     i = i+1
                     call img%read(cavgs,icls)
                     call img%write('cls_rejected_chunk_'//int2str_pad(self%id,3)//'.mrc',i)
