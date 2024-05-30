@@ -533,9 +533,9 @@ contains
         real, parameter   :: C = 2132.79 ! eq B.6, conversion to eV
         real, parameter   :: fourpisq = 4.*PI*PI
         real, allocatable :: rmat(:,:,:)
-        real    :: lp_here, a(5),b(5),aterm(5), xyz(3), smpd,r2,bfac,rjk2,cutoffsq,D,E
-        integer :: bbox(3,2),ldim(3),pos(3),i,j,k,l,jj,kk,z,icutoff
-        if( .not.vol%is_3d() .or. vol%is_ft() ) THROW_HARD('Only for real-space volumes')
+        real    :: lp_here, a(5), b(5), aterm(5), xyz(3), smpd, r2, bfac, rjk2, cutoffsq, D, E
+        integer :: bbox(3,2), ldim(3), pos(3), i, j, k, l, jj, kk, z, icutoff
+        if( .not. vol%is_3d() .or. vol%is_ft() ) THROW_HARD('Only for real-space volumes')
         smpd    = vol%get_smpd()
         ldim    = vol%get_ldim()
         lp_here = 2.*smpd
@@ -869,14 +869,15 @@ contains
         call vol%set_rmat(rmat,.false.)
         deallocate(rmat)
     contains
+    
         ! potential assuming static atoms (eq B.6)
-        real function epot(r2,aterm,b)
-            real, intent(in) :: r2, aterm(5),b(5)
+        real function epot( r2, aterm, b )
+            real, intent(in) :: r2, aterm(5), b(5)
             epot = C * sum( aterm * exp(-fourpisq*r2/b) )
         end function epot
 
         ! single gaussian convolution, unused
-        elemental real function egau(r2,zi)
+        elemental real function egau( r2, zi )
             real,    intent(in) :: r2
             integer, intent(in) :: zi
             egau = real(zi) / D * exp(-r2*E)

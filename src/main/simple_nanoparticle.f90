@@ -268,7 +268,7 @@ contains
         call find_ldim_nptcls(self%npname, self%ldim, nptcls, smpd)
         call self%img%new(self%ldim, self%smpd)
         call self%img_bin%new_bimg(self%ldim, self%smpd)
-        call self%img_bin%new(self%ldim, self%smpd)
+        !call self%img_bin%new(self%ldim, self%smpd)
         call self%img%read(fname)
         if( present(msk) ) call self%img%mask(msk, 'soft')
         call self%img_raw%copy(self%img)
@@ -330,7 +330,7 @@ contains
         class(nanoparticle), intent(inout) :: self
         real,                intent(in)    :: xyz(:,:)
         type(atoms) :: a
-        integer :: N, i
+        integer     :: N, i
         if( size(xyz,dim=2) /= 3 ) THROW_HARD("Error! Non-conforming dimensions of xyz; set_atomic_coords_from_xyz")
         if( allocated(self%atominfo) ) deallocate(self%atominfo)
         N = size(xyz, dim=1)
@@ -1773,13 +1773,13 @@ contains
                     cnt = cnt + 1
                     call set_atom(cnt, i)
                 endif
-            end do
+            enddo
         else
             do i = 1, self%n_cc
                 call set_atom(i, i)
             enddo
         endif
-        call simatms%new(self%ldim,self%smpd)
+        call simatms%new(self%ldim, self%smpd)
         call atms_ptr%convolve(simatms, cutoff = 8.*self%smpd)
         if( .not. atoms_obj_present ) call atms_ptr%kill
 
