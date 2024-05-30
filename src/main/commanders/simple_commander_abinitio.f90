@@ -684,7 +684,6 @@ contains
         real,    parameter :: CENLP_DEFAULT   = 30.
         real,    parameter :: LP_DEFAULT      = 6.
         real,    parameter :: LPSTART_DEFAULT = 30., LPSTOP_DEFAULT=LP_DEFAULT
-        real,    parameter :: TAU_ABINI       = 2.
         integer, parameter :: MINBOX  = 88
         integer, parameter :: NSTAGES = 5
         integer, parameter :: MAXITS1 = 100, MAXITS2 = 30, MAXITS_SHORT1 = 15, MAXITS_SHORT2 = 25
@@ -717,7 +716,7 @@ contains
         if( .not. cline%defined('mkdir')        ) call cline%set('mkdir',        'yes')
         if( .not. cline%defined('refine')       ) call cline%set('refine',      'prob')
         if( .not. cline%defined('autoscale')    ) call cline%set('autoscale',    'yes')
-        if( .not. cline%defined('ml_reg')       ) call cline%set('ml_reg',        'no')
+        if( .not. cline%defined('ml_reg')       ) call cline%set('ml_reg',       'yes')
         if( .not. cline%defined('sigma_est')    ) call cline%set('sigma_est', 'global')
         if( .not. cline%defined('prob_sh')      ) call cline%set('prob_sh',      'yes')
         if( .not. cline%defined('prob_norm')    ) call cline%set('prob_norm',    'yes')
@@ -731,8 +730,6 @@ contains
         if( .not. cline%defined('shift_stage')  ) call cline%set('shift_stage', SHIFT_STAGE_DEFAULT)
         if( .not. cline%defined('icm')          ) call cline%set('icm',           'no')
         if( .not. cline%defined('icm_stage')    ) call cline%set('icm_stage', ICM_STAGE_DEFAULT)
-        if( .not. cline%defined('lambda')       ) call cline%set('lambda',          1.)
-        if( .not. cline%defined('tau')          ) call cline%set('tau',      TAU_ABINI)
         if( .not. cline%defined('ptclw')        ) call cline%set('ptclw',         'no')
         ! resolution limit strategy
         l_lpset       = .false.
@@ -1242,7 +1239,7 @@ contains
         integer :: iter, it, prev_box_crop, maxits, state, i,j, final_nptcls, nptcls_sel
         integer :: ini_nptcls, nptcls, iters_per_stage
         logical :: l_lpset, l_err, l_lpstop_set, l_lpstart_set
-        call cline%set('ml_reg',       'no')
+        call cline%set('ml_reg',       'no') !!!!!!!!!!! NEED SUPPORT FOR ML_REG AS IT SHOULD BE ON BY DEFAULT
         call cline%set('stoch_update', 'no')
         call cline%set('pgrp',         'c1')
         call cline%set('oritype',      'ptcl3D')
@@ -1603,7 +1600,7 @@ contains
 
     end subroutine exec_batch_abinitio_3Dmodel
 
-!> for generation of an initial 3d model from particles
+    !> for generation of an initial 3d model from particles
     subroutine exec_lp_abinitio_3Dmodel( self, cline )
         use simple_convergence, only: convergence
         use simple_class_frcs,  only: class_frcs
@@ -1613,7 +1610,6 @@ contains
         real,    parameter :: CENLP_DEFAULT   = 30.
         real,    parameter :: LP_DEFAULT      = 6.
         real,    parameter :: LPSTART_DEFAULT = 30., LPSTOP_DEFAULT=LP_DEFAULT
-        real,    parameter :: TAU_ABINI       = 2.
         integer, parameter :: MINBOX  = 88
         integer, parameter :: NSTAGES = 5
         integer, parameter :: MAXITS1 = 100, MAXITS2 = 30, MAXITS_SHORT1 = 15, MAXITS_SHORT2 = 25
@@ -1646,7 +1642,7 @@ contains
         if( .not. cline%defined('mkdir')        ) call cline%set('mkdir',        'yes')
         if( .not. cline%defined('refine')       ) call cline%set('refine',      'prob')
         if( .not. cline%defined('autoscale')    ) call cline%set('autoscale',    'yes')
-        if( .not. cline%defined('ml_reg')       ) call cline%set('ml_reg',        'no')
+        if( .not. cline%defined('ml_reg')       ) call cline%set('ml_reg',       'yes')
         if( .not. cline%defined('sigma_est')    ) call cline%set('sigma_est', 'global')
         if( .not. cline%defined('prob_sh')      ) call cline%set('prob_sh',      'yes')
         if( .not. cline%defined('prob_norm')    ) call cline%set('prob_norm',    'yes')
@@ -1660,8 +1656,6 @@ contains
         if( .not. cline%defined('shift_stage')  ) call cline%set('shift_stage', SHIFT_STAGE_DEFAULT)
         if( .not. cline%defined('icm')          ) call cline%set('icm',           'no')
         if( .not. cline%defined('icm_stage')    ) call cline%set('icm_stage', ICM_STAGE_DEFAULT)
-        if( .not. cline%defined('lambda')       ) call cline%set('lambda',          1.)
-        if( .not. cline%defined('tau')          ) call cline%set('tau',      TAU_ABINI)
         if( .not. cline%defined('ptclw')        ) call cline%set('ptclw',         'no')
         ! resolution limit strategy
         l_lpset       = .false.

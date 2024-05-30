@@ -173,8 +173,8 @@ real, parameter    :: STREAM_SRCHFRAC      = 0.4       !< fraction of times full
 real, parameter    :: MC_PATCHSZ           = 740.      !< recommended patch size (in pixels) for motion correction
 real, parameter    :: ENVMSK_FSC_THRESH    = 0.8       !< FSC value after which phase-randomization and FSC correction is applied in enveloppe masking
 real, parameter    :: MAX_SMPD             = 2.67      !< maximum sampling distance in scaling
-real, parameter    :: TAU_DEFAULT          = 3.0       !< TAU fudge factor to control strength or regularization [0.5,3] more -> less low-pass effect
-                                                       !! tau < 3 leads to excessive low-pass filtering (at least in 2D)
+real, parameter    :: TAU_DEFAULT          = 3.0       !< TAU fudge factor to control strength or regularization [0.5,5] more -> less low-pass effect
+                                                       !! tau < 3 leads to excessive low-pass filtering
 real, parameter    :: CLS_REJECT_STD       = 2.5       !< # deviations for 2D class selection/rejection
 
 ! preprocessing constants
