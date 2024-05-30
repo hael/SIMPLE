@@ -129,11 +129,12 @@ module nano_detect_atoms
         character(len=2)         :: element
         character(len=100)       :: raw_filename, pdb_filename
         integer                  :: boxsize, ldim(3), nxyz_offset(3), offset, peak_thres_level
-        integer, allocatable     :: inds_offset(:,:,:)
+        integer, allocatable     :: inds_offset(:,:,:), positions(:,:)
         type(image)              :: simulated_atom, nano_img, sim_img
         type(image), allocatable :: convolved_atoms(:)
-        real                     :: smpd, thres, temp_thres, radius
-        real, allocatable        :: box_scores(:,:,:), loc_sdevs(:,:,:), positions(:,:), initial_positions(:,:)
+        real                     :: smpd, thres, radius
+        real, allocatable        :: box_scores(:,:,:), loc_sdevs(:,:,:), center_positions(:,:)
+        logical                  :: is_denoised
 
     contains
         procedure :: new
@@ -143,7 +144,6 @@ module nano_detect_atoms
         procedure :: identify_threshold
         procedure :: distance_filter
         procedure :: remove_outliers
-        procedure :: set_positions
         procedure :: find_centers
         procedure :: calc_atom_stats
         procedure :: write_pdb
@@ -171,20 +171,20 @@ module nano_detect_atoms
         self%smpd = smpd
         self%element = element
         self%raw_filename = filename
+        self%is_denoised = .false.
         ! retrieve nano_img from filename and find ldim
         params_glob => params
         params_glob%element = self%element
         params_glob%smpd = self%smpd
         call nano%new(filename)
         call nano%get_img(self%nano_img)
-        self%sim_img = self%nano_img
         self%ldim = self%nano_img%get_ldim()
         self%peak_thres_level = peak_thres_level
-        self%temp_thres = 0.
         ! denoise nano_img if requested
         if (present(denoise)) then
             if (denoise) then
                 call phasecorr_one_atom(self%nano_img, self%nano_img, self%element)
+                self%is_denoised = .true.
             end if
         end if
     end subroutine new
@@ -229,7 +229,8 @@ module nano_detect_atoms
             end do
         end do
         ! set up positions and inds_offset
-        allocate(self%positions(nboxes,3), source = 0.)
+        allocate(self%positions(nboxes,3), source = 0)
+        allocate(self%center_positions(nboxes,3), source = 0.)
         allocate(self%inds_offset(self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3)), source=0)
         self%nxyz_offset = 0
         nboxes = 0
@@ -242,7 +243,7 @@ module nano_detect_atoms
                 do zind = 0, nxyz(3), self%offset
                     self%nxyz_offset(3) = self%nxyz_offset(3) + 1
                     nboxes = nboxes + 1
-                    self%positions(nboxes,:) = [real(xind),real(yind),real(zind)]
+                    self%positions(nboxes,:) = [xind,yind,zind]
                     self%inds_offset(self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3)) = nboxes
                 end do
             end do
@@ -438,15 +439,6 @@ module nano_detect_atoms
         !$omp end parallel do
     end subroutine remove_outliers
 
-    ! sets initial_positions to whatever the positions are at the time this subroutine is called
-    ! included because of an issue with writing over positions in find_centers when calling find_centers iterativelys 
-    subroutine set_positions(self)
-        class(nano_picker), intent(inout) :: self
-        allocate(self%initial_positions(size(self%positions,dim=1),3))
-        self%initial_positions = self%positions
-    end subroutine set_positions
-
-    ! changing self%positions
     ! no longer writes the file
     subroutine find_centers(self)
         class(nano_picker), intent(inout) :: self
@@ -459,29 +451,46 @@ module nano_detect_atoms
         nbox = size(pos_inds, dim=1)
         allocate(coords(nbox,3))
         allocate(atms_array(nbox))
-        if (allocated(self%convolved_atoms)) deallocate(self%convolved_atoms)
-        allocate(self%convolved_atoms(nbox))
-        call self%simulated_atom%fft()
-        do iimg = 1, nbox
-            pos = self%positions(pos_inds(iimg),:)
-            call atms_array(iimg)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
-            call self%convolved_atoms(iimg)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
-            call window_slim_3D(self%nano_img, pos, self%boxsize, atms_array(iimg))
-            !call atms_array(iimg)%write('boximgs/boximg_'//trim(int2str(iimg))//'.mrc')
-            call atms_array(iimg)%fft()
-            self%convolved_atoms(iimg) = atms_array(iimg)%conjg() * self%simulated_atom
-            !call self%convolved_atoms(iimg)%write('boximgs_ft/boximg_ft_'//trim(int2str(iimg))//'.mrc')
-            call self%convolved_atoms(iimg)%ifft()
-            !call self%convolved_atoms(iimg)%write('boximgs_convolved/boximg_conv_'//trim(int2str(iimg))//'.mrc')
-            call atms_array(iimg)%ifft()
-            ! want coordinates of atoms to be at the center of the images
-            call self%convolved_atoms(iimg)%norm_minmax
-            call self%convolved_atoms(iimg)%masscen(coords(iimg,:)) 
-            coords(iimg,:) = coords(iimg,:) + real(self%convolved_atoms(iimg)%get_ldim())/2. + pos !adjust center by size and position of box
-            ! update positions for chosen boxes
-            self%positions(pos_inds(iimg),:) = coords(iimg,:)
-        end do
-        call self%simulated_atom%ifft()
+        if (.not. self%is_denoised) then
+            if (allocated(self%convolved_atoms)) deallocate(self%convolved_atoms)
+            allocate(self%convolved_atoms(nbox))
+            call self%simulated_atom%fft()
+            do iimg = 1, nbox
+                pos = self%positions(pos_inds(iimg),:)
+                call atms_array(iimg)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
+                call self%convolved_atoms(iimg)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
+                call window_slim_3D(self%nano_img, pos, self%boxsize, atms_array(iimg))
+                !call atms_array(iimg)%write('boximgs/boximg_'//trim(int2str(iimg))//'.mrc')
+                call atms_array(iimg)%fft()
+                self%convolved_atoms(iimg) = atms_array(iimg)%conjg() * self%simulated_atom
+                !call self%convolved_atoms(iimg)%write('boximgs_ft/boximg_ft_'//trim(int2str(iimg))//'.mrc')
+                call self%convolved_atoms(iimg)%ifft()
+                !call self%convolved_atoms(iimg)%write('boximgs_convolved/boximg_conv_'//trim(int2str(iimg))//'.mrc')
+                call atms_array(iimg)%ifft()
+                ! want coordinates of atoms to be at the center of the images
+                call self%convolved_atoms(iimg)%norm_minmax
+                call self%convolved_atoms(iimg)%masscen(coords(iimg,:)) 
+                coords(iimg,:) = coords(iimg,:) + real(self%convolved_atoms(iimg)%get_ldim())/2. + pos !adjust center by size and position of box
+                ! update center positions for chosen boxes
+                self%center_positions(pos_inds(iimg),:) = coords(iimg,:)
+            end do
+            call self%simulated_atom%ifft()
+        else 
+            do iimg = 1, nbox
+                pos = self%positions(pos_inds(iimg),:)
+                call atms_array(iimg)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
+                call window_slim_3D(self%nano_img, pos, self%boxsize, atms_array(iimg))
+                ! want coordinates of atoms to be at the center of the images
+                call atms_array(iimg)%norm_minmax
+                call atms_array(iimg)%masscen(coords(iimg,:)) 
+                coords(iimg,:) = coords(iimg,:) + real([self%boxsize,self%boxsize,self%boxsize])/2. + pos !adjust center by size and position of box
+                ! update center positions for chosen boxes
+                self%center_positions(pos_inds(iimg),:) = coords(iimg,:)
+            end do
+            if (allocated(self%convolved_atoms)) deallocate(self%convolved_atoms)
+            allocate(self%convolved_atoms(nbox))
+            self%convolved_atoms = atms_array
+        end if
         deallocate(atms_array)
         deallocate(coords)
         deallocate(pos_inds)
@@ -510,9 +519,9 @@ module nano_detect_atoms
             call boximgs(ithr)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
         end do
         rad = anint((self%radius * 1.) / self%smpd) ! need to convert to pixels, give wiggle room
-        ! !$omp parallel do schedule(static) default(shared) private(ibox,x,y,z,xbox,ybox,zbox) proc_bind(close)
+        !$omp parallel do schedule(static) default(shared) private(ibox,x,y,z,xbox,ybox,zbox,rmat,rmat_flat) proc_bind(close)
         do ibox = 1, nbox
-            int_pos = anint(self%positions(pos_inds(ibox),:))
+            int_pos = anint(self%center_positions(pos_inds(ibox),:))
             edge_pos = int_pos - [rad,rad,rad]
             ithr = omp_get_thread_num() + 1
             call window_slim_3D( self%nano_img, edge_pos, 2*rad, boximgs(ithr))
@@ -541,7 +550,7 @@ module nano_detect_atoms
             xbox = 0
             deallocate(rmat,rmat_flat)
         end do
-        ! !$omp end parallel do
+        !$omp end parallel do
         call bimg%new_bimg(self%ldim,self%smpd)
         where (imat >= 1)
             imat_adj = 1
@@ -573,7 +582,7 @@ module nano_detect_atoms
         nbox = size(pos_inds, dim=1)
         allocate(coords(nbox,3))
         do iimg = 1, nbox
-            pos = self%positions(pos_inds(iimg),:)
+            pos = self%center_positions(pos_inds(iimg),:)
             coords(iimg,:) = pos
         end do
         if (present(filename)) then
@@ -614,7 +623,7 @@ module nano_detect_atoms
         nbox = size(pos_inds)
         allocate(coords(nbox,3))
         do ipos = 1, nbox
-            coords(ipos,:) = self%positions(pos_inds(ipos),:) * self%smpd
+            coords(ipos,:) = self%center_positions(pos_inds(ipos),:) * self%smpd
         end do
         open(unit=25, file=filename, status='replace', action='write')
         do i = 1, nbox
@@ -712,11 +721,6 @@ module nano_detect_atoms
         real                     :: thresholds(num_thres), thres_corrs(num_thres), max_thres_here, step
         integer                  :: i, optimal_index(1), num_pos
         integer, allocatable     :: pos_inds(:)
-        if (.not. allocated(self%initial_positions)) then
-            print *, 'ERROR'
-            print *, 'Please run set_positions before running refine_threshold'
-            return
-        end if
         print *, 'REFINE_THRESHOLD'
         if (present(max_thres)) then
             max_thres_here = max_thres
@@ -724,7 +728,6 @@ module nano_detect_atoms
             max_thres_here = 0.5
         end if
         step = (max_thres_here - self%thres) / (num_thres - 1)
-        self%temp_thres = self%thres ! save old threshold here
         ! set up array of potential thresholds
         do i = 1, num_thres
             thresholds(i) = self%thres + step * (i-1)
@@ -745,7 +748,6 @@ module nano_detect_atoms
         ! 5. save correlations in array, at end will find maximum and return corresponding threshold
         do i = 1, num_thres
             self%thres = thresholds(i) ! need to set self%thres because it is called in multiple subroutines
-            self%positions = self%initial_positions
             call self%find_centers
             call self%write_pdb('sim_centers')
             call nano_exp%new(trim(ref_img_name))
@@ -757,7 +759,6 @@ module nano_detect_atoms
         end do
         optimal_index = maxloc(thres_corrs)
         self%thres = thresholds(optimal_index(1))
-        self%positions = self%initial_positions
         call self%find_centers ! call again to set positions to the optimal
         pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
         num_pos = size(pos_inds)
@@ -770,6 +771,7 @@ module nano_detect_atoms
     subroutine kill(self)
         class(nano_picker), intent(inout) :: self
         if (allocated(self%positions)) deallocate(self%positions)
+        if (allocated(self%center_positions)) deallocate(self%center_positions)
         if (allocated(self%inds_offset)) deallocate(self%inds_offset)
         if (allocated(self%convolved_atoms)) deallocate(self%convolved_atoms)
         if (allocated(self%box_scores)) deallocate(self%box_scores)
@@ -828,18 +830,16 @@ program simple_test_nano_detect_atoms
     call test_exp4%setup_iterators(offset)
     call test_exp4%match_boxes(circle=.true.)
     call test_exp4%identify_threshold()
-    call test_exp4%set_positions
     call test_exp4%find_centers
-    !call test_exp4%refine_threshold(100,pdbfile_ref,filename_sim,max_thres=0.75)
     call test_exp4%distance_filter(dist_thres)
     call test_exp4%refine_threshold(100,pdbfile_ref,filename_sim,max_thres=0.75)
     call test_exp4%remove_outliers(3.)
+    !call test_exp4%write_boximgs(foldername='boximgs')
     ! OUTPUT FILES
     call test_exp4%write_pdb('experimental_centers')
     call test_exp4%compare_pick('experimental_centers.pdb',trim(pdbfile_ref))
     call test_exp4%write_NP_image(filename_sim,'result.mrc')
     call test_exp4%calc_atom_stats
-    call test_exp4%write_positions('positions.csv')
     call test_exp4%kill
     subStop = real(time())
     print *, 'TEST 1 RUNTIME = ', (subStop - subStart), ' s'
