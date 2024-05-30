@@ -610,6 +610,7 @@ contains
         call private_prgs(11)%push_opt_key('nthr')
         call private_prgs(11)%push_opt_key('pickrefs')
         call private_prgs(11)%push_opt_key('neg')
+        call private_prgs(11)%push_opt_key('smpd')
 
         ! MAP_CAVGS_SELECTION, for mapping class average selection to project
         call private_prgs(12)%set_name('map_cavgs_selection')

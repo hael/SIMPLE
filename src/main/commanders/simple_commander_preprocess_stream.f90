@@ -55,7 +55,7 @@ contains
         character(len=:),          allocatable :: output_dir, output_dir_ctf_estimate, output_dir_picker
         character(len=:),          allocatable :: output_dir_motion_correct, output_dir_extract
         character(len=LONGSTRLEN)              :: movie, cwd_job
-        real                                   :: pickref_scale
+        real                                   :: pickrefs_smpd
         integer                                :: nchunks_imported_glob, nchunks_imported, box_extract
         integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection, iproj
         integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, ncls_in, nmic_star
@@ -199,12 +199,14 @@ contains
                 cline_make_pickrefs = cline
                 call cline_make_pickrefs%set('prg','make_pickrefs')
                 call cline_make_pickrefs%set('stream','no')
+                call cline_make_pickrefs%set('neg','yes')
                 call cline_make_pickrefs%delete('ncls')
                 call cline_make_pickrefs%delete('mskdiam')
+                pickrefs_smpd = params%smpd / params%scale
                 if( cline_make_pickrefs%defined('eer_upsampling') )then
-                    pickref_scale = real(params%eer_upsampling) * params%scale
-                    call cline_make_pickrefs%set('scale',pickref_scale)
+                    pickrefs_smpd = pickrefs_smpd / real(params%eer_upsampling)
                 endif
+                call cline_make_pickrefs%set('smpd',pickrefs_smpd)
                 call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
                 call cline%set('pickrefs', '../'//trim(PICKREFS_FBODY)//trim(params%ext))
                 write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'

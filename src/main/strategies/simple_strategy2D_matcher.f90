@@ -107,6 +107,12 @@ contains
             l_snhc_smpl   = .false. ! defaults to snhc
         endif
         if( l_stream )then
+            select case(trim(params_glob%refine))
+            case('snhc')
+                l_snhc      = .true.
+            case('snhc_smpl')
+                l_snhc_smpl = .true.
+            end select
             l_frac_update              = .false.
             l_partial_sums             = .false.
             params_glob%l_frac_update  = .false.
@@ -259,7 +265,7 @@ contains
                 iptcl_map  = batch_start + iptcl_batch - 1 ! masked global index (cumulative batch index)
                 iptcl      = pinds(iptcl_map)              ! global index
                 ! Search strategy (polymorphic strategy2D construction)
-                updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
+                updatecnt = build_glob%spproj_field%get_updatecnt(iptcl)
                 if( l_stream )then
                     ! online mode, based on history
                     if( updatecnt==1 .or. (.not.build_glob%spproj_field%has_been_searched(iptcl)) )then
@@ -269,6 +275,8 @@ contains
                         ! other particles
                         if( l_greedy )then
                             allocate(strategy2D_greedy          :: strategy2Dsrch(iptcl_batch)%ptr)
+                        else if( l_snhc_smpl )then
+                            allocate(strategy2D_snhc_smpl       :: strategy2Dsrch(iptcl_batch)%ptr)
                         else
                             allocate(strategy2D_snhc            :: strategy2Dsrch(iptcl_batch)%ptr)
                         endif

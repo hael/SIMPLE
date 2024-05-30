@@ -658,7 +658,7 @@ contains
         integer                                :: nmics_sel, nmics_rej, nmics_rejected_glob
         integer                                :: nmics, nprojects, stacksz, prev_stacksz, iter, last_injection, iproj, envlen
         integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, nmic_star
-        logical                                :: l_templates_provided, l_projects_left, l_haschanged, l_multipick, l_extract
+        logical                                :: l_templates_provided, l_projects_left, l_haschanged, l_multipick, l_extract, l_once
         integer(timer_int_kind) :: t0
         real(timer_int_kind)    :: rt_write
         call cline%set('oritype', 'mic')
@@ -785,19 +785,6 @@ contains
         else
             call qenv%new(1,stream=.true.)
         end if
-        ! prepares picking references
-        if( l_templates_provided )then
-            cline_make_pickrefs = cline
-            call cline_make_pickrefs%set('prg','make_pickrefs')
-            call cline_make_pickrefs%set('stream','no')
-            call cline_make_pickrefs%delete('ncls')
-            call cline_make_pickrefs%delete('mskdiam')
-            if(.not.cline%defined('moldiam')) call cline_make_pickrefs%delete('moldiam')
-            call xmake_pickrefs%execute_shmem(cline_make_pickrefs)
-            call cline%set('pickrefs', '../'//trim(PICKREFS_FBODY)//trim(params%ext))
-            write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
-            call qsys_cleanup
-        endif
         ! command line for execution
         cline_pick_extract = cline
         call cline_pick_extract%set('prg','pick_extract')
@@ -818,6 +805,7 @@ contains
         n_added               = 0   ! global number of micrographs added to processing stack
         l_projects_left       = .false.
         l_haschanged          = .false.
+        l_once                = .true.
         do
             if( file_exists(trim(TERM_STREAM)) )then
                 ! termination
@@ -877,6 +865,20 @@ contains
                 nmics = 0
                 do iproj = 1, nprojects
                     call create_individual_project(projects(iproj), nmics_sel, nmics_rej)
+                    if( l_once )then
+                        ! prepares picking references here as we did not have pixel size before
+                        if( l_templates_provided )then
+                            cline_make_pickrefs = cline
+                            call cline_make_pickrefs%set('prg',   'make_pickrefs')
+                            call cline_make_pickrefs%set('stream','no')
+                            call cline_make_pickrefs%set('smpd',  params%smpd)
+                            call xmake_pickrefs%execute_shmem(cline_make_pickrefs)
+                            call cline%set('pickrefs', '../'//trim(PICKREFS_FBODY)//trim(params%ext))
+                            write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
+                            call qsys_cleanup
+                        endif
+                        l_once = .false.
+                    endif
                     call project_buff%add2history(projects(iproj))
                     if( nmics_sel > 0 )then
                         call qenv%qscripts%add_to_streaming(cline_pick_extract)
@@ -1279,6 +1281,8 @@ contains
                 enddo
                 nselected = cnt
                 nrejected = tmp_proj%os_mic%get_noris() - nselected
+                ! Gather pixel size once
+                if( l_once ) params%smpd = spproj_here%os_mic%get(1,'smpd')
                 ! update for execution
                 pick_extract_set_counter = pick_extract_set_counter + 1
                 projname = int2str_pad(pick_extract_set_counter,params%numlen)
@@ -1418,7 +1422,6 @@ contains
         call cline%set('kweight_chunk','default')
         call cline%set('kweight_pool', 'default')
         call cline%set('prune',        'no')
-        call cline%set('ml_reg',       'no')
         call cline%set('wiener',       'full')
         if( .not. cline%defined('outdir')          ) call cline%set('outdir',           '')
         if( .not. cline%defined('walltime')        ) call cline%set('walltime',         29*60) ! 29 minutes
@@ -1432,8 +1435,10 @@ contains
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',        'black')
         if( .not. cline%defined('extractfrommov')  ) call cline%set('extractfrommov',   'no')
         ! 2D classification
-        if( .not. cline%defined('ncls')            ) call cline%set('ncls',            30)
+        if( .not. cline%defined('ncls')            ) call cline%set('ncls',           30)
         if( .not. cline%defined('nptcls_per_cls')  ) call cline%set('nptcls_per_cls', 500)
+        if( .not. cline%defined('ml_reg')          ) call cline%set('ml_reg',         'no')
+        if( .not. cline%defined('refine')          ) call cline%set('refine',         'snhc')
         ! ev overrides
         call get_environment_variable(SIMPLE_STREAM_PICK_NTHR, pick_nthr_env, envlen)
         if(envlen > 0) then
@@ -1475,8 +1480,9 @@ contains
         ! movie watcher init
         project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true.)
         ! 2D parameters
-        params%nchunks    = 0
-        params%ncls_start = params%ncls
+        params%nchunks     = 0
+        params%ncls_start  = params%ncls
+        params%ml_reg_pool = params%ml_reg
         ! guistats init
         call gui_stats%init
         call gui_stats%set('micrographs', 'micrographs_imported', int2str(0), primary=.true.)
@@ -2107,16 +2113,18 @@ contains
         call cline%set('kweight_chunk','default')
         call cline%set('kweight_pool', 'default')
         call cline%set('prune',        'no')
-        call cline%set('ml_reg',       'no')
         call cline%set('wiener',       'full')
         if( .not. cline%defined('dir_target')   ) THROW_HARD('DIR_TARGET must be defined!')
-        if( .not. cline%defined('walltime')     ) call cline%set('walltime',   29.0*60.0) ! 29 minutes
-        if( .not. cline%defined('lpthres')      ) call cline%set('lpthres',       30.0)
-        if( .not. cline%defined('ndev')         ) call cline%set('ndev', CLS_REJECT_STD)
+        if( .not. cline%defined('walltime')     ) call cline%set('walltime',     29*60) ! 29 minutes
+        if( .not. cline%defined('lpthres')      ) call cline%set('lpthres',      30.0)
+        if( .not. cline%defined('ndev')         ) call cline%set('ndev',         CLS_REJECT_STD)
         if( .not. cline%defined('reject_cls')   ) call cline%set('reject_cls',   'yes')
-        if( .not. cline%defined('objfun')       ) call cline%set('objfun',    'euclid')
-        if( .not. cline%defined('rnd_cls_init') ) call cline%set('rnd_cls_init',  'no')
+        if( .not. cline%defined('objfun')       ) call cline%set('objfun',       'euclid')
+        if( .not. cline%defined('ml_reg')       ) call cline%set('ml_reg',       'no')
+        if( .not. cline%defined('tau')          ) call cline%set('tau',          5)
+        if( .not. cline%defined('rnd_cls_init') ) call cline%set('rnd_cls_init', 'no')
         if( .not. cline%defined('remove_chunks')) call cline%set('remove_chunks','yes')
+        if( .not. cline%defined('refine')       ) call cline%set('refine',       'snhc')
         ! write cmdline for GUI
         call cline%writeline(".cline")
         ! sanity check for restart
@@ -2132,10 +2140,12 @@ contains
             call cline%delete('ncls')
         endif
         ! master parameters
-        call cline%set('numlen', 5.)
+        call cline%set('numlen', 5)
         call cline%set('stream','yes')
         call params%new(cline)
-        params%nthr2D = params%nthr
+        params%nthr2D       = params%nthr
+        params%ml_reg_chunk = trim(params%ml_reg)
+        params%ml_reg_pool  = trim(params%ml_reg)
         call simple_getcwd(cwd_job)
         call cline%set('mkdir', 'no')
         if( ncls_in > 0 ) call cline%set('ncls', real(ncls_in))

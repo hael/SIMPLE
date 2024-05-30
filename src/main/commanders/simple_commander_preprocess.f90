@@ -141,7 +141,7 @@ contains
         type(cmdline)                 :: cline_make_pickrefs
         type(chash)                   :: job_descr
         type(sp_project)              :: spproj
-        real    :: pickref_scale
+        real    :: pickrefs_smpd
         logical :: l_pick
         if( .not. cline%defined('oritype')         ) call cline%set('oritype',        'mic')
         if( .not. cline%defined('stream')          ) call cline%set('stream',          'no')
@@ -199,10 +199,11 @@ contains
                     call cline_make_pickrefs%set('prg','make_pickrefs')
                     call cline_make_pickrefs%set('neg','yes')
                     call cline_make_pickrefs%set('mkdir','no')
+                    pickrefs_smpd = params%smpd / params%scale
                     if( cline_make_pickrefs%defined('eer_upsampling') )then
-                        pickref_scale = real(params%eer_upsampling) * params%scale
-                        call cline_make_pickrefs%set('scale',pickref_scale)
+                        pickrefs_smpd = pickrefs_smpd / real(params%eer_upsampling)
                     endif
+                    call cline_make_pickrefs%set('smpd', pickrefs_smpd)
                     call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
                     call cline%set('pickrefs', trim(PICKREFS_FBODY)//params%ext)
                     write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
@@ -988,8 +989,9 @@ contains
             case('old')
                 ! prepares picking references (always required)
                 cline_make_pickrefs = cline
-                call cline_make_pickrefs%set('prg','make_pickrefs')
-                call cline_make_pickrefs%set('neg','yes')
+                call cline_make_pickrefs%set('prg',  'make_pickrefs')
+                call cline_make_pickrefs%set('smpd', params%smpd)
+                call cline_make_pickrefs%set('neg',  'yes')
                 call cline_make_pickrefs%set('mkdir','no')
                 call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
                 call cline%set('pickrefs', trim(PICKREFS_FBODY)//params%ext)
@@ -2382,7 +2384,6 @@ contains
 
     subroutine exec_make_pickrefs( self, cline )
         use simple_masker,   only: automask2D
-        use simple_binimage, only: binimage
         use simple_default_clines
         class(make_pickrefs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
@@ -2393,10 +2394,10 @@ contains
         real,        allocatable :: diams(:), shifts(:,:)
         real,    parameter :: MSKDIAM2LP = 0.15, lP_LB = 30., LP_UB = 15.
         integer, parameter :: NREFS=100
-        real    :: ang, rot, xyz(3), lp, diam_max
-        integer :: nrots, iref, irot, ldim_clip(3), ldim(3), ncavgs, icavg
-        integer :: cnt, norefs, new_box
-        logical :: l_moldiam = .false.
+        real    :: ang, rot, xyz(3), lp, diam_max, smpd_here, sc
+        integer :: i, nrots, iref, irot, ldim_clip(3), ldim(3), ldim_sc(3), ncavgs, icavg
+        integer :: cnt, norefs, b, new_box
+        logical :: l_scale, l_moldiam = .false.
         ! error check
         if( cline%defined('vol1') ) THROW_HARD('vol1 input no longer supported, use prg=reproject to generate 20 2D references')
         if( .not.cline%defined('pickrefs') ) THROW_HARD('PICKREFS must be informed!')
@@ -2410,14 +2411,38 @@ contains
         call params%new(cline)
         if( params%stream.eq.'yes' ) THROW_HARD('not a streaming application')
         ! read selected cavgs
-        call find_ldim_nptcls(params%pickrefs, ldim, ncavgs, smpd=params%smpd)
-        if( params%smpd < 0.01 ) THROW_HARD('Invalid sampling distance for the cavgs (should be in MRC format)')
+        call find_ldim_nptcls(params%pickrefs, ldim, ncavgs, smpd=smpd_here)
+        if( smpd_here < 0.01 ) THROW_HARD('Invalid sampling distance for the cavgs (should be in MRC format)')
         ldim(3) = 1
+        ! Pixel size & scaling
+        ! smpd_here is the pixel size read in
+        ! params%smpd is the target pixel size of the micrograph
+        if( .not.cline%defined('smpd') ) params%smpd = smpd_here
+        l_scale = .false.
+        if( abs(smpd_here-params%smpd) > 0.001 )then
+            sc = smpd_here/params%smpd
+            b  = round2even(real(ldim(1))*sc)
+            if( b /= ldim(1) )then
+                l_scale = .true.
+                ldim_sc = [b,b,1]
+            endif
+        endif
+        ! read
         allocate( projs(ncavgs), masks(ncavgs) )
-        call stkio_r%open(params%pickrefs, params%smpd, 'read', bufsz=ncavgs)
+        call stkio_r%open(params%pickrefs, smpd_here, 'read', bufsz=ncavgs)
         do icavg=1,ncavgs
-            call projs(icavg)%new(ldim, params%smpd)
+            call projs(icavg)%new(ldim, smpd_here)
             call stkio_r%read(icavg, projs(icavg))
+            if( l_scale )then
+                ! scaling to final dimension
+                call projs(icavg)%fft
+                if( ldim_sc(1) > ldim(1) )then
+                    call projs(icavg)%pad_inplace(ldim_sc, antialiasing=.false.)
+                else
+                    call projs(icavg)%clip_inplace(ldim_sc)
+                endif
+                call projs(icavg)%ifft
+            endif
             call masks(icavg)%copy(projs(icavg))
         end do
         call stkio_r%close
@@ -2441,9 +2466,7 @@ contains
         lp       = min(max(LP_LB,MSKDIAM2LP * diam_max),LP_UB)
         new_box = round2even(diam_max / params%smpd + 2. * COSMSKHALFWIDTH)
         write(logfhandle,'(A,1X,I4)') 'ESTIMATED BOX SIXE: ', new_box
-        ldim_clip(1) = new_box
-        ldim_clip(2) = new_box
-        ldim_clip(3) = 1
+        ldim_clip = [new_box, new_box, 1]
         do icavg=1,ncavgs
             call projs(icavg)%bp(0.,lp)
         end do
@@ -2474,6 +2497,14 @@ contains
                 call ref2D_clip%write(trim(PICKREFS_FBODY)//params%ext, iref)
             end do
         endif
+        ! cleanup
+        do icavg = 1,ncavgs
+            call masks(icavg)%kill
+            call projs(icavg)%kill
+        enddo
+        deallocate(masks,projs)
+        call ref2D%kill
+        call ref2D_clip%kill
         ! end gracefully
         call simple_touch('MAKE_PICKREFS_FINISHED', errmsg='In: commander_preprocess::exec_make_pickrefs')
         call simple_end('**** SIMPLE_MAKE_PICKREFS NORMAL STOP ****')

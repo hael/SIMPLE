@@ -1895,7 +1895,7 @@ contains
         &'is a distributed workflow that executes 2D classification'//&                ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_stream',&                                                             ! executable
-        &0, 2, 0, 7, 2, 1, 5, .true.)                                                 ! # entries in each group, requires sp_project
+        &0, 2, 0, 9, 2, 1, 5, .true.)                                                 ! # entries in each group, requires sp_project
         cluster2D_stream%gui_submenu_list = "data,cluster 2D,compute"
         cluster2D_stream%advanced = .false.
         ! image input/output
@@ -1927,6 +1927,13 @@ contains
         call cluster2D_stream%set_gui_params('srch_ctrls', 6, submenu="cluster 2D")
         call cluster2D_stream%set_input('srch_ctrls', 7, maxnchunks)
         call cluster2D_stream%set_gui_params('srch_ctrls', 7, submenu="cluster 2D", online=.true.)
+        call cluster2D_stream%set_input('srch_ctrls', 8, ml_reg)
+        call cluster2D_stream%set_gui_params('srch_ctrls', 8, submenu="cluster 2D")
+        cluster2D_stream%srch_ctrls(8)%descr_long        = 'Regularization (ML-style) based on the signal power(yes|no){no}'
+        cluster2D_stream%srch_ctrls(8)%descr_placeholder = '(yes|no){no}'
+        cluster2D_stream%srch_ctrls(8)%cval_default      = 'no'
+        call cluster2D_stream%set_input('srch_ctrls', 9, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(snhc|snhc_smpl){snhc}', '(snhc|snhc_smpl){snhc}', .false., 'snhc')
+        call cluster2D_stream%set_gui_params('srch_ctrls', 9, submenu="cluster 2D")
         ! filter controls
         call cluster2D_stream%set_input('filt_ctrls', 1, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
@@ -3045,13 +3052,17 @@ contains
         &'Make pick references',&            ! descr_short
         &'is a program for making 2D references for particle picking',&
         &'simple_exec',&                     ! executable
-        &1, 2, 0, 0, 0, 0, 1, .false.)       ! # entries in each group, requires sp_project
+        &1, 3, 0, 0, 0, 0, 1, .false.)       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call make_pickrefs%set_input('img_ios', 1,  pickrefs)
         ! parameter input/output
-        call make_pickrefs%set_input('parm_ios', 1, neg)
-        call make_pickrefs%set_input('parm_ios', 2, moldiam)
+        call make_pickrefs%set_input('parm_ios', 1, smpd)
+        make_pickrefs%parm_ios(1)%descr_short = 'Target sampling distance'
+        make_pickrefs%parm_ios(1)%descr_long  = 'Desired final pixel size (eg, that of micrograph to pick)'
+        make_pickrefs%parm_ios(1)%required    = .false.
+        call make_pickrefs%set_input('parm_ios', 2, neg)
+        call make_pickrefs%set_input('parm_ios', 3, moldiam)
         ! alternative inputs
         ! <empty>
         ! search controls

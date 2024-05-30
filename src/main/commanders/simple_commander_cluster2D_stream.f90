@@ -742,23 +742,18 @@ contains
         integer              :: nptcls_rejected, ncls_rejected, ncls2reject, iptcl
         integer              :: icls, cnt
         if( .not.pool_available ) return
-        if( trim(params_glob%reject_cls).ne.'yes' ) return
+        if( trim(params_glob%reject_cls).eq.'no' ) return
         ! rejection frequency
         if( pool_iter <= 2*FREQ_POOL_REJECTION .or. mod(pool_iter,FREQ_POOL_REJECTION)/=0 ) return
         if( pool_proj%os_cls2D%get_noris() == 0 ) return
         ncls_rejected   = 0
         nptcls_rejected = 0
-        allocate(cls_mask(ncls_glob),moments_mask(ncls_glob),corres_mask(ncls_glob),source=.true.)
-        ! total variation distance
-        if( L_CLS_REJECT_DEV )then
-            call pool_proj%os_cls2D%class_moments_rejection(moments_mask)
-            call pool_proj%os_cls2D%class_corres_rejection(ndev_here, corres_mask)
-        endif
+        allocate(cls_mask(ncls_glob),corres_mask(ncls_glob),source=.true.)
         ! correlation & resolution
         ndev_here = 1.25*params_glob%ndev2D ! less stringent rejection than chunk
         call pool_proj%os_cls2D%find_best_classes(box,smpd,params_glob%lpthres,corres_mask,ndev_here)
         ! overall class rejection
-        cls_mask = moments_mask .and. corres_mask
+        cls_mask = corres_mask
         ! rejecting associated particles
         ncls2reject = count(.not.cls_mask)
         if( ncls2reject > 0 .and. ncls2reject < min(ncls_glob,nint(real(ncls_glob)*FRAC_SKIP_REJECTION)) )then
@@ -789,7 +784,7 @@ contains
                     if( cls_mask(icls) ) cycle
                     cnt = cnt+1
                     ncls_rejected_glob = ncls_rejected_glob + 1
-                    if( debug_here .or. L_CLS_REJECT_DEV )then
+                    if( debug_here )then
                         call img%read(trim(POOL_DIR)//trim(refs_glob),icls)
                         call img%write(trim(POOL_DIR)//'cls_rejected_pool.mrc',ncls_rejected_glob)
                     endif
