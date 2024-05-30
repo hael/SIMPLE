@@ -26,6 +26,7 @@ end interface read_imgbatch
 real, parameter :: SHTHRESH  = 0.001
 real, parameter :: CENTHRESH = 0.5                    ! threshold for performing volume/cavg centering in pixels
 character(len=*), parameter :: L_LPSET_FILTER = 'COS' ! <BW|COS|NONE>
+logical,          parameter :: EXP_GATE_TST   = .false.
 type(stack_io)  :: stkio_r
 
 contains
@@ -567,7 +568,13 @@ contains
         ! Volume filtering
         filtsz = build_glob%vol%get_filtsz()
         if( params_glob%l_ml_reg )then
-            ! no filtering
+            if( EXP_GATE_TST )then
+                if( params_glob%l_lpset )then
+                    ! Butterworth low-pass filter
+                    call butterworth_filter(calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd), filter)
+                    call vol_ptr%apply_filter(filter)
+                endif
+            endif
         else if( params_glob%l_icm )then
             ! filtering done in read_and_filter_refvols
         else if( params_glob%l_nonuniform )then
