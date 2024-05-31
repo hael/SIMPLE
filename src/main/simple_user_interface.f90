@@ -2389,7 +2389,7 @@ contains
         &'is a distributed workflow that executes picking and extraction'//&             ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_stream',&                                                               ! executable
-        &1, 4, 0, 2, 3, 1, 5, .true.)                                                    ! # entries in each group, requires sp_project
+        &1, 5, 0, 2, 3, 1, 5, .true.)                                                    ! # entries in each group, requires sp_project
         gen_picking_refs%gui_submenu_list = "data,picking,extract,cluster 2D,compute"
         gen_picking_refs%advanced = .false.
         ! image input/output
@@ -2406,6 +2406,8 @@ contains
         call gen_picking_refs%set_input('parm_ios', 4, 'dir_target', 'file', 'Target directory',&
         &'Directory where the preprocess_stream application is running', 'e.g. 1_preproc', .true., '')
         call gen_picking_refs%set_gui_params('parm_ios', 4, submenu="data")
+        call gen_picking_refs%set_input('parm_ios', 5, 'maxpop', 'num', 'Maximum number of particles processed',&
+        &'Maximum number of particles extracted and classified{200000}', '{200000}', .false., 200000.)
         ! alternative inputs
         ! <empty>
         ! search controls

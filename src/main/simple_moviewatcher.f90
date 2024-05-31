@@ -26,7 +26,10 @@ type moviewatcher
     integer                            :: lastreporttime = 0     !< time ellapsed between last and first watch
     integer                            :: n_watch        = 0     !< number of times the folder has been watched
     integer                            :: len_ext        = 0
+    logical                            :: exists         = .false.
 contains
+    ! getters
+    procedure          :: does_exist
     ! doers
     procedure          :: watch
     procedure, private :: watchdirs
@@ -86,7 +89,13 @@ contains
             self%regexp = '\.simple$'
         endif
         self%len_ext = len_trim(self%ext)
+        self%exists  = .true.
     end function constructor
+
+    logical function does_exist( self )
+        class(moviewatcher), intent(in) :: self
+        does_exist = self%exists
+    end function does_exist
 
     !>  \brief  is the watching procedure
     subroutine watch( self, n_movies, movies, max_nmovies )
@@ -100,6 +109,9 @@ contains
         integer                   :: tnow, last_accessed, last_modified, last_status_change ! in seconds
         integer                   :: i, io_stat, n_lsfiles, cnt, fail_cnt
         character(len=LONGSTRLEN) :: fname
+        if( allocated(movies) ) deallocate(movies)
+        n_movies = 0
+        if( .not.self%exists )return
         ! init
         self%n_watch = self%n_watch + 1
         tnow = simple_gettime()
@@ -107,8 +119,6 @@ contains
             self%starttime  = tnow ! first call
         endif
         self%ellapsedtime = tnow - self%starttime
-        if(allocated(movies))deallocate(movies)
-        n_movies = 0
         fail_cnt = 0
         ! get file list
         ! call self%check4dirs ! Only necessary for multiple directories!
@@ -327,6 +337,7 @@ contains
         self%n_watch        = 0
         self%n_history      = 0
         self%len_ext        = 0
+        self%exists = .false.
     end subroutine kill
 
 end module simple_moviewatcher

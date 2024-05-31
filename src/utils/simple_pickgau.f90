@@ -91,7 +91,7 @@ contains
         real,          allocatable :: smds_corr(:)
         type(pickgau) :: picker_merged
         integer :: npickers, ipick, ioff, joff, loc(1)
-        real    :: moldiam_max
+        real    :: moldiam_max, dist_threshold
         logical :: l_merge
         npickers    = size(moldiams)
         moldiam_max = maxval(moldiams)
@@ -99,7 +99,8 @@ contains
         ! multi-gaussian pick
         do ipick = 1,npickers
             call pickers(ipick)%new_gaupicker(pcontrast, smpd_shrink, moldiams(ipick), moldiam_max, offset, ndev)
-            call pickers(ipick)%gaupick
+            dist_threshold = (pickers(ipick)%maxdiam/3.) / smpd_shrink
+            call pickers(ipick)%gaupick(dist_thres=dist_threshold)
             smds_corr(ipick) = pickers(ipick)%smd_corr
             call pickers(ipick)%mic_shrink%kill
         end do
@@ -150,9 +151,10 @@ contains
         deallocate(pickers)
     end subroutine gaupick_multi
 
-    subroutine gaupick( self, self_refine )
+    subroutine gaupick( self, self_refine, dist_thres )
         class(pickgau),           intent(inout) :: self
         class(pickgau), optional, intent(inout) :: self_refine
+        real,           optional, intent(in)    :: dist_thres ! distance threshold that applies to self, not self_refine
         integer, allocatable :: pos(:,:)
         if( self%l_roi )then
             call self%flag_ice
@@ -177,7 +179,7 @@ contains
             return
         endif
         ! if( L_WRITE ) call self%write_boxfile('pickgau_after_detect_peaks.box')
-        call self%distance_filter
+        call self%distance_filter(dist_thres=dist_thres)
         ! if( L_WRITE ) call self%write_boxfile('pickgau_after_distance_filter.box')
         call self%remove_outliers
         ! if( L_WRITE ) call self%write_boxfile('pickgau_after_remove_outliers.box')

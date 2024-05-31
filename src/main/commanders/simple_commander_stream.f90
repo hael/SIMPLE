@@ -1392,6 +1392,7 @@ contains
         class(commander_stream_gen_picking_refs), intent(inout) :: self
         class(cmdline),                           intent(inout) :: cline
         character(len=STDLEN),     parameter   :: micspproj_fname = './streamdata.simple'
+        integer,                   parameter   :: MAXPOP_DEFAULT  = 200000 ! # of particles after wich picking is stopped
         logical,                   parameter   :: DEBUG_HERE      = .FALSE.
         type(parameters)                       :: params
         type(guistats)                         :: gui_stats
@@ -1439,6 +1440,7 @@ contains
         if( .not. cline%defined('nptcls_per_cls')  ) call cline%set('nptcls_per_cls', 500)
         if( .not. cline%defined('ml_reg')          ) call cline%set('ml_reg',         'no')
         if( .not. cline%defined('refine')          ) call cline%set('refine',         'snhc')
+        if( .not. cline%defined('maxpop')          ) call cline%set('maxpop',         MAXPOP_DEFAULT)
         ! ev overrides
         call get_environment_variable(SIMPLE_STREAM_PICK_NTHR, pick_nthr_env, envlen)
         if(envlen > 0) then
@@ -1461,6 +1463,10 @@ contains
         params%ncunits    = params%nparts
         call simple_getcwd(cwd_job)
         call cline%set('mkdir', 'no')
+        call cline%delete('maxpop')
+        if( params%nptcls_per_cls*params%ncls > params%maxpop )then
+            THROW_HARD('Incorrect inputs: MAXPOP < NPTCLS_PER_CLS x NCLS')
+        endif
         ! determine whether we are picking/extracting or extracting only
         if( .not.dir_exists(trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED)) )then
             THROW_HARD('Invalid DIR_TARGET 1')
@@ -1571,6 +1577,11 @@ contains
             endif
             iter = iter + 1
             ! detection of new projects
+            if( nptcls_glob > params%maxpop .and. project_buff%does_exist() )then
+                ! limit reached
+                call project_buff%kill
+                write(logfhandle,'(A)')'>>> PICKING/EXTRACTION OF PARTICLES WILL STOP FROM NOW'
+            endif
             call project_buff%watch( nprojects, projects, max_nmovies=params%nparts )
             ! append projects to processing stack
             if( nprojects > 0 )then
@@ -1599,7 +1610,6 @@ contains
                 ! guistats
                 call gui_stats%set('micrographs', 'micrographs_imported', int2str(project_buff%n_history * NMOVS_SET), primary=.true.)
                 call gui_stats%set_now('micrographs', 'last_micrograph_imported')
-            else
             endif
             ! submit jobs
             call qenv%qscripts%schedule_streaming( qenv%qdescr, path=output_dir )
