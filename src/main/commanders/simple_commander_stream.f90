@@ -1491,10 +1491,9 @@ contains
         params%ml_reg_pool = params%ml_reg
         ! guistats init
         call gui_stats%init
-        call gui_stats%set('micrographs', 'micrographs_imported', int2str(0), primary=.true.)
-        call gui_stats%set('micrographs', 'micrographs_rejected', int2str(0), primary=.true.)
-        call gui_stats%set('micrographs', 'micrographs_picked',   int2str(0), primary=.true.)
-        call gui_stats%set('compute',     'compute_in_use',       int2str(0) // '/' // int2str(params%nparts), primary=.true.)
+        call gui_stats%set('particles', 'particles_extracted',         0,            primary=.true.)
+        call gui_stats%set('2D',        'iteration',                   0,            primary=.true.)
+        call gui_stats%set('compute',   'compute_in_use',      int2str(0) // '/' // int2str(params%nparts), primary=.true.)
         ! directories
         output_dir         = trim(PATH_HERE)//trim(DIR_STREAM)
         output_dir_picker  = filepath(trim(PATH_HERE), trim(DIR_PICKER))
@@ -1570,7 +1569,7 @@ contains
         l_haschanged          = .false.
         l_once                = .true.
         do
-            if( file_exists(trim(TERM_STREAM)) )then
+            if( file_exists(trim(TERM_STREAM)) .or. file_exists(STREAM_REJECT_CLS))then
                 ! termination
                 write(logfhandle,'(A)')'>>> TERMINATING STREAM GEN_PICKING_REFERENCES'
                 exit
@@ -1607,9 +1606,8 @@ contains
                 if( nmics > 0 )then
                     write(logfhandle,'(A,I4,A,A)')'>>> ',nmics,' NEW MICROGRAPHS ADDED; ',cast_time_char(simple_gettime())
                 endif
-                ! guistats
-                call gui_stats%set('micrographs', 'micrographs_imported', int2str(project_buff%n_history * NMOVS_SET), primary=.true.)
-                call gui_stats%set_now('micrographs', 'last_micrograph_imported')
+                ! guistats 
+                call gui_stats%set_now('particles', 'last_particles_imported')
             endif
             ! submit jobs
             call qenv%qscripts%schedule_streaming( qenv%qdescr, path=output_dir )
@@ -1647,16 +1645,7 @@ contains
                 write(logfhandle,'(A,I3,A2,I3)') '>>> # OF COMPUTING UNITS IN USE/TOTAL   : ',qenv%get_navail_computing_units(),'/ ',params%nparts
                 if( n_failed_jobs > 0 ) write(logfhandle,'(A,I8)') '>>> # DESELECTED MICROGRAPHS/FAILED JOBS: ',n_failed_jobs
                 ! guistats
-                call gui_stats%set('micrographs', 'micrographs_picked', int2str(n_imported) // ' (' // int2str(ceiling(100.0 * real(n_imported) / real(project_buff%n_history * NMOVS_SET))) // '%)', primary=.true.)
-                if( n_failed_jobs > 0 ) call gui_stats%set('micrographs', 'micrographs_rejected', n_failed_jobs, primary=.true.)
-                if(spproj_glob%os_mic%isthere("nptcls")) then
-                    call gui_stats%set('micrographs', 'avg_number_picks', ceiling(spproj_glob%os_mic%get_avg("nptcls")), primary=.true.)
-                end if
-                call gui_stats%set('particles', 'total_extracted_particles', nptcls_glob, primary=.true.)
-                if(spproj_glob%os_mic%isthere('intg') .and. spproj_glob%os_mic%isthere('boxfile')) then
-                    latest_boxfile = trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'boxfile'))
-                    if(file_exists(trim(latest_boxfile))) call gui_stats%set('latest', '', trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'intg')), thumbnail=.true., boxfile=trim(latest_boxfile))
-                end if
+                call gui_stats%set('particles', 'particles_extracted', nptcls_glob, primary=.true.)
                 ! update progress monitor
                 call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
                 ! write project for gui, micrographs field only
@@ -1681,9 +1670,12 @@ contains
             call update_pool_dev
             call import_records_into_pool( micproj_records )
             call classify_pool_dev
-            ! guistats
-            call gui_stats%write_json
             call sleep(WAITTIME)
+            ! guistats
+            if(file_exists(POOLSTATS_FILE)) then
+                call gui_stats%merge(POOLSTATS_FILE)
+            end if
+            call gui_stats%write_json
         end do
         ! termination
         if( l_once )then
@@ -1691,6 +1683,9 @@ contains
         else
             call terminate_stream2D_dev
         endif
+        if(file_exists(STREAM_REJECT_CLS)) call write_pool_cls_selected_user_dev
+        !call write_project
+        !call update_user_params(cline)
         ! call copy_micrographs_optics
         ! call write_migrographs_starfile(optics_set=.true.)
         ! call write_particles_starfile(optics_set=.true.)
