@@ -123,7 +123,11 @@ contains
         self%prev_state = o_prev%get_state()                               ! state index
         self%class      = o_prev%get_class()                               ! 2D class index
         self%prev_roind = pftcc_glob%get_roind(360.-o_prev%e3get())        ! in-plane angle index
-        self%prev_shvec = o_prev%get_2Dshift()                             ! shift vector
+        if( (trim(params_glob%sh_rand) .eq. 'yes') .and. (params_glob%which_iter == 1) )then
+            self%prev_shvec = 2. * (ran3() - 0.5) * params_glob%sh_sig     ! perturbation of initial shifts
+        else
+            self%prev_shvec = o_prev%get_2Dshift()                         ! shift vector
+        endif
         self%prev_proj  = build_glob%eulspace%find_closest_proj(o_prev)    ! previous projection direction
         self%prev_ref   = (self%prev_state-1)*self%nprojs + self%prev_proj ! previous reference
         call build_glob%spproj_field%set(self%iptcl, 'proj', real(self%prev_proj))
