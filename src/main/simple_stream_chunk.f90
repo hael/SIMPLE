@@ -440,7 +440,7 @@ contains
         allocate(cls_mask(ncls),moments_mask(ncls),corres_mask(ncls),source=.true.)
         ! moments & total variation distance
         if( trim(params_glob%reject_cls).eq.'dev' )then
-            call self%spproj%os_cls2D%class_moments_rejection(moments_mask)
+            call self%spproj%os_cls2D%class_robust_rejection(moments_mask)
         endif
         ! correlation and resolution
         call self%spproj%os_cls2D%find_best_classes(box, smpd_here, res_thresh, corres_mask, ndev)
