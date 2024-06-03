@@ -1469,7 +1469,7 @@ contains
                 logical, allocatable :: moments_mask(:), corres_mask(:)
                 integer :: icls
                 allocate(moments_mask(cavgs_ncls),corres_mask(cavgs_ncls),source=.true.)
-                call build%spproj%os_cls2D%class_moments_rejection(moments_mask)
+                call build%spproj%os_cls2D%class_robust_rejection(moments_mask)
                 call build%spproj%os_cls2D%class_corres_rejection(params%ndev, corres_mask)
                 cls_mask = cls_mask .and. moments_mask .and. corres_mask
                 do icls = 1,cavgs_ncls

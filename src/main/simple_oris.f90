@@ -201,7 +201,7 @@ type :: oris
     procedure          :: calc_hard_weights2D
     procedure          :: calc_soft_weights2D
     procedure          :: find_best_classes
-    procedure          :: class_moments_rejection, class_corres_rejection
+    procedure          :: class_robust_rejection, class_corres_rejection
     procedure          :: find_closest_proj
     procedure          :: discretize
     procedure, private :: nearest_proj_neighbors_1
@@ -2942,10 +2942,10 @@ contains
 
     end subroutine class_corres_rejection
 
-    subroutine class_moments_rejection( self, mask )
+    subroutine class_robust_rejection( self, mask )
         class(oris), intent(in)    :: self
         logical,     intent(inout) :: mask(1:self%n)
-        real,    allocatable :: vals(:)
+        real,    allocatable :: vals(:), x(:)
         logical, allocatable :: msk(:)
         integer :: icls
         logical :: has_mean, has_var, has_skew, has_tvd, l_err
@@ -2955,74 +2955,34 @@ contains
                 msk(icls) = self%get(icls,'pop') > 0.5
             enddo
         endif
+        if( count(mask) <= 5 ) return
         has_mean = self%isthere('mean')
         has_var  = self%isthere('var')
         has_tvd  = self%isthere('tvd')
         if( has_mean )then
             vals = self%get_all('mean')
-            call normalize_vals(vals, l_err)
-            if( .not.l_err )then
-                do icls = 1,self%n
-                    if( msk(icls) ) msk(icls) = vals(icls) > -5.0
-                enddo
-            endif
+            x    = pack(vals, mask=msk)
+            call robust_scaling(x)
+            do icls = 1,self%n
+                if( mask(icls) ) mask(icls) = x(icls) > -5.0
+            enddo
         endif
         if( has_var )then
             vals = self%get_all('var')
-            call normalize_vals(vals, l_err)
-            if( .not.l_err )then
-                do icls = 1,self%n
-                    if( msk(icls) ) msk(icls) = vals(icls) < 5.0
-                enddo
-            endif
+            x    = pack(vals, mask=msk)
+            call robust_scaling(x)
+            do icls = 1,self%n
+                if( mask(icls) ) mask(icls) = x(icls) > 5.0
+            enddo
         endif
         if( has_tvd )then
             vals = self%get_all('tvd')
             do icls = 1,self%n
-                if( msk(icls) ) msk(icls) = vals(icls) < 0.5
+                if( mask(icls) ) mask(icls) = vals(icls) < 0.5
             enddo
         endif
-        mask = msk
-        contains
-
-            subroutine normalize_vals( x, err )
-                real,    intent(inout) :: x(self%n)
-                logical, intent(out)   :: err
-                logical :: tmpmsk(self%n)
-                real    :: mean, var
-                integer :: nmsk
-                err    = .false.
-                tmpmsk = msk
-                nmsk   = count(tmpmsk)
-                if( nmsk < 3 )then
-                    err = .true.
-                    return
-                endif
-                mean   = sum(x,mask=tmpmsk) / real(nmsk)
-                x      = x - mean
-                var    = sum(x**2,mask=tmpmsk) / real(nmsk)
-                if( var < TINY )then
-                    err = .true.
-                else
-                    x      = x / sqrt(var)
-                    tmpmsk = tmpmsk .and. (abs(x) < 3.)
-                    nmsk   = count(tmpmsk)
-                    if( nmsk > 2 )then
-                        mean = sum(x,mask=tmpmsk) / real(nmsk)
-                        x    = x - mean
-                        var  = sum(x**2,mask=tmpmsk) / real(nmsk)
-                        if( var < TINY )then
-                            err = .true.
-                        else
-                            x = x / sqrt(var)
-                        endif
-                    else
-                        l_err = .true.
-                    endif
-                endif
-            end subroutine normalize_vals
-
-    end subroutine class_moments_rejection
+        deallocate(vals, x, msk)
+    end subroutine class_robust_rejection
 
     !>  \brief  calculates hard weights based on ptcl ranking
     subroutine calc_hard_weights( self, frac )

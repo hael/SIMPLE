@@ -783,7 +783,7 @@ contains
         allocate(cls_mask(ncls_glob),moments_mask(ncls_glob),corres_mask(ncls_glob),source=.true.)
         ! moments & total variation distance
         if( trim(params_glob%reject_cls).eq.'dev' )then
-            call pool_proj%os_cls2D%class_moments_rejection(moments_mask)
+            call pool_proj%os_cls2D%class_robust_rejection(moments_mask)
         endif
         ! correlation & resolution
         ndev_here = 1.25*params_glob%ndev ! less stringent rejection than chunk

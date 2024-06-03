@@ -9,10 +9,10 @@ use simple_is_check_assert
 implicit none
 
 public :: avg_sdev, moment, moment_serial, pearsn, normalize, normalize_sigm, normalize_minmax, std_mean_diff
-public :: corrs2weights, corr2distweight, analyze_smat, dev_from_dmat, mad, mad_gau, robust_sigma_thres, z_scores
-public :: median, median_nocopy, robust_z_scores, robust_normalization, pearsn_serial_8, kstwo
+public :: corrs2weights, corr2distweight, analyze_smat, dev_from_dmat, z_scores, pearsn_serial_8, kstwo
 public :: rank_sum_weights, rank_inverse_weights, rank_centroid_weights, rank_exponent_weights
 public :: conv2rank_weights, calc_stats, pearsn_serial, norm_corr, norm_corr_8, skewness, kurtosis
+public :: median, median_nocopy, mad, mad_gau, robust_scaling, robust_z_scores, robust_normalization, robust_sigma_thres
 private
 #include "simple_local_flags.inc"
 
@@ -1098,6 +1098,23 @@ contains
         dev = mad_gau(x, med)
         x   = (x - med) / dev
     end subroutine robust_normalization
+
+    ! scaling of input data according to median & IQR
+    subroutine robust_scaling( x )
+        real, intent(inout) :: x(:)
+        real, allocatable :: y(:)
+        real    :: q25, q75, med
+        integer :: n
+        n = size(x)
+        if( n < 4 ) return
+        y = x
+        call hpsort(y)
+        q25 = y(nint(0.25*real(n)))
+        med = y(nint(0.50*real(n)))
+        q75 = y(nint(0.75*real(n)))
+        x   = (x-med) / (q75-q25)
+        deallocate(y)
+    end subroutine robust_scaling
 
     subroutine expweights_from_scores( n, scores, weights )
         integer, intent(in)    :: n
