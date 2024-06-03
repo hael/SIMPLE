@@ -30,6 +30,7 @@ type euclid_sigma2
 contains
     ! constructor
     procedure          :: new
+    procedure          :: consolidate_sigma2_history
     procedure, private :: init_from_group_header
     ! utils
     procedure          :: write_info
@@ -77,6 +78,51 @@ contains
         self%exists       =  .true.
         eucl_sigma2_glob  => self
     end subroutine new
+
+    subroutine consolidate_sigma2_history( self, os, pinds, iters )
+        class(euclid_sigma2), intent(inout) :: self
+        class(oris),          intent(in)    :: os
+        integer,              intent(in)    :: pinds(:), iters(:)
+        real, allocatable :: pspecs(:,:,:)
+        integer :: i,nptcls,mincnt,maxcnt,icnt,ngroups,fromp,top,iptcl,eo,igroup
+        nptcls  = size(pinds)
+        mincnt  = minval(iters, mask=iters>=0)
+        maxcnt  = maxval(iters)
+        fromp   = minval(pinds)
+        top     = maxval(pinds)
+        call self%init_from_group_header( sigma2_star_from_iter(mincnt) )
+        allocate(self%sigma2_noise(self%kfromto(1):self%kfromto(2),fromp:top),source=0.)
+        if( params_glob%l_sigma_glob )then
+            do icnt = mincnt,maxcnt
+                call self%read_sigma2_groups( icnt, pspecs, ngroups )
+                if( ngroups /= 1 )then
+                    THROW_HARD('ngroups must be 1 when global sigma is estimated (params_glob%l_sigma_glob == .true.)')
+                endif
+                do i = 1,nptcls
+                    if( iters(i) == icnt )then
+                        iptcl = pinds(i)
+                        eo    = os%get_eo(iptcl) + 1
+                        self%sigma2_noise(:,iptcl) = pspecs(eo,1,:)
+                    endif
+                enddo
+                deallocate(pspecs)
+            enddo
+        else
+            do icnt = mincnt,maxcnt
+                call self%read_sigma2_groups( icnt, pspecs, ngroups )
+                do i = 1,nptcls
+                    if( iters(i) == icnt )then
+                        iptcl  = pinds(i)
+                        igroup = nint(os%get(iptcl,'stkind'))
+                        eo     = os%get_eo(iptcl) + 1
+                        self%sigma2_noise(:,iptcl) = pspecs(eo,igroup,:)
+                    endif
+                enddo
+                deallocate(pspecs)
+            enddo
+        endif
+        self%exists = .true.
+    end subroutine consolidate_sigma2_history
 
     !>  This is a minimal constructor to allow I/O of groups
     subroutine init_from_group_header( self, fname )
@@ -428,7 +474,6 @@ contains
         enddo
         deallocate(strings)
         call fclose(funit)
-        
         contains
         
             subroutine parse_key_int_pair(string, key, val)
