@@ -4,7 +4,7 @@ module simple_fplane
 include 'simple_lib.f08'
 use simple_image,         only: image
 use simple_parameters,    only: params_glob
-use simple_euclid_sigma2, only: eucl_sigma2_glob
+use simple_euclid_sigma2, only: euclid_sigma2, eucl_sigma2_glob
 use simple_ctf,           only: ctf
 implicit none
 
@@ -18,6 +18,7 @@ type :: fplane
     real,    allocatable, public :: ctfsq_plane(:,:)             !< On output CTF normalization
     real,    allocatable         :: ctf_ang(:,:)                 !< CTF effective defocus
     real,    allocatable         :: hcos(:), hsin(:)             !< For fast shift
+    real,    allocatable         :: sigma2_noise(:)              !< Noise power
     integer,              public :: ldim(3)       = 0            !< dimensions of original image
     integer,              public :: frlims_crop(3,2) = 0         !< Redundant Fourier cropped limits
     integer,              public :: ldim_crop(3)  = 0            !< dimensions of cropped image
@@ -61,9 +62,11 @@ contains
         allocate(self%cmplx_plane(self%frlims_crop(1,1):self%frlims_crop(1,2),self%frlims_crop(2,1):self%frlims_crop(2,2)),&
                 &self%ctfsq_plane(self%frlims_crop(1,1):self%frlims_crop(1,2),self%frlims_crop(2,1):self%frlims_crop(2,2)),&
                 &self%ctf_ang(self%frlims_crop(1,1):self%frlims_crop(1,2), self%frlims_crop(2,1):self%frlims_crop(2,2)),&
-                &self%hcos(self%frlims_crop(1,1):self%frlims_crop(1,2)), self%hsin(self%frlims_crop(1,1):self%frlims_crop(1,2)))
-        self%cmplx_plane = cmplx(0.,0.)
-        self%ctfsq_plane = 0.
+                &self%hcos(self%frlims_crop(1,1):self%frlims_crop(1,2)), self%hsin(self%frlims_crop(1,1):self%frlims_crop(1,2)),&
+                &self%sigma2_noise(1:self%nyq_crop))
+        self%cmplx_plane  = cmplx(0.,0.)
+        self%ctfsq_plane  = 0.
+        self%sigma2_noise = 0.
         ! CTF pre-calculations
         do k=self%frlims_crop(2,1),self%frlims_crop(2,2)
             do h=self%frlims_crop(1,1),self%frlims_crop(1,2)
@@ -79,12 +82,13 @@ contains
     end function does_exist
 
     !> Produces CTF multiplied fourier & CTF-squared planes
-    subroutine gen_planes( self, img, ctfvars, shift, iptcl)
-        class(fplane),    intent(inout) :: self
-        class(image),     intent(in)    :: img
-        class(ctfparams), intent(in)    :: ctfvars
-        real,             intent(in)    :: shift(2)
-        integer, optional,intent(in)    :: iptcl
+    subroutine gen_planes( self, img, ctfvars, shift, iptcl, sigma2)
+        class(fplane),                  intent(inout) :: self
+        class(image),                   intent(in)    :: img
+        class(ctfparams),               intent(in)    :: ctfvars
+        real,                           intent(in)    :: shift(2)
+        integer,                        intent(in)    :: iptcl
+        class(euclid_sigma2), optional, intent(in)     :: sigma2
         type(ctf) :: tfun
         complex   :: c, s
         real(dp)  :: pshift(2), arg, kcos,ksin
@@ -104,10 +108,20 @@ contains
             self%hcos(h) = dcos(arg)
             self%hsin(h) = dsin(arg)
         enddo
-        use_sigmas = present(iptcl) .and. params_glob%l_ml_reg
+        use_sigmas = params_glob%l_ml_reg
         if( use_sigmas )then
-            sigma2_kfromto(1) = lbound(eucl_sigma2_glob%sigma2_noise,1)
-            sigma2_kfromto(2) = ubound(eucl_sigma2_glob%sigma2_noise,1)
+            if( present(sigma2) )then
+                if( sigma2_kfromto(2) < self%nyq_crop )then
+                    THROW_HARD('Frequency range error')
+                endif
+                sigma2_kfromto(1) = lbound(sigma2%sigma2_noise,1)
+                sigma2_kfromto(2) = ubound(sigma2%sigma2_noise,1)
+                self%sigma2_noise(sigma2_kfromto(1):self%nyq_crop) = sigma2%sigma2_noise(sigma2_kfromto(1):self%nyq_crop,iptcl)
+            else
+                sigma2_kfromto(1) = lbound(eucl_sigma2_glob%sigma2_noise,1)
+                sigma2_kfromto(2) = ubound(eucl_sigma2_glob%sigma2_noise,1)
+                self%sigma2_noise(sigma2_kfromto(1):self%nyq_crop) = eucl_sigma2_glob%sigma2_noise(sigma2_kfromto(1):self%nyq_crop,iptcl)
+            endif
         end if
         do k = self%frlims_crop(2,1),self%frlims_crop(2,2)
             arg  = real(k,dp)*pshift(2)
@@ -136,11 +150,11 @@ contains
                     ! sigma2 weighing
                     if( use_sigmas) then
                         if(sh >= sigma2_kfromto(1))then
-                            c      = c      / eucl_sigma2_glob%sigma2_noise(sh,iptcl)
-                            tvalsq = tvalsq / eucl_sigma2_glob%sigma2_noise(sh,iptcl)
+                            c      = c      / self%sigma2_noise(sh)
+                            tvalsq = tvalsq / self%sigma2_noise(sh)
                         else
-                            c      = c      / eucl_sigma2_glob%sigma2_noise(sigma2_kfromto(1),iptcl)
-                            tvalsq = tvalsq / eucl_sigma2_glob%sigma2_noise(sigma2_kfromto(1),iptcl)
+                            c      = c      / self%sigma2_noise(sigma2_kfromto(1))
+                            tvalsq = tvalsq / self%sigma2_noise(sigma2_kfromto(1))
                         endif
                     endif
                 endif
@@ -159,11 +173,12 @@ contains
     !>  \brief  is a destructor
     subroutine kill( self )
         class(fplane), intent(inout) :: self !< this instance
-        if(allocated(self%cmplx_plane)    ) deallocate(self%cmplx_plane)
-        if(allocated(self%ctfsq_plane)    ) deallocate(self%ctfsq_plane)
-        if(allocated(self%ctf_ang)        ) deallocate(self%ctf_ang)
-        if(allocated(self%hcos)           ) deallocate(self%hcos)
-        if(allocated(self%hsin)           ) deallocate(self%hsin)
+        if( allocated(self%cmplx_plane)  ) deallocate(self%cmplx_plane)
+        if( allocated(self%ctfsq_plane)  ) deallocate(self%ctfsq_plane)
+        if( allocated(self%ctf_ang)      ) deallocate(self%ctf_ang)
+        if( allocated(self%hcos)         ) deallocate(self%hcos)
+        if( allocated(self%hsin)         ) deallocate(self%hsin)
+        if( allocated(self%sigma2_noise) ) deallocate(self%sigma2_noise)
         self%exists = .false.
     end subroutine kill
 

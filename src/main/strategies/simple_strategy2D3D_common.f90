@@ -674,7 +674,7 @@ contains
                 call build_glob%imgbatch(ibatch)%fft
                 ctfparms(ibatch) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
                 shift = build_glob%spproj_field%get_2Dshift(iptcl)
-                call fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), shift, iptcl=iptcl)
+                call fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), shift, iptcl)
             end do
             !$omp end parallel do
             ! gridding
@@ -699,7 +699,8 @@ contains
 
     !> volumetric 3d reconstruction
     subroutine calc_3Dbatchrec( cline, nptcls2update, pinds, prev_oris, which_iter )
-        use simple_fplane, only: fplane
+        use simple_fplane,        only: fplane
+        use simple_euclid_sigma2, only: euclid_sigma2
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: nptcls2update
         integer,           intent(in)    :: pinds(nptcls2update)
@@ -708,17 +709,18 @@ contains
         type(fplane),    allocatable :: fpls(:), prev_fpls(:)
         type(ctfparams), allocatable :: ctfparms(:)
         integer,         allocatable :: pops(:)
-        type(ori) :: orientation
-        real      :: shift(2), sdev_noise
-        integer   :: updates(nptcls2update), batchlims(2), iptcl, i, i_batch, ibatch, istate
-        if( params_glob%l_ml_reg )then
-            THROW_HARD('BATCH ML_REG NOT IMPLEMENTED YET!')
-        endif
+        type(euclid_sigma2) :: prev_sigma2
+        type(ori)           :: orientation
+        real    :: shift(2), sdev_noise
+        integer :: updates(nptcls2update), batchlims(2), iptcl, i, i_batch, ibatch, istate
+        ! contributions to be subtracted
         !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i = 1,nptcls2update
             updates(i) = prev_oris%get_updatecnt(pinds(i))
         enddo
         !$omp end parallel do
+        ! sigma2 of particles to be subtracted
+        if( params_glob%l_ml_reg ) call prev_sigma2%consolidate_sigma2_history(prev_oris, pinds, updates-1)
         ! init volumes
         call build_glob%spproj_field%get_pops(pops, 'state')
         do istate = 1, params_glob%nstates
@@ -747,11 +749,11 @@ contains
                 call build_glob%imgbatch(ibatch)%fft
                 ctfparms(ibatch) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
                 shift = build_glob%spproj_field%get_2Dshift(iptcl)
-                call fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), shift, iptcl=iptcl)
+                call fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), shift, iptcl)
                 if( updates(i) > 1 )then
                     if( .not.prev_fpls(ibatch)%does_exist() ) call prev_fpls(ibatch)%new(build_glob%imgbatch(1))
                     shift = prev_oris%get_2Dshift(iptcl)
-                    call prev_fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), shift, iptcl=iptcl)
+                    call prev_fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), shift, iptcl, sigma2=prev_sigma2)
                     call prev_fpls(ibatch)%neg
                 endif
             end do
@@ -772,6 +774,7 @@ contains
         ! normalise structure factors
         call norm_struct_facts( cline, which_iter)
         ! destruct
+        call prev_sigma2%kill
         call killrecvols()
         do ibatch=1,MAXIMGBATCHSZ
             call fpls(ibatch)%kill
