@@ -87,6 +87,7 @@ character(len=*), parameter :: STREAM_SPPROJFILES   = './stream_spprojfiles.txt'
 character(len=*), parameter :: TERM_STREAM          = './SIMPLE_TERM_STREAM'
 character(len=*), parameter :: PAUSE_STREAM         = './SIMPLE_PAUSE_STREAM'
 character(len=*), parameter :: STREAM_REJECT_CLS    = './SIMPLE_REJECT_CLS'
+character(len=*), parameter :: STREAM_SELECTED_REFS = './selected_references'
 ! MISCELLANEOUS
 character(len=3), parameter :: NIL                  = 'nil'
 character(len=*), parameter :: STDERR2STDOUT        = '2>&1'

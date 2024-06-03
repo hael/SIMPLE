@@ -24,6 +24,7 @@ public :: init_cluster2D_stream_dev, terminate_stream2D_dev, cleanup_root_folder
 public :: update_pool_status_dev, update_pool_dev, reject_from_pool_dev, reject_from_pool_user_dev
 public :: classify_pool_dev, update_chunks_dev, classify_new_chunks_dev, import_chunks_into_pool_dev
 public :: is_pool_available_dev, update_user_params_dev, read_pool_xml_beamtilts_dev, assign_pool_optics_dev
+public :: write_pool_cls_selected_user_dev
 private
 #include "simple_local_flags.inc"
 
@@ -914,6 +915,57 @@ contains
         endif
         call img%kill
     end subroutine reject_from_pool_user_dev
+
+    subroutine write_pool_cls_selected_user_dev
+        type(image)          :: img, jpegimg
+        type(stack_io)       :: stkio_r, stkio_w
+        type(oris)           :: cls2reject
+        logical, allocatable :: cls_mask(:)
+        integer              :: i, nl, icls, isel
+        if( .not. stream2D_active ) return
+        if( pool_proj%os_cls2D%get_noris() == 0 ) return
+        if( .not.file_exists(STREAM_REJECT_CLS) ) return
+        nl = nlines(STREAM_REJECT_CLS)
+        if( nl == 0 ) return
+        call cls2reject%new(nl,is_ptcl=.false.)
+        call cls2reject%read(STREAM_REJECT_CLS)
+        call del_file(STREAM_REJECT_CLS)
+        if( cls2reject%get_noris() == 0 ) return
+        allocate(cls_mask(ncls_glob), source=.true.)
+        do i = 1,pool_proj%os_cls2D%get_noris()
+            if( nint(pool_proj%os_cls2D%get(i,'pop'))   == 0 ) cls_mask(i) = .false.
+            if( nint(pool_proj%os_cls2D%get(i,'state')) == 0 ) cls_mask(i) = .false.
+        enddo
+        do i = 1,cls2reject%get_noris()
+            icls = cls2reject%get_class(i)
+            if( icls == 0 ) cycle
+            if( icls > ncls_glob ) cycle
+            cls_mask(icls) = .false.
+        enddo
+        call cls2reject%kill
+        write(logfhandle,'(A,I6,A)')'>>> USER SELECTED FROM POOL: ',count(cls_mask),' clusters'
+        if( count(cls_mask) == 0 ) return
+        write(logfhandle,'(A,A)')'>>> WRITING SELECTED CLUSTERS TO: ', trim(POOL_DIR) // STREAM_SELECTED_REFS//trim(STK_EXT)
+        call img%new([box,box,1], smpd)
+        call jpegimg%new([box, box * count(cls_mask), 1], smpd) 
+        call stkio_r%open(trim(POOL_DIR) // trim(refs_glob), smpd, 'read', bufsz=ncls_glob)
+        call stkio_r%read_whole
+        call stkio_w%open(trim(POOL_DIR) // STREAM_SELECTED_REFS//trim(STK_EXT), smpd, 'write', box=box, bufsz=count(cls_mask))
+        isel = 1
+        do icls = 1,ncls_glob
+            if( .not. cls_mask(icls) ) cycle
+            call stkio_r%get_image(icls, img)
+            call stkio_w%write(isel, img)
+            call jpegimg%tile(img, 1, isel) 
+            isel = isel + 1
+        enddo
+        call jpegimg%write_jpg(trim(POOL_DIR) // STREAM_SELECTED_REFS // trim(JPG_EXT))
+        call stkio_r%close
+        call stkio_w%close
+        call img%kill
+        call jpegimg%kill
+        if(allocated(cls_mask)) deallocate(cls_mask)
+    end subroutine write_pool_cls_selected_user_dev
 
     !> updates current parameters with user input
     subroutine update_user_params_dev( cline_here )
