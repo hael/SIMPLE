@@ -268,7 +268,6 @@ contains
         call find_ldim_nptcls(self%npname, self%ldim, nptcls, smpd)
         call self%img%new(self%ldim, self%smpd)
         call self%img_bin%new_bimg(self%ldim, self%smpd)
-        !call self%img_bin%new(self%ldim, self%smpd)
         call self%img%read(fname)
         if( present(msk) ) call self%img%mask(msk, 'soft')
         call self%img_raw%copy(self%img)
@@ -1749,8 +1748,8 @@ contains
         type(atoms), optional, target, intent(inout) :: atoms_obj
         type(atoms), target  :: atms_here
         type(atoms), pointer :: atms_ptr => null()
-        logical :: betas_present, mask_present, atoms_obj_present
-        integer :: i, cnt
+        logical              :: betas_present, mask_present, atoms_obj_present
+        integer              :: i, cnt
         betas_present     = present(betas)
         mask_present      = present(mask)
         atoms_obj_present = present(atoms_obj)
