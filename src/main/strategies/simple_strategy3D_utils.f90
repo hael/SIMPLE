@@ -20,7 +20,7 @@ contains
         real,                   intent(in)    :: sh(2)
         real,         optional, intent(in)    :: w
         type(ori) :: osym, o_prev, o_new
-        integer   :: state, neff_states, nrefs_eval, nrefs_tot
+        integer   :: state, neff_states, nrefs_eval, nrefs_tot, loc
         real      :: shvec(2), shvec_incr(2), mi_state, euldist, dist_inpl, mi_proj, frac, pw, corrs(s%nrots), t
         logical   :: l_multistates
         s3D%proj_space_euls(3,ref,s%ithr) = 360. - pftcc_glob%get_rot(inpl)
@@ -38,14 +38,20 @@ contains
         shvec_incr = 0.
         if( s%doshift ) then
             shvec_incr = sh
-            shvec      = shvec + shvec_incr
-        elseif( trim(params_glob%sh_rand) .eq. 'yes' )then
-            shvec_incr = sh
-            call pftcc_glob%gencorrs(ref, s%iptcl, shvec,              corrs)
-            t = maxval(corrs)
-            call pftcc_glob%gencorrs(ref, s%iptcl, shvec + shvec_incr, corrs)
-            t = t / (t + maxval(corrs))
-            shvec = shvec * t + (shvec + shvec_incr) * (1. - t)
+            if( trim(params_glob%sh_rand) .eq. 'yes' )then
+                call pftcc_glob%gencorrs(ref, s%iptcl, corrs)
+                t = maxval(corrs)
+                call pftcc_glob%gencorrs(ref, s%iptcl, shvec_incr, corrs)
+                t = t / (t + maxval(corrs))
+                shvec_incr = shvec_incr * (1. - t)
+                ! reseting inpl from the adjusted shifts
+                call pftcc_glob%gencorrs(ref, s%iptcl, shvec_incr, corrs)
+                loc = maxloc(corrs, dim=1)
+                s3D%proj_space_euls(3,ref,s%ithr) = 360. - pftcc_glob%get_rot(loc)
+                call build_glob%spproj_field%set(      s%iptcl, 'inpl', real(loc))
+                call build_glob%spproj_field%set_euler(s%iptcl, s3D%proj_space_euls(:,ref,s%ithr))
+            endif
+            shvec = shvec + shvec_incr
         end if
         where( abs(shvec) < 1e-6 ) shvec = 0.
         call build_glob%spproj_field%set_shift(s%iptcl, shvec)
