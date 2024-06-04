@@ -787,11 +787,7 @@ contains
                         THROW_HARD('Class averages could not be found in the project')
                     endif
                     vol_type = 'vol_cavg'
-                    if( trim(params%sh_rand) .eq. 'yes' )then
-                        call spproj%os_cls3D%rnd_oris(trs=params%sh_sig)
-                    else
-                        call spproj%os_cls3D%rnd_oris
-                    endif
+                    call spproj%os_cls3D%rnd_oris
                     call spproj%os_cls3D%set_all2single('stkind', 1.)
                     call spproj%os_cls3D%set_all2single('w',1.)
                 case('ptcl3D')
@@ -799,7 +795,11 @@ contains
                         THROW_HARD('Particles could not be found in the project')
                     endif
                     vol_type = 'vol'
-                    call spproj%os_ptcl3D%rnd_oris
+                    if( trim(params%sh_rand) .eq. 'yes' )then
+                        call spproj%os_ptcl3D%rnd_oris(trs=params%sh_sig)
+                    else
+                        call spproj%os_ptcl3D%rnd_oris
+                    endif
                     call spproj%os_ptcl3D%set_all2single('w',1.)
                 case DEFAULT
                     THROW_HARD('Unsupported ORITYPE; exec_abinitio_3Dmodel')
