@@ -87,7 +87,8 @@ contains
         self%prev_class = nint(build_glob%spproj_field%get(self%iptcl,'class'))                ! class index
         prev_roind      = pftcc_glob%get_roind(360.-build_glob%spproj_field%e3get(self%iptcl)) ! in-plane angle index
         if( (trim(params_glob%sh_rand) .eq. 'yes') .and. (params_glob%which_iter == 1) )then
-            self%prev_shvec = 2. * (ran3() - 0.5) * params_glob%sh_sig                         ! perturbation of initial shifts
+            self%prev_shvec(1) = 2. * (ran3() - 0.5) * params_glob%sh_sig                      ! perturbation of initial shifts
+            self%prev_shvec(2) = 2. * (ran3() - 0.5) * params_glob%sh_sig
         else
             self%prev_shvec = build_glob%spproj_field%get_2Dshift(self%iptcl)                  ! shift vector
         endif
