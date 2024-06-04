@@ -21,7 +21,7 @@ contains
         real,         optional, intent(in)    :: w
         type(ori) :: osym, o_prev, o_new
         integer   :: state, neff_states, nrefs_eval, nrefs_tot
-        real      :: shvec(2), shvec_incr(2), mi_state, euldist, dist_inpl, mi_proj, frac, pw
+        real      :: shvec(2), shvec_incr(2), mi_state, euldist, dist_inpl, mi_proj, frac, pw, corrs(s%nrots), t
         logical   :: l_multistates
         s3D%proj_space_euls(3,ref,s%ithr) = 360. - pftcc_glob%get_rot(inpl)
         ! stash previous ori
@@ -39,6 +39,13 @@ contains
         if( s%doshift ) then
             shvec_incr = sh
             shvec      = shvec + shvec_incr
+        elseif( trim(params_glob%sh_rand) .eq. 'yes' )then
+            shvec_incr = sh
+            call pftcc_glob%gencorrs(ref, s%iptcl, shvec,              corrs)
+            t = maxval(corrs)
+            call pftcc_glob%gencorrs(ref, s%iptcl, shvec + shvec_incr, corrs)
+            t = t / (t + maxval(corrs))
+            shvec = shvec * t + (shvec + shvec_incr) * (1. - t)
         end if
         where( abs(shvec) < 1e-6 ) shvec = 0.
         call build_glob%spproj_field%set_shift(s%iptcl, shvec)
