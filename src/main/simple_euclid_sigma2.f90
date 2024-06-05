@@ -86,7 +86,7 @@ contains
         real, allocatable :: pspecs(:,:,:)
         integer :: i,nptcls,mincnt,maxcnt,icnt,ngroups,fromp,top,iptcl,eo,igroup
         nptcls  = size(pinds)
-        mincnt  = minval(iters, mask=iters>=0)
+        mincnt  = minval(iters, mask=iters>0)
         maxcnt  = maxval(iters)
         fromp   = minval(pinds)
         top     = maxval(pinds)
@@ -98,6 +98,7 @@ contains
                 if( ngroups /= 1 )then
                     THROW_HARD('ngroups must be 1 when global sigma is estimated (params_glob%l_sigma_glob == .true.)')
                 endif
+                !$omp parallel do default(shared) private(i,iptcl,eo) proc_bind(close) schedule(static)
                 do i = 1,nptcls
                     if( iters(i) == icnt )then
                         iptcl = pinds(i)
@@ -105,11 +106,13 @@ contains
                         self%sigma2_noise(:,iptcl) = pspecs(eo,1,:)
                     endif
                 enddo
+                !$omp end parallel do
                 deallocate(pspecs)
             enddo
         else
             do icnt = mincnt,maxcnt
                 call self%read_sigma2_groups( icnt, pspecs, ngroups )
+                !$omp parallel do default(shared) private(i,iptcl,igroup,eo) proc_bind(close) schedule(static)
                 do i = 1,nptcls
                     if( iters(i) == icnt )then
                         iptcl  = pinds(i)
@@ -118,6 +121,7 @@ contains
                         self%sigma2_noise(:,iptcl) = pspecs(eo,igroup,:)
                     endif
                 enddo
+                !$omp end parallel do
                 deallocate(pspecs)
             enddo
         endif
