@@ -81,7 +81,7 @@ contains
         integer                                :: movies_set_counter, import_counter
         integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection, nsets, i,j
         integer                                :: cnt, n_imported, n_added, n_failed_jobs, n_fail_iter, nmic_star, iset, envlen
-        logical                                :: l_movies_left, l_haschanged
+        logical                                :: l_movies_left, l_haschanged, pause_import
         real                                   :: avg_tmp, preproc_nthr
         call cline%set('oritype',     'mic')
         call cline%set('mkdir',       'yes')
@@ -153,9 +153,9 @@ contains
             nmic_star = spproj_glob%os_mic%get_noris()
             call write_mic_star_and_field(write_field=.true.)
             ! guistats
-            call gui_stats%set('movies',      'movies_imported',      int2str(nmic_star),              primary=.true.)
-            call gui_stats%set('movies',      'movies_processed',     int2str(nmic_star) // ' (100%)', primary=.true.)
-            call gui_stats%set('micrographs', 'micrographs',          int2str(nmic_star),              primary=.true.)
+            call gui_stats%set('movies',      'movies_imported',      int2commastr(nmic_star),              primary=.true.)
+            call gui_stats%set('movies',      'movies_processed',     int2commastr(nmic_star) // ' (100%)', primary=.true.)
+            call gui_stats%set('micrographs', 'micrographs',          int2commastr(nmic_star),              primary=.true.)
             if(spproj_glob%os_mic%isthere("ctfres")) then
                 avg_tmp = spproj_glob%os_mic%get_avg("ctfres")
                 if(spproj_glob%os_mic%get_noris() > 50 .and. avg_tmp > 7.0) then
@@ -246,7 +246,7 @@ contains
                 write(logfhandle,'(A,I4,A,A)')'>>> ',cnt,' NEW MOVIES ADDED; ', cast_time_char(simple_gettime())
                 l_movies_left = cnt .ne. nmovies
                 ! guistats
-                call gui_stats%set('movies', 'movies_imported', int2str(movie_buff%n_history), primary=.true.)
+                call gui_stats%set('movies', 'movies_imported', int2commastr(movie_buff%n_history), primary=.true.)
                 call gui_stats%set_now('movies', 'last_movie_imported')
             else
                 l_movies_left = .false.
@@ -285,8 +285,8 @@ contains
                 write(logfhandle,'(A,I3,A2,I3)')                   '>>> # OF COMPUTING UNITS IN USE/TOTAL   : ',qenv%get_navail_computing_units(),'/ ',params%nparts
                 if( n_failed_jobs > 0 ) write(logfhandle,'(A,I8)') '>>> # DESELECTED MICROGRAPHS/FAILED JOBS: ',n_failed_jobs
                 ! guistats
-                call gui_stats%set('movies',      'movies_processed', int2str(n_imported) // ' (' // int2str(ceiling(100.0 * real(n_imported) / real(movie_buff%n_history))) // '%)', primary=.true.)
-                call gui_stats%set('micrographs', 'micrographs',      int2str(n_imported), primary=.true.)
+                call gui_stats%set('movies',      'movies_processed', int2commastr(n_imported) // ' (' // int2str(ceiling(100.0 * real(n_imported) / real(movie_buff%n_history))) // '%)', primary=.true.)
+                call gui_stats%set('micrographs', 'micrographs',      int2commastr(n_imported), primary=.true.)
                 if( n_failed_jobs > 0 ) call gui_stats%set('micrographs', 'micrographs_rejected', n_failed_jobs, primary=.true.)
                 if(spproj_glob%os_mic%isthere("ctfres")) then
                     avg_tmp = spproj_glob%os_mic%get_avg("ctfres")
@@ -659,6 +659,7 @@ contains
         integer                                :: nmics, nprojects, stacksz, prev_stacksz, iter, last_injection, iproj, envlen
         integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, nmic_star
         logical                                :: l_templates_provided, l_projects_left, l_haschanged, l_multipick, l_extract, l_once
+        logical                                :: l_multipick_init, l_multipick_refine, pause_import
         integer(timer_int_kind) :: t0
         real(timer_int_kind)    :: rt_write
         call cline%set('oritype', 'mic')
@@ -702,18 +703,22 @@ contains
         call cline%set('mkdir', 'no')
         ! picking
         l_multipick = cline%defined('nmoldiams')
+        l_multipick_init   = .false.
+        l_multipick_refine = .false.
         if( l_multipick )then
             l_extract            = .false.
             l_templates_provided = .false.
+            l_multipick_refine   = .false.
+            l_multipick_init     = cline%defined('ninit')
             write(logfhandle,'(A)')'>>> PERFORMING MULTI-DIAMETER PICKING'
             moldiams = equispaced_vals(params%moldiam, params%moldiam_max, params%nmoldiams)
             call histogram_moldiams%new(moldiams)
             deallocate(moldiams)
             ! remove existing files (restart)
             if(file_exists("micrographs.star")) call del_file("micrographs.star")
-            if(file_exists("micrographs_pre_refine.star")) call del_file("micrographs_pre_refine.star")
+            if(file_exists("micrographs_init.star")) call del_file("micrographs_init.star")
             if(file_exists("pick.star")) call del_file("pick.star")
-            if(file_exists("pick_pre_refine.star")) call del_file("pick_pre_refine.star")
+            if(file_exists("pick_init.star")) call del_file("pick_init.star")
         else
             l_extract            = .true.
             l_templates_provided = cline%defined('pickrefs')
@@ -736,9 +741,10 @@ contains
         call gui_stats%set('micrographs', 'micrographs_imported', int2str(0), primary=.true.)
         call gui_stats%set('micrographs', 'micrographs_rejected', int2str(0), primary=.true.)
         call gui_stats%set('micrographs', 'micrographs_picked',   int2str(0), primary=.true.)
-        if( l_multipick ) then
-            call gui_stats%set('current_search', 'type', 'global')
+        if( l_multipick_init ) then
+            call gui_stats%set('current_search', 'type', 'initial global search')
             call gui_stats%set('current_search', 'range', int2str(floor(params%moldiam)) // 'Å - ' // int2str(floor(params%moldiam_max)) // 'Å')
+            call gui_stats%set('current_search', 'status', 'running')
         endif
         call gui_stats%set('compute',     'compute_in_use',       int2str(0) // '/' // int2str(params%nparts), primary=.true.)
         ! restart
@@ -753,8 +759,8 @@ contains
             if( allocated(micproj_records) )then
                 nptcls_glob = sum(micproj_records(:)%nptcls)
                 nmic_star   = spproj_glob%os_mic%get_noris()
-                call gui_stats%set('micrographs', 'micrographs_imported', int2str(nmic_star),              primary=.true.)
-                call gui_stats%set('micrographs', 'micrographs_picked',   int2str(nmic_star) // ' (100%)', primary=.true.)
+                call gui_stats%set('micrographs', 'micrographs_imported', int2commastr(nmic_star),              primary=.true.)
+                call gui_stats%set('micrographs', 'micrographs_picked',   int2commastr(nmic_star) // ' (100%)', primary=.true.)
                 if(spproj_glob%os_mic%isthere("nptcls") .and. .not. l_multipick) then
                     call gui_stats%set('micrographs', 'avg_number_picks', ceiling(spproj_glob%os_mic%get_avg("nptcls")), primary=.true.)
                 end if
@@ -771,11 +777,14 @@ contains
         call simple_mkdir(trim(output_dir)//trim(STDERROUT_DIR))
         call simple_mkdir(trim(PATH_HERE)//trim(DIR_STREAM_COMPLETED))
         output_dir_picker  = filepath(trim(PATH_HERE), trim(DIR_PICKER))
-        if( l_extract ) output_dir_extract = filepath(trim(PATH_HERE), trim(DIR_EXTRACT))
         call simple_mkdir(output_dir_picker, errmsg="commander_stream :: exec_stream_pick_extract;  ")
+        if( l_multipick_init ) then
+            output_dir_picker = output_dir_picker // "/init"
+            call simple_mkdir(output_dir_picker, errmsg="commander_stream :: exec_stream_pick_extract;  ")
+            call simple_mkdir(trim(PATH_HERE)//trim(DIR_STREAM_COMPLETED)//"/init")
+        endif
+        if( l_extract ) output_dir_extract = filepath(trim(PATH_HERE), trim(DIR_EXTRACT))
         if( l_extract ) call simple_mkdir(output_dir_extract,errmsg="commander_stream :: exec_stream_pick_extract;  ")
-        ! Cleanup on restart
-        if( l_multipick .and. dir_exists(output_dir_picker //"_pre_refine")) call simple_rmdir(output_dir_picker //"_pre_refine")
         ! initialise progress monitor
         call progressfile_init()
         ! setup the environment for distributed execution
@@ -788,12 +797,17 @@ contains
         ! command line for execution
         cline_pick_extract = cline
         call cline_pick_extract%set('prg','pick_extract')
-        call cline_pick_extract%set('dir','../')
+        if( l_multipick_init ) then
+            call cline_pick_extract%set('dir','../picker/init')
+        else
+            call cline_pick_extract%set('dir','../')
+        endif
         if( l_extract )then
             call cline_pick_extract%set('extract','yes')
         else
             call cline_pick_extract%set('extract','no')
         endif
+        
         ! ugly single use flag for backwards compatibility, will need to go
         call cline_pick_extract%set('newstream','yes')
         ! Infinite loop
@@ -806,6 +820,7 @@ contains
         l_projects_left       = .false.
         l_haschanged          = .false.
         l_once                = .true.
+        pause_import          = .false.
         do
             if( file_exists(trim(TERM_STREAM)) )then
                 ! termination
@@ -814,39 +829,23 @@ contains
             endif
             iter = iter + 1
             ! switch to diameter refinement
-            if( l_multipick .and. params_glob%updated .eq. 'yes' .and. params%moldiam .ne. params_glob%moldiam_refine) then
+            if( l_multipick_refine .and. params_glob%updated .eq. 'yes' .and. params_glob%moldiam_refine .gt. 0.0) then
+                write(logfhandle,'(A,I3)') '>>> REFINING MOLECULAR DIAMETER        : ', int(params_glob%moldiam_refine)
+
+                output_dir_picker   = filepath(trim(PATH_HERE), trim(DIR_PICKER))
+                call simple_mkdir(output_dir_picker, errmsg="commander_stream :: exec_stream_pick_extract;  ")
                 params_glob%updated = 'no'
                 params%moldiam      = params_glob%moldiam_refine - 50.0
                 params%moldiam_max  = params_glob%moldiam_refine + 50.0
                 params%nmoldiams    = 11.0
-                write(logfhandle,'(A,I3)') '>>> REFINING MOLECULAR DIAMETER        : ', int(params_glob%moldiam_refine)
                 call cline_pick_extract%set('moldiam',     params%moldiam)
                 call cline_pick_extract%set('moldiam_max', params%moldiam_max)
                 call cline_pick_extract%set('nmoldiams',   params%nmoldiams)
+                call cline_pick_extract%set('dir','../')
                 ! undo already processed micrographs
-                call project_buff%clear_history()
-                call qenv%qscripts%clear_stack()
                 call spproj_glob%os_mic%kill()
+                call project_buff%clear_history()
                 if(allocated(micproj_records)) deallocate(micproj_records)
-                ! remove existing files
-                call simple_rmdir(trim(PATH_HERE)//trim(DIR_STREAM_COMPLETED))
-                call simple_mkdir(trim(PATH_HERE)//trim(DIR_STREAM_COMPLETED))
-                call simple_rename(output_dir_picker, output_dir_picker//"_pre_refine")
-                call simple_mkdir(output_dir_picker, errmsg="commander_stream :: exec_stream_pick_extract;  ")
-                if(file_exists("micrographs.star")) then
-                    if(file_exists("micrographs_pre_refine.star")) then
-                        call del_file("micrographs.star")
-                    else
-                        call simple_rename("micrographs.star", "micrographs_pre_refine.star")
-                    end if
-                end if
-                if(file_exists("pick.star")) then
-                    if(file_exists("pick_pre_refine.star")) then
-                        call del_file("pick.star")
-                    else
-                        call simple_rename("pick.star", "pick_pre_refine.star")
-                    end if
-                end if
                 ! reset histogram
                 moldiams = equispaced_vals(params%moldiam, params%moldiam_max, params%nmoldiams)
                 call histogram_moldiams%kill
@@ -855,12 +854,20 @@ contains
                 call gui_stats%set('current_search', 'type', 'refinement')
                 call gui_stats%set('current_search', 'range', int2str(floor(params%moldiam)) // 'Å - ' // int2str(floor(params%moldiam_max)) // 'Å')
                 call gui_stats%set('current_search', 'estimated_diameter', '')
+                call gui_stats%set('current_search', 'status', 'running')
                 call gui_stats%set('latest', '', '')
+                pause_import = .false.
+            endif
+            ! pause import after ninit mics for global search
+            if(l_multipick_init .and. .not. pause_import .and. n_added >= params%ninit) then
+                write(logfhandle,'(A,A,A)') '>>> NEW MICROGRAPH IMPORT PAUSED AFTER ', int2str(params%ninit), ' MICROGRAPHS WHILE INITIAL SEARCH IS PERFORMED';
+                call gui_stats%set('micrographs', 'micrographs_imported', int2str(project_buff%n_history * NMOVS_SET) // "(paused)", primary=.true.)
+                pause_import = .true.
             endif
             ! detection of new projects
             call project_buff%watch( nprojects, projects, max_nmovies=params%nparts )
             ! append projects to processing stack
-            if( nprojects > 0 )then
+            if( .not. pause_import .and. nprojects > 0 )then
                 cnt   = 0
                 nmics = 0
                 do iproj = 1, nprojects
@@ -895,7 +902,7 @@ contains
                 endif
                 l_projects_left = cnt .ne. nprojects
                 ! guistats
-                call gui_stats%set('micrographs', 'micrographs_imported', int2str(project_buff%n_history * NMOVS_SET), primary=.true.)
+                call gui_stats%set('micrographs', 'micrographs_imported', int2commastr(project_buff%n_history * NMOVS_SET), primary=.true.)
                 call gui_stats%set_now('micrographs', 'last_micrograph_imported')
             else
                 l_projects_left = .false.
@@ -935,19 +942,20 @@ contains
                 if( l_extract ) write(logfhandle,'(A,I8)')   '>>> # PARTICLES EXTRACTED               : ',nptcls_glob
                 if( l_multipick )then
                     call histogram_moldiams%plot('moldiams')
-                    call starproj_stream%stream_export_pick_diameters(params%outdir, histogram_moldiams)
+                    if( l_multipick_init )  call starproj_stream%stream_export_pick_diameters(params%outdir, histogram_moldiams, filename="pick_init.star")
+                    if( l_multipick_refine) call starproj_stream%stream_export_pick_diameters(params%outdir, histogram_moldiams)
                     write(logfhandle,'(A,F8.2)') '>>> ESTIMATED MOLECULAR DIAMETER        : ',histogram_moldiams%mean()
                     call gui_stats%set('current_search', 'estimated_diameter', int2str(floor(histogram_moldiams%mean())) // 'Å')
                 endif
                 write(logfhandle,'(A,I3,A2,I3)') '>>> # OF COMPUTING UNITS IN USE/TOTAL   : ',qenv%get_navail_computing_units(),'/ ',params%nparts
                 if( n_failed_jobs > 0 ) write(logfhandle,'(A,I8)') '>>> # DESELECTED MICROGRAPHS/FAILED JOBS: ',n_failed_jobs
                 ! guistats
-                call gui_stats%set('micrographs', 'micrographs_picked', int2str(n_imported) // ' (' // int2str(ceiling(100.0 * real(n_imported) / real(project_buff%n_history * NMOVS_SET))) // '%)', primary=.true.)
-                call gui_stats%set('micrographs', 'micrographs_rejected', int2str(n_failed_jobs + nmics_rejected_glob) // ' (' // int2str(floor(100.0 * real(n_failed_jobs + nmics_rejected_glob) / real(project_buff%n_history * NMOVS_SET))) // '%)', primary=.true.)
+                call gui_stats%set('micrographs', 'micrographs_picked', int2commastr(n_imported) // ' (' // int2str(ceiling(100.0 * real(n_imported) / real(project_buff%n_history * NMOVS_SET))) // '%)', primary=.true.)
+                call gui_stats%set('micrographs', 'micrographs_rejected', int2commastr(n_failed_jobs + nmics_rejected_glob) // ' (' // int2str(floor(100.0 * real(n_failed_jobs + nmics_rejected_glob) / real(project_buff%n_history * NMOVS_SET))) // '%)', primary=.true.)
                 if(spproj_glob%os_mic%isthere("nptcls") .and. .not. l_multipick) then
                     call gui_stats%set('micrographs', 'avg_number_picks', ceiling(spproj_glob%os_mic%get_avg("nptcls")), primary=.true.)
                 end if
-                if(.not. l_multipick) call gui_stats%set('particles', 'total_extracted_particles', nptcls_glob, primary=.true.)
+                if(.not. l_multipick) call gui_stats%set('particles', 'total_extracted_particles', int2commastr(nptcls_glob), primary=.true.)
                 if(spproj_glob%os_mic%isthere('intg') .and. spproj_glob%os_mic%isthere('boxfile')) then
                     latest_boxfile = trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'boxfile'))
                     if(file_exists(trim(latest_boxfile))) call gui_stats%set('latest', '', trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'intg')), thumbnail=.true., boxfile=trim(latest_boxfile))
@@ -977,6 +985,12 @@ contains
                         l_haschanged = .false.
                     endif
                 endif
+            endif
+            if(l_multipick_init .and. pause_import .and. n_imported + n_failed_jobs + nmics_rejected_glob >= params%ninit) then
+                write(logfhandle,'(A)')'>>> WAITING FOR USER INPUT REFINEMENT DIAMETER'
+                call gui_stats%set('current_search', 'status', 'waiting for refinement diameter')
+                l_multipick_init   = .false.
+                l_multipick_refine = .true.
             endif
             call update_user_params(cline)
             ! guistats
@@ -1030,7 +1044,11 @@ contains
                 if( present(optics_set) ) l_optics_set = optics_set
                 if (spproj_glob%os_mic%get_noris() > 0) then
                     if( DEBUG_HERE ) ms0 = tic()
-                    call starproj_stream%stream_export_micrographs(spproj_glob, params%outdir, optics_set=l_optics_set)
+                    if(l_multipick_init) then
+                        call starproj_stream%stream_export_micrographs(spproj_glob, params%outdir, optics_set=l_optics_set, filename="micrographs_init.star")
+                    else
+                        call starproj_stream%stream_export_micrographs(spproj_glob, params%outdir, optics_set=l_optics_set)
+                    endif
                     if( DEBUG_HERE )then
                         ms_export = toc(ms0)
                         print *,'ms_export  : ', ms_export; call flush(6)
@@ -1177,7 +1195,11 @@ contains
                         if(spprojs(iproj)%projinfo%isthere("pickdiam") .and. spprojs(iproj)%projinfo%get(1, "pickdiam") .eq. real(params%moldiam)) then
                             ! move project to appropriate directory
                             fname     = trim(output_dir)//trim(completed_jobs_clines(iproj)%get_carg('projfile'))
-                            new_fname = trim(DIR_STREAM_COMPLETED)//trim(completed_jobs_clines(iproj)%get_carg('projfile'))
+                            if(l_multipick_init) then
+                                new_fname = trim(DIR_STREAM_COMPLETED)//"init/"//trim(completed_jobs_clines(iproj)%get_carg('projfile'))
+                            else
+                                new_fname = trim(DIR_STREAM_COMPLETED)//trim(completed_jobs_clines(iproj)%get_carg('projfile'))
+                            endif
                             call simple_rename(fname, new_fname)
                             abs_fname = simple_abspath(new_fname, errmsg='stream pick_extract :: update_projects_list 1')
                             ! records & project
@@ -2216,7 +2238,7 @@ contains
                 write(logfhandle,'(A,I8)')       '>>> # MICROGRAPHS IMPORTED : ',n_imported
                 write(logfhandle,'(A,I8)')       '>>> # PARTICLES IMPORTED   : ',nptcls_glob
                 ! guistats
-                call gui_stats%set('particles', 'particles_imported', int2str(nptcls_glob), primary=.true.)
+                call gui_stats%set('particles', 'particles_imported', int2commastr(nptcls_glob), primary=.true.)
                 call gui_stats%set_now('particles', 'last_particles_imported')
                 ! update progress monitor
                 call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
@@ -2259,7 +2281,7 @@ contains
             if(file_exists(POOLSTATS_FILE)) then
                 call gui_stats%merge(POOLSTATS_FILE)
                 call gui_stats%get('particles', 'particles_processed', nptcls_pool)
-                if(nptcls_pool > 0.0) call gui_stats%set('particles', 'particles_processed', int2str(floor(nptcls_pool)) // ' (' // int2str(ceiling(100.0 * real(nptcls_pool) / real(nptcls_glob))) // '%)')
+                if(nptcls_pool > 0.0) call gui_stats%set('particles', 'particles_processed', int2commastr(floor(nptcls_pool)) // ' (' // int2str(ceiling(100.0 * real(nptcls_pool) / real(nptcls_glob))) // '%)')
             end if
             call gui_stats%write_json
         end do
@@ -2446,7 +2468,7 @@ contains
                          write(logfhandle,'(A,F8.2)')'>>> MULTIPICK REFINE DIAMETER TOO HIGH: ', moldiam_refine
                      else
                          params_glob%moldiam_refine = moldiam_refine
-                         params_glob%updated          = 'yes'
+                         params_glob%updated        = 'yes'
                          write(logfhandle,'(A,F8.2)')'>>> MULTIPICK REFINE DIAMETER UPDATED TO: ', moldiam_refine
                      endif
                 endif
