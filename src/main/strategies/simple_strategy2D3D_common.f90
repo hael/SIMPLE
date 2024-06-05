@@ -713,7 +713,7 @@ contains
         enddo
         !$omp end parallel do
         ! sigma2 of particles to be subtracted
-        if( params_glob%l_ml_reg ) call prev_sigma2%consolidate_sigma2_history(prev_oris, pinds, updates-1)
+        if( params_glob%l_ml_reg ) call prev_sigma2%consolidate_sigma2_history(prev_oris, pinds, updates)
         ! init volumes
         call build_glob%spproj_field%get_pops(pops, 'state')
         do istate = 1, params_glob%nstates
@@ -743,7 +743,7 @@ contains
                 ctfparms(ibatch) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
                 shift = build_glob%spproj_field%get_2Dshift(iptcl)
                 call fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), shift, iptcl)
-                if( updates(i) > 1 )then
+                if( updates(i) > 0 )then
                     if( .not.prev_fpls(ibatch)%does_exist() ) call prev_fpls(ibatch)%new(build_glob%imgbatch(1))
                     shift = prev_oris%get_2Dshift(iptcl)
                     call prev_fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), shift, iptcl, sigma2=prev_sigma2)
@@ -758,7 +758,7 @@ contains
                 call build_glob%spproj_field%get_ori(iptcl, orientation)
                 if( orientation%isstatezero() ) cycle
                 call grid_ptcl(fpls(ibatch), build_glob%pgrpsyms, orientation)
-                if( updates(i) > 1 )then
+                if( updates(i) > 0 )then
                     call prev_oris%get_ori(iptcl, orientation)
                     call grid_ptcl(prev_fpls(ibatch), build_glob%pgrpsyms, orientation)
                 endif

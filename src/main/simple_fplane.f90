@@ -111,7 +111,7 @@ contains
         use_sigmas = params_glob%l_ml_reg
         if( use_sigmas )then
             if( present(sigma2) )then
-                if( sigma2_kfromto(2) < self%nyq_crop )then
+                if( sigma2_kfromto(2) > self%nyq_crop )then
                     THROW_HARD('Frequency range error')
                 endif
                 sigma2_kfromto(1) = lbound(sigma2%sigma2_noise,1)
