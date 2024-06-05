@@ -333,6 +333,45 @@ contains
         end if
     end function int2str
 
+    !>  \brief  turn integer variable into character variable with commas
+    !! - now supports negative values
+    pure function int2commastr(intg) result(string)
+        integer, intent(in)           :: intg
+        character(len=:), allocatable :: string
+        integer :: ndigs_int, intg_this
+        logical :: isnegative, comma_thousands, comma_millions
+        isnegative      = .false.
+        comma_thousands = .false.
+        comma_millions  = .false.
+        intg_this=intg
+        if( intg < 0 )then
+            isnegative=.true.
+            intg_this =  -intg
+        end if
+        if (intg_this .eq. 0) then
+            ndigs_int = 1
+        else
+            ndigs_int = int(log10(real(intg_this))) + 1
+        endif
+        if (ndigs_int .gt. 6) then
+            ndigs_int = ndigs_int + 2
+            comma_thousands = .true.
+            comma_millions  = .true.
+        else if (ndigs_int .gt. 3) then
+            ndigs_int = ndigs_int + 1
+            comma_thousands = .true.
+        endif
+        if (isnegative) ndigs_int = ndigs_int + 1
+        allocate(character(len=ndigs_int) :: string)
+        if (isnegative)then
+            write(string,'(a1,i0)') '-',intg_this
+        else
+            write(string,'(i0)') intg_this
+        end if
+        if(comma_millions)  string = string(:ndigs_int - 7) // ',' // string(ndigs_int - 6:)
+        if(comma_thousands) string = string(:ndigs_int - 4) // ',' // string(ndigs_int - 3:)
+    end function int2commastr
+
     !>  \brief  turn integer variable into zero padded character variable
     function int2str_pad( intg, numlen ) result(string)
         integer, intent(in)           :: intg, numlen

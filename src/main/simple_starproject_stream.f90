@@ -249,16 +249,21 @@ contains
     end subroutine starfile_set_particles2D_table
     ! export
 
-    subroutine stream_export_micrographs( self, spproj, outdir, optics_set)
-        class(starproject_stream),  intent(inout) :: self
-        class(sp_project),          intent(inout) :: spproj
-        character(len=LONGSTRLEN),  intent(in)    :: outdir
+    subroutine stream_export_micrographs( self, spproj, outdir, optics_set, filename)
+        class(starproject_stream),             intent(inout) :: self
+        class(sp_project),                     intent(inout) :: spproj
+        character(len=LONGSTRLEN),             intent(in)    :: outdir
+        character(len=*),           optional,  intent(in)    :: filename
         logical,         optional,  intent(in)    :: optics_set
         logical  :: l_optics_set
         l_optics_set = .false.
         if(present(optics_set)) l_optics_set = optics_set
         if(.not. l_optics_set) call self%assign_optics_single(spproj)
-        call self%starfile_init('micrographs.star', outdir)
+        if(present(filename)) then
+            call self%starfile_init(filename, outdir)
+        else
+            call self%starfile_init('micrographs.star', outdir)
+        endif
         call self%starfile_set_optics_table(spproj)
         call self%starfile_write_table(append = .false.)
         call self%starfile_set_micrographs_table(spproj)
@@ -305,11 +310,16 @@ contains
         call self%starfile_deinit()
     end subroutine stream_export_particles_2D
 
-    subroutine stream_export_pick_diameters( self, outdir, histogram_moldiams)
+    subroutine stream_export_pick_diameters( self, outdir, histogram_moldiams, filename)
         class(starproject_stream),            intent(inout) :: self
         type(histogram),                      intent(inout) :: histogram_moldiams
         character(len=LONGSTRLEN),            intent(in)    :: outdir
-        call self%starfile_init('pick.star', outdir)
+        character(len=*),          optional,  intent(in)    :: filename
+        if(present(filename)) then
+            call self%starfile_init(filename, outdir)
+        else
+            call self%starfile_init('pick.star', outdir)
+        endif
         call self%starfile_set_pick_diameters_table(histogram_moldiams)
         call self%starfile_write_table(append = .true.)
         call self%starfile_deinit()

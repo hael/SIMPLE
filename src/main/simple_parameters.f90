@@ -274,6 +274,7 @@ type :: parameters
     integer :: newbox=0            !< new box for scaling (by Fourier padding/clipping)
     integer :: nframes=0           !< # frames{30}
     integer :: ngrow=0             !< # of white pixel layers to grow in binary image
+    integer :: ninit=3             !< # number of micrographs to use during diameter estimation global search
     integer :: nmics=0             !< # micographs
     integer :: nmoldiams=1         !< # moldiams
     integer :: noris=0
@@ -729,6 +730,7 @@ contains
         call check_iarg('newbox',         self%newbox)
         call check_iarg('nframes',        self%nframes)
         call check_iarg('ngrow',          self%ngrow)
+        call check_iarg('ninit',          self%ninit)
         call check_iarg('nmoldiams',      self%nmoldiams)
         call check_iarg('nsearch',        self%nsearch)
         call check_iarg('noris',          self%noris)
