@@ -713,7 +713,9 @@ contains
         enddo
         !$omp end parallel do
         ! sigma2 of particles to be subtracted
-        if( params_glob%l_ml_reg ) call prev_sigma2%consolidate_sigma2_history(prev_oris, pinds, updates)
+        if( params_glob%l_ml_reg )then
+            call prev_sigma2%consolidate_sigma2_history(prev_oris, pinds, updates)
+        endif
         ! init volumes
         call build_glob%spproj_field%get_pops(pops, 'state')
         do istate = 1, params_glob%nstates
