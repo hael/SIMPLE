@@ -2947,7 +2947,7 @@ contains
         logical,     intent(inout) :: mask(1:self%n)
         real,    allocatable :: vals(:), x(:)
         logical, allocatable :: msk(:)
-        integer :: icls
+        integer :: icls, i
         logical :: has_mean, has_var, has_skew, has_tvd, l_err
         msk = mask
         if( self%isthere('pop') )then
@@ -2955,7 +2955,11 @@ contains
                 msk(icls) = self%get(icls,'pop') > 0.5
             enddo
         endif
-        if( count(mask) <= 5 ) return
+        mask = msk
+        if( count(msk) <= 5 )then
+            deallocate(msk)
+            return
+        endif
         has_mean = self%isthere('mean')
         has_var  = self%isthere('var')
         has_tvd  = self%isthere('tvd')
@@ -2963,16 +2967,24 @@ contains
             vals = self%get_all('mean')
             x    = pack(vals, mask=msk)
             call robust_scaling(x)
+            i = 0
             do icls = 1,self%n
-                if( mask(icls) ) mask(icls) = x(icls) > -5.0
+                if( msk(icls) )then
+                    i = i+1
+                    if( mask(icls) ) mask(icls) = x(i) > -5.0
+                endif
             enddo
         endif
         if( has_var )then
             vals = self%get_all('var')
             x    = pack(vals, mask=msk)
             call robust_scaling(x)
+            i = 0
             do icls = 1,self%n
-                if( mask(icls) ) mask(icls) = x(icls) > 5.0
+                if( msk(icls) )then
+                    i = i+1
+                    if( mask(icls) ) mask(icls) = x(i) < 5.0
+                endif
             enddo
         endif
         if( has_tvd )then
@@ -2981,7 +2993,8 @@ contains
                 if( mask(icls) ) mask(icls) = vals(icls) < 0.5
             enddo
         endif
-        deallocate(vals, x, msk)
+        deallocate(msk)
+        if(allocated(vals) ) deallocate(vals, x)
     end subroutine class_robust_rejection
 
     !>  \brief  calculates hard weights based on ptcl ranking

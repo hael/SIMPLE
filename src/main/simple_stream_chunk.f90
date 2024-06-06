@@ -29,6 +29,7 @@ end type micproj_record
 character(len=STDLEN), parameter   :: DIR_CHUNK           = 'chunk_'
 character(len=STDLEN), parameter   :: PROJNAME_CHUNK      = 'chunk'
 logical,               parameter   :: DEBUG_HERE          = .false.
+integer                            :: ncls_rejected_glob  = 0 ! counter of rejected classes
 
 type stream_chunk
     type(sp_project)                       :: spproj
@@ -236,7 +237,7 @@ contains
         type(cmdline)              :: cline_pspec
         character(len=XLONGSTRLEN) :: cwd
         real                       :: scale
-        integer                    :: nptcls_sel, nclines, i
+        integer                    :: nptcls_sel, nclines
         call debug_print('in chunk%exec_classify '//int2str(self%id))
         if( .not.self%available ) return
         if( self%nptcls == 0 ) return
@@ -428,7 +429,7 @@ contains
         character(len=XLONGSTRLEN)    :: projfile
         real                  :: smpd_here
         integer               :: nptcls_rejected, ncls_rejected, iptcl
-        integer               :: icls, ncls, i
+        integer               :: icls, ncls
         call debug_print('in chunk%reject '//int2str(self%id))
         projfile        = trim(self%path)//self%projfile_out
         ncls_rejected   = 0
@@ -452,7 +453,7 @@ contains
         else
             call self%spproj%read_segment('ptcl2D',projfile)
             ! rejects particles 2D
-            !$omp parallel do private(iptcl,icls) reduction(+:ncls_rejected) proc_bind(close)
+            !$omp parallel do private(iptcl,icls) reduction(+:nptcls_rejected) proc_bind(close)
             do iptcl=1,self%nptcls
                 if( self%spproj%os_ptcl2D%get_state(iptcl) == 0 )cycle
                 icls = self%spproj%os_ptcl2D%get_class(iptcl)
@@ -474,13 +475,12 @@ contains
             call self%spproj%write_segment_inside('cls2D',projfile)
             ! updates class averages
             call img%new([box,box,1],smpd_here)
-            i = 0
             do icls=1,ncls
                 if( cls_mask(icls) ) cycle
                 if( trim(params_glob%reject_cls).eq.'dev' )then
-                    i = i+1
+                    ncls_rejected_glob = ncls_rejected_glob + 1 ! update to global counter
                     call img%read(cavgs,icls)
-                    call img%write('cls_rejected_chunk_'//int2str_pad(self%id,3)//'.mrc',i)
+                    call img%write('cls_rejected_chunks.mrc',ncls_rejected_glob)
                 endif
                 img = 0.
                 call img%write(cavgs,icls)
