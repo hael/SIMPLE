@@ -795,7 +795,7 @@ contains
         ncls2reject = count(.not.cls_mask)
         if( ncls2reject > 0 .and. ncls2reject < min(ncls_glob,nint(real(ncls_glob)*FRAC_SKIP_REJECTION)) )then
             ncls_rejected = 0
-            !$omp parallel do private(iptcl,icls) reduction(+:ncls_rejected) proc_bind(close)
+            !$omp parallel do private(iptcl,icls) reduction(+:nptcls_rejected) proc_bind(close)
             do iptcl = 1,pool_proj%os_ptcl2D%get_noris()
                 if( pool_proj%os_ptcl2D%get_state(iptcl) == 0 )cycle
                 icls = pool_proj%os_ptcl2D%get_class(iptcl)
