@@ -85,13 +85,15 @@ contains
         integer,              intent(in)    :: pinds(:), iters(:)
         real, allocatable :: pspecs(:,:,:)
         integer :: i,nptcls,mincnt,maxcnt,icnt,ngroups,fromp,top,iptcl,eo,igroup
-        nptcls  = size(pinds)
+        nptcls = size(pinds)
+        fromp  = minval(pinds)
+        top    = maxval(pinds)
+        self%fromp = fromp
+        self%top   = top
         mincnt  = minval(iters, mask=iters>0)
         maxcnt  = maxval(iters)
-        fromp   = minval(pinds)
-        top     = maxval(pinds)
         call self%init_from_group_header( sigma2_star_from_iter(mincnt) )
-        allocate(self%sigma2_noise(self%kfromto(1):self%kfromto(2),fromp:top),source=0.)
+        allocate(self%sigma2_noise(self%kfromto(1):self%kfromto(2),self%fromp:self%top),source=0.)
         if( params_glob%l_sigma_glob )then
             do icnt = mincnt,maxcnt
                 call self%read_sigma2_groups( icnt, pspecs, ngroups )

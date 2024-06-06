@@ -124,18 +124,21 @@ contains
         ! termination
         call qsys_cleanup
         call build%spproj_field%kill
+        call qenv%kill
+        call cline_volassemble%kill
+        call job_descr%kill
         call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_reconstruct3D_distr
 
     subroutine exec_reconstruct3D( self, cline )
-        use simple_euclid_sigma2, only: euclid_sigma2
+        use simple_euclid_sigma2, only: euclid_sigma2, eucl_sigma2_glob
         class(reconstruct3D_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(parameters)     :: params
-        type(builder)        :: build
-        type(euclid_sigma2)  :: eucl_sigma
+        type(parameters)              :: params
+        type(builder)                 :: build
+        type(euclid_sigma2),   target :: eucl_sigma
         character(len=:), allocatable :: fname
-        integer,          allocatable :: pinds(:)
+        integer,          allocatable :: pinds(:), updatecnts(:)
         logical,          allocatable :: ptcl_mask(:)
         integer :: nptcls2update
         logical :: l_did_sample
@@ -173,11 +176,19 @@ contains
             nptcls2update, pinds, ptcl_mask, .false.) ! no increment of sampled
         endif
         if( params%l_needs_sigma )then
-            fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
-            call eucl_sigma%new(fname, params%box)
-            call eucl_sigma%read_groups(build%spproj_field, ptcl_mask)
+            if( cline%defined('batchfrac') )then
+                updatecnts = nint(build%spproj_field%get_all('updatecnt', [params%fromp,params%top]))
+                call eucl_sigma%consolidate_sigma2_history(build%spproj_field, pinds, updatecnts)
+                eucl_sigma2_glob => eucl_sigma
+            else
+                fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
+                call eucl_sigma%new(fname, params%box)
+                call eucl_sigma%read_groups(build%spproj_field, ptcl_mask)
+            endif
         end if
         call calc_3Drec( cline, nptcls2update, pinds )
+        ! cleanup
+        call eucl_sigma%kill
         call qsys_job_finished('simple_commander_rec :: exec_reconstruct3D')
         ! end gracefully
         call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
