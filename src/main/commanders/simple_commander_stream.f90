@@ -831,7 +831,6 @@ contains
             ! switch to diameter refinement
             if( l_multipick_refine .and. params_glob%updated .eq. 'yes' .and. params_glob%moldiam_refine .gt. 0.0) then
                 write(logfhandle,'(A,I3)') '>>> REFINING MOLECULAR DIAMETER        : ', int(params_glob%moldiam_refine)
-
                 output_dir_picker   = filepath(trim(PATH_HERE), trim(DIR_PICKER))
                 call simple_mkdir(output_dir_picker, errmsg="commander_stream :: exec_stream_pick_extract;  ")
                 params_glob%updated = 'no'
@@ -1164,9 +1163,12 @@ contains
                 do iproj = 1,n_spprojs
                     fname = trim(output_dir)//trim(completed_jobs_clines(iproj)%get_carg('projfile'))
                     call tmpproj%read_segment('projinfo', fname)
-                    if(tmpproj%projinfo%isthere("pickdiam") .and. tmpproj%projinfo%get(1, "pickdiam") .eq. real(params%moldiam)) then
+                    if(l_multipick_refine .and. tmpproj%projinfo%isthere("init") .and. tmpproj%projinfo%get(1, "init") .eq. 1.0) then
+                        if(file_exists(trim(fname))) call del_file(trim(fname))
+                        call spprojs(iproj)%os_mic%new(0, .false.)
+                    else
                         call spprojs(iproj)%read_segment('mic', fname)
-                        call spprojs(iproj)%read_segment('projinfo', fname)
+                       ! call spprojs(iproj)%read_segment('projinfo', fname)
                         nmics = nmics + spprojs(iproj)%os_mic%get_noris()
                     endif
                 enddo
@@ -1192,33 +1194,29 @@ contains
                     j = n_old
                     do iproj = 1,n_spprojs
                         if( spprojs(iproj)%os_mic%get_noris() == 0 ) cycle
-                        if(spprojs(iproj)%projinfo%isthere("pickdiam") .and. spprojs(iproj)%projinfo%get(1, "pickdiam") .eq. real(params%moldiam)) then
-                            ! move project to appropriate directory
-                            fname     = trim(output_dir)//trim(completed_jobs_clines(iproj)%get_carg('projfile'))
-                            if(l_multipick_init) then
-                                new_fname = trim(DIR_STREAM_COMPLETED)//"init/"//trim(completed_jobs_clines(iproj)%get_carg('projfile'))
-                            else
-                                new_fname = trim(DIR_STREAM_COMPLETED)//trim(completed_jobs_clines(iproj)%get_carg('projfile'))
-                            endif
-                            call simple_rename(fname, new_fname)
-                            abs_fname = simple_abspath(new_fname, errmsg='stream pick_extract :: update_projects_list 1')
-                            ! records & project
-                            do imic = 1,spprojs(iproj)%os_mic%get_noris()
-                                j = j + 1
-                                micproj_records(j)%projname = trim(abs_fname)
-                                micproj_records(j)%micind   = imic
-                                if( l_multipick )then
-                                    micproj_records(j)%nptcls = 0
-                                else
-                                    nptcls      = nint(spprojs(iproj)%os_mic%get(imic,'nptcls'))
-                                    nptcls_glob = nptcls_glob + nptcls ! global update
-                                    micproj_records(j)%nptcls = nptcls
-                                endif
-                                call spproj_glob%os_mic%transfer_ori(j, spprojs(iproj)%os_mic, imic)
-                            enddo
+                        ! move project to appropriate directory
+                        fname = trim(output_dir)//trim(completed_jobs_clines(iproj)%get_carg('projfile'))
+                        if(tmpproj%projinfo%isthere("init") .and. tmpproj%projinfo%get(1, "init") .eq. 1.0) then
+                            new_fname = trim(DIR_STREAM_COMPLETED)// '/init/' //trim(completed_jobs_clines(iproj)%get_carg('projfile'))
                         else
-                            call del_file(fname)
-                        endif
+                            new_fname = trim(DIR_STREAM_COMPLETED)//trim(completed_jobs_clines(iproj)%get_carg('projfile'))
+                        endif    
+                        call simple_rename(fname, new_fname)
+                        abs_fname = simple_abspath(new_fname, errmsg='stream pick_extract :: update_projects_list 1')
+                        ! records & project
+                        do imic = 1,spprojs(iproj)%os_mic%get_noris()
+                            j = j + 1
+                            micproj_records(j)%projname = trim(abs_fname)
+                            micproj_records(j)%micind   = imic
+                            if( l_multipick )then
+                                micproj_records(j)%nptcls = 0
+                            else
+                                nptcls      = nint(spprojs(iproj)%os_mic%get(imic,'nptcls'))
+                                nptcls_glob = nptcls_glob + nptcls ! global update
+                                micproj_records(j)%nptcls = nptcls
+                            endif
+                            call spproj_glob%os_mic%transfer_ori(j, spprojs(iproj)%os_mic, imic)
+                        enddo
                     enddo
                     if( l_multipick )then
                         ! update molecular diameters
@@ -1289,7 +1287,7 @@ contains
                 call spproj_here%projinfo%set(1,'projname', trim(projname))
                 call spproj_here%projinfo%set(1,'projfile', trim(projfile))
                 call spproj_here%projinfo%set(1,'cwd',      trim(path))
-                call spproj_here%projinfo%set(1,'pickdiam', params%moldiam)
+                if(l_multipick_init) call spproj_here%projinfo%set(1,'init', 1.0)
                 ! from current global project
                 spproj_here%compenv = spproj_glob%compenv
                 spproj_here%jobproc = spproj_glob%jobproc
