@@ -11,7 +11,7 @@ private
 #include "simple_local_flags.inc"
 
 ! class constants
-real,    parameter :: GAUSIG = 2.5, BOX_EXP_FAC = 0.111, NDEV_DEFAULT = 2.5
+real,    parameter :: GAUSIG = 2.5, BOX_EXP_FAC = 0.111, NDEV_DEFAULT = 2.5, BOXEXTRACT_EXP_FAC = 1.2
 real,    parameter :: MSKDIAM2LP = 0.15, lP_LB = 30., LP_UB = 15.
 integer, parameter :: OFFSET_DEFAULT = 3
 logical, parameter :: L_WRITE  = .false.
@@ -98,7 +98,8 @@ contains
         allocate(pickers(npickers), smds_corr(npickers))
         ! multi-gaussian pick
         do ipick = 1,npickers
-            call pickers(ipick)%new_gaupicker(pcontrast, smpd_shrink, moldiams(ipick), moldiam_max, offset, ndev)
+            call pickers(ipick)%new_gaupicker(pcontrast, smpd_shrink, moldiams(ipick), moldiams(ipick), offset, ndev)
+            ! call pickers(ipick)%new_gaupicker(pcontrast, smpd_shrink, moldiams(ipick), moldiam_max, offset, ndev)
             dist_threshold = (pickers(ipick)%maxdiam/3.) / smpd_shrink
             call pickers(ipick)%gaupick(dist_thres=dist_threshold)
             smds_corr(ipick) = pickers(ipick)%smd_corr
@@ -1463,7 +1464,7 @@ contains
         integer, allocatable :: pos(:,:)
         real,    allocatable :: scores(:), loc_sdevs(:)
         real    :: moldiam
-        integer :: i,j, funit, iostat, npos, box
+        integer :: i,j, funit, iostat, npos, box, box_raw
         call fopen(funit, status='REPLACE', action='WRITE', file=trim(adjustl(fname)), iostat=iostat)
         call fileiochk('simple_pickgau; report_multipick ', iostat)
         do i = 1,npick
@@ -1472,8 +1473,12 @@ contains
             call picker(i)%get_positions(pos, smpd_new=smpd_raw)
             call picker(i)%get_scores(scores)
             call picker(i)%get_loc_sdevs(loc_sdevs)
-            box     = picker(i)%get_box()
+            box_raw = picker(i)%get_box()
             moldiam = picker(i)%get_moldiam()
+            ! to account tight box
+            box = find_larger_magic_box( nint(BOXEXTRACT_EXP_FAC*real(box_raw)) )
+            if( box /= box_raw ) pos = nint(real(pos) - real(box-box_raw)/2.)
+            ! write
             do j = 1,npos
                 write(funit,'(I7,I7,I7,F8.1,F8.3,F12.3)') pos(j,1),pos(j,2),box,moldiam,scores(j),loc_sdevs(j)
             enddo

@@ -328,7 +328,7 @@ contains
     procedure          :: zero_below
     procedure          :: div_below
     procedure          :: ellipse
-    procedure          :: flipY
+    procedure          :: flip
     ! FFTs
     procedure          :: fft  => fwd_ft
     procedure          :: ifft => bwd_ft
@@ -8104,21 +8104,42 @@ contains
           endif
     end subroutine ellipse
 
-    subroutine flipY( self )
-        class(image), intent(inout) :: self
-        integer :: i,j,jj
+    recursive subroutine flip( self, mode )
+        class(image),     intent(inout) :: self
+        character(len=*), intent(in)    :: mode
+        integer :: i,j,ii,jj
         real    :: val
-        !$omp parallel do private(i,j,jj,val) proc_bind(close) default(shared) schedule(static)
-        do j = 1,self%ldim(2)/2
-            jj = self%ldim(2) - j - 1
-            do i = 1,self%ldim(1)
-                val               = self%rmat(i,j,1)
-                self%rmat(i,j,1)  = self%rmat(i,jj,1)
-                self%rmat(i,jj,1) = val
+        if( self%ldim(3) > 1 )THROW_HARD('for 2D images only; flip')
+        select case(upperCase(trim(mode)))
+        case('X')
+            !$omp parallel do private(i,j,ii,val) proc_bind(close) default(shared) schedule(static)
+            do i = 1,self%ldim(1)/2
+                ii = self%ldim(1) - i - 1
+                do j = 1,self%ldim(2)
+                    val               = self%rmat(i,j,1)
+                    self%rmat(i,j,1)  = self%rmat(ii,j,1)
+                    self%rmat(ii,j,1) = val
+                enddo
             enddo
-        enddo
-        !$omp end parallel do
-    end subroutine flipY
+            !$omp end parallel do
+        case('Y')
+            !$omp parallel do private(i,j,jj,val) proc_bind(close) default(shared) schedule(static)
+            do j = 1,self%ldim(2)/2
+                jj = self%ldim(2) - j - 1
+                do i = 1,self%ldim(1)
+                    val               = self%rmat(i,j,1)
+                    self%rmat(i,j,1)  = self%rmat(i,jj,1)
+                    self%rmat(i,jj,1) = val
+                enddo
+            enddo
+            !$omp end parallel do
+        case('XY','YX')
+            call self%flip('X')
+            call self%flip('Y')
+        case DEFAULT
+            THROW_HARD('Unsupported flip mode')
+        end select
+    end subroutine flip
 
     !> \brief rad_cc calculates the radial correlation function between two images/volumes
     subroutine radial_cc( self1, self2, smpd, rad_corrs, rad_dists )

@@ -421,8 +421,8 @@ contains
 
     subroutine reject( self, res_thresh, ndev, box )
         class(stream_chunk), intent(inout) :: self
-        real,              intent(in) :: res_thresh, ndev
-        integer,           intent(in) :: box
+        real,                intent(in)    :: res_thresh, ndev
+        integer,             intent(in)    :: box
         type(image)                   :: img
         logical,          allocatable :: cls_mask(:), moments_mask(:), corres_mask(:)
         character(len=:), allocatable :: cavgs
@@ -440,9 +440,7 @@ contains
         cavgs = trim(self%path)//basename(cavgs)
         allocate(cls_mask(ncls),moments_mask(ncls),corres_mask(ncls),source=.true.)
         ! moments & total variation distance
-        if( trim(params_glob%reject_cls).eq.'dev' )then
-            call self%spproj%os_cls2D%class_robust_rejection(moments_mask)
-        endif
+        if( trim(params_glob%reject_cls).ne.'old' ) call self%spproj%os_cls2D%class_robust_rejection(moments_mask)
         ! correlation and resolution
         call self%spproj%os_cls2D%find_best_classes(box, smpd_here, res_thresh, corres_mask, ndev)
         ! overall class rejection
@@ -462,8 +460,23 @@ contains
                 call self%spproj%os_ptcl2D%set_state(iptcl,0)
             enddo
             !$omp end parallel do
-            call debug_print('in chunk%reject '//int2str(self%id)//' '//int2str(nptcls_rejected))
             call self%spproj%write_segment_inside('ptcl2D',projfile)
+            ! updates class averages
+            call img%new([box,box,1],smpd_here)
+            do icls = 1,ncls
+                if( cls_mask(icls) ) cycle
+                if( self%spproj%os_cls2D%get(icls,'pop') >  0.5 )then
+                    ! update to global counter, does not include empty classes
+                    ncls_rejected_glob = ncls_rejected_glob + 1
+                    call img%read(cavgs,icls)
+                    call img%write('cls_rejected_chunks.mrc',ncls_rejected_glob)
+                    img = 0.
+                    call img%write(cavgs,icls)
+                endif
+            enddo
+            call img%read(cavgs, ncls)
+            call img%write(cavgs,ncls)
+            call img%kill
             ! updates cls2D field
             do icls=1,ncls
                 if( .not.cls_mask(icls) )then
@@ -473,24 +486,9 @@ contains
                 endif
             enddo
             call self%spproj%write_segment_inside('cls2D',projfile)
-            ! updates class averages
-            call img%new([box,box,1],smpd_here)
-            do icls=1,ncls
-                if( cls_mask(icls) ) cycle
-                if( trim(params_glob%reject_cls).eq.'dev' )then
-                    ncls_rejected_glob = ncls_rejected_glob + 1 ! update to global counter
-                    call img%read(cavgs,icls)
-                    call img%write('cls_rejected_chunks.mrc',ncls_rejected_glob)
-                endif
-                img = 0.
-                call img%write(cavgs,icls)
-            enddo
-            call img%read(cavgs, ncls)
-            call img%write(cavgs,ncls)
             write(logfhandle,'(A,I6,A,I6,A,I6,A,I6,A)')'>>> REJECTED FROM CHUNK ',self%id,': ',&
                 &nptcls_rejected,' / ',self%nptcls,' PARTICLES IN ',ncls_rejected,' CLUSTERS'
         endif
-        call img%kill
         call self%spproj%kill
         call debug_print('end chunk%reject '//int2str(self%id))
     end subroutine reject
