@@ -307,11 +307,11 @@ contains
         if( ldim_gain(1)==self%onx .and. ldim_gain(2)==self%ony )then
             ! gain dimensions = desired frames dimensions
             call gain%read(fname)
-            if( dotgain ) call gain%flipY
+            if( dotgain ) call gain%flip('Y')
         else
             call tmp%new(ldim_gain, 1.)
             call tmp%read(fname)
-            if( dotgain ) call tmp%flipY
+            if( dotgain ) call tmp%flip('Y')
             call gain%zero
             if( ldim_gain(1)==EER_IMAGE_WIDTH .and. self%upsampling==2 )then
                 ! gain 4K, images 8K

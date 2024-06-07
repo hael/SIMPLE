@@ -1461,7 +1461,7 @@ contains
         if( .not. cline%defined('ncls')            ) call cline%set('ncls',           30)
         if( .not. cline%defined('nptcls_per_cls')  ) call cline%set('nptcls_per_cls', 500)
         if( .not. cline%defined('ml_reg')          ) call cline%set('ml_reg',         'no')
-        if( .not. cline%defined('refine')          ) call cline%set('refine',         'snhc')
+        if( .not. cline%defined('refine')          ) call cline%set('refine',         'snhc_smpl')
         if( .not. cline%defined('maxpop')          ) call cline%set('maxpop',         MAXPOP_DEFAULT)
         ! ev overrides
         call get_environment_variable(SIMPLE_STREAM_PICK_NTHR, pick_nthr_env, envlen)
@@ -2151,7 +2151,7 @@ contains
         if( .not. cline%defined('tau')          ) call cline%set('tau',          5)
         if( .not. cline%defined('rnd_cls_init') ) call cline%set('rnd_cls_init', 'no')
         if( .not. cline%defined('remove_chunks')) call cline%set('remove_chunks','yes')
-        if( .not. cline%defined('refine')       ) call cline%set('refine',       'snhc')
+        if( .not. cline%defined('refine')       ) call cline%set('refine',       'snhc_smpl')
         ! write cmdline for GUI
         call cline%writeline(".cline")
         ! sanity check for restart

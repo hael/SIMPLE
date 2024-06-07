@@ -1895,7 +1895,7 @@ contains
         &'is a distributed workflow that executes 2D classification'//&                ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_stream',&                                                             ! executable
-        &0, 2, 0, 9, 2, 1, 5, .true.)                                                 ! # entries in each group, requires sp_project
+        &0, 2, 0, 9, 3, 1, 5, .true.)                                                 ! # entries in each group, requires sp_project
         cluster2D_stream%gui_submenu_list = "data,cluster 2D,compute"
         cluster2D_stream%advanced = .false.
         ! image input/output
@@ -1942,6 +1942,9 @@ contains
         call cluster2D_stream%set_input('filt_ctrls', 2, 'lp', 'num', 'Static low-pass limit for 2D classification', 'Static low-pass limit for 2D classification',&
         &'low-pass limit in Angstroms', .false., 15.)
         call cluster2D_stream%set_gui_params('filt_ctrls', 2, submenu="cluster 2D")
+        call cluster2D_stream%set_input('filt_ctrls', 3, 'reject_cls', 'multi', 'Whether to reject class averages',&
+        &'Whether to automatically reject 2D clusters and associated particles(yes|old|no){yes}', '(yes|old|no){yes}', .false., 'yes')
+        call cluster2D_stream%set_gui_params('filt_ctrls', 3, submenu="cluster 2D", online=.true.)
         ! mask controls
         call cluster2D_stream%set_input('mask_ctrls', 1, mskdiam)
         call cluster2D_stream%set_gui_params('mask_ctrls', 1, submenu="cluster 2D", advanced=.false.)

@@ -772,7 +772,7 @@ contains
         logical, allocatable :: cls_mask(:), moments_mask(:), corres_mask(:)
         real                 :: ndev_here
         integer              :: nptcls_rejected, ncls_rejected, ncls2reject, iptcl
-        integer              :: icls, cnt
+        integer              :: icls
         if( .not. stream2D_active ) return
         if( .not.pool_available )   return
         if( trim(params_glob%reject_cls).eq.'no' ) return
@@ -783,9 +783,7 @@ contains
         nptcls_rejected = 0
         allocate(cls_mask(ncls_glob),moments_mask(ncls_glob),corres_mask(ncls_glob),source=.true.)
         ! moments & total variation distance
-        if( trim(params_glob%reject_cls).eq.'dev' )then
-            call pool_proj%os_cls2D%class_robust_rejection(moments_mask)
-        endif
+        if( trim(params_glob%reject_cls).ne.'old' ) call pool_proj%os_cls2D%class_robust_rejection(moments_mask)
         ! correlation & resolution
         ndev_here = 1.25*params_glob%ndev ! less stringent rejection than chunk
         call pool_proj%os_cls2D%find_best_classes(box,smpd,params_glob%lpthres,corres_mask,ndev_here)
@@ -805,6 +803,28 @@ contains
             enddo
             !$omp end parallel do
             if( nptcls_rejected > 0 )then
+                ! classes
+                call img%new([box,box,1],smpd)
+                do icls = 1,ncls_glob
+                    if( cls_mask(icls) ) cycle
+                    if( pool_proj%os_cls2D%get(icls,'pop') > 0.5 )then
+                        ncls_rejected_glob = ncls_rejected_glob + 1
+                        call img%read(trim(POOL_DIR)//trim(refs_glob),icls)
+                        call img%write(trim(POOL_DIR)//'cls_rejected_pool.mrc',ncls_rejected_glob)
+                        img = 0.
+                        call img%write(trim(POOL_DIR)//trim(refs_glob),icls)
+                        if( l_wfilt )then
+                            call img%write(trim(POOL_DIR)//trim(add2fbody(refs_glob, params_glob%ext,trim(WFILT_SUFFIX))),icls)
+                        endif
+                    endif
+                enddo
+                call img%read(trim(POOL_DIR)//trim(refs_glob), ncls_glob)
+                call img%write(trim(POOL_DIR)//trim(refs_glob), ncls_glob)
+                if( l_wfilt )then
+                    call img%read(trim(POOL_DIR)//trim(add2fbody(refs_glob, params_glob%ext,trim(WFILT_SUFFIX))), ncls_glob)
+                    call img%write(trim(POOL_DIR)//trim(add2fbody(refs_glob, params_glob%ext,trim(WFILT_SUFFIX))), ncls_glob)
+                endif
+                ! cls2D field
                 do icls=1,ncls_glob
                     if( .not.cls_mask(icls) )then
                         if( pool_proj%os_cls2D%get(icls,'pop') > 0.5 ) ncls_rejected = ncls_rejected+1
@@ -815,30 +835,9 @@ contains
                         call pool_proj%os_cls2D%set(icls,'prev_pop_odd', 0.)
                     endif
                 enddo
-                cnt = 0
-                call img%new([box,box,1],smpd)
-                do icls=1,ncls_glob
-                    if( cls_mask(icls) ) cycle
-                    cnt = cnt+1
-                    ncls_rejected_glob = ncls_rejected_glob + 1
-                    if( debug_here .or. trim(params_glob%reject_cls).eq.'dev' )then
-                        call img%read(trim(POOL_DIR)//trim(refs_glob),icls)
-                        call img%write(trim(POOL_DIR)//'cls_rejected_pool.mrc',ncls_rejected_glob)
-                    endif
-                    img = 0.
-                    call img%write(trim(POOL_DIR)//trim(refs_glob),icls)
-                    if( l_wfilt )then
-                        call img%write(trim(POOL_DIR)//trim(add2fbody(refs_glob, params_glob%ext,trim(WFILT_SUFFIX))),icls)
-                    endif
-                enddo
-                call img%read(trim(POOL_DIR)//trim(refs_glob), ncls_glob)
-                call img%write(trim(POOL_DIR)//trim(refs_glob), ncls_glob)
-                if( l_wfilt )then
-                    call img%read(trim(POOL_DIR)//trim(add2fbody(refs_glob, params_glob%ext,trim(WFILT_SUFFIX))), ncls_glob)
-                    call img%write(trim(POOL_DIR)//trim(add2fbody(refs_glob, params_glob%ext,trim(WFILT_SUFFIX))), ncls_glob)
-                endif
                 deallocate(cls_mask)
-                write(logfhandle,'(A,I4,A,I6,A)')'>>> REJECTED FROM POOL: ',nptcls_rejected,' PARTICLES IN ',ncls_rejected,' CLUSTER(S)'
+                call img%kill
+                write(logfhandle,'(A,I6,A,I6,A)')'>>> REJECTED FROM POOL: ',nptcls_rejected,' PARTICLES IN ',ncls_rejected,' CLUSTER(S)'
                 ! write stream2d.star with ptcl numbers post rejection 
                ! call starproj%export_stream2D(pool_proj%os_ptcl2D%get_noris(), nptcls_rejected)
             endif
@@ -847,7 +846,6 @@ contains
             ! write stream2d.star with ptcl numbers post rejection 
             !call starproj%export_stream2D(pool_proj%os_ptcl2D%get_noris(), 0)
         endif
-        call img%kill
     end subroutine reject_from_pool_dev
 
     subroutine reject_from_pool_user_dev
