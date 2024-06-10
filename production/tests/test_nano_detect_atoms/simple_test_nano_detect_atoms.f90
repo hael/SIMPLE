@@ -58,38 +58,6 @@ implicit none
         call centers_pdb%writepdb(fname)
     end subroutine write_centers
 
-    function avg_loc_sdev_3D( img, winsz ) result( asdev )
-        type(image), intent(in) :: img
-        integer,     intent(in) :: winsz
-        integer           :: img_ldim(3), i, j, k, ir(2), jr(2), kr(2), npix, isz, jsz, ksz
-        real              :: avg, asdev
-        real, allocatable :: rmat(:,:,:), sdevs(:,:,:)
-        img_ldim = img%get_ldim()
-        allocate( rmat(img_ldim(1),img_ldim(2),img_ldim(3)))
-        allocate(sdevs(img_ldim(1),img_ldim(2),img_ldim(3)))
-        rmat = img%get_rmat()
-        do i = 1, img_ldim(1)
-            ir(1) = max(1,           i-winsz)
-            ir(2) = min(img_ldim(1), i+winsz)
-            isz   = ir(2) - ir(1) + 1
-            do j = 1, img_ldim(2)
-                jr(1) = max(1,           j-winsz)
-                jr(2) = min(img_ldim(2), j+winsz)
-                jsz   = jr(2) - jr(1) + 1
-                do k = 1, img_ldim(3)
-                    kr(1)        = max(1,           k-winsz)
-                    kr(2)        = min(img_ldim(3), k+winsz)
-                    ksz          = kr(2) - kr(1) + 1
-                    npix         = isz * jsz * ksz
-                    avg          = sum(rmat(ir(1):ir(2),jr(1):jr(2),kr(1):kr(2))) / real(npix)
-                    sdevs(i,j,k) = sqrt(sum((rmat(ir(1):ir(2),jr(1):jr(2),kr(1):kr(2))-avg)**2.0) / real(npix - 1))
-                enddo
-            enddo
-        enddo
-        asdev = sum(sdevs) / real(img_ldim(1) * img_ldim(2) * img_ldim(3))
-        deallocate(rmat,sdevs)
-    end function avg_loc_sdev_3D
-
 end module nano_picker_utils
 
 module nano_detect_atoms
@@ -287,7 +255,7 @@ module nano_detect_atoms
                         call self%nano_img%window_slim( pos, self%boxsize, boximgs(ithr), outside)
                         !call boximgs(ithr)%prenorm4real_corr(l_err_box)
                         self%box_scores(xoff,yoff,zoff) = self%simulated_atom%real_corr(boximgs(ithr))
-                        self%loc_sdevs( xoff,yoff,zoff) = avg_loc_sdev_3D(boximgs(ithr),self%offset)
+                        self%loc_sdevs( xoff,yoff,zoff) = boximgs(ithr)%avg_loc_sdev(self%offset)
                     enddo 
                 enddo 
             enddo
@@ -326,7 +294,7 @@ module nano_detect_atoms
                         call self%nano_img%win2arr_rad(      pos_center(1),  pos_center(2),  pos_center(3),  winsz, npix_in, maxrad, npix_out1, pixels1)
                         call self%simulated_atom%win2arr_rad(self%boxsize/2, self%boxsize/2, self%boxsize/2, winsz, npix_in, maxrad, npix_out2, pixels2)
                         self%box_scores(xoff,yoff,zoff) = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))
-                        self%loc_sdevs( xoff,yoff,zoff) = avg_loc_sdev_3D(boximgs(ithr),self%offset)
+                        self%loc_sdevs( xoff,yoff,zoff) = boximgs(ithr)%avg_loc_sdev(self%offset)
                     enddo 
                 enddo 
             enddo
