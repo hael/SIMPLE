@@ -4524,52 +4524,105 @@ contains
         integer,        intent(in)    :: winsz
         class(image),   intent(inout) :: sdevimg
         real, optional, intent(inout) :: asdev
-        real    :: avg
-        integer :: i, j, ir(2), jr(2), isz, jsz, npix
-        if( self%ldim(3) /= 1 ) THROW_HARD('not for 3d')
-        call sdevimg%new(self%ldim, self%smpd)
-        !$omp parallel do private(i,j,ir,jr,isz,jsz,npix,avg) default(shared) proc_bind(close)
-        do i = 1,self%ldim(1)
-            ir(1) = max(1,            i - winsz)
-            ir(2) = min(self%ldim(1), i + winsz)
-            isz   = ir(2) - ir(1) + 1
-            do j = 1,self%ldim(2)
-                jr(1) = max(1,            j - winsz)
-                jr(2) = min(self%ldim(2), j + winsz)
-                jsz   = jr(2) - jr(1) + 1
-                npix  = isz * jsz
-                avg   = sum(self%rmat(ir(1):ir(2),jr(1):jr(2),1)) / real(npix)
-                sdevimg%rmat(i,j,1) = sqrt(sum((self%rmat(ir(1):ir(2),jr(1):jr(2),1) - avg)**2.0) / real(npix - 1)) 
-            end do
-        end do
-        !$omp end parallel do
-        if( present(asdev) )then
-            asdev = sum(sdevimg%rmat(:self%ldim(1),:self%ldim(2),1)) / real(self%ldim(1) * self%ldim(2))
+        real                 :: avg
+        integer              :: i, j, k, ir(2), jr(2), kr(2), isz, jsz, ksz, npix
+        logical              :: isvol
+        isvol = .false.
+        isvol = self%is_3d()
+        if( isvol )then
+            call sdevimg%new(self%ldim, self%smpd)
+            !$omp parallel do private(i,j,k,ir,jr,kr,isz,jsz,ksz,npix,avg) default(shared) proc_bind(close)
+            do i = 1, self%ldim(1)
+                ir(1) = max(1,            i - winsz)
+                ir(2) = min(self%ldim(1), i + winsz)
+                isz   = ir(2) - ir(1) + 1
+                do j = 1, self%ldim(2)
+                    jr(1) = max(1,            j - winsz)
+                    jr(2) = min(self%ldim(2), j + winsz)
+                    jsz   = jr(2) - jr(1) + 1
+                    do k = 1, self%ldim(3)
+                        kr(1)               = max(1,            k - winsz)
+                        kr(2)               = min(self%ldim(3), k + winsz)
+                        ksz                 = kr(2) - kr(1) + 1
+                        npix                = isz * jsz * ksz
+                        avg                 = sum(self%rmat(ir(1):ir(2),jr(1):jr(2),kr(1):kr(2))) / real(npix)
+                        sdevimg%rmat(i,j,1) = sqrt(sum((self%rmat(ir(1):ir(2),jr(1):jr(2),kr(1):kr(2)) - avg)**2.0) / real(npix - 1)) 
+                    enddo    
+                enddo
+            enddo
+            !$omp end parallel do
+            if( present(asdev) )then
+                asdev = sum(sdevimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / real(self%ldim(1) * self%ldim(2) * self%ldim(3))
+            endif
+        else
+            call sdevimg%new(self%ldim, self%smpd)
+            !$omp parallel do private(i,j,ir,jr,isz,jsz,npix,avg) default(shared) proc_bind(close)
+            do i = 1,self%ldim(1)
+               ir(1) = max(1,            i - winsz)
+               ir(2) = min(self%ldim(1), i + winsz)
+               isz   = ir(2) - ir(1) + 1
+               do j = 1,self%ldim(2)
+                   jr(1)               = max(1,            j - winsz)
+                   jr(2)               = min(self%ldim(2), j + winsz)
+                   jsz                 = jr(2) - jr(1) + 1
+                   npix                = isz * jsz
+                   avg                 = sum(self%rmat(ir(1):ir(2),jr(1):jr(2),1)) / real(npix)
+                   sdevimg%rmat(i,j,1) = sqrt(sum((self%rmat(ir(1):ir(2),jr(1):jr(2),1) - avg)**2.0) / real(npix - 1)) 
+                enddo
+            enddo
+            !$omp end parallel do
+            if( present(asdev) )then
+                asdev = sum(sdevimg%rmat(:self%ldim(1),:self%ldim(2),1)) / real(self%ldim(1) * self%ldim(2))
+            endif
         endif
     end subroutine loc_sdev
 
     function avg_loc_sdev( self, winsz ) result( asdev )
         class(image), intent(in) :: self
         integer,      intent(in) :: winsz
-        real(dp) :: sum_sdevs
-        real     :: avg, asdev
-        integer  :: i, j, ir(2), jr(2), isz, jsz, npix
-        if( self%ldim(3) /= 1 ) THROW_HARD('not yet implemented for 3d')
+        real(dp)             :: sum_sdevs
+        real                 :: avg, asdev
+        integer              :: i, j, k, ir(2), jr(2), kr(2), isz, jsz, ksz, npix
+        logical              :: isvol
+        isvol     = .false.
+        isvol     = self%is_3d()
         sum_sdevs = 0.d0
-        do i = 1,self%ldim(1)
-            ir(1) = max(1,            i - winsz)
-            ir(2) = min(self%ldim(1), i + winsz)
-            isz   = ir(2) - ir(1) + 1
-            do j = 1,self%ldim(2)
-                jr(1)     = max(1,            j - winsz)
-                jr(2)     = min(self%ldim(2), j + winsz)
-                jsz       = jr(2) - jr(1) + 1
-                npix      = isz * jsz
-                avg       = sum(self%rmat(ir(1):ir(2),jr(1):jr(2),1)) / real(npix)
-                sum_sdevs = sum_sdevs + sqrt(real(sum((self%rmat(ir(1):ir(2),jr(1):jr(2),1) - avg)**2.0),dp) / real(npix-1,dp))
-            end do
-        end do
-        asdev = real(sum_sdevs / real(self%ldim(1) * self%ldim(2),dp))
+        if( isvol )then
+            do i = 1, self%ldim(1)
+                ir(1) = max(1,            i - winsz)
+                ir(2) = min(self%ldim(1), i + winsz)
+                isz   = ir(2) - ir(1) + 1
+                do j = 1, self%ldim(2)
+                    jr(1)     = max(1,            j - winsz)
+                    jr(2)     = min(self%ldim(2), j + winsz)
+                    jsz       = jr(2) - jr(1) + 1
+                    do k = 1, self%ldim(3)
+                        kr(1) = max(1,            k - winsz)
+                        kr(2) = min(self%ldim(3), k + winsz)
+                        ksz       = kr(2) - kr(1) + 1
+                        npix      = isz * jsz * ksz
+                        avg       = sum(self%rmat(ir(1):ir(2),jr(1):jr(2),kr(1):kr(2))) / real(npix)
+                        sum_sdevs = sum_sdevs + sqrt(real(sum((self%rmat(ir(1):ir(2),jr(1):jr(2),kr(1):kr(2)) - avg)**2.0),dp) / real(npix-1,dp))
+                    enddo
+                enddo
+            enddo
+            asdev = real(sum_sdevs / real(self%ldim(1) * self%ldim(2) * self%ldim(3),dp))
+        else
+            do i = 1, self%ldim(1)
+                ir(1) = max(1,            i - winsz)
+                ir(2) = min(self%ldim(1), i + winsz)
+                isz   = ir(2) - ir(1) + 1
+                do j = 1, self%ldim(2)
+                    jr(1)     = max(1,            j - winsz)
+                    jr(2)     = min(self%ldim(2), j + winsz)
+                    jsz       = jr(2) - jr(1) + 1
+                    npix      = isz * jsz
+                    avg       = sum(self%rmat(ir(1):ir(2),jr(1):jr(2),1)) / real(npix)
+                    sum_sdevs = sum_sdevs + sqrt(real(sum((self%rmat(ir(1):ir(2),jr(1):jr(2),1) - avg)**2.0),dp) / real(npix-1,dp))
+                enddo
+            enddo
+            asdev = real(sum_sdevs / real(self%ldim(1) * self%ldim(2),dp))
+        endif
     end function avg_loc_sdev
 
     subroutine loc_var( self, varimg, avar )
