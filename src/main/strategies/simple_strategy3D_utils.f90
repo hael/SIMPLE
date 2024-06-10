@@ -38,20 +38,7 @@ contains
         shvec_incr = 0.
         if( s%doshift ) then
             shvec_incr = sh
-            if( trim(params_glob%sh_rand) .eq. 'yes' )then
-                call pftcc_glob%gencorrs(ref, s%iptcl, corrs)
-                t = maxval(corrs)
-                call pftcc_glob%gencorrs(ref, s%iptcl, shvec_incr, corrs)
-                t = t / (t + maxval(corrs))
-                shvec_incr = shvec_incr * (1. - t)
-                ! reseting inpl from the adjusted shifts
-                call pftcc_glob%gencorrs(ref, s%iptcl, shvec_incr, corrs)
-                loc = maxloc(corrs, dim=1)
-                s3D%proj_space_euls(3,ref,s%ithr) = 360. - pftcc_glob%get_rot(loc)
-                call build_glob%spproj_field%set(      s%iptcl, 'inpl', real(loc))
-                call build_glob%spproj_field%set_euler(s%iptcl, s3D%proj_space_euls(:,ref,s%ithr))
-            endif
-            shvec = shvec + shvec_incr
+            shvec      = shvec + shvec_incr
         end if
         where( abs(shvec) < 1e-6 ) shvec = 0.
         call build_glob%spproj_field%set_shift(s%iptcl, shvec)
