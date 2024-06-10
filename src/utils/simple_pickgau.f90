@@ -11,7 +11,7 @@ private
 #include "simple_local_flags.inc"
 
 ! class constants
-real,    parameter :: GAUSIG = 2.5, BOX_EXP_FAC = 0.111, NDEV_DEFAULT = 2.5, BOXEXTRACT_EXP_FAC = 1.2
+real,    parameter :: GAUSIG = 2.5, BOX_EXP_FAC = 0.111, NDEV_DEFAULT = 2.5
 real,    parameter :: MSKDIAM2LP = 0.15, lP_LB = 30., LP_UB = 15.
 integer, parameter :: OFFSET_DEFAULT = 3
 logical, parameter :: L_WRITE  = .false.
@@ -1476,7 +1476,7 @@ contains
             box_raw = picker(i)%get_box()
             moldiam = picker(i)%get_moldiam()
             ! to account tight box
-            box = find_larger_magic_box( nint(BOXEXTRACT_EXP_FAC*real(box_raw)) )
+            box = find_larger_magic_box( nint(params_glob%box_exp_factor*real(box_raw)) )
             if( box /= box_raw ) pos = nint(real(pos) - real(box-box_raw)/2.)
             ! write
             do j = 1,npos

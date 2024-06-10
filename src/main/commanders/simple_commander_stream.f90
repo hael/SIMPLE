@@ -63,6 +63,7 @@ integer,               parameter :: WAITTIME        = 10   ! movie folder watche
 contains
 
     subroutine exec_stream_preprocess( self, cline )
+        use simple_motion_correct, only: flip_gain
         class(commander_stream_preprocess), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters)                       :: params
@@ -133,6 +134,8 @@ contains
         call spproj_glob%read( params%projfile )
         call spproj_glob%update_projinfo(cline)
         if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('PREPROCESS_STREAM must start from an empty project (eg from root project folder)')
+        ! gain reference
+        call flip_gain(cline, params%gainref, params%flipgain)
         ! movie watcher init
         movie_buff = moviewatcher(LONGTIME, params%dir_movies)
         ! guistats init

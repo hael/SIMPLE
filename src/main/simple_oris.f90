@@ -1303,13 +1303,13 @@ contains
         integer :: i, cnt, nptcls, n_nonzero, n2sample, ns, nsampled, mins, maxs
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
-        allocate(inds(nptcls), sampled(nptcls), source=0)
+        allocate(inds(nptcls), sampled(fromto(1):fromto(2)), source=0)
         allocate(l_states(nptcls))
         cnt = 0
         do i = fromto(1), fromto(2)
             cnt            = cnt + 1
             l_states(cnt)  = self%o(i)%get_state() > 0
-            sampled(cnt)   = self%o(i)%get_sampled()
+            sampled(i)     = self%o(i)%get_sampled()
             inds(cnt)      = i
         end do
         mask      = .false.
@@ -1333,7 +1333,7 @@ contains
             cnt = 0
             do i = 1,nptcls
                 if( .not.l_states(i) ) cycle
-                if( sampled(i)==mins )then
+                if( sampled(inds(i))==mins )then
                     cnt      = cnt + 1
                     vec(cnt) = i
                 endif
@@ -2903,7 +2903,7 @@ contains
             do icls = 1,self%n
                 if( msk(icls) )then
                     i = i+1
-                    if( mask(icls) ) mask(icls) = x(i) > -6.0
+                    if( mask(icls) ) mask(icls) = x(i) > -8.0
                 endif
             enddo
         endif
