@@ -22,7 +22,7 @@ public :: motion_correct_with_patched
 public :: motion_correct_kill_common, motion_correct_mic2spec, patched_shift_fname, motion_correct_write_poly
 public :: motion_correct_write2star, motion_correct_calc_opt_weights, motion_correct_calc_bid
 ! Utils
-public :: motion_correct_get_ref_frame, correct_gain
+public :: motion_correct_get_ref_frame, correct_gain, flip_gain
 private
 #include "simple_local_flags.inc"
 
@@ -851,6 +851,44 @@ contains
     integer function motion_correct_get_ref_frame()
         motion_correct_get_ref_frame = fixed_frame
     end function motion_correct_get_ref_frame
+
+    ! flips, writes gain reference & update command line
+    subroutine flip_gain( cline, gainref_fname, mode )
+        use simple_cmdline, only: cmdline
+        class(cmdline),   intent(inout) :: cline
+        character(len=*), intent(inout) :: gainref_fname, mode
+        type(image)                   :: gain
+        character(len=:), allocatable :: new_fname
+        real    :: smpd
+        integer :: ldim(3), n
+        if( .not.cline%defined('gainref') ) return
+        if( .not.cline%defined('flipgain') ) return
+        select case(trim(uppercase(mode)))
+        case('NO')
+            return
+        case('X','Y','XY','YX')
+            ! supported
+        case DEFAULT
+            THROW_HARD('UNSUPPORTED GAIN REFERENCE FLIPPING MODE: '//trim(mode))
+        end select
+        if( .not.file_exists(gainref_fname) )then
+            THROW_HARD('Could not find gain reference: '//trim(gainref_fname))
+        endif
+        call find_ldim_nptcls(gainref_fname, ldim, n, smpd=smpd)
+        ldim(3) = 1
+        call gain%new(ldim, smpd, wthreads=.false.)
+        call gain%read(gainref_fname)
+        call gain%flip(mode)
+        gainref_fname = basename(gainref_fname)
+        gainref_fname = get_fbody(gainref_fname, trim(fname2ext(gainref_fname)), separator=.true.)
+        gainref_fname = './'//trim(gainref_fname)//'_flip'//trim(uppercase(mode))//'.mrc'
+        call gain%write(gainref_fname)
+        new_fname     = simple_abspath(gainref_fname)
+        gainref_fname = trim(new_fname)
+        call cline%set('gainref', gainref_fname)
+        call gain%kill
+        deallocate(new_fname)
+    end subroutine flip_gain
 
     ! COMMON PRIVATE UTILITY METHODS
 

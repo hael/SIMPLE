@@ -134,6 +134,7 @@ end type make_pickrefs_commander
 contains
 
     subroutine exec_preprocess_distr( self, cline )
+        use simple_motion_correct, only: flip_gain
         class(preprocess_commander_distr), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(parameters)              :: params
@@ -188,6 +189,8 @@ contains
         ! deal with numlen so that length matches JOB_FINISHED indicator files
         params%numlen = len(int2str(params%nparts))
         call cline%set('numlen', real(params%numlen))
+        ! gain reference
+        call flip_gain(cline, params%gainref, params%flipgain)
         ! setup the environment for distributed execution
         call qenv%new(params%nparts)
         ! prepares picking references
@@ -464,6 +467,7 @@ contains
     end subroutine exec_preprocess
 
     subroutine exec_motion_correct_distr( self, cline )
+        use simple_motion_correct, only: flip_gain
         class(motion_correct_commander_distr), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
         type(parameters) :: params
@@ -489,6 +493,8 @@ contains
         call spproj%read_segment(params%oritype, params%projfile)
         if( spproj%get_nmovies() ==0 ) THROW_HARD('no movies to process! exec_motion_correct_distr')
         call spproj%kill
+        ! gain reference
+        call flip_gain(cline, params%gainref, params%flipgain)
         ! setup the environment for distributed execution
         call qenv%new(params%nparts)
         ! prepare job description

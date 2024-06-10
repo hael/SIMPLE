@@ -224,6 +224,7 @@ type(simple_input_param) :: eer_fraction
 type(simple_input_param) :: eer_upsampling
 type(simple_input_param) :: element
 type(simple_input_param) :: eo
+type(simple_input_param) :: flipgain
 type(simple_input_param) :: focusmskdiam
 type(simple_input_param) :: frac
 type(simple_input_param) :: fraca
@@ -1185,6 +1186,7 @@ contains
         call set_param(nran,           'nran',         'num',    'Number of random samples', 'Number of entries to randomly sample', '# random samples', .false., 0.)        
         call set_param(pickrefs,       'pickrefs',     'file',   'Stack of class-averages/reprojections for picking', 'Stack of class-averages/reprojections for picking', 'e.g. pickrefs.mrc', .false., '')
         call set_param(icm,            'icm',          'binary', 'Whether to perform ICM filtering of reference(s)', 'Whether to perform ICM filtering of reference(s)(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(flipgain,       'flipgain',     'multi',  'Flip the gain reference', 'Flip the gain reference along the provided axis(no|x|y|xy|yx){no}', '(no|x|y|xy|yx){no}', .false., 'no')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -3210,7 +3212,7 @@ contains
         & (dose-weighting strategy). If scale is given, the movie will be Fourier cropped according to&
         & the down-scaling factor (for super-resolution movies).',&     ! descr_long
         &'simple_exec',&                                                    ! executable
-        &1, 8, 0, 8, 3, 0, 2, .true.)                                       ! # entries in each group, requires sp_project
+        &1, 9, 0, 8, 3, 0, 2, .true.)                                       ! # entries in each group, requires sp_project
         motion_correct%gui_submenu_list = "data,motion correction,compute"
         motion_correct%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -3235,6 +3237,8 @@ contains
         call motion_correct%set_gui_params('parm_ios', 7, submenu="data")
         call motion_correct%set_input('parm_ios', 8, eer_upsampling)
         call motion_correct%set_gui_params('parm_ios', 8, submenu="data")
+        call motion_correct%set_input('parm_ios', 9,  flipgain)
+        call motion_correct%set_gui_params('parm_ios', 9, submenu="motion correction")
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3641,7 +3645,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
         &'simple_exec',&                                                                    ! executable
-        &2, 14, 0, 16, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &2, 15, 0, 16, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%set_input('img_ios', 1, gainref)
@@ -3663,6 +3667,7 @@ contains
         call preprocess%set_input('parm_ios',13,  picker)
         call preprocess%set_input('parm_ios',14,  mskdiam)
         preprocess%parm_ios(14)%required = .false.
+        call preprocess%set_input('parm_ios',15,  flipgain)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -4664,7 +4669,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_stream',&                                                           ! executable
-        &4, 11, 0, 13, 4, 0, 3, .true.)                                              ! # entries in each group, requires sp_project
+        &4, 12, 0, 13, 4, 0, 3, .true.)                                              ! # entries in each group, requires sp_project
         preproc%gui_submenu_list = "data,motion correction,CTF estimation"
         preproc%advanced = .false.
         ! image input/output
@@ -4705,6 +4710,8 @@ contains
         call preproc%set_gui_params('parm_ios', 10, submenu="data", advanced=.false.)
         call preproc%set_input('parm_ios',11, ctfpatch)
         call preproc%set_gui_params('parm_ios', 11, submenu="CTF estimation")
+        call preproc%set_input('parm_ios', 12,  flipgain)
+        call preproc%set_gui_params('parm_ios', 12, submenu="motion correction")
         ! alternative inputs
         ! <empty>
         ! search controls

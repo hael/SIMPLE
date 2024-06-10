@@ -185,6 +185,7 @@ type :: parameters
     character(len=4)          :: ext='.mrc'           !< file extension{.mrc}
     character(len=STDLEN)     :: fbody=''             !< file body
     character(len=STDLEN)     :: filter='no'          !< filter type{no}
+    character(len=STDLEN)     :: flipgain='no'        !< gain reference flipping (no|x|y|xy|yx)
     character(len=STDLEN)     :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}
     character(len=STDLEN)     :: interpfun='kb'       !< Interpolation function projection/reconstruction/polar representation(kb|linear){kb}
@@ -340,6 +341,7 @@ type :: parameters
     real    :: batchfrac=1.0
     real    :: bfac=200            !< bfactor for sharpening/low-pass filtering(in A**2){200.}
     real    :: bfacerr=50.         !< bfactor error in simulated images(in A**2){0}
+    real    :: box_exp_factor=BOX_EXP_FACTOR_DEFAULT !< multiplication factor to image size as determined by multi-diameter picking{1.2}
     real    :: bw_ratio=0.3        !< ratio between foreground-background pixel desired in edge detection
     real    :: cenlp=20.           !< low-pass limit for binarisation in centering(in A){30 A}
     real    :: cs=2.7              !< spherical aberration constant(in mm){2.7}
@@ -541,6 +543,7 @@ contains
         call check_carg('fbody',          self%fbody)
         call check_carg('fill_holes',     self%fill_holes)
         call check_carg('filter',         self%filter)
+        call check_carg('flipgain',       self%flipgain)
         call check_carg('groupframes',    self%groupframes)
         call check_carg('ft2img',         self%ft2img)
         call check_carg('guinier',        self%guinier)
@@ -789,6 +792,7 @@ contains
         call check_rarg('batchfrac',      self%batchfrac)
         call check_rarg('bfac',           self%bfac)
         call check_rarg('bfacerr',        self%bfacerr)
+        call check_rarg('box_exp_factor', self%box_exp_factor)
         call check_rarg('bw_ratio',       self%bw_ratio)
         call check_rarg('cenlp',          self%cenlp)
         call check_rarg('cs',             self%cs)
