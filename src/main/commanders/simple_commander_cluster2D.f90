@@ -286,7 +286,7 @@ contains
         if( .not. cline%defined('ncls')      ) call cline%set('ncls',        200.)
         if( .not. cline%defined('center')    ) call cline%set('center',      'no')
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale',  'yes')
-        if( .not. cline%defined('refine')    ) call cline%set('refine',  'greedy')
+        if( .not. cline%defined('refine')    ) call cline%set('refine',  'greedy_smpl')
         if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('wiener')    ) call cline%set('wiener',    'full')
         if( .not. cline%defined('objfun')    ) call cline%set('objfun',  'euclid')

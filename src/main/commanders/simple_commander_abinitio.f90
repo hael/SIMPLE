@@ -1251,11 +1251,11 @@ contains
         call cline%set('stoch_update', 'no')
         call cline%set('pgrp',         'c1')
         call cline%set('oritype',      'ptcl3D')
-        call cline%set('refine',       'prob')
         call cline%set('mkdir',        'yes')
         call cline%set('sigma_est',    'global')
         call cline%set('center',       'no')
         if( .not. cline%defined('ml_reg')       )  call cline%set('ml_reg',        'yes')
+        if( .not. cline%defined('refine')       )  call cline%set('refine',        'prob')
         if( .not. cline%defined('prob_sh')      )  call cline%set('prob_sh',       'yes')
         if( .not. cline%defined('prob_norm')    )  call cline%set('prob_norm',     'yes')
         if( .not. cline%defined('prob_athres')  )  call cline%set('prob_athres',   10.)
@@ -1485,8 +1485,10 @@ contains
                         call cline_reconstruct3D%set('ml_reg',     'yes')
                         call cline_reconstruct3D%set('needs_sigma','yes')
                         call cline_reconstruct3D%set('objfun',     'euclid')
+                        call cline_refine3D%set('continue', 'yes')
+                    else
+                        call cline_refine3D%set('vol1', 'recvol_state01.mrc')
                     endif
-                    ! call cline_refine3D%set('vol1',     'recvol_state01.mrc')
                     call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D)
                     call spproj%read_segment('ptcl3D', params%projfile)
                     call spproj%os_ptcl3D%set_all2single('updatecnt',0.)
@@ -1494,7 +1496,6 @@ contains
                     call spproj%read_segment('out', params%projfile)
                     call spproj%add_vol2os_out('recvol_state01.mrc', params%smpd_crop, 1, 'vol')
                     call spproj%write_segment_inside('out', params%projfile)
-                    call cline_refine3D%set('continue', 'yes')
                 endif
                 ! Minibatch size
                 call cline_refine3D%set('batchfrac', params%batchfrac)
@@ -1534,7 +1535,11 @@ contains
                     call spproj%read_segment('out', params%projfile)
                     call spproj%add_vol2os_out('recvol_state01.mrc', params%smpd_crop, 1, 'vol')
                     call spproj%write_segment_inside('out', params%projfile)
-                    call cline_refine3D%set('continue', 'yes')
+                    if( params%l_ml_reg .and. it >= MLREG_ITER )then
+                        call cline_refine3D%set('continue', 'yes')
+                    else
+                        call cline_refine3D%set('vol1', 'recvol_state01.mrc')
+                    endif
                 endif
             enddo
         end select

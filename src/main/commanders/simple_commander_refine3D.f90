@@ -972,7 +972,7 @@ contains
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         allocate(ptcl_mask(1:params%nptcls))
         if( params%l_batchfrac )then
-            call build%spproj_field%sample4batchupdate([params%fromp,params%top],&
+            call build%spproj_field%sample4batchupdate([1,params%nptcls],&
             &params%batchfrac, nptcls, pinds, ptcl_mask)
         else
             if( params%startit == 1 ) call build%spproj_field%clean_updatecnt_sampled
