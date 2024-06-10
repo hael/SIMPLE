@@ -57,7 +57,6 @@ type strategy3D_srch
     real                    :: prev_corr     = 1.        !< previous best correlation
     real                    :: prev_shvec(2) = 0.        !< previous origin shift vector
     logical                 :: l_neigh       = .false.   !< neighbourhood refinement flag
-    logical                 :: l_greedy      = .false.   !< greedy        refinement flag
     logical                 :: doshift       = .true.    !< 2 indicate whether 2 serch shifts
     logical                 :: exists        = .false.   !< 2 indicate existence
   contains
@@ -99,7 +98,6 @@ contains
         self%doshift       = params_glob%l_doshift
         self%l_neigh       = params_glob%l_neigh
         self%refine        = trim(params_glob%refine)
-        self%l_greedy      = str_has_substr(params_glob%refine, 'greedy')
         lims(:,1)          = -params_glob%trs
         lims(:,2)          =  params_glob%trs
         lims_init(:,1)     = -SHC_INPL_TRSHWDTH
@@ -108,8 +106,13 @@ contains
         call self%opeaks%new(self%npeaks, is_ptcl=.true.)
         ! create in-plane search objects
         self%nrots = pftcc_glob%get_nrots()
-        call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
-        &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=.true.)
+        if( trim(params_glob%sh_rand) .eq. 'yes' )then
+            call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
+                    &shbarrier=params_glob%shbarrier, maxits=1, opt_angle=.true.)
+        else
+            call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
+                    &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=.true.)
+        endif
         self%exists = .true.
     end subroutine new
 
