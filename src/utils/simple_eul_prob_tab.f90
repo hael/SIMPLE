@@ -100,9 +100,8 @@ contains
         use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
         class(eul_prob_tab),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
-        integer,      parameter :: MAXITS = 60
-        integer,    allocatable :: locn(:)
-        type(pftcc_shsrch_grad) :: grad_shsrch_obj(nthr_glob) !< origin shift search object, L-BFGS with gradient
+        integer,                 allocatable   :: locn(:)
+        type(pftcc_shsrch_grad)                :: grad_shsrch_obj(nthr_glob) !< origin shift search object, L-BFGS with gradient
         integer :: i, j, iproj, iptcl, projs_ns, ithr, irot, inds_sorted(pftcc%nrots,nthr_glob), istate, iref
         logical :: l_doshift
         real    :: dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob)
@@ -116,7 +115,7 @@ contains
             lims_init(:,1) = -SHC_INPL_TRSHWDTH
             lims_init(:,2) =  SHC_INPL_TRSHWDTH
             do ithr = 1,nthr_glob
-                call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=.true.)
+                call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier, maxits=params_glob%maxits_sh, opt_angle=.true.)
             end do
             ! fill the table
             do istate = 1, self%nstates

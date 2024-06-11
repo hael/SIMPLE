@@ -89,7 +89,7 @@ type :: parameters
     character(len=3)          :: script='no'          !< do not execute but generate a script for submission to the queue
     character(len=3)          :: silence_fsc='no'     !< dont print FSC plot to stdout(yes|no){no}
     character(len=3)          :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
-    character(len=3)          :: sh_rand='no'         !< initial shift randomization in the first iteration(yes|no){no}
+    character(len=3)          :: sh_center='no'       !< 2D class average center registration(yes|no){no}
     character(len=3)          :: stoch_update='no'    !< update of random sampling in each iteration
     character(len=3)          :: newstream='no'       !< new streaming version
     character(len=3)          :: stream='no'          !< stream (real time) execution mode(yes|no){no}
@@ -262,6 +262,7 @@ type :: parameters
     integer :: maxits=100          !< maximum # iterations
     integer :: maxits_glob=100     !< maximum # iterations, global
     integer :: maxits_between=30   !< maximum # iterations in between model building steps
+    integer :: maxits_sh=60        !< maximum # iterations of shifting lbfgsb
     integer :: maxnchunks=0
     integer :: maxpop=0            !< max population of an optics group
     integer :: minits=0            !< minimum # iterations
@@ -414,7 +415,6 @@ type :: parameters
     real    :: prob_athres=10.     !< angle threshold for prob distribution samplings
     real    :: scale=1.            !< image scale factor{1}
     real    :: sherr=0.            !< shift error(in pixels){2}
-    real    :: sh_sig=2.           !< shift randomization amplitude (in pixels){2}
     real    :: sigma=1.0           !< for gaussian function generation {1.}
     real    :: smpd=2.             !< sampling distance; same as EMANs apix(in A)
     real    :: smpd_crop=2.        !< sampling distance; same as EMANs apix(in A) refers to cropped cavg/volume
@@ -621,7 +621,7 @@ contains
         call check_carg('silence_fsc',    self%silence_fsc)
         call check_carg('script',         self%script)
         call check_carg('shbarrier',      self%shbarrier)
-        call check_carg('sh_rand',        self%sh_rand)
+        call check_carg('sh_center',      self%sh_center)
         call check_carg('sigma_est',      self%sigma_est)
         call check_carg('speckind',       self%speckind)
         call check_carg('split_mode',     self%split_mode)
@@ -720,6 +720,7 @@ contains
         call check_iarg('maxits',         self%maxits)
         call check_iarg('maxits_glob',    self%maxits_glob)
         call check_iarg('maxits_between', self%maxits_between)
+        call check_iarg('maxits_sh',      self%maxits_sh)
         call check_iarg('maxnchunks',     self%maxnchunks)
         call check_iarg('maxpop',         self%maxpop)
         call check_iarg('minits',         self%minits)
@@ -853,7 +854,6 @@ contains
         call check_rarg('prob_athres',    self%prob_athres)
         call check_rarg('scale',          self%scale)
         call check_rarg('sherr',          self%sherr)
-        call check_rarg('sh_sig',         self%sh_sig)
         call check_rarg('smpd',           self%smpd)
         call check_rarg('smpd_crop',      self%smpd_crop)
         call check_rarg('sigma',          self%sigma)

@@ -53,7 +53,6 @@ contains
     subroutine new( self, spec )
         class(strategy2D_srch), intent(inout) :: self
         class(strategy2D_spec), intent(in)    :: spec
-        integer, parameter :: MAXITS = 60
         real :: lims(2,2), lims_init(2,2)
         call self%kill
         ! set constants
@@ -70,11 +69,11 @@ contains
         lims_init(:,2)  =  SHC_INPL_TRSHWDTH
         if( trim(params_glob%tseries).eq.'yes' )then
             ! shift only search
-            call self%grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=MAXITS, opt_angle=.false.)
+            call self%grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=params_glob%maxits_sh, opt_angle=.false.)
         else
-            call self%grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=MAXITS)
+            call self%grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=params_glob%maxits_sh)
         endif
-        call self%grad_shsrch_obj2%new(lims, lims_init=lims_init, maxits=MAXITS, opt_angle=.false.)
+        call self%grad_shsrch_obj2%new(lims, lims_init=lims_init, maxits=params_glob%maxits_sh, opt_angle=.false.)
     end subroutine new
 
     subroutine prep4srch( self )
@@ -86,12 +85,7 @@ contains
         ! find previous discrete alignment parameters
         self%prev_class = nint(build_glob%spproj_field%get(self%iptcl,'class'))                ! class index
         prev_roind      = pftcc_glob%get_roind(360.-build_glob%spproj_field%e3get(self%iptcl)) ! in-plane angle index
-        if( (trim(params_glob%sh_rand) .eq. 'yes') .and. (params_glob%which_iter == 1) )then
-            self%prev_shvec(1) = 2. * (ran3() - 0.5) * params_glob%sh_sig                      ! perturbation of initial shifts
-            self%prev_shvec(2) = 2. * (ran3() - 0.5) * params_glob%sh_sig
-        else
-            self%prev_shvec = build_glob%spproj_field%get_2Dshift(self%iptcl)                  ! shift vector
-        endif
+        self%prev_shvec = build_glob%spproj_field%get_2Dshift(self%iptcl)                      ! shift vector
         self%best_shvec = 0.
         if( self%prev_class > 0 )then
             if( s2D%cls_pops(self%prev_class) > 0 )then

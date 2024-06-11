@@ -76,7 +76,6 @@ contains
     subroutine new( self, spec )
         class(strategy3D_srch), intent(inout) :: self
         class(strategy3D_spec), intent(in)    :: spec
-        integer, parameter :: MAXITS = 60
         real :: lims(2,2), lims_init(2,2)
         ! set constants
         self%iptcl         = spec%iptcl
@@ -108,13 +107,8 @@ contains
         call self%opeaks%new(self%npeaks, is_ptcl=.true.)
         ! create in-plane search objects
         self%nrots = pftcc_glob%get_nrots()
-        if( trim(params_glob%sh_rand) .eq. 'yes' )then
-            call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
-                    &shbarrier=params_glob%shbarrier, maxits=1, opt_angle=.true.)
-        else
-            call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
-                    &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=.true.)
-        endif
+        call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
+                &shbarrier=params_glob%shbarrier, maxits=params_glob%maxits_sh, opt_angle=.true.)
         self%exists = .true.
     end subroutine new
 
