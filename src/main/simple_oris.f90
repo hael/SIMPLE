@@ -108,6 +108,7 @@ type :: oris
     procedure          :: delete_entry_2
     procedure          :: delete_2Dclustering
     procedure          :: delete_3Dalignment
+    procedure          :: delete
     procedure          :: transfer_2Dshifts
     procedure, private :: transfer_2Dparams_1, transfer_2Dparams_2
     generic            :: transfer_2Dparams => transfer_2Dparams_1, transfer_2Dparams_2
@@ -1732,6 +1733,21 @@ contains
             call self%o(i)%delete_3Dalignment(keepshifts)
         end do
     end subroutine delete_3Dalignment
+
+    subroutine delete( self, ind )
+        class(oris),      intent(inout) :: self
+        integer,          intent(in)    :: ind
+        type(ori),        allocatable   :: tmporis(:)
+        if( ind < 0 .or. ind > self%n )then
+            THROW_WARN('index out of range; simple_oris % delete')
+            return
+        endif
+        allocate( tmporis(self%n - 1) )
+        tmporis=[self%o(1:ind-1), self%o(ind+1:self%n)]
+        call self%new(self%n - 1, .false.)
+        self%o=tmporis
+        if(allocated(tmporis)) deallocate(tmporis)
+    end subroutine delete
 
     subroutine set_euler( self, i, euls )
         class(oris), intent(inout) :: self

@@ -944,11 +944,11 @@ contains
         write(logfhandle,'(A,I6,A)')'>>> USER SELECTED FROM POOL: ',count(cls_mask),' clusters'
         if( count(cls_mask) == 0 ) return
         write(logfhandle,'(A,A)')'>>> WRITING SELECTED CLUSTERS TO: ', trim(POOL_DIR) // STREAM_SELECTED_REFS//trim(STK_EXT)
-        call img%new([box,box,1], smpd)
-        call jpegimg%new([box, box * count(cls_mask), 1], smpd) 
+        call img%new([params_glob%box,params_glob%box,1], smpd)
+        call jpegimg%new([params_glob%box, params_glob%box * count(cls_mask), 1], smpd) 
         call stkio_r%open(trim(POOL_DIR) // trim(refs_glob), smpd, 'read', bufsz=ncls_glob)
         call stkio_r%read_whole
-        call stkio_w%open(trim(POOL_DIR) // STREAM_SELECTED_REFS//trim(STK_EXT), smpd, 'write', box=box, bufsz=count(cls_mask))
+        call stkio_w%open(trim(POOL_DIR) // STREAM_SELECTED_REFS//trim(STK_EXT), smpd, 'write', box=params_glob%box, bufsz=count(cls_mask))
         isel = 1
         do icls = 1,ncls_glob
             if( .not. cls_mask(icls) ) cycle
