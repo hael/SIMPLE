@@ -479,7 +479,7 @@ contains
         allocate(match_imgs(params_glob%ncls))
         call cavgs_merged(1)%construct_thread_safe_tmp_imgs(nthr_glob)
         ! PREPARATION OF REFERENCES IN PFTCC
-        if( trim(params_glob%center) .eq. 'yes' .and. (which_iter > 2))then
+        if( trim(params_glob%sh_center) .eq. 'yes' .and. (which_iter > 2))then
             ! averaged center
             !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
             do icls=1,params_glob%ncls
