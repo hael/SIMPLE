@@ -2471,7 +2471,12 @@ contains
         end if
         lp       = min(max(LP_LB,MSKDIAM2LP * diam_max),LP_UB)
         new_box = round2even(diam_max / params%smpd + 2. * COSMSKHALFWIDTH)
-        write(logfhandle,'(A,1X,I4)') 'ESTIMATED BOX SIXE: ', new_box
+        if(new_box .gt. ldim(1)) then
+            new_box = ldim(1)
+            write(logfhandle,'(A,1X,I4)') 'USING INPUT REFERENCE BOX SIZE: ', new_box
+        else
+            write(logfhandle,'(A,1X,I4)') 'ESTIMATED BOX SIZE: ', new_box
+        endif
         ldim_clip = [new_box, new_box, 1]
         do icavg=1,ncavgs
             call projs(icavg)%bp(0.,lp)

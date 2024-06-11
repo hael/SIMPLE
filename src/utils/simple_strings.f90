@@ -368,7 +368,7 @@ contains
         else
             write(string,'(i0)') intg_this
         end if
-        if(comma_millions)  string = string(:ndigs_int - 7) // ',' // string(ndigs_int - 6:)
+        if(comma_millions)  string = string(:ndigs_int - 8) // ',' // string(ndigs_int - 7:)
         if(comma_thousands) string = string(:ndigs_int - 4) // ',' // string(ndigs_int - 3:)
     end function int2commastr
 

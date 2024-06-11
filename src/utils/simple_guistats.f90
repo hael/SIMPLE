@@ -24,6 +24,7 @@ contains
     procedure :: set_2
     procedure :: set_3
     procedure :: set_now
+    procedure :: delete
     procedure :: hide
     procedure :: generate_2D_thumbnail
     procedure :: generate_2D_jpeg
@@ -295,6 +296,16 @@ contains
             end if
         enddo
     end subroutine get_1
+
+    subroutine delete( self, section, key )
+        class(guistats),  intent(inout) :: self
+        character(len=*), intent(in)    :: section
+        character(len=*), intent(in)    :: key
+        integer                         :: line
+        line = self%get_keyline(section, key)
+        call self%stats%delete(line)
+        self%updated = .true.
+    end subroutine delete
 
     subroutine hide( self, section, key )
         class(guistats),  intent(inout) :: self
