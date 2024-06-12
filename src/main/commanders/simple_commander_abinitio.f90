@@ -1209,13 +1209,13 @@ contains
         real,    parameter :: LPSTART_DEFAULT = 30., LPSTOP_DEFAULT=LP_DEFAULT
         real,    parameter :: BATCHFRAC_DEFAULT = 0.2
         integer, parameter :: MINBOX  = 88
-        integer, parameter :: NSTAGES = 6
+        integer, parameter :: NSTAGES = 11
         integer, parameter :: NSPACE1=500, NSPACE2=1000, NSPACE3=1500
-        integer, parameter :: SHIFT_STAGE_DEFAULT = NSTAGES-1
+        integer, parameter :: SHIFT_STAGE_DEFAULT = NSTAGES-2
         integer, parameter :: ICM_STAGE_DEFAULT   = 2       ! in [1;NSTAGES]
         integer, parameter :: MIN_NPTCLS = 20000
         integer, parameter :: MAX_NPTCLS = 100000
-        integer, parameter :: MAXITS_BETWEEN_DEFAULT = 5
+        integer, parameter :: MAXITS_BETWEEN_DEFAULT = 4
         integer, parameter :: MLREG_ITER     = 1
         ! commanders
         type(refine3D_commander_distr)      :: xrefine3D_distr
@@ -1238,8 +1238,8 @@ contains
         integer,          allocatable :: vec(:), states(:), batches(:), pinds(:), sampled(:), cnts(:)
         logical,          allocatable :: mask(:)
         character(len=LONGSTRLEN)     :: vol_str
-        real    :: lps(NSTAGES), smpds(NSTAGES)
-        integer :: boxs(NSTAGES)
+        real    :: lps(NSTAGES), smpds(NSTAGES), trs(NSTAGES)
+        integer :: boxs(NSTAGES), nspaces(NSTAGES)
         real    :: smpd_target, lp_target, scale, trslim, cenlp, symlp, dummy
         integer :: iter, it, prev_box_crop, maxits, state, i,j, final_nptcls, nptcls_sel
         integer :: ini_nptcls, nptcls, iters_per_stage
@@ -1359,7 +1359,7 @@ contains
         lps(1)       = params%lpstart
         lps(NSTAGES) = params%lpstop
         do it = 2,NSTAGES-1
-            lps(it) = max(params%lpstop, params%lpstop+(lps(it-1)-params%lpstop)/2.)
+            lps(it) = params%lpstop + (params%lpstart-params%lpstop) * real(NSTAGES-it) / real(NSTAGES)
         enddo
         ! dimensions
         do it = 1,NSTAGES
@@ -1367,6 +1367,16 @@ contains
             smpd_target = max(params%smpd, lp_target/2.)
             call autoscale(params%box, params%smpd, smpd_target, boxs(it), smpds(it), scale, minbox=MINBOX)
         enddo
+        ! shift search & number of projections directions
+        do it = 1,NSTAGES
+            trs(it)     = 0.
+            nspaces(it) = NSPACE1
+            if( it >= params%shift_stage )then
+                trs(it)     = trslim
+                nspaces(it) = NSPACE2
+            endif
+        enddo
+        nspaces(NSTAGES) = NSPACE3
         ! Batch plan
         iters_per_stage  = ceiling(1./params%batchfrac)
         params%batchfrac = 1./real(iters_per_stage)
@@ -1433,14 +1443,8 @@ contains
                     call cline_refine3D%set('maxits', params%maxits_between*iters_per_stage)
                 endif
                 ! Shift search & projection directions
-                if( it >= params%shift_stage )then
-                    call cline_refine3D%set('trs', trslim)
-                    call cline_refine3D%set('nspace', NSPACE2)
-                else
-                    call cline_refine3D%set('trs', 0.)
-                    call cline_refine3D%set('nspace', NSPACE1)
-                endif
-                if( it == NSTAGES ) call cline_refine3D%set('nspace', NSPACE3)
+                call cline_refine3D%set('trs',    trs(it))
+                call cline_refine3D%set('nspace', nspaces(it))
                 ! ICM filter
                 if( params%l_icm .and. (it >= params%icm_stage) )then
                     call cline_refine3D%set('icm',   'yes')
@@ -1496,22 +1500,14 @@ contains
                 ! Minibatch size
                 call cline_refine3D%set('batchfrac', params%batchfrac)
                 ! Iterations per minibatch
-                if( it == 1 )then
-                    call cline_refine3D%set('maxits', (params%maxits_between+1)*iters_per_stage)
-                else if( it == NSTAGES )then
+                if( (it == 1) .or. (it == NSTAGES) )then
                     call cline_refine3D%set('maxits', (params%maxits_between+1)*iters_per_stage)
                 else
                     call cline_refine3D%set('maxits', params%maxits_between*iters_per_stage)
                 endif
                 ! Shift search & projection directions
-                if( it >= params%shift_stage )then
-                    call cline_refine3D%set('trs', trslim)
-                    call cline_refine3D%set('nspace', NSPACE2)
-                else
-                    call cline_refine3D%set('trs', 0.)
-                    call cline_refine3D%set('nspace', NSPACE1)
-                endif
-                if( it == NSTAGES ) call cline_refine3D%set('nspace', NSPACE3)
+                call cline_refine3D%set('trs',    trs(it))
+                call cline_refine3D%set('nspace', nspaces(it))
                 ! ICM filter
                 if( params%l_icm .and. (it >= params%icm_stage) )then
                     call cline_refine3D%set('icm',   'yes')
@@ -1609,11 +1605,15 @@ contains
                 call xrefine3D_distr%execute_shmem(cline_refine3D)
                 call conv%read(l_err)
                 enditer = nint(conv%get('iter'))
+                ! probability table
+                if( (it < NSTAGES) .and. (nspaces(it+1) /= nspaces(it)) )then
+                    call del_file(trim(DIST_FBODY)//'.dat')
+                endif
                 call del_files(DIST_FBODY,      params_glob%nparts,ext='.dat')
                 call del_files(ASSIGNMENT_FBODY,params_glob%nparts,ext='.dat')
-                call del_file(trim(DIST_FBODY)      //'.dat')
                 call del_file(trim(ASSIGNMENT_FBODY)//'.dat')
                 if( it < NSTAGES )then
+                    ! stash volumes
                     stage = '_stage_'//int2str(it)
                     do state = 1, params%nstates
                         str_state = int2str_pad(state,2)

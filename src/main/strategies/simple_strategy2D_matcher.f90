@@ -457,7 +457,8 @@ contains
         type(image),      allocatable :: match_imgs(:)
         character(len=:), allocatable :: fname
         real      :: xyz(3), xyz_cls(3,params_glob%ncls)
-        integer   :: icls, pop, pop_even, pop_odd
+        integer   :: pops_even(params_glob%ncls), pops_odd(params_glob%ncls), pops(params_glob%ncls)
+        integer   :: icls, pop, pop_even, pop_odd, ncen
         logical   :: do_center, has_been_searched
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
         ! create the polarft_corrcalc object
@@ -481,32 +482,40 @@ contains
         ! PREPARATION OF REFERENCES IN PFTCC
         if( trim(params_glob%sh_center) .eq. 'yes' .and. (which_iter > 2))then
             ! averaged center
-            !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
+            xyz     = 0.
+            xyz_cls = 0.
+            ncen    = 0
+            !$omp parallel do default(shared) private(icls,do_center)&
+            !$omp schedule(static) proc_bind(close) reduction(+:ncen)
             do icls=1,params_glob%ncls
-                xyz_cls(:,icls) = cavgs_merged(icls)%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
+                if( has_been_searched )then
+                    pops_even(icls) = build_glob%spproj_field%get_pop(icls, 'class', eo=0)
+                    pops_odd(icls)  = build_glob%spproj_field%get_pop(icls, 'class', eo=1)
+                    pops(icls)      = pops_even(icls) + pops_odd(icls)
+                else
+                    pops(icls)      = 1
+                    pops_even(icls) = 0
+                    pops_odd(icls)  = 0
+                endif
+                do_center = (has_been_searched .and. (pops(icls) > MINCLSPOPLIM) .and. (which_iter > 2)&
+                &.and. .not.params_glob%l_frac_update)
+                if( do_center )then
+                    ncen = ncen+1
+                    xyz_cls(:,icls) = cavgs_merged(icls)%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
+                endif
             end do
             !$omp end parallel do
-            xyz = sum(xyz_cls, dim=2) / real(params_glob%ncls)
+            if( ncen > 0 ) xyz = sum(xyz_cls, dim=2) / real(ncen)
             ! read references and transform into polar coordinates
-            !$omp parallel do default(shared) private(icls,pop,pop_even,pop_odd,do_center)&
-            !$omp schedule(static) proc_bind(close)
+            !$omp parallel do default(shared) private(icls,do_center) schedule(static) proc_bind(close)
             do icls=1,params_glob%ncls
-                pop      = 1
-                pop_even = 0
-                pop_odd  = 0
-                if( has_been_searched )then
-                    pop      = build_glob%spproj_field%get_pop(icls, 'class'      )
-                    pop_even = build_glob%spproj_field%get_pop(icls, 'class', eo=0)
-                    pop_odd  = build_glob%spproj_field%get_pop(icls, 'class', eo=1)
-                endif
-                if( pop > 0 )then
+                if( pops(icls) > 0 )then
                     call match_imgs(icls)%new([params_glob%box_crop, params_glob%box_crop, 1], params_glob%smpd_crop, wthreads=.false.)
                     ! prepare the references
-                    ! here we are determining the shifts and map them back to classes
-                    do_center = (has_been_searched .and. (pop > MINCLSPOPLIM) .and. (which_iter > 2)&
+                    do_center = (has_been_searched .and. (pops(icls) > MINCLSPOPLIM) .and. (which_iter > 2)&
                         &.and. .not.params_glob%l_frac_update)
                     if( .not.params_glob%l_lpset )then
-                        if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
+                        if( pops_even(icls) >= MINCLSPOPLIM .and. pops_odd(icls) >= MINCLSPOPLIM )then
                             ! here we are passing in the shifts and do NOT map them back to classes
                             call prep2Dref(cavgs_even(icls), match_imgs(icls), icls, iseven=.true., center=do_center, xyz_in=xyz)
                             call build_glob%img_crop_polarizer%polarize(pftcc, match_imgs(icls), icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
