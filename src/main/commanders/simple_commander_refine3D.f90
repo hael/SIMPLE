@@ -994,7 +994,11 @@ contains
         ! communicate to project file
         call build%spproj%write_segment_inside(params%oritype)        
         ! more prep
-        call eulprob_obj_glob%new(pinds)
+        if( params%l_batchfrac )then
+            call eulprob_obj_glob%new(build%spproj_field)
+        else
+            call eulprob_obj_glob%new(pinds)
+        endif
         ! generating all corrs on all parts
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab' ) ! required for distributed call
@@ -1013,6 +1017,10 @@ contains
             fname = trim(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
             call eulprob_obj_glob%read_tab_to_glob(fname)
         enddo
+        if( params%l_batchfrac )then
+            call eulprob_obj_glob%write_tab(trim(DIST_FBODY)//'.dat')
+            call eulprob_obj_glob%trim_tab(build%spproj_field)
+        endif
         call eulprob_obj_glob%prob_assign
         ! write the iptcl->(iref,istate) assignment
         fname = trim(ASSIGNMENT_FBODY)//'.dat'
