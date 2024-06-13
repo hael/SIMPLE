@@ -139,7 +139,7 @@ contains
         ! movie watcher init
         movie_buff = moviewatcher(LONGTIME, params%dir_movies)
         ! guistats init
-        call gui_stats%init
+        call gui_stats%init(.true.)
         call gui_stats%set('movies',      'movies_imported',      int2str(0), primary=.true.)
         call gui_stats%set('movies',      'movies_processed',     int2str(0), primary=.true.)
         call gui_stats%set('micrographs', 'micrographs',          int2str(0), primary=.true.)
@@ -740,7 +740,7 @@ contains
         ! movie watcher init
         project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true.)
         ! guistats init
-        call gui_stats%init
+        call gui_stats%init(.true.)
         call gui_stats%set('micrographs', 'micrographs_imported', int2str(0), primary=.true.)
         call gui_stats%set('micrographs', 'micrographs_rejected', int2str(0), primary=.true.)
         call gui_stats%set('micrographs', 'micrographs_picked',   int2str(0), primary=.true.)
@@ -1513,7 +1513,7 @@ contains
         params%ncls_start  = params%ncls
         params%ml_reg_pool = params%ml_reg
         ! guistats init
-        call gui_stats%init
+        call gui_stats%init(.true.)
         call gui_stats%set('particles', 'particles_extracted',         0,            primary=.true.)
         call gui_stats%set('2D',        'iteration',                   0,            primary=.true.)
         call gui_stats%set('compute',   'compute_in_use',      int2str(0) // '/' // int2str(params%nparts), primary=.true.)
@@ -1707,6 +1707,8 @@ contains
             call terminate_stream2D_dev
         endif
         if(file_exists(STREAM_REJECT_CLS)) call write_pool_cls_selected_user_dev
+        call gui_stats%delete('latest', '')
+        call gui_stats%set('selected references', '', trim(cwd_glob) // '/' // STREAM_SELECTED_REFS // trim(JPG_EXT), thumbnail = .true.)
         !call write_project
         !call update_user_params(cline)
         ! call copy_micrographs_optics
@@ -2056,7 +2058,7 @@ contains
         ! initialise progress monitor
         call progressfile_init()
         ! guistats init
-        call gui_stats%init
+        call gui_stats%init(.true.)
         call gui_stats%set('micrographs', 'micrographs_imported',  int2str(0), primary=.true.)
         call gui_stats%set('groups',      'optics_group_assigned', int2str(0), primary=.true.)
         ! Infinite loop
@@ -2209,7 +2211,7 @@ contains
         l_haschanged          = .false.
         l_nchunks_maxed       = .false.
         ! guistats init
-        call gui_stats%init
+        call gui_stats%init(.true.)
         call gui_stats%set('particles', 'particles_imported',          0,            primary=.true.)
         call gui_stats%set('2D',        'iteration',                   0,            primary=.true.)
         call gui_stats%set('compute',   'compute_in_use',      int2str(0) // '/' // int2str(params%nparts), primary=.true.)
