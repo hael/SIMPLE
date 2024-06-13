@@ -244,6 +244,7 @@ contains
         call avg_img%spectrum('power',pspec_ave,norm=.true.)
         pspec_ave = pspec_ave / 2.0
         nyq = avg_img%get_nyq()
+        call avg_img%kill
         ! read power spectra of particles
         allocate(pspecs(nyq,params%nptcls),sigma2_arrays(params%nparts))
         do ipart = 1,params%nparts

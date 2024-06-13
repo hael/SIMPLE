@@ -390,7 +390,7 @@ contains
         enddo
     end subroutine state_assign
 
-    subroutine trim_tab( self, os)
+    subroutine trim_tab( self, os )
         class(eul_prob_tab), intent(inout) :: self
         class(oris),         intent(in)    :: os
         integer, allocatable :: states(:), sampled(:)
