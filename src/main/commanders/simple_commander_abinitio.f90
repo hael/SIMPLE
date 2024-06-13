@@ -1496,6 +1496,10 @@ contains
                     call spproj%read_segment('out', params%projfile)
                     call spproj%add_vol2os_out('recvol_state01.mrc', params%smpd_crop, 1, 'vol')
                     call spproj%write_segment_inside('out', params%projfile)
+                else
+                    call spproj%read_segment('ptcl3D', params%projfile)
+                    call spproj%os_ptcl3D%set_all2single('sampled',0.)
+                    call spproj%write_segment_inside('ptcl3D', params%projfile)
                 endif
                 ! Minibatch size
                 call cline_refine3D%set('batchfrac', params%batchfrac)

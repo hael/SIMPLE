@@ -16,7 +16,7 @@ real, parameter :: FRACSRCHSPACE_HET   = 99.0
 real, parameter :: MSK_FRAC            = 0.07
 real, parameter :: MINSHIFT            = 5.0
 real, parameter :: MAXSHIFT            = 6.0
-real, parameter :: AHELIX_WIDTH        = 12.0 ! alphha-helix width in A
+real, parameter :: AHELIX_WIDTH        = 12.0 ! alpha-helix width in A
 ! stochastic particle sampling
 integer, parameter :: NSAMPL_LB            = 50000
 integer, parameter :: NSAMPL_UB            = 200000
