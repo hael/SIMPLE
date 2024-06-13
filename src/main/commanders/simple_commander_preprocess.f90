@@ -2453,7 +2453,11 @@ contains
         end do
         call stkio_r%close
         ! set mask radius in pixels before automasking
-        params%msk = ldim(1)/2 - nint(COSMSKHALFWIDTH)
+        if( l_scale ) then ! Cyril. Pls check this if
+            params%msk = ldim_sc(1)/2 - nint(COSMSKHALFWIDTH) 
+        else      
+            params%msk = ldim(1)/2 - nint(COSMSKHALFWIDTH)
+        endif
         call automask2D(masks, params%ngrow, nint(params%winsz), params%edge, diams, shifts)
         do icavg=1,ncavgs
             call projs(icavg)%div_below(0.,10.)
@@ -2464,19 +2468,10 @@ contains
             call projs(icavg)%shift(xyz)
         end do
         ! estimate new box size and clip
-        if(l_moldiam) then
-            diam_max = params%moldiam
-        else
-            diam_max = maxval(diams)
-        end if
+        diam_max = maxval(diams) !Cyril. Should work now so removed reliance on input mskdiam
         lp       = min(max(LP_LB,MSKDIAM2LP * diam_max),LP_UB)
         new_box = round2even(diam_max / params%smpd + 2. * COSMSKHALFWIDTH)
-        if(new_box .gt. ldim(1)) then
-            new_box = ldim(1)
-            write(logfhandle,'(A,1X,I4)') 'USING INPUT REFERENCE BOX SIZE: ', new_box
-        else
-            write(logfhandle,'(A,1X,I4)') 'ESTIMATED BOX SIZE: ', new_box
-        endif
+        write(logfhandle,'(A,1X,I4)') 'ESTIMATED BOX SIZE: ', new_box
         ldim_clip = [new_box, new_box, 1]
         do icavg=1,ncavgs
             call projs(icavg)%bp(0.,lp)

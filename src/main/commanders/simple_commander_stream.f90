@@ -882,7 +882,7 @@ contains
                             call cline_make_pickrefs%set('stream','no')
                             call cline_make_pickrefs%set('smpd',  params%smpd)
                             call xmake_pickrefs%execute_shmem(cline_make_pickrefs)
-                            call cline%set('pickrefs', '../'//trim(PICKREFS_FBODY)//trim(params%ext))
+                            call cline_pick_extract%set('pickrefs', '../'//trim(PICKREFS_FBODY)//trim(params%ext)) !Cyril - fixed deliberate mistake
                             write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
                             call qsys_cleanup
                         endif
