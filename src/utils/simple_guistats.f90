@@ -43,8 +43,12 @@ end type guistats
 
 contains
 
-    subroutine init( self )
-        class(guistats), intent(inout) :: self
+    subroutine init( self, remove_existing)
+        class(guistats),   intent(inout) :: self
+        logical, optional, intent(in)    :: remove_existing
+        if(present(remove_existing) .and. remove_existing) then
+            if(file_exists(GUISTATS_FILE // '.json')) call del_file(GUISTATS_FILE // '.json')
+        endif
         call self%stats%new(1, .false.)
         call self%stats%set(1, "len", 1.0)
         call self%stats%set(1, "sects", 0.0)
