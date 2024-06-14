@@ -24,7 +24,7 @@ public :: init_cluster2D_stream_dev, terminate_stream2D_dev, cleanup_root_folder
 public :: update_pool_status_dev, update_pool_dev, reject_from_pool_dev, reject_from_pool_user_dev
 public :: classify_pool_dev, update_chunks_dev, classify_new_chunks_dev, import_chunks_into_pool_dev
 public :: is_pool_available_dev, update_user_params_dev, read_pool_xml_beamtilts_dev, assign_pool_optics_dev
-public :: write_pool_cls_selected_user_dev
+public :: write_pool_cls_selected_user_dev, get_pool_iter
 private
 #include "simple_local_flags.inc"
 
@@ -2125,6 +2125,10 @@ contains
             endif
         endif
     end subroutine tidy_2Dstream_iter
+
+    integer function get_pool_iter()
+        get_pool_iter = pool_iter
+    end function get_pool_iter
 
     ! resolution-related updates to command-lines
     subroutine set_resolution_limits( master_cline )
