@@ -728,6 +728,10 @@ contains
             if( l_templates_provided )then
                 if( .not.file_exists(params%pickrefs) ) THROW_HARD('Could not find: '//trim(params%pickrefs))
                 write(logfhandle,'(A)')'>>> PERFORMING REFERENCE-BASED PICKING'
+                if( cline%defined('moldiam') )then
+                    call cline%delete('moldiam')
+                    write(logfhandle,'(A)')'>>> MOLDIAM IGNORED'
+                endif
             else if( .not.cline%defined('moldiam') )then
                 THROW_HARD('MOLDIAM required for picker=new reference-free picking')
                 write(logfhandle,'(A)')'>>> PERFORMING SINGLE DIAMETER PICKING'
@@ -882,7 +886,7 @@ contains
                             call cline_make_pickrefs%set('stream','no')
                             call cline_make_pickrefs%set('smpd',  params%smpd)
                             call xmake_pickrefs%execute_shmem(cline_make_pickrefs)
-                            call cline_pick_extract%set('pickrefs', '../'//trim(PICKREFS_FBODY)//trim(params%ext)) !Cyril - fixed deliberate mistake
+                            call cline_pick_extract%set('pickrefs', '../'//trim(PICKREFS_FBODY)//trim(params%ext))
                             write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
                             call qsys_cleanup
                         endif
@@ -2134,6 +2138,7 @@ contains
         integer                                :: nmics_rejected_glob
         integer                                :: nchunks_imported_glob, nchunks_imported, nprojects, iter, last_injection
         integer                                :: n_imported, n_added, nptcls_glob, n_failed_jobs, ncls_in, nmic_star
+        integer                                :: pool_iter_last_chunk_imported, pool_iter_max_chunk_imported
         logical                                :: l_haschanged, l_nchunks_maxed
         real                                   :: nptcls_pool
         call cline%set('oritype',      'mic')
@@ -2238,8 +2243,7 @@ contains
             ! project update
             if( nprojects > 0 )then
                 n_imported = size(micproj_records)
-                write(logfhandle,'(A,I8)')       '>>> # MICROGRAPHS IMPORTED : ',n_imported
-                write(logfhandle,'(A,I8)')       '>>> # PARTICLES IMPORTED   : ',nptcls_glob
+                write(logfhandle,'(A,I6,I8)') '>>> # MICROGRAPHS / PARTICLES IMPORTED : ',n_imported, nptcls_glob
                 ! guistats
                 call gui_stats%set('particles', 'particles_imported', int2commastr(nptcls_glob), primary=.true.)
                 call gui_stats%set_now('particles', 'last_particles_imported')
@@ -2249,9 +2253,9 @@ contains
                 last_injection = simple_gettime()
                 l_haschanged = .true.
                 ! remove this?
-                if( n_imported < 1000 .and. l_haschanged )then
+                if( n_imported < 1000 )then
                     call update_user_params(cline)
-                else if( n_imported > nmic_star + 100 .and. l_haschanged )then
+                else if( n_imported > nmic_star + 100 )then
                     call update_user_params(cline)
                     nmic_star = n_imported
                 endif
@@ -2270,13 +2274,24 @@ contains
             call reject_from_pool_dev
             call reject_from_pool_user_dev
             if( l_nchunks_maxed )then
-                ! # of chunks is above desired threshold
-                if( is_pool_available_dev() ) exit
+                ! # of chunks is above desired number
+                if( is_pool_available_dev() .and. (get_pool_iter()>pool_iter_max_chunk_imported+5) ) exit
             else
-                call import_chunks_into_pool_dev(nchunks_imported)
-                nchunks_imported_glob = nchunks_imported_glob + nchunks_imported
-                l_nchunks_maxed       = nchunks_imported_glob >= params%maxnchunks
-                call classify_pool_dev
+                call import_chunks_into_pool_dev( nchunks_imported )
+                if( nchunks_imported > 0 )then
+                    nchunks_imported_glob         = nchunks_imported_glob + nchunks_imported
+                    pool_iter_last_chunk_imported = get_pool_iter()
+                endif
+                if( nchunks_imported_glob >= params%maxnchunks )then
+                    if( .not.l_nchunks_maxed ) pool_iter_max_chunk_imported = get_pool_iter()
+                    l_nchunks_maxed = .true.
+                endif
+                if( get_pool_iter() > pool_iter_last_chunk_imported+5 )then
+                    ! pause pool classification in absence of new chunks
+                    write(logfhandle,'(A)') '>>> POOL CLASSIFICATION PAUSED'
+                else
+                    call classify_pool_dev
+                endif
                 call classify_new_chunks_dev(micproj_records)
             endif
             call sleep(WAITTIME)

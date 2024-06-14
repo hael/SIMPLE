@@ -2400,7 +2400,7 @@ contains
         real,        allocatable :: diams(:), shifts(:,:)
         real,    parameter :: MSKDIAM2LP = 0.15, lP_LB = 30., LP_UB = 15.
         integer, parameter :: NREFS=100
-        real    :: ang, rot, xyz(3), lp, diam_max, smpd_here, sc
+        real    :: ang, rot, lp, diam_max, smpd_here, sc
         integer :: i, nrots, iref, irot, ldim_clip(3), ldim(3), ldim_sc(3), ncavgs, icavg
         integer :: cnt, norefs, b, new_box
         logical :: l_scale, l_moldiam = .false.
@@ -2424,13 +2424,16 @@ contains
         ! smpd_here is the pixel size read in
         ! params%smpd is the target pixel size of the micrograph
         if( .not.cline%defined('smpd') ) params%smpd = smpd_here
-        l_scale = .false.
+        l_scale    = .false.
+        params%msk = real(ldim(1)/2) - COSMSKHALFWIDTH ! for automasking
         if( abs(smpd_here-params%smpd) > 0.001 )then
             sc = smpd_here/params%smpd
             b  = round2even(real(ldim(1))*sc)
             if( b /= ldim(1) )then
-                l_scale = .true.
-                ldim_sc = [b,b,1]
+                ! adjust image size and mask
+                l_scale    = .true.
+                ldim_sc    = [b,b,1]
+                params%msk = real(b/2) - COSMSKHALFWIDTH
             endif
         endif
         ! read
@@ -2452,24 +2455,20 @@ contains
             call masks(icavg)%copy(projs(icavg))
         end do
         call stkio_r%close
-        ! set mask radius in pixels before automasking
-        if( l_scale ) then ! Cyril. Pls check this if
-            params%msk = ldim_sc(1)/2 - nint(COSMSKHALFWIDTH) 
-        else      
-            params%msk = ldim(1)/2 - nint(COSMSKHALFWIDTH)
-        endif
+        ! Automasking
         call automask2D(masks, params%ngrow, nint(params%winsz), params%edge, diams, shifts)
         do icavg=1,ncavgs
             call projs(icavg)%div_below(0.,10.)
             call projs(icavg)%mul(masks(icavg))
-            xyz(1) = shifts(icavg,1)
-            xyz(2) = shifts(icavg,2)
-            xyz(3) = 0.
-            call projs(icavg)%shift(xyz)
+            call projs(icavg)%shift([shifts(icavg,1),shifts(icavg,2),0.])
         end do
         ! estimate new box size and clip
-        diam_max = maxval(diams) !Cyril. Should work now so removed reliance on input mskdiam
-        lp       = min(max(LP_LB,MSKDIAM2LP * diam_max),LP_UB)
+        if( l_moldiam ) then
+            diam_max = params%moldiam
+        else
+            diam_max = maxval(diams)
+        end if
+        lp      = min(max(LP_LB,MSKDIAM2LP * diam_max),LP_UB)
         new_box = round2even(diam_max / params%smpd + 2. * COSMSKHALFWIDTH)
         write(logfhandle,'(A,1X,I4)') 'ESTIMATED BOX SIZE: ', new_box
         ldim_clip = [new_box, new_box, 1]
