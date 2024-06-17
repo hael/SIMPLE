@@ -1139,6 +1139,115 @@ void StarFileTable::write(std::ostream& out) const
 
 }
 
+std::string StarFileTable::write_mem(bool ignoreheader) const
+{
+	std::string returnstring;
+	returnstring.reserve(1000000000); // 1GB for speed
+    // Only write tables that have something in them
+    if (isEmpty()) return "";
+	
+	if(!ignoreheader){
+		returnstring.append("\n");
+	    returnstring.append("data_" + getName() +"\n");
+	    if (containsComment()) returnstring.append("# " + comment + "\n");
+	    returnstring.append("\n");
+	}
+   
+    if (!isList){
+    	if(!ignoreheader){
+			// Write loop header structure
+			returnstring.append("loop_ \n");
+			for (long i = 0; i < activeLabels.size(); i++)
+			{
+			    EMDLabel l = activeLabels[i];
+
+			    if (l != EMDL_COMMENT && l != EMDL_SORTED_IDX) // EMDL_SORTED_IDX is only for internal use, never write it out!
+			    {
+				returnstring.append("_" + EMDL::label2Str(l) + " #" + std::to_string(i+1) + " \n");
+			    }
+			}
+		}
+
+		// Write actual data block
+		for (long int idx = 0; idx < objects.size(); idx++)
+		{
+		    std::string entryComment = "";  
+
+		    for (long i = 0; i < activeLabels.size(); i++)
+		    {
+			EMDLabel l = activeLabels[i];
+
+			if (l != EMDL_COMMENT && l != EMDL_SORTED_IDX)
+			{
+			  //  out.width(10);
+			    std::string val;
+			    getValueToString(l, val, idx);
+			    returnstring.append(val + " ");
+			}
+			if (l == EMDL_COMMENT)
+			{
+			    getValue(EMDL_COMMENT, entryComment, idx);
+			}
+		    }
+		    if (entryComment != std::string(""))
+		    {
+			returnstring.append("# " + entryComment);
+		    }
+		    returnstring.append("\n");
+		}
+		// Finish table with a white-line
+	//	returnstring.append(" \n");
+
+    } else {
+		// Get first object. In this case (row format) there is a single object
+		std::string entryComment = "";
+		int maxWidth=10;
+
+		for (long i = 0; i < activeLabels.size(); i++){
+		    EMDLabel l = activeLabels[i];
+
+		    if (l != EMDL_COMMENT)
+		    {
+			int w = EMDL::label2Str(l).length();
+
+			if (w > maxWidth) maxWidth = w;
+		    }
+		    else
+		    {
+			getValue(EMDL_COMMENT, entryComment, 0);
+		    }
+		}
+
+		for (long i = 0; i < activeLabels.size(); i++)
+		{
+		    EMDLabel l = activeLabels[i];
+
+		    if (l != EMDL_COMMENT)
+		    {
+			int w = EMDL::label2Str(l).length();
+			//returnstring.append("_" + EMDL::label2Str(l) + std::setw(12 + maxWidth - w) + " ");
+			returnstring.append("_" + EMDL::label2Str(l) + " ");
+			std::string val;
+			getValueToString(l, val, 0);
+			returnstring.append(val + "\n");
+		    }
+		}
+		if (entryComment != std::string(""))
+		{
+		    returnstring.append("# " + entryComment + "\n");
+		}
+
+		// End a data block with a white line
+		returnstring.append(" \n");
+    }
+
+    returnstring.shrink_to_fit();
+
+    return returnstring;
+
+}
+
+
 void StarFileTable::write(const FileName &fn_out) const
 {
     std::ofstream  fh;
@@ -1533,7 +1642,6 @@ StarFileTable removeDuplicatedParticles(StarFileTable &MDin, EMDLabel mic_label,
 
 		if (dist_sq <= threshold_sq)
 		{
-//					std::cout << it->first << " " << part_id1 << " " << part_id2 << " " << dist_sq << std::endl;
 		    valid[part_id1] = false;
 		    break;
 		}
@@ -1581,6 +1689,11 @@ void StarFileTable::open_ofile(const std::string& fname, int mode)
 void StarFileTable::write_ofile()
 {
   write(output_stream);
+}
+
+std::string StarFileTable::write_omem(bool ignoreheader)
+{
+  return write_mem(ignoreheader);
 }
 
 void StarFileTable::close_ofile()
@@ -1722,6 +1835,15 @@ void StarFileTable__open_ofile(StarFileTable* This, char* fname, int mode)
 void StarFileTable__write_ofile(StarFileTable* This)
 {
   This->write_ofile();
+}
+
+void StarFileTable__write_omem(StarFileTable* This, void** str, long unsigned int* partlength, bool ignoreheader)
+{
+  std::string value = This->write_omem(ignoreheader);
+  char* c_str = NULL;
+  c_str = strdup(value.c_str());  // need to make a persevering copy here because "value" will be destroyed once it goes out of scope
+  *str = (void*)c_str;            // the caller has to free it manually
+  *partlength = strlen(c_str);
 }
 
 void StarFileTable__close_ofile(StarFileTable* This)
