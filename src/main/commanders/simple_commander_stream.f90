@@ -944,8 +944,8 @@ contains
             ! project update
             if( n_imported > 0 )then
                 n_imported = spproj_glob%os_mic%get_noris()
-                write(logfhandle,'(A,I8)')       '>>> # MICROGRAPHS PROCESSED & IMPORTED   : ',n_imported
-                if( l_extract ) write(logfhandle,'(A,I8)')   '>>> # PARTICLES EXTRACTED               : ',nptcls_glob
+                write(logfhandle,'(A,I8)')                '>>> # MICROGRAPHS PROCESSED & IMPORTED  : ',n_imported
+                if( l_extract ) write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED               : ',nptcls_glob
                 if( l_multipick )then
                     call histogram_moldiams%plot('moldiams')
                     if( l_multipick_init )  call starproj_stream%stream_export_pick_diameters(params%outdir, histogram_moldiams, filename="pick_init.star")
@@ -2139,7 +2139,7 @@ contains
         integer                                :: nchunks_imported_glob, nchunks_imported, nprojects, iter, last_injection
         integer                                :: n_imported, n_added, nptcls_glob, n_failed_jobs, ncls_in, nmic_star
         integer                                :: pool_iter_last_chunk_imported, pool_iter_max_chunk_imported
-        logical                                :: l_haschanged, l_nchunks_maxed
+        logical                                :: l_haschanged, l_nchunks_maxed, l_pause
         real                                   :: nptcls_pool
         call cline%set('oritype',      'mic')
         call cline%set('mkdir',        'yes')
@@ -2215,6 +2215,7 @@ contains
         nmics_rejected_glob   = 0   ! global number of micrographs rejected
         l_haschanged          = .false.
         l_nchunks_maxed       = .false.
+        l_pause               = .false.
         ! guistats init
         call gui_stats%init(.true.)
         call gui_stats%set('particles', 'particles_imported',          0,            primary=.true.)
@@ -2268,27 +2269,33 @@ contains
             ! 2D classification section
             call update_user_params_dev(cline)
             call update_chunks_dev
-            call update_pool_status_dev
-            call update_pool_dev
+            if( .not.l_pause )then
+                call update_pool_status_dev
+                call update_pool_dev
+            endif
             call update_user_params_dev(cline)
             call reject_from_pool_dev
             call reject_from_pool_user_dev
             if( l_nchunks_maxed )then
                 ! # of chunks is above desired number
-                if( is_pool_available_dev() .and. (get_pool_iter()>pool_iter_max_chunk_imported+5) ) exit
+                if( is_pool_available_dev() .and. (get_pool_iter()>=pool_iter_max_chunk_imported+10) ) exit
             else
                 call import_chunks_into_pool_dev( nchunks_imported )
                 if( nchunks_imported > 0 )then
                     nchunks_imported_glob         = nchunks_imported_glob + nchunks_imported
                     pool_iter_last_chunk_imported = get_pool_iter()
+                    l_pause = .false.
                 endif
                 if( nchunks_imported_glob >= params%maxnchunks )then
                     if( .not.l_nchunks_maxed ) pool_iter_max_chunk_imported = get_pool_iter()
                     l_nchunks_maxed = .true.
                 endif
-                if( get_pool_iter() > pool_iter_last_chunk_imported+5 )then
+                if( get_pool_iter() >= pool_iter_last_chunk_imported+10 )then
                     ! pause pool classification in absence of new chunks
-                    write(logfhandle,'(A)') '>>> POOL CLASSIFICATION PAUSED'
+                    l_pause = is_pool_available_dev()
+                    if( l_pause .and. (get_pool_iter() == pool_iter_last_chunk_imported+10) )then
+                        write(logfhandle,'(A)') '>>> POOL CLASSIFICATION PAUSED'
+                    endif
                 else
                     call classify_pool_dev
                 endif
