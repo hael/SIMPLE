@@ -25,6 +25,7 @@ type starproject_stream
     integer                    :: group_offset = 0
     logical                    :: nicestream   = .false.
     logical                    :: use_beamtilt = .false.
+    logical                    :: verbose      = .false.
 contains
     ! export
     procedure          :: stream_export_micrographs
@@ -39,6 +40,7 @@ contains
     procedure, private :: starfile_set_optics_group_table
     procedure, private :: starfile_set_micrographs_table
     procedure, private :: starfile_set_particles2D_table
+    procedure, private :: starfile_set_particles2D_subtable
     procedure, private :: starfile_set_pick_diameters_table
     !optics
     procedure, private :: assign_optics_single
@@ -47,16 +49,27 @@ contains
 
 end type starproject_stream
 
+type :: starpart
+    integer                       :: index
+    integer                       :: nstart
+    integer                       :: nend
+    integer                       :: length
+    type(starfile_table_type)     :: startable
+    character(len=:), allocatable :: string
+end type starpart
+
 contains
 
     ! starfiles
 
-    subroutine starfile_init( self, fname, outdir)
+    subroutine starfile_init( self, fname, outdir, verbose)
         class(starproject_stream),  intent(inout) :: self
         character(len=*),           intent(in)    :: fname
         character(len=LONGSTRLEN),  intent(in)    :: outdir
+        logical, optional,          intent(in)    :: verbose
         character(len=XLONGSTRLEN)                :: cwd
         character(len=:),           allocatable   :: stem
+        if(present(verbose)) self%verbose = verbose
         self%starfile_name = fname
         self%starfile_tmp  = fname // '.tmp'
         call simple_getcwd(cwd)
@@ -247,6 +260,59 @@ contains
             end function get_relative_path
 
     end subroutine starfile_set_particles2D_table
+
+    subroutine starfile_set_particles2D_subtable( self, spproj, part )
+        class(starproject_stream),  intent(inout)   :: self
+        class(sp_project),          intent(inout)   :: spproj
+        class(starpart),            intent(inout)   :: part
+        character(len=:),           allocatable     :: stkname
+        integer                                     :: i, ind_in_stk, stkind, pathtrim, half_boxsize
+        pathtrim = 0
+        call starfile_table__new(part%startable)
+        call starfile_table__setIsList(part%startable, .false.)
+        call starfile_table__setname(part%startable, 'particles')
+        do i=part%nstart, part%nend
+            if(spproj%os_ptcl2d%get(i, 'state') .eq. 0.0 ) cycle
+            call starfile_table__addObject(part%startable)
+            call spproj%get_stkname_and_ind('ptcl2D', i, stkname, ind_in_stk)
+            stkind = floor(spproj%os_ptcl2d%get(ind_in_stk, 'stkind'))
+            half_boxsize = floor(spproj%os_stk%get(stkind, 'box') / 2.0)
+    !        ! ints
+            if(spproj%os_ptcl2d%isthere(i, 'ogid'   )) call starfile_table__setValue_int(part%startable, EMDL_IMAGE_OPTICS_GROUP, int(spproj%os_ptcl2d%get(i, 'ogid' )))
+            if(spproj%os_ptcl2d%isthere(i, 'class'  )) call starfile_table__setValue_int(part%startable, EMDL_PARTICLE_CLASS,     int(spproj%os_ptcl2d%get(i, 'class')))
+            if(spproj%os_ptcl2d%isthere(i, 'gid'    )) call starfile_table__setValue_int(part%startable, EMDL_MLMODEL_GROUP_NO,   int(spproj%os_ptcl2d%get(i, 'gid'  )))
+    !        ! doubles
+            if(spproj%os_ptcl2d%isthere(i, 'dfx'    )) call starfile_table__setValue_double(part%startable,  EMDL_CTF_DEFOCUSU,              real(spproj%os_ptcl2d%get(i, 'dfx') / 0.0001,        dp))
+            if(spproj%os_ptcl2d%isthere(i, 'dfy'    )) call starfile_table__setValue_double(part%startable,  EMDL_CTF_DEFOCUSV,              real(spproj%os_ptcl2d%get(i, 'dfy') / 0.0001,        dp))
+            if(spproj%os_ptcl2d%isthere(i, 'angast' )) call starfile_table__setValue_double(part%startable,  EMDL_CTF_DEFOCUS_ANGLE,         real(spproj%os_ptcl2d%get(i, 'angast'),              dp))
+            if(spproj%os_ptcl2d%isthere(i, 'phshift')) call starfile_table__setValue_double(part%startable,  EMDL_CTF_PHASESHIFT,            real(spproj%os_ptcl2d%get(i, 'phshift'),             dp))
+            if(spproj%os_ptcl2d%isthere(i, 'e3'     )) call starfile_table__setValue_double(part%startable,  EMDL_ORIENT_PSI,                real(spproj%os_ptcl2d%get(i, 'e3'),                  dp))
+            if(spproj%os_ptcl2d%isthere(i, 'xpos'   )) call starfile_table__setValue_double(part%startable,  EMDL_IMAGE_COORD_X,             real(spproj%os_ptcl2d%get(i, 'xpos') + half_boxsize, dp))
+            if(spproj%os_ptcl2d%isthere(i, 'ypos'   )) call starfile_table__setValue_double(part%startable,  EMDL_IMAGE_COORD_Y,             real(spproj%os_ptcl2d%get(i, 'ypos') + half_boxsize, dp))
+            if(spproj%os_ptcl2d%isthere(i, 'x'      )) call starfile_table__setValue_double(part%startable,  EMDL_ORIENT_ORIGIN_X_ANGSTROM,  real(spproj%os_ptcl2d%get(i, 'x'),                   dp))
+            if(spproj%os_ptcl2d%isthere(i, 'y'      )) call starfile_table__setValue_double(part%startable,  EMDL_ORIENT_ORIGIN_Y_ANGSTROM,  real(spproj%os_ptcl2d%get(i, 'y'),                   dp))
+    !        ! strings
+            if(stkname .ne. '' .and. ind_in_stk .gt. 0) then
+                !$omp critical
+                call starfile_table__setValue_string(part%startable, EMDL_IMAGE_NAME,      int2str(ind_in_stk) // '@' // trim(get_relative_path(stkname)))
+                call starfile_table__setValue_string(part%startable, EMDL_MICROGRAPH_NAME, trim(get_relative_path(spproj%get_micname(i))))
+                !$omp end critical
+            end if
+
+        end do
+        if(allocated(stkname)) deallocate(stkname)
+
+        contains
+
+            function get_relative_path ( path ) result ( newpath )
+                character(len=*),           intent(in) :: path
+                character(len=STDLEN)                  :: newpath
+                if(pathtrim .eq. 0) pathtrim = index(path, trim(self%rootpath)) 
+                newpath = trim(path(pathtrim:))
+            end function get_relative_path
+        
+
+    end subroutine starfile_set_particles2D_subtable
     ! export
 
     subroutine stream_export_micrographs( self, spproj, outdir, optics_set, filename)
@@ -292,22 +358,95 @@ contains
         call self%starfile_deinit()
     end subroutine stream_export_optics
 
-    subroutine stream_export_particles_2D( self, spproj, outdir, optics_set)
+    subroutine stream_export_particles_2D( self, spproj, outdir, optics_set, filename, verbose)
         class(starproject_stream),            intent(inout) :: self
         class(sp_project),                    intent(inout) :: spproj
         character(len=LONGSTRLEN),            intent(in)    :: outdir
-        logical,         optional,            intent(in)    :: optics_set
-        logical                                             :: l_optics_set
-        integer                                             :: ioptics
+        character(len=*),          optional,  intent(in)    :: filename
+        logical,                   optional,  intent(in)    :: optics_set, verbose
+        type(starpart),                       allocatable   :: starparts(:)
+        type(starpart)          :: newpart
+        logical                 :: l_optics_set, l_verbose
+        integer                 :: ioptics, i, nptcls, nbatches, fhandle, ok
+        integer,      parameter :: BATCHSIZE=10000
+        integer,      parameter :: NTHR=4
+        integer(timer_int_kind) :: ms0
+        real(timer_int_kind)    :: ms_complete
         l_optics_set = .false.
+        l_verbose    = .false.
         if(present(optics_set)) l_optics_set = optics_set
+        if(present(verbose))    l_verbose    = verbose
         if(.not. l_optics_set) call self%assign_optics_single(spproj)
-        call self%starfile_init('particles2D.star', outdir)
+        if(present(filename)) then
+            call self%starfile_init(filename, outdir, verbose=l_verbose)
+        else
+            call self%starfile_init('particles2D.star', outdir, verbose=l_verbose)
+        endif
+        if(file_exists(trim(adjustl(self%starfile_tmp)))) call del_file(trim(adjustl(self%starfile_tmp)))
+        if(self%verbose) ms0 = tic()
         call self%starfile_set_optics_table(spproj)
         call self%starfile_write_table(append = .false.)
-        call self%starfile_set_particles2D_table(spproj)
-        call self%starfile_write_table(append = .true.)
-        call self%starfile_deinit()
+        if(self%verbose) then
+            ms_complete = toc(ms0)
+            print *,'particle star optics section written in :', ms_complete; call flush(6)
+        endif
+        if(NTHR .le. 1) then
+            if(self%verbose) ms0 = tic()
+            call self%starfile_set_particles2D_table(spproj)
+            call self%starfile_write_table(append = .true.)
+            call self%starfile_deinit()
+            if(self%verbose) then
+                ms_complete = toc(ms0)
+                print *,'particle star written in :', ms_complete, 'using single thread'; call flush(6)
+            endif
+        else
+            nptcls = spproj%os_ptcl2d%get_noris()
+            nbatches = ceiling(real(nptcls) / real(BATCHSIZE))
+            allocate(starparts(nbatches))
+            call omp_set_num_threads(NTHR)
+            if(self%verbose) ms0 = tic()
+            !$omp parallel private(i, newpart) shared(starparts)
+                !$omp do
+                    do i=1, nbatches
+                        newpart%index  = i 
+                        newpart%nstart = 1 + ((i - 1) * BATCHSIZE)
+                        newpart%nend   = i * BATCHSIZE
+                        if(newpart%nend .gt. nptcls) newpart%nend = nptcls
+                        call self%starfile_set_particles2D_subtable(spproj, newpart)
+                        if(i .eq. 1) then
+                            call starfile_table__write_omem(newpart%startable, newpart%string, newpart%length)
+                        else
+                            call starfile_table__write_omem(newpart%startable, newpart%string, newpart%length, ignoreheader=.true.)
+                        endif
+                        call starfile_table__delete(newpart%startable)
+                        !$omp critical
+                            starparts(newpart%index) = newpart
+                        !$omp end critical
+                        if(allocated(newpart%string)) deallocate(newpart%string)
+                    end do
+                !$omp end do
+            !$omp end parallel
+            if(self%verbose) then
+                ms_complete = toc(ms0)
+                print *,'particle star parts generated in :', ms_complete, 'using', NTHR, 'threads'; call flush(6)
+            endif
+            if(.not. file_exists(trim(adjustl(self%starfile_tmp)))) THROW_HARD("stream_export_particles_2D: starfile headers not written")
+            if(self%verbose) ms0 = tic()
+            call fopen(fhandle, file=trim(adjustl(self%starfile_tmp)), position='append', iostat=ok)
+            do i=1,nbatches
+                write(fhandle, '(a)', advance="no") starparts(i)%string
+            end do
+            !trailing empty line
+            write(fhandle, '(a)')
+            call fclose(fhandle)
+            if(self%verbose) then
+                ms_complete = toc(ms0)
+                print *,'particle star parts written in :',  ms_complete; call flush(6)
+            endif
+            if(file_exists(trim(adjustl(self%starfile_name)))) call del_file(trim(adjustl(self%starfile_name)))
+            call simple_rename(trim(adjustl(self%starfile_tmp)), trim(adjustl(self%starfile_name)))
+        endif
+        if(allocated(starparts)) deallocate(starparts)
     end subroutine stream_export_particles_2D
 
     subroutine stream_export_pick_diameters( self, outdir, histogram_moldiams, filename)

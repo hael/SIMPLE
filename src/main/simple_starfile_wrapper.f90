@@ -146,6 +146,14 @@ interface
         type(C_ptr), value :: this
     end subroutine C_starfile_table__write_ofile
 
+    subroutine C_starfile_table__write_omem(this, str, partlength, ignoreheader) bind(C,name="StarFileTable__write_omem")
+        import
+        type(C_ptr),            value       :: this
+        type(C_ptr),            intent(out) :: str
+        integer(C_long),        intent(out) :: partlength
+        logical(C_bool), value, intent(in)  :: ignoreheader
+    end subroutine C_starfile_table__write_omem
+
     subroutine C_starfile_table__close_ofile(this) bind(C,name="StarFileTable__close_ofile")
         import
         type(C_ptr), value :: this
@@ -439,6 +447,31 @@ contains
         type(starfile_table_type), intent(inout) :: this
         call C_starfile_table__write_ofile(this%object)
     end subroutine starfile_table__write_ofile
+
+    subroutine starfile_table__write_omem(this, str, length, ignoreheader)
+        type(starfile_table_type),     intent(inout) :: this
+        character(len=:), allocatable, intent(inout) :: str
+        integer,                       intent(inout) :: length
+        logical,          optional,    intent(in)    :: ignoreheader
+        character(len=1,kind=C_char), dimension(:), pointer :: f_str
+        type(C_ptr)     :: c_str
+        integer(C_long) :: partlength
+        integer         :: i
+        logical(C_bool) :: l_ignoreheader
+        if(present(ignoreheader) .and. ignoreheader) then
+            l_ignoreheader = .true.
+        else
+            l_ignoreheader = .false.
+        endif
+        call C_starfile_table__write_omem(this%object, c_str, partlength, l_ignoreheader)
+        allocate( character(len=partlength) :: str )
+        call c_f_pointer(c_str, f_str, [partlength])
+        do i = 1, partlength
+             str(i:i) = f_str(i)
+        end do
+        call C_dealloc_str(c_str)
+        length = partlength
+    end subroutine starfile_table__write_omem
 
     subroutine starfile_table__close_ofile(this)
         type(starfile_table_type), intent(inout) :: this

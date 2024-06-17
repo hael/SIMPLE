@@ -270,6 +270,9 @@ public:
     // Write a StarFileTable in STAR format
     void write(std::ostream& out = std::cout) const;
 
+    // Write a StarFileTable to memory in STAR format
+    std::string write_mem(bool ignoreheader) const;
+
     // Write to a single file
     void write(const FileName & fn_out) const;
 
@@ -278,6 +281,9 @@ public:
 
     // Write to output file
     void write_ofile();
+
+    // Write to memory
+    std::string write_omem(bool ignoreheader);
 
     // Close output file
     void close_ofile();
@@ -411,6 +417,7 @@ extern "C"
   void StarFileTable__clear(StarFileTable* This);
   void StarFileTable__open_ofile(StarFileTable* This, char* fname, int mode);
   void StarFileTable__write_ofile(StarFileTable* This);
+  void StarFileTable__write_omem(StarFileTable* This, void** str, long unsigned int* partlength, bool ignoreheader);
   void StarFileTable__close_ofile(StarFileTable* This);
   void StarFileTable__read(StarFileTable* This, char* fname, char* name);
   void StarFileTable__setName(StarFileTable* This, char* aname);
