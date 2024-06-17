@@ -1928,7 +1928,7 @@ contains
         endif
         call cline_rank_cavgs%set('stk', stk)
         call cline_rank_cavgs%set('outstk',   trim(refs_ranked))
-        call xrank_cavgs%execute(cline_rank_cavgs)
+        call xrank_cavgs%execute_shmem(cline_rank_cavgs)
         call cline_rank_cavgs%kill
     end subroutine rank_cavgs
 
