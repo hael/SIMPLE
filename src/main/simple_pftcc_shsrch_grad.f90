@@ -163,10 +163,11 @@ contains
     end subroutine grad_shsrch_set_indices
 
     !> minimisation routine
-    function grad_shsrch_minimize( self, irot, xy ) result( cxy )
+    function grad_shsrch_minimize( self, irot, xy, prev_sh ) result( cxy )
         class(pftcc_shsrch_grad), intent(inout) :: self
         integer,                  intent(inout) :: irot
         real, optional,           intent(in)    :: xy(2)
+        real, optional,           intent(in)    :: prev_sh(2)
         real     :: corrs(self%nrots), rotmat(2,2), cxy(3), lowest_shift(2), lowest_cost
         real(dp) :: init_xy(2), lowest_cost_overall, coarse_cost, initial_cost
         integer  :: loc, i, lowest_rot, init_rot
@@ -196,6 +197,7 @@ contains
             if( (trim(params_glob%sh_rnd).eq.'yes') .and. (ran3() < -lowest_cost_overall) )then
                 init_xy(1)     = 2.*(ran3()-0.5) * params_glob%sh_sig
                 init_xy(2)     = 2.*(ran3()-0.5) * params_glob%sh_sig
+                if( present(prev_sh) ) init_xy = init_xy - prev_sh
                 self%ospec%x_8 = init_xy
                 self%ospec%x   = real(init_xy)
                 ! shift search / in-plane rot update
@@ -262,6 +264,7 @@ contains
             if( (trim(params_glob%sh_rnd).eq.'yes') .and. (ran3() < -lowest_cost_overall) )then
                 init_xy(1)     = 2.*(ran3()-0.5) * params_glob%sh_sig
                 init_xy(2)     = 2.*(ran3()-0.5) * params_glob%sh_sig
+                if( present(prev_sh) ) init_xy = init_xy - prev_sh
                 self%ospec%x_8 = init_xy
                 self%ospec%x   = real(init_xy)
                 call self%opt_obj%minimize(self%ospec, self, lowest_cost)
