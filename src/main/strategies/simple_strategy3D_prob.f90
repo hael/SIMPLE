@@ -63,9 +63,9 @@ contains
                     if( trim(params_glob%sh_ori_rnd) .eq. 'yes' )then
                         call build_glob%spproj_field%get_ori(iptcl, o_prev)  ! previous ori
                         prev_sh = o_prev%get_2Dshift()                       ! shift vector
-                        call self%s%inpl_srch(ref=iref, xy=[0.,0.], irot_in=irot, prev_sh=prev_sh)
+                        call self%s%inpl_srch(ref=iref, xy=[0.,0.], irot_in=irot, prev_sh=prev_sh, prob=corr)
                     else
-                        call self%s%inpl_srch(ref=iref, xy=[0.,0.], irot_in=irot)
+                        call self%s%inpl_srch(ref=iref, xy=[0.,0.], irot_in=irot, prob=corr)
                     endif
                     ! checking if shift search is good
                     if( s3D%proj_space_inplinds(iref, ithr) < 1 )then
