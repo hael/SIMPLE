@@ -108,7 +108,7 @@ contains
         ! create in-plane search objects
         self%nrots = pftcc_glob%get_nrots()
         call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
-                &shbarrier=params_glob%shbarrier, maxits=params_glob%maxits_sh, opt_angle=.true.)
+                &shbarrier=params_glob%shbarrier, maxits=params_glob%maxits_sh, opt_angle=(trim(params_glob%sh_opt_angle).eq.'yes'))
         self%exists = .true.
     end subroutine new
 
@@ -190,13 +190,15 @@ contains
         cxy = self%cart_shsrch_obj%minimize(nevals, shvec)
     end function shift_srch_cart
 
-    subroutine inpl_srch( self, ref, xy )
+    subroutine inpl_srch( self, ref, xy, irot_in )
         class(strategy3D_srch), intent(inout) :: self
         integer, optional,      intent(in)    :: ref
         real,    optional,      intent(in)    :: xy(2)
+        integer, optional,      intent(in)    :: irot_in
         real    :: cxy(3)
         integer :: iref, irot, loc(1)
         if( self%doshift )then
+            if( present(irot_in) ) irot = irot_in
             if( present(ref) )then
                 iref = ref
             else

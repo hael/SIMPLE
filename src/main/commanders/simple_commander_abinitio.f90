@@ -795,7 +795,7 @@ contains
                         THROW_HARD('Particles could not be found in the project')
                     endif
                     vol_type = 'vol'
-                    call spproj%os_ptcl3D%rnd_oris
+                    call spproj%os_ptcl3D%rnd_oris(trs=params%sh_sig)
                     call spproj%os_ptcl3D%set_all2single('w',1.)
                 case DEFAULT
                     THROW_HARD('Unsupported ORITYPE; exec_abinitio_3Dmodel')
