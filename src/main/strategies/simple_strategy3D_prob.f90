@@ -38,8 +38,9 @@ contains
         use simple_eul_prob_tab, only: eulprob_corr_switch
         class(strategy3D_prob), intent(inout) :: self
         integer,                intent(in)    :: ithr
-        integer :: iproj, iptcl, iptcl_map, irot, istate, iref
-        real    :: corr
+        integer   :: iproj, iptcl, iptcl_map, irot, istate, iref
+        real      :: corr, prev_sh(2)
+        type(ori) :: o_prev
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
@@ -59,7 +60,13 @@ contains
                     &[self%spec%eulprob_obj_part%assgn_map(iptcl_map)%x,&
                     & self%spec%eulprob_obj_part%assgn_map(iptcl_map)%y], corr)
                 else
-                    call self%s%inpl_srch(ref=iref, xy=[0.,0.], irot_in=irot)
+                    if( trim(params_glob%sh_ori_rnd) .eq. 'yes' )then
+                        call build_glob%spproj_field%get_ori(iptcl, o_prev)  ! previous ori
+                        prev_sh = o_prev%get_2Dshift()                       ! shift vector
+                        call self%s%inpl_srch(ref=iref, xy=[0.,0.], irot_in=irot, prev_sh=prev_sh)
+                    else
+                        call self%s%inpl_srch(ref=iref, xy=[0.,0.], irot_in=irot)
+                    endif
                     ! checking if shift search is good
                     if( s3D%proj_space_inplinds(iref, ithr) < 1 )then
                         call assign_ori(self%s, iref, irot, corr, [0.,0.], corr)
