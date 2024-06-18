@@ -173,11 +173,11 @@ contains
         logical  :: found_better
         found_better = .false.
         if( present(xy) )then
-            self%ospec%x      = xy
-            self%ospec%x_8    = dble(xy)
+            self%ospec%x   = xy
+            self%ospec%x_8 = dble(xy)
         else
-            self%ospec%x      = [0.,0.]
-            self%ospec%x_8    = [0.d0,0.d0]
+            self%ospec%x   = [0.,0.]
+            self%ospec%x_8 = [0.d0,0.d0]
         endif
         if( self%opt_angle )then
             call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs, kweight=params_glob%l_kweight_rot)
@@ -192,34 +192,56 @@ contains
                     self%cur_inpl_idx = init_rot
                 endif
             end if
-            ! shift search / in-plane rot update
-            do i = 1,self%max_evals
-                call self%opt_obj%minimize(self%ospec, self, lowest_cost)
-                call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs, kweight=params_glob%l_kweight_rot)
-                loc = maxloc(corrs,dim=1)
-                if( loc == self%cur_inpl_idx ) exit
-                self%cur_inpl_idx = loc
-            end do
-            ! update best
-            lowest_cost = -corrs(self%cur_inpl_idx)
-            if( lowest_cost < lowest_cost_overall )then
-                found_better        = .true.
-                lowest_cost_overall = lowest_cost
-                lowest_rot          = self%cur_inpl_idx
-                lowest_shift        = self%ospec%x
-            endif
-            if( found_better )then
-                irot    =   lowest_rot                 ! in-plane index
-                cxy(1)  = - real(lowest_cost_overall)  ! correlation
-                cxy(2:) =   real(lowest_shift)         ! shift
+            ! using lowest_cost_overall to probabilistically random start the shift search and stick with the resulted shifts
+            if( (trim(params_glob%sh_rnd).eq.'yes') .and. (ran3() < -lowest_cost_overall) )then
+                init_xy(1)     = 2.*(ran3()-0.5) * params_glob%sh_sig
+                init_xy(2)     = 2.*(ran3()-0.5) * params_glob%sh_sig
+                self%ospec%x_8 = init_xy
+                self%ospec%x   = real(init_xy)
+                ! shift search / in-plane rot update
+                do i = 1,self%max_evals
+                    call self%opt_obj%minimize(self%ospec, self, lowest_cost)
+                    call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs, kweight=params_glob%l_kweight_rot)
+                    loc = maxloc(corrs,dim=1)
+                    if( loc == self%cur_inpl_idx ) exit
+                    self%cur_inpl_idx = loc
+                end do
+                irot    =   self%cur_inpl_idx
+                cxy(1)  = - real(lowest_cost)  ! correlation
+                cxy(2:) =   self%ospec%x       ! shift
                 ! rotate the shift vector to the frame of reference
                 call rotmat2d(pftcc_glob%get_rot(irot), rotmat)
                 cxy(2:) = matmul(cxy(2:), rotmat)
             else
-                irot = 0 ! to communicate that a better solution was not found
+                ! shift search / in-plane rot update
+                do i = 1,self%max_evals
+                    call self%opt_obj%minimize(self%ospec, self, lowest_cost)
+                    call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs, kweight=params_glob%l_kweight_rot)
+                    loc = maxloc(corrs,dim=1)
+                    if( loc == self%cur_inpl_idx ) exit
+                    self%cur_inpl_idx = loc
+                end do
+                ! update best
+                lowest_cost = -corrs(self%cur_inpl_idx)
+                if( lowest_cost < lowest_cost_overall )then
+                    found_better        = .true.
+                    lowest_cost_overall = lowest_cost
+                    lowest_rot          = self%cur_inpl_idx
+                    lowest_shift        = self%ospec%x
+                endif
+                if( found_better )then
+                    irot    =   lowest_rot                 ! in-plane index
+                    cxy(1)  = - real(lowest_cost_overall)  ! correlation
+                    cxy(2:) =   real(lowest_shift)         ! shift
+                    ! rotate the shift vector to the frame of reference
+                    call rotmat2d(pftcc_glob%get_rot(irot), rotmat)
+                    cxy(2:) = matmul(cxy(2:), rotmat)
+                else
+                    irot = 0 ! to communicate that a better solution was not found
+                endif
             endif
         else
-            self%cur_inpl_idx = irot
+            self%cur_inpl_idx   = irot
             lowest_cost_overall = -pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, self%ospec%x_8, self%cur_inpl_idx)
             initial_cost        = lowest_cost_overall
             if( perform_rndstart )then
@@ -236,21 +258,35 @@ contains
                     self%ospec%x        = real(init_xy)
                 endif
             end if
-            ! shift search
-            call self%opt_obj%minimize(self%ospec, self, lowest_cost)
-            if( lowest_cost < lowest_cost_overall )then
-                found_better        = .true.
-                lowest_cost_overall = lowest_cost
-                lowest_shift        = self%ospec%x
-            endif
-            if( found_better )then
-                cxy(1)  = - real(lowest_cost_overall)  ! correlation
-                cxy(2:) =   lowest_shift               ! shift
+            ! using lowest_cost_overall to probabilistically random start the shift search and stick with the resulted shifts
+            if( (trim(params_glob%sh_rnd).eq.'yes') .and. (ran3() < -lowest_cost_overall) )then
+                init_xy(1)     = 2.*(ran3()-0.5) * params_glob%sh_sig
+                init_xy(2)     = 2.*(ran3()-0.5) * params_glob%sh_sig
+                self%ospec%x_8 = init_xy
+                self%ospec%x   = real(init_xy)
+                call self%opt_obj%minimize(self%ospec, self, lowest_cost)
+                cxy(1)  = - real(lowest_cost)  ! correlation
+                cxy(2:) =   self%ospec%x       ! shift
                 ! rotate the shift vector to the frame of reference
                 call rotmat2d(pftcc_glob%get_rot(irot), rotmat)
                 cxy(2:) = matmul(cxy(2:), rotmat)
             else
-                irot = 0 ! to communicate that a better solution was not found
+                ! shift search
+                call self%opt_obj%minimize(self%ospec, self, lowest_cost)
+                if( lowest_cost < lowest_cost_overall )then
+                    found_better        = .true.
+                    lowest_cost_overall = lowest_cost
+                    lowest_shift        = self%ospec%x
+                endif
+                if( found_better )then
+                    cxy(1)  = - real(lowest_cost_overall)  ! correlation
+                    cxy(2:) =   lowest_shift               ! shift
+                    ! rotate the shift vector to the frame of reference
+                    call rotmat2d(pftcc_glob%get_rot(irot), rotmat)
+                    cxy(2:) = matmul(cxy(2:), rotmat)
+                else
+                    irot = 0 ! to communicate that a better solution was not found
+                endif
             endif
         end if
     end function grad_shsrch_minimize
