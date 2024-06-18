@@ -337,7 +337,7 @@ contains
         call a%new(N)
         do i = 1, N
             call a%set_coord(i,xyz(i,:))
-            self%atominfo(i)%center = a%get_coord(i)
+            self%atominfo(i)%center(:) = a%get_coord(i)
         enddo
         self%n_cc = N
         call a%kill
@@ -596,9 +596,9 @@ contains
 
     ! This subrotuine takes in input a nanoparticle and
     ! binarizes it by thresholding. The gray level histogram is split
-    ! in 20 parts, which corrispond to 20 possible threshold.
-    ! Among those threshold, the selected one is the for which
-    ! tha correlation between the raw map and a simulated distribution
+    ! in 20 parts, which corresponds to 20 possible thresholds
+    ! Among those thresholds, the selected one is the for which
+    ! that correlation between the raw map and a simulated distribution
     ! obtained with that threshold reaches the maximum value.
     subroutine binarize_and_find_centers( self )
         class(nanoparticle), intent(inout) :: self
@@ -641,7 +641,7 @@ contains
             corr = t2c( thresh )
             write(logfhandle,*) 'threshold: ', thresh , 'corr: ', corr
             if( corr > max_corr )then
-                max_corr  = corr
+                max_corr   = corr
                 thresh_opt = thresh
             endif
             if( corr < max_corr ) exit ! convex goal function
@@ -656,7 +656,7 @@ contains
             corr = t2c( thresh )
             write(logfhandle,*) 'threshold: ', thresh, 'corr: ', corr
             if( corr > max_corr )then
-                max_corr  = corr
+                max_corr   = corr
                 thresh_opt = thresh
             endif
             thresh = thresh + step_refine
@@ -703,7 +703,7 @@ contains
         ! It considers the grey level value only in the positive range.
         ! It doesn't threshold the map. It just returns the ideal threshold.
         ! This is based on the implementation of 1D otsu
-        subroutine otsu_nano(img, scaled_thresh)
+        subroutine otsu_nano( img, scaled_thresh )
             type(image),    intent(inout) :: img
             real,           intent(out)   :: scaled_thresh ! returns the threshold in the correct range
             real, pointer     :: rmat(:,:,:)
@@ -798,7 +798,7 @@ contains
             allocate(coords(3,self%n_cc))
             do i=1,self%n_cc
                 coords(:,i) = self%atominfo(i)%center(:)
-            end do
+            enddo
         endif
     end subroutine find_centers
 
@@ -984,7 +984,7 @@ contains
             call self%img_raw%win2arr_rad(ijk(1), ijk(2), ijk(3), winsz, npix_in, maxrad, npix_out1, pixels1)
             call simatms%win2arr_rad(     ijk(1), ijk(2), ijk(3), winsz, npix_in, maxrad, npix_out2, pixels2)
             self%atominfo(i)%valid_corr = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))
-        end do
+        enddo
         call calc_stats(self%atominfo(:)%valid_corr, corr_stats)
         write(logfhandle,'(A)') '>>> VALID_CORR (PER-ATOM CORRELATION WITH SIMULATED DENSITY) STATS BELOW'
         write(logfhandle,'(A,F8.4)') 'Average: ', corr_stats%avg
@@ -1018,7 +1018,7 @@ contains
                 where(imat_cc == cc) imat_bin = 0
                 n_discard = n_discard + 1
             endif
-        end do
+        enddo
         call self%img_bin%set_imat(imat_bin)
         call self%img_bin%find_ccs(self%img_cc)
         call self%img_cc%get_nccs(self%n_cc)
@@ -1068,7 +1068,7 @@ contains
                 where(imat_cc == cc) imat_bin = 0
                 n_discard = n_discard + 1
             endif
-        end do
+        enddo
         ! Removing outliers based on coordination number
         call remove_lowly_contacted( cthresh )
         ! don't leave behind any atoms with cscore < cthresh - 2
@@ -1100,7 +1100,7 @@ contains
                 call self%find_centers()
                 if( allocated(centers_A) ) deallocate(centers_A)
                 centers_A = self%atominfo2centers_A()
-                call calc_contact_scores(self%element,centers_A,cscores)
+                call calc_contact_scores(self%element, centers_A,cscores)
             end subroutine remove_lowly_contacted
 
     end subroutine discard_atoms_with_low_contact_score
@@ -1132,7 +1132,7 @@ contains
                 where(imat_cc == cc) imat_bin = 0
                 n_discard = n_discard + 1
             endif
-        end do
+        enddo
         ! Removing outliers based on coordination number
         n_discard = 0
         call remove_lowly_coordinated( cn_thresh )
@@ -1225,7 +1225,7 @@ contains
             call self%img_cc%set_imat(imat_cc)
         else
             call self%img_cc%get_imat(imat_cc)
-        end if
+        endif
         call fit_isotropic%new(self%img_raw%get_ldim(), self%img_raw%get_smpd())
         call fit_anisotropic%new(self%img_raw%get_ldim(), self%img_raw%get_smpd())
         max_size = 0
@@ -1244,7 +1244,7 @@ contains
             ! whether atom is neighbors with an atom of CN > 12
             if (maxval(self%atominfo(:)%cn_std) > 12) then
                 call self%check_neighbors_cn(cc, a)
-            end if
+            endif
             ! maximum grey level intensity across the connected component
             self%atominfo(cc)%max_int = maxval(rmat_raw(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), mask)
             ! average grey level intensity across the connected component
@@ -1267,13 +1267,13 @@ contains
             ! reset masks
             mask    = .false.
             cc_mask = .true.
-        end do
+        enddo
         write(logfhandle,'(a,i5)') "ADP Tossed: ", count(self%atominfo(:)%tossADP)
         write(logfhandle, '(A)') '>>> WRITING OUTPUT'
         self%n_aniso = self%n_cc - count(self%atominfo(:)%tossADP)
         call fit_isotropic%write(fn_fit_isotropic)
         call fit_anisotropic%write(fn_fit_anisotropic)
-        if (WRITE_OUTPUT) call write_2D_slice()
+        if( WRITE_OUTPUT ) call write_2D_slice()
 
         ! CALCULATE GLOBAL NP PARAMETERS
         call calc_stats(  real(self%atominfo(:)%size),    self%size_stats,         mask=self%atominfo(:)%size >= NVOX_THRESH )
@@ -1302,7 +1302,7 @@ contains
         do cn = CNMIN, CNMAX
             call calc_cn_stats( cn )
             call write_cn_atoms( cn )
-        end do
+        enddo
         ! write pdf files with valid_corr and max_int in the B-factor field (for validation/visualisation)
         call self%write_centers('valid_corr_in_bfac_field', 'valid_corr')
         call self%write_centers('max_int_in_bfac_field',    'max_int')
@@ -1400,29 +1400,29 @@ contains
                 character(*), parameter :: fn_slice='cc_2D_slice.csv'
                 character(*), parameter :: header='X'//CSV_DELIM//'Y'//CSV_DELIM//'INTENSITY'
                 ! Find largest CC for best visualization
-                max_size = 0
+                max_size   = 0
                 cc_largest = 0
-                do cc=1, self%n_cc
-                    if (self%atominfo(cc)%size > max_size) then
+                do cc = 1, self%n_cc
+                    if( self%atominfo(cc)%size > max_size )then
                         cc_largest = cc
                         max_size = self%atominfo(cc)%size
-                    end if
-                end do
+                    endif
+                enddo
                 center(:) = self%atominfo(cc_largest)%center(:)
                 ! Write output as CSV file with the cc center at the origin for easy analysis
                 call fopen(funit, file=fn_slice, status='replace')
                 write(funit, '(A)') 'X'//CSV_DELIM//'Y'//CSV_DELIM//'INTENSITY'
                 601 format(F10.6,A2)
                 602 format(F10.6)
-                do i=1,self%ldim(1)
-                    do j=1, self%ldim(2)
+                do i = 1, self%ldim(1)
+                    do j = 1, self%ldim(2)
                         if ( imat_cc(i, j, center(3)) == cc_largest ) then
                             write(funit,601,advance='no') real(i-center(1)),    CSV_DELIM ! X
                             write(funit,601,advance='no') real(j-center(2)),    CSV_DELIM ! Y
                             write(funit,602) rmat_raw(i,j,center(3))                      ! Intensity
-                        end if
-                    end do
-                end do
+                        endif
+                    enddo
+                enddo
                 call fclose(funit)
             end subroutine write_2D_slice
 
@@ -1436,7 +1436,7 @@ contains
        m = 0.
        do i = 1, self%n_cc
            m = m + self%atominfo(i)%center(:)
-       end do
+       enddo
        m = m / real(self%n_cc)
     end function masscen
 
@@ -1453,7 +1453,7 @@ contains
             imat_cc = imat
        else
             call self%img_cc%get_imat(imat_cc)
-       end if
+       endif
        where(imat_cc.eq.label)
            imat_cc = 1
        elsewhere
@@ -1492,12 +1492,12 @@ contains
             case DEFAULT ! FCC by default
                 d = a0 * ((1. + 1. / sqrt(2.)) / 2.)
         end select
-        do i=1, self%n_cc
-            if (i/=cc .and. self%atominfo(i)%cn_std > 12 .and.&
-                    &euclid(self%atominfo(cc)%center(:3),self%atominfo(i)%center(:3))*self%smpd < d) then
+        do i = 1, self%n_cc
+            if( i/=cc .and. self%atominfo(i)%cn_std > 12 .and. &
+                    & euclid(self%atominfo(cc)%center(:3),self%atominfo(i)%center(:3))*self%smpd < d )then
                 self%atominfo(cc)%adjacent_cn13 = self%atominfo(cc)%adjacent_cn13 + 1
-            end if
-        end do
+            endif
+        enddo
     end subroutine check_neighbors_cn
 
 
@@ -1506,7 +1506,7 @@ contains
     ! in rmat with a 3D Gaussian with isotropic variance in a sphere of radius 3*a/(8sqrt(2))
     ! about the cc center. The best fit solution is output into the 3D map fit, and
     ! the correlation between fit and rmat is stored in atominfo.
-    subroutine calc_isotropic_disp(self, cc, a, rmat, fit)
+    subroutine calc_isotropic_disp( self, cc, a, rmat, fit )
         class(nanoparticle), intent(inout)  :: self
         class(image), intent(inout)         :: fit
         integer, intent(in)                 :: cc
@@ -1518,68 +1518,68 @@ contains
         logical     :: fit_mask(self%ldim(1),self%ldim(2),self%ldim(3))
 
         output_rad = (sum(a)/3)/(2.*sqrt(2.))/self%smpd  ! 1/2 FCC nearest neighbor dist
-        fit_rad = 0.75 * output_rad ! 0.75 prevents fitting tails of other atoms
+        fit_rad    = 0.75 * output_rad ! 0.75 prevents fitting tails of other atoms
 
         ! Create search window containing sphere of fit rad to speed up loops.
-        center = self%atominfo(cc)%center(:)
-        maxrad  = 0.5*(sum(a)/3) / self%smpd
-        ilo = max(nint(center(1) - maxrad), 1)
-        ihi = min(nint(center(1) + maxrad), self%ldim(1))
-        jlo = max(nint(center(2) - maxrad), 1)
-        jhi = min(nint(center(2) + maxrad), self%ldim(2))
-        klo = max(nint(center(3) - maxrad), 1)
-        khi = min(nint(center(3) + maxrad), self%ldim(3))
+        center     = self%atominfo(cc)%center(:)
+        maxrad     = 0.5*(sum(a)/3) / self%smpd
+        ilo        = max(nint(center(1) - maxrad), 1)
+        ihi        = min(nint(center(1) + maxrad), self%ldim(1))
+        jlo        = max(nint(center(2) - maxrad), 1)
+        jhi        = min(nint(center(2) + maxrad), self%ldim(2))
+        klo        = max(nint(center(3) - maxrad), 1)
+        khi        = min(nint(center(3) + maxrad), self%ldim(3))
 
         ! Linear least squares to calculate the best fit params B.
         ! Note the sum of the square error of the logs in minimized instead
         ! of the sum of the square error to make the problem linear.
         ! Solution: B = ((X^T)WX)^-1((X^T)WY)
-        XTWX = 0.
+        XTWX     = 0.
         XTWX_inv = 0.
-        XTWY = 0.
-        do k=klo, khi
-            do j=jlo, jhi
-                do i=ilo, ihi
+        XTWY     = 0.
+        do k = klo, khi
+            do j = jlo, jhi
+                do i = ilo, ihi
                     r = euclid(1.*(/i, j, k/), 1.*center)
-                    if (r < fit_rad) then
+                    if( r < fit_rad )then
                         int = rmat(i,j,k)
-                        if (int > 0) then
+                        if( int > 0 )then
                             XTWX(1,1) = XTWX(1,1) + int
                             XTWX(1,2) = XTWX(1,2) + r**2 * int
                             XTWX(2,2) = XTWX(2,2) + r**4 * int
                             XTWY(1,1) = XTWY(1,1) + int * log(int)
                             XTWY(2,1) = XTWY(2,1) + r**2 * int * log(int)
-                        end if
-                    end if
-                end do
-            end do
-        end do
+                        endif
+                    endif
+                enddo
+            enddo
+        enddo
         XTWX(2,1) = XTWX(1,2)
         call matinv(XTWX, XTWX_inv, 2, errflg)
-        B = matmul(XTWX_inv, XTWY)
+        B   = matmul(XTWX_inv, XTWY)
         amp = exp(B(1,1)) ! Best fit peak
         var = -0.5 / B(2,1) ! Best fit variance
 
         ! Sample fit for goodness of fit and visualization
         max_int_out = 0.
-        fit_mask = .false.
-        do k=klo, khi 
-            do j=jlo, jhi
-                do i=ilo, ihi
+        fit_mask    = .false.
+        do k = klo, khi 
+            do j = jlo, jhi
+                do i = ilo, ihi
                     r = euclid(1.*(/i, j, k/), 1.*center) 
-                    if (r < output_rad) then
+                    if( r < output_rad )then
                         fit_mask(i,j,k) = .true.
                         int =  amp * exp(-0.5 * r**2 / var)
                         call fit%set_rmat_at(i, j, k, int)
-                        if (int > max_int_out) then
+                        if( int > max_int_out )then
                             max_int_out = int
-                        end if
-                    end if
-                end do
-            end do
-        end do
+                        endif
+                    endif
+                enddo
+            enddo
+        enddo
         self%atominfo(cc)%isocorr = fit%real_corr(self%img_raw, mask=fit_mask)
-        self%atominfo(cc)%u_iso = var * self%smpd**2
+        self%atominfo(cc)%u_iso   = var * self%smpd**2
     end subroutine calc_isotropic_disp
 
     ! Calculates the anisotropic displacement parameter matrix of a given cc by fitting
@@ -1595,13 +1595,13 @@ contains
         integer,             intent(in)     :: cc
         real,                intent(in)     :: a(3) ! Lattice params
         real, pointer,       intent(in)     :: rmat(:,:,:)
-        real(kind=8), allocatable           :: X(:,:), XTW(:,:), Y(:,:)
-        real(kind=8)    :: XTWX(7,7), XTWX_inv(7,7), XTWY(7,1), B(7,1), cov(3,3), cov_inv(3,3)
-        real(kind=8)    :: eigenvals(3), eigenvecs(3,3)
-        real(kind=8)    :: majvector(3), rvec(3,1), beta(1,1), r(3)
-        real    :: center(3), output_rad, fit_rad, maxrad, int, amp, max_int_out, corr
-        integer :: ilo, ihi, jlo, jhi, klo, khi, i, j, k, nvoxels, n, errflg, nrot
-        logical :: fit_mask(self%ldim(1), self%ldim(2), self%ldim(3))
+        real(kind=8), allocatable :: X(:,:), XTW(:,:), Y(:,:)
+        real(kind=8) :: XTWX(7,7), XTWX_inv(7,7), XTWY(7,1), B(7,1), cov(3,3), cov_inv(3,3)
+        real(kind=8) :: eigenvals(3), eigenvecs(3,3)
+        real(kind=8) :: majvector(3), rvec(3,1), beta(1,1), r(3)
+        real         :: center(3), output_rad, fit_rad, maxrad, int, amp, max_int_out, corr
+        integer      :: ilo, ihi, jlo, jhi, klo, khi, i, j, k, nvoxels, n, errflg, nrot
+        logical      :: fit_mask(self%ldim(1), self%ldim(2), self%ldim(3))
 
         output_rad = ( sum(a) / 3 ) / ( 2. * sqrt(2.) )  ! 1/2 FCC nearest neighbor dist
         fit_rad    = 0.75 * output_rad ! 0.75 prevents fitting tails of other atoms
@@ -1620,12 +1620,12 @@ contains
         do k = klo, khi
             do j = jlo, jhi
                 do i = ilo, ihi
-                    if ( euclid(1.*(/i, j, k/), 1.*center)*self%smpd < fit_rad ) then
+                    if( euclid(1.*(/i, j, k/), 1.*center)*self%smpd < fit_rad )then
                         nvoxels = nvoxels + 1
-                    end if
-                end do
-            end do
-        end do
+                    endif
+                enddo
+            enddo
+        enddo
         allocate(X(nvoxels, 7), XTW(7, nvoxels), Y(nvoxels,1), source = 0._dp)
         ! Linear least squares to calculate the best fit params B
         ! Conduct fit in units of Angstroms (easier on matrix operations)
@@ -1641,9 +1641,9 @@ contains
             do j = jlo, jhi
                 do i = ilo, ihi
                     r = (1.*(/i, j, k/) - center) * self%smpd
-                    if (norm_2(r) < fit_rad) then
+                    if( norm_2(r) < fit_rad )then
                         int = rmat(i,j,k)
-                        if (int > 0) then
+                        if( int > 0 )then
                             X(n,2:4)  = r(1:3)**2
                             X(n,5)    = r(1)*r(2)
                             X(n,6)    = r(1)*r(3)
@@ -1651,11 +1651,11 @@ contains
                             XTW(:7,n) = int*X(n,:7)
                             Y(n,1)    = log(int)
                             n = n + 1
-                        end if
-                    end if
-                end do
-            end do
-        end do
+                        endif
+                    endif
+                enddo
+            enddo
+        enddo
         XTWX = matmul(XTW, X)
         XTWY = matmul(XTW, Y)
         deallocate(X,XTW,Y)
@@ -1682,18 +1682,18 @@ contains
             do j = jlo, jhi   
                 do i = ilo, ihi
                     rvec(:3,1) = (1.*(/i, j, k/) - center) * self%smpd
-                    if (norm_2(rvec(:3,1)) < output_rad) then
+                    if( norm_2(rvec(:3,1)) < output_rad )then
                         fit_mask(i,j,k) = .true.
                         beta            = matmul(matmul(transpose(rvec),cov_inv),rvec)
                         int             = amp * exp(-0.5 * beta(1,1))
                         call fit%set_rmat_at(i, j, k, int)
-                        if (int > max_int_out) then
+                        if( int > max_int_out )then
                             max_int_out = int
-                        end if
-                    end if
-                end do
-            end do
-        end do
+                        endif
+                    endif
+                enddo
+            enddo
+        enddo
         corr = fit%real_corr(self%img_raw, mask=fit_mask)
         self%atominfo(cc)%anisocorr = corr 
         ! Calculate eigenvalues and orientation of major eigenvector
@@ -1701,7 +1701,7 @@ contains
         call eigsrt(eigenvals, eigenvecs, 3, 3)
         ! Any negative eigenvalue or large eigenvalue implies intensity 
         ! distribution can't be approximated as a multivariate Gaussian
-        if ( any(eigenvals <= 0._dp) .or. any(eigenvals > (1.25*fit_rad)**2) ) then
+        if( any(eigenvals <= 0._dp) .or. any(eigenvals > (1.25*fit_rad)**2) )then
             self%atominfo(cc)%tossADP     = .true.
             self%atominfo(cc)%u_evals     = 0.
             self%atominfo(cc)%anisocorr   = 0.
@@ -1711,31 +1711,31 @@ contains
             self%atominfo(cc)%doi_min     = 0.
             self%atominfo(cc)%aniso       = 0.
             return
-        end if
+        endif
         self%atominfo(cc)%u_evals(:3) = eigenvals(:3)
         self%atominfo(cc)%doi         = eigenvals(3) / eigenvals(1)
         self%atominfo(cc)%doi_min     = eigenvals(2) / eigenvals(1)
         ! Find azimuthal and polar angles of the major eigenvector
         majvector = eigenvecs(:,1)
         ! Sign of majvector is arbitrary. Use convention that y-coordinate must be >= 0
-        if (majvector(2) < 0.) then
+        if( majvector(2) < 0. )then
             majvector = -1. * majvector
-        end if
+        endif
         self%atominfo(cc)%azimuth = atan(majvector(2) / majvector(1))
-        if (majvector(1) > 0.) then
+        if( majvector(1) > 0. )then
             self%atominfo(cc)%azimuth = atan(majvector(2) / majvector(1))
-        else if (majvector(1) < 0.) then
+        elseif( majvector(1) < 0. )then
             self%atominfo(cc)%azimuth = atan(majvector(2) / majvector(1)) + PI
         else
             self%atominfo(cc)%azimuth = PI / 2
-        end if
-        if (majvector(3) > 0.) then
+        endif
+        if( majvector(3) > 0. )then
             self%atominfo(cc)%polar = atan(sqrt(majvector(1)**2 + majvector(2)**2) / majvector(3))
-        else if (majvector(3) < 0.) then
+        elseif( majvector(3) < 0. )then
             self%atominfo(cc)%polar = atan(sqrt(majvector(1)**2 + majvector(2)**2) / majvector(3)) + PI
         else
             self%atominfo(cc)%polar = PI / 2
-        end if
+        endif
     end subroutine calc_anisotropic_disp
 
     ! visualization and output
@@ -1819,11 +1819,11 @@ contains
                 call set_atm_info
             enddo
         endif
-        if( present(fname) ) then
+        if( present(fname) )then
             call centers_pdb%writepdb(fname)
         else
-           call centers_pdb%writepdb(trim(self%fbody)//'_ATMS')
-           write(logfhandle,'(A)') 'output, atomic coordinates:       '//trim(self%fbody)//'_ATMS'
+            call centers_pdb%writepdb(trim(self%fbody)//'_ATMS')
+            write(logfhandle,'(A)') 'output, atomic coordinates:       '//trim(self%fbody)//'_ATMS'
         endif
 
         contains
@@ -1870,7 +1870,7 @@ contains
         call centers_pdb%writepdb(fname)
     end subroutine write_centers_2
 
-    subroutine write_centers_aniso( self, fname)
+    subroutine write_centers_aniso( self, fname )
         class(nanoparticle), intent(inout) :: self
         character(len=*),    intent(in)    :: fname
         type(atoms) :: centers_pdb
@@ -1934,7 +1934,7 @@ contains
         call fopen(funit, file=ATOMS_STATS_FILE, iostat=ios, status='replace', iomsg=io_msg)
         call fileiochk("simple_nanoparticle :: write_csv_files; ERROR when opening file "//ATOMS_STATS_FILE//'; '//trim(io_msg),ios)
         ! write header
-        if (ATOMS_STATS_OMIT) then
+        if( ATOMS_STATS_OMIT )then
             write(funit,'(a)') ATOM_STATS_HEAD_OMIT
         else
             write(funit,'(a)') ATOM_STATS_HEAD
@@ -1981,21 +1981,21 @@ contains
         write(funit,601,advance='no') self%atominfo(cc)%isocorr,                CSV_DELIM ! ISO_CORR
         write(funit,601,advance='no') self%atominfo(cc)%anisocorr,              CSV_DELIM ! ANISO_CORR
         if( .not. omit_here )then
-        write(funit,601,advance='no') self%atominfo(cc)%center(1)*self%smpd,    CSV_DELIM ! X
-        write(funit,601,advance='no') self%atominfo(cc)%center(2)*self%smpd,    CSV_DELIM ! Y
-        write(funit,601,advance='no') self%atominfo(cc)%center(3)*self%smpd,    CSV_DELIM ! Z
-        ! strain
-        write(funit,601,advance='no') self%atominfo(cc)%exx_strain,             CSV_DELIM ! EXX_STRAIN
-        write(funit,601,advance='no') self%atominfo(cc)%eyy_strain,             CSV_DELIM ! EYY_STRAIN
-        write(funit,601,advance='no') self%atominfo(cc)%ezz_strain,             CSV_DELIM ! EZZ_STRAIN
-        write(funit,601,advance='no') self%atominfo(cc)%exy_strain,             CSV_DELIM ! EXY_STRAIN
-        write(funit,601,advance='no') self%atominfo(cc)%eyz_strain,             CSV_DELIM ! EYZ_STRAIN
-        write(funit,601,advance='no') self%atominfo(cc)%exz_strain,             CSV_DELIM ! EXZ_STRAIN
+            write(funit,601,advance='no') self%atominfo(cc)%center(1)*self%smpd,    CSV_DELIM ! X
+            write(funit,601,advance='no') self%atominfo(cc)%center(2)*self%smpd,    CSV_DELIM ! Y
+            write(funit,601,advance='no') self%atominfo(cc)%center(3)*self%smpd,    CSV_DELIM ! Z
+            ! strain
+            write(funit,601,advance='no') self%atominfo(cc)%exx_strain,             CSV_DELIM ! EXX_STRAIN
+            write(funit,601,advance='no') self%atominfo(cc)%eyy_strain,             CSV_DELIM ! EYY_STRAIN
+            write(funit,601,advance='no') self%atominfo(cc)%ezz_strain,             CSV_DELIM ! EZZ_STRAIN
+            write(funit,601,advance='no') self%atominfo(cc)%exy_strain,             CSV_DELIM ! EXY_STRAIN
+            write(funit,601,advance='no') self%atominfo(cc)%eyz_strain,             CSV_DELIM ! EYZ_STRAIN
+            write(funit,601,advance='no') self%atominfo(cc)%exz_strain,             CSV_DELIM ! EXZ_STRAIN
         endif
         if( .not. omit_here )then
-        write(funit,602)              self%atominfo(cc)%radial_strain                     ! RADIAL_STRAIN
+            write(funit,602)              self%atominfo(cc)%radial_strain                     ! RADIAL_STRAIN
         else
-        write(funit,602)              self%atominfo(cc)%radial_strain                     ! RADIAL_STRAIN
+            write(funit,602)              self%atominfo(cc)%radial_strain                     ! RADIAL_STRAIN
         endif
     end subroutine write_atominfo
 
@@ -2041,7 +2041,7 @@ contains
         write(funit,601,advance='no') self%valid_corr_stats%avg,     CSV_DELIM ! AVG_VALID_CORR       (25)
         write(funit,601,advance='no') self%valid_corr_stats%med,     CSV_DELIM ! MED_VALID_CORR       (26)
         write(funit,601,advance='no') self%valid_corr_stats%sdev,    CSV_DELIM ! SDEV_VALID_CORR      (27)
-        ! -- Isotropic displacement parameter
+        ! -- isotropic displacement parameter
         write(funit,601,advance='no') self%u_iso_stats%avg,          CSV_DELIM ! AVG_U_ISO            (28)
         write(funit,601,advance='no') self%u_iso_stats%med,          CSV_DELIM ! MED_U_ISO            (29)
         write(funit,601,advance='no') self%u_iso_stats%sdev,         CSV_DELIM ! SDEV_U_ISO           (30)
@@ -2057,11 +2057,11 @@ contains
         write(funit,601,advance='no') self%u_min_stats%avg,          CSV_DELIM ! AVG_U_MIN            (37)
         write(funit,601,advance='no') self%u_min_stats%med,          CSV_DELIM ! MED_U_MIN            (38)
         write(funit,601,advance='no') self%u_min_stats%sdev,         CSV_DELIM ! SDEV_U_MIN           (39)
-        ! -- Azimuthal angle of major eigenvector 
+        ! -- azimuthal angle of major eigenvector 
         write(funit,601,advance='no') self%azimuth_stats%avg,        CSV_DELIM ! AVG_AZIMUTH          (40)
         write(funit,601,advance='no') self%azimuth_stats%med,        CSV_DELIM ! MED_AZIMUTH          (41)
         write(funit,601,advance='no') self%azimuth_stats%sdev,       CSV_DELIM ! SDEV_AZIMUTH         (42)
-        ! -- Polar angle of major eigenvector
+        ! -- polar angle of major eigenvector
         write(funit,601,advance='no') self%polar_stats%avg,          CSV_DELIM ! AVG_POLAR            (43)
         write(funit,601,advance='no') self%polar_stats%med,          CSV_DELIM ! MED_POLAR            (44)
         write(funit,601,advance='no') self%polar_stats%sdev,         CSV_DELIM ! SDEV_POLAR           (45)
@@ -2094,7 +2094,7 @@ contains
         integer,             intent(in) :: cn, funit
         601 format(F8.4,A2)
         602 format(F8.4)
-        if( count(self%atominfo(:)%cn_std == cn) < 2 ) return
+        if( count(self%atominfo(:)%cn_std == cn) < 2 )return
         ! -- coordination number
         write(funit,601,advance='no') real(cn),                              CSV_DELIM ! CN_STD               (1)
         ! -- # atoms per cn
