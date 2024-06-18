@@ -163,12 +163,13 @@ contains
     end subroutine grad_shsrch_set_indices
 
     !> minimisation routine
-    function grad_shsrch_minimize( self, irot, xy, prev_sh ) result( cxy )
+    function grad_shsrch_minimize( self, irot, xy, prev_sh, prob ) result( cxy )
         class(pftcc_shsrch_grad), intent(inout) :: self
         integer,                  intent(inout) :: irot
         real, optional,           intent(in)    :: xy(2)
         real, optional,           intent(in)    :: prev_sh(2)
-        real     :: corrs(self%nrots), rotmat(2,2), cxy(3), lowest_shift(2), lowest_cost
+        real, optional,           intent(in)    :: prob
+        real     :: corrs(self%nrots), rotmat(2,2), cxy(3), lowest_shift(2), lowest_cost, prob_rnd
         real(dp) :: init_xy(2), lowest_cost_overall, coarse_cost, initial_cost
         integer  :: loc, i, lowest_rot, init_rot
         logical  :: found_better
@@ -194,7 +195,9 @@ contains
                 endif
             end if
             ! using lowest_cost_overall to probabilistically random start the shift search and stick with the resulted shifts
-            if( (trim(params_glob%sh_rnd).eq.'yes') .and. (ran3() < -lowest_cost_overall) )then
+            prob_rnd = -lowest_cost_overall
+            if( present(prob) ) prob_rnd = prob
+            if( (trim(params_glob%sh_rnd).eq.'yes') .and. (ran3() > prob_rnd) )then
                 init_xy(1)     = 2.*(ran3()-0.5) * params_glob%sh_sig
                 init_xy(2)     = 2.*(ran3()-0.5) * params_glob%sh_sig
                 if( present(prev_sh) ) init_xy = init_xy - prev_sh
@@ -261,7 +264,9 @@ contains
                 endif
             end if
             ! using lowest_cost_overall to probabilistically random start the shift search and stick with the resulted shifts
-            if( (trim(params_glob%sh_rnd).eq.'yes') .and. (ran3() < -lowest_cost_overall) )then
+            prob_rnd = -lowest_cost_overall
+            if( present(prob) ) prob_rnd = prob
+            if( (trim(params_glob%sh_rnd).eq.'yes') .and. (ran3() > prob_rnd) )then
                 init_xy(1)     = 2.*(ran3()-0.5) * params_glob%sh_sig
                 init_xy(2)     = 2.*(ran3()-0.5) * params_glob%sh_sig
                 if( present(prev_sh) ) init_xy = init_xy - prev_sh
