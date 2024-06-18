@@ -59,7 +59,7 @@ contains
                     &[self%spec%eulprob_obj_part%assgn_map(iptcl_map)%x,&
                     & self%spec%eulprob_obj_part%assgn_map(iptcl_map)%y], corr)
                 else
-                    call self%s%inpl_srch(ref=iref)
+                    call self%s%inpl_srch(ref=iref, xy=[0.,0.], irot_in=irot)
                     ! checking if shift search is good
                     if( s3D%proj_space_inplinds(iref, ithr) < 1 )then
                         call assign_ori(self%s, iref, irot, corr, [0.,0.], corr)
