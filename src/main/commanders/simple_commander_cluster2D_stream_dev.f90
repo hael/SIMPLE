@@ -915,11 +915,12 @@ contains
     end subroutine reject_from_pool_user_dev
 
     subroutine write_pool_cls_selected_user_dev
-        type(image)          :: img, jpegimg
-        type(stack_io)       :: stkio_r, stkio_w
-        type(oris)           :: cls2reject
-        logical, allocatable :: cls_mask(:)
-        integer              :: i, nl, icls, isel
+        type(image)              :: img, jpegimg
+        type(stack_io)           :: stkio_r, stkio_w
+        type(oris)               :: cls2reject
+        type(starproject_stream) :: starproj_stream
+        logical, allocatable     :: cls_mask(:)
+        integer                  :: i, nl, icls, isel
         if( .not. stream2D_active ) return
         if( pool_proj%os_cls2D%get_noris() == 0 ) return
         if( .not.file_exists(STREAM_REJECT_CLS) ) return
@@ -944,24 +945,31 @@ contains
         write(logfhandle,'(A,I6,A)')'>>> USER SELECTED FROM POOL: ',count(cls_mask),' clusters'
         if( count(cls_mask) == 0 ) return
         write(logfhandle,'(A,A)')'>>> WRITING SELECTED CLUSTERS TO: ', trim(POOL_DIR) // STREAM_SELECTED_REFS//trim(STK_EXT)
-        call img%new([params_glob%box,params_glob%box,1], smpd)
-        call jpegimg%new([params_glob%box, params_glob%box * count(cls_mask), 1], smpd) 
+        call img%new([params_glob%box,params_glob%box,1], params_glob%smpd)
+        call jpegimg%new([params_glob%box, params_glob%box * count(cls_mask), 1], params_glob%smpd) 
         call stkio_r%open(trim(POOL_DIR) // trim(refs_glob), smpd, 'read', bufsz=ncls_glob)
         call stkio_r%read_whole
-        call stkio_w%open(trim(POOL_DIR) // STREAM_SELECTED_REFS//trim(STK_EXT), smpd, 'write', box=params_glob%box, bufsz=count(cls_mask))
+        call stkio_w%open(trim(POOL_DIR) // STREAM_SELECTED_REFS//trim(STK_EXT), params_glob%smpd, 'write', box=params_glob%box, bufsz=count(cls_mask))
         isel = 1
         do icls = 1,ncls_glob
-            if( .not. cls_mask(icls) ) cycle
-            call stkio_r%get_image(icls, img)
-            call stkio_w%write(isel, img)
-            call jpegimg%tile(img, 1, isel) 
-            isel = isel + 1
+            if( .not. cls_mask(icls) ) then
+                call pool_proj%os_cls2D%set_state(icls, 0)
+            else
+                call pool_proj%os_cls2D%set_state(icls, 1)
+                call pool_proj%os_cls2D%set(icls,'stk', trim(cwd_glob) // '/' // STREAM_SELECTED_REFS // trim(STK_EXT))
+                call pool_proj%os_cls2D%set(icls,'stkind', real(isel))
+                call stkio_r%get_image(icls, img)
+                call stkio_w%write(isel, img)
+                call jpegimg%tile(img, 1, isel) 
+                isel = isel + 1
+            endif
         enddo
         call jpegimg%write_jpg(trim(POOL_DIR) // STREAM_SELECTED_REFS // trim(JPG_EXT))
         call stkio_r%close
         call stkio_w%close
         call img%kill
         call jpegimg%kill
+        call starproj_stream%stream_export_picking_references(pool_proj, params_glob%outdir)
         if(allocated(cls_mask)) deallocate(cls_mask)
     end subroutine write_pool_cls_selected_user_dev
 

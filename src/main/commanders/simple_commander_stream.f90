@@ -1071,7 +1071,7 @@ contains
                 if( present(optics_set) ) l_optics_set = optics_set
                 if (spproj_glob%os_ptcl2D%get_noris() > 0) then
                     if( DEBUG_HERE ) ptcl0 = tic()
-                    call starproj_stream%stream_export_particles_2D(spproj_glob, params%outdir, optics_set=l_optics_set)
+                    call starproj_stream%stream_export_particles_2D(spproj_glob, params%outdir, optics_set=l_optics_set, verbose=.true.)
                     if( DEBUG_HERE )then
                         ptcl_export = toc(ptcl0)
                         print *,'ptcl_export  : ', ptcl_export; call flush(6)
@@ -1773,7 +1773,7 @@ contains
                 if( present(optics_set) ) l_optics_set = optics_set
                 if (spproj_glob%os_ptcl2D%get_noris() > 0) then
                     if( DEBUG_HERE ) ptcl0 = tic()
-                    call starproj_stream%stream_export_particles_2D(spproj_glob, params%outdir, optics_set=l_optics_set)
+                    call starproj_stream%stream_export_particles_2D(spproj_glob, params%outdir, optics_set=l_optics_set, verbose=.true.)
                     if( DEBUG_HERE )then
                         ptcl_export = toc(ptcl0)
                         print *,'ptcl_export  : ', ptcl_export; call flush(6)
