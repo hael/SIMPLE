@@ -450,6 +450,8 @@ enum EMDLabel
     SMPL_OPTICS_SHIFTY,
     SMPL_PICK_DIAMETER,
     SMPL_PICK_POPULATION,
+    SMPL_N_CLS,
+    SMPL_CLS_SCORE,
 
     EMDL_LAST_LABEL                       // **** NOTE ****: Do keep this label always at the end
     // it is here for looping purposes
@@ -920,7 +922,8 @@ private:
         EMDL::addLabel(SMPL_OPTICS_SHIFTY,      EMDL_DOUBLE, "splBeamshiftY",       "Beamshift y");
         EMDL::addLabel(SMPL_PICK_DIAMETER,      EMDL_DOUBLE, "splPickDiam",         "Pick diameter");
         EMDL::addLabel(SMPL_PICK_POPULATION,    EMDL_INT,    "splPickPop",          "Pick diameter population");
-
+        EMDL::addLabel(SMPL_N_CLS,              EMDL_INT,    "splNClasses",         "Number classes");
+        EMDL::addLabel(SMPL_CLS_SCORE,          EMDL_DOUBLE, "splClassScore",       "Class score");
     }
 
     ~StaticInitialization()

@@ -32,6 +32,7 @@ contains
     procedure          :: stream_export_optics
     procedure          :: stream_export_particles_2D
     procedure          :: stream_export_pick_diameters
+    procedure          :: stream_export_picking_references
     !starfile
     procedure, private :: starfile_init
     procedure, private :: starfile_deinit
@@ -42,6 +43,7 @@ contains
     procedure, private :: starfile_set_particles2D_table
     procedure, private :: starfile_set_particles2D_subtable
     procedure, private :: starfile_set_pick_diameters_table
+    procedure, private :: starfile_set_clusters2D_table
     !optics
     procedure, private :: assign_optics_single
     procedure, private :: assign_optics
@@ -148,7 +150,7 @@ contains
         end do
     end subroutine starfile_set_optics_group_table
 
-    subroutine starfile_set_pick_diameters_table( self, histogram_moldiams)
+    subroutine starfile_set_pick_diameters_table( self, histogram_moldiams )
         class(starproject_stream),  intent(inout) :: self
         type(histogram),            intent(in)    :: histogram_moldiams
         integer                                   :: i
@@ -311,8 +313,47 @@ contains
                 newpath = trim(path(pathtrim:))
             end function get_relative_path
         
-
     end subroutine starfile_set_particles2D_subtable
+
+    subroutine starfile_set_clusters2D_table( self, spproj )
+        class(starproject_stream), intent(inout) :: self
+        class(sp_project),         intent(inout) :: spproj
+        character(len=:),          allocatable   :: stkname
+        integer                                  :: i, stkind, pathtrim
+        pathtrim = 0
+        call starfile_table__clear(self%starfile)
+        call starfile_table__new(self%starfile)
+        call starfile_table__setIsList(self%starfile, .false.)
+        call starfile_table__setname(self%starfile, 'clusters')
+        do i=1,spproj%os_cls2D%get_noris()
+            if(spproj%os_cls2D%get(i, 'state') .eq. 0.0 ) cycle
+            call starfile_table__addObject(self%starfile)
+            ! ints
+            if(spproj%os_cls2D%isthere(i, 'ncls')) call starfile_table__setValue_int(self%starfile, SMPL_N_CLS, int(spproj%os_cls2D%get(i, 'ncls')))
+            ! doubles
+            if(spproj%os_cls2D%isthere(i, 'res'  )) call starfile_table__setValue_double(self%starfile, EMDL_MLMODEL_ESTIM_RESOL_REF, real(spproj%os_cls2D%get(i, 'res'),   dp))
+            if(spproj%os_cls2D%isthere(i, 'pop'  )) call starfile_table__setValue_double(self%starfile, EMDL_MLMODEL_PDF_CLASS,       real(spproj%os_cls2D%get(i, 'pop') ,  dp))
+            if(spproj%os_cls2D%isthere(i, 'score')) call starfile_table__setValue_double(self%starfile, SMPL_CLS_SCORE,               real(spproj%os_cls2D%get(i, 'score'), dp))
+            ! strings
+            if(spproj%os_cls2D%isthere(i, 'stkind') .and. spproj%os_cls2D%isthere(i, 'stk')) then
+                stkind  = floor(spproj%os_cls2D%get(i, 'stkind'))
+                stkname = trim(spproj%os_cls2D%get_static(i, 'stk'))
+                call starfile_table__setValue_string(self%starfile, EMDL_MLMODEL_REF_IMAGE,  int2str(stkind) // '@' // trim(get_relative_path(trim(stkname))))
+            end if
+        end do
+        if(allocated(stkname)) deallocate(stkname)
+
+        contains
+
+            function get_relative_path ( path ) result ( newpath )
+                character(len=*),           intent(in) :: path
+                character(len=STDLEN)                  :: newpath
+                if(pathtrim .eq. 0) pathtrim = index(path, trim(self%rootpath)) 
+                newpath = trim(path(pathtrim:))
+            end function get_relative_path
+
+    end subroutine starfile_set_clusters2D_table
+
     ! export
 
     subroutine stream_export_micrographs( self, spproj, outdir, optics_set, filename)
@@ -463,6 +504,22 @@ contains
         call self%starfile_write_table(append = .true.)
         call self%starfile_deinit()
     end subroutine stream_export_pick_diameters
+
+    subroutine stream_export_picking_references( self, spproj, outdir, filename)
+        class(starproject_stream),            intent(inout) :: self
+        class(sp_project),                    intent(inout) :: spproj
+        character(len=LONGSTRLEN),            intent(in)    :: outdir
+        character(len=*),          optional,  intent(in)    :: filename
+        if(present(filename)) then
+            call self%starfile_init(filename, outdir)
+        else
+            call self%starfile_init('pickrefs.star', outdir)
+        endif
+        call self%starfile_set_clusters2D_table(spproj)
+        call self%starfile_write_table(append = .true.)
+        call self%starfile_deinit()
+    end subroutine stream_export_picking_references
+
 
     ! optics
 

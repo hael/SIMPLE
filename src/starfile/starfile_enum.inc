@@ -395,6 +395,8 @@
         enumerator :: SMPL_OPTICS_SHIFTY                               = 372
         enumerator :: SMPL_PICK_DIAMETER                               = 373
         enumerator :: SMPL_PICK_POPULATION                             = 374
+        enumerator :: SMPL_N_CLS                                       = 375
+        enumerator :: SMPL_CLS_SCORE                                   = 376
 
-        enumerator :: EMDL_LAST_LABEL                                  = 375 ! **** NOTE ****: Do keep this label always at the end
+        enumerator :: EMDL_LAST_LABEL                                  = 377 ! **** NOTE ****: Do keep this label always at the end
     end enum
