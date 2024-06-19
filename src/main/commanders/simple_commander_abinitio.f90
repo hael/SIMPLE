@@ -1297,6 +1297,12 @@ contains
             THROW_WARN('SHIFT_STAGE out of range, defaulting to: '//int2str(params%shift_stage))
         endif
         trslim = max(MINSHIFT, AHELIX_WIDTH / params%smpd)
+        if( cline%defined('trs') )then
+            trslim = params%trs
+            call cline%delete('trs')
+        else
+            trslim = max(MINSHIFT, AHELIX_WIDTH / params%smpd)
+        endif
         ! read project
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
@@ -1610,8 +1616,8 @@ contains
                 call conv%read(l_err)
                 enditer = nint(conv%get('iter'))
                 ! probability table
-                if( (it < NSTAGES) .and. (nspaces(it+1) /= nspaces(it)) )then
-                    call del_file(trim(DIST_FBODY)//'.dat')
+                if( (it < NSTAGES) )then
+                    if( nspaces(it+1) /= nspaces(it) )call del_file(trim(DIST_FBODY)//'.dat')
                 endif
                 call del_files(DIST_FBODY,      params_glob%nparts,ext='.dat')
                 call del_files(ASSIGNMENT_FBODY,params_glob%nparts,ext='.dat')
