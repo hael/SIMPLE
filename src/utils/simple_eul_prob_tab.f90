@@ -36,6 +36,7 @@ type :: eul_prob_tab
     ! GLOBAL PROCEDURES (used only by the global eul_prob_tab object)
     procedure :: read_tab_to_glob
     procedure :: prob_assign
+    procedure :: shift_assign
     procedure :: write_assignment
     ! DESTRUCTOR
     procedure :: kill
@@ -170,7 +171,8 @@ contains
             lims_init(:,1) = -SHC_INPL_TRSHWDTH
             lims_init(:,2) =  SHC_INPL_TRSHWDTH
             do ithr = 1,nthr_glob
-                call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier, maxits=params_glob%maxits_sh, opt_angle=.true.)
+                call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier,&
+                    &maxits=params_glob%maxits_sh, opt_angle=(trim(params_glob%sh_opt_angle).eq.'yes'))
             end do
             ! fill the table
             do istate = 1, self%nstates
@@ -400,6 +402,42 @@ contains
             self%assgn_map = self%state_tab(1,:)
         endif
     end subroutine prob_assign
+
+    subroutine shift_assign( self )
+        use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad
+        class(eul_prob_tab), intent(inout) :: self
+        type(pftcc_shsrch_grad)            :: grad_shsrch_obj(nthr_glob) !< origin shift search object, L-BFGS with gradient
+        integer :: i, iptcl, iref, irot, ithr
+        real    :: lims(2,2), lims_init(2,2), cxy(3)
+        ! make shift search objects
+        lims(:,1)      = -params_glob%trs
+        lims(:,2)      =  params_glob%trs
+        lims_init(:,1) = -SHC_INPL_TRSHWDTH
+        lims_init(:,2) =  SHC_INPL_TRSHWDTH
+        do ithr = 1,nthr_glob
+            call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier,&
+                &maxits=params_glob%maxits_sh, opt_angle=(trim(params_glob%sh_opt_angle).eq.'yes'))
+        end do
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,iptcl,ithr,iref,irot,cxy)
+        do i = 1, self%nptcls
+            if( .not.(self%assgn_map(i)%has_sh) )then
+                iptcl = self%assgn_map(i)%pind
+                iref  = (self%assgn_map(i)%istate-1)*params_glob%nspace
+                ithr  = omp_get_thread_num() + 1
+                ! BFGS over shifts
+                call grad_shsrch_obj(ithr)%set_indices(iref + self%assgn_map(i)%iproj, iptcl)
+                irot = self%assgn_map(i)%inpl
+                cxy  = grad_shsrch_obj(ithr)%minimize(irot=irot)
+                if( irot > 0 )then
+                    self%assgn_map(i)%inpl = irot
+                    self%assgn_map(i)%x    = cxy(2)
+                    self%assgn_map(i)%y    = cxy(3)
+                endif
+                self%assgn_map(i)%has_sh = .true.
+            endif
+        enddo
+        !$omp end parallel do
+    end subroutine shift_assign
 
     ! projection normalization (same energy) of the 3D loc_tab (for each state)
     ! [0,1] normalization for each state
