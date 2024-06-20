@@ -99,7 +99,6 @@ contains
         ! multi-gaussian pick
         do ipick = 1,npickers
             call pickers(ipick)%new_gaupicker(pcontrast, smpd_shrink, moldiams(ipick), moldiams(ipick), offset, ndev)
-            ! call pickers(ipick)%new_gaupicker(pcontrast, smpd_shrink, moldiams(ipick), moldiam_max, offset, ndev)
             dist_threshold = (pickers(ipick)%maxdiam/3.) / smpd_shrink
             call pickers(ipick)%gaupick(dist_thres=dist_threshold)
             smds_corr(ipick) = pickers(ipick)%smd_corr
