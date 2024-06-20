@@ -54,7 +54,7 @@ contains
             irot      =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%inpl
             iref      = (istate-1)*params_glob%nspace + iproj
             if( self%s%doshift )then
-                if( params_glob%l_prob_sh .and. self%spec%eulprob_obj_part%assgn_map(iptcl_map)%has_sh )then
+                if( self%spec%eulprob_obj_part%assgn_map(iptcl_map)%has_sh )then
                     call assign_ori(self%s, iref, irot, corr,&
                     &[self%spec%eulprob_obj_part%assgn_map(iptcl_map)%x,&
                     & self%spec%eulprob_obj_part%assgn_map(iptcl_map)%y], corr)

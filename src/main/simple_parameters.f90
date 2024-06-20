@@ -93,6 +93,7 @@ type :: parameters
     character(len=3)          :: sh_opt_angle='yes'   !< shift opt angle(yes|no){yes}
     character(len=3)          :: sh_rnd='no'          !< shift probabilistic random start(yes|no){no}
     character(len=3)          :: sh_ori_rnd='no'      !< random start around the origin(yes|no){no}
+    character(len=3)          :: sh_glob='no'         !< global shift control(yes|no){no}
     character(len=3)          :: stoch_update='no'    !< update of random sampling in each iteration
     character(len=3)          :: newstream='no'       !< new streaming version
     character(len=3)          :: stream='no'          !< stream (real time) execution mode(yes|no){no}
@@ -629,6 +630,7 @@ contains
         call check_carg('sh_opt_angle',   self%sh_opt_angle)
         call check_carg('sh_rnd',         self%sh_rnd)
         call check_carg('sh_ori_rnd',     self%sh_ori_rnd)
+        call check_carg('sh_glob',        self%sh_glob)
         call check_carg('sigma_est',      self%sigma_est)
         call check_carg('speckind',       self%speckind)
         call check_carg('split_mode',     self%split_mode)

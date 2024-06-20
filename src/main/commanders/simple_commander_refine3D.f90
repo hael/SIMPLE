@@ -1026,6 +1026,7 @@ contains
             call eulprob_obj_glob%trim_tab(build%spproj_field)
         endif
         call eulprob_obj_glob%prob_assign
+        if( trim(params%sh_glob) .eq. 'yes' ) call eulprob_obj_glob%shift_assign
         ! write the iptcl->(iref,istate) assignment
         fname = trim(ASSIGNMENT_FBODY)//'.dat'
         call eulprob_obj_glob%write_assignment(fname)
