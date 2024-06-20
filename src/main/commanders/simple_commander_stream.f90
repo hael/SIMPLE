@@ -652,13 +652,13 @@ contains
         type(starproject_stream)               :: starproj_stream
         type(histogram)                        :: histogram_moldiams
         character(len=LONGSTRLEN), allocatable :: projects(:)
-        character(len=:),          allocatable :: output_dir, output_dir_extract, output_dir_picker
+        character(len=:),          allocatable :: odir, odir_extract, odir_picker, odir_completed
+        character(len=:),          allocatable :: odir_picker_init, odir_picker_init_completed
         character(len=LONGSTRLEN)              :: cwd_job, latest_boxfile
         character(len=STDLEN)                  :: pick_nthr_env, pick_part_env
         real,                      allocatable :: moldiams(:)
         real                                   :: pick_nthr
-        integer                                :: pick_extract_set_counter    ! Internal counter of projects to be processed
-        integer                                :: nmics_sel, nmics_rej, nmics_rejected_glob
+        integer                                :: nmics_sel, nmics_rej, nmics_rejected_glob, pick_extract_set_counter
         integer                                :: nmics, nprojects, stacksz, prev_stacksz, iter, last_injection, iproj, envlen
         integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, nmic_star
         logical                                :: l_templates_provided, l_projects_left, l_haschanged, l_multipick, l_extract, l_once
@@ -754,44 +754,57 @@ contains
             call gui_stats%set('current_search', 'status', 'running')
         endif
         call gui_stats%set('compute',     'compute_in_use',       int2str(0) // '/' // int2str(params%nparts), primary=.true.)
-        ! restart
-        pick_extract_set_counter = 0
-        nptcls_glob              = 0     ! global number of particles
-        nmics_rejected_glob      = 0     ! global number of micrographs rejected
+        ! directories structure & restart
+        odir                       = trim(DIR_STREAM)
+        odir_completed             = trim(DIR_STREAM_COMPLETED)
+        odir_picker                = trim(PATH_HERE)//trim(DIR_PICKER)
+        odir_picker_init           = trim(odir_picker)//'init/'
+        odir_picker_init_completed = trim(odir_completed)//'init/'
+        odir_extract               = trim(PATH_HERE)//trim(DIR_EXTRACT)
+        pick_extract_set_counter = 0    ! global counter of projects to be processed
+        nptcls_glob              = 0    ! global number of particles
+        nmics_rejected_glob      = 0    ! global number of micrographs rejected
         nmic_star                = 0
         if( cline%defined('dir_exec') )then
             call del_file(TERM_STREAM)
             call cline%delete('dir_exec')
-            call import_previous_mics( micproj_records )
-            if( allocated(micproj_records) )then
-                nptcls_glob = sum(micproj_records(:)%nptcls)
-                nmic_star   = spproj_glob%os_mic%get_noris()
-                call gui_stats%set('micrographs', 'micrographs_imported', int2commastr(nmic_star),              primary=.true.)
-                call gui_stats%set('micrographs', 'micrographs_picked',   int2commastr(nmic_star) // ' (100%)', primary=.true.)
-                if(spproj_glob%os_mic%isthere("nptcls") .and. .not. l_multipick) then
-                    call gui_stats%set('micrographs', 'avg_number_picks', ceiling(spproj_glob%os_mic%get_avg("nptcls")), primary=.true.)
-                end if
-                if(.not. l_multipick) call gui_stats%set('particles', 'total_extracted_particles', nptcls_glob, primary=.true.)
-                if(spproj_glob%os_mic%isthere('intg') .and. spproj_glob%os_mic%isthere('boxfile')) then
-                    latest_boxfile = trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'boxfile'))
-                    if(file_exists(trim(latest_boxfile))) call gui_stats%set('latest', '', trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'intg')), thumbnail=.true., boxfile=trim(latest_boxfile))
-                end if
+            call simple_rmdir(odir)
+            if( l_multipick )then
+                ! removes directory structure
+                call simple_rmdir(odir_completed)
+                call simple_rmdir(odir_picker)
+                call simple_rmdir(odir_picker_init)
+                call simple_rmdir(odir_picker_init_completed)
+                call simple_rmdir(odir_extract)
+            else
+                ! import previous run and updates stats for gui
+                call import_previous_mics( micproj_records )
+                if( allocated(micproj_records) )then
+                    nptcls_glob = sum(micproj_records(:)%nptcls)
+                    nmic_star   = spproj_glob%os_mic%get_noris()
+                    call gui_stats%set('micrographs', 'micrographs_imported', int2commastr(nmic_star),              primary=.true.)
+                    call gui_stats%set('micrographs', 'micrographs_picked',   int2commastr(nmic_star) // ' (100%)', primary=.true.)
+                    if( spproj_glob%os_mic%isthere("nptcls") ) then
+                        call gui_stats%set('micrographs', 'avg_number_picks', ceiling(spproj_glob%os_mic%get_avg("nptcls")), primary=.true.)
+                    end if
+                    call gui_stats%set('particles', 'total_extracted_particles', nptcls_glob, primary=.true.)
+                    if(spproj_glob%os_mic%isthere('intg') .and. spproj_glob%os_mic%isthere('boxfile')) then
+                        latest_boxfile = trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'boxfile'))
+                        if(file_exists(trim(latest_boxfile))) call gui_stats%set('latest', '', trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'intg')), thumbnail=.true., boxfile=trim(latest_boxfile))
+                    end if
+                endif
             endif
         endif
-        ! output directories
-        output_dir = trim(PATH_HERE)//trim(DIR_STREAM)
-        call simple_mkdir(output_dir)
-        call simple_mkdir(trim(output_dir)//trim(STDERROUT_DIR))
-        call simple_mkdir(trim(PATH_HERE)//trim(DIR_STREAM_COMPLETED))
-        output_dir_picker  = filepath(trim(PATH_HERE), trim(DIR_PICKER))
-        call simple_mkdir(output_dir_picker, errmsg="commander_stream :: exec_stream_pick_extract;  ")
+        ! make directories structure
+        call simple_mkdir(odir)
+        call simple_mkdir(trim(odir)//trim(STDERROUT_DIR))
+        call simple_mkdir(odir_completed)
+        call simple_mkdir(odir_picker)
         if( l_multipick_init ) then
-            output_dir_picker = output_dir_picker // "/init"
-            call simple_mkdir(output_dir_picker, errmsg="commander_stream :: exec_stream_pick_extract;  ")
-            call simple_mkdir(trim(PATH_HERE)//trim(DIR_STREAM_COMPLETED)//"/init")
+            call simple_mkdir(odir_picker_init)
+            call simple_mkdir(odir_picker_init_completed)
         endif
-        if( l_extract ) output_dir_extract = filepath(trim(PATH_HERE), trim(DIR_EXTRACT))
-        if( l_extract ) call simple_mkdir(output_dir_extract,errmsg="commander_stream :: exec_stream_pick_extract;  ")
+        if( l_extract ) call simple_mkdir(odir_extract)
         ! initialise progress monitor
         call progressfile_init()
         ! setup the environment for distributed execution
@@ -805,16 +818,15 @@ contains
         cline_pick_extract = cline
         call cline_pick_extract%set('prg','pick_extract')
         if( l_multipick_init ) then
-            call cline_pick_extract%set('dir','../picker/init')
+            call cline_pick_extract%set('dir', filepath(PATH_PARENT,odir_picker_init))
         else
-            call cline_pick_extract%set('dir','../')
+            call cline_pick_extract%set('dir', PATH_PARENT)
         endif
         if( l_extract )then
             call cline_pick_extract%set('extract','yes')
         else
             call cline_pick_extract%set('extract','no')
         endif
-        
         ! ugly single use flag for backwards compatibility, will need to go
         call cline_pick_extract%set('newstream','yes')
         ! Infinite loop
@@ -838,8 +850,10 @@ contains
             ! switch to diameter refinement
             if( l_multipick_refine .and. params_glob%updated .eq. 'yes' .and. params_glob%moldiam_refine .gt. 0.0) then
                 write(logfhandle,'(A,I3)') '>>> REFINING MOLECULAR DIAMETER        : ', int(params_glob%moldiam_refine)
-                output_dir_picker   = filepath(trim(PATH_HERE), trim(DIR_PICKER))
-                call simple_mkdir(output_dir_picker, errmsg="commander_stream :: exec_stream_pick_extract;  ")
+                !! necessary??
+                odir_picker = filepath(trim(PATH_HERE), trim(DIR_PICKER))
+                call simple_mkdir(odir_picker, errmsg="commander_stream :: exec_stream_pick_extract;  ")
+                !!
                 params_glob%updated = 'no'
                 params%moldiam      = params_glob%moldiam_refine - 50.0
                 params%moldiam_max  = params_glob%moldiam_refine + 50.0
@@ -895,7 +909,7 @@ contains
                     call project_buff%add2history(projects(iproj))
                     if( nmics_sel > 0 )then
                         call qenv%qscripts%add_to_streaming(cline_pick_extract)
-                        call qenv%qscripts%schedule_streaming( qenv%qdescr, path=output_dir )
+                        call qenv%qscripts%schedule_streaming( qenv%qdescr, path=odir )
                         cnt   = cnt   + 1
                         nmics = nmics + nmics_sel
                     endif
@@ -914,7 +928,7 @@ contains
                 l_projects_left = .false.
             endif
             ! submit jobs
-            call qenv%qscripts%schedule_streaming( qenv%qdescr, path=output_dir )
+            call qenv%qscripts%schedule_streaming( qenv%qdescr, path=odir )
             stacksz = qenv%qscripts%get_stacksz()
             ! guistats
             call gui_stats%set('compute', 'compute_in_use', int2str(qenv%get_navail_computing_units()) // '/' // int2str(params%nparts))
@@ -1168,7 +1182,7 @@ contains
                 ! all mics can be assumed associated with particles
                 nmics = 0
                 do iproj = 1,n_spprojs
-                    fname = trim(output_dir)//trim(completed_jobs_clines(iproj)%get_carg('projfile'))
+                    fname = filepath(odir, completed_jobs_clines(iproj)%get_carg('projfile'))
                     call tmpproj%read_segment('projinfo', fname)
                     if(l_multipick_refine .and. tmpproj%projinfo%isthere("init") .and. tmpproj%projinfo%get(1, "init") .eq. 1.0) then
                         if(file_exists(trim(fname))) call del_file(trim(fname))
@@ -1202,11 +1216,11 @@ contains
                     do iproj = 1,n_spprojs
                         if( spprojs(iproj)%os_mic%get_noris() == 0 ) cycle
                         ! move project to appropriate directory
-                        fname = trim(output_dir)//trim(completed_jobs_clines(iproj)%get_carg('projfile'))
+                        fname = filepath(odir, completed_jobs_clines(iproj)%get_carg('projfile'))
                         if(tmpproj%projinfo%isthere("init") .and. tmpproj%projinfo%get(1, "init") .eq. 1.0) then
-                            new_fname = trim(DIR_STREAM_COMPLETED)// '/init/' //trim(completed_jobs_clines(iproj)%get_carg('projfile'))
+                            new_fname = filepath(odir_picker_init_completed, completed_jobs_clines(iproj)%get_carg('projfile'))
                         else
-                            new_fname = trim(DIR_STREAM_COMPLETED)//trim(completed_jobs_clines(iproj)%get_carg('projfile'))
+                            new_fname = filepath(odir_completed, completed_jobs_clines(iproj)%get_carg('projfile'))
                         endif    
                         call simple_rename(fname, new_fname)
                         abs_fname = simple_abspath(new_fname, errmsg='stream pick_extract :: update_projects_list 1')
@@ -1239,6 +1253,7 @@ contains
                     call spprojs(iproj)%kill
                 enddo
                 deallocate(spprojs)
+                call tmpproj%kill
             end subroutine update_projects_list
 
             ! prepares project for processing and performs micrograph selection
@@ -1286,7 +1301,7 @@ contains
                     endif
                 endif
                 ! as per update_projinfo
-                path       = trim(cwd_glob)//'/'//trim(output_dir)
+                path       = trim(cwd_glob)//'/'//trim(odir)
                 proj_fname = basename(project_fname)
                 projname   = trim(get_fbody(trim(proj_fname), trim(METADATA_EXT), separator=.false.))
                 projfile   = trim(projname)//trim(METADATA_EXT)
@@ -1333,7 +1348,7 @@ contains
                 integer :: n_spprojs, iproj, nmics, imic, jmic, iostat,id, nsel_mics, irec
                 pick_extract_set_counter = 0
                 ! previously completed projects
-                call simple_list_files_regexp(DIR_STREAM_COMPLETED, '\.simple$', completed_fnames)
+                call simple_list_files_regexp(odir_completed, '\.simple$', completed_fnames)
                 if( .not.allocated(completed_fnames) )then
                     return ! nothing was previously completed
                 endif
@@ -1371,7 +1386,7 @@ contains
                     ! nothing to import
                     do iproj = 1,n_spprojs
                         call spprojs(iproj)%kill
-                        fname = trim(DIR_STREAM_COMPLETED)//trim(completed_fnames(iproj))
+                        fname = filepath(odir_completed, completed_fnames(iproj))
                         call del_file(fname)
                     enddo
                     deallocate(spprojs)
@@ -1408,8 +1423,6 @@ contains
                 do iproj = 1,n_spprojs
                     call project_buff%add2history(completed_fnames(iproj))
                 enddo
-                ! tidy files
-                call simple_rmdir(DIR_STREAM)
                 write(logfhandle,'(A,I6,A)')'>>> IMPORTED ',nsel_mics,' PREVIOUSLY PROCESSED MICROGRAPHS'
             end subroutine import_previous_mics
 
