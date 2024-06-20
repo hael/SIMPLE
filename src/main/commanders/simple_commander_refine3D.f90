@@ -939,7 +939,11 @@ contains
         ! make CTFs
         if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, params%oritype)
         call pftcc%memoize_ptcls
-        call eulprob_obj_part%fill_tab(pftcc)
+        if( params%l_batchfrac )then
+            call eulprob_obj_part%fill_tab_batch(pftcc)
+        else
+            call eulprob_obj_part%fill_tab(pftcc)
+        endif
         fname = trim(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
         call eulprob_obj_part%write_tab(fname)
         call eulprob_obj_part%kill

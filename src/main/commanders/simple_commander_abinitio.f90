@@ -1300,8 +1300,6 @@ contains
         if( cline%defined('trs') )then
             trslim = params%trs
             call cline%delete('trs')
-        else
-            trslim = max(MINSHIFT, AHELIX_WIDTH / params%smpd)
         endif
         ! read project
         call spproj%read(params%projfile)
@@ -1378,7 +1376,7 @@ contains
             trs(it)     = 0.
             nspaces(it) = NSPACE1
             if( it >= params%shift_stage )then
-                trs(it)     = trslim
+                trs(it)     = trslim * params%smpd / smpds(it)
                 nspaces(it) = NSPACE2
             endif
         enddo
