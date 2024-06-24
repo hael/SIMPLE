@@ -1006,7 +1006,7 @@ contains
                     endif
                 endif
             endif
-            if(l_multipick_init .and. pause_import .and. n_imported + n_failed_jobs + nmics_rejected_glob >= params%ninit) then
+            if(l_multipick_init .and. pause_import .and. n_imported + n_failed_jobs >= params%ninit) then
                 write(logfhandle,'(A)')'>>> WAITING FOR USER INPUT REFINEMENT DIAMETER'
                 call gui_stats%set('current_search', 'status', 'waiting for refinement diameter')
                 l_multipick_init   = .false.

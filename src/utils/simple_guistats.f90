@@ -499,12 +499,16 @@ contains
         call clsstk%new(ldim_stk, 1.0)
         call thumbimg%new(ldim_thumb, 1.0)
         do i=1, 5
-            call clsstk%read(trim(adjustl(cavgs)), classes(i))
-            call thumbimg%tile(clsstk, i, 1) 
+            if(classes(i) .gt. 0) then
+                call clsstk%read(trim(adjustl(cavgs)), classes(i))
+                call thumbimg%tile(clsstk, i, 1)
+            endif
         end do
         do i=6, 10
-            call clsstk%read(trim(adjustl(cavgs)), classes(i))
-            call thumbimg%tile(clsstk, i - 5, 2)
+            if(classes(i) .gt. 0) then
+                call clsstk%read(trim(adjustl(cavgs)), classes(i))
+                call thumbimg%tile(clsstk, i - 5, 2)
+            endif
         end do
         call thumbimg%write_jpg(CLUSTER2D_ITER_THUMB)
         call self%set(section, key, trim(adjustl(cwd)) // '/' // CLUSTER2D_ITER_THUMB, thumbnail = .true.)
