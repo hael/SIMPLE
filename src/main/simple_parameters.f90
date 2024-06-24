@@ -49,7 +49,7 @@ type :: parameters
     character(len=3)          :: loc_sdev='no'        !< Whether to calculate local standard deviations(yes|no){no}
     character(len=3)          :: lp_est='no'          !< estimate lp(yes|no){no}
     character(len=3)          :: makemovie='no'
-    character(len=3)          :: masscen='no'         !< center to center of gravity(yes|no){no}
+    character(len=3)          :: masscen='yes'         !< center to center of gravity(yes|no){yes}
     character(len=3)          :: mcpatch='yes'        !< whether to perform patch-based alignment during motion correction
     character(len=3)          :: mcpatch_thres='yes'  !< whether to use the threshold for motion correction patch solution(yes|no){yes}
     character(len=3)          :: mirr='no'            !< mirror(no|x|y){no}
