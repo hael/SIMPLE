@@ -217,6 +217,7 @@ type :: oris
     procedure, private :: map3dshift22d_1
     procedure, private :: map3dshift22d_2
     generic            :: map3dshift22d => map3dshift22d_1, map3dshift22d_2
+    procedure          :: calc_avg_offset2D
     procedure          :: mirror2d
     procedure          :: mirror3d
     procedure          :: add_shift2class
@@ -3351,6 +3352,31 @@ contains
             call self%o(i)%map3dshift22d(sh3d)
         endif
     end subroutine map3dshift22d_2
+
+    !>  \brief  Calculates the average particles offset within a class
+    subroutine calc_avg_offset2D( self, class, offset_avg)
+        class(oris), intent(in)    :: self
+        integer,     intent(in)    :: class
+        real,        intent(inout) :: offset_avg(2)
+        real(dp) :: avg(2)
+        real     :: sh(2)
+        integer  :: i, n
+        n   = 0
+        avg = 0.d0
+        do i=1,self%n
+            if( self%o(i)%isstatezero() ) cycle
+            if( self%o(i)%get_class() == class )then
+                call self%o(i)%calc_offset2D(sh)
+                n   = n+1
+                avg = avg + real(sh,dp)
+            endif
+        end do
+        if( n > 0 )then
+            offset_avg = real(avg / real(n,dp))
+        else
+            offset_avg = 0.0
+        endif
+    end subroutine calc_avg_offset2D
 
     !>  \brief  generates the mirror of the projection
     !!          can be equivalently accomplished by mirror('y')

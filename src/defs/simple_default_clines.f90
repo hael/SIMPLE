@@ -30,6 +30,7 @@ contains
         if( .not. cline%defined('nonuniform'))   call cline%set('nonuniform',  'no')
         if( .not. cline%defined('smooth_ext'))   call cline%set('smooth_ext',   20.)
         if( .not. cline%defined('rnd_cls_init')) call cline%set('rnd_cls_init','no')
+        if( .not. cline%defined('masscen')   )   call cline%set('masscen',    'yes')
         ! 2D objective function section
         if( .not. cline%defined('kweight')   ) call cline%set('kweight',  'default')
         if( .not. cline%defined('objfun')    ) call cline%set('objfun',    'euclid')

@@ -113,6 +113,7 @@ type :: ori
     procedure, private :: compeuler
     procedure          :: compose3d2d
     procedure          :: map3dshift22d
+    procedure          :: calc_offset2D
     procedure          :: mirror3d
     procedure          :: mirror2d
     procedure          :: transp
@@ -1395,6 +1396,20 @@ contains
         call self%set('x', x)
         call self%set('y', y)
     end subroutine map3dshift22d
+
+    ! calculates the clockwise particle 2D shift with respect to in-plane rotation
+    subroutine calc_offset2D( self, offset )
+        class(ori), intent(in)    :: self
+        real,       intent(inout) :: offset(2)
+        real :: sh(2)
+        real :: psi, cospsi, sinpsi
+        psi    = deg2rad(self%e3get())
+        cospsi = cos(psi)
+        sinpsi = sin(psi)
+        sh     = self%get_2Dshift()
+        offset(1) = sh(1) * cospsi - sh(2) * sinpsi
+        offset(2) = sh(1) * sinpsi + sh(2) * cospsi
+    end subroutine calc_offset2D
 
     !>  \brief  generates the opposite hand of an Euler angle
     !!          so that a set of Euler angles transformed by

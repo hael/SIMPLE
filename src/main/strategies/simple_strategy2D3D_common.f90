@@ -378,8 +378,15 @@ contains
                     call img_in%shift2Dserial(xyz_in(1:2))
                 endif
             else
-                xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
-                sharg = arg(xyz)
+                if( trim(params_glob%masscen).eq.'yes' )then
+                    xyz   = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
+                    sharg = arg(xyz)
+                else
+                    call build_glob%spproj_field%calc_avg_offset2D(icls, xyz(1:2))
+                    xyz(3) = 0.
+                    xyz    = xyz * crop_factor
+                    sharg  = arg(xyz)
+                endif
                 if( sharg > CENTHRESH )then
                     ! apply shift and update the corresponding class parameters
                     call img_in%fft()

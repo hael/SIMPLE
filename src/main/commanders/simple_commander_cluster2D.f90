@@ -292,6 +292,7 @@ contains
         if( .not. cline%defined('objfun')    ) call cline%set('objfun',  'euclid')
         if( .not. cline%defined('ml_reg')    ) call cline%set('ml_reg',      'no')
         if( .not. cline%defined('smooth_ext')) call cline%set('smooth_ext',   20.)
+        if( .not. cline%defined('masscen')   ) call cline%set('masscen',    'yes')
         call cline%set('stream', 'no')
         ! set shared-memory flag
         if( cline%defined('nparts') )then
