@@ -218,7 +218,8 @@ contains
         type(sigma_array), allocatable   :: sigma2_arrays(:)
         character(len=:),  allocatable   :: part_fname,starfile_fname,outbin_fname
         integer                          :: iptcl,ipart,nptcls,nptcls_sel,eo,ngroups,igroup,nyq,pspec_l,pspec_u
-        real,              allocatable   :: group_pspecs(:,:,:),pspec_ave(:),pspecs(:,:),sigma2_output(:,:)
+        real(dp),          allocatable   :: group_pspecs(:,:,:)
+        real,              allocatable   :: pspec_ave(:),pspecs(:,:),sigma2_output(:,:)
         integer,           allocatable   :: group_weights(:,:)
         call cline%set('mkdir', 'no')
         call cline%set('stream','no')
@@ -272,7 +273,7 @@ contains
             enddo
             !$omp end parallel do
         endif
-        allocate(group_pspecs(2,ngroups,nyq),source=0.)
+        allocate(group_pspecs(2,ngroups,nyq),source=0.d0)
         allocate(group_weights(2,ngroups),source=0)
         do iptcl = 1,nptcls
             if( build%spproj_field%get_state(iptcl) == 0 ) cycle
@@ -282,14 +283,14 @@ contains
             else
                 igroup = nint(build%spproj_field%get(iptcl,'stkind'))
             endif
-            group_pspecs(eo+1,igroup,:) = group_pspecs(eo+1,igroup,:) + pspecs(:, iptcl)
+            group_pspecs(eo+1,igroup,:) = group_pspecs(eo+1,igroup,:) + real(pspecs(:, iptcl),dp)
             group_weights(eo+1,igroup)  = group_weights(eo+1,igroup)  + 1
         enddo
         do eo = 1,2
             do igroup = 1,ngroups
                 if( group_weights(eo,igroup) < 1 ) cycle
-                group_pspecs(eo,igroup,:) = group_pspecs(eo,igroup,:) / real(group_weights(eo,igroup))
-                group_pspecs(eo,igroup,:) = group_pspecs(eo,igroup,:) - pspec_ave(:)
+                group_pspecs(eo,igroup,:) = group_pspecs(eo,igroup,:) / real(group_weights(eo,igroup),dp)
+                group_pspecs(eo,igroup,:) = group_pspecs(eo,igroup,:) - real(pspec_ave(:),dp)
                 call remove_negative_sigmas(eo, igroup)
             end do
         end do
@@ -299,7 +300,7 @@ contains
         else
             starfile_fname = trim(SIGMA2_GROUP_FBODY)//'1.star'
         endif
-        call write_groups_starfile(starfile_fname, group_pspecs, ngroups)
+        call write_groups_starfile(starfile_fname, real(group_pspecs), ngroups)
         ! update sigmas in binfiles to match averages
         do iptcl = 1,nptcls
             if( build%spproj_field%get_state(iptcl) == 0 ) cycle
@@ -309,7 +310,7 @@ contains
             else
                 igroup = nint(build%spproj_field%get(iptcl,'stkind'))
             endif
-            pspecs(:,iptcl) = group_pspecs(eo+1,igroup,:)
+            pspecs(:,iptcl) = real(group_pspecs(eo+1,igroup,:))
         enddo
         ! write updated sigmas to disc
         do ipart = 1,params%nparts
@@ -321,7 +322,7 @@ contains
                 sigma2_output(params%kfromto(1):params%kfromto(2),iptcl) = pspecs(params%kfromto(1):params%kfromto(2),iptcl)
             end do
             outbin_fname = SIGMA2_FBODY//int2str_pad(ipart,params%numlen)//'.dat'
-            call binfile%new(outbin_fname, fromp=pspec_l, top=pspec_u, kfromto=(/params%kfromto(1), params%kfromto(2)/))
+            call binfile%new(outbin_fname, fromp=pspec_l, top=pspec_u, kfromto=[params%kfromto(1), params%kfromto(2)])
             call binfile%write(sigma2_output)
         end do
         ! end gracefully
@@ -329,7 +330,7 @@ contains
             deallocate(sigma2_arrays(ipart)%fname)
             deallocate(sigma2_arrays(ipart)%sigma2)
         end do
-        deallocate(sigma2_arrays)
+        deallocate(sigma2_arrays,group_pspecs,pspec_ave,pspecs,group_weights)
         call binfile%kill
         call build%kill_general_tbox
         call simple_touch('CALC_PSPEC_FINISHED',errmsg='In: commander_euclid::calc_pspec_assemble')
@@ -344,11 +345,11 @@ contains
             integer :: nn, idx
             ! remove any negative sigma2 noise values: replace by positive neighboring value
             do idx = 1, size(group_pspecs, 3)
-                if( group_pspecs(eo,igroup,idx) < 0. )then
+                if( group_pspecs(eo,igroup,idx) < 0.d0 )then
                     ! first try the previous value
                     fixed_from_prev = .false.
                     if( idx - 1 >= 1 )then
-                        if( group_pspecs(eo,igroup,idx-1) > 0. )then
+                        if( group_pspecs(eo,igroup,idx-1) > 0.d0 )then
                             group_pspecs(eo,igroup,idx) = group_pspecs(eo,igroup,idx-1)
                             fixed_from_prev = .true.
                         end if
@@ -361,7 +362,7 @@ contains
                             if( nn > size(group_pspecs,3) )then
                                 THROW_HARD('BUG! Cannot find positive values in sigma2 noise spectrum; eo=' // trim(int2str(eo)) // ', igroup=' // trim(int2str(igroup)))
                             end if
-                            if( group_pspecs(eo,igroup,nn) > 0. )then
+                            if( group_pspecs(eo,igroup,nn) > 0.d0 )then
                                 is_positive = .true.
                                 group_pspecs(eo,igroup,idx) = group_pspecs(eo,igroup,nn)
                             end if
@@ -381,9 +382,9 @@ contains
         type(sigma2_binfile)          :: binfile
         type(sigma_array)             :: sigma2_array
         character(len=:), allocatable :: starfile_fname
-        real,             allocatable :: group_pspecs(:,:,:),glob_pspec(:,:,:),pspecs(:,:)
-        real,             allocatable :: group_weights(:,:)
-        real                          :: w
+        real,             allocatable :: pspecs(:,:)
+        real(dp),         allocatable :: group_weights(:,:), group_pspecs(:,:,:)
+        real(dp)                      :: w
         integer                       :: kfromto(2),iptcl,ipart,eo,ngroups,igroup,fromp,top
         if( associated(build_glob) )then
             if( .not.associated(params_glob) )then
@@ -413,49 +414,49 @@ contains
             deallocate(sigma2_array%sigma2)
         end do
         call binfile%kill
-        ngroups = 0
-        !$omp parallel do default(shared) private(iptcl,igroup)&
-        !$omp schedule(static) proc_bind(close) reduction(max:ngroups)
-        do iptcl = 1,params_glob%nptcls
-            if( build_glob%spproj_field%get_state(iptcl) == 0 ) cycle
-            igroup  = nint(build_glob%spproj_field%get(iptcl,'stkind'))
-            ngroups = max(igroup,ngroups)
-        enddo
-        !$omp end parallel do
-        allocate(group_pspecs(2,ngroups,kfromto(1):kfromto(2)),glob_pspec(2,1,kfromto(1):kfromto(2)), group_weights(2,ngroups),source=0.)
-        do iptcl = 1,params_glob%nptcls
-            if( build_glob%spproj_field%get_state(iptcl) == 0 ) cycle
-            eo     = nint(build_glob%spproj_field%get(iptcl,'eo'    )) ! 0/1
-            igroup = nint(build_glob%spproj_field%get(iptcl,'stkind'))
-            w      = build_glob%spproj_field%get(iptcl,'w')
-            if( w < TINY )cycle
-            group_pspecs(eo+1,igroup,:) = group_pspecs (eo+1,igroup,:) + w * pspecs(:,iptcl)
-            group_weights(eo+1,igroup)  = group_weights(eo+1,igroup)   + w
-        enddo
         if( params_glob%l_sigma_glob )then
-            glob_pspec = 0.
-            w          = 1./real(ngroups)
-            do eo = 1,2
-                do igroup = 1,ngroups
-                    if( group_weights(eo,igroup) < TINY ) cycle
-                    group_pspecs(eo,igroup,:) = group_pspecs(eo,igroup,:) / group_weights(eo,igroup)
-                    glob_pspec(eo,1,:)        = glob_pspec(eo,1,:) + w * group_pspecs(eo,igroup,:)
-                end do
-            end do
-            ! write global sigma to starfile
-            starfile_fname = trim(SIGMA2_GROUP_FBODY)//trim(int2str(params_glob%which_iter))//'.star'
-            call write_groups_starfile(starfile_fname, glob_pspec, 1)
+            ngroups = 1
+            allocate(group_pspecs(2,ngroups,kfromto(1):kfromto(2)), group_weights(2,ngroups),source=0.d0)
+            do iptcl = 1,params_glob%nptcls
+                if( build_glob%spproj_field%get_state(iptcl) == 0 ) cycle
+                eo = nint(build_glob%spproj_field%get(iptcl,'eo'    )) ! 0/1
+                w  = real(build_glob%spproj_field%get(iptcl,'w'),dp)
+                if( w < TINY )cycle
+                group_pspecs(eo+1,1,:) = group_pspecs (eo+1,1,:) + w * real(pspecs(:,iptcl),dp)
+                group_weights(eo+1,1)  = group_weights(eo+1,1)   + w
+            enddo
         else
-            do eo = 1,2
-                do igroup = 1,ngroups
-                    if( group_weights(eo,igroup) < TINY ) cycle
-                    group_pspecs(eo,igroup,:) = group_pspecs(eo,igroup,:) / group_weights(eo,igroup)
-                end do
-            end do
-            ! write group sigmas to starfile
-            starfile_fname = trim(SIGMA2_GROUP_FBODY)//trim(int2str(params_glob%which_iter))//'.star'
-            call write_groups_starfile(starfile_fname, group_pspecs, ngroups)
+            ngroups = 0
+            !$omp parallel do default(shared) private(iptcl,igroup)&
+            !$omp schedule(static) proc_bind(close) reduction(max:ngroups)
+            do iptcl = 1,params_glob%nptcls
+                if( build_glob%spproj_field%get_state(iptcl) == 0 ) cycle
+                igroup  = nint(build_glob%spproj_field%get(iptcl,'stkind'))
+                ngroups = max(igroup,ngroups)
+            enddo
+            !$omp end parallel do
+            allocate(group_pspecs(2,ngroups,kfromto(1):kfromto(2)), group_weights(2,ngroups),source=0.d0)
+            do iptcl = 1,params_glob%nptcls
+                if( build_glob%spproj_field%get_state(iptcl) == 0 ) cycle
+                eo     = nint(build_glob%spproj_field%get(iptcl,'eo'    )) ! 0/1
+                igroup = nint(build_glob%spproj_field%get(iptcl,'stkind'))
+                w      = real(build_glob%spproj_field%get(iptcl,'w'),dp)
+                if( w < TINY )cycle
+                group_pspecs(eo+1,igroup,:) = group_pspecs (eo+1,igroup,:) + w * real(pspecs(:,iptcl),dp)
+                group_weights(eo+1,igroup)  = group_weights(eo+1,igroup)   + w
+            enddo
         endif
+        deallocate(pspecs)
+        do eo = 1,2
+            do igroup = 1,ngroups
+                if( group_weights(eo,igroup) < TINY ) cycle
+                group_pspecs(eo,igroup,:) = group_pspecs(eo,igroup,:) / group_weights(eo,igroup)
+            end do
+        end do
+        ! write group sigmas to starfile
+        starfile_fname = trim(SIGMA2_GROUP_FBODY)//trim(int2str(params_glob%which_iter))//'.star'
+        call write_groups_starfile(starfile_fname, real(group_pspecs), ngroups)
+        ! cleanup
         call build%kill_general_tbox
         call simple_touch('CALC_GROUP_SIGMAS_FINISHED',errmsg='In: commander_euclid::calc_group_sigmas')
         call simple_end('**** SIMPLE_CALC_GROUP_SIGMAS NORMAL STOP ****', print_simple=.false.)
