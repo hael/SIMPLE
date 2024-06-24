@@ -947,7 +947,7 @@ contains
         write(logfhandle,'(A,A)')'>>> WRITING SELECTED CLUSTERS TO: ', trim(POOL_DIR) // STREAM_SELECTED_REFS//trim(STK_EXT)
         call img%new([params_glob%box,params_glob%box,1], params_glob%smpd)
         call jpegimg%new([params_glob%box, params_glob%box * count(cls_mask), 1], params_glob%smpd) 
-        call stkio_r%open(trim(POOL_DIR) // trim(refs_glob), smpd, 'read', bufsz=ncls_glob)
+        call stkio_r%open(trim(POOL_DIR) // trim(refs_glob), params_glob%smpd, 'read', bufsz=ncls_glob)
         call stkio_r%read_whole
         call stkio_w%open(trim(POOL_DIR) // STREAM_SELECTED_REFS//trim(STK_EXT), params_glob%smpd, 'write', box=params_glob%box, bufsz=count(cls_mask))
         isel = 1
