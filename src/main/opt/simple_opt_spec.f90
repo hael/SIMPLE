@@ -53,7 +53,6 @@ type :: opt_spec
     real, allocatable         :: x_4_tmp(:)                           !< temporary storage for single precision function value
     logical                   :: debug     = .false.
     logical                   :: warn      = .false.
- !   logical                   :: verbose   = .false.
     logical                   :: converged = .false.                  !< converged status
     logical                   :: exists    = .false.                  !< to indicate existence
   contains

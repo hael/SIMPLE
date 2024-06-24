@@ -282,7 +282,7 @@ contains
 
     subroutine write_groups_starfile( fname, group_pspecs, ngroups )
         character(len=*),  intent(in) :: fname
-        real, allocatable, intent(in) :: group_pspecs(:,:,:)
+        real,              intent(in) :: group_pspecs(:,:,:)
         integer,           intent(in) :: ngroups
         character(len=:), allocatable :: stmp
         integer                       :: kfromto(2), eo, igroup, idx
