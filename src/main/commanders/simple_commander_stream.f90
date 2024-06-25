@@ -2149,10 +2149,10 @@ contains
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=LONGSTRLEN)              :: cwd_job
         integer                                :: nmics_rejected_glob
-        integer                                :: nchunks_imported_glob, nchunks_imported, nprojects, iter, last_injection
+        integer                                :: nchunks_imported_glob, nchunks_imported, nprojects, iter
         integer                                :: n_imported, n_added, nptcls_glob, n_failed_jobs, ncls_in, nmic_star
         integer                                :: pool_iter_last_chunk_imported, pool_iter_max_chunk_imported
-        logical                                :: l_haschanged, l_nchunks_maxed, l_pause
+        logical                                :: l_nchunks_maxed, l_pause, l_params_updated
         real                                   :: nptcls_pool
         call cline%set('oritype',      'mic')
         call cline%set('mkdir',        'yes')
@@ -2219,14 +2219,12 @@ contains
         ! Infinite loop
         nptcls_glob           = 0   ! global number of particles
         nchunks_imported_glob = 0   ! global number of completed chunks
-        last_injection        = simple_gettime()
         nprojects             = 0
         iter                  = 0
         n_imported            = 0   ! global number of imported processed micrographs
         n_failed_jobs         = 0
         nmic_star             = 0
         nmics_rejected_glob   = 0   ! global number of micrographs rejected
-        l_haschanged          = .false.
         l_nchunks_maxed       = .false.
         l_pause               = .false.
         ! guistats init
@@ -2263,9 +2261,6 @@ contains
                 call gui_stats%set_now('particles', 'last_particles_imported')
                 ! update progress monitor
                 call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
-                ! write project for gui, micrographs field only
-                last_injection = simple_gettime()
-                l_haschanged = .true.
                 ! remove this?
                 if( n_imported < 1000 )then
                     call update_user_params(cline)
@@ -2273,25 +2268,25 @@ contains
                     call update_user_params(cline)
                     nmic_star = n_imported
                 endif
-            else
-                if( (simple_gettime()-last_injection > INACTIVE_TIME) .and. l_haschanged )then
-                    call update_user_params_dev(cline)
-                    l_haschanged = .false.
-                endif
             endif
             ! 2D classification section
-            call update_user_params_dev(cline)
+            call update_user_params_dev(cline, l_params_updated)
+            if( l_params_updated ) l_pause = .false.
             call update_chunks_dev
-            if( .not.l_pause )then
+            if( l_pause )then
+                call update_user_params_dev(cline, l_params_updated)
+                if( l_params_updated ) l_pause = .false.
+            else
                 call update_pool_status_dev
                 call update_pool_dev
+                call update_user_params_dev(cline, l_params_updated)
+                call reject_from_pool_dev
             endif
-            call update_user_params_dev(cline)
-            call reject_from_pool_dev
             call reject_from_pool_user_dev
             if( l_nchunks_maxed )then
                 ! # of chunks is above desired number
                 if( is_pool_available_dev() .and. (get_pool_iter()>=pool_iter_max_chunk_imported+10) ) exit
+                call classify_pool_dev
             else
                 call import_chunks_into_pool_dev( nchunks_imported )
                 if( nchunks_imported > 0 )then
@@ -2303,15 +2298,16 @@ contains
                     if( .not.l_nchunks_maxed ) pool_iter_max_chunk_imported = get_pool_iter()
                     l_nchunks_maxed = .true.
                 endif
-                if( get_pool_iter() >= pool_iter_last_chunk_imported+10 )then
-                    ! pause pool classification in absence of new chunks
-                    l_pause = is_pool_available_dev()
-                    if( l_pause .and. (get_pool_iter() == pool_iter_last_chunk_imported+10) )then
-                        write(logfhandle,'(A)') '>>> POOL CLASSIFICATION PAUSED'
-                    endif
+                if( l_pause )then
+                    ! skipping pool classification
                 else
-                    call classify_pool_dev
+                    if( get_pool_iter() >= pool_iter_last_chunk_imported+10 )then
+                        ! pause pool classification & rejection in absence of new chunks, resumes
+                        ! when new chunks are added or classification parameters have been updated
+                        l_pause = is_pool_available_dev()
+                    endif
                 endif
+                if( .not.l_pause ) call classify_pool_dev
                 call classify_new_chunks_dev(micproj_records)
             endif
             call sleep(WAITTIME)
@@ -2325,7 +2321,7 @@ contains
         end do
         ! termination
         call terminate_stream2D_dev
-        call update_user_params(cline)
+        call update_user_params(cline) !!??
         ! final stats
         if(file_exists(POOLSTATS_FILE)) call gui_stats%merge(POOLSTATS_FILE, delete = .true.)
         call gui_stats%hide('compute', 'compute_in_use')

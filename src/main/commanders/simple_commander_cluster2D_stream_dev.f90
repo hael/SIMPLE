@@ -974,10 +974,12 @@ contains
     end subroutine write_pool_cls_selected_user_dev
 
     !> updates current parameters with user input
-    subroutine update_user_params_dev( cline_here )
+    subroutine update_user_params_dev( cline_here, updated )
         type(cmdline), intent(inout) :: cline_here
+        logical,       intent(out)   :: updated
         type(oris) :: os
         real       :: lpthres, ndev
+        updated = .false.
         call os%new(1, is_ptcl=.false.)
         if( file_exists(USER_PARAMS) )then
             call os%read(USER_PARAMS)
@@ -989,6 +991,7 @@ contains
                     else
                         params_glob%lpthres = lpthres
                         write(logfhandle,'(A,F8.2)')'>>> REJECTION lpthres UPDATED TO: ',params_glob%lpthres
+                        updated = .true.
                     endif
                 endif
             endif
@@ -1000,6 +1003,7 @@ contains
                     else
                         params_glob%ndev = ndev
                         write(logfhandle,'(A,F8.2)')'>>> REJECTION NDEV   UPDATED TO: ',params_glob%ndev
+                        updated = .true.
                     endif
                 endif
             endif
@@ -1304,7 +1308,7 @@ contains
         write(logfhandle,'(A,I6,A,I8,A3,I8,A)')'>>> POOL         INITIATED ITERATION ',pool_iter,' WITH ',nptcls_sel,&
         &' / ', sum(nptcls_per_stk),' PARTICLES'
         if( L_BENCH ) print *,'timer exec_classify_pool tot : ',toc(t_tot)
-        call tidy_2Dstream_iter
+        call tidy_2Dstream_iter(l_no_chunks)
     end subroutine classify_pool_dev
 
     !> produces consolidated project at original scale
@@ -2121,15 +2125,18 @@ contains
         call debug_print('end rescale_cavgs')
     end subroutine rescale_cavgs
 
-    subroutine tidy_2Dstream_iter
+    subroutine tidy_2Dstream_iter( all )
+        logical,           intent(in) :: all
         character(len=:), allocatable :: prefix
         if( pool_iter > 3 )then
             prefix = trim(POOL_DIR)//trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter-3,3))
             call del_file(prefix//'_even'//trim(params_glob%ext))
             call del_file(prefix//'_odd'//trim(params_glob%ext))
+            if( all ) call del_file(prefix//trim(params_glob%ext))
             if( l_wfilt )then
                 call del_file(prefix//trim(WFILT_SUFFIX)//'_even'//trim(params_glob%ext))
                 call del_file(prefix//trim(WFILT_SUFFIX)//'_odd'//trim(params_glob%ext))
+                if( all ) call del_file(prefix//trim(WFILT_SUFFIX)//trim(params_glob%ext))
             endif
         endif
     end subroutine tidy_2Dstream_iter
