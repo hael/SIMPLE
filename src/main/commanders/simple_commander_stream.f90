@@ -2141,6 +2141,7 @@ contains
         character(len=STDLEN),     parameter   :: micspproj_fname = './streamdata.simple'
         type(parameters)                       :: params
         type(guistats)                         :: gui_stats
+        type(oris)                             :: moldiamori
         integer,                   parameter   :: INACTIVE_TIME   = 900  ! inactive time trigger for writing project file
         logical,                   parameter   :: DEBUG_HERE      = .true.
         type(micproj_record),      allocatable :: micproj_records(:)
@@ -2153,7 +2154,7 @@ contains
         integer                                :: n_imported, n_added, nptcls_glob, n_failed_jobs, ncls_in, nmic_star
         integer                                :: pool_iter_last_chunk_imported, pool_iter_max_chunk_imported
         logical                                :: l_nchunks_maxed, l_pause, l_params_updated
-        real                                   :: nptcls_pool
+        real                                   :: nptcls_pool, moldiam
         call cline%set('oritype',      'mic')
         call cline%set('mkdir',        'yes')
         call cline%set('autoscale',    'yes')
@@ -2186,7 +2187,7 @@ contains
             ! to circumvent parameters class stringency, restored after params%new
             ncls_in = nint(cline%get_rarg('ncls'))
             call cline%delete('ncls')
-        endif
+        endif        
         ! master parameters
         call cline%set('numlen', 5)
         call cline%set('stream','yes')
@@ -2207,6 +2208,19 @@ contains
             call cline%delete('dir_exec')
             call del_file(micspproj_fname)
             call cleanup_root_folder
+        endif
+         ! mskdiam
+        if( .not. cline%defined('mskdiam') ) then
+            if( .not. file_exists(trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM))) THROW_HARD('either mskdiam must be given or '// trim(STREAM_MOLDIAM) // ' exists in target_dir')
+            ! read mskdiam from file
+            call moldiamori%new(1, .false.)
+            call moldiamori%read( trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM) )
+            if( .not. moldiamori%isthere(1, "moldiam") ) THROW_HARD( 'moldiam missing from ' // trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM) )
+            moldiam = moldiamori%get(1, "moldiam")
+            call moldiamori%kill
+            call cline%set('mskdiam', moldiam * 1.2)
+            params%mskdiam = moldiam * 1.2
+            write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER SET TO', params%mskdiam
         endif
         ! initialise progress monitor
         call progressfile_init()

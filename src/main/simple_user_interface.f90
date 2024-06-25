@@ -1948,7 +1948,9 @@ contains
         &'Whether to automatically reject 2D clusters and associated particles(yes|old|no){yes}', '(yes|old|no){yes}', .false., 'yes')
         call cluster2D_stream%set_gui_params('filt_ctrls', 3, submenu="cluster 2D", online=.true.)
         ! mask controls
-        call cluster2D_stream%set_input('mask_ctrls', 1, mskdiam)
+        call cluster2D_stream%set_input('mask_ctrls', 1, 'mskdiam', 'num', 'Mask diameter', 'Mask diameter (in A) for application of a soft-edged circular mask to remove background noise',& 
+        &'mask diameter in A', .false., 0.)
+      !  call cluster2D_stream%set_input('mask_ctrls', 1, mskdiam, .false.)
         call cluster2D_stream%set_gui_params('mask_ctrls', 1, submenu="cluster 2D", advanced=.false.)
         ! computer controls
         call cluster2D_stream%set_input('comp_ctrls', 1, nchunks)

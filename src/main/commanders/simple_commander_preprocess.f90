@@ -2395,6 +2395,7 @@ contains
         class(cmdline),                 intent(inout) :: cline
         type(parameters)         :: params
         type(stack_io)           :: stkio_r
+        type(oris)               :: moldiamori
         type(image)              :: ref2D, ref2D_clip
         type(image), allocatable :: projs(:), masks(:)
         real,        allocatable :: diams(:), shifts(:,:)
@@ -2475,6 +2476,11 @@ contains
         do icavg=1,ncavgs
             call projs(icavg)%bp(0.,lp)
         end do
+        ! write diam_max to file
+        call moldiamori%new(1, .false.)
+        call moldiamori%set(1, "moldiam", diam_max)
+        call moldiamori%write(1, trim(STREAM_MOLDIAM))
+        call moldiamori%kill
         ! expand in in-plane rotation, clip and write to file
         nrots  = nint( real(NREFS)/real(ncavgs) )
         norefs = ncavgs
