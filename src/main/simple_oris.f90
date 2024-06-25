@@ -3354,11 +3354,12 @@ contains
     end subroutine map3dshift22d_2
 
     !>  \brief  Calculates the average particles offset within a class
-    subroutine calc_avg_offset2D( self, class, offset_avg)
-        class(oris), intent(in)    :: self
-        integer,     intent(in)    :: class
-        real,        intent(inout) :: offset_avg(2)
-        real(dp) :: avg(2)
+    subroutine calc_avg_offset2D( self, class, offset_avg, offset_stddev )
+        class(oris),    intent(in)    :: self
+        integer,        intent(in)    :: class
+        real,           intent(inout) :: offset_avg(2)
+        real, optional, intent(inout) :: offset_stddev
+        real(dp) :: avg(2), sumdistsq
         real     :: sh(2)
         integer  :: i, n
         n   = 0
@@ -3372,9 +3373,25 @@ contains
             endif
         end do
         if( n > 0 )then
-            offset_avg = real(avg / real(n,dp))
+            avg        = avg / real(n,dp)
+            offset_avg = real(avg)
         else
             offset_avg = 0.0
+        endif
+        if( present(offset_stddev) )then
+            if( n > 1 )then
+                sumdistsq = 0.d0
+                do i=1,self%n
+                    if( self%o(i)%isstatezero() ) cycle
+                    if( self%o(i)%get_class() == class )then
+                        call self%o(i)%calc_offset2D(sh)
+                        sumdistsq = sumdistsq + sum((real(sh,dp)-avg)**2)
+                    endif
+                end do
+                offset_stddev = real(sqrt(sumdistsq / real(n,dp)))
+            else
+                offset_stddev = 0.
+            endif
         endif
     end subroutine calc_avg_offset2D
 

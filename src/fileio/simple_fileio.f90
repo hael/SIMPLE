@@ -537,6 +537,54 @@ contains
         end do
     end function make_filenames
 
+    !> Concatenate two paths
+    !! Last character is '/'; '//' & '/./' are substituted with '/'
+    function concat_paths(p1, p2) result( fname )
+        character(len=*),  intent(in)              :: p1
+        character(len=*),  intent(in)              :: p2
+        character(len=:), allocatable :: fname
+        character(len=LONGSTRLEN) :: string1,string2
+        integer :: e1,e2,s2,l,pos
+        string1 = trim(adjustl(p1))
+        string2 = trim(adjustl(p2))
+        e1 = len_trim(string1)
+        e2 = len_trim(string2)
+        s2 = 1
+        if( e1 < 1 ) THROW_HARD("First arg too small")
+        if( e2 < 1 ) THROW_HARD("Second arg too small")
+        if( string1(e1:e1) == PATH_SEPARATOR ) e1 = e1 - 1
+        if( e1 < 1 ) THROW_HARD("First arg cannot be /")
+        if( string2(e2:e2) == PATH_SEPARATOR) e2 = e2 - 1
+        if( e2 < 1) THROW_HARD("second arg cannot be / ")
+        if( string2(1:1) == PATH_SEPARATOR) s2 = 2
+        if( e2 == s2 ) THROW_HARD("second arg cannot be "//trim(string2))
+        allocate(fname,source=string1(1:e1)//PATH_SEPARATOR//string2(s2:e2)//PATH_SEPARATOR)
+        pos = index(fname, '/./')
+        do while( pos > 0 )
+            l = len_trim(fname)
+            if( pos == 1 )then
+                fname = fname(3:l)
+            else if( pos == l-2 )then
+                fname = fname(1:pos)
+            else
+                fname = fname(1:pos)//fname(pos+3:l)
+            endif
+            pos = index(fname, '/./')
+        enddo
+        pos = index(fname, '//')
+        do while( pos > 0 )
+            l = len_trim(fname)
+            if( pos == 1 )then
+                fname = fname(2:l)
+            else if( pos == l-1 )then
+                fname = fname(1:pos)
+            else
+                fname = fname(1:pos)//fname(pos+2:l)
+            endif
+            pos = index(fname, '//')
+        enddo
+    end function concat_paths
+
     !> concatenate strings together to with '/' to create a filename
     !! input args are restricted to STDLEN after trimming
     !! for allocatable character results
