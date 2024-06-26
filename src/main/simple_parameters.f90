@@ -724,6 +724,7 @@ contains
         call check_iarg('grow',           self%grow)
         call check_iarg('icm_stage',      self%icm_stage)
         call check_iarg('it_history',     self%it_history)
+        call check_iarg('iptcl',          self%iptcl)
         call check_iarg('job_memory_per_task2D', self%job_memory_per_task2D)
         call check_iarg('lp_iters',       self%lp_iters)
         call check_iarg('maxits',         self%maxits)
