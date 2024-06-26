@@ -21,7 +21,7 @@ integer,          parameter :: NBIN_THRESH         = 15      ! number of thresho
 integer,          parameter :: CN_THRESH_XTAL      = 5       ! cn-threshold highly crystalline NPs
 integer,          parameter :: NVOX_THRESH         = 3       ! min # voxels per atom is 3
 logical,          parameter :: DEBUG               = .false. ! for debugging purposes
-logical,          parameter :: WRITE_OUTPUT        = .false. ! for figures generation
+logical,          parameter :: WRITE_OUTPUT        = .true. ! for figures generation
 logical,          parameter :: ATOMS_STATS_OMIT    = .false. ! omit = shorter atoms stats output
 integer,          parameter :: SOFT_EDGE           = 6
 integer,          parameter :: N_DISCRET           = 1000
@@ -426,6 +426,7 @@ contains
         logical :: mask_present
         integer :: sz, i, cnt
         sz           = size(self%atominfo)
+        print *, 'sz = ', sz
         mask_present = .false.
         if( present(mask) ) mask_present = .true.
         if( mask_present )then
@@ -965,12 +966,13 @@ contains
 
     end subroutine split_atoms
 
-    subroutine validate_atoms( self, simatms )
+    subroutine validate_atoms( self, simatms, avg_valid_corr )
         class(nanoparticle), intent(inout) :: self
         class(image),        intent(in)    :: simatms
+        real, optional,      intent(out)   :: avg_valid_corr
         real, allocatable :: centers(:,:)           ! coordinates of the atoms in PIXELS
         real, allocatable :: pixels1(:), pixels2(:) ! pixels extracted around the center
-        real    :: maxrad
+        real    :: maxrad, sum
         integer :: ijk(3), npix_in, npix_out1, npix_out2, i, winsz
         type(stats_struct) :: corr_stats
         maxrad  = (self%theoretical_radius * 1.5) / self%smpd ! in pixels
@@ -979,6 +981,7 @@ contains
         centers = self%atominfo2centers()
         allocate(pixels1(npix_in), pixels2(npix_in), source=0.)
         ! calculate per-atom correlations
+        sum = 0
         do i = 1, self%n_cc
             ijk = nint(centers(:,i))
             call self%img_raw%win2arr_rad(ijk(1), ijk(2), ijk(3), winsz, npix_in, maxrad, npix_out1, pixels1)
@@ -992,6 +995,7 @@ contains
         write(logfhandle,'(A,F8.4)') 'Sigma  : ', corr_stats%sdev
         write(logfhandle,'(A,F8.4)') 'Max    : ', corr_stats%maxv
         write(logfhandle,'(A,F8.4)') 'Min    : ', corr_stats%minv
+        if (present(avg_valid_corr)) avg_valid_corr = corr_stats%avg
     end subroutine validate_atoms
 
     subroutine discard_low_valid_corr_atoms( self, use_auto_corr_thres, n_discard )
@@ -1605,7 +1609,6 @@ contains
 
         output_rad = ( sum(a) / 3 ) / ( 2. * sqrt(2.) )  ! 1/2 FCC nearest neighbor dist
         fit_rad    = 0.75 * output_rad ! 0.75 prevents fitting tails of other atoms
-
         ! Create search window containing sphere of fit rad to speed up loops.
         center  = self%atominfo(cc)%center(:)
         maxrad  = 0.5 * (sum(a)/3) / self%smpd
@@ -1641,6 +1644,7 @@ contains
             do j = jlo, jhi
                 do i = ilo, ihi
                     r = (1.*(/i, j, k/) - center) * self%smpd
+                    !print *, 'r = ', r
                     if( norm_2(r) < fit_rad )then
                         int = rmat(i,j,k)
                         if( int > 0 )then
@@ -1674,7 +1678,6 @@ contains
         cov_inv(3,2) = cov_inv(2,3)
         call matinv(cov_inv, cov, 3, errflg)
         self%atominfo(cc)%aniso = cov
-
         ! Sample fit for goodness of fit and visualization
         max_int_out = 0.
         fit_mask    = .false.
