@@ -18,7 +18,7 @@ integer, parameter :: LENSTR = 48
 type euclid_sigma2
     private
     real,    allocatable, public  :: sigma2_noise(:,:)      !< the sigmas for alignment & reconstruction (from groups)
-    real,    allocatable          :: sigma2_part(:,:)       !< the actual sigmas per particle (this part only)
+    real,    allocatable, public  :: sigma2_part(:,:)       !< the actual sigmas per particle (this part only)
     real,    allocatable          :: sigma2_groups(:,:,:)   !< sigmas for groups
     integer, allocatable          :: pinds(:)
     integer, allocatable          :: micinds(:)

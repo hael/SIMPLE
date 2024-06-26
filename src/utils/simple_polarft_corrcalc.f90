@@ -140,7 +140,7 @@ type :: polarft_corrcalc
     procedure          :: create_polar_absctfmats, calc_polar_ctf
     procedure          :: gen_shmat
     procedure, private :: gen_shmat_8
-    procedure          :: calc_corr_rot_shift
+    procedure          :: calc_corr_rot_shift, calc_abscorr_rot
     procedure          :: genmaxcorr_comlin
     procedure          :: gencorrs_weighted_cc, gencorrs_shifted_weighted_cc
     procedure          :: gencorrs_cc,          gencorrs_shifted_cc
@@ -1150,7 +1150,7 @@ contains
         integer,                 intent(in)    :: irot
         complex(dp), pointer :: pft_ref(:,:), shmat(:,:), pft_rot_ref(:,:)
         real(dp)    :: sqsumref, sqsumptcl, num
-        integer     :: i, k, ithr!, rot
+        integer     :: i, k, ithr
         i    = self%pinds(iptcl)
         ithr = omp_get_thread_num() + 1
         pft_ref     => self%heap_vars(ithr)%pft_ref_8
@@ -1175,6 +1175,47 @@ contains
         enddo
         calc_corr_rot_shift = real(num/sqrt(sqsumref*sqsumptcl))
     end function calc_corr_rot_shift
+
+    real function calc_abscorr_rot( self, iref, iptcl, irot)
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        integer,                 intent(in)    :: irot
+        complex(dp), pointer :: pft_ref(:,:), pft_rot_ref(:,:)
+        real(dp)    :: sqsumref, sqsumptcl, num
+        integer     :: i, k, ithr
+        i    = self%pinds(iptcl)
+        ithr = omp_get_thread_num() + 1
+        pft_ref     => self%heap_vars(ithr)%pft_ref_8
+        pft_rot_ref => self%heap_vars(ithr)%pft_ref_tmp_8
+        if( self%iseven(i) )then
+            pft_ref = self%pfts_refs_even(:,:,iref)
+        else
+            pft_ref = self%pfts_refs_odd(:,:,iref)
+        endif
+        call self%rotate_ref(pft_ref, irot, pft_rot_ref)
+        if( self%with_ctf ) pft_rot_ref = pft_rot_ref * self%ctfmats(:,:,i)
+        select case(params_glob%cc_objfun)
+        case(OBJFUN_CC)
+            sqsumref  = 0.d0
+            sqsumptcl = 0.d0
+            num       = 0.d0
+            do k = self%kfromto(1),self%kfromto(2)
+                sqsumptcl = sqsumptcl + real(k,dp) * real(sum(abs(self%pfts_ptcls(:,k,i))**2),dp)
+                sqsumref  = sqsumref  + real(k,dp) * real(sum(abs(pft_rot_ref(:,k)      )**2) ,dp)
+                num       = num       + real(k,dp) * real(sum(abs(pft_rot_ref(:,k)) * abs(self%pfts_ptcls(:,k,i))),dp)
+            enddo
+            calc_abscorr_rot = real(num/sqrt(sqsumref*sqsumptcl))
+        case(OBJFUN_EUCLID)
+            pft_ref = abs(pft_rot_ref) - abs(self%pfts_ptcls(:,:,i))
+            sqsumptcl = 0.d0
+            num       = 0.d0
+            do k = self%kfromto(1),self%kfromto(2)
+                sqsumptcl = sqsumptcl + (real(k,dp) / self%sigma2_noise(k,iptcl)) * real(sum(abs(self%pfts_ptcls(:,k,i))**2),dp)
+                num       = num       + (real(k,dp) / self%sigma2_noise(k,iptcl)) * real(sum(real(pft_ref(:,k))**2),dp)
+            end do
+            calc_abscorr_rot = real(exp( -num / sqsumptcl ))
+        end select
+    end function calc_abscorr_rot
 
     subroutine calc_frc( self, iref, iptcl, irot, shvec, frc )
         class(polarft_corrcalc),  intent(inout) :: self
