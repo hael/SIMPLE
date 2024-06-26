@@ -30,7 +30,7 @@ public :: analysis2D_nano_commander
 public :: center2D_nano_commander
 public :: cluster2D_nano_commander
 public :: tseries_ctf_estimate_commander
-public :: autoclean_nano_commander
+public :: extract_substk_commander
 public :: autorefine3D_nano_commander
 public :: refine3D_nano_commander
 public :: cavgsproc_nano_commander
@@ -101,10 +101,10 @@ type, extends(commander_base) :: tseries_ctf_estimate_commander
     procedure :: execute      => exec_tseries_ctf_estimate
 end type tseries_ctf_estimate_commander
 
-type, extends(commander_base) :: autoclean_nano_commander
+type, extends(commander_base) :: extract_substk_commander
 contains
-    procedure :: execute      => exec_autoclean_nano
-end type autoclean_nano_commander
+    procedure :: execute      => exec_extract_substk
+end type extract_substk_commander
 
 type, extends(commander_base) :: autorefine3D_nano_commander
   contains
@@ -942,87 +942,23 @@ contains
         call xrefine3D_distr%execute(cline)
     end subroutine exec_refine3D_nano
 
-    subroutine exec_autoclean_nano( self, cline )
+    subroutine exec_extract_substk( self, cline )
         use simple_image, only: image
-        class(autoclean_nano_commander), intent(inout) :: self
+        class(extract_substk_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        type(parameters)              :: params
-        type(sp_project)              :: spproj
-        type(image)                   :: img
-        real,             allocatable :: rstates(:), corrs(:), tmp(:)
-        character(len=:), allocatable :: fname, cavgstk
-        real    :: corr_t, smpd
-        logical :: fall_over
-        integer :: i, funit, io_stat, nall, ldim(3), cnt, cnt2
-        call cline%set('mkdir', 'yes') ! because we want to create the directory X_autoclean_nano & copy the project file
+        type(parameters) :: params
+        type(sp_project) :: spproj
+        call cline%set('mkdir', 'no')
         ! init params
         call params%new(cline)
-        params%mkdir = 'no'            ! to prevent the input vol to be appended with ../
-        call cline%set('mkdir', 'no')  ! because we do not want a nested directory structure in the execution directory
         ! read the project file
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
         call spproj%write_segment_inside('projinfo')
-        ! sanity checks
-        rstates = spproj%os_ptcl2D%get_all('state')
-        fall_over = .false.
-        if( any(rstates < 0.5 ) ) fall_over = .true.
-        deallocate(rstates)
-        rstates = spproj%os_ptcl3D%get_all('state')
-        if( any(rstates < 0.5 ) ) fall_over = .true.
-        if( fall_over ) THROW_HARD('There are state=0s in the ptcl2D/3D fields of the project, which is not allowed.')
-        rstates = spproj%os_cls2D%get_all('state')
-        ! print CSV file of correlation vs particle number
-        corrs = spproj%os_cls3D%get_all('corr')
-        fname = 'class_vs_reprojs_corrs.csv'
-        call fopen(funit, trim(fname), 'replace', 'unknown', iostat=io_stat, form='formatted')
-        call fileiochk('autoclean_nano fopen failed'//trim(fname), io_stat)
-        write(funit,*) 'CLASS_INDEX'//CSV_DELIM//'CORR'
-        do i = 1,size(corrs)
-            write(funit,*) int2str(i)//CSV_DELIM//real2str(corrs(i))
-        end do
-        call fclose(funit)
-        ! identify correlation treshold
-        tmp = pack(corrs, mask=corrs > TINY)
-        call otsu(size(tmp), tmp, corr_t)
-
-        print *, 'corr threshold: ', corr_t
-
-        where( corrs >= corr_t )
-            rstates = 1.0
-        elsewhere
-            rstates = 0.
-        endwhere
-        ! update states
-        call spproj%os_cls2D%set_all('state', rstates)
-        call spproj%os_cls3D%set_all('state', rstates)
-        call spproj%write(params%projfile)
-
-
-        call spproj%get_cavgs_stk(cavgstk, nall, smpd)
-        call find_ldim_nptcls(cavgstk, ldim, nall)
-        ldim(3) = 1
-        if( size(corrs) /= nall ) THROW_HARD('# class averages incongruent')
-        ! read images
-        call img%new(ldim, smpd)
-        cnt  = 0
-        cnt2 = 0
-        do i = 1,nall
-            call img%new(ldim, smpd)
-            call img%read(cavgstk, i)
-            if( corrs(i) >= corr_t )then
-                cnt = cnt + 1
-                call img%write('cavgs_selected.mrcs', cnt)
-            else
-                cnt2 = cnt2 + 1
-                call img%write('cavgs_rejected.mrcs', cnt2)
-            endif
-        end do
-
-
+        call spproj%write_substk([params%fromp,params%top], params%outstk)
         ! end gracefully
-        call simple_end('**** SINGLE_AUTOCLEAN_NANO NORMAL STOP ****')
-    end subroutine exec_autoclean_nano
+        call simple_end('**** SINGLE_extract_substk NORMAL STOP ****')
+    end subroutine exec_extract_substk
 
     subroutine exec_autorefine3D_nano( self, cline )
         use simple_commander_atoms, only: detect_atoms_commander

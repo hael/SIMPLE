@@ -92,6 +92,7 @@ contains
     procedure          :: get_mic2stk_inds
     ! modifiers
     procedure          :: split_stk
+    procedure          :: write_substk
     procedure          :: set_sp_oris
     procedure          :: scale_projfile
     procedure          :: merge_algndocs
@@ -1297,7 +1298,7 @@ contains
         call o_ptcl%kill
         call o_stk%kill
     end subroutine add_stktab_2
-
+    
     !>  Only commits to disk when a change to the project is made
     subroutine split_stk( self, nparts, dir )
         use simple_map_reduce,        only: split_nobjs_even
@@ -1434,6 +1435,53 @@ contains
         call simple_rmdir(tmp_dir,errmsg="sp_project::split_stk")
         call orig_stk%kill
     end subroutine split_stk
+
+    subroutine write_substk( self, fromto, stkout )
+        use simple_image,             only: image
+        use simple_stack_io,          only: stack_io
+        use simple_discrete_stack_io, only: dstack_io
+        class(sp_project), intent(inout) :: self
+        integer,           intent(in)    :: fromto(2)
+        character(len=*),  intent(in)    :: stkout
+        character(len=:), allocatable    :: stk
+        integer         :: ind_in_stk, iptcl, n_os_stk, nptcls, box, cnt, ffromto(2)
+        real            :: smpd
+        type(image)     :: img
+        type(ori)       :: orig_stk
+        type(stack_io)  :: stkio_w
+        type(dstack_io) :: dstkio_r
+        ! check that stk field is not empty
+        n_os_stk = self%os_stk%get_noris()
+        if( n_os_stk == 0 )then
+            THROW_HARD('No stack to extract from! write_substk')
+        else if( n_os_stk > 1 )then ! re-splitting not supported
+            return
+        endif
+        ! get original simple_parameters
+        call self%os_stk%get_ori(1, orig_stk)
+        ! copy prep
+        nptcls  = self%get_nptcls()
+        ffromto = fromto
+        if( ffromto(1) < 1 ) ffromto(1) = 1
+        if( ffromto(2) < 1 ) ffromto(2) = nptcls
+        ! images copy
+        smpd = orig_stk%get('smpd')
+        box  = nint(orig_stk%get('box'))
+        call img%new([box,box,1], smpd)
+        call dstkio_r%new(smpd, box)
+        call stkio_w%open(stkout, smpd, 'write', box=box, is_ft=.false.)
+        cnt = 0
+        do iptcl = ffromto(1),ffromto(2)
+            cnt = cnt + 1
+            if( iptcl < 1 .or. iptcl > nptcls ) THROW_HARD('index '//int2str(iptcl)//' out of range')
+            call self%get_stkname_and_ind('ptcl2D', iptcl, stk, ind_in_stk)
+            call dstkio_r%read(stk, ind_in_stk, img)
+            call stkio_w%write(cnt, img)
+        end do
+        call stkio_w%close
+        call dstkio_r%kill
+        call img%kill
+    end subroutine write_substk
 
     function get_micname( self, iptcl ) result( micname )
         class(sp_project), intent(inout) :: self
