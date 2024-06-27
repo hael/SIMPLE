@@ -134,6 +134,7 @@ use simple_aff_prop
         enddo
         ! set up positions and inds_offset
         allocate(self%positions(nboxes,3),        source = 0)
+        allocate(self%center_positions(nboxes,3), source = 0.)
         allocate(self%inds_offset(self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3)), source=0)
         self%nxyz_offset = 0
         nboxes           = 0
@@ -159,6 +160,7 @@ use simple_aff_prop
         class(nano_picker), intent(inout) :: self
         logical, optional,  intent(in)    :: circle
         type(image), allocatable :: boximgs(:)
+        type(image)              :: boximg
         integer                  :: xoff, yoff, zoff, pos(3), pos_center(3), ithr, nthr, winsz, npix_in, npix_out1, npix_out2
         logical                  :: l_err_box, circle_here
         real                     :: maxrad, xyz(3)
@@ -169,15 +171,15 @@ use simple_aff_prop
         else
             circle_here = .false.
         endif
-        ! construct array of boximgs
-        !$ nthr = omp_get_max_threads()
-        allocate(boximgs(nthr))
-        do ithr = 1,nthr
-            call boximgs(ithr)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
-        enddo
         if( .not. circle_here )then
             ! use entire boxes for correlation scores
             ! iterate through positions in nanoparticle image, compare to simulated atom 
+            ! construct array of boximgs
+            !$ nthr = omp_get_max_threads()
+            allocate(boximgs(nthr))
+            do ithr = 1,nthr
+                call boximgs(ithr)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
+            enddo
             !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,ithr,pos,l_err_box) proc_bind(close)
             do xoff = 1, self%nxyz_offset(1)
                 do yoff = 1, self%nxyz_offset(2)
@@ -192,51 +194,54 @@ use simple_aff_prop
                 enddo 
             enddo
             !$omp end parallel do
+            ! kill boximgs
+            do ithr = 1, nthr
+                call boximgs(ithr)%kill
+            enddo
+            deallocate(boximgs)
         else
         ! circular correlation
             maxrad    = (self%radius * 1.5) / self%smpd ! in pixels
             winsz     = ceiling(maxrad)
             npix_in   = (2 * winsz + 1)**3
-            allocate(pixels1(npix_in), pixels2(npix_in), source=0.)
             ! !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,ithr,pos,pos_center,xyz,l_err_box) proc_bind(close)
             do xoff = 1, self%nxyz_offset(1)
                 do yoff = 1, self%nxyz_offset(2)
                     do zoff = 1, self%nxyz_offset(3)
+                        call boximg%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
+                        if (allocated(pixels1)) deallocate(pixels1)
+                        if (allocated(pixels2)) deallocate(pixels2)
+                        allocate(pixels1(npix_in), pixels2(npix_in), source=0.)
                         pos  = self%positions(self%inds_offset(xoff,yoff,zoff),:)
                         !pos_center = pos + [self%boxsize/2,self%boxsize/2,self%boxsize/2]
-                        ithr = omp_get_thread_num() + 1
-                        call self%nano_img%window_slim( pos, self%boxsize, boximgs(ithr), outside)
-                        call boximgs(ithr)%norm_minmax
-                        call boximgs(ithr)%masscen(xyz)
+                        call self%nano_img%window_slim( pos, self%boxsize, boximg, outside)
+                        call boximg%norm_minmax
+                        call boximg%masscen(xyz)
                         pos_center = pos + anint(xyz) + [self%boxsize/2,self%boxsize/2,self%boxsize/2]
-                        do 
-                            if( pos_center(1)-winsz < 1 .or. pos_center(2)-winsz < 1 .or. pos_center(3)-winsz < 1 )then
-                                pos_center = pos_center + [1,1,1]
-                            else
-                                exit
-                            endif
-                        enddo
-                        do 
-                            if( pos_center(1)+winsz > self%ldim(1) .or. pos_center(2)+winsz > self%ldim(2) .or. pos_center(3)+winsz > self%ldim(3) )then
-                                pos_center = pos_center - [1,1,1]
-                            else
-                                exit
-                            endif
-                        enddo
+                        ! edge positions should never be atoms
+                        if( pos_center(1)-winsz < 1 .or. pos_center(2)-winsz < 1 .or. pos_center(3)-winsz < 1 )then
+                            self%box_scores(xoff,yoff,zoff) = -1
+                            cycle
+                        else if ( pos_center(1)+winsz > self%ldim(1) .or. pos_center(2)+winsz > self%ldim(2) .or. pos_center(3)+winsz > self%ldim(3) )then
+                            self%box_scores(xoff,yoff,zoff) = -1
+                            cycle
+                        end if
                         call self%nano_img%win2arr_rad(      pos_center(1),  pos_center(2),  pos_center(3),  winsz, npix_in, maxrad, npix_out1, pixels1)
                         call self%simulated_atom%win2arr_rad(self%boxsize/2, self%boxsize/2, self%boxsize/2, winsz, npix_in, maxrad, npix_out2, pixels2)
                         self%box_scores(xoff,yoff,zoff) = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))
-                        self%loc_sdevs( xoff,yoff,zoff) = boximgs(ithr)%avg_loc_sdev(self%offset)
+                        self%loc_sdevs( xoff,yoff,zoff) = boximg%avg_loc_sdev(self%offset)
+                        if (pos(1) .eq. 58 .and. pos(2) .eq. 46 .and. pos(3) .eq. 28 ) then
+                            print *, 'pos = ', pos
+                            print *, 'pos_center = ', pos_center
+                            print *, 'SCORE = ', self%box_scores(xoff,yoff,zoff)
+                        end if
+                        call boximg%kill
                     enddo 
                 enddo 
             enddo
+            ! !$omp end parallel do
+            deallocate(pixels1,pixels2)
         endif
-        ! !$omp end parallel do
-        ! kill boximgs
-        do ithr = 1, nthr
-            call boximgs(ithr)%kill
-        enddo
-        deallocate(boximgs)
     end subroutine match_boxes
 
     subroutine one_box_corr(self, pos, circle, corr)
@@ -250,12 +255,16 @@ use simple_aff_prop
         integer           :: pos_int(3), pos_center(3), winsz, npix_in, npix_out1, npix_out2
         logical           :: outside
         print *, 'inside one_box_corr'
+        print *, 'pos = ', pos
         pos_int = anint(pos)
+        print *, 'pos_int = ', pos_int
         call boximg%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
         call self%nano_img%window_slim( pos_int, self%boxsize, boximg, outside)
         call boximg%norm_minmax
         call boximg%masscen(xyz)
+        print *, 'xyz = ', xyz
         pos_center = pos + anint(xyz) + [self%boxsize/2,self%boxsize/2,self%boxsize/2]
+        print *, 'pos_center = ', pos_center
         if (.not. circle) then
             corr      = self%simulated_atom%real_corr(boximg)
         else
@@ -263,23 +272,10 @@ use simple_aff_prop
             winsz     = ceiling(maxrad)
             npix_in   = (2 * winsz + 1)**3
             allocate(pixels1(npix_in), pixels2(npix_in), source=0.)
-            do 
-                if( pos_center(1)-winsz < 1 .or. pos_center(2)-winsz < 1 .or. pos_center(3)-winsz < 1 )then
-                    pos_center = pos_center + [1,1,1]
-                else
-                    exit
-                endif
-            enddo
-            do 
-                if( pos_center(1)+winsz > self%ldim(1) .or. pos_center(2)+winsz > self%ldim(2) .or. pos_center(3)+winsz > self%ldim(3) )then
-                    pos_center = pos_center - [1,1,1]
-                else
-                    exit
-                endif
-            enddo
             call self%nano_img%win2arr_rad(      pos_center(1),  pos_center(2),  pos_center(3),  winsz, npix_in, maxrad, npix_out1, pixels1)
             call self%simulated_atom%win2arr_rad(self%boxsize/2, self%boxsize/2, self%boxsize/2, winsz, npix_in, maxrad, npix_out2, pixels2)
             corr = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))
+            print *, 'corr = ', corr
         end if
         call boximg%kill
     end subroutine one_box_corr
@@ -402,9 +398,8 @@ use simple_aff_prop
         allocate(atms_array(nbox))
         if (allocated(self%convolved_atoms)) deallocate(self%convolved_atoms)
         allocate(self%convolved_atoms(nbox))
-        if (allocated(self%center_positions)) deallocate(self%center_positions)
-        allocate(self%center_positions(nbox,3), source = 0.)
         call self%simulated_atom%fft()
+        cnt = 0
         do iimg = 1, nbox
             pos = self%positions(pos_inds(iimg),:)
             call atms_array(iimg)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
@@ -419,7 +414,6 @@ use simple_aff_prop
             call self%convolved_atoms(iimg)%norm_minmax
             call self%convolved_atoms(iimg)%masscen(coords(iimg,:)) 
             coords(iimg,:) = coords(iimg,:) + real(self%convolved_atoms(iimg)%get_ldim())/2. + pos !adjust center by size and position of box
-            !print *, 'iimg = ', iimg, 'coords = ', coords(iimg,:)
             ! update center positions for chosen boxes
             self%center_positions(pos_inds(iimg),:) = coords(iimg,:)
         enddo
@@ -517,8 +511,8 @@ use simple_aff_prop
         nbox     = size(pos_inds, dim=1)
         allocate(coords(nbox,3))
         do iimg = 1, nbox
-            pos = self%center_positions(pos_inds(iimg),:)
-            coords(iimg,:) = pos
+            pos = self%positions(pos_inds(iimg),:)
+            coords(iimg,:) = self%center_positions(pos_inds(iimg),:)
         enddo
         if( present(filename) )then
             call write_centers(filename,coords,self%smpd)
@@ -559,7 +553,8 @@ use simple_aff_prop
         nbox     = size(pos_inds)
         allocate(coords(nbox,3))
         do ipos = 1, nbox
-            coords(ipos,:) = self%center_positions(pos_inds(ipos),:) * self%smpd
+            coords(ipos,:) = self%center_positions(pos_inds(ipos),:) * self%smpd ! using center positions and Angstroms (same as pdb)
+            !coords(ipos,:) = self%positions(pos_inds(ipos),:) ! keep in pixels
         enddo
         open(unit=25, file=filename, status='replace', action='write')
         do i = 1, nbox
@@ -632,7 +627,6 @@ use simple_aff_prop
         pos_int = anint(pos)
         call img%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
         call self%nano_img%window_slim( pos_int, self%boxsize, img, outside)
-        print *, 'boxsize = ', self%boxsize
     end subroutine extract_img_from_pos
 
     ! input both pdbfile_* with .pdb extension
