@@ -28,17 +28,17 @@ type(oris)                    :: os
 type(image), allocatable      :: match_imgs(:), ptcl_match_imgs(:)
 ! character(len=:), allocatable :: cmd
 logical                :: be_verbose=.false.
-real,    parameter     :: SHMAG=5.0
+real,    parameter     :: SHMAG=3.0
 real,    parameter     :: SNR  =0.01
 real,    parameter     :: BFAC =10.
-integer, parameter     :: N_PTCLS = 100
+integer, parameter     :: N_PTCLS = 10, SH_ITERS = 5
 logical, allocatable   :: ptcl_mask(:)
 integer, allocatable   :: pinds(:)
 type(ctfparams)        :: ctfparms
 type(euclid_sigma2)    :: eucl
-real, allocatable      :: sigma2_group(:,:,:)
-real                   :: cxy(3), lims(2,2), lims_init(2,2), sh(2)
-integer                :: xsh, ysh, xbest, ybest, i, irot, ne, no, iptcl, nptcls2update, ithr
+real, allocatable      :: sigma2_group(:,:,:), truth_sh(:,:)
+real                   :: cxy(3), lims(2,2), lims_init(2,2)
+integer                :: xsh, ysh, xbest, ybest, i, irot, ne, no, iptcl, nptcls2update, ithr, iter
 logical                :: mrc_exists
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)',advance='no') 'ERROR! required arguments: '
@@ -81,20 +81,25 @@ call b%img%read(p%stk, p%iptcl)
 call prepimgbatch(N_PTCLS)
 call os%new(p%nptcls,is_ptcl=.true.)
 call os%rnd_ctf(p%kv, 2.7, 0.1, 2.5, 1.5, 0.001)
+allocate(truth_sh(p%fromp:p%top,2))
 do iptcl = p%fromp,p%top
     call os%set(iptcl,'state',1.)
     call os%set(iptcl,'w',    1.)
     call os%set(iptcl,'class',1.)
-    sh  = [gasdev( 0., SHMAG), gasdev( 0., SHMAG)]
-    call os%set(iptcl,'x',sh(1))
-    call os%set(iptcl,'y',sh(2))
+    truth_sh(iptcl,:) = [gasdev( 0., SHMAG), gasdev( 0., SHMAG)]
+    call os%set(iptcl,'x', truth_sh(iptcl,1))
+    call os%set(iptcl,'y', truth_sh(iptcl,2))
     call os%get_ori(iptcl, o)
     call b%img%pad(b%img_pad)
     call b%img_pad%fft
-    call b%img_pad%shift2Dserial([0., 0.])          ! intention of wrong shift to form nonreliable reference
+    call b%img_pad%shift2Dserial(truth_sh(iptcl,:) )
     call simimg(b%img_pad, o, tfun, p%ctf, SNR, bfac=BFAC)
     call b%img_pad%clip(b%imgbatch(iptcl))
     call b%imgbatch(iptcl)%write('particles.mrc',iptcl)
+enddo
+do iptcl = p%fromp,p%top
+    call os%set(iptcl,'x', 0.)
+    call os%set(iptcl,'y', 0.)
 enddo
 call b%spproj%add_single_stk('particles.mrc', ctfparms, os)
 call b%spproj_field%partition_eo
@@ -125,56 +130,62 @@ do iptcl = 1,p%nptcls
 end do
 !$omp end parallel do
 call pftcc%create_polar_absctfmats(b%spproj, 'ptcl2D')
-! initial sigma2
-allocate( sigma2_group(2,1,1:fdim(p%box)-1), source=0. )
-ne = 0
-no = 0
-do iptcl = p%fromp,p%top
-    call b%spproj_field%get_ori(iptcl, o)
-    call eucl%calc_sigma2(pftcc, iptcl, o, 'class')
-    if( o%get_eo() == 0 )then
-        ne = ne+1
-        sigma2_group(1,1,:) = sigma2_group(1,1,:) + eucl%sigma2_part(:,iptcl)
-    else
-        no = no+1
-        sigma2_group(2,1,:) = sigma2_group(2,1,:) + eucl%sigma2_part(:,iptcl)
-    endif
-enddo
-sigma2_group(1,:,:) = sigma2_group(1,:,:) / real(ne)
-sigma2_group(2,:,:) = sigma2_group(2,:,:) / real(no)
-call write_groups_starfile(sigma2_star_from_iter(0), sigma2_group, 1)
-call eucl%read_groups(b%spproj_field, ptcl_mask)
-do iptcl = p%fromp,p%top
-    call pftcc%memoize_sqsum_ptcl(iptcl)
-enddo
-call pftcc%memoize_refs
-call pftcc%memoize_ptcls
 
-! shift search
-iptcl           =  4
+! prep for shift search
 lims(:,1)       = -p%trs
 lims(:,2)       =  p%trs
 lims_init(:,1)  = -SHC_INPL_TRSHWDTH
 lims_init(:,2)  =  SHC_INPL_TRSHWDTH
 call grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=p%maxits_sh, opt_angle=(trim(p%sh_opt_angle).eq.'yes'), coarse_init=.false.)
-call grad_shsrch_obj%set_indices(1, iptcl)
-irot = 1 ! zero angle
-cxy  = grad_shsrch_obj%minimize(irot=irot)
-print *,'irot  ', irot
-print *,'score ', cxy(1)
-print *,'shift ', cxy(2:3)
-call os%get_ori(iptcl, o)
-print *,'truth ', o%get_2Dshift()
-call b%spproj_field%set_shift(iptcl, b%spproj_field%get_2Dshift(iptcl)+cxy(2:3)) !!
 
-do iptcl = p%fromp,p%top
-    call grad_shsrch_obj%set_indices(1, iptcl)
-    irot = 1 ! zero angle
-    cxy  = grad_shsrch_obj%minimize(irot=irot)
-    call b%spproj_field%set_shift(iptcl, b%spproj_field%get_2Dshift(iptcl)+cxy(2:3)) !!
+! initial sigma2
+allocate( sigma2_group(2,1,1:fdim(p%box)-1), source=0. )
+do iter = 1, SH_ITERS
+    ne = 0
+    no = 0
+    do iptcl = p%fromp,p%top
+        call b%spproj_field%get_ori(iptcl, o)
+        call eucl%calc_sigma2(pftcc, iptcl, o, 'class')
+        if( o%get_eo() == 0 )then
+            ne = ne+1
+            sigma2_group(1,1,:) = sigma2_group(1,1,:) + eucl%sigma2_part(:,iptcl)
+        else
+            no = no+1
+            sigma2_group(2,1,:) = sigma2_group(2,1,:) + eucl%sigma2_part(:,iptcl)
+        endif
+    enddo
+    sigma2_group(1,:,:) = sigma2_group(1,:,:) / real(ne)
+    sigma2_group(2,:,:) = sigma2_group(2,:,:) / real(no)
+    call write_groups_starfile(sigma2_star_from_iter(iter-1), sigma2_group, 1)
+    call eucl%read_groups(b%spproj_field, ptcl_mask)
+    do iptcl = p%fromp,p%top
+        call pftcc%memoize_sqsum_ptcl(iptcl)
+    enddo
+    call pftcc%memoize_ptcls
+
+    ! shift search
+    do iptcl = p%fromp,p%top
+        call grad_shsrch_obj%set_indices(1, iptcl)
+        irot = 1 ! zero angle
+        cxy  = grad_shsrch_obj%minimize(irot=irot)
+        if( iptcl == 4 )then
+            print *,'irot  ',     irot
+            print *,'score ',     cxy(1)
+            print *,'cur shift ', b%spproj_field%get_2Dshift(iptcl)
+            print *,'opt shift ', cxy(2:3)
+            print *,'truth ',     truth_sh(iptcl,:)
+        endif
+        call b%spproj_field%set_shift(iptcl, cxy(2:3)) !!
+    enddo
+
+    call restore_read_polarize_cavgs(iter)
 enddo
 
-call restore_read_polarize_cavgs(1)
+do iptcl = p%fromp,p%top
+    call b%spproj_field%set_shift(iptcl, truth_sh(iptcl,:))
+enddo
+
+call restore_read_polarize_cavgs(iter)
 
 
 contains
