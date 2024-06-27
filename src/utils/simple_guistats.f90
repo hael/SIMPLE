@@ -19,6 +19,7 @@ contains
     ! setters 
     procedure :: new_section
     procedure :: ensure_section
+    procedure :: deactivate_section
     generic   :: set => set_1, set_2, set_3
     procedure :: set_1
     procedure :: set_2
@@ -93,6 +94,25 @@ contains
             self%updated = .true.
         end if
     end subroutine ensure_section
+
+    subroutine deactivate_section( self, section_name )
+        class(guistats),    intent(inout) :: self
+        character(len=*),   intent(in)    :: section_name
+        integer                           :: i, n_sections
+        logical                           :: exists
+        exists = .false.
+        if(self%stats%isthere(1, "sects")) then
+            n_sections = int(self%stats%get(1, "sects"))
+            do i = 1, n_sections
+                if(self%stats%isthere(1, "sect_" // int2str(i)) \
+                    .and. trim(adjustl(self%stats%get_static(1, "sect_" // int2str(i)))) .eq. section_name) then
+                        call self%stats%set(1, "sect_" // int2str(i), "null")
+                        self%updated = .true.
+                    exit 
+                end if
+            enddo
+        end if
+    end subroutine deactivate_section
 
     function get_keyline( self, section, key ) result ( line )
         class(guistats),  intent(inout) :: self
@@ -389,7 +409,7 @@ contains
             ! create object of section entries
             call json%create_object(sections, 'sections')
             do isect=1, int(self%stats%get(1, "sects"))
-                if(self%stats%isthere(1, "sect_" // int2str(isect))) then
+                if(self%stats%isthere(1, "sect_" // int2str(isect)) .and. trim(adjustl(self%stats%get_static(1, "sect_" // int2str(isect)))) .ne. "null") then
                     call create_section_array(trim(adjustl(self%stats%get_static(1, "sect_" // int2str(isect)))))
                     call json%add(sections, section)
                 end if
