@@ -399,7 +399,6 @@ use simple_aff_prop
         if (allocated(self%convolved_atoms)) deallocate(self%convolved_atoms)
         allocate(self%convolved_atoms(nbox))
         call self%simulated_atom%fft()
-        cnt = 0
         do iimg = 1, nbox
             pos = self%positions(pos_inds(iimg),:)
             call atms_array(iimg)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
