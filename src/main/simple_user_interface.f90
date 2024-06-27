@@ -3440,7 +3440,7 @@ contains
         &'Template-based particle picking',&                               ! descr_short
         &'is a distributed workflow for template-based particle picking',& ! descr_long
         &'simple_exec',&                                                   ! executable
-        &1, 7, 0, 4, 0, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        &1, 7, 0, 4, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         pick%gui_submenu_list = "picking,compute"
         pick%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -3475,7 +3475,8 @@ contains
         call pick%set_input('srch_ctrls', 4, crowded)
         call pick%set_gui_params('srch_ctrls', 4, submenu="picking")
         ! filter controls
-        ! <empty>
+        call pick%set_input('filt_ctrls', 1, lp)
+        call pick%set_gui_params('filt_ctrls', 1, submenu="picking")
         ! mask controls
         ! <empty>
         ! computer controls
