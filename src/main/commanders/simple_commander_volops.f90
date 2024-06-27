@@ -75,11 +75,15 @@ contains
         type(parameters)  :: params
         type(builder)     :: build
         real, allocatable :: shvec(:,:)
+        real              :: avg(2), stdev
         integer           :: ldim(3), istate, i, nimgs
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp',   20.)
         call build%init_params_and_build_general_tbox(cline,params)
         if( cline%defined('stk') )then
+            if( params%masscen.ne.'yes' )then
+                if(.not.cline%defined('oritab') ) THROW_HARD('Alignments parameters are required')
+            endif
             call find_ldim_nptcls(params%stk, ldim, nimgs)
             allocate(shvec(nimgs,3))
             call build%img%construct_thread_safe_tmp_imgs(1)
@@ -91,11 +95,11 @@ contains
                 else
                     shvec(i,:) = build%img%calc_shiftcen_serial(params%cenlp, params%msk)
                 endif
+                if( cline%defined('oritab') ) call build%spproj_field%add_shift2class(i, -shvec(i,:))
                 call build%img%fft
                 call build%img%shift2Dserial(shvec(i,1:2))
                 call build%img%ifft
                 call build%img%write(params%outstk,i)
-                if( cline%defined('oritab') ) call build%spproj_field%map3dshift22d(-shvec(i,:), state=1)
             enddo
             call build%img%kill_thread_safe_tmp_imgs
         else
