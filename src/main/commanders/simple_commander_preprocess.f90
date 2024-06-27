@@ -941,11 +941,11 @@ contains
         if( .not. cline%defined('pick_roi')    ) call cline%set('pick_roi',     'no')
         if( .not. cline%defined('backgr_subtr')) call cline%set('backgr_subtr', 'no') 
         if( .not. cline%defined('picker')      ) call cline%set('picker',      'old')
+        if( .not. cline%defined('lp')          ) call cline%set('lp',PICK_LP_DEFAULT)
         which_picker = cline%get_carg('picker')
-        if( which_picker .eq. 'seg' )then
+        if( trim(which_picker) .eq. 'seg' )then
             if( .not. cline%defined('ndev')        ) call cline%set('ndev',         1.5)
         else
-            if( .not. cline%defined('lp')          ) call cline%set('lp',PICK_LP_DEFAULT)
             if( .not. cline%defined('ndev')        ) call cline%set('ndev',           2.)
         endif
         call params%new(cline)

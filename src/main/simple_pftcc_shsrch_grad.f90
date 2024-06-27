@@ -33,6 +33,7 @@ contains
     procedure :: new         => grad_shsrch_new
     procedure :: set_indices => grad_shsrch_set_indices
     procedure :: minimize    => grad_shsrch_minimize
+    procedure :: minimize2
     procedure :: kill        => grad_shsrch_kill
     procedure :: does_opt_angle
     procedure :: set_limits
@@ -298,6 +299,85 @@ contains
             endif
         end if
     end function grad_shsrch_minimize
+
+    !> minimisation routine based on identification of in-plane rotation via shift invariant metric
+    function minimize2( self, irot ) result( cxy )
+        class(pftcc_shsrch_grad), intent(inout) :: self
+        integer,                  intent(inout) :: irot
+        integer, parameter :: ncoarse_steps = 5
+        real     :: abscorrs(pftcc_glob%get_pftsz()), corrs(pftcc_glob%get_nrots())
+        real     :: rotmat(2,2), cxy(3), ini_cost, prob_rnd, cost1,cost2, lowest_cost
+        real(dp) :: init_xy(2), xy(2), cost, stepx, stepy, curr_cost
+        integer  :: ix, iy, loc, i, irot1, irot2, init_rot
+        real(dp) :: x, y
+        ! Lower bound
+        self%ospec%x      = [0.,0.]
+        self%ospec%x_8    = [0.d0,0.d0]
+        self%cur_inpl_idx = irot
+        cost        = -pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, self%ospec%x_8, self%cur_inpl_idx)
+        lowest_cost = real(cost)
+        irot = 0
+        cxy  = [-lowest_cost, 0., 0.]
+        ! Two ambiguous in-plane rotations identified
+        call pftcc_glob%gencorrs_shinvariant(self%reference, self%particle, abscorrs)
+        irot1 = maxloc(abscorrs,dim=1)
+        irot2 = irot1 + pftcc_glob%get_pftsz()
+        ! Coarse search for first rotation
+        stepx = real(self%ospec%limits(1,2)-self%ospec%limits(1,1),dp)/real(ncoarse_steps,dp)
+        stepy = real(self%ospec%limits(2,2)-self%ospec%limits(2,1),dp)/real(ncoarse_steps,dp)
+        self%cur_inpl_idx = irot1
+        cost    = huge(cost)
+        init_xy = 0.d0
+        do ix = 1,ncoarse_steps
+            x = self%ospec%limits(1,1)+stepx/2. + real(ix-1,dp)*stepx
+            do iy = 1,ncoarse_steps
+                y = self%ospec%limits(2,1)+stepy/2. + real(iy-1,dp)*stepy
+                curr_cost = -pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, [x,y], self%cur_inpl_idx)
+                if (curr_cost < cost) then
+                    cost    = curr_cost
+                    init_xy = [x,y]
+                end if
+            enddo
+        enddo
+        ! Continuous search for first rotation
+        self%ospec%x   = real(init_xy)
+        self%ospec%x_8 = init_xy
+        call self%opt_obj%minimize(self%ospec, self, cost1)
+        if( cost1 < lowest_cost )then
+            lowest_cost = cost1
+            irot        = irot1
+            cxy         = [-lowest_cost, self%ospec%x(1), self%ospec%x(2)]
+        endif
+        ! Coarse search for second rotation
+        self%cur_inpl_idx = irot2
+        cost    = huge(cost)
+        init_xy = 0.d0
+        do ix = 1,ncoarse_steps
+            x = self%ospec%limits(1,1)+stepx/2. + real(ix-1,dp)*stepx
+            do iy = 1,ncoarse_steps
+                y = self%ospec%limits(2,1)+stepy/2. + real(iy-1,dp)*stepy
+                curr_cost = -pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, [x,y], self%cur_inpl_idx)
+                if (curr_cost < cost) then
+                    cost    = curr_cost
+                    init_xy = [x,y]
+                end if
+            enddo
+        enddo
+        ! Continuous search for second rotation
+        self%ospec%x   = real(init_xy)
+        self%ospec%x_8 = init_xy
+        call self%opt_obj%minimize(self%ospec, self, cost2)
+        if( cost2 < lowest_cost )then
+            lowest_cost = cost2
+            irot        = irot2
+            cxy         = [-lowest_cost, self%ospec%x(1), self%ospec%x(2)]
+        endif
+        ! reporting particle shift
+        if( irot > 0 )then
+          call rotmat2d(pftcc_glob%get_rot(irot), rotmat)
+            cxy(2:) = matmul(cxy(2:), rotmat)
+        endif
+    end function minimize2
 
     subroutine coarse_search(self, lowest_cost, init_xy)
         class(pftcc_shsrch_grad), intent(inout) :: self

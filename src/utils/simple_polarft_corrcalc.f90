@@ -140,7 +140,7 @@ type :: polarft_corrcalc
     procedure          :: create_polar_absctfmats, calc_polar_ctf
     procedure          :: gen_shmat
     procedure, private :: gen_shmat_8
-    procedure          :: calc_corr_rot_shift, calc_abscorr_rot
+    procedure          :: calc_corr_rot_shift, calc_abscorr_rot, gencorrs_shinvariant
     procedure          :: genmaxcorr_comlin
     procedure          :: gencorrs_weighted_cc, gencorrs_shifted_weighted_cc
     procedure          :: gencorrs_cc,          gencorrs_shifted_cc
@@ -778,7 +778,7 @@ contains
         endif
     end subroutine rotate_ptcl
 
-    ! Particle rotation of the reference
+    ! Particle rotation of the CTF or any real matrix
     subroutine rotate_ctf( self, iptcl, irot, ctf_rot)
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl, irot
@@ -1178,8 +1178,7 @@ contains
 
     real function calc_abscorr_rot( self, iref, iptcl, irot)
         class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref, iptcl
-        integer,                 intent(in)    :: irot
+        integer,                 intent(in)    :: iref, iptcl, irot
         complex(dp), pointer :: pft_ref(:,:), pft_rot_ref(:,:)
         real(dp)    :: sqsumref, sqsumptcl, num
         integer     :: i, k, ithr
@@ -1216,6 +1215,64 @@ contains
             calc_abscorr_rot = real(exp( -num / sqsumptcl ))
         end select
     end function calc_abscorr_rot
+
+    subroutine gencorrs_shinvariant( self, iref, iptcl, ccs )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        real,                    intent(inout) :: ccs(self%pftsz)
+        real(dp),    pointer :: abs_pft(:,:)
+        complex(dp), pointer :: pft_ref(:,:), pft_rot_ref(:,:)
+        real(dp)    :: sqsumref, num
+        integer     :: i, k, ithr, irot
+        i    = self%pinds(iptcl)
+        ithr = omp_get_thread_num() + 1
+        pft_ref     => self%heap_vars(ithr)%pft_ref_8
+        pft_rot_ref => self%heap_vars(ithr)%pft_ref_tmp_8
+        abs_pft     => self%heap_vars(ithr)%argmat_8
+        if( self%iseven(i) )then
+            pft_ref = self%pfts_refs_even(:,:,iref)
+        else
+            pft_ref = self%pfts_refs_odd(:,:,iref)
+        endif
+        select case(params_glob%cc_objfun)
+        case(OBJFUN_CC)
+            if( params_glob%l_kweight )then
+                do irot = 1,self%pftsz
+                    call self%rotate_ref(pft_ref, irot, pft_rot_ref)
+                    abs_pft = abs(pft_rot_ref)
+                    if( self%with_ctf ) abs_pft = abs_pft * self%ctfmats(:,:,i)
+                    sqsumref = 0.d0
+                    num      = 0.d0
+                    do k = self%kfromto(1),self%kfromto(2)
+                        sqsumref = sqsumref  + real(k,dp) * real(sum(abs_pft(:,k)**2) ,dp)
+                        num      = num       + real(k,dp) * real(sum(abs_pft(:,k) * abs(self%pfts_ptcls(:,k,i))),dp)
+                    enddo
+                    ccs(irot) = real(num / sqrt(sqsumref*self%ksqsums_ptcls(i)))
+                enddo
+            else
+                do irot = 1,self%pftsz
+                    call self%rotate_ref(pft_ref, irot, pft_rot_ref)
+                    abs_pft = abs(pft_rot_ref)
+                    if( self%with_ctf ) abs_pft = abs_pft * self%ctfmats(:,:,i)
+                    sqsumref  = real(sum(abs_pft**2) ,dp)
+                    num       = real(sum(abs_pft * abs(self%pfts_ptcls(:,:,i))),dp)
+                    ccs(irot) = real(num / sqrt(sqsumref*self%sqsums_ptcls(i)))
+                enddo
+            endif
+        case(OBJFUN_EUCLID)
+            do irot = 1,self%pftsz
+                call self%rotate_ref(pft_ref, irot, pft_rot_ref)
+                abs_pft = abs(pft_rot_ref)
+                if( self%with_ctf ) abs_pft = abs_pft * self%ctfmats(:,:,i)
+                abs_pft = abs_pft - abs(self%pfts_ptcls(:,:,i))
+                num = 0.d0
+                do k = self%kfromto(1),self%kfromto(2)
+                    num = num + (real(k,dp) / self%sigma2_noise(k,iptcl)) * real(sum(abs_pft(:,k)**2),dp)
+                end do
+                ccs(irot) = real(exp( -num / self%wsqsums_ptcls(i) ))
+            enddo
+        end select
+    end subroutine gencorrs_shinvariant
 
     subroutine calc_frc( self, iref, iptcl, irot, shvec, frc )
         class(polarft_corrcalc),  intent(inout) :: self
