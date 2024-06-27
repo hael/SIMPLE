@@ -357,6 +357,7 @@ contains
         call write_mic_star_and_field(write_field=.true., copy_optics=.true.)
         ! final stats
         call gui_stats%hide('compute', 'compute_in_use')
+        call gui_stats%deactivate_section('compute')
         call gui_stats%write_json
         call gui_stats%kill
         ! cleanup
@@ -1028,6 +1029,7 @@ contains
         call spproj_glob%os_ptcl2D%kill
         ! final stats
         call gui_stats%hide('compute', 'compute_in_use')
+        call gui_stats%deactivate_section('compute')
         call gui_stats%write_json
         call gui_stats%kill
         ! cleanup
@@ -1733,6 +1735,7 @@ contains
         ! call write_particles_starfile(optics_set=.true.)
         ! final stats
         call gui_stats%hide('compute', 'compute_in_use')
+        call gui_stats%deactivate_section('compute')
         call gui_stats%write_json
         call gui_stats%kill
         ! cleanup
@@ -2339,6 +2342,7 @@ contains
         ! final stats
         if(file_exists(POOLSTATS_FILE)) call gui_stats%merge(POOLSTATS_FILE, delete = .true.)
         call gui_stats%hide('compute', 'compute_in_use')
+        call gui_stats%deactivate_section('compute')
         call gui_stats%write_json
         call gui_stats%kill
         ! cleanup
