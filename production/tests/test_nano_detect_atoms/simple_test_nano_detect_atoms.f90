@@ -54,18 +54,19 @@ call test_exp4%new(smpd, element, filename_exp, peak_thres_level, offset, denois
 call test_exp4%simulate_atom()
 call test_exp4%setup_iterators()
 call test_exp4%match_boxes(circle=.true.)
-if (debug) call test_exp4%write_corr_dist('corr_dist_before_thresholding.csv')
-call test_exp4%identify_threshold()
-if (debug) call test_exp4%write_corr_dist('corr_dist_after_thresholding.csv')
+if (debug) call test_exp4%write_corr_dist('corr_dist_before_high_filter.csv')
+!call test_exp4%identify_threshold()
+call test_exp4%identify_high_scores
+if (debug) call test_exp4%write_corr_dist('corr_dist_after_high_filter.csv')
 call test_exp4%distance_filter(dist_thres)
-if (debug) call test_exp4%write_corr_dist('corr_dist_after_dist_filter.csv')
+if (debug) call test_exp4%write_corr_dist('corr_dist_after_dist_filter_high.csv')
 call test_exp4%find_centers
 !call test_exp4%refine_threshold(10,pdbfile_ref,max_thres=0.75)
 !call test_exp4%remove_outliers(3.)
 !call test_exp4%write_boximgs(foldername='boximgs')
 ! OUTPUT FILES
+call test_exp4%write_positions_and_scores('pos_and_scores_centers.csv')
 call test_exp4%write_pdb('experimental_centers')
-call test_exp4%write_positions_and_scores('pos_and_scores.csv')
 call test_exp4%compare_pick('experimental_centers.pdb',trim(pdbfile_ref))
 call test_exp4%write_NP_image('result.mrc')
 !call test_exp4%calc_atom_stats

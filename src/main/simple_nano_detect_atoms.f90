@@ -38,6 +38,7 @@ use simple_aff_prop
         procedure :: match_boxes
         procedure :: one_box_corr
         procedure :: identify_threshold
+        procedure :: identify_high_scores
         procedure :: distance_filter
         procedure :: remove_outliers
         procedure :: find_centers
@@ -219,22 +220,36 @@ use simple_aff_prop
                         call boximg%masscen(xyz)
                         pos_center = pos + anint(xyz) + [self%boxsize/2,self%boxsize/2,self%boxsize/2]
                         ! edge positions should never be atoms
-                        if( pos_center(1)-winsz < 1 .or. pos_center(2)-winsz < 1 .or. pos_center(3)-winsz < 1 )then
-                            self%box_scores(xoff,yoff,zoff) = -1
-                            cycle
-                        else if ( pos_center(1)+winsz > self%ldim(1) .or. pos_center(2)+winsz > self%ldim(2) .or. pos_center(3)+winsz > self%ldim(3) )then
-                            self%box_scores(xoff,yoff,zoff) = -1
-                            cycle
-                        end if
+                        ! if( pos_center(1)-winsz < 1 .or. pos_center(2)-winsz < 1 .or. pos_center(3)-winsz < 1 )then
+                        !     self%box_scores(xoff,yoff,zoff) = -1
+                        !     cycle
+                        ! else if ( pos_center(1)+winsz > self%ldim(1) .or. pos_center(2)+winsz > self%ldim(2) .or. pos_center(3)+winsz > self%ldim(3) )then
+                        !     self%box_scores(xoff,yoff,zoff) = -1
+                        !     cycle
+                        ! end if
+                        do 
+                            if( pos_center(1)-winsz < 1 .or. pos_center(2)-winsz < 1 .or. pos_center(3)-winsz < 1 )then
+                                pos_center = pos_center + [1,1,1]
+                            else
+                                exit
+                            endif
+                        enddo
+                        do 
+                            if( pos_center(1)+winsz > self%ldim(1) .or. pos_center(2)+winsz > self%ldim(2) .or. pos_center(3)+winsz > self%ldim(3) )then
+                                pos_center = pos_center - [1,1,1]
+                            else
+                                exit
+                            endif
+                        enddo
                         call self%nano_img%win2arr_rad(      pos_center(1),  pos_center(2),  pos_center(3),  winsz, npix_in, maxrad, npix_out1, pixels1)
                         call self%simulated_atom%win2arr_rad(self%boxsize/2, self%boxsize/2, self%boxsize/2, winsz, npix_in, maxrad, npix_out2, pixels2)
                         self%box_scores(xoff,yoff,zoff) = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))
                         self%loc_sdevs( xoff,yoff,zoff) = boximg%avg_loc_sdev(self%offset)
-                        if (pos(1) .eq. 58 .and. pos(2) .eq. 46 .and. pos(3) .eq. 28 ) then
-                            print *, 'pos = ', pos
-                            print *, 'pos_center = ', pos_center
-                            print *, 'SCORE = ', self%box_scores(xoff,yoff,zoff)
-                        end if
+                        ! if (pos(1) .eq. 58 .and. pos(2) .eq. 46 .and. pos(3) .eq. 28 ) then
+                        !     print *, 'pos = ', pos
+                        !     print *, 'pos_center = ', pos_center
+                        !     print *, 'SCORE = ', self%box_scores(xoff,yoff,zoff)
+                        ! end if
                         call boximg%kill
                     enddo 
                 enddo 
@@ -294,6 +309,44 @@ use simple_aff_prop
         print *, 'Peak threshold is ', self%thres
         deallocate(tmp)
     end subroutine identify_threshold
+
+    subroutine identify_high_scores(self)
+        class(nano_picker), intent(inout) :: self
+        real                 :: Q1, mid, Q3, IQR, outlier_cutoff
+        real, allocatable    :: pos_scores(:), lower_half_scores(:), upper_half_scores(:)
+        integer              :: xoff, yoff, zoff, ipeak, npeaks
+        integer, allocatable :: pos_inds(:)
+        logical              :: is_peak
+        pos_scores        = pack(self%box_scores(:,:,:),   mask=.true.)
+        mid               = median(pos_scores)
+        lower_half_scores = pack(pos_scores(:), pos_scores(:) < mid)
+        upper_half_scores = pack(pos_scores(:), pos_scores(:) > mid)
+        Q1                = median(lower_half_scores)
+        Q3                = median(upper_half_scores)
+        IQR               = Q3 - Q1
+        outlier_cutoff    = Q3 + 1.5*(IQR)
+        self%thres        = outlier_cutoff
+        pos_inds = pack(self%inds_offset(:,:,:), mask=self%box_scores(:,:,:) >= self%thres)
+        npeaks   = size(pos_inds)
+        ! update box scores
+        !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,is_peak,ipeak)
+        do xoff = 1, self%nxyz_offset(1)
+            do yoff = 1, self%nxyz_offset(2)
+                do zoff = 1, self%nxyz_offset(3)
+                    is_peak = .false.
+                    do ipeak = 1,npeaks
+                        if( pos_inds(ipeak) == self%inds_offset(xoff,yoff,zoff) )then
+                            is_peak = .true.
+                            exit
+                        endif
+                    enddo
+                    if( .not. is_peak ) self%box_scores(xoff,yoff,zoff) = -1.
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        deallocate(lower_half_scores, upper_half_scores, pos_scores, pos_inds)
+    end subroutine identify_high_scores
 
     subroutine distance_filter( self, dist_thres )
         class(nano_picker), intent(inout) :: self
@@ -611,7 +664,7 @@ use simple_aff_prop
         print *, 'MEAN = ', mean
         open(unit=99,file=trim(csv_name))
         do i = 1, size(pos_scores)
-            write(99,'(1x,f15.14)') pos_scores(i)
+            write(99,'(1x,f11.8)') pos_scores(i)
         enddo
         close(99)
     end subroutine write_corr_dist
