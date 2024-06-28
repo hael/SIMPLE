@@ -362,7 +362,7 @@ contains
         real,    optional, intent(out)   :: xyz_out(3)
         integer :: filtsz
         real    :: frc(img_out%get_filtsz()), filter(img_out%get_filtsz())
-        real    :: xyz(3), ref_xyz(3),sharg, crop_factor, dist_stddev
+        real    :: xy_cavg(2), xyz(3), t, sharg, crop_factor
         logical :: do_center
         filtsz = img_in%get_filtsz()
         crop_factor = real(params_glob%box_crop) / real(params_glob%box)
@@ -378,12 +378,13 @@ contains
                     call img_in%shift2Dserial(xyz_in(1:2))
                 endif
             else
-                if( trim(params_glob%masscen).eq.'yes' )then
-                    xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
-                else
-                    call build_glob%spproj_field%calc_avg_offset2D(icls, xyz(1:2))
-                    xyz(3) = 0.
-                    xyz    = xyz * crop_factor
+                xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
+                if( trim(params_glob%masscen).ne.'yes' )then
+                    call build_glob%spproj_field%calc_avg_offset2D(icls, xy_cavg)
+                    t = min(10.,max(3.,params_glob%mskdiam/params_glob%smpd/20.))
+                    if( arg(xyz(1:2)/crop_factor - xy_cavg) > t )then
+                        xyz(1:2) = xy_cavg * crop_factor
+                    endif
                 endif
                 sharg = arg(xyz)
                 if( sharg > CENTHRESH )then

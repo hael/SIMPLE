@@ -75,7 +75,7 @@ contains
         type(parameters)  :: params
         type(builder)     :: build
         real, allocatable :: shvec(:,:)
-        real              :: avg(2), stdev
+        real              :: avg(2), xy(2)
         integer           :: ldim(3), istate, i, nimgs
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp',   20.)
@@ -94,6 +94,10 @@ contains
                     shvec(i,:) = build%img%calc_shiftcen_serial(params%cenlp, params%msk, hp=params%hp)
                 else
                     shvec(i,:) = build%img%calc_shiftcen_serial(params%cenlp, params%msk)
+                endif
+                if( params%masscen.ne.'yes' )then
+                    call build%spproj_field%calc_avg_offset2D(i, xy)
+                    if( arg(shvec(i,:)-xy) > min(10.,max(3.,params%mskdiam/params%smpd/20.)) ) shvec(i,:) = xy
                 endif
                 if( cline%defined('oritab') ) call build%spproj_field%add_shift2class(i, -shvec(i,:))
                 call build%img%fft
