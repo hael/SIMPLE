@@ -1745,7 +1745,7 @@ contains
 
     subroutine simulate_atoms( self, simatms, betas, mask, atoms_obj )
         class(nanoparticle),           intent(inout) :: self
-        class(image),                  intent(inout) :: simatms
+        class(image),                  intent(out)   :: simatms
         real,        optional,         intent(in)    :: betas(self%n_cc) ! in pdb file b-factor
         logical,     optional,         intent(in)    :: mask(self%n_cc)
         type(atoms), optional, target, intent(inout) :: atoms_obj
