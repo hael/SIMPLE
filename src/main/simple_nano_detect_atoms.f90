@@ -40,7 +40,8 @@ use simple_aff_prop
         procedure :: identify_threshold
         procedure :: identify_high_scores
         procedure :: distance_filter
-        procedure :: remove_outliers
+        procedure :: remove_outliers_sdev
+        procedure :: remove_outliers_position
         procedure :: find_centers
         procedure :: calc_atom_stats
         procedure :: write_pdb
@@ -93,6 +94,7 @@ use simple_aff_prop
             if( denoise )then
                 call phasecorr_one_atom(self%nano_img, self%nano_img, self%element)
                 self%is_denoised = .true.
+                call self%nano_img%write('denoised.mrc')
             endif
         endif
     end subroutine new
@@ -219,14 +221,6 @@ use simple_aff_prop
                         call boximg%norm_minmax
                         call boximg%masscen(xyz)
                         pos_center = pos + anint(xyz) + [self%boxsize/2,self%boxsize/2,self%boxsize/2]
-                        ! edge positions should never be atoms
-                        ! if( pos_center(1)-winsz < 1 .or. pos_center(2)-winsz < 1 .or. pos_center(3)-winsz < 1 )then
-                        !     self%box_scores(xoff,yoff,zoff) = -1
-                        !     cycle
-                        ! else if ( pos_center(1)+winsz > self%ldim(1) .or. pos_center(2)+winsz > self%ldim(2) .or. pos_center(3)+winsz > self%ldim(3) )then
-                        !     self%box_scores(xoff,yoff,zoff) = -1
-                        !     cycle
-                        ! end if
                         do 
                             if( pos_center(1)-winsz < 1 .or. pos_center(2)-winsz < 1 .or. pos_center(3)-winsz < 1 )then
                                 pos_center = pos_center + [1,1,1]
@@ -245,11 +239,12 @@ use simple_aff_prop
                         call self%simulated_atom%win2arr_rad(self%boxsize/2, self%boxsize/2, self%boxsize/2, winsz, npix_in, maxrad, npix_out2, pixels2)
                         self%box_scores(xoff,yoff,zoff) = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))
                         self%loc_sdevs( xoff,yoff,zoff) = boximg%avg_loc_sdev(self%offset)
-                        ! if (pos(1) .eq. 58 .and. pos(2) .eq. 46 .and. pos(3) .eq. 28 ) then
-                        !     print *, 'pos = ', pos
-                        !     print *, 'pos_center = ', pos_center
-                        !     print *, 'SCORE = ', self%box_scores(xoff,yoff,zoff)
-                        ! end if
+                        if ( pos(1) .eq. 106 .and. pos(2) .eq. 106 .and. pos(3) .eq. 70 ) then
+                            print *, 'pos = ', pos
+                            print *, 'pos_center = ', pos_center
+                            print *, 'SCORE = ', self%box_scores(xoff,yoff,zoff)
+                            call boximg%write('boximg_2.mrc')
+                        end if
                         call boximg%kill
                     enddo 
                 enddo 
@@ -261,20 +256,18 @@ use simple_aff_prop
 
     subroutine one_box_corr(self, pos, circle, corr)
         class(nano_picker), intent(inout) :: self
-        real,               intent(in)    :: pos(3)
+        integer,            intent(in)    :: pos(3)
         logical,            intent(in)    :: circle
         real,               intent(out)   :: corr
         type(image)       :: boximg
         real              :: maxrad, xyz(3)
         real, allocatable :: pixels1(:), pixels2(:)
-        integer           :: pos_int(3), pos_center(3), winsz, npix_in, npix_out1, npix_out2
+        integer           :: pos_center(3), winsz, npix_in, npix_out1, npix_out2
         logical           :: outside
         print *, 'inside one_box_corr'
         print *, 'pos = ', pos
-        pos_int = anint(pos)
-        print *, 'pos_int = ', pos_int
         call boximg%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
-        call self%nano_img%window_slim( pos_int, self%boxsize, boximg, outside)
+        call self%nano_img%window_slim( pos, self%boxsize, boximg, outside)
         call boximg%norm_minmax
         call boximg%masscen(xyz)
         print *, 'xyz = ', xyz
@@ -326,6 +319,7 @@ use simple_aff_prop
         IQR               = Q3 - Q1
         outlier_cutoff    = Q3 + 1.5*(IQR)
         self%thres        = outlier_cutoff
+        print *, 'Outlier cutoff = ', self%thres
         pos_inds = pack(self%inds_offset(:,:,:), mask=self%box_scores(:,:,:) >= self%thres)
         npeaks   = size(pos_inds)
         ! update box scores
@@ -410,7 +404,7 @@ use simple_aff_prop
         deallocate(pos_inds, pos_scores, mask, selected_pos)
     end subroutine distance_filter
 
-    subroutine remove_outliers( self, ndev )
+    subroutine remove_outliers_sdev( self, ndev )
         class(nano_picker), intent(inout) :: self
         real,               intent(in)    :: ndev
         real, allocatable :: tmp(:)
@@ -435,7 +429,68 @@ use simple_aff_prop
             enddo
         enddo
         !$omp end parallel do
-    end subroutine remove_outliers
+    end subroutine remove_outliers_sdev
+
+    ! finds distance of each atom to closest neighbor and removes atoms too far away
+    subroutine remove_outliers_position(self, dist_cutoff, filename)
+        class(nano_picker),         intent(inout) :: self
+        real,                       intent(in)    :: dist_cutoff
+        character(len=*), optional, intent(in)    :: filename
+        integer, allocatable :: pos_inds(:), peak_inds(:)
+        integer              :: ibox, jbox, nbox, xoff, yoff, zoff, ipeak, npeaks, index
+        real,    allocatable :: dists(:)
+        real                 :: pos(3), pos2(3), dist, min_dist
+        logical, allocatable :: mask(:)
+        logical              :: is_peak
+        if (.not. allocated(self%center_positions)) THROW_HARD('self%center_positions must be allocated to call remove_outliers_positions')
+        pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
+        nbox     = size(pos_inds, dim=1)
+        allocate(dists(nbox))
+        allocate( mask(nbox), source = .true.)
+        do ibox = 1, nbox
+            pos = self%center_positions(pos_inds(ibox),:)
+            min_dist = 1000
+            do jbox = 1, nbox
+                if (ibox .eq. jbox) cycle
+                pos2 = self%center_positions(pos_inds(jbox),:)
+                dist = euclid(pos,pos2)
+                if (dist < min_dist) min_dist = dist
+            end do
+            dists(ibox) = min_dist
+            if (min_dist > dist_cutoff) mask(ibox) = .false.
+        end do
+        ! update box scores
+        peak_inds = pack(pos_inds, mask=mask)
+        npeaks    = size(peak_inds)
+        print *, 'NPEAKS AFTER REMOVE OUTLIERS (BY POSITION) = ', npeaks
+        !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,is_peak,ipeak)
+        do xoff = 1, self%nxyz_offset(1)
+            do yoff = 1, self%nxyz_offset(2)
+                do zoff = 1, self%nxyz_offset(3)
+                    is_peak = .false.
+                    do ipeak = 1,npeaks
+                        if( peak_inds(ipeak) == self%inds_offset(xoff,yoff,zoff) )then
+                            is_peak = .true.
+                            exit
+                        endif
+                    enddo
+                    if( .not. is_peak ) self%box_scores(xoff,yoff,zoff) = -1.
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        if (present(filename)) then
+            open(unit = 99, file=trim(filename))
+            write(99, '(9(a))') 'index', ',', 'x', ',', 'y', ',', 'z', ',', 'distance'
+            do ibox = 1, nbox
+                index = pos_inds(ibox)
+                pos   = self%center_positions(pos_inds(ibox),:)
+                write(99,'(I8,4(a,f8.4))') index, ',', pos(1), ',', pos(2), ',', pos(3), ',', dists(ibox)
+            end do
+            close(99)
+        end if
+        deallocate(dists, mask, pos_inds, peak_inds)
+    end subroutine remove_outliers_position
 
     subroutine find_centers( self )
         class(nano_picker), intent(inout) :: self
@@ -672,13 +727,11 @@ use simple_aff_prop
     ! input pos in pixels, not Angstroms
     subroutine extract_img_from_pos(self, pos, img)
         class(nano_picker), intent(inout) :: self
-        real,               intent(in)    :: pos(3)
+        integer,            intent(in)    :: pos(3)
         type(image),        intent(out)   :: img
-        integer :: pos_int(3)
         logical :: outside
-        pos_int = anint(pos)
         call img%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
-        call self%nano_img%window_slim( pos_int, self%boxsize, img, outside)
+        call self%nano_img%window_slim( pos, self%boxsize, img, outside)
     end subroutine extract_img_from_pos
 
     ! input both pdbfile_* with .pdb extension

@@ -60,9 +60,9 @@ call test_exp4%identify_high_scores
 if (debug) call test_exp4%write_corr_dist('corr_dist_after_high_filter.csv')
 call test_exp4%distance_filter(dist_thres)
 if (debug) call test_exp4%write_corr_dist('corr_dist_after_dist_filter_high.csv')
-call test_exp4%find_centers
+call test_exp4%find_centers()
+call test_exp4%remove_outliers_position(10.,'close_atoms_distances.csv')
 !call test_exp4%refine_threshold(10,pdbfile_ref,max_thres=0.75)
-!call test_exp4%remove_outliers(3.)
 !call test_exp4%write_boximgs(foldername='boximgs')
 ! OUTPUT FILES
 call test_exp4%write_positions_and_scores('pos_and_scores_centers.csv')
