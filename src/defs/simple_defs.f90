@@ -176,6 +176,8 @@ real, parameter    :: MAX_SMPD             = 2.67      !< maximum sampling dista
 real, parameter    :: TAU_DEFAULT          = 3.0       !< TAU fudge factor to control strength or regularization [0.5,5] more -> less low-pass effect
                                                        !! tau < 3 leads to excessive low-pass filtering
 real, parameter    :: CLS_REJECT_STD       = 2.5       !< # deviations for 2D class selection/rejection
+real, parameter    :: CENTHRESH            = 0.5       ! threshold for performing volume/cavg centering in pixels
+real, parameter    :: MAXCENTHRESH2D       = 3.0       ! max threshold for performing cavg centering in pixels
 
 ! preprocessing constants
 real, parameter    :: FRACTION_DOSE_TARGET_DEFAULT=1.0 !< EER target fraction dose in e/A2

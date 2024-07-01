@@ -23,8 +23,7 @@ interface read_imgbatch
     module procedure read_imgbatch_3
 end interface read_imgbatch
 
-real, parameter :: SHTHRESH  = 0.001
-real, parameter :: CENTHRESH = 0.5                    ! threshold for performing volume/cavg centering in pixels
+real, parameter :: SHTHRESH       = 0.001
 character(len=*), parameter :: L_LPSET_FILTER = 'COS' ! <BW|COS|NONE>
 type(stack_io)  :: stkio_r
 
@@ -362,7 +361,7 @@ contains
         real,    optional, intent(out)   :: xyz_out(3)
         integer :: filtsz
         real    :: frc(img_out%get_filtsz()), filter(img_out%get_filtsz())
-        real    :: xy_cavg(2), xyz(3), t, sharg, crop_factor
+        real    :: xy_cavg(2), xyz(3), sharg, crop_factor
         logical :: do_center
         filtsz = img_in%get_filtsz()
         crop_factor = real(params_glob%box_crop) / real(params_glob%box)
@@ -378,13 +377,19 @@ contains
                     call img_in%shift2Dserial(xyz_in(1:2))
                 endif
             else
-                xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
                 if( trim(params_glob%masscen).ne.'yes' )then
                     call build_glob%spproj_field%calc_avg_offset2D(icls, xy_cavg)
-                    t = min(10.,max(3.,params_glob%mskdiam/params_glob%smpd/20.))
-                    if( arg(xyz(1:2)/crop_factor - xy_cavg) > t )then
+                    if( arg(xy_cavg) < CENTHRESH )then
+                        xyz = 0.
+                    else if( arg(xy_cavg) > MAXCENTHRESH2D )then
                         xyz(1:2) = xy_cavg * crop_factor
+                        xyz(3)   = 0.
+                    else
+                        xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
+                        if( arg(xyz(1:2)/crop_factor - xy_cavg) > MAXCENTHRESH2D ) xyz = 0.
                     endif
+                else
+                    xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
                 endif
                 sharg = arg(xyz)
                 if( sharg > CENTHRESH )then
@@ -392,6 +397,8 @@ contains
                     call img_in%fft()
                     call img_in%shift2Dserial(xyz(1:2))
                     call build_glob%spproj_field%add_shift2class(icls, -xyz(1:2) / crop_factor)
+                else
+                    xyz = 0.
                 endif
                 if( present(xyz_out) ) xyz_out = xyz
             endif
