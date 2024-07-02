@@ -8194,7 +8194,7 @@ contains
         end select
     end subroutine flip
 
-    !> \brief rad_cc calculates the radial correlation function between two images/volumes
+    !> \brief rad_cc calculates the radial correlation function between two images/volumes and weight the intensities of the original vol
     subroutine radial_cc( self1, self2, smpd, rad_corrs, rad_dists )
         class(image),      intent(inout):: self1, self2
         real,              intent(in)   :: smpd
@@ -8240,7 +8240,7 @@ contains
             if( rad_weights(n+1) > 0.99999 ) rad_weights(n+1) = 0.99999
             rad_dists(n+1) = ( ( dist_lbound * smpd + dist_ubound * smpd ) / 2. )
             where( shell_mask(:,:,:) .eqv. .true. )
-                self1%rmat = self1%rmat * rad_weights(n+1)
+                self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) = self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) * rad_weights(n+1)
             end where
         enddo
     end subroutine radial_cc
