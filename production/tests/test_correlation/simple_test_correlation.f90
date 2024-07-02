@@ -8,7 +8,8 @@ program simple_test_correlation
     ! will compare to completely blank image (all zeroes) and outlier position in image
     type(nano_picker) :: np 
     type(image) :: blank, boximg
-    real :: pos(3), smpd, boximg_corr
+    real :: smpd, boximg_corr
+    integer :: pos(3)
     real, allocatable :: rmat_blank(:,:,:)
     character(len=100) :: filename_exp, pdbfile_ref
     character(len=2) :: element
