@@ -9,11 +9,10 @@ program simple_test_correlation
     type(nano_picker) :: np 
     type(image) :: blank, boximg
     real :: smpd, boximg_corr
-    integer :: pos(3)
     real, allocatable :: rmat_blank(:,:,:)
     character(len=100) :: filename_exp, pdbfile_ref
     character(len=2) :: element
-    integer :: offset, peak_thres_level, ldim_box(3), center(3)
+    integer :: offset, peak_thres_level, ldim_box(3), center(3), pos(3)
 
     filename_exp     = 'rec_merged.mrc'
     pdbfile_ref      = 'reference.pdb'
@@ -25,8 +24,8 @@ program simple_test_correlation
     center           = [4,4,4]
 
     allocate(rmat_blank(8,8,8), source=0.)
-    pos = [0., 0., 0.]
-    call np%new(smpd, element, filename_exp, peak_thres_level, offset, denoise=.false.)
+    pos = [106, 106, 70]
+    call np%new(smpd, element, filename_exp, peak_thres_level, offset, denoise=.true.)
     call np%simulate_atom()
     call np%extract_img_from_pos(pos, boximg)
     call boximg%write('boximg.mrc')

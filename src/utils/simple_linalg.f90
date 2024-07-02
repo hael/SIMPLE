@@ -1397,6 +1397,22 @@ contains
         dist = sqrt(sum((vec1-vec2)**2))
     end function euclid
 
+    !>   normalize mean of both vectors to 0 before computing distance between vectors
+    function same_energy_euclid(vec1, vec2) result(dist)
+        real, intent(in)  :: vec1(:), vec2(:)
+        real              :: avg1, avg2, dist
+        real, allocatable :: diff1(:), diff2(:)
+        integer           :: sz1, sz2
+        sz1   = size(vec1)
+        sz2   = size(vec2)
+        allocate(diff1(sz1), diff2(sz2))
+        avg1  = sum(vec1) / sz1
+        avg2  = sum(vec2) / sz2
+        diff1 = vec1 - avg1
+        diff2 = vec2 - avg2
+        dist  = log10(euclid(diff1,diff2))
+    end function same_energy_euclid
+
     ! imported from numerical recipes
     function pythag_sp(a,b)
         implicit none
