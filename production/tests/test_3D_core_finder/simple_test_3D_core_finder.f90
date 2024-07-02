@@ -6,21 +6,37 @@ implicit none
 real,    parameter  :: smpd=0.358 
 real,    parameter  :: shell_size_A=smpd
 real,    parameter  :: shell_size_vox=shell_size_A/smpd
-type(image)                 :: img_part1, img_part2, dists_img
-real,    allocatable        :: rvec1(:), rvec2(:)
-logical, allocatable        :: mask(:,:,:), shell_mask(:,:,:)
-real(kind=c_float), pointer :: rmat_dists_img(:,:,:)=>null()
-real                        :: np_rad_A, np_rad_vox
-real                        :: corr
-character(len=256)          :: fn_img_part1, fn_img_part2
-integer                     :: ldim1(3), ldim2(3), ldim_refs(3), n, nshells, ifoo
-real                        :: mean, mean1, sdev1, var1, mean2, sdev2, var2, dist_lbound, dist_ubound
-logical                     :: err
+type(image)                   :: img_part1, img_part2, dists_img
+real,    allocatable          :: rvec1(:), rvec2(:)
+logical, allocatable          :: mask(:,:,:), shell_mask(:,:,:)
+real(kind=c_float), pointer   :: rmat_dists_img(:,:,:)=>null()
+real                          :: np_rad_A, np_rad_vox
+real                          :: corr
+character(len=256)            :: fn_img_part1, fn_img_part2
+integer                       :: ldim1(3), ldim2(3), ldim_refs(3), n, nshells, ifoo, rc
+real                          :: mean, mean1, sdev1, var1, mean2, sdev2, var2, dist_lbound, dist_ubound
+logical                       :: err
+character(len=:), allocatable :: cmd
+logical                       :: mrc_exists
 if( command_argument_count() /= 2 )then
-    write(logfhandle,'(a)')  'Usage: simple_test_3D_core_finder vol_part1.mrc vol_part2.mrc'
+    write(logfhandle,'(a)') 'ERROR! Usage: simple_test_3D_core_finder vol_part1.mrc vol_part2.mrc'
     write(logfhandle,'(a)')  'vol_part1.mrc: 3D volume density map of part1'
-    write(logfhandle,'(a)')  'vol_part2.mrc: 3D volume density map of part2', NEW_LINE('a')
-    stop
+    write(logfhandle,'(a)')  'vol_part2.mrc: 3D volume density map of part2'
+    write(logfhandle,'(a)') 'Example: https://www.rcsb.org/structure/1jyx'
+    write(logfhandle,'(a)') 'DEFAULT TEST (example above) is running now...', NEW_LINE('a')
+    inquire(file="1JYX.mrc", exist=mrc_exists)
+    if( .not. mrc_exists )then
+        write(*, *) 'Downloading the example dataset...'
+        cmd = 'curl -s -o 1JYX.pdb https://files.rcsb.org/download/1JYX.pdb'
+        call execute_command_line(cmd, exitstat=rc)
+        write(*, *) 'Converting .pdb to .mrc...'
+        cmd = 'e2pdb2mrc.py 1JYX.pdb 1JYX.mrc'
+        call execute_command_line(cmd, exitstat=rc)
+        cmd = 'rm 1JYX.pdb'
+        call execute_command_line(cmd, exitstat=rc)
+    endif
+    fn_img_part1="1JYX.mrc"
+    fn_img_part2="1JYX.mrc"
 else
     call get_command_argument(1, fn_img_part1)
     call get_command_argument(2, fn_img_part2)
@@ -64,6 +80,7 @@ do n = 0, nshells-1
     else where
         shell_mask = .false.
     end where
+
     if( count(shell_mask) < 3 )then
         corr = 0.
         mean = 0.
@@ -72,10 +89,14 @@ do n = 0, nshells-1
         rvec2 = img_part2%serialize(shell_mask)
         call moment(rvec1, mean1, sdev1, var1, err)
         call moment(rvec2, mean2, sdev2, var2, err)
-        mean = mean1 - mean2
-        corr = pearsn_serial(rvec1, rvec2)
+        mean  = mean1 - mean2
+        corr  = pearsn_serial(rvec1, rvec2)
     endif
     print *, n+1, dist_lbound*smpd, dist_ubound*smpd, corr, mean
+
+    !corr = img_part1%real_corr(img_part2, shell_mask)
+    !print *, n+1, dist_lbound*smpd, dist_ubound*smpd, corr
+
 enddo
 call img_part1%kill()
 call img_part2%kill()
