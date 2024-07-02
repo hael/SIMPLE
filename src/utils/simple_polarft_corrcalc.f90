@@ -1216,15 +1216,19 @@ contains
         end select
     end function calc_abscorr_rot
 
-    subroutine gencorrs_shinvariant( self, iref, iptcl, ccs )
+    subroutine gencorrs_shinvariant( self, iref, iptcl, ccs, kweight )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real,                    intent(inout) :: ccs(self%pftsz)
+        logical,       optional, intent(in)    :: kweight
         real(dp),    pointer :: abs_pft(:,:)
         complex(dp), pointer :: pft_ref(:,:), pft_rot_ref(:,:)
-        complex(sp) :: cvec1(self%pftsz+1), cvec2(self%pftsz+1)
-        real(dp)    :: sqsumref, sumsqptcl, num, w
+        complex(sp) :: cvec(self%pftsz+1)
+        real(dp)    :: sqsumref, sumsqptcl, sumsqkptcl, num, w
         integer     :: i, k, ithr, irot
+        logical     :: kw
+        kw = .true.
+        if( present(kweight) ) kw = kweight
         i    = self%pinds(iptcl)
         ithr = omp_get_thread_num() + 1
         pft_ref     => self%heap_vars(ithr)%pft_ref_8
@@ -1237,7 +1241,7 @@ contains
         endif
         select case(params_glob%cc_objfun)
         case(OBJFUN_CC)
-            if( params_glob%l_kweight_rot )then
+            if( kw )then
                 do irot = 1,self%pftsz
                     call self%rotate_ref(pft_ref, irot, pft_rot_ref)
                     abs_pft = abs(pft_rot_ref)
@@ -1245,8 +1249,8 @@ contains
                     sqsumref = 0.d0
                     num      = 0.d0
                     do k = self%kfromto(1),self%kfromto(2)
-                        sqsumref = sqsumref  + real(k,dp) * real(sum(abs_pft(:,k)**2) ,dp)
-                        num      = num       + real(k,dp) * real(sum(abs_pft(:,k) * abs(self%pfts_ptcls(:,k,i))),dp)
+                        sqsumref = sqsumref + real(k,dp) * real(sum(abs_pft(:,k)**2) ,dp)
+                        num      = num      + real(k,dp) * real(sum(abs_pft(:,k) * abs(self%pfts_ptcls(:,k,i))),dp)
                     enddo
                     ccs(irot) = real(num / sqrt(sqsumref*self%ksqsums_ptcls(i)))
                 enddo
@@ -1261,10 +1265,13 @@ contains
                 enddo
             endif
         case(OBJFUN_EUCLID)
+            sumsqptcl = 0.d0
             self%heap_vars(ithr)%kcorrs = 0.d0
             do k = self%kfromto(1),self%kfromto(2)
-                w         = real(k,dp) / real(self%sigma2_noise(k,iptcl),dp)
-                sumsqptcl = sum(real(csq_fast(self%pfts_ptcls(:,k,i)), dp))
+                w = 1.d0 / real(self%sigma2_noise(k,iptcl),dp)
+                if( kw ) w = w * real(k,dp)
+                sumsqkptcl = w * sum(real(csq_fast(self%pfts_ptcls(:,k,i)), dp))
+                sumsqptcl  = sumsqptcl + sumsqkptcl
                 ! FT(|X|.CTF)
                 if( self%with_ctf )then
                     self%rvec1(ithr)%r(1:self%pftsz)            = abs(self%pfts_ptcls(:,k,i)) * self%ctfmats(:,k,i)
@@ -1273,26 +1280,27 @@ contains
                     self%rvec1(ithr)%r = 1.0
                 endif
                 call fftwf_execute_dft_r2c(self%plan_mem_r2c, self%rvec1(ithr)%r, self%cvec1(ithr)%c)
-                cvec1 = self%cvec1(ithr)%c(1:self%pftsz+1)
+                cvec = self%cvec1(ithr)%c(1:self%pftsz+1)
                 ! FT(|REF|)*
                 self%rvec1(ithr)%r(1:self%pftsz)            = abs(pft_ref(:,k))
                 self%rvec1(ithr)%r(self%pftsz+1:self%nrots) = self%rvec1(ithr)%r(1:self%pftsz)
                 call fftwf_execute_dft_r2c(self%plan_mem_r2c, self%rvec1(ithr)%r, self%cvec1(ithr)%c)
-                cvec2 = conjg(self%cvec1(ithr)%c(1:self%pftsz+1))
+                cvec = cvec * conjg(self%cvec1(ithr)%c(1:self%pftsz+1))
                 ! FT(CTF2) x FT(REF2)*) - 2 * FT(|X|.CTF) x FT(|REF|)*
                 if( self%iseven(i) )then
-                    self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c * self%ft_ref2_even(k,iref)%c - 2.d0 * cvec1 * cvec2
+                    self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c * self%ft_ref2_even(k,iref)%c - 2.d0 * cvec
                 else
-                    self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c * self%ft_ref2_odd(k,iref)%c  - 2.d0 * cvec1 * cvec2
+                    self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c * self%ft_ref2_odd(k,iref)%c  - 2.d0 * cvec
                 endif
                 ! |X|.CTF.|REF| = IFFT( FT(CTF2) x FT(REF2)*) - 2 * FT(X.|CTF|) x FT(|REF|)* )
                 call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
                 ! k/sig2 x ( |CTF.REF|2 - 2.X.CTF.|REF| ), fftw normalized
-                self%drvec(ithr)%r = (w / real(2*self%nrots,dp)) * real(self%rvec1(ithr)%r(1:self%nrots),dp)
+                self%drvec(ithr)%r(1:self%pftsz) = (w / real(2*self%nrots,dp)) * real(self%rvec1(ithr)%r(1:self%pftsz),dp)
                 ! k/sig2 x ( |X|2 + |CTF.REF|2 - 2.X.CTF.|REF| )
-                self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + w * sumsqptcl + self%drvec(ithr)%r
+                self%heap_vars(ithr)%kcorrs(1:self%pftsz) = &
+                    &self%heap_vars(ithr)%kcorrs(1:self%pftsz) + sumsqkptcl + self%drvec(ithr)%r(1:self%pftsz)
             end do
-            ccs = real( dexp( -self%heap_vars(ithr)%kcorrs(1:self%pftsz) / self%wsqsums_ptcls(i) ) )
+            ccs = dexp( -self%heap_vars(ithr)%kcorrs(1:self%pftsz) / sumsqptcl )
         end select
     end subroutine gencorrs_shinvariant
 
