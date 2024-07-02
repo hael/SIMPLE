@@ -10,10 +10,10 @@
 #NAME Test_2D_opt_filt
 #COMMAND simple_2D_opt_filt
 #)
-#add_test(
-#NAME Test_3D_core_finder
-#COMMAND simple_3D_core_finder
-#)
+add_test(
+NAME Test_3D_core_finder
+COMMAND simple_3D_core_finder
+)
 #add_test(
 #NAME Test_3D_lpbasic
 #COMMAND simple_3D_lpbasic
