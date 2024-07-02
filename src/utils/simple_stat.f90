@@ -525,7 +525,11 @@ contains
             sxy = sxy+xt*yt
         end do
         !$omp end parallel do
-        r = max(-1.,min(1.,sxy/sqrt(sxx*syy)))
+        if( sxx > TINY .and. syy > TINY )then
+            r = max(-1.,min(1.,sxy/sqrt(sxx*syy)))
+        else
+            r = 0.
+        endif
     end function pearsn_1
 
     function pearsn_serial( x, y ) result( r )
@@ -546,7 +550,11 @@ contains
             syy = syy + yt**2
             sxy = sxy + xt*yt
         end do
-        r = sxy / sqrt(sxx * syy)
+        if( sxx > TINY .and. syy > TINY )then
+            r = sxy / sqrt(sxx * syy)
+        else
+            r = 0.
+        endif
     end function pearsn_serial
 
     function pearsn_serial_8( n, x, y ) result( r )
@@ -597,7 +605,11 @@ contains
             end do
         end do
         !$omp end parallel do
-        r = max(-1.,min(1.,sxy/sqrt(sxx*syy)))
+        if( sxx > TINY .and. syy > TINY )then
+            r = max(-1.,min(1.,sxy/sqrt(sxx*syy)))
+        else
+            r = 0.
+        endif
     end function pearsn_2
 
     function pearsn_3( x, y ) result( r )
@@ -628,7 +640,11 @@ contains
             end do
         end do
         !$omp end parallel do
-        r = max(-1.,min(1.,sxy/sqrt(sxx*syy)))
+        if( sxx > TINY .and. syy > TINY )then
+            r = max(-1.,min(1.,sxy/sqrt(sxx*syy)))
+        else
+            r = 0.
+        endif
     end function pearsn_3
 
     subroutine normalize_1( arr, err )
