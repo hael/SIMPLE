@@ -31,7 +31,7 @@ type(image), allocatable :: match_imgs(:), ptcl_match_imgs(:)
 type(image)              :: img, img_rot_pad
 logical                :: be_verbose=.false.
 real,    parameter     :: SHMAG=5.0
-real,    parameter     :: SNR  =0.01
+real,    parameter     :: SNR  =0.0005
 real,    parameter     :: BFAC =10.
 integer, parameter     :: N_PTCLS = 50
 logical, allocatable   :: ptcl_mask(:)
@@ -183,11 +183,12 @@ call pftcc%memoize_ptcls
 
 ! iptcl = 1
 ! call pftcc%gencorrs(1,iptcl,scores)
-! call pftcc%gencorrs_shinvariant(1,iptcl,scores2)
+! call pftcc%gencorrs_shinvariant(1,iptcl,scores2,kweight=.false.)
 ! do irot =1,pftcc%get_pftsz()
 !     print *,irot,scores(irot), scores2(irot), pftcc%calc_abscorr_rot(1,iptcl,irot)
 ! enddo
-! print *, arg(orishifts(iptcl,:)),pftcc%get_roind(360.-b%spproj_field%e3get(iptcl)), maxloc(scores,dim=1), maxloc(scores2,dim=1)
+! print *, arg(orishifts(iptcl,:)),pftcc%get_roind(360.-b%spproj_field%e3get(iptcl)), maxloc(scores,dim=1), maxloc(scores2,dim=1),maxloc(scores2,dim=1)+pftcc%get_pftsz()
+! stop
 
 ! shift search
 lims(:,1)       = -p%trs
@@ -217,7 +218,9 @@ do iptcl = p%fromp,p%top
         cenerr = cenerr + arg(cxy(2:3)-orishifts(iptcl,:))
         call b%spproj_field%set(iptcl, 'e3', e3)
         call b%spproj_field%set_shift(iptcl, b%spproj_field%get_2Dshift(iptcl)+cxy(2:3))
-        print *,iptcl,aerr,arg(cxy(2:3)-orishifts(iptcl,:)),orishifts(iptcl,:)
+        print *,iptcl,'found', aerr,arg(cxy(2:3)-orishifts(iptcl,:)),orishifts(iptcl,:)
+    else
+        print *,iptcl,orishifts(iptcl,:),cxy
     endif
 enddo
 angerr = angerr / real(p%nptcls)

@@ -29,7 +29,7 @@ type :: eul_prob_tab
     procedure, private :: new_1, new_2
     generic            :: new => new_1, new_2
   ! PARTITION-WISE PROCEDURES (used only by partition-wise eul_prob_tab objects)
-    procedure :: fill_tab
+    procedure :: fill_tab, fill_tab_shinv
     procedure :: write_tab
     procedure :: read_assignment
     procedure :: trim_tab
@@ -232,6 +232,99 @@ contains
             enddo
         endif
     end subroutine fill_tab
+
+    subroutine fill_tab_shinv( self, pftcc )
+        use simple_polarft_corrcalc,  only: polarft_corrcalc
+        use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad
+        class(eul_prob_tab),     intent(inout) :: self
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        integer,                 allocatable   :: locn(:)
+        type(pftcc_shsrch_grad)                :: grad_shsrch_obj(nthr_glob) 
+        integer :: i, j, iproj, iptcl, projs_ns, ithr, irot, inds_sorted(pftcc%nrots,nthr_glob), istate, iref, irot2
+        logical :: l_doshift
+        real,    allocatable :: scores_inpl(:,:), scores_inpl_sorted(:,:)
+        integer, allocatable :: scores_inds_sorted(:,:)
+        real    :: dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob)
+        real    :: dists_projs(params_glob%nspace,nthr_glob), lims(2,2), lims_init(2,2), cxy(3), inpl_athres, d1, d2
+        call seed_rnd
+        l_doshift = params_glob%l_prob_sh .and. params_glob%l_doshift
+        if( l_doshift )then
+            ! make shift search objects
+            lims(:,1)      = -params_glob%trs
+            lims(:,2)      =  params_glob%trs
+            lims_init(:,1) = -SHC_INPL_TRSHWDTH
+            lims_init(:,2) =  SHC_INPL_TRSHWDTH
+            do ithr = 1,nthr_glob
+                call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier,&
+                    &maxits=params_glob%maxits_sh, opt_angle=.false.)
+            end do
+            ! fill the table
+            allocate(scores_inpl(pftcc%get_pftsz(),nthr_glob),scores_inds_sorted(pftcc%get_pftsz(),nthr_glob),&
+                &scores_inpl_sorted(pftcc%get_pftsz(),nthr_glob))
+            do istate = 1, self%nstates
+                iref        = (istate-1)*params_glob%nspace
+                inpl_athres = calc_athres('dist_inpl', state=istate)
+                call calc_num2sample(params_glob%nspace, 'dist', projs_ns, state=istate)
+                if( allocated(locn) ) deallocate(locn)
+                allocate(locn(projs_ns), source=0)
+                !$omp parallel do default(shared) private(i,j,iptcl,ithr,iproj,irot,cxy,locn) proc_bind(close) schedule(static)
+                do i = 1, self%nptcls
+                    iptcl = self%pinds(i)
+                    ithr  = omp_get_thread_num() + 1
+                    do iproj = 1, params_glob%nspace
+                        ! to determine the directions whose shift will be searched
+                        call pftcc%gencorrs_shinvariant(iref + iproj, iptcl, scores_inpl(:,ithr))
+                        scores_inpl(:,ithr) = eulprob_dist_switch(scores_inpl(:,ithr))
+                        irot = angle_sampling(scores_inpl(:,ithr), scores_inpl_sorted(:,ithr), scores_inds_sorted(:,ithr), inpl_athres)
+                        dists_projs(iproj,ithr) = scores_inpl(irot,ithr)
+                        ! to fill the table without shift search
+                        call pftcc%gencorrs(iref + iproj, iptcl, dists_inpl(:,ithr))
+                        dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
+                        irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres)
+                        self%loc_tab(iproj,i,istate)%dist = dists_inpl(irot,ithr)
+                        self%loc_tab(iproj,i,istate)%inpl = irot
+                        self%loc_tab(iproj,i,istate)%x    = 0.
+                        self%loc_tab(iproj,i,istate)%y    = 0.
+                        self%loc_tab(iproj,i,istate)%has_sh = .false.
+                    enddo
+                    locn = minnloc(dists_projs(:,ithr), projs_ns)
+                    do j = 1,projs_ns
+                        iproj = locn(j)
+                        ! BFGS over shifts
+                        call grad_shsrch_obj(ithr)%set_indices(iref + iproj, iptcl)
+                        irot = self%loc_tab(iproj,i,istate)%inpl
+                        cxy  = grad_shsrch_obj(ithr)%minimize(irot=irot)
+                        if( irot > 0 )then
+                            self%loc_tab(iproj,i,istate)%inpl = irot
+                            self%loc_tab(iproj,i,istate)%dist = eulprob_dist_switch(cxy(1))
+                            self%loc_tab(iproj,i,istate)%x    = cxy(2)
+                            self%loc_tab(iproj,i,istate)%y    = cxy(3)
+                        endif
+                        self%loc_tab(iproj,i,istate)%has_sh = .true.
+                    end do
+                enddo
+                !$omp end parallel do
+            enddo
+        else
+            do istate = 1, self%nstates
+                iref        = (istate-1)*params_glob%nspace
+                inpl_athres = calc_athres('dist_inpl', state=istate)
+                !$omp parallel do default(shared) collapse(2) private(i,iptcl,ithr,iproj,irot) proc_bind(close) schedule(static)
+                do i = 1, self%nptcls
+                    do iproj = 1, params_glob%nspace
+                        iptcl = self%pinds(i)
+                        ithr  = omp_get_thread_num() + 1
+                        call pftcc%gencorrs(iref + iproj, iptcl, dists_inpl(:,ithr))
+                        dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
+                        irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres)
+                        self%loc_tab(iproj,i,istate)%dist = dists_inpl(irot,ithr)
+                        self%loc_tab(iproj,i,istate)%inpl = irot
+                    enddo
+                enddo
+                !$omp end parallel do
+            enddo
+        endif
+    end subroutine fill_tab_shinv
 
     ! ptcl -> (proj, state) assignment used in the global prob_align commander, in 'exec_prob_align'
     subroutine prob_assign( self )
