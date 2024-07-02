@@ -28,7 +28,7 @@ use simple_aff_prop
         type(image), allocatable :: convolved_atoms(:)
         type(nanoparticle)       :: np
         real                     :: smpd, thres, radius
-        real, allocatable        :: box_scores(:,:,:), loc_sdevs(:,:,:), center_positions(:,:)
+        real, allocatable        :: box_scores(:,:,:), loc_sdevs(:,:,:), avg_int(:,:,:), euclid_dists(:,:,:), center_positions(:,:)
         logical                  :: is_denoised
 
     contains
@@ -49,6 +49,7 @@ use simple_aff_prop
         procedure :: write_positions_and_scores
         procedure :: write_NP_image
         procedure :: write_corr_dist
+        procedure :: write_int_dist
         procedure :: extract_img_from_pos
         procedure :: compare_pick
         procedure :: refine_threshold
@@ -155,8 +156,10 @@ use simple_aff_prop
                 enddo
             enddo
         enddo
-        allocate(self%box_scores(self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3)), source = -1.)
-        allocate(self%loc_sdevs( self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3)), source = -1.)
+        allocate(self%box_scores(  self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3)), source = -1.)
+        allocate(self%loc_sdevs(   self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3)), source = -1.)
+        allocate(self%avg_int(     self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3)), source = -1.)
+        allocate(self%euclid_dists(self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3)), source = -1.)
     end subroutine setup_iterators
 
     subroutine match_boxes( self, circle )
@@ -190,9 +193,10 @@ use simple_aff_prop
                         ithr = omp_get_thread_num() + 1
                         pos  = self%positions(self%inds_offset(xoff,yoff,zoff),:)
                         call self%nano_img%window_slim( pos, self%boxsize, boximgs(ithr), outside)
-                        !call boximgs(ithr)%prenorm4real_corr(l_err_box)
-                        self%box_scores(xoff,yoff,zoff) = self%simulated_atom%real_corr(boximgs(ithr))
-                        self%loc_sdevs( xoff,yoff,zoff) = boximgs(ithr)%avg_loc_sdev(self%offset)
+                        self%box_scores(  xoff,yoff,zoff)   = self%simulated_atom%real_corr(boximgs(ithr))            ! revert to
+                        self%euclid_dists(xoff,yoff,zoff)   = self%simulated_atom%euclid_dist_two_imgs(boximgs(ithr)) ! new method
+                        self%loc_sdevs(   xoff,yoff,zoff)   = boximgs(ithr)%avg_loc_sdev(self%offset)
+                        self%avg_int(     xoff,yoff,zoff)   = boximgs(ithr)%get_avg_int()
                     enddo 
                 enddo 
             enddo
@@ -216,7 +220,6 @@ use simple_aff_prop
                         if (allocated(pixels2)) deallocate(pixels2)
                         allocate(pixels1(npix_in), pixels2(npix_in), source=0.)
                         pos  = self%positions(self%inds_offset(xoff,yoff,zoff),:)
-                        !pos_center = pos + [self%boxsize/2,self%boxsize/2,self%boxsize/2]
                         call self%nano_img%window_slim( pos, self%boxsize, boximg, outside)
                         call boximg%norm_minmax
                         call boximg%masscen(xyz)
@@ -237,14 +240,10 @@ use simple_aff_prop
                         enddo
                         call self%nano_img%win2arr_rad(      pos_center(1),  pos_center(2),  pos_center(3),  winsz, npix_in, maxrad, npix_out1, pixels1)
                         call self%simulated_atom%win2arr_rad(self%boxsize/2, self%boxsize/2, self%boxsize/2, winsz, npix_in, maxrad, npix_out2, pixels2)
-                        self%box_scores(xoff,yoff,zoff) = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))
-                        self%loc_sdevs( xoff,yoff,zoff) = boximg%avg_loc_sdev(self%offset)
-                        if ( pos(1) .eq. 106 .and. pos(2) .eq. 106 .and. pos(3) .eq. 70 ) then
-                            print *, 'pos = ', pos
-                            print *, 'pos_center = ', pos_center
-                            print *, 'SCORE = ', self%box_scores(xoff,yoff,zoff)
-                            call boximg%write('boximg_2.mrc')
-                        end if
+                        self%box_scores(  xoff,yoff,zoff) = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))      ! revert to
+                        self%euclid_dists(xoff,yoff,zoff) = same_energy_euclid(pixels1(:npix_out1),pixels2(:npix_out2)) ! new method
+                        self%loc_sdevs(   xoff,yoff,zoff) = boximg%avg_loc_sdev(self%offset)
+                        self%avg_int(     xoff,yoff,zoff) = boximg%get_avg_int()
                         call boximg%kill
                     enddo 
                 enddo 
@@ -282,7 +281,8 @@ use simple_aff_prop
             allocate(pixels1(npix_in), pixels2(npix_in), source=0.)
             call self%nano_img%win2arr_rad(      pos_center(1),  pos_center(2),  pos_center(3),  winsz, npix_in, maxrad, npix_out1, pixels1)
             call self%simulated_atom%win2arr_rad(self%boxsize/2, self%boxsize/2, self%boxsize/2, winsz, npix_in, maxrad, npix_out2, pixels2)
-            corr = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))
+            !corr = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2)) ! revert to
+            corr = same_energy_euclid(pixels1(:npix_out1),pixels2(:npix_out2)) ! new method
             print *, 'corr = ', corr
         end if
         call boximg%kill
@@ -724,6 +724,35 @@ use simple_aff_prop
         close(99)
     end subroutine write_corr_dist
 
+    subroutine write_int_dist(self, csv_name)
+        class(nano_picker), intent(inout) :: self
+        character(len=*),   intent(in)    :: csv_name
+        integer, allocatable :: pos_inds(:)
+        integer              :: i
+        real,    allocatable :: avg_ints(:), lower_half_ints(:), upper_half_ints(:)
+        real                 :: Q1, mid, Q3, IQR, mean
+        pos_inds        = pack(self%inds_offset(:,:,:), mask=self%box_scores(:,:,:) >= self%thres)
+        avg_ints        = pack(self%avg_int(:,:,:),     mask=self%box_scores(:,:,:) >= self%thres)
+        mid             = median(avg_ints)
+        lower_half_ints = pack(avg_ints(:), avg_ints(:) < mid)
+        upper_half_ints = pack(avg_ints(:), avg_ints(:) > mid)
+        Q1              = median(lower_half_ints)
+        Q3              = median(upper_half_ints)
+        IQR             = Q3 - Q1
+        mean = sum(avg_ints) / size(avg_ints)
+        print *, 'SUMMARY STATISTICS OF AVERAGE BOX IMAGE INTENSITY SCORES'
+        print *, 'Q1 = ', Q1
+        print *, 'MEDIAN = ', mid
+        print *, 'Q3 = ', Q3
+        print *, 'IQR = ', IQR
+        print *, 'MEAN = ', mean
+        open(unit=98,file=trim(csv_name))
+        do i = 1, size(avg_ints)
+            write(98,'(1x,f11.8)') avg_ints(i)
+        enddo
+        close(98)
+    end subroutine write_int_dist
+
     ! input pos in pixels, not Angstroms
     subroutine extract_img_from_pos(self, pos, img)
         class(nano_picker), intent(inout) :: self
@@ -837,6 +866,8 @@ use simple_aff_prop
         if(allocated(self%center_positions)) deallocate(self%center_positions)
         if(allocated(self%inds_offset)     ) deallocate(self%inds_offset)
         if(allocated(self%box_scores)      ) deallocate(self%box_scores)
+        if(allocated(self%avg_int)         ) deallocate(self%avg_int)
+        if(allocated(self%euclid_dists)    ) deallocate(self%euclid_dists)
     end subroutine kill
 
 end module simple_nano_detect_atoms

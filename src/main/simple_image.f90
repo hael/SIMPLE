@@ -81,6 +81,7 @@ contains
     generic            :: get_cmat_at => get_cmat_at_1, get_cmat_at_2
     procedure, private :: get_rmat_at_1, get_rmat_at_2
     generic            :: get_rmat_at => get_rmat_at_1, get_rmat_at_2
+    procedure          :: get_avg_int
     procedure          :: set_rmat_at
     procedure, private :: set_1, set_2
     generic            :: set => set_1, set_2
@@ -241,6 +242,7 @@ contains
     procedure          :: corr_shifted
     procedure, private :: real_corr_1, real_corr_2
     generic            :: real_corr => real_corr_1, real_corr_2
+    procedure          :: euclid_dist_two_imgs
     procedure          :: phase_corr
     procedure          :: fcorr_shift
     procedure          :: norm_within
@@ -1283,6 +1285,19 @@ contains
         real :: val
         val = self%rmat(i,j,k)
     end function get_rmat_at_2
+
+    function get_avg_int(self) result(avg_int)
+        class(image), intent(in) :: self
+        real    :: avg_int
+        integer :: num_pixels
+        if (self%is_3d()) then
+            num_pixels = self%ldim(1) * self%ldim(2) * self%ldim(3)
+            avg_int = sum(self%rmat) / num_pixels
+        else
+            num_pixels = self%ldim(1) * self%ldim(2)
+            avg_int = sum(self%rmat) / num_pixels
+        end if
+    end function get_avg_int
 
     pure subroutine set_rmat_at( self, i,j,k, val )
         class(image), intent(inout) :: self
@@ -5279,6 +5294,30 @@ contains
             r = 0.
         endif
     end function real_corr_2
+
+    function euclid_dist_two_imgs(self1, self2, mask1) result(dist)
+        use simple_linalg, only: euclid
+        class(image),      intent(inout) :: self1, self2
+        logical, optional, intent(in)    :: mask1(self1%ldim(1),self1%ldim(2),self1%ldim(3))
+        real              :: diff1(self1%ldim(1),self1%ldim(2),self1%ldim(3))
+        real              :: diff2(self2%ldim(1),self2%ldim(2),self2%ldim(3))
+        real              :: ax, ay, npix, dist
+        real, allocatable :: diff1_flat(:), diff2_flat(:)
+        logical           :: mask_here(self1%ldim(1),self1%ldim(2),self1%ldim(3))
+        if (present(mask1)) then
+            mask_here = mask1
+        else 
+            mask_here = .true.
+        end if
+        npix       = real(count(mask_here))
+        ax         = sum(self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)), mask=mask_here) / npix
+        ay         = sum(self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3)), mask=mask_here) / npix
+        diff1      = self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) - ax
+        diff2      = self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3)) - ay
+        diff1_flat = pack(diff1, mask=.true.)
+        diff2_flat = pack(diff2, mask=.true.)
+        dist       = euclid(diff1_flat, diff2_flat)
+    end function euclid_dist_two_imgs
 
     !> /brief phase_corr calculates the phase correlation between
     !> self1 and self2 and returns it in pc.
