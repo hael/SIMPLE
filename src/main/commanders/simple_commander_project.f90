@@ -721,12 +721,12 @@ contains
 
     subroutine exec_export_cavgs( self, cline )
         use simple_image, only: image
-        class(export_cavgs_commander), intent(inout) :: self
+        class(export_cavgs_commander),   intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(parameters)              :: params
         type(sp_project)              :: spproj
         type(image)                   :: img
-        character(len=:), allocatable :: cavgs_fname, projfile_path
+        character(len=:), allocatable :: cavgs_fname, projfile_path, stk_path
         logical,          allocatable :: lstates(:)
         integer :: ldim(3), icls, ncls, ncavgs, cnt
         real    :: smpd, smpd_phys
@@ -744,6 +744,11 @@ contains
         ! takes care of path
         projfile_path = get_fpath(simple_abspath(params%projfile))
         cavgs_fname   = trim(projfile_path)//'/'//trim(cavgs_fname)
+        if(.not. file_exists(cavgs_fname)) then
+            !try using stkpath if present in projfile
+            call spproj%get_cavgs_stk(cavgs_fname, ncls, smpd, stkpath=stk_path)
+            if(allocated(stk_path)) cavgs_fname = trim(stk_path)//'/'//trim(cavgs_fname)
+        endif
         call find_ldim_nptcls(cavgs_fname, ldim, ncavgs, smpd=smpd_phys)
         if(ncavgs /= ncls)    THROW_HARD('Inconsistent # of cls2D cavgs & physical cavgs!')
         if( abs(smpd-smpd_phys) > 0.001 ) THROW_HARD('Inconsistent sampling distancs in project & physical cavgs!')

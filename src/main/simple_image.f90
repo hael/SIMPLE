@@ -2882,7 +2882,6 @@ contains
         class(image), intent(inout) :: self
         class(image), intent(inout) :: stkimg
         integer,      intent(in)    :: x, y
-        type(image)                 :: img_tmp
         integer                     :: stkimg_ldim(3), x_start, y_start, x_end, y_end
         stkimg_ldim = stkimg%get_ldim()
         x_start = (x - 1) * stkimg_ldim(1) + 1
@@ -2891,9 +2890,8 @@ contains
         y_end = y * stkimg_ldim(2)
         if(x_start .lt. 1 .or. y_start .lt. 1) THROW_HARD('tile: out of bounds')
         if(x_end .gt. self%ldim(1) .or. y_end .gt. self%ldim(2)) THROW_HARD('tile: out of bounds')
-        call stkimg%norm4viz(brightness=128.0)
+        call stkimg%norm4viz(brightness=80.0, maxmin=.true.)
         self%rmat(x_start:x_end, y_start:y_end, 1) = stkimg%rmat(:stkimg_ldim(1), :stkimg_ldim(2), 1)
-        call img_tmp%kill()
     end subroutine tile
 
     ! generate the 3 orthogonal reprojections from a volume into a single image
@@ -7755,16 +7753,27 @@ contains
         &(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - smin)/delta
     end subroutine norm_minmax
 
-    subroutine norm4viz( self, brightness)
-        class(image),   intent(inout) :: self
-        real, optional, intent(in)    :: brightness
-        real                          :: brightness_l
+    subroutine norm4viz( self, brightness, maxmin)
+        class(image),      intent(inout) :: self
+        real,    optional, intent(in)    :: brightness
+        logical, optional, intent(in)    :: maxmin
+        real    :: brightness_l
+        logical :: maxmin_l
         brightness_l = 128.0
+        maxmin_l     = .false.
         if(present(brightness)) brightness_l = brightness
+        if(present(maxmin))     maxmin_l     = maxmin
         if(self%is_ft())THROW_HARD('real space only; norm4viz')
-        call self%norm
-        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = brightness_l + 10.5 *& ! magic numbers from Joe
+        if(maxmin_l) then
+            call self%norm_minmax
+            brightness_l = brightness_l - 128.0
+            self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = brightness_l + 256 *&
             &self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))
+        else
+            call self%norm
+            self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = brightness_l + 10.5 *& ! magic numbers from Joe
+            &self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))
+        endif
         ! thresholding
         where( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) > 255. )
             self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = 255.

@@ -1566,11 +1566,12 @@ contains
 
     ! os_out related methods
 
-    subroutine add_cavgs2os_out( self, stk, smpd, imgkind )
+    subroutine add_cavgs2os_out( self, stk, smpd, imgkind, clspath)
         class(sp_project),          intent(inout) :: self
         character(len=*),           intent(in)    :: stk
         real,                       intent(in)    :: smpd ! sampling distance of images in stk
         character(len=*), optional, intent(in)    :: imgkind
+        logical,          optional, intent(in)    :: clspath
         character(len=:), allocatable :: iimgkind
         character(len=LONGSTRLEN)     :: relpath
         integer                       :: ldim(3), nptcls, ind
@@ -1595,6 +1596,7 @@ contains
         call self%os_out%set(ind, 'stkkind', 'single')
         call self%os_out%set(ind, 'imgkind', iimgkind)
         call self%os_out%set(ind, 'ctf',     'no')
+        if(present(clspath) .and. clspath) call self%os_out%set(ind, 'stkpath', trim(CWD_GLOB))
         ! add congruent os_cls2D & os_cls3D
         if( self%os_cls2D%get_noris() /= nptcls )then
             call self%os_cls2D%new(nptcls, is_ptcl=.false.)
@@ -1773,14 +1775,15 @@ contains
         endif
     end subroutine add_entry2os_out
 
-    subroutine get_cavgs_stk( self, stkname, ncls, smpd, imgkind, fail )
-        class(sp_project),             intent(inout) :: self
-        character(len=:), allocatable, intent(inout) :: stkname
-        integer,                       intent(out)   :: ncls
-        real,                          intent(out)   :: smpd
-        character(len=*), optional,    intent(in)    :: imgkind
-        logical,          optional,    intent(in)    :: fail
-        character(len=:), allocatable :: ikind, iimgkind
+    subroutine get_cavgs_stk( self, stkname, ncls, smpd, imgkind, fail, stkpath)
+        class(sp_project),                       intent(inout) :: self
+        character(len=:), allocatable,           intent(inout) :: stkname
+        integer,                                 intent(out)   :: ncls
+        real,                                    intent(out)   :: smpd
+        character(len=:), allocatable, optional, intent(inout) :: stkpath
+        character(len=*), optional,              intent(in)    :: imgkind
+        logical,          optional,              intent(in)    :: fail
+        character(len=:), allocatable                          :: ikind, iimgkind
         integer :: n_os_out, ind, i, cnt
         logical :: fail_here
         if( present(imgkind) )then
@@ -1828,6 +1831,10 @@ contains
         stkname = trim(self%os_out%get_static(ind,'stk'))
         ncls = nint(self%os_out%get(ind, 'nptcls'))
         smpd = self%os_out%get(ind, 'smpd')
+        if(present(stkpath)) then
+            if( allocated(stkpath) ) deallocate(stkpath)
+            if(self%os_out%isthere(ind, 'stkpath')) stkpath = trim(self%os_out%get_static(ind,'stkpath'))
+        endif
     end subroutine get_cavgs_stk
 
     subroutine get_vol( self, imgkind, state, vol_fname, smpd, box)

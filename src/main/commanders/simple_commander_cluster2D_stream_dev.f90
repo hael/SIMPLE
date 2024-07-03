@@ -1317,17 +1317,20 @@ contains
     end subroutine classify_pool_dev
 
     !> produces consolidated project at original scale
-    subroutine write_project_stream2D_dev( write_star )
+    subroutine write_project_stream2D_dev( write_star, clspath)
         logical, optional, intent(in) :: write_star
+        logical, optional, intent(in) :: clspath
         type(class_frcs)              :: frcs, frcs_sc
         type(oris)                    :: os_backup
         type(starproject_stream)      :: starproj_stream
         character(len=:), allocatable :: projfile,projfname, cavgsfname, frcsfname, src, dest
         character(len=:), allocatable :: pool_refs
-        logical                       :: l_write_star
+        logical                       :: l_write_star, l_clspath
         logical,     parameter        :: DEBUG_HERE      = .true.
         l_write_star = .false.
+        l_clspath    = .false.
         if(present(write_star)) l_write_star = write_star
+        if(present(clspath))    l_clspath    = clspath
         ! file naming
         projfname  = get_fbody(orig_projfile, METADATA_EXT, separator=.false.)
         cavgsfname = get_fbody(refs_glob, params_glob%ext, separator=.false.)
@@ -1361,7 +1364,7 @@ contains
             dest = add2fbody(cavgsfname,params_glob%ext,'_odd')
             call rescale_cavgs(src, dest)
             call pool_proj%os_out%kill
-            call pool_proj%add_cavgs2os_out(cavgsfname, params_glob%smpd, 'cavg')
+            call pool_proj%add_cavgs2os_out(cavgsfname, params_glob%smpd, 'cavg', clspath=l_clspath)
             if( l_wfilt )then
                 src = add2fbody(cavgsfname,params_glob%ext,trim(WFILT_SUFFIX))
                 call pool_proj%add_cavgs2os_out(src, params_glob%smpd, 'cavg'//trim(WFILT_SUFFIX))
@@ -1382,7 +1385,7 @@ contains
             call pool_proj%os_ptcl3D%kill
         else
             call pool_proj%os_out%kill
-            call pool_proj%add_cavgs2os_out(cavgsfname, params_glob%smpd, 'cavg')
+            call pool_proj%add_cavgs2os_out(cavgsfname, params_glob%smpd, 'cavg', clspath=l_clspath)
             if( l_wfilt )then
                 src = add2fbody(cavgsfname,params_glob%ext,trim(WFILT_SUFFIX))
                 call pool_proj%add_cavgs2os_out(src, params_glob%smpd, 'cavg'//trim(WFILT_SUFFIX))
@@ -1473,7 +1476,7 @@ contains
             enddo
             call simple_touch(trim(POOL_DIR)//'CAVGASSEMBLE_FINISHED')
         endif
-        call write_project_stream2D_dev(write_star=.true.)
+        call write_project_stream2D_dev(write_star=.true., clspath=.true.)
         ! rank cavgs
         if( pool_iter >= 1 ) call rank_cavgs
         ! cleanup
