@@ -1037,13 +1037,9 @@ contains
         !$omp end do
         !$omp single
         call hist_avg%new(hists(findloc(cls_mask, .true., dim=1)))
-        !$omp end single
-        !$omp do
         do icls = 1,ncls
             if( cls_mask(icls) ) call hist_avg%add(hists(icls))
         enddo
-        !$omp end do
-        !$omp single
         call hist_avg%div(real(n))
         !$omp end single
         !$omp do
