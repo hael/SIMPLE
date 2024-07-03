@@ -1011,7 +1011,7 @@ contains
         cls_mask = nint(os%get_all('pop')) > 0
         n        = count(cls_mask)
         if( n == 0 ) return
-        mskrad = real(params_glob%msk)
+        mskrad = real(ldim_crop(1)/2-1)
         call tmpimg%disc(ldim_crop, smpd_crop, mskrad, lmsk)
         overall_min =  huge(0.)
         overall_max = -999999.

@@ -217,7 +217,7 @@ type :: oris
     procedure, private :: map3dshift22d_1
     procedure, private :: map3dshift22d_2
     generic            :: map3dshift22d => map3dshift22d_1, map3dshift22d_2
-    procedure          :: calc_avg_offset2D
+    procedure          :: calc_avg_offset2D, calc_avg_offset3D
     procedure          :: mirror2d
     procedure          :: mirror3d
     procedure          :: add_shift2class
@@ -1906,9 +1906,9 @@ contains
     end subroutine set_projs
 
     subroutine remap_projs( self, e_space, mapped_projs )
-        class(oris), intent(inout) :: self
-        class(oris), intent(inout) :: e_space
-        integer,     intent(out)   :: mapped_projs(self%n)
+        class(oris), intent(in)  :: self
+        class(oris), intent(in)  :: e_space
+        integer,     intent(out) :: mapped_projs(self%n)
         integer :: i
         !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i=1,self%n
@@ -2932,14 +2932,15 @@ contains
             do icls = 1,self%n
                 if( msk(icls) )then
                     i = i+1
-                    if( mask(icls) ) mask(icls) = x(i) < 6.0
+                    if( mask(icls) ) mask(icls) = x(i)       < 6.0 ! relative rejection
+                    if( mask(icls) ) mask(icls) = vals(icls) < 1.5 ! absolute rejection
                 endif
             enddo
         endif
         if( has_tvd )then
             vals = self%get_all('tvd')
             do icls = 1,self%n
-                if( mask(icls) ) mask(icls) = vals(icls) < 0.5
+                if( mask(icls) ) mask(icls) = vals(icls) < 0.6
             enddo
         endif
         deallocate(msk)
@@ -3358,7 +3359,7 @@ contains
         class(oris),    intent(in)    :: self
         integer,        intent(in)    :: class
         real,           intent(inout) :: offset_avg(2)
-        real(dp) :: avg(2), sumdistsq
+        real(dp) :: avg(2)
         real     :: sh(2)
         integer  :: i, n
         n   = 0
@@ -3378,6 +3379,49 @@ contains
             offset_avg = 0.0
         endif
     end subroutine calc_avg_offset2D
+
+    !>  \brief
+    subroutine calc_avg_offset3D( self, offset_avg, state )
+        class(oris),       intent(in)    :: self
+        real,              intent(inout) :: offset_avg(3)
+        integer, optional, intent(in)    :: state
+        integer, parameter :: N = 300
+        type(oris) :: spiral
+        integer,  allocatable :: pops(:), closest_proj(:)
+        real(dp), allocatable :: offsets(:,:)
+        real(dp) :: avg(3)
+        real     :: rmat(3,3), sh(2), sh3d(3)
+        integer  :: i,j, istate
+        istate = 1
+        if( present(state) ) istate = state
+        call spiral%new(N,.true.)
+        call spiral%spiral
+        allocate(pops(N),offsets(2,N),closest_proj(self%n))
+        call self%remap_projs(spiral, closest_proj)
+        pops    = 0
+        offsets = 0.d0
+        do i=1,self%n
+            if( self%o(i)%get_state() /= istate ) cycle
+            j       = closest_proj(i)
+            pops(j) = pops(j) + 1
+            call self%o(i)%calc_offset2D(sh)
+            offsets(:,j) = offsets(:,j) + real(sh,dp)
+        end do
+        avg        = 0.d0
+        do i = 1,N
+            if( pops(i) < 1 )then
+                pops(i) = 0
+            else
+                offsets(:,i) = offsets(:,i) / real(pops(i),dp)
+                rmat = euler2m(spiral%o(i)%get_euler())
+                sh3d = matmul(rmat, [real(offsets(1,i)),real(offsets(2,i)),0.])
+                avg = avg + sh3d
+            endif
+        enddo
+        avg        = avg / real(count(pops>0),dp)
+        offset_avg = real(avg)
+        call spiral%kill
+    end subroutine calc_avg_offset3D
 
     !>  \brief  generates the mirror of the projection
     !!          can be equivalently accomplished by mirror('y')

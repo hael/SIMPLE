@@ -425,11 +425,12 @@ contains
         integer,             intent(in)    :: box
         type(image)                   :: img
         logical,          allocatable :: cls_mask(:), moments_mask(:), corres_mask(:)
+        integer,          allocatable :: pops(:)
         character(len=:), allocatable :: cavgs
         character(len=XLONGSTRLEN)    :: projfile
         real                  :: smpd_here
         integer               :: nptcls_rejected, ncls_rejected, iptcl
-        integer               :: icls, ncls
+        integer               :: icls, ncls, ncls_rejected_populated, ncls_populated
         call debug_print('in chunk%reject '//int2str(self%id))
         projfile        = trim(self%path)//self%projfile_out
         ncls_rejected   = 0
@@ -439,6 +440,7 @@ contains
         call self%spproj%get_cavgs_stk(cavgs, ncls, smpd_here)
         cavgs = trim(self%path)//basename(cavgs)
         allocate(cls_mask(ncls),moments_mask(ncls),corres_mask(ncls),source=.true.)
+        allocate(pops(ncls),source=nint(self%spproj%os_cls2D%get_all('pop')))
         ! moments & total variation distance
         if( trim(params_glob%reject_cls).ne.'old' ) call self%spproj%os_cls2D%class_robust_rejection(moments_mask)
         ! correlation and resolution
@@ -446,7 +448,10 @@ contains
         ! overall class rejection
         cls_mask      = moments_mask .and. corres_mask
         ncls_rejected = count(.not.cls_mask)
-        if( ncls_rejected == 0 .or. ncls_rejected >= min(ncls,nint(real(ncls)*FRAC_SKIP_REJECTION)) )then
+        ncls_rejected_populated = count((.not.cls_mask).and.(pops>0))
+        ncls_populated          = count(pops>0)
+        if( ncls_rejected == 0 .or.&
+            &ncls_rejected_populated >= min(ncls_populated,nint(real(ncls_populated)*FRAC_SKIP_REJECTION)) )then
             ! no or too many classes to reject
         else
             call self%spproj%read_segment('ptcl2D',projfile)
@@ -465,17 +470,13 @@ contains
             call img%new([box,box,1],smpd_here)
             do icls = 1,ncls
                 if( cls_mask(icls) ) cycle
-                if( self%spproj%os_cls2D%get(icls,'pop') >  0.5 )then
+                if( pops(icls) > 0 )then
                     ! update to global counter, does not include empty classes
                     ncls_rejected_glob = ncls_rejected_glob + 1
                     call img%read(cavgs,icls)
                     call img%write('cls_rejected_chunks.mrc',ncls_rejected_glob)
-                    img = 0.
-                    call img%write(cavgs,icls)
                 endif
             enddo
-            call img%read(cavgs, ncls)
-            call img%write(cavgs,ncls)
             call img%kill
             ! updates cls2D field
             do icls=1,ncls
@@ -487,7 +488,7 @@ contains
             enddo
             call self%spproj%write_segment_inside('cls2D',projfile)
             write(logfhandle,'(A,I6,A,I6,A,I6,A,I6,A)')'>>> REJECTED FROM CHUNK ',self%id,': ',&
-                &nptcls_rejected,' / ',self%nptcls,' PARTICLES IN ',ncls_rejected,' CLUSTERS'
+                &nptcls_rejected,' / ',self%nptcls,' PARTICLES IN ',ncls_rejected_populated,' CLUSTERS'
         endif
         call self%spproj%kill
         call debug_print('end chunk%reject '//int2str(self%id))

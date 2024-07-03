@@ -192,7 +192,7 @@ real, parameter    :: ICEFRAC_THRESHOLD        = 1.0   !< Icefrac rejection thre
 real, parameter    :: ICEFRAC_THRESHOLD_STREAM = 1.0   !< Stream icefrac rejection threshold
 real, parameter    :: ASTIG_THRESHOLD          = 10.0  !< Astigmatism rejection threshold
 real, parameter    :: ASTIG_THRESHOLD_STREAM   = 10.0  !< Stream astigmatism rejection threshold
-real, parameter    :: FRAC_SKIP_REJECTION      = 0.8   !< When the number of classes to reject is too high rejection is skipped
+real, parameter    :: FRAC_SKIP_REJECTION      = 0.7   !< When the number of classes to reject is too high rejection is skipped
 real, parameter    :: PICK_LP_DEFAULT          = 20.   !< Picking resolution limit
 real, parameter    :: BOX_EXP_FACTOR_DEFAULT   = 1.2   !< Multilication factor to increase the image size as determined bu muti-diameter picking
 
