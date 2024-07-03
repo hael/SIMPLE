@@ -769,10 +769,11 @@ contains
 
     subroutine reject_from_pool_dev
         type(image)          :: img
+        integer, allocatable :: pops(:)
         logical, allocatable :: cls_mask(:), moments_mask(:), corres_mask(:)
         real                 :: ndev_here
         integer              :: nptcls_rejected, ncls_rejected, ncls2reject, iptcl
-        integer              :: icls
+        integer              :: icls, ncls2reject_populated, ncls_populated
         if( .not. stream2D_active ) return
         if( .not.pool_available )   return
         if( trim(params_glob%reject_cls).eq.'no' ) return
@@ -782,6 +783,7 @@ contains
         ncls_rejected   = 0
         nptcls_rejected = 0
         allocate(cls_mask(ncls_glob),moments_mask(ncls_glob),corres_mask(ncls_glob),source=.true.)
+        allocate(pops(ncls_glob),source=nint(pool_proj%os_cls2D%get_all('pop')))
         ! moments & total variation distance
         if( trim(params_glob%reject_cls).ne.'old' ) call pool_proj%os_cls2D%class_robust_rejection(moments_mask)
         ! correlation & resolution
@@ -790,8 +792,11 @@ contains
         ! overall class rejection
         cls_mask = moments_mask .and. corres_mask
         ! rejecting associated particles
-        ncls2reject = count(.not.cls_mask)
-        if( ncls2reject > 0 .and. ncls2reject < min(ncls_glob,nint(real(ncls_glob)*FRAC_SKIP_REJECTION)) )then
+        ncls2reject           = count(.not.cls_mask)
+        ncls_populated        = count(pops>0)
+        ncls2reject_populated = count((.not.cls_mask).and.(pops>0))
+        if( ncls2reject > 0 .and.&
+            & ncls2reject_populated < min(ncls_populated,nint(real(ncls_populated)*FRAC_SKIP_REJECTION)) )then
             ncls_rejected = 0
             !$omp parallel do private(iptcl,icls) reduction(+:nptcls_rejected) proc_bind(close)
             do iptcl = 1,pool_proj%os_ptcl2D%get_noris()
@@ -807,7 +812,7 @@ contains
                 call img%new([box,box,1],smpd)
                 do icls = 1,ncls_glob
                     if( cls_mask(icls) ) cycle
-                    if( pool_proj%os_cls2D%get(icls,'pop') > 0.5 )then
+                    if( pops(icls) > 0 )then
                         ncls_rejected_glob = ncls_rejected_glob + 1
                         call img%read(trim(POOL_DIR)//trim(refs_glob),icls)
                         call img%write(trim(POOL_DIR)//'cls_rejected_pool.mrc',ncls_rejected_glob)
@@ -827,7 +832,7 @@ contains
                 ! cls2D field
                 do icls=1,ncls_glob
                     if( .not.cls_mask(icls) )then
-                        if( pool_proj%os_cls2D%get(icls,'pop') > 0.5 ) ncls_rejected = ncls_rejected+1
+                        if( pops(icls) > 0 ) ncls_rejected = ncls_rejected+1
                         call pool_proj%os_cls2D%set(icls, 'pop',         0.)
                         call pool_proj%os_cls2D%set(icls, 'corr',       -1.)
                         call pool_proj%os_cls2D%set_state(icls,          0 )
