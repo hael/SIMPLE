@@ -9,22 +9,37 @@ use simple_image,              only: image
 implicit none  ! Ensures all variables must have an explicit type (all modern Fortran programs should include this statement)
 
 ! Declaration of variables
-type(image)                 :: denoised
-real                        :: smpd=1.0      ! Sampling distance (Angstroms per voxel length)
-real                        :: res           ! Resolution of output image
-integer                     :: ldim(3), ifoo ! ldim is the dimensions of the 3D volume
-character(*), parameter     :: fn_in = '/Users/wietfeldthc/Documents/simpleTestImages/lpForAlannaJun27/vol_noisy.mrc'
-character(256)              :: fn_out, resChar
+type(image)                   :: denoised
+real                          :: smpd=1.0           ! Sampling distance (Angstroms per voxel length)
+real                          :: res                ! Resolution of output image
+integer                       :: ldim(3), ifoo, rc  ! ldim is the dimensions of the 3D volume
+!character(*), parameter      :: fn_in = '/Users/wietfeldthc/Documents/simpleTestImages/lpForAlannaJun27/vol_noisy.mrc'
+character(256)                :: fn_in, fn_out, resChar
+character(len=:), allocatable :: cmd
+logical                       :: mrc_exists
 
 ! Load the resolution from the commandline
 if( command_argument_count() /= 2 ) then
-    write(logfhandle,'(a)') 'Usage: simple_test_3D_lpbasic res outvol.mrc'
+    write(logfhandle,'(a)') 'ERROR! Usage: simple_test_3D_lpbasic res outvol.mrc'
     write(logfhandle,'(a)') 'res: resolution of denoised image [real]'
     write(logfhandle,'(a)') 'outvol.mrc: name of output volume with .mrc extension'
-    write(logfhandle,'(a)') 'Example: simple_test_3D_lpbasic 6.0 example_out.mrc'
+    write(logfhandle,'(a)') 'Example: https://www.rcsb.org/structure/1jyx'
     write(logfhandle,'(a)') 'DEFAULT TEST (example above) is running now...'
-    res = 6.0
+    res    = 6.0
     fn_out = 'example_out.mrc'
+    inquire(file="1JYX.mrc", exist=mrc_exists)
+    if( .not. mrc_exists )then
+        write(*, *) 'Downloading the example dataset...'
+        cmd = 'curl -s -o 1JYX.pdb https://files.rcsb.org/download/1JYX.pdb'
+        call execute_command_line(cmd, exitstat=rc)
+        write(*, *) 'Converting .pdb to .mrc...'
+        cmd = 'e2pdb2mrc.py 1JYX.pdb 1JYX.mrc'
+        call execute_command_line(cmd, exitstat=rc)
+        cmd = 'rm 1JYX.pdb'
+        call execute_command_line(cmd, exitstat=rc)
+    endif
+    fn_in  = "1JYX.mrc"
+    fn_out = "1JYX.mrc"
 else
     call get_command_argument(1, resChar)
     read(resChar, *)res ! Converts character to real

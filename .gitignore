@@ -41,3 +41,4 @@ doc/html/
 *.orig
 /node_modules
 /dist
+.eman2log.txt
