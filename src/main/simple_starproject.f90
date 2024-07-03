@@ -672,7 +672,7 @@ contains
         class(starproject), intent(inout) :: self
         class(sp_project),  intent(inout) :: spproj
         integer, optional,  intent(in)    :: iter
-        character(len=:), allocatable     :: stkname
+        character(len=:), allocatable     :: stkname, stk_path
         integer                           :: i, ncls
         real                              :: smpd
         if( L_VERBOSE_GLOB ) VERBOSE_OUTPUT = .true.
@@ -696,8 +696,12 @@ contains
         end if
         do i=1, spproj%os_cls2D%get_noris()
             if(.not. spproj%os_cls2D%isthere(i, "stk")) then
-                call spproj%get_cavgs_stk(stkname, ncls, smpd)
-                call spproj%os_cls2D%set(i, "stk", trim(adjustl(stkname)))
+                call spproj%get_cavgs_stk(stkname, ncls, smpd, stkpath=stk_path)
+                if(allocated(stk_path) .and. len(stk_path) .gt. 0) then
+                    call spproj%os_cls2D%set(i, "stk", trim(adjustl(stk_path)) // '/' // trim(adjustl(stkname)))
+                else
+                    call spproj%os_cls2D%set(i, "stk", trim(adjustl(stkname)))
+                endif
             end if
             call spproj%os_cls2D%set(i, "ncls", real(spproj%os_cls2D%get_noris()))
         end do

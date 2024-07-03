@@ -877,6 +877,7 @@ contains
                 call gui_stats%set('current_search', 'estimated_diameter', '')
                 call gui_stats%set('current_search', 'status', 'running')
                 call gui_stats%set('latest', '', '')
+                call gui_stats%write_json
                 pause_import = .false.
             endif
             ! pause import after ninit mics for global search
