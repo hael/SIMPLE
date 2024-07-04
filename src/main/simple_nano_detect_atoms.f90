@@ -48,8 +48,7 @@ use simple_aff_prop
         procedure :: write_boximgs
         procedure :: write_positions_and_scores
         procedure :: write_NP_image
-        procedure :: write_corr_dist
-        procedure :: write_int_dist
+        procedure :: write_dist
         procedure :: extract_img_from_pos
         procedure :: compare_pick
         procedure :: refine_threshold
@@ -649,20 +648,40 @@ use simple_aff_prop
         deallocate(pos_inds)
     end subroutine write_boximgs
 
-    subroutine write_positions_and_scores( self, filename )
+    subroutine write_positions_and_scores( self, filename, type )
         class(nano_picker), intent(inout) :: self
         character(len=*),   intent(in)    :: filename
+        character(len=*),   intent(in)    :: type
         integer,     allocatable :: pos_inds(:)
         real,        allocatable :: coords(:,:), scores(:)
         integer                  :: nbox, ipos, i, j
         pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
-        scores   = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= self%thres)
         nbox     = size(pos_inds)
         allocate(coords(nbox,3))
-        do ipos = 1, nbox
-            coords(ipos,:) = self%center_positions(pos_inds(ipos),:) * self%smpd ! using center positions and Angstroms (same as pdb)
-            !coords(ipos,:) = self%positions(pos_inds(ipos),:) ! keep in pixels
-        enddo
+        select case(trim(type))
+            case('centers')
+                scores   = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= self%thres)
+                do ipos  = 1, nbox
+                    coords(ipos,:) = self%center_positions(pos_inds(ipos),:) * self%smpd ! using center positions and Angstroms (same as pdb)
+                enddo
+            case('pixels')
+                scores   = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= self%thres)
+                do ipos  = 1, nbox
+                    coords(ipos,:) = self%positions(pos_inds(ipos),:) ! keep in pixels
+                enddo
+            case('intensities')
+                scores   = pack(self%avg_int(:,:,:),      mask=self%box_scores(:,:,:) >= self%thres)
+                do ipos  = 1, nbox
+                    coords(ipos,:) = self%center_positions(pos_inds(ipos),:) * self%smpd ! using center positions and Angstroms (same as pdb)
+                enddo
+            case('euclid')
+                scores   = pack(self%euclid_dists(:,:,:), mask=self%box_scores(:,:,:) >= self%thres)
+                do ipos  = 1, nbox
+                    coords(ipos,:) = self%center_positions(pos_inds(ipos),:) * self%smpd ! using center positions and Angstroms (same as pdb)
+                enddo
+            case DEFAULT
+                THROW_HARD('write_positions_and_scores: type='//trim(type)//' is unsupported')
+        end select
         open(unit=25, file=filename, status='replace', action='write')
         do i = 1, nbox
             write(25, '(I9,a)', advance='no') pos_inds(i), ','
@@ -695,15 +714,22 @@ use simple_aff_prop
         call nano%kill
     end subroutine write_NP_image
 
-    subroutine write_corr_dist( self, csv_name )
+    subroutine write_dist( self, csv_name, type )
         class(nano_picker), intent(inout) :: self
-        character(len=*),   intent(in)    :: csv_name
+        character(len=*),   intent(in)    :: csv_name, type
         real,    allocatable :: pos_scores(:), lower_half_scores(:), upper_half_scores(:)
         integer, allocatable :: pos_inds(:)
         real                 :: Q1, mid, Q3, IQR, mean
         integer              :: i
-        pos_inds          = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
-        pos_scores        = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= self%thres)
+        pos_inds           = pack(self%inds_offset(:,:,:),       mask=self%box_scores(:,:,:) >= self%thres)
+        select case(trim(type))
+            case('corr')
+                pos_scores = pack(self%box_scores(:,:,:),        mask=self%box_scores(:,:,:) >= self%thres)
+            case('avg_int')
+                pos_scores = pack(self%avg_int(:,:,:),           mask=self%box_scores(:,:,:) >= self%thres)
+            case('euclid')
+                pos_scores = pack(self%euclid_dists(:,:,:),      mask=self%box_scores(:,:,:) >= self%thres)
+        end select
         mid               = median(pos_scores)
         lower_half_scores = pack(pos_scores(:), pos_scores(:) < mid)
         upper_half_scores = pack(pos_scores(:), pos_scores(:) > mid)
@@ -722,36 +748,7 @@ use simple_aff_prop
             write(99,'(1x,f11.8)') pos_scores(i)
         enddo
         close(99)
-    end subroutine write_corr_dist
-
-    subroutine write_int_dist(self, csv_name)
-        class(nano_picker), intent(inout) :: self
-        character(len=*),   intent(in)    :: csv_name
-        integer, allocatable :: pos_inds(:)
-        integer              :: i
-        real,    allocatable :: avg_ints(:), lower_half_ints(:), upper_half_ints(:)
-        real                 :: Q1, mid, Q3, IQR, mean
-        pos_inds        = pack(self%inds_offset(:,:,:), mask=self%box_scores(:,:,:) >= self%thres)
-        avg_ints        = pack(self%avg_int(:,:,:),     mask=self%box_scores(:,:,:) >= self%thres)
-        mid             = median(avg_ints)
-        lower_half_ints = pack(avg_ints(:), avg_ints(:) < mid)
-        upper_half_ints = pack(avg_ints(:), avg_ints(:) > mid)
-        Q1              = median(lower_half_ints)
-        Q3              = median(upper_half_ints)
-        IQR             = Q3 - Q1
-        mean = sum(avg_ints) / size(avg_ints)
-        print *, 'SUMMARY STATISTICS OF AVERAGE BOX IMAGE INTENSITY SCORES'
-        print *, 'Q1 = ', Q1
-        print *, 'MEDIAN = ', mid
-        print *, 'Q3 = ', Q3
-        print *, 'IQR = ', IQR
-        print *, 'MEAN = ', mean
-        open(unit=98,file=trim(csv_name))
-        do i = 1, size(avg_ints)
-            write(98,'(1x,f11.8)') avg_ints(i)
-        enddo
-        close(98)
-    end subroutine write_int_dist
+    end subroutine write_dist
 
     ! input pos in pixels, not Angstroms
     subroutine extract_img_from_pos(self, pos, img)
