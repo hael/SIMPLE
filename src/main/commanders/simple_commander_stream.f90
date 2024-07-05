@@ -2169,7 +2169,7 @@ contains
         call cline%set('wiener',       'full')
         if( .not. cline%defined('dir_target')   ) THROW_HARD('DIR_TARGET must be defined!')
         if( .not. cline%defined('walltime')     ) call cline%set('walltime',     29*60) ! 29 minutes
-        if( .not. cline%defined('lpthres')      ) call cline%set('lpthres',      30.0)
+        if( .not. cline%defined('lpthres')      ) call cline%set('lpthres',      RES_THRESHOLD_STREAM)
         if( .not. cline%defined('ndev')         ) call cline%set('ndev',         CLS_REJECT_STD)
         if( .not. cline%defined('reject_cls')   ) call cline%set('reject_cls',   'yes')
         if( .not. cline%defined('objfun')       ) call cline%set('objfun',       'euclid')

@@ -75,17 +75,17 @@ contains
         type(parameters)  :: params
         type(builder)     :: build
         real, allocatable :: shvec(:,:)
-        real              :: xy(3)
+        real              :: xyz(3)
         integer           :: ldim(3), istate, i, nimgs
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp',   20.)
         call build%init_params_and_build_general_tbox(cline,params)
-        if( cline%defined('stk') )then
-            if( params%masscen.ne.'yes' )then
-                if(.not.cline%defined('oritab') .and. .not.cline%defined('projfile') )then
-                    THROW_HARD('Alignments parameters are required')
-                endif
+        if( params%masscen.ne.'yes' )then
+            if(.not.cline%defined('oritab') .and. .not.cline%defined('projfile') )then
+                THROW_HARD('Alignments parameters are required')
             endif
+        endif
+        if( cline%defined('stk') )then
             call find_ldim_nptcls(params%stk, ldim, nimgs)
             allocate(shvec(nimgs,3))
             call build%img%construct_thread_safe_tmp_imgs(1)
@@ -93,15 +93,15 @@ contains
                 call build%img%zero_and_unflag_ft
                 call build%img%read(params%stk,i)
                 if( trim(params_glob%masscen).ne.'yes' )then
-                    xy = 0.
-                    call build%spproj_field%calc_avg_offset2D(i, xy(1:2))
-                    if( arg(xy) < CENTHRESH )then
+                    xyz = 0.
+                    call build%spproj_field%calc_avg_offset2D(i, xyz(1:2))
+                    if( arg(xyz) < CENTHRESH )then
                         shvec(i,:) = 0.
-                    else if( arg(xy) > MAXCENTHRESH2D )then
-                        shvec(i,:) = xy
+                    else if( arg(xyz) > MAXCENTHRESH2D )then
+                        shvec(i,:) = xyz
                     else
                         shvec(i,:) = build%img%calc_shiftcen_serial(params%cenlp, params%msk)
-                        if( arg(shvec(i,1:2) - xy(1:2)) > MAXCENTHRESH2D ) shvec(i,:) = 0.
+                        if( arg(shvec(i,1:2) - xyz(1:2)) > MAXCENTHRESH2D ) shvec(i,:) = 0.
                     endif
                     call build%spproj_field%add_shift2class(i, -shvec(i,:))
                 else
@@ -121,18 +121,18 @@ contains
             allocate(shvec(params%nstates,3))
             do istate=1,params%nstates
                 call build%vol%read(params%vols(istate))
-                if( cline%defined('hp') )then
-                    shvec(istate,:) = build%vol%calc_shiftcen(params%cenlp, params%msk, hp=params%hp)
+                if( trim(params_glob%masscen).ne.'yes' )then
+                    call build%spproj_field%calc_avg_offset3D(shvec(istate,:), state=istate)
+                    call build%spproj_field%map3dshift22d(-shvec(istate,:), state=istate)
                 else
                     shvec(istate,:) = build%vol%calc_shiftcen(params%cenlp, params%msk)
+                    if( cline%defined('oritab') .or. cline%defined('projfile') )then
+                        call build%spproj_field%map3dshift22d(-shvec(istate,:), state=istate)
+                    endif
                 endif
                 call build%vol%read(params%vols(istate))
-                call build%vol%shift([shvec(istate,1),shvec(istate,2),shvec(istate,3)])
+                call build%vol%shift(shvec(istate,1:3))
                 call build%vol%write('shifted_vol_state'//int2str(istate)//params%ext)
-                ! transfer the 3D shifts to 2D
-                if( cline%defined('oritab') .or. cline%defined('projfile') )then
-                    call build%spproj_field%map3dshift22d(-shvec(istate,:), state=istate)
-                endif
             end do
         endif
         if( cline%defined('oritab') )then

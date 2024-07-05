@@ -1022,6 +1022,8 @@ contains
                 call cavgs_merged(icls)%stats(mean, std, minmax(2), minmax(1), tmpimg )
                 overall_min = min(minmax(1),overall_min)
                 overall_max = max(minmax(2),overall_max)
+                call os%set(icls, 'min',  minmax(1))
+                call os%set(icls, 'max',  minmax(2))
                 call os%set(icls, 'mean', mean)
                 call os%set(icls, 'var',  std*std)
             endif
