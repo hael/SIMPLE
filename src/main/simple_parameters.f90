@@ -398,7 +398,7 @@ type :: parameters
     real    :: lpstart=0.          !< start low-pass limit(in A){15}
     real    :: lpstop=8.0          !< stop low-pass limit(in A){8}
     real    :: lpstop2D=8.0        !< stop low-pass limit(in A){8}
-    real    :: lpthres=30.
+    real    :: lpthres=RES_THRESHOLD_STREAM
     real    :: max_dose=0.         !< maximum dose threshold (e/A2)
     real    :: max_rad=0.          !< particle longest  dim (in pixels)
     real    :: min_rad=100.        !< particle shortest dim (in pixels)

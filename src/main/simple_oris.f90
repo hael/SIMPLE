@@ -2894,10 +2894,16 @@ contains
     subroutine class_robust_rejection( self, mask )
         class(oris), intent(in)    :: self
         logical,     intent(inout) :: mask(1:self%n)
+        real,    parameter   :: MEAN_THRESHOLD    = -8.0
+        real,    parameter   :: REL_VAR_THRESHOLD =  6.0
+        real,    parameter   :: ABS_VAR_THRESHOLD =  1.5
+        real,    parameter   :: TVD_THRESHOLD     =  0.55
+        real,    parameter   :: MIN_THRESHOLD     = -2.0
+        real,    parameter   :: MAX_THRESHOLD     =  2.0
         real,    allocatable :: vals(:), x(:)
         logical, allocatable :: msk(:)
         integer :: icls, i
-        logical :: has_mean, has_var, has_skew, has_tvd, l_err
+        logical :: has_mean, has_var, has_skew, has_tvd, has_minmax, l_err
         msk = mask
         if( self%isthere('pop') )then
             do icls=1,self%n
@@ -2909,9 +2915,10 @@ contains
             deallocate(msk)
             return
         endif
-        has_mean = self%isthere('mean')
-        has_var  = self%isthere('var')
-        has_tvd  = self%isthere('tvd')
+        has_mean   = self%isthere('mean')
+        has_var    = self%isthere('var')
+        has_tvd    = self%isthere('tvd')
+        has_minmax = self%isthere('min') .and. self%isthere('max')
         if( has_mean )then
             vals = self%get_all('mean')
             x    = pack(vals, mask=msk)
@@ -2920,7 +2927,7 @@ contains
             do icls = 1,self%n
                 if( msk(icls) )then
                     i = i+1
-                    if( mask(icls) ) mask(icls) = x(i) > -8.0
+                    if( mask(icls) ) mask(icls) = x(i) > MEAN_THRESHOLD
                 endif
             enddo
         endif
@@ -2932,15 +2939,25 @@ contains
             do icls = 1,self%n
                 if( msk(icls) )then
                     i = i+1
-                    if( mask(icls) ) mask(icls) = x(i)       < 6.0 ! relative rejection
-                    if( mask(icls) ) mask(icls) = vals(icls) < 1.5 ! absolute rejection
+                    if( mask(icls) ) mask(icls) = x(i)       < REL_VAR_THRESHOLD
+                    if( mask(icls) ) mask(icls) = vals(icls) < ABS_VAR_THRESHOLD
                 endif
             enddo
         endif
         if( has_tvd )then
             vals = self%get_all('tvd')
             do icls = 1,self%n
-                if( mask(icls) ) mask(icls) = vals(icls) < 0.6
+                if( mask(icls) ) mask(icls) = vals(icls) < TVD_THRESHOLD
+            enddo
+        endif
+        if( has_minmax )then
+            do icls = 1,self%n
+                if( mask(icls) )then
+                    if(  (self%get(icls,'min') < MIN_THRESHOLD).and.&
+                        &(self%get(icls,'max') > MAX_THRESHOLD) )then
+                        mask(icls) = .false.
+                    endif
+                endif
             enddo
         endif
         deallocate(msk)
@@ -3382,45 +3399,49 @@ contains
 
     !>  \brief
     subroutine calc_avg_offset3D( self, offset_avg, state )
-        class(oris),       intent(in)    :: self
+        class(oris),       intent(inout)    :: self
         real,              intent(inout) :: offset_avg(3)
         integer, optional, intent(in)    :: state
-        integer, parameter :: N = 300
-        type(oris) :: spiral
-        integer,  allocatable :: pops(:), closest_proj(:)
-        real(dp), allocatable :: offsets(:,:)
-        real(dp) :: avg(3)
-        real     :: rmat(3,3), sh(2), sh3d(3)
-        integer  :: i,j, istate
+        integer,    parameter :: N = 100
+        integer,    parameter :: PROJDIRMINPOP = 1
+        type(oris)            :: spiral
+        type(ori)             :: o
+        integer,  allocatable :: closest_proj(:)
+        real(dp) :: avg(3), offset(3)
+        real     :: rmat(3,3), sh(3), sh3d(3), euls(3),x,y,c,s,phi
+        integer  :: i,j, istate, pop, npop
         istate = 1
         if( present(state) ) istate = state
         call spiral%new(N,.true.)
         call spiral%spiral
-        allocate(pops(N),offsets(2,N),closest_proj(self%n))
+        allocate(closest_proj(self%n),source=0)
         call self%remap_projs(spiral, closest_proj)
-        pops    = 0
-        offsets = 0.d0
-        do i=1,self%n
-            if( self%o(i)%get_state() /= istate ) cycle
-            j       = closest_proj(i)
-            pops(j) = pops(j) + 1
-            call self%o(i)%calc_offset2D(sh)
-            offsets(:,j) = offsets(:,j) + real(sh,dp)
-        end do
-        avg        = 0.d0
+        avg  = 0.d0
+        npop = 0
+        o    = ori(.true.)
+        !$omp parallel do default(shared) private(i,j,pop,offset,o,sh3d) &
+        !$omp schedule(static) proc_bind(close) reduction(+:npop,avg)
         do i = 1,N
-            if( pops(i) < 1 )then
-                pops(i) = 0
-            else
-                offsets(:,i) = offsets(:,i) / real(pops(i),dp)
-                rmat = euler2m(spiral%o(i)%get_euler())
-                sh3d = matmul(rmat, [real(offsets(1,i)),real(offsets(2,i)),0.])
-                avg = avg + sh3d
-            endif
+            pop    = 0
+            offset = 0.d0
+            call spiral%get_ori(i, o)
+            do j = 1,self%n
+                if( self%o(i)%get_state() /= istate ) cycle
+                if( closest_proj(j) /= i ) cycle
+                call self%o(j)%compose2dshift3d(o, sh3d)
+                offset = offset + real(sh3d,dp)
+                pop    = pop + 1
+            enddo
+            if( pop < PROJDIRMINPOP ) cycle
+            avg  = avg + offset / real(pop,dp)
+            npop = npop + 1
         enddo
-        avg        = avg / real(count(pops>0),dp)
+        !$omp end parallel do
+        avg        = avg / real(npop,dp)
         offset_avg = real(avg)
         call spiral%kill
+        call o%kill
+        deallocate(closest_proj)
     end subroutine calc_avg_offset3D
 
     !>  \brief  generates the mirror of the projection

@@ -111,7 +111,7 @@ type :: ori
     ! CALCULATORS
     procedure          :: round_shifts
     procedure, private :: compeuler
-    procedure          :: compose3d2d
+    procedure          :: compose3d2d, compose2dshift3d
     procedure          :: map3dshift22d
     procedure          :: calc_offset2D
     procedure          :: mirror3d
@@ -1365,6 +1365,22 @@ contains
             end subroutine transfmat2inpls
 
     end subroutine compose3d2d
+
+    !>  Returns the 3D composed in-plane shift with projection direction
+    subroutine compose2dshift3d( self2D, self3D, shift3d )
+        class(ori), intent(in)  :: self2D, self3D
+        real,       intent(out) :: shift3d(3)
+        real :: rmat(3,3), euls(3)
+        ! from projection direction
+        euls = self3D%get_euler()
+        ! from in-plane
+        shift3d(1:2) = self2D%get_2Dshift()
+        shift3d(3)   = 0.
+        euls(3)      = self2D%e3get() ! psi from 3D ignored
+        ! rotate
+        rmat    = transpose(euler2m(euls))
+        shift3d = matmul(rmat, shift3d)
+    end subroutine compose2dshift3d
 
     subroutine map3dshift22d( self, sh3d )
         class(ori), intent(inout) :: self
