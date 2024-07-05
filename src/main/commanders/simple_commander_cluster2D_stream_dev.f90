@@ -1216,8 +1216,8 @@ contains
             pool_stacks_mask = nptcls_per_stk > 0
         endif
         ! poolstats
-        call pool_stats%set('particles', 'particles_processed', nptcls_glob,          primary=.true.)
-        call pool_stats%set('particles', 'particles_assigned',  int2str(nptcls_sel)           // '_(' // int2str(ceiling(100.0 * real(nptcls_sel)           / real(nptcls_glob))) // '%)')
+        !call pool_stats%set('particles', 'particles_processed', int2commastr(nptcls_glob), primary=.true.)
+        call pool_stats%set('particles', 'particles_assigned',  int2str(nptcls_glob - nptcls_rejected_glob) // '_(' // int2str(ceiling(100.0 * real(nptcls_glob - nptcls_rejected_glob) / real(nptcls_glob))) // '%)')
         call pool_stats%set('particles', 'particles_rejected',  int2str(nptcls_rejected_glob) // '_(' // int2str(floor(100.0 * real(nptcls_rejected_glob) / real(nptcls_glob))) // '%)')
         call pool_stats%set('2D', 'iteration',                  pool_iter - 1,        primary=.true.)
         call pool_stats%set('2D', 'number_classes',             ncls_glob,            primary=.true.)
