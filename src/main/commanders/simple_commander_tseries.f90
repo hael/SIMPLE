@@ -1325,8 +1325,8 @@ contains
                     call imgs(i + 1)%new([params%box,params%box,1], smpd)
                     call imgs(i    )%read(cavgs_stk,     cnt)
                     call imgs(i + 1)%read('reprojs.mrc', cnt)
-                    !call imgs(i)%radial_cc(imgs(i+1), smpd, rad_cc(i,:), rad_dists(i,:)) 
-                    ! create radial weights obtained with fsc2optlp and a filter mask with those weights subroutine mask
+                    ! cavgs images are weighted using radial cross-correlation
+                    call imgs(i)%radial_cc(imgs(i+1), smpd, rad_cc(i,:), rad_dists(i,:)) 
                     ! filter out cavgs
                     call imgs(i    )%norm
                     call imgs(i + 1)%norm

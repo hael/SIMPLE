@@ -8246,7 +8246,7 @@ contains
     subroutine radial_cc( self1, self2, smpd, rad_corrs, rad_dists )
         class(image),      intent(inout):: self1, self2
         real,              intent(in)   :: smpd
-        real,              intent(out)  :: rad_corrs(int(self1%ldim(1)/2.)), rad_dists(int(self1%ldim(1)/2.))
+        real, optional,    intent(out)  :: rad_corrs(int(self1%ldim(1)/2.)), rad_dists(int(self1%ldim(1)/2.))
         real                 :: rad_weights(int(self1%ldim(1)/2.))
         type(image)          :: distimg
         real,    allocatable :: rvec1(:), rvec2(:)
