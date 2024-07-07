@@ -3414,6 +3414,7 @@ contains
         if( present(state) ) istate = state
         call spiral%new(N,.true.)
         call spiral%spiral
+        call spiral%set_all2single('state', 1.)
         allocate(closest_proj(self%n),source=0)
         call self%remap_projs(spiral, closest_proj)
         avg  = 0.d0

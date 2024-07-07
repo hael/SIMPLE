@@ -130,7 +130,6 @@ contains
                         call build%spproj_field%map3dshift22d(-shvec(istate,:), state=istate)
                     endif
                 endif
-                call build%vol%read(params%vols(istate))
                 call build%vol%shift(shvec(istate,1:3))
                 call build%vol%write('shifted_vol_state'//int2str(istate)//params%ext)
             end do
