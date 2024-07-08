@@ -27,7 +27,7 @@ use simple_aff_prop
         type(image)              :: simulated_atom, nano_img, sim_img
         type(image), allocatable :: convolved_atoms(:)
         type(nanoparticle)       :: np
-        real                     :: smpd, thres, radius
+        real                     :: smpd, thres, radius, euclid_thres
         real, allocatable        :: box_scores(:,:,:), loc_sdevs(:,:,:), avg_int(:,:,:), euclid_dists(:,:,:), center_positions(:,:)
         logical                  :: is_denoised
 
@@ -40,6 +40,7 @@ use simple_aff_prop
         procedure :: identify_threshold
         procedure :: identify_high_scores
         procedure :: distance_filter
+        procedure :: euclid_filter
         procedure :: remove_outliers_sdev
         procedure :: remove_outliers_position
         procedure :: find_centers
@@ -111,6 +112,7 @@ use simple_aff_prop
         ldim_box  = [self%boxsize,self%boxsize,self%boxsize]
         call atom%set_coord(1,(self%smpd*real(ldim_box)/2.)) ! make sure atom is in center of box
         call atom%convolve(self%simulated_atom, cutoff=8*self%smpd)
+        !call self%simulated_atom%norm_minmax
         call self%simulated_atom%write('simulated_atom.mrc')
         call atom%kill
     end subroutine simulate_atom
@@ -165,7 +167,7 @@ use simple_aff_prop
         class(nano_picker), intent(inout) :: self
         logical, optional,  intent(in)    :: circle
         type(image), allocatable :: boximgs(:)
-        type(image)              :: boximg
+        type(image)              :: boximg, boximg_minmax
         integer                  :: xoff, yoff, zoff, pos(3), pos_center(3), ithr, nthr, winsz, npix_in, npix_out1, npix_out2
         logical                  :: l_err_box, circle_here
         real                     :: maxrad, xyz(3)
@@ -220,8 +222,9 @@ use simple_aff_prop
                         allocate(pixels1(npix_in), pixels2(npix_in), source=0.)
                         pos  = self%positions(self%inds_offset(xoff,yoff,zoff),:)
                         call self%nano_img%window_slim( pos, self%boxsize, boximg, outside)
-                        call boximg%norm_minmax
-                        call boximg%masscen(xyz)
+                        call boximg_minmax%copy(boximg)
+                        call boximg_minmax%norm_minmax
+                        call boximg_minmax%masscen(xyz)
                         pos_center = pos + anint(xyz) + [self%boxsize/2,self%boxsize/2,self%boxsize/2]
                         do 
                             if( pos_center(1)-winsz < 1 .or. pos_center(2)-winsz < 1 .or. pos_center(3)-winsz < 1 )then
@@ -338,7 +341,18 @@ use simple_aff_prop
             enddo
         enddo
         !$omp end parallel do
-        deallocate(lower_half_scores, upper_half_scores, pos_scores, pos_inds)
+        ! identify euclid distance threshold (this is an upper rather than lower threshold)
+        deallocate(pos_scores, lower_half_scores, upper_half_scores, pos_inds)
+        pos_scores        = pack(self%euclid_dists(:,:,:),   mask=.true.)
+        mid               = median(pos_scores)
+        lower_half_scores = pack(pos_scores(:), pos_scores(:) < mid)
+        upper_half_scores = pack(pos_scores(:), pos_scores(:) > mid)
+        Q1                = median(lower_half_scores)
+        Q3                = median(upper_half_scores)
+        IQR               = Q3 - Q1
+        outlier_cutoff    = Q1 - 1.5*(IQR)
+        self%euclid_thres = outlier_cutoff
+        deallocate(lower_half_scores, upper_half_scores, pos_scores)
     end subroutine identify_high_scores
 
     subroutine distance_filter( self, dist_thres )
@@ -402,6 +416,30 @@ use simple_aff_prop
         !$omp end parallel do
         deallocate(pos_inds, pos_scores, mask, selected_pos)
     end subroutine distance_filter
+
+    subroutine euclid_filter(self)
+        class(nano_picker), intent(inout) :: self
+        integer, allocatable :: pos_inds(:)
+        integer              :: xoff, yoff, zoff, npeaks, ipeak
+        logical              :: is_peak
+        pos_inds = pack(self%inds_offset(:,:,:), self%euclid_dists(:,:,:) < self%euclid_thres)
+        npeaks   = size(pos_inds)
+        !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,is_peak,ipeak)
+        do xoff = 1, self%nxyz_offset(1)
+            do yoff = 1, self%nxyz_offset(2)
+                do zoff = 1, self%nxyz_offset(3)
+                    is_peak = .false.
+                    do ipeak = 1, npeaks
+                        if (self%inds_offset(xoff,yoff,zoff) .eq. ipeak) is_peak = .true.
+                    end do
+                    if(.not. is_peak) self%box_scores(xoff,yoff,zoff) = -1
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        deallocate(pos_inds)
+    end subroutine euclid_filter
+
 
     subroutine remove_outliers_sdev( self, ndev )
         class(nano_picker), intent(inout) :: self
@@ -673,6 +711,7 @@ use simple_aff_prop
                 scores   = pack(self%avg_int(:,:,:),      mask=self%box_scores(:,:,:) >= self%thres)
                 do ipos  = 1, nbox
                     coords(ipos,:) = self%center_positions(pos_inds(ipos),:) * self%smpd ! using center positions and Angstroms (same as pdb)
+                    !coords(ipos,:) = self%positions(pos_inds(ipos),:) ! keep in pixels
                 enddo
             case('euclid')
                 scores   = pack(self%euclid_dists(:,:,:), mask=self%box_scores(:,:,:) >= self%thres)
@@ -725,10 +764,15 @@ use simple_aff_prop
         select case(trim(type))
             case('corr')
                 pos_scores = pack(self%box_scores(:,:,:),        mask=self%box_scores(:,:,:) >= self%thres)
+                print *, 'SUMMARY STATISTICS OF ATOMIC CORRELATION SCORES'
             case('avg_int')
                 pos_scores = pack(self%avg_int(:,:,:),           mask=self%box_scores(:,:,:) >= self%thres)
+                print *, 'SUMMARY STATISTICS OF PER-ATOM AVERAGE INTENSITY'
             case('euclid')
                 pos_scores = pack(self%euclid_dists(:,:,:),      mask=self%box_scores(:,:,:) >= self%thres)
+                print *, 'SUMMARY STATISTICS OF SAME ENERGY EUCLIDEAN DISTANCE'
+            case DEFAULT
+                THROW_HARD('write_dist: type='//trim(type)//' is unsupported')
         end select
         mid               = median(pos_scores)
         lower_half_scores = pack(pos_scores(:), pos_scores(:) < mid)
@@ -737,7 +781,6 @@ use simple_aff_prop
         Q3                = median(upper_half_scores)
         IQR               = Q3 - Q1
         mean = sum(pos_scores) / size(pos_scores)
-        print *, 'SUMMARY STATISTICS OF ATOMIC CORRELATION SCORES'
         print *, 'Q1 = ', Q1
         print *, 'MEDIAN = ', mid
         print *, 'Q3 = ', Q3
@@ -745,7 +788,7 @@ use simple_aff_prop
         print *, 'MEAN = ', mean
         open(unit=99,file=trim(csv_name))
         do i = 1, size(pos_scores)
-            write(99,'(1x,f11.8)') pos_scores(i)
+            write(99,'(1x,f11.6)') pos_scores(i)
         enddo
         close(99)
     end subroutine write_dist
