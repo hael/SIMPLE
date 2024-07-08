@@ -102,9 +102,11 @@ use simple_aff_prop
 
     subroutine simulate_atom( self )
         class(nano_picker), intent(inout) :: self
-        type(atoms) :: atom
-        integer     :: Z, ldim_box(3)
-        logical     :: l_err_atom
+        type(atoms)       :: atom
+        integer           :: Z, ldim_box(3)
+        logical           :: l_err_atom
+        real, allocatable :: rmat(:,:,:), rmat_simatm(:,:,:)
+        real              :: rmat_min, rmat_max, delta
         call get_element_Z_and_radius(self%element, Z, self%radius)
         if (Z == 0) THROW_HARD('Unknown element : '//self%element)
         call atom%new(1)
@@ -112,9 +114,20 @@ use simple_aff_prop
         ldim_box  = [self%boxsize,self%boxsize,self%boxsize]
         call atom%set_coord(1,(self%smpd*real(ldim_box)/2.)) ! make sure atom is in center of box
         call atom%convolve(self%simulated_atom, cutoff=8*self%smpd)
-        !call self%simulated_atom%norm_minmax
+        ! normalize simulated atom
+        rmat         = self%nano_img%get_rmat()
+        rmat_min     = minval(rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
+        rmat_max     = maxval(rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
+        delta        = rmat_max - rmat_min
+        call self%simulated_atom%norm_minmax
+        rmat_simatm  = self%simulated_atom%get_rmat()
+        rmat_simatm  = rmat_simatm * delta
+        rmat_simatm  = rmat_simatm + rmat_min
+        call self%simulated_atom%set_rmat(rmat_simatm, ft=.false.)
+        ! output 
         call self%simulated_atom%write('simulated_atom.mrc')
         call atom%kill
+        deallocate(rmat,rmat_simatm)
     end subroutine simulate_atom
 
     subroutine setup_iterators( self )
@@ -422,15 +435,20 @@ use simple_aff_prop
         integer, allocatable :: pos_inds(:)
         integer              :: xoff, yoff, zoff, npeaks, ipeak
         logical              :: is_peak
-        pos_inds = pack(self%inds_offset(:,:,:), self%euclid_dists(:,:,:) < self%euclid_thres)
+        pos_inds = pack(self%inds_offset(:,:,:), mask=self%euclid_dists(:,:,:) < self%euclid_thres .and. self%box_scores(:,:,:) >= self%thres)
         npeaks   = size(pos_inds)
+        print *, 'Euclid filter cutoff (high) = ', self%euclid_thres
+        print *, 'NPEAKS AFTER EUCLID FILTER = ', npeaks
         !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,is_peak,ipeak)
         do xoff = 1, self%nxyz_offset(1)
             do yoff = 1, self%nxyz_offset(2)
                 do zoff = 1, self%nxyz_offset(3)
                     is_peak = .false.
                     do ipeak = 1, npeaks
-                        if (self%inds_offset(xoff,yoff,zoff) .eq. ipeak) is_peak = .true.
+                        if ( pos_inds(ipeak) == self%inds_offset(xoff,yoff,zoff) ) then
+                            is_peak = .true.
+                            exit
+                        end if
                     end do
                     if(.not. is_peak) self%box_scores(xoff,yoff,zoff) = -1
                 end do
@@ -439,7 +457,6 @@ use simple_aff_prop
         !$omp end parallel do
         deallocate(pos_inds)
     end subroutine euclid_filter
-
 
     subroutine remove_outliers_sdev( self, ndev )
         class(nano_picker), intent(inout) :: self
@@ -753,44 +770,53 @@ use simple_aff_prop
         call nano%kill
     end subroutine write_NP_image
 
-    subroutine write_dist( self, csv_name, type )
+    subroutine write_dist( self, csv_name, type, to_write )
         class(nano_picker), intent(inout) :: self
         character(len=*),   intent(in)    :: csv_name, type
+        logical, optional,  intent(in)    :: to_write
         real,    allocatable :: pos_scores(:), lower_half_scores(:), upper_half_scores(:)
-        integer, allocatable :: pos_inds(:)
         real                 :: Q1, mid, Q3, IQR, mean
         integer              :: i
-        pos_inds           = pack(self%inds_offset(:,:,:),       mask=self%box_scores(:,:,:) >= self%thres)
+        logical              :: write_here
+        if (present(to_write)) then
+            write_here = to_write
+        else
+            write_here = .false.
+        end if
         select case(trim(type))
             case('corr')
-                pos_scores = pack(self%box_scores(:,:,:),        mask=self%box_scores(:,:,:) >= self%thres)
-                print *, 'SUMMARY STATISTICS OF ATOMIC CORRELATION SCORES'
+                pos_scores = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= self%thres)
+                if(write_here) print *, 'SUMMARY STATISTICS OF ATOMIC CORRELATION SCORES'
             case('avg_int')
-                pos_scores = pack(self%avg_int(:,:,:),           mask=self%box_scores(:,:,:) >= self%thres)
-                print *, 'SUMMARY STATISTICS OF PER-ATOM AVERAGE INTENSITY'
+                pos_scores = pack(self%avg_int(:,:,:),      mask=self%box_scores(:,:,:) >= self%thres)
+                if(write_here) print *, 'SUMMARY STATISTICS OF PER-ATOM AVERAGE INTENSITY'
             case('euclid')
-                pos_scores = pack(self%euclid_dists(:,:,:),      mask=self%box_scores(:,:,:) >= self%thres)
-                print *, 'SUMMARY STATISTICS OF SAME ENERGY EUCLIDEAN DISTANCE'
+                pos_scores = pack(self%euclid_dists(:,:,:), mask=self%box_scores(:,:,:) >= self%thres)
+                if(write_here) print *, 'SUMMARY STATISTICS OF SAME ENERGY EUCLIDEAN DISTANCE'
             case DEFAULT
                 THROW_HARD('write_dist: type='//trim(type)//' is unsupported')
         end select
-        mid               = median(pos_scores)
-        lower_half_scores = pack(pos_scores(:), pos_scores(:) < mid)
-        upper_half_scores = pack(pos_scores(:), pos_scores(:) > mid)
-        Q1                = median(lower_half_scores)
-        Q3                = median(upper_half_scores)
-        IQR               = Q3 - Q1
-        mean = sum(pos_scores) / size(pos_scores)
-        print *, 'Q1 = ', Q1
-        print *, 'MEDIAN = ', mid
-        print *, 'Q3 = ', Q3
-        print *, 'IQR = ', IQR
-        print *, 'MEAN = ', mean
+        if (write_here) then
+            mid               = median(pos_scores)
+            lower_half_scores = pack(pos_scores(:), pos_scores(:) < mid)
+            upper_half_scores = pack(pos_scores(:), pos_scores(:) > mid)
+            Q1                = median(lower_half_scores)
+            Q3                = median(upper_half_scores)
+            IQR               = Q3 - Q1
+            mean              = sum(pos_scores) / size(pos_scores)
+            print *, 'Q1 = ', Q1
+            print *, 'MEDIAN = ', mid
+            print *, 'Q3 = ', Q3
+            print *, 'IQR = ', IQR
+            print *, 'MEAN = ', mean
+            deallocate(lower_half_scores, upper_half_scores)
+        end if
         open(unit=99,file=trim(csv_name))
         do i = 1, size(pos_scores)
             write(99,'(1x,f11.6)') pos_scores(i)
         enddo
         close(99)
+        deallocate(pos_scores)
     end subroutine write_dist
 
     ! input pos in pixels, not Angstroms
