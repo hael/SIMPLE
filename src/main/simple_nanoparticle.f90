@@ -522,7 +522,7 @@ contains
         integer           :: n_discard
         ! MODEL BUILDING
         ! Phase correlation approach
-        call phasecorr_one_atom(self%img, self%img, self%element)
+        call phasecorr_one_atom(self%img, self%element)
         ! Nanoparticle binarization
         call self%binarize_and_find_centers()
         ! atom splitting by correlation map validation
@@ -553,7 +553,7 @@ contains
         integer     :: n_discard
         ! MODEL BUILDING
         ! Phase correlation approach
-        call phasecorr_one_atom(self%img, self%img, self%element)
+        call phasecorr_one_atom(self%img, self%element)
         if( WRITE_OUTPUT ) call self%img%write('denoised.mrc')
         ! Nanoparticle binarization
         call self%binarize_and_find_centers()

@@ -558,8 +558,9 @@ contains
 
     !>  \brief  prepares one volume for references extraction
     subroutine preprefvol( cline, s, do_center, xyz, iseven )
-        use simple_projector,  only: projector
-        use simple_opt_filter, only: butterworth_filter, exponential_reg
+        use simple_projector,          only: projector
+        use simple_opt_filter,         only: butterworth_filter, exponential_reg
+        use simple_nanoparticle_utils, only: phasecorr_one_atom
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: s
         logical,        intent(in)    :: do_center
@@ -587,6 +588,7 @@ contains
         else if( params_glob%l_nonuniform )then
             ! filtering done in read_and_filter_refvols
         else if( params_glob%l_lpset )then
+            call vol_ptr%fft()
             select case(L_LPSET_FILTER)
                 case('BW')
                     ! Butterworth low-pass filter

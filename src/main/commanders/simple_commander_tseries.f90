@@ -938,6 +938,7 @@ contains
         if( .not. cline%defined('kweight')        ) call cline%set('kweight',   'default') ! best resolution weighting scheme for this kind of data
         if( .not. cline%defined('ml_reg')         ) call cline%set('ml_reg',         'no') ! ml_reg=yes -> too few atoms 
         if( .not. cline%defined('sigma_est')      ) call cline%set('sigma_est',  'global') ! only sensible option for this kind of data
+        if( .not. cline%defined('lambda')         ) call cline%set('lambda',          0.1)
         call cline%set('lp_iters',0.) ! low-pass limited resolution, no e/o
         call xrefine3D_distr%execute(cline)
     end subroutine exec_refine3D_nano

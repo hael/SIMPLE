@@ -92,7 +92,7 @@ use simple_stat
         ! denoise nano_img if requested
         if( present(denoise) )then
             if( denoise )then
-                call phasecorr_one_atom(self%nano_img, self%nano_img, self%element)
+                call phasecorr_one_atom(self%nano_img, self%element)
                 self%is_denoised = .true.
                 call self%nano_img%write('denoised.mrc')
             endif
