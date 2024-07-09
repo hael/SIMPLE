@@ -1271,21 +1271,23 @@ contains
         call spproj%update_projinfo(cline)
         call spproj%write_segment_inside('projinfo')
 
-        ncls = spproj%os_ptcl2D%get_n('class')
-        print *, "Number of cavgs: ", ncls
-
-        do icls = 1,ncls
-            call spproj%os_ptcl2D%get_pinds(icls, 'class', pinds)
-            !print *, "Class number", icls, "Number of ptcls in the classs", size(pinds)
-            do i=1,size(pinds)
-                !print *, pinds(i)
-            enddo
-            tmax   = maxval(pinds)
-            tmin   = minval(pinds)
-            tstamp = tmin + (tmax-tmin)/2
-            !print *, 'class / tstamp ', icls, tmin, tmax, tstamp
-        enddo
-        !stop
+        ! ncls = spproj%os_ptcl2D%get_n('class')
+        ! print *, "Number of cavgs: ", ncls
+        ! do icls = 1,ncls
+        !     call spproj%os_ptcl2D%get_pinds(icls, 'class', pinds)
+        !     if( .not. allocated(pinds) ) then
+        !         print *, icls, "EMPTY CLASS"
+        !         cycle
+        !     endif
+        !     !print *, "Class number", icls, "Number of ptcls in the class", size(pinds)
+        !     do i=1,size(pinds)
+        !         !print *, pinds(i)
+        !     enddo
+        !     tmax   = maxval(pinds)
+        !     tmin   = minval(pinds)
+        !     tstamp = tmin + (tmax-tmin)/2
+        !     print *, 'class / tstamp ', icls, tmin, tmax, tstamp
+        ! enddo
 
         ! retrieve cavgs stack
         call spproj%get_cavgs_stk(cavgs_stk, ncavgs, smpd, fail=.false.)
@@ -1348,6 +1350,7 @@ contains
                     call imgs(i + 1)%read('reprojs.mrc', cnt)
                     ! cavgs images are weighted using radial cross-correlation
                     call spproj%os_ptcl2D%get_pinds(cnt, 'class', pinds)
+                    if( .not. allocated(pinds) ) cycle
                     tmax   = maxval(pinds)
                     tmin   = minval(pinds)
                     tstamp = tmin + (tmax-tmin)/2
