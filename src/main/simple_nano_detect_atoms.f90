@@ -547,7 +547,8 @@ use simple_stat
         logical, allocatable :: mask(:)
         logical              :: is_peak
         if (.not. allocated(self%center_positions)) THROW_HARD('self%center_positions must be allocated to call remove_outliers_positions')
-        nbox         = size(pos_inds, dim=1)
+        pos_inds   = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
+        nbox       = size(pos_inds, dim=1)
         allocate(dists(nbox))
         allocate( mask(nbox), source = .true.)
         do ibox = 1, nbox
