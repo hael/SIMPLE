@@ -1367,19 +1367,15 @@ contains
     end subroutine compose3d2d
 
     !>  Returns the 3D composed in-plane shift with projection direction
-    subroutine compose2dshift3d( self2D, self3D, shift3d )
-        class(ori), intent(in)  :: self2D, self3D
+    subroutine compose2dshift3d( self3D, shift3d )
+        class(ori), intent(in)  :: self3D
         real,       intent(out) :: shift3d(3)
-        real :: rmat(3,3), euls(3)
-        ! from projection direction
-        euls = self3D%get_euler()
-        ! from in-plane
-        shift3d(1:2) = self2D%get_2Dshift()
-        shift3d(3)   = 0.
-        euls(3)      = self2D%e3get() ! psi from 3D ignored
-        ! rotate
-        rmat    = transpose(euler2m(euls))
-        shift3d = matmul(rmat, shift3d)
+        real :: rmat(3,3), euls3D(3)
+        euls3d       = self3D%get_euler()
+        shift3D(1:2) = self3D%get_2Dshift()
+        shift3D(3)   = 0.
+        rmat         = transpose(euler2m(euls3D))
+        shift3d      = matmul(rmat, shift3d)
     end subroutine compose2dshift3d
 
     subroutine map3dshift22d( self, sh3d )
