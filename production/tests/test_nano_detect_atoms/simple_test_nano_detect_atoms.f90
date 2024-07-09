@@ -58,7 +58,7 @@ if (debug) call test_exp4%write_dist(  'corr_dist_before_high_filter.csv','corr'
 if (debug) call test_exp4%write_dist(   'int_dist_before_high_filter.csv','avg_int')
 if (debug) call test_exp4%write_dist('euclid_dist_before_high_filter.csv','euclid' )
 !call test_exp4%identify_threshold()
-call test_exp4%identify_high_scores
+call test_exp4%identify_high_scores(use_zscores=.true.)
 if (debug) call test_exp4%write_dist('corr_dist_after_high_filter.csv','corr'   )
 if (debug) call test_exp4%write_dist( 'int_dist_after_high_filter.csv','avg_int')
 call test_exp4%distance_filter(dist_thres)

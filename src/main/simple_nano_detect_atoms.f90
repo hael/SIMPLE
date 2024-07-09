@@ -13,7 +13,6 @@ use simple_linalg
 use simple_nanoparticle_utils
 use simple_defs_atoms
 use simple_stat
-use simple_aff_prop
 #include "simple_local_flags.inc"
 
     implicit none
@@ -318,22 +317,56 @@ use simple_aff_prop
         deallocate(tmp)
     end subroutine identify_threshold
 
-    subroutine identify_high_scores(self)
+    subroutine identify_high_scores(self, use_zscores)
         class(nano_picker), intent(inout) :: self
+        logical, optional,  intent(in)    :: use_zscores
         real                 :: Q1, mid, Q3, IQR, outlier_cutoff
         real, allocatable    :: pos_scores(:), lower_half_scores(:), upper_half_scores(:)
         integer              :: xoff, yoff, zoff, ipeak, npeaks
         integer, allocatable :: pos_inds(:)
-        logical              :: is_peak
-        pos_scores        = pack(self%box_scores(:,:,:),   mask=.true.)
-        mid               = median(pos_scores)
-        lower_half_scores = pack(pos_scores(:), pos_scores(:) < mid)
-        upper_half_scores = pack(pos_scores(:), pos_scores(:) > mid)
-        Q1                = median(lower_half_scores)
-        Q3                = median(upper_half_scores)
-        IQR               = Q3 - Q1
-        outlier_cutoff    = Q3 + 1.5*(IQR)
-        self%thres        = outlier_cutoff
+        logical              :: is_peak, use_zscores_here
+        if (present(use_zscores)) then
+            use_zscores_here = use_zscores
+        else
+            use_zscores_here = .false.
+        end if
+        if (.not. use_zscores_here) then
+            ! identify lower threshold for outlier correlation scores
+            pos_scores        = pack(self%box_scores(:,:,:),   mask=.true.)
+            mid               = median(pos_scores)
+            lower_half_scores = pack(pos_scores(:), pos_scores(:) < mid)
+            upper_half_scores = pack(pos_scores(:), pos_scores(:) > mid)
+            Q1                = median(lower_half_scores)
+            Q3                = median(upper_half_scores)
+            IQR               = Q3 - Q1
+            outlier_cutoff    = Q3 + 1.5*(IQR)
+            self%thres        = outlier_cutoff
+            ! identify euclid distance threshold (this is an upper rather than lower threshold)
+            deallocate(pos_scores, lower_half_scores, upper_half_scores)
+            pos_scores        = pack(self%euclid_dists(:,:,:), mask=.true.)
+            mid               = median(pos_scores)
+            lower_half_scores = pack(pos_scores(:), pos_scores(:) < mid)
+            upper_half_scores = pack(pos_scores(:), pos_scores(:) > mid)
+            Q1                = median(lower_half_scores)
+            Q3                = median(upper_half_scores)
+            IQR               = Q3 - Q1
+            outlier_cutoff    = Q1 - 1.5*(IQR)
+            self%euclid_thres = outlier_cutoff
+            deallocate(lower_half_scores, upper_half_scores, pos_scores)
+        else
+            ! identify lower threshold for outlier correlation scores
+            pos_scores        = pack(self%box_scores(:,:,:),   mask=.true.)
+            mid               = median(pos_scores)
+            outlier_cutoff    = 2.5 * mad_gau(pos_scores,mid) + mid
+            self%thres        = outlier_cutoff
+            deallocate(pos_scores)
+            ! identify euclid distance threshold (this is an upper rather than lower threshold)
+            pos_scores        = pack(self%euclid_dists(:,:,:), mask=.true.)
+            mid               = median(pos_scores)
+            outlier_cutoff    = mid - 2.5 * mad_gau(pos_scores,mid)
+            self%euclid_thres = outlier_cutoff
+            deallocate(pos_scores)
+        end if
         print *, 'Outlier cutoff = ', self%thres
         pos_inds = pack(self%inds_offset(:,:,:), mask=self%box_scores(:,:,:) >= self%thres)
         npeaks   = size(pos_inds)
@@ -354,18 +387,7 @@ use simple_aff_prop
             enddo
         enddo
         !$omp end parallel do
-        ! identify euclid distance threshold (this is an upper rather than lower threshold)
-        deallocate(pos_scores, lower_half_scores, upper_half_scores, pos_inds)
-        pos_scores        = pack(self%euclid_dists(:,:,:),   mask=.true.)
-        mid               = median(pos_scores)
-        lower_half_scores = pack(pos_scores(:), pos_scores(:) < mid)
-        upper_half_scores = pack(pos_scores(:), pos_scores(:) > mid)
-        Q1                = median(lower_half_scores)
-        Q3                = median(upper_half_scores)
-        IQR               = Q3 - Q1
-        outlier_cutoff    = Q1 - 1.5*(IQR)
-        self%euclid_thres = outlier_cutoff
-        deallocate(lower_half_scores, upper_half_scores, pos_scores)
+        deallocate(pos_inds)
     end subroutine identify_high_scores
 
     subroutine distance_filter( self, dist_thres )
