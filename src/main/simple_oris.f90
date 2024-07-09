@@ -3403,12 +3403,12 @@ contains
         real,              intent(inout) :: offset_avg(3)
         integer, optional, intent(in)    :: state
         integer,    parameter :: N = 100
-        integer,    parameter :: PROJDIRMINPOP = 1
+        integer,    parameter :: PROJDIRMINPOP = 10
         type(oris)            :: spiral
         type(ori)             :: o
         integer,  allocatable :: closest_proj(:)
         real(dp) :: avg(3), offset(3)
-        real     :: rmat(3,3), sh(3), sh3d(3), euls(3),x,y,c,s,phi
+        real     :: rmat(3,3), sh3d(3)
         integer  :: i,j, istate, pop, npop
         istate = 1
         if( present(state) ) istate = state
@@ -3427,9 +3427,9 @@ contains
             offset = 0.d0
             call spiral%get_ori(i, o)
             do j = 1,self%n
-                if( self%o(i)%get_state() /= istate ) cycle
+                if( self%o(j)%get_state() /= istate ) cycle
                 if( closest_proj(j) /= i ) cycle
-                call self%o(j)%compose2dshift3d(o, sh3d)
+                call self%o(j)%compose2dshift3d(sh3d)
                 offset = offset + real(sh3d,dp)
                 pop    = pop + 1
             enddo
