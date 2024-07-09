@@ -1253,12 +1253,13 @@ contains
         type(refine3D_nano_commander) :: xrefine3D_nano
         type(reproject_commander)     :: xreproject
         type(cmdline)                 :: cline_refine3D_cavgs, cline_reproject
-        type(image), allocatable      :: imgs(:)
+        type(image),      allocatable :: imgs(:)
         type(sp_project)              :: spproj
         character(len=:), allocatable :: cavgs_stk
         real,             allocatable :: rstates(:), rad_cc(:,:), rad_dists(:,:)
         logical,          allocatable :: state_mask(:)
-        integer :: ncavgs, i, cnt, cnt2
+        integer,          allocatable :: pinds(:)
+        integer :: ncavgs, i, j, cnt, cnt2, ncls, icls, tmax, tmin, tstamp
         real    :: smpd
         call cline%set('mkdir', 'yes') ! because we want to create the directory X_cavgsproc_nano & copy the project file
         call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
@@ -1268,6 +1269,23 @@ contains
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
         call spproj%write_segment_inside('projinfo')
+
+        ncls = spproj%os_ptcl2D%get_n('class')
+        print *, "Number of cavgs: ", ncls
+
+        do icls = 1,ncls
+            call spproj%os_ptcl2D%get_pinds(icls, 'class', pinds)
+            !print *, "Class number", icls, "Number of ptcls in the classs", size(pinds)
+            do i=1,size(pinds)
+                !print *, pinds(i)
+            enddo
+            tmax   = maxval(pinds)
+            tmin   = minval(pinds)
+            tstamp = tmin + (tmax-tmin)/2
+            !print *, 'class / tstamp ', icls, tmin, tmax, tstamp
+        enddo
+        !stop
+
         ! retrieve cavgs stack
         call spproj%get_cavgs_stk(cavgs_stk, ncavgs, smpd, fail=.false.)
         if( ncavgs /= 0 )then
@@ -1319,6 +1337,8 @@ contains
             allocate(imgs(2*ncavgs), state_mask(ncavgs))
             cnt = 0
             do i = 1,2*ncavgs,2
+                open(unit=25, file="radial_analysis.csv")
+                !write(25, '(A)') "  Nclass  Time  Radial_dist   Radial_cc"
                 cnt = cnt + 1
                 if( rstates(cnt) > 0.5 )then
                     call imgs(i    )%new([params%box,params%box,1], smpd)
@@ -1326,7 +1346,14 @@ contains
                     call imgs(i    )%read(cavgs_stk,     cnt)
                     call imgs(i + 1)%read('reprojs.mrc', cnt)
                     ! cavgs images are weighted using radial cross-correlation
-                    call imgs(i)%radial_cc(imgs(i+1), smpd, rad_cc(i,:), rad_dists(i,:)) 
+                    call spproj%os_ptcl2D%get_pinds(cnt, 'class', pinds)
+                    tmax   = maxval(pinds)
+                    tmin   = minval(pinds)
+                    tstamp = tmin + (tmax-tmin)/2
+                    call imgs(i)%radial_cc(imgs(i+1), smpd, rad_cc(cnt,:), rad_dists(cnt,:)) 
+                    do j = 1, size(rad_dists,dim=2)
+                        write(25,'(i6, i6, 2F18.6)') cnt, tstamp, rad_dists(cnt,j), rad_cc(cnt,j)
+                    enddo
                     ! filter out cavgs
                     call imgs(i    )%norm
                     call imgs(i + 1)%norm
@@ -1334,7 +1361,9 @@ contains
                 else
                     state_mask(cnt) = .false.
                 endif
+                write(25, '(A)') "          "
             enddo
+            close(25)
             cnt  = 0
             cnt2 = 1 ! needed because we have omissions
             do i = 1,2*ncavgs,2
