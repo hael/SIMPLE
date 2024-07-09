@@ -1410,7 +1410,7 @@ contains
         avg2  = sum(vec2) / sz2
         diff1 = vec1 - avg1
         diff2 = vec2 - avg2
-        dist  = log10(euclid(diff1,diff2))
+        dist  = euclid(diff1,diff2)
     end function same_energy_euclid
 
     ! imported from numerical recipes
