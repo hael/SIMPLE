@@ -23,11 +23,12 @@ use simple_stat
         character(len=100)       :: raw_filename, pdb_filename
         integer                  :: boxsize, ldim(3), nxyz_offset(3), offset, peak_thres_level
         integer, allocatable     :: inds_offset(:,:,:), positions(:,:)
-        type(image)              :: simulated_atom, nano_img, sim_img
+        type(image)              :: simulated_atom, nano_img
         type(image), allocatable :: convolved_atoms(:)
-        real                     :: smpd, thres, radius, euclid_thres
+        real                     :: smpd, thres, radius, euclid_thres, mask_radius
         real, allocatable        :: box_scores(:,:,:), loc_sdevs(:,:,:), avg_int(:,:,:), euclid_dists(:,:,:), center_positions(:,:)
-        logical                  :: is_denoised, use_euclids
+        logical                  :: is_denoised, use_euclids, has_mask
+        logical, allocatable     :: msk(:,:,:)
 
     contains
         procedure :: new
@@ -57,7 +58,7 @@ use simple_stat
 
     contains
 
-    subroutine new( self, smpd, element, raw_filename, peak_thres_level, offset, denoise, use_euclids )
+    subroutine new( self, smpd, element, raw_filename, peak_thres_level, offset, denoise, use_euclids, mskdiam)
         class(nano_picker), intent(inout) :: self
         real,               intent(in)    :: smpd
         character(len=*),   intent(in)    :: element
@@ -65,8 +66,10 @@ use simple_stat
         integer,            intent(in)    :: peak_thres_level, offset
         logical, optional,  intent(in)    :: denoise
         logical, optional,  intent(in)    :: use_euclids
+        real,    optional,  intent(in)    :: mskdiam ! Angstroms
         character(len=2)         :: el_ucase
         integer                  :: Z, nptcls
+        logical                  :: outside
         type(parameters), target :: params
         call self%kill
         self%smpd           = smpd
@@ -87,9 +90,8 @@ use simple_stat
         call self%nano_img%new(self%ldim, self%smpd)
         call self%nano_img%read(self%raw_filename)
         call self%simulated_atom%new([self%boxsize,self%boxsize,self%boxsize], self%smpd)
-        call self%sim_img%new(self%ldim, self%smpd)
         self%peak_thres_level = peak_thres_level
-        self%thres = -1. ! initial value, will be updated later
+        self%thres = -0.999 ! initial value, will be updated later
         ! denoise nano_img if requested
         if( present(denoise) )then
             if( denoise )then
@@ -98,8 +100,12 @@ use simple_stat
                 call self%nano_img%write('denoised.mrc')
             endif
         endif
-        if(present(use_euclids)) then
+        if( present(use_euclids) ) then
             self%use_euclids = use_euclids
+        end if
+        if( present(mskdiam) ) then
+            self%has_mask = .true.
+            self%mask_radius   = (mskdiam / self%smpd) / 2
         end if
     end subroutine new
 
@@ -157,6 +163,7 @@ use simple_stat
         allocate(self%positions(nboxes,3),        source = 0)
         allocate(self%center_positions(nboxes,3), source = 0.)
         allocate(self%inds_offset(self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3)), source=0)
+        allocate(self%msk(self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3)), source=.true.)
         self%nxyz_offset = 0
         nboxes           = 0
         do xind = 0, nxyz(1), self%offset
@@ -170,6 +177,11 @@ use simple_stat
                     nboxes                   = nboxes + 1
                     self%positions(nboxes,:) = [xind,yind,zind]
                     self%inds_offset(self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3)) = nboxes
+                    if(self%has_mask) then
+                        if(euclid(real(self%ldim / 2), real([xind,yind,zind])) > self%mask_radius) then
+                            self%msk(self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3))=.false.
+                        end if
+                    end if
                 enddo
             enddo
         enddo
@@ -312,9 +324,9 @@ use simple_stat
         real, allocatable :: tmp(:)
         ! find peak thresholding value
         if( present(min_thres) )then
-            tmp = pack(self%box_scores, mask=(self%box_scores > min_thres))
+            tmp = pack(self%box_scores(:,:,:), mask=(self%box_scores(:,:,:) > min_thres)  .and. self%msk(:,:,:))
         else ! idk if this is something that makes sense to do..
-            tmp = pack(self%box_scores, mask=(self%box_scores > -1 + 1e-10))
+            tmp = pack(self%box_scores(:,:,:), mask=(self%box_scores(:,:,:) > -1 + 1e-10) .and. self%msk(:,:,:))
         endif
         call detect_peak_thres(size(tmp), size(tmp), self%peak_thres_level, tmp, self%thres)
         print *, 'Peak threshold is ', self%thres
@@ -324,9 +336,10 @@ use simple_stat
     subroutine identify_high_scores(self, use_zscores)
         class(nano_picker), intent(inout) :: self
         logical, optional,  intent(in)    :: use_zscores
-        real                 :: Q1, mid, Q3, IQR, outlier_cutoff
+        real                 :: Q1, mid, Q3, IQR, outlier_cutoff, temp_thres
         real, allocatable    :: pos_scores(:), lower_half_scores(:), upper_half_scores(:)
         logical              :: use_zscores_here
+        temp_thres = self%thres
         if (present(use_zscores)) then
             use_zscores_here = use_zscores
         else
@@ -334,7 +347,7 @@ use simple_stat
         end if
         if (.not. use_zscores_here) then
             ! identify lower threshold for outlier correlation scores
-            pos_scores        = pack(self%box_scores(:,:,:),   mask=.true.)
+            pos_scores        = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= temp_thres .and. self%msk(:,:,:))
             mid               = median(pos_scores)
             lower_half_scores = pack(pos_scores(:), pos_scores(:) < mid)
             upper_half_scores = pack(pos_scores(:), pos_scores(:) > mid)
@@ -345,7 +358,7 @@ use simple_stat
             self%thres        = outlier_cutoff
             ! identify euclid distance threshold (this is an upper rather than lower threshold)
             deallocate(pos_scores, lower_half_scores, upper_half_scores)
-            pos_scores        = pack(self%euclid_dists(:,:,:), mask=.true.)
+            pos_scores        = pack(self%euclid_dists(:,:,:), mask=self%box_scores(:,:,:) >= temp_thres .and. self%msk(:,:,:))
             mid               = median(pos_scores)
             lower_half_scores = pack(pos_scores(:), pos_scores(:) < mid)
             upper_half_scores = pack(pos_scores(:), pos_scores(:) > mid)
@@ -357,13 +370,13 @@ use simple_stat
             deallocate(lower_half_scores, upper_half_scores, pos_scores)
         else
             ! identify lower threshold for outlier correlation scores
-            pos_scores        = pack(self%box_scores(:,:,:),   mask=.true.)
+            pos_scores        = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= temp_thres .and. self%msk(:,:,:))
             mid               = median(pos_scores)
             outlier_cutoff    = 3.5 * mad_gau(pos_scores,mid) + mid
             self%thres        = outlier_cutoff
             deallocate(pos_scores)
             ! identify euclid distance threshold (this is an upper rather than lower threshold)
-            pos_scores        = pack(self%euclid_dists(:,:,:), mask=.true.)
+            pos_scores        = pack(self%euclid_dists(:,:,:), mask=self%box_scores(:,:,:) >= temp_thres .and. self%msk(:,:,:))
             mid               = median(pos_scores)
             outlier_cutoff    = mid - 3.5 * mad_gau(pos_scores,mid)
             self%euclid_thres = outlier_cutoff
@@ -379,7 +392,7 @@ use simple_stat
         logical              :: is_peak
         if (.not. self%use_euclids) then
             print *, 'Correlation threshold = ', self%thres
-            pos_inds = pack(self%inds_offset(:,:,:), mask=self%box_scores(:,:,:) >= self%thres)
+            pos_inds = pack(self%inds_offset(:,:,:), mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
             npeaks   = size(pos_inds)
             ! update box scores
             !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,is_peak,ipeak)
@@ -400,7 +413,7 @@ use simple_stat
             !$omp end parallel do
         else
             print *, 'Euclidean distance threshold = ', self%euclid_thres
-            pos_inds = pack(self%inds_offset(:,:,:), mask=self%euclid_dists(:,:,:) <= self%euclid_thres)
+            pos_inds = pack(self%inds_offset(:,:,:), mask=self%euclid_dists(:,:,:) <= self%euclid_thres .and. self%msk(:,:,:))
             npeaks   = size(pos_inds)
             ! update box scores
             !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,is_peak,ipeak)
@@ -440,8 +453,8 @@ use simple_stat
             dist_thres_here  = self%offset
         endif
         if (.not. self%use_euclids) then
-            pos_inds   = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
-            pos_scores = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= self%thres)
+            pos_inds   = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
+            pos_scores = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
             nbox       = size(pos_inds)
             allocate(mask(nbox),         source=.false.)
             allocate(selected_pos(nbox), source=.true. )
@@ -461,8 +474,8 @@ use simple_stat
                 where( mask ) selected_pos = .false.
             enddo
         else
-            pos_inds   = pack(self%inds_offset(:,:,:),  mask=self%euclid_dists(:,:,:) <= self%euclid_thres)
-            pos_scores = pack(self%euclid_dists(:,:,:), mask=self%euclid_dists(:,:,:) <= self%euclid_thres)
+            pos_inds   = pack(self%inds_offset(:,:,:),  mask=self%euclid_dists(:,:,:) <= self%euclid_thres .and. self%msk(:,:,:))
+            pos_scores = pack(self%euclid_dists(:,:,:), mask=self%euclid_dists(:,:,:) <= self%euclid_thres .and. self%msk(:,:,:))
             nbox       = size(pos_inds)
             allocate(mask(nbox),         source=.false.)
             allocate(selected_pos(nbox), source=.true. )
@@ -514,7 +527,7 @@ use simple_stat
         real, allocatable :: tmp(:)
         real              :: avg, sdev, t
         integer           :: npeaks, xoff, yoff, zoff
-        tmp    = pack(self%loc_sdevs, mask = self%box_scores(:,:,:) >= self%thres .and. self%loc_sdevs(:,:,:) > 0.)
+        tmp    = pack(self%loc_sdevs, mask = self%box_scores(:,:,:) >= self%thres .and. self%loc_sdevs(:,:,:) > 0. .and. self%msk(:,:,:))
         call avg_sdev(tmp, avg, sdev)
         t      = avg + ndev * sdev
         npeaks = count(tmp < t)
@@ -547,7 +560,7 @@ use simple_stat
         logical, allocatable :: mask(:)
         logical              :: is_peak
         if (.not. allocated(self%center_positions)) THROW_HARD('self%center_positions must be allocated to call remove_outliers_positions')
-        pos_inds   = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
+        pos_inds   = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
         nbox       = size(pos_inds, dim=1)
         allocate(dists(nbox))
         allocate( mask(nbox), source = .true.)
@@ -603,7 +616,7 @@ use simple_stat
         real,        allocatable :: coords(:,:)
         integer                  :: nbox, iimg, pos(3)
         logical                  :: outside
-        pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
+        pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
         nbox     = size(pos_inds, dim=1)
         allocate(coords(nbox,3))
         allocate(atms_array(nbox))
@@ -647,7 +660,7 @@ use simple_stat
         params_glob => params
         params_glob%element = self%element
         params_glob%smpd    = self%smpd
-        pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
+        pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
         nbox     = size(pos_inds, dim=1)
         allocate(imat(    self%ldim(1),self%ldim(2),self%ldim(3)),source=0)
         allocate(imat_adj(self%ldim(1),self%ldim(2),self%ldim(3)),source=0)
@@ -716,7 +729,7 @@ use simple_stat
         real,    allocatable :: coords(:,:)
         integer              :: nbox, iimg
         real                 :: pos(3)
-        pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
+        pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
         nbox     = size(pos_inds, dim=1)
         allocate(coords(nbox,3))
         do iimg = 1, nbox
@@ -739,7 +752,7 @@ use simple_stat
         character(len=*), optional,  intent(in)    :: foldername
         integer              :: iimg, nbox
         integer, allocatable :: pos_inds(:)
-        pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
+        pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
         nbox     = size(pos_inds, dim=1)
         do iimg  = 1, nbox
             if( present(foldername) )then 
@@ -758,27 +771,27 @@ use simple_stat
         integer,     allocatable :: pos_inds(:)
         real,        allocatable :: coords(:,:), scores(:)
         integer                  :: nbox, ipos, i, j
-        pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
+        pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
         nbox     = size(pos_inds)
         allocate(coords(nbox,3))
         select case(trim(type))
             case('centers')
-                scores   = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= self%thres)
+                scores   = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
                 do ipos  = 1, nbox
                     coords(ipos,:) = self%center_positions(pos_inds(ipos),:) * self%smpd ! using center positions and Angstroms (same as pdb)
                 enddo
             case('pixels')
-                scores   = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= self%thres)
+                scores   = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
                 do ipos  = 1, nbox
                     coords(ipos,:) = self%positions(pos_inds(ipos),:) ! keep in pixels
                 enddo
             case('intensities')
-                scores   = pack(self%avg_int(:,:,:),      mask=self%box_scores(:,:,:) >= self%thres)
+                scores   = pack(self%avg_int(:,:,:),      mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
                 do ipos  = 1, nbox
                     coords(ipos,:) = self%center_positions(pos_inds(ipos),:) * self%smpd ! using center positions and Angstroms (same as pdb)
                 enddo
             case('euclid')
-                scores   = pack(self%euclid_dists(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
+                scores   = pack(self%euclid_dists(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
                 do ipos  = 1, nbox
                     coords(ipos,:) = self%center_positions(pos_inds(ipos),:) * self%smpd ! using center positions and Angstroms (same as pdb)
                 enddo
@@ -793,7 +806,7 @@ use simple_stat
                 write(25, '(F10.3)', advance='no') coords(i, j)
             enddo
             write(25, '(A)', advance='no') ', '
-            write(25, '(F10.3)', advance='no') scores(i)
+            write(25, '(F12.5)', advance='no') scores(i)
             write(25, *)
         enddo
         close(25)
@@ -813,7 +826,6 @@ use simple_stat
         call nano%set_atomic_coords('simulate_NP.pdb')
         call nano%simulate_atoms(simatms=sim_img)
         call sim_img%write(sim_img_name)
-        self%sim_img = sim_img
         call nano%kill
     end subroutine write_NP_image
 
@@ -832,13 +844,13 @@ use simple_stat
         end if
         select case(trim(type))
             case('corr')
-                pos_scores = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= self%thres)
+                pos_scores = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
                 if(write_here) print *, 'SUMMARY STATISTICS OF ATOMIC CORRELATION SCORES'
             case('avg_int')
-                pos_scores = pack(self%avg_int(:,:,:),      mask=self%box_scores(:,:,:) >= self%thres)
+                pos_scores = pack(self%avg_int(:,:,:),      mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
                 if(write_here) print *, 'SUMMARY STATISTICS OF PER-ATOM AVERAGE INTENSITY'
             case('euclid')
-                pos_scores = pack(self%euclid_dists(:,:,:), mask=self%box_scores(:,:,:) >= self%thres)
+                pos_scores = pack(self%euclid_dists(:,:,:), mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
                 if(write_here) print *, 'SUMMARY STATISTICS OF SAME ENERGY EUCLIDEAN DISTANCE'
             case DEFAULT
                 THROW_HARD('write_dist: type='//trim(type)//' is unsupported')
@@ -953,7 +965,7 @@ use simple_stat
         optimal_index = maxloc(thres_corrs)
         self%thres    = thresholds(optimal_index(1))
         call self%find_centers ! call again to set positions to the optimal
-        pos_inds      = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
+        pos_inds      = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
         num_pos       = size(pos_inds)
         print *, 'OPTIMAL THRESHOLD = ', self%thres
         print *, 'OPTIMAL CORRELATION = ', thres_corrs(optimal_index(1))
@@ -965,7 +977,6 @@ use simple_stat
         class(nano_picker), intent(inout) :: self
         integer :: i_atom
         call self%nano_img%kill
-        call self%sim_img%kill
         call self%simulated_atom%kill
         if(allocated(self%convolved_atoms))then
             do i_atom = 1, size(self%convolved_atoms)

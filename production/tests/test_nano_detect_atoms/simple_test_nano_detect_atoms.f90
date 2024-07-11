@@ -11,7 +11,7 @@ use simple_strings, only: int2str
 implicit none
 #include "simple_local_flags.inc"
 type(nano_picker)        :: test_exp4
-real                     :: smpd, dist_thres
+real                     :: smpd, dist_thres, mskdiam
 character(len=2)         :: element
 character(len=100)       :: filename_exp, filename_sim, pdbfile_ref
 integer                  :: offset, peak_thres_level
@@ -31,14 +31,21 @@ denoise          = .true.
 debug            = .true.
 use_euclids      = .false.
 use_zscores      = .false.
+mskdiam          = 32.
 
-call test_exp4%new(smpd, element, filename_exp, peak_thres_level, offset, denoise, use_euclids)
+call test_exp4%new(smpd, element, filename_exp, peak_thres_level, offset, denoise, use_euclids, mskdiam)
 call test_exp4%simulate_atom()
 call test_exp4%setup_iterators()
 call test_exp4%match_boxes(circle=circle)
 if (debug) call test_exp4%write_dist(  'corr_dist_before_high_filter.csv','corr'   )
 if (debug) call test_exp4%write_dist(   'int_dist_before_high_filter.csv','avg_int')
 if (debug) call test_exp4%write_dist('euclid_dist_before_high_filter.csv','euclid' )
+if (debug) then
+    call test_exp4%find_centers()
+    call test_exp4%write_positions_and_scores('pos_and_scores_centers_before_high_filter.csv','centers')
+    call test_exp4%write_positions_and_scores('pos_and_intensities_before_high_filter.csv','intensities')
+    call test_exp4%write_positions_and_scores('pos_and_euclids_before_high_filter.csv','euclid')
+end if
 call test_exp4%identify_high_scores(use_zscores=use_zscores)
 call test_exp4%apply_threshold
 if (debug) call test_exp4%write_dist('corr_dist_after_high_filter.csv','corr'   )
