@@ -27,7 +27,7 @@ use simple_stat
         type(image), allocatable :: convolved_atoms(:)
         real                     :: smpd, thres, radius, euclid_thres, mask_radius
         real, allocatable        :: box_scores(:,:,:), loc_sdevs(:,:,:), avg_int(:,:,:), euclid_dists(:,:,:), center_positions(:,:)
-        logical                  :: is_denoised, use_euclids, has_mask
+        logical                  :: is_denoised, use_euclids, has_mask, wrote_pdb
         logical, allocatable     :: msk(:,:,:)
 
     contains
@@ -44,6 +44,7 @@ use simple_stat
         procedure :: remove_outliers_position
         procedure :: find_centers
         procedure :: calc_atom_stats
+        procedure :: calc_per_atom_corr
         procedure :: write_pdb
         procedure :: write_boximgs
         procedure :: write_positions_and_scores
@@ -78,13 +79,16 @@ use simple_stat
         self%offset         = offset
         self%is_denoised    = .false.
         self%use_euclids    = .false.
+        self%wrote_pdb      = .false.
+        self%has_mask       = .false.
         params_glob         => params
-        params_glob%element = element
-        params_glob%smpd    = smpd
+        params_glob%element = self%element
+        params_glob%smpd    = self%smpd
         ! retrieve nano_img from filename and find ldim
         el_ucase            = upperCase(trim(adjustl(params_glob%element)))
         call get_element_Z_and_radius(el_ucase, Z, self%radius)
         if( Z == 0 ) THROW_HARD('Unknown element: '//el_ucase)
+        ! hardcode
         self%boxsize = round2even(self%radius / self%smpd) * 2
         call find_ldim_nptcls(self%raw_filename, self%ldim, nptcls, self%smpd)
         call self%nano_img%new(self%ldim, self%smpd)
@@ -270,8 +274,8 @@ use simple_stat
                         enddo
                         call self%nano_img%win2arr_rad(      pos_center(1),  pos_center(2),  pos_center(3),  winsz, npix_in, maxrad, npix_out1, pixels1)
                         call self%simulated_atom%win2arr_rad(self%boxsize/2, self%boxsize/2, self%boxsize/2, winsz, npix_in, maxrad, npix_out2, pixels2)
-                        self%box_scores(  xoff,yoff,zoff) = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))      ! revert to
-                        self%euclid_dists(xoff,yoff,zoff) = same_energy_euclid(pixels1(:npix_out1),pixels2(:npix_out2)) ! new method
+                        self%box_scores(  xoff,yoff,zoff) = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))      
+                        self%euclid_dists(xoff,yoff,zoff) = same_energy_euclid(pixels1(:npix_out1),pixels2(:npix_out2)) 
                         self%loc_sdevs(   xoff,yoff,zoff) = boximg%avg_loc_sdev(self%offset)
                         self%avg_int(     xoff,yoff,zoff) = boximg%get_avg_int()
                         call boximg%kill
@@ -354,7 +358,7 @@ use simple_stat
             Q1                = median(lower_half_scores)
             Q3                = median(upper_half_scores)
             IQR               = Q3 - Q1
-            outlier_cutoff    = Q3 + 1.5*(IQR)
+            outlier_cutoff    = Q3 + 1.25*(IQR)
             self%thres        = outlier_cutoff
             ! identify euclid distance threshold (this is an upper rather than lower threshold)
             deallocate(pos_scores, lower_half_scores, upper_half_scores)
@@ -365,7 +369,7 @@ use simple_stat
             Q1                = median(lower_half_scores)
             Q3                = median(upper_half_scores)
             IQR               = Q3 - Q1
-            outlier_cutoff    = Q1 - 1.5*(IQR)
+            outlier_cutoff    = Q1 - 0.5*(IQR)
             self%euclid_thres = outlier_cutoff
             deallocate(lower_half_scores, upper_half_scores, pos_scores)
         else
@@ -721,6 +725,22 @@ use simple_stat
         print *, 'FINISHED CALC_ATOM_STATS'
     end subroutine calc_atom_stats
 
+    subroutine calc_per_atom_corr(self)
+        class(nano_picker), intent(inout) :: self
+        type(nanoparticle)       :: nano
+        type(image)              :: simatms
+        type(parameters), target :: params
+        params_glob         => params
+        params_glob%element = self%element
+        params_glob%smpd    = self%smpd
+        call nano%new(self%raw_filename)
+        if (.not. self%wrote_pdb) call self%write_pdb()
+        call nano%set_atomic_coords(trim(self%pdb_filename))
+        call nano%simulate_atoms(simatms=simatms)
+        call nano%validate_atoms(simatms=simatms)
+        call nano%kill
+    end subroutine
+
     ! input filename with no extension
     subroutine write_pdb( self, filename )
         class(nano_picker),         intent(inout) :: self
@@ -745,6 +765,7 @@ use simple_stat
         endif
         deallocate(coords)
         deallocate(pos_inds)
+        self%wrote_pdb = .true.
     end subroutine write_pdb
 
     subroutine write_boximgs( self, foldername )
