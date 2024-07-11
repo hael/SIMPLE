@@ -25,13 +25,13 @@ element          = 'PT'
 smpd             = 0.358
 offset           = 2
 peak_thres_level = 2
-dist_thres       = 3.
+dist_thres       = 2.
 circle           = .true.
 denoise          = .true.
 debug            = .true.
 use_euclids      = .false.
 use_zscores      = .false.
-mskdiam          = 32.
+mskdiam          = 30.
 
 call test_exp4%new(smpd, element, filename_exp, peak_thres_level, offset, denoise, use_euclids, mskdiam)
 call test_exp4%simulate_atom()
@@ -55,6 +55,7 @@ if (debug) call test_exp4%write_dist(  'corr_dist_after_dist_filter_high.csv','c
 if (debug) call test_exp4%write_dist(   'int_dist_after_dist_filter_high.csv','avg_int')
 if (debug) call test_exp4%write_dist('euclid_dist_after_dist_filter_high.csv','euclid' )
 call test_exp4%find_centers()
+call test_exp4%calc_per_atom_corr
 ! OUTPUT FILES
 call test_exp4%write_positions_and_scores('pos_and_scores.csv','pixels')
 call test_exp4%write_positions_and_scores('pos_and_scores_centers.csv','centers')
