@@ -16,6 +16,11 @@ character(len=2)         :: element
 character(len=100)       :: filename_exp, filename_sim, pdbfile_ref
 integer                  :: offset, peak_thres_level
 logical                  :: circle, denoise, debug, use_euclids, use_zscores
+! for Henry's test
+type(nanoparticle)       :: nano
+real                     :: a(3)
+logical                  :: use_cs_thres, use_auto_corr_thres
+type(parameters), target :: params
 
 ! Inputs
 filename_exp     = 'rec_merged.mrc'
@@ -33,6 +38,7 @@ use_euclids      = .false.
 use_zscores      = .false.
 mskdiam          = 30.
 
+print *, 'NEW METHOD: '
 call test_exp4%new(smpd, element, filename_exp, peak_thres_level, offset, denoise, use_euclids, mskdiam)
 call test_exp4%simulate_atom()
 call test_exp4%setup_iterators()
@@ -65,5 +71,18 @@ call test_exp4%write_pdb('experimental_centers')
 call test_exp4%compare_pick('experimental_centers.pdb',trim(pdbfile_ref))
 call test_exp4%write_NP_image('result.mrc')
 call test_exp4%kill
+print *, ' '
+
+! Henry's method (for comparison)
+print *, 'OLD METHOD: '
+params_glob         => params
+params_glob%element = element
+params_glob%smpd    = smpd
+use_cs_thres        = .false.
+use_auto_corr_thres = .false.
+call nano%new(filename_exp,msk=mskdiam)
+call nano%identify_atomic_pos(a, l_fit_lattice=.true., use_cs_thres=use_cs_thres,&
+                &use_auto_corr_thres=use_auto_corr_thres)
+call nano%kill
 
 end program simple_test_nano_detect_atoms

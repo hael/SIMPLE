@@ -21,7 +21,7 @@ integer,          parameter :: NBIN_THRESH         = 15      ! number of thresho
 integer,          parameter :: CN_THRESH_XTAL      = 5       ! cn-threshold highly crystalline NPs
 integer,          parameter :: NVOX_THRESH         = 3       ! min # voxels per atom is 3
 logical,          parameter :: DEBUG               = .false. ! for debugging purposes
-logical,          parameter :: WRITE_OUTPUT        = .true. ! for figures generation
+logical,          parameter :: WRITE_OUTPUT        = .false. ! for figures generation
 logical,          parameter :: ATOMS_STATS_OMIT    = .false. ! omit = shorter atoms stats output
 integer,          parameter :: SOFT_EDGE           = 6
 integer,          parameter :: N_DISCRET           = 1000
@@ -426,7 +426,6 @@ contains
         logical :: mask_present
         integer :: sz, i, cnt
         sz           = size(self%atominfo)
-        print *, 'sz = ', sz
         mask_present = .false.
         if( present(mask) ) mask_present = .true.
         if( mask_present )then
