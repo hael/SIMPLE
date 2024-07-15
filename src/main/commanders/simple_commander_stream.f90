@@ -1449,8 +1449,8 @@ contains
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=:),          allocatable :: output_dir, output_dir_extract, output_dir_picker
         character(len=LONGSTRLEN)              :: cwd_job, latest_boxfile
-        character(len=STDLEN)                  :: pick_nthr_env, pick_part_env
-        real                                   :: pick_nthr
+        character(len=STDLEN)                  :: refgen_nthr_env, refgen_part_env
+        real                                   :: refgen_nthr
         integer                                :: extract_set_counter    ! Internal counter of projects to be processed
         integer                                :: nmics_sel, nmics_rej, nmics_rejected_glob
         integer                                :: nmics, nprojects, stacksz, prev_stacksz, iter, iproj, envlen
@@ -1485,10 +1485,11 @@ contains
         if( .not. cline%defined('refine')          ) call cline%set('refine',         'snhc_smpl')
         if( .not. cline%defined('maxpop')          ) call cline%set('maxpop',         MAXPOP_DEFAULT)
         ! ev overrides
-        call get_environment_variable(SIMPLE_STREAM_PICK_NTHR, pick_nthr_env, envlen)
+        call get_environment_variable(SIMPLE_STREAM_REFGEN_NTHR, refgen_nthr_env, envlen)
         if(envlen > 0) then
-            read(pick_nthr_env,*) pick_nthr
-            call cline%set('nthr', pick_nthr)
+            read(refgen_nthr_env,*) refgen_nthr
+            call cline%set('nthr', refgen_nthr)
+            call cline%set('nthr2D', refgen_nthr)
         end if
         ! write cmdline for GUI
         call cline%writeline(".cline")
@@ -1525,6 +1526,11 @@ contains
         ! master project file
         call spproj_glob%read( params%projfile )
         call spproj_glob%update_projinfo(cline)
+        ! force local if nparts < 2
+        if(params%nparts < 2) then
+            call spproj_glob%compenv%set(1, 'qsys_name', 'local')
+            call spproj_glob%write_non_data_segments(trim(params%projfile))
+        endif
         if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream_cluster2D must start from an empty project (eg from root project folder)')
         ! movie watcher init
         project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true.)
@@ -1567,9 +1573,9 @@ contains
         ! initialise progress monitor
         call progressfile_init()
         ! setup the environment for distributed execution
-        call get_environment_variable(SIMPLE_STREAM_PICK_PARTITION, pick_part_env, envlen)
+        call get_environment_variable(SIMPLE_STREAM_REFGEN_PARTITION, refgen_part_env, envlen)
         if(envlen > 0) then
-            call qenv%new(1,stream=.true.,qsys_partition=trim(pick_part_env))
+            call qenv%new(1,stream=.true.,qsys_partition=trim(refgen_part_env))
         else
             call qenv%new(1,stream=.true.)
         end if

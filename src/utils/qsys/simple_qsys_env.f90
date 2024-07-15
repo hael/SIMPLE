@@ -103,6 +103,8 @@ contains
             call self%qdescr%set('job_time','0-'//hrs_str//':'//mins_str//':'//secs_str)
         endif
         if( present(qsys_name) ) call self%qdescr%set('qsys_name', qsys_name)
+        ! force local if nparts is 1 or less
+       ! if(params_glob%nparts < 2) call self%qdescr%set('qsys_name', 'local')
         qsnam = self%qdescr%get('qsys_name')
         call self%qsys_fac%new(qsnam, self%myqsys)
         ! create the user specific qsys and qsys controller (script generator)
