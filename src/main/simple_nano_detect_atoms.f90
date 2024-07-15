@@ -23,7 +23,7 @@ use simple_stat
         character(len=100)       :: raw_filename, pdb_filename
         integer                  :: boxsize, ldim(3), nxyz_offset(3), offset, peak_thres_level
         integer, allocatable     :: inds_offset(:,:,:), positions(:,:)
-        type(image)              :: simulated_atom, nano_img
+        type(image)              :: simulated_atom, nano_img, thresh_img
         type(image), allocatable :: convolved_atoms(:)
         real                     :: smpd, thres, radius, euclid_thres, mask_radius
         real, allocatable        :: box_scores(:,:,:), loc_sdevs(:,:,:), avg_int(:,:,:), euclid_dists(:,:,:), center_positions(:,:)
@@ -104,6 +104,8 @@ use simple_stat
                 call self%nano_img%write('denoised.mrc')
             endif
         endif
+        call threshold_img(self%nano_img, self%thresh_img, level=2)
+        call self%thresh_img%write('post_thresholding_map.mrc')
         if( present(use_euclids) ) then
             self%use_euclids = use_euclids
         end if
@@ -225,7 +227,8 @@ use simple_stat
                     do zoff = 1, self%nxyz_offset(3)
                         ithr = omp_get_thread_num() + 1
                         pos  = self%positions(self%inds_offset(xoff,yoff,zoff),:)
-                        call self%nano_img%window_slim( pos, self%boxsize, boximgs(ithr), outside)
+                        !call self%nano_img%window_slim( pos, self%boxsize, boximgs(ithr), outside)
+                        call self%thresh_img%window_slim( pos, self%boxsize, boximgs(ithr), outside)
                         self%box_scores(  xoff,yoff,zoff)   = self%simulated_atom%real_corr(boximgs(ithr))            ! revert to
                         self%euclid_dists(xoff,yoff,zoff)   = self%simulated_atom%euclid_dist_two_imgs(boximgs(ithr)) ! new method
                         self%loc_sdevs(   xoff,yoff,zoff)   = boximgs(ithr)%avg_loc_sdev(self%offset)
@@ -272,7 +275,8 @@ use simple_stat
                                 exit
                             endif
                         enddo
-                        call self%nano_img%win2arr_rad(      pos_center(1),  pos_center(2),  pos_center(3),  winsz, npix_in, maxrad, npix_out1, pixels1)
+                        !call self%nano_img%win2arr_rad(      pos_center(1),  pos_center(2),  pos_center(3),  winsz, npix_in, maxrad, npix_out1, pixels1)
+                        call self%thresh_img%win2arr_rad(      pos_center(1),  pos_center(2),  pos_center(3),  winsz, npix_in, maxrad, npix_out1, pixels1)
                         call self%simulated_atom%win2arr_rad(self%boxsize/2, self%boxsize/2, self%boxsize/2, winsz, npix_in, maxrad, npix_out2, pixels2)
                         self%box_scores(  xoff,yoff,zoff) = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))      
                         self%euclid_dists(xoff,yoff,zoff) = same_energy_euclid(pixels1(:npix_out1),pixels2(:npix_out2)) 
@@ -998,6 +1002,7 @@ use simple_stat
         class(nano_picker), intent(inout) :: self
         integer :: i_atom
         call self%nano_img%kill
+        call self%thresh_img%kill
         call self%simulated_atom%kill
         if(allocated(self%convolved_atoms))then
             do i_atom = 1, size(self%convolved_atoms)
