@@ -68,7 +68,43 @@ implicit none
         call detect_peak_thres(size(intensities), level, intensities, thres)
         call img_out%copy(img_in)
         call img_out%zero_below(thres)
+        call img_out%write('post_thresholding_map.mrc')
         deallocate(intensities)
     end subroutine threshold_img
+
+    subroutine make_intensity_mask(img_in, mask_out, level)
+        type(image),          intent(in)  :: img_in
+        logical, allocatable, intent(out) :: mask_out(:,:,:)
+        integer,              intent(in)  :: level
+        integer           :: ldim(3)
+        real, allocatable :: rmat(:,:,:)
+        type(image)       :: thres_img
+        ldim = img_in%get_ldim()
+        allocate(mask_out(ldim(1), ldim(2), ldim(3)), source=.false.)
+        call threshold_img(img_in, thres_img, level)
+        rmat = thres_img%get_rmat()
+        where (rmat > 0)
+            mask_out = .true.
+        end where
+    end subroutine make_intensity_mask
+
+    function logical_box(array, pos, boxsize) result(truth_value)
+        logical, intent(in)  :: array(:,:,:)
+        integer, intent(in)  :: pos(3)
+        integer, intent(in)  :: boxsize
+        logical              :: truth_value
+        logical, allocatable :: small_box(:,:,:)
+        integer              :: to(3), from(3)
+        allocate(small_box(boxsize,boxsize,boxsize))
+        from      = pos
+        to        = pos + boxsize
+        small_box = array(from(1):to(1),from(2):to(2),from(3):to(3))
+        if(count(small_box) > 0) then 
+            truth_value = .true.
+        else
+            truth_value = .false.
+        end if
+        deallocate(small_box)
+    end function logical_box
     
 end module simple_nano_picker_utils

@@ -30,16 +30,16 @@ element          = 'PT'
 smpd             = 0.358
 offset           = 2
 peak_thres_level = 2
-dist_thres       = 2.
+dist_thres       = 3.
 circle           = .true.
 denoise          = .true.
 debug            = .true.
 use_euclids      = .false.
 use_zscores      = .false.
-mskdiam          = 26.
+mskdiam          = 27.
 
 print *, 'NEW METHOD: '
-call test_exp4%new(smpd, element, filename_exp, peak_thres_level, offset, denoise, use_euclids)
+call test_exp4%new(smpd, element, filename_exp, peak_thres_level, offset, denoise, use_euclids, mskdiam)
 call test_exp4%simulate_atom()
 call test_exp4%setup_iterators()
 call test_exp4%match_boxes(circle=circle)
@@ -68,8 +68,8 @@ call test_exp4%write_positions_and_scores('pos_and_scores.csv','pixels')
 call test_exp4%write_positions_and_scores('pos_and_scores_centers.csv','centers')
 call test_exp4%write_positions_and_scores('pos_and_intensities.csv','intensities')
 call test_exp4%write_positions_and_scores('pos_and_euclids.csv','euclid')
-call test_exp4%write_pdb('experimental_centers')
-call test_exp4%compare_pick('experimental_centers.pdb',trim(pdbfile_ref))
+call test_exp4%write_pdb('experimental_centers_thres')
+call test_exp4%compare_pick('experimental_centers_thres.pdb',trim(pdbfile_ref))
 call test_exp4%write_NP_image('result.mrc')
 call test_exp4%kill
 print *, ' '
