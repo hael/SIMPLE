@@ -240,15 +240,18 @@ contains
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 allocatable   :: locn(:)
         type(pftcc_shsrch_grad)                :: grad_shsrch_obj(nthr_glob) 
-        integer :: i, j, iproj, iptcl, projs_ns, ithr, irot, inds_sorted(pftcc%nrots,nthr_glob), istate, iref, irot2
-        logical :: l_doshift
         real,    allocatable :: scores_inpl(:,:), scores_inpl_sorted(:,:)
         integer, allocatable :: scores_inds_sorted(:,:)
         real    :: dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob)
-        real    :: dists_projs(params_glob%nspace,nthr_glob), lims(2,2), lims_init(2,2), cxy(3), inpl_athres, d1, d2
+        real    :: dists_projs(params_glob%nspace,nthr_glob), lims(2,2), lims_init(2,2), cxy(3), inpl_athres
+        integer :: i, j, iproj, iptcl, projs_ns, ithr, irot, inds_sorted(pftcc%nrots,nthr_glob), istate, iref
+        logical :: l_doshift, l_kw
         call seed_rnd
         l_doshift = params_glob%l_prob_sh .and. params_glob%l_doshift
         if( l_doshift )then
+            allocate(scores_inpl(pftcc%get_pftsz(),nthr_glob),scores_inds_sorted(pftcc%get_pftsz(),nthr_glob),&
+            &scores_inpl_sorted(pftcc%get_pftsz(),nthr_glob))
+            l_kw = trim(params_glob%sh_inv_kw).eq.'yes'
             ! make shift search objects
             lims(:,1)      = -params_glob%trs
             lims(:,2)      =  params_glob%trs
@@ -256,11 +259,9 @@ contains
             lims_init(:,2) =  SHC_INPL_TRSHWDTH
             do ithr = 1,nthr_glob
                 call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier,&
-                    &maxits=params_glob%maxits_sh, opt_angle=.false.)
+                    &maxits=params_glob%maxits_sh, opt_angle=(trim(params_glob%sh_opt_angle).eq.'yes'))
             end do
             ! fill the table
-            allocate(scores_inpl(pftcc%get_pftsz(),nthr_glob),scores_inds_sorted(pftcc%get_pftsz(),nthr_glob),&
-                &scores_inpl_sorted(pftcc%get_pftsz(),nthr_glob))
             do istate = 1, self%nstates
                 iref        = (istate-1)*params_glob%nspace
                 inpl_athres = calc_athres('dist_inpl', state=istate)
@@ -273,24 +274,20 @@ contains
                     ithr  = omp_get_thread_num() + 1
                     do iproj = 1, params_glob%nspace
                         ! to determine the directions whose shift will be searched
-                        call pftcc%gencorrs_shinvariant(iref + iproj, iptcl, scores_inpl(:,ithr))
+                        call pftcc%gencorrs_shinvariant(iref + iproj, iptcl, scores_inpl(:,ithr),kweight=l_kw)
                         scores_inpl(:,ithr) = eulprob_dist_switch(scores_inpl(:,ithr))
                         irot = angle_sampling(scores_inpl(:,ithr), scores_inpl_sorted(:,ithr), scores_inds_sorted(:,ithr), inpl_athres)
                         dists_projs(iproj,ithr) = scores_inpl(irot,ithr)
-                        ! to fill the table without shift search
+                        ! fill the rest of the table
                         call pftcc%gencorrs(iref + iproj, iptcl, dists_inpl(:,ithr))
                         dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
                         irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres)
                         self%loc_tab(iproj,i,istate)%dist = dists_inpl(irot,ithr)
                         self%loc_tab(iproj,i,istate)%inpl = irot
-                        self%loc_tab(iproj,i,istate)%x    = 0.
-                        self%loc_tab(iproj,i,istate)%y    = 0.
-                        self%loc_tab(iproj,i,istate)%has_sh = .false.
                     enddo
                     locn = minnloc(dists_projs(:,ithr), projs_ns)
                     do j = 1,projs_ns
                         iproj = locn(j)
-                        ! BFGS over shifts
                         call grad_shsrch_obj(ithr)%set_indices(iref + iproj, iptcl)
                         irot = self%loc_tab(iproj,i,istate)%inpl
                         cxy  = grad_shsrch_obj(ithr)%minimize(irot=irot)
@@ -305,6 +302,7 @@ contains
                 enddo
                 !$omp end parallel do
             enddo
+            deallocate(scores_inpl,scores_inds_sorted,scores_inpl_sorted)
         else
             do istate = 1, self%nstates
                 iref        = (istate-1)*params_glob%nspace
