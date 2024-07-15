@@ -110,6 +110,7 @@ contains
                         call build%spproj_field%add_shift2class(i, -shvec(i,:))
                     endif
                 endif
+                write(logfhandle,'(A,I4,2F6.1)')'>>> OFFSET: ',i,shvec(i,1:2)
                 call build%img%fft
                 call build%img%shift2Dserial(shvec(i,1:2))
                 call build%img%ifft
@@ -130,6 +131,7 @@ contains
                         call build%spproj_field%map3dshift22d(-shvec(istate,:), state=istate)
                     endif
                 endif
+                write(logfhandle,'(A,3F6.1)')'>>> OFFSET: ',shvec(istate,:)
                 call build%vol%shift(shvec(istate,1:3))
                 call build%vol%write('shifted_vol_state'//int2str(istate)//params%ext)
             end do
