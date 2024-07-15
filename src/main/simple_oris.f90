@@ -3397,18 +3397,17 @@ contains
         endif
     end subroutine calc_avg_offset2D
 
-    !>  \brief
     subroutine calc_avg_offset3D( self, offset_avg, state )
         class(oris),       intent(inout)    :: self
         real,              intent(inout) :: offset_avg(3)
         integer, optional, intent(in)    :: state
-        integer,    parameter :: N = 100
+        integer,    parameter :: N = 300
         integer,    parameter :: PROJDIRMINPOP = 10
         type(oris)            :: spiral
-        type(ori)             :: o
+        type(ori)             :: o, oxy, oxz, oyz
         integer,  allocatable :: closest_proj(:)
-        real(dp) :: avg(3), offset(3)
-        real     :: rmat(3,3), sh3d(3)
+        real(dp) :: avg(3), offset(3), w(3), sumw(3)
+        real     :: sh3d(3)
         integer  :: i,j, istate, pop, npop
         istate = 1
         if( present(state) ) istate = state
@@ -3420,21 +3419,37 @@ contains
         avg  = 0.d0
         npop = 0
         o    = ori(.true.)
-        !$omp parallel do default(shared) private(i,j,pop,offset,o,sh3d) &
+        oxy  = ori(.true.)
+        oxz  = ori(.true.)
+        oyz  = ori(.true.)
+        call oxy%set_euler([ 0., 0.,0.])
+        call oxz%set_euler([90.,90.,0.])
+        call oyz%set_euler([ 0.,90.,0.])
+        !$omp parallel do default(shared) private(i,j,pop,offset,o,sh3d,w,sumw) &
         !$omp schedule(static) proc_bind(close) reduction(+:npop,avg)
         do i = 1,N
             pop    = 0
             offset = 0.d0
+            sumw   = 0.d0
             call spiral%get_ori(i, o)
             do j = 1,self%n
                 if( self%o(j)%get_state() /= istate ) cycle
                 if( closest_proj(j) /= i ) cycle
                 call self%o(j)%compose2dshift3d(sh3d)
-                offset = offset + real(sh3d,dp)
-                pop    = pop + 1
+                w(1)   = abs(sin(oyz.euldist.self%o(j)))
+                w(2)   = abs(sin(oxz.euldist.self%o(j)))
+                w(3)   = abs(sin(oxy.euldist.self%o(j)))
+                offset = offset + w*real(sh3d,dp)
+                sumw   = sumw   + w**2
+                pop    = pop    + 1
             enddo
             if( pop < PROJDIRMINPOP ) cycle
-            avg  = avg + offset / real(pop,dp)
+            where( sumw < 1.d-6 )
+                offset = 0.d0
+            else where
+                offset = offset / sumw
+            end where
+            avg  = avg  + offset
             npop = npop + 1
         enddo
         !$omp end parallel do
@@ -3442,6 +3457,9 @@ contains
         offset_avg = real(avg)
         call spiral%kill
         call o%kill
+        call oxy%kill
+        call oxz%kill
+        call oyz%kill
         deallocate(closest_proj)
     end subroutine calc_avg_offset3D
 
