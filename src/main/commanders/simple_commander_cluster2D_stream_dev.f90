@@ -79,16 +79,17 @@ logical               :: l_update_sigmas = .false.
 
 contains
 
-    subroutine init_cluster2D_stream_dev( cline, spproj, box_in, projfilegui )
+    subroutine init_cluster2D_stream_dev( cline, spproj, box_in, projfilegui, reference_generation )
         class(cmdline),    intent(inout) :: cline
         class(sp_project), intent(inout) :: spproj
         integer,           intent(in)    :: box_in
         character(len=*),  intent(in)    :: projfilegui ! to go?
+        logical, optional, intent(in)    :: reference_generation
         character(len=:), allocatable    :: carg
-        character(len=STDLEN)            :: chunk_nthr_env, pool_nthr_env, pool_part_env
+        character(len=STDLEN)            :: chunk_nthr_env, pool_nthr_env, pool_part_env, refgen_nthr_env, refgen_part_env
         real    :: SMPD_TARGET = MAX_SMPD  ! target sampling distance
-        real    :: chunk_nthr, pool_nthr
-        integer :: ichunk, envlen
+        real    :: chunk_nthr, pool_nthr, refgen_nthr
+        integer :: ichunk, envlen, nthr2D
         call seed_rnd
         ! general parameters
         call mskdiam2lplimits(params_glob%mskdiam, lpstart, lpstop, lpcen)
@@ -162,9 +163,13 @@ contains
                 call cline_cluster2D_chunk%set('nthr', real(params_glob%nthr2D))
             end if
             allocate(chunks(params_glob%nchunks))
+            ! deal with nthr2d .ne. nthr
+            nthr2D = params_glob%nthr2D
+            params_glob%nthr2D = int(cline_cluster2D_chunk%get_rarg('nthr'))
             do ichunk = 1,params_glob%nchunks
                 call chunks(ichunk)%init(ichunk, pool_proj)
             enddo
+            params_glob%nthr2D = nthr2D
             glob_chunk_id = params_glob%nchunks
             l_no_chunks = .false.
         else
@@ -203,19 +208,39 @@ contains
             l_update_sigmas = .false. !!
         endif
         ! EV override
-        call get_environment_variable(SIMPLE_STREAM_POOL_NTHR, pool_nthr_env, envlen)
-        if(envlen > 0) then
-            read(pool_nthr_env,*) pool_nthr
-            call cline_cluster2D_pool%set('nthr', pool_nthr)
+        if(present(reference_generation) .and. reference_generation) then
+            call get_environment_variable(SIMPLE_STREAM_REFGEN_NTHR, refgen_nthr_env, envlen)
+            if(envlen > 0) then
+                read(refgen_nthr_env,*) refgen_nthr
+                call cline_cluster2D_pool%set('nthr', refgen_nthr)
+            else
+                call cline_cluster2D_pool%set('nthr', real(params_glob%nthr2D))
+            end if
         else
-            call cline_cluster2D_pool%set('nthr', real(params_glob%nthr2D))
+            call get_environment_variable(SIMPLE_STREAM_POOL_NTHR, pool_nthr_env, envlen)
+            if(envlen > 0) then
+                read(pool_nthr_env,*) pool_nthr
+                call cline_cluster2D_pool%set('nthr', pool_nthr)
+                call cline_cluster2D_pool%set('nthr2D', pool_nthr)
+            else
+                call cline_cluster2D_pool%set('nthr', real(params_glob%nthr2D))
+            end if
         end if
         ! EV override
-        call get_environment_variable(SIMPLE_STREAM_POOL_PARTITION, pool_part_env, envlen)
-        if(envlen > 0) then
-            call qenv_pool%new(params_glob%nparts_pool,exec_bin='simple_private_exec',qsys_name='local', qsys_partition=trim(pool_part_env))
+        if(present(reference_generation) .and. reference_generation) then
+            call get_environment_variable(SIMPLE_STREAM_REFGEN_PARTITION, refgen_part_env, envlen)
+            if(envlen > 0) then
+                call qenv_pool%new(params_glob%nparts_pool,exec_bin='simple_private_exec',qsys_name='local', qsys_partition=trim(refgen_part_env))
+            else
+                call qenv_pool%new(params_glob%nparts_pool,exec_bin='simple_private_exec',qsys_name='local')
+            end if
         else
-            call qenv_pool%new(params_glob%nparts_pool,exec_bin='simple_private_exec',qsys_name='local')
+            call get_environment_variable(SIMPLE_STREAM_POOL_PARTITION, pool_part_env, envlen)
+            if(envlen > 0) then
+                call qenv_pool%new(params_glob%nparts_pool,exec_bin='simple_private_exec',qsys_name='local', qsys_partition=trim(pool_part_env))
+            else
+                call qenv_pool%new(params_glob%nparts_pool,exec_bin='simple_private_exec',qsys_name='local')
+            end if
         end if
         ! objective function
         select case(params_glob%cc_objfun)

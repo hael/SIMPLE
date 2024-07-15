@@ -57,8 +57,9 @@ character(len=STDLEN), parameter :: DIR_STREAM           = trim(PATH_HERE)//'spp
 character(len=STDLEN), parameter :: DIR_STREAM_COMPLETED = trim(PATH_HERE)//'spprojs_completed/' ! location for projects processed
 character(len=STDLEN), parameter :: USER_PARAMS     = 'stream_user_params.txt'                   
 integer,               parameter :: NMOVS_SET       = 5                                          ! number of movies processed at once (>1)
-integer,               parameter :: LONGTIME        = 60                                        ! time lag after which a movie/project is processed
-integer,               parameter :: WAITTIME        = 10   ! movie folder watched every WAITTIME seconds
+integer,               parameter :: LONGTIME        = 60                                         ! time lag after which a movie/project is processed
+integer,               parameter :: WAITTIME        = 10                                         ! movie folder watched every WAITTIME seconds
+integer,               parameter :: SHORTWAIT       = 2                                          ! movie folder watched every SHORTTIME seconds in shmem
 
 contains
 
@@ -1712,14 +1713,18 @@ contains
             ! 2D section
             if( l_once .and. (nptcls_glob > params%nptcls_per_cls*params%ncls) )then
                 if( .not.cline%defined('mskdiam') ) params%mskdiam = 0.85 * real(params%box) * params%smpd
-                call init_cluster2D_stream_dev( cline, spproj_glob, params%box, micspproj_fname )
+                call init_cluster2D_stream_dev( cline, spproj_glob, params%box, micspproj_fname, reference_generation=.true. )
                 l_once = .false.
             endif
             call update_pool_status_dev
             call update_pool_dev
             call import_records_into_pool( micproj_records )
             call classify_pool_dev
-            call sleep(WAITTIME)
+            if(  params%nparts > 1 ) then
+                call sleep(WAITTIME)
+            else
+                call sleep(SHORTWAIT)
+            endif
             ! guistats
             if(file_exists(POOLSTATS_FILE)) then
                 call gui_stats%merge(POOLSTATS_FILE)
