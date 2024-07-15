@@ -23,12 +23,12 @@ use simple_stat
         character(len=100)       :: raw_filename, pdb_filename
         integer                  :: boxsize, ldim(3), nxyz_offset(3), offset, peak_thres_level
         integer, allocatable     :: inds_offset(:,:,:), positions(:,:)
-        type(image)              :: simulated_atom, nano_img, thresh_img
+        type(image)              :: simulated_atom, nano_img
         type(image), allocatable :: convolved_atoms(:)
         real                     :: smpd, thres, radius, euclid_thres, mask_radius
         real, allocatable        :: box_scores(:,:,:), loc_sdevs(:,:,:), avg_int(:,:,:), euclid_dists(:,:,:), center_positions(:,:)
-        logical                  :: is_denoised, use_euclids, has_mask, wrote_pdb
-        logical, allocatable     :: msk(:,:,:)
+        logical                  :: use_euclids, has_mask, wrote_pdb
+        logical, allocatable     :: msk(:,:,:), thres_msk(:,:,:)
 
     contains
         procedure :: new
@@ -72,12 +72,12 @@ use simple_stat
         integer                  :: Z, nptcls
         logical                  :: outside
         type(parameters), target :: params
+        type(image)              :: thres_img
         call self%kill
         self%smpd           = smpd
         self%element        = element
         self%raw_filename   = raw_filename
         self%offset         = offset
-        self%is_denoised    = .false.
         self%use_euclids    = .false.
         self%wrote_pdb      = .false.
         self%has_mask       = .false.
@@ -96,16 +96,17 @@ use simple_stat
         call self%simulated_atom%new([self%boxsize,self%boxsize,self%boxsize], self%smpd)
         self%peak_thres_level = peak_thres_level
         self%thres = -0.999 ! initial value, will be updated later
+        allocate(self%thres_msk(self%ldim(1),self%ldim(2),self%ldim(3)), source=.true.)
         ! denoise nano_img if requested
         if( present(denoise) )then
             if( denoise )then
-                call phasecorr_one_atom(self%nano_img, self%element)
-                self%is_denoised = .true.
-                call self%nano_img%write('denoised.mrc')
+                deallocate(self%thres_msk)
+                call thres_img%copy(self%nano_img)
+                call phasecorr_one_atom(thres_img, self%element)
+                call thres_img%write('denoised_map.mrc') 
+                call make_intensity_mask(thres_img, self%thres_msk, level=2)
             endif
         endif
-        call threshold_img(self%nano_img, self%thresh_img, level=2)
-        call self%thresh_img%write('post_thresholding_map.mrc')
         if( present(use_euclids) ) then
             self%use_euclids = use_euclids
         end if
@@ -188,6 +189,9 @@ use simple_stat
                             self%msk(self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3))=.false.
                         end if
                     end if
+                    if(self%msk(self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3))) then
+                        self%msk(self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3)) = logical_box(self%thres_msk, pos=self%positions(nboxes,:), boxsize=self%boxsize)
+                    end if
                 enddo
             enddo
         enddo
@@ -227,8 +231,8 @@ use simple_stat
                     do zoff = 1, self%nxyz_offset(3)
                         ithr = omp_get_thread_num() + 1
                         pos  = self%positions(self%inds_offset(xoff,yoff,zoff),:)
-                        !call self%nano_img%window_slim( pos, self%boxsize, boximgs(ithr), outside)
-                        call self%thresh_img%window_slim( pos, self%boxsize, boximgs(ithr), outside)
+                        call self%nano_img%window_slim( pos, self%boxsize, boximgs(ithr), outside)
+                        !call self%thresh_img%window_slim( pos, self%boxsize, boximgs(ithr), outside)
                         self%box_scores(  xoff,yoff,zoff)   = self%simulated_atom%real_corr(boximgs(ithr))            ! revert to
                         self%euclid_dists(xoff,yoff,zoff)   = self%simulated_atom%euclid_dist_two_imgs(boximgs(ithr)) ! new method
                         self%loc_sdevs(   xoff,yoff,zoff)   = boximgs(ithr)%avg_loc_sdev(self%offset)
@@ -275,8 +279,8 @@ use simple_stat
                                 exit
                             endif
                         enddo
-                        !call self%nano_img%win2arr_rad(      pos_center(1),  pos_center(2),  pos_center(3),  winsz, npix_in, maxrad, npix_out1, pixels1)
-                        call self%thresh_img%win2arr_rad(      pos_center(1),  pos_center(2),  pos_center(3),  winsz, npix_in, maxrad, npix_out1, pixels1)
+                        call self%nano_img%win2arr_rad(      pos_center(1),  pos_center(2),  pos_center(3),  winsz, npix_in, maxrad, npix_out1, pixels1)
+                        !call self%thresh_img%win2arr_rad(      pos_center(1),  pos_center(2),  pos_center(3),  winsz, npix_in, maxrad, npix_out1, pixels1)
                         call self%simulated_atom%win2arr_rad(self%boxsize/2, self%boxsize/2, self%boxsize/2, winsz, npix_in, maxrad, npix_out2, pixels2)
                         self%box_scores(  xoff,yoff,zoff) = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))      
                         self%euclid_dists(xoff,yoff,zoff) = same_energy_euclid(pixels1(:npix_out1),pixels2(:npix_out2)) 
@@ -1002,7 +1006,6 @@ use simple_stat
         class(nano_picker), intent(inout) :: self
         integer :: i_atom
         call self%nano_img%kill
-        call self%thresh_img%kill
         call self%simulated_atom%kill
         if(allocated(self%convolved_atoms))then
             do i_atom = 1, size(self%convolved_atoms)
@@ -1016,6 +1019,7 @@ use simple_stat
         if(allocated(self%box_scores)      ) deallocate(self%box_scores)
         if(allocated(self%avg_int)         ) deallocate(self%avg_int)
         if(allocated(self%euclid_dists)    ) deallocate(self%euclid_dists)
+        if(allocated(self%thres_msk)       ) deallocate(self%thres_msk)
     end subroutine kill
 
 end module simple_nano_detect_atoms
