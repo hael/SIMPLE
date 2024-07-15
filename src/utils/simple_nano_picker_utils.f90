@@ -57,5 +57,18 @@ implicit none
         enddo
         call centers_pdb%writepdb(fname)
     end subroutine write_centers
+
+    subroutine threshold_img(img_in, img_out, level)
+        type(image), intent(in)  :: img_in
+        type(image), intent(out) :: img_out
+        integer,     intent(in)  :: level
+        real              :: thres
+        real, allocatable :: intensities(:)
+        intensities = pack(img_in%get_rmat(), mask=.true.)
+        call detect_peak_thres(size(intensities), level, intensities, thres)
+        call img_out%copy(img_in)
+        call img_out%zero_below(thres)
+        deallocate(intensities)
+    end subroutine threshold_img
     
 end module simple_nano_picker_utils
