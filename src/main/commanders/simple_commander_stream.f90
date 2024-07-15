@@ -1963,7 +1963,12 @@ contains
                             selected_moldiam = maxval(entries(4,:))
                         endif
                         allocate(mask(nl),source=.false.)
-                        mask = abs(entries(4,:)-selected_moldiam) < 0.001
+                        !Cyril check
+                        if(params%box == 0) then
+                            mask = abs(entries(4,:)-selected_moldiam) < 0.001
+                        else
+                            mask = abs(entries(3,:)-params%box) < 0.001
+                        endif
                         nb   = count(mask)
                         if( nb < 1 )then
                             states(imic) = 0
@@ -1982,7 +1987,7 @@ contains
                                     params%box  = nint(entries(3,ind)) ! first time
                                 else
                                     if( nint(entries(3,ind)) /= params%box )then
-                                        THROW_HARD('INCONSISTENT EXTRACTION BOX SIZES')
+                                        THROW_HARD('INCONSISTENT EXTRACTION BOX SIZES '//trim(boxfname)//' '//int2str(params%box)//' '//int2str(nint(entries(3,ind))))
                                     endif
                                 endif
                             endif
