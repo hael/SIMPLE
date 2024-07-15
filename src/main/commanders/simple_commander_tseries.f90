@@ -1257,6 +1257,7 @@ contains
         type(image),      allocatable :: imgs(:)
         type(sp_project)              :: spproj
         character(len=:), allocatable :: cavgs_stk
+        character(len=STDLEN)         :: command_plot
         real,             allocatable :: rstates(:), rad_cc(:,:), rad_dists(:,:)
         logical,          allocatable :: state_mask(:)
         integer,          allocatable :: pinds(:)
@@ -1270,25 +1271,6 @@ contains
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
         call spproj%write_segment_inside('projinfo')
-
-        ! ncls = spproj%os_ptcl2D%get_n('class')
-        ! print *, "Number of cavgs: ", ncls
-        ! do icls = 1,ncls
-        !     call spproj%os_ptcl2D%get_pinds(icls, 'class', pinds)
-        !     if( .not. allocated(pinds) ) then
-        !         print *, icls, "EMPTY CLASS"
-        !         cycle
-        !     endif
-        !     !print *, "Class number", icls, "Number of ptcls in the class", size(pinds)
-        !     do i=1,size(pinds)
-        !         !print *, pinds(i)
-        !     enddo
-        !     tmax   = maxval(pinds)
-        !     tmin   = minval(pinds)
-        !     tstamp = tmin + (tmax-tmin)/2
-        !     print *, 'class / tstamp ', icls, tmin, tmax, tstamp
-        ! enddo
-
         ! retrieve cavgs stack
         call spproj%get_cavgs_stk(cavgs_stk, ncavgs, smpd, fail=.false.)
         if( ncavgs /= 0 )then
@@ -1339,9 +1321,8 @@ contains
             ! write cavgs & reprojections
             allocate(imgs(2*ncavgs), state_mask(ncavgs))
             cnt = 0
+            open(unit=25, file="radial_analysis.csv")
             do i = 1,2*ncavgs,2
-                open(unit=25, file="radial_analysis.csv")
-                !write(25, '(A)') "  Nclass  Time  Radial_dist   Radial_cc"
                 cnt = cnt + 1
                 if( rstates(cnt) > 0.5 )then
                     call imgs(i    )%new([params%box,params%box,1], smpd)
@@ -1356,7 +1337,7 @@ contains
                     tstamp = tmin + (tmax-tmin)/2
                     call imgs(i)%radial_cc(imgs(i+1), smpd, rad_cc(cnt,:), rad_dists(cnt,:)) 
                     do j = 1, size(rad_dists,dim=2)
-                        write(25,'(i6, i6, 2F18.6)') cnt, tstamp, rad_dists(cnt,j), rad_cc(cnt,j)
+                        write(25,'(i6, i6, 2F18.6, i6, i6)') cnt, tstamp, rad_dists(cnt,j), rad_cc(cnt,j), tmax-tmin, size(pinds)
                     enddo
                     ! filter out cavgs
                     call imgs(i    )%norm
@@ -1366,7 +1347,12 @@ contains
                     state_mask(cnt) = .false.
                 endif
                 write(25, '(A)') "          "
+
             enddo
+            command_plot = "gnuplot -e "//'"'//"set pm3d map; set zrange[-.4:1]; splot " //"'"//"radial_analysis.csv"//"'"// &
+            " u 2:3:4 ; set term png; set xlabel " //"'"//"Time"//"'"// "; set ylabel " //"'"//"Radius({\305})"// &
+            "'"// "; set title " //"'"//"Radial Cross-correlation"//"'"// "; set nokey; set output 'radial_analysis.png'; replot" //'"'
+            call execute_command_line(command_plot)
             close(25)
             cnt  = 0
             cnt2 = 1 ! needed because we have omissions
