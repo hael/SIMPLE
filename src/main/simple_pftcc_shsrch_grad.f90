@@ -309,20 +309,19 @@ contains
         real(dp) :: init_xy(2), xy(2), cost, stepx, stepy, cost1,cost2
         integer  :: ix, iy, irot1, irot2, lbx,lby,ubx,uby
         ! Lower bound
-        call pftcc_glob%gencorrs(self%reference, self%particle, corrs)
+        call pftcc_glob%gencorrs(self%reference, self%particle, corrs, kweight=.true.)
         irot        = maxloc(corrs, dim=1)
         lowest_cost = -corrs(irot)
         cxy         = [-lowest_cost, 0., 0.]
-        irot        = 0
         ! Two ambiguous in-plane rotations identified
-        call pftcc_glob%gencorrs_shinvariant(self%reference, self%particle, abscorrs)
+        call pftcc_glob%gencorrs_shinvariant(self%reference, self%particle, abscorrs, trim(params_glob%sh_inv_kw).eq.'yes')
         irot1 = maxloc(abscorrs,dim=1)
         irot2 = irot1 + pftcc_glob%get_pftsz()
         ! Coarse search for first rotation
         lbx = ceiling(self%ospec%limits(1,1))
         ubx = floor(self%ospec%limits(1,2))
         lby = ceiling(self%ospec%limits(2,1))
-        uby = floor(self%ospec%limits(1,2))
+        uby = floor(self%ospec%limits(2,2))
         self%cur_inpl_idx = irot1
         cost1   = huge(cost1)
         init_xy = 0.d0
@@ -377,10 +376,8 @@ contains
             cxy         = [-lowest_cost, self%ospec%x(1), self%ospec%x(2)]
         endif
         ! reporting particle shift
-        if( irot > 0 )then
-            call rotmat2d(pftcc_glob%get_rot(irot), rotmat)
-            cxy(2:3) = matmul(cxy(2:3), rotmat)
-        endif
+        call rotmat2d(pftcc_glob%get_rot(irot), rotmat)
+        cxy(2:3) = matmul(cxy(2:3), rotmat)
     end function minimize2
 
     subroutine coarse_search(self, lowest_cost, init_xy)
