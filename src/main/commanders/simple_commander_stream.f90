@@ -2242,6 +2242,7 @@ contains
             params%mskdiam = moldiam * 1.2
             write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER SET TO', params%mskdiam
         endif
+        if(params%nptcls_per_cls == 0) write(logfhandle,'(A)')   '>>> # PARTICLES PER CLASS WILL BE AUTO DETERMINED AFTER 100 IMPORTED MICROGRAPHS'
         ! initialise progress monitor
         call progressfile_init()
         ! master project file
@@ -2376,6 +2377,7 @@ contains
                 type(sp_project),     allocatable :: spprojs(:)
                 type(micproj_record), allocatable :: old_records(:)
                 character(len=:),     allocatable :: fname, abs_fname
+                real    :: avgmicptcls, nptcls_per_cls
                 integer :: iproj, n_spprojs, n_old, irec, n_completed, nptcls, nmics, imic, n_ptcls, first
                 n_imported = 0
                 n_ptcls    = 0
@@ -2395,14 +2397,6 @@ contains
                     if( (first == 0) .and. (nmics > 0) ) first = iproj
                 enddo
                 if( nmics == 0 ) return
-                ! Updates global parameters once and init 2D
-                if( n_old == 0 )then
-                    params%smpd = spprojs(first)%os_mic%get(1,'smpd')
-                    call spprojs(first)%read_segment('stk', trim(projectnames(first)))
-                    params%box  = nint(spprojs(first)%os_stk%get(1,'box'))
-                    call init_cluster2D_stream_dev(cline, spproj_glob, params%box, micspproj_fname)
-                    call cline%delete('ncls')
-                endif
                 ! import micrographs
                 n_completed = n_old + nmics
                 n_imported  = nmics
@@ -2432,6 +2426,32 @@ contains
                     enddo
                 enddo
                 nptcls_glob = nptcls_glob + n_ptcls ! global update
+                ! Updates global parameters once and init 2D
+                if(params%nptcls_per_cls == 0) then
+                    if(size(micproj_records) .gt. 100) then
+                        avgmicptcls = nptcls_glob / size(micproj_records)
+                        avgmicptcls = ceiling(avgmicptcls / 10) * 10.0
+                        ! these parameters may need tweaking
+                        nptcls_per_cls = 1000 * (20 + (0.15 * avgmicptcls))
+                        nptcls_per_cls = nptcls_per_cls / real(params%ncls_start)
+                        nptcls_per_cls = ceiling(nptcls_per_cls / 100) * 100.0
+                        write(logfhandle,'(A,I6)')   '>>> AVERAGE # PARTICLES PER MICROGRAPH : ', int(avgmicptcls)
+                        write(logfhandle,'(A,I6,A)') '>>> USING ', int(nptcls_per_cls), ' PARTICLES PER CLASS'
+                        params%nptcls_per_cls = int(nptcls_per_cls)
+                        call cline%set('nptcls_per_cls', nptcls_per_cls)
+                        params%smpd = spprojs(first)%os_mic%get(1,'smpd')
+                        call spprojs(first)%read_segment('stk', trim(projectnames(first)))
+                        params%box  = nint(spprojs(first)%os_stk%get(1,'box'))
+                        call init_cluster2D_stream_dev(cline, spproj_glob, params%box, micspproj_fname)
+                        call cline%delete('ncls')
+                    end if
+                else if( n_old == 0 )then
+                    params%smpd = spprojs(first)%os_mic%get(1,'smpd')
+                    call spprojs(first)%read_segment('stk', trim(projectnames(first)))
+                    params%box  = nint(spprojs(first)%os_stk%get(1,'box'))
+                    call init_cluster2D_stream_dev(cline, spproj_glob, params%box, micspproj_fname)
+                    call cline%delete('ncls')
+                endif
                 ! cleanup
                 do iproj = 1,n_spprojs
                     call spprojs(iproj)%kill
