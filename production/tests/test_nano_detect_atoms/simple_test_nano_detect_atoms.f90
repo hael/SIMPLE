@@ -32,7 +32,7 @@ offset           = 2
 peak_thres_level = 2
 dist_thres       = 3.
 circle           = .true.
-denoise          = .true.
+denoise          = .false.
 debug            = .true.
 use_euclids      = .false.
 use_zscores      = .false.
@@ -62,14 +62,16 @@ if (debug) call test_exp4%write_dist(  'corr_dist_after_dist_filter_high.csv','c
 if (debug) call test_exp4%write_dist(   'int_dist_after_dist_filter_high.csv','avg_int')
 if (debug) call test_exp4%write_dist('euclid_dist_after_dist_filter_high.csv','euclid' )
 call test_exp4%find_centers()
+call test_exp4%write_positions_and_scores('pos_and_scores_centers_pre_discard.csv','centers')
+call test_exp4%discard_atoms()
 call test_exp4%calc_per_atom_corr
 ! OUTPUT FILES
 call test_exp4%write_positions_and_scores('pos_and_scores.csv','pixels')
 call test_exp4%write_positions_and_scores('pos_and_scores_centers.csv','centers')
 call test_exp4%write_positions_and_scores('pos_and_intensities.csv','intensities')
 call test_exp4%write_positions_and_scores('pos_and_euclids.csv','euclid')
-call test_exp4%write_pdb('experimental_centers_thres')
-call test_exp4%compare_pick('experimental_centers_thres.pdb',trim(pdbfile_ref))
+call test_exp4%write_pdb('experimental_centers_discard')
+call test_exp4%compare_pick('experimental_centers_discard.pdb',trim(pdbfile_ref))
 call test_exp4%write_NP_image('result.mrc')
 call test_exp4%kill
 print *, ' '
