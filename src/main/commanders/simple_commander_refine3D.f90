@@ -10,7 +10,7 @@ use simple_qsys_env,         only: qsys_env
 use simple_cluster_seed,     only: gen_labelling
 use simple_commander_volops, only: postprocess_commander
 use simple_commander_mask,   only: automask_commander
-use simple_starproject,      only: starproject
+! use simple_starproject,      only: starproject
 use simple_commander_euclid
 use simple_qsys_funs
 implicit none
@@ -107,7 +107,6 @@ contains
         type(builder)       :: build
         type(qsys_env)      :: qenv
         type(chash)         :: job_descr
-        type(starproject)   :: starproj
         character(len=:),          allocatable :: vol_fname, prev_refine_path, target_name, fname_automasked
         character(len=LONGSTRLEN), allocatable :: list(:)
         character(len=STDLEN),     allocatable :: state_assemble_finished(:)
@@ -711,7 +710,7 @@ contains
                     call cline_prob_align%set('vol1',       params%vols(1))
                     call cline_prob_align%set('nparts',     1)
                     if( params%l_lpset ) call cline_prob_align%set('lp', params%lp)
-                    call xprob_align%execute_shmem( cline_prob_align )
+                    call xprob_align%execute( cline_prob_align )
                 endif
                 ! in strategy3D_matcher:
                 call refine3D_exec(cline, params%which_iter, converged)
@@ -972,34 +971,42 @@ contains
         type(qsys_env)                :: qenv
         type(chash)                   :: job_descr
         integer :: nptcls, ipart
-        call cline%set('mkdir', 'no')
-        call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-        allocate(ptcl_mask(1:params%nptcls))
-        if( params%l_batchfrac )then
-            call build%spproj_field%sample4batchupdate([1,params%nptcls],&
-            &params%batchfrac, nptcls, pinds, ptcl_mask)
+        if( associated(build_glob) )then
+            if( .not.associated(params_glob) )then
+                THROW_HARD('Builder & parameters must be associated for shared memory execution!')
+            endif
         else
-            if( params%startit == 1 ) call build%spproj_field%clean_updatecnt_sampled
-            if( params%l_frac_update )then
-                if( params%l_stoch_update )then
-                    call build%spproj_field%sample4update_rnd([1,params%nptcls],&
-                    &params%update_frac, nptcls, pinds, ptcl_mask, .true.) ! sampled incremented
+            call cline%set('mkdir',  'no')
+            call cline%set('stream', 'no')
+            call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
+        endif
+        ! call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
+        allocate(ptcl_mask(1:params_glob%nptcls))
+        if( params_glob%l_batchfrac )then
+            call build_glob%spproj_field%sample4batchupdate([1,params_glob%nptcls],&
+            &params_glob%batchfrac, nptcls, pinds, ptcl_mask)
+        else
+            if( params_glob%startit == 1 ) call build_glob%spproj_field%clean_updatecnt_sampled
+            if( params_glob%l_frac_update )then
+                if( params_glob%l_stoch_update )then
+                    call build_glob%spproj_field%sample4update_rnd([1,params_glob%nptcls],&
+                    &params_glob%update_frac, nptcls, pinds, ptcl_mask, .true.) ! sampled incremented
                 else
-                    call build%spproj_field%sample4update_rnd2([1,params%nptcls],&
-                    &params%update_frac, nptcls, pinds, ptcl_mask, .true.) ! sampled incremented
+                    call build_glob%spproj_field%sample4update_rnd2([1,params_glob%nptcls],&
+                    &params_glob%update_frac, nptcls, pinds, ptcl_mask, .true.) ! sampled incremented
                 endif
             else                                                    ! we sample all state > 0
-                call build%spproj_field%sample4update_all([1,params%nptcls],&
+                call build_glob%spproj_field%sample4update_all([1,params_glob%nptcls],&
                 &nptcls, pinds, ptcl_mask, .true.) ! sampled incremented
             endif
         endif
         ! increment update counter
-        call build%spproj_field%incr_updatecnt([1,params%nptcls], ptcl_mask)
+        call build_glob%spproj_field%incr_updatecnt([1,params_glob%nptcls], ptcl_mask)
         ! communicate to project file
-        call build%spproj%write_segment_inside(params%oritype)        
+        call build_glob%spproj%write_segment_inside(params_glob%oritype)        
         ! more prep
-        if( params%l_batchfrac )then
-            call eulprob_obj_glob%new(build%spproj_field)
+        if( params_glob%l_batchfrac )then
+            call eulprob_obj_glob%new(build_glob%spproj_field)
         else
             call eulprob_obj_glob%new(pinds)
         endif
@@ -1007,32 +1014,31 @@ contains
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab' ) ! required for distributed call
         ! execution
-        if( params%nparts == 1)then
+        if( params_glob%nparts == 1)then
             call xprob_tab%execute_shmem(cline_prob_tab)
         else
             ! setup the environment for distributed execution
-            call qenv%new(params%nparts, nptcls=params%nptcls)
+            call qenv%new(params_glob%nparts, nptcls=params_glob%nptcls)
             call cline_prob_tab%gen_job_descr(job_descr)
             ! schedule
             call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
         endif
         ! reading corrs from all parts
-        do ipart = 1, params%nparts
-            fname = trim(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
+        do ipart = 1, params_glob%nparts
+            fname = trim(DIST_FBODY)//int2str_pad(ipart,params_glob%numlen)//'.dat'
             call eulprob_obj_glob%read_tab_to_glob(fname)
         enddo
-        if( params%l_batchfrac )then
+        if( params_glob%l_batchfrac )then
             call eulprob_obj_glob%write_tab(trim(DIST_FBODY)//'.dat')
-            call eulprob_obj_glob%trim_tab(build%spproj_field)
+            call eulprob_obj_glob%trim_tab(build_glob%spproj_field)
         endif
         call eulprob_obj_glob%prob_assign
-        if( trim(params%sh_glob) .eq. 'yes' ) call eulprob_obj_glob%shift_assign
+        if( trim(params_glob%sh_glob) .eq. 'yes' ) call eulprob_obj_glob%shift_assign
         ! write the iptcl->(iref,istate) assignment
         fname = trim(ASSIGNMENT_FBODY)//'.dat'
         call eulprob_obj_glob%write_assignment(fname)
         ! cleanup
         call eulprob_obj_glob%kill
-        ! call build%kill_general_tbox
         call cline_prob_tab%kill
         call qenv%kill
         call job_descr%kill

@@ -936,6 +936,7 @@ contains
             else
                 trslim      = max(2.0, AHELIX_WIDTH / params%smpd / 2.0)
             endif
+            if( cline%defined('trs') ) trslim = params%trs
             if( l_autoscale )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
             endif
