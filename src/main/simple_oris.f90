@@ -145,6 +145,7 @@ type :: oris
     procedure          :: zero_inpl
     procedure          :: mul_shifts
     procedure          :: rnd_oris
+    procedure          :: gau_rnd_shifts
     procedure          :: rnd_ori
     procedure          :: rnd_inpls
     procedure          :: rnd_ctf
@@ -2004,6 +2005,15 @@ contains
             call self%o(i)%rnd_ori(trs, eullims)
         end do
     end subroutine rnd_oris
+
+    subroutine gau_rnd_shifts( self, std )
+        class(oris),    intent(inout) :: self
+        real,           intent(in)    :: std
+        integer :: i
+        do i=1,self%n
+            call self%o(i)%gau_rnd_shift(std)
+        end do
+    end subroutine gau_rnd_shifts
 
     subroutine transfer_2Dshifts( self_out, self_in )
         class(oris), intent(inout) :: self_out

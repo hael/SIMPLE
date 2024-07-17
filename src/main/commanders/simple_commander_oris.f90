@@ -129,6 +129,10 @@ contains
             ! introduce error in defocus parameters
             call build%spproj_field%introd_ctf_err(params%dferr)
         endif
+        if( cline%defined('sherr') )then
+            ! introduce gaussian error to 2D shifts
+            call build%spproj_field%gau_rnd_shifts(params%sherr)
+        endif
         if( cline%defined('e1') .or.&
             cline%defined('e2') .or.&
             cline%defined('e3') )then
