@@ -61,7 +61,7 @@ type :: ori
     generic            :: rnd_euler => rnd_euler_1, rnd_euler_2, rnd_euler_3, rnd_euler_4, rnd_euler_5
     procedure          :: rnd_ori
     procedure          :: rnd_inpl
-    procedure          :: rnd_shift
+    procedure          :: rnd_shift, gau_rnd_shift
     procedure          :: str2ori
     procedure          :: set_boxfile
     ! GETTERS
@@ -680,6 +680,19 @@ contains
         call self%set('x', x)
         call self%set('y', y)
     end subroutine rnd_shift
+
+    subroutine gau_rnd_shift( self, std )
+        class(ori), intent(inout) :: self
+        real,       intent(in)    :: std !< standard deviation
+        real :: sh(2)
+        if( std < 1e-3 )then
+            return
+        else
+            sh = self%get_2Dshift()
+            sh = [gasdev(sh(1),std), gasdev(sh(2),std)]
+            call self%set_shift(sh)
+        endif
+    end subroutine gau_rnd_shift
 
     subroutine str2ori( self, line, is_ptcl )
         use simple_sauron, only: sauron_ori_parser
