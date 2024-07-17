@@ -402,7 +402,7 @@ contains
                 call cline_prob_align%set('startit',    iter)
                 if( cline%defined('lp') ) call cline_prob_align%set('lp',params%lp)
                 ! reading corrs from all parts into one table
-                call xprob_align%execute( cline_prob_align )
+                call xprob_align%execute_shmem( cline_prob_align )
             endif
             ! exponential cooling of the randomization rate
             params%extr_iter = params%extr_iter + 1
@@ -980,7 +980,6 @@ contains
             call cline%set('stream', 'no')
             call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         endif
-        ! call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         allocate(ptcl_mask(1:params_glob%nptcls))
         if( params_glob%l_batchfrac )then
             call build_glob%spproj_field%sample4batchupdate([1,params_glob%nptcls],&
