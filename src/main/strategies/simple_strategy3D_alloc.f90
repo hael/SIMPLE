@@ -96,6 +96,8 @@ contains
         ! precalculate nearest neighbour matrix
         ! call build_glob%eulspace%nearest_proj_neighbors(4, s3D%proj_space_nnmat) ! 4 because self is included
         if( str_has_substr(params_glob%refine,'smpl') )then
+            if( allocated(s3D%smpl_refs_athres) ) deallocate(s3D%smpl_refs_athres)
+            if( allocated(s3D%smpl_inpl_athres) ) deallocate(s3D%smpl_inpl_athres)
             allocate(s3D%smpl_refs_athres(params_glob%nstates), s3D%smpl_inpl_athres(params_glob%nstates))
             do istate = 1, params_glob%nstates
                 s3D%smpl_refs_athres(istate) = calc_athres('dist',      state=istate)
