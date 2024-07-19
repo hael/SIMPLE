@@ -464,12 +464,13 @@ contains
 
     !>  \brief  determines the reference volume shift and map shifts back to particles
     !>          reference volume shifting is performed in shift_and_mask_refvol
-    subroutine calcrefvolshift_and_mapshifts2ptcls(cline, s, volfname, do_center, xyz )
+    subroutine calcrefvolshift_and_mapshifts2ptcls(cline, s, volfname, do_center, xyz, map_shift )
         class(cmdline),   intent(inout) :: cline
         integer,          intent(in)    :: s
         character(len=*), intent(in)    :: volfname
         logical,          intent(out)   :: do_center
         real,             intent(out)   :: xyz(3)
+        logical,          intent(in)    :: map_shift
         real    :: crop_factor
         logical :: has_been_searched
         do_center   = .true.
@@ -491,11 +492,13 @@ contains
             xyz       = 0.
             return
         endif
-        ! map back to particle oritentations
-        has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
-        if( has_been_searched )then
-            crop_factor = real(params_glob%box) / real(params_glob%box_crop)
-            call build_glob%spproj_field%map3dshift22d(-xyz(:)*crop_factor, state=s)
+        if( map_shift )then
+            ! map back to particle oritentations
+            has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
+            if( has_been_searched )then
+                crop_factor = real(params_glob%box) / real(params_glob%box_crop)
+                call build_glob%spproj_field%map3dshift22d(-xyz(:)*crop_factor, state=s)
+            endif
         endif
     end subroutine calcrefvolshift_and_mapshifts2ptcls
 

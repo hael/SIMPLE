@@ -463,7 +463,12 @@ contains
                     endif
                 endif
             endif
-            call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz)
+            if( trim(params_glob%refine).eq.'prob' )then
+                ! already mapping shifts in prob_tab
+                call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=.false.)
+            else
+                call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=.true.)
+            endif
             if( params_glob%l_lpset )then
                 if( params_glob%l_icm )then
                     call read_and_filter_refvols( cline, params_glob%vols_even(s), params_glob%vols_odd(s) )

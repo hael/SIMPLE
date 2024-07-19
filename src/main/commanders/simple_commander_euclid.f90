@@ -528,7 +528,7 @@ contains
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         ! read reference volume
         do s=1,params%nstates
-            call calcrefvolshift_and_mapshifts2ptcls( cline, s, params%vols(s), do_center, xyz)
+            call calcrefvolshift_and_mapshifts2ptcls( cline, s, params%vols(s), do_center, xyz, map_shift=.true.)
             call read_and_filter_refvols( cline, params%vols(s), params%vols(s) )
         end do
         find_start = max(1,                   calc_fourier_index(params%lpstart, params%box_crop, params%smpd_crop))
