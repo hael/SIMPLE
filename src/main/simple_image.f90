@@ -8242,7 +8242,7 @@ contains
         end select
     end subroutine flip
 
-    !> \brief rad_cc calculates the radial correlation function between two images/volumes and weight the intensities of the original vol
+    !> \brief rad_cc calculates the radial correlation function between two images/volumes and weight the intensities of the original image/volume
     subroutine radial_cc( self1, self2, smpd, rad_corrs, rad_dists )
         class(image),      intent(inout):: self1, self2
         real,              intent(in)   :: smpd
