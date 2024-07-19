@@ -85,6 +85,7 @@ type(simple_program), target :: binarize
 type(simple_program), target :: calc_pspec
 type(simple_program), target :: cavg_filter2D
 type(simple_program), target :: cavgsproc_nano
+type(simple_program), target :: ptclsproc_nano
 type(simple_program), target :: center
 type(simple_program), target :: cleanup2D
 type(simple_program), target :: center2D_nano
@@ -376,6 +377,7 @@ contains
         call new_calc_pspec
         call new_cavg_filter2D
         call new_cavgsproc_nano
+        call new_ptclsproc_nano
         call new_center
         call new_cleanup2D
         call new_center2D_nano
@@ -496,6 +498,7 @@ contains
         call push2prg_ptr_array(calc_pspec)
         call push2prg_ptr_array(cavg_filter2D)
         call push2prg_ptr_array(cavgsproc_nano)
+        call push2prg_ptr_array(ptclsproc_nano)
         call push2prg_ptr_array(center)
         call push2prg_ptr_array(cleanup2D)
         call push2prg_ptr_array(center2D_nano)
@@ -639,6 +642,8 @@ contains
                 ptr2prg => cavg_filter2D
             case('cavgsproc_nano')
                 ptr2prg => cavgsproc_nano
+            case('ptclsproc_nano')
+                ptr2prg => ptclsproc_nano
             case('center')
                 ptr2prg => center
             case('cleanup2D')
@@ -983,6 +988,7 @@ contains
         write(logfhandle,'(A)') format_str('VALIDATION PROGRAMS:', C_UNDERLINED)
         write(logfhandle,'(A)') vizoris%name
         write(logfhandle,'(A)') cavgsproc_nano%name
+        write(logfhandle,'(A)') ptclsproc_nano%name
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') format_str('MODEL BULDING/ANALYSIS PROGRAMS:', C_UNDERLINED)
         write(logfhandle,'(A)') detect_atoms%name
@@ -1532,6 +1538,31 @@ contains
         call cavgsproc_nano%set_input('comp_ctrls', 1, nthr)
         call cavgsproc_nano%set_input('comp_ctrls', 2, script)
     end subroutine new_cavgsproc_nano
+
+    subroutine new_ptclsproc_nano
+        ! PROGRAM SPECIFICATION
+        call ptclsproc_nano%new(&
+        &'ptclsproc_nano',&                                           ! name
+        &'Analysis of particle images inside a class along nanocrystal time-series using radial cross-correlation',& ! descr_short
+        &'is a program to analyze the core/surface dynamics of nanocrystals using particle images inside a class',& ! descr_long
+        &'single_exec',&                                              ! executable
+        &0, 1, 0, 1, 0, 1, 2, .true.)                                 ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! parameter input/output
+        call ptclsproc_nano%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call ptclsproc_nano%set_input('srch_ctrls', 1, pgrp)
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        call ptclsproc_nano%set_input('mask_ctrls', 1, mskdiam)
+        ! computer controls
+        call ptclsproc_nano%set_input('comp_ctrls', 1, nthr)
+        call ptclsproc_nano%set_input('comp_ctrls', 2, script)
+    end subroutine new_ptclsproc_nano
 
     subroutine new_center
         ! PROGRAM SPECIFICATION
