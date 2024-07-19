@@ -884,7 +884,6 @@ contains
         cline_reconstruct3D_mlreg = cline_reconstruct3D
         call cline_refine3D%set('prg',                'refine3D')
         call cline_refine3D%set('projfile',      params%projfile)
-        call cline_refine3D%set('center',                   'no')
         call cline_refine3D%set('pgrp',        params%pgrp_start)
         if( params%l_lp_est )then
             call cline_refine3D%set('lpstart', params%lpstart)
@@ -940,8 +939,8 @@ contains
             if( l_autoscale )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
             endif
+            call cline_refine3D%set('center', params%center)
             if( it > 1 )then
-                call cline_refine3D%set('center', params%center)
                 if( prev_box_crop == params%box_crop )then
                     call cline_refine3D%set('continue',  'yes')
                 else

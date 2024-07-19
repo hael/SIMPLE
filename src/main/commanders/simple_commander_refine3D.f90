@@ -893,7 +893,7 @@ contains
         end if
         ! read reference volumes and create polar projections
         do s=1,params%nstates
-            call calcrefvolshift_and_mapshifts2ptcls( cline, s, params%vols(s), do_center, xyz)
+            call calcrefvolshift_and_mapshifts2ptcls( cline, s, params%vols(s), do_center, xyz, map_shift=.true.)
             if( params_glob%l_lpset )then
                 if( params_glob%l_icm )then
                     call read_and_filter_refvols( cline, params_glob%vols_even(s), params_glob%vols_odd(s) )
