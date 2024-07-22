@@ -9,6 +9,7 @@ use simple_image,             only: image
 use simple_parameters,        only: parameters
 use simple_polarizer,         only: polarizer
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
+use simple_pftcc_shsrch_fm
 use simple_strategy2D3D_common
 use simple_simulator
 use simple_ctf
@@ -22,6 +23,7 @@ type(parameters)         :: p
 type(polarft_corrcalc)   :: pftcc
 type(polarizer)          :: img_copy
 type(pftcc_shsrch_grad)  :: grad_shsrch_obj
+type(pftcc_shsrch_fm)    :: grad_shsrch_fm_obj
 type(ori)                :: o
 type(oris)               :: os
 type(ctfparams)          :: ctfparms
@@ -29,16 +31,19 @@ type(euclid_sigma2)      :: eucl
 type(ctf)                :: tfun
 type(image), allocatable :: match_imgs(:), ptcl_match_imgs(:)
 type(image)              :: img, img_rot_pad
+integer(timer_int_kind)  :: t
+real(timer_int_kind)     :: rt
 logical                :: be_verbose=.false.
+logical                :: found
 real,    parameter     :: SHMAG=5.0
-real,    parameter     :: SNR  =0.0005
+real,    parameter     :: SNR  =0.005
 real,    parameter     :: BFAC =10.
 integer, parameter     :: N_PTCLS = 50
 logical, allocatable   :: ptcl_mask(:)
 integer, allocatable   :: pinds(:)
-real, allocatable      :: sigma2_group(:,:,:), orishifts(:,:), scores(:), scores2(:)
+real, allocatable      :: sigma2_group(:,:,:), orishifts(:,:), scores(:), scores2(:), scores3(:)
 real                   :: cxy(3), lims(2,2), lims_init(2,2), sh(2), rsh(2), e3, c, s, angerr, cenerr, aerr
-integer                :: xsh, ysh, xbest, ybest, i, irot, irot0, ne, no, iptcl, nptcls2update, ithr
+integer                :: i, irot, irot0, ne, no, iptcl, nptcls2update, ithr
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)',advance='no') 'ERROR! required arguments: '
 endif
@@ -129,7 +134,7 @@ call pftcc%reallocate_ptcls(p%nptcls, pinds)
 do ithr = 1,nthr_glob
     call ptcl_match_imgs(ithr)%new([p%box_crop, p%box_crop, 1], p%smpd_crop, wthreads=.false.)
 enddo
-allocate(scores(pftcc%get_nrots()),scores2(pftcc%get_pftsz()),source=0.)
+allocate(scores3(pftcc%get_nrots()),scores(pftcc%get_nrots()),scores2(pftcc%get_pftsz()),source=0.)
 
 ! references
 call restore_read_polarize_cavgs(0)
@@ -182,12 +187,35 @@ call pftcc%create_polar_absctfmats(b%spproj, 'ptcl2D')
 call pftcc%memoize_ptcls
 
 ! iptcl = 1
-! call pftcc%gencorrs(1,iptcl,scores)
-! call pftcc%gencorrs_shinvariant(1,iptcl,scores2,kweight=.false.)
+! call pftcc%gencorrs(1,iptcl,scores3)
+! call pftcc%gencorrs_abs(1,iptcl,scores(1:pftcc%pftsz),kweight=.true.)
+! call pftcc%gencorrs_mag(1,iptcl,scores2,kweight=.true.)
+! ! irot = maxloc(scores2,dim=1)
+! ! t = tic()
+! ! call pftcc%FM(1,iptcl,p%trs,1.,irot,sh)
+! ! print *,toc(t)
+! ! call pftcc%gencorrs(1,iptcl,scores,kweight=p%l_kweight_rot)
+! ! call pftcc%gencorrs_shinvariant(1,iptcl,scores2,kweight=.true.)
 ! do irot =1,pftcc%get_pftsz()
-!     print *,irot,scores(irot), scores2(irot), pftcc%calc_abscorr_rot(1,iptcl,irot)
+!     print *,irot,scores3(irot), pftcc%calc_corr_rot_shift(1,iptcl,[0.0,0.0],irot,.true.),scores(irot), pftcc%calc_abscorr_rot(1,iptcl,irot,.true.), scores2(irot), pftcc%calc_magcorr_rot(1,iptcl,irot,.true.)
 ! enddo
-! print *, arg(orishifts(iptcl,:)),pftcc%get_roind(360.-b%spproj_field%e3get(iptcl)), maxloc(scores,dim=1), maxloc(scores2,dim=1),maxloc(scores2,dim=1)+pftcc%get_pftsz()
+! ! print *, arg(orishifts(iptcl,:)),pftcc%get_roind(360.-b%spproj_field%e3get(iptcl)), maxloc(scores,dim=1), maxloc(scores2,dim=1),maxloc(scores2,dim=1)+pftcc%get_pftsz()
+! stop
+
+
+! iptcl = 1
+! call pftcc%gencorrs(1,iptcl,scores,kweight=p%l_kweight_rot)
+! call pftcc%gencorrs_abs(1,iptcl,scores2,kweight=.true.)
+! irot = maxloc(scores2,dim=1)
+! t = tic()
+! ! call pftcc%FM(1,iptcl,p%trs,1.,irot,sh)
+! print *,toc(t)
+! ! call pftcc%gencorrs(1,iptcl,scores,kweight=p%l_kweight_rot)
+! ! call pftcc%gencorrs_shinvariant(1,iptcl,scores2,kweight=.true.)
+! ! do irot =1,pftcc%get_pftsz()
+! !     print *,irot,scores(irot), scores2(irot), pftcc%calc_abscorr_rot(1,iptcl,irot)
+! ! enddo
+! ! print *, arg(orishifts(iptcl,:)),pftcc%get_roind(360.-b%spproj_field%e3get(iptcl)), maxloc(scores,dim=1), maxloc(scores2,dim=1),maxloc(scores2,dim=1)+pftcc%get_pftsz()
 ! stop
 
 ! shift search
@@ -195,32 +223,56 @@ lims(:,1)       = -p%trs
 lims(:,2)       =  p%trs
 lims_init(:,1)  = -SHC_INPL_TRSHWDTH
 lims_init(:,2)  =  SHC_INPL_TRSHWDTH
+! lims_init(:,1)       = -p%trs
+! lims_init(:,2)       =  p%trs
 angerr  = 0.
 cenerr  = 0.
 do iptcl = p%fromp,p%top
-    if( trim(p%sh_opt_angle).eq.'yes' )then
-        call grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=p%maxits_sh, opt_angle=.true., coarse_init=.false.)
-        call grad_shsrch_obj%set_indices(1, iptcl)
-        cxy = grad_shsrch_obj%minimize(irot)
+    if( trim(p%sh_inv).eq.'yes')then
+            call grad_shsrch_fm_obj%new(p%trs, 1.)
+            call pftcc%gencorrs_abs(1,iptcl,scores2,kweight=.false.)
+            ! call pftcc%gencorrs_mag(1,iptcl,scores2,kweight=.false.)
+            irot = maxloc(scores2,dim=1)
+            call grad_shsrch_fm_obj%minimize(1, iptcl, found, irot, cxy(1), cxy(2:3))
+            e3 = 360. - pftcc%get_rot(irot)
+            aerr = abs(b%spproj_field%e3get(iptcl)-e3)
+            if( aerr > 180. ) aerr = 360.-aerr
+            angerr = angerr + aerr
+            cenerr = cenerr + arg(cxy(2:3)-orishifts(iptcl,:))
+            call b%spproj_field%set(iptcl, 'e3', e3)
+            call b%spproj_field%set_shift(iptcl, b%spproj_field%get_2Dshift(iptcl)+cxy(2:3))
+            print *,iptcl,'found', aerr,arg(cxy(2:3)-orishifts(iptcl,:)),cxy(2:3),orishifts(iptcl,:)
     else
-        call grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=p%maxits_sh, opt_angle=.false., coarse_init=.false.)
-        call pftcc%gencorrs(1,iptcl,scores)
-        irot = irnd_uni(pftcc%get_nrots())
-        call grad_shsrch_obj%set_indices(1, iptcl)
-        ! cxy = grad_shsrch_obj%minimize(irot)
-        cxy = grad_shsrch_obj%minimize2(irot)
-    endif
-    if( irot > 0 )then
-        e3 = 360. - pftcc%get_rot(irot)
-        aerr = abs(b%spproj_field%e3get(iptcl)-e3)
-        if( aerr > 180. ) aerr = 360.-aerr
-        angerr = angerr + aerr
-        cenerr = cenerr + arg(cxy(2:3)-orishifts(iptcl,:))
-        call b%spproj_field%set(iptcl, 'e3', e3)
-        call b%spproj_field%set_shift(iptcl, b%spproj_field%get_2Dshift(iptcl)+cxy(2:3))
-        print *,iptcl,'found', aerr,arg(cxy(2:3)-orishifts(iptcl,:)),orishifts(iptcl,:)
-    else
-        print *,iptcl,orishifts(iptcl,:),cxy
+        if( trim(p%sh_opt_angle).eq.'yes' )then
+            call grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=p%maxits_sh, opt_angle=.true., coarse_init=.false.)
+            call grad_shsrch_obj%set_indices(1, iptcl)
+            call pftcc%gencorrs(1,iptcl,scores)
+            irot0 = maxloc(scores,dim=1)
+            cxy = grad_shsrch_obj%minimize(irot)
+        else
+            call grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=p%maxits_sh, opt_angle=.false., coarse_init=.false.)
+            call pftcc%gencorrs(1,iptcl,scores,kweight=p%l_kweight_rot)
+            irot = irnd_uni(pftcc%get_nrots())
+            call grad_shsrch_obj%set_indices(1, iptcl)
+            ! cxy = grad_shsrch_obj%minimize(irot)
+            cxy = grad_shsrch_obj%minimize2(irot)
+        endif
+        if( irot > 0 )then
+            e3 = 360. - pftcc%get_rot(irot)
+            aerr = abs(b%spproj_field%e3get(iptcl)-e3)
+            if( aerr > 180. ) aerr = 360.-aerr
+            angerr = angerr + aerr
+            cenerr = cenerr + arg(cxy(2:3)-orishifts(iptcl,:))
+            call b%spproj_field%set(iptcl, 'e3', e3)
+            call b%spproj_field%set_shift(iptcl, b%spproj_field%get_2Dshift(iptcl)+cxy(2:3))
+            print *,iptcl,'found', aerr,arg(cxy(2:3)-orishifts(iptcl,:)),cxy(2:3),orishifts(iptcl,:)
+        else
+            e3 = 360. - pftcc%get_rot(irot0)
+            aerr = abs(b%spproj_field%e3get(iptcl)-e3)
+            if( aerr > 180. ) aerr = 360.-aerr
+            angerr = angerr + aerr
+            print *,iptcl,aerr,orishifts(iptcl,:),cxy
+        endif
     endif
 enddo
 angerr = angerr / real(p%nptcls)

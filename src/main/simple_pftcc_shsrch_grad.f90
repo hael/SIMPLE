@@ -314,7 +314,7 @@ contains
         lowest_cost = -corrs(irot)
         cxy         = [-lowest_cost, 0., 0.]
         ! Two ambiguous in-plane rotations identified
-        call pftcc_glob%gencorrs_shinvariant(self%reference, self%particle, abscorrs, trim(params_glob%sh_inv_kw).eq.'yes')
+        call pftcc_glob%gencorrs_abs(self%reference, self%particle, abscorrs, trim(params_glob%sh_inv_kw).eq.'yes')
         irot1 = maxloc(abscorrs,dim=1)
         irot2 = irot1 + pftcc_glob%get_pftsz()
         ! Coarse search for first rotation
