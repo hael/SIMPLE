@@ -748,17 +748,19 @@ use simple_stat
         call nano%simulate_atoms(simatms=simatms)
         call nano%validate_atoms(simatms=simatms)
         call nano%kill
-    end subroutine
+    end subroutine calc_per_atom_corr
 
     ! input filename with no extension
     subroutine write_pdb( self, filename )
         class(nano_picker),         intent(inout) :: self
         character(len=*), optional, intent(in)    :: filename
         integer, allocatable :: pos_inds(:)
-        real,    allocatable :: coords(:,:)
-        integer              :: nbox, iimg
+        real,    allocatable :: coords(:,:), pos_scores(:)
+        integer              :: nbox, iimg, locmin(1)
         real                 :: pos(3)
         pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
+        pos_scores = pack(self%box_scores(:,:,:), mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
+        locmin = minloc(pos_scores)
         nbox     = size(pos_inds, dim=1)
         allocate(coords(nbox,3))
         do iimg = 1, nbox
@@ -1010,9 +1012,9 @@ use simple_stat
         logical                  :: cs_here, corr_here ! true by default, otherwise take input vals
         logical                  :: is_peak
         logical, allocatable     :: selected_pos(:)
-        real                     :: corr_thres_here, corr_thres_sigma, cs_thres_here
+        real                     :: corr_thres_here, corr_thres_sigma, cs_thres_here, pos(3), maxrad
         real,    allocatable     :: corrs(:), positions(:,:)
-        integer                  :: ibox, nbox, xoff, yoff, zoff, ipeak, npeaks
+        integer                  :: ibox, nbox, xoff, yoff, zoff, ipeak, npeaks, edge_pos(3)
         integer, allocatable     :: pos_inds(:), contact_scores(:)
         type(nanoparticle)       :: nano 
         type(image)              :: simatms
@@ -1037,11 +1039,23 @@ use simple_stat
             call nano%new(trim(self%raw_filename))
             call nano%set_atomic_coords(trim(self%pdb_filename))
             call nano%simulate_atoms(simatms=simatms)
-            call nano%validate_atoms(simatms=simatms)
-            corrs    = nano%get_valid_corrs()
+            call simatms%write('simatms1.mrc')
+            call self%nano_img%write('nano_img.mrc')
+            ! call nano%validate_atoms(simatms=simatms)
             pos_inds = pack(self%inds_offset(:,:,:), mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
             nbox     = size(pos_inds)
             allocate(selected_pos(nbox), source=.true.)
+            allocate(corrs(nbox))
+            maxrad  = (self%radius * 1.5) / self%smpd ! in pixels
+            print *, 'maxrad = ', maxrad
+            open(60,file='corrs.csv')
+            do ibox = 1, nbox
+                pos      = self%center_positions(pos_inds(ibox),:)
+                edge_pos = self%positions(pos_inds(ibox),:)
+                corrs(ibox) = one_atom_valid_corr(pos, maxrad, self%nano_img, simatms)
+                write(60,'(1x,f9.4,a,f9.4,a,f9.4,a,f6.4,a)') real(edge_pos(1)), ',', real(edge_pos(2)), ',', real(edge_pos(3)), ',', corrs(ibox)
+            end do
+            close(60)
             if (present(corr_thres)) then
                 corr_thres_here = corr_thres
             else
@@ -1050,9 +1064,7 @@ use simple_stat
             end if
             print *, 'Valid_corr threshold: ', corr_thres_here
             do ibox = 1, nbox
-                if (corrs(ibox) < corr_thres_here) then
-                    selected_pos(ibox) = .false.
-                end if
+                if (corrs(ibox) < corr_thres_here) selected_pos(ibox) = .false.
             end do
             pos_inds = pack(pos_inds, mask=selected_pos)
             npeaks   = size(pos_inds)
@@ -1078,6 +1090,7 @@ use simple_stat
             deallocate(pos_inds, selected_pos)
             call nano%kill
             self%wrote_pdb = .false.
+            deallocate(corrs)
         end if
         ! remove atoms with low contact scores (cs)
         if(cs_here) then
@@ -1125,7 +1138,6 @@ use simple_stat
             !$omp end parallel do
             deallocate(pos_inds, selected_pos)
         end if
-         
     end subroutine discard_atoms
 
     subroutine kill( self )

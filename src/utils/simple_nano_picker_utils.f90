@@ -37,7 +37,6 @@ implicit none
             write(22,'(7(f8.3,a))') coords_1(1,i), ',', coords_1(2,i), ',', coords_1(3,i), ',', closest_coord(1), ',', closest_coord(2), ',', closest_coord(3), ',', min_dist
             deallocate(dists)
         enddo
-    
         close(22)
     end subroutine find_closest
     
@@ -51,7 +50,7 @@ implicit none
         do cc = 1, size(coords, dim = 1)
             call centers_pdb%set_name(cc,params_glob%element)
             call centers_pdb%set_element(cc,params_glob%element)
-            call centers_pdb%set_coord(cc,coords(cc,:)*smpd)
+            call centers_pdb%set_coord(cc,(coords(cc,:))*smpd)
             !call centers_pdb%set_beta(cc,nano%atominfo(cc)%valid_corr) ! use per atom valid corr
             call centers_pdb%set_resnum(cc,cc)
         enddo
@@ -106,5 +105,22 @@ implicit none
         end if
         deallocate(small_box)
     end function logical_box
+
+    function one_atom_valid_corr(coord, maxrad, raw_img, simatms) result(valid_corr)
+        real,        intent(in) :: coord(3)
+        real,        intent(in) :: maxrad
+        type(image), intent(in) :: raw_img, simatms
+        real              :: valid_corr ! ouput
+        real, allocatable :: pixels1(:), pixels2(:)
+        integer           :: winsz, npix_in, npix_out1, npix_out2, ijk(3)
+        winsz     = ceiling(maxrad)
+        npix_in   = (2 * winsz + 1)**3
+        allocate(pixels1(npix_in), pixels2(npix_in), source=0.)
+        ijk = nint(coord)
+        call raw_img%win2arr_rad(ijk(1), ijk(2), ijk(3), winsz, npix_in, maxrad, npix_out1, pixels1)
+        call simatms%win2arr_rad(ijk(1), ijk(2), ijk(3), winsz, npix_in, maxrad, npix_out2, pixels2)
+        valid_corr = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))
+        deallocate(pixels1,pixels2)
+    end function one_atom_valid_corr
     
 end module simple_nano_picker_utils
