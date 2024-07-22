@@ -288,11 +288,12 @@ contains
        call self%img_cc%get_nccs(n)
     end function get_natoms
 
+    ! returning center positions alongside valid corr to 
     function get_valid_corrs( self ) result( corrs )
         class(nanoparticle), intent(in) :: self
         real, allocatable :: corrs(:)
         if( allocated(self%atominfo) )then
-            allocate(corrs(size(self%atominfo)), source=self%atominfo(:)%valid_corr)
+            allocate(corrs(size(self%atominfo)), source = self%atominfo(:)%valid_corr)
         endif
     end function get_valid_corrs
 
@@ -971,7 +972,7 @@ contains
         real, optional,      intent(out)   :: avg_valid_corr
         real, allocatable :: centers(:,:)           ! coordinates of the atoms in PIXELS
         real, allocatable :: pixels1(:), pixels2(:) ! pixels extracted around the center
-        real    :: maxrad, sum
+        real    :: maxrad
         integer :: ijk(3), npix_in, npix_out1, npix_out2, i, winsz
         type(stats_struct) :: corr_stats
         maxrad  = (self%theoretical_radius * 1.5) / self%smpd ! in pixels
@@ -980,7 +981,6 @@ contains
         centers = self%atominfo2centers()
         allocate(pixels1(npix_in), pixels2(npix_in), source=0.)
         ! calculate per-atom correlations
-        sum = 0
         do i = 1, self%n_cc
             ijk = nint(centers(:,i))
             call self%img_raw%win2arr_rad(ijk(1), ijk(2), ijk(3), winsz, npix_in, maxrad, npix_out1, pixels1)
@@ -1643,7 +1643,6 @@ contains
             do j = jlo, jhi
                 do i = ilo, ihi
                     r = (1.*(/i, j, k/) - center) * self%smpd
-                    !print *, 'r = ', r
                     if( norm_2(r) < fit_rad )then
                         int = rmat(i,j,k)
                         if( int > 0 )then
