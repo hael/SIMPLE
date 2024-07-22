@@ -2,6 +2,7 @@
 module simple_strategy3D_srch
 include 'simple_lib.f08'
 use simple_pftcc_shsrch_grad,  only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
+use simple_pftcc_shsrch_fm,    only: pftcc_shsrch_fm
 use simple_polarft_corrcalc,   only: pftcc_glob, polarft_corrcalc
 use simple_cartft_corrcalc,    only: cftcc_glob
 use simple_cftcc_shsrch_grad,  only: cftcc_shsrch_grad
@@ -27,6 +28,7 @@ type strategy3D_srch
     character(len=:), allocatable :: refine              !< 3D refinement flag
     type(pftcc_shsrch_grad) :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
     type(cftcc_shsrch_grad) :: cart_shsrch_obj           !< origin shift search object in cartesian, L-BFGS with gradient
+    type(pftcc_shsrch_fm)   :: fm_shsrch_obj
     type(ori)               :: o_prev                    !< previous orientation, used in continuous search
     type(oris)              :: opeaks                    !< peak orientations to consider for refinement
     integer                 :: iptcl         = 0         !< global particle index
@@ -109,6 +111,7 @@ contains
         self%nrots = pftcc_glob%get_nrots()
         call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
                 &shbarrier=params_glob%shbarrier, maxits=params_glob%maxits_sh, opt_angle=(trim(params_glob%sh_opt_angle).eq.'yes'))
+        if( self%doshift .and. (trim(self%refine).eq.'shift_fm') ) call self%fm_shsrch_obj%new(params_glob%trs,0.2)
         self%exists = .true.
     end subroutine new
 
@@ -249,6 +252,7 @@ contains
         class(strategy3D_srch), intent(inout) :: self
         call self%grad_shsrch_obj%kill
         call self%cart_shsrch_obj%kill
+        call self%fm_shsrch_obj%kill
         call self%opeaks%kill
         call self%o_prev%kill
     end subroutine kill

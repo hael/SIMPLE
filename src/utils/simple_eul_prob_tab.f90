@@ -274,7 +274,7 @@ contains
                     ithr  = omp_get_thread_num() + 1
                     do iproj = 1, params_glob%nspace
                         ! to determine the directions whose shift will be searched
-                        call pftcc%gencorrs_shinvariant(iref + iproj, iptcl, scores_inpl(:,ithr),kweight=l_kw)
+                        call pftcc%gencorrs_abs(iref + iproj, iptcl, scores_inpl(:,ithr),kweight=l_kw)
                         scores_inpl(:,ithr) = eulprob_dist_switch(scores_inpl(:,ithr))
                         irot = angle_sampling(scores_inpl(:,ithr), scores_inpl_sorted(:,ithr), scores_inds_sorted(:,ithr), inpl_athres)
                         dists_projs(iproj,ithr) = scores_inpl(irot,ithr)
