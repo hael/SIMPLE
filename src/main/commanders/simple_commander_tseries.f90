@@ -1252,65 +1252,60 @@ contains
     end subroutine exec_autorefine3D_nano
 
     subroutine exec_ptclsproc_nano( self, cline )
-        use simple_strategy2D3D_common, only: read_imgbatch, prepimgbatch
+        use simple_strategy2D3D_common, only: read_imgbatch, prepimgbatch, discrete_read_imgbatch
         class(ptclsproc_nano_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         class(parameters), pointer    :: params_ptr => null()
         type(parameters)              :: params
-        type(image),      allocatable :: ptcl_imgs(:)
         type(builder)                 :: build
+        type(image)                   :: cavg_img
         type(sp_project)              :: spproj
         character(len=:), allocatable :: cavgs_stk
         character(len=:), allocatable :: ptcls_stk
         real,             allocatable :: rad_cc(:,:), rad_dists(:,:)
         integer,          allocatable :: pinds(:)
-        integer :: cnt, iptcl, icavgs, ncavgs, sz_cls2D, j, nptcls
-        real    :: smpd
+        integer            :: cnt, iptcl, icavgs, ncavgs, sz_cls2D, j, nptcls
+        real               :: smpd, corr, tmpstap
         call cline%set('mkdir', 'yes') ! because we want to create the directory X_ptclsproc_nano & copy the project file
         call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
         params%mkdir = 'no'            ! to prevent the input vol to be appended with ../
         call cline%set('mkdir', 'no')  ! because we do not want a nested directory structure in the execution directory
         ! read the project file
         call spproj%read(params%projfile)
-        call build%init_params_and_build_general_tbox(cline,params)
+        call build%init_params_and_build_general_tbox(cline, params)
         call build%spproj%update_projinfo(cline)
-        !nptcls     = build%spproj%get_nptcls()
-        !print *, "Number of ptcls ", nptcls
-        !ncavgs     = size(pinds)
         call spproj%update_projinfo(cline)
         call spproj%write_segment_inside('projinfo')
         ! retrieve number of cavgs stack
         call spproj%get_cavgs_stk(cavgs_stk, ncavgs, smpd, fail=.false.)
         !sz_cls2D = spproj%os_cls2D%get_noris()
         print *, "Number of cavgs ", ncavgs
-        cnt = 0
-        do icavgs = 1, ncavgs-1
-            cnt = cnt + 1
-            call spproj%os_ptcl2D%get_pinds(cnt, 'class', pinds)
+        do icavgs = 1, ncavgs
+            cnt = 0
+            call spproj%os_ptcl2D%get_pinds(icavgs, 'class', pinds)
             nptcls = size(pinds)
-            print *, "class number", cnt, "number of particles", nptcls, icavgs
+            call cavg_img%new([params%box,params%box,1], smpd)
+            call cavg_img%read(cavgs_stk,     icavgs)
+            write(logfhandle,'(2(A,I3))')'>>> PROCESSING CLASS ', icavgs, ' NUMBER OF PARTICLES ', nptcls
             if( .not. allocated(pinds) ) cycle
-            allocate(ptcl_imgs(nptcls), rad_cc(nptcls,params%box/2), rad_dists(nptcls,params%box/2))
-            open(unit=25, file="radial_analysis.csv")
+            !allocate(rad_cc(nptcls,params%box/2), rad_dists(nptcls,params%box/2))
+            open(unit=25, file="ptcls_cc_analysis.csv")
+            !call discrete_read_imgbatch(nptcls, pinds(:), [1,nptcls] )
             do iptcl = 1, nptcls
-                ! compute radial cross-correlation between ptcl_imgs
+                cnt = cnt + 1
+                ! compute cross-correlation between particle image and the class average image
                 call prepimgbatch(nptcls)
                 call read_imgbatch([1, nptcls])
-                !call spproj%get_stkname_and_ind('ptcl2D', iptcl, stk, ind_in_stk)
-                !call dstkio_r%read(stk, ind_in_stk, img)
-                !call stkio_w%write(cnt, img)
-                call ptcl_imgs(iptcl    )%new([params%box,params%box,1], smpd)
-                call ptcl_imgs(iptcl + 1)%new([params%box,params%box,1], smpd)
-                !call ptcl_imgs(iptcl    )%read(ptcls_stk,     cnt)
-                !call ptcl_imgs(iptcl + 1)%read(ptcls_stk,     cnt+1)
-                ! ptcl images are weighted using radial cross-correlation
-                !call ptcl_imgs(iptcl)%radial_cc(ptcl_imgs(iptcl+1), smpd, rad_cc(cnt,:), rad_dists(cnt,:)) 
-                !do j = 1, size(rad_dists,dim=2)
-                !    write(25,'(i6, i6, 2F18.6, i6, i6)') cnt, pinds(cnt), rad_dists(cnt,j), rad_cc(cnt,j)
-                !enddo
+                call discrete_read_imgbatch(nptcls, pinds(:), [1,nptcls] )
+                corr = build%imgbatch(iptcl)%real_corr(cavg_img)
+                write(25,'(2i6, 2F18.6)') icavgs, pinds(cnt), real(cnt)/real(nptcls), corr
+                ! if( corr < 0. ) print *, 'CORR BELOW ZERO', corr
+                ! tmpstap   = abs(pinds(iptcl+1)-pinds(iptcl))/2.
+                ! write(25,'(3i6, 3F18.6)') icavgs, pinds(iptcl), pinds(iptcl+1), tmpstap, real(cnt)/real(nptcls), corr
             enddo
             write(25, '(A)') "          "
-            deallocate(ptcl_imgs, rad_cc, rad_dists)
+            call cavg_img%kill
+            !deallocate(rad_cc, rad_dists)
         enddo
         call exec_cmdline('rm -rf fsc* fft* stderrout')
         ! deallocate
