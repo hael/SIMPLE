@@ -467,8 +467,8 @@ contains
                 endif
             endif
             if( trim(params_glob%refine).eq.'prob' )then
-                ! already mapping shifts in prob_tab
-                call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=.false.)
+                ! already mapping shifts in prob_tab with shared-memory execution
+                call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=l_distr_exec_glob)
             else
                 call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=.true.)
             endif
