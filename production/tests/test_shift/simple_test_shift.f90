@@ -125,6 +125,7 @@ call restore_read_polarize_cavgs(0)
 do iptcl = 1,p%nptcls
     ithr  = omp_get_thread_num() + 1
     call prepimg4align(iptcl, b%imgbatch(iptcl), ptcl_match_imgs(ithr))
+    call b%imgbatch(iptcl)%ifft
     call b%img_crop_polarizer%polarize(pftcc, ptcl_match_imgs(ithr), iptcl, .true., .true.)
     call pftcc%set_eo(iptcl, nint(b%spproj_field%get(iptcl,'eo'))<=0 )
 end do
