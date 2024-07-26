@@ -111,7 +111,7 @@ contains
         self%nrots = pftcc_glob%get_nrots()
         call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
                 &shbarrier=params_glob%shbarrier, maxits=params_glob%maxits_sh, opt_angle=(trim(params_glob%sh_opt_angle).eq.'yes'))
-        if( self%doshift .and. (trim(self%refine).eq.'shift_fm') ) call self%fm_shsrch_obj%new(params_glob%trs,0.2)
+        if( self%doshift .and. (trim(self%refine).eq.'shift_fm') ) call self%fm_shsrch_obj%new(params_glob%trs,1.)
         self%exists = .true.
     end subroutine new
 

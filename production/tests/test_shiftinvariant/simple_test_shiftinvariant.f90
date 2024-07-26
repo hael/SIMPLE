@@ -35,15 +35,15 @@ integer(timer_int_kind)  :: t
 real(timer_int_kind)     :: rt
 logical                :: be_verbose=.false.
 logical                :: found
-real,    parameter     :: SHMAG=5.0
-real,    parameter     :: SNR  =0.005
-real,    parameter     :: BFAC =10.
+real,    parameter     :: SHMAG=8.
+real,    parameter     :: SNR  =0.001
+real,    parameter     :: BFAC =20.
 integer, parameter     :: N_PTCLS = 50
 logical, allocatable   :: ptcl_mask(:)
 integer, allocatable   :: pinds(:)
-real, allocatable      :: sigma2_group(:,:,:), orishifts(:,:), scores(:), scores2(:), scores3(:)
+real, allocatable      :: sigma2_group(:,:,:), orishifts(:,:), scores(:), scores2(:), scores3(:), vals(:)
 real                   :: cxy(3), lims(2,2), lims_init(2,2), sh(2), rsh(2), e3, c, s, angerr, cenerr, aerr
-integer                :: i, irot, irot0, ne, no, iptcl, nptcls2update, ithr
+integer                :: i, irot, irot0, ne, no, iptcl, nptcls2update, ithr, nfound, iref
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)',advance='no') 'ERROR! required arguments: '
 endif
@@ -91,6 +91,7 @@ do iptcl = p%fromp,p%top
     call os%set(iptcl,'state',1.)
     call os%set(iptcl,'w',    1.)
     call os%set(iptcl,'class',1.)
+    call os%set(iptcl,'proj', real(p%iptcl))
     sh  = [gasdev( 0., SHMAG), gasdev( 0., SHMAG)]
     call os%set(iptcl,'x',sh(1))
     call os%set(iptcl,'y',sh(2))
@@ -137,7 +138,8 @@ enddo
 allocate(scores3(pftcc%get_nrots()),scores(pftcc%get_nrots()),scores2(pftcc%get_pftsz()),source=0.)
 
 ! references
-call restore_read_polarize_cavgs(0)
+! call restore_read_polarize_cavgs(0)
+call read_polarize_refs(0)
 
 ! particles
 !$omp parallel do default(shared) private(iptcl,ithr)&
@@ -158,7 +160,8 @@ ne = 0
 no = 0
 do iptcl = p%fromp,p%top
     call b%spproj_field%get_ori(iptcl, o)
-    call eucl%calc_sigma2(pftcc, iptcl, o, 'class')
+    ! call eucl%calc_sigma2(pftcc, iptcl, o, 'class')
+    call eucl%calc_sigma2(pftcc, iptcl, o, 'proj')
     if( o%get_eo() == 0 )then
         ne = ne+1
         sigma2_group(1,1,:) = sigma2_group(1,1,:) + eucl%sigma2_part(:,iptcl)
@@ -176,6 +179,7 @@ call eucl%read_groups(b%spproj_field, ptcl_mask)
 do iptcl = p%fromp,p%top
     ithr  = omp_get_thread_num() + 1
     call b%spproj_field%set_shift(iptcl, [0.,0.]) !!!
+    call b%imgbatch(iptcl)%read('particles.mrc',iptcl)
     call prepimg4align(iptcl, b%imgbatch(iptcl), ptcl_match_imgs(ithr))
     call ptcl_match_imgs(ithr)%ifft
     call ptcl_match_imgs(ithr)%write('prepped_particles.mrc', iptcl)
@@ -186,35 +190,35 @@ enddo
 call pftcc%create_polar_absctfmats(b%spproj, 'ptcl2D')
 call pftcc%memoize_ptcls
 
-! iptcl = 1
-! call pftcc%gencorrs(1,iptcl,scores3)
-! call pftcc%gencorrs_abs(1,iptcl,scores(1:pftcc%pftsz),kweight=.true.)
-! call pftcc%gencorrs_mag(1,iptcl,scores2,kweight=.true.)
-! ! irot = maxloc(scores2,dim=1)
-! ! t = tic()
-! ! call pftcc%FM(1,iptcl,p%trs,1.,irot,sh)
-! ! print *,toc(t)
-! ! call pftcc%gencorrs(1,iptcl,scores,kweight=p%l_kweight_rot)
-! ! call pftcc%gencorrs_shinvariant(1,iptcl,scores2,kweight=.true.)
-! do irot =1,pftcc%get_pftsz()
-!     print *,irot,scores3(irot), pftcc%calc_corr_rot_shift(1,iptcl,[0.0,0.0],irot,.true.),scores(irot), pftcc%calc_abscorr_rot(1,iptcl,irot,.true.), scores2(irot), pftcc%calc_magcorr_rot(1,iptcl,irot,.true.)
+
+! nfound = 0
+! allocate(vals(p%fromp:p%top),source=0.)
+! t = tic()
+! do iptcl = p%fromp,p%top
+!     do iref = p%fromp,p%top
+!         if( trim(p%sh_inv).eq.'yes')then
+!             scores = -1.0
+!             call pftcc%gencorrs_mag_cc(iref,iptcl,scores3(1:pftcc%get_pftsz()),.true.)
+!         else
+!             call pftcc%gencorrs(iref,iptcl,scores3)
+!         endif
+!         ! call pftcc%gencorrs_mag(iptcl,p%iptcl,scores(1:pftcc%pftsz),kweight=.true.)
+!         vals(iref) = maxval(scores3)
+!         ! print *,iptcl,maxval(scores3), maxval(scores), orishifts(p%iptcl,:)
+!     enddo
+!     print *,iptcl,maxloc(vals,dim=1),maxval(vals)
+!     if( maxloc(vals,dim=1) == p%iptcl ) nfound = nfound+1
 ! enddo
-! ! print *, arg(orishifts(iptcl,:)),pftcc%get_roind(360.-b%spproj_field%e3get(iptcl)), maxloc(scores,dim=1), maxloc(scores2,dim=1),maxloc(scores2,dim=1)+pftcc%get_pftsz()
+! print *,nfound, toc(t)
 ! stop
 
-
 ! iptcl = 1
-! call pftcc%gencorrs(1,iptcl,scores,kweight=p%l_kweight_rot)
-! call pftcc%gencorrs_abs(1,iptcl,scores2,kweight=.true.)
-! irot = maxloc(scores2,dim=1)
-! t = tic()
-! ! call pftcc%FM(1,iptcl,p%trs,1.,irot,sh)
-! print *,toc(t)
-! ! call pftcc%gencorrs(1,iptcl,scores,kweight=p%l_kweight_rot)
-! ! call pftcc%gencorrs_shinvariant(1,iptcl,scores2,kweight=.true.)
-! ! do irot =1,pftcc%get_pftsz()
-! !     print *,irot,scores(irot), scores2(irot), pftcc%calc_abscorr_rot(1,iptcl,irot)
-! ! enddo
+! call pftcc%gencorrs(p%iptcl,iptcl,scores3)
+! call pftcc%gencorrs_abs(p%iptcl,iptcl,scores(1:pftcc%pftsz),kweight=.false.)
+! call pftcc%gencorrs_mag(p%iptcl,iptcl,scores2,kweight=.false.)
+! do irot =1,pftcc%get_pftsz()
+!     print *,irot,scores3(irot), pftcc%calc_corr_rot_shift(p%iptcl,iptcl,[0.0,0.0],irot,.false.),scores(irot), pftcc%calc_abscorr_rot(p%iptcl,iptcl,irot,.false.), scores2(irot), pftcc%calc_magcorr_rot(p%iptcl,iptcl,irot,.false.)
+! enddo
 ! ! print *, arg(orishifts(iptcl,:)),pftcc%get_roind(360.-b%spproj_field%e3get(iptcl)), maxloc(scores,dim=1), maxloc(scores2,dim=1),maxloc(scores2,dim=1)+pftcc%get_pftsz()
 ! stop
 
@@ -230,10 +234,9 @@ cenerr  = 0.
 do iptcl = p%fromp,p%top
     if( trim(p%sh_inv).eq.'yes')then
             call grad_shsrch_fm_obj%new(p%trs, 1.)
-            call pftcc%gencorrs_abs(1,iptcl,scores2,kweight=.false.)
-            ! call pftcc%gencorrs_mag(1,iptcl,scores2,kweight=.false.)
+            call pftcc%gencorrs_mag_cc(p%iptcl,iptcl,scores2,kweight=.false.)
             irot = maxloc(scores2,dim=1)
-            call grad_shsrch_fm_obj%minimize(1, iptcl, found, irot, cxy(1), cxy(2:3))
+            call grad_shsrch_fm_obj%minimize(p%iptcl, iptcl, found, irot, cxy(1), cxy(2:3))
             e3 = 360. - pftcc%get_rot(irot)
             aerr = abs(b%spproj_field%e3get(iptcl)-e3)
             if( aerr > 180. ) aerr = 360.-aerr
@@ -245,17 +248,16 @@ do iptcl = p%fromp,p%top
     else
         if( trim(p%sh_opt_angle).eq.'yes' )then
             call grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=p%maxits_sh, opt_angle=.true., coarse_init=.false.)
-            call grad_shsrch_obj%set_indices(1, iptcl)
-            call pftcc%gencorrs(1,iptcl,scores)
+            call grad_shsrch_obj%set_indices(p%iptcl, iptcl)
+            call pftcc%gencorrs(p%iptcl,iptcl,scores)
             irot0 = maxloc(scores,dim=1)
             cxy = grad_shsrch_obj%minimize(irot)
         else
             call grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=p%maxits_sh, opt_angle=.false., coarse_init=.false.)
-            call pftcc%gencorrs(1,iptcl,scores,kweight=p%l_kweight_rot)
+            call pftcc%gencorrs(p%iptcl,iptcl,scores,kweight=p%l_kweight_rot)
             irot = irnd_uni(pftcc%get_nrots())
-            call grad_shsrch_obj%set_indices(1, iptcl)
-            ! cxy = grad_shsrch_obj%minimize(irot)
-            cxy = grad_shsrch_obj%minimize2(irot)
+            call grad_shsrch_obj%set_indices(p%iptcl, iptcl)
+            cxy = grad_shsrch_obj%minimize(irot)
         endif
         if( irot > 0 )then
             e3 = 360. - pftcc%get_rot(irot)
@@ -283,6 +285,23 @@ call restore_read_polarize_cavgs(1)
 
 
 contains
+
+    subroutine read_polarize_refs( iter )
+        integer, intent(in) :: iter
+        p%which_iter = iter
+        ! call match_imgs(1)%new([p%box_crop, p%box_crop, 1], p%smpd_crop, wthreads=.false.)
+        call b%img_crop_polarizer%init_polarizer(pftcc, p%alpha)
+        do iptcl = p%fromp,p%top
+            call b%img%read(p%stk, iptcl)
+            call b%img%div(2.)
+            call b%img%mask(p%msk, 'soft')
+            call b%img%write('prepped_refs.mrc',iptcl)
+            call b%img%fft
+            call b%img_crop_polarizer%polarize(pftcc, b%img, iptcl, isptcl=.false., iseven=.true.)
+            call b%img_crop_polarizer%polarize(pftcc, b%img, iptcl, isptcl=.false., iseven=.false.)
+        enddo
+        call pftcc%memoize_refs
+    end subroutine read_polarize_refs
 
     subroutine restore_read_polarize_cavgs( iter )
         integer, intent(in) :: iter

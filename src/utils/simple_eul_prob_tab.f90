@@ -235,17 +235,18 @@ contains
 
     subroutine fill_tab_shinv( self, pftcc )
         use simple_polarft_corrcalc,  only: polarft_corrcalc
-        use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad
+        use simple_pftcc_shsrch_fm,   only: pftcc_shsrch_fm
         class(eul_prob_tab),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 allocatable   :: locn(:)
-        type(pftcc_shsrch_grad)                :: grad_shsrch_obj(nthr_glob) 
+        type(pftcc_shsrch_fm)                  :: fm_shsrch_obj(nthr_glob)
         real,    allocatable :: scores_inpl(:,:), scores_inpl_sorted(:,:)
         integer, allocatable :: scores_inds_sorted(:,:)
         real    :: dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob)
         real    :: dists_projs(params_glob%nspace,nthr_glob), lims(2,2), lims_init(2,2), cxy(3), inpl_athres
+        integer :: inpls(params_glob%nspace,nthr_glob)
         integer :: i, j, iproj, iptcl, projs_ns, ithr, irot, inds_sorted(pftcc%nrots,nthr_glob), istate, iref
-        logical :: l_doshift, l_kw
+        logical :: l_doshift, l_kw, found
         call seed_rnd
         l_doshift = params_glob%l_prob_sh .and. params_glob%l_doshift
         if( l_doshift )then
@@ -258,8 +259,7 @@ contains
             lims_init(:,1) = -SHC_INPL_TRSHWDTH
             lims_init(:,2) =  SHC_INPL_TRSHWDTH
             do ithr = 1,nthr_glob
-                call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier,&
-                    &maxits=params_glob%maxits_sh, opt_angle=(trim(params_glob%sh_opt_angle).eq.'yes'))
+                call fm_shsrch_obj(ithr)%new(params_glob%trs, params_glob%smpd_crop/params_glob%smpd)
             end do
             ! fill the table
             do istate = 1, self%nstates
@@ -268,16 +268,17 @@ contains
                 call calc_num2sample(params_glob%nspace, 'dist', projs_ns, state=istate)
                 if( allocated(locn) ) deallocate(locn)
                 allocate(locn(projs_ns), source=0)
-                !$omp parallel do default(shared) private(i,j,iptcl,ithr,iproj,irot,cxy,locn) proc_bind(close) schedule(static)
+                !$omp parallel do default(shared) private(i,j,iptcl,ithr,iproj,irot,cxy,locn,found) proc_bind(close) schedule(static)
                 do i = 1, self%nptcls
                     iptcl = self%pinds(i)
                     ithr  = omp_get_thread_num() + 1
                     do iproj = 1, params_glob%nspace
                         ! to determine the directions whose shift will be searched
-                        call pftcc%gencorrs_abs(iref + iproj, iptcl, scores_inpl(:,ithr),kweight=l_kw)
+                        call pftcc%gencorrs_mag_cc(iref + iproj, iptcl, scores_inpl(:,ithr),kweight=.true.)
                         scores_inpl(:,ithr) = eulprob_dist_switch(scores_inpl(:,ithr))
                         irot = angle_sampling(scores_inpl(:,ithr), scores_inpl_sorted(:,ithr), scores_inds_sorted(:,ithr), inpl_athres)
                         dists_projs(iproj,ithr) = scores_inpl(irot,ithr)
+                        inpls(iproj,ithr) = irot
                         ! fill the rest of the table
                         call pftcc%gencorrs(iref + iproj, iptcl, dists_inpl(:,ithr))
                         dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
@@ -288,14 +289,13 @@ contains
                     locn = minnloc(dists_projs(:,ithr), projs_ns)
                     do j = 1,projs_ns
                         iproj = locn(j)
-                        call grad_shsrch_obj(ithr)%set_indices(iref + iproj, iptcl)
-                        irot = self%loc_tab(iproj,i,istate)%inpl
-                        cxy  = grad_shsrch_obj(ithr)%minimize(irot=irot)
-                        if( irot > 0 )then
-                            self%loc_tab(iproj,i,istate)%inpl = irot
-                            self%loc_tab(iproj,i,istate)%dist = eulprob_dist_switch(cxy(1))
-                            self%loc_tab(iproj,i,istate)%x    = cxy(2)
-                            self%loc_tab(iproj,i,istate)%y    = cxy(3)
+                        irot  = inpls(iproj,ithr)
+                        call fm_shsrch_obj(ithr)%minimize(iref+iproj, iptcl, found, irot, cxy(1), cxy(2:3))
+                        if( found )then
+                            self%loc_tab(iproj,i,istate)%inpl   = irot
+                            self%loc_tab(iproj,i,istate)%dist   = eulprob_dist_switch(cxy(1))
+                            self%loc_tab(iproj,i,istate)%x      = cxy(2)
+                            self%loc_tab(iproj,i,istate)%y      = cxy(3)
                         endif
                         self%loc_tab(iproj,i,istate)%has_sh = .true.
                     end do

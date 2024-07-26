@@ -36,7 +36,7 @@ contains
     subroutine srch_shift_fm( self, ithr )
         class(strategy3D_shift_fm), intent(inout) :: self
         integer,                    intent(in)    :: ithr
-        integer   :: iref, isample, irot, nfound
+        integer   :: iref, isample, irot
         integer   :: inds(self%s%nrefs), rot_inds(self%s%nrefs)
         real      :: inpl_abscorrs(pftcc_glob%get_pftsz()), abscorrs(self%s%nrefs)
         real      :: offset(2), score
@@ -51,7 +51,7 @@ contains
             do isample=1,self%s%nrefs
                 iref = s3D%srch_order(isample,self%s%ithr)
                 if( s3D%state_exists(s3D%proj_space_state(iref)) )then
-                    call pftcc_glob%gencorrs_mag(iref, self%s%iptcl, inpl_abscorrs, kweight=.true.)
+                    call pftcc_glob%gencorrs_mag_cc(iref, self%s%iptcl, inpl_abscorrs, kweight=.true.)
                     irot           = maxloc(inpl_abscorrs,dim=1)
                     rot_inds(iref) = irot
                     abscorrs(iref) = inpl_abscorrs(irot)
@@ -63,47 +63,18 @@ contains
                 endif
             end do
             call hpsort(abscorrs, inds)
-            nfound = 0
             do isample = floor(0.95*real(self%s%nrefs)),self%s%nrefs
                 iref = inds(isample)
                 irot = rot_inds(iref)
                 call self%s%fm_shsrch_obj%minimize(iref, self%s%iptcl, found, irot, score, offset )
-                if( found ) nfound = nfound + 1
                 call self%s%store_solution(iref, irot, score, sh=offset)
             enddo
             self%s%nrefs_eval = self%s%nrefs
             call self%oris_assign
-            if( params_glob%part == 1 )print *,self%s%iptcl, nfound
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif
     end subroutine srch_shift_fm
-
-    ! in-plane search only version
-    ! subroutine srch_shift_fm( self, ithr )
-    !     class(strategy3D_shift_fm), intent(inout) :: self
-    !     integer,                    intent(in)    :: ithr
-    !     integer   :: iref, isample, irot
-    !     integer   :: inds(self%s%nrefs), rot_inds(self%s%nrefs)
-    !     real      :: inpl_abscorrs(pftcc_glob%get_pftsz()), abscorrs(self%s%nrefs)
-    !     real      :: offset(2), score
-    !     ! execute search
-    !     if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
-    !         ! set thread index
-    !         self%s%ithr = ithr
-    !         ! prep
-    !         call self%s%prep4srch
-    !         ! search
-    !         call pftcc_glob%gencorrs_abs(self%s%prev_ref, self%s%iptcl, inpl_abscorrs, kweight=.true.)
-    !         irot = maxloc(inpl_abscorrs,dim=1)
-    !         call self%s%fm_shsrch_obj%minimize(self%s%prev_ref, self%s%iptcl, irot, score, offset )
-    !         call self%s%store_solution(self%s%prev_ref, irot, score, sh=offset)
-    !         self%s%nrefs_eval = self%s%nrefs
-    !         call self%oris_assign
-    !     else
-    !         call build_glob%spproj_field%reject(self%s%iptcl)
-    !     endif
-    ! end subroutine srch_shift_fm
 
     subroutine oris_assign_shift_fm( self )
         class(strategy3D_shift_fm), intent(inout) :: self
