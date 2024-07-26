@@ -1260,6 +1260,7 @@ contains
         type(builder)                 :: build
         type(image)                   :: cavg_img
         type(sp_project)              :: spproj
+        character(len=STDLEN)         :: command_plot
         character(len=:), allocatable :: cavgs_stk
         character(len=:), allocatable :: ptcls_stk
         real,             allocatable :: rad_cc(:,:), rad_dists(:,:)
@@ -1288,9 +1289,7 @@ contains
             call cavg_img%read(cavgs_stk,     icavgs)
             write(logfhandle,'(2(A,I3))')'>>> PROCESSING CLASS ', icavgs, ' NUMBER OF PARTICLES ', nptcls
             if( .not. allocated(pinds) ) cycle
-            !allocate(rad_cc(nptcls,params%box/2), rad_dists(nptcls,params%box/2))
             open(unit=25, file="ptcls_cc_analysis.csv")
-            !call discrete_read_imgbatch(nptcls, pinds(:), [1,nptcls] )
             do iptcl = 1, nptcls
                 cnt = cnt + 1
                 ! compute cross-correlation between particle image and the class average image
@@ -1299,14 +1298,14 @@ contains
                 call discrete_read_imgbatch(nptcls, pinds(:), [1,nptcls] )
                 corr = build%imgbatch(iptcl)%real_corr(cavg_img)
                 write(25,'(2i6, 2F18.6)') icavgs, pinds(cnt), real(cnt)/real(nptcls), corr
-                ! if( corr < 0. ) print *, 'CORR BELOW ZERO', corr
-                ! tmpstap   = abs(pinds(iptcl+1)-pinds(iptcl))/2.
-                ! write(25,'(3i6, 3F18.6)') icavgs, pinds(iptcl), pinds(iptcl+1), tmpstap, real(cnt)/real(nptcls), corr
             enddo
             write(25, '(A)') "          "
             call cavg_img%kill
-            !deallocate(rad_cc, rad_dists)
         enddo
+        command_plot = "gnuplot -e "//'"'//"set view map; set zrange[-.4:1]; splot " //"'"//"ptcls_cc_analysis.csv"//"'"// &
+            " u 1:2:4 ; set term png; set xlabel " //"'"//"Class average"//"'"// "; set ylabel " //"'"//"Time"// &
+            "'"// "; set title " //"'"//"Time Particles Class Analysis"//"'"// "; set nokey; set output 'ptcl_analysis.png'; replot" //'"'
+        call execute_command_line(command_plot)
         call exec_cmdline('rm -rf fsc* fft* stderrout')
         ! deallocate
         !if( allocated(cavgs_stk) ) deallocate(cavgs_stk)
