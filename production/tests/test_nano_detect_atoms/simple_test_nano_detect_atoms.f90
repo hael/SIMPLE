@@ -14,7 +14,7 @@ type(nano_picker)        :: test_exp4
 real                     :: smpd, dist_thres, mskdiam
 character(len=2)         :: element
 character(len=100)       :: filename_exp, filename_sim, pdbfile_ref
-integer                  :: offset, peak_thres_level
+integer                  :: offset, peak_thres_level, intensity_level
 logical                  :: circle, denoise, debug, use_euclids, use_zscores
 logical                  :: use_valid_corr, use_cs_thres
 ! for Henry's test
@@ -32,17 +32,18 @@ smpd             = 0.358
 offset           = 2
 peak_thres_level = 2
 dist_thres       = 3.
+intensity_level  = 2
 circle           = .true.
 denoise          = .false.
 debug            = .false.
 use_euclids      = .false.
 use_zscores      = .false.
 use_valid_corr   = .true.
-use_cs_thres     = .false.
+use_cs_thres     = .true.
 mskdiam          = 34.7
 
 print *, 'NEW METHOD: '
-call test_exp4%new(smpd, element, filename_exp, peak_thres_level, offset, denoise, use_euclids, mskdiam)
+call test_exp4%new(smpd, element, filename_exp, peak_thres_level, offset, denoise, use_euclids, mskdiam, intensity_level)
 call test_exp4%simulate_atom()
 call test_exp4%setup_iterators()
 call test_exp4%match_boxes(circle=circle)
@@ -65,17 +66,17 @@ if (debug) call test_exp4%write_dist(  'corr_dist_after_dist_filter_high.csv','c
 if (debug) call test_exp4%write_dist(   'int_dist_after_dist_filter_high.csv','avg_int')
 if (debug) call test_exp4%write_dist('euclid_dist_after_dist_filter_high.csv','euclid' )
 call test_exp4%find_centers()
-call test_exp4%write_positions_and_scores('pos_and_scores_centers.csv','centers')
-call test_exp4%discard_atoms(use_valid_corr=use_valid_corr, use_cs_thres=use_cs_thres, corr_thres=0.35)
-call test_exp4%write_positions_and_scores('pos_and_scores_centers_discarded.csv','centers')
+!call test_exp4%write_positions_and_scores('pos_and_scores_centers.csv','centers')
+call test_exp4%discard_atoms(use_valid_corr=use_valid_corr, use_cs_thres=use_cs_thres)
+!call test_exp4%write_positions_and_scores('pos_and_scores_centers_discarded.csv','centers')
 call test_exp4%calc_per_atom_corr
 ! OUTPUT FILES
 if (debug) call test_exp4%write_positions_and_scores('pos_and_scores.csv','pixels')
 if (debug) call test_exp4%write_positions_and_scores('pos_and_scores_centers.csv','centers')
 if (debug) call test_exp4%write_positions_and_scores('pos_and_intensities.csv','intensities')
 if (debug) call test_exp4%write_positions_and_scores('pos_and_euclids.csv','euclid')
-call test_exp4%write_pdb('experimental_centers2')
-call test_exp4%compare_pick('experimental_centers2.pdb',trim(pdbfile_ref))
+call test_exp4%write_pdb('experimental_centers_TEST')
+call test_exp4%compare_pick('experimental_centers_TEST.pdb',trim(pdbfile_ref))
 if (debug) call test_exp4%write_NP_image('result.mrc')
 call test_exp4%kill
 print *, ' '

@@ -3,6 +3,7 @@ include 'simple_lib.f08'
 use simple_image
 use simple_atoms
 use simple_parameters
+use simple_defs_atoms
 use simple_srch_sort_loc, only : hpsort
 implicit none
 #include "simple_local_flags.inc"
@@ -71,6 +72,7 @@ implicit none
         deallocate(intensities)
     end subroutine threshold_img
 
+    ! intensity thresholding based on Otsu's method
     subroutine make_intensity_mask(img_in, mask_out, level)
         type(image),          intent(in)  :: img_in
         logical, allocatable, intent(out) :: mask_out(:,:,:)
@@ -86,6 +88,115 @@ implicit none
             mask_out = .true.
         end where
     end subroutine make_intensity_mask
+
+    ! intensity thresholding based on nanoparticle properties
+    subroutine make_intensity_mask_2(img_in, mask_out, element, NP_diam)
+        type(image),          intent(in)  :: img_in
+        logical, allocatable, intent(out) :: mask_out(:,:,:)
+        character(len=*),     intent(in)  :: element
+        real,                 intent(in)  :: NP_diam ! approx. diameter of nanoparticle
+        character(len=2)  :: el_ucase
+        character(len=8)  :: crystal_system
+        real              :: msksq, a, ha, x, y, z, center(3), smpd, radius, radius_vx, sphere_vol, total_vol, thres
+        real              :: x1, x2, x3, y1, y2, y3, z1, z2, z3
+        real, allocatable :: intensities_flat(:), rmat(:,:,:)
+        integer           :: i, j, k, n, ncubes, box, ldim(3), ZZ, nvx, last_index
+        print *, 'NP_diam = ', NP_diam
+        msksq    = (NP_diam / 2.)**2.
+        print *, 'msksq = ', msksq
+        el_ucase = uppercase(trim(adjustl(element)))
+        call get_lattice_params(el_ucase, crystal_system, a)
+        print *, 'crystal_system = ', crystal_system
+        print *, 'el_ucase = ', el_ucase
+        print *, 'a = ', a
+        ha       = a / 2.
+        ldim     = img_in%get_ldim()
+        box      = ldim(1)
+        print *, 'box = ', box
+        smpd     = img_in%get_smpd()
+        ncubes   = floor(real(box) * smpd / a)
+        ! atoms at edges
+        n = 0
+        center = (real([box,box,box]/2 + 1) - 1.) * smpd
+        ! find number of atoms in startvol
+        select case( trim(crystal_system) )
+            case('fcc')
+                ! count
+                do i = 1, ncubes
+                    x  = real(i - 1) * a
+                    x1 = x + ha; x2 = x; x3 = x + ha
+                    do j = 1, ncubes
+                        y  = real(j - 1) * a
+                        y1 = y + ha; y2 = y + ha; y3 = y
+                        do k = 1, ncubes
+                            z  = real(k - 1) * a
+                            z1 = z; z2 = z + ha; z3 = z + ha
+                            ! edge
+                            if( sum(([x ,y ,z ] - center)**2.) <= msksq ) n = n+1
+                            ! faces
+                            if( sum(([x1,y1,z1] - center)**2.) <= msksq ) n = n+1
+                            if( sum(([x2,y2,z2] - center)**2.) <= msksq ) n = n+1
+                            if( sum(([x3,y3,z3] - center)**2.) <= msksq ) n = n+1
+                        enddo
+                    enddo
+                enddo
+            case('bcc')
+                ! count
+                do i = 1, ncubes
+                    x  = real(i - 1) * a; x1 = x + ha
+                    do j = 1, ncubes
+                        y  = real(j - 1) * a; y1 = y + ha
+                        do k= 1, ncubes
+                            z  = real(k - 1) * a; z1 = z + ha
+                            ! edge
+                            if( sum(([x ,y ,z ] - center)**2.) <= msksq ) n = n + 1
+                            ! body-centered
+                            if( sum(([x1,y1,z1] - center)**2.) <= msksq ) n = n + 1
+                        enddo
+                    enddo
+                enddo
+            case('rocksalt')
+                ! count
+                do i = 1, ncubes
+                    x  = real(i - 1) * a; x1 = x + ha
+                    do j = 1, ncubes
+                        y  = real(j - 1) * a; y1 = y + ha
+                        do k=1,ncubes
+                            z  = real(k - 1) * a; z1 = z + ha
+                            if( sum(([x ,y ,z ] - center)**2.) <= msksq ) n = n + 1
+                            if( sum(([x1,y1,z ] - center)**2.) <= msksq ) n = n + 1
+                            if( sum(([x ,y1,z1] - center)**2.) <= msksq ) n = n + 1
+                            if( sum(([x1,y ,z1] - center)**2.) <= msksq ) n = n + 1
+                            if( sum(([x1,y1,z1] - center)**2.) <= msksq ) n = n + 1
+                            if( sum(([x1,y ,z ] - center)**2.) <= msksq ) n = n + 1
+                            if( sum(([x ,y1,z ] - center)**2.) <= msksq ) n = n + 1
+                            if( sum(([x ,y ,z1] - center)**2.) <= msksq ) n = n + 1
+                        enddo
+                    enddo
+                enddo
+        end select
+        print *, 'n = ', n
+        if (n .eq. 0) print *, 'Error! n should be greater than 0: make_intensity_mask_2.'
+        call get_element_Z_and_radius(trim(adjustl(element)), ZZ, radius)
+        radius_vx  = radius / smpd
+        sphere_vol = PI * (4./3.) * radius_vx**3
+        total_vol  = sphere_vol * n
+        print *, 'total_vol = ', total_vol
+        nvx        = anint(total_vol)
+        ! find intensity threshold value based on highest 'nvx' intensity values
+        rmat       = img_in%get_rmat()
+        intensities_flat = pack(rmat, mask=.true.)
+        call hpsort(intensities_flat)                   ! sort array (low to high)
+        last_index = size(intensities_flat)             ! last_index is position of largest intensity value in sorted array
+        thres      = intensities_flat(last_index - nvx) ! last_index - nvx position of sorted array is threshold
+        ! make intensity logical mask, with positions with intensities greater than the threshold being set to true
+        allocate(mask_out(ldim(1), ldim(2), ldim(3)), source=.false.)
+        where (rmat > thres)
+            mask_out = .true.
+        end where
+        print *, 'count(mask_out) = ', count(mask_out)
+        deallocate(intensities_flat)
+    end subroutine make_intensity_mask_2
 
     function logical_box(array, pos, boxsize) result(truth_value)
         logical, intent(in)  :: array(:,:,:)
