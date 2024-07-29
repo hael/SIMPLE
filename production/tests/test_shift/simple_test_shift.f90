@@ -31,7 +31,7 @@ logical                :: be_verbose=.false.
 real,    parameter     :: SHMAG=3.0
 real,    parameter     :: SNR  =0.01
 real,    parameter     :: BFAC =10.
-integer, parameter     :: N_PTCLS = 10, SH_ITERS = 5
+integer, parameter     :: N_PTCLS = 100, SH_ITERS = 1
 logical, allocatable   :: ptcl_mask(:)
 integer, allocatable   :: pinds(:)
 type(ctfparams)        :: ctfparms
@@ -86,6 +86,11 @@ do iptcl = p%fromp,p%top
     call os%set(iptcl,'state',1.)
     call os%set(iptcl,'w',    1.)
     call os%set(iptcl,'class',1.)
+    if( is_odd(iptcl) )then
+        call b%img%read(p%stk, 1)
+    else
+        call b%img%read(p%stk, 2)
+    endif
     truth_sh(iptcl,:) = [gasdev( 0., SHMAG), gasdev( 0., SHMAG)]
     call os%set(iptcl,'x', truth_sh(iptcl,1))
     call os%set(iptcl,'y', truth_sh(iptcl,2))
