@@ -17,9 +17,13 @@ interface angle_sampling
     module procedure angle_sampling_2
 end interface
 
+integer, parameter :: SHIFT_NUM = 10
+integer, parameter :: NSHIFTS   = SHIFT_NUM**2    !< number of discretized shift space
+
 type :: eul_prob_tab
     type(ptcl_ref), allocatable :: loc_tab(:,:,:) !< 3D search table (nspace,  nptcls, nstates)
     type(ptcl_ref), allocatable :: state_tab(:,:) !< 2D search table (nstates, nptcls)
+    type(ptcl_ref), allocatable :: shift_tab(:,:) !< 2D search table (nshifts, nptcls)
     type(ptcl_ref), allocatable :: assgn_map(:)   !< assignment map           (nptcls)
     integer,        allocatable :: pinds(:)       !< particle indices for processing
     integer                     :: nptcls         !< size of pinds array
@@ -54,14 +58,14 @@ contains
     subroutine new_1( self, pinds )
         class(eul_prob_tab), intent(inout) :: self
         integer,             intent(in)    :: pinds(:)
-        integer :: i, iproj, iptcl, istate
+        integer :: i, iproj, iptcl, istate, ishift
         real    :: x
         call self%kill
         self%nptcls  = size(pinds)
         self%nstates = params_glob%nstates
         allocate(self%pinds(self%nptcls), source=pinds)
         allocate(self%loc_tab(params_glob%nspace,self%nptcls,self%nstates), self%assgn_map(self%nptcls),&
-                    &self%state_tab(self%nstates,self%nptcls))
+                    &self%state_tab(self%nstates,self%nptcls), self%shift_tab(NSHIFTS,self%nptcls))
         !$omp parallel do default(shared) private(i,iptcl,istate,iproj) proc_bind(close) schedule(static)
         do i = 1,self%nptcls
             iptcl = self%pinds(i)
@@ -92,6 +96,16 @@ contains
                     self%loc_tab(iproj,i,istate)%y      = 0.
                     self%loc_tab(iproj,i,istate)%has_sh = .false.
                 end do
+            end do
+            do ishift = 1,NSHIFTS
+                self%shift_tab(ishift,i)%pind   = iptcl
+                self%shift_tab(ishift,i)%istate = 0
+                self%shift_tab(ishift,i)%iproj  = 0
+                self%shift_tab(ishift,i)%inpl   = 0
+                self%shift_tab(ishift,i)%dist   = huge(x)
+                self%shift_tab(ishift,i)%x      = 0.
+                self%shift_tab(ishift,i)%y      = 0.
+                self%shift_tab(ishift,i)%has_sh = .false.
             end do
         end do
         !$omp end parallel do 
@@ -338,37 +352,29 @@ contains
     end subroutine prob_assign
 
     subroutine shift_assign( self )
-        use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad
         class(eul_prob_tab), intent(inout) :: self
-        type(pftcc_shsrch_grad)            :: grad_shsrch_obj(nthr_glob) !< origin shift search object, L-BFGS with gradient
-        integer :: i, iptcl, iref, irot, ithr
-        real    :: lims(2,2), lims_init(2,2), cxy(3)
+        integer :: i, iptcl, iref, ithr, ix, iy, ishift
+        real    :: lims(2,2), stepx, stepy, x, y
         ! make shift search objects
-        lims(:,1)      = -params_glob%trs
-        lims(:,2)      =  params_glob%trs
-        lims_init(:,1) = -SHC_INPL_TRSHWDTH
-        lims_init(:,2) =  SHC_INPL_TRSHWDTH
-        do ithr = 1,nthr_glob
-            call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier,&
-                &maxits=params_glob%maxits_sh, opt_angle=(trim(params_glob%sh_opt_angle).eq.'yes'))
-        end do
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,iptcl,ithr,iref,irot,cxy)
+        lims(:,1) = -params_glob%trs
+        lims(:,2) =  params_glob%trs
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,iptcl,ithr,iref,stepx,stepy,ix,iy,x,ishift,y)
         do i = 1, self%nptcls
-            if( .not.(self%assgn_map(i)%has_sh) )then
-                iptcl = self%assgn_map(i)%pind
-                iref  = (self%assgn_map(i)%istate-1)*params_glob%nspace
-                ithr  = omp_get_thread_num() + 1
-                ! BFGS over shifts
-                call grad_shsrch_obj(ithr)%set_indices(iref + self%assgn_map(i)%iproj, iptcl)
-                irot = self%assgn_map(i)%inpl
-                cxy  = grad_shsrch_obj(ithr)%minimize(irot=irot)
-                if( irot > 0 )then
-                    self%assgn_map(i)%inpl = irot
-                    self%assgn_map(i)%x    = cxy(2)
-                    self%assgn_map(i)%y    = cxy(3)
-                endif
-                self%assgn_map(i)%has_sh = .true.
-            endif
+            iptcl = self%assgn_map(i)%pind
+            iref  = (self%assgn_map(i)%istate-1)*params_glob%nspace
+            ithr  = omp_get_thread_num() + 1
+            stepx = real(lims(1,2) - lims(1,1), dp) / real(SHIFT_NUM, dp)
+            stepy = real(lims(2,2) - lims(2,1), dp) / real(SHIFT_NUM, dp)
+            do ix = 1,SHIFT_NUM
+                x = lims(1,1) + stepx/2. + real(ix-1,dp)*stepx
+                do iy = 1,SHIFT_NUM
+                    ishift = (ix-1)*SHIFT_NUM + iy
+                    y      = lims(2,1) + stepy/2. + real(iy-1,dp)*stepy
+                    self%shift_tab(ishift,i)      = self%assgn_map(iptcl)
+                    ! self%shift_tab(ishift,i)%dist = eulprob_dist_switch(real(&
+                    !     &pftcc_glob%gencorr_for_rot_8(iref, iptcl, real([x,y]), self%assgn_map(iptcl)%irot)))
+                end do
+            end do
         enddo
         !$omp end parallel do
     end subroutine shift_assign
