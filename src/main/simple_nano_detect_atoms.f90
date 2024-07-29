@@ -45,6 +45,8 @@ use simple_stat
         procedure :: find_centers
         procedure :: calc_atom_stats
         procedure :: calc_per_atom_corr
+        procedure :: refine_threshold
+        procedure :: discard_atoms
         procedure :: write_pdb
         procedure :: write_boximgs
         procedure :: write_positions_and_scores
@@ -52,15 +54,13 @@ use simple_stat
         procedure :: write_dist
         procedure :: extract_img_from_pos
         procedure :: compare_pick
-        procedure :: refine_threshold
-        procedure :: discard_atoms
         procedure :: kill
 
     end type nano_picker
 
     contains
 
-    subroutine new( self, smpd, element, raw_filename, peak_thres_level, offset, denoise, use_euclids, mskdiam)
+    subroutine new( self, smpd, element, raw_filename, peak_thres_level, offset, denoise, use_euclids, mskdiam, intensity_level)
         class(nano_picker), intent(inout) :: self
         real,               intent(in)    :: smpd
         character(len=*),   intent(in)    :: element
@@ -69,6 +69,7 @@ use simple_stat
         logical, optional,  intent(in)    :: denoise
         logical, optional,  intent(in)    :: use_euclids
         real,    optional,  intent(in)    :: mskdiam ! Angstroms
+        integer, optional,  intent(in)    :: intensity_level
         character(len=2)         :: el_ucase
         integer                  :: Z, nptcls
         logical                  :: outside
@@ -98,10 +99,24 @@ use simple_stat
         self%peak_thres_level = peak_thres_level
         self%thres = -0.999 ! initial value, will be updated later
         ! create thresholding mask
-        call thres_img%copy(self%nano_img)
-        call phasecorr_one_atom(thres_img, self%element)
-        call thres_img%write('denoised_map.mrc') 
-        call make_intensity_mask(thres_img, self%thres_msk, level=2)
+        if (present(intensity_level)) then
+            call thres_img%copy(self%nano_img)
+            call phasecorr_one_atom(thres_img, self%element)
+            call thres_img%write('denoised_map.mrc') 
+            if (    intensity_level .eq. 1) then
+                call make_intensity_mask(  thres_img, self%thres_msk, level=2)
+            else if(intensity_level .eq. 2) then
+                if (present(mskdiam)) then
+                    call make_intensity_mask_2(thres_img, self%thres_msk, self%element, mskdiam*0.75)
+                else
+                    THROW_HARD('ERROR: MSKDIAM must be present to use intensity level 2')
+                end if
+            else
+                allocate(self%thres_msk(self%ldim(1),self%ldim(2),self%ldim(3)), source=.true.)
+            end if  
+        else
+            allocate(self%thres_msk(self%ldim(1),self%ldim(2),self%ldim(3)), source=.true.)
+        end if
         ! denoise nano_img if requested
         if( present(denoise) )then
             if( denoise )then
@@ -324,8 +339,7 @@ use simple_stat
             allocate(pixels1(npix_in), pixels2(npix_in), source=0.)
             call self%nano_img%win2arr_rad(      pos_center(1),  pos_center(2),  pos_center(3),  winsz, npix_in, maxrad, npix_out1, pixels1)
             call self%simulated_atom%win2arr_rad(self%boxsize/2, self%boxsize/2, self%boxsize/2, winsz, npix_in, maxrad, npix_out2, pixels2)
-            !corr = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2)) ! revert to
-            corr = same_energy_euclid(pixels1(:npix_out1),pixels2(:npix_out2)) ! new method
+            corr = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))
             print *, 'corr = ', corr
         end if
         call boximg%kill
@@ -750,6 +764,197 @@ use simple_stat
         call nano%kill
     end subroutine calc_per_atom_corr
 
+    subroutine refine_threshold( self, num_thres, ref_pdb_name, max_thres )
+        class(nano_picker), intent(inout) :: self
+        integer,            intent(in)    :: num_thres
+        character(len=*),   intent(in)    :: ref_pdb_name
+        real,    optional,  intent(in)    :: max_thres
+        type(nanoparticle)       :: nano_ref, nano_exp
+        type(image)              :: ref_NP,   exp_NP
+        type(parameters), target :: params
+        real                     :: thresholds(num_thres), thres_corrs(num_thres), max_thres_here, step, avg_corr
+        integer                  :: i, optimal_index(1), num_pos
+        integer, allocatable     :: pos_inds(:)
+        print *, 'REFINE_THRESHOLD'
+        if( present(max_thres) )then
+            max_thres_here = max_thres
+        else
+            max_thres_here = 0.75
+        end if
+        step = (max_thres_here - self%thres) / (num_thres - 1)
+        ! set up array of potential thresholds
+        do i = 1, num_thres
+            thresholds(i) = self%thres + step * (i-1)
+        enddo
+        ! simulate nanoparticle with initial pdb file (for reference / comparison)
+        ! params_glob has to be set because of the way simple_nanoparticle is set up
+        params_glob => params
+        params_glob%element = self%element
+        params_glob%smpd    = self%smpd
+        ! call nano_ref%new(trim(self%raw_filename))
+        ! call nano_ref%set_atomic_coords(trim(ref_pdb_name))
+        ! call nano_ref%simulate_atoms(simatms=ref_NP)
+        ! iterate through following steps:
+        ! 1. remove boxes with correlations below each threshold
+        ! 2. call find centers and write_pdb
+        ! 3. use the resulting pdb file to simulate nanoparticle
+        ! 4. calculate correlation between this simulated nanoparticle and original? simulated nanoparticle
+        ! 5. save correlations in array, at end will find maximum and return corresponding threshold
+        do i = 1, num_thres
+            self%thres     = thresholds(i) ! need to set self%thres because it is called in multiple subroutines
+            call self%find_centers
+            call self%write_pdb('sim_centers')
+            call nano_exp%new(self%raw_filename)
+            call nano_exp%set_atomic_coords('sim_centers.pdb')
+            call nano_exp%simulate_atoms(simatms=exp_NP)
+            !thres_corrs(i) = ref_NP%real_corr(exp_NP)
+            thres_corrs(i) = self%nano_img%real_corr(exp_NP) ! see if correlating with raw img helps
+            !call nano_exp%validate_atoms(exp_NP, avg_corr)
+            !thres_corrs(i) = avg_corr
+            call nano_exp%kill
+        enddo
+        optimal_index = maxloc(thres_corrs)
+        self%thres    = thresholds(optimal_index(1))
+        call self%find_centers ! call again to set positions to the optimal
+        pos_inds      = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
+        num_pos       = size(pos_inds)
+        print *, 'OPTIMAL THRESHOLD = ', self%thres
+        print *, 'OPTIMAL CORRELATION = ', thres_corrs(optimal_index(1))
+        print *, 'NUMBER POSITIONS = ', num_pos
+        call nano_ref%kill
+    end subroutine refine_threshold
+
+    subroutine discard_atoms(self, use_cs_thres, use_valid_corr, corr_thres, cs_thres)
+        class(nano_picker), intent(inout) :: self
+        logical, optional,  intent(in)    :: use_cs_thres, use_valid_corr
+        real,    optional,  intent(in)    :: corr_thres, cs_thres
+        logical                  :: cs_here, corr_here ! true by default, otherwise take input vals
+        logical                  :: is_peak
+        logical, allocatable     :: selected_pos(:)
+        real                     :: corr_thres_here, corr_thres_sigma, cs_thres_here, pos(3), maxrad
+        real,    allocatable     :: corrs(:), positions(:,:), coords(:,:)
+        integer                  :: ibox, nbox, xoff, yoff, zoff, ipeak, npeaks
+        integer, allocatable     :: pos_inds(:), contact_scores(:)
+        type(nanoparticle)       :: nano 
+        type(image)              :: simatms
+        type(parameters), target :: params
+        type(stats_struct)       :: cscore_stats
+        params_glob         => params
+        params_glob%element = self%element
+        params_glob%smpd    = self%smpd
+        if (present(use_cs_thres)) then
+            cs_here = use_cs_thres
+        else
+            cs_here = .true.
+        end if
+        if (present(use_valid_corr)) then
+            corr_here = use_valid_corr
+        else
+            corr_here = .true.
+        end if
+        ! filter out lowly correlated atoms
+        if (corr_here) then
+            call nano%new(trim(self%raw_filename))
+            if (.not. self%wrote_pdb) call self%write_pdb()
+            call nano%set_atomic_coords(trim(self%pdb_filename))
+            call nano%simulate_atoms(simatms=simatms)
+            call nano%kill
+            pos_inds = pack(self%inds_offset(:,:,:), mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
+            nbox     = size(pos_inds)
+            allocate(selected_pos(nbox), source=.true.)
+            allocate(corrs(nbox))
+            maxrad  = (self%radius * 1.5) / self%smpd ! in pixels
+            open(unit=44,file='discard_coords.csv')
+            do ibox = 1, nbox
+                pos         = self%center_positions(pos_inds(ibox),:)
+                corrs(ibox) = one_atom_valid_corr(pos, maxrad, self%nano_img, simatms)
+                write(44,'(1x,4(f8.3,a))') pos(1), ',', pos(2), ',', pos(3), ',', corrs(ibox)
+            end do
+            close(44)
+            if (present(corr_thres)) then
+                corr_thres_here = corr_thres
+            else
+                corr_thres_sigma = -2.0 ! took from nanoparticle class paramter
+                corr_thres_here = min(max(robust_sigma_thres(corrs(:), corr_thres_sigma), 0.3), 0.7)
+            end if
+            print *, 'Valid_corr threshold: ', corr_thres_here
+            do ibox = 1, nbox
+                if (corrs(ibox) < corr_thres_here) selected_pos(ibox) = .false.
+            end do
+            pos_inds = pack(pos_inds, mask=selected_pos)
+            npeaks   = size(pos_inds)
+            print *, 'Number positions removed due to low valid-corr: ', nbox - npeaks
+            print *, 'NPEAKS AFTER LOW VALID CORR REMOVED = ', npeaks
+            ! update box scores
+            !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,is_peak,ipeak)
+            do xoff = 1, self%nxyz_offset(1)
+                do yoff = 1, self%nxyz_offset(2)
+                    do zoff = 1, self%nxyz_offset(3)
+                        is_peak = .false.
+                        do ipeak = 1,npeaks
+                            if( pos_inds(ipeak) == self%inds_offset(xoff,yoff,zoff) )then
+                                is_peak = .true.
+                                exit
+                            endif
+                        enddo
+                        if( .not. is_peak ) self%box_scores(xoff,yoff,zoff) = -1.
+                    enddo
+                enddo
+            enddo
+            !$omp end parallel do
+            deallocate(pos_inds, selected_pos)
+            call nano%kill
+            self%wrote_pdb = .false.
+            deallocate(corrs)
+        end if
+        ! remove atoms with low contact scores (cs)
+        if(cs_here) then
+            pos_inds = pack(self%inds_offset(:,:,:), mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
+            nbox     = size(pos_inds)
+            allocate(positions(3,nbox))
+            allocate(contact_scores(nbox))
+            do ibox = 1, nbox
+                positions(:,ibox) = (self%center_positions(pos_inds(ibox),:) - 1.) * self%smpd
+            end do
+            call calc_contact_scores(self%element, positions, contact_scores)
+            call calc_stats(real(contact_scores), cscore_stats)
+            if( present(cs_thres) )then
+                cs_thres_here = cs_thres
+            else
+                cs_thres_here = min(5,max(3,nint(cscore_stats%avg - cscore_stats%sdev)))
+                print *, 'Contact score threshold: ', cs_thres_here
+            endif
+            allocate(selected_pos(nbox), source=.true.)
+            do ibox = 1, nbox
+                if (contact_scores(ibox) < cs_thres_here) then
+                    selected_pos(ibox) = .false.
+                end if
+            end do
+            pos_inds = pack(pos_inds, mask=selected_pos)
+            npeaks   = size(pos_inds)
+            print *, 'Number positions removed due to low contact score: ', nbox - npeaks
+            print *, 'NPEAKS AFTER LOW CONTACT SCORES REMOVED = ', npeaks
+            ! update box scores
+            !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,is_peak,ipeak)
+            do xoff = 1, self%nxyz_offset(1)
+                do yoff = 1, self%nxyz_offset(2)
+                    do zoff = 1, self%nxyz_offset(3)
+                        is_peak = .false.
+                        do ipeak = 1,npeaks
+                            if( pos_inds(ipeak) == self%inds_offset(xoff,yoff,zoff) )then
+                                is_peak = .true.
+                                exit
+                            endif
+                        enddo
+                        if( .not. is_peak ) self%box_scores(xoff,yoff,zoff) = -1.
+                    enddo
+                enddo
+            enddo
+            !$omp end parallel do
+            deallocate(pos_inds, selected_pos)
+        end if
+    end subroutine discard_atoms
+
     ! input filename with no extension
     subroutine write_pdb( self, filename )
         class(nano_picker),         intent(inout) :: self
@@ -944,201 +1149,6 @@ use simple_stat
         call find_closest(pdb_ref_coords,pdb_exp_coords,size(pdb_ref_coords,dim=2),size(pdb_exp_coords,dim=2),distances)
         print *, 'AVG DISTANCE = ', sum(distances)/size(distances)
     end subroutine compare_pick
-    
-    subroutine refine_threshold( self, num_thres, ref_pdb_name, max_thres )
-        class(nano_picker), intent(inout) :: self
-        integer,            intent(in)    :: num_thres
-        character(len=*),   intent(in)    :: ref_pdb_name
-        real,    optional,  intent(in)    :: max_thres
-        type(nanoparticle)       :: nano_ref, nano_exp
-        type(image)              :: ref_NP,   exp_NP
-        type(parameters), target :: params
-        real                     :: thresholds(num_thres), thres_corrs(num_thres), max_thres_here, step, avg_corr
-        integer                  :: i, optimal_index(1), num_pos
-        integer, allocatable     :: pos_inds(:)
-        print *, 'REFINE_THRESHOLD'
-        if( present(max_thres) )then
-            max_thres_here = max_thres
-        else
-            max_thres_here = 0.75
-        end if
-        step = (max_thres_here - self%thres) / (num_thres - 1)
-        ! set up array of potential thresholds
-        do i = 1, num_thres
-            thresholds(i) = self%thres + step * (i-1)
-        enddo
-        ! simulate nanoparticle with initial pdb file (for reference / comparison)
-        ! params_glob has to be set because of the way simple_nanoparticle is set up
-        params_glob => params
-        params_glob%element = self%element
-        params_glob%smpd    = self%smpd
-        ! call nano_ref%new(trim(self%raw_filename))
-        ! call nano_ref%set_atomic_coords(trim(ref_pdb_name))
-        ! call nano_ref%simulate_atoms(simatms=ref_NP)
-        ! iterate through following steps:
-        ! 1. remove boxes with correlations below each threshold
-        ! 2. call find centers and write_pdb
-        ! 3. use the resulting pdb file to simulate nanoparticle
-        ! 4. calculate correlation between this simulated nanoparticle and original? simulated nanoparticle
-        ! 5. save correlations in array, at end will find maximum and return corresponding threshold
-        do i = 1, num_thres
-            self%thres     = thresholds(i) ! need to set self%thres because it is called in multiple subroutines
-            call self%find_centers
-            call self%write_pdb('sim_centers')
-            call nano_exp%new(self%raw_filename)
-            call nano_exp%set_atomic_coords('sim_centers.pdb')
-            call nano_exp%simulate_atoms(simatms=exp_NP)
-            !thres_corrs(i) = ref_NP%real_corr(exp_NP)
-            thres_corrs(i) = self%nano_img%real_corr(exp_NP) ! see if correlating with raw img helps
-            !call nano_exp%validate_atoms(exp_NP, avg_corr)
-            !thres_corrs(i) = avg_corr
-            call nano_exp%kill
-        enddo
-        optimal_index = maxloc(thres_corrs)
-        self%thres    = thresholds(optimal_index(1))
-        call self%find_centers ! call again to set positions to the optimal
-        pos_inds      = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
-        num_pos       = size(pos_inds)
-        print *, 'OPTIMAL THRESHOLD = ', self%thres
-        print *, 'OPTIMAL CORRELATION = ', thres_corrs(optimal_index(1))
-        print *, 'NUMBER POSITIONS = ', num_pos
-        call nano_ref%kill
-    end subroutine refine_threshold
-
-    subroutine discard_atoms(self, use_cs_thres, use_valid_corr, corr_thres, cs_thres)
-        class(nano_picker), intent(inout) :: self
-        logical, optional,  intent(in)    :: use_cs_thres, use_valid_corr
-        real,    optional,  intent(in)    :: corr_thres, cs_thres
-        logical                  :: cs_here, corr_here ! true by default, otherwise take input vals
-        logical                  :: is_peak
-        logical, allocatable     :: selected_pos(:)
-        real                     :: corr_thres_here, corr_thres_sigma, cs_thres_here, pos(3), maxrad
-        real,    allocatable     :: corrs(:), positions(:,:)
-        integer                  :: ibox, nbox, xoff, yoff, zoff, ipeak, npeaks, edge_pos(3)
-        integer, allocatable     :: pos_inds(:), contact_scores(:)
-        type(nanoparticle)       :: nano 
-        type(image)              :: simatms
-        type(parameters), target :: params
-        type(stats_struct)       :: cscore_stats
-        params_glob         => params
-        params_glob%element = self%element
-        params_glob%smpd    = self%smpd
-        if (present(use_cs_thres)) then
-            cs_here = use_cs_thres
-        else
-            cs_here = .true.
-        end if
-        if (present(use_valid_corr)) then
-            corr_here = use_valid_corr
-        else
-            corr_here = .true.
-        end if
-        ! filter out lowly correlated atoms
-        if (corr_here) then
-            if (.not. self%wrote_pdb) call self%write_pdb()
-            call nano%new(trim(self%raw_filename))
-            call nano%set_atomic_coords(trim(self%pdb_filename))
-            call nano%simulate_atoms(simatms=simatms)
-            call simatms%write('simatms1.mrc')
-            call self%nano_img%write('nano_img.mrc')
-            ! call nano%validate_atoms(simatms=simatms)
-            pos_inds = pack(self%inds_offset(:,:,:), mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
-            nbox     = size(pos_inds)
-            allocate(selected_pos(nbox), source=.true.)
-            allocate(corrs(nbox))
-            maxrad  = (self%radius * 1.5) / self%smpd ! in pixels
-            print *, 'maxrad = ', maxrad
-            open(60,file='corrs.csv')
-            do ibox = 1, nbox
-                pos      = self%center_positions(pos_inds(ibox),:)
-                edge_pos = self%positions(pos_inds(ibox),:)
-                corrs(ibox) = one_atom_valid_corr(pos, maxrad, self%nano_img, simatms)
-                write(60,'(1x,f9.4,a,f9.4,a,f9.4,a,f6.4,a)') real(edge_pos(1)), ',', real(edge_pos(2)), ',', real(edge_pos(3)), ',', corrs(ibox)
-            end do
-            close(60)
-            if (present(corr_thres)) then
-                corr_thres_here = corr_thres
-            else
-                corr_thres_sigma = -2.0 ! took from nanoparticle class paramter
-                corr_thres_here = min(max(robust_sigma_thres(corrs(:), corr_thres_sigma), 0.3), 0.7)
-            end if
-            print *, 'Valid_corr threshold: ', corr_thres_here
-            do ibox = 1, nbox
-                if (corrs(ibox) < corr_thres_here) selected_pos(ibox) = .false.
-            end do
-            pos_inds = pack(pos_inds, mask=selected_pos)
-            npeaks   = size(pos_inds)
-            print *, 'Number positions removed due to low valid-corr: ', nbox - npeaks
-            print *, 'NPEAKS AFTER LOW VALID CORR REMOVED = ', npeaks
-            ! update box scores
-            !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,is_peak,ipeak)
-            do xoff = 1, self%nxyz_offset(1)
-                do yoff = 1, self%nxyz_offset(2)
-                    do zoff = 1, self%nxyz_offset(3)
-                        is_peak = .false.
-                        do ipeak = 1,npeaks
-                            if( pos_inds(ipeak) == self%inds_offset(xoff,yoff,zoff) )then
-                                is_peak = .true.
-                                exit
-                            endif
-                        enddo
-                        if( .not. is_peak ) self%box_scores(xoff,yoff,zoff) = -1.
-                    enddo
-                enddo
-            enddo
-            !$omp end parallel do
-            deallocate(pos_inds, selected_pos)
-            call nano%kill
-            self%wrote_pdb = .false.
-            deallocate(corrs)
-        end if
-        ! remove atoms with low contact scores (cs)
-        if(cs_here) then
-            pos_inds = pack(self%inds_offset(:,:,:), mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
-            nbox     = size(pos_inds)
-            allocate(positions(3,nbox))
-            allocate(contact_scores(nbox))
-            do ibox = 1, nbox
-                positions(:,ibox) = (self%center_positions(pos_inds(ibox),:) - 1.) * self%smpd
-            end do
-            call calc_contact_scores(self%element, positions, contact_scores)
-            call calc_stats(real(contact_scores), cscore_stats)
-            if( present(cs_thres) )then
-                cs_thres_here = cs_thres
-            else
-                cs_thres_here = min(5,max(3,nint(cscore_stats%avg - cscore_stats%sdev)))
-                print *, 'Contact score threshold: ', cs_thres_here
-            endif
-            allocate(selected_pos(nbox), source=.true.)
-            do ibox = 1, nbox
-                if (contact_scores(ibox) < cs_thres_here) then
-                    selected_pos(ibox) = .false.
-                end if
-            end do
-            pos_inds = pack(pos_inds, mask=selected_pos)
-            npeaks   = size(pos_inds)
-            print *, 'Number positions removed due to low contact score: ', nbox - npeaks
-            print *, 'NPEAKS AFTER LOW CONTACT SCORES REMOVED = ', npeaks
-            ! update box scores
-            !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,is_peak,ipeak)
-            do xoff = 1, self%nxyz_offset(1)
-                do yoff = 1, self%nxyz_offset(2)
-                    do zoff = 1, self%nxyz_offset(3)
-                        is_peak = .false.
-                        do ipeak = 1,npeaks
-                            if( pos_inds(ipeak) == self%inds_offset(xoff,yoff,zoff) )then
-                                is_peak = .true.
-                                exit
-                            endif
-                        enddo
-                        if( .not. is_peak ) self%box_scores(xoff,yoff,zoff) = -1.
-                    enddo
-                enddo
-            enddo
-            !$omp end parallel do
-            deallocate(pos_inds, selected_pos)
-        end if
-    end subroutine discard_atoms
 
     subroutine kill( self )
         class(nano_picker), intent(inout) :: self
