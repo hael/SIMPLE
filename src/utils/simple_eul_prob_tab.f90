@@ -34,12 +34,13 @@ type :: eul_prob_tab
     generic            :: new => new_1, new_2
   ! PARTITION-WISE PROCEDURES (used only by partition-wise eul_prob_tab objects)
     procedure :: fill_tab, fill_tab_shinv
-    procedure :: write_tab
-    procedure :: read_assignment
+    procedure :: write_tab, write_shift
+    procedure :: read_assignment, read_shift
     procedure :: trim_tab
     ! GLOBAL PROCEDURES (used only by the global eul_prob_tab object)
     procedure :: read_tab_to_glob
     procedure :: prob_assign
+    procedure :: fill_shift_tab
     procedure :: shift_assign
     procedure :: write_assignment
     ! DESTRUCTOR
@@ -351,33 +352,35 @@ contains
         endif
     end subroutine prob_assign
 
-    subroutine shift_assign( self, pftcc )
+    subroutine fill_shift_tab( self, pftcc )
         use simple_polarft_corrcalc, only: polarft_corrcalc
         class(eul_prob_tab),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
-        integer :: i, iptcl, iproj, ithr, ix, iy, ishift, dist_inds(NSHIFTS),&
-                   &stab_inds(self%nptcls, NSHIFTS), assigned_ishift, assigned_ptcl
-        real    :: lims(2,2), stepx, stepy, x, y, sum_dist_all, min_dist, max_dist, xy(2),&
-                   &sorted_tab(self%nptcls, NSHIFTS), shift_dist(NSHIFTS), rotmat(2,2)
-        logical :: ptcl_avail(self%nptcls)
+        integer :: i, iptcl, iproj, ithr, ix, iy, ishift
+        real    :: lims(2,2), stepx, stepy, x, y, xy(2), rotmat(2,2)
         ! filling the 2D shift prob table
         lims(:,1) = -params_glob%trs
         lims(:,2) =  params_glob%trs
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,iptcl,ithr,iproj,stepx,stepy,ix,iy,x,ishift,y)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+        !$omp private(i,iptcl,ithr,iproj,stepx,stepy,ix,iy,x,ishift,y,xy,rotmat)
         do i = 1, self%nptcls
             iptcl = self%assgn_map(i)%pind
             iproj = self%assgn_map(i)%iproj
             ithr  = omp_get_thread_num() + 1
             stepx = real(lims(1,2) - lims(1,1), dp) / real(SHIFT_NUM, dp)
             stepy = real(lims(2,2) - lims(2,1), dp) / real(SHIFT_NUM, dp)
+            self%shift_tab(:,i) = self%assgn_map(i)
             do ix = 1,SHIFT_NUM
                 x = lims(1,1) + stepx/2. + real(ix-1,dp)*stepx
                 do iy = 1,SHIFT_NUM
                     ishift = (ix-1)*SHIFT_NUM + iy
                     y      = lims(2,1) + stepy/2. + real(iy-1,dp)*stepy
-                    self%shift_tab(ishift,i)        = self%assgn_map(i)
-                    self%shift_tab(ishift,i)%x      = x
-                    self%shift_tab(ishift,i)%y      = y
+                    ! rotate the shift vector to the frame of reference
+                    xy = [x,y]
+                    call rotmat2d(pftcc%get_rot(self%assgn_map(i)%inpl), rotmat)
+                    xy = matmul(xy, rotmat)
+                    self%shift_tab(ishift,i)%x      = xy(1)
+                    self%shift_tab(ishift,i)%y      = xy(2)
                     self%shift_tab(ishift,i)%has_sh = .true.
                     self%shift_tab(ishift,i)%dist   = eulprob_dist_switch(real(&
                         &pftcc%gencorr_for_rot_8(iproj, iptcl, real([x,y], dp), self%assgn_map(i)%inpl)))
@@ -385,6 +388,13 @@ contains
             end do
         enddo
         !$omp end parallel do
+    end subroutine fill_shift_tab
+
+    subroutine shift_assign( self )
+        class(eul_prob_tab), intent(inout) :: self
+        integer :: i, ishift, dist_inds(NSHIFTS), stab_inds(self%nptcls, NSHIFTS), assigned_ishift, assigned_ptcl
+        real    :: sum_dist_all, min_dist, max_dist, sorted_tab(self%nptcls, NSHIFTS), shift_dist(NSHIFTS)
+        logical :: ptcl_avail(self%nptcls)
         ! normalization
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,sum_dist_all)
         do i = 1, self%nptcls
@@ -430,12 +440,6 @@ contains
             assigned_ptcl   = stab_inds(dist_inds(assigned_ishift), assigned_ishift)
             ptcl_avail(assigned_ptcl)     = .false.
             self%assgn_map(assigned_ptcl) = self%shift_tab(assigned_ishift,assigned_ptcl)
-            ! rotate the shift vector to the frame of reference
-            xy = [self%assgn_map(assigned_ptcl)%x, self%assgn_map(assigned_ptcl)%y]
-            call rotmat2d(pftcc%get_rot(self%assgn_map(assigned_ptcl)%inpl), rotmat)
-            xy = matmul(xy, rotmat)
-            self%assgn_map(assigned_ptcl)%x = xy(1)
-            self%assgn_map(assigned_ptcl)%y = xy(2)
             ! update the shift_dist and dist_inds
             do ishift = 1, NSHIFTS
                 do while( dist_inds(ishift) < self%nptcls .and. .not.(ptcl_avail(stab_inds(dist_inds(ishift), ishift))))
@@ -613,6 +617,42 @@ contains
     end subroutine trim_tab
 
     ! FILE IO
+
+    ! write the partition-wise (or global) dist value table to a binary file
+    subroutine write_shift( self, binfname )
+        class(eul_prob_tab), intent(in) :: self
+        character(len=*),    intent(in) :: binfname
+        integer :: funit, addr, io_stat
+        call fopen(funit,trim(binfname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
+        write(unit=funit,pos=1)                     self%nptcls
+        write(unit=funit,pos=sizeof(self%nptcls)+1) self%shift_tab
+        call fclose(funit)
+    end subroutine write_shift
+
+    subroutine read_shift( self, binfname )
+        class(eul_prob_tab), intent(inout) :: self
+        character(len=*),    intent(in)    :: binfname
+        type(ptcl_ref),      allocatable   :: shift_tab_glob(:,:)
+        integer :: funit, io_stat, nptcls_glob, headsz, i_loc, i_glob
+        headsz = sizeof(nptcls_glob)
+        if( .not. file_exists(trim(binfname)) )then
+            THROW_HARD('file '//trim(binfname)//' does not exists!')
+        else
+            call fopen(funit,trim(binfname),access='STREAM',action='READ',status='OLD', iostat=io_stat)
+        end if
+        call fileiochk('read_tab_to_glob; read_shift; file: '//trim(binfname), io_stat)
+        read(unit=funit,pos=1) nptcls_glob
+        allocate(shift_tab_glob(NSHIFTS,nptcls_glob))
+        read(unit=funit,pos=headsz + 1) shift_tab_glob
+        call fclose(funit)
+        !$omp parallel do collapse(2) default(shared) proc_bind(close) schedule(static) private(i_loc,i_glob)
+        do i_loc = 1, self%nptcls
+            do i_glob = 1, nptcls_glob
+                if( shift_tab_glob(1,i_glob)%pind == self%shift_tab(1,i_loc)%pind ) self%shift_tab(:,i_loc) = shift_tab_glob(:,i_glob)
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine read_shift
 
     ! write the partition-wise (or global) dist value table to a binary file
     subroutine write_tab( self, binfname )

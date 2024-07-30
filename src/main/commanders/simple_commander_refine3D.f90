@@ -1076,9 +1076,9 @@ contains
         if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, params%oritype)
         call pftcc%memoize_ptcls
         call eulprob_obj_part%read_assignment(trim(ASSIGNMENT_FBODY)//'.dat')
-        call eulprob_obj_part%shift_assign(pftcc)
-        fname = trim(ASSIGNMENT_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
-        call eulprob_obj_part%write_assignment(fname)
+        call eulprob_obj_part%fill_shift_tab(pftcc)
+        fname = trim(SHIFT_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
+        call eulprob_obj_part%write_shift(fname)
         call eulprob_obj_part%kill
         call killimgbatch
         call pftcc%kill
@@ -1187,9 +1187,13 @@ contains
             endif
             ! reading assignments from all parts
             do ipart = 1, params_glob%nparts
-                fname = trim(ASSIGNMENT_FBODY)//int2str_pad(ipart,params_glob%numlen)//'.dat'
-                call eulprob_obj_glob%read_assignment(fname)
+                fname = trim(SHIFT_FBODY)//int2str_pad(ipart,params_glob%numlen)//'.dat'
+                call eulprob_obj_glob%read_shift(fname)
             enddo
+            call eulprob_obj_glob%shift_assign
+            ! write the iptcl->(iref,istate) assignment again with the shifts
+            fname = trim(ASSIGNMENT_FBODY)//'.dat'
+            call eulprob_obj_glob%write_assignment(fname)
             call cline_shift_tab%kill
         endif
         ! cleanup

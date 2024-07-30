@@ -80,6 +80,7 @@ character(len=*), parameter :: DIR_PICKER           = 'picker/'
 character(len=*), parameter :: DIR_PREPROC          = './'
 ! REG CORR/ASSIGNMENT
 character(len=*), parameter :: DIST_FBODY           = 'dist_part'
+character(len=*), parameter :: SHIFT_FBODY          = 'shift_dist_part'
 character(len=*), parameter :: ASSIGNMENT_FBODY     = 'assignment_part'
 ! STREAMING
 character(len=*), parameter :: PREPROCESS_PREFIX    = 'preprocess_'
