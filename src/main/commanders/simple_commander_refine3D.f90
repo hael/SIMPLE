@@ -1185,12 +1185,13 @@ contains
                 ! schedule
                 call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
             endif
+            ! reading assignments from all parts
+            do ipart = 1, params_glob%nparts
+                fname = trim(ASSIGNMENT_FBODY)//int2str_pad(ipart,params_glob%numlen)//'.dat'
+                call eulprob_obj_glob%read_assignment(fname)
+            enddo
+            call cline_shift_tab%kill
         endif
-        ! reading assignments from all parts
-        do ipart = 1, params_glob%nparts
-            fname = trim(ASSIGNMENT_FBODY)//int2str_pad(ipart,params_glob%numlen)//'.dat'
-            call eulprob_obj_glob%read_assignment(fname)
-        enddo
         ! cleanup
         call eulprob_obj_glob%kill
         call cline_prob_tab%kill
