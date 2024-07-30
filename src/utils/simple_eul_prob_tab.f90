@@ -351,17 +351,22 @@ contains
         endif
     end subroutine prob_assign
 
-    subroutine shift_assign( self )
-        class(eul_prob_tab), intent(inout) :: self
-        integer :: i, iptcl, iref, ithr, ix, iy, ishift
-        real    :: lims(2,2), stepx, stepy, x, y
-        ! make shift search objects
+    subroutine shift_assign( self, pftcc )
+        use simple_polarft_corrcalc, only: polarft_corrcalc
+        class(eul_prob_tab),     intent(inout) :: self
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        integer :: i, iptcl, iproj, ithr, ix, iy, ishift, dist_inds(NSHIFTS),&
+                   &stab_inds(self%nptcls, NSHIFTS), assigned_ishift, assigned_ptcl
+        real    :: sorted_tab(self%nptcls, NSHIFTS), shift_dist(NSHIFTS)
+        real    :: lims(2,2), stepx, stepy, x, y, sum_dist_all, min_dist, max_dist
+        logical :: ptcl_avail(self%nptcls)
+        ! filling the 2D shift prob table
         lims(:,1) = -params_glob%trs
         lims(:,2) =  params_glob%trs
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,iptcl,ithr,iref,stepx,stepy,ix,iy,x,ishift,y)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,iptcl,ithr,iproj,stepx,stepy,ix,iy,x,ishift,y)
         do i = 1, self%nptcls
             iptcl = self%assgn_map(i)%pind
-            iref  = (self%assgn_map(i)%istate-1)*params_glob%nspace
+            iproj = self%assgn_map(i)%iproj
             ithr  = omp_get_thread_num() + 1
             stepx = real(lims(1,2) - lims(1,1), dp) / real(SHIFT_NUM, dp)
             stepy = real(lims(2,2) - lims(2,1), dp) / real(SHIFT_NUM, dp)
@@ -370,13 +375,69 @@ contains
                 do iy = 1,SHIFT_NUM
                     ishift = (ix-1)*SHIFT_NUM + iy
                     y      = lims(2,1) + stepy/2. + real(iy-1,dp)*stepy
-                    self%shift_tab(ishift,i)      = self%assgn_map(iptcl)
-                    ! self%shift_tab(ishift,i)%dist = eulprob_dist_switch(real(&
-                    !     &pftcc_glob%gencorr_for_rot_8(iref, iptcl, real([x,y]), self%assgn_map(iptcl)%irot)))
+                    self%shift_tab(ishift,i)        = self%assgn_map(i)
+                    self%shift_tab(ishift,i)%x      = x
+                    self%shift_tab(ishift,i)%y      = y
+                    self%shift_tab(ishift,i)%has_sh = .true.
+                    self%shift_tab(ishift,i)%dist   = eulprob_dist_switch(real(&
+                        &pftcc%gencorr_for_rot_8(iproj, iptcl, real([x,y], dp), self%assgn_map(i)%inpl)))
                 end do
             end do
         enddo
         !$omp end parallel do
+        ! normalization
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,sum_dist_all)
+        do i = 1, self%nptcls
+            sum_dist_all = sum(self%shift_tab(:,i)%dist)
+            if( sum_dist_all < TINY )then
+                self%shift_tab(:,i)%dist = 0.
+            else
+                self%shift_tab(:,i)%dist = self%shift_tab(:,i)%dist / sum_dist_all
+            endif
+        enddo
+        !$omp end parallel do
+        ! min/max normalization to obtain values between 0 and 1
+        max_dist = 0.
+        min_dist = huge(min_dist)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i)&
+        !$omp reduction(min:min_dist) reduction(max:max_dist)
+        do i = 1, self%nptcls
+            max_dist = max(max_dist, maxval(self%shift_tab(:,i)%dist, dim=1))
+            min_dist = min(min_dist, minval(self%shift_tab(:,i)%dist, dim=1))
+        enddo
+        !$omp end parallel do
+        if( (max_dist - min_dist) < TINY )then
+            self%shift_tab%dist = 0.
+        else
+            self%shift_tab%dist = (self%shift_tab%dist - min_dist) / (max_dist - min_dist)
+        endif
+        ! assigning shift points to iptcl:
+        ! sorting each columns
+        sorted_tab = transpose(self%shift_tab%dist)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ishift,i)
+        do ishift = 1, NSHIFTS
+            stab_inds(:,ishift) = (/(i,i=1,self%nptcls)/)
+            call hpsort(sorted_tab(:,ishift), stab_inds(:,ishift))
+        enddo
+        !$omp end parallel do
+        ! first row is the current best state distribution
+        dist_inds  = 1
+        shift_dist = sorted_tab(1,:)
+        ptcl_avail = .true.
+        do while( any(ptcl_avail) )
+            ! choose next ishift to assign !!! SHOULD DO PROBABILISTIC SAMPLING HERE
+            assigned_ishift = minloc(shift_dist, dim=1)
+            assigned_ptcl   = stab_inds(dist_inds(assigned_ishift), assigned_ishift)
+            ptcl_avail(assigned_ptcl)     = .false.
+            self%assgn_map(assigned_ptcl) = self%shift_tab(assigned_ishift,assigned_ptcl)
+            ! update the shift_dist and dist_inds
+            do ishift = 1, NSHIFTS
+                do while( dist_inds(ishift) < self%nptcls .and. .not.(ptcl_avail(stab_inds(dist_inds(ishift), ishift))))
+                    dist_inds(ishift)  = dist_inds(ishift) + 1
+                    shift_dist(ishift) = sorted_tab(dist_inds(ishift), ishift)
+                enddo
+            enddo
+        enddo
     end subroutine shift_assign
 
     ! projection normalization (same energy) of the 3D loc_tab (for each state)

@@ -54,6 +54,7 @@ type(check_3Dconv_commander)            :: xcheck_3Dconv
 type(calc_group_sigmas_commander)       :: xcalc_group_sigmas
 type(prob_tab_commander)                :: xprob_tab
 type(prob_align_commander)              :: xprob_align
+type(shift_tab_commander)               :: xshift_tab
 type(pspec_lp_commander)                :: xpspec_lp
 
 ! RECONSTRUCTION PROGRAMS
@@ -182,6 +183,8 @@ select case(prg)
         call xprob_tab%execute(cline)
     case( 'prob_align' )
         call xprob_align%execute(cline)
+    case( 'shift_tab' )
+        call xshift_tab%execute(cline)
     case( 'pspec_lp' )
         call xpspec_lp%execute(cline)
 
