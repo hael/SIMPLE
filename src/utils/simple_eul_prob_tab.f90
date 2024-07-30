@@ -357,8 +357,8 @@ contains
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer :: i, iptcl, iproj, ithr, ix, iy, ishift, dist_inds(NSHIFTS),&
                    &stab_inds(self%nptcls, NSHIFTS), assigned_ishift, assigned_ptcl
-        real    :: sorted_tab(self%nptcls, NSHIFTS), shift_dist(NSHIFTS)
-        real    :: lims(2,2), stepx, stepy, x, y, sum_dist_all, min_dist, max_dist
+        real    :: lims(2,2), stepx, stepy, x, y, sum_dist_all, min_dist, max_dist, xy(2),&
+                   &sorted_tab(self%nptcls, NSHIFTS), shift_dist(NSHIFTS), rotmat(2,2)
         logical :: ptcl_avail(self%nptcls)
         ! filling the 2D shift prob table
         lims(:,1) = -params_glob%trs
@@ -430,6 +430,12 @@ contains
             assigned_ptcl   = stab_inds(dist_inds(assigned_ishift), assigned_ishift)
             ptcl_avail(assigned_ptcl)     = .false.
             self%assgn_map(assigned_ptcl) = self%shift_tab(assigned_ishift,assigned_ptcl)
+            ! rotate the shift vector to the frame of reference
+            xy = [self%assgn_map(assigned_ptcl)%x, self%assgn_map(assigned_ptcl)%y]
+            call rotmat2d(pftcc%get_rot(self%assgn_map(assigned_ptcl)%inpl), rotmat)
+            xy = matmul(xy, rotmat)
+            self%assgn_map(assigned_ptcl)%x = xy(1)
+            self%assgn_map(assigned_ptcl)%y = xy(2)
             ! update the shift_dist and dist_inds
             do ishift = 1, NSHIFTS
                 do while( dist_inds(ishift) < self%nptcls .and. .not.(ptcl_avail(stab_inds(dist_inds(ishift), ishift))))
