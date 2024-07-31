@@ -66,6 +66,7 @@ implicit none
         real, allocatable :: intensities(:)
         intensities = pack(img_in%get_rmat(), mask=.true.)
         call detect_peak_thres(size(intensities), level, intensities, thres)
+        print *, 'intensity threshold = ', thres
         call img_out%copy(img_in)
         call img_out%zero_below(thres)
         call img_out%write('post_thresholding_map.mrc')
@@ -95,6 +96,7 @@ implicit none
         logical, allocatable, intent(out) :: mask_out(:,:,:)
         character(len=*),     intent(in)  :: element
         real,                 intent(in)  :: NP_diam ! approx. diameter of nanoparticle
+        type(image)       :: img_copy
         character(len=2)  :: el_ucase
         character(len=8)  :: crystal_system
         real              :: msksq, a, ha, x, y, z, center(3), smpd, radius, radius_vx, sphere_vol, total_vol, thres
@@ -189,11 +191,15 @@ implicit none
         call hpsort(intensities_flat)                   ! sort array (low to high)
         last_index = size(intensities_flat)             ! last_index is position of largest intensity value in sorted array
         thres      = intensities_flat(last_index - nvx) ! last_index - nvx position of sorted array is threshold
+        print *, 'intensity threshold = ', thres
         ! make intensity logical mask, with positions with intensities greater than the threshold being set to true
         allocate(mask_out(ldim(1), ldim(2), ldim(3)), source=.false.)
         where (rmat > thres)
             mask_out = .true.
         end where
+        call img_copy%copy(img_in)
+        call img_copy%zero_below(thres)
+        call img_copy%write('post_thresholding_map2.mrc')
         print *, 'count(mask_out) = ', count(mask_out)
         deallocate(intensities_flat)
     end subroutine make_intensity_mask_2

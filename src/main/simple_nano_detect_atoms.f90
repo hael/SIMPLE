@@ -47,6 +47,7 @@ use simple_stat
         procedure :: calc_per_atom_corr
         procedure :: refine_threshold
         procedure :: discard_atoms
+        procedure :: whole_map_correlation
         procedure :: write_pdb
         procedure :: write_boximgs
         procedure :: write_positions_and_scores
@@ -104,7 +105,7 @@ use simple_stat
             call phasecorr_one_atom(thres_img, self%element)
             call thres_img%write('denoised_map.mrc') 
             if (    intensity_level .eq. 1) then
-                call make_intensity_mask(  thres_img, self%thres_msk, level=2)
+                call make_intensity_mask(      thres_img, self%thres_msk, level=2)
             else if(intensity_level .eq. 2) then
                 if (present(mskdiam)) then
                     call make_intensity_mask_2(thres_img, self%thres_msk, self%element, mskdiam*0.75)
@@ -954,6 +955,37 @@ use simple_stat
             deallocate(pos_inds, selected_pos)
         end if
     end subroutine discard_atoms
+
+    function whole_map_correlation(self, compare_to_pdb) result(corr)
+        class(nano_picker),         intent(inout) :: self
+        character(len=*), optional, intent(in)    :: compare_to_pdb
+        real                     :: corr
+        type(nanoparticle)       :: nano, nano_ref
+        type(image)              :: simatms, rawimg, simatms_ref
+        type(parameters), target :: params
+        if (.not. self%wrote_pdb) call self%write_pdb()
+        params_glob => params
+        params_glob%element = self%element
+        params_glob%smpd    = self%smpd
+        call nano%new(self%raw_filename)
+        call nano%set_atomic_coords(trim(self%pdb_filename))
+        call nano%simulate_atoms(simatms)
+        if (present(compare_to_pdb)) then
+            call nano_ref%new(self%raw_filename)
+            call nano_ref%set_atomic_coords(trim(compare_to_pdb))
+            call nano_ref%simulate_atoms(simatms_ref)
+            corr = simatms_ref%real_corr(simatms)
+            call nano_ref%kill
+            call simatms_ref%kill
+        else
+            call rawimg%new(self%ldim, self%smpd)
+            call rawimg%read(trim(self%raw_filename))
+            corr = rawimg%real_corr(simatms)
+            call rawimg%kill
+        end if
+        call nano%kill
+        call simatms%kill
+    end function whole_map_correlation
 
     ! input filename with no extension
     subroutine write_pdb( self, filename )
