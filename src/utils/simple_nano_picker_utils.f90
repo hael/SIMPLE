@@ -69,7 +69,7 @@ implicit none
         print *, 'intensity threshold = ', thres
         call img_out%copy(img_in)
         call img_out%zero_below(thres)
-        call img_out%write('post_thresholding_map.mrc')
+        call img_out%write('post_thresholding_map_3.mrc')
         deallocate(intensities)
     end subroutine threshold_img
 
@@ -91,11 +91,12 @@ implicit none
     end subroutine make_intensity_mask
 
     ! intensity thresholding based on nanoparticle properties
-    subroutine make_intensity_mask_2(img_in, mask_out, element, NP_diam)
+    subroutine make_intensity_mask_2(img_in, mask_out, element, NP_diam, level)
         type(image),          intent(in)  :: img_in
         logical, allocatable, intent(out) :: mask_out(:,:,:)
         character(len=*),     intent(in)  :: element
         real,                 intent(in)  :: NP_diam ! approx. diameter of nanoparticle
+        integer, optional,    intent(in)  :: level
         type(image)       :: img_copy
         character(len=2)  :: el_ucase
         character(len=8)  :: crystal_system
@@ -192,14 +193,18 @@ implicit none
         last_index = size(intensities_flat)             ! last_index is position of largest intensity value in sorted array
         thres      = intensities_flat(last_index - nvx) ! last_index - nvx position of sorted array is threshold
         print *, 'intensity threshold = ', thres
-        ! make intensity logical mask, with positions with intensities greater than the threshold being set to true
-        allocate(mask_out(ldim(1), ldim(2), ldim(3)), source=.false.)
-        where (rmat > thres)
-            mask_out = .true.
-        end where
         call img_copy%copy(img_in)
         call img_copy%zero_below(thres)
         call img_copy%write('post_thresholding_map2.mrc')
+        if (present(level)) then
+            call make_intensity_mask(img_copy, mask_out, level)
+        else
+            ! make intensity logical mask, with positions with intensities greater than the threshold being set to true
+            allocate(mask_out(ldim(1), ldim(2), ldim(3)), source=.false.)
+            where (rmat > thres)
+                mask_out = .true.
+            end where
+        end if
         print *, 'count(mask_out) = ', count(mask_out)
         deallocate(intensities_flat)
     end subroutine make_intensity_mask_2
