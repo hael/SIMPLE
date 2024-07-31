@@ -356,13 +356,15 @@ contains
         use simple_polarft_corrcalc, only: polarft_corrcalc
         class(eul_prob_tab),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
-        integer :: i, iptcl, iproj, ithr, ix, iy, ishift
-        real    :: lims(2,2), stepx, stepy, x, y, xy(2), rotmat(2,2)
+        integer :: i, iptcl, iproj, ithr, ix, iy, ishift, irot, inds_sorted(pftcc%nrots,nthr_glob)
+        real    :: lims(2,2), stepx, stepy, x, y, xy(2), rotmat(2,2), inpl_athres,&
+                   &dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob)
         ! filling the 2D shift prob table
-        lims(:,1) = -params_glob%trs
-        lims(:,2) =  params_glob%trs
+        lims(:,1)   = -params_glob%trs
+        lims(:,2)   =  params_glob%trs
+        inpl_athres = calc_athres('dist_inpl', state=1)
         !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-        !$omp private(i,iptcl,ithr,iproj,stepx,stepy,ix,iy,x,ishift,y,xy,rotmat)
+        !$omp private(i,iptcl,ithr,iproj,stepx,stepy,ix,iy,x,y,ishift,irot,xy,rotmat)
         do i = 1, self%nptcls
             iptcl = self%assgn_map(i)%pind
             iproj = self%assgn_map(i)%iproj
@@ -375,15 +377,18 @@ contains
                 do iy = 1,SHIFT_NUM
                     ishift = (ix-1)*SHIFT_NUM + iy
                     y      = lims(2,1) + stepy/2. + real(iy-1,dp)*stepy
+                    call pftcc%gencorrs(iproj, iptcl, [x,y], dists_inpl(:,ithr))
+                    dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
+                    irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres)
                     ! rotate the shift vector to the frame of reference
                     xy = [x,y]
-                    call rotmat2d(pftcc%get_rot(self%assgn_map(i)%inpl), rotmat)
+                    call rotmat2d(pftcc%get_rot(irot), rotmat)
                     xy = matmul(xy, rotmat)
                     self%shift_tab(ishift,i)%x      = xy(1)
                     self%shift_tab(ishift,i)%y      = xy(2)
+                    self%shift_tab(ishift,i)%inpl   = irot
                     self%shift_tab(ishift,i)%has_sh = .true.
-                    self%shift_tab(ishift,i)%dist   = eulprob_dist_switch(real(&
-                        &pftcc%gencorr_for_rot_8(iproj, iptcl, real([x,y], dp), self%assgn_map(i)%inpl)))
+                    self%shift_tab(ishift,i)%dist   = dists_inpl(irot,ithr)
                 end do
             end do
         enddo
