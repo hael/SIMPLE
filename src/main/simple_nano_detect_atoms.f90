@@ -108,7 +108,7 @@ use simple_stat
                 call make_intensity_mask(      thres_img, self%thres_msk, level=2)
             else if(intensity_level .eq. 2) then
                 if (present(mskdiam)) then
-                    call make_intensity_mask_2(thres_img, self%thres_msk, self%element, mskdiam*0.75)
+                    call make_intensity_mask_2(thres_img, self%thres_msk, self%element, mskdiam*0.75, level=2)
                 else
                     THROW_HARD('ERROR: MSKDIAM must be present to use intensity level 2')
                 end if
