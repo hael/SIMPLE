@@ -17,7 +17,7 @@ interface angle_sampling
     module procedure angle_sampling_2
 end interface
 
-integer, parameter :: SHIFT_NUM = 10
+integer, parameter :: SHIFT_NUM = 50
 integer, parameter :: NSHIFTS   = SHIFT_NUM**2    !< number of discretized shift space
 
 type :: eul_prob_tab
@@ -358,39 +358,47 @@ contains
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer :: i, iptcl, iproj, ithr, ix, iy, ishift, irot, inds_sorted(pftcc%nrots,nthr_glob)
         real    :: lims(2,2), stepx, stepy, x, y, xy(2), rotmat(2,2), inpl_athres,&
-                   &dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob)
-        ! filling the 2D shift prob table
+                   &dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob),&
+                   &shift_points(2,NSHIFTS)
         lims(:,1)   = -params_glob%trs
         lims(:,2)   =  params_glob%trs
+        stepx       = real(lims(1,2) - lims(1,1), dp) / real(SHIFT_NUM, dp)
+        stepy       = real(lims(2,2) - lims(2,1), dp) / real(SHIFT_NUM, dp)
         inpl_athres = calc_athres('dist_inpl', state=1)
+        ! generating discretized shifts
         !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-        !$omp private(i,iptcl,ithr,iproj,stepx,stepy,ix,iy,x,y,ishift,irot,xy,rotmat)
+        !$omp private(ix,iy,x,y,ishift)
+        do ix = 1,SHIFT_NUM
+            x = lims(1,1) + stepx/2. + real(ix-1,dp)*stepx
+            do iy = 1,SHIFT_NUM
+                ishift = (ix-1)*SHIFT_NUM + iy
+                y      = lims(2,1) + stepy/2. + real(iy-1,dp)*stepy
+                shift_points(:,ishift) = [x,y]
+            end do
+        end do
+        !$omp end parallel do
+        ! filling the tab
+        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+        !$omp private(i,iptcl,ithr,iproj,ishift,irot,xy,rotmat)
         do i = 1, self%nptcls
             iptcl = self%assgn_map(i)%pind
             iproj = self%assgn_map(i)%iproj
             ithr  = omp_get_thread_num() + 1
-            stepx = real(lims(1,2) - lims(1,1), dp) / real(SHIFT_NUM, dp)
-            stepy = real(lims(2,2) - lims(2,1), dp) / real(SHIFT_NUM, dp)
             self%shift_tab(:,i) = self%assgn_map(i)
-            do ix = 1,SHIFT_NUM
-                x = lims(1,1) + stepx/2. + real(ix-1,dp)*stepx
-                do iy = 1,SHIFT_NUM
-                    ishift = (ix-1)*SHIFT_NUM + iy
-                    y      = lims(2,1) + stepy/2. + real(iy-1,dp)*stepy
-                    call pftcc%gencorrs(iproj, iptcl, [x,y], dists_inpl(:,ithr))
-                    dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
-                    irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres)
-                    ! rotate the shift vector to the frame of reference
-                    xy = [x,y]
-                    call rotmat2d(pftcc%get_rot(irot), rotmat)
-                    xy = matmul(xy, rotmat)
-                    self%shift_tab(ishift,i)%x      = xy(1)
-                    self%shift_tab(ishift,i)%y      = xy(2)
-                    self%shift_tab(ishift,i)%inpl   = irot
-                    self%shift_tab(ishift,i)%has_sh = .true.
-                    self%shift_tab(ishift,i)%dist   = dists_inpl(irot,ithr)
-                end do
-            end do
+            do ishift = 1, NSHIFTS
+                xy = shift_points(:,ishift)
+                call pftcc%gencorrs(iproj, iptcl, xy, dists_inpl(:,ithr))
+                dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
+                irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres)
+                ! rotate the shift vector to the frame of reference
+                call rotmat2d(pftcc%get_rot(irot), rotmat)
+                xy = matmul(xy, rotmat)
+                self%shift_tab(ishift,i)%x      = xy(1)
+                self%shift_tab(ishift,i)%y      = xy(2)
+                self%shift_tab(ishift,i)%inpl   = irot
+                self%shift_tab(ishift,i)%has_sh = .true.
+                self%shift_tab(ishift,i)%dist   = dists_inpl(irot,ithr)
+            enddo
         enddo
         !$omp end parallel do
     end subroutine fill_shift_tab
