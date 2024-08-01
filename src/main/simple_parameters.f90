@@ -94,6 +94,7 @@ type :: parameters
     character(len=3)          :: sh_rnd='no'          !< shift probabilistic random start(yes|no){no}
     character(len=3)          :: sh_ori_rnd='no'      !< random start around the origin(yes|no){no}
     character(len=3)          :: sh_glob='no'         !< global shift control(yes|no){no}
+    character(len=3)          :: sh_first='no'        !< shifting before orientation search(yes|no){no}
     character(len=3)          :: sh_inv='no'          !< whether to use shift invariant metric for projection direction assignment(yes|no){no}
     character(len=3)          :: sh_inv_kw='yes'       !< whether k-weights for shift invariant metric(yes|no){yes}
     character(len=3)          :: stoch_update='no'    !< update of random sampling in each iteration
@@ -633,6 +634,7 @@ contains
         call check_carg('sh_rnd',         self%sh_rnd)
         call check_carg('sh_ori_rnd',     self%sh_ori_rnd)
         call check_carg('sh_glob',        self%sh_glob)
+        call check_carg('sh_first',       self%sh_first)
         call check_carg('sh_inv',         self%sh_inv)
         call check_carg('sh_inv_kw',      self%sh_inv_kw)
         call check_carg('sigma_est',      self%sigma_est)
