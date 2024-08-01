@@ -238,7 +238,7 @@ contains
         call self%reset
     end subroutine shuffle_2
 
-    !>  \brief  creates a balanced randomised paritioning over nstates states
+    !>  \brief  creates a balanced randomised partitioning over nstates states
     subroutine balanced( self, nstates, iarr )
         class(ran_tabu), intent(inout) :: self
         integer,         intent(in)    :: nstates !< num states

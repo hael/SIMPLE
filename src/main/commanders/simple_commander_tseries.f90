@@ -34,6 +34,7 @@ public :: extract_substk_commander
 public :: autorefine3D_nano_commander
 public :: refine3D_nano_commander
 public :: cavgsproc_nano_commander
+public :: cavgseoproc_nano_commander
 public :: ptclsproc_nano_commander
 public :: graphene_subtr_commander
 public :: tseries_swap_stack_commander
@@ -116,6 +117,11 @@ type, extends(commander_base) :: cavgsproc_nano_commander
   contains
     procedure :: execute      => exec_cavgsproc_nano
 end type cavgsproc_nano_commander
+
+type, extends(commander_base) :: cavgseoproc_nano_commander
+  contains
+    procedure :: execute      => exec_cavgseoproc_nano
+end type cavgseoproc_nano_commander
 
 type, extends(commander_base) :: ptclsproc_nano_commander
   contains
@@ -1312,6 +1318,90 @@ contains
         ! end gracefully
         call simple_end('**** PTCLSPROC_NANO NORMAL STOP ****')
     end subroutine exec_ptclsproc_nano
+
+    subroutine exec_cavgseoproc_nano( self, cline )
+        class(cavgseoproc_nano_commander), intent(inout) :: self
+        class(cmdline),                    intent(inout) :: cline
+        class(parameters), pointer    :: params_ptr => null()
+        type(parameters)              :: params
+        type(image)                   :: cavg_even, cavg_odd
+        type(sp_project)              :: spproj
+        character(len=:), allocatable :: cavgs_stk, cavgs_stk_even, cavgs_stk_odd
+        character(len=STDLEN)         :: command_plot
+        real,             allocatable :: rstates(:), rad_cc(:,:), rad_dists(:,:)
+        logical,          allocatable :: state_mask(:)
+        integer,          allocatable :: pinds(:)
+        integer :: ncavgs, ncavgs_even, ncavgs_odd, i, j, cnt, cnt2, ncls, icls, tmax, tmin, tstamp
+        real    :: smpd
+        call cline%set('mkdir', 'yes') ! because we want to create the directory X_cavgseoproc_nano & copy the project file
+        call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
+        params%mkdir = 'no'            ! to prevent the input vol to be appended with ../
+        call cline%set('mkdir', 'no')  ! because we do not want a nested directory structure in the execution directory
+        ! read the project file
+        call spproj%read(params%projfile)
+        call spproj%update_projinfo(cline)
+        call spproj%write_segment_inside('projinfo')
+        ! retrieve cavgs stack
+        call spproj%get_cavgs_stk(cavgs_stk, ncavgs, smpd, fail=.false.)
+
+        cavgs_stk_even = add2fbody(basename(cavgs_stk),fname2ext(cavgs_stk),'_even')
+        cavgs_stk_odd  = add2fbody(basename(cavgs_stk),fname2ext(cavgs_stk),'_odd')
+        print *, cavgs_stk_even, cavgs_stk_odd
+        stop
+        call spproj%get_cavgs_stk(cavgs_stk_even, ncavgs_even, smpd, fail=.false.)
+        call spproj%get_cavgs_stk(cavgs_stk_odd, ncavgs_odd, smpd, fail=.false.)
+        print *, "number of cavgs even", ncavgs_even
+        print *, "number of cavgs odd", ncavgs_odd
+
+        if( allocated(rstates) ) deallocate(rstates)
+        rstates = spproj%os_cls3D%get_all('state')
+        ! partition eo
+        !print *, spproj%os_ptcl3D%get_nevenodd()
+        !call spproj%os_ptcl3D%partition_eo
+        !call build_glob%spproj_field%partition_eo
+        !if( spproj%os_ptcl2D%get_nevenodd() == 0 )then
+        !call spproj%partition_eo
+        !call build_glob%spproj_field%partition_eo
+        !call build_glob%spproj%write_segment_inside(params_glob%oritype)
+        ! compute radial cross-correlation between the even and odd cavgs
+        print *,"params", params%box
+        allocate(rad_cc(ncavgs,params%box/2), rad_dists(ncavgs,params%box/2), state_mask(ncavgs))
+        cnt = 0
+        open(unit=25, file="evenodd_radial_analysis.csv")
+        print *, "ncavgs", ncavgs
+        do i = 1, ncavgs
+            cnt = cnt + 1
+            if( rstates(cnt) > 0.5 )then
+                print *,">>>PROCESSING CLASS ", i
+                call cavg_odd%new([params%box,params%box,1], smpd)
+                call cavg_odd%new([params%box,params%box,1], smpd)
+                !call cavg_even%new([params%box,params%box,1], smpd)
+                !call cavg_odd%read(cavgs_stk,     i)
+                !call cavg_even%read(cavgs_stk,     i+1)
+                call spproj%os_ptcl2D%get_pinds(cnt, 'class', pinds)
+                if( .not. allocated(pinds) ) cycle
+                tmax   = maxval(pinds)
+                tmin   = minval(pinds)
+                tstamp = tmin + (tmax-tmin)/2
+                !call cavg_odd%radial_cc(cavg_even, smpd, rad_cc(cnt,:), rad_dists(cnt,:)) 
+                !do j = 1, size(rad_dists,dim=2)
+                !    write(25,'(i6, i6, 2F18.6, i6, i6)') cnt, tstamp, rad_dists(cnt,j), rad_cc(cnt,j), tmax-tmin, size(pinds)
+                !enddo
+            else
+                state_mask(cnt) = .false.
+            endif
+            write(25, '(A)') "          "
+        enddo
+        command_plot = "gnuplot -e "//'"'//"set pm3d map; set zrange[-1:1]; splot " //"'"//"evenodd_radial_analysis.csv"//"'"// &
+        " u 2:3:4 ; set term png; set xlabel " //"'"//"Time"//"'"// "; set ylabel " //"'"//"Radius({\305})"// &
+        "'"// "; set title " //"'"//"Even-Odd Cavgs Radial Cross-correlation"//"'"// "; set nokey; set output 'evenodd_radial_analysis.png'; replot" //'"'
+        call execute_command_line(command_plot)
+        close(25)
+        ! deallocate
+        if( allocated(cavgs_stk) ) deallocate(cavgs_stk)
+        ! end gracefully
+        call simple_end('**** CAVGSEOPROC_NANO NORMAL STOP ****')
+    end subroutine exec_cavgseoproc_nano
 
     subroutine exec_cavgsproc_nano( self, cline )
         !use simple_commander_atoms, only: detect_atoms_commander
