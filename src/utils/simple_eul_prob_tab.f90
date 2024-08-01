@@ -193,9 +193,6 @@ contains
             do istate = 1, self%nstates
                 iref        = (istate-1)*params_glob%nspace
                 inpl_athres = calc_athres('dist_inpl', state=istate)
-                call calc_num2sample(params_glob%nspace, 'dist', projs_ns, state=istate)
-                if( allocated(locn) ) deallocate(locn)
-                allocate(locn(projs_ns), source=0)
                 !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,iproj,irot,cxy) proc_bind(close) schedule(static)
                 do i = 1, self%nptcls
                     iptcl = self%pinds(i)
@@ -320,9 +317,6 @@ contains
             do istate = 1, self%nstates
                 iref        = (istate-1)*params_glob%nspace
                 inpl_athres = calc_athres('dist_inpl', state=istate)
-                call calc_num2sample(params_glob%nspace, 'dist', projs_ns, state=istate)
-                if( allocated(locn) ) deallocate(locn)
-                allocate(locn(projs_ns), source=0)
                 !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,iproj,irot,cxy,found) proc_bind(close) schedule(static)
                 do i = 1, self%nptcls
                     iptcl = self%pinds(i)

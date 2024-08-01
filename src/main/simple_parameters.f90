@@ -89,10 +89,7 @@ type :: parameters
     character(len=3)          :: script='no'          !< do not execute but generate a script for submission to the queue
     character(len=3)          :: silence_fsc='no'     !< dont print FSC plot to stdout(yes|no){no}
     character(len=3)          :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
-    character(len=3)          :: sh_center='no'       !< 2D class average center registration(yes|no){no}
     character(len=3)          :: sh_opt_angle='yes'   !< shift opt angle(yes|no){yes}
-    character(len=3)          :: sh_rnd='no'          !< shift probabilistic random start(yes|no){no}
-    character(len=3)          :: sh_ori_rnd='no'      !< random start around the origin(yes|no){no}
     character(len=3)          :: sh_glob='no'         !< global shift control(yes|no){no}
     character(len=3)          :: sh_first='no'        !< shifting before orientation search(yes|no){no}
     character(len=3)          :: sh_inv='no'          !< whether to use shift invariant metric for projection direction assignment(yes|no){no}
@@ -422,7 +419,6 @@ type :: parameters
     real    :: prob_athres=10.     !< angle threshold for prob distribution samplings
     real    :: scale=1.            !< image scale factor{1}
     real    :: sherr=0.            !< shift error(in pixels){2}
-    real    :: sh_sig=0.           !< shift initial randomizing range (in pixels){0}
     real    :: sigma=1.0           !< for gaussian function generation {1.}
     real    :: smpd=2.             !< sampling distance; same as EMANs apix(in A)
     real    :: smpd_crop=2.        !< sampling distance; same as EMANs apix(in A) refers to cropped cavg/volume
@@ -629,10 +625,7 @@ contains
         call check_carg('silence_fsc',    self%silence_fsc)
         call check_carg('script',         self%script)
         call check_carg('shbarrier',      self%shbarrier)
-        call check_carg('sh_center',      self%sh_center)
         call check_carg('sh_opt_angle',   self%sh_opt_angle)
-        call check_carg('sh_rnd',         self%sh_rnd)
-        call check_carg('sh_ori_rnd',     self%sh_ori_rnd)
         call check_carg('sh_glob',        self%sh_glob)
         call check_carg('sh_first',       self%sh_first)
         call check_carg('sh_inv',         self%sh_inv)
@@ -870,7 +863,6 @@ contains
         call check_rarg('prob_athres',    self%prob_athres)
         call check_rarg('scale',          self%scale)
         call check_rarg('sherr',          self%sherr)
-        call check_rarg('sh_sig',         self%sh_sig)
         call check_rarg('smpd',           self%smpd)
         call check_rarg('smpd_crop',      self%smpd_crop)
         call check_rarg('sigma',          self%sigma)

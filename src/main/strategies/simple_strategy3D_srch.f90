@@ -193,13 +193,12 @@ contains
         cxy = self%cart_shsrch_obj%minimize(nevals, shvec)
     end function shift_srch_cart
 
-    subroutine inpl_srch( self, ref, xy, irot_in, prev_sh, prob )
+    subroutine inpl_srch( self, ref, xy, irot_in, prev_sh )
         class(strategy3D_srch), intent(inout) :: self
         integer, optional,      intent(in)    :: ref
         real,    optional,      intent(in)    :: xy(2)
         integer, optional,      intent(in)    :: irot_in
         real,    optional,      intent(in)    :: prev_sh(2)
-        real,    optional,      intent(in)    :: prob
         real    :: cxy(3)
         integer :: iref, irot, loc(1)
         if( self%doshift )then
@@ -212,7 +211,7 @@ contains
             endif
             ! BFGS over shifts with in-plane rot exhaustive callback
             call self%grad_shsrch_obj%set_indices(iref, self%iptcl)
-            cxy = self%grad_shsrch_obj%minimize(irot=irot, xy=xy, prev_sh=prev_sh, prob=prob)
+            cxy = self%grad_shsrch_obj%minimize(irot=irot, xy=xy, prev_sh=prev_sh)
             if( irot > 0 ) call self%store_solution(iref, irot, cxy(1), sh=cxy(2:3))
         endif
     end subroutine inpl_srch
