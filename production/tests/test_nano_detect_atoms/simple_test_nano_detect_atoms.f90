@@ -37,9 +37,9 @@ denoise          = .false. ! whether to denoise the experimental volume before p
 debug            = .false. ! whether to write additional output files for the purpose of debugging
 use_euclids      = .false. ! whether to use euclidean distance between boximg and simulated atom instead of correlation
 use_zscores      = .false. ! whether to use z-scores when determining outlier correlation scores
-use_valid_corr   = .false.  ! whether to discard boxes based on a low valid correlation
-use_cs_thres     = .false.  ! whether to discard boxes based on a low contact score
-mskdiam          = 28.4
+use_valid_corr   = .true.  ! whether to discard boxes based on a low valid correlation
+use_cs_thres     = .true.  ! whether to discard boxes based on a low contact score
+mskdiam          = 39.3
 
 print *, 'NEW METHOD: '
 call test_exp4%new(smpd, element, filename_exp, peak_thres_level, offset, denoise, use_euclids, mskdiam, intensity_level)
@@ -65,6 +65,7 @@ if (debug) call test_exp4%write_dist(  'corr_dist_after_dist_filter_high.csv','c
 if (debug) call test_exp4%write_dist(   'int_dist_after_dist_filter_high.csv','avg_int')
 if (debug) call test_exp4%write_dist('euclid_dist_after_dist_filter_high.csv','euclid' )
 call test_exp4%find_centers()
+call test_exp4%refine_threshold(20,max_thres=0.7)
 !call test_exp4%write_positions_and_scores('pos_and_scores_centers.csv','centers')
 call test_exp4%discard_atoms(use_valid_corr=use_valid_corr, use_cs_thres=use_cs_thres)
 !call test_exp4%write_positions_and_scores('pos_and_scores_centers_discarded.csv','centers')
@@ -87,14 +88,14 @@ call test_exp4%kill
 print *, ' '
 
 ! Henry's method (for comparison)
-print *, 'OLD METHOD: '
-params_glob         => params
-params_glob%element = element
-params_glob%smpd    = smpd
-use_auto_corr_thres = .true.
-call nano%new(filename_exp,msk=mskdiam)
-call nano%identify_atomic_pos(a, l_fit_lattice=.true., use_cs_thres=use_cs_thres,&
-                &use_auto_corr_thres=use_auto_corr_thres)
- call nano%kill
+! print *, 'OLD METHOD: '
+! params_glob         => params
+! params_glob%element = element
+! params_glob%smpd    = smpd
+! use_auto_corr_thres = .true.
+! call nano%new(filename_exp,msk=mskdiam)
+! call nano%identify_atomic_pos(a, l_fit_lattice=.true., use_cs_thres=use_cs_thres,&
+!                 &use_auto_corr_thres=use_auto_corr_thres)
+! call nano%kill
 
 end program simple_test_nano_detect_atoms

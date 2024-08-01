@@ -478,7 +478,8 @@ use simple_stat
         if( present(dist_thres) )then
             dist_thres_here  = dist_thres
         else
-            dist_thres_here  = self%offset
+            dist_thres_here  = self%radius / self%smpd
+            print *, 'DIST_THRES = ', dist_thres_here
         endif
         if (.not. self%use_euclids) then
             pos_inds   = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
@@ -669,6 +670,7 @@ use simple_stat
             self%center_positions(pos_inds(iimg),:) = coords(iimg,:)
         enddo
         call self%simulated_atom%ifft()
+        self%wrote_pdb = .false. ! when centers are updated, we will want to update pdb file
         deallocate(atms_array)
         deallocate(coords)
         deallocate(pos_inds)
@@ -765,14 +767,10 @@ use simple_stat
         call nano%kill
     end subroutine calc_per_atom_corr
 
-    subroutine refine_threshold( self, num_thres, ref_pdb_name, max_thres )
+    subroutine refine_threshold( self, num_thres, max_thres )
         class(nano_picker), intent(inout) :: self
         integer,            intent(in)    :: num_thres
-        character(len=*),   intent(in)    :: ref_pdb_name
         real,    optional,  intent(in)    :: max_thres
-        type(nanoparticle)       :: nano_ref, nano_exp
-        type(image)              :: ref_NP,   exp_NP
-        type(parameters), target :: params
         real                     :: thresholds(num_thres), thres_corrs(num_thres), max_thres_here, step, avg_corr
         integer                  :: i, optimal_index(1), num_pos
         integer, allocatable     :: pos_inds(:)
@@ -787,32 +785,11 @@ use simple_stat
         do i = 1, num_thres
             thresholds(i) = self%thres + step * (i-1)
         enddo
-        ! simulate nanoparticle with initial pdb file (for reference / comparison)
-        ! params_glob has to be set because of the way simple_nanoparticle is set up
-        params_glob => params
-        params_glob%element = self%element
-        params_glob%smpd    = self%smpd
-        ! call nano_ref%new(trim(self%raw_filename))
-        ! call nano_ref%set_atomic_coords(trim(ref_pdb_name))
-        ! call nano_ref%simulate_atoms(simatms=ref_NP)
-        ! iterate through following steps:
-        ! 1. remove boxes with correlations below each threshold
-        ! 2. call find centers and write_pdb
-        ! 3. use the resulting pdb file to simulate nanoparticle
-        ! 4. calculate correlation between this simulated nanoparticle and original? simulated nanoparticle
-        ! 5. save correlations in array, at end will find maximum and return corresponding threshold
+        ! iterate through thresholds and calculate correlation to experimental map
         do i = 1, num_thres
             self%thres     = thresholds(i) ! need to set self%thres because it is called in multiple subroutines
             call self%find_centers
-            call self%write_pdb('sim_centers')
-            call nano_exp%new(self%raw_filename)
-            call nano_exp%set_atomic_coords('sim_centers.pdb')
-            call nano_exp%simulate_atoms(simatms=exp_NP)
-            !thres_corrs(i) = ref_NP%real_corr(exp_NP)
-            thres_corrs(i) = self%nano_img%real_corr(exp_NP) ! see if correlating with raw img helps
-            !call nano_exp%validate_atoms(exp_NP, avg_corr)
-            !thres_corrs(i) = avg_corr
-            call nano_exp%kill
+            thres_corrs(i) = self%whole_map_correlation()
         enddo
         optimal_index = maxloc(thres_corrs)
         self%thres    = thresholds(optimal_index(1))
@@ -822,7 +799,6 @@ use simple_stat
         print *, 'OPTIMAL THRESHOLD = ', self%thres
         print *, 'OPTIMAL CORRELATION = ', thres_corrs(optimal_index(1))
         print *, 'NUMBER POSITIONS = ', num_pos
-        call nano_ref%kill
     end subroutine refine_threshold
 
     subroutine discard_atoms(self, use_cs_thres, use_valid_corr, corr_thres, cs_thres)
@@ -991,10 +967,14 @@ use simple_stat
     subroutine write_pdb( self, filename )
         class(nano_picker),         intent(inout) :: self
         character(len=*), optional, intent(in)    :: filename
-        integer, allocatable :: pos_inds(:)
-        real,    allocatable :: coords(:,:), pos_scores(:)
-        integer              :: nbox, iimg, locmin(1)
-        real                 :: pos(3)
+        integer, allocatable     :: pos_inds(:)
+        real,    allocatable     :: coords(:,:), pos_scores(:)
+        integer                  :: nbox, iimg, locmin(1)
+        real                     :: pos(3)
+        type(parameters), target :: params
+        params_glob         => params
+        params_glob%element = self%element
+        params_glob%smpd    = self%smpd
         pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
         pos_scores = pack(self%box_scores(:,:,:), mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
         locmin = minloc(pos_scores)
