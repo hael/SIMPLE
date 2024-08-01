@@ -1165,7 +1165,7 @@ contains
         enddo
         if( params_glob%l_batchfrac )then
             call eulprob_obj_glob%write_tab(trim(DIST_FBODY)//'.dat')
-            call eulprob_obj_glob%trim_tab(build_glob%spproj_field)
+            ! call eulprob_obj_glob%trim_tab(build_glob%spproj_field)
         endif
         call eulprob_obj_glob%prob_assign
         ! write the iptcl->(iref,istate) assignment
