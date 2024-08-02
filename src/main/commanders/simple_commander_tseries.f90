@@ -1346,11 +1346,6 @@ contains
         call spproj%get_cavgs_stk(cavgs_stk, ncavgs, smpd, fail=.false.)
         cavgs_stk_even = add2fbody(cavgs_stk,'.mrc','_even')
         cavgs_stk_odd  = add2fbody(cavgs_stk,'.mrc','_odd')
-        !call spproj%get_cavgs_stk(cavgs_stk_even, ncavgs_even, smpd, fail=.false.)
-        !call spproj%get_cavgs_stk(cavgs_stk_odd, ncavgs_odd, smpd, fail=.false.)
-        !print *, cavgs_stk_even, cavgs_stk_odd, ncavgs, ncavgs_even, ncavgs_odd
-        !print *, "number of cavgs even", ncavgs_even
-        !print *, "number of cavgs odd", ncavgs_odd
         if( allocated(rstates) ) deallocate(rstates)
         rstates = spproj%os_cls3D%get_all('state')
         ! compute radial cross-correlation between the even and odd cavgs
@@ -1386,10 +1381,6 @@ contains
             " u 2:3:4 ; set term png; set xlabel " //"'"//"Time"//"'"// "; set ylabel " //"'"//"Radius({\305})"// &
             "'"// "; set title " //"'"//"Even-Odd Radial Cross-correlation"//"'"// "; set nokey; set output 'radial_analysis.png'; replot" //'"'
         call execute_command_line(command_plot)
-        !command_plot = "gnuplot -e "//'"'//"set pm3d map; set zrange[-.4:1]; splot " //"'"//"evenodd_radial_analysis.csv"//"'"// &
-        !" u 2:3:4 ; set term png; set xlabel " //"'"//"Time"//"'"// "; set ylabel " //"'"//"Radius({\305})"// &
-        !"'"// "; set title " //"'"//"Even-Odd Cavgs Radial Cross-correlation"//"'"// "; set nokey; set output 'evenodd_radial_analysis.png'; replot" //'"'
-        !call execute_command_line(command_plot)
         close(25)
         ! deallocate
         if( allocated(cavgs_stk) ) deallocate(cavgs_stk)
