@@ -296,12 +296,12 @@ contains
         class(polarft_corrcalc), intent(inout) :: pftcc
         type(pftcc_shsrch_fm) :: fm_shsrch_obj(nthr_glob)
         type(ori)             :: o_prev
-        integer,  allocatable :: locn(:), scores_inds_sorted(:,:)
+        integer,  allocatable :: scores_inds_sorted(:,:)
         real,     allocatable :: scores_inpl(:,:), scores_inpl_sorted(:,:)
         real    :: dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob)
         real    :: dists_projs(params_glob%nspace,nthr_glob), lims(2,2), lims_init(2,2), cxy(3), inpl_athres
-        integer :: inpls(params_glob%nspace,nthr_glob)
-        integer :: i, j, iproj, iptcl, projs_ns, ithr, irot, inds_sorted(pftcc%nrots,nthr_glob), istate, iref
+        integer :: inpls(params_glob%nspace,nthr_glob), locn(params_glob%nspace)
+        integer :: i, j, iproj, iptcl, projs_ns, ithr, irot, inds_sorted(pftcc%nrots,nthr_glob), istate, iref, nfound
         logical :: l_doshift, found
         call seed_rnd
         if( trim(params_glob%sh_first).eq.'yes' )then
@@ -351,46 +351,71 @@ contains
                 lims_init(:,1) = -SHC_INPL_TRSHWDTH
                 lims_init(:,2) =  SHC_INPL_TRSHWDTH
                 do ithr = 1,nthr_glob
-                    call fm_shsrch_obj(ithr)%new(params_glob%trs, params_glob%smpd_crop/params_glob%smpd)
+                    call fm_shsrch_obj(ithr)%new(params_glob%trs, 1.)
                 end do
                 ! fill the table
                 do istate = 1, self%nstates
                     iref        = (istate-1)*params_glob%nspace
                     inpl_athres = calc_athres('dist_inpl', state=istate)
                     call calc_num2sample(params_glob%nspace, 'dist', projs_ns, state=istate)
-                    if( allocated(locn) ) deallocate(locn)
-                    allocate(locn(projs_ns), source=0)
-                    !$omp parallel do default(shared) private(i,j,iptcl,ithr,iproj,irot,cxy,locn,found) proc_bind(close) schedule(static)
+                    !$omp parallel do default(shared) private(i,j,iptcl,ithr,iproj,irot,cxy,locn,found,nfound) proc_bind(close) schedule(static)
                     do i = 1, self%nptcls
                         iptcl = self%pinds(i)
                         ithr  = omp_get_thread_num() + 1
                         do iproj = 1, params_glob%nspace
-                            ! to determine the directions whose shift will be searched
-                            call pftcc%gencorrs_mag_cc(iref + iproj, iptcl, scores_inpl(:,ithr),kweight=.true.)
+                            select case(trim(params_glob%algorithm))
+                            case('magcc')
+                                call pftcc%gencorrs_mag_cc(iref + iproj, iptcl, scores_inpl(:,ithr),kweight=.false.)
+                            case('magccp')
+                                call pftcc%gencorrs_mag_cc(iref + iproj, iptcl, scores_inpl(:,ithr),kweight=.true.)
+                            case('mag')
+                                call pftcc%gencorrs_mag(iref + iproj, iptcl, scores_inpl(:,ithr),kweight=.false.)
+                            case('magp')
+                                call pftcc%gencorrs_mag(iref + iproj, iptcl, scores_inpl(:,ithr),kweight=.true.)
+                            case('abscc')
+                                call pftcc%gencorrs_abs_cc(iref + iproj, iptcl, scores_inpl(:,ithr),kweight=.false.)
+                            case('absccp')
+                                call pftcc%gencorrs_abs_cc(iref + iproj, iptcl, scores_inpl(:,ithr),kweight=.true.)
+                            case('abs')
+                                call pftcc%gencorrs_abs(iref + iproj, iptcl, scores_inpl(:,ithr),kweight=.false.)
+                            case DEFAULT ! ='absp'
+                                call pftcc%gencorrs_abs(iref + iproj, iptcl, scores_inpl(:,ithr),kweight=.true.)
+                            end select
                             scores_inpl(:,ithr) = eulprob_dist_switch(scores_inpl(:,ithr))
                             irot = angle_sampling(scores_inpl(:,ithr), scores_inpl_sorted(:,ithr), scores_inds_sorted(:,ithr), inpl_athres)
                             dists_projs(iproj,ithr) = scores_inpl(irot,ithr)
-                            inpls(iproj,ithr) = irot
-                            ! fill the rest of the table
-                            call pftcc%gencorrs(iref + iproj, iptcl, dists_inpl(:,ithr))
-                            dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
-                            irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres)
-                            self%loc_tab(iproj,i,istate)%dist = dists_inpl(irot,ithr)
-                            self%loc_tab(iproj,i,istate)%inpl = irot
+                            inpls(iproj,ithr)       = minloc(scores_inpl(:,ithr),dim=1)
                         enddo
-                        locn = minnloc(dists_projs(:,ithr), projs_ns)
-                        do j = 1,projs_ns
+                        locn = (/(iproj,iproj=1,params_glob%nspace)/)
+                        call hpsort(dists_projs(:,ithr), locn)
+                        nfound = 0
+                        do j = 1, params_glob%nspace
                             iproj = locn(j)
-                            irot  = inpls(iproj,ithr)
-                            call fm_shsrch_obj(ithr)%minimize(iref+iproj, iptcl, found, irot, cxy(1), cxy(2:3))
-                            if( found )then
-                                self%loc_tab(iproj,i,istate)%inpl   = irot
-                                self%loc_tab(iproj,i,istate)%dist   = eulprob_dist_switch(cxy(1))
-                                self%loc_tab(iproj,i,istate)%x      = cxy(2)
-                                self%loc_tab(iproj,i,istate)%y      = cxy(3)
+                            if( nfound < projs_ns )then
+                                irot = inpls(iproj,ithr)
+                                call fm_shsrch_obj(ithr)%minimize(iref+iproj, iptcl, found, irot, cxy(1), cxy(2:3))
+                                if( found )then
+                                    self%loc_tab(iproj,i,istate)%inpl = irot
+                                    self%loc_tab(iproj,i,istate)%dist = eulprob_dist_switch(cxy(1))
+                                    self%loc_tab(iproj,i,istate)%x    = cxy(2)
+                                    self%loc_tab(iproj,i,istate)%y    = cxy(3)
+                                    nfound = nfound + 1
+                                else
+                                    call pftcc%gencorrs(iref+iproj, iptcl, dists_inpl(:,ithr))
+                                    dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
+                                    irot = angle_sampling(eulprob_dist_switch(dists_inpl(:,ithr)), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres)
+                                    self%loc_tab(iproj,i,istate)%inpl = irot
+                                    self%loc_tab(iproj,i,istate)%dist = dists_inpl(irot,ithr)
+                                endif
+                                self%loc_tab(iproj,i,istate)%has_sh = .true.
+                            else
+                                call pftcc%gencorrs(iref + iproj, iptcl, dists_inpl(:,ithr))
+                                dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
+                                irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres)
+                                self%loc_tab(iproj,i,istate)%dist = dists_inpl(irot,ithr)
+                                self%loc_tab(iproj,i,istate)%inpl = irot
                             endif
-                            self%loc_tab(iproj,i,istate)%has_sh = .true.
-                        end do
+                        enddo
                     enddo
                     !$omp end parallel do
                 enddo
@@ -690,21 +715,23 @@ contains
     subroutine trim_tab( self, os )
         class(eul_prob_tab), intent(inout) :: self
         class(oris),         intent(in)    :: os
-        integer, allocatable :: states(:), sampled(:)
+        integer, allocatable :: states(:), sampled(:), inds(:)
         logical, allocatable :: mask(:)
-        integer :: i, n
-        allocate(sampled(self%nptcls), source=nint(os%get_all('sampled')))
-        allocate(states(self%nptcls), source=nint(os%get_all('state')))
+        integer :: i, n, ntot
+        ntot = os%get_noris()
+        allocate(sampled(ntot), source=nint(os%get_all('sampled')))
+        allocate(states(ntot), source=nint(os%get_all('state')))
         mask = sampled > 0 .and. states > 0
         n    = count(mask)
         deallocate(states,sampled)
         if( n == self%nptcls )return
-        self%pinds     = pack(self%pinds,mask=mask)
-        self%loc_tab   = self%loc_tab(:,self%pinds(:),:)
-        self%assgn_map = self%assgn_map(self%pinds(:))
-        self%state_tab = self%state_tab(:,self%pinds(:))
+        inds           = pack((/(i,i=1,size(self%pinds))/), mask=mask(self%pinds(:)))
+        self%loc_tab   = self%loc_tab(:,inds(:),:)
+        self%assgn_map = self%assgn_map(inds(:))
+        self%state_tab = self%state_tab(:,inds(:))
+        self%pinds     = self%pinds(inds(:))
         self%nptcls    = n
-        deallocate(mask)
+        deallocate(mask,inds)
     end subroutine trim_tab
 
     ! FILE IO

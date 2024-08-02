@@ -1210,7 +1210,7 @@ contains
         real,    parameter :: BATCHFRAC_DEFAULT = 0.2
         integer, parameter :: MINBOX  = 88
         integer, parameter :: NSTAGES = 11
-        integer, parameter :: NSPACE1=500, NSPACE2=1000, NSPACE3=1500
+        integer, parameter :: NSPACE1=500, NSPACE2=1000, NSPACE3=2000
         integer, parameter :: SHIFT_STAGE_DEFAULT = NSTAGES-2
         integer, parameter :: ICM_STAGE_DEFAULT   = 2       ! in [1;NSTAGES]
         integer, parameter :: MIN_NPTCLS = 20000
@@ -1245,7 +1245,6 @@ contains
         integer :: ini_nptcls, nptcls, iters_per_stage
         logical :: l_lpset, l_err, l_lpstop_set, l_lpstart_set
         call cline%set('stoch_update', 'no')
-        call cline%set('pgrp',         'c1')
         call cline%set('oritype',      'ptcl3D')
         call cline%set('mkdir',        'yes')
         call cline%set('sigma_est',    'global')
@@ -1261,6 +1260,7 @@ contains
         if( .not. cline%defined('icm')          )  call cline%set('icm',           'no')
         if( .not. cline%defined('icm_stage')    )  call cline%set('icm_stage',     ICM_STAGE_DEFAULT)
         if( .not. cline%defined('maxits_between')) call cline%set('maxits_between',MAXITS_BETWEEN_DEFAULT)
+        if( .not. cline%defined('pgrp')         )  call cline%set('pgrp',          'c1')
         ! resolution limit strategy
         l_lpset       = .false.
         l_lpstop_set  = cline%defined('lpstop')
