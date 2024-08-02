@@ -1,5 +1,7 @@
 module simple_defs_environment
 use, intrinsic :: iso_c_binding, only: c_int, c_char, c_null_char
+! SLURM ENVIRONMENT VARIABLES
+character(len=*), parameter :: SIMPLE_DEFAULT_PARTITION_TIME   = 'SIMPLE_SLURM_PARTITION_TIME'
 ! STREAM ENVIRONMENT VARIABLES
 character(len=*), parameter :: SIMPLE_STREAM_PREPROC_NTHR      = 'SIMPLE_STREAM_PREPROC_NTHR'
 character(len=*), parameter :: SIMPLE_STREAM_PREPROC_PARTITION = 'SIMPLE_STREAM_PREPROC_PARTITION'

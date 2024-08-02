@@ -52,8 +52,9 @@ contains
         type(ori)                     :: compenv_o
         type(sp_project)              :: spproj
         character(len=:), allocatable :: qsnam, tpi, hrs_str, mins_str, secs_str
-        integer                       :: partsz, hrs, mins, secs, nptcls_here
-        real                          :: rtpi, tot_time_sec
+        character(len=STDLEN)         :: default_time_env
+        integer                       :: partsz, hrs, mins, secs, nptcls_here, envlen
+        real                          :: rtpi, tot_time_sec, default_time
         logical                       :: sstream
         integer, parameter            :: MAXENVKEYS = 30
         call self%kill
@@ -84,7 +85,12 @@ contains
         call spproj%compenv%get_ori(1, compenv_o)
         self%qdescr = compenv_o%ori2chash()
         ! deal with time
-        if( self%qdescr%isthere('time_per_image') )then
+        call get_environment_variable(SIMPLE_DEFAULT_PARTITION_TIME, default_time_env, envlen)
+        if(envlen > 0 .and. trim(default_time_env) .eq. "true") then
+            if( self%qdescr%isthere('job_time') ) then
+                call self%qdescr%delete('job_time')
+            end if
+        else if( self%qdescr%isthere('time_per_image') ) then
             tpi          = self%qdescr%get('time_per_image')
             rtpi         = str2real(tpi)
             tot_time_sec = rtpi*real(partsz)
