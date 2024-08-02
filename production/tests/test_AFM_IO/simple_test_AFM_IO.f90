@@ -4,8 +4,11 @@ include 'simple_lib.f08'
 use simple_AFM_image
 ! use simple_AFM_image 
 !AFM IO
-character(*), parameter     :: fn_in = '/Users/atifao/Downloads/IBW/Cob_450016.ibw'
-integer         :: in, check, real_type
+type :: AFM_image
+    type(image), allocatable :: img_array(:)
+    character(len = 20), allocatable :: img_names(:)
+end type AFM_image 
+
 type    :: bin_header5
     INTEGER(KIND=2) :: version 
     INTEGER(KIND=2) :: checksum 
@@ -65,44 +68,42 @@ end type
 !     end type AFM
 ! end interface 
 
-type(bin_header5)   :: binheader
-type(wave_header5)  :: waveheader
-if(index(fn_in, '.ibw') == 0) then 
-    print *, 'Error: only .ibw files are supported'
-end if
-open(newunit = check, file = fn_in, status = 'old', access='stream')
-read(check) binheader%version
-if(binheader%version > 5) then
-    open(newunit = in, file = fn_in, status = 'old', access='stream', convert='swap')
-else
-    open(newunit = in, file = fn_in, status = 'old', access='stream')
-end if
-read(in)binheader, waveheader
-if(binheader%version /= 5) then
-    print *, "Error: only version 5 files are supported"
-    stop 
-end if 
-call rmat_gen(waveheader, binheader)
+
+call read_ibw('/Users/atifao/Downloads/IBW/Cob_450016.ibw')
 ! Can add integer/complex support later. 
 ! open(newunit = data, file = fn_in, status = 'old', access='stream')
 ! read(in, pos = 385) first_entry 
 ! delete file at some point
 contains 
 
-    subroutine rmat_gen(waveheader1, binheader1) 
-        type(wave_header5), intent(in)   :: waveheader1
-        type(bin_header5), intent(in)   :: binheader1
+    subroutine read_ibw(fn_in) 
+        character(len=*),           intent(in)  :: fn_in 
+        integer         :: in, check, real_type
         integer                          :: real_type1, data, total_bytes, bytes_read, iter_ind, prop_ind, img_ind, i
         real(kind = 4), allocatable          :: Rank3_Data_4byte(:, :, :, :)
         real(kind = 8), allocatable          :: Rank3_Data_8byte(:, :, :, :)
         character(:), allocatable                            :: channel_info
         character(len = 10)    :: iteration(2), properties(4)
-        character(len = 20), allocatable  :: img_names(:)
-        type(image), allocatable                       :: img_array(:)
-        type(image_stack)                 :: AFM_Stack     
+        type(AFM_image)       :: AFM
+        type(bin_header5)   :: binheader
+        type(wave_header5)  :: waveheader
         iteration = [character(len = 10) :: 'Trace', 'Retrace']
         properties = [character(len = 10) :: 'Height', 'Amplitude', 'Phase', 'ZSensor' ]
-        
+        if(index(fn_in, '.ibw') == 0) then 
+            print *, 'Error: only .ibw files are supported'
+        end if
+        open(newunit = check, file = fn_in, status = 'old', access='stream')
+        read(check) binheader%version
+        if(binheader%version > 5) then
+            open(newunit = in, file = fn_in, status = 'old', access='stream', convert='swap')
+        else
+            open(newunit = in, file = fn_in, status = 'old', access='stream')
+        end if
+        read(in)binheader, waveheader
+        if(binheader%version /= 5) then
+            print *, "Error: only version 5 files are supported"
+            stop 
+        end if 
         allocate(Rank3_Data_4byte(waveheader%nDim(1) ,waveheader%nDim(2), 1, waveheader%nDim(3)))
         ! select case (waveheader1%type)
         ! case (2) 
@@ -114,41 +115,47 @@ contains
         !     print *, "Error: only float data is currently supported"
         !     stop
         ! end select
-        
         open(newunit = data, file = fn_in, status = 'old', access='stream')
         read(data, pos = 385) Rank3_Data_4byte
         inquire(data, pos = bytes_read)
         allocate(character(binheader%dimLabelsSize(3)) :: channel_info)
-        allocate(img_names(size(iteration) * size(properties)))
+        allocate(AFM%img_names(size(iteration) * size(properties)))
         read(data, pos = binheader%noteSize + bytes_read) channel_info
         print *, channel_info 
         ! getting image names 
         do prop_ind = 1, size(properties)
             do iter_ind = 1, size(iteration)
                 if( index(channel_info, trim(properties(prop_ind)) // trim(iteration(iter_ind)) ) /= 0 .AND. iter_ind == 2 ) then 
-                    img_names(iter_ind*prop_ind) = trim(properties(prop_ind)) // trim(iteration(iter_ind))
+                    AFM%img_names(iter_ind*prop_ind) = trim(properties(prop_ind)) // trim(iteration(iter_ind))
                 else if( index(channel_info, trim(properties(prop_ind)) // trim(iteration(iter_ind)) ) /= 0 .AND. iter_ind == 1) then
-                    img_names(2*prop_ind - iter_ind) = trim(properties(prop_ind)) // trim(iteration(iter_ind)) 
+                    AFM%img_names(2*prop_ind - iter_ind) = trim(properties(prop_ind)) // trim(iteration(iter_ind)) 
                 end if 
             end do 
         end do     
-        print *, img_names 
+        print *, AFM%img_names 
 
-        allocate(img_array(waveheader%nDim(3)))
+        allocate(AFM%img_array(waveheader%nDim(3)))
         do img_ind = 1, waveheader%nDim(3)
-            call img_array(img_ind)%new([waveheader%nDim(1), waveheader%nDim(2), 1], real(waveheader%sfA(1)) * 10**10)
+            call AFM%img_array(img_ind)%new([waveheader%nDim(1), waveheader%nDim(2), 1], real(waveheader%sfA(1)) * 10**10)
         end do 
         ! print *,  img_array(1)%get_smpd()
-        print *, img_array(1)%get_ldim()
+        print *, AFM%img_array(1)%get_ldim()
         print *, waveheader%nDim(3)
         print *, size(Rank3_Data_4byte, dim=1), size(Rank3_Data_4byte, dim=2), size(Rank3_Data_4byte, dim=3)
-        call img_array(1)%set_rmat(Rank3_Data_4byte(:, :, 1, :), .false.)
+        call AFM%img_array(1)%set_rmat(Rank3_Data_4byte(:, :, 1, :), .false.)
         do img_ind = 1, waveheader%nDim(3)
-            call img_array(img_ind)%set_rmat(Rank3_Data_4byte(:, :, img_ind, :), .false.)
+            call AFM%img_array(img_ind)%set_rmat(Rank3_Data_4byte(:, :, img_ind, :), .false.)
         end do 
         ! print *, img_array(1)%get_rmat()
         ! might need to transpose or rotate
         ! call img_array(3)%vis()
-        call img_array(findloc(index(img_names, 'HeightTrace'),1, dim = 1))%vis()
-    end subroutine
+        call AFM%img_array(findloc(index(AFM%img_names, 'HeightTrace'),1, dim = 1))%vis()
+    end subroutine read_ibw
+
+    ! subroutine get_property(AFM, property)
+    !     type(AFM_image), intent(in)      :: AFM
+    !     character(len = *), intent(in)                     :: property
+    !     AFM%img_array(findloc(index(AFM%img_names, property), 1, dim = 1))
+    ! end subroutine get_property 
+
 end program AFM_File_IO
