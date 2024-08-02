@@ -1406,8 +1406,8 @@ contains
             ! write
             pool_proj%os_ptcl3D = pool_proj%os_ptcl2D
             call pool_proj%os_ptcl3D%delete_2Dclustering
-            call pool_proj%write(projfile)
-            call pool_proj%os_ptcl3D%kill
+            !call pool_proj%write(projfile)
+            !call pool_proj%os_ptcl3D%kill
         else
             call pool_proj%os_out%kill
             call pool_proj%add_cavgs2os_out(cavgsfname, params_glob%smpd, 'cavg', clspath=l_clspath)
@@ -1419,8 +1419,8 @@ contains
             ! write
             pool_proj%os_ptcl3D = pool_proj%os_ptcl2D
             call pool_proj%os_ptcl3D%delete_2Dclustering
-            call pool_proj%write(projfile)
-            call pool_proj%os_ptcl3D%kill
+            !call pool_proj%write(projfile)
+            !call pool_proj%os_ptcl3D%kill
         endif
         ! write starfiles
         call starproj%export_cls2D(pool_proj)
@@ -1428,8 +1428,9 @@ contains
             call copy_micrographs_optics
             call write_migrographs_starfile(optics_set=.true.)
             call write_particles_starfile(optics_set=.true.)
-        end if 
-
+        end if
+        call pool_proj%write(projfile)
+        call pool_proj%os_ptcl3D%kill
         call pool_proj%os_cls2D%delete_entry('stk')
 
         contains
