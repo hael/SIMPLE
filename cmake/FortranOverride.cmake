@@ -284,9 +284,9 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   set(forpar   "" )# -fopenmp  -Wp,-fopenmp")                                                   # parallel flags
   set(target   "${GNUNATIVE} -fPIC ")                                                           # target platform
   if(CMAKE_Fortran_COMPILER_SUPPORTS_F08 EQUAL 1)
-    set(target "${target} -std=f2008 -fall-intrinsics -Wintrinsics-std")
+    set(target "${target} -std=gnu -fall-intrinsics -Wintrinsics-std")
   else()
-    set(target "${target} -std=f2003 -fall-intrinsics -Wintrinsics-std")
+    set(target "${target} -std=gnu -fall-intrinsics -Wintrinsics-std")
   endif()
 
   set(common   "${preproc} ${dialect} ${target} ${warn}")
