@@ -6,12 +6,12 @@ contains
     ! single covalent radii from Cordero, et al., 2008, "Covalent radii revisited"
     ! Dalton Trans. (21): 2832–2838. doi:10.1039/b801115j
     subroutine get_element_Z_and_radius( element_ucase, Z, r )
-        character(len=2), intent(in)  :: element_ucase
+        character(len=*), intent(in)  :: element_ucase
         integer,          intent(out) :: Z
         real,             intent(out) :: r
         Z = 0
         r = 1.
-        select case(element_ucase)
+        select case(trim(element_ucase))
             ! organic
             case('H')
                 Z = 1 ; r = 0.31
