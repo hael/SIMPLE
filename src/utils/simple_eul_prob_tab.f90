@@ -292,9 +292,11 @@ contains
     subroutine fill_tab_shinv( self, pftcc )
         use simple_polarft_corrcalc,  only: polarft_corrcalc
         use simple_pftcc_shsrch_fm,   only: pftcc_shsrch_fm
+        use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad
         class(eul_prob_tab),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         type(pftcc_shsrch_fm) :: fm_shsrch_obj(nthr_glob)
+        type(pftcc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)
         type(ori)             :: o_prev
         integer,  allocatable :: scores_inds_sorted(:,:)
         real,     allocatable :: scores_inpl(:,:), scores_inpl_sorted(:,:)
@@ -352,6 +354,8 @@ contains
                 lims_init(:,2) =  SHC_INPL_TRSHWDTH
                 do ithr = 1,nthr_glob
                     call fm_shsrch_obj(ithr)%new(params_glob%trs, 1.)
+                    call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier,&
+                    &maxits=params_glob%maxits_sh, opt_angle=(trim(params_glob%sh_opt_angle).eq.'yes'))
                 end do
                 ! fill the table
                 do istate = 1, self%nstates
@@ -381,7 +385,16 @@ contains
                             case DEFAULT ! ='absp'
                                 call pftcc%gencorrs_abs(iref + iproj, iptcl, scores_inpl(:,ithr),kweight=.true.)
                             end select
-                            scores_inpl(:,ithr) = eulprob_dist_switch(scores_inpl(:,ithr))
+                            select case(trim(params_glob%algorithm))
+                            case('magcc','magccp','abscc','absccp')
+                                where( scores_inpl(:,ithr) < TINY )
+                                    scores_inpl(:,ithr) = huge(inpl_athres)
+                                else where
+                                    scores_inpl(:,ithr) = 1.0 - scores_inpl(:,ithr)
+                                end where
+                            case DEFAULT
+                                scores_inpl(:,ithr) = eulprob_dist_switch(scores_inpl(:,ithr))
+                            end select
                             irot = angle_sampling(scores_inpl(:,ithr), scores_inpl_sorted(:,ithr), scores_inds_sorted(:,ithr), inpl_athres)
                             dists_projs(iproj,ithr) = scores_inpl(irot,ithr)
                             inpls(iproj,ithr)       = minloc(scores_inpl(:,ithr),dim=1)
@@ -392,9 +405,9 @@ contains
                         do j = 1, params_glob%nspace
                             iproj = locn(j)
                             if( nfound < projs_ns )then
-                                irot = inpls(iproj,ithr)
-                                call fm_shsrch_obj(ithr)%minimize(iref+iproj, iptcl, found, irot, cxy(1), cxy(2:3))
-                                if( found )then
+                                call grad_shsrch_obj(ithr)%set_indices(iref + iproj, iptcl)
+                                cxy = grad_shsrch_obj(ithr)%minimize(irot=irot)
+                                if( irot > 0 )then
                                     self%loc_tab(iproj,i,istate)%inpl = irot
                                     self%loc_tab(iproj,i,istate)%dist = eulprob_dist_switch(cxy(1))
                                     self%loc_tab(iproj,i,istate)%x    = cxy(2)
@@ -412,8 +425,8 @@ contains
                                 call pftcc%gencorrs(iref + iproj, iptcl, dists_inpl(:,ithr))
                                 dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
                                 irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres)
-                                self%loc_tab(iproj,i,istate)%dist = dists_inpl(irot,ithr)
                                 self%loc_tab(iproj,i,istate)%inpl = irot
+                                self%loc_tab(iproj,i,istate)%dist = dists_inpl(irot,ithr)
                             endif
                         enddo
                     enddo
