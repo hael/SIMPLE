@@ -61,7 +61,7 @@ contains
         real, parameter  :: FRAC_ERR = 0.15 ! error term for expanding rMax (fraction of atomic radius)
         real    :: a_0, rMax, r, err
         integer :: Z
-        el_ucase = uppercase(trim(adjustl(element)))
+        el_ucase = uppercase(element)
         call get_lattice_params(el_ucase, crystal_system, a_0)
         call get_element_Z_and_radius(el_ucase, Z, r)
         if( Z == 0 ) THROW_HARD('Unknown element: '//el_ucase)
@@ -943,7 +943,7 @@ contains
         logical, allocatable :: mask(:)
         real,    allocatable :: points_P_out(:,:), points_Q_out(:,:)
         real,    parameter   :: ABSURD = -10000.
-        el_ucase = upperCase(trim(adjustl(element)))
+        el_ucase = upperCase(element)
         call get_element_Z_and_radius(el_ucase, z, theoretical_radius)
         if( z == 0 ) THROW_HARD('Unknown element: '//el_ucase)
         if( present(theoretical_rad) ) theoretical_radius = theoretical_rad
@@ -1024,14 +1024,14 @@ contains
         real    :: d
         n    = size(atms2keep, dim=2)
         n2rm = size(atms2rm,   dim=2)
-        if( n2rm >= n ) THROW_HARD('atoms to remove must be subset of atoms to keep')
+        if( n2rm > n ) THROW_HARD('atoms to remove must be subset of atoms to keep')
         allocate(mask2keep(n), source=.true.)
         do i = 1, n2rm
             d = pixels_dist(atms2rm(:,i),atms2keep(:,:),'min',mask2keep,loc,keep_zero=.true.)
             mask2keep(loc(1)) = .false.
         enddo
         n2keep = count(mask2keep)
-        if( n2keep /= n - n2rm .or. n2keep < 1 ) THROW_HARD('incorrect # atoms identified')
+        if( n2keep /= n - n2rm ) THROW_HARD('incorrect # atoms identified')
         if( allocated(atms_kept) ) deallocate(atms_kept)
         allocate(atms_kept(3,n2keep), source=0.)
         cnt = 0
