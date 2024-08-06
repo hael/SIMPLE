@@ -94,7 +94,6 @@ type :: parameters
     character(len=3)          :: sh_glob='no'         !< global shift control(yes|no){no}
     character(len=3)          :: sh_first='no'        !< shifting before orientation search(yes|no){no}
     character(len=3)          :: sh_inv='no'          !< whether to use shift invariant metric for projection direction assignment(yes|no){no}
-    character(len=3)          :: sh_inv_kw='yes'       !< whether k-weights for shift invariant metric(yes|no){yes}
     character(len=3)          :: stoch_update='no'    !< update of random sampling in each iteration
     character(len=3)          :: newstream='no'       !< new streaming version
     character(len=3)          :: stream='no'          !< stream (real time) execution mode(yes|no){no}
@@ -211,6 +210,7 @@ type :: parameters
     character(len=STDLEN)     :: picker='old'         !< which picker to use (old|new){old}
     character(len=STDLEN)     :: prg=''               !< SIMPLE program being executed
     character(len=STDLEN)     :: projname=''          !< SIMPLE  project name
+    character(len=STDLEN)     :: protocol=''          !< generic option
     character(len=STDLEN)     :: ptclw='no'           !< use particle weights(yes|no){no}
     character(len=STDLEN)     :: qsys_name='local'    !< name of queue system (local|slurm|pbs)
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2d classification
@@ -608,6 +608,7 @@ contains
         call check_carg('projname',       self%projname)
         call check_carg('proj_is_class',  self%proj_is_class)
         call check_carg('projstats',      self%projstats)
+        call check_carg('protocol',       self%protocol)
         call check_carg('prune',          self%prune)
         call check_carg('ptclw',          self%ptclw)
         call check_carg('qsys_name',      self%qsys_name)
@@ -631,7 +632,6 @@ contains
         call check_carg('sh_glob',        self%sh_glob)
         call check_carg('sh_first',       self%sh_first)
         call check_carg('sh_inv',         self%sh_inv)
-        call check_carg('sh_inv_kw',      self%sh_inv_kw)
         call check_carg('sigma_est',      self%sigma_est)
         call check_carg('speckind',       self%speckind)
         call check_carg('split_mode',     self%split_mode)

@@ -944,11 +944,7 @@ contains
         ! make CTFs
         if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, params%oritype)
         call pftcc%memoize_ptcls
-        if( trim(params%sh_inv).eq.'yes' )then
-            call eulprob_obj_part%fill_tab_shinv(pftcc)
-        else
-            call eulprob_obj_part%fill_tab(pftcc)
-        endif
+        call eulprob_obj_part%fill_tab(pftcc)
         fname = trim(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
         call eulprob_obj_part%write_tab(fname)
         call eulprob_obj_part%kill
@@ -1165,7 +1161,7 @@ contains
         enddo
         if( params_glob%l_batchfrac )then
             call eulprob_obj_glob%write_tab(trim(DIST_FBODY)//'.dat')
-            ! call eulprob_obj_glob%trim_tab(build_glob%spproj_field)
+            call eulprob_obj_glob%trim_tab(build_glob%spproj_field)
         endif
         call eulprob_obj_glob%prob_assign
         ! write the iptcl->(iref,istate) assignment

@@ -1290,6 +1290,7 @@ contains
         do icavgs = 1, ncavgs
             cnt = 0
             call spproj%os_ptcl2D%get_pinds(icavgs, 'class', pinds)
+            if( .not. allocated(pinds) ) cycle
             nptcls = size(pinds)
             call cavg_img%new([params%box,params%box,1], smpd)
             call cavg_img%read(cavgs_stk,     icavgs)
@@ -1314,7 +1315,7 @@ contains
         call execute_command_line(command_plot)
         call exec_cmdline('rm -rf fsc* fft* stderrout')
         ! deallocate
-        !if( allocated(cavgs_stk) ) deallocate(cavgs_stk)
+        if( allocated(cavgs_stk) ) deallocate(cavgs_stk)
         ! end gracefully
         call simple_end('**** PTCLSPROC_NANO NORMAL STOP ****')
     end subroutine exec_ptclsproc_nano
@@ -1327,7 +1328,7 @@ contains
         type(image)                   :: cavg_even, cavg_odd
         type(sp_project)              :: spproj
         character(len=:), allocatable :: cavgs_stk, cavgs_stk_even, cavgs_stk_odd
-        character(len=STDLEN)         :: command_plot
+        character(len=STDLEN)         :: command_plot, ext
         real,             allocatable :: rstates(:), rad_cc(:,:), rad_dists(:,:)
         logical,          allocatable :: state_mask(:)
         integer,          allocatable :: pinds(:)
@@ -1341,28 +1342,12 @@ contains
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
         call spproj%write_segment_inside('projinfo')
-        ! retrieve cavgs stack
+        ! retrieve even and odd cavgs stack
         call spproj%get_cavgs_stk(cavgs_stk, ncavgs, smpd, fail=.false.)
-
-        cavgs_stk_even = add2fbody(basename(cavgs_stk),fname2ext(cavgs_stk),'_even')
-        cavgs_stk_odd  = add2fbody(basename(cavgs_stk),fname2ext(cavgs_stk),'_odd')
-        print *, cavgs_stk_even, cavgs_stk_odd
-        stop
-        call spproj%get_cavgs_stk(cavgs_stk_even, ncavgs_even, smpd, fail=.false.)
-        call spproj%get_cavgs_stk(cavgs_stk_odd, ncavgs_odd, smpd, fail=.false.)
-        print *, "number of cavgs even", ncavgs_even
-        print *, "number of cavgs odd", ncavgs_odd
-
+        cavgs_stk_even = add2fbody(cavgs_stk,'.mrc','_even')
+        cavgs_stk_odd  = add2fbody(cavgs_stk,'.mrc','_odd')
         if( allocated(rstates) ) deallocate(rstates)
         rstates = spproj%os_cls3D%get_all('state')
-        ! partition eo
-        !print *, spproj%os_ptcl3D%get_nevenodd()
-        !call spproj%os_ptcl3D%partition_eo
-        !call build_glob%spproj_field%partition_eo
-        !if( spproj%os_ptcl2D%get_nevenodd() == 0 )then
-        !call spproj%partition_eo
-        !call build_glob%spproj_field%partition_eo
-        !call build_glob%spproj%write_segment_inside(params_glob%oritype)
         ! compute radial cross-correlation between the even and odd cavgs
         print *,"params", params%box
         allocate(rad_cc(ncavgs,params%box/2), rad_dists(ncavgs,params%box/2), state_mask(ncavgs))
@@ -1375,26 +1360,26 @@ contains
                 print *,">>>PROCESSING CLASS ", i
                 call cavg_odd%new([params%box,params%box,1], smpd)
                 call cavg_odd%new([params%box,params%box,1], smpd)
-                !call cavg_even%new([params%box,params%box,1], smpd)
-                !call cavg_odd%read(cavgs_stk,     i)
-                !call cavg_even%read(cavgs_stk,     i+1)
+                call cavg_even%new([params%box,params%box,1], smpd)
+                call cavg_odd%read(cavgs_stk_even,     i)
+                call cavg_even%read(cavgs_stk_odd,     i)
                 call spproj%os_ptcl2D%get_pinds(cnt, 'class', pinds)
                 if( .not. allocated(pinds) ) cycle
                 tmax   = maxval(pinds)
                 tmin   = minval(pinds)
                 tstamp = tmin + (tmax-tmin)/2
-                !call cavg_odd%radial_cc(cavg_even, smpd, rad_cc(cnt,:), rad_dists(cnt,:)) 
-                !do j = 1, size(rad_dists,dim=2)
-                !    write(25,'(i6, i6, 2F18.6, i6, i6)') cnt, tstamp, rad_dists(cnt,j), rad_cc(cnt,j), tmax-tmin, size(pinds)
-                !enddo
+                call cavg_odd%radial_cc(cavg_even, smpd, rad_cc(cnt,:), rad_dists(cnt,:)) 
+                do j = 1, size(rad_dists,dim=2)
+                    write(25,'(i6, i6, 2F18.6, i6, i6)') cnt, tstamp, rad_dists(cnt,j), rad_cc(cnt,j), tmax-tmin, size(pinds)
+                enddo
             else
                 state_mask(cnt) = .false.
             endif
             write(25, '(A)') "          "
         enddo
-        command_plot = "gnuplot -e "//'"'//"set pm3d map; set zrange[-1:1]; splot " //"'"//"evenodd_radial_analysis.csv"//"'"// &
-        " u 2:3:4 ; set term png; set xlabel " //"'"//"Time"//"'"// "; set ylabel " //"'"//"Radius({\305})"// &
-        "'"// "; set title " //"'"//"Even-Odd Cavgs Radial Cross-correlation"//"'"// "; set nokey; set output 'evenodd_radial_analysis.png'; replot" //'"'
+        command_plot = "gnuplot -e "//'"'//"set pm3d map; set zrange[-.4:1]; splot " //"'"//"evenodd_radial_analysis.csv"//"'"// &
+            " u 2:3:4 ; set term png; set xlabel " //"'"//"Time"//"'"// "; set ylabel " //"'"//"Radius({\305})"// &
+            "'"// "; set title " //"'"//"Even-Odd Radial Cross-correlation"//"'"// "; set nokey; set output 'radial_analysis.png'; replot" //'"'
         call execute_command_line(command_plot)
         close(25)
         ! deallocate

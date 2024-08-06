@@ -49,6 +49,7 @@ type(tseries_swap_stack_commander)            :: xtseries_swap_stack
 ! VALIDATION PROGRAMS
 type(vizoris_commander)                       :: xvizoris
 type(cavgsproc_nano_commander)                :: xcavgsproc
+type(cavgseoproc_nano_commander)              :: xcavgseoproc
 type(ptclsproc_nano_commander)                :: xptclsproc
 
 ! MODEL BUILDING/ANALYSIS PROGRAMS
@@ -153,6 +154,8 @@ select case(prg)
         call xvizoris%execute(cline)
     case('cavgsproc_nano')
         call xcavgsproc%execute(cline)
+    case('cavgseoproc_nano')
+        call xcavgseoproc%execute(cline)
     case('ptclsproc_nano')
         call xptclsproc%execute(cline)
 

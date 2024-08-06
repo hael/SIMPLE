@@ -178,6 +178,7 @@ contains
         if( params%l_needs_sigma )then
             if( cline%defined('batchfrac') )then
                 updatecnts = nint(build%spproj_field%get_all('updatecnt', [params%fromp,params%top]))
+                updatecnts = pack(updatecnts,mask=ptcl_mask)
                 call eucl_sigma%consolidate_sigma2_history(build%spproj_field, pinds, updatecnts)
                 eucl_sigma2_glob => eucl_sigma
             else
