@@ -2786,7 +2786,7 @@ contains
         &'is a distributed workflow for generating an initial 3D model&
         & from particles',&                                                           ! descr_long
         &'simple_exec',&                                                              ! executable
-        &0, 0, 0, 1, 5, 1, 2, .true.)
+        &0, 0, 0, 3, 5, 1, 2, .true.)
         batch_abinitio_3Dmodel%gui_submenu_list = "model,filter,mask,compute"
         batch_abinitio_3Dmodel%advanced = .false.                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -2800,6 +2800,10 @@ contains
         call batch_abinitio_3Dmodel%set_input('srch_ctrls', 1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
         &center of gravity and map shifts back to the particles(yes|no){no}', '(yes|no){no}', .false., 'no')
         call batch_abinitio_3Dmodel%set_gui_params('srch_ctrls', 1, submenu="model")
+        call batch_abinitio_3Dmodel%set_input('srch_ctrls', 2, pgrp)
+        call batch_abinitio_3Dmodel%set_gui_params('srch_ctrls', 2, submenu="model", advanced=.false.)
+        call batch_abinitio_3Dmodel%set_input('srch_ctrls', 3, pgrp_start)
+        call batch_abinitio_3Dmodel%set_gui_params('srch_ctrls', 3, submenu="model")
         ! filter controls
         call batch_abinitio_3Dmodel%set_input('filt_ctrls', 1, hp)
         call batch_abinitio_3Dmodel%set_gui_params('filt_ctrls', 1, submenu="filter")

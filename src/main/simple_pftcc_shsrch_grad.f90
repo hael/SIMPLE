@@ -33,7 +33,6 @@ contains
     procedure :: new         => grad_shsrch_new
     procedure :: set_indices => grad_shsrch_set_indices
     procedure :: minimize    => grad_shsrch_minimize
-    procedure :: minimize2
     procedure :: kill        => grad_shsrch_kill
     procedure :: does_opt_angle
     procedure :: set_limits
@@ -256,86 +255,6 @@ contains
             endif
         end if
     end function grad_shsrch_minimize
-
-    !> minimisation routine based on identification of in-plane rotation via shift invariant metric
-    function minimize2( self, irot ) result( cxy )
-        class(pftcc_shsrch_grad), intent(inout) :: self
-        integer,                  intent(out)   :: irot
-        real     :: abscorrs(pftcc_glob%get_pftsz()), corrs(pftcc_glob%get_nrots())
-        real     :: rotmat(2,2), cxy(3), rcost,lowest_cost
-        real(dp) :: init_xy(2), xy(2), cost, stepx, stepy, cost1,cost2
-        integer  :: ix, iy, irot1, irot2, lbx,lby,ubx,uby
-        ! Lower bound
-        call pftcc_glob%gencorrs(self%reference, self%particle, corrs, kweight=.true.)
-        irot        = maxloc(corrs, dim=1)
-        lowest_cost = -corrs(irot)
-        cxy         = [-lowest_cost, 0., 0.]
-        ! Two ambiguous in-plane rotations identified
-        call pftcc_glob%gencorrs_abs(self%reference, self%particle, abscorrs, trim(params_glob%sh_inv_kw).eq.'yes')
-        irot1 = maxloc(abscorrs,dim=1)
-        irot2 = irot1 + pftcc_glob%get_pftsz()
-        ! Coarse search for first rotation
-        lbx = ceiling(self%ospec%limits(1,1))
-        ubx = floor(self%ospec%limits(1,2))
-        lby = ceiling(self%ospec%limits(2,1))
-        uby = floor(self%ospec%limits(2,2))
-        self%cur_inpl_idx = irot1
-        cost1   = huge(cost1)
-        init_xy = 0.d0
-        do ix = lbx,ubx
-            do iy = lby,uby
-                cost = -pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, real([ix,iy],dp), self%cur_inpl_idx)
-                if (cost < cost1) then
-                    cost1   = cost
-                    init_xy = real([ix,iy],dp)
-                end if
-            enddo
-        enddo
-        if( real(cost1) < lowest_cost )then
-            lowest_cost = real(cost1)
-            irot        = irot1
-            cxy         = [-lowest_cost, real(init_xy(1)), real(init_xy(2))]
-        endif
-        ! Continuous search for first rotation
-        self%ospec%x   = real(init_xy)
-        self%ospec%x_8 = init_xy
-        call self%opt_obj%minimize(self%ospec, self, rcost)
-        if( rcost < lowest_cost )then
-            lowest_cost = rcost
-            irot        = irot1
-            cxy         = [-lowest_cost, self%ospec%x(1), self%ospec%x(2)]
-        endif
-        ! Coarse search for second rotation
-        self%cur_inpl_idx = irot2
-        cost2   = huge(cost2)
-        init_xy = 0.d0
-        do ix = lbx,ubx
-            do iy = lby,uby
-                cost = -pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, real([ix,iy],dp), self%cur_inpl_idx)
-                if (cost < cost2) then
-                    cost2   = cost
-                    init_xy = real([ix,iy],dp)
-                end if
-            enddo
-        enddo
-        if( real(cost2) < lowest_cost )then
-            lowest_cost = real(cost2)
-            irot        = irot2
-            cxy         = [-lowest_cost, real(init_xy(1)), real(init_xy(2))]
-        endif
-        ! Continuous search for second rotation
-        self%ospec%x   = real(init_xy)
-        self%ospec%x_8 = init_xy
-        call self%opt_obj%minimize(self%ospec, self, rcost)
-        if( rcost < lowest_cost )then
-            lowest_cost = rcost
-            irot        = irot2
-            cxy         = [-lowest_cost, self%ospec%x(1), self%ospec%x(2)]
-        endif
-        ! reporting particle shift
-        call rotmat2d(pftcc_glob%get_rot(irot), rotmat)
-        cxy(2:3) = matmul(cxy(2:3), rotmat)
-    end function minimize2
 
     subroutine coarse_search(self, lowest_cost, init_xy)
         class(pftcc_shsrch_grad), intent(inout) :: self
