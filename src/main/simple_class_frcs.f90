@@ -280,7 +280,7 @@ contains
         do iproj=1,self%nprojs
             frc = self%frcs(sstate,iproj,:)
             if( any(frc > 0.5) )then
-                call get_resolution(self%frcs(sstate,iproj,:), self%res4frc_calc, res_frc05, res_frc0143)
+                call get_resolution(frc, self%res4frc_calc, res_frc05, res_frc0143)
                 freqs_frc05(iproj) = res_frc05
                 nvalid = nvalid + 1
             else
@@ -291,7 +291,7 @@ contains
             estimate_lpstart = 30.0
         else
             call hpsort(freqs_frc05)
-            n = min(nvalid,20)
+            n = min(nvalid,25)
             estimate_lpstart = sum(freqs_frc05(1:n)) / real(n)
         endif
     end function estimate_lpstart

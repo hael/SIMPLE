@@ -709,7 +709,7 @@ contains
         type(sym)                     :: se1, se2
         type(class_frcs)              :: clsfrcs
         type(image)                   :: final_vol, reprojs
-        character(len=:), allocatable :: vol_type, str_state, vol, vol_pproc, vol_pproc_mirr
+        character(len=:), allocatable :: vol_type, str_state, vol, vol_pproc, vol_pproc_mirr, frcs_fname
         character(len=LONGSTRLEN)     :: vol_str
         real    :: smpd_target, lp_target, scale, trslim, cenlp, symlp, dummy
         integer :: iter, it, prev_box_crop, maxits, state, frac_maxits_incr, maxits_glob
@@ -818,7 +818,7 @@ contains
             end select
             call spproj%write_segment_inside(params%oritype, params%projfile)
         endif
-        ! Automated lpstart, not active yet
+        ! ! Automated lpstart, not active yet
         ! if( .not.l_lpset )then
         !     if( l_lpstart_set )then
         !         ! all set
@@ -826,10 +826,10 @@ contains
         !         call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
         !         if( file_exists(frcs_fname) )then
         !             call clsfrcs%read(frcs_fname)
-        !             auto_lpstart = clsfrcs%estimate_lpstart()
+        !             params%lpstart = clsfrcs%estimate_lpstart()
         !             call clsfrcs%kill
         !         else
-        !             auto_lpstart = LPSTART_DEFAULT
+        !             params%lpstart = LPSTART_DEFAULT
         !         endif
         !     endif    
         ! endif
