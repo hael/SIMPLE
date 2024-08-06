@@ -530,8 +530,8 @@ contains
 
     subroutine exec_tseries_track_particles( self, cline )
         use simple_tseries_track_particles
-        use simple_qsys_funs,        only: qsys_job_finished
-        use simple_sp_project,       only: sp_project
+        use simple_qsys_funs,  only: qsys_job_finished
+        use simple_sp_project, only: sp_project
         class(tseries_track_particles_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(sp_project)                       :: spproj
@@ -539,7 +539,8 @@ contains
         character(len=:),          allocatable :: dir, forctf
         character(len=LONGSTRLEN), allocatable :: intg_names(:), frame_names(:)
         real,                      allocatable :: boxdata(:,:)
-        integer :: i, iframe, orig_box, nframes
+        logical,                   allocatable :: frames_are_there(:), intgs_are_there(:)
+        integer :: i, orig_box, nframes
         call cline%set('oritype','mic')
         call params%new(cline)
         orig_box = params%box
@@ -555,20 +556,38 @@ contains
         ! frames input
         call spproj%read(params%projfile)
         nframes = spproj%get_nframes()
-        allocate(intg_names(nframes),frame_names(nframes))
-        iframe = 0
-        do i = 1,spproj%os_mic%get_noris()
-            if( spproj%os_mic%isthere(i,'frame') )then
-                iframe = iframe + 1
-                intg_names(iframe)  = trim(spproj%os_mic%get_static(i,'intg'))
-                frame_names(iframe) = trim(spproj%os_mic%get_static(i,'frame'))
-            endif
+        allocate(frames_are_there(nframes), intgs_are_there(nframes), source=.false.)
+        do i = 1,nframes
+            frames_are_there(i) = spproj%os_mic%isthere(i,'frame')
+            intgs_are_there(i)  = spproj%os_mic%isthere(i,'intg')
         enddo
+        if( all(frames_are_there) )then
+            allocate(frame_names(nframes))
+            do i = 1,nframes
+                frame_names(i) = trim(spproj%os_mic%get_static(i,'frame'))
+            enddo
+        endif
+        if( all(intgs_are_there) )then
+            allocate(intg_names(nframes))
+            do i = 1,nframes
+                intg_names(i) = trim(spproj%os_mic%get_static(i,'intg'))
+            enddo
+        endif
         ! actual tracking
         dir = trim(params%fbody)
         call simple_mkdir(dir)
-        call init_tracker( nint(boxdata(1,1:2)), intg_names, frame_names, dir, params%fbody)
-        call track_particle( forctf )
+        if( allocated(frame_names) )then
+            if( allocated(intg_names) )then
+                call init_tracker( nint(boxdata(1,1:2)), intg_names, frame_names, dir, params%fbody)
+            else
+                call init_tracker( nint(boxdata(1,1:2)), frame_names, frame_names, dir, params%fbody)
+            endif
+        endif
+        if( cline%defined('fromf') )then
+            call track_particle( forctf, params%fromf )
+        else
+            call track_particle( forctf )
+        endif
         ! clean tracker
         call kill_tracker
         ! end gracefully

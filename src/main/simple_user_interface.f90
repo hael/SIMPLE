@@ -5467,7 +5467,7 @@ contains
         &'Track particles in time-series',&                                      ! descr_short
         &'is a distributed workflow for particle tracking in time-series data',& ! descr_long
         &'single_exec',&                                                         ! executable
-        &0, 3, 0, 2, 4, 0, 1, .true.)                                            ! # entries in each group, requires sp_project
+        &0, 4, 0, 2, 4, 0, 1, .true.)                                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -5477,6 +5477,7 @@ contains
         call tseries_track_particles%set_input('parm_ios', 2, 'boxfile', 'file', 'List of particle coordinates',&
         &'.txt file with EMAN particle coordinates', 'e.g. coords.box', .true., '')
         call tseries_track_particles%set_input('parm_ios', 3, neg)
+        call tseries_track_particles%set_input('parm_ios', 4, 'fromf', 'num', 'Frame to start tracking from', 'Frame to start tracking from', 'frame index', .false., 0.)
         ! alternative inputs
         ! <empty>
         ! search controls
