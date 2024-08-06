@@ -778,11 +778,14 @@ contains
         integer(kind=kind(ENUM_ORISEG)) :: iseg
         integer                         :: n_lines,fnr,noris,i,nstks,noris_in_state
         real                            :: state
-        logical                         :: l_ctfres, l_icefrac
+        logical                         :: l_ctfres, l_icefrac, l_append
         class(oris), pointer :: pos => NULL()
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        if( .not. cline%defined('prune') ) call cline%set('prune', 'no')
+        l_append = .false.
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir',  'yes')
+        if( .not. cline%defined('prune') ) call cline%set('prune',  'no')
+        if( .not. cline%defined('append')) call cline%set('append', 'no')
         call params%new(cline, silent=.true.)
+        if(params%append .eq. 'yes') l_append = .true.
         iseg = oritype2segment(trim(params%oritype))
         ! read project (almost all or largest segments are updated)
         call spproj%read(params%projfile)
@@ -841,7 +844,7 @@ contains
             if( cline%defined('state') ) then
                 if( spproj%get_n_insegment_state(params%oritype, cline%get_rarg("state")) /= n_lines )then
                     write(logfhandle,*) '# lines in infile '//trim(params%infile)//': ', n_lines
-                    write(logfhandle,*) '# entries in '//trim(params%oritype)//' segment with requested state: ', noris
+                    write(logfhandle,*) '# entries in '//trim(params%oritype)//' segment with requested state: ', spproj%get_n_insegment_state(params%oritype, cline%get_rarg("state"))
                     THROW_WARN('# entries in infile/project file '//trim(params%oritype)//' segment with requested state do not match, aborting; exec_selection')
                     return
                 endif
@@ -884,11 +887,11 @@ contains
                 call spproj%report_state2stk(states)
             case(CLS2D_SEG)
                 call spproj%os_cls2D%set_all('state', real(states))
-                call spproj%map2ptcls_state ! map states to ptcl2D/3D & cls3D segments
+                call spproj%map2ptcls_state(append=l_append) ! map states to ptcl2D/3D & cls3D segments
             case(CLS3D_SEG)
                 if(spproj%os_cls3D%get_noris() == spproj%os_cls2D%get_noris())then
                     call spproj%os_cls2D%set_all('state', real(states))
-                    call spproj%map2ptcls_state ! map states to ptcl2D/3D & cls3D segments
+                    call spproj%map2ptcls_state(append=l_append) ! map states to ptcl2D/3D & cls3D segments
                 else
                     ! class averages
                     call spproj%os_cls3D%set_all('state', real(states))

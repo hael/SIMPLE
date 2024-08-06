@@ -2801,11 +2801,16 @@ contains
 
     ! this map2ptcls routine assumes that any selection of class averages is done
     ! exclusively by state=0 flagging without any physical deletion
-    subroutine map2ptcls_state( self )
+    subroutine map2ptcls_state( self, append )
         class(sp_project), intent(inout) :: self
-        integer, allocatable :: particles(:)
+        logical, optional, intent(in)    :: append
+        integer, allocatable             :: particles(:)
         integer   :: ncls, icls, iptcl, pind, noris_ptcl3D, noris_ptcl2D
-        real      :: rstate
+        logical   :: l_append
+        real      :: rstate, pstate
+        l_append = .false.
+        if(present(append)) l_append = append
+        write(logfhandle, *) "APPEND", l_append
         noris_ptcl2D = self%os_ptcl2D%get_noris()
         if( noris_ptcl2D == 0 )then
             THROW_WARN('empty PTCL2D field. Nothing to do; map2ptcls_state')
@@ -2818,14 +2823,14 @@ contains
             self%os_ptcl3D = self%os_ptcl2D
             call self%os_ptcl3D%delete_2Dclustering(keepcls=.true.)
         endif
-        ! undo previous selection & excludes non classified particles
+        ! undo previous selection if append is false & excludes non classified particles
         do iptcl=1,noris_ptcl2D
             if( .not.self%os_ptcl2D%isthere(iptcl, 'class') )then
                 call self%os_ptcl2D%set(iptcl, 'state', 0.)
                 call self%os_ptcl3D%set(iptcl, 'state', 0.)
-            else
-                 call self%os_ptcl2D%set(iptcl, 'state', 1.)
-                 call self%os_ptcl3D%set(iptcl, 'state', 1.)
+            else if(.not. l_append) then
+                call self%os_ptcl2D%set(iptcl, 'state', 1.)
+                call self%os_ptcl3D%set(iptcl, 'state', 1.)
             endif
         end do
         ! do the mapping
@@ -2839,10 +2844,20 @@ contains
                 do iptcl=1,size(particles)
                     ! get particle index
                     pind = particles(iptcl)
-                    ! update state in self%os_ptcl2D
-                    call self%os_ptcl2D%set(pind, 'state', rstate)
-                    ! update state in self%os_ptcl3D
-                    call self%os_ptcl3D%set(pind, 'state', rstate)
+                    if(l_append) then
+                        pstate = self%os_ptcl2D%get(pind, 'state')
+                        if (pstate .gt. 0.0) then
+                            ! update state in self%os_ptcl2D
+                            call self%os_ptcl2D%set(pind, 'state', rstate)
+                            ! update state in self%os_ptcl3D
+                            call self%os_ptcl3D%set(pind, 'state', rstate) 
+                        endif
+                    else
+                        ! update state in self%os_ptcl2D
+                        call self%os_ptcl2D%set(pind, 'state', rstate)
+                        ! update state in self%os_ptcl3D
+                        call self%os_ptcl3D%set(pind, 'state', rstate)
+                    endif
                 end do
                 deallocate(particles)
             endif
