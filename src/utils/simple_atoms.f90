@@ -9,10 +9,11 @@ public :: atoms
 private
 #include "simple_local_flags.inc"
 
-character(len=78), parameter :: pdbfmt          = "(A6,I5,1X,A4,A1,A3,1X,A1,I7,A1,3X,3F8.3,2F6.2,10x,A2)"       ! custom 3.3
-character(len=78), parameter :: pdbfmt_long     = "(A5,I6,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10x,A2)"       ! custom 3.3
-character(len=74), parameter :: pdbfmt_read     = "(A11,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)"                ! custom 3.3
-character(len=78), parameter :: pdbfmt_longread = "(A11,1X,A4,A1,A3,1X,A1,I1,A4,5X,3(F8.3,1X),2F6.2,10x,A2)"    ! custom 3.3
+
+character(len=78), parameter :: pdbfmt          = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10x,A2)"  ! custom 3.3
+character(len=78), parameter :: pdbfmt_long     = "(A5,I6,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10x,A2)"  ! custom 3.3
+character(len=74), parameter :: pdbfmt_read     = "(A11,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)"           ! custom 3.3
+character(len=78), parameter :: pdbfmt_longread = "(A11,1X,A4,A1,A3,1X,A1,I1,A4,3X,3F8.3,2F6.2,10x,A2)"    ! custom 3.3
 character(len=78), parameter :: pdbfmt_anisou   = "(A6, I5,1X,A4,A1,A3,1X,A1,I4,A1,1X,6I7,5X,A2)"
 
 !>  \brief type for dealing with atomic structures
