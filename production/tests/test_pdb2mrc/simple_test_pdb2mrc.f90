@@ -46,7 +46,7 @@ else
     else 
         inquire(file=pdb_file, exist=pdb_exists)
         if( .not. pdb_exists )then
-            str_name = get_fbody(pdb_file,'.mrc')
+            str_name = get_fbody(pdb_file,'.pdb')
             print *, str_name
             write(logfhandle, *) 'Downloading '//trim(str_name)//' from PDB database:'
             cmd = 'curl -s -o'//trim(pdb_file)//' https://files.rcsb.org/download/'//trim(pdb_file)

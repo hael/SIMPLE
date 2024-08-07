@@ -1125,7 +1125,7 @@ contains
         center(1)  = minval(self%xyz(:,1)) + mol_dim(1)/2.
         center(2)  = minval(self%xyz(:,2)) + mol_dim(2)/2.
         center(3)  = minval(self%xyz(:,3)) + mol_dim(3)/2.
-        write(logfhandle,'(A,2(F4.1,","),F4.1,A)') " Atomic center at ", center," (center of volume at 0, 0, 0)"
+        write(logfhandle,'(A,2(F8.3,","),F8.3,A)') " Atomic center at ", center," (center of volume at 0, 0, 0)"
         if( present(vol_dim) )then
             ldim(:)     = int( maxval(mol_dim)/smpd )
             if( vol_dim(1) < ldim(1) )  THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pbd2mrc')
