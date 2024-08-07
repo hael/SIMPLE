@@ -20,10 +20,11 @@ type :: pftcc_shsrch_fm
     integer           :: hn      = 0            !< Search limit halfwidth (in units of trsincr)
     integer           :: nrots   = 0            !< # rotations
     integer           :: pftsz   = 0            !< nrots/2
-
+    logical           :: opt_angle = .true.
 contains
     procedure          :: new
     procedure          :: minimize
+    procedure          :: exhaustive_search
     procedure, private :: interpolate_peak
     procedure          :: kill
 
@@ -31,10 +32,11 @@ end type pftcc_shsrch_fm
 
 contains
 
-    subroutine new( self, trslim, trsstep )
-        class(pftcc_shsrch_fm),   intent(inout) :: self     !< instance
-        real,                     intent(in)    :: trslim   !< limits for barrier constraint
-        real,                     intent(in)    :: trsstep  !< 
+    subroutine new( self, trslim, trsstep, opt_angle )
+        class(pftcc_shsrch_fm), intent(inout) :: self     !< instance
+        real,                   intent(in)    :: trslim   !< limits for barrier constraint
+        real,                   intent(in)    :: trsstep  !<
+        logical,      optional, intent(in)    :: opt_angle
         integer :: i
         call self%kill
         self%trslim  = trslim
@@ -42,6 +44,8 @@ contains
         self%trsincr = self%trslim / real(self%hn)
         self%nrots = pftcc_glob%get_nrots()
         self%pftsz = pftcc_glob%get_pftsz()
+        self%opt_angle = .true.
+        if( present(opt_angle) ) self%opt_angle = opt_angle
         allocate(self%grid1(-self%hn:self%hn,-self%hn:self%hn), self%grid2(-self%hn:self%hn,-self%hn:self%hn),&
             &self%coords(-self%hn:self%hn), self%scores(self%nrots),source=0.)
         self%coords = (/(real(i)*self%trsincr,i=-self%hn,self%hn)/)
@@ -94,6 +98,63 @@ contains
         offset = matmul(offset, rotmat)
     end subroutine minimize
 
+    ! exhaustive coarse grid search fllowed by peak interpolation
+    subroutine exhaustive_search( self, iref, iptcl, irot, score, offset )
+        class(pftcc_shsrch_fm), intent(inout) :: self
+        integer,                intent(in)    :: iref, iptcl
+        integer,                intent(inout) :: irot
+        real,                   intent(out)   :: score
+        real,                   intent(out)   :: offset(2)
+        real     :: rotmat(2,2), shift(2)
+        integer  :: i,j,loc,ii,jj
+        self%ref  = iref
+        self%ptcl = iptcl
+        offset    = 0.
+        score     = -1.
+        ii        = 0
+        jj        = 0
+        if( self%opt_angle )then
+            ! 3D search
+            self%grid1 = -1.
+            irot       = 0
+            do i = -self%hn,self%hn
+                do j = -self%hn,self%hn
+                    shift = [self%coords(i), self%coords(j)]
+                    call pftcc_glob%gencorrs(self%ref, self%ptcl, shift, self%scores, kweight=params_glob%l_kweight_rot)
+                    loc = maxloc(self%scores, dim=1)
+                    if( self%scores(loc) > score )then
+                        score  = self%scores(loc)
+                        irot   = loc
+                        ii     = i
+                        jj     = j
+                    endif
+                enddo
+            enddo
+            do i = max(-self%hn,ii-1), min(self%hn,ii+1)
+                do j = max(-self%hn,jj-1), min(self%hn,jj+1)
+                    shift = [self%coords(i), self%coords(j)]
+                    self%grid1(i,j) = real(pftcc_glob%gencorr_for_rot_8(self%ref, self%ptcl, real(shift,dp), irot))
+                enddo
+            enddo
+        else
+            ! 2D search, fixed rotation
+            if( (irot<1) .or. (irot>self%nrots) )then
+                THROW_HARD('Invalid totation index '//int2str(irot))
+            endif
+            do i = -self%hn,self%hn
+                do j = -self%hn,self%hn
+                    shift = [self%coords(i), self%coords(j)]
+                    self%grid1(i,j) = real(pftcc_glob%gencorr_for_rot_8(self%ref, self%ptcl, real(shift,dp), irot))
+                enddo
+            enddo
+        endif
+        ! peak interpolation
+        call self%interpolate_peak(self%grid1, irot, offset, score)
+        ! Particle shift
+        call rotmat2d(pftcc_glob%get_rot(irot), rotmat)
+        offset = matmul(offset, rotmat)
+    end subroutine exhaustive_search
+
     subroutine interpolate_peak( self, grid, irot, offset, score )
         class(pftcc_shsrch_fm), intent(in) :: self
         real,    intent(in)  :: grid(-self%hn:self%hn,-self%hn:self%hn)
@@ -141,8 +202,9 @@ contains
         self%ref     = 0
         self%ptcl    = 0
         self%hn      = 0
-        self%nrots   = 0       !< # rotations
-        self%pftsz   = 0       !< 
+        self%nrots   = 0
+        self%pftsz   = 0
+        self%opt_angle = .true.
     end subroutine kill
 
 end module simple_pftcc_shsrch_fm
