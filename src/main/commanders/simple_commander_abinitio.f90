@@ -685,8 +685,6 @@ contains
         real,    parameter :: LP_DEFAULT      = 6.
         real,    parameter :: LPSTART_DEFAULT = 30., LPSTOP_DEFAULT=LP_DEFAULT
         integer, parameter :: MINBOX  = 88
-        integer, parameter :: NSTAGES_ALT = 14
-        integer, parameter :: MAXITS_SHORT1_ALT = 10, MAXITS_SHORT2_ALT = 20
         integer, parameter :: NSTAGES_DEFAULT = 5
         integer, parameter :: MAXITS2 = 30, MAXITS_SHORT1 = 15, MAXITS_SHORT2 = 25
         integer, parameter :: NSPACE1 = 500, NSPACE2 = 1000, NSPACE3 = 2000
@@ -715,7 +713,7 @@ contains
         integer :: iter, it, prev_box_crop, maxits, state, frac_maxits_incr, maxits_glob
         integer :: nstages, symsearch_iter
         logical :: l_autoscale, l_lpset, l_err, l_srch4symaxis, l_symran, l_sym, l_lpstop_set
-        logical :: l_lpstart_set, l_slowmarch
+        logical :: l_lpstart_set
         if( .not. cline%defined('mkdir')        ) call cline%set('mkdir',        'yes')
         if( .not. cline%defined('refine')       ) call cline%set('refine',      'prob')
         if( .not. cline%defined('autoscale')    ) call cline%set('autoscale',    'yes')
@@ -734,7 +732,6 @@ contains
         if( .not. cline%defined('icm')          ) call cline%set('icm',           'no')
         if( .not. cline%defined('icm_stage')    ) call cline%set('icm_stage', ICM_STAGE_DEFAULT)
         if( .not. cline%defined('ptclw')        ) call cline%set('ptclw',         'no')
-        if( .not. cline%defined('protocol')     ) call cline%set('protocol', 'default')
         ! resolution limit strategy
         l_lpset       = .false.
         l_lpstop_set  = cline%defined('lpstop')
@@ -759,18 +756,9 @@ contains
         call cline%delete('shift_stage')
         call cline%delete('icm_stage')
         call cline%delete('icm')
-        call cline%delete('protocol')
         ! stages specific parameters
-        select case(trim(params%protocol))
-        case('slowmarch')
-            l_slowmarch    = .true.
-            nstages        = NSTAGES_ALT
-            symsearch_iter = 2*SYMSEARCH_DEFAULT
-        case DEFAULT
-            l_slowmarch    = .false.
-            nstages        = NSTAGES_DEFAULT
-            symsearch_iter = SYMSEARCH_DEFAULT
-        end select
+        nstages          = NSTAGES_DEFAULT
+        symsearch_iter   = SYMSEARCH_DEFAULT
         frac_maxits_incr = 0
         maxits_glob      = MAXITS_SHORT1 * (nstages - 2) + MAXITS_SHORT2 * 2 + MAXITS2
         if( params%l_frac_update .and. (.not.params%l_stoch_update) )then
@@ -917,11 +905,7 @@ contains
             if( it == 1 )then
                 params%lp = params%lpstart
             else
-                if( l_slowmarch )then
-                    params%lp = params%lpstop + (params%lpstart-params%lpstop) * real(nstages+1-it) / real(nstages+1)
-                else
-                    params%lp = max(params%lpstop, params%lpstop+(params%lp-params%lpstop)/2.)
-                endif
+                params%lp = max(params%lpstop, params%lpstop+(params%lp-params%lpstop)/2.)
             endif
             write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ',it,' WITH LP =',params%lp
             ! dimensions
@@ -968,36 +952,17 @@ contains
             call cline_refine3D%set('box_crop', params%box_crop)
             call cline_refine3D%set('lp',       params%lp)
             call cline_refine3D%set('startit',  iter+1)
-            ! protocol
-            if( l_slowmarch )then
-                ! # of iterations
-                maxits = MAXITS_SHORT1_ALT
-                if( it >= nstages-1 ) maxits = MAXITS_SHORT2_ALT
-                if( it < nint(real(nstages)/3.)+1 )then
-                    call cline_refine3D%set('nspace', NSPACE1)
-                else if( it == nstages )then
-                    call cline_refine3D%set('nspace', NSPACE3)
-                else
-                    call cline_refine3D%set('nspace', NSPACE2)
-                end if
-                if( it < params%shift_stage )then
-                    call cline_refine3D%set('trs',    0.)
-                else
-                    call cline_refine3D%set('trs',    trslim)
-                end if
+            ! # of iterations
+            maxits = MAXITS_SHORT1
+            if( it >= nstages-1 ) maxits = MAXITS_SHORT2
+            ! projection directions & shift
+            if( it < params%shift_stage )then
+                call cline_refine3D%set('nspace', NSPACE1)
+                call cline_refine3D%set('trs',    0.)
             else
-                ! # of iterations
-                maxits = MAXITS_SHORT1
-                if( it >= nstages-1 ) maxits = MAXITS_SHORT2
-                ! projection directions & shift
-                if( it < params%shift_stage )then
-                    call cline_refine3D%set('nspace', NSPACE1)
-                    call cline_refine3D%set('trs',    0.)
-                else
-                    call cline_refine3D%set('nspace', NSPACE2)
-                    call cline_refine3D%set('trs',    trslim)
-                end if
-            endif
+                call cline_refine3D%set('nspace', NSPACE2)
+                call cline_refine3D%set('trs',    trslim)
+            end if
             maxits = maxits + frac_maxits_incr
             call cline_refine3D%set('maxits',      maxits)
             call cline_refine3D%set('maxits_glob', maxits_glob)
