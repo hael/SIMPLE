@@ -739,7 +739,7 @@ contains
         call qsys_job_finished(  'simple_commander_imgproc :: exec_scale' )
     end subroutine exec_scale
 
-    !>  for stacking individual images or multiple stacks into one
+   !>  for stacking individual images or multiple stacks into one
     subroutine exec_stack( self, cline )
         class(stack_commander), intent(inout)  :: self
         class(cmdline),         intent(inout)  :: cline
@@ -756,48 +756,67 @@ contains
         nfiles = size(filenames)
         call find_ldim_nptcls(filenames(1),ldim,ifoo)
         ldim(3) = 1 ! to correct for the stupid 3:d dim of mrc stacks
-        params%box = ldim(1)
-        ! prepare img and tmp for reading
-        call img%new(ldim, params%smpd)
-        l_clip = cline%defined('clip')
-        if( l_clip )then
-            call tmp%new([params%clip,params%clip,1], params%smpd)
-            call stkio_w%open(trim(params%outstk), params%smpd, 'write', box=params%clip)
-        else
-            call stkio_w%open(trim(params%outstk), params%smpd, 'write', box=ldim(1))
-        endif
-        ! loop over files
-        cnt = 0
-        do ifile=1,nfiles
-            if( .not. file_exists(filenames(ifile)) )then
-                write(logfhandle,*) 'inputted file does not exist: ', trim(adjustl(filenames(ifile)))
-            endif
-            call find_ldim_nptcls(filenames(ifile),lfoo,nimgs)
-            do iimg=1,nimgs
-                cnt = cnt+1
-                if( .not. stkio_r%stk_is_open() )then
-                    call stkio_r%open(filenames(ifile), params%smpd, 'read')
-                else if( .not. stkio_r%same_stk(filenames(ifile), ldim) )then
-                    call stkio_r%close
-                    call stkio_r%open(filenames(ifile), params%smpd, 'read')
+        if( ldim(1) /= ldim(2) )then
+            ! prepare img and tmp for reading
+            call img%new(ldim, params%smpd)
+            ! loop over files
+            cnt = 0
+            do ifile=1,nfiles
+                if( .not. file_exists(filenames(ifile)) )then
+                    write(logfhandle,*) 'inputted file does not exist: ', trim(adjustl(filenames(ifile)))
                 endif
-                call stkio_r%read(iimg, img)
-                if( l_clip )then
-                    call img%clip(tmp)
-                    call stkio_w%write(cnt, tmp)
-                else
-                    call stkio_w%write(cnt, img)
-                endif
+                call find_ldim_nptcls(filenames(ifile),lfoo,nimgs)
+                do iimg=1,nimgs
+                    cnt = cnt + 1
+                    call img%read(filenames(ifile), iimg)
+                    call img%write(trim(params%outstk), cnt)
+                end do
+                call progress(ifile, nfiles)
             end do
-            call progress(ifile, nfiles)
-        end do
-        call stkio_r%close
-        call stkio_w%close
+        else
+            params%box = ldim(1)
+            ! prepare img and tmp for reading
+            call img%new(ldim, params%smpd)
+            l_clip = cline%defined('clip')
+            if( l_clip )then
+                call tmp%new([params%clip,params%clip,1], params%smpd)
+                call stkio_w%open(trim(params%outstk), params%smpd, 'write', box=params%clip)
+            else
+                call stkio_w%open(trim(params%outstk), params%smpd, 'write', box=ldim(1))
+            endif
+            ! loop over files
+            cnt = 0
+            do ifile=1,nfiles
+                if( .not. file_exists(filenames(ifile)) )then
+                    write(logfhandle,*) 'inputted file does not exist: ', trim(adjustl(filenames(ifile)))
+                endif
+                call find_ldim_nptcls(filenames(ifile),lfoo,nimgs)
+                do iimg=1,nimgs
+                    cnt = cnt+1
+                    if( .not. stkio_r%stk_is_open() )then
+                        call stkio_r%open(filenames(ifile), params%smpd, 'read')
+                    else if( .not. stkio_r%same_stk(filenames(ifile), ldim) )then
+                        call stkio_r%close
+                        call stkio_r%open(filenames(ifile), params%smpd, 'read')
+                    endif
+                    call stkio_r%read(iimg, img)
+                    if( l_clip )then
+                        call img%clip(tmp)
+                        call stkio_w%write(cnt, tmp)
+                    else
+                        call stkio_w%write(cnt, img)
+                    endif
+                end do
+                call progress(ifile, nfiles)
+            end do
+            call stkio_r%close
+            call stkio_w%close
+        endif
         call img%kill
         call tmp%kill
         ! end gracefully
         call simple_end('**** SIMPLE_STACK NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_stack
+    end subroutine exec_stack 
 
     subroutine exec_stackops( self, cline )
         use simple_stackops
