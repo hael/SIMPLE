@@ -256,8 +256,8 @@ contains
         if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',    5.)
         if( .not. cline%defined('mcpatch')    ) call cline%set('mcpatch',    'yes')
-        if( .not. cline%defined('nxpatch')    ) call cline%set('nxpatch',       3.)
-        if( .not. cline%defined('nypatch')    ) call cline%set('nypatch',       3.)
+        if( .not. cline%defined('nxpatch')    ) call cline%set('nxpatch',      10.)
+        if( .not. cline%defined('nypatch')    ) call cline%set('nypatch',      10.)
         if( .not. cline%defined('trs')        ) call cline%set('trs',          10.)
         if( .not. cline%defined('lpstart')    ) call cline%set('lpstart',       5.)
         if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',        3.)
@@ -310,8 +310,8 @@ contains
         call cline%set('groupframes', 'no')
         if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',    5.)
         if( .not. cline%defined('mcpatch')    ) call cline%set('mcpatch',    'yes')
-        if( .not. cline%defined('nxpatch')    ) call cline%set('nxpatch',       3.)
-        if( .not. cline%defined('nypatch')    ) call cline%set('nypatch',       3.)
+        if( .not. cline%defined('nxpatch')    ) call cline%set('nxpatch',      10.)
+        if( .not. cline%defined('nypatch')    ) call cline%set('nypatch',      10.)
         if( .not. cline%defined('trs')        ) call cline%set('trs',          10.)
         if( .not. cline%defined('lpstart')    ) call cline%set('lpstart',       5.)
         if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',        3.)
@@ -396,7 +396,8 @@ contains
         type(ori)                 :: o
         type(tvfilter)            :: tvfilt
         type(image)               :: img_intg
-        integer :: i, nframes, frame_counter, ldim(3), ifoo
+        integer                   :: istart, istop
+        integer :: i, nframes, frame_counter, ldim(3), ifoo, cnt
         if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',    10.)
         if( .not. cline%defined('mcpatch')    ) call cline%set('mcpatch',    'yes')
         if( .not. cline%defined('nxpatch')    ) call cline%set('nxpatch',        3.)
@@ -413,10 +414,15 @@ contains
         call spproj%read(params%projfile)
         nframes  = spproj%get_nframes()
         allocate(framenames(params%nframesgrp))
-        do i = 1,params%nframesgrp
+        istart = 1
+        if( cline%defined('fromf') ) istart = params%fromf
+        istop  = istart + params%nframesgrp - 1
+        cnt    = 0
+        do i = istart,istop
             if( spproj%os_mic%isthere(i,'frame') )then
-                framenames(i) = trim(spproj%os_mic%get_static(i,'frame'))
-                params%smpd   = spproj%os_mic%get(i,'smpd')
+                cnt = cnt + 1
+                framenames(cnt) = trim(spproj%os_mic%get_static(i,'frame'))
+                params%smpd     = spproj%os_mic%get(i,'smpd')
             endif
         enddo
         call cline%set('smpd', params%smpd)
@@ -457,7 +463,7 @@ contains
         call tvfilt%kill
         call img_intg%write('frames2align_intg_denoised.mrc')
         call img_intg%kill
-        call simple_end('**** SIMPLE_GEN_INI_TSERIES_AVG NORMAL STOP ****')
+        call simple_end('**** SIMPLE_TSERIES_MAKE_PICKAVG NORMAL STOP ****')
     end subroutine exec_tseries_make_pickavg
 
     subroutine exec_tseries_track_particles_distr( self, cline )
