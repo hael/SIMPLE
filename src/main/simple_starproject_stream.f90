@@ -200,6 +200,7 @@ contains
             if(spproj%os_mic%isthere(i, 'intg'       )) call starfile_table__setValue_string(self%starfile, EMDL_MICROGRAPH_NAME,          trim(get_relative_path(trim(spproj%os_mic%get_static(i, 'intg'       )))))
             if(spproj%os_mic%isthere(i, 'mc_starfile')) call starfile_table__setValue_string(self%starfile, EMDL_MICROGRAPH_METADATA_NAME, trim(get_relative_path(trim(spproj%os_mic%get_static(i, 'mc_starfile')))))
             if(spproj%os_mic%isthere(i, 'boxfile'    )) call starfile_table__setValue_string(self%starfile, EMDL_MICROGRAPH_COORDINATES,   trim(get_relative_path(trim(spproj%os_mic%get_static(i, 'boxfile'    )))))
+            if(spproj%os_mic%isthere(i, 'ctfjpg'     )) call starfile_table__setValue_string(self%starfile, EMDL_CTF_PSPEC,                trim(get_relative_path(trim(spproj%os_mic%get_static(i, 'ctfjpg'     )))))
         end do
 
         contains

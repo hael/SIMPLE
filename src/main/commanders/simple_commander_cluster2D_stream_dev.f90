@@ -339,6 +339,7 @@ contains
     ! deals with chunk completion, rejection, reset
     subroutine update_chunks_dev
         integer :: ichunk
+        real    :: nthr2D
         if( .not. stream2D_active ) return
         do ichunk = 1,params_glob%nchunks
             if( chunks(ichunk)%available ) cycle
@@ -356,7 +357,11 @@ contains
                 endif
                 ! reinit
                 glob_chunk_id = glob_chunk_id + 1
+                ! deal with nthr2d .ne. nthr
+                nthr2D = params_glob%nthr2D
+                params_glob%nthr2D = int(cline_cluster2D_chunk%get_rarg('nthr'))
                 call chunks(ichunk)%init(glob_chunk_id, pool_proj)
+                params_glob%nthr2D = nthr2D
             endif
         enddo
     end subroutine update_chunks_dev
