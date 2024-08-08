@@ -2810,7 +2810,6 @@ contains
         real      :: rstate, pstate
         l_append = .false.
         if(present(append)) l_append = append
-        write(logfhandle, *) "APPEND", l_append
         noris_ptcl2D = self%os_ptcl2D%get_noris()
         if( noris_ptcl2D == 0 )then
             THROW_WARN('empty PTCL2D field. Nothing to do; map2ptcls_state')
@@ -2850,7 +2849,7 @@ contains
                             ! update state in self%os_ptcl2D
                             call self%os_ptcl2D%set(pind, 'state', rstate)
                             ! update state in self%os_ptcl3D
-                            call self%os_ptcl3D%set(pind, 'state', rstate) 
+                            call self%os_ptcl3D%set(pind, 'state', rstate)
                         endif
                     else
                         ! update state in self%os_ptcl2D
