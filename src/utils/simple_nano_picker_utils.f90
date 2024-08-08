@@ -49,11 +49,12 @@ implicit none
         integer     :: cc
         call centers_pdb%new(size(coords, dim = 1), dummy=.true.)
         do cc = 1, size(coords, dim = 1)
-            call centers_pdb%set_name(cc,params_glob%element)
+            call centers_pdb%set_name(cc,' '//params_glob%element)
+            call centers_pdb%set_num(cc,cc)
             call centers_pdb%set_element(cc,params_glob%element)
             call centers_pdb%set_coord(cc,(coords(cc,:))*smpd)
             !call centers_pdb%set_beta(cc,nano%atominfo(cc)%valid_corr) ! use per atom valid corr
-            call centers_pdb%set_resnum(cc,cc)
+            call centers_pdb%set_resnum(cc,1)
         enddo
         call centers_pdb%writepdb(fname)
     end subroutine write_centers
@@ -66,10 +67,9 @@ implicit none
         real, allocatable :: intensities(:)
         intensities = pack(img_in%get_rmat(), mask=.true.)
         call detect_peak_thres(size(intensities), level, intensities, thres)
-        print *, 'intensity threshold = ', thres
         call img_out%copy(img_in)
         call img_out%zero_below(thres)
-        call img_out%write('post_thresholding_map_3.mrc')
+        call img_out%write('post_thresholding_map.mrc')
         deallocate(intensities)
     end subroutine threshold_img
 
@@ -104,18 +104,12 @@ implicit none
         real              :: x1, x2, x3, y1, y2, y3, z1, z2, z3
         real, allocatable :: intensities_flat(:), rmat(:,:,:)
         integer           :: i, j, k, n, ncubes, box, ldim(3), ZZ, nvx, last_index
-        print *, 'NP_diam = ', NP_diam
         msksq    = (NP_diam / 2.)**2.
-        print *, 'msksq = ', msksq
         el_ucase = uppercase(trim(adjustl(element)))
         call get_lattice_params(el_ucase, crystal_system, a)
-        print *, 'crystal_system = ', crystal_system
-        print *, 'el_ucase = ', el_ucase
-        print *, 'a = ', a
         ha       = a / 2.
         ldim     = img_in%get_ldim()
         box      = ldim(1)
-        print *, 'box = ', box
         smpd     = img_in%get_smpd()
         ncubes   = floor(real(box) * smpd / a)
         ! atoms at edges
@@ -178,13 +172,11 @@ implicit none
                     enddo
                 enddo
         end select
-        print *, 'n = ', n
         if (n .eq. 0) print *, 'Error! n should be greater than 0: make_intensity_mask_2.'
-        call get_element_Z_and_radius(trim(adjustl(element)), ZZ, radius)
+        call get_element_Z_and_radius(element, ZZ, radius)
         radius_vx  = radius / smpd
         sphere_vol = PI * (4./3.) * radius_vx**3
         total_vol  = sphere_vol * n
-        print *, 'total_vol = ', total_vol
         nvx        = anint(total_vol)
         ! find intensity threshold value based on highest 'nvx' intensity values
         rmat       = img_in%get_rmat()
@@ -192,7 +184,6 @@ implicit none
         call hpsort(intensities_flat)                   ! sort array (low to high)
         last_index = size(intensities_flat)             ! last_index is position of largest intensity value in sorted array
         thres      = intensities_flat(last_index - nvx) ! last_index - nvx position of sorted array is threshold
-        print *, 'intensity threshold = ', thres
         call img_copy%copy(img_in)
         call img_copy%zero_below(thres)
         call img_copy%write('post_thresholding_map2.mrc')
@@ -205,7 +196,6 @@ implicit none
                 mask_out = .true.
             end where
         end if
-        print *, 'count(mask_out) = ', count(mask_out)
         deallocate(intensities_flat)
     end subroutine make_intensity_mask_2
 
