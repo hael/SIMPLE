@@ -2342,7 +2342,11 @@ contains
                         l_pause = is_pool_available_dev()
                     endif
                 endif
-                if( .not.l_pause ) call classify_pool_dev
+                if( .not.l_pause )then 
+                    call classify_pool_dev
+                else
+                    call generate_pool_stats
+                endif
                 call classify_new_chunks_dev(micproj_records)
             endif
             call sleep(WAITTIME)

@@ -22,7 +22,7 @@ implicit none
 public :: cluster2D_commander_subsets
 public :: init_cluster2D_stream_dev, terminate_stream2D_dev, cleanup_root_folder, import_records_into_pool
 public :: update_pool_status_dev, update_pool_dev, reject_from_pool_dev, reject_from_pool_user_dev
-public :: classify_pool_dev, update_chunks_dev, classify_new_chunks_dev, import_chunks_into_pool_dev
+public :: classify_pool_dev, generate_pool_stats, update_chunks_dev, classify_new_chunks_dev, import_chunks_into_pool_dev
 public :: is_pool_available_dev, update_user_params_dev, read_pool_xml_beamtilts_dev, assign_pool_optics_dev
 public :: write_pool_cls_selected_user_dev, get_pool_iter
 private
@@ -355,7 +355,7 @@ contains
                 else
                     allocate(converged_chunks(1),source=[chunks(ichunk)])
                 endif
-                ! reinit
+                ! reinit and deal with nthr2D != nthr
                 glob_chunk_id = glob_chunk_id + 1
                 ! deal with nthr2d .ne. nthr
                 nthr2D = params_glob%nthr2D
@@ -1101,7 +1101,6 @@ contains
         logical,                   parameter   :: L_BENCH = .false.
         type(ran_tabu)                         :: random_generator
         type(sp_project)                       :: spproj
-        type(guistats)                         :: pool_stats
         type(cmdline),             allocatable :: clines(:)
         integer,                   allocatable :: min_update_cnts_per_stk(:), nptcls_per_stk(:), stk_order(:)
         integer,                   allocatable :: prev_eo_pops(:,:), prev_eo_pops_thread(:,:)
@@ -1119,7 +1118,6 @@ contains
         nptcls_rejected_glob = 0
         if( nptcls_tot == 0 ) return
         pool_iter = pool_iter + 1
-        call pool_stats%init
         call cline_cluster2D_pool%set('refs',    refs_glob)
         call cline_cluster2D_pool%set('ncls',    real(ncls_glob))
         call cline_cluster2D_pool%set('startit', real(pool_iter))
@@ -1245,18 +1243,6 @@ contains
             nptcls_sel       = sum(nptcls_per_stk)
             pool_stacks_mask = nptcls_per_stk > 0
         endif
-        ! poolstats
-        !call pool_stats%set('particles', 'particles_processed', int2commastr(nptcls_glob), primary=.true.)
-        call pool_stats%set('particles', 'particles_assigned',  int2str(nptcls_glob - nptcls_rejected_glob) // '_(' // int2str(ceiling(100.0 * real(nptcls_glob - nptcls_rejected_glob) / real(nptcls_glob))) // '%)')
-        call pool_stats%set('particles', 'particles_rejected',  int2str(nptcls_rejected_glob) // '_(' // int2str(floor(100.0 * real(nptcls_rejected_glob) / real(nptcls_glob))) // '%)')
-        call pool_stats%set('2D', 'iteration',                  pool_iter - 1,        primary=.true.)
-        call pool_stats%set('2D', 'number_classes',             ncls_glob,            primary=.true.)
-        call pool_stats%set('2D', 'number_classes_rejected',    ncls_rejected_glob,   primary=.true.)
-        call pool_stats%set('2D', 'maximum_resolution',         current_resolution,   primary=.true.)
-        if(pool_iter > 1) call pool_stats%set_now('2D', 'iteration_time')
-        call pool_stats%generate_2D_thumbnail('2D', 'top_classes', pool_proj%os_cls2D, pool_iter - 1)
-        call pool_stats%generate_2D_jpeg('latest', '', pool_proj%os_cls2D, pool_iter - 1)
-        call pool_stats%write(POOLSTATS_FILE)
         nstks2update = count(pool_stacks_mask)
         ! transfer stacks and particles
         call spproj%os_stk%new(nstks2update, is_ptcl=.false.)
@@ -1329,7 +1315,8 @@ contains
         endif
         call spproj%write(trim(POOL_DIR)//trim(PROJFILE_POOL))
         call spproj%kill
-        call pool_stats%kill
+        ! pool stats
+        call generate_pool_stats
         ! execution
         if( l_no_chunks .and. pool_iter == iterswitch2euclid )then
             write(logfhandle,'(A)')'>>> SWITCHING TO OBJFUN=EUCLID'
@@ -1345,6 +1332,32 @@ contains
         if( L_BENCH ) print *,'timer exec_classify_pool tot : ',toc(t_tot)
         call tidy_2Dstream_iter(l_no_chunks)
     end subroutine classify_pool_dev
+
+    subroutine generate_pool_stats
+        type(guistats)            :: pool_stats
+        character(len=LONGSTRLEN) :: cwd
+        integer                   :: iter_loc
+        call simple_getcwd(cwd)
+        if(file_exists(trim(adjustl(cwd)) // '/clusters2D_iter' // int2str_pad(pool_iter,3) // '.star')) then
+            iter_loc = pool_iter
+        else if(file_exists(trim(adjustl(cwd)) // '/clusters2D_iter' // int2str_pad(pool_iter - 1,3) // '.star')) then
+            iter_loc = pool_iter - 1
+        endif
+        call pool_stats%init
+        call pool_stats%set('particles', 'particles_assigned',  int2str(nptcls_glob - nptcls_rejected_glob) // '_(' // int2str(ceiling(100.0 * real(nptcls_glob - nptcls_rejected_glob) / real(nptcls_glob))) // '%)')
+        call pool_stats%set('particles', 'particles_rejected',  int2str(nptcls_rejected_glob) // '_(' // int2str(floor(100.0 * real(nptcls_rejected_glob) / real(nptcls_glob))) // '%)')
+        call pool_stats%set('2D', 'iteration',                  iter_loc,             primary=.true.)
+        call pool_stats%set('2D', 'number_classes',             ncls_glob,            primary=.true.)
+        call pool_stats%set('2D', 'number_classes_rejected',    ncls_rejected_glob,   primary=.true.)
+        call pool_stats%set('2D', 'maximum_resolution',         current_resolution,   primary=.true.)
+        if(.not. file_exists(trim(adjustl(cwd)) // '/' // trim(CAVGS_ITER_FBODY) // int2str_pad(iter_loc, 3) // '.jpg')) then
+            if(iter_loc > 0) call pool_stats%set_now('2D', 'iteration_time')
+            call pool_stats%generate_2D_thumbnail('2D', 'top_classes', pool_proj%os_cls2D, iter_loc)
+            call pool_stats%generate_2D_jpeg('latest', '', pool_proj%os_cls2D, iter_loc)
+        endif
+        call pool_stats%write(POOLSTATS_FILE)
+        call pool_stats%kill
+    end subroutine generate_pool_stats
 
     !> produces consolidated project at original scale
     subroutine write_project_stream2D_dev( write_star, clspath)
