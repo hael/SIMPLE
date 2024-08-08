@@ -503,7 +503,8 @@ contains
     end subroutine calcrefvolshift_and_mapshifts2ptcls
 
     subroutine read_and_filter_refvols( cline, fname_even, fname_odd )
-        use simple_opt_filter, only: nonuni_filt3D, butterworth_filter
+        use simple_butterworth, only: butterworth_filter
+        use simple_opt_filter,  only: nonuni_filt3D
         class(cmdline),   intent(in) :: cline
         character(len=*), intent(in) :: fname_even
         character(len=*), intent(in) :: fname_odd
@@ -562,7 +563,7 @@ contains
     !>  \brief  prepares one volume for references extraction
     subroutine preprefvol( cline, s, do_center, xyz, iseven )
         use simple_projector,          only: projector
-        use simple_opt_filter,         only: butterworth_filter, exponential_reg
+        use simple_butterworth,        only: butterworth_filter
         use simple_nanoparticle_utils, only: phasecorr_one_atom
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: s

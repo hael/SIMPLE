@@ -5,7 +5,7 @@ use simple_builder,            only: builder
 use simple_parameters,         only: parameters
 use simple_commander_volops,   only: reproject_commander
 use simple_image,              only: image
-use simple_opt_filter,         only: butterworth_filter
+use simple_butterworth,        only: butterworth_filter
 implicit none
 type(parameters)              :: p
 type(cmdline)                 :: cline, cline_projection

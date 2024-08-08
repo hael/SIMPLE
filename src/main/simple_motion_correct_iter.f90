@@ -46,7 +46,7 @@ contains
         real,             allocatable :: boxdata(:,:)
         character(len=:), allocatable :: fbody_here, ext, star_fname, poly_fname
         character(len=LONGSTRLEN)     :: rel_fname
-        real    :: ldim4patch(2), goodnessoffit(2), scale, bfac_here, bid
+        real    :: goodnessoffit(2), scale, bfac_here, bid
         integer :: ldim(3), ldim_thumb(3), iptcl, nxpatch, nypatch
         logical :: patch_success, l_tseries
         patch_success = .false.
@@ -89,24 +89,7 @@ contains
             self%moviename = trim(moviename)
         endif
         ! determines whether to perform patch-based step & patch size
-        if( params_glob%mcpatch.eq.'yes' )then
-            ldim4patch = [orientation%get('xdim'),orientation%get('ydim')] * params_glob%scale
-            if( fname2format(self%moviename) .eq. 'K' )then
-                ! need to take EER up-sampling into account
-                ldim4patch = ldim4patch * real(params_glob%eer_upsampling)
-            endif
-            if( .not.cline%defined('nxpatch') )then
-                params_glob%nxpatch = min(MC_NPATCH, max(1,floor(ldim4patch(1)/MC_PATCHSZ)) )
-            endif
-            if( .not.cline%defined('nypatch') )then
-                params_glob%nypatch = min(MC_NPATCH, max(1,floor(ldim4patch(2)/MC_PATCHSZ)) )
-            endif
-            call orientation%set('nxpatch', real(params_glob%nxpatch))
-            call orientation%set('nypatch', real(params_glob%nypatch))
-        else
-            call orientation%set('nxpatch', 1.0)
-            call orientation%set('nypatch', 1.0)
-        endif
+        call calc_npatches(self%moviename, ctfvars%smpd, cline, orientation)
         motion_correct_with_patched = (params_glob%mcpatch.eq.'yes') .and. (params_glob%nxpatch*params_glob%nypatch > 1)
         bid = 0.0
         ! ALIGNEMENT
@@ -259,6 +242,40 @@ contains
         endif
         call motion_correct_kill_common
     end subroutine iterate
+
+    subroutine calc_npatches( moviename, smpd, cline, o )
+        character(len=*), intent(in)    :: moviename
+        real,             intent(in)    :: smpd
+        class(cmdline),   intent(inout) :: cline
+        class(ori),       intent(inout) :: o
+        integer :: patchsz(2),pixsz(2),nx,ny
+        real    :: physz(2)
+        if( trim(params_glob%mcpatch).eq.'yes' )then
+            pixsz = nint([o%get('xdim'),o%get('ydim')])     ! micrograph pixel dimensions
+            physz = real(pixsz) * smpd                      ! stage size in Angs
+            nx    = max(1, floor(physz(1) / MC_PATCHSZ))    ! # of patches along x
+            ny    = max(1, floor(physz(2) / MC_PATCHSZ))    ! # of patches along y
+            ! Micrograph scaled pixel dimensions
+            pixsz = nint(real(pixsz) * params_glob%scale)
+            if( fname2format(moviename) .eq. 'K' ) pixsz = pixsz * params_glob%eer_upsampling
+            ! Patch size in pixel
+            patchsz(1) = nint(real(pixsz(1)) / real(nx))
+            patchsz(2) = nint(real(pixsz(2)) / real(ny))
+            ! Minimum patch size
+            patchsz(1) = max(patchsz(1), MC_MINPATCHSZ)
+            patchsz(2) = max(patchsz(2), MC_MINPATCHSZ)
+            ! Effective number of patches
+            nx = max(1, floor(real(pixsz(1)) / real(patchsz(1))))
+            ny = max(1, floor(real(pixsz(2)) / real(patchsz(2))))
+            if( .not.cline%defined('nxpatch') ) params_glob%nxpatch = nx
+            if( .not.cline%defined('nypatch') ) params_glob%nypatch = ny
+        else
+            params_glob%nxpatch = 1
+            params_glob%nypatch = 1
+        endif
+        call o%set('nxpatch', real(params_glob%nxpatch))
+        call o%set('nypatch', real(params_glob%nypatch))
+    end subroutine calc_npatches
 
     function get_moviename( self, which ) result( moviename )
         class(motion_correct_iter), intent(in) :: self
