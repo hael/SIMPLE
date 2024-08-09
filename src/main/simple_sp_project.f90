@@ -2845,7 +2845,7 @@ contains
                 do iptcl=1,size(particles)
                     ! get particle index
                     pind = particles(iptcl)
-                    if(present(maxpop) .and. nptcls .gt. maxpop) then
+                    if(present(maxpop) .and. nptcls .ge. maxpop) then
                         call self%os_ptcl2D%set(pind, 'state', 0.0)
                         call self%os_ptcl3D%set(pind, 'state', 0.0)
                     else if(l_append) then
@@ -2866,7 +2866,7 @@ contains
                     endif
                 end do
                 deallocate(particles)
-                if(present(maxpop)) call self%os_cls2D%set(icls, 'pop', real(nptcls - 1))
+                if(present(maxpop)) call self%os_cls2D%set(icls, 'pop', real(nptcls))
             endif
         end do
         ! cls3D mirrors cls2D
