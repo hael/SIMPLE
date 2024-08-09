@@ -2801,11 +2801,12 @@ contains
 
     ! this map2ptcls routine assumes that any selection of class averages is done
     ! exclusively by state=0 flagging without any physical deletion
-    subroutine map2ptcls_state( self, append )
+    subroutine map2ptcls_state( self, append, maxpop )
         class(sp_project), intent(inout) :: self
         logical, optional, intent(in)    :: append
+        integer, optional, intent(in)    :: maxpop
         integer, allocatable             :: particles(:)
-        integer   :: ncls, icls, iptcl, pind, noris_ptcl3D, noris_ptcl2D
+        integer   :: ncls, icls, iptcl, pind, nptcls, noris_ptcl3D, noris_ptcl2D
         logical   :: l_append
         real      :: rstate, pstate
         l_append = .false.
@@ -2838,20 +2839,26 @@ contains
             ! get particle indices
             call self%os_ptcl2D%get_pinds(icls, 'class', particles)
             if( allocated(particles) )then
+                nptcls = 0
                 ! get 3d ori info
                 rstate = self%os_cls2D%get(icls,'state')
                 do iptcl=1,size(particles)
                     ! get particle index
                     pind = particles(iptcl)
-                    if(l_append) then
+                    if(present(maxpop) .and. nptcls .gt. maxpop) then
+                        call self%os_ptcl2D%set(pind, 'state', 0.0)
+                        call self%os_ptcl3D%set(pind, 'state', 0.0)
+                    else if(l_append) then
                         pstate = self%os_ptcl2D%get(pind, 'state')
                         if (pstate .gt. 0.0) then
+                            nptcls = nptcls + 1
                             ! update state in self%os_ptcl2D
                             call self%os_ptcl2D%set(pind, 'state', rstate)
                             ! update state in self%os_ptcl3D
                             call self%os_ptcl3D%set(pind, 'state', rstate)
                         endif
                     else
+                        nptcls = nptcls + 1
                         ! update state in self%os_ptcl2D
                         call self%os_ptcl2D%set(pind, 'state', rstate)
                         ! update state in self%os_ptcl3D
@@ -2859,6 +2866,7 @@ contains
                     endif
                 end do
                 deallocate(particles)
+                if(present(maxpop)) call self%os_cls2D%set(icls, 'pop', real(nptcls - 1))
             endif
         end do
         ! cls3D mirrors cls2D
