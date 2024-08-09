@@ -203,6 +203,7 @@ type :: nanoparticle
     procedure          :: get_natoms
     procedure          :: get_valid_corrs
     procedure          :: get_img
+    procedure          :: get_img_raw
     procedure          :: set_img
     procedure, private :: set_atomic_coords_from_pdb
     procedure, private :: set_atomic_coords_from_xyz
@@ -303,6 +304,12 @@ contains
         type(image),         intent(out) :: img
         img = self%img
     end subroutine get_img
+
+    subroutine get_img_raw(self, raw_img)
+        class(nanoparticle), intent(in)  :: self
+        type(image),         intent(out) :: raw_img
+        raw_img = self%img_raw
+    end subroutine get_img_raw
 
     ! set one of the images of the nanoparticle type
     subroutine set_img( self, imgfile, which )

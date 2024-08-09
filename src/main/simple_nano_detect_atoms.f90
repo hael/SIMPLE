@@ -138,8 +138,9 @@ use simple_stat
 
     ! executes overall picking workflow
     ! some things are hard-coded for now. Can be changed to be more / less customizable
-    subroutine exec_nano_picker(self)
-        class(nano_picker) :: self
+    subroutine exec_nano_picker(self, corr_thres, cs_thres)
+        class(nano_picker), intent(inout) :: self
+        real,  optional   , intent(in)    :: corr_thres, cs_thres
         call self%simulate_atom
         call self%setup_iterators
         call self%match_boxes
@@ -147,8 +148,25 @@ use simple_stat
         call self%apply_threshold
         call self%distance_filter
         call self%find_centers
+        call self%write_pdb('before_refinement')
+        print *, 'before refinement'
+        call self%calc_per_atom_corr
+        call self%write_NP_image('simimg3.mrc')
         call self%refine_threshold(20, max_thres=0.7)
-        call self%discard_atoms(use_valid_corr=.true., use_cs_thres=.true.)
+        call self%write_pdb('after_refinement')
+        print *, 'after refinement'
+        call self%calc_per_atom_corr
+        if (.not. present(corr_thres) .and. .not. present(cs_thres))  then
+            call self%discard_atoms(use_valid_corr=.true., use_cs_thres=.true.)
+        else if (present(corr_thres) .and. .not. present(cs_thres))   then
+            call self%discard_atoms(use_valid_corr=.true., use_cs_thres=.true., corr_thres=corr_thres)
+        else if (present(cs_thres)   .and. .not. present(corr_thres)) then
+            call self%discard_atoms(use_valid_corr=.true., use_cs_thres=.true., cs_thres=cs_thres)
+        else 
+            call self%discard_atoms(use_valid_corr=.true., use_cs_thres=.true., corr_thres=corr_thres, cs_thres=cs_thres)
+        end if
+        call self%write_pdb('after_discard_atoms')
+        print *, 'after discard atoms'
         call self%calc_per_atom_corr
     end subroutine exec_nano_picker
 
@@ -430,7 +448,6 @@ use simple_stat
         integer, allocatable :: pos_inds(:)
         integer              :: xoff, yoff, zoff, ipeak, npeaks
         logical              :: is_peak
-        print *, 'Correlation threshold = ', self%thres
         pos_inds = pack(self%inds_offset(:,:,:), mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
         npeaks   = size(pos_inds)
         ! update box scores
@@ -606,7 +623,6 @@ use simple_stat
         logical                  :: outside
         pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
         nbox     = size(pos_inds, dim=1)
-        print *, 'NBOX = ', nbox
         allocate(coords(nbox,3))
         allocate(atms_array(nbox))
         if (allocated(self%convolved_atoms)) deallocate(self%convolved_atoms)
@@ -933,16 +949,15 @@ use simple_stat
         character(len=*), optional, intent(in)    :: filename
         integer, allocatable     :: pos_inds(:)
         real,    allocatable     :: coords(:,:), pos_scores(:)
-        integer                  :: nbox, iimg, locmin(1)
+        integer                  :: nbox, iimg
         real                     :: pos(3)
         type(parameters), target :: params
         params_glob         => params
         params_glob%element = self%element
         params_glob%smpd    = self%smpd
         pos_inds   = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
-        pos_scores = pack(self%box_scores(:,:,:), mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
-        locmin = minloc(pos_scores)
-        nbox     = size(pos_inds, dim=1)
+        pos_scores = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
+        nbox       = size(pos_inds, dim=1)
         allocate(coords(nbox,3))
         do iimg = 1, nbox
             pos = self%positions(pos_inds(iimg),:)
@@ -1034,12 +1049,13 @@ use simple_stat
         params_glob => params
         params_glob%element = self%element
         params_glob%smpd    = self%smpd
-        call self%write_pdb('simulate_NP')
+        if (.not. self%wrote_pdb) call self%write_pdb('simulate_NP')
         call nano%new(trim(self%raw_filename))
-        call nano%set_atomic_coords('simulate_NP.pdb')
+        call nano%set_atomic_coords(trim(self%pdb_filename))
         call nano%simulate_atoms(simatms=sim_img)
         call sim_img%write(sim_img_name)
         call nano%kill
+        call sim_img%kill
     end subroutine write_NP_image
 
     subroutine write_dist( self, csv_name, type, to_write )
