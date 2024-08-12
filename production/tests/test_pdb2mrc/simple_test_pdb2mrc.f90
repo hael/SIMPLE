@@ -38,23 +38,28 @@ else
         pdb_file = trim(str_name)//'.pdb'
         inquire(file=pdb_file, exist=pdb_exists)
         if( .not. pdb_exists )then
+            write(logfhandle,'(A,A)') "Experimental PDB Structure: ",trim(str_name)
             write(logfhandle, *) 'Downloading '//trim(str_name)//' from PDB database:'
             cmd = 'curl -s -o '//trim(pdb_file)//' https://files.rcsb.org/download/'//trim(pdb_file)
             write(logfhandle, *) ' https://files.rcsb.org/download/'//trim(pdb_file)
             call execute_command_line(cmd, exitstat=rc)
+        else
+            write(logfhandle,'(A,A)') "Experimental PDB Structure: ",trim(str_name)
         endif
     else 
         inquire(file=pdb_file, exist=pdb_exists)
         if( .not. pdb_exists )then
             str_name = get_fbody(pdb_file,'.pdb')
-            print *, str_name
+            write(logfhandle,'(A,A)') "Experimental PDB Structure: ",trim(str_name)
             write(logfhandle, *) 'Downloading '//trim(str_name)//' from PDB database:'
             cmd = 'curl -s -o'//trim(pdb_file)//' https://files.rcsb.org/download/'//trim(pdb_file)
             call execute_command_line(cmd, exitstat=rc)
+        else
+            write(logfhandle,'(A,A)') "Experimental PDB Structure: ",trim(str_name)
         endif
     endif 
 endif
-write(logfhandle,'(A,F8.4)') 'SMPD: ', smpd
+write(logfhandle,'(A,f8.4)') 'smpd: ', smpd
 vol_file = swap_suffix(pdb_file,'mrc','pdb') 
 call molecule%new(pdb_file)
 call molecule%pdb2mrc(pdb_file, vol_file, smpd)
