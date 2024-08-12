@@ -5571,12 +5571,11 @@ contains
         &'Uniform 2D filter',&           ! descr_short
         &'is a program for 2D uniform filter by minimizing/searching the fourier index of the CV cost function',& ! descr_long
         &'simple_exec',&                 ! executable
-        &3, 1, 0, 0, 3, 0, 1, .false.)                                      ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 2, 1, 1, .false.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call uniform_filter2D%set_input('img_ios', 1, 'stk',  'file', 'Odd stack',  'Odd stack',  'stack_even.mrc file', .true., '')
         call uniform_filter2D%set_input('img_ios', 2, 'stk2', 'file', 'Even stack', 'Even stack', 'stack_odd.mrc file',  .true., '')
-        call uniform_filter2D%set_input('img_ios', 3, 'stk3', 'file', 'Mask stack', 'Mask stack', 'stack_mask.mrc file',  .false., '')
         ! parameter input/output
         call uniform_filter2D%set_input('parm_ios', 1, smpd)
         ! alternative inputs
@@ -5584,12 +5583,10 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call uniform_filter2D%set_input('filt_ctrls', 1, lpstart_nonuni)
-        call uniform_filter2D%set_input('filt_ctrls', 2, nsearch)
-        frcs%required = .true.
-        call uniform_filter2D%set_input('filt_ctrls', 3, frcs)
+        call uniform_filter2D%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Starting resolution limit', 'Starting resolution limit (in Angstroms)', 'in Angstroms', .true., -1.)
+        call uniform_filter2D%set_input('filt_ctrls', 2, 'lpstop',  'num', 'Stopping resolution limit', 'Stopping resolution limit (in Angstroms)', 'in Angstroms', .true., -1.)
         ! mask controls
-        ! <empty>
+        call uniform_filter2D%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
         call uniform_filter2D%set_input('comp_ctrls', 1, nthr)
     end subroutine new_uniform_filter2D

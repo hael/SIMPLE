@@ -529,7 +529,7 @@ contains
         ! read reference volume
         do s=1,params%nstates
             call calcrefvolshift_and_mapshifts2ptcls( cline, s, params%vols(s), do_center, xyz, map_shift=.true.)
-            call read_and_filter_refvols( cline, params%vols(s), params%vols(s) )
+            call read_and_filter_refvols( params%vols(s), params%vols(s) )
         end do
         find_start = max(1,                   calc_fourier_index(params%lpstart, params%box_crop, params%smpd_crop))
         find_stop  = min(build%vol%get_nyq(), calc_fourier_index(params%lpstop,  params%box_crop, params%smpd_crop))

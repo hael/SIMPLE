@@ -466,7 +466,6 @@ type :: parameters
     logical :: l_ml_reg       = .true.
     logical :: l_needs_sigma  = .false.
     logical :: l_neigh        = .false.
-    logical :: l_nonuniform   = .false.
     logical :: l_phaseplate   = .false.
     logical :: l_prob_sh      = .false.
     logical :: l_prob_norm    = .true.
@@ -1382,9 +1381,7 @@ contains
         ! set envfsc flag
         self%l_envfsc = self%envfsc .ne. 'no'
         ! set reference filtering flag
-        if( cline%defined('nonuniform') ) self%l_nonuniform = trim(self%nonuniform).eq.'yes'
         if( cline%defined('icm') ) self%l_icm = (trim(self%icm).eq.'yes')
-        if( self%l_icm .and. self%l_nonuniform ) THROW_HARD('Nonuniform & ICM filters are exclusive!')
         ! set correlation weighting scheme
         self%l_corrw = self%wcrit .ne. 'no'
         ! set wiener mode
