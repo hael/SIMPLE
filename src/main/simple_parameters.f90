@@ -1572,7 +1572,7 @@ contains
             if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
                 ! all good, this is an lpset mode (no eo alignment), so update flag
                 self%l_lpset = .true.
-            else    
+            else
                 THROW_HARD('Automatic low-pass limit estimation requires LPSTART/LPSTOP range input')
             endif
         endif
