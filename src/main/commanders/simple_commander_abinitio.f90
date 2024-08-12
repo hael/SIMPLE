@@ -870,7 +870,7 @@ contains
         call cline_refine3D%set('prg',                'refine3D')
         call cline_refine3D%set('projfile',      params%projfile)
         call cline_refine3D%set('pgrp',        params%pgrp_start)
-        if( params%l_lp_est )then
+        if( params%l_lpauto )then
             call cline_refine3D%set('lpstart', params%lpstart)
             call cline_refine3D%set('lpstop',  params%lpstop)
         endif
@@ -1906,7 +1906,7 @@ contains
         call cline_refine3D%set('projfile',      params%projfile)
         call cline_refine3D%set('center',                   'no')
         call cline_refine3D%set('pgrp',        params%pgrp_start)
-        if( params%l_lp_est )then
+        if( params%l_lpauto )then
             call cline_refine3D%set('lpstart', params%lpstart)
             call cline_refine3D%set('lpstop',  params%lpstop)
         endif

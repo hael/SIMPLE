@@ -531,7 +531,7 @@ contains
         ! read reference volume
         do s=1,params%nstates
             call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=.false.)
-            call read_and_filter_refvols( params_glob%vols_even(s), params_glob%vols_odd(s) )
+            call read_and_filter_refvols(s)
             call preprefvol(cline, s, do_center, xyz, .false.)
             call preprefvol(cline, s, do_center, xyz, .true.)
         end do

@@ -502,18 +502,6 @@ contains
         endif
     end subroutine calcrefvolshift_and_mapshifts2ptcls
 
-    subroutine read_refvols( fname_even, fname_odd )
-        character(len=*), intent(in) :: fname_even
-        character(len=*), intent(in) :: fname_odd
-        ! Read & ensure correct volumes dimensions
-        call build_glob%vol%read_and_crop(fname_even, params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
-        if( trim(fname_even) == trim(fname_odd) )then
-            call build_glob%vol_odd%copy(build_glob%vol)
-        else
-            call build_glob%vol_odd%read_and_crop(fname_odd, params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
-        endif
-    end subroutine read_refvols
-
     subroutine estimate_lp_refvols( s )
         use simple_opt_filter, only: estimate_lplim
         integer, intent(in) :: s
@@ -544,20 +532,29 @@ contains
         call mskvol%kill
     end subroutine estimate_lp_refvols
 
-    subroutine filter_refvols
+    subroutine read_and_filter_refvols( s )
+        integer, intent(in) :: s
+        character(len=:), allocatable :: vol_even, vol_odd, vol_avg
+        vol_even = params_glob%vols_even(s)
+        vol_odd  = params_glob%vols_odd(s)
+        vol_avg  = params_glob%vols(s)
+        call build_glob%vol%read_and_crop(vol_even,    params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+        call build_glob%vol_odd%read_and_crop(vol_odd, params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+        if( params_glob%l_lpauto ) call estimate_lp_refvols(s)
         if( params_glob%l_icm )then
             call build_glob%vol%ICM3D_eo(build_glob%vol_odd, params_glob%lambda)
-        else
-            call build_glob%vol%fft
-            call build_glob%vol_odd%fft
+            if( params_glob%l_lpset )then ! no independent volume registration, so average eo pairs
+                call build_glob%vol%add(build_glob%vol_odd)
+                call build_glob%vol%mul(0.5)
+                call build_glob%vol_odd%copy(build_glob%vol)
+            endif
+        else if( params_glob%l_lpset )then
+            ! the average volume occupies both even and odd
+            call build_glob%vol%read_and_crop(vol_avg, params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+            call build_glob%vol_odd%copy(build_glob%vol) 
         endif
-    end subroutine filter_refvols
-
-    subroutine read_and_filter_refvols( fname_even, fname_odd )
-        character(len=*), intent(in) :: fname_even
-        character(len=*), intent(in) :: fname_odd
-        call read_refvols( fname_even, fname_odd )
-        call filter_refvols
+        call build_glob%vol%fft
+        call build_glob%vol_odd%fft
     end subroutine read_and_filter_refvols
 
     !>  \brief  prepares one volume for references extraction
