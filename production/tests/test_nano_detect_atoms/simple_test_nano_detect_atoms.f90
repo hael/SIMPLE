@@ -64,7 +64,7 @@ params_glob%smpd       = smpd
 params_glob%corr_thres = corr_thres
 cs_thres_int           = anint(cs_thres)
 use_auto_corr_thres    = .true.
-call nano%new(filename_exp,msk=mskdiam)
+call nano%new(filename_exp,msk=(mskdiam / smpd)/2)
 !call nano%identify_atomic_pos(a, l_fit_lattice=.true., use_cs_thres=use_cs_thres,&
 !                &use_auto_corr_thres=use_auto_corr_thres, cs_thres=cs_thres_int)
 call nano%identify_atomic_pos(a, l_fit_lattice=.true., use_cs_thres=use_cs_thres,&
