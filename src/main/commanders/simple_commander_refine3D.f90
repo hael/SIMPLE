@@ -447,7 +447,6 @@ contains
                 call cline_pspec_lp%set('icm',        'no')
                 call cline_pspec_lp%set('nonuniform', 'no')
                 call cline_pspec_lp%set('nparts',     1)
-                call cline_pspec_lp%delete('lp')
                 call xpspec_lp%execute_shmem( cline_pspec_lp )
             endif
             ! ASSEMBLE VOLUMES
@@ -728,7 +727,6 @@ contains
                     call cline_pspec_lp%set('nparts',     1)
                     call cline_pspec_lp%set('icm',        'no')
                     call cline_pspec_lp%set('nonuniform', 'no')
-                    call cline_pspec_lp%delete('lp')
                     call xpspec_lp%execute_shmem( cline_pspec_lp )
                 endif
                 if( converged .or. i == params%maxits )then

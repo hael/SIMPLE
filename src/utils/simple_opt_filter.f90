@@ -165,8 +165,8 @@ contains
         integer     :: box, ldim(3), find_start, find_stop
         integer     :: cutoff_find, best_ind
         real        :: smpd, cur_cost, best_cost
-        if( odd%is_ft() .or. even%is_ft() ) THROW_HARD('Input even & odd in FT representation, need to be real-space')
-        if( mskimg%is_ft() ) THROW_HARD('Input mskimg in FT representation, need to be real-space')
+        if( odd%is_ft() .or. even%is_ft() ) THROW_HARD('Input even & odd has to be in real-space representation')
+        if( mskimg%is_ft() ) THROW_HARD('Input mskimg has to be in real-space representation')
         ldim       = odd%get_ldim()
         box        = ldim(1)
         smpd       = odd%get_smpd()

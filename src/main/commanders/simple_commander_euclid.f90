@@ -514,22 +514,26 @@ contains
         !$ use omp_lib_kinds
         use simple_strategy2D3D_common, only: calcrefvolshift_and_mapshifts2ptcls, read_and_filter_refvols, preprefvol
         use simple_fsc,                 only: plot_fsc
+        use simple_opt_filter,          only: estimate_lplim
         use simple_image
         class(pspec_lp_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         real,             allocatable :: res(:), vol_pspec(:)
         type(builder)                 :: build
         type(parameters)              :: params
+        type(image)                   :: mskvol, odd_filt
         character(len=90)             :: filename
         integer  :: s, find_start, find_stop, find, fhandle, Nk, k
         logical  :: do_center, l_exist
-        real     :: vol_dens, xyz(3)
+        real     :: vol_dens, xyz(3), lpopt
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         ! read reference volume
         do s=1,params%nstates
-            call calcrefvolshift_and_mapshifts2ptcls( cline, s, params%vols(s), do_center, xyz, map_shift=.true.)
-            call read_and_filter_refvols( params%vols(s), params%vols(s) )
+            call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=.false.)
+            call read_and_filter_refvols( params_glob%vols_even(s), params_glob%vols_odd(s) )
+            call preprefvol(cline, s, do_center, xyz, .false.)
+            call preprefvol(cline, s, do_center, xyz, .true.)
         end do
         find_start = max(1,                   calc_fourier_index(params%lpstart, params%box_crop, params%smpd_crop))
         find_stop  = min(build%vol%get_nyq(), calc_fourier_index(params%lpstop,  params%box_crop, params%smpd_crop))
@@ -545,9 +549,21 @@ contains
         filename  = 'pspec_vol_iter'//int2str(params%which_iter)
         call plot_fsc(Nk, vol_pspec, res, params%smpd_crop, trim(filename))
         ! estimate the next lp (first middle-ruled slope change from the right)
-        do find = find_stop-2, find_start+2, -1
-            if( (vol_pspec(find+1) - vol_pspec(find-1)) * (vol_pspec(find) - vol_pspec(find-2)) < 0. ) exit
-        enddo
+        if( params%l_filemsk )then
+            call mskvol%new([params%box,params%box,params%box], params%smpd)
+            call mskvol%read(params%mskfile)
+            call mskvol%one_at_edge ! to expand before masking of reference internally
+        else
+            ! spherical masking
+            call mskvol%disc([params%box,params%box,params%box], params%smpd,&
+                    &real(min(params%box/2, int(params%msk + COSMSKHALFWIDTH))))
+        endif
+        call odd_filt%new([params%box,params%box,params%box], params%smpd)
+        call build_glob%vol_odd%ifft
+        call build_glob%vol%ifft
+        call estimate_lplim(build_glob%vol_odd, build_glob%vol, mskvol, [params%lpstart,params%lpstop], lpopt, odd_filt)
+        call build_glob%vol_odd%fft
+        call build_glob%vol%fft
         ! write estimated lp to a text file
         filename = 'estimated_lp.txt'
         inquire(file=trim(filename), exist=l_exist)
@@ -556,7 +572,7 @@ contains
         else
             open(fhandle, file=trim(filename), status="new", action="write")
         end if
-        write(fhandle, *) res(find)
+        write(fhandle, *) 'lp = ', params%lp, '; estimated lp = ', lpopt
         close(fhandle)
         ! ending
         call build%kill_general_tbox
