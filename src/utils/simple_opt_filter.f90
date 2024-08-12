@@ -9,7 +9,7 @@ use simple_butterworth
 implicit none
 #include "simple_local_flags.inc"
 
-public :: nonuni_filt3D, uni_filt2D, uni_filt2D_sub, uni_filt3D, exponential_reg
+public :: nonuni_filt3D, uni_filt2D, uni_filt2D_sub, uni_filt3D, estimate_lplim3D, exponential_reg
 public :: test_filt2D
 private
 
@@ -405,6 +405,56 @@ contains
         call diff_img_odd%kill
         call diff_img_even%kill
     end subroutine uni_filt3D
+
+    subroutine estimate_lplim3D(odd, even, mskimg, lprange, lpopt, odd_filt_out)
+        class(image),           intent(inout) :: odd, even, mskimg
+        real,                   intent(in)    :: lprange(2)
+        real,                   intent(out)   :: lpopt
+        class(image), optional, intent(out)   :: odd_filt_out
+        real,    allocatable :: cur_fil(:)
+        logical, allocatable :: lmask(:,:,:)
+        type(image) :: odd_copy_cmat, odd_filt
+        integer     :: box, ldim(3), find_start, find_stop
+        integer     :: cutoff_find, best_ind
+        real        :: smpd, cur_cost, best_cost
+        if( odd%is_ft() .or. even%is_ft() ) THROW_HARD('Input even & odd in real-space representation')
+        if( mskimg%is_ft() ) THROW_HARD('Input mskimg in real-space representation')
+        ldim       = odd%get_ldim()
+        box        = ldim(1)
+        smpd       = odd%get_smpd()
+        find_start = calc_fourier_index(lprange(1), box, smpd)
+        find_stop  = calc_fourier_index(lprange(2), box, smpd)
+        lmask      = mskimg%bin2logical()
+        call odd_copy_cmat%copy(odd)
+        call odd_copy_cmat%fft
+        call odd_filt%new(ldim, smpd)
+        call odd_filt%set_ft(.true.)
+        allocate(cur_fil(box), source=0.)
+        best_ind  = find_start
+        best_cost = huge(best_cost)
+        do cutoff_find = find_start, find_stop
+            ! apply BW kernel to odd
+            call odd_filt%copy_fast(odd_copy_cmat)
+            call butterworth_filter(odd_filt, cutoff_find, cur_fil)
+            call odd_filt%ifft
+            ! calculate squared Euclidean distance
+            cur_cost = odd_filt%sqeuclid(even, lmask)
+            if( cur_cost <= best_cost )then
+                best_cost = cur_cost
+                best_ind  = cutoff_find
+            endif
+        enddo
+        lpopt = calc_lowpass_lim(best_ind, box, smpd)
+        if( present(odd_filt_out) )then
+            call odd_filt_out%new(ldim, smpd)
+            call odd_filt_out%set_ft(.true.)
+            call odd_filt_out%copy_fast(odd_copy_cmat)
+            call butterworth_filter(odd_filt_out, best_ind, cur_fil)
+            call odd_filt_out%ifft
+        endif
+        call odd_copy_cmat%kill
+        call odd_filt%kill
+    end subroutine estimate_lplim3D
 
     ! searching for the best index of the cost function |sum(filter(img) - img)|
     ! also return the filtered img at this best index
