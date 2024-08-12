@@ -502,62 +502,62 @@ contains
         endif
     end subroutine calcrefvolshift_and_mapshifts2ptcls
 
-    subroutine read_and_filter_refvols( cline, fname_even, fname_odd )
-        use simple_butterworth, only: butterworth_filter
-        use simple_opt_filter,  only: nonuni_filt3D
-        class(cmdline),   intent(in) :: cline
+    subroutine read_refvols( fname_even, fname_odd )
         character(len=*), intent(in) :: fname_even
         character(len=*), intent(in) :: fname_odd
-        type(image)       :: mskvol
-        real, allocatable :: filter(:)
         ! Read & ensure correct volumes dimensions
         call build_glob%vol%read_and_crop(fname_even, params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
         if( trim(fname_even) == trim(fname_odd) )then
             call build_glob%vol_odd%copy(build_glob%vol)
         else
-            call build_glob%vol_odd%read_and_crop(fname_odd,  params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+            call build_glob%vol_odd%read_and_crop(fname_odd, params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
         endif
-        ! filtering
-        if( params_glob%l_nonuniform )then
-            if( params_glob%l_filemsk )then
-                call mskvol%read_and_crop(params_glob%mskfile, params_glob%box, params_glob%smpd,&
-                    &params_glob%box_crop, params_glob%smpd_crop, ismask=.true.)
-            else
-                call mskvol%new([params_glob%box_crop,params_glob%box_crop,params_glob%box_crop],params_glob%smpd_crop)
-                mskvol = 1.0
-                call mskvol%mask(params_glob%msk_crop, 'soft', backgr=0.0)
+    end subroutine read_refvols
+
+    subroutine estimate_lp_refvols( s )
+        use simple_opt_filter, only: estimate_lplim
+        integer, intent(in) :: s
+        type(image) :: mskvol
+        real        :: lpopt
+        integer     :: npix
+        logical     :: l_update_lp
+        call mskvol%disc([params_glob%box_crop,params_glob%box_crop,params_glob%box_crop],&
+                         &params_glob%smpd_crop, params_glob%msk_crop, npix )
+        call estimate_lplim(build_glob%vol_odd, build_glob%vol, mskvol, [params_glob%lpstart,params_glob%lpstop], lpopt)
+        l_update_lp = .false.
+        if( s == 1 )then
+            l_update_lp = .true. ! always update for state == 1       
+        else
+            if( lpopt > params_glob%lp )then
+                l_update_lp = .true. ! the limit for the state with the worst resolution wins
             endif
-            call mskvol%one_at_edge ! to expand before masking of reference
-            if( params_glob%l_lpset )then ! nanocrystal refinement
-                if( cline%defined('lpstop') )then
-                    ! lpstop required as upper Fourier index boundary for the nonuniform filter in frequency limited refinement
-                    call nonuni_filt3D(build_glob%vol_odd, build_glob%vol, mskvol, params_glob%lpstop)
-                else
-                    ! applying uniform Butterworth filter at the cut-off frequency = lp
-                    allocate(filter(build_glob%vol%get_filtsz()))
-                    call butterworth_filter(calc_fourier_index(params_glob%lp, params_glob%box_crop, params_glob%smpd_crop), filter)
-                    call build_glob%vol%fft
-                    call build_glob%vol_odd%fft
-                    call build_glob%vol%apply_filter(filter)
-                    call build_glob%vol_odd%apply_filter(filter)
-                endif
-            else
-                if( cline%defined('lpstop') )then
-                    call nonuni_filt3D(build_glob%vol_odd, build_glob%vol, mskvol, params_glob%lpstop)
-                else
-                    call nonuni_filt3D(build_glob%vol_odd, build_glob%vol, mskvol)
-                endif
-            endif
-            ! e/o masking is performed in preprefvol
-            call mskvol%kill
-            call build_glob%vol%fft
-            call build_glob%vol_odd%fft
-        else if( params_glob%l_icm )then
+        endif
+        if( l_update_lp )then
+            ! re-set the low-pass limit
+            params_glob%lp = lpopt
+            ! update the Fourier index limit
+            params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, params_glob%box_crop, params_glob%smpd_crop)
+            ! update low-pass limit in project
+            call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
+        endif
+        ! destruct
+        call mskvol%kill
+    end subroutine estimate_lp_refvols
+
+    subroutine filter_refvols
+        if( params_glob%l_icm )then
             call build_glob%vol%ICM3D_eo(build_glob%vol_odd, params_glob%lambda)
         else
             call build_glob%vol%fft
             call build_glob%vol_odd%fft
         endif
+    end subroutine filter_refvols
+
+    subroutine read_and_filter_refvols( fname_even, fname_odd )
+        character(len=*), intent(in) :: fname_even
+        character(len=*), intent(in) :: fname_odd
+        call read_refvols( fname_even, fname_odd )
+        call filter_refvols
     end subroutine read_and_filter_refvols
 
     !>  \brief  prepares one volume for references extraction
@@ -586,11 +586,9 @@ contains
         ! Volume filtering
         filtsz = build_glob%vol%get_filtsz()
         if( params_glob%l_ml_reg )then
-            ! filtering done in read_and_filter_refvols
+            ! filtering done when volumes are assembled
         else if( params_glob%l_icm )then
-            ! filtering done in read_and_filter_refvols
-        else if( params_glob%l_nonuniform )then
-            ! filtering done in read_and_filter_refvols
+            ! filtering done in filter_refvols
         else if( params_glob%l_lpset )then
             call vol_ptr%fft()
             select case(L_LPSET_FILTER)

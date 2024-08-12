@@ -185,7 +185,7 @@ contains
     end subroutine exec_nununiform_filter3D
 
     subroutine exec_uniform_filter3D(self, cline)
-        use simple_opt_filter, only: estimate_lplim3D
+        use simple_opt_filter, only: estimate_lplim
         class(uniform_filter3D_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(parameters)  :: params
@@ -218,7 +218,7 @@ contains
             call mskvol%disc([params%box,params%box,params%box], params%smpd,&
                     &real(min(params%box/2, int(params%msk + COSMSKHALFWIDTH))))
         endif
-        call estimate_lplim3D(odd, even, mskvol, [params%lpstart,params%lpstop], lpopt, odd_filt)
+        call estimate_lplim(odd, even, mskvol, [params%lpstart,params%lpstop], lpopt, odd_filt)
         print *, 'found optimal low-pass limit: ', lpopt
         call odd_filt%write('odd_filt.mrc')
         ! destruct
@@ -294,53 +294,37 @@ contains
     end subroutine exec_icm3D
 
     subroutine exec_uniform_filter2D( self, cline )
-        use simple_opt_filter, only: uni_filt2D_sub
-        use simple_masker,     only: automask2D
-        use simple_image,      only: image_ptr 
-        use simple_default_clines
+        use simple_opt_filter, only: estimate_lplims2D
         class(uniform_filter2D_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
-        character(len=:), allocatable :: file_tag
-        type(image),      allocatable :: odd(:), even(:), mask(:)
-        real,             allocatable :: diams(:)
+        type(image),      allocatable :: odd(:), even(:), odd_filt(:)
+        real,             allocatable :: lpsopt(:)
         type(parameters) :: params
-        type(image_ptr)  :: pmask
         integer          :: iptcl
         ! init
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        call set_automask2D_defaults(cline)
         call params%new(cline)
         call find_ldim_nptcls(params%stk, params%ldim, params%nptcls)
         params%ldim(3) = 1 ! because we operate on stacks
-        file_tag = 'uniform_filter2D'
         ! allocate
-        allocate(odd(params%nptcls), even(params%nptcls), mask(params%nptcls))
+        allocate(odd(params%nptcls), odd_filt(params%nptcls), even(params%nptcls), lpsopt(params%nptcls))
         ! construct & read
         do iptcl = 1, params%nptcls
             call odd( iptcl)%new( params%ldim, params%smpd, .false.)
+            call odd_filt( iptcl)%new( params%ldim, params%smpd, .false.)
             call odd( iptcl)%read(params%stk,  iptcl)
             call even(iptcl)%new( params%ldim, params%smpd, .false.)
             call even(iptcl)%read(params%stk2, iptcl)
-            call mask(iptcl)%copy(odd(iptcl))
-            call mask(iptcl)%add(even(iptcl))
-            call mask(iptcl)%mul(0.5)
         enddo
         ! filter
-        do iptcl = 1, params%nptcls
-            call mask(iptcl)%get_mat_ptrs(pmask)
-            pmask%rmat = 1;
-        enddo
-        call uni_filt2D_sub(even, odd, mask)
+        call estimate_lplims2D( odd, even, params%msk, [params%lpstart,params%lpstop], lpsopt, odd_filt )
         ! write output and destruct
         do iptcl = 1, params%nptcls
-            call odd( iptcl)%write(trim(file_tag)//'_odd.mrc',  iptcl)
-            call even(iptcl)%write(trim(file_tag)//'_even.mrc',  iptcl)
-            call odd( iptcl)%kill()
-            call even(iptcl)%kill()
+            print *, 'found optimal low-pass limit: ', iptcl, lpsopt(iptcl)
+            call odd_filt(iptcl)%write('odd_filt.mrc', iptcl)
         end do
-        if( allocated(diams) ) deallocate(diams)
         ! end gracefully
-        call simple_end('**** SIMPLE_uniform_filter2D NORMAL STOP ****')
+        call simple_end('**** SIMPLE_UNIFORM_FILTER2D NORMAL STOP ****')
     end subroutine exec_uniform_filter2D
 
     subroutine exec_icm2D( self, cline )
