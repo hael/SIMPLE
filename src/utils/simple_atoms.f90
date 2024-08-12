@@ -32,6 +32,7 @@ type :: atoms
     real,             allocatable :: occupancy(:)
     real,             allocatable :: beta(:)
     real,             allocatable :: radius(:)
+    real,             allocatable :: atom_corr(:)
     integer,          allocatable :: num(:)
     integer,          allocatable :: resnum(:)
     integer,          allocatable :: Z(:)
@@ -44,6 +45,7 @@ type :: atoms
     generic            :: new => new_from_pdb, new_instance
     generic            :: assignment(=) => copy
     procedure          :: copy
+    procedure          :: extract_atom
     ! CHECKER
     procedure          :: element_exists
     ! GETTERS/SETTERS
@@ -56,6 +58,7 @@ type :: atoms
     procedure          :: get_num
     procedure          :: get_atomicnumber
     procedure          :: get_radius
+    procedure          :: get_atom_corr
     procedure          :: set_coord
     procedure          :: set_chain
     procedure          :: set_name
@@ -64,6 +67,7 @@ type :: atoms
     procedure          :: set_beta
     procedure          :: set_resnum
     procedure          :: set_occupancy
+    procedure          :: set_atom_corr
     ! I/O
     procedure          :: print_atom
     procedure          :: writepdb
@@ -77,9 +81,11 @@ type :: atoms
     procedure          :: geometry_analysis_pdb
     procedure          :: find_masscen
     procedure          :: pdb2mrc
+    procedure          :: atom_validation
     ! MODIFIERS
     procedure          :: translate
     procedure          :: rotate
+    procedure          :: ref2originbox
     ! DESTRUCTOR
     procedure          :: kill
 end type atoms
@@ -167,7 +173,7 @@ contains
         call self%kill
         allocate(self%name(n), self%chain(n), self%resname(n), self%xyz(n,3), self%mw(n),&
             self%occupancy(n), self%beta(n), self%num(n), self%Z(n), self%het(n), self%icode(n),&
-            self%altloc(n), self%resnum(n), self%element(n), self%radius(n))
+            self%altloc(n), self%resnum(n), self%element(n), self%radius(n), self%atom_corr(n))
         self%name(:)    = '    '
         self%resname(:) = '   '
         self%chain(:)   = ' '
@@ -179,6 +185,7 @@ contains
         self%beta      = 0.
         self%occupancy = 0.
         self%radius    = 0.
+        self%atom_corr = 0.
         self%num    = 0
         self%resnum = 0
         self%Z      = 0
@@ -192,6 +199,7 @@ contains
                 self%beta(i)      = 1.
                 self%occupancy(i) = 1.
                 self%radius(i)    = 1.
+                self%atom_corr(i) = 1.
                 self%num(i)       = i
                 self%resnum(i)    = 1
             enddo
@@ -222,7 +230,21 @@ contains
         self%het        = self_in%het
         self%element    = self_in%element
         self%radius     = self_in%radius
+        self%atom_corr  = self_in%atom_corr
     end subroutine copy
+
+    subroutine extract_atom( self, self_atom, i )
+        class(atoms), intent(inout) :: self
+        type(atoms),  intent(out)   :: self_atom
+        integer,      intent(in)    :: i
+        call self_atom%new(1)
+        self_atom%name         = self%get_name(i)
+        self_atom%element      = self%get_element(i)
+        self_atom%xyz(1,:)     = self%get_coord(i)
+        self_atom%beta         = self%get_beta(i)
+        self_atom%Z            = self%get_atomicnumber(i)
+        self_atom%radius       = self%get_radius(i)
+    end subroutine extract_atom
 
     ! CHECKERS
 
@@ -315,9 +337,16 @@ contains
     real function get_radius( self, i )
         class(atoms), intent(in) :: self
         integer,      intent(in) :: i
-        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; get_atomicnumber')
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; get_radius')
         get_radius = self%radius(i)
     end function get_radius
+
+    real function get_atom_corr( self, i )
+        class(atoms), intent(in) :: self
+        integer,      intent(in) :: i
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; get_atom_corr')
+        get_atom_corr = self%atom_corr(i)
+    end function get_atom_corr
 
     subroutine set_coord( self, i, xyz )
         class(atoms), intent(inout) :: self
@@ -384,6 +413,14 @@ contains
         if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; set_occupancy')
         self%occupancy(i) = occupancy
     end subroutine set_occupancy
+
+    subroutine set_atom_corr( self, i, corr )
+        class(atoms), intent(inout) :: self
+        integer,      intent(in)    :: i
+        real,         intent(in)    :: corr
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; set_corr')
+        self%atom_corr(i) = corr
+    end subroutine set_atom_corr
 
     subroutine print_atom( self, i )
         class(atoms), intent(inout) :: self
@@ -496,7 +533,7 @@ contains
             THROW_WARN('Unknown atom '//int2str(i)//' : '//trim(self%name(i))//' - '//self%element(i))
         else
             self%radius(i) = r
-            self%Z(i) = z
+            self%Z(i)      = z
         endif
     end subroutine guess_an_element
 
@@ -1111,31 +1148,38 @@ contains
         real,          intent(in)    :: smpd
         character(*),  intent(in)    :: pdb_file, vol_file   
         type(image)       :: vol
-        real              :: mol_dim(3), center(3), half_box(3)
-        integer           :: ldim(3), i
+        real              :: mol_dim(3), center(3), half_box(3), max_dist, dist
+        integer           :: ldim(3), i_atom, j_atom
         integer, optional :: vol_dim(3)
         call self%new(pdb_file)
-        ! dimensions of the molecule
-        write(logfhandle,'(A,F8.2,1X,A,F8.2)') "Bounding box: x:", minval(self%xyz(:,1)),"-", maxval(self%xyz(:,1))
-        write(logfhandle,'(A,F8.2,1X,A,F8.2)') "              y:", minval(self%xyz(:,2)),"-", maxval(self%xyz(:,2))
-        write(logfhandle,'(A,F8.2,1X,A,F8.2)') "              z:", minval(self%xyz(:,3)),"-", maxval(self%xyz(:,3))
+        ! Dimensions of the molecule
+        write(logfhandle,'(A,f8.2,1X,A,f8.2)') "Bounding box: x:", minval(self%xyz(:,1)),"-", maxval(self%xyz(:,1))
+        write(logfhandle,'(A,f8.2,1X,A,f8.2)') "              y:", minval(self%xyz(:,2)),"-", maxval(self%xyz(:,2))
+        write(logfhandle,'(A,f8.2,1X,A,f8.2)') "              z:", minval(self%xyz(:,3)),"-", maxval(self%xyz(:,3))
         mol_dim(1) = maxval(self%xyz(:,1)) - minval(self%xyz(:,1))
         mol_dim(2) = maxval(self%xyz(:,2)) - minval(self%xyz(:,2))
         mol_dim(3) = maxval(self%xyz(:,3)) - minval(self%xyz(:,3))
         center(1)  = minval(self%xyz(:,1)) + mol_dim(1)/2.
         center(2)  = minval(self%xyz(:,2)) + mol_dim(2)/2.
         center(3)  = minval(self%xyz(:,3)) + mol_dim(3)/2.
-        write(logfhandle,'(A,2(F8.3,","),F8.3,A)') " Atomic center at ", center," (center of volume at 0, 0, 0)"
+        write(logfhandle,'(A,2(f8.3,","),f8.3,A)') " Atomic center at ", center," (center of volume at 0, 0, 0)"
         if( present(vol_dim) )then
-            ldim(:)     = int( maxval(mol_dim)/smpd )
+            ldim        = ceiling( (mol_dim)/smpd )
             if( vol_dim(1) < ldim(1) )  THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pbd2mrc')
             if( vol_dim(2) < ldim(2) )  THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pbd2mrc')
             if( vol_dim(3) < ldim(3) )  THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pbd2mrc')
             ldim        = vol_dim
-            half_box(:) = (vol_dim*smpd)/2. 
+            half_box(:) = (vol_dim*smpd)/2.
         else
-            ldim(:)     = int( maxval(mol_dim)/smpd ) + 75
-            half_box(:) = maxval(mol_dim)/2. 
+            max_dist = 0.
+            do i_atom = 1, self%n
+                do j_atom = i_atom + 1, self%n
+                    dist = euclid( self%xyz(i_atom,:), self%xyz(j_atom,:) )
+                    if( dist > max_dist ) max_dist = dist
+                enddo
+            enddo
+            ldim(:)     = ceiling( (max_dist/smpd) * 2.)
+            half_box(:) = max_dist / 2.
         endif
         call vol%new([ldim(1), ldim(2), ldim(3)], smpd)
         ! 0,0,0 in PDB space is map to the center of the volume 
@@ -1143,8 +1187,44 @@ contains
         call self%convolve( vol, cutoff = 8*smpd)
         call vol%write(vol_file)
         call vol%kill()
-        write(logfhandle,'(A)') " Simulated volume created "
+        write(logfhandle,'(A,3i5)') " Simulated volume created ", ldim
     end subroutine pdb2mrc
+
+    subroutine atom_validation( self, vol, filename )
+        use simple_image, only: image
+        class(atoms),               intent(inout) :: self
+        type(image),                intent(in)    :: vol
+        character(len=*), optional, intent(in)    :: filename
+        type(image) :: vol_atom, vol_at
+        type(atoms) :: atom
+        integer     :: i_atom, center(3), atom_box
+        real        :: smpd, cc
+        logical     :: outside
+        smpd = vol%get_smpd()
+        if(present(filename)) open(unit=45,file=trim(filename))
+        do i_atom = 1, self%n
+            atom_box = (2 * ceiling((1.5*self%radius(i_atom))/smpd)) + 1
+            ! generate simulted atom volume
+            call vol_atom%new([atom_box, atom_box, atom_box], smpd)
+            !call vol_atom%new(vol%get_ldim(), vol%get_smpd())
+            call self%extract_atom(atom, i_atom)
+            center(:) = atom%get_coord(1)
+            call atom%ref2originbox(1, atom_box)
+            call atom%convolve(vol_atom, cutoff = 8*smpd)
+            ! extract the atom volume from the molecule volume
+            call vol_at%new([atom_box, atom_box, atom_box], smpd)
+            call vol%window_slim(center, atom_box, vol_at, outside)
+            !call vol_at%mask(real(atom_box)/2., 'soft')
+            ! compute cross-correlation between both volumes
+            cc = vol_atom%real_corr(vol_at)
+            call self%set_atom_corr(i_atom, cc)
+            if(present(filename)) write(45,'(1x,4(f10.6,a))') self%xyz(i_atom,1), ',', self%xyz(i_atom,2), ',', self%xyz(i_atom,3), ',', self%atom_corr(i_atom)
+            call vol_atom%kill
+            call vol_at%kill
+            call atom%kill
+        enddo
+        if(present(filename)) close(45)
+    end subroutine atom_validation
 
     ! MODIFIERS
 
@@ -1161,6 +1241,13 @@ contains
         real,         intent(in)    :: mat(3,3)
         self%xyz = matmul(self%xyz,transpose(mat))
     end subroutine rotate
+
+    subroutine ref2originbox( self, i, boxsize )
+        class(atoms), intent(inout) :: self
+        integer,      intent(in)    :: boxsize, i
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; center2originbox')
+        self%xyz(i,:) = boxsize/2
+    end subroutine ref2originbox
 
     ! DESTRUCTOR
     subroutine kill( self )
@@ -1180,6 +1267,7 @@ contains
         if( allocated(self%het) )deallocate(self%het)
         if( allocated(self%element) )deallocate(self%element)
         if( allocated(self%radius) )deallocate(self%radius)
+        if( allocated(self%atom_corr) )deallocate(self%atom_corr)
         self%n      = 0
         self%exists = .false.
     end subroutine kill
