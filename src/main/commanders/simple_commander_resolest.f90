@@ -185,16 +185,18 @@ contains
     end subroutine exec_nununiform_filter3D
 
     subroutine exec_uniform_filter3D(self, cline)
-        use simple_opt_filter, only: uni_filt3D
+        use simple_opt_filter, only: estimate_lplim3D
         class(uniform_filter3D_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(parameters)  :: params
-        type(image)       :: even, odd, mskvol
+        type(image)       :: even, odd, mskvol, odd_filt
         logical           :: have_mask_file
+        real              :: lpopt
         character(len=90) :: file_tag
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
-        call odd %new([params%box,params%box,params%box], params%smpd)
+        call odd%new([params%box,params%box,params%box], params%smpd)
+        call odd_filt%new([params%box,params%box,params%box], params%smpd)
         call even%new([params%box,params%box,params%box], params%smpd)
         call odd %read(params%vols(1))
         call even%read(params%vols(2))
@@ -216,23 +218,13 @@ contains
             call mskvol%disc([params%box,params%box,params%box], params%smpd,&
                     &real(min(params%box/2, int(params%msk + COSMSKHALFWIDTH))))
         endif
-        call uni_filt3D(odd, even, mskvol)
-        if( have_mask_file )then
-            call mskvol%read(params%mskfile) ! restore the soft edge
-            call even%mul(mskvol)
-            call  odd%mul(mskvol)
-        else
-            call even%mask(params%msk, 'soft')
-            call  odd%mask(params%msk, 'soft')
-        endif
-        call  odd%write(trim(file_tag)//'_odd.mrc')
-        call even%write(trim(file_tag)//'_even.mrc')
-        call odd%add(even)
-        call odd%mul(0.5)
-        call odd%write(trim(file_tag)//'_avg.mrc')
+        call estimate_lplim3D(odd, even, mskvol, [params%lpstart,params%lpstop], lpopt, odd_filt)
+        print *, 'found optimal low-pass limit: ', lpopt
+        call odd_filt%write('odd_filt.mrc')
         ! destruct
-        call    odd%kill
-        call   even%kill
+        call odd%kill
+        call odd_filt%kill
+        call even%kill
         call mskvol%kill
         ! end gracefully
         call simple_end('**** SIMPLE_UNIFORM_FILTER3D NORMAL STOP ****')

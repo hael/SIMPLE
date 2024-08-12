@@ -3436,7 +3436,7 @@ contains
         &'Uniform Butterworth 3D filter',&                      ! descr_short
         &'is a program for 3D uniform filter by minimizing/searching the fourier index of the CV cost function',& ! descr_long
         &'simple_exec',&                                        ! executable
-        &2, 1, 0, 0, 4, 2, 1, .false.)                          ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 2, 2, 1, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call uniform_filter3D%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
@@ -3448,10 +3448,8 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call uniform_filter3D%set_input('filt_ctrls', 1, lpstart_nonuni)
-        call uniform_filter3D%set_input('filt_ctrls', 2, nsearch)
-        call uniform_filter3D%set_input('filt_ctrls', 3, 'fsc', 'file', 'FSC file', 'FSC file', 'e.g. fsc_state01.bin file', .true., '')
-        call uniform_filter3D%set_input('filt_ctrls', 4, 'lpstop', 'num', 'Stopping resolution limit', 'Stopping resolution limit (in Angstroms)', 'in Angstroms', .false., -1.)
+        call uniform_filter3D%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Starting resolution limit', 'Starting resolution limit (in Angstroms)', 'in Angstroms', .true., -1.)
+        call uniform_filter3D%set_input('filt_ctrls', 2, 'lpstop',  'num', 'Stopping resolution limit', 'Stopping resolution limit (in Angstroms)', 'in Angstroms', .true., -1.)
         ! mask controls
         call uniform_filter3D%set_input('mask_ctrls', 1, mskdiam)
         call uniform_filter3D%set_input('mask_ctrls', 2, mskfile)
