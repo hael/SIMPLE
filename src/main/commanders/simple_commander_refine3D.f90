@@ -440,7 +440,7 @@ contains
                 rt_merge_algndocs = toc(t_merge_algndocs)
                 t_volassemble = tic()
             endif
-            if( params%l_lp_est )then
+            if( params%l_lpauto )then
                 cline_pspec_lp = cline
                 call cline_pspec_lp%set('which_iter', params%which_iter)
                 call cline_pspec_lp%set('vol1',       params%vols(1))
@@ -719,7 +719,7 @@ contains
                 endif
                 ! in strategy3D_matcher:
                 call refine3D_exec(cline, params%which_iter, converged)
-                if( params%l_lp_est )then
+                if( params%l_lpauto )then
                     cline_pspec_lp = cline
                     call cline_pspec_lp%set('prg',       'pspec_lp')
                     call cline_pspec_lp%set('which_iter', params%which_iter)
@@ -898,15 +898,7 @@ contains
         ! read reference volumes and create polar projections
         do s=1,params%nstates
             call calcrefvolshift_and_mapshifts2ptcls( cline, s, params%vols(s), do_center, xyz, map_shift=.true.)
-            if( params_glob%l_lpset )then
-                if( params_glob%l_icm )then
-                    call read_and_filter_refvols( params_glob%vols_even(s), params_glob%vols_odd(s) )
-                else
-                    call read_and_filter_refvols( params_glob%vols(s), params_glob%vols(s) )
-                endif
-            else
-                call read_and_filter_refvols( params_glob%vols_even(s), params_glob%vols_odd(s) )
-            endif
+            call read_and_filter_refvols(s)
             ! PREPARE E/O VOLUMES
             call preprefvol(cline, s, do_center, xyz, .false.)
             call preprefvol(cline, s, do_center, xyz, .true.)
@@ -1030,15 +1022,7 @@ contains
         ! read reference volumes and create polar projections
         do s=1,params%nstates
             call calcrefvolshift_and_mapshifts2ptcls( cline, s, params%vols(s), do_center, xyz, map_shift=.true.)
-            if( params_glob%l_lpset )then
-                if( params_glob%l_icm )then
-                    call read_and_filter_refvols( params_glob%vols_even(s), params_glob%vols_odd(s) )
-                else
-                    call read_and_filter_refvols( params_glob%vols(s), params_glob%vols(s) )
-                endif
-            else
-                call read_and_filter_refvols( params_glob%vols_even(s), params_glob%vols_odd(s) )
-            endif
+            call read_and_filter_refvols(s)
             ! PREPARE E/O VOLUMES
             call preprefvol(cline, s, do_center, xyz, .false.)
             call preprefvol(cline, s, do_center, xyz, .true.)

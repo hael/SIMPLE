@@ -469,15 +469,7 @@ contains
             else
                 call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=.true.)
             endif
-            if( params_glob%l_lpset )then
-                if( params_glob%l_icm )then
-                    call read_and_filter_refvols( params_glob%vols_even(s), params_glob%vols_odd(s) )
-                else
-                    call read_and_filter_refvols( params_glob%vols(s), params_glob%vols(s) )
-                endif
-            else
-                call read_and_filter_refvols( params_glob%vols_even(s), params_glob%vols_odd(s) )
-            endif
+            call read_and_filter_refvols(s)
             ! PREPARE E/O VOLUMES
             call preprefvol(cline, s, do_center, xyz, .false.)
             call preprefvol(cline, s, do_center, xyz, .true.)

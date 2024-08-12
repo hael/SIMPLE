@@ -49,7 +49,7 @@ type :: parameters
     character(len=3)          :: iterstats='no'       !< Whether to keep track alignment stats throughout iterations
     character(len=3)          :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
     character(len=3)          :: loc_sdev='no'        !< Whether to calculate local standard deviations(yes|no){no}
-    character(len=3)          :: lp_est='no'          !< estimate lp(yes|no){no}
+    character(len=3)          :: lp_auto='no'         !< automatically estimate lp(yes|no){no}
     character(len=3)          :: makemovie='no'
     character(len=3)          :: masscen='yes'         !< center to center of gravity(yes|no){yes}
     character(len=3)          :: mcpatch='yes'        !< whether to perform patch-based alignment during motion correction
@@ -461,7 +461,7 @@ type :: parameters
     logical :: l_kweight_rot  = .false.
     logical :: l_icm          = .false.
     logical :: l_incrreslim   = .true.
-    logical :: l_lp_est       = .false.
+    logical :: l_lpauto       = .false.
     logical :: l_lpset        = .false.
     logical :: l_ml_reg       = .true.
     logical :: l_needs_sigma  = .false.
@@ -563,7 +563,7 @@ contains
         call check_carg('iterstats',      self%iterstats)
         call check_carg('keepvol',        self%keepvol)
         call check_carg('loc_sdev',       self%loc_sdev)
-        call check_carg('lp_est',         self%lp_est)
+        call check_carg('lp_auto',         self%lp_auto)
         call check_carg('kweight',        self%kweight)
         call check_carg('kweight_chunk',  self%kweight_chunk)
         call check_carg('kweight_pool',   self%kweight_pool)
@@ -1566,8 +1566,16 @@ contains
             case DEFAULT
                 THROW_HARD('INVALID KWEIGHT_POOL ARGUMENT')
         end select
-        ! estimated lp
-        self%l_lp_est       = trim(self%lp_est      ).eq.'yes'
+        ! automatically estimated lp
+        self%l_lpauto = trim(self%lp_auto).eq.'yes'
+        if( self%l_lpauto )then
+            if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
+                ! all good, this is an lpset mode (no eo alignment), so update flag
+                self%l_lpset = .true.
+            else    
+                THROW_HARD('Automatic low-pass limit estimation requires LPSTART/LPSTOP range input')
+            endif
+        endif
         ! reg options
         self%l_prob_sh      = trim(self%prob_sh     ).eq.'yes'
         self%l_prob_norm    = trim(self%prob_norm   ).eq.'yes'
