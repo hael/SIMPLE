@@ -23,7 +23,7 @@ type(image)              :: simatms, raw_img
 real                     :: a(3), corr
 logical                  :: use_auto_corr_thres
 type(parameters), target :: params
-integer                  :: cs_thres_int
+integer                  :: cs_thres_int, ldim(3)
 
 ! Inputs
 filename_exp     = 'rec_merged.mrc'
@@ -51,8 +51,6 @@ call test_exp4%write_pdb('experimental_centers_TEST')
 call test_exp4%compare_pick('experimental_centers_TEST.pdb',trim(pdbfile_ref))
 corr = test_exp4%whole_map_correlation('reference.pdb')
 print *, 'Correlation to reference.pdb is: ', corr
-!corr = test_exp4%whole_map_correlation('startvol.mrc.pdb')
-!print *, 'Correlation to startvol.mrc.pdb is: ', corr
 corr = test_exp4%whole_map_correlation()
 print *, 'Correlation to rec_merged.mrc is: ', corr
 call test_exp4%kill
@@ -76,6 +74,7 @@ call simatms%write('simatms_henry.mrc')
 call nano%get_img_raw(raw_img)
 corr = simatms%real_corr(raw_img)
 print *, 'correlation to rec_merged.mrc is ', corr
+call raw_img%write('raw_img_check.mrc')
 call nano%kill
 call simatms%kill
 call raw_img%kill

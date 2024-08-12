@@ -131,6 +131,8 @@ use simple_stat
         if( present(mskdiam) ) then
             self%has_mask = .true.
             self%mask_radius   = (mskdiam / self%smpd) / 2
+            call self%nano_img%mask(self%mask_radius, 'soft')
+            call self%nano_img%write('masked_img.mrc')
         end if
         if( present(circle) ) self%circle = circle
         if( present(dist_thres) ) self%dist_thres = dist_thres
@@ -917,7 +919,7 @@ use simple_stat
         character(len=*), optional, intent(in)    :: compare_to_pdb
         real                     :: corr
         type(nanoparticle)       :: nano, nano_ref
-        type(image)              :: simatms, rawimg, simatms_ref
+        type(image)              :: simatms, simatms_ref
         type(parameters), target :: params
         if (.not. self%wrote_pdb) call self%write_pdb()
         params_glob => params
@@ -934,10 +936,7 @@ use simple_stat
             call nano_ref%kill
             call simatms_ref%kill
         else
-            call rawimg%new(self%ldim, self%smpd)
-            call rawimg%read(trim(self%raw_filename))
-            corr = rawimg%real_corr(simatms)
-            call rawimg%kill
+            corr = self%nano_img%real_corr(simatms)
         end if
         call nano%kill
         call simatms%kill
