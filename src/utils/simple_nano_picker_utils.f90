@@ -4,6 +4,7 @@ use simple_image
 use simple_atoms
 use simple_parameters
 use simple_defs_atoms
+use simple_nanoparticle_utils
 use simple_srch_sort_loc, only : hpsort
 implicit none
 #include "simple_local_flags.inc"
@@ -40,6 +41,30 @@ implicit none
         enddo
         close(22)
     end subroutine find_closest
+
+       ! input both pdbfile_* with .pdb extension
+    subroutine compare_pick( pdbfile_ref, pdbfile_exp )
+        character(len=*),           intent(in)    :: pdbfile_ref
+        character(len=*), optional, intent(in)    :: pdbfile_exp
+        real,    allocatable :: pdb_ref_coords(:,:), pdb_exp_coords(:,:), distances(:)
+        integer              :: iostat, i
+        call read_pdb2matrix(trim(pdbfile_ref), pdb_ref_coords)
+        if( present(pdbfile_exp) )then 
+            call read_pdb2matrix(trim(pdbfile_exp),pdb_exp_coords)
+        else
+            open(unit = 40, file='test_atomic_centers.pdb', iostat=iostat)
+            if( iostat /= 0 )then
+                print *, 'compare_pick: test_atomic_centers.pdb does not exist, please enter valid filename for pdbfile_exp'
+                close(40)
+                return
+            endif
+            call read_pdb2matrix('test_atomic_centers.pdb',pdb_exp_coords)
+            close(40)
+        endif
+        allocate(distances(max(size(pdb_ref_coords,dim=2),size(pdb_exp_coords,dim=2))))
+        call find_closest(pdb_ref_coords,pdb_exp_coords,size(pdb_ref_coords,dim=2),size(pdb_exp_coords,dim=2),distances)
+        print *, 'AVG DISTANCE = ', sum(distances)/size(distances)
+    end subroutine compare_pick
     
     subroutine write_centers( fname, coords, smpd )
         character(len=*),           intent(in)    :: fname
@@ -48,21 +73,25 @@ implicit none
         type(atoms) :: centers_pdb
         integer     :: cc
         call centers_pdb%new(size(coords, dim = 1), dummy=.true.)
+        open(unit=45,file=trim(fname)//'.csv')
         do cc = 1, size(coords, dim = 1)
             call centers_pdb%set_name(cc,' '//params_glob%element)
             call centers_pdb%set_num(cc,cc)
             call centers_pdb%set_element(cc,params_glob%element)
-            call centers_pdb%set_coord(cc,(coords(cc,:))*smpd)
+            call centers_pdb%set_coord(cc,(coords(cc,:)-1)*smpd)
             !call centers_pdb%set_beta(cc,nano%atominfo(cc)%valid_corr) ! use per atom valid corr
             call centers_pdb%set_resnum(cc,1)
+            write(45,'(f8.4,a,f8.4,a,f8.4)') coords(cc,1), ',', coords(cc,2), ',', coords(cc,3)-1
         enddo
+        close(45)
         call centers_pdb%writepdb(fname)
     end subroutine write_centers
 
-    subroutine threshold_img(img_in, img_out, level)
-        type(image), intent(in)  :: img_in
-        type(image), intent(out) :: img_out
-        integer,     intent(in)  :: level
+    subroutine threshold_img(img_in, img_out, level, threshold_out)
+        type(image),    intent(in)  :: img_in
+        type(image),    intent(out) :: img_out
+        integer,        intent(in)  :: level
+        real, optional, intent(out) :: threshold_out
         real              :: thres
         real, allocatable :: intensities(:)
         intensities = pack(img_in%get_rmat(), mask=.true.)
@@ -71,19 +100,21 @@ implicit none
         call img_out%zero_below(thres)
         call img_out%write('post_thresholding_map.mrc')
         deallocate(intensities)
+        threshold_out = thres
     end subroutine threshold_img
 
     ! intensity thresholding based on Otsu's method
-    subroutine make_intensity_mask(img_in, mask_out, level)
+    subroutine make_intensity_mask(img_in, mask_out, level, intensity_thres)
         type(image),          intent(in)  :: img_in
         logical, allocatable, intent(out) :: mask_out(:,:,:)
         integer,              intent(in)  :: level
+        real,    optional,    intent(out) :: intensity_thres
         integer           :: ldim(3)
         real, allocatable :: rmat(:,:,:)
         type(image)       :: thres_img
         ldim = img_in%get_ldim()
         allocate(mask_out(ldim(1), ldim(2), ldim(3)), source=.false.)
-        call threshold_img(img_in, thres_img, level)
+        call threshold_img(img_in, thres_img, level, intensity_thres)
         rmat = thres_img%get_rmat()
         where (rmat > 0)
             mask_out = .true.
@@ -91,12 +122,13 @@ implicit none
     end subroutine make_intensity_mask
 
     ! intensity thresholding based on nanoparticle properties
-    subroutine make_intensity_mask_2(img_in, mask_out, element, NP_diam, level)
+    subroutine make_intensity_mask_2(img_in, mask_out, element, NP_diam, level, intensity_thres)
         type(image),          intent(in)  :: img_in
         logical, allocatable, intent(out) :: mask_out(:,:,:)
         character(len=*),     intent(in)  :: element
         real,                 intent(in)  :: NP_diam ! approx. diameter of nanoparticle
         integer, optional,    intent(in)  :: level
+        real,    optional,    intent(out) :: intensity_thres
         type(image)       :: img_copy
         character(len=2)  :: el_ucase
         character(len=8)  :: crystal_system
@@ -188,13 +220,14 @@ implicit none
         call img_copy%zero_below(thres)
         call img_copy%write('post_thresholding_map2.mrc')
         if (present(level)) then
-            call make_intensity_mask(img_copy, mask_out, level)
+            call make_intensity_mask(img_copy, mask_out, level, intensity_thres)
         else
             ! make intensity logical mask, with positions with intensities greater than the threshold being set to true
             allocate(mask_out(ldim(1), ldim(2), ldim(3)), source=.false.)
             where (rmat > thres)
                 mask_out = .true.
             end where
+            intensity_thres = thres
         end if
         deallocate(intensities_flat)
     end subroutine make_intensity_mask_2
