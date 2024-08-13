@@ -25,7 +25,7 @@ use simple_stat
         integer, allocatable     :: inds_offset(:,:,:), positions(:,:)
         type(image)              :: simulated_atom, nano_img
         type(image), allocatable :: convolved_atoms(:)
-        real                     :: smpd, thres, radius, euclid_thres, mask_radius, dist_thres
+        real                     :: smpd, thres, radius, euclid_thres, mask_radius, dist_thres, intensity_thres
         real, allocatable        :: box_scores(:,:,:), loc_sdevs(:,:,:), avg_int(:,:,:), euclid_dists(:,:,:), center_positions(:,:)
         logical                  :: has_mask, wrote_pdb, circle
         logical, allocatable     :: msk(:,:,:), thres_msk(:,:,:)
@@ -55,7 +55,6 @@ use simple_stat
         procedure :: write_NP_image
         procedure :: write_dist
         procedure :: extract_img_from_pos
-        procedure :: compare_pick
         procedure :: kill
 
     end type nano_picker
@@ -79,16 +78,17 @@ use simple_stat
         type(parameters), target :: params
         type(image)              :: thres_img
         call self%kill
-        self%smpd           = smpd
-        self%element        = element
-        self%raw_filename   = raw_filename
-        self%offset         = offset
-        self%wrote_pdb      = .false.
-        self%has_mask       = .false.
-        self%circle         = .false.
-        params_glob         => params
-        params_glob%element = self%element
-        params_glob%smpd    = self%smpd
+        self%smpd            = smpd
+        self%element         = element
+        self%raw_filename    = raw_filename
+        self%offset          = offset
+        self%wrote_pdb       = .false.
+        self%has_mask        = .false.
+        self%circle          = .false.
+        self%intensity_thres = -1
+        params_glob          => params
+        params_glob%element  = self%element
+        params_glob%smpd     = self%smpd
         ! retrieve nano_img from filename and find ldim
         !el_ucase            = upperCase(trim(adjustl(params_glob%element)))
         el_ucase            = upperCase(params_glob%element)
@@ -109,10 +109,10 @@ use simple_stat
             call phasecorr_one_atom(thres_img, self%element)
             call thres_img%write('denoised_map.mrc') 
             if (    intensity_level .eq. 1) then
-                call make_intensity_mask(      thres_img, self%thres_msk, level=2)
+                call make_intensity_mask(      thres_img, self%thres_msk, level=2, intensity_thres=self%intensity_thres)
             else if(intensity_level .eq. 2) then
                 if (present(mskdiam)) then
-                    call make_intensity_mask_2(thres_img, self%thres_msk, self%element, mskdiam*0.75, level=2)
+                    call make_intensity_mask_2(thres_img, self%thres_msk, self%element, mskdiam*0.75, level=2, intensity_thres=self%intensity_thres)
                 else
                     THROW_HARD('ERROR: MSKDIAM must be present to use intensity level 2')
                 end if
@@ -122,6 +122,7 @@ use simple_stat
         else
             allocate(self%thres_msk(self%ldim(1),self%ldim(2),self%ldim(3)), source=.true.)
         end if
+        print *, 'INTENSITY THRES = ', self%intensity_thres
         ! denoise nano_img if requested
         if( present(denoise) )then
             if( denoise )then
@@ -262,10 +263,9 @@ use simple_stat
         type(image), allocatable :: boximgs(:)
         type(image)              :: boximg, boximg_minmax
         integer                  :: xoff, yoff, zoff, pos(3), pos_center(3), ithr, nthr, winsz, npix_in, npix_out1, npix_out2
-        logical                  :: l_err_box, circle_here
+        logical                  :: l_err_box, circle_here, outside
         real                     :: maxrad, xyz(3)
         real,        allocatable :: pixels1(:), pixels2(:)
-        logical                  :: outside
         if( .not. self%circle )then
             ! use entire boxes for correlation scores
             ! iterate through positions in nanoparticle image, compare to simulated atom 
@@ -330,7 +330,6 @@ use simple_stat
                             endif
                         enddo
                         call self%nano_img%win2arr_rad(      pos_center(1),  pos_center(2),  pos_center(3),  winsz, npix_in, maxrad, npix_out1, pixels1)
-                        !call self%thresh_img%win2arr_rad(      pos_center(1),  pos_center(2),  pos_center(3),  winsz, npix_in, maxrad, npix_out1, pixels1)
                         call self%simulated_atom%win2arr_rad(self%boxsize/2, self%boxsize/2, self%boxsize/2, winsz, npix_in, maxrad, npix_out2, pixels2)
                         self%box_scores(  xoff,yoff,zoff) = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))      
                         self%euclid_dists(xoff,yoff,zoff) = same_energy_euclid(pixels1(:npix_out1),pixels2(:npix_out2)) 
@@ -620,9 +619,10 @@ use simple_stat
         class(nano_picker), intent(inout) :: self
         type(image), allocatable :: atms_array(:)
         integer,     allocatable :: pos_inds(:)
-        real,        allocatable :: coords(:,:)
+        real,        allocatable :: coords(:,:), boximg_rmat(:,:,:)
         integer                  :: nbox, iimg, pos(3)
         logical                  :: outside
+        logical,     allocatable :: boximg_mask(:,:,:)
         pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
         nbox     = size(pos_inds, dim=1)
         allocate(coords(nbox,3))
@@ -636,14 +636,25 @@ use simple_stat
             call self%convolved_atoms(iimg)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
             call self%nano_img%window_slim( pos, self%boxsize, atms_array(iimg), outside)
             !call atms_array(iimg)%write('boximgs/boximg_'//trim(int2str(iimg))//'.mrc')
-            call atms_array(iimg)%fft()
-            self%convolved_atoms(iimg) = atms_array(iimg)%conjg() * self%simulated_atom
-            call self%convolved_atoms(iimg)%ifft()
-            call atms_array(iimg)%ifft()
+            ! call atms_array(iimg)%fft()
+            ! self%convolved_atoms(iimg) = atms_array(iimg)%conjg() * self%simulated_atom
+            ! call self%convolved_atoms(iimg)%ifft()
+            ! call atms_array(iimg)%ifft()
+            self%convolved_atoms(iimg) = atms_array(iimg)
             ! want coordinates of atoms to be at the center of the images
-            call self%convolved_atoms(iimg)%norm_minmax
-            call self%convolved_atoms(iimg)%masscen(coords(iimg,:)) 
-            coords(iimg,:) = coords(iimg,:) + real(self%convolved_atoms(iimg)%get_ldim())/2. + pos !adjust center by size and position of box
+            !call self%convolved_atoms(iimg)%norm_minmax
+            allocate(boximg_rmat(self%boxsize,self%boxsize,self%boxsize), source=0.)
+            allocate(boximg_mask(self%boxsize,self%boxsize,self%boxsize), source=.true.)
+            boximg_rmat = self%convolved_atoms(iimg)%get_rmat()
+            where (boximg_rmat < self%intensity_thres)
+                boximg_mask = .false.
+            end where
+            !print *, 'count(mask) = ', count(boximg_mask)
+            call self%convolved_atoms(iimg)%masscen_adjusted(coords(iimg,:),boximg_mask) 
+            deallocate(boximg_rmat, boximg_mask)
+            !coords(iimg,:) = coords(iimg,:) + real(self%convolved_atoms(iimg)%get_ldim())/2. + pos !adjust center by size and position of box
+            coords(iimg,:) = coords(iimg,:) + pos
+            !print *, 'i = ', iimg, 'coords = ', coords(iimg,:)
             ! update center positions for chosen boxes
             self%center_positions(pos_inds(iimg),:) = coords(iimg,:)
         enddo
@@ -737,11 +748,16 @@ use simple_stat
         params_glob         => params
         params_glob%element = self%element
         params_glob%smpd    = self%smpd
-        call nano%new(self%raw_filename)
+        if (self%has_mask) then
+            call nano%new(self%raw_filename, msk=self%mask_radius)
+        else
+            call nano%new(self%raw_filename)
+        end if
         if (.not. self%wrote_pdb) call self%write_pdb()
-        call nano%set_atomic_coords(trim(self%pdb_filename))
+        call nano%set_atomic_coords(trim(self%pdb_filename),write_file='coordinates_in_nanoparticle.csv')
         call nano%simulate_atoms(simatms=simatms)
         call nano%validate_atoms(simatms=simatms)
+        call nano%write_centers('coordinates_in_nanoparticle_angstroms',which='valid_corr')
         call nano%kill
     end subroutine calc_per_atom_corr
 
@@ -1115,31 +1131,6 @@ use simple_stat
         call img%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
         call self%nano_img%window_slim( pos, self%boxsize, img, outside)
     end subroutine extract_img_from_pos
-
-    ! input both pdbfile_* with .pdb extension
-    subroutine compare_pick( self, pdbfile_ref, pdbfile_exp )
-        class(nano_picker),         intent(inout) :: self
-        character(len=*),           intent(in)    :: pdbfile_ref
-        character(len=*), optional, intent(in)    :: pdbfile_exp
-        real,    allocatable :: pdb_ref_coords(:,:), pdb_exp_coords(:,:), distances(:)
-        integer              :: iostat, i
-        call read_pdb2matrix(trim(pdbfile_ref), pdb_ref_coords)
-        if( present(pdbfile_exp) )then 
-            call read_pdb2matrix(trim(pdbfile_exp),pdb_exp_coords)
-        else
-            open(unit = 40, file='test_atomic_centers.pdb', iostat=iostat)
-            if( iostat /= 0 )then
-                print *, 'compare_pick: test_atomic_centers.pdb does not exist, please enter valid filename for pdbfile_exp'
-                close(40)
-                return
-            endif
-            call read_pdb2matrix('test_atomic_centers.pdb',pdb_exp_coords)
-            close(40)
-        endif
-        allocate(distances(max(size(pdb_ref_coords,dim=2),size(pdb_exp_coords,dim=2))))
-        call find_closest(pdb_ref_coords,pdb_exp_coords,size(pdb_ref_coords,dim=2),size(pdb_exp_coords,dim=2),distances)
-        print *, 'AVG DISTANCE = ', sum(distances)/size(distances)
-    end subroutine compare_pick
 
     subroutine kill( self )
         class(nano_picker), intent(inout) :: self
