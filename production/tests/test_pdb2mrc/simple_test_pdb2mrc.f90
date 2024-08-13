@@ -12,11 +12,11 @@ character(len=:), allocatable :: cmd
 type(atoms)                   :: molecule 
 
 if( command_argument_count() /= 2 )then
-    write(logfhandle,'(a)') 'ERROR! Usage: simple_test_pdb2mrc mol.pdb smpd'
-    write(logfhandle,'(a)') '              simple test_pdb2mrc pdb_structure_name'
-    write(logfhandle,'(a)') 'mol.pdb           : PDB with the cartesian coordinates of the molecule'
-    write(logfhandle,'(a)') 'smpd              : SMPD value in Angstrom per voxel ' 
-    write(logfhandle,'(a)') 'pdb_structure_name: PDB name structure from PDB database'
+    write(logfhandle,'(a)') 'ERROR! Usage: simple_test_pdb2mrc mol.pdb            smpd'
+    write(logfhandle,'(a)') '              simple test_pdb2mrc pdb_structure_name smpd'
+    write(logfhandle,'(a)') 'mol.pdb            : PDB with the cartesian coordinates of the molecule'
+    write(logfhandle,'(a)') 'pdb_structure_name : PDB name structure from PDB database'
+    write(logfhandle,'(a)') 'smpd               : SMPD value in Angstrom per voxel ' 
     write(logfhandle,'(a)') 'Example: https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180'
     write(logfhandle,'(a)') 'DEFAULT TEST (example above) is running now...'
     pdb_file = '1JYX.pdb'

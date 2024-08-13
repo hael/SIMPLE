@@ -552,7 +552,7 @@ contains
         if( present(el) ) el = uppercase_el
     end subroutine Z_and_radius_from_name
 
-    function get_geom_center(self) result(center)
+    function get_geom_center( self ) result( center )
         class(atoms), intent(in) :: self
         real :: center(3)
         center(1) = sum(self%xyz(:,1)) / real(self%n)
@@ -1203,10 +1203,9 @@ contains
         smpd = vol%get_smpd()
         if(present(filename)) open(unit=45,file=trim(filename))
         do i_atom = 1, self%n
-            atom_box = (2 * ceiling((1.5*self%radius(i_atom))/smpd)) + 1
+            atom_box = (2 * ceiling((self%radius(i_atom))/smpd)) + 1
             ! generate simulted atom volume
             call vol_atom%new([atom_box, atom_box, atom_box], smpd)
-            !call vol_atom%new(vol%get_ldim(), vol%get_smpd())
             call self%extract_atom(atom, i_atom)
             center(:) = atom%get_coord(1)
             call atom%ref2originbox(1, atom_box)
@@ -1214,7 +1213,7 @@ contains
             ! extract the atom volume from the molecule volume
             call vol_at%new([atom_box, atom_box, atom_box], smpd)
             call vol%window_slim(center, atom_box, vol_at, outside)
-            !call vol_at%mask(real(atom_box)/2., 'soft')
+            call vol_at%mask(real(atom_box)/2., 'soft')
             ! compute cross-correlation between both volumes
             cc = vol_atom%real_corr(vol_at)
             call self%set_atom_corr(i_atom, cc)
