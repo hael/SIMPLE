@@ -5,9 +5,9 @@ from sklearn.decomposition import KernelPCA
 from sklearn.preprocessing import StandardScaler
 
 # File path to the MRC file
-ptcls_file = "/home/elmlundho/data/NanoX/dissolving/71-17_tp1_den/subtr.mrc"
+ptcls_file = "/home/elmlundho/data/NanoX/dissolving/NP87/subtr.mrc"
 # Save the denoised particle stack to a new MRC file in Downloads/nano
-file_path1 = "/home/elmlundho/data/NanoX/dissolving/71-17_tp1_den/subtr_den20cmp.mrc"  # Change 'your-username' to your actual username
+file_path1  = "/home/elmlundho/data/NanoX/dissolving/NP87/subtr_den.mrc"  # Change 'your-username' to your actual username
 
 # Open and update the header of the MRC file
 with mrcfile.open(ptcls_file, mode='r+', permissive=True) as mrc:
@@ -42,7 +42,7 @@ for j in range(num_batches):
     flattened_images_std = scaler.fit_transform(flattened_images)
 
     # Apply KernelPCA
-    kpca = KernelPCA(n_components=20, kernel="cosine", fit_inverse_transform=True)
+    kpca = KernelPCA(n_components=500, kernel="cosine", fit_inverse_transform=True)
     transformed_data = kpca.fit_transform(flattened_images_std)
     denoised_data = kpca.inverse_transform(transformed_data)
     denoised_data_rescaled = scaler.inverse_transform(denoised_data)
@@ -56,4 +56,6 @@ for j in range(num_batches):
 dnf = dnmat.astype(np.float32)
 with mrcfile.new(file_path1, overwrite=True) as mrc:	
     mrc.set_data(dnf)
+
+
 
