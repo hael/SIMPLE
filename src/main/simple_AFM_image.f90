@@ -344,7 +344,6 @@ end interface image
 
 type :: image_stack
     type(image), allocatable :: stack(:)
-    character(len = 30), allocatable :: AFM_names(:)
 end type image_stack
 
 ! CLASS PARAMETERS/VARIABLES

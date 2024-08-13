@@ -2,11 +2,12 @@ program AFM_File_IO
 use iso_c_binding
 include 'simple_lib.f08'
 use simple_AFM_image
-! use simple_AFM_image 
+use simple_segmentation
 !AFM IO
 type :: AFM_image
     type(image), allocatable :: img_array(:)
     character(len = 20), allocatable :: img_names(:)
+    integer                          :: AFM_index = 0
 end type AFM_image 
 
 type    :: bin_header5
@@ -56,35 +57,51 @@ type    :: wave_header5
     CHARACTER(KIND=4)  :: fileName
     INTEGER(KIND=4)    :: sIndices 
 end type
+type(AFM_image) ::  Cob16
+type(image)     ::  HeightTrace
+type(image)     ::  PhaseTrace
+type(image)     ::  Subtract
+integer         :: i, j, fu
+real, allocatable   :: rmat_test(:,:,:)
+! character(len=*), parameter :: OUT_FILE = '/Users/atifao/Downloads/IBW/16_im.txt' ! Output file.
+! character(len=*), parameter :: PLT_FILE = 'plot.plt' ! Gnuplot file.
+! real       :: test_mat(3,3), test_sing(3), test_vec(3,3)
+! test_mat = reshape((/ 2, 1, 3, 3, 7, 2, 6, 9, -1 /), shape(test_mat))
+! call svdcmp_sp(test_mat, test_sing, test_vec)
 
-! interface
-!     include 'simple_lib.f08'
-!     use simple_image
-!     type    :: AFM
-!         type(image_stack)      :: AFM_stack
-!         character(len = 30), pointer   :: names(:) => null()
-!     contains 
-!         procedure   :: set_names
-!     end type AFM
-! end interface 
+! print *, test_sing
+! add padding to non square images 
+call read_ibw('/Users/atifao/Downloads/IBW/Cob_450007.ibw', Cob16)
+call zero_padding(Cob16)
 
+! HeightTrace = Cob16%img_array(findloc(index(Cob16%img_names, 'HeightTrace'),1, dim = 1))
+! PhaseTrace = Cob16%img_array(findloc(index(Cob16%img_names, 'PhaseTrace'),1, dim = 1))
 
-call read_ibw('/Users/atifao/Downloads/IBW/Cob_450016.ibw')
+! call HeightTrace%vis()
+! call PhaseTrace%vis()
+! Subtract = HeightTrace + PhaseTrace
+! call Subtract%vis()
+! rmat_test = HeightTrace%get_rmat()
+
+! open (action = 'write', file = OUT_FILE, unit = fu)
+!     write (fu, *) rmat_test
+! close (fu)
+! call HeightTrace%vis()
+! call HeightRetrace%vis()
 ! Can add integer/complex support later. 
 ! open(newunit = data, file = fn_in, status = 'old', access='stream')
 ! read(in, pos = 385) first_entry 
 ! delete file at some point
+!normalize and then align =
 contains 
-
-    subroutine read_ibw(fn_in) 
+    subroutine read_ibw(fn_in, AFM)
         character(len=*),           intent(in)  :: fn_in 
         integer         :: in, check, real_type
         integer                          :: real_type1, data, total_bytes, bytes_read, iter_ind, prop_ind, img_ind, i
         real(kind = 4), allocatable          :: Rank3_Data_4byte(:, :, :, :)
-        real(kind = 8), allocatable          :: Rank3_Data_8byte(:, :, :, :)
         character(:), allocatable                            :: channel_info
         character(len = 10)    :: iteration(2), properties(4)
-        type(AFM_image)       :: AFM
+        type(AFM_image), intent(out)       :: AFM
         type(bin_header5)   :: binheader
         type(wave_header5)  :: waveheader
         iteration = [character(len = 10) :: 'Trace', 'Retrace']
@@ -105,23 +122,12 @@ contains
             stop 
         end if 
         allocate(Rank3_Data_4byte(waveheader%nDim(1) ,waveheader%nDim(2), 1, waveheader%nDim(3)))
-        ! select case (waveheader1%type)
-        ! case (2) 
-        !     real_type1 = 4
-        ! case (4)
-        !     real_type1 = 8
-        !     Rank3_Data_8byte = dble(Rank3_Data_4byte) 
-        ! case default
-        !     print *, "Error: only float data is currently supported"
-        !     stop
-        ! end select
         open(newunit = data, file = fn_in, status = 'old', access='stream')
         read(data, pos = 385) Rank3_Data_4byte
         inquire(data, pos = bytes_read)
         allocate(character(binheader%dimLabelsSize(3)) :: channel_info)
-        allocate(AFM%img_names(size(iteration) * size(properties)))
+        allocate(AFM%img_names(waveheader%nDim(3)))
         read(data, pos = binheader%noteSize + bytes_read) channel_info
-        print *, channel_info 
         ! getting image names 
         do prop_ind = 1, size(properties)
             do iter_ind = 1, size(iteration)
@@ -132,30 +138,71 @@ contains
                 end if 
             end do 
         end do     
-        print *, AFM%img_names 
 
         allocate(AFM%img_array(waveheader%nDim(3)))
         do img_ind = 1, waveheader%nDim(3)
             call AFM%img_array(img_ind)%new([waveheader%nDim(1), waveheader%nDim(2), 1], real(waveheader%sfA(1)) * 10**10)
-        end do 
-        ! print *,  img_array(1)%get_smpd()
-        print *, AFM%img_array(1)%get_ldim()
-        print *, waveheader%nDim(3)
-        print *, size(Rank3_Data_4byte, dim=1), size(Rank3_Data_4byte, dim=2), size(Rank3_Data_4byte, dim=3)
-        call AFM%img_array(1)%set_rmat(Rank3_Data_4byte(:, :, 1, :), .false.)
-        do img_ind = 1, waveheader%nDim(3)
             call AFM%img_array(img_ind)%set_rmat(Rank3_Data_4byte(:, :, img_ind, :), .false.)
         end do 
-        ! print *, img_array(1)%get_rmat()
-        ! might need to transpose or rotate
-        ! call img_array(3)%vis()
-        call AFM%img_array(findloc(index(AFM%img_names, 'HeightTrace'),1, dim = 1))%vis()
+        deallocate(Rank3_Data_4byte)
     end subroutine read_ibw
 
-    ! subroutine get_property(AFM, property)
-    !     type(AFM_image), intent(in)      :: AFM
-    !     character(len = *), intent(in)                     :: property
-    !     AFM%img_array(findloc(index(AFM%img_names, property), 1, dim = 1))
-    ! end subroutine get_property 
+    subroutine lookup(AFM_Hash, key,img_at_key)
+        type(AFM_image), intent(in) :: AFM_Hash
+        character(:), allocatable, intent(in)    :: key 
+        type(image), intent(out)     :: img_at_key
+        integer         :: index1
+        index1 = findloc(index(AFM_Hash%img_names, key),1, dim = 1)
+        img_at_key = AFM_Hash%img_array(index1)
+    end subroutine
+    ! Zero Padding to make it square (maybe set to intensity average)
+    subroutine zero_padding(AFM_pad)
+        type(AFM_image), intent(inout)  :: AFM_pad
+        integer        :: img_ind
+        integer :: dim(3)
+        do img_ind = 1, size(AFM_pad%img_names)
+            dim = AFM_pad%img_array(img_ind)%get_ldim()
+            print *, dim
+            if( dim(1) /= dim(2) ) then 
+                call AFM_pad%img_array(img_ind)%pad_inplace([maxval(dim), maxval(dim), 1])
+            end if 
+        end do 
+    end subroutine zero_padding 
+  
+    subroutine destriping(AFM)
+        type(AFM_image), intent(inout)  :: AFM 
+    end subroutine destriping
 
+    subroutine matrix_log(rmat, rmat_eigvl, rmat_eigvc)
+        real, allocatable   :: rmat(:, :), rmat_eigvl(:, :), rmat_eigvc(:, :)
+    end subroutine matrix_log
+
+    ! alignment subroutine. 
+
+    ! print *,  img_array(1)%get_smpd()
+    ! print *, AFM%img_array(1)%get_ldim()
+    ! print *, waveheader%nDim(3)
+    ! print *, size(Rank3_Data_4byte, dim=1), size(Rank3_Data_4byte, dim=2), size(Rank3_Data_4byte, dim=3)
+    ! call AFM%img_array(1)%set_rmat(Rank3_Data_4byte(:, :, 1, :), .false.)
+    ! do img_ind = 1, 8
+    !     print *, AFM%img_array(1)%real_corr(AFM%img_array(img_ind))
+    ! end do     
+    ! print *, AFM%img_array(1)%real_corr(AFM%img_array(1))
+    ! print *, img_array(1)%get_rmat()
+    ! call img_array(3)%vis()
+    ! call AFM%img_array(findloc(index(AFM%img_names, 'HeightTrace'),1, dim = 1))%vis()
+    ! call AFM%img_array(findloc(index(AFM%img_names, 'HeightRetrace'),1, dim = 1))%vis()
+    ! HeightTrace = AFM%img_array(findloc(index(AFM%img_names, 'HeightTrace'),1, dim = 1))
+    ! call otsu_img(HeightTrace, positive = .false.)
+    ! select case (waveheader1%type)
+    ! case (2) 
+    !     real_type1 = 4
+    ! case (4)
+    !     real_type1 = 8
+    !     Rank3_Data_8byte = dble(Rank3_Data_4byte) 
+    ! case default
+    !     print *, "Error: only float data is currently supported"
+    !     stop
+    ! end select
+    ! real(kind = 8), allocatable          :: Rank3_Data_8byte(:, :, :, :)
 end program AFM_File_IO
