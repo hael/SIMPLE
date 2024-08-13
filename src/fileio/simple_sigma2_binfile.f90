@@ -61,7 +61,7 @@ contains
         if (.not. file_exists(fname)) then
             THROW_HARD('sigma2_binfile: new_from_file; file ' // trim(fname) // ' does not exist')
         end if
-        self%fname             = trim(fname)
+        self%fname = trim(fname)
         call self%read_header
         self%file_header(1)   = self%fromp
         self%file_header(2)   = self%top

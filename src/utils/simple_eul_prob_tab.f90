@@ -314,7 +314,7 @@ contains
                 lims(:,2)      =  params_glob%trs
                 lims_init(:,1) = -SHC_INPL_TRSHWDTH
                 lims_init(:,2) =  SHC_INPL_TRSHWDTH
-                trslim = min(10.,params_glob%msk/4.)
+                trslim = min(15.,params_glob%msk/3.)
                 do ithr = 1,nthr_glob
                     call fm_shsrch_obj(ithr)%new(trslim, 1., opt_angle=.false.)
                     call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier,&
@@ -900,6 +900,7 @@ contains
         if( allocated(self%loc_tab)   ) deallocate(self%loc_tab)
         if( allocated(self%state_tab) ) deallocate(self%state_tab)
         if( allocated(self%assgn_map) ) deallocate(self%assgn_map)
+        if( allocated(self%shift_tab) ) deallocate(self%shift_tab)
         if( allocated(self%pinds)     ) deallocate(self%pinds)
     end subroutine kill
 

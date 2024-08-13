@@ -324,6 +324,7 @@ contains
             nullify(strategy3Dsrch(iptcl_batch)%ptr2)
         end do
         deallocate(strategy3Dsrch,strategy3Dspecs,batches)
+        call eulprob_obj_part%kill
 
         ! WRITE SIGMAS FOR ML-BASED REFINEMENT
         if( params_glob%l_needs_sigma ) call eucl_sigma%write_sigma2
@@ -419,7 +420,7 @@ contains
     end subroutine refine3D_exec
 
     subroutine prep_ccobjs4align( cline, batchsz_max )
-        class(cmdline), intent(inout) :: cline !< command line
+        class(cmdline), intent(in)    :: cline !< command line
         integer,        intent(in)    :: batchsz_max
         character(len=:), allocatable :: fname
         type(ori) :: o_tmp
