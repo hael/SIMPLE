@@ -18,6 +18,7 @@ implicit none
 public :: nspace_commander
 public :: refine3D_commander_distr
 public :: refine3D_commander
+public :: estimate_first_sigmas_commander
 public :: check_3Dconv_commander
 public :: prob_tab_commander
 public :: prob_align_commander
@@ -39,6 +40,11 @@ type, extends(commander_base) :: refine3D_commander
   contains
     procedure :: execute      => exec_refine3D
 end type refine3D_commander
+
+type, extends(commander_base) :: estimate_first_sigmas_commander
+  contains
+    procedure :: execute      => exec_estimate_first_sigmas
+end type estimate_first_sigmas_commander
 
 type, extends(commander_base) :: check_3Dconv_commander
   contains
@@ -638,12 +644,14 @@ contains
         class(cmdline),            intent(inout) :: cline
         type(estimate_first_sigmas_commander) :: xfirst_sigmas
         type(calc_group_sigmas_commander)     :: xcalc_group_sigmas
+        type(calc_pspec_assemble_commander)   :: xcalc_pspec_assemble
         type(calc_pspec_commander)            :: xcalc_pspec
         type(pspec_lp_commander)              :: xpspec_lp
         type(prob_align_commander)            :: xprob_align
         type(parameters)                      :: params
         type(builder)                         :: build
         type(cmdline)                         :: cline_calc_sigma, cline_prob_align, cline_pspec_lp
+        type(cmdline)                         :: cline_calc_pspec, cline_first_sigmas
         character(len=STDLEN)                 :: str_state, fsc_file, vol, vol_iter
         integer                               :: startit, i, state
         real                                  :: corr, corr_prev
@@ -679,12 +687,14 @@ contains
                         call build%spproj_field%partition_eo
                         call build%spproj%write_segment_inside(params%oritype)
                     endif
-                    call xcalc_pspec%execute( cline )
+                    cline_calc_pspec   = cline
+                    cline_first_sigmas = cline
+                    call xcalc_pspec%execute_shmem( cline_calc_pspec )
                     call cline_calc_sigma%set('which_iter', startit)
-                    call xcalc_group_sigmas%execute(cline_calc_sigma)
-                    if( .not.cline%defined('nspace') ) call cline%set('nspace', real(params%nspace))
-                    if( .not.cline%defined('athres') ) call cline%set('athres', real(params%athres))
-                    call xfirst_sigmas%execute(cline)
+                    call xcalc_pspec_assemble%execute_shmem(cline_calc_sigma)
+                    if( .not.cline_first_sigmas%defined('nspace') ) call cline_first_sigmas%set('nspace', real(params%nspace))
+                    if( .not.cline_first_sigmas%defined('athres') ) call cline_first_sigmas%set('athres', real(params%athres))
+                    call xfirst_sigmas%execute_shmem(cline)
                 endif
             endif
             params%startit    = startit
@@ -713,7 +723,6 @@ contains
                     call cline_prob_align%set('prg',       'prob_align')
                     call cline_prob_align%set('which_iter', params%which_iter)
                     call cline_prob_align%set('vol1',       params%vols(1))
-                    call cline_prob_align%set('nparts',     1)
                     if( params%l_lpset ) call cline_prob_align%set('lp', params%lp)
                     call xprob_align%execute( cline_prob_align )
                 endif
@@ -764,8 +773,66 @@ contains
         ! end gracefully
         call build%kill_strategy3D_tbox
         call build%kill_general_tbox
+        if( .not.params%l_distr_exec ) call simple_touch(JOB_FINISHED_FBODY)
         call simple_end('**** SIMPLE_REFINE3D NORMAL STOP ****')
     end subroutine exec_refine3D
+
+    subroutine exec_estimate_first_sigmas( self, cline )
+        use simple_strategy3D_matcher, only: refine3D_exec
+        class(estimate_first_sigmas_commander), intent(inout) :: self
+        class(cmdline),                         intent(inout) :: cline
+        ! command lines
+        type(cmdline)    :: cline_first_sigmas
+        ! other variables
+        type(parameters) :: params
+        type(builder)    :: build
+        type(qsys_env)   :: qenv
+        type(chash)      :: job_descr
+        logical          :: l_shmem, converged
+        if( .not. cline%defined('vol1')     ) THROW_HARD('starting volume is needed for first sigma estimation')
+        if( .not. cline%defined('pgrp')     ) THROW_HARD('point-group symmetry (pgrp) is needed for first sigma estimation')
+        if( .not. cline%defined('mskdiam')  ) THROW_HARD('mask diameter (mskdiam) is needed for first sigma estimation')
+        if( .not. cline%defined('nthr')     ) THROW_HARD('number of threads (nthr) is needed for first sigma estimation')
+        if( .not. cline%defined('projfile') ) THROW_HARD('missing project file entry; exec_estimate_first_sigmas')
+        if( .not. cline%defined('oritype')  ) call cline%set('oritype', 'ptcl3D')
+        l_shmem = .not.cline%defined('nparts')
+        cline_first_sigmas = cline
+        call cline_first_sigmas%set('prg', 'refine3D')
+        call cline_first_sigmas%set('center',    'no')
+        call cline_first_sigmas%set('continue',  'no')
+        call cline_first_sigmas%delete('lp_iters')
+        call cline_first_sigmas%set('maxits',     1.0)
+        call cline_first_sigmas%set('which_iter', 1.0)
+        call cline_first_sigmas%set('objfun','euclid')
+        call cline_first_sigmas%set('refine', 'sigma')
+        call cline_first_sigmas%delete('update_frac') ! all particles neeed to contribute
+        call cline_first_sigmas%delete('hp')
+        ! call cline_first_sigmas%delete('lp')
+        ! call cline_first_sigmas%delete('lpstop')
+        call cline_first_sigmas%set('mkdir', 'no')    ! generate the sigma files in the root refine3D dir
+        ! init
+        if( l_shmem )then
+            call build%init_params_and_build_strategy3D_tbox(cline_first_sigmas, params )
+            call refine3D_exec(cline_first_sigmas, params%which_iter, converged)
+            call build%kill_strategy3D_tbox
+        else
+            call build%init_params_and_build_spproj(cline_first_sigmas, params)
+            call build%spproj%update_projinfo(cline_first_sigmas)
+            call build%spproj%write_segment_inside('projinfo')
+            ! setup the environment for distributed execution
+            call qenv%new(params%nparts)
+            ! prepare job description
+            call cline_first_sigmas%gen_job_descr(job_descr)
+            ! schedule
+            call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
+            ! end gracefully
+            call qsys_cleanup
+        endif
+        call qenv%kill
+        call job_descr%kill
+        call build%kill_general_tbox
+        call simple_end('**** SIMPLE_ESTIMATE_FIRST_SIGMAS NORMAL STOP ****')
+    end subroutine exec_estimate_first_sigmas
 
     subroutine exec_check_3Dconv( self, cline )
         use simple_convergence, only: convergence
@@ -1132,7 +1199,7 @@ contains
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab' ) ! required for distributed call
         ! execution
-        if( params_glob%nparts == 1)then
+        if( .not.cline_prob_tab%defined('nparts') )then
             call xprob_tab%execute_shmem(cline_prob_tab)
         else
             ! setup the environment for distributed execution

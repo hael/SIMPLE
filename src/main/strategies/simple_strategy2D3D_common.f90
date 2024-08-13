@@ -161,7 +161,7 @@ contains
     end subroutine discrete_read_imgbatch
 
     subroutine set_bp_range( cline )
-        class(cmdline), intent(inout) :: cline
+        class(cmdline), intent(in) :: cline
         real, allocatable     :: resarr(:), fsc_arr(:)
         real                  :: fsc0143, fsc05
         real                  :: mapres(params_glob%nstates)
@@ -460,12 +460,12 @@ contains
     !>  \brief  determines the reference volume shift and map shifts back to particles
     !>          reference volume shifting is performed in shift_and_mask_refvol
     subroutine calcrefvolshift_and_mapshifts2ptcls(cline, s, volfname, do_center, xyz, map_shift )
-        class(cmdline),   intent(inout) :: cline
-        integer,          intent(in)    :: s
-        character(len=*), intent(in)    :: volfname
-        logical,          intent(out)   :: do_center
-        real,             intent(out)   :: xyz(3)
-        logical,          intent(in)    :: map_shift
+        class(cmdline),   intent(in)  :: cline
+        integer,          intent(in)  :: s
+        character(len=*), intent(in)  :: volfname
+        logical,          intent(out) :: do_center
+        real,             intent(out) :: xyz(3)
+        logical,          intent(in)  :: map_shift
         real    :: crop_factor
         logical :: has_been_searched
         do_center   = .true.
@@ -557,11 +557,11 @@ contains
         use simple_projector,          only: projector
         use simple_butterworth,        only: butterworth_filter
         use simple_nanoparticle_utils, only: phasecorr_one_atom
-        class(cmdline), intent(inout) :: cline
-        integer,        intent(in)    :: s
-        logical,        intent(in)    :: do_center
-        real,           intent(in)    :: xyz(3)
-        logical,        intent(in)    :: iseven
+        class(cmdline), intent(in) :: cline
+        integer,        intent(in) :: s
+        logical,        intent(in) :: do_center
+        real,           intent(in) :: xyz(3)
+        logical,        intent(in) :: iseven
         type(projector), pointer :: vol_ptr => null()
         type(image)              :: mskvol
         real    :: filter(build_glob%vol%get_filtsz())
@@ -649,10 +649,10 @@ contains
     !> volumetric 3d reconstruction
     subroutine calc_3Drec( cline, nptcls2update, pinds, which_iter )
         use simple_fplane, only: fplane
-        class(cmdline),    intent(inout) :: cline
-        integer,           intent(in)    :: nptcls2update
-        integer,           intent(in)    :: pinds(nptcls2update)
-        integer, optional, intent(in)    :: which_iter
+        class(cmdline),    intent(in) :: cline
+        integer,           intent(in) :: nptcls2update
+        integer,           intent(in) :: pinds(nptcls2update)
+        integer, optional, intent(in) :: which_iter
         type(fplane),    allocatable :: fpls(:)
         type(ctfparams), allocatable :: ctfparms(:)
         type(ori)        :: orientation
@@ -704,11 +704,11 @@ contains
     subroutine calc_3Dbatchrec( cline, nptcls2update, pinds, prev_oris, which_iter )
         use simple_fplane,        only: fplane
         use simple_euclid_sigma2, only: euclid_sigma2
-        class(cmdline),    intent(inout) :: cline
-        integer,           intent(in)    :: nptcls2update
-        integer,           intent(in)    :: pinds(nptcls2update)
-        class(oris),       intent(in)    :: prev_oris
-        integer, optional, intent(in)    :: which_iter
+        class(cmdline),    intent(in) :: cline
+        integer,           intent(in) :: nptcls2update
+        integer,           intent(in) :: pinds(nptcls2update)
+        class(oris),       intent(in) :: prev_oris
+        integer, optional, intent(in) :: which_iter
         type(fplane),    allocatable :: fpls(:), prev_fpls(:)
         type(ctfparams), allocatable :: ctfparms(:)
         integer,         allocatable :: pops(:)
@@ -791,8 +791,8 @@ contains
 
     subroutine norm_struct_facts( cline, which_iter )
         use simple_masker, only: masker
-        class(cmdline),    intent(inout) :: cline
-        integer, optional, intent(in)    :: which_iter
+        class(cmdline),    intent(in) :: cline
+        integer, optional, intent(in) :: which_iter
         character(len=:), allocatable :: mskfile, fname
         character(len=STDLEN) :: pprocvol, lpvol
         real, allocatable     :: optlp(:), res(:)

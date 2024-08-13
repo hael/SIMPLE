@@ -3209,7 +3209,6 @@ contains
             call os_stk%set(stk_cnt, 'top',   real(top_glob))
             call os_stk%set(stk_cnt, 'nptcls',real(ptcl_cnt))
             ! update micrograph
-            
             if( nmics_tot > 0 ) then
                 call os_mic%transfer_ori(stk_cnt, self%os_mic, stk2mic_inds(istk))
                 call os_mic%set(stk_cnt,'nptcls',real(ptcl_cnt))
@@ -3224,7 +3223,6 @@ contains
         call os_ptcl2d%kill
         call os_ptcl3d%kill
     end subroutine prune_particles
-
 
     ! printers
 

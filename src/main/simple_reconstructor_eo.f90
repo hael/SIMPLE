@@ -586,7 +586,7 @@ contains
         if( self%phaseplate ) call phaseplate_correct_fsc(fsc, find_plate)
         if( self%hpind_fsc > 0 ) fsc(:self%hpind_fsc) = fsc(self%hpind_fsc + 1)
         ! save, get & print resolution
-        call arr2file(fsc, 'fsc_state'//int2str_pad(state,2)//BIN_EXT)
+        call arr2file(fsc, trim(FSC_FBODY)//int2str_pad(state,2)//BIN_EXT)
         call get_resolution(fsc, res, self%res_fsc05, self%res_fsc0143)
         self%res_fsc05   = max(self%res_fsc05,self%fny)
         self%res_fsc0143 = max(self%res_fsc0143,self%fny)

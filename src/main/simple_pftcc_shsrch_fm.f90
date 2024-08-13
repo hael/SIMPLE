@@ -173,7 +173,7 @@ contains
             gamma = grid(i+1,j)
             if( alpha<beta .and. gamma<beta )then
                 denom = alpha + gamma - 2.*beta
-                if( abs(denom) > TINY ) offset(1) = offset(1) + 0.5 * (alpha-gamma) / denom
+                if( abs(denom) > TINY ) offset(1) = offset(1) + self%trsincr * 0.5 * (alpha-gamma) / denom
             endif
         endif
         if( abs(j) /= self%hn )then
@@ -181,7 +181,7 @@ contains
             gamma = grid(i,j+1)
             if( alpha<beta .and. gamma<beta )then
                 denom = alpha + gamma - 2.*beta
-                if( abs(denom) > TINY ) offset(2) = offset(2) + 0.5 * (alpha-gamma) / denom
+                if( abs(denom) > TINY ) offset(2) = offset(2) + self%trsincr * 0.5 * (alpha-gamma) / denom
             endif
         endif
         score = pftcc_glob%gencorr_for_rot_8(self%ref, self%ptcl, real(offset,dp), irot)
