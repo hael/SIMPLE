@@ -271,9 +271,11 @@ contains
         call self%img%new(self%ldim, self%smpd)
         call self%img_bin%new_bimg(self%ldim, self%smpd)
         call self%img%read(fname)
+        call self%img%write('raw_img_check_1.mrc')
         if( present(msk) ) call self%img%mask(msk, 'soft')
         call self%img_raw%copy(self%img)
         call self%img_raw%stats(self%map_stats%avg, self%map_stats%sdev, self%map_stats%maxv, self%map_stats%minv)
+        call self%img_raw%write('raw_img_check_2.mrc')
     end subroutine new_nanoparticle
 
     ! getters/setters
@@ -353,9 +355,10 @@ contains
     end subroutine set_atomic_coords_from_xyz
 
     ! sets the atom positions to be the ones in the inputted PDB file.
-    subroutine set_atomic_coords_from_pdb( self, pdb_file )
-        class(nanoparticle), intent(inout) :: self
-        character(len=*),    intent(in)    :: pdb_file
+    subroutine set_atomic_coords_from_pdb( self, pdb_file, write_file )
+        class(nanoparticle),        intent(inout) :: self
+        character(len=*),           intent(in)    :: pdb_file
+        character(len=*), optional, intent(in)    :: write_file
         type(atoms) :: a
         integer     :: i, N
         if( fname2ext(pdb_file) .ne. 'pdb' ) THROW_HARD('Inputted filename has to have pdb extension; set_atomic_coords_from_pdb')
@@ -363,9 +366,12 @@ contains
         call a%new(trim(pdb_file))
         N = a%get_n() ! number of atoms
         allocate(self%atominfo(N))
+        if(present(write_file)) open(unit=44,file=trim(write_file))
         do i = 1, N
             self%atominfo(i)%center(:) = a%get_coord(i)/self%smpd + 1.
+            if(present(write_file)) write(44,'(f8.4,a,f8.4,a,f8.4)') self%atominfo(i)%center(1), ',', self%atominfo(i)%center(2), ',', self%atominfo(i)%center(3)
         enddo
+        if(present(write_file)) close(44)
         self%n_cc = N
         call a%kill
     end subroutine set_atomic_coords_from_pdb
