@@ -767,7 +767,6 @@ contains
         maxits_glob      = MAXITS_SHORT1 * (nstages - 2) + MAXITS_SHORT2 * 2 + MAXITS2
         if( params%l_frac_update .and. (.not.params%l_stoch_update) )then
             ! adjusting number ot iterations for frac_update alone
-            call cline%set('mov_avg_vol', 'yes')
             frac_maxits_incr = max(2,min(10,nint(1./params%update_frac)))
             maxits_glob      = maxits_glob + (nstages+1)*frac_maxits_incr
         endif
@@ -1057,7 +1056,6 @@ contains
         call cline_refine3D%set('maxits',     MAXITS2+frac_maxits_incr)
         call cline_refine3D%set('lp_iters',   MAXITS2+frac_maxits_incr)
         call cline_refine3D%set('nspace',     NSPACE3)
-        call cline_refine3D%set('mov_avg_vol',  'yes')
         ! execution
         call exec_refine3D(iter)
         ! for visualization
@@ -1780,7 +1778,6 @@ contains
         maxits_glob      = MAXITS_SHORT1 * (NSTAGES - 2) + MAXITS_SHORT2 * 2 + MAXITS2
         if( params%l_frac_update .and. (.not.params%l_stoch_update) )then
             ! adjusting number ot iterations for frac_update alone
-            call cline%set('mov_avg_vol', 'yes')
             frac_maxits_incr = max(2,min(10,nint(1./params%update_frac)))
             maxits_glob      = maxits_glob + (NSTAGES+1)*frac_maxits_incr
         endif
@@ -2081,7 +2078,6 @@ contains
         call cline_refine3D%set('maxits',     MAXITS2+frac_maxits_incr)
         call cline_refine3D%set('lp_iters',   MAXITS2+frac_maxits_incr)
         call cline_refine3D%set('nspace',     NSPACE3)
-        call cline_refine3D%set('mov_avg_vol',  'yes')
         ! execution
         call exec_refine3D(iter)
         ! for visualization
