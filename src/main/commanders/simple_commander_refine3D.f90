@@ -239,7 +239,7 @@ contains
                     fsc_file  = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
                     if( .not.file_exists(fsc_file)) THROW_HARD('Missing file: '//trim(fsc_file))
                 end do
-                if( params%l_mov_avg_vol )then
+                if( params%l_frac_update )then
                     call simple_list_files(prev_refine_path//'*recvol_state*part*', list)
                     nfiles = size(list)
                     err = params%nparts * 4 /= nfiles
@@ -265,7 +265,7 @@ contains
                     call simple_copy_file(trim(prev_refine_path)//trim(fsc_file), fsc_file)
                 end do
                 ! if we are doing moving average volume update, partial reconstructions need to be carried over
-                if( params%l_mov_avg_vol )then
+                if( params%l_frac_update )then
                     call simple_list_files(prev_refine_path//'*recvol_state*part*', list)
                     nfiles = size(list)
                     err = params%nparts * 4 /= nfiles

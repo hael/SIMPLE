@@ -656,7 +656,6 @@ contains
         call cline_cluster2D_stage1%set('ml_reg',     'no')
         if( params%l_frac_update )then
             if( params%l_stoch_update )then
-                call cline_cluster2D_stage1%set('it_history',  1)
                 call cline_cluster2D_stage1%set('maxits_glob', MAX_EXTRLIM2D)
                 call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1))
                 call cline_cluster2D_stage1%delete('update_frac') ! will be calculated later
@@ -710,7 +709,6 @@ contains
         call cline_cluster2D_stage2%set('startit',    last_iter_stage1+1)
         if( params%l_frac_update )then
             if( params%l_stoch_update )then
-                call cline_cluster2D_stage2%set('it_history',  2)
                 call cline_cluster2D_stage2%set('maxits_glob', MAX_EXTRLIM2D)
                 call cline_cluster2D_stage2%delete('update_frac')
             else

@@ -3,13 +3,31 @@ include 'simple_lib.f08'
 use simple_dyn_ufrac
 implicit none
 
-integer, parameter :: NPTCLS = 2000000 ! two million
-integer, parameter :: MAXITS = 40      ! upper iteration bound
+integer, parameter :: MAXITS = 100 ! upper iteration bound
 real    :: update_frac
-integer :: nsampl, i, nsampl_fromto(2)
+integer :: nsampl, i, nsampl_fromto(2), nptcls
+
+! nptcls = 5000
+! print *, calc_nsampl_fromto( nptcls )
+! nptcls = 10000
+! print *, calc_nsampl_fromto( nptcls )
+! nptcls = 30000
+! print *, calc_nsampl_fromto( nptcls )
+! nptcls = 80000
+! print *, calc_nsampl_fromto( nptcls )
+! nptcls = 200000
+! print *, calc_nsampl_fromto( nptcls )
+nptcls = 1000000
+! print *, calc_nsampl_fromto( nptcls )
+
+! do i = 1,MAXITS
+!     nsampl      = inv_nsampl_decay( i, MAXITS, NPTCLS)
+!     update_frac = real(nsampl) / real(NPTCLS)
+!     print *, i, nsampl, update_frac
+! end do
 
 do i = 1,MAXITS
-    nsampl      = inv_nsampl_decay( i, MAXITS, NPTCLS)
+    nsampl      = nsampl_decay( i, MAXITS, NPTCLS)
     update_frac = real(nsampl) / real(NPTCLS)
     print *, i, nsampl, update_frac
 end do

@@ -970,9 +970,6 @@ contains
                 call cline_refine3D%set('icm',   'yes')
                 call cline_refine3D%set('lambda', params%lambda)
             endif
-            if( params%l_stoch_update )then
-                call cline_refine3D%set('it_history', min(3,it)) ! particles sampled in most recent past iterations also included in rec
-            endif
             ! ML volume regularization
             if( params%l_ml_reg .and. it >= MLREG_ITER )then
                 call cline_refine3D%set('ml_reg', 'yes')
@@ -1054,9 +1051,6 @@ contains
         call cline_refine3D%set('maxits',     MAXITS2+frac_maxits_incr)
         call cline_refine3D%set('lp_iters',   MAXITS2+frac_maxits_incr)
         call cline_refine3D%set('nspace',     NSPACE3)
-        if( params%l_stoch_update )then
-            call cline_refine3D%set('it_history', 3) ! particles sampled in three most recent past iterations also included in rec
-        endif
         call cline_refine3D%set('mov_avg_vol',  'yes')
         ! execution
         call exec_refine3D(iter)
@@ -1082,7 +1076,6 @@ contains
             ! no fractional or stochastic updates
             call cline_reconstruct3D%delete('update_frac')
             call cline_reconstruct3D%delete('stoch_update')
-            call cline_reconstruct3D%delete('it_history')
             ! reconstruction
             call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D)
             call spproj%read_segment('out',params%projfile)
@@ -2001,9 +1994,6 @@ contains
                 call cline_refine3D%set('icm',   'yes')
                 call cline_refine3D%set('lambda', params%lambda)
             endif
-            if( params%l_stoch_update )then
-                call cline_refine3D%set('it_history', min(3,it)) ! particles sampled in most recent past iterations also included in rec
-            endif
             ! ML volume regularization
             if( params%l_ml_reg .and. it >= MLREG_ITER )then
                 call cline_refine3D%set('ml_reg', 'yes')
@@ -2085,9 +2075,6 @@ contains
         call cline_refine3D%set('maxits',     MAXITS2+frac_maxits_incr)
         call cline_refine3D%set('lp_iters',   MAXITS2+frac_maxits_incr)
         call cline_refine3D%set('nspace',     NSPACE3)
-        if( params%l_stoch_update )then
-            call cline_refine3D%set('it_history', 3) ! particles sampled in three most recent past iterations also included in rec
-        endif
         call cline_refine3D%set('mov_avg_vol',  'yes')
         ! execution
         call exec_refine3D(iter)
@@ -2113,7 +2100,6 @@ contains
             ! no fractional or stochastic updates
             call cline_reconstruct3D%delete('update_frac')
             call cline_reconstruct3D%delete('stoch_update')
-            call cline_reconstruct3D%delete('it_history')
             ! reconstruction
             call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D)
             call spproj%read_segment('out',params%projfile)
