@@ -19,7 +19,7 @@ use simple_qsys_funs
 implicit none
 
 public :: initial_3Dmodel_commander, abinitio_3Dmodel_commander, batch_abinitio_3Dmodel_commander, lp_abinitio_3Dmodel_commander
-public :: abinitio_3Dmodel2_commander
+public :: abinitio_3Dmodel2_commander, initial_3Dmodel2_commander
 private
 #include "simple_local_flags.inc"
 
@@ -693,7 +693,7 @@ contains
         real,                  parameter :: SCALEFAC2_TARGET = 0.5
         real,                  parameter :: CENLP_DEFAULT = 30.
         integer,               parameter :: MAXITS_PROB=50, MAXITS_INIT=15, MAXITS_REFINE=20
-        integer,               parameter :: NSPACE_PROB=1000, NSPACE_INIT=1000, NSPACE_REFINE=2500
+        integer,               parameter :: NSPACE_PROB=1000
         integer,               parameter :: MINBOX = 64
         character(len=STDLEN), parameter :: ORIG_work_projfile = 'initial_3Dmodel_tmpproj.simple'
         ! distributed commanders
@@ -724,9 +724,9 @@ contains
         character(len=STDLEN) :: vol_iter, pgrp_init, pgrp_refine, vol_iter_pproc, vol_iter_pproc_mirr
         character(len=STDLEN) :: sigma2_fname, sigma2_fname_sc, orig_objfun
         real                  :: smpd_target, lplims(2), cenlp
-        real                  :: scale_factor1, scale_factor2
+        real                  :: scale_factor1, scale_factor2, trslim
         integer               :: icls, ncavgs, cnt, iter, ipart
-        logical               :: srch4symaxis, do_autoscale, symran_before_refine, l_lpset, l_euclid
+        logical               :: srch4symaxis, do_autoscale, symran_before_refine, l_euclid !l_lpset, 
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         if( .not. cline%defined('overlap')   ) call cline%set('overlap',    0.98)
@@ -738,8 +738,6 @@ contains
         call cline%set('bfac', 0.)       ! because initial models should not be sharpened
         ! class averages, so no CTF
         ctfvars%ctfflag = CTFFLAG_NO
-        ! whether to perform perform ab-initio reconstruction with e/o class averages
-        l_lpset = cline%defined('lpstart') .and. cline%defined('lpstop')
         ! make master parameters
         call params%new(cline)
         select case(params%cc_objfun)
@@ -800,21 +798,16 @@ contains
         ! set lplims
         call mskdiam2lplimits(params%mskdiam, lplims(1), lplims(2), cenlp)
         if( .not. cline%defined('cenlp') ) params_glob%cenlp = cenlp
-        if( l_lpset )then
+        if( cline%defined('lpstart') )then
             lplims(1) = params%lpstart
-            lplims(2) = params%lpstop
         else
-            if( cline%defined('lpstart') )then
-                lplims(1) = params%lpstart
-            else
-                tmp_rarr  = spproj%os_cls2D%get_all('res')
-                tmp_iarr  = nint(spproj%os_cls2D%get_all('state'))
-                res       = pack(tmp_rarr, mask=(tmp_iarr>0))
-                call hpsort(res)
-                ! new way
-                lplims(2) = max(median_nocopy(res(:3)), lplims(2)) ! low-pass limit is median of three best (as in 2D)
-                deallocate(res, tmp_iarr, tmp_rarr)
-            endif
+            tmp_rarr  = spproj%os_cls2D%get_all('res')
+            tmp_iarr  = nint(spproj%os_cls2D%get_all('state'))
+            res       = pack(tmp_rarr, mask=(tmp_iarr>0))
+            call hpsort(res)
+            ! new way
+            lplims(2) = max(median_nocopy(res(:3)), lplims(2)) ! low-pass limit is median of three best (as in 2D)
+            deallocate(res, tmp_iarr, tmp_rarr)
         endif
         write(logfhandle,'(A,F5.1)') '>>> DID SET STARTING  LOW-PASS LIMIT (IN A) TO: ', lplims(1)
         write(logfhandle,'(A,F5.1)') '>>> DID SET HARD      LOW-PASS LIMIT (IN A) TO: ', lplims(2)
@@ -846,6 +839,9 @@ contains
             if( do_autoscale )then
                 params%msk_crop = params%msk * scale_factor1
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
+                trslim = max(2.0, AHELIX_WIDTH / params%smpd_crop / 2.0)
+            else
+                trslim = max(2.0, AHELIX_WIDTH / params%smpd / 2.0)
             endif
         endif
         ! prepare command lines from prototype
@@ -876,26 +872,20 @@ contains
         call cline_refine3D_prob%set('maxits',     real(MAXITS_PROB))
         call cline_refine3D_prob%set('silence_fsc','yes')              ! no FSC plot printing in prob phase
         call cline_refine3D_prob%set('lp_iters',    0.)                ! low-pass limited resolution, no e/o
-        call cline_refine3D_prob%delete('frac')                        ! no rejections in first phase
         ! (2) REFINE3D_INIT
         call cline_refine3D_init%set('prg',      'refine3D')
         call cline_refine3D_init%set('projfile', trim(ORIG_work_projfile))
         call cline_refine3D_init%set('box_crop', real(params%box_crop))
         call cline_refine3D_init%set('smpd_crop',params%smpd_crop)
         call cline_refine3D_init%set('refine',   'smpl_neigh')
-        call cline_refine3D_init%set('lp',       lplims(1))
+        call cline_refine3D_init%set('lpstart',   lplims(1))
+        call cline_refine3D_init%set('lpstop',    lplims(2))
+        call cline_refine3D_init%set('lp_auto',   'yes')
         call cline_refine3D_init%set('lp_iters', 0.)                   ! low-pass limited resolution, no e/o
-        if( .not. cline_refine3D_init%defined('nspace') )then
-            call cline_refine3D_init%set('nspace',real(NSPACE_INIT))
-        endif
         call cline_refine3D_init%set('maxits',     real(MAXITS_INIT))
         call cline_refine3D_init%set('silence_fsc','yes') ! no FSC plot printing in 2nd phase
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         call cline_refine3D_init%set('vol1',       trim(VOL_FBODY)//trim(str_state)//ext)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-        call cline_refine3D_init%delete('frac')
+        call cline_refine3D_refine%set('trs',      trslim)
         ! (3) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
             ! need to replace original point-group flag with c1/pgrp_start
@@ -918,8 +908,7 @@ contains
         call cline_refine3D_refine%set('projfile',   trim(ORIG_work_projfile))
         call cline_refine3D_refine%set('pgrp',   trim(pgrp_refine))
         call cline_refine3D_refine%set('maxits', real(MAXITS_REFINE))
-        call cline_refine3D_refine%set('refine', 'neigh')
-        call cline_refine3D_refine%set('nspace', real(NSPACE_REFINE))
+        call cline_refine3D_refine%set('refine', 'smpl_neigh')
         if( l_euclid )then
             call cline_refine3D_refine%set('objfun',     orig_objfun)
             call cline_refine3D_refine%set('sigma_est',  'global')
@@ -934,14 +923,10 @@ contains
             call cline_reconstruct3D%set('needs_sigma',  'no')
             call cline_reconstruct3D%set('ml_reg',       'no')
         endif
-        if( l_lpset )then
-            call cline_refine3D_refine%set('lp', lplims(2))
-            call cline_refine3D_refine%set('lp_iters', real(MAXITS_REFINE)) ! low-pass limited resolution, no e/o
-        else
-            call cline_refine3D_refine%delete('lp')
-            call cline_refine3D_refine%set('lp_iters',      0.)             ! no lp, e/o only
-            call cline_refine3D_refine%set('lpstop',      lplims(2))
-        endif
+        call cline_refine3D_refine%delete('lp')
+        call cline_refine3D_refine%set('lpstart',     lplims(1))
+        call cline_refine3D_refine%set('lpstop',      lplims(2))
+        call cline_refine3D_refine%set('lp_auto',     'yes')
         ! (5) RE-CONSTRUCT & RE-PROJECT VOLUME
         call cline_reconstruct3D%set('prg',     'reconstruct3D')
         call cline_reconstruct3D%set('box',      real(params%box))
@@ -950,11 +935,6 @@ contains
         call cline_postprocess%set('projfile',   ORIG_work_projfile)
         call cline_postprocess%set('mkdir',      'no')
         call cline_postprocess%delete('bfac') ! sharpen final map
-        if( l_lpset )then
-            call cline_postprocess%set('lp', lplims(2))
-        else
-            call cline_postprocess%delete('lp')
-        endif
         call cline_reproject%set('prg',    'reproject')
         call cline_reproject%set('pgrp',   trim(pgrp_refine))
         call cline_reproject%set('outstk', 'reprojs'//ext)
@@ -962,16 +942,18 @@ contains
         call cline_reproject%set('box',    real(params%box))
         ! execute commanders
         write(logfhandle,'(A)') '>>>'
-        write(logfhandle,'(A)') '>>> INITIALIZATION WITH STOCHASTIC NEIGHBORHOOD HILL-CLIMBING'
+        write(logfhandle,'(A)') '>>> BAYESIAN 3D AB INITIO'
         write(logfhandle,'(A,F6.1,A)') '>>> LOW-PASS LIMIT FOR ALIGNMENT: ', lplims(1),' ANGSTROMS'
         write(logfhandle,'(A)') '>>>'
-        call rec(cline_refine3D_prob, l_rnd=.true.)
+        call make_noise_vol( cline_refine3D_prob )
         call xrefine3D%execute_shmem(cline_refine3D_prob)
+        iter = nint(cline_refine3D_prob%get_rarg('endit'))
+        call cline_refine3D_init%set('startit',  real(iter + 1))
         write(logfhandle,'(A)') '>>>'
-        write(logfhandle,'(A)') '>>> INITIAL 3D MODEL GENERATION WITH REFINE3D'
+        write(logfhandle,'(A)') '>>> INITIAL PROBABLISTIC 3D REFINEMENT'
         write(logfhandle,'(A)') '>>>'
         call xrefine3D%execute_shmem(cline_refine3D_init)
-        iter     = nint(cline_refine3D_init%get_rarg('endit'))
+        iter = nint(cline_refine3D_init%get_rarg('endit'))
         vol_iter = trim(VOL_FBODY)//trim(str_state)//ext
         if( .not. file_exists(vol_iter) ) THROW_HARD('input volume to symmetry axis search does not exist')
         if( symran_before_refine )then
@@ -992,14 +974,8 @@ contains
         work_proj2%projinfo = spproj%projinfo
         work_proj2%compenv  = spproj%compenv
         if( spproj%jobproc%get_noris()  > 0 ) work_proj2%jobproc = spproj%jobproc
-        if( l_lpset )then
-            call work_proj2%add_stk(trim(orig_stk), ctfvars)
-            work_proj2%os_ptcl3D = work_proj1%os_ptcl3D
-            call work_proj2%os_ptcl3D%set_all('state', real(states))
-        else
-            call prep_eo_stks_refine
-            params_glob%nptcls = work_proj2%get_nptcls()
-        endif
+        call prep_eo_stks_refine
+        params_glob%nptcls = work_proj2%get_nptcls()
         call work_proj1%kill
         call del_file(ORIG_work_projfile)
         call work_proj2%projinfo%delete_entry('projname')
@@ -1021,16 +997,20 @@ contains
             if( do_autoscale )then
                 params%msk_crop = params%msk * scale_factor2
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
+                trslim = max(2.0, AHELIX_WIDTH / params%smpd_crop / 2.0)
+            else
+                trslim = max(2.0, AHELIX_WIDTH / params%smpd / 2.0)
             endif
         endif
         ! refinement stage
         write(logfhandle,'(A)') '>>>'
-        write(logfhandle,'(A)') '>>> REFINEMENT'
+        write(logfhandle,'(A)') '>>> FINAL PROBABLISTIC 3D REFINEMENT'
         write(logfhandle,'(A)') '>>>'
         iter = iter + 1
         call cline_refine3D_refine%set('startit',  real(iter))
         call cline_refine3D_refine%set('box_crop', real(params%box_crop))
         call cline_refine3D_refine%set('smpd_crop',params%smpd_crop)
+        call cline_refine3D_refine%set('trs',      trslim)
         if( l_euclid )then
             ! sigma2 at original sampling
             cline_calc_pspec = cline
@@ -1043,7 +1023,7 @@ contains
             call xcalc_pspec_distr%execute_shmem( cline_calc_pspec )
             call cline_refine3D_refine%set('which_iter', real(iter))
         endif
-        call rec(cline_refine3D_refine, l_rnd=.false.)
+        call rec(cline_refine3D_refine)
         call xrefine3D%execute_shmem(cline_refine3D_refine)
         iter = nint(cline_refine3D_refine%get_rarg('endit'))
         if( l_euclid )then
@@ -1063,9 +1043,7 @@ contains
             ! because postprocess only updates project file when mkdir=yes
             call work_proj2%read_segment('out', ORIG_work_projfile)
             call work_proj2%add_vol2os_out(vol_iter, params%smpd, 1, 'vol')
-            if( .not.l_lpset )then
-                call work_proj2%add_fsc2os_out(FSC_FBODY//str_state//trim(BIN_EXT), 1, params%box)
-            endif
+            call work_proj2%add_fsc2os_out(FSC_FBODY//str_state//trim(BIN_EXT), 1, params%box)
             call work_proj2%write_segment_inside('out',ORIG_work_projfile)
             call xpostprocess%execute(cline_postprocess)
         else
@@ -1086,15 +1064,11 @@ contains
         call work_proj2%os_ptcl3D%delete_entry('stkind')
         call work_proj2%os_ptcl3D%delete_entry('eo')
         params_glob%nptcls = ncavgs
-        if( l_lpset )then
-            spproj%os_cls3D = work_proj2%os_ptcl3D
-        else
-            call spproj%os_cls3D%new(ncavgs, is_ptcl=.false.)
-            do icls=1,ncavgs
-                call spproj%os_cls3D%transfer_ori(icls, work_proj2%os_ptcl3D, icls)
-            enddo
-            call conv_eo(work_proj2%os_ptcl3D)
-        endif
+        call spproj%os_cls3D%new(ncavgs, is_ptcl=.false.)
+        do icls=1,ncavgs
+            call spproj%os_cls3D%transfer_ori(icls, work_proj2%os_ptcl3D, icls)
+        enddo
+        call conv_eo(work_proj2%os_ptcl3D)
         call work_proj2%kill
         ! revert splitting
         call spproj%os_cls3D%set_all2single('stkind', 1.)
@@ -1150,17 +1124,23 @@ contains
 
         contains
 
-            subroutine rec( cline, l_rnd )
+            subroutine make_noise_vol( cline )
                 class(cmdline), intent(inout) :: cline
-                logical,        intent(in)    :: l_rnd
+                type(parameters) :: params
+                type(builder)    :: build
+                type(image)      :: vol
+                call build%init_params_and_build_spproj(cline, params)
+                call vol%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+                call vol%ran
+                call vol%write('startvol.mrc')
+                call cline%set('vol1', 'startvol.mrc')
+            end subroutine make_noise_vol
+
+            subroutine rec( cline )
+                class(cmdline), intent(inout) :: cline
                 type(parameters) :: params
                 type(builder)    :: build
                 call build%init_params_and_build_spproj(cline, params)
-                if( l_rnd )then
-                    call build%spproj%os_ptcl3D%rnd_oris
-                    call build%spproj_field%zero_shifts
-                    call build%spproj%write_segment_inside('ptcl3D', params%projfile)
-                endif
                 call cline%set('mkdir', 'no') ! to avoid nested dirs
                 call xreconstruct3D%execute_shmem(cline)
                 call build%spproj_field%kill
@@ -1240,7 +1220,7 @@ contains
         real,    parameter :: CENLP_DEFAULT   = 30.
         real,    parameter :: LP_DEFAULT      = 6.
         real,    parameter :: LPSTART_DEFAULT = 30., LPSTOP_DEFAULT=LP_DEFAULT
-        integer, parameter :: MINBOX  = 88
+        integer, parameter :: MINBOX  = 64
         integer, parameter :: NSTAGES_DEFAULT = 5
         integer, parameter :: MAXITS2 = 30, MAXITS_SHORT1 = 15, MAXITS_SHORT2 = 25
         integer, parameter :: NSPACE1 = 500, NSPACE2 = 1000, NSPACE3 = 2000

@@ -62,6 +62,7 @@ type(cleanup2D_commander_hlev)              :: xcleanup2D_distr
 
 ! AB INITIO 3D RECONSTRUCTION WORKFLOW
 type(initial_3Dmodel_commander)             :: xinitial_3Dmodel
+type(initial_3Dmodel2_commander)            :: xinitial_3Dmodel2
 type(abinitio_3Dmodel_commander)            :: xabinitio_3Dmodel
 type(abinitio_3Dmodel2_commander)           :: xabinitio_3Dmodel2
 type(batch_abinitio_3Dmodel_commander)      :: xbatch_abinitio_3Dmodel
@@ -239,6 +240,12 @@ select case(trim(prg))
         else
             call xinitial_3Dmodel%execute(cline)
         endif
+    case( 'initial_3Dmodel2' )
+        if( cline%defined('nrestarts') )then
+            call restarted_exec(cline, 'initial_3Dmodel2', 'simple_exec')
+        else
+            call xinitial_3Dmodel2%execute(cline)
+        endif
     case( 'abinitio_3Dmodel' )
         if( cline%defined('nrestarts') )then
             call restarted_exec(cline, 'abinitio_3Dmodel', 'simple_exec')
@@ -407,7 +414,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('1b7bac0b')
+call simple_print_git_version('372c471d')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
