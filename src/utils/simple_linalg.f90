@@ -1370,6 +1370,21 @@ contains
         deg = (rad/DPI)*180.d0
     end function rad2deg_2
 
+    !>   converts from Angstrom to voxel/pixels
+    elemental function ang2vox( ang, smpd ) result( vox )
+        real, intent(in) :: ang, smpd
+        integer          :: vox
+        vox = nint( ang / smpd ) + 1
+    end function ang2vox
+
+    !>   converts from voxel/pixels to Angstrom
+    elemental function vox2ang( vox, smpd ) result( ang )
+        integer, intent(in) :: vox
+        real,    intent(in) :: smpd
+        real                :: ang
+        ang = ( vox - 1. ) * smpd 
+    end function vox2ang
+
     real pure function hyp_1( x1, x2 )
         real, intent(in) :: x1, x2
         hyp_1 = sqrt(x1*x1 + x2*x2)
