@@ -154,22 +154,12 @@ contains
         endif
         allocate(ptcl_mask(params%fromp:params%top))
         if( params%l_frac_update )then
-            l_did_sample = .false.
-            if( params%it_history > 0 )then
-                if( build%spproj_field%has_been_sampled() )then
-                    call build%spproj_field%sample4update_history([params%fromp,params%top],&
-                    &params%it_history, nptcls2update, pinds, ptcl_mask)
-                    l_did_sample = .true.
-                endif
-            endif
-            if( .not. l_did_sample )then
-                if( build%spproj_field%has_been_sampled() )then
-                    call build%spproj_field%sample4update_reprod([params%fromp,params%top],&
-                    &nptcls2update, pinds, ptcl_mask)
-                else
-                    call build%spproj_field%sample4update_rnd2([params%fromp,params%top],&
-                    params%update_frac, nptcls2update, pinds, ptcl_mask, .false.) ! no increment of sampled
-                endif
+            if( build%spproj_field%has_been_sampled() )then
+                call build%spproj_field%sample4update_reprod([params%fromp,params%top],&
+                &nptcls2update, pinds, ptcl_mask)
+            else
+                call build%spproj_field%sample4update_rnd2([params%fromp,params%top],&
+                params%update_frac, nptcls2update, pinds, ptcl_mask, .false.) ! no increment of sampled
             endif
         else
             call build%spproj_field%sample4update_all([params%fromp,params%top],&

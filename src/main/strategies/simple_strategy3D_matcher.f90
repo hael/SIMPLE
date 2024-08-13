@@ -372,13 +372,6 @@ contains
                 ! no reconstruction
             case DEFAULT
                 if( L_BENCH_GLOB ) t_rec = tic()
-                if( params_glob%l_frac_update )then
-                    if( params_glob%l_stoch_update .and. params_glob%it_history > 0 )then
-                        ! re-sample indices
-                        call build_glob%spproj_field%sample4update_history([params_glob%fromp,params_glob%top],&
-                        params_glob%it_history, nptcls2update, pinds, ptcl_mask)
-                    endif
-                endif
                 if( params_glob%l_batchfrac )then
                     call calc_3Dbatchrec( cline, nptcls2update, pinds, prev_oris, which_iter )
                     call prev_oris%kill
