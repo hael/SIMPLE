@@ -429,14 +429,6 @@ contains
         logical   :: do_center
         ! first the polar
         nrefs = params_glob%nspace * params_glob%nstates
-        ! must be done here since params_glob%kfromto is dynamically set
-        call pftcc%new(nrefs, [1,batchsz_max], params_glob%kfromto)
-        if( params_glob%l_needs_sigma )then
-            fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
-            call eucl_sigma%new(fname, params_glob%box)
-            call eucl_sigma%read_part(  build_glob%spproj_field, ptcl_mask)
-            call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
-        end if
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read reference volumes and create polar projections
         cnt = 0
@@ -464,6 +456,16 @@ contains
                 call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=.true.)
             endif
             call read_and_filter_refvols(s)
+            ! must be done here since params_glob%kfromto is dynamically set when lp_auto=yes
+            if( s == 1 )then
+                call pftcc%new(nrefs, [1,batchsz_max], params_glob%kfromto)
+                if( params_glob%l_needs_sigma )then
+                    fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
+                    call eucl_sigma%new(fname, params_glob%box)
+                    call eucl_sigma%read_part(  build_glob%spproj_field, ptcl_mask)
+                    call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
+                end if
+            endif
             ! PREPARE E/O VOLUMES
             call preprefvol(cline, s, do_center, xyz, .false.)
             call preprefvol(cline, s, do_center, xyz, .true.)
