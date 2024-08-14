@@ -23,6 +23,7 @@ type convergence
     type(stats_struct) :: better     !< improvement statistics
     type(stats_struct) :: better_l   !< improvement statistics, LBFGS-B
     type(stats_struct) :: pw         !< particle weights
+    type(stats_struct) :: lp         !< low-pass limit
     type(oris)         :: ostats     !< centralize stats for writing
     integer :: iteration = 0         !< current interation
     real    :: mi_class  = 0.        !< class parameter distribution overlap
@@ -95,6 +96,7 @@ contains
         call os%stats('dist_inpl', self%dist_inpl, mask=mask)
         call os%stats('frac',      self%frac_srch, mask=mask)
         call os%stats('shincarg',  self%shincarg,  mask=mask)
+        call os%stats('lp',        self%lp,        mask=mask)
         self%mi_class = os%get_avg('mi_class',     mask=mask)
         ! overlaps and particle updates
         write(logfhandle,601) '>>> CLASS OVERLAP:                          ', self%mi_class
@@ -103,8 +105,9 @@ contains
         write(logfhandle,601) '>>> % PARTICLES USED FOR AVERAGING          ', percen_avg
         ! dists and % search space
         write(logfhandle,604) '>>> IN-PLANE DIST    (DEG) AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
-        write(logfhandle,604) '>>> SHIFT INCR ARG         AVG/SDEV/MIN/MAX:', self%shincarg%avg, self%shincarg%sdev, self%shincarg%minv, self%shincarg%maxv
+        write(logfhandle,604) '>>> SHIFT INCR ARG         AVG/SDEV/MIN/MAX:', self%shincarg%avg,  self%shincarg%sdev,  self%shincarg%minv,  self%shincarg%maxv
         write(logfhandle,604) '>>> % SEARCH SPACE SCANNED AVG/SDEV/MIN/MAX:', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
+        write(logfhandle,604) '>>> % LOW-PASS LIMIT       AVG/SDEV/MIN/MAX:', self%lp%avg,        self%lp%sdev,        self%lp%minv,        self%lp%maxv
         ! score
         write(logfhandle,604) '>>> SCORE [0,1]            AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
         ! dynamic shift search range update
@@ -234,6 +237,7 @@ contains
         call build_glob%spproj_field%stats('frac',       self%frac_srch,  mask=mask)
         call build_glob%spproj_field%stats('shincarg',   self%shincarg,   mask=mask)
         call build_glob%spproj_field%stats('w',          self%pw,         mask=mask)
+        call build_glob%spproj_field%stats('lp',         self%lp,         mask=mask)
         self%mi_proj   = build_glob%spproj_field%get_avg('mi_proj',   mask=mask)
         self%mi_state  = build_glob%spproj_field%get_avg('mi_state',  mask=mask)
         ! overlaps and particle updates
@@ -245,11 +249,12 @@ contains
         write(logfhandle,601) '>>> % PARTICLES UPDATED SO FAR                ', percen_updated
         write(logfhandle,601) '>>> % PARTICLES USED FOR AVERAGING            ', percen_avg
         ! dists and % search space
-        write(logfhandle,604) '>>> DIST BTW BEST ORIS (DEG) AVG/SDEV/MIN/MAX:', self%dist%avg, self%dist%sdev, self%dist%minv, self%dist%maxv
+        write(logfhandle,604) '>>> DIST BTW BEST ORIS (DEG) AVG/SDEV/MIN/MAX:', self%dist%avg,      self%dist%sdev,      self%dist%minv,      self%dist%maxv
         write(logfhandle,604) '>>> IN-PLANE DIST      (DEG) AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
-        write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX:', self%shincarg%avg, self%shincarg%sdev, self%shincarg%minv, self%shincarg%maxv
+        write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX:', self%shincarg%avg,  self%shincarg%sdev,  self%shincarg%minv,  self%shincarg%maxv
         write(logfhandle,604) '>>> % SEARCH SPACE SCANNED   AVG/SDEV/MIN/MAX:', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
-        write(logfhandle,604) '>>> PARTICLE WEIGHTS         AVG/SDEV/MIN/MAX:', self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
+        write(logfhandle,604) '>>> PARTICLE WEIGHTS         AVG/SDEV/MIN/MAX:', self%pw%avg,        self%pw%sdev,        self%pw%minv,        self%pw%maxv
+        write(logfhandle,604) '>>> % LOW-PASS LIMIT         AVG/SDEV/MIN/MAX:', self%lp%avg,        self%lp%sdev,        self%lp%minv,        self%lp%maxv
         ! score
         write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
         ! dynamic shift search range update

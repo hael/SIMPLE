@@ -136,6 +136,7 @@ type(simple_program), target :: motion_correct
 type(simple_program), target :: multipick_cleanup2D
 type(simple_program), target :: new_project
 type(simple_program), target :: nununiform_filter3D
+type(simple_program), target :: noisevol
 type(simple_program), target :: normalize_
 type(simple_program), target :: orisops
 type(simple_program), target :: oristats
@@ -429,6 +430,7 @@ contains
         call new_multipick_cleanup2D
         call new_new_project
         call new_nununiform_filter3D
+        call new_noisevol
         call new_normalize
         call new_orisops
         call new_oristats
@@ -552,6 +554,7 @@ contains
         call push2prg_ptr_array(multipick_cleanup2D)
         call push2prg_ptr_array(new_project)
         call push2prg_ptr_array(nununiform_filter3D)
+        call push2prg_ptr_array(noisevol)
         call push2prg_ptr_array(normalize_)
         call push2prg_ptr_array(orisops)
         call push2prg_ptr_array(oristats)
@@ -747,6 +750,8 @@ contains
                 ptr2prg => new_project
             case('nununiform_filter3D')
                 ptr2prg => nununiform_filter3D
+            case('noisevol')
+                ptr2prg => noisevol
             case('normalize')
                 ptr2prg => normalize_
             case('orisops')
@@ -918,6 +923,7 @@ contains
         write(logfhandle,'(A)') multipick_cleanup2D%name
         write(logfhandle,'(A)') new_project%name
         write(logfhandle,'(A)') nununiform_filter3D%name
+        write(logfhandle,'(A)') noisevol%name
         write(logfhandle,'(A)') normalize_%name
         write(logfhandle,'(A)') orisops%name
         write(logfhandle,'(A)') oristats%name
@@ -4293,6 +4299,33 @@ contains
         ! computer controls
         call reproject%set_input('comp_ctrls', 1, nthr)
     end subroutine new_reproject
+
+    subroutine new_noisevol
+        ! PROGRAM SPECIFICATION
+        call noisevol%new(&
+        &'noisevol',&                         ! name
+        &'Generate noise volume',&            ! descr_short
+        &'is a program for generating noise volume(s)',&
+        &'simple_exec',&                       ! executable
+        &0, 3, 0, 0, 0, 0, 0, .false.)         ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call noisevol%set_input('parm_ios', 1, smpd)
+        call noisevol%set_input('parm_ios', 2, box)
+        call noisevol%set_input('parm_ios', 3,  'nstates', 'num', 'Number states', 'Number states', '# states', .false., 1.0)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_noisevol
 
     subroutine new_normalize
         ! PROGRAM SPECIFICATION

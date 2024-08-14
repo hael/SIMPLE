@@ -18,6 +18,7 @@ public :: centervol_commander
 public :: postprocess_commander
 public :: reproject_commander
 public :: volops_commander
+public :: noisevol_commander
 public :: dock_volpair_commander
 public :: symaxis_search_commander
 public :: symmetrize_map_commander
@@ -45,6 +46,11 @@ type, extends(commander_base) :: volops_commander
   contains
     procedure :: execute      => exec_volops
 end type volops_commander
+
+type, extends(commander_base) :: noisevol_commander
+  contains
+    procedure :: execute      => exec_noisevol
+end type noisevol_commander
 
 type, extends(commander_base) :: dock_volpair_commander
   contains
@@ -410,6 +416,27 @@ contains
         call simple_end('**** SIMPLE_VOLOPS NORMAL STOP ****')
     end subroutine exec_volops
 
+    subroutine exec_noisevol( self, cline )
+        class(noisevol_commander), intent(inout) :: self
+        class(cmdline),          intent(inout) :: cline
+        type(parameters) :: params
+        type(image)      :: noisevol
+        integer          :: s
+        call params%new(cline)
+        call noisevol%new([params%box,params%box,params%box], params%smpd)
+        do s = 1, params%nstates
+            call noisevol%ran()
+            call noisevol%write('noisevol_state'//int2str_pad(s,2)//'.mrc')
+            call noisevol%ran()
+            call noisevol%write('noisevol_state'//int2str_pad(s,2)//'_even.mrc')
+            call noisevol%ran()
+            call noisevol%write('noisevol_state'//int2str_pad(s,2)//'_odd.mrc')
+        end do
+        call noisevol%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_NOISEVOL NORMAL STOP ****')
+    end subroutine exec_noisevol
+    
     subroutine exec_dock_volpair( self, cline )
         use simple_vol_srch
         class(dock_volpair_commander), intent(inout) :: self
