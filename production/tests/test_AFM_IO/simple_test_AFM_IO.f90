@@ -3,11 +3,11 @@ use iso_c_binding
 include 'simple_lib.f08'
 use simple_AFM_image
 use simple_segmentation
+use simple_hash
 !AFM IO
 type :: AFM_image
     type(image), allocatable :: img_array(:)
     character(len = 20), allocatable :: img_names(:)
-    integer                          :: AFM_index = 0
 end type AFM_image 
 
 type    :: bin_header5
@@ -59,8 +59,8 @@ type    :: wave_header5
 end type
 type(AFM_image) ::  Cob16
 type(image)     ::  HeightTrace
-type(image)     ::  PhaseTrace
-type(image)     ::  Subtract
+type(image)     ::  HeightRetrace
+type(image)     ::  Sum
 integer         :: i, j, fu
 real, allocatable   :: rmat_test(:,:,:)
 ! character(len=*), parameter :: OUT_FILE = '/Users/atifao/Downloads/IBW/16_im.txt' ! Output file.
@@ -71,14 +71,19 @@ real, allocatable   :: rmat_test(:,:,:)
 
 ! print *, test_sing
 ! add padding to non square images 
-call read_ibw('/Users/atifao/Downloads/IBW/Cob_450007.ibw', Cob16)
+call read_ibw('/Users/atifao/Downloads/IBW/Cob_450016.ibw', Cob16)
 call zero_padding(Cob16)
 
-! HeightTrace = Cob16%img_array(findloc(index(Cob16%img_names, 'HeightTrace'),1, dim = 1))
-! PhaseTrace = Cob16%img_array(findloc(index(Cob16%img_names, 'PhaseTrace'),1, dim = 1))
+HeightTrace = Cob16%img_array(findloc(index(Cob16%img_names, 'HeightTrace'),1, dim = 1))
+HeightRetrace = Cob16%img_array(findloc(index(Cob16%img_names, 'HeightRetrace'),1, dim = 1))
 
-! call HeightTrace%vis()
-! call PhaseTrace%vis()
+! normalize retrace to max value of normalized retrace
+call HeightTrace%norm_minmax()
+call HeightRetrace%norm_minmax()
+
+
+call HeightTrace%vis()
+call HeightRetrace%vis()
 ! Subtract = HeightTrace + PhaseTrace
 ! call Subtract%vis()
 ! rmat_test = HeightTrace%get_rmat()
@@ -147,14 +152,6 @@ contains
         deallocate(Rank3_Data_4byte)
     end subroutine read_ibw
 
-    subroutine lookup(AFM_Hash, key,img_at_key)
-        type(AFM_image), intent(in) :: AFM_Hash
-        character(:), allocatable, intent(in)    :: key 
-        type(image), intent(out)     :: img_at_key
-        integer         :: index1
-        index1 = findloc(index(AFM_Hash%img_names, key),1, dim = 1)
-        img_at_key = AFM_Hash%img_array(index1)
-    end subroutine
     ! Zero Padding to make it square (maybe set to intensity average)
     subroutine zero_padding(AFM_pad)
         type(AFM_image), intent(inout)  :: AFM_pad
@@ -162,7 +159,6 @@ contains
         integer :: dim(3)
         do img_ind = 1, size(AFM_pad%img_names)
             dim = AFM_pad%img_array(img_ind)%get_ldim()
-            print *, dim
             if( dim(1) /= dim(2) ) then 
                 call AFM_pad%img_array(img_ind)%pad_inplace([maxval(dim), maxval(dim), 1])
             end if 
@@ -178,6 +174,19 @@ contains
     end subroutine matrix_log
 
     ! alignment subroutine. 
+    subroutine alignment(Align_AFM)
+        type(AFM_image), intent(inout)     :: Align_AFM
+
+    end subroutine 
+
+    !change this to function... 
+    subroutine get_AFM(AFM_Hash, key, image_at_key)
+        type(AFM_image), intent(in) :: AFM_Hash
+        character(*), intent(in)    :: key 
+        type(image), intent(out)  :: image_at_key
+        image_at_key = AFM_Hash%img_array(findloc(index(AFM_Hash%img_names, key),1, dim = 1))
+    end subroutine get_AFM  
+
 
     ! print *,  img_array(1)%get_smpd()
     ! print *, AFM%img_array(1)%get_ldim()
