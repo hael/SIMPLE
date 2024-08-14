@@ -5531,6 +5531,7 @@ contains
         ax   = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask) / npix
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - ax
         sxx  = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))*self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask)
+        sxx  = sxx/real(npix)
         if( sxx > TINY ) self%rmat = self%rmat / sqrt(sxx)
     end subroutine norm_within
 
