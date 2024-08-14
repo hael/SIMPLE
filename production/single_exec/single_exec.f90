@@ -6,7 +6,6 @@ use simple_cmdline,              only: cmdline, cmdline_err
 use simple_commander_sim,        only: simulate_atoms_commander
 use simple_commander_preprocess, only: map_cavgs_selection_commander
 use simple_commander_imgproc,    only: estimate_diam_commander, pspec_int_rank_commander
-use simple_commander_rec,        only: random_rec_commander_distr
 use simple_exec_helpers
 use simple_commander_project
 use simple_commander_cluster2D
@@ -180,7 +179,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('eeb46d66')
+call simple_print_git_version('359332e1')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
