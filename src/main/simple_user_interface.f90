@@ -2052,10 +2052,10 @@ contains
         &to apply a balancing constraint (on the class population). Adjust balance until you are &
         &satisfied with the shape of the histogram',&                              ! descr_long
         &'simple_exec',&                                                           ! executable
-        &0, 2, 0, 0, 3, 1, 1, .true.)                                              ! # entries in each group, requires sp_project
+        &1, 2, 0, 0, 3, 1, 1, .false.)                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        ! <empty>
+        call cluster_cavgs%set_input('img_ios', 1, stk)
         ! parameter input/output
         call cluster_cavgs%set_input('parm_ios', 1, 'bin_cls', 'multi', 'Perform good/bad classification based on common lines',&
         &'Classes with lower common line correlation to the rest are rejected by Otsu(yes|no|only){yes}', '(yes|no|only){yes}', .false., 'yes')

@@ -1788,7 +1788,7 @@ contains
         complex(dp), pointer :: pft_ref_8(:,:), diff_8(:,:), pft_shref_8(:,:)
         complex(sp), pointer :: pft_ptcl(:,:)
         real(sp),    pointer :: rctf(:,:)
-        real(dp)             :: shvec(2), score
+        real(dp)             :: shvec(2), score, sqsum_ref, denom
         integer              :: ithr, i, ix, iy, k, prot
         i    =  self%pinds(iptcl)
         ithr = omp_get_thread_num() + 1
@@ -1811,27 +1811,53 @@ contains
             call self%rotate_ctf(iptcl, prot, rctf)
             pft_ref_8 = pft_ref_8 * real(rctf,dp)
         endif
-        do ix = -hn,hn
-            do iy = -hn,hn
-                shvec = real([shifts(ix), shifts(iy)],dp)
-                call self%gen_shmat_8(ithr, shvec, pft_shref_8) ! shift matrix
-                pft_shref_8 = pft_ref_8 * pft_shref_8           ! shifted reference
-                ! first orientation
-                diff_8 = pft_shref_8 - dcmplx(pft_ptcl)
-                score = 0.d0
-                do k = self%kfromto(1),self%kfromto(2)
-                    score = score + (real(k,dp) / self%sigma2_noise(k,iptcl)) * sum(real(diff_8(:,k)*conjg(diff_8(:,k)),dp))
-                end do
-                grid1(ix,iy) = real(exp( -score / self%wsqsums_ptcls(i) ))
-                ! second orientation (first+pi)
-                diff_8 = pft_shref_8 - dcmplx(conjg(pft_ptcl))
-                score = 0.d0
-                do k = self%kfromto(1),self%kfromto(2)
-                    score = score + (real(k,dp) / self%sigma2_noise(k,iptcl)) * sum(real(diff_8(:,k)*conjg(diff_8(:,k)),dp))
-                end do
-                grid2(ix,iy) = real(exp( -score / self%wsqsums_ptcls(i) ))
+        select case(params_glob%cc_objfun)
+        case(OBJFUN_CC)
+            do ix = -hn,hn
+                do iy = -hn,hn
+                    shvec = real([shifts(ix), shifts(iy)],dp)
+                    call self%gen_shmat_8(ithr, shvec, pft_shref_8) ! shift matrix
+                    pft_shref_8 = pft_ref_8 * pft_shref_8           ! shifted reference
+                    ! first orientation
+                    sqsum_ref = 0.d0
+                    score     = 0.d0
+                    do k = self%kfromto(1),self%kfromto(2)
+                        sqsum_ref = sqsum_ref + real(k,kind=dp) * sum(real(pft_shref_8(:,k) * conjg(pft_shref_8(:,k)),dp))
+                        score     = score     + real(k,kind=dp) * sum(real(pft_shref_8(:,k) * conjg(pft_ptcl(:,k)),dp))
+                    end do
+                    denom        = dsqrt(sqsum_ref * self%ksqsums_ptcls(i))
+                    grid1(ix,iy) = score / denom
+                    ! second orientation (first+pi)
+                    score = 0.d0
+                    do k = self%kfromto(1),self%kfromto(2)
+                        score = score + real(k,kind=dp) * sum(real(pft_shref_8(:,k) * pft_ptcl(:,k),dp))
+                    end do
+                    grid2(ix,iy) = score / denom
+                enddo
             enddo
-        enddo
+        case(OBJFUN_EUCLID)
+            do ix = -hn,hn
+                do iy = -hn,hn
+                    shvec = real([shifts(ix), shifts(iy)],dp)
+                    call self%gen_shmat_8(ithr, shvec, pft_shref_8) ! shift matrix
+                    pft_shref_8 = pft_ref_8 * pft_shref_8           ! shifted reference
+                    ! first orientation
+                    diff_8 = pft_shref_8 - dcmplx(pft_ptcl)
+                    score = 0.d0
+                    do k = self%kfromto(1),self%kfromto(2)
+                        score = score + (real(k,dp) / self%sigma2_noise(k,iptcl)) * sum(real(diff_8(:,k)*conjg(diff_8(:,k)),dp))
+                    end do
+                    grid1(ix,iy) = real(exp( -score / self%wsqsums_ptcls(i) ))
+                    ! second orientation (first+pi)
+                    diff_8 = pft_shref_8 - dcmplx(conjg(pft_ptcl))
+                    score = 0.d0
+                    do k = self%kfromto(1),self%kfromto(2)
+                        score = score + (real(k,dp) / self%sigma2_noise(k,iptcl)) * sum(real(diff_8(:,k)*conjg(diff_8(:,k)),dp))
+                    end do
+                    grid2(ix,iy) = real(exp( -score / self%wsqsums_ptcls(i) ))
+                enddo
+            enddo
+        end select
     end subroutine bidirectional_shift_search
 
     real(dp) function gencorr_for_rot_8( self, iref, iptcl, shvec, irot )
