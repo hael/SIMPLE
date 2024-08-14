@@ -232,18 +232,24 @@ implicit none
         deallocate(intensities_flat)
     end subroutine make_intensity_mask_2
 
-    function logical_box(array, pos, boxsize) result(truth_value)
-        logical, intent(in)  :: array(:,:,:)
-        integer, intent(in)  :: pos(3)
-        integer, intent(in)  :: boxsize
+    function logical_box(array, pos, boxsize, num_px) result(truth_value)
+        logical, intent(in)           :: array(:,:,:)
+        integer, intent(in)           :: pos(3)
+        integer, intent(in)           :: boxsize
+        integer, optional, intent(in) :: num_px
         logical              :: truth_value
         logical, allocatable :: small_box(:,:,:)
-        integer              :: to(3), from(3)
+        integer              :: to(3), from(3), num_px_here
         allocate(small_box(boxsize,boxsize,boxsize))
+        if (present(num_px)) then
+            num_px_here = num_px
+        else
+            num_px_here = 0
+        end if
         from      = pos
         to        = pos + boxsize
         small_box = array(from(1):to(1),from(2):to(2),from(3):to(3))
-        if(count(small_box) > 0) then 
+        if(count(small_box) > num_px_here) then 
             truth_value = .true.
         else
             truth_value = .false.
