@@ -61,14 +61,13 @@ use simple_stat
 
     contains
 
-    subroutine new( self, smpd, element, raw_filename, peak_thres_level, offset, dist_thres, denoise, mskdiam, intensity_level, circle)
+    subroutine new( self, smpd, element, raw_filename, peak_thres_level, offset, dist_thres, mskdiam, intensity_level, circle)
         class(nano_picker), intent(inout) :: self
         real,               intent(in)    :: smpd
         character(len=*),   intent(in)    :: element
         character(len=100), intent(in)    :: raw_filename
         integer,            intent(in)    :: peak_thres_level, offset
         real,    optional,  intent(in)    :: dist_thres
-        logical, optional,  intent(in)    :: denoise
         real,    optional,  intent(in)    :: mskdiam ! Angstroms
         integer, optional,  intent(in)    :: intensity_level
         logical, optional,  intent(in)    :: circle
@@ -76,7 +75,6 @@ use simple_stat
         integer                  :: Z, nptcls
         logical                  :: outside
         type(parameters), target :: params
-        type(image)              :: thres_img
         call self%kill
         self%smpd            = smpd
         self%element         = element
@@ -105,14 +103,11 @@ use simple_stat
         self%thres = -0.999 ! initial value, will be updated later
         ! create thresholding mask
         if (present(intensity_level)) then
-            call thres_img%copy(self%nano_img)
-            call phasecorr_one_atom(thres_img, self%element)
-            call thres_img%write('denoised_map.mrc') 
             if (    intensity_level .eq. 1) then
-                call make_intensity_mask(      thres_img, self%thres_msk, level=2, intensity_thres=self%intensity_thres)
+                call make_intensity_mask(      self%nano_img, self%thres_msk, level=2, intensity_thres=self%intensity_thres)
             else if(intensity_level .eq. 2) then
                 if (present(mskdiam)) then
-                    call make_intensity_mask_2(thres_img, self%thres_msk, self%element, mskdiam*0.75, level=2, intensity_thres=self%intensity_thres)
+                    call make_intensity_mask_2(self%nano_img, self%thres_msk, self%element, mskdiam*0.75, level=2, intensity_thres=self%intensity_thres)
                 else
                     THROW_HARD('ERROR: MSKDIAM must be present to use intensity level 2')
                 end if
@@ -123,12 +118,6 @@ use simple_stat
             allocate(self%thres_msk(self%ldim(1),self%ldim(2),self%ldim(3)), source=.true.)
         end if
         print *, 'INTENSITY THRES = ', self%intensity_thres
-        ! denoise nano_img if requested
-        if( present(denoise) )then
-            if( denoise )then
-                call phasecorr_one_atom(self%nano_img, self%element)
-            endif
-        endif
         if( present(mskdiam) ) then
             self%has_mask = .true.
             self%mask_radius   = (mskdiam / self%smpd) / 2
@@ -754,7 +743,7 @@ use simple_stat
             call nano%new(self%raw_filename)
         end if
         if (.not. self%wrote_pdb) call self%write_pdb()
-        call nano%set_atomic_coords(trim(self%pdb_filename),write_file='coordinates_in_nanoparticle.csv')
+        call nano%set_atomic_coords(trim(self%pdb_filename))
         call nano%simulate_atoms(simatms=simatms)
         call nano%validate_atoms(simatms=simatms)
         call nano%write_centers('coordinates_in_nanoparticle_angstroms',which='valid_corr')

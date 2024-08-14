@@ -35,15 +35,14 @@ peak_thres_level = 2
 dist_thres       = 3.
 intensity_level  = 2
 circle           = .true.  ! whether to use cube or sphere for correlation calculation
-denoise          = .false. ! whether to denoise the experimental volume before picking
 use_valid_corr   = .true.  ! whether to discard boxes based on a low valid correlation
 use_cs_thres     = .true.  ! whether to discard boxes based on a low contact score
-mskdiam          = 33.5
+mskdiam          = 34.7
 corr_thres       = 0.3
 cs_thres         = 3.0
 
 print *, 'NEW METHOD: '
-call test_exp4%new(smpd, element, filename_exp, peak_thres_level, offset, dist_thres, denoise, mskdiam, intensity_level, circle)
+call test_exp4%new(smpd, element, filename_exp, peak_thres_level, offset, dist_thres, mskdiam, intensity_level, circle)
 call test_exp4%exec_nano_picker(corr_thres=corr_thres,cs_thres=cs_thres)
 !call test_exp4%exec_nano_picker()
 !OUTPUT FILES
