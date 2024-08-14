@@ -86,7 +86,7 @@ contains
         type(cmdline) :: cline_reconstruct3D, cline_postprocess
         type(cmdline) :: cline_reproject, cline_calc_pspec
         ! other
-        character(len=:), allocatable :: stk, orig_stk, frcs_fname, shifted_stk, stk_even, stk_odd, ext
+        character(len=:), allocatable :: stk, stkpath, orig_stk, frcs_fname, shifted_stk, stk_even, stk_odd, ext
         real,             allocatable :: res(:), tmp_rarr(:), diams(:)
         integer,          allocatable :: states(:), tmp_iarr(:)
         character(len=2)      :: str_state
@@ -169,7 +169,9 @@ contains
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
         ! retrieve cavgs stack & FRCS info
-        call spproj%get_cavgs_stk(stk, ncavgs, params%smpd)
+        call spproj%get_cavgs_stk(stk, ncavgs, params%smpd, stkpath=stkpath)
+        if(.not. file_exists(stk)) stk = trim(stkpath) // '/' // trim(stk)
+        if(.not. file_exists(stk)) THROW_HARD('cavgs stk does not exist; simple_commander_abinitio')
         ext = '.'//fname2ext( stk )
         ! e/o
         if( l_lpset )then
@@ -592,6 +594,7 @@ contains
         if( allocated(diams)    ) deallocate(diams)
         if( allocated(states)   ) deallocate(states)
         if( allocated(tmp_iarr) ) deallocate(tmp_iarr)
+        if( allocated(stkpath)  ) deallocate(stkpath)
         call del_file(ORIG_work_projfile)
         call simple_rmdir(STKPARTSDIR)
         call simple_end('**** SIMPLE_INITIAL_3DMODEL NORMAL STOP ****')
