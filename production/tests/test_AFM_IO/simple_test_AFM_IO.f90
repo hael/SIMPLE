@@ -63,6 +63,7 @@ type(image)     ::  HeightRetrace
 type(image)     ::  Sum
 integer         :: i, j, fu
 real, allocatable   :: rmat_test(:,:,:)
+real            :: h_shift(2)
 ! character(len=*), parameter :: OUT_FILE = '/Users/atifao/Downloads/IBW/16_im.txt' ! Output file.
 ! character(len=*), parameter :: PLT_FILE = 'plot.plt' ! Gnuplot file.
 ! real       :: test_mat(3,3), test_sing(3), test_vec(3,3)
@@ -74,16 +75,18 @@ real, allocatable   :: rmat_test(:,:,:)
 call read_ibw('/Users/atifao/Downloads/IBW/Cob_450016.ibw', Cob16)
 call zero_padding(Cob16)
 
-HeightTrace = Cob16%img_array(findloc(index(Cob16%img_names, 'HeightTrace'),1, dim = 1))
+call get_AFM(Cob16, 'HeightTrace', HeightTrace)
 HeightRetrace = Cob16%img_array(findloc(index(Cob16%img_names, 'HeightRetrace'),1, dim = 1))
 
+call HeightTrace%fft()
+call HeightRetrace%fft()
+
+!need to adjust make function sub-pixel accurate. 
+call HeightTrace%fcorr_shift(HeightRetrace, 20., h_shift)
+print *, h_shift
+
 ! normalize retrace to max value of normalized retrace
-call HeightTrace%norm_minmax()
-call HeightRetrace%norm_minmax()
 
-
-call HeightTrace%vis()
-call HeightRetrace%vis()
 ! Subtract = HeightTrace + PhaseTrace
 ! call Subtract%vis()
 ! rmat_test = HeightTrace%get_rmat()
@@ -131,7 +134,7 @@ contains
         read(data, pos = 385) Rank3_Data_4byte
         inquire(data, pos = bytes_read)
         allocate(character(binheader%dimLabelsSize(3)) :: channel_info)
-        allocate(AFM%img_names(waveheader%nDim(3)))
+        allocate(AFM%img_names(size(iteration)*size(properties)))
         read(data, pos = binheader%noteSize + bytes_read) channel_info
         ! getting image names 
         do prop_ind = 1, size(properties)
@@ -143,7 +146,6 @@ contains
                 end if 
             end do 
         end do     
-
         allocate(AFM%img_array(waveheader%nDim(3)))
         do img_ind = 1, waveheader%nDim(3)
             call AFM%img_array(img_ind)%new([waveheader%nDim(1), waveheader%nDim(2), 1], real(waveheader%sfA(1)) * 10**10)
@@ -157,7 +159,7 @@ contains
         type(AFM_image), intent(inout)  :: AFM_pad
         integer        :: img_ind
         integer :: dim(3)
-        do img_ind = 1, size(AFM_pad%img_names)
+        do img_ind = 1, size(AFM_pad%img_array)
             dim = AFM_pad%img_array(img_ind)%get_ldim()
             if( dim(1) /= dim(2) ) then 
                 call AFM_pad%img_array(img_ind)%pad_inplace([maxval(dim), maxval(dim), 1])

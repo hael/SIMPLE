@@ -3,20 +3,20 @@ include 'simple_lib.f08'
 use simple_ppca_inmem, only: ppca_inmem
 use simple_pca_svd,    only: pca_svd
 implicit none
-integer, parameter :: NP = 3, NS = 4, NC = 2, MAXPCAITS = 15
+integer, parameter :: NP = 2, NS = 2, NC = 2, MAXPCAITS = 15
 type(ppca_inmem)   :: prob_pca
 type(pca_svd)      :: pca_obj
 integer :: j
 real    :: data_ori(NP, NS), avg(NP), tmpvec(NP), data_pca(NP, NS), E_zn(NC, NS), data_cen(NP, NS)
-data_ori(1,:) = [ 1, 2, 3, 4]
-data_ori(2,:) = [ 3, 1, 5, 8]
-data_ori(3,:) = [-1, 0, 4, 10]
+data_ori(1,:) = [ 1, 2]
+data_ori(2,:) = [ 4, 5]
+! data_ori(3,:) = [7, 8, 9]
 ! data_ori(4,:) = [ 0, 0, 7, 10]
 ! data_ori(5,:) = [-2, 0, 1, 10]
 print *, 'Original data:'
 print *, data_ori(1,:)
 print *, data_ori(2,:)
-print *, data_ori(3,:)
+! print *, data_ori(3,:)
 avg           = sum(data_ori, dim=2) / real(NS)
 do j = 1, NP
      data_cen(j,:) = data_ori(j,:) - avg(j)
@@ -45,6 +45,7 @@ print *, '---------------------------------------------------'
 ! PCA test
 print *, 'PCA eigenvalues/eigenvectors:'
 call pca_obj%new(NS, NP, NC)
+! this is pca_svd, should print eigenvalues 
 call pca_obj%master(data_cen)
 print *, 'Feature vecs using PCA:'
 do j = 1, NS
