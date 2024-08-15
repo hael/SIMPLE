@@ -172,7 +172,9 @@ contains
         real     :: corrs(self%nrots), rotmat(2,2), cxy(3), lowest_shift(2), lowest_cost
         real(dp) :: init_xy(2), lowest_cost_overall, coarse_cost, initial_cost
         integer  :: loc, i, lowest_rot, init_rot
-        logical  :: found_better
+        logical  :: found_better, l_sh_rot
+        l_sh_rot = .true.
+        if( present(sh_rot) .and. .not.(sh_rot) ) l_sh_rot = .false.
         found_better = .false.
         if( present(xy) )then
             self%ospec%x   = xy
@@ -214,7 +216,7 @@ contains
                 irot    =   lowest_rot                 ! in-plane index
                 cxy(1)  = - real(lowest_cost_overall)  ! correlation
                 cxy(2:) =   real(lowest_shift)         ! shift
-                if( .not. present(sh_rot) )then
+                if( l_sh_rot )then
                     ! rotate the shift vector to the frame of reference
                     call rotmat2d(pftcc_glob%get_rot(irot), rotmat)
                     cxy(2:) = matmul(cxy(2:), rotmat)
@@ -250,7 +252,7 @@ contains
             if( found_better )then
                 cxy(1)  = - real(lowest_cost_overall)  ! correlation
                 cxy(2:) =   lowest_shift               ! shift
-                if( .not. present(sh_rot) )then
+                if( l_sh_rot )then
                     ! rotate the shift vector to the frame of reference
                     call rotmat2d(pftcc_glob%get_rot(irot), rotmat)
                     cxy(2:) = matmul(cxy(2:), rotmat)

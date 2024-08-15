@@ -413,19 +413,6 @@ contains
                     call cline_prob_align%set(vol, cline%get_carg(vol))
                 enddo
                 if( cline%defined('lp') ) call cline_prob_align%set('lp',params%lp)
-                if( trim(params%sh_alt) .eq. 'yes' )then
-                    if( mod(iter,2) == 1 )then
-                        call cline_prob_align%set('trs',     0.)
-                        call cline_prob_align%set('sh_only', 'no')
-                    else
-                        if( cline%defined('trs') )then
-                            call cline_prob_align%set('trs', params%trs)
-                        else
-                            call cline_prob_align%delete('trs')
-                        endif
-                        call cline_prob_align%set('sh_only', 'yes')
-                    endif
-                endif
                 ! reading corrs from all parts into one table
                 call xprob_align%execute_shmem( cline_prob_align )
             endif
@@ -437,13 +424,6 @@ contains
             call cline%set(     'which_iter', params%which_iter)
             call job_descr%set( 'startit',    trim(int2str(iter)))
             call cline%set(     'startit',    iter)
-            if( trim(params%sh_alt) .eq. 'yes' )then
-                if( mod(iter,2) == 1 )then
-                    call job_descr%set('trs', real2str(0.))
-                else
-                    call job_descr%set('trs', real2str(params%trs))
-                endif
-            endif
             ! FRCs
             if( cline%defined('frcs') )then
                 ! all good

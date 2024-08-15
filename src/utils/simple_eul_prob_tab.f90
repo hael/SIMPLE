@@ -32,7 +32,7 @@ type :: eul_prob_tab
     ! CONSTRUCTOR
     procedure, private :: new_1, new_2
     generic            :: new => new_1, new_2
-  ! PARTITION-WISE PROCEDURES (used only by partition-wise eul_prob_tab objects)
+    ! PARTITION-WISE PROCEDURES (used only by partition-wise eul_prob_tab objects)
     procedure :: fill_tab
     procedure :: write_tab, write_shift
     procedure :: read_assignment, read_shift
@@ -179,17 +179,7 @@ contains
         real    :: dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob), rotmat(2,2)
         real    :: dists_projs(params_glob%nspace,nthr_glob), lims(2,2), lims_init(2,2), cxy(3), inpl_athres
         call seed_rnd
-        if( trim(params_glob%sh_only).eq.'yes' )then
-            ! retrieving previous orientation
-            !$omp parallel do default(shared) private(i,iptcl,o_prev) proc_bind(close) schedule(static)
-            do i = 1, self%nptcls
-                iptcl = self%pinds(i)
-                call build_glob%spproj_field%get_ori(iptcl, o_prev)                       ! previous ori
-                self%loc_tab(:,i,:)%inpl  = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
-                self%loc_tab(:,i,:)%iproj = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
-            enddo
-            !$omp end parallel do
-        else if( trim(params_glob%sh_first).eq.'yes' )then
+        if( trim(params_glob%sh_first).eq.'yes' )then
             ! make shift search objects
             lims(:,1)      = -params_glob%trs
             lims(:,2)      =  params_glob%trs
@@ -305,18 +295,13 @@ contains
     ! ptcl -> (proj, state) assignment used in the global prob_align commander, in 'exec_prob_align'
     subroutine prob_assign( self )
         class(eul_prob_tab), intent(inout) :: self
-        if( trim(params_glob%sh_only) .eq. 'yes' )then
-            ! retrieving previous orientation
-            self%assgn_map = self%loc_tab(1,:,1)
+        call self%proj_normalize
+        call self%proj_assign
+        if( self%nstates > 1 )then
+            call self%state_normalize
+            call self%state_assign
         else
-            call self%proj_normalize
-            call self%proj_assign
-            if( self%nstates > 1 )then
-                call self%state_normalize
-                call self%state_assign
-            else
-                self%assgn_map = self%state_tab(1,:)
-            endif
+            self%assgn_map = self%state_tab(1,:)
         endif
     end subroutine prob_assign
 

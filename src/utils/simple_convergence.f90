@@ -281,22 +281,12 @@ contains
         if( cline%defined('fracsrch') ) fracsrch_lim = cline%get_rarg('fracsrch')
         ! determine convergence
         if( params_glob%nstates == 1 )then
-            if( trim(params_glob%sh_alt) .eq. 'yes' )then
-                if( self%frac_srch%avg > fracsrch_lim .and. self%mi_proj  > overlap_lim .and. self%shincarg%avg < TINY )then
-                    write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
-                    converged = .true.
-                else
-                    write(logfhandle,'(A)') '>>> CONVERGED: .NO.'
-                    converged = .false.
-                endif
+            if( self%frac_srch%avg > fracsrch_lim .and. self%mi_proj  > overlap_lim )then
+                write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
+                converged = .true.
             else
-                if( self%frac_srch%avg > fracsrch_lim .and. self%mi_proj  > overlap_lim )then
-                    write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
-                    converged = .true.
-                else
-                    write(logfhandle,'(A)') '>>> CONVERGED: .NO.'
-                    converged = .false.
-                endif
+                write(logfhandle,'(A)') '>>> CONVERGED: .NO.'
+                converged = .false.
             endif
         else
             ! provides convergence stats for multiple states
