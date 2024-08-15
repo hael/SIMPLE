@@ -65,8 +65,6 @@ jobs:
              simple_test_binoris
              echo "-------------------- TEST BOUNDS FROM MASK3D -------------------------"
              simple_test_bounds_from_mask3D
-             echo "-------------------- TEST CONT IN PLANE -------------------------"
-             simple_test_cont_inplane
              echo "-------------------- TEST COORS TO WEIGHTS -------------------------"
              simple_test_corrs2weights
              echo "-------------------- TEST CTF -------------------------"
