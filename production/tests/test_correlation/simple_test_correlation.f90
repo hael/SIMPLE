@@ -25,7 +25,7 @@ program simple_test_correlation
 
     allocate(rmat_blank(8,8,8), source=0.)
     pos = [106, 106, 70]
-    call np%new(smpd, element, filename_exp, peak_thres_level, offset, denoise=.true.)
+    call np%new(smpd, element, filename_exp, peak_thres_level, offset)
     call np%simulate_atom()
     call np%extract_img_from_pos(pos, boximg)
     call boximg%write('boximg.mrc')
