@@ -23,7 +23,6 @@ use simple_strategy2D_snhc_smpl,   only: strategy2D_snhc_smpl
 use simple_strategy2D_eval,        only: strategy2D_eval
 use simple_euclid_sigma2,          only: euclid_sigma2
 use simple_masker,                 only: automask2D
-use simple_opt_filter,             only: uni_filt2D_sub
 use simple_classaverager
 use simple_progress
 implicit none
@@ -99,7 +98,6 @@ contains
             l_frac_update  = params_glob%l_frac_update
             l_partial_sums = params_glob%l_frac_update
             if( params_glob%l_stoch_update )then
-                params_glob%it_history = 3
                 l_partial_sums         = .true.
             endif
             l_greedy      = trim(params_glob%refine).eq.'greedy'
@@ -155,15 +153,9 @@ contains
         ! particles used for class averages restoration
         if( allocated(pinds2restore) )     deallocate(pinds2restore)
         if( allocated(ptcl_mask2restore) ) deallocate(ptcl_mask2restore)
-        if( params_glob%l_stoch_update .and. params_glob%it_history > 0)then
-            allocate(ptcl_mask2restore(params_glob%fromp:params_glob%top))
-            call build_glob%spproj_field%sample4update_history([params_glob%fromp,params_glob%top],&
-            params_glob%it_history, nptcls2restore, pinds2restore, ptcl_mask2restore)
-        else
-            ptcl_mask2restore = ptcl_mask
-            pinds2restore     = pinds
-            nptcls2restore    = nptcls2update
-        endif
+        ptcl_mask2restore = ptcl_mask
+        pinds2restore     = pinds
+        nptcls2restore    = nptcls2update
 
         ! SNHC LOGICS
         neigh_frac = 0.

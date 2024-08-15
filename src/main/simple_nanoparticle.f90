@@ -203,6 +203,7 @@ type :: nanoparticle
     procedure          :: get_natoms
     procedure          :: get_valid_corrs
     procedure          :: get_img
+    procedure          :: get_img_raw
     procedure          :: set_img
     procedure, private :: set_atomic_coords_from_pdb
     procedure, private :: set_atomic_coords_from_xyz
@@ -262,16 +263,19 @@ contains
         self%smpd      = params_glob%smpd
         self%atom_name = ' '//params_glob%element
         self%element   = params_glob%element
-        el_ucase       = upperCase(trim(adjustl(params_glob%element)))
+        !el_ucase       = upperCase(trim(adjustl(params_glob%element)))
+        el_ucase       = upperCase(params_glob%element)
         call get_element_Z_and_radius(el_ucase, Z, self%theoretical_radius)
         if( Z == 0 ) THROW_HARD('Unknown element: '//el_ucase)
         call find_ldim_nptcls(self%npname, self%ldim, nptcls, smpd)
         call self%img%new(self%ldim, self%smpd)
         call self%img_bin%new_bimg(self%ldim, self%smpd)
         call self%img%read(fname)
+        call self%img%write('raw_img_check_1.mrc')
         if( present(msk) ) call self%img%mask(msk, 'soft')
         call self%img_raw%copy(self%img)
         call self%img_raw%stats(self%map_stats%avg, self%map_stats%sdev, self%map_stats%maxv, self%map_stats%minv)
+        call self%img_raw%write('raw_img_check_2.mrc')
     end subroutine new_nanoparticle
 
     ! getters/setters
@@ -302,6 +306,12 @@ contains
         type(image),         intent(out) :: img
         img = self%img
     end subroutine get_img
+
+    subroutine get_img_raw(self, raw_img)
+        class(nanoparticle), intent(in)  :: self
+        type(image),         intent(out) :: raw_img
+        raw_img = self%img_raw
+    end subroutine get_img_raw
 
     ! set one of the images of the nanoparticle type
     subroutine set_img( self, imgfile, which )
@@ -338,26 +348,30 @@ contains
         call a%new(N)
         do i = 1, N
             call a%set_coord(i,xyz(i,:))
-            self%atominfo(i)%center(:) = a%get_coord(i)
+            self%atominfo(i)%center(:) = a%get_coord(i) 
         enddo
         self%n_cc = N
         call a%kill
     end subroutine set_atomic_coords_from_xyz
 
     ! sets the atom positions to be the ones in the inputted PDB file.
-    subroutine set_atomic_coords_from_pdb( self, pdb_file )
-        class(nanoparticle), intent(inout) :: self
-        character(len=*),    intent(in)    :: pdb_file
+    subroutine set_atomic_coords_from_pdb( self, pdb_file, write_file )
+        class(nanoparticle),        intent(inout) :: self
+        character(len=*),           intent(in)    :: pdb_file
+        character(len=*), optional, intent(in)    :: write_file
         type(atoms) :: a
         integer     :: i, N
         if( fname2ext(pdb_file) .ne. 'pdb' ) THROW_HARD('Inputted filename has to have pdb extension; set_atomic_coords_from_pdb')
         if( allocated(self%atominfo) ) deallocate(self%atominfo)
-        call a%new(pdb_file)
+        call a%new(trim(pdb_file))
         N = a%get_n() ! number of atoms
         allocate(self%atominfo(N))
+        if(present(write_file)) open(unit=44,file=trim(write_file))
         do i = 1, N
             self%atominfo(i)%center(:) = a%get_coord(i)/self%smpd + 1.
+            if(present(write_file)) write(44,'(f8.4,a,f8.4,a,f8.4)') self%atominfo(i)%center(1), ',', self%atominfo(i)%center(2), ',', self%atominfo(i)%center(3)
         enddo
+        if(present(write_file)) close(44)
         self%n_cc = N
         call a%kill
     end subroutine set_atomic_coords_from_pdb
@@ -966,10 +980,11 @@ contains
 
     end subroutine split_atoms
 
-    subroutine validate_atoms( self, simatms, avg_valid_corr )
-        class(nanoparticle), intent(inout) :: self
-        class(image),        intent(in)    :: simatms
-        real, optional,      intent(out)   :: avg_valid_corr
+    subroutine validate_atoms( self, simatms, avg_valid_corr, filename )
+        class(nanoparticle),        intent(inout) :: self
+        class(image),               intent(in)    :: simatms
+        real, optional,             intent(out)   :: avg_valid_corr
+        character(len=*), optional, intent(in)    :: filename
         real, allocatable :: centers(:,:)           ! coordinates of the atoms in PIXELS
         real, allocatable :: pixels1(:), pixels2(:) ! pixels extracted around the center
         real    :: maxrad
@@ -981,12 +996,15 @@ contains
         centers = self%atominfo2centers()
         allocate(pixels1(npix_in), pixels2(npix_in), source=0.)
         ! calculate per-atom correlations
+        if(present(filename)) open(unit=45,file=trim(filename))
         do i = 1, self%n_cc
             ijk = nint(centers(:,i))
             call self%img_raw%win2arr_rad(ijk(1), ijk(2), ijk(3), winsz, npix_in, maxrad, npix_out1, pixels1)
             call simatms%win2arr_rad(     ijk(1), ijk(2), ijk(3), winsz, npix_in, maxrad, npix_out2, pixels2)
             self%atominfo(i)%valid_corr = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))
+            if(present(filename)) write(45,'(1x,4(f8.3,a))') self%atominfo(i)%center(1), ',', self%atominfo(i)%center(2), ',', self%atominfo(i)%center(3), ',', self%atominfo(i)%valid_corr
         enddo
+        if(present(filename)) close(45)
         call calc_stats(self%atominfo(:)%valid_corr, corr_stats)
         write(logfhandle,'(A)') '>>> VALID_CORR (PER-ATOM CORRELATION WITH SIMULATED DENSITY) STATS BELOW'
         write(logfhandle,'(A,F8.4)') 'Average: ', corr_stats%avg

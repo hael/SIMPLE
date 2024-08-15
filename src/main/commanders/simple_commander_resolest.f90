@@ -19,7 +19,6 @@ public :: uniform_filter3D_commander
 public :: icm3D_commander
 public :: icm2D_commander
 public :: cavg_filter2D_commander
-public :: score_cavgs_commander
 public :: prune_cavgs_commander
 private
 #include "simple_local_flags.inc"
@@ -58,11 +57,6 @@ type, extends(commander_base) :: cavg_filter2D_commander
   contains
     procedure :: execute      => exec_cavg_filter2D
 end type cavg_filter2D_commander
-
-type, extends(commander_base) :: score_cavgs_commander
-  contains
-    procedure :: execute      => exec_score_cavgs
-end type score_cavgs_commander
 
 type, extends(commander_base) :: prune_cavgs_commander
   contains
@@ -185,16 +179,18 @@ contains
     end subroutine exec_nununiform_filter3D
 
     subroutine exec_uniform_filter3D(self, cline)
-        use simple_opt_filter, only: uni_filt3D
+        use simple_opt_filter, only: estimate_lplim
         class(uniform_filter3D_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(parameters)  :: params
-        type(image)       :: even, odd, mskvol
+        type(image)       :: even, odd, mskvol, odd_filt
         logical           :: have_mask_file
+        real              :: lpopt
         character(len=90) :: file_tag
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
-        call odd %new([params%box,params%box,params%box], params%smpd)
+        call odd%new([params%box,params%box,params%box], params%smpd)
+        call odd_filt%new([params%box,params%box,params%box], params%smpd)
         call even%new([params%box,params%box,params%box], params%smpd)
         call odd %read(params%vols(1))
         call even%read(params%vols(2))
@@ -216,23 +212,13 @@ contains
             call mskvol%disc([params%box,params%box,params%box], params%smpd,&
                     &real(min(params%box/2, int(params%msk + COSMSKHALFWIDTH))))
         endif
-        call uni_filt3D(odd, even, mskvol)
-        if( have_mask_file )then
-            call mskvol%read(params%mskfile) ! restore the soft edge
-            call even%mul(mskvol)
-            call  odd%mul(mskvol)
-        else
-            call even%mask(params%msk, 'soft')
-            call  odd%mask(params%msk, 'soft')
-        endif
-        call  odd%write(trim(file_tag)//'_odd.mrc')
-        call even%write(trim(file_tag)//'_even.mrc')
-        call odd%add(even)
-        call odd%mul(0.5)
-        call odd%write(trim(file_tag)//'_avg.mrc')
+        call estimate_lplim(odd, even, mskvol, [params%lpstart,params%lpstop], lpopt, odd_filt)
+        print *, 'found optimal low-pass limit: ', lpopt
+        call odd_filt%write('odd_filt.mrc')
         ! destruct
-        call    odd%kill
-        call   even%kill
+        call odd%kill
+        call odd_filt%kill
+        call even%kill
         call mskvol%kill
         ! end gracefully
         call simple_end('**** SIMPLE_UNIFORM_FILTER3D NORMAL STOP ****')
@@ -302,53 +288,37 @@ contains
     end subroutine exec_icm3D
 
     subroutine exec_uniform_filter2D( self, cline )
-        use simple_opt_filter, only: uni_filt2D_sub
-        use simple_masker,     only: automask2D
-        use simple_image,      only: image_ptr 
-        use simple_default_clines
+        use simple_opt_filter, only: estimate_lplims2D
         class(uniform_filter2D_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
-        character(len=:), allocatable :: file_tag
-        type(image),      allocatable :: odd(:), even(:), mask(:)
-        real,             allocatable :: diams(:)
+        type(image),      allocatable :: odd(:), even(:), odd_filt(:)
+        real,             allocatable :: lpsopt(:)
         type(parameters) :: params
-        type(image_ptr)  :: pmask
         integer          :: iptcl
         ! init
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        call set_automask2D_defaults(cline)
         call params%new(cline)
         call find_ldim_nptcls(params%stk, params%ldim, params%nptcls)
         params%ldim(3) = 1 ! because we operate on stacks
-        file_tag = 'uniform_filter2D'
         ! allocate
-        allocate(odd(params%nptcls), even(params%nptcls), mask(params%nptcls))
+        allocate(odd(params%nptcls), odd_filt(params%nptcls), even(params%nptcls), lpsopt(params%nptcls))
         ! construct & read
         do iptcl = 1, params%nptcls
             call odd( iptcl)%new( params%ldim, params%smpd, .false.)
+            call odd_filt( iptcl)%new( params%ldim, params%smpd, .false.)
             call odd( iptcl)%read(params%stk,  iptcl)
             call even(iptcl)%new( params%ldim, params%smpd, .false.)
             call even(iptcl)%read(params%stk2, iptcl)
-            call mask(iptcl)%copy(odd(iptcl))
-            call mask(iptcl)%add(even(iptcl))
-            call mask(iptcl)%mul(0.5)
         enddo
         ! filter
-        do iptcl = 1, params%nptcls
-            call mask(iptcl)%get_mat_ptrs(pmask)
-            pmask%rmat = 1;
-        enddo
-        call uni_filt2D_sub(even, odd, mask)
+        call estimate_lplims2D( odd, even, params%msk, [params%lpstart,params%lpstop], lpsopt, odd_filt )
         ! write output and destruct
         do iptcl = 1, params%nptcls
-            call odd( iptcl)%write(trim(file_tag)//'_odd.mrc',  iptcl)
-            call even(iptcl)%write(trim(file_tag)//'_even.mrc',  iptcl)
-            call odd( iptcl)%kill()
-            call even(iptcl)%kill()
+            print *, 'found optimal low-pass limit: ', iptcl, lpsopt(iptcl)
+            call odd_filt(iptcl)%write('odd_filt.mrc', iptcl)
         end do
-        if( allocated(diams) ) deallocate(diams)
         ! end gracefully
-        call simple_end('**** SIMPLE_uniform_filter2D NORMAL STOP ****')
+        call simple_end('**** SIMPLE_UNIFORM_FILTER2D NORMAL STOP ****')
     end subroutine exec_uniform_filter2D
 
     subroutine exec_icm2D( self, cline )
@@ -542,250 +512,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_cavg_filter2D NORMAL STOP ****')
     end subroutine exec_cavg_filter2D
-
-    subroutine exec_score_cavgs( self, cline )
-        use simple_histogram, only:histogram
-        use simple_oris
-        use simple_polarft_corrcalc, only: polarft_corrcalc
-        class(score_cavgs_commander), intent(inout) :: self
-        class(cmdline),               intent(inout) :: cline
-        integer,       parameter :: NHISTBINS = 256
-        type(image),     allocatable :: cavgs(:), match_imgs(:)
-        type(histogram), allocatable :: hists(:)
-        type(parameters)       :: p
-        type(builder)          :: b
-        type(oris)             :: os
-        type(image)            :: tmpimg
-        type(polarft_corrcalc) :: pftcc
-        type(histogram)        :: hist_avg
-        real,    allocatable :: corrmat(:,:), inpl_corrs(:), corrs(:), scores(:)
-        logical, allocatable :: lmsk(:,:,:), cls_mask(:),mask_otsu(:)
-        real    :: minmax(2),xyz(3),mean,skew,tvd,overall_min,overall_max,mskrad,std,sdev_noise, ccmax
-        integer :: icls,n,ncls,ithr,i,j,jcls,pop1,pop2
-        call cline%set('oritype','cls2D')
-        call cline%set('ctf',    'no')
-        call cline%set('objfun', 'cc')
-        call b%init_params_and_build_general_tbox(cline, p, do3d=.false.)
-        call find_ldim_nptcls(p%stk, p%ldim, ncls, smpd=p%smpd)
-        allocate(cavgs(ncls),hists(ncls),cls_mask(ncls),corrmat(ncls,ncls))
-        do icls = 1,ncls
-            call cavgs(icls)%new([p%box,p%box,1],p%smpd)
-            call cavgs(icls)%read(p%stk,icls)
-        enddo
-        if( cline%defined('projfile') )then
-            os = b%spproj_field
-        else
-            call os%new(ncls,is_ptcl=.false.)
-        endif
-        cls_mask = .true.
-        mskrad   = real(p%msk)
-        call tmpimg%disc(p%ldim, p%smpd, mskrad, lmsk)
-        overall_min =  huge(0.)
-        overall_max = -999999.
-        !$omp parallel private(icls,minmax,mean,std,skew,tvd) proc_bind(close) default(shared)
-        !$omp do reduction(min:overall_min) reduction(max:overall_max)
-        do icls = 1,ncls
-            ! call cavgs(icls)%zero_below(0.)
-            call cavgs(icls)%fft
-            call cavgs(icls)%bp(0.,p%lp)
-            call cavgs(icls)%ifft
-            call cavgs(icls)%stats(mean, std, minmax(2), minmax(1), tmpimg )
-            call os%set(icls, 'mean', mean)
-            call os%set(icls, 'var',  std*std)
-            if( mean<1.e-6 .and. std < 1.e-6 )then
-                cls_mask(icls) = .false.
-            else
-                cls_mask(icls) = .true.
-                overall_min = min(minmax(1),overall_min)
-                overall_max = max(minmax(2),overall_max)
-                skew = cavgs(icls)%skew(lmsk(:p%box,:p%box,1))
-                call os%set(icls, 'skew', skew)
-            endif
-        enddo
-        !$omp end do
-        !$omp do
-        do icls = 1,ncls
-            if( cls_mask(icls) )then
-                call hists(icls)%new(cavgs(icls), NHISTBINS,&
-                &minmax=[overall_min, overall_max], radius=mskrad)
-            endif
-        enddo
-        !$omp end do
-        !$omp single
-        n = count(cls_mask)
-        call hist_avg%new(hists(findloc(cls_mask, .true., dim=1)))
-        !$omp end single
-        !$omp do
-        do icls = 1,ncls
-            if( cls_mask(icls) ) call hist_avg%add(hists(icls))
-        enddo
-        !$omp end do
-        !$omp single
-        call hist_avg%div(real(n))
-        !$omp end single
-        !$omp do
-        do icls = 1,ncls
-            if( cls_mask(icls) )then
-                tvd = hist_avg%tvd(hists(icls))
-                call os%set(icls, 'tvd', tvd)
-                ! call hists(icls)%kill
-            endif
-        enddo
-        !$omp end do
-        !$omp end parallel
-        call tmpimg%kill
-        ! TVD matrix
-        do icls = 1,ncls
-            corrmat(icls,icls) = 0.
-            do jcls= icls+1,ncls,1
-                corrmat(icls,jcls) = hists(icls)%tvd(hists(jcls))
-                corrmat(jcls,icls) = corrmat(icls,jcls)
-            enddo
-        enddo
-        corrmat = 1.-corrmat
-        allocate(scores(ncls),source=0.)
-        do icls = 1,ncls
-            corrs = corrmat(icls,:)
-            call hpsort(corrs)
-            scores(icls) = sum(corrs(floor(0.9*real(ncls)):ncls-1))
-        enddo
-        allocate(mask_otsu(ncls))
-        call otsu(ncls, scores, mask_otsu)
-        pop1 = count(      mask_otsu)
-        pop2 = count(.not. mask_otsu)
-        write(logfhandle,*) 'average corr cluster 1: ', sum(scores, mask=      mask_otsu) / real(pop1), ' pop ', pop1
-        write(logfhandle,*) 'average corr cluster 2: ', sum(scores, mask=.not. mask_otsu) / real(pop2), ' pop ', pop2
-        pop1 = 0
-        pop2 = 0
-        do i = 1, ncls
-            if( mask_otsu(i) )then
-                pop1 = pop1 + 1
-                call cavgs(i)%write('good.mrc', pop1)
-            else
-                pop2 = pop2 + 1
-                call cavgs(i)%write('bad.mrc',  pop2)
-            endif
-        end do
-        call cluster
-        stop
-        p%kfromto(1) = max(2, calc_fourier_index(p%hp, p%box, p%smpd))
-        p%kfromto(2) =        calc_fourier_index(p%lp, p%box, p%smpd)
-        call pftcc%new(2*ncls, [1,ncls], p%kfromto)
-        call b%img_crop_polarizer%init_polarizer(pftcc, p%alpha)
-        allocate(match_imgs(params_glob%nthr),inpl_corrs(pftcc%get_nrots()))
-        do ithr = 1,params_glob%nthr
-            call match_imgs(ithr)%new([p%box,p%box,1], p%smpd, wthreads=.false.)
-        enddo
-        call cavgs(1)%construct_thread_safe_tmp_imgs(nthr_glob)
-        !$omp parallel do default(shared) private(icls,ithr,xyz) schedule(static) proc_bind(close)
-        do icls = 1,ncls
-            ! xyz = cavgs(icls)%calc_shiftcen_serial(p%cenlp, p%msk)
-            ! apply shift and update the corresponding class parameters
-            call cavgs(icls)%fft()
-            call cavgs(icls)%shift2Dserial(xyz(1:2))
-            call cavgs(icls)%ifft()
-            ! call cavgs(icls)%norm_noise(lmsk, sdev_noise)
-            call cavgs(icls)%mask(p%msk, 'soft', backgr=0.)
-            ithr = omp_get_thread_num()+1
-            call match_imgs(ithr)%copy_fast(cavgs(icls))
-            call match_imgs(ithr)%fft
-            call b%img_crop_polarizer%polarize(pftcc, match_imgs(ithr), icls, isptcl=.false., iseven=.true., mask=b%l_resmsk)
-            call pftcc%cp_even_ref2ptcl(icls,icls)
-            call match_imgs(ithr)%copy_fast(cavgs(icls))
-            call match_imgs(ithr)%mirror('y')
-            call match_imgs(ithr)%fft
-            call b%img_crop_polarizer%polarize(pftcc, match_imgs(ithr), ncls+icls, isptcl=.false., iseven=.true., mask=b%l_resmsk)
-        end do
-        !$omp end parallel do
-        call pftcc%memoize_refs
-        call pftcc%memoize_ptcls
-        do icls = 1,ncls
-            call cavgs(icls)%write('prepped.mrc',icls)
-        enddo
-        !$omp parallel do default(shared) private(icls,jcls,ccmax,inpl_corrs,i,j) proc_bind(close)
-        do icls = 1,ncls
-            corrmat(icls,icls) = 1.
-            do jcls= icls+1,ncls,1
-                ccmax = -1.
-                do i = -10,10,1
-                    do j = -10,10,1
-                        call pftcc%gencorrs(     icls, jcls, real([i,j]), inpl_corrs, kweight=.true.)
-                        ccmax = max(ccmax,maxval(inpl_corrs))
-                        call pftcc%gencorrs(ncls+icls, jcls, real([i,j]), inpl_corrs, kweight=.true.)
-                        ccmax = max(ccmax,maxval(inpl_corrs))
-                        corrmat(icls,jcls) = ccmax
-                        corrmat(jcls,icls) = ccmax
-                    enddo
-                enddo
-            enddo
-        enddo
-        !$omp end parallel do
-        allocate(scores(ncls),source=0.)
-        do icls = 1,ncls
-            corrs = corrmat(icls,:)
-            call hpsort(corrs)
-            scores(icls) = sum(corrs(floor(0.9*real(ncls)):ncls-1))
-        enddo
-        allocate(mask_otsu(ncls))
-        call otsu(ncls, scores, mask_otsu)
-        pop1 = count(      mask_otsu)
-        pop2 = count(.not. mask_otsu)
-        write(logfhandle,*) 'average corr cluster 1: ', sum(scores, mask=      mask_otsu) / real(pop1), ' pop ', pop1
-        write(logfhandle,*) 'average corr cluster 2: ', sum(scores, mask=.not. mask_otsu) / real(pop2), ' pop ', pop2
-        pop1 = 0
-        pop2 = 0
-        do i = 1, ncls
-            if( mask_otsu(i) )then
-                pop1 = pop1 + 1
-                call cavgs(i)%write('good.mrc', pop1)
-            else
-                pop2 = pop2 + 1
-                call cavgs(i)%write('bad.mrc',  pop2)
-            endif
-        end do
-        contains
-
-            subroutine cluster( )
-                use simple_aff_prop
-                type(aff_prop) :: aprop
-                integer,  allocatable :: centers(:), labels(:), cntarr(:)
-                character(len=STDLEN) :: fname
-                real    :: pref, minv, simsum
-                integer :: ncls_aff_prop,i, n
-                minv = minval(corrmat)
-                pref = minv - (maxval(corrmat) - minv)
-                call aprop%new(ncls, corrmat, pref=pref)
-                call aprop%propagate(centers, labels, simsum)
-                ncls_aff_prop = size(centers)
-                write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION: ', ncls_aff_prop
-                ! write the classes
-                do icls = 1, ncls_aff_prop
-                    n = 0
-                    do i=1,ncls
-                        if( labels(i) == icls )then
-                            n = n+1
-                            fname = 'class'//int2str_pad(icls,3)//trim(STK_EXT)
-                            call cavgs(i)%write(fname, n)
-                        endif
-                    end do
-                end do
-                do icls = 1, ncls_aff_prop
-                    n = 0
-                    call hist_avg%zero
-                    do i=1,ncls
-                        if( labels(i) == icls )then
-                            call hist_avg%add(hists(i))
-                            n = n+1
-                        endif
-                    end do
-                    fname = 'affprop_'//int2str_pad(icls,3)
-                    call hist_avg%div(real(n))
-                    call hist_avg%plot(fname)
-                    print *, icls, hist_avg%variance(), hist_avg%skew()
-                end do
-            end subroutine cluster
-
-    end subroutine exec_score_cavgs
 
     subroutine exec_prune_cavgs( self, cline )
         use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimgbatch, prepimg4align

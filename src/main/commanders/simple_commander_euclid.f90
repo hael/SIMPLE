@@ -15,7 +15,6 @@ public :: calc_pspec_commander_distr
 public :: calc_pspec_commander
 public :: calc_pspec_assemble_commander
 public :: calc_group_sigmas_commander
-public :: estimate_first_sigmas_commander
 public :: pspec_lp_commander
 private
 #include "simple_local_flags.inc"
@@ -39,11 +38,6 @@ type, extends(commander_base) :: calc_group_sigmas_commander
   contains
     procedure :: execute      => exec_calc_group_sigmas
 end type calc_group_sigmas_commander
-
-type, extends(commander_base) :: estimate_first_sigmas_commander
-  contains
-    procedure :: execute      => exec_estimate_first_sigmas
-end type estimate_first_sigmas_commander
 
 type, extends(commander_base) :: pspec_lp_commander
   contains
@@ -462,74 +456,31 @@ contains
         call simple_end('**** SIMPLE_CALC_GROUP_SIGMAS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_calc_group_sigmas
 
-    subroutine exec_estimate_first_sigmas( self, cline )
-        class(estimate_first_sigmas_commander), intent(inout) :: self
-        class(cmdline),                         intent(inout) :: cline
-        ! command lines
-        type(cmdline)    :: cline_first_sigmas
-        ! other variables
-        type(parameters) :: params
-        type(builder)    :: build
-        type(qsys_env)   :: qenv
-        type(chash)      :: job_descr
-        if( .not. cline%defined('vol1')     ) THROW_HARD('starting volume is needed for first sigma estimation')
-        if( .not. cline%defined('pgrp')     ) THROW_HARD('point-group symmetry (pgrp) is needed for first sigma estimation')
-        if( .not. cline%defined('mskdiam')  ) THROW_HARD('mask diameter (mskdiam) is needed for first sigma estimation')
-        if( .not. cline%defined('nthr')     ) THROW_HARD('number of threads (nthr) is needed for first sigma estimation')
-        if( .not. cline%defined('nparts')   ) THROW_HARD('number of partitions (npart) is needed for first sigma estimation (distributed workflow)')
-        if( .not. cline%defined('projfile') ) THROW_HARD('missing project file entry; exec_estimate_first_sigmas')
-        if( .not. cline%defined('oritype')  ) call cline%set('oritype', 'ptcl3D')
-        cline_first_sigmas = cline
-        call cline_first_sigmas%set('prg', 'refine3D')
-        call cline_first_sigmas%set('center',    'no')
-        call cline_first_sigmas%set('continue',  'no')
-        call cline_first_sigmas%delete('lp_iters')
-        call cline_first_sigmas%set('maxits',     1.0)
-        call cline_first_sigmas%set('which_iter', 1.0)
-        call cline_first_sigmas%set('objfun','euclid')
-        call cline_first_sigmas%set('refine', 'sigma')
-        call cline_first_sigmas%delete('update_frac') ! all particles neeed to contribute
-        call cline_first_sigmas%delete('hp')
-        ! call cline_first_sigmas%delete('lp')
-        call cline_first_sigmas%delete('lpstop')
-        call cline_first_sigmas%set('mkdir', 'no')    ! generate the sigma files in the root refine3D dir
-        ! init
-        call build%init_params_and_build_spproj(cline_first_sigmas, params)
-        call build%spproj%update_projinfo(cline_first_sigmas)
-        call build%spproj%write_segment_inside('projinfo')
-        ! setup the environment for distributed execution
-        call qenv%new(params%nparts)
-        ! prepare job description
-        call cline_first_sigmas%gen_job_descr(job_descr)
-        ! schedule
-        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
-        ! end gracefully
-        call qsys_cleanup
-        call build%spproj%kill
-        call simple_end('**** SIMPLE_ESTIMATE_FIRST_SIGMAS NORMAL STOP ****')
-    end subroutine exec_estimate_first_sigmas
-
     subroutine exec_pspec_lp( self, cline )
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_strategy2D3D_common, only: calcrefvolshift_and_mapshifts2ptcls, read_and_filter_refvols, preprefvol
         use simple_fsc,                 only: plot_fsc
+        use simple_opt_filter,          only: estimate_lplim
         use simple_image
         class(pspec_lp_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         real,             allocatable :: res(:), vol_pspec(:)
         type(builder)                 :: build
         type(parameters)              :: params
+        type(image)                   :: mskvol, odd_filt
         character(len=90)             :: filename
         integer  :: s, find_start, find_stop, find, fhandle, Nk, k
         logical  :: do_center, l_exist
-        real     :: vol_dens, xyz(3)
+        real     :: vol_dens, xyz(3), lpopt
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         ! read reference volume
         do s=1,params%nstates
-            call calcrefvolshift_and_mapshifts2ptcls( cline, s, params%vols(s), do_center, xyz, map_shift=.true.)
-            call read_and_filter_refvols( cline, params%vols(s), params%vols(s) )
+            call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=.false.)
+            call read_and_filter_refvols(s)
+            call preprefvol(cline, s, do_center, xyz, .false.)
+            call preprefvol(cline, s, do_center, xyz, .true.)
         end do
         find_start = max(1,                   calc_fourier_index(params%lpstart, params%box_crop, params%smpd_crop))
         find_stop  = min(build%vol%get_nyq(), calc_fourier_index(params%lpstop,  params%box_crop, params%smpd_crop))
@@ -545,9 +496,21 @@ contains
         filename  = 'pspec_vol_iter'//int2str(params%which_iter)
         call plot_fsc(Nk, vol_pspec, res, params%smpd_crop, trim(filename))
         ! estimate the next lp (first middle-ruled slope change from the right)
-        do find = find_stop-2, find_start+2, -1
-            if( (vol_pspec(find+1) - vol_pspec(find-1)) * (vol_pspec(find) - vol_pspec(find-2)) < 0. ) exit
-        enddo
+        if( params%l_filemsk )then
+            call mskvol%new([params%box,params%box,params%box], params%smpd)
+            call mskvol%read(params%mskfile)
+            call mskvol%one_at_edge ! to expand before masking of reference internally
+        else
+            ! spherical masking
+            call mskvol%disc([params%box,params%box,params%box], params%smpd,&
+                    &real(min(params%box/2, int(params%msk + COSMSKHALFWIDTH))))
+        endif
+        call odd_filt%new([params%box,params%box,params%box], params%smpd)
+        call build_glob%vol_odd%ifft
+        call build_glob%vol%ifft
+        call estimate_lplim(build_glob%vol_odd, build_glob%vol, mskvol, [params%lpstart,params%lpstop], lpopt, odd_filt)
+        call build_glob%vol_odd%fft
+        call build_glob%vol%fft
         ! write estimated lp to a text file
         filename = 'estimated_lp.txt'
         inquire(file=trim(filename), exist=l_exist)
@@ -556,7 +519,7 @@ contains
         else
             open(fhandle, file=trim(filename), status="new", action="write")
         end if
-        write(fhandle, *) res(find)
+        write(fhandle, *) 'lp = ', params%lp, '; estimated lp = ', lpopt
         close(fhandle)
         ! ending
         call build%kill_general_tbox

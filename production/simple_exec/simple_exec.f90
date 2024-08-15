@@ -61,8 +61,11 @@ type(cluster2D_commander_subsets)           :: xcluster2D_subsets
 type(cleanup2D_commander_hlev)              :: xcleanup2D_distr
 
 ! AB INITIO 3D RECONSTRUCTION WORKFLOW
+type(noisevol_commander)                    :: xnoisevol
 type(initial_3Dmodel_commander)             :: xinitial_3Dmodel
+type(initial_3Dmodel2_commander)            :: xinitial_3Dmodel2
 type(abinitio_3Dmodel_commander)            :: xabinitio_3Dmodel
+type(abinitio_3Dmodel2_commander)           :: xabinitio_3Dmodel2
 type(batch_abinitio_3Dmodel_commander)      :: xbatch_abinitio_3Dmodel
 type(lp_abinitio_3Dmodel_commander)         :: xlp_abinitio_3Dmodel
 
@@ -232,17 +235,31 @@ select case(trim(prg))
         call xcluster2D_subsets%execute(cline)
 
     ! AB INITIO 3D RECONSTRUCTION WORKFLOW
+    case('noisevol')
+        call xnoisevol%execute(cline)
     case( 'initial_3Dmodel' )
         if( cline%defined('nrestarts') )then
             call restarted_exec(cline, 'initial_3Dmodel', 'simple_exec')
         else
             call xinitial_3Dmodel%execute(cline)
         endif
+    case( 'initial_3Dmodel2' )
+        if( cline%defined('nrestarts') )then
+            call restarted_exec(cline, 'initial_3Dmodel2', 'simple_exec')
+        else
+            call xinitial_3Dmodel2%execute(cline)
+        endif
     case( 'abinitio_3Dmodel' )
         if( cline%defined('nrestarts') )then
             call restarted_exec(cline, 'abinitio_3Dmodel', 'simple_exec')
         else
             call xabinitio_3Dmodel%execute(cline)
+        endif
+    case( 'abinitio_3Dmodel2' )
+        if( cline%defined('nrestarts') )then
+            call restarted_exec(cline, 'abinitio_3Dmodel2', 'simple_exec')
+        else
+            call xabinitio_3Dmodel2%execute(cline)
         endif
     case( 'batch_abinitio_3Dmodel' )
         if( cline%defined('nrestarts') )then
@@ -263,7 +280,11 @@ select case(trim(prg))
     case( 'pspec_lp' )
         call xpspec_lp%execute(cline)
     case( 'refine3D' )
-        call xrefine3D_distr%execute(cline)
+        if( cline%defined('nrestarts') )then
+            call restarted_exec(cline, 'refine3D', 'simple_exec')
+        else
+            call xrefine3D_distr%execute(cline)
+        endif
     case( 'reconstruct3D' )
         call xreconstruct3D%execute( cline )
 
@@ -400,7 +421,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('ad8b4b94')
+call simple_print_git_version('243a5bbd')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

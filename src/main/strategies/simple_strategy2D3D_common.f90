@@ -8,7 +8,6 @@ use simple_parameters,        only: params_glob
 use simple_stack_io,          only: stack_io
 use simple_discrete_stack_io, only: dstack_io
 use simple_polarft_corrcalc,  only: pftcc_glob
-use simple_cartft_corrcalc,   only: cftcc_glob
 implicit none
 
 public :: prepimgbatch, killimgbatch, read_imgbatch, set_bp_range, set_bp_range2D, prepimg4align,&
@@ -161,7 +160,7 @@ contains
     end subroutine discrete_read_imgbatch
 
     subroutine set_bp_range( cline )
-        class(cmdline), intent(inout) :: cline
+        class(cmdline), intent(in) :: cline
         real, allocatable     :: resarr(:), fsc_arr(:)
         real                  :: fsc0143, fsc05
         real                  :: mapres(params_glob%nstates)
@@ -436,17 +435,11 @@ contains
             if( pops(istate) > 0)then
                 call build_glob%eorecvols(istate)%new(build_glob%spproj)
                 call build_glob%eorecvols(istate)%reset_all
-                if( params_glob%l_mov_avg_vol )then
+                if( params_glob%l_frac_update .and. params_glob%which_iter > 1 )then
                     fbody = trim(VOL_FBODY)//int2str_pad(istate,2)//'_part'//part_str
-                    if( params_glob%l_frac_update .and. .not.params_glob%l_stoch_update )then
+                    if( build_glob%eorecvols(istate)%ldim_even_match(fbody) )then
                         call build_glob%eorecvols(istate)%read_eos(fbody)
-                        call build_glob%eorecvols(istate)%apply_weight(1.-params_glob%update_frac)
                         call build_glob%eorecvols(istate)%expand_exp
-                    else
-                        if( build_glob%eorecvols(istate)%ldim_even_match(fbody) )then
-                            call build_glob%eorecvols(istate)%read_eos(fbody)
-                            call build_glob%eorecvols(istate)%expand_exp
-                        endif
                     endif
                 endif
             endif
@@ -465,19 +458,19 @@ contains
     !>  \brief  determines the reference volume shift and map shifts back to particles
     !>          reference volume shifting is performed in shift_and_mask_refvol
     subroutine calcrefvolshift_and_mapshifts2ptcls(cline, s, volfname, do_center, xyz, map_shift )
-        class(cmdline),   intent(inout) :: cline
-        integer,          intent(in)    :: s
-        character(len=*), intent(in)    :: volfname
-        logical,          intent(out)   :: do_center
-        real,             intent(out)   :: xyz(3)
-        logical,          intent(in)    :: map_shift
+        class(cmdline),   intent(in)  :: cline
+        integer,          intent(in)  :: s
+        character(len=*), intent(in)  :: volfname
+        logical,          intent(out) :: do_center
+        real,             intent(out) :: xyz(3)
+        logical,          intent(in)  :: map_shift
         real    :: crop_factor
         logical :: has_been_searched
         do_center   = .true.
         ! centering
         if( params_glob%center .eq. 'no' .or. params_glob%nstates > 1 .or. &
             .not. params_glob%l_doshift .or. params_glob%pgrp(:1) .ne. 'c' .or. &
-            params_glob%l_filemsk .or. params_glob%l_mov_avg_vol )then
+            params_glob%l_filemsk .or. params_glob%l_frac_update )then
             do_center = .false.
             xyz       = 0.
             return
@@ -502,73 +495,71 @@ contains
         endif
     end subroutine calcrefvolshift_and_mapshifts2ptcls
 
-    subroutine read_and_filter_refvols( cline, fname_even, fname_odd )
-        use simple_opt_filter, only: nonuni_filt3D, butterworth_filter
-        class(cmdline),   intent(in) :: cline
-        character(len=*), intent(in) :: fname_even
-        character(len=*), intent(in) :: fname_odd
-        type(image)       :: mskvol
-        real, allocatable :: filter(:)
-        ! Read & ensure correct volumes dimensions
-        call build_glob%vol%read_and_crop(fname_even, params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
-        if( trim(fname_even) == trim(fname_odd) )then
-            call build_glob%vol_odd%copy(build_glob%vol)
+    subroutine estimate_lp_refvols( s )
+        use simple_opt_filter, only: estimate_lplim
+        integer, intent(in) :: s
+        type(image) :: mskvol
+        real        :: lpopt
+        integer     :: npix
+        logical     :: l_update_lp
+        call mskvol%disc([params_glob%box_crop,params_glob%box_crop,params_glob%box_crop],&
+                         &params_glob%smpd_crop, params_glob%msk_crop, npix )
+        call estimate_lplim(build_glob%vol_odd, build_glob%vol, mskvol, [params_glob%lpstart,params_glob%lpstop], lpopt)
+        l_update_lp = .false.
+        if( s == 1 )then
+            l_update_lp = .true. ! always update for state == 1       
         else
-            call build_glob%vol_odd%read_and_crop(fname_odd,  params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+            if( lpopt > params_glob%lp )then
+                l_update_lp = .true. ! the limit for the state with the worst resolution wins
+            endif
         endif
-        ! filtering
-        if( params_glob%l_nonuniform )then
-            if( params_glob%l_filemsk )then
-                call mskvol%read_and_crop(params_glob%mskfile, params_glob%box, params_glob%smpd,&
-                    &params_glob%box_crop, params_glob%smpd_crop, ismask=.true.)
-            else
-                call mskvol%new([params_glob%box_crop,params_glob%box_crop,params_glob%box_crop],params_glob%smpd_crop)
-                mskvol = 1.0
-                call mskvol%mask(params_glob%msk_crop, 'soft', backgr=0.0)
-            endif
-            call mskvol%one_at_edge ! to expand before masking of reference
-            if( params_glob%l_lpset )then ! nanocrystal refinement
-                if( cline%defined('lpstop') )then
-                    ! lpstop required as upper Fourier index boundary for the nonuniform filter in frequency limited refinement
-                    call nonuni_filt3D(build_glob%vol_odd, build_glob%vol, mskvol, params_glob%lpstop)
-                else
-                    ! applying uniform Butterworth filter at the cut-off frequency = lp
-                    allocate(filter(build_glob%vol%get_filtsz()))
-                    call butterworth_filter(calc_fourier_index(params_glob%lp, params_glob%box_crop, params_glob%smpd_crop), filter)
-                    call build_glob%vol%fft
-                    call build_glob%vol_odd%fft
-                    call build_glob%vol%apply_filter(filter)
-                    call build_glob%vol_odd%apply_filter(filter)
-                endif
-            else
-                if( cline%defined('lpstop') )then
-                    call nonuni_filt3D(build_glob%vol_odd, build_glob%vol, mskvol, params_glob%lpstop)
-                else
-                    call nonuni_filt3D(build_glob%vol_odd, build_glob%vol, mskvol)
-                endif
-            endif
-            ! e/o masking is performed in preprefvol
-            call mskvol%kill
-            call build_glob%vol%fft
-            call build_glob%vol_odd%fft
-        else if( params_glob%l_icm )then
+        if( l_update_lp )then
+            ! re-set the low-pass limit
+            params_glob%lp = lpopt
+            ! update the Fourier index limit
+            params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, params_glob%box_crop, params_glob%smpd_crop)
+            ! update low-pass limit in project
+            call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
+        endif
+        ! destruct
+        call mskvol%kill
+    end subroutine estimate_lp_refvols
+
+    subroutine read_and_filter_refvols( s )
+        integer, intent(in) :: s
+        character(len=:), allocatable :: vol_even, vol_odd, vol_avg
+        vol_even = params_glob%vols_even(s)
+        vol_odd  = params_glob%vols_odd(s)
+        vol_avg  = params_glob%vols(s)
+        call build_glob%vol%read_and_crop(vol_even,    params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+        call build_glob%vol_odd%read_and_crop(vol_odd, params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+        if( params_glob%l_lpauto ) call estimate_lp_refvols(s)
+        if( params_glob%l_icm )then
             call build_glob%vol%ICM3D_eo(build_glob%vol_odd, params_glob%lambda)
-        else
-            call build_glob%vol%fft
-            call build_glob%vol_odd%fft
+            if( params_glob%l_lpset )then ! no independent volume registration, so average eo pairs
+                call build_glob%vol%add(build_glob%vol_odd)
+                call build_glob%vol%mul(0.5)
+                call build_glob%vol_odd%copy(build_glob%vol)
+            endif
+        else if( params_glob%l_lpset )then
+            ! the average volume occupies both even and odd
+            call build_glob%vol%read_and_crop(vol_avg, params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+            call build_glob%vol_odd%copy(build_glob%vol) 
         endif
+        call build_glob%vol%fft
+        call build_glob%vol_odd%fft
     end subroutine read_and_filter_refvols
 
     !>  \brief  prepares one volume for references extraction
     subroutine preprefvol( cline, s, do_center, xyz, iseven )
         use simple_projector,          only: projector
-        use simple_opt_filter,         only: butterworth_filter, exponential_reg
+        use simple_butterworth,        only: butterworth_filter
         use simple_nanoparticle_utils, only: phasecorr_one_atom
-        class(cmdline), intent(inout) :: cline
-        integer,        intent(in)    :: s
-        logical,        intent(in)    :: do_center
-        real,           intent(in)    :: xyz(3)
-        logical,        intent(in)    :: iseven
+        class(cmdline), intent(in) :: cline
+        integer,        intent(in) :: s
+        logical,        intent(in) :: do_center
+        real,           intent(in) :: xyz(3)
+        logical,        intent(in) :: iseven
         type(projector), pointer :: vol_ptr => null()
         type(image)              :: mskvol
         real    :: filter(build_glob%vol%get_filtsz())
@@ -585,11 +576,9 @@ contains
         ! Volume filtering
         filtsz = build_glob%vol%get_filtsz()
         if( params_glob%l_ml_reg )then
-            ! filtering done in read_and_filter_refvols
+            ! filtering done when volumes are assembled
         else if( params_glob%l_icm )then
-            ! filtering done in read_and_filter_refvols
-        else if( params_glob%l_nonuniform )then
-            ! filtering done in read_and_filter_refvols
+            ! filtering done in filter_refvols
         else if( params_glob%l_lpset )then
             call vol_ptr%fft()
             select case(L_LPSET_FILTER)
@@ -658,10 +647,10 @@ contains
     !> volumetric 3d reconstruction
     subroutine calc_3Drec( cline, nptcls2update, pinds, which_iter )
         use simple_fplane, only: fplane
-        class(cmdline),    intent(inout) :: cline
-        integer,           intent(in)    :: nptcls2update
-        integer,           intent(in)    :: pinds(nptcls2update)
-        integer, optional, intent(in)    :: which_iter
+        class(cmdline),    intent(in) :: cline
+        integer,           intent(in) :: nptcls2update
+        integer,           intent(in) :: pinds(nptcls2update)
+        integer, optional, intent(in) :: which_iter
         type(fplane),    allocatable :: fpls(:)
         type(ctfparams), allocatable :: ctfparms(:)
         type(ori)        :: orientation
@@ -713,11 +702,11 @@ contains
     subroutine calc_3Dbatchrec( cline, nptcls2update, pinds, prev_oris, which_iter )
         use simple_fplane,        only: fplane
         use simple_euclid_sigma2, only: euclid_sigma2
-        class(cmdline),    intent(inout) :: cline
-        integer,           intent(in)    :: nptcls2update
-        integer,           intent(in)    :: pinds(nptcls2update)
-        class(oris),       intent(in)    :: prev_oris
-        integer, optional, intent(in)    :: which_iter
+        class(cmdline),    intent(in) :: cline
+        integer,           intent(in) :: nptcls2update
+        integer,           intent(in) :: pinds(nptcls2update)
+        class(oris),       intent(in) :: prev_oris
+        integer, optional, intent(in) :: which_iter
         type(fplane),    allocatable :: fpls(:), prev_fpls(:)
         type(ctfparams), allocatable :: ctfparms(:)
         integer,         allocatable :: pops(:)
@@ -800,8 +789,8 @@ contains
 
     subroutine norm_struct_facts( cline, which_iter )
         use simple_masker, only: masker
-        class(cmdline),    intent(inout) :: cline
-        integer, optional, intent(in)    :: which_iter
+        class(cmdline),    intent(in) :: cline
+        integer, optional, intent(in) :: which_iter
         character(len=:), allocatable :: mskfile, fname
         character(len=STDLEN) :: pprocvol, lpvol
         real, allocatable     :: optlp(:), res(:)

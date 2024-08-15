@@ -18,6 +18,7 @@ public :: centervol_commander
 public :: postprocess_commander
 public :: reproject_commander
 public :: volops_commander
+public :: noisevol_commander
 public :: dock_volpair_commander
 public :: symaxis_search_commander
 public :: symmetrize_map_commander
@@ -45,6 +46,11 @@ type, extends(commander_base) :: volops_commander
   contains
     procedure :: execute      => exec_volops
 end type volops_commander
+
+type, extends(commander_base) :: noisevol_commander
+  contains
+    procedure :: execute      => exec_noisevol
+end type noisevol_commander
 
 type, extends(commander_base) :: dock_volpair_commander
   contains
@@ -194,14 +200,6 @@ contains
         ldim = [box,box,box]
         call vol_bfac%new(ldim, smpd)
         call vol_bfac%read(fname_vol)
-        if( params%l_nonuniform )then
-            if( .not. file_exists(trim(fname_even)) ) THROW_HARD('volume: '//trim(fname_even)//' does not exists')
-            if( .not. file_exists(trim(fname_odd))  ) THROW_HARD('volume: '//trim(fname_odd)//' does not exists')
-            call vol_even%new(ldim, smpd)
-            call vol_even%read(fname_even)
-            call vol_odd%new(ldim, smpd)
-            call vol_odd%read(fname_odd)
-        endif
         ! check fsc filter & determine resolution
         has_fsc = .false.
         if( cline%defined('lp') )then
@@ -256,22 +254,6 @@ contains
             ! low-pass overrides all input
             call vol_bfac%bp(0., params%lp)
             call vol_no_bfac%bp(0., params%lp)
-        else if( params%l_nonuniform .and. has_fsc )then
-            call sphere%new(ldim, smpd)
-            sphere = 1.0
-            call sphere%mask(params%msk_crop, 'soft', backgr=0.0)
-            call sphere%one_at_edge
-            call nonuni_filt3D(vol_odd, vol_even, sphere)
-            call sphere%kill
-            ! merge volumes
-            call vol_odd%add(vol_even)
-            call vol_odd%mul(0.5)
-            vol_no_bfac = vol_odd
-            vol_bfac    = vol_odd
-            call vol_bfac%apply_bfac(params%bfac)
-            ! final low-pass filtering for smoothness
-            call vol_bfac%bp(0., fsc0143)
-            call vol_no_bfac%bp(0., fsc0143)
         else if( has_fsc )then
             ! optimal low-pass filter of unfiltered volumes from FSC
             if( params%cc_objfun == OBJFUN_CC )then
@@ -434,6 +416,27 @@ contains
         call simple_end('**** SIMPLE_VOLOPS NORMAL STOP ****')
     end subroutine exec_volops
 
+    subroutine exec_noisevol( self, cline )
+        class(noisevol_commander), intent(inout) :: self
+        class(cmdline),          intent(inout) :: cline
+        type(parameters) :: params
+        type(image)      :: noisevol
+        integer          :: s
+        call params%new(cline)
+        call noisevol%new([params%box,params%box,params%box], params%smpd)
+        do s = 1, params%nstates
+            call noisevol%ran()
+            call noisevol%write('noisevol_state'//int2str_pad(s,2)//'.mrc')
+            call noisevol%ran()
+            call noisevol%write('noisevol_state'//int2str_pad(s,2)//'_even.mrc')
+            call noisevol%ran()
+            call noisevol%write('noisevol_state'//int2str_pad(s,2)//'_odd.mrc')
+        end do
+        call noisevol%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_NOISEVOL NORMAL STOP ****')
+    end subroutine exec_noisevol
+    
     subroutine exec_dock_volpair( self, cline )
         use simple_vol_srch
         class(dock_volpair_commander), intent(inout) :: self

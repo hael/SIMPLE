@@ -46,7 +46,7 @@ integer                       :: nthr_glob = 1                 !< number of thre
 logical                       :: l_distr_exec_glob             !< global distributed execution flag
 integer                       :: part_glob                     !< global part index
 character(len=:), allocatable :: cmdline_glob                  !< global command line string
-logical,          parameter   :: L_BENCH_GLOB       = .false.  !< global benchmarking flag
+logical,          parameter   :: L_BENCH_GLOB       = .true.   !< global benchmarking flag
 logical,          parameter   :: L_DO_GRIDCORR_GLOB = .false.  !< global gridding correction flag
 logical,          parameter   :: L_USE_SLURM_ARR    = .false.  !< use SLURM arrays for jobs where we know nparts
 logical,          parameter   :: L_USE_AUTO_MEM     = .false.  !< auto estmate memory usage for parts
@@ -160,7 +160,7 @@ real, parameter    :: RECWINSZ             = 1.5       !< half-window size for 3
 real, parameter    :: FRAC_SH_LIM          = 75.0      !< at what frac to turn on the shift search
 real, parameter    :: NEIGH_MINFRAC        = 0.3       !< minimum fraction of search space scanned in refine=neigh
 real, parameter    :: FRAC_GREEDY_LIM      = 99.0      !< at what frac to turn to greedy search
-real, parameter    :: EXTRINITHRES        = 0.5        !< initial randomization threshold for extremal search
+real, parameter    :: EXTRINITHRES         = 0.5       !< initial randomization threshold for extremal search
 real, parameter    :: EXTRTHRESH_CONST     = 0.2       !< threshold for factorial decay in extremal search
 real, parameter    :: SNHC2D_INITFRAC      = 0.5       !< initial neighbourhood fraction for 2D SNHC
 real, parameter    :: SNHC2D_DECAY         = 0.2       !< factorial decay in 2D SNHC
@@ -170,7 +170,7 @@ real, parameter    :: LP2SMPDFAC           = 0.4125    !< low-pass limit scaling
 real, parameter    :: LP2SMPDFAC2D         = 0.4       !< low-pass limit scaling constant
 real, parameter    :: SHC_INPL_TRSHWDTH    = 2.0       !< shift search halfwidht (pixels)ch
 real, parameter    :: STREAM_SRCHFRAC      = 0.4       !< fraction of times full 2D search is performed in the pool
-real, parameter    :: MC_PATCHSZ           = 740.      !< recommended patch size (in pixels) for motion correction
+real, parameter    :: MC_PATCHSZ           = 200.      !< recommended patch size (in Angstroms) for motion correction
 real, parameter    :: ENVMSK_FSC_THRESH    = 0.8       !< FSC value after which phase-randomization and FSC correction is applied in enveloppe masking
 real, parameter    :: MAX_SMPD             = 2.67      !< maximum sampling distance in scaling
 real, parameter    :: TAU_DEFAULT          = 3.0       !< TAU fudge factor to control strength or regularization [0.5,5] more -> less low-pass effect
@@ -209,6 +209,7 @@ integer, parameter :: NPEAKS_DEFAULT       = 3         !< # of greedy subspace p
 integer, parameter :: NPEAKS_INPL_DEFAULT  = 10        !< # neighborhood search peaks to refine with L-BFGS
 integer, parameter :: STREAM_SRCHLIM       = 5         !< maximum # of systematic iterations for streaming 2D pool
 integer, parameter :: MC_NPATCH            = 5         !< number of patches in x/y-direction for motion correction
+integer, parameter :: MC_MINPATCHSZ        = 200       !< Minimum patch size in pixels for motion correction
 integer, parameter :: MIN_ITERS_SHC        = 5         !< minimum number of iterations of stochastic search
 integer, parameter :: BATCHTHRSZ           = 50        !< # of images per thread
 integer, parameter :: FAST2D_MINSZ         = 25000     !< Minimum # of particles to sample for fast subset 2D classification

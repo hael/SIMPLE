@@ -32,8 +32,6 @@ real                      :: msk
 integer                   :: ldim(3), nframes, track_freq
 logical                   :: l_neg
 
-integer :: cnt4debug = 0
-
 contains
 
     subroutine init_tracker( boxcoord, intg_fnames, frame_fnames, dir_in, fbody_in )
@@ -97,25 +95,26 @@ contains
         particle_locations(:,2) = real(boxcoord(2))
     end subroutine init_tracker
 
-    subroutine track_particle( fname_forctf )
+    subroutine track_particle( fname_forctf, frame_start )
         use simple_motion_align_nano, only: motion_align_nano
         character(len=:), allocatable, intent(inout) :: fname_forctf
+        integer, optional,             intent(in)    :: frame_start
         type(motion_align_nano)       :: aligner
         character(len=:), allocatable :: fname
         real,             allocatable :: opt_shifts(:,:)
-        integer :: first_pos(3), funit2, funit, io_stat, iframe, xind,yind, i, last_frame, cnt, nrange, noutside
+        integer :: first_pos(3), funit2, funit, io_stat, iframe, xind,yind, i, last_frame, cnt, nrange, noutside, fstart
         real    :: xyz(3), pos(2)
         ! init neigh counter
         call frame_avg%zero_and_unflag_ft
         call reference%zero_and_flag_ft
         write(logfhandle,'(a)') ">>> TRACKING PARTICLES"
-        cnt4debug = 0
-        do iframe = 1,nframes,track_freq
-            cnt4debug = cnt4debug + 1
+        fstart = 1
+        if( present(frame_start) ) fstart = frame_start
+        do iframe = fstart,nframes,track_freq
             ! read frames & extract particles
             last_frame = min(iframe+params_glob%nframesgrp-1,nframes)
             nrange     = last_frame-iframe+1
-            first_pos = nint([particle_locations(iframe,1),particle_locations(iframe,2),1.])
+            first_pos  = nint([particle_locations(iframe,1),particle_locations(iframe,2),1.])
             cnt = 0
             do i=iframe,last_frame
                 cnt = cnt + 1
@@ -148,7 +147,7 @@ contains
             call aligner%set_reslims(params_glob%hp, params_glob%lp)
             call aligner%set_bfactor(BFACTOR)
             call aligner%set_trs(real(params_glob%offset))
-            if( iframe == 1 )then
+            if( iframe == fstart )then
                 call aligner%align
             else
                 ! providing previous reference to mitigate drift
@@ -212,7 +211,9 @@ contains
         call fileiochk("tseries tracker ; write_tracked_series ", io_stat)
         stkname = trim(dir)//'/'//trim(fbody)//'.mrc'
         stkframes_name = trim(dir)//'/'//trim(fbody_raw)//'.mrc'
-        do iframe=1,nframes
+        cnt = 0
+        do iframe=fstart,nframes
+            cnt = cnt + 1
             xind = nint(particle_locations(iframe,1))
             yind = nint(particle_locations(iframe,2))
             ! slight shift of box for potential border effects
@@ -227,21 +228,21 @@ contains
             call frame_img%window([xind,yind,1], params_glob%box, ptcl_target, noutside)
             call ptcl_target%norm
             if( l_neg ) call ptcl_target%neg()
-            call ptcl_target%write(stkname, iframe)
+            call ptcl_target%write(stkname, cnt)
             ! box
             write(funit,'(I7,I7,I7,I7,I7)') xind, yind, params_glob%box, params_glob%box, -3
             write(funit2,'(2F12.6)') particle_locations(iframe,1:2) * params_glob%smpd ! in angstroms
             ! neighbors & spectrum
             call update_background_pspec(iframe, [xind,yind])
             call pspec%add(pspec_nn,w=1./real(nframes))
-            call pspec_nn%write(trim(dir)//'/'//trim(fbody)//'_background_pspec.mrc',iframe)
+            call pspec_nn%write(trim(dir)//'/'//trim(fbody)//'_background_pspec.mrc',cnt)
             ! read frame & write particle frame
             call frame_img%read(frame_names(iframe),1)
             noutside = 0
             call frame_img%window([xind,yind,1], params_glob%box, ptcl_target, noutside)
             call ptcl_target%norm
             if( l_neg ) call ptcl_target%neg()
-            call ptcl_target%write(stkframes_name, iframe)
+            call ptcl_target%write(stkframes_name, cnt)
         end do
         call fclose(funit)
         call fclose(funit2)
@@ -250,23 +251,24 @@ contains
         call pspec%dampen_pspec_central_cross
         call pspec%write(fname_forctf)
         ! trajectory
-        call write_trajectory
+        call write_trajectory(fstart)
     end subroutine track_particle
 
-    subroutine write_trajectory
+    subroutine write_trajectory( fstart )
+        integer, intent(in) :: fstart
         integer :: xind,yind,i,j,iframe,sz
         call frame_avg%norm
         do iframe = nframes,1,-1
             xind = nint((particle_locations(iframe,1)+1.) + real(params_glob%box)/2.+1.)
             yind = nint((particle_locations(iframe,2)+1.) + real(params_glob%box)/2.+1.)
             sz   = 1
-            if( iframe==1 ) sz=3
+            if( iframe==fstart ) sz=3
             do j = yind-sz,yind+sz
                 do i = xind-sz,xind+sz
                     call frame_avg%set([i,j,1],-3.)
                 enddo
             enddo
-            if( iframe==1 )then
+            if( iframe==fstart )then
                 do j = yind-1,yind+1
                     do i = xind-1,xind+1
                         call frame_avg%set([i,j,1],3.)

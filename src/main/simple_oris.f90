@@ -86,9 +86,6 @@ type :: oris
     procedure          :: sample4update_rnd, sample4update_rnd2
     procedure          :: sample4batchupdate, sample4batchupdate_reprod
     procedure          :: sample4update_reprod
-    procedure, private :: sample4update_history_1
-    procedure, private :: sample4update_history_2
-    generic            :: sample4update_history => sample4update_history_1, sample4update_history_2
     procedure          :: incr_updatecnt
     procedure          :: clean_updatecnt
     procedure          :: clean_updatecnt_sampled
@@ -112,7 +109,8 @@ type :: oris
     procedure          :: transfer_2Dshifts
     procedure, private :: transfer_2Dparams_1, transfer_2Dparams_2
     generic            :: transfer_2Dparams => transfer_2Dparams_1, transfer_2Dparams_2
-    procedure          :: transfer_3Dparams
+    procedure, private :: transfer_3Dparams_1, transfer_3Dparams_2
+    generic            :: transfer_3Dparams => transfer_3Dparams_1, transfer_3Dparams_2
     procedure          :: set_euler
     procedure          :: set_shift
     procedure          :: set_state
@@ -1526,51 +1524,6 @@ contains
         end do
     end subroutine sample4update_reprod
 
-    subroutine sample4update_history_1( self, fromto, it_history, nsamples, inds, mask )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: fromto(2)
-        integer, optional,    intent(in)    :: it_history
-        integer,              intent(inout) :: nsamples
-        integer, allocatable, intent(inout) :: inds(:)
-        logical,              intent(inout) :: mask(fromto(1):fromto(2))
-        integer, allocatable :: sampled(:)
-        integer :: i, cnt, nptcls, sample_ind, sample_ind_lb
-        nptcls = fromto(2) - fromto(1) + 1
-        if( allocated(inds) ) deallocate(inds)
-        allocate(inds(nptcls), sampled(nptcls), source=0)
-        cnt = 0
-        do i = fromto(1), fromto(2)
-            cnt          = cnt + 1
-            inds(cnt)    = i
-            sampled(cnt) = self%o(i)%get_sampled()
-        end do
-        sample_ind    = maxval(sampled)
-        if( sample_ind  == 0 ) THROW_HARD('requires previous sampling')
-        sample_ind_lb = max(1,sample_ind - it_history)
-        nsamples      = count(sampled >= sample_ind_lb)
-        inds          = pack(inds, mask=sampled >= sample_ind_lb)
-        mask          = .false.
-        do i = 1, nsamples
-            mask(inds(i)) = .true.
-        end do
-    end subroutine sample4update_history_1
-
-    subroutine sample4update_history_2( self, it_history, nsamples )
-        class(oris),          intent(inout) :: self
-        integer, optional,    intent(in)    :: it_history
-        integer,              intent(inout) :: nsamples
-        integer, allocatable :: sampled(:)
-        integer :: i, nptcls, sample_ind, sample_ind_lb
-        allocate(sampled(self%n), source=0)
-        do i = 1,self%n
-            sampled(i) = self%o(i)%get_sampled()
-        end do
-        sample_ind    = maxval(sampled)
-        if( sample_ind  == 0 ) THROW_HARD('requires previous sampling')
-        sample_ind_lb = max(1,sample_ind - it_history)
-        nsamples      = count(sampled >= sample_ind_lb)
-    end subroutine sample4update_history_2
-
     subroutine incr_updatecnt( self, fromto, mask )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: fromto(2)
@@ -2038,12 +1991,19 @@ contains
         call self%o(i)%transfer_2Dparams(os_in%o(i_in))
     end subroutine transfer_2Dparams_2
 
-    subroutine transfer_3Dparams( self, i, o_in )
+    subroutine transfer_3Dparams_1( self, i, o_in )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
         type(ori),   intent(in)    :: o_in
         call self%o(i)%transfer_3Dparams(o_in)
-    end subroutine transfer_3Dparams
+    end subroutine transfer_3Dparams_1
+
+    subroutine transfer_3Dparams_2( self, i, os_in, i_in )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: i, i_in
+        class(oris), intent(in)    :: os_in
+        call self%o(i)%transfer_3Dparams(os_in%o(i_in))
+    end subroutine transfer_3Dparams_2
 
     !>  \brief  generate random projection direction space around a given one
     subroutine rnd_proj_space( self, nsample, o_prev, thres, eullims )

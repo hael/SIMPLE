@@ -38,6 +38,7 @@ type :: image
 contains
     ! CONSTRUCTORS
     procedure          :: new
+    procedure          :: set_wthreads
     procedure          :: construct_thread_safe_tmp_imgs
     procedure, private :: disc_1
     procedure, private :: disc_2
@@ -178,6 +179,7 @@ contains
     generic            :: binarize => binarize_1, binarize_2, binarize_3
     procedure          :: cendist
     procedure          :: masscen
+    procedure          :: masscen_adjusted
     procedure          :: box_cen_arg
     procedure          :: calc_shiftcen
     procedure          :: calc_shiftcen_serial
@@ -448,6 +450,35 @@ contains
         self%existence = .true.
     end subroutine new
 
+    subroutine set_wthreads( self, wthreads )
+        class(image), intent(inout) :: self
+        logical,      intent(in)    :: wthreads
+        integer(kind=c_int) :: rc
+        if( self%wthreads .eqv. wthreads ) return
+        self%wthreads = wthreads
+        self%wthreads = self%wthreads .and. nthr_glob > 1
+        !$omp critical
+        call fftwf_destroy_plan(self%plan_fwd)
+        call fftwf_destroy_plan(self%plan_bwd)
+        ! make fftw plans
+        if( self%wthreads )then
+            rc = fftwf_init_threads()
+            call fftwf_plan_with_nthreads(nthr_glob)
+        endif
+        if( self%ldim(3) > 1 )then
+            self%plan_fwd = fftwf_plan_dft_r2c_3d(self%ldim(3), self%ldim(2), self%ldim(1), self%rmat, self%cmat, FFTW_ESTIMATE)
+            self%plan_bwd = fftwf_plan_dft_c2r_3d(self%ldim(3), self%ldim(2), self%ldim(1), self%cmat, self%rmat, FFTW_ESTIMATE)
+        else
+            self%plan_fwd = fftwf_plan_dft_r2c_2d(self%ldim(2), self%ldim(1), self%rmat, self%cmat, FFTW_ESTIMATE)
+            self%plan_bwd = fftwf_plan_dft_c2r_2d(self%ldim(2), self%ldim(1), self%cmat, self%rmat, FFTW_ESTIMATE)
+        endif
+        if( self%wthreads )then
+            ! disable threads for subsequent plans
+            call fftwf_plan_with_nthreads(1)
+        endif
+        !$omp end critical
+    end subroutine set_wthreads
+
     subroutine construct_thread_safe_tmp_imgs( self, nthr )
         class(image), intent(in) :: self
         integer,      intent(in) :: nthr
@@ -539,8 +570,14 @@ contains
     subroutine copy_fast( self, self_in )
         class(image), intent(inout) :: self
         class(image), intent(in)    :: self_in
-        self%rmat = self_in%rmat
-        self%ft   = self_in%ft
+        if( self%wthreads )then
+            !$omp parallel workshare
+            self%rmat = self_in%rmat
+            !$omp end parallel workshare
+        else
+            self%rmat = self_in%rmat
+        endif
+        self%ft = self_in%ft
     end subroutine copy_fast
 
     !> img2spec calculates the powerspectrum of the input image
@@ -2702,11 +2739,20 @@ contains
     end subroutine cendist
 
     !> to find centre of gravity
-    subroutine masscen( self, xyz )
-        class(image), intent(inout) :: self
-        real        , intent(out)   :: xyz(3)
-        real    ::  spix, ci, cj, ck
-        integer :: i, j, k
+    subroutine masscen( self, xyz, mask_in )
+        class(image),      intent(inout) :: self
+        real        ,      intent(out)   :: xyz(3)
+        logical, optional, intent(in)    :: mask_in(:,:,:)
+        real                 ::  spix, ci, cj, ck
+        integer              :: i, j, k
+        logical, allocatable :: mask_here(:,:,:)
+        allocate(mask_here(self%ldim(1),self%ldim(2),self%ldim(3)), source=.true.)
+        if (present(mask_in)) then 
+            if (.not.(size(mask_in, dim=1) .eq. self%ldim(1))) THROW_HARD('mask_in dimension must match dimension of image')
+            if (.not.(size(mask_in, dim=2) .eq. self%ldim(2))) THROW_HARD('mask_in dimension must match dimension of image')
+            if (.not.(size(mask_in, dim=3) .eq. self%ldim(3))) THROW_HARD('mask_in dimension must match dimension of image')
+            mask_here = mask_in   
+        end if
         if( self%is_ft() ) THROW_HARD('masscen not implemented for FTs; masscen')
         spix = 0.
         xyz  = 0.
@@ -2716,8 +2762,10 @@ contains
             do j=1,self%ldim(2)
                 ck = -real(self%ldim(3))/2.
                 do k=1,self%ldim(3)
-                    xyz  = xyz  + self%rmat(i,j,k) * [ci, cj, ck]
-                    spix = spix + self%rmat(i,j,k) 
+                    if (mask_here(i,j,k)) then
+                        xyz  = xyz  + self%rmat(i,j,k) * [ci, cj, ck]
+                        spix = spix + self%rmat(i,j,k) 
+                    end if
                     ck   = ck + 1.
                 end do
                 cj = cj + 1.
@@ -2728,6 +2776,39 @@ contains
         xyz = xyz / spix
         if( self%ldim(3) == 1 ) xyz(3) = 0.
     end subroutine masscen
+
+    !> to find center of gravity in absolute, not relative, terms
+    subroutine masscen_adjusted(self, xyz, mask_in)
+        class(image),      intent(inout) :: self
+        real        ,      intent(out)   :: xyz(3)
+        logical, optional, intent(in)    :: mask_in(:,:,:)
+        real                 ::  spix
+        integer              :: i, j, k
+        logical, allocatable :: mask_here(:,:,:)
+        allocate(mask_here(self%ldim(1),self%ldim(2),self%ldim(3)), source=.true.)
+        if (present(mask_in)) then 
+            if (.not.(size(mask_in, dim=1) .eq. self%ldim(1))) THROW_HARD('mask_in dimension must match dimension of image')
+            if (.not.(size(mask_in, dim=2) .eq. self%ldim(2))) THROW_HARD('mask_in dimension must match dimension of image')
+            if (.not.(size(mask_in, dim=3) .eq. self%ldim(3))) THROW_HARD('mask_in dimension must match dimension of image')
+            mask_here = mask_in   
+        end if
+        if( self%is_ft() ) THROW_HARD('masscen not implemented for FTs; masscen')
+        spix = 0.
+        xyz  = 0.
+        do i=1,self%ldim(1)
+            do j=1,self%ldim(2)
+                do k=1,self%ldim(3)
+                    if (mask_here(i,j,k)) then
+                        xyz  = xyz  + self%rmat(i,j,k) * [i, j, k]
+                        spix = spix + self%rmat(i,j,k) 
+                    end if
+                end do
+            end do
+        end do
+        if( is_equal(spix,0.) ) return
+        xyz = xyz / spix
+        if( self%ldim(3) == 1 ) xyz(3) = 0.
+    end subroutine masscen_adjusted
 
     function box_cen_arg( self, tmp ) result( a )
         class(image), intent(in)    :: self
@@ -5420,20 +5501,55 @@ contains
     end subroutine phase_corr
 
     ! returns the discrete shift that registers self2 to self1. self1 is the unnormalized correlation image on output
-    subroutine fcorr_shift(self1, self2, trs, shift )
+    subroutine fcorr_shift(self1, self2, trs, shift, peak_interp )
         class(image),      intent(inout) :: self1, self2
         real,              intent(in)    :: trs
         real,              intent(inout) :: shift(2)
-        integer     :: center(2), pos(2), itrs
+        logical, optional, intent(in)    :: peak_interp
+        real    :: alpha, beta, gamma, denom
+        integer :: center(2), pos(2), itrs
+        logical :: l_interp
         if( self1%is_3d() .or. self2%is_3d() ) THROW_HARD('2d only supported')
         if( .not.(self1%is_ft() .and. self2%is_ft()) ) THROW_HARD('FTed only supported')
         if( .not.(self1.eqdims.self2) ) THROW_HARD('Inconsistent dimensions in fcorr_shift')
+        l_interp = .false.
+        if(present(peak_interp)) l_interp = peak_interp
+        ! dimensions
         center = self1%ldim(1:2)/2+1
         itrs   = min(floor(trs),minval(center)-1)
+        ! Correlation image
         self1%cmat = self1%cmat * conjg(self2%cmat)
         call self1%ifft
+        ! maximum correlation & offset
         pos   = maxloc(self1%rmat(center(1)-itrs:center(1)+itrs, center(2)-itrs:center(2)+itrs, 1)) -itrs-1
-        shift = -real(pos)
+        ! peak interpolation
+        if( l_interp )then
+            shift = real(pos)
+            pos   = pos+itrs+1
+            beta  = self1%rmat(center(1)+pos(1),center(2)+pos(2), 1)
+            ! along x
+            if( abs(pos(1)-center(1)) < itrs )then ! within limits
+                alpha = self1%rmat(center(1)+pos(1)-1,center(2)+pos(2), 1)
+                gamma = self1%rmat(center(1)+pos(1)+1,center(2)+pos(2), 1)
+                if( alpha<beta .and. gamma<beta )then
+                    denom = alpha + gamma - 2.*beta
+                    if( abs(denom) > TINY ) shift(1) = shift(1) + 0.5 * (alpha-gamma) / denom
+                endif
+            endif
+            ! along y
+            if( abs(pos(2)-center(2)) < itrs )then
+                alpha = self1%rmat(center(1)+pos(1),center(2)+pos(2)-1, 1)
+                gamma = self1%rmat(center(1)+pos(1),center(2)+pos(2)-1, 1)
+                if( alpha<beta .and. gamma<beta )then
+                    denom = alpha + gamma - 2.*beta
+                    if( abs(denom) > TINY ) shift(2) = shift(2) + 0.5 * (alpha-gamma) / denom
+                endif
+            endif
+            ! convention
+            shift = -shift
+        else
+            shift = -real(pos)
+        endif
     end subroutine fcorr_shift
 
     !> \brief prenorm4real_corr pre-normalises the reference in preparation for real_corr_prenorm
@@ -5486,6 +5602,7 @@ contains
         ax   = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask) / npix
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - ax
         sxx  = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))*self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask)
+        sxx  = sxx/real(npix)
         if( sxx > TINY ) self%rmat = self%rmat / sqrt(sxx)
     end subroutine norm_within
 
@@ -5555,8 +5672,15 @@ contains
         class(image), intent(inout) :: self1, self2
         logical,      intent(in)    :: mask(self1%ldim(1),self1%ldim(2),self1%ldim(3))
         real :: r
-        r = sum((self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) -&
-        &self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3)))**2.0, mask=mask)
+        if( self1%wthreads )then
+            !$omp parallel workshare
+            r = sum((self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) -&
+            &self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3)))**2.0, mask=mask)
+            !$omp end parallel workshare
+        else
+            r = sum((self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) -&
+            &self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3)))**2.0, mask=mask)
+        endif
     end function sqeuclid
 
     subroutine sqeuclid_matrix_1( self1, self2, sqdiff )
@@ -8560,8 +8684,6 @@ contains
     subroutine kill_thread_safe_tmp_imgs( self )
         class(image), intent(in) :: self
         integer :: i
-        !integer :: i, sz, ldim(3)
-        !logical :: do_allocate
         if( allocated(thread_safe_tmp_imgs) )then
             do i=1,size(thread_safe_tmp_imgs)
                 call thread_safe_tmp_imgs(i)%kill

@@ -18,10 +18,12 @@ type :: parameters
     type(simple_program), pointer :: ptr2prg => null()
     ! yes/no decision variables in ascending alphabetical order
     character(len=3)          :: acf='no'             !< calculate autocorrelation function(yes|no){no}
+    character(len=3)          :: append='no'          !< append selection (yes|no){no}
     character(len=3)          :: async='no'           !< asynchronous (yes|no){no}
     character(len=3)          :: autoscale='no'       !< automatic down-scaling(yes|no){yes}
     character(len=3)          :: avg='no'             !< calculate average (yes|no){no}
     character(len=3)          :: backgr_subtr='no'    !< Whether to perform micrograph background subtraction
+    character(len=3)          :: balance='no'         !< Balance class populations to smallest selected
     character(len=3)          :: beamtilt='no'        !< use beamtilt values when generating optics groups
     character(len=3)          :: bin='no'             !< binarize image(yes|no){no}
     character(len=3)          :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
@@ -47,7 +49,7 @@ type :: parameters
     character(len=3)          :: iterstats='no'       !< Whether to keep track alignment stats throughout iterations
     character(len=3)          :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
     character(len=3)          :: loc_sdev='no'        !< Whether to calculate local standard deviations(yes|no){no}
-    character(len=3)          :: lp_est='no'          !< estimate lp(yes|no){no}
+    character(len=3)          :: lp_auto='no'         !< automatically estimate lp(yes|no){no}
     character(len=3)          :: makemovie='no'
     character(len=3)          :: masscen='yes'         !< center to center of gravity(yes|no){yes}
     character(len=3)          :: mcpatch='yes'        !< whether to perform patch-based alignment during motion correction
@@ -57,7 +59,6 @@ type :: parameters
     character(len=3)          :: ml_reg='yes'         !< apply ML regularization to class averages or volume
     character(len=3)          :: ml_reg_chunk='no'    !< apply ML regularization to class averages or volume in chunks
     character(len=3)          :: ml_reg_pool='no'     !< apply ML regularization to class averages or volume in pool
-    character(len=3)          :: mov_avg_vol='no'     !< volume is a moving average (add particles on top of current)
     character(len=3)          :: needs_sigma='no'     !<
     character(len=3)          :: neg='no'             !< invert contrast of images(yes|no){no}
     character(len=3)          :: noise_norm ='no'
@@ -92,8 +93,9 @@ type :: parameters
     character(len=3)          :: sh_opt_angle='yes'   !< shift opt angle(yes|no){yes}
     character(len=3)          :: sh_glob='no'         !< global shift control(yes|no){no}
     character(len=3)          :: sh_first='no'        !< shifting before orientation search(yes|no){no}
+    character(len=3)          :: sh_alt='no'          !< shifting/ori search alternative(yes|no){no}
+    character(len=3)          :: sh_only='no'         !< shifting only, no ori search(yes|no){no}
     character(len=3)          :: sh_inv='no'          !< whether to use shift invariant metric for projection direction assignment(yes|no){no}
-    character(len=3)          :: sh_inv_kw='yes'       !< whether k-weights for shift invariant metric(yes|no){yes}
     character(len=3)          :: stoch_update='no'    !< update of random sampling in each iteration
     character(len=3)          :: newstream='no'       !< new streaming version
     character(len=3)          :: stream='no'          !< stream (real time) execution mode(yes|no){no}
@@ -210,6 +212,7 @@ type :: parameters
     character(len=STDLEN)     :: picker='old'         !< which picker to use (old|new){old}
     character(len=STDLEN)     :: prg=''               !< SIMPLE program being executed
     character(len=STDLEN)     :: projname=''          !< SIMPLE  project name
+    character(len=STDLEN)     :: protocol=''          !< generic option
     character(len=STDLEN)     :: ptclw='no'           !< use particle weights(yes|no){no}
     character(len=STDLEN)     :: qsys_name='local'    !< name of queue system (local|slurm|pbs)
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2d classification
@@ -258,7 +261,6 @@ type :: parameters
     integer :: icm_stage=0
     integer :: iptcl=1
     integer :: istart=0
-    integer :: it_history=0        !< iteration history for sampling particles for 3D reconstruction
     integer :: job_memory_per_task2D=JOB_MEMORY_PER_TASK_DEFAULT
     integer :: kfromto(2)
     integer :: ldim(3)=0
@@ -452,19 +454,17 @@ type :: parameters
     logical :: l_focusmsk     = .false.
     logical :: l_frac_update  = .false.
     logical :: l_stoch_update = .false.
-    logical :: l_mov_avg_vol  = .false.
     logical :: l_graphene     = .false.
     logical :: l_kweight      = .false.
     logical :: l_kweight_shift= .true.
     logical :: l_kweight_rot  = .false.
     logical :: l_icm          = .false.
     logical :: l_incrreslim   = .true.
-    logical :: l_lp_est       = .false.
+    logical :: l_lpauto       = .false.
     logical :: l_lpset        = .false.
     logical :: l_ml_reg       = .true.
     logical :: l_needs_sigma  = .false.
     logical :: l_neigh        = .false.
-    logical :: l_nonuniform   = .false.
     logical :: l_phaseplate   = .false.
     logical :: l_prob_sh      = .false.
     logical :: l_prob_norm    = .true.
@@ -514,12 +514,14 @@ contains
         call check_carg('acf',            self%acf)
         call check_carg('algorithm',      self%algorithm)
         call check_carg('angastunit',     self%angastunit)
+        call check_carg('append',         self%append)
         call check_carg('async',          self%async)
         call check_carg('automsk',        self%automsk)
         call check_carg('automatic',      self%automatic)
         call check_carg('autoscale',      self%autoscale)
         call check_carg('avg',            self%avg)
         call check_carg('backgr_subtr',   self%backgr_subtr)
+        call check_carg('balance',        self%balance)
         call check_carg('bin',            self%bin)
         call check_carg('bin_cls',        self%bin_cls)
         call check_carg('boxtype',        self%boxtype)
@@ -560,7 +562,7 @@ contains
         call check_carg('iterstats',      self%iterstats)
         call check_carg('keepvol',        self%keepvol)
         call check_carg('loc_sdev',       self%loc_sdev)
-        call check_carg('lp_est',         self%lp_est)
+        call check_carg('lp_auto',         self%lp_auto)
         call check_carg('kweight',        self%kweight)
         call check_carg('kweight_chunk',  self%kweight_chunk)
         call check_carg('kweight_pool',   self%kweight_pool)
@@ -573,7 +575,6 @@ contains
         call check_carg('ml_reg',         self%ml_reg)
         call check_carg('ml_reg_chunk',   self%ml_reg_chunk)
         call check_carg('ml_reg_pool',    self%ml_reg_pool)
-        call check_carg('mov_avg_vol',    self%mov_avg_vol)
         call check_carg('msktype',        self%msktype)
         call check_carg('mcconvention',   self%mcconvention)
         call check_carg('multi_moldiams', self%multi_moldiams)
@@ -606,6 +607,7 @@ contains
         call check_carg('projname',       self%projname)
         call check_carg('proj_is_class',  self%proj_is_class)
         call check_carg('projstats',      self%projstats)
+        call check_carg('protocol',       self%protocol)
         call check_carg('prune',          self%prune)
         call check_carg('ptclw',          self%ptclw)
         call check_carg('qsys_name',      self%qsys_name)
@@ -628,8 +630,9 @@ contains
         call check_carg('sh_opt_angle',   self%sh_opt_angle)
         call check_carg('sh_glob',        self%sh_glob)
         call check_carg('sh_first',       self%sh_first)
+        call check_carg('sh_alt',         self%sh_alt)
+        call check_carg('sh_only',        self%sh_only)
         call check_carg('sh_inv',         self%sh_inv)
-        call check_carg('sh_inv_kw',      self%sh_inv_kw)
         call check_carg('sigma_est',      self%sigma_est)
         call check_carg('speckind',       self%speckind)
         call check_carg('split_mode',     self%split_mode)
@@ -722,7 +725,6 @@ contains
         call check_iarg('fromf',          self%fromf)
         call check_iarg('grow',           self%grow)
         call check_iarg('icm_stage',      self%icm_stage)
-        call check_iarg('it_history',     self%it_history)
         call check_iarg('iptcl',          self%iptcl)
         call check_iarg('job_memory_per_task2D', self%job_memory_per_task2D)
         call check_iarg('lp_iters',       self%lp_iters)
@@ -1257,38 +1259,13 @@ contains
         if( self%l_stoch_update )then
             self%l_frac_update = .true. ! update_frac set dynamically (see below)
             if( cline%defined('maxits_glob') )then
-                self%update_frac = real(inv_nsampl_decay(self%which_iter, self%maxits_glob, self%nptcls)) / real(self%nptcls)
+                self%update_frac = real(nsampl_decay(self%which_iter, self%maxits_glob, self%nptcls)) / real(self%nptcls)
             else
-                self%update_frac = real(inv_nsampl_decay(self%which_iter, self%maxits,      self%nptcls)) / real(self%nptcls)
+                self%update_frac = real(nsampl_decay(self%which_iter, self%maxits,      self%nptcls)) / real(self%nptcls)
             endif
             call cline%set('update_frac', self%update_frac)
-            ! iteration history for sampling particles for 3D reconstruction
-            if( cline%defined('it_history') )then
-                if( self%it_history > 3 .or. self%it_history < 1 ) THROW_HARD('it_history out of range, select within [0,3]')
-            else
-                self%it_history = 1
-            endif
-        else
-            self%it_history = 0
         endif
         self%l_batchfrac = self%batchfrac < 0.99
-        ! trailing volume
-        if( self%l_stoch_update )then
-            if( cline%defined('mov_avg_vol') )then
-                self%l_mov_avg_vol = trim(self%mov_avg_vol) .ne. 'no'
-            else
-                select case(trim(self%refine))
-                    case('prob')
-                        self%l_mov_avg_vol = .false.
-                    case DEFAULT
-                        self%l_mov_avg_vol = .true.
-                end select
-            endif
-        else
-            if( self%l_frac_update .and. cline%defined('mov_avg_vol') )then
-                self%l_mov_avg_vol = trim(self%mov_avg_vol) .ne. 'no'
-            endif
-        endif
         if( .not. cline%defined('ncunits') )then
             ! we assume that the number of computing units is equal to the number of partitions
             self%ncunits = self%nparts
@@ -1378,9 +1355,7 @@ contains
         ! set envfsc flag
         self%l_envfsc = self%envfsc .ne. 'no'
         ! set reference filtering flag
-        if( cline%defined('nonuniform') ) self%l_nonuniform = trim(self%nonuniform).eq.'yes'
         if( cline%defined('icm') ) self%l_icm = (trim(self%icm).eq.'yes')
-        if( self%l_icm .and. self%l_nonuniform ) THROW_HARD('Nonuniform & ICM filters are exclusive!')
         ! set correlation weighting scheme
         self%l_corrw = self%wcrit .ne. 'no'
         ! set wiener mode
@@ -1565,8 +1540,16 @@ contains
             case DEFAULT
                 THROW_HARD('INVALID KWEIGHT_POOL ARGUMENT')
         end select
-        ! estimated lp
-        self%l_lp_est       = trim(self%lp_est      ).eq.'yes'
+        ! automatically estimated lp
+        self%l_lpauto = trim(self%lp_auto).eq.'yes'
+        if( self%l_lpauto )then
+            if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
+                ! all good, this is an lpset mode (no eo alignment), so update flag
+                self%l_lpset = .true.
+            else
+                THROW_HARD('Automatic low-pass limit estimation requires LPSTART/LPSTOP range input')
+            endif
+        endif
         ! reg options
         self%l_prob_sh      = trim(self%prob_sh     ).eq.'yes'
         self%l_prob_norm    = trim(self%prob_norm   ).eq.'yes'

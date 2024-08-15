@@ -776,17 +776,24 @@ contains
         type(ran_tabu)                  :: rt
         integer,            allocatable :: states(:), ptcls_in_state(:), ptcls_rnd(:)
         integer(kind=kind(ENUM_ORISEG)) :: iseg
-        integer                         :: n_lines,fnr,noris,i,nstks,noris_in_state
-        real                            :: state
-        logical                         :: l_ctfres, l_icefrac
+        integer                         :: n_lines,fnr,noris,i,nstks,noris_in_state, ncls, icls, nstates
+        real                            :: state, pop, minclspop
+        logical                         :: l_ctfres, l_icefrac, l_append
         class(oris), pointer :: pos => NULL()
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        if( .not. cline%defined('prune') ) call cline%set('prune', 'no')
+        l_append = .false.
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir',  'yes')
+        if( .not. cline%defined('prune') ) call cline%set('prune',  'no')
+        if( .not. cline%defined('append')) call cline%set('append', 'no')
         call params%new(cline, silent=.true.)
+        if(params%append .eq. 'yes') l_append = .true.
         iseg = oritype2segment(trim(params%oritype))
+        if(.not. iseg .eq. CLS2D_SEG .and. cline%defined('balance'))     THROW_HARD("balance can only be used with oritype=cls2D")
+        if(cline%defined('nptcls') .and. .not. cline%defined('balance')) THROW_HARD("nptcls can only be used with balance")
         ! read project (almost all or largest segments are updated)
         call spproj%read(params%projfile)
         call spproj%update_projinfo( cline )
+        ! update nptcls
+        if(.not. cline%defined('nptcls')) params%nptcls = spproj%get_nptcls()
         ! check number of oris in field
         noris = spproj%get_n_insegment(params%oritype)
         ! associate pointer to field
@@ -808,7 +815,12 @@ contains
             allocate(states(noris), source=0)
             do i=1,params%nran
                 states(ptcls_rnd(i)) = 1
-            end do
+            enddo
+        else if(.not. cline%defined("infile") .and. cline%defined('balance') .and. params%balance .eq. 'yes') then
+            allocate(states(noris))
+            do i=1,noris
+                states(i) = nint(spproj%os_cls2D%get(i, 'state'))
+            enddo
         else if( cline%defined('ctfresthreshold') .or. cline%defined('icefracthreshold') )then
             l_ctfres  = cline%defined('ctfresthreshold')
             l_icefrac = cline%defined('icefracthreshold')
@@ -841,7 +853,7 @@ contains
             if( cline%defined('state') ) then
                 if( spproj%get_n_insegment_state(params%oritype, cline%get_rarg("state")) /= n_lines )then
                     write(logfhandle,*) '# lines in infile '//trim(params%infile)//': ', n_lines
-                    write(logfhandle,*) '# entries in '//trim(params%oritype)//' segment with requested state: ', noris
+                    write(logfhandle,*) '# entries in '//trim(params%oritype)//' segment with requested state: ', spproj%get_n_insegment_state(params%oritype, cline%get_rarg("state"))
                     THROW_WARN('# entries in infile/project file '//trim(params%oritype)//' segment with requested state do not match, aborting; exec_selection')
                     return
                 endif
@@ -872,6 +884,23 @@ contains
             endif
             call fclose(fnr)
         endif
+        ! find minpop
+        if(params%balance .eq. 'yes') then
+            ! find pop of smallest state=1 class
+            minclspop = 1000000
+            nstates   = 0
+            ncls = spproj%os_cls2D%get_noris()
+            do icls=1,ncls
+                state = spproj%os_cls2D%get(icls, 'state')
+                if(state .gt. 0.0 .and. spproj%os_cls2D%isthere(icls, 'pop')) then
+                    nstates = nstates + 1
+                    pop = spproj%os_cls2D%get(icls, 'pop')
+                    if(pop < minclspop) minclspop = pop
+                endif
+            enddo
+            if(nstates * minclspop > params%nptcls) minclspop = floor(real(params%nptcls) / nstates)
+            write(logfhandle, *) ">>> Selecting", minclspop, "particles from each selected class"
+        endif
         ! updates relevant segments
         select case(iseg)
             case(MIC_SEG)
@@ -884,11 +913,15 @@ contains
                 call spproj%report_state2stk(states)
             case(CLS2D_SEG)
                 call spproj%os_cls2D%set_all('state', real(states))
-                call spproj%map2ptcls_state ! map states to ptcl2D/3D & cls3D segments
+                if(params%balance .eq. 'yes') then
+                    call spproj%map2ptcls_state(append=.true., maxpop=nint(minclspop)) ! map states to ptcl2D/3D & cls3D segments
+                else
+                    call spproj%map2ptcls_state(append=l_append) ! map states to ptcl2D/3D & cls3D segments
+                endif
             case(CLS3D_SEG)
                 if(spproj%os_cls3D%get_noris() == spproj%os_cls2D%get_noris())then
                     call spproj%os_cls2D%set_all('state', real(states))
-                    call spproj%map2ptcls_state ! map states to ptcl2D/3D & cls3D segments
+                    call spproj%map2ptcls_state(append=l_append) ! map states to ptcl2D/3D & cls3D segments
                 else
                     ! class averages
                     call spproj%os_cls3D%set_all('state', real(states))

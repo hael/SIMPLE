@@ -120,7 +120,9 @@ type(simple_program), target :: import_starproject
 type(simple_program), target :: info_image
 type(simple_program), target :: info_stktab
 type(simple_program), target :: initial_3Dmodel
+type(simple_program), target :: initial_3Dmodel2
 type(simple_program), target :: abinitio_3Dmodel
+type(simple_program), target :: abinitio_3Dmodel2
 type(simple_program), target :: batch_abinitio_3Dmodel
 type(simple_program), target :: lp_abinitio_3Dmodel
 type(simple_program), target :: make_cavgs
@@ -134,6 +136,7 @@ type(simple_program), target :: motion_correct
 type(simple_program), target :: multipick_cleanup2D
 type(simple_program), target :: new_project
 type(simple_program), target :: nununiform_filter3D
+type(simple_program), target :: noisevol
 type(simple_program), target :: normalize_
 type(simple_program), target :: orisops
 type(simple_program), target :: oristats
@@ -365,6 +368,7 @@ contains
         call set_common_params
         call set_prg_ptr_array
         call new_abinitio_3Dmodel
+        call new_abinitio_3Dmodel2
         call new_batch_abinitio_3Dmodel
         call new_lp_abinitio_3Dmodel
         call new_analysis2D_nano
@@ -409,6 +413,7 @@ contains
         call new_info_image
         call new_info_stktab
         call new_initial_3Dmodel
+        call new_initial_3Dmodel2
         call new_import_boxes
         call new_import_cavgs
         call new_import_movies
@@ -425,6 +430,7 @@ contains
         call new_multipick_cleanup2D
         call new_new_project
         call new_nununiform_filter3D
+        call new_noisevol
         call new_normalize
         call new_orisops
         call new_oristats
@@ -488,6 +494,7 @@ contains
     subroutine set_prg_ptr_array
         n_prg_ptrs = 0
         call push2prg_ptr_array(abinitio_3Dmodel)
+        call push2prg_ptr_array(abinitio_3Dmodel2)
         call push2prg_ptr_array(batch_abinitio_3Dmodel)
         call push2prg_ptr_array(lp_abinitio_3Dmodel)
         call push2prg_ptr_array(analysis2D_nano)
@@ -530,6 +537,7 @@ contains
         call push2prg_ptr_array(info_image)
         call push2prg_ptr_array(info_stktab)
         call push2prg_ptr_array(initial_3Dmodel)
+        call push2prg_ptr_array(initial_3Dmodel2)
         call push2prg_ptr_array(import_boxes)
         call push2prg_ptr_array(import_cavgs)
         call push2prg_ptr_array(import_movies)
@@ -546,6 +554,7 @@ contains
         call push2prg_ptr_array(multipick_cleanup2D)
         call push2prg_ptr_array(new_project)
         call push2prg_ptr_array(nununiform_filter3D)
+        call push2prg_ptr_array(noisevol)
         call push2prg_ptr_array(normalize_)
         call push2prg_ptr_array(orisops)
         call push2prg_ptr_array(oristats)
@@ -619,6 +628,8 @@ contains
         select case(trim(which_program))
             case('abinitio_3Dmodel')
                 ptr2prg => abinitio_3Dmodel
+            case('abinitio_3Dmodel2')
+                ptr2prg => abinitio_3Dmodel2
             case('batch_abinitio_3Dmodel')
                 ptr2prg => batch_abinitio_3Dmodel
             case('lp_abinitio_3Dmodel')
@@ -705,6 +716,8 @@ contains
                 ptr2prg => info_stktab
             case('initial_3Dmodel')
                 ptr2prg => initial_3Dmodel
+            case('initial_3Dmodel2')
+                ptr2prg => initial_3Dmodel2
             case('import_boxes')
                 ptr2prg => import_boxes
             case('import_cavgs')
@@ -737,6 +750,8 @@ contains
                 ptr2prg => new_project
             case('nununiform_filter3D')
                 ptr2prg => nununiform_filter3D
+            case('noisevol')
+                ptr2prg => noisevol
             case('normalize')
                 ptr2prg => normalize_
             case('orisops')
@@ -860,6 +875,7 @@ contains
 
     subroutine list_simple_prgs_in_ui
         write(logfhandle,'(A)') abinitio_3Dmodel%name
+        write(logfhandle,'(A)') abinitio_3Dmodel2%name
         write(logfhandle,'(A)') batch_abinitio_3Dmodel%name
         write(logfhandle,'(A)') lp_abinitio_3Dmodel%name
         write(logfhandle,'(A)') assign_optics_groups%name
@@ -888,6 +904,7 @@ contains
         write(logfhandle,'(A)') icm2D%name
         write(logfhandle,'(A)') icm3D%name
         write(logfhandle,'(A)') initial_3Dmodel%name
+        write(logfhandle,'(A)') initial_3Dmodel2%name
         write(logfhandle,'(A)') info_image%name
         write(logfhandle,'(A)') info_stktab%name
         write(logfhandle,'(A)') import_boxes%name
@@ -906,6 +923,7 @@ contains
         write(logfhandle,'(A)') multipick_cleanup2D%name
         write(logfhandle,'(A)') new_project%name
         write(logfhandle,'(A)') nununiform_filter3D%name
+        write(logfhandle,'(A)') noisevol%name
         write(logfhandle,'(A)') normalize_%name
         write(logfhandle,'(A)') orisops%name
         write(logfhandle,'(A)') oristats%name
@@ -2040,10 +2058,10 @@ contains
         &to apply a balancing constraint (on the class population). Adjust balance until you are &
         &satisfied with the shape of the histogram',&                              ! descr_long
         &'simple_exec',&                                                           ! executable
-        &0, 2, 0, 0, 3, 1, 1, .true.)                                              ! # entries in each group, requires sp_project
+        &1, 2, 0, 0, 3, 1, 1, .false.)                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        ! <empty>
+        call cluster_cavgs%set_input('img_ios', 1, stk)
         ! parameter input/output
         call cluster_cavgs%set_input('parm_ios', 1, 'bin_cls', 'multi', 'Perform good/bad classification based on common lines',&
         &'Classes with lower common line correlation to the rest are rejected by Otsu(yes|no|only){yes}', '(yes|no|only){yes}', .false., 'yes')
@@ -2717,6 +2735,56 @@ contains
         call initial_3Dmodel%set_gui_params('comp_ctrls', 2, submenu="compute", advanced=.false.)
     end subroutine new_initial_3Dmodel
 
+    subroutine new_initial_3Dmodel2
+        ! PROGRAM SPECIFICATION
+        call initial_3Dmodel2%new(&
+        &'initial_3Dmodel2',&                                                          ! name
+        &'3D ab initio model generation from class averages',&                        ! descr_short
+        &'is a distributed workflow for generating an initial 3D model from class&
+        & averages obtained with cluster2D',&                                         ! descr_long
+        &'simple_exec',&                                                              ! executable
+        &0, 0, 0, 4, 4, 1, 1, .true.)  
+        initial_3Dmodel2%gui_submenu_list = "model,filter,mask,compute"
+        initial_3Dmodel2%advanced = .false.                                               ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call initial_3Dmodel2%set_input('srch_ctrls', 1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
+        &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call initial_3Dmodel2%set_gui_params('srch_ctrls', 1, submenu="model")
+        call initial_3Dmodel2%set_input('srch_ctrls', 2, pgrp)
+        call initial_3Dmodel2%set_gui_params('srch_ctrls', 2, submenu="model", advanced=.false.)
+        call initial_3Dmodel2%set_input('srch_ctrls', 3, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
+        &for accelerated convergence rate. Final low-pass limit controls the degree of down-scaling(yes|no){yes}','(yes|no){yes}', .false., 'yes')
+        call initial_3Dmodel2%set_gui_params('srch_ctrls', 3, submenu="model")
+        call initial_3Dmodel2%set_input('srch_ctrls', 4, pgrp_start)
+        call initial_3Dmodel2%set_gui_params('srch_ctrls', 4, submenu="model")
+        ! filter controls
+        call initial_3Dmodel2%set_input('filt_ctrls', 1, hp)
+        call initial_3Dmodel2%set_gui_params('filt_ctrls', 1, submenu="filter")
+        call initial_3Dmodel2%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
+        &Angstroms{30}', .false., 30.)
+        call initial_3Dmodel2%set_gui_params('filt_ctrls', 2, submenu="filter")
+        call initial_3Dmodel2%set_input('filt_ctrls', 3, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit for the first stage of ab-initio model generation',&
+            &'low-pass limit in Angstroms', .false., 0.)
+        call initial_3Dmodel2%set_gui_params('filt_ctrls', 3, submenu="filter")
+        call initial_3Dmodel2%set_input('filt_ctrls', 4, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
+            &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 8.)
+        call initial_3Dmodel2%set_gui_params('filt_ctrls', 4, submenu="filter")
+        ! mask controls
+        call initial_3Dmodel2%set_input('mask_ctrls', 1, mskdiam)
+        call initial_3Dmodel2%set_gui_params('mask_ctrls', 1, submenu="mask", advanced=.false.)
+        ! computer controls
+        call initial_3Dmodel2%set_input('comp_ctrls', 1, nthr)
+        call initial_3Dmodel2%set_gui_params('comp_ctrls', 1, submenu="compute", advanced=.false.)
+    end subroutine new_initial_3Dmodel2
+
     subroutine new_abinitio_3Dmodel
         ! PROGRAM SPECIFICATION
         call abinitio_3Dmodel%new(&
@@ -2778,6 +2846,62 @@ contains
         call abinitio_3Dmodel%set_gui_params('comp_ctrls', 2, submenu="compute", advanced=.false.)
     end subroutine new_abinitio_3Dmodel
 
+    subroutine new_abinitio_3Dmodel2
+        ! PROGRAM SPECIFICATION
+        call abinitio_3Dmodel2%new(&
+        &'abinitio_3Dmodel',&                                                         ! name
+        &'3D ab initio model generation from particles',&                             ! descr_short
+        &'is a distributed workflow for generating an initial 3D model&
+        & from particles',&                                                           ! descr_long
+        &'simple_exec',&                                                              ! executable
+        &0, 1, 0, 3, 7, 1, 1, .true.)
+        abinitio_3Dmodel2%gui_submenu_list = "model,filter,mask,compute"
+        abinitio_3Dmodel2%advanced = .false.                                           ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call abinitio_3Dmodel2%set_input('parm_ios', 1, oritype)
+        abinitio_3Dmodel2%parm_ios(1)%descr_long = 'Oritype segment in project(cls3D|ptcl3D){ptcl3D}'
+        abinitio_3Dmodel2%parm_ios(1)%descr_placeholder = '(cls3D|ptcl3D){ptcl3D}'
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call abinitio_3Dmodel2%set_input('srch_ctrls', 1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
+        &center of gravity and map shifts back to the particles(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call abinitio_3Dmodel2%set_gui_params('srch_ctrls', 1, submenu="model")
+        call abinitio_3Dmodel2%set_input('srch_ctrls', 2, pgrp)
+        call abinitio_3Dmodel2%set_gui_params('srch_ctrls', 2, submenu="model", advanced=.false.)
+        call abinitio_3Dmodel2%set_input('srch_ctrls', 3, pgrp_start)
+        call abinitio_3Dmodel2%set_gui_params('srch_ctrls', 3, submenu="model")
+        ! filter controls
+        call abinitio_3Dmodel2%set_input('filt_ctrls', 1, hp)
+        call abinitio_3Dmodel2%set_gui_params('filt_ctrls', 1, submenu="filter")
+        call abinitio_3Dmodel2%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
+        &Angstroms{30}', .false., 30.)
+        call abinitio_3Dmodel2%set_gui_params('filt_ctrls', 2, submenu="filter")
+        call abinitio_3Dmodel2%set_input('filt_ctrls', 3, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit for the first stage of ab-initio model generation',&
+            &'low-pass limit in Angstroms', .false., 30.)
+        call abinitio_3Dmodel2%set_gui_params('filt_ctrls', 3, submenu="filter")
+        call abinitio_3Dmodel2%set_input('filt_ctrls', 4, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
+            &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 6.)
+        call abinitio_3Dmodel2%set_gui_params('filt_ctrls', 4, submenu="filter")
+        call abinitio_3Dmodel2%set_input('filt_ctrls', 5, lp)
+        call abinitio_3Dmodel2%set_gui_params('filt_ctrls', 5, submenu="filter")
+        call abinitio_3Dmodel2%set_input('filt_ctrls', 6, ml_reg)
+        call abinitio_3Dmodel2%set_gui_params('filt_ctrls', 6, submenu="filter")
+        abinitio_3Dmodel2%filt_ctrls(6)%descr_placeholder = '(yes|no){no}'
+        abinitio_3Dmodel2%filt_ctrls(6)%cval_default      = 'no'
+        call abinitio_3Dmodel2%set_input('filt_ctrls', 7, icm)
+        ! mask controls
+        call abinitio_3Dmodel2%set_input('mask_ctrls', 1, mskdiam)
+        call abinitio_3Dmodel2%set_gui_params('mask_ctrls', 1, submenu="mask", advanced=.false.)
+        ! computer controls
+        call abinitio_3Dmodel2%set_input('comp_ctrls', 1, nthr)
+        call abinitio_3Dmodel2%set_gui_params('comp_ctrls', 1, submenu="compute", advanced=.false.)
+    end subroutine new_abinitio_3Dmodel2
+
     subroutine new_batch_abinitio_3Dmodel
         ! PROGRAM SPECIFICATION
         call batch_abinitio_3Dmodel%new(&
@@ -2786,7 +2910,7 @@ contains
         &'is a distributed workflow for generating an initial 3D model&
         & from particles',&                                                           ! descr_long
         &'simple_exec',&                                                              ! executable
-        &0, 0, 0, 1, 5, 1, 2, .true.)
+        &0, 0, 0, 3, 5, 1, 2, .true.)
         batch_abinitio_3Dmodel%gui_submenu_list = "model,filter,mask,compute"
         batch_abinitio_3Dmodel%advanced = .false.                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -2800,6 +2924,10 @@ contains
         call batch_abinitio_3Dmodel%set_input('srch_ctrls', 1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
         &center of gravity and map shifts back to the particles(yes|no){no}', '(yes|no){no}', .false., 'no')
         call batch_abinitio_3Dmodel%set_gui_params('srch_ctrls', 1, submenu="model")
+        call batch_abinitio_3Dmodel%set_input('srch_ctrls', 2, pgrp)
+        call batch_abinitio_3Dmodel%set_gui_params('srch_ctrls', 2, submenu="model", advanced=.false.)
+        call batch_abinitio_3Dmodel%set_input('srch_ctrls', 3, pgrp_start)
+        call batch_abinitio_3Dmodel%set_gui_params('srch_ctrls', 3, submenu="model")
         ! filter controls
         call batch_abinitio_3Dmodel%set_input('filt_ctrls', 1, hp)
         call batch_abinitio_3Dmodel%set_gui_params('filt_ctrls', 1, submenu="filter")
@@ -3432,7 +3560,7 @@ contains
         &'Uniform Butterworth 3D filter',&                      ! descr_short
         &'is a program for 3D uniform filter by minimizing/searching the fourier index of the CV cost function',& ! descr_long
         &'simple_exec',&                                        ! executable
-        &2, 1, 0, 0, 4, 2, 1, .false.)                          ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 2, 2, 1, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call uniform_filter3D%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
@@ -3444,10 +3572,8 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call uniform_filter3D%set_input('filt_ctrls', 1, lpstart_nonuni)
-        call uniform_filter3D%set_input('filt_ctrls', 2, nsearch)
-        call uniform_filter3D%set_input('filt_ctrls', 3, 'fsc', 'file', 'FSC file', 'FSC file', 'e.g. fsc_state01.bin file', .true., '')
-        call uniform_filter3D%set_input('filt_ctrls', 4, 'lpstop', 'num', 'Stopping resolution limit', 'Stopping resolution limit (in Angstroms)', 'in Angstroms', .false., -1.)
+        call uniform_filter3D%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Starting resolution limit', 'Starting resolution limit (in Angstroms)', 'in Angstroms', .true., -1.)
+        call uniform_filter3D%set_input('filt_ctrls', 2, 'lpstop',  'num', 'Stopping resolution limit', 'Stopping resolution limit (in Angstroms)', 'in Angstroms', .true., -1.)
         ! mask controls
         call uniform_filter3D%set_input('mask_ctrls', 1, mskdiam)
         call uniform_filter3D%set_input('mask_ctrls', 2, mskfile)
@@ -4174,6 +4300,33 @@ contains
         call reproject%set_input('comp_ctrls', 1, nthr)
     end subroutine new_reproject
 
+    subroutine new_noisevol
+        ! PROGRAM SPECIFICATION
+        call noisevol%new(&
+        &'noisevol',&                         ! name
+        &'Generate noise volume',&            ! descr_short
+        &'is a program for generating noise volume(s)',&
+        &'simple_exec',&                       ! executable
+        &0, 3, 0, 0, 0, 0, 0, .false.)         ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call noisevol%set_input('parm_ios', 1, smpd)
+        call noisevol%set_input('parm_ios', 2, box)
+        call noisevol%set_input('parm_ios', 3,  'nstates', 'num', 'Number states', 'Number states', '# states', .false., 1.0)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_noisevol
+
     subroutine new_normalize
         ! PROGRAM SPECIFICATION
         call normalize_%new(&
@@ -4607,7 +4760,7 @@ contains
         &'Reports external selection through state 0/1 tags to project',&               ! descr_short
         &'is a program for reporting external (GUI) selections to the SIMPLE project',& ! descr_long
         &'simple_exec',&                                                                ! executable
-        &0, 3, 4, 0, 0, 0, 0, .true.)                                                   ! # entries in each group, requires sp_project
+        &0, 6, 4, 0, 0, 0, 0, .true.)                                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -4615,6 +4768,9 @@ contains
         call selection%set_input('parm_ios', 1, oritype)
         call selection%set_input('parm_ios', 2, 'state', 'num', 'State number', 'Map selection to oris with this state only', '{1}', .false., 1.0)
         call selection%set_input('parm_ios', 3, prune)
+        call selection%set_input('parm_ios', 4, 'append',  'binary', 'Append selection to existing', 'Previously deselected particles will stay deselected(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call selection%set_input('parm_ios', 5, 'balance', 'binary', 'Prune particles so each class has the same population', 'Balance class populations to smallest(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call selection%set_input('parm_ios', 6, 'nptcls', 'num', 'Total number ptcls to select when balancing', 'Total ptcls after balancing', '{100000}', .false., 100000.0)
         ! alternative inputs
         call selection%set_input('alt_ios', 1, 'infile', 'file', 'File with selection state (0/1) flags', 'Plain text file (.txt) with selection state (0/1) flags',&
         &'give .txt selection file', .false., '')
@@ -5370,12 +5526,13 @@ contains
         &'is a program for aligning & averaging the first few frames of the time-series&
         & to accomplish SNR enhancement for particle identification',&                   ! descr_long
         &'single_exec',&                                                                 ! executable
-        &0, 1, 0, 5, 3, 0, 1, .true.)                                                    ! # entries in each group, requires sp_project
+        &0, 2, 0, 5, 3, 0, 1, .true.)                                                    ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call tseries_make_pickavg%set_input('parm_ios', 1, 'nframesgrp', 'num', '# contigous frames to average', 'Number of contigous frames to average using correlation-based weights{10}', '{10}', .false., 10.)
+        call tseries_make_pickavg%set_input('parm_ios', 2, 'fromf',      'num', 'Frame to start averaging from', 'Frame to start averaging from', 'frame index', .false., 0.)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -5462,7 +5619,7 @@ contains
         &'Track particles in time-series',&                                      ! descr_short
         &'is a distributed workflow for particle tracking in time-series data',& ! descr_long
         &'single_exec',&                                                         ! executable
-        &0, 3, 0, 2, 4, 0, 1, .true.)                                            ! # entries in each group, requires sp_project
+        &0, 4, 0, 2, 4, 0, 1, .true.)                                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -5472,6 +5629,7 @@ contains
         call tseries_track_particles%set_input('parm_ios', 2, 'boxfile', 'file', 'List of particle coordinates',&
         &'.txt file with EMAN particle coordinates', 'e.g. coords.box', .true., '')
         call tseries_track_particles%set_input('parm_ios', 3, neg)
+        call tseries_track_particles%set_input('parm_ios', 4, 'fromf', 'num', 'Frame to start tracking from', 'Frame to start tracking from', 'frame index', .false., 0.)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -5564,12 +5722,11 @@ contains
         &'Uniform 2D filter',&           ! descr_short
         &'is a program for 2D uniform filter by minimizing/searching the fourier index of the CV cost function',& ! descr_long
         &'simple_exec',&                 ! executable
-        &3, 1, 0, 0, 3, 0, 1, .false.)                                      ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 2, 1, 1, .false.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call uniform_filter2D%set_input('img_ios', 1, 'stk',  'file', 'Odd stack',  'Odd stack',  'stack_even.mrc file', .true., '')
         call uniform_filter2D%set_input('img_ios', 2, 'stk2', 'file', 'Even stack', 'Even stack', 'stack_odd.mrc file',  .true., '')
-        call uniform_filter2D%set_input('img_ios', 3, 'stk3', 'file', 'Mask stack', 'Mask stack', 'stack_mask.mrc file',  .false., '')
         ! parameter input/output
         call uniform_filter2D%set_input('parm_ios', 1, smpd)
         ! alternative inputs
@@ -5577,12 +5734,10 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call uniform_filter2D%set_input('filt_ctrls', 1, lpstart_nonuni)
-        call uniform_filter2D%set_input('filt_ctrls', 2, nsearch)
-        frcs%required = .true.
-        call uniform_filter2D%set_input('filt_ctrls', 3, frcs)
+        call uniform_filter2D%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Starting resolution limit', 'Starting resolution limit (in Angstroms)', 'in Angstroms', .true., -1.)
+        call uniform_filter2D%set_input('filt_ctrls', 2, 'lpstop',  'num', 'Stopping resolution limit', 'Stopping resolution limit (in Angstroms)', 'in Angstroms', .true., -1.)
         ! mask controls
-        ! <empty>
+        call uniform_filter2D%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
         call uniform_filter2D%set_input('comp_ctrls', 1, nthr)
     end subroutine new_uniform_filter2D

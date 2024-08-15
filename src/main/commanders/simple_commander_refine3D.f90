@@ -18,6 +18,7 @@ implicit none
 public :: nspace_commander
 public :: refine3D_commander_distr
 public :: refine3D_commander
+public :: estimate_first_sigmas_commander
 public :: check_3Dconv_commander
 public :: prob_tab_commander
 public :: prob_align_commander
@@ -39,6 +40,11 @@ type, extends(commander_base) :: refine3D_commander
   contains
     procedure :: execute      => exec_refine3D
 end type refine3D_commander
+
+type, extends(commander_base) :: estimate_first_sigmas_commander
+  contains
+    procedure :: execute      => exec_estimate_first_sigmas
+end type estimate_first_sigmas_commander
 
 type, extends(commander_base) :: check_3Dconv_commander
   contains
@@ -239,7 +245,7 @@ contains
                     fsc_file  = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
                     if( .not.file_exists(fsc_file)) THROW_HARD('Missing file: '//trim(fsc_file))
                 end do
-                if( params%l_mov_avg_vol )then
+                if( params%l_frac_update )then
                     call simple_list_files(prev_refine_path//'*recvol_state*part*', list)
                     nfiles = size(list)
                     err = params%nparts * 4 /= nfiles
@@ -265,7 +271,7 @@ contains
                     call simple_copy_file(trim(prev_refine_path)//trim(fsc_file), fsc_file)
                 end do
                 ! if we are doing moving average volume update, partial reconstructions need to be carried over
-                if( params%l_mov_avg_vol )then
+                if( params%l_frac_update )then
                     call simple_list_files(prev_refine_path//'*recvol_state*part*', list)
                     nfiles = size(list)
                     err = params%nparts * 4 /= nfiles
@@ -401,12 +407,25 @@ contains
             if( str_has_substr(params%refine, 'prob') )then
                 ! generate all corrs
                 call cline_prob_align%set('which_iter', params%which_iter)
+                call cline_prob_align%set('startit',    iter)
                 do state = 1,params%nstates
                     vol = 'vol'//trim(int2str(state))
                     call cline_prob_align%set(vol, cline%get_carg(vol))
                 enddo
-                call cline_prob_align%set('startit',    iter)
                 if( cline%defined('lp') ) call cline_prob_align%set('lp',params%lp)
+                if( trim(params%sh_alt) .eq. 'yes' )then
+                    if( mod(iter,2) == 1 )then
+                        call cline_prob_align%set('trs',     0.)
+                        call cline_prob_align%set('sh_only', 'no')
+                    else
+                        if( cline%defined('trs') )then
+                            call cline_prob_align%set('trs', params%trs)
+                        else
+                            call cline_prob_align%delete('trs')
+                        endif
+                        call cline_prob_align%set('sh_only', 'yes')
+                    endif
+                endif
                 ! reading corrs from all parts into one table
                 call xprob_align%execute_shmem( cline_prob_align )
             endif
@@ -418,6 +437,13 @@ contains
             call cline%set(     'which_iter', params%which_iter)
             call job_descr%set( 'startit',    trim(int2str(iter)))
             call cline%set(     'startit',    iter)
+            if( trim(params%sh_alt) .eq. 'yes' )then
+                if( mod(iter,2) == 1 )then
+                    call job_descr%set('trs', real2str(0.))
+                else
+                    call job_descr%set('trs', real2str(params%trs))
+                endif
+            endif
             ! FRCs
             if( cline%defined('frcs') )then
                 ! all good
@@ -440,14 +466,13 @@ contains
                 rt_merge_algndocs = toc(t_merge_algndocs)
                 t_volassemble = tic()
             endif
-            if( params%l_lp_est )then
+            if( params%l_lpauto )then
                 cline_pspec_lp = cline
                 call cline_pspec_lp%set('which_iter', params%which_iter)
                 call cline_pspec_lp%set('vol1',       params%vols(1))
                 call cline_pspec_lp%set('icm',        'no')
                 call cline_pspec_lp%set('nonuniform', 'no')
                 call cline_pspec_lp%set('nparts',     1)
-                call cline_pspec_lp%delete('lp')
                 call xpspec_lp%execute_shmem( cline_pspec_lp )
             endif
             ! ASSEMBLE VOLUMES
@@ -635,18 +660,22 @@ contains
 
     subroutine exec_refine3D( self, cline )
         use simple_strategy3D_matcher, only: refine3D_exec
+        use simple_image,              only: image
         class(refine3D_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(estimate_first_sigmas_commander) :: xfirst_sigmas
         type(calc_group_sigmas_commander)     :: xcalc_group_sigmas
+        type(calc_pspec_assemble_commander)   :: xcalc_pspec_assemble
         type(calc_pspec_commander)            :: xcalc_pspec
         type(pspec_lp_commander)              :: xpspec_lp
         type(prob_align_commander)            :: xprob_align
         type(parameters)                      :: params
         type(builder)                         :: build
         type(cmdline)                         :: cline_calc_sigma, cline_prob_align, cline_pspec_lp
+        type(cmdline)                         :: cline_calc_pspec, cline_first_sigmas
+        type(image)                           :: noisevol
         character(len=STDLEN)                 :: str_state, fsc_file, vol, vol_iter
-        integer                               :: startit, i, state
+        integer                               :: startit, i, state, s
         real                                  :: corr, corr_prev
         logical                               :: converged, l_sigma
         call build%init_params_and_build_strategy3D_tbox(cline,params)
@@ -663,7 +692,22 @@ contains
             call refine3D_exec(cline, startit, converged)
         else
             if( trim(params%continue) == 'yes'    ) THROW_HARD('shared-memory implementation of refine3D does not support continue=yes')
-            if( .not. file_exists(params%vols(1)) ) THROW_HARD('shared-memory implementation of refine3D requires starting volume(s) input')
+            if( .not. file_exists(params%vols(1)) ) then
+                call noisevol%new([params%box,params%box,params%box], params%smpd)
+                do s = 1, params%nstates
+                    params%vols(s)      = 'noisevol_state'//int2str_pad(s,2)//'.mrc'
+                    params%vols_even(s) = 'noisevol_state'//int2str_pad(s,2)//'_even.mrc'
+                    params%vols_odd(s)  = 'noisevol_state'//int2str_pad(s,2)//'_odd.mrc'
+                    call cline%set('vol'//int2str(s), params%vols(s))
+                    call noisevol%ran()
+                    call noisevol%write(params%vols(s))
+                    call noisevol%ran()
+                    call noisevol%write(params%vols_even(s))
+                    call noisevol%ran()
+                    call noisevol%write(params%vols_odd(s))
+                end do
+                call noisevol%kill
+            endif
             ! objfun=euclid
             l_sigma = .false.
             if( trim(params%objfun) == 'euclid' )then
@@ -680,12 +724,14 @@ contains
                         call build%spproj_field%partition_eo
                         call build%spproj%write_segment_inside(params%oritype)
                     endif
-                    call xcalc_pspec%execute( cline )
+                    cline_calc_pspec   = cline
+                    cline_first_sigmas = cline
+                    call xcalc_pspec%execute_shmem( cline_calc_pspec )
                     call cline_calc_sigma%set('which_iter', startit)
-                    call xcalc_group_sigmas%execute(cline_calc_sigma)
-                    if( .not.cline%defined('nspace') ) call cline%set('nspace', real(params%nspace))
-                    if( .not.cline%defined('athres') ) call cline%set('athres', real(params%athres))
-                    call xfirst_sigmas%execute(cline)
+                    call xcalc_pspec_assemble%execute_shmem(cline_calc_sigma)
+                    if( .not.cline_first_sigmas%defined('nspace') ) call cline_first_sigmas%set('nspace', real(params%nspace))
+                    if( .not.cline_first_sigmas%defined('athres') ) call cline_first_sigmas%set('athres', real(params%athres))
+                    call xfirst_sigmas%execute_shmem(cline)
                 endif
             endif
             params%startit    = startit
@@ -714,13 +760,12 @@ contains
                     call cline_prob_align%set('prg',       'prob_align')
                     call cline_prob_align%set('which_iter', params%which_iter)
                     call cline_prob_align%set('vol1',       params%vols(1))
-                    call cline_prob_align%set('nparts',     1)
                     if( params%l_lpset ) call cline_prob_align%set('lp', params%lp)
                     call xprob_align%execute( cline_prob_align )
                 endif
                 ! in strategy3D_matcher:
                 call refine3D_exec(cline, params%which_iter, converged)
-                if( params%l_lp_est )then
+                if( params%l_lpauto )then
                     cline_pspec_lp = cline
                     call cline_pspec_lp%set('prg',       'pspec_lp')
                     call cline_pspec_lp%set('which_iter', params%which_iter)
@@ -728,7 +773,6 @@ contains
                     call cline_pspec_lp%set('nparts',     1)
                     call cline_pspec_lp%set('icm',        'no')
                     call cline_pspec_lp%set('nonuniform', 'no')
-                    call cline_pspec_lp%delete('lp')
                     call xpspec_lp%execute_shmem( cline_pspec_lp )
                 endif
                 if( converged .or. i == params%maxits )then
@@ -766,8 +810,64 @@ contains
         ! end gracefully
         call build%kill_strategy3D_tbox
         call build%kill_general_tbox
+        if( .not.params%l_distr_exec ) call simple_touch(JOB_FINISHED_FBODY)
         call simple_end('**** SIMPLE_REFINE3D NORMAL STOP ****')
     end subroutine exec_refine3D
+
+    subroutine exec_estimate_first_sigmas( self, cline )
+        use simple_strategy3D_matcher, only: refine3D_exec
+        class(estimate_first_sigmas_commander), intent(inout) :: self
+        class(cmdline),                         intent(inout) :: cline
+        ! command lines
+        type(cmdline)    :: cline_first_sigmas
+        ! other variables
+        type(parameters) :: params
+        type(builder)    :: build
+        type(qsys_env)   :: qenv
+        type(chash)      :: job_descr
+        logical          :: l_shmem, converged
+        if( .not. cline%defined('vol1')     ) THROW_HARD('starting volume is needed for first sigma estimation')
+        if( .not. cline%defined('pgrp')     ) THROW_HARD('point-group symmetry (pgrp) is needed for first sigma estimation')
+        if( .not. cline%defined('mskdiam')  ) THROW_HARD('mask diameter (mskdiam) is needed for first sigma estimation')
+        if( .not. cline%defined('nthr')     ) THROW_HARD('number of threads (nthr) is needed for first sigma estimation')
+        if( .not. cline%defined('projfile') ) THROW_HARD('missing project file entry; exec_estimate_first_sigmas')
+        if( .not. cline%defined('oritype')  ) call cline%set('oritype', 'ptcl3D')
+        l_shmem = .not.cline%defined('nparts')
+        cline_first_sigmas = cline
+        call cline_first_sigmas%set('prg', 'refine3D')
+        call cline_first_sigmas%set('center',    'no')
+        call cline_first_sigmas%set('continue',  'no')
+        call cline_first_sigmas%delete('lp_iters')
+        call cline_first_sigmas%set('maxits',     1.0)
+        call cline_first_sigmas%set('which_iter', 1.0)
+        call cline_first_sigmas%set('objfun','euclid')
+        call cline_first_sigmas%set('refine', 'sigma')
+        call cline_first_sigmas%delete('update_frac') ! all particles neeed to contribute
+        call cline_first_sigmas%delete('hp')
+        call cline_first_sigmas%set('mkdir', 'no')    ! generate the sigma files in the root refine3D dir
+        ! init
+        if( l_shmem )then
+            call build%init_params_and_build_strategy3D_tbox(cline_first_sigmas, params )
+            call refine3D_exec(cline_first_sigmas, params%which_iter, converged)
+            call build%kill_strategy3D_tbox
+        else
+            call build%init_params_and_build_spproj(cline_first_sigmas, params)
+            call build%spproj%update_projinfo(cline_first_sigmas)
+            call build%spproj%write_segment_inside('projinfo')
+            ! setup the environment for distributed execution
+            call qenv%new(params%nparts)
+            ! prepare job description
+            call cline_first_sigmas%gen_job_descr(job_descr)
+            ! schedule
+            call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
+            ! end gracefully
+            call qsys_cleanup
+        endif
+        call qenv%kill
+        call job_descr%kill
+        call build%kill_general_tbox
+        call simple_end('**** SIMPLE_ESTIMATE_FIRST_SIGMAS NORMAL STOP ****')
+    end subroutine exec_estimate_first_sigmas
 
     subroutine exec_check_3Dconv( self, cline )
         use simple_convergence, only: convergence
@@ -900,15 +1000,7 @@ contains
         ! read reference volumes and create polar projections
         do s=1,params%nstates
             call calcrefvolshift_and_mapshifts2ptcls( cline, s, params%vols(s), do_center, xyz, map_shift=.true.)
-            if( params_glob%l_lpset )then
-                if( params_glob%l_icm )then
-                    call read_and_filter_refvols( cline, params_glob%vols_even(s), params_glob%vols_odd(s) )
-                else
-                    call read_and_filter_refvols( cline, params_glob%vols(s), params_glob%vols(s) )
-                endif
-            else
-                call read_and_filter_refvols( cline, params_glob%vols_even(s), params_glob%vols_odd(s) )
-            endif
+            call read_and_filter_refvols(s)
             ! PREPARE E/O VOLUMES
             call preprefvol(cline, s, do_center, xyz, .false.)
             call preprefvol(cline, s, do_center, xyz, .true.)
@@ -944,11 +1036,7 @@ contains
         ! make CTFs
         if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, params%oritype)
         call pftcc%memoize_ptcls
-        if( trim(params%sh_inv).eq.'yes' )then
-            call eulprob_obj_part%fill_tab_shinv(pftcc)
-        else
-            call eulprob_obj_part%fill_tab(pftcc)
-        endif
+        call eulprob_obj_part%fill_tab(pftcc)
         fname = trim(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
         call eulprob_obj_part%write_tab(fname)
         call eulprob_obj_part%kill
@@ -1031,15 +1119,7 @@ contains
         ! read reference volumes and create polar projections
         do s=1,params%nstates
             call calcrefvolshift_and_mapshifts2ptcls( cline, s, params%vols(s), do_center, xyz, map_shift=.true.)
-            if( params_glob%l_lpset )then
-                if( params_glob%l_icm )then
-                    call read_and_filter_refvols( cline, params_glob%vols_even(s), params_glob%vols_odd(s) )
-                else
-                    call read_and_filter_refvols( cline, params_glob%vols(s), params_glob%vols(s) )
-                endif
-            else
-                call read_and_filter_refvols( cline, params_glob%vols_even(s), params_glob%vols_odd(s) )
-            endif
+            call read_and_filter_refvols(s)
             ! PREPARE E/O VOLUMES
             call preprefvol(cline, s, do_center, xyz, .false.)
             call preprefvol(cline, s, do_center, xyz, .true.)
@@ -1149,7 +1229,7 @@ contains
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab' ) ! required for distributed call
         ! execution
-        if( params_glob%nparts == 1)then
+        if( .not.cline_prob_tab%defined('nparts') )then
             call xprob_tab%execute_shmem(cline_prob_tab)
         else
             ! setup the environment for distributed execution

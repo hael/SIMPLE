@@ -256,8 +256,8 @@ contains
         if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',    5.)
         if( .not. cline%defined('mcpatch')    ) call cline%set('mcpatch',    'yes')
-        if( .not. cline%defined('nxpatch')    ) call cline%set('nxpatch',       3.)
-        if( .not. cline%defined('nypatch')    ) call cline%set('nypatch',       3.)
+        if( .not. cline%defined('nxpatch')    ) call cline%set('nxpatch',      10.)
+        if( .not. cline%defined('nypatch')    ) call cline%set('nypatch',      10.)
         if( .not. cline%defined('trs')        ) call cline%set('trs',          10.)
         if( .not. cline%defined('lpstart')    ) call cline%set('lpstart',       5.)
         if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',        3.)
@@ -310,8 +310,8 @@ contains
         call cline%set('groupframes', 'no')
         if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',    5.)
         if( .not. cline%defined('mcpatch')    ) call cline%set('mcpatch',    'yes')
-        if( .not. cline%defined('nxpatch')    ) call cline%set('nxpatch',       3.)
-        if( .not. cline%defined('nypatch')    ) call cline%set('nypatch',       3.)
+        if( .not. cline%defined('nxpatch')    ) call cline%set('nxpatch',      10.)
+        if( .not. cline%defined('nypatch')    ) call cline%set('nypatch',      10.)
         if( .not. cline%defined('trs')        ) call cline%set('trs',          10.)
         if( .not. cline%defined('lpstart')    ) call cline%set('lpstart',       5.)
         if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',        3.)
@@ -396,7 +396,8 @@ contains
         type(ori)                 :: o
         type(tvfilter)            :: tvfilt
         type(image)               :: img_intg
-        integer :: i, nframes, frame_counter, ldim(3), ifoo
+        integer                   :: istart, istop
+        integer :: i, nframes, frame_counter, ldim(3), ifoo, cnt
         if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',    10.)
         if( .not. cline%defined('mcpatch')    ) call cline%set('mcpatch',    'yes')
         if( .not. cline%defined('nxpatch')    ) call cline%set('nxpatch',        3.)
@@ -413,10 +414,15 @@ contains
         call spproj%read(params%projfile)
         nframes  = spproj%get_nframes()
         allocate(framenames(params%nframesgrp))
-        do i = 1,params%nframesgrp
+        istart = 1
+        if( cline%defined('fromf') ) istart = params%fromf
+        istop  = istart + params%nframesgrp - 1
+        cnt    = 0
+        do i = istart,istop
             if( spproj%os_mic%isthere(i,'frame') )then
-                framenames(i) = trim(spproj%os_mic%get_static(i,'frame'))
-                params%smpd   = spproj%os_mic%get(i,'smpd')
+                cnt = cnt + 1
+                framenames(cnt) = trim(spproj%os_mic%get_static(i,'frame'))
+                params%smpd     = spproj%os_mic%get(i,'smpd')
             endif
         enddo
         call cline%set('smpd', params%smpd)
@@ -457,7 +463,7 @@ contains
         call tvfilt%kill
         call img_intg%write('frames2align_intg_denoised.mrc')
         call img_intg%kill
-        call simple_end('**** SIMPLE_GEN_INI_TSERIES_AVG NORMAL STOP ****')
+        call simple_end('**** SIMPLE_TSERIES_MAKE_PICKAVG NORMAL STOP ****')
     end subroutine exec_tseries_make_pickavg
 
     subroutine exec_tseries_track_particles_distr( self, cline )
@@ -530,8 +536,8 @@ contains
 
     subroutine exec_tseries_track_particles( self, cline )
         use simple_tseries_track_particles
-        use simple_qsys_funs,        only: qsys_job_finished
-        use simple_sp_project,       only: sp_project
+        use simple_qsys_funs,  only: qsys_job_finished
+        use simple_sp_project, only: sp_project
         class(tseries_track_particles_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(sp_project)                       :: spproj
@@ -539,7 +545,8 @@ contains
         character(len=:),          allocatable :: dir, forctf
         character(len=LONGSTRLEN), allocatable :: intg_names(:), frame_names(:)
         real,                      allocatable :: boxdata(:,:)
-        integer :: i, iframe, orig_box, nframes
+        logical,                   allocatable :: frames_are_there(:), intgs_are_there(:)
+        integer :: i, orig_box, nframes
         call cline%set('oritype','mic')
         call params%new(cline)
         orig_box = params%box
@@ -555,20 +562,38 @@ contains
         ! frames input
         call spproj%read(params%projfile)
         nframes = spproj%get_nframes()
-        allocate(intg_names(nframes),frame_names(nframes))
-        iframe = 0
-        do i = 1,spproj%os_mic%get_noris()
-            if( spproj%os_mic%isthere(i,'frame') )then
-                iframe = iframe + 1
-                intg_names(iframe)  = trim(spproj%os_mic%get_static(i,'intg'))
-                frame_names(iframe) = trim(spproj%os_mic%get_static(i,'frame'))
-            endif
+        allocate(frames_are_there(nframes), intgs_are_there(nframes), source=.false.)
+        do i = 1,nframes
+            frames_are_there(i) = spproj%os_mic%isthere(i,'frame')
+            intgs_are_there(i)  = spproj%os_mic%isthere(i,'intg')
         enddo
+        if( all(frames_are_there) )then
+            allocate(frame_names(nframes))
+            do i = 1,nframes
+                frame_names(i) = trim(spproj%os_mic%get_static(i,'frame'))
+            enddo
+        endif
+        if( all(intgs_are_there) )then
+            allocate(intg_names(nframes))
+            do i = 1,nframes
+                intg_names(i) = trim(spproj%os_mic%get_static(i,'intg'))
+            enddo
+        endif
         ! actual tracking
         dir = trim(params%fbody)
         call simple_mkdir(dir)
-        call init_tracker( nint(boxdata(1,1:2)), intg_names, frame_names, dir, params%fbody)
-        call track_particle( forctf )
+        if( allocated(frame_names) )then
+            if( allocated(intg_names) )then
+                call init_tracker( nint(boxdata(1,1:2)), intg_names, frame_names, dir, params%fbody)
+            else
+                call init_tracker( nint(boxdata(1,1:2)), frame_names, frame_names, dir, params%fbody)
+            endif
+        endif
+        if( cline%defined('fromf') )then
+            call track_particle( forctf, params%fromf )
+        else
+            call track_particle( forctf )
+        endif
         ! clean tracker
         call kill_tracker
         ! end gracefully
@@ -950,7 +975,8 @@ contains
         if( .not. cline%defined('kweight')        ) call cline%set('kweight',   'default') ! best resolution weighting scheme for this kind of data
         if( .not. cline%defined('ml_reg')         ) call cline%set('ml_reg',         'no') ! ml_reg=yes -> too few atoms 
         if( .not. cline%defined('sigma_est')      ) call cline%set('sigma_est',  'global') ! only sensible option for this kind of data
-        if( .not. cline%defined('lambda')         ) call cline%set('lambda',          0.1)
+        if( .not. cline%defined('icm')            ) call cline%set('icm',           'yes') ! ICM regualrization works 
+        if( .not. cline%defined('lambda')         ) call cline%set('lambda',          0.1) ! this is an empirically determined regularization parameter
         call cline%set('lp_iters',0.) ! low-pass limited resolution, no e/o
         call xrefine3D_distr%execute(cline)
     end subroutine exec_refine3D_nano
@@ -1017,7 +1043,7 @@ contains
         if( .not. cline%defined('maxits_between') ) call cline%set('maxits_between', 10.)
         if( .not. cline%defined('overlap')        ) call cline%set('overlap',        0.9)
         if( .not. cline%defined('fracsrch')       ) call cline%set('fracsrch',       0.9)
-        if( .not. cline%defined('objfun')         ) call cline%set('objfun',        'cc')
+        if( .not. cline%defined('objfun')         ) call cline%set('objfun',         'cc') ! needs to be here to avoid ERROR! file sigma2_it_10.star does not exist; simple_fileio.f90; line:   932
         call cline%set('mkdir', 'yes') ! because we want to create the directory X_autorefine3D_nano & copy the project file
         call cline%set('lp_iters', 0.) ! low-pass limited resolution, no e/o
         call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
@@ -1346,11 +1372,6 @@ contains
         call spproj%get_cavgs_stk(cavgs_stk, ncavgs, smpd, fail=.false.)
         cavgs_stk_even = add2fbody(cavgs_stk,'.mrc','_even')
         cavgs_stk_odd  = add2fbody(cavgs_stk,'.mrc','_odd')
-        !call spproj%get_cavgs_stk(cavgs_stk_even, ncavgs_even, smpd, fail=.false.)
-        !call spproj%get_cavgs_stk(cavgs_stk_odd, ncavgs_odd, smpd, fail=.false.)
-        !print *, cavgs_stk_even, cavgs_stk_odd, ncavgs, ncavgs_even, ncavgs_odd
-        !print *, "number of cavgs even", ncavgs_even
-        !print *, "number of cavgs odd", ncavgs_odd
         if( allocated(rstates) ) deallocate(rstates)
         rstates = spproj%os_cls3D%get_all('state')
         ! compute radial cross-correlation between the even and odd cavgs
@@ -1386,10 +1407,6 @@ contains
             " u 2:3:4 ; set term png; set xlabel " //"'"//"Time"//"'"// "; set ylabel " //"'"//"Radius({\305})"// &
             "'"// "; set title " //"'"//"Even-Odd Radial Cross-correlation"//"'"// "; set nokey; set output 'radial_analysis.png'; replot" //'"'
         call execute_command_line(command_plot)
-        !command_plot = "gnuplot -e "//'"'//"set pm3d map; set zrange[-.4:1]; splot " //"'"//"evenodd_radial_analysis.csv"//"'"// &
-        !" u 2:3:4 ; set term png; set xlabel " //"'"//"Time"//"'"// "; set ylabel " //"'"//"Radius({\305})"// &
-        !"'"// "; set title " //"'"//"Even-Odd Cavgs Radial Cross-correlation"//"'"// "; set nokey; set output 'evenodd_radial_analysis.png'; replot" //'"'
-        !call execute_command_line(command_plot)
         close(25)
         ! deallocate
         if( allocated(cavgs_stk) ) deallocate(cavgs_stk)

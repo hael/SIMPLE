@@ -9,6 +9,7 @@ public :: atoms
 private
 #include "simple_local_flags.inc"
 
+
 character(len=78), parameter :: pdbfmt          = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10x,A2)"  ! custom 3.3
 character(len=78), parameter :: pdbfmt_long     = "(A5,I6,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10x,A2)"  ! custom 3.3
 character(len=74), parameter :: pdbfmt_read     = "(A11,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)"           ! custom 3.3
@@ -31,6 +32,7 @@ type :: atoms
     real,             allocatable :: occupancy(:)
     real,             allocatable :: beta(:)
     real,             allocatable :: radius(:)
+    real,             allocatable :: atom_corr(:)
     integer,          allocatable :: num(:)
     integer,          allocatable :: resnum(:)
     integer,          allocatable :: Z(:)
@@ -43,6 +45,7 @@ type :: atoms
     generic            :: new => new_from_pdb, new_instance
     generic            :: assignment(=) => copy
     procedure          :: copy
+    procedure          :: extract_atom
     ! CHECKER
     procedure          :: element_exists
     ! GETTERS/SETTERS
@@ -55,6 +58,7 @@ type :: atoms
     procedure          :: get_num
     procedure          :: get_atomicnumber
     procedure          :: get_radius
+    procedure          :: get_atom_corr
     procedure          :: set_coord
     procedure          :: set_chain
     procedure          :: set_name
@@ -63,6 +67,7 @@ type :: atoms
     procedure          :: set_beta
     procedure          :: set_resnum
     procedure          :: set_occupancy
+    procedure          :: set_atom_corr
     ! I/O
     procedure          :: print_atom
     procedure          :: writepdb
@@ -75,9 +80,12 @@ type :: atoms
     procedure          :: convolve
     procedure          :: geometry_analysis_pdb
     procedure          :: find_masscen
+    procedure          :: pdb2mrc
+    procedure          :: atom_validation
     ! MODIFIERS
     procedure          :: translate
     procedure          :: rotate
+    procedure          :: ref2originbox
     ! DESTRUCTOR
     procedure          :: kill
 end type atoms
@@ -165,7 +173,7 @@ contains
         call self%kill
         allocate(self%name(n), self%chain(n), self%resname(n), self%xyz(n,3), self%mw(n),&
             self%occupancy(n), self%beta(n), self%num(n), self%Z(n), self%het(n), self%icode(n),&
-            self%altloc(n), self%resnum(n), self%element(n), self%radius(n))
+            self%altloc(n), self%resnum(n), self%element(n), self%radius(n), self%atom_corr(n))
         self%name(:)    = '    '
         self%resname(:) = '   '
         self%chain(:)   = ' '
@@ -177,6 +185,7 @@ contains
         self%beta      = 0.
         self%occupancy = 0.
         self%radius    = 0.
+        self%atom_corr = 0.
         self%num    = 0
         self%resnum = 0
         self%Z      = 0
@@ -190,6 +199,7 @@ contains
                 self%beta(i)      = 1.
                 self%occupancy(i) = 1.
                 self%radius(i)    = 1.
+                self%atom_corr(i) = 1.
                 self%num(i)       = i
                 self%resnum(i)    = 1
             enddo
@@ -220,7 +230,21 @@ contains
         self%het        = self_in%het
         self%element    = self_in%element
         self%radius     = self_in%radius
+        self%atom_corr  = self_in%atom_corr
     end subroutine copy
+
+    subroutine extract_atom( self, self_atom, i )
+        class(atoms), intent(inout) :: self
+        type(atoms),  intent(out)   :: self_atom
+        integer,      intent(in)    :: i
+        call self_atom%new(1)
+        self_atom%name         = self%get_name(i)
+        self_atom%element      = self%get_element(i)
+        self_atom%xyz(1,:)     = self%get_coord(i)
+        self_atom%beta         = self%get_beta(i)
+        self_atom%Z            = self%get_atomicnumber(i)
+        self_atom%radius       = self%get_radius(i)
+    end subroutine extract_atom
 
     ! CHECKERS
 
@@ -313,9 +337,16 @@ contains
     real function get_radius( self, i )
         class(atoms), intent(in) :: self
         integer,      intent(in) :: i
-        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; get_atomicnumber')
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; get_radius')
         get_radius = self%radius(i)
     end function get_radius
+
+    real function get_atom_corr( self, i )
+        class(atoms), intent(in) :: self
+        integer,      intent(in) :: i
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; get_atom_corr')
+        get_atom_corr = self%atom_corr(i)
+    end function get_atom_corr
 
     subroutine set_coord( self, i, xyz )
         class(atoms), intent(inout) :: self
@@ -382,6 +413,14 @@ contains
         if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; set_occupancy')
         self%occupancy(i) = occupancy
     end subroutine set_occupancy
+
+    subroutine set_atom_corr( self, i, corr )
+        class(atoms), intent(inout) :: self
+        integer,      intent(in)    :: i
+        real,         intent(in)    :: corr
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; set_corr')
+        self%atom_corr(i) = corr
+    end subroutine set_atom_corr
 
     subroutine print_atom( self, i )
         class(atoms), intent(inout) :: self
@@ -494,7 +533,7 @@ contains
             THROW_WARN('Unknown atom '//int2str(i)//' : '//trim(self%name(i))//' - '//self%element(i))
         else
             self%radius(i) = r
-            self%Z(i) = z
+            self%Z(i)      = z
         endif
     end subroutine guess_an_element
 
@@ -507,13 +546,13 @@ contains
         character(len=2)                :: uppercase_el
         character(len=2), optional, intent(inout) :: el
         uppercase_name = upperCase(name)
-        uppercase_el   = trim(adjustl(uppercase_name))
+        uppercase_el   = adjustl(uppercase_name)
         call get_element_Z_and_radius(uppercase_el,Z,r)
         if( Z == 0 ) THROW_HARD('Unknown element: '//uppercase_el)
         if( present(el) ) el = uppercase_el
     end subroutine Z_and_radius_from_name
 
-    function get_geom_center(self) result(center)
+    function get_geom_center( self ) result( center )
         class(atoms), intent(in) :: self
         real :: center(3)
         center(1) = sum(self%xyz(:,1)) / real(self%n)
@@ -885,204 +924,204 @@ contains
 
     end subroutine convolve
 
-    subroutine geometry_analysis_pdb(self, pdbfile, thresh)
-      class(atoms),     intent(inout) :: self
-      character(len=*), intent(in)    :: pdbfile   ! all the atomic positions
-      real, optional,   intent(in)    :: thresh    ! for belonging
-      character(len=2)     :: element
-      type(atoms)          :: init_atoms, final_atoms
-      real,    allocatable :: radii(:),line(:,:), plane(:,:,:),points(:,:), distances_totheplane(:), distances_totheline(:)
-      real,    allocatable :: w(:),v(:,:),d(:),pointsTrans(:,:)
-      logical, allocatable :: flag(:) ! flags the atoms belonging to the plane/column
-      integer, parameter   :: N_DISCRET = 500
-      integer :: i, n, n_tot, t, s, filnum, io_stat, cnt_intersect, cnt
-      real    :: atom1(3), atom2(3), atom3(3), dir_1(3), dir_2(3), vec(3), m(3), dist_plane, dist_line
-      real    :: t_vec(N_DISCRET), s_vec(N_DISCRET), denominator, centroid(3), prod(3), tthresh
-      call init_atoms%new(pdbfile)
-      n = init_atoms%get_n()
-      if(present(thresh)) then
-          tthresh = thresh
-      else
-          tthresh = 1.2*sum(self%radius)/real(self%get_n())  ! avg of the radii*1.2
-      endif
-      if(n < 2 .or. n > 3 ) THROW_HARD('Inputted pdb file contains the wrong number of atoms!; geometry_analysis_pdb')
-      do i = 1, N_DISCRET/2
-          t_vec(i) = -real(i)/10.
-      enddo
-      t_vec(N_DISCRET/2+1:N_DISCRET) = -t_vec(1:N_DISCRET/2)
-      s_vec(:) = t_vec(:)
-      n_tot = self%n
-      ! fetch thoretical radius
-      element = self%element(1) ! pick the first atom (should be heterogeneous)
-      allocate(flag(n_tot), source = .false.)
-      if(n == 2) then
-        write(logfhandle,*)'COLUMN IDENTIFICATION, INITIATION'
-        allocate(line(3, N_DISCRET), source = 0.)
-        atom1(:) = init_atoms%get_coord(1)
-        atom2(:) = init_atoms%get_coord(2)
-        dir_1 = atom1-atom2
-        do t = 1, N_DISCRET
-          line(1,t) = atom1(1) + t_vec(t)* dir_1(1)
-          line(2,t) = atom1(2) + t_vec(t)* dir_1(2)
-          line(3,t) = atom1(3) + t_vec(t)* dir_1(3)
+    subroutine geometry_analysis_pdb( self, pdbfile, thresh )
+        class(atoms),     intent(inout) :: self
+        character(len=*), intent(in)    :: pdbfile   ! all the atomic positions
+        real, optional,   intent(in)    :: thresh    ! for belonging
+        character(len=2)     :: element
+        type(atoms)          :: init_atoms, final_atoms
+        real,    allocatable :: radii(:),line(:,:), plane(:,:,:),points(:,:), distances_totheplane(:), distances_totheline(:)
+        real,    allocatable :: w(:),v(:,:),d(:),pointsTrans(:,:)
+        logical, allocatable :: flag(:) ! flags the atoms belonging to the plane/column
+        integer, parameter   :: N_DISCRET = 500
+        integer :: i, n, n_tot, t, s, filnum, io_stat, cnt_intersect, cnt
+        real    :: atom1(3), atom2(3), atom3(3), dir_1(3), dir_2(3), vec(3), m(3), dist_plane, dist_line
+        real    :: t_vec(N_DISCRET), s_vec(N_DISCRET), denominator, centroid(3), prod(3), tthresh
+        call init_atoms%new(pdbfile)
+        n = init_atoms%get_n()
+        if( present(thresh) )then
+            tthresh = thresh
+        else
+            tthresh = 1.2*sum(self%radius)/real(self%get_n())  ! avg of the radii*1.2
+        endif
+        if( n < 2 .or. n > 3 ) THROW_HARD('Inputted pdb file contains the wrong number of atoms!; geometry_analysis_pdb')
+        do i = 1, N_DISCRET/2
+            t_vec(i) = -real(i)/10.
         enddo
-        ! calculate how many atoms does the line intersect and flag them
-        do i = 1, n_tot
+        t_vec(N_DISCRET/2+1:N_DISCRET) = -t_vec(1:N_DISCRET/2)
+        s_vec(:) = t_vec(:)
+        n_tot    = self%n
+        ! fetch thoretical radius
+        element  = self%element(1) ! pick the first atom (should be heterogeneous)
+        allocate(flag(n_tot), source = .false.)
+        if( n == 2 )then
+            write(logfhandle,*)'COLUMN IDENTIFICATION, INITIATION'
+            allocate(line(3, N_DISCRET), source = 0.)
+            atom1(:) = init_atoms%get_coord(1)
+            atom2(:) = init_atoms%get_coord(2)
+            dir_1 = atom1-atom2
             do t = 1, N_DISCRET
-              dist_line = euclid(self%xyz(i,:3),line(:3,t))
-              if(dist_line <= 0.6*tthresh) then ! it intersects atoms
-                   flag(i) = .true. !flags also itself
-               endif
+                line(1,t) = atom1(1) + t_vec(t)* dir_1(1)
+                line(2,t) = atom1(2) + t_vec(t)* dir_1(2)
+              line(3,t) = atom1(3) + t_vec(t)* dir_1(3)
             enddo
-        enddo
-       ! generate pdb file for visualisation
-       cnt_intersect = 0
-       call final_atoms%new(count(flag), dummy=.true.)
-       do i = 1, n_tot
-           if(flag(i)) then
-               cnt_intersect = cnt_intersect + 1
-               call final_atoms%set_name(cnt_intersect,self%name(i))
-               call final_atoms%set_element(cnt_intersect,self%element(i))
-               call final_atoms%set_coord(cnt_intersect,(self%xyz(i,:3)))
-               call final_atoms%set_occupancy(cnt_intersect,self%occupancy(i))
-               call final_atoms%set_beta(cnt_intersect,self%beta(i))
-           endif
-       enddo
-       call final_atoms%writePDB('AtomColumn')
-       call final_atoms%kill
-       ! Find the line that best fits the atoms
-       allocate(points(3,count(flag)), source = 0.)
-       cnt = 0
-       do i = 1,n_tot
-         if(flag(i)) then
-           cnt = cnt + 1
-           points(:3,cnt) = self%xyz(i,:3)
-         endif
-       enddo
-       ! calculate centroid of the points
-       centroid = sum(points(:,:), dim = 2)/real(count(flag))
-       ! svd fit
-       allocate(pointsTrans(count(flag),3), source = 0.) ! because svdcmp modifies its input
-       ! translate
-       do i = 1, count(flag)
-         pointsTrans(i,:3) = points(:3,i) - centroid(:3)
-       enddo
-       allocate(w(3), v(3,3), source = 0.)
-       allocate(d(3), source = 0.)
-       call svdcmp(pointsTrans,w,v)
-       d = v(:,1)
-       write(logfhandle, *) 'Directional vector of the line', d
-       ! line
-       ! line(1,t) = centroid(1) + t_vec(t)* d(1)
-       ! line(2,t) = centroid(2) + t_vec(t)* d(2)
-       ! line(3,t) = centroid(3) + t_vec(t)* d(3)
-       ! calculate the distance to the points from the identified line
-       allocate(distances_totheline(cnt), source = 0.)
-       allocate(radii(cnt), source = 0.) ! which radius is the atom center belonging to
-       denominator = sqrt(d(1)**2+d(2)**2+d(3)**2)
-       m = sum(self%xyz(:,:), dim=1) /real(self%n)
-       cnt = count(flag)
-       do i = 1, cnt
-         vec  = centroid(:3)-points(:3,i)
-         prod = cross(vec,d)
-         distances_totheline(i) = sqrt(prod(1)**2+prod(2)**2+prod(3)**2)/denominator
-         radii(i) = euclid(points(:,i), m)
-       enddo
-       ! it's already in A
-       call fopen(filnum, file='Radii.csv', iostat=io_stat)
-       write (filnum,*) 'r'
-       do i = 1, cnt
-         write (filnum,'(A)', advance='yes') trim(real2str(radii(i)))
-       end do
-       call fclose(filnum)
-       call fopen(filnum, file='DistancesToTheLine.csv',iostat=io_stat)
-       write (filnum,*) 'd'
-       do i = 1, cnt
-         write (filnum,'(A)', advance='yes') trim(real2str(distances_totheline(i)))
-       end do
-       call fclose(filnum)
-      elseif(n == 3) then
-        write(logfhandle,*)'PLANE IDENTIFICATION, INITIATION'
-        atom1(:) = init_atoms%get_coord(1)
-        atom2(:) = init_atoms%get_coord(2)
-        atom3(:) = init_atoms%get_coord(3)
-        dir_1 = atom1-atom2
-        dir_2 = atom1-atom3
-        allocate(plane(3, N_DISCRET, N_DISCRET), source = 0.)
-        do t = 1, N_DISCRET
-            do s = 1, N_DISCRET
-                plane(1,t,s) = atom1(1) + t_vec(t)* dir_1(1) + s_vec(s)* dir_2(1)
-                plane(2,t,s) = atom1(2) + t_vec(t)* dir_1(2) + s_vec(s)* dir_2(2)
-                plane(3,t,s) = atom1(3) + t_vec(t)* dir_1(3) + s_vec(s)* dir_2(3)
+            ! calculate how many atoms does the line intersect and flag them
+            do i = 1, n_tot
+                do t = 1, N_DISCRET
+                    dist_line = euclid(self%xyz(i,:3),line(:3,t))
+                    if(dist_line <= 0.6*tthresh) then ! it intersects atoms
+                        flag(i) = .true. !flags also itself
+                    endif
+                enddo
             enddo
-        enddo
-        ! calculate how many atoms does the plane intersect and flag them
-        do i = 1, n_tot
+            ! generate pdb file for visualisation
+            cnt_intersect = 0
+            call final_atoms%new(count(flag), dummy=.true.)
+            do i = 1, n_tot
+                if( flag(i) )then
+                    cnt_intersect = cnt_intersect + 1
+                    call final_atoms%set_name(cnt_intersect,self%name(i))
+                    call final_atoms%set_element(cnt_intersect,self%element(i))
+                    call final_atoms%set_coord(cnt_intersect,(self%xyz(i,:3)))
+                    call final_atoms%set_occupancy(cnt_intersect,self%occupancy(i))
+                    call final_atoms%set_beta(cnt_intersect,self%beta(i))
+                endif
+            enddo
+            call final_atoms%writePDB('AtomColumn')
+            call final_atoms%kill
+            ! Find the line that best fits the atoms
+            allocate(points(3,count(flag)), source = 0.)
+            cnt = 0
+            do i = 1,n_tot
+                if( flag(i) )then
+                    cnt = cnt + 1
+                    points(:3,cnt) = self%xyz(i,:3)
+                endif
+            enddo
+            ! calculate centroid of the points
+            centroid = sum(points(:,:), dim = 2)/real(count(flag))
+            ! svd fit
+            allocate(pointsTrans(count(flag),3), source = 0.) ! because svdcmp modifies its input
+            ! translate
+            do i = 1, count(flag)
+                pointsTrans(i,:3) = points(:3,i) - centroid(:3)
+            enddo
+            allocate(w(3), v(3,3), source = 0.)
+            allocate(d(3), source = 0.)
+            call svdcmp(pointsTrans,w,v)
+            d = v(:,1)
+            write(logfhandle, *) 'Directional vector of the line', d
+            ! line
+            ! line(1,t) = centroid(1) + t_vec(t)* d(1)
+            ! line(2,t) = centroid(2) + t_vec(t)* d(2)
+            ! line(3,t) = centroid(3) + t_vec(t)* d(3)
+            ! calculate the distance to the points from the identified line
+            allocate(distances_totheline(cnt), source = 0.)
+            allocate(radii(cnt), source = 0.) ! which radius is the atom center belonging to
+            denominator = sqrt(d(1)**2+d(2)**2+d(3)**2)
+            m           = sum(self%xyz(:,:), dim=1) /real(self%n)
+            cnt         = count(flag)
+            do i = 1, cnt
+                vec                    = centroid(:3)-points(:3,i)
+                prod                   = cross(vec,d)
+                distances_totheline(i) = sqrt(prod(1)**2+prod(2)**2+prod(3)**2)/denominator
+                radii(i)               = euclid(points(:,i), m)
+            enddo
+            ! it's already in A
+            call fopen(filnum, file='Radii.csv', iostat=io_stat)
+            write (filnum,*) 'r'
+            do i = 1, cnt
+                write (filnum,'(A)', advance='yes') trim(real2str(radii(i)))
+            enddo
+            call fclose(filnum)
+            call fopen(filnum, file='DistancesToTheLine.csv',iostat=io_stat)
+            write (filnum,*) 'd'
+            do i = 1, cnt
+                write (filnum,'(A)', advance='yes') trim(real2str(distances_totheline(i)))
+            enddo
+            call fclose(filnum)
+        elseif(n == 3) then
+            write(logfhandle,*)'PLANE IDENTIFICATION, INITIATION'
+            atom1(:) = init_atoms%get_coord(1)
+            atom2(:) = init_atoms%get_coord(2)
+            atom3(:) = init_atoms%get_coord(3)
+            dir_1 = atom1-atom2
+            dir_2 = atom1-atom3
+            allocate(plane(3, N_DISCRET, N_DISCRET), source = 0.)
             do t = 1, N_DISCRET
-              do s = 1, N_DISCRET
-                dist_plane = euclid(self%xyz(i,:3),plane(:3,t,s))
-                if(dist_plane <= 0.6*tthresh) then ! it intersects atoms i
-                     flag(i) = .true. !flags also itself
-                 endif
-              enddo
+                do s = 1, N_DISCRET
+                    plane(1,t,s) = atom1(1) + t_vec(t)* dir_1(1) + s_vec(s)* dir_2(1)
+                    plane(2,t,s) = atom1(2) + t_vec(t)* dir_1(2) + s_vec(s)* dir_2(2)
+                    plane(3,t,s) = atom1(3) + t_vec(t)* dir_1(3) + s_vec(s)* dir_2(3)
+                enddo
             enddo
-        enddo
-        ! generate pdb for visualisation
-        cnt_intersect = 0
-        call final_atoms%new(count(flag), dummy=.true.)
-        do i = 1, n_tot
-            if(flag(i)) then
-                cnt_intersect = cnt_intersect + 1
-                call final_atoms%set_name(cnt_intersect,self%name(i))
-                call final_atoms%set_element(cnt_intersect,self%element(i))
-                call final_atoms%set_coord(cnt_intersect,(self%xyz(i,:3)))
-                call final_atoms%set_occupancy(cnt_intersect,self%occupancy(i))
-                call final_atoms%set_beta(cnt_intersect,self%beta(i))
-            endif
-        enddo
-        call final_atoms%writePDB('AtomPlane')
-        call final_atoms%kill
-        allocate(points(3, count(flag)), source = 0.)
-        ! calculate center of mass of the points
-        m = sum(self%xyz(:,:), dim=1) /real(self%n)
-        cnt = 0
-        do i = 1, n_tot
-            if(flag(i)) then
-                cnt = cnt + 1
-                points(:3,cnt) = self%xyz(i,:3)-m(:)
-            endif
-        enddo
-        vec = plane_from_points(points)
-        allocate(distances_totheplane(cnt), source = 0.)
-        allocate(radii(cnt), source = 0.) ! which radius is the atom center belonging to
-        cnt = 0
-        denominator = sqrt(vec(1)**2+vec(2)**2+1.)
-        write(logfhandle,*) 'Normal vector: [', vec(1), ',', vec(2), ',', -1., ']'
-        do i = 1, n_tot
-            if(flag(i)) then
-                cnt = cnt + 1
-                ! formula for distance of a point to a plane
-                distances_totheplane(cnt) = abs(vec(1)*points(1,cnt)+vec(2)*points(2,cnt)-points(3,cnt)+vec(3))/denominator
-                radii(cnt) = euclid(self%xyz(i,:3), m)
-            endif
-        enddo
-        ! it's already in A
-        call fopen(filnum, file='Radii.csv', iostat=io_stat)
-        write (filnum,*) 'r'
-        do i = 1, cnt
-          write (filnum,'(A)', advance='yes') trim(real2str(radii(i)))
-        end do
-        call fclose(filnum)
-        call fopen(filnum, file='DistancesToThePlane.csv',iostat=io_stat)
-        write (filnum,*) 'd'
-        do i = 1, cnt
-          write (filnum,'(A)', advance='yes') trim(real2str(distances_totheplane(i)))
-        end do
-        call fclose(filnum)
-      endif
-      call init_atoms%kill
-      if(allocated(line))  deallocate(line)
-      if(allocated(plane)) deallocate(plane)
+            ! calculate how many atoms does the plane intersect and flag them
+            do i = 1, n_tot
+                do t = 1, N_DISCRET
+                    do s = 1, N_DISCRET
+                        dist_plane = euclid(self%xyz(i,:3),plane(:3,t,s))
+                        if( dist_plane <= 0.6*tthresh )then ! it intersects atoms i
+                            flag(i) = .true. !flags also itself
+                        endif
+                    enddo
+                enddo
+            enddo
+            ! generate pdb for visualisation
+            cnt_intersect = 0
+            call final_atoms%new(count(flag), dummy=.true.)
+            do i = 1, n_tot
+                if( flag(i) )then
+                    cnt_intersect = cnt_intersect + 1
+                    call final_atoms%set_name(cnt_intersect,self%name(i))
+                    call final_atoms%set_element(cnt_intersect,self%element(i))
+                    call final_atoms%set_coord(cnt_intersect,(self%xyz(i,:3)))
+                    call final_atoms%set_occupancy(cnt_intersect,self%occupancy(i))
+                    call final_atoms%set_beta(cnt_intersect,self%beta(i))
+                endif
+            enddo
+            call final_atoms%writePDB('AtomPlane')
+            call final_atoms%kill
+            allocate(points(3, count(flag)), source = 0.)
+            ! calculate center of mass of the points
+            m   = sum(self%xyz(:,:), dim=1) /real(self%n)
+            cnt = 0
+            do i = 1, n_tot
+                if( flag(i) )then
+                    cnt = cnt + 1
+                    points(:3,cnt) = self%xyz(i,:3)-m(:)
+                endif
+            enddo
+            vec = plane_from_points(points)
+            allocate(distances_totheplane(cnt), source = 0.)
+            allocate(radii(cnt), source = 0.) ! which radius is the atom center belonging to
+            cnt = 0
+            denominator = sqrt(vec(1)**2+vec(2)**2+1.)
+            write(logfhandle,*) 'Normal vector: [', vec(1), ',', vec(2), ',', -1., ']'
+            do i = 1, n_tot
+                if(flag(i)) then
+                    cnt = cnt + 1
+                    ! formula for distance of a point to a plane
+                    distances_totheplane(cnt) = abs(vec(1)*points(1,cnt)+vec(2)*points(2,cnt)-points(3,cnt)+vec(3))/denominator
+                    radii(cnt) = euclid(self%xyz(i,:3), m)
+                endif
+            enddo
+            ! it's already in A
+            call fopen(filnum, file='Radii.csv', iostat=io_stat)
+            write (filnum,*) 'r'
+            do i = 1, cnt
+                write (filnum,'(A)', advance='yes') trim(real2str(radii(i)))
+            enddo
+            call fclose(filnum)
+            call fopen(filnum, file='DistancesToThePlane.csv',iostat=io_stat)
+            write (filnum,*) 'd'
+            do i = 1, cnt
+                write (filnum,'(A)', advance='yes') trim(real2str(distances_totheplane(i)))
+            enddo
+            call fclose(filnum)
+        endif
+        call init_atoms%kill
+        if(allocated(line))  deallocate(line)
+        if(allocated(plane)) deallocate(plane)
     end subroutine geometry_analysis_pdb
 
     function find_masscen( self ) result( m )
@@ -1103,6 +1142,89 @@ contains
     !
     ! end subroutine shift2masscen
 
+    subroutine pdb2mrc( self, pdb_file, vol_file, smpd, vol_dim )
+        use simple_image, only: image
+        class(atoms),  intent(inout) :: self
+        real,          intent(in)    :: smpd
+        character(*),  intent(in)    :: pdb_file, vol_file   
+        type(image)       :: vol
+        real              :: mol_dim(3), center(3), half_box(3), max_dist, dist
+        integer           :: ldim(3), i_atom, j_atom
+        integer, optional :: vol_dim(3)
+        call self%new(pdb_file)
+        ! Dimensions of the molecule
+        write(logfhandle,'(A,f8.2,1X,A,f8.2)') "Bounding box: x:", minval(self%xyz(:,1)),"-", maxval(self%xyz(:,1))
+        write(logfhandle,'(A,f8.2,1X,A,f8.2)') "              y:", minval(self%xyz(:,2)),"-", maxval(self%xyz(:,2))
+        write(logfhandle,'(A,f8.2,1X,A,f8.2)') "              z:", minval(self%xyz(:,3)),"-", maxval(self%xyz(:,3))
+        mol_dim(1) = maxval(self%xyz(:,1)) - minval(self%xyz(:,1))
+        mol_dim(2) = maxval(self%xyz(:,2)) - minval(self%xyz(:,2))
+        mol_dim(3) = maxval(self%xyz(:,3)) - minval(self%xyz(:,3))
+        center(1)  = minval(self%xyz(:,1)) + mol_dim(1)/2.
+        center(2)  = minval(self%xyz(:,2)) + mol_dim(2)/2.
+        center(3)  = minval(self%xyz(:,3)) + mol_dim(3)/2.
+        write(logfhandle,'(A,2(f8.3,","),f8.3,A)') " Atomic center at ", center," (center of volume at 0, 0, 0)"
+        if( present(vol_dim) )then
+            ldim        = ceiling( (mol_dim)/smpd )
+            if( vol_dim(1) < ldim(1) )  THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pbd2mrc')
+            if( vol_dim(2) < ldim(2) )  THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pbd2mrc')
+            if( vol_dim(3) < ldim(3) )  THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pbd2mrc')
+            ldim        = vol_dim
+            half_box(:) = (vol_dim*smpd)/2.
+        else
+            max_dist = 0.
+            do i_atom = 1, self%n
+                do j_atom = i_atom + 1, self%n
+                    dist = euclid( self%xyz(i_atom,:), self%xyz(j_atom,:) )
+                    if( dist > max_dist ) max_dist = dist
+                enddo
+            enddo
+            ldim(:)     = ceiling( (max_dist/smpd) * 2.)
+            half_box(:) = max_dist / 2.
+        endif
+        call vol%new([ldim(1), ldim(2), ldim(3)], smpd)
+        ! 0,0,0 in PDB space is map to the center of the volume 
+        call self%translate(-center+half_box)
+        call self%convolve( vol, cutoff = 8*smpd)
+        call vol%write(vol_file)
+        call vol%kill()
+        write(logfhandle,'(A,3i5)') " Simulated volume created ", ldim
+    end subroutine pdb2mrc
+
+    subroutine atom_validation( self, vol, filename )
+        use simple_image, only: image
+        class(atoms),               intent(inout) :: self
+        type(image),                intent(in)    :: vol
+        character(len=*), optional, intent(in)    :: filename
+        type(image) :: vol_atom, vol_at
+        type(atoms) :: atom
+        integer     :: i_atom, center(3), atom_box
+        real        :: smpd, cc
+        logical     :: outside
+        smpd = vol%get_smpd()
+        if(present(filename)) open(unit=45,file=trim(filename))
+        do i_atom = 1, self%n
+            atom_box = (2 * ceiling((self%radius(i_atom))/smpd)) + 1
+            ! generate simulted atom volume
+            call vol_atom%new([atom_box, atom_box, atom_box], smpd)
+            call self%extract_atom(atom, i_atom)
+            center(:) = atom%get_coord(1)
+            call atom%ref2originbox(1, atom_box)
+            call atom%convolve(vol_atom, cutoff = 8*smpd)
+            ! extract the atom volume from the molecule volume
+            call vol_at%new([atom_box, atom_box, atom_box], smpd)
+            call vol%window_slim(center, atom_box, vol_at, outside)
+            call vol_at%mask(real(atom_box)/2., 'soft')
+            ! compute cross-correlation between both volumes
+            cc = vol_atom%real_corr(vol_at)
+            call self%set_atom_corr(i_atom, cc)
+            if(present(filename)) write(45,'(1x,4(f10.6,a))') self%xyz(i_atom,1), ',', self%xyz(i_atom,2), ',', self%xyz(i_atom,3), ',', self%atom_corr(i_atom)
+            call vol_atom%kill
+            call vol_at%kill
+            call atom%kill
+        enddo
+        if(present(filename)) close(45)
+    end subroutine atom_validation
+
     ! MODIFIERS
 
     subroutine translate( self, shift )
@@ -1118,6 +1240,13 @@ contains
         real,         intent(in)    :: mat(3,3)
         self%xyz = matmul(self%xyz,transpose(mat))
     end subroutine rotate
+
+    subroutine ref2originbox( self, i, boxsize )
+        class(atoms), intent(inout) :: self
+        integer,      intent(in)    :: boxsize, i
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; center2originbox')
+        self%xyz(i,:) = boxsize/2
+    end subroutine ref2originbox
 
     ! DESTRUCTOR
     subroutine kill( self )
@@ -1137,6 +1266,7 @@ contains
         if( allocated(self%het) )deallocate(self%het)
         if( allocated(self%element) )deallocate(self%element)
         if( allocated(self%radius) )deallocate(self%radius)
+        if( allocated(self%atom_corr) )deallocate(self%atom_corr)
         self%n      = 0
         self%exists = .false.
     end subroutine kill

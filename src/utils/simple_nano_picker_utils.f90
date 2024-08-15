@@ -4,6 +4,7 @@ use simple_image
 use simple_atoms
 use simple_parameters
 use simple_defs_atoms
+use simple_nanoparticle_utils
 use simple_srch_sort_loc, only : hpsort
 implicit none
 #include "simple_local_flags.inc"
@@ -40,6 +41,30 @@ implicit none
         enddo
         close(22)
     end subroutine find_closest
+
+       ! input both pdbfile_* with .pdb extension
+    subroutine compare_pick( pdbfile_ref, pdbfile_exp )
+        character(len=*),           intent(in)    :: pdbfile_ref
+        character(len=*), optional, intent(in)    :: pdbfile_exp
+        real,    allocatable :: pdb_ref_coords(:,:), pdb_exp_coords(:,:), distances(:)
+        integer              :: iostat, i
+        call read_pdb2matrix(trim(pdbfile_ref), pdb_ref_coords)
+        if( present(pdbfile_exp) )then 
+            call read_pdb2matrix(trim(pdbfile_exp),pdb_exp_coords)
+        else
+            open(unit = 40, file='test_atomic_centers.pdb', iostat=iostat)
+            if( iostat /= 0 )then
+                print *, 'compare_pick: test_atomic_centers.pdb does not exist, please enter valid filename for pdbfile_exp'
+                close(40)
+                return
+            endif
+            call read_pdb2matrix('test_atomic_centers.pdb',pdb_exp_coords)
+            close(40)
+        endif
+        allocate(distances(max(size(pdb_ref_coords,dim=2),size(pdb_exp_coords,dim=2))))
+        call find_closest(pdb_ref_coords,pdb_exp_coords,size(pdb_ref_coords,dim=2),size(pdb_exp_coords,dim=2),distances)
+        print *, 'AVG DISTANCE = ', sum(distances)/size(distances)
+    end subroutine compare_pick
     
     subroutine write_centers( fname, coords, smpd )
         character(len=*),           intent(in)    :: fname
@@ -48,42 +73,48 @@ implicit none
         type(atoms) :: centers_pdb
         integer     :: cc
         call centers_pdb%new(size(coords, dim = 1), dummy=.true.)
+        open(unit=45,file=trim(fname)//'.csv')
         do cc = 1, size(coords, dim = 1)
-            call centers_pdb%set_name(cc,params_glob%element)
+            call centers_pdb%set_name(cc,' '//params_glob%element)
+            call centers_pdb%set_num(cc,cc)
             call centers_pdb%set_element(cc,params_glob%element)
-            call centers_pdb%set_coord(cc,(coords(cc,:))*smpd)
+            call centers_pdb%set_coord(cc,(coords(cc,:)-1)*smpd)
             !call centers_pdb%set_beta(cc,nano%atominfo(cc)%valid_corr) ! use per atom valid corr
-            call centers_pdb%set_resnum(cc,cc)
+            call centers_pdb%set_resnum(cc,1)
+            write(45,'(f8.4,a,f8.4,a,f8.4)') coords(cc,1), ',', coords(cc,2), ',', coords(cc,3)-1
         enddo
+        close(45)
         call centers_pdb%writepdb(fname)
     end subroutine write_centers
 
-    subroutine threshold_img(img_in, img_out, level)
-        type(image), intent(in)  :: img_in
-        type(image), intent(out) :: img_out
-        integer,     intent(in)  :: level
+    subroutine threshold_img(img_in, img_out, level, threshold_out)
+        type(image),    intent(in)  :: img_in
+        type(image),    intent(out) :: img_out
+        integer,        intent(in)  :: level
+        real, optional, intent(out) :: threshold_out
         real              :: thres
         real, allocatable :: intensities(:)
         intensities = pack(img_in%get_rmat(), mask=.true.)
         call detect_peak_thres(size(intensities), level, intensities, thres)
-        print *, 'intensity threshold = ', thres
         call img_out%copy(img_in)
         call img_out%zero_below(thres)
-        call img_out%write('post_thresholding_map_3.mrc')
+        call img_out%write('post_thresholding_map.mrc')
         deallocate(intensities)
+        threshold_out = thres
     end subroutine threshold_img
 
     ! intensity thresholding based on Otsu's method
-    subroutine make_intensity_mask(img_in, mask_out, level)
+    subroutine make_intensity_mask(img_in, mask_out, level, intensity_thres)
         type(image),          intent(in)  :: img_in
         logical, allocatable, intent(out) :: mask_out(:,:,:)
         integer,              intent(in)  :: level
+        real,    optional,    intent(out) :: intensity_thres
         integer           :: ldim(3)
         real, allocatable :: rmat(:,:,:)
         type(image)       :: thres_img
         ldim = img_in%get_ldim()
         allocate(mask_out(ldim(1), ldim(2), ldim(3)), source=.false.)
-        call threshold_img(img_in, thres_img, level)
+        call threshold_img(img_in, thres_img, level, intensity_thres)
         rmat = thres_img%get_rmat()
         where (rmat > 0)
             mask_out = .true.
@@ -91,12 +122,13 @@ implicit none
     end subroutine make_intensity_mask
 
     ! intensity thresholding based on nanoparticle properties
-    subroutine make_intensity_mask_2(img_in, mask_out, element, NP_diam, level)
+    subroutine make_intensity_mask_2(img_in, mask_out, element, NP_diam, level, intensity_thres)
         type(image),          intent(in)  :: img_in
         logical, allocatable, intent(out) :: mask_out(:,:,:)
         character(len=*),     intent(in)  :: element
         real,                 intent(in)  :: NP_diam ! approx. diameter of nanoparticle
         integer, optional,    intent(in)  :: level
+        real,    optional,    intent(out) :: intensity_thres
         type(image)       :: img_copy
         character(len=2)  :: el_ucase
         character(len=8)  :: crystal_system
@@ -104,18 +136,12 @@ implicit none
         real              :: x1, x2, x3, y1, y2, y3, z1, z2, z3
         real, allocatable :: intensities_flat(:), rmat(:,:,:)
         integer           :: i, j, k, n, ncubes, box, ldim(3), ZZ, nvx, last_index
-        print *, 'NP_diam = ', NP_diam
         msksq    = (NP_diam / 2.)**2.
-        print *, 'msksq = ', msksq
         el_ucase = uppercase(trim(adjustl(element)))
         call get_lattice_params(el_ucase, crystal_system, a)
-        print *, 'crystal_system = ', crystal_system
-        print *, 'el_ucase = ', el_ucase
-        print *, 'a = ', a
         ha       = a / 2.
         ldim     = img_in%get_ldim()
         box      = ldim(1)
-        print *, 'box = ', box
         smpd     = img_in%get_smpd()
         ncubes   = floor(real(box) * smpd / a)
         ! atoms at edges
@@ -178,13 +204,11 @@ implicit none
                     enddo
                 enddo
         end select
-        print *, 'n = ', n
         if (n .eq. 0) print *, 'Error! n should be greater than 0: make_intensity_mask_2.'
-        call get_element_Z_and_radius(trim(adjustl(element)), ZZ, radius)
+        call get_element_Z_and_radius(element, ZZ, radius)
         radius_vx  = radius / smpd
         sphere_vol = PI * (4./3.) * radius_vx**3
         total_vol  = sphere_vol * n
-        print *, 'total_vol = ', total_vol
         nvx        = anint(total_vol)
         ! find intensity threshold value based on highest 'nvx' intensity values
         rmat       = img_in%get_rmat()
@@ -192,35 +216,40 @@ implicit none
         call hpsort(intensities_flat)                   ! sort array (low to high)
         last_index = size(intensities_flat)             ! last_index is position of largest intensity value in sorted array
         thres      = intensities_flat(last_index - nvx) ! last_index - nvx position of sorted array is threshold
-        print *, 'intensity threshold = ', thres
         call img_copy%copy(img_in)
         call img_copy%zero_below(thres)
         call img_copy%write('post_thresholding_map2.mrc')
         if (present(level)) then
-            call make_intensity_mask(img_copy, mask_out, level)
+            call make_intensity_mask(img_copy, mask_out, level, intensity_thres)
         else
             ! make intensity logical mask, with positions with intensities greater than the threshold being set to true
             allocate(mask_out(ldim(1), ldim(2), ldim(3)), source=.false.)
             where (rmat > thres)
                 mask_out = .true.
             end where
+            intensity_thres = thres
         end if
-        print *, 'count(mask_out) = ', count(mask_out)
         deallocate(intensities_flat)
     end subroutine make_intensity_mask_2
 
-    function logical_box(array, pos, boxsize) result(truth_value)
-        logical, intent(in)  :: array(:,:,:)
-        integer, intent(in)  :: pos(3)
-        integer, intent(in)  :: boxsize
+    function logical_box(array, pos, boxsize, num_px) result(truth_value)
+        logical, intent(in)           :: array(:,:,:)
+        integer, intent(in)           :: pos(3)
+        integer, intent(in)           :: boxsize
+        integer, optional, intent(in) :: num_px
         logical              :: truth_value
         logical, allocatable :: small_box(:,:,:)
-        integer              :: to(3), from(3)
+        integer              :: to(3), from(3), num_px_here
         allocate(small_box(boxsize,boxsize,boxsize))
+        if (present(num_px)) then
+            num_px_here = num_px
+        else
+            num_px_here = 0
+        end if
         from      = pos
         to        = pos + boxsize
         small_box = array(from(1):to(1),from(2):to(2),from(3):to(3))
-        if(count(small_box) > 0) then 
+        if(count(small_box) > num_px_here) then 
             truth_value = .true.
         else
             truth_value = .false.

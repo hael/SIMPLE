@@ -25,13 +25,14 @@ use simple_stat
         integer, allocatable     :: inds_offset(:,:,:), positions(:,:)
         type(image)              :: simulated_atom, nano_img
         type(image), allocatable :: convolved_atoms(:)
-        real                     :: smpd, thres, radius, euclid_thres, mask_radius
+        real                     :: smpd, thres, radius, euclid_thres, mask_radius, dist_thres, intensity_thres
         real, allocatable        :: box_scores(:,:,:), loc_sdevs(:,:,:), avg_int(:,:,:), euclid_dists(:,:,:), center_positions(:,:)
-        logical                  :: use_euclids, has_mask, wrote_pdb
+        logical                  :: has_mask, wrote_pdb, circle
         logical, allocatable     :: msk(:,:,:), thres_msk(:,:,:)
 
     contains
         procedure :: new
+        procedure :: exec_nano_picker
         procedure :: simulate_atom
         procedure :: setup_iterators
         procedure :: match_boxes
@@ -54,45 +55,46 @@ use simple_stat
         procedure :: write_NP_image
         procedure :: write_dist
         procedure :: extract_img_from_pos
-        procedure :: compare_pick
         procedure :: kill
 
     end type nano_picker
 
     contains
 
-    subroutine new( self, smpd, element, raw_filename, peak_thres_level, offset, denoise, use_euclids, mskdiam, intensity_level)
+    subroutine new( self, smpd, element, raw_filename, peak_thres_level, offset, dist_thres, mskdiam, intensity_level, circle)
         class(nano_picker), intent(inout) :: self
         real,               intent(in)    :: smpd
         character(len=*),   intent(in)    :: element
         character(len=100), intent(in)    :: raw_filename
         integer,            intent(in)    :: peak_thres_level, offset
-        logical, optional,  intent(in)    :: denoise
-        logical, optional,  intent(in)    :: use_euclids
+        real,    optional,  intent(in)    :: dist_thres
         real,    optional,  intent(in)    :: mskdiam ! Angstroms
         integer, optional,  intent(in)    :: intensity_level
+        logical, optional,  intent(in)    :: circle
         character(len=2)         :: el_ucase
         integer                  :: Z, nptcls
         logical                  :: outside
         type(parameters), target :: params
-        type(image)              :: thres_img
         call self%kill
-        self%smpd           = smpd
-        self%element        = element
-        self%raw_filename   = raw_filename
-        self%offset         = offset
-        self%use_euclids    = .false.
-        self%wrote_pdb      = .false.
-        self%has_mask       = .false.
-        params_glob         => params
-        params_glob%element = self%element
-        params_glob%smpd    = self%smpd
+        self%smpd            = smpd
+        self%element         = element
+        self%raw_filename    = raw_filename
+        self%offset          = offset
+        self%wrote_pdb       = .false.
+        self%has_mask        = .false.
+        self%circle          = .false.
+        self%intensity_thres = -1
+        params_glob          => params
+        params_glob%element  = self%element
+        params_glob%smpd     = self%smpd
         ! retrieve nano_img from filename and find ldim
-        el_ucase            = upperCase(trim(adjustl(params_glob%element)))
+        !el_ucase            = upperCase(trim(adjustl(params_glob%element)))
+        el_ucase            = upperCase(params_glob%element)
         call get_element_Z_and_radius(el_ucase, Z, self%radius)
         if( Z == 0 ) THROW_HARD('Unknown element: '//el_ucase)
         ! hardcode
-        self%boxsize = round2even(self%radius / self%smpd) * 2
+        self%boxsize    = round2even(self%radius / self%smpd) * 2
+        self%dist_thres = self%radius / self%smpd
         call find_ldim_nptcls(self%raw_filename, self%ldim, nptcls, self%smpd)
         call self%nano_img%new(self%ldim, self%smpd)
         call self%nano_img%read(self%raw_filename)
@@ -101,14 +103,11 @@ use simple_stat
         self%thres = -0.999 ! initial value, will be updated later
         ! create thresholding mask
         if (present(intensity_level)) then
-            call thres_img%copy(self%nano_img)
-            call phasecorr_one_atom(thres_img, self%element)
-            call thres_img%write('denoised_map.mrc') 
             if (    intensity_level .eq. 1) then
-                call make_intensity_mask(      thres_img, self%thres_msk, level=2)
+                call make_intensity_mask(      self%nano_img, self%thres_msk, level=2, intensity_thres=self%intensity_thres)
             else if(intensity_level .eq. 2) then
                 if (present(mskdiam)) then
-                    call make_intensity_mask_2(thres_img, self%thres_msk, self%element, mskdiam*0.75, level=2)
+                    call make_intensity_mask_2(self%nano_img, self%thres_msk, self%element, mskdiam*0.75, level=2, intensity_thres=self%intensity_thres)
                 else
                     THROW_HARD('ERROR: MSKDIAM must be present to use intensity level 2')
                 end if
@@ -118,20 +117,50 @@ use simple_stat
         else
             allocate(self%thres_msk(self%ldim(1),self%ldim(2),self%ldim(3)), source=.true.)
         end if
-        ! denoise nano_img if requested
-        if( present(denoise) )then
-            if( denoise )then
-                call phasecorr_one_atom(self%nano_img, self%element)
-            endif
-        endif
-        if( present(use_euclids) ) then
-            self%use_euclids = use_euclids
-        end if
+        print *, 'INTENSITY THRES = ', self%intensity_thres
         if( present(mskdiam) ) then
             self%has_mask = .true.
             self%mask_radius   = (mskdiam / self%smpd) / 2
+            call self%nano_img%mask(self%mask_radius, 'soft')
+            call self%nano_img%write('masked_img.mrc')
         end if
+        if( present(circle) ) self%circle = circle
+        if( present(dist_thres) ) self%dist_thres = dist_thres
     end subroutine new
+
+    ! executes overall picking workflow
+    ! some things are hard-coded for now. Can be changed to be more / less customizable
+    subroutine exec_nano_picker(self, corr_thres, cs_thres)
+        class(nano_picker), intent(inout) :: self
+        real,  optional   , intent(in)    :: corr_thres, cs_thres
+        call self%simulate_atom
+        call self%setup_iterators
+        call self%match_boxes
+        call self%identify_threshold()
+        call self%apply_threshold
+        call self%distance_filter
+        call self%find_centers
+        call self%write_pdb('before_refinement')
+        print *, 'before refinement'
+        call self%calc_per_atom_corr
+        call self%write_NP_image('simimg3.mrc')
+        call self%refine_threshold(20, max_thres=0.7)
+        call self%write_pdb('after_refinement')
+        print *, 'after refinement'
+        call self%calc_per_atom_corr
+        if (.not. present(corr_thres) .and. .not. present(cs_thres))  then
+            call self%discard_atoms(use_valid_corr=.true., use_cs_thres=.true.)
+        else if (present(corr_thres) .and. .not. present(cs_thres))   then
+            call self%discard_atoms(use_valid_corr=.true., use_cs_thres=.true., corr_thres=corr_thres)
+        else if (present(cs_thres)   .and. .not. present(corr_thres)) then
+            call self%discard_atoms(use_valid_corr=.true., use_cs_thres=.true., cs_thres=cs_thres)
+        else 
+            call self%discard_atoms(use_valid_corr=.true., use_cs_thres=.true., corr_thres=corr_thres, cs_thres=cs_thres)
+        end if
+        call self%write_pdb('after_discard_atoms')
+        print *, 'after discard atoms'
+        call self%calc_per_atom_corr
+    end subroutine exec_nano_picker
 
     subroutine simulate_atom( self )
         class(nano_picker), intent(inout) :: self
@@ -143,7 +172,7 @@ use simple_stat
         call get_element_Z_and_radius(self%element, Z, self%radius)
         if (Z == 0) THROW_HARD('Unknown element : '//self%element)
         call atom%new(1)
-        call atom%set_element(1,trim(self%element))
+        call atom%set_element(1,self%element)
         ldim_box  = [self%boxsize,self%boxsize,self%boxsize]
         call atom%set_coord(1,(self%smpd*real(ldim_box)/2.)) ! make sure atom is in center of box
         call atom%convolve(self%simulated_atom, cutoff=8*self%smpd)
@@ -171,13 +200,13 @@ use simple_stat
         self%nxyz_offset = 0
         nboxes           = 0
         ! find number of boxes
-        do xind = 0, nxyz(1), self%offset
+        do xind = 1, nxyz(1), self%offset
             self%nxyz_offset(1) = self%nxyz_offset(1) + 1
             self%nxyz_offset(2) = 0
-            do yind = 0, nxyz(2), self%offset
+            do yind = 1, nxyz(2), self%offset
                 self%nxyz_offset(2) = self%nxyz_offset(2) + 1
                 self%nxyz_offset(3) = 0
-                do zind = 0, nxyz(3), self%offset
+                do zind = 1, nxyz(3), self%offset
                     self%nxyz_offset(3) = self%nxyz_offset(3) + 1
                     nboxes              = nboxes + 1
                 enddo
@@ -190,13 +219,13 @@ use simple_stat
         allocate(self%msk(self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3)), source=.true.)
         self%nxyz_offset = 0
         nboxes           = 0
-        do xind = 0, nxyz(1), self%offset
+        do xind = 1, nxyz(1), self%offset
             self%nxyz_offset(1) = self%nxyz_offset(1) + 1
             self%nxyz_offset(2) = 0
-            do yind = 0, nxyz(2), self%offset
+            do yind = 1, nxyz(2), self%offset
                 self%nxyz_offset(2) = self%nxyz_offset(2) + 1
                 self%nxyz_offset(3) = 0
-                do zind = 0, nxyz(3), self%offset
+                do zind = 1, nxyz(3), self%offset
                     self%nxyz_offset(3)      = self%nxyz_offset(3) + 1
                     nboxes                   = nboxes + 1
                     self%positions(nboxes,:) = [xind,yind,zind]
@@ -218,22 +247,15 @@ use simple_stat
         allocate(self%euclid_dists(self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3)), source = -1.)
     end subroutine setup_iterators
 
-    subroutine match_boxes( self, circle )
+    subroutine match_boxes( self )
         class(nano_picker), intent(inout) :: self
-        logical, optional,  intent(in)    :: circle
         type(image), allocatable :: boximgs(:)
         type(image)              :: boximg, boximg_minmax
         integer                  :: xoff, yoff, zoff, pos(3), pos_center(3), ithr, nthr, winsz, npix_in, npix_out1, npix_out2
-        logical                  :: l_err_box, circle_here
+        logical                  :: l_err_box, circle_here, outside
         real                     :: maxrad, xyz(3)
         real,        allocatable :: pixels1(:), pixels2(:)
-        logical                  :: outside
-        if( present(circle) )then
-            circle_here = circle
-        else
-            circle_here = .false.
-        endif
-        if( .not. circle_here )then
+        if( .not. self%circle )then
             ! use entire boxes for correlation scores
             ! iterate through positions in nanoparticle image, compare to simulated atom 
             ! construct array of boximgs
@@ -297,7 +319,6 @@ use simple_stat
                             endif
                         enddo
                         call self%nano_img%win2arr_rad(      pos_center(1),  pos_center(2),  pos_center(3),  winsz, npix_in, maxrad, npix_out1, pixels1)
-                        !call self%thresh_img%win2arr_rad(      pos_center(1),  pos_center(2),  pos_center(3),  winsz, npix_in, maxrad, npix_out1, pixels1)
                         call self%simulated_atom%win2arr_rad(self%boxsize/2, self%boxsize/2, self%boxsize/2, winsz, npix_in, maxrad, npix_out2, pixels2)
                         self%box_scores(  xoff,yoff,zoff) = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))      
                         self%euclid_dists(xoff,yoff,zoff) = same_energy_euclid(pixels1(:npix_out1),pixels2(:npix_out2)) 
@@ -410,7 +431,6 @@ use simple_stat
             self%euclid_thres = outlier_cutoff
             deallocate(pos_scores)
         end if
-        if (self%use_euclids) self%thres = -0.999
     end subroutine identify_high_scores
 
     subroutine apply_threshold(self)
@@ -418,56 +438,31 @@ use simple_stat
         integer, allocatable :: pos_inds(:)
         integer              :: xoff, yoff, zoff, ipeak, npeaks
         logical              :: is_peak
-        if (.not. self%use_euclids) then
-            print *, 'Correlation threshold = ', self%thres
-            pos_inds = pack(self%inds_offset(:,:,:), mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
-            npeaks   = size(pos_inds)
-            ! update box scores
-            !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,is_peak,ipeak)
-            do xoff = 1, self%nxyz_offset(1)
-                do yoff = 1, self%nxyz_offset(2)
-                    do zoff = 1, self%nxyz_offset(3)
-                        is_peak = .false.
-                        do ipeak = 1,npeaks
-                            if( pos_inds(ipeak) == self%inds_offset(xoff,yoff,zoff) )then
-                                is_peak = .true.
-                                exit
-                            endif
-                        enddo
-                        if( .not. is_peak ) self%box_scores(xoff,yoff,zoff) = -1.
+        pos_inds = pack(self%inds_offset(:,:,:), mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
+        npeaks   = size(pos_inds)
+        ! update box scores
+        !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,is_peak,ipeak)
+        do xoff = 1, self%nxyz_offset(1)
+            do yoff = 1, self%nxyz_offset(2)
+                do zoff = 1, self%nxyz_offset(3)
+                    is_peak = .false.
+                    do ipeak = 1,npeaks
+                        if( pos_inds(ipeak) == self%inds_offset(xoff,yoff,zoff) )then
+                            is_peak = .true.
+                            exit
+                        endif
                     enddo
+                    if( .not. is_peak ) self%box_scores(xoff,yoff,zoff) = -1.
                 enddo
             enddo
-            !$omp end parallel do
-        else
-            print *, 'Euclidean distance threshold = ', self%euclid_thres
-            pos_inds = pack(self%inds_offset(:,:,:), mask=self%euclid_dists(:,:,:) <= self%euclid_thres .and. self%msk(:,:,:))
-            npeaks   = size(pos_inds)
-            ! update box scores
-            !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,is_peak,ipeak)
-            do xoff = 1, self%nxyz_offset(1)
-                do yoff = 1, self%nxyz_offset(2)
-                    do zoff = 1, self%nxyz_offset(3)
-                        is_peak = .false.
-                        do ipeak = 1,npeaks
-                            if( pos_inds(ipeak) == self%inds_offset(xoff,yoff,zoff) )then
-                                is_peak = .true.
-                                exit
-                            endif
-                        enddo
-                        if( .not. is_peak ) self%box_scores(xoff,yoff,zoff) = -1.
-                    enddo
-                enddo
-            enddo
-            !$omp end parallel do
-        end if
+        enddo
+        !$omp end parallel do
         deallocate(pos_inds)
     end subroutine apply_threshold
 
-    subroutine distance_filter( self, dist_thres)
+    subroutine distance_filter( self )
         class(nano_picker), intent(inout) :: self
-        real,    optional,  intent(in)    :: dist_thres
-        real                 :: dist_thres_here, dist
+        real                 :: dist
         integer              :: nbox, ibox, jbox, xoff, yoff, zoff, npeaks, ipeak, loc
         integer, allocatable :: pos_inds(:)
         real,    allocatable :: pos_scores(:)
@@ -475,55 +470,26 @@ use simple_stat
         logical              :: is_peak
         character(len=8)     :: crystal_system
         ! distance threshold
-        if( present(dist_thres) )then
-            dist_thres_here  = dist_thres
-        else
-            dist_thres_here  = self%radius / self%smpd
-            print *, 'DIST_THRES = ', dist_thres_here
-        endif
-        if (.not. self%use_euclids) then
-            pos_inds   = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
-            pos_scores = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
-            nbox       = size(pos_inds)
-            allocate(mask(nbox),         source=.false.)
-            allocate(selected_pos(nbox), source=.true. )
-            do ibox = 1, nbox
-                mask = .false.
-                ! identify boxes in neighborhood
-                !$omp parallel do schedule(static) default(shared) private(jbox, dist) proc_bind(close)
-                do jbox = 1, nbox
-                    dist = euclid(real(self%positions(pos_inds(ibox),:)),real(self%positions(pos_inds(jbox),:)))
-                    if( dist <= dist_thres_here ) mask(jbox) = .true.
-                enddo
-                !$omp end parallel do
-                ! find highest correlation score in neighborhood
-                loc = maxloc(pos_scores, mask=mask, dim=1)
-                ! eliminate all but the best
-                mask(loc) = .false.
-                where( mask ) selected_pos = .false.
+        pos_inds   = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
+        pos_scores = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
+        nbox       = size(pos_inds)
+        allocate(mask(nbox),         source=.false.)
+        allocate(selected_pos(nbox), source=.true. )
+        do ibox = 1, nbox
+            mask = .false.
+            ! identify boxes in neighborhood
+            !$omp parallel do schedule(static) default(shared) private(jbox, dist) proc_bind(close)
+            do jbox = 1, nbox
+                dist = euclid(real(self%positions(pos_inds(ibox),:)),real(self%positions(pos_inds(jbox),:)))
+                if( dist <= self%dist_thres ) mask(jbox) = .true.
             enddo
-        else
-            pos_inds   = pack(self%inds_offset(:,:,:),  mask=self%euclid_dists(:,:,:) <= self%euclid_thres .and. self%msk(:,:,:))
-            pos_scores = pack(self%euclid_dists(:,:,:), mask=self%euclid_dists(:,:,:) <= self%euclid_thres .and. self%msk(:,:,:))
-            nbox       = size(pos_inds)
-            allocate(mask(nbox),         source=.false.)
-            allocate(selected_pos(nbox), source=.true. )
-            do ibox = 1, nbox
-                mask = .false.
-                ! identify boxes in neighborhood
-                !$omp parallel do schedule(static) default(shared) private(jbox, dist) proc_bind(close)
-                do jbox = 1, nbox
-                    dist = euclid(real(self%positions(pos_inds(ibox),:)),real(self%positions(pos_inds(jbox),:)))
-                    if( dist <= dist_thres_here ) mask(jbox) = .true.
-                enddo
-                !$omp end parallel do
-                ! find highest correlation score in neighborhood
-                loc = minloc(pos_scores, mask=mask, dim=1)
-                ! eliminate all but the best
-                mask(loc) = .false.
-                where( mask ) selected_pos = .false.
-            enddo
-        end if
+            !$omp end parallel do
+            ! find highest correlation score in neighborhood
+            loc = maxloc(pos_scores, mask=mask, dim=1)
+            ! eliminate all but the best
+            mask(loc) = .false.
+            where( mask ) selected_pos = .false.
+        enddo
         npeaks = count(selected_pos)
         print *, 'NPEAKS BEFORE DISTANCE FILTER = ', nbox
         print *, 'NPEAKS AFTER DISTANCE FILTER = ', npeaks
@@ -642,9 +608,10 @@ use simple_stat
         class(nano_picker), intent(inout) :: self
         type(image), allocatable :: atms_array(:)
         integer,     allocatable :: pos_inds(:)
-        real,        allocatable :: coords(:,:)
+        real,        allocatable :: coords(:,:), boximg_rmat(:,:,:)
         integer                  :: nbox, iimg, pos(3)
         logical                  :: outside
+        logical,     allocatable :: boximg_mask(:,:,:)
         pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
         nbox     = size(pos_inds, dim=1)
         allocate(coords(nbox,3))
@@ -658,14 +625,25 @@ use simple_stat
             call self%convolved_atoms(iimg)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
             call self%nano_img%window_slim( pos, self%boxsize, atms_array(iimg), outside)
             !call atms_array(iimg)%write('boximgs/boximg_'//trim(int2str(iimg))//'.mrc')
-            call atms_array(iimg)%fft()
-            self%convolved_atoms(iimg) = atms_array(iimg)%conjg() * self%simulated_atom
-            call self%convolved_atoms(iimg)%ifft()
-            call atms_array(iimg)%ifft()
+            ! call atms_array(iimg)%fft()
+            ! self%convolved_atoms(iimg) = atms_array(iimg)%conjg() * self%simulated_atom
+            ! call self%convolved_atoms(iimg)%ifft()
+            ! call atms_array(iimg)%ifft()
+            self%convolved_atoms(iimg) = atms_array(iimg)
             ! want coordinates of atoms to be at the center of the images
-            call self%convolved_atoms(iimg)%norm_minmax
-            call self%convolved_atoms(iimg)%masscen(coords(iimg,:)) 
-            coords(iimg,:) = coords(iimg,:) + real(self%convolved_atoms(iimg)%get_ldim())/2. + pos !adjust center by size and position of box
+            !call self%convolved_atoms(iimg)%norm_minmax
+            allocate(boximg_rmat(self%boxsize,self%boxsize,self%boxsize), source=0.)
+            allocate(boximg_mask(self%boxsize,self%boxsize,self%boxsize), source=.true.)
+            boximg_rmat = self%convolved_atoms(iimg)%get_rmat()
+            where (boximg_rmat < self%intensity_thres)
+                boximg_mask = .false.
+            end where
+            !print *, 'count(mask) = ', count(boximg_mask)
+            call self%convolved_atoms(iimg)%masscen_adjusted(coords(iimg,:),boximg_mask) 
+            deallocate(boximg_rmat, boximg_mask)
+            !coords(iimg,:) = coords(iimg,:) + real(self%convolved_atoms(iimg)%get_ldim())/2. + pos !adjust center by size and position of box
+            coords(iimg,:) = coords(iimg,:) + pos
+            !print *, 'i = ', iimg, 'coords = ', coords(iimg,:)
             ! update center positions for chosen boxes
             self%center_positions(pos_inds(iimg),:) = coords(iimg,:)
         enddo
@@ -759,11 +737,16 @@ use simple_stat
         params_glob         => params
         params_glob%element = self%element
         params_glob%smpd    = self%smpd
-        call nano%new(self%raw_filename)
+        if (self%has_mask) then
+            call nano%new(self%raw_filename, msk=self%mask_radius)
+        else
+            call nano%new(self%raw_filename)
+        end if
         if (.not. self%wrote_pdb) call self%write_pdb()
         call nano%set_atomic_coords(trim(self%pdb_filename))
         call nano%simulate_atoms(simatms=simatms)
         call nano%validate_atoms(simatms=simatms)
+        call nano%write_centers('coordinates_in_nanoparticle_angstroms',which='valid_corr')
         call nano%kill
     end subroutine calc_per_atom_corr
 
@@ -786,11 +769,15 @@ use simple_stat
             thresholds(i) = self%thres + step * (i-1)
         enddo
         ! iterate through thresholds and calculate correlation to experimental map
+        print *, 'ITERATIONS BEGIN'
         do i = 1, num_thres
             self%thres     = thresholds(i) ! need to set self%thres because it is called in multiple subroutines
+            print *, 'i = ', i, 'self%thres = ', self%thres
             call self%find_centers
             thres_corrs(i) = self%whole_map_correlation()
+            print *, 'CORR = ', thres_corrs(i)
         enddo
+        print *, 'ITERATIONS END'
         optimal_index = maxloc(thres_corrs)
         self%thres    = thresholds(optimal_index(1))
         call self%find_centers ! call again to set positions to the optimal
@@ -937,7 +924,7 @@ use simple_stat
         character(len=*), optional, intent(in)    :: compare_to_pdb
         real                     :: corr
         type(nanoparticle)       :: nano, nano_ref
-        type(image)              :: simatms, rawimg, simatms_ref
+        type(image)              :: simatms, simatms_ref
         type(parameters), target :: params
         if (.not. self%wrote_pdb) call self%write_pdb()
         params_glob => params
@@ -954,10 +941,7 @@ use simple_stat
             call nano_ref%kill
             call simatms_ref%kill
         else
-            call rawimg%new(self%ldim, self%smpd)
-            call rawimg%read(trim(self%raw_filename))
-            corr = rawimg%real_corr(simatms)
-            call rawimg%kill
+            corr = self%nano_img%real_corr(simatms)
         end if
         call nano%kill
         call simatms%kill
@@ -969,16 +953,15 @@ use simple_stat
         character(len=*), optional, intent(in)    :: filename
         integer, allocatable     :: pos_inds(:)
         real,    allocatable     :: coords(:,:), pos_scores(:)
-        integer                  :: nbox, iimg, locmin(1)
+        integer                  :: nbox, iimg
         real                     :: pos(3)
         type(parameters), target :: params
         params_glob         => params
         params_glob%element = self%element
         params_glob%smpd    = self%smpd
-        pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
-        pos_scores = pack(self%box_scores(:,:,:), mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
-        locmin = minloc(pos_scores)
-        nbox     = size(pos_inds, dim=1)
+        pos_inds   = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
+        pos_scores = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
+        nbox       = size(pos_inds, dim=1)
         allocate(coords(nbox,3))
         do iimg = 1, nbox
             pos = self%positions(pos_inds(iimg),:)
@@ -1070,12 +1053,13 @@ use simple_stat
         params_glob => params
         params_glob%element = self%element
         params_glob%smpd    = self%smpd
-        call self%write_pdb('simulate_NP')
+        if (.not. self%wrote_pdb) call self%write_pdb('simulate_NP')
         call nano%new(trim(self%raw_filename))
-        call nano%set_atomic_coords('simulate_NP.pdb')
+        call nano%set_atomic_coords(trim(self%pdb_filename))
         call nano%simulate_atoms(simatms=sim_img)
         call sim_img%write(sim_img_name)
         call nano%kill
+        call sim_img%kill
     end subroutine write_NP_image
 
     subroutine write_dist( self, csv_name, type, to_write )
@@ -1136,31 +1120,6 @@ use simple_stat
         call img%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
         call self%nano_img%window_slim( pos, self%boxsize, img, outside)
     end subroutine extract_img_from_pos
-
-    ! input both pdbfile_* with .pdb extension
-    subroutine compare_pick( self, pdbfile_ref, pdbfile_exp )
-        class(nano_picker),         intent(inout) :: self
-        character(len=*),           intent(in)    :: pdbfile_ref
-        character(len=*), optional, intent(in)    :: pdbfile_exp
-        real,    allocatable :: pdb_ref_coords(:,:), pdb_exp_coords(:,:), distances(:)
-        integer              :: iostat, i
-        call read_pdb2matrix(trim(pdbfile_ref), pdb_ref_coords)
-        if( present(pdbfile_exp) )then 
-            call read_pdb2matrix(trim(pdbfile_exp),pdb_exp_coords)
-        else
-            open(unit = 40, file='test_atomic_centers.pdb', iostat=iostat)
-            if( iostat /= 0 )then
-                print *, 'compare_pick: test_atomic_centers.pdb does not exist, please enter valid filename for pdbfile_exp'
-                close(40)
-                return
-            endif
-            call read_pdb2matrix('test_atomic_centers.pdb',pdb_exp_coords)
-            close(40)
-        endif
-        allocate(distances(max(size(pdb_ref_coords,dim=2),size(pdb_exp_coords,dim=2))))
-        call find_closest(pdb_ref_coords,pdb_exp_coords,size(pdb_ref_coords,dim=2),size(pdb_exp_coords,dim=2),distances)
-        print *, 'AVG DISTANCE = ', sum(distances)/size(distances)
-    end subroutine compare_pick
 
     subroutine kill( self )
         class(nano_picker), intent(inout) :: self

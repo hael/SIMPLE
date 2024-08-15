@@ -2801,11 +2801,16 @@ contains
 
     ! this map2ptcls routine assumes that any selection of class averages is done
     ! exclusively by state=0 flagging without any physical deletion
-    subroutine map2ptcls_state( self )
+    subroutine map2ptcls_state( self, append, maxpop )
         class(sp_project), intent(inout) :: self
-        integer, allocatable :: particles(:)
-        integer   :: ncls, icls, iptcl, pind, noris_ptcl3D, noris_ptcl2D
-        real      :: rstate
+        logical, optional, intent(in)    :: append
+        integer, optional, intent(in)    :: maxpop
+        integer, allocatable             :: particles(:)
+        integer   :: ncls, icls, iptcl, pind, nptcls, noris_ptcl3D, noris_ptcl2D
+        logical   :: l_append
+        real      :: rstate, pstate
+        l_append = .false.
+        if(present(append)) l_append = append
         noris_ptcl2D = self%os_ptcl2D%get_noris()
         if( noris_ptcl2D == 0 )then
             THROW_WARN('empty PTCL2D field. Nothing to do; map2ptcls_state')
@@ -2818,14 +2823,14 @@ contains
             self%os_ptcl3D = self%os_ptcl2D
             call self%os_ptcl3D%delete_2Dclustering(keepcls=.true.)
         endif
-        ! undo previous selection & excludes non classified particles
+        ! undo previous selection if append is false & excludes non classified particles
         do iptcl=1,noris_ptcl2D
             if( .not.self%os_ptcl2D%isthere(iptcl, 'class') )then
                 call self%os_ptcl2D%set(iptcl, 'state', 0.)
                 call self%os_ptcl3D%set(iptcl, 'state', 0.)
-            else
-                 call self%os_ptcl2D%set(iptcl, 'state', 1.)
-                 call self%os_ptcl3D%set(iptcl, 'state', 1.)
+            else if(.not. l_append) then
+                call self%os_ptcl2D%set(iptcl, 'state', 1.)
+                call self%os_ptcl3D%set(iptcl, 'state', 1.)
             endif
         end do
         ! do the mapping
@@ -2834,17 +2839,34 @@ contains
             ! get particle indices
             call self%os_ptcl2D%get_pinds(icls, 'class', particles)
             if( allocated(particles) )then
+                nptcls = 0
                 ! get 3d ori info
                 rstate = self%os_cls2D%get(icls,'state')
                 do iptcl=1,size(particles)
                     ! get particle index
                     pind = particles(iptcl)
-                    ! update state in self%os_ptcl2D
-                    call self%os_ptcl2D%set(pind, 'state', rstate)
-                    ! update state in self%os_ptcl3D
-                    call self%os_ptcl3D%set(pind, 'state', rstate)
+                    if(present(maxpop) .and. nptcls .ge. maxpop) then
+                        call self%os_ptcl2D%set(pind, 'state', 0.0)
+                        call self%os_ptcl3D%set(pind, 'state', 0.0)
+                    else if(l_append) then
+                        pstate = self%os_ptcl2D%get(pind, 'state')
+                        if (pstate .gt. 0.0) then
+                            nptcls = nptcls + 1
+                            ! update state in self%os_ptcl2D
+                            call self%os_ptcl2D%set(pind, 'state', rstate)
+                            ! update state in self%os_ptcl3D
+                            call self%os_ptcl3D%set(pind, 'state', rstate)
+                        endif
+                    else
+                        nptcls = nptcls + 1
+                        ! update state in self%os_ptcl2D
+                        call self%os_ptcl2D%set(pind, 'state', rstate)
+                        ! update state in self%os_ptcl3D
+                        call self%os_ptcl3D%set(pind, 'state', rstate)
+                    endif
                 end do
                 deallocate(particles)
+                if(present(maxpop)) call self%os_cls2D%set(icls, 'pop', real(nptcls))
             endif
         end do
         ! cls3D mirrors cls2D
@@ -3187,7 +3209,6 @@ contains
             call os_stk%set(stk_cnt, 'top',   real(top_glob))
             call os_stk%set(stk_cnt, 'nptcls',real(ptcl_cnt))
             ! update micrograph
-            
             if( nmics_tot > 0 ) then
                 call os_mic%transfer_ori(stk_cnt, self%os_mic, stk2mic_inds(istk))
                 call os_mic%set(stk_cnt,'nptcls',real(ptcl_cnt))
@@ -3202,7 +3223,6 @@ contains
         call os_ptcl2d%kill
         call os_ptcl3d%kill
     end subroutine prune_particles
-
 
     ! printers
 

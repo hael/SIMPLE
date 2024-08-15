@@ -2,10 +2,7 @@
 module simple_strategy3D_srch
 include 'simple_lib.f08'
 use simple_pftcc_shsrch_grad,  only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
-use simple_pftcc_shsrch_fm,    only: pftcc_shsrch_fm
 use simple_polarft_corrcalc,   only: pftcc_glob, polarft_corrcalc
-use simple_cartft_corrcalc,    only: cftcc_glob
-use simple_cftcc_shsrch_grad,  only: cftcc_shsrch_grad
 use simple_parameters,         only: params_glob
 use simple_builder,            only: build_glob
 use simple_eul_prob_tab,       only: eul_prob_tab
@@ -17,7 +14,6 @@ private
 #include "simple_local_flags.inc"
 
 type strategy3D_spec
-    integer,            pointer :: symmat(:,:) => null()
     type(eul_prob_tab), pointer :: eulprob_obj_part
     integer :: iptcl=0, iptcl_map=0, szsn=0
     logical :: do_extr=.false.
@@ -27,8 +23,6 @@ end type strategy3D_spec
 type strategy3D_srch
     character(len=:), allocatable :: refine              !< 3D refinement flag
     type(pftcc_shsrch_grad) :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
-    type(cftcc_shsrch_grad) :: cart_shsrch_obj           !< origin shift search object in cartesian, L-BFGS with gradient
-    type(pftcc_shsrch_fm)   :: fm_shsrch_obj
     type(ori)               :: o_prev                    !< previous orientation, used in continuous search
     type(oris)              :: opeaks                    !< peak orientations to consider for refinement
     integer                 :: iptcl         = 0         !< global particle index
@@ -65,11 +59,9 @@ type strategy3D_srch
   contains
     procedure :: new
     procedure :: prep4srch
-    procedure :: prep4_cont_srch
     procedure :: inpl_srch
     procedure :: inpl_srch_peaks
     procedure :: store_solution
-    procedure :: shift_srch_cart
     procedure :: kill
 end type strategy3D_srch
 
@@ -111,7 +103,6 @@ contains
         self%nrots = pftcc_glob%get_nrots()
         call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
                 &shbarrier=params_glob%shbarrier, maxits=params_glob%maxits_sh, opt_angle=(trim(params_glob%sh_opt_angle).eq.'yes'))
-        if( self%doshift .and. (trim(self%refine).eq.'shift_fm') ) call self%fm_shsrch_obj%new(params_glob%trs,1.)
         self%exists = .true.
     end subroutine new
 
@@ -167,31 +158,6 @@ contains
         self%prev_corr = corr
         call o_prev%kill
     end subroutine prep4srch
-
-    subroutine prep4_cont_srch( self )
-        class(strategy3D_srch), intent(inout) :: self
-        ! previous parameters
-        call build_glob%spproj_field%get_ori(self%iptcl, self%o_prev) ! previous ori
-        self%prev_state = self%o_prev%get_state()                     ! state index
-        self%prev_shvec = self%o_prev%get_2Dshift()                   ! shift vector
-        ! sanity check
-        if( self%prev_state > 0 )then
-            if( self%prev_state > self%nstates )          THROW_HARD('previous best state outside boundary; prep4_cont_srch')
-            if( .not. s3D%state_exists(self%prev_state) ) THROW_HARD('empty previous state; prep4_cont_srch')
-        endif
-        ! prep corr
-        self%prev_corr = cftcc_glob%project_and_correlate(self%iptcl, self%o_prev)
-        call self%o_prev%set('corr', self%prev_corr)
-    end subroutine prep4_cont_srch
-
-    function shift_srch_cart( self, nevals, shvec ) result( cxy )
-        class(strategy3D_srch), intent(inout) :: self
-        integer,                intent(inout) :: nevals(2)
-        real, optional,         intent(in)    :: shvec(2)
-        real :: cxy(3)
-        call self%cart_shsrch_obj%set_pind( self%iptcl )
-        cxy = self%cart_shsrch_obj%minimize(nevals, shvec)
-    end function shift_srch_cart
 
     subroutine inpl_srch( self, ref, xy, irot_in, prev_sh )
         class(strategy3D_srch), intent(inout) :: self
@@ -250,8 +216,6 @@ contains
     subroutine kill( self )
         class(strategy3D_srch), intent(inout) :: self
         call self%grad_shsrch_obj%kill
-        call self%cart_shsrch_obj%kill
-        call self%fm_shsrch_obj%kill
         call self%opeaks%kill
         call self%o_prev%kill
     end subroutine kill
