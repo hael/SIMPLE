@@ -180,6 +180,10 @@ contains
         allocate(cur_fil(box), source=0.)
         best_ind  = find_start
         best_cost = huge(best_cost)
+        if( ldim(3) > 1 )then ! 3D, so parallelize
+            call odd_filt%set_wthreads(.true.)
+            call even%set_wthreads(.true.)
+        endif
         do cutoff_find = find_start, find_stop
             ! apply BW kernel to odd
             call odd_filt%copy_fast(odd_copy_cmat)

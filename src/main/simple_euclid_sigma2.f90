@@ -1,7 +1,6 @@
 module simple_euclid_sigma2
 include 'simple_lib.f08'
 use simple_parameters,       only: params_glob
-use simple_cartft_corrcalc,  only: cartft_corrcalc, cftcc_glob
 use simple_polarft_corrcalc, only: polarft_corrcalc, pftcc_glob
 use simple_sigma2_binfile,   only: sigma2_binfile
 use simple_starfile_wrappers
@@ -38,10 +37,8 @@ contains
     procedure          :: read_part
     procedure          :: read_groups
     procedure          :: allocate_ptcls
-    procedure, private :: calc_sigma2_1, calc_sigma2_2
-    generic            :: calc_sigma2 => calc_sigma2_1, calc_sigma2_2
-    procedure, private :: update_sigma2_1, update_sigma2_2
-    generic            :: update_sigma2 => update_sigma2_1, update_sigma2_2
+    procedure          :: calc_sigma2
+    procedure          :: update_sigma2
     procedure          :: write_sigma2
     procedure, private :: read_groups_starfile, read_sigma2_groups
     ! destructor
@@ -66,10 +63,6 @@ contains
         if( associated(pftcc_glob) )then
             call pftcc_glob%assign_sigma2_noise(self%sigma2_noise)
             call pftcc_glob%assign_pinds(self%pinds)
-        endif
-        if( associated(cftcc_glob) )then
-            call cftcc_glob%assign_sigma2_noise(self%sigma2_noise)
-            call cftcc_glob%assign_pinds(self%pinds)
         endif
         self%binfname     =  trim(binfname)
         self%fromp        =  params_glob%fromp
@@ -175,7 +168,6 @@ contains
         logical,              intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
         integer                             :: iptcl, igroup, ngroups, eo
         if( associated(pftcc_glob) ) call pftcc_glob%assign_pinds(self%pinds)
-        if( associated(cftcc_glob) ) call cftcc_glob%assign_pinds(self%pinds)
         call self%read_sigma2_groups( params_glob%which_iter, self%sigma2_groups, ngroups )
         if( params_glob%l_sigma_glob )then
             if( ngroups /= 1 ) THROW_HARD('ngroups must be 1 when global sigma is estimated (params_glob%l_sigma_glob == .true.)')
@@ -209,7 +201,7 @@ contains
     end subroutine allocate_ptcls
 
     !>  Calculates and updates sigma2 within search resolution range
-    subroutine calc_sigma2_1( self, pftcc, iptcl, o, refkind )
+    subroutine calc_sigma2( self, pftcc, iptcl, o, refkind )
         class(euclid_sigma2),    intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
@@ -224,24 +216,10 @@ contains
         irot  = pftcc_glob%get_roind(360. - o%e3get())
         call pftcc%gencorr_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib)
         self%sigma2_part(params_glob%kfromto(1):params_glob%kfromto(2),iptcl) = sigma_contrib
-    end subroutine calc_sigma2_1
+    end subroutine calc_sigma2
 
     !>  Calculates and updates sigma2 within search resolution range
-    subroutine calc_sigma2_2( self, cftcc, iptcl, o )
-        class(euclid_sigma2),   intent(inout) :: self
-        class(cartft_corrcalc), intent(inout) :: cftcc
-        integer,                intent(in)    :: iptcl
-        class(ori),             intent(in)    :: o
-        real :: sigma_contrib(params_glob%kfromto(1):params_glob%kfromto(2))
-        real :: shvec(2)
-        if ( o%isstatezero() ) return
-        shvec = o%get_2Dshift()
-        call cftcc%calc_sigma_contrib(iptcl, o, shvec, sigma_contrib)
-        self%sigma2_part(params_glob%kfromto(1):params_glob%kfromto(2),iptcl) = sigma_contrib
-    end subroutine calc_sigma2_2
-
-    !>  Calculates and updates sigma2 within search resolution range
-    subroutine update_sigma2_1( self, pftcc, iptcl, o, refkind )
+    subroutine update_sigma2( self, pftcc, iptcl, o, refkind )
         class(euclid_sigma2),    intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
@@ -254,19 +232,7 @@ contains
         iref  = nint(o%get(trim(refkind)))
         irot  = pftcc_glob%get_roind(360. - o%e3get())
         call pftcc%update_sigma(iref, iptcl, shvec, irot)
-    end subroutine update_sigma2_1
-
-    !>  Calculates and updates sigma2 within search resolution range
-    subroutine update_sigma2_2( self, cftcc, iptcl, o )
-        class(euclid_sigma2),   intent(inout) :: self
-        class(cartft_corrcalc), intent(inout) :: cftcc
-        integer,                intent(in)    :: iptcl
-        class(ori),             intent(in)    :: o
-        real :: shvec(2)
-        if ( o%isstatezero() ) return
-        shvec = o%get_2Dshift()
-        call cftcc%update_sigma(iptcl, o, shvec)
-    end subroutine update_sigma2_2
+    end subroutine update_sigma2
 
     subroutine write_sigma2( self )
         class(euclid_sigma2), intent(in) :: self

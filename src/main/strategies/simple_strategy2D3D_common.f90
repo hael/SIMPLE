@@ -8,7 +8,6 @@ use simple_parameters,        only: params_glob
 use simple_stack_io,          only: stack_io
 use simple_discrete_stack_io, only: dstack_io
 use simple_polarft_corrcalc,  only: pftcc_glob
-use simple_cartft_corrcalc,   only: cftcc_glob
 implicit none
 
 public :: prepimgbatch, killimgbatch, read_imgbatch, set_bp_range, set_bp_range2D, prepimg4align,&
