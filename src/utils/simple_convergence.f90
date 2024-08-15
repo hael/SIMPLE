@@ -107,7 +107,7 @@ contains
         write(logfhandle,604) '>>> IN-PLANE DIST    (DEG) AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
         write(logfhandle,604) '>>> SHIFT INCR ARG         AVG/SDEV/MIN/MAX:', self%shincarg%avg,  self%shincarg%sdev,  self%shincarg%minv,  self%shincarg%maxv
         write(logfhandle,604) '>>> % SEARCH SPACE SCANNED AVG/SDEV/MIN/MAX:', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
-        write(logfhandle,604) '>>> % LOW-PASS LIMIT       AVG/SDEV/MIN/MAX:', self%lp%avg,        self%lp%sdev,        self%lp%minv,        self%lp%maxv
+        write(logfhandle,604) '>>> LOW-PASS LIMIT         AVG/SDEV/MIN/MAX:', self%lp%avg,        self%lp%sdev,        self%lp%minv,        self%lp%maxv
         ! score
         write(logfhandle,604) '>>> SCORE [0,1]            AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
         ! dynamic shift search range update
@@ -254,7 +254,7 @@ contains
         write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX:', self%shincarg%avg,  self%shincarg%sdev,  self%shincarg%minv,  self%shincarg%maxv
         write(logfhandle,604) '>>> % SEARCH SPACE SCANNED   AVG/SDEV/MIN/MAX:', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
         write(logfhandle,604) '>>> PARTICLE WEIGHTS         AVG/SDEV/MIN/MAX:', self%pw%avg,        self%pw%sdev,        self%pw%minv,        self%pw%maxv
-        write(logfhandle,604) '>>> % LOW-PASS LIMIT         AVG/SDEV/MIN/MAX:', self%lp%avg,        self%lp%sdev,        self%lp%minv,        self%lp%maxv
+        write(logfhandle,604) '>>> LOW-PASS LIMIT           AVG/SDEV/MIN/MAX:', self%lp%avg,        self%lp%sdev,        self%lp%minv,        self%lp%maxv
         ! score
         write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
         ! dynamic shift search range update

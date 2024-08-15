@@ -12,7 +12,6 @@ use simple_parameters,              only: params_glob
 use simple_builder,                 only: build_glob
 use simple_eul_prob_tab,            only: eul_prob_tab
 use simple_polarft_corrcalc,        only: polarft_corrcalc
-use simple_cartft_corrcalc,         only: cartft_corrcalc
 use simple_strategy3D_snhc,         only: strategy3D_snhc
 use simple_strategy3D_shc,          only: strategy3D_shc
 use simple_strategy3D_shc_smpl,     only: strategy3D_shc_smpl
@@ -31,7 +30,7 @@ use simple_euclid_sigma2,           only: euclid_sigma2
 use simple_strategy2D3D_common
 implicit none
 
-public :: refine3D_exec, prep_ccobjs4align, pftcc
+public :: refine3D_exec, prepare_polar_references, pftcc
 private
 #include "simple_local_flags.inc"
 
@@ -39,16 +38,16 @@ logical, parameter             :: DEBUG_HERE = .false.
 logical                        :: has_been_searched
 type(polarft_corrcalc), target :: pftcc
 type(eul_prob_tab),     target :: eulprob_obj_part
-type(cartft_corrcalc),  target :: cftcc
 type(image),       allocatable :: ptcl_match_imgs(:)
 integer,           allocatable :: prev_states(:), pinds(:)
 logical,           allocatable :: ptcl_mask(:)
-type(sym)                      :: c1_symop
 integer                        :: nptcls2update
 type(euclid_sigma2)            :: eucl_sigma
 ! benchmarking
-integer(timer_int_kind)        :: t_init,   t_prep_pftcc,  t_prep_orisrch,  t_align,  t_rec,  t_tot,  t_projio
-real(timer_int_kind)           :: rt_init, rt_prep_pftcc, rt_prep_orisrch, rt_align, rt_rec, rt_tot, rt_projio
+integer(timer_int_kind)        :: t_init,   t_build_batch_particles,  t_prep_orisrch,  t_align,  t_rec,  t_tot,  t_projio
+integer(timer_int_kind)        :: t_prepare_polar_references, t_read_and_filter_refvols
+real(timer_int_kind)           :: rt_init, rt_build_batch_particles, rt_prep_orisrch, rt_align, rt_rec, rt_tot, rt_projio
+real(timer_int_kind)           :: rt_prepare_polar_references, rt_read_and_filter_refvols
 character(len=STDLEN)          :: benchfname
 
 contains
@@ -57,8 +56,6 @@ contains
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
-        integer, target, allocatable  :: symmat(:,:)
-        logical,         allocatable  :: het_mask(:)
         !---> The below is to allow particle-dependent decision about which 3D strategy to use
         type :: strategy3D_per_ptcl
             class(strategy3D), pointer :: ptr  => null() ! 1st polar greedy discrete search
@@ -141,64 +138,25 @@ contains
             endif
         endif
 
-        ! EXTREMAL LOGICS
-        do_extr           = .false.
-        extr_score_thresh = -huge(extr_score_thresh)
-        select case(trim(params_glob%refine))
-            case('cluster','clustersym')
-                ! general logics
-                if(allocated(het_mask))deallocate(het_mask)
-                allocate(het_mask(params_glob%fromp:params_glob%top), source=ptcl_mask)
-                call build_glob%spproj_field%set_extremal_vars(params_glob%extr_init, params_glob%extr_iter,&
-                    &which_iter, frac_srch_space, do_extr, iextr_lim, update_frac=params_glob%update_frac)
-                if( do_extr )then
-                    anneal_ratio      = max(0., cos(PI/2.*real(params_glob%extr_iter-1)/real(iextr_lim)))
-                    extr_thresh       = params_glob%extr_init * anneal_ratio
-                    extr_score_thresh = build_glob%spproj_field%extremal_bound(extr_thresh)
-                    if( cline%defined('lpstart') )then
-                        ! resolution limit update
-                        lpind_start       = calc_fourier_index(params_glob%lpstart,params_glob%box,params_glob%smpd)
-                        lpind_anneal      = nint(real(lpind_start) + (1.-anneal_ratio)*real(params_glob%kfromto(2)-lpind_start))
-                        params_glob%kfromto(2) = min(lpind_anneal, params_glob%kfromto(2))
-                        resarr            = build_glob%img%get_res()
-                        params_glob%lp    = resarr(params_glob%kfromto(2))
-                        call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
-                        deallocate(resarr)
-                    endif
-                else
-                    het_mask = .false.
-                endif
-                ! refinement mode specifics
-                select case(trim(params_glob%refine))
-                    case('clustersym')
-                        ! symmetry pairing matrix
-                        c1_symop = sym('c1')
-                        params_glob%nspace = min(params_glob%nspace*build_glob%pgrpsyms%get_nsym(), 2500)
-                        call build_glob%eulspace%new(params_glob%nspace, is_ptcl=.false.)
-                        call build_glob%eulspace%spiral
-                        call build_glob%pgrpsyms%nearest_sym_neighbors(build_glob%eulspace, symmat)
-                end select
-        end select
-
         ! PREP BATCH ALIGNEMENT
         batchsz_max = min(nptcls2update,params_glob%nthr*BATCHTHRSZ)
         nbatches    = ceiling(real(nptcls2update)/real(batchsz_max))
         batches     = split_nobjs_even(nptcls2update, nbatches)
         batchsz_max = maxval(batches(:,2)-batches(:,1)+1)
 
-        ! PREPARE THE FT_CORRCALC DATA STRUCTURES
+        ! PREPARE THE POLARFT DATA STRUCTURES
         if( L_BENCH_GLOB )then
-            rt_init = toc(t_init)
-            t_prep_pftcc = tic()
+            rt_init                    = toc(t_init)
+            t_prepare_polar_references = tic()
         endif
-
-        call prep_ccobjs4align(cline, batchsz_max)
+        call prepare_polar_references(cline, batchsz_max)
+        if( L_BENCH_GLOB )then
+            rt_prepare_polar_references = toc(t_prepare_polar_references)
+            t_prep_orisrch              = tic()
+        endif
         call build_glob%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
-        if( L_BENCH_GLOB ) rt_prep_pftcc = toc(t_prep_pftcc)
-        if( L_BENCH_GLOB ) t_prep_orisrch = tic()
-        ! clean big objects before starting to allocate new big memory chunks
-        ! cannot kill build_glob%vol since used in continuous search
-        ! cannot kill build_glob%vol_odd when we support cftcc refinement (Cartesian)
+        call build_glob%vol%kill
+        call build_glob%vol_odd%kill
         call build_glob%vol2%kill
         ! array allocation for strategy3D
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: array allocation for strategy3D'
@@ -211,29 +169,25 @@ contains
         do ithr = 1,params_glob%nthr
             call ptcl_match_imgs(ithr)%new([params_glob%box_crop, params_glob%box_crop, 1], params_glob%smpd_crop, wthreads=.false.)
         enddo
-
-        ! STOCHASTIC IMAGE ALIGNMENT
         write(logfhandle,'(A,1X,I3)') '>>> REFINE3D SEARCH, ITERATION:', which_iter
-        if( L_BENCH_GLOB )then
-            rt_prep_orisrch = toc(t_prep_orisrch)
-            rt_align        = 0.
-        endif
-
-        ! ref regularization
         if( str_has_substr(params_glob%refine, 'prob') .and. .not.(trim(params_glob%refine) .eq. 'sigma') )then
             call eulprob_obj_part%new(pinds)
             call eulprob_obj_part%read_assignment(trim(ASSIGNMENT_FBODY)//'.dat')
         endif
-
+        if( L_BENCH_GLOB )then
+            rt_prep_orisrch          = toc(t_prep_orisrch)
+            rt_build_batch_particles = 0.
+            rt_align                 = 0.
+        endif
         ! Batch loop
         do ibatch=1,nbatches
             batch_start = batches(ibatch,1)
             batch_end   = batches(ibatch,2)
             batchsz     = batch_end - batch_start + 1
             ! Prep particles in pftcc
-            if( L_BENCH_GLOB ) t_prep_pftcc = tic()
+            if( L_BENCH_GLOB ) t_build_batch_particles = tic()
             call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-            if( L_BENCH_GLOB ) rt_prep_pftcc = rt_prep_pftcc + toc(t_prep_pftcc)
+            if( L_BENCH_GLOB ) rt_build_batch_particles = rt_build_batch_particles + toc(t_build_batch_particles)
             ! Particles loop
             if( L_BENCH_GLOB ) t_align = tic()
             !$omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map,ithr,orientation)&
@@ -291,8 +245,6 @@ contains
                 strategy3Dspecs(iptcl_batch)%szsn      = params_glob%szsn
                 strategy3Dspecs(iptcl_batch)%extr_score_thresh = extr_score_thresh
                 if( str_has_substr(params_glob%refine, 'prob') ) strategy3Dspecs(iptcl_batch)%eulprob_obj_part => eulprob_obj_part
-                if( allocated(het_mask) ) strategy3Dspecs(iptcl_batch)%do_extr =  het_mask(iptcl)
-                if( allocated(symmat)   ) strategy3Dspecs(iptcl_batch)%symmat  => symmat
                 ! search object(s) & search
                 if( associated(strategy3Dsrch(iptcl_batch)%ptr) )then
                     call strategy3Dsrch(iptcl_batch)%ptr%new(strategy3Dspecs(iptcl_batch))
@@ -340,8 +292,6 @@ contains
         if( str_has_substr(params_glob%refine, 'prob') ) call eulprob_obj_part%kill
         call build_glob%vol%kill
         call orientation%kill
-        if( allocated(symmat)   ) deallocate(symmat)
-        if( allocated(het_mask) ) deallocate(het_mask)
         do ithr = 1,params_glob%nthr
             call ptcl_match_imgs(ithr)%kill
         enddo
@@ -386,7 +336,7 @@ contains
 
         ! REPORT CONVERGENCE
         call qsys_job_finished('simple_strategy3D_matcher :: refine3D_exec')
-        if( .not. params_glob%l_distr_exec )then
+        if( .not. params_glob%l_distr_exec .and. trim(params_glob%refine).ne.'sigma' )then
             converged = conv%check_conv3D(cline, params_glob%msk)
         endif
         if( L_BENCH_GLOB )then
@@ -397,29 +347,33 @@ contains
                 benchfname = 'REFINE3D_BENCH_ITER'//int2str_pad(which_iter,3)//'.txt'
                 call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
                 write(fnr,'(a)') '*** TIMINGS (s) ***'
-                write(fnr,'(a,1x,f9.2)') 'initialisation        : ', rt_init
-                write(fnr,'(a,1x,f9.2)') 'pftcc preparation     : ', rt_prep_pftcc
-                write(fnr,'(a,1x,f9.2)') 'orisrch3D preparation : ', rt_prep_orisrch
-                write(fnr,'(a,1x,f9.2)') '3D alignment          : ', rt_align
-                write(fnr,'(a,1x,f9.2)') 'project file I/O      : ', rt_projio
-                write(fnr,'(a,1x,f9.2)') 'reconstruction        : ', rt_rec
-                write(fnr,'(a,1x,f9.2)') 'total time            : ', rt_tot
+                write(fnr,'(a,1x,f9.2)') 'initialisation           : ', rt_init
+                write(fnr,'(a,1x,f9.2)') 'build_batch_particles    : ', rt_build_batch_particles
+                write(fnr,'(a,1x,f9.2)') 'prepare_polar_references : ', rt_prepare_polar_references
+                write(fnr,'(a,1x,f9.2)') 'read_and_filter_refvols  : ', rt_read_and_filter_refvols
+                write(fnr,'(a,1x,f9.2)') 'orisrch3D preparation    : ', rt_prep_orisrch
+                write(fnr,'(a,1x,f9.2)') '3D alignment             : ', rt_align
+                write(fnr,'(a,1x,f9.2)') 'project file I/O         : ', rt_projio
+                write(fnr,'(a,1x,f9.2)') 'reconstruction           : ', rt_rec
+                write(fnr,'(a,1x,f9.2)') 'total time               : ', rt_tot
                 write(fnr,'(a)') ''
                 write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
-                write(fnr,'(a,1x,f9.2)') 'initialisation        : ', (rt_init/rt_tot)         * 100.
-                write(fnr,'(a,1x,f9.2)') 'pftcc preparation     : ', (rt_prep_pftcc/rt_tot)   * 100.
-                write(fnr,'(a,1x,f9.2)') 'orisrch3D preparation : ', (rt_prep_orisrch/rt_tot) * 100.
-                write(fnr,'(a,1x,f9.2)') '3D alignment          : ', (rt_align/rt_tot)        * 100.
-                write(fnr,'(a,1x,f9.2)') 'project file I/O      : ', (rt_projio/rt_tot)       * 100.
-                write(fnr,'(a,1x,f9.2)') 'reconstruction        : ', (rt_rec/rt_tot)          * 100.
-                write(fnr,'(a,1x,f9.2)') '% accounted for       : ',&
-                    &((rt_init+rt_prep_pftcc+rt_prep_orisrch+rt_align+rt_projio+rt_rec)/rt_tot) * 100.
+                write(fnr,'(a,1x,f9.2)') 'initialisation           : ', (rt_init/rt_tot)                     * 100.
+                write(fnr,'(a,1x,f9.2)') 'build_batch_particles    : ', (rt_build_batch_particles/rt_tot)    * 100.
+                write(fnr,'(a,1x,f9.2)') 'prepare_polar_references : ', (rt_prepare_polar_references/rt_tot) * 100.
+                write(fnr,'(a,1x,f9.2)') 'read_and_filter_refvols  : ', (rt_read_and_filter_refvols/rt_tot)  * 100.
+                write(fnr,'(a,1x,f9.2)') 'orisrch3D preparation    : ', (rt_prep_orisrch/rt_tot)             * 100.
+                write(fnr,'(a,1x,f9.2)') '3D alignment             : ', (rt_align/rt_tot)                    * 100.
+                write(fnr,'(a,1x,f9.2)') 'project file I/O         : ', (rt_projio/rt_tot)                   * 100.
+                write(fnr,'(a,1x,f9.2)') 'reconstruction           : ', (rt_rec/rt_tot)                      * 100.
+                write(fnr,'(a,1x,f9.2)') '% accounted for          : ',&
+                    &((rt_init+rt_build_batch_particles+rt_prepare_polar_references+rt_prep_orisrch+rt_align+rt_projio+rt_rec)/rt_tot) * 100.
                 call fclose(fnr)
             endif
         endif
     end subroutine refine3D_exec
 
-    subroutine prep_ccobjs4align( cline, batchsz_max )
+    subroutine prepare_polar_references( cline, batchsz_max )
         class(cmdline), intent(in)    :: cline !< command line
         integer,        intent(in)    :: batchsz_max
         character(len=:), allocatable :: fname
@@ -427,6 +381,7 @@ contains
         real      :: xyz(3)
         integer   :: cnt, s, iref, nrefs
         logical   :: do_center
+        if( L_BENCH_GLOB ) rt_read_and_filter_refvols = 0.
         ! first the polar
         nrefs = params_glob%nspace * params_glob%nstates
         ! PREPARATION OF REFERENCES IN PFTCC
@@ -455,7 +410,9 @@ contains
             else
                 call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=.true.)
             endif
+            if( L_BENCH_GLOB ) t_read_and_filter_refvols = tic()
             call read_and_filter_refvols(s)
+            if( L_BENCH_GLOB ) rt_read_and_filter_refvols = rt_read_and_filter_refvols + toc(t_read_and_filter_refvols)
             ! must be done here since params_glob%kfromto is dynamically set when lp_auto=yes
             if( s == 1 )then
                 call pftcc%new(nrefs, [1,batchsz_max], params_glob%kfromto)
@@ -482,8 +439,8 @@ contains
             !$omp end parallel do
         end do
         call pftcc%memoize_refs
-        if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: finished prep_ccobjs4align'
-    end subroutine prep_ccobjs4align
+        if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: finished prepare_polar_references'
+    end subroutine prepare_polar_references
 
     subroutine build_batch_particles( nptcls_here, pinds_here )
         use simple_strategy2D3D_common, only: read_imgbatch, prepimg4align

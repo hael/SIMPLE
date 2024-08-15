@@ -660,6 +660,7 @@ contains
 
     subroutine exec_refine3D( self, cline )
         use simple_strategy3D_matcher, only: refine3D_exec
+        use simple_image,              only: image
         class(refine3D_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(estimate_first_sigmas_commander) :: xfirst_sigmas
@@ -672,8 +673,9 @@ contains
         type(builder)                         :: build
         type(cmdline)                         :: cline_calc_sigma, cline_prob_align, cline_pspec_lp
         type(cmdline)                         :: cline_calc_pspec, cline_first_sigmas
+        type(image)                           :: noisevol
         character(len=STDLEN)                 :: str_state, fsc_file, vol, vol_iter
-        integer                               :: startit, i, state
+        integer                               :: startit, i, state, s
         real                                  :: corr, corr_prev
         logical                               :: converged, l_sigma
         call build%init_params_and_build_strategy3D_tbox(cline,params)
@@ -690,7 +692,22 @@ contains
             call refine3D_exec(cline, startit, converged)
         else
             if( trim(params%continue) == 'yes'    ) THROW_HARD('shared-memory implementation of refine3D does not support continue=yes')
-            if( .not. file_exists(params%vols(1)) ) THROW_HARD('shared-memory implementation of refine3D requires starting volume(s) input')
+            if( .not. file_exists(params%vols(1)) ) then
+                call noisevol%new([params%box,params%box,params%box], params%smpd)
+                do s = 1, params%nstates
+                    params%vols(s)      = 'noisevol_state'//int2str_pad(s,2)//'.mrc'
+                    params%vols_even(s) = 'noisevol_state'//int2str_pad(s,2)//'_even.mrc'
+                    params%vols_odd(s)  = 'noisevol_state'//int2str_pad(s,2)//'_odd.mrc'
+                    call cline%set('vol'//int2str(s), params%vols(s))
+                    call noisevol%ran()
+                    call noisevol%write(params%vols(s))
+                    call noisevol%ran()
+                    call noisevol%write(params%vols_even(s))
+                    call noisevol%ran()
+                    call noisevol%write(params%vols_odd(s))
+                end do
+                call noisevol%kill
+            endif
             ! objfun=euclid
             l_sigma = .false.
             if( trim(params%objfun) == 'euclid' )then

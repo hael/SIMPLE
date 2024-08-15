@@ -38,6 +38,7 @@ type :: image
 contains
     ! CONSTRUCTORS
     procedure          :: new
+    procedure          :: set_wthreads
     procedure          :: construct_thread_safe_tmp_imgs
     procedure, private :: disc_1
     procedure, private :: disc_2
@@ -449,6 +450,35 @@ contains
         self%existence = .true.
     end subroutine new
 
+    subroutine set_wthreads( self, wthreads )
+        class(image), intent(inout) :: self
+        logical,      intent(in)    :: wthreads
+        integer(kind=c_int) :: rc
+        if( self%wthreads .eqv. wthreads ) return
+        self%wthreads = wthreads
+        self%wthreads = self%wthreads .and. nthr_glob > 1
+        !$omp critical
+        call fftwf_destroy_plan(self%plan_fwd)
+        call fftwf_destroy_plan(self%plan_bwd)
+        ! make fftw plans
+        if( self%wthreads )then
+            rc = fftwf_init_threads()
+            call fftwf_plan_with_nthreads(nthr_glob)
+        endif
+        if( self%ldim(3) > 1 )then
+            self%plan_fwd = fftwf_plan_dft_r2c_3d(self%ldim(3), self%ldim(2), self%ldim(1), self%rmat, self%cmat, FFTW_ESTIMATE)
+            self%plan_bwd = fftwf_plan_dft_c2r_3d(self%ldim(3), self%ldim(2), self%ldim(1), self%cmat, self%rmat, FFTW_ESTIMATE)
+        else
+            self%plan_fwd = fftwf_plan_dft_r2c_2d(self%ldim(2), self%ldim(1), self%rmat, self%cmat, FFTW_ESTIMATE)
+            self%plan_bwd = fftwf_plan_dft_c2r_2d(self%ldim(2), self%ldim(1), self%cmat, self%rmat, FFTW_ESTIMATE)
+        endif
+        if( self%wthreads )then
+            ! disable threads for subsequent plans
+            call fftwf_plan_with_nthreads(1)
+        endif
+        !$omp end critical
+    end subroutine set_wthreads
+
     subroutine construct_thread_safe_tmp_imgs( self, nthr )
         class(image), intent(in) :: self
         integer,      intent(in) :: nthr
@@ -540,8 +570,14 @@ contains
     subroutine copy_fast( self, self_in )
         class(image), intent(inout) :: self
         class(image), intent(in)    :: self_in
-        self%rmat = self_in%rmat
-        self%ft   = self_in%ft
+        if( self%wthreads )then
+            !$omp parallel workshare
+            self%rmat = self_in%rmat
+            !$omp end parallel workshare
+        else
+            self%rmat = self_in%rmat
+        endif
+        self%ft = self_in%ft
     end subroutine copy_fast
 
     !> img2spec calculates the powerspectrum of the input image
@@ -5601,8 +5637,15 @@ contains
         class(image), intent(inout) :: self1, self2
         logical,      intent(in)    :: mask(self1%ldim(1),self1%ldim(2),self1%ldim(3))
         real :: r
-        r = sum((self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) -&
-        &self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3)))**2.0, mask=mask)
+        if( self1%wthreads )then
+            !$omp parallel workshare
+            r = sum((self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) -&
+            &self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3)))**2.0, mask=mask)
+            !$omp end parallel workshare
+        else
+            r = sum((self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) -&
+            &self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3)))**2.0, mask=mask)
+        endif
     end function sqeuclid
 
     subroutine sqeuclid_matrix_1( self1, self2, sqdiff )
@@ -8606,8 +8649,6 @@ contains
     subroutine kill_thread_safe_tmp_imgs( self )
         class(image), intent(in) :: self
         integer :: i
-        !integer :: i, sz, ldim(3)
-        !logical :: do_allocate
         if( allocated(thread_safe_tmp_imgs) )then
             do i=1,size(thread_safe_tmp_imgs)
                 call thread_safe_tmp_imgs(i)%kill
