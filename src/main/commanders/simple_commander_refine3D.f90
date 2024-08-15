@@ -673,7 +673,7 @@ contains
         else
             if( trim(params%continue) == 'yes'    ) THROW_HARD('shared-memory implementation of refine3D does not support continue=yes')
             if( .not. file_exists(params%vols(1)) ) then
-                call noisevol%new([params%box,params%box,params%box], params%smpd)
+                call noisevol%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
                 do s = 1, params%nstates
                     params%vols(s)      = 'noisevol_state'//int2str_pad(s,2)//'.mrc'
                     params%vols_even(s) = 'noisevol_state'//int2str_pad(s,2)//'_even.mrc'
