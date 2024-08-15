@@ -72,10 +72,8 @@ contains
         logical, optional,    intent(in)    :: expand !< expand flag
         integer :: dim
         logical :: l_expand
-        l_expand = .true.
         if(.not. self%exists() ) THROW_HARD('construct image before allocating rho; alloc_rho')
         if(      self%is_2d()  ) THROW_HARD('only for volumes; alloc_rho')
-        if( present(expand) )l_expand = expand
         call self%dealloc_rho
         l_expand = .true.
         if( present(expand) ) l_expand = expand
@@ -376,7 +374,7 @@ contains
         real(dp), allocatable :: rho_average(:)
         integer,  allocatable :: counts(:)
         real    :: winsz, val_prev, val, invrho, rsh_sq, rho
-        integer :: h,k,m, phys(3), physc(3),iter, sh, cmat_shape(3), i,j,l
+        integer :: h,k,m, phys(3), iter, sh, cmat_shape(3), i,j,l
         logical :: l_gridcorr, l_lastiter
         ! kernel
         winsz   = max(1., 2.*self%kbwin%get_winsz())

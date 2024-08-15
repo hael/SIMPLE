@@ -109,7 +109,8 @@ type :: oris
     procedure          :: transfer_2Dshifts
     procedure, private :: transfer_2Dparams_1, transfer_2Dparams_2
     generic            :: transfer_2Dparams => transfer_2Dparams_1, transfer_2Dparams_2
-    procedure          :: transfer_3Dparams
+    procedure, private :: transfer_3Dparams_1, transfer_3Dparams_2
+    generic            :: transfer_3Dparams => transfer_3Dparams_1, transfer_3Dparams_2
     procedure          :: set_euler
     procedure          :: set_shift
     procedure          :: set_state
@@ -1990,12 +1991,19 @@ contains
         call self%o(i)%transfer_2Dparams(os_in%o(i_in))
     end subroutine transfer_2Dparams_2
 
-    subroutine transfer_3Dparams( self, i, o_in )
+    subroutine transfer_3Dparams_1( self, i, o_in )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
         type(ori),   intent(in)    :: o_in
         call self%o(i)%transfer_3Dparams(o_in)
-    end subroutine transfer_3Dparams
+    end subroutine transfer_3Dparams_1
+
+    subroutine transfer_3Dparams_2( self, i, os_in, i_in )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: i, i_in
+        class(oris), intent(in)    :: os_in
+        call self%o(i)%transfer_3Dparams(os_in%o(i_in))
+    end subroutine transfer_3Dparams_2
 
     !>  \brief  generate random projection direction space around a given one
     subroutine rnd_proj_space( self, nsample, o_prev, thres, eullims )
