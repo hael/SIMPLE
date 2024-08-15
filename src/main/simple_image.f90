@@ -5501,20 +5501,55 @@ contains
     end subroutine phase_corr
 
     ! returns the discrete shift that registers self2 to self1. self1 is the unnormalized correlation image on output
-    subroutine fcorr_shift(self1, self2, trs, shift )
+    subroutine fcorr_shift(self1, self2, trs, shift, peak_interp )
         class(image),      intent(inout) :: self1, self2
         real,              intent(in)    :: trs
         real,              intent(inout) :: shift(2)
-        integer     :: center(2), pos(2), itrs
+        logical, optional, intent(in)    :: peak_interp
+        real    :: alpha, beta, gamma, denom
+        integer :: center(2), pos(2), itrs
+        logical :: l_interp
         if( self1%is_3d() .or. self2%is_3d() ) THROW_HARD('2d only supported')
         if( .not.(self1%is_ft() .and. self2%is_ft()) ) THROW_HARD('FTed only supported')
         if( .not.(self1.eqdims.self2) ) THROW_HARD('Inconsistent dimensions in fcorr_shift')
+        l_interp = .false.
+        if(present(peak_interp)) l_interp = peak_interp
+        ! dimensions
         center = self1%ldim(1:2)/2+1
         itrs   = min(floor(trs),minval(center)-1)
+        ! Correlation image
         self1%cmat = self1%cmat * conjg(self2%cmat)
         call self1%ifft
+        ! maximum correlation & offset
         pos   = maxloc(self1%rmat(center(1)-itrs:center(1)+itrs, center(2)-itrs:center(2)+itrs, 1)) -itrs-1
-        shift = -real(pos)
+        ! peak interpolation
+        if( l_interp )then
+            shift = real(pos)
+            pos   = pos+itrs+1
+            beta  = self1%rmat(center(1)+pos(1),center(2)+pos(2), 1)
+            ! along x
+            if( abs(pos(1)-center(1)) < itrs )then ! within limits
+                alpha = self1%rmat(center(1)+pos(1)-1,center(2)+pos(2), 1)
+                gamma = self1%rmat(center(1)+pos(1)+1,center(2)+pos(2), 1)
+                if( alpha<beta .and. gamma<beta )then
+                    denom = alpha + gamma - 2.*beta
+                    if( abs(denom) > TINY ) shift(1) = shift(1) + 0.5 * (alpha-gamma) / denom
+                endif
+            endif
+            ! along y
+            if( abs(pos(2)-center(2)) < itrs )then
+                alpha = self1%rmat(center(1)+pos(1),center(2)+pos(2)-1, 1)
+                gamma = self1%rmat(center(1)+pos(1),center(2)+pos(2)-1, 1)
+                if( alpha<beta .and. gamma<beta )then
+                    denom = alpha + gamma - 2.*beta
+                    if( abs(denom) > TINY ) shift(2) = shift(2) + 0.5 * (alpha-gamma) / denom
+                endif
+            endif
+            ! convention
+            shift = -shift
+        else
+            shift = -real(pos)
+        endif
     end subroutine fcorr_shift
 
     !> \brief prenorm4real_corr pre-normalises the reference in preparation for real_corr_prenorm
