@@ -125,8 +125,8 @@ contains
         integer :: i, inds(self%D), min_ND
         pcavecs_T  = transpose(pcavecs)
         eig_vecs_T = pcavecs_T
+        inds       = (/(i,i=1,self%D)/)
         call svdcmp(eig_vecs_T, eig_vals_T, tmp_T)
-        inds      = (/(i,i=1,self%D)/)
         call hpsort(eig_vals_T, inds)
         call reverse(eig_vals_T)
         call reverse(inds)
