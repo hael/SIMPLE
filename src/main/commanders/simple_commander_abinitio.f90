@@ -694,11 +694,12 @@ contains
         class(cmdline),                    intent(inout) :: cline
         ! constants
         real,                  parameter :: SCALEFAC2_TARGET = 0.5
-        real,                  parameter :: CENLP_DEFAULT = 30.
-        integer,               parameter :: MAXITS_PROB=30, MAXITS_INIT=15, MAXITS_REFINE=20
-        integer,               parameter :: NSPACE_PROB=1000
-        integer,               parameter :: MINBOX = 88
-        character(len=STDLEN), parameter :: work_projfile = 'initial_3Dmodel_tmpproj.simple'
+        real,                  parameter :: CENLP_DEFAULT    = 30.
+        integer,               parameter :: MAXITS_PROB      = 30
+        integer,               parameter :: MAXITS_REFINE    = 20
+        integer,               parameter :: NSPACE_PROB      = 1000
+        integer,               parameter :: MINBOX           = 88
+        character(len=STDLEN), parameter :: work_projfile    = 'initial_3Dmodel_tmpproj.simple'
         ! distributed commanders
         type(calc_pspec_commander_distr) :: xcalc_pspec_distr
         ! shared-mem commanders
@@ -708,7 +709,7 @@ contains
         type(reproject_commander)        :: xreproject
         type(postprocess_commander)      :: xpostprocess
         ! command lines
-        type(cmdline) :: cline_refine3D_prob, cline_refine3D_init, cline_refine3D_refine
+        type(cmdline) :: cline_refine3D_prob, cline_refine3D_refine
         type(cmdline) :: cline_symsrch
         type(cmdline) :: cline_reconstruct3D, cline_postprocess
         type(cmdline) :: cline_reproject, cline_calc_pspec
@@ -727,11 +728,10 @@ contains
         type(stack_io)        :: stkio_r, stkio_r2, stkio_w
         character(len=STDLEN) :: vol_iter, pgrp_init, pgrp_refine, vol_iter_pproc, vol_iter_pproc_mirr
         character(len=STDLEN) :: sigma2_fname, sigma2_fname_sc, orig_objfun
-        real                  :: scale_factor1, scale_factor2, trslim, smpd_target, lplims(2), cenlp
+        real                  :: scale_factor1, scale_factor2, trslim, smpd_target, lplims(2), cenlp, lp_est
         integer               :: icls, ncavgs, cnt, iter, ipart, even_ind, odd_ind, state
         logical               :: srch4symaxis, do_autoscale, symran_before_refine
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
-        call cline%set('ml_reg',        'no') ! no ML regularization on class averages, consider regularization at the 2D class level
         call cline%set('sigma_est', 'global')
         call cline%set('refine',      'prob') ! we start off with refine=prob and move on from there
         call cline%set('oritype',      'out') ! because cavgs are part of out segment
@@ -740,6 +740,7 @@ contains
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         if( .not. cline%defined('overlap')   ) call cline%set('overlap',    0.98)
         if( .not. cline%defined('fracsrch')  ) call cline%set('fracsrch',   0.95)
+        if( .not. cline%defined('ml_reg')    ) call cline%set('ml_reg',     'no')
         ! make master parameters
         call params%new(cline)
         call cline%delete('autoscale')
@@ -847,7 +848,6 @@ contains
         cline_refine3D_refine = cline
         cline_reproject       = cline
         cline_refine3D_prob   = cline
-        cline_refine3D_init   = cline
         cline_symsrch         = cline
         ! initialise command line parameters
         ! (1) PROBABILISTIC AB INITIO STEP
@@ -859,23 +859,12 @@ contains
         call cline_refine3D_prob%set('lpstop',     lplims(2))
         call cline_refine3D_prob%set('nspace',     real(NSPACE_PROB))
         call cline_refine3D_prob%set('maxits',     real(MAXITS_PROB))
-        call cline_refine3D_prob%set('silence_fsc','yes')              ! no FSC plot printing in prob phase
-        ! (2) INITIAL REFINEMENT
-        call cline_refine3D_init%set('prg',      'refine3D')
-        call cline_refine3D_init%set('projfile', trim(work_projfile))
-        call cline_refine3D_init%set('box_crop', real(params%box_crop))
-        call cline_refine3D_init%set('smpd_crop',params%smpd_crop)
-        call cline_refine3D_init%set('lpstart',   lplims(1))
-        call cline_refine3D_init%set('lpstop',    lplims(2))
-        call cline_refine3D_init%set('maxits',     real(MAXITS_INIT))
-        call cline_refine3D_init%set('silence_fsc','yes') ! no FSC plot printing in 2nd phase
-        call cline_refine3D_init%set('vol1',       trim(VOL_FBODY)//trim(str_state)//ext)
-        call cline_refine3D_refine%set('trs',      trslim)
-        ! (3) SYMMETRY AXIS SEARCH
+        call cline_refine3D_prob%set('silence_fsc','yes') ! no FSC plot printing in prob phase
+        call cline_refine3D_prob%set('trs',        trslim)              
+        ! (2) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
             ! need to replace original point-group flag with c1/pgrp_start
             call cline_refine3D_prob%set('pgrp', trim(pgrp_init))
-            call cline_refine3D_init%set('pgrp', trim(pgrp_init))
             ! symsrch
             call qenv%new(1, exec_bin='simple_exec')
             call cline_symsrch%set('prg',     'symaxis_search') ! needed for cluster exec
@@ -885,10 +874,10 @@ contains
             call cline_symsrch%set('projfile', trim(work_projfile))
             if( .not. cline_symsrch%defined('cenlp') ) call cline_symsrch%set('cenlp', CENLP)
             call cline_symsrch%set('hp',       params%hp)
-            call cline_symsrch%set('lp',       lplims(1))
             call cline_symsrch%set('oritype',  'ptcl3D')
+            call cline_symsrch%delete('lp_auto')
         endif
-        ! (4) FINAL REFINEMENT
+        ! (3)  REFINEMENT
         call cline_refine3D_refine%set('prg',    'refine3D')
         call cline_refine3D_refine%set('projfile',   trim(work_projfile))
         call cline_refine3D_refine%set('pgrp',   trim(pgrp_refine))
@@ -898,7 +887,7 @@ contains
         call cline_refine3D_refine%set('lpstart',     lplims(1))
         call cline_refine3D_refine%set('lpstop',      lplims(2))
         call cline_refine3D_refine%set('lp_auto',     'yes')
-        ! (5) RE-CONSTRUCT & RE-PROJECT VOLUME
+        ! (4) RE-CONSTRUCT & RE-PROJECT VOLUME
         call cline_reconstruct3D%set('prg',     'reconstruct3D')
         call cline_reconstruct3D%set('box',      real(params%box))
         call cline_reconstruct3D%set('projfile', work_projfile)
@@ -917,13 +906,7 @@ contains
         write(logfhandle,'(A)') '>>>'
         call rndstart(cline_refine3D_prob)
         call xrefine3D%execute_shmem(cline_refine3D_prob)
-        iter = nint(cline_refine3D_prob%get_rarg('endit'))
-        call cline_refine3D_init%set('startit',  real(iter + 1))
-        write(logfhandle,'(A)') '>>>'
-        write(logfhandle,'(A)') '>>> INITIAL PROBABLISTIC 3D REFINEMENT'
-        write(logfhandle,'(A)') '>>>'
-        call xrefine3D%execute_shmem(cline_refine3D_init)
-        iter = nint(cline_refine3D_init%get_rarg('endit'))
+        iter     = nint(cline_refine3D_prob%get_rarg('endit'))
         vol_iter = trim(VOL_FBODY)//trim(str_state)//ext
         if( .not. file_exists(vol_iter) ) THROW_HARD('input volume to symmetry axis search does not exist')
         if( symran_before_refine )then
@@ -932,6 +915,9 @@ contains
             call work_proj%write_segment_inside('ptcl3D', work_projfile)
         endif
         if( srch4symaxis )then
+            call work_proj%read_segment('ptcl3D', work_projfile)
+            lp_est = work_proj%os_ptcl3D%get_avg('lp')
+            call cline_symsrch%set('lp', lp_est)
             write(logfhandle,'(A)') '>>>'
             write(logfhandle,'(A)') '>>> SYMMETRY AXIS SEARCH'
             write(logfhandle,'(A)') '>>>'
@@ -944,15 +930,16 @@ contains
         call downscale(smpd_target, scale_factor2)
         ! refinement stage
         write(logfhandle,'(A)') '>>>'
-        write(logfhandle,'(A)') '>>> FINAL PROBABLISTIC 3D REFINEMENT'
+        write(logfhandle,'(A)') '>>> PROBABLISTIC 3D REFINEMENT'
         write(logfhandle,'(A)') '>>>'
         iter = iter + 1
         call cline_refine3D_refine%set('startit',  real(iter))
         call cline_refine3D_refine%set('box_crop', real(params%box_crop))
         call cline_refine3D_refine%set('smpd_crop',params%smpd_crop)
-        call cline_refine3D_refine%set('trs',      trslim)
+        call cline_refine3D_refine%set('trs',      trslim) ! updated by call to downscale
         ! sigma2 at original sampling
         cline_calc_pspec = cline
+        call cline_calc_pspec%delete('lp_auto')
         call cline_calc_pspec%set('prg',      'calc_pspec' )
         call cline_calc_pspec%set('projfile', work_projfile)
         call cline_calc_pspec%set('box',   real(params%box))
@@ -969,6 +956,7 @@ contains
             write(logfhandle,'(A)') '>>>'
             write(logfhandle,'(A)') '>>> RECONSTRUCTION AT ORIGINAL SAMPLING'
             write(logfhandle,'(A)') '>>>'
+            call cline_reconstruct3D%delete('lp_auto')
             call cline_reconstruct3D%set('box',  real(params%box))
             call cline_reconstruct3D%set('smpd', params%smpd)
             ! reconstruction
@@ -1014,6 +1002,7 @@ contains
         write(logfhandle,'(A)') '>>>'
         write(logfhandle,'(A)') '>>> RE-PROJECTION OF THE FINAL VOLUME'
         write(logfhandle,'(A)') '>>>'
+        call cline_reproject%delete('lp_auto')
         call cline_reproject%set('vol1',   trim(REC_PPROC_FBODY)//ext)
         call cline_reproject%set('oritab', 'final_oris.txt')
         call xreproject%execute(cline_reproject)
@@ -1092,6 +1081,10 @@ contains
                 call cline%set('objfun', 'cc')
                 call xreconstruct3D%execute_shmem(cline)
                 call cline%set('objfun', trim(params%objfun))
+                if( params%l_ml_reg )then
+                    call simple_copy_file('recvol_state01_even.mrc', 'startvol_even_unfil.mrc')
+                    call simple_copy_file('recvol_state01_odd.mrc',  'startvol_odd_unfil.mrc')
+                endif
                 call simple_rename('recvol_state01_even.mrc', 'startvol_even.mrc')
                 call simple_rename('recvol_state01_odd.mrc',  'startvol_odd.mrc')
                 call simple_rename('recvol_state01.mrc',      'startvol.mrc')
@@ -1106,6 +1099,10 @@ contains
                 call cline%set('mkdir', 'no') ! to avoid nested dirs
                 call xreconstruct3D%execute_shmem(cline)
                 call build%spproj_field%kill
+                if( params%l_ml_reg )then
+                    call simple_rename('recvol_state01_even_unfil.mrc', 'startvol_even_unfil.mrc')
+                    call simple_rename('recvol_state01_odd_unfil.mrc',  'startvol_odd_unfil.mrc')
+                endif
                 call simple_rename('recvol_state01_even.mrc', 'startvol_even.mrc')
                 call simple_rename('recvol_state01_odd.mrc',  'startvol_odd.mrc')
                 call simple_rename('recvol_state01.mrc',      'startvol.mrc')

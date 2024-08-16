@@ -502,7 +502,7 @@ contains
             call even%ifft()
             call even%clip_inplace([self%box,self%box,self%box])
             call even%div(self%mag_correction)
-            if( l_combined ) call even%write(add2fbody(fname_even,params_glob%ext,'_unfil'))
+            call even%write(add2fbody(fname_even,params_glob%ext,'_unfil'))
             ! odd
             cmat = self%odd%get_cmat()
             call self%odd%sampl_dens_correct(do_gridcorr=.false.)
@@ -512,7 +512,7 @@ contains
             call odd%ifft()
             call odd%clip_inplace([self%box,self%box,self%box])
             call odd%div(self%mag_correction)
-            if( l_combined ) call odd%write(add2fbody(fname_odd,params_glob%ext,'_unfil'))
+            call odd%write(add2fbody(fname_odd,params_glob%ext,'_unfil'))
             ! masking
             if( self%automsk )then
                 call even%mul(self%envmask)
