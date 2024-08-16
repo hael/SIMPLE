@@ -1770,7 +1770,7 @@ contains
                 do icls = 1, ncls_sel
                     call cavg_imgs_good(icls)%fft()
                     call cavg_imgs_good(1)%polarize(pftcc, cavg_imgs_good(icls), icls, isptcl=.false., iseven=.true.)
-                    call cavg_imgs_good(1)%polarize(pftcc, cavg_imgs_good(icls), icls, isptcl=.true., iseven=.true.)
+                    call pftcc%cp_even_ref2ptcl(icls,icls)
                     call cavg_imgs_good(icls)%ifft()
                 end do
                 !$omp end parallel do
@@ -1780,13 +1780,13 @@ contains
                 do i = 1,nthr_glob
                     call correlators(i)%new(5.,1.,opt_angle=.false.)
                 enddo
-                !$omp parallel do default(shared) private(i,j,irot,ithr,found,corrs,offset) schedule(static) proc_bind(close)
+                !$omp parallel do default(shared) private(i,j,irot,ithr,corrs,offset) schedule(static) proc_bind(close)
                 do i = 1, ncls_sel - 1
                     ithr = omp_get_thread_num()+1
                     do j = i + 1, ncls_sel
                         call pftcc%gencorrs_mag_cc(i, j, corrs, kweight=.true.)
                         irot = maxloc(corrs,dim=1)
-                        call correlators(ithr)%minimize( i,j, found, irot, corrmat_comlin(i,j), offset )
+                        call correlators(ithr)%minimize(i,j, irot, corrmat_comlin(i,j), offset)
                         corrmat_comlin(j,i) = corrmat_comlin(i,j)
                     enddo
                     corrmat_comlin(i,i) = 1.
@@ -1826,6 +1826,7 @@ contains
             write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH AFFINITY PROPAGATION'
             call aprop%new(ncls_sel, corrmat_comlin, pref=pref)
             call aprop%propagate(centers, labels, simsum)
+            call aprop%kill
             ncls_aff_prop = size(centers)
             write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION (AP): ', ncls_aff_prop
             allocate(cntarr(ncls_aff_prop), source=0)
@@ -1934,7 +1935,7 @@ contains
                             if( found )then
                                 call pftcc%gencorrs_mag_cc(icen, i, corrs, kweight=.true.)
                                 irot = maxloc(corrs,dim=1)
-                                call correlators(1)%minimize(icen,i, found, irot, corr_icls, offset)
+                                call correlators(1)%minimize(icen,i, irot, corr_icls, offset)
                                 call cavg_imgs(i)%rtsq(pftcc%get_rot(irot),0.,0.)
                             else
                                 icen = i

@@ -1312,7 +1312,7 @@ contains
         logical,       optional, intent(in)    :: kweight
         complex(dp), pointer :: pft_ref(:,:)
         real(dp),    pointer :: pft_mag_ptcl(:,:)
-        real(dp)    :: sumsqptcl
+        real(dp)    :: sumsqptcl, sumsqref
         integer     :: i, k, ithr
         logical     :: kw
         kw = .true.
@@ -1329,54 +1329,77 @@ contains
         pft_mag_ptcl(:,:)           = real(self%pfts_ptcls(:,:,i)*conjg(self%pfts_ptcls(:,:,i)),dp)
         sumsqptcl                   = 0.d0
         self%heap_vars(ithr)%kcorrs = 0.d0
-        self%drvec(ithr)%r          = 0.d0
-        do k = self%kfromto(1),self%kfromto(2)
-            ! (|X|2)2
-            if( kw )then
-                sumsqptcl = sumsqptcl + real(k,dp) * sum(pft_mag_ptcl(:,k)**2)
-            else
-                sumsqptcl = sumsqptcl + sum(pft_mag_ptcl(:,k)**2)
-            endif
-            ! FT(CTF4)
-            if( self%with_ctf )then
+        if( self%with_ctf )then
+            self%drvec(ithr)%r = 0.d0
+            do k = self%kfromto(1),self%kfromto(2)
+                ! (|X|2)2
+                if( kw )then
+                    sumsqptcl = sumsqptcl + real(k,dp) * sum(pft_mag_ptcl(:,k)**2)
+                else
+                    sumsqptcl = sumsqptcl + sum(pft_mag_ptcl(:,k)**2)
+                endif
+                ! FT(CTF4)
                 self%rvec1(ithr)%r(1:self%pftsz) = self%ctfmats(:,k,i)**4
-            else
-                self%rvec1(ithr)%r(1:self%pftsz) = 1.0
-            endif
-            self%rvec1(ithr)%r(self%pftsz+1:self%nrots) = self%rvec1(ithr)%r(1:self%pftsz)
-            call fftwf_execute_dft_r2c(self%plan_mem_r2c, self%rvec1(ithr)%r, self%cvec1(ithr)%c)
-            self%cvec2(ithr)%c(1:self%pftsz+1) = self%cvec1(ithr)%c
-            ! FT((|REF|2)2))
-            self%rvec1(ithr)%r(1:self%pftsz)            = real(pft_ref(:,k)*conjg(pft_ref(:,k)))**2
-            self%rvec1(ithr)%r(self%pftsz+1:self%nrots) = self%rvec1(ithr)%r(1:self%pftsz)
-            call fftwf_execute_dft_r2c(self%plan_mem_r2c, self%rvec1(ithr)%r, self%cvec1(ithr)%c)
-            ! FT(CTF4) x FT((|REF|2)2))*
-            self%cvec1(ithr)%c = self%cvec2(ithr)%c(1:self%pftsz+1) * conjg(self%cvec1(ithr)%c)
-            ! IFFT( FT(CTF4) x FT((|REF|2)2))* )
-            call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
-            if( kw )then
-                self%drvec(ithr)%r(1:self%pftsz) = self%drvec(ithr)%r(1:self%pftsz) + real(k,dp) * real(self%rvec1(ithr)%r(1:self%pftsz),dp)
-            else
-                self%drvec(ithr)%r(1:self%pftsz) = self%drvec(ithr)%r(1:self%pftsz) + real(self%rvec1(ithr)%r(1:self%pftsz),dp)
-            endif
-            ! FT(|X|2.CTF2) x FT(|REF|2)*
-            if( self%iseven(i) )then
-                self%cvec1(ithr)%c = self%ft_ptcl2_ctf2(k,i)%c(1:self%pftsz+1) * self%ft_ref2_even(k,iref)%c(1:self%pftsz+1)
-            else
-                self%cvec1(ithr)%c = self%ft_ptcl2_ctf2(k,i)%c(1:self%pftsz+1) * self%ft_ref2_odd(k,iref)%c(1:self%pftsz+1)
-            endif
-            ! IFFT( FT(|X|2.CTF2) x FT(REF2)* )
-            call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
-            if( kw )then
-                self%heap_vars(ithr)%kcorrs(1:self%pftsz) = self%heap_vars(ithr)%kcorrs(1:self%pftsz) +&
-                    &real(k,dp) * real(self%rvec1(ithr)%r(1:self%pftsz),dp)
-            else
-                self%heap_vars(ithr)%kcorrs(1:self%pftsz) = self%heap_vars(ithr)%kcorrs(1:self%pftsz) +&
-                    &real(self%rvec1(ithr)%r(1:self%pftsz),dp)
-            endif
-        end do
-        self%drvec(ithr)%r(1:self%pftsz) = self%drvec(ithr)%r(1:self%pftsz) * (sumsqptcl * real(2*self%nrots,dp))
-        ccs = real(self%heap_vars(ithr)%kcorrs(1:self%pftsz) / dsqrt(self%drvec(ithr)%r(1:self%pftsz)))
+                self%rvec1(ithr)%r(self%pftsz+1:self%nrots) = self%rvec1(ithr)%r(1:self%pftsz)
+                call fftwf_execute_dft_r2c(self%plan_mem_r2c, self%rvec1(ithr)%r, self%cvec1(ithr)%c)
+                self%cvec2(ithr)%c(1:self%pftsz+1) = self%cvec1(ithr)%c
+                ! FT((|REF|2)2))
+                self%rvec1(ithr)%r(1:self%pftsz)            = real(pft_ref(:,k)*conjg(pft_ref(:,k)))**2
+                self%rvec1(ithr)%r(self%pftsz+1:self%nrots) = self%rvec1(ithr)%r(1:self%pftsz)
+                call fftwf_execute_dft_r2c(self%plan_mem_r2c, self%rvec1(ithr)%r, self%cvec1(ithr)%c)
+                ! FT(CTF4) x FT((|REF|2)2))*
+                self%cvec1(ithr)%c = self%cvec2(ithr)%c(1:self%pftsz+1) * conjg(self%cvec1(ithr)%c)
+                ! IFFT( FT(CTF4) x FT((|REF|2)2))* )
+                call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
+                if( kw )then
+                    self%drvec(ithr)%r(1:self%pftsz) = self%drvec(ithr)%r(1:self%pftsz) + real(k,dp) * real(self%rvec1(ithr)%r(1:self%pftsz),dp)
+                else
+                    self%drvec(ithr)%r(1:self%pftsz) = self%drvec(ithr)%r(1:self%pftsz) + real(self%rvec1(ithr)%r(1:self%pftsz),dp)
+                endif
+                ! FT(|X|2.CTF2) x FT(|REF|2)*
+                if( self%iseven(i) )then
+                    self%cvec1(ithr)%c = self%ft_ptcl2_ctf2(k,i)%c(1:self%pftsz+1) * self%ft_ref2_even(k,iref)%c(1:self%pftsz+1)
+                else
+                    self%cvec1(ithr)%c = self%ft_ptcl2_ctf2(k,i)%c(1:self%pftsz+1) * self%ft_ref2_odd(k,iref)%c(1:self%pftsz+1)
+                endif
+                ! IFFT( FT(|X|2.CTF2) x FT(REF2)* )
+                call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
+                if( kw )then
+                    self%heap_vars(ithr)%kcorrs(1:self%pftsz) = self%heap_vars(ithr)%kcorrs(1:self%pftsz) +&
+                        &real(k,dp) * real(self%rvec1(ithr)%r(1:self%pftsz),dp)
+                else
+                    self%heap_vars(ithr)%kcorrs(1:self%pftsz) = self%heap_vars(ithr)%kcorrs(1:self%pftsz) +&
+                        &real(self%rvec1(ithr)%r(1:self%pftsz),dp)
+                endif
+            end do
+            self%drvec(ithr)%r(1:self%pftsz) = self%drvec(ithr)%r(1:self%pftsz) * (sumsqptcl * real(2*self%nrots,dp))
+            ccs = real(self%heap_vars(ithr)%kcorrs(1:self%pftsz) / dsqrt(self%drvec(ithr)%r(1:self%pftsz)))
+        else
+            sumsqref = 0.d0
+            do k = self%kfromto(1),self%kfromto(2)
+                ! FT(|X|2) x FT(|REF|2)*
+                if( self%iseven(i) )then
+                    self%cvec1(ithr)%c = self%ft_ptcl2_ctf2(k,i)%c(1:self%pftsz+1) * self%ft_ref2_even(k,iref)%c(1:self%pftsz+1)
+                else
+                    self%cvec1(ithr)%c = self%ft_ptcl2_ctf2(k,i)%c(1:self%pftsz+1) * self%ft_ref2_odd(k,iref)%c(1:self%pftsz+1)
+                endif
+                ! IFFT( FT(|X|2) x FT(REF2)* )
+                call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
+                if( kw )then
+                    ! (|X|2)2 & (|REF|2)2
+                    sumsqptcl = sumsqptcl + real(k,dp) * sum(pft_mag_ptcl(:,k)**2)
+                    sumsqref  = sumsqref  + real(k,dp) * sum(pft_ref(:,k)**2)
+                    self%heap_vars(ithr)%kcorrs(1:self%pftsz) = self%heap_vars(ithr)%kcorrs(1:self%pftsz) +&
+                        &real(k,dp) * real(self%rvec1(ithr)%r(1:self%pftsz),dp)
+                else
+                    sumsqptcl = sumsqptcl + sum(pft_mag_ptcl(:,k)**2)
+                    sumsqref  = sumsqref  + sum(pft_ref(:,k)**2)
+                    self%heap_vars(ithr)%kcorrs(1:self%pftsz) = self%heap_vars(ithr)%kcorrs(1:self%pftsz) +&
+                        &real(self%rvec1(ithr)%r(1:self%pftsz),dp)
+                endif
+            end do
+            ccs = real(self%heap_vars(ithr)%kcorrs(1:self%pftsz) / dsqrt(sumsqptcl*sumsqref))
+        endif
     end subroutine gencorrs_mag_cc
 
     subroutine gencorrs_mag( self, iref, iptcl, ccs, kweight )

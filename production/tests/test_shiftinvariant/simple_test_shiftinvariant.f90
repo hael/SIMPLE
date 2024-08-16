@@ -236,7 +236,7 @@ do iptcl = p%fromp,p%top
             call grad_shsrch_fm_obj%new(p%trs, 1.)
             call pftcc%gencorrs_mag_cc(p%iptcl,iptcl,scores2,kweight=.false.)
             irot = maxloc(scores2,dim=1)
-            call grad_shsrch_fm_obj%minimize(p%iptcl, iptcl, found, irot, cxy(1), cxy(2:3))
+            call grad_shsrch_fm_obj%minimize(p%iptcl, iptcl, irot, cxy(1), cxy(2:3))
             e3 = 360. - pftcc%get_rot(irot)
             aerr = abs(b%spproj_field%e3get(iptcl)-e3)
             if( aerr > 180. ) aerr = 360.-aerr
