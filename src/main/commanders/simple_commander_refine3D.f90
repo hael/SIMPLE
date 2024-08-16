@@ -1016,6 +1016,9 @@ contains
         ! make CTFs
         if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, params%oritype)
         call pftcc%memoize_ptcls
+        if( trim(params%sh_glob) .eq. 'yes' )then
+            call eulprob_obj_part%read_assignment(trim(ASSIGNMENT_FBODY)//'.dat')
+        endif
         call eulprob_obj_part%fill_tab(pftcc)
         fname = trim(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
         call eulprob_obj_part%write_tab(fname)
@@ -1135,7 +1138,6 @@ contains
         ! make CTFs
         if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, params%oritype)
         call pftcc%memoize_ptcls
-        call eulprob_obj_part%read_assignment(trim(ASSIGNMENT_FBODY)//'.dat')
         call eulprob_obj_part%fill_shift_tab(pftcc)
         fname = trim(SHIFT_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
         call eulprob_obj_part%write_shift(fname)
@@ -1205,6 +1207,31 @@ contains
         else
             call eulprob_obj_glob%new(pinds)
         endif
+        ! shift assignment
+        if( trim(params_glob%sh_glob) .eq. 'yes' )then
+            cline_shift_tab = cline
+            call cline_shift_tab%set('prg', 'shift_tab') ! required for distributed call
+            ! execution
+            if( params_glob%nparts == 1)then
+                call xshift_tab%execute_shmem(cline_shift_tab)
+            else
+                ! setup the environment for distributed execution
+                call qenv%new(params_glob%nparts, nptcls=params_glob%nptcls)
+                call cline_shift_tab%gen_job_descr(job_descr)
+                ! schedule
+                call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
+            endif
+            ! reading assignments from all parts
+            do ipart = 1, params_glob%nparts
+                fname = trim(SHIFT_FBODY)//int2str_pad(ipart,params_glob%numlen)//'.dat'
+                call eulprob_obj_glob%read_shift(fname)
+            enddo
+            call eulprob_obj_glob%shift_assign
+            ! write the iptcl->(iref,istate) assignment again with the shifts
+            fname = trim(ASSIGNMENT_FBODY)//'.dat'
+            call eulprob_obj_glob%write_assignment(fname)
+            call cline_shift_tab%kill
+        endif
         ! generating all corrs on all parts
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab' ) ! required for distributed call
@@ -1231,31 +1258,6 @@ contains
         ! write the iptcl->(iref,istate) assignment
         fname = trim(ASSIGNMENT_FBODY)//'.dat'
         call eulprob_obj_glob%write_assignment(fname)
-        ! shift assignment
-        if( trim(params_glob%sh_glob) .eq. 'yes' )then
-            cline_shift_tab = cline
-            call cline_shift_tab%set('prg', 'shift_tab') ! required for distributed call
-            ! execution
-            if( params_glob%nparts == 1)then
-                call xshift_tab%execute_shmem(cline_shift_tab)
-            else
-                ! setup the environment for distributed execution
-                call qenv%new(params_glob%nparts, nptcls=params_glob%nptcls)
-                call cline_shift_tab%gen_job_descr(job_descr)
-                ! schedule
-                call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
-            endif
-            ! reading assignments from all parts
-            do ipart = 1, params_glob%nparts
-                fname = trim(SHIFT_FBODY)//int2str_pad(ipart,params_glob%numlen)//'.dat'
-                call eulprob_obj_glob%read_shift(fname)
-            enddo
-            call eulprob_obj_glob%shift_assign
-            ! write the iptcl->(iref,istate) assignment again with the shifts
-            fname = trim(ASSIGNMENT_FBODY)//'.dat'
-            call eulprob_obj_glob%write_assignment(fname)
-            call cline_shift_tab%kill
-        endif
         ! cleanup
         call eulprob_obj_glob%kill
         call cline_prob_tab%kill
