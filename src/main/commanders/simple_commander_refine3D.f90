@@ -1221,13 +1221,13 @@ contains
                 ! schedule
                 call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
             endif
-            ! reading assignments from all parts
+            ! reading shifts from all parts
             do ipart = 1, params_glob%nparts
                 fname = trim(SHIFT_FBODY)//int2str_pad(ipart,params_glob%numlen)//'.dat'
                 call eulprob_obj_glob%read_shift(fname)
             enddo
             call eulprob_obj_glob%shift_assign
-            ! write the iptcl->(iref,istate) assignment again with the shifts
+            ! write the iptcl->shifts assignment
             fname = trim(ASSIGNMENT_FBODY)//'.dat'
             call eulprob_obj_glob%write_assignment(fname)
             call cline_shift_tab%kill

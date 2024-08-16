@@ -177,7 +177,7 @@ contains
         integer :: i, j, iproj, iptcl, projs_ns, ithr, irot, inds_sorted(pftcc%nrots,nthr_glob), istate, iref
         logical :: l_doshift
         real    :: dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob), rotmat(2,2)
-        real    :: dists_projs(params_glob%nspace,nthr_glob), lims(2,2), lims_init(2,2), cxy(3), inpl_athres
+        real    :: dists_projs(params_glob%nspace,nthr_glob), lims(2,2), lims_init(2,2), cxy(3), rot_xy(2), inpl_athres
         call seed_rnd
         if( trim(params_glob%sh_first).eq.'yes' )then
             ! make shift search objects
@@ -193,7 +193,7 @@ contains
             do istate = 1, self%nstates
                 iref        = (istate-1)*params_glob%nspace
                 inpl_athres = calc_athres('dist_inpl', state=istate)
-                !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,iproj,irot,cxy,rotmat) proc_bind(close) schedule(static)
+                !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,iproj,irot,cxy,rot_xy,rotmat) proc_bind(close) schedule(static)
                 do i = 1, self%nptcls
                     iptcl = self%pinds(i)
                     ithr  = omp_get_thread_num() + 1
@@ -214,11 +214,11 @@ contains
                         irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres)
                         ! rotate the shift vector to the frame of reference
                         call rotmat2d(pftcc%get_rot(irot), rotmat)
-                        cxy(2:3) = matmul(cxy(2:3), rotmat)
+                        rot_xy = matmul(cxy(2:3), rotmat)
                         self%loc_tab(iproj,i,istate)%dist   = dists_inpl(irot,ithr)
                         self%loc_tab(iproj,i,istate)%inpl   = irot
-                        self%loc_tab(iproj,i,istate)%x      = cxy(2)
-                        self%loc_tab(iproj,i,istate)%y      = cxy(3)
+                        self%loc_tab(iproj,i,istate)%x      = rot_xy(1)
+                        self%loc_tab(iproj,i,istate)%y      = rot_xy(2)
                         self%loc_tab(iproj,i,istate)%has_sh = .true.
                     enddo
                 enddo
@@ -339,7 +339,7 @@ contains
         !$omp parallel do default(shared) proc_bind(close) schedule(static)&
         !$omp private(i,iptcl,ithr,iproj,ishift,irot,xy,o_prev)
         do i = 1, self%nptcls
-            iptcl = self%assgn_map(i)%pind
+            iptcl = self%pinds(i)
             call build_glob%spproj_field%get_ori(iptcl, o_prev)   ! previous ori
             iproj = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
             ithr  = omp_get_thread_num() + 1
