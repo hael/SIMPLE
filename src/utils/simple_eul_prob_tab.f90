@@ -198,7 +198,7 @@ contains
                     iptcl = self%pinds(i)
                     ithr  = omp_get_thread_num() + 1
                     if( trim(params_glob%sh_glob) .eq. 'yes' )then  ! retrieve ptcl shift from assign_map
-                        cxy(2:3) = [self%assgn_map(iptcl)%x, self%assgn_map(iptcl)%y]
+                        cxy(2:3) = [self%assgn_map(i)%x, self%assgn_map(i)%y]
                     else                                            ! using previous ori for shift search
                         call build_glob%spproj_field%get_ori(iptcl, o_prev)   ! previous ori
                         irot  = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
