@@ -695,7 +695,7 @@ contains
         ! constants
         real,                  parameter :: SCALEFAC2_TARGET = 0.5
         real,                  parameter :: CENLP_DEFAULT    = 30.
-        integer,               parameter :: MAXITS_PROB      = 30
+        integer,               parameter :: MAXITS_PROB      = 50
         integer,               parameter :: MAXITS_REFINE    = 20
         integer,               parameter :: NSPACE_PROB      = 1000
         integer,               parameter :: MINBOX           = 88
