@@ -740,7 +740,7 @@ contains
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         if( .not. cline%defined('overlap')   ) call cline%set('overlap',    0.98)
         if( .not. cline%defined('fracsrch')  ) call cline%set('fracsrch',   0.95)
-        if( .not. cline%defined('ml_reg')    ) call cline%set('ml_reg',     'no')
+        if( .not. cline%defined('ml_reg')    ) call cline%set('ml_reg',    'yes') ! ml_reg=yes wins on trpv1
         ! make master parameters
         call params%new(cline)
         call cline%delete('autoscale')
