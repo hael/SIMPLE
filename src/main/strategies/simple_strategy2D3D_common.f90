@@ -530,7 +530,7 @@ contains
         integer, intent(in) :: s
         character(len=:), allocatable :: vol_even, vol_even_unfil, vol_odd, vol_odd_unfil, vol_avg
         real    :: cur_fil(params_glob%box_crop), lpopt, lpest
-        integer :: filtsz, cutoff_find
+        integer :: filtsz
         vol_even = params_glob%vols_even(s)
         vol_odd  = params_glob%vols_odd(s)
         vol_avg  = params_glob%vols(s)
@@ -571,8 +571,6 @@ contains
             ! filtering done above
         else if( params_glob%l_lpauto )then
             ! no filtering unless ML-reg or ICM is used
-            cutoff_find = calc_fourier_index(lpest,params_glob%box_crop,params_glob%smpd_crop)
-            call butterworth_filter(build_glob%vol, cutoff_find, cur_fil)
         else if( params_glob%l_lpset )then
             filtsz = build_glob%vol%get_filtsz()
             select case(L_LPSET_FILTER)
