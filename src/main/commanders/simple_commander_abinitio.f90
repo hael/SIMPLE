@@ -695,9 +695,10 @@ contains
         ! constants
         real,                  parameter :: SCALEFAC2_TARGET = 0.5
         real,                  parameter :: CENLP_DEFAULT    = 30.
-        integer,               parameter :: MAXITS_PROB      = 50
-        integer,               parameter :: MAXITS_REFINE    = 20
-        integer,               parameter :: NSPACE_PROB      = 1000
+        integer,               parameter :: MAXITS_PROB1     = 30
+        integer,               parameter :: MAXITS_PROB2     = 30
+        integer,               parameter :: NSPACE_PROB1     = 500
+        integer,               parameter :: NSPACE_PROB2     = 1000
         integer,               parameter :: MINBOX           = 88
         character(len=STDLEN), parameter :: work_projfile    = 'initial_3Dmodel_tmpproj.simple'
         ! distributed commanders
@@ -709,7 +710,7 @@ contains
         type(reproject_commander)        :: xreproject
         type(postprocess_commander)      :: xpostprocess
         ! command lines
-        type(cmdline) :: cline_refine3D_prob, cline_refine3D_refine
+        type(cmdline) :: cline_refine3D_prob1, cline_refine3D_prob2
         type(cmdline) :: cline_symsrch
         type(cmdline) :: cline_reconstruct3D, cline_postprocess
         type(cmdline) :: cline_reproject, cline_calc_pspec
@@ -733,7 +734,7 @@ contains
         logical               :: srch4symaxis, do_autoscale, symran_before_refine
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global')
-        call cline%set('refine',      'prob') ! we start off with refine=prob and move on from there
+        call cline%set('refine',      'prob')
         call cline%set('oritype',      'out') ! because cavgs are part of out segment
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
@@ -844,27 +845,27 @@ contains
         ! projects names are subject to change depending on scaling and are updated individually
         call cline%delete('projname')
         call cline%delete('projfile')
-        cline_reconstruct3D   = cline
-        cline_refine3D_refine = cline
-        cline_reproject       = cline
-        cline_refine3D_prob   = cline
-        cline_symsrch         = cline
+        cline_reconstruct3D  = cline
+        cline_refine3D_prob1 = cline
+        cline_refine3D_prob2 = cline
+        cline_reproject      = cline
+        cline_symsrch        = cline
         ! initialise command line parameters
         ! (1) PROBABILISTIC AB INITIO STEP
-        call cline_refine3D_prob%set('prg',        'refine3D')
-        call cline_refine3D_prob%set('projfile',   trim(work_projfile))
-        call cline_refine3D_prob%set('box_crop',   real(params%box_crop))
-        call cline_refine3D_prob%set('smpd_crop',  params%smpd_crop)
-        call cline_refine3D_prob%set('lpstart',    lplims(1))
-        call cline_refine3D_prob%set('lpstop',     lplims(2))
-        call cline_refine3D_prob%set('nspace',     real(NSPACE_PROB))
-        call cline_refine3D_prob%set('maxits',     real(MAXITS_PROB))
-        call cline_refine3D_prob%set('silence_fsc','yes') ! no FSC plot printing in prob phase
-        call cline_refine3D_prob%set('trs',        trslim)              
+        call cline_refine3D_prob1%set('prg',        'refine3D')
+        call cline_refine3D_prob1%set('projfile',   trim(work_projfile))
+        call cline_refine3D_prob1%set('box_crop',   real(params%box_crop))
+        call cline_refine3D_prob1%set('smpd_crop',  params%smpd_crop)
+        call cline_refine3D_prob1%set('lpstart',    lplims(1))
+        call cline_refine3D_prob1%set('lpstop',     lplims(2))
+        call cline_refine3D_prob1%set('nspace',     real(NSPACE_PROB1))
+        call cline_refine3D_prob1%set('maxits',     real(MAXITS_PROB1))
+        call cline_refine3D_prob1%set('silence_fsc','yes') ! no FSC plot printing in prob phase
+        call cline_refine3D_prob1%set('trs',        trslim)              
         ! (2) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
             ! need to replace original point-group flag with c1/pgrp_start
-            call cline_refine3D_prob%set('pgrp', trim(pgrp_init))
+            call cline_refine3D_prob1%set('pgrp', trim(pgrp_init))
             ! symsrch
             call qenv%new(1, exec_bin='simple_exec')
             call cline_symsrch%set('prg',     'symaxis_search') ! needed for cluster exec
@@ -878,15 +879,15 @@ contains
             call cline_symsrch%delete('lp_auto')
         endif
         ! (3)  REFINEMENT
-        call cline_refine3D_refine%set('prg',    'refine3D')
-        call cline_refine3D_refine%set('projfile',   trim(work_projfile))
-        call cline_refine3D_refine%set('pgrp',   trim(pgrp_refine))
-        call cline_refine3D_refine%set('maxits', real(MAXITS_REFINE))
-        call cline_refine3D_refine%set('refine', 'smpl_neigh')
+        call cline_refine3D_prob2%set('prg',    'refine3D')
+        call cline_refine3D_prob2%set('projfile',   trim(work_projfile))
+        call cline_refine3D_prob2%set('pgrp',   trim(pgrp_refine))
+        call cline_refine3D_prob2%set('nspace', real(NSPACE_PROB2))
+        call cline_refine3D_prob2%set('maxits', real(MAXITS_PROB2))
         call cline_reconstruct3D%set('needs_sigma',  'yes')
-        call cline_refine3D_refine%set('lpstart',     lplims(1))
-        call cline_refine3D_refine%set('lpstop',      lplims(2))
-        call cline_refine3D_refine%set('lp_auto',     'yes')
+        call cline_refine3D_prob2%set('lpstart',     lplims(1))
+        call cline_refine3D_prob2%set('lpstop',      lplims(2))
+        call cline_refine3D_prob2%set('lp_auto',     'yes')
         ! (4) RE-CONSTRUCT & RE-PROJECT VOLUME
         call cline_reconstruct3D%set('prg',     'reconstruct3D')
         call cline_reconstruct3D%set('box',      real(params%box))
@@ -904,9 +905,9 @@ contains
         write(logfhandle,'(A)') '>>>'
         write(logfhandle,'(A)') '>>> BAYESIAN 3D AB INITIO'
         write(logfhandle,'(A)') '>>>'
-        call rndstart(cline_refine3D_prob)
-        call xrefine3D%execute_shmem(cline_refine3D_prob)
-        iter     = nint(cline_refine3D_prob%get_rarg('endit'))
+        call rndstart(cline_refine3D_prob1)
+        call xrefine3D%execute_shmem(cline_refine3D_prob1)
+        iter     = nint(cline_refine3D_prob1%get_rarg('endit'))
         vol_iter = trim(VOL_FBODY)//trim(str_state)//ext
         if( .not. file_exists(vol_iter) ) THROW_HARD('input volume to symmetry axis search does not exist')
         if( symran_before_refine )then
@@ -933,10 +934,10 @@ contains
         write(logfhandle,'(A)') '>>> PROBABLISTIC 3D REFINEMENT'
         write(logfhandle,'(A)') '>>>'
         iter = iter + 1
-        call cline_refine3D_refine%set('startit',  real(iter))
-        call cline_refine3D_refine%set('box_crop', real(params%box_crop))
-        call cline_refine3D_refine%set('smpd_crop',params%smpd_crop)
-        call cline_refine3D_refine%set('trs',      trslim) ! updated by call to downscale
+        call cline_refine3D_prob2%set('startit',  real(iter))
+        call cline_refine3D_prob2%set('box_crop', real(params%box_crop))
+        call cline_refine3D_prob2%set('smpd_crop',params%smpd_crop)
+        call cline_refine3D_prob2%set('trs',      trslim) ! updated by call to downscale
         ! sigma2 at original sampling
         cline_calc_pspec = cline
         call cline_calc_pspec%delete('lp_auto')
@@ -946,10 +947,10 @@ contains
         call cline_calc_pspec%set('smpd',  params%smpd)
         call cline_calc_pspec%set('which_iter', real(iter))
         call xcalc_pspec_distr%execute_shmem(cline_calc_pspec)
-        call cline_refine3D_refine%set('which_iter', real(iter))
-        call rec(cline_refine3D_refine)
-        call xrefine3D%execute_shmem(cline_refine3D_refine)
-        iter = nint(cline_refine3D_refine%get_rarg('endit'))
+        call cline_refine3D_prob2%set('which_iter', real(iter))
+        call rec(cline_refine3D_prob2)
+        call xrefine3D%execute_shmem(cline_refine3D_prob2)
+        iter = nint(cline_refine3D_prob2%get_rarg('endit'))
         call cline_reconstruct3D%set('which_iter',real(iter))
         ! deals with final volume
         if( do_autoscale )then
