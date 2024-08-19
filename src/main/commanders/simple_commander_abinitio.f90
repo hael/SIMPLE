@@ -715,7 +715,7 @@ contains
         type(cmdline) :: cline_reconstruct3D, cline_postprocess
         type(cmdline) :: cline_reproject, cline_calc_pspec
         ! other
-        character(len=:), allocatable :: stk, orig_stk, frcs_fname, shifted_stk, stk_even, stk_odd, ext
+        character(len=:), allocatable :: stk, stkpath, orig_stk, frcs_fname, shifted_stk, stk_even, stk_odd, ext
         real,             allocatable :: res(:), tmp_rarr(:), diams(:)
         integer,          allocatable :: states(:), tmp_iarr(:)
         character(len=2)      :: str_state
@@ -773,7 +773,9 @@ contains
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
         ! retrieve cavgs stack info
-        call spproj%get_cavgs_stk(stk, ncavgs, params%smpd)
+        call spproj%get_cavgs_stk(stk, ncavgs, params%smpd, stkpath=stkpath)
+        if(.not. file_exists(stk)) stk = trim(stkpath) // '/' // trim(stk)
+        if(.not. file_exists(stk)) THROW_HARD('cavgs stk does not exist; simple_commander_abinitio')
         orig_stk        = stk
         ext             = '.'//fname2ext(stk)
         stk_even        = add2fbody(trim(stk), trim(ext), '_even')
@@ -1694,9 +1696,9 @@ contains
         logical :: l_lpset, l_err, l_lpstop_set, l_lpstart_set, l_srch4symaxis, l_symran, l_sym
         call cline%set('stoch_update', 'no')
         call cline%set('oritype',      'ptcl3D')
-        call cline%set('mkdir',        'yes')
         call cline%set('sigma_est',    'global')
         call cline%set('center',       'no')
+        if( .not. cline%defined('mkdir')        ) call cline%set('mkdir',          'yes')
         if( .not. cline%defined('ml_reg')       )  call cline%set('ml_reg',        'yes')
         if( .not. cline%defined('refine')       )  call cline%set('refine',        'prob')
         if( .not. cline%defined('prob_sh')      )  call cline%set('prob_sh',       'yes')

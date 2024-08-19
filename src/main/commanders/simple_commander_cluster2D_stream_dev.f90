@@ -1420,7 +1420,7 @@ contains
             call frcs%write(frcsfname)
             call frcs%kill
             call frcs_sc%kill
-            call pool_proj%add_frcs2os_out(frcsfname, 'frc2D')
+            call pool_proj%add_frcs2os_out(frcsfname, 'frc2D', absolutepath=.true.)
             ! write
             pool_proj%os_ptcl3D = pool_proj%os_ptcl2D
             call pool_proj%os_ptcl3D%delete_2Dclustering
@@ -1433,7 +1433,7 @@ contains
                 src = add2fbody(cavgsfname,params_glob%ext,trim(WFILT_SUFFIX))
                 call pool_proj%add_cavgs2os_out(src, params_glob%smpd, 'cavg'//trim(WFILT_SUFFIX))
             endif
-            call pool_proj%add_frcs2os_out(frcsfname, 'frc2D')
+            call pool_proj%add_frcs2os_out(frcsfname, 'frc2D', absolutepath=.true.)
             ! write
             pool_proj%os_ptcl3D = pool_proj%os_ptcl2D
             call pool_proj%os_ptcl3D%delete_2Dclustering

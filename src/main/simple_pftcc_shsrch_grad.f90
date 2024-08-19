@@ -174,7 +174,7 @@ contains
         integer  :: loc, i, lowest_rot, init_rot
         logical  :: found_better, l_sh_rot
         l_sh_rot = .true.
-        if( present(sh_rot) .and. .not.(sh_rot) ) l_sh_rot = .false.
+        if( present(sh_rot) ) l_sh_rot = sh_rot
         found_better = .false.
         if( present(xy) )then
             self%ospec%x   = xy
