@@ -81,7 +81,6 @@ type :: parameters
     character(len=3)          :: remove_chunks='yes'  !< whether to remove chunks after completion
     character(len=3)          :: rnd_cls_init='no'    !< whether 2D classification is initiated from random classes or raw images
     character(len=3)          :: prob_sh='no'         !< shift information in the prob tab (yes|no){no}
-    character(len=3)          :: prob_norm='yes'      !< ref normalization in the prob tab (yes|no){yes}
     character(len=3)          :: reject_cls='no'      !< whether to reject poor classes
     character(len=3)          :: reject_mics='no'     !< whether to reject micrographs based on ctfres/icefrac
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
@@ -465,7 +464,6 @@ type :: parameters
     logical :: l_neigh        = .false.
     logical :: l_phaseplate   = .false.
     logical :: l_prob_sh      = .false.
-    logical :: l_prob_norm    = .true.
     logical :: l_sigma_glob   = .false.
     logical :: l_remap_cls    = .false.
     logical :: l_use_denoised = .false.
@@ -618,7 +616,6 @@ contains
         call check_carg('refine',         self%refine)
         call check_carg('randomise',      self%randomise)
         call check_carg('prob_sh',        self%prob_sh)
-        call check_carg('prob_norm',      self%prob_norm)
         call check_carg('projfile_optics',self%projfile_optics)
         call check_carg('remap_cls',      self%remap_cls)
         call check_carg('roavg',          self%roavg)
@@ -1548,7 +1545,6 @@ contains
         endif
         ! reg options
         self%l_prob_sh      = trim(self%prob_sh     ).eq.'yes'
-        self%l_prob_norm    = trim(self%prob_norm   ).eq.'yes'
         self%l_use_denoised = trim(self%use_denoised).eq.'yes'
         ! ML regularization
         self%l_ml_reg = trim(self%ml_reg).eq.'yes'
