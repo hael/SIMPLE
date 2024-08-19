@@ -22,8 +22,7 @@ interface read_imgbatch
     module procedure read_imgbatch_3
 end interface read_imgbatch
 
-real, parameter :: SHTHRESH       = 0.001
-character(len=*), parameter :: L_LPSET_FILTER = 'COS' ! <BW|COS|NONE>
+real, parameter :: SHTHRESH = 0.001
 type(stack_io)  :: stkio_r
 
 contains
@@ -526,7 +525,6 @@ contains
     end subroutine estimate_lp_refvols
 
     subroutine read_and_filter_refvols( s )
-        use simple_butterworth
         integer, intent(in) :: s
         character(len=:), allocatable :: vol_even, vol_even_unfil, vol_odd, vol_odd_unfil, vol_avg
         real    :: cur_fil(params_glob%box_crop), lpopt, lpest
@@ -569,20 +567,11 @@ contains
             ! filtering done when volumes are assembled
         else if( params_glob%l_icm )then
             ! filtering done above
-        else if( params_glob%l_lpauto )then
-            ! no filtering unless ML-reg or ICM is used
         else if( params_glob%l_lpset )then
-            filtsz = build_glob%vol%get_filtsz()
-            select case(L_LPSET_FILTER)
-                case('COS')
-                    ! Cosine low-pass filter, works best for nanoparticles
-                    call build_glob%vol%bp(0., lpest)
-                case('NONE')
-                    ! nothing to do
-                case DEFAULT
-                    THROW_HARD('Unsupported L_LPSET_FILTER flag')
-            end select  
+            ! Cosine low-pass filter, works best for nanoparticles
+            call build_glob%vol%bp(0., lpest)
         else
+            filtsz = build_glob%vol%get_filtsz()
             if( any(build_glob%fsc(s,:) > 0.143) )then
                 call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),cur_fil)
                 call build_glob%vol%apply_filter(cur_fil)
@@ -602,8 +591,6 @@ contains
         logical,        intent(in) :: iseven
         type(projector), pointer :: vol_ptr => null()
         type(image)              :: mskvol
-        ! real    :: filter(build_glob%vol%get_filtsz())
-        ! integer :: filtsz
         if( iseven )then
             vol_ptr => build_glob%vol
         else
