@@ -38,6 +38,7 @@ contains
     procedure :: set_limits
     procedure :: coarse_search
     procedure :: coarse_search_opt_angle
+    procedure :: prob_search_opt_angle
 end type pftcc_shsrch_grad
 
 contains
@@ -172,7 +173,9 @@ contains
         real     :: corrs(self%nrots), rotmat(2,2), cxy(3), lowest_shift(2), lowest_cost
         real(dp) :: init_xy(2), lowest_cost_overall, coarse_cost, initial_cost
         integer  :: loc, i, lowest_rot, init_rot
-        logical  :: found_better
+        logical  :: found_better, l_sh_rot
+        l_sh_rot = .true.
+        if( present(sh_rot) ) l_sh_rot = sh_rot
         found_better = .false.
         if( present(xy) )then
             self%ospec%x   = xy
@@ -214,7 +217,7 @@ contains
                 irot    =   lowest_rot                 ! in-plane index
                 cxy(1)  = - real(lowest_cost_overall)  ! correlation
                 cxy(2:) =   real(lowest_shift)         ! shift
-                if( .not. present(sh_rot) )then
+                if( l_sh_rot )then
                     ! rotate the shift vector to the frame of reference
                     call rotmat2d(pftcc_glob%get_rot(irot), rotmat)
                     cxy(2:) = matmul(cxy(2:), rotmat)
@@ -250,7 +253,7 @@ contains
             if( found_better )then
                 cxy(1)  = - real(lowest_cost_overall)  ! correlation
                 cxy(2:) =   lowest_shift               ! shift
-                if( .not. present(sh_rot) )then
+                if( l_sh_rot )then
                     ! rotate the shift vector to the frame of reference
                     call rotmat2d(pftcc_glob%get_rot(irot), rotmat)
                     cxy(2:) = matmul(cxy(2:), rotmat)
@@ -313,6 +316,41 @@ contains
             end do
         end do
     end subroutine coarse_search_opt_angle
+
+    subroutine prob_search_opt_angle(self, lowest_cost, init_xy, irot)
+        class(pftcc_shsrch_grad), intent(inout) :: self
+        real(dp),                 intent(out)   :: lowest_cost, init_xy(2)
+        integer,                  intent(out)   :: irot
+        integer,                  parameter     :: SHIFT_NUMS = coarse_num_steps**2
+        real(dp) :: x, y, stepx, stepy
+        real     :: corrs(self%nrots), sh_corrs(SHIFT_NUMS), sh_vecs(2,SHIFT_NUMS), rot_vecs(SHIFT_NUMS), pvec(SHIFT_NUMS)
+        integer  :: loc, ix, iy, cnt, prob_ind
+        ! generating prob shift table
+        init_xy = 0.d0
+        irot    = 0
+        if (coarse_num_steps .le. 1) return
+        stepx = real(self%ospec%limits(1,2)-self%ospec%limits(1,1),dp)/real(coarse_num_steps,dp)
+        stepy = real(self%ospec%limits(2,2)-self%ospec%limits(2,1),dp)/real(coarse_num_steps,dp)
+        cnt   = 1
+        do ix = 1,coarse_num_steps
+            x = self%ospec%limits(1,1)+stepx/2. + real(ix-1,dp)*stepx
+            do iy = 1,coarse_num_steps
+                y = self%ospec%limits(2,1)+stepy/2. + real(iy-1,dp)*stepy
+                call pftcc_glob%gencorrs(self%reference, self%particle, real([x,y]), corrs, kweight=params_glob%l_kweight_rot)
+                loc            = maxloc(corrs,dim=1)
+                rot_vecs( cnt) = loc
+                sh_vecs(:,cnt) = [x,y]
+                sh_corrs( cnt) = corrs(loc)
+                cnt = cnt + 1
+            end do
+        end do
+        ! sampling for the shifts/irot
+        pvec        = sh_corrs / sum(sh_corrs)
+        prob_ind    = multinomal(pvec)
+        lowest_cost = sh_corrs( prob_ind)
+        init_xy     = sh_vecs(:,prob_ind)
+        irot        = rot_vecs( prob_ind)
+    end subroutine prob_search_opt_angle
 
     subroutine grad_shsrch_kill( self )
         class(pftcc_shsrch_grad), intent(inout) :: self

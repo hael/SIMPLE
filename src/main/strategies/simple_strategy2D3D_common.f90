@@ -495,11 +495,11 @@ contains
         endif
     end subroutine calcrefvolshift_and_mapshifts2ptcls
 
-    subroutine estimate_lp_refvols( s )
+    subroutine estimate_lp_refvols( s, lpopt )
         use simple_opt_filter, only: estimate_lplim
-        integer, intent(in) :: s
+        integer, intent(in)  :: s
+        real,    intent(out) :: lpopt
         type(image) :: mskvol
-        real        :: lpopt
         integer     :: npix
         logical     :: l_update_lp
         call mskvol%disc([params_glob%box_crop,params_glob%box_crop,params_glob%box_crop],&
@@ -526,14 +526,29 @@ contains
     end subroutine estimate_lp_refvols
 
     subroutine read_and_filter_refvols( s )
+        use simple_butterworth
         integer, intent(in) :: s
-        character(len=:), allocatable :: vol_even, vol_odd, vol_avg
+        character(len=:), allocatable :: vol_even, vol_even_unfil, vol_odd, vol_odd_unfil, vol_avg
+        real    :: cur_fil(params_glob%box_crop), lpopt, lpest
+        integer :: filtsz
         vol_even = params_glob%vols_even(s)
         vol_odd  = params_glob%vols_odd(s)
         vol_avg  = params_glob%vols(s)
-        call build_glob%vol%read_and_crop(vol_even,    params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
-        call build_glob%vol_odd%read_and_crop(vol_odd, params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
-        if( params_glob%l_lpauto ) call estimate_lp_refvols(s)
+        if( params_glob%l_lpauto .and. params_glob%l_ml_reg )then
+            vol_even_unfil = add2fbody(vol_even,params_glob%ext,'_unfil')
+            vol_odd_unfil  = add2fbody(vol_odd,params_glob%ext,'_unfil')
+            ! estimate low-pass limit from unifiltered volumes
+            call build_glob%vol%read_and_crop(vol_even_unfil,    params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+            call build_glob%vol_odd%read_and_crop(vol_odd_unfil, params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+            call estimate_lp_refvols(s, lpopt)
+            ! read in filtered volumes (ML-reg)
+            call build_glob%vol%read_and_crop(vol_even,    params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+            call build_glob%vol_odd%read_and_crop(vol_odd, params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+        else
+            call build_glob%vol%read_and_crop(vol_even,    params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+            call build_glob%vol_odd%read_and_crop(vol_odd, params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+            if( params_glob%l_lpauto ) call estimate_lp_refvols(s, lpopt)
+        endif
         if( params_glob%l_icm )then
             call build_glob%vol%ICM3D_eo(build_glob%vol_odd, params_glob%lambda)
             if( params_glob%l_lpset )then ! no independent volume registration, so average eo pairs
@@ -544,10 +559,35 @@ contains
         else if( params_glob%l_lpset )then
             ! the average volume occupies both even and odd
             call build_glob%vol%read_and_crop(vol_avg, params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
-            call build_glob%vol_odd%copy(build_glob%vol) 
+            call build_glob%vol_odd%copy(build_glob%vol)
         endif
         call build_glob%vol%fft
         call build_glob%vol_odd%fft
+        lpest = params_glob%lp
+        if( params_glob%l_lpauto ) lpest = lpopt
+        if( params_glob%l_ml_reg )then
+            ! filtering done when volumes are assembled
+        else if( params_glob%l_icm )then
+            ! filtering done above
+        else if( params_glob%l_lpauto )then
+            ! no filtering unless ML-reg or ICM is used
+        else if( params_glob%l_lpset )then
+            filtsz = build_glob%vol%get_filtsz()
+            select case(L_LPSET_FILTER)
+                case('COS')
+                    ! Cosine low-pass filter, works best for nanoparticles
+                    call build_glob%vol%bp(0., lpest)
+                case('NONE')
+                    ! nothing to do
+                case DEFAULT
+                    THROW_HARD('Unsupported L_LPSET_FILTER flag')
+            end select  
+        else
+            if( any(build_glob%fsc(s,:) > 0.143) )then
+                call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),cur_fil)
+                call build_glob%vol%apply_filter(cur_fil)
+            endif
+        endif
     end subroutine read_and_filter_refvols
 
     !>  \brief  prepares one volume for references extraction
@@ -562,8 +602,8 @@ contains
         logical,        intent(in) :: iseven
         type(projector), pointer :: vol_ptr => null()
         type(image)              :: mskvol
-        real    :: filter(build_glob%vol%get_filtsz())
-        integer :: filtsz
+        ! real    :: filter(build_glob%vol%get_filtsz())
+        ! integer :: filtsz
         if( iseven )then
             vol_ptr => build_glob%vol
         else
@@ -572,34 +612,6 @@ contains
         if( do_center )then
             call vol_ptr%fft()
             call vol_ptr%shift([xyz(1),xyz(2),xyz(3)])
-        endif
-        ! Volume filtering
-        filtsz = build_glob%vol%get_filtsz()
-        if( params_glob%l_ml_reg )then
-            ! filtering done when volumes are assembled
-        else if( params_glob%l_icm )then
-            ! filtering done in filter_refvols
-        else if( params_glob%l_lpset )then
-            call vol_ptr%fft()
-            select case(L_LPSET_FILTER)
-                case('BW')
-                    ! Butterworth low-pass filter
-                    call butterworth_filter(calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd), filter)
-                    call vol_ptr%apply_filter(filter)
-                case('COS')
-                    ! Cosine low-pass filter, works best for nanoparticles
-                    call vol_ptr%bp(0., params_glob%lp)
-                case('NONE')
-                    ! nothing to do
-                case DEFAULT
-                    THROW_HARD('Unsupported L_LPSET_FILTER flag')
-            end select  
-        else
-            call vol_ptr%fft()
-            if( any(build_glob%fsc(s,:) > 0.143) )then
-                call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter)
-                call vol_ptr%apply_filter(filter)
-            endif
         endif
         ! back to real space
         call vol_ptr%ifft()

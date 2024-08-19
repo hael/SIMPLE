@@ -93,8 +93,6 @@ type :: parameters
     character(len=3)          :: sh_opt_angle='yes'   !< shift opt angle(yes|no){yes}
     character(len=3)          :: sh_glob='no'         !< global shift control(yes|no){no}
     character(len=3)          :: sh_first='no'        !< shifting before orientation search(yes|no){no}
-    character(len=3)          :: sh_alt='no'          !< shifting/ori search alternative(yes|no){no}
-    character(len=3)          :: sh_only='no'         !< shifting only, no ori search(yes|no){no}
     character(len=3)          :: sh_inv='no'          !< whether to use shift invariant metric for projection direction assignment(yes|no){no}
     character(len=3)          :: stoch_update='no'    !< update of random sampling in each iteration
     character(len=3)          :: newstream='no'       !< new streaming version
@@ -630,8 +628,6 @@ contains
         call check_carg('sh_opt_angle',   self%sh_opt_angle)
         call check_carg('sh_glob',        self%sh_glob)
         call check_carg('sh_first',       self%sh_first)
-        call check_carg('sh_alt',         self%sh_alt)
-        call check_carg('sh_only',        self%sh_only)
         call check_carg('sh_inv',         self%sh_inv)
         call check_carg('sigma_est',      self%sigma_est)
         call check_carg('speckind',       self%speckind)

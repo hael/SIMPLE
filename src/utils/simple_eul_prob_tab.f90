@@ -32,7 +32,7 @@ type :: eul_prob_tab
     ! CONSTRUCTOR
     procedure, private :: new_1, new_2
     generic            :: new => new_1, new_2
-  ! PARTITION-WISE PROCEDURES (used only by partition-wise eul_prob_tab objects)
+    ! PARTITION-WISE PROCEDURES (used only by partition-wise eul_prob_tab objects)
     procedure :: fill_tab
     procedure :: write_tab, write_shift
     procedure :: read_assignment, read_shift
@@ -177,19 +177,9 @@ contains
         integer :: i, j, iproj, iptcl, projs_ns, ithr, irot, inds_sorted(pftcc%nrots,nthr_glob), istate, iref
         logical :: l_doshift
         real    :: dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob), rotmat(2,2)
-        real    :: dists_projs(params_glob%nspace,nthr_glob), lims(2,2), lims_init(2,2), cxy(3), inpl_athres
+        real    :: dists_projs(params_glob%nspace,nthr_glob), lims(2,2), lims_init(2,2), cxy(3), rot_xy(2), inpl_athres
         call seed_rnd
-        if( trim(params_glob%sh_only).eq.'yes' )then
-            ! retrieving previous orientation
-            !$omp parallel do default(shared) private(i,iptcl,o_prev) proc_bind(close) schedule(static)
-            do i = 1, self%nptcls
-                iptcl = self%pinds(i)
-                call build_glob%spproj_field%get_ori(iptcl, o_prev)                       ! previous ori
-                self%loc_tab(:,i,:)%inpl  = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
-                self%loc_tab(:,i,:)%iproj = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
-            enddo
-            !$omp end parallel do
-        else if( trim(params_glob%sh_first).eq.'yes' )then
+        if( trim(params_glob%sh_first).eq.'yes' )then
             ! make shift search objects
             lims(:,1)      = -params_glob%trs
             lims(:,2)      =  params_glob%trs
@@ -203,28 +193,32 @@ contains
             do istate = 1, self%nstates
                 iref        = (istate-1)*params_glob%nspace
                 inpl_athres = calc_athres('dist_inpl', state=istate)
-                !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,iproj,irot,cxy,rotmat) proc_bind(close) schedule(static)
+                !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,iproj,irot,cxy,rot_xy,rotmat) proc_bind(close) schedule(static)
                 do i = 1, self%nptcls
                     iptcl = self%pinds(i)
                     ithr  = omp_get_thread_num() + 1
-                    call build_glob%spproj_field%get_ori(iptcl, o_prev)   ! previous ori
-                    irot  = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
-                    iproj = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
-                    ! BFGS over shifts
-                    call grad_shsrch_obj(ithr)%set_indices(iref + iproj, iptcl)
-                    cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
-                    if( irot < TINY ) cxy(2:3) = 0.
+                    if( trim(params_glob%sh_glob) .eq. 'yes' )then  ! retrieve ptcl shift from assign_map
+                        cxy(2:3) = [self%assgn_map(i)%x, self%assgn_map(i)%y]
+                    else                                            ! using previous ori for shift search
+                        call build_glob%spproj_field%get_ori(iptcl, o_prev)   ! previous ori
+                        irot  = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
+                        iproj = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
+                        ! BFGS over shifts
+                        call grad_shsrch_obj(ithr)%set_indices(iref + iproj, iptcl)
+                        cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
+                        if( irot < TINY ) cxy(2:3) = 0.
+                    endif
                     do iproj = 1, params_glob%nspace
                         call pftcc%gencorrs(iref + iproj, iptcl, cxy(2:3), dists_inpl(:,ithr))
                         dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
                         irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres)
                         ! rotate the shift vector to the frame of reference
                         call rotmat2d(pftcc%get_rot(irot), rotmat)
-                        cxy(2:3) = matmul(cxy(2:3), rotmat)
+                        rot_xy = matmul(cxy(2:3), rotmat)
                         self%loc_tab(iproj,i,istate)%dist   = dists_inpl(irot,ithr)
                         self%loc_tab(iproj,i,istate)%inpl   = irot
-                        self%loc_tab(iproj,i,istate)%x      = cxy(2)
-                        self%loc_tab(iproj,i,istate)%y      = cxy(3)
+                        self%loc_tab(iproj,i,istate)%x      = rot_xy(1)
+                        self%loc_tab(iproj,i,istate)%y      = rot_xy(2)
                         self%loc_tab(iproj,i,istate)%has_sh = .true.
                     enddo
                 enddo
@@ -305,18 +299,13 @@ contains
     ! ptcl -> (proj, state) assignment used in the global prob_align commander, in 'exec_prob_align'
     subroutine prob_assign( self )
         class(eul_prob_tab), intent(inout) :: self
-        if( trim(params_glob%sh_only) .eq. 'yes' )then
-            ! retrieving previous orientation
-            self%assgn_map = self%loc_tab(1,:,1)
+        call self%proj_normalize
+        call self%proj_assign
+        if( self%nstates > 1 )then
+            call self%state_normalize
+            call self%state_assign
         else
-            call self%proj_normalize
-            call self%proj_assign
-            if( self%nstates > 1 )then
-                call self%state_normalize
-                call self%state_assign
-            else
-                self%assgn_map = self%state_tab(1,:)
-            endif
+            self%assgn_map = self%state_tab(1,:)
         endif
     end subroutine prob_assign
 
@@ -324,10 +313,11 @@ contains
         use simple_polarft_corrcalc, only: polarft_corrcalc
         class(eul_prob_tab),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
-        integer :: i, iptcl, iproj, ithr, ix, iy, ishift, irot, inds_sorted(pftcc%nrots,nthr_glob)
-        real    :: lims(2,2), stepx, stepy, x, y, xy(2), rotmat(2,2), inpl_athres,&
-                   &dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob),&
-                   &shift_points(2,NSHIFTS)
+        type(ori) :: o_prev
+        integer   :: i, iptcl, iproj, ithr, ix, iy, ishift, irot, inds_sorted(pftcc%nrots,nthr_glob)
+        real      :: lims(2,2), stepx, stepy, x, y, xy(2), inpl_athres,&
+                    &dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob),&
+                    &shift_points(2,NSHIFTS)
         lims(:,1)   = -params_glob%trs
         lims(:,2)   =  params_glob%trs
         stepx       = real(lims(1,2) - lims(1,1), dp) / real(SHIFT_NUM, dp)
@@ -347,20 +337,17 @@ contains
         !$omp end parallel do
         ! filling the tab
         !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-        !$omp private(i,iptcl,ithr,iproj,ishift,irot,xy,rotmat)
+        !$omp private(i,iptcl,ithr,iproj,ishift,irot,xy,o_prev)
         do i = 1, self%nptcls
-            iptcl = self%assgn_map(i)%pind
-            iproj = self%assgn_map(i)%iproj
+            iptcl = self%pinds(i)
+            call build_glob%spproj_field%get_ori(iptcl, o_prev)   ! previous ori
+            iproj = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
             ithr  = omp_get_thread_num() + 1
-            self%shift_tab(:,i) = self%assgn_map(i)
             do ishift = 1, NSHIFTS
                 xy = shift_points(:,ishift)
                 call pftcc%gencorrs(iproj, iptcl, xy, dists_inpl(:,ithr))
                 dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
                 irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres)
-                ! rotate the shift vector to the frame of reference
-                call rotmat2d(pftcc%get_rot(irot), rotmat)
-                xy = matmul(xy, rotmat)
                 self%shift_tab(ishift,i)%x      = xy(1)
                 self%shift_tab(ishift,i)%y      = xy(2)
                 self%shift_tab(ishift,i)%inpl   = irot

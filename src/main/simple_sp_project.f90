@@ -1605,23 +1605,31 @@ contains
         if( self%os_cls3D%get_noris() /= nptcls ) self%os_cls3D = self%os_cls2D
     end subroutine add_cavgs2os_out
 
-    subroutine add_frcs2os_out( self, frc, which_imgkind )
+    subroutine add_frcs2os_out( self, frc, which_imgkind, absolutepath )
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: frc, which_imgkind
-        character(len=LONGSTRLEN)        :: relpath
+        character(len=LONGSTRLEN)        :: path
         integer                          :: ind
+        logical, optional, intent(in)    :: absolutepath
+        logical :: abspath
         select case(trim(which_imgkind))
             case('frc2D','frc3D')
                 ! all good
             case DEFAULT
                 THROW_HARD('invalid FRC kind: '//trim(which_imgkind)//'; add_frcs2os_out')
         end select
+        abspath = .false.
+        if( present(absolutepath) ) abspath = absolutepath
         ! full path and existence check
-        call make_relativepath(CWD_GLOB, frc, relpath)
+        if( abspath )then
+            path = trim(simple_abspath(frc,check_exists=.true.))
+        else
+            call make_relativepath(CWD_GLOB, frc, path)
+        endif
         ! add os_out entry
         call self%add_entry2os_out(which_imgkind, ind)
         ! fill-in field
-        call self%os_out%set(ind, 'frcs',    trim(relpath))
+        call self%os_out%set(ind, 'frcs',    trim(path))
         call self%os_out%set(ind, 'imgkind', trim(which_imgkind))
     end subroutine add_frcs2os_out
 
@@ -2806,16 +2814,18 @@ contains
         logical, optional, intent(in)    :: append
         integer, optional, intent(in)    :: maxpop
         integer, allocatable             :: particles(:)
-        integer   :: ncls, icls, iptcl, pind, nptcls, noris_ptcl3D, noris_ptcl2D
-        logical   :: l_append
-        real      :: rstate, pstate
-        l_append = .false.
-        if(present(append)) l_append = append
+        integer :: ncls, icls, iptcl, pind, nptcls, noris_ptcl3D, noris_ptcl2D
+        integer :: maxnptcls, pstate, rstate
+        logical :: l_append
         noris_ptcl2D = self%os_ptcl2D%get_noris()
         if( noris_ptcl2D == 0 )then
             THROW_WARN('empty PTCL2D field. Nothing to do; map2ptcls_state')
             return
         endif
+        l_append = .false.
+        if(present(append)) l_append = append
+        maxnptcls = huge(maxnptcls)
+        if(present(maxpop)) maxnptcls = maxpop
         ! ensure ptcl3D field congruent with ptcl2D field
         noris_ptcl3D = self%os_ptcl3D%get_noris()
         if( noris_ptcl3D /= noris_ptcl2D )then
@@ -2824,15 +2834,17 @@ contains
             call self%os_ptcl3D%delete_2Dclustering(keepcls=.true.)
         endif
         ! undo previous selection if append is false & excludes non classified particles
+        !$omp parallel do proc_bind(close) default(shared) private(iptcl)
         do iptcl=1,noris_ptcl2D
             if( .not.self%os_ptcl2D%isthere(iptcl, 'class') )then
-                call self%os_ptcl2D%set(iptcl, 'state', 0.)
-                call self%os_ptcl3D%set(iptcl, 'state', 0.)
+                call self%os_ptcl2D%set_state(iptcl, 0)
+                call self%os_ptcl3D%set_state(iptcl, 0)
             else if(.not. l_append) then
-                call self%os_ptcl2D%set(iptcl, 'state', 1.)
-                call self%os_ptcl3D%set(iptcl, 'state', 1.)
+                call self%os_ptcl2D%set_state(iptcl, 1)
+                call self%os_ptcl3D%set_state(iptcl, 1)
             endif
         end do
+        !$omp end parallel do
         ! do the mapping
         ncls = self%os_cls2D%get_noris()
         do icls=1,ncls
@@ -2840,29 +2852,26 @@ contains
             call self%os_ptcl2D%get_pinds(icls, 'class', particles)
             if( allocated(particles) )then
                 nptcls = 0
-                ! get 3d ori info
-                rstate = self%os_cls2D%get(icls,'state')
+                rstate = self%os_cls2D%get_state(icls)
                 do iptcl=1,size(particles)
                     ! get particle index
                     pind = particles(iptcl)
-                    if(present(maxpop) .and. nptcls .ge. maxpop) then
-                        call self%os_ptcl2D%set(pind, 'state', 0.0)
-                        call self%os_ptcl3D%set(pind, 'state', 0.0)
+                    if( nptcls .ge. maxnptcls ) then
+                        call self%os_ptcl2D%set_state(pind, 0)
+                        call self%os_ptcl3D%set_state(pind, 0)
                     else if(l_append) then
-                        pstate = self%os_ptcl2D%get(pind, 'state')
-                        if (pstate .gt. 0.0) then
+                        pstate = self%os_ptcl2D%get_state(pind)
+                        if ( pstate .gt. 0 ) then
                             nptcls = nptcls + 1
-                            ! update state in self%os_ptcl2D
-                            call self%os_ptcl2D%set(pind, 'state', rstate)
-                            ! update state in self%os_ptcl3D
-                            call self%os_ptcl3D%set(pind, 'state', rstate)
+                            ! update state in self%os_ptcl2D & 3D
+                            call self%os_ptcl2D%set_state(pind, rstate)
+                            call self%os_ptcl3D%set_state(pind, rstate)
                         endif
                     else
                         nptcls = nptcls + 1
-                        ! update state in self%os_ptcl2D
-                        call self%os_ptcl2D%set(pind, 'state', rstate)
-                        ! update state in self%os_ptcl3D
-                        call self%os_ptcl3D%set(pind, 'state', rstate)
+                        ! update state in self%os_ptcl2D & 3D
+                        call self%os_ptcl2D%set_state(pind, rstate)
+                        call self%os_ptcl3D%set_state(pind, rstate)
                     endif
                 end do
                 deallocate(particles)
@@ -2872,19 +2881,21 @@ contains
         ! cls3D mirrors cls2D
         if( self%os_cls3D%get_noris() == ncls)then
             do icls=1,ncls
-                call self%os_cls3D%set(icls, 'state', self%os_cls2D%get(icls,'state'))
+                call self%os_cls3D%set_state(icls, self%os_cls2D%get_state(icls))
             enddo
         else if( self%os_cls3D%get_noris() > 0 )then
             THROW_WARN('Inconsistent number of classes in cls2D & cls3D segments')
         endif
         ! state = 0 all entries that don't have a state/class label
-        do iptcl=1,noris_ptcl2D
+        !$omp parallel do proc_bind(close) default(shared) private(iptcl)
+        do iptcl = 1,noris_ptcl2D
             if( .not.self%os_ptcl2D%isthere(iptcl, 'state') .or.&
                 &.not.self%os_ptcl3D%isthere(iptcl, 'state') )then
-                 call self%os_ptcl2D%set(iptcl, 'state', 0.)
-                 call self%os_ptcl3D%set(iptcl, 'state', 0.)
+                 call self%os_ptcl2D%set_state(iptcl, 0)
+                 call self%os_ptcl3D%set_state(iptcl, 0)
             endif
         end do
+        !$omp end parallel do
     end subroutine map2ptcls_state
 
     ! this updates cls fields with respect to ptcl2D/3D states

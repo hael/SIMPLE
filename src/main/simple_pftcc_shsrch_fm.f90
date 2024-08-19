@@ -52,10 +52,9 @@ contains
     end subroutine new
 
     !> minimisation routine based on identification of in-plane rotation via shift invariant metric
-    subroutine minimize( self, iref, iptcl, found, irot, score, offset )
+    subroutine minimize( self, iref, iptcl, irot, score, offset )
         class(pftcc_shsrch_fm), intent(inout) :: self
         integer,                intent(in)    :: iref, iptcl
-        logical,                intent(out)   :: found
         integer,                intent(inout) :: irot
         real,                   intent(out)   :: score
         real,                   intent(out)   :: offset(2)
@@ -70,25 +69,15 @@ contains
             irot1 = irot
             irot2 = irot + self%pftsz
         endif
-        ! Lower bound
-        call pftcc_glob%gencorrs(self%ref, self%ptcl, self%scores, kweight=.true.)
-        irot   = maxloc(self%scores, dim=1)
-        score  = self%scores(irot)
-        offset = 0.
-        found = .false.
         ! Grid search of both orientations
         call pftcc_glob%bidirectional_shift_search(self%ref, self%ptcl, irot1, self%hn, self%coords, self%grid1, self%grid2)
         ! Maxima
         call self%interpolate_peak(self%grid1, irot1, shift1, score1)
         call self%interpolate_peak(self%grid2, irot2, shift2, score2)
-        if( score1 > score )then
-            found  = .true.
-            irot   = irot1
-            score  = score1
-            offset = shift1
-        endif
-        if( score2 > score )then
-            found  = .true.
+        irot   = irot1
+        score  = score1
+        offset = shift1
+        if( score2 > score1 )then
             irot   = irot2
             score  = score2
             offset = shift2
