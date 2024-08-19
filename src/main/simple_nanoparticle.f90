@@ -215,6 +215,7 @@ type :: nanoparticle
     procedure, private :: atominfo2centers_A
     procedure, private :: center_on_atom
     procedure          :: update_ncc
+    procedure          :: per_atom_valid_corr_from_pdb
     ! atomic position determination
     procedure          :: identify_lattice_params
     procedure          :: identify_atomic_pos
@@ -271,11 +272,9 @@ contains
         call self%img%new(self%ldim, self%smpd)
         call self%img_bin%new_bimg(self%ldim, self%smpd)
         call self%img%read(fname)
-        call self%img%write('raw_img_check_1.mrc')
         if( present(msk) ) call self%img%mask(msk, 'soft')
         call self%img_raw%copy(self%img)
         call self%img_raw%stats(self%map_stats%avg, self%map_stats%sdev, self%map_stats%maxv, self%map_stats%minv)
-        call self%img_raw%write('raw_img_check_2.mrc')
     end subroutine new_nanoparticle
 
     ! getters/setters
@@ -524,6 +523,32 @@ contains
             call self%img_cc%get_nccs(self%n_cc)
         endif
     end subroutine update_ncc
+
+    ! finds per-atom valid correlation for positions from an input pdb file
+    subroutine per_atom_valid_corr_from_pdb( self, pdb_file, output_file)
+        use simple_nano_picker_utils, only : find_corr_by_coords
+        class(nanoparticle),        intent(inout) :: self
+        character(len=*),           intent(in)    :: pdb_file
+        character(len=*), optional, intent(in)    :: output_file
+        real, allocatable :: coords(:,:), corrs(:)
+        real              :: maxrad
+        type(image)       :: simatms
+        integer           :: icoord, ncoord
+        if (.not. allocated(self%atominfo)) THROW_HARD('must set coordinates for nanoparticle before calling per_atom_valid_corr_from_pdb')
+        call read_pdb2matrix(pdb_file, coords)
+        ncoord = size(coords,dim=2)
+        do icoord = 1, ncoord 
+            coords(:,icoord) = (coords(:,icoord) / self%smpd) + 1 ! convert to pixels
+        end do
+        call self%simulate_atoms(simatms)
+        maxrad = (self%theoretical_radius * 1.5) / self%smpd
+        if (present(output_file)) then
+            call find_corr_by_coords(coords, maxrad, self%img_raw, simatms, self%smpd, corrs, filename=trim(output_file))
+        else
+            call find_corr_by_coords(coords, maxrad, self%img_raw, simatms, self%smpd, corrs)
+        end if
+        deallocate(coords, corrs)
+    end subroutine per_atom_valid_corr_from_pdb
 
     ! atomic position determination
 

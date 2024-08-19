@@ -32,23 +32,22 @@ element          = 'PT'
 smpd             = 0.358
 offset           = 2
 peak_thres_level = 2
-dist_thres       = 3.
 intensity_level  = 2
-circle           = .true.  ! whether to use cube or sphere for correlation calculation
+circle           = .true.  ! whether to use cube or sphere for correlation calculation (.true. = sphere, default value is .false.)
 use_valid_corr   = .true.  ! whether to discard boxes based on a low valid correlation
 use_cs_thres     = .true.  ! whether to discard boxes based on a low contact score
-mskdiam          = 34.7
+mskdiam          = 39.3
 corr_thres       = 0.3
-cs_thres         = 3.0
+cs_thres         = 2.0
 
 print *, 'NEW METHOD: '
-call test_exp4%new(smpd, element, filename_exp, peak_thres_level, offset, dist_thres, mskdiam, intensity_level, circle)
+call test_exp4%new(smpd, element, filename_exp, peak_thres_level, offset, mskdiam=mskdiam, intensity_level=intensity_level, circle=circle)
 call test_exp4%exec_nano_picker(corr_thres=corr_thres,cs_thres=cs_thres)
 !call test_exp4%exec_nano_picker()
 !OUTPUT FILES
 call test_exp4%write_pdb('experimental_centers_TEST')
 call compare_pick('experimental_centers_TEST.pdb',trim(pdbfile_ref))
-call test_exp4%write_positions_and_scores('pos_and_scores_centers.pdb', 'centers')
+call test_exp4%write_positions_and_scores('pos_and_scores_centers.csv', 'centers')
 corr = test_exp4%whole_map_correlation('reference.pdb')
 print *, 'Correlation to reference.pdb is: ', corr
 corr = test_exp4%whole_map_correlation()

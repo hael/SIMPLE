@@ -25,30 +25,31 @@ use simple_stat
         integer, allocatable     :: inds_offset(:,:,:), positions(:,:)
         type(image)              :: simulated_atom, nano_img
         type(image), allocatable :: convolved_atoms(:)
-        real                     :: smpd, thres, radius, euclid_thres, mask_radius, dist_thres, intensity_thres
-        real, allocatable        :: box_scores(:,:,:), loc_sdevs(:,:,:), avg_int(:,:,:), euclid_dists(:,:,:), center_positions(:,:)
+        real                     :: smpd, thres, radius, mask_radius, dist_thres, intensity_thres
+        real, allocatable        :: box_scores(:,:,:), loc_sdevs(:,:,:), avg_int(:,:,:), center_positions(:,:)
         logical                  :: has_mask, wrote_pdb, circle
         logical, allocatable     :: msk(:,:,:), thres_msk(:,:,:)
 
     contains
-        procedure :: new
-        procedure :: exec_nano_picker
-        procedure :: simulate_atom
-        procedure :: setup_iterators
-        procedure :: match_boxes
-        procedure :: one_box_corr
-        procedure :: identify_threshold
-        procedure :: identify_high_scores
-        procedure :: apply_threshold
-        procedure :: distance_filter
-        procedure :: remove_outliers_sdev
-        procedure :: remove_outliers_position
-        procedure :: find_centers
-        procedure :: calc_atom_stats
-        procedure :: calc_per_atom_corr
-        procedure :: refine_threshold
-        procedure :: discard_atoms
-        procedure :: whole_map_correlation
+        procedure :: new                        ! create new nano_picker object, initialized object variables
+        procedure :: exec_nano_picker           ! execute overall picking workflow
+        procedure :: simulate_atom              ! simulate atom based on element identity
+        procedure :: setup_iterators            ! setup picking infrastructure (indexing, initialize arrays, etc)
+        procedure :: match_boxes                ! calculate correlation between image at each position and simulated atom
+        procedure :: identify_threshold         ! identify threshold for correlation scores
+        procedure :: identify_high_scores       ! idenitfy outliers for correlation scores (currently retired method, kept in case useful later)
+        procedure :: apply_threshold            ! remove positions with a correlation below the threshold
+        procedure :: distance_filter            ! remove all positions in local neighborhoods except position with highest correlation to simualted atom
+        procedure :: remove_outliers_sdev       
+        procedure :: remove_outliers_position   ! remove all positions that are not within a certain distance of their nearest neighbor
+        procedure :: find_centers               ! find center of mass of selected positions, save as center_positions
+        procedure :: calc_atom_stats            
+        procedure :: calc_per_atom_corr         ! find per-atom valid correlation by comparing selected positions with experimental map
+        procedure :: refine_threshold           ! refine correlation threshold by iterating over various thresholds and optimizing correlation with exp. map
+        procedure :: discard_atoms              ! discard atoms with low per-atom valid correlation and / or low contact score
+        procedure :: whole_map_correlation      ! calculate correlation between simulated map based on selected positions and experimental map
+        ! utils
+        procedure :: one_box_corr  
         procedure :: write_pdb
         procedure :: write_boximgs
         procedure :: write_positions_and_scores
@@ -74,6 +75,7 @@ use simple_stat
         character(len=2)         :: el_ucase
         integer                  :: Z, nptcls
         logical                  :: outside
+        type(image)              :: img_copy
         type(parameters), target :: params
         call self%kill
         self%smpd            = smpd
@@ -88,7 +90,6 @@ use simple_stat
         params_glob%element  = self%element
         params_glob%smpd     = self%smpd
         ! retrieve nano_img from filename and find ldim
-        !el_ucase            = upperCase(trim(adjustl(params_glob%element)))
         el_ucase            = upperCase(params_glob%element)
         call get_element_Z_and_radius(el_ucase, Z, self%radius)
         if( Z == 0 ) THROW_HARD('Unknown element: '//el_ucase)
@@ -107,13 +108,13 @@ use simple_stat
                 call make_intensity_mask(      self%nano_img, self%thres_msk, level=2, intensity_thres=self%intensity_thres)
             else if(intensity_level .eq. 2) then
                 if (present(mskdiam)) then
-                    call make_intensity_mask_2(self%nano_img, self%thres_msk, self%element, mskdiam*0.75, level=2, intensity_thres=self%intensity_thres)
+                    call make_intensity_mask_2(self%nano_img, self%thres_msk, self%element, mskdiam*0.75, level=1, intensity_thres=self%intensity_thres)
                 else
                     THROW_HARD('ERROR: MSKDIAM must be present to use intensity level 2')
                 end if
             else
                 allocate(self%thres_msk(self%ldim(1),self%ldim(2),self%ldim(3)), source=.true.)
-            end if  
+            end if 
         else
             allocate(self%thres_msk(self%ldim(1),self%ldim(2),self%ldim(3)), source=.true.)
         end if
@@ -139,7 +140,6 @@ use simple_stat
         call self%identify_threshold()
         call self%apply_threshold
         call self%distance_filter
-        call self%find_centers
         call self%write_pdb('before_refinement')
         print *, 'before refinement'
         call self%calc_per_atom_corr
@@ -236,7 +236,7 @@ use simple_stat
                         end if
                     end if
                     if(self%msk(self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3))) then
-                        self%msk(self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3)) = logical_box(self%thres_msk, pos=self%positions(nboxes,:), boxsize=self%boxsize)
+                        self%msk(self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3)) = logical_box(self%thres_msk, pos=self%positions(nboxes,:), boxsize=self%boxsize, num_px=ceiling(self%radius / self%smpd))
                     end if
                 enddo
             enddo
@@ -244,7 +244,6 @@ use simple_stat
         allocate(self%box_scores(  self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3)), source = -1.)
         allocate(self%loc_sdevs(   self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3)), source = -1.)
         allocate(self%avg_int(     self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3)), source = -1.)
-        allocate(self%euclid_dists(self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3)), source = -1.)
     end subroutine setup_iterators
 
     subroutine match_boxes( self )
@@ -271,9 +270,7 @@ use simple_stat
                         ithr = omp_get_thread_num() + 1
                         pos  = self%positions(self%inds_offset(xoff,yoff,zoff),:)
                         call self%nano_img%window_slim( pos, self%boxsize, boximgs(ithr), outside)
-                        !call self%thresh_img%window_slim( pos, self%boxsize, boximgs(ithr), outside)
                         self%box_scores(  xoff,yoff,zoff)   = self%simulated_atom%real_corr(boximgs(ithr))            ! revert to
-                        self%euclid_dists(xoff,yoff,zoff)   = self%simulated_atom%euclid_dist_two_imgs(boximgs(ithr)) ! new method
                         self%loc_sdevs(   xoff,yoff,zoff)   = boximgs(ithr)%avg_loc_sdev(self%offset)
                         self%avg_int(     xoff,yoff,zoff)   = boximgs(ithr)%get_avg_int()
                     enddo 
@@ -320,8 +317,7 @@ use simple_stat
                         enddo
                         call self%nano_img%win2arr_rad(      pos_center(1),  pos_center(2),  pos_center(3),  winsz, npix_in, maxrad, npix_out1, pixels1)
                         call self%simulated_atom%win2arr_rad(self%boxsize/2, self%boxsize/2, self%boxsize/2, winsz, npix_in, maxrad, npix_out2, pixels2)
-                        self%box_scores(  xoff,yoff,zoff) = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))      
-                        self%euclid_dists(xoff,yoff,zoff) = same_energy_euclid(pixels1(:npix_out1),pixels2(:npix_out2)) 
+                        self%box_scores(  xoff,yoff,zoff) = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))       
                         self%loc_sdevs(   xoff,yoff,zoff) = boximg%avg_loc_sdev(self%offset)
                         self%avg_int(     xoff,yoff,zoff) = boximg%get_avg_int()
                         call boximg%kill
@@ -405,30 +401,13 @@ use simple_stat
             IQR               = Q3 - Q1
             outlier_cutoff    = Q3 + 1.25*(IQR)
             self%thres        = outlier_cutoff
-            ! identify euclid distance threshold (this is an upper rather than lower threshold)
-            deallocate(pos_scores, lower_half_scores, upper_half_scores)
-            pos_scores        = pack(self%euclid_dists(:,:,:), mask=self%box_scores(:,:,:) >= temp_thres .and. self%msk(:,:,:))
-            mid               = median(pos_scores)
-            lower_half_scores = pack(pos_scores(:), pos_scores(:) < mid)
-            upper_half_scores = pack(pos_scores(:), pos_scores(:) > mid)
-            Q1                = median(lower_half_scores)
-            Q3                = median(upper_half_scores)
-            IQR               = Q3 - Q1
-            outlier_cutoff    = Q1 - 0.5*(IQR)
-            self%euclid_thres = outlier_cutoff
-            deallocate(lower_half_scores, upper_half_scores, pos_scores)
+            deallocate(pos_scores)
         else
             ! identify lower threshold for outlier correlation scores
             pos_scores        = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= temp_thres .and. self%msk(:,:,:))
             mid               = median(pos_scores)
             outlier_cutoff    = 3.5 * mad_gau(pos_scores,mid) + mid
             self%thres        = outlier_cutoff
-            deallocate(pos_scores)
-            ! identify euclid distance threshold (this is an upper rather than lower threshold)
-            pos_scores        = pack(self%euclid_dists(:,:,:), mask=self%box_scores(:,:,:) >= temp_thres .and. self%msk(:,:,:))
-            mid               = median(pos_scores)
-            outlier_cutoff    = mid - 3.5 * mad_gau(pos_scores,mid)
-            self%euclid_thres = outlier_cutoff
             deallocate(pos_scores)
         end if
     end subroutine identify_high_scores
@@ -469,7 +448,6 @@ use simple_stat
         logical, allocatable :: mask(:), selected_pos(:)
         logical              :: is_peak
         character(len=8)     :: crystal_system
-        ! distance threshold
         pos_inds   = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
         pos_scores = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
         nbox       = size(pos_inds)
@@ -514,6 +492,7 @@ use simple_stat
         enddo
         !$omp end parallel do
         deallocate(pos_inds, pos_scores, mask, selected_pos)
+        call self%find_centers
     end subroutine distance_filter
 
     subroutine remove_outliers_sdev( self, ndev )
@@ -746,7 +725,7 @@ use simple_stat
         call nano%set_atomic_coords(trim(self%pdb_filename))
         call nano%simulate_atoms(simatms=simatms)
         call nano%validate_atoms(simatms=simatms)
-        call nano%write_centers('coordinates_in_nanoparticle_angstroms',which='valid_corr')
+        !call nano%write_centers('coordinates_in_nanoparticle_angstroms',which='valid_corr')
         call nano%kill
     end subroutine calc_per_atom_corr
 
@@ -1022,11 +1001,6 @@ use simple_stat
                 do ipos  = 1, nbox
                     coords(ipos,:) = self%center_positions(pos_inds(ipos),:) * self%smpd ! using center positions and Angstroms (same as pdb)
                 enddo
-            case('euclid')
-                scores   = pack(self%euclid_dists(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
-                do ipos  = 1, nbox
-                    coords(ipos,:) = self%center_positions(pos_inds(ipos),:) * self%smpd ! using center positions and Angstroms (same as pdb)
-                enddo
             case DEFAULT
                 THROW_HARD('write_positions_and_scores: type='//trim(type)//' is unsupported')
         end select
@@ -1082,9 +1056,6 @@ use simple_stat
             case('avg_int')
                 pos_scores = pack(self%avg_int(:,:,:),      mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
                 if(write_here) print *, 'SUMMARY STATISTICS OF PER-ATOM AVERAGE INTENSITY'
-            case('euclid')
-                pos_scores = pack(self%euclid_dists(:,:,:), mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
-                if(write_here) print *, 'SUMMARY STATISTICS OF SAME ENERGY EUCLIDEAN DISTANCE'
             case DEFAULT
                 THROW_HARD('write_dist: type='//trim(type)//' is unsupported')
         end select
@@ -1137,7 +1108,6 @@ use simple_stat
         if(allocated(self%inds_offset)     ) deallocate(self%inds_offset)
         if(allocated(self%box_scores)      ) deallocate(self%box_scores)
         if(allocated(self%avg_int)         ) deallocate(self%avg_int)
-        if(allocated(self%euclid_dists)    ) deallocate(self%euclid_dists)
         if(allocated(self%thres_msk)       ) deallocate(self%thres_msk)
     end subroutine kill
 

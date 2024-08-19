@@ -94,13 +94,13 @@ implicit none
         real, optional, intent(out) :: threshold_out
         real              :: thres
         real, allocatable :: intensities(:)
-        intensities = pack(img_in%get_rmat(), mask=.true.)
+        intensities = pack(img_in%get_rmat(), mask=img_in%get_rmat() > 0.)
         call detect_peak_thres(size(intensities), level, intensities, thres)
         call img_out%copy(img_in)
         call img_out%zero_below(thres)
         call img_out%write('post_thresholding_map.mrc')
         deallocate(intensities)
-        threshold_out = thres
+        if (present(threshold_out)) threshold_out = thres
     end subroutine threshold_img
 
     ! intensity thresholding based on Otsu's method
@@ -216,6 +216,7 @@ implicit none
         call hpsort(intensities_flat)                   ! sort array (low to high)
         last_index = size(intensities_flat)             ! last_index is position of largest intensity value in sorted array
         thres      = intensities_flat(last_index - nvx) ! last_index - nvx position of sorted array is threshold
+        print *, 'initial thres = ', thres
         call img_copy%copy(img_in)
         call img_copy%zero_below(thres)
         call img_copy%write('post_thresholding_map2.mrc')
@@ -273,5 +274,29 @@ implicit none
         valid_corr = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))
         deallocate(pixels1,pixels2)
     end function one_atom_valid_corr
+
+    ! finds per-atom valid correlation for a subset of coordinates, given a raw and simulated image
+    ! input coords in PIXELS (for now, can change this later)
+    subroutine find_corr_by_coords(coords, maxrad, raw_img, simatms, smpd, corrs, filename)
+        real,                       intent(in)  :: coords(:,:) !should be dimensions 3 x n, where n is number of positions
+        real,                       intent(in)  :: maxrad
+        type(image),                intent(in)  :: raw_img, simatms
+        real,                       intent(in)  :: smpd
+        character(len=*), optional, intent(in)  :: filename
+        real,          allocatable, intent(out) :: corrs(:)
+        integer           :: npos, ipos
+        npos = size(coords, dim=2)
+        allocate(corrs(npos))
+        do ipos = 1, npos
+            corrs(ipos) = one_atom_valid_corr(coords(:,ipos), maxrad, raw_img, simatms)
+        end do
+        if(present(filename)) then
+            open(unit=80,file=filename)
+            do ipos = 1, npos
+                write(80,'(f8.4,a,f8.4,a,f8.4,a,f6.5)') (coords(1,ipos) - 1) * smpd, ',', (coords(2,ipos) - 1) * smpd, ',', (coords(3,ipos) - 1) * smpd, ',', corrs(ipos)
+            end do
+            close(80)
+        end if
+    end subroutine find_corr_by_coords
     
 end module simple_nano_picker_utils
