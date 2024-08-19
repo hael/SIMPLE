@@ -76,17 +76,19 @@ contains
     subroutine read( self, sigma2 )! read in all sigmas from file
         class(sigma2_binfile), intent(inout) :: self
         real, allocatable,     intent(out)   :: sigma2(:,:)
-        integer :: funit
-        logical :: success
-        integer :: iptcl, addr
-        real    :: sigma2_noise_n(self%kfromto(1):self%kfromto(2))
+        integer(kind=dp) :: addr, sz
+        integer          :: funit, iptcl
+        logical          :: success
+        real             :: sigma2_noise_n(self%kfromto(1):self%kfromto(2))
         allocate(sigma2(self%kfromto(1):self%kfromto(2),self%fromp:self%top),source=0.0)
         success = self%open_and_check_header( funit, .true. )
         if( .not. success ) return
+        sz   = int(self%sigmassz,kind=dp)
+        addr = int(self%headsz+1,kind=dp)
         do iptcl = self%fromp, self%top
-            addr = self%headsz + (iptcl - self%fromp) * self%sigmassz + 1
             read(unit=funit,pos=addr) sigma2_noise_n
             sigma2(:,iptcl) = sigma2_noise_n
+            addr = addr + sz
         end do
         call fclose(funit)
     end subroutine read
@@ -94,9 +96,9 @@ contains
     subroutine write( self, sigma2 )
         class(sigma2_binfile),  intent(inout) :: self
         real, allocatable,      intent(in)    :: sigma2(:,:)
-        integer :: funit
-        logical :: success
-        integer :: addr, iptcl
+        integer(kind=dp) :: addr, sz
+        integer          :: funit, iptcl
+        logical          :: success
         ! make sure the dimensions of inout matrix agree
         if( (lbound(sigma2,2).ne.self%fromp)     .or.(ubound(sigma2,2).ne.self%top).or.&
             (lbound(sigma2,1).ne.self%kfromto(1)).or.(ubound(sigma2,1).ne.self%kfromto(2))) then
@@ -112,9 +114,11 @@ contains
             success = self%open_and_check_header( funit, .false. )
             if( .not. success ) return
         end if
+        sz   = int(self%sigmassz,kind=dp)
+        addr = int(self%headsz+1,kind=dp)
         do iptcl = self%fromp,self%top
-            addr = self%headsz + (iptcl - self%fromp) * self%sigmassz + 1
             write(funit,pos=addr) sigma2(:,iptcl)
+            addr = addr + sz
         end do
         call fclose(funit)
     end subroutine write
