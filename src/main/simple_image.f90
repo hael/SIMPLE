@@ -5514,7 +5514,7 @@ contains
         real,              intent(in)    :: trs
         real,              intent(inout) :: shift(2)
         logical, optional, intent(in)    :: peak_interp
-        real    :: alpha, beta, gamma, denom
+        real(kind = 8)    :: alpha, beta, gamma, denom
         integer :: center(2), pos(2), itrs
         logical :: l_interp
         if( self1%is_3d() .or. self2%is_3d() ) THROW_HARD('2d only supported')
@@ -5527,7 +5527,7 @@ contains
         itrs   = min(floor(trs),minval(center)-1)
         ! Correlation image
         self1%cmat = self1%cmat * conjg(self2%cmat)
-        call self1%ifft
+        call self1%ifft()
         ! maximum correlation & offset
         pos   = maxloc(self1%rmat(center(1)-itrs:center(1)+itrs, center(2)-itrs:center(2)+itrs, 1)) -itrs-1
         ! peak interpolation
@@ -5536,21 +5536,25 @@ contains
             pos   = pos+itrs+1
             beta  = self1%rmat(center(1)+pos(1),center(2)+pos(2), 1)
             ! along x
-            if( abs(pos(1)-center(1)) < itrs )then ! within limits
+            if( abs(pos(1) - itrs - 1) < itrs )then ! within limits
                 alpha = self1%rmat(center(1)+pos(1)-1,center(2)+pos(2), 1)
                 gamma = self1%rmat(center(1)+pos(1)+1,center(2)+pos(2), 1)
-                if( alpha<beta .and. gamma<beta )then
-                    denom = alpha + gamma - 2.*beta
-                    if( abs(denom) > TINY ) shift(1) = shift(1) + 0.5 * (alpha-gamma) / denom
+                if( alpha .le. beta .and. gamma .le. beta )then 
+                    denom = alpha + gamma - 2.*beta 
+                    if( abs(denom) > 10**(-38) ) then 
+                        shift(1) = shift(1) + 0.5 * (alpha-gamma) / denom
+                    endif 
                 endif
             endif
             ! along y
-            if( abs(pos(2)-center(2)) < itrs )then
+            if( abs(pos(2) - itrs - 1) < itrs )then
                 alpha = self1%rmat(center(1)+pos(1),center(2)+pos(2)-1, 1)
-                gamma = self1%rmat(center(1)+pos(1),center(2)+pos(2)-1, 1)
-                if( alpha<beta .and. gamma<beta )then
+                gamma = self1%rmat(center(1)+pos(1),center(2)+pos(2)+1, 1)
+                if( alpha .le. beta .and. gamma .le. beta )then
                     denom = alpha + gamma - 2.*beta
-                    if( abs(denom) > TINY ) shift(2) = shift(2) + 0.5 * (alpha-gamma) / denom
+                    if( abs(denom) > 10**(-38) ) then 
+                        shift(2) = shift(2) + 0.5 * (alpha-gamma) / denom
+                    endif     
                 endif
             endif
             ! convention
