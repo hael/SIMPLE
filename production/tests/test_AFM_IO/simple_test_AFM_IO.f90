@@ -1,7 +1,7 @@
 program AFM_File_IO
 use iso_c_binding
 include 'simple_lib.f08'
-use simple_AFM_image
+use simple_image
 use simple_segmentation
 use simple_hash
 !AFM IO
@@ -63,7 +63,7 @@ type(image)     ::  HeightRetrace
 type(image)     ::  Sum
 integer         :: i, j, fu
 real, allocatable   :: rmat_test(:,:,:)
-real            :: h_shift(2)
+real            :: h_shift(2), shvec(3), a, iterx, itery
 ! character(len=*), parameter :: OUT_FILE = '/Users/atifao/Downloads/IBW/16_im.txt' ! Output file.
 ! character(len=*), parameter :: PLT_FILE = 'plot.plt' ! Gnuplot file.
 ! real       :: test_mat(3,3), test_sing(3), test_vec(3,3)
@@ -75,14 +75,24 @@ real            :: h_shift(2)
 call read_ibw('/Users/atifao/Downloads/IBW/Cob_450016.ibw', Cob16)
 call zero_padding(Cob16)
 
-call get_AFM(Cob16, 'HeightTrace', HeightTrace)
-HeightRetrace = Cob16%img_array(findloc(index(Cob16%img_names, 'HeightRetrace'),1, dim = 1))
-
+call get_AFM(Cob16, 'AmplitudeTrace', HeightTrace)
+HeightRetrace = Cob16%img_array(findloc(index(Cob16%img_names, 'AmplitudeRetrace'),1, dim = 1))
 call HeightTrace%fft()
 call HeightRetrace%fft()
 
+! shvec(3) = 1
+! do iterx = 9.38, 10.09, 0.01
+!     do itery = -1.09, -0.61, 0.01
+!         shvec(1) = iterx
+!         shvec(2) = itery
+!         a = HeightTrace%corr_shifted(HeightRetrace, shvec)
+!         print *, iterx, itery, a
+!     end do 
+! end do 
+
 !need to adjust make function sub-pixel accurate. 
-call HeightTrace%fcorr_shift(HeightRetrace, 20., h_shift)
+
+call HeightTrace%fcorr_shift(HeightRetrace, 20., h_shift, .false.)
 print *, h_shift
 
 ! normalize retrace to max value of normalized retrace
@@ -116,6 +126,7 @@ contains
         properties = [character(len = 10) :: 'Height', 'Amplitude', 'Phase', 'ZSensor' ]
         if(index(fn_in, '.ibw') == 0) then 
             print *, 'Error: only .ibw files are supported'
+            stop 
         end if
         open(newunit = check, file = fn_in, status = 'old', access='stream')
         read(check) binheader%version
