@@ -690,6 +690,7 @@ contains
         ! constants
         real,                  parameter :: SCALEFAC2_TARGET = 0.5
         real,                  parameter :: CENLP_DEFAULT    = 30.
+        real,                  parameter :: LP_SYMSRCH_LB    = 12.
         integer,               parameter :: MAXITS_PROB1     = 30
         integer,               parameter :: MAXITS_PROB2     = 30
         integer,               parameter :: NSPACE_PROB1     = 500
@@ -728,16 +729,16 @@ contains
         integer               :: icls, ncavgs, cnt, iter, ipart, even_ind, odd_ind, state
         logical               :: srch4symaxis, do_autoscale, symran_before_refine
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
-        call cline%set('sigma_est', 'global')
-        call cline%set('refine',      'prob')
+        call cline%set('sigma_est', 'global') ! obviously
+        call cline%set('refine',      'prob') ! refine=prob should be used throughout
         call cline%set('oritype',      'out') ! because cavgs are part of out segment
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('autoscale')   ) call cline%set('autoscale',  'yes')
-        if( .not. cline%defined('overlap')     ) call cline%set('overlap',     0.98)
-        if( .not. cline%defined('fracsrch')    ) call cline%set('fracsrch',    0.95)
+        if( .not. cline%defined('overlap')     ) call cline%set('overlap',     0.99) ! needed to prevent premature convergence
         if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',      'no') ! simple low-pass filter works better on class averages
         if( .not. cline%defined('prob_athres') ) call cline%set('prob_athres',  90.) ! reduces # failed runs on trpv1 from 4->2/10
+        if( .not. cline%defined('prob_sh')     ) call cline%set('prob_sh',    'yes') ! produces maps of superior quality
         ! make master parameters
         call params%new(cline)
         call cline%delete('autoscale')
@@ -801,7 +802,7 @@ contains
         ! update orientations parameters
         do icls=1,ncavgs
             even_ind = icls
-            odd_ind  = ncavgs+icls
+            odd_ind  = ncavgs + icls
             call work_proj%os_ptcl3D%get_ori(icls, o)
             state    = o%get_state()
             call o%set('class', real(icls)) ! for mapping frcs in 3D
@@ -915,7 +916,7 @@ contains
         endif
         if( srch4symaxis )then
             call work_proj%read_segment('ptcl3D', work_projfile)
-            lp_est = work_proj%os_ptcl3D%get_avg('lp')
+            lp_est = max(LP_SYMSRCH_LB,work_proj%os_ptcl3D%get_avg('lp'))
             call cline_symsrch%set('lp', lp_est)
             write(logfhandle,'(A)') '>>>'
             write(logfhandle,'(A)') '>>> SYMMETRY AXIS SEARCH'
