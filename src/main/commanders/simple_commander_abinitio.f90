@@ -727,7 +727,7 @@ contains
         character(len=STDLEN) :: sigma2_fname, sigma2_fname_sc, orig_objfun
         real                  :: scale_factor1, scale_factor2, trslim, smpd_target, lplims(2), cenlp, lp_est
         integer               :: icls, ncavgs, cnt, iter, ipart, even_ind, odd_ind, state
-        logical               :: srch4symaxis, do_autoscale, symran_before_refine
+        logical               :: srch4symaxis, do_autoscale, symran_before_refine, trslim1_present
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('refine',      'prob') ! refine=prob should be used throughout
@@ -742,9 +742,10 @@ contains
         ! make master parameters
         call params%new(cline)
         call cline%delete('autoscale')
-        call cline%set('lp_auto',    'yes') ! automated frequency marching is the method of choice throughout
-        call cline%set('mkdir',       'no') ! to avoid nested directory structure
-        call cline%set('oritype', 'ptcl3D') ! from now on we are in the ptcl3D segment, final report is in the cls3D segment
+        call cline%set('lp_auto',    'yes')    ! automated frequency marching is the method of choice throughout
+        call cline%set('mkdir',       'no')    ! to avoid nested directory structure
+        call cline%set('oritype', 'ptcl3D')    ! from now on we are in the ptcl3D segment, final report is in the cls3D segment
+        trslim1_present = cline%defined('trs') ! flag translation bound for first phase present on command line
         ! state string
         str_state    = int2str_pad(1,2)
         ! decide wether to search for the symmetry axis
@@ -860,7 +861,11 @@ contains
         call cline_refine3D_prob1%set('nspace',     real(NSPACE_PROB1))
         call cline_refine3D_prob1%set('maxits',     real(MAXITS_PROB1))
         call cline_refine3D_prob1%set('silence_fsc','yes') ! no FSC plot printing in prob phase
-        call cline_refine3D_prob1%set('trs',        trslim)              
+        if( trslim1_present )then
+            call cline_refine3D_prob1%set('trs',    params%trs)
+        else
+            call cline_refine3D_prob1%set('trs',    trslim) ! trslim set in call downscale(smpd_target, scale_factor1) above
+        endif       
         ! (2) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
             ! need to replace original point-group flag with c1/pgrp_start
@@ -936,7 +941,7 @@ contains
         call cline_refine3D_prob2%set('startit',  real(iter))
         call cline_refine3D_prob2%set('box_crop', real(params%box_crop))
         call cline_refine3D_prob2%set('smpd_crop',params%smpd_crop)
-        call cline_refine3D_prob2%set('trs',      trslim) ! updated by call to downscale
+        call cline_refine3D_prob2%set('trs',      trslim) ! trslim set in call downscale(smpd_target, scale_factor2) above
         ! sigma2 at original sampling
         cline_calc_pspec = cline
         call cline_calc_pspec%delete('lp_auto')
