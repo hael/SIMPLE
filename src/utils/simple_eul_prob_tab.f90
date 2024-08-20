@@ -658,10 +658,13 @@ contains
         addr = sizeof(file_header) + 1
         read(unit=funit,pos=addr) mat_loc
         call fclose(funit)
-        !$omp parallel do collapse(2) default(shared) proc_bind(close) schedule(static) private(i_loc,i_glob)
-        do i_loc = 1, nptcls_loc
-            do i_glob = 1, self%nptcls
-                if( mat_loc(1,i_loc,1)%pind == self%loc_tab(1,i_glob,1)%pind ) self%loc_tab(:,i_glob,:) = mat_loc(:,i_loc,:)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i_loc,i_glob)
+        do i_glob = 1, self%nptcls
+            do i_loc = 1, nptcls_loc
+                if( mat_loc(1,i_loc,1)%pind == self%loc_tab(1,i_glob,1)%pind )then
+                    self%loc_tab(:,i_glob,:) = mat_loc(:,i_loc,:)
+                    exit
+                endif
             end do
         end do
         !$omp end parallel do
@@ -696,11 +699,12 @@ contains
         allocate(assgn_glob(nptcls_glob))
         read(unit=funit,pos=headsz + 1) assgn_glob
         call fclose(funit)
-        !$omp parallel do collapse(2) default(shared) proc_bind(close) schedule(static) private(i_loc,i_glob)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i_loc,i_glob)
         do i_loc = 1, self%nptcls
             do i_glob = 1, nptcls_glob
                 if( self%assgn_map(i_loc)%pind == assgn_glob(i_glob)%pind )then
                     self%assgn_map(i_loc) = assgn_glob(i_glob)
+                    exit
                 endif
             end do
         end do

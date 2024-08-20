@@ -1388,12 +1388,12 @@ contains
                 if( kw )then
                     ! (|X|2)2 & (|REF|2)2
                     sumsqptcl = sumsqptcl + real(k,dp) * sum(pft_mag_ptcl(:,k)**2)
-                    sumsqref  = sumsqref  + real(k,dp) * sum(pft_ref(:,k)**2)
+                    sumsqref  = sumsqref  + real(k,dp) * sum(real(pft_ref(:,k)*conjg(pft_ref(:,k)),dp)**2)
                     self%heap_vars(ithr)%kcorrs(1:self%pftsz) = self%heap_vars(ithr)%kcorrs(1:self%pftsz) +&
                         &real(k,dp) * real(self%rvec1(ithr)%r(1:self%pftsz),dp)
                 else
                     sumsqptcl = sumsqptcl + sum(pft_mag_ptcl(:,k)**2)
-                    sumsqref  = sumsqref  + sum(pft_ref(:,k)**2)
+                    sumsqref  = sumsqref  + sum(real(pft_ref(:,k)*conjg(pft_ref(:,k)),dp)**2)
                     self%heap_vars(ithr)%kcorrs(1:self%pftsz) = self%heap_vars(ithr)%kcorrs(1:self%pftsz) +&
                         &real(self%rvec1(ithr)%r(1:self%pftsz),dp)
                 endif
@@ -1849,13 +1849,13 @@ contains
                         score     = score     + real(k,kind=dp) * sum(real(pft_shref_8(:,k) * conjg(pft_ptcl(:,k)),dp))
                     end do
                     denom        = dsqrt(sqsum_ref * self%ksqsums_ptcls(i))
-                    grid1(ix,iy) = score / denom
+                    grid1(ix,iy) = real(score / denom)
                     ! second orientation (first+pi)
                     score = 0.d0
                     do k = self%kfromto(1),self%kfromto(2)
                         score = score + real(k,kind=dp) * sum(real(pft_shref_8(:,k) * pft_ptcl(:,k),dp))
                     end do
-                    grid2(ix,iy) = score / denom
+                    grid2(ix,iy) = real(score / denom)
                 enddo
             enddo
         case(OBJFUN_EUCLID)
