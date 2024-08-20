@@ -688,6 +688,9 @@ contains
                 end do
                 call noisevol%kill
             endif
+            if( build%spproj%is_virgin_field(params%oritype) )then  ! we don't have orientations, so randomize
+                call build%spproj_field%rnd_oris
+            endif
             ! objfun=euclid
             l_sigma = .false.
             if( trim(params%objfun) == 'euclid' )then
