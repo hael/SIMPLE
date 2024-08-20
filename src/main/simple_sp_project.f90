@@ -1596,7 +1596,9 @@ contains
         call self%os_out%set(ind, 'stkkind', 'single')
         call self%os_out%set(ind, 'imgkind', iimgkind)
         call self%os_out%set(ind, 'ctf',     'no')
-        if(present(clspath) .and. clspath) call self%os_out%set(ind, 'stkpath', trim(CWD_GLOB))
+        if( present(clspath) )then
+            if( clspath ) call self%os_out%set(ind, 'stkpath', trim(CWD_GLOB))
+        endif
         ! add congruent os_cls2D & os_cls3D
         if( self%os_cls2D%get_noris() /= nptcls )then
             call self%os_cls2D%new(nptcls, is_ptcl=.false.)

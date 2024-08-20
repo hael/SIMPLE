@@ -67,7 +67,7 @@ contains
         allocate(self%pinds(self%nptcls), source=pinds)
         allocate(self%loc_tab(params_glob%nspace,self%nptcls,self%nstates), self%assgn_map(self%nptcls),&
                     &self%state_tab(self%nstates,self%nptcls), self%shift_tab(NSHIFTS,self%nptcls))
-        !$omp parallel do default(shared) private(i,iptcl,istate,iproj) proc_bind(close) schedule(static)
+        !$omp parallel do default(shared) private(i,iptcl,istate,iproj,ishift) proc_bind(close) schedule(static)
         do i = 1,self%nptcls
             iptcl = self%pinds(i)
             self%assgn_map(i)%pind   = iptcl
