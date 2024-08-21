@@ -8,8 +8,8 @@ private
 #include "simple_local_flags.inc"
 
 type class_frcs
-    private
-    integer           :: nprojs       = 0
+    private 
+    integer           :: ncls         = 0
     integer           :: filtsz       = 0
     integer           :: box4frc_calc = 0
     integer           :: nstates      = 1
@@ -29,11 +29,12 @@ contains
     procedure, private :: raise_exception
     procedure, private :: bound_res
     ! setters/getters
-    procedure          :: get_nprojs
+    procedure          :: get_ncls
     procedure          :: get_filtsz
     procedure          :: set_frc
     procedure          :: get_frc
     procedure          :: frc_getter
+    procedure          :: avg_frc_getter
     procedure          :: getter
     procedure          :: estimate_res
     procedure          :: estimate_find_for_eoavg
@@ -52,15 +53,15 @@ contains
 
     ! constructor
 
-    subroutine new( self, nprojs, box4frc_calc, smpd, nstates )
+    subroutine new( self, ncls, box4frc_calc, smpd, nstates )
         class(class_frcs), intent(inout) :: self
-        integer,           intent(in)    :: nprojs
+        integer,           intent(in)    :: ncls
         integer,           intent(in)    :: box4frc_calc
         real,              intent(in)    :: smpd
         integer, optional, intent(in)    :: nstates
         ! init
         call self%kill
-        self%nprojs       = nprojs
+        self%ncls         = ncls
         self%box4frc_calc = box4frc_calc
         self%smpd         = smpd
         self%filtsz       = fdim(box4frc_calc) - 1
@@ -69,28 +70,28 @@ contains
         self%nstates      = 1
         if( present(nstates) ) self%nstates = nstates
         ! prep file header
-        self%file_header(1) = real(self%nprojs)
+        self%file_header(1) = real(self%ncls)
         self%file_header(2) = real(self%box4frc_calc)
         self%file_header(3) = self%smpd
         self%file_header(4) = real(self%nstates)
         self%headsz         = sizeof(self%file_header)
         ! alloc
-        allocate(self%frcs(self%nstates,self%nprojs,self%filtsz), source=0.0)
+        allocate(self%frcs(self%nstates,self%ncls,self%filtsz), source=0.0)
         self%exists = .true.
     end subroutine new
 
     ! exception
 
-    subroutine raise_exception( self, proj, state, msg )
+    subroutine raise_exception( self, cls, state, msg )
         class(class_frcs), intent(in) :: self
-        integer,           intent(in) :: proj, state
+        integer,           intent(in) :: cls, state
         character(len=*),  intent(in) :: msg
         logical :: l_outside
         l_outside = .false.
-        if( proj  < 1 .or. proj  > self%nprojs  )then
-            write(logfhandle,*) self%nprojs
+        if( cls  < 1 .or. cls  > self%ncls  )then
+            write(logfhandle,*) self%ncls
             write(logfhandle,*) 'exists: ', self%exists
-            write(logfhandle,*) 'proj: ', proj
+            write(logfhandle,*) 'cls: ', cls
             l_outside = .true.
         endif
         if( state < 1 .or. state > self%nstates ) then
@@ -133,29 +134,29 @@ contains
 
     ! setters/getters
 
-    pure integer function get_nprojs( self )
+    pure integer function get_ncls( self )
         class(class_frcs), intent(in) :: self
-        get_nprojs = self%nprojs
-    end function get_nprojs
+        get_ncls = self%ncls
+    end function get_ncls
 
     pure integer function get_filtsz( self )
         class(class_frcs), intent(in) :: self
         get_filtsz = self%filtsz
     end function get_filtsz
 
-    subroutine set_frc( self, proj, frc, state )
+    subroutine set_frc( self, cls, frc, state )
         class(class_frcs), intent(inout) :: self
-        integer,           intent(in)    :: proj
+        integer,           intent(in)    :: cls
         real,              intent(in)    :: frc(:)
         integer, optional, intent(in)    :: state
         integer :: sstate
         sstate = 1
         if( present(state) ) sstate = state
-        call self%raise_exception( proj, sstate, 'ERROR, out of bounds in set_frc')
+        call self%raise_exception( cls, sstate, 'ERROR, out of bounds in set_frc')
         if( size(frc) /= self%filtsz )then
             THROW_HARD('size of input frc not conforming; set_frc')
         else
-            self%frcs(sstate,proj,:) = frc
+            self%frcs(sstate,cls,:) = frc
         endif
     end subroutine set_frc
 
@@ -175,92 +176,106 @@ contains
     end function resample_filter
 
     !>  getter for values interepreted as FRCs
-    function get_frc( self, proj, box, state ) result( frc )
+    function get_frc( self, cls, box, state ) result( frc )
         class(class_frcs), intent(in) :: self
-        integer,           intent(in) :: proj, box
+        integer,           intent(in) :: cls, box
         integer, optional, intent(in) :: state
         real, allocatable :: frc(:)
         real, allocatable :: res(:)
         integer :: sstate
         sstate = 1
         if( present(state) ) sstate = state
-        call self%raise_exception( proj, sstate, 'ERROR, out of bounds in get_frc')
+        call self%raise_exception( cls, sstate, 'ERROR, out of bounds in get_frc')
         if( box /= self%box4frc_calc )then
             res = get_resarr(box, self%smpd)
-            frc = resample_filter(self%frcs(sstate,proj,:), self%res4frc_calc, res)
+            frc = resample_filter(self%frcs(sstate,cls,:), self%res4frc_calc, res)
         else
-            allocate(frc(self%filtsz), source=self%frcs(sstate,proj,:))
+            allocate(frc(self%filtsz), source=self%frcs(sstate,cls,:))
         endif
     end function get_frc
 
     !>  getter for values interepreted as FRCs
-    subroutine frc_getter( self, proj, hpind_fsc, phaseplate, frc, state )
+    subroutine frc_getter( self, cls, hpind_fsc, phaseplate, frc, state )
         class(class_frcs), intent(in)  :: self
-        integer,           intent(in)  :: proj, hpind_fsc
+        integer,           intent(in)  :: cls, hpind_fsc
         logical,           intent(in)  :: phaseplate
         real,              intent(out) :: frc(self%filtsz)
         integer, optional, intent(in)  :: state
         integer :: sstate, find_plate
         sstate = 1
         if( present(state) ) sstate = state
-        call self%raise_exception( proj, sstate, 'ERROR, out of bounds in frc_getter')
-        frc = self%frcs(sstate,proj,:)
+        call self%raise_exception( cls, sstate, 'ERROR, out of bounds in frc_getter')
+        frc = self%frcs(sstate,cls,:)
         if( phaseplate )then
             if( any(frc > 0.5) )call phaseplate_correct_fsc(frc, find_plate)
         endif
         if( hpind_fsc > 0 ) frc(:hpind_fsc) = frc(hpind_fsc + 1)
     end subroutine frc_getter
 
-    !>  getter for raw values
-    subroutine getter( self, proj, frc, state )
+    subroutine avg_frc_getter( self, frcs_avg, states, state )
         class(class_frcs), intent(in)  :: self
-        integer,           intent(in)  :: proj
+        real,              intent(out) :: frcs_avg(self%filtsz)
+        integer,           intent(in)  :: states(self%ncls)
+        integer, optional, intent(in)  :: state
+        integer :: sstate, icls, k
+        sstate = 1
+        if( present(state) ) sstate = state
+        do k = 1,self%filtsz
+            frcs_avg(k) = sum(self%frcs(sstate,:,k), mask=states > 0 .and. self%frcs(sstate,:,k) > 0.)
+        enddo
+        frcs_avg = frcs_avg / real(count(states > 0))
+    end subroutine avg_frc_getter
+
+    !>  getter for raw values
+    subroutine getter( self, cls, frc, state )
+        class(class_frcs), intent(in)  :: self
+        integer,           intent(in)  :: cls
         real,              intent(out) :: frc(self%filtsz)
         integer, optional, intent(in)  :: state
         integer :: sstate
         sstate = 1
         if( present(state) ) sstate = state
-        call self%raise_exception( proj, sstate, 'ERROR, out of bounds in frc_getter')
-        frc = self%frcs(sstate,proj,:)
+        call self%raise_exception( cls, sstate, 'ERROR, out of bounds in frc_getter')
+        frc = self%frcs(sstate,cls,:)
     end subroutine getter
 
-    subroutine estimate_res( self, proj, res_frc05, res_frc0143, state )
+    subroutine estimate_res( self, cls, res_frc05, res_frc0143, state )
         class(class_frcs), intent(in)  :: self
-        integer,           intent(in)  :: proj
+        integer,           intent(in)  :: cls
         real,              intent(out) :: res_frc05, res_frc0143
         integer, optional, intent(in)  :: state
         integer :: sstate
         sstate = 1
         if( present(state) ) sstate = state
-        call self%raise_exception( proj, sstate, 'ERROR, out of bounds in estimate_res')
-        call get_resolution(self%frcs(sstate,proj,:), self%res4frc_calc, res_frc05, res_frc0143)
-        call self%bound_res(self%frcs(sstate,proj,:), res_frc05, res_frc0143)
+        call self%raise_exception( cls, sstate, 'ERROR, out of bounds in estimate_res')
+        call get_resolution(self%frcs(sstate,cls,:), self%res4frc_calc, res_frc05, res_frc0143)
+        call self%bound_res(self%frcs(sstate,cls,:), res_frc05, res_frc0143)
     end subroutine estimate_res
 
-    function estimate_find_for_eoavg( self, proj, state ) result( find )
+    function estimate_find_for_eoavg( self, cls, state ) result( find )
         class(class_frcs), intent(in)  :: self
-        integer,           intent(in)  :: proj
+        integer,           intent(in)  :: cls
         integer, optional, intent(in)  :: state
         integer :: sstate, find
         sstate = 1
         if( present(state) ) sstate = state
-        call self%raise_exception( proj, sstate, 'ERROR, out of bounds in estimate_find_for_eoavg')
-        find = max(K4EOAVGLB,get_lplim_at_corr(self%frcs(sstate,proj,:), FSC4EOAVG2D))
+        call self%raise_exception( cls, sstate, 'ERROR, out of bounds in estimate_find_for_eoavg')
+        find = max(K4EOAVGLB,get_lplim_at_corr(self%frcs(sstate,cls,:), FSC4EOAVG2D))
     end function estimate_find_for_eoavg
 
     function estimate_lp_for_align( self, state ) result( lp )
         class(class_frcs), intent(in)  :: self
         integer, optional, intent(in)  :: state
-        real    :: lplims(self%nprojs),lp3(3)
-        integer :: sstate, iproj
+        real    :: lplims(self%ncls),lp3(3)
+        integer :: sstate, icls
         real    :: lp, res_frc05, res_frc0143
         sstate = 1
         if( present(state) ) sstate = state
         ! order FRCs according to low-pass limit (best first)
-        do iproj=1,self%nprojs
-            call get_resolution(self%frcs(sstate,iproj,:), self%res4frc_calc, res_frc05, res_frc0143)
-            call self%bound_res(self%frcs(sstate,iproj,:), res_frc05, res_frc0143)
-            lplims(iproj) = res_frc0143
+        do icls=1,self%ncls
+            call get_resolution(self%frcs(sstate,icls,:), self%res4frc_calc, res_frc05, res_frc0143)
+            call self%bound_res(self%frcs(sstate,icls,:), res_frc05, res_frc0143)
+            lplims(icls) = res_frc0143
         end do
         lp3 = min3(lplims)
         ! return median of top three clusters
@@ -271,20 +286,20 @@ contains
         class(class_frcs), intent(in)  :: self
         integer, optional, intent(in)  :: state
         real, allocatable :: frc(:)
-        real    :: freqs_frc05(self%nprojs)
-        integer :: sstate, iproj, nvalid, n
+        real    :: freqs_frc05(self%ncls)
+        integer :: sstate, icls, nvalid, n
         real    :: res_frc05, res_frc0143
         sstate = 1
         if( present(state) ) sstate = state
         nvalid = 0
-        do iproj=1,self%nprojs
-            frc = self%frcs(sstate,iproj,:)
+        do icls=1,self%ncls
+            frc = self%frcs(sstate,icls,:)
             if( any(frc > 0.5) )then
                 call get_resolution(frc, self%res4frc_calc, res_frc05, res_frc0143)
-                freqs_frc05(iproj) = res_frc05
+                freqs_frc05(icls) = res_frc05
                 nvalid = nvalid + 1
             else
-                freqs_frc05(iproj) = huge(res_frc05)
+                freqs_frc05(icls) = huge(res_frc05)
             endif
         end do
         if( nvalid < 1 )then
@@ -305,11 +320,11 @@ contains
             THROW_HARD('New <= old filter size; downsample')
         else if( newbox == self%box4frc_calc )then
             ! copy
-            call self_out%new(self%nprojs, newbox, newsmpd, self%nstates)
+            call self_out%new(self%ncls, newbox, newsmpd, self%nstates)
             self_out%frcs(:,:,:) = self%frcs(:,:,:)
         else
             ! zero padding
-            call self_out%new(self%nprojs, newbox, newsmpd, self%nstates)
+            call self_out%new(self%ncls, newbox, newsmpd, self%nstates)
             self_out%frcs(:,:,:self%filtsz) = self%frcs(:,:,:)
             if( self_out%filtsz > self%filtsz ) self_out%frcs(:,:,self%filtsz+1:) = 0.0
         endif
@@ -346,16 +361,16 @@ contains
         character(len=*),  intent(in)    :: fname
         integer, optional, intent(in)    :: state
         real, allocatable :: res(:)
-        integer :: j, sstate, iproj
+        integer :: j, sstate, icls
         sstate = 1
         if( present(state) ) sstate = state
         call self%read(fname)
         res = get_resarr(self%box4frc_calc, self%smpd)
-        do iproj=1,self%nprojs
-            write(logfhandle,'(A,1X,I4)') '>>> FRC FOR PROJECTION INDEX:', iproj
+        do icls=1,self%ncls
+            write(logfhandle,'(A,1X,I4)') '>>> FRC FOR clsECTION INDEX:', icls
             write(logfhandle,*) ''
             do j=1,size(res)
-               write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', self%frcs(sstate,iproj,j)
+               write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', self%frcs(sstate,icls,j)
             end do
             write(logfhandle,*) ''
         end do
@@ -367,7 +382,7 @@ contains
         class(class_frcs), intent(inout) :: self
         if( self%exists )then
             deallocate(self%res4frc_calc, self%frcs)
-            self%nprojs       = 0
+            self%ncls       = 0
             self%filtsz       = 0
             self%box4frc_calc = 0
             self%exists       = .false.
