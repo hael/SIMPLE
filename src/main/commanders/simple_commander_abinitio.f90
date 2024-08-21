@@ -690,6 +690,7 @@ contains
         ! constants
         real,                  parameter :: SCALEFAC2_TARGET = 0.5
         real,                  parameter :: CENLP_DEFAULT    = 30.
+        real,                  parameter :: STARTLP_DEFAULT  = 40.
         real,                  parameter :: LP_SYMSRCH_LB    = 12.
         integer,               parameter :: MAXITS_PROB1     = 30
         integer,               parameter :: MAXITS_PROB2     = 30
@@ -712,8 +713,7 @@ contains
         type(cmdline) :: cline_reproject, cline_calc_pspec
         ! other
         character(len=:), allocatable :: stk, stkpath, orig_stk, frcs_fname, shifted_stk, stk_even, stk_odd, ext
-        real,             allocatable :: res(:), tmp_rarr(:), diams(:)
-        integer,          allocatable :: states(:), tmp_iarr(:)
+        integer,          allocatable :: states(:)
         character(len=2)      :: str_state
         type(ori)             :: o, o_even, o_odd
         type(qsys_env)        :: qenv
@@ -725,8 +725,8 @@ contains
         type(stack_io)        :: stkio_r, stkio_r2, stkio_w
         character(len=STDLEN) :: vol_iter, pgrp_init, pgrp_refine, vol_iter_pproc, vol_iter_pproc_mirr
         character(len=STDLEN) :: sigma2_fname, sigma2_fname_sc, orig_objfun
-        real                  :: scale_factor1, scale_factor2, trslim, smpd_target, lplims(2), cenlp, lp_est
-        integer               :: icls, ncavgs, cnt, iter, ipart, even_ind, odd_ind, state
+        real                  :: scale_factor1, scale_factor2, trslim, smpd_target, lplims(2), lp_est
+        integer               :: icls, ncavgs, cnt, iter, ipart, even_ind, odd_ind, state, find_start
         logical               :: srch4symaxis, do_autoscale, symran_before_refine, trslim1_present
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
@@ -739,6 +739,7 @@ contains
         if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',      'no') ! simple low-pass filter works better on class averages
         if( .not. cline%defined('prob_athres') ) call cline%set('prob_athres',  90.) ! reduces # failed runs on trpv1 from 4->2/10
         if( .not. cline%defined('prob_sh')     ) call cline%set('prob_sh',    'yes') ! produces maps of superior quality
+        if( .not. cline%defined('cenlp')       ) call cline%set('cenlp', CENLP_DEFAULT)
         ! make master parameters
         call params%new(cline)
         call cline%delete('autoscale')
@@ -783,7 +784,7 @@ contains
         ctfvars%ctfflag = CTFFLAG_NO
         ctfvars%smpd    = params%smpd
         shifted_stk     = basename(add2fbody(stk, ext, '_shifted'))
-        states = nint(spproj%os_cls2D%get_all('state'))
+        states          = nint(spproj%os_cls2D%get_all('state'))
         if( count(states==0) .eq. ncavgs )then
             THROW_HARD('no class averages detected in project file: '//trim(params%projfile)//'; initial_3Dmodel')
         endif
@@ -822,19 +823,9 @@ contains
         params_glob%nptcls = work_proj%get_nptcls()
         call work_proj%write()
         ! set lplims
-        call mskdiam2lplimits(params%mskdiam, lplims(1), lplims(2), cenlp)
-        if( .not. cline%defined('cenlp') ) params_glob%cenlp = cenlp
-        if( cline%defined('lpstart') )then
-            lplims(1) = params%lpstart
-        else
-            tmp_rarr  = spproj%os_cls2D%get_all('res')
-            tmp_iarr  = nint(spproj%os_cls2D%get_all('state'))
-            res       = pack(tmp_rarr, mask=(tmp_iarr>0))
-            call hpsort(res)
-            ! new way
-            lplims(2) = max(median_nocopy(res(:3)), lplims(2)) ! low-pass limit is median of three best (as in 2D)
-            deallocate(res, tmp_iarr, tmp_rarr)
-        endif
+        lplims(1) = STARTLP_DEFAULT
+        if( cline%defined('lpstart') ) lplims(1) = params%lpstart
+        lplims(2) = calc_lplim() ! low-pass limit is median of all classes
         write(logfhandle,'(A,F5.1)') '>>> DID SET STARTING  LOW-PASS LIMIT (IN A) TO: ', lplims(1)
         write(logfhandle,'(A,F5.1)') '>>> DID SET HARD      LOW-PASS LIMIT (IN A) TO: ', lplims(2)
         write(logfhandle,'(A,F5.1)') '>>> DID SET CENTERING LOW-PASS LIMIT (IN A) TO: ', params_glob%cenlp
@@ -877,7 +868,7 @@ contains
             call cline_symsrch%set('smpd',     params%smpd_crop)
             call cline_symsrch%set('box',      real(params%box_crop))
             call cline_symsrch%set('projfile', trim(work_projfile))
-            if( .not. cline_symsrch%defined('cenlp') ) call cline_symsrch%set('cenlp', CENLP)
+            if( .not. cline_symsrch%defined('cenlp') ) call cline_symsrch%set('cenlp', CENLP_DEFAULT)
             call cline_symsrch%set('hp',       params%hp)
             call cline_symsrch%set('oritype',  'ptcl3D')
             call cline_symsrch%delete('lp_auto')
@@ -911,8 +902,15 @@ contains
         write(logfhandle,'(A)') '>>>'
         call rndstart(cline_refine3D_prob1)
         call xrefine3D%execute_shmem(cline_refine3D_prob1)
-        iter     = nint(cline_refine3D_prob1%get_rarg('endit'))
-        vol_iter = trim(VOL_FBODY)//trim(str_state)//ext
+        iter       = nint(cline_refine3D_prob1%get_rarg('endit'))
+        vol_iter   = trim(VOL_FBODY)//trim(str_state)//ext
+        lp_est     = max(LP_SYMSRCH_LB,work_proj%os_ptcl3D%get_avg('lp'))
+        find_start = calc_fourier_index(lp_est, params%box, params%smpd) - 2
+        lplims(1)  = calc_lowpass_lim(find_start, params%box, params%smpd)
+        lplims(2)  = calc_lplim(3) ! low-pass limit is median of three best (as in 2D)
+        call cline_refine3D_prob2%set('lpstart', lplims(1))
+        write(logfhandle,'(A,F5.1)') '>>> DID SET STARTING  LOW-PASS LIMIT (IN A) TO: ', lplims(1)
+        write(logfhandle,'(A,F5.1)') '>>> DID SET HARD      LOW-PASS LIMIT (IN A) TO: ', lplims(2)
         if( .not. file_exists(vol_iter) ) THROW_HARD('input volume to symmetry axis search does not exist')
         if( symran_before_refine )then
             call work_proj%read_segment('ptcl3D', work_projfile)
@@ -921,8 +919,7 @@ contains
         endif
         if( srch4symaxis )then
             call work_proj%read_segment('ptcl3D', work_projfile)
-            lp_est = max(LP_SYMSRCH_LB,work_proj%os_ptcl3D%get_avg('lp'))
-            call cline_symsrch%set('lp', lp_est)
+            call cline_symsrch%set('lp', max(LP_SYMSRCH_LB,lp_est))
             write(logfhandle,'(A)') '>>>'
             write(logfhandle,'(A)') '>>> SYMMETRY AXIS SEARCH'
             write(logfhandle,'(A)') '>>>'
@@ -1044,17 +1041,30 @@ contains
         call o_even%kill
         call o_odd%kill
         call work_proj%kill
-        if( allocated(res)      ) deallocate(res)
-        if( allocated(tmp_rarr) ) deallocate(tmp_rarr)
-        if( allocated(diams)    ) deallocate(diams)
-        if( allocated(states)   ) deallocate(states)
-        if( allocated(tmp_iarr) ) deallocate(tmp_iarr)
         call del_file(work_projfile)
         call simple_rmdir(STKPARTSDIR)
         call simple_end('**** SIMPLE_INITIAL_3DMODEL2 NORMAL STOP ****')
 
         contains
 
+            function calc_lplim( nbest ) result( lplim )
+                integer, optional, intent(in)  :: nbest
+                real,    allocatable :: res(:), tmp_rarr(:)
+                integer, allocatable :: states(:), tmp_iarr(:)
+                real :: lplim
+                tmp_rarr  = spproj%os_cls2D%get_all('res')
+                tmp_iarr  = nint(spproj%os_cls2D%get_all('state'))
+                res       = pack(tmp_rarr, mask=(tmp_iarr>0))
+                call hpsort(res)
+                if( present(nbest) )then
+                    lplim = median_nocopy(res(:nbest))
+                else
+                    lplim = median_nocopy(res)
+                endif
+                if( cline%defined('lpstop') ) lplim = max(params%lpstop, lplim) 
+                deallocate(tmp_rarr, tmp_iarr, res)
+            end function calc_lplim
+            
             subroutine downscale( smpd_target, scale_factor )
                 real, intent(in)    :: smpd_target
                 real, intent(inout) :: scale_factor
