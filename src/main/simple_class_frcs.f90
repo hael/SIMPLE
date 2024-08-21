@@ -39,7 +39,6 @@ contains
     procedure          :: estimate_res
     procedure          :: estimate_find_for_eoavg
     procedure          :: estimate_lp_for_align
-    procedure          :: estimate_lpstart
     procedure          :: pad
     ! I/O
     procedure          :: read
@@ -281,35 +280,6 @@ contains
         ! return median of top three clusters
         lp = median(lp3)
     end function estimate_lp_for_align
-
-    real function estimate_lpstart( self, state )
-        class(class_frcs), intent(in)  :: self
-        integer, optional, intent(in)  :: state
-        real, allocatable :: frc(:)
-        real    :: freqs_frc05(self%ncls)
-        integer :: sstate, icls, nvalid, n
-        real    :: res_frc05, res_frc0143
-        sstate = 1
-        if( present(state) ) sstate = state
-        nvalid = 0
-        do icls=1,self%ncls
-            frc = self%frcs(sstate,icls,:)
-            if( any(frc > 0.5) )then
-                call get_resolution(frc, self%res4frc_calc, res_frc05, res_frc0143)
-                freqs_frc05(icls) = res_frc05
-                nvalid = nvalid + 1
-            else
-                freqs_frc05(icls) = huge(res_frc05)
-            endif
-        end do
-        if( nvalid < 1 )then
-            estimate_lpstart = 30.0
-        else
-            call hpsort(freqs_frc05)
-            n = min(nvalid,25)
-            estimate_lpstart = sum(freqs_frc05(1:n)) / real(n)
-        endif
-    end function estimate_lpstart
 
     subroutine pad( self, newsmpd, newbox, self_out )
         class(class_frcs), intent(in)  :: self

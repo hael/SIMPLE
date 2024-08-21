@@ -168,6 +168,10 @@ contains
         type(image) :: odd_copy_cmat, odd_filt
         integer     :: box, ldim(3), cutoff_find
         real        :: smpd, cur_cost, best_cost
+        if( kfromto(1) == kfromto(2) )then  
+            best_ind = kfromto(1)
+            return
+        endif
         if( odd%is_ft() .or. even%is_ft() ) THROW_HARD('Input even & odd has to be in real-space representation')
         if( mskimg%is_ft() ) THROW_HARD('Input mskimg has to be in real-space representation')
         ldim  = odd%get_ldim()

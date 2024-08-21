@@ -363,12 +363,6 @@ contains
             endif
         endif
 
-        ! EXTREMAL DYNAMICS
-        if( cline%defined('extr_iter') )then
-            params%extr_iter = params%extr_iter - 1
-        else
-            params%extr_iter = params%startit - 1
-        endif
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! MAIN LOOP
@@ -416,10 +410,6 @@ contains
                 ! reading corrs from all parts into one table
                 call xprob_align%execute_shmem( cline_prob_align )
             endif
-            ! exponential cooling of the randomization rate
-            params%extr_iter = params%extr_iter + 1
-            call job_descr%set( 'extr_iter',  trim(int2str(params%extr_iter)))
-            call cline%set(     'extr_iter',  params%extr_iter)
             call job_descr%set( 'which_iter', trim(int2str(params%which_iter)))
             call cline%set(     'which_iter', params%which_iter)
             call job_descr%set( 'startit',    trim(int2str(iter)))
@@ -720,7 +710,6 @@ contains
             params%startit    = startit
             params%which_iter = params%startit
             params%outfile    = 'algndoc'//METADATA_EXT
-            params%extr_iter  = params%startit - 1
             corr              = -1.
             do i = 1, params%maxits
                 write(logfhandle,'(A)')   '>>>'
@@ -732,8 +721,6 @@ contains
                     corr      = build%spproj_field%get_avg('corr')
                     if( corr <= corr_prev ) params%szsn = min(SZSN_MAX,params%szsn + SZSN_STEP)
                 endif
-                ! exponential cooling of the randomization rate
-                params%extr_iter = params%extr_iter + 1
                 if( l_sigma )then
                     call cline_calc_sigma%set('which_iter',real(i))
                     call xcalc_group_sigmas%execute(cline_calc_sigma)
