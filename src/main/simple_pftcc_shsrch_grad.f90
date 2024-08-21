@@ -191,12 +191,11 @@ contains
             lowest_cost_overall = -corrs(self%cur_inpl_idx)
             initial_cost        = lowest_cost_overall
             if( self%coarse_init )then
-                call self%coarse_search_opt_angle(coarse_cost, init_xy, init_rot)
-                if( init_rot /= 0 .and. coarse_cost < lowest_cost_overall )then
+                call self%coarse_search_opt_angle(init_xy, init_rot)
+                if( init_rot /= 0 )then
                     self%ospec%x_8      = init_xy
                     self%ospec%x        = real(init_xy)
                     self%cur_inpl_idx   = init_rot
-                    lowest_cost_overall = coarse_cost
                 endif
             end if
             ! shift search / in-plane rot update
@@ -289,12 +288,12 @@ contains
         enddo
     end subroutine coarse_search
 
-    subroutine coarse_search_opt_angle(self, lowest_cost, init_xy, irot)
+    subroutine coarse_search_opt_angle(self, init_xy, irot)
         class(pftcc_shsrch_grad), intent(inout) :: self
-        real(dp),                 intent(out)   :: lowest_cost, init_xy(2)
+        real(dp),                 intent(out)   :: init_xy(2)
         integer,                  intent(out)   :: irot
         real(dp) :: x, y, cost, stepx,stepy
-        real     :: corrs(self%nrots)
+        real     :: corrs(self%nrots), lowest_cost
         integer  :: loc, ix,iy
         init_xy = 0.d0
         irot    = 0
@@ -319,9 +318,9 @@ contains
         end do
     end subroutine coarse_search_opt_angle
 
-    subroutine prob_search_opt_angle(self, lowest_cost, init_xy, irot)
+    subroutine prob_search_opt_angle(self, init_xy, irot)
         class(pftcc_shsrch_grad), intent(inout) :: self
-        real(dp),                 intent(out)   :: lowest_cost, init_xy(2)
+        real(dp),                 intent(out)   :: init_xy(2)
         integer,                  intent(out)   :: irot
         integer,                  parameter     :: SHIFT_NUMS = coarse_num_steps**2
         real(dp) :: x, y, stepx, stepy
@@ -347,11 +346,10 @@ contains
             end do
         end do
         ! sampling for the shifts/irot
-        pvec        =   sh_corrs / sum(sh_corrs)
-        prob_ind    =   multinomal(pvec)
-        lowest_cost = - sh_corrs( prob_ind)
-        init_xy     =   sh_vecs(:,prob_ind)
-        irot        =   rot_vecs( prob_ind)
+        pvec     = sh_corrs / sum(sh_corrs)
+        prob_ind = multinomal(pvec)
+        init_xy  = sh_vecs(:,prob_ind)
+        irot     = rot_vecs( prob_ind)
     end subroutine prob_search_opt_angle
 
     subroutine prob_search(self, lowest_cost, init_xy, irot)
