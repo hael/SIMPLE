@@ -688,7 +688,6 @@ contains
         class(initial_3Dmodel2_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         ! constants
-        real,                  parameter :: SCALEFAC2_TARGET = 0.5
         real,                  parameter :: CENLP_DEFAULT    = 30.
         real,                  parameter :: STARTLP_DEFAULT  = 40.
         real,                  parameter :: LP_SYMSRCH_LB    = 12.
@@ -880,9 +879,7 @@ contains
         call cline_refine3D_prob2%set('nspace', real(NSPACE_PROB2))
         call cline_refine3D_prob2%set('maxits', real(MAXITS_PROB2))
         call cline_reconstruct3D%set('needs_sigma',  'yes')
-        call cline_refine3D_prob2%set('lpstart',     lplims(1))
-        call cline_refine3D_prob2%set('lpstop',      lplims(2))
-        call cline_refine3D_prob2%set('lp_auto',     'yes')
+        call cline_refine3D_prob2%set('lp_auto',     'yes') ! lpstart/lpstop set below
         ! (4) RE-CONSTRUCT & RE-PROJECT VOLUME
         call cline_reconstruct3D%set('prg',     'reconstruct3D')
         call cline_reconstruct3D%set('box',      real(params%box))
@@ -909,6 +906,7 @@ contains
         lplims(1)  = calc_lowpass_lim(find_start, params%box, params%smpd)
         lplims(2)  = calc_lplim(3) ! low-pass limit is median of three best (as in 2D)
         call cline_refine3D_prob2%set('lpstart', lplims(1))
+        call cline_refine3D_prob2%set('lpstop',  lplims(2))
         write(logfhandle,'(A,F5.1)') '>>> DID SET STARTING  LOW-PASS LIMIT (IN A) TO: ', lplims(1)
         write(logfhandle,'(A,F5.1)') '>>> DID SET HARD      LOW-PASS LIMIT (IN A) TO: ', lplims(2)
         if( .not. file_exists(vol_iter) ) THROW_HARD('input volume to symmetry axis search does not exist')
@@ -928,7 +926,7 @@ contains
             call del_file('SYMAXIS_SEARCH_FINISHED')
         endif
         ! refinement scaling
-        smpd_target = max(params%smpd, params%smpd/SCALEFAC2_TARGET)
+        smpd_target = max(params%smpd, lplims(2)*LP2SMPDFAC)
         call downscale(smpd_target, scale_factor2)
         ! refinement stage
         write(logfhandle,'(A)') '>>>'
