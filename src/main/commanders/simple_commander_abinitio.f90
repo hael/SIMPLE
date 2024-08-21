@@ -13,6 +13,7 @@ use simple_commander_refine3D, only: refine3D_commander, refine3D_commander_dist
 use simple_procimgstk,         only: shift_imgfile
 use simple_image,              only: image
 use simple_builder,            only: builder
+use simple_class_frcs,         only: class_frcs
 use simple_commander_euclid
 use simple_euclid_sigma2
 use simple_qsys_funs
@@ -689,7 +690,7 @@ contains
         class(cmdline),                    intent(inout) :: cline
         ! constants
         real,                  parameter :: CENLP_DEFAULT    = 30.
-        real,                  parameter :: STARTLP_DEFAULT  = 40.
+        real,                  parameter :: STARTLP_DEFAULT  = 20.
         real,                  parameter :: LP_SYMSRCH_LB    = 12.
         integer,               parameter :: MAXITS_PROB1     = 30
         integer,               parameter :: MAXITS_PROB2     = 30
@@ -713,6 +714,7 @@ contains
         ! other
         character(len=:), allocatable :: stk, stkpath, orig_stk, frcs_fname, shifted_stk, stk_even, stk_odd, ext
         integer,          allocatable :: states(:)
+        real,             allocatable :: frcs_avg(:)
         character(len=2)      :: str_state
         type(ori)             :: o, o_even, o_odd
         type(qsys_env)        :: qenv
@@ -722,10 +724,11 @@ contains
         type(sym)             :: se1,se2
         type(image)           :: img, vol
         type(stack_io)        :: stkio_r, stkio_r2, stkio_w
+        type(class_frcs)      :: clsfrcs
         character(len=STDLEN) :: vol_iter, pgrp_init, pgrp_refine, vol_iter_pproc, vol_iter_pproc_mirr
         character(len=STDLEN) :: sigma2_fname, sigma2_fname_sc, orig_objfun
-        real                  :: scale_factor1, scale_factor2, trslim, smpd_target, lplims(2), lp_est
-        integer               :: icls, ncavgs, cnt, iter, ipart, even_ind, odd_ind, state, find_start
+        real                  :: scale_factor1, scale_factor2, trslim, smpd_target, lplims(2), lp_est, lp
+        integer               :: icls, ncavgs, cnt, iter, ipart, even_ind, odd_ind, state, find_start, find, filtsz
         logical               :: srch4symaxis, do_autoscale, symran_before_refine, trslim1_present
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
@@ -787,6 +790,40 @@ contains
         if( count(states==0) .eq. ncavgs )then
             THROW_HARD('no class averages detected in project file: '//trim(params%projfile)//'; initial_3Dmodel')
         endif
+        ! retrieve FRC info
+        call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
+        if( .not.file_exists(frcs_fname) )then
+            THROW_HARD('the project file does not contain an FRCs file, whihc is required')
+        endif
+        params%frcs = trim(frcs_fname)
+        call clsfrcs%read(frcs_fname)
+        filtsz = clsfrcs%get_filtsz()
+        allocate(frcs_avg(filtsz), source=0.)
+        call clsfrcs%avg_frc_getter(frcs_avg, states)
+        find = get_lplim_at_corr(frcs_avg, 0.9)
+        lp   = calc_lowpass_lim(find, params%box, params%smpd)
+        print *, 'lp@0.9   ', lp
+        find = get_lplim_at_corr(frcs_avg, 0.8)
+        lp   = calc_lowpass_lim(find, params%box, params%smpd)
+        print *, 'lp@0.8   ', lp
+        find = get_lplim_at_corr(frcs_avg, 0.7)
+        lp   = calc_lowpass_lim(find, params%box, params%smpd)
+        print *, 'lp@0.7   ', lp
+        find = get_lplim_at_corr(frcs_avg, 0.6)
+        lp   = calc_lowpass_lim(find, params%box, params%smpd)
+        print *, 'lp@0.6   ', lp
+        find = get_lplim_at_corr(frcs_avg, 0.5)
+        lp   = calc_lowpass_lim(find, params%box, params%smpd)
+        print *, 'lp@0.5   ', lp
+        find = get_lplim_at_corr(frcs_avg, 0.4)
+        lp   = calc_lowpass_lim(find, params%box, params%smpd)
+        print *, 'lp@0.4   ', lp
+        find = get_lplim_at_corr(frcs_avg, 0.3)
+        lp   = calc_lowpass_lim(find, params%box, params%smpd)
+        print *, 'lp@0.3   ', lp
+        find = get_lplim_at_corr(frcs_avg, 0.143)
+        lp   = calc_lowpass_lim(find, params%box, params%smpd)
+        print *, 'lp@0.143 ', lp
         ! prepare a temporary project file
         work_proj%projinfo = spproj%projinfo
         work_proj%compenv  = spproj%compenv
@@ -806,7 +843,7 @@ contains
             odd_ind  = ncavgs + icls
             call work_proj%os_ptcl3D%get_ori(icls, o)
             state    = o%get_state()
-            call o%set('class', real(icls)) ! for mapping frcs in 3D
+            call o%set('class', real(icls))
             call o%set('state', real(state))
             ! even
             o_even = o
@@ -822,9 +859,18 @@ contains
         params_glob%nptcls = work_proj%get_nptcls()
         call work_proj%write()
         ! set lplims
-        lplims(1) = STARTLP_DEFAULT
-        if( cline%defined('lpstart') ) lplims(1) = params%lpstart
-        lplims(2) = calc_lplim() ! low-pass limit is median of all classes
+        if( cline%defined('lpstart') )then
+            lplims(1) = params%lpstart
+        else if( any(frcs_avg > 0.8) )then
+            find      = get_lplim_at_corr(frcs_avg, 0.8)
+            lplims(1) = calc_lowpass_lim(find, params%box, params%smpd)
+        else
+            lplims(1) = STARTLP_DEFAULT
+        endif
+        if( any(frcs_avg > 0.5) )then
+            find      = get_lplim_at_corr(frcs_avg, 0.5)
+            lplims(2) = calc_lowpass_lim(find, params%box, params%smpd)
+        endif
         write(logfhandle,'(A,F5.1)') '>>> DID SET STARTING  LOW-PASS LIMIT (IN A) TO: ', lplims(1)
         write(logfhandle,'(A,F5.1)') '>>> DID SET HARD      LOW-PASS LIMIT (IN A) TO: ', lplims(2)
         write(logfhandle,'(A,F5.1)') '>>> DID SET CENTERING LOW-PASS LIMIT (IN A) TO: ', params_glob%cenlp
@@ -854,7 +900,7 @@ contains
         if( trslim1_present )then
             call cline_refine3D_prob1%set('trs',    params%trs)
         else
-            call cline_refine3D_prob1%set('trs',    trslim) ! trslim set in call downscale(smpd_target, scale_factor1) above
+            call cline_refine3D_prob1%set('trs',    0.) ! no shift search in stage 1 by default
         endif       
         ! (2) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
@@ -904,7 +950,7 @@ contains
         lp_est     = max(LP_SYMSRCH_LB,work_proj%os_ptcl3D%get_avg('lp'))
         find_start = calc_fourier_index(lp_est, params%box, params%smpd) - 2
         lplims(1)  = calc_lowpass_lim(find_start, params%box, params%smpd)
-        lplims(2)  = calc_lplim(3) ! low-pass limit is median of three best (as in 2D)
+        lplims(2)  = calc_lplim_stage2(3) ! low-pass limit is median of three best (as in 2D)
         call cline_refine3D_prob2%set('lpstart', lplims(1))
         call cline_refine3D_prob2%set('lpstop',  lplims(2))
         write(logfhandle,'(A,F5.1)') '>>> DID SET STARTING  LOW-PASS LIMIT (IN A) TO: ', lplims(1)
@@ -1038,6 +1084,7 @@ contains
         call o%kill
         call o_even%kill
         call o_odd%kill
+        call clsfrcs%kill
         call work_proj%kill
         call del_file(work_projfile)
         call simple_rmdir(STKPARTSDIR)
@@ -1045,8 +1092,8 @@ contains
 
         contains
 
-            function calc_lplim( nbest ) result( lplim )
-                integer, optional, intent(in)  :: nbest
+            function calc_lplim_stage2( nbest ) result( lplim )
+                integer, intent(in)  :: nbest
                 real,    allocatable :: res(:), tmp_rarr(:)
                 integer, allocatable :: states(:), tmp_iarr(:)
                 real :: lplim
@@ -1054,14 +1101,10 @@ contains
                 tmp_iarr  = nint(spproj%os_cls2D%get_all('state'))
                 res       = pack(tmp_rarr, mask=(tmp_iarr>0))
                 call hpsort(res)
-                if( present(nbest) )then
-                    lplim = median_nocopy(res(:nbest))
-                else
-                    lplim = median_nocopy(res)
-                endif
+                lplim = median_nocopy(res(:nbest))
                 if( cline%defined('lpstop') ) lplim = max(params%lpstop, lplim) 
                 deallocate(tmp_rarr, tmp_iarr, res)
-            end function calc_lplim
+            end function calc_lplim_stage2
             
             subroutine downscale( smpd_target, scale_factor )
                 real, intent(in)    :: smpd_target
@@ -1154,7 +1197,6 @@ contains
     !> for generation of an initial 3d model from particles
     subroutine exec_abinitio_3Dmodel( self, cline )
         use simple_convergence, only: convergence
-        use simple_class_frcs,  only: class_frcs
         class(abinitio_3Dmodel_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         real,    parameter :: SCALEFAC        = 0.667
@@ -2167,7 +2209,6 @@ contains
     !> for generation of an initial 3d model from particles
     subroutine exec_abinitio_3Dmodel2( self, cline )
         use simple_convergence, only: convergence
-        use simple_class_frcs,  only: class_frcs
         use simple_fsc,         only: plot_fsc
         class(abinitio_3Dmodel2_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
