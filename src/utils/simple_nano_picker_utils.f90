@@ -204,7 +204,7 @@ implicit none
                     enddo
                 enddo
         end select
-        if (n .eq. 0) print *, 'Error! n should be greater than 0: make_intensity_mask_2.'
+        if (n .eq. 0) THROW_HARD( 'Error! n should be greater than 0: make_intensity_mask_2.' )
         call get_element_Z_and_radius(element, ZZ, radius)
         radius_vx  = radius / smpd
         sphere_vol = PI * (4./3.) * radius_vx**3

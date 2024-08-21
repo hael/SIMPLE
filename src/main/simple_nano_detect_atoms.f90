@@ -46,6 +46,7 @@ use simple_stat
         procedure :: calc_atom_stats            
         procedure :: calc_per_atom_corr         ! find per-atom valid correlation by comparing selected positions with experimental map
         procedure :: refine_threshold           ! refine correlation threshold by iterating over various thresholds and optimizing correlation with exp. map
+        procedure :: refine_positions           ! refine selected positions
         procedure :: discard_atoms              ! discard atoms with low per-atom valid correlation and / or low contact score
         procedure :: whole_map_correlation      ! calculate correlation between simulated map based on selected positions and experimental map
         ! utils
@@ -56,6 +57,7 @@ use simple_stat
         procedure :: write_NP_image
         procedure :: write_dist
         procedure :: extract_img_from_pos
+        procedure :: extract_img_from_center_pos
         procedure :: kill
 
     end type nano_picker
@@ -329,25 +331,31 @@ use simple_stat
         endif
     end subroutine match_boxes
 
-    subroutine one_box_corr(self, pos, circle, corr)
+    subroutine one_box_corr(self, pos, circle, corr, center)
         class(nano_picker), intent(inout) :: self
         integer,            intent(in)    :: pos(3)
         logical,            intent(in)    :: circle
         real,               intent(out)   :: corr
-        type(image)       :: boximg
-        real              :: maxrad, xyz(3)
-        real, allocatable :: pixels1(:), pixels2(:)
-        integer           :: pos_center(3), winsz, npix_in, npix_out1, npix_out2
-        logical           :: outside
-        print *, 'inside one_box_corr'
-        print *, 'pos = ', pos
+        real, optional,     intent(out)   :: center(3)
+        type(image)          :: boximg
+        real                 :: maxrad, xyz(3)
+        real, allocatable    :: pixels1(:), pixels2(:), boximg_rmat(:,:,:)
+        integer              :: pos_center(3), winsz, npix_in, npix_out1, npix_out2
+        logical              :: outside
+        logical, allocatable :: boximg_mask(:,:,:)
         call boximg%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
         call self%nano_img%window_slim( pos, self%boxsize, boximg, outside)
-        call boximg%norm_minmax
-        call boximg%masscen(xyz)
-        print *, 'xyz = ', xyz
-        pos_center = pos + anint(xyz) + [self%boxsize/2,self%boxsize/2,self%boxsize/2]
-        print *, 'pos_center = ', pos_center
+        allocate(boximg_rmat(self%boxsize,self%boxsize,self%boxsize), source=0.)
+        allocate(boximg_mask(self%boxsize,self%boxsize,self%boxsize), source=.true.)
+        boximg_rmat = boximg%get_rmat()
+        where (boximg_rmat < self%intensity_thres)
+            boximg_mask = .false.
+        end where
+        call boximg%masscen_adjusted(xyz, mask_in=boximg_mask)
+        pos_center = pos + anint(xyz)
+        if (present(center)) then
+            center = pos + xyz
+        end if
         if (.not. circle) then
             corr      = self%simulated_atom%real_corr(boximg)
         else
@@ -358,9 +366,9 @@ use simple_stat
             call self%nano_img%win2arr_rad(      pos_center(1),  pos_center(2),  pos_center(3),  winsz, npix_in, maxrad, npix_out1, pixels1)
             call self%simulated_atom%win2arr_rad(self%boxsize/2, self%boxsize/2, self%boxsize/2, winsz, npix_in, maxrad, npix_out2, pixels2)
             corr = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))
-            print *, 'corr = ', corr
         end if
         call boximg%kill
+        deallocate(boximg_rmat, boximg_mask)
     end subroutine one_box_corr
 
     subroutine identify_threshold( self, min_thres )
@@ -603,26 +611,17 @@ use simple_stat
             call atms_array(iimg)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
             call self%convolved_atoms(iimg)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
             call self%nano_img%window_slim( pos, self%boxsize, atms_array(iimg), outside)
-            !call atms_array(iimg)%write('boximgs/boximg_'//trim(int2str(iimg))//'.mrc')
-            ! call atms_array(iimg)%fft()
-            ! self%convolved_atoms(iimg) = atms_array(iimg)%conjg() * self%simulated_atom
-            ! call self%convolved_atoms(iimg)%ifft()
-            ! call atms_array(iimg)%ifft()
             self%convolved_atoms(iimg) = atms_array(iimg)
             ! want coordinates of atoms to be at the center of the images
-            !call self%convolved_atoms(iimg)%norm_minmax
             allocate(boximg_rmat(self%boxsize,self%boxsize,self%boxsize), source=0.)
             allocate(boximg_mask(self%boxsize,self%boxsize,self%boxsize), source=.true.)
             boximg_rmat = self%convolved_atoms(iimg)%get_rmat()
             where (boximg_rmat < self%intensity_thres)
                 boximg_mask = .false.
             end where
-            !print *, 'count(mask) = ', count(boximg_mask)
             call self%convolved_atoms(iimg)%masscen_adjusted(coords(iimg,:),boximg_mask) 
             deallocate(boximg_rmat, boximg_mask)
-            !coords(iimg,:) = coords(iimg,:) + real(self%convolved_atoms(iimg)%get_ldim())/2. + pos !adjust center by size and position of box
             coords(iimg,:) = coords(iimg,:) + pos
-            !print *, 'i = ', iimg, 'coords = ', coords(iimg,:)
             ! update center positions for chosen boxes
             self%center_positions(pos_inds(iimg),:) = coords(iimg,:)
         enddo
@@ -766,6 +765,49 @@ use simple_stat
         print *, 'OPTIMAL CORRELATION = ', thres_corrs(optimal_index(1))
         print *, 'NUMBER POSITIONS = ', num_pos
     end subroutine refine_threshold
+
+    subroutine refine_positions(self)
+        class(nano_picker), intent(inout) :: self
+        integer, allocatable :: pos_inds(:)
+        integer              :: npos, ipos, pos(3), x, y, z, xoff, yoff, zoff, optimal_pos(3)
+        real,    allocatable :: pos_scores(:)
+        real                 :: corr, optimal_corr, xyz(3), center(3), optimal_center(3)
+        pos_inds   = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
+        pos_scores = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
+        npos       = size(pos_inds)
+        do ipos = 1, npos
+            pos            = self%positions(pos_inds(ipos),:)
+            optimal_pos    = pos
+            optimal_corr   = pos_scores(ipos)
+            optimal_center = self%center_positions(pos_inds(ipos),:)
+            do x = pos(1) - self%offset, pos(1) + self%offset
+                do y = pos(2) - self%offset, pos(2) + self%offset
+                    do z = pos(3) - self%offset, pos(3) + self%offset
+                        call self%one_box_corr([x,y,z], circle=.true., corr=corr, center=center)       
+                        if (corr > optimal_corr) then
+                            optimal_corr   = corr
+                            optimal_pos    = [x,y,z]
+                            optimal_center = center
+                        end if
+                    end do
+                end do
+            end do
+            !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,ipos)
+            do xoff = 1, self%nxyz_offset(1)
+                do yoff = 1, self%nxyz_offset(2)
+                    do zoff = 1, self%nxyz_offset(3)
+                        if(pos_inds(ipos) .eq. self%inds_offset(xoff,yoff,zoff)) then
+                            self%center_positions(pos_inds(ipos),:) = optimal_center
+                            self%positions(pos_inds(ipos),:) = optimal_pos
+                        end if
+                    enddo
+                enddo
+            enddo
+            !$omp end parallel do
+        end do
+        deallocate(pos_inds, pos_scores)
+        call self%find_centers
+    end subroutine refine_positions
 
     subroutine discard_atoms(self, use_cs_thres, use_valid_corr, corr_thres, cs_thres)
         class(nano_picker), intent(inout) :: self
@@ -989,7 +1031,7 @@ use simple_stat
             case('centers')
                 scores   = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
                 do ipos  = 1, nbox
-                    coords(ipos,:) = self%center_positions(pos_inds(ipos),:) * self%smpd ! using center positions and Angstroms (same as pdb)
+                    coords(ipos,:) = ( self%center_positions(pos_inds(ipos),:) - 1 ) * self%smpd ! using center positions and Angstroms (same as pdb)
                 enddo
             case('pixels')
                 scores   = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
@@ -1091,6 +1133,22 @@ use simple_stat
         call img%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
         call self%nano_img%window_slim( pos, self%boxsize, img, outside)
     end subroutine extract_img_from_pos
+
+    ! input center_pos in pixels, not Angstroms
+    subroutine extract_img_from_center_pos(self, center_pos, img)
+        class(nano_picker), intent(inout) :: self
+        real,               intent(in)    :: center_pos(3)
+        type(image),        intent(out)   :: img
+        real    :: maxrad
+        integer :: winsz, edge_pos(3)
+        logical :: outside
+        maxrad    = (self%radius * 1.5) / self%smpd ! in pixels
+        winsz     = ceiling(maxrad)
+        call img%new([winsz,winsz,winsz],self%smpd)
+        edge_pos  = anint(center_pos - [winsz/2., winsz/2., winsz/2.])
+        call self%nano_img%window_slim( edge_pos, winsz, img, outside)
+        call img%mask(maxrad, 'hard')
+    end subroutine extract_img_from_center_pos
 
     subroutine kill( self )
         class(nano_picker), intent(inout) :: self
