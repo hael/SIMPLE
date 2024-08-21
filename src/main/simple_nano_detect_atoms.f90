@@ -46,7 +46,7 @@ use simple_stat
         procedure :: calc_atom_stats            
         procedure :: calc_per_atom_corr         ! find per-atom valid correlation by comparing selected positions with experimental map
         procedure :: refine_threshold           ! refine correlation threshold by iterating over various thresholds and optimizing correlation with exp. map
-        procedure :: refine_positions           ! refine selected positions
+        procedure :: refine_positions           ! refine selected positions to those with highest per-atom valid correlation
         procedure :: discard_atoms              ! discard atoms with low per-atom valid correlation and / or low contact score
         procedure :: whole_map_correlation      ! calculate correlation between simulated map based on selected positions and experimental map
         ! utils
@@ -770,20 +770,18 @@ use simple_stat
         class(nano_picker), intent(inout) :: self
         integer, allocatable :: pos_inds(:)
         integer              :: npos, ipos, pos(3), x, y, z, xoff, yoff, zoff, optimal_pos(3)
-        real,    allocatable :: pos_scores(:)
         real                 :: corr, optimal_corr, xyz(3), center(3), optimal_center(3)
         pos_inds   = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
-        pos_scores = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
         npos       = size(pos_inds)
         do ipos = 1, npos
             pos            = self%positions(pos_inds(ipos),:)
             optimal_pos    = pos
-            optimal_corr   = pos_scores(ipos)
+            call self%one_box_corr(pos, circle=.true., corr=optimal_corr)
             optimal_center = self%center_positions(pos_inds(ipos),:)
             do x = pos(1) - self%offset, pos(1) + self%offset
                 do y = pos(2) - self%offset, pos(2) + self%offset
                     do z = pos(3) - self%offset, pos(3) + self%offset
-                        call self%one_box_corr([x,y,z], circle=.true., corr=corr, center=center)       
+                        call self%one_box_corr([x,y,z], circle=.true., corr=corr, center=center)      
                         if (corr > optimal_corr) then
                             optimal_corr   = corr
                             optimal_pos    = [x,y,z]
@@ -805,7 +803,7 @@ use simple_stat
             enddo
             !$omp end parallel do
         end do
-        deallocate(pos_inds, pos_scores)
+        deallocate(pos_inds)
         call self%find_centers
     end subroutine refine_positions
 
