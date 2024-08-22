@@ -211,15 +211,6 @@ contains
                             endif
                         endif
                     case('shc_smpl')
-                        if( .not. has_been_searched )then
-                            allocate(strategy3D_greedy_smpl      :: strategy3Dsrch(iptcl_batch)%ptr)
-                        else
-                            if( ran3() < GREEDY_FREQ )then
-                                allocate(strategy3D_greedy_smpl  :: strategy3Dsrch(iptcl_batch)%ptr)
-                            else
-                                allocate(strategy3D_shc_smpl     :: strategy3Dsrch(iptcl_batch)%ptr)
-                            endif
-                        endif
                         allocate(strategy3D_shc_smpl             :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('neigh')
                         allocate(strategy3D_greedy_sub           :: strategy3Dsrch(iptcl_batch)%ptr)
