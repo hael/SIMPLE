@@ -436,15 +436,6 @@ contains
                 rt_merge_algndocs = toc(t_merge_algndocs)
                 t_volassemble = tic()
             endif
-            if( params%l_lpauto )then
-                cline_pspec_lp = cline
-                call cline_pspec_lp%set('which_iter', params%which_iter)
-                call cline_pspec_lp%set('vol1',       params%vols(1))
-                call cline_pspec_lp%set('icm',        'no')
-                call cline_pspec_lp%set('nonuniform', 'no')
-                call cline_pspec_lp%set('nparts',     1)
-                call xpspec_lp%execute_shmem( cline_pspec_lp )
-            endif
             ! ASSEMBLE VOLUMES
             select case(trim(params%refine))
                 case('eval')
@@ -509,6 +500,15 @@ contains
                             endif
                         endif
                     enddo
+                    if( params%l_lpauto )then
+                        cline_pspec_lp = cline
+                        call cline_pspec_lp%set('which_iter', params%which_iter)
+                        call cline_pspec_lp%set('vol1',       cline%get_carg('vol1')) ! single state assumed
+                        call cline_pspec_lp%set('icm',        'no')
+                        call cline_pspec_lp%set('nonuniform', 'no')
+                        call cline_pspec_lp%set('nparts',     1)
+                        call xpspec_lp%execute_shmem( cline_pspec_lp )
+                    endif
                     ! volume mask, one for all states
                     if( cline%defined('mskfile') )then
                         if( file_exists(trim(params%mskfile)) )then
