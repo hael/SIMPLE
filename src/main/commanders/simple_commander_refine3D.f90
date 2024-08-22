@@ -98,7 +98,6 @@ contains
         type(refine3D_commander)              :: xrefine3D_shmem
         type(estimate_first_sigmas_commander) :: xfirst_sigmas
         type(prob_align_commander)            :: xprob_align
-        type(pspec_lp_commander)              :: xpspec_lp
         type(automask_commander)              :: xautomask
         ! command lines
         type(cmdline) :: cline_reconstruct3D_distr
@@ -108,7 +107,6 @@ contains
         type(cmdline) :: cline_volassemble
         type(cmdline) :: cline_postprocess
         type(cmdline) :: cline_prob_align
-        type(cmdline) :: cline_pspec_lp
         type(cmdline) :: cline_tmp
         type(cmdline) :: cline_automask
         integer(timer_int_kind) :: t_init,   t_scheduled,  t_merge_algndocs,  t_volassemble,  t_tot
@@ -186,12 +184,10 @@ contains
         cline_postprocess         = cline
         cline_calc_sigma          = cline
         cline_prob_align          = cline
-        cline_pspec_lp            = cline
         ! initialise static command line parameters and static job description parameter
         call cline_reconstruct3D_distr%set( 'prg', 'reconstruct3D' )     ! required for distributed call
         call cline_calc_pspec_distr%set(    'prg', 'calc_pspec' )        ! required for distributed call
         call cline_prob_align%set(          'prg', 'prob_align' )        ! required for distributed call
-        call cline_pspec_lp%set(            'prg', 'pspec_lp' )          ! required for distributed call
         call cline_postprocess%set(         'prg', 'postprocess' )       ! required for local call
         call cline_calc_sigma%set(          'prg', 'calc_group_sigmas' ) ! required for local call
         call cline_postprocess%set('mirr',    'no')
@@ -500,15 +496,6 @@ contains
                             endif
                         endif
                     enddo
-                    if( params%l_lpauto )then
-                        cline_pspec_lp = cline
-                        call cline_pspec_lp%set('which_iter', params%which_iter)
-                        call cline_pspec_lp%set('vol1',       cline%get_carg('vol1')) ! single state assumed
-                        call cline_pspec_lp%set('icm',        'no')
-                        call cline_pspec_lp%set('nonuniform', 'no')
-                        call cline_pspec_lp%set('nparts',     1)
-                        call xpspec_lp%execute_shmem( cline_pspec_lp )
-                    endif
                     ! volume mask, one for all states
                     if( cline%defined('mskfile') )then
                         if( file_exists(trim(params%mskfile)) )then
@@ -637,11 +624,10 @@ contains
         type(calc_group_sigmas_commander)     :: xcalc_group_sigmas
         type(calc_pspec_assemble_commander)   :: xcalc_pspec_assemble
         type(calc_pspec_commander)            :: xcalc_pspec
-        type(pspec_lp_commander)              :: xpspec_lp
         type(prob_align_commander)            :: xprob_align
         type(parameters)                      :: params
         type(builder)                         :: build
-        type(cmdline)                         :: cline_calc_sigma, cline_prob_align, cline_pspec_lp
+        type(cmdline)                         :: cline_calc_sigma, cline_prob_align
         type(cmdline)                         :: cline_calc_pspec, cline_first_sigmas
         type(image)                           :: noisevol
         character(len=STDLEN)                 :: str_state, fsc_file, vol, vol_iter
@@ -735,16 +721,6 @@ contains
                 endif
                 ! in strategy3D_matcher:
                 call refine3D_exec(cline, params%which_iter, converged)
-                if( params%l_lpauto )then
-                    cline_pspec_lp = cline
-                    call cline_pspec_lp%set('prg',       'pspec_lp')
-                    call cline_pspec_lp%set('which_iter', params%which_iter)
-                    call cline_pspec_lp%set('vol1',       params%vols(1))
-                    call cline_pspec_lp%set('nparts',     1)
-                    call cline_pspec_lp%set('icm',        'no')
-                    call cline_pspec_lp%set('nonuniform', 'no')
-                    call xpspec_lp%execute_shmem( cline_pspec_lp )
-                endif
                 if( converged .or. i == params%maxits )then
                     ! report the last iteration on exit
                     call cline%delete( 'startit' )
