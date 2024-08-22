@@ -698,7 +698,8 @@ contains
         real,                  parameter :: CENLP_DEFAULT    = 30.
         real,                  parameter :: STARTLP_DEFAULT  = 20.
         real,                  parameter :: LP_SYMSRCH_LB    = 12.
-        integer,               parameter :: MAXITS_PROB1     = 30
+        ! integer,               parameter :: MAXITS_PROB1     = 30
+        integer,               parameter :: MAXITS_PROB1     = 50
         integer,               parameter :: MAXITS_PROB2     = 30
         integer,               parameter :: NSPACE_PROB1     = 500
         integer,               parameter :: NSPACE_PROB2     = 1000
@@ -906,6 +907,7 @@ contains
         call cline_refine3D_prob1%set('nspace',     real(NSPACE_PROB1))
         call cline_refine3D_prob1%set('maxits',     real(MAXITS_PROB1))
         call cline_refine3D_prob1%set('silence_fsc','yes') ! no FSC plot printing in prob phase
+        call cline_refine3D_prob1%set('refine',    'smpl') !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 4 TST
         if( trslim1_present )then
             call cline_refine3D_prob1%set('trs',    params%trs)
         else
