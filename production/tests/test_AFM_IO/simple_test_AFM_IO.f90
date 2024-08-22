@@ -4,6 +4,7 @@ include 'simple_lib.f08'
 use simple_image
 use simple_segmentation
 use simple_hash
+use simple_ced_filter,         only: ced_filter_2D
 !AFM IO
 type :: AFM_image
     type(image), allocatable :: img_array(:)
@@ -58,12 +59,17 @@ type    :: wave_header5
     INTEGER(KIND=4)    :: sIndices 
 end type
 type(AFM_image) ::  Cob16
-type(image)     ::  HeightTrace
-type(image)     ::  HeightRetrace
+type(image)     ::  HeightTrace, Height_Avg
+type(image)     ::  HeightRetrace, Retrace_Copy
 type(image)     ::  Sum
 integer         :: i, j, fu
 real, allocatable   :: rmat_test(:,:,:)
-real            :: h_shift(2), shvec(3), a, iterx, itery
+real            :: h_shift(2), shvec(3), a, iterx, itery 
+real,    pointer     :: J11_rmat(:,:,:)=>null()
+! call J11%new([1024, 1024, 1], 5.0)
+! call J11%get_rmat_ptr(J11_rmat)
+! allocate(J11_rmat(1024, 1024, 1))
+! print *, J11_rmat
 ! character(len=*), parameter :: OUT_FILE = '/Users/atifao/Downloads/IBW/16_im.txt' ! Output file.
 ! character(len=*), parameter :: PLT_FILE = 'plot.plt' ! Gnuplot file.
 ! real       :: test_mat(3,3), test_sing(3), test_vec(3,3)
@@ -75,10 +81,45 @@ real            :: h_shift(2), shvec(3), a, iterx, itery
 call read_ibw('/Users/atifao/Downloads/IBW/Cob_450016.ibw', Cob16)
 call zero_padding(Cob16)
 
-call get_AFM(Cob16, 'AmplitudeTrace', HeightTrace)
-HeightRetrace = Cob16%img_array(findloc(index(Cob16%img_names, 'AmplitudeRetrace'),1, dim = 1))
+call get_AFM(Cob16, 'HeightTrace', HeightTrace)
+HeightRetrace = Cob16%img_array(findloc(index(Cob16%img_names, 'HeightRetrace'),1, dim = 1))
+call align_avg(Cob16)
+call Height_Avg%copy(HeightTrace)
+call Retrace_Copy%copy(HeightRetrace)
+! print *, HeightTrace%mean()
+! call ced_filter_2D(HeightRetrace, 0.7)
+! call HeightTrace%vis()
+! print *, HeightTrace%mean()
+
 call HeightTrace%fft()
 call HeightRetrace%fft()
+
+! call HeightTrace%fcorr_shift(HeightRetrace, 20., h_shift, .true.) 
+! have to store height trace since it is destroyed on fcorr_shift output
+shvec = [h_shift(1), h_shift(2), 0.]
+! print *, shvec 
+call HeightRetrace%fft()
+call HeightRetrace%shift(shvec)
+call HeightRetrace%ifft()
+! call HeightTrace%ifft()
+
+! call HeightRetrace%vis()
+! call Trace_Copy%vis()
+Height_Avg = HeightRetrace * 0.5 + Height_Avg* 0.5
+! call Height_Avg%vis()
+! call Trace_Copy%vis()
+! call softmin_avg(Trace_Copy, HeightRetrace)
+call otsu_img(Height_Avg, positive = .false.)
+! call Height_Avg%vis()
+
+call otsu_img(Retrace_Copy, positive = .false.)
+! call Retrace_Copy%vis()
+! do i = 1, Trace_Copy%get_ldim(1)
+!     do j = 1, Trace_Copy%ldim(2)
+!         -beta**(-1)*(exp(-beta*x) + exp(-beta*y)) + log(2)
+!     end do 
+! end do 
+
 ! shvec(3) = 1
 ! do iterx = 9.38, 10.09, 0.01
 !     do itery = -1.09, -0.61, 0.01
@@ -91,8 +132,8 @@ call HeightRetrace%fft()
 
 !need to adjust make function sub-pixel accurate. 
 
-call HeightTrace%fcorr_shift(HeightRetrace, 20., h_shift, .true.)
-print *, h_shift
+
+! print *, h_shift
 
 ! normalize retrace to max value of normalized retrace
 
@@ -185,11 +226,32 @@ contains
         real, allocatable   :: rmat(:, :), rmat_eigvl(:, :), rmat_eigvc(:, :)
     end subroutine matrix_log
 
-    ! alignment subroutine. 
+    ! alignment subroutine for all measurements.
     subroutine align_avg(Align_AFM)
         type(AFM_image), intent(inout)     :: Align_AFM
-        real, allocatable                  :: shifts(:)
-        allocate(shifts(size(Align_AFM%img_array)))
+        real, allocatable                  :: shifts(:, :)
+        integer                            :: num_avg, avg_ind
+        call Align_AFM%img_array(1)%vis()
+        num_avg = size(Align_AFM%img_array) / 2
+        allocate(shifts(2, num_avg))
+        if(modulo(size(shifts), 2) /= 0) then 
+            print *, 'One or more traces are not present'
+        end if 
+        do avg_ind = 1, size(Align_AFM%img_array)
+            call Align_AFM%img_array(avg_ind)%fft()
+        end do
+        do avg_ind = 2, size(Align_AFM%img_array), 2
+            call Align_AFM%img_array(avg_ind - 1)%fcorr_shift(Align_AFM%img_array(avg_ind), 20., shifts(:, avg_ind / 2), .true.)
+        end do 
+        do avg_ind = 1, num_avg 
+            call Align_AFM%img_array(2*avg_ind)%fft()
+            call Align_AFM%img_array(2*avg_ind)%shift([shifts(1, avg_ind), shifts(2, avg_ind), 0.])
+            call Align_AFM%img_array(2*avg_ind)%ifft()
+        end do
+        do avg_ind = 2, size(Align_AFM%img_array), 2
+           Align_AFM%img_array(avg_ind - 1) =  Align_AFM%img_array(avg_ind) * 0.5 + Align_AFM%img_array(avg_ind - 1) * 0.5
+           call Align_AFM%img_array(avg_ind - 1)%vis()
+        end do 
     end subroutine align_avg
 
     !change this to function... 
@@ -207,6 +269,25 @@ contains
         image_at_key = AFM_Hash%img_array(findloc(index(AFM_Hash%img_names, key),1, dim = 1))
     end function fget_AFM  
 
+    subroutine softmin_avg(trace, retrace, beta)
+        type(image), intent(inout) :: trace 
+        type(image), intent(in) :: retrace
+        real, optional, intent(in) :: beta 
+        real                       :: beta_d, int_t, int_r, int_avg
+        integer                    :: dim(3), xdim, ydim
+        beta_d = 0.0000000002
+        if(present(beta)) beta_d = beta 
+        dim = trace%get_ldim()
+        do xdim = 1, dim(1)
+            do ydim = 1, dim(2)
+                int_t = trace%get_rmat_at(xdim, ydim, 1)
+                int_r = retrace%get_rmat_at(xdim, ydim, 1)
+                int_avg = beta_d**(-1.) * log(2.) * exp(abs(int_t - int_r)*(-beta_d)**2.)
+                print *, int_t, int_r, int_avg 
+                call trace%set_rmat_at(xdim, ydim, 1, int_avg)
+            end do 
+        end do
+    end subroutine softmin_avg
     ! print *,  img_array(1)%get_smpd()
     ! print *, AFM%img_array(1)%get_ldim()
     ! print *, waveheader%nDim(3)
