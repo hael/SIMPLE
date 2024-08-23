@@ -734,7 +734,7 @@ contains
         type(class_frcs)      :: clsfrcs
         character(len=STDLEN) :: vol_iter, pgrp_init, pgrp_refine, vol_iter_pproc, vol_iter_pproc_mirr
         character(len=STDLEN) :: sigma2_fname, sigma2_fname_sc, orig_objfun
-        real                  :: scale_factor1, scale_factor2, trslim, smpd_target, lplims(2), lp_est, lp
+        real                  :: scale_factor1, scale_factor2, trslim, smpd_target, lplims(2), lp_est, lp, lp_sym
         integer               :: icls, ncavgs, cnt, iter, ipart, even_ind, odd_ind, state, find_start, find, filtsz
         logical               :: srch4symaxis, do_autoscale, symran_before_refine, trslim1_present
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
@@ -958,6 +958,7 @@ contains
         call xrefine3D%execute_shmem(cline_refine3D_prob1)
         iter       = nint(cline_refine3D_prob1%get_rarg('endit'))
         vol_iter   = trim(VOL_FBODY)//trim(str_state)//ext
+        call work_proj%read_segment('ptcl3D', work_projfile)
         lp_est     = work_proj%os_ptcl3D%get_avg('lp')
         find_start = calc_fourier_index(lp_est, params%box_crop, params%smpd_crop) - 2
         lplims(1)  = calc_lowpass_lim(find_start, params%box_crop, params%smpd_crop)
@@ -967,15 +968,16 @@ contains
         write(logfhandle,'(A,F5.1)') '>>> ESTIMATED         LOW-PASS LIMIT (IN A) TO: ', lp_est
         write(logfhandle,'(A,F5.1)') '>>> DID SET STARTING  LOW-PASS LIMIT (IN A) TO: ', lplims(1)
         write(logfhandle,'(A,F5.1)') '>>> DID SET HARD      LOW-PASS LIMIT (IN A) TO: ', lplims(2)
+        
         if( .not. file_exists(vol_iter) ) THROW_HARD('input volume to symmetry axis search does not exist')
         if( symran_before_refine )then
-            call work_proj%read_segment('ptcl3D', work_projfile)
             call se1%symrandomize(work_proj%os_ptcl3D)
             call work_proj%write_segment_inside('ptcl3D', work_projfile)
         endif
         if( srch4symaxis )then
-            call work_proj%read_segment('ptcl3D', work_projfile)
-            call cline_symsrch%set('lp', max(LP_SYMSRCH_LB,lp_est))
+            lp_sym = max(LP_SYMSRCH_LB,lp_est)
+            write(logfhandle,'(A,F5.1)') '>>> DID SET SYMSEARCH LOW-PASS LIMIT (IN A) TO: ', lp_sym
+            call cline_symsrch%set('lp', lp_sym)
             write(logfhandle,'(A)') '>>>'
             write(logfhandle,'(A)') '>>> SYMMETRY AXIS SEARCH'
             write(logfhandle,'(A)') '>>>'
