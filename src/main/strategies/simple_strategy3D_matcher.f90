@@ -24,9 +24,9 @@ use simple_strategy3D_prob,         only: strategy3D_prob
 use simple_strategy3D_neigh,        only: strategy3D_neigh
 use simple_strategy3D_shift,        only: strategy3D_shift
 use simple_strategy3D,              only: strategy3D
-use simple_strategy3D_srch,         only: strategy3D_spec
 use simple_convergence,             only: convergence
 use simple_euclid_sigma2,           only: euclid_sigma2
+use simple_strategy3D_srch
 use simple_strategy2D3D_common
 implicit none
 
@@ -437,7 +437,8 @@ contains
         use simple_strategy2D3D_common, only: read_imgbatch, prepimg4align
         integer, intent(in) :: nptcls_here
         integer, intent(in) :: pinds_here(nptcls_here)
-        integer :: iptcl_batch, iptcl, ithr
+        integer :: iptcl_batch, iptcl, ithr, irot
+        real    :: shvec_incr_crop(2)
         call discrete_read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here], params_glob%l_use_denoised )
         ! reassign particles indices & associated variables
         call pftcc%reallocate_ptcls(nptcls_here, pinds_here)
@@ -456,6 +457,22 @@ contains
         call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
         ! Memoize particles FFT parameters
         call pftcc%memoize_ptcls
+        if( params_glob%l_sh_first )then
+            ! search shifts on the previous best reference
+            call init_sh_srch_first
+            !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr,irot,shvec_incr_crop) schedule(static) proc_bind(close)
+            do iptcl_batch = 1,nptcls_here
+                ithr  = omp_get_thread_num() + 1
+                iptcl = pinds_here(iptcl_batch)
+                call sh_srch_first(ithr, iptcl, irot, shvec_incr_crop)
+                if( irot > 0 )then ! better shifts where identified
+                    ! re-prep
+                    call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), ptcl_match_imgs(ithr), shvec_incr_crop)
+                    ! transfer to polar coordinates
+                    call build_glob%img_crop_polarizer%polarize(pftcc, ptcl_match_imgs(ithr), iptcl, .true., .true., mask=build_glob%l_resmsk)
+                endif
+            end do
+        endif
     end subroutine build_batch_particles
 
 end module simple_strategy3D_matcher

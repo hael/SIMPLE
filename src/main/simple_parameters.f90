@@ -350,6 +350,7 @@ type :: parameters
     real    :: cenlp=20.           !< low-pass limit for binarisation in centering(in A){30 A}
     real    :: cs=2.7              !< spherical aberration constant(in mm){2.7}
     real    :: corr_thres=0.5      !< per-atom validation correlation threshold for discarding atoms
+    real    :: crop_factor=1.0     !< downscaling factor
     real    :: ctfresthreshold=CTFRES_THRESHOLD !< ctf resolution threshold{30A}
     real    :: dcrit_rel=0.5       !< critical distance relative to box(0-1){0.5}
     real    :: defocus=2.          !< defocus(in microns){2.}
@@ -464,6 +465,7 @@ type :: parameters
     logical :: l_neigh        = .false.
     logical :: l_phaseplate   = .false.
     logical :: l_prob_sh      = .false.
+    logical :: l_sh_first     = .false.
     logical :: l_sigma_glob   = .false.
     logical :: l_remap_cls    = .false.
     logical :: l_use_denoised = .false.
@@ -1167,10 +1169,14 @@ contains
             endif
         endif
         ! smpd_crop/box_crop
-        if( .not.cline%defined('box_crop') ) self%box_crop  = self%box
+        if( .not.cline%defined('box_crop') )then
+            self%box_crop    = self%box
+            self%crop_factor = 1.0
+        endif
         if( .not.cline%defined('smpd_crop') )then
             if( cline%defined('box_crop') )then
-                self%smpd_crop = real(self%box)/real(self%box_crop) * self%smpd
+                self%crop_factor = real(self%box_crop) / real(self%box)
+                self%smpd_crop = self%smpd / self%crop_factor
             else
                 self%smpd_crop = self%smpd
             endif
@@ -1544,7 +1550,6 @@ contains
             endif
         endif
         ! reg options
-        self%l_prob_sh      = trim(self%prob_sh     ).eq.'yes'
         self%l_use_denoised = trim(self%use_denoised).eq.'yes'
         ! ML regularization
         self%l_ml_reg = trim(self%ml_reg).eq.'yes'
@@ -1595,6 +1600,8 @@ contains
             self%trs       = 0.
             self%l_doshift = .false.
         endif
+        self%l_prob_sh  = trim(self%prob_sh).eq.'yes'
+        self%l_sh_first = trim(self%sh_first).eq.'yes'
         ! motion correction
         if( self%mcpatch.eq.'yes' .and. self%nxpatch*self%nypatch<=1 ) self%mcpatch = 'no'
         if( self%mcpatch.eq.'no' )then

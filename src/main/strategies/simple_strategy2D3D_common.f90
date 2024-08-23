@@ -298,23 +298,36 @@ contains
 
     !>  \brief  prepares one particle image for alignment
     !!          serial routine
-    subroutine prepimg4align( iptcl, img, img_out )
+    subroutine prepimg4align( iptcl, img, img_out, shvec_incr_crop )
         use simple_ctf, only: ctf
-        integer,      intent(in)    :: iptcl
-        class(image), intent(inout) :: img
-        class(image), intent(inout) :: img_out
+        integer,        intent(in)    :: iptcl
+        class(image),   intent(inout) :: img
+        class(image),   intent(inout) :: img_out
+        real, optional, intent(in)    :: shvec_incr_crop(2)
         type(ctf)       :: tfun
         type(ctfparams) :: ctfparms
         real            :: x, y, sdev_noise, crop_factor
-        ! Normalise
-        call img%norm_noise(build_glob%lmsk, sdev_noise)
+        if( img%is_ft() )then
+            ! we assume that noise normalization and FFT have already been taken care of
+        else
+            ! Normalise
+            call img%norm_noise(build_glob%lmsk, sdev_noise)
+            call img%fft()
+        endif
         ! Fourier cropping
-        call img%fft()
         call img%clip(img_out)
         ! Shift image to rotational origin
         crop_factor = real(params_glob%box_crop) / real(params_glob%box)
         x = build_glob%spproj_field%get(iptcl, 'x') * crop_factor
         y = build_glob%spproj_field%get(iptcl, 'y') * crop_factor
+        if( present(shvec_incr_crop) )then
+            ! add on shift
+            x = x + shvec_incr_crop(1)
+            y = y + shvec_incr_crop(2)
+            ! update project
+            call build_glob%spproj_field%set(iptcl, 'x', x / crop_factor)
+            call build_glob%spproj_field%set(iptcl, 'y', y / crop_factor)
+        endif
         if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH)then
             call img_out%shift2Dserial([-x,-y])
         endif
