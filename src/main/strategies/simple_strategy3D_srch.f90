@@ -9,7 +9,7 @@ use simple_eul_prob_tab,       only: eul_prob_tab
 use simple_strategy3D_alloc    ! singleton s3D
 implicit none
 
-public :: strategy3D_srch, strategy3D_spec
+public :: strategy3D_srch, strategy3D_spec, init_sh_srch_first, sh_srch_first
 private
 #include "simple_local_flags.inc"
 
@@ -64,6 +64,8 @@ type strategy3D_srch
     procedure :: store_solution
     procedure :: kill
 end type strategy3D_srch
+
+type(pftcc_shsrch_grad), allocatable :: grad_sh_first_objs(:)
 
 contains
 
@@ -159,45 +161,85 @@ contains
         call o_prev%kill
     end subroutine prep4srch
 
-    subroutine inpl_srch( self, ref, xy, irot_in, prev_sh )
+    subroutine init_sh_srch_first
+        integer :: ithr
+        real    :: lims(2,2), lims_init(2,2), cxy(3)
+        lims(:,1)      = -params_glob%trs
+        lims(:,2)      =  params_glob%trs
+        lims_init(:,1) = -SHC_INPL_TRSHWDTH
+        lims_init(:,2) =  SHC_INPL_TRSHWDTH
+        if( allocated(grad_sh_first_objs) )then
+            do ithr = 1, nthr_glob
+                call grad_sh_first_objs(ithr)%kill
+            end do
+            deallocate(grad_sh_first_objs)
+        endif
+        allocate(grad_sh_first_objs(nthr_glob))
+        do ithr = 1, nthr_glob
+            call grad_sh_first_objs(ithr)%new(lims, lims_init=lims_init,&
+            &shbarrier=params_glob%shbarrier, maxits=params_glob%maxits_sh,&
+            &opt_angle=(trim(params_glob%sh_opt_angle).eq.'yes'), coarse_init=.true.)
+        end do
+    end subroutine init_sh_srch_first
+
+    ! assumes that particle has been shifted according to previous shift (in project)
+    ! irot == 0 indicates better solution NOT found
+    ! irot >  0 indicates better shifts where found and particle needs to be re-shifted to [0.,0.] and re-masked
+    subroutine sh_srch_first( ithr, iptcl, irot, xy )
+        integer, intent(in)  :: ithr, iptcl
+        integer, intent(out) :: irot
+        real,    intent(out) :: xy(2)
+        type(pftcc_shsrch_grad) :: grad_shsrch_obj
+        type(ori) :: o_prev
+        integer   :: prev_state, prev_proj, prev_ref, prev_roind
+        real      :: cxy(3)
+        call build_glob%spproj_field%get_ori(iptcl, o_prev)        ! previous ori
+        prev_state = o_prev%get_state()                            ! state index
+        prev_proj  = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
+        prev_ref   = (prev_state-1)*params_glob%nspace + prev_proj ! previous reference
+        prev_roind = pftcc_glob%get_roind(360.-o_prev%e3get())     ! in-plane angle index
+        irot       = prev_roind
+        call grad_sh_first_objs(ithr)%set_indices(prev_ref, iptcl)
+        cxy = grad_sh_first_objs(ithr)%minimize(irot=irot, sh_rot=.false.)  ! sh_rot=.false. because we are re-searching in-plane rotations
+        xy  = cxy(2:3)
+        call o_prev%kill
+    end subroutine sh_srch_first
+
+    subroutine inpl_srch( self, ref, irot_in )
         class(strategy3D_srch), intent(inout) :: self
         integer, optional,      intent(in)    :: ref
-        real,    optional,      intent(in)    :: xy(2)
         integer, optional,      intent(in)    :: irot_in
-        real,    optional,      intent(in)    :: prev_sh(2)
         real    :: cxy(3)
         integer :: iref, irot, loc(1)
-        if( self%doshift )then
-            if( present(irot_in) ) irot = irot_in
-            if( present(ref) )then
-                iref = ref
-            else
-                loc  = maxloc(s3D%proj_space_corrs(:,self%ithr))
-                iref = loc(1)
-            endif
-            ! BFGS over shifts with in-plane rot exhaustive callback
-            call self%grad_shsrch_obj%set_indices(iref, self%iptcl)
-            cxy = self%grad_shsrch_obj%minimize(irot=irot, xy=xy, prev_sh=prev_sh)
-            if( irot > 0 ) call self%store_solution(iref, irot, cxy(1), sh=cxy(2:3))
+        if( .not. self%doshift ) return
+        if( present(irot_in) ) irot = irot_in
+        if( present(ref) )then
+            iref = ref
+        else
+            loc  = maxloc(s3D%proj_space_corrs(:,self%ithr))
+            iref = loc(1)
         endif
+        ! BFGS over shifts with in-plane rot exhaustive callback
+        call self%grad_shsrch_obj%set_indices(iref, self%iptcl)
+        cxy = self%grad_shsrch_obj%minimize(irot=irot)
+        if( irot > 0 ) call self%store_solution(iref, irot, cxy(1), sh=cxy(2:3))
     end subroutine inpl_srch
 
     subroutine inpl_srch_peaks( self )
         class(strategy3D_srch), intent(inout) :: self
         real    :: cxy(3)
         integer :: refs(self%npeaks_inpl), irot, ipeak
-        if( self%doshift )then
-            ! BFGS over shifts with in-plane rot exhaustive callback
-            refs = maxnloc(s3D%proj_space_corrs(:,self%ithr), self%npeaks_inpl)
-            do ipeak = 1, self%npeaks_inpl
-                call self%grad_shsrch_obj%set_indices(refs(ipeak), self%iptcl)
-                cxy = self%grad_shsrch_obj%minimize(irot=irot)
-                if( irot > 0 )then
-                    ! irot > 0 guarantees improvement found, update solution
-                    call self%store_solution(refs(ipeak), irot, cxy(1), sh=cxy(2:3))
-                endif
-            enddo
-        endif
+        if( .not. self%doshift ) return
+        ! BFGS over shifts with in-plane rot exhaustive callback
+        refs = maxnloc(s3D%proj_space_corrs(:,self%ithr), self%npeaks_inpl)
+        do ipeak = 1, self%npeaks_inpl
+            call self%grad_shsrch_obj%set_indices(refs(ipeak), self%iptcl)
+            cxy = self%grad_shsrch_obj%minimize(irot=irot)
+            if( irot > 0 )then
+                ! irot > 0 guarantees improvement found, update solution
+                call self%store_solution(refs(ipeak), irot, cxy(1), sh=cxy(2:3))
+            endif
+        enddo
     end subroutine inpl_srch_peaks
 
     subroutine store_solution( self, ref, inpl_ind, corr, sh, w )

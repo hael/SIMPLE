@@ -165,11 +165,9 @@ contains
     end subroutine grad_shsrch_set_indices
 
     !> minimisation routine
-    function grad_shsrch_minimize( self, irot, xy, prev_sh, sh_rot ) result( cxy )
+    function grad_shsrch_minimize( self, irot, sh_rot ) result( cxy )
         class(pftcc_shsrch_grad), intent(inout) :: self
         integer,                  intent(inout) :: irot
-        real,    optional,        intent(in)    :: xy(2)
-        real,    optional,        intent(in)    :: prev_sh(2)
         logical, optional,        intent(in)    :: sh_rot
         real     :: corrs(self%nrots), rotmat(2,2), cxy(3), lowest_shift(2), lowest_cost
         real(dp) :: init_xy(2), lowest_cost_overall, coarse_cost, initial_cost
@@ -178,13 +176,8 @@ contains
         l_sh_rot = .true.
         if( present(sh_rot) ) l_sh_rot = sh_rot
         found_better = .false.
-        if( present(xy) )then
-            self%ospec%x   = xy
-            self%ospec%x_8 = dble(xy)
-        else
-            self%ospec%x   = [0.,0.]
-            self%ospec%x_8 = [0.d0,0.d0]
-        endif
+        self%ospec%x   = [0.,0.]
+        self%ospec%x_8 = [0.d0,0.d0]
         if( self%opt_angle )then
             call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs, kweight=params_glob%l_kweight_rot)
             self%cur_inpl_idx   = maxloc(corrs,dim=1)
