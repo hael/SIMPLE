@@ -958,12 +958,13 @@ contains
         call xrefine3D%execute_shmem(cline_refine3D_prob1)
         iter       = nint(cline_refine3D_prob1%get_rarg('endit'))
         vol_iter   = trim(VOL_FBODY)//trim(str_state)//ext
-        lp_est     = max(LP_SYMSRCH_LB,work_proj%os_ptcl3D%get_avg('lp'))
-        find_start = calc_fourier_index(lp_est, params%box, params%smpd) - 2
-        lplims(1)  = calc_lowpass_lim(find_start, params%box, params%smpd)
+        lp_est     = work_proj%os_ptcl3D%get_avg('lp')
+        find_start = calc_fourier_index(lp_est, params%box_crop, params%smpd_crop) - 2
+        lplims(1)  = calc_lowpass_lim(find_start, params%box_crop, params%smpd_crop)
         lplims(2)  = calc_lplim_stage2(3) ! low-pass limit is median of three best (as in 2D)
         call cline_refine3D_prob2%set('lpstart', lplims(1))
         call cline_refine3D_prob2%set('lpstop',  lplims(2))
+        write(logfhandle,'(A,F5.1)') '>>> ESTIMATED         LOW-PASS LIMIT (IN A) TO: ', lp_est
         write(logfhandle,'(A,F5.1)') '>>> DID SET STARTING  LOW-PASS LIMIT (IN A) TO: ', lplims(1)
         write(logfhandle,'(A,F5.1)') '>>> DID SET HARD      LOW-PASS LIMIT (IN A) TO: ', lplims(2)
         if( .not. file_exists(vol_iter) ) THROW_HARD('input volume to symmetry axis search does not exist')
