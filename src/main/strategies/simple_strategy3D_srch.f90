@@ -200,7 +200,7 @@ contains
         prev_roind = pftcc_glob%get_roind(360.-o_prev%e3get())     ! in-plane angle index
         irot       = prev_roind
         call grad_sh_first_objs(ithr)%set_indices(prev_ref, iptcl)
-        cxy = grad_sh_first_objs(ithr)%minimize(irot=irot, sh_rot=.false.)  ! sh_rot=.false. because we are re-searching in-plane rotations
+        cxy = grad_sh_first_objs(ithr)%minimize(irot=irot, sh_rot=.false.)  ! sh_rot=.false. because we are re-searching in-plane rotations in the pftcc
         xy  = cxy(2:3)
         call o_prev%kill
     end subroutine sh_srch_first
