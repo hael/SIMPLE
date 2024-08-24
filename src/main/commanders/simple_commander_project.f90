@@ -18,6 +18,7 @@ public :: print_project_info_commander
 public :: print_project_vals_commander
 public :: print_project_field_commander
 public :: update_project_commander
+public :: zero_project_shifts_commander
 public :: import_movies_commander
 public :: import_boxes_commander
 public :: import_particles_commander
@@ -56,6 +57,11 @@ type, extends(commander_base) :: update_project_commander
   contains
     procedure :: execute      => exec_update_project
 end type update_project_commander
+
+type, extends(commander_base) :: zero_project_shifts_commander
+  contains
+    procedure :: execute      => exec_zero_project_shifts
+end type zero_project_shifts_commander
 
 type, extends(commander_base) :: import_movies_commander
   contains
@@ -274,6 +280,20 @@ contains
         call spproj%write_non_data_segments(trim(params%projfile))
         ! no printing for this program
     end subroutine exec_update_project
+
+    subroutine exec_zero_project_shifts( self, cline )
+        class(zero_project_shifts_commander), intent(inout) :: self
+        class(cmdline),                       intent(inout) :: cline
+        type(parameters) :: params
+        type(sp_project) :: spproj
+        call cline%set('mkdir', 'yes')
+        call params%new(cline, silent=.true.)
+        call spproj%read(params%projfile)
+        call spproj%os_ptcl2D%zero_shifts
+        call spproj%os_ptcl3D%zero_shifts
+        call spproj%write(params%projfile)
+        call spproj%kill
+    end subroutine exec_zero_project_shifts
 
     subroutine exec_import_movies( self, cline )
         class(import_movies_commander), intent(inout) :: self

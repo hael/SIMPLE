@@ -194,6 +194,7 @@ type(simple_program), target :: update_project
 type(simple_program), target :: vizoris
 type(simple_program), target :: volops
 type(simple_program), target :: write_classes
+type(simple_program), target :: zero_project_shifts
 
 ! declare common params here, with name same as flag
 type(simple_input_param) :: algorithm
@@ -486,6 +487,7 @@ contains
         call new_vizoris
         call new_volops
         call new_write_classes
+        call new_zero_project_shifts
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; make_user_interface, DONE'
     end subroutine make_user_interface
 
@@ -608,6 +610,7 @@ contains
         call push2prg_ptr_array(vizoris)
         call push2prg_ptr_array(volops)
         call push2prg_ptr_array(write_classes)
+        call push2prg_ptr_array(zero_project_shifts)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
         contains
 
@@ -863,6 +866,8 @@ contains
                 ptr2prg => volops
             case('write_classes')
                 ptr2prg => write_classes
+            case('zero_project_shifts')
+                ptr2prg => zero_project_shifts
             case DEFAULT
                 ptr2prg => null()
         end select
@@ -961,6 +966,7 @@ contains
         write(logfhandle,'(A)') vizoris%name
         write(logfhandle,'(A)') volops%name
         write(logfhandle,'(A)') write_classes%name
+        write(logfhandle,'(A)') zero_project_shifts%name
     end subroutine list_simple_prgs_in_ui
 
     subroutine list_stream_prgs_in_ui
@@ -5807,6 +5813,31 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_write_classes
+
+    subroutine new_zero_project_shifts
+        ! PROGRAM SPECIFICATION
+        call zero_project_shifts%new(&
+        &'zero_project_shifts', &                                       ! name
+        &'zero_project_shifts',&                                        ! descr_short
+        &'is a program that zeroes the shifts in the ptcl2D/ptcl3D fields in the project',& ! descr_long
+        &'simple_exec',&                                                ! executable
+        &0, 0, 0, 0, 0, 0, 0, .true.)                                   ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_zero_project_shifts
 
     ! instance methods
 
