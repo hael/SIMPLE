@@ -226,7 +226,7 @@ contains
                             ! BFGS over shifts
                             call grad_shsrch_obj(ithr)%set_indices(iref + iproj, iptcl)
                             irot = self%loc_tab(iproj,i,istate)%inpl
-                            cxy  = grad_shsrch_obj(ithr)%minimize(irot=irot)
+                            cxy  = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true., xy_in=cxy(2:3))
                             if( irot > 0 )then
                                 self%loc_tab(iproj,i,istate)%inpl = irot
                                 self%loc_tab(iproj,i,istate)%dist = eulprob_dist_switch(cxy(1))
