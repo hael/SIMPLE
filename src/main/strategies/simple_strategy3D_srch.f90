@@ -9,7 +9,7 @@ use simple_eul_prob_tab,       only: eul_prob_tab
 use simple_strategy3D_alloc    ! singleton s3D
 implicit none
 
-public :: strategy3D_srch, strategy3D_spec, init_sh_srch_first, sh_srch_first
+public :: strategy3D_srch, strategy3D_spec
 private
 #include "simple_local_flags.inc"
 
@@ -64,8 +64,6 @@ type strategy3D_srch
     procedure :: store_solution
     procedure :: kill
 end type strategy3D_srch
-
-type(pftcc_shsrch_grad), allocatable :: grad_sh_first_objs(:)
 
 contains
 
@@ -160,50 +158,6 @@ contains
         self%prev_corr = corr
         call o_prev%kill
     end subroutine prep4srch
-
-    subroutine init_sh_srch_first
-        integer :: ithr
-        real    :: lims(2,2), lims_init(2,2), cxy(3)
-        lims(:,1)      = -params_glob%trs
-        lims(:,2)      =  params_glob%trs
-        lims_init(:,1) = -SHC_INPL_TRSHWDTH
-        lims_init(:,2) =  SHC_INPL_TRSHWDTH
-        if( allocated(grad_sh_first_objs) )then
-            do ithr = 1, nthr_glob
-                call grad_sh_first_objs(ithr)%kill
-            end do
-            deallocate(grad_sh_first_objs)
-        endif
-        allocate(grad_sh_first_objs(nthr_glob))
-        do ithr = 1, nthr_glob
-            call grad_sh_first_objs(ithr)%new(lims, lims_init=lims_init,&
-            &shbarrier=params_glob%shbarrier, maxits=params_glob%maxits_sh,&
-            &opt_angle=(trim(params_glob%sh_opt_angle).eq.'yes'), coarse_init=.true.)
-        end do
-    end subroutine init_sh_srch_first
-
-    ! assumes that particle has been shifted according to previous shift (in project)
-    ! irot == 0 indicates better solution NOT found
-    ! irot >  0 indicates better shifts where found and particle needs to be re-shifted to [0.,0.] and re-masked
-    subroutine sh_srch_first( ithr, iptcl, irot, xy )
-        integer, intent(in)  :: ithr, iptcl
-        integer, intent(out) :: irot
-        real,    intent(out) :: xy(2)
-        type(pftcc_shsrch_grad) :: grad_shsrch_obj
-        type(ori) :: o_prev
-        integer   :: prev_state, prev_proj, prev_ref, prev_roind
-        real      :: cxy(3)
-        call build_glob%spproj_field%get_ori(iptcl, o_prev)        ! previous ori
-        prev_state = o_prev%get_state()                            ! state index
-        prev_proj  = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
-        prev_ref   = (prev_state-1)*params_glob%nspace + prev_proj ! previous reference
-        prev_roind = pftcc_glob%get_roind(360.-o_prev%e3get())     ! in-plane angle index
-        irot       = prev_roind
-        call grad_sh_first_objs(ithr)%set_indices(prev_ref, iptcl)
-        cxy = grad_sh_first_objs(ithr)%minimize(irot=irot, sh_rot=.false.)  ! sh_rot=.false. because we are re-searching in-plane rotations in the pftcc
-        xy  = cxy(2:3)
-        call o_prev%kill
-    end subroutine sh_srch_first
 
     subroutine inpl_srch( self, ref, irot_in )
         class(strategy3D_srch), intent(inout) :: self
