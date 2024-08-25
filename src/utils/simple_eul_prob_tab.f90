@@ -174,11 +174,10 @@ contains
         integer,                 allocatable   :: locn(:)
         type(pftcc_shsrch_grad) :: grad_shsrch_obj(nthr_glob) !< origin shift search object, L-BFGS with gradient
         type(ori)               :: o_prev
-        integer :: i, j, iproj, iptcl, projs_ns, ithr, irot, irot_first, inds_sorted(pftcc%nrots,nthr_glob), istate, iref
+        integer :: i, j, iproj, iptcl, projs_ns, ithr, irot, inds_sorted(pftcc%nrots,nthr_glob), istate, iref
         logical :: l_doshift
         real    :: dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob), rotmat(2,2)
-        real    :: dists_projs(params_glob%nspace,nthr_glob), lims(2,2), lims_init(2,2), cxy_first(3), cxy(3)
-        real    :: rot_xy(2), inpl_athres
+        real    :: dists_projs(params_glob%nspace,nthr_glob), lims(2,2), lims_init(2,2), cxy(3), rot_xy(2), inpl_athres
         call seed_rnd
         if( trim(params_glob%sh_first).eq.'yes' )then
             ! make shift search objects
@@ -197,10 +196,11 @@ contains
                 call calc_num2sample(params_glob%nspace, 'dist', projs_ns, state=istate)
                 if( allocated(locn) ) deallocate(locn)
                 allocate(locn(projs_ns), source=0)
-                !$omp parallel do default(shared) private(i,j,iptcl,ithr,o_prev,iproj,irot,irot_first,cxy,cxy_first,rot_xy,rotmat,locn) proc_bind(close) schedule(static)
+                !$omp parallel do default(shared) private(i,j,iptcl,ithr,o_prev,iproj,irot,cxy,rot_xy,rotmat,locn) proc_bind(close) schedule(static)
                 do i = 1, self%nptcls
                     iptcl = self%pinds(i)
                     ithr  = omp_get_thread_num() + 1
+                    ! (1) identify shifts using the previously assigned best reference
                     if( trim(params_glob%sh_glob) .eq. 'yes' )then  ! retrieve ptcl shift from assign_map
                         cxy(2:3) = [self%assgn_map(i)%x, self%assgn_map(i)%y]
                     else                                            ! using previous ori for shift search
@@ -211,55 +211,41 @@ contains
                         call grad_shsrch_obj(ithr)%set_indices(iref + iproj, iptcl)
                         cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
                         if( irot == 0 ) cxy(2:3) = 0.
-                        cxy_first = cxy
                     endif
+                    ! (2) search projection directions using those shifts for all references
+                    do iproj = 1, params_glob%nspace
+                        call pftcc%gencorrs(iref + iproj, iptcl, cxy(2:3), dists_inpl(:,ithr))
+                        dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
+                        irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres)
+                        ! rotate the shift vector to the frame of reference
+                        call rotmat2d(pftcc%get_rot(irot), rotmat)
+                        rot_xy = matmul(cxy(2:3), rotmat)
+                        self%loc_tab(iproj,i,istate)%dist   = dists_inpl(irot,ithr)
+                        dists_projs(iproj,ithr)             = dists_inpl(irot,ithr)
+                        self%loc_tab(iproj,i,istate)%inpl   = irot
+                        self%loc_tab(iproj,i,istate)%x      = rot_xy(1)
+                        self%loc_tab(iproj,i,istate)%y      = rot_xy(2)
+                        self%loc_tab(iproj,i,istate)%has_sh = .true.
+                    enddo
+                    ! (3) see if we can refine the shifts by re-searching them for individual references in the 
+                    !     identified probabilsitic neighborhood
                     if( params_glob%l_prob_sh )then
-                        do iproj = 1, params_glob%nspace
-                            call pftcc%gencorrs(iref + iproj, iptcl, cxy(2:3), dists_inpl(:,ithr))
-                            dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
-                            irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres)
-                            self%loc_tab(iproj,i,istate)%dist = dists_inpl(irot,ithr)
-                            self%loc_tab(iproj,i,istate)%inpl = irot
-                            dists_projs(iproj,ithr) = dists_inpl(irot,ithr)
-                        enddo
                         locn = minnloc(dists_projs(:,ithr), projs_ns)
                         do j = 1,projs_ns
                             iproj = locn(j)
                             ! BFGS over shifts
                             call grad_shsrch_obj(ithr)%set_indices(iref + iproj, iptcl)
-                            irot       = self%loc_tab(iproj,i,istate)%inpl
-                            irot_first = irot
-                            cxy        = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true., xy_in=cxy(2:3))
+                            irot = self%loc_tab(iproj,i,istate)%inpl
+                            cxy  = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true., xy_in=cxy(2:3))
                             if( irot > 0 )then
-                                self%loc_tab(iproj,i,istate)%inpl = irot
-                                self%loc_tab(iproj,i,istate)%dist = eulprob_dist_switch(cxy(1))
-                                self%loc_tab(iproj,i,istate)%x    = cxy(2)
-                                self%loc_tab(iproj,i,istate)%y    = cxy(3)
-                            else
-                                ! rotate the shift vector to the frame of reference
-                                call rotmat2d(pftcc%get_rot(irot_first), rotmat)
-                                rot_xy = matmul(cxy_first(2:3), rotmat)
-                                self%loc_tab(iproj,i,istate)%inpl = irot_first
-                                self%loc_tab(iproj,i,istate)%dist = eulprob_dist_switch(cxy_first(1))
-                                self%loc_tab(iproj,i,istate)%x    = rot_xy(1)
-                                self%loc_tab(iproj,i,istate)%y    = rot_xy(2)
+                                self%loc_tab(iproj,i,istate)%inpl   = irot
+                                self%loc_tab(iproj,i,istate)%dist   = eulprob_dist_switch(cxy(1))
+                                self%loc_tab(iproj,i,istate)%x      = cxy(2)
+                                self%loc_tab(iproj,i,istate)%y      = cxy(3)
+                                self%loc_tab(iproj,i,istate)%has_sh = .true.
+                                print *, 'prob_sh found better shift'
                             endif
-                            self%loc_tab(iproj,i,istate)%has_sh = .true.
                         end do
-                    else
-                        do iproj = 1, params_glob%nspace
-                            call pftcc%gencorrs(iref + iproj, iptcl, cxy(2:3), dists_inpl(:,ithr))
-                            dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
-                            irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres)
-                            ! rotate the shift vector to the frame of reference
-                            call rotmat2d(pftcc%get_rot(irot), rotmat)
-                            rot_xy = matmul(cxy(2:3), rotmat)
-                            self%loc_tab(iproj,i,istate)%dist   = dists_inpl(irot,ithr)
-                            self%loc_tab(iproj,i,istate)%inpl   = irot
-                            self%loc_tab(iproj,i,istate)%x      = rot_xy(1)
-                            self%loc_tab(iproj,i,istate)%y      = rot_xy(2)
-                            self%loc_tab(iproj,i,istate)%has_sh = .true.
-                        enddo
                     endif
                 enddo
                 !$omp end parallel do
