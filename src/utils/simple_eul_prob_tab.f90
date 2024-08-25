@@ -174,10 +174,11 @@ contains
         integer,                 allocatable   :: locn(:)
         type(pftcc_shsrch_grad) :: grad_shsrch_obj(nthr_glob) !< origin shift search object, L-BFGS with gradient
         type(ori)               :: o_prev
-        integer :: i, j, iproj, iptcl, projs_ns, ithr, irot, inds_sorted(pftcc%nrots,nthr_glob), istate, iref
+        integer :: i, j, iproj, iptcl, projs_ns, ithr, irot, irot_first, inds_sorted(pftcc%nrots,nthr_glob), istate, iref
         logical :: l_doshift
         real    :: dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob), rotmat(2,2)
-        real    :: dists_projs(params_glob%nspace,nthr_glob), lims(2,2), lims_init(2,2), cxy(3), rot_xy(2), inpl_athres
+        real    :: dists_projs(params_glob%nspace,nthr_glob), lims(2,2), lims_init(2,2), cxy_first(3), cxy(3)
+        real    :: rot_xy(2), inpl_athres
         call seed_rnd
         if( trim(params_glob%sh_first).eq.'yes' )then
             ! make shift search objects
@@ -196,7 +197,7 @@ contains
                 call calc_num2sample(params_glob%nspace, 'dist', projs_ns, state=istate)
                 if( allocated(locn) ) deallocate(locn)
                 allocate(locn(projs_ns), source=0)
-                !$omp parallel do default(shared) private(i,j,iptcl,ithr,o_prev,iproj,irot,cxy,rot_xy,rotmat,locn) proc_bind(close) schedule(static)
+                !$omp parallel do default(shared) private(i,j,iptcl,ithr,o_prev,iproj,irot,irot_first,cxy,cxy_first,rot_xy,rotmat,locn) proc_bind(close) schedule(static)
                 do i = 1, self%nptcls
                     iptcl = self%pinds(i)
                     ithr  = omp_get_thread_num() + 1
@@ -210,6 +211,7 @@ contains
                         call grad_shsrch_obj(ithr)%set_indices(iref + iproj, iptcl)
                         cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
                         if( irot == 0 ) cxy(2:3) = 0.
+                        cxy_first = cxy
                     endif
                     if( params_glob%l_prob_sh )then
                         do iproj = 1, params_glob%nspace
@@ -225,13 +227,22 @@ contains
                             iproj = locn(j)
                             ! BFGS over shifts
                             call grad_shsrch_obj(ithr)%set_indices(iref + iproj, iptcl)
-                            irot = self%loc_tab(iproj,i,istate)%inpl
-                            cxy  = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true., xy_in=cxy(2:3))
+                            irot       = self%loc_tab(iproj,i,istate)%inpl
+                            irot_first = irot
+                            cxy        = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true., xy_in=cxy(2:3))
                             if( irot > 0 )then
                                 self%loc_tab(iproj,i,istate)%inpl = irot
                                 self%loc_tab(iproj,i,istate)%dist = eulprob_dist_switch(cxy(1))
                                 self%loc_tab(iproj,i,istate)%x    = cxy(2)
                                 self%loc_tab(iproj,i,istate)%y    = cxy(3)
+                            else
+                                ! rotate the shift vector to the frame of reference
+                                call rotmat2d(pftcc%get_rot(irot_first), rotmat)
+                                rot_xy = matmul(cxy_first(2:3), rotmat)
+                                self%loc_tab(iproj,i,istate)%inpl = irot_first
+                                self%loc_tab(iproj,i,istate)%dist = eulprob_dist_switch(cxy_first(1))
+                                self%loc_tab(iproj,i,istate)%x    = rot_xy(1)
+                                self%loc_tab(iproj,i,istate)%y    = rot_xy(2)
                             endif
                             self%loc_tab(iproj,i,istate)%has_sh = .true.
                         end do
