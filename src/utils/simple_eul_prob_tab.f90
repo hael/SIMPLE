@@ -243,7 +243,6 @@ contains
                                 self%loc_tab(iproj,i,istate)%x      = cxy(2)
                                 self%loc_tab(iproj,i,istate)%y      = cxy(3)
                                 self%loc_tab(iproj,i,istate)%has_sh = .true.
-                                print *, 'prob_sh found better shift'
                             endif
                         end do
                     endif
