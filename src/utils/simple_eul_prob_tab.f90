@@ -209,7 +209,7 @@ contains
                         ! BFGS over shifts
                         call grad_shsrch_obj(ithr)%set_indices(iref + iproj, iptcl)
                         cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
-                        if( irot < TINY ) cxy(2:3) = 0.
+                        if( irot == 0 ) cxy(2:3) = 0.
                     endif
                     if( params_glob%l_prob_sh )then
                         do iproj = 1, params_glob%nspace
