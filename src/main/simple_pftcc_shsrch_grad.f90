@@ -11,7 +11,6 @@ public :: pftcc_shsrch_grad
 private
 #include "simple_local_flags.inc"
 
-logical,  parameter :: perform_rndstart = .false.
 real(dp), parameter :: init_range       = 2.0_dp  ! range for random initialization (negative to positive)
 integer,  parameter :: coarse_num_steps = 5       ! no. of coarse search steps in x AND y (hence real no. is its square)
 
@@ -165,19 +164,26 @@ contains
     end subroutine grad_shsrch_set_indices
 
     !> minimisation routine
-    function grad_shsrch_minimize( self, irot, sh_rot ) result( cxy )
+    function grad_shsrch_minimize( self, irot, sh_rot, xy_in ) result( cxy )
         class(pftcc_shsrch_grad), intent(inout) :: self
         integer,                  intent(inout) :: irot
         logical, optional,        intent(in)    :: sh_rot
+        real,    optional,        intent(in)    :: xy_in(2)
         real     :: corrs(self%nrots), rotmat(2,2), cxy(3), lowest_shift(2), lowest_cost
         real(dp) :: init_xy(2), lowest_cost_overall, coarse_cost, initial_cost
         integer  :: loc, i, lowest_rot, init_rot
-        logical  :: found_better, l_sh_rot
+        logical  :: found_better, l_sh_rot, coarse_init_orig
         l_sh_rot = .true.
-        if( present(sh_rot) ) l_sh_rot = sh_rot
-        found_better = .false.
-        self%ospec%x   = [0.,0.]
-        self%ospec%x_8 = [0.d0,0.d0]
+        if( present(sh_rot)  ) l_sh_rot = sh_rot
+        if( present(xy_in)   )then
+            coarse_init_orig = self%coarse_init
+            self%coarse_init = .false.
+            self%ospec%x     = xy_in
+        else
+            self%ospec%x     = [0.,0.]
+        endif
+        self%ospec%x_8 = dble(self%ospec%x)
+        found_better   = .false.
         if( self%opt_angle )then
             call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs, kweight=params_glob%l_kweight_rot)
             self%cur_inpl_idx   = maxloc(corrs,dim=1)
@@ -223,12 +229,6 @@ contains
             self%cur_inpl_idx   = irot
             lowest_cost_overall = -pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, self%ospec%x_8, self%cur_inpl_idx)
             initial_cost        = lowest_cost_overall
-            if( perform_rndstart )then
-                init_xy(1)     = 2.*(ran3()-0.5) * init_range
-                init_xy(2)     = 2.*(ran3()-0.5) * init_range
-                self%ospec%x_8 = init_xy
-                self%ospec%x   = real(init_xy)
-            endif
             if( self%coarse_init )then
                 call self%coarse_search(coarse_cost, init_xy)
                 if( coarse_cost < lowest_cost_overall )then
@@ -256,6 +256,7 @@ contains
                 irot = 0 ! to communicate that a better solution was not found
             endif
         end if
+        if( present(xy_in) ) self%coarse_init = coarse_init_orig
     end function grad_shsrch_minimize
 
     subroutine coarse_search(self, lowest_cost, init_xy)
