@@ -179,7 +179,7 @@ contains
         real    :: dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob), rotmat(2,2)
         real    :: dists_projs(params_glob%nspace,nthr_glob), lims(2,2), lims_init(2,2), cxy(3), rot_xy(2), inpl_athres
         call seed_rnd
-        if( trim(params_glob%sh_first).eq.'yes' )then
+        if( params_glob%l_sh_first .and. params_glob%l_doshift )then
             ! make shift search objects
             lims(:,1)      = -params_glob%trs
             lims(:,2)      =  params_glob%trs

@@ -464,6 +464,7 @@ type :: parameters
     logical :: l_neigh        = .false.
     logical :: l_phaseplate   = .false.
     logical :: l_prob_sh      = .false.
+    logical :: l_sh_first     = .false.
     logical :: l_sigma_glob   = .false.
     logical :: l_remap_cls    = .false.
     logical :: l_use_denoised = .false.
@@ -1544,7 +1545,6 @@ contains
             endif
         endif
         ! reg options
-        self%l_prob_sh      = trim(self%prob_sh     ).eq.'yes'
         self%l_use_denoised = trim(self%use_denoised).eq.'yes'
         ! ML regularization
         self%l_ml_reg = trim(self%ml_reg).eq.'yes'
@@ -1589,12 +1589,14 @@ contains
                     self%trs = MINSHIFT
             end select
         endif
-        self%trs       = abs(self%trs)
+        self%trs = abs(self%trs)
         self%l_doshift = .true.
         if( self%trs < 0.1 )then
             self%trs       = 0.
             self%l_doshift = .false.
         endif
+        self%l_prob_sh  = trim(self%prob_sh).eq.'yes'
+        self%l_sh_first = trim(self%sh_first).eq.'yes'
         ! motion correction
         if( self%mcpatch.eq.'yes' .and. self%nxpatch*self%nypatch<=1 ) self%mcpatch = 'no'
         if( self%mcpatch.eq.'no' )then
