@@ -1201,7 +1201,12 @@ contains
         real        :: smpd, cc
         logical     :: outside
         smpd = vol%get_smpd()
-        if(present(filename)) open(unit=45,file=trim(filename))
+        if(present(filename))then
+            open(unit=45,file=trim("atomic_centers.xyz"))
+            open(unit=46,file=trim(filename//".csv"))
+            write(45,*) self%n
+            write(45,*) " "
+        endif
         do i_atom = 1, self%n
             atom_box = (2 * ceiling((self%radius(i_atom))/smpd)) + 1
             ! generate simulted atom volume
@@ -1217,12 +1222,19 @@ contains
             ! compute cross-correlation between both volumes
             cc = vol_atom%real_corr(vol_at)
             call self%set_atom_corr(i_atom, cc)
-            if(present(filename)) write(45,'(1x,4(f10.6,a))') self%xyz(i_atom,1), ',', self%xyz(i_atom,2), ',', self%xyz(i_atom,3), ',', self%atom_corr(i_atom)
+            call self%set_beta(i_atom, cc)
+            if(present(filename))then
+                write(46,'(a,1x,4(a,f10.6))') self%name(i_atom),",",self%xyz(i_atom,1),",",self%xyz(i_atom,2),",",self%xyz(i_atom,3),",",self%atom_corr(i_atom)
+                write(45,'(a1,1x,f10.6,1x,f10.6,1x,f10.6)') trim(adjustl(self%name(i_atom))), self%xyz(i_atom,1), self%xyz(i_atom,2), self%xyz(i_atom,3)
+            endif
             call vol_atom%kill
             call vol_at%kill
             call atom%kill
         enddo
-        if(present(filename)) close(45)
+        if(present(filename))then
+            close(45)
+            call self%writepdb(filename)
+        endif
     end subroutine atom_validation
 
     ! MODIFIERS
