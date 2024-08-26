@@ -2521,7 +2521,7 @@ contains
         integer, parameter :: NSTAGES_DEFAULT = 22
         integer, parameter :: MAXITS_SHORT = 5
         integer, parameter :: NSPACE1 = 500, NSPACE2 = 1000, NSPACE3 = 2000
-        integer, parameter :: SYMSEARCH_DEFAULT = 3
+        integer, parameter :: SYMSEARCH_DEFAULT = 5
         integer, parameter :: MLREG_ITER        = 1
         integer, parameter :: SHIFT_STAGE_DEFAULT = NSTAGES_DEFAULT-5 ! in [1;NSTAGES+1]
         ! commanders
@@ -2903,19 +2903,32 @@ contains
                 call vol_odd%kill
                 call tmpvol%kill
             endif
+            ! symmetrization
+            if( it == SYMSEARCH_ITER-1 )then
+                call consolidate_alnparms
+                call cline_symsrch%set('vol1', trim(VOL_FBODY)//trim(str_state)//'_stage'//int2str_pad(it,2)//'.mrc')
+                call symmetrize
+                call cline_refine3D%set('pgrp', params%pgrp)
+                call cline_reconstruct3D%set('pgrp', params%pgrp)
+                l_srch4symaxis = .false.
+                l_symran       = .false.
+                ! transfer symmetrized parameters
+                call spproj%read_segment('ptcl3D',params%projfile)
+                do part = 1,params%nparts
+                    call spproj_part%read_segment('ptcl3D', int2str(part)//'/'//basename(params%projfile))
+                    j = 0
+                    do i = 1,params%nptcls
+                        if( states(i) /= part ) cycle
+                        j = j+1
+                        call spproj_part%os_ptcl3D%transfer_3Dparams(j, spproj%os_ptcl3D, i)
+                    enddo
+                    call spproj_part%write_segment_inside('ptcl3D',int2str(part)//'/'//basename(params%projfile))
+                enddo
+                call spproj_part%kill
+            endif
         enddo
-        ! gathering alignemnt parameters
-        do part = 1,params%nparts
-            call spproj_part%read_segment('ptcl3D', int2str(part)//'/'//basename(params%projfile))
-            j = 0
-            do i = 1,params%nptcls
-                if( states(i) /= part ) cycle
-                j = j+1
-                call spproj%os_ptcl3D%transfer_3Dparams(i, spproj_part%os_ptcl3D, j)
-            enddo
-        enddo
-        call spproj_part%kill
-        call spproj%write_segment_inside('ptcl3D',params%projfile)
+        ! gathering alignment parameters
+        call consolidate_alnparms
         ! final reconstruction
         write(logfhandle,'(A)') '>>>'
         write(logfhandle,'(A)') '>>> RECONSTRUCTION AT ORIGINAL SAMPLING'
@@ -2944,7 +2957,7 @@ contains
         ! cleanup
         call spproj%kill
         call qsys_cleanup
-        call simple_end('**** SIMPLE_ABINITIO_3DMODEL NORMAL STOP ****')
+        call simple_end('**** SIMPLE_ABINITIO_3DMODEL2 NORMAL STOP ****')
         contains
 
             subroutine exec_refine3D( part )
@@ -2960,6 +2973,70 @@ contains
                 call chdir('../')
                 call simple_getcwd(cwd_glob)
             end subroutine exec_refine3D
+
+            subroutine symmetrize()
+                use simple_projector_hlev, only: rotvol_slim
+                use simple_projector,      only: projector
+                type(projector) :: vol_pad
+                type(image)     :: rovol_pad, rovol
+                type(ori)       :: o
+                real    :: symaxis_rmat(3,3), symop_rmat(3,3), rmat(3,3)
+                integer :: ldim_pd(3), boxpd,isym, nsym
+                if( l_symran )then
+                    call spproj%read_segment(params%oritype, params%projfile)
+                    call se1%symrandomize(spproj%os_ptcl3D)
+                    call spproj%write_segment_inside(params%oritype, params%projfile)
+                endif
+                if( l_srch4symaxis )then
+                    write(logfhandle,'(A)') '>>>'
+                    write(logfhandle,'(A)') '>>> SYMMETRY AXIS SEARCH'
+                    write(logfhandle,'(A)') '>>>'
+                    symlp = max(symlp, params%lp)
+                    call cline_symsrch%set('lp',       symlp)
+                    call cline_symsrch%set('box_crop', params%box_crop)
+                    call xsymsrch%execute_shmem(cline_symsrch)
+                    call del_file('SYMAXIS_SEARCH_FINISHED')
+                    ! symmetrize volume
+                    call vol%new([params%box_crop, params%box_crop,params%box_crop],params%smpd_crop)
+                    call rovol%new([params%box_crop, params%box_crop,params%box_crop],params%smpd_crop)
+                    boxpd   = 2 * round2even(KBALPHA * real(params%box_crop))
+                    ldim_pd = [boxpd,boxpd,boxpd]
+                    call rovol_pad%new(ldim_pd, params%smpd_crop)
+                    call vol_pad%new(ldim_pd, params%smpd_crop)
+                    call vol%read('vol_aligned2_'//trim(params%pgrp)//'axis'//params%ext)
+                    call vol%pad(vol_pad)
+                    call vol_pad%fft
+                    call vol_pad%expand_cmat(KBALPHA)
+                    nsym = se2%get_nsym()
+                    do isym =2,nsym
+                        call se2%get_symori(isym, o)
+                        call rotvol_slim(vol_pad, rovol_pad, rovol, o)
+                        call vol%add_workshare(rovol)
+                    end do
+                    call vol%div(real(nsym))
+                    call vol%write(trim(VOL_FBODY)//trim(str_state)//'_stage'//int2str_pad(it,2)//'.mrc')
+                    call o%kill
+                    call rovol%kill
+                    call rovol_pad%kill
+                    call vol%kill
+                    call vol_pad%kill
+                endif
+            end subroutine symmetrize
+
+            subroutine consolidate_alnparms
+                integer :: i,j,part
+                do part = 1,params%nparts
+                    call spproj_part%read_segment('ptcl3D', int2str(part)//'/'//basename(params%projfile))
+                    j = 0
+                    do i = 1,params%nptcls
+                        if( states(i) /= part ) cycle
+                        j = j+1
+                        call spproj%os_ptcl3D%transfer_3Dparams(i, spproj_part%os_ptcl3D, j)
+                    enddo
+                enddo
+                call spproj_part%kill
+                call spproj%write_segment_inside('ptcl3D',params%projfile)
+            end subroutine consolidate_alnparms
 
     end subroutine exec_abinitio_3Dmodel2
 
