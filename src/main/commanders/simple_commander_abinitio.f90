@@ -698,7 +698,6 @@ contains
         real,                  parameter :: CENLP_DEFAULT    = 30.
         real,                  parameter :: STARTLP_DEFAULT  = 20.
         real,                  parameter :: LP_SYMSRCH_LB    = 12.
-        ! integer,               parameter :: MAXITS_PROB1     = 30
         integer,               parameter :: MAXITS_PROB1     = 50
         integer,               parameter :: MAXITS_PROB2     = 30
         integer,               parameter :: NSPACE_PROB1     = 500
@@ -747,7 +746,6 @@ contains
         if( .not. cline%defined('overlap')     ) call cline%set('overlap',     0.99) ! needed to prevent premature convergence
         if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',      'no') ! simple low-pass filter works better on class averages
         if( .not. cline%defined('prob_athres') ) call cline%set('prob_athres',  90.) ! reduces # failed runs on trpv1 from 4->2/10
-        if( .not. cline%defined('prob_sh')     ) call cline%set('prob_sh',    'yes') ! produces maps of superior quality
         if( .not. cline%defined('cenlp')       ) call cline%set('cenlp', CENLP_DEFAULT)
         ! make master parameters
         call params%new(cline)
@@ -906,12 +904,14 @@ contains
         call cline_refine3D_prob1%set('lpstop',     lplims(2))
         call cline_refine3D_prob1%set('nspace',     real(NSPACE_PROB1))
         call cline_refine3D_prob1%set('maxits',     real(MAXITS_PROB1))
-        call cline_refine3D_prob1%set('silence_fsc','yes') ! no FSC plot printing in prob phase
-        call cline_refine3D_prob1%set('refine',    'shc_smpl') !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 4 TST
+        call cline_refine3D_prob1%set('silence_fsc','yes')     ! no FSC plot printing in prob phase
+        call cline_refine3D_prob1%set('refine',    'shc_smpl') ! best refine mode identified for class averages
+        call cline_refine3D_prob1%set('sh_first',   'yes')
         if( trslim1_present )then
             call cline_refine3D_prob1%set('trs',    params%trs)
         else
-            call cline_refine3D_prob1%set('trs',    0.) ! no shift search in stage 1 by default
+            ! call cline_refine3D_prob1%set('trs',    0.) ! no shift search in stage 1 
+            call cline_refine3D_prob1%set('trs',    trslim) ! trslim set in call downscale(smpd_target, scale_factor1) above
         endif       
         ! (2) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
@@ -935,12 +935,14 @@ contains
         call cline_refine3D_prob2%set('pgrp',   trim(pgrp_refine))
         call cline_refine3D_prob2%set('nspace', real(NSPACE_PROB2))
         call cline_refine3D_prob2%set('maxits', real(MAXITS_PROB2))
-        call cline_reconstruct3D%set('needs_sigma',  'yes')
         call cline_refine3D_prob2%set('lp_auto',     'yes') ! lpstart/lpstop set below
+        call cline_refine3D_prob2%set('sh_first',    'yes')
+        call cline_refine3D_prob2%set('prob_sh',     'yes')
         ! (4) RE-CONSTRUCT & RE-PROJECT VOLUME
         call cline_reconstruct3D%set('prg',     'reconstruct3D')
         call cline_reconstruct3D%set('box',      real(params%box))
         call cline_reconstruct3D%set('projfile', work_projfile)
+        call cline_reconstruct3D%set('needs_sigma',  'yes')
         call cline_postprocess%set('prg',       'postprocess')
         call cline_postprocess%set('projfile',   work_projfile)
         call cline_postprocess%set('mkdir',      'no')
@@ -968,7 +970,6 @@ contains
         write(logfhandle,'(A,F5.1)') '>>> ESTIMATED         LOW-PASS LIMIT (IN A) TO: ', lp_est
         write(logfhandle,'(A,F5.1)') '>>> DID SET STARTING  LOW-PASS LIMIT (IN A) TO: ', lplims(1)
         write(logfhandle,'(A,F5.1)') '>>> DID SET HARD      LOW-PASS LIMIT (IN A) TO: ', lplims(2)
-        
         if( .not. file_exists(vol_iter) ) THROW_HARD('input volume to symmetry axis search does not exist')
         if( symran_before_refine )then
             call se1%symrandomize(work_proj%os_ptcl3D)
