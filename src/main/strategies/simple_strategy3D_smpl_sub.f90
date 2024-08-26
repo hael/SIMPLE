@@ -29,14 +29,14 @@ contains
 
     subroutine new_smpl_sub( self, spec )
         class(strategy3D_smpl_sub), intent(inout) :: self
-        class(strategy3D_spec), intent(inout) :: spec
+        class(strategy3D_spec),     intent(inout) :: spec
         call self%s%new(spec)
         self%spec = spec
     end subroutine new_smpl_sub
 
     subroutine srch_smpl_sub( self, ithr )
         class(strategy3D_smpl_sub), intent(inout) :: self
-        integer,                intent(in)    :: ithr
+        integer,                    intent(in)    :: ithr
         integer   :: iref, isample, loc(1), iproj, irot, ipeak
         integer   :: inds(self%s%nrots)
         logical   :: lnns(params_glob%nspace)
@@ -48,12 +48,18 @@ contains
             self%s%ithr = ithr
             ! prep
             call self%s%prep4srch
+            ! shift search on previous best reference
+            call self%s%inpl_srch_first
             ! search
             do isample=1,self%s%nrefs_sub
                 iref = s3D%srch_order_sub(isample,self%s%ithr) ! set the reference index
                 if( s3D%state_exists(s3D%proj_space_state(iref)) )then
                     ! identify the top scoring in-plane angle
-                    call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                    if( params_glob%l_sh_first )then
+                        call pftcc_glob%gencorrs(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
+                    else
+                        call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                    endif
                     loc = maxloc(inpl_corrs)
                     call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
                 endif
@@ -73,7 +79,12 @@ contains
                 iproj = iref - (self%s%prev_state - 1) * params_glob%nspace
                 if( .not. lnns(iproj) ) cycle
                 if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
-                    call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                    ! identify the top scoring in-plane angle
+                    if( params_glob%l_sh_first )then
+                        call pftcc_glob%gencorrs(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
+                    else
+                        call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                    endif
                     irot = angle_sampling(eulprob_dist_switch(inpl_corrs), sorted_corrs, inds, s3D%smpl_inpl_athres(s3D%proj_space_state(iref)))
                     call self%s%store_solution(iref, irot, inpl_corrs(irot))
                 endif

@@ -18,17 +18,17 @@ type, extends(strategy3D) :: strategy3D_shc
     type(strategy3D_srch) :: s
     type(strategy3D_spec) :: spec
 contains
-    procedure          :: new         => new_shc
-    procedure          :: srch        => srch_shc
-    procedure          :: oris_assign => oris_assign_shc
-    procedure          :: kill        => kill_shc
+    procedure :: new         => new_shc
+    procedure :: srch        => srch_shc
+    procedure :: oris_assign => oris_assign_shc
+    procedure :: kill        => kill_shc
 end type strategy3D_shc
 
 contains
 
     subroutine new_shc( self, spec )
-        class(strategy3D_shc), intent(inout) :: self
-        class(strategy3D_spec),  intent(inout) :: spec
+        class(strategy3D_shc),  intent(inout) :: self
+        class(strategy3D_spec), intent(inout) :: spec
         call self%s%new(spec)
         self%spec = spec
     end subroutine new_shc
@@ -38,20 +38,26 @@ contains
         integer,               intent(in)    :: ithr
         integer :: iref, isample, loc(1)
         real    :: inpl_corrs(self%s%nrots)
-        ! execute search
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
             ! prep
             call self%s%prep4srch
-            ! initialize, ctd
+            ! shift search on previous best reference
+            call self%s%inpl_srch_first
+            ! initialize
             self%s%nbetter    = 0
             self%s%nrefs_eval = 0
+            ! search
             do isample=1,self%s%nrefs
                 iref = s3D%srch_order(isample,self%s%ithr)  ! set the stochastic reference index
                 if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
                     ! identify the top scoring in-plane angle
-                    call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                    if( params_glob%l_sh_first )then
+                        call pftcc_glob%gencorrs(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
+                    else
+                        call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                    endif
                     loc = maxloc(inpl_corrs)
                     call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
                     ! update nbetter to keep track of how many improving solutions we have identified
@@ -62,7 +68,8 @@ contains
                 ! exit condition
                 if( self%s%nbetter > 0 ) exit
             end do
-            call self%s%inpl_srch ! search shifts
+            ! take care of the in-planes
+            call self%s%inpl_srch
             ! prepare weights and orientations
             call self%oris_assign
         else
