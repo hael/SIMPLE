@@ -177,7 +177,8 @@ contains
         integer :: i, j, iproj, iptcl, projs_ns, ithr, irot, inds_sorted(pftcc%nrots,nthr_glob), istate, iref
         logical :: l_doshift
         real    :: dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob), rotmat(2,2)
-        real    :: dists_projs(params_glob%nspace,nthr_glob), lims(2,2), lims_init(2,2), cxy(3), rot_xy(2), inpl_athres
+        real    :: dists_projs(params_glob%nspace,nthr_glob), lims(2,2), lims_init(2,2), cxy(3), cxy_prob(3)
+        real    ::  rot_xy(2), inpl_athres
         call seed_rnd
         if( params_glob%l_sh_first .and. params_glob%l_doshift )then
             ! make shift search objects
@@ -196,7 +197,8 @@ contains
                 call calc_num2sample(params_glob%nspace, 'dist', projs_ns, state=istate)
                 if( allocated(locn) ) deallocate(locn)
                 allocate(locn(projs_ns), source=0)
-                !$omp parallel do default(shared) private(i,j,iptcl,ithr,o_prev,iproj,irot,cxy,rot_xy,rotmat,locn) proc_bind(close) schedule(static)
+                !$omp parallel do default(shared) private(i,j,iptcl,ithr,o_prev,iproj,irot,cxy,cxy_prob,rot_xy,rotmat,locn)&
+                !$omp proc_bind(close) schedule(static)
                 do i = 1, self%nptcls
                     iptcl = self%pinds(i)
                     ithr  = omp_get_thread_num() + 1
@@ -235,13 +237,13 @@ contains
                             iproj = locn(j)
                             ! BFGS over shifts
                             call grad_shsrch_obj(ithr)%set_indices(iref + iproj, iptcl)
-                            irot = self%loc_tab(iproj,i,istate)%inpl
-                            cxy  = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true., xy_in=cxy(2:3))
+                            irot     = self%loc_tab(iproj,i,istate)%inpl
+                            cxy_prob = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true., xy_in=cxy(2:3))
                             if( irot > 0 )then
                                 self%loc_tab(iproj,i,istate)%inpl   = irot
-                                self%loc_tab(iproj,i,istate)%dist   = eulprob_dist_switch(cxy(1))
-                                self%loc_tab(iproj,i,istate)%x      = cxy(2)
-                                self%loc_tab(iproj,i,istate)%y      = cxy(3)
+                                self%loc_tab(iproj,i,istate)%dist   = eulprob_dist_switch(cxy_prob(1))
+                                self%loc_tab(iproj,i,istate)%x      = cxy_prob(2)
+                                self%loc_tab(iproj,i,istate)%y      = cxy_prob(3)
                                 self%loc_tab(iproj,i,istate)%has_sh = .true.
                             endif
                         end do
