@@ -103,7 +103,8 @@ type :: oris
     generic            :: delete_entry => delete_entry_1, delete_entry_2
     procedure          :: delete_entry_1
     procedure          :: delete_entry_2
-    procedure          :: delete_2Dclustering
+    procedure, private :: delete_2Dclustering_1, delete_2Dclustering_2
+    generic            :: delete_2Dclustering => delete_2Dclustering_1, delete_2Dclustering_2
     procedure          :: delete_3Dalignment
     procedure          :: delete
     procedure          :: transfer_2Dshifts
@@ -1671,14 +1672,25 @@ contains
         call self%o(ind)%delete_entry(key)
     end subroutine delete_entry_2
 
-    subroutine delete_2Dclustering( self, keepshifts, keepcls )
+    subroutine delete_2Dclustering_1( self, keepshifts, keepcls )
         class(oris),       intent(inout) :: self
         logical, optional, intent(in)    :: keepshifts, keepcls
         integer :: i
         do i=1,self%n
             call self%o(i)%delete_2Dclustering(keepshifts, keepcls)
         end do
-    end subroutine delete_2Dclustering
+    end subroutine delete_2Dclustering_1
+
+    subroutine delete_2Dclustering_2( self, i, keepshifts, keepcls )
+        class(oris),       intent(inout) :: self
+        integer,           intent(in)    :: i
+        logical, optional, intent(in)    :: keepshifts, keepcls
+        if( i < 0 .or. i > self%n )then
+            THROW_WARN('index out of range; simple_oris % delete_2Dclustering_2')
+            return
+        endif
+        call self%o(i)%delete_2Dclustering(keepshifts, keepcls)
+    end subroutine delete_2Dclustering_2
 
     subroutine delete_3Dalignment( self, keepshifts )
         class(oris),       intent(inout) :: self
