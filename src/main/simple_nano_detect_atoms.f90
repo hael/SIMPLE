@@ -46,11 +46,11 @@ use simple_stat
         procedure :: calc_atom_stats            
         procedure :: calc_per_atom_corr         ! find per-atom valid correlation by comparing selected positions with experimental map
         procedure :: refine_threshold           ! refine correlation threshold by iterating over various thresholds and optimizing correlation with exp. map
-        procedure :: refine_positions           ! refine selected positions to those with highest per-atom valid correlation
         procedure :: discard_atoms              ! discard atoms with low per-atom valid correlation and / or low contact score
         procedure :: whole_map_correlation      ! calculate correlation between simulated map based on selected positions and experimental map
         ! utils
         procedure :: one_box_corr  
+        procedure :: set_pdb
         procedure :: write_pdb
         procedure :: write_boximgs
         procedure :: write_positions_and_scores
@@ -145,7 +145,6 @@ use simple_stat
         call self%write_pdb('before_refinement')
         print *, 'before refinement'
         call self%calc_per_atom_corr
-        call self%write_NP_image('simimg3.mrc')
         call self%refine_threshold(20, max_thres=0.7)
         call self%write_pdb('after_refinement')
         print *, 'after refinement'
@@ -161,7 +160,7 @@ use simple_stat
         end if
         call self%write_pdb('after_discard_atoms')
         print *, 'after discard atoms'
-        call self%calc_per_atom_corr
+        call self%calc_per_atom_corr('post_discard_atoms')
     end subroutine exec_nano_picker
 
     subroutine simulate_atom( self )
@@ -707,8 +706,10 @@ use simple_stat
         print *, 'FINISHED CALC_ATOM_STATS'
     end subroutine calc_atom_stats
 
-    subroutine calc_per_atom_corr(self)
-        class(nano_picker), intent(inout) :: self
+    ! input filename without file extension
+    subroutine calc_per_atom_corr(self, filename)
+        class(nano_picker),         intent(inout) :: self
+        character(len=*), optional, intent(in)    :: filename
         type(nanoparticle)       :: nano
         type(image)              :: simatms
         type(parameters), target :: params
@@ -724,7 +725,7 @@ use simple_stat
         call nano%set_atomic_coords(trim(self%pdb_filename))
         call nano%simulate_atoms(simatms=simatms)
         call nano%validate_atoms(simatms=simatms)
-        !call nano%write_centers('coordinates_in_nanoparticle_angstroms',which='valid_corr')
+        if (present(filename)) call nano%write_centers(trim(filename),which='valid_corr')
         call nano%kill
     end subroutine calc_per_atom_corr
 
@@ -765,47 +766,6 @@ use simple_stat
         print *, 'OPTIMAL CORRELATION = ', thres_corrs(optimal_index(1))
         print *, 'NUMBER POSITIONS = ', num_pos
     end subroutine refine_threshold
-
-    subroutine refine_positions(self)
-        class(nano_picker), intent(inout) :: self
-        integer, allocatable :: pos_inds(:)
-        integer              :: npos, ipos, pos(3), x, y, z, xoff, yoff, zoff, optimal_pos(3)
-        real                 :: corr, optimal_corr, xyz(3), center(3), optimal_center(3)
-        pos_inds   = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
-        npos       = size(pos_inds)
-        do ipos = 1, npos
-            pos            = self%positions(pos_inds(ipos),:)
-            optimal_pos    = pos
-            call self%one_box_corr(pos, circle=.true., corr=optimal_corr)
-            optimal_center = self%center_positions(pos_inds(ipos),:)
-            do x = pos(1) - self%offset, pos(1) + self%offset
-                do y = pos(2) - self%offset, pos(2) + self%offset
-                    do z = pos(3) - self%offset, pos(3) + self%offset
-                        call self%one_box_corr([x,y,z], circle=.true., corr=corr, center=center)      
-                        if (corr > optimal_corr) then
-                            optimal_corr   = corr
-                            optimal_pos    = [x,y,z]
-                            optimal_center = center
-                        end if
-                    end do
-                end do
-            end do
-            !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,ipos)
-            do xoff = 1, self%nxyz_offset(1)
-                do yoff = 1, self%nxyz_offset(2)
-                    do zoff = 1, self%nxyz_offset(3)
-                        if(pos_inds(ipos) .eq. self%inds_offset(xoff,yoff,zoff)) then
-                            self%center_positions(pos_inds(ipos),:) = optimal_center
-                            self%positions(pos_inds(ipos),:) = optimal_pos
-                        end if
-                    enddo
-                enddo
-            enddo
-            !$omp end parallel do
-        end do
-        deallocate(pos_inds)
-        call self%find_centers
-    end subroutine refine_positions
 
     subroutine discard_atoms(self, use_cs_thres, use_valid_corr, corr_thres, cs_thres)
         class(nano_picker), intent(inout) :: self
@@ -998,6 +958,13 @@ use simple_stat
         self%wrote_pdb = .true.
     end subroutine write_pdb
 
+    subroutine set_pdb(self, filename)
+        class(nano_picker), intent(inout) :: self
+        character(len=*),   intent(in)    :: filename
+        self%wrote_pdb    = .true.
+        self%pdb_filename = filename
+    end subroutine set_pdb
+
     subroutine write_boximgs( self, foldername )
         class(nano_picker),          intent(inout) :: self
         character(len=*), optional,  intent(in)    :: foldername
@@ -1058,22 +1025,25 @@ use simple_stat
         close(25)
     end subroutine write_positions_and_scores
 
-    subroutine write_NP_image( self, sim_img_name )
-        class(nano_picker), intent(inout) :: self
-        character(len=*),   intent(in)    :: sim_img_name
+    subroutine write_NP_image( self, sim_img_name, sim_img )
+        class(nano_picker),    intent(inout) :: self
+        character(len=*),      intent(in)    :: sim_img_name
+        type(image), optional, intent(out)   :: sim_img
+        type(image)              :: sim_img_here
         type(nanoparticle)       :: nano
-        type(image)              :: sim_img
         type(parameters), target :: params
         params_glob => params
         params_glob%element = self%element
         params_glob%smpd    = self%smpd
+        print *, 'self%wrote_pdb inside write_NP_image = ', self%wrote_pdb
         if (.not. self%wrote_pdb) call self%write_pdb('simulate_NP')
         call nano%new(trim(self%raw_filename))
         call nano%set_atomic_coords(trim(self%pdb_filename))
-        call nano%simulate_atoms(simatms=sim_img)
-        call sim_img%write(sim_img_name)
+        call nano%simulate_atoms(simatms=sim_img_here)
+        call sim_img_here%write(trim(sim_img_name))
+        if (present(sim_img)) call sim_img%copy(sim_img_here)
+        call sim_img_here%kill
         call nano%kill
-        call sim_img%kill
     end subroutine write_NP_image
 
     subroutine write_dist( self, csv_name, type, to_write )
