@@ -56,8 +56,7 @@ contains
         logical,        intent(inout) :: converged
         !---> The below is to allow particle-dependent decision about which 3D strategy to use
         type :: strategy3D_per_ptcl
-            class(strategy3D), pointer :: ptr  => null() ! 1st polar greedy discrete search
-            class(strategy3D), pointer :: ptr2 => null() ! 2nd Cartesian stochastic continuous search
+            class(strategy3D), pointer :: ptr  => null()
         end type strategy3D_per_ptcl
         type(strategy3D_per_ptcl), allocatable :: strategy3Dsrch(:)
         !<---- hybrid or combined search strategies can then be implemented as extensions of the
@@ -238,16 +237,6 @@ contains
                     call strategy3Dsrch(iptcl_batch)%ptr%srch(ithr)
                     call strategy3Dsrch(iptcl_batch)%ptr%kill
                 endif
-                if( associated(strategy3Dsrch(iptcl_batch)%ptr2) )then
-                    ! do shifting in the ptr2 now
-                    params_glob%l_doshift = .true.
-                    ! updating sigma with new orientation (same reference though), when ptr2 is set
-                    call build_glob%spproj_field%get_ori(iptcl, orientation)
-                    call eucl_sigma%update_sigma2(pftcc, iptcl, orientation, 'proj')
-                    call strategy3Dsrch(iptcl_batch)%ptr2%new(strategy3Dspecs(iptcl_batch))
-                    call strategy3Dsrch(iptcl_batch)%ptr2%srch(ithr)
-                    call strategy3Dsrch(iptcl_batch)%ptr2%kill
-                endif
                 ! calculate sigma2 for ML-based refinement
                 if ( params_glob%l_needs_sigma ) then
                     call build_glob%spproj_field%get_ori(iptcl, orientation)
@@ -260,7 +249,6 @@ contains
         ! cleanup
         do iptcl_batch = 1,batchsz_max
             nullify(strategy3Dsrch(iptcl_batch)%ptr)
-            nullify(strategy3Dsrch(iptcl_batch)%ptr2)
         end do
         deallocate(strategy3Dsrch,strategy3Dspecs,batches)
         call eulprob_obj_part%kill
