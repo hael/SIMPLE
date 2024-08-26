@@ -835,6 +835,7 @@ contains
                 if( cls_mask(icls) ) cycle
                 nptcls_rejected = nptcls_rejected+1
                 call pool_proj%os_ptcl2D%set_state(iptcl,0)
+                call pool_proj%os_ptcl2D%delete_2Dclustering(iptcl)
             enddo
             !$omp end parallel do
             if( nptcls_rejected > 0 )then
@@ -921,6 +922,7 @@ contains
                 jcls = pool_proj%os_ptcl2D%get_class(iptcl)
                 if( jcls == icls )then
                     call pool_proj%os_ptcl2D%reject(iptcl)
+                    call pool_proj%os_ptcl2D%delete_2Dclustering(iptcl)
                     nptcls_rejected = nptcls_rejected + 1
                 endif
             enddo
@@ -1424,8 +1426,6 @@ contains
             ! write
             pool_proj%os_ptcl3D = pool_proj%os_ptcl2D
             call pool_proj%os_ptcl3D%delete_2Dclustering
-            !call pool_proj%write(projfile)
-            !call pool_proj%os_ptcl3D%kill
         else
             call pool_proj%os_out%kill
             call pool_proj%add_cavgs2os_out(cavgsfname, params_glob%smpd, 'cavg', clspath=l_clspath)
@@ -1437,8 +1437,6 @@ contains
             ! write
             pool_proj%os_ptcl3D = pool_proj%os_ptcl2D
             call pool_proj%os_ptcl3D%delete_2Dclustering
-            !call pool_proj%write(projfile)
-            !call pool_proj%os_ptcl3D%kill
         endif
         ! write starfiles
         call starproj%export_cls2D(pool_proj)

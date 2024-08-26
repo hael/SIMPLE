@@ -462,6 +462,7 @@ contains
                 icls = self%spproj%os_ptcl2D%get_class(iptcl)
                 if( cls_mask(icls) ) cycle
                 nptcls_rejected = nptcls_rejected+1
+                call self%spproj%os_ptcl2D%delete_2Dclustering(iptcl)
                 call self%spproj%os_ptcl2D%set_state(iptcl,0)
             enddo
             !$omp end parallel do
