@@ -18,10 +18,10 @@ type, extends(strategy3D) :: strategy3D_greedy_smpl
     type(strategy3D_srch) :: s
     type(strategy3D_spec) :: spec
 contains
-    procedure          :: new         => new_greedy_smpl
-    procedure          :: srch        => srch_greedy_smpl
-    procedure          :: oris_assign => oris_assign_greedy_smpl
-    procedure          :: kill        => kill_greedy_smpl
+    procedure :: new         => new_greedy_smpl
+    procedure :: srch        => srch_greedy_smpl
+    procedure :: oris_assign => oris_assign_greedy_smpl
+    procedure :: kill        => kill_greedy_smpl
 end type strategy3D_greedy_smpl
 
 contains
@@ -36,21 +36,26 @@ contains
     subroutine srch_greedy_smpl( self, ithr )
         use simple_eul_prob_tab, only: angle_sampling, eulprob_dist_switch
         class(strategy3D_greedy_smpl), intent(inout) :: self
-        integer,                    intent(in)    :: ithr
+        integer,                       intent(in)    :: ithr
         integer :: iref, isample, loc(1), inds(self%s%nrots)
         real    :: inpl_corrs(self%s%nrots), sorted_corrs(self%s%nrots)
-        ! execute search
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
             ! prep
             call self%s%prep4srch
+            ! shift search on previous best reference
+            call self%s%inpl_srch_first
             ! search
             do isample=1,self%s%nrefs
                 iref = s3D%srch_order(isample,self%s%ithr)  ! set the stochastic reference index
-                if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
+                if( s3D%state_exists(s3D%proj_space_state(iref)) )then
                     ! identify the top scoring in-plane angle
-                    call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                    if( params_glob%l_sh_first )then
+                        call pftcc_glob%gencorrs(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
+                    else
+                        call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                    endif
                     loc = angle_sampling(eulprob_dist_switch(inpl_corrs), sorted_corrs, inds, s3D%smpl_inpl_athres(s3D%proj_space_state(iref)))
                     call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
                 end if

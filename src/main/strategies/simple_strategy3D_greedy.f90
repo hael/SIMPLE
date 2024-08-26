@@ -1,18 +1,17 @@
 ! concrete strategy3D: greedy refinement
 module simple_strategy3D_greedy
 include 'simple_lib.f08'
-use simple_strategy3D_alloc  ! use all in there
-use simple_strategy3D_utils  ! use all in there
-use simple_strategy3D,       only: strategy3D
-use simple_strategy3D_srch,  only: strategy3D_srch, strategy3D_spec
+use simple_strategy3D_alloc
+use simple_strategy3D_utils
 use simple_parameters,       only: params_glob
 use simple_builder,          only: build_glob
+use simple_strategy3D,       only: strategy3D
+use simple_strategy3D_srch,  only: strategy3D_srch, strategy3D_spec
 use simple_polarft_corrcalc, only: pftcc_glob
 implicit none
 
 public :: strategy3D_greedy
 private
-
 #include "simple_local_flags.inc"
 
 type, extends(strategy3D) :: strategy3D_greedy
@@ -44,12 +43,18 @@ contains
             self%s%ithr = ithr
             ! prep
             call self%s%prep4srch
+             ! shift search on previous best reference
+            call self%s%inpl_srch_first
             ! search
             do isample=1,self%s%nrefs
                 iref = s3D%srch_order(isample,self%s%ithr) ! set the reference index
                 if( s3D%state_exists(s3D%proj_space_state(iref)) )then
                     ! identify the top scoring in-plane angle
-                    call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                    if( params_glob%l_sh_first )then
+                        call pftcc_glob%gencorrs(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
+                    else
+                        call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                    endif
                     loc = maxloc(inpl_corrs)
                     call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
                 endif

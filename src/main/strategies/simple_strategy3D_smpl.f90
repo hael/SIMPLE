@@ -39,16 +39,22 @@ contains
         integer,                intent(in)    :: ithr
         integer :: iref, locs(self%s%nrefs), inds(self%s%nrots), inds_ref(self%s%nrefs), irot
         real    :: inpl_corrs(self%s%nrots), ref_corrs(self%s%nrefs), sorted_corrs(self%s%nrots), sorted_ref(self%s%nrefs), corr
-        ! execute search
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
-            ! init threaded search arrays
+            ! set thread index
             self%s%ithr = ithr
+            ! prep
             call self%s%prep4srch
+            ! shift search on previous best reference
+            call self%s%inpl_srch_first
             ! search
             ref_corrs = TINY
             do iref=1,self%s%nrefs
                 if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
-                    call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                    if( params_glob%l_sh_first )then
+                        call pftcc_glob%gencorrs(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
+                    else
+                        call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                    endif
                     irot = angle_sampling(eulprob_dist_switch(inpl_corrs), sorted_corrs, inds,&
                           &s3D%smpl_inpl_athres(s3D%proj_space_state(iref)))
                     locs(iref)      = irot
@@ -64,7 +70,7 @@ contains
                 call self%s%inpl_srch(ref=iref)
                 ! checking if shift search is good
                 if( s3D%proj_space_inplinds(iref, self%s%ithr) < 1 )then
-                    call assign_ori(self%s, iref, irot, corr, [0.,0.])
+                    call assign_ori(self%s, iref, irot, corr, self%s%xy_first_rot)
                 else
                     irot = s3D%proj_space_inplinds(iref, self%s%ithr)
                     corr = s3D%proj_space_corrs(   iref, self%s%ithr)

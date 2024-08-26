@@ -18,10 +18,10 @@ type, extends(strategy3D) :: strategy3D_shc_smpl
     type(strategy3D_srch) :: s
     type(strategy3D_spec) :: spec
 contains
-    procedure          :: new         => new_shc_smpl
-    procedure          :: srch        => srch_shc_smpl
-    procedure          :: oris_assign => oris_assign_shc_smpl
-    procedure          :: kill        => kill_shc_smpl
+    procedure :: new         => new_shc_smpl
+    procedure :: srch        => srch_shc_smpl
+    procedure :: oris_assign => oris_assign_shc_smpl
+    procedure :: kill        => kill_shc_smpl
 end type strategy3D_shc_smpl
 
 contains
@@ -39,7 +39,6 @@ contains
         integer,                    intent(in)    :: ithr
         integer :: iref, isample, loc(1), inds(self%s%nrots)
         real    :: inpl_corrs(self%s%nrots), sorted_corrs(self%s%nrots)
-        ! execute search
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
@@ -47,13 +46,13 @@ contains
             call self%s%prep4srch
             ! shift search on previous best reference
             call self%s%inpl_srch_first
-            ! initialize, ctd
+            ! initialize
             self%s%nbetter    = 0
             self%s%nrefs_eval = 0
+            ! search
             do isample=1,self%s%nrefs
                 iref = s3D%srch_order(isample,self%s%ithr)  ! set the stochastic reference index
-                if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
-                    ! identify the top scoring in-plane angle
+                if( s3D%state_exists(s3D%proj_space_state(iref)) )then
                     if( params_glob%l_sh_first )then
                         call pftcc_glob%gencorrs(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
                     else
@@ -69,7 +68,8 @@ contains
                 ! exit condition
                 if( self%s%nbetter > 0 ) exit
             end do
-            call self%s%inpl_srch ! search shifts
+            ! take care of the in-planes
+            call self%s%inpl_srch
             ! prepare weights and orientations
             call self%oris_assign
         else
