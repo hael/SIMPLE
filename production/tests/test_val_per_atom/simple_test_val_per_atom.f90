@@ -37,7 +37,7 @@ call molecule%pdb2mrc(pdb_file, vol_file, smpd)
 call find_ldim_nptcls(vol_file, ldim, ifoo)
 call vol%new(ldim, smpd)
 call vol%read(vol_file)
-call molecule%atom_validation(vol, 'valid_correlation.csv')
+call molecule%atom_validation(vol, 'validation_correlation')
 call molecule%kill
 call vol%kill
 end program simple_test_val_per_atom 
