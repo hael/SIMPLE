@@ -4376,7 +4376,6 @@ contains
         call oristats%set_input('parm_ios', 7,  'classtats', 'binary', 'Class statistics',      'Provide statistics about 2D clusters(yes|no){no}',              '(yes|no){no}', .false., 'no')
         call oristats%set_input('parm_ios', 8,  'projstats', 'binary', 'Projection statistics', 'Provide statistics about projection directions(yes|no){no}',    '(yes|no){no}', .false., 'no')
         call oristats%set_input('parm_ios', 9,  'trsstats',  'binary', 'Shift statistics',      'Provide statistics about rotational origin shifts(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call oristats%set_input('parm_ios', 10, 'specstats', 'binary', 'Specscore statistics',  'Provide statistics about spectral score(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! alternative inputs
         ! <empty>
         ! search controls

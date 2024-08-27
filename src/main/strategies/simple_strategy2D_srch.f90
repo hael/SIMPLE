@@ -38,14 +38,13 @@ type strategy2D_srch
     real                    :: best_shvec(2) =  0.  !< best shift vector found by search
     real                    :: prev_corr     = -1.  !< previous best correlation
     real                    :: best_corr     = -1.  !< best corr found by search
-    real                    :: specscore     =  0.  !< spectral score
     real                    :: trs           =  0.  !< shift boundary
   contains
-    procedure          :: new
-    procedure          :: prep4srch
-    procedure          :: inpl_srch
-    procedure          :: store_solution
-    procedure          :: kill
+    procedure :: new
+    procedure :: prep4srch
+    procedure :: inpl_srch
+    procedure :: store_solution
+    procedure :: kill
 end type strategy2D_srch
 
 contains
@@ -73,7 +72,6 @@ contains
         else
             call self%grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=params_glob%maxits_sh)
         endif
-        call self%grad_shsrch_obj2%new(lims, lims_init=lims_init, maxits=params_glob%maxits_sh, opt_angle=.false.)
     end subroutine new
 
     subroutine prep4srch( self )
@@ -116,8 +114,6 @@ contains
             self%prev_corr  = corrs(prev_roind)
         endif
         self%best_corr  = self%prev_corr
-        ! calculate spectral score
-        self%specscore = pftcc_glob%specscore(self%prev_class, self%iptcl, prev_roind)
     end subroutine prep4srch
 
     subroutine inpl_srch( self )
@@ -172,7 +168,6 @@ contains
         call build_glob%spproj_field%set(self%iptcl, 'inpl',       real(self%best_rot))
         call build_glob%spproj_field%set(self%iptcl, 'class',      real(self%best_class))
         call build_glob%spproj_field%set(self%iptcl, 'corr',       self%best_corr)
-        call build_glob%spproj_field%set(self%iptcl, 'specscore',  self%specscore)
         call build_glob%spproj_field%set(self%iptcl, 'dist_inpl',  rad2deg(dist))
         call build_glob%spproj_field%set(self%iptcl, 'mi_class',   mi_class)
         call build_glob%spproj_field%set(self%iptcl, 'frac',       frac)
@@ -180,9 +175,8 @@ contains
     end subroutine store_solution
 
     subroutine kill( self )
-        class(strategy2D_srch),  intent(inout) :: self
+        class(strategy2D_srch), intent(inout) :: self
         call self%grad_shsrch_obj%kill
-        call self%grad_shsrch_obj2%kill
     end subroutine kill
 
     subroutine squared_sampling( n, corrs, order, nb, ind, rank, cc )
@@ -222,9 +216,9 @@ contains
             endif
         enddo
         if( rank == 0 ) rank = nb
-        rank = n - nb + rank    ! rank of selected value
-        ind  = order(rank)      ! index
-        cc   = corrs(rank)      ! value
+        rank = n - nb + rank ! rank of selected value
+        ind  = order(rank)   ! index
+        cc   = corrs(rank)   ! value
     end subroutine squared_sampling
 
 end module simple_strategy2D_srch

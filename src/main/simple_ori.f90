@@ -182,15 +182,13 @@ contains
         call self%set_euler([0., 0., 0.])
         call self%set_shift([0., 0.])
         if( self%is_ptcl )then
-            self%pparms(I_STATE)     =  0.
-            self%pparms(I_CORR)      = -1.
-            self%pparms(I_SPECSCORE) =  0.
-            self%pparms(I_EO)        = -1.
+            self%pparms(I_STATE) =  0.
+            self%pparms(I_CORR)  = -1.
+            self%pparms(I_EO)    = -1.
         else
             call self%htab%set('state', 0.)
-            if( self%isthere('corr') )     call self%htab%set('corr',     -1.)
-            if( self%isthere('specscore') )call self%htab%set('specscore', 0.)
-            if( self%isthere('eo') )       call self%htab%set('eo', -1.)
+            if( self%isthere('corr') ) call self%htab%set('corr',     -1.)
+            if( self%isthere('eo')   ) call self%htab%set('eo', -1.)
         endif
     end subroutine reject
 
@@ -330,7 +328,6 @@ contains
             self_out%pparms(I_CLASS)     = self_in%pparms(I_CLASS)
             self_out%pparms(I_CORR)      = self_in%pparms(I_CORR)
             self_out%pparms(I_FRAC)      = self_in%pparms(I_FRAC)
-            self_out%pparms(I_SPECSCORE) = self_in%pparms(I_SPECSCORE)
             self_out%pparms(I_SAMPLED)   = self_in%pparms(I_SAMPLED)
             self_out%pparms(I_UPDATECNT) = self_in%pparms(I_UPDATECNT)
             self_out%pparms(I_W)         = self_in%pparms(I_W)
@@ -339,7 +336,6 @@ contains
             call self_out%htab%set('class',    self_in%htab%get('class'))
             call self_out%htab%set('corr',     self_in%htab%get('corr'))
             call self_out%htab%set('frac',     self_in%htab%get('frac'))
-            call self_out%htab%set('specscore',self_in%htab%get('specscore'))
             call self_out%htab%set('sampled',  self_in%htab%get('sampled'))
             call self_out%htab%set('updatecnt',self_in%htab%get('updatecnt'))
             call self_out%htab%set('w',        self_in%htab%get('w'))
@@ -357,7 +353,6 @@ contains
             self_out%pparms(I_PROJ)      = self_in%pparms(I_PROJ)
             self_out%pparms(I_CORR)      = self_in%pparms(I_CORR)
             self_out%pparms(I_FRAC)      = self_in%pparms(I_FRAC)
-            self_out%pparms(I_SPECSCORE) = self_in%pparms(I_SPECSCORE)
             self_out%pparms(I_SAMPLED)   = self_in%pparms(I_SAMPLED)
             self_out%pparms(I_UPDATECNT) = self_in%pparms(I_UPDATECNT)
             self_out%pparms(I_W)         = self_in%pparms(I_W)
@@ -366,7 +361,6 @@ contains
             call self_out%htab%set('proj',     self_in%htab%get('proj'))
             call self_out%htab%set('corr',     self_in%htab%get('corr'))
             call self_out%htab%set('frac',     self_in%htab%get('frac'))
-            call self_out%htab%set('specscore',self_in%htab%get('specscore'))
             call self_out%htab%set('sampled',  self_in%htab%get('sampled'))
             call self_out%htab%set('updatecnt',self_in%htab%get('updatecnt'))
             call self_out%htab%set('w',        self_in%htab%get('w'))
