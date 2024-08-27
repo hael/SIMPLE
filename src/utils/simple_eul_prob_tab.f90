@@ -17,13 +17,9 @@ interface angle_sampling
     module procedure angle_sampling_2
 end interface
 
-integer, parameter :: SHIFT_NUM = 50
-integer, parameter :: NSHIFTS   = SHIFT_NUM**2    !< number of discretized shift space
-
 type :: eul_prob_tab
     type(ptcl_ref), allocatable :: loc_tab(:,:,:) !< 3D search table (nspace,  nptcls, nstates)
     type(ptcl_ref), allocatable :: state_tab(:,:) !< 2D search table (nstates, nptcls)
-    type(ptcl_ref), allocatable :: shift_tab(:,:) !< 2D search table (nshifts, nptcls)
     type(ptcl_ref), allocatable :: assgn_map(:)   !< assignment map           (nptcls)
     integer,        allocatable :: pinds(:)       !< particle indices for processing
     integer                     :: nptcls         !< size of pinds array
@@ -34,14 +30,12 @@ type :: eul_prob_tab
     generic            :: new => new_1, new_2
     ! PARTITION-WISE PROCEDURES (used only by partition-wise eul_prob_tab objects)
     procedure :: fill_tab
-    procedure :: write_tab, write_shift
-    procedure :: read_assignment, read_shift
+    procedure :: write_tab
+    procedure :: read_assignment
     procedure :: trim_tab
     ! GLOBAL PROCEDURES (used only by the global eul_prob_tab object)
     procedure :: read_tab_to_glob
     procedure :: prob_assign
-    procedure :: fill_shift_tab
-    procedure :: shift_assign
     procedure :: write_assignment
     ! DESTRUCTOR
     procedure :: kill
@@ -59,15 +53,15 @@ contains
     subroutine new_1( self, pinds )
         class(eul_prob_tab), intent(inout) :: self
         integer,             intent(in)    :: pinds(:)
-        integer :: i, iproj, iptcl, istate, ishift
+        integer :: i, iproj, iptcl, istate
         real    :: x
         call self%kill
         self%nptcls  = size(pinds)
         self%nstates = params_glob%nstates
         allocate(self%pinds(self%nptcls), source=pinds)
         allocate(self%loc_tab(params_glob%nspace,self%nptcls,self%nstates), self%assgn_map(self%nptcls),&
-                    &self%state_tab(self%nstates,self%nptcls), self%shift_tab(NSHIFTS,self%nptcls))
-        !$omp parallel do default(shared) private(i,iptcl,istate,iproj,ishift) proc_bind(close) schedule(static)
+                    &self%state_tab(self%nstates,self%nptcls))
+        !$omp parallel do default(shared) private(i,iptcl,istate,iproj) proc_bind(close) schedule(static)
         do i = 1,self%nptcls
             iptcl = self%pinds(i)
             self%assgn_map(i)%pind   = iptcl
@@ -97,16 +91,6 @@ contains
                     self%loc_tab(iproj,i,istate)%y      = 0.
                     self%loc_tab(iproj,i,istate)%has_sh = .false.
                 end do
-            end do
-            do ishift = 1,NSHIFTS
-                self%shift_tab(ishift,i)%pind   = iptcl
-                self%shift_tab(ishift,i)%istate = 0
-                self%shift_tab(ishift,i)%iproj  = 0
-                self%shift_tab(ishift,i)%inpl   = 0
-                self%shift_tab(ishift,i)%dist   = huge(x)
-                self%shift_tab(ishift,i)%x      = 0.
-                self%shift_tab(ishift,i)%y      = 0.
-                self%shift_tab(ishift,i)%has_sh = .false.
             end do
         end do
         !$omp end parallel do 
@@ -188,7 +172,7 @@ contains
             lims_init(:,2) =  SHC_INPL_TRSHWDTH
             do ithr = 1,nthr_glob
                 call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier,&
-                    &maxits=params_glob%maxits_sh, opt_angle=(trim(params_glob%sh_opt_angle).eq.'yes'), coarse_init=.true.)
+                    &maxits=params_glob%maxits_sh, opt_angle=.true., coarse_init=.true.)
             end do
             ! fill the table
             do istate = 1, self%nstates
@@ -203,17 +187,13 @@ contains
                     iptcl = self%pinds(i)
                     ithr  = omp_get_thread_num() + 1
                     ! (1) identify shifts using the previously assigned best reference
-                    if( trim(params_glob%sh_glob) .eq. 'yes' )then  ! retrieve ptcl shift from assign_map
-                        cxy(2:3) = [self%assgn_map(i)%x, self%assgn_map(i)%y]
-                    else                                            ! using previous ori for shift search
-                        call build_glob%spproj_field%get_ori(iptcl, o_prev)   ! previous ori
-                        irot  = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
-                        iproj = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
-                        ! BFGS over shifts
-                        call grad_shsrch_obj(ithr)%set_indices(iref_start + iproj, iptcl)
-                        cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
-                        if( irot == 0 ) cxy(2:3) = 0.
-                    endif
+                    call build_glob%spproj_field%get_ori(iptcl, o_prev)   ! previous ori
+                    irot  = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
+                    iproj = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
+                    ! BFGS over shifts
+                    call grad_shsrch_obj(ithr)%set_indices(iref_start + iproj, iptcl)
+                    cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
+                    if( irot == 0 ) cxy(2:3) = 0.
                     ! (2) search projection directions using those shifts for all references
                     do iproj = 1, params_glob%nspace
                         call pftcc%gencorrs(iref_start + iproj, iptcl, cxy(2:3), dists_inpl(:,ithr))
@@ -261,7 +241,7 @@ contains
                 lims_init(:,2) =  SHC_INPL_TRSHWDTH
                 do ithr = 1,nthr_glob
                     call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier,&
-                        &maxits=params_glob%maxits_sh, opt_angle=(trim(params_glob%sh_opt_angle).eq.'yes'))
+                        &maxits=params_glob%maxits_sh, opt_angle=.true.)
                 end do
                 ! fill the table
                 do istate = 1, self%nstates
@@ -335,115 +315,6 @@ contains
             self%assgn_map = self%state_tab(1,:)
         endif
     end subroutine prob_assign
-
-    subroutine fill_shift_tab( self, pftcc )
-        use simple_polarft_corrcalc, only: polarft_corrcalc
-        class(eul_prob_tab),     intent(inout) :: self
-        class(polarft_corrcalc), intent(inout) :: pftcc
-        type(ori) :: o_prev
-        integer   :: i, iptcl, iproj, ithr, ix, iy, ishift, irot, inds_sorted(pftcc%nrots,nthr_glob)
-        real      :: lims(2,2), stepx, stepy, x, y, xy(2), inpl_athres,&
-                    &dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob),&
-                    &shift_points(2,NSHIFTS)
-        lims(:,1)   = -params_glob%trs
-        lims(:,2)   =  params_glob%trs
-        stepx       = real(lims(1,2) - lims(1,1), dp) / real(SHIFT_NUM, dp)
-        stepy       = real(lims(2,2) - lims(2,1), dp) / real(SHIFT_NUM, dp)
-        inpl_athres = calc_athres('dist_inpl', state=1)
-        ! generating discretized shifts
-        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-        !$omp private(ix,iy,x,y,ishift)
-        do ix = 1,SHIFT_NUM
-            x = lims(1,1) + stepx/2. + real(ix-1,dp)*stepx
-            do iy = 1,SHIFT_NUM
-                ishift = (ix-1)*SHIFT_NUM + iy
-                y      = lims(2,1) + stepy/2. + real(iy-1,dp)*stepy
-                shift_points(:,ishift) = [x,y]
-            end do
-        end do
-        !$omp end parallel do
-        ! filling the tab
-        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-        !$omp private(i,iptcl,ithr,iproj,ishift,irot,xy,o_prev)
-        do i = 1, self%nptcls
-            iptcl = self%pinds(i)
-            call build_glob%spproj_field%get_ori(iptcl, o_prev)   ! previous ori
-            iproj = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
-            ithr  = omp_get_thread_num() + 1
-            do ishift = 1, NSHIFTS
-                xy = shift_points(:,ishift)
-                call pftcc%gencorrs(iproj, iptcl, xy, dists_inpl(:,ithr))
-                dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
-                irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres)
-                self%shift_tab(ishift,i)%x      = xy(1)
-                self%shift_tab(ishift,i)%y      = xy(2)
-                self%shift_tab(ishift,i)%inpl   = irot
-                self%shift_tab(ishift,i)%has_sh = .true.
-                self%shift_tab(ishift,i)%dist   = dists_inpl(irot,ithr)
-            enddo
-        enddo
-        !$omp end parallel do
-    end subroutine fill_shift_tab
-
-    subroutine shift_assign( self )
-        class(eul_prob_tab), intent(inout) :: self
-        integer :: i, ishift, dist_inds(NSHIFTS), stab_inds(self%nptcls, NSHIFTS), assigned_ishift, assigned_ptcl
-        real    :: sum_dist_all, min_dist, max_dist, sorted_tab(self%nptcls, NSHIFTS), shift_dist(NSHIFTS)
-        logical :: ptcl_avail(self%nptcls)
-        ! normalization
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,sum_dist_all)
-        do i = 1, self%nptcls
-            sum_dist_all = sum(self%shift_tab(:,i)%dist)
-            if( sum_dist_all < TINY )then
-                self%shift_tab(:,i)%dist = 0.
-            else
-                self%shift_tab(:,i)%dist = self%shift_tab(:,i)%dist / sum_dist_all
-            endif
-        enddo
-        !$omp end parallel do
-        ! min/max normalization to obtain values between 0 and 1
-        max_dist = 0.
-        min_dist = huge(min_dist)
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i)&
-        !$omp reduction(min:min_dist) reduction(max:max_dist)
-        do i = 1, self%nptcls
-            max_dist = max(max_dist, maxval(self%shift_tab(:,i)%dist, dim=1))
-            min_dist = min(min_dist, minval(self%shift_tab(:,i)%dist, dim=1))
-        enddo
-        !$omp end parallel do
-        if( (max_dist - min_dist) < TINY )then
-            self%shift_tab%dist = 0.
-        else
-            self%shift_tab%dist = (self%shift_tab%dist - min_dist) / (max_dist - min_dist)
-        endif
-        ! assigning shift points to iptcl:
-        ! sorting each columns
-        sorted_tab = transpose(self%shift_tab%dist)
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ishift,i)
-        do ishift = 1, NSHIFTS
-            stab_inds(:,ishift) = (/(i,i=1,self%nptcls)/)
-            call hpsort(sorted_tab(:,ishift), stab_inds(:,ishift))
-        enddo
-        !$omp end parallel do
-        ! first row is the current best state distribution
-        dist_inds  = 1
-        shift_dist = sorted_tab(1,:)
-        ptcl_avail = .true.
-        do while( any(ptcl_avail) )
-            ! choose next ishift to assign !!! SHOULD DO PROBABILISTIC SAMPLING HERE
-            assigned_ishift = minloc(shift_dist, dim=1)
-            assigned_ptcl   = stab_inds(dist_inds(assigned_ishift), assigned_ishift)
-            ptcl_avail(assigned_ptcl)     = .false.
-            self%assgn_map(assigned_ptcl) = self%shift_tab(assigned_ishift,assigned_ptcl)
-            ! update the shift_dist and dist_inds
-            do ishift = 1, NSHIFTS
-                do while( dist_inds(ishift) < self%nptcls .and. .not.(ptcl_avail(stab_inds(dist_inds(ishift), ishift))))
-                    dist_inds(ishift)  = dist_inds(ishift) + 1
-                    shift_dist(ishift) = sorted_tab(dist_inds(ishift), ishift)
-                enddo
-            enddo
-        enddo
-    end subroutine shift_assign
 
     ! projection normalization (same energy) of the 3D loc_tab (for each state)
     ! [0,1] normalization for each state
@@ -614,42 +485,6 @@ contains
     ! FILE IO
 
     ! write the partition-wise (or global) dist value table to a binary file
-    subroutine write_shift( self, binfname )
-        class(eul_prob_tab), intent(in) :: self
-        character(len=*),    intent(in) :: binfname
-        integer :: funit, addr, io_stat
-        call fopen(funit,trim(binfname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
-        write(unit=funit,pos=1)                     self%nptcls
-        write(unit=funit,pos=sizeof(self%nptcls)+1) self%shift_tab
-        call fclose(funit)
-    end subroutine write_shift
-
-    subroutine read_shift( self, binfname )
-        class(eul_prob_tab), intent(inout) :: self
-        character(len=*),    intent(in)    :: binfname
-        type(ptcl_ref),      allocatable   :: shift_tab_glob(:,:)
-        integer :: funit, io_stat, nptcls_glob, headsz, i_loc, i_glob
-        headsz = sizeof(nptcls_glob)
-        if( .not. file_exists(trim(binfname)) )then
-            THROW_HARD('file '//trim(binfname)//' does not exists!')
-        else
-            call fopen(funit,trim(binfname),access='STREAM',action='READ',status='OLD', iostat=io_stat)
-        end if
-        call fileiochk('read_tab_to_glob; read_shift; file: '//trim(binfname), io_stat)
-        read(unit=funit,pos=1) nptcls_glob
-        allocate(shift_tab_glob(NSHIFTS,nptcls_glob))
-        read(unit=funit,pos=headsz + 1) shift_tab_glob
-        call fclose(funit)
-        !$omp parallel do collapse(2) default(shared) proc_bind(close) schedule(static) private(i_loc,i_glob)
-        do i_loc = 1, self%nptcls
-            do i_glob = 1, nptcls_glob
-                if( shift_tab_glob(1,i_glob)%pind == self%shift_tab(1,i_loc)%pind ) self%shift_tab(:,i_loc) = shift_tab_glob(:,i_glob)
-            end do
-        end do
-        !$omp end parallel do
-    end subroutine read_shift
-
-    ! write the partition-wise (or global) dist value table to a binary file
     subroutine write_tab( self, binfname )
         class(eul_prob_tab), intent(in) :: self
         character(len=*),    intent(in) :: binfname
@@ -745,7 +580,6 @@ contains
         if( allocated(self%loc_tab)   ) deallocate(self%loc_tab)
         if( allocated(self%state_tab) ) deallocate(self%state_tab)
         if( allocated(self%assgn_map) ) deallocate(self%assgn_map)
-        if( allocated(self%shift_tab) ) deallocate(self%shift_tab)
         if( allocated(self%pinds)     ) deallocate(self%pinds)
     end subroutine kill
 

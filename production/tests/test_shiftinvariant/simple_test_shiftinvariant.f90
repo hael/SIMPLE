@@ -246,19 +246,11 @@ do iptcl = p%fromp,p%top
             call b%spproj_field%set_shift(iptcl, b%spproj_field%get_2Dshift(iptcl)+cxy(2:3))
             print *,iptcl,'found', aerr,arg(cxy(2:3)-orishifts(iptcl,:)),cxy(2:3),orishifts(iptcl,:)
     else
-        if( trim(p%sh_opt_angle).eq.'yes' )then
-            call grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=p%maxits_sh, opt_angle=.true., coarse_init=.false.)
-            call grad_shsrch_obj%set_indices(p%iptcl, iptcl)
-            call pftcc%gencorrs(p%iptcl,iptcl,scores)
-            irot0 = maxloc(scores,dim=1)
-            cxy = grad_shsrch_obj%minimize(irot)
-        else
-            call grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=p%maxits_sh, opt_angle=.false., coarse_init=.false.)
-            call pftcc%gencorrs(p%iptcl,iptcl,scores,kweight=p%l_kweight_rot)
-            irot = irnd_uni(pftcc%get_nrots())
-            call grad_shsrch_obj%set_indices(p%iptcl, iptcl)
-            cxy = grad_shsrch_obj%minimize(irot)
-        endif
+        call grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=p%maxits_sh, opt_angle=.true., coarse_init=.false.)
+        call grad_shsrch_obj%set_indices(p%iptcl, iptcl)
+        call pftcc%gencorrs(p%iptcl,iptcl,scores)
+        irot0 = maxloc(scores,dim=1)
+        cxy = grad_shsrch_obj%minimize(irot)
         if( irot > 0 )then
             e3 = 360. - pftcc%get_rot(irot)
             aerr = abs(b%spproj_field%e3get(iptcl)-e3)

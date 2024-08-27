@@ -89,8 +89,6 @@ type :: parameters
     character(len=3)          :: script='no'          !< do not execute but generate a script for submission to the queue
     character(len=3)          :: silence_fsc='no'     !< dont print FSC plot to stdout(yes|no){no}
     character(len=3)          :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
-    character(len=3)          :: sh_opt_angle='yes'   !< shift opt angle(yes|no){yes}
-    character(len=3)          :: sh_glob='no'         !< global shift control(yes|no){no}
     character(len=3)          :: sh_first='no'        !< shifting before orientation search(yes|no){no}
     character(len=3)          :: sh_inv='no'          !< whether to use shift invariant metric for projection direction assignment(yes|no){no}
     character(len=3)          :: stoch_update='no'    !< update of random sampling in each iteration
@@ -626,8 +624,6 @@ contains
         call check_carg('silence_fsc',    self%silence_fsc)
         call check_carg('script',         self%script)
         call check_carg('shbarrier',      self%shbarrier)
-        call check_carg('sh_opt_angle',   self%sh_opt_angle)
-        call check_carg('sh_glob',        self%sh_glob)
         call check_carg('sh_first',       self%sh_first)
         call check_carg('sh_inv',         self%sh_inv)
         call check_carg('sigma_est',      self%sigma_est)
