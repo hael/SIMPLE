@@ -37,8 +37,6 @@ contains
     procedure :: set_limits
     procedure :: coarse_search
     procedure :: coarse_search_opt_angle
-    procedure :: prob_search_opt_angle
-    procedure :: prob_search
 end type pftcc_shsrch_grad
 
 contains
@@ -311,79 +309,6 @@ contains
             end do
         end do
     end subroutine coarse_search_opt_angle
-
-    subroutine prob_search_opt_angle(self, init_xy, irot)
-        class(pftcc_shsrch_grad), intent(inout) :: self
-        real(dp),                 intent(out)   :: init_xy(2)
-        integer,                  intent(out)   :: irot
-        integer,                  parameter     :: SHIFT_NUMS = coarse_num_steps**2
-        real(dp) :: x, y, stepx, stepy
-        real     :: corrs(self%nrots), sh_corrs(SHIFT_NUMS), sh_vecs(2,SHIFT_NUMS), rot_vecs(SHIFT_NUMS), pvec(SHIFT_NUMS)
-        integer  :: loc, ix, iy, cnt, prob_ind
-        ! generating prob shift table
-        init_xy = 0.d0
-        irot    = 0
-        if (coarse_num_steps .le. 1) return
-        stepx = real(self%ospec%limits(1,2)-self%ospec%limits(1,1),dp)/real(coarse_num_steps,dp)
-        stepy = real(self%ospec%limits(2,2)-self%ospec%limits(2,1),dp)/real(coarse_num_steps,dp)
-        cnt   = 1
-        do ix = 1,coarse_num_steps
-            x = self%ospec%limits(1,1)+stepx/2. + real(ix-1,dp)*stepx
-            do iy = 1,coarse_num_steps
-                y = self%ospec%limits(2,1)+stepy/2. + real(iy-1,dp)*stepy
-                call pftcc_glob%gencorrs(self%reference, self%particle, real([x,y]), corrs, kweight=params_glob%l_kweight_rot)
-                loc            = maxloc(corrs,dim=1)
-                rot_vecs( cnt) = loc
-                sh_vecs(:,cnt) = [x,y]
-                sh_corrs( cnt) = corrs(loc)
-                cnt = cnt + 1
-            end do
-        end do
-        ! sampling for the shifts/irot
-        pvec     = sh_corrs / sum(sh_corrs)
-        prob_ind = multinomal(pvec)
-        init_xy  = sh_vecs(:,prob_ind)
-        irot     = rot_vecs( prob_ind)
-    end subroutine prob_search_opt_angle
-
-    subroutine prob_search(self, lowest_cost, init_xy, irot)
-        class(pftcc_shsrch_grad), intent(inout) :: self
-        real(dp),                 intent(out)   :: lowest_cost, init_xy(2)
-        integer,                  intent(out)   :: irot
-        integer,                  parameter     :: IROT_NUMS = 10
-        integer,                  parameter     :: SEARCH_NUMS = coarse_num_steps**2 * IROT_NUMS
-        real(dp) :: x, y, stepx, stepy
-        real     :: corrs(self%nrots), sh_corrs(SEARCH_NUMS), sh_vecs(2,SEARCH_NUMS), rot_vecs(SEARCH_NUMS), pvec(SEARCH_NUMS)
-        integer  :: loc, ix, iy, cnt, prob_ind, locs(IROT_NUMS)
-        ! generating prob shift table
-        init_xy = 0.d0
-        irot    = 0
-        if (coarse_num_steps .le. 1) return
-        stepx = real(self%ospec%limits(1,2)-self%ospec%limits(1,1),dp)/real(coarse_num_steps,dp)
-        stepy = real(self%ospec%limits(2,2)-self%ospec%limits(2,1),dp)/real(coarse_num_steps,dp)
-        cnt   = 1
-        do loc = 1, IROT_NUMS
-            locs(loc) = floor(real(loc - 1) / real(IROT_NUMS - 1) * real(pftcc_glob%nrots - 1)) + 1
-        enddo
-        do ix = 1,coarse_num_steps
-            x = self%ospec%limits(1,1)+stepx/2. + real(ix-1,dp)*stepx
-            do iy = 1,coarse_num_steps
-                y = self%ospec%limits(2,1)+stepy/2. + real(iy-1,dp)*stepy
-                do loc = 1, IROT_NUMS
-                    sh_corrs( cnt) = pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, [x,y], locs(loc))
-                    rot_vecs( cnt) = locs(loc)
-                    sh_vecs(:,cnt) = [x,y]
-                    cnt = cnt + 1
-                enddo
-            end do
-        end do
-        ! sampling for the shifts/irot
-        pvec        =   sh_corrs / sum(sh_corrs)
-        prob_ind    =   multinomal(pvec)
-        lowest_cost = - sh_corrs( prob_ind)
-        init_xy     =   sh_vecs(:,prob_ind)
-        irot        =   rot_vecs( prob_ind)
-    end subroutine prob_search
 
     subroutine grad_shsrch_kill( self )
         class(pftcc_shsrch_grad), intent(inout) :: self
