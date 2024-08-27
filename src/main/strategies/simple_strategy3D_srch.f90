@@ -104,9 +104,9 @@ contains
         ! create in-plane search objects
         self%nrots = pftcc_glob%get_nrots()
         call self%grad_shsrch_obj%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier,&
-        &maxits=params_glob%maxits_sh, opt_angle=(trim(params_glob%sh_opt_angle).eq.'yes'))
+        &maxits=params_glob%maxits_sh, opt_angle=.true.)
         call self%grad_shsrch_first_obj%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier,&
-        &maxits=params_glob%maxits_sh, opt_angle=(trim(params_glob%sh_opt_angle).eq.'yes'), coarse_init=.true.)
+        &maxits=params_glob%maxits_sh, opt_angle=.true., coarse_init=.true.)
         self%exists = .true.
     end subroutine new
 

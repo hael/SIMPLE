@@ -142,7 +142,7 @@ lims(:,1)       = -p%trs
 lims(:,2)       =  p%trs
 lims_init(:,1)  = -SHC_INPL_TRSHWDTH
 lims_init(:,2)  =  SHC_INPL_TRSHWDTH
-call grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=p%maxits_sh, opt_angle=(trim(p%sh_opt_angle).eq.'yes'), coarse_init=.false.)
+call grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=p%maxits_sh, opt_angle=.true., coarse_init=.false.)
 
 ! initial sigma2
 allocate( sigma2_group(2,1,1:fdim(p%box)-1), source=0. )
