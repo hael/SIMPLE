@@ -22,26 +22,30 @@ type strategy2D_spec
 end type strategy2D_spec
 
 type strategy2D_srch
-    type(pftcc_shsrch_grad) :: grad_shsrch_obj      !< origin shift search object, L-BFGS with gradient
-    type(pftcc_shsrch_grad) :: grad_shsrch_obj2     !< origin shift search object, L-BFGS with gradient, no call back
-    integer                 :: nrefs         =  0   !< number of references
-    integer                 :: nrots         =  0   !< number of in-plane rotations in polar representation
-    integer                 :: nrefs_eval    =  0   !< nr of references evaluated
-    integer                 :: prev_class    =  0   !< previous class index
-    integer                 :: best_class    =  0   !< best class index found by search
-    integer                 :: best_rot      =  0   !< best in-plane rotation found by search
-    integer                 :: prev_rot      =  0   !< previous in-plane rotation found by search
-    integer                 :: iptcl         =  0   !< global particle index
-    integer                 :: iptcl_map     =  0   !< index in pre-allocated batch array
-    integer                 :: ithr          =  0   !< current thread
-    real                    :: prev_shvec(2) =  0.  !< previous origin shift vector
-    real                    :: best_shvec(2) =  0.  !< best shift vector found by search
-    real                    :: prev_corr     = -1.  !< previous best correlation
-    real                    :: best_corr     = -1.  !< best corr found by search
-    real                    :: trs           =  0.  !< shift boundary
+    type(pftcc_shsrch_grad) :: grad_shsrch_obj        !< origin shift search object, L-BFGS with gradient
+    type(pftcc_shsrch_grad) :: grad_shsrch_obj2       !< origin shift search object, L-BFGS with gradient, no call back
+    type(pftcc_shsrch_grad) :: grad_shsrch_first_obj  !< origin shift search object, L-BFGS with gradient, used for initial shift search on previous ref
+    integer                 :: nrefs           =  0   !< number of references
+    integer                 :: nrots           =  0   !< number of in-plane rotations in polar representation
+    integer                 :: nrefs_eval      =  0   !< nr of references evaluated
+    integer                 :: prev_class      =  0   !< previous class index
+    integer                 :: best_class      =  0   !< best class index found by search
+    integer                 :: best_rot        =  0   !< best in-plane rotation found by search
+    integer                 :: prev_rot        =  0   !< previous in-plane rotation found by search
+    integer                 :: iptcl           =  0   !< global particle index
+    integer                 :: iptcl_map       =  0   !< index in pre-allocated batch array
+    integer                 :: ithr            =  0   !< current thread
+    real                    :: prev_shvec(2)   =  0.  !< previous origin shift vector
+    real                    :: best_shvec(2)   =  0.  !< best shift vector found by search
+    real                    :: xy_first(2)     =  0.  !< initial shifts identified by searching the previous best reference
+    real                    :: xy_first_rot(2) =  0.  !< initial shifts identified by searching the previous best reference, rotated
+    real                    :: prev_corr       = -1.  !< previous best correlation
+    real                    :: best_corr       = -1.  !< best corr found by search
+    real                    :: trs             =  0.  !< shift boundary
   contains
     procedure :: new
     procedure :: prep4srch
+    procedure :: inpl_srch_first
     procedure :: inpl_srch
     procedure :: store_solution
     procedure :: kill
@@ -68,21 +72,27 @@ contains
         lims_init(:,2)  =  SHC_INPL_TRSHWDTH
         if( trim(params_glob%tseries).eq.'yes' )then
             ! shift only search
-            call self%grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=params_glob%maxits_sh, opt_angle=.false.)
+            call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
+            maxits=params_glob%maxits_sh, opt_angle=.false.)
+            call self%grad_shsrch_first_obj%new(lims, lims_init=lims_init,&
+            maxits=params_glob%maxits_sh, opt_angle=.false., coarse_init=.true.)
         else
-            call self%grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=params_glob%maxits_sh)
+            call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
+            maxits=params_glob%maxits_sh)
+            call self%grad_shsrch_first_obj%new(lims, lims_init=lims_init,&
+            maxits=params_glob%maxits_sh, coarse_init=.true.)
         endif
+        call self%grad_shsrch_obj2%new(lims, lims_init=lims_init, maxits=params_glob%maxits_sh, opt_angle=.false.)
     end subroutine new
 
     subroutine prep4srch( self )
         class(strategy2D_srch), intent(inout) :: self
         real    :: corrs(pftcc_glob%get_nrots())
-        integer :: prev_roind
         self%nrefs_eval = 0
         self%ithr       = omp_get_thread_num() + 1
         ! find previous discrete alignment parameters
         self%prev_class = nint(build_glob%spproj_field%get(self%iptcl,'class'))                ! class index
-        prev_roind      = pftcc_glob%get_roind(360.-build_glob%spproj_field%e3get(self%iptcl)) ! in-plane angle index
+        self%prev_rot   = pftcc_glob%get_roind(360.-build_glob%spproj_field%e3get(self%iptcl)) ! in-plane angle index
         self%prev_shvec = build_glob%spproj_field%get_2Dshift(self%iptcl)                      ! shift vector
         self%best_shvec = 0.
         if( self%prev_class > 0 )then
@@ -104,22 +114,52 @@ contains
         endif
         ! set best to previous best by default
         self%best_class = self%prev_class
-        self%best_rot   = prev_roind
-        self%prev_rot   = prev_roind
+        self%best_rot   = self%prev_rot
         ! calculate previous best corr (treshold for better)
         call pftcc_glob%gencorrs(self%prev_class, self%iptcl, corrs)
         if( params_glob%cc_objfun == OBJFUN_CC )then
-            self%prev_corr  = max(0., corrs(prev_roind))
+            self%prev_corr  = max(0., corrs(self%prev_rot))
         else
-            self%prev_corr  = corrs(prev_roind)
+            self%prev_corr  = corrs(self%prev_rot)
         endif
-        self%best_corr  = self%prev_corr
+        self%best_corr = self%prev_corr
     end subroutine prep4srch
+
+    subroutine inpl_srch_first( self )
+        class(strategy2D_srch), intent(inout) :: self
+        real    :: cxy(3), rotmat(2,2)
+        integer :: irot
+        if( .not. params_glob%l_sh_first ) return
+        irot = 0
+        self%best_shvec = [0.,0.]
+        if( s2D%do_inplsrch(self%iptcl_map) )then
+            ! BFGS
+            call self%grad_shsrch_first_obj%set_indices(self%prev_class, self%iptcl)
+            if( .not.self%grad_shsrch_obj%does_opt_angle() )then
+                ! shift-only optimization
+                irot = self%prev_rot
+            endif
+            cxy = self%grad_shsrch_obj%minimize(irot=irot, sh_rot=.false.)
+            if( irot == 0 ) cxy(2:3) = 0.
+            self%xy_first = cxy(2:3)
+            self%xy_first_rot = 0.
+            if( irot > 0 )then
+                ! rotate the shift vector to the frame of reference
+                call rotmat2d(pftcc_glob%get_rot(irot), rotmat)
+                self%xy_first_rot = matmul(cxy(2:3), rotmat)
+                ! update best
+                self%best_corr  = cxy(1)
+                self%best_rot   = irot
+                self%best_shvec = self%xy_first_rot
+            endif
+        endif
+    end subroutine inpl_srch_first
 
     subroutine inpl_srch( self )
         class(strategy2D_srch), intent(inout) :: self
         real    :: cxy(3)
         integer :: irot
+        irot = 0
         self%best_shvec = [0.,0.]
         if( s2D%do_inplsrch(self%iptcl_map) )then
             ! BFGS
@@ -177,6 +217,8 @@ contains
     subroutine kill( self )
         class(strategy2D_srch), intent(inout) :: self
         call self%grad_shsrch_obj%kill
+        call self%grad_shsrch_obj2%kill
+        call self%grad_shsrch_first_obj%kill
     end subroutine kill
 
     subroutine squared_sampling( n, corrs, order, nb, ind, rank, cc )
