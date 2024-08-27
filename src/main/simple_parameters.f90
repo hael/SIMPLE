@@ -6,7 +6,7 @@ include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline
 use simple_user_interface, only: simple_program, get_prg_ptr
 use simple_atoms,          only: atoms
-use simple_dyn_ufrac
+use simple_decay_funs
 implicit none
 
 public :: parameters, params_glob
@@ -362,7 +362,8 @@ type :: parameters
     real    :: e1=0.               !< 1st Euler(in degrees){0}
     real    :: e2=0.               !< 2nd Euler(in degrees){0}
     real    :: e3=0.               !< 3d Euler(in degrees){0}
-    real    :: eps=0.003           !< learning rate{0.003}
+    real    :: eps=0.5             !< learning rate
+    real    :: eps_bounds(2) = [0.5,1.0]
     real    :: eullims(3,2)=0.
     real    :: extr_init=EXTRINITHRES !< initial extremal ratio (0-1)
     real    :: fny=0.
@@ -1550,6 +1551,11 @@ contains
         ! reg options
         self%l_use_denoised = trim(self%use_denoised).eq.'yes'
         self%l_noise_reg    = cline%defined('snr_noise_reg')
+        if( self%l_noise_reg )then
+            self%eps_bounds(2) = self%snr_noise_reg
+            self%eps_bounds(1) = self%eps_bounds(2) / 2.
+            self%eps           = self%eps_bounds(1)
+        endif
         ! ML regularization
         self%l_ml_reg = trim(self%ml_reg).eq.'yes'
         if( self%l_ml_reg )then

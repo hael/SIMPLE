@@ -1,6 +1,6 @@
 program simple_test_extr_frac
 include 'simple_lib.f08'
-use simple_dyn_ufrac
+use simple_decay_funs
 implicit none
 
 integer, parameter :: MAXITS = 100 ! upper iteration bound
@@ -20,10 +20,17 @@ nptcls = 36000
 ! nptcls = 1000000
 ! print *, calc_nsampl_fromto( nptcls )
 
+! do i = 1,MAXITS
+!     nsampl      = nsampl_decay( i, MAXITS, NPTCLS)
+!     update_frac = real(nsampl) / real(NPTCLS)
+!     print *, i, nsampl, update_frac
+! end do
+
+
 do i = 1,MAXITS
-    nsampl      = nsampl_decay( i, MAXITS, NPTCLS)
-    update_frac = real(nsampl) / real(NPTCLS)
-    print *, i, nsampl, update_frac
+
+    print *, i, inv_cos_decay( i, maxits, [0.5,1.0] )
+
 end do
 
 ! do i = 1,MAXITS
