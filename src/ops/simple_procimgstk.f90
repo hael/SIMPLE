@@ -391,6 +391,7 @@ contains
         do i=1,n
             call progress(i,n)
             call stkio_r%read(i, img)
+            call img%norm
             call img%add_gauran(snr)
             call stkio_w%write(i, img)
         end do

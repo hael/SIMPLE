@@ -896,17 +896,18 @@ contains
         cline_symsrch        = cline
         ! initialise command line parameters
         ! (1) PROBABILISTIC AB INITIO STEP
-        call cline_refine3D_prob1%set('prg',        'refine3D')
-        call cline_refine3D_prob1%set('projfile',   trim(work_projfile))
-        call cline_refine3D_prob1%set('box_crop',   real(params%box_crop))
-        call cline_refine3D_prob1%set('smpd_crop',  params%smpd_crop)
-        call cline_refine3D_prob1%set('lpstart',    lplims(1))
-        call cline_refine3D_prob1%set('lpstop',     lplims(2))
-        call cline_refine3D_prob1%set('nspace',     real(NSPACE_PROB1))
-        call cline_refine3D_prob1%set('maxits',     real(MAXITS_PROB1))
-        call cline_refine3D_prob1%set('silence_fsc','yes')     ! no FSC plot printing in prob phase
-        call cline_refine3D_prob1%set('refine',    'shc_smpl') ! best refine mode identified for class averages
-        call cline_refine3D_prob1%set('sh_first',   'yes')
+        call cline_refine3D_prob1%set('prg',          'refine3D')
+        call cline_refine3D_prob1%set('projfile',     trim(work_projfile))
+        call cline_refine3D_prob1%set('box_crop',     real(params%box_crop))
+        call cline_refine3D_prob1%set('smpd_crop',    params%smpd_crop)
+        call cline_refine3D_prob1%set('lpstart',      lplims(1))
+        call cline_refine3D_prob1%set('lpstop',       lplims(2))
+        call cline_refine3D_prob1%set('nspace',       real(NSPACE_PROB1))
+        call cline_refine3D_prob1%set('maxits',       real(MAXITS_PROB1))
+        call cline_refine3D_prob1%set('silence_fsc',  'yes')     ! no FSC plot printing in prob phase
+        call cline_refine3D_prob1%set('refine',      'shc_smpl') ! best refine mode identified for class averages
+        call cline_refine3D_prob1%set('sh_first',     'yes')
+        call cline_refine3D_prob1%set('snr_noise_reg', 1.0)
         if( trslim1_present )then
             call cline_refine3D_prob1%set('trs',    params%trs)
         else

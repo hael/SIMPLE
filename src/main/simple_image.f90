@@ -311,6 +311,7 @@ contains
     procedure          :: scale_pixels
     procedure          :: mirror
     procedure          :: norm
+    procedure          :: variance
     procedure          :: norm_minmax
     procedure, private :: norm4viz
     procedure          :: norm_ext
@@ -6052,23 +6053,21 @@ contains
     !! \param snr signal-to-noise ratio
     !! \param noiseimg output image
     !!
-    subroutine add_gauran( self, snr, noiseimg )
-        class(image), intent(inout)          :: self
-        real, intent(in)                     :: snr
-        type(image), optional, intent(inout) :: noiseimg
-        real    :: noisesdev, ran
+    subroutine add_gauran( self, snr )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: snr
+        real    :: sdev_noise, var
         integer :: i, j, k
-        logical :: noiseimg_present
-        call self%norm
-        noiseimg_present = present(noiseimg)
-        if( noiseimg_present ) call noiseimg%new(self%ldim, self%smpd)
-        noisesdev = sqrt(1/snr)
+        var = self%variance()
+        if( var > TINY )then
+            sdev_noise = sqrt(var/snr)
+        else
+            THROW_HARD('variance of image is zero')
+        endif
         do i=1,self%ldim(1)
             do j=1,self%ldim(2)
                 do k=1,self%ldim(3)
-                    ran = gasdev(0., noisesdev)
-                    self%rmat(i,j,k) = self%rmat(i,j,k)+ran
-                    if( noiseimg_present ) call noiseimg%set([i,j,k], ran)
+                    self%rmat(i,j,k) = self%rmat(i,j,k) + gasdev(0., sdev_noise)
                 end do
             end do
         end do
@@ -7866,6 +7865,18 @@ contains
             self%rmat = self%rmat + a_s(1)
         endif
     end subroutine norm
+
+    function variance( self ) result( var )
+        class(image), intent(in) :: self
+        real    :: ave, var, ep, rmat_subtr_avg(self%ldim(1),self%ldim(2),self%ldim(3))
+        integer :: npix
+        npix           = product(self%ldim)
+        ave            = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / real(npix)
+        rmat_subtr_avg = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - ave
+        ep             = sum(rmat_subtr_avg)
+        var            = sum(rmat_subtr_avg**2.0)
+        var            = (var-ep**2./real(npix))/(real(npix)-1.) ! corrected two-pass formula
+    end function variance
 
     subroutine norm_minmax( self  )
         class(image), intent(inout) :: self

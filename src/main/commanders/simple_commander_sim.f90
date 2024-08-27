@@ -299,6 +299,7 @@ contains
             call shifted_base_image%shift([shifts(i,1),shifts(i,2),0.])
             call shifted_base_image%ifft()
             ! add pink noise
+            call shifted_base_image%norm
             call shifted_base_image%add_gauran(snr_pink)
             ! multiply with CTF
             call shifted_base_image%fft()
@@ -309,6 +310,7 @@ contains
             endif
             call shifted_base_image%ifft()
             ! add the detector noise
+            call shifted_base_image%norm
             call shifted_base_image%add_gauran(snr_detector)
             if( params%vis .eq. 'yes' ) call shifted_base_image%vis()
             call shifted_base_image%write('simulate_movie'//params%ext, i)
@@ -395,6 +397,7 @@ contains
         call vol_rot%new([params%box,params%box,params%box], params%smpd)
         call build%vol%new([params%box,params%box,params%box],   params%smpd)
         call build%vol%read(params%vols(1))
+        call build%vol%norm
         call build%vol%add_gauran(params%snr)
         call o%new(is_ptcl=.false.)
         numlen = len(int2str(params%nptcls))
