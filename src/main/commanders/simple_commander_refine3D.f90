@@ -618,6 +618,7 @@ contains
     subroutine exec_refine3D( self, cline )
         use simple_strategy3D_matcher, only: refine3D_exec
         use simple_image,              only: image
+        use simple_decay_funs,         only: inv_cos_decay
         class(refine3D_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(estimate_first_sigmas_commander) :: xfirst_sigmas
@@ -701,6 +702,8 @@ contains
                 write(logfhandle,'(A)')   '>>>'
                 write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
                 write(logfhandle,'(A)')   '>>>'
+                ! set annealing parameter
+                params%eps = inv_cos_decay(i, params%maxits, params%eps_bounds)
                 if( params%refine .eq. 'snhc' .and. params%which_iter > 1 )then
                     ! update stochastic neighborhood size if corr is not improving
                     corr_prev = corr

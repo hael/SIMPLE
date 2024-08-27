@@ -905,7 +905,7 @@ contains
         call cline_refine3D_prob1%set('nspace',       real(NSPACE_PROB1))
         call cline_refine3D_prob1%set('maxits',       real(MAXITS_PROB1))
         call cline_refine3D_prob1%set('silence_fsc',  'yes')     ! no FSC plot printing in prob phase
-        call cline_refine3D_prob1%set('refine',      'shc_smpl') ! best refine mode identified for class averages
+        call cline_refine3D_prob1%set('refine',       'shc_smpl') ! best refine mode identified for class averages
         call cline_refine3D_prob1%set('sh_first',     'yes')
         call cline_refine3D_prob1%set('snr_noise_reg', 1.0)
         if( trslim1_present )then

@@ -1,8 +1,8 @@
-module simple_dyn_ufrac
+module simple_decay_funs
 include 'simple_lib.f08'
 implicit none
 
-public :: nsampl_decay, inv_nsampl_decay, calc_nsampl_fromto
+public :: nsampl_decay, inv_nsampl_decay, calc_nsampl_fromto, inv_cos_decay
 private
 
 real,    parameter :: UPDATE_FRAC_MIN = 0.1
@@ -56,7 +56,7 @@ contains
         endif
     end function calc_nsampl_fromto
 
-end module simple_dyn_ufrac
+end module simple_decay_funs
 
 
 

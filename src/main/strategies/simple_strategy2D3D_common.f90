@@ -603,7 +603,9 @@ contains
         ! back to real space
         call vol_ptr%ifft()
         ! noise regularization
-        if( params_glob%l_noise_reg ) call vol_ptr%add_gauran(params_glob%snr_noise_reg)
+        if( params_glob%l_noise_reg )then
+            call vol_ptr%add_gauran(params_glob%eps)
+        endif
         ! masking
         if( params_glob%l_filemsk )then
             ! envelope masking

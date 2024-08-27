@@ -248,6 +248,9 @@ contains
         write(logfhandle,601) '>>> % PARTICLES SAMPLED THIS ITERATION        ', percen_sampled
         write(logfhandle,601) '>>> % PARTICLES UPDATED SO FAR                ', percen_updated
         write(logfhandle,601) '>>> % PARTICLES USED FOR AVERAGING            ', percen_avg
+        if( params_glob%l_noise_reg )then
+        write(logfhandle,601) '>>> SNR, WHITE NOISE REGULARIZATION           ', params_glob%eps
+        endif
         ! dists and % search space
         write(logfhandle,604) '>>> DIST BTW BEST ORIS (DEG) AVG/SDEV/MIN/MAX:', self%dist%avg,      self%dist%sdev,      self%dist%minv,      self%dist%maxv
         write(logfhandle,604) '>>> IN-PLANE DIST      (DEG) AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
