@@ -330,7 +330,7 @@ contains
         ! fix volumes and stacks
         call build%vol%read(params%vols(1))
         ! masking
-        if(cline%defined('mskdiam')) call build%vol%mask(params%msk, 'soft')
+        if(cline%defined('mskdiam')) call build%vol%mask(params%msk, 'soft',backgr=0.)
         ! generate projections
         imgs     = reproject(build%vol, build%spproj_field)
         if( file_exists(params%outstk) ) call del_file(params%outstk)
