@@ -847,9 +847,8 @@ contains
             even_ind = icls
             odd_ind  = ncavgs + icls
             call work_proj%os_ptcl3D%get_ori(icls, o)
-            state    = o%get_state()
             call o%set('class', real(icls))
-            call o%set('state', real(state))
+            call o%set('state', real(states(icls)))
             ! even
             o_even = o
             call o_even%set('eo', 0.)
