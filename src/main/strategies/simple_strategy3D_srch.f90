@@ -16,8 +16,6 @@ private
 type strategy3D_spec
     type(eul_prob_tab), pointer :: eulprob_obj_part
     integer :: iptcl=0, iptcl_map=0, szsn=0
-    logical :: do_extr=.false.
-    real    :: extr_score_thresh=0.
 end type strategy3D_spec
 
 type strategy3D_srch

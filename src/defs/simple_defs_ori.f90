@@ -23,7 +23,7 @@ enum, bind(c)
     enumerator :: I_PHSHIFT    = 19
     enumerator :: I_PROJ       = 20
     enumerator :: I_SHINCARG   = 21
-    enumerator :: I_SPECSCORE  = 22
+    enumerator :: I_SPECSCORE  = 22 ! unused
     enumerator :: I_STATE      = 23
     enumerator :: I_STKIND     = 24
     enumerator :: I_UPDATECNT  = 25
@@ -107,7 +107,7 @@ contains
             case('shincarg')
                 get_oriparam_ind = I_SHINCARG
             case('specscore')
-                get_oriparam_ind = I_SPECSCORE
+                get_oriparam_ind = I_SPECSCORE ! unused
             case('state')
                 get_oriparam_ind = I_STATE
             case('stkind')
@@ -206,7 +206,7 @@ contains
             case(I_SHINCARG)
                 flag ='shincarg'
             case(I_SPECSCORE)
-                flag ='specscore'
+                flag ='specscore' ! unused
             case(I_STATE)
                 flag ='state'
             case(I_STKIND)

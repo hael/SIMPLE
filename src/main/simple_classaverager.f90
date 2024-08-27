@@ -216,7 +216,7 @@ contains
         class(sp_project), target, intent(inout) :: spproj
         class(oris), pointer :: ptcl_field, cls_field
         integer  :: pops(params_glob%ncls)
-        real(dp) :: corrs(params_glob%ncls), ws(params_glob%ncls), specscores(params_glob%ncls)
+        real(dp) :: corrs(params_glob%ncls), ws(params_glob%ncls)
         real     :: frc05, frc0143, rstate, w
         integer  :: i, iptcl, icls, pop, nptcls
         select case(trim(params_glob%oritype))
@@ -233,9 +233,8 @@ contains
         pops       = 0
         corrs      = 0.d0
         ws         = 0.d0
-        specscores = 0.d0
         !$omp parallel do default(shared) private(iptcl,rstate,icls,w) schedule(static)&
-        !$omp proc_bind(close) reduction(+:pops,corrs,ws,specscores)
+        !$omp proc_bind(close) reduction(+:pops,corrs,ws)
         do iptcl=1,nptcls
             rstate = ptcl_field%get(iptcl,'state')
             if( rstate < 0.5 ) cycle
@@ -246,7 +245,6 @@ contains
             pops(icls)       = pops(icls)      + 1
             corrs(icls)      = corrs(icls)     + ptcl_field%get(iptcl,'corr')
             ws(icls)         = ws(icls)        + real(w,dp)
-            specscores(icls) = specscores(icls)+ ptcl_field%get(iptcl,'specscore')
         enddo
         !$omp end parallel do
         if( l_stream  .and. cls_field%get_noris()==ncls .and. params_glob%update_frac<.99 )then
@@ -259,18 +257,15 @@ contains
                 if( pop == 0 ) cycle
                 corrs(icls)      = corrs(icls)      + real(pop) * cls_field%get(i,'corr')
                 ws(icls)         = ws(icls)         + real(pop) * cls_field%get(i,'w')
-                specscores(icls) = specscores(icls) + real(pop) * cls_field%get(i,'specscore')
                 pops(icls)       = pops(icls) + pop
             enddo
         endif
         where(pops>1)
             corrs      = corrs / real(pops)
             ws         = ws / real(pops)
-            specscores = specscores / real(pops)
         elsewhere
             corrs      = -1.
             ws         = 0.
-            specscores = 0.
         end where
         call cls_field%new(params_glob%ncls, is_ptcl=.false.)
         do icls=1,params_glob%ncls
@@ -281,7 +276,6 @@ contains
             call cls_field%set(icls, 'res',       frc0143)
             call cls_field%set(icls, 'corr',      real(corrs(icls)))
             call cls_field%set(icls, 'w',         real(ws(icls)))
-            call cls_field%set(icls, 'specscore', real(specscores(icls)))
             if( pop > 0 )then
                 call cls_field%set(icls, 'state', 1.0) ! needs to be default val if no selection has been done
             else

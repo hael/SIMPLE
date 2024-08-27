@@ -1512,7 +1512,6 @@ contains
                 call clsdoc_ranked%set(icls, 'res',       spproj%os_cls2D%get(order(icls),  'res'))
                 call clsdoc_ranked%set(icls, 'corr',      spproj%os_cls2D%get(order(icls), 'corr'))
                 call clsdoc_ranked%set(icls, 'w',         spproj%os_cls2D%get(order(icls),    'w'))
-                call clsdoc_ranked%set(icls, 'specscore', spproj%os_cls2D%get(order(icls), 'specscore'))
                 write(logfhandle,'(a,1x,i5,1x,a,1x,i5,1x,a,i5,1x,a,1x,f6.2)') 'CLASS:', order(icls),&
                     &'RANK:', icls ,'POP:', nint(spproj%os_cls2D%get(order(icls), 'pop')),&
                     &'RES:', spproj%os_cls2D%get(order(icls), 'res')
@@ -2193,7 +2192,6 @@ contains
         nptcls   = sum(cls_pops,  mask=cls_pops > 2)
         ncls     = size(cls_inds)
         call os%new(nptcls, is_ptcl=.true.)
-        if( trim(params%projstats).eq.'yes' ) call build%spproj_field%set_all2single('specscore',-1.)
         fname                = 'ptcls.mrcs'
         fname_denoised       = 'ptcls_denoised.mrcs'
         fname_cavgs          = 'cavgs.mrcs'
@@ -2257,7 +2255,6 @@ contains
                 !$omp parallel do private(j,std) default(shared) proc_bind(close) schedule(static)
                 do j = 1,nptcls
                     std = sqrt(sum((pcavecs(:,j)-avg_pix)**2) / real(npix))
-                    call build%spproj_field%set(pinds(j), 'specscore', std)
                 enddo
                 !$omp end parallel do
             endif
