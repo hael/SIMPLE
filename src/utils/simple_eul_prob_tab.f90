@@ -172,7 +172,7 @@ contains
             lims_init(:,2) =  SHC_INPL_TRSHWDTH
             do ithr = 1,nthr_glob
                 call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier,&
-                    &maxits=params_glob%maxits_sh, opt_angle=.true.)
+                    &maxits=params_glob%maxits_sh, opt_angle=.true., coarse_init=.true.)
             end do
             ! fill the table
             do istate = 1, self%nstates
@@ -191,7 +191,6 @@ contains
                     irot  = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
                     iproj = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
                     ! BFGS over shifts
-                    call grad_shsrch_obj(ithr)%set_coarse_init(.true.)
                     call grad_shsrch_obj(ithr)%set_indices(iref_start + iproj, iptcl)
                     cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
                     if( irot == 0 ) cxy(2:3) = 0.
@@ -217,7 +216,6 @@ contains
                         do j = 1,projs_ns
                             iproj = locn(j)
                             ! BFGS over shifts
-                            call grad_shsrch_obj(ithr)%set_coarse_init(.false.)
                             call grad_shsrch_obj(ithr)%set_indices(iref_start + iproj, iptcl)
                             irot     = self%loc_tab(iproj,i,istate)%inpl
                             cxy_prob = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true., xy_in=cxy(2:3))
