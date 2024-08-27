@@ -735,16 +735,16 @@ contains
         character(len=STDLEN) :: sigma2_fname, sigma2_fname_sc, orig_objfun
         real                  :: scale_factor1, scale_factor2, trslim, smpd_target, lplims(2), lp_est, lp, lp_sym
         integer               :: icls, ncavgs, cnt, iter, ipart, even_ind, odd_ind, state, find_start, find, filtsz
-        logical               :: srch4symaxis, do_autoscale, symran_before_refine, trslim1_present
+        logical               :: srch4symaxis, do_autoscale, symran_before_refine
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('refine',      'prob') ! refine=prob should be used throughout
         call cline%set('oritype',      'out') ! because cavgs are part of out segment
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
+        call cline%set('ml_reg',        'no') ! not trusting FSC-based SSNR estimation on class averages
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('autoscale')   ) call cline%set('autoscale',  'yes')
         if( .not. cline%defined('overlap')     ) call cline%set('overlap',     0.99) ! needed to prevent premature convergence
-        if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',      'no') ! simple low-pass filter works better on class averages
         if( .not. cline%defined('prob_athres') ) call cline%set('prob_athres',  90.) ! reduces # failed runs on trpv1 from 4->2/10
         if( .not. cline%defined('cenlp')       ) call cline%set('cenlp', CENLP_DEFAULT)
         ! make master parameters
@@ -753,7 +753,6 @@ contains
         call cline%set('lp_auto',    'yes')    ! automated frequency marching is the method of choice throughout
         call cline%set('mkdir',       'no')    ! to avoid nested directory structure
         call cline%set('oritype', 'ptcl3D')    ! from now on we are in the ptcl3D segment, final report is in the cls3D segment
-        trslim1_present = cline%defined('trs') ! flag translation bound for first phase present on command line
         ! state string
         str_state    = int2str_pad(1,2)
         ! decide wether to search for the symmetry axis
@@ -907,13 +906,9 @@ contains
         call cline_refine3D_prob1%set('silence_fsc',              'yes') ! no FSC plot printing in prob phase
         call cline_refine3D_prob1%set('refine',              'shc_smpl') ! best refine mode identified for class averages
         call cline_refine3D_prob1%set('sh_first',                 'yes')
-        call cline_refine3D_prob2%set('prob_sh',                   'no')
+        call cline_refine3D_prob1%set('prob_sh',                   'no')
         call cline_refine3D_prob1%set('snr_noise_reg',              2.0)
-        if( trslim1_present )then
-            call cline_refine3D_prob1%set('trs', params%trs)
-        else
-            call cline_refine3D_prob1%set('trs',     trslim) ! trslim set in call downscale(smpd_target, scale_factor1) above
-        endif       
+        call cline_refine3D_prob1%set('trs',                     trslim) ! trslim set in call downscale(smpd_target, scale_factor1) above      
         ! (2) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
             ! need to replace original point-group flag with c1/pgrp_start
@@ -939,7 +934,7 @@ contains
         call cline_refine3D_prob2%set('lp_auto',                'yes') ! lpstart/lpstop set below
         call cline_refine3D_prob2%set('sh_first',               'yes')
         call cline_refine3D_prob2%set('prob_sh',                'yes')
-        call cline_refine3D_prob1%set('snr_noise_reg',            3.0)
+        call cline_refine3D_prob2%set('snr_noise_reg',            3.0)
         ! (4) RE-CONSTRUCT & RE-PROJECT VOLUME
         call cline_reconstruct3D%set('prg',           'reconstruct3D')
         call cline_reconstruct3D%set('box',          real(params%box))
@@ -1000,6 +995,7 @@ contains
         call cline_refine3D_prob2%set('box_crop', real(params%box_crop))
         call cline_refine3D_prob2%set('smpd_crop',     params%smpd_crop)
         call cline_refine3D_prob2%set('trs',                     trslim) ! trslim set in call downscale(smpd_target, scale_factor2) above
+        call cline_refine3D_prob2%set('which_iter',          real(iter))
         ! sigma2 at original sampling
         cline_calc_pspec = cline
         call cline_calc_pspec%delete('lp_auto')
@@ -1009,7 +1005,6 @@ contains
         call cline_calc_pspec%set('smpd',       params%smpd)
         call cline_calc_pspec%set('which_iter',  real(iter))
         call xcalc_pspec_distr%execute_shmem(cline_calc_pspec)
-        call cline_refine3D_prob2%set('which_iter', real(iter))
         call rec(cline_refine3D_prob2)
         call xrefine3D%execute_shmem(cline_refine3D_prob2)
         iter = nint(cline_refine3D_prob2%get_rarg('endit'))
