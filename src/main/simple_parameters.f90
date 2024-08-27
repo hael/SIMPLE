@@ -423,6 +423,7 @@ type :: parameters
     real    :: smpd_crop=2.        !< sampling distance; same as EMANs apix(in A) refers to cropped cavg/volume
     real    :: smpd_targets2D(2)
     real    :: snr=0.              !< signal-to-noise ratio
+    real    :: snr_noise_reg=0.    !< signal to noise ratio of noise regularization 
     real    :: tau=TAU_DEFAULT     !< for empirical scaling of cc-based particle weights
     real    :: tilt_thres=0.05
     real    :: thres=0.            !< threshold (binarisation: 0-1; distance filer: in pixels)
@@ -460,6 +461,7 @@ type :: parameters
     logical :: l_lpauto       = .false.
     logical :: l_lpset        = .false.
     logical :: l_ml_reg       = .true.
+    logical :: l_noise_reg    = .false.
     logical :: l_needs_sigma  = .false.
     logical :: l_neigh        = .false.
     logical :: l_phaseplate   = .false.
@@ -863,6 +865,7 @@ contains
         call check_rarg('smpd_crop',      self%smpd_crop)
         call check_rarg('sigma',          self%sigma)
         call check_rarg('snr',            self%snr)
+        call check_rarg('snr_noise_reg',  self%snr_noise_reg)
         call check_rarg('tau',            self%tau)
         call check_rarg('tilt_thres',     self%tilt_thres)
         call check_rarg('thres',          self%thres)
@@ -1546,6 +1549,7 @@ contains
         endif
         ! reg options
         self%l_use_denoised = trim(self%use_denoised).eq.'yes'
+        self%l_noise_reg    = cline%defined('snr_noise_reg')
         ! ML regularization
         self%l_ml_reg = trim(self%ml_reg).eq.'yes'
         if( self%l_ml_reg )then
