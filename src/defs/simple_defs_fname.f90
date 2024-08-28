@@ -63,10 +63,6 @@ character(len=*), parameter :: LOCRESMAP3D_FILE     = 'locresmap3D_finds.bin'
 character(len=*), parameter :: PICKREFS_FBODY       = 'pickrefs'
 character(len=*), parameter :: EXTRACT_STK_FBODY    = 'ptcls_from_'
 character(len=*), parameter :: EXTRACT_PARAMS_FBODY = 'extract_params_'
-! CLUSTER3D
-character(len=*), parameter :: CLUSTER3D_FSC        = 'mixed_fsc'//BIN_EXT
-character(len=*), parameter :: CLUSTER3D_FRCS       = 'mixed_frcs'//BIN_EXT
-character(len=*), parameter :: CLUSTER3D_VOL        = 'mixed_recvol'
 ! ML
 character(len=*), parameter :: SIGMA2_FBODY         = 'sigma2_noise_part'
 character(len=*), parameter :: SIGMA2_GROUP_FBODY   = 'sigma2_it_'
