@@ -7,13 +7,20 @@ use simple_image,          only: image
 use simple_binimage,       only: binimage
 use simple_nanoparticle,   only: nanoparticle
 use simple_nanoparticle_utils
+use simple_atoms,          only: atoms
 implicit none
 
+public :: pdb2mrc_commander
 public :: detect_atoms_commander
 public :: atoms_stats_commander
 public :: tseries_atoms_analysis_commander
 private
 #include "simple_local_flags.inc"
+
+type, extends(commander_base) :: pdb2mrc_commander
+  contains
+    procedure :: execute      => exec_pdb2mrc
+end type pdb2mrc_commander
 
 type, extends(commander_base) :: detect_atoms_commander
   contains
@@ -43,6 +50,20 @@ type :: common_atoms
 end type common_atoms
 
 contains
+
+    subroutine exec_pdb2mrc( self, cline )
+        class(pdb2mrc_commander), intent(inout) :: self
+        class(cmdline),           intent(inout) :: cline
+        type(parameters) :: params
+        type(atoms)      :: molecule
+        call params%new(cline)
+        call molecule%new(params%pdbfile)
+        if( .not.cline%defined('outvol') ) params%outvol = swap_suffix(params%pdbfile,'mrc','pdb')
+        call molecule%pdb2mrc(params%pdbfile, params%outvol, params%smpd)
+        call molecule%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_PDB2MRC NORMAL STOP ****')
+    end subroutine exec_pdb2mrc
 
     subroutine exec_detect_atoms( self, cline )
         class(detect_atoms_commander), intent(inout) :: self

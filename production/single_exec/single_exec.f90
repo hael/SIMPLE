@@ -52,6 +52,7 @@ type(cavgseoproc_nano_commander)              :: xcavgseoproc
 type(ptclsproc_nano_commander)                :: xptclsproc
 
 ! MODEL BUILDING/ANALYSIS PROGRAMS
+type(pdb2mrc_commander)                       :: xpdb2mrc   
 type(detect_atoms_commander)                  :: xdetect_atoms
 type(atoms_stats_commander)                   :: xatoms_stats
 type(tseries_atoms_analysis_commander)        :: xtseries_atoms_analysis
@@ -106,7 +107,7 @@ select case(prg)
         call xprune_project%execute( cline )
 
     ! TIME-SERIES PRE-PROCESSING PROGRAMS
-    case( 'tseries_make_pickavg')
+    case( 'tseries_make_pickavg' )
         call xtseries_make_pickavg%execute(cline)
     case( 'tseries_motion_correct' )
         call xmcorr%execute( cline )
@@ -127,38 +128,41 @@ select case(prg)
         call xmap_cavgs_selection%execute(cline)
     case( 'ppca_denoise_classes' )
         call xppca_denoise_classes%execute(cline)
-    case( 'estimate_diam')
+    case( 'estimate_diam' )
         call cline%set('mkdir', 'no')
         call xestimate_diam%execute(cline)
     case( 'simulate_atoms' )
         call cline%set('mkdir', 'no')
         call xsimulate_atoms%execute(cline)
-    case( 'refine3D_nano')
+    case( 'refine3D_nano' )
         call xrefine3D_nano%execute(cline)
-    case( 'extract_substk')
+    case( 'extract_substk' )
         call xextract_substk%execute(cline)
-    case( 'autorefine3D_nano')
+    case( 'autorefine3D_nano' )
         if( cline%defined('nrestarts') )then
             call restarted_exec(cline, 'autorefine3D_nano', 'single_exec')
         else
             call xautorefine3D_nano%execute(cline)
         endif
-    case( 'tseries_reconstruct3D')
+    case( 'tseries_reconstruct3D' )
         call xtseries_reconstruct3D%execute(cline)
-    case( 'tseries_swap_stack')
+    case( 'tseries_swap_stack' ) 
         call xtseries_swap_stack%execute(cline)
 
     ! VALIDATION PROGRAMS
     case( 'vizoris' )
         call xvizoris%execute(cline)
-    case('cavgsproc_nano')
+    case( 'cavgsproc_nano' )
         call xcavgsproc%execute(cline)
-    case('cavgseoproc_nano')
+    case( 'cavgseoproc_nano' )
         call xcavgseoproc%execute(cline)
-    case('ptclsproc_nano')
+    case( 'ptclsproc_nano' )
         call xptclsproc%execute(cline)
 
     ! MODEL BUILDING/ANALYSIS PROGRAMS
+    case( 'pdb2mrc' )
+        call cline%set('mkdir', 'no')
+        call xpdb2mrc%execute(cline)
     case( 'detect_atoms' )
         call cline%set('mkdir', 'no')
         call xdetect_atoms%execute(cline)
@@ -179,7 +183,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('d6f153fc')
+call simple_print_git_version('a2923c4d')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

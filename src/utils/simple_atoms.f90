@@ -1144,13 +1144,14 @@ contains
 
     subroutine pdb2mrc( self, pdb_file, vol_file, smpd, vol_dim )
         use simple_image, only: image
-        class(atoms),  intent(inout) :: self
-        real,          intent(in)    :: smpd
-        character(*),  intent(in)    :: pdb_file, vol_file   
+        class(atoms),           intent(inout) :: self
+        real,                   intent(in)    :: smpd
+        character(*),           intent(in)    :: pdb_file, vol_file
         type(image)       :: vol
         real              :: mol_dim(3), center(3), half_box(3), max_dist, dist
         integer           :: ldim(3), i_atom, j_atom
         integer, optional :: vol_dim(3)
+        write(logfhandle,'(A,f8.3,A)') 'Sampling distance: ',smpd,' Angstrom'
         call self%new(pdb_file)
         ! Dimensions of the molecule
         write(logfhandle,'(A,f8.2,1X,A,f8.2)') "Bounding box: x:", minval(self%xyz(:,1)),"-", maxval(self%xyz(:,1))
@@ -1165,9 +1166,9 @@ contains
         write(logfhandle,'(A,2(f8.3,","),f8.3,A)') " Atomic center at ", center," (center of volume at 0, 0, 0)"
         if( present(vol_dim) )then
             ldim        = ceiling( (mol_dim)/smpd )
-            if( vol_dim(1) < ldim(1) )  THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pbd2mrc')
-            if( vol_dim(2) < ldim(2) )  THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pbd2mrc')
-            if( vol_dim(3) < ldim(3) )  THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pbd2mrc')
+            if( vol_dim(1) < ldim(1) )  THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pdb2mrc')
+            if( vol_dim(2) < ldim(2) )  THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pdb2mrc')
+            if( vol_dim(3) < ldim(3) )  THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pdb2mrc')
             ldim        = vol_dim
             half_box(:) = (vol_dim*smpd)/2.
         else
@@ -1187,7 +1188,7 @@ contains
         call self%convolve( vol, cutoff = 8*smpd)
         call vol%write(vol_file)
         call vol%kill()
-        write(logfhandle,'(A,3i5)') " Simulated volume created ", ldim
+        write(logfhandle,'(A)') " 3D MRC simulated volume created "
     end subroutine pdb2mrc
 
     subroutine atom_validation( self, vol, filename )
@@ -1257,7 +1258,7 @@ contains
         class(atoms), intent(inout) :: self
         integer,      intent(in)    :: boxsize, i
         if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; center2originbox')
-        self%xyz(i,:) = boxsize/2
+        self%xyz(i,:) = real(boxsize/2)
     end subroutine ref2originbox
 
     ! DESTRUCTOR

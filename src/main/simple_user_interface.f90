@@ -139,6 +139,7 @@ type(simple_program), target :: noisevol
 type(simple_program), target :: normalize_
 type(simple_program), target :: orisops
 type(simple_program), target :: oristats
+type(simple_program), target :: pdb2mrc
 type(simple_program), target :: pick
 type(simple_program), target :: pick_extract
 type(simple_program), target :: postprocess
@@ -396,6 +397,7 @@ contains
         call new_convert
         call new_ctf_estimate
         call new_ctfops
+        call new_pdb2mrc
         call new_detect_atoms
         call new_dock_volpair
         call new_estimate_diam
@@ -521,6 +523,7 @@ contains
         call push2prg_ptr_array(convert)
         call push2prg_ptr_array(ctf_estimate)
         call push2prg_ptr_array(ctfops)
+        call push2prg_ptr_array(pdb2mrc)
         call push2prg_ptr_array(detect_atoms)
         call push2prg_ptr_array(dock_volpair)
         call push2prg_ptr_array(extract)
@@ -684,6 +687,8 @@ contains
                 ptr2prg => ctf_estimate
             case('ctfops')
                 ptr2prg => ctfops
+            case('pdb2mrc')
+                ptr2prg => pdb2mrc
             case('detect_atoms')
                 ptr2prg => detect_atoms
             case('dock_volpair')
@@ -926,6 +931,7 @@ contains
         write(logfhandle,'(A)') normalize_%name
         write(logfhandle,'(A)') orisops%name
         write(logfhandle,'(A)') oristats%name
+        write(logfhandle,'(A)') pdb2mrc%name
         write(logfhandle,'(A)') pick%name
         write(logfhandle,'(A)') postprocess%name
         write(logfhandle,'(A)') ppca_denoise%name
@@ -1015,6 +1021,7 @@ contains
         write(logfhandle,'(A)') ptclsproc_nano%name
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') format_str('MODEL BULDING/ANALYSIS PROGRAMS:', C_UNDERLINED)
+        write(logfhandle,'(A)') pdb2mrc%name
         write(logfhandle,'(A)') detect_atoms%name
         write(logfhandle,'(A)') atoms_stats%name
         write(logfhandle,'(A)') tseries_atoms_analysis%name
@@ -2208,6 +2215,30 @@ contains
         ! computer controls
         call ctfops%set_input('comp_ctrls', 1, nthr)
     end subroutine new_ctfops
+
+    subroutine new_pdb2mrc
+        ! PROGRAM SPECIFICATION
+        call pdb2mrc%new(&
+        &'pdb2mrc', &                                      ! name
+        &'PDB to MRC converter',&                          ! descr_short
+        &'is a program to convert a PDB format coordinadinates file to a 3D simulated density map volume in MRC format',& ! descr long
+        &'all',&                                           ! executable
+        &1, 2, 0, 0, 0, 0, 0, .false.)                     ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call pdb2mrc%set_input('img_ios', 1, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'vol.mrc')
+        ! parameter input/output
+        call pdb2mrc%set_input('parm_ios', 1, smpd)
+        pdb2mrc%parm_ios(1)%required = .false.
+        call pdb2mrc%set_input('parm_ios', 2, outvol)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! mask controls
+        ! computer controls
+    end subroutine new_pdb2mrc
 
     subroutine new_detect_atoms
         ! PROGRAM SPECIFICATION

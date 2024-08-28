@@ -24,6 +24,7 @@ use simple_commander_sim
 use simple_commander_volops
 use simple_commander_resolest
 use simple_commander_euclid
+use simple_commander_atoms
 implicit none
 #include "simple_local_flags.inc"
 
@@ -138,6 +139,7 @@ type(simulate_subtomogram_commander)        :: xsimulate_subtomogram
 type(scale_project_commander_distr)         :: xscale_project
 type(projops_commander)                     :: xprojops
 type(prune_project_commander_distr)         :: xprune_project
+type(pdb2mrc_commander)                     :: xpdb2mrc     
 
 ! SYSTEM INTERACTION PROGRAMS
 type(mkdir_commander)                       :: xmkdir
@@ -236,7 +238,7 @@ select case(trim(prg))
         call xcluster2D_subsets%execute(cline)
 
     ! AB INITIO 3D RECONSTRUCTION WORKFLOW
-    case('noisevol')
+    case( 'noisevol' )
         call xnoisevol%execute(cline)
     case( 'initial_3Dmodel' )
         if( cline%defined('nrestarts') )then
@@ -286,11 +288,11 @@ select case(trim(prg))
         call xmap_cavgs_selection%execute(cline)
     case( 'map_cavgs_states' )
         call xmap_cavgs_states%execute(cline)
-    case('cluster_cavgs')
+    case( 'cluster_cavgs' )
         call xcluster_cavgs%execute(cline)
-    case('prune_cavgs')
+    case( 'prune_cavgs' )
         call xprune_cavgs%execute(cline)
-    case('write_classes')
+    case( 'write_classes' )
         call xwrite_classes%execute(cline)
     case( 'symaxis_search' )
         call xsymsrch%execute( cline )
@@ -310,7 +312,7 @@ select case(trim(prg))
         call xcomparemc%execute(cline)
 
     ! IMAGE PROCESSING PROGRAMS
-    case('binarize')
+    case( 'binarize' )
         call xbinarize%execute(cline)
     case( 'mask' )
         call xmask%execute(cline)
@@ -354,7 +356,7 @@ select case(trim(prg))
         call xicm2D%execute(cline)
     case( 'icm3D' )
         call xicm3D%execute(cline)
-    case('make_pickrefs')
+    case( 'make_pickrefs' )
         call xmake_pickrefs%execute(cline)
 
     ! ORIENTATION PROCESSING PROGRAMS
@@ -398,6 +400,8 @@ select case(trim(prg))
         call xprojops%execute( cline )   
     case( 'prune_project' )
         call xprune_project%execute( cline )
+    case( 'pdb2mrc' )
+        call xpdb2mrc%execute( cline )
 
     ! SYSTEM INTERACTION PROGRAMS
     case( 'mkdir' )
@@ -414,7 +418,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('d6f153fc')
+call simple_print_git_version('a2923c4d')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
