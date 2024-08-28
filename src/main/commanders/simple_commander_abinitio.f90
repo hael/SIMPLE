@@ -1177,13 +1177,11 @@ contains
                 call cline%set('objfun', 'cc')
                 call xreconstruct3D%execute_shmem(cline)
                 call cline%set('objfun', trim(params%objfun))
-                if( params%l_ml_reg )then
-                    call simple_copy_file('recvol_state01_even.mrc', 'startvol_even_unfil.mrc')
-                    call simple_copy_file('recvol_state01_odd.mrc',  'startvol_odd_unfil.mrc')
-                endif
-                call simple_rename('recvol_state01_even.mrc', 'startvol_even.mrc')
-                call simple_rename('recvol_state01_odd.mrc',  'startvol_odd.mrc')
-                call simple_rename('recvol_state01.mrc',      'startvol.mrc')
+                call simple_copy_file('recvol_state01_even.mrc', 'startvol_even_unfil.mrc')
+                call simple_copy_file('recvol_state01_odd.mrc',  'startvol_odd_unfil.mrc')
+                call simple_rename(   'recvol_state01_even.mrc', 'startvol_even.mrc')
+                call simple_rename(   'recvol_state01_odd.mrc',  'startvol_odd.mrc')
+                call simple_rename(   'recvol_state01.mrc',      'startvol.mrc')
                 call cline%set('vol1', 'startvol.mrc')
             end subroutine rndstart
 
@@ -1195,13 +1193,11 @@ contains
                 call cline%set('mkdir', 'no') ! to avoid nested dirs
                 call xreconstruct3D%execute_shmem(cline)
                 call build%spproj_field%kill
-                if( params%l_ml_reg )then
-                    call simple_copy_file('recvol_state01_even.mrc', 'startvol_even_unfil.mrc')
-                    call simple_copy_file('recvol_state01_odd.mrc',  'startvol_odd_unfil.mrc')
-                endif
-                call simple_rename('recvol_state01_even.mrc', 'startvol_even.mrc')
-                call simple_rename('recvol_state01_odd.mrc',  'startvol_odd.mrc')
-                call simple_rename('recvol_state01.mrc',      'startvol.mrc')
+                call simple_copy_file('recvol_state01_even.mrc', 'startvol_even_unfil.mrc')
+                call simple_copy_file('recvol_state01_odd.mrc',  'startvol_odd_unfil.mrc')
+                call simple_rename(   'recvol_state01_even.mrc', 'startvol_even.mrc')
+                call simple_rename(   'recvol_state01_odd.mrc',  'startvol_odd.mrc')
+                call simple_rename(   'recvol_state01.mrc',      'startvol.mrc')
                 call cline%set('vol1', 'startvol.mrc')
             end subroutine rec
 
