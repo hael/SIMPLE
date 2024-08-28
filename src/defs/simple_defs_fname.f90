@@ -90,6 +90,7 @@ character(len=*), parameter :: PAUSE_STREAM         = './SIMPLE_PAUSE_STREAM'
 character(len=*), parameter :: STREAM_REJECT_CLS    = './SIMPLE_REJECT_CLS'
 character(len=*), parameter :: STREAM_SELECTED_REFS = './selected_references'
 character(len=*), parameter :: STREAM_MOLDIAM       = 'moldiam.txt'
+character(len=*), parameter :: CALCPSPEC_FINISHED   = 'CALCPSPEC_FINISHED'
 ! MISCELLANEOUS
 character(len=3), parameter :: NIL                  = 'nil'
 character(len=*), parameter :: STDERR2STDOUT        = '2>&1'

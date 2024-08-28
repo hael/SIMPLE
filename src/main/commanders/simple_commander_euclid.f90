@@ -109,6 +109,7 @@ contains
         call cline_calc_pspec_assemble%kill
         call qenv%kill
         call qsys_cleanup
+        call simple_touch(CALCPSPEC_FINISHED)
         call simple_end('**** SIMPLE_DISTR_CALC_PSPEC NORMAL STOP ****')
     end subroutine exec_calc_pspec_distr
 
