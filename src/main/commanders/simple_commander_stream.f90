@@ -2266,6 +2266,7 @@ contains
         call gui_stats%init(.true.)
         call gui_stats%set('particles', 'particles_imported',          0,            primary=.true.)
         call gui_stats%set('2D',        'iteration',                   0,            primary=.true.)
+        ! ?? nparts is not an input, also see project_buff below
         call gui_stats%set('compute',   'compute_in_use',      int2str(0) // '/' // int2str(params%nparts), primary=.true.)
         do
             if( file_exists(trim(TERM_STREAM)) )then
@@ -2340,6 +2341,10 @@ contains
                         ! pause pool classification & rejection in absence of new chunks, resumes
                         ! when new chunks are added or classification parameters have been updated
                         l_pause = is_pool_available_dev()
+                        if( l_pause )then
+                            ! Remaining unclassified particles will join the pool directly
+                            call flush_remaining_particles(micproj_records)
+                        endif
                     endif
                 endif
                 if( .not.l_pause )then 

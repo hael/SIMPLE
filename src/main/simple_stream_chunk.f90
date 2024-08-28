@@ -40,13 +40,15 @@ type stream_chunk
     integer                                :: it
     integer                                :: nmics
     integer                                :: nptcls
-    logical                                :: converged = .false.
-    logical                                :: autoscale = .false.
-    logical                                :: available = .true.
+    logical                                :: toclassify = .true.
+    logical                                :: converged  = .false.
+    logical                                :: autoscale  = .false.
+    logical                                :: available  = .true.
 contains
     procedure          :: init
     procedure, private :: generate_1, generate_2
     generic            :: generate => generate_1, generate_2
+    procedure          :: calc_sigma2
     procedure          :: exec_classify
     procedure          :: read
     procedure          :: split_sigmas_into
@@ -102,8 +104,9 @@ contains
         call self%spproj%projinfo%delete_entry('projname')
         call self%spproj%projinfo%delete_entry('projfile')
         if( allocated(self%orig_stks) ) deallocate(self%orig_stks)
-        self%converged = .false.
-        self%available = .true.
+        self%toclassify = .true.
+        self%converged  = .false.
+        self%available  = .true.
         call debug_print('end chunk%init '//int2str(id))
     end subroutine init
 
@@ -292,6 +295,54 @@ contains
         call debug_print('end chunk%exec_classify')
     end subroutine exec_classify
 
+    ! To calculate noise power estimates only
+    subroutine calc_sigma2( self, cline_classify, need_sigma )
+        class(stream_chunk), intent(inout) :: self
+        class(cmdline),      intent(in)    :: cline_classify
+        logical,             intent(in)    :: need_sigma
+        type(cmdline)              :: cline_pspec
+        character(len=XLONGSTRLEN) :: cwd
+        integer                    :: nptcls_sel
+        call debug_print('in calc_sigma2 '//int2str(self%id))
+        if( .not.self%available ) return
+        if( self%nptcls == 0 ) return
+        call simple_mkdir(self%path)
+        call chdir(self%path)
+        call simple_getcwd(cwd)
+        cwd_glob    = trim(cwd)
+        self%projfile_out = trim(PROJNAME_CHUNK)//trim(METADATA_EXT)
+        call simple_mkdir(STDERROUT_DIR)
+        nptcls_sel = self%spproj%os_ptcl2D%get_noris(consider_state=.true.)
+        call cline_pspec%set('prg',     'calc_pspec_distr')
+        call cline_pspec%set('oritype',  'ptcl2D')
+        call cline_pspec%set('nthr',     cline_classify%get_rarg('nthr'))
+        call cline_pspec%set('mkdir',    'yes')
+        call cline_pspec%set('nparts',   1.)
+        if( params_glob%nparts_chunk > 1 ) call cline_pspec%set('nparts',real(params_glob%nparts_chunk))
+        call cline_pspec%set('projfile', self%projfile_out)
+        call cline_pspec%set('projname', trim(PROJNAME_CHUNK))
+        call self%spproj%update_projinfo(cline_pspec)
+        call self%spproj%write()
+        self%available  = .false.
+        self%toclassify = .false. ! not to be classified
+        self%it         = 1
+        if( need_sigma )then
+            ! submission
+            self%converged  = .false.
+            call self%qenv%exec_simple_prg_in_queue_async(cline_pspec, './distr_chunk2D', 'simple_log_chunk2d')
+            write(logfhandle,'(A,I6,A,I6,A)')'>>> CHUNK ',self%id,' INITIATED SIGMA2 CALCULATION WITH ',nptcls_sel,' PARTICLES'
+        else
+            self%converged  = .true. ! nothing to calculate
+        endif
+        call chdir('..')
+        call simple_getcwd(cwd_glob)
+        ! cleanup
+        call self%spproj%kill
+        call cline_pspec%kill
+        call self%qenv%kill
+        call debug_print('end calc_sigma2')
+    end subroutine calc_sigma2
+
     subroutine read( self, box )
         class(stream_chunk), intent(inout) :: self
         integer,             intent(in)    :: box
@@ -415,7 +466,13 @@ contains
 
     logical function has_converged( self )
         class(stream_chunk), intent(inout) :: self
-        self%converged = file_exists(trim(self%path)//trim(CLUSTER2D_FINISHED))
+        if( .not.self%converged )then
+            if( self%toclassify )then
+                self%converged = file_exists(trim(self%path)//trim(CLUSTER2D_FINISHED))
+            else
+                self%converged = file_exists(trim(self%path)//trim(CALCPSPEC_FINISHED))
+            endif
+        endif
         has_converged  = self%converged
     end function has_converged
 
@@ -517,9 +574,10 @@ contains
         self%path      = ''
         self%projfile_out = ''
         if( allocated(self%orig_stks) ) deallocate(self%orig_stks)
-        self%autoscale = .false.
-        self%converged = .false.
-        self%available = .false.
+        self%toclassify = .true.
+        self%autoscale  = .false.
+        self%converged  = .false.
+        self%available  = .false.
     end subroutine kill
 
 end module simple_stream_chunk
