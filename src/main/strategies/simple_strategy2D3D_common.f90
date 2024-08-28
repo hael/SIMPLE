@@ -175,11 +175,7 @@ contains
             endif
             ! FSC values are read anyway
             do s=1,params_glob%nstates
-                if( params_glob%nstates > 1 )then
-                    fsc_fname = trim(CLUSTER3D_FSC)
-                else
-                    fsc_fname = trim(FSC_FBODY)//int2str_pad(s,2)//BIN_EXT
-                endif
+                fsc_fname = trim(FSC_FBODY)//int2str_pad(s,2)//BIN_EXT
                 if( file_exists(fsc_fname) )then
                     fsc_arr = file2rarr(trim(adjustl(fsc_fname)))
                     build_glob%fsc(s,:) = fsc_arr(:)
@@ -191,11 +187,7 @@ contains
             all_fsc_bin_exist = .true.
             fsc_bin_exists    = .false.
             do s=1,params_glob%nstates
-                if( params_glob%nstates > 1 )then
-                    fsc_fname = trim(CLUSTER3D_FSC)
-                else
-                    fsc_fname = trim(FSC_FBODY)//int2str_pad(s,2)//BIN_EXT
-                endif
+                fsc_fname = trim(FSC_FBODY)//int2str_pad(s,2)//BIN_EXT
                 fsc_bin_exists( s ) = file_exists(trim(adjustl(fsc_fname)))
                 if( build_glob%spproj_field%get_pop(s, 'state') > 0 .and. .not.fsc_bin_exists(s))&
                     & all_fsc_bin_exist = .false.
@@ -207,12 +199,7 @@ contains
                 resarr = build_glob%img%get_res()
                 do s=1,params_glob%nstates
                     if( fsc_bin_exists(s) )then
-                        ! these are the 'classical' resolution measures
-                        if( params_glob%nstates > 1 )then
-                            fsc_fname = trim(CLUSTER3D_FSC) ! mixed model FSC
-                        else
-                            fsc_fname = trim(FSC_FBODY)//int2str_pad(s,2)//BIN_EXT
-                        endif
+                        fsc_fname = trim(FSC_FBODY)//int2str_pad(s,2)//BIN_EXT
                         fsc_arr = file2rarr(trim(adjustl(fsc_fname)))
                         build_glob%fsc(s,:) = fsc_arr(:)
                         deallocate(fsc_arr)
@@ -503,7 +490,12 @@ contains
         logical     :: l_update_lp
         call mskvol%disc([params_glob%box_crop,params_glob%box_crop,params_glob%box_crop],&
                             &params_glob%smpd_crop, params_glob%msk_crop, npix )
-        call estimate_lplim(build_glob%vol_odd, build_glob%vol, mskvol, [params_glob%lpstart,params_glob%lpstop], lpopt)
+        if( params_glob%lp_auto.eq.'fsc' )then
+            lpopt = calc_lowpass_lim(get_lplim_at_corr(build_glob%fsc(s,:), params_glob%lplim_crit),&
+            &params_glob%box_crop, params_glob%smpd_crop)
+        else
+            call estimate_lplim(build_glob%vol_odd, build_glob%vol, mskvol, [params_glob%lpstart,params_glob%lpstop], lpopt)
+        endif
         l_update_lp = .false.
         if( s == 1 )then
             l_update_lp = .true. ! always update for state == 1       

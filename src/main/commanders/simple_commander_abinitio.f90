@@ -704,6 +704,7 @@ contains
         integer,               parameter :: NSPACE_PROB2     = 1000
         integer,               parameter :: MINBOX           = 88
         character(len=STDLEN), parameter :: work_projfile    = 'initial_3Dmodel_tmpproj.simple'
+        logical,               parameter :: L_FSC_STAGE2     = .true.
         ! distributed commanders
         type(calc_pspec_commander_distr) :: xcalc_pspec_distr
         ! shared-mem commanders
@@ -738,10 +739,9 @@ contains
         logical               :: srch4symaxis, do_autoscale, symran_before_refine
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
-        call cline%set('refine',      'prob') ! refine=prob should be used throughout
         call cline%set('oritype',      'out') ! because cavgs are part of out segment
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
-        call cline%set('ml_reg',        'no') ! not trusting FSC-based SSNR estimation on class averages
+        call cline%set('ml_reg',        'no') ! not trusting FSC-based SSNR estimation on class averages by default
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('autoscale')   ) call cline%set('autoscale',  'yes')
         if( .not. cline%defined('overlap')     ) call cline%set('overlap',     0.99) ! needed to prevent premature convergence
@@ -750,7 +750,7 @@ contains
         ! make master parameters
         call params%new(cline)
         call cline%delete('autoscale')
-        call cline%set('lp_auto',    'yes')    ! automated frequency marching is the method of choice throughout
+        call cline%set('lp_auto',    'yes')    ! automated frequency marching is the default method of choice
         call cline%set('mkdir',       'no')    ! to avoid nested directory structure
         call cline%set('oritype', 'ptcl3D')    ! from now on we are in the ptcl3D segment, final report is in the cls3D segment
         ! state string
@@ -904,6 +904,7 @@ contains
         call cline_refine3D_prob1%set('maxits',      real(MAXITS_PROB1))
         call cline_refine3D_prob1%set('silence_fsc',              'yes') ! no FSC plot printing in prob phase
         call cline_refine3D_prob1%set('refine',              'shc_smpl') ! best refine mode identified for class averages
+        call cline_refine3D_prob1%set('lp_auto',                  'yes')
         call cline_refine3D_prob1%set('sh_first',                 'yes')
         call cline_refine3D_prob1%set('prob_sh',                   'no')
         call cline_refine3D_prob1%set('snr_noise_reg',              2.0)
@@ -927,13 +928,25 @@ contains
         ! (3)  REFINEMENT
         call cline_refine3D_prob2%set('prg',               'refine3D')
         call cline_refine3D_prob2%set('projfile', trim(work_projfile))
+        ! box_crop & smpd_crop set after downscaling, below
+        ! lpstart & lpstop set after low-pass limit estimation, below
         call cline_refine3D_prob2%set('pgrp',       trim(pgrp_refine))
         call cline_refine3D_prob2%set('nspace',    real(NSPACE_PROB2))
         call cline_refine3D_prob2%set('maxits',    real(MAXITS_PROB2))
-        call cline_refine3D_prob2%set('lp_auto',                'yes') ! lpstart/lpstop set below
+        call cline_refine3D_prob2%set('silence_fsc',             'no')
+        call cline_refine3D_prob2%set('refine',                'prob')
         call cline_refine3D_prob2%set('sh_first',               'yes')
         call cline_refine3D_prob2%set('prob_sh',                'yes')
+        if( L_FSC_STAGE2 )then
+        call cline_refine3D_prob2%set('lp_auto',                'fsc')
+        call cline_refine3D_prob2%set('lplim_crit',             0.143)
+        call cline_refine3D_prob2%set('ml_reg',                 'yes')
+        else
+        call cline_refine3D_prob2%set('lp_auto',                'yes') ! lpstart/lpstop set below
         call cline_refine3D_prob2%set('snr_noise_reg',            3.0)
+        call cline_refine3D_prob2%set('ml_reg',                  'no')
+        endif
+        ! trslim set after downscaling, below
         ! (4) RE-CONSTRUCT & RE-PROJECT VOLUME
         call cline_reconstruct3D%set('prg',           'reconstruct3D')
         call cline_reconstruct3D%set('box',          real(params%box))
