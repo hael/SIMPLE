@@ -1131,20 +1131,6 @@ contains
         call simple_end('**** SIMPLE_INITIAL_3DMODEL2 NORMAL STOP ****')
 
         contains
-
-            function calc_lplim_stage2( nbest ) result( lplim )
-                integer, intent(in)  :: nbest
-                real,    allocatable :: res(:), tmp_rarr(:)
-                integer, allocatable :: states(:), tmp_iarr(:)
-                real :: lplim
-                tmp_rarr  = spproj%os_cls2D%get_all('res')
-                tmp_iarr  = nint(spproj%os_cls2D%get_all('state'))
-                res       = pack(tmp_rarr, mask=(tmp_iarr>0))
-                call hpsort(res)
-                lplim = median_nocopy(res(:nbest))
-                if( cline%defined('lpstop') ) lplim = max(params%lpstop, lplim) 
-                deallocate(tmp_rarr, tmp_iarr, res)
-            end function calc_lplim_stage2
             
             subroutine downscale( smpd_target, scale_factor )
                 real, intent(in)    :: smpd_target
@@ -1167,6 +1153,20 @@ contains
                     endif
                 endif
             end subroutine downscale
+
+            function calc_lplim_stage2( nbest ) result( lplim )
+                integer, intent(in)  :: nbest
+                real,    allocatable :: res(:), tmp_rarr(:)
+                integer, allocatable :: states(:), tmp_iarr(:)
+                real :: lplim
+                tmp_rarr  = spproj%os_cls2D%get_all('res')
+                tmp_iarr  = nint(spproj%os_cls2D%get_all('state'))
+                res       = pack(tmp_rarr, mask=(tmp_iarr>0))
+                call hpsort(res)
+                lplim = median_nocopy(res(:nbest))
+                if( cline%defined('lpstop') ) lplim = max(params%lpstop, lplim) 
+                deallocate(tmp_rarr, tmp_iarr, res)
+            end function calc_lplim_stage2
 
             subroutine rndstart( cline )
                 class(cmdline), intent(inout) :: cline
@@ -1232,14 +1232,13 @@ contains
 
     !> for generation of an initial 3d model from particles
     subroutine exec_abinitio_3Dmodel_autolp( self, cline )
-        use simple_convergence, only: convergence
         class(abinitio_3Dmodel_autolp_commander), intent(inout) :: self
         class(cmdline),                           intent(inout) :: cline
         real,    parameter :: CENLP_DEFAULT   = 30.
         real,    parameter :: STARTLP_DEFAULT = 20.
         real,    parameter :: LP_SYMSRCH_LB   = 12.
-        integer, parameter :: MAXITS1         = 30
-        integer, parameter :: MAXITS2         = 30
+        integer, parameter :: MAXITS1         = 20
+        integer, parameter :: MAXITS2         = 10
         integer, parameter :: MAXITS3         = 30
         integer, parameter :: NSPACE1         = 500
         integer, parameter :: NSPACE2         = 1000
@@ -1260,12 +1259,12 @@ contains
         type(sym)                     :: se1, se2
         type(class_frcs)              :: clsfrcs
         type(image)                   :: final_vol, reprojs
-        character(len=:), allocatable :: vol_type, str_state, vol, vol_pproc, vol_pproc_mirr, frcs_fname
+        character(len=:), allocatable :: vol_type, str_state, vol, vol_pproc, vol_pproc_mirr, frcs_fname, vol_iter
         character(len=LONGSTRLEN)     :: vol_str
         integer,          allocatable :: states_cavg(:)
         real,             allocatable :: frcs_avg(:)
-        integer :: find, state, filtsz
-        real    :: smpd_target, scale_factor1, trslim, lplims(2), lp
+        integer :: find, state, filtsz, find_start, iter
+        real    :: smpd_target, scale_factor1, trslim, lplims(2), lp, lp_est, lp_sym
         logical :: l_autoscale, l_err, l_srch4symaxis, l_symran, l_sym
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
@@ -1411,9 +1410,6 @@ contains
         call cline_refine3D_2%set('projfile', trim(params%projfile))
         call cline_refine3D_2%set('box_crop', real(params%box_crop))
         call cline_refine3D_2%set('smpd_crop',     params%smpd_crop)
-!!!!!!!!!!!!!!!!!!!!!!! MUST BE SET BELOW
-        ! call cline_refine3D_2%set('lpstart',    lplims(1))
-        ! call cline_refine3D_2%set('lpstop',     lplims(2))
         call cline_refine3D_2%set('nspace',           real(NSPACE2)) ! # projection directions are increased
         call cline_refine3D_2%set('maxits',           real(MAXITS2))
         call cline_refine3D_2%set('pgrp',         params%pgrp_start)
@@ -1470,9 +1466,39 @@ contains
             call cline_symsrch%set('center',   'yes')
             call cline_symsrch%delete('lp_auto')
         endif
-
-
-        
+        ! execute commanders
+        write(logfhandle,'(A)') '>>>'
+        write(logfhandle,'(A)') '>>> BAYESIAN 3D AB INITIO'
+        write(logfhandle,'(A)') '>>>'
+        call xrefine3D_distr%execute(cline_refine3D_1)
+        iter       = nint(cline_refine3D_1%get_rarg('endit'))
+        call spproj%read_segment('ptcl3D', params%projfile)
+        lp_est     = spproj%os_ptcl3D%get_avg('lp')
+        find_start = calc_fourier_index(lp_est, params%box_crop, params%smpd_crop) - 2
+        lplims(1)  = calc_lowpass_lim(find_start, params%box_crop, params%smpd_crop)
+        lplims(2)  = calc_lplim_stage2(3) ! low-pass limit is median of three best (as in 2D)
+        call cline_refine3D_2%set('startit', real(iter))
+        call cline_refine3D_2%set('lpstart', lplims(1))
+        call cline_refine3D_2%set('lpstop',  lplims(2))
+        write(logfhandle,'(A,F5.1)') '>>> ESTIMATED         LOW-PASS LIMIT (IN A) TO: ', lp_est
+        write(logfhandle,'(A,F5.1)') '>>> DID SET STARTING  LOW-PASS LIMIT (IN A) TO: ', lplims(1)
+        write(logfhandle,'(A,F5.1)') '>>> DID SET HARD      LOW-PASS LIMIT (IN A) TO: ', lplims(2)
+        call xrefine3D_distr%execute(cline_refine3D_2)
+        iter       = nint(cline_refine3D_1%get_rarg('endit'))
+        call spproj%read_segment('ptcl3D', params%projfile)
+        lp_est     = spproj%os_ptcl3D%get_avg('lp')
+        vol_iter   = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
+        if( l_srch4symaxis )then
+            lp_sym = max(LP_SYMSRCH_LB,lp_est)
+            write(logfhandle,'(A,F5.1)') '>>> DID SET SYMSEARCH LOW-PASS LIMIT (IN A) TO: ', lp_sym
+            call cline_symsrch%set('lp', lp_sym)
+            write(logfhandle,'(A)') '>>>'
+            write(logfhandle,'(A)') '>>> SYMMETRY AXIS SEARCH'
+            write(logfhandle,'(A)') '>>>'
+            call cline_symsrch%set('vol1', trim(vol_iter))
+            call xsymsrch%execute_shmem(cline_symsrch)
+            call del_file('SYMAXIS_SEARCH_FINISHED')
+        endif
         
        
 
@@ -1565,6 +1591,20 @@ contains
                     endif
                 endif
             end subroutine downscale
+
+            function calc_lplim_stage2( nbest ) result( lplim )
+                integer, intent(in)  :: nbest
+                real,    allocatable :: res(:), tmp_rarr(:)
+                integer, allocatable :: states(:), tmp_iarr(:)
+                real :: lplim
+                tmp_rarr  = spproj%os_cls2D%get_all('res')
+                tmp_iarr  = nint(spproj%os_cls2D%get_all('state'))
+                res       = pack(tmp_rarr, mask=(tmp_iarr>0))
+                call hpsort(res)
+                lplim = median_nocopy(res(:nbest))
+                if( cline%defined('lpstop') ) lplim = max(params%lpstop, lplim) 
+                deallocate(tmp_rarr, tmp_iarr, res)
+            end function calc_lplim_stage2
 
     end subroutine exec_abinitio_3Dmodel_autolp
 
