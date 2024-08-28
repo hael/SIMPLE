@@ -10,7 +10,7 @@ use simple_qsys_env,         only: qsys_env
 use simple_cluster_seed,     only: gen_labelling
 use simple_commander_volops, only: postprocess_commander
 use simple_commander_mask,   only: automask_commander
-! use simple_starproject,      only: starproject
+use simple_decay_funs,       only: inv_cos_decay
 use simple_commander_euclid
 use simple_qsys_funs
 implicit none
@@ -125,6 +125,7 @@ contains
         real    :: corr, corr_prev, smpd
         integer :: ldim(3), i, state, iter, box, nfiles, niters, ifoo
         integer :: fnr
+        601 format(A,1X,F12.3)
         if( .not. cline%defined('nparts') )then
             call xrefine3D_shmem%execute(cline)
             return
@@ -306,6 +307,10 @@ contains
                 endif
             enddo
             have_oris = .not. build%spproj%is_virgin_field(params%oritype)
+
+            print *, 'have_oris:   ', have_oris
+            print *, 'vol_defined: ', vol_defined
+
             if( .not. have_oris )then
                 call build%spproj_field%rnd_oris
                 have_oris = .true.
@@ -329,9 +334,13 @@ contains
                     vol       = 'vol'//trim(int2str(state))
                     call      cline%set( trim(vol), trim(str) )
                     vol_even  = trim(VOL_FBODY)//trim(str_state)//'_even'//params%ext
+                    str       = trim(STARTVOL_FBODY)//trim(str_state)//'_even_unfil'//params%ext
+                    call      simple_copy_file( trim(vol_even), trim(str) )
                     str       = trim(STARTVOL_FBODY)//trim(str_state)//'_even'//params%ext
                     call      simple_rename( trim(vol_even), trim(str) )
                     vol_odd   = trim(VOL_FBODY)//trim(str_state)//'_odd' //params%ext
+                    str       = trim(STARTVOL_FBODY)//trim(str_state)//'_odd_unfil'//params%ext
+                    call      simple_copy_file( trim(vol_odd), trim(str) )
                     str       = trim(STARTVOL_FBODY)//trim(str_state)//'_odd'//params%ext
                     call      simple_rename( trim(vol_odd), trim(str) )
                 enddo
@@ -371,6 +380,14 @@ contains
             write(logfhandle,'(A)')   '>>>'
             write(logfhandle,'(A,I6)')'>>> ITERATION ', iter
             write(logfhandle,'(A)')   '>>>'
+
+            if( params%l_noise_reg )then
+                ! set annealing parameter
+                params%eps = inv_cos_decay(niters, params%maxits, params%eps_bounds)
+                write(logfhandle,601) '>>> SNR, WHITE NOISE REGULARIZATION           ', params%eps
+            endif
+            
+           
             if( trim(params%objfun).eq.'euclid' )then
                 call cline_calc_sigma%set('which_iter', iter)
                 call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
@@ -612,7 +629,6 @@ contains
     subroutine exec_refine3D( self, cline )
         use simple_strategy3D_matcher, only: refine3D_exec
         use simple_image,              only: image
-        use simple_decay_funs,         only: inv_cos_decay
         class(refine3D_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(estimate_first_sigmas_commander) :: xfirst_sigmas
@@ -629,6 +645,7 @@ contains
         integer                               :: startit, i, state, s
         real                                  :: corr, corr_prev
         logical                               :: converged, l_sigma
+        601 format(A,1X,F12.3)
         call build%init_params_and_build_strategy3D_tbox(cline,params)
         startit = 1
         if( cline%defined('startit') ) startit = params%startit
@@ -644,20 +661,22 @@ contains
         else
             if( trim(params%continue) == 'yes'    ) THROW_HARD('shared-memory implementation of refine3D does not support continue=yes')
             if( .not. file_exists(params%vols(1)) ) then
-                call noisevol%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
-                do s = 1, params%nstates
-                    params%vols(s)      = 'noisevol_state'//int2str_pad(s,2)//'.mrc'
-                    params%vols_even(s) = 'noisevol_state'//int2str_pad(s,2)//'_even.mrc'
-                    params%vols_odd(s)  = 'noisevol_state'//int2str_pad(s,2)//'_odd.mrc'
-                    call cline%set('vol'//int2str(s), params%vols(s))
-                    call noisevol%ran()
-                    call noisevol%write(params%vols(s))
-                    call noisevol%ran()
-                    call noisevol%write(params%vols_even(s))
-                    call noisevol%ran()
-                    call noisevol%write(params%vols_odd(s))
-                end do
-                call noisevol%kill
+                ! THE BELOW CAN CERTAINLY BE DONE, BUT IT HAS TO BE DONE OUTSIDE OF HERE
+                ! call noisevol%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+                ! do s = 1, params%nstates
+                !     params%vols(s)      = 'noisevol_state'//int2str_pad(s,2)//'.mrc'
+                !     params%vols_even(s) = 'noisevol_state'//int2str_pad(s,2)//'_even.mrc'
+                !     params%vols_odd(s)  = 'noisevol_state'//int2str_pad(s,2)//'_odd.mrc'
+                !     call cline%set('vol'//int2str(s), params%vols(s))
+                !     call noisevol%ran()
+                !     call noisevol%write(params%vols(s))
+                !     call noisevol%ran()
+                !     call noisevol%write(params%vols_even(s))
+                !     call noisevol%ran()
+                !     call noisevol%write(params%vols_odd(s))
+                ! end do
+                ! call noisevol%kill
+                THROW_HARD('shared-memory implementation of refine3D needs starting volume input')
             endif
             if( build%spproj%is_virgin_field(params%oritype) )then  ! we don't have orientations, so randomize
                 call build%spproj_field%rnd_oris
@@ -696,8 +715,11 @@ contains
                 write(logfhandle,'(A)')   '>>>'
                 write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
                 write(logfhandle,'(A)')   '>>>'
-                ! set annealing parameter
-                params%eps = inv_cos_decay(i, params%maxits, params%eps_bounds)
+                if( params%l_noise_reg )then
+                    ! set annealing parameter
+                    params%eps = inv_cos_decay(i, params%maxits, params%eps_bounds)
+                    write(logfhandle,601) '>>> SNR, WHITE NOISE REGULARIZATION           ', params%eps
+                endif
                 if( params%refine .eq. 'snhc' .and. params%which_iter > 1 )then
                     ! update stochastic neighborhood size if corr is not improving
                     corr_prev = corr
