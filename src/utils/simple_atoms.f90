@@ -1148,7 +1148,7 @@ contains
         real,                   intent(in)    :: smpd
         character(*),           intent(in)    :: pdb_file, vol_file
         type(image)       :: vol
-        real              :: mol_dim(3), center(3), half_box(3), max_dist, dist
+        real              :: mol_dim(3), center(3), half_box(3), max_dist, dist, corner(3)
         integer           :: ldim(3), i_atom, j_atom
         integer, optional :: vol_dim(3)
         write(logfhandle,'(A,f8.3,A)') 'Sampling distance: ',smpd,' Angstrom'
@@ -1163,6 +1163,7 @@ contains
         center(1)  = minval(self%xyz(:,1)) + mol_dim(1)/2.
         center(2)  = minval(self%xyz(:,2)) + mol_dim(2)/2.
         center(3)  = minval(self%xyz(:,3)) + mol_dim(3)/2.
+        corner(1)  = minval(self%xyz(:,1)); corner(2)= minval(self%xyz(:,2)); corner(3)  = minval(self%xyz(:,3))
         write(logfhandle,'(A,2(f8.3,","),f8.3,A)') " Atomic center at ", center," (center of volume at 0, 0, 0)"
         if( present(vol_dim) )then
             ldim        = ceiling( (mol_dim)/smpd )
@@ -1179,12 +1180,12 @@ contains
                     if( dist > max_dist ) max_dist = dist
                 enddo
             enddo
-            ldim(:)     = ceiling( (max_dist/smpd) * 2.)
+            ldim(:)     = nint( (max_dist * 2./smpd) + 1 )
             half_box(:) = max_dist / 2.
         endif
         call vol%new([ldim(1), ldim(2), ldim(3)], smpd)
         ! 0,0,0 in PDB space is map to the center of the volume 
-        call self%translate(-center+half_box)
+        call self%translate(-corner+half_box)
         call self%convolve( vol, cutoff = 8*smpd)
         call vol%write(vol_file)
         call vol%kill()
