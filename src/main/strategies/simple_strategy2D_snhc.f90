@@ -35,7 +35,11 @@ contains
         real    :: corrs(self%s%nrots), inpl_corr, cc_glob
         logical :: found_better
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
+            ! Prep
             call self%s%prep4srch
+            ! Shift search on previous best reference
+            call self%s%inpl_srch_first
+            ! Class search
             cc_glob      = -huge(cc_glob)
             found_better = .false.
             do isample=1,self%s%nrefs
@@ -48,7 +52,11 @@ contains
                 ! passes empty classes
                 if( s2D%cls_pops(iref) == 0 )cycle
                 ! shc update
-                call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs)
+                if( self%s%l_sh_first )then
+                    call pftcc_glob%gencorrs(iref, self%s%iptcl, self%s%xy_first, corrs)
+                else
+                    call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs)
+                endif
                 inpl_ind = shcloc(self%s%nrots, corrs, self%s%prev_corr)
                 if( inpl_ind == 0 )then
                     ! update inpl_ind & inpl_corr to greedy best
@@ -82,9 +90,15 @@ contains
             if( params_glob%cc_objfun == OBJFUN_CC .and. params_glob%l_kweight_rot )then
                 ! back-calculating in-plane angle with k-weighing
                 if( found_better )then
-                    call pftcc_glob%gencorrs(self%s%prev_class, self%s%iptcl, corrs, kweight=.true.)
-                    self%s%prev_corr = corrs(self%s%prev_rot) ! updated threshold
-                    call pftcc_glob%gencorrs(self%s%best_class, self%s%iptcl, corrs, kweight=.true.)
+                    if( self%s%l_sh_first )then
+                        call pftcc_glob%gencorrs(self%s%prev_class, self%s%iptcl, self%s%xy_first, corrs, kweight=.true.)
+                        self%s%prev_corr = corrs(self%s%prev_rot) ! updated threshold
+                        call pftcc_glob%gencorrs(self%s%best_class, self%s%iptcl, self%s%xy_first, corrs, kweight=.true.)
+                    else
+                        call pftcc_glob%gencorrs(self%s%prev_class, self%s%iptcl, corrs, kweight=.true.)
+                        self%s%prev_corr = corrs(self%s%prev_rot) ! updated threshold
+                        call pftcc_glob%gencorrs(self%s%best_class, self%s%iptcl, corrs, kweight=.true.)
+                    endif
                     inpl_ind = shcloc(self%s%nrots, corrs, self%s%prev_corr)
                     if( inpl_ind == 0 )then
                         ! accept greedy best
@@ -96,7 +110,11 @@ contains
                         self%s%best_rot  = inpl_ind
                     endif
                 else
-                    call pftcc_glob%gencorrs(self%s%best_class, self%s%iptcl, corrs, kweight=.true.)
+                    if( self%s%l_sh_first )then
+                        call pftcc_glob%gencorrs(self%s%best_class, self%s%iptcl, self%s%xy_first, corrs, kweight=.true.)
+                    else
+                        call pftcc_glob%gencorrs(self%s%best_class, self%s%iptcl, corrs, kweight=.true.)
+                    endif
                     self%s%best_rot  = maxloc(corrs, dim=1)
                     self%s%best_corr = corrs(self%s%best_rot)
                 endif

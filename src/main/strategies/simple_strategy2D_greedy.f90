@@ -34,12 +34,20 @@ contains
         integer :: iref,inpl_ind
         real    :: corrs(self%s%nrots),inpl_corr,corr
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
+            ! Prep
             call self%s%prep4srch
+            ! shift search on previous best reference
+            call self%s%inpl_srch_first
+            ! greedy search
             corr = -huge(corr)
             do iref=1,self%s%nrefs
                 if( s2D%cls_pops(iref) == 0 )cycle
                 ! class best
-                call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs)
+                if( self%s%l_sh_first )then
+                    call pftcc_glob%gencorrs(iref, self%s%iptcl, self%s%xy_first, corrs)
+                else
+                    call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs)
+                endif
                 inpl_ind  = maxloc(corrs, dim=1)
                 inpl_corr = corrs(inpl_ind)
                 ! updates global best
@@ -52,7 +60,11 @@ contains
             end do
             if( params_glob%cc_objfun == OBJFUN_CC .and. params_glob%l_kweight_rot )then
                 ! back-calculating in-plane angle with k-weighing
-                call pftcc_glob%gencorrs(self%s%best_class, self%s%iptcl, corrs, kweight=.true.)
+                if( self%s%l_sh_first )then
+                    call pftcc_glob%gencorrs(self%s%best_class, self%s%iptcl, self%s%xy_first, corrs, kweight=.true.)
+                else
+                    call pftcc_glob%gencorrs(self%s%best_class, self%s%iptcl, corrs, kweight=.true.)
+                endif
                 self%s%best_rot  = maxloc(corrs, dim=1)
                 self%s%best_corr = corrs(inpl_ind)
             endif

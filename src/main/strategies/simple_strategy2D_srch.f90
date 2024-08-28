@@ -42,6 +42,7 @@ type strategy2D_srch
     real                    :: prev_corr       = -1.  !< previous best correlation
     real                    :: best_corr       = -1.  !< best corr found by search
     real                    :: trs             =  0.  !< shift boundary
+    logical                 :: l_sh_first      = .false. !< Whether to search the shifts on previous best reference
   contains
     procedure :: new
     procedure :: prep4srch
@@ -123,35 +124,37 @@ contains
             self%prev_corr  = corrs(self%prev_rot)
         endif
         self%best_corr = self%prev_corr
+        ! whether to search shifts first
+        self%l_sh_first   = s2D%do_inplsrch(self%iptcl_map) .and. params_glob%l_sh_first
+        self%xy_first     =  0.
+        self%xy_first_rot =  0.
     end subroutine prep4srch
 
     subroutine inpl_srch_first( self )
         class(strategy2D_srch), intent(inout) :: self
         real    :: cxy(3), rotmat(2,2)
         integer :: irot
-        if( .not. params_glob%l_sh_first ) return
-        irot = 0
         self%best_shvec = [0.,0.]
-        if( s2D%do_inplsrch(self%iptcl_map) )then
-            ! BFGS
-            call self%grad_shsrch_first_obj%set_indices(self%prev_class, self%iptcl)
-            if( .not.self%grad_shsrch_obj%does_opt_angle() )then
-                ! shift-only optimization
-                irot = self%prev_rot
-            endif
-            cxy = self%grad_shsrch_obj%minimize(irot=irot, sh_rot=.false.)
-            if( irot == 0 ) cxy(2:3) = 0.
-            self%xy_first = cxy(2:3)
-            self%xy_first_rot = 0.
-            if( irot > 0 )then
-                ! rotate the shift vector to the frame of reference
-                call rotmat2d(pftcc_glob%get_rot(irot), rotmat)
-                self%xy_first_rot = matmul(cxy(2:3), rotmat)
-                ! update best
-                self%best_corr  = cxy(1)
-                self%best_rot   = irot
-                self%best_shvec = self%xy_first_rot
-            endif
+        if( .not. self%l_sh_first ) return
+        ! BFGS
+        irot = 0
+        call self%grad_shsrch_first_obj%set_indices(self%prev_class, self%iptcl)
+        if( .not.self%grad_shsrch_first_obj%does_opt_angle() )then
+            ! shift-only optimization
+            irot = self%prev_rot
+        endif
+        cxy = self%grad_shsrch_first_obj%minimize(irot=irot, sh_rot=.false.)
+        if( irot == 0 ) cxy(2:3) = 0.
+        self%xy_first = cxy(2:3)
+        self%xy_first_rot = 0.
+        if( irot > 0 )then
+            ! rotate the shift vector to the frame of reference
+            call rotmat2d(pftcc_glob%get_rot(irot), rotmat)
+            self%xy_first_rot = matmul(cxy(2:3), rotmat)
+            ! update best
+            self%best_corr  = cxy(1)
+            self%best_rot   = irot
+            self%best_shvec = self%xy_first_rot
         endif
     end subroutine inpl_srch_first
 
@@ -168,7 +171,11 @@ contains
                 ! shift-only optimization
                 irot = self%best_rot
             endif
-            cxy = self%grad_shsrch_obj%minimize(irot=irot)
+            if( self%l_sh_first )then
+                cxy = self%grad_shsrch_obj%minimize(irot=irot, xy_in=self%xy_first)
+            else
+                cxy = self%grad_shsrch_obj%minimize(irot=irot)
+            endif
             if( irot > 0 )then
                 self%best_corr  = cxy(1)
                 self%best_rot   = irot
