@@ -151,7 +151,8 @@ type :: polarft_corrcalc
     procedure          :: gencorrs_euclid,      gencorrs_shifted_euclid
     procedure, private :: gencorrs_1,           gencorrs_2
     generic            :: gencorrs => gencorrs_1, gencorrs_2
-    procedure          :: gencorr_for_rot_8
+    procedure, private :: gencorr_for_rot_8_1, gencorr_for_rot_8_2
+    generic            :: gencorr_for_rot_8 => gencorr_for_rot_8_1, gencorr_for_rot_8_2
     procedure          :: gencorr_grad_for_rot_8
     procedure          :: gencorr_grad_only_for_rot_8
     procedure          :: gencorr_cc_for_rot_8
@@ -2095,7 +2096,34 @@ contains
         end select
     end subroutine bidirectional_shift_search
 
-    real(dp) function gencorr_for_rot_8( self, iref, iptcl, shvec, irot )
+    real(dp) function gencorr_for_rot_8_1( self, iref, iptcl, irot )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl, irot
+        complex(dp), pointer :: pft_ref_8(:,:), pft_ref_tmp_8(:,:)
+        integer              :: ithr, i
+        i    =  self%pinds(iptcl)
+        ithr = omp_get_thread_num() + 1
+        pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
+        pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
+        if( self%iseven(i) )then
+            pft_ref_8 = self%pfts_refs_even(:,:,iref)
+        else
+            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
+        endif
+        ! rotation
+        call self%rotate_ref(pft_ref_8, irot, pft_ref_tmp_8)
+        ! ctf
+        if( self%with_ctf ) pft_ref_tmp_8 = pft_ref_tmp_8 * self%ctfmats(:,:,i)
+        gencorr_for_rot_8_1 = 0.d0
+        select case(params_glob%cc_objfun)
+            case(OBJFUN_CC)
+                gencorr_for_rot_8_1 = self%gencorr_cc_for_rot_8(pft_ref_tmp_8, i)
+            case(OBJFUN_EUCLID)
+                gencorr_for_rot_8_1 = self%gencorr_euclid_for_rot_8(pft_ref_tmp_8, iptcl)
+        end select
+    end function gencorr_for_rot_8_1
+
+    real(dp) function gencorr_for_rot_8_2( self, iref, iptcl, shvec, irot )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(dp),                intent(in)    :: shvec(2)
@@ -2119,14 +2147,14 @@ contains
         call self%rotate_ref(pft_ref_8, irot, pft_ref_tmp_8)
         ! ctf
         if( self%with_ctf ) pft_ref_tmp_8 = pft_ref_tmp_8 * self%ctfmats(:,:,i)
-        gencorr_for_rot_8 = 0.d0
+        gencorr_for_rot_8_2 = 0.d0
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
-                gencorr_for_rot_8 = self%gencorr_cc_for_rot_8(pft_ref_tmp_8, i)
+                gencorr_for_rot_8_2 = self%gencorr_cc_for_rot_8(pft_ref_tmp_8, i)
             case(OBJFUN_EUCLID)
-                gencorr_for_rot_8 = self%gencorr_euclid_for_rot_8(pft_ref_tmp_8, iptcl)
+                gencorr_for_rot_8_2 = self%gencorr_euclid_for_rot_8(pft_ref_tmp_8, iptcl)
         end select
-    end function gencorr_for_rot_8
+    end function gencorr_for_rot_8_2
 
     real(dp) function gencorr_cc_for_rot_8( self, pft_ref, i )
         class(polarft_corrcalc), intent(inout) :: self

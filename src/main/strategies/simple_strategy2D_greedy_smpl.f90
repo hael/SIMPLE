@@ -37,14 +37,23 @@ contains
         real    :: refs_corrs(self%s%nrefs), inpl_corrs(self%s%nrots), cxy(3)
         real    :: inpl_corr
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
+            ! Prep
             call self%s%prep4srch
+            ! Shift search on previous best reference
+            call self%s%inpl_srch_first
+            ! Class search
             do iref = 1,self%s%nrefs
                 refs_inds(iref) = iref
                 if( s2D%cls_pops(iref) == 0 )then
                     refs_corrs(iref)    = -1.
                     refs_inplinds(iref) = 0
                 else
-                    call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                    ! in-plane sampling
+                    if( self%s%l_sh_first )then
+                        call pftcc_glob%gencorrs(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
+                    else
+                        call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                    endif
                     call squared_sampling(self%s%nrots, inpl_corrs, inds,&
                                         &s2D%smpl_ninpl, inpl_ind, order_ind, inpl_corr)
                     refs_inplinds(iref) = inpl_ind
@@ -54,6 +63,7 @@ contains
             self%s%best_class = maxloc(refs_corrs,dim=1)
             self%s%best_corr  = refs_corrs(self%s%best_class)
             self%s%best_rot   = refs_inplinds(self%s%best_class)
+            ! Performs shift search for top scoring subset
             if( s2D%do_inplsrch(self%s%iptcl_map) )then
                 call hpsort(refs_corrs, refs_inds)
                 self%s%best_corr = -1.
@@ -62,20 +72,37 @@ contains
                     if( s2D%cls_pops(iref) == 0 ) cycle
                     call self%s%grad_shsrch_obj2%set_indices(iref, self%s%iptcl)
                     if( self%s%grad_shsrch_obj2%does_opt_angle() )then
-                        cxy = self%s%grad_shsrch_obj2%minimize(irot=inpl_ind)
-                        if( inpl_ind == 0 )then
-                            inpl_ind = refs_inplinds(iref)
-                            cxy      = [refs_corrs(isample), 0., 0.]
+                        if( self%s%l_sh_first )then
+                            cxy = self%s%grad_shsrch_obj2%minimize(irot=inpl_ind, xy_in=self%s%xy_first)
+                            if( inpl_ind == 0 )then
+                                inpl_ind = refs_inplinds(iref)
+                                cxy      = [refs_corrs(isample), self%s%xy_first_rot(1), self%s%xy_first_rot(2)]
+                            endif
+                        else
+                            cxy = self%s%grad_shsrch_obj2%minimize(irot=inpl_ind)
+                            if( inpl_ind == 0 )then
+                                inpl_ind = refs_inplinds(iref)
+                                cxy      = [refs_corrs(isample), 0., 0.]
+                            endif
                         endif
                     else
                         inpl_ind = refs_inplinds(iref)
-                        cxy      = self%s%grad_shsrch_obj2%minimize(irot=inpl_ind)
-                        if( inpl_ind == 0 )then
-                            inpl_ind = refs_inplinds(iref)
-                            cxy(1)   = real(pftcc_glob%gencorr_for_rot_8(iref, self%s%iptcl, [0.d0,0.d0], inpl_ind))
-                            cxy(2:3) = [0., 0.]
+                        if( self%s%l_sh_first )then
+                            cxy = self%s%grad_shsrch_obj2%minimize(irot=inpl_ind, xy_in=self%s%xy_first)
+                            if( inpl_ind == 0 )then
+                                inpl_ind = refs_inplinds(iref)
+                                cxy(1)   = real(pftcc_glob%gencorr_for_rot_8(iref, self%s%iptcl, real(self%s%xy_first,dp), inpl_ind))
+                                cxy(2:3) = self%s%xy_first_rot
+                            endif
+                        else
+                            cxy = self%s%grad_shsrch_obj2%minimize(irot=inpl_ind)
+                            if( inpl_ind == 0 )then
+                                inpl_ind = refs_inplinds(iref)
+                                cxy      = [real(pftcc_glob%gencorr_for_rot_8(iref, self%s%iptcl, inpl_ind)), 0.,0.]
+                            endif
                         endif
                     endif
+                    ! Select best score
                     if( cxy(1) > self%s%best_corr )then
                         self%s%best_class = iref
                         self%s%best_corr  = cxy(1)

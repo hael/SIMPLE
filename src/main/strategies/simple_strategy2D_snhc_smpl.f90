@@ -36,21 +36,33 @@ contains
         integer :: cls_inpl_inds(self%s%nrefs), vec_nrots(self%s%nrots), sorted_cls_inds(self%s%nrefs)
         integer :: iref, isample, inpl_ind, order_ind
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
+            ! Prep
             call self%s%prep4srch
+            ! shift search on previous best reference
+            call self%s%inpl_srch_first
             ! Class search
             cls_corrs     = -1.
             cls_inpl_inds = 0
             do isample = 1,self%s%nrefs
+                ! stochastic reference index
                 iref = s2D%srch_order(self%s%iptcl_map, isample)
+                ! keep track of how many references we are evaluating
                 self%s%nrefs_eval = self%s%nrefs_eval + 1
+                ! neighbourhood size
                 if(self%s%nrefs_eval > s2D%snhc_nrefs_bound) exit
                 if( s2D%cls_pops(iref) == 0 )cycle
-                call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                ! In-plane sampling
+                if( self%s%l_sh_first )then
+                    call pftcc_glob%gencorrs(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
+                else
+                    call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                endif
                 call squared_sampling( self%s%nrots, inpl_corrs, vec_nrots,&
                                         &s2D%snhc_smpl_ninpl, inpl_ind, order_ind, inpl_corr )
                 cls_corrs(iref)     = inpl_corr
                 cls_inpl_inds(iref) = inpl_ind
             end do
+            ! Performs shift search for top scoring subset
             if( s2D%do_inplsrch(self%s%iptcl_map) )then
                 sorted_cls_corrs = cls_corrs
                 sorted_cls_inds  = (/(iref,iref=1,self%s%nrefs)/)
@@ -61,11 +73,19 @@ contains
                     if( s2D%cls_pops(iref) == 0 ) cycle
                     call self%s%grad_shsrch_obj2%set_indices(iref, self%s%iptcl)
                     inpl_ind = cls_inpl_inds(iref)
-                    cxy      = self%s%grad_shsrch_obj2%minimize(irot=inpl_ind)
-                    if( inpl_ind == 0 )then
-                        inpl_ind = cls_inpl_inds(iref)
-                        cxy(1)   = real(pftcc_glob%gencorr_for_rot_8(iref, self%s%iptcl, [0.d0,0.d0], inpl_ind))
-                        cxy(2:3) = 0.
+                    if( self%s%l_sh_first )then
+                        cxy = self%s%grad_shsrch_obj2%minimize(irot=inpl_ind, xy_in=self%s%xy_first)
+                        if( inpl_ind == 0 )then
+                            inpl_ind = cls_inpl_inds(iref)
+                            cxy(1)   = real(pftcc_glob%gencorr_for_rot_8(iref, self%s%iptcl, real(self%s%xy_first,dp), inpl_ind))
+                            cxy(2:3) = self%s%xy_first_rot
+                        endif
+                    else
+                        cxy = self%s%grad_shsrch_obj2%minimize(irot=inpl_ind)
+                        if( inpl_ind == 0 )then
+                            inpl_ind = cls_inpl_inds(iref)
+                            cxy      = [real(pftcc_glob%gencorr_for_rot_8(iref, self%s%iptcl, inpl_ind)), 0.,0.]
+                        endif
                     endif
                     cls_corrs(iref) = cxy(1)
                 enddo

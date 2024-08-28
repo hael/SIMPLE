@@ -46,7 +46,7 @@ integer                       :: nthr_glob = 1                 !< number of thre
 logical                       :: l_distr_exec_glob             !< global distributed execution flag
 integer                       :: part_glob                     !< global part index
 character(len=:), allocatable :: cmdline_glob                  !< global command line string
-logical,          parameter   :: L_BENCH_GLOB       = .true.   !< global benchmarking flag
+logical,          parameter   :: L_BENCH_GLOB       = .false.   !< global benchmarking flag
 logical,          parameter   :: L_DO_GRIDCORR_GLOB = .false.  !< global gridding correction flag
 logical,          parameter   :: L_USE_SLURM_ARR    = .false.  !< use SLURM arrays for jobs where we know nparts
 logical,          parameter   :: L_USE_AUTO_MEM     = .false.  !< auto estmate memory usage for parts
@@ -225,8 +225,8 @@ real, parameter :: GRAPHENE_BAND1 = 2.14        !< graphene band 1 for omission 
 real, parameter :: GRAPHENE_BAND2 = 1.23        !< graphene band 2 for omission in score function
 
 ! Ice
-real, parameter :: ICE_BAND1 = 3.7   
-real, parameter :: ICE_BAND2 = 1.23 
+real, parameter :: ICE_BAND1 = 3.7
+real, parameter :: ICE_BAND2 = 1.23
 
 ! C-compatible boolean constants
 logical(c_bool), parameter :: C_FALSE = logical(.false.,kind=c_bool)
