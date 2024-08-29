@@ -220,19 +220,19 @@ contains
         real     :: frc05, frc0143, rstate, w
         integer  :: i, iptcl, icls, pop, nptcls
         select case(trim(params_glob%oritype))
-        case('ptcl2D')
-            ptcl_field => spproj%os_ptcl2D
-            cls_field  => spproj%os_cls2D
-        case('ptcl3D')
-            ptcl_field => spproj%os_ptcl3D
-            cls_field  => spproj%os_cls3D
-        case DEFAULT
-            THROW_HARD('Unsupported ORITYPE: '//trim(params_glob%oritype))
+            case('ptcl2D')
+                ptcl_field => spproj%os_ptcl2D
+                cls_field  => spproj%os_cls2D
+            case('ptcl3D')
+                ptcl_field => spproj%os_ptcl3D
+                cls_field  => spproj%os_cls2D ! we want to update the 2D field here
+            case DEFAULT
+                THROW_HARD('Unsupported ORITYPE: '//trim(params_glob%oritype))
         end select
-        nptcls     = ptcl_field%get_noris()
-        pops       = 0
-        corrs      = 0.d0
-        ws         = 0.d0
+        nptcls = ptcl_field%get_noris()
+        pops   = 0
+        corrs  = 0.d0
+        ws     = 0.d0
         !$omp parallel do default(shared) private(iptcl,rstate,icls,w) schedule(static)&
         !$omp proc_bind(close) reduction(+:pops,corrs,ws)
         do iptcl=1,nptcls
