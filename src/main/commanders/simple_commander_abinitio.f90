@@ -1256,7 +1256,6 @@ contains
             maxits = maxits + frac_maxits_incr
             call cline_refine3D%set('maxits',      maxits)
             call cline_refine3D%set('maxits_glob', maxits_glob)
-            call cline_refine3D%set('lp_iters',    maxits)
             ! ICM filtering
             if( params%l_icm .and. (it >= params%icm_stage) )then
                 call cline_refine3D%set('icm',   'yes')
@@ -1341,7 +1340,6 @@ contains
         call cline_refine3D%set('trs',        trslim)
         call cline_refine3D%set('startit',    iter+1)
         call cline_refine3D%set('maxits',     MAXITS2+frac_maxits_incr)
-        call cline_refine3D%set('lp_iters',   MAXITS2+frac_maxits_incr)
         call cline_refine3D%set('nspace',     NSPACE3)
         ! execution
         call exec_refine3D(iter)
@@ -1638,7 +1636,6 @@ contains
         call cline_refine3D%set('prg',                'refine3D')
         call cline_refine3D%set('projfile',      params%projfile)
         call cline_refine3D%set('pgrp',        params%pgrp_start)
-        call cline_refine3D%set('lp_iters',                 9999)
         call cline_refine3D%set('ml_reg',                   'no')
         call cline_reconstruct3D%set('prg',      'reconstruct3D')
         call cline_reconstruct3D%set('box',     real(params%box))
