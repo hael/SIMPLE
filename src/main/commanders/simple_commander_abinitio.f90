@@ -1380,7 +1380,7 @@ contains
         ! command-lines
         cline_refine3D_1          = cline
         cline_refine3D_2          = cline
-        cline_refine3D_2          = cline
+        cline_refine3D_3          = cline
         cline_reconstruct3D       = cline
         cline_reconstruct3D_mlreg = cline
         cline_postprocess         = cline
