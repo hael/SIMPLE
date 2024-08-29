@@ -12,7 +12,6 @@ use simple_parameters,              only: params_glob
 use simple_builder,                 only: build_glob
 use simple_eul_prob_tab,            only: eul_prob_tab
 use simple_polarft_corrcalc,        only: polarft_corrcalc
-use simple_strategy3D_snhc,         only: strategy3D_snhc
 use simple_strategy3D_shc,          only: strategy3D_shc
 use simple_strategy3D_shc_smpl,     only: strategy3D_shc_smpl
 use simple_strategy3D_smpl,         only: strategy3D_smpl
@@ -195,8 +194,6 @@ contains
                 ithr       = omp_get_thread_num() + 1
                 ! switch for per-particle polymorphic strategy3D construction
                 select case(trim(params_glob%refine))
-                    case('snhc')
-                        allocate(strategy3D_snhc                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('shc')
                         if( .not. has_been_searched )then
                             allocate(strategy3D_greedy           :: strategy3Dsrch(iptcl_batch)%ptr)
@@ -228,7 +225,6 @@ contains
                 end select
                 strategy3Dspecs(iptcl_batch)%iptcl     = iptcl
                 strategy3Dspecs(iptcl_batch)%iptcl_map = iptcl_map
-                strategy3Dspecs(iptcl_batch)%szsn      = params_glob%szsn
                 if( str_has_substr(params_glob%refine, 'prob') ) strategy3Dspecs(iptcl_batch)%eulprob_obj_part => eulprob_obj_part
                 ! search object(s) & search
                 if( associated(strategy3Dsrch(iptcl_batch)%ptr) )then

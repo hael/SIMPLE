@@ -387,16 +387,6 @@ contains
             endif
             if( have_oris .or. iter > params%startit )then
                 call build%spproj%read(params%projfile)
-                if( params%refine .eq. 'snhc' )then
-                    ! update stochastic neighborhood size if corr is not improving
-                    corr_prev = corr
-                    corr      = build%spproj_field%get_avg('corr')
-                    if( iter > 1 .and. corr <= corr_prev )then
-                        params%szsn = min(SZSN_MAX,params%szsn + SZSN_STEP)
-                    endif
-                    call job_descr%set('szsn', int2str(params%szsn))
-                    call cline%set('szsn', params%szsn)
-                endif
             endif
             if( str_has_substr(params%refine, 'prob') )then
                 ! generate all corrs
@@ -445,11 +435,7 @@ contains
                     call cline_volassemble%set( 'which_iter', params%which_iter)
                     do state = 1,params%nstates
                         str_state = int2str_pad(state,2)
-                        if( str_has_substr(params%refine,'snhc') )then
-                            volassemble_output = 'RESOLUTION_STATE'//trim(str_state)
-                        else
-                            volassemble_output = 'RESOLUTION_STATE'//trim(str_state)//'_ITER'//trim(str_iter)
-                        endif
+                        volassemble_output = 'RESOLUTION_STATE'//trim(str_state)//'_ITER'//trim(str_iter)
                         call cline_volassemble%set( 'state', real(state) )
                         if( params%nstates>1 )call cline_volassemble%set('part', real(state))
                         call qenv%exec_simple_prg_in_queue_async(cline_volassemble,&
@@ -467,23 +453,14 @@ contains
                             call job_descr%delete( vol )
                         else
                             ! rename state volume
-                            vol = trim(VOL_FBODY)//trim(str_state)//params%ext
-                            if( params%refine .eq. 'snhc' )then
-                                vol_iter = trim(SNHCVOL)//trim(str_state)//params%ext
-                                call simple_rename( vol, vol_iter )
-                            else
-                                vol_iter = trim(vol)
-                            endif
-                            fsc_file = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
+                            vol       = trim(VOL_FBODY)//trim(str_state)//params%ext
+                            vol_iter  = trim(vol)
+                            fsc_file  = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
                             call build%spproj%add_fsc2os_out(fsc_file, state, params%box)
                             ! generate FSC pdf
-                            res = get_resarr(params%box_crop, params%smpd_crop)
-                            fsc = file2rarr(fsc_file)
-                            if( str_has_substr(params%refine,'snhc') )then
-                                fsc_templ = 'fsc_state'//trim(str_state)
-                            else
-                                fsc_templ = 'fsc_state'//trim(str_state)//'_iter'//trim(str_iter)
-                            endif
+                            res       = get_resarr(params%box_crop, params%smpd_crop)
+                            fsc       = file2rarr(fsc_file)
+                            fsc_templ = 'fsc_state'//trim(str_state)//'_iter'//trim(str_iter)
                             call plot_fsc(size(fsc), fsc, res, params%smpd_crop, fsc_templ)
                             ! add state volume to os_out
                             if( trim(params%oritype).eq.'cls3D' )then
@@ -514,41 +491,39 @@ contains
                         if( state_pops(state) == 0 ) cycle
                         call cline_postprocess%set('state', real(state))
                         if( cline%defined('lp') ) call cline_postprocess%set('lp', params%lp)
-                        call xpostprocess%execute(cline_postprocess)
-                        if( params%refine .ne. 'snhc' )then
-                            volpproc = trim(VOL_FBODY)//trim(str_state)//PPROC_SUFFIX//params%ext
-                            vollp    = trim(VOL_FBODY)//trim(str_state)//LP_SUFFIX//params%ext
-                            if( l_automsk )then
-                                if( niters == 1 .and. .not.params%l_filemsk )then
-                                    do_automsk = .true.
-                                else if( mod(iter,AMSK_FREQ)==0 )then
-                                    do_automsk = .true.
-                                else 
-                                    do_automsk = .false. 
-                                endif
-                                if( do_automsk )then
-                                    cline_automask = cline
-                                    call cline_automask%set('vol1', trim(vollp))
-                                    call cline%set('smpd', params%smpd_crop)
-                                    call xautomask%execute(cline_automask)
-                                    params%mskfile   = 'automask'//params%ext
-                                    params%l_filemsk = .true.
-                                    call cline%set('mskfile', trim(params%mskfile))
-                                    call job_descr%set('mskfile', trim(params%mskfile))
-                                    fname_automasked = basename(add2fbody(trim(vollp), params%ext, '_automsk'))
-                                    call del_file(fname_automasked)
-                                endif
+                        call xpostprocess%execute(cline_postprocess)         
+                        volpproc = trim(VOL_FBODY)//trim(str_state)//PPROC_SUFFIX//params%ext
+                        vollp    = trim(VOL_FBODY)//trim(str_state)//LP_SUFFIX//params%ext
+                        if( l_automsk )then
+                            if( niters == 1 .and. .not.params%l_filemsk )then
+                                do_automsk = .true.
+                            else if( mod(iter,AMSK_FREQ)==0 )then
+                                do_automsk = .true.
+                            else 
+                                do_automsk = .false. 
                             endif
-                            vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter,3)//PPROC_SUFFIX//params%ext
-                            call simple_copy_file(volpproc, vol_iter)
-                            vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter,3)//LP_SUFFIX//params%ext
-                            call simple_copy_file(vollp, vol_iter)
-                            if( iter > 1 )then
-                                vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter-1,3)//PPROC_SUFFIX//params%ext
-                                call del_file(vol_iter)
-                                vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter-1,3)//LP_SUFFIX//params%ext
-                                call del_file(vol_iter)
+                            if( do_automsk )then
+                                cline_automask = cline
+                                call cline_automask%set('vol1', trim(vollp))
+                                call cline%set('smpd', params%smpd_crop)
+                                call xautomask%execute(cline_automask)
+                                params%mskfile   = 'automask'//params%ext
+                                params%l_filemsk = .true.
+                                call cline%set('mskfile', trim(params%mskfile))
+                                call job_descr%set('mskfile', trim(params%mskfile))
+                                fname_automasked = basename(add2fbody(trim(vollp), params%ext, '_automsk'))
+                                call del_file(fname_automasked)
                             endif
+                        endif
+                        vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter,3)//PPROC_SUFFIX//params%ext
+                        call simple_copy_file(volpproc, vol_iter)
+                        vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter,3)//LP_SUFFIX//params%ext
+                        call simple_copy_file(vollp, vol_iter)
+                        if( iter > 1 )then
+                            vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter-1,3)//PPROC_SUFFIX//params%ext
+                            call del_file(vol_iter)
+                            vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter-1,3)//LP_SUFFIX//params%ext
+                            call del_file(vol_iter)
                         endif
                     enddo
             end select
@@ -698,12 +673,6 @@ contains
                     params%eps = inv_cos_decay(i, params%maxits, params%eps_bounds)
                     write(logfhandle,601) '>>> SNR, WHITE NOISE REGULARIZATION           ', params%eps
                 endif
-                if( params%refine .eq. 'snhc' .and. params%which_iter > 1 )then
-                    ! update stochastic neighborhood size if corr is not improving
-                    corr_prev = corr
-                    corr      = build%spproj_field%get_avg('corr')
-                    if( corr <= corr_prev ) params%szsn = min(SZSN_MAX,params%szsn + SZSN_STEP)
-                endif
                 if( l_sigma )then
                     call cline_calc_sigma%set('which_iter',real(i))
                     call xcalc_group_sigmas%execute(cline_calc_sigma)
@@ -727,15 +696,11 @@ contains
                     call del_file(params%outfile)
                     do state = 1, params%nstates
                         str_state = int2str_pad(state,2)
-                        fsc_file = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
+                        fsc_file  = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
                         call build%spproj%add_fsc2os_out(fsc_file, state, params%box_crop)
                         ! add state volume to os_out
-                        vol = trim(VOL_FBODY)//trim(str_state)//params%ext
-                        if( params%refine .eq. 'snhc' )then
-                            vol_iter = trim(SNHCVOL)//trim(str_state)//params%ext
-                        else
-                            vol_iter = trim(vol)
-                        endif
+                        vol       = trim(VOL_FBODY)//trim(str_state)//params%ext
+                        vol_iter  = trim(vol)
                         if( trim(params%oritype).eq.'cls3D' )then
                             call build%spproj%add_vol2os_out(vol_iter, params%smpd_crop, state, 'vol_cavg')
                         else

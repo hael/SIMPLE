@@ -318,7 +318,6 @@ type :: parameters
     integer :: startit=1           !< start iterating from here
     integer :: state=1             !< state to extract
     integer :: stepsz=1            !< size of step{1}
-    integer :: szsn=SZSN_INIT      !< size of stochastic neighborhood{5}
     integer :: tofny=0
     integer :: top=1
     integer :: tof=0               !< end index
@@ -774,7 +773,6 @@ contains
         call check_iarg('startit',        self%startit)
         call check_iarg('state',          self%state)
         call check_iarg('stepsz',         self%stepsz)
-        call check_iarg('szsn',           self%szsn)
         call check_iarg('top',            self%top)
         call check_iarg('tof',            self%tof)
         call check_iarg('which_iter',     self%which_iter)

@@ -238,11 +238,6 @@ real,    parameter :: FSC4EOAVG3D  = 0.95       !< corr criterion for eo-averagi
 real,    parameter :: FSC4EOAVG2D  = 0.7        !< corr criterion for eo-averaging in 2D
 integer, parameter :: K4EOAVGLB    = 4          !< Fourier index lower-bound
 
-! SNHC-related global constants, PRIME3D, refine=snhc
-integer, parameter :: SZSN_INIT  = 5
-integer, parameter :: SZSN_STEP  = 3
-integer, parameter :: SZSN_MAX   = 20
-
 ! qsys related
 integer, parameter :: QSYS_SUBMISSION_RETRY_LIMIT = 5
 integer, parameter :: QSYS_SUBMISSION_RETRY_SLEEP = 5
