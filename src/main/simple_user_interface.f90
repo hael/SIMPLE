@@ -120,7 +120,6 @@ type(simple_program), target :: import_starproject
 type(simple_program), target :: info_image
 type(simple_program), target :: info_stktab
 type(simple_program), target :: initial_3Dmodel
-type(simple_program), target :: initial_3Dmodel2
 type(simple_program), target :: abinitio_3Dmodel
 type(simple_program), target :: abinitio_3Dmodel_autolp
 type(simple_program), target :: abinitio_3Dmodel2
@@ -416,7 +415,6 @@ contains
         call new_info_image
         call new_info_stktab
         call new_initial_3Dmodel
-        call new_initial_3Dmodel2
         call new_import_boxes
         call new_import_cavgs
         call new_import_movies
@@ -542,7 +540,6 @@ contains
         call push2prg_ptr_array(info_image)
         call push2prg_ptr_array(info_stktab)
         call push2prg_ptr_array(initial_3Dmodel)
-        call push2prg_ptr_array(initial_3Dmodel2)
         call push2prg_ptr_array(import_boxes)
         call push2prg_ptr_array(import_cavgs)
         call push2prg_ptr_array(import_movies)
@@ -724,8 +721,6 @@ contains
                 ptr2prg => info_stktab
             case('initial_3Dmodel')
                 ptr2prg => initial_3Dmodel
-            case('initial_3Dmodel2')
-                ptr2prg => initial_3Dmodel2
             case('import_boxes')
                 ptr2prg => import_boxes
             case('import_cavgs')
@@ -914,7 +909,6 @@ contains
         write(logfhandle,'(A)') icm2D%name
         write(logfhandle,'(A)') icm3D%name
         write(logfhandle,'(A)') initial_3Dmodel%name
-        write(logfhandle,'(A)') initial_3Dmodel2%name
         write(logfhandle,'(A)') info_image%name
         write(logfhandle,'(A)') info_stktab%name
         write(logfhandle,'(A)') import_boxes%name
@@ -1822,7 +1816,7 @@ contains
         call cluster2D%set_gui_params('srch_ctrls', 7, submenu="search")
         call cluster2D%set_input('srch_ctrls', 8, objfun)
         call cluster2D%set_gui_params('srch_ctrls', 8, submenu="search")
-        call cluster2D%set_input('srch_ctrls', 9, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|greedy|snhc_smpl|greedy_smpl){snhc}', '(snhc|greedy|snhc_smpl|greedy_smpl){snhc}', .false., 'snhc')
+        call cluster2D%set_input('srch_ctrls', 9, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|greedy||greedy_smpl){snhc}', '(snhc|greedy|snhc_smpl|greedy_smpl){snhc}', .false., 'snhc')
         call cluster2D%set_gui_params('srch_ctrls', 9, submenu="search")
         call cluster2D%set_input('srch_ctrls', 10, sigma_est)
         call cluster2D%set_gui_params('srch_ctrls', 10, submenu="search")
@@ -2713,69 +2707,7 @@ contains
     subroutine new_initial_3Dmodel
         ! PROGRAM SPECIFICATION
         call initial_3Dmodel%new(&
-        &'initial_3Dmodel',&                                                          ! name
-        &'3D ab initio model generation from class averages',&                        ! descr_short
-        &'is a distributed workflow for generating an initial 3D model from class&
-        & averages obtained with cluster2D',&                                         ! descr_long
-        &'simple_exec',&                                                              ! executable
-        &0, 0, 0, 5, 6, 2, 2, .true.)  
-        initial_3Dmodel%gui_submenu_list = "model,filter,mask,compute"
-        initial_3Dmodel%advanced = .false.                                               ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        ! <empty>
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call initial_3Dmodel%set_input('srch_ctrls', 1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
-        &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call initial_3Dmodel%set_gui_params('srch_ctrls', 1, submenu="model")
-        call initial_3Dmodel%set_input('srch_ctrls', 2, frac)
-        call initial_3Dmodel%set_gui_params('srch_ctrls', 2, submenu="model")
-        call initial_3Dmodel%set_input('srch_ctrls', 3, pgrp)
-        call initial_3Dmodel%set_gui_params('srch_ctrls', 3, submenu="model", advanced=.false.)
-        call initial_3Dmodel%set_input('srch_ctrls', 4, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
-        &for accelerated convergence rate. Final low-pass limit controls the degree of down-scaling(yes|no){yes}','(yes|no){yes}', .false., 'yes')
-        call initial_3Dmodel%set_gui_params('srch_ctrls', 4, submenu="model")
-        call initial_3Dmodel%set_input('srch_ctrls', 5, pgrp_start)
-        call initial_3Dmodel%set_gui_params('srch_ctrls', 5, submenu="model")
-        ! filter controls
-        call initial_3Dmodel%set_input('filt_ctrls', 1, hp)
-        call initial_3Dmodel%set_gui_params('filt_ctrls', 1, submenu="filter")
-        call initial_3Dmodel%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
-        &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30.)
-        call initial_3Dmodel%set_gui_params('filt_ctrls', 2, submenu="filter")
-        call initial_3Dmodel%set_input('filt_ctrls', 3, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit for the first stage of ab-initio model generation',&
-            &'low-pass limit in Angstroms', .false., 0.)
-        call initial_3Dmodel%set_gui_params('filt_ctrls', 3, submenu="filter")
-        call initial_3Dmodel%set_input('filt_ctrls', 4, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
-            &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 8.)
-        call initial_3Dmodel%set_gui_params('filt_ctrls', 4, submenu="filter")
-        call initial_3Dmodel%set_input('filt_ctrls', 5, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
-            & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 15.)
-        call initial_3Dmodel%set_gui_params('filt_ctrls', 5, submenu="filter")
-        call initial_3Dmodel%set_input('filt_ctrls', 6, nonuniform)
-        call initial_3Dmodel%set_gui_params('filt_ctrls', 6, submenu="filter")
-        ! mask controls
-        call initial_3Dmodel%set_input('mask_ctrls', 1, mskdiam)
-        call initial_3Dmodel%set_gui_params('mask_ctrls', 1, submenu="mask", advanced=.false.)
-        call initial_3Dmodel%set_input('mask_ctrls', 2, automsk)
-        call initial_3Dmodel%set_gui_params('mask_ctrls', 2, submenu="mask")
-        ! computer controls
-        call initial_3Dmodel%set_input('comp_ctrls', 1, nparts)
-        call initial_3Dmodel%set_gui_params('comp_ctrls', 1, submenu="compute", advanced=.false.)
-        initial_3Dmodel%comp_ctrls(1)%required = .false.
-        call initial_3Dmodel%set_input('comp_ctrls', 2, nthr)
-        call initial_3Dmodel%set_gui_params('comp_ctrls', 2, submenu="compute", advanced=.false.)
-    end subroutine new_initial_3Dmodel
-
-    subroutine new_initial_3Dmodel2
-        ! PROGRAM SPECIFICATION
-        call initial_3Dmodel2%new(&
-        &'initial_3Dmodel2',&                                                         ! name
+        &'initial_3Dmodel',&                                                         ! name
         &'3D ab initio model generation from class averages',&                        ! descr_short
         &'is a distributed workflow for generating an initial 3D model from class&
         & averages obtained with cluster2D',&                                         ! descr_long
@@ -2789,32 +2721,32 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call initial_3Dmodel2%set_input('srch_ctrls', 1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
+        call initial_3Dmodel%set_input('srch_ctrls', 1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
         &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call initial_3Dmodel2%set_input('srch_ctrls', 2, pgrp)
-        call initial_3Dmodel2%set_input('srch_ctrls', 3, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
+        call initial_3Dmodel%set_input('srch_ctrls', 2, pgrp)
+        call initial_3Dmodel%set_input('srch_ctrls', 3, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated convergence rate. Final low-pass limit controls the degree of down-scaling(yes|no){yes}','(yes|no){yes}', .false., 'yes')
-        call initial_3Dmodel2%set_input('srch_ctrls', 4, pgrp_start)
+        call initial_3Dmodel%set_input('srch_ctrls', 4, pgrp_start)
         ! filter controls
-        call initial_3Dmodel2%set_input('filt_ctrls', 1, hp)
-        call initial_3Dmodel2%set_gui_params('filt_ctrls', 1, submenu="filter")
-        call initial_3Dmodel2%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        call initial_3Dmodel%set_input('filt_ctrls', 1, hp)
+        call initial_3Dmodel%set_gui_params('filt_ctrls', 1, submenu="filter")
+        call initial_3Dmodel%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30.)
-        call initial_3Dmodel2%set_gui_params('filt_ctrls', 2, submenu="filter")
-        call initial_3Dmodel2%set_input('filt_ctrls', 3, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit for the first stage of ab-initio model generation',&
+        call initial_3Dmodel%set_gui_params('filt_ctrls', 2, submenu="filter")
+        call initial_3Dmodel%set_input('filt_ctrls', 3, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit for the first stage of ab-initio model generation',&
             &'low-pass limit in Angstroms', .false., 0.)
-        call initial_3Dmodel2%set_gui_params('filt_ctrls', 3, submenu="filter")
-        call initial_3Dmodel2%set_input('filt_ctrls', 4, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
+        call initial_3Dmodel%set_gui_params('filt_ctrls', 3, submenu="filter")
+        call initial_3Dmodel%set_input('filt_ctrls', 4, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
             &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 8.)
-        call initial_3Dmodel2%set_gui_params('filt_ctrls', 4, submenu="filter")
+        call initial_3Dmodel%set_gui_params('filt_ctrls', 4, submenu="filter")
         ! mask controls
-        call initial_3Dmodel2%set_input('mask_ctrls', 1, mskdiam)
-        call initial_3Dmodel2%set_gui_params('mask_ctrls', 1, submenu="mask", advanced=.false.)
+        call initial_3Dmodel%set_input('mask_ctrls', 1, mskdiam)
+        call initial_3Dmodel%set_gui_params('mask_ctrls', 1, submenu="mask", advanced=.false.)
         ! computer controls
-        call initial_3Dmodel2%set_input('comp_ctrls', 1, nthr)
-        call initial_3Dmodel2%set_gui_params('comp_ctrls', 1, submenu="compute", advanced=.false.)
-    end subroutine new_initial_3Dmodel2
+        call initial_3Dmodel%set_input('comp_ctrls', 1, nthr)
+        call initial_3Dmodel%set_gui_params('comp_ctrls', 1, submenu="compute", advanced=.false.)
+    end subroutine new_initial_3Dmodel
 
     subroutine new_abinitio_3Dmodel
         ! PROGRAM SPECIFICATION

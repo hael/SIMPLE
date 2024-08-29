@@ -464,7 +464,6 @@ contains
         call cmd_dict%push('stk_backgr',    'stack with image for background subtraction')
         call cmd_dict%push('stream',        'sream (real time) execution mode(yes|no){no}')
         call cmd_dict%push('symrnd',        'randomize over symmetry operations(yes|no){no}')
-        call cmd_dict%push('szsn',          'size of stochastic neighborhood{5}')
         call cmd_dict%push('taper_edges',   'to taper edges(yes|no){no}')
         call cmd_dict%push('thres',         'threshold (binarisation: 0-1; distance filer: # pixels; post-proc: pix val)')
         call cmd_dict%push('thres_low',     'lower threshold for canny edge detection')

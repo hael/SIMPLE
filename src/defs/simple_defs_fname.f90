@@ -47,7 +47,6 @@ character(len=*), parameter :: AMSK_OTSU            = 'automasked_otsu.mrc'
 character(len=*), parameter :: REFINE3D_ITER_FBODY  = 'refine3Ddoc_'
 character(len=*), parameter :: STARTVOL_FBODY       = 'startvol_state'
 character(len=*), parameter :: VOL_FBODY            = 'recvol_state'
-character(len=*), parameter :: SNHCVOL              = 'snhc_recvol_state'
 ! 2D/3D COMMON
 character(len=*), parameter :: FSC_FBODY            = 'fsc_state'
 character(len=*), parameter :: PSSNR_FBODY          = 'pssnr_state'

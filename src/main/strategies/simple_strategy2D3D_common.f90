@@ -821,11 +821,7 @@ contains
                 call build_glob%eorecvols(s)%write_eos(VOL_FBODY//int2str_pad(s,2)//'_part'//&
                     int2str_pad(params_glob%part,params_glob%numlen))
             else
-                if( trim(params_glob%refine) .eq. 'snhc' )then
-                    params_glob%vols(s) = trim(SNHCVOL)//trim(int2str_pad(s,2))//params_glob%ext
-                else
-                    params_glob%vols(s) = fname
-                endif
+                params_glob%vols(s) = fname
                 if( params_glob%l_filemsk .and. params_glob%l_envfsc )then
                     call build_glob%eorecvols(s)%set_automsk(.true.)
                 endif
