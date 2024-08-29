@@ -259,7 +259,6 @@ type :: parameters
     integer :: job_memory_per_task2D=JOB_MEMORY_PER_TASK_DEFAULT
     integer :: kfromto(2)
     integer :: ldim(3)=0
-    integer :: lp_iters=1          !< # iters low-pass limited refinement
     integer :: maxits=100          !< maximum # iterations
     integer :: maxits_glob=100     !< maximum # iterations, global
     integer :: maxits_between=30   !< maximum # iterations in between model building steps
@@ -719,7 +718,6 @@ contains
         call check_iarg('icm_stage',      self%icm_stage)
         call check_iarg('iptcl',          self%iptcl)
         call check_iarg('job_memory_per_task2D', self%job_memory_per_task2D)
-        call check_iarg('lp_iters',       self%lp_iters)
         call check_iarg('maxits',         self%maxits)
         call check_iarg('maxits_glob',    self%maxits_glob)
         call check_iarg('maxits_between', self%maxits_between)
@@ -1588,7 +1586,11 @@ contains
         ! -- neigh defaults
         self%l_neigh = .false.
         if( str_has_substr(self%refine, 'neigh') )then
-            if( .not. cline%defined('nspace') ) self%nspace = 20000
+            if( .not. cline%defined('nspace') )then
+                self%nspace = 20000
+            else
+                self%nspace = max(self%nspace, 20000)
+            endif
             if( .not. cline%defined('athres') ) self%athres = 10.
             self%l_neigh = .true.
         endif

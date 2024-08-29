@@ -120,8 +120,8 @@ contains
         character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc, vollp
         character(len=LONGSTRLEN) :: volassemble_output
         logical :: err, vol_defined, have_oris, converged, fall_over
-        logical :: l_switch2eo, l_continue, l_multistates, l_automsk
-        logical :: l_combine_eo, l_lpset, l_griddingset, do_automsk
+        logical :: l_continue, l_multistates, l_automsk
+        logical :: l_combine_eo, l_griddingset, do_automsk
         real    :: corr, corr_prev, smpd
         integer :: ldim(3), i, state, iter, box, nfiles, niters, ifoo
         integer :: fnr
@@ -131,11 +131,9 @@ contains
             return
         endif
         l_multistates = cline%defined('nstates')
-        l_lpset       = cline%defined('lp')
         l_griddingset = cline%defined('gridding')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',        30.)
-        if( .not. cline%defined('lp_iters')) call cline%set('lp_iters',      1.)
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! init
         call build%init_params_and_build_spproj(cline, params)
@@ -153,9 +151,6 @@ contains
         end select
         if( fall_over ) THROW_HARD('no particles found! exec_refine3D_distr')
         if( .not. l_multistates .and. params%nstates >  1 ) THROW_HARD('nstates > 1 but refine mode is single')
-        ! switch from low-pass to e/o refinement
-        l_switch2eo = params%lp_iters >= 1
-        if( .not.l_lpset ) l_switch2eo = .false. ! is already e/o
         ! final iteration with combined e/o
         l_combine_eo = .false.
         if( cline%defined('combine_eo') )then
@@ -574,16 +569,6 @@ contains
                 call job_descr%set( 'trs', trim(str) )
                 call cline%set( 'trs', cline_check_3Dconv%get_rarg('trs') )
             endif
-            if( l_switch2eo .and. (niters == params%lp_iters ) )then
-                ! e/o projection matching
-                write(logfhandle,'(A)')'>>>'
-                write(logfhandle,'(A)')'>>> SWITCHING TO EVEN/ODD RESOLUTION LIMIT'
-                call cline%delete('lp')
-                call job_descr%delete('lp')
-                call cline_postprocess%delete('lp')
-                call cline%delete('lp_iters')
-                call job_descr%delete('lp_iters')
-            endif
         end do
         call qsys_cleanup
         ! report the last iteration on exit
@@ -682,7 +667,6 @@ contains
                     call cline_prob_align%set('prg',       'prob_align')
                     call cline_prob_align%set('which_iter', params%which_iter)
                     call cline_prob_align%set('vol1',       params%vols(1))
-                    if( params%l_lpset ) call cline_prob_align%set('lp', params%lp)
                     call xprob_align%execute( cline_prob_align )
                 endif
                 ! in strategy3D_matcher:
@@ -745,7 +729,6 @@ contains
         call cline_first_sigmas%set('prg', 'refine3D')
         call cline_first_sigmas%set('center',    'no')
         call cline_first_sigmas%set('continue',  'no')
-        call cline_first_sigmas%delete('lp_iters')
         call cline_first_sigmas%set('maxits',     1.0)
         call cline_first_sigmas%set('which_iter', 1.0)
         call cline_first_sigmas%set('objfun','euclid')
