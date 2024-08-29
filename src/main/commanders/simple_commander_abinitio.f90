@@ -1450,13 +1450,14 @@ contains
         call cline_postprocess%set('imgkind',              vol_type)
         ! SYMMETRY AXIS SEARCH
         if( l_srch4symaxis )then
-            call cline_symsrch%set('prg',     'symaxis_search') ! needed for cluster exec
-            call cline_symsrch%set('pgrp',     params%pgrp)
+            call cline_symsrch%set('prg',      'symaxis_search') ! needed for cluster exec
+            call cline_symsrch%set('pgrp',          params%pgrp)
             call cline_symsrch%set('smpd',     params%smpd_crop)
-            call cline_symsrch%set('box',      real(params%box_crop))
-            call cline_symsrch%set('projfile', params%projfile)
-            call cline_symsrch%set('hp',       params%hp)
-            call cline_symsrch%set('center',   'yes')
+            call cline_symsrch%set('box', real(params%box_crop))
+            call cline_symsrch%set('projfile',  params%projfile)
+            if( .not. cline_symsrch%defined('cenlp') ) call cline_symsrch%set('cenlp', CENLP_DEFAULT)
+            call cline_symsrch%set('hp',              params%hp)
+            call cline_symsrch%set('oritype',          'ptcl3D')
             call cline_symsrch%delete('lp_auto')
         endif
         ! execute commanders

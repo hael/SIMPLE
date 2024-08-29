@@ -307,10 +307,6 @@ contains
                 endif
             enddo
             have_oris = .not. build%spproj%is_virgin_field(params%oritype)
-
-            print *, 'have_oris:   ', have_oris
-            print *, 'vol_defined: ', vol_defined
-
             if( .not. have_oris )then
                 call build%spproj_field%rnd_oris
                 have_oris = .true.
@@ -380,14 +376,11 @@ contains
             write(logfhandle,'(A)')   '>>>'
             write(logfhandle,'(A,I6)')'>>> ITERATION ', iter
             write(logfhandle,'(A)')   '>>>'
-
             if( params%l_noise_reg )then
                 ! set annealing parameter
                 params%eps = inv_cos_decay(niters, params%maxits, params%eps_bounds)
                 write(logfhandle,601) '>>> SNR, WHITE NOISE REGULARIZATION           ', params%eps
             endif
-            
-           
             if( trim(params%objfun).eq.'euclid' )then
                 call cline_calc_sigma%set('which_iter', iter)
                 call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
@@ -661,21 +654,6 @@ contains
         else
             if( trim(params%continue) == 'yes'    ) THROW_HARD('shared-memory implementation of refine3D does not support continue=yes')
             if( .not. file_exists(params%vols(1)) ) then
-                ! THE BELOW CAN CERTAINLY BE DONE, BUT IT HAS TO BE DONE OUTSIDE OF HERE
-                ! call noisevol%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
-                ! do s = 1, params%nstates
-                !     params%vols(s)      = 'noisevol_state'//int2str_pad(s,2)//'.mrc'
-                !     params%vols_even(s) = 'noisevol_state'//int2str_pad(s,2)//'_even.mrc'
-                !     params%vols_odd(s)  = 'noisevol_state'//int2str_pad(s,2)//'_odd.mrc'
-                !     call cline%set('vol'//int2str(s), params%vols(s))
-                !     call noisevol%ran()
-                !     call noisevol%write(params%vols(s))
-                !     call noisevol%ran()
-                !     call noisevol%write(params%vols_even(s))
-                !     call noisevol%ran()
-                !     call noisevol%write(params%vols_odd(s))
-                ! end do
-                ! call noisevol%kill
                 THROW_HARD('shared-memory implementation of refine3D needs starting volume input')
             endif
             if( build%spproj%is_virgin_field(params%oritype) )then  ! we don't have orientations, so randomize

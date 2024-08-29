@@ -1536,14 +1536,22 @@ contains
         end select
         ! automatically estimated lp
         self%l_lpauto = trim(self%lp_auto).ne.'no'
-        if( self%l_lpauto )then
-            if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
-                ! all good, this is an lpset mode (no eo alignment), so update flag
+        select case(trim(self%lp_auto))
+            case('yes')
+                if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
+                    ! all good, this is an lpset mode (no eo alignment), so update flag
+                    self%l_lpset = .true.
+                else
+                    THROW_HARD('Automatic low-pass limit estimation requires LPSTART/LPSTOP range input')
+                endif
+            case('no')
+                ! don't touch l_lpset flag
+            case('fsc')
+                ! low-pass limit set from FSC (but no eo alignment)
                 self%l_lpset = .true.
-            else
-                THROW_HARD('Automatic low-pass limit estimation requires LPSTART/LPSTOP range input')
-            endif
-        endif
+            case DEFAULT
+                THROW_HARD('unsupported lp_auto flag')
+        end select        
         ! reg options
         self%l_use_denoised = trim(self%use_denoised).eq.'yes'
         self%l_noise_reg    = cline%defined('snr_noise_reg')
