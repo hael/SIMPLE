@@ -894,8 +894,8 @@ contains
         call cline%delete('projname')
         call cline%delete('projfile')
         cline_reconstruct3D  = cline
-        cline_refine3D_1 = cline
-        cline_refine3D_2 = cline
+        cline_refine3D_1     = cline
+        cline_refine3D_2     = cline
         cline_reproject      = cline
         cline_symsrch        = cline
         ! initialise command line parameters
@@ -1164,7 +1164,6 @@ contains
                 res       = pack(tmp_rarr, mask=(tmp_iarr>0))
                 call hpsort(res)
                 lplim = median_nocopy(res(:nbest))
-                if( cline%defined('lpstop') ) lplim = max(params%lpstop, lplim) 
                 deallocate(tmp_rarr, tmp_iarr, res)
             end function calc_lplim_stage2
 
@@ -1264,7 +1263,7 @@ contains
         integer,          allocatable :: states_cavg(:)
         real,             allocatable :: frcs_avg(:)
         integer :: find, state, filtsz, find_start, iter
-        real    :: smpd_target, scale_factor1, trslim, lplims(2), lp, lp_est, lp_sym
+        real    :: smpd_target, scale_factor1, scale_factor2, trslim, lplims(2), lp, lp_est, lp_sym
         logical :: l_autoscale, l_err, l_srch4symaxis, l_symran, l_sym
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
@@ -1414,19 +1413,16 @@ contains
         call cline_refine3D_2%set('maxits',           real(MAXITS2))
         call cline_refine3D_2%set('pgrp',         params%pgrp_start)
         call cline_refine3D_2%set('silence_fsc',              'yes')
-        call cline_refine3D_2%set('refine',                  'prob')  ! changing to prob refinement
+        call cline_refine3D_2%set('refine',                  'prob') ! changing to prob refinement
         call cline_refine3D_2%set('lp_auto',                  'yes')
         call cline_refine3D_2%set('sh_first',                 'yes') ! first shift logic is turned on
         call cline_refine3D_2%set('prob_sh',                  'yes') ! probabilistic shift search is turned on
         call cline_refine3D_2%set('ml_reg',                   'yes') ! ML regularization is turned on
         call cline_refine3D_2%set('snr_noise_reg',              4.0) ! white noise regularization is reduced
-        call cline_refine3D_2%set('trs',                     trslim) ! shifts are turned on
+        call cline_refine3D_2%set('trs',                     trslim) ! shifts are turned on, trslim set by downscale above
         ! (3)
         call cline_refine3D_3%set('prg',                 'refine3D')
         call cline_refine3D_3%set('projfile', trim(params%projfile))
-!!!!!!!!!!!!!!!!!!!!!!! MUST BE SET BELOW
-        ! call cline_refine3D_3%set('box_crop', real(params%box_crop))
-        ! call cline_refine3D_3%set('smpd_crop',     params%smpd_crop)
         call cline_refine3D_3%set('nspace',           real(NSPACE3)) ! # projection directions are increased
         call cline_refine3D_3%set('maxits',           real(MAXITS3))
         call cline_refine3D_3%set('pgrp',               params%pgrp) ! highest point-group symmetry is used
@@ -1436,9 +1432,6 @@ contains
         call cline_refine3D_3%set('sh_first',                 'yes')
         call cline_refine3D_3%set('prob_sh',                  'yes')
         call cline_refine3D_3%set('ml_reg',                   'yes')
-!!!!!!!!!!!!!!!!!!!!!!! MUST BE SET BELOW
-        ! call cline_refine3D_2%set('trs',                     trslim) ! shifts are turned on
-
         ! rec3D & postproc
         call cline_reconstruct3D%set('prg',         'reconstruct3D')
         call cline_reconstruct3D%set('box',        real(params%box))
@@ -1477,6 +1470,7 @@ contains
         find_start = calc_fourier_index(lp_est, params%box_crop, params%smpd_crop) - 2
         lplims(1)  = calc_lowpass_lim(find_start, params%box_crop, params%smpd_crop)
         lplims(2)  = calc_lplim_stage2(3) ! low-pass limit is median of three best (as in 2D)
+        iter = iter + 1
         call cline_refine3D_2%set('startit', real(iter))
         call cline_refine3D_2%set('lpstart', lplims(1))
         call cline_refine3D_2%set('lpstop',  lplims(2))
@@ -1484,10 +1478,10 @@ contains
         write(logfhandle,'(A,F5.1)') '>>> DID SET STARTING  LOW-PASS LIMIT (IN A) TO: ', lplims(1)
         write(logfhandle,'(A,F5.1)') '>>> DID SET HARD      LOW-PASS LIMIT (IN A) TO: ', lplims(2)
         call xrefine3D_distr%execute(cline_refine3D_2)
-        iter       = nint(cline_refine3D_1%get_rarg('endit'))
+        iter     = nint(cline_refine3D_1%get_rarg('endit'))
         call spproj%read_segment('ptcl3D', params%projfile)
-        lp_est     = spproj%os_ptcl3D%get_avg('lp')
-        vol_iter   = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
+        lp_est   = spproj%os_ptcl3D%get_avg('lp')
+        vol_iter = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
         if( l_srch4symaxis )then
             lp_sym = max(LP_SYMSRCH_LB,lp_est)
             write(logfhandle,'(A,F5.1)') '>>> DID SET SYMSEARCH LOW-PASS LIMIT (IN A) TO: ', lp_sym
@@ -1499,9 +1493,14 @@ contains
             call xsymsrch%execute_shmem(cline_symsrch)
             call del_file('SYMAXIS_SEARCH_FINISHED')
         endif
-        
-       
-
+        ! final phase scaling
+        smpd_target = max(params%smpd, lplims(2)*LP2SMPDFAC)
+        call downscale(smpd_target, scale_factor2)
+        iter = iter + 1
+        call cline_refine3D_3%set('box_crop', real(params%box_crop))
+        call cline_refine3D_3%set('smpd_crop',     params%smpd_crop)
+        call cline_refine3D_3%set('trs',                     trslim) ! trslim set by downscale above
+        call xrefine3D_distr%execute(cline_refine3D_3)
         ! for visualization
         do state = 1, params%nstates
             str_state = int2str_pad(state,2)
@@ -1538,7 +1537,7 @@ contains
             call spproj%write_segment_inside('out',params%projfile)
             ! post-processing
             do state = 1, params%nstates
-                call cline_postprocess%delete('lp') ! so as to obtain optimal filtration
+                call cline_postprocess%delete('lp') ! to obtain optimal filtration
                 call cline_postprocess%set('state', real(state))
                 call xpostprocess%execute(cline_postprocess)
             enddo
@@ -1562,7 +1561,6 @@ contains
             if( file_exists(vol_pproc)      ) call simple_rename(vol_pproc,      trim(REC_PPROC_FBODY)     //trim(str_state)//trim(params%ext))
             if( file_exists(vol_pproc_mirr) ) call simple_rename(vol_pproc_mirr, trim(REC_PPROC_MIRR_FBODY)//trim(str_state)//trim(params%ext))
         enddo
-
         ! cleanup
         call spproj%kill
         call qsys_cleanup
@@ -1602,7 +1600,6 @@ contains
                 res       = pack(tmp_rarr, mask=(tmp_iarr>0))
                 call hpsort(res)
                 lplim = median_nocopy(res(:nbest))
-                if( cline%defined('lpstop') ) lplim = max(params%lpstop, lplim) 
                 deallocate(tmp_rarr, tmp_iarr, res)
             end function calc_lplim_stage2
 
