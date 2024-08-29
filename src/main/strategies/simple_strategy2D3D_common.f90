@@ -402,6 +402,10 @@ contains
         call img_in%ifft()
         ! clip image if needed
         call img_in%clip(img_out)
+        ! noise regularization
+        if( params_glob%l_noise_reg )then
+            call img_out%add_gauran(params_glob%eps)
+        endif
         ! apply mask
         call img_out%mask(params_glob%msk_crop, 'soft', backgr=0.0)
         ! gridding prep
