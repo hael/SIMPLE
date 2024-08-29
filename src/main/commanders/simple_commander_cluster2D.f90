@@ -229,19 +229,19 @@ contains
             call cavger_write(trim(params%refs_even), 'even'  )
             call cavger_write(trim(params%refs_odd),  'odd'   )
             select case(trim(params%oritype))
-            case('ptcl2D')
-                ! all done
-            case('ptcl3D')
-                do icls = 1,params%nspace
-                    call build%spproj%os_cls3D%set_euler(icls, build%eulspace%get_euler(icls))
-                enddo
-                if( cline%defined('outfile') )then
-                    call build%spproj%os_cls3D%write(params%outfile)
-                else
-                    call build%spproj%os_cls3D%write('cls3D_oris.txt')
-                endif
-            case DEFAULT
-                THROW_HARD('Unsupported ORITYPE: '//trim(params%oritype))
+                case('ptcl2D')
+                    ! all done
+                case('ptcl3D')
+                    do icls = 1,params%nspace
+                        call build%spproj%os_cls3D%set_euler(icls, build%eulspace%get_euler(icls))
+                    enddo
+                    if( cline%defined('outfile') )then
+                        call build%spproj%os_cls3D%write(params%outfile)
+                    else
+                        call build%spproj%os_cls3D%write('cls3D_oris.txt')
+                    endif
+                case DEFAULT
+                    THROW_HARD('Unsupported ORITYPE: '//trim(params%oritype))
             end select
         else
             ! write partial sums
@@ -1407,6 +1407,31 @@ contains
         if( l_stream )then
             params_glob%stream = 'yes'
         endif
+        ! start by modifying project
+        select case(trim(params%oritype))
+            case('ptcl2D') ! make sure state assignment is transferred to cls3D
+                call build%spproj%os_cls3D%new(params%ncls, is_ptcl=.false.)
+                states = build%spproj%os_cls2D%get_all('state')
+                call build%spproj%os_cls3D%set_all('state',states)
+                deallocate(states)
+            case('ptcl3D')
+                ! assign class averages nspace discretized projection directions
+                call build%eulspace%new(params%nspace, is_ptcl=.false.)
+                call build%pgrpsyms%build_refspiral(build%eulspace)
+                do icls = 1,params%ncls
+                    call build%spproj%os_cls3D%set_euler(icls, build%eulspace%get_euler(icls))
+                enddo
+                ! states are 1 by default in cls3D field
+                ! because we make new classes based on projection direction assignment
+                call build%spproj%os_cls3D%set_all2single('state', 1.0)
+                if( cline%defined('outfile') )then
+                    call build%spproj%os_cls3D%write(params%outfile)
+                else
+                    call build%spproj%os_cls3D%write('cls3D_oris.txt')
+                endif
+            case DEFAULT
+                THROW_HARD('Unsupported ORITYPE: '//trim(params%oritype))
+        end select
         call cavger_new
         call cavger_transf_oridat( build%spproj )
         call cavger_assemble_sums_from_parts()
@@ -1422,7 +1447,9 @@ contains
         call terminate_stream('SIMPLE_CAVGASSEMBLE HARD STOP 1')
         call cavger_calc_and_write_frcs_and_eoavg(params%frcs, params%which_iter)
         ! classdoc gen needs to be after calc of FRCs
-        call cavger_gen2Dclassdoc(build%spproj)
+        call cavger_gen2Dclassdoc(build%spproj) ! populates the cls2D field in project
+        call build%spproj%os_cls2D%write('cls2D_oris.txt')
+        call build%spproj%write_segment_inside('cls2D', params%projfile) ! writes it to the project
         ! get iteration from which_iter else from refs filename and write cavgs starfile
         if( cline%defined('which_iter') ) then
             call starproj%export_cls2D(build%spproj, params%which_iter)
@@ -1438,32 +1465,9 @@ contains
         call cavger_write(trim(params%refs_even), 'even'  )
         call cavger_write(trim(params%refs_odd),  'odd'   )
         call cavger_kill()
-        ! write project
-        select case(trim(params%oritype))
-        case('ptcl2D')
-            ! cls2D and state congruent cls3D
-            call build%spproj%os_cls3D%new(params%ncls, is_ptcl=.false.)
-            states = build%spproj%os_cls2D%get_all('state')
-            call build%spproj%os_cls3D%set_all('state',states)
-            deallocate(states)
-            if( trim(params%oritype).eq.'ptcl2D' )then
-                call build%spproj%write_segment_inside('cls2D', params%projfile)
-            endif
-            call build%spproj%write_segment_inside('cls3D', params%projfile)
-        case('ptcl3D')
-            call build%eulspace%new(params%nspace, is_ptcl=.false.)
-            call build%pgrpsyms%build_refspiral(build%eulspace)
-            do icls = 1,params%ncls
-                call build%spproj%os_cls3D%set_euler(icls, build%eulspace%get_euler(icls))
-            enddo
-            if( cline%defined('outfile') )then
-                call build%spproj%os_cls3D%write(params%outfile)
-            else
-                call build%spproj%os_cls3D%write('cls3D_oris.txt')
-            endif
-        case DEFAULT
-            THROW_HARD('Unsupported ORITYPE: '//trim(params%oritype))
-        end select
+        call build%spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
+        call build%spproj%add_cavgs2os_out(trim(params%refs), build%spproj%get_smpd(), imgkind='cavg')
+        call build%spproj%write
         ! end gracefully
         call starproj%kill
         call build%spproj%kill
