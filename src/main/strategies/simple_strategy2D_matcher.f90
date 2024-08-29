@@ -46,6 +46,7 @@ contains
 
     !>  \brief  is the prime2D algorithm
     subroutine cluster2D_exec( cline, which_iter, converged )
+        use simple_decay_funs, only: inv_cos_decay
         class(cmdline),          intent(inout) :: cline
         integer,                 intent(in)    :: which_iter
         logical,                 intent(inout) :: converged
@@ -167,6 +168,24 @@ contains
                 neigh_frac = min(SNHC2D_INITFRAC,&
                     &max(0.,SNHC2D_INITFRAC*(1.-SNHC2D_DECAY)**real(params_glob%extr_iter-2)))
                 if( L_VERBOSE_GLOB ) write(logfhandle,'(A,F8.2)') '>>> STOCHASTIC NEIGHBOURHOOD SIZE(%):', 100.*(1.-neigh_frac)
+            endif
+        endif
+
+        ! WHITE NOISE REGULARIZATION
+        if( l_stream )then
+            ! deactivated for now
+        else
+            if( params_glob%l_noise_reg )then
+                if( l_snhc.or.l_snhc_smpl )then
+                    if( which_iter <= MAX_EXTRLIM2D )then
+                        params_glob%eps = inv_cos_decay(which_iter, MAX_EXTRLIM2D, params_glob%eps_bounds)
+                        write(logfhandle,'(A,F8.3)') '>>> SNR, WHITE NOISE REGULARIZATION', params_glob%eps
+                    else
+                        params_glob%l_noise_reg = .false.
+                    endif
+                else
+                    params_glob%l_noise_reg = .false. ! not implemented yet
+                endif
             endif
         endif
 

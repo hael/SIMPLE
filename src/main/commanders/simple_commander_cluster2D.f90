@@ -407,10 +407,6 @@ contains
             call cline_cluster2D2%set('maxits', MAXITS)
         endif
         call cline_cluster2D2%set('minits', min(MINITS+3,MAXITS))
-        ! if( l_shmem )then
-        !     call cline_cluster2D2%set('minits', 3)
-        !     call cline_cluster2D2%set('minits', MAXITS-MINITS)
-        ! endif
         if( l_euclid )then
             call cline_cluster2D2%set('objfun',   trim(cline%get_carg('objfun')))
             call cline_cluster2D2%set('cc_iters', 0.)
