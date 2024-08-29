@@ -1467,7 +1467,7 @@ contains
         call cavger_kill()
         call build%spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
         call build%spproj%add_cavgs2os_out(trim(params%refs), build%spproj%get_smpd(), imgkind='cavg')
-        call build%spproj%write
+        call build%spproj%write(params%projfile)
         ! end gracefully
         call starproj%kill
         call build%spproj%kill
