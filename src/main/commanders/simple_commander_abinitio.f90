@@ -1498,6 +1498,7 @@ contains
         smpd_target = max(params%smpd, lplims(2)*LP2SMPDFAC)
         call downscale(smpd_target, scale_factor2)
         iter = iter + 1
+        call cline_refine3D_3%set('startit', real(iter))
         call cline_refine3D_3%set('box_crop', real(params%box_crop))
         call cline_refine3D_3%set('smpd_crop',     params%smpd_crop)
         call cline_refine3D_3%set('trs',                     trslim) ! trslim set by downscale above
