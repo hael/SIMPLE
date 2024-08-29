@@ -804,7 +804,13 @@ contains
         ! retrieve FRC info
         call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
         if( .not.file_exists(frcs_fname) )then
-            THROW_HARD('the project file does not contain an FRCs file, which is required')
+            ! 08/24 This is a backwards compatibility patch to account for error in metadata
+            ! on exit of streaming related to GUI directory structure (now fixed and cf above get_cavgs_stk).
+            ! Will need to harmonize (move to absolute path?).
+            frcs_fname = trim(stkpath)//'/'//trim(frcs_fname)
+            if( .not.file_exists(frcs_fname) )then
+                THROW_HARD('the project file does not contain an FRCs file, which is required')
+            endif
         endif
         params%frcs = trim(frcs_fname)
         call clsfrcs%read(frcs_fname)
