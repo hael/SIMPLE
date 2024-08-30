@@ -817,7 +817,8 @@ contains
         real    :: smpd
         call cline%set('dir_exec', 'selection')
         call cline%set('mkdir',    'yes')
-        if( .not.cline%defined('prune') ) call cline%set('prune', 'no')
+        if( .not.cline%defined('prune')   ) call cline%set('prune',   'no')
+        if( .not.cline%defined('imgkind') ) call cline%set('imgkind', 'cavg')
         call build%init_params_and_build_spproj(cline,params)
         call build%spproj%update_projinfo(cline)
         ! find number of selected cavgs
@@ -825,7 +826,7 @@ contains
         if( cline%defined('ares') ) nsel = int(params%ares)
         ! find number of original cavgs
         if( .not. cline%defined('stk' ) )then
-            call build%spproj%get_cavgs_stk(cavgstk, nall, smpd)
+            call build%spproj%get_cavgs_stk(cavgstk, nall, smpd, imgkind=params%imgkind)
             params%stk = trim(cavgstk)
         else
             call find_ldim_nptcls(params%stk, lfoo, nall)
@@ -849,7 +850,7 @@ contains
             states(loc(1)) = 1
         end do
         ! communicate selection to project
-        call build%spproj%map_cavgs_selection(states)
+        call build%spproj%map_cavgs_selection(states, trim(params%imgkind)=='cavg3D')
         ! optional pruning
         if( trim(params%prune).eq.'yes') call build%spproj%prune_particles
         ! this needs to be a full write as many segments are updated

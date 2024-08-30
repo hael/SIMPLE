@@ -1576,7 +1576,7 @@ contains
         endif
         ! sanity check imgkind
         select case(trim(self%imgkind))
-            case('movie','mic','ptcl','cavg','vol','vol_cavg')
+            case('movie','mic','ptcl','cavg','cavg3D','vol','vol_cavg')
                 ! alles gut!
             case DEFAULT
                 write(logfhandle,*) 'imgkind: ', trim(self%imgkind)

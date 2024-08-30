@@ -100,7 +100,7 @@ contains
         type(stack_io)        :: stkio_r, stkio_r2, stkio_w
         type(class_frcs)      :: clsfrcs
         character(len=STDLEN) :: vol_iter, pgrp_init, pgrp_refine, vol_iter_pproc, vol_iter_pproc_mirr
-        character(len=STDLEN) :: sigma2_fname, sigma2_fname_sc, orig_objfun
+        character(len=STDLEN) :: sigma2_fname, sigma2_fname_sc, orig_objfun, frckind
         real                  :: scale_factor1, scale_factor2, trslim, smpd_target, lplims(2), lp_est, lp, lp_sym
         integer               :: icls, ncavgs, cnt, iter, ipart, even_ind, odd_ind, state, find_start, find, filtsz
         logical               :: srch4symaxis, do_autoscale, symran_before_refine
@@ -119,6 +119,7 @@ contains
         if( .not. cline%defined('prob_athres') ) call cline%set('prob_athres',  90.) ! reduces # failed runs on trpv1 from 4->2/10
         endif
         if( .not. cline%defined('cenlp')       ) call cline%set('cenlp', CENLP_DEFAULT)
+        if( .not. cline%defined('imgkind')     ) call cline%set('imgkind',   'cavg') ! whether to use classes generated from 2D/3D
         ! make master parameters
         call params%new(cline)
         call cline%delete('autoscale')
@@ -150,8 +151,21 @@ contains
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
         call spproj%write_segment_inside('projinfo', params%projfile)
+        ! whether to use classes generated from 2D or 3D
+        select case(trim(params%imgkind))
+        case('cavg')
+            frckind = 'frc2D'
+            states  = nint(spproj%os_cls2D%get_all('state'))
+        case('cavg3D')
+            frckind = 'frc3D'
+            states  = nint(spproj%os_cls3D%get_all('state'))
+
+        case DEFAULT
+            THROW_HARD('Unsupported IMGKIND!')
+        end select
+        call cline%delete('imgkind') ! no interference down the line
         ! retrieve cavgs stack info
-        call spproj%get_cavgs_stk(stk, ncavgs, params%smpd, stkpath=stkpath)
+        call spproj%get_cavgs_stk(stk, ncavgs, params%smpd, imgkind=params%imgkind, stkpath=stkpath)
         if(.not. file_exists(stk)) stk = trim(stkpath) // '/' // trim(stk)
         if(.not. file_exists(stk)) THROW_HARD('cavgs stk does not exist; simple_commander_abinitio')
         orig_stk        = stk
@@ -163,12 +177,11 @@ contains
         ctfvars%ctfflag = CTFFLAG_NO
         ctfvars%smpd    = params%smpd
         shifted_stk     = basename(add2fbody(stk, ext, '_shifted'))
-        states          = nint(spproj%os_cls2D%get_all('state'))
         if( count(states==0) .eq. ncavgs )then
             THROW_HARD('no class averages detected in project file: '//trim(params%projfile)//'; initial_3Dmodel')
         endif
         ! retrieve FRC info
-        call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
+        call spproj%get_frcs(frcs_fname, frckind, fail=.false.)
         if( .not.file_exists(frcs_fname) )then
             ! 08/24 This is a backwards compatibility patch to account for error in metadata
             ! on exit of streaming related to GUI directory structure (now fixed and cf above get_cavgs_stk).
@@ -452,7 +465,12 @@ contains
         ! revert splitting
         call spproj%os_cls3D%set_all2single('stkind', 1.)
         ! map the orientation parameters obtained for the clusters back to the particles
-        call spproj%map2ptcls
+        select case(trim(params%imgkind))
+        case('cavg')
+            call spproj%map2ptcls
+        case('cavg3D')
+            ! TODO
+        end select
         ! add rec_final to os_out
         call spproj%add_vol2os_out(trim(REC_FBODY)//ext, params%smpd, 1, 'vol_cavg')
         ! reprojections
