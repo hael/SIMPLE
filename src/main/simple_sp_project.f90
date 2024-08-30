@@ -490,35 +490,57 @@ contains
         nullify(ptcl_field)
     end subroutine map_ptcl_ind2stk_ind
 
-    subroutine map_cavgs_selection( self, states )
+    subroutine map_cavgs_selection( self, states, cavg3D )
         class(sp_project), intent(inout) :: self
         integer,           intent(in)    :: states(:)
+        logical, optional, intent(in)    :: cavg3D  ! indicates the classes were generated from ptcl3D
         integer, allocatable :: pinds(:)
         integer :: icls, sz_cls2D, sz_states, sz_cls3D, ncls, i
         real    :: rstate
-        sz_cls2D  = self%os_cls2D%get_noris()
+        logical :: l_cavg3D
+        l_cavg3D = .false.
+        if( present(cavg3D) ) l_cavg3D = cavg3D
         sz_states = size(states)
-        if( sz_cls2D /= sz_states )then
-            write(logfhandle,*) 'size(cls2D): ', sz_cls2D
-            write(logfhandle,*) 'sz_states  : ', sz_states
-            THROW_HARD('size(cls2D) not consistent with size(states) in map_cavgs_selection, aborting...')
+        if( l_cavg3D )then
+            ! cls2D field is ignored
+            sz_cls3D = self%os_cls3D%get_noris()
+            if( sz_cls3D /= sz_states )then
+                write(logfhandle,*) 'size(cls3D): ', sz_cls3D
+                write(logfhandle,*) 'sz_states  : ', sz_states
+                THROW_HARD('size(cls3D) not consistent with size(states) in map_cavgs_selection, aborting...')
+            endif
+            ! map selection to self%os_cls3D
+            do icls=1,sz_cls3D
+                call self%os_cls3D%set(icls, 'state', real(states(icls)))
+            end do
+        else
+            sz_cls2D  = self%os_cls2D%get_noris()
+            if( sz_cls2D /= sz_states )then
+                write(logfhandle,*) 'size(cls2D): ', sz_cls2D
+                write(logfhandle,*) 'sz_states  : ', sz_states
+                THROW_HARD('size(cls2D) not consistent with size(states) in map_cavgs_selection, aborting...')
+            endif
+            ! map selection to self%os_cls2D
+            do icls=1,sz_cls2D
+                call self%os_cls2D%set(icls, 'state', real(states(icls)))
+            end do
+            ! map selection to self%os_cls3D
+            sz_cls3D = self%os_cls3D%get_noris()
+            if( sz_cls3D /= sz_cls2D ) call self%os_cls3D%new(sz_cls2D, is_ptcl=.false.)
+            sz_cls3D = sz_cls2D
+            do icls=1,sz_cls3D
+                call self%os_cls3D%set(icls, 'state', real(states(icls)))
+            end do
         endif
-        ! map selection to self%os_cls2D
-        do icls=1,sz_cls2D
-            call self%os_cls2D%set(icls, 'state', real(states(icls)))
-        end do
-        ! map selection to self%os_cls3D
-        sz_cls3D = self%os_cls3D%get_noris()
-        if( sz_cls3D /= sz_cls2D ) call self%os_cls3D%new(sz_cls2D, is_ptcl=.false.)
-        sz_cls3D = sz_cls2D
-        do icls=1,sz_cls3D
-            call self%os_cls3D%set(icls, 'state', real(states(icls)))
-        end do
         ! map selection to self%os_ptcl2D & os_ptcl3D
         ncls = sz_states
         if( self%os_ptcl2D%get_noris() > 0 .and. self%os_ptcl3D%get_noris() > 0)then
             do icls=1,ncls
-                call self%os_ptcl2D%get_pinds(icls, 'class', pinds)
+                if( l_cavg3D )then
+                    call self%os_ptcl3D%get_pinds(icls, 'class', pinds)
+                else
+                    call self%os_ptcl2D%get_pinds(icls, 'class', pinds)
+                endif
                 if( allocated(pinds) )then
                     rstate = real(states(icls))
                     do i=1,size(pinds)

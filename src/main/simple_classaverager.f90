@@ -225,7 +225,7 @@ contains
                 cls_field  => spproj%os_cls2D
             case('ptcl3D')
                 ptcl_field => spproj%os_ptcl3D
-                cls_field  => spproj%os_cls2D ! we want to update the 2D field here
+                cls_field  => spproj%os_cls3D
             case DEFAULT
                 THROW_HARD('Unsupported ORITYPE: '//trim(params_glob%oritype))
         end select
