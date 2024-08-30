@@ -204,6 +204,7 @@ type :: nanoparticle
     procedure          :: get_valid_corrs
     procedure          :: get_img
     procedure          :: get_img_raw
+    procedure          :: set_ncc
     procedure          :: set_img
     procedure, private :: set_atomic_coords_from_pdb
     procedure, private :: set_atomic_coords_from_xyz
@@ -220,7 +221,7 @@ type :: nanoparticle
     procedure          :: identify_lattice_params
     procedure          :: identify_atomic_pos
     procedure, private :: binarize_and_find_centers
-    procedure, private :: find_centers
+    procedure          :: find_centers
     procedure, private :: discard_atoms_with_low_contact_score
     procedure, private :: discard_lowly_coordinated
     procedure, private :: discard_low_valid_corr_atoms
@@ -311,6 +312,12 @@ contains
         type(image),         intent(out) :: raw_img
         raw_img = self%img_raw
     end subroutine get_img_raw
+
+    subroutine set_ncc(self, ncc)
+        class(nanoparticle), intent(inout) :: self
+        integer,             intent(in)    :: ncc
+        self%n_cc = ncc
+    end subroutine set_ncc
 
     ! set one of the images of the nanoparticle type
     subroutine set_img( self, imgfile, which )
@@ -793,22 +800,27 @@ contains
     ! Find the centers coordinates of the atoms in the particle
     ! and save it in the global variable centers.
     ! If coords is present, it saves it also in coords.
-    subroutine find_centers( self, img_bin, img_cc, coords )
-        class(nanoparticle),         intent(inout) :: self
-        type(binimage), optional,    intent(inout) :: img_bin, img_cc
-        real, optional, allocatable, intent(out)   :: coords(:,:)
+    subroutine find_centers( self, img_bin, img_cc, coords, imat )
+        class(nanoparticle),                   intent(inout) :: self
+        type(binimage), optional,              intent(inout) :: img_bin, img_cc
+        integer,        optional,              intent(in)    :: imat(:,:,:)
+        real,           optional, allocatable, intent(out)   :: coords(:,:)
         real,        pointer :: rmat_raw(:,:,:)
         integer, allocatable :: imat_cc_in(:,:,:)
         logical, allocatable :: mask(:,:,:)
         integer :: i, ii, jj, kk
         real    :: m(3), sum_mass
         ! sanity check
-        if( present(img_bin) .and. .not. present(img_cc) ) THROW_HARD('img_bin and img_cc have to be both present')
+        if( present(img_bin) .and. .not. present(img_cc) ) then
+            if( .not. present(imat)) THROW_HARD('img_bin and img_cc have to be both present')
+        end if
         ! global variables allocation
         if( allocated(self%atominfo) ) deallocate(self%atominfo)
         allocate( self%atominfo(self%n_cc) )
         if( present(img_cc) )then
             call img_cc%get_imat(imat_cc_in)
+        else if (present(imat)) then
+            imat_cc_in = imat
         else
             call self%img_cc%get_imat(imat_cc_in)
         endif
@@ -841,6 +853,7 @@ contains
             enddo
         endif
     end subroutine find_centers
+
 
     subroutine split_atoms( self, fname )
         class(nanoparticle),        intent(inout) :: self

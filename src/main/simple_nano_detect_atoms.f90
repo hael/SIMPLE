@@ -43,6 +43,7 @@ use simple_stat
         procedure :: remove_outliers_sdev       
         procedure :: remove_outliers_position   ! remove all positions that are not within a certain distance of their nearest neighbor
         procedure :: find_centers               ! find center of mass of selected positions, save as center_positions
+        procedure :: find_centers_nano          ! find center of mass of selected positions using find_centers in simple_nanoparticle
         procedure :: calc_atom_stats            
         procedure :: calc_per_atom_corr         ! find per-atom valid correlation by comparing selected positions with experimental map
         procedure :: refine_threshold           ! refine correlation threshold by iterating over various thresholds and optimizing correlation with exp. map
@@ -52,6 +53,7 @@ use simple_stat
         procedure :: one_box_corr  
         procedure :: set_pdb
         procedure :: write_pdb
+        procedure :: write_cc_image
         procedure :: write_boximgs
         procedure :: write_positions_and_scores
         procedure :: write_NP_image
@@ -631,6 +633,39 @@ use simple_stat
         deallocate(pos_inds)
     end subroutine find_centers
 
+    subroutine find_centers_nano(self, filename)
+        class(nano_picker),         intent(inout) :: self
+        character(len=*), optional, intent(in) :: filename
+        type(parameters), target :: params
+        type(nanoparticle)       :: nano
+        type(binimage)           :: bimg
+        integer, allocatable     :: imat_cc(:,:,:), pos_inds(:)
+        integer                  :: npos, ipos
+        real,    allocatable     :: coords(:,:)
+        params_glob => params
+        params_glob%element = self%element
+        params_glob%smpd    = self%smpd
+        call nano%new(self%raw_filename, msk=self%mask_radius)
+        if (present(filename)) then
+            call self%write_cc_image(imat_cc, bimg, filename)
+            call nano%set_img(trim(filename),'img_bin')
+        else
+            call self%write_cc_image(imat_cc, bimg)
+            call nano%set_img('bin.mrc','img_bin')
+        end if
+        pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
+        npos     = size(pos_inds, dim=1)
+        call nano%set_ncc(npos)
+        call nano%find_centers(img_bin=bimg, imat=imat_cc, coords=coords)
+        call self%find_centers
+        do ipos = 1, npos
+            print *, 'my method center pos: ', (self%center_positions(pos_inds(ipos),:) - 1) * self%smpd
+            print *, 'nano method center pos: ', (coords(:,ipos) - 1) * self%smpd
+            print *, ' '
+        end do
+    end subroutine find_centers_nano
+
+
     subroutine calc_atom_stats(self)
         class(nano_picker), intent(inout) :: self
         type(nanoparticle)       :: nano
@@ -958,6 +993,69 @@ use simple_stat
         self%wrote_pdb = .true.
     end subroutine write_pdb
 
+    subroutine write_cc_image(self, imat, bimg, filename)
+        class(nano_picker),         intent(inout) :: self
+        integer, allocatable,       intent(out)   :: imat(:,:,:)
+        type(binimage),             intent(out)   :: bimg
+        character(len=*), optional, intent(in)    :: filename
+        type(image), allocatable :: boximgs(:)   
+        integer,     allocatable :: pos_inds(:), imat_adj(:,:,:)
+        integer                  :: nbox, ibox, pos(3), xbox, ybox, zbox, x, y, z, ithr, nthr
+        logical                  :: outside
+        real,        allocatable :: rmat(:,:,:)
+        pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
+        nbox     = size(pos_inds, dim=1)
+        ! boximgs is array of images used for parallel computing
+        !$ nthr = omp_get_max_threads()
+        allocate(boximgs(nthr))
+        do ithr = 1,nthr
+            call boximgs(ithr)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
+        enddo
+        allocate(imat(self%ldim(1), self%ldim(2), self%ldim(3)), imat_adj(self%ldim(1), self%ldim(2), self%ldim(3)))
+        ! !$omp parallel do schedule(static) default(shared) private(ibox,x,y,z,xbox,ybox,zbox)
+        do ibox  = 1, nbox
+            pos  = self%positions(pos_inds(ibox),:)
+            ithr = omp_get_thread_num() + 1
+            call self%nano_img%window_slim(pos, self%boxsize, boximgs(ithr), outside)
+            rmat = boximgs(ithr)%get_rmat()
+            x = pos(1) ! position in larger image
+            do xbox = 1, self%boxsize ! position in smaller image
+                y = pos(2)
+                do ybox = 1, self%boxsize  
+                    z = pos(3)
+                    do zbox = 1, self%boxsize
+                        if (rmat(xbox,ybox,zbox) >= self%intensity_thres) then
+                            imat(x,y,z) = ibox
+                        end if
+                        z = z + 1
+                    end do
+                    y = y + 1
+                end do
+                x = x + 1
+            end do
+            deallocate(rmat)
+        end do
+        ! !$omp end parallel do
+        call bimg%new_bimg(self%ldim,self%smpd)
+        where( imat >= 1 )
+            imat_adj = 1
+        elsewhere
+            imat_adj = 0
+        end where
+        deallocate(boximgs,pos_inds)
+        call bimg%set_imat(imat_adj)
+        if (present(filename)) then
+            call bimg%write_bimg(trim(filename))
+        else
+            call bimg%write_bimg('bin.mrc')
+        end if
+        if (allocated(imat_adj)) deallocate(imat_adj)
+        ! do ithr = 1,nthr
+        !     print *, 'ithr = ', ithr
+        !     call boximgs(ithr)%kill
+        ! enddo
+    end subroutine write_cc_image
+
     subroutine set_pdb(self, filename)
         class(nano_picker), intent(inout) :: self
         character(len=*),   intent(in)    :: filename
@@ -1035,7 +1133,6 @@ use simple_stat
         params_glob => params
         params_glob%element = self%element
         params_glob%smpd    = self%smpd
-        print *, 'self%wrote_pdb inside write_NP_image = ', self%wrote_pdb
         if (.not. self%wrote_pdb) call self%write_pdb('simulate_NP')
         call nano%new(trim(self%raw_filename))
         call nano%set_atomic_coords(trim(self%pdb_filename))

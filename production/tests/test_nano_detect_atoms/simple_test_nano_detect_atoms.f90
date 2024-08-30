@@ -48,7 +48,7 @@ print *, 'NEW METHOD: '
 call test_exp%new(smpd, element, filename_exp, peak_thres_level, offset, mskdiam=mskdiam, intensity_level=intensity_level, circle=circle)
 call test_exp%exec_nano_picker(corr_thres=corr_thres,cs_thres=cs_thres)
 call test_exp%calc_per_atom_corr('final_positions_and_corrs')
-
+call test_exp%find_centers_nano()
 !OUTPUT FILES
 call test_exp%write_pdb('experimental_centers_TEST')
 call test_exp%write_positions_and_scores('pos_and_scores_centers_refined.csv', 'centers')
