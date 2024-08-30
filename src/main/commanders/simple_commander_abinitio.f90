@@ -642,8 +642,6 @@ contains
         call cline%set('oritype',   'ptcl3D') ! obviously
         if( .not. cline%defined('mkdir')        ) call cline%set('mkdir',        'yes')
         if( .not. cline%defined('autoscale')    ) call cline%set('autoscale',    'yes')
-        if( .not. cline%defined('prob_athres')  ) call cline%set('prob_athres',    10.)
-        if( .not. cline%defined('prob_sh')      ) call cline%set('prob_sh',      'yes')
         if( .not. cline%defined('center')       ) call cline%set('center',        'no')
         if( .not. cline%defined('pgrp')         ) call cline%set('pgrp',          'c1')
         if( .not. cline%defined('pgrp_start')   ) call cline%set('pgrp_start',    'c1')
@@ -773,8 +771,8 @@ contains
         call cline_refine3D_1%set('lp_auto',                  'yes')
         call cline_refine3D_1%set('sh_first',                  'no')
         call cline_refine3D_1%set('prob_sh',                   'no')
-        call cline_refine3D_1%set('ml_reg',                    'no')
-        call cline_refine3D_1%set('snr_noise_reg',              2.0)
+        call cline_refine3D_1%set('ml_reg',                    'no') ! No ML-reg in the start, we don't trust the FSC yet
+        call cline_refine3D_1%set('snr_noise_reg',              4.0)
         call cline_refine3D_1%set('trs',                        0.0) ! no shifts in phase 1
         ! (2)
         call cline_refine3D_2%set('prg',                 'refine3D')
@@ -786,11 +784,11 @@ contains
         call cline_refine3D_2%set('pgrp',         params%pgrp_start)
         call cline_refine3D_2%set('silence_fsc',               'no')
         call cline_refine3D_2%set('refine',                  'prob') ! changing to prob refinement
+        call cline_refine3D_2%set('prob_athres',                90.) ! following the same logic as in initial_3Dmodel, phase 2
         call cline_refine3D_2%set('lp_auto',                  'yes')
         call cline_refine3D_2%set('sh_first',                 'yes') ! first shift logic is turned on
         call cline_refine3D_2%set('prob_sh',                  'yes') ! probabilistic shift search is turned on
-        call cline_refine3D_2%set('ml_reg',                   'yes') ! ML regularization is turned on
-        call cline_refine3D_2%set('snr_noise_reg',              4.0) ! white noise regularization is reduced
+        call cline_refine3D_2%set('ml_reg',                    'no') ! No ML-reg in the start, we don't trust the FSC yet
         call cline_refine3D_2%set('trs',                     trslim) ! shifts are turned on, trslim set by downscale above
         ! (3)
         call cline_refine3D_3%set('prg',                 'refine3D')
@@ -798,17 +796,18 @@ contains
         call cline_refine3D_3%set('nspace',           real(NSPACE3)) ! # projection directions are increased
         call cline_refine3D_3%set('maxits',           real(MAXITS3))
         call cline_refine3D_3%set('pgrp',               params%pgrp) ! highest point-group symmetry is used
-        call cline_refine3D_3%set('silence_fsc',               'no') ! printing of FSC is turned on
+        call cline_refine3D_3%set('silence_fsc',               'no')
         if( cline%defined('refine') )then
             call cline_refine3D_3%set('refine', trim(params%refine)) ! possible to input desired refinement mode for final phase
         else
             call cline_refine3D_3%set('refine',              'prob')
         endif
+        call cline_refine3D_2%set('prob_athres',                10.) ! following what have worked in the past on export gate
         call cline_refine3D_3%set('refine',                  'prob')
         call cline_refine3D_3%set('lp_auto',                  'fsc') ! changing to FSC-based lp estimation 
         call cline_refine3D_3%set('sh_first',                 'yes')
         call cline_refine3D_3%set('prob_sh',                  'yes')
-        call cline_refine3D_3%set('ml_reg',                   'yes')
+        call cline_refine3D_3%set('ml_reg',                   'yes') ! turning on ML regularization to prevent overfitting
         ! rec3D & postproc
         call cline_reconstruct3D%set('prg',         'reconstruct3D')
         call cline_reconstruct3D%set('box',        real(params%box))
