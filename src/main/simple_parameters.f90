@@ -1249,9 +1249,9 @@ contains
         if( self%l_stoch_update )then
             self%l_frac_update = .true. ! update_frac set dynamically (see below)
             if( cline%defined('maxits_glob') )then
-                self%update_frac = real(nsampl_decay(self%which_iter, self%maxits_glob, self%nptcls)) / real(self%nptcls)
+                self%update_frac = real(inv_nsampl_decay(self%which_iter, self%maxits_glob, self%nptcls)) / real(self%nptcls)
             else
-                self%update_frac = real(nsampl_decay(self%which_iter, self%maxits,      self%nptcls)) / real(self%nptcls)
+                self%update_frac = real(inv_nsampl_decay(self%which_iter, self%maxits,      self%nptcls)) / real(self%nptcls)
             endif
             call cline%set('update_frac', self%update_frac)
         endif
