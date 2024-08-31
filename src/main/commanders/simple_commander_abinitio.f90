@@ -1047,7 +1047,8 @@ contains
         if( .not. cline%defined('sigma_est')    ) call cline%set('sigma_est', 'global')
         if( .not. cline%defined('prob_sh')      ) call cline%set('prob_sh',      'yes')
         if( .not. cline%defined('prob_athres')  ) call cline%set('prob_athres',    10.)
-        if( .not. cline%defined('stoch_update') ) call cline%set('stoch_update', 'yes')
+        ! if( .not. cline%defined('stoch_update') ) call cline%set('stoch_update', 'yes') ! off 4 now
+        call cline%set('stoch_update', 'no')
         if( .not. cline%defined('center')       ) call cline%set('center',        'no')
         if( .not. cline%defined('objfun')       ) call cline%set('objfun',    'euclid')
         if( .not. cline%defined('oritype')      ) call cline%set('oritype',   'ptcl3D')

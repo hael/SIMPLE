@@ -425,10 +425,11 @@ contains
             if( pops(istate) > 0)then
                 call build_glob%eorecvols(istate)%new(build_glob%spproj)
                 call build_glob%eorecvols(istate)%reset_all
-                if( params_glob%l_frac_update .and. params_glob%which_iter > 1 )then
+                if( params_glob%l_frac_update )then
                     fbody = trim(VOL_FBODY)//int2str_pad(istate,2)//'_part'//part_str
                     if( build_glob%eorecvols(istate)%ldim_even_match(fbody) )then
                         call build_glob%eorecvols(istate)%read_eos(fbody)
+                        call build_glob%eorecvols(istate)%apply_weight(1.-params_glob%update_frac)
                         call build_glob%eorecvols(istate)%expand_exp
                     endif
                 endif
