@@ -153,15 +153,14 @@ contains
         call spproj%write_segment_inside('projinfo', params%projfile)
         ! whether to use classes generated from 2D or 3D
         select case(trim(params%imgkind))
-        case('cavg')
-            frckind = 'frc2D'
-            states  = nint(spproj%os_cls2D%get_all('state'))
-        case('cavg3D')
-            frckind = 'frc3D'
-            states  = nint(spproj%os_cls3D%get_all('state'))
-
-        case DEFAULT
-            THROW_HARD('Unsupported IMGKIND!')
+            case('cavg')
+                frckind = 'frc2D'
+                states  = nint(spproj%os_cls2D%get_all('state'))
+            case('cavg3D')
+                frckind = 'frc3D'
+                states  = nint(spproj%os_cls3D%get_all('state'))
+            case DEFAULT
+                THROW_HARD('Unsupported IMGKIND!')
         end select
         call cline%delete('imgkind') ! no interference down the line
         ! retrieve cavgs stack info

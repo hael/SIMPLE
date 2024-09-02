@@ -106,6 +106,12 @@ type ptcl_ref
     logical :: has_sh = .false.
 end type ptcl_ref
 
+type lp_crop_inf
+    real    :: lp, smpd_crop, scale, trslim
+    integer :: box_crop
+    logical :: l_autoscale
+end type lp_crop_inf
+
 ! oritype enumeration
 enum, bind(c)
     enumerator :: ENUM_ORISEG = 0

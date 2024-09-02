@@ -3,6 +3,7 @@ module simple_estimate_ssnr
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_defs
+use simple_defs_conv
 use simple_srch_sort_loc
 use simple_syslib
 use simple_math_ft
@@ -12,6 +13,7 @@ implicit none
 
 public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp
 public :: lowpass_from_klim, mskdiam2lplimits, calc_dose_weights, get_resolution
+public :: lpstages
 private
 #include "simple_local_flags.inc"
 
@@ -186,5 +188,43 @@ contains
             fsc05 = res(ires05)
         endif
     end subroutine get_resolution
+
+    subroutine lpstages( box, frcs_avg, smpd, lp_default, lpinfo )
+        use simple_magic_boxes
+        integer,           intent(in)  :: box
+        real,              intent(in)  :: frcs_avg(:), smpd, lp_default
+        type(lp_crop_inf), intent(out) :: lpinfo(8)
+        call calc_lpinfo(1, 0.8)
+        call calc_lpinfo(2, 0.7)
+        call calc_lpinfo(3, 0.6)
+        call calc_lpinfo(4, 0.5)
+        call calc_lpinfo(5, 0.4)
+        call calc_lpinfo(6, 0.3)
+        call calc_lpinfo(7, 0.2)
+        call calc_lpinfo(8, 0.143)
+
+        contains
+
+            subroutine calc_lpinfo( stage, thres )
+                integer, intent(in) :: stage
+                real,    intent(in) :: thres
+                integer :: find
+                real    :: smpd_target
+                if( any(frcs_avg > thres) )then            
+                    find = get_lplim_at_corr(frcs_avg, thres)
+                    lpinfo(stage)%lp = calc_lowpass_lim(find, box, smpd)
+                else 
+                    lpinfo(stage)%lp = lp_default
+                endif
+                smpd_target = max(smpd, (lpinfo(stage)%lp/3.))
+
+                ! call autoscale(params%box, params%smpd, smpd_target, params%box_crop, params%smpd_crop, scale_factor, minbox=MINBOX)
+
+                call autoscale(box, smpd, smpd_target, lpinfo(stage)%box_crop, lpinfo(stage)%smpd_crop, lpinfo(stage)%scale, minbox=64)
+                lpinfo(stage)%trslim      = max(2.0, AHELIX_WIDTH / lpinfo(stage)%smpd_crop / 2.0)
+                lpinfo(stage)%l_autoscale = lpinfo(stage)%box_crop < box
+            end subroutine calc_lpinfo
+
+    end subroutine lpstages
 
 end module simple_estimate_ssnr
