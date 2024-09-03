@@ -3,7 +3,7 @@ include 'simple_lib.f08'
 use simple_atoms, only: atoms
 use simple_image
 implicit none
-character(len=STDLEN)         :: pdb_file, vol_file, str_name
+character(len=STDLEN)         :: pdb_file, vol_file, str_name, pdb_out
 character(len=:), allocatable :: smpd_char
 real                          :: smpd = 1.
 logical                       :: pdb_exists
@@ -61,7 +61,8 @@ else
 endif
 write(logfhandle,'(A,f8.4)') 'smpd: ', smpd
 vol_file = swap_suffix(pdb_file,'mrc','pdb') 
+pdb_out  = trim(get_fbody(pdb_file,'pdb'))//'_centered' 
 call molecule%new(pdb_file)
-call molecule%pdb2mrc(pdb_file, vol_file, smpd)
+call molecule%pdb2mrc(pdb_file, vol_file, smpd, pdb_out)
 call molecule%kill
 end program simple_test_pdb2mrc

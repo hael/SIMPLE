@@ -290,6 +290,7 @@ type(simple_input_param) :: nonuniform
 type(simple_input_param) :: numlen
 type(simple_input_param) :: nxpatch
 type(simple_input_param) :: nypatch
+type(simple_input_param) :: pdbout
 type(simple_input_param) :: objfun
 type(simple_input_param) :: oritab
 type(simple_input_param) :: oritab2
@@ -1087,6 +1088,7 @@ contains
         &'.simple|.txt parameter file', .false., 'oritab2'//trim(METADATA_EXT))
         call set_param(outfile,       'outfile',       'file',   'Output orientation and CTF parameter file', 'Output Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format',&
         &'.simple|.txt parameter file', .false., 'outfile'//trim(METADATA_EXT))
+        call set_param(pdbout,        'pdbout',        'file',   'Output PDB volume-centered molecule', 'Output coordinates file in PDB format for the volume-centered molecule', 'e.g. output.pdb', .false., 'pdbout.pdb')
         call set_param(dir_movies,    'dir_movies',    'dir',    'Input movies directory', 'Where the movies to process are located or will squentially appear', 'e.g. /cryodata/', .true., 'preprocess/')
         call set_param(startit,       'startit',       'num',    'First iteration', 'Index of first iteration when starting from a previous run', 'start iterations from here', .false., 1.0)
         call set_param(trs,           'trs',           'num',    'Maximum translational shift', 'Maximum half-width for bund-constrained search of rotational origin shifts',&
@@ -2229,14 +2231,15 @@ contains
         &'PDB to MRC converter',&                          ! descr_short
         &'is a program to convert a PDB format coordinadinates file to a 3D simulated density map volume in MRC format',& ! descr long
         &'all',&                                           ! executable
-        &1, 2, 0, 0, 0, 0, 0, .false.)                     ! # entries in each group, requires sp_project
+        &1, 3, 0, 0, 0, 0, 0, .false.)                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call pdb2mrc%set_input('img_ios', 1, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'vol.mrc')
+        call pdb2mrc%set_input('img_ios', 1, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'molecule.pdb')
         ! parameter input/output
         call pdb2mrc%set_input('parm_ios', 1, smpd)
         pdb2mrc%parm_ios(1)%required = .false.
         call pdb2mrc%set_input('parm_ios', 2, outvol)
+        call pdb2mrc%set_input('parm_ios', 3, pdbout)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2296,7 +2299,7 @@ contains
         call dock_volpair%set_input('img_ios', 3, outvol)
         ! parameter input/output
         call dock_volpair%set_input('parm_ios', 1, smpd)
-        call dock_volpair%set_input('parm_ios', 2,  outfile)
+        call dock_volpair%set_input('parm_ios', 2, outfile)
         ! alternative inputs
         ! <empty>
         ! search controls

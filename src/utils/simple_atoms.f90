@@ -9,28 +9,28 @@ public :: atoms
 private
 #include "simple_local_flags.inc"
 
-!    COLUMNS  DATA TYPE     FIELD       DEFINITION
-!    --------------------------------------------------------------------------
-!  a6   1 -  6  Record name   "ATOM  "                       
-!  i5   7 - 11  Integer       serial      Atom serial number.
+!        COLUMNS  DATA TYPE     FIELD       DEFINITION
+!  ------------------------------------------------------------------------------
+!  a6     1 -  6  Record name   "ATOM  "                       
+!  i5     7 - 11  Integer       serial      Atom serial number.
 !  1x
-!  a4  13 - 16  Atom          name        Atom name.
-!  a1  17       Character     altLoc      Alternate location indicator.
-!  a3  18 - 20  Residue name  resName     Residue name.
+!  a4    13 - 16  Atom          name        Atom name.
+!  a1    17       Character     altLoc      Alternate location indicator.
+!  a3    18 - 20  Residue name  resName     Residue name.
 !  1x
-!  i1  22       Character     chainID     Chain identifier.
-!  i4  23 - 26  Integer       resSeq      Residue sequence number.
-!  a1  27       AChar         iCode       Code for insertion of residues.
+!  i1    22       Character     chainID     Chain identifier.
+!  i4    23 - 26  Integer       resSeq      Residue sequence number.
+!  a1    27       AChar         iCode       Code for insertion of residues.
 !  3x
 !  f8.3  31 - 38  Real(8.3)     x           Orthogonal coordinates for X, Angstroms.
 !  f8.3  39 - 46  Real(8.3)     y           Orthogonal coordinates for Y, Angstroms.
 !  f8.3  47 - 54  Real(8.3)     z           Orthogonal coordinates for Z, Angstroms.
-!  f6.2  55 - 60  Real(6.2)     occupancy   Occupancy.
+!  f6.2  55 - 60  Real(6.2)     occupancy   Occupancy.  
 !  f6.2  61 - 66  Real(6.2)     tempFactor  Temperature factor.
 !  6x
-!  A4  73 - 76  LString(4)    segID       Segment identifier, left-justified.
-!  A2  77 - 78  LString(2)    element     Element symbol, right-justified.
-!  A2  79 - 80  LString(2)    charge      Charge on the atom.
+!  A4    73 - 76  LString(4)    segID       Segment identifier, left-justified.
+!  A2    77 - 78  LString(2)    element     Element symbol, right-justified.
+!  A2    79 - 80  LString(2)    charge      Charge on the atom.
 !
 !character(len=80), parameter :: pdbfmt          = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,6X,A4,2A2)"
 character(len=78), parameter :: pdbfmt          = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10x,A2)"  ! custom 3.3
@@ -1165,11 +1165,11 @@ contains
     !
     ! end subroutine shift2masscen
 
-    subroutine pdb2mrc( self, pdb_file, vol_file, smpd, vol_dim )
+    subroutine pdb2mrc( self, pdb_file, vol_file, smpd, pdb_out, vol_dim)
         use simple_image, only: image
         class(atoms),           intent(inout) :: self
         real,                   intent(in)    :: smpd
-        character(*),           intent(in)    :: pdb_file, vol_file
+        character(*),           intent(in)    :: pdb_file, vol_file, pdb_out
         type(image)       :: vol
         real              :: mol_dim(3), center(3), half_box(3), max_dist, dist, corner(3)
         integer           :: ldim(3), i_atom, j_atom
@@ -1210,6 +1210,7 @@ contains
         ! 0,0,0 in PDB space is map to the center of the volume 
         call self%translate(-corner+half_box)
         call self%convolve( vol, cutoff = 8*smpd)
+        call self%writepdb(pdb_out)
         call vol%write(vol_file)
         call vol%kill()
         write(logfhandle,'(A)') " 3D MRC simulated volume created "

@@ -58,8 +58,13 @@ contains
         type(atoms)      :: molecule
         call params%new(cline)
         call molecule%new(params%pdbfile)
+        if( .not.cline%defined('pdbout') )then
+            params%pdbout = trim(get_fbody(params%pdbfile,'pdb'))//'_centered'
+        else
+            params%pdbout = trim(get_fbody(params%pdbout,'pdb'))
+        endif
         if( .not.cline%defined('outvol') ) params%outvol = swap_suffix(params%pdbfile,'mrc','pdb')
-        call molecule%pdb2mrc(params%pdbfile, params%outvol, params%smpd)
+        call molecule%pdb2mrc(params%pdbfile, params%outvol, params%smpd, params%pdbout)
         call molecule%kill
         ! end gracefully
         call simple_end('**** SIMPLE_PDB2MRC NORMAL STOP ****')
