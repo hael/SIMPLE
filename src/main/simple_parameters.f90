@@ -81,6 +81,7 @@ type :: parameters
     character(len=3)          :: remove_chunks='yes'  !< whether to remove chunks after completion
     character(len=3)          :: rnd_cls_init='no'    !< whether 2D classification is initiated from random classes or raw images
     character(len=3)          :: prob_sh='no'         !< shift information in the prob tab (yes|no){no}
+    character(len=3)          :: projrec='no'         !< Ehether to reconstruct from summed projection directions (yes|no){no}
     character(len=3)          :: reject_cls='no'      !< whether to reject poor classes
     character(len=3)          :: reject_mics='no'     !< whether to reject micrographs based on ctfres/icefrac
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
@@ -616,6 +617,7 @@ contains
         call check_carg('refine',         self%refine)
         call check_carg('randomise',      self%randomise)
         call check_carg('prob_sh',        self%prob_sh)
+        call check_carg('projrec',        self%projrec)
         call check_carg('projfile_optics',self%projfile_optics)
         call check_carg('remap_cls',      self%remap_cls)
         call check_carg('roavg',          self%roavg)

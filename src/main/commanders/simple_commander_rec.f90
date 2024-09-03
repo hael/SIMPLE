@@ -6,7 +6,7 @@ use simple_cmdline,             only: cmdline
 use simple_commander_base,      only: commander_base
 use simple_parameters,          only: parameters
 use simple_qsys_env,            only: qsys_env
-use simple_strategy2D3D_common, only: calc_3Drec
+use simple_strategy2D3D_common, only: calc_3Drec, calc_projdir3Drec
 use simple_qsys_funs
 implicit none
 
@@ -177,7 +177,11 @@ contains
                 call eucl_sigma%read_groups(build%spproj_field, ptcl_mask)
             endif
         end if
-        call calc_3Drec( cline, nptcls2update, pinds )
+        if( trim(params%projrec).eq.'yes' )then
+            call calc_projdir3Drec( cline, nptcls2update, pinds )
+        else
+            call calc_3Drec( cline, nptcls2update, pinds )
+        endif
         ! cleanup
         call eucl_sigma%kill
         call qsys_job_finished('simple_commander_rec :: exec_reconstruct3D')
