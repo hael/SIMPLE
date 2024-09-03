@@ -30,6 +30,7 @@ public :: rank_cavgs_commander
 public :: cluster_cavgs_commander
 public :: write_classes_commander
 public :: ppca_denoise_classes_commander
+public :: gen_cavgs_partition_commander
 public :: check_2dconv
 private
 #include "simple_local_flags.inc"
@@ -88,6 +89,11 @@ type, extends(commander_base) :: ppca_denoise_classes_commander
   contains
     procedure :: execute      => exec_ppca_denoise_classes
 end type ppca_denoise_classes_commander
+
+type, extends(commander_base) :: gen_cavgs_partition_commander
+  contains
+    procedure :: execute      => exec_gen_cavgs_partition
+end type gen_cavgs_partition_commander
 
 contains
 
@@ -2286,6 +2292,287 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_PPCA_DENOISE_CLASSES NORMAL STOP ****')
     end subroutine exec_ppca_denoise_classes
+
+    subroutine exec_gen_cavgs_partition( self, cline )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
+        use simple_polarizer,        only: polarizer
+        use simple_class_frcs,       only: class_frcs
+        use simple_polarft_corrcalc, only: polarft_corrcalc
+        use simple_aff_prop,         only: aff_prop
+        use simple_pftcc_shsrch_fm,  only: pftcc_shsrch_fm
+        class(gen_cavgs_partition_commander), intent(inout) :: self
+        class(cmdline),                       intent(inout) :: cline
+        character(len=STDLEN),   parameter :: SIMMAT_FNAME = 'simmat.bin'
+        character(len=STDLEN),   parameter :: LABELS_FNAME = 'labels.txt'
+        type(pftcc_shsrch_fm), allocatable :: correlators(:)
+        type(parameters)              :: params
+        type(sp_project)              :: spproj
+        type(class_frcs)              :: clsfrcs
+        type(image)                   :: img_msk
+        type(polarft_corrcalc)        :: pftcc
+        type(aff_prop)                :: aprop
+        type(polarizer),  allocatable :: cavg_imgs(:), cavg_imgs_good(:)
+        character(len=:), allocatable :: cavgsstk, classname, frcs_fname
+        real,             allocatable :: states(:), frc(:), filter(:), clspops(:), clsres(:)
+        real,             allocatable :: corrs(:), corrmat(:,:)
+        logical,          allocatable :: l_msk(:,:,:), mask_icls(:)
+        integer,          allocatable :: centers(:), labels(:), cntarr(:), clsinds(:), tmp(:)
+        logical,          parameter   :: DEBUG = .true.
+        integer :: ldim(3), n, ncls_sel, i, j, icls, cnt, filtsz
+        integer :: irot, irotm, ithr, ncls_aff_prop, icen, jcen, funit, io_stat
+        real    :: smpd, simsum, cmin, cmax, pref, corr_icls, offset(2), offsetm(2), cc,ccm, trsstep, prefmin, prefmax
+        logical :: l_apply_optlp
+        ! defaults
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
+        if( .not. cline%defined('trs')     ) call cline%set('trs',     10.)
+        if( .not. cline%defined('kweight') ) call cline%set('kweight', 'all')
+        if( .not. cline%defined('frac')    ) call cline%set('frac',    0.)
+        call cline%set('oritype', 'cls2D')
+        call cline%set('ctf',     'no')
+        call cline%set('objfun',  'cc')
+        call params%new(cline)
+        if( cline%defined('fname') )then
+            ! Similarity matrix has been calculated, clustering is performed
+            if( (params%frac < 0.) .or. (params%frac > 1.) ) THROW_HARD('FRAC out of range')
+            if( cline%defined('stk') )then
+                call find_ldim_nptcls(cavgsstk, ldim, params%ncls, smpd=smpd)
+                params%stk = trim(cavgsstk)
+                ldim(3) = 1
+                allocate(states(params%ncls),source=1.)
+                call file2rmat(params%fname, corrmat)
+            else
+                if(.not.cline%defined('projfile')) THROW_HARD('PROJFILE is required!')
+                call spproj%read_segment(params%oritype, params%projfile)
+                call spproj%read_segment('out', params%projfile)
+                call spproj%get_cavgs_stk(cavgsstk, params%ncls, smpd)
+                params%stk = trim(cavgsstk)
+                call find_ldim_nptcls(params%stk, ldim, n)
+                ldim(3) = 1
+                if( n /= params%ncls ) THROW_HARD('Inconsistent # classes in project file vs cavgs stack; gen_cavgs_partition')
+                states = spproj%os_cls2D%get_all('state')
+                ncls_sel = count(states>0.5)
+                call file2rmat(params%fname, corrmat)
+                if( size(corrmat, dim=1) /= ncls_sel ) THROW_HARD('Invalid dimensions in corrmat 1')
+                if( size(corrmat, dim=2) /= ncls_sel ) THROW_HARD('Invalid dimensions in corrmat 2')
+            endif
+            ! preference
+            call analyze_smat(corrmat, .false., cmin, cmax)
+            pref    = cmin + params%frac * (cmax-cmin)
+        else
+            ! Similarity matrix calculation
+            trsstep = min(1.,params%trs/10.) ! offset stepping
+            ! get class average stack
+            l_apply_optlp = .false.
+            if( cline%defined('stk') )then
+                if( .not.cline%defined('lp') ) THROW_HARD('LP must be defined when STK is used!')
+                call find_ldim_nptcls(cavgsstk, ldim, params%ncls, smpd=smpd)
+                params%stk = trim(cavgsstk)
+                ldim(3) = 1
+                allocate(states(params%ncls),source=1.)
+                filtsz = fdim(params%box)-1
+            else
+                if(.not.cline%defined('projfile')) THROW_HARD('PROJFILE is required!')
+                call spproj%read_segment(params%oritype, params%projfile)
+                call spproj%read_segment('out', params%projfile)
+                call spproj%get_cavgs_stk(cavgsstk, params%ncls, smpd)
+                params%stk = trim(cavgsstk)
+                call find_ldim_nptcls(params%stk, ldim, n)
+                ldim(3) = 1
+                if( n /= params%ncls ) THROW_HARD('Inconsistent # classes in project file vs cavgs stack; exec_cluster_cavgs')
+                ! threshold based on states/population/resolution
+                states = spproj%os_cls2D%get_all('state')
+                clspops = spproj%os_cls2D%get_all('pop')
+                where( clspops <  real(MINCLSPOPLIM) ) states = 0.
+                if( cline%defined('lpthres') )then
+                    clsres  = spproj%os_cls2D%get_all('res')
+                    where( clsres  >= params%lpthres ) states = 0.
+                endif
+                ! get FRCs
+                call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
+                if( file_exists(frcs_fname) )then
+                    call clsfrcs%read(frcs_fname)
+                    l_apply_optlp = .true.
+                endif
+                filtsz = clsfrcs%get_filtsz()
+            endif
+            ! ensure correct smpd/box in params class
+            params%smpd = smpd
+            params%box  = ldim(1)
+            params%msk  = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
+            ! find out how many selected class averages initially
+            ncls_sel = count(states > 0.5)
+            ! keep track of the original class indices
+            clsinds = pack((/(i,i=1,params%ncls)/), mask=states > 0.5)
+            write(logfhandle,'(A)') '>>> PREPARING CLASS AVERAGES'
+            allocate(cavg_imgs(ncls_sel), cavg_imgs_good(ncls_sel), frc(filtsz), filter(filtsz))
+            ! prep mask
+            call img_msk%new([params%box,params%box,1], params%smpd)
+            img_msk = 1.
+            call img_msk%mask(params%msk, 'hard')
+            l_msk = img_msk%bin2logical()
+            call img_msk%kill
+            cnt = 0
+            do i = 1 , params%ncls
+                if( states(i) < 0.5 ) cycle
+                cnt = cnt+1
+                call cavg_imgs(cnt)%new(ldim, smpd, wthreads=.false.)
+                call cavg_imgs(cnt)%read(params%stk, i)
+                ! FRC-based filter
+                if( l_apply_optlp )then
+                    call clsfrcs%frc_getter(i, params%hpind_fsc, params%l_phaseplate, frc)
+                    if( any(frc > 0.143) )then
+                        call fsc2optlp_sub(clsfrcs%get_filtsz(), frc, filter)
+                        where( filter > TINY ) filter = sqrt(filter) ! because the filter is applied to the average not the even or odd
+                        call cavg_imgs(cnt)%fft
+                        call cavg_imgs(cnt)%apply_filter_serial(filter)
+                        call cavg_imgs(cnt)%ifft
+                    endif
+                endif
+                ! normalization
+                call cavg_imgs(cnt)%norm_within(l_msk)
+                ! mask
+                call cavg_imgs(cnt)%mask(params%msk, 'soft', backgr=0.)
+                if( DEBUG ) call cavg_imgs(cnt)%write('4_masked.mrc', cnt)
+            end do
+            ! resolution limits
+            params%kfromto(1) = max(2, calc_fourier_index(params%hp, params%box, params%smpd))
+            params%kfromto(2) =        calc_fourier_index(params%lp, params%box, params%smpd)
+            do i = 1, ncls_sel
+                call cavg_imgs_good(i)%copy(cavg_imgs(i))
+            end do
+            allocate(corrmat(ncls_sel,ncls_sel), source=-1.)
+            ! Pseudo-Fourier Mellin transform
+            write(logfhandle,'(A)') '>>> CALCULATING CORRELATION OF MAGNITUDES MATRIX'
+            ! pftcc init
+            params%sh_inv = 'yes'
+            call pftcc%new(ncls_sel, [1,ncls_sel], params%kfromto)
+            ! PFT transform
+            call cavg_imgs_good(1)%init_polarizer(pftcc, params%alpha)
+            !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
+            do icls = 1, ncls_sel
+                call cavg_imgs_good(icls)%fft()
+                ! particles & even refs are the same, odd refs are even mirrored
+                call cavg_imgs_good(1)%polarize(pftcc, cavg_imgs_good(icls), icls, isptcl=.false., iseven=.true.)
+                call pftcc%cp_even_ref2ptcl(icls,icls)
+                call pftcc%mirror_pft(pftcc%pfts_refs_even(:,:,icls), pftcc%pfts_refs_odd(:,:,icls))
+            end do
+            !$omp end parallel do
+            call pftcc%memoize_refs
+            call pftcc%memoize_ptcls
+            ! correlation matrix calculation
+            allocate(corrs(pftcc%pftsz),correlators(nthr_glob))
+            do i = 1,nthr_glob
+                call correlators(i)%new(params%trs,trsstep,opt_angle=.false.)
+            enddo
+            !$omp parallel do default(shared) private(i,j,irot,irotm,cc,ccm,ithr,corrs,offset,offsetm)&
+            !$omp schedule(dynamic) proc_bind(close)
+            do i = 1, ncls_sel - 1
+                ithr = omp_get_thread_num()+1
+                corrmat(i,i) = 1.
+                do j = i + 1, ncls_sel
+                    ! correlation of reference to particle
+                    call pftcc%set_eo(i,.true.)
+                    ! rotational correlations of magnitudes
+                    call pftcc%gencorrs_mag_cc(j, i, corrs, kweight=params%l_kweight_rot)
+                    irot = maxloc(corrs,dim=1)
+                    ! shift optimization of both irot & irot+pi
+                    call correlators(ithr)%minimize(j,i, irot, cc, offset)
+                    ! correlation of mirrored reference to particle
+                    call pftcc%set_eo(i,.false.)
+                    call pftcc%gencorrs_mag_cc(j, i, corrs, kweight=params%l_kweight_rot)
+                    irotm = maxloc(corrs,dim=1)
+                    call correlators(ithr)%minimize(j,i, irotm, ccm, offsetm)
+                    ! highest correlation
+                    cc = max(cc,ccm)
+                    corrmat(i,j) = cc
+                    corrmat(j,i) = cc
+                enddo
+            enddo
+            !$omp end parallel do
+            corrmat(ncls_sel,ncls_sel) = 1.
+            ! write similarity matrix
+            call rmat2file(corrmat, SIMMAT_FNAME)
+            ! for the first run the clustering solution that theoretically corresponds
+            ! to a small number of cluster is returned
+            call analyze_smat(corrmat, .false., cmin, cmax)
+            pref        = cmin                      ! generates a small number of clusters
+            params%frac = (pref-cmin) / (cmax-cmin) ! for reporting
+        endif
+        write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH AFFINITY PROPAGATION'
+        ! clustering
+        call aprop%new(ncls_sel, corrmat, pref=pref)
+        call aprop%propagate(centers, labels, simsum)
+        call aprop%kill
+        ncls_aff_prop = size(centers)
+        write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION (AP): ', ncls_aff_prop
+        allocate(cntarr(ncls_aff_prop), source=0)
+        ! write labels
+        allocate(tmp(params%ncls),source=0)
+        cnt = 1
+        do icls = 1,params%ncls
+            if( states(icls) > 0.5 )then
+                tmp(cnt) = labels(cnt)
+                cnt = cnt+1
+            endif
+        enddo
+        call fopen(funit,LABELS_FNAME, 'replace', 'unknown', iostat=io_stat, form='formatted')
+        call fileiochk("arr2txtfile fopen failed "//trim(LABELS_FNAME),io_stat)
+        ! header
+        write(funit,'(A2,I6,F8.3)') '# ',params%ncls,params%frac
+        ! labels
+        do icls = 1,params%ncls
+            write(funit,*) labels(icls)
+        end do
+        call fclose(funit)
+        if( DEBUG .and. (.not.cline%defined('fname')) )then
+            ! write the classes
+            do icls = 1, ncls_aff_prop
+                do i=1,ncls_sel
+                    if( labels(i) == icls )then
+                        classname = 'class'//int2str_pad(icls,3)//trim(STK_EXT)
+                        cntarr(labels(i)) = cntarr(labels(i)) + 1
+                        call cavg_imgs(i)%write(classname, cntarr(labels(i)))
+                    endif
+                end do
+            end do
+        endif
+        ! calculate average similarity of the AP clusters
+        if( allocated(mask_icls) ) deallocate(mask_icls)
+        allocate( mask_icls(ncls_sel) )
+        do icls = 1, ncls_aff_prop
+            ! mask out the cluster
+            where( labels == icls )
+                mask_icls = .true.
+            elsewhere
+                mask_icls = .false.
+            end where
+            ! calculate the average correlation of the cluster
+            corr_icls = 0.
+            cnt       = 0
+            do i = 1, ncls_sel - 1
+                do j = i + 1, ncls_sel
+                    if( mask_icls(i) .and. mask_icls(j) )then
+                        corr_icls = corr_icls + corrmat(i,j)
+                        cnt       = cnt + 1
+                    endif
+                end do
+            end do
+            corr_icls = corr_icls / real(cnt)
+            write(logfhandle,*) 'Average corr AP cluster '//int2str_pad(icls,3)//': ', corr_icls, ' pop ', count(mask_icls)
+        end do
+        ! print the correlations between the cluster centers
+        write(logfhandle,'(A)') '>>> COMMON LINE CORRELATIONS BETWEEN CLUSTER CENTERS'
+        do i = 1,ncls_aff_prop - 1
+            icen = centers(i)
+            do j = i + 1,ncls_aff_prop
+                jcen = centers(j)
+                write(logfhandle,*) 'corr btw cluster  '//int2str_pad(i,3)//' & '//int2str_pad(j,3)//': ', corrmat(icen,jcen)
+            end do
+        end do
+        ! end gracefully
+        call simple_end('**** SIMPLE_CLUSTER_CAVGS NORMAL STOP ****')
+    end subroutine exec_gen_cavgs_partition
 
     ! UTILITIES
 
