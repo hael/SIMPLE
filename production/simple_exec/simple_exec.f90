@@ -79,6 +79,7 @@ type(reconstruct3D_commander_distr)         :: xreconstruct3D
 type(map_cavgs_selection_commander)         :: xmap_cavgs_selection
 type(map_cavgs_states_commander)            :: xmap_cavgs_states
 type(cluster_cavgs_commander)               :: xcluster_cavgs
+type(gen_cavgs_partition_commander)         :: xgen_cavgs_partition
 type(prune_cavgs_commander)                 :: xprune_cavgs
 type(write_classes_commander)               :: xwrite_classes
 type(symaxis_search_commander)              :: xsymsrch
@@ -290,6 +291,8 @@ select case(trim(prg))
         call xmap_cavgs_states%execute(cline)
     case( 'cluster_cavgs' )
         call xcluster_cavgs%execute(cline)
+    case( 'gen_cavgs_partition' )
+        call xgen_cavgs_partition%execute(cline)
     case( 'prune_cavgs' )
         call xprune_cavgs%execute(cline)
     case( 'write_classes' )
@@ -418,7 +421,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('4703aa38')
+call simple_print_git_version('f25fbf1f')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

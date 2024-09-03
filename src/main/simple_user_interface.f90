@@ -108,6 +108,7 @@ type(simple_program), target :: export_starproject
 type(simple_program), target :: extract
 type(simple_program), target :: filter
 type(simple_program), target :: fsc
+type(simple_program), target :: gen_cavgs_partition
 type(simple_program), target :: gen_pspecs_and_thumbs
 type(simple_program), target :: gen_picking_refs
 type(simple_program), target :: icm2D
@@ -408,6 +409,7 @@ contains
         call new_filter
         call new_fractionate_movies
         call new_fsc
+        call new_gen_cavgs_partition
         call new_gen_pspecs_and_thumbs
         call new_gen_picking_refs
         call new_icm2D
@@ -533,6 +535,7 @@ contains
         call push2prg_ptr_array(filter)
         call push2prg_ptr_array(fractionate_movies)
         call push2prg_ptr_array(fsc)
+        call push2prg_ptr_array(gen_cavgs_partition)
         call push2prg_ptr_array(gen_pspecs_and_thumbs)
         call push2prg_ptr_array(gen_picking_refs)
         call push2prg_ptr_array(icm2D)
@@ -707,6 +710,8 @@ contains
                 ptr2prg => filter
             case('fsc')
                 ptr2prg => fsc
+            case('gen_cavgs_partition')
+                ptr2prg => gen_cavgs_partition
             case('gen_pspecs_and_thumbs')
                 ptr2prg => gen_pspecs_and_thumbs
             case('gen_picking_refs')
@@ -905,6 +910,7 @@ contains
         write(logfhandle,'(A)') export_starproject%name
         write(logfhandle,'(A)') filter%name
         write(logfhandle,'(A)') fsc%name
+        write(logfhandle,'(A)') gen_cavgs_partition%name
         write(logfhandle,'(A)') gen_pspecs_and_thumbs%name
         write(logfhandle,'(A)') icm2D%name
         write(logfhandle,'(A)') icm3D%name
@@ -2471,6 +2477,34 @@ contains
         ! computer controls
         call fsc%set_input('comp_ctrls', 1, nthr)
     end subroutine new_fsc
+
+    subroutine new_gen_cavgs_partition
+        ! PROGRAM SPECIFICATION
+        call gen_cavgs_partition%new(&
+        &'gen_cavgs_partition', &                                           ! name
+        &'Generate class averages partitions based on their simmilarity',&  ! descr_short
+        &'is an application to cluster class averages',&                    ! descr_long
+        &'simple_exec',&                                                    ! executable
+        &1, 2, 0, 0, 3, 1, 1, .false.)                                       ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call gen_cavgs_partition%set_input('img_ios',  1, stk)
+        ! parameter input/output
+        call gen_cavgs_partition%set_input('parm_ios', 1, 'fname',   'file', 'Input/Output Similarity Matrix', 'Binary file (.bin)','simmat.bin', .false., '')
+        call gen_cavgs_partition%set_input('parm_ios', 2, frac)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call gen_cavgs_partition%set_input('filt_ctrls', 1, hp)
+        call gen_cavgs_partition%set_input('filt_ctrls', 2, lp)
+        call gen_cavgs_partition%set_input('filt_ctrls', 3, lpthres)
+        ! mask controls
+        call gen_cavgs_partition%set_input('mask_ctrls', 1, mskdiam)
+        ! computer controls
+        call gen_cavgs_partition%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_gen_cavgs_partition
 
     subroutine new_gen_pspecs_and_thumbs
         ! PROGRAM SPECIFICATION
