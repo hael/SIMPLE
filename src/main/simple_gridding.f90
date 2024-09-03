@@ -113,7 +113,7 @@ contains
         center = ldim/2+1
         select case(trim(interpfun))
         case('kb')
-            if(.not.present(kbwin)) THROW_HARD('KB interpolator must be gigen with interpfun=kb')
+            if(.not.present(kbwin)) THROW_HARD('KB interpolator must be given with interpfun=kb')
             allocate(w(ldim(1)),source=1.)
             ! kaiser-besel window
             do i = 1,ldim(1)
