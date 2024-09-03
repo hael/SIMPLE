@@ -3,7 +3,7 @@ include 'simple_lib.f08'
 use simple_atoms, only: atoms
 use simple_image
 implicit none
-character(len=STDLEN)         :: pdb_file, vol_file
+character(len=STDLEN)         :: pdb_file, vol_file, pdb_out
 type(atoms)                   :: molecule 
 type(image)                   :: vol 
 real                          :: smpd=1.0
@@ -32,8 +32,9 @@ else
 endif
 smpd     = 1.000
 vol_file = swap_suffix(pdb_file,'mrc','pdb')
+pdb_out  = trim(get_fbody(pdb_file,'pdb'))//'_centered'
 call molecule%new(pdb_file)
-call molecule%pdb2mrc(pdb_file, vol_file, smpd)
+call molecule%pdb2mrc(pdb_file, vol_file, smpd, pdb_out)
 call find_ldim_nptcls(vol_file, ldim, ifoo)
 call vol%new(ldim, smpd)
 call vol%read(vol_file)

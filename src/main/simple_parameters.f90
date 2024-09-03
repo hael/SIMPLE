@@ -142,6 +142,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: pdbfile=''           !< PDB file
     character(len=LONGSTRLEN) :: pdbfile2=''          !< PDB file, another one
     character(len=LONGSTRLEN) :: pdbfiles=''          !< list of PDB files
+    character(len=LONGSTRLEN) :: pdbout=''            !< PDB output file
     character(len=LONGSTRLEN) :: pdfile='pdfile.bin'
     character(len=LONGSTRLEN) :: pickrefs=''          !< picking references
     character(len=LONGSTRLEN) :: plaintexttab=''      !< plain text file of input parameters
@@ -668,6 +669,7 @@ contains
         call check_file('pdbfile',        self%pdbfile)
         call check_file('pdbfile2',       self%pdbfile2)
         call check_file('pdbfiles',       self%pdbfiles,     'T')
+        call check_file('pdbout',         self%pdbout)
         call check_file('pickrefs',       self%pickrefs,     notAllowed='T')
         call check_file('plaintexttab',   self%plaintexttab, 'T')
         call check_file('projfile',       self%projfile,     'O')
