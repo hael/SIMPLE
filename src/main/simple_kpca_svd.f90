@@ -25,7 +25,8 @@ type, extends(pca) :: kpca_svd
     procedure :: kill     => kill_kpca
     procedure :: kernel_center
     procedure :: rbf_kernel
-    procedure :: test_all, test_kernel_center, test_rbf_kernel
+    procedure :: compute_alpha
+    procedure :: test_all, test_kernel_center, test_rbf_kernel, test_alpha
 end type
 
 logical :: L_PRINT = .false.
@@ -113,9 +114,38 @@ contains
                 ker(i,j) = euclid(mat(i,:), mat(j,:))**2
             enddo
         enddo
+        ! normalization and centering
         ker = exp(-ker/real(ncomp)/c)
         call self%kernel_center(dim, ker)
     end subroutine rbf_kernel
+
+    subroutine compute_alpha( self, dim, mat, ncomp, alpha )
+        class(kpca_svd), intent(inout) :: self
+        integer,         intent(in)    :: dim
+        real,            intent(in)    :: mat(dim,dim)
+        integer,         intent(in)    :: ncomp
+        real,            intent(out)   :: alpha(dim,ncomp)
+        real    :: eig_vecs(dim,dim), eig_vals(dim), tmp(dim,dim), tmp_mat(dim,dim)
+        integer :: i, inds(dim)
+        tmp_mat = mat
+        do i = 1, dim
+            tmp_mat(:,i) = tmp_mat(:,i) - sum(tmp_mat(:,i))/real(dim)
+        enddo
+        ! computing eigvals/eigvecs
+        eig_vecs = tmp_mat
+        call svdcmp(eig_vecs, eig_vals, tmp)
+        eig_vals  = eig_vals**2 / real(dim)
+        inds      = (/(i,i=1,dim)/)
+        call hpsort(eig_vals, inds)
+        call reverse(eig_vals)
+        call reverse(inds)
+        tmp = tmp(:, inds)
+        do i = 1, dim
+            alpha(i,:) = tmp(i,1:ncomp) / sqrt(eig_vals(1:ncomp))
+        enddo
+        ! change the sorted order of alpha
+        alpha(:,1:ncomp) = alpha(:,ncomp:1:-1)
+    end subroutine compute_alpha
 
     ! DESTRUCTOR
 
@@ -133,6 +163,7 @@ contains
         class(kpca_svd), intent(inout) :: self
         call self%test_kernel_center
         call self%test_rbf_kernel
+        call self%test_alpha
     end subroutine test_all
 
     subroutine test_kernel_center( self )
@@ -166,5 +197,22 @@ contains
             print *, 'ker = ', ker
         endif
     end subroutine test_rbf_kernel
+
+    subroutine test_alpha( self )
+        class(kpca_svd), intent(inout) :: self
+        real :: mat(3,3), truth(3,2), alpha(3,2)
+        mat(1,:) = [ 0.,  1., 7.]
+        mat(2,:) = [ 2.,  5., 3.]
+        mat(3,:) = [ 1., -2., 0.]
+        call self%compute_alpha(3, mat, 2, alpha)
+        truth(1,1) =  0.31606028
+        truth(2,1) = -0.31606028
+        if( maxval(abs(alpha - truth)) < TINY )then
+            print *, 'Unit test of compute_alpha: PASSED'
+        else
+            print *, 'Unit test of compute_alpha: FAILED'
+            print *, 'alpha = ', alpha
+        endif
+    end subroutine test_alpha
 
 end module simple_kpca_svd
