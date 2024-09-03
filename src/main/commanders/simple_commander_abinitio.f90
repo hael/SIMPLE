@@ -1015,7 +1015,7 @@ contains
         integer, parameter :: NSPACE1 = 500, NSPACE2 = 1000, NSPACE3 = 2000
         integer, parameter :: SYMSEARCH_DEFAULT = 3
         integer, parameter :: MLREG_ITER        = 1
-        integer, parameter :: SHIFT_STAGE_DEFAULT = NSTAGES_DEFAULT ! in [1;NSTAGES+1]
+        integer, parameter :: SHIFT_STAGE_DEFAULT = 4
         integer, parameter :: ICM_STAGE_DEFAULT   = NSTAGES_DEFAULT ! in [1;NSTAGES+1]
         ! commanders
         type(refine3D_commander_distr)      :: xrefine3D_distr
@@ -1045,6 +1045,7 @@ contains
         if( .not. cline%defined('ml_reg')       ) call cline%set('ml_reg',       'yes')
         if( .not. cline%defined('sigma_est')    ) call cline%set('sigma_est', 'global')
         if( .not. cline%defined('prob_sh')      ) call cline%set('prob_sh',      'yes')
+        if( .not. cline%defined('sh_first')     ) call cline%set('sh_first',     'yes')
         if( .not. cline%defined('prob_athres')  ) call cline%set('prob_athres',    10.)
         ! if( .not. cline%defined('stoch_update') ) call cline%set('stoch_update', 'yes') ! off 4 now
         call cline%set('stoch_update', 'no')
