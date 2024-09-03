@@ -24,6 +24,7 @@ type, extends(pca) :: kpca_svd
     ! DESTRUCTOR
     procedure :: kill     => kill_kpca
     procedure :: kernel_center
+    procedure :: test_all, test_kernel_center
 end type
 
 logical :: L_PRINT = .false.
@@ -87,13 +88,14 @@ contains
         integer, optional, intent(in)    :: maxpcaits ! redundant
     end subroutine master_kpca
 
-    subroutine kernel_center( self, ker )
+    subroutine kernel_center( self, dim, ker )
         class(kpca_svd), intent(inout) :: self
-        real,            intent(inout) :: ker(self%N,self%N)
-        real :: ones(self%N,self%N)
-        ones = 1.
+        integer,         intent(in)    :: dim
+        real,            intent(inout) :: ker(dim,dim)
+        real :: ones(dim,dim)
+        ones = 1. / dim
         ! Appendix D.2.2 Centering in Feature Space from Schoelkopf, Bernhard, Support vector learning, 1997
-        ker  = ker - matmul(ones, ker) - matmul(ker, ones) + matmul(ones, matmul(ones, ker))
+        ker  = ker - matmul(ones, ker) - matmul(ker, ones) + matmul(matmul(ones, ker), ones)
     end subroutine kernel_center
 
     ! DESTRUCTOR
@@ -106,5 +108,27 @@ contains
             self%existence = .false.
         endif
     end subroutine kill_kpca
+
+    ! UNIT TESTS
+    subroutine test_all( self )
+        class(kpca_svd), intent(inout) :: self
+        call self%test_kernel_center
+    end subroutine test_all
+
+    subroutine test_kernel_center( self )
+        class(kpca_svd), intent(inout) :: self
+        real :: ker(2,2), truth(2,2)
+        ker(1,:) = [ 1., 2.]
+        ker(2,:) = [ 3., 1.]
+        call self%kernel_center(2, ker)
+        truth(1,:) = [ -0.75,  0.75 ]
+        truth(2,:) = [  0.75, -0.75 ]
+        if( maxval(abs(ker - truth)) < TINY )then
+            print *, 'Unit test of kernel_center: PASSED'
+        else
+            print *, 'Unit test of kernel_center: FAILED'
+            print *, 'ker = ', ker
+        endif
+    end subroutine test_kernel_center
 
 end module simple_kpca_svd

@@ -1,4 +1,4 @@
-program simple_test_ppca_kpca
+program simple_test_pca_all
 include 'simple_lib.f08'
 use simple_ppca_inmem, only: ppca_inmem
 use simple_pca_svd,    only: pca_svd
@@ -63,4 +63,4 @@ print *, 'Pre-imaged data using PCA:'
 do j = 1, NP
     print *, data_pca(j,:)
 enddo
-end program simple_test_ppca_kpca
+end program simple_test_pca_all
