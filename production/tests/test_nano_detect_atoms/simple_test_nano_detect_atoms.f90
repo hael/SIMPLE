@@ -40,7 +40,7 @@ intensity_level  = 2
 circle           = .true.  ! whether to use cube or sphere for correlation calculation (.true. = sphere, default value is .false.)
 use_valid_corr   = .true.  ! whether to discard boxes based on a low valid correlation
 use_cs_thres     = .true.  ! whether to discard boxes based on a low contact score
-mskdiam          = 28.4
+mskdiam          = 33.5
 corr_thres       = 0.3
 cs_thres         = 2.0
 
@@ -48,11 +48,11 @@ print *, 'NEW METHOD: '
 call test_exp%new(smpd, element, filename_exp, peak_thres_level, offset, mskdiam=mskdiam, intensity_level=intensity_level, circle=circle)
 call test_exp%exec_nano_picker(corr_thres=corr_thres,cs_thres=cs_thres)
 call test_exp%calc_per_atom_corr('final_positions_and_corrs')
-call test_exp%find_centers_nano()
+!call test_exp%find_centers_nano()
 !OUTPUT FILES
 call test_exp%write_pdb('experimental_centers_TEST')
 call test_exp%write_positions_and_scores('pos_and_scores_centers_refined.csv', 'centers')
-corr = test_exp%whole_map_correlation()
+corr = test_exp%whole_map_correlation(which='raw')
 print *, 'Correlation to rec_merged.mrc is: ', corr
 call test_exp%kill
 print *, ' '
