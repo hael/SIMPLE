@@ -78,103 +78,43 @@ type(parameters), target    :: params
 integer, allocatable     :: pick_pos(:, :)
 logical     :: outside = .true. 
 integer     :: neighbors(3,8), nsz, px(3) = [78, 93, 1], test_coord(2), box_ldim(3)
-! call J11%new([1024, 1024, 1], 5.0)
-! call J11%get_rmat_ptr(J11_rmat)
-! allocate(J11_rmat(1024, 1024, 1))
-! print *, J11_rmat
-! character(len=*), parameter :: OUT_FILE = '/Users/atifao/Downloads/IBW/16_im.txt' ! Output file.
-! character(len=*), parameter :: PLT_FILE = 'plot.plt' ! Gnuplot file.
-! real       :: test_mat(3,3), test_sing(3), test_vec(3,3)
-! test_mat = reshape((/ 2, 1, 3, 3, 7, 2, 6, 9, -1 /), shape(test_mat))
-! call svdcmp_sp(test_mat, test_sing, test_vec)
-
-! print *, test_sing
-! add padding to non square images 
+!
 params_glob => params
 params_glob%pcontrast = 'black'
 params_glob%lp        = 10.
 params_glob%nsig      = 1.5
-call cpu_time(start)
 call read_ibw('/Users/atifao/Downloads/IBW/Cob_450016.ibw', Cob16)
 call zero_padding(Cob16)
 call get_AFM(Cob16, 'HeightTrace', HeightTrace)
 HeightRetrace = Cob16%img_array(findloc(index(Cob16%img_names, 'HeightRetrace'),1, dim = 1))
-
-
-call HeightTrace%write('/Users/atifao/16_t.mrc')
-call pickseg_t%pick('/Users/atifao/16_t.mrc')
-! print *, 'trace', pickseg_t%get_nboxes()
-call pickseg_t%get_positions(pick_pos)
-do i = 1, pickseg_t%get_nboxes()
-    print *, i,'th position', pick_pos(i, :)
-end do 
-
-
-
-! call HeightTrace%window_slim(position, box_num, slim_out, outside)
-
-call HeightRetrace%write('/Users/atifao/16_r.mrc')
-call pickseg_r%pick('/Users/atifao/16_r.mrc')
-call pickseg_r%get_positions(pick_pos)
-do i = 1, pickseg_r%get_nboxes()
-    print *, i,'th position', pick_pos(i, :)
-end do 
-
-! call align_avg(Cob16)
-
-
-! pick again on avg. images 
-! validate
-call cpu_time(finish)
-print *, finish - start 
 call get_AFM(Cob16, 'HeightTrace', HeightTrace)
-
 call Height_Avg%copy(HeightTrace)
-call Retrace_Copy%copy(HeightRetrace)
-! print *, HeightTrace%mean()
-! call ced_filter_2D(HeightRetrace, 0.7)
-! call HeightTrace%vis()
-! print *, HeightTrace%mean()
-
-! call HeightTrace%fft()
-! call HeightRetrace%fft()
-
-! call HeightTrace%fcorr_shift(HeightRetrace, 20., h_shift, .true.) 
-! have to store height trace since it is destroyed on fcorr_shift output
-! shvec = [h_shift(1), h_shift(2), 0.]
-! print *, shvec 
-! call HeightRetrace%fft()
-! call HeightRetrace%shift(shvec)
-! call HeightRetrace%ifft()
-! call HeightTrace%ifft()
-
-! call HeightRetrace%vis()
-! call Trace_Copy%vis()
+call align_avg(Cob16)
 Height_Avg = HeightRetrace * 0.5 + Height_Avg * 0.5
-
+Height_Avg = Cob16%img_array(1)
 call pick_valid(Height_Avg, HeightTrace, HeightRetrace)
 
-call Height_Avg%write('/Users/atifao/16_avg.mrc')
-call pickseg_avg%pick('/Users/atifao/16_avg.mrc')
-call pickseg_avg%get_positions(pick_pos)
-do i = 1, pickseg_avg%get_nboxes()
-    print *, i,'th position', pick_pos(i, :)
-end do 
-test_coord = pick_pos(7, :)
-box_ldim = [pickseg_avg%box_raw, pickseg_avg%box_raw, 1]
-box_smpd = HeightTrace%get_smpd()
+! call Height_Avg%write('/Users/atifao/16_avg.mrc')
+! call pickseg_avg%pick('/Users/atifao/16_avg.mrc')
+! call pickseg_avg%get_positions(pick_pos)
+! do i = 1, pickseg_avg%get_nboxes()
+!     print *, i,'th position', pick_pos(i, :)
+! end do 
+! test_coord = pick_pos(7, :)
+! box_ldim = [pickseg_avg%box_raw, pickseg_avg%box_raw, 1]
+! box_smpd = HeightTrace%get_smpd()
 
-call Height_Avg%norm_minmax()
-call HeightTrace%norm_minmax()
+! call Height_Avg%norm_minmax()
+! call HeightTrace%norm_minmax()
 
-call pickseg_avg_win%new(box_ldim, box_smpd)
-call pickseg_t_win%new(box_ldim, box_smpd)
-call Height_Avg%window_slim(test_coord, pickseg_avg%box_raw, pickseg_avg_win, outside)
+! call pickseg_avg_win%new(box_ldim, box_smpd)
+! call pickseg_t_win%new(box_ldim, box_smpd)
+! call Height_Avg%window_slim(test_coord, pickseg_avg%box_raw, pickseg_avg_win, outside)
 
-test_coord = [3, 46]
-call HeightTrace%window_slim(test_coord, pickseg_avg%box_raw, pickseg_t_win, outside)
+! test_coord = [3, 46]
+! call HeightTrace%window_slim(test_coord, pickseg_avg%box_raw, pickseg_t_win, outside)
 
-print *, pickseg_avg_win%real_corr(pickseg_t_win) 
+! print *, pickseg_avg_win%real_corr(pickseg_t_win) 
 ! call Height_Avg%vis()
 ! call Trace_Copy%vis()
 ! call softmin_avg(Trace_Copy, HeightRetrace)
@@ -199,6 +139,26 @@ print *, pickseg_avg_win%real_corr(pickseg_t_win)
 
 ! call neigh_8_1(Height_Avg%get_ldim(), px, neighbors, nsz)
 ! print *, neighbors 
+! call HeightTrace%write('/Users/atifao/16_t.mrc')
+! call pickseg_t%pick('/Users/atifao/16_t.mrc')
+! ! print *, 'trace', pickseg_t%get_nboxes()
+! call pickseg_t%get_positions(pick_pos)
+! do i = 1, pickseg_t%get_nboxes()
+!     print *, i,'th position', pick_pos(i, :)
+! end do 
+
+
+
+! call HeightTrace%window_slim(position, box_num, slim_out, outside)
+
+! call HeightRetrace%write('/Users/atifao/16_r.mrc')
+! call pickseg_r%pick('/Users/atifao/16_r.mrc')
+! call pickseg_r%get_positions(pick_pos)
+! do i = 1, pickseg_r%get_nboxes()
+!     print *, i,'th position', pick_pos(i, :)
+! end do 
+
+! call align_avg(Cob16)
 
 contains 
     subroutine read_ibw(fn_in, AFM)
@@ -282,14 +242,7 @@ contains
         type(AFM_image), intent(inout)     :: Align_AFM
         real, allocatable                  :: shifts(:, :)
         integer                            :: num_avg, avg_ind, prop_ind
-        ! character(len = 10)    :: iteration(2), properties(4)
-        ! iteration = [character(len = 10) :: 'Trace', 'Retrace']
-        ! properties = [character(len = 10) :: 'Height', 'Amplitude', 'Phase', 'ZSensor' ]
-        ! do prop_ind = 1, size(properties)
-        !     do avg_ind = 1, size(Align_AFM%img_array)
-        !         print *, index(Align_AFM%img_names(avg_ind), trim(properties(prop_ind)))
-        !     end do 
-        ! end do
+        ! increase size of align afm. 1st entry should be avg then trace, retrace. need to copy 
         num_avg = size(Align_AFM%img_array) / 2
         allocate(shifts(2, num_avg))
         if(modulo(size(shifts), 2) /= 0) then 
@@ -304,7 +257,7 @@ contains
         do avg_ind = 1, num_avg 
             call Align_AFM%img_array(2*avg_ind)%fft()
             ! not sure if negative or positive shift... 
-            call Align_AFM%img_array(2*avg_ind)%shift([-shifts(1, avg_ind), -shifts(2, avg_ind), 0.])
+            call Align_AFM%img_array(2*avg_ind)%shift([shifts(1, avg_ind), shifts(2, avg_ind), 0.])
             call Align_AFM%img_array(2*avg_ind)%ifft()
         end do
         do avg_ind = 2, size(Align_AFM%img_array), 2
@@ -353,12 +306,14 @@ contains
         type(image), intent(inout)  :: avg, trace, retrace 
         type(pickseg)               :: avg_p, trace_p, retrace_p
         type(image)                 :: avg_slim, trace_slim, retrace_slim 
-        integer                     :: ldim_box(3), box_iter 
-        real                        :: smpd_box
+        integer                     :: ldim_box(3), box_iter, search_iter, neighbor_iter
+        real                        :: smpd_box, neighbor_corr(8), coord_corr(3,8), threshold = 0.01
         CHARACTER(len=255)          :: cwd
-        integer, allocatable        :: pickpos(:, :)            
-        integer                     :: coord_test(2)
+        integer, allocatable        :: pickpos(:, :)          
+        integer                     :: coord_test(2), max_iter = 10
         logical                     :: outs = .true. 
+        integer                     :: neighbor(3, 8), nsiz, center(3)
+        real, allocatable           :: corr_r(:), corr_t(:)
         call getcwd(cwd)
         call avg%write(trim(cwd) // 'avg.mrc')
         call avg_p%pick(trim(cwd) // 'avg.mrc')
@@ -376,14 +331,31 @@ contains
         call avg_slim%new(ldim_box, smpd_box )
         call trace_slim%new(ldim_box, smpd_box)
         call retrace_slim%new(ldim_box, smpd_box)
-
+        allocate(corr_t(max_iter))
+        allocate(corr_r(max_iter))
+        ! allocate(center(3, max_iter))
         call avg_p%get_positions(pickpos) 
         do box_iter = 1, avg_p%get_nboxes()
+            print *, 'box: ', box_iter 
             coord_test = pickpos(box_iter, :)
             call avg%window_slim(coord_test, avg_p%box_raw, avg_slim, outs)
             call trace%window_slim(coord_test, avg_p%box_raw, trace_slim, outs)
             call retrace%window_slim(coord_test, avg_p%box_raw, retrace_slim, outs)
-            print *, 'avg_trace', avg_slim%real_corr(trace_slim), 'avg_retrace', avg_slim%real_corr(retrace_slim)
+
+            corr_r(1) =  avg_slim%real_corr(retrace_slim)
+            corr_t(1) = avg_slim%real_corr(trace_slim)
+            center = [coord_test(1), coord_test(2), 1]
+            
+            do search_iter = 1, max_iter 
+                call neigh_8_1(avg%get_ldim(), center, neighbor, nsiz)
+                do neighbor_iter = 1, nsiz
+                    call retrace%window_slim([neighbor(1, neighbor_iter), neighbor(2, neighbor_iter)], avg_p%box_raw, trace_slim, outs)
+                    coord_corr(:, neighbor_iter) = [real(neighbor(1, neighbor_iter)), real(neighbor(2, neighbor_iter)), avg_slim%real_corr(trace_slim)]
+                    neighbor_corr(neighbor_iter) = avg_slim%real_corr(trace_slim)
+                end do 
+                center = [ int(coord_corr(1, maxloc(neighbor_corr))), int(coord_corr(2, maxloc(neighbor_corr))), 1 ] 
+                print *, center, maxval(neighbor_corr )
+            end do 
         end do 
     end subroutine pick_valid 
     ! subroutine write_pick_mrcs(pickseg_inp, ref_img)
