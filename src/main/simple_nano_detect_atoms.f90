@@ -23,7 +23,7 @@ use simple_stat
         character(len=100)       :: raw_filename, pdb_filename
         integer                  :: boxsize, ldim(3), nxyz_offset(3), offset, peak_thres_level
         integer, allocatable     :: inds_offset(:,:,:), positions(:,:)
-        type(image)              :: simulated_atom, nano_img
+        type(image)              :: simulated_atom, nano_img, nano_img_raw
         type(image), allocatable :: convolved_atoms(:)
         real                     :: smpd, thres, radius, mask_radius, dist_thres, intensity_thres
         real, allocatable        :: box_scores(:,:,:), loc_sdevs(:,:,:), avg_int(:,:,:), center_positions(:,:)
@@ -129,6 +129,9 @@ use simple_stat
             call self%nano_img%mask(self%mask_radius, 'soft')
             call self%nano_img%write('masked_img.mrc')
         end if
+        call self%nano_img_raw%copy(self%nano_img)
+        call self%nano_img%zero_below(self%intensity_thres)
+        call self%nano_img%write('zero_below.mrc')
         if( present(circle) ) self%circle = circle
         if( present(dist_thres) ) self%dist_thres = dist_thres
     end subroutine new
@@ -457,6 +460,7 @@ use simple_stat
         logical, allocatable :: mask(:), selected_pos(:)
         logical              :: is_peak
         character(len=8)     :: crystal_system
+        call self%find_centers
         pos_inds   = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
         pos_scores = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= self%thres .and. self%msk(:,:,:))
         nbox       = size(pos_inds)
@@ -467,7 +471,7 @@ use simple_stat
             ! identify boxes in neighborhood
             !$omp parallel do schedule(static) default(shared) private(jbox, dist) proc_bind(close)
             do jbox = 1, nbox
-                dist = euclid(real(self%positions(pos_inds(ibox),:)),real(self%positions(pos_inds(jbox),:)))
+                dist = euclid(real(self%center_positions(pos_inds(ibox),:)),real(self%center_positions(pos_inds(jbox),:)))
                 if( dist <= self%dist_thres ) mask(jbox) = .true.
             enddo
             !$omp end parallel do
@@ -788,7 +792,7 @@ use simple_stat
             self%thres     = thresholds(i) ! need to set self%thres because it is called in multiple subroutines
             print *, 'i = ', i, 'self%thres = ', self%thres
             call self%find_centers
-            thres_corrs(i) = self%whole_map_correlation()
+            thres_corrs(i) = self%whole_map_correlation(which='adj')
             print *, 'CORR = ', thres_corrs(i)
         enddo
         print *, 'ITERATIONS END'
@@ -933,14 +937,20 @@ use simple_stat
         end if
     end subroutine discard_atoms
 
-    function whole_map_correlation(self, compare_to_pdb) result(corr)
+    function whole_map_correlation(self, which, compare_to_pdb) result(corr)
         class(nano_picker),         intent(inout) :: self
-        character(len=*), optional, intent(in)    :: compare_to_pdb
+        character(len=*), optional, intent(in)    :: compare_to_pdb, which
         real                     :: corr
         type(nanoparticle)       :: nano, nano_ref
         type(image)              :: simatms, simatms_ref
         type(parameters), target :: params
+        character(len=3)         :: which_here
         if (.not. self%wrote_pdb) call self%write_pdb()
+        if (present(which)) then
+            which_here = trim(which)
+        else
+            which_here = 'raw'
+        end if
         params_glob => params
         params_glob%element = self%element
         params_glob%smpd    = self%smpd
@@ -955,7 +965,14 @@ use simple_stat
             call nano_ref%kill
             call simatms_ref%kill
         else
-            corr = self%nano_img%real_corr(simatms)
+            select case(which_here)
+            case('raw') 
+                corr = self%nano_img_raw%real_corr(simatms)
+            case('adj')
+                corr = self%nano_img%real_corr(simatms)
+            case DEFAULT 
+                THROW_HARD('invalid input to whole_map_correlation')
+            end select
         end if
         call nano%kill
         call simatms%kill
@@ -1196,7 +1213,7 @@ use simple_stat
         type(image),        intent(out)   :: img
         logical :: outside
         call img%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
-        call self%nano_img%window_slim( pos, self%boxsize, img, outside)
+        call self%nano_img_raw%window_slim( pos, self%boxsize, img, outside)
     end subroutine extract_img_from_pos
 
     ! input center_pos in pixels, not Angstroms
@@ -1211,7 +1228,7 @@ use simple_stat
         winsz     = ceiling(maxrad)
         call img%new([winsz,winsz,winsz],self%smpd)
         edge_pos  = anint(center_pos - [winsz/2., winsz/2., winsz/2.])
-        call self%nano_img%window_slim( edge_pos, winsz, img, outside)
+        call self%nano_img_raw%window_slim( edge_pos, winsz, img, outside)
         call img%mask(maxrad, 'hard')
     end subroutine extract_img_from_center_pos
 
@@ -1219,6 +1236,7 @@ use simple_stat
         class(nano_picker), intent(inout) :: self
         integer :: i_atom
         call self%nano_img%kill
+        call self%nano_img_raw%kill
         call self%simulated_atom%kill
         if(allocated(self%convolved_atoms))then
             do i_atom = 1, size(self%convolved_atoms)
