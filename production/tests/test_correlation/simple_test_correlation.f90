@@ -40,9 +40,31 @@ program simple_test_correlation
     call nano_old%set_atomic_coords(trim(old_pdb_filename))
 
     ! find per-atom valid correlation for overlapping and differing atoms
-    call nano_new%per_atom_valid_corr_from_pdb(trim(atoms_new_not_old),output_file='atoms_new_not_old_corrs.csv')
-    call nano_new%per_atom_valid_corr_from_pdb(trim(atoms_new_in_old), output_file='atoms_new_in_old_corrs.csv' )
-    call nano_old%per_atom_valid_corr_from_pdb(trim(atoms_old_not_new),output_file='atoms_old_not_new_corrs.csv')
-    call nano_new%per_atom_valid_corr_from_pdb(trim(atoms_old_in_new), output_file='atoms_old_in_new_corrs.csv' )
+    if (.not. is_empty(trim(atoms_new_not_old))) call nano_new%per_atom_valid_corr_from_pdb(trim(atoms_new_not_old),output_file='atoms_new_not_old_corrs.csv')
+    if (.not. is_empty(trim(atoms_new_in_old)) ) call nano_new%per_atom_valid_corr_from_pdb(trim(atoms_new_in_old), output_file='atoms_new_in_old_corrs.csv' )
+    if (.not. is_empty(trim(atoms_old_not_new))) call nano_old%per_atom_valid_corr_from_pdb(trim(atoms_old_not_new),output_file='atoms_old_not_new_corrs.csv')
+    if (.not. is_empty(trim(atoms_old_in_new)) ) call nano_new%per_atom_valid_corr_from_pdb(trim(atoms_old_in_new), output_file='atoms_old_in_new_corrs.csv' )
+
+    contains
+
+        function is_empty(filename)
+            character(len=*), intent(in) :: filename
+            character(len=100) :: line
+            integer            :: iostat
+            logical            :: is_empty
+            is_empty = .false.
+            open(unit=11, file=filename, action="READ", iostat=iostat)
+            if(iostat /= 0) then
+                is_empty = .true.
+                return
+            end if
+            read(11,'(a)',iostat=iostat) line
+            if(iostat /= 0 .or. trim(line) == "") then
+                is_empty = .true.
+                return
+            end if
+            rewind(11)
+            close(11)
+        end function is_empty
 
 end program simple_test_correlation
