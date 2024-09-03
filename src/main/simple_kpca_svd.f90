@@ -24,7 +24,8 @@ type, extends(pca) :: kpca_svd
     ! DESTRUCTOR
     procedure :: kill     => kill_kpca
     procedure :: kernel_center
-    procedure :: test_all, test_kernel_center
+    procedure :: rbf_kernel
+    procedure :: test_all, test_kernel_center, test_rbf_kernel
 end type
 
 logical :: L_PRINT = .false.
@@ -98,6 +99,24 @@ contains
         ker  = ker - matmul(ones, ker) - matmul(ker, ones) + matmul(matmul(ones, ker), ones)
     end subroutine kernel_center
 
+    subroutine rbf_kernel( self, dim, mat, ncomp, c, ker )
+        class(kpca_svd), intent(inout) :: self
+        integer,         intent(in)    :: dim
+        real,            intent(in)    :: mat(dim,dim)
+        integer,         intent(in)    :: ncomp
+        real,            intent(in)    :: c
+        real,            intent(out)   :: ker(dim,dim)
+        integer :: i, j
+        ! squared euclidean distance between pairs of rows
+        do i = 1,dim
+            do j = 1,dim
+                ker(i,j) = euclid(mat(i,:), mat(j,:))**2
+            enddo
+        enddo
+        ker = exp(-ker/real(ncomp)/c)
+        call self%kernel_center(dim, ker)
+    end subroutine rbf_kernel
+
     ! DESTRUCTOR
 
     !>  \brief  is a destructor
@@ -113,6 +132,7 @@ contains
     subroutine test_all( self )
         class(kpca_svd), intent(inout) :: self
         call self%test_kernel_center
+        call self%test_rbf_kernel
     end subroutine test_all
 
     subroutine test_kernel_center( self )
@@ -130,5 +150,21 @@ contains
             print *, 'ker = ', ker
         endif
     end subroutine test_kernel_center
+
+    subroutine test_rbf_kernel( self )
+        class(kpca_svd), intent(inout) :: self
+        real :: mat(2,2), truth(2,2), ker(2,2)
+        mat(1,:) = [ 0., 2.]
+        mat(2,:) = [ 1., 1.]
+        call self%rbf_kernel(2, mat, 2, 1., ker)
+        truth(1,:) = [  0.31606028, -0.31606028 ]
+        truth(2,:) = [ -0.31606028,  0.31606028 ]
+        if( maxval(abs(ker - truth)) < TINY )then
+            print *, 'Unit test of rbf_kernel: PASSED'
+        else
+            print *, 'Unit test of rbf_kernel: FAILED'
+            print *, 'ker = ', ker
+        endif
+    end subroutine test_rbf_kernel
 
 end module simple_kpca_svd
