@@ -245,7 +245,8 @@ contains
         real      :: rotmats(se%get_nsym(),3,3), w(self%wdim,self%wdim,self%wdim)
         real      :: vec(3), loc(3), odists(3), dists(3), ctfval
         real      :: w000, w001, w010, w011, w100, w101, w110, w111
-        integer   :: i, h, k, nsym, isym, iwinsz, sh, win(2,3), floc(3), cloc(3)
+        integer   :: win(2,3), floc(3), cloc(3), fpllims(3,2)
+        integer   :: i, h, k, nsym, isym, iwinsz, sh, fplnyq
         if( pwght < TINY )return
         ! window size
         iwinsz = ceiling(self%winsz - 0.5)
@@ -258,18 +259,33 @@ contains
                 rotmats(isym,:,:) = o_sym%get_mat()
             end do
         endif
+        if( fpl%padded )then
+            ! the input slice has the size of the padded volume
+            fpllims = fpl%frlims_croppd
+            fplnyq  = fpl%nyq_croppd
+        else
+            ! the input slice is not padded
+            fpllims = fpl%frlims_crop
+            fplnyq  = fpl%nyq_crop
+        endif
         if( self%linear_interp )then
             !$omp parallel default(shared) proc_bind(close)&
             !$omp private(h,k,sh,comp,ctfval,vec,loc,dists,odists,floc,cloc,w000,w001,w010,w011,w100,w101,w110,w111)
             do isym=1,nsym
                 !$omp do collapse(2) schedule(static)
-                do h=fpl%frlims_crop(1,1),fpl%frlims_crop(1,2)
-                    do k=fpl%frlims_crop(2,1),fpl%frlims_crop(2,2)
+                do h = fpllims(1,1),fpllims(1,2)
+                    do k = fpllims(2,1),fpllims(2,2)
                         sh = nint(sqrt(real(h*h + k*k)))
-                        if( sh > fpl%nyq_crop ) cycle
+                        if( sh > fplnyq ) cycle
                         vec  = real([h,k,0])
                         ! non-uniform sampling location
-                        loc  = self%alpha * matmul(vec, rotmats(isym,:,:))
+                        if( fpl%padded )then
+                            ! already padded
+                            loc = matmul(vec, rotmats(isym,:,:))
+                        else
+                            ! padded location
+                            loc = self%alpha * matmul(vec, rotmats(isym,:,:))
+                        endif
                         ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
                         floc = floor(loc)
                         cloc = floc + 1
@@ -316,13 +332,19 @@ contains
             !$omp proc_bind(close)
             do isym=1,nsym
                 !$omp do collapse(2) schedule(static)
-                do h=fpl%frlims_crop(1,1),fpl%frlims_crop(1,2)
-                    do k=fpl%frlims_crop(2,1),fpl%frlims_crop(2,2)
+                do h = fpllims(1,1),fpllims(1,2)
+                    do k = fpllims(2,1),fpllims(2,2)
                         sh = nint(sqrt(real(h*h + k*k)))
-                        if( sh > fpl%nyq_crop ) cycle
+                        if( sh > fplnyq ) cycle
                         vec  = real([h,k,0])
                         ! non-uniform sampling location
-                        loc  = self%alpha * matmul(vec, rotmats(isym,:,:))
+                        if( fpl%padded )then
+                            ! already padded
+                            loc = matmul(vec, rotmats(isym,:,:))
+                        else
+                            ! padded location
+                            loc = self%alpha * matmul(vec, rotmats(isym,:,:))
+                        endif
                         ! window
                         win(1,:) = nint(loc)
                         win(2,:) = win(1,:) + iwinsz
