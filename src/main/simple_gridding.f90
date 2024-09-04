@@ -14,14 +14,16 @@ private
 contains
 
     !>  \brief generates instrument function image for division of real-space images
-    subroutine gen_instrfun_img( instrfun_img, interpfun, kbwin, padded_dim )
+    subroutine gen_instrfun_img( instrfun_img, interpfun, kbwin, padded_dim, norm )
         class(image),                intent(inout) :: instrfun_img
         character(len=*),            intent(in)    :: interpfun
         class(kbinterpol), optional, intent(in)    :: kbwin
         integer,           optional, intent(in)    :: padded_dim
+        logical,           optional, intent(in)    :: norm
         real, allocatable :: w(:)
         real    :: arg
         integer :: ldim(3), center(3), i,j,k, iarg, dim
+        logical :: l_norm
         ldim = instrfun_img%get_ldim()
         if( any(ldim==0) .or. instrfun_img%is_ft() .or. .not.instrfun_img%square_dims() )then
             THROW_HARD('Erroneous image in gen_instrfun_img')
@@ -29,6 +31,8 @@ contains
         center = ldim/2+1
         dim    = ldim(1)
         if( present(padded_dim) ) dim = padded_dim
+        l_norm = .false.
+        if( present(norm) ) l_norm = norm
         select case(trim(interpfun))
         case('kb')
             ! Kaiser-bessel window
@@ -38,6 +42,7 @@ contains
                 arg  = real(i-center(1))/real(dim)
                 w(i) = kbwin%instr(arg)
             end do
+            if( l_norm ) w = w / kbwin%instr(0.)
             if( instrfun_img%is_2d() )then
                 !$omp parallel do collapse(2) private(i,j) default(shared) proc_bind(close) schedule(static)
                 do i = 1,ldim(1)
