@@ -282,7 +282,7 @@ contains
                 ! setup weights
                 call build%spproj_field%calc_hard_weights(params%frac)
                 ! generate population stats
-                call build%spproj_field%get_pops(tmp, 'proj', consider_w=.true.)
+                call build%spproj_field%get_pops(tmp, 'proj')
                 nprojs         = size(tmp)
                 pops           = pack(tmp, tmp > 0.5)                   !! realloc warning
                 frac_populated = real(size(pops))/real(params%nspace)
@@ -299,7 +299,7 @@ contains
                 write(logfhandle,'(a,1x,f8.2)') 'SDEV OF POPULATION        :', popsdev
                 ! produce a histogram based on clustering into NSPACE_REDUCED even directions
                 ! first, generate a mask based on state flag and w
-                ptcl_mask = build%spproj_field%included(consider_w=.true.)
+                ptcl_mask = build%spproj_field%included()
                 allocate(clustering(noris), clustszs(NSPACE_REDUCED))
                 call osubspace%new(NSPACE_REDUCED, is_ptcl=.false.)
                 call build%pgrpsyms%build_refspiral(osubspace)

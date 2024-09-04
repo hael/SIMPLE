@@ -589,43 +589,24 @@ contains
     end function get_n
 
     !>  \brief  is for checking label population
-    function get_pop( self, ind, label, consider_w, eo ) result( pop )
+    function get_pop( self, ind, label, eo ) result( pop )
         class(oris),       intent(in)    :: self
         integer,           intent(in)    :: ind
         character(len=*),  intent(in)    :: label
-        logical, optional, intent(in)    :: consider_w
         integer, optional, intent(in)    :: eo
         integer :: mylab, pop, i
-        logical :: cconsider_w, consider_eo
-        cconsider_w = .false.
-        if( present(consider_w) ) cconsider_w = consider_w
-        if( cconsider_w )then
-            if( .not. self%isthere('w') ) THROW_HARD('get_pop with optional consider_w assumes w set')
-        endif
+        logical :: consider_eo
         consider_eo = .false.
         if( present(eo) ) consider_eo = .true.
         pop = 0
-        if( cconsider_w )then
-            do i=1,self%n
-                if( self%o(i)%isstatezero() ) cycle
-                if( consider_eo )then
-                    if( self%o(i)%get_eo() /= eo ) cycle
-                endif
-                if( self%o(i)%get('w') > TINY )then
-                    mylab = nint(self%o(i)%get(label))
-                    if( mylab == ind )  pop = pop + 1
-                endif
-            end do
-        else
-            do i=1,self%n
-                if( self%o(i)%isstatezero() ) cycle
-                if( consider_eo )then
-                    if( self%o(i)%get_eo() /= eo ) cycle
-                endif
-                mylab = nint(self%o(i)%get(label))
-                if( mylab == ind )  pop = pop + 1
-            end do
-        endif
+        do i=1,self%n
+            if( self%o(i)%isstatezero() ) cycle
+            if( consider_eo )then
+                if( self%o(i)%get_eo() /= eo ) cycle
+            endif
+            mylab = nint(self%o(i)%get(label))
+            if( mylab == ind )  pop = pop + 1
+        end do
     end function get_pop
 
     !>  \brief  is for getting all rotation matrices
@@ -641,20 +622,14 @@ contains
         end do
     end function get_all_rmats
 
-    subroutine get_pops( self, pops, label, consider_w, maxn, eo )
+    subroutine get_pops( self, pops, label, maxn, eo )
         class(oris),          intent(in)    :: self
         integer, allocatable, intent(out)   :: pops(:)
         character(len=*),     intent(in)    :: label
-        logical, optional,    intent(in)    :: consider_w
         integer, optional,    intent(in)    :: maxn ! max label, for the case where the last class/state is missing
         integer, optional,    intent(in)    :: eo
         integer :: i, myval, n
-        logical :: cconsider_w, consider_eo
-        cconsider_w = .false.
-        if( present(consider_w) ) cconsider_w = consider_w
-        if( cconsider_w )then
-            if( .not. self%isthere('w') ) THROW_HARD('get_pops with optional consider_w assumes w set')
-        endif
+        logical :: consider_eo
         consider_eo = .false.
         if( present(eo) ) consider_eo = .true.
         n = self%get_n(label)
@@ -663,27 +638,14 @@ contains
         endif
         if(allocated(pops))deallocate(pops)
         allocate(pops(n),source=0)
-        if( cconsider_w )then
-            do i=1,self%n
-                if( self%o(i)%isstatezero() ) cycle
-                if( consider_eo )then
-                    if( self%o(i)%get_eo() /= eo ) cycle
-                endif
-                if( self%o(i)%get('w') > TINY )then
-                    myval = nint(self%o(i)%get(label))
-                    if( myval > 0 ) pops(myval) = pops(myval) + 1
-                endif
-            end do
-        else
-            do i=1,self%n
-                if( self%o(i)%isstatezero() ) cycle
-                if( consider_eo )then
-                    if( self%o(i)%get_eo() /= eo ) cycle
-                endif
-                myval = nint(self%o(i)%get(label))
-                if( myval > 0 ) pops(myval) = pops(myval) + 1
-            end do
-        endif
+        do i=1,self%n
+            if( self%o(i)%isstatezero() ) cycle
+            if( consider_eo )then
+                if( self%o(i)%get_eo() /= eo ) cycle
+            endif
+            myval = nint(self%o(i)%get(label))
+            if( myval > 0 ) pops(myval) = pops(myval) + 1
+        end do
     end subroutine get_pops
 
     function get_all_normals(self) result(normals)
@@ -856,7 +818,7 @@ contains
             if( maxval(pops) <= 2*MINCLSPOPLIM ) exit
             if( .not.chunk_mask(icls) ) cycle
             if( pops(icls)>2 .or. pops(icls)==0 ) cycle
-            call self%get_pinds(icls, 'class', inds2split, consider_w=.false.)
+            call self%get_pinds(icls, 'class', inds2split)
             do i=1,size(inds2split)
                 iptcl = inds2split(i)
                 cnt   = irnd_uni(ncls)
@@ -885,7 +847,7 @@ contains
             pop       = pops(cls2split)
             if( pop <= 2*MINCLSPOPLIM )exit
             ! migration: the worst moves
-            call self%get_pinds(cls2split, 'class', inds2split, consider_w=.false.)
+            call self%get_pinds(cls2split, 'class', inds2split)
             allocate(corrs(pop),source=-1.)
             do i=1,pop
                 corrs(i) = self%get(inds2split(i),'corr')
@@ -961,61 +923,46 @@ contains
     end subroutine remap_cls
 
     !>  \brief  is for getting an allocatable array with ptcl indices of the label 'label'
-    subroutine get_pinds( self, ind, label, indices, consider_w )
+    subroutine get_pinds( self, ind, label, indices, l_shuffle )
         class(oris),          intent(inout) :: self
         character(len=*),     intent(in)    :: label
         integer,              intent(in)    :: ind
         integer, allocatable, intent(out)   :: indices(:)
-        logical, optional,    intent(in)    :: consider_w
+        logical, optional,    intent(in)    :: l_shuffle
+        type(ran_tabu) :: rt
         integer :: pop, cnt, myval, i
-        logical :: cconsider_w
-        cconsider_w = .false.
-        if( present(consider_w) ) cconsider_w = consider_w
-        if( cconsider_w )then
-            if( .not. self%isthere('w') ) THROW_HARD('get_pinds with optional consider_w assumes w set')
-        endif
+        logical :: ll_shuffle
+        ll_shuffle = .false.
+        if( present(l_shuffle) ) ll_shuffle = l_shuffle
         if( allocated(indices) )deallocate(indices)
-        pop = self%get_pop(ind, label, cconsider_w )
+        pop = self%get_pop(ind, label)
         if( pop > 0 )then
             allocate( indices(pop) )
             cnt = 0
-            if( cconsider_w )then
-                do i=1,self%n
-                    if( self%o(i)%isstatezero() ) cycle
-                    if( self%o(i)%get('w') > TINY )then
-                        myval = nint(self%get(i, trim(label)))
-                        if( myval == ind )then
-                            cnt = cnt + 1
-                            indices(cnt) = i
-                        endif
-                    endif
-                end do
-            else
-                do i=1,self%n
-                    if( self%o(i)%isstatezero() ) cycle
-                    myval = nint(self%get(i, trim(label)))
-                    if( myval == ind )then
-                        cnt = cnt + 1
-                        indices(cnt) = i
-                    endif
-                end do
+            do i=1,self%n
+                if( self%o(i)%isstatezero() ) cycle
+                myval = nint(self%get(i, trim(label)))
+                if( myval == ind )then
+                    cnt = cnt + 1
+                    indices(cnt) = i
+                endif
+            end do
+            if( ll_shuffle )then
+                rt = ran_tabu(pop)
+                call rt%shuffle(indices)
+                call rt%kill
             endif
         endif
     end subroutine get_pinds
 
     !>  \brief  generate a mask with the oris with mystate == state/ind == get(label)
-    subroutine gen_mask( self, state, ind, label, l_mask, consider_w, fromto )
+    subroutine gen_mask( self, state, ind, label, l_mask, fromto )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: state, ind
         character(len=*),     intent(in)    :: label
         logical, allocatable, intent(out)   :: l_mask(:)
-        logical, optional,    intent(in)    :: consider_w
         integer, optional,    intent(in)    :: fromto(2)
-        logical :: cconsider_w
-        real    :: w
         integer :: i, mystate, myval, ffromto(2)
-        cconsider_w = .false.
-        if( present(consider_w) ) cconsider_w = consider_w
         ffromto(1) = 1
         ffromto(2) = self%n
         if( present(fromto) ) ffromto = fromto
@@ -1023,11 +970,9 @@ contains
         allocate(l_mask(ffromto(1):ffromto(2)))
         l_mask = .false.
         do i=ffromto(1),ffromto(2)
-            w = 1.0
-            if( cconsider_w ) w = self%o(i)%get('w')
             mystate = nint(self%o(i)%get('state'))
             myval   = nint(self%o(i)%get(trim(label)))
-            if( mystate == state .and. (myval == ind .and. w > TINY) ) l_mask(i) = .true.
+            if( mystate == state .and. myval == ind ) l_mask(i) = .true.
         end do
     end subroutine gen_mask
 
@@ -1197,25 +1142,15 @@ contains
     end function get_avg
 
     !>  \brief  for getting a logical mask of the included particles
-    function included( self, consider_w ) result( incl )
+    function included( self ) result( incl )
         class(oris),       intent(inout) :: self
-        logical, optional, intent(in)    :: consider_w
         logical, allocatable :: incl(:)
         integer :: i, istate
-        logical :: cconsider_w
-        real    :: w
-        cconsider_w = .false.
-        if( present(consider_w) ) cconsider_w = consider_w
-        if( cconsider_w )then
-            if( .not. self%isthere('w') ) THROW_HARD('included with optional consider_w assumes w set')
-        endif
         if(.not.allocated(incl))allocate(incl(self%n))
         incl = .false.
         do i=1,self%n
             istate = nint(self%o(i)%get('state'))
-            w = 1.0
-            if( cconsider_w ) w = self%o(i)%get('w')
-            if( istate > 0 .and. w > TINY ) incl(i) = .true.
+            if( istate > 0 ) incl(i) = .true.
         end do
     end function included
 
@@ -3046,7 +2981,7 @@ contains
         integer :: i, icls, pop
         if( frac < 0.99 )then
             do icls=1,ncls
-                call self%get_pinds(icls, 'class', pinds, consider_w=.false.)
+                call self%get_pinds(icls, 'class', pinds)
                 if(.not.allocated(pinds)) cycle
                 pop = size(pinds)
                 call os%new(pop, self%o(1)%is_particle())

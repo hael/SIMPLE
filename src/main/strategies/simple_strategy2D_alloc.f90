@@ -50,7 +50,7 @@ contains
                 ! the ==0    is to overcome bug in shared-memory version
                 ! the ==ncls is to be able to restart after having run cleanup with fewer classes
                 if( zero_oris )then
-                    call build_glob%spproj%os_ptcl2D%get_pops(s2D%cls_pops, 'class', consider_w=.false., maxn=params_glob%ncls)
+                    call build_glob%spproj%os_ptcl2D%get_pops(s2D%cls_pops, 'class', maxn=params_glob%ncls)
                     return
                 endif
                 if( ncls_diff )then
