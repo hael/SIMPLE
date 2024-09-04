@@ -580,7 +580,7 @@ contains
                             call pool_proj%os_cls2D%transfer_ori(icls, converged_chunks(ichunk)%spproj%os_cls2D, ind)
                             call pool_proj%os_cls2D%set_class(icls, icls)
                             ! particles
-                            call converged_chunks(ichunk)%spproj%os_ptcl2D%get_pinds(ind,'class',pinds,consider_w=.false.)
+                            call converged_chunks(ichunk)%spproj%os_ptcl2D%get_pinds(ind,'class',pinds)
                             pop = size(pinds)
                             do i=1,pop
                                 ii      = pinds(i)            ! in chunk
@@ -592,7 +592,7 @@ contains
                         ! now transfer particles that were not remapped
                         do icls = 1,params_glob%ncls_start
                             if( cls_chunk_pop(icls) == 0 ) cycle
-                            call converged_chunks(ichunk)%spproj%os_ptcl2D%get_pinds(icls,'class',pinds,consider_w=.false.)
+                            call converged_chunks(ichunk)%spproj%os_ptcl2D%get_pinds(icls,'class',pinds)
                             pop = size(pinds)
                             do i = 1,pop
                                 ii      = pinds(i)            ! in chunk
@@ -839,7 +839,7 @@ contains
                 endif
             enddo
             ! update classes info
-            call pool_proj%os_ptcl2D%get_pops(pops, 'class', consider_w=.false., maxn=ncls_glob)
+            call pool_proj%os_ptcl2D%get_pops(pops, 'class', maxn=ncls_glob)
             pool_proj%os_cls2D = spproj%os_cls2D
             call pool_proj%os_cls2D%set_all('pop', real(pops))
             ! updates sigmas

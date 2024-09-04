@@ -4703,8 +4703,8 @@ contains
         &'replace_project_field',&                    ! name
         &'hard substitution of project field',&       ! descr_short
         &'is a program for hard substitution of project field, for development purposes',& ! descr_long
-        &'simple_exec',&                             ! executable
-        &0, 3, 0, 0, 0, 0, 0, .false.)              ! # entries in each group, requires sp_project
+        &'simple_exec',&                              ! executable
+        &0, 3, 0, 0, 0, 0, 0, .false.)                ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>

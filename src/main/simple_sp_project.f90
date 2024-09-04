@@ -2873,7 +2873,7 @@ contains
         ncls = self%os_cls2D%get_noris()
         do icls=1,ncls
             ! get particle indices
-            call self%os_ptcl2D%get_pinds(icls, 'class', particles)
+            call self%os_ptcl2D%get_pinds(icls, 'class', particles, l_shuffle=.true.)
             if( allocated(particles) )then
                 nptcls = 0
                 rstate = self%os_cls2D%get_state(icls)
