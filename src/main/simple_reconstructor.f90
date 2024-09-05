@@ -328,7 +328,7 @@ contains
             !$omp end parallel
         else
             ! KB interpolation
-            !$omp parallel default(shared) private(i,h,k,sh,comp,ctfval,w,win,vec,loc,dists)&
+            !$omp parallel default(shared) private(i,h,k,sh,comp,ctfval,w,win,loc,dists)&
             !$omp proc_bind(close)
             do isym=1,nsym
                 !$omp do collapse(2) schedule(static)
@@ -336,14 +336,13 @@ contains
                     do k = fpllims(2,1),fpllims(2,2)
                         sh = nint(sqrt(real(h*h + k*k)))
                         if( sh > fplnyq ) cycle
-                        vec  = real([h,k,0])
                         ! non-uniform sampling location
                         if( fpl%padded )then
                             ! already padded
-                            loc = matmul(vec, rotmats(isym,:,:))
+                            loc = matmul(real([h,k,0]), rotmats(isym,:,:))
                         else
                             ! padded location
-                            loc = self%alpha * matmul(vec, rotmats(isym,:,:))
+                            loc = matmul(self%alpha * real([h,k,0]), rotmats(isym,:,:))
                         endif
                         ! window
                         win(1,:) = nint(loc)

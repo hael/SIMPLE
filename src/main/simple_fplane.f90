@@ -41,7 +41,7 @@ type :: fplane
     procedure :: convert2img
     ! SETTERS
     procedure :: gen_planes
-    procedure :: gen_planes2, gen_planes3, gen_planes4
+    procedure :: gen_planes_pad
     ! MODIFIERS
     procedure :: neg
     ! DESTRUCTOR
@@ -97,27 +97,16 @@ contains
         if( self%genplane )then
             ! the object will be used to prep image for reconstruction
             ! otherwise the following allocations are not done to reduce memory usage
-            if( self%ldim(1) == params_glob%boxpd )then
-                ! input image was padded
-                allocate(self%ctf_ang(self%frlims_croppd(1,1):self%frlims_croppd(1,2), self%frlims_croppd(2,1):self%frlims_croppd(2,2)),&
-                &self%hcos(self%frlims_croppd(1,1):self%frlims_croppd(1,2)), self%hsin(self%frlims_croppd(1,1):self%frlims_croppd(1,2)))
-                ! CTF pre-calculations
-                do k=self%frlims_croppd(2,1),self%frlims_croppd(2,2)
-                    do h=self%frlims_croppd(1,1),self%frlims_croppd(1,2)
-                        self%ctf_ang(h,k) = atan2(real(k), real(h))
-                    enddo
+            allocate(self%ctf_ang(self%frlims_crop(1,1):self%frlims_crop(1,2), self%frlims_crop(2,1):self%frlims_crop(2,2)),&
+            &self%hcos(self%frlims_crop(1,1):self%frlims_crop(1,2)), self%hsin(self%frlims_crop(1,1):self%frlims_crop(1,2)),&
+            &self%sigma2_noise(1:self%nyq_crop))
+            ! CTF pre-calculations
+            do k=self%frlims_crop(2,1),self%frlims_crop(2,2)
+                do h=self%frlims_crop(1,1),self%frlims_crop(1,2)
+                    self%ctf_ang(h,k) = atan2(real(k), real(h))
                 enddo
-            else
-                allocate(self%ctf_ang(self%frlims_crop(1,1):self%frlims_crop(1,2), self%frlims_crop(2,1):self%frlims_crop(2,2)),&
-                &self%hcos(self%frlims_crop(1,1):self%frlims_crop(1,2)), self%hsin(self%frlims_crop(1,1):self%frlims_crop(1,2)))
-                ! CTF pre-calculations
-                do k=self%frlims_crop(2,1),self%frlims_crop(2,2)
-                    do h=self%frlims_crop(1,1),self%frlims_crop(1,2)
-                        self%ctf_ang(h,k) = atan2(real(k), real(h))
-                    enddo
-                enddo
-            endif
-            allocate(self%sigma2_noise(1:self%nyq_crop),source=0.)
+            enddo
+            self%sigma2_noise = 0.
         endif
         self%exists = .true.
     end subroutine new
@@ -169,7 +158,8 @@ contains
                 self%sigma2_noise(sigma2_kfromto(1):self%nyq_crop) = eucl_sigma2_glob%sigma2_noise(sigma2_kfromto(1):self%nyq_crop,iptcl)
             endif
         end if
-        do k = self%frlims_crop(2,1),self%frlims_crop(2,2)
+        ! prep slice for k in [N/2;0]
+        do k = self%frlims_crop(2,1),0
             arg  = real(k,dp)*pshift(2)
             kcos = dcos(arg)
             ksin = dsin(arg)
@@ -208,127 +198,25 @@ contains
                 self%ctfsq_plane(h,k) = tvalsq
             enddo
         enddo
-    end subroutine gen_planes
-
-    !> Produces shifted, rotated, CTF multiplied fourier & CTF-squared planes
-    subroutine gen_planes2( self, img, ctfvars, shift, e3, iptcl, sigma2)
-        class(fplane),                  intent(inout) :: self
-        class(image),                   intent(in)    :: img
-        class(ctfparams),               intent(in)    :: ctfvars
-        real,                           intent(in)    :: shift(2), e3
-        integer,                        intent(in)    :: iptcl
-        class(euclid_sigma2), optional, intent(in)    :: sigma2
-        type(ctf) :: tfun
-        complex   :: c, s
-        real(dp)  :: pshift(2), arg, kcos,ksin
-        real      :: w(self%wdim,self%wdim),rmat(2,2),loc(2),inv(2),d(2),tval,tvalsq,sqSpatFreq,add_phshift
-        integer   :: win(2,2),sigma2_kfromto(2), i,j,h,k,hh,kk,sh, iwinsz
-        logical   :: use_sigmas
-        ! CTF
-        if( ctfvars%ctfflag /= CTFFLAG_NO )then
-            tfun = ctf(ctfvars%smpd, ctfvars%kv, ctfvars%cs, ctfvars%fraca)
-            call tfun%init(ctfvars%dfx, ctfvars%dfy, ctfvars%angast)
-            add_phshift = 0.0
-            if( ctfvars%l_phaseplate ) add_phshift = ctfvars%phshift
-        endif
-        ! Shift precomputation
-        pshift = real(-shift * self%shconst(1:2),dp)
-        do h = self%frlims_crop(1,1),self%frlims_crop(1,2)
-            arg = real(h,dp)*pshift(1)
-            self%hcos(h) = dcos(arg)
-            self%hsin(h) = dsin(arg)
-        enddo
-        ! rotation
-        call rotmat2D(e3, rmat)
-        ! sigma2
-        use_sigmas = params_glob%l_ml_reg
-        if( use_sigmas )then
-            if( present(sigma2) )then
-                if( sigma2_kfromto(2) > self%nyq_crop )then
-                    THROW_HARD('Frequency range error')
-                endif
-                sigma2_kfromto(1) = lbound(sigma2%sigma2_noise,1)
-                sigma2_kfromto(2) = ubound(sigma2%sigma2_noise,1)
-                self%sigma2_noise(sigma2_kfromto(1):self%nyq_crop) = sigma2%sigma2_noise(sigma2_kfromto(1):self%nyq_crop,iptcl)
-            else
-                sigma2_kfromto(1) = lbound(eucl_sigma2_glob%sigma2_noise,1)
-                sigma2_kfromto(2) = ubound(eucl_sigma2_glob%sigma2_noise,1)
-                self%sigma2_noise(sigma2_kfromto(1):self%nyq_crop) = eucl_sigma2_glob%sigma2_noise(sigma2_kfromto(1):self%nyq_crop,iptcl)
-            endif
-        end if
-        ! interpolation window
-        iwinsz = ceiling(self%winsz - 0.5)
-        ! interpolation
-        self%cmplx_plane = cmplx(0.,0.)
-        self%ctfsq_plane = 0.
-        do k = self%frlims_crop(2,1),self%frlims_crop(2,2)
-            arg  = real(k,dp)*pshift(2)
-            kcos = dcos(arg)
-            ksin = dsin(arg)
+        ! prep slice for k in [1;N/2-1] with Friedel symmetry
+        do k = 1,self%frlims_crop(2,2)
             do h = self%frlims_crop(1,1),self%frlims_crop(1,2)
                 sh = nint(sqrt(real(h*h + k*k)))
-                if( sh > self%nyq_crop ) cycle
-                ! Shift
-                s = cmplx(kcos*self%hcos(h)-ksin*self%hsin(h), kcos*self%hsin(h)+ksin*self%hcos(h),sp)
-                c = img%get_fcomp2D(h,k) * s
-                ! CTF
-                if( ctfvars%ctfflag /= CTFFLAG_NO )then
-                    inv        = real([h,k]) / real(self%ldim(1:2))
-                    sqSpatFreq = dot_product(inv,inv)
-                    tval       = tfun%eval(sqSpatFreq, self%ctf_ang(h,k), add_phshift, .not.params_glob%l_wiener_part)
-                    tvalsq     = tval * tval
-                    if( ctfvars%ctfflag == CTFFLAG_FLIP ) tval = abs(tval)
-                    c          = tval * c
+                if( sh > self%nyq_crop )then
+                    self%cmplx_plane(h,k) = cmplx(0.,0.)
+                    self%ctfsq_plane(h,k) = 0.
                 else
-                    tvalsq = 1.0
+                    self%cmplx_plane(h,k) = conjg(self%cmplx_plane(-h,-k))
+                    self%ctfsq_plane(h,k) = self%ctfsq_plane(-h,-k)
                 endif
-                ! sigma2 weighing
-                if( use_sigmas) then
-                    if(sh >= sigma2_kfromto(1))then
-                        c      = c      / self%sigma2_noise(sh)
-                        tvalsq = tvalsq / self%sigma2_noise(sh)
-                    else
-                        c      = c      / self%sigma2_noise(sigma2_kfromto(1))
-                        tvalsq = tvalsq / self%sigma2_noise(sigma2_kfromto(1))
-                    endif
-                endif
-                ! rotation
-                loc = matmul(real([h,k]), rmat)
-                ! window
-                win(1,:) = nint(loc)
-                win(2,:) = win(1,:) + iwinsz
-                win(1,:) = win(1,:) - iwinsz
-                ! kernel
-                w = 1.
-                do i = 1,self%wdim
-                    d  = real(win(1,:) + i - 1) - loc
-                    w(i,:) = w(i,:) * self%kbwin%apod(d(1))
-                    w(:,i) = w(:,i) * self%kbwin%apod(d(2))
-                enddo
-                w = w / sum(w)
-                ! update
-                i = 0
-                do hh = win(1,1),win(2,1)
-                    i = i+1
-                    if( hh < self%frlims_crop(1,1) ) cycle
-                    if( hh > self%frlims_crop(1,2) ) cycle
-                    j = 0
-                    do kk = win(1,2),win(2,2)
-                        j = j+1
-                        if( kk < self%frlims_crop(2,1) ) cycle
-                        if( kk > self%frlims_crop(2,2) ) cycle
-                        self%cmplx_plane(hh,kk) = self%cmplx_plane(hh,kk) + w(i,j) * c
-                        self%ctfsq_plane(hh,kk) = self%ctfsq_plane(hh,kk) + w(i,j) * tvalsq
-                    enddo
-                enddo
             enddo
         enddo
-    end subroutine gen_planes2
+    end subroutine gen_planes
 
     !> Produces padded shifted, rotated, CTF multiplied fourier & CTF-squared planes
-    subroutine gen_planes3( self, img, ctfvars, shift, e3, iptcl, sigma2)
+    subroutine gen_planes_pad( self, img, ctfvars, shift, e3, iptcl, sigma2)
         class(fplane),                  intent(inout) :: self
-        class(image),                   intent(in)    :: img
+        class(image),                   intent(inout) :: img
         class(ctfparams),               intent(in)    :: ctfvars
         real,                           intent(in)    :: shift(2), e3
         integer,                        intent(in)    :: iptcl
@@ -338,7 +226,7 @@ contains
         real(dp)  :: pshift(2), arg, kcos,ksin
         real      :: w(self%wdim,self%wdim),rmat(2,2),loc(2),inv(2),d(2),tval,tvalsq,sqSpatFreq,add_phshift
         integer   :: win(2,2),sigma2_kfromto(2), i,j,h,k,hh,kk,sh, iwinsz
-        logical   :: use_sigmas
+        if( .not.self%padded ) THROW_HARD('gen_planes_pad only for use with padding!')
         ! CTF
         if( ctfvars%ctfflag /= CTFFLAG_NO )then
             tfun = ctf(ctfvars%smpd, ctfvars%kv, ctfvars%cs, ctfvars%fraca)
@@ -356,8 +244,7 @@ contains
         ! rotation
         call rotmat2D(e3, rmat)
         ! sigma2
-        use_sigmas = params_glob%l_ml_reg
-        if( use_sigmas )then
+        if( params_glob%l_ml_reg )then
             if( present(sigma2) )then
                 if( sigma2_kfromto(2) > self%nyq_crop )then
                     THROW_HARD('Frequency range error')
@@ -398,7 +285,7 @@ contains
                     tvalsq = 1.0
                 endif
                 ! sigma2 weighing
-                if( use_sigmas) then
+                if( params_glob%l_ml_reg ) then
                     if(sh >= sigma2_kfromto(1))then
                         c      = c      / self%sigma2_noise(sh)
                         tvalsq = tvalsq / self%sigma2_noise(sh)
@@ -438,124 +325,7 @@ contains
                 enddo
             enddo
         enddo
-    end subroutine gen_planes3
-
-    !> Produces padded shifted, rotated, CTF multiplied fourier & CTF-squared planes
-    !  from already padded image
-    subroutine gen_planes4( self, img, ctfvars, shift, e3, iptcl, sigma2)
-        class(fplane),                  intent(inout) :: self
-        class(image),                   intent(in)    :: img
-        class(ctfparams),               intent(in)    :: ctfvars
-        real,                           intent(in)    :: shift(2), e3
-        integer,                        intent(in)    :: iptcl
-        class(euclid_sigma2), optional, intent(in)    :: sigma2
-        type(ctf) :: tfun
-        complex   :: c, s
-        real(dp)  :: pshift(2), arg, kcos,ksin
-        real      :: w(self%wdim,self%wdim),rmat(2,2),loc(2),inv(2),d(2),tval,tvalsq,sqSpatFreq,add_phshift
-        integer   :: win(2,2),sigma2_kfromto(2), i,j,h,k,hh,kk,sh,sh_sc, iwinsz
-        logical   :: use_sigmas
-        ! CTF
-        if( ctfvars%ctfflag /= CTFFLAG_NO )then
-            tfun = ctf(ctfvars%smpd, ctfvars%kv, ctfvars%cs, ctfvars%fraca)
-            call tfun%init(ctfvars%dfx, ctfvars%dfy, ctfvars%angast)
-            add_phshift = 0.0
-            if( ctfvars%l_phaseplate ) add_phshift = ctfvars%phshift
-        endif
-        ! Shift precomputation
-        pshift = real(-shift * self%shconst(1:2),dp)
-        do h = self%frlims_croppd(1,1),self%frlims_croppd(1,2)
-            arg = real(h,dp)*pshift(1)
-            self%hcos(h) = dcos(arg)
-            self%hsin(h) = dsin(arg)
-        enddo
-        ! rotation
-        call rotmat2D(e3, rmat)
-        ! sigma2
-        use_sigmas = params_glob%l_ml_reg
-        if( use_sigmas )then
-            if( present(sigma2) )then
-                if( sigma2_kfromto(2) > self%nyq_crop )then
-                    THROW_HARD('Frequency range error')
-                endif
-                sigma2_kfromto(1) = lbound(sigma2%sigma2_noise,1)
-                sigma2_kfromto(2) = ubound(sigma2%sigma2_noise,1)
-                self%sigma2_noise(sigma2_kfromto(1):self%nyq_crop) = sigma2%sigma2_noise(sigma2_kfromto(1):self%nyq_crop,iptcl)
-            else
-                sigma2_kfromto(1) = lbound(eucl_sigma2_glob%sigma2_noise,1)
-                sigma2_kfromto(2) = ubound(eucl_sigma2_glob%sigma2_noise,1)
-                self%sigma2_noise(sigma2_kfromto(1):self%nyq_crop) = eucl_sigma2_glob%sigma2_noise(sigma2_kfromto(1):self%nyq_crop,iptcl)
-            endif
-        end if
-        ! interpolation window
-        iwinsz = ceiling(self%winsz - 0.5)
-        ! interpolation
-        self%cmplx_plane = cmplx(0.,0.)
-        self%ctfsq_plane = 0.
-        do k = self%frlims_croppd(2,1),self%frlims_croppd(2,2)
-            arg  = real(k,dp)*pshift(2)
-            kcos = dcos(arg)
-            ksin = dsin(arg)
-            do h = self%frlims_croppd(1,1),self%frlims_croppd(1,2)
-                sh = nint(sqrt(real(h*h + k*k)))
-                if( sh > self%nyq_croppd ) cycle
-                ! Shift
-                s = cmplx(kcos*self%hcos(h)-ksin*self%hsin(h), kcos*self%hsin(h)+ksin*self%hcos(h),sp)
-                c = img%get_fcomp2D(h,k) * s
-                ! CTF
-                if( ctfvars%ctfflag /= CTFFLAG_NO )then
-                    inv        = real([h,k]) / real(self%ldim(1:2))
-                    sqSpatFreq = dot_product(inv,inv)
-                    tval       = tfun%eval(sqSpatFreq, self%ctf_ang(h,k), add_phshift, .not.params_glob%l_wiener_part)
-                    tvalsq     = tval * tval
-                    if( ctfvars%ctfflag == CTFFLAG_FLIP ) tval = abs(tval)
-                    c          = tval * c
-                else
-                    tvalsq = 1.0
-                endif
-                ! sigma2 weighing
-                if( use_sigmas) then
-                    sh_sc = min(nint(real(sh)/self%alpha), self%nyq_crop)
-                    if( sh_sc >= sigma2_kfromto(1))then
-                        c      = c      / self%sigma2_noise(sh_sc)
-                        tvalsq = tvalsq / self%sigma2_noise(sh_sc)
-                    else
-                        c      = c      / self%sigma2_noise(sigma2_kfromto(1))
-                        tvalsq = tvalsq / self%sigma2_noise(sigma2_kfromto(1))
-                    endif
-                endif
-                ! rotation
-                loc = matmul(real([h,k]), rmat)
-                ! window
-                win(1,:) = nint(loc)
-                win(2,:) = win(1,:) + iwinsz
-                win(1,:) = win(1,:) - iwinsz
-                ! kernel
-                w = 1.
-                do i = 1,self%wdim
-                    d  = real(win(1,:) + i - 1) - loc
-                    w(i,:) = w(i,:) * self%kbwin%apod(d(1))
-                    w(:,i) = w(:,i) * self%kbwin%apod(d(2))
-                enddo
-                w = w / sum(w)
-                ! update
-                i = 0
-                do hh = win(1,1),win(2,1)
-                    i = i+1
-                    if( hh < self%frlims_croppd(1,1) ) cycle
-                    if( hh > self%frlims_croppd(1,2) ) cycle
-                    j = 0
-                    do kk = win(1,2),win(2,2)
-                        j = j+1
-                        if( kk < self%frlims_croppd(2,1) ) cycle
-                        if( kk > self%frlims_croppd(2,2) ) cycle
-                        self%cmplx_plane(hh,kk) = self%cmplx_plane(hh,kk) + w(i,j) * c
-                        self%ctfsq_plane(hh,kk) = self%ctfsq_plane(hh,kk) + w(i,j) * tvalsq
-                    enddo
-                enddo
-            enddo
-        enddo
-    end subroutine gen_planes4
+    end subroutine gen_planes_pad
 
     subroutine convert2img( self, fcimg, ctfsqimg )
         class(fplane), intent(in)    :: self
