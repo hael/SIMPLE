@@ -794,21 +794,23 @@ contains
         !$ use omp_lib_kinds
         use simple_fplane,   only: fplane
         use simple_gridding, only: gen_instrfun_img
+        use simple_timer
         class(cmdline),    intent(in) :: cline
         integer,           intent(in) :: nptcls2update
         integer,           intent(in) :: pinds(nptcls2update)
         integer, optional, intent(in) :: which_iter
         type(fplane),     allocatable :: fpls(:), projdirs(:,:)
-        integer,          allocatable :: eopops(:,:)
+        integer,          allocatable :: eopops(:,:), tmp(:,:)
         type(image),      allocatable :: padded_imgs(:)
         type(ctfparams) :: ctfparms
         type(image)     :: instrimg, numimg, denomimg
         type(ori)       :: orientation
         real            :: shift(2), e3, sdev_noise, w
-        integer         :: batchlims(2), iptcl, i, i_batch, ibatch, iproj, eo, ithr
-        logical         :: DEBUG    = .false.
-        logical         :: PADIMG   = .true.
-        logical         :: PADPLANE = .true.
+        integer         :: batchlims(2), iptcl, i,j, i_batch, ibatch, iproj, eo, peo, ithr, pproj
+        logical         :: DEBUG = .false.
+        integer(timer_int_kind) :: t
+        real(timer_int_kind)    :: t_ini, t_pad, t_sum, t_rec
+        t = tic()
         ! init volumes
         call preprecvols
         ! prep batch imgs
@@ -826,52 +828,32 @@ contains
             eopops(iproj,eo) = eopops(iproj,eo) + 1
         end do
         !$omp end parallel do
-        ! particles slices to sum
-        if( PADIMG )then
-            ! images will be padded
-            allocate(padded_imgs(nthr_glob))
-            !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
-            do ithr = 1,nthr_glob
-                call padded_imgs(ithr)%new([params_glob%boxpd,params_glob%boxpd,1], params_glob%smpd, wthreads=.false.)
-            end do
-            !$omp end parallel do
-            !$omp parallel do default(shared) private(ibatch) schedule(static) proc_bind(close)
-            do ibatch = 1,min(nptcls2update,MAXIMGBATCHSZ)
-                call fpls(ibatch)%new(padded_imgs(1), pad=.true.)
-            end do
-            !$omp end parallel do
-            ! projection direction slices to insert into volume
-            !$omp parallel do default(shared) private(iproj) schedule(static) proc_bind(close)
-            do iproj = 1,params_glob%nspace
-                if( eopops(iproj,1) > 0 ) call projdirs(iproj,1)%new(padded_imgs(1),pad=.true., genplane=.false.)
-                if( eopops(iproj,2) > 0 ) call projdirs(iproj,2)%new(padded_imgs(1),pad=.true., genplane=.false.)
-            end do
-            !$omp end parallel do
-            ! instrument function
-            call instrimg%new([params_glob%boxpd,params_glob%boxpd,1], params_glob%smpd)
-            call gen_instrfun_img(instrimg, 'kb', fpls(1)%kbwin, padded_dim=params_glob%boxpd, norm=.true.)
-        else
-            !$omp parallel do default(shared) private(ibatch) schedule(static) proc_bind(close)
-            do ibatch = 1,min(nptcls2update,MAXIMGBATCHSZ)
-                call fpls(ibatch)%new(build_glob%imgbatch(1), pad=PADPLANE)
-            end do
-            !$omp end parallel do
-            ! projection direction slices to insert into volume
-            !$omp parallel do default(shared) private(iproj) schedule(static) proc_bind(close)
-            do iproj = 1,params_glob%nspace
-                if( eopops(iproj,1) > 0 ) call projdirs(iproj,1)%new(build_glob%imgbatch(1),pad=PADPLANE, genplane=.false.)
-                if( eopops(iproj,2) > 0 ) call projdirs(iproj,2)%new(build_glob%imgbatch(1),pad=PADPLANE, genplane=.false.)
-            end do
-            !$omp end parallel do
-            ! instrument function
-            call instrimg%new([params_glob%box,params_glob%box,1], params_glob%smpd)
-            call gen_instrfun_img(instrimg, 'kb', fpls(1)%kbwin, norm=.true.)
-        endif
+        ! particles to be summed into projection direction slices
+        !$omp parallel do default(shared) private(ibatch) schedule(static) proc_bind(close)
+        do ibatch = 1,min(nptcls2update,MAXIMGBATCHSZ)
+            call fpls(ibatch)%new(build_glob%imgbatch(1),pad=.true.)
+        end do
+        !$omp end parallel do
+        ! projection direction slices to insert into volume
+        !$omp parallel do default(shared) private(iproj) schedule(static) proc_bind(close)
+        do iproj = 1,params_glob%nspace
+            if( eopops(iproj,1) > 0 ) call projdirs(iproj,1)%new(build_glob%imgbatch(1),pad=.true., genplane=.false.)
+            if( eopops(iproj,2) > 0 ) call projdirs(iproj,2)%new(build_glob%imgbatch(1),pad=.true., genplane=.false.)
+        end do
+        !$omp end parallel do
+        ! instrument function
+        call instrimg%new([params_glob%box,params_glob%box,1], params_glob%smpd)
+        call gen_instrfun_img(instrimg, 'kb', fpls(1)%kbwin, padded_dim=params_glob%boxpd, norm=.true.)
+        t_ini = toc(t)
         ! batch loop
+        tmp = eopops
+        t_pad = 0.
+        t_sum = 0.
         do i_batch=1,nptcls2update,MAXIMGBATCHSZ
             batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
             ! particles in-plane transformation
             call discrete_read_imgbatch( nptcls2update, pinds, batchlims)
+            t = tic()
             !$omp parallel do default(shared) private(i,iptcl,ibatch,shift,e3,sdev_noise,ctfparms,ithr)&
             !$omp schedule(static) proc_bind(close)
             do i = batchlims(1),batchlims(2)
@@ -881,43 +863,68 @@ contains
                 shift    = build_glob%spproj_field%get_2Dshift(iptcl)
                 e3       = build_glob%spproj_field%e3get(iptcl)
                 call build_glob%imgbatch(ibatch)%norm_noise(build_glob%lmsk, sdev_noise)
-                if( PADIMG )then
-                    ithr = omp_get_thread_num() + 1
-                    call build_glob%imgbatch(ibatch)%pad(padded_imgs(ithr))
-                    ! if( ctfparms%ctfflag == CTFFLAG_NO ) call padded_imgs(ithr)%div(instrimg)
-                    call padded_imgs(ithr)%div(instrimg)
-                    call padded_imgs(ithr)%fft
-                    call fpls(ibatch)%gen_planes4(padded_imgs(ithr), ctfparms, shift, e3, iptcl)
-                else
-                    if( ctfparms%ctfflag == CTFFLAG_NO ) call build_glob%imgbatch(ibatch)%div(instrimg)
-                    call build_glob%imgbatch(ibatch)%fft
-                    if( PADPLANE )then
-                        call fpls(ibatch)%gen_planes3(build_glob%imgbatch(ibatch), ctfparms, shift, e3, iptcl)
-                    else
-                        call fpls(ibatch)%gen_planes2(build_glob%imgbatch(ibatch), ctfparms, shift, e3, iptcl)
-                    endif
-                endif
+                call build_glob%imgbatch(ibatch)%div(instrimg)
+                call build_glob%imgbatch(ibatch)%fft
+                call fpls(ibatch)%gen_planes_pad(build_glob%imgbatch(ibatch), ctfparms, shift, e3, iptcl)
             end do
             !$omp end parallel do
+            t_pad = t_pad + toc(t)
+            t = tic()
             ! particles summation
-            do i = batchlims(1),batchlims(2)
-                iptcl  = pinds(i)
-                ibatch = i - batchlims(1) + 1
-                iproj  = nint(build_glob%spproj_field%get(iptcl, 'proj'))
-                eo     = build_glob%spproj_field%get_eo(iptcl)+1
-                w      = build_glob%spproj_field%get(iptcl, 'w')
-                if( w < TINY ) cycle
-                !$omp parallel workshare
-                projdirs(iproj,eo)%cmplx_plane = projdirs(iproj,eo)%cmplx_plane + w * fpls(ibatch)%cmplx_plane
-                projdirs(iproj,eo)%ctfsq_plane = projdirs(iproj,eo)%ctfsq_plane + w * fpls(ibatch)%ctfsq_plane
-                !$omp end parallel workshare
-            end do
+            ! FAST
+            !$omp parallel do default(shared) private(i,j,iproj,pproj,iptcl,ibatch,w,eo,peo)&
+            !$omp schedule(dynamic) proc_bind(close)
+            do j = 1,2*params_glob%nspace
+                ! For better e/o balancing
+                if( j <= params_glob%nspace )then
+                    iproj = j
+                    eo    = 1
+                else
+                    iproj = j - params_glob%nspace
+                    eo    = 2
+                endif
+                if( tmp(iproj,eo)==0 ) cycle
+                do i = batchlims(1),batchlims(2)
+                    iptcl  = pinds(i)
+                    pproj  = nint(build_glob%spproj_field%get(iptcl, 'proj'))
+                    if( iproj /= pproj ) cycle
+                    peo = build_glob%spproj_field%get_eo(iptcl)+1
+                    if( peo /= eo ) cycle
+                    w = build_glob%spproj_field%get(iptcl, 'w')
+                    if( w < TINY ) cycle
+                    ibatch = i - batchlims(1) + 1
+                    projdirs(iproj,eo)%cmplx_plane = projdirs(iproj,eo)%cmplx_plane + w * fpls(ibatch)%cmplx_plane
+                    projdirs(iproj,eo)%ctfsq_plane = projdirs(iproj,eo)%ctfsq_plane + w * fpls(ibatch)%ctfsq_plane
+                    tmp(iproj,eo) = tmp(iproj,eo) - 1
+                enddo
+            enddo
+            !$omp end parallel do
+            ! SLOW
+            ! ! particles summation
+            ! do i = batchlims(1),batchlims(2)
+            !     iptcl  = pinds(i)
+            !     ibatch = i - batchlims(1) + 1
+            !     iproj  = nint(build_glob%spproj_field%get(iptcl, 'proj'))
+            !     eo     = build_glob%spproj_field%get_eo(iptcl)+1
+            !     w      = build_glob%spproj_field%get(iptcl, 'w')
+            !     if( w < TINY ) cycle
+            !     !$omp parallel workshare
+            !     projdirs(iproj,eo)%cmplx_plane = projdirs(iproj,eo)%cmplx_plane + w * fpls(ibatch)%cmplx_plane
+            !     projdirs(iproj,eo)%ctfsq_plane = projdirs(iproj,eo)%ctfsq_plane + w * fpls(ibatch)%ctfsq_plane
+            !     !$omp end parallel workshare
+            ! end do
+            t_sum = t_sum + toc(t)
         end do
+        ! some cleanup
+        !$omp parallel do default(shared) private(ibatch) schedule(static) proc_bind(close)
         do ibatch = 1,size(fpls)
             call fpls(ibatch)%kill
         end do
-        deallocate(fpls)
+        !$omp end parallel do
+        deallocate(fpls,tmp)
+        call instrimg%kill
         ! projections directions reconstructon
+        t = tic()
         do iproj = 1,params_glob%nspace
             call build_glob%eulspace%get_ori(iproj, orientation)
             call orientation%set('state',1.)
@@ -932,6 +939,8 @@ contains
                 call grid_ptcl(projdirs(iproj,2), build_glob%pgrpsyms, orientation)
             endif
         end do
+        t_rec = toc(t)
+        if( DEBUG ) print *,'timing: ',t_ini, t_pad, t_sum, t_rec
         ! debug
         if( DEBUG )then
             call build_glob%eulspace%write('reforis.txt')
@@ -966,7 +975,6 @@ contains
         call norm_struct_facts( cline, which_iter)
         ! destruct
         call killrecvols()
-        call instrimg%kill
         call orientation%kill
     end subroutine calc_projdir3Drec
 
