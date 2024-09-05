@@ -152,30 +152,30 @@ contains
     end subroutine get_find_at_crit
 
     !>   returns the Fourier index of the resolution limit at corr
-    integer function get_lplim_at_corr( fsc, corr, incrreslim )
+    integer function get_find_at_corr( fsc, corr, incrreslim )
         real,    intent(in)           :: fsc(:), corr
         logical, intent(in), optional :: incrreslim
         integer :: n, h
         n = size(fsc)
         if( n < 3 )then
-            call simple_exception('nonconforming size of fsc array; get_lplim_at_corr', __FILENAME__ , __LINE__)
+            call simple_exception('nonconforming size of fsc array; get_find_at_corr', __FILENAME__ , __LINE__)
         endif
-        get_lplim_at_corr = n-1
+        get_find_at_corr = n-1
         if( present(incrreslim) )then
             if( incrreslim )then
                 do h = n-1,3,-1
                     if( fsc(h) > corr )then
-                        get_lplim_at_corr = h
+                        get_find_at_corr = h
                         exit
                     endif
                 enddo
-                get_lplim_at_corr = min(get_lplim_at_corr+10,n-1)
+                get_find_at_corr = min(get_find_at_corr+10,n-1)
             else
                 do h=3,n-1
                     if( fsc(h) >= corr )then
                         cycle
                     else
-                        get_lplim_at_corr = h - 1
+                        get_find_at_corr = h - 1
                         exit
                     endif
                 end do
@@ -185,12 +185,12 @@ contains
                 if( fsc(h) >= corr )then
                     cycle
                 else
-                    get_lplim_at_corr = h - 1
+                    get_find_at_corr = h - 1
                     exit
                 endif
             end do
         endif
-    end function get_lplim_at_corr
+    end function get_find_at_corr
 
     !>  \brief get array of resolution steps
     function get_resarr( box, smpd ) result( res )

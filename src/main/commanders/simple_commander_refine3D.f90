@@ -780,7 +780,7 @@ contains
             params%fsc = 'fsc_state'//int2str_pad(istate,2)//'.bin'
             if( file_exists(params%fsc) )then
                 build%fsc(istate,:) = file2rarr(params%fsc)
-                maplp(istate) = calc_lowpass_lim(get_lplim_at_corr(build%fsc(istate,:),params%lplim_crit), params_glob%box_crop, params_glob%smpd_crop)
+                maplp(istate) = calc_lowpass_lim(get_find_at_corr(build%fsc(istate,:),params%lplim_crit), params_glob%box_crop, params_glob%smpd_crop)
                 maplp(istate) = max(maplp(istate), 2.*params%smpd_crop)
             else
                 THROW_HARD('tried to check the fsc file: '//trim(params%fsc)//' but it does not exist!')

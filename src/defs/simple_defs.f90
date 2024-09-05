@@ -107,9 +107,9 @@ type ptcl_ref
 end type ptcl_ref
 
 type lp_crop_inf
-    real    :: lp, smpd_crop, scale, trslim
-    integer :: box_crop
-    logical :: l_autoscale
+    real    :: lp=0., smpd_crop=0., scale=1., trslim=0., frc_crit=0.
+    integer :: box_crop=0.
+    logical :: l_autoscale=.false., l_lpset=.false.
 end type lp_crop_inf
 
 ! oritype enumeration

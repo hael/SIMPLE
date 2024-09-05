@@ -259,7 +259,7 @@ contains
         sstate = 1
         if( present(state) ) sstate = state
         call self%raise_exception( cls, sstate, 'ERROR, out of bounds in estimate_find_for_eoavg')
-        find = max(K4EOAVGLB,get_lplim_at_corr(self%frcs(sstate,cls,:), FSC4EOAVG2D))
+        find = max(K4EOAVGLB,get_find_at_corr(self%frcs(sstate,cls,:), FSC4EOAVG2D))
     end function estimate_find_for_eoavg
 
     function estimate_lp_for_align( self, state ) result( lp )

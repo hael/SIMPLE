@@ -790,7 +790,7 @@ contains
     subroutine exec_selection( self, cline )
         use simple_sp_project, only: sp_project, oritype2segment
         class(selection_commander), intent(inout) :: self
-        class(cmdline),                    intent(inout) :: cline
+        class(cmdline),             intent(inout) :: cline
         type(parameters)                :: params
         type(sp_project)                :: spproj
         type(ran_tabu)                  :: rt
@@ -933,7 +933,7 @@ contains
                 call spproj%report_state2stk(states)
             case(CLS2D_SEG)
                 call spproj%os_cls2D%set_all('state', real(states))
-                if(params%balance .eq. 'yes') then
+                if( params%balance .eq. 'yes' )then
                     call spproj%map2ptcls_state(append=.true., maxpop=nint(minclspop)) ! map states to ptcl2D/3D & cls3D segments
                 else
                     call spproj%map2ptcls_state(append=l_append) ! map states to ptcl2D/3D & cls3D segments

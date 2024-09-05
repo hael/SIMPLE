@@ -52,7 +52,7 @@ contains
             else
                 ! retrieve FSC and calculate low-pass limit
                 fsc       = file2rarr(fsc_fname)
-                find_stop = min(get_lplim_at_corr(fsc, 0.1),calc_fourier_index(params_glob%lpstop, box, smpd)) ! little overshoot, filter function anyway applied in polarft_corrcalc
+                find_stop = min(get_find_at_corr(fsc, 0.1),calc_fourier_index(params_glob%lpstop, box, smpd)) ! little overshoot, filter function anyway applied in polarft_corrcalc
             endif
         endif
         find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
