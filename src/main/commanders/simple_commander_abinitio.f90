@@ -195,28 +195,28 @@ contains
         filtsz = clsfrcs%get_filtsz()
         allocate(frcs_avg(filtsz), source=0.)
         call clsfrcs%avg_frc_getter(frcs_avg, states)
-        find = get_lplim_at_corr(frcs_avg, 0.9)
+        find = get_find_at_corr(frcs_avg, 0.9)
         lp   = calc_lowpass_lim(find, params%box, params%smpd)
         print *, 'lp@0.9   ', lp
-        find = get_lplim_at_corr(frcs_avg, 0.8)
+        find = get_find_at_corr(frcs_avg, 0.8)
         lp   = calc_lowpass_lim(find, params%box, params%smpd)
         print *, 'lp@0.8   ', lp
-        find = get_lplim_at_corr(frcs_avg, 0.7)
+        find = get_find_at_corr(frcs_avg, 0.7)
         lp   = calc_lowpass_lim(find, params%box, params%smpd)
         print *, 'lp@0.7   ', lp
-        find = get_lplim_at_corr(frcs_avg, 0.6)
+        find = get_find_at_corr(frcs_avg, 0.6)
         lp   = calc_lowpass_lim(find, params%box, params%smpd)
         print *, 'lp@0.6   ', lp
-        find = get_lplim_at_corr(frcs_avg, 0.5)
+        find = get_find_at_corr(frcs_avg, 0.5)
         lp   = calc_lowpass_lim(find, params%box, params%smpd)
         print *, 'lp@0.5   ', lp
-        find = get_lplim_at_corr(frcs_avg, 0.4)
+        find = get_find_at_corr(frcs_avg, 0.4)
         lp   = calc_lowpass_lim(find, params%box, params%smpd)
         print *, 'lp@0.4   ', lp
-        find = get_lplim_at_corr(frcs_avg, 0.3)
+        find = get_find_at_corr(frcs_avg, 0.3)
         lp   = calc_lowpass_lim(find, params%box, params%smpd)
         print *, 'lp@0.3   ', lp
-        find = get_lplim_at_corr(frcs_avg, 0.143)
+        find = get_find_at_corr(frcs_avg, 0.143)
         lp   = calc_lowpass_lim(find, params%box, params%smpd)
         print *, 'lp@0.143 ', lp
         ! prepare a temporary project file
@@ -256,13 +256,13 @@ contains
         if( cline%defined('lpstart') )then
             lplims(1) = params%lpstart
         else if( any(frcs_avg > 0.8) )then
-            find      = get_lplim_at_corr(frcs_avg, 0.8)
+            find      = get_find_at_corr(frcs_avg, 0.8)
             lplims(1) = calc_lowpass_lim(find, params%box, params%smpd)
         else
             lplims(1) = STARTLP_DEFAULT
         endif
         if( any(frcs_avg > 0.5) )then
-            find      = get_lplim_at_corr(frcs_avg, 0.5)
+            find      = get_find_at_corr(frcs_avg, 0.5)
             lplims(2) = calc_lowpass_lim(find, params%box, params%smpd)
         else
             lplims(2) = STARTLP_DEFAULT
@@ -704,41 +704,41 @@ contains
         filtsz = clsfrcs%get_filtsz()
         allocate(frcs_avg(filtsz), source=0.)
         call clsfrcs%avg_frc_getter(frcs_avg, states_cavg)
-        find = get_lplim_at_corr(frcs_avg, 0.9)
+        find = get_find_at_corr(frcs_avg, 0.9)
         lp   = calc_lowpass_lim(find, params%box, params%smpd)
         print *, 'lp@0.9   ', lp
-        find = get_lplim_at_corr(frcs_avg, 0.8)
+        find = get_find_at_corr(frcs_avg, 0.8)
         lp   = calc_lowpass_lim(find, params%box, params%smpd)
         print *, 'lp@0.8   ', lp
-        find = get_lplim_at_corr(frcs_avg, 0.7)
+        find = get_find_at_corr(frcs_avg, 0.7)
         lp   = calc_lowpass_lim(find, params%box, params%smpd)
         print *, 'lp@0.7   ', lp
-        find = get_lplim_at_corr(frcs_avg, 0.6)
+        find = get_find_at_corr(frcs_avg, 0.6)
         lp   = calc_lowpass_lim(find, params%box, params%smpd)
         print *, 'lp@0.6   ', lp
-        find = get_lplim_at_corr(frcs_avg, 0.5)
+        find = get_find_at_corr(frcs_avg, 0.5)
         lp   = calc_lowpass_lim(find, params%box, params%smpd)
         print *, 'lp@0.5   ', lp
-        find = get_lplim_at_corr(frcs_avg, 0.4)
+        find = get_find_at_corr(frcs_avg, 0.4)
         lp   = calc_lowpass_lim(find, params%box, params%smpd)
         print *, 'lp@0.4   ', lp
-        find = get_lplim_at_corr(frcs_avg, 0.3)
+        find = get_find_at_corr(frcs_avg, 0.3)
         lp   = calc_lowpass_lim(find, params%box, params%smpd)
         print *, 'lp@0.3   ', lp
-        find = get_lplim_at_corr(frcs_avg, 0.143)
+        find = get_find_at_corr(frcs_avg, 0.143)
         lp   = calc_lowpass_lim(find, params%box, params%smpd)
         print *, 'lp@0.143 ', lp
         ! set lplims
         if( cline%defined('lpstart') )then
             lplims(1) = params%lpstart
         else if( any(frcs_avg > 0.8) )then
-            find      = get_lplim_at_corr(frcs_avg, 0.8)
+            find      = get_find_at_corr(frcs_avg, 0.8)
             lplims(1) = calc_lowpass_lim(find, params%box, params%smpd)
         else
             lplims(1) = STARTLP_DEFAULT
         endif
         if( any(frcs_avg > 0.5) )then
-            find      = get_lplim_at_corr(frcs_avg, 0.5)
+            find      = get_find_at_corr(frcs_avg, 0.5)
             lplims(2) = calc_lowpass_lim(find, params%box, params%smpd)
         else
             lplims(2) = STARTLP_DEFAULT

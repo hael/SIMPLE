@@ -33,7 +33,7 @@ contains
         call odd%fft()
         call even%fsc(odd, fsc_t)               ! FSC
         ! Randomize then calculate masked FSC
-        k_rand = get_lplim_at_corr(fsc_t, ENVMSK_FSC_THRESH)
+        k_rand = get_find_at_corr(fsc_t, ENVMSK_FSC_THRESH)
         if( k_rand > n-3 )then
             ! reverts to sherical masking
             call even%ifft()

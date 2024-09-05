@@ -189,41 +189,106 @@ contains
         endif
     end subroutine get_resolution
 
-    subroutine lpstages( box, frcs_avg, smpd, lp_default, lpinfo )
+    subroutine lpstages( box, nstages, frcs_avg, smpd, lplims, lpstart_default, lpinfo, verbose )
         use simple_magic_boxes
-        integer,           intent(in)  :: box
-        real,              intent(in)  :: frcs_avg(:), smpd, lp_default
-        type(lp_crop_inf), intent(out) :: lpinfo(8)
-        call calc_lpinfo(1, 0.8)
-        call calc_lpinfo(2, 0.7)
-        call calc_lpinfo(3, 0.6)
-        call calc_lpinfo(4, 0.5)
-        call calc_lpinfo(5, 0.4)
-        call calc_lpinfo(6, 0.3)
-        call calc_lpinfo(7, 0.2)
-        call calc_lpinfo(8, 0.143)
-
+        integer,           intent(in)  :: box, nstages
+        real,              intent(in)  :: frcs_avg(:), smpd, lplims(2), lpstart_default
+        type(lp_crop_inf), intent(out) :: lpinfo(nstages)
+        logical, optional, intent(in)  :: verbose
+        real, parameter :: FRCLIMS_DEFAULT(2) = [0.8,0.143], LP2SMPD_TARGET = 1./3.
+        integer :: findlims(2), istage, box_stepsz, box_trial
+        real    :: frclims(2), frc_stepsz, lp_max, lp_min, lp_stepsz
+        logical :: l_verbose
+        ! lplims(1)       -> 10 A cap
+        ! lplims(2)       -> 6  A cap
+        ! lpstart_deafult -> 20 A
+        l_verbose = .false.
+        if( present(verbose) ) l_verbose = verbose
+        ! (1) calculate FRC values at the inputted boundaries
+        findlims(1) = calc_fourier_index(lplims(1), box, smpd)
+        findlims(2) = calc_fourier_index(lplims(2), box, smpd)
+        ! (2) let the shape of the FRC influence the limit choice, if needed
+        frclims(1)  = max(frcs_avg(findlims(1)),FRCLIMS_DEFAULT(1)) ! always moving the limit towards lower resolution
+        frclims(2)  = max(frcs_avg(findlims(2)),FRCLIMS_DEFAULT(2))
+        ! (3) calculate critical FRC limits and corresponding low-pass limits for the nstages
+        call calc_lpinfo(1, frclims(1))
+        frc_stepsz = (frclims(1) - frclims(2)) / real(nstages - 1)
+        do istage = 2, nstages
+            call calc_lpinfo(istage, lpinfo(istage-1)%frc_crit - frc_stepsz)
+        end do
+        if( l_verbose )then
+            print *, '########## 1st pass'
+            call print_lpinfo
+        endif
+        ! (4) gather low-pass limit information
+        if( all(lpinfo(:)%l_lpset) )then
+            ! nothing to do
+        else
+            ! revert to linear scheme
+            lpinfo(1)%lp      = lpstart_default
+            lpinfo(1)%l_lpset = .true.
+            do istage = 2, nstages
+                lpinfo(istage)%lp      = lpinfo(istage-1)%lp - (lpinfo(istage-1)%lp - lplims(2)) / 2.
+                lpinfo(istage)%l_lpset = .true.
+            end do
+        endif
+        if( l_verbose )then
+            print *, '########## 2nd pass'
+            call print_lpinfo
+        endif
+        if( .not. all(lpinfo(:)%l_lpset) ) THROW_HARD('Not all lp limits set')
+        ! (4) gather downscaling information
+        call calc_scaleinfo(1)
+        call calc_scaleinfo(nstages)
+        box_stepsz = nint(real(lpinfo(nstages)%box_crop - lpinfo(1)%box_crop)/real(nstages))
+        do istage = 2, nstages - 1 ! linear box_crop scheme
+            box_trial                = lpinfo(istage-1)%box_crop + box_stepsz
+            lpinfo(istage)%box_crop  = find_magic_box(box_trial)
+            lpinfo(istage)%scale     = real(lpinfo(istage)%box_crop) / real(box)
+            lpinfo(istage)%smpd_crop = smpd / lpinfo(istage)%scale
+            lpinfo(istage)%trslim    = min(8.,max(2.0, AHELIX_WIDTH / lpinfo(istage)%smpd_crop))
+        end do
+        if( l_verbose )then
+            print *, '########## scale info'
+            call print_scaleinfo
+        endif
+        
         contains
 
             subroutine calc_lpinfo( stage, thres )
                 integer, intent(in) :: stage
                 real,    intent(in) :: thres
                 integer :: find
-                real    :: smpd_target
-                if( any(frcs_avg > thres) )then            
-                    find = get_lplim_at_corr(frcs_avg, thres)
+                lpinfo(stage)%frc_crit = thres
+                lpinfo(stage)%l_lpset  = .false.
+                if( all(frcs_avg > thres) ) return
+                if( any(frcs_avg > thres) )then           
+                    find = get_find_at_corr(frcs_avg, thres)
                     lpinfo(stage)%lp = calc_lowpass_lim(find, box, smpd)
-                else 
-                    lpinfo(stage)%lp = lp_default
+                    lpinfo(stage)%l_lpset = .true.
                 endif
-                smpd_target = max(smpd, (lpinfo(stage)%lp/3.))
-
-                ! call autoscale(params%box, params%smpd, smpd_target, params%box_crop, params%smpd_crop, scale_factor, minbox=MINBOX)
-
-                call autoscale(box, smpd, smpd_target, lpinfo(stage)%box_crop, lpinfo(stage)%smpd_crop, lpinfo(stage)%scale, minbox=64)
-                lpinfo(stage)%trslim      = max(2.0, AHELIX_WIDTH / lpinfo(stage)%smpd_crop / 2.0)
-                lpinfo(stage)%l_autoscale = lpinfo(stage)%box_crop < box
             end subroutine calc_lpinfo
+
+            subroutine print_lpinfo
+                do istage = 1, nstages
+                    print *, 'frc_crit/l_lpset/lp ', lpinfo(istage)%frc_crit, lpinfo(istage)%l_lpset, lpinfo(istage)%lp
+                end do
+            end subroutine print_lpinfo
+
+            subroutine calc_scaleinfo( istage )
+                integer, intent(in) :: istage
+                real :: smpd_target
+                smpd_target                = max(smpd, (lpinfo(istage)%lp * LP2SMPD_TARGET))
+                call autoscale(box, smpd, smpd_target, lpinfo(istage)%box_crop, lpinfo(istage)%smpd_crop, lpinfo(istage)%scale, minbox=64)
+                lpinfo(istage)%trslim      = min(8.,max(2.0, AHELIX_WIDTH / lpinfo(istage)%smpd_crop))
+                lpinfo(istage)%l_autoscale = lpinfo(istage)%box_crop < box
+            end subroutine calc_scaleinfo
+
+            subroutine print_scaleinfo
+                do istage = 1, nstages
+                    print *, 'scale/box_crop/smpd_crop/trslim ',lpinfo(istage)%scale, lpinfo(istage)%box_crop, lpinfo(istage)%smpd_crop, lpinfo(istage)%trslim
+                end do
+            end subroutine print_scaleinfo
 
     end subroutine lpstages
 
