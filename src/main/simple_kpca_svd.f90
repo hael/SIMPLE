@@ -229,7 +229,9 @@ contains
 
     subroutine test_alpha( self )
         class(kpca_svd), intent(inout) :: self
-        real :: mat(4,3), truth(4,2), alpha(4,2), ker(4,4)
+        real :: mat(4,3), truth(4,2), alpha(4,2), ker(4,4), beta(4,2), gamma(4,4)
+        real :: z_prev(3), z_cur(3), zcoeff(4), s
+        integer :: i, ind
         self%N   = 4
         self%D   = 3
         self%Q   = 2
@@ -239,6 +241,8 @@ contains
         mat(4,:) = [ -2.,  4.,  5.]
         call self%rbf_kernel(mat, 1., ker)
         call self%compute_alpha(ker, alpha)
+        beta  = matmul(ker, alpha)
+        gamma = matmul(beta, transpose(alpha))
         truth(1,1) =  0.31606028
         truth(2,1) = -0.31606028
         if( maxval(abs(alpha - truth)) < TINY )then
@@ -248,7 +252,29 @@ contains
             print *, 'ker = ', ker(:,1)
             print *, 'alpha = ', alpha(:,1)
             print *, 'alpha = ', alpha(:,2)
+            print *, 'beta = ', beta(:,1)
+            print *, 'gamma = ', gamma(:,1)
         endif
+        ! testing pre-imaging iterations
+        do ind = 1, self%N
+            z_cur  = mat(ind,:)
+            z_prev = 0.
+            do while( euclid(z_cur,z_prev) > 0.01 )
+                z_prev = z_cur
+                do i = 1,self%N
+                    zcoeff(i) = euclid(z_prev, mat(i,:))**2
+                enddo
+                zcoeff = exp(-zcoeff/real(self%Q)/1.)    ! c = 1.
+                zcoeff = gamma(:,ind) * zcoeff
+                s      = sum(zcoeff)
+                do i = 1,self%D
+                    z_cur(i) = sum(mat(:,i) * zcoeff)
+                enddo
+                z_cur = z_cur/s
+            enddo
+            self%data(:,ind) = z_cur
+            print *, z_cur
+        enddo
     end subroutine test_alpha
 
 end module simple_kpca_svd
