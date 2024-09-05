@@ -17,7 +17,7 @@ print *, 'Original data:'
 print *, data_ori(1,:)
 print *, data_ori(2,:)
 print *, data_ori(3,:)
-avg           = sum(data_ori, dim=2) / real(NS)
+avg = sum(data_ori, dim=2) / real(NS)
 do j = 1, NP
      data_cen(j,:) = data_ori(j,:) - avg(j)
 enddo

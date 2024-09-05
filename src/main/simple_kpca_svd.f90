@@ -91,85 +91,84 @@ contains
         integer, optional, intent(in)    :: maxpcaits ! redundant
     end subroutine master_kpca
 
-    subroutine kernel_center( self, dim, ker, cen_ker )
+    subroutine kernel_center( self, ker, cen_ker )
         class(kpca_svd), intent(inout) :: self
-        integer,         intent(in)    :: dim
-        real,            intent(in)    :: ker(dim,dim)
-        real,            intent(inout) :: cen_ker(dim,dim)
-        real :: ones(dim,dim)
-        ones = 1. / dim
+        real,            intent(in)    :: ker(self%N,self%N)
+        real,            intent(inout) :: cen_ker(self%N,self%N)
+        real :: ones(self%N,self%N)
+        ones = 1. / real(self%N)
         ! Appendix D.2.2 Centering in Feature Space from Schoelkopf, Bernhard, Support vector learning, 1997
         cen_ker  = cen_ker - matmul(ones, ker) - matmul(cen_ker, ones) + matmul(matmul(ones, ker), ones)
     end subroutine kernel_center
 
-    subroutine rbf_kernel_1( self, dim, mat, ncomp, c, ker )
+    subroutine rbf_kernel_1( self, mat, c, ker )
         class(kpca_svd), intent(inout) :: self
-        integer,         intent(in)    :: dim
-        real,            intent(in)    :: mat(dim,dim)
-        integer,         intent(in)    :: ncomp
+        real,            intent(in)    :: mat(self%N,self%D)
         real,            intent(in)    :: c
-        real,            intent(out)   :: ker(dim,dim)
+        real,            intent(out)   :: ker(self%N,self%N)
         integer :: i, j
         ! squared euclidean distance between pairs of rows
-        do i = 1,dim
-            do j = 1,dim
+        do i = 1,self%N
+            do j = 1,self%N
                 ker(i,j) = euclid(mat(i,:), mat(j,:))**2
             enddo
         enddo
         ! normalization and centering
-        ker = exp(-ker/real(ncomp)/c)
-        call self%kernel_center(dim, ker, ker)
+        ker = exp(-ker/real(self%Q)/c)
+        call self%kernel_center(ker, ker)
     end subroutine rbf_kernel_1
 
     ! rbf kernel from the previous kernel
-    subroutine rbf_kernel_2( self, dim, mat_test, mat_train, ncomp, c, ker_train, ker )
+    subroutine rbf_kernel_2( self, mat_test, mat_train, c, ker_train, ker )
         class(kpca_svd), intent(inout) :: self
-        integer,         intent(in)    :: dim
-        real,            intent(in)    :: mat_test(dim,dim)
-        real,            intent(in)    :: mat_train(dim,dim)
-        integer,         intent(in)    :: ncomp
+        real,            intent(in)    :: mat_test( self%N,self%D)
+        real,            intent(in)    :: mat_train(self%N,self%D)
         real,            intent(in)    :: c
-        real,            intent(in)    :: ker_train(dim,dim)
-        real,            intent(out)   :: ker(dim,dim)
+        real,            intent(in)    :: ker_train(self%N,self%N)
+        real,            intent(out)   :: ker(self%N,self%N)
         integer :: i, j
         ! squared euclidean distance between pairs of rows
-        do i = 1,dim
-            do j = 1,dim
+        do i = 1,self%N
+            do j = 1,self%N
                 ker(i,j) = euclid(mat_test(i,:), mat_train(j,:))**2
             enddo
         enddo
         ! normalization and centering
-        ker = exp(-ker/real(ncomp)/c)
-        call self%kernel_center(dim, ker_train, ker)
+        ker = exp(-ker/real(self%Q)/c)
+        call self%kernel_center(ker_train, ker)
     end subroutine rbf_kernel_2
 
-    subroutine compute_alpha( self, dim, mat, ncomp, alpha )
+    subroutine compute_alpha( self, ker, alpha )
         class(kpca_svd), intent(inout) :: self
-        integer,         intent(in)    :: dim
-        real,            intent(in)    :: mat(dim,dim)
-        integer,         intent(in)    :: ncomp
-        real,            intent(out)   :: alpha(dim,ncomp)
-        real    :: eig_vecs(dim,dim), eig_vals(dim), tmp(dim,dim), tmp_mat(dim,dim)
-        integer :: i, inds(dim)
-        tmp_mat = mat
-        do i = 1, dim
-            tmp_mat(:,i) = tmp_mat(:,i) - sum(tmp_mat(:,i))/real(dim)
+        real,            intent(in)    :: ker(self%N,self%N)
+        real,            intent(out)   :: alpha(self%N,self%Q)
+        real    :: eig_vecs(self%N,self%N), eig_vals(self%N), tmp(self%N,self%N), tmp_ker(self%N,self%N)
+        integer :: i, inds(self%N)
+        tmp_ker = ker
+        do i = 1, self%N
+            tmp_ker(:,i) = tmp_ker(:,i) - sum(tmp_ker(:,i))/real(self%N)
         enddo
         ! computing eigvals/eigvecs
-        eig_vecs = tmp_mat
+        eig_vecs = tmp_ker
         call svdcmp(eig_vecs, eig_vals, tmp)
-        eig_vals  = eig_vals**2 / real(dim)
-        inds      = (/(i,i=1,dim)/)
+        eig_vals  = eig_vals**2 / real(self%N)
+        inds      = (/(i,i=1,self%N)/)
         call hpsort(eig_vals, inds)
         call reverse(eig_vals)
         call reverse(inds)
         tmp = tmp(:, inds)
-        do i = 1, dim
-            alpha(i,:) = tmp(i,1:ncomp) / sqrt(eig_vals(1:ncomp))
+        do i = 1, self%N
+            alpha(i,:) = tmp(i,1:self%Q) / sqrt(eig_vals(1:self%Q))
         enddo
         ! change the sorted order of alpha
-        alpha(:,1:ncomp) = alpha(:,ncomp:1:-1)
+        alpha = alpha(:,self%Q:1:-1)
     end subroutine compute_alpha
+
+    subroutine compute_gamma( self, mat, gamma )
+        class(kpca_svd), intent(inout) :: self
+        real,            intent(in)    :: mat(self%N,self%D)
+        real,            intent(out)   :: gamma(self%N,self%Q)
+    end subroutine compute_gamma
 
     ! DESTRUCTOR
 
@@ -193,9 +192,12 @@ contains
     subroutine test_kernel_center( self )
         class(kpca_svd), intent(inout) :: self
         real :: ker(2,2), truth(2,2)
+        self%N   = 2
+        self%D   = 2
+        self%Q   = 2
         ker(1,:) = [ 1., 2.]
         ker(2,:) = [ 3., 1.]
-        call self%kernel_center(2, ker, ker)
+        call self%kernel_center(ker, ker)
         truth(1,:) = [ -0.75,  0.75 ]
         truth(2,:) = [  0.75, -0.75 ]
         if( maxval(abs(ker - truth)) < TINY )then
@@ -209,9 +211,12 @@ contains
     subroutine test_rbf_kernel( self )
         class(kpca_svd), intent(inout) :: self
         real :: mat(2,2), truth(2,2), ker(2,2)
+        self%N   = 2
+        self%D   = 2
+        self%Q   = 2
         mat(1,:) = [ 0., 2.]
         mat(2,:) = [ 1., 1.]
-        call self%rbf_kernel(2, mat, 2, 1., ker)
+        call self%rbf_kernel(mat, 1., ker)
         truth(1,:) = [  0.31606028, -0.31606028 ]
         truth(2,:) = [ -0.31606028,  0.31606028 ]
         if( maxval(abs(ker - truth)) < TINY )then
@@ -224,18 +229,25 @@ contains
 
     subroutine test_alpha( self )
         class(kpca_svd), intent(inout) :: self
-        real :: mat(3,3), truth(3,2), alpha(3,2)
-        mat(1,:) = [ 0.,  1., 7.]
-        mat(2,:) = [ 2.,  5., 3.]
-        mat(3,:) = [ 1., -2., 0.]
-        call self%compute_alpha(3, mat, 2, alpha)
+        real :: mat(4,3), truth(4,2), alpha(4,2), ker(4,4)
+        self%N   = 4
+        self%D   = 3
+        self%Q   = 2
+        mat(1,:) = [  0.,  1.,  7.]
+        mat(2,:) = [  2.,  5.,  3.]
+        mat(3,:) = [  1., -2.,  0.]
+        mat(4,:) = [ -2.,  4.,  5.]
+        call self%rbf_kernel(mat, 1., ker)
+        call self%compute_alpha(ker, alpha)
         truth(1,1) =  0.31606028
         truth(2,1) = -0.31606028
         if( maxval(abs(alpha - truth)) < TINY )then
             print *, 'Unit test of compute_alpha: PASSED'
         else
             print *, 'Unit test of compute_alpha: FAILED'
-            print *, 'alpha = ', alpha
+            print *, 'ker = ', ker(:,1)
+            print *, 'alpha = ', alpha(:,1)
+            print *, 'alpha = ', alpha(:,2)
         endif
     end subroutine test_alpha
 
