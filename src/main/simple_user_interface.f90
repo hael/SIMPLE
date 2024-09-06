@@ -102,6 +102,7 @@ type(simple_program), target :: ctf_estimate
 type(simple_program), target :: ctfops
 type(simple_program), target :: detect_atoms
 type(simple_program), target :: dock_volpair
+type(simple_program), target :: estimate_lpstages
 type(simple_program), target :: estimate_diam
 type(simple_program), target :: export_relion
 type(simple_program), target :: export_starproject
@@ -403,6 +404,7 @@ contains
         call new_pdb2mrc
         call new_detect_atoms
         call new_dock_volpair
+        call new_estimate_lpstages
         call new_estimate_diam
         call new_extract
         call new_export_relion
@@ -699,6 +701,8 @@ contains
                 ptr2prg => detect_atoms
             case('dock_volpair')
                 ptr2prg => dock_volpair
+            case('estimate_lpstages')
+                ptr2prg => estimate_lpstages
             case('estimate_diam')
                 ptr2prg => estimate_diam
             case('extract')
@@ -906,6 +910,7 @@ contains
         write(logfhandle,'(A)') ctf_estimate%name
         write(logfhandle,'(A)') ctfops%name
         write(logfhandle,'(A)') dock_volpair%name
+        write(logfhandle,'(A)') estimate_lpstages%name
         write(logfhandle,'(A)') extract%name
         write(logfhandle,'(A)') export_relion%name
         write(logfhandle,'(A)') export_starproject%name
@@ -2315,6 +2320,32 @@ contains
         ! computer controls
         call dock_volpair%set_input('comp_ctrls', 1, nthr)
     end subroutine new_dock_volpair
+
+    subroutine new_estimate_lpstages
+        ! PROGRAM SPECIFICATION
+        call estimate_lpstages%new(&
+        &'estimate_lpstages',&                                                                                             ! name
+        &'Estimation of low-pass limits, shift boundaries, and downscaling parameters for ab initio 3D',&                  ! descr_short
+        &'is a program for estimation of low-pass limits, shift boundaries, and downscaling parameters for ab initio 3D',& ! descr_long
+        &'simple_exec',&                                                                                                   ! executable
+        &0, 2, 0, 0, 0, 0, 0, .true.)                                                                                     ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call estimate_lpstages%set_input('parm_ios', 1, projfile)
+        call estimate_lpstages%set_input('parm_ios', 2, 'nstages', 'num', 'Number of low-pass limit stages', 'Number of low-pass limit stages', '# stages', .true., 8.)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_estimate_lpstages
 
     subroutine new_estimate_diam
         ! PROGRAM SPECIFICATION

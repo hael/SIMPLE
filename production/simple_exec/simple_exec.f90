@@ -63,6 +63,7 @@ type(cluster2D_commander_subsets)           :: xcluster2D_subsets
 type(cleanup2D_commander_hlev)              :: xcleanup2D_distr
 
 ! AB INITIO 3D RECONSTRUCTION WORKFLOW
+type(estimate_lpstages_commander)           :: xestimate_lpstages
 type(noisevol_commander)                    :: xnoisevol
 type(initial_3Dmodel_commander)             :: xinitial_3Dmodel
 type(abinitio_3Dmodel_commander)            :: xabinitio_3Dmodel
@@ -239,6 +240,8 @@ select case(trim(prg))
         call xcluster2D_subsets%execute(cline)
 
     ! AB INITIO 3D RECONSTRUCTION WORKFLOW
+    case('estimate_lpstages')
+        call xestimate_lpstages%execute(cline)
     case( 'noisevol' )
         call xnoisevol%execute(cline)
     case( 'initial_3Dmodel' )
@@ -421,7 +424,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('ae1aeb64')
+call simple_print_git_version('cd80a993')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
