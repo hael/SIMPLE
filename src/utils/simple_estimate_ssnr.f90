@@ -275,7 +275,7 @@ contains
                 if( all(frcs_avg > thres) ) return
                 if( any(frcs_avg > thres) )then           
                     find = get_find_at_corr(frcs_avg, thres)
-                    lpinfo(stage)%lp = calc_lowpass_lim(find, box, smpd)
+                    lpinfo(stage)%lp = max(lplims(2),calc_lowpass_lim(find, box, smpd))
                     lpinfo(stage)%l_lpset = .true.
                 endif
             end subroutine calc_lpinfo
