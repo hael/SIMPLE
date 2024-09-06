@@ -27,7 +27,7 @@ type, extends(pca) :: kpca_svd
     procedure :: rbf_kernel_1, rbf_kernel_2
     generic   :: rbf_kernel => rbf_kernel_1, rbf_kernel_2
     procedure :: compute_alpha
-    procedure :: test_all, test_kernel_center, test_rbf_kernel, test_alpha
+    procedure :: test_all, test_kernel_center, test_rbf_kernel, test_alpha, test_square_data
 end type
 
 logical :: L_PRINT = .false.
@@ -187,6 +187,7 @@ contains
         call self%test_kernel_center
         call self%test_rbf_kernel
         call self%test_alpha
+        call self%test_square_data
     end subroutine test_all
 
     subroutine test_kernel_center( self )
@@ -276,5 +277,48 @@ contains
             print *, z_cur
         enddo
     end subroutine test_alpha
+
+    subroutine test_square_data( self )
+        class(kpca_svd), intent(inout) :: self
+        real(dp), allocatable :: XY(:,:), data_here(:,:)
+        real :: mat(1000,2), alpha(1000,2), ker(1000,1000), beta(1000,2), gamma(1000,1000)
+        real :: z_prev(2), z_cur(2), zcoeff(1000), s
+        integer :: i, ind, N, funit, io_stat
+        character(len=100) :: binfname
+        binfname = '/Users/vanc2/Downloads/XY_py.txt'
+        open(unit=funit,file=binfname)
+        read(funit,*) N
+        allocate(XY(2,N))
+        read(funit,*) XY
+        mat = transpose(XY)
+        call fclose(funit)
+        self%N   = 1000
+        self%D   = 2
+        self%Q   = 4
+        allocate( data_here(self%D,self%N), source=0._dp)
+        call self%rbf_kernel(mat, 1., ker)
+        call self%compute_alpha(ker, alpha)
+        beta  = matmul(ker, alpha)
+        gamma = matmul(beta, transpose(alpha))
+        ! testing pre-imaging iterations
+        do ind = 1, self%N
+            z_cur  = mat(ind,:)
+            z_prev = 0.
+            do while( euclid(z_cur,z_prev) > 0.0000001 )
+                z_prev = z_cur
+                do i = 1,self%N
+                    zcoeff(i) = euclid(z_prev, mat(i,:))**2
+                enddo
+                zcoeff = exp(-zcoeff/real(self%Q)/1.)    ! c = 1.
+                zcoeff = gamma(:,ind) * zcoeff
+                s      = sum(zcoeff)
+                do i = 1,self%D
+                    z_cur(i) = sum(mat(:,i) * zcoeff)
+                enddo
+                z_cur = z_cur/s
+            enddo
+            data_here(:,ind) = z_cur
+        enddo
+    end subroutine test_square_data
 
 end module simple_kpca_svd
