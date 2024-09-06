@@ -20,6 +20,7 @@ public :: icm3D_commander
 public :: icm2D_commander
 public :: cavg_filter2D_commander
 public :: prune_cavgs_commander
+public :: estimate_lpstages_commander
 private
 #include "simple_local_flags.inc"
 
@@ -62,6 +63,11 @@ type, extends(commander_base) :: prune_cavgs_commander
   contains
     procedure :: execute      => exec_prune_cavgs
 end type prune_cavgs_commander
+
+type, extends(commander_base) :: estimate_lpstages_commander
+  contains
+    procedure :: execute      => exec_estimate_lpstages
+end type estimate_lpstages_commander
 
 contains
 
@@ -510,7 +516,7 @@ contains
         call img_cavg%kill
         call calc_cavg%kill
         ! end gracefully
-        call simple_end('**** SIMPLE_cavg_filter2D NORMAL STOP ****')
+        call simple_end('**** SIMPLE_CAVG_FILTER2D NORMAL STOP ****')
     end subroutine exec_cavg_filter2D
 
     subroutine exec_prune_cavgs( self, cline )
@@ -1204,5 +1210,28 @@ contains
             end subroutine reject_class_outliers
 
     end subroutine exec_prune_cavgs
+
+    subroutine exec_estimate_lpstages( self, cline )
+        class(estimate_lpstages_commander), intent(inout) :: self
+        class(cmdline),                     intent(inout) :: cline
+        type(builder)    :: build
+        type(parameters) :: params
+        real, parameter :: LPLIMS(2) = [10.,6.], LPSTART_DEFAULT=20.
+        character(len=:),  allocatable :: frcs_fname
+        real,              allocatable :: frcs_avg(:)
+        integer,           allocatable :: states(:)
+        type(lp_crop_inf), allocatable :: lpinfo(:)
+        integer :: filtsz
+        call build%init_params_and_build_general_tbox(cline, params)
+        call build%spproj%get_frcs(frcs_fname, 'frc2D', fail=.true.)
+        call build%clsfrcs%read(frcs_fname)
+        states  = nint(build%spproj%os_cls2D%get_all('state'))
+        filtsz = build%clsfrcs%get_filtsz()
+        allocate(frcs_avg(filtsz), source=0.)
+        call build%clsfrcs%avg_frc_getter(frcs_avg, states)
+        allocate(lpinfo(params%nstages))
+        call lpstages(params%box, params%nstages, frcs_avg, params%smpd, LPLIMS, LPSTART_DEFAULT, lpinfo, verbose=.true. )
+        call simple_end('**** SIMPLE_ESTIMATE_LPSTAGES NORMAL STOP ****')
+    end subroutine exec_estimate_lpstages
 
 end module simple_commander_resolest

@@ -207,9 +207,17 @@ contains
         ! (1) calculate FRC values at the inputted boundaries
         findlims(1) = calc_fourier_index(lplims(1), box, smpd)
         findlims(2) = calc_fourier_index(lplims(2), box, smpd)
-        ! (2) let the shape of the FRC influence the limit choice, if needed
+        ! -- letting the shape of the FRC influence the limit choice, if needed
+
+        print *, 'frclim1', frcs_avg(findlims(1))
+        print *, 'frclim2', frcs_avg(findlims(2))
+
         frclims(1)  = max(frcs_avg(findlims(1)),FRCLIMS_DEFAULT(1)) ! always moving the limit towards lower resolution
         frclims(2)  = max(frcs_avg(findlims(2)),FRCLIMS_DEFAULT(2))
+
+        print *, 'frclim1', frclims(1)
+        print *, 'frclim2', frclims(2)
+
         ! (3) calculate critical FRC limits and corresponding low-pass limits for the nstages
         call calc_lpinfo(1, frclims(1))
         frc_stepsz = (frclims(1) - frclims(2)) / real(nstages - 1)
@@ -224,6 +232,9 @@ contains
         if( all(lpinfo(:)%l_lpset) )then
             ! nothing to do
         else
+
+            print *, 'reverting to linear scheme'
+
             ! revert to linear scheme
             lpinfo(1)%lp      = lpstart_default
             lpinfo(1)%l_lpset = .true.
@@ -240,7 +251,7 @@ contains
         ! (4) gather downscaling information
         call calc_scaleinfo(1)
         call calc_scaleinfo(nstages)
-        box_stepsz = nint(real(lpinfo(nstages)%box_crop - lpinfo(1)%box_crop)/real(nstages))
+        box_stepsz = nint(real(lpinfo(nstages)%box_crop - lpinfo(1)%box_crop)/real(nstages - 1))
         do istage = 2, nstages - 1 ! linear box_crop scheme
             box_trial                = lpinfo(istage-1)%box_crop + box_stepsz
             lpinfo(istage)%box_crop  = find_magic_box(box_trial)

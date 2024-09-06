@@ -301,6 +301,7 @@ type :: parameters
     integer :: nsearch=40          !< # search grid points{40}
     integer :: nspace=2500         !< # projection directions
     integer :: nspace_sub=500      !< # projection directions in subspace
+    integer :: nstages=8           !< # low-pass limit stages
     integer :: nstates=1           !< # states to reconstruct
     integer :: nsym=1
     integer :: nthr=1              !< # OpenMP threads{1}
@@ -751,6 +752,7 @@ contains
         call check_iarg('nsample_trs',    self%nsample_trs)
         call check_iarg('nspace',         self%nspace)
         call check_iarg('nspace_sub',     self%nspace_sub)
+        call check_iarg('nstages',        self%nstages)
         call check_iarg('nstates',        self%nstates)
         call check_iarg('class',          self%class)
         call check_iarg('nparts',         self%nparts)
