@@ -189,24 +189,21 @@ contains
         endif
     end subroutine get_resolution
 
-    subroutine lpstages( box, nstages, frcs_avg, smpd, lplims, lpstart_default, lpinfo, verbose )
+    subroutine lpstages( box, nstages, frcs_avg, smpd, lpstart_lb, lpstart_default, lpfinal, lpinfo, verbose )
         use simple_magic_boxes
         integer,           intent(in)  :: box, nstages
-        real,              intent(in)  :: frcs_avg(:), smpd, lplims(2), lpstart_default
+        real,              intent(in)  :: frcs_avg(:), smpd, lpstart_lb, lpstart_default, lpfinal
         type(lp_crop_inf), intent(out) :: lpinfo(nstages)
         logical, optional, intent(in)  :: verbose
-        real, parameter :: FRCLIMS_DEFAULT(2) = [0.8,0.143], LP2SMPD_TARGET = 1./3.
+        real, parameter :: FRCLIMS_DEFAULT(2) = [0.8,0.05], LP2SMPD_TARGET = 1./3.
         integer :: findlims(2), istage, box_stepsz, box_trial
         real    :: frclims(2), frc_stepsz, lp_max, lp_min, lp_stepsz
         logical :: l_verbose
-        ! lplims(1)       -> 10 A cap
-        ! lplims(2)       -> 6  A cap
-        ! lpstart_deafult -> 20 A
         l_verbose = .false.
         if( present(verbose) ) l_verbose = verbose
         ! (1) calculate FRC values at the inputted boundaries
-        findlims(1) = calc_fourier_index(lplims(1), box, smpd)
-        findlims(2) = calc_fourier_index(lplims(2), box, smpd)
+        findlims(1) = calc_fourier_index(lpstart_lb, box, smpd)
+        findlims(2) = calc_fourier_index(lpfinal,    box, smpd)
         ! -- letting the shape of the FRC influence the limit choice, if needed
 
         print *, 'frclim1', frcs_avg(findlims(1))
@@ -224,6 +221,8 @@ contains
         do istage = 2, nstages
             call calc_lpinfo(istage, lpinfo(istage-1)%frc_crit - frc_stepsz)
         end do
+        lpinfo(nstages)%lp      = lpfinal
+        lpinfo(nstages)%l_lpset = .true.
         if( l_verbose )then
             print *, '########## 1st pass'
             call print_lpinfo
@@ -239,7 +238,7 @@ contains
             lpinfo(1)%lp      = lpstart_default
             lpinfo(1)%l_lpset = .true.
             do istage = 2, nstages
-                lpinfo(istage)%lp      = lpinfo(istage-1)%lp - (lpinfo(istage-1)%lp - lplims(2)) / 2.
+                lpinfo(istage)%lp      = lpinfo(istage-1)%lp - (lpinfo(istage-1)%lp - lpfinal) / 2.
                 lpinfo(istage)%l_lpset = .true.
             end do
         endif
@@ -275,7 +274,7 @@ contains
                 if( all(frcs_avg > thres) ) return
                 if( any(frcs_avg > thres) )then           
                     find = get_find_at_corr(frcs_avg, thres)
-                    lpinfo(stage)%lp = max(lplims(2),calc_lowpass_lim(find, box, smpd))
+                    lpinfo(stage)%lp = max(lpfinal,calc_lowpass_lim(find, box, smpd))
                     lpinfo(stage)%l_lpset = .true.
                 endif
             end subroutine calc_lpinfo
