@@ -1216,12 +1216,13 @@ contains
         class(cmdline),                     intent(inout) :: cline
         type(builder)    :: build
         type(parameters) :: params
-        real, parameter :: LPLIMS(2) = [10.,6.], LPSTART_DEFAULT=20.
+        real, parameter :: LPSTART_LB=10., LPSTART_DEFAULT=20., LPSTOP_LB=6.
         character(len=:),  allocatable :: frcs_fname
         real,              allocatable :: frcs_avg(:)
         integer,           allocatable :: states(:)
         type(lp_crop_inf), allocatable :: lpinfo(:)
         integer :: filtsz
+        real    :: lpfinal
         call build%init_params_and_build_general_tbox(cline, params)
         call build%spproj%get_frcs(frcs_fname, 'frc2D', fail=.true.)
         call build%clsfrcs%read(frcs_fname)
@@ -1230,8 +1231,25 @@ contains
         allocate(frcs_avg(filtsz), source=0.)
         call build%clsfrcs%avg_frc_getter(frcs_avg, states)
         allocate(lpinfo(params%nstages))
-        call lpstages(params%box, params%nstages, frcs_avg, params%smpd, LPLIMS, LPSTART_DEFAULT, lpinfo, verbose=.true. )
+        lpfinal = max(LPSTOP_LB,calc_lplim_final_stage(3))
+        call lpstages(params%box, params%nstages, frcs_avg, params%smpd, LPSTART_LB, LPSTART_DEFAULT, lpfinal, lpinfo, verbose=.true. )
         call simple_end('**** SIMPLE_ESTIMATE_LPSTAGES NORMAL STOP ****')
-    end subroutine exec_estimate_lpstages
+
+        contains
+
+            function calc_lplim_final_stage( nbest ) result( lplim )
+                integer, intent(in)  :: nbest
+                real,    allocatable :: res(:), tmp_rarr(:)
+                integer, allocatable :: states(:), tmp_iarr(:)
+                real :: lplim
+                tmp_rarr  = build%spproj%os_cls2D%get_all('res')
+                tmp_iarr  = nint(build%spproj%os_cls2D%get_all('state'))
+                res       = pack(tmp_rarr, mask=(tmp_iarr>0))
+                call hpsort(res)
+                lplim = median_nocopy(res(:nbest))
+                deallocate(tmp_rarr, tmp_iarr, res)
+            end function calc_lplim_final_stage
+
+        end subroutine exec_estimate_lpstages
 
 end module simple_commander_resolest
