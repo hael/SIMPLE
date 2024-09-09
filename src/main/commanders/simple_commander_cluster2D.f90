@@ -2140,6 +2140,7 @@ contains
         use simple_classaverager, only: transform_ptcls
         use simple_pca,           only: pca
         use simple_pca_svd,       only: pca_svd
+        use simple_kpca_svd,      only: kpca_svd
         use simple_ppca_inmem,    only: ppca_inmem
         class(ppca_denoise_classes_commander), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
@@ -2156,7 +2157,7 @@ contains
         real,             allocatable :: avg(:), avg_pix(:), pcavecs(:,:), tmpvec(:)
         real             :: std
         integer          :: npix, i, j, ncls, nptcls, cnt1, cnt2
-        logical          :: l_phflip, l_transp_pca, l_pre_norm ! pixel-wise learning
+        logical          :: l_phflip, l_transp_pca, l_pre_norm, l_avg ! pixel-wise learning
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('neigs')   ) call cline%set('neigs',    4.0)
@@ -2211,11 +2212,15 @@ contains
         cnt1 = 0
         cnt2 = 0
         ! pca allocation
+        l_avg = .true.
         select case(trim(params_glob%pca_mode))
             case('ppca')
                 allocate(ppca_inmem :: pca_ptr)
             case('pca_svd')
                 allocate(pca_svd    :: pca_ptr)
+            case('kpca')
+                allocate(kpca_svd   :: pca_ptr)
+                l_avg = .false. ! kpca do averaging internally in the kernel
         end select
         do i = 1, ncls
             call progress_gfortran(i,ncls)
@@ -2233,9 +2238,9 @@ contains
             call cavg%write(fname_cavgs, i)
             ! performs ppca
             if( trim(params%projstats).eq.'yes' )then
-                call make_pcavecs(imgs, npix, avg, pcavecs, transp=l_transp_pca, avg_pix=avg_pix)
+                call make_pcavecs(imgs, npix, avg, pcavecs, transp=l_transp_pca, avg_pix=avg_pix, do_avg=l_avg)
             else
-                call make_pcavecs(imgs, npix, avg, pcavecs, transp=l_transp_pca)
+                call make_pcavecs(imgs, npix, avg, pcavecs, transp=l_transp_pca, do_avg=l_avg)
             endif
             if( allocated(tmpvec) ) deallocate(tmpvec)
             if( l_transp_pca )then
