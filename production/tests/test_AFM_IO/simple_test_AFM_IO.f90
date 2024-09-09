@@ -78,12 +78,14 @@ type(parameters), target    :: params
 integer, allocatable     :: pick_pos(:, :)
 logical     :: outside = .true. 
 integer     :: neighbors(3,8), nsz, px(3) = [78, 93, 1], test_coord(2), box_ldim(3)
-!
+
 params_glob => params
 params_glob%pcontrast = 'black'
 params_glob%lp        = 10.
 params_glob%nsig      = 1.5
-call read_ibw('/Users/atifao/Downloads/IBW/Cob_450016.ibw', Cob16)
+
+call cpu_time(start)
+call read_ibw('/Users/atifao/Downloads/IBW/Cob_450014.ibw', Cob16)
 call zero_padding(Cob16)
 call get_AFM(Cob16, 'HeightTrace', HeightTrace)
 HeightRetrace = Cob16%img_array(findloc(index(Cob16%img_names, 'HeightRetrace'),1, dim = 1))
@@ -93,72 +95,8 @@ call Height_Avg%copy(HeightTrace)
 call align_avg(Cob16)
 Height_Avg = Cob16%img_array(1)
 call pick_valid(Height_Avg, HeightTrace, HeightRetrace)
-
-! call Height_Avg%write('/Users/atifao/16_avg.mrc')
-! call pickseg_avg%pick('/Users/atifao/16_avg.mrc')
-! call pickseg_avg%get_positions(pick_pos)
-! do i = 1, pickseg_avg%get_nboxes()
-!     print *, i,'th position', pick_pos(i, :)
-! end do 
-! test_coord = pick_pos(7, :)
-! box_ldim = [pickseg_avg%box_raw, pickseg_avg%box_raw, 1]
-! box_smpd = HeightTrace%get_smpd()
-
-! call Height_Avg%norm_minmax()
-! call HeightTrace%norm_minmax()
-
-! call pickseg_avg_win%new(box_ldim, box_smpd)
-! call pickseg_t_win%new(box_ldim, box_smpd)
-! call Height_Avg%window_slim(test_coord, pickseg_avg%box_raw, pickseg_avg_win, outside)
-
-! test_coord = [3, 46]
-! call HeightTrace%window_slim(test_coord, pickseg_avg%box_raw, pickseg_t_win, outside)
-
-! print *, pickseg_avg_win%real_corr(pickseg_t_win) 
-! call Height_Avg%vis()
-! call Trace_Copy%vis()
-! call softmin_avg(Trace_Copy, HeightRetrace)
-! call Height_Avg%vis()
-
-! call init_picker(micfname = '/Users/atifao/Downloads/MRC_Inv/16_out.mrc', pickrefs = pickrefs, smpd_in = 2.5)
-! call Retrace_Copy%vis()
-! do i = 1, Trace_Copy%get_ldim(1)
-!     do j = 1, Trace_Copy%ldim(2)
-!         -beta**(-1)*(exp(-beta*x) + exp(-beta*y)) + log(2)
-!     end do 
-! end do 
-
-! shvec(3) = 1
-! do iterx = 9.38, 10.09, 0.01
-!     do itery = -1.09, -0.61, 0.01
-!         shvec(1) = iterx
-!         shvec(2) = itery
-!         a = HeightTrace%corr_shifted(HeightRetrace, shvec)
-!         print *, iterx, itery, a
-!     end do 
-
-! call neigh_8_1(Height_Avg%get_ldim(), px, neighbors, nsz)
-! print *, neighbors 
-! call HeightTrace%write('/Users/atifao/16_t.mrc')
-! call pickseg_t%pick('/Users/atifao/16_t.mrc')
-! ! print *, 'trace', pickseg_t%get_nboxes()
-! call pickseg_t%get_positions(pick_pos)
-! do i = 1, pickseg_t%get_nboxes()
-!     print *, i,'th position', pick_pos(i, :)
-! end do 
-
-
-
-! call HeightTrace%window_slim(position, box_num, slim_out, outside)
-
-! call HeightRetrace%write('/Users/atifao/16_r.mrc')
-! call pickseg_r%pick('/Users/atifao/16_r.mrc')
-! call pickseg_r%get_positions(pick_pos)
-! do i = 1, pickseg_r%get_nboxes()
-!     print *, i,'th position', pick_pos(i, :)
-! end do 
-
-! call align_avg(Cob16)
+call cpu_time(finish)
+print *, finish - start 
 
 contains 
     subroutine read_ibw(fn_in, AFM)
@@ -229,14 +167,7 @@ contains
         end do 
     end subroutine zero_padding 
   
-    subroutine destriping(AFM)
-        type(AFM_image), intent(inout)  :: AFM 
-    end subroutine destriping
-
-    subroutine matrix_log(rmat, rmat_eigvl, rmat_eigvc)
-        real, allocatable   :: rmat(:, :), rmat_eigvl(:, :), rmat_eigvc(:, :)
-    end subroutine matrix_log
-
+    ! rewrite this to make copies initially and expand AFM stack by length/2 
     ! alignment subroutine for all measurements.
     subroutine align_avg(Align_AFM)
         type(AFM_image), intent(inout)     :: Align_AFM
@@ -258,7 +189,7 @@ contains
         do avg_ind = 1, num_avg 
             call Align_AFM%img_array(2*avg_ind)%fft()
             ! not sure if negative or positive shift... 
-            call Align_AFM%img_array(2*avg_ind)%shift([-shifts(1, avg_ind), -shifts(2, avg_ind), 0.])
+            call Align_AFM%img_array(2*avg_ind)%shift([shifts(1, avg_ind), shifts(2, avg_ind), 0.])
             call Align_AFM%img_array(2*avg_ind)%ifft()
         end do
         do avg_ind = 2, size(Align_AFM%img_array), 2
@@ -306,14 +237,20 @@ contains
         type(image), intent(inout)  :: avg, trace, retrace 
         type(pickseg)               :: avg_p, trace_p, retrace_p
         type(image)                 :: avg_slim, trace_slim, retrace_slim 
-        integer                     :: ldim_box(3), box_iter, search_iter, neighbor_iter
+        integer                     :: ldim_box(3), box_iter, search_iter, neighbor_iter, box_count
         real                        :: smpd_box, neighbor_corr(8), coord_corr(3,8), max_corr(20)
         CHARACTER(len=255)          :: cwd
-        integer, allocatable        :: pickpos(:, :), val_centers(:, :)          
+        integer, allocatable        :: pickpos(:, :), val_centers(:, :)   
         integer                     :: coord_test(2), center_x(20), center_y(20)
         logical                     :: outs = .true. 
         integer                     :: neighbor(3, 8), nsiz, center(3)
         real                        :: corr_r, corr_t
+        real, allocatable           :: corr_final(:)   
+     
+
+        call avg%norm_minmax()
+        call trace%norm_minmax()
+        call retrace%norm_minmax()
 
         call getcwd(cwd)
         call avg%write(trim(cwd) // 'avg.mrc')
@@ -323,9 +260,6 @@ contains
         call retrace%write(trim(cwd) // 'retrace.mrc')
         call retrace_p%pick(trim(cwd) // 'retrace.mrc')
 
-        call avg%norm_minmax()
-        call trace%norm_minmax()
-        call retrace%norm_minmax()
 
         ldim_box = [avg_p%box_raw, avg_p%box_raw, 1]
         smpd_box    = avg%get_smpd()
@@ -342,9 +276,11 @@ contains
         ! do i = 1, retrace_p%get_nboxes()
         !     print *, i,'th position', pick_pos(i, :)
         ! end do 
-
+        box_count = 0 
+        allocate(corr_final(avg_p%get_nboxes()))
+        allocate(val_centers(3, avg_p%get_nboxes()))
         call avg_p%get_positions(pickpos) 
-        do box_iter = 1, avg_p%get_nboxes()
+        do box_iter = 1, avg_p%get_nboxes() 
             print *, 'box: ', box_iter 
             coord_test = pickpos(box_iter, :)
             call avg%window_slim(coord_test, avg_p%box_raw, avg_slim, outs)
@@ -361,7 +297,8 @@ contains
                 print *, 'box is outside the image'
                 cycle
             end if 
-
+            ! store coordinates found with nn and visualize each pick side by side avg and trace/retrace. 
+            box_count = box_count + 1
             do search_iter = 2, 21
                 call neigh_8_1(avg%get_ldim(), center, neighbor, nsiz)
                 do neighbor_iter = 1, nsiz
@@ -370,39 +307,27 @@ contains
                     neighbor_corr(neighbor_iter) = avg_slim%real_corr(trace_slim)
                 end do 
                 center = [ int(coord_corr(1, maxloc(neighbor_corr))), int(coord_corr(2, maxloc(neighbor_corr))), 1 ] 
+                ! print *, center 
                 max_corr(search_iter) = maxval(neighbor_corr)
                 if(search_iter > 2 .and. max_corr(search_iter - 1) < max_corr(search_iter)) then 
-                    print *, center, max_corr(search_iter)
+                    print *, center
+                    val_centers(:, box_iter) = center 
+                    corr_final(box_iter) = max_corr(search_iter)
                     exit
                 end if 
             end do 
-        ! find centers in avg based on trace and then retrace, and then compute some validation score 
         end do 
+        do box_iter = 26, 26 
+            call avg%window_slim(pickpos(box_iter, :), avg_p%box_raw, avg_slim, outs)
+            call avg_slim%vis()
+            call trace%window_slim(val_centers(:2, box_iter), avg_p%box_raw, trace_slim, outs)
+            call trace_slim%vis()
+        end do
+        ! print *, sum(corr_final)/box_count
+        ! print *, val_centers
+        ! the avg is much closer to the retrace... 
     end subroutine pick_valid 
-    ! subroutine write_pick_mrcs(pickseg_inp, ref_img)
-    !         type(pickseg), intent(in)   :: pickseg_inp
-    !         type(image), intent(in)     :: ref_img
-    !         integer                     :: positions(2)
-    !         do i = 1, pickseg_inp%get_nboxes
-    !             print *, pickseg_inp%get_positions(i)
-    !         end do 
-    !  end subroutine write_pick_mrcs
-    
-    ! print *,  img_array(1)%get_smpd()
-    ! print *, AFM%img_array(1)%get_ldim()
-    ! print *, waveheader%nDim(3)
-    ! print *, size(Rank3_Data_4byte, dim=1), size(Rank3_Data_4byte, dim=2), size(Rank3_Data_4byte, dim=3)
-    ! call AFM%img_array(1)%set_rmat(Rank3_Data_4byte(:, :, 1, :), .false.)
-    ! do img_ind = 1, 8
-    !     print *, AFM%img_array(1)%real_corr(AFM%img_array(img_ind))
-    ! end do     
-    ! print *, AFM%img_array(1)%real_corr(AFM%img_array(1))
-    ! print *, img_array(1)%get_rmat()
-    ! call img_array(3)%vis()
-    ! call AFM%img_array(findloc(index(AFM%img_names, 'HeightTrace'),1, dim = 1))%vis()
-    ! call AFM%img_array(findloc(index(AFM%img_names, 'HeightRetrace'),1, dim = 1))%vis()
-    ! HeightTrace = AFM%img_array(findloc(index(AFM%img_names, 'HeightTrace'),1, dim = 1))
-    ! call otsu_img(HeightTrace, positive = .false.)
+
     ! select case (waveheader1%type)
     ! case (2) 
     !     real_type1 = 4
@@ -414,19 +339,4 @@ contains
     !     stop
     ! end select
     ! real(kind = 8), allocatable          :: Rank3_Data_8byte(:, :, :, :)
-    ! search_iter = 1
-    ! do while(max_corr(search_iter) > max_corr(search_iter + 1) .and. search_iter < 20 )
-    !     search_iter = search_iter + 1
-    !     call neigh_8_1(avg%get_ldim(), [center_x(search_iter), center_y(search_iter), 1], neighbor, nsiz)
-    !     do neighbor_iter = 1, nsiz
-    !         call retrace%window_slim([neighbor(1, neighbor_iter), neighbor(2, neighbor_iter)], avg_p%box_raw, trace_slim, outs)
-    !         coord_corr(:, neighbor_iter) = [real(neighbor(1, neighbor_iter)), real(neighbor(2, neighbor_iter)), avg_slim%real_corr(trace_slim)]
-    !         neighbor_corr(neighbor_iter) = avg_slim%real_corr(trace_slim)
-    !     end do 
-    !     ! center = [ int(coord_corr(1, maxloc(neighbor_corr))), int(coord_corr(2, maxloc(neighbor_corr))), 1 ]
-    !     center_x(search_iter) = int( coord_corr(1, maxloc(neighbor_corr, 1)))
-    !     center_y(search_iter) = int( coord_corr(2, maxloc(neighbor_corr, 1)))
-    !     max_corr(search_iter) = maxval(neighbor_corr)
-    !     print *, center_x(search_iter), center_y(search_iter), maxval(neighbor_corr)
-    ! end do 
 end program AFM_File_IO
