@@ -163,7 +163,7 @@ contains
         real, allocatable     :: resarr(:), fsc_arr(:)
         real                  :: fsc0143, fsc05
         real                  :: mapres(params_glob%nstates)
-        integer               :: s, loc(1), lp_ind
+        integer               :: s, loc(1), lp_ind, arr_sz, fsc_sz
         character(len=STDLEN) :: fsc_fname
         logical               :: fsc_bin_exists(params_glob%nstates), all_fsc_bin_exist
         if( params_glob%l_lpset )then
@@ -178,7 +178,18 @@ contains
                 fsc_fname = trim(FSC_FBODY)//int2str_pad(s,2)//BIN_EXT
                 if( file_exists(fsc_fname) )then
                     fsc_arr = file2rarr(trim(adjustl(fsc_fname)))
-                    build_glob%fsc(s,:) = fsc_arr(:)
+                    fsc_sz  = size(build_glob%fsc(s,:))
+                    arr_sz  = size(fsc_arr)
+                    if( fsc_sz == arr_sz )then
+                        build_glob%fsc(s,:) = fsc_arr(:)
+                    else if( fsc_sz > arr_sz )then
+                        ! padding
+                        build_glob%fsc(s,:arr_sz)   = fsc_arr(:)
+                        build_glob%fsc(s,arr_sz+1:) = 0.
+                    else
+                        ! clipping
+                        build_glob%fsc(s,:fsc_sz)   = fsc_arr(:fsc_sz)
+                    endif
                     deallocate(fsc_arr)
                 endif
             enddo
@@ -201,7 +212,18 @@ contains
                     if( fsc_bin_exists(s) )then
                         fsc_fname = trim(FSC_FBODY)//int2str_pad(s,2)//BIN_EXT
                         fsc_arr = file2rarr(trim(adjustl(fsc_fname)))
-                        build_glob%fsc(s,:) = fsc_arr(:)
+                        fsc_sz  = size(build_glob%fsc(s,:))
+                        arr_sz  = size(fsc_arr)
+                        if( fsc_sz == arr_sz )then
+                            build_glob%fsc(s,:) = fsc_arr(:)
+                        else if( fsc_sz > arr_sz )then
+                            ! padding
+                            build_glob%fsc(s,:arr_sz)   = fsc_arr(:)
+                            build_glob%fsc(s,arr_sz+1:) = 0.
+                        else
+                            ! clipping
+                            build_glob%fsc(s,:fsc_sz)   = fsc_arr(:fsc_sz)
+                        endif
                         deallocate(fsc_arr)
                         call get_resolution(build_glob%fsc(s,:), resarr, fsc05, fsc0143)
                         mapres(s) = fsc0143

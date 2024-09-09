@@ -7782,6 +7782,7 @@ contains
                 call self%fft
                 call self%clip_inplace([box_crop,box_crop,box_crop])
                 call self%ifft
+                call self%set_smpd(smpd_crop) ! safety
                 if( l_mask )then
                     where( self%rmat < TINY ) self%rmat = 0.0
                     where( self%rmat > 1.0 )  self%rmat = 1.0
@@ -7790,6 +7791,18 @@ contains
                 ! read
                 call self%new([box_crop,box_crop,box_crop],smpd_crop)
                 call self%read(volfname)
+            elseif( all(ldim < box_crop) )then
+                ! read & pad
+                call self%new(ldim, smpd_here)
+                call self%read(volfname)
+                call self%fft
+                call self%pad_inplace([box_crop,box_crop,box_crop], antialiasing=.false.)
+                call self%ifft
+                call self%set_smpd(smpd_crop) ! safety
+                if( l_mask )then
+                    where( self%rmat < TINY ) self%rmat = 0.0
+                    where( self%rmat > 1.0 )  self%rmat = 1.0
+                endif
             else
                 THROW_HARD('Erroneous volume dimensions 2; read_and_crop')
             endif
