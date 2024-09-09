@@ -12,7 +12,7 @@ use simple_neighs
 !AFM IO
 type :: AFM_image
     type(image), allocatable :: img_array(:)
-    character(len = 20), allocatable :: img_names(:)
+    character(len = 50), allocatable :: img_names(:)
 end type AFM_image 
 
 type    :: bin_header5
@@ -62,7 +62,7 @@ type    :: wave_header5
     CHARACTER(KIND=4)  :: fileName
     INTEGER(KIND=4)    :: sIndices 
 end type
-type(AFM_image) ::  Cob16
+type(AFM_image) ::  Cob16, Cob16_avg
 type(image)     ::  HeightTrace, Height_Avg
 type(image)     ::  HeightRetrace, Retrace_Copy
 type(image)     ::  slim_out, pickseg_t_win, pickseg_r_win, pickseg_avg_win
@@ -85,16 +85,18 @@ params_glob%lp        = 10.
 params_glob%nsig      = 1.5
 
 call cpu_time(start)
-call read_ibw('/Users/atifao/Downloads/IBW/Cob_450014.ibw', Cob16)
+call read_ibw('/Users/atifao/Downloads/IBW/Cob_450016.ibw', Cob16)
 call zero_padding(Cob16)
 call get_AFM(Cob16, 'HeightTrace', HeightTrace)
 HeightRetrace = Cob16%img_array(findloc(index(Cob16%img_names, 'HeightRetrace'),1, dim = 1))
 
 call get_AFM(Cob16, 'HeightTrace', HeightTrace)
 call Height_Avg%copy(HeightTrace)
-call align_avg(Cob16)
-Height_Avg = Cob16%img_array(1)
-call pick_valid(Height_Avg, HeightTrace, HeightRetrace)
+Height_Avg = HeightTrace * 0.5 + HeightRetrace * 0.5 
+
+call align_avg(Cob16, Cob16_avg)
+! Height_Avg = Cob16%img_array(1)
+! call pick_valid(Height_Avg, HeightTrace, HeightRetrace)
 call cpu_time(finish)
 print *, finish - start 
 
@@ -169,32 +171,60 @@ contains
   
     ! rewrite this to make copies initially and expand AFM stack by length/2 
     ! alignment subroutine for all measurements.
-    subroutine align_avg(Align_AFM)
-        type(AFM_image), intent(inout)     :: Align_AFM
+    subroutine align_avg(AFM_in, Align_AFM)
+        type(AFM_image), intent(in)     :: AFM_in 
+        type(AFM_image), intent(out)    :: Align_AFM
         real, allocatable                  :: shifts(:, :)
-        integer                            :: num_avg, avg_ind, prop_ind
-        ! increase size of align afm. 1st entry should be avg then trace, retrace. need to copy trace.
-        ! should adjust the vector of strings as well.
-        num_avg = size(Align_AFM%img_array) / 2
+        integer                            :: num_avg, avg_ind, prop_ind, new_size, count, num_mic, tr_ind, retr_ind
+        character(len = 50)                :: new_name 
+        num_mic = size(AFM_in%img_array)
+        new_size = int(num_mic*1.5)
+        allocate(Align_AFM%img_array(new_size))
+        allocate(Align_AFM%img_names(new_size))
+        num_avg = num_mic/2
         allocate(shifts(2, num_avg))
         if(modulo(size(shifts), 2) /= 0) then 
             print *, 'One or more traces are not present'
         end if 
+        do i = 1, num_mic
+            Align_AFM%img_array(i) = AFM_in%img_array(i)
+            Align_AFM%img_names(i) = AFM_in%img_names(i)
+        end do 
+        count = 0
+        do i = num_mic + 1, new_size
+            Align_AFM%img_array(i) = AFM_in%img_array(i - num_mic + count)
+            count = count + 1
+        end do 
+    
         do avg_ind = 1, size(Align_AFM%img_array)
             call Align_AFM%img_array(avg_ind)%fft()
         end do
-        do avg_ind = 2, size(Align_AFM%img_array), 2
-            call Align_AFM%img_array(avg_ind - 1)%fcorr_shift(Align_AFM%img_array(avg_ind), 20., shifts(:, avg_ind / 2), .true.)
+
+        count = 0
+        do avg_ind = num_mic + 1, new_size
+            count = count + 1
+            call Align_AFM%img_array(avg_ind)%fcorr_shift(Align_AFM%img_array(avg_ind - num_mic + count), 20., shifts(:, count), .true.)
         end do 
-        do avg_ind = 1, num_avg 
+        print *, shifts 
+        do avg_ind = 1, num_avg
             call Align_AFM%img_array(2*avg_ind)%fft()
-            ! not sure if negative or positive shift... 
             call Align_AFM%img_array(2*avg_ind)%shift([shifts(1, avg_ind), shifts(2, avg_ind), 0.])
             call Align_AFM%img_array(2*avg_ind)%ifft()
         end do
-        do avg_ind = 2, size(Align_AFM%img_array), 2
-           Align_AFM%img_array(avg_ind - 1) =  Align_AFM%img_array(avg_ind) * 0.5 + Align_AFM%img_array(avg_ind - 1) * 0.5
-        !    call Align_AFM%img_array(avg_ind - 1)%vis()
+        
+        do avg_ind = 1, new_size 
+            if(Align_AFM%img_array(avg_ind)%is_ft()) then
+                call Align_AFM%img_array(avg_ind)%ifft()
+            end if    
+        end do 
+        count = 0 
+        do avg_ind = num_mic + 1, new_size 
+           tr_ind = avg_ind - num_mic + count
+           retr_ind = avg_ind - num_mic + 1 + count
+           Align_AFM%img_array(avg_ind) =  Align_AFM%img_array(tr_ind) * 0.5 + Align_AFM%img_array(retr_ind) * 0.5
+           new_name = AFM_in%img_names(tr_ind)
+           Align_AFM%img_names(avg_ind) = 'avg' // new_name(1:len_trim(new_name)  - 5)
+           count = count + 1
         end do 
     end subroutine align_avg
 
@@ -266,16 +296,7 @@ contains
         call avg_slim%new(ldim_box, smpd_box )
         call trace_slim%new(ldim_box, smpd_box)
         call retrace_slim%new(ldim_box, smpd_box)
-    
-        ! call trace_p%get_positions(pick_pos)
-        ! do i = 1, trace_p%get_nboxes()
-        !     print *, i,'th position', pick_pos(i, :)
-        ! end do 
 
-        ! call retrace_p%get_positions(pick_pos)
-        ! do i = 1, retrace_p%get_nboxes()
-        !     print *, i,'th position', pick_pos(i, :)
-        ! end do 
         box_count = 0 
         allocate(corr_final(avg_p%get_nboxes()))
         allocate(val_centers(3, avg_p%get_nboxes()))
@@ -297,7 +318,7 @@ contains
                 print *, 'box is outside the image'
                 cycle
             end if 
-            ! store coordinates found with nn and visualize each pick side by side avg and trace/retrace. 
+
             box_count = box_count + 1
             do search_iter = 2, 21
                 call neigh_8_1(avg%get_ldim(), center, neighbor, nsiz)
@@ -310,33 +331,20 @@ contains
                 ! print *, center 
                 max_corr(search_iter) = maxval(neighbor_corr)
                 if(search_iter > 2 .and. max_corr(search_iter - 1) < max_corr(search_iter)) then 
-                    print *, center
+                    print *, center, max_corr(search_iter)
                     val_centers(:, box_iter) = center 
                     corr_final(box_iter) = max_corr(search_iter)
                     exit
                 end if 
             end do 
         end do 
-        do box_iter = 26, 26 
+        do box_iter = 38, 38 
             call avg%window_slim(pickpos(box_iter, :), avg_p%box_raw, avg_slim, outs)
             call avg_slim%vis()
-            call trace%window_slim(val_centers(:2, box_iter), avg_p%box_raw, trace_slim, outs)
-            call trace_slim%vis()
+            call retrace%window_slim(val_centers(:2, box_iter), avg_p%box_raw, retrace_slim, outs)
+            call retrace_slim%vis()
         end do
         ! print *, sum(corr_final)/box_count
         ! print *, val_centers
-        ! the avg is much closer to the retrace... 
-    end subroutine pick_valid 
-
-    ! select case (waveheader1%type)
-    ! case (2) 
-    !     real_type1 = 4
-    ! case (4)
-    !     real_type1 = 8
-    !     Rank3_Data_8byte = dble(Rank3_Data_4byte) 
-    ! case default
-    !     print *, "Error: only float data is currently supported"
-    !     stop
-    ! end select
-    ! real(kind = 8), allocatable          :: Rank3_Data_8byte(:, :, :, :)
+    end subroutine pick_valid
 end program AFM_File_IO
