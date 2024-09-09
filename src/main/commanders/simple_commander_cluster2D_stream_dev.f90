@@ -1409,9 +1409,9 @@ contains
         character(len=LONGSTRLEN) :: cwd
         integer                   :: iter_loc
         call simple_getcwd(cwd)
-        if(file_exists(trim(adjustl(cwd)) // '/clusters2D_iter' // int2str_pad(pool_iter,3) // '.star')) then
+        if(file_exists(trim(adjustl(cwd))//'/'//trim(CLS2D_STARFBODY)//'_iter'//int2str_pad(pool_iter,3)//'.star')) then
             iter_loc = pool_iter
-        else if(file_exists(trim(adjustl(cwd)) // '/clusters2D_iter' // int2str_pad(pool_iter - 1,3) // '.star')) then
+        else if(file_exists(trim(adjustl(cwd))//'/'//trim(CLS2D_STARFBODY)//'_iter'//int2str_pad(pool_iter,3)//'.star')) then
             iter_loc = pool_iter - 1
         endif
         call pool_stats%init
@@ -2289,6 +2289,7 @@ contains
         call debug_print('end rescale_cavgs')
     end subroutine rescale_cavgs
 
+    ! Removes some unnecessary files
     subroutine tidy_2Dstream_iter( all )
         logical,           intent(in) :: all
         character(len=:), allocatable :: prefix
@@ -2302,6 +2303,8 @@ contains
                 call del_file(prefix//trim(WFILT_SUFFIX)//'_odd'//trim(params_glob%ext))
                 if( all ) call del_file(prefix//trim(WFILT_SUFFIX)//trim(params_glob%ext))
             endif
+            call del_file(trim(POOL_DIR)//trim(CLS2D_STARFBODY)//'_iter'//int2str_pad(pool_iter-3,3)//'.star')
+            call del_file(trim(POOL_DIR)//trim(sigma2_star_from_iter(pool_iter-3)))
         endif
     end subroutine tidy_2Dstream_iter
 

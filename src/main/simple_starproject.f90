@@ -677,9 +677,9 @@ contains
         real                              :: smpd
         if( L_VERBOSE_GLOB ) VERBOSE_OUTPUT = .true.
         if(present(iter)) then
-            self%starfile%filename ="clusters2D_iter"//int2str_pad(iter,3)//".star"
+            self%starfile%filename = trim(CLS2D_STARFBODY)//'_iter'//int2str_pad(iter,3)//'.star'
         else
-            self%starfile%filename = "clusters2D.star"
+            self%starfile%filename = trim(CLS2D_STARFBODY)//'.star'
         end if
         if( VERBOSE_OUTPUT )then
             write(logfhandle,*) ''
