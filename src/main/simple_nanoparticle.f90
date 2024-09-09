@@ -222,6 +222,7 @@ type :: nanoparticle
     procedure          :: identify_atomic_pos
     procedure, private :: binarize_and_find_centers
     procedure          :: find_centers
+    procedure          :: discard_atoms
     procedure, private :: discard_atoms_with_low_contact_score
     procedure, private :: discard_lowly_coordinated
     procedure, private :: discard_low_valid_corr_atoms
@@ -612,6 +613,7 @@ contains
         call self%validate_atoms(simatms)
         if ( WRITE_OUTPUT )call self%write_centers('valid_corr_in_bfac_field_pre_discard', 'valid_corr')
         ! discard atoms with low valid_corr
+        call self%discard_atoms(use_auto_corr_thres, cs_thres)
         call self%discard_low_valid_corr_atoms(use_auto_corr_thres, n_discard)
         ! discard lowly coordinated atoms
         fixed_cs_thres = present(cs_thres)
@@ -1228,6 +1230,82 @@ contains
             end subroutine remove_lowly_coordinated
 
     end subroutine discard_lowly_coordinated
+
+    ! analyzes valid correlation for low and high contact score atoms
+    ! can be used to determine which atoms to discard based on both metrics
+    subroutine discard_atoms(self, use_auto_corr_thres, cs_thres)
+        class(nanoparticle), intent(inout) :: self
+        logical,             intent(in)    :: use_auto_corr_thres
+        integer, optional,   intent(in)    :: cs_thres
+        real, allocatable  :: centers_A(:,:) ! coordinates of the atoms in ANGSTROMS
+        real, allocatable  :: centers_low_scores(:,:), centers_high_scores(:,:)
+        integer            :: cscores(self%n_cc), cthresh, icc, count_low_scores, count_high_scores, index_low, index_high
+        type(stats_struct) :: cscore_stats
+        centers_A = self%atominfo2centers_A()
+        call calc_contact_scores(self%element,centers_A,cscores)
+        call calc_stats(real(cscores), cscore_stats)
+        write(logfhandle,'(A)') '>>> CONTACT SCORE STATS BELOW'
+        write(logfhandle,'(A,F8.4)') 'Average: ', cscore_stats%avg
+        write(logfhandle,'(A,F8.4)') 'Median : ', cscore_stats%med
+        write(logfhandle,'(A,F8.4)') 'Sigma  : ', cscore_stats%sdev
+        write(logfhandle,'(A,F8.4)') 'Max    : ', cscore_stats%maxv
+        write(logfhandle,'(A,F8.4)') 'Min    : ', cscore_stats%minv
+        if( .not. present(cs_thres) )then
+            cthresh = min(5,max(3,nint(cscore_stats%avg - cscore_stats%sdev)))
+            write(logfhandle,'(A,I3)') 'CONTACT SCORE THRESHOLD: ', cthresh
+        else
+            cthresh = cs_thres
+        endif
+        count_low_scores  = size(pack(cscores, mask=cscores < cthresh))
+        count_high_scores = self%n_cc - count_low_scores
+        ! columns of centers_low_scores and centers_high_scores:
+        ! 1. index in centers_A, 2-4. x,y,z position in Angstroms, 5. contact score, 6. valid correlation score
+        allocate(centers_low_scores(count_low_scores,6), centers_high_scores(count_high_scores,6))
+        index_low  = 1
+        index_high = 1
+        do icc = 1, self%n_cc
+            if (cscores(icc) < cthresh) then
+                centers_low_scores(index_low, 1) = real(icc)
+                centers_low_scores(index_low, 2) = centers_A(1, icc)
+                centers_low_scores(index_low, 3) = centers_A(2, icc)
+                centers_low_scores(index_low, 4) = centers_A(3, icc)
+                centers_low_scores(index_low, 5) = real(cscores(icc))
+                centers_low_scores(index_low, 6) = self%atominfo(icc)%valid_corr
+                index_low = index_low + 1
+            else 
+                centers_high_scores(index_high, 1) = real(icc)
+                centers_high_scores(index_high, 2) = centers_A(1, icc)
+                centers_high_scores(index_high, 3) = centers_A(2, icc)
+                centers_high_scores(index_high, 4) = centers_A(3, icc)
+                centers_high_scores(index_high, 5) = real(cscores(icc))
+                centers_high_scores(index_high, 6) = self%atominfo(icc)%valid_corr
+                index_high = index_high + 1
+            end if
+        end do
+        ! export distributions
+        call write_csv(centers_low_scores,  'low_contact_scores_stats.csv' )
+        call write_csv(centers_high_scores, 'high_contact_scores_stats.csv')
+        deallocate(centers_low_scores,centers_high_scores,centers_A)
+
+        contains 
+
+            subroutine write_csv(centers_array, filename)
+                real,             intent(in) :: centers_array(:,:)
+                character(len=*), intent(in) :: filename
+                integer :: num_rows, num_cols, irow, icol
+                num_rows = size(centers_array, dim=1)
+                num_cols = size(centers_array, dim=2)
+                open(15, file=trim(filename), status='replace')
+                do irow = 1, num_rows
+                    do icol = 1, num_cols
+                        write(15, '(f8.4,a)', advance='no') centers_array(irow,icol), ','
+                    end do
+                    write(15, '(f8.4,a)', advance='yes')
+                end do
+                close(15)
+            end subroutine write_csv
+            
+    end subroutine discard_atoms
 
     ! calc stats
     subroutine fillin_atominfo( self, a0, imat )
