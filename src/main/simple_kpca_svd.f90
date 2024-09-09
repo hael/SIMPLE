@@ -87,18 +87,17 @@ contains
         real,              intent(in)    :: pcavecs(self%D,self%N)
         integer, optional, intent(in)    :: maxpcaits ! redundant
         real, parameter   :: C_CONST = 0.6, TOL = 0.0001, MAX_ITS = 100
-        real    :: mat(self%N,self%D), alpha(self%N,self%Q), ker(self%N,self%N), beta(self%N,self%Q), gamma_t(self%N,self%N)
+        real    :: mat(self%N,self%D), alpha(self%N,self%Q), ker(self%N,self%N), gamma_t(self%N,self%N)
         real    :: prev_data(self%D), cur_data(self%D), coeffs(self%N), s
         integer :: i, ind, iter
         mat = transpose(pcavecs)
-        call self%rbf_kernel(mat, C_CONST, ker)
+        call self%rbf_kernel(pcavecs, C_CONST, ker)
         call self%compute_alpha(ker, alpha)
-        beta    = matmul(ker, alpha)
-        gamma_t = matmul(beta, transpose(alpha))
+        gamma_t = matmul(matmul(ker, alpha), transpose(alpha))
         ! pre-imaging iterations
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,cur_data,prev_data,iter,i,coeffs,s)
         do ind = 1, self%N
-            cur_data  = mat(ind,:)
+            cur_data  = pcavecs(:,ind)
             prev_data = 0.
             iter      = 1
             do while( euclid(cur_data,prev_data) > TOL .and. iter < MAX_ITS )
@@ -132,14 +131,14 @@ contains
 
     subroutine rbf_kernel_1( self, mat, c, ker )
         class(kpca_svd), intent(inout) :: self
-        real,            intent(in)    :: mat(self%N,self%D)
+        real,            intent(in)    :: mat(self%D,self%N)
         real,            intent(in)    :: c
         real,            intent(out)   :: ker(self%N,self%N)
         integer :: i, j
         ! squared euclidean distance between pairs of rows
         do i = 1,self%N
             do j = 1,self%N
-                ker(i,j) = euclid(mat(i,:), mat(j,:))**2
+                ker(i,j) = euclid(mat(:,i), mat(:,j))**2
             enddo
         enddo
         ! normalization and centering
@@ -150,8 +149,8 @@ contains
     ! rbf kernel from the previous kernel
     subroutine rbf_kernel_2( self, mat_test, mat_train, c, ker_train, ker )
         class(kpca_svd), intent(inout) :: self
-        real,            intent(in)    :: mat_test( self%N,self%D)
-        real,            intent(in)    :: mat_train(self%N,self%D)
+        real,            intent(in)    :: mat_test( self%D,self%N)
+        real,            intent(in)    :: mat_train(self%D,self%N)
         real,            intent(in)    :: c
         real,            intent(in)    :: ker_train(self%N,self%N)
         real,            intent(out)   :: ker(self%N,self%N)
@@ -159,7 +158,7 @@ contains
         ! squared euclidean distance between pairs of rows
         do i = 1,self%N
             do j = 1,self%N
-                ker(i,j) = euclid(mat_test(i,:), mat_train(j,:))**2
+                ker(i,j) = euclid(mat_test(:,i), mat_train(:,j))**2
             enddo
         enddo
         ! normalization and centering
