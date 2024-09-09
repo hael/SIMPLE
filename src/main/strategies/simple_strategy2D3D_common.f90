@@ -807,7 +807,7 @@ contains
         type(ori)       :: orientation
         real            :: shift(2), e3, sdev_noise, w
         integer         :: batchlims(2), iptcl, i,j, i_batch, ibatch, iproj, eo, peo, ithr, pproj
-        logical         :: DEBUG = .false.
+        logical         :: DEBUG    = .false.
         integer(timer_int_kind) :: t
         real(timer_int_kind)    :: t_ini, t_pad, t_sum, t_rec
         t = tic()
@@ -899,20 +899,6 @@ contains
                 enddo
             enddo
             !$omp end parallel do
-            ! SLOW
-            ! ! particles summation
-            ! do i = batchlims(1),batchlims(2)
-            !     iptcl  = pinds(i)
-            !     ibatch = i - batchlims(1) + 1
-            !     iproj  = nint(build_glob%spproj_field%get(iptcl, 'proj'))
-            !     eo     = build_glob%spproj_field%get_eo(iptcl)+1
-            !     w      = build_glob%spproj_field%get(iptcl, 'w')
-            !     if( w < TINY ) cycle
-            !     !$omp parallel workshare
-            !     projdirs(iproj,eo)%cmplx_plane = projdirs(iproj,eo)%cmplx_plane + w * fpls(ibatch)%cmplx_plane
-            !     projdirs(iproj,eo)%ctfsq_plane = projdirs(iproj,eo)%ctfsq_plane + w * fpls(ibatch)%ctfsq_plane
-            !     !$omp end parallel workshare
-            ! end do
             t_sum = t_sum + toc(t)
         end do
         ! some cleanup
@@ -929,7 +915,6 @@ contains
             call build_glob%eulspace%get_ori(iproj, orientation)
             call orientation%set('state',1.)
             call orientation%set('w',    1.)
-            call orientation%set('e3',   0.)
             if( eopops(iproj,1) > 0 )then
                 call orientation%set('eo',0.)
                 call grid_ptcl(projdirs(iproj,1), build_glob%pgrpsyms, orientation)
@@ -940,9 +925,8 @@ contains
             endif
         end do
         t_rec = toc(t)
-        if( DEBUG ) print *,'timing: ',t_ini, t_pad, t_sum, t_rec
-        ! debug
         if( DEBUG )then
+            print *,'timing: ',t_ini, t_pad, t_sum, t_rec
             call build_glob%eulspace%write('reforis.txt')
             call build_glob%spproj_field%write('oris.txt')
             call instrimg%write('instrumentfunction.mrc')

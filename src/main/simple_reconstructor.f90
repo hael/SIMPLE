@@ -267,6 +267,7 @@ contains
             ! the input slice is not padded
             fpllims = fpl%frlims_crop
             fplnyq  = fpl%nyq_crop
+            rotmats = self%alpha * rotmats ! scale & rotation
         endif
         if( self%linear_interp )then
             !$omp parallel default(shared) proc_bind(close)&
@@ -337,13 +338,7 @@ contains
                         sh = nint(sqrt(real(h*h + k*k)))
                         if( sh > fplnyq ) cycle
                         ! non-uniform sampling location
-                        if( fpl%padded )then
-                            ! already padded
-                            loc = matmul(real([h,k,0]), rotmats(isym,:,:))
-                        else
-                            ! padded location
-                            loc = matmul(self%alpha * real([h,k,0]), rotmats(isym,:,:))
-                        endif
+                        loc = matmul(real([h,k,0]), rotmats(isym,:,:))
                         ! window
                         win(1,:) = nint(loc)
                         win(2,:) = win(1,:) + iwinsz
