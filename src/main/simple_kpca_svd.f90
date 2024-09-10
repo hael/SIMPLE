@@ -86,16 +86,16 @@ contains
         class(kpca_svd),   intent(inout) :: self
         real,              intent(in)    :: pcavecs(self%D,self%N)
         integer, optional, intent(in)    :: maxpcaits ! redundant
-        real, parameter   :: C_CONST = 0.6, TOL = 0.0001, MAX_ITS = 100
+        real, parameter   :: TOL = 0.0001, MAX_ITS = 100
         real    :: mat(self%N,self%D), alpha(self%N,self%Q), ker(self%N,self%N), gamma_t(self%N,self%N)
-        real    :: prev_data(self%D), cur_data(self%D), coeffs(self%N), s
+        real    :: prev_data(self%D), cur_data(self%D), coeffs(self%N), s, denom
         integer :: i, ind, iter
         mat = transpose(pcavecs)
         call self%cosine_kernel(pcavecs, pcavecs, ker)
         call self%compute_alpha(ker, alpha)
         gamma_t = matmul(matmul(ker, alpha), transpose(alpha))
         ! pre-imaging iterations
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,cur_data,prev_data,iter,i,coeffs,s)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,cur_data,prev_data,iter,i,coeffs,s,denom)
         do ind = 1, self%N
             cur_data  = pcavecs(:,ind)
             prev_data = 0.
@@ -103,9 +103,10 @@ contains
             do while( euclid(cur_data,prev_data) > TOL .and. iter < MAX_ITS )
                 prev_data = cur_data
                 do i = 1,self%N
-                    coeffs(i) = euclid(prev_data, pcavecs(:,i))**2
+                    denom     = sqrt(sum(prev_data**2) * sum(pcavecs(:,i)**2))
+                    coeffs(i) = 0.
+                    if( denom > TINY ) coeffs(i) = sum(prev_data * pcavecs(:,i)) / denom
                 enddo
-                coeffs = exp(-coeffs/real(self%Q)/C_CONST)
                 coeffs = gamma_t(:,ind) * coeffs
                 s      = sum(coeffs)        ! CHECK FOR s = 0 ?
                 do i = 1,self%D
