@@ -28,6 +28,7 @@ type :: parameters
     character(len=3)          :: bin='no'             !< binarize image(yes|no){no}
     character(len=3)          :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
     character(len=3)          :: classtats='no'       !< calculate class population statistics(yes|no){no}
+    character(len=3)          :: cluster_cavgs='no'   !< Wheter to perform clustering of the class-averages(yes|no){no}
     character(len=3)          :: combine_eo='no'      !< Whether combined e/o volumes have been used for alignment(yes|no){no}
     character(len=3)          :: continue='no'        !< continue previous refinement(yes|no){no}
     character(len=3)          :: crowded='yes'        !< wheter picking is done in crowded micrographs or not (yes|no){yes}
@@ -279,7 +280,7 @@ type :: parameters
     integer :: nframes=0           !< # frames{30}
     integer :: ngrow=0             !< # of white pixel layers to grow in binary image
     integer :: ninit=3             !< # number of micrographs to use during diameter estimation global search
-    integer :: nmics=0             !< # micographs
+    integer :: nmics=0             !< # micrographs
     integer :: nmoldiams=1         !< # moldiams
     integer :: noris=0
     integer :: nparts=1            !< # partitions in distributed execution
@@ -526,6 +527,7 @@ contains
         call check_carg('boxtype',        self%boxtype)
         call check_carg('center',         self%center)
         call check_carg('classtats',      self%classtats)
+        call check_carg('cluster_cavgs',  self%cluster_cavgs)
         call check_carg('cn_type',        self%cn_type)
         call check_carg('combine_eo',     self%combine_eo)
         call check_carg('continue',       self%continue)

@@ -2517,19 +2517,29 @@ contains
         call gen_cavgs_partition%new(&
         &'gen_cavgs_partition', &                                           ! name
         &'Generate class averages partitions based on their simmilarity',&  ! descr_short
-        &'is an application to cluster class averages',&                    ! descr_long
+        &'is an application to cluster class averages with affinity propagation',   &! descr_long
         &'simple_exec',&                                                    ! executable
-        &1, 2, 0, 0, 3, 1, 1, .false.)                                       ! # entries in each group, requires sp_project
+        &0, 0, 1, 3, 3, 1, 1, .true.)                                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call gen_cavgs_partition%set_input('img_ios',  1, stk)
+        ! <empty>
         ! parameter input/output
-        call gen_cavgs_partition%set_input('parm_ios', 1, 'fname',   'file', 'Input/Output Similarity Matrix', 'Binary file (.bin)','simmat.bin', .false., '')
-        call gen_cavgs_partition%set_input('parm_ios', 2, frac)
+        ! <empty>
         ! alternative inputs
-        ! <empty>
+        call gen_cavgs_partition%set_input('alt_ios', 1, 'fname',   'file', 'Input/Output Similarity Matrix', 'Binary file (.bin)','simmat.bin', .false., '')
         ! search controls
-        ! <empty>
+        call gen_cavgs_partition%set_input('srch_ctrls', 1, nsearch)
+        gen_cavgs_partition%filt_ctrls(1)%descr_long        = 'Number of clustering attempts with a range preference values{0.}'
+        gen_cavgs_partition%filt_ctrls(1)%descr_placeholder = 'Number of clustering attempts{0.}'
+        gen_cavgs_partition%filt_ctrls(1)%rval_default      = 0.
+        call gen_cavgs_partition%set_input('srch_ctrls', 2, frac)
+        gen_cavgs_partition%filt_ctrls(2)%descr_long        = 'Preference value within the [minimum=0;median=1] range{0.}'
+        gen_cavgs_partition%filt_ctrls(2)%descr_placeholder = 'Preference value{0.}'
+        gen_cavgs_partition%filt_ctrls(2)%rval_default      = 0.
+        call gen_cavgs_partition%set_input('srch_ctrls', 3, trs)
+        gen_cavgs_partition%srch_ctrls(3)%descr_long        = 'Image alignment half-offset{15.}'
+        gen_cavgs_partition%srch_ctrls(3)%descr_placeholder = 'Half-offset{15.}'
+        gen_cavgs_partition%srch_ctrls(3)%rval_default      = 15.
         ! filter controls
         call gen_cavgs_partition%set_input('filt_ctrls', 1, hp)
         call gen_cavgs_partition%set_input('filt_ctrls', 2, lp)
@@ -2547,7 +2557,7 @@ contains
         &'Motion correction of movies',&                                         ! descr_short
         &'is a distributed workflow for generating power spectra and thumbnails&
         & for imported integrated movies',&                                      ! descr_long
-        &'simple_exec',&                                                   ! executable
+        &'simple_exec',&                                                         ! executable
         &0, 1, 0, 0, 0, 0, 2, .true.)                                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
