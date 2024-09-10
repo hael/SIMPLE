@@ -2168,6 +2168,10 @@ contains
                 allocate(pca_svd    :: pca_ptr)
             case('kpca')
                 allocate(kpca_svd   :: pca_ptr)
+                if( l_transp_pca )then
+                    THROW_WARN('transp_pca is not supported in kPCA. Turning transp_pca off now.')
+                    l_transp_pca = .false.
+                endif
         end select
         do i = 1, ncls
             call progress_gfortran(i,ncls)
