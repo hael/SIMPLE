@@ -8,12 +8,10 @@ use simple_parameters
 use simple_segmentation
 use simple_binimage
 use simple_neighs
+use simple_AFM_image
 
 !AFM IO
-type :: AFM_image
-    type(image), allocatable :: img_array(:)
-    character(len = 50), allocatable :: img_names(:)
-end type AFM_image 
+
 
 type    :: bin_header5
     INTEGER(KIND=2) :: version 
@@ -63,7 +61,7 @@ type    :: wave_header5
     INTEGER(KIND=4)    :: sIndices 
 end type
 type(AFM_image) ::  Cob16, Cob16_avg
-type(image)     ::  HeightTrace, Height_Avg
+type(image)     ::  HeightTrace, AvgHeight
 type(image)     ::  HeightRetrace, Retrace_Copy
 type(image)     ::  slim_out, pickseg_t_win, pickseg_r_win, pickseg_avg_win
 integer         :: i, j, fu, nptcls, box_num = 1 , pos_i(2)
@@ -85,21 +83,18 @@ params_glob%lp        = 10.
 params_glob%nsig      = 1.5
 
 call cpu_time(start)
-call read_ibw('/Users/atifao/Downloads/IBW/Cob_450016.ibw', Cob16)
+call read_ibw('/Users/atifao/Downloads/IBW/Cob_450014.ibw', Cob16)
 call zero_padding(Cob16)
-call get_AFM(Cob16, 'HeightTrace', HeightTrace)
-HeightRetrace = Cob16%img_array(findloc(index(Cob16%img_names, 'HeightRetrace'),1, dim = 1))
-
-call get_AFM(Cob16, 'HeightTrace', HeightTrace)
-call Height_Avg%copy(HeightTrace)
-Height_Avg = HeightTrace * 0.5 + HeightRetrace * 0.5 
 
 call align_avg(Cob16, Cob16_avg)
-! Height_Avg = Cob16%img_array(1)
-! call pick_valid(Height_Avg, HeightTrace, HeightRetrace)
+call get_AFM(Cob16_avg, 'HeightTrace', HeightTrace)
+call get_AFM(Cob16_avg, 'HeightRetrace', HeightRetrace)
+call get_AFM(Cob16_avg, 'AvgHeight', AvgHeight)
+
+! call pick_valid(AvgHeight, HeightTrace, HeightRetrace)
 call cpu_time(finish)
 print *, finish - start 
-
+call pick_valid1(Cob16_avg)
 contains 
     subroutine read_ibw(fn_in, AFM)
         character(len=*),           intent(in)  :: fn_in 
@@ -169,8 +164,6 @@ contains
         end do 
     end subroutine zero_padding 
   
-    ! rewrite this to make copies initially and expand AFM stack by length/2 
-    ! alignment subroutine for all measurements.
     subroutine align_avg(AFM_in, Align_AFM)
         type(AFM_image), intent(in)     :: AFM_in 
         type(AFM_image), intent(out)    :: Align_AFM
@@ -223,12 +216,11 @@ contains
            retr_ind = avg_ind - num_mic + 1 + count
            Align_AFM%img_array(avg_ind) =  Align_AFM%img_array(tr_ind) * 0.5 + Align_AFM%img_array(retr_ind) * 0.5
            new_name = AFM_in%img_names(tr_ind)
-           Align_AFM%img_names(avg_ind) = 'avg' // new_name(1:len_trim(new_name)  - 5)
+           Align_AFM%img_names(avg_ind) = 'Avg' // new_name(1:len_trim(new_name)  - 5)
            count = count + 1
         end do 
     end subroutine align_avg
 
-    !change this to function... 
     subroutine get_AFM(AFM_Hash, key, image_at_key)
         type(AFM_image), intent(in) :: AFM_Hash
         character(*), intent(in)    :: key 
@@ -236,32 +228,6 @@ contains
         image_at_key = AFM_Hash%img_array(findloc(index(AFM_Hash%img_names, key),1, dim = 1))
     end subroutine get_AFM  
 
-    function fget_AFM(AFM_Hash, key) result(image_at_key)
-        type(AFM_image), intent(in) :: AFM_Hash
-        character(*), intent(in)    :: key 
-        type(image)     :: image_at_key
-        image_at_key = AFM_Hash%img_array(findloc(index(AFM_Hash%img_names, key),1, dim = 1))
-    end function fget_AFM  
-
-    subroutine softmin_avg(trace, retrace, beta)
-        type(image), intent(inout) :: trace 
-        type(image), intent(in) :: retrace
-        real, optional, intent(in) :: beta 
-        real                       :: beta_d, int_t, int_r, int_avg
-        integer                    :: dim(3), xdim, ydim
-        beta_d = 0.0000000002
-        if(present(beta)) beta_d = beta 
-        dim = trace%get_ldim()
-        do xdim = 1, dim(1)
-            do ydim = 1, dim(2)
-                int_t = trace%get_rmat_at(xdim, ydim, 1)
-                int_r = retrace%get_rmat_at(xdim, ydim, 1)
-                int_avg = beta_d**(-1.) * log(2.) * exp(abs(int_t - int_r)*(-beta_d)**2.)
-                print *, int_t, int_r, int_avg 
-                call trace%set_rmat_at(xdim, ydim, 1, int_avg)
-            end do 
-        end do
-    end subroutine softmin_avg
 
     subroutine pick_valid(avg, trace, retrace)
         type(image), intent(inout)  :: avg, trace, retrace 
@@ -301,6 +267,7 @@ contains
         allocate(corr_final(avg_p%get_nboxes()))
         allocate(val_centers(3, avg_p%get_nboxes()))
         call avg_p%get_positions(pickpos) 
+
         do box_iter = 1, avg_p%get_nboxes() 
             print *, 'box: ', box_iter 
             coord_test = pickpos(box_iter, :)
@@ -318,8 +285,8 @@ contains
                 print *, 'box is outside the image'
                 cycle
             end if 
-
             box_count = box_count + 1
+
             do search_iter = 2, 21
                 call neigh_8_1(avg%get_ldim(), center, neighbor, nsiz)
                 do neighbor_iter = 1, nsiz
@@ -336,15 +303,18 @@ contains
                     corr_final(box_iter) = max_corr(search_iter)
                     exit
                 end if 
-            end do 
-        end do 
+            end do
+        end do
         do box_iter = 38, 38 
             call avg%window_slim(pickpos(box_iter, :), avg_p%box_raw, avg_slim, outs)
             call avg_slim%vis()
-            call retrace%window_slim(val_centers(:2, box_iter), avg_p%box_raw, retrace_slim, outs)
-            call retrace_slim%vis()
+            call trace%window_slim(val_centers(:2, box_iter), avg_p%box_raw, trace_slim, outs)
+            call trace_slim%vis()
         end do
-        ! print *, sum(corr_final)/box_count
+        print *, sum(corr_final)/box_count
         ! print *, val_centers
+        ! sometimes the trace is closer to the average while other times the retrace is closer to the average 
+    
     end subroutine pick_valid
+
 end program AFM_File_IO
