@@ -932,7 +932,7 @@ contains
 
     contains
 
-        subroutine split_atom(new_centers,cnt)
+        subroutine split_atom( new_centers, cnt )
             real,    intent(inout) :: new_centers(:,:) ! updated coordinates of the centers
             integer, intent(inout) :: cnt              ! atom counter, to update the center coords
             integer :: new_center1(3), new_center2(3), new_center3(3)
