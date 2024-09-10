@@ -11,7 +11,7 @@ private
 
 contains
 
-    subroutine make_pcavecs( imgs, D, avg, pcavecs, l_mask, transp, avg_pix, do_avg )
+    subroutine make_pcavecs( imgs, D, avg, pcavecs, l_mask, transp, avg_pix )
         class(image),                intent(in)    :: imgs(:)       !< images to serialize
         integer,                     intent(out)   :: D             !< vector dimension
         real, allocatable,           intent(inout) :: avg(:)        !< average of pcavecs
@@ -19,19 +19,16 @@ contains
         logical,           optional, intent(in)    :: l_mask(:,:,:) !< true for pixels to extract
         logical,           optional, intent(in)    :: transp        !< pixel-wise learning
         real, allocatable, optional, intent(inout) :: avg_pix(:)    !< pixel average
-        logical,           optional, intent(in)    :: do_avg        !< do avg on pcavecs or not
         type(image)          :: img
         logical, allocatable :: ll_mask(:,:,:)
-        logical              :: ttransp, l_avg
+        logical              :: ttransp
         integer              :: n, i, ldim(3), ldim_mask(3)
         real                 :: smpd
         ldim    = imgs(1)%get_ldim()
         n       = size(imgs)
         smpd    = imgs(1)%get_smpd()
         ttransp = .false.
-        l_avg   = .true.
         if( present(transp) ) ttransp = transp
-        if( present(do_avg) ) l_avg   = do_avg
         if( present(l_mask) )then
             ldim_mask = [size(l_mask, dim=1),size(l_mask, dim=2),size(l_mask, dim=3)]
             if( .not. all(ldim_mask .eq. ldim) )then
@@ -56,24 +53,16 @@ contains
         if( ttransp )then
             if( present(avg_pix) ) avg_pix = sum(pcavecs, dim=2) / real(n)
             pcavecs = transpose(pcavecs)
-            if( l_avg )then
-                avg = sum(pcavecs, dim=2) / real(D)
-                do i = 1, D
-                    pcavecs(:,i) = pcavecs(:,i) - avg
-                end do
-            else
-                allocate(avg(n), source=0.)
-            endif
+            avg = sum(pcavecs, dim=2) / real(D)
+            do i = 1, D
+                pcavecs(:,i) = pcavecs(:,i) - avg
+            end do
         else
-            if( l_avg )then
-                avg = sum(pcavecs, dim=2) / real(n)
-                if( present(avg_pix) ) avg_pix = avg
-                do i = 1, n
-                    pcavecs(:,i) = pcavecs(:,i) - avg
-                end do
-            else
-                allocate(avg(D), source=0.)
-            endif
+            avg = sum(pcavecs, dim=2) / real(n)
+            if( present(avg_pix) ) avg_pix = avg
+            do i = 1, n
+                pcavecs(:,i) = pcavecs(:,i) - avg
+            end do
         endif
     end subroutine make_pcavecs
 

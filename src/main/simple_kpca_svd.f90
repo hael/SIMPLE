@@ -165,6 +165,7 @@ contains
                 if( denom > TINY ) ker(i,j) = sum(mat_test(:,i) * mat_train(:,j)) / denom
             enddo
         enddo
+        call self%kernel_center(ker, ker)
     end subroutine cosine_kernel
 
     subroutine compute_alpha( self, ker, alpha )
