@@ -688,7 +688,7 @@ contains
         endif
         if( file_exists(self%starfile%filename) ) call del_file(self%starfile%filename)
         if(.not. self%starfile%initialised) call self%initialise()
-        if(present(iter)) then
+        if(present(iter)) then 
             stkname = basename(CWD_GLOB)//"/"//trim(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//trim(params_glob%ext)
             do i=1, spproj%os_cls2D%get_noris()
                 call spproj%os_cls2D%set(i, "stk", trim(adjustl(stkname)))
@@ -707,6 +707,7 @@ contains
         end do
         call enable_splflags(spproj%os_cls2D, self%starfile%clusters2D%flags)
         call self%export_stardata(spproj, self%starfile%clusters2D%flags, spproj%os_cls2D, "clusters", mapstks=.false.)
+        call spproj%os_cls2D%delete_entry("stk")
     end subroutine export_cls2D
 
     subroutine export_iter3D(self, spproj, states, iter)

@@ -938,12 +938,10 @@ contains
                 call img%kill
                 write(logfhandle,'(A,I6,A,I6,A)')'>>> REJECTED FROM POOL: ',nptcls_rejected,' PARTICLES IN ',ncls_rejected,' CLUSTER(S)'
                 ! write stream2d.star with ptcl numbers post rejection 
-               ! call starproj%export_stream2D(pool_proj%os_ptcl2D%get_noris(), nptcls_rejected)
+                call starproj%export_cls2D(pool_proj, pool_iter)
             endif
         else
             write(logfhandle,'(A,I4,A,I6,A)')'>>> NO PARTICLES FLAGGED FOR REJECTION FROM POOL'
-            ! write stream2d.star with ptcl numbers post rejection 
-            !call starproj%export_stream2D(pool_proj%os_ptcl2D%get_noris(), 0)
         endif
     end subroutine reject_from_pool_dev
 
@@ -1003,7 +1001,6 @@ contains
                 endif
                 write(logfhandle,'(A,I6,A,I4)')'>>> USER REJECTED FROM POOL: ',nptcls_rejected,' PARTICLE(S) IN CLASS ',icls
             endif
-
         enddo
         call img%read(trim(POOL_DIR)//trim(refs_glob), ncls_glob)
         call img%write(trim(POOL_DIR)//trim(refs_glob), ncls_glob)
@@ -1012,6 +1009,8 @@ contains
             call img%write(trim(POOL_DIR)//trim(add2fbody(refs_glob, params_glob%ext,trim(WFILT_SUFFIX))), ncls_glob)
         endif
         call img%kill
+        ! write stream2d.star with ptcl numbers post rejection 
+        call starproj%export_cls2D(pool_proj, pool_iter)
     end subroutine reject_from_pool_user_dev
 
     subroutine write_pool_cls_selected_user_dev
@@ -1418,7 +1417,7 @@ contains
         if(.not. file_exists(trim(adjustl(cwd)) // '/' // trim(CAVGS_ITER_FBODY) // int2str_pad(iter_loc, 3) // '.jpg')) then
             if(iter_loc > 0) call pool_stats%set_now('2D', 'iteration_time')
             call pool_stats%generate_2D_thumbnail('2D', 'top_classes', pool_proj%os_cls2D, iter_loc)
-            call pool_stats%generate_2D_jpeg('latest', '', pool_proj%os_cls2D, iter_loc)
+            call pool_stats%generate_2D_jpeg('latest', '', pool_proj%os_cls2D, iter_loc, smpd)
         endif
         call pool_stats%write(POOLSTATS_FILE)
         call pool_stats%kill
