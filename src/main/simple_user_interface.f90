@@ -2233,8 +2233,8 @@ contains
         ! PROGRAM SPECIFICATION
         call pdb2mrc%new(&
         &'pdb2mrc', &                                      ! name
-        &'PDB to MRC converter',&                          ! descr_short
-        &'is a program to convert a PDB format coordinadinates file to a 3D simulated density map volume in MRC format',& ! descr long
+        &'PDB to MRC simulator',&                          ! descr_short
+        &'is a program to simulate a 3D density map in MRC format using a PDB format coordinadinates file',& ! descr long
         &'all',&                                           ! executable
         &1, 3, 0, 0, 0, 0, 0, .false.)                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -2259,7 +2259,7 @@ contains
         call detect_atoms%new(&
         &'detect_atoms', &                                      ! name
         &'Detect atoms in atomic-resolution nanoparticle map',& ! descr_short
-        &'is a program for identifying atoms in atomic-resolution nanoparticle maps and generating bin and connected-comp map',& ! descr long
+        &'is a program for identifying atoms in atomic-resolution nanoparticle maps and generating bin and connected-components map',& ! descr long
         &'single_exec',&                                        ! executable
         &2, 4, 0, 0, 1, 1, 1, .false.)                         ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS

@@ -107,8 +107,9 @@ type :: atoms
     procedure          :: atom_validation
     ! MODIFIERS
     procedure          :: translate
+    procedure          :: center_pdbcoord
+    procedure          :: center_inbox
     procedure          :: rotate
-    procedure          :: ref2originbox
     ! DESTRUCTOR
     procedure          :: kill
 end type atoms
@@ -1165,7 +1166,7 @@ contains
     !
     ! end subroutine shift2masscen
 
-    subroutine pdb2mrc( self, pdb_file, vol_file, smpd, pdb_out, vol_dim)
+    subroutine pdb2mrc( self, pdb_file, vol_file, smpd, pdb_out, vol_dim )
         use simple_image, only: image
         class(atoms),           intent(inout) :: self
         real,                   intent(in)    :: smpd
@@ -1176,7 +1177,7 @@ contains
         integer, optional :: vol_dim(3)
         write(logfhandle,'(A,f8.3,A)') 'Sampling distance: ',smpd,' Angstrom'
         call self%new(pdb_file)
-        ! Dimensions of the molecule
+        ! dimensions of the molecule
         write(logfhandle,'(A,f8.2,1X,A,f8.2)') "Bounding box: x:", minval(self%xyz(:,1)),"-", maxval(self%xyz(:,1))
         write(logfhandle,'(A,f8.2,1X,A,f8.2)') "              y:", minval(self%xyz(:,2)),"-", maxval(self%xyz(:,2))
         write(logfhandle,'(A,f8.2,1X,A,f8.2)') "              z:", minval(self%xyz(:,3)),"-", maxval(self%xyz(:,3))
@@ -1190,9 +1191,9 @@ contains
         write(logfhandle,'(A,2(f8.3,","),f8.3,A)') " Atomic center at ", center," (center of volume at 0, 0, 0)"
         if( present(vol_dim) )then
             ldim        = ceiling( (mol_dim)/smpd )
-            if( vol_dim(1) < ldim(1) )  THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pdb2mrc')
-            if( vol_dim(2) < ldim(2) )  THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pdb2mrc')
-            if( vol_dim(3) < ldim(3) )  THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pdb2mrc')
+            if( vol_dim(1) < ldim(1) ) THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pdb2mrc')
+            if( vol_dim(2) < ldim(2) ) THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pdb2mrc')
+            if( vol_dim(3) < ldim(3) ) THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pdb2mrc')
             ldim        = vol_dim
             half_box(:) = (vol_dim*smpd)/2.
         else
@@ -1203,18 +1204,30 @@ contains
                     if( dist > max_dist ) max_dist = dist
                 enddo
             enddo
-            ldim(:)     = nint( (max_dist * 2./smpd) + 1 )
-            half_box(:) = max_dist / 2.
+            ldim(:)     = ( ((max_dist * 2.)/smpd) )
+            half_box(:) = (smpd*real(ldim(:))/2.)
         endif
         call vol%new([ldim(1), ldim(2), ldim(3)], smpd)
         ! 0,0,0 in PDB space is map to the center of the volume 
         call self%translate(-corner+half_box)
-        call self%convolve( vol, cutoff = 8*smpd)
+        call self%center_pdbcoord(ldim, smpd)
+        call self%convolve(vol, cutoff = 8*smpd)
         call self%writepdb(pdb_out)
         call vol%write(vol_file)
         call vol%kill()
-        write(logfhandle,'(A)') " 3D MRC simulated volume created "
+        write(logfhandle,'(A,3I4,A)') " 3D MRC simulated volume created (", ldim," ) voxels"
     end subroutine pdb2mrc
+
+    !>brief translate PDB coordinates to center of the volume
+    subroutine center_pdbcoord( self, ldim, smpd )
+        class(atoms),  intent(inout) :: self
+        integer, intent(in) :: ldim(3)
+        real, intent(in)    :: smpd
+        real                :: corner(3), half_box(3)
+        corner(1)   = minval(self%xyz(:,1)); corner(2)= minval(self%xyz(:,2)); corner(3)  = minval(self%xyz(:,3))
+        half_box(:) = smpd*(real(ldim(:))/2.)
+        call self%translate(-corner+half_box)
+    end subroutine center_pdbcoord
 
     subroutine atom_validation( self, vol, filename )
         use simple_image, only: image
@@ -1223,8 +1236,8 @@ contains
         character(len=*), optional, intent(in)    :: filename
         type(image) :: vol_atom, vol_at
         type(atoms) :: atom
-        integer     :: i_atom, center(3), atom_box
-        real        :: smpd, cc
+        integer     :: i_atom, atom_box, center(3)
+        real        :: atom_coord(3), smpd, cc
         logical     :: outside
         smpd = vol%get_smpd()
         if(present(filename))then
@@ -1234,15 +1247,16 @@ contains
             write(45,*) " "
         endif
         do i_atom = 1, self%n
-            atom_box = (2 * ceiling((self%radius(i_atom))/smpd)) + 1
-            ! generate simulted atom volume
+            atom_box = 2 * ceiling(((self%radius(i_atom)*1.5)/smpd)) + 1
+            ! generate simulated atom volume
             call vol_atom%new([atom_box, atom_box, atom_box], smpd)
             call self%extract_atom(atom, i_atom)
-            center(:) = atom%get_coord(1)
-            call atom%ref2originbox(1, atom_box)
+            atom_coord(:) = atom%get_coord(1)
+            call atom%center_inbox(1, atom_box, smpd)
             call atom%convolve(vol_atom, cutoff = 8*smpd)
             ! extract the atom volume from the molecule volume
             call vol_at%new([atom_box, atom_box, atom_box], smpd)
+            center(:) = ang2vox(atom_coord(:), smpd) - atom_box/2
             call vol%window_slim(center, atom_box, vol_at, outside)
             call vol_at%mask(real(atom_box)/2., 'soft')
             ! compute cross-correlation between both volumes
@@ -1257,10 +1271,10 @@ contains
             call vol_at%kill
             call atom%kill
         enddo
-        if(present(filename))then
-            close(45)
-            call self%writepdb(filename)
-        endif
+        ! if(present(filename))then
+        !     close(45)
+        !     call self%writepdb(filename)
+        ! endif
     end subroutine atom_validation
 
     ! MODIFIERS
@@ -1279,12 +1293,13 @@ contains
         self%xyz = matmul(self%xyz,transpose(mat))
     end subroutine rotate
 
-    subroutine ref2originbox( self, i, boxsize )
+    subroutine center_inbox( self, i, boxsize, smpd ) ! in Angstrom
         class(atoms), intent(inout) :: self
         integer,      intent(in)    :: boxsize, i
-        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; center2originbox')
-        self%xyz(i,:) = real(boxsize/2)
-    end subroutine ref2originbox
+        real,         intent(in)    :: smpd
+        if( i.lt.1 .or. i.gt.self%n ) THROW_HARD('index out of range; center_inbox')
+        self%xyz(i,:) = smpd*(real(boxsize/2.))
+    end subroutine center_inbox
 
     ! DESTRUCTOR
     subroutine kill( self )

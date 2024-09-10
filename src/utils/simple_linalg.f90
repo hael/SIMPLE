@@ -1370,14 +1370,14 @@ contains
         deg = (rad/DPI)*180.d0
     end function rad2deg_2
 
-    !>   converts from Angstrom to voxel/pixels
+    !>   converts from Angstrom to voxel/pixels only for absolute coordinatess and not distances
     elemental function ang2vox( ang, smpd ) result( vox )
         real, intent(in) :: ang, smpd
         integer          :: vox
-        vox = nint( ang / smpd ) + 1
+        vox = ( ang / smpd ) + 1
     end function ang2vox
 
-    !>   converts from voxel/pixels to Angstrom
+    !>   converts from voxel/pixels to Angstrom only for absolute coords and not distances
     elemental function vox2ang( vox, smpd ) result( ang )
         integer, intent(in) :: vox
         real,    intent(in) :: smpd
