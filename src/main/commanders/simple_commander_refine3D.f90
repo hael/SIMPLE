@@ -352,7 +352,6 @@ contains
                 call cline_reconstruct3D_distr%set('needs_sigma','yes')
             endif
         endif
-
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! MAIN LOOP

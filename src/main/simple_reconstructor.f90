@@ -280,13 +280,7 @@ contains
                         if( sh > fplnyq ) cycle
                         vec  = real([h,k,0])
                         ! non-uniform sampling location
-                        if( fpl%padded )then
-                            ! already padded
-                            loc = matmul(vec, rotmats(isym,:,:))
-                        else
-                            ! padded location
-                            loc = self%alpha * matmul(vec, rotmats(isym,:,:))
-                        endif
+                        loc = matmul(vec, rotmats(isym,:,:))
                         ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
                         floc = floor(loc)
                         cloc = floc + 1
