@@ -2529,13 +2529,13 @@ contains
         call gen_cavgs_partition%set_input('alt_ios', 1, 'fname',   'file', 'Input/Output Similarity Matrix', 'Binary file (.bin)','simmat.bin', .false., '')
         ! search controls
         call gen_cavgs_partition%set_input('srch_ctrls', 1, nsearch)
-        gen_cavgs_partition%filt_ctrls(1)%descr_long        = 'Number of clustering attempts with a range preference values{0.}'
-        gen_cavgs_partition%filt_ctrls(1)%descr_placeholder = 'Number of clustering attempts{0.}'
-        gen_cavgs_partition%filt_ctrls(1)%rval_default      = 0.
+        gen_cavgs_partition%srch_ctrls(1)%descr_long        = 'Number of clustering attempts with a range preference values{0.}'
+        gen_cavgs_partition%srch_ctrls(1)%descr_placeholder = 'Number of clustering attempts{0.}'
+        gen_cavgs_partition%srch_ctrls(1)%rval_default      = 0.
         call gen_cavgs_partition%set_input('srch_ctrls', 2, frac)
-        gen_cavgs_partition%filt_ctrls(2)%descr_long        = 'Preference value within the [minimum=0;median=1] range{0.}'
-        gen_cavgs_partition%filt_ctrls(2)%descr_placeholder = 'Preference value{0.}'
-        gen_cavgs_partition%filt_ctrls(2)%rval_default      = 0.
+        gen_cavgs_partition%srch_ctrls(2)%descr_long        = 'Preference value within the [minimum=0;median=1] range{0.}'
+        gen_cavgs_partition%srch_ctrls(2)%descr_placeholder = 'Preference value{0.}'
+        gen_cavgs_partition%srch_ctrls(2)%rval_default      = 0.
         call gen_cavgs_partition%set_input('srch_ctrls', 3, trs)
         gen_cavgs_partition%srch_ctrls(3)%descr_long        = 'Image alignment half-offset{15.}'
         gen_cavgs_partition%srch_ctrls(3)%descr_placeholder = 'Half-offset{15.}'
