@@ -1532,18 +1532,16 @@ contains
     end subroutine calc_frc
 
     ! Identifies optimal pair of common-lines & correlation (no CTF)
-    subroutine genmaxcorr_comlin( self, ieven, jeven, clcc, kweight, magnitude, pair )
+    subroutine genmaxcorr_comlin( self, ieven, jeven, clcc, magnitude, pair )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: ieven, jeven
         real,                    intent(out)   :: clcc
-        logical, optional,       intent(in)    :: kweight, magnitude
+        logical, optional,       intent(in)    :: magnitude
         integer, optional,       intent(out)   :: pair(2)
         complex(sp), pointer :: pft_ref_i(:,:), pft_ref_j(:,:)
-        real     :: sqrtk, cc
-        integer  :: ithr, i,j,k,el,ol
-        logical  :: kw, mag
-        kw = .false.
-        if( present(kweight) ) kw = kweight
+        real     :: cc
+        integer  :: ithr, i,j,el,ol
+        logical  :: mag
         mag = .false.
         if( present(magnitude) ) mag = magnitude
         ithr      =       omp_get_thread_num() + 1
@@ -1555,14 +1553,6 @@ contains
             ! conversion to magnitudes
             pft_ref_i = cmplx(real(pft_ref_i*conjg(pft_ref_i)),0.)
             pft_ref_j = cmplx(real(pft_ref_j*conjg(pft_ref_j)),0.)
-        endif
-        if( kw )then
-            ! shell pre-weighing, todo: find alternative, does not make sense in 1D
-            do k = self%kfromto(1),self%kfromto(2)
-                sqrtk = sqrt(real(k))
-                pft_ref_i(:,k) = sqrtk * pft_ref_i(:,k)
-                pft_ref_j(:,k) = sqrtk * pft_ref_j(:,k)
-            enddo
         endif
         clcc = -2.
         el   = 0
@@ -1612,21 +1602,17 @@ contains
     end subroutine genmaxcorr_comlin
 
     ! Optimal offset correlation between pairs of common lines (no CTF)
-    subroutine comlin_shift_search( self, eind, oind, el, ol, trs, step, clcc, kweight )
+    subroutine comlin_shift_search( self, eind, oind, el, ol, trs, step, clcc )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: eind, oind    ! pft indices
         integer,                 intent(in)    :: el, ol        ! rotation indices
         real,                    intent(in)    :: trs, step     ! half-limit
         real,                    intent(out)   :: clcc
-        logical,       optional, intent(in)    :: kweight
         complex(sp) :: eline(self%kfromto(1):self%kfromto(2))
         complex(sp) :: oline(self%kfromto(1):self%kfromto(2))
         complex(sp) :: argvec(self%kfromto(1):self%kfromto(2))
         real    :: cc, offset, phase_diff
         integer :: k
-        logical :: kw
-        kw = .false.
-        if( present(kweight) ) kw = kweight
         if( el <= self%pftsz )then
             eline = self%pfts_refs_even(el,:,eind)
         else
@@ -1636,13 +1622,6 @@ contains
             oline = self%pfts_refs_even(ol,:,oind)
         else
             oline = conjg(self%pfts_refs_even(ol-self%pftsz,:,oind))
-        endif
-        if( kw )then
-            ! todo: find alternative, does not make sense in 1D
-            do k = self%kfromto(1),self%kfromto(2)
-                eline(k) = sqrt(real(k)) * eline(k)
-                oline(k) = sqrt(real(k)) * oline(k)
-            enddo
         endif
         ! normalization
         eline = eline / sqrt(sum(real(eline*conjg(eline))))
