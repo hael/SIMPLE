@@ -22,9 +22,8 @@ type, extends(pca) :: kpca_svd
     ! CALCULATORS
     procedure :: master   => master_kpca
     procedure :: kernel_center
-    procedure :: rbf_kernel
     procedure :: cosine_kernel
-    procedure :: compute_alpha
+    procedure :: compute_eigvecs
     ! DESTRUCTOR
     procedure :: kill     => kill_kpca
 end type
@@ -85,16 +84,23 @@ contains
     subroutine master_kpca( self, pcavecs, maxpcaits )
         class(kpca_svd),   intent(inout) :: self
         real,              intent(in)    :: pcavecs(self%D,self%N)
-        integer, optional, intent(in)    :: maxpcaits ! redundant
+        integer, optional, intent(in)    :: maxpcaits
         real, parameter   :: TOL = 0.0001, MAX_ITS = 100
-        real    :: mat(self%N,self%D), alpha(self%N,self%Q), ker(self%N,self%N), gamma_t(self%N,self%N)
+        real    :: mat(self%N,self%D), eig_vecs(self%N,self%Q), ker(self%N,self%N), gamma_t(self%N,self%N)
         real    :: prev_data(self%D), cur_data(self%D), coeffs(self%N), s, denom
-        integer :: i, ind, iter
+        integer :: i, ind, iter, its
         mat = transpose(pcavecs)
-        call self%cosine_kernel(pcavecs, pcavecs, ker)
-        call self%compute_alpha(ker, alpha)
-        gamma_t = matmul(matmul(ker, alpha), transpose(alpha))
-        ! pre-imaging iterations
+        ! compute the cosine kernel, i.e. angle between the vectors
+        call self%cosine_kernel(pcavecs, ker)
+        ! compute the sorted principle components of the kernel above
+        call self%compute_eigvecs(ker, eig_vecs)
+        ! pre-imaging:
+        ! 1. projecting each image on kernel space
+        ! 2. applying the principle components to the projected vector
+        ! 3. computing the pre-image (of the image in step 1) using the result in step 2
+        its = MAX_ITS
+        if( present(maxpcaits) ) its = maxpcaits
+        gamma_t = matmul(matmul(ker, eig_vecs), transpose(eig_vecs))
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,cur_data,prev_data,iter,i,coeffs,s,denom)
         do ind = 1, self%N
             cur_data  = pcavecs(:,ind)
@@ -102,12 +108,15 @@ contains
             iter      = 1
             do while( euclid(cur_data,prev_data) > TOL .and. iter < MAX_ITS )
                 prev_data = cur_data
+                ! 1. projecting each image on kernel space
                 do i = 1,self%N
                     denom     = sqrt(sum(prev_data**2) * sum(pcavecs(:,i)**2))
                     coeffs(i) = 0.
                     if( denom > TINY ) coeffs(i) = sum(prev_data * pcavecs(:,i)) / denom
                 enddo
+                ! 2. applying the principle components to the projected vector
                 coeffs = gamma_t(:,ind) * coeffs
+                ! 3. computing the pre-image (of the image in step 1) using the result in step 2
                 s      = sum(coeffs)        ! CHECK FOR s = 0 ?
                 do i = 1,self%D
                     cur_data(i) = sum(mat(:,i) * coeffs)
@@ -120,79 +129,57 @@ contains
         !$omp end parallel do
     end subroutine master_kpca
 
-    subroutine kernel_center( self, ker, cen_ker )
+    subroutine kernel_center( self, ker )
         class(kpca_svd), intent(inout) :: self
-        real,            intent(in)    :: ker(self%N,self%N)
-        real,            intent(inout) :: cen_ker(self%N,self%N)
+        real,            intent(inout) :: ker(self%N,self%N)
         real :: ones(self%N,self%N)
         ones = 1. / real(self%N)
         ! Appendix D.2.2 Centering in Feature Space from Schoelkopf, Bernhard, Support vector learning, 1997
-        cen_ker = cen_ker - matmul(ones, ker) - matmul(cen_ker, ones) + matmul(matmul(ones, ker), ones)
+        ker = ker - matmul(ones, ker) - matmul(ker, ones) + matmul(matmul(ones, ker), ones)
     end subroutine kernel_center
 
-    ! rbf kernel from the previous kernel
-    subroutine rbf_kernel( self, mat_test, mat_train, c, ker_train, ker )
+    subroutine cosine_kernel( self, mat, ker )
         class(kpca_svd), intent(inout) :: self
-        real,            intent(in)    :: mat_test( self%D,self%N)
-        real,            intent(in)    :: mat_train(self%D,self%N)
-        real,            intent(in)    :: c
-        real,            intent(inout) :: ker_train(self%N,self%N)
-        real,            intent(inout) :: ker(self%N,self%N)
-        integer :: i, j
-        ! squared euclidean distance between pairs of rows
-        do i = 1,self%N
-            do j = 1,self%N
-                ker(i,j) = euclid(mat_test(:,i), mat_train(:,j))**2
-            enddo
-        enddo
-        ! normalization and centering
-        ker = exp(-ker/real(self%Q)/c)
-        call self%kernel_center(ker_train, ker)
-    end subroutine rbf_kernel
-
-    subroutine cosine_kernel( self, mat_test, mat_train, ker )
-        class(kpca_svd), intent(inout) :: self
-        real,            intent(in)    :: mat_test( self%D,self%N)
-        real,            intent(in)    :: mat_train(self%D,self%N)
+        real,            intent(in)    :: mat(self%D,self%N)
         real,            intent(out)   :: ker(self%N,self%N)
         integer :: i, j
         real    :: denom
         ! squared cosine similarity between pairs of rows
         do i = 1,self%N
             do j = 1,self%N
-                denom    = sqrt(sum(mat_test(:,i)**2) * sum(mat_train(:,j)**2))
+                denom    = sqrt(sum(mat(:,i)**2) * sum(mat(:,j)**2))
                 ker(i,j) = 0.
-                if( denom > TINY ) ker(i,j) = sum(mat_test(:,i) * mat_train(:,j)) / denom
+                if( denom > TINY ) ker(i,j) = sum(mat(:,i) * mat(:,j)) / denom
             enddo
         enddo
-        call self%kernel_center(ker, ker)
+        call self%kernel_center(ker)
     end subroutine cosine_kernel
 
-    subroutine compute_alpha( self, ker, alpha )
+    subroutine compute_eigvecs( self, ker, eig_vecs )
         class(kpca_svd), intent(inout) :: self
         real,            intent(in)    :: ker(self%N,self%N)
-        real,            intent(inout) :: alpha(self%N,self%Q)
-        real    :: eig_vecs(self%N,self%N), eig_vals(self%N), tmp(self%N,self%N), tmp_ker(self%N,self%N)
+        real,            intent(inout) :: eig_vecs(self%N,self%Q)
+        real    :: eig_vecs_all(self%N,self%N), eig_vals(self%N), tmp(self%N,self%N), tmp_ker(self%N,self%N)
         integer :: i, inds(self%N)
         tmp_ker = ker
         do i = 1, self%N
             tmp_ker(:,i) = tmp_ker(:,i) - sum(tmp_ker(:,i))/real(self%N)
         enddo
         ! computing eigvals/eigvecs
-        eig_vecs = tmp_ker
-        call svdcmp(eig_vecs, eig_vals, tmp)
+        eig_vecs_all = tmp_ker
+        call svdcmp(eig_vecs_all, eig_vals, tmp)
         eig_vals = eig_vals**2 / real(self%N)
         inds     = (/(i,i=1,self%N)/)
         call hpsort(eig_vals, inds)
         call reverse(eig_vals)
         call reverse(inds)
-        tmp = tmp(:, inds)
+        eig_vecs_all = eig_vecs_all(:,inds)
         do i = 1, self%N
-            alpha(i,:) = tmp(i,1:self%Q) / sqrt(eig_vals(1:self%Q))
+            eig_vecs(i,:) = eig_vecs_all(i,1:self%Q) / sqrt(eig_vals(1:self%Q))
         enddo
-        ! change the sorted order of alpha
-        alpha = alpha(:,self%Q:1:-1)
-    end subroutine compute_alpha
+        ! reverse the sorted order of eig_vecs
+        eig_vecs = eig_vecs(:,self%Q:1:-1)
+    end subroutine compute_eigvecs
 
     ! DESTRUCTOR
 
