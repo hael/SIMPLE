@@ -1739,7 +1739,7 @@ contains
         endif
         if(file_exists(STREAM_REJECT_CLS)) call write_pool_cls_selected_user_dev
         call gui_stats%delete('latest', '')
-        call gui_stats%set('selected references', '', trim(cwd_glob) // '/' // STREAM_SELECTED_REFS // trim(JPG_EXT), thumbnail = .true.)
+        call gui_stats%set('selected references', '', trim(cwd_glob) // '/' // STREAM_SELECTED_REFS // trim(JPG_EXT), thumbnail = .true., smpd = params%smpd, box = real(params%box))
         !call write_project
         !call update_user_params(cline)
         ! call copy_micrographs_optics

@@ -230,13 +230,14 @@ contains
         self%updated = .true.
     end subroutine set_2
 
-    subroutine set_3( self, section, key, val, primary, alert, alerttext, notify, notifytext, thumbnail, boxfile)
+    subroutine set_3( self, section, key, val, primary, alert, alerttext, notify, notifytext, thumbnail, boxfile, smpd, box)
         class(guistats),  intent(inout)        :: self
         character(len=*), intent(in)           :: section
         character(len=*), intent(in)           :: key
         character(len=*), intent(in)           :: val
         logical, optional, intent(in)          :: primary, alert, thumbnail, notify
         character(len=*), optional, intent(in) :: alerttext, notifytext, boxfile
+        real,    optional, intent(in)          :: smpd, box
         integer                                :: line
         call self%ensure_section(section)
         line = self%get_keyline(section, key)
@@ -247,6 +248,12 @@ contains
             call self%stats%set(line, 'type', 'thumbnail')
             if(present(boxfile)) then
                 call self%stats%set(line, 'boxfile', trim(boxfile))
+            end if
+            if(present(smpd)) then
+                call self%stats%set(line, 'smpd', smpd)
+            end if
+            if(present(box)) then
+                call self%stats%set(line, 'box', box)
             end if
         else
             call self%stats%set(line, 'type', 'string')
@@ -469,6 +476,12 @@ contains
                             if(self%stats%isthere(i, 'boxfile')) then
                                 call json%add(keydata, 'boxfile', trim(adjustl(self%stats%get_static(i, 'boxfile'))))
                             end if
+                            if(self%stats%isthere(i, 'box') .and. self%stats%get(i, 'box') .gt. 0.0) then
+                                call json%add(keydata, 'box', int(self%stats%get(i, 'box'))) 
+                            end if
+                            if(self%stats%isthere(i, 'smpd') .and. self%stats%get(i, 'smpd') .gt. 0.0) then
+                                call json%add(keydata, 'smpd', dble(self%stats%get(i, 'smpd'))) 
+                            end if
                             call json%add(section, keydata)
                         end if
                     end if
@@ -538,12 +551,13 @@ contains
         if(allocated(classres)) deallocate(classres)
     end subroutine generate_2D_thumbnail
 
-    subroutine generate_2D_jpeg( self, section, key, oris2D, last_iter )
+    subroutine generate_2D_jpeg( self, section, key, oris2D, last_iter, smpd )
         class(guistats),  intent(inout) :: self
         type(oris),       intent(inout) :: oris2D
         integer,          intent(in)    :: last_iter
         character(len=*), intent(in)    :: section
         character(len=*), intent(in)    :: key
+        real,             intent(in)    :: smpd
         type(image)                     :: clsstk, img
         character(len=LONGSTRLEN)       :: cavgs, cwd
         integer                         :: ncls, i, n, ldim_stk(3), ldim_img(3), nptcls
@@ -564,7 +578,7 @@ contains
             call img%tile(clsstk, 1, i) 
         end do
         call img%write_jpg(trim(CAVGS_ITER_FBODY) // int2str_pad(last_iter,3) // '.jpg')
-        call self%set(section, key, trim(adjustl(cwd)) // '/' // trim(CAVGS_ITER_FBODY) // int2str_pad(last_iter,3) // '.jpg', thumbnail = .true.)
+        call self%set(section, key, trim(adjustl(cwd)) // '/' // trim(CAVGS_ITER_FBODY) // int2str_pad(last_iter,3) // '.jpg', thumbnail = .true., box = real(ldim_stk(1)), smpd = smpd)
         call img%kill()
         call clsstk%kill()
     end subroutine generate_2D_jpeg
