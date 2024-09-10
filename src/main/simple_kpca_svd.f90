@@ -86,8 +86,8 @@ contains
         real,              intent(in)    :: pcavecs(self%D,self%N)
         integer, optional, intent(in)    :: maxpcaits
         real, parameter   :: TOL = 0.0001, MAX_ITS = 100
-        real    :: mat(self%N,self%D), eig_vecs(self%N,self%Q), ker(self%N,self%N), gamma_t(self%N,self%N)
-        real    :: prev_data(self%D), cur_data(self%D), coeffs(self%N), s, denom
+        real    :: mat(self%N,self%D), eig_vecs(self%N,self%Q), ker(self%N,self%N), ker_weight(self%N,self%N)
+        real    :: prev_data(self%D), cur_data(self%D), proj_data(self%N), s, denom
         integer :: i, ind, iter, its
         mat = transpose(pcavecs)
         ! compute the cosine kernel, i.e. angle between the vectors
@@ -100,8 +100,8 @@ contains
         ! 3. computing the pre-image (of the image in step 1) using the result in step 2
         its = MAX_ITS
         if( present(maxpcaits) ) its = maxpcaits
-        gamma_t = matmul(matmul(ker, eig_vecs), transpose(eig_vecs))
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,cur_data,prev_data,iter,i,coeffs,s,denom)
+        ker_weight = matmul(matmul(ker, eig_vecs), transpose(eig_vecs))
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,cur_data,prev_data,iter,i,proj_data,s,denom)
         do ind = 1, self%N
             cur_data  = pcavecs(:,ind)
             prev_data = 0.
@@ -110,19 +110,19 @@ contains
                 prev_data = cur_data
                 ! 1. projecting each image on kernel space
                 do i = 1,self%N
-                    denom     = sqrt(sum(prev_data**2) * sum(pcavecs(:,i)**2))
-                    coeffs(i) = 0.
-                    if( denom > TINY ) coeffs(i) = sum(prev_data * pcavecs(:,i)) / denom
+                    denom        = sqrt(sum(prev_data**2) * sum(pcavecs(:,i)**2))
+                    proj_data(i) = 0.
+                    if( denom > TINY ) proj_data(i) = sum(prev_data * pcavecs(:,i)) / denom
                 enddo
                 ! 2. applying the principle components to the projected vector
-                coeffs = gamma_t(:,ind) * coeffs
+                proj_data = proj_data * ker_weight(:,ind)
                 ! 3. computing the pre-image (of the image in step 1) using the result in step 2
-                s      = sum(coeffs)        ! CHECK FOR s = 0 ?
+                s = sum(proj_data)
                 do i = 1,self%D
-                    cur_data(i) = sum(mat(:,i) * coeffs)
+                    cur_data(i) = sum(proj_data * mat(:,i))
                 enddo
-                cur_data = cur_data/s
-                iter     = iter + 1
+                if( s > TINY ) cur_data = cur_data/s
+                iter = iter + 1
             enddo
             self%data(:,ind) = cur_data
         enddo
