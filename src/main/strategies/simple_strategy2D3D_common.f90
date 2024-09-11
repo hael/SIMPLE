@@ -830,6 +830,7 @@ contains
         real            :: shift(2), e3, sdev_noise, w
         integer         :: batchlims(2), iptcl, i,j, i_batch, ibatch, iproj, eo, peo, ithr, pproj
         logical         :: DEBUG    = .false.
+        logical         :: BILINEAR = .false.
         integer(timer_int_kind) :: t
         real(timer_int_kind)    :: t_ini, t_pad, t_sum, t_rec
         t = tic()
@@ -865,7 +866,11 @@ contains
         !$omp end parallel do
         ! instrument function
         call instrimg%new([params_glob%box,params_glob%box,1], params_glob%smpd)
-        call gen_instrfun_img(instrimg, 'kb', fpls(1)%kbwin, padded_dim=params_glob%boxpd, norm=.true.)
+        if( BILINEAR )then
+            call gen_instrfun_img(instrimg, 'linear', padded_dim=params_glob%boxpd, norm=.true.)
+        else
+            call gen_instrfun_img(instrimg, 'kb', fpls(1)%kbwin, padded_dim=params_glob%boxpd, norm=.true.)
+        endif
         t_ini = toc(t)
         ! batch loop
         tmp = eopops
@@ -887,7 +892,7 @@ contains
                 call build_glob%imgbatch(ibatch)%norm_noise(build_glob%lmsk, sdev_noise)
                 call build_glob%imgbatch(ibatch)%div(instrimg)
                 call build_glob%imgbatch(ibatch)%fft
-                call fpls(ibatch)%gen_planes_pad(build_glob%imgbatch(ibatch), ctfparms, shift, e3, iptcl)
+                call fpls(ibatch)%gen_planes_pad(build_glob%imgbatch(ibatch), ctfparms, shift, e3, iptcl, BILINEAR)
             end do
             !$omp end parallel do
             t_pad = t_pad + toc(t)
@@ -930,7 +935,6 @@ contains
         end do
         !$omp end parallel do
         deallocate(fpls,tmp)
-        call instrimg%kill
         ! projections directions reconstructon
         t = tic()
         do iproj = 1,params_glob%nspace
@@ -955,15 +959,15 @@ contains
             do iproj = 1,params_glob%nspace
                 if( eopops(iproj,1) > 0 )then
                     call projdirs(iproj,1)%convert2img(numimg, denomimg)
-                    call numimg%ctf_dens_correct(denomimg)
-                    call numimg%ifft
-                    call numimg%write('projdirs_even.mrc',iproj)
+                    ! call numimg%ctf_dens_correct(denomimg)
+                    ! call numimg%ifft
+                    call denomimg%write('projdirs_even.mrc',iproj)
                 endif
                 if( eopops(iproj,2) > 0 )then
                     call projdirs(iproj,2)%convert2img(numimg, denomimg)
-                    call numimg%ctf_dens_correct(denomimg)
-                    call numimg%ifft
-                    call numimg%write('projdirs_odd.mrc',iproj)
+                    ! call numimg%ctf_dens_correct(denomimg)
+                    ! call numimg%ifft
+                    call denomimg%write('projdirs_odd.mrc',iproj)
                 endif
             end do
             call numimg%kill
@@ -979,7 +983,8 @@ contains
         deallocate(projdirs)
         ! normalise structure factors
         call norm_struct_facts( cline, which_iter)
-        ! destruct
+        ! cleanup
+        call instrimg%kill
         call killrecvols()
         call orientation%kill
     end subroutine calc_projdir3Drec
