@@ -614,15 +614,15 @@ contains
         if ( WRITE_OUTPUT )call self%write_centers('valid_corr_in_bfac_field_pre_discard', 'valid_corr')
         ! discard atoms with low valid_corr
         call self%discard_atoms(use_auto_corr_thres, cs_thres)
-        call self%discard_low_valid_corr_atoms(use_auto_corr_thres, n_discard)
+        ! call self%discard_low_valid_corr_atoms(use_auto_corr_thres, n_discard)
         ! discard lowly coordinated atoms
-        fixed_cs_thres = present(cs_thres)
-        if( fixed_cs_thres )then
-            call self%discard_atoms_with_low_contact_score(use_cn_thresh, cs_thres)
-        else if( use_cs_thres )then
-            call self%discard_atoms_with_low_contact_score(use_cn_thresh)
-            if( use_cn_thresh ) call self%discard_lowly_coordinated(CN_THRESH_XTAL, a, l_fit_lattice)
-        endif
+        ! fixed_cs_thres = present(cs_thres)
+        ! if( fixed_cs_thres )then
+        !     call self%discard_atoms_with_low_contact_score(use_cn_thresh, cs_thres)
+        ! else if( use_cs_thres )then
+        !     call self%discard_atoms_with_low_contact_score(use_cn_thresh)
+        !     if( use_cn_thresh ) call self%discard_lowly_coordinated(CN_THRESH_XTAL, a, l_fit_lattice)
+        ! endif
         ! re-calculate valid_corr:s (since they are otherwise lost from the B-factor field due to reallocations of atominfo)
         call self%simulate_atoms(simatms)
         call self%validate_atoms(simatms)
@@ -1237,10 +1237,12 @@ contains
         class(nanoparticle), intent(inout) :: self
         logical,             intent(in)    :: use_auto_corr_thres
         integer, optional,   intent(in)    :: cs_thres
-        real, allocatable  :: centers_A(:,:) ! coordinates of the atoms in ANGSTROMS
-        real, allocatable  :: centers_low_scores(:,:), centers_high_scores(:,:)
-        integer            :: cscores(self%n_cc), cthresh, icc, count_low_scores, count_high_scores, index_low, index_high
-        type(stats_struct) :: cscore_stats
+        real, allocatable    :: centers_A(:,:) ! coordinates of the atoms in ANGSTROMS
+        real, allocatable    :: centers_low_scores(:,:), centers_high_scores(:,:), low_correlations(:), high_correlations(:)
+        real                 :: thres
+        integer, allocatable :: atoms_to_remove(:), imat_bin(:,:,:), imat_cc(:,:,:)
+        integer              :: cscores(self%n_cc), cthresh, icc, count_low_scores, count_high_scores, index_low, index_high, n_remove, i_remove, atom_index
+        type(stats_struct)   :: cscore_stats, low_score_stats, high_score_stats
         centers_A = self%atominfo2centers_A()
         call calc_contact_scores(self%element,centers_A,cscores)
         call calc_stats(real(cscores), cscore_stats)
@@ -1282,10 +1284,45 @@ contains
                 index_high = index_high + 1
             end if
         end do
-        ! export distributions
+        ! export initial distributions
         call write_csv(centers_low_scores,  'low_contact_scores_stats.csv' )
         call write_csv(centers_high_scores, 'high_contact_scores_stats.csv')
-        deallocate(centers_low_scores,centers_high_scores,centers_A)
+        ! find threshold for low contact score correlations
+        allocate(low_correlations(count_low_scores), high_correlations(count_high_scores))
+        low_correlations  = centers_low_scores( :,6)
+        high_correlations = centers_high_scores(:,6)
+        call calc_stats(low_correlations,  low_score_stats )
+        call calc_stats(high_correlations, high_score_stats)
+        ! report stats by low or high contact scores
+        write(logfhandle,'(A)') '>>> CORRELATION STATS FOR LOW CONTACT SCORE ATOMS'
+        write(logfhandle,'(A,F8.4)') 'Average: ', low_score_stats%avg
+        write(logfhandle,'(A,F8.4)') 'Median : ', low_score_stats%med
+        write(logfhandle,'(A,F8.4)') 'Sigma  : ', low_score_stats%sdev
+        write(logfhandle,'(A,F8.4)') 'Max    : ', low_score_stats%maxv
+        write(logfhandle,'(A,F8.4)') 'Min    : ', low_score_stats%minv
+        write(logfhandle,'(A)') '>>> CORRELATION STATS FOR HIGH CONTACT SCORE ATOMS'
+        write(logfhandle,'(A,F8.4)') 'Average: ', high_score_stats%avg
+        write(logfhandle,'(A,F8.4)') 'Median : ', high_score_stats%med
+        write(logfhandle,'(A,F8.4)') 'Sigma  : ', high_score_stats%sdev
+        write(logfhandle,'(A,F8.4)') 'Max    : ', high_score_stats%maxv
+        write(logfhandle,'(A,F8.4)') 'Min    : ', high_score_stats%minv
+        ! find threshold for removing low correlation, low contact score atoms based on distribution of high contact score atoms
+        thres = high_score_stats%med - 3*high_score_stats%sdev ! not sure what is appropriate threshold here
+        atoms_to_remove = anint(pack(centers_low_scores(:,1), mask=centers_low_scores(:,6) < thres))
+        n_remove = size(atoms_to_remove)
+        write(logfhandle,'(A,I4)') 'Number of atoms to be discarded: ', n_remove
+        call self%img_cc%get_imat(imat_cc)
+        call self%img_bin%get_imat(imat_bin)
+        ! remove low correlations, low contact score atoms
+        do i_remove = 1, n_remove
+            atom_index = atoms_to_remove(i_remove)
+            where (imat_cc == atom_index) imat_bin = 0
+        end do
+        call self%img_bin%set_imat(imat_bin)
+        call self%img_bin%find_ccs(self%img_cc)
+        ! update number of connected components
+        call self%img_cc%get_nccs(self%n_cc)
+        deallocate(centers_low_scores,centers_high_scores,centers_A, low_correlations, high_correlations, atoms_to_remove)
 
         contains 
 
