@@ -1404,7 +1404,7 @@ contains
         call simple_getcwd(cwd)
         if(file_exists(trim(adjustl(cwd))//'/'//trim(CLS2D_STARFBODY)//'_iter'//int2str_pad(pool_iter,3)//'.star')) then
             iter_loc = pool_iter
-        else if(file_exists(trim(adjustl(cwd))//'/'//trim(CLS2D_STARFBODY)//'_iter'//int2str_pad(pool_iter,3)//'.star')) then
+        else if(file_exists(trim(adjustl(cwd))//'/'//trim(CLS2D_STARFBODY)//'_iter'//int2str_pad(pool_iter - 1,3)//'.star')) then
             iter_loc = pool_iter - 1
         endif
         call pool_stats%init
