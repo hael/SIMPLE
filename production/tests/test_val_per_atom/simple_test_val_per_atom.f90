@@ -6,7 +6,7 @@ implicit none
 character(len=STDLEN)         :: pdb_file, vol_file, pdb_out
 type(atoms)                   :: molecule 
 type(image)                   :: vol 
-real                          :: smpd=1.0
+real                          :: smpd
 logical                       :: pdb_exists
 integer                       :: rc
 character(len=:), allocatable :: cmd
@@ -30,12 +30,13 @@ if( command_argument_count() /= 1 )then
 else
     call get_command_argument(1, pdb_file)
 endif
-smpd     = 1.000
+smpd     = 0.358
 vol_file = swap_suffix(pdb_file,'mrc','pdb')
 pdb_out  = trim(get_fbody(pdb_file,'pdb'))//'_centered'
 call molecule%new(pdb_file)
 call molecule%pdb2mrc(pdb_file, vol_file, smpd, pdb_out)
 call find_ldim_nptcls(vol_file, ldim, ifoo)
+print *, 'dimensions box', ldim
 call vol%new(ldim, smpd)
 call vol%read(vol_file)
 call molecule%atom_validation(vol, 'validation_correlation')

@@ -1172,7 +1172,7 @@ contains
         real,                   intent(in)    :: smpd
         character(*),           intent(in)    :: pdb_file, vol_file, pdb_out
         type(image)       :: vol
-        real              :: mol_dim(3), center(3), half_box(3), max_dist, dist, corner(3)
+        real              :: mol_dim(3), center(3), qrt_box(3), max_dist, dist, corner(3)
         integer           :: ldim(3), i_atom, j_atom
         integer, optional :: vol_dim(3)
         write(logfhandle,'(A,f8.3,A)') 'Sampling distance: ',smpd,' Angstrom'
@@ -1195,7 +1195,7 @@ contains
             if( vol_dim(2) < ldim(2) ) THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pdb2mrc')
             if( vol_dim(3) < ldim(3) ) THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pdb2mrc')
             ldim        = vol_dim
-            half_box(:) = (vol_dim*smpd)/2.
+            ! qrt_box(:) = (vol_dim*smpd)/4.
         else
             max_dist = 0.
             do i_atom = 1, self%n
@@ -1205,11 +1205,11 @@ contains
                 enddo
             enddo
             ldim(:)     = ( ((max_dist * 2.)/smpd) )
-            half_box(:) = (smpd*real(ldim(:))/2.)
+            ! qrt_box(:) = (smpd*real(ldim(:))/4.)
         endif
         call vol%new([ldim(1), ldim(2), ldim(3)], smpd)
         ! 0,0,0 in PDB space is map to the center of the volume 
-        call self%translate(-corner+half_box)
+        !call self%translate(-corner+half_box)
         call self%center_pdbcoord(ldim, smpd)
         call self%convolve(vol, cutoff = 8*smpd)
         call self%writepdb(pdb_out)
@@ -1223,10 +1223,10 @@ contains
         class(atoms),  intent(inout) :: self
         integer, intent(in) :: ldim(3)
         real, intent(in)    :: smpd
-        real                :: corner(3), half_box(3)
+        real                :: corner(3), qrt_box(3)
         corner(1)   = minval(self%xyz(:,1)); corner(2)= minval(self%xyz(:,2)); corner(3)  = minval(self%xyz(:,3))
-        half_box(:) = smpd*(real(ldim(:))/2.)
-        call self%translate(-corner+half_box)
+        qrt_box(:) = smpd*(real(ldim(:))/4.)
+        call self%translate(-corner+qrt_box)
     end subroutine center_pdbcoord
 
     subroutine atom_validation( self, vol, filename )
@@ -1246,6 +1246,7 @@ contains
             write(45,*) self%n
             write(45,*) " "
         endif
+        print *, 'smpd', smpd
         do i_atom = 1, self%n
             atom_box = 2 * ceiling(((self%radius(i_atom)*1.5)/smpd)) + 1
             ! generate simulated atom volume
@@ -1254,11 +1255,13 @@ contains
             atom_coord(:) = atom%get_coord(1)
             call atom%center_inbox(1, atom_box, smpd)
             call atom%convolve(vol_atom, cutoff = 8*smpd)
+            !call vol_atom%write('vol_atom.mrc')
             ! extract the atom volume from the molecule volume
             call vol_at%new([atom_box, atom_box, atom_box], smpd)
             center(:) = ang2vox(atom_coord(:), smpd) - atom_box/2
             call vol%window_slim(center, atom_box, vol_at, outside)
             call vol_at%mask(real(atom_box)/2., 'soft')
+            !call vol_at%write('vol_at_'//int2str(i_atom)//'.mrc')
             ! compute cross-correlation between both volumes
             cc = vol_atom%real_corr(vol_at)
             call self%set_atom_corr(i_atom, cc)
