@@ -99,7 +99,7 @@ contains
         ! multi-gaussian pick
         do ipick = 1,npickers
             call pickers(ipick)%new_gaupicker(pcontrast, smpd_shrink, moldiams(ipick), moldiams(ipick), offset, ndev)
-            dist_threshold = (pickers(ipick)%maxdiam/3.) / smpd_shrink
+            dist_threshold = (pickers(ipick)%maxdiam/3.) / pickers(ipick)%smpd_shrink
             call pickers(ipick)%gaupick(dist_thres=dist_threshold)
             smds_corr(ipick) = pickers(ipick)%smd_corr
             call pickers(ipick)%mic_shrink%kill
@@ -270,7 +270,7 @@ contains
         integer     :: box_max
         real        :: scale, maxdiam_max, lp
         if( self%exists ) call self%kill
-        self%smpd_shrink = smpd_shrink
+        self%smpd_shrink = max(smpd_raw,smpd_shrink)
         if( present(roi) )then
             self%l_roi = roi
         else
