@@ -338,13 +338,13 @@ contains
         call cline_refine3D_2%set('sh_first',               'yes')
         call cline_refine3D_2%set('prob_sh',                'yes')
         if( L_FSC_STAGE2 )then
-        call cline_refine3D_2%set('lp_auto',                'fsc')
-        call cline_refine3D_2%set('lplim_crit',             0.143)
-        call cline_refine3D_2%set('ml_reg',                 'yes')
+            call cline_refine3D_2%set('lp_auto',            'fsc')
+            call cline_refine3D_2%set('lplim_crit',         0.143)
+            call cline_refine3D_2%set('ml_reg',             'yes')
         else
-        call cline_refine3D_2%set('lp_auto',                'yes') ! lpstart/lpstop set below
-        call cline_refine3D_2%set('snr_noise_reg',            3.0)
-        call cline_refine3D_2%set('ml_reg',                  'no')
+            call cline_refine3D_2%set('lp_auto',            'yes') ! lpstart/lpstop set below
+            call cline_refine3D_2%set('snr_noise_reg',        3.0)
+            call cline_refine3D_2%set('ml_reg',              'no')
         endif
         ! trslim set after downscaling, below
         ! (4) RE-CONSTRUCT & RE-PROJECT VOLUME
@@ -1013,8 +1013,8 @@ contains
         integer, parameter :: NSTAGES_DEFAULT = 5
         integer, parameter :: MAXITS2 = 30, MAXITS_SHORT1 = 15, MAXITS_SHORT2 = 25
         integer, parameter :: NSPACE1 = 500, NSPACE2 = 1000, NSPACE3 = 2000
-        integer, parameter :: SYMSEARCH_DEFAULT = 3
-        integer, parameter :: MLREG_ITER        = 1
+        integer, parameter :: SYMSEARCH_DEFAULT   = 3               ! in [1;NSTAGES]
+        integer, parameter :: MLREG_ITER          = 1               ! in [1;NSTAGES+1]
         integer, parameter :: SHIFT_STAGE_DEFAULT = 4
         integer, parameter :: ICM_STAGE_DEFAULT   = NSTAGES_DEFAULT ! in [1;NSTAGES+1]
         ! commanders
@@ -1233,29 +1233,6 @@ contains
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
             endif
             call cline_refine3D%set('center', params%center)
-            if( it > 1 )then
-                if( prev_box_crop == params%box_crop )then
-                    call cline_refine3D%set('continue',  'yes')
-                else
-                    ! allows reconstruction to correct dimension
-                    call cline_refine3D%delete('continue')
-                    do state = 1,params%nstates
-                        vol_str = 'vol'//trim(int2str(state))
-                        call cline_refine3D%delete(vol_str)
-                    enddo
-                endif
-            endif
-            ! symmetry
-            if( it == symsearch_iter+1 .and. (l_srch4symaxis .or. l_symran) )then
-                call cline_refine3D%delete('continue')
-                do state = 1,params%nstates
-                    vol_str = 'vol'//trim(int2str(state))
-                    call cline_refine3D%delete(vol_str)
-                enddo
-                call cline_refine3D%set('pgrp', params%pgrp)
-                l_srch4symaxis = .false.
-                l_symran       = .false.
-            endif
             ! stage updates
             call cline_refine3D%set('box_crop', params%box_crop)
             call cline_refine3D%set('lp',       params%lp)
@@ -1279,28 +1256,38 @@ contains
                 call cline_refine3D%set('icm',   'yes')
                 call cline_refine3D%set('lambda', params%lambda)
             endif
-            ! ML volume regularization
+            ! Volume: ML regularization, symmetry
+            call cline_refine3D%set('ml_reg', 'no')
+            if( it > 1 ) call cline_refine3D%set('continue',  'yes')
+            ! reconstruction is required after symmetry search
+            if( it == symsearch_iter+1 .and. (l_srch4symaxis .or. l_symran) )then
+                call cline_refine3D%delete('continue')
+                do state = 1,params%nstates
+                    vol_str = 'vol'//trim(int2str(state))
+                    call cline_refine3D%delete(vol_str)
+                enddo
+                call cline_refine3D%set('pgrp', params%pgrp)
+                l_srch4symaxis = .false.
+                l_symran       = .false.
+            endif
+            ! reconstruction is required when switching to MLreg
             if( params%l_ml_reg .and. it >= MLREG_ITER )then
                 call cline_refine3D%set('ml_reg', 'yes')
-                if( it == MLREG_ITER .or. params%box_crop > prev_box_crop )then
-                    if( it > 1 )then
-                        call cline_reconstruct3D_mlreg%set('which_iter', iter)
-                        call cline_reconstruct3D_mlreg%set('box_crop',   params%box_crop)
-                        call cline_reconstruct3D_mlreg%set('smpd_crop',  params%smpd_crop)
-                        call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D_mlreg)
-                        call cline_refine3D%set('continue',  'yes')
-                        do state = 1,params%nstates
-                            vol_str = 'vol'//trim(int2str(state))
-                            call cline_refine3D%delete(vol_str)
-                        enddo
-                    endif
+                if( it == MLREG_ITER .and. it > 1 )then
+                    call cline_reconstruct3D_mlreg%set('which_iter', iter)
+                    call cline_reconstruct3D_mlreg%set('box_crop',   params%box_crop)
+                    call cline_reconstruct3D_mlreg%set('smpd_crop',  params%smpd_crop)
+                    call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D_mlreg)
+                    call cline_refine3D%set('continue',  'yes')
+                    do state = 1,params%nstates
+                        vol_str = 'vol'//trim(int2str(state))
+                        call cline_refine3D%delete(vol_str)
+                    enddo
                 endif
-            else
-                call cline_refine3D%set('ml_reg', 'no')
             endif
-            ! execution
+            ! Execution
             call exec_refine3D(iter)
-            ! symmetrization
+            ! Symmetrization
             if( it == SYMSEARCH_ITER ) call symmetrize
         enddo
         ! Final stage
@@ -1321,32 +1308,21 @@ contains
         if( l_autoscale )then
             write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
         endif
-        ! Dealing with reconstruction
-        if( prev_box_crop == params%box_crop )then
-            call cline_refine3D%set('continue',  'yes')
-        else
-            ! allows reconstruction to correct dimension
-            call cline_refine3D%delete('continue')
-            do state = 1,params%nstates
-                vol_str = 'vol'//trim(int2str(state))
-                call cline_refine3D%delete(vol_str)
-            enddo
-        endif
-        if( params%l_ml_reg .and. it >= MLREG_ITER )then
+        call cline_refine3D%set('continue', 'yes')
+        call cline_refine3D%set('ml_reg',   'no')
+        if( params%l_ml_reg )then
             call cline_refine3D%set('ml_reg', 'yes')
-            if( it == MLREG_ITER .or. params%box_crop > prev_box_crop )then
+            if( it == MLREG_ITER )then
+                ! reconstruction required
                 call cline_reconstruct3D_mlreg%set('which_iter', iter)
                 call cline_reconstruct3D_mlreg%set('box_crop',   params%box_crop)
                 call cline_reconstruct3D_mlreg%set('smpd_crop',  params%smpd_crop)
                 call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D_mlreg)
-                call cline_refine3D%set('continue',  'yes')
                 do state = 1,params%nstates
                     vol_str = 'vol'//trim(int2str(state))
                     call cline_refine3D%delete(vol_str)
                 enddo
             endif
-        else
-            call cline_refine3D%set('ml_reg', 'no')
         endif
         if( params%l_icm .and. (it >= params%icm_stage) )then
             call cline_refine3D%set('icm',   'yes')
@@ -1499,7 +1475,7 @@ contains
         real,    parameter :: LP_DEFAULT    = 6.
         real,    parameter :: LPSTART_DEFAULT = 30., LPSTOP_DEFAULT=LP_DEFAULT
         real,    parameter :: BATCHFRAC_DEFAULT = 0.2
-        integer, parameter :: MINBOX  = 88
+        integer, parameter :: MINBOX  = 64
         integer, parameter :: NSTAGES = 11
         integer, parameter :: NSPACE1=500, NSPACE2=1000, NSPACE3=2000
         integer, parameter :: SHIFT_STAGE_DEFAULT = NSTAGES-2
@@ -1778,10 +1754,12 @@ contains
                 call exec_refine3D(iter)
                 ! Reconstruction
                 if( it < NSTAGES )then
-                    call cline_reconstruct3D%set('smpd_crop',  smpds(it+1))
-                    call cline_reconstruct3D%set('box_crop',   boxs(it+1))
-                    call cline_reconstruct3D%set('which_iter', iter)
-                    call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D)
+                    if( params%box_crop /= boxs(it+1) )then
+                        call cline_reconstruct3D%set('smpd_crop',  smpds(it+1))
+                        call cline_reconstruct3D%set('box_crop',   boxs(it+1))
+                        call cline_reconstruct3D%set('which_iter', iter)
+                        call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D)
+                    endif
                 endif
             enddo
             deallocate(batches)
@@ -2007,7 +1985,7 @@ contains
         real,    parameter :: LP_DEFAULT      = 6.
         real,    parameter :: LPSTART_DEFAULT = 30., LPSTOP_DEFAULT=LP_DEFAULT
         integer, parameter :: NPARTS  = 4
-        integer, parameter :: MINBOX  = 88
+        integer, parameter :: MINBOX  = 64
         integer, parameter :: NSTAGES_DEFAULT = 22
         integer, parameter :: MAXITS_SHORT = 5
         integer, parameter :: NSPACE1 = 500, NSPACE2 = 1000, NSPACE3 = 2000
@@ -2031,7 +2009,7 @@ contains
         type(class_frcs)              :: clsfrcs
         type(image)                   :: vol_even, vol_odd, reprojs, tmpvol, vol
         type(qsys_env)                :: qenv
-        real,             allocatable :: fsc(:), fsc2(:),res(:)
+        real,             allocatable :: fsc(:), res(:)
         character(len=:), allocatable :: str_state, vol_pproc, vol_pproc_mirr
         character(len=:), allocatable :: stack_name, dir, fsc_fname
         integer,          allocatable :: states(:), tmp(:), iters(:), prev_iters(:)
@@ -2040,7 +2018,7 @@ contains
         real    :: lps(NSTAGES_DEFAULT), smpds(NSTAGES_DEFAULT), trs(NSTAGES_DEFAULT)
         integer :: boxs(NSTAGES_DEFAULT)
         real    :: smpd_target, lp_target, scale, trslim, cenlp, symlp, dummy, msk
-        integer :: it, prev_box_crop, maxits, nptcls_sel, box, filtsz
+        integer :: it, prev_box_crop, maxits, nptcls_sel, filtsz
         integer :: nstages, symsearch_iter, istk, part, iter, nptcls_part, i,j, cnt
         logical :: l_autoscale, l_lpset, l_err, l_srch4symaxis, l_symran, l_sym, l_lpstop_set
         logical :: l_lpstart_set
@@ -2353,21 +2331,15 @@ contains
                     call del_file(trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(i,3)//LP_SUFFIX//params%ext)
                     call del_file(trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(i,3)//'_even'//params%ext)
                     call del_file(trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(i,3)//'_odd'//params%ext)
+                    call del_file(trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(i,3)//'_even_unfil'//params%ext)
+                    call del_file(trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(i,3)//'_odd_unfil'//params%ext)
                     call del_file(trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(i,3)//params%ext)
                 enddo
-                ! to remove previous volumes
                 call chdir('../')
             enddo
-            ! averaging
+            ! averaging & fsc
             if( it < NSTAGES_DEFAULT )then
-                box = params%box_crop
-                if( boxs(it+1) > box )then
-                    box = boxs(it+1)
-                    call vol%fft
-                    call vol%pad_inplace([box,box,box], antialiasing=.false.)
-                    call vol%ifft
-                    call vol%mul((real(params%box_crop)/real(box))**3)
-                endif
+                ! Volume & FSC will be padded on the fly at the next refine3D run
                 call vol%div(real(params%nparts))
                 call vol_even%div(real(params%nparts))
                 call vol_odd%div(real(params%nparts))
@@ -2380,14 +2352,12 @@ contains
                 call vol_even%fft()
                 call vol_odd%fft()
                 call vol_even%fsc(vol_odd, fsc)
-                allocate(fsc2(fdim(box)-1),source=0.)
-                fsc2(1:filtsz) = fsc(1:filtsz)
                 fsc_fname = trim(FSC_FBODY)//int2str_pad(1,2)//BIN_EXT
-                call arr2file(fsc2, fsc_fname)
+                call arr2file(fsc, fsc_fname)
                 call cline_refine3D%set('fsc', '../'//trim(fsc_fname))
-                res = get_resarr(box, smpds(it+1))
-                call plot_fsc(size(fsc2), fsc2, res, smpds(it+1), 'fsc_stage_'//int2str_pad(it,2))
-                deallocate(fsc,fsc2,res)
+                res = get_resarr(params%box_crop, params%smpd_crop)
+                call plot_fsc(size(fsc), fsc, res, params%smpd_crop, 'fsc_stage_'//int2str_pad(it,2))
+                deallocate(fsc,res)
                 call vol%kill
                 call vol_even%kill
                 call vol_odd%kill

@@ -830,7 +830,7 @@ contains
         real            :: shift(2), e3, sdev_noise, w
         integer         :: batchlims(2), iptcl, i,j, i_batch, ibatch, iproj, eo, peo, ithr, pproj
         logical         :: DEBUG    = .false.
-        logical         :: BILINEAR = .false.
+        logical         :: BILINEAR = .true.
         integer(timer_int_kind) :: t
         real(timer_int_kind)    :: t_ini, t_pad, t_sum, t_rec
         t = tic()
