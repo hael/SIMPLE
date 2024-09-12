@@ -3,7 +3,7 @@ module simple_commander_stream
 include 'simple_lib.f08'
 use simple_binoris_io
 use simple_cmdline,            only: cmdline
-use simple_parameters,         only: parameters, params_glob
+use simple_parameters,         only: parameters
 use simple_commander_base,     only: commander_base
 use simple_sp_project,         only: sp_project
 use simple_qsys_env,           only: qsys_env
@@ -83,7 +83,7 @@ contains
         integer                                :: movies_set_counter, import_counter
         integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection, nsets, i,j
         integer                                :: cnt, n_imported, n_added, n_failed_jobs, n_fail_iter, nmic_star, iset, envlen
-        logical                                :: l_movies_left, l_haschanged, pause_import
+        logical                                :: l_movies_left, l_haschanged
         real                                   :: avg_tmp, preproc_nthr
         call cline%set('oritype',     'mic')
         call cline%set('mkdir',       'yes')
@@ -850,16 +850,16 @@ contains
             endif
             iter = iter + 1
             ! switch to diameter refinement
-            if( l_multipick_refine .and. params_glob%updated .eq. 'yes' .and. params_glob%moldiam_refine .gt. 0.0) then
-                write(logfhandle,'(A,I3)') '>>> REFINING MOLECULAR DIAMETER        : ', int(params_glob%moldiam_refine)
+            if( l_multipick_refine .and. params%updated .eq. 'yes' .and. params%moldiam_refine .gt. 0.0) then
+                write(logfhandle,'(A,I3)') '>>> REFINING MOLECULAR DIAMETER        : ', int(params%moldiam_refine)
                 !! necessary??
                 odir_picker = filepath(trim(PATH_HERE), trim(DIR_PICKER))
                 call simple_mkdir(odir_picker, errmsg="commander_stream :: exec_stream_pick_extract;  ")
                 !!
-                params_glob%updated = 'no'
-                params%moldiam      = params_glob%moldiam_refine - 50.0
-                params%moldiam_max  = params_glob%moldiam_refine + 50.0
-                params%nmoldiams    = 11.0
+                params%updated     = 'no'
+                params%moldiam     = params%moldiam_refine - 50.0
+                params%moldiam_max = params%moldiam_refine + 50.0
+                params%nmoldiams   = 11.0
                 call cline_pick_extract%set('moldiam',     params%moldiam)
                 call cline_pick_extract%set('moldiam_max', params%moldiam_max)
                 call cline_pick_extract%set('nmoldiams',   params%nmoldiams)
@@ -901,7 +901,7 @@ contains
                             cline_make_pickrefs = cline
                             call cline_make_pickrefs%set('prg',   'make_pickrefs')
                             call cline_make_pickrefs%set('stream','no')
-                            call cline_make_pickrefs%set('smpd',  params%smpd)
+                            call cline_make_pickrefs%set('smpd',  params%smpd) ! is the required output sampling distance
                             call xmake_pickrefs%execute_shmem(cline_make_pickrefs)
                             call cline_pick_extract%set('pickrefs', '../'//trim(PICKREFS_FBODY)//trim(params%ext))
                             write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
@@ -1445,11 +1445,11 @@ contains
         type(qsys_env)                         :: qenv
         type(cmdline)                          :: cline_extract, cline_pick_extract
         type(moviewatcher)                     :: project_buff
-        type(sp_project)                       :: spproj_glob, stream_spproj
+        type(sp_project)                       :: spproj_glob
         type(starproject_stream)               :: starproj_stream
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=:),          allocatable :: output_dir, output_dir_extract, output_dir_picker
-        character(len=LONGSTRLEN)              :: cwd_job, latest_boxfile
+        character(len=LONGSTRLEN)              :: cwd_job
         character(len=STDLEN)                  :: refgen_nthr_env, refgen_part_env
         real                                   :: refgen_nthr
         integer                                :: extract_set_counter    ! Internal counter of projects to be processed
@@ -1457,8 +1457,6 @@ contains
         integer                                :: nmics, nprojects, stacksz, prev_stacksz, iter, iproj, envlen
         integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, nmic_star
         logical                                :: l_haschanged, l_once, l_pick_extract
-        integer(timer_int_kind) :: t0
-        real(timer_int_kind)    :: rt_write
         call cline%set('oritype',      'mic')
         call cline%set('mkdir',        'yes')
         call cline%set('picker',       'new')
@@ -1596,6 +1594,7 @@ contains
             ! ugly single use flag for backwards compatibility, will need to go
             call cline_pick_extract%set('newstream','yes')
         else
+            ! extraction only
             cline_extract = cline
             call cline_extract%set('prg','extract')
             call cline_extract%set('dir','../'//trim(trim(DIR_EXTRACT)))
@@ -1737,7 +1736,7 @@ contains
         else
             call terminate_stream2D_dev
         endif
-        if(file_exists(STREAM_REJECT_CLS)) call write_pool_cls_selected_user_dev
+        if(file_exists(STREAM_REJECT_CLS)) call write_pool_cls_selected_user
         call gui_stats%delete('latest', '')
         call gui_stats%set('selected references', '', trim(cwd_glob) // '/' // STREAM_SELECTED_REFS // trim(JPG_EXT), thumbnail = .true., smpd = params%smpd, box = real(params%box))
         !call write_project
@@ -2159,20 +2158,20 @@ contains
         class(commander_stream_cluster2D), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         character(len=STDLEN),     parameter   :: micspproj_fname = './streamdata.simple'
+        integer,                   parameter   :: FLUSH_NITERS    = 5    ! # of iterations after which leftover particles join the pool
+        integer(kind=dp),          parameter   :: FLUSH_TIMELIMIT = 600  ! time (secs) after which leftover particles join the pool
+        type(micproj_record),      allocatable :: micproj_records(:)
         type(parameters)                       :: params
         type(guistats)                         :: gui_stats
         type(oris)                             :: moldiamori
-        integer,                   parameter   :: INACTIVE_TIME   = 900  ! inactive time trigger for writing project file
-        logical,                   parameter   :: DEBUG_HERE      = .true.
-        type(micproj_record),      allocatable :: micproj_records(:)
         type(moviewatcher)                     :: project_buff
         type(sp_project)                       :: spproj_glob
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=LONGSTRLEN)              :: cwd_job
-        integer                                :: nmics_rejected_glob
-        integer                                :: nchunks_imported_glob, nchunks_imported, nprojects, iter
-        integer                                :: n_imported, n_added, nptcls_glob, n_failed_jobs, ncls_in, nmic_star
-        integer                                :: pool_iter_last_chunk_imported, pool_iter_max_chunk_imported
+        integer(kind=dp)                       :: pool_time_last_chunk
+        integer                                :: nmics_rejected_glob, nchunks_imported_glob, nchunks_imported, nprojects, iter
+        integer                                :: n_imported, n_imported_prev, n_added, nptcls_glob, n_failed_jobs, ncls_in
+        integer                                :: pool_iter_last_chunk, pool_iter_max_chunk_imported
         logical                                :: l_nchunks_maxed, l_pause, l_params_updated
         real                                   :: nptcls_pool, moldiam
         call cline%set('oritype',      'mic')
@@ -2238,8 +2237,8 @@ contains
             if( .not. moldiamori%isthere(1, "moldiam") ) THROW_HARD( 'moldiam missing from ' // trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM) )
             moldiam = moldiamori%get(1, "moldiam")
             call moldiamori%kill
-            call cline%set('mskdiam', moldiam * 1.2)
             params%mskdiam = moldiam * 1.2
+            call cline%set('mskdiam', params%mskdiam)
             write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER SET TO', params%mskdiam
         endif
         if(params%nptcls_per_cls == 0) write(logfhandle,'(A)')   '>>> # PARTICLES PER CLASS WILL BE AUTO DETERMINED AFTER 100 IMPORTED MICROGRAPHS'
@@ -2252,16 +2251,18 @@ contains
         ! movie watcher init
         project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true.)
         ! Infinite loop
-        nptcls_glob           = 0   ! global number of particles
-        nchunks_imported_glob = 0   ! global number of completed chunks
+        nptcls_glob           = 0       ! global number of particles
+        nchunks_imported_glob = 0       ! global number of completed chunks
+        n_imported            = 0       ! global number of imported processed micrographs
+        n_imported_prev       = 0
+        nmics_rejected_glob   = 0       ! global number of micrographs rejected
         nprojects             = 0
-        iter                  = 0
-        n_imported            = 0   ! global number of imported processed micrographs
+        iter                  = 0       ! global number of infinite loop iterations
         n_failed_jobs         = 0
-        nmic_star             = 0
-        nmics_rejected_glob   = 0   ! global number of micrographs rejected
-        l_nchunks_maxed       = .false.
-        l_pause               = .false.
+        l_nchunks_maxed       = .false. ! Whether a minimum number of chunks as been met
+        l_pause               = .false. ! whether pool classification is skipped
+        pool_iter_last_chunk  = -1                          ! used for flushing unclassified particles
+        pool_time_last_chunk  = huge(pool_time_last_chunk)  ! used for flushing unclassified particles
         ! guistats init
         call gui_stats%init(.true.)
         call gui_stats%set('particles', 'particles_imported',          0,            primary=.true.)
@@ -2280,7 +2281,6 @@ contains
                 call project_buff%kill
                 nprojects = 0
             else
-                ! watch & update global records
                 call project_buff%watch(nprojects, projects, max_nmovies=10*params%nparts)
             endif
             ! update global records
@@ -2297,12 +2297,12 @@ contains
                 call gui_stats%set_now('particles', 'last_particles_imported')
                 ! update progress monitor
                 call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
-                ! remove this?
+                ! remove this??
                 if( n_imported < 1000 )then
                     call update_user_params(cline)
-                else if( n_imported > nmic_star + 100 )then
+                else if( n_imported > n_imported_prev + 100 )then
                     call update_user_params(cline)
-                    nmic_star = n_imported
+                    n_imported_prev = n_imported
                 endif
             endif
             ! 2D classification section
@@ -2311,7 +2311,7 @@ contains
             call update_chunks_dev
             if( l_pause )then
                 call update_user_params_dev(cline, l_params_updated)
-                if( l_params_updated ) l_pause = .false.
+                if( l_params_updated ) l_pause = .false.    ! resuming classification
             else
                 call update_pool_status_dev
                 call update_pool_dev
@@ -2326,9 +2326,10 @@ contains
             else
                 call import_chunks_into_pool_dev( nchunks_imported )
                 if( nchunks_imported > 0 )then
-                    nchunks_imported_glob         = nchunks_imported_glob + nchunks_imported
-                    pool_iter_last_chunk_imported = get_pool_iter()
-                    l_pause = .false.
+                    nchunks_imported_glob = nchunks_imported_glob + nchunks_imported
+                    pool_iter_last_chunk  = get_pool_iter()
+                    pool_time_last_chunk  = time8()
+                    l_pause = .false.   ! resuming classification
                 endif
                 if( nchunks_imported_glob >= params%maxnchunks )then
                     if( .not.l_nchunks_maxed ) pool_iter_max_chunk_imported = get_pool_iter()
@@ -2337,20 +2338,22 @@ contains
                 if( l_pause )then
                     ! skipping pool classification
                 else
-                    if( get_pool_iter() >= pool_iter_last_chunk_imported+10 )then
+                    if( ((pool_iter_last_chunk>0) .and. (get_pool_iter() >= pool_iter_last_chunk+FLUSH_NITERS))&
+                        &.or.(time8()-pool_time_last_chunk > FLUSH_TIMELIMIT) )then
                         ! pause pool classification & rejection in absence of new chunks, resumes
                         ! when new chunks are added or classification parameters have been updated
                         l_pause = is_pool_available_dev()
                         if( l_pause )then
                             ! Remaining unclassified particles will join the pool directly
-                            call flush_remaining_particles(micproj_records)
+                            ! if pool & all chunks are inactive
+                            if( all_chunks_available() ) call flush_remaining_particles(micproj_records)
                         endif
                     endif
                 endif
-                if( .not.l_pause )then 
-                    call classify_pool_dev
-                else
+                if( l_pause )then
                     call generate_pool_stats
+                else
+                    call classify_pool_dev
                 endif
                 call classify_new_chunks_dev(micproj_records)
             endif
@@ -2474,6 +2477,7 @@ contains
 
     !> updates current parameters with user input
     subroutine update_user_params( cline_here )
+        use simple_parameters, only: params_glob
         type(cmdline), intent(inout) :: cline_here
         type(oris) :: os
         real       :: tilt_thres, beamtilt, astigthreshold, ctfresthreshold, icefracthreshold

@@ -24,7 +24,7 @@ public :: init_cluster2D_stream_dev, terminate_stream2D_dev, cleanup_root_folder
 public :: update_pool_status_dev, update_pool_dev, reject_from_pool_dev, reject_from_pool_user_dev
 public :: classify_pool_dev, generate_pool_stats, update_chunks_dev, classify_new_chunks_dev, import_chunks_into_pool_dev
 public :: is_pool_available_dev, update_user_params_dev, read_pool_xml_beamtilts_dev, assign_pool_optics_dev
-public :: write_pool_cls_selected_user_dev, get_pool_iter, flush_remaining_particles
+public :: write_pool_cls_selected_user, get_pool_iter, flush_remaining_particles, all_chunks_available
 private
 #include "simple_local_flags.inc"
 
@@ -370,6 +370,14 @@ contains
         enddo
     end subroutine update_chunks_dev
 
+    logical function all_chunks_available()
+        if( params_glob%nchunks == 0 )then
+            all_chunks_available = .true.
+        else
+            all_chunks_available = all(chunks(:)%available)
+        endif
+    end function all_chunks_available
+
     subroutine classify_new_chunks_dev( micproj_records )
         type(micproj_record), intent(inout) :: micproj_records(:)
         integer :: ichunk, n_avail_chunks, n_spprojs_in, iproj, nptcls, n2fill
@@ -708,14 +716,10 @@ contains
     subroutine import_records_into_pool( records )
         type(micproj_record), allocatable, intent(inout) :: records(:)
         type(sp_project)                   :: spproj
-        character(LONGSTRLEN), allocatable :: tmp(:)
-        integer,               allocatable :: cls_pop(:), pinds(:), states(:)
         character(LONGSTRLEN) :: projname
-        real    :: smpd_here
-        integer :: nptcls2import, nmics2import, nptcls, imic, iproj, nrecords
-        integer :: ncls_tmp, fromp_prev, fromp, ii, jptcl, i, poolind, n_remap, pop, nptcls_sel
-        integer :: nmics_imported, nptcls_imported, iptcl, ind, ncls_here, icls, irec
-        logical :: l_maxed
+        integer :: nptcls2import, nmics2import, imic, nrecords
+        integer :: fromp, jptcl
+        integer :: nmics_imported, nptcls_imported, iptcl, irec
         if( .not. allocated(records) ) return
         if( .not. stream2D_active )    return
         if( .not.pool_available )      return
@@ -1013,7 +1017,7 @@ contains
         call starproj%export_cls2D(pool_proj, pool_iter)
     end subroutine reject_from_pool_user_dev
 
-    subroutine write_pool_cls_selected_user_dev
+    subroutine write_pool_cls_selected_user
         type(image)              :: img, jpegimg
         type(stack_io)           :: stkio_r, stkio_w
         type(oris)               :: cls2reject
@@ -1070,7 +1074,7 @@ contains
         call jpegimg%kill
         call starproj_stream%stream_export_picking_references(pool_proj, params_glob%outdir)
         if(allocated(cls_mask)) deallocate(cls_mask)
-    end subroutine write_pool_cls_selected_user_dev
+    end subroutine write_pool_cls_selected_user
 
     !> updates current parameters with user input
     subroutine update_user_params_dev( cline_here, updated )
@@ -1394,7 +1398,7 @@ contains
         write(logfhandle,'(A,I6,A,I8,A3,I8,A)')'>>> POOL         INITIATED ITERATION ',pool_iter,' WITH ',nptcls_sel,&
         &' / ', sum(nptcls_per_stk),' PARTICLES'
         if( L_BENCH ) print *,'timer exec_classify_pool tot : ',toc(t_tot)
-        call tidy_2Dstream_iter(l_no_chunks)
+        call tidy_2Dstream_iter
     end subroutine classify_pool_dev
 
     subroutine generate_pool_stats
@@ -2283,21 +2287,22 @@ contains
     end subroutine rescale_cavgs
 
     ! Removes some unnecessary files
-    subroutine tidy_2Dstream_iter( all )
-        logical,           intent(in) :: all
+    subroutine tidy_2Dstream_iter
         character(len=:), allocatable :: prefix
         if( pool_iter > 3 )then
             prefix = trim(POOL_DIR)//trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter-3,3))
+            call del_file(prefix//trim(JPG_EXT))
             call del_file(prefix//'_even'//trim(params_glob%ext))
             call del_file(prefix//'_odd'//trim(params_glob%ext))
-            if( all ) call del_file(prefix//trim(params_glob%ext))
+            call del_file(prefix//trim(params_glob%ext))
             if( l_wfilt )then
                 call del_file(prefix//trim(WFILT_SUFFIX)//'_even'//trim(params_glob%ext))
                 call del_file(prefix//trim(WFILT_SUFFIX)//'_odd'//trim(params_glob%ext))
-                if( all ) call del_file(prefix//trim(WFILT_SUFFIX)//trim(params_glob%ext))
+                call del_file(prefix//trim(WFILT_SUFFIX)//trim(params_glob%ext))
             endif
             call del_file(trim(POOL_DIR)//trim(CLS2D_STARFBODY)//'_iter'//int2str_pad(pool_iter-3,3)//'.star')
-            call del_file(trim(POOL_DIR)//trim(sigma2_star_from_iter(pool_iter-3)))
+            call del_file(trim(prefix) // '.jpg')
+            if( l_update_sigmas ) call del_file(trim(POOL_DIR)//trim(sigma2_star_from_iter(pool_iter-3)))
         endif
     end subroutine tidy_2Dstream_iter
 
