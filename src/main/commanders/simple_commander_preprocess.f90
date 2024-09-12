@@ -2403,7 +2403,7 @@ contains
         real,    parameter :: MSKDIAM2LP = 0.15, lP_LB = 30., LP_UB = 15.
         integer, parameter :: NREFS=100
         real    :: ang, rot, lp, diam_max, smpd_here, sc
-        integer :: i, nrots, iref, irot, ldim_clip(3), ldim(3), ldim_sc(3), ncavgs, icavg
+        integer :: nrots, iref, irot, ldim_clip(3), ldim(3), ldim_sc(3), ncavgs, icavg
         integer :: cnt, norefs, b, new_box
         logical :: l_scale, l_moldiam = .false.
         ! error check
