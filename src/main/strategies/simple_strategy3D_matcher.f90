@@ -295,10 +295,14 @@ contains
             case DEFAULT
                 if( L_BENCH_GLOB ) t_rec = tic()
                 if( params_glob%l_batchfrac )then
-                    call calc_3Dbatchrec( cline, nptcls2update, pinds, prev_oris, which_iter )
+                    call calc_3Dbatchrec( cline, nptcls2update, pinds, prev_oris, which_iter=which_iter )
                     call prev_oris%kill
                 else
-                    call calc_3Drec( cline, nptcls2update, pinds, which_iter )
+                    if( trim(params_glob%projrec).eq.'yes' )then
+                        call calc_projdir3Drec( cline, nptcls2update, pinds, which_iter=which_iter )
+                    else
+                        call calc_3Drec( cline, nptcls2update, pinds, which_iter=which_iter )
+                    endif
                 endif
                 call eucl_sigma%kill
                 call killimgbatch

@@ -1277,6 +1277,9 @@ contains
                     call cline_reconstruct3D_mlreg%set('which_iter', iter)
                     call cline_reconstruct3D_mlreg%set('box_crop',   params%box_crop)
                     call cline_reconstruct3D_mlreg%set('smpd_crop',  params%smpd_crop)
+                    ! nspace must match refine3D when projrec=yes
+                    call cline_reconstruct3D_mlreg%set('nspace',     cline_refine3D%get_rarg('nspace'))
+                    ! reconstruction
                     call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D_mlreg)
                     call cline_refine3D%set('continue',  'yes')
                     do state = 1,params%nstates
@@ -1359,6 +1362,8 @@ contains
             ! no fractional or stochastic updates
             call cline_reconstruct3D%delete('update_frac')
             call cline_reconstruct3D%delete('stoch_update')
+            ! individual particles reconstruction
+            call cline_reconstruct3D%set('projrec', 'no')
             ! reconstruction
             call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D)
             call spproj%read_segment('out',params%projfile)
