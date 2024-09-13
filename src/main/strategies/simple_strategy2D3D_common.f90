@@ -833,7 +833,9 @@ contains
         logical         :: BILINEAR = .true.
         integer(timer_int_kind) :: t
         real(timer_int_kind)    :: t_ini, t_pad, t_sum, t_rec
-        t = tic()
+        if( params_glob%nstates /= 1   ) THROW_HARD('PROJREC & NSTATES>1 not supported yet')
+        if( cline%defined('batchfrac') ) THROW_HARD('PROJREC & BATCHFRAC not supported yet')
+        if( DEBUG ) t = tic()
         ! init volumes
         call preprecvols
         ! prep batch imgs
@@ -871,16 +873,18 @@ contains
         else
             call gen_instrfun_img(instrimg, 'kb', fpls(1)%kbwin, padded_dim=params_glob%boxpd, norm=.true.)
         endif
-        t_ini = toc(t)
+        if( DEBUG ) t_ini = toc(t)
         ! batch loop
         tmp = eopops
-        t_pad = 0.
-        t_sum = 0.
+        if( DEBUG )then
+            t_pad = 0.
+            t_sum = 0.
+        endif
         do i_batch=1,nptcls2update,MAXIMGBATCHSZ
             batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
             ! particles in-plane transformation
             call discrete_read_imgbatch( nptcls2update, pinds, batchlims)
-            t = tic()
+            if( DEBUG ) t = tic()
             !$omp parallel do default(shared) private(i,iptcl,ibatch,shift,e3,sdev_noise,ctfparms,ithr)&
             !$omp schedule(static) proc_bind(close)
             do i = batchlims(1),batchlims(2)
@@ -895,8 +899,10 @@ contains
                 call fpls(ibatch)%gen_planes_pad(build_glob%imgbatch(ibatch), ctfparms, shift, e3, iptcl, BILINEAR)
             end do
             !$omp end parallel do
-            t_pad = t_pad + toc(t)
-            t = tic()
+            if( DEBUG )then
+                t_pad = t_pad + toc(t)
+                t = tic()
+            endif
             ! particles summation
             ! FAST
             !$omp parallel do default(shared) private(i,j,iproj,pproj,iptcl,ibatch,w,eo,peo)&
@@ -926,7 +932,7 @@ contains
                 enddo
             enddo
             !$omp end parallel do
-            t_sum = t_sum + toc(t)
+            if( DEBUG ) t_sum = t_sum + toc(t)
         end do
         ! some cleanup
         !$omp parallel do default(shared) private(ibatch) schedule(static) proc_bind(close)
@@ -936,7 +942,7 @@ contains
         !$omp end parallel do
         deallocate(fpls,tmp)
         ! projections directions reconstructon
-        t = tic()
+        if( DEBUG ) t = tic()
         do iproj = 1,params_glob%nspace
             call build_glob%eulspace%get_ori(iproj, orientation)
             call orientation%set('state',1.)
@@ -950,7 +956,7 @@ contains
                 call grid_ptcl(projdirs(iproj,2), build_glob%pgrpsyms, orientation)
             endif
         end do
-        t_rec = toc(t)
+        if( DEBUG ) t_rec = toc(t)
         if( DEBUG )then
             print *,'timing: ',t_ini, t_pad, t_sum, t_rec
             call build_glob%eulspace%write('reforis.txt')
