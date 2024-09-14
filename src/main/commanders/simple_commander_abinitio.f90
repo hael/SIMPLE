@@ -629,6 +629,7 @@ contains
         integer,               parameter :: NSTAGES         = 8
         integer,               parameter :: PHASES(3)       = [2,6,8]
         integer,               parameter :: MAXITS(3)       = [20,15,10]
+        integer,               parameter :: MAXITS_GLOB(3)  = [2*20,4*15,2*10]
         integer,               parameter :: NSPACE(3)       = [500,1000,2500]
         integer,               parameter :: SYMSRCH_STAGE   = 3
         character(len=STDLEN), parameter :: work_projfile   = 'initial_3Dmodel_tmpproj.simple'
@@ -1001,9 +1002,9 @@ contains
 
             subroutine set_cline_refine3D( istage )
                 integer, intent(in) :: istage
-                character(len=:), allocatable :: silence_fsc, sh_first, prob_sh, ml_reg
+                character(len=:), allocatable :: silence_fsc, sh_first, prob_sh, ml_reg, refine
                 integer :: iphase
-                real    :: trs, rnspace, rmaxits, riter
+                real    :: trs, rnspace, rmaxits, rmaxits_glob, riter, snr_noise_reg
                 ! iteration number bookkeeping
                 if( cline_refine3D%defined('endit') )then
                     riter = cline_refine3D%get_rarg('endit')
@@ -1024,29 +1025,38 @@ contains
                 ! phase control parameters
                 select case(iphase)
                     case(1)
-                        rnspace     = real(NSPACE(1))
-                        rmaxits     = real(MAXITS(1))
-                        silence_fsc = 'yes'
-                        trs         = 0.
-                        sh_first    = 'no'
-                        prob_sh     = 'no'
-                        ml_reg      = 'no'
+                        refine        = 'shc_smpl'
+                        rnspace       = real(NSPACE(1))
+                        rmaxits       = real(MAXITS(1))
+                        rmaxits_glob  = real(MAXITS_GLOB(1))
+                        silence_fsc   = 'yes'
+                        trs           = 0.
+                        snr_noise_reg = 2.0
+                        sh_first      = 'no'
+                        prob_sh       = 'no'
+                        ml_reg        = 'no'
                     case(2)
-                        rnspace     = real(NSPACE(2))
-                        rmaxits     = real(MAXITS(2))
-                        silence_fsc = 'yes'
-                        trs         = lpinfo(istage)%trslim
-                        sh_first    = 'yes'
-                        prob_sh     = 'no'
-                        ml_reg      = 'yes'
+                        refine        = 'shc_smpl'
+                        rnspace       = real(NSPACE(2))
+                        rmaxits       = real(MAXITS(2))
+                        rmaxits_glob  = real(MAXITS_GLOB(2))
+                        silence_fsc   = 'yes'
+                        trs           = lpinfo(istage)%trslim
+                        snr_noise_reg = 4.0
+                        sh_first      = 'yes'
+                        prob_sh       = 'no'
+                        ml_reg        = 'yes'
                     case(3)
-                        rnspace     = real(NSPACE(3))
-                        rmaxits     = real(MAXITS(3))
-                        silence_fsc = 'no'
-                        trs         = lpinfo(istage)%trslim
-                        sh_first    = 'yes'
-                        prob_sh     = 'yes'
-                        ml_reg      = 'yes'
+                        refine        = 'prob'
+                        rnspace       = real(NSPACE(3))
+                        rmaxits       = real(MAXITS(3))
+                        rmaxits_glob  = real(MAXITS_GLOB(3))
+                        silence_fsc   = 'no'
+                        trs           = lpinfo(istage)%trslim
+                        snr_noise_reg = 8.0
+                        sh_first      = 'yes'
+                        prob_sh       = 'yes'
+                        ml_reg        = 'yes'
                 end select
                 ! symmetry
                 if( srch4symaxis )then
@@ -1061,14 +1071,16 @@ contains
                 call cline_refine3D%set('prg',                     'refine3D')
                 call cline_refine3D%set('startit',                      riter)
                 call cline_refine3D%set('which_iter',                   riter)
-                call cline_refine3D%set('refine',                  'shc_smpl')
+                call cline_refine3D%set('refine',                      refine)
                 call cline_refine3D%set('lp',               lpinfo(istage)%lp)
                 call cline_refine3D%set('smpd_crop', lpinfo(istage)%smpd_crop)
                 call cline_refine3D%set('box_crop',   lpinfo(istage)%box_crop)
                 call cline_refine3D%set('nspace',                     rnspace)
                 call cline_refine3D%set('maxits',                     rmaxits)
+                call cline_refine3D%set('maxits_glob',           rmaxits_glob)
                 call cline_refine3D%set('silence_fsc',            silence_fsc)
                 call cline_refine3D%set('trs',                            trs)
+                call cline_refine3D%set('snr_noise_reg',        snr_noise_reg)
                 call cline_refine3D%set('sh_first',                  sh_first)
                 call cline_refine3D%set('prob_sh',                    prob_sh)
                 call cline_refine3D%set('ml_reg',                      ml_reg)

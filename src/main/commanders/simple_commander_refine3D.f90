@@ -372,7 +372,7 @@ contains
             write(logfhandle,'(A)')   '>>>'
             if( params%l_noise_reg )then
                 ! set annealing parameter
-                params%eps = inv_cos_decay(niters, params%maxits, params%eps_bounds)
+                params%eps = inv_cos_decay(iter, params%maxits_glob, params%eps_bounds)
                 write(logfhandle,601) '>>> SNR, WHITE NOISE REGULARIZATION           ', params%eps
             endif
             if( trim(params%objfun).eq.'euclid' )then
@@ -654,7 +654,7 @@ contains
                 write(logfhandle,'(A)')   '>>>'
                 if( params%l_noise_reg )then
                     ! set annealing parameter
-                    params%eps = inv_cos_decay(i, params%maxits, params%eps_bounds)
+                    params%eps = inv_cos_decay(params%which_iter, params%maxits_glob, params%eps_bounds)
                     write(logfhandle,601) '>>> SNR, WHITE NOISE REGULARIZATION           ', params%eps
                 endif
                 if( l_sigma )then
