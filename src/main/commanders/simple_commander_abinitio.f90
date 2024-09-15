@@ -1002,7 +1002,7 @@ contains
 
             subroutine set_cline_refine3D( istage )
                 integer, intent(in) :: istage
-                character(len=:), allocatable :: silence_fsc, sh_first, prob_sh, ml_reg, refine
+                character(len=:), allocatable :: silence_fsc, sh_first, prob_sh, ml_reg, refine, icm
                 integer :: iphase
                 real    :: trs, rnspace, rmaxits, rmaxits_glob, riter, snr_noise_reg
                 ! iteration number bookkeeping
@@ -1035,6 +1035,7 @@ contains
                         sh_first      = 'no'
                         prob_sh       = 'no'
                         ml_reg        = 'no'
+                        icm           = 'no'
                     case(2)
                         refine        = 'shc_smpl'
                         rnspace       = real(NSPACE(2))
@@ -1046,6 +1047,7 @@ contains
                         sh_first      = 'yes'
                         prob_sh       = 'no'
                         ml_reg        = 'yes'
+                        icm           = 'no'
                     case(3)
                         refine        = 'prob'
                         rnspace       = real(NSPACE(3))
@@ -1053,10 +1055,11 @@ contains
                         rmaxits_glob  = real(MAXITS_GLOB(3))
                         silence_fsc   = 'no'
                         trs           = lpinfo(istage)%trslim
-                        snr_noise_reg = 8.0
+                        snr_noise_reg = 6.0
                         sh_first      = 'yes'
                         prob_sh       = 'yes'
                         ml_reg        = 'yes'
+                        icm           = 'yes'
                 end select
                 ! symmetry
                 if( srch4symaxis )then
@@ -1084,6 +1087,7 @@ contains
                 call cline_refine3D%set('sh_first',                  sh_first)
                 call cline_refine3D%set('prob_sh',                    prob_sh)
                 call cline_refine3D%set('ml_reg',                      ml_reg)
+                call cline_refine3D%set('icm',                            icm)
 
                 call cline_refine3D%printline
 
