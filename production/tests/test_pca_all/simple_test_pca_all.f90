@@ -2,10 +2,16 @@ program simple_test_pca_all
 include 'simple_lib.f08'
 use simple_ppca_inmem, only: ppca_inmem
 use simple_pca_svd,    only: pca_svd
+use simple_kpca_svd,   only: kpca_svd
+use simple_cmdline,    only: cmdline
+use simple_parameters, only: parameters
 implicit none
-integer, parameter :: NP = 3, NS = 4, NC = 2, MAXPCAITS = 15
+integer, parameter :: NP = 3, NS = 4, NC = 3, MAXPCAITS = 15
 type(ppca_inmem)   :: prob_pca
 type(pca_svd)      :: pca_obj
+type(kpca_svd)     :: kpca_obj
+type(cmdline)      :: cline
+type(parameters)   :: p
 integer :: j
 real    :: data_ori(NP, NS), avg(NP), tmpvec(NP), data_pca(NP, NS), E_zn(NC, NS), data_cen(NP, NS)
 data_ori(1,:) = [ 1, 2, 3, 4]
@@ -60,6 +66,22 @@ do j = 1, NS
 end do
 !$omp end parallel do
 print *, 'Pre-imaged data using PCA:'
+do j = 1, NP
+    print *, data_pca(j,:)
+enddo
+print *, '---------------------------------------------------'
+! kPCA test
+call cline%parse_oldschool
+call p%new(cline)
+call kpca_obj%new(NS, NP, NC)
+call kpca_obj%master(data_cen)
+!$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
+do j = 1, NS
+    call kpca_obj%generate(j, avg, tmpvec)
+    data_pca(:,j) = tmpvec
+end do
+!$omp end parallel do
+print *, 'Pre-imaged data using kPCA:'
 do j = 1, NP
     print *, data_pca(j,:)
 enddo
