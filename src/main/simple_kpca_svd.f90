@@ -106,7 +106,7 @@ contains
             cur_data  = pcavecs(:,ind)
             prev_data = 0.
             iter      = 1
-            do while( euclid(cur_data,prev_data) > TOL .and. iter < MAX_ITS )
+            do while( euclid(cur_data,prev_data) > TOL .and. iter < its )
                 prev_data = cur_data
                 ! 1. projecting each image on kernel space
                 do i = 1,self%N
