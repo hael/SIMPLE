@@ -87,7 +87,7 @@ contains
         class(kpca_svd),   intent(inout) :: self
         real,              intent(in)    :: pcavecs(self%D,self%N)
         integer, optional, intent(in)    :: maxpcaits
-        real, parameter   :: TOL = 0.0001, MAX_ITS = 100
+        real, parameter   :: TOL = 0.0001, MAX_ITS = 100, C_CONST = 0.4 ! for rbf_kernel for testing
         real    :: mat(self%N,self%D), eig_vecs(self%N,self%Q), ker(self%N,self%N), ker_weight(self%N,self%N)
         real    :: prev_data(self%D), cur_data(self%D), proj_data(self%N), s, denom
         integer :: i, ind, iter, its
@@ -122,7 +122,7 @@ contains
                             proj_data(i) = euclid(prev_data, pcavecs(:,i))**2
                         enddo
                         ! 2. applying the principle components to the projected vector
-                        proj_data = exp(-proj_data/real(self%Q)/0.4)
+                        proj_data = exp(-proj_data/real(self%Q)/C_CONST)
                         proj_data = proj_data * ker_weight(:,ind)
                         ! 3. computing the pre-image (of the image in step 1) using the result in step 2
                         s = sum(proj_data)
@@ -203,8 +203,8 @@ contains
         class(kpca_svd), intent(inout) :: self
         real,            intent(in)    :: mat(self%D,self%N)
         real,            intent(out)   :: ker(self%N,self%N)
+        real,            parameter     :: C_CONST = 0.4 ! for rbf_kernel for testing
         integer :: i, j
-        real    :: c
         ! squared euclidean distance between pairs of rows
         !$omp parallel do collapse(2) default(shared) proc_bind(close) schedule(static) private(i,j)
         do i = 1,self%N
@@ -214,8 +214,7 @@ contains
         enddo
         !$omp end parallel do
         ! normalization and centering
-        c   = 0.4
-        ker = exp(-ker/real(self%Q)/c)
+        ker = exp(-ker/real(self%Q)/C_CONST)
         call self%kernel_center(ker)
     end subroutine rbf_kernel
 
