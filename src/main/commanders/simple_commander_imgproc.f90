@@ -513,7 +513,6 @@ contains
             case('kpca')
                 allocate(kpca_svd   :: pca_ptr)
         end select
-        print *, params%nptcls, npix
         call pca_ptr%new(params%nptcls, npix, params%neigs)
         call pca_ptr%master(pcavecs, MAXPCAITS)
         allocate(gen(npix))
