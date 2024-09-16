@@ -600,6 +600,11 @@ contains
                 box   = build%spproj%get_box()
                 shvec = shvec * real(box) / real(params%box_crop)
                 call syme%apply_sym_with_shift(build%spproj_field, symaxis, shvec)
+                if( cline%defined('nspace') )then
+                    ! making sure the projection directions assignment
+                    ! refers to the input reference space
+                    call build%spproj_field%set_projs(build%eulspace)
+                endif
                 call build%spproj%write_segment_inside(params%oritype, params%projfile)
             endif
         endif

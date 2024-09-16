@@ -141,7 +141,6 @@ contains
         integer,          allocatable :: pinds(:), updatecnts(:)
         logical,          allocatable :: ptcl_mask(:)
         integer :: nptcls2update
-        logical :: l_did_sample
         call build%init_params_and_build_general_tbox(cline, params)
         call build%build_strategy3D_tbox(params)
         if( .not. cline%defined('nparts') )then ! shared-memory implementation
@@ -178,6 +177,9 @@ contains
             endif
         end if
         if( trim(params%projrec).eq.'yes' )then
+            ! making sure the projection directions assignment
+            ! refers to current reference space
+            call build%spproj_field%set_projs(build%eulspace)
             call calc_projdir3Drec( cline, nptcls2update, pinds )
         else
             call calc_3Drec( cline, nptcls2update, pinds )
