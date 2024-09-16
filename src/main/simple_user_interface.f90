@@ -122,7 +122,6 @@ type(simple_program), target :: info_image
 type(simple_program), target :: info_stktab
 type(simple_program), target :: initial_3Dmodel
 type(simple_program), target :: abinitio_3Dmodel
-type(simple_program), target :: abinitio_3Dmodel_autolp
 type(simple_program), target :: abinitio_3Dmodel2
 type(simple_program), target :: batch_abinitio_3Dmodel
 type(simple_program), target :: make_cavgs
@@ -371,7 +370,6 @@ contains
         call set_common_params
         call set_prg_ptr_array
         call new_abinitio_3Dmodel
-        call new_abinitio_3Dmodel_autolp
         call new_abinitio_3Dmodel2
         call new_batch_abinitio_3Dmodel
         call new_analysis2D_nano
@@ -500,7 +498,6 @@ contains
     subroutine set_prg_ptr_array
         n_prg_ptrs = 0
         call push2prg_ptr_array(abinitio_3Dmodel)
-        call push2prg_ptr_array(abinitio_3Dmodel_autolp)
         call push2prg_ptr_array(abinitio_3Dmodel2)
         call push2prg_ptr_array(batch_abinitio_3Dmodel)
         call push2prg_ptr_array(analysis2D_nano)
@@ -636,8 +633,6 @@ contains
         select case(trim(which_program))
             case('abinitio_3Dmodel')
                 ptr2prg => abinitio_3Dmodel
-            case('abinitio_3Dmodel_autolp')
-                ptr2prg => abinitio_3Dmodel_autolp
             case('abinitio_3Dmodel2')
                 ptr2prg => abinitio_3Dmodel2
             case('batch_abinitio_3Dmodel')
@@ -889,7 +884,6 @@ contains
 
     subroutine list_simple_prgs_in_ui
         write(logfhandle,'(A)') abinitio_3Dmodel%name
-        write(logfhandle,'(A)') abinitio_3Dmodel_autolp%name
         write(logfhandle,'(A)') abinitio_3Dmodel2%name
         write(logfhandle,'(A)') batch_abinitio_3Dmodel%name
         write(logfhandle,'(A)') assign_optics_groups%name
@@ -2757,43 +2751,6 @@ contains
         call abinitio_3Dmodel%set_input('comp_ctrls', 1, nparts, gui_submenu="compute", gui_advanced=.false.)
         call abinitio_3Dmodel%set_input('comp_ctrls', 2, nthr, gui_submenu="compute", gui_advanced=.false.)
     end subroutine new_abinitio_3Dmodel
-
-    subroutine new_abinitio_3Dmodel_autolp
-        ! PROGRAM SPECIFICATION
-        call abinitio_3Dmodel_autolp%new(&
-        &'abinitio_3Dmodel_autolp',&                                                  ! name
-        &'3D ab initio model generation from particles',&                             ! descr_short
-        &'is a distributed workflow for generating an initial 3D model&
-        & from particles',&                                                           ! descr_long
-        &'simple_exec',&                                                              ! executable
-        &0, 0, 0, 4, 4, 1, 2, .true.)
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        ! <empty>
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call abinitio_3Dmodel_autolp%set_input('srch_ctrls', 1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
-        &center of gravity and map shifts back to the particles(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call abinitio_3Dmodel_autolp%set_input('srch_ctrls', 2, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
-        &for accelerated computation(yes|no){yes}','(yes|no){yes}', .false., 'yes')
-        call abinitio_3Dmodel_autolp%set_input('srch_ctrls', 3, pgrp)
-        call abinitio_3Dmodel_autolp%set_input('srch_ctrls', 4, pgrp_start)
-        ! filter controls
-        call abinitio_3Dmodel_autolp%set_input('filt_ctrls', 1, hp)
-        call abinitio_3Dmodel_autolp%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
-        &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30.)
-        call abinitio_3Dmodel_autolp%set_input('filt_ctrls', 3, ml_reg)
-        call abinitio_3Dmodel_autolp%set_input('filt_ctrls', 4, icm)
-        ! mask controls
-        call abinitio_3Dmodel_autolp%set_input('mask_ctrls', 1, mskdiam)
-        ! computer controls
-        call abinitio_3Dmodel_autolp%set_input('comp_ctrls', 1, nparts)
-        call abinitio_3Dmodel_autolp%set_input('comp_ctrls', 2, nthr)
-    end subroutine new_abinitio_3Dmodel_autolp
 
     subroutine new_abinitio_3Dmodel2
         ! PROGRAM SPECIFICATION
