@@ -1209,13 +1209,12 @@ contains
         endif
         call vol%new([ldim(1), ldim(2), ldim(3)], smpd)
         ! 0,0,0 in PDB space is map to the center of the volume 
-        !call self%translate(-corner+half_box)
         call self%center_pdbcoord(ldim, smpd)
         call self%convolve(vol, cutoff = 8*smpd)
         call self%writepdb(pdb_out)
         call vol%write(vol_file)
         call vol%kill()
-        write(logfhandle,'(A,3I4,A)') " 3D MRC simulated volume created (", ldim," ) voxels"
+        write(logfhandle,'(A,3I8,A)') " 3D MRC simulated volume created (", ldim," ) voxels"
     end subroutine pdb2mrc
 
     !>brief translate PDB coordinates to center of the volume
@@ -1223,10 +1222,10 @@ contains
         class(atoms),  intent(inout) :: self
         integer, intent(in) :: ldim(3)
         real, intent(in)    :: smpd
-        real                :: corner(3), qrt_box(3)
-        corner(1)   = minval(self%xyz(:,1)); corner(2)= minval(self%xyz(:,2)); corner(3)  = minval(self%xyz(:,3))
-        qrt_box(:) = smpd*(real(ldim(:))/4.)
-        call self%translate(-corner+qrt_box)
+        real                :: center(3), half_box(3)
+        center(1)   = sum(self%xyz(:,1)) / self%n;  center(2) = sum(self%xyz(:,2)) / self%n; center(3) = sum(self%xyz(:,3)) / self%n
+        half_box(:) = smpd*(real(ldim(:)/2.))
+        call self%translate(-center+half_box)
     end subroutine center_pdbcoord
 
     subroutine atom_validation( self, vol, filename )
@@ -1241,14 +1240,17 @@ contains
         logical     :: outside
         smpd = vol%get_smpd()
         if(present(filename))then
-            open(unit=45,file=trim("atomic_centers.xyz"))
             open(unit=46,file=trim(filename//".csv"))
-            write(45,*) self%n
-            write(45,*) " "
+            !open(unit=45,file=trim("atomic_centers.xyz"))
+            !write(45,*) self%n
+            !write(45,*) " "
         endif
-        print *, 'smpd', smpd
         do i_atom = 1, self%n
-            atom_box = 2 * ceiling(((self%radius(i_atom)*1.5)/smpd)) + 1
+            !atom_box = 2 * ceiling(((self%radius(i_atom)*1.5)/smpd)) + 1
+            atom_box = round2even(2 * (((self%radius(i_atom))*1.5)/smpd))
+            if( atom_box <= 2 )then !for cases where the atom box is too small
+                atom_box = 4
+            endif 
             ! generate simulated atom volume
             call vol_atom%new([atom_box, atom_box, atom_box], smpd)
             call self%extract_atom(atom, i_atom)
@@ -1268,16 +1270,17 @@ contains
             call self%set_beta(i_atom, cc)
             if(present(filename))then
                 write(46,'(a,1x,4(a,f10.6))') self%name(i_atom),",",self%xyz(i_atom,1),",",self%xyz(i_atom,2),",",self%xyz(i_atom,3),",",self%atom_corr(i_atom)
-                write(45,'(a1,1x,f10.6,1x,f10.6,1x,f10.6)') trim(adjustl(self%name(i_atom))), self%xyz(i_atom,1), self%xyz(i_atom,2), self%xyz(i_atom,3)
+                !write(45,'(a1,1x,f10.6,1x,f10.6,1x,f10.6)') trim(adjustl(self%name(i_atom))), self%xyz(i_atom,1), self%xyz(i_atom,2), self%xyz(i_atom,3)
             endif
             call vol_atom%kill
             call vol_at%kill
             call atom%kill
         enddo
-        ! if(present(filename))then
-        !     close(45)
-        !     call self%writepdb(filename)
-        ! endif
+        if(present(filename))then
+            !close(45)
+            close(46)
+            call self%writepdb(filename)
+        endif
     end subroutine atom_validation
 
     ! MODIFIERS
