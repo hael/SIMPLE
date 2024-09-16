@@ -844,28 +844,29 @@ contains
         allocate(fpls(MAXIMGBATCHSZ),projdirs(params_glob%nspace,2),eopops(params_glob%nspace,2))
         ! e/o projection directions populations
         eopops = 0
-        !$omp parallel do default(shared) private(i,iptcl,iproj,eo)&
-        !$omp schedule(static) proc_bind(close) reduction(+:eopops)
+        !$omp parallel default(shared) private(i,iptcl,iproj,eo,ibatch) proc_bind(close)
+        !$omp do schedule(static) reduction(+:eopops)
         do i = 1,nptcls2update
             iptcl  = pinds(i)
             iproj  = nint(build_glob%spproj_field%get(iptcl, 'proj'))
             eo     = build_glob%spproj_field%get_eo(iptcl)+1
             eopops(iproj,eo) = eopops(iproj,eo) + 1
         end do
-        !$omp end parallel do
-        ! particles to be summed into projection direction slices
-        !$omp parallel do default(shared) private(ibatch) schedule(static) proc_bind(close)
-        do ibatch = 1,min(nptcls2update,MAXIMGBATCHSZ)
-            call fpls(ibatch)%new(build_glob%imgbatch(1),pad=.true.)
-        end do
-        !$omp end parallel do
+        !$omp end do
         ! projection direction slices to insert into volume
-        !$omp parallel do default(shared) private(iproj) schedule(static) proc_bind(close)
+        !$omp do schedule(static)
         do iproj = 1,params_glob%nspace
             if( eopops(iproj,1) > 0 ) call projdirs(iproj,1)%new(build_glob%imgbatch(1),pad=.true., genplane=.false.)
             if( eopops(iproj,2) > 0 ) call projdirs(iproj,2)%new(build_glob%imgbatch(1),pad=.true., genplane=.false.)
         end do
-        !$omp end parallel do
+        !$omp end do nowait
+        ! particles to be summed into projection direction slices
+        !$omp do schedule(static)
+        do ibatch = 1,min(nptcls2update,MAXIMGBATCHSZ)
+            call fpls(ibatch)%new(build_glob%imgbatch(1),pad=.true.)
+        end do
+        !$omp end do
+        !$omp end parallel
         ! instrument function
         call instrimg%new([params_glob%box,params_glob%box,1], params_glob%smpd)
         if( BILINEAR )then
