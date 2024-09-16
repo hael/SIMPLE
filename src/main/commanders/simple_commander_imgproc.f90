@@ -479,11 +479,15 @@ contains
 
     subroutine exec_ppca_denoise( self, cline )
         use simple_imgproc,    only: make_pcavecs
+        use simple_pca,        only: pca
         use simple_ppca_inmem, only: ppca_inmem
+        use simple_pca_svd,    only: pca_svd
+        use simple_kpca_svd,   only: kpca_svd
         use simple_image,      only: image
         class(ppca_denoise_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         integer,     parameter   :: MAXPCAITS = 15
+        class(pca),  pointer     :: pca_ptr  => null()
         type(image), allocatable :: imgs(:)
         real,        allocatable :: avg(:), gen(:), pcavecs(:,:)
         type(parameters)  :: params
@@ -500,11 +504,21 @@ contains
             call imgs(iptcl)%read(params%stk, iptcl)
         end do
         call make_pcavecs(imgs, npix, avg, pcavecs)
-        call prob_pca%new(params%nptcls, npix, params%neigs)
-        call prob_pca%master(pcavecs, MAXPCAITS)
+        ! pca allocation
+        select case(trim(params%pca_mode))
+            case('ppca')
+                allocate(ppca_inmem :: pca_ptr)
+            case('pca_svd')
+                allocate(pca_svd    :: pca_ptr)
+            case('kpca')
+                allocate(kpca_svd   :: pca_ptr)
+        end select
+        print *, params%nptcls, npix
+        call pca_ptr%new(params%nptcls, npix, params%neigs)
+        call pca_ptr%master(pcavecs, MAXPCAITS)
         allocate(gen(npix))
         do iptcl = 1, params%nptcls
-            call prob_pca%generate(iptcl, avg, gen)
+            call pca_ptr%generate(iptcl, avg, gen)
             call imgs(iptcl)%unserialize(gen)
             call imgs(iptcl)%write(params%outstk, iptcl)
             call imgs(iptcl)%kill
