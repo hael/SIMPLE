@@ -10,18 +10,19 @@ use simple_binimage
 use simple_neighs
 implicit none 
 
+logical     :: L_DEBUG = .true.
 type :: AFM_image
     type(image), allocatable :: img_array(:)
     character(len = 50), allocatable :: img_names(:)
 contains
-    procedure   :: read_ibw1
-    procedure   :: pick_valid1
-    procedure   :: get_AFM1
-    procedure   :: zero_padding1
-    procedure   :: align_avg1
+    procedure   :: read_ibw
+    procedure   :: pick_valid
+    procedure   :: get_AFM
+    procedure   :: zero_padding
+    procedure   :: align_avg
 end type AFM_image 
 contains
-    subroutine read_ibw1(AFM, fn_in)
+    subroutine read_ibw(AFM, fn_in)
         class(AFM_image), intent(out)       :: AFM
         character(len=*),      intent(in)  :: fn_in 
         integer         :: in, check, real_type
@@ -123,9 +124,9 @@ contains
         end do 
         deallocate(Rank3_Data_4byte)
         
-    end subroutine read_ibw1
+    end subroutine read_ibw
 
-    subroutine pick_valid1(AFM_in)
+    subroutine pick_valid(AFM_in)
         class(AFM_image), intent(inout)    :: AFM_in 
         type(image)                        :: HeightTrace, HeightRetrace, AvgHeight
         CHARACTER(len=255)                 :: cwd
@@ -133,17 +134,17 @@ contains
         type(image)                        :: avg_slim, trace_slim, retrace_slim 
         integer                            :: ldim_box(3), box_iter, search_iter, neighbor_iter, box_count
         real                               :: smpd_box, neighbor_corr(8), coord_corr(3,8), max_corr(20)
-        integer, allocatable               :: pickpos(:, :), val_centers(:, :)   
+        integer, allocatable               :: pickpos(:, :), val_center_r(:, :), val_center_t(:, :)
         integer                            :: coord_test(2), center_x(20), center_y(20)
-        logical                            :: outs = .true. 
+        logical                            :: outs
         integer                            :: neighbor(3, 8), nsiz, center(3)
         real                               :: corr_r, corr_t, val_score_t, val_score_r 
         real, allocatable                  :: corr_final_t(:), corr_final_r(:)
         
 
-        call get_AFM1(AFM_in, 'HeightRetrace', HeightRetrace)
-        call get_AFM1(AFM_in, 'HeightTrace', HeightTrace)
-        call get_AFM1(AFM_in, 'AvgHeight', AvgHeight)
+        call get_AFM(AFM_in, 'HeightRetrace', HeightRetrace)
+        call get_AFM(AFM_in, 'HeightTrace', HeightTrace)
+        call get_AFM(AFM_in, 'AvgHeight', AvgHeight)
 
         call HeightRetrace%norm_minmax()
         call HeightTrace%norm_minmax()
@@ -165,7 +166,11 @@ contains
         call retrace_slim%new(ldim_box, smpd_box)
 
         box_count = 0 
-        allocate(val_centers(3, avg_p%get_nboxes()))
+        ! allocate(val_centers(3, avg_p%get_nboxes()))
+        allocate(val_center_r(3, avg_p%get_nboxes()))
+        allocate(val_center_t(3, avg_p%get_nboxes()))
+        val_center_t = 0
+        val_center_r = 0
         call avg_p%get_positions(pickpos) 
         allocate(corr_final_r(avg_p%get_nboxes()))
         allocate(corr_final_t(avg_p%get_nboxes()))
@@ -188,22 +193,36 @@ contains
             end if 
             box_count = box_count + 1 
 
-            call nn_val(HeightTrace, corr_final_t)
+            call nn_val(HeightTrace, corr_final_t, val_center_t)
             
             
-            call nn_val(HeightRetrace, corr_final_r)
+            call nn_val(HeightRetrace, corr_final_r, val_center_r)
             
         end do 
+        
         if(sum(corr_final_t) /  box_count > sum(corr_final_r) / box_count) then 
             print *, 'retrace is more noisy than trace'
         else
             print *, 'trace is more noisy than retrace'
         end if 
+        if(L_DEBUG) then 
+            print *, sum(corr_final_t) /  box_count, sum(corr_final_r) / box_count
+            print *, val_center_t, val_center_r
+            do box_iter = 38, 38 
+                    call AvgHeight%window_slim(pickpos(box_iter, :), avg_p%box_raw, avg_slim, outs)
+                    call avg_slim%vis()
+                    call HeightTrace%window_slim(val_center_t(:2, box_iter), avg_p%box_raw, trace_slim, outs)
+                    call trace_slim%vis()
+                    call HeightRetrace%window_slim(val_center_r(:2, box_iter), avg_p%box_raw, retrace_slim, outs)
+                    call retrace_slim%vis()
+            end do
+        end if 
         contains 
-            subroutine nn_val(im_iter, corr_final)
+            subroutine nn_val(im_iter, corr_final, val_centers)
                 type(image), intent(in)     :: im_iter
                 real, intent(out) :: corr_final(avg_p%get_nboxes())
-                ! output validated centers. add debug for some print, vis. 
+                integer, intent(out)    :: val_centers(3, avg_p%get_nboxes())
+                ! output validated centers
                 do search_iter = 2, 20
                     call neigh_8_1(AvgHeight%get_ldim(), center, neighbor, nsiz)
                     do neighbor_iter = 1, nsiz
@@ -221,18 +240,24 @@ contains
                         exit
                     end if 
                 end do
+                ! do box_iter = 38, 38 
+                !     call avg%window_slim(pickpos(box_iter, :), avg_p%box_raw, avg_slim, outs)
+                !     call avg_slim%vis()
+                !     call trace%window_slim(val_centers(:2, box_iter), avg_p%box_raw, trace_slim, outs)
+                !     call trace_slim%vis()
+                ! end do
         
             end subroutine 
-    end subroutine pick_valid1     
+    end subroutine pick_valid  
 
-    subroutine get_AFM1(AFM_Hash, key, image_at_key)
+    subroutine get_AFM(AFM_Hash, key, image_at_key)
         class(AFM_image), intent(in) :: AFM_Hash
         character(*), intent(in)    :: key 
         type(image), intent(out)  :: image_at_key
         image_at_key = AFM_Hash%img_array(findloc(index(AFM_Hash%img_names, key),1, dim = 1))
-    end subroutine get_AFM1
+    end subroutine get_AFM
 
-    subroutine zero_padding1(AFM_pad)
+    subroutine zero_padding(AFM_pad)
         class(AFM_image), intent(inout)  :: AFM_pad
         integer        :: img_ind
         integer :: dim(3)
@@ -240,12 +265,11 @@ contains
             dim = AFM_pad%img_array(img_ind)%get_ldim()
             if( dim(1) /= dim(2) ) then 
                 call AFM_pad%img_array(img_ind)%pad_inplace([maxval(dim), maxval(dim), 1])
-                call AFM_pad%img_array(img_ind)%vis()
             end if 
         end do 
-    end subroutine zero_padding1
+    end subroutine zero_padding
     
-    subroutine align_avg1(AFM_in, Align_AFM)
+    subroutine align_avg(AFM_in, Align_AFM)
         class(AFM_image), intent(in)     :: AFM_in 
         class(AFM_image), intent(out)    :: Align_AFM
         real, allocatable                  :: shifts(:, :)
@@ -300,6 +324,6 @@ contains
            Align_AFM%img_names(avg_ind) = 'Avg' // new_name(1:len_trim(new_name)  - 5)
            count = count + 1
         end do 
-    end subroutine align_avg1
+    end subroutine align_avg
 
 end module simple_AFM_image 
