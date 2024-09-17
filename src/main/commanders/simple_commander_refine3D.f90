@@ -468,7 +468,7 @@ contains
                             vol = 'vol'//trim(int2str(state))
                             call job_descr%set( vol, vol_iter )
                             call cline%set(vol, vol_iter)
-                            if( params%keepvol.ne.'no' )then
+                            if( params%keepvol.eq.'yes' )then
                                 call simple_copy_file(vol_iter,trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter,3)//params%ext)
                             endif
                         endif

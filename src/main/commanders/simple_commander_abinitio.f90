@@ -14,6 +14,7 @@ use simple_procimgstk,         only: shift_imgfile
 use simple_image,              only: image
 use simple_builder,            only: builder
 use simple_class_frcs,         only: class_frcs
+use simple_convergence,        only: convergence
 use simple_commander_euclid
 use simple_euclid_sigma2
 use simple_qsys_funs
@@ -49,7 +50,6 @@ logical                          :: l_srch4symaxis=.false., l_symran=.false., l_
 type(sym)                        :: se1,se2
 
 contains
-
 
     subroutine set_symmetry_class_vars( params )
         class(parameters), intent(in) :: params
@@ -112,7 +112,7 @@ contains
         type(cmdline) :: cline_reconstruct3D, cline_postprocess
         type(cmdline) :: cline_reproject, cline_calc_pspec
         ! other
-        character(len=:),  allocatable :: stk, stkpath, orig_stk, frcs_fname, shifted_stk, stk_even, stk_odd, ext, vol_str, vol_name
+        character(len=:),  allocatable :: stk, stkpath, orig_stk, frcs_fname, shifted_stk, stk_even, stk_odd, ext, vol_str, vol_name, vol_pproc
         integer,           allocatable :: states(:)
         real,              allocatable :: frcs_avg(:)
         type(lp_crop_inf), allocatable :: lpinfo(:)
@@ -121,12 +121,14 @@ contains
         type(parameters)      :: params
         type(ctfparams)       :: ctfvars
         type(sp_project)      :: spproj, work_proj
+        type(convergence)     :: conv
         type(image)           :: img, vol
         type(stack_io)        :: stkio_r, stkio_r2, stkio_w
         type(class_frcs)      :: clsfrcs
         character(len=STDLEN) :: vol_iter, vol_iter_pproc, vol_iter_pproc_mirr, frckind, vol_sym
         real                  :: lpsym, lpfinal
         integer               :: icls, ncavgs, cnt, iter, ipart, even_ind, odd_ind, state, filtsz, istage
+        logical               :: l_err
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('oritype',      'out') ! because cavgs are part of out segment
@@ -260,14 +262,12 @@ contains
         do istage = 1, NSTAGES
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', lpinfo(istage)%lp
-            call set_cline_refine3D(istage)
             if( istage == 1 ) call rndstart(cline_refine3D)
+            call set_cline_refine3D(istage)
             if( lpinfo(istage)%l_autoscale )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',lpinfo(istage)%box_crop
             endif
-            call xrefine3D%execute_shmem(cline_refine3D)
-            call work_proj%read_segment('ptcl3D', work_projfile)
-
+            call exec_refine3D( iter )
             ! Symmetrization
             if( istage == SYMSRCH_STAGE )then
                 if( l_symran )then
@@ -290,7 +290,7 @@ contains
                     write(logfhandle,'(A)') '>>>'
                     call xsymmap%execute_shmem(cline_symmap)
                     call del_file('SYMAXIS_SEARCH_FINISHED')
-                    call simple_copy_file(vol_sym, vol_iter)
+                    call cline_refine3D%set('vol1', vol_sym)
                 endif
             endif
         end do
@@ -416,15 +416,6 @@ contains
                 character(len=:), allocatable :: silence_fsc, sh_first, prob_sh, ml_reg, refine, icm
                 integer :: iphase, s
                 real    :: trs, rnspace, rmaxits, rmaxits_glob, riter, snr_noise_reg
-                if( istage > 1 )then ! use the previous volume rather than the random starting volume
-                    do s = 1, params%nstates
-                        vol_str   = 'vol'//trim(int2str(s))
-                        call cline_refine3D%delete(vol_str)
-                        str_state = int2str_pad(s,2)
-                        vol_name  = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
-                        call cline_refine3D%set(vol_str, vol_name)
-                    enddo
-                endif
                 ! iteration number bookkeeping
                 if( cline_refine3D%defined('endit') )then
                     riter = cline_refine3D%get_rarg('endit')
@@ -509,6 +500,29 @@ contains
                 call cline_refine3D%set('ml_reg',                      ml_reg)
                 call cline_refine3D%set('icm',                            icm)
             end subroutine set_cline_refine3D
+
+            subroutine exec_refine3D( iter )
+                integer,          intent(out) :: iter
+                character(len=:), allocatable :: stage
+                call cline_refine3D%delete('endit')
+                call xrefine3D%execute_shmem(cline_refine3D)
+                call conv%read(l_err)
+                iter = nint(conv%get('iter'))
+                call del_files(DIST_FBODY,      params_glob%nparts,ext='.dat')
+                call del_files(ASSIGNMENT_FBODY,params_glob%nparts,ext='.dat')
+                call del_file(trim(DIST_FBODY)      //'.dat')
+                call del_file(trim(ASSIGNMENT_FBODY)//'.dat')
+                if( istage <= NSTAGES )then
+                    stage = '_stage_'//int2str(istage)
+                    do state = 1, params%nstates
+                        str_state = int2str_pad(state,2)
+                        vol_name  = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
+                        vol_pproc = add2fbody(vol_name, params%ext,PPROC_SUFFIX)
+                        if( file_exists(vol_name) ) call simple_copy_file(vol_name,  add2fbody(vol_name, params%ext,stage))
+                        if( file_exists(vol_pproc)) call simple_copy_file(vol_pproc, add2fbody(vol_pproc,params%ext,stage))
+                    enddo
+                endif
+            end subroutine exec_refine3D
     
             subroutine conv_eo( os )
                 class(oris), intent(inout) :: os
@@ -541,7 +555,6 @@ contains
 
     !> for generation of an initial 3d model from particles
     subroutine exec_abinitio_3Dmodel( self, cline )
-        use simple_convergence, only: convergence
         class(abinitio_3Dmodel_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         ! constants
@@ -560,7 +573,7 @@ contains
         type(cmdline)                       :: cline_refine3D, cline_reconstruct3D
         type(cmdline)                       :: cline_postprocess, cline_symmap
         ! other
-        character(len=:),  allocatable :: frcs_fname, vol_type, str_state, vol, vol_pproc, vol_pproc_mirr, frckind, stkpath, stk, imgkind
+        character(len=:),  allocatable :: frcs_fname, vol_type, str_state, vol_name, vol_pproc, vol_pproc_mirr, frckind, stkpath, stk, imgkind
         integer,           allocatable :: states(:)
         real,              allocatable :: frcs_avg(:)
         type(lp_crop_inf), allocatable :: lpinfo(:)
@@ -617,20 +630,20 @@ contains
             call noisevol%new([params%box,params%box,params%box], params%smpd)
             do s = 1, params%nstates
                 call noisevol%ran()
-                vol = 'startvol_state'//int2str_pad(s,2)//'.mrc'
-                call cline%set('vol'//int2str(s), vol)
-                params%vols(s) = vol
-                call noisevol%write(vol)
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'.mrc'
+                call cline%set('vol'//int2str(s), vol_name)
+                params%vols(s) = vol_name
+                call noisevol%write(vol_name)
                 call noisevol%ran()
-                vol = 'startvol_state'//int2str_pad(s,2)//'_even.mrc'
-                call noisevol%write(vol)
-                vol = 'startvol_state'//int2str_pad(s,2)//'_even_unfil.mrc'
-                call noisevol%write(vol)
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'_even.mrc'
+                call noisevol%write(vol_name)
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'_even_unfil.mrc'
+                call noisevol%write(vol_name)
                 call noisevol%ran()
-                vol = 'startvol_state'//int2str_pad(s,2)//'_odd.mrc'
-                call noisevol%write(vol)
-                vol = 'startvol_state'//int2str_pad(s,2)//'_odd_unfil.mrc'
-                call noisevol%write(vol)
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd.mrc'
+                call noisevol%write(vol_name)
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd_unfil.mrc'
+                call noisevol%write(vol_name)
             end do
             call noisevol%kill
         endif
@@ -716,7 +729,7 @@ contains
                     write(logfhandle,'(A)') '>>>'
                     call xsymmap%execute_shmem(cline_symmap)
                     call del_file('SYMAXIS_SEARCH_FINISHED')
-                    call simple_copy_file(vol_sym, vol_iter)
+                    call cline_refine3D%set('vol1', vol_sym)
                 endif
             endif
         enddo
@@ -749,8 +762,8 @@ contains
         call spproj%read_segment('out',params%projfile)
         do state = 1, params%nstates
             str_state = int2str_pad(state,2)
-            vol       = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
-            call spproj%add_vol2os_out(vol, params%smpd, state, vol_type)
+            vol_name  = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
+            call spproj%add_vol2os_out(vol_name, params%smpd, state, vol_type)
             if( trim(params%oritype).eq.'ptcl3D' )then
                 call spproj%add_fsc2os_out(FSC_FBODY//str_state//trim(BIN_EXT), state, params%box)
             endif
@@ -764,10 +777,10 @@ contains
         enddo
         do state = 1, params%nstates
             str_state      = int2str_pad(state,2)
-            vol            = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
-            vol_pproc      = add2fbody(vol,params%ext,PPROC_SUFFIX)
-            vol_pproc_mirr = add2fbody(vol,params%ext,trim(PPROC_SUFFIX)//trim(MIRR_SUFFIX))
-            if( file_exists(vol)            ) call simple_rename(vol,            trim(REC_FBODY)           //trim(str_state)//trim(params%ext))
+            vol_name       = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
+            vol_pproc      = add2fbody(vol_name,params%ext,PPROC_SUFFIX)
+            vol_pproc_mirr = add2fbody(vol_name,params%ext,trim(PPROC_SUFFIX)//trim(MIRR_SUFFIX))
+            if( file_exists(vol_name)       ) call simple_rename(vol_name,       trim(REC_FBODY)           //trim(str_state)//trim(params%ext))
             if( file_exists(vol_pproc)      ) call simple_rename(vol_pproc,      trim(REC_PPROC_FBODY)     //trim(str_state)//trim(params%ext))
             if( file_exists(vol_pproc_mirr) ) call simple_rename(vol_pproc_mirr, trim(REC_PPROC_MIRR_FBODY)//trim(str_state)//trim(params%ext))
         enddo
@@ -777,43 +790,11 @@ contains
         call simple_end('**** SIMPLE_ABINITIO_3DMODEL NORMAL STOP ****')
         contains
 
-            subroutine exec_refine3D( iter )
-                integer,          intent(out) :: iter
-                character(len=:), allocatable :: stage
-                call cline_refine3D%delete('endit')
-                call xrefine3D_distr%execute_shmem(cline_refine3D)
-                call conv%read(l_err)
-                iter = nint(conv%get('iter'))
-                call del_files(DIST_FBODY,      params_glob%nparts,ext='.dat')
-                call del_files(ASSIGNMENT_FBODY,params_glob%nparts,ext='.dat')
-                call del_file(trim(DIST_FBODY)      //'.dat')
-                call del_file(trim(ASSIGNMENT_FBODY)//'.dat')
-                if( istage <= NSTAGES )then
-                    stage = '_stage_'//int2str(istage)
-                    do state = 1, params%nstates
-                        str_state = int2str_pad(state,2)
-                        vol       = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
-                        vol_pproc = add2fbody(vol,params%ext,PPROC_SUFFIX)
-                        if( file_exists(vol)      ) call simple_copy_file(vol,       add2fbody(vol,      params%ext,stage))
-                        if( file_exists(vol_pproc)) call simple_copy_file(vol_pproc, add2fbody(vol_pproc,params%ext,stage))
-                    enddo
-                endif
-            end subroutine exec_refine3D
-
             subroutine set_cline_refine3D( istage )
                 integer, intent(in) :: istage
                 character(len=:), allocatable :: silence_fsc, sh_first, prob_sh, ml_reg, refine, icm
                 integer :: iphase, s
                 real    :: trs, rnspace, rmaxits, rmaxits_glob, riter
-                if( istage > 1 )then ! use the previous volume rather than the noise starting volume
-                    do s = 1, params%nstates
-                        vol_str   = 'vol'//trim(int2str(s))
-                        call cline_refine3D%delete(vol_str)
-                        str_state = int2str_pad(s,2)
-                        vol       = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
-                        call cline_refine3D%set(vol_str, vol)
-                    enddo
-                endif
                 ! iteration number bookkeeping
                 if( cline_refine3D%defined('endit') )then
                     riter = cline_refine3D%get_rarg('endit')
@@ -894,6 +875,29 @@ contains
                 call cline_refine3D%set('ml_reg',                      ml_reg)
                 call cline_refine3D%set('icm',                            icm)                
             end subroutine set_cline_refine3D
+
+            subroutine exec_refine3D( iter )
+                integer,          intent(out) :: iter
+                character(len=:), allocatable :: stage
+                call cline_refine3D%delete('endit')
+                call xrefine3D_distr%execute_shmem(cline_refine3D)
+                call conv%read(l_err)
+                iter = nint(conv%get('iter'))
+                call del_files(DIST_FBODY,      params_glob%nparts,ext='.dat')
+                call del_files(ASSIGNMENT_FBODY,params_glob%nparts,ext='.dat')
+                call del_file(trim(DIST_FBODY)      //'.dat')
+                call del_file(trim(ASSIGNMENT_FBODY)//'.dat')
+                if( istage <= NSTAGES )then
+                    stage = '_stage_'//int2str(istage)
+                    do state = 1, params%nstates
+                        str_state = int2str_pad(state,2)
+                        vol_name  = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
+                        vol_pproc = add2fbody(vol_name,params%ext,PPROC_SUFFIX)
+                        if( file_exists(vol_name) ) call simple_copy_file(vol_name,  add2fbody(vol_name, params%ext,stage))
+                        if( file_exists(vol_pproc)) call simple_copy_file(vol_pproc, add2fbody(vol_pproc,params%ext,stage))
+                    enddo
+                endif
+            end subroutine exec_refine3D
 
     end subroutine exec_abinitio_3Dmodel
 
