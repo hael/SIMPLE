@@ -12,7 +12,7 @@ implicit none
 
 public :: prepimgbatch, killimgbatch, read_imgbatch, set_bp_range, set_bp_range2D, prepimg4align,&
 &prep2Dref, preprecvols, killrecvols, calcrefvolshift_and_mapshifts2ptcls, read_and_filter_refvols,&
-&preprefvol, grid_ptcl, calc_3Drec, calc_projdir3Drec, calc_3Dbatchrec, norm_struct_facts, discrete_read_imgbatch
+&preprefvol, grid_ptcl, calc_3Drec, calc_projdir3Drec, norm_struct_facts, discrete_read_imgbatch
 private
 #include "simple_local_flags.inc"
 
@@ -669,12 +669,12 @@ contains
     !> volumetric 3d reconstruction
     subroutine calc_3Drec( cline, nptcls2update, pinds, which_iter )
         use simple_fplane, only: fplane
-        class(cmdline),    intent(in) :: cline
-        integer,           intent(in) :: nptcls2update
-        integer,           intent(in) :: pinds(nptcls2update)
-        integer, optional, intent(in) :: which_iter
-        type(fplane),    allocatable :: fpls(:)
-        type(ctfparams), allocatable :: ctfparms(:)
+        class(cmdline),    intent(inout) :: cline
+        integer,           intent(in)    :: nptcls2update
+        integer,           intent(in)    :: pinds(nptcls2update)
+        integer, optional, intent(in)    :: which_iter
+        type(fplane),      allocatable   :: fpls(:)
+        type(ctfparams),   allocatable   :: ctfparms(:)
         type(ori)        :: orientation
         real             :: shift(2), sdev_noise
         integer          :: batchlims(2), iptcl, i, i_batch, ibatch
@@ -720,95 +720,6 @@ contains
         call orientation%kill
     end subroutine calc_3Drec
 
-    !> volumetric 3d reconstruction
-    subroutine calc_3Dbatchrec( cline, nptcls2update, pinds, prev_oris, which_iter )
-        use simple_fplane,        only: fplane
-        use simple_euclid_sigma2, only: euclid_sigma2
-        class(cmdline),    intent(in) :: cline
-        integer,           intent(in) :: nptcls2update
-        integer,           intent(in) :: pinds(nptcls2update)
-        class(oris),       intent(in) :: prev_oris
-        integer, optional, intent(in) :: which_iter
-        type(fplane),    allocatable :: fpls(:), prev_fpls(:)
-        type(ctfparams), allocatable :: ctfparms(:)
-        integer,         allocatable :: pops(:)
-        type(euclid_sigma2) :: prev_sigma2
-        type(ori)           :: orientation
-        real    :: shift(2), sdev_noise
-        integer :: updates(nptcls2update), batchlims(2), iptcl, i, i_batch, ibatch, istate
-        ! contributions to be subtracted
-        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
-        do i = 1,nptcls2update
-            updates(i) = prev_oris%get_updatecnt(pinds(i))
-        enddo
-        !$omp end parallel do
-        ! sigma2 of particles to be subtracted
-        if( params_glob%l_ml_reg )then
-            call prev_sigma2%consolidate_sigma2_history(prev_oris, pinds, updates)
-        endif
-        ! init volumes
-        call build_glob%spproj_field%get_pops(pops, 'state')
-        do istate = 1, params_glob%nstates
-            if( pops(istate) > 0)then
-                call build_glob%eorecvols(istate)%new(build_glob%spproj)
-                call build_glob%eorecvols(istate)%reset_all
-                call build_glob%eorecvols(istate)%read_eos(trim(VOL_FBODY)//int2str_pad(istate,2)//'_part'//int2str_pad(params_glob%part,params_glob%numlen))
-                call build_glob%eorecvols(istate)%expand_exp
-            endif
-        end do
-        deallocate(pops)
-        ! prep batch imgs
-        call prepimgbatch(MAXIMGBATCHSZ)
-        ! allocate arrays
-        allocate(prev_fpls(MAXIMGBATCHSZ),fpls(MAXIMGBATCHSZ),ctfparms(MAXIMGBATCHSZ))
-        ! gridding batch loop
-        do i_batch = 1,nptcls2update,MAXIMGBATCHSZ
-            batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
-            call discrete_read_imgbatch( nptcls2update, pinds, batchlims)
-            !$omp parallel do default(shared) private(i,iptcl,ibatch,shift,sdev_noise) schedule(static) proc_bind(close)
-            do i=batchlims(1),batchlims(2)
-                iptcl  = pinds(i)
-                ibatch = i - batchlims(1) + 1
-                if( .not.fpls(ibatch)%does_exist() ) call fpls(ibatch)%new(build_glob%imgbatch(1))
-                call build_glob%imgbatch(ibatch)%norm_noise(build_glob%lmsk, sdev_noise)
-                call build_glob%imgbatch(ibatch)%fft
-                ctfparms(ibatch) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
-                shift = build_glob%spproj_field%get_2Dshift(iptcl)
-                call fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), shift, iptcl)
-                if( updates(i) > 0 )then
-                    if( .not.prev_fpls(ibatch)%does_exist() ) call prev_fpls(ibatch)%new(build_glob%imgbatch(1))
-                    shift = prev_oris%get_2Dshift(iptcl)
-                    call prev_fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), shift, iptcl, sigma2=prev_sigma2)
-                    call prev_fpls(ibatch)%neg
-                endif
-            end do
-            !$omp end parallel do
-            ! gridding
-            do i=batchlims(1),batchlims(2)
-                iptcl  = pinds(i)
-                ibatch = i - batchlims(1) + 1
-                call build_glob%spproj_field%get_ori(iptcl, orientation)
-                if( orientation%isstatezero() ) cycle
-                call grid_ptcl(fpls(ibatch), build_glob%pgrpsyms, orientation)
-                if( updates(i) > 0 )then
-                    call prev_oris%get_ori(iptcl, orientation)
-                    call grid_ptcl(prev_fpls(ibatch), build_glob%pgrpsyms, orientation)
-                endif
-            end do
-        end do
-        ! normalise structure factors
-        call norm_struct_facts( cline, which_iter)
-        ! destruct
-        call prev_sigma2%kill
-        call killrecvols()
-        do ibatch=1,MAXIMGBATCHSZ
-            call fpls(ibatch)%kill
-            call prev_fpls(ibatch)%kill
-        end do
-        deallocate(prev_fpls,fpls,ctfparms)
-        call orientation%kill
-    end subroutine calc_3Dbatchrec
-
     !> Volumetric 3d reconstruction from summed projection directions
     !> Only supports single state
     subroutine calc_projdir3Drec( cline, nptcls2update, pinds, which_iter )
@@ -817,13 +728,13 @@ contains
         use simple_fplane,   only: fplane
         use simple_gridding, only: gen_instrfun_img
         use simple_timer
-        class(cmdline),    intent(in) :: cline
-        integer,           intent(in) :: nptcls2update
-        integer,           intent(in) :: pinds(nptcls2update)
-        integer, optional, intent(in) :: which_iter
-        type(fplane),     allocatable :: fpls(:), projdirs(:,:)
-        integer,          allocatable :: eopops(:,:), tmp(:,:)
-        type(image),      allocatable :: padded_imgs(:)
+        class(cmdline),    intent(inout) :: cline
+        integer,           intent(in)    :: nptcls2update
+        integer,           intent(in)    :: pinds(nptcls2update)
+        integer, optional, intent(in)    :: which_iter
+        type(fplane),      allocatable   :: fpls(:), projdirs(:,:)
+        integer,           allocatable   :: eopops(:,:), tmp(:,:)
+        type(image),       allocatable   :: padded_imgs(:)
         type(ctfparams) :: ctfparms
         type(image)     :: instrimg, numimg, denomimg
         type(ori)       :: orientation
@@ -997,9 +908,9 @@ contains
 
     subroutine norm_struct_facts( cline, which_iter )
         use simple_masker, only: masker
-        class(cmdline),    intent(in) :: cline
-        integer, optional, intent(in) :: which_iter
-        character(len=:), allocatable :: mskfile, fname
+        class(cmdline),    intent(inout) :: cline
+        integer, optional, intent(in)    :: which_iter
+        character(len=:), allocatable    :: mskfile, fname
         character(len=STDLEN) :: pprocvol, lpvol
         real, allocatable     :: optlp(:), res(:)
         type(masker)          :: envmsk
@@ -1031,6 +942,8 @@ contains
                     int2str_pad(params_glob%part,params_glob%numlen))
             else
                 params_glob%vols(s) = fname
+                ! updating command-line according (needed in multi-stage wflows)
+                call cline%set('vol'//int2str(s), trim(fname))
                 if( params_glob%l_filemsk .and. params_glob%l_envfsc )then
                     call build_glob%eorecvols(s)%set_automsk(.true.)
                 endif
