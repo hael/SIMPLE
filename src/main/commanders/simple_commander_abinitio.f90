@@ -131,8 +131,7 @@ contains
         type(image)           :: img, vol
         type(stack_io)        :: stkio_r, stkio_r2, stkio_w
         type(class_frcs)      :: clsfrcs
-        character(len=STDLEN) :: vol_iter, vol_iter_pproc, vol_iter_pproc_mirr
-        character(len=STDLEN) :: sigma2_fname, sigma2_fname_sc, orig_objfun, frckind
+        character(len=STDLEN) :: vol_iter, vol_iter_pproc, vol_iter_pproc_mirr, frckind
         real                  :: lpsym, lpfinal
         integer               :: icls, ncavgs, cnt, iter, ipart, even_ind, odd_ind, state, filtsz, istage
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
@@ -272,12 +271,12 @@ contains
         do istage = 1, NSTAGES
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', lpinfo(istage)%lp
+            call set_cline_refine3D(istage)
             if( istage == 1 )then
                 call rndstart(cline_refine3D)
             else
                 call rec(cline_refine3D)
             endif
-            call set_cline_refine3D(istage)
             if( lpinfo(istage)%l_autoscale )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',lpinfo(istage)%box_crop
             endif
@@ -351,7 +350,7 @@ contains
         case('cavg')
             call spproj%map2ptcls
         case('cavg3D')
-            ! TODO
+            ! For internal testing, particle parameters are not updated
         end select
         ! add rec_final to os_out
         call spproj%add_vol2os_out(trim(REC_FBODY)//ext, params%smpd, 1, 'vol_cavg')
