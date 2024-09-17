@@ -196,8 +196,8 @@ contains
         type(lp_crop_inf), intent(out) :: lpinfo(nstages)
         logical, optional, intent(in)  :: verbose
         real, parameter :: FRCLIMS_DEFAULT(2) = [0.8,0.05], LP2SMPD_TARGET = 1./3.
-        integer :: findlims(2), istage, box_stepsz, box_trial
-        real    :: frclims(2), frc_stepsz, lp_max, lp_min, lp_stepsz
+        integer :: findlims(2), istage, box_trial
+        real    :: frclims(2), frc_stepsz, lp_max, lp_min, lp_stepsz, rbox_stepsz
         logical :: l_verbose
         l_verbose = .false.
         if( present(verbose) ) l_verbose = verbose
@@ -250,10 +250,10 @@ contains
         ! (4) gather downscaling information
         call calc_scaleinfo(1)
         call calc_scaleinfo(nstages)
-        box_stepsz = nint(real(lpinfo(nstages)%box_crop - lpinfo(1)%box_crop)/real(nstages - 1))
+        rbox_stepsz = real(lpinfo(nstages)%box_crop - lpinfo(1)%box_crop)/real(nstages - 1)
         do istage = 2, nstages - 1 ! linear box_crop scheme
-            box_trial                = lpinfo(istage-1)%box_crop + box_stepsz
-            lpinfo(istage)%box_crop  = find_magic_box(box_trial)
+            box_trial                = nint(real(lpinfo(1)%box_crop) + (istage-1)*rbox_stepsz)
+            lpinfo(istage)%box_crop  = min(lpinfo(nstages)%box_crop, find_magic_box(box_trial))
             lpinfo(istage)%scale     = real(lpinfo(istage)%box_crop) / real(box)
             lpinfo(istage)%smpd_crop = smpd / lpinfo(istage)%scale
             lpinfo(istage)%trslim    = min(8.,max(2.0, AHELIX_WIDTH / lpinfo(istage)%smpd_crop))
