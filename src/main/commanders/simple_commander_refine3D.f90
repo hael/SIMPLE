@@ -295,10 +295,12 @@ contains
                 vol = 'vol' // int2str(state)
                 if( cline%defined(trim(vol)) )then
                     vol_defined = .true.
-                    call find_ldim_nptcls(trim(params%vols(state)),ldim,ifoo)
-                    if( (ldim(1) /= params%box_crop) .and.  (ldim(1) /= params%box) )then
-                        THROW_HARD('Incompatible dimensions between input volume and images: '//params%vols(state))
-                    endif
+                    !!!!!!!!!!!!!!!!!!!! cropping done in strategy2D3D_common :: read_and_filter_refvvols
+                    ! call find_ldim_nptcls(trim(params%vols(state)),ldim,ifoo)
+                    ! if( (ldim(1) /= params%box_crop) .and.  (ldim(1) /= params%box) )then
+                    !     THROW_HARD('Incompatible dimensions between input volume and images: '//params%vols(state))
+                    ! endif
+                    !!!!!!!!!!!!!!!!!!!! cropping done in strategy2D3D_common :: read_and_filter_refvvols
                 endif
             enddo
             have_oris = .not. build%spproj%is_virgin_field(params%oritype)
@@ -605,7 +607,7 @@ contains
             case('prob')
                 ! random sampling and updatecnt dealt with in prob_align
             case DEFAULT
-                if( (startit == 1) .and. (.not.params%l_batchfrac) ) call build%spproj_field%clean_updatecnt_sampled
+                if( startit == 1 ) call build%spproj_field%clean_updatecnt_sampled
         end select
         if( params%l_distr_exec )then
             if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
@@ -849,27 +851,18 @@ contains
         real     :: xyz(3)
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-        allocate(ptcl_mask(params%fromp:params%top))
-        if( params%l_batchfrac )then
+        allocate(ptcl_mask(params%fromp:params%top))        
+        if( params%l_frac_update )then
             if( build%spproj_field%has_been_sampled() )then
-                call build%spproj_field%sample4batchupdate_reprod([params%fromp,params%top],&
+                call build%spproj_field%sample4update_reprod([params%fromp,params%top],&
                 &nptcls, pinds, ptcl_mask)
             else
-                THROW_HARD('error')
+                call build%spproj_field%sample4update_rnd([params%fromp,params%top],&
+                &params%update_frac, nptcls, pinds, ptcl_mask, .false.) ! no increment of sampled
             endif
         else
-            if( params%l_frac_update )then
-                if( build%spproj_field%has_been_sampled() )then
-                    call build%spproj_field%sample4update_reprod([params%fromp,params%top],&
-                    &nptcls, pinds, ptcl_mask)
-                else
-                    call build%spproj_field%sample4update_rnd([params%fromp,params%top],&
-                    &params%update_frac, nptcls, pinds, ptcl_mask, .false.) ! no increment of sampled
-                endif
-            else
-                call build%spproj_field%sample4update_all([params%fromp,params%top],&
-                &nptcls, pinds, ptcl_mask, .false.) ! no increement of sampled
-            endif
+            call build%spproj_field%sample4update_all([params%fromp,params%top],&
+            &nptcls, pinds, ptcl_mask, .false.) ! no increement of sampled
         endif
         ! more prep
         call set_bp_range( cline )
@@ -970,34 +963,25 @@ contains
             call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         endif
         allocate(ptcl_mask(1:params_glob%nptcls))
-        if( params_glob%l_batchfrac )then
-            call build_glob%spproj_field%sample4batchupdate([1,params_glob%nptcls],&
-            &params_glob%batchfrac, nptcls, pinds, ptcl_mask)
-        else
-            if( params_glob%startit == 1 ) call build_glob%spproj_field%clean_updatecnt_sampled
-            if( params_glob%l_frac_update )then
-                if( params_glob%l_stoch_update )then
-                    call build_glob%spproj_field%sample4update_rnd([1,params_glob%nptcls],&
-                    &params_glob%update_frac, nptcls, pinds, ptcl_mask, .true.) ! sampled incremented
-                else
-                    call build_glob%spproj_field%sample4update_rnd2([1,params_glob%nptcls],&
-                    &params_glob%update_frac, nptcls, pinds, ptcl_mask, .true.) ! sampled incremented
-                endif
-            else                                                    ! we sample all state > 0
-                call build_glob%spproj_field%sample4update_all([1,params_glob%nptcls],&
-                &nptcls, pinds, ptcl_mask, .true.) ! sampled incremented
+        if( params_glob%startit == 1 ) call build_glob%spproj_field%clean_updatecnt_sampled
+        if( params_glob%l_frac_update )then
+            if( params_glob%l_stoch_update )then
+                call build_glob%spproj_field%sample4update_rnd([1,params_glob%nptcls],&
+                &params_glob%update_frac, nptcls, pinds, ptcl_mask, .true.) ! sampled incremented
+            else
+                call build_glob%spproj_field%sample4update_rnd2([1,params_glob%nptcls],&
+                &params_glob%update_frac, nptcls, pinds, ptcl_mask, .true.) ! sampled incremented
             endif
+        else                                                    ! we sample all state > 0
+            call build_glob%spproj_field%sample4update_all([1,params_glob%nptcls],&
+            &nptcls, pinds, ptcl_mask, .true.) ! sampled incremented
         endif
         ! increment update counter
         call build_glob%spproj_field%incr_updatecnt([1,params_glob%nptcls], ptcl_mask)
         ! communicate to project file
         call build_glob%spproj%write_segment_inside(params_glob%oritype)        
         ! more prep
-        if( params_glob%l_batchfrac )then
-            call eulprob_obj_glob%new(build_glob%spproj_field)
-        else
-            call eulprob_obj_glob%new(pinds)
-        endif
+        call eulprob_obj_glob%new(pinds)
         ! generating all corrs on all parts
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab' ) ! required for distributed call
@@ -1016,10 +1000,6 @@ contains
             fname = trim(DIST_FBODY)//int2str_pad(ipart,params_glob%numlen)//'.dat'
             call eulprob_obj_glob%read_tab_to_glob(fname)
         enddo
-        if( params_glob%l_batchfrac )then
-            call eulprob_obj_glob%write_tab(trim(DIST_FBODY)//'.dat')
-            call eulprob_obj_glob%trim_tab(build_glob%spproj_field)
-        endif
         call eulprob_obj_glob%prob_assign
         ! write the iptcl->(iref,istate) assignment
         fname = trim(ASSIGNMENT_FBODY)//'.dat'

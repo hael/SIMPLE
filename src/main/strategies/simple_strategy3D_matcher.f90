@@ -95,44 +95,32 @@ contains
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
         if( allocated(pinds) )     deallocate(pinds)
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
-        allocate(ptcl_mask(params_glob%fromp:params_glob%top))
-        if( params_glob%l_batchfrac )then
-            if( trim(params_glob%refine).eq.'prob' )then
-                call build_glob%spproj_field%sample4batchupdate_reprod([params_glob%fromp,params_glob%top],&
-                &nptcls2update, pinds, ptcl_mask )
-            else
-                call build_glob%spproj_field%sample4batchupdate([params_glob%fromp,params_glob%top],&
-                &params_glob%batchfrac, nptcls2update, pinds, ptcl_mask)
-                call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top], ptcl_mask)
-            endif
-            call prev_oris%copy(build_glob%spproj_field, build_glob%spproj_field%is_particle())
+        allocate(ptcl_mask(params_glob%fromp:params_glob%top))        
+        if( trim(params_glob%refine).eq.'prob' )then
+            ! generation of random sample and incr of updatecnts delegated to prob_align
+            call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
+            &nptcls2update, pinds, ptcl_mask )
         else
-            if( trim(params_glob%refine).eq.'prob' )then
-                ! generation of random sample and incr of updatecnts delegated to prob_align
-                call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
-                &nptcls2update, pinds, ptcl_mask )
-            else
-                if( params_glob%l_frac_update )then
-                    if( params_glob%l_stoch_update )then
-                        call build_glob%spproj_field%sample4update_rnd([params_glob%fromp,params_glob%top],&
-                            &params_glob%update_frac, nptcls2update, pinds, ptcl_mask, .true.) ! sampled incremented
-                    else
-                        if( build_glob%spproj_field%has_been_sampled() )then ! we have a random subset
-                            call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
-                                                    &nptcls2update, pinds, ptcl_mask)
-                        else                                                 ! we generate a random subset
-                            call build_glob%spproj_field%sample4update_rnd2([params_glob%fromp,params_glob%top],&
-                            &params_glob%update_frac, nptcls2update, pinds, ptcl_mask, .true.) ! sampled incremented
-                        endif
+            if( params_glob%l_frac_update )then
+                if( params_glob%l_stoch_update )then
+                    call build_glob%spproj_field%sample4update_rnd([params_glob%fromp,params_glob%top],&
+                        &params_glob%update_frac, nptcls2update, pinds, ptcl_mask, .true.) ! sampled incremented
+                else
+                    if( build_glob%spproj_field%has_been_sampled() )then ! we have a random subset
+                        call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
+                                                &nptcls2update, pinds, ptcl_mask)
+                    else                                                 ! we generate a random subset
+                        call build_glob%spproj_field%sample4update_rnd2([params_glob%fromp,params_glob%top],&
+                        &params_glob%update_frac, nptcls2update, pinds, ptcl_mask, .true.) ! sampled incremented
                     endif
-                else           
-                                                          ! we sample all state > 0
-                    call build_glob%spproj_field%sample4update_all([params_glob%fromp,params_glob%top],&
-                                                &nptcls2update, pinds, ptcl_mask, .true.) ! sampled incremented
                 endif
-                ! increment update counter
-                call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top], ptcl_mask)
+            else           
+                                                        ! we sample all state > 0
+                call build_glob%spproj_field%sample4update_all([params_glob%fromp,params_glob%top],&
+                                            &nptcls2update, pinds, ptcl_mask, .true.) ! sampled incremented
             endif
+            ! increment update counter
+            call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top], ptcl_mask)
         endif
 
         ! PREP BATCH ALIGNEMENT
@@ -294,15 +282,10 @@ contains
                 ! no reconstruction
             case DEFAULT
                 if( L_BENCH_GLOB ) t_rec = tic()
-                if( params_glob%l_batchfrac )then
-                    call calc_3Dbatchrec( cline, nptcls2update, pinds, prev_oris, which_iter=which_iter )
-                    call prev_oris%kill
+                if( trim(params_glob%projrec).eq.'yes' )then
+                    call calc_projdir3Drec( cline, nptcls2update, pinds, which_iter=which_iter )
                 else
-                    if( trim(params_glob%projrec).eq.'yes' )then
-                        call calc_projdir3Drec( cline, nptcls2update, pinds, which_iter=which_iter )
-                    else
-                        call calc_3Drec( cline, nptcls2update, pinds, which_iter=which_iter )
-                    endif
+                    call calc_3Drec( cline, nptcls2update, pinds, which_iter=which_iter )
                 endif
                 call eucl_sigma%kill
                 call killimgbatch

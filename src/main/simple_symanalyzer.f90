@@ -27,12 +27,13 @@ end type sym_stats
 
 contains
 
-    subroutine symmetrize_map( vol_in, params, vol_out )
+    subroutine symmetrize_map( vol_in, params, vol_out, symaxis )
         use simple_parameters, only: parameters
         class(projector),  intent(inout) :: vol_in
         class(parameters), intent(inout) :: params
         class(image),      intent(inout) :: vol_out
-        type(ori)         :: symaxis, o
+        class(ori),        intent(inout) :: symaxis
+        type(ori)         :: o
         type(sym)         :: symobj
         type(image)       :: rovol_pad, rovol, vol_asym_aligned2axis
         type(projector)   :: vol_pad

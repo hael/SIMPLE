@@ -479,64 +479,24 @@ contains
             !$omp end parallel do
             ! cleanup
             call W_img%kill
-        else
-            ! division by rho
-            if( params_glob%l_batchfrac )then
-                call self%get_cmat_ptr(pcmat)
-                allocate(rho_average(0:self%sh_lim),source=0.d0)
-                allocate(counts(0:self%sh_lim),source=0)
-                !$omp parallel do collapse(3) default(shared) schedule(static)&
-                !$omp private(h,k,m,phys,sh) proc_bind(close) reduction(+:rho_average,counts)
-                do h = self%lims(1,1),self%lims(1,2)
-                    do k = self%lims(2,1),self%lims(2,2)
-                        do m = self%lims(3,1),self%lims(3,2)
-                            sh   = nint(sqrt(real(h*h + k*k + m*m)))
-                            if( sh <= self%sh_lim )then
-                                phys = self%comp_addr_phys(h, k, m )
-                                rho_average(sh) = rho_average(sh) + self%rho(phys(1), phys(2), phys(3))
-                                counts(sh)      = counts(sh) + 1
-                            endif
-                        end do
+        else            
+            !$omp parallel do collapse(3) default(shared) schedule(static)&
+            !$omp private(h,k,m,phys,sh) proc_bind(close)
+            do h = self%lims(1,1),self%lims(1,2)
+                do k = self%lims(2,1),self%lims(2,2)
+                    do m = self%lims(3,1),self%lims(3,2)
+                        sh   = nint(sqrt(real(h*h + k*k + m*m)))
+                        phys = self%comp_addr_phys(h, k, m )
+                        if( sh > self%sh_lim )then
+                            ! outside Nyqvist, zero
+                            call self%set_cmat_at(phys(1),phys(2),phys(3), zero)
+                        else
+                            call self%div_cmat_at(phys, self%rho(phys(1),phys(2),phys(3)))
+                        endif
                     end do
                 end do
-                !$omp end parallel do
-                where( counts > 0 ) rho_average = rho_average / real(counts,dp)
-                !$omp parallel do collapse(3) default(shared) schedule(static)&
-                !$omp private(h,k,m,phys,sh,rho) proc_bind(close)
-                do h = self%lims(1,1),self%lims(1,2)
-                    do k = self%lims(2,1),self%lims(2,2)
-                        do m = self%lims(3,1),self%lims(3,2)
-                            sh   = nint(sqrt(real(h*h + k*k + m*m)))
-                            phys = self%comp_addr_phys(h, k, m )
-                            if( sh > self%sh_lim )then
-                                pcmat(phys(1),phys(2),phys(3)) = zero
-                            else
-                                rho = max(real(rho_average(sh)/1.d2),self%rho(phys(1),phys(2),phys(3)))
-                                pcmat(phys(1),phys(2),phys(3)) = pcmat(phys(1),phys(2),phys(3)) / rho
-                            endif
-                        end do
-                    end do
-                end do
-                !$omp end parallel do
-            else
-                !$omp parallel do collapse(3) default(shared) schedule(static)&
-                !$omp private(h,k,m,phys,sh) proc_bind(close)
-                do h = self%lims(1,1),self%lims(1,2)
-                    do k = self%lims(2,1),self%lims(2,2)
-                        do m = self%lims(3,1),self%lims(3,2)
-                            sh   = nint(sqrt(real(h*h + k*k + m*m)))
-                            phys = self%comp_addr_phys(h, k, m )
-                            if( sh > self%sh_lim )then
-                                ! outside Nyqvist, zero
-                                call self%set_cmat_at(phys(1),phys(2),phys(3), zero)
-                            else
-                                call self%div_cmat_at(phys, self%rho(phys(1),phys(2),phys(3)))
-                            endif
-                        end do
-                    end do
-                end do
-                !$omp end parallel do
-            endif
+            end do
+            !$omp end parallel do
         endif
     end subroutine sampl_dens_correct
 
@@ -548,53 +508,28 @@ contains
             THROW_HARD('expanded complex or rho matrices do not exist; compress_exp')
         endif
         ! Fourier components & rho matrices compression
-        call self%reset
-        if( params_glob%l_batchfrac )then
-            !$omp parallel do collapse(3) private(h,k,m,rho,phys) schedule(static) default(shared) proc_bind(close)
-            do h = self%lims(1,1),self%lims(1,2)
-                do k = self%lims(2,1),self%lims(2,2)
-                    do m = self%lims(3,1),self%lims(3,2)
-                        rho = self%rho_exp(h,k,m)
-                        if( rho < 0. ) cycle
-                        if (h > 0) then
-                            phys(1) = h + 1
-                            phys(2) = k + 1 + MERGE(self%ldim_img(2),0,k < 0)
-                            phys(3) = m + 1 + MERGE(self%ldim_img(3),0,m < 0)
-                            call self%set_cmat_at(phys(1),phys(2),phys(3), self%cmat_exp(h,k,m))
-                        else
-                            phys(1) = -h + 1
-                            phys(2) = -k + 1 + MERGE(self%ldim_img(2),0,-k < 0)
-                            phys(3) = -m + 1 + MERGE(self%ldim_img(3),0,-m < 0)
-                            call self%set_cmat_at(phys(1),phys(2),phys(3), conjg(self%cmat_exp(h,k,m)))
-                        endif
-                        self%rho(phys(1),phys(2),phys(3)) = rho
-                    end do
+        call self%reset        
+        !$omp parallel do collapse(3) private(h,k,m,phys) schedule(static) default(shared) proc_bind(close)
+        do h = self%lims(1,1),self%lims(1,2)
+            do k = self%lims(2,1),self%lims(2,2)
+                do m = self%lims(3,1),self%lims(3,2)
+                    if(abs(self%cmat_exp(h,k,m)) < TINY) cycle
+                    if (h > 0) then
+                        phys(1) = h + 1
+                        phys(2) = k + 1 + MERGE(self%ldim_img(2),0,k < 0)
+                        phys(3) = m + 1 + MERGE(self%ldim_img(3),0,m < 0)
+                        call self%set_cmat_at(phys(1),phys(2),phys(3), self%cmat_exp(h,k,m))
+                    else
+                        phys(1) = -h + 1
+                        phys(2) = -k + 1 + MERGE(self%ldim_img(2),0,-k < 0)
+                        phys(3) = -m + 1 + MERGE(self%ldim_img(3),0,-m < 0)
+                        call self%set_cmat_at(phys(1),phys(2),phys(3), conjg(self%cmat_exp(h,k,m)))
+                    endif
+                    self%rho(phys(1),phys(2),phys(3)) = self%rho_exp(h,k,m)
                 end do
             end do
-            !$omp end parallel do
-        else
-            !$omp parallel do collapse(3) private(h,k,m,phys) schedule(static) default(shared) proc_bind(close)
-            do h = self%lims(1,1),self%lims(1,2)
-                do k = self%lims(2,1),self%lims(2,2)
-                    do m = self%lims(3,1),self%lims(3,2)
-                        if(abs(self%cmat_exp(h,k,m)) < TINY) cycle
-                        if (h > 0) then
-                            phys(1) = h + 1
-                            phys(2) = k + 1 + MERGE(self%ldim_img(2),0,k < 0)
-                            phys(3) = m + 1 + MERGE(self%ldim_img(3),0,m < 0)
-                            call self%set_cmat_at(phys(1),phys(2),phys(3), self%cmat_exp(h,k,m))
-                        else
-                            phys(1) = -h + 1
-                            phys(2) = -k + 1 + MERGE(self%ldim_img(2),0,-k < 0)
-                            phys(3) = -m + 1 + MERGE(self%ldim_img(3),0,-m < 0)
-                            call self%set_cmat_at(phys(1),phys(2),phys(3), conjg(self%cmat_exp(h,k,m)))
-                        endif
-                        self%rho(phys(1),phys(2),phys(3)) = self%rho_exp(h,k,m)
-                    end do
-                end do
-            end do
-            !$omp end parallel do
-        endif
+        end do
+        !$omp end parallel do
     end subroutine compress_exp
 
     subroutine expand_exp( self )

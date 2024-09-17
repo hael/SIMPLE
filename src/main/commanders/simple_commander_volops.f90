@@ -627,8 +627,10 @@ contains
         class(cmdline),                  intent(inout) :: cline
         type(parameters)   :: params
         type(builder)      :: build
+        type(ori)          :: symaxis
+        type(sym)          :: syme
         real               :: shvec(3), scale, smpd
-        integer            :: ldim(3)
+        integer            :: ldim(3), box
         integer, parameter :: MAXBOX = 128
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'yes')
         if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',    20.)
@@ -648,6 +650,7 @@ contains
             params%msk   = round2even(scale * params%msk)
             params%width = scale * params%width
         endif
+        shvec = 0.
         if( params%center.eq.'yes' )then
             shvec = build%vol%calc_shiftcen(params%cenlp,params%msk)
             call build%vol%shift(shvec)
@@ -663,7 +666,36 @@ contains
         ! mask volume
         call build%vol%mask(params%msk, 'soft')
         ! symmetrize
-        call symmetrize_map(build%vol, params, build%vol2)
+        call symmetrize_map(build%vol, params, build%vol2, symaxis)
+        if( cline%defined('projfile') )then
+            if( trim(params%mkdir).eq.'yes' )then
+                ! updates paths manually as project is not required in this application
+                ! this is usually performed in the parameters type
+                call simple_copy_file(trim(params%projfile), filepath(PATH_HERE, basename(params%projfile)))
+                params%projfile = trim(simple_abspath(filepath(PATH_HERE, basename(params%projfile))))
+                params%projname = get_fbody(params%projfile, 'simple')
+                call cline%set('projname', params%projname)
+                call build%spproj%update_projinfo(cline)
+                call build%spproj%write_non_data_segments(params%projfile)
+            endif
+            call build%spproj%read(params%projfile)
+            if( .not. build%spproj%is_virgin_field(params%oritype) )then
+                ! transfer shift and symmetry to orientations
+                call syme%new(params%pgrp)
+                ! rotate the orientations & transfer the 3d shifts to 2d
+                shvec = -1. * shvec ! the sign is right
+                ! accounting for different volume/particle size
+                box   = build%spproj%get_box()
+                shvec = shvec * real(box) / real(params%box_crop)
+                call syme%apply_sym_with_shift(build%spproj_field, symaxis, shvec)
+                if( cline%defined('nspace') )then
+                    ! making sure the projection directions assignment
+                    ! refers to the input reference space
+                    call build%spproj_field%set_projs(build%eulspace)
+                endif
+                call build%spproj%write_segment_inside(params%oritype, params%projfile)
+            endif
+        endif
         ! write
         call build%vol2%write(trim(params%outvol))
         ! end gracefully
