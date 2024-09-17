@@ -9,29 +9,29 @@ public :: atoms
 private
 #include "simple_local_flags.inc"
 
-!        COLUMNS  DATA TYPE     FIELD       DEFINITION
-!  ------------------------------------------------------------------------------
+!        COLUMNS  DATA TYPE     FIELD        DEFINITION
+!  =============  ============  ===========  =============================================
 !  a6     1 -  6  Record name   "ATOM  "                       
-!  i5     7 - 11  Integer       serial      Atom serial number.
+!  i5     7 - 11  Integer       serial       Atom serial number.
 !  1x
-!  a4    13 - 16  Atom          name        Atom name.
-!  a1    17       Character     altLoc      Alternate location indicator.
-!  a3    18 - 20  Residue name  resName     Residue name.
+!  a4    13 - 16  Atom          name         Atom name (13-14 Chemical symbol - right justified 15 Remoteness indicator (alphabetic) 16 Branch designator (numeric))
+!  a1    17       Character     altLoc       Alternate location indicator.
+!  a3    18 - 20  Residue name  resName      Residue name.
 !  1x
-!  i1    22       Character     chainID     Chain identifier.
-!  i4    23 - 26  Integer       resSeq      Residue sequence number.
-!  a1    27       AChar         iCode       Code for insertion of residues.
+!  i1    22       Character     chainID      Chain identifier.
+!  i4    23 - 26  Integer       resSeq       Residue sequence number.
+!  a1    27       AChar         iCode        Code for insertion of residues.
 !  3x
-!  f8.3  31 - 38  Real(8.3)     x           Orthogonal coordinates for X, Angstroms.
-!  f8.3  39 - 46  Real(8.3)     y           Orthogonal coordinates for Y, Angstroms.
-!  f8.3  47 - 54  Real(8.3)     z           Orthogonal coordinates for Z, Angstroms.
-!  f6.2  55 - 60  Real(6.2)     occupancy   Occupancy.  
-!  f6.2  61 - 66  Real(6.2)     tempFactor  Temperature factor.
+!  f8.3  31 - 38  Real(8.3)     x            Orthogonal coordinates for X, Angstroms.
+!  f8.3  39 - 46  Real(8.3)     y            Orthogonal coordinates for Y, Angstroms.
+!  f8.3  47 - 54  Real(8.3)     z            Orthogonal coordinates for Z, Angstroms.
+!  f6.2  55 - 60  Real(6.2)     occupancy    Occupancy.  
+!  f6.2  61 - 66  Real(6.2)     tempFactor   Temperature factor.
 !  6x
-!  A4    73 - 76  LString(4)    segID       Segment identifier, left-justified.
-!  A2    77 - 78  LString(2)    element     Element symbol, right-justified.
-!  A2    79 - 80  LString(2)    charge      Charge on the atom.
-!
+!  A4    73 - 76  LString(4)    segID        Segment identifier, left-justified.
+!  A2    77 - 78  LString(2)    element      Element symbol, right-justified.
+!  A2    79 - 80  LString(2)    charge       Charge on the atom.
+!  =============  ============  ===========  =============================================
 !character(len=80), parameter :: pdbfmt          = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,6X,A4,2A2)"
 character(len=78), parameter :: pdbfmt          = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10x,A2)"  ! custom 3.3
 character(len=78), parameter :: pdbfmt_long     = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10x,A2)"  ! custom 3.3
@@ -176,6 +176,16 @@ contains
         ! done
         call fclose(filnum)
         contains
+
+            ! elemental character function element_pdbparser( name ) result( element_name )
+            !     character(len=4), intent(in) :: name
+            !     element_name = '  '
+            !     if( len_trim(trim(adjustl(name))) == 4 )then
+            !         element_name = name(1:1)//' '
+            !     else
+            !         element_name = ((adjustl(name(1:2))))
+            !     endif
+            ! end function element_pdbparser
 
             elemental logical function is_valid_entry( str )
                 character(len=6), intent(in) :: str
@@ -1195,7 +1205,6 @@ contains
             if( vol_dim(2) < ldim(2) ) THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pdb2mrc')
             if( vol_dim(3) < ldim(3) ) THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pdb2mrc')
             ldim        = vol_dim
-            ! qrt_box(:) = (vol_dim*smpd)/4.
         else
             max_dist = 0.
             do i_atom = 1, self%n
@@ -1204,8 +1213,7 @@ contains
                     if( dist > max_dist ) max_dist = dist
                 enddo
             enddo
-            ldim(:)     = ( ((max_dist * 2.)/smpd) )
-            ! qrt_box(:) = (smpd*real(ldim(:))/4.)
+            ldim(:) = ( ((max_dist * 2.)/smpd) )
         endif
         call vol%new([ldim(1), ldim(2), ldim(3)], smpd)
         ! 0,0,0 in PDB space is map to the center of the volume 
@@ -1241,12 +1249,11 @@ contains
         smpd = vol%get_smpd()
         if(present(filename))then
             open(unit=46,file=trim(filename//".csv"))
-            !open(unit=45,file=trim("atomic_centers.xyz"))
-            !write(45,*) self%n
-            !write(45,*) " "
+            open(unit=45,file=trim("atomic_centers.xyz"))
+            write(45,*) self%n
+            write(45,*) " "
         endif
         do i_atom = 1, self%n
-            !atom_box = 2 * ceiling(((self%radius(i_atom)*1.5)/smpd)) + 1
             atom_box = round2even(2 * (((self%radius(i_atom))*1.5)/smpd))
             if( atom_box <= 2 )then !for cases where the atom box is too small
                 atom_box = 4
@@ -1257,27 +1264,25 @@ contains
             atom_coord(:) = atom%get_coord(1)
             call atom%center_inbox(1, atom_box, smpd)
             call atom%convolve(vol_atom, cutoff = 8*smpd)
-            !call vol_atom%write('vol_atom.mrc')
             ! extract the atom volume from the molecule volume
             call vol_at%new([atom_box, atom_box, atom_box], smpd)
             center(:) = ang2vox(atom_coord(:), smpd) - atom_box/2
             call vol%window_slim(center, atom_box, vol_at, outside)
             call vol_at%mask(real(atom_box)/2., 'soft')
-            !call vol_at%write('vol_at_'//int2str(i_atom)//'.mrc')
             ! compute cross-correlation between both volumes
             cc = vol_atom%real_corr(vol_at)
             call self%set_atom_corr(i_atom, cc)
             call self%set_beta(i_atom, cc)
             if(present(filename))then
-                write(46,'(a,1x,4(a,f10.6))') self%name(i_atom),",",self%xyz(i_atom,1),",",self%xyz(i_atom,2),",",self%xyz(i_atom,3),",",self%atom_corr(i_atom)
-                !write(45,'(a1,1x,f10.6,1x,f10.6,1x,f10.6)') trim(adjustl(self%name(i_atom))), self%xyz(i_atom,1), self%xyz(i_atom,2), self%xyz(i_atom,3)
+                write(46,'(a,1x,4(a,f10.6))') self%element(i_atom),",",self%xyz(i_atom,1),",",self%xyz(i_atom,2),",",self%xyz(i_atom,3),",",self%atom_corr(i_atom)
+                write(45,'(a,1x,f10.6,1x,f10.6,1x,f10.6)') trim(adjustl(self%element(i_atom))), self%xyz(i_atom,1), self%xyz(i_atom,2), self%xyz(i_atom,3)
             endif
             call vol_atom%kill
             call vol_at%kill
             call atom%kill
         enddo
         if(present(filename))then
-            !close(45)
+            close(45)
             close(46)
             call self%writepdb(filename)
         endif
