@@ -3,14 +3,15 @@ include 'simple_lib.f08'
 use simple_atoms, only: atoms
 use simple_image
 implicit none
+#include "simple_local_flags.inc"
 character(len=STDLEN)         :: pdb_file, pdb_out, exp_vol_file, sim_vol_file, even_vol_file, odd_vol_file
 type(atoms)                   :: molecule 
 type(image)                   :: exp_vol, sim_vol, even_vol, odd_vol 
 real                          :: smpd=1.0
 logical                       :: pdb_exists
-integer                       :: rc, slen
+integer                       :: rc, slen, i
 character(len=:), allocatable :: cmd
-integer                       :: ifoo, ldim(3)
+integer                       :: ifoo, ldim(3), ldim1(3), ldim2(3)
 character(len=:), allocatable :: smpd_char
 if( command_argument_count() /= 2 )then
      write(logfhandle,'(a)') 'ERROR! Usage: simple_test_val_map coords.pdb smpd'
@@ -30,7 +31,12 @@ even_vol_file = trim(get_fbody(pdb_file,'pdb'))//'_even.mrc'
 odd_vol_file  = trim(get_fbody(pdb_file,'pdb'))//'_odd.mrc'
 pdb_out       = trim(get_fbody(pdb_file,'pdb'))//'_centered'
 ! the dimensions of all volumes need to be consisted
-call find_ldim_nptcls(exp_vol_file, ldim, ifoo)
+call find_ldim_nptcls(exp_vol_file,  ldim, ifoo)
+call find_ldim_nptcls(odd_vol_file,  ldim1, ifoo)
+call find_ldim_nptcls(even_vol_file, ldim2, ifoo)
+do i=1,3
+    if( (ldim(i) /= ldim1(i)) .or. (ldim(i) /= ldim2(i)) .or. (ldim1(i) /= ldim2(i)) ) THROW_HARD('Images no conforming in dimensions')
+enddo
 call molecule%new(pdb_file)
 call molecule%pdb2mrc(pdb_file, sim_vol_file, smpd, pdb_out, vol_dim=ldim)
 call sim_vol%new(ldim, smpd)

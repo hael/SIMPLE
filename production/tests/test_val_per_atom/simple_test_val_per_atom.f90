@@ -3,6 +3,7 @@ include 'simple_lib.f08'
 use simple_atoms, only: atoms
 use simple_image
 implicit none
+#include "simple_local_flags.inc"
 character(len=STDLEN)         :: pdb_file, vol_file, pdb_out
 type(atoms)                   :: molecule 
 type(image)                   :: vol 
