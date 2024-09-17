@@ -252,7 +252,7 @@ contains
         call calc_scaleinfo(nstages)
         rbox_stepsz = real(lpinfo(nstages)%box_crop - lpinfo(1)%box_crop)/real(nstages - 1)
         do istage = 2, nstages - 1 ! linear box_crop scheme
-            box_trial                = nint(real(lpinfo(1)%box_crop) + (istage-1)*rbox_stepsz)
+            box_trial                = nint(real(lpinfo(1)%box_crop) + real(istage-1)*rbox_stepsz)
             lpinfo(istage)%box_crop  = min(lpinfo(nstages)%box_crop, find_magic_box(box_trial))
             lpinfo(istage)%scale     = real(lpinfo(istage)%box_crop) / real(box)
             lpinfo(istage)%smpd_crop = smpd / lpinfo(istage)%scale

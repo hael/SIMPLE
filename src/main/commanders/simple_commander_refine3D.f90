@@ -658,7 +658,7 @@ contains
                     write(logfhandle,601) '>>> SNR, WHITE NOISE REGULARIZATION           ', params%eps
                 endif
                 if( l_sigma )then
-                    call cline_calc_sigma%set('which_iter',real(i))
+                    call cline_calc_sigma%set('which_iter', params%which_iter)
                     call xcalc_group_sigmas%execute(cline_calc_sigma)
                 endif
                 if( str_has_substr(params%refine, 'prob') )then
@@ -692,6 +692,11 @@ contains
                     end do
                     if( cline%defined('mskfile') )call build%spproj%add_vol2os_out(trim(params%mskfile), params%smpd, 1, 'vol_msk')
                     call build%spproj%write_segment_inside('out')
+                    if( l_sigma )then
+                        ! so final sigma2 can be used for a subsequent refine3D run
+                        call cline_calc_sigma%set('which_iter',params%which_iter+1)
+                        call xcalc_group_sigmas%execute_shmem(cline_calc_sigma)
+                    endif
                     exit
                 endif
                 ! update iteration counter
