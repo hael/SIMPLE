@@ -165,16 +165,9 @@ contains
             nptcls2update, pinds, ptcl_mask, .false.) ! no increment of sampled
         endif
         if( params%l_needs_sigma )then
-            if( cline%defined('batchfrac') )then
-                updatecnts = nint(build%spproj_field%get_all('updatecnt', [params%fromp,params%top]))
-                updatecnts = pack(updatecnts,mask=ptcl_mask)
-                call eucl_sigma%consolidate_sigma2_history(build%spproj_field, pinds, updatecnts)
-                eucl_sigma2_glob => eucl_sigma
-            else
-                fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
-                call eucl_sigma%new(fname, params%box)
-                call eucl_sigma%read_groups(build%spproj_field, ptcl_mask)
-            endif
+            fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
+            call eucl_sigma%new(fname, params%box)
+            call eucl_sigma%read_groups(build%spproj_field, ptcl_mask)
         end if
         if( trim(params%projrec).eq.'yes' )then
             ! making sure the projection directions assignment

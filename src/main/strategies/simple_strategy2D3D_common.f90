@@ -834,7 +834,6 @@ contains
         integer(timer_int_kind) :: t
         real(timer_int_kind)    :: t_ini, t_pad, t_sum, t_rec
         if( params_glob%nstates /= 1   ) THROW_HARD('PROJREC & NSTATES>1 not supported yet')
-        if( cline%defined('batchfrac') ) THROW_HARD('PROJREC & BATCHFRAC not supported yet')
         if( DEBUG ) t = tic()
         ! init volumes
         call preprecvols

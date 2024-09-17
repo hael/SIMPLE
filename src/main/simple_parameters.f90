@@ -343,7 +343,6 @@ type :: parameters
     real    :: astigthreshold=ASTIG_THRESHOLD !< ice fraction threshold{1.0}
     real    :: astigtol=0.05       !< expected (tolerated) astigmatism(in microns){0.05}
     real    :: athres=10.          !< angular threshold(in degrees)
-    real    :: batchfrac=1.0
     real    :: bfac=200            !< bfactor for sharpening/low-pass filtering(in A**2){200.}
     real    :: bfacerr=50.         !< bfactor error in simulated images(in A**2){0}
     real    :: box_exp_factor=BOX_EXP_FACTOR_DEFAULT !< multiplication factor to image size as determined by multi-diameter picking{1.2}
@@ -442,7 +441,6 @@ type :: parameters
     real    :: zsh=0.              !< z shift(in pixels){0}
     ! logical variables in (roughly) ascending alphabetical order
     logical :: l_autoscale    = .false.
-    logical :: l_batchfrac    = .false.
     logical :: l_bfac         = .false.
     logical :: l_corrw        = .false.
     logical :: l_distr_exec   = .false.
@@ -800,7 +798,6 @@ contains
         call check_rarg('astigthreshold', self%astigthreshold)
         call check_rarg('astigtol',       self%astigtol)
         call check_rarg('athres',         self%athres)
-        call check_rarg('batchfrac',      self%batchfrac)
         call check_rarg('bfac',           self%bfac)
         call check_rarg('bfacerr',        self%bfacerr)
         call check_rarg('box_exp_factor', self%box_exp_factor)
@@ -1236,7 +1233,6 @@ contains
         endif
         if ( trim(self%projrec).eq.'yes' )then
             if( self%nstates /= 1 ) THROW_HARD('PROJREC & multi states not implemented yet!')
-            if( cline%defined('batchfrac') ) THROW_HARD('PROJREC & BATCHFRAC not implemented yet!')
         endif
         !<<< END, SANITY CHECKING AND PARAMETER EXTRACTION FROM VOL(S)/STACK(S)
 
@@ -1269,7 +1265,6 @@ contains
             endif
             call cline%set('update_frac', self%update_frac)
         endif
-        self%l_batchfrac = self%batchfrac < 0.99
         if( .not. cline%defined('ncunits') )then
             ! we assume that the number of computing units is equal to the number of partitions
             self%ncunits = self%nparts

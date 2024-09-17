@@ -68,7 +68,6 @@ type(noisevol_commander)                    :: xnoisevol
 type(initial_3Dmodel_commander)             :: xinitial_3Dmodel
 type(abinitio_3Dmodel_commander)            :: xabinitio_3Dmodel
 type(abinitio_3Dmodel2_commander)           :: xabinitio_3Dmodel2
-type(batch_abinitio_3Dmodel_commander)      :: xbatch_abinitio_3Dmodel
 
 ! REFINE3D WORKFLOWS
 type(calc_pspec_commander_distr)            :: xcalc_pspec_distr
@@ -261,12 +260,6 @@ select case(trim(prg))
         else
             call xabinitio_3Dmodel2%execute(cline)
         endif
-    case( 'batch_abinitio_3Dmodel' )
-        if( cline%defined('nrestarts') )then
-            call restarted_exec(cline, 'batch_abinitio_3Dmodel', 'simple_exec')
-        else
-            call xbatch_abinitio_3Dmodel%execute(cline)
-        endif
 
     ! REFINE3D WORKFLOWS
     case( 'calc_pspec' )
@@ -417,7 +410,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('e9c19560')
+call simple_print_git_version('efda26d5')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
