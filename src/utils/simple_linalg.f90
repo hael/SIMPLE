@@ -83,7 +83,7 @@ interface eigh
         real(kind(0d0)),  intent(in)    :: abstol, vl, vu
         integer,          intent(out)   :: iwork(*)
         integer,          intent(out)   :: info
-        real(kind(0d0)),  intent(in)    :: a(lda,*)
+        real(kind(0d0)),  intent(inout) :: a(lda,*)
         real(kind(0d0)),  intent(out)   :: work(*), z(ldz,*)
         real(kind(0d0)),  intent(out)   :: w(*)
     end subroutine dsyevr
@@ -1487,17 +1487,17 @@ contains
     end function pythag_dp
 
     subroutine eigh_dp(n, mat, neigs, eigvals, eigvecs)
-        integer,  intent(in)  :: n
-        real(dp), intent(in)  :: mat(n,n)
-        integer,  intent(in)  :: neigs
-        real(dp), intent(out) :: eigvals(neigs)
-        real(dp), intent(out) :: eigvecs(n,neigs)
-        integer,  parameter  :: LWMAX = 1000
+        integer,  intent(in)    :: n
+        real(dp), intent(inout) :: mat(n,n)
+        integer,  intent(in)    :: neigs
+        real(dp), intent(out)   :: eigvals(neigs)
+        real(dp), intent(out)   :: eigvecs(n,neigs)
+        integer,  parameter     :: LWMAX = 1000
         integer  :: info, lwork, liwork, il, iu, m, isuppz(n), iwork(LWMAX), i
         real(dp) :: abstol, vl, vu, w(n), work(LWMAX)
         abstol = -1.0
-        il     = 1
-        iu     = neigs
+        il     = n-neigs+1
+        iu     = n
         ! Query the optimal workspace.
         lwork  = -1
         liwork = -1
