@@ -141,16 +141,14 @@ contains
         real                               :: corr_r, corr_t, val_score_t, val_score_r 
         real, allocatable                  :: corr_final_t(:), corr_final_r(:)
         
-
-        call get_AFM(AFM_in, 'HeightRetrace', HeightRetrace)
-        call get_AFM(AFM_in, 'HeightTrace', HeightTrace)
         call get_AFM(AFM_in, 'AvgHeight', AvgHeight)
+        call get_AFM(AFM_in, 'HeightTrace', HeightTrace)
+        call get_AFM(AFM_in, 'HeightRetrace', HeightRetrace)
 
-        call HeightRetrace%norm_minmax()
-        call HeightTrace%norm_minmax()
         call AvgHeight%norm_minmax()
-
-
+        call HeightTrace%norm_minmax()
+        call HeightRetrace%norm_minmax()
+        
         call getcwd(cwd)
         call AvgHeight%write(trim(cwd) // 'avg.mrc')
         call avg_p%pick(trim(cwd) // 'avg.mrc')
@@ -175,7 +173,7 @@ contains
         allocate(corr_final_r(avg_p%get_nboxes()))
         allocate(corr_final_t(avg_p%get_nboxes()))
         do box_iter = 1, avg_p%get_nboxes() 
-            !  print *, 'box: ', box_iter 
+            
             coord_test = pickpos(box_iter, :)
             call AvgHeight%window_slim(coord_test, avg_p%box_raw, avg_slim, outs)
             call HeightTrace%window_slim(coord_test, avg_p%box_raw, trace_slim, outs)
@@ -186,29 +184,27 @@ contains
             center = [coord_test(1), coord_test(2), 1]
             center_x(1) = coord_test(1)
             center_y(1) = coord_test(2)
-            
+            ! print *, 'box: ', box_iter 
             if( corr_r < 0.1 .or. corr_t < 0.1) then 
                 ! print *, 'box is outside the image'
                 cycle
             end if 
             box_count = box_count + 1 
 
-            call nn_val(HeightTrace, corr_final_t, val_center_t)
-            
-            
+            call nn_val(HeightTrace, corr_final_t, val_center_t)                                                 
             call nn_val(HeightRetrace, corr_final_r, val_center_r)
             
         end do 
         
-        if(sum(corr_final_t) /  box_count > sum(corr_final_r) / box_count) then 
-            print *, 'retrace is more noisy than trace'
-        else
-            print *, 'trace is more noisy than retrace'
-        end if 
         if(L_DEBUG) then 
+            if(sum(corr_final_t) /  box_count > sum(corr_final_r) / box_count) then 
+                print *, 'retrace is more noisy than trace'
+            else
+                print *, 'trace is more noisy than retrace'
+            end if 
             print *, sum(corr_final_t) /  box_count, sum(corr_final_r) / box_count
             print *, val_center_t, val_center_r
-            do box_iter = 38, 38 
+            do box_iter = 73, 75
                     call AvgHeight%window_slim(pickpos(box_iter, :), avg_p%box_raw, avg_slim, outs)
                     call avg_slim%vis()
                     call HeightTrace%window_slim(val_center_t(:2, box_iter), avg_p%box_raw, trace_slim, outs)
@@ -217,6 +213,7 @@ contains
                     call retrace_slim%vis()
             end do
         end if 
+        
         contains 
             subroutine nn_val(im_iter, corr_final, val_centers)
                 type(image), intent(in)     :: im_iter
@@ -240,13 +237,6 @@ contains
                         exit
                     end if 
                 end do
-                ! do box_iter = 38, 38 
-                !     call avg%window_slim(pickpos(box_iter, :), avg_p%box_raw, avg_slim, outs)
-                !     call avg_slim%vis()
-                !     call trace%window_slim(val_centers(:2, box_iter), avg_p%box_raw, trace_slim, outs)
-                !     call trace_slim%vis()
-                ! end do
-        
             end subroutine 
     end subroutine pick_valid  
 
