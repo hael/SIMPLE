@@ -394,7 +394,7 @@ contains
                 enddo
                 if( cline%defined('lp') ) call cline_prob_align%set('lp',params%lp)
                 ! reading corrs from all parts into one table
-                call xprob_align%execute_shmem( cline_prob_align )
+                call xprob_align%execute_safe( cline_prob_align )
             endif
             call job_descr%set( 'which_iter', trim(int2str(params%which_iter)))
             call cline%set(     'which_iter', params%which_iter)
@@ -638,12 +638,12 @@ contains
                     endif
                     cline_calc_pspec   = cline
                     cline_first_sigmas = cline
-                    call xcalc_pspec%execute_shmem( cline_calc_pspec )
+                    call xcalc_pspec%execute_safe( cline_calc_pspec )
                     call cline_calc_sigma%set('which_iter', startit)
-                    call xcalc_pspec_assemble%execute_shmem(cline_calc_sigma)
+                    call xcalc_pspec_assemble%execute_safe(cline_calc_sigma)
                     if( .not.cline_first_sigmas%defined('nspace') ) call cline_first_sigmas%set('nspace', real(params%nspace))
                     if( .not.cline_first_sigmas%defined('athres') ) call cline_first_sigmas%set('athres', real(params%athres))
-                    call xfirst_sigmas%execute_shmem(cline)
+                    call xfirst_sigmas%execute_safe(cline)
                 endif
             endif
             params%startit    = startit
@@ -697,7 +697,7 @@ contains
                     if( l_sigma )then
                         ! so final sigma2 can be used for a subsequent refine3D run
                         call cline_calc_sigma%set('which_iter',params%which_iter+1)
-                        call xcalc_group_sigmas%execute_shmem(cline_calc_sigma)
+                        call xcalc_group_sigmas%execute_safe(cline_calc_sigma)
                     endif
                     exit
                 endif
@@ -987,7 +987,7 @@ contains
         call cline_prob_tab%set('prg', 'prob_tab' ) ! required for distributed call
         ! execution
         if( .not.cline_prob_tab%defined('nparts') )then
-            call xprob_tab%execute_shmem(cline_prob_tab)
+            call xprob_tab%execute_safe(cline_prob_tab)
         else
             ! setup the environment for distributed execution
             call qenv%new(params_glob%nparts, nptcls=params_glob%nptcls)

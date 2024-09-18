@@ -9,7 +9,7 @@ private
 type, abstract :: commander_base
   contains
   procedure(generic_execute), deferred :: execute
-  procedure                            :: execute_shmem
+  procedure                            :: execute_safe
   end type commander_base
 
 abstract interface
@@ -26,7 +26,7 @@ end interface
 
 contains
 
-    subroutine execute_shmem( self, cline )
+    subroutine execute_safe( self, cline )
         use simple_cmdline,    only: cmdline
         use simple_parameters, only: parameters, params_glob
         use simple_builder,    only: builder, build_glob
@@ -41,6 +41,6 @@ contains
         params_glob => params_ptr
         build_glob  => build_ptr
         nullify(build_ptr,params_ptr)
-    end subroutine execute_shmem
+    end subroutine execute_safe
 
 end module simple_commander_base

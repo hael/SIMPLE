@@ -443,7 +443,7 @@ contains
         write(logfhandle,'(A,F6.1)') '>>> STAGE 1, LOW-PASS LIMIT: ',lp1
         write(logfhandle,'(A)') '>>>'
         if( l_shmem )then
-            call xcluster2D%execute_shmem(cline_cluster2D1)
+            call xcluster2D%execute_safe(cline_cluster2D1)
         else
             call xcluster2D_distr%execute(cline_cluster2D1)
         endif
@@ -459,7 +459,7 @@ contains
                 call cline_cluster2D2%set('startit',  real(last_iter+1))
                 call cline_cluster2D2%set('refs',     trim(finalcavgs))
                 if( l_shmem )then
-                    call xcluster2D%execute_shmem(cline_cluster2D2)
+                    call xcluster2D%execute_safe(cline_cluster2D2)
                 else
                     call xcluster2D_distr%execute(cline_cluster2D2)
                 endif
