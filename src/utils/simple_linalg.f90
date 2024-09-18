@@ -70,6 +70,25 @@ interface pythag
     module procedure pythag_sp, pythag_dp
 end interface pythag
 
+interface eigh
+    module procedure eigh_dp
+
+    subroutine dsyevr( jobz, range, uplo, n, a, lda, vl, vu, il, iu, &
+                    &abstol, m, w, z, ldz, isuppz, work, lwork,&
+                    &iwork, liwork, info )
+        character(len=1), intent(in)    :: jobz, range, uplo
+        integer,          intent(in)    :: n, il, iu, ldz, lda, lwork, liwork
+        integer,          intent(out)   :: m
+        integer,          intent(out)   :: isuppz(*)
+        real(kind(0d0)),  intent(in)    :: abstol, vl, vu
+        integer,          intent(out)   :: iwork(*)
+        integer,          intent(out)   :: info
+        real(kind(0d0)),  intent(in)    :: a(lda,*)
+        real(kind(0d0)),  intent(out)   :: work(*), z(ldz,*)
+        real(kind(0d0)),  intent(out)   :: w(*)
+    end subroutine dsyevr
+end interface eigh
+
 contains
 
     !>   calculates the argument of a vector
@@ -1466,5 +1485,35 @@ contains
             end if
         end if
     end function pythag_dp
+
+    subroutine eigh_dp(n, mat, neigs, eigvals, eigvecs)
+        integer,  intent(in)  :: n
+        real(dp), intent(in)  :: mat(n,n)
+        integer,  intent(in)  :: neigs
+        real(dp), intent(out) :: eigvals(neigs)
+        real(dp), intent(out) :: eigvecs(n,neigs)
+        integer,  parameter  :: LWMAX = 1000
+        integer  :: info, lwork, liwork, il, iu, m, isuppz(n), iwork(LWMAX), i
+        real(dp) :: abstol, vl, vu, w(n), work(LWMAX)
+        abstol = -1.0
+        il     = 1
+        iu     = neigs
+        ! Query the optimal workspace.
+        lwork  = -1
+        liwork = -1
+        call dsyevr( 'Vectors', 'Indices', 'Upper', n, mat, n, vl, vu, il, iu, abstol,&
+                    & m, w, eigvecs, n, isuppz, work, lwork, iwork, liwork, info )
+        lwork  = min( LWMAX, int(work(1)) )
+        liwork = min( LWMAX,    iwork(1)  )
+        ! Solve eigenproblem.
+        call dsyevr( 'Vectors', 'Indices', 'Upper', n, mat, n, vl, vu, il, iu, abstol,&
+                    & m, w, eigvecs, n, isuppz, work, lwork, iwork, liwork, info )
+        ! Check for convergence.
+        if( info > 0 )then
+            print *, 'The algorithm failed to compute eigenvalues.'
+            STOP
+        endif
+        eigvals = w(1:neigs)
+    end subroutine eigh_dp
 
 end module simple_linalg
