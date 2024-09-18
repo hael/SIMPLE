@@ -2361,19 +2361,19 @@ contains
         write(logfhandle,'(A,I6)')'>>> RANDOMLY SELECTED MICROGRAPHS:    ',params%nran
         ! multi pick
         write(logfhandle,'(A)')'>>> PERFORMING MULTI-DIAMETER PICKING'
-        call xpick%execute_shmem(cline_multipick)
+        call xpick%execute_safe(cline_multipick)
         call qsys_cleanup
         params%moldiam = cline_multipick%get_rarg('moldiam')
         write(logfhandle,'(A,F6.1)')'>>> ESTIMATED MOLECULAR DIAMETER: ',params%moldiam
         ! single pick
         write(logfhandle,'(A)')'>>> PERFORMING SINGLE DIAMETER PICKING'
         call cline_pick%set('moldiam', params%moldiam)
-        call xpick%execute_shmem(cline_pick)
+        call xpick%execute_safe(cline_pick)
         call qsys_cleanup
         ! extraction
         write(logfhandle,'(A)')'>>> PERFORMING EXTRACTION'
         call cline_extract%set('prg', 'extract')
-        call xextract%execute_shmem(cline_extract)
+        call xextract%execute_safe(cline_extract)
         call qsys_cleanup
         call spproj_glob%read(params%projfile)
         params%nptcls = spproj_glob%get_nptcls()
@@ -2382,7 +2382,7 @@ contains
         params%ncls = min(30,max(15,ceiling(real(params%nptcls)/real(NPTCLS_PER_CLS))))
         write(logfhandle,'(A,I3,A)')'>>> PERFORMING 2D CLASSIFICATION WITH ',params%ncls,' CLASSES'
         call cline_cleanup2D%set('ncls', params%ncls)
-        call xcleanup2D%execute_shmem(cline_cleanup2D)
+        call xcleanup2D%execute_safe(cline_cleanup2D)
         call qsys_cleanup
         ! cleanup
         call spproj_glob%kill

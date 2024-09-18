@@ -40,101 +40,58 @@ type, extends(commander_base) :: abinitio_3Dmodel2_commander
     procedure :: execute => exec_abinitio_3Dmodel2
 end type abinitio_3Dmodel2_commander
 
-character(len=STDLEN), parameter :: REC_FBODY            = 'rec_final'
-character(len=STDLEN), parameter :: REC_PPROC_FBODY      = trim(REC_FBODY)//trim(PPROC_SUFFIX)
-character(len=STDLEN), parameter :: REC_PPROC_MIRR_FBODY = trim(REC_PPROC_FBODY)//trim(MIRR_SUFFIX)
-real,                  parameter :: LPSTART_LB=10., LPSTART_DEFAULT=20., LPSTOP_LB=6.
-real,                  parameter :: CENLP_DEFAULT=30.
-real,                  parameter :: LPSYMSRCH_LB=12.
-logical                          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false.
-type(sym)                        :: se1,se2
+! class constants
+character(len=*), parameter :: REC_FBODY            = 'rec_final'
+character(len=*), parameter :: REC_PPROC_FBODY      = REC_FBODY//PPROC_SUFFIX
+character(len=*), parameter :: REC_PPROC_MIRR_FBODY = REC_PPROC_FBODY//MIRR_SUFFIX
+character(len=*), parameter :: STR_STATE_GLOB       = '01'
+real,             parameter :: LPSTART_LB           = 10.
+real,             parameter :: LPSTART_DEFAULT      = 20.
+real,             parameter :: LPSTOP_LB            = 6.
+real,             parameter :: CENLP_DEFAULT        = 30.
+real,             parameter :: LPSYMSRCH_LB         = 12.
+integer,          parameter :: NSTAGES              = 8
+integer,          parameter :: PHASES(3)            = [2,6,8]
+integer,          parameter :: MAXITS(3)            = [20,15,10]
+integer,          parameter :: MAXITS_GLOB(3)       = [2*20,4*15,2*10]
+integer,          parameter :: NSPACE(3)            = [500,1000,2500]
+integer,          parameter :: SYMSRCH_STAGE        = 3
+integer,          parameter :: PROBREFINE_STAGE     = 5
+! class variables
+type(lp_crop_inf), allocatable :: lpinfo(:)
+logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false.
+type(sym)        :: se1,se2
+type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_postprocess, cline_reproject
+
 
 contains
 
-    subroutine set_symmetry_class_vars( params )
-        class(parameters), intent(in) :: params
-        l_srch4symaxis = trim(params%pgrp) .ne. trim(params%pgrp_start)
-        l_symran       = .false.
-        l_sym          = l_srch4symaxis
-        if( params%pgrp_start.ne.'c1' .or. params%pgrp.ne.'c1' )then
-            se1 = sym(params%pgrp_start)
-            se2 = sym(params%pgrp)
-            if(se1%get_nsym() > se2%get_nsym())then
-                ! ensure se2 is a subgroup of se1
-                if( .not. se1%has_subgrp(params%pgrp) )THROW_HARD('Incompatible symmetry groups; exec_abinitio_3Dmodel')
-                ! set flag for symmetry randomisation
-                ! in case we are moving from a higher to lower group
-                l_symran = .true.
-            else if( se2%get_nsym() > se1%get_nsym() )then
-                ! ensure se1 is a subgroup of se2
-                if( .not. se2%has_subgrp(params%pgrp_start) )THROW_HARD('Incompatible symmetry groups; exec_abinitio_3Dmodel')
-            endif
-        endif
-    end subroutine set_symmetry_class_vars
-
-    function calc_lplim_final_stage( spproj, nbest ) result( lplim )
-        class(sp_project), intent(in) :: spproj
-        integer,           intent(in) :: nbest
-        real,    allocatable :: res(:), tmp_rarr(:)
-        integer, allocatable :: states(:), tmp_iarr(:)
-        real :: lplim
-        tmp_rarr  = spproj%os_cls2D%get_all('res')
-        tmp_iarr  = nint(spproj%os_cls2D%get_all('state'))
-        res       = pack(tmp_rarr, mask=(tmp_iarr>0))
-        call hpsort(res)
-        lplim = median_nocopy(res(:nbest))
-        deallocate(tmp_rarr, tmp_iarr, res)
-    end function calc_lplim_final_stage
-
-    !> for generation of an initial 3d model from class averages
+    !> for generation of an initial 3D model from class averages
     subroutine exec_initial_3Dmodel( self, cline )
         class(initial_3Dmodel_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
-        ! constants
-        integer,               parameter :: NSTAGES         = 8
-        integer,               parameter :: PHASES(3)       = [2,6,8]
-        integer,               parameter :: MAXITS(3)       = [20,15,10]
-        integer,               parameter :: MAXITS_GLOB(3)  = [2*20,4*15,2*10]
-        integer,               parameter :: NSPACE(3)       = [500,1000,2500]
-        integer,               parameter :: SYMSRCH_STAGE   = 3
-        character(len=STDLEN), parameter :: work_projfile   = 'initial_3Dmodel_tmpproj.simple'
-        ! distributed commanders
-        type(calc_pspec_commander_distr) :: xcalc_pspec_distr
+        character(len=*),      parameter :: work_projfile = 'initial_3Dmodel_tmpproj.simple'
         ! shared-mem commanders
         type(refine3D_commander)         :: xrefine3D
         type(reconstruct3D_commander)    :: xreconstruct3D
-        type(symmetrize_map_commander)   :: xsymmap
         type(reproject_commander)        :: xreproject
-        type(postprocess_commander)      :: xpostprocess
-        ! command lines
-        type(cmdline) :: cline_refine3D
-        type(cmdline) :: cline_symmap
-        type(cmdline) :: cline_reconstruct3D, cline_postprocess
-        type(cmdline) :: cline_reproject, cline_calc_pspec
         ! other
-        character(len=:),  allocatable :: stk, stkpath, orig_stk, frcs_fname, shifted_stk, stk_even, stk_odd, ext, vol_str, vol_name, vol_pproc
-        integer,           allocatable :: states(:)
-        real,              allocatable :: frcs_avg(:)
-        type(lp_crop_inf), allocatable :: lpinfo(:)
-        character(len=2)      :: str_state
+        character(len=:),    allocatable :: stk, stkpath, orig_stk, shifted_stk, stk_even, stk_odd, ext
+        integer,             allocatable :: states(:)
         type(ori)             :: o, o_even, o_odd
         type(parameters)      :: params
         type(ctfparams)       :: ctfvars
         type(sp_project)      :: spproj, work_proj
-        type(convergence)     :: conv
-        type(image)           :: img, vol
+        type(image)           :: img
         type(stack_io)        :: stkio_r, stkio_r2, stkio_w
-        type(class_frcs)      :: clsfrcs
-        character(len=STDLEN) :: vol_iter, vol_iter_pproc, vol_iter_pproc_mirr, frckind, vol_sym
-        real                  :: lpsym, lpfinal
-        integer               :: icls, ncavgs, cnt, iter, ipart, even_ind, odd_ind, state, filtsz, istage
-        logical               :: l_err
+        character(len=STDLEN) :: vol_iter, vol_iter_pproc, vol_iter_pproc_mirr
+        integer               :: icls, ncavgs, cnt, iter, ipart, even_ind, odd_ind, istage
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('oritype',      'out') ! because cavgs are part of out segment
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',      'yes')
-        if( .not. cline%defined('overlap')     ) call cline%set('overlap',     0.95) ! needed to prevent premature convergence
+        if( .not. cline%defined('overlap')     ) call cline%set('overlap',     0.95)
         if( .not. cline%defined('prob_athres') ) call cline%set('prob_athres',  90.) ! reduces # failed runs on trpv1 from 4->2/10
         if( .not. cline%defined('cenlp')       ) call cline%set('cenlp', CENLP_DEFAULT)
         if( .not. cline%defined('imgkind')     ) call cline%set('imgkind',   'cavg') ! whether to use classes generated from 2D/3D
@@ -142,30 +99,30 @@ contains
         call params%new(cline)
         call cline%set('mkdir',       'no')   ! to avoid nested directory structure
         call cline%set('oritype', 'ptcl3D')   ! from now on we are in the ptcl3D segment, final report is in the cls3D segment
-        ! state string
-        str_state = int2str_pad(1,2)
-        ! symmetry
-        call set_symmetry_class_vars(params)
+        ! prepare class command lines
+        call prep_class_command_lines(cline, work_projfile)
+        ! set symmetry class variables
+        call set_symmetry_class_vars
         ! read project
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
         call spproj%write_segment_inside('projinfo', params%projfile)
+        ! set low-pass limits and downscaling info from FRCs
+        call set_lplims_from_frcs(spproj)
         ! whether to use classes generated from 2D or 3D
         select case(trim(params%imgkind))
             case('cavg')
-                frckind = 'frc2D'
                 states  = nint(spproj%os_cls2D%get_all('state'))
             case('cavg3D')
-                frckind = 'frc3D'
                 states  = nint(spproj%os_cls3D%get_all('state'))
             case DEFAULT
                 THROW_HARD('Unsupported IMGKIND!')
         end select
-        call cline%delete('imgkind') ! no interference down the line
         ! retrieve cavgs stack info
         call spproj%get_cavgs_stk(stk, ncavgs, params%smpd, imgkind=params%imgkind, stkpath=stkpath)
         if(.not. file_exists(stk)) stk = trim(stkpath) // '/' // trim(stk)
         if(.not. file_exists(stk)) THROW_HARD('cavgs stk does not exist; simple_commander_abinitio')
+        states          = nint(spproj%os_cls2D%get_all('state'))
         orig_stk        = stk
         ext             = '.'//fname2ext(stk)
         stk_even        = add2fbody(trim(stk), trim(ext), '_even')
@@ -178,26 +135,6 @@ contains
         if( count(states==0) .eq. ncavgs )then
             THROW_HARD('no class averages detected in project file: '//trim(params%projfile)//'; initial_3Dmodel')
         endif
-        ! retrieve FRC info
-        call spproj%get_frcs(frcs_fname, frckind, fail=.false.)
-        if( .not.file_exists(frcs_fname) )then
-            ! 08/24 This is a backwards compatibility patch to account for error in metadata
-            ! on exit of streaming related to GUI directory structure (now fixed and cf above get_cavgs_stk).
-            ! Will need to harmonize (move to absolute path?).
-            frcs_fname = trim(stkpath)//'/'//trim(frcs_fname)
-            if( .not.file_exists(frcs_fname) )then
-                THROW_HARD('the project file does not contain an FRCs file, which is required')
-            endif
-        endif
-        ! work out low-pass limits and downscaling parameters
-        params%frcs = trim(frcs_fname)
-        call clsfrcs%read(frcs_fname)
-        filtsz = clsfrcs%get_filtsz()
-        allocate(frcs_avg(filtsz), source=0.)
-        call clsfrcs%avg_frc_getter(frcs_avg, states)
-        allocate(lpinfo(NSTAGES))
-        lpfinal = max(LPSTOP_LB,calc_lplim_final_stage(spproj,3))
-        call lpstages(params%box, NSTAGES, frcs_avg, params%smpd, LPSTART_LB, LPSTART_DEFAULT, lpfinal, lpinfo, verbose=.true.)
         ! prepare a temporary project file
         work_proj%projinfo = spproj%projinfo
         work_proj%compenv  = spproj%compenv
@@ -231,100 +168,30 @@ contains
         enddo
         params_glob%nptcls = work_proj%get_nptcls()
         call work_proj%write()
-        ! prepare command lines from prototype
-        cline_reconstruct3D = cline
-        cline_refine3D      = cline
-        cline_reproject     = cline
-        cline_symmap        = cline
-        ! map symmetrization
-        if( l_srch4symaxis )then
-            call cline_symmap%set('prg',     'symaxis_search')
-            call cline_symmap%set('pgrp',   trim(params%pgrp))
-            call cline_symmap%set('projfile', params%projfile)
-            if( .not. cline_symmap%defined('cenlp') ) call cline_symmap%set('cenlp', CENLP_DEFAULT)
-            call cline_symmap%set('hp',             params%hp)
-        endif
-        ! re-reconstruct & re-project volume
-        call cline_reconstruct3D%set('prg',       'reconstruct3D')
-        call cline_reconstruct3D%set('box',      real(params%box))
-        call cline_reconstruct3D%set('projfile',    work_projfile)
-        call cline_reconstruct3D%set('needs_sigma',         'yes')
-        call cline_postprocess%set('prg',           'postprocess')
-        call cline_postprocess%set('projfile',      work_projfile)
-        call cline_postprocess%set('mkdir',                  'no')
-        call cline_postprocess%delete('bfac') ! sharpen final map
-        call cline_reproject%set('prg',               'reproject')
-        call cline_reproject%set('pgrp',        trim(params%pgrp))
-        call cline_reproject%set('outstk',         'reprojs'//ext)
-        call cline_reproject%set('smpd',              params%smpd)
-        call cline_reproject%set('box',          real(params%box))
         ! Frequency marching
+        call rndstart(cline_refine3D)
         do istage = 1, NSTAGES
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', lpinfo(istage)%lp
-            if( istage == 1 ) call rndstart(cline_refine3D)
-            call set_cline_refine3D(istage)
+            ! Preparation of command line for probabilistic search
+            call set_cline_refine3D(istage, l_noise_reg=.true.)
             if( lpinfo(istage)%l_autoscale )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',lpinfo(istage)%box_crop
             endif
-            call exec_refine3D( iter )
+            ! Probabilistic search
+            call exec_refine3D(istage, xrefine3D)
             ! Symmetrization
             if( istage == SYMSRCH_STAGE )then
-                if( l_symran )then
-                    call se1%symrandomize(spproj%os_ptcl3D)
-                    call spproj%write_segment_inside('ptcl3D', work_projfile)
-                endif
-                if( l_srch4symaxis )then
-                    vol_iter = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
-                    if( .not. file_exists(vol_iter) ) THROW_HARD('input volume to map symmetrization does not exist')
-                    call cline_symmap%set('vol1',               trim(vol_iter))
-                    call cline_symmap%set('smpd',     lpinfo(istage)%smpd_crop)
-                    call cline_symmap%set('box', real(lpinfo(istage)%box_crop))
-                    vol_sym  = 'symmetrized_map'//trim(params%ext)
-                    call cline_symmap%set('outvol', trim(vol_sym))
-                    lpsym = max(LPSYMSRCH_LB,lpinfo(SYMSRCH_STAGE)%lp)
-                    call cline_symmap%set('lp', lpsym)
-                    write(logfhandle,'(A,F5.1)') '>>> DID SET MAP SYMMETRIZATION LOW-PASS LIMIT (IN A) TO: ', lpsym
-                    write(logfhandle,'(A)') '>>>'
-                    write(logfhandle,'(A)') '>>> MAP SYMMETRIZATION'
-                    write(logfhandle,'(A)') '>>>'
-                    call xsymmap%execute_shmem(cline_symmap)
-                    call del_file('SYMAXIS_SEARCH_FINISHED')
-                    call cline_refine3D%set('vol1', vol_sym)
-                endif
+                call symmetrize(istage, work_proj, work_projfile)
             endif
         end do
-        ! sigma2 at original sampling
-        cline_calc_pspec = cline
-        call cline_calc_pspec%set('prg',      'calc_pspec' )
-        call cline_calc_pspec%set('projfile', work_projfile)
-        call cline_calc_pspec%set('box',   real(params%box))
-        call cline_calc_pspec%set('smpd',       params%smpd)
-        call cline_calc_pspec%set('which_iter',  real(iter))
-        call xcalc_pspec_distr%execute_shmem(cline_calc_pspec)
-        iter = nint(cline_refine3D%get_rarg('endit'))
-        call cline_reconstruct3D%set('which_iter',real(iter))
-        ! deal with final volume
-        write(logfhandle,'(A)') '>>>'
-        write(logfhandle,'(A)') '>>> RECONSTRUCTION AT ORIGINAL SAMPLING'
-        write(logfhandle,'(A)') '>>>'
-        call cline_reconstruct3D%set('box',  real(params%box))
-        call cline_reconstruct3D%set('smpd', params%smpd)
-        ! reconstruction
-        call xreconstruct3D%execute_shmem(cline_reconstruct3D)
-        vol_iter = trim(VOL_FBODY)//trim(str_state)//ext
-        ! because postprocess only updates project file when mkdir=yes
-        call work_proj%read_segment('out', work_projfile)
-        call work_proj%add_vol2os_out(vol_iter, params%smpd, 1, 'vol')
-        call work_proj%add_fsc2os_out(FSC_FBODY//str_state//trim(BIN_EXT), 1, params%box)
-        call work_proj%write_segment_inside('out', work_projfile)
-        call xpostprocess%execute(cline_postprocess)
-        vol_iter_pproc      = add2fbody(vol_iter,ext,PPROC_SUFFIX)
-        vol_iter_pproc_mirr = add2fbody(vol_iter,ext,trim(PPROC_SUFFIX)//trim(MIRR_SUFFIX))
-        if( file_exists(vol_iter)            ) call simple_rename(vol_iter,            trim(REC_FBODY)//ext)
-        if( file_exists(vol_iter_pproc)      ) call simple_rename(vol_iter_pproc,      trim(REC_PPROC_FBODY)//ext)
-        if( file_exists(vol_iter_pproc_mirr) ) call simple_rename(vol_iter_pproc_mirr, trim(REC_PPROC_MIRR_FBODY)//ext)
-        ! updates original cls3D segment
+        ! for visualization
+        call gen_ortho_reprojs4viz
+        ! calculate 3D reconstruction at original sampling
+        call calc_final_rec(work_proj, work_projfile, xreconstruct3D)
+        ! postprocess final 3D reconstruction
+        ! call postprocess_final_rec
+        ! update original cls3D segment
         call work_proj%read_segment('ptcl3D', work_projfile)
         call work_proj%os_ptcl3D%delete_entry('stkind')
         call work_proj%os_ptcl3D%delete_entry('eo')
@@ -338,10 +205,10 @@ contains
         call spproj%os_cls3D%set_all2single('stkind', 1.)
         ! map the orientation parameters obtained for the clusters back to the particles
         select case(trim(params%imgkind))
-        case('cavg')
-            call spproj%map2ptcls
-        case('cavg3D')
-            ! For internal testing, particle parameters are not updated
+            case('cavg')
+                call spproj%map2ptcls
+            case('cavg3D')
+                ! For internal testing, particle parameters are not updated
         end select
         ! add rec_final to os_out
         call spproj%add_vol2os_out(trim(REC_FBODY)//ext, params%smpd, 1, 'vol_cavg')
@@ -350,9 +217,7 @@ contains
         write(logfhandle,'(A)') '>>>'
         write(logfhandle,'(A)') '>>> RE-PROJECTION OF THE FINAL VOLUME'
         write(logfhandle,'(A)') '>>>'
-        call cline_reproject%set('vol1',   trim(REC_PPROC_FBODY)//ext)
-        call cline_reproject%set('oritab', 'final_oris.txt')
-        call xreproject%execute(cline_reproject)
+        call xreproject%execute_safe(cline_reproject)
         ! write alternated stack
         call img%new([params%box,params%box,1], params%smpd)
         call stkio_r%open(orig_stk,            params%smpd, 'read',                                 bufsz=500)
@@ -378,14 +243,11 @@ contains
         ! write results (this needs to be a full write as multiple segments are updated)
         call spproj%write()
         ! end gracefully
-        call se1%kill
-        call se2%kill
         call img%kill
         call spproj%kill
         call o%kill
         call o_even%kill
         call o_odd%kill
-        call clsfrcs%kill
         call work_proj%kill
         call del_file(work_projfile)
         call simple_rmdir(STKPARTSDIR)
@@ -401,7 +263,7 @@ contains
                 call cline%set('mkdir', 'no') ! to avoid nested dirs
                 call cline%set('objfun', 'cc')
                 call cline%set('silence_fsc', 'yes')
-                call xreconstruct3D%execute_shmem(cline)
+                call xreconstruct3D%execute_safe(cline)
                 call cline%set('objfun', trim(params%objfun))
                 call simple_copy_file('recvol_state01_even.mrc', 'startvol_even_unfil.mrc')
                 call simple_copy_file('recvol_state01_odd.mrc',  'startvol_odd_unfil.mrc')
@@ -410,119 +272,6 @@ contains
                 call simple_rename(   'recvol_state01.mrc',      'startvol.mrc')
                 call cline%set('vol1', 'startvol.mrc')
             end subroutine rndstart
-
-            subroutine set_cline_refine3D( istage )
-                integer, intent(in) :: istage
-                character(len=:), allocatable :: silence_fsc, sh_first, prob_sh, ml_reg, refine, icm
-                integer :: iphase, s
-                real    :: trs, rnspace, rmaxits, rmaxits_glob, riter, snr_noise_reg
-                ! iteration number bookkeeping
-                if( cline_refine3D%defined('endit') )then
-                    riter = cline_refine3D%get_rarg('endit')
-                else
-                    riter = 0.
-                endif
-                riter = riter + 1.0
-                ! phase logics
-                if(      istage <= PHASES(1) )then
-                    iphase = 1
-                else if( istage <= PHASES(2) )then
-                    iphase = 2
-                else if( istage <= PHASES(3) )then
-                    iphase = 3
-                else 
-                    THROW_HARD('Invalid istage index')
-                endif
-                ! phase control parameters
-                select case(iphase)
-                    case(1)
-                        refine        = 'shc_smpl'
-                        rnspace       = real(NSPACE(1))
-                        rmaxits       = real(MAXITS(1))
-                        rmaxits_glob  = real(MAXITS_GLOB(1))
-                        silence_fsc   = 'yes'
-                        trs           = 0.
-                        snr_noise_reg = 2.0
-                        sh_first      = 'no'
-                        prob_sh       = 'no'
-                        ml_reg        = 'no'
-                        icm           = 'no'
-                    case(2)
-                        refine        = 'shc_smpl'
-                        rnspace       = real(NSPACE(2))
-                        rmaxits       = real(MAXITS(2))
-                        rmaxits_glob  = real(MAXITS_GLOB(2))
-                        silence_fsc   = 'yes'
-                        trs           = lpinfo(istage)%trslim
-                        snr_noise_reg = 4.0
-                        sh_first      = 'yes'
-                        prob_sh       = 'no'
-                        ml_reg        = 'yes'
-                        icm           = 'no'
-                    case(3)
-                        refine        = 'prob'
-                        rnspace       = real(NSPACE(3))
-                        rmaxits       = real(MAXITS(3))
-                        rmaxits_glob  = real(MAXITS_GLOB(3))
-                        silence_fsc   = 'no'
-                        trs           = lpinfo(istage)%trslim
-                        snr_noise_reg = 6.0
-                        sh_first      = 'yes'
-                        prob_sh       = 'yes'
-                        ml_reg        = 'yes'
-                        icm           = 'yes'
-                end select
-                ! symmetry
-                if( l_srch4symaxis )then
-                    if( istage <= SYMSRCH_STAGE )then
-                        ! need to replace original point-group flag with c1/pgrp_start
-                        call cline_refine3D%set('pgrp', trim(params%pgrp_start))
-                    else
-                        call cline_refine3D%set('pgrp', trim(params%pgrp))
-                    endif
-                endif
-                ! command line update
-                call cline_refine3D%set('prg',                     'refine3D')
-                call cline_refine3D%set('startit',                      riter)
-                call cline_refine3D%set('which_iter',                   riter)
-                call cline_refine3D%set('refine',                      refine)
-                call cline_refine3D%set('lp',               lpinfo(istage)%lp)
-                call cline_refine3D%set('smpd_crop', lpinfo(istage)%smpd_crop)
-                call cline_refine3D%set('box_crop',   lpinfo(istage)%box_crop)
-                call cline_refine3D%set('nspace',                     rnspace)
-                call cline_refine3D%set('maxits',                     rmaxits)
-                call cline_refine3D%set('maxits_glob',           rmaxits_glob)
-                call cline_refine3D%set('silence_fsc',            silence_fsc)
-                call cline_refine3D%set('trs',                            trs)
-                call cline_refine3D%set('snr_noise_reg',        snr_noise_reg)
-                call cline_refine3D%set('sh_first',                  sh_first)
-                call cline_refine3D%set('prob_sh',                    prob_sh)
-                call cline_refine3D%set('ml_reg',                      ml_reg)
-                call cline_refine3D%set('icm',                            icm)
-            end subroutine set_cline_refine3D
-
-            subroutine exec_refine3D( iter )
-                integer,          intent(out) :: iter
-                character(len=:), allocatable :: stage
-                call cline_refine3D%delete('endit')
-                call xrefine3D%execute_shmem(cline_refine3D)
-                call conv%read(l_err)
-                iter = nint(conv%get('iter'))
-                call del_files(DIST_FBODY,      params_glob%nparts,ext='.dat')
-                call del_files(ASSIGNMENT_FBODY,params_glob%nparts,ext='.dat')
-                call del_file(trim(DIST_FBODY)      //'.dat')
-                call del_file(trim(ASSIGNMENT_FBODY)//'.dat')
-                if( istage <= NSTAGES )then
-                    stage = '_stage_'//int2str(istage)
-                    do state = 1, params%nstates
-                        str_state = int2str_pad(state,2)
-                        vol_name  = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
-                        vol_pproc = add2fbody(vol_name, params%ext,PPROC_SUFFIX)
-                        if( file_exists(vol_name) ) call simple_copy_file(vol_name,  add2fbody(vol_name, params%ext,stage))
-                        if( file_exists(vol_pproc)) call simple_copy_file(vol_pproc, add2fbody(vol_pproc,params%ext,stage))
-                    enddo
-                endif
-            end subroutine exec_refine3D
     
             subroutine conv_eo( os )
                 class(oris), intent(inout) :: os
@@ -557,40 +306,19 @@ contains
     subroutine exec_abinitio_3Dmodel( self, cline )
         class(abinitio_3Dmodel_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
-        ! constants
-        integer, parameter :: NSTAGES         = 8
-        integer, parameter :: PHASES(3)       = [2,6,8]
-        integer, parameter :: MAXITS(3)       = [20,15,10]
-        integer, parameter :: MAXITS_GLOB(3)  = [2*20,4*15,2*10]
-        integer, parameter :: NSPACE(3)       = [500,1000,2500]
-        integer, parameter :: SYMSRCH_STAGE   = 3
         ! commanders
-        type(refine3D_commander_distr)      :: xrefine3D_distr
+        type(refine3D_commander_distr)      :: xrefine3D
         type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
-        type(postprocess_commander)         :: xpostprocess
-        type(symmetrize_map_commander)      :: xsymmap
-        ! command lines
-        type(cmdline)                       :: cline_refine3D, cline_reconstruct3D
-        type(cmdline)                       :: cline_postprocess, cline_symmap
         ! other
-        character(len=:),  allocatable :: frcs_fname, vol_type, str_state, vol_name, vol_pproc, vol_pproc_mirr, frckind, stkpath, stk, imgkind
-        integer,           allocatable :: states(:)
-        real,              allocatable :: frcs_avg(:)
-        type(lp_crop_inf), allocatable :: lpinfo(:)
+        character(len=:),  allocatable :: vol_name
         type(parameters)               :: params
         type(sp_project)               :: spproj
-        type(convergence)              :: conv
-        type(class_frcs)               :: clsfrcs
-        type(image)                    :: final_vol, reprojs, noisevol
-        character(len=LONGSTRLEN)      :: vol_str
-        character(len=STDLEN)          :: vol_iter, vol_sym
-        real    :: lpsym, lpfinal, smpd
-        integer :: istage, s, filtsz, ncavgs, iter, state, box_crop
-        logical :: l_err
+        type(image)                    :: noisevol
+        integer :: istage, s, state
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',        'yes')
-        if( .not. cline%defined('overlap')     ) call cline%set('overlap',       0.95) ! needed to prevent premature convergence
+        if( .not. cline%defined('overlap')     ) call cline%set('overlap',       0.95)
         if( .not. cline%defined('prob_athres') ) call cline%set('prob_athres',    10.)
         ! if( .not. cline%defined('stoch_update') ) call cline%set('stoch_update', 'yes') ! off 4 now
         call cline%set('stoch_update', 'no')
@@ -600,18 +328,21 @@ contains
         if( .not. cline%defined('pgrp')        ) call cline%set('pgrp',          'c1')
         if( .not. cline%defined('pgrp_start')  ) call cline%set('pgrp_start',    'c1')
         if( .not. cline%defined('ptclw')       ) call cline%set('ptclw',         'no')
+        if( cline%defined('update_frac')       ) call cline%delete('stoch_update')
         ! make master parameters
-        if( cline%defined('update_frac') ) call cline%delete('stoch_update')
         call params%new(cline)
         call cline%set('mkdir', 'no')
-        ! state string
-        str_state = int2str_pad(1,2)
-        ! symmetry
-        call set_symmetry_class_vars(params)
+        ! prepare class command lines
+        call prep_class_command_lines(cline, params%projfile)
+        ! set symmetry class variables
+        call set_symmetry_class_vars
         ! read project
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
         call spproj%write_segment_inside('projinfo', params%projfile)
+        ! set low-pass limits and downscaling info from FRCs
+        call set_lplims_from_frcs(spproj)
+        ! starting volume logics
         if( .not. cline%defined('vol1') )then
             ! randomize projection directions
             select case(trim(params%oritype))
@@ -619,7 +350,6 @@ contains
                     if( spproj%os_ptcl3D%get_noris() < 1 )then
                         THROW_HARD('Particles could not be found in the project')
                     endif
-                    vol_type = 'vol'
                     call spproj%os_ptcl3D%rnd_oris
                     ! call spproj%os_ptcl3D%set_all2single('w',1.) !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                 case DEFAULT
@@ -631,7 +361,7 @@ contains
             do s = 1, params%nstates
                 call noisevol%ran()
                 vol_name = 'startvol_state'//int2str_pad(s,2)//'.mrc'
-                call cline%set('vol'//int2str(s), vol_name)
+                call cline_refine3D%set('vol'//int2str(s), vol_name)
                 params%vols(s) = vol_name
                 call noisevol%write(vol_name)
                 call noisevol%ran()
@@ -647,6 +377,114 @@ contains
             end do
             call noisevol%kill
         endif
+        ! Frequency marching
+        do istage = 1, NSTAGES
+            write(logfhandle,'(A)')'>>>'
+            write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', lpinfo(istage)%lp
+            ! Preparation of command line for probabilistic search
+            call set_cline_refine3D(istage, l_noise_reg=.false.)
+            if( lpinfo(istage)%l_autoscale )then
+                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',lpinfo(istage)%box_crop
+            endif
+            ! Probabilistic search
+            call exec_refine3D(istage, xrefine3D)
+            ! Symmetrization
+            if( istage == SYMSRCH_STAGE )then
+                call symmetrize(istage, spproj, params%projfile)
+            endif
+        enddo
+        ! for visualization
+        call gen_ortho_reprojs4viz
+        ! calculate 3D reconstruction at original sampling
+        call calc_final_rec(spproj, params%projfile, xreconstruct3D_distr)
+        ! postprocess final 3D reconstruction
+        call postprocess_final_rec
+        ! cleanup
+        call spproj%kill
+        call qsys_cleanup
+        call simple_end('**** SIMPLE_ABINITIO_3DMODEL NORMAL STOP ****')
+    end subroutine exec_abinitio_3Dmodel
+
+    ! private helper routines
+
+    subroutine prep_class_command_lines( cline, projfile )
+        class(cmdline),   intent(in) :: cline
+        character(len=*), intent(in) :: projfile
+        cline_refine3D      = cline
+        cline_symmap        = cline
+        cline_reconstruct3D = cline
+        cline_postprocess   = cline
+        cline_reproject     = cline
+        ! refine3D
+        call cline_refine3D%set('prg',                         'refine3D')
+        call cline_refine3D%set('pgrp',            trim(params_glob%pgrp))
+        call cline_refine3D%set('projfile',                trim(projfile))
+        ! symmetrization
+        call cline_symmap%set('prg',                     'symmetrize_map')
+        call cline_symmap%set('pgrp',              trim(params_glob%pgrp))
+        call cline_symmap%set('projfile',                  trim(projfile))
+        if( .not. cline_symmap%defined('cenlp') )then
+        call cline_symmap%set('cenlp',                      CENLP_DEFAULT)
+        endif
+        call cline_symmap%set('hp',                        params_glob%hp)
+        ! re-reconstruct volume
+        call cline_reconstruct3D%set('prg',               'reconstruct3D')
+        call cline_reconstruct3D%set('box',         real(params_glob%box))
+        call cline_reconstruct3D%set('smpd',             params_glob%smpd)
+        call cline_reconstruct3D%set('projfile',           trim(projfile))
+        call cline_reconstruct3D%set('pgrp',       trim(params_glob%pgrp))
+        call cline_reconstruct3D%set('ml_reg',                       'no')
+        call cline_reconstruct3D%set('needs_sigma',                  'no')
+        call cline_reconstruct3D%set('objfun',                       'cc')
+        ! no fractional or stochastic updates
+        call cline_reconstruct3D%delete('update_frac')
+        call cline_reconstruct3D%delete('stoch_update')
+        ! individual particles reconstruction
+        call cline_reconstruct3D%set('projrec', 'no')
+        ! postprocess volume
+        call cline_postprocess%set('prg',                   'postprocess')
+        call cline_postprocess%set('projfile',             trim(projfile))
+        call cline_postprocess%set('mkdir',                          'no')
+        call cline_postprocess%delete('bfac') ! sharpen final map
+        call cline_postprocess%delete('lp')   ! to obtain optimal filtration
+        ! re-project volume
+        call cline_reproject%set('prg',                       'reproject')
+        call cline_reproject%set('vol1', REC_PPROC_FBODY//params_glob%ext)
+        call cline_reproject%set('pgrp',           trim(params_glob%pgrp))
+        call cline_reproject%set('outstk',     'reprojs'//params_glob%ext)
+        call cline_reproject%set('smpd',                 params_glob%smpd)
+        call cline_reproject%set('box',             real(params_glob%box))
+        call cline_reproject%set('oritab',               'final_oris.txt')
+    end subroutine prep_class_command_lines
+
+    subroutine set_symmetry_class_vars
+        l_srch4symaxis = trim(params_glob%pgrp) .ne. trim(params_glob%pgrp_start)
+        l_symran       = .false.
+        l_sym          = l_srch4symaxis
+        if( params_glob%pgrp_start.ne.'c1' .or. params_glob%pgrp.ne.'c1' )then
+            se1 = sym(params_glob%pgrp_start)
+            se2 = sym(params_glob%pgrp)
+            if(se1%get_nsym() > se2%get_nsym())then
+                ! ensure se2 is a subgroup of se1
+                if( .not. se1%has_subgrp(params_glob%pgrp) )THROW_HARD('Incompatible symmetry groups; exec_abinitio_3Dmodel')
+                ! set flag for symmetry randomisation
+                ! in case we are moving from a higher to lower group
+                l_symran = .true.
+            else if( se2%get_nsym() > se1%get_nsym() )then
+                ! ensure se1 is a subgroup of se2
+                if( .not. se2%has_subgrp(params_glob%pgrp_start) )THROW_HARD('Incompatible symmetry groups; exec_abinitio_3Dmodel')
+            endif
+        endif
+    end subroutine set_symmetry_class_vars
+
+    subroutine set_lplims_from_frcs( spproj )
+        class(sp_project), intent(inout) :: spproj
+        character(len=:),  allocatable   :: frcs_fname, stk, imgkind, stkpath
+        real,              allocatable   :: frcs_avg(:)
+        integer,           allocatable   :: states(:)
+        type(class_frcs) :: clsfrcs
+        real             :: smpd, lpfinal
+        integer          :: filtsz, ncavgs
         ! retrieve FRC info
         call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
         if( .not.file_exists(frcs_fname) )then
@@ -660,246 +498,236 @@ contains
             endif
         endif
         ! work out low-pass limits and downscaling parameters
-        params%frcs = trim(frcs_fname)
+        params_glob%frcs = trim(frcs_fname)
         call clsfrcs%read(frcs_fname)
         filtsz = clsfrcs%get_filtsz()
         allocate(frcs_avg(filtsz), source=0.)
         states  = nint(spproj%os_cls2D%get_all('state'))
         call clsfrcs%avg_frc_getter(frcs_avg, states)
+        if( allocated(lpinfo) ) deallocate(lpinfo)
         allocate(lpinfo(NSTAGES))
-        lpfinal = max(LPSTOP_LB,calc_lplim_final_stage(spproj,3))
-        call lpstages(params%box, NSTAGES, frcs_avg, params%smpd, LPSTART_LB, LPSTART_DEFAULT, lpfinal, lpinfo, verbose=.true.)
-        ! dimensions defaults
-        params%box          = spproj%get_box()
-        params%smpd_crop    = params%smpd
-        params%box_crop     = params%box
-        ! prepare command lines from prototype
-        cline_refine3D      = cline
-        cline_reconstruct3D = cline
-        cline_postprocess   = cline
-        cline_symmap        = cline
-        ! map symmetrization
-        if( l_srch4symaxis )then
-            call cline_symmap%set('prg',     'symaxis_search') ! needed for cluster exec
-            call cline_symmap%set('pgrp',   trim(params%pgrp))
-            call cline_symmap%set('projfile', params%projfile)
-            if( .not. cline_symmap%defined('cenlp') ) call cline_symmap%set('cenlp', CENLP_DEFAULT)
-            call cline_symmap%set('hp',             params%hp)
+        lpfinal = max(LPSTOP_LB,calc_lplim_final_stage(3))
+        call lpstages(params_glob%box, NSTAGES, frcs_avg, params_glob%smpd, LPSTART_LB, LPSTART_DEFAULT, lpfinal, lpinfo, verbose=.true.)
+        call clsfrcs%kill
+
+        contains
+
+            function calc_lplim_final_stage( nbest ) result( lplim )
+                integer,           intent(in) :: nbest
+                real,    allocatable :: res(:), tmp_rarr(:)
+                integer, allocatable :: states(:), tmp_iarr(:)
+                real :: lplim
+                tmp_rarr  = spproj%os_cls2D%get_all('res')
+                tmp_iarr  = nint(spproj%os_cls2D%get_all('state'))
+                res       = pack(tmp_rarr, mask=(tmp_iarr>0))
+                call hpsort(res)
+                lplim = median_nocopy(res(:nbest))
+                deallocate(tmp_rarr, tmp_iarr, res)
+            end function calc_lplim_final_stage
+
+    end subroutine set_lplims_from_frcs
+
+    subroutine set_cline_refine3D( istage, l_noise_reg )
+        integer, intent(in) :: istage
+        logical, intent(in) :: l_noise_reg
+        character(len=:), allocatable :: silence_fsc, sh_first, prob_sh, ml_reg, refine, icm
+        integer :: iphase, s
+        real    :: trs, rnspace, rmaxits, rmaxits_glob, riter, snr_noise_reg
+        ! iteration number bookkeeping
+        if( cline_refine3D%defined('endit') )then
+            riter = cline_refine3D%get_rarg('endit')
+        else
+            riter = 0.
         endif
-        ! re-reconstruction & re-projection
-        call cline_reconstruct3D%set('prg',      'reconstruct3D')
-        call cline_reconstruct3D%set('box',     real(params%box))
-        call cline_reconstruct3D%set('projfile', params%projfile)
-        call cline_reconstruct3D%set('ml_reg',              'no')
-        call cline_reconstruct3D%set('needs_sigma',         'no')
-        call cline_reconstruct3D%set('objfun',              'cc')
-        call cline_reconstruct3D%set('pgrp',         params%pgrp)
-        call cline_postprocess%set('prg',          'postprocess')
-        call cline_postprocess%set('projfile',   params%projfile)
-        call cline_postprocess%set('imgkind',           vol_type)
-        ! Frequency marching
-        do istage = 1, NSTAGES
-            write(logfhandle,'(A)')'>>>'
-            write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', lpinfo(istage)%lp
-            call set_cline_refine3D(istage)
-            if( lpinfo(istage)%l_autoscale )then
-                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',lpinfo(istage)%box_crop
+        riter = riter + 1.0
+        ! phase logics
+        if(      istage <= PHASES(1) )then
+            iphase = 1
+        else if( istage <= PHASES(2) )then
+            iphase = 2
+        else if( istage <= PHASES(3) )then
+            iphase = 3
+        else 
+            THROW_HARD('Invalid istage index')
+        endif
+        ! phase control parameters
+        select case(iphase)
+            case(1)
+                rnspace       = real(NSPACE(1))
+                rmaxits       = real(MAXITS(1))
+                rmaxits_glob  = real(MAXITS_GLOB(1))
+                silence_fsc   = 'yes'
+                trs           = 0.
+                sh_first      = 'no'
+                ml_reg        = 'no'
+                icm           = 'no'
+                snr_noise_reg = 2.0
+            case(2)
+                rnspace       = real(NSPACE(2))
+                rmaxits       = real(MAXITS(2))
+                rmaxits_glob  = real(MAXITS_GLOB(2))
+                silence_fsc   = 'yes'
+                trs           = lpinfo(istage)%trslim
+                sh_first      = 'yes'
+                ml_reg        = 'yes'
+                icm           = 'no'
+                snr_noise_reg = 4.0
+            case(3)
+                rnspace       = real(NSPACE(3))
+                rmaxits       = real(MAXITS(3))
+                rmaxits_glob  = real(MAXITS_GLOB(3))
+                silence_fsc   = 'no'
+                trs           = lpinfo(istage)%trslim
+                sh_first      = 'yes'
+                ml_reg        = 'yes'
+                icm           = 'yes'
+                snr_noise_reg = 6.0
+        end select
+        ! symmetry
+        if( l_srch4symaxis )then
+            if( istage <= SYMSRCH_STAGE )then
+                ! need to replace original point-group flag with c1/pgrp_start
+                call cline_refine3D%set('pgrp', trim(params_glob%pgrp_start))
+            else
+                call cline_refine3D%set('pgrp', trim(params_glob%pgrp))
             endif
-            ! Execution
-            call exec_refine3D(iter)
-            ! Symmetrization
-            if( istage == SYMSRCH_STAGE )then
-                if( l_symran )then
-                    call se1%symrandomize(spproj%os_ptcl3D)
-                    call spproj%write_segment_inside('ptcl3D', params%projfile)
-                endif
-                if( l_srch4symaxis )then
-                    vol_iter = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
-                    if( .not. file_exists(vol_iter) ) THROW_HARD('input volume to map symmetrization does not exist')
-                    call cline_symmap%set('vol1',               trim(vol_iter))
-                    call cline_symmap%set('smpd',     lpinfo(istage)%smpd_crop)
-                    call cline_symmap%set('box', real(lpinfo(istage)%box_crop))
-                    vol_sym  = 'symmetrized_map'//trim(params%ext)
-                    call cline_symmap%set('outvol', trim(vol_sym))
-                    lpsym = max(LPSYMSRCH_LB,lpinfo(SYMSRCH_STAGE)%lp)
-                    call cline_symmap%set('lp', lpsym)
-                    write(logfhandle,'(A,F5.1)') '>>> DID SET MAP SYMMETRIZATION LOW-PASS LIMIT (IN A) TO: ', lpsym
-                    write(logfhandle,'(A)') '>>>'
-                    write(logfhandle,'(A)') '>>> MAP SYMMETRIZATION'
-                    write(logfhandle,'(A)') '>>>'
-                    call xsymmap%execute_shmem(cline_symmap)
-                    call del_file('SYMAXIS_SEARCH_FINISHED')
-                    call cline_refine3D%set('vol1', vol_sym)
-                endif
-            endif
-        enddo
-        ! for visualization
-        do state = 1, params%nstates
+        endif
+        ! refinement mode
+        if( istage < PROBREFINE_STAGE )then
+            refine  = 'shc_smpl'
+            prob_sh = 'no'
+        else
+            refine  = 'prob'
+            prob_sh = 'yes'
+        endif
+        ! command line update
+        call cline_refine3D%set('prg',                     'refine3D')
+        call cline_refine3D%set('startit',                      riter)
+        call cline_refine3D%set('which_iter',                   riter)
+        call cline_refine3D%set('refine',                      refine)
+        call cline_refine3D%set('lp',               lpinfo(istage)%lp)
+        call cline_refine3D%set('smpd_crop', lpinfo(istage)%smpd_crop)
+        call cline_refine3D%set('box_crop',   lpinfo(istage)%box_crop)
+        call cline_refine3D%set('nspace',                     rnspace)
+        call cline_refine3D%set('maxits',                     rmaxits)
+        call cline_refine3D%set('maxits_glob',           rmaxits_glob)
+        call cline_refine3D%set('silence_fsc',            silence_fsc)
+        call cline_refine3D%set('trs',                            trs)
+        call cline_refine3D%set('sh_first',                  sh_first)
+        call cline_refine3D%set('prob_sh',                    prob_sh)
+        call cline_refine3D%set('ml_reg',                      ml_reg)
+        call cline_refine3D%set('icm',                            icm)
+        if( l_noise_reg )then
+        call cline_refine3D%set('snr_noise_reg',        snr_noise_reg)
+        endif
+    end subroutine set_cline_refine3D
+
+    subroutine exec_refine3D( istage, xrefine3D )
+        integer,               intent(in)    :: istage
+        class(commander_base), intent(inout) :: xrefine3D
+        character(len=:), allocatable :: stage, str_state, vol_name, vol_pproc
+        integer :: state
+        call cline_refine3D%delete('endit')
+        call xrefine3D%execute_safe(cline_refine3D)
+        call del_files(DIST_FBODY,      params_glob%nparts,ext='.dat')
+        call del_files(ASSIGNMENT_FBODY,params_glob%nparts,ext='.dat')
+        call del_file(DIST_FBODY      //'.dat')
+        call del_file(ASSIGNMENT_FBODY//'.dat')
+        stage = '_stage_'//int2str(istage)
+        do state = 1, params_glob%nstates
             str_state = int2str_pad(state,2)
-            box_crop = lpinfo(NSTAGES)%box_crop 
-            call final_vol%new([box_crop,box_crop,box_crop],lpinfo(NSTAGES)%smpd_crop)
-            call final_vol%read(trim(VOL_FBODY)//trim(str_state)//trim(params%ext))
+            vol_name  = VOL_FBODY//str_state//params_glob%ext
+            vol_pproc = add2fbody(vol_name, params_glob%ext, PPROC_SUFFIX)
+            if( file_exists(vol_name) ) call simple_copy_file(vol_name,  add2fbody(vol_name, params_glob%ext,stage))
+            if( file_exists(vol_pproc)) call simple_copy_file(vol_pproc, add2fbody(vol_pproc,params_glob%ext,stage))
+        enddo
+    end subroutine exec_refine3D
+
+    subroutine symmetrize( istage, spproj, projfile )
+        integer,           intent(in)    :: istage
+        class(sp_project), intent(inout) :: spproj
+        character(len=*),  intent(in)    :: projfile
+        character(len=:), allocatable    :: vol_iter, vol_sym
+        type(symmetrize_map_commander)   :: xsymmap
+        real :: lpsym
+        if( l_symran )then
+            call se1%symrandomize(spproj%os_ptcl3D)
+            call spproj%write_segment_inside('ptcl3D', projfile)
+        endif
+        if( l_srch4symaxis )then
+            vol_iter = VOL_FBODY//STR_STATE_GLOB//params_glob%ext
+            if( .not. file_exists(vol_iter) ) THROW_HARD('input volume to map symmetrization does not exist')
+            call cline_symmap%set('vol1',                     vol_iter)
+            call cline_symmap%set('smpd',     lpinfo(istage)%smpd_crop)
+            call cline_symmap%set('box', real(lpinfo(istage)%box_crop))
+            vol_sym = 'symmetrized_map'//params_glob%ext
+            call cline_symmap%set('outvol', vol_sym)
+            lpsym = max(LPSYMSRCH_LB,lpinfo(SYMSRCH_STAGE)%lp)
+            call cline_symmap%set('lp', lpsym)
+            write(logfhandle,'(A,F5.1)') '>>> DID SET MAP SYMMETRIZATION LOW-PASS LIMIT (IN A) TO: ', lpsym
+            write(logfhandle,'(A)') '>>>'
+            write(logfhandle,'(A)') '>>> MAP SYMMETRIZATION'
+            write(logfhandle,'(A)') '>>>'
+            call xsymmap%execute_safe(cline_symmap)
+            call del_file('SYMAXIS_SEARCH_FINISHED')
+            call cline_refine3D%set('vol1', vol_sym)
+        endif
+    end subroutine symmetrize
+
+    subroutine gen_ortho_reprojs4viz
+        character(len=:), allocatable :: str_state
+        type(image) :: final_vol, reprojs
+        integer     :: state, box_crop
+        box_crop = lpinfo(NSTAGES)%box_crop 
+        call final_vol%new([box_crop,box_crop,box_crop],lpinfo(NSTAGES)%smpd_crop)
+        do state = 1, params_glob%nstates
+            str_state = int2str_pad(state,2)
+            call final_vol%read(VOL_FBODY//str_state//params_glob%ext)
             call final_vol%generate_orthogonal_reprojs(reprojs)
-            call reprojs%write_jpg('orthogonal_reprojs_state'//trim(str_state)//'.jpg')
-            call final_vol%kill
+            call reprojs%write_jpg('orthogonal_reprojs_state'//str_state//'.jpg')
             call reprojs%kill
         enddo
-        ! Final reconstruction at original scale
+        call final_vol%kill
+    end subroutine gen_ortho_reprojs4viz
+
+    subroutine calc_final_rec( spproj, projfile, xreconstruct3D )
+        class(sp_project),     intent(inout) :: spproj
+        character(len=*),      intent(in)    :: projfile
+        class(commander_base), intent(inout) :: xreconstruct3D
+        character(len=:), allocatable :: str_state, vol_name
+        integer :: state
         write(logfhandle,'(A)') '>>>'
         write(logfhandle,'(A)') '>>> RECONSTRUCTION AT ORIGINAL SAMPLING'
         write(logfhandle,'(A)') '>>>'
-        ! no ML-filtering
-        call cline_reconstruct3D%set('ml_reg',      'no')
-        call cline_reconstruct3D%set('needs_sigma', 'no')
-        call cline_reconstruct3D%set('objfun',      'cc')
-        ! no fractional or stochastic updates
-        call cline_reconstruct3D%delete('update_frac')
-        call cline_reconstruct3D%delete('stoch_update')
-        ! individual particles reconstruction
-        call cline_reconstruct3D%set('projrec', 'no')
-        ! reconstruction
-        call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D)
-        call spproj%read_segment('out',params%projfile)
-        do state = 1, params%nstates
+        call xreconstruct3D%execute_safe(cline_reconstruct3D)
+        call spproj%read_segment('out', projfile)
+        do state = 1, params_glob%nstates
             str_state = int2str_pad(state,2)
-            vol_name  = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
-            call spproj%add_vol2os_out(vol_name, params%smpd, state, vol_type)
-            if( trim(params%oritype).eq.'ptcl3D' )then
-                call spproj%add_fsc2os_out(FSC_FBODY//str_state//trim(BIN_EXT), state, params%box)
-            endif
+            vol_name  = VOL_FBODY//str_state//params_glob%ext
+            call spproj%add_vol2os_out(vol_name, params_glob%smpd, state, 'vol')
+            call spproj%add_fsc2os_out(FSC_FBODY//str_state//BIN_EXT, state, params_glob%box)
         enddo
-        call spproj%write_segment_inside('out',params%projfile)
-        ! post-processing
-        do state = 1, params%nstates
-            call cline_postprocess%delete('lp') ! so as to obtain optimal filtration
+        call spproj%write_segment_inside('out', projfile)
+    end subroutine calc_final_rec
+
+    subroutine postprocess_final_rec
+        type(postprocess_commander) :: xpostprocess
+        integer :: state
+        character(len=:), allocatable :: str_state, vol_name, vol_pproc, vol_pproc_mirr
+        do state = 1, params_glob%nstates
             call cline_postprocess%set('state', real(state))
-            call xpostprocess%execute(cline_postprocess)
+            call xpostprocess%execute_safe(cline_postprocess)
         enddo
-        do state = 1, params%nstates
+        do state = 1, params_glob%nstates
             str_state      = int2str_pad(state,2)
-            vol_name       = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
-            vol_pproc      = add2fbody(vol_name,params%ext,PPROC_SUFFIX)
-            vol_pproc_mirr = add2fbody(vol_name,params%ext,trim(PPROC_SUFFIX)//trim(MIRR_SUFFIX))
-            if( file_exists(vol_name)       ) call simple_rename(vol_name,       trim(REC_FBODY)           //trim(str_state)//trim(params%ext))
-            if( file_exists(vol_pproc)      ) call simple_rename(vol_pproc,      trim(REC_PPROC_FBODY)     //trim(str_state)//trim(params%ext))
-            if( file_exists(vol_pproc_mirr) ) call simple_rename(vol_pproc_mirr, trim(REC_PPROC_MIRR_FBODY)//trim(str_state)//trim(params%ext))
+            vol_name       = VOL_FBODY//str_state//params_glob%ext
+            vol_pproc      = add2fbody(vol_name,params_glob%ext,PPROC_SUFFIX)
+            vol_pproc_mirr = add2fbody(vol_name,params_glob%ext,PPROC_SUFFIX//MIRR_SUFFIX)
+            if( file_exists(vol_name)       ) call simple_rename(vol_name,       REC_FBODY           //str_state//params_glob%ext)
+            if( file_exists(vol_pproc)      ) call simple_rename(vol_pproc,      REC_PPROC_FBODY     //str_state//params_glob%ext)
+            if( file_exists(vol_pproc_mirr) ) call simple_rename(vol_pproc_mirr, REC_PPROC_MIRR_FBODY//str_state//params_glob%ext)
         enddo
-        ! cleanup
-        call spproj%kill
-        call qsys_cleanup
-        call simple_end('**** SIMPLE_ABINITIO_3DMODEL NORMAL STOP ****')
-        contains
-
-            subroutine set_cline_refine3D( istage )
-                integer, intent(in) :: istage
-                character(len=:), allocatable :: silence_fsc, sh_first, prob_sh, ml_reg, refine, icm
-                integer :: iphase, s
-                real    :: trs, rnspace, rmaxits, rmaxits_glob, riter
-                ! iteration number bookkeeping
-                if( cline_refine3D%defined('endit') )then
-                    riter = cline_refine3D%get_rarg('endit')
-                else
-                    riter = 0.
-                endif
-                riter = riter + 1.0
-                ! phase logics
-                if(      istage <= PHASES(1) )then
-                    iphase = 1
-                else if( istage <= PHASES(2) )then
-                    iphase = 2
-                else if( istage <= PHASES(3) )then
-                    iphase = 3
-                else 
-                    THROW_HARD('Invalid istage index')
-                endif
-                ! phase control parameters
-                select case(iphase)
-                    case(1)
-                        refine        = 'shc_smpl'
-                        rnspace       = real(NSPACE(1))
-                        rmaxits       = real(MAXITS(1))
-                        rmaxits_glob  = real(MAXITS_GLOB(1))
-                        silence_fsc   = 'yes'
-                        trs           = 0.
-                        sh_first      = 'no'
-                        prob_sh       = 'no'
-                        ml_reg        = 'no'
-                        icm           = 'no'
-                    case(2)
-                        refine        = 'shc_smpl'
-                        rnspace       = real(NSPACE(2))
-                        rmaxits       = real(MAXITS(2))
-                        rmaxits_glob  = real(MAXITS_GLOB(2))
-                        silence_fsc   = 'yes'
-                        trs           = lpinfo(istage)%trslim
-                        sh_first      = 'yes'
-                        prob_sh       = 'no'
-                        ml_reg        = 'yes'
-                        icm           = 'no'
-                    case(3)
-                        refine        = 'prob'
-                        rnspace       = real(NSPACE(3))
-                        rmaxits       = real(MAXITS(3))
-                        rmaxits_glob  = real(MAXITS_GLOB(3))
-                        silence_fsc   = 'no'
-                        trs           = lpinfo(istage)%trslim
-                        sh_first      = 'yes'
-                        prob_sh       = 'yes'
-                        ml_reg        = 'yes'
-                        icm           = 'yes'
-                end select
-                ! symmetry
-                if( l_srch4symaxis )then
-                    if( istage <= SYMSRCH_STAGE )then
-                        ! need to replace original point-group flag with c1/pgrp_start
-                        call cline_refine3D%set('pgrp', trim(params%pgrp_start))
-                    else
-                        call cline_refine3D%set('pgrp', trim(params%pgrp))
-                    endif
-                endif
-                ! command line update
-                call cline_refine3D%set('prg',                     'refine3D')
-                call cline_refine3D%set('startit',                      riter)
-                call cline_refine3D%set('which_iter',                   riter)
-                call cline_refine3D%set('refine',                      refine)
-                call cline_refine3D%set('lp',               lpinfo(istage)%lp)
-                call cline_refine3D%set('smpd_crop', lpinfo(istage)%smpd_crop)
-                call cline_refine3D%set('box_crop',   lpinfo(istage)%box_crop)
-                call cline_refine3D%set('nspace',                     rnspace)
-                call cline_refine3D%set('maxits',                     rmaxits)
-                call cline_refine3D%set('maxits_glob',           rmaxits_glob)
-                call cline_refine3D%set('silence_fsc',            silence_fsc)
-                call cline_refine3D%set('trs',                            trs)
-                call cline_refine3D%set('sh_first',                  sh_first)
-                call cline_refine3D%set('prob_sh',                    prob_sh)
-                call cline_refine3D%set('ml_reg',                      ml_reg)
-                call cline_refine3D%set('icm',                            icm)                
-            end subroutine set_cline_refine3D
-
-            subroutine exec_refine3D( iter )
-                integer,          intent(out) :: iter
-                character(len=:), allocatable :: stage
-                call cline_refine3D%delete('endit')
-                call xrefine3D_distr%execute_shmem(cline_refine3D)
-                call conv%read(l_err)
-                iter = nint(conv%get('iter'))
-                call del_files(DIST_FBODY,      params_glob%nparts,ext='.dat')
-                call del_files(ASSIGNMENT_FBODY,params_glob%nparts,ext='.dat')
-                call del_file(trim(DIST_FBODY)      //'.dat')
-                call del_file(trim(ASSIGNMENT_FBODY)//'.dat')
-                if( istage <= NSTAGES )then
-                    stage = '_stage_'//int2str(istage)
-                    do state = 1, params%nstates
-                        str_state = int2str_pad(state,2)
-                        vol_name  = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
-                        vol_pproc = add2fbody(vol_name,params%ext,PPROC_SUFFIX)
-                        if( file_exists(vol_name) ) call simple_copy_file(vol_name,  add2fbody(vol_name, params%ext,stage))
-                        if( file_exists(vol_pproc)) call simple_copy_file(vol_pproc, add2fbody(vol_pproc,params%ext,stage))
-                    enddo
-                endif
-            end subroutine exec_refine3D
-
-    end subroutine exec_abinitio_3Dmodel
+    end subroutine postprocess_final_rec
 
     !> for generation of an initial 3d model from particles
     subroutine exec_abinitio_3Dmodel2( self, cline )
@@ -933,8 +761,8 @@ contains
         type(sp_project)              :: spproj, spproj_part
         type(convergence)             :: conv
         type(sym)                     :: se1, se2
-        type(class_frcs)              :: clsfrcs
-        type(image)                   :: vol_even, vol_odd, reprojs, tmpvol, vol
+        ! type(class_frcs)              :: clsfrcs
+        type(image)                   :: vol_even, vol_odd, tmpvol, vol
         type(qsys_env)                :: qenv
         real,             allocatable :: fsc(:), res(:)
         character(len=:), allocatable :: str_state, vol_pproc, vol_pproc_mirr
@@ -1119,13 +947,13 @@ contains
         call cline_reconstruct3D%set('smpd_crop', params%smpd_crop)
         call cline_reconstruct3D%set('box_crop',  params%box_crop)
         if( params%l_ml_reg .and. MLREG_ITER==1 )then
-            call xcalc_pspec_distr%execute_shmem(cline_calc_pspec_distr)
+            call xcalc_pspec_distr%execute_safe(cline_calc_pspec_distr)
             call cline_reconstruct3D%set('which_iter', 1)
             call cline_reconstruct3D%set('ml_reg',     'yes')
             call cline_reconstruct3D%set('needs_sigma','yes')
             call cline_reconstruct3D%set('objfun',     'euclid')
         endif
-        call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D)
+        call xreconstruct3D_distr%execute_safe(cline_reconstruct3D)
         call spproj%read_segment('ptcl3D', params%projfile)
         call spproj%os_ptcl3D%set_all2single('updatecnt',0.)
         call spproj%write_segment_inside('ptcl3D', params%projfile)
@@ -1326,7 +1154,7 @@ contains
         call cline_reconstruct3D%set('objfun',      'cc')
         call cline_reconstruct3D%delete('smpd_crop')
         call cline_reconstruct3D%delete('box_crop')
-        call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D)
+        call xreconstruct3D_distr%execute_safe(cline_reconstruct3D)
         vol_str = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
         call spproj%read_segment('out',params%projfile)
         call spproj%add_vol2os_out(vol_str, params%smpd, 1, 'vol')
@@ -1335,7 +1163,7 @@ contains
         ! post-processing
         call cline_postprocess%delete('lp')
         call cline_postprocess%set('state', 1)
-        call xpostprocess%execute(cline_postprocess)
+        call xpostprocess%execute_safe(cline_postprocess)
         vol_pproc      = add2fbody(vol_str,params%ext,PPROC_SUFFIX)
         vol_pproc_mirr = add2fbody(vol_str,params%ext,trim(PPROC_SUFFIX)//trim(MIRR_SUFFIX))
         call simple_rename(vol_str, trim(REC_FBODY)//trim(str_state)//trim(params%ext))
@@ -1381,7 +1209,7 @@ contains
                     symlp = max(symlp, params%lp)
                     call cline_symsrch%set('lp',       symlp)
                     call cline_symsrch%set('box_crop', params%box_crop)
-                    call xsymsrch%execute_shmem(cline_symsrch)
+                    call xsymsrch%execute_safe(cline_symsrch)
                     call del_file('SYMAXIS_SEARCH_FINISHED')
                     ! symmetrize volume
                     call vol%new([params%box_crop, params%box_crop,params%box_crop],params%smpd_crop)
