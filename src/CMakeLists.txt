@@ -24,6 +24,7 @@ list(APPEND OPERATORS_src
 file(GLOB UTILS_src    "${CMAKE_CURRENT_SOURCE_DIR}/utils/*.f90" "${CMAKE_CURRENT_SOURCE_DIR}/utils/*/*.f90" PARENT_SCOPE)
 file(GLOB STARFILE_src "${CMAKE_CURRENT_SOURCE_DIR}/starfile/*.cpp" PARENT_SCOPE)
 file(GLOB CPLOT2D_src  "${CMAKE_CURRENT_SOURCE_DIR}/CPlot2D/*.cpp"  PARENT_SCOPE)
+file(GLOB F90_src      "${CMAKE_CURRENT_SOURCE_DIR}/f90/*.f90"      PARENT_SCOPE)
 file(GLOB XML_src      "${CMAKE_CURRENT_SOURCE_DIR}/xml/*/*.[Ff]90" PARENT_SCOPE)
 file(GLOB OPS_src      "${CMAKE_CURRENT_SOURCE_DIR}/ops/*/*.[Ff]90" PARENT_SCOPE)
 file(GLOB MAIN_src "${CMAKE_CURRENT_SOURCE_DIR}/main/*/*(^commander)*.f[90][08]" "${CMAKE_CURRENT_SOURCE_DIR}/main/*(^commander)*.f[90][08]" PARENT_SCOPE)
@@ -40,7 +41,7 @@ list(APPEND SIMPLE_src
   "${CMAKE_BINARY_DIR}/lib/simple/simple_args.f90"
   "${CMAKE_BINARY_DIR}/lib/simple/simple_modules.f90"
   )
-list(APPEND SIMPLECORELIB  ${DEFS_src} ${UTILS_src} ${FILEIO_src} ${STARFILE_src} ${CPLOT2D_src} ${XML_src} ${JPG_src} ${OPERATORS_src} ${SIMPLE_src})
+list(APPEND SIMPLECORELIB  ${DEFS_src} ${UTILS_src} ${FILEIO_src} ${STARFILE_src} ${CPLOT2D_src} ${F90_src} ${XML_src} ${JPG_src} ${OPERATORS_src} ${SIMPLE_src})
 
 add_custom_target(simple_modules
   COMMAND  echo Creating simple_module \; ( echo module simple_modules\; for file in ${DEFS_src} ${UTILS_src} ${FILEIO_src} ${JPG_src} ${OPERATORS_src} ${MAIN_src}\; do if \\[ \"\$\$\{file\#\#*.\}\" = \"f90\" \\] &&  test ! \"\$\${file}\" != \"\$\${file%simple_modules*}\" \; then      echo use \$\$\(basename \$\$file .f90\)\;fi\;done\;echo contains\;echo end module ) >> ${CMAKE_BINARY_DIR}/lib/simple/simple_modules_tmp.f90
