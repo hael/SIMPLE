@@ -222,23 +222,18 @@ contains
         class(kpca_svd), intent(inout) :: self
         real,            intent(in)    :: ker(self%N,self%N)
         real,            intent(inout) :: eig_vecs(self%N,self%Q)
-        real    :: eig_vecs_all(self%N,self%N), eig_vals(self%N), tmp(self%N,self%N), tmp_ker(self%N,self%N)
-        integer :: i, inds(self%N)
-        tmp_ker = ker
+        real(dp) :: eig_vals(self%Q), tmp_ker(self%N,self%N), eig_vecs_ori(self%N,self%Q)
+        integer  :: i
+        tmp_ker = real(ker, dp)
         do i = 1, self%N
-            tmp_ker(:,i) = tmp_ker(:,i) - sum(tmp_ker(:,i))/real(self%N)
+            tmp_ker(:,i) = tmp_ker(:,i) - real(sum(tmp_ker(:,i)),dp)/real(self%N,dp)
         enddo
+        print *, tmp_ker(1:3,1:3)
         ! computing eigvals/eigvecs
-        eig_vecs_all = tmp_ker
-        call svdcmp(eig_vecs_all, eig_vals, tmp)
+        call eigh(self%N, tmp_ker, self%Q, eig_vals, eig_vecs_ori)
         eig_vals = eig_vals**2 / real(self%N)
-        inds     = (/(i,i=1,self%N)/)
-        call hpsort(eig_vals, inds)
-        call reverse(eig_vals)
-        call reverse(inds)
-        eig_vecs_all = eig_vecs_all(:,inds)
-        do i = 1, self%N
-            eig_vecs(i,:) = eig_vecs_all(i,1:self%Q) / sqrt(eig_vals(1:self%Q))
+        do i = 1, self%Q
+            eig_vecs(:,i) = eig_vecs_ori(:,i) / sqrt(eig_vals(i))
         enddo
         ! reverse the sorted order of eig_vecs
         eig_vecs = eig_vecs(:,self%Q:1:-1)
