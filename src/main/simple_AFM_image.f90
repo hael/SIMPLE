@@ -10,7 +10,7 @@ use simple_binimage
 use simple_neighs
 implicit none 
 
-logical     :: L_DEBUG = .true.
+logical     :: L_DEBUG = .false.
 type :: AFM_image
     type(image), allocatable :: img_array(:)
     character(len = 50), allocatable :: img_names(:)
@@ -126,11 +126,12 @@ contains
         
     end subroutine read_ibw
 
-    subroutine pick_valid(AFM_in)
+    subroutine pick_valid(AFM_in, refs)
         class(AFM_image), intent(inout)    :: AFM_in 
         type(image)                        :: HeightTrace, HeightRetrace, AvgHeight
         CHARACTER(len=255)                 :: cwd
         type(pickseg)                      :: avg_p, trace_p, retrace_p
+        type(pickseg), intent(out)         :: refs(3)
         type(image)                        :: avg_slim, trace_slim, retrace_slim 
         integer                            :: ldim_box(3), box_iter, search_iter, neighbor_iter, box_count
         real                               :: smpd_box, neighbor_corr(8), coord_corr(3,8), max_corr(20)
@@ -156,6 +157,7 @@ contains
         call trace_p%pick(trim(cwd) // 'trace.mrc')
         call HeightRetrace%write(trim(cwd) // 'retrace.mrc')
         call retrace_p%pick(trim(cwd) // 'retrace.mrc')
+        refs = [avg_p, trace_p, retrace_p]
 
         ldim_box = [avg_p%box_raw, avg_p%box_raw, 1]
         smpd_box =  AvgHeight%get_smpd()
@@ -164,7 +166,7 @@ contains
         call retrace_slim%new(ldim_box, smpd_box)
 
         box_count = 0 
-        ! allocate(val_centers(3, avg_p%get_nboxes()))
+
         allocate(val_center_r(3, avg_p%get_nboxes()))
         allocate(val_center_t(3, avg_p%get_nboxes()))
         val_center_t = 0
@@ -213,7 +215,7 @@ contains
                     call retrace_slim%vis()
             end do
         end if 
-        
+    
         contains 
             subroutine nn_val(im_iter, corr_final, val_centers)
                 type(image), intent(in)     :: im_iter
