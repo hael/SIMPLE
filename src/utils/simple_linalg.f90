@@ -1430,15 +1430,15 @@ contains
 
     !>   calculates the euclidean distance between two vectors of dimension _n_
     pure function euclid_sp( vec1, vec2 ) result( dist )
-        real, intent(in)    :: vec1(:), vec2(:)
-        real                :: dist
+        real, intent(in) :: vec1(:), vec2(:)
+        real             :: dist
         dist = sqrt(sum((vec1-vec2)**2))
     end function euclid_sp
 
     pure function euclid_dp( vec1, vec2 ) result( dist )
-        real(dp), intent(in)    :: vec1(:), vec2(:)
-        real(dp) :: dist
-        dist = dsqrt(sum((vec1-vec2))**2)
+        real(dp), intent(in) :: vec1(:), vec2(:)
+        real(dp)             :: dist
+        dist = dsqrt(sum((vec1-vec2)**2))
     end function euclid_dp
 
     !>   normalize mean of both vectors to 0 before computing distance between vectors
