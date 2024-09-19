@@ -29,7 +29,7 @@ type, extends(pca) :: kpca_svd
     procedure :: kill     => kill_kpca
 end type
 
-integer, parameter :: C_CONST = 0.4_dp  ! for rbf_kernel for testing
+real, parameter :: C_CONST = 0.4_dp  ! for rbf_kernel for testing
 
 contains
 
