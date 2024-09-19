@@ -94,7 +94,6 @@ contains
         call rovol_pad%kill
         call vol_asym_aligned2axis%kill
         call o%kill
-        call symaxis%kill
         call symobj%kill
     end subroutine symmetrize_map
 

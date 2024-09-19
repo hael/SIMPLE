@@ -283,9 +283,9 @@ contains
             case DEFAULT
                 if( L_BENCH_GLOB ) t_rec = tic()
                 if( trim(params_glob%projrec).eq.'yes' )then
-                    call calc_projdir3Drec( cline, nptcls2update, pinds, which_iter=which_iter )
+                    call calc_projdir3Drec( cline, nptcls2update, pinds )
                 else
-                    call calc_3Drec( cline, nptcls2update, pinds, which_iter=which_iter )
+                    call calc_3Drec( cline, nptcls2update, pinds )
                 endif
                 call eucl_sigma%kill
                 call killimgbatch
