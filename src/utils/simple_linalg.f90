@@ -48,6 +48,10 @@ interface vabs
     module procedure vabs_sp, vabs_dp
 end interface vabs
 
+interface euclid
+    module procedure euclid_sp, euclid_dp
+end interface euclid
+
 ! trigonometry
 
 interface hyp
@@ -1425,11 +1429,17 @@ contains
     end function hyp_4
 
     !>   calculates the euclidean distance between two vectors of dimension _n_
-    pure function euclid( vec1, vec2 ) result( dist )
+    pure function euclid_sp( vec1, vec2 ) result( dist )
         real, intent(in)    :: vec1(:), vec2(:)
         real                :: dist
         dist = sqrt(sum((vec1-vec2)**2))
-    end function euclid
+    end function euclid_sp
+
+    pure function euclid_dp( vec1, vec2 ) result( dist )
+        real(dp), intent(in)    :: vec1(:), vec2(:)
+        real(dp) :: dist
+        dist = dsqrt(sum((vec1-vec2))**2)
+    end function euclid_dp
 
     !>   normalize mean of both vectors to 0 before computing distance between vectors
     function same_energy_euclid(vec1, vec2) result(dist)
@@ -1492,7 +1502,7 @@ contains
         integer,  intent(in)    :: neigs
         real(dp), intent(out)   :: eigvals(neigs)
         real(dp), intent(out)   :: eigvecs(n,neigs)
-        integer,  parameter     :: LWMAX = 1000
+        integer,  parameter     :: LWMAX = 500000
         integer  :: info, lwork, liwork, il, iu, m, isuppz(n), iwork(LWMAX), i
         real(dp) :: abstol, vl, vu, w(n), work(LWMAX)
         abstol = -1.0
@@ -1501,12 +1511,12 @@ contains
         ! Query the optimal workspace.
         lwork  = -1
         liwork = -1
-        call dsyevr( 'Vectors', 'Indices', 'Upper', n, mat, n, vl, vu, il, iu, abstol,&
+        call dsyevr( 'Vectors', 'Indices', 'Lower', n, mat, n, vl, vu, il, iu, abstol,&
                     & m, w, eigvecs, n, isuppz, work, lwork, iwork, liwork, info )
         lwork  = min( LWMAX, int(work(1)) )
         liwork = min( LWMAX,    iwork(1)  )
         ! Solve eigenproblem.
-        call dsyevr( 'Vectors', 'Indices', 'Upper', n, mat, n, vl, vu, il, iu, abstol,&
+        call dsyevr( 'Vectors', 'Indices', 'Lower', n, mat, n, vl, vu, il, iu, abstol,&
                     & m, w, eigvecs, n, isuppz, work, lwork, iwork, liwork, info )
         ! Check for convergence.
         if( info > 0 )then
