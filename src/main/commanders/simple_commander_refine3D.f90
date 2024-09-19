@@ -582,7 +582,6 @@ contains
 
     subroutine exec_refine3D( self, cline )
         use simple_strategy3D_matcher, only: refine3D_exec
-        use simple_image,              only: image
         class(refine3D_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(estimate_first_sigmas_commander) :: xfirst_sigmas
@@ -594,10 +593,9 @@ contains
         type(builder)                         :: build
         type(cmdline)                         :: cline_calc_sigma, cline_prob_align
         type(cmdline)                         :: cline_calc_pspec, cline_first_sigmas
-        type(image)                           :: noisevol
-        character(len=STDLEN)                 :: str_state, fsc_file, vol, vol_iter
-        integer                               :: startit, i, state, s
-        real                                  :: corr, corr_prev
+        character(len=STDLEN)                 :: str_state, fsc_file, vol, vol_iter, iter_str
+        integer                               :: startit, i, state
+        real                                  :: corr
         logical                               :: converged, l_sigma
         601 format(A,1X,F12.3)
         call build%init_params_and_build_strategy3D_tbox(cline,params)
@@ -672,6 +670,26 @@ contains
                 endif
                 ! in strategy3D_matcher:
                 call refine3D_exec(cline, params%which_iter, converged)
+                ! volumes book-keeping
+                    do state = 1, params%nstates
+                        str_state = int2str_pad(state,2)
+                        iter_str  = '_iter'//int2str_pad(params%which_iter,3)
+                        if( trim(params_glob%keepvol).eq.'yes' )then
+                            call simple_copy_file(params%vols(state), add2fbody(params%vols(state),params%ext,iter_str))
+                       endif
+                        vol_iter = add2fbody(params%vols(state), params%ext, PPROC_SUFFIX)
+                        call simple_copy_file(vol_iter, add2fbody(vol_iter,params%ext,iter_str))
+                        vol_iter = add2fbody(params%vols(state), params%ext, LP_SUFFIX)
+                        call simple_copy_file(vol_iter, add2fbody(vol_iter,params%ext,iter_str))
+                        if( params%which_iter > 1 )then
+                            iter_str = '_iter'//int2str_pad(params%which_iter-1,3)
+                            vol_iter = add2fbody(params%vols(state), params%ext, PPROC_SUFFIX)
+                            call del_file(add2fbody(vol_iter, params%ext,iter_str))
+                            vol_iter = add2fbody(params%vols(state), params%ext, LP_SUFFIX)
+                            call del_file(add2fbody(vol_iter, params%ext,iter_str))
+                        endif
+                    enddo
+                ! convergence
                 if( converged .or. i == params%maxits )then
                     ! report the last iteration on exit
                     call cline%delete( 'startit' )

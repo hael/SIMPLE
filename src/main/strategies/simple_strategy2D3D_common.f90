@@ -667,12 +667,11 @@ contains
     end subroutine grid_ptcl
 
     !> volumetric 3d reconstruction
-    subroutine calc_3Drec( cline, nptcls2update, pinds, which_iter )
+    subroutine calc_3Drec( cline, nptcls2update, pinds )
         use simple_fplane, only: fplane
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: nptcls2update
         integer,           intent(in)    :: pinds(nptcls2update)
-        integer, optional, intent(in)    :: which_iter
         type(fplane),      allocatable   :: fpls(:)
         type(ctfparams),   allocatable   :: ctfparms(:)
         type(ori)        :: orientation
@@ -710,7 +709,7 @@ contains
             end do
         end do
         ! normalise structure factors
-        call norm_struct_facts( cline, which_iter)
+        call norm_struct_facts( cline )
         ! destruct
         call killrecvols()
         do ibatch=1,MAXIMGBATCHSZ
@@ -722,7 +721,7 @@ contains
 
     !> Volumetric 3d reconstruction from summed projection directions
     !> Only supports single state
-    subroutine calc_projdir3Drec( cline, nptcls2update, pinds, which_iter )
+    subroutine calc_projdir3Drec( cline, nptcls2update, pinds )
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_fplane,   only: fplane
@@ -731,10 +730,8 @@ contains
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: nptcls2update
         integer,           intent(in)    :: pinds(nptcls2update)
-        integer, optional, intent(in)    :: which_iter
         type(fplane),      allocatable   :: fpls(:), projdirs(:,:)
         integer,           allocatable   :: eopops(:,:), tmp(:,:)
-        type(image),       allocatable   :: padded_imgs(:)
         type(ctfparams) :: ctfparms
         type(image)     :: instrimg, numimg, denomimg
         type(ori)       :: orientation
@@ -899,25 +896,22 @@ contains
         !$omp end parallel do
         deallocate(projdirs)
         ! normalise structure factors
-        call norm_struct_facts( cline, which_iter)
+        call norm_struct_facts( cline )
         ! cleanup
         call instrimg%kill
         call killrecvols()
         call orientation%kill
     end subroutine calc_projdir3Drec
 
-    subroutine norm_struct_facts( cline, which_iter )
+    subroutine norm_struct_facts( cline )
         use simple_masker, only: masker
         class(cmdline),    intent(inout) :: cline
-        integer, optional, intent(in)    :: which_iter
-        character(len=:), allocatable    :: mskfile, fname
+        character(len=:), allocatable    :: iter_str
         character(len=STDLEN) :: pprocvol, lpvol
         real, allocatable     :: optlp(:), res(:)
         type(masker)          :: envmsk
         integer               :: s, find4eoavg, ldim(3)
         real                  :: res05s(params_glob%nstates), res0143s(params_glob%nstates), lplim, bfac
-        logical               :: which_iter_present
-        which_iter_present = present(which_iter)
         ! init
         ldim = [params_glob%box_crop,params_glob%box_crop,params_glob%box_crop]
         call build_glob%vol%new(ldim,params_glob%smpd_crop)
@@ -926,11 +920,6 @@ contains
         res05s   = 0.
         ! cycle through states
         do s=1,params_glob%nstates
-            if( which_iter_present )then
-                fname = VOL_FBODY//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//params_glob%ext
-            else
-                fname = VOL_FBODY//int2str_pad(s,2)//params_glob%ext
-            endif
             if( build_glob%spproj_field%get_pop(s, 'state') == 0 )then
                 ! empty state
                 build_glob%fsc(s,:) = 0.
@@ -941,9 +930,10 @@ contains
                 call build_glob%eorecvols(s)%write_eos(VOL_FBODY//int2str_pad(s,2)//'_part'//&
                     int2str_pad(params_glob%part,params_glob%numlen))
             else
-                params_glob%vols(s) = fname
+                ! global volume name update
+                params_glob%vols(s) = VOL_FBODY//int2str_pad(s,2)//params_glob%ext
                 ! updating command-line according (needed in multi-stage wflows)
-                call cline%set('vol'//int2str(s), trim(fname))
+                call cline%set('vol'//int2str(s), params_glob%vols(s))
                 if( params_glob%l_filemsk .and. params_glob%l_envfsc )then
                     call build_glob%eorecvols(s)%set_automsk(.true.)
                 endif
@@ -962,9 +952,6 @@ contains
                 endif
                 call build_glob%eorecvols(s)%sampl_dens_correct_sum(build_glob%vol)
                 call build_glob%vol%write(params_glob%vols(s), del_if_exists=.true.)
-                if( which_iter_present )then
-                    call simple_copy_file(trim(params_glob%vols(s)),trim(VOL_FBODY)//int2str_pad(s,2)//params_glob%ext)
-                endif
                 ! need to put the sum back at lowres for the eo pairs
                 call build_glob%vol%fft()
                 call build_glob%vol2%zero_and_unflag_ft
