@@ -1502,9 +1502,12 @@ contains
         integer,  intent(in)    :: neigs
         real(dp), intent(out)   :: eigvals(neigs)
         real(dp), intent(out)   :: eigvecs(n,neigs)
-        integer,  parameter     :: LWMAX = 500000
-        integer  :: info, lwork, liwork, il, iu, m, isuppz(n), iwork(LWMAX), i
-        real(dp) :: abstol, vl, vu, w(n), work(LWMAX)
+        integer,  allocatable   :: iwork(:)
+        real(dp), allocatable   :: work(:)
+        integer  :: lwmax, info, lwork, liwork, il, iu, m, isuppz(n)
+        real(dp) :: abstol, vl, vu, w(n)
+        lwmax  = 26 * n     ! explained in dsyevr.f90
+        allocate(iwork(lwmax), work(lwmax))
         abstol = -1.0
         il     = n-neigs+1
         iu     = n
@@ -1513,8 +1516,8 @@ contains
         liwork = -1
         call dsyevr( 'Vectors', 'Indices', 'Lower', n, mat, n, vl, vu, il, iu, abstol,&
                     & m, w, eigvecs, n, isuppz, work, lwork, iwork, liwork, info )
-        lwork  = min( LWMAX, int(work(1)) )
-        liwork = min( LWMAX,    iwork(1)  )
+        lwork  = min( lwmax, int(work(1)) )
+        liwork = min( lwmax,    iwork(1)  )
         ! Solve eigenproblem.
         call dsyevr( 'Vectors', 'Indices', 'Lower', n, mat, n, vl, vu, il, iu, abstol,&
                     & m, w, eigvecs, n, isuppz, work, lwork, iwork, liwork, info )

@@ -21,12 +21,13 @@ type, extends(pca) :: kpca_svd
     procedure :: generate => generate_kpca
     ! CALCULATORS
     procedure :: master   => master_kpca
-    procedure :: kernel_center
-    procedure :: cosine_kernel
-    procedure :: rbf_kernel
-    procedure :: compute_eigvecs
     ! DESTRUCTOR
     procedure :: kill     => kill_kpca
+    ! PRIVATE
+    procedure, private :: kernel_center
+    procedure, private :: cosine_kernel
+    procedure, private :: rbf_kernel
+    procedure, private :: compute_eigvecs
 end type
 
 real, parameter :: C_CONST = 0.4_dp  ! for rbf_kernel for testing
