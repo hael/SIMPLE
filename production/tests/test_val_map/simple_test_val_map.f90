@@ -44,6 +44,7 @@ call sim_vol%read(sim_vol_file)
 call molecule%atom_validation(sim_vol, 'sim_val_corr')
 call sim_vol%kill()
 call molecule%kill()
+print *, "Done simulated map validation"
 ! experimental volume - even and odd
 call molecule%new(pdb_file)
 call molecule%center_pdbcoord(ldim, smpd)
@@ -51,17 +52,29 @@ call exp_vol%new(ldim, smpd)
 call exp_vol%read(exp_vol_file)
 call molecule%atom_validation(exp_vol, 'exp_val_corr')
 call exp_vol%kill()
+print *, "Done experimental map validation"
 ! even
 call exp_vol%new(ldim, smpd)
 call exp_vol%read(even_vol_file)
 call molecule%atom_validation(exp_vol, 'even_val_corr')
 call exp_vol%kill()
+print *, "Done experimental even map validation"
 ! odd
 call exp_vol%new(ldim, smpd)
 call exp_vol%read(odd_vol_file)
 call molecule%atom_validation(exp_vol, 'odd_val_corr')
 call exp_vol%kill()
+print *, "Done experimental odd map validation"
+! exp vol vs sim vol per atom
+call exp_vol%new(ldim, smpd)
+call exp_vol%read(exp_vol_file)
+call sim_vol%new(ldim, smpd)
+call sim_vol%read(sim_vol_file)
+call molecule%map_validation(exp_vol, sim_vol, 'exp_sim_val_corr')
+call exp_vol%kill()
+call sim_vol%kill()
 call molecule%kill()
+print *, "Done experimental vs simulated map validation"
 end program simple_test_val_map
 
 

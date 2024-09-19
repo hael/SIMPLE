@@ -105,6 +105,7 @@ type :: atoms
     procedure          :: find_masscen
     procedure          :: pdb2mrc
     procedure          :: atom_validation
+    procedure          :: map_validation
     ! MODIFIERS
     procedure          :: translate
     procedure          :: center_pdbcoord
@@ -1235,6 +1236,58 @@ contains
         half_box(:) = smpd*(real(ldim(:)/2.))
         call self%translate(-center+half_box)
     end subroutine center_pdbcoord
+
+    subroutine map_validation( self, vol1, vol2, filename )
+        use simple_image, only: image
+        class(atoms),               intent(inout) :: self
+        type(image),                intent(in)    :: vol1, vol2
+        character(len=*), optional, intent(in)    :: filename
+        type(image) :: vol_at1, vol_at2
+        type(atoms) :: atom
+        integer     :: i_atom, atom_box, center(3)
+        real        :: atom_coord(3), smpd, cc
+        logical     :: outside
+        smpd = vol1%get_smpd()
+        if(present(filename))then
+             open(unit=46,file=trim(filename//".csv"))
+        !     !  open(unit=45,file=trim("atomic_centers.xyz"))
+        !     !  write(45,*) self%n
+        !     !  write(45,*) " "
+        endif
+        do i_atom = 1, self%n
+            atom_box = round2even(2 * (((self%radius(i_atom))*1.)/smpd))
+            if( atom_box <= 2 )then !for cases where the atom box is too small
+                atom_box = 4
+            endif 
+            call self%extract_atom(atom, i_atom)
+            atom_coord(:) = atom%get_coord(1)
+            ! extract the atom volume from the molecule volume 1
+            call vol_at1%new([atom_box, atom_box, atom_box], smpd)
+            call vol_at2%new([atom_box, atom_box, atom_box], smpd)
+            center(:) = ang2vox(atom_coord(:), smpd) - atom_box/2
+            call vol1%window_slim(center, atom_box, vol_at1, outside)
+            call vol_at1%mask(real(atom_box)/2., 'soft')
+            call vol2%window_slim(center, atom_box, vol_at2, outside)
+            call vol_at2%mask(real(atom_box)/2., 'soft')
+            ! compute cross-correlation between both volumes
+            cc = vol_at1%real_corr(vol_at2)
+            call self%set_atom_corr(i_atom, cc)
+            call self%set_beta(i_atom, cc)
+            if(present(filename))then
+                write(46,'(a,1x,4(a,f10.6))') self%element(i_atom),",",self%xyz(i_atom,1),",",self%xyz(i_atom,2),",",self%xyz(i_atom,3),",",self%atom_corr(i_atom)
+                !write(45,'(a,1x,f10.6,1x,f10.6,1x,f10.6)') trim(adjustl(self%element(i_atom))), self%xyz(i_atom,1), self%xyz(i_atom,2), self%xyz(i_atom,3)
+            endif
+            call vol_at1%kill
+            call vol_at2%kill
+            call atom%kill
+        enddo
+        if(present(filename))then
+            ! close(45)
+            close(46)
+            call self%writepdb(filename)
+        endif
+
+    end subroutine map_validation
 
     subroutine atom_validation( self, vol, filename )
         use simple_image, only: image
