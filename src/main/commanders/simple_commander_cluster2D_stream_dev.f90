@@ -7,13 +7,13 @@ use simple_parameters,         only: parameters, params_glob
 use simple_sp_project,         only: sp_project
 use simple_qsys_env,           only: qsys_env
 use simple_image,              only: image
-use simple_stream_chunk,       only: stream_chunk, micproj_record, DIR_CHUNK
 use simple_class_frcs,         only: class_frcs
 use simple_stack_io,           only: stack_io
 use simple_starproject,        only: starproject
 use simple_starproject_stream, only: starproject_stream
 use simple_euclid_sigma2,      only: consolidate_sigma2_groups, split_sigma2_into_groups, sigma2_star_from_iter
 use simple_guistats,           only: guistats
+use simple_stream_utils
 use simple_qsys_funs
 use simple_commander_cluster2D
 use FoX_dom
@@ -54,6 +54,7 @@ type(sp_project)                       :: pool_proj
 type(qsys_env)                         :: qenv_pool
 type(cmdline)                          :: cline_cluster2D_pool
 type(starproject)                      :: starproj
+type(starproject_stream)               :: starproj_stream
 logical,                   allocatable :: pool_stacks_mask(:)
 integer                                :: pool_iter
 logical                                :: pool_available
@@ -196,9 +197,9 @@ contains
         call cline_cluster2D_pool%set('mkdir',     'no')
         call cline_cluster2D_pool%set('mskdiam',   params_glob%mskdiam)
         call cline_cluster2D_pool%set('async',     'yes') ! to enable hard termination
-        call cline_cluster2D_pool%set('stream',    'yes') ! use for dual CTF treatment
+        call cline_cluster2D_pool%set('stream',    'yes')
         call cline_cluster2D_pool%set('nparts',    params_glob%nparts_pool)
-        if( l_update_sigmas ) call cline_cluster2D_pool%set('cc_iters', 0.0)
+        if( l_update_sigmas ) call cline_cluster2D_pool%set('cc_iters', 0)
         ! when the classification is started without chunks, without pre-classification
         if( l_no_chunks )then
             l_update_sigmas = .false. !!
@@ -302,7 +303,7 @@ contains
         logical, optional, intent(in)  :: all
         character(len=LONGSTRLEN), allocatable :: files(:)
         character(len=STDLEN),     allocatable :: folders(:)
-        integer :: i,n
+        integer :: i
         call qsys_cleanup(nparts=params_glob%nparts_pool)
         call simple_rmdir(SIGMAS_DIR)
         call del_file(USER_PARAMS)
@@ -379,7 +380,7 @@ contains
     end function all_chunks_available
 
     subroutine classify_new_chunks_dev( micproj_records )
-        type(micproj_record), intent(inout) :: micproj_records(:)
+        type(projrecord), intent(inout) :: micproj_records(:)
         integer :: ichunk, n_avail_chunks, n_spprojs_in, iproj, nptcls, n2fill
         integer :: first2import, last2import, n2import
         if( .not. stream2D_active ) return
@@ -433,9 +434,9 @@ contains
     end subroutine classify_new_chunks_dev
 
     subroutine flush_remaining_particles( micproj_records )
-        type(micproj_record), intent(inout) :: micproj_records(:)
+        type(projrecord), intent(inout) :: micproj_records(:)
         integer :: ichunk, n_avail_chunks, n_spprojs_in, iproj, nptcls
-        integer :: first2import, last2import, n2import
+        integer :: first2import
         if( .not. stream2D_active ) return
         n_avail_chunks = count(chunks(:)%available)
         ! cannot import yet
@@ -471,10 +472,9 @@ contains
 
     subroutine import_chunks_into_pool_dev( nchunks_imported )
         integer, intent(out) :: nchunks_imported
-        type(class_frcs)                   :: frcs_glob, frcs_chunk, frcs_prev
-        character(LONGSTRLEN), allocatable :: tmp(:)
-        character(len=:),      allocatable :: cavgs_chunk, dir_chunk
-        integer,               allocatable :: cls_pop(:), cls_chunk_pop(:), pinds(:), states(:)
+        type(class_frcs)              :: frcs_glob, frcs_chunk, frcs_prev
+        character(len=:), allocatable :: cavgs_chunk, dir_chunk
+        integer,          allocatable :: cls_pop(:), cls_chunk_pop(:), pinds(:), states(:)
         real    :: smpd_here
         integer :: ichunk, nchunks2import, nptcls2import, nmics2import, nptcls, imic, iproj
         integer :: ncls_tmp, fromp_prev, fromp, ii, jptcl, i, poolind, n_remap, pop, nptcls_sel
@@ -714,8 +714,8 @@ contains
     end subroutine import_chunks_into_pool_dev
 
     subroutine import_records_into_pool( records )
-        type(micproj_record), allocatable, intent(inout) :: records(:)
-        type(sp_project)                   :: spproj
+        type(projrecord), allocatable, intent(inout) :: records(:)
+        type(sp_project)      :: spproj
         character(LONGSTRLEN) :: projname
         integer :: nptcls2import, nmics2import, imic, nrecords
         integer :: fromp, jptcl
@@ -1021,7 +1021,6 @@ contains
         type(image)              :: img, jpegimg
         type(stack_io)           :: stkio_r, stkio_w
         type(oris)               :: cls2reject
-        type(starproject_stream) :: starproj_stream
         logical, allocatable     :: cls_mask(:)
         integer                  :: i, nl, icls, isel
         if( .not. stream2D_active ) return
@@ -1433,7 +1432,6 @@ contains
         logical, optional, intent(in) :: clspath
         type(class_frcs)              :: frcs, frcs_sc
         type(oris)                    :: os_backup
-        type(starproject_stream)      :: starproj_stream
         character(len=:), allocatable :: projfile,projfname, cavgsfname, frcsfname, src, dest
         character(len=:), allocatable :: pool_refs
         logical                       :: l_write_star, l_clspath
@@ -1478,7 +1476,7 @@ contains
             call pool_proj%add_cavgs2os_out(cavgsfname, params_glob%smpd, 'cavg', clspath=l_clspath)
             if( l_wfilt )then
                 src = add2fbody(cavgsfname,params_glob%ext,trim(WFILT_SUFFIX))
-                call pool_proj%add_cavgs2os_out(src, params_glob%smpd, 'cavg'//trim(WFILT_SUFFIX))
+                call pool_proj%add_cavgs2os_out(src, params_glob%smpd, 'cavg'//trim(WFILT_SUFFIX), clspath=l_clspath)
             endif
             pool_proj%os_cls2D = os_backup
             call os_backup%kill
@@ -1507,86 +1505,48 @@ contains
         ! write starfiles
         call starproj%export_cls2D(pool_proj)
         if(l_write_star) then
-            call copy_micrographs_optics
-            call write_migrographs_starfile(optics_set=.true.)
-            call write_particles_starfile(optics_set=.true.)
+            call starproj_stream%copy_micrographs_optics(pool_proj, verbose=DEBUG_HERE)
+            if( DEBUG_HERE ) t = tic()
+            call starproj_stream%stream_export_micrographs(pool_proj, params_glob%outdir, optics_set=.true.)
+            if( DEBUG_HERE ) print *,'ms_export  : ', toc(t); call flush(6); t = tic()
+            call starproj_stream%stream_export_particles_2D(pool_proj, params_glob%outdir, optics_set=.true.)
+            if( DEBUG_HERE ) print *,'ptcl_export  : ', toc(t); call flush(6)
         end if
         call pool_proj%write(projfile)
         call pool_proj%os_ptcl3D%kill
         call pool_proj%os_cls2D%delete_entry('stk')
-
-        contains
-
-        subroutine copy_micrographs_optics
-                integer(timer_int_kind) ::ms0
-                real(timer_int_kind)    :: ms_copy_optics
-                type(sp_project)        :: spproj_optics
-                if( params_glob%projfile_optics .ne. '' .and. file_exists('../' // trim(params_glob%projfile_optics)) ) then
-                    if( DEBUG_HERE ) ms0 = tic()
-                    call spproj_optics%read('../' // trim(params_glob%projfile_optics))
-                    call starproj_stream%copy_optics(pool_proj, spproj_optics)
-                    call spproj_optics%kill()
-                    if( DEBUG_HERE )then
-                        ms_copy_optics = toc(ms0)
-                        print *,'ms_copy_optics  : ', ms_copy_optics; call flush(6)
-                    endif
-                end if
-            end subroutine copy_micrographs_optics
-
-            !>  write starfile snapshot
-            subroutine write_migrographs_starfile( optics_set )
-                logical, optional, intent(in) :: optics_set
-                integer(timer_int_kind)       :: ms0
-                real(timer_int_kind)          :: ms_export
-                logical                       :: l_optics_set
-                l_optics_set = .false.
-                if( present(optics_set) ) l_optics_set = optics_set
-                if (pool_proj%os_mic%get_noris() > 0) then
-                    if( DEBUG_HERE ) ms0 = tic()
-                    call starproj_stream%stream_export_micrographs(pool_proj, params_glob%outdir, optics_set=l_optics_set)
-                    if( DEBUG_HERE )then
-                        ms_export = toc(ms0)
-                        print *,'ms_export  : ', ms_export; call flush(6)
-                    endif
-                end if
-            end subroutine write_migrographs_starfile
-
-            subroutine write_particles_starfile( optics_set )
-                logical, optional, intent(in) :: optics_set
-                integer(timer_int_kind)       :: ptcl0
-                real(timer_int_kind)          :: ptcl_export
-                logical                       :: l_optics_set
-                l_optics_set = .false.
-                if( present(optics_set) ) l_optics_set = optics_set
-                if (pool_proj%os_ptcl2D%get_noris() > 0) then
-                    if( DEBUG_HERE ) ptcl0 = tic()
-                    call starproj_stream%stream_export_particles_2D(pool_proj, params_glob%outdir, optics_set=l_optics_set)
-                    if( DEBUG_HERE )then
-                        ptcl_export = toc(ptcl0)
-                        print *,'ptcl_export  : ', ptcl_export; call flush(6)
-                    endif
-                end if
-            end subroutine write_particles_starfile
     end subroutine write_project_stream2D_dev
 
-    subroutine terminate_stream2D_dev
-        integer                  :: ichunk, ipart
+    subroutine terminate_stream2D_dev( records )
+        type(projrecord), allocatable, intent(in) :: records(:)
+        integer :: ichunk, ipart
         do ichunk = 1,params_glob%nchunks
             call chunks(ichunk)%terminate
         enddo
-        if( .not.pool_available )then
-            pool_iter = pool_iter-1 ! iteration pool_iter not complete so fall back on previous iteration
-            refs_glob = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter,3))//trim(params_glob%ext)
-            ! tricking the asynchronous master process to come to a hard stop
-            call simple_touch(trim(POOL_DIR)//trim(TERM_STREAM))
-            do ipart = 1,params_glob%nparts_pool
-                call simple_touch(trim(POOL_DIR)//trim(JOB_FINISHED_FBODY)//int2str_pad(ipart,numlen))
-            enddo
-            call simple_touch(trim(POOL_DIR)//'CAVGASSEMBLE_FINISHED')
+        if( pool_iter == 0 )then
+            ! no pool classification performed, all available info is written down
+            if( allocated(records) )then
+                call projrecords2proj(records, pool_proj)
+                call starproj_stream%copy_micrographs_optics(pool_proj, verbose=DEBUG_HERE)
+                call starproj_stream%stream_export_micrographs(pool_proj, params_glob%outdir, optics_set=.true.)
+                call starproj_stream%stream_export_particles_2D(pool_proj, params_glob%outdir, optics_set=.true.)
+                call pool_proj%write(orig_projfile)
+            endif
+        else
+            if( .not.pool_available )then
+                pool_iter = pool_iter-1 ! iteration pool_iter not complete so fall back on previous iteration
+                refs_glob = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter,3))//trim(params_glob%ext)
+                ! tricking the asynchronous master process to come to a hard stop
+                call simple_touch(trim(POOL_DIR)//trim(TERM_STREAM))
+                do ipart = 1,params_glob%nparts_pool
+                    call simple_touch(trim(POOL_DIR)//trim(JOB_FINISHED_FBODY)//int2str_pad(ipart,numlen))
+                enddo
+                call simple_touch(trim(POOL_DIR)//'CAVGASSEMBLE_FINISHED')
+            endif
+            call write_project_stream2D_dev(write_star=.true., clspath=.true.)
+            ! rank cavgs
+            if( pool_iter >= 1 ) call rank_cavgs
         endif
-        call write_project_stream2D_dev(write_star=.true., clspath=.true.)
-        ! rank cavgs
-        if( pool_iter >= 1 ) call rank_cavgs
         ! cleanup
         call simple_rmdir(SIGMAS_DIR)
         call del_file(trim(POOL_DIR)//trim(PROJFILE_POOL))
@@ -1651,7 +1611,7 @@ contains
         character(len=STDLEN), parameter :: DIR_PROJS   = trim(PATH_HERE)//'spprojs/'
         integer,               parameter :: WAITTIME    = 5
         real,                  parameter :: SMPD_TARGET = MAX_SMPD
-        type(micproj_record),      allocatable :: micproj_records(:)
+        type(projrecord),         allocatable  :: micproj_records(:)
         type(parameters)                       :: params
         type(sp_project)                       :: spproj_glob
         type(class_frcs)                       :: frcs, frcs_sc

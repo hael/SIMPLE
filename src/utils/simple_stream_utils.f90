@@ -1,4 +1,4 @@
-module simple_stream_chunk
+module simple_stream_utils
 include 'simple_lib.f08'
 use simple_builder,        only: builder
 use simple_cmdline,        only: cmdline
@@ -12,25 +12,27 @@ use simple_commander_cluster2D
 use simple_timer
 implicit none
 
-public :: stream_chunk, micproj_record, DIR_CHUNK
+public :: stream_chunk, DIR_CHUNK
+public :: projrecord, projrecords2proj
 
 private
 #include "simple_local_flags.inc"
-
-! public convenience type
-type micproj_record
-    character(len=:), allocatable :: projname           ! project file name
-    integer                       :: micind     = 0     ! index of micrograph in project
-    integer                       :: nptcls     = 0     ! # of particles
-    integer                       :: nptcls_sel = 0     ! # of particles (state=1)
-    logical                       :: included   = .false.
-end type micproj_record
 
 character(len=STDLEN), parameter   :: DIR_CHUNK           = 'chunk_'
 character(len=STDLEN), parameter   :: PROJNAME_CHUNK      = 'chunk'
 logical,               parameter   :: DEBUG_HERE          = .false.
 integer                            :: ncls_rejected_glob  = 0 ! counter of rejected classes
 
+! Convenience type to hold information about individual project files
+type projrecord
+    character(len=:), allocatable :: projname           ! project file name
+    integer                       :: micind     = 0     ! index of micrograph in project
+    integer                       :: nptcls     = 0     ! # of particles
+    integer                       :: nptcls_sel = 0     ! # of particles (state=1)
+    logical                       :: included   = .false.
+end type projrecord
+
+! Type to handle a single chunk
 type stream_chunk
     type(sp_project)                       :: spproj
     type(qsys_env)                         :: qenv
@@ -44,7 +46,7 @@ type stream_chunk
     logical                                :: converged  = .false.
     logical                                :: autoscale  = .false.
     logical                                :: available  = .true.
-contains
+  contains
     procedure          :: init
     procedure, private :: generate_1, generate_2
     generic            :: generate => generate_1, generate_2
@@ -110,6 +112,7 @@ contains
         call debug_print('end chunk%init '//int2str(id))
     end subroutine init
 
+    ! Backward compatibility
     subroutine generate_1( self, fnames, nptcls, ind_glob )
         class(stream_chunk),       intent(inout) :: self
         character(len=LONGSTRLEN), intent(in)    :: fnames(:)
@@ -171,62 +174,21 @@ contains
         call debug_print('end chunk%generate '//int2str(self%id))
     end subroutine generate_1
 
-    ! Do we really need to read and store micrograph info?
+    ! for use by cluster2D_stream_dev
     subroutine generate_2( self, micproj_records )
-        class(stream_chunk),  intent(inout) :: self
-        type(micproj_record), intent(in)    :: micproj_records(:)
-        type(sp_project)              :: spproj
-        character(len=:), allocatable :: stack_name, prev_projname
-        integer :: iptcl, fromp, ifromp, itop, imic, n_in, nptcls, jptcl, micind
+        class(stream_chunk), intent(inout) :: self
+        type(projrecord),    intent(in)    :: micproj_records(:)
+        integer :: istk
         if( .not.self%available ) THROW_HARD('chunk unavailable; chunk%generate')
-        n_in = size(micproj_records(:))
-        if( n_in == 0 ) THROW_HARD('# ptcls == 0; chunk%generate')
-        call debug_print('in chunk%generate '//int2str(self%id)//' '//int2str(nptcls)//' '//int2str(n_in))
-        self%nmics  = n_in
-        self%nptcls = sum(micproj_records(1:n_in)%nptcls)
-        call self%spproj%os_mic%new(self%nmics, is_ptcl=.false.)
-        call self%spproj%os_stk%new(self%nmics, is_ptcl=.false.)
-        call self%spproj%os_ptcl2D%new(self%nptcls, is_ptcl=.true.)
+        if( size(micproj_records(:)) == 0 ) THROW_HARD('# ptcls == 0; chunk%generate')
+        call debug_print('in chunk%generate '//int2str(self%id)//' '//int2str(size(micproj_records(:))))
+        call projrecords2proj(micproj_records(:), self%spproj)
+        self%nmics  = self%spproj%os_mic%get_noris()
+        self%nptcls = self%spproj%os_ptcl2D%get_noris()
         allocate(self%orig_stks(self%nmics))
-        jptcl         = 0
-        fromp         = 1
-        prev_projname = ''
-        do imic = 1,n_in
-            if( trim(micproj_records(imic)%projname) /= trim(prev_projname) )then
-                call spproj%kill
-                call spproj%read_mic_stk_ptcl2D_segments(micproj_records(imic)%projname)
-                prev_projname = trim(micproj_records(imic)%projname)
-            endif
-            micind = micproj_records(imic)%micind
-            call self%spproj%os_mic%transfer_ori(imic, spproj%os_mic, micind)
-            call self%spproj%os_stk%transfer_ori(imic, spproj%os_stk, micind)
-            ! update to stored stack file name because we are in the root folder
-            stack_name = trim(spproj%get_stkname(micind))
-            if( stack_name(1:1) == '/' )then
-                ! already absolute path
-                self%orig_stks(imic) = trim(stack_name)
-            else if( stack_name(1:3) == '../' )then
-                ! need to be absolute path
-                self%orig_stks(imic) = simple_abspath(trim(stack_name))
-            else
-                THROW_HARD('Unexpected file path format for: '//trim(stack_name))
-            endif
-            call self%spproj%os_stk%set(imic, 'stk', self%orig_stks(imic))
-            ! particles
-            nptcls = micproj_records(imic)%nptcls
-            ifromp = nint(self%spproj%os_stk%get(imic,'fromp'))
-            itop   = nint(self%spproj%os_stk%get(imic,'top'))
-            do iptcl = ifromp,itop
-                jptcl = jptcl+1
-                call self%spproj%os_ptcl2D%transfer_ori(jptcl, spproj%os_ptcl2D, iptcl)
-                call self%spproj%os_ptcl2D%set_stkind(jptcl, imic)
-            enddo
-            call self%spproj%os_stk%set(imic, 'fromp', real(fromp))
-            call self%spproj%os_stk%set(imic, 'top',   real(fromp+nptcls-1))
-            fromp = fromp + nptcls
+        do istk = 1,self%nmics
+            self%orig_stks(istk) = self%spproj%get_stkname(istk)
         enddo
-        call spproj%kill
-        self%spproj%os_ptcl3D = self%spproj%os_ptcl2D
         call debug_print('end chunk%generate_2 '//int2str(self%id))
     end subroutine generate_2
 
@@ -580,4 +542,72 @@ contains
         self%available  = .false.
     end subroutine kill
 
-end module simple_stream_chunk
+    ! Utilities to handle the type projecord
+
+    !> convert a list of projects into one project
+    !  previous mic/stk/ptcl2D,ptcl3D are wipped, other fields untouched
+    subroutine projrecords2proj( records, spproj )
+        class(projrecord), intent(in)    :: records(:)
+        class(sp_project), intent(inout) :: spproj
+        type(sp_project)              :: tmpproj
+        character(len=:), allocatable :: stack_name, projname, prev_projname
+        integer :: iptcl, fromp, ifromp, itop, jptcl, nptcls_tot
+        integer :: nrecs, nmics, nptcls, imic, micind
+        logical :: has_ptcl
+        call spproj%os_mic%kill
+        call spproj%os_stk%kill
+        call spproj%os_ptcl2D%kill
+        call spproj%os_ptcl3D%kill
+        nrecs      = size(records)
+        if( nrecs == 0 ) return 
+        nmics      = nrecs
+        nptcls_tot = sum(records(:)%nptcls)
+        has_ptcl   = nptcls_tot > 0
+        call spproj%os_mic%new(nmics,is_ptcl=.false.)
+        call spproj%os_stk%new(nmics,is_ptcl=.false.)
+        if( has_ptcl ) call spproj%os_ptcl2D%new(nptcls_tot,is_ptcl=.true.)
+        prev_projname = ''
+        jptcl = 0
+        fromp = 1
+        do imic = 1,nmics
+            ! read individual project (up to NMOVS_SET entries)
+            projname = trim(records(imic)%projname)
+            if( trim(projname) /= trim(prev_projname) )then
+                call tmpproj%kill
+                call tmpproj%read_mic_stk_ptcl2D_segments(projname)
+                prev_projname = trim(projname)
+            endif
+            ! mic
+            micind = records(imic)%micind
+            call spproj%os_mic%transfer_ori(imic, tmpproj%os_mic, micind)
+            ! stack
+            nptcls = records(imic)%nptcls
+            if( nptcls == 0 )cycle
+            call spproj%os_stk%transfer_ori(imic, tmpproj%os_stk, micind)
+            ! update stack path to absolute
+            stack_name = trim(spproj%get_stkname(imic))
+            if( stack_name(1:1) == '/' )then
+                ! already absolute path
+            else if( stack_name(1:3) == '../' )then
+                stack_name = simple_abspath(trim(stack_name))
+                call spproj%os_stk%set(imic, 'stk', stack_name)
+            else
+                THROW_HARD('Unexpected file path format for: '//trim(stack_name))
+            endif
+            ! particles
+            ifromp = nint(spproj%os_stk%get(imic,'fromp'))
+            itop   = nint(spproj%os_stk%get(imic,'top'))
+            do iptcl = ifromp,itop
+                jptcl = jptcl+1 ! global index
+                call spproj%os_ptcl2D%transfer_ori(jptcl, tmpproj%os_ptcl2D, iptcl)
+                call spproj%os_ptcl2D%set_stkind(jptcl, imic)
+            enddo
+            call spproj%os_stk%set(imic, 'fromp', real(fromp))
+            call spproj%os_stk%set(imic, 'top',   real(fromp+nptcls-1))
+            fromp = fromp + nptcls
+        enddo
+        call tmpproj%kill
+        if( has_ptcl ) spproj%os_ptcl3D = spproj%os_ptcl2D
+    end subroutine projrecords2proj
+
+end module simple_stream_utils
