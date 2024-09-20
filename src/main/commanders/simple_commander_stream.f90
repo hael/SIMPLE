@@ -10,7 +10,7 @@ use simple_qsys_env,           only: qsys_env
 use simple_starproject_stream, only: starproject_stream
 use simple_guistats,           only: guistats
 use simple_moviewatcher,       only: moviewatcher
-use simple_stream_chunk,       only: micproj_record
+use simple_stream_utils,       only: projrecord
 use simple_commander_cluster2D_stream_dev
 use simple_qsys_funs
 use simple_commander_preprocess
@@ -376,50 +376,16 @@ contains
                 if( present(write_field) ) l_wfield      = write_field
                 if( present(copy_optics) ) l_copy_optics = copy_optics
                 if(l_copy_optics) then
-                    call copy_micrographs_optics()
-                    call write_migrographs_starfile(optics_set = .true.)
+                    call starproj_stream%copy_micrographs_optics(spproj_glob, verbose=DEBUG_HERE)
+                    call starproj_stream%stream_export_micrographs(spproj_glob, params%outdir, optics_set=.true.)
                 else
-                    call write_migrographs_starfile
+                    call starproj_stream%stream_export_micrographs(spproj_glob, params%outdir)
                 end if
                 if( l_wfield )then
                     call spproj_glob%write_segment_inside('mic', params%projfile)
                     call spproj_glob%write_non_data_segments(params%projfile)
                 endif
             end subroutine write_mic_star_and_field
-
-            subroutine copy_micrographs_optics
-                integer(timer_int_kind) ::ms0
-                real(timer_int_kind)    :: ms_copy_optics
-                type(sp_project)        :: spproj_optics
-                if( params%projfile_optics .ne. '' .and. file_exists('../' // trim(params%projfile_optics)) ) then
-                    if( DEBUG_HERE ) ms0 = tic()
-                    call spproj_optics%read('../' // trim(params%projfile_optics))
-                    call starproj_stream%copy_optics(spproj_glob, spproj_optics)
-                    call spproj_optics%kill()
-                    if( DEBUG_HERE )then
-                        ms_copy_optics = toc(ms0)
-                        print *,'ms_copy_optics  : ', ms_copy_optics; call flush(6)
-                    endif
-                end if
-            end subroutine copy_micrographs_optics
-
-            !>  write starfile snapshot
-            subroutine write_migrographs_starfile( optics_set )
-                logical, optional, intent(in) :: optics_set
-                integer(timer_int_kind)       :: ms0
-                real(timer_int_kind)          :: ms_export
-                logical                       :: l_optics_set
-                l_optics_set = .false.
-                if( present(optics_set) ) l_optics_set = optics_set
-                if (spproj_glob%os_mic%get_noris() > 0) then
-                    if( DEBUG_HERE ) ms0 = tic()
-                    call starproj_stream%stream_export_micrographs(spproj_glob, params%outdir, optics_set=l_optics_set)
-                    if( DEBUG_HERE )then
-                        ms_export = toc(ms0)
-                        print *,'ms_export  : ', ms_export; call flush(6)
-                    endif
-                end if
-            end subroutine write_migrographs_starfile
 
             ! returns list of completed jobs
             subroutine update_projects_list( nimported )
@@ -646,7 +612,7 @@ contains
         integer,                   parameter   :: INACTIVE_TIME   = 900  ! inactive time triggers writing of project file
         logical,                   parameter   :: DEBUG_HERE      = .true.
         class(cmdline),            allocatable :: completed_jobs_clines(:), failed_jobs_clines(:)
-        type(micproj_record),      allocatable :: micproj_records(:)
+        type(projrecord),          allocatable :: projrecords(:)
         type(qsys_env)                         :: qenv
         type(cmdline)                          :: cline_make_pickrefs, cline_pick_extract
         type(moviewatcher)                     :: project_buff
@@ -780,9 +746,9 @@ contains
                 call simple_rmdir(odir_extract)
             else
                 ! import previous run and updates stats for gui
-                call import_previous_mics( micproj_records )
-                if( allocated(micproj_records) )then
-                    nptcls_glob = sum(micproj_records(:)%nptcls)
+                call import_previous_mics( projrecords )
+                if( allocated(projrecords) )then
+                    nptcls_glob = sum(projrecords(:)%nptcls)
                     nmic_star   = spproj_glob%os_mic%get_noris()
                     call gui_stats%set('micrographs', 'micrographs_imported', int2commastr(nmic_star),              primary=.true.)
                     call gui_stats%set('micrographs', 'micrographs_picked',   int2commastr(nmic_star) // ' (100%)', primary=.true.)
@@ -867,7 +833,7 @@ contains
                 ! undo already processed micrographs
                 call spproj_glob%os_mic%kill()
                 call project_buff%clear_history()
-                if(allocated(micproj_records)) deallocate(micproj_records)
+                if(allocated(projrecords)) deallocate(projrecords)
                 ! reset histogram
                 moldiams = equispaced_vals(params%moldiam, params%moldiam_max, params%nmoldiams)
                 call histogram_moldiams%kill
@@ -943,7 +909,7 @@ contains
             ! fetch completed jobs list & updates
             if( qenv%qscripts%get_done_stacksz() > 0 )then
                 call qenv%qscripts%get_stream_done_stack( completed_jobs_clines )
-                call update_projects_list( micproj_records, n_imported )
+                call update_projects_list( projrecords, n_imported )
                 call completed_jobs_clines(:)%kill
                 deallocate(completed_jobs_clines)
             else
@@ -991,10 +957,10 @@ contains
                 ! always write micrographs snapshot if less than 1000 mics, else every 100
                 if( n_imported < 1000 .and. l_haschanged )then
                     call update_user_params(cline)
-                    call write_migrographs_starfile
+                    call write_micrographs_starfile
                 else if( n_imported > nmic_star + 100 .and. l_haschanged )then
                     call update_user_params(cline)
-                    call write_migrographs_starfile
+                    call write_micrographs_starfile
                     nmic_star = n_imported
                 endif
             else
@@ -1004,7 +970,7 @@ contains
                         ! write project when inactive
                         call write_project
                         call update_user_params(cline)
-                        call write_migrographs_starfile
+                        call write_micrographs_starfile
                         l_haschanged = .false.
                     endif
                 endif
@@ -1023,9 +989,9 @@ contains
         ! termination
         call write_project
         call update_user_params(cline)
-        call copy_micrographs_optics
-        call write_migrographs_starfile(optics_set=.true.)
-        call write_particles_starfile(optics_set=.true.)
+        call starproj_stream%copy_micrographs_optics(spproj_glob, write=.true., verbose=DEBUG_HERE)
+        call write_micrographs_starfile(optics_set=.true.)
+        call starproj_stream%stream_export_particles_2D(spproj_glob, params%outdir, optics_set=.true., verbose=.true.)
         ! kill ptcls now starfiles written
         call spproj_glob%os_stk%kill
         call spproj_glob%os_ptcl2D%kill
@@ -1041,25 +1007,8 @@ contains
         call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT NORMAL STOP ****')
         contains
 
-            subroutine copy_micrographs_optics
-                integer(timer_int_kind) ::ms0
-                real(timer_int_kind)    :: ms_copy_optics
-                type(sp_project)        :: spproj_optics
-                if( params%projfile_optics .ne. '' .and. file_exists('../' // trim(params%projfile_optics)) ) then
-                    if( DEBUG_HERE ) ms0 = tic()
-                    call spproj_optics%read('../' // trim(params%projfile_optics))
-                    call starproj_stream%copy_optics(spproj_glob, spproj_optics)
-                    call spproj_optics%kill()
-                    call spproj_glob%write
-                    if( DEBUG_HERE )then
-                        ms_copy_optics = toc(ms0)
-                        print *,'ms_copy_optics  : ', ms_copy_optics; call flush(6)
-                    endif
-                end if
-            end subroutine copy_micrographs_optics
-
             !>  write starfile snapshot
-            subroutine write_migrographs_starfile( optics_set )
+            subroutine write_micrographs_starfile( optics_set )
                 logical, optional, intent(in) :: optics_set
                 integer(timer_int_kind)       :: ms0
                 real(timer_int_kind)          :: ms_export
@@ -1078,24 +1027,7 @@ contains
                         print *,'ms_export  : ', ms_export; call flush(6)
                     endif
                 end if
-            end subroutine write_migrographs_starfile
-
-            subroutine write_particles_starfile( optics_set )
-                logical, optional, intent(in) :: optics_set
-                integer(timer_int_kind)       :: ptcl0
-                real(timer_int_kind)          :: ptcl_export
-                logical                       :: l_optics_set
-                l_optics_set = .false.
-                if( present(optics_set) ) l_optics_set = optics_set
-                if (spproj_glob%os_ptcl2D%get_noris() > 0) then
-                    if( DEBUG_HERE ) ptcl0 = tic()
-                    call starproj_stream%stream_export_particles_2D(spproj_glob, params%outdir, optics_set=l_optics_set, verbose=.true.)
-                    if( DEBUG_HERE )then
-                        ptcl_export = toc(ptcl0)
-                        print *,'ptcl_export  : ', ptcl_export; call flush(6)
-                    endif
-                end if
-            end subroutine write_particles_starfile
+            end subroutine write_micrographs_starfile
 
             subroutine write_project()
                 integer, allocatable :: fromps(:)
@@ -1115,15 +1047,15 @@ contains
                     top           = 0
                     prev_projname = ''
                     do imic = 1,nmics
-                        if( trim(micproj_records(imic)%projname) /= trim(prev_projname) )then
+                        if( trim(projrecords(imic)%projname) /= trim(prev_projname) )then
                             call stream_spproj%kill
-                            call stream_spproj%read_segment('stk', micproj_records(imic)%projname)
-                            prev_projname = trim(micproj_records(imic)%projname)
+                            call stream_spproj%read_segment('stk', projrecords(imic)%projname)
+                            prev_projname = trim(projrecords(imic)%projname)
                         endif
-                        micind = micproj_records(imic)%micind
+                        micind = projrecords(imic)%micind
                         fromps(imic) = nint(stream_spproj%os_stk%get(micind,'fromp')) ! fromp from individual project
                         fromp        = nptcls + 1
-                        nptcls       = nptcls + micproj_records(imic)%nptcls
+                        nptcls       = nptcls + projrecords(imic)%nptcls
                         top          = nptcls
                         call spproj_glob%os_stk%transfer_ori(imic, stream_spproj%os_stk, micind)
                         call spproj_glob%os_stk%set(imic, 'fromp',real(fromp))
@@ -1135,13 +1067,13 @@ contains
                     iptcl         = 0
                     prev_projname = ''
                     do imic = 1,nmics
-                        if( trim(micproj_records(imic)%projname) /= prev_projname )then
+                        if( trim(projrecords(imic)%projname) /= prev_projname )then
                             call stream_spproj%kill
-                            call stream_spproj%read_segment('ptcl2D', micproj_records(imic)%projname)
-                            prev_projname = trim(micproj_records(imic)%projname)
+                            call stream_spproj%read_segment('ptcl2D', projrecords(imic)%projname)
+                            prev_projname = trim(projrecords(imic)%projname)
                         endif
                         fromp = fromps(imic)
-                        top   = fromp + micproj_records(imic)%nptcls - 1
+                        top   = fromp + projrecords(imic)%nptcls - 1
                         do i = fromp,top
                             iptcl = iptcl + 1
                             call spproj_glob%os_ptcl2D%transfer_ori(iptcl, stream_spproj%os_ptcl2D, i)
@@ -1166,12 +1098,12 @@ contains
 
             ! updates global project, returns records of processed micrographs
             subroutine update_projects_list( records, nimported )
-                type(micproj_record), allocatable, intent(inout) :: records(:)
-                integer,                           intent(inout) :: nimported
-                type(sp_project),     allocatable :: spprojs(:)
-                type(micproj_record), allocatable :: old_records(:)
-                character(len=:),     allocatable :: fname, abs_fname, new_fname
-                type(sp_project)                  :: tmpproj
+                type(projrecord), allocatable, intent(inout) :: records(:)
+                integer,                       intent(inout) :: nimported
+                type(sp_project), allocatable :: spprojs(:)
+                type(projrecord), allocatable :: old_records(:)
+                character(len=:), allocatable :: fname, abs_fname, new_fname
+                type(sp_project)              :: tmpproj
                 integer :: n_spprojs, n_old, j, nprev_imports, n_completed, nptcls, nmics, imic
                 n_completed = 0
                 nimported   = 0
@@ -1207,12 +1139,12 @@ contains
                     ! reallocate global project
                     if( nprev_imports == 0 )then
                         call spproj_glob%os_mic%new(nmics, is_ptcl=.false.) ! first import
-                        allocate(micproj_records(nmics))
+                        allocate(projrecords(nmics))
                     else
                         call spproj_glob%os_mic%reallocate(n_completed)
-                        call move_alloc(micproj_records, old_records)
-                        allocate(micproj_records(n_completed))
-                        if( n_old > 0 ) micproj_records(1:n_old) = old_records(:)
+                        call move_alloc(projrecords, old_records)
+                        allocate(projrecords(n_completed))
+                        if( n_old > 0 ) projrecords(1:n_old) = old_records(:)
                         deallocate(old_records)
                     endif
                     ! update records and global project
@@ -1231,14 +1163,14 @@ contains
                         ! records & project
                         do imic = 1,spprojs(iproj)%os_mic%get_noris()
                             j = j + 1
-                            micproj_records(j)%projname = trim(abs_fname)
-                            micproj_records(j)%micind   = imic
+                            projrecords(j)%projname = trim(abs_fname)
+                            projrecords(j)%micind   = imic
                             if( l_multipick )then
-                                micproj_records(j)%nptcls = 0
+                                projrecords(j)%nptcls = 0
                             else
                                 nptcls      = nint(spprojs(iproj)%os_mic%get(imic,'nptcls'))
                                 nptcls_glob = nptcls_glob + nptcls ! global update
-                                micproj_records(j)%nptcls = nptcls
+                                projrecords(j)%nptcls = nptcls
                             endif
                             call spproj_glob%os_mic%transfer_ori(j, spprojs(iproj)%os_mic, imic)
                         enddo
@@ -1344,7 +1276,7 @@ contains
 
             !>  import previous run to the current project and reselect micrographs
             subroutine import_previous_mics( records )
-                type(micproj_record),      allocatable, intent(inout) :: records(:)
+                type(projrecord), allocatable, intent(inout) :: records(:)
                 type(sp_project),          allocatable :: spprojs(:)
                 character(len=LONGSTRLEN), allocatable :: completed_fnames(:)
                 character(len=:),          allocatable :: fname
@@ -1441,7 +1373,7 @@ contains
         type(parameters)                       :: params
         type(guistats)                         :: gui_stats
         class(cmdline),            allocatable :: completed_jobs_clines(:), failed_jobs_clines(:)
-        type(micproj_record),      allocatable :: micproj_records(:)
+        type(projrecord),          allocatable :: projrecords(:)
         type(qsys_env)                         :: qenv
         type(cmdline)                          :: cline_extract, cline_pick_extract
         type(moviewatcher)                     :: project_buff
@@ -1671,7 +1603,7 @@ contains
             ! fetch completed jobs list & updates
             if( qenv%qscripts%get_done_stacksz() > 0 )then
                 call qenv%qscripts%get_stream_done_stack( completed_jobs_clines )
-                call update_records_with_project( micproj_records, n_imported )
+                call update_records_with_project( projrecords, n_imported )
                 call completed_jobs_clines(:)%kill
                 deallocate(completed_jobs_clines)
             else
@@ -1702,10 +1634,10 @@ contains
                 ! always write micrographs snapshot if less than 1000 mics, else every 100
                 if( n_imported < 1000 .and. l_haschanged )then
                     call update_user_params(cline)
-                    call write_migrographs_starfile
+                    call starproj_stream%stream_export_micrographs(spproj_glob, params%outdir)
                 else if( n_imported > nmic_star + 100 .and. l_haschanged )then
                     call update_user_params(cline)
-                    call write_migrographs_starfile
+                    call starproj_stream%stream_export_micrographs(spproj_glob, params%outdir)
                     nmic_star = n_imported
                 endif
             endif
@@ -1717,7 +1649,7 @@ contains
             endif
             call update_pool_status_dev
             call update_pool_dev
-            call import_records_into_pool( micproj_records )
+            call import_records_into_pool( projrecords )
             call classify_pool_dev
             if(  params%nparts > 1 ) then
                 call sleep(WAITTIME)
@@ -1734,16 +1666,16 @@ contains
         if( l_once )then
             ! nothing to write
         else
-            call terminate_stream2D_dev
+            call terminate_stream2D_dev(projrecords)
         endif
         if(file_exists(STREAM_REJECT_CLS)) call write_pool_cls_selected_user
         call gui_stats%delete('latest', '')
         call gui_stats%set('selected references', '', trim(cwd_glob) // '/' // STREAM_SELECTED_REFS // trim(JPG_EXT), thumbnail = .true., smpd = params%smpd, box = real(params%box))
         !call write_project
         !call update_user_params(cline)
-        ! call copy_micrographs_optics
-        ! call write_migrographs_starfile(optics_set=.true.)
-        ! call write_particles_starfile(optics_set=.true.)
+        ! call starproj_stream%copy_micrographs_optics(spproj_glob, write=.true., verbose=DEBUG_HERE)
+        ! call starproj_stream%stream_export_micrographs(spproj_glob, params%outdir, optics_set=.true.)
+        ! call starproj_stream%stream_export_particles_2D(spproj_glob, params%outdir, optics_set=.true., verbose=.true.)
         ! final stats
         call gui_stats%hide('compute', 'compute_in_use')
         call gui_stats%deactivate_section('compute')
@@ -1756,65 +1688,13 @@ contains
         call simple_end('**** SIMPLE_STREAM_GENERATE_PICKING_REFERENCES NORMAL STOP ****')
         contains
 
-            subroutine copy_micrographs_optics
-                integer(timer_int_kind) ::ms0
-                real(timer_int_kind)    :: ms_copy_optics
-                type(sp_project)        :: spproj_optics
-                if( params%projfile_optics .ne. '' .and. file_exists('../' // trim(params%projfile_optics)) ) then
-                    if( DEBUG_HERE ) ms0 = tic()
-                    call spproj_optics%read('../' // trim(params%projfile_optics))
-                    call starproj_stream%copy_optics(spproj_glob, spproj_optics)
-                    call spproj_optics%kill()
-                    call spproj_glob%write
-                    if( DEBUG_HERE )then
-                        ms_copy_optics = toc(ms0)
-                        print *,'ms_copy_optics  : ', ms_copy_optics; call flush(6)
-                    endif
-                end if
-            end subroutine copy_micrographs_optics
-
-            !>  write starfile snapshot
-            subroutine write_migrographs_starfile( optics_set )
-                logical, optional, intent(in) :: optics_set
-                integer(timer_int_kind)       :: ms0
-                real(timer_int_kind)          :: ms_export
-                logical                       :: l_optics_set
-                l_optics_set = .false.
-                if( present(optics_set) ) l_optics_set = optics_set
-                if (spproj_glob%os_mic%get_noris() > 0) then
-                    if( DEBUG_HERE ) ms0 = tic()
-                    call starproj_stream%stream_export_micrographs(spproj_glob, params%outdir, optics_set=l_optics_set)
-                    if( DEBUG_HERE )then
-                        ms_export = toc(ms0)
-                        print *,'ms_export  : ', ms_export; call flush(6)
-                    endif
-                end if
-            end subroutine write_migrographs_starfile
-
-            subroutine write_particles_starfile( optics_set )
-                logical, optional, intent(in) :: optics_set
-                integer(timer_int_kind)       :: ptcl0
-                real(timer_int_kind)          :: ptcl_export
-                logical                       :: l_optics_set
-                l_optics_set = .false.
-                if( present(optics_set) ) l_optics_set = optics_set
-                if (spproj_glob%os_ptcl2D%get_noris() > 0) then
-                    if( DEBUG_HERE ) ptcl0 = tic()
-                    call starproj_stream%stream_export_particles_2D(spproj_glob, params%outdir, optics_set=l_optics_set, verbose=.true.)
-                    if( DEBUG_HERE )then
-                        ptcl_export = toc(ptcl0)
-                        print *,'ptcl_export  : ', ptcl_export; call flush(6)
-                    endif
-                end if
-            end subroutine write_particles_starfile
-
             ! updates global project, returns records of processed micrographs
             subroutine update_records_with_project( records, nimported )
-                type(micproj_record), allocatable, intent(inout) :: records(:)
-                integer,                           intent(inout) :: nimported
-                type(sp_project),     allocatable :: spprojs(:)
-                type(micproj_record), allocatable :: old_records(:)
-                character(len=:),     allocatable :: fname, abs_fname, new_fname
+                type(projrecord), allocatable, intent(inout) :: records(:)
+                integer,                       intent(inout) :: nimported
+                type(sp_project), allocatable :: spprojs(:)
+                type(projrecord), allocatable :: old_records(:)
+                character(len=:), allocatable :: fname, abs_fname, new_fname
                 integer :: n_spprojs, n_old, j, nprev_imports, n_completed, nptcls, nmics, imic
                 n_completed = 0
                 nimported   = 0
@@ -1843,12 +1723,12 @@ contains
                     ! reallocate global project
                     if( nprev_imports == 0 )then
                         call spproj_glob%os_mic%new(nmics, is_ptcl=.false.) ! first import
-                        allocate(micproj_records(nmics))
+                        allocate(projrecords(nmics))
                     else
                         call spproj_glob%os_mic%reallocate(n_completed)
-                        call move_alloc(micproj_records, old_records)
-                        allocate(micproj_records(n_completed))
-                        if( n_old > 0 ) micproj_records(1:n_old) = old_records(:)
+                        call move_alloc(projrecords, old_records)
+                        allocate(projrecords(n_completed))
+                        if( n_old > 0 ) projrecords(1:n_old) = old_records(:)
                         deallocate(old_records)
                     endif
                     ! update records and global project
@@ -1863,12 +1743,12 @@ contains
                         ! records & project
                         do imic = 1,spprojs(iproj)%os_mic%get_noris()
                             j = j + 1
-                            micproj_records(j)%projname = trim(abs_fname)
-                            micproj_records(j)%micind   = imic
+                            projrecords(j)%projname = trim(abs_fname)
+                            projrecords(j)%micind   = imic
                             nptcls      = nint(spprojs(iproj)%os_mic%get(imic,'nptcls'))
                             nptcls_glob = nptcls_glob + nptcls ! global update
-                            micproj_records(j)%nptcls     = nptcls
-                            micproj_records(j)%nptcls_sel = nptcls
+                            projrecords(j)%nptcls     = nptcls
+                            projrecords(j)%nptcls_sel = nptcls
                             call spproj_glob%os_mic%transfer_ori(j, spprojs(iproj)%os_mic, imic)
                         enddo
                     enddo
@@ -2160,7 +2040,7 @@ contains
         character(len=STDLEN),     parameter   :: micspproj_fname = './streamdata.simple'
         integer,                   parameter   :: FLUSH_NITERS    = 5    ! # of iterations after which leftover particles join the pool
         integer(kind=dp),          parameter   :: FLUSH_TIMELIMIT = 600  ! time (secs) after which leftover particles join the pool
-        type(micproj_record),      allocatable :: micproj_records(:)
+        type(projrecord),          allocatable :: projrecords(:)
         type(parameters)                       :: params
         type(guistats)                         :: gui_stats
         type(oris)                             :: moldiamori
@@ -2290,7 +2170,7 @@ contains
             endif
             ! project update
             if( nprojects > 0 )then
-                n_imported = size(micproj_records)
+                n_imported = size(projrecords)
                 write(logfhandle,'(A,I6,I8)') '>>> # MICROGRAPHS / PARTICLES IMPORTED : ',n_imported, nptcls_glob
                 ! guistats
                 call gui_stats%set('particles', 'particles_imported', int2commastr(nptcls_glob), primary=.true.)
@@ -2346,7 +2226,7 @@ contains
                         if( l_pause )then
                             ! Remaining unclassified particles will join the pool directly
                             ! if pool & all chunks are inactive
-                            if( all_chunks_available() ) call flush_remaining_particles(micproj_records)
+                            if( all_chunks_available() ) call flush_remaining_particles(projrecords)
                         endif
                     endif
                 endif
@@ -2355,7 +2235,7 @@ contains
                 else
                     call classify_pool_dev
                 endif
-                call classify_new_chunks_dev(micproj_records)
+                call classify_new_chunks_dev(projrecords)
             endif
             call sleep(WAITTIME)
             ! guistats
@@ -2367,7 +2247,7 @@ contains
             call gui_stats%write_json
         end do
         ! termination
-        call terminate_stream2D_dev
+        call terminate_stream2D_dev( projrecords )
         call update_user_params(cline) !!??
         ! final stats
         if(file_exists(POOLSTATS_FILE)) call gui_stats%merge(POOLSTATS_FILE, delete = .true.)
@@ -2387,7 +2267,7 @@ contains
                 character(len=LONGSTRLEN), allocatable, intent(in)  :: projectnames(:)
                 integer,                                intent(out) :: n_imported
                 type(sp_project),     allocatable :: spprojs(:)
-                type(micproj_record), allocatable :: old_records(:)
+                type(projrecord),     allocatable :: old_records(:)
                 character(len=:),     allocatable :: fname, abs_fname
                 real    :: avgmicptcls, nptcls_per_cls
                 integer :: iproj, n_spprojs, n_old, irec, n_completed, nptcls, nmics, imic, n_ptcls, first
@@ -2397,7 +2277,7 @@ contains
                 n_spprojs  = size(projectnames)
                 if( n_spprojs == 0 )return
                 n_old = 0 ! on first import
-                if( allocated(micproj_records) ) n_old = size(micproj_records)
+                if( allocated(projrecords) ) n_old = size(projrecords)
                 allocate(spprojs(n_spprojs))
                 ! because pick_extract purges state=0 and nptcls=0 mics,
                 ! all mics can be assumed associated with particles
@@ -2414,11 +2294,11 @@ contains
                 n_imported  = nmics
                 ! reallocate records
                 if( n_old == 0 )then
-                    allocate(micproj_records(nmics))
+                    allocate(projrecords(nmics))
                 else
-                    call move_alloc(micproj_records, old_records)
-                    allocate(micproj_records(n_completed))
-                    micproj_records(1:n_old) = old_records(:)
+                    call move_alloc(projrecords, old_records)
+                    allocate(projrecords(n_completed))
+                    projrecords(1:n_old) = old_records(:)
                     deallocate(old_records)
                 endif
                 ! update global records and some global variables
@@ -2430,18 +2310,18 @@ contains
                         n_ptcls   = n_ptcls + nptcls ! global update
                         fname     = trim(projectnames(iproj))
                         abs_fname = simple_abspath(fname, errmsg='stream_cluster2D :: update_projects_list 1')
-                        micproj_records(irec)%projname   = trim(abs_fname)
-                        micproj_records(irec)%micind     = imic
-                        micproj_records(irec)%nptcls     = nptcls
-                        micproj_records(irec)%nptcls_sel = nptcls
-                        micproj_records(irec)%included   = .false.
+                        projrecords(irec)%projname   = trim(abs_fname)
+                        projrecords(irec)%micind     = imic
+                        projrecords(irec)%nptcls     = nptcls
+                        projrecords(irec)%nptcls_sel = nptcls
+                        projrecords(irec)%included   = .false.
                     enddo
                 enddo
                 nptcls_glob = nptcls_glob + n_ptcls ! global update
                 ! Updates global parameters once and init 2D
                 if(params%nptcls_per_cls == 0) then
-                    if(size(micproj_records) .gt. 100) then
-                        avgmicptcls = nptcls_glob / size(micproj_records)
+                    if(size(projrecords) .gt. 100) then
+                        avgmicptcls = nptcls_glob / size(projrecords)
                         avgmicptcls = ceiling(avgmicptcls / 10) * 10.0
                         ! these parameters may need tweaking
                         nptcls_per_cls = 1000 * (20 + (0.15 * avgmicptcls))

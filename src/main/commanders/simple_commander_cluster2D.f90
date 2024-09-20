@@ -613,7 +613,7 @@ contains
         params%smpd_crop = params%smpd
         params%box_crop  = params%box
         params%msk_crop  = params%msk
-        if( params%l_autoscale )then
+        if( params%l_autoscale .and. (params%box > MINBOX) )then
             call autoscale(params%box, params%smpd, smpd_target, params%box_crop, params%smpd_crop, scale, minbox=MINBOX)
             l_scaling = params%box_crop < params%box
             if( l_scaling )then

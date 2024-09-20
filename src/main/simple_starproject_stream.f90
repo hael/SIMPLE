@@ -48,6 +48,7 @@ contains
     procedure, private :: assign_optics_single
     procedure, private :: assign_optics
     procedure          :: copy_optics
+    procedure          :: copy_micrographs_optics
 
 end type starproject_stream
 
@@ -364,6 +365,7 @@ contains
         character(len=*),           optional,  intent(in)    :: filename
         logical,         optional,  intent(in)    :: optics_set
         logical  :: l_optics_set
+        if( spproj%os_mic%get_noris() == 0 ) return
         l_optics_set = .false.
         if(present(optics_set)) l_optics_set = optics_set
         if(.not. l_optics_set) call self%assign_optics_single(spproj)
@@ -414,6 +416,7 @@ contains
         integer,      parameter :: NTHR=4
         integer(timer_int_kind) :: ms0
         real(timer_int_kind)    :: ms_complete
+        if( spproj%os_ptcl2D%get_noris() == 0 ) return
         l_optics_set = .false.
         l_verbose    = .false.
         if(present(optics_set)) l_optics_set = optics_set
@@ -791,6 +794,30 @@ contains
         if(allocated(ogmap)) deallocate(ogmap)
     end subroutine copy_optics  
 
-
+    subroutine copy_micrographs_optics( self, spproj_dest, write, verbose )
+        class(starproject_stream), intent(inout) :: self
+        class(sp_project),         intent(inout) :: spproj_dest
+        logical,         optional, intent(in)    :: write, verbose
+        type(sp_project)        :: spproj_optics
+        integer(timer_int_kind) :: ms0
+        real(timer_int_kind)    :: ms_copy_optics
+        logical                 :: l_verbose, l_write
+        l_verbose = .false.
+        l_write   = .false.
+        if( present(verbose) ) l_verbose = verbose
+        if( present(write)   ) l_write   = write
+        if( (params_glob%projfile_optics .ne. '') .and.&
+           &(file_exists('../' // trim(params_glob%projfile_optics))) ) then
+            if( l_verbose ) ms0 = tic()
+            call spproj_optics%read('../' // trim(params_glob%projfile_optics))
+            call self%copy_optics(spproj_dest, spproj_optics)
+            call spproj_optics%kill()
+            if( l_write ) call spproj_dest%write
+            if( l_verbose )then
+                ms_copy_optics = toc(ms0)
+                print *,'ms_copy_optics  : ', ms_copy_optics; call flush(6)
+            endif
+        end if
+    end subroutine copy_micrographs_optics
 
 end module simple_starproject_stream
