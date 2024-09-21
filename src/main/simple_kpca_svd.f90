@@ -30,7 +30,7 @@ type, extends(pca) :: kpca_svd
     procedure, private :: compute_eigvecs
 end type
 
-real, parameter :: C_CONST = 0.4_dp  ! for rbf_kernel for testing
+real, parameter :: C_CONST = 0.4  ! for rbf_kernel for testing
 
 contains
 
@@ -90,18 +90,18 @@ contains
         class(kpca_svd),   intent(inout) :: self
         real,              intent(in)    :: pcavecs(self%D,self%N)
         integer, optional, intent(in)    :: maxpcaits
-        integer,  parameter :: MAX_ITS = 100
-        real(dp), parameter :: TOL = 0.01_dp
-        real(dp) :: ker(self%N,self%N), prev_data(self%D), cur_data(self%D), proj_data(self%N), s, denom,&
-                    &sum_vecs(self%N), ker_weight(self%N,self%N), mat(self%N,self%D), eig_vecs(self%N,self%Q)
-        integer  :: i, ind, iter, its
-        mat = real(transpose(pcavecs),dp)
+        integer, parameter :: MAX_ITS = 100
+        real,    parameter :: TOL = 0.01
+        real    :: ker(self%N,self%N), prev_data(self%D), cur_data(self%D), proj_data(self%N), s, denom,&
+                &sum_vecs(self%N), ker_weight(self%N,self%N), mat(self%N,self%D), eig_vecs(self%N,self%Q)
+        integer :: i, ind, iter, its
+        mat = transpose(pcavecs)
         ! compute the kernel
         select case(trim(params_glob%kpca_ker))
             case('rbf')
-                call self%rbf_kernel(   real(pcavecs,dp), ker)
+                call self%rbf_kernel(   pcavecs, ker)
             case('cosine')
-                call self%cosine_kernel(real(pcavecs,dp), ker)
+                call self%cosine_kernel(pcavecs, ker)
         end select
         ! compute the sorted principle components of the kernel above
         call self%compute_eigvecs(ker, eig_vecs)
@@ -116,17 +116,17 @@ contains
             case('rbf')
                 !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,cur_data,prev_data,iter,i,proj_data,s)
                 do ind = 1, self%N
-                    cur_data  = real(pcavecs(:,ind), dp)
-                    prev_data = 0._dp
+                    cur_data  = pcavecs(:,ind)
+                    prev_data = 0.
                     iter      = 1
                     do while( euclid(cur_data,prev_data) > TOL .and. iter < its )
                         prev_data = cur_data
                         ! 1. projecting each image on kernel space
                         do i = 1,self%N
-                            proj_data(i) = euclid(prev_data, real(pcavecs(:,i),dp))**2
+                            proj_data(i) = euclid(prev_data, pcavecs(:,i))**2
                         enddo
                         ! 2. applying the principle components to the projected vector
-                        proj_data = dexp(-proj_data/real(self%Q,dp)/C_CONST) * ker_weight(:,ind)
+                        proj_data = exp(-proj_data/real(self%Q)/C_CONST) * ker_weight(:,ind)
                         ! 3. computing the pre-image (of the image in step 1) using the result in step 2
                         s = sum(proj_data)
                         do i = 1,self%D
@@ -139,24 +139,24 @@ contains
                 enddo
                 !$omp end parallel do
             case('cosine')
-                sum_vecs = 0._dp
+                sum_vecs = 0.
                 !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i)
                 do i = 1,self%N
-                    sum_vecs(i) = sum(real(pcavecs(:,i),dp)**2)
+                    sum_vecs(i) = sum(pcavecs(:,i)**2)
                 enddo
                 !$omp end parallel do
                 !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,cur_data,prev_data,iter,i,proj_data,s,denom)
                 do ind = 1, self%N
-                    cur_data  = real(pcavecs(:,ind), dp)
-                    prev_data = 0._dp
+                    cur_data  = pcavecs(:,ind)
+                    prev_data = 0.
                     iter      = 1
                     do while( euclid(cur_data,prev_data) > TOL .and. iter < its )
                         prev_data = cur_data
                         ! 1. projecting each image on kernel space
                         do i = 1,self%N
-                            denom        = dsqrt(sum(prev_data**2) * sum_vecs(i))
-                            proj_data(i) = 0._dp
-                            if( denom > DTINY ) proj_data(i) = sum(prev_data * real(pcavecs(:,i),dp)) / denom
+                            denom        = sqrt(sum(prev_data**2) * sum_vecs(i))
+                            proj_data(i) = 0.
+                            if( denom > DTINY ) proj_data(i) = sum(prev_data * pcavecs(:,i)) / denom
                         enddo
                         ! 2. applying the principle components to the projected vector
                         proj_data = proj_data * ker_weight(:,ind)
@@ -176,9 +176,9 @@ contains
 
     subroutine kernel_center( self, ker )
         class(kpca_svd), intent(inout) :: self
-        real(dp),        intent(inout) :: ker(self%N,self%N)
-        real(dp) :: ones(self%N,self%N), ones_ker(self%N,self%N)
-        ones     = 1._dp / real(self%N,dp)
+        real,            intent(inout) :: ker(self%N,self%N)
+        real :: ones(self%N,self%N), ones_ker(self%N,self%N)
+        ones     = 1. / real(self%N)
         ones_ker = matmul(ones, ker)
         ! Appendix D.2.2 Centering in Feature Space from Schoelkopf, Bernhard, Support vector learning, 1997
         ker = ker - ones_ker - transpose(ones_ker) + matmul(ones_ker, ones)
@@ -186,10 +186,10 @@ contains
 
     subroutine cosine_kernel( self, mat, ker )
         class(kpca_svd), intent(inout) :: self
-        real(dp),        intent(in)    :: mat(self%D,self%N)
-        real(dp),        intent(out)   :: ker(self%N,self%N)
-        integer  :: i, j
-        real(dp) :: denom, row_sums2(self%N)
+        real,            intent(in)    :: mat(self%D,self%N)
+        real,            intent(out)   :: ker(self%N,self%N)
+        integer :: i, j
+        real    :: denom, row_sums2(self%N)
         ! squared cosine similarity between pairs of rows
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i)
         do i = 1,self%N
@@ -199,7 +199,7 @@ contains
         !$omp parallel do collapse(2) default(shared) proc_bind(close) schedule(static) private(i,j,denom)
         do i = 1,self%N
             do j = 1,self%N
-                denom    = dsqrt(row_sums2(i) * row_sums2(j))
+                denom    = sqrt(row_sums2(i) * row_sums2(j))
                 ker(i,j) = 0._dp
                 if( denom > TINY ) ker(i,j) = sum(mat(:,i) * mat(:,j)) / denom
             enddo
@@ -210,8 +210,8 @@ contains
 
     subroutine rbf_kernel( self, mat, ker )
         class(kpca_svd), intent(inout) :: self
-        real(dp),        intent(in)    :: mat(self%D,self%N)
-        real(dp),        intent(out)   :: ker(self%N,self%N)
+        real,            intent(in)    :: mat(self%D,self%N)
+        real,            intent(out)   :: ker(self%N,self%N)
         integer :: i, j
         ! squared euclidean distance between pairs of rows
         !$omp parallel do collapse(2) default(shared) proc_bind(close) schedule(static) private(i,j)
@@ -222,16 +222,16 @@ contains
         enddo
         !$omp end parallel do
         ! normalization and centering
-        ker = dexp(-ker/real(self%Q,dp)/C_CONST)
+        ker = exp(-ker/real(self%Q)/C_CONST)
         call self%kernel_center(ker)
     end subroutine rbf_kernel
 
     subroutine compute_eigvecs( self, ker, eig_vecs )
         class(kpca_svd), intent(inout) :: self
-        real(dp),        intent(in)    :: ker(self%N,self%N)
-        real(dp),        intent(inout) :: eig_vecs(self%N,self%Q)
-        real(dp) :: eig_vals(self%Q), tmp_ker(self%N,self%N), eig_vecs_ori(self%N,self%Q)
-        integer  :: i
+        real,        intent(in)    :: ker(self%N,self%N)
+        real,        intent(inout) :: eig_vecs(self%N,self%Q)
+        real    :: eig_vals(self%Q), tmp_ker(self%N,self%N), eig_vecs_ori(self%N,self%Q)
+        integer :: i
         tmp_ker = ker
         do i = 1, self%N
             tmp_ker(:,i) = tmp_ker(:,i) - sum(tmp_ker(:,i))/real(self%N,dp)
@@ -240,7 +240,7 @@ contains
         call eigh(self%N, tmp_ker, self%Q, eig_vals, eig_vecs_ori)
         eig_vals = eig_vals**2 / real(self%N)
         do i = 1, self%Q
-            eig_vecs(:,i) = eig_vecs_ori(:,i) / dsqrt(eig_vals(i))
+            eig_vecs(:,i) = eig_vecs_ori(:,i) / sqrt(eig_vals(i))
         enddo
         ! reverse the sorted order of eig_vecs
         eig_vecs = eig_vecs(:,self%Q:1:-1)
