@@ -75,22 +75,22 @@ interface pythag
 end interface pythag
 
 interface eigh
-    module procedure eigh_dp
+    module procedure eigh_sp
 
-    subroutine dsyevr( jobz, range, uplo, n, a, lda, vl, vu, il, iu, &
-                    &abstol, m, w, z, ldz, isuppz, work, lwork,&
-                    &iwork, liwork, info )
+    subroutine ssyevr( jobz, range, uplo, n, a, lda, vl, vu, il, iu, &
+        &abstol, m, w, z, ldz, isuppz, work, lwork,&
+        &iwork, liwork, info )
         character(len=1), intent(in)    :: jobz, range, uplo
         integer,          intent(in)    :: n, il, iu, ldz, lda, lwork, liwork
         integer,          intent(out)   :: m
         integer,          intent(out)   :: isuppz(*)
-        real(kind(0d0)),  intent(in)    :: abstol, vl, vu
+        real,             intent(in)    :: abstol, vl, vu
         integer,          intent(out)   :: iwork(*)
         integer,          intent(out)   :: info
-        real(kind(0d0)),  intent(inout) :: a(lda,*)
-        real(kind(0d0)),  intent(out)   :: work(*), z(ldz,*)
-        real(kind(0d0)),  intent(out)   :: w(*)
-    end subroutine dsyevr
+        real,             intent(inout) :: a(lda,*)
+        real,             intent(out)   :: work(*), z(ldz,*)
+        real,             intent(out)   :: w(*)
+        end subroutine ssyevr
 end interface eigh
 
 contains
@@ -1496,30 +1496,25 @@ contains
         end if
     end function pythag_dp
 
-    subroutine eigh_dp(n, mat, neigs, eigvals, eigvecs)
+    subroutine eigh_sp(n, mat, neigs, eigvals, eigvecs)
         integer,  intent(in)    :: n
-        real(dp), intent(inout) :: mat(n,n)
+        real,     intent(inout) :: mat(n,n)
         integer,  intent(in)    :: neigs
-        real(dp), intent(out)   :: eigvals(neigs)
-        real(dp), intent(out)   :: eigvecs(n,neigs)
+        real,     intent(out)   :: eigvals(neigs)
+        real,     intent(out)   :: eigvecs(n,neigs)
         integer,  allocatable   :: iwork(:)
-        real(dp), allocatable   :: work(:)
+        real,     allocatable   :: work(:)
         integer  :: lwmax, info, lwork, liwork, il, iu, m, isuppz(n)
-        real(dp) :: abstol, vl, vu, w(n)
+        real     :: abstol, vl, vu, w(n)
         lwmax  = 26 * n     ! explained in dsyevr.f90
         allocate(iwork(lwmax), work(lwmax))
         abstol = -1.0
         il     = n-neigs+1
         iu     = n
-        ! Query the optimal workspace.
-        lwork  = -1
-        liwork = -1
-        call dsyevr( 'Vectors', 'Indices', 'Lower', n, mat, n, vl, vu, il, iu, abstol,&
-                    & m, w, eigvecs, n, isuppz, work, lwork, iwork, liwork, info )
-        lwork  = min( lwmax, int(work(1)) )
-        liwork = min( lwmax,    iwork(1)  )
+        lwork  = lwmax
+        liwork = lwmax
         ! Solve eigenproblem.
-        call dsyevr( 'Vectors', 'Indices', 'Lower', n, mat, n, vl, vu, il, iu, abstol,&
+        call ssyevr( 'Vectors', 'Indices', 'Lower', n, mat, n, vl, vu, il, iu, abstol,&
                     & m, w, eigvecs, n, isuppz, work, lwork, iwork, liwork, info )
         ! Check for convergence.
         if( info > 0 )then
@@ -1527,6 +1522,13 @@ contains
             STOP
         endif
         eigvals = w(1:neigs)
-    end subroutine eigh_dp
+    end subroutine eigh_sp
+
+    subroutine test_eigh(N_L, N_EIGS_L)
+        integer, intent(in) :: N_L, N_EIGS_L
+        real :: A(N_L, N_L), A_vals(N_EIGS_L), A_eigvecs(N_L, N_EIGS_L)
+        call random_number(A)
+        call eigh( N_L, A, N_EIGS_L, A_vals, A_eigvecs )
+    end subroutine test_eigh
 
 end module simple_linalg
