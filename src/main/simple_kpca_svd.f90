@@ -92,10 +92,9 @@ contains
         integer, optional, intent(in)    :: maxpcaits
         integer, parameter :: MAX_ITS = 100
         real,    parameter :: TOL = 0.01
-        real    :: ker(self%N,self%N), prev_data(self%D), cur_data(self%D), proj_data(self%N), s, denom,&
-                &sum_vecs(self%N), ker_weight(self%N,self%N), mat(self%N,self%D), eig_vecs(self%N,self%Q)
+        real    :: ker(self%N,self%N), prev_data(self%D), proj_data(self%N,1), s, denom,&
+                &sum_vecs(self%N), ker_weight(self%N,self%N), eig_vecs(self%N,self%Q)
         integer :: i, ind, iter, its
-        mat = transpose(pcavecs)
         ! compute the kernel
         select case(trim(params_glob%kpca_ker))
             case('rbf')
@@ -114,28 +113,25 @@ contains
         ker_weight = matmul(matmul(ker, eig_vecs), transpose(eig_vecs))
         select case(trim(params_glob%kpca_ker))
             case('rbf')
-                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,cur_data,prev_data,iter,i,proj_data,s)
+                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,prev_data,iter,i,proj_data,s)
                 do ind = 1, self%N
-                    cur_data  = pcavecs(:,ind)
-                    prev_data = 0.
-                    iter      = 1
-                    do while( euclid(cur_data,prev_data) > TOL .and. iter < its )
-                        prev_data = cur_data
+                    self%data(:,ind) = pcavecs(:,ind)
+                    prev_data     = 0.
+                    iter          = 1
+                    do while( euclid(self%data(:,ind),prev_data) > TOL .and. iter < its )
+                        prev_data = self%data(:,ind)
                         ! 1. projecting each image on kernel space
                         do i = 1,self%N
-                            proj_data(i) = euclid(prev_data, pcavecs(:,i))**2
+                            proj_data(i,1) = euclid(prev_data, pcavecs(:,i))**2
                         enddo
                         ! 2. applying the principle components to the projected vector
-                        proj_data = exp(-proj_data/real(self%Q)/C_CONST) * ker_weight(:,ind)
+                        proj_data(:,1)   = exp(-proj_data(:,1)/real(self%Q)/C_CONST) * ker_weight(:,ind)
                         ! 3. computing the pre-image (of the image in step 1) using the result in step 2
-                        s = sum(proj_data)
-                        do i = 1,self%D
-                            cur_data(i) = sum(proj_data * mat(:,i))
-                        enddo
-                        if( s > DTINY ) cur_data = cur_data/s
+                        s                = sum(proj_data(:,1))
+                        self%data(:,ind) = matmul(pcavecs, proj_data(:,1))
+                        if( s > DTINY ) self%data(:,ind) = self%data(:,ind)/s
                         iter = iter + 1
                     enddo
-                    self%data(:,ind) = cur_data
                 enddo
                 !$omp end parallel do
             case('cosine')
@@ -145,30 +141,27 @@ contains
                     sum_vecs(i) = sum(pcavecs(:,i)**2)
                 enddo
                 !$omp end parallel do
-                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,cur_data,prev_data,iter,i,proj_data,s,denom)
+                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,prev_data,iter,i,proj_data,s,denom)
                 do ind = 1, self%N
-                    cur_data  = pcavecs(:,ind)
-                    prev_data = 0.
-                    iter      = 1
-                    do while( euclid(cur_data,prev_data) > TOL .and. iter < its )
-                        prev_data = cur_data
+                    self%data(:,ind) = pcavecs(:,ind)
+                    prev_data        = 0.
+                    iter             = 1
+                    do while( euclid(self%data(:,ind),prev_data) > TOL .and. iter < its )
+                        prev_data = self%data(:,ind)
                         ! 1. projecting each image on kernel space
                         do i = 1,self%N
-                            denom        = sqrt(sum(prev_data**2) * sum_vecs(i))
-                            proj_data(i) = 0.
-                            if( denom > DTINY ) proj_data(i) = sum(prev_data * pcavecs(:,i)) / denom
+                            denom          = sqrt(sum(prev_data**2) * sum_vecs(i))
+                            proj_data(i,1) = 0.
+                            if( denom > DTINY ) proj_data(i,1) = sum(prev_data * pcavecs(:,i)) / denom
                         enddo
                         ! 2. applying the principle components to the projected vector
-                        proj_data = proj_data * ker_weight(:,ind)
+                        proj_data(:,1)   = proj_data(:,1) * ker_weight(:,ind)
                         ! 3. computing the pre-image (of the image in step 1) using the result in step 2
-                        s = sum(proj_data)
-                        do i = 1,self%D
-                            cur_data(i) = sum(proj_data * mat(:,i))
-                        enddo
-                        if( s > TINY ) cur_data = cur_data/s
+                        s                = sum(proj_data(:,1))
+                        self%data(:,ind) = matmul(pcavecs, proj_data(:,1))
+                        if( s > TINY ) self%data(:,ind) = self%data(:,ind)/s
                         iter = iter + 1
                     enddo
-                    self%data(:,ind) = cur_data
                 enddo
                 !$omp end parallel do
         end select
@@ -233,15 +226,19 @@ contains
         real    :: eig_vals(self%Q), tmp_ker(self%N,self%N), eig_vecs_ori(self%N,self%Q)
         integer :: i
         tmp_ker = ker
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i)
         do i = 1, self%N
             tmp_ker(:,i) = tmp_ker(:,i) - sum(tmp_ker(:,i))/real(self%N,dp)
         enddo
+        !$omp end parallel do
         ! computing eigvals/eigvecs
         call eigh(self%N, tmp_ker, self%Q, eig_vals, eig_vecs_ori)
         eig_vals = eig_vals**2 / real(self%N)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i)
         do i = 1, self%Q
             eig_vecs(:,i) = eig_vecs_ori(:,i) / sqrt(eig_vals(i))
         enddo
+        !$omp end parallel do
         ! reverse the sorted order of eig_vecs
         eig_vecs = eig_vecs(:,self%Q:1:-1)
     end subroutine compute_eigvecs
