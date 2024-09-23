@@ -97,9 +97,8 @@ contains
         logical, parameter :: DEBUG   = .true.
         integer(int64)     :: start_time, end_time
         real(real64)       :: rate
-        real    :: ker(self%N,self%N), prev_data(self%D,params_glob%nthr), proj_data(self%N,params_glob%nthr),&
-                  &s, denom, sum_vecs(self%N), ker_weight(self%N,self%N), eig_vecs(self%N,self%Q),&
-                  &norm_pcavecs(self%D,self%N), norm_prev(self%D,params_glob%nthr)
+        real    :: ker(self%N,self%N), ker_weight(self%N,self%N), eig_vecs(self%N,self%Q), norm_pcavecs(self%D,self%N), denom,&
+                  &prev_data(self%D,params_glob%nthr), proj_data(self%N,params_glob%nthr), norm_prev(self%D,params_glob%nthr)
         integer :: i, ind, iter, its, ithr
         ! compute the kernel
         select case(trim(params_glob%kpca_ker))
@@ -125,7 +124,7 @@ contains
         ker_weight = matmul(matmul(ker, eig_vecs), transpose(eig_vecs))
         select case(trim(params_glob%kpca_ker))
             case('rbf')
-                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,iter,ithr,i,s)
+                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,iter,ithr,i,denom)
                 do ind = 1, self%N
                     self%data(:,ind)  = pcavecs(:,ind)
                     ithr              = omp_get_thread_num() + 1
@@ -140,23 +139,22 @@ contains
                         ! 2. applying the principle components to the projected vector
                         proj_data(:,ithr) = exp(-proj_data(:,ithr)/real(self%Q)/C_CONST) * ker_weight(:,ind)
                         ! 3. computing the pre-image (of the image in step 1) using the result in step 2
-                        s                 = sum(proj_data(:,ithr))
+                        denom             = sum(proj_data(:,ithr))
                         self%data(:,ind)  = matmul(pcavecs, proj_data(:,ithr))
-                        if( s > TINY ) self%data(:,ind) = self%data(:,ind)/s
+                        if( denom > TINY ) self%data(:,ind) = self%data(:,ind)/denom
                         iter = iter + 1
                     enddo
                 enddo
                 !$omp end parallel do
             case('cosine')
-                sum_vecs     = 0.
                 norm_pcavecs = pcavecs
-                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i)
+                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,denom)
                 do i = 1,self%N
-                    sum_vecs(i) = sqrt(sum(pcavecs(:,i)**2))
-                    if( sum_vecs(i) > TINY ) norm_pcavecs(:,i) = pcavecs(:,i) / sum_vecs(i)
+                    denom = sqrt(sum(pcavecs(:,i)**2))
+                    if( denom > TINY ) norm_pcavecs(:,i) = pcavecs(:,i) / denom
                 enddo
                 !$omp end parallel do
-                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,i,s,denom)
+                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,i,denom)
                 do ind = 1, self%N
                     self%data(:,ind)  = pcavecs(:,ind)
                     ithr              = omp_get_thread_num() + 1
@@ -174,9 +172,9 @@ contains
                         ! 2. applying the principle components to the projected vector
                         proj_data(:,ithr) = proj_data(:,ithr) * ker_weight(:,ind)
                         ! 3. computing the pre-image (of the image in step 1) using the result in step 2
-                        s                 = sum(proj_data(:,ithr))
+                        denom             = sum(proj_data(:,ithr))
                         self%data(:,ind)  = matmul(pcavecs, proj_data(:,ithr))
-                        if( s > TINY ) self%data(:,ind) = self%data(:,ind)/s
+                        if( denom > TINY ) self%data(:,ind) = self%data(:,ind)/denom
                         iter = iter + 1
                     enddo
                 enddo
