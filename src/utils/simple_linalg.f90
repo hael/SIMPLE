@@ -1524,11 +1524,16 @@ contains
         eigvals = w(1:neigs)
     end subroutine eigh_sp
 
-    subroutine test_eigh(N_L, N_EIGS_L)
-        integer, intent(in) :: N_L, N_EIGS_L
-        real :: A(N_L, N_L), A_vals(N_EIGS_L), A_eigvecs(N_L, N_EIGS_L)
+    subroutine test_eigh(n, n_eigs)
+        integer, intent(in) :: n, n_eigs
+        real                :: A(n,n), eigvals(n_eigs), eigvecs(n, n_eigs)
+        real(real64)        :: rate
+        integer(int64)      :: start_time, end_time
         call random_number(A)
-        call eigh( N_L, A, N_EIGS_L, A_vals, A_eigvecs )
+        call system_clock(start_time, rate)
+        call eigh( n, A, n_eigs, eigvals, eigvecs )
+        call system_clock(end_time)
+        print *, real(end_time-start_time)/real(rate), " seconds"
     end subroutine test_eigh
 
 end module simple_linalg
