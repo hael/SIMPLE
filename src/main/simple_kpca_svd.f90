@@ -98,7 +98,8 @@ contains
         integer(int64)     :: start_time, end_time
         real(real64)       :: rate
         real    :: ker(self%N,self%N), prev_data(self%D,params_glob%nthr), proj_data(self%N,params_glob%nthr),&
-                  &s, denom, sum_vecs(self%N), ker_weight(self%N,self%N), eig_vecs(self%N,self%Q)
+                  &s, denom, sum_vecs(self%N), ker_weight(self%N,self%N), eig_vecs(self%N,self%Q),&
+                  &norm_pcavecs(self%D,self%N), norm_prev(self%D,params_glob%nthr)
         integer :: i, ind, iter, its, ithr
         ! compute the kernel
         select case(trim(params_glob%kpca_ker))
@@ -141,16 +142,18 @@ contains
                         ! 3. computing the pre-image (of the image in step 1) using the result in step 2
                         s                 = sum(proj_data(:,ithr))
                         self%data(:,ind)  = matmul(pcavecs, proj_data(:,ithr))
-                        if( s > DTINY ) self%data(:,ind) = self%data(:,ind)/s
+                        if( s > TINY ) self%data(:,ind) = self%data(:,ind)/s
                         iter = iter + 1
                     enddo
                 enddo
                 !$omp end parallel do
             case('cosine')
-                sum_vecs = 0.
+                sum_vecs     = 0.
+                norm_pcavecs = pcavecs
                 !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i)
                 do i = 1,self%N
-                    sum_vecs(i) = sum(pcavecs(:,i)**2)
+                    sum_vecs(i) = sqrt(sum(pcavecs(:,i)**2))
+                    if( sum_vecs(i) > TINY ) norm_pcavecs(:,i) = pcavecs(:,i) / sum_vecs(i)
                 enddo
                 !$omp end parallel do
                 !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,i,s,denom)
@@ -161,11 +164,12 @@ contains
                     iter              = 1
                     do while( euclid(self%data(:,ind),prev_data(:,ithr)) > TOL .and. iter < its )
                         prev_data(:,ithr) = self%data(:,ind)
+                        norm_prev(:,ithr) = prev_data(:,ithr)
+                        denom             = sqrt(sum(prev_data(:,ithr)**2))
+                        if( denom > TINY ) norm_prev(:,ithr) = norm_prev(:,ithr) / denom
                         ! 1. projecting each image on kernel space
                         do i = 1,self%N
-                            denom             = sqrt(sum(prev_data(:,ithr)**2) * sum_vecs(i))
-                            proj_data(i,ithr) = 0.
-                            if( denom > DTINY ) proj_data(i,ithr) = sum(prev_data(:,ithr) * pcavecs(:,i)) / denom
+                            proj_data(i,ithr) = sum(norm_prev(:,ithr) * norm_pcavecs(:,i))
                         enddo
                         ! 2. applying the principle components to the projected vector
                         proj_data(:,ithr) = proj_data(:,ithr) * ker_weight(:,ind)
