@@ -1504,36 +1504,38 @@ contains
         real,     intent(out)   :: eigvecs(n,neigs)
         integer,  allocatable   :: iwork(:)
         real,     allocatable   :: work(:)
-        integer  :: lwmax, info, lwork, liwork, il, iu, m, isuppz(n)
-        real     :: abstol, vl, vu, w(n)
-        lwmax  = 26 * n     ! explained in dsyevr.f90
+        logical,  parameter     :: DEBUG  = .false.
+        real,     parameter     :: ABSTOL = -1.0
+        integer(int64) :: start_time, end_time
+        integer        :: lwmax, info, il, iu, m, isuppz(n)
+        real(real64)   :: rate
+        real           :: vl, vu, w(n)
+        if( DEBUG ) call system_clock(start_time, rate)
+        lwmax = 26 * n     ! explained in dsyevr.f90
         allocate(iwork(lwmax), work(lwmax))
-        abstol = -1.0
-        il     = n-neigs+1
-        iu     = n
-        lwork  = lwmax
-        liwork = lwmax
+        il = n-neigs+1
+        iu = n
         ! Solve eigenproblem.
-        call ssyevr( 'Vectors', 'Indices', 'Lower', n, mat, n, vl, vu, il, iu, abstol,&
-                    & m, w, eigvecs, n, isuppz, work, lwork, iwork, liwork, info )
+        call ssyevr( 'Vectors', 'Indices', 'Lower', n, mat, n, vl, vu, il, iu, ABSTOL,&
+                    & m, w, eigvecs, n, isuppz, work, lwmax, iwork, lwmax, info )
         ! Check for convergence.
         if( info > 0 )then
             print *, 'The algorithm failed to compute eigenvalues.'
             STOP
         endif
         eigvals = w(1:neigs)
+        if( DEBUG )then
+            call system_clock(end_time)
+            print *, real(end_time-start_time)/real(rate), " seconds"
+        endif
     end subroutine eigh_sp
 
+    ! testing eigh on huge matrix
     subroutine test_eigh(n, n_eigs)
         integer, intent(in) :: n, n_eigs
-        real                :: A(n,n), eigvals(n_eigs), eigvecs(n, n_eigs)
-        real(real64)        :: rate
-        integer(int64)      :: start_time, end_time
+        real :: A(n,n), eigvals(n_eigs), eigvecs(n, n_eigs)
         call random_number(A)
-        call system_clock(start_time, rate)
         call eigh( n, A, n_eigs, eigvals, eigvecs )
-        call system_clock(end_time)
-        print *, real(end_time-start_time)/real(rate), " seconds"
     end subroutine test_eigh
 
 end module simple_linalg
