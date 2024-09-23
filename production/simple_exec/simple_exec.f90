@@ -17,6 +17,7 @@ use simple_commander_preprocess_stream
 use simple_commander_cluster2D
 use simple_commander_cluster2D_stream_dev
 use simple_commander_abinitio
+use simple_commander_abinitio2D
 use simple_commander_refine3D
 use simple_commander_rec
 use simple_commander_relion
@@ -58,6 +59,7 @@ type(multipick_cleanup2D_commander_distr)   :: xmultipick_cleanup2D_distr
 
 ! CLUSTER2D WORKFLOWS
 type(make_cavgs_commander_distr)            :: xmake_cavgs_distr
+type(abinitio2D_commander)                  :: xabinitio2D
 type(cluster2D_autoscale_commander)         :: xcluster2D_hlev
 type(cluster2D_commander_subsets)           :: xcluster2D_subsets
 type(cleanup2D_commander_hlev)              :: xcleanup2D_distr
@@ -230,6 +232,8 @@ select case(trim(prg))
     ! CLUSTER2D WORKFLOWS
     case( 'make_cavgs' )
         call xmake_cavgs_distr%execute(cline)
+    case( 'abinitio2D' )
+        call xabinitio2D%execute(cline)
     case( 'cleanup2D' )
         call xcleanup2D_distr%execute(cline)
     case( 'cluster2D' )
@@ -410,7 +414,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('9a751b94')
+call simple_print_git_version('d99507b1')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
