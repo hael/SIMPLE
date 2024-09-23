@@ -172,6 +172,7 @@ type :: parameters
     ! other character variables in ascending alphabetical order
     character(len=STDLEN)     :: algorithm=''         !< algorithm to be used
     character(len=STDLEN)     :: bin_cls='yes'        !< binary clustering applied(yes|no|only){yes}
+    character(len=STDLEN)     :: cls_init='ptcl'      !< Scheme to generate initial references for 2D classification(ptcl|randcls|rand)
     character(len=STDLEN)     :: cn_type='cn_std'     !< generalised coordination number (cn_gen) or stardard (cn_std)
     character(len=STDLEN)     :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
     character(len=4)          :: automatic='no'       !< automatic thres for edge detect (yes|no){no}
@@ -251,6 +252,7 @@ type :: parameters
     integer :: eer_fraction=20     !< # of eer raw frames to fraction together
     integer :: eer_upsampling=1    !< eer up-sampling
     integer :: extr_iter=1
+    integer :: extr_lim=MAX_EXTRLIM2D
     integer :: find=1              !< Fourier index
     integer :: nframesgrp=0        !< # frames to group before motion_correct(Falcon 3){0}
     integer :: fromp=1             !< start ptcl index
@@ -526,6 +528,7 @@ contains
         call check_carg('boxtype',        self%boxtype)
         call check_carg('center',         self%center)
         call check_carg('classtats',      self%classtats)
+        call check_carg('cls_init',       self%cls_init)
         call check_carg('cluster_cavgs',  self%cluster_cavgs)
         call check_carg('cn_type',        self%cn_type)
         call check_carg('combine_eo',     self%combine_eo)
@@ -717,6 +720,7 @@ contains
         call check_iarg('eer_fraction',   self%eer_fraction)
         call check_iarg('eer_upsampling', self%eer_upsampling)
         call check_iarg('extr_iter',      self%extr_iter)
+        call check_iarg('extr_lim',      self%extr_lim)
         call check_iarg('find',           self%find)
         call check_iarg('nframesgrp',     self%nframesgrp)
         call check_iarg('fromp',          self%fromp)
@@ -1306,7 +1310,7 @@ contains
             self%lpstop = self%fny                                 ! deafult lpstop
         endif
         if( self%fny > 0. ) self%tofny = nint(self%dstep/self%fny) ! Nyqvist Fourier index
-        self%hpind_fsc = 0                                         ! high-pass Fouirer index FSC
+        self%hpind_fsc = 0                                         ! high-pass Fourier index FSC
         if( cline%defined('hp_fsc') ) self%hpind_fsc = nint(self%dstep/self%hp_fsc)
         self%lpstart = max(self%lpstart, self%fny)
         self%lpstop  = max(self%lpstop,  self%fny)
