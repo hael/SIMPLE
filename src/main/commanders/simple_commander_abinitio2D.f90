@@ -1,17 +1,14 @@
 ! concrete commander: high-level workflows
 module simple_commander_abinitio2D
 include 'simple_lib.f08'
+use simple_commander_base,      only: commander_base
 use simple_cmdline,             only: cmdline
 use simple_parameters,          only: parameters
 use simple_sp_project,          only: sp_project
-use simple_qsys_env,            only: qsys_env
-use simple_commander_base,      only: commander_base
-use simple_image,               only: image
-use simple_class_frcs,          only: class_frcs
-use simple_convergence,         only: convergence
-use simple_commander_cluster2D, only: cluster2D_commander_distr
+use simple_commander_cluster2D
 use simple_commander_euclid
-use simple_euclid_sigma2
+
+! use simple_euclid_sigma2
 use simple_qsys_funs
 implicit none
 
@@ -25,13 +22,12 @@ type, extends(commander_base) :: abinitio2D_commander
 end type abinitio2D_commander
 
 ! class constants
-real,             parameter :: LPSTART_DEFAULT      = 15.
-real,             parameter :: CENLP_DEFAULT        = 25.
-real,             parameter :: SMPD_TARGET          = 2.67
-integer,          parameter :: NSTAGES              = 6
-integer,          parameter :: PHASES(2)            = [5,  6]
-integer,          parameter :: MAXITS(2)            = [15,20]
-integer,          parameter :: MINBOXSZ             = 88
+real,             parameter :: SMPD_TARGET    = 2.67
+integer,          parameter :: NSTAGES        = 4
+integer,          parameter :: PHASES(2)      = [3,  4]
+integer,          parameter :: MINBOXSZ       = 88
+integer,          parameter :: EXTR_LIM_LOCAL = 18
+
 ! class variables
 type(lp_crop_inf) :: lpinfo(NSTAGES)
 type(cmdline)     :: cline_cluster2D, cline_calc_pspec_distr
@@ -46,22 +42,28 @@ contains
         type(cluster2D_commander_distr)  :: xcluster2D_distr
         type(calc_pspec_commander_distr) :: xcalc_pspec_distr
         ! other
-        type(parameters)     :: params
-        type(sp_project)     :: spproj
-        class(oris), pointer :: spproj_field 
-        integer              :: istage
-        call cline%set('oritype',   'ptcl2D')
+        type(parameters)              :: params
+        type(sp_project)              :: spproj
+        class(oris),          pointer :: spproj_field
+        character(len=:), allocatable :: inirefs
+        integer :: maxits(2), istage, last_iter
+        call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('autoscale')) call cline%set('autoscale', 'yes')
         if( .not. cline%defined('mkdir')    ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('masscen')  ) call cline%set('masscen',   'yes')
         if( .not. cline%defined('center')   ) call cline%set('center',    'yes')
-        if( .not. cline%defined('cls_init') ) call cline%set('cls_init', 'rand')
+        if( .not. cline%defined('sh_first') ) call cline%set('sh_first',  'yes')
+        if( .not. cline%defined('cls_init') ) call cline%set('cls_init',  'rand')
+        if( .not. cline%defined('extr_lim') ) call cline%set('extr_lim',  EXTR_LIM_LOCAL)
         ! make master parameters
         call params%new(cline)
         call cline%set('mkdir', 'no')
         call spproj%ptr2oritype(params%oritype, spproj_field)
-        ! prepare downscaling, resolution limits
-        call prep_dims_lplims
+        maxits = [params%extr_lim, params%extr_lim+5]
+        ! set downscaling
+        call set_dims
+        ! set resolutions limits
+        call set_lplims
         ! prepare class command lines
         call prep_command_lines(cline)
         ! read project
@@ -74,38 +76,42 @@ contains
         if( spproj_field%get_nevenodd() == 0 ) call spproj_field%partition_eo
         call spproj%write_segment_inside(params%oritype, params%projfile)
         call spproj%split_stk(params%nparts, dir=PATH_PARENT)
-        ! Starting references
-        call prep_refs
         ! Initial sigma2
         call xcalc_pspec_distr%execute_safe(cline_calc_pspec_distr)
         ! Frequency marching
         do istage = 1, NSTAGES
             write(logfhandle,'(A)')'>>>'
-            write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', lpinfo(istage)%lp
+            if( lpinfo(istage)%l_lpset )then
+                write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', lpinfo(istage)%lp
+            else
+                write(logfhandle,'(A,I3)')'>>> STAGE ', istage
+            endif
             ! parameters update
             call set_cline_cluster2D(istage)
-            if( lpinfo(istage)%l_autoscale )then
-                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',lpinfo(istage)%box_crop
-            endif
             ! Search
-            call cline_cluster2D%delete('endit')
             call xcluster2D_distr%execute_safe(cline_cluster2D)
         enddo
-        ! TODO: final class generation, ranking, clustering
+        ! transfer 2D shifts to 3D field
+        call spproj%read_segment(params%oritype,params%projfile)
+        call spproj%read_segment('ptcl3D',params%projfile) ! already read in?
+        call spproj%os_ptcl3D%transfer_2Dshifts(spproj_field)
+        call spproj%write_segment_inside('ptcl3D', params%projfile)
+        ! final class generation & ranking
+        last_iter = nint(cline_cluster2D%get_rarg('endit'))
+        call gen_final_cavgs(last_iter)
         ! cleanup
+        call del_file('start2Drefs'//params%ext)
+        call del_file('start2Drefs_even'//params%ext)
+        call del_file('start2Drefs_odd'//params%ext)
         call spproj%kill
+        nullify(spproj_field)
         call qsys_cleanup
         call simple_end('**** SIMPLE_ABINITIO2D NORMAL STOP ****')
       contains
 
-        ! calculates:
-        ! 1. Downscaling/cropping dimensions used throughout
-        ! 2. resolution limits
-        subroutine prep_dims_lplims
-            use simple_estimate_ssnr, only: mskdiam2lplimits
-            real    :: lpstart, lpstop, cenlp, smpd_target_eff, scale_factor
-            integer :: istage
-            ! Downscaling, same for ALL STAGES
+        ! Downscaling/cropping dimensions used throughout
+        subroutine set_dims
+            real    :: smpd_target_eff, scale_factor
             smpd_target_eff  = max(SMPD_TARGET, params%smpd)
             scale_factor     = 1.0
             params%smpd_crop = params%smpd
@@ -119,8 +125,20 @@ contains
                     write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
                 endif
             endif
+            lpinfo(:)%box_crop    = params%box_crop
+            lpinfo(:)%smpd_crop   = params%smpd_crop
+            lpinfo(:)%scale       = scale_factor      ! unused
+            lpinfo(:)%l_autoscale = .false.           ! unused
+            lpinfo(:)%trslim      = min(5.,max(2.0, AHELIX_WIDTH/params%smpd_crop))
+        end subroutine set_dims
+
+        ! Set resolution limits
+        subroutine set_lplims
+            use simple_estimate_ssnr, only: mskdiam2lplimits
+            real    :: lpstart, lpstop, cenlp
+            integer :: istage
             ! Resolution limits
-            call mskdiam2lplimits(params%mskdiam, lpstart, lpstop, cenlp)
+            call mskdiam2lplimits_here(params%mskdiam, lpstart, lpstop, cenlp)
             lpstart = max(lpstart, 2.*params%smpd_crop)
             lpstop  = max(lpstop,  2.*params%smpd_crop)
             cenlp   = max(cenlp,   2.*params%smpd_crop)
@@ -131,23 +149,18 @@ contains
             write(logfhandle,'(A,F5.1)') '>>> DID SET HARD      LOW-PASS LIMIT (IN A) TO: ', params%lpstop
             write(logfhandle,'(A,F5.1)') '>>> DID SET CENTERING LOW-PASS LIMIT (IN A) TO: ', params%cenlp
             ! Stages resolution limits
-            lpinfo(:)%box_crop    = params%box_crop
-            lpinfo(:)%smpd_crop   = params%smpd_crop
-            lpinfo(:)%scale       = scale_factor      ! unused
-            lpinfo(:)%l_autoscale = .false.           ! unused
-            lpinfo(:)%trslim      = min(8.,max(2.0, AHELIX_WIDTH/params%smpd))
             lpinfo(1)%lp      = params%lpstart
             lpinfo(1)%l_lpset = .true.
-            do istage = 2, NSTAGES-2
+            do istage = 2, NSTAGES-1
                 lpinfo(istage)%lp      = lpinfo(istage-1)%lp - (lpinfo(istage-1)%lp - params%lpstop)/2.0
                 lpinfo(istage)%l_lpset = .true.
             end do
-            lpinfo(NSTAGES-1:)%l_lpset = .false.
-            lpinfo(NSTAGES-1:)%lp      = lpinfo(NSTAGES-2)%lp
+            lpinfo(NSTAGES)%l_lpset = .false.
+            lpinfo(NSTAGES)%lp      = params%lpstop
             do istage = 1,NSTAGES
                 print *, 'stage lpset lp: ', istage,lpinfo(istage)%l_lpset,lpinfo(istage)%lp
             end do
-        end subroutine prep_dims_lplims
+        end subroutine set_lplims
 
         subroutine prep_command_lines( cline )
             use simple_default_clines, only: set_automask2D_defaults
@@ -155,93 +168,24 @@ contains
             cline_cluster2D        = cline
             cline_calc_pspec_distr = cline
             ! initial sigma2
-            call cline_calc_pspec_distr%set( 'prg', 'calc_pspec' )
+            call cline_calc_pspec_distr%set('prg', 'calc_pspec')
             ! cluster2D
             call cline_cluster2D%set('prg',       'cluster2D_distr')
             call cline_cluster2D%set('wiener',    'full')
-            call cline_cluster2D%set('objfun',    'euclid')
-            call cline_cluster2D%set('cc_iters',  0) ! euclid from the top
             call cline_cluster2D%set('sigma_est', 'group')
             call cline_cluster2D%set('ptclw',     'no')
             call cline_cluster2D%set('ml_reg',    'no')
             call cline_cluster2D%set('kweight',   'default')
             call cline_cluster2D%set('cenlp',     params%cenlp)
             call set_automask2D_defaults( cline_cluster2D )
-            ! Single downscaling stage
-            call cline_cluster2D%set('box_crop',  params%box_crop)
-            call cline_cluster2D%set('smpd_crop', params%smpd_crop)
         end subroutine prep_command_lines
-
-        ! generates starting references
-        subroutine prep_refs
-            use simple_commander_imgproc,   only: scale_commander
-            use simple_commander_cluster2D, only: make_cavgs_commander_distr
-            use simple_procimgstk,          only: random_selection_from_imgfile
-            type(make_cavgs_commander_distr) :: xmake_cavgs
-            type(scale_commander)            :: xscale
-            type(cmdline)                    :: cline_make_cavgs, cline_scalerefs
-            type(image)                      :: noiseimg
-            character(len=:), allocatable    :: refs_sc
-            integer :: ldim(3), iptcl, n, icls
-            logical :: l_scale
-            l_scale = .false.
-            if( cline%defined('refs') )then
-                ! existing references
-                call find_ldim_nptcls(params%refs, ldim, n)
-                if( n /= params%ncls ) THROW_HARD('Inconsistent number of classes in '//trim(params%refs))
-                l_scale = ldim(1) == params%box_crop
-            else
-                params%refs = 'start2Drefs.mrc'
-                select case(trim(params%cls_init))
-                case('ptcl')
-                    ! random selection of raw particles
-                    call random_selection_from_imgfile(spproj, params%refs, params%box, params%ncls)
-                    l_scale = params%l_autoscale
-                case('randcls')
-                    ! particles summed in random orientations
-                    do iptcl=1,params%nptcls
-                        if( spproj_field%get_state(iptcl) == 0 ) cycle
-                        call spproj_field%set(iptcl, 'class', real(irnd_uni(params%ncls)))
-                        call spproj_field%e3set(iptcl,ran3()*360.0)
-                    end do
-                    call spproj%write_segment_inside(params%oritype, params%projfile)
-                    cline_make_cavgs = cline
-                    call cline_make_cavgs%set('refs',      params%refs)
-                    call cline_make_cavgs%set('box_crop',  params%box_crop)
-                    call cline_make_cavgs%set('smpd_crop', params%smpd_crop)
-                    call xmake_cavgs%execute_safe(cline_make_cavgs)
-                    call cline_make_cavgs%kill
-                case('rand')
-                    ! from noise
-                    call noiseimg%new([params%box_crop,params%box_crop,1], params%smpd_crop)
-                    do icls = 1,params%ncls
-                        call noiseimg%ran
-                        call noiseimg%write(params%refs,icls)
-                    enddo
-                    call noiseimg%kill
-                case DEFAULT
-                    THROW_HARD('Unsupported mode of starting refernces generation: '//trim(params%cls_init))
-                end select
-            endif
-            if( l_scale )then
-                refs_sc = 'tmp'//params%ext
-                call cline_scalerefs%set('stk',    params%refs)
-                call cline_scalerefs%set('outstk', refs_sc)
-                call cline_scalerefs%set('smpd',   params%smpd)
-                call cline_scalerefs%set('newbox', params%box_crop)
-                call xscale%execute_safe(cline_scalerefs)
-                call cline_scalerefs%kill
-                params%refs = 'start2Drefs.mrc'
-                call simple_rename(refs_sc, params%refs)
-                call del_file(refs_sc)
-            endif
-        end subroutine prep_refs
 
         subroutine set_cline_cluster2D( istage )
             integer, intent(in) :: istage
-            character(len=:), allocatable :: sh_first, refine, center
-            integer :: iphase, iter, imaxits
-            real    :: trs, snr_noise_reg    
+            character(len=:), allocatable :: sh_first, refine, center, objfun, refs
+            integer :: iphase, iter, imaxits, maxits_glob, cc_iters, minits
+            real    :: trs, snr_noise_reg
+            refine      = 'snhc_smpl' ! not optional
             ! iteration number bookkeeping
             iter = 0
             if( cline_cluster2D%defined('endit') ) iter = nint(cline_cluster2D%get_rarg('endit'))
@@ -256,46 +200,144 @@ contains
                 THROW_HARD('Invalid istage index')
             endif
             ! phase control parameters
-            refine = 'snhc_smpl'
             select case(iphase)
             case(1)
-                snr_noise_reg = real(istage)
                 select case(istage)
                 case(1)
+                    imaxits       = nint(real(params%extr_lim)/3.) != 1/3 * maxits(1)
+                    maxits_glob   = params%extr_lim
+                    minits        = imaxits
                     trs           = 0.
                     sh_first      = 'no'
-                    imaxits       = 3
                     center        = 'no'
-                    call cline_cluster2D%set('refs', params%refs)
-                case(2,3,4,5)
-                    imaxits       = 3 + (istage-1)*params%extr_lim/(NSTAGES-1)
+                    if( cline%defined('refs') )then
+                        refs      = trim(params%refs)
+                    else
+                        refs      = NIL
+                    endif
+                    snr_noise_reg = params%snr_noise_reg
+                    cc_iters      = 0
+                    if( params%cc_objfun == OBJFUN_CC )then
+                        objfun   = 'cc'
+                    else
+                        objfun   = 'euclid'
+                    endif
+                case(2)
+                    imaxits       = nint(2.*real(params%extr_lim)/3.) != 2/3 * maxits(1)
+                    maxits_glob   = params%extr_lim
+                    minits        = imaxits
                     trs           = lpinfo(istage)%trslim
-                    sh_first      = 'yes'
+                    sh_first      = trim(params%sh_first)
                     center        = trim(params%center)
+                    refs          = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
+                    snr_noise_reg = params%snr_noise_reg
+                    cc_iters      = 0
+                    if( params%cc_objfun == OBJFUN_CC )then
+                        objfun   = 'cc'
+                    else
+                        objfun   = 'euclid'
+                    endif
+                case(3)
+                    imaxits       = params%extr_lim != maxits(1)
+                    maxits_glob   = params%extr_lim
+                    minits        = imaxits
+                    trs           = lpinfo(istage)%trslim
+                    sh_first      = trim(params%sh_first)
+                    center        = trim(params%center)
+                    refs          = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
+                    snr_noise_reg = params%snr_noise_reg
+                    if( params%cc_objfun == OBJFUN_CC )then
+                        cc_iters  = iter-1
+                    else
+                        cc_iters = 0
+                    endif
+                    objfun        = 'euclid'
                 end select
             case(2)
-                imaxits       = MAXITS(2)
-                sh_first      = 'yes'
-                snr_noise_reg = 6.0
+                imaxits       = maxits(2)
+                maxits_glob   = 0
+                minits        = iter+2
+                trs           = lpinfo(istage)%trslim
+                sh_first      = trim(params%sh_first)
                 center        = trim(params%center)
+                refs          = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
+                snr_noise_reg = 0.
+                cc_iters      = 0
+                objfun        = 'euclid'
                 ! deactivates stochastic withdrawal
                 call cline_cluster2D%set('extr_iter', params%extr_lim+1)
             end select
             ! command line update
-            call cline_cluster2D%set('startit',       iter)
-            call cline_cluster2D%set('refine',        refine)
+            call cline_cluster2D%set('startit',   iter)
+            call cline_cluster2D%set('minits',    minits)
+            call cline_cluster2D%set('maxits',    imaxits)
+            call cline_cluster2D%set('refine',    refine)
+            call cline_cluster2D%set('objfun',    objfun)
+            call cline_cluster2D%set('cc_iters',  cc_iters)
+            call cline_cluster2D%set('trs',       trs)
+            call cline_cluster2D%set('sh_first',  sh_first)
+            call cline_cluster2D%set('center',    center)
+            call cline_cluster2D%set('box_crop',  lpinfo(istage)%box_crop)
+            call cline_cluster2D%set('smpd_crop', lpinfo(istage)%smpd_crop)
             if( lpinfo(istage)%l_lpset )then
-                ! call cline_cluster2D%set('lp',        lpinfo(istage)%lp)
-                call cline_cluster2D%set('lp',        lpinfo(1)%lp)
+                call cline_cluster2D%set('lp',    lpinfo(istage)%lp)
             else
                 call cline_cluster2D%delete('lp')
             endif
-            call cline_cluster2D%set('maxits',        imaxits)
-            call cline_cluster2D%set('trs',           trs)
-            call cline_cluster2D%set('sh_first',      sh_first)
-            call cline_cluster2D%set('snr_noise_reg', snr_noise_reg)
-            call cline_cluster2D%set('center',        center)
+            if( trim(refs) /= NIL )then
+                call cline_cluster2D%set('refs',  refs)
+            endif
+            if( params%l_noise_reg .and. snr_noise_reg > 0.001)then
+                call cline_cluster2D%set('snr_noise_reg', snr_noise_reg)
+                call cline_cluster2D%set('maxits_glob',   maxits_glob)
+            else
+                call cline_cluster2D%delete('snr_noise_reg')
+                call cline_cluster2D%delete('maxits_glob')
+            endif
+            call cline_cluster2D%delete('endit')
+            ! debug for now
+            call cline_cluster2D%printline
         end subroutine set_cline_cluster2D
+
+        subroutine gen_final_cavgs( iter )
+            type(make_cavgs_commander_distr) :: xmake_cavgs_distr
+            type(make_cavgs_commander)       :: xmake_cavgs
+            type(rank_cavgs_commander)       :: xrank_cavgs
+            type(cmdline)                    :: cline_make_cavgs, cline_rank_cavgs
+            character(len=:),    allocatable :: finalcavgs, finalcavgs_ranked
+            integer :: iter
+            finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//params%ext
+            ! classes generation
+            if( params%l_autoscale )then
+                cline_make_cavgs = cline ! ncls is transferred here
+                call cline_make_cavgs%delete('autoscale')
+                call cline_make_cavgs%delete('balance')
+                call cline_make_cavgs%set('prg',        'make_cavgs')
+                call cline_make_cavgs%set('refs',       finalcavgs)
+                call cline_make_cavgs%set('which_iter', iter)
+                call xmake_cavgs%execute_safe(cline_make_cavgs)
+            endif
+            ! adding cavgs & FRCs to project
+            call spproj%read_segment('out', params%projfile)
+            call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
+            call spproj%add_cavgs2os_out(trim(finalcavgs), params%smpd, imgkind='cavg')
+            call spproj%write_segment_inside('out', params%projfile)
+            ! rank based on gold-standard resolution estimates
+            finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//'_ranked'//params%ext
+            call cline_rank_cavgs%set('projfile', params%projfile)
+            call cline_rank_cavgs%set('stk',      finalcavgs)
+            call cline_rank_cavgs%set('outstk',   finalcavgs_ranked)
+            call xrank_cavgs%execute( cline_rank_cavgs )
+        end subroutine gen_final_cavgs
+
+        ! attempt at defining resolution limits
+        subroutine mskdiam2lplimits_here( mskdiam, lpstart,lpstop, lpcen )
+            real, intent(in)    :: mskdiam
+            real, intent(inout) :: lpstart,lpstop, lpcen
+            lpstart = min(max(mskdiam/12., 15.), 20.)
+            lpstop  = min(max(mskdiam/22.,  5.),  8.)
+            lpcen   = min(max(mskdiam/6.,  20.), 30.)
+        end subroutine mskdiam2lplimits_here
 
     end subroutine exec_abinitio2D
 

@@ -140,19 +140,20 @@ contains
             call cline_cluster2D_chunk%set('autoscale', 'no')
             call cline_cluster2D_chunk%set('mkdir',     'no')
             call cline_cluster2D_chunk%set('stream',    'no')
-            call cline_cluster2D_chunk%set('startit',   1.)
+            call cline_cluster2D_chunk%set('startit',   1)
             call cline_cluster2D_chunk%set('mskdiam',   params_glob%mskdiam)
             call cline_cluster2D_chunk%set('ncls',      real(params_glob%ncls_start))
             call cline_cluster2D_chunk%set('minits',    CHUNK_MINITS)
             call cline_cluster2D_chunk%set('maxits',    CHUNK_MAXITS)
             call cline_cluster2D_chunk%set('extr_iter', CHUNK_EXTR_ITER)
+            call cline_cluster2D_chunk%set('extr_lim',  MAX_EXTRLIM2D)
             if( l_update_sigmas ) call cline_cluster2D_chunk%set('cc_iters', CHUNK_CC_ITERS)
             call cline_cluster2D_chunk%set('kweight',   params_glob%kweight_chunk)
             if( l_wfilt ) call cline_cluster2D_chunk%set('wiener', 'partial')
-            if( cline%defined('rnd_cls_init') )then
-                call cline_cluster2D_chunk%set('rnd_cls_init', params_glob%rnd_cls_init)
+            if( cline%defined('cls_init') )then
+                call cline_cluster2D_chunk%set('cls_init', params_glob%cls_init)
             else
-                call cline_cluster2D_chunk%set('rnd_cls_init','no')
+                call cline_cluster2D_chunk%set('cls_init','ptcl')
             endif
             ! EV override
             call get_environment_variable(SIMPLE_STREAM_CHUNK_NTHR, chunk_nthr_env, envlen)
@@ -194,6 +195,7 @@ contains
         endif
         if( l_wfilt ) call cline_cluster2D_pool%set('wiener', 'partial')
         call cline_cluster2D_pool%set('extr_iter', 99999)
+        call cline_cluster2D_pool%set('extr_lim',  MAX_EXTRLIM2D)
         call cline_cluster2D_pool%set('mkdir',     'no')
         call cline_cluster2D_pool%set('mskdiam',   params_glob%mskdiam)
         call cline_cluster2D_pool%set('async',     'yes') ! to enable hard termination
@@ -1643,7 +1645,7 @@ contains
         if( .not. cline%defined('objfun')       ) call cline%set('objfun',       'euclid')
         if( .not. cline%defined('sigma_est')    ) call cline%set('sigma_est',    'group')
         if( .not. cline%defined('reject_cls')   ) call cline%set('reject_cls',   'no')
-        if( .not. cline%defined('rnd_cls_init') ) call cline%set('rnd_cls_init', 'no')
+        if( .not. cline%defined('cls_init')     ) call cline%set('cls_init',     'ptcl')
         if( .not. cline%defined('remove_chunks')) call cline%set('remove_chunks','yes')
         call mskdiam2lplimits(cline%get_rarg('mskdiam'), lpstart, lpstop, lpcen)
         if( .not. cline%defined('lp') ) call cline%set('lp', lpstart)

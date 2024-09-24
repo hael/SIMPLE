@@ -80,7 +80,6 @@ type :: parameters
     character(len=3)          :: prune='no'
     character(len=3)          :: randomise='no'       !< whether to randomise particle order
     character(len=3)          :: remove_chunks='yes'  !< whether to remove chunks after completion
-    character(len=3)          :: rnd_cls_init='no'    !< whether 2D classification is initiated from random classes or raw images
     character(len=3)          :: prob_sh='no'         !< shift information in the prob tab (yes|no){no}
     character(len=3)          :: projrec='no'         !< Ehether to reconstruct from summed projection directions (yes|no){no}
     character(len=3)          :: reject_cls='no'      !< whether to reject poor classes
@@ -617,7 +616,6 @@ contains
         call check_carg('qsys_name',      self%qsys_name)
         call check_carg('qsys_partition2D',self%qsys_partition2D)
         call check_carg('remove_chunks',  self%remove_chunks)
-        call check_carg('rnd_cls_init',   self%rnd_cls_init)
         call check_carg('real_filter',    self%real_filter)
         call check_carg('reject_cls',     self%reject_cls)
         call check_carg('reject_mics',    self%reject_mics)
@@ -1635,6 +1633,15 @@ contains
             case DEFAULT
                 THROW_HARD('Invalid entry for MCCONVENTION='//trim(self%mcconvention))
         end select
+        ! initial class generation
+        if( cline%defined('cls_init') )then
+            select case(trim(self%cls_init))
+            case('ptcl','rand','randcls')
+                ! supported
+            case DEFAULT
+                THROW_HARD('Unsupported mode of initial class generation CLS_INIT='//trim(self%cls_init))
+            end select
+        endif
         !>>> END, IMAGE-PROCESSING-RELATED
         ! set global pointer to instance
         ! first touch policy here

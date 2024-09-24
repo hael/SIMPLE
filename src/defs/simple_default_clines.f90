@@ -1,4 +1,5 @@
 module simple_default_clines
+use simple_defs
 use simple_cmdline,       only: cmdline
 use simple_estimate_ssnr, only: mskdiam2lplimits
 implicit none
@@ -28,9 +29,10 @@ contains
         if( .not. cline%defined('refine')    )   call cline%set('refine',    'snhc_smpl')
         if( .not. cline%defined('wiener')    )   call cline%set('wiener',    'full')
         if( .not. cline%defined('nonuniform'))   call cline%set('nonuniform',  'no')
-        if( .not. cline%defined('rnd_cls_init')) call cline%set('rnd_cls_init','no')
+        if( .not. cline%defined('cls_init')  )   call cline%set('cls_init',  'ptcl')
         if( .not. cline%defined('masscen')   )   call cline%set('masscen',    'yes')
         if( .not. cline%defined('sh_first')  )   call cline%set('sh_first',    'no')
+        if( .not. cline%defined('extr_lim')  )   call cline%set('extr_lim',  MAX_EXTRLIM2D)
         ! 2D objective function section
         if( .not. cline%defined('kweight')   ) call cline%set('kweight',  'default')
         if( .not. cline%defined('objfun')    ) call cline%set('objfun',    'euclid')

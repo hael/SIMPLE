@@ -82,7 +82,7 @@ contains
             ! greedy start
             l_greedy = .true.
             l_greedy_smpl = trim(params_glob%refine).eq.'greedy_smpl'
-        else if( params_glob%extr_iter <= MAX_EXTRLIM2D )then
+        else if( params_glob%extr_iter <= params_glob%extr_lim )then
             ! no fractional update
             select case(trim(params_glob%refine))
                 case('snhc')
@@ -98,12 +98,9 @@ contains
             ! optional fractional update and shc optimization (=snhc with all classes)
             l_frac_update  = params_glob%l_frac_update
             l_partial_sums = params_glob%l_frac_update
-            if( params_glob%l_stoch_update )then
-                l_partial_sums         = .true.
-            endif
-            l_greedy      = trim(params_glob%refine).eq.'greedy'
-            l_greedy_smpl = trim(params_glob%refine).eq.'greedy_smpl'
-            l_snhc_smpl   = .false. ! defaults to snhc
+            l_greedy       = trim(params_glob%refine).eq.'greedy'
+            l_greedy_smpl  = trim(params_glob%refine).eq.'greedy_smpl'
+            l_snhc_smpl    = .false. ! defaults to snhc
         endif
         if( l_stream )then
             select case(trim(params_glob%refine))
@@ -115,7 +112,6 @@ contains
             l_frac_update              = .false.
             l_partial_sums             = .false.
             params_glob%l_frac_update  = .false.
-            params_glob%l_stoch_update = .false.
             if( which_iter > 1 )then
                 if( params_glob%update_frac < 0.99 )then
                     l_partial_sums            = .true.
@@ -132,22 +128,17 @@ contains
         if( allocated(pinds) )     deallocate(pinds)
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
         allocate(ptcl_mask(params_glob%fromp:params_glob%top))
-        if( params_glob%l_stoch_update )then
-            call build_glob%spproj_field%sample4update_rnd([params_glob%fromp,params_glob%top],&
+        if( l_frac_update )then
+            if( build_glob%spproj_field%has_been_sampled() )then ! we have a random subset
+                call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
+                                        &nptcls2update, pinds, ptcl_mask)
+            else                                                 ! we generate a random subset
+                call build_glob%spproj_field%sample4update_rnd2([params_glob%fromp,params_glob%top],&
                 &params_glob%update_frac, nptcls2update, pinds, ptcl_mask, .true.) ! sampled incremented
-        else
-            if( l_frac_update )then
-                if( build_glob%spproj_field%has_been_sampled() )then ! we have a random subset
-                    call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
-                                            &nptcls2update, pinds, ptcl_mask)
-                else                                                 ! we generate a random subset
-                    call build_glob%spproj_field%sample4update_rnd2([params_glob%fromp,params_glob%top],&
-                    &params_glob%update_frac, nptcls2update, pinds, ptcl_mask, .true.) ! sampled incremented
-                endif
-            else                                                     ! we sample all state > 0
-                call build_glob%spproj_field%sample4update_all([params_glob%fromp,params_glob%top],&
-                                            &nptcls2update, pinds, ptcl_mask, .true.) ! sampled incremented
             endif
+        else                                                     ! we sample all state > 0
+            call build_glob%spproj_field%sample4update_all([params_glob%fromp,params_glob%top],&
+                                        &nptcls2update, pinds, ptcl_mask, .true.) ! sampled incremented
         endif
         ! increment update counter
         call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top], ptcl_mask)
@@ -160,7 +151,7 @@ contains
 
         ! SNHC LOGICS
         neigh_frac = 0.
-        if( params_glob%extr_iter > MAX_EXTRLIM2D )then
+        if( params_glob%extr_iter > params_glob%extr_lim )then
             ! done
         else
             if( l_snhc .or. l_snhc_smpl )then
@@ -175,17 +166,16 @@ contains
         if( l_stream )then
             ! deactivated for now
         else
-            if( params_glob%l_noise_reg )then
-                if( l_snhc.or.l_snhc_smpl )then
-                    if( which_iter <= MAX_EXTRLIM2D )then
-                        params_glob%eps = inv_cos_decay(which_iter, MAX_EXTRLIM2D, params_glob%eps_bounds)
-                        write(logfhandle,'(A,F8.3)') '>>> SNR, WHITE NOISE REGULARIZATION', params_glob%eps
-                    else
-                        params_glob%l_noise_reg = .false.
-                    endif
+            if( params_glob%l_noise_reg .and. (which_iter > 1) )then
+                if( which_iter <= params_glob%maxits_glob )then
+                    params_glob%eps = inv_cos_decay(which_iter, params_glob%maxits_glob, params_glob%eps_bounds)
+                    write(logfhandle,'(A,F8.3)') '>>> SNR, WHITE NOISE REGULARIZATION', params_glob%eps
                 else
-                    params_glob%l_noise_reg = .false. ! not implemented yet
+                    params_glob%l_noise_reg = .false.
                 endif
+            else
+                ! deactivated for the first iteration
+                params_glob%l_noise_reg = .false.
             endif
         endif
 
@@ -357,10 +347,6 @@ contains
 
         ! WIENER RESTORATION OF CLASS AVERAGES
         if( L_BENCH_GLOB ) t_cavg = tic()
-        if( params_glob%l_stoch_update .and. l_partial_sums )then
-            ! such that the previous sums have a weight of 1.0
-            params_glob%update_frac = 0.
-        endif
         call cavger_transf_oridat( build_glob%spproj )
         call cavger_assemble_sums( l_partial_sums )
         if( l_distr_exec_glob )then
