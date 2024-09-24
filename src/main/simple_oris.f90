@@ -68,6 +68,7 @@ type :: oris
     procedure          :: get_pop
     procedure          :: get_pops
     procedure          :: get_pinds
+    procedure          :: sample_balanced
     procedure          :: gen_mask
     procedure          :: mask_from_state
     procedure, private :: get_all_normals
@@ -954,6 +955,73 @@ contains
             endif
         endif
     end subroutine get_pinds
+
+    subroutine sample_balanced( self, clsinds, nptcls, states )
+        type class_sample
+            integer :: clsind = 0, pop = 0, nsample = 0
+            integer, allocatable :: pinds(:)
+            real,    allocatable :: ccs(:)
+            logical, allocatable :: sel(:)
+        end type class_sample
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: clsinds(:) ! class indices to sample from
+        integer,     intent(in)    :: nptcls     ! # particles to sample in total
+        integer,     intent(inout) :: states(self%n)
+        type(class_sample), allocatable :: clssmp(:)
+        integer,            allocatable :: pinds(:), pinds_left(:)
+        type(ran_tabu)                  :: rt
+        integer :: n, i, j, minclspop, cnt, nleft
+        n = size(clsinds)
+        allocate(clssmp(n))
+        ! fetch necessary information
+        do i = 1, n
+            call self%get_pinds(clsinds(i), 'class', pinds)
+            if( allocated(pinds) )then
+                clssmp(i)%clsind = clsinds(i)
+                clssmp(i)%pop    = size(pinds)
+                clssmp(i)%pinds  = pinds
+                ! get cc values
+                allocate(clssmp(i)%ccs(clssmp(i)%pop), source=0.)
+                do j = 1, clssmp(i)%pop
+                    clssmp(i)%ccs(j) = self%o(clssmp(i)%pinds(j))%get('corr')
+                end do
+                call hpsort(clssmp(i)%ccs, clssmp(i)%pinds)
+                call reverse(clssmp(i)%ccs)   ! best first
+                call reverse(clssmp(i)%pinds) ! best first
+                ! allocate selected
+                allocate(clssmp(i)%sel(clssmp(i)%pop), source=.false.)
+                deallocate(pinds)
+            endif
+        end do
+        ! calculate sampling size for each class
+        do while( sum(clssmp(:)%nsample) < nptcls )
+            where( clssmp(:)%nsample < clssmp(:)%pop ) clssmp(:)%nsample = clssmp(:)%nsample + 1
+        end do
+        states = 0
+        do i = 1, n 
+            ! sample first half as the best ones
+            nleft = clssmp(i)%pop - clssmp(i)%nsample/2
+            allocate(pinds_left(nleft), source=0)
+            cnt = 0
+            do j = 1, clssmp(i)%pop      
+                if( j <= clssmp(i)%nsample/2 )then
+                    states(clssmp(i)%pinds(j)) = 1
+                else
+                    cnt             = cnt + 1
+                    pinds_left(cnt) = clssmp(i)%pinds(j)
+                endif
+            end do
+            ! sample second half randomly from what is left
+            rt = ran_tabu(nleft)
+            call rt%shuffle(pinds_left)
+            call rt%kill
+            nleft = clssmp(i)%nsample - clssmp(i)%nsample/2
+            do j = 1, nleft
+                 states(pinds_left(j)) = 1
+            end do
+            deallocate(pinds_left)
+        enddo
+    end subroutine sample_balanced
 
     !>  \brief  generate a mask with the oris with mystate == state/ind == get(label)
     subroutine gen_mask( self, state, ind, label, l_mask, fromto )
