@@ -794,10 +794,11 @@ contains
         type(parameters)                :: params
         type(sp_project)                :: spproj
         type(ran_tabu)                  :: rt
-        integer,            allocatable :: states(:), ptcls_in_state(:), ptcls_rnd(:)
+        integer,            allocatable :: states(:), ptcls_in_state(:), ptcls_rnd(:), tmpinds(:), clsinds(:)
+        real,               allocatable :: rstates(:)
         integer(kind=kind(ENUM_ORISEG)) :: iseg
-        integer                         :: n_lines,fnr,noris,i,nstks,noris_in_state, ncls, icls, nstates
-        real                            :: state, pop, minclspop
+        integer                         :: n_lines,fnr,noris,i,nstks,noris_in_state,ncls,icls,nstates,nptcls
+        real                            :: state
         logical                         :: l_ctfres, l_icefrac, l_append
         class(oris), pointer :: pos => NULL()
         l_append = .false.
@@ -836,11 +837,6 @@ contains
             do i=1,params%nran
                 states(ptcls_rnd(i)) = 1
             enddo
-        else if(.not. cline%defined("infile") .and. cline%defined('balance') .and. params%balance .eq. 'yes') then
-            allocate(states(noris))
-            do i=1,noris
-                states(i) = nint(spproj%os_cls2D%get(i, 'state'))
-            enddo
         else if( cline%defined('ctfresthreshold') .or. cline%defined('icefracthreshold') )then
             l_ctfres  = cline%defined('ctfresthreshold')
             l_icefrac = cline%defined('icefracthreshold')
@@ -866,7 +862,7 @@ contains
                     endif
                 enddo
             endif
-        else
+        else if( cline%defined('infile') )then
             ! selection based on text file input
             ! sanity check
             n_lines = nlines(trim(params%infile))
@@ -904,56 +900,49 @@ contains
             endif
             call fclose(fnr)
         endif
-        ! find minpop
-        if(params%balance .eq. 'yes') then
-            ! find pop of smallest state=1 class
-            minclspop = 1000000
-            nstates   = 0
-            ncls = spproj%os_cls2D%get_noris()
-            do icls=1,ncls
-                state = spproj%os_cls2D%get(icls, 'state')
-                if(state .gt. 0.0 .and. spproj%os_cls2D%isthere(icls, 'pop')) then
-                    nstates = nstates + 1
-                    pop = spproj%os_cls2D%get(icls, 'pop')
-                    if(pop < minclspop) minclspop = pop
-                endif
-            enddo
-            if(nstates * minclspop > params%nptcls) minclspop = floor(real(params%nptcls) / nstates)
-            write(logfhandle, *) ">>> Selecting", minclspop, "particles from each selected class"
-        endif
-        ! updates relevant segments
-        select case(iseg)
-            case(MIC_SEG)
-                call spproj%report_state2mic(states)
-                nstks = spproj%os_stk%get_noris()
-                if( nstks > 0 )then
+        if( params%balance .eq. 'yes') then
+            ncls    = spproj%os_cls2D%get_noris()
+            nptcls  = spproj%os_ptcl2D%get_noris()
+            tmpinds = (/(icls,icls=1,ncls)/)
+            rstates = spproj%os_cls2D%get_all('state')
+            clsinds = pack(tmpinds, mask=rstates > 0.5)
+            allocate(states(nptcls), source=0)
+            call spproj%os_ptcl2D%sample_balanced(clsinds, params%nptcls, states)
+            call spproj%os_ptcl2D%set_all('state', real(states))
+            call spproj%os_ptcl3D%set_all('state', real(states))
+            if( trim(params%prune).eq.'yes' ) call spproj%prune_particles
+            call spproj%map_ptcls_state_to_cls
+        else
+            ! updates relevant segments
+            select case(iseg)
+                case(MIC_SEG)
+                    call spproj%report_state2mic(states)
+                    nstks = spproj%os_stk%get_noris()
+                    if( nstks > 0 )then
+                        call spproj%report_state2stk(states)
+                    endif
+                case(STK_SEG)
                     call spproj%report_state2stk(states)
-                endif
-            case(STK_SEG)
-                call spproj%report_state2stk(states)
-            case(CLS2D_SEG)
-                call spproj%os_cls2D%set_all('state', real(states))
-                if( params%balance .eq. 'yes' )then
-                    call spproj%map2ptcls_state(append=.true., maxpop=nint(minclspop)) ! map states to ptcl2D/3D & cls3D segments
-                else
-                    call spproj%map2ptcls_state(append=l_append) ! map states to ptcl2D/3D & cls3D segments
-                endif
-            case(CLS3D_SEG)
-                if(spproj%os_cls3D%get_noris() == spproj%os_cls2D%get_noris())then
+                case(CLS2D_SEG)
                     call spproj%os_cls2D%set_all('state', real(states))
                     call spproj%map2ptcls_state(append=l_append) ! map states to ptcl2D/3D & cls3D segments
-                else
-                    ! class averages
-                    call spproj%os_cls3D%set_all('state', real(states))
-                endif
-            case(PTCL2D_SEG,PTCL3D_SEG)
-                call spproj%os_ptcl2D%set_all('state', real(states))
-                call spproj%os_ptcl3D%set_all('state', real(states))
-                if( trim(params%prune).eq.'yes' ) call spproj%prune_particles
-                call spproj%map_ptcls_state_to_cls
-            case DEFAULT
-                THROW_HARD('Cannot report selection to segment '//trim(params%oritype)//'; exec_selection')
-        end select
+                case(CLS3D_SEG)
+                    if(spproj%os_cls3D%get_noris() == spproj%os_cls2D%get_noris())then
+                        call spproj%os_cls2D%set_all('state', real(states))
+                        call spproj%map2ptcls_state(append=l_append) ! map states to ptcl2D/3D & cls3D segments
+                    else
+                        ! class averages
+                        call spproj%os_cls3D%set_all('state', real(states))
+                    endif
+                case(PTCL2D_SEG,PTCL3D_SEG)
+                    call spproj%os_ptcl2D%set_all('state', real(states))
+                    call spproj%os_ptcl3D%set_all('state', real(states))
+                    if( trim(params%prune).eq.'yes' ) call spproj%prune_particles
+                    call spproj%map_ptcls_state_to_cls
+                case DEFAULT
+                    THROW_HARD('Cannot report selection to segment '//trim(params%oritype)//'; exec_selection')
+            end select        
+        endif
         ! final full write
         call spproj%write(params%projfile)
         call simple_end('**** SELECTION NORMAL STOP ****')
