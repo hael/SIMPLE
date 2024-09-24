@@ -33,8 +33,6 @@ interface greedy_sampling
     module procedure greedy_sampling_2
 end interface
 
-integer(long), save :: idum
-
 contains
 
     !>  \brief  random seed
@@ -200,28 +198,19 @@ contains
 
     !>  \brief  random number generator yielding normal distribution
     !!          with zero mean and unit variance (from NR)
-    function gasdev_1( ) result( harvest )
-        real         :: v1=0., v2=0., r, fac, harvest
-        real,   save :: gset
-        integer,save :: iset=0
-        if( idum < 0 ) iset = 0
-        if( iset == 0 )then ! reinitialize
-            r = 99.
-            do while( r >= 1. .or. r < TINY )
-                v1 = 2.*ran3( )-1.
-                v2 = 2.*ran3( )-1.
-                r  = v1**2.+v2**2.
-            end do
-            fac = sqrt(-2.*log(r)/r)
-            ! Now make Box-Muller transformation to get the two normal deviates.
-            ! Return one and save the other for the next call.
-            gset    = v1*fac
-            iset    = 1
-            harvest = v2*fac
-        else
-            iset    = 0
-            harvest = gset
-        endif
+    !!  Edited for thread safety
+    real function gasdev_1()
+        real :: v1, v2, r, fac
+        r = 99.
+        do while( r >= 1. .or. r < TINY )
+            v1 = 2.*ran3( )-1.
+            v2 = 2.*ran3( )-1.
+            r  = v1**2.+v2**2.
+        end do
+        fac = sqrt(-2.*log(r)/r)
+        ! Now make Box-Muller transformation to get the two normal deviates.
+        ! Return one, no saving is performed as this is not thread safe
+        gasdev_1 = v2*fac
     end function gasdev_1
 
     !>  \brief  random number generator yielding normal distribution
