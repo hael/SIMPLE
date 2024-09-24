@@ -317,17 +317,18 @@ contains
         integer :: istage, s, state
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
-        if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',        'yes')
-        if( .not. cline%defined('overlap')     ) call cline%set('overlap',       0.95)
-        if( .not. cline%defined('prob_athres') ) call cline%set('prob_athres',    10.)
+        if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',         'yes')
+        if( .not. cline%defined('overlap')     ) call cline%set('overlap',        0.95)
+        if( .not. cline%defined('prob_athres') ) call cline%set('prob_athres',     10.)
         ! if( .not. cline%defined('stoch_update') ) call cline%set('stoch_update', 'yes') ! off 4 now
         call cline%set('stoch_update', 'no')
-        if( .not. cline%defined('center')      ) call cline%set('center',        'no')
+        if( .not. cline%defined('center')      ) call cline%set('center',         'no')
         if( .not. cline%defined('cenlp')       ) call cline%set('cenlp', CENLP_DEFAULT)
-        if( .not. cline%defined('oritype')     ) call cline%set('oritype',   'ptcl3D')
-        if( .not. cline%defined('pgrp')        ) call cline%set('pgrp',          'c1')
-        if( .not. cline%defined('pgrp_start')  ) call cline%set('pgrp_start',    'c1')
-        if( .not. cline%defined('ptclw')       ) call cline%set('ptclw',         'no')
+        if( .not. cline%defined('oritype')     ) call cline%set('oritype',    'ptcl3D')
+        if( .not. cline%defined('pgrp')        ) call cline%set('pgrp',           'c1')
+        if( .not. cline%defined('pgrp_start')  ) call cline%set('pgrp_start',     'c1')
+        if( .not. cline%defined('ptclw')       ) call cline%set('ptclw',          'no')
+        if( .not. cline%defined('projrec')     ) call cline%set('projrec',       'yes')
         if( cline%defined('update_frac')       ) call cline%delete('stoch_update')
         ! make master parameters
         call params%new(cline)
