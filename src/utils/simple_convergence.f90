@@ -140,10 +140,6 @@ contains
                 if( (params_glob%l_frac_update) .or. (params_glob%stream.eq.'yes') )then
                     overlap_lim  = OVERLAP_2D_FRAC
                     fracsrch_lim = FRACSRCHSPACE_FRAC
-                    if( params_glob%l_stoch_update )then
-                        overlap_lim  = OVERLAP_2D
-                        fracsrch_lim = FRACSRCHSPACE_2D
-                    endif
                 else if( trim(params_glob%tseries) .eq. 'yes' )then
                     overlap_lim  = OVERLAP_2D_NANO
                 else

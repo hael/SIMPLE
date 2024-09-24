@@ -209,6 +209,7 @@ type(simple_input_param) :: box
 type(simple_input_param) :: box_extract
 type(simple_input_param) :: cc_iters
 type(simple_input_param) :: clip
+type(simple_input_param) :: cls_init
 type(simple_input_param) :: clustermode
 type(simple_input_param) :: cn
 type(simple_input_param) :: cn_min
@@ -317,7 +318,6 @@ type(simple_input_param) :: qsys_reservation
 type(simple_input_param) :: remove_chunks
 type(simple_input_param) :: reject_cls
 type(simple_input_param) :: remap_cls
-type(simple_input_param) :: rnd_cls_init
 type(simple_input_param) :: scale_movies
 type(simple_input_param) :: script
 type(simple_input_param) :: sherr
@@ -1219,7 +1219,7 @@ contains
         call set_param(picker,         'picker',       'multi',  'Which picker to use', 'Which picker to use(old|new|seg){old}', '(old|new|seg){old}', .false., 'old')
         call set_param(pick_roi,       'pick_roi',     'binary', 'Artefactual regions exclusion(new picker only)', 'Whether to exclude regions of disinterest(carbon, thick ice, new picker only){yes|no}', '{yes|no}', .false., 'no')
         call set_param(remove_chunks,  'remove_chunks','binary', 'Whether to remove subsets', 'Whether to remove subsets after completion(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call set_param(rnd_cls_init,   'rnd_cls_init', 'binary', 'Initiate 2D classification from random classes', 'Initiate 2D classification from random classes vs. raw images(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(cls_init,       'cls_init',     'multi',  'Scheme for initial class generation', 'Initiate 2D classification from raw images|random classes|noise images(ptcl|randcls|rand){ptcl}', '(ptcl|randcls|rand){ptcl}', .false., 'ptcl')
         call set_param(kweight,        'kweight',      'multi',  'Correlation weighing scheme', 'Correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
         call set_param(kweight_chunk,  'kweight_chunk','multi',  'Subset correlation weighing scheme', 'Subset correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
         call set_param(kweight_pool,   'kweight_pool', 'multi',  'Pool Correlation weighing scheme', 'Pool correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
@@ -1666,7 +1666,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm&
         & suitable for the first pass of cleanup after picking',&               ! descr_long
         &'simple_exec',&                                                        ! executable
-        &0, 0, 0, 6, 5, 1, 2, .true.,&                                          ! # entries in each group, requires sp_project
+        &0, 0, 0, 7, 5, 1, 2, .true.,&                                          ! # entries in each group, requires sp_project
         &gui_advanced=.false., gui_submenu_list = "search,mask,filter,compute") ! GUI                  
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -1684,6 +1684,7 @@ contains
         call cleanup2D%set_input('srch_ctrls', 5, objfun, gui_submenu="search")
         call cleanup2D%set_input('srch_ctrls', 6, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated execution(yes|no){yes}','(yes|no){yes}', .false., 'yes', gui_submenu="search")
+        call cleanup2D%set_input('srch_ctrls', 7, cls_init, gui_submenu="cluster2D")
         ! filter controls
         call cleanup2D%set_input('filt_ctrls', 1, hp, gui_submenu="filter")
         call cleanup2D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
@@ -1801,7 +1802,7 @@ contains
         call cluster2D%set_input('srch_ctrls', 9, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|greedy||greedy_smpl){snhc}',&
         &'(snhc|greedy|snhc_smpl|greedy_smpl){snhc}', .false., 'snhc', gui_submenu="search")
         call cluster2D%set_input('srch_ctrls', 10, sigma_est, gui_submenu="search")
-        call cluster2D%set_input('srch_ctrls', 11, rnd_cls_init, gui_submenu="search")
+        call cluster2D%set_input('srch_ctrls', 11, cls_init, gui_submenu="search")
         call cluster2D%set_input('srch_ctrls', 12, cc_iters, gui_submenu="search")
         ! filter controls
         call cluster2D%set_input('filt_ctrls', 1, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
@@ -1903,7 +1904,7 @@ contains
         call cluster2D_subsets%set_input('srch_ctrls', 7, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}',&
              &'(no|greedy){no}', .false., 'no', gui_submenu="cluster 2D")
         call cluster2D_subsets%set_input('srch_ctrls', 8, objfun, gui_submenu="cluster 2D")
-        call cluster2D_subsets%set_input('srch_ctrls', 9, rnd_cls_init, gui_submenu="cluster2D")
+        call cluster2D_subsets%set_input('srch_ctrls', 9, cls_init, gui_submenu="cluster2D")
         call cluster2D_subsets%set_input('srch_ctrls', 10, remove_chunks, gui_submenu="cluster2D")
         ! filter controls
         call cluster2D_subsets%set_input('filt_ctrls', 1, hp, gui_submenu="cluster 2D")
@@ -2713,7 +2714,7 @@ contains
         &'is a distributed workflow for generating an initial 3D model&
         & from particles',&                                                           ! descr_long
         &'simple_exec',&                                                              ! executable
-        &0, 0, 0, 5, 5, 1, 2, .true.,&                                                ! # entries in each group, requires sp_project
+        &0, 0, 0, 6, 5, 1, 2, .true.,&                                                ! # entries in each group, requires sp_project
         &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute"  )      ! GUI
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2731,6 +2732,7 @@ contains
         call abinitio2D%set_input('srch_ctrls', 4, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|greedy||greedy_smpl){snhc}',&
         &'(snhc|greedy|snhc_smpl|greedy_smpl){snhc}', .false., 'snhc', gui_submenu="search")
         call abinitio2D%set_input('srch_ctrls', 5, sigma_est, gui_submenu="search")
+        call abinitio2D%set_input('srch_ctrls', 6, cls_init, gui_submenu="search")
         ! filter controls
         call abinitio2D%set_input('filt_ctrls', 1, hp, gui_submenu="filter")
         call abinitio2D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &

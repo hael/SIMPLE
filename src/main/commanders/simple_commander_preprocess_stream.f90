@@ -109,7 +109,7 @@ contains
         if( .not. cline%defined('reject_cls')  ) call cline%set('reject_cls',   'yes')
         if( .not. cline%defined('objfun')      ) call cline%set('objfun',    'euclid')
         if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',        'no')
-        if( .not. cline%defined('rnd_cls_init')) call cline%set('rnd_cls_init',  'no')
+        if( .not. cline%defined('cls_init')    ) call cline%set('cls_init',    'ptcl')
         if( .not. cline%defined('remove_chunks'))call cline%set('remove_chunks','yes')
         if( .not. cline%defined('kweight_chunk'))call cline%set('kweight_chunk','default')
         if( .not. cline%defined('kweight_pool') )call cline%set('kweight_pool', 'default')

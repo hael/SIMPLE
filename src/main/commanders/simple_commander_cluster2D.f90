@@ -654,7 +654,7 @@ contains
         endif
         ! this workflow executes two stages of CLUSTER2D
         ! Stage 1: down-scaling for fast execution, hybrid extremal/SHC optimisation for
-        !          improved population distribution of clusters, no incremental learning,
+        !          improved population distribution of clusters, no incremental learning
         if( l_euclid )then
             call cline_cluster2D_stage1%set('objfun', trim(cline%get_carg('objfun')))
         else
@@ -662,29 +662,18 @@ contains
         endif
         call cline_cluster2D_stage1%set('lpstop',     params%lpstart)
         call cline_cluster2D_stage1%set('ml_reg',     'no')
+        if( params%l_noise_reg .and. .not.cline%defined('maxits_glob'))then
+            call cline_cluster2D_stage1%set('maxits_glob', params%extr_lim)
+        endif
         if( params%l_frac_update )then
-            if( params%l_stoch_update )then
-                call cline_cluster2D_stage1%set('maxits_glob', MAX_EXTRLIM2D)
-                call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1))
-                call cline_cluster2D_stage1%delete('update_frac') ! will be calculated later
-                if( l_euclid )then
-                    if( l_cc_iters )then
-                        params%cc_iters = min(params%cc_iters,MAXITS_STAGE1)
-                        call cline_cluster2D_stage1%set('cc_iters', real(params%cc_iters))
-                    else
-                        call cline_cluster2D_stage1%set('cc_iters', real(MAXITS_STAGE1))
-                    endif
-                endif
-            else
-                call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
-                call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1_EXTR))
-                if( l_euclid )then
-                    if( l_cc_iters )then
-                        params%cc_iters = min(params%cc_iters,MAXITS_STAGE1_EXTR)
-                        call cline_cluster2D_stage1%set('cc_iters', real(params%cc_iters))
-                    else
-                        call cline_cluster2D_stage1%set('cc_iters', real(MAXITS_STAGE1))
-                    endif
+            call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
+            call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1_EXTR))
+            if( l_euclid )then
+                if( l_cc_iters )then
+                    params%cc_iters = min(params%cc_iters,MAXITS_STAGE1_EXTR)
+                    call cline_cluster2D_stage1%set('cc_iters', real(params%cc_iters))
+                else
+                    call cline_cluster2D_stage1%set('cc_iters', real(MAXITS_STAGE1))
                 endif
             endif
         else
@@ -716,12 +705,7 @@ contains
         call cline_cluster2D_stage2%set('refs',       cavgs)
         call cline_cluster2D_stage2%set('startit',    last_iter_stage1+1)
         if( params%l_frac_update )then
-            if( params%l_stoch_update )then
-                call cline_cluster2D_stage2%set('maxits_glob', MAX_EXTRLIM2D)
-                call cline_cluster2D_stage2%delete('update_frac')
-            else
-                call cline_cluster2D_stage2%set('update_frac', params%update_frac)
-            endif
+            call cline_cluster2D_stage2%set('update_frac', params%update_frac)
         endif
         if( l_euclid )then
             call cline_cluster2D_stage2%set('objfun',   trim(cline%get_carg('objfun')))
@@ -733,6 +717,9 @@ contains
         ! for testing
         if( cline%defined('extr_iter') )then
             call cline_cluster2D_stage2%set('extr_iter', cline_cluster2D_stage1%get_rarg('extr_iter'))
+        endif
+        if( params%l_noise_reg .and. .not.cline%defined('maxits_glob'))then
+            call cline_cluster2D_stage2%set('maxits_glob', params%extr_lim)
         endif
         ! execution
         if( l_shmem )then
@@ -837,7 +824,7 @@ contains
         integer                   :: iter, cnt, iptcl, ptclind, fnr, iter_switch2euclid
         type(chash)               :: job_descr
         real                      :: frac_srch_space
-        logical                   :: l_stream, l_switch2euclid, l_griddingset, l_converged, l_ml_reg
+        logical                   :: l_stream, l_switch2euclid, l_griddingset, l_converged, l_ml_reg, l_scale_inirefs
         call cline%set('prg','cluster2D')
         call set_cluster2D_defaults( cline )
         ! streaming
@@ -916,6 +903,7 @@ contains
             params%refs      = trim(refs)
             params%refs_even = 'start2Drefs_even'//params%ext
             params%refs_odd  = 'start2Drefs_odd'//params%ext
+            l_scale_inirefs  = .false.
             if( build%spproj%is_virgin_field('ptcl2D') .or. params%startit == 1 )then
                 if( params%tseries .eq. 'yes' )then
                     if( cline%defined('nptcls_per_cls') )then
@@ -936,6 +924,7 @@ contains
                         call cline_cavgassemble%set('ncls', real(params%ncls))
                         call cline_make_cavgs%set('refs', params%refs)
                         call xmake_cavgs%execute(cline_make_cavgs)
+                        l_scale_inirefs = .false.
                     else
                         if( trim(params%refine).eq.'inpl' )then
                             params%ncls = build%spproj%os_ptcl2D%get_n('class')
@@ -946,13 +935,24 @@ contains
                             call cline_cavgassemble%set('ncls', real(params%ncls))
                             call cline_make_cavgs%set('refs', params%refs)
                             call xmake_cavgs%execute(cline_make_cavgs)
+                            l_scale_inirefs = .false.
                         else
                             call selection_from_tseries_imgfile(build%spproj, params%refs, params%box, params%ncls)
+                            l_scale_inirefs = .true.
                         endif
                     endif
                 else
-                    if( trim(params%rnd_cls_init).eq.'yes' )then
-                        if(.not.cline%defined('ncls')) THROW_HARD('NCLS must be provide with RND_CLS_INIT=YES ')
+                    select case(trim(params%cls_init))
+                    case('ptcl')
+                        ! initialization from raw images
+                        call random_selection_from_imgfile(build%spproj, params%refs, params%box, params%ncls)
+                        l_scale_inirefs = .true.
+                    case('rand')
+                        ! from noise
+                        call noise_imgfile(params%refs, params%ncls, params%box_crop, params%smpd_crop)
+                        l_scale_inirefs = .false.
+                    case('randcls')
+                        if(.not.cline%defined('ncls')) THROW_HARD('NCLS must be provide with CLS_INIT=RANDCLS')
                         ! initialization from random classes
                         do iptcl=1,params%nptcls
                             if( build%spproj_field%get_state(iptcl) == 0 ) cycle
@@ -963,21 +963,18 @@ contains
                         call build%spproj%write_segment_inside(params%oritype, params%projfile)
                         call cline_make_cavgs%set('refs', params%refs)
                         call xmake_cavgs%execute(cline_make_cavgs)
-                    else
-                        ! initialization from raw images
-                        call random_selection_from_imgfile(build%spproj, params%refs, params%box, params%ncls)
-                    endif
-                endif
-                if( params%box_crop == params%box )then
-                    call copy_imgfile(trim(params%refs), trim(params%refs_even), params%smpd, [1,params%ncls])
-                    call copy_imgfile(trim(params%refs), trim(params%refs_odd),  params%smpd, [1,params%ncls])
+                        l_scale_inirefs = .false.
+                    case DEFAULT
+                        THROW_HARD('Unsupported mode of initial class generation CLS_INIT='//trim(params%cls_init))
+                    end select
                 endif
             else
                 call cline_make_cavgs%set('refs', params%refs)
                 call xmake_cavgs%execute(cline_make_cavgs)
+                l_scale_inirefs = .false.
             endif
             ! scale references to box_crop
-            if( params%box_crop < params%box )then
+            if( l_scale_inirefs )then
                 refs_sc = 'refs'//trim(SCALE_SUFFIX)//params%ext
                 call cline_scalerefs%set('stk',    trim(params%refs))
                 call cline_scalerefs%set('outstk', trim(refs_sc))
@@ -985,9 +982,9 @@ contains
                 call cline_scalerefs%set('newbox', real(params%box_crop))
                 call xscale%execute(cline_scalerefs)
                 call simple_rename(refs_sc, params%refs)
-                call copy_imgfile(trim(params%refs), trim(params%refs_even), params%smpd_crop, [1,params%ncls])
-                call copy_imgfile(trim(params%refs), trim(params%refs_odd),  params%smpd_crop, [1,params%ncls])
             endif
+            call copy_imgfile(trim(params%refs), trim(params%refs_even), params%smpd_crop, [1,params%ncls])
+            call copy_imgfile(trim(params%refs), trim(params%refs_odd),  params%smpd_crop, [1,params%ncls])
         else
             refs = trim(params%refs)
         endif
@@ -1158,7 +1155,7 @@ contains
         character(len=LONGSTRLEN)  :: finalcavgs, orig_objfun, refs_sc, fname
         integer                    :: startit, ncls_from_refs, lfoo(3), i, cnt, iptcl, ptclind
         integer                    :: iter_switch2euclid, j, io_stat, funit, class_ind, class_max
-        logical                    :: converged, l_stream, l_switch2euclid, l_griddingset, l_ml_reg
+        logical                    :: converged, l_stream, l_switch2euclid, l_griddingset, l_ml_reg, l_scale_inirefs
         real,    allocatable       :: corrs(:), corrs_all(:), class_all(:)
         integer, allocatable       :: order(:), class_cnt(:)
         call cline%set('oritype', 'ptcl2D')
@@ -1188,6 +1185,7 @@ contains
                 params%refs      = 'start2Drefs'//params%ext
                 params%refs_even = 'start2Drefs_even'//params%ext
                 params%refs_odd  = 'start2Drefs_odd'//params%ext
+                l_scale_inirefs  = .false.
                 if( build%spproj%is_virgin_field('ptcl2D') .or. params%startit == 1 )then
                     if( params%tseries .eq. 'yes' )then
                         if( cline%defined('nptcls_per_cls') )then
@@ -1206,6 +1204,7 @@ contains
                             call cline_make_cavgs%set('ncls', real(params%ncls))
                             call cline_make_cavgs%set('refs', params%refs)
                             call xmake_cavgs%execute(cline_make_cavgs)
+                            l_scale_inirefs  = .false.
                         else
                             if( trim(params%refine).eq.'inpl' )then
                                 params%ncls = build%spproj%os_ptcl2D%get_n('class')
@@ -1214,13 +1213,24 @@ contains
                                 call cline_make_cavgs%delete('tseries')
                                 call cline_make_cavgs%set('refs', params%refs)
                                 call xmake_cavgs%execute(cline_make_cavgs)
+                                l_scale_inirefs  = .false.
                             else
                                 call selection_from_tseries_imgfile(build%spproj, params%refs, params%box, params%ncls)
+                                l_scale_inirefs  = .true.
                             endif
                         endif
                     else
-                        if( trim(params%rnd_cls_init).eq.'yes' )then
-                            if(.not.cline%defined('ncls')) THROW_HARD('NCLS must be provide with RND_CLS_INIT=YES ')
+                        select case(trim(params%cls_init))
+                        case('ptcl')
+                            ! initialization from raw images
+                            call random_selection_from_imgfile(build%spproj, params%refs, params%box, params%ncls)
+                            l_scale_inirefs  = .true.
+                        case('rand')
+                            ! from noise
+                            call noise_imgfile(params%refs, params%ncls, params%box_crop, params%smpd_crop)
+                            l_scale_inirefs  = .false.
+                        case('randcls')
+                            if(.not.cline%defined('ncls')) THROW_HARD('NCLS must be provide with CLS_INIT=RANDCLS ')
                             ! initialization from random classes
                             do iptcl=1,params%nptcls
                                 if( build%spproj_field%get_state(iptcl) == 0 ) cycle
@@ -1231,15 +1241,13 @@ contains
                             call build%spproj%write_segment_inside(params%oritype, params%projfile)
                             call cline_make_cavgs%set('refs', params%refs)
                             call xmake_cavgs%execute(cline_make_cavgs)
-                        else
-                            ! initialization from raw images
-                            call random_selection_from_imgfile(build%spproj, params%refs, params%box, params%ncls)
-                        endif
-
-                        ! call random_selection_from_imgfile(build%spproj, params%refs, params%box, params%ncls)
+                            l_scale_inirefs  = .false.
+                        case DEFAULT
+                            THROW_HARD('Unsupported mode of initial class generation CLS_INIT='//trim(params%cls_init))
+                        end select
                     endif
                     ! scale references to box_crop
-                    if( params%box_crop < params%box )then
+                    if( l_scale_inirefs )then
                         refs_sc = 'refs'//trim(SCALE_SUFFIX)//params%ext
                         call cline_scalerefs%set('stk',    trim(params%refs))
                         call cline_scalerefs%set('outstk', trim(refs_sc))

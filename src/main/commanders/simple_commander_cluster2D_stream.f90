@@ -188,10 +188,10 @@ contains
         call cline_cluster2D_chunk%set('kweight',   params_glob%kweight_chunk)
         if( l_update_sigmas ) call cline_cluster2D_chunk%set('cc_iters', CHUNK_MINITS-1.0)
         if( l_wfilt ) call cline_cluster2D_chunk%set('wiener', 'partial')
-        if( cline%defined('rnd_cls_init') )then
-            call cline_cluster2D_chunk%set('rnd_cls_init', params_glob%rnd_cls_init)
+        if( cline%defined('cls_init') )then
+            call cline_cluster2D_chunk%set('cls_init', params_glob%cls_init)
         else
-            call cline_cluster2D_chunk%set('rnd_cls_init','no')
+            call cline_cluster2D_chunk%set('cls_init','ptcl')
         endif
         allocate(chunks(params_glob%nchunks))
         do ichunk = 1,params_glob%nchunks
@@ -1533,7 +1533,7 @@ contains
             ! previous behaviour
             call cline_cluster2D_chunk%set('lp',        lpstart)
             call cline_cluster2D_chunk%set('refine',    'snhc')
-            call cline_cluster2D_chunk%set('extr_iter', real(MAX_EXTRLIM2D-2))
+            call cline_cluster2D_chunk%set('extr_iter', params_glob%extr_lim-2)
             call cline_cluster2D_chunk%set('maxits',    CHUNK_MAXITS)
         else
             call cline_cluster2D_chunk%delete('lp')

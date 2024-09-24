@@ -400,6 +400,30 @@ contains
         call img%kill
     end subroutine add_noise_imgfile
 
+    subroutine noise_imgfile( fname, nimgs, box, smpd, snr )
+        character(len=*), intent(in) :: fname
+        integer,          intent(in) :: nimgs, box
+        real,             intent(in) :: smpd
+        real,   optional, intent(in) :: snr
+        type(stack_io)               :: stkio_w
+        type(image)                  :: img
+        integer                      :: i
+        call stkio_w%open(fname, smpd, 'write', box=box)
+        call img%new([box,box,1],smpd,wthreads=.false.)
+        write(logfhandle,'(a)') '>>> GENERATING NOISE IMAGES'
+        do i=1,nimgs
+            call progress(i,nimgs)
+            if( present(snr) )then
+                call img%gauran(0., 1./(snr+1.e-6))
+            else
+                call img%ran
+            endif
+            call stkio_w%write(i, img)
+        end do
+        call stkio_w%close
+        call img%kill
+    end subroutine noise_imgfile
+
     subroutine bp_imgfile( fname2filter, fname, smpd, hp, lp, width )
         character(len=*), intent(in) :: fname2filter, fname
         real,             intent(in) :: smpd, hp, lp
