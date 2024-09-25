@@ -489,11 +489,12 @@ contains
         integer,     parameter   :: MAXPCAITS = 15
         class(pca),  pointer     :: pca_ptr  => null()
         type(image), allocatable :: imgs(:)
-        real,        allocatable :: avg(:), gen(:), pcavecs(:,:)
+        real,        allocatable :: avg(:), gen(:), pcavecs(:,:), tmpvec(:)
         type(parameters)  :: params
         type(builder)     :: build
         type(ppca_inmem)  :: prob_pca
-        integer           :: npix, iptcl
+        integer           :: npix, iptcl, j
+        logical           :: l_transp_pca
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
         if( .not. cline%defined('outstk') ) call cline%set('outstk', 'ppca_denoised'//trim(STK_EXT))
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
@@ -503,7 +504,8 @@ contains
             call imgs(iptcl)%new([params%box,params%box,1], params%smpd)
             call imgs(iptcl)%read(params%stk, iptcl)
         end do
-        call make_pcavecs(imgs, npix, avg, pcavecs)
+        l_transp_pca = (trim(params%transp_pca) .eq. 'yes')
+        call make_pcavecs(imgs, npix, avg, pcavecs, transp=l_transp_pca)
         ! pca allocation
         select case(trim(params%pca_mode))
             case('ppca')
@@ -513,15 +515,33 @@ contains
             case('kpca')
                 allocate(kpca_svd   :: pca_ptr)
         end select
-        call pca_ptr%new(params%nptcls, npix, params%neigs)
-        call pca_ptr%master(pcavecs, MAXPCAITS)
-        allocate(gen(npix))
-        do iptcl = 1, params%nptcls
-            call pca_ptr%generate(iptcl, avg, gen)
-            call imgs(iptcl)%unserialize(gen)
-            call imgs(iptcl)%write(params%outstk, iptcl)
-            call imgs(iptcl)%kill
-        end do
+        if( l_transp_pca )then
+            call pca_ptr%new(npix, params%nptcls, params%neigs)
+            call pca_ptr%master(pcavecs, MAXPCAITS)
+            allocate(tmpvec(params%nptcls))
+            !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
+            do j = 1, npix
+                call pca_ptr%generate(j, avg, tmpvec)
+                pcavecs(:,j) = tmpvec
+            end do
+            !$omp end parallel do
+            pcavecs = transpose(pcavecs)
+            do iptcl = 1, params%nptcls
+                call imgs(iptcl)%unserialize(pcavecs(:,iptcl))
+                call imgs(iptcl)%write(params%outstk, iptcl)
+                call imgs(iptcl)%kill
+            end do
+        else
+            call pca_ptr%new(params%nptcls, npix, params%neigs)
+            call pca_ptr%master(pcavecs, MAXPCAITS)
+            allocate(gen(npix))
+            do iptcl = 1, params%nptcls
+                call pca_ptr%generate(iptcl, avg, gen)
+                call imgs(iptcl)%unserialize(gen)
+                call imgs(iptcl)%write(params%outstk, iptcl)
+                call imgs(iptcl)%kill
+            end do
+        endif
         ! cleanup
         deallocate(imgs)
         call build%kill_general_tbox
