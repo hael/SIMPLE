@@ -160,10 +160,8 @@ contains
                     ithr              = omp_get_thread_num() + 1
                     self%data(:,ind)  = pcavecs(:,ind)
                     norm_prev(:,ithr) = 1. / sqrt(real(self%D))
+                    norm_data(:,ithr) = norm_pcavecs(:,ind)
                     iter              = 1
-                    denom             = dsqrt(sum(real(self%data(:,ind),dp)**2))
-                    if( denom < DTINY ) continue
-                    norm_data(:,ithr) = self%data(:,ind) / real(denom)
                     do while( abs(sum(norm_data(:,ithr) * norm_prev(:,ithr)) - 1.) > TOL .and. iter < its )
                         norm_prev(:,ithr) = norm_data(:,ithr)
                         ! 1. projecting each image on kernel space
@@ -173,9 +171,7 @@ contains
                         ! 2. applying the principle components to the projected vector
                         proj_data(:,ithr) = proj_data(:,ithr) * ker_weight(:,ind)
                         ! 3. computing the pre-image (of the image in step 1) using the result in step 2
-                        denom = sum(real(proj_data(:,ithr),dp))
-                        if( denom < DTINY ) exit
-                        self%data(:,ind) = matmul(pcavecs, proj_data(:,ithr)) / real(denom)
+                        self%data(:,ind) = matmul(norm_pcavecs, proj_data(:,ithr))
                         denom            = dsqrt(sum(real(self%data(:,ind),dp)**2))
                         if( denom < DTINY ) exit
                         norm_data(:,ithr) = self%data(:,ind) / real(denom)
@@ -208,7 +204,7 @@ contains
         real(dp) :: denom
         real     :: norm_mat(self%D,self%N)
         ! squared cosine similarity between pairs of rows
-        norm_mat = 0.
+        norm_mat = mat
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,denom)
         do i = 1,self%N
             denom = dsqrt(sum(real(mat(:,i),dp)**2))
