@@ -94,11 +94,11 @@ contains
         integer, optional, intent(in)    :: maxpcaits
         integer, parameter :: MAX_ITS = 100
         real,    parameter :: TOL     = 1e-4
-        logical, parameter :: DEBUG   = .true.
+        logical, parameter :: DEBUG   = .false.
         integer(int64)     :: start_time, end_time
         real(real64)       :: rate
         real(dp) :: denom
-        real     :: ker(self%N,self%N), ker_weight(self%N,self%N), eig_vecs(self%N,self%Q), norm_pcavecs(self%D,self%N),&
+        real     :: ker(self%N,self%N), ker_weight(self%N,self%N), eig_vecs(self%N,self%Q), norm_pcavecs(self%D,self%N),norm_pcavecs_t(self%N,self%D),&
                    &proj_data(self%N,params_glob%nthr), norm_prev(self%D,params_glob%nthr), norm_data(self%D,params_glob%nthr)
         integer  :: i, ind, iter, its, ithr
         ! compute the kernel
@@ -155,6 +155,7 @@ contains
                     if( denom > DTINY ) norm_pcavecs(:,i) = pcavecs(:,i) / real(denom)
                 enddo
                 !$omp end parallel do
+                norm_pcavecs_t = transpose(norm_pcavecs)
                 !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,i,denom)
                 do ind = 1, self%N
                     ithr              = omp_get_thread_num() + 1
@@ -165,13 +166,13 @@ contains
                     do while( abs(sum(norm_data(:,ithr) * norm_prev(:,ithr)) - 1.) > TOL .and. iter < its )
                         norm_prev(:,ithr) = norm_data(:,ithr)
                         ! 1. projecting each image on kernel space
-                        do i = 1,self%N
-                            proj_data(i,ithr) = sum(norm_prev(:,ithr) * norm_pcavecs(:,i))
-                        enddo
+                        proj_data(:,ithr) = matmul(norm_pcavecs_t, norm_prev(:,ithr))
                         ! 2. applying the principle components to the projected vector
                         proj_data(:,ithr) = proj_data(:,ithr) * ker_weight(:,ind)
                         ! 3. computing the pre-image (of the image in step 1) using the result in step 2
-                        self%data(:,ind) = matmul(norm_pcavecs, proj_data(:,ithr))
+                        denom = sum(real(proj_data(:,ithr),dp))
+                        if( denom < DTINY ) exit
+                        self%data(:,ind) = matmul(pcavecs, proj_data(:,ithr)) / real(denom)
                         denom            = dsqrt(sum(real(self%data(:,ind),dp)**2))
                         if( denom < DTINY ) exit
                         norm_data(:,ithr) = self%data(:,ind) / real(denom)
