@@ -30,7 +30,6 @@ type, extends(pca) :: kpca_svd
     procedure, private :: cosine_kernel
     procedure, private :: rbf_kernel
     procedure, private :: compute_eigvecs
-    procedure, private :: cosine_similarity
 end type
 
 real, parameter :: C_CONST = 0.4  ! for rbf_kernel for testing
@@ -94,13 +93,13 @@ contains
         real,              intent(in)    :: pcavecs(self%D,self%N)
         integer, optional, intent(in)    :: maxpcaits
         integer, parameter :: MAX_ITS = 100
-        real,    parameter :: TOL     = 0.01
+        real,    parameter :: TOL     = 1e-4
         logical, parameter :: DEBUG   = .true.
         integer(int64)     :: start_time, end_time
         real(real64)       :: rate
         real(dp) :: denom
         real     :: ker(self%N,self%N), ker_weight(self%N,self%N), eig_vecs(self%N,self%Q), norm_pcavecs(self%D,self%N),&
-                   &prev_data(self%D,params_glob%nthr), proj_data(self%N,params_glob%nthr), norm_prev(self%D,params_glob%nthr)
+                   &proj_data(self%N,params_glob%nthr), norm_prev(self%D,params_glob%nthr), norm_data(self%D,params_glob%nthr)
         integer  :: i, ind, iter, its, ithr
         ! compute the kernel
         select case(trim(params_glob%kpca_ker))
@@ -130,13 +129,13 @@ contains
                 do ind = 1, self%N
                     self%data(:,ind)  = pcavecs(:,ind)
                     ithr              = omp_get_thread_num() + 1
-                    prev_data(:,ithr) = 0.
+                    norm_prev(:,ithr) = 0.
                     iter              = 1
-                    do while( euclid(self%data(:,ind),prev_data(:,ithr)) > TOL .and. iter < its )
-                        prev_data(:,ithr) = self%data(:,ind)
+                    do while( euclid(self%data(:,ind),norm_prev(:,ithr)) > TOL .and. iter < its )
+                        norm_prev(:,ithr) = self%data(:,ind)
                         ! 1. projecting each image on kernel space
                         do i = 1,self%N
-                            proj_data(i,ithr) = euclid(prev_data(:,ithr), pcavecs(:,i))**2
+                            proj_data(i,ithr) = euclid(norm_prev(:,ithr), pcavecs(:,i))**2
                         enddo
                         ! 2. applying the principle components to the projected vector
                         proj_data(:,ithr) = exp(-proj_data(:,ithr)/real(self%Q)/C_CONST) * ker_weight(:,ind)
@@ -158,15 +157,15 @@ contains
                 !$omp end parallel do
                 !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,i,denom)
                 do ind = 1, self%N
-                    self%data(:,ind)  = pcavecs(:,ind)
                     ithr              = omp_get_thread_num() + 1
-                    prev_data(:,ithr) = 0.
+                    self%data(:,ind)  = pcavecs(:,ind)
+                    norm_prev(:,ithr) = 1. / sqrt(real(self%D))
                     iter              = 1
-                    do while( euclid(self%data(:,ind),prev_data(:,ithr)) > TOL )
-                        denom = dsqrt(sum(real(self%data(:,ind),dp)**2))
-                        if( denom < DTINY ) exit
-                        prev_data(:,ithr) = self%data(:,ind)
-                        norm_prev(:,ithr) = prev_data(:,ithr) / real(denom)
+                    denom             = dsqrt(sum(real(self%data(:,ind),dp)**2))
+                    if( denom < DTINY ) continue
+                    norm_data(:,ithr) = self%data(:,ind) / real(denom)
+                    do while( abs(sum(norm_data(:,ithr) * norm_prev(:,ithr)) - 1.) > TOL .and. iter < its )
+                        norm_prev(:,ithr) = norm_data(:,ithr)
                         ! 1. projecting each image on kernel space
                         do i = 1,self%N
                             proj_data(i,ithr) = sum(norm_prev(:,ithr) * norm_pcavecs(:,i))
@@ -175,7 +174,11 @@ contains
                         proj_data(:,ithr) = proj_data(:,ithr) * ker_weight(:,ind)
                         ! 3. computing the pre-image (of the image in step 1) using the result in step 2
                         denom = sum(real(proj_data(:,ithr),dp))
-                        if( denom > DTINY ) self%data(:,ind) = matmul(pcavecs, proj_data(:,ithr)) / real(denom)
+                        if( denom < DTINY ) exit
+                        self%data(:,ind) = matmul(pcavecs, proj_data(:,ithr)) / real(denom)
+                        denom            = dsqrt(sum(real(self%data(:,ind),dp)**2))
+                        if( denom < DTINY ) exit
+                        norm_data(:,ithr) = self%data(:,ind) / real(denom)
                         iter = iter + 1
                     enddo
                 enddo
@@ -221,18 +224,6 @@ contains
         !$omp end parallel do
         call self%kernel_center(ker)
     end subroutine cosine_kernel
-
-    function cosine_similarity( self, vec1, norm_vec2 ) result(cos_sim)
-        class(kpca_svd), intent(inout) :: self
-        real,            intent(in)    :: vec1(self%D)
-        real,            intent(in)    :: norm_vec2(self%D)
-        real(dp) :: denom
-        real     :: cos_sim, norm_vec1(self%D)
-        denom     = dsqrt(sum(real(vec1,dp)**2))
-        norm_vec1 = 0.
-        if( denom > DTINY ) norm_vec1 = vec1 / real(denom)
-        cos_sim = sum(norm_vec1 * norm_vec2)
-    end function cosine_similarity
 
     subroutine rbf_kernel( self, mat, ker )
         class(kpca_svd), intent(inout) :: self
