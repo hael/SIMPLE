@@ -1195,11 +1195,8 @@ contains
         mol_dim(1) = maxval(self%xyz(:,1)) - minval(self%xyz(:,1))
         mol_dim(2) = maxval(self%xyz(:,2)) - minval(self%xyz(:,2))
         mol_dim(3) = maxval(self%xyz(:,3)) - minval(self%xyz(:,3))
-        center(1)  = minval(self%xyz(:,1)) + mol_dim(1)/2.
-        center(2)  = minval(self%xyz(:,2)) + mol_dim(2)/2.
-        center(3)  = minval(self%xyz(:,3)) + mol_dim(3)/2.
-        corner(1)  = minval(self%xyz(:,1)); corner(2)= minval(self%xyz(:,2)); corner(3)  = minval(self%xyz(:,3))
-        write(logfhandle,'(A,2(f8.3,","),f8.3,A)') " Atomic center at ", center," (center of volume at 0, 0, 0)"
+        center = self%get_geom_center()
+        write(logfhandle,'(A,2(f6.1,","),f6.1,A)') " Atomic center at ", center," (center of volume at 0, 0, 0)"
         if( present(vol_dim) )then
             ldim        = ceiling( (mol_dim)/smpd )
             if( vol_dim(1) < ldim(1) ) THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pdb2mrc')
@@ -1232,9 +1229,11 @@ contains
         integer, intent(in) :: ldim(3)
         real, intent(in)    :: smpd
         real                :: center(3), half_box(3)
-        center(1)   = sum(self%xyz(:,1)) / self%n;  center(2) = sum(self%xyz(:,2)) / self%n; center(3) = sum(self%xyz(:,3)) / self%n
+        !center(1)   = sum(self%xyz(:,1)) / self%n;  center(2) = sum(self%xyz(:,2)) / self%n; center(3) = sum(self%xyz(:,3)) / self%n
+        center      = self%get_geom_center()
         half_box(:) = smpd*(real(ldim(:)/2.))
-        call self%translate(-center+half_box)
+        !call self%translate(-center+half_box)
+        call self%translate(half_box)
     end subroutine center_pdbcoord
 
     subroutine map_validation( self, vol1, vol2, filename )

@@ -489,7 +489,7 @@ contains
             return
         endif
         ! taking care of volume dimensions
-        call build_glob%vol%read_and_crop(volfname, params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+        call build_glob%vol%read_and_crop(volfname, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
         ! offset
         xyz = build_glob%vol%calc_shiftcen(params_glob%cenlp,params_glob%msk_crop)
         if( params_glob%pgrp .ne. 'c1' ) xyz(1:2) = 0.     ! shifts only along z-axis for C2 and above
@@ -555,15 +555,15 @@ contains
             vol_even_unfil = add2fbody(vol_even,params_glob%ext,'_unfil')
             vol_odd_unfil  = add2fbody(vol_odd,params_glob%ext,'_unfil')
             ! estimate low-pass limit from unifiltered volumes
-            call build_glob%vol%read_and_crop(vol_even_unfil,    params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
-            call build_glob%vol_odd%read_and_crop(vol_odd_unfil, params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+            call build_glob%vol%read_and_crop(vol_even_unfil,    params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+            call build_glob%vol_odd%read_and_crop(vol_odd_unfil, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
             call estimate_lp_refvols(s, lpopt)
             ! read in filtered volumes (ML-reg)
-            call build_glob%vol%read_and_crop(vol_even,    params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
-            call build_glob%vol_odd%read_and_crop(vol_odd, params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+            call build_glob%vol%read_and_crop(vol_even,          params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+            call build_glob%vol_odd%read_and_crop(vol_odd,       params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
         else
-            call build_glob%vol%read_and_crop(vol_even,    params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
-            call build_glob%vol_odd%read_and_crop(vol_odd, params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+            call build_glob%vol%read_and_crop(vol_even,          params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+            call build_glob%vol_odd%read_and_crop(vol_odd,       params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
             if( params_glob%l_lpauto ) call estimate_lp_refvols(s, lpopt)
         endif
         if( params_glob%l_icm )then
@@ -575,7 +575,7 @@ contains
             endif
         else if( params_glob%l_lpset )then
             ! the average volume occupies both even and odd
-            call build_glob%vol%read_and_crop(vol_avg, params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+            call build_glob%vol%read_and_crop(vol_avg, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
             call build_glob%vol_odd%copy(build_glob%vol)
         endif
         call build_glob%vol%fft

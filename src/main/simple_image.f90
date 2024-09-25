@@ -7753,59 +7753,33 @@ contains
         call tmp%kill()
     end subroutine clip_inplace
 
-    subroutine read_and_crop( self, volfname, box, smpd, box_crop, smpd_crop, ismask )
+    subroutine read_and_crop( self, volfname, smpd, box_crop, smpd_crop )
         class(image),      intent(inout) :: self
         character(len=*),  intent(in)    :: volfname
-        integer,           intent(in)    :: box, box_crop
+        integer,           intent(in)    :: box_crop
         real,              intent(in)    :: smpd, smpd_crop
-        logical, optional, intent(in)    :: ismask
-        real    :: crop_factor, smpd_here
-        integer :: ldim(3), ifoo
-        logical :: l_mask
-        l_mask = .false.
-        if( present(ismask) ) l_mask = ismask
-        crop_factor = real(box) / real(box_crop)
+        real    :: smpd_here
+        integer :: ldim(3), ifoo, box
         call find_ldim_nptcls(volfname, ldim, ifoo, smpd=smpd_here)
-        if( box == box_crop )then
-            ! read
-            if( all(ldim == box) )then
-                call self%new([box,box,box],smpd)
-                call self%read(volfname)
-            else
-                THROW_HARD('Erroneous volume dimensions 1; read_and_crop')
-            endif
+        ! HE, I would not trust the smpd from the header
+        box = ldim(1)
+        call self%new(ldim, smpd)
+        call self%read(volfname)
+        if( box < box_crop )then
+            ! read & pad
+            call self%fft
+            call self%pad_inplace([box_crop,box_crop,box_crop], antialiasing=.false.)
+            call self%ifft
+            call self%set_smpd(smpd_crop) ! safety
+        else if( box > box_crop )then
+            ! read & crop
+            call self%fft
+            call self%clip_inplace([box_crop,box_crop,box_crop])
+            call self%ifft
+            call self%set_smpd(smpd_crop) ! safety
         else
-            if( all(ldim == box) )then
-                ! read & crop
-                call self%new([box,box,box],smpd)
-                call self%read(volfname)
-                call self%fft
-                call self%clip_inplace([box_crop,box_crop,box_crop])
-                call self%ifft
-                call self%set_smpd(smpd_crop) ! safety
-                if( l_mask )then
-                    where( self%rmat < TINY ) self%rmat = 0.0
-                    where( self%rmat > 1.0 )  self%rmat = 1.0
-                endif
-            elseif( all(ldim == box_crop) )then
-                ! read
-                call self%new([box_crop,box_crop,box_crop],smpd_crop)
-                call self%read(volfname)
-            elseif( all(ldim < box_crop) )then
-                ! read & pad
-                call self%new(ldim, smpd_here)
-                call self%read(volfname)
-                call self%fft
-                call self%pad_inplace([box_crop,box_crop,box_crop], antialiasing=.false.)
-                call self%ifft
-                call self%set_smpd(smpd_crop) ! safety
-                if( l_mask )then
-                    where( self%rmat < TINY ) self%rmat = 0.0
-                    where( self%rmat > 1.0 )  self%rmat = 1.0
-                endif
-            else
-                THROW_HARD('Erroneous volume dimensions 2; read_and_crop')
-            endif
+            ! read
+            call self%read(volfname)
         endif
     end subroutine read_and_crop
 
@@ -8388,7 +8362,7 @@ contains
         case DEFAULT
             THROW_HARD('Unsupported flip mode')
         end select
-    end subroutine flip
+    end subroutine flip  
 
     !> \brief rad_cc calculates the radial correlation function between two images/volumes and weight the intensities of the original image/volume
     subroutine radial_cc( self1, self2, smpd, rad_corrs, rad_dists )
