@@ -30,6 +30,7 @@ type, extends(pca) :: kpca_svd
     procedure, private :: cosine_kernel
     procedure, private :: rbf_kernel
     procedure, private :: compute_eigvecs
+    procedure, private :: cosine_similarity
 end type
 
 real, parameter :: C_CONST = 0.4  ! for rbf_kernel for testing
@@ -97,9 +98,10 @@ contains
         logical, parameter :: DEBUG   = .true.
         integer(int64)     :: start_time, end_time
         real(real64)       :: rate
-        real    :: ker(self%N,self%N), ker_weight(self%N,self%N), eig_vecs(self%N,self%Q), norm_pcavecs(self%D,self%N), denom,&
-                  &prev_data(self%D,params_glob%nthr), proj_data(self%N,params_glob%nthr), norm_prev(self%D,params_glob%nthr)
-        integer :: i, ind, iter, its, ithr
+        real(dp) :: denom
+        real     :: ker(self%N,self%N), ker_weight(self%N,self%N), eig_vecs(self%N,self%Q), norm_pcavecs(self%D,self%N),&
+                   &prev_data(self%D,params_glob%nthr), proj_data(self%N,params_glob%nthr), norm_prev(self%D,params_glob%nthr)
+        integer  :: i, ind, iter, its, ithr
         ! compute the kernel
         select case(trim(params_glob%kpca_ker))
             case('rbf')
@@ -139,9 +141,9 @@ contains
                         ! 2. applying the principle components to the projected vector
                         proj_data(:,ithr) = exp(-proj_data(:,ithr)/real(self%Q)/C_CONST) * ker_weight(:,ind)
                         ! 3. computing the pre-image (of the image in step 1) using the result in step 2
-                        denom             = sum(proj_data(:,ithr))
+                        denom             = sum(real(proj_data(:,ithr),dp))
                         self%data(:,ind)  = matmul(pcavecs, proj_data(:,ithr))
-                        if( denom > TINY ) self%data(:,ind) = self%data(:,ind)/denom
+                        if( denom > DTINY ) self%data(:,ind) = self%data(:,ind)/real(denom)
                         iter = iter + 1
                     enddo
                 enddo
@@ -150,8 +152,8 @@ contains
                 norm_pcavecs = pcavecs
                 !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,denom)
                 do i = 1,self%N
-                    denom = sqrt(sum(pcavecs(:,i)**2))
-                    if( denom > TINY ) norm_pcavecs(:,i) = pcavecs(:,i) / denom
+                    denom = dsqrt(sum(real(pcavecs(:,i),dp)**2))
+                    if( denom > DTINY ) norm_pcavecs(:,i) = pcavecs(:,i) / real(denom)
                 enddo
                 !$omp end parallel do
                 !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,i,denom)
@@ -160,11 +162,11 @@ contains
                     ithr              = omp_get_thread_num() + 1
                     prev_data(:,ithr) = 0.
                     iter              = 1
-                    do while( euclid(self%data(:,ind),prev_data(:,ithr)) > TOL .and. iter < its )
+                    do while( euclid(self%data(:,ind),prev_data(:,ithr)) > TOL )
+                        denom = dsqrt(sum(real(self%data(:,ind),dp)**2))
+                        if( denom < DTINY ) exit
                         prev_data(:,ithr) = self%data(:,ind)
-                        norm_prev(:,ithr) = prev_data(:,ithr)
-                        denom             = sqrt(sum(prev_data(:,ithr)**2))
-                        if( denom > TINY ) norm_prev(:,ithr) = norm_prev(:,ithr) / denom
+                        norm_prev(:,ithr) = prev_data(:,ithr) / real(denom)
                         ! 1. projecting each image on kernel space
                         do i = 1,self%N
                             proj_data(i,ithr) = sum(norm_prev(:,ithr) * norm_pcavecs(:,i))
@@ -172,9 +174,8 @@ contains
                         ! 2. applying the principle components to the projected vector
                         proj_data(:,ithr) = proj_data(:,ithr) * ker_weight(:,ind)
                         ! 3. computing the pre-image (of the image in step 1) using the result in step 2
-                        denom             = sum(proj_data(:,ithr))
-                        self%data(:,ind)  = matmul(pcavecs, proj_data(:,ithr))
-                        if( denom > TINY ) self%data(:,ind) = self%data(:,ind)/denom
+                        denom = sum(real(proj_data(:,ithr),dp))
+                        if( denom > DTINY ) self%data(:,ind) = matmul(pcavecs, proj_data(:,ithr)) / real(denom)
                         iter = iter + 1
                     enddo
                 enddo
@@ -200,25 +201,38 @@ contains
         class(kpca_svd), intent(inout) :: self
         real,            intent(in)    :: mat(self%D,self%N)
         real,            intent(out)   :: ker(self%N,self%N)
-        integer :: i, j
-        real    :: denom, row_sums2(self%N)
+        integer  :: i, j
+        real(dp) :: denom
+        real     :: norm_mat(self%D,self%N)
         ! squared cosine similarity between pairs of rows
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i)
+        norm_mat = 0.
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,denom)
         do i = 1,self%N
-            row_sums2(i) = sum(mat(:,i)**2)
+            denom = dsqrt(sum(real(mat(:,i),dp)**2))
+            if( denom > DTINY ) norm_mat(:,i) = mat(:,i) / real(denom)
         enddo
         !$omp end parallel do
-        !$omp parallel do collapse(2) default(shared) proc_bind(close) schedule(static) private(i,j,denom)
+        !$omp parallel do collapse(2) default(shared) proc_bind(close) schedule(static) private(i,j)
         do i = 1,self%N
             do j = 1,self%N
-                denom    = sqrt(row_sums2(i) * row_sums2(j))
-                ker(i,j) = 0._dp
-                if( denom > TINY ) ker(i,j) = sum(mat(:,i) * mat(:,j)) / denom
+                ker(i,j) = sum(norm_mat(:,i) * norm_mat(:,j))
             enddo
         enddo
         !$omp end parallel do
         call self%kernel_center(ker)
     end subroutine cosine_kernel
+
+    function cosine_similarity( self, vec1, norm_vec2 ) result(cos_sim)
+        class(kpca_svd), intent(inout) :: self
+        real,            intent(in)    :: vec1(self%D)
+        real,            intent(in)    :: norm_vec2(self%D)
+        real(dp) :: denom
+        real     :: cos_sim, norm_vec1(self%D)
+        denom     = dsqrt(sum(real(vec1,dp)**2))
+        norm_vec1 = 0.
+        if( denom > DTINY ) norm_vec1 = vec1 / real(denom)
+        cos_sim = sum(norm_vec1 * norm_vec2)
+    end function cosine_similarity
 
     subroutine rbf_kernel( self, mat, ker )
         class(kpca_svd), intent(inout) :: self
