@@ -10,8 +10,6 @@ use simple_image,          only: image
 use simple_projector_hlev, only: reproject, rotvol
 use simple_masker,         only: masker
 use simple_projector,      only: projector
-use simple_volprep,        only: read_and_prep_vol
-use simple_volpft_srch
 implicit none
 
 public :: centervol_commander
@@ -438,94 +436,26 @@ contains
     end subroutine exec_noisevol
     
     subroutine exec_dock_volpair( self, cline )
-        use simple_vol_srch
+        ! use simple_vol_srch
         class(dock_volpair_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         real,  parameter :: SHSRCH_HWDTH  = 5.0
         type(parameters) :: params
         type(projector)  :: vol1, vol2
-        ! type(image)      :: vol_out
-        type(projector)      :: vol_out
-        type(oris)       :: ori2write
-        type(ori)        :: orientation, orientation_best
-        real             :: cxyz(4), cxyz2(4), corr_prev
+        type(projector)  :: vol_out
         integer          :: i
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes'       )
-        if( .not. cline%defined('trs'  ) ) call cline%set('trs',   SHSRCH_HWDTH)
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
-        ! prep vols
-        call read_and_prep_vol(params%vols(1), vol1)
-        call read_and_prep_vol(params%vols(2), vol2)
+
+
+
         select case( trim(params%dockmode) )
-        case('shift')
-                call vol_srch_init(vol1, vol2, params%hp, params%lpstart, params%trs)
-                cxyz = vol_shsrch_minimize()
-                write(logfhandle,*) 'corr: ', cxyz(1), 'shift: ', cxyz(2:4)
-                call vol2%read(params%vols(2))
-                call vol2%shift(cxyz(2:4))
-                call vol2%write(params%outvol)
+            case('shift')
+                ! to be implemented
             case('rot')
                 ! to be implemented
             case('rotshift')
-                ! grid search with volpft (icosahedral sampling geometry) using lpstart low-pass limit
-                call volpft_srch_init(vol1, vol2, params%hp, params%lpstart)
-                orientation = volpft_srch_minimize()
-                ! rotate vol to create reference for shift alignment
-                call vol2%ifft
-                vol_out = rotvol(vol2, orientation)
-                call vol2%fft
-                call vol_out%fft
-                ! continuous shift alignment using lpstart low-pass limit
-                call vol_srch_init(vol1, vol_out, params%hp, params%lpstart, params%trs)
-                cxyz = vol_shsrch_minimize()
-                ! re-search the angular grid with the shifts in-place
-                call volpft_srch_set_shvec(cxyz(2:4))
-                orientation = volpft_srch_minimize()
-                ! Refinment using lpstop low-pass limit
-                call volpft_srch_init(vol1, vol_out, params%hp, params%lpstop)
-                ! call volpft_srch_init(vol1, vol2, params%hp, params%lpstop)
-                call vol_srch_init(vol1, vol_out, params%hp, params%lpstop, params%trs)
-                corr_prev = 0. ! initialise
-                cxyz2     = 0.
-                do i=1,10
-                    ! rotate and shift vol to create reference for shift alignment
-                    call vol2%ifft
-                    vol_out = rotvol(vol2, orientation, cxyz(2:4))
-                    call vol2%fft
-                    call vol_out%fft
-                    cxyz2 = vol_shsrch_minimize()
-                    if( any(abs(cxyz2(2:4)) > 0.) )then ! a better solution was found
-                        corr_prev = cxyz2(1)
-                        ! obtain joint shifts by vector addition
-                        cxyz(2:4) = cxyz(2:4) + cxyz2(2:4)
-                        ! update shifts in volpft_srch class and refine angles
-                        call volpft_srch_set_shvec(cxyz(2:4))
-                        if( i <= 3 )then
-                            orientation_best = volpft_srch_refine(orientation)
-                        else
-                            orientation_best = volpft_srch_refine(orientation, angres=5.)
-                        endif
-                        orientation = orientation_best
-                        call orientation%set('x', cxyz(2))
-                        call orientation%set('y', cxyz(3))
-                        call orientation%set('z', cxyz(4))
-                        call orientation%print_ori
-                    endif
-                end do
-                ! rotate and shift vol for output
-                call vol2%ifft
-                vol_out = rotvol(vol2, orientation, cxyz(2:4))
-                call orientation%print_ori
-                if( cline%defined('outfile') )then
-                    call ori2write%new(1, is_ptcl=.false.)
-                    call ori2write%set_ori(1,orientation)
-                    call ori2write%write(params%outfile)
-                    call ori2write%kill
-                endif
-                ! write
-                call vol_out%write(params%outvol, del_if_exists=.true.)
-                ! destruct
-                call volpft_srch_kill
+                ! to be implemented
             case('refine')
                 ! to be implemented
             case DEFAULT
@@ -535,8 +465,6 @@ contains
         call vol1%kill
         call vol2%kill
         call vol_out%kill
-        call orientation%kill
-        call orientation_best%kill
         ! end gracefully
         call simple_end('**** SIMPLE_DOCK_VOLPAIR NORMAL STOP ****')
     end subroutine exec_dock_volpair

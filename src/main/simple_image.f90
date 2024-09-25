@@ -7762,24 +7762,22 @@ contains
         integer :: ldim(3), ifoo, box
         call find_ldim_nptcls(volfname, ldim, ifoo, smpd=smpd_here)
         ! HE, I would not trust the smpd from the header
+        if( ldim(3) /= ldim(1) ) THROW_HARD('Only for volumes')
         box = ldim(1)
         call self%new(ldim, smpd)
         call self%read(volfname)
         if( box < box_crop )then
-            ! read & pad
+            ! pad
             call self%fft
             call self%pad_inplace([box_crop,box_crop,box_crop], antialiasing=.false.)
             call self%ifft
             call self%set_smpd(smpd_crop) ! safety
         else if( box > box_crop )then
-            ! read & crop
+            ! clip
             call self%fft
             call self%clip_inplace([box_crop,box_crop,box_crop])
             call self%ifft
             call self%set_smpd(smpd_crop) ! safety
-        else
-            ! read
-            call self%read(volfname)
         endif
     end subroutine read_and_crop
 

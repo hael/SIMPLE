@@ -796,6 +796,7 @@ contains
         type(ran_tabu)                  :: rt
         integer,            allocatable :: states(:), ptcls_in_state(:), ptcls_rnd(:), tmpinds(:), clsinds(:)
         real,               allocatable :: rstates(:)
+        type(class_sample), allocatable :: clssmp(:)
         integer(kind=kind(ENUM_ORISEG)) :: iseg
         integer                         :: n_lines,fnr,noris,i,nstks,noris_in_state,ncls,icls,nstates,nptcls
         real                            :: state
@@ -907,7 +908,9 @@ contains
             rstates = spproj%os_cls2D%get_all('state')
             clsinds = pack(tmpinds, mask=rstates > 0.5)
             allocate(states(nptcls), source=0)
-            call spproj%os_ptcl2D%sample_balanced(clsinds, params%nptcls, states)
+            call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
+            call spproj%os_ptcl2D%sample_balanced(clssmp, params%nptcls, states)
+            deallocate(clssmp)
             call spproj%os_ptcl2D%set_all('state', real(states))
             call spproj%os_ptcl3D%set_all('state', real(states))
             if( trim(params%prune).eq.'yes' ) call spproj%prune_particles
