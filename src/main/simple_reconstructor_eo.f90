@@ -379,8 +379,8 @@ contains
             l_match = .false.
             return
         endif
-        l_match = .false.
-        if( ldim_read(1) <= ldim(1) ) l_match = .true.
+        ldim    = self%even%get_ldim()
+        l_match = ldim_read(1) <= ldim(1)
     end function ldim_even_match
 
     !>  \brief  read the even reconstruction
