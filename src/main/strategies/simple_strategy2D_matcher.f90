@@ -46,7 +46,7 @@ contains
 
     !>  \brief  is the prime2D algorithm
     subroutine cluster2D_exec( cline, which_iter, converged )
-        use simple_decay_funs, only: inv_cos_decay
+        use simple_decay_funs, only: inv_cos_decay, extremal_decay2D
         class(cmdline),          intent(inout) :: cline
         integer,                 intent(in)    :: which_iter
         logical,                 intent(inout) :: converged
@@ -155,9 +155,7 @@ contains
             ! done
         else
             if( l_snhc .or. l_snhc_smpl )then
-                ! factorial decay, -2 because first step is always greedy
-                neigh_frac = min(SNHC2D_INITFRAC,&
-                    &max(0.,SNHC2D_INITFRAC*(1.-SNHC2D_DECAY)**real(params_glob%extr_iter-2)))
+                neigh_frac = extremal_decay2D( params_glob%extr_iter, params_glob%extr_lim )
                 if( L_VERBOSE_GLOB ) write(logfhandle,'(A,F8.2)') '>>> STOCHASTIC NEIGHBOURHOOD SIZE(%):', 100.*(1.-neigh_frac)
             endif
         endif

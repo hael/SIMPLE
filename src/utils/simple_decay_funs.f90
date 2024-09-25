@@ -2,7 +2,7 @@ module simple_decay_funs
 include 'simple_lib.f08'
 implicit none
 
-public :: nsampl_decay, inv_nsampl_decay, calc_nsampl_fromto, inv_cos_decay
+public :: nsampl_decay, inv_nsampl_decay, calc_nsampl_fromto, inv_cos_decay, extremal_decay2D
 private
 
 real,    parameter :: UPDATE_FRAC_MIN = 0.1
@@ -55,6 +55,15 @@ contains
             nsampl_fromto(2) = min(nsampl_fromto(2), NSAMPL_MAX)
         endif
     end function calc_nsampl_fromto
+
+    real function extremal_decay2D( extr_iter, extr_lim )
+        integer, intent(in) :: extr_iter, extr_lim
+        real :: power
+        ! factorial decay, -2 because first step is always greedy
+        power = real(extr_iter)*MAX_EXTRLIM2D/real(extr_lim) - 2.0
+        extremal_decay2D = SNHC2D_INITFRAC * (1.-SNHC2D_DECAY)**power
+        extremal_decay2D = min(SNHC2D_INITFRAC, max(0.,extremal_decay2D))
+    end function extremal_decay2D
 
 end module simple_decay_funs
 

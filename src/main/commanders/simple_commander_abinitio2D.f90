@@ -23,10 +23,10 @@ end type abinitio2D_commander
 
 ! class constants
 real,             parameter :: SMPD_TARGET    = 2.67
-integer,          parameter :: NSTAGES        = 4
-integer,          parameter :: PHASES(2)      = [3,  4]
+integer,          parameter :: NSTAGES        = 6
+integer,          parameter :: PHASES(2)      = [4, 6]
 integer,          parameter :: MINBOXSZ       = 88
-integer,          parameter :: EXTR_LIM_LOCAL = 18
+integer,          parameter :: EXTR_LIM_LOCAL = 20
 
 ! class variables
 type(lp_crop_inf) :: lpinfo(NSTAGES)
@@ -59,7 +59,7 @@ contains
         call params%new(cline)
         call cline%set('mkdir', 'no')
         call spproj%ptr2oritype(params%oritype, spproj_field)
-        maxits = [params%extr_lim, params%extr_lim+5]
+        maxits = [params%extr_lim, params%extr_lim+10]
         ! set downscaling
         call set_dims
         ! set resolutions limits
@@ -93,7 +93,6 @@ contains
         enddo
         ! transfer 2D shifts to 3D field
         call spproj%read_segment(params%oritype,params%projfile)
-        call spproj%read_segment('ptcl3D',params%projfile) ! already read in?
         call spproj%os_ptcl3D%transfer_2Dshifts(spproj_field)
         call spproj%write_segment_inside('ptcl3D', params%projfile)
         ! final class generation & ranking
@@ -155,6 +154,7 @@ contains
                 lpinfo(istage)%lp      = lpinfo(istage-1)%lp - (lpinfo(istage-1)%lp - params%lpstop)/2.0
                 lpinfo(istage)%l_lpset = .true.
             end do
+            lpinfo(NSTAGES-1)%lp    = params%lpstop
             lpinfo(NSTAGES)%l_lpset = .false.
             lpinfo(NSTAGES)%lp      = params%lpstop
             do istage = 1,NSTAGES
@@ -183,7 +183,7 @@ contains
         subroutine set_cline_cluster2D( istage )
             integer, intent(in) :: istage
             character(len=:), allocatable :: sh_first, refine, center, objfun, refs
-            integer :: iphase, iter, imaxits, maxits_glob, cc_iters, minits
+            integer :: iphase, iter, imaxits, maxits_glob, cc_iters, minits, extr_iter
             real    :: trs, snr_noise_reg
             refine      = 'snhc_smpl' ! not optional
             ! iteration number bookkeeping
@@ -202,70 +202,79 @@ contains
             ! phase control parameters
             select case(iphase)
             case(1)
+                ! phase constants
+                maxits_glob   = params%extr_lim+5
+                snr_noise_reg = params%snr_noise_reg
+                extr_iter     = 0
+                minits        = imaxits
+                ! phase variables
+                imaxits       = nint(real(istage)*real(maxits(1))/real(PHASES(1)))
                 select case(istage)
                 case(1)
-                    imaxits       = nint(real(params%extr_lim)/3.) != 1/3 * maxits(1)
-                    maxits_glob   = params%extr_lim
-                    minits        = imaxits
-                    trs           = 0.
-                    sh_first      = 'no'
-                    center        = 'no'
+                    trs          = 0.
+                    sh_first     = 'no'
+                    center       = 'no'
                     if( cline%defined('refs') )then
-                        refs      = trim(params%refs)
+                        refs     = trim(params%refs)
                     else
-                        refs      = NIL
+                        refs     = NIL
                     endif
-                    snr_noise_reg = params%snr_noise_reg
-                    cc_iters      = 0
+                    cc_iters     = 0
                     if( params%cc_objfun == OBJFUN_CC )then
                         objfun   = 'cc'
                     else
                         objfun   = 'euclid'
                     endif
                 case(2)
-                    imaxits       = nint(2.*real(params%extr_lim)/3.) != 2/3 * maxits(1)
-                    maxits_glob   = params%extr_lim
-                    minits        = imaxits
-                    trs           = lpinfo(istage)%trslim
-                    sh_first      = trim(params%sh_first)
-                    center        = trim(params%center)
-                    refs          = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
-                    snr_noise_reg = params%snr_noise_reg
-                    cc_iters      = 0
+                    trs          = lpinfo(istage)%trslim
+                    sh_first     = trim(params%sh_first)
+                    center       = trim(params%center)
+                    refs         = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
+                    cc_iters     = 0
                     if( params%cc_objfun == OBJFUN_CC )then
                         objfun   = 'cc'
                     else
                         objfun   = 'euclid'
                     endif
                 case(3)
-                    imaxits       = params%extr_lim != maxits(1)
-                    maxits_glob   = params%extr_lim
-                    minits        = imaxits
-                    trs           = lpinfo(istage)%trslim
-                    sh_first      = trim(params%sh_first)
-                    center        = trim(params%center)
-                    refs          = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
-                    snr_noise_reg = params%snr_noise_reg
+                    trs          = lpinfo(istage)%trslim
+                    sh_first     = trim(params%sh_first)
+                    center       = trim(params%center)
+                    refs         = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
                     if( params%cc_objfun == OBJFUN_CC )then
-                        cc_iters  = iter-1
+                        cc_iters = iter-1
                     else
                         cc_iters = 0
                     endif
                     objfun        = 'euclid'
+                case(4)
+                    trs           = lpinfo(istage)%trslim
+                    sh_first      = trim(params%sh_first)
+                    center        = trim(params%center)
+                    refs          = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
+                    cc_iters      = 0
+                    objfun        = 'euclid'
                 end select
             case(2)
-                imaxits       = maxits(2)
-                maxits_glob   = 0
-                minits        = iter+2
-                trs           = lpinfo(istage)%trslim
-                sh_first      = trim(params%sh_first)
-                center        = trim(params%center)
-                refs          = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
-                snr_noise_reg = 0.
-                cc_iters      = 0
-                objfun        = 'euclid'
-                ! deactivates stochastic withdrawal
-                call cline_cluster2D%set('extr_iter', params%extr_lim+1)
+                ! phase constants
+                imaxits           = iter+4
+                minits            = iter+1
+                sh_first          = trim(params%sh_first)
+                trs               = lpinfo(istage)%trslim
+                center            = trim(params%center)
+                cc_iters          = 0
+                objfun            = 'euclid'
+                extr_iter         = params%extr_lim+1
+                refs              = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
+                ! phase variables
+                select case(istage)
+                case(5)
+                    maxits_glob   = params%extr_lim+5
+                    snr_noise_reg = params%snr_noise_reg
+                case(6)
+                    maxits_glob   = 0
+                    snr_noise_reg = 0.
+                end select
             end select
             ! command line update
             call cline_cluster2D%set('startit',   iter)
@@ -284,9 +293,7 @@ contains
             else
                 call cline_cluster2D%delete('lp')
             endif
-            if( trim(refs) /= NIL )then
-                call cline_cluster2D%set('refs',  refs)
-            endif
+            if( trim(refs) /= NIL ) call cline_cluster2D%set('refs', refs)
             if( params%l_noise_reg .and. snr_noise_reg > 0.001)then
                 call cline_cluster2D%set('snr_noise_reg', snr_noise_reg)
                 call cline_cluster2D%set('maxits_glob',   maxits_glob)
@@ -294,9 +301,12 @@ contains
                 call cline_cluster2D%delete('snr_noise_reg')
                 call cline_cluster2D%delete('maxits_glob')
             endif
+            if( extr_iter > 0 )then
+                call cline_cluster2D%set('extr_iter', extr_iter)
+            else
+                call cline_cluster2D%delete('extr_iter')
+            endif
             call cline_cluster2D%delete('endit')
-            ! debug for now
-            call cline_cluster2D%printline
         end subroutine set_cline_cluster2D
 
         subroutine gen_final_cavgs( iter )
@@ -315,7 +325,7 @@ contains
                 call cline_make_cavgs%set('prg',        'make_cavgs')
                 call cline_make_cavgs%set('refs',       finalcavgs)
                 call cline_make_cavgs%set('which_iter', iter)
-                call xmake_cavgs%execute_safe(cline_make_cavgs)
+                call xmake_cavgs_distr%execute_safe(cline_make_cavgs)
             endif
             ! adding cavgs & FRCs to project
             call spproj%read_segment('out', params%projfile)
