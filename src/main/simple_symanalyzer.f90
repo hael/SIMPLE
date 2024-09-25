@@ -259,7 +259,6 @@ contains
     end subroutine symmetry_tester
 
     subroutine eval_point_groups( vol_in, msk, hp, lp, pgrps )
-        use simple_vol_srch
         class(projector), intent(inout) :: vol_in
         real,             intent(in)    :: msk, hp, lp
         type(sym_stats),  intent(inout) :: pgrps(:)
@@ -267,7 +266,7 @@ contains
         type(image)     :: rovol_pad, rovol, vol_asym_aligned2axis, vol_sym
         type(ori)       :: symaxis
         type(sym)       :: symobj
-        real            :: rmat_symaxis(3,3), smpd, cxyz(4)
+        real            :: rmat_symaxis(3,3), smpd!, cxyz(4)
         integer         :: filtsz, ldim(3), boxpd, igrp, ldim_pd(3)
         ! prepare for volume rotations
         ldim    = vol_in%get_ldim()
@@ -306,18 +305,6 @@ contains
             ! generate symmetrized volume
             if( DEBUG_HERE ) write(logfhandle,*) 'generating symmetrized volume'
             call symaverage
-            call vol_sym%write('vol_sym_'//trim(pgrps(igrp)%str)//'.mrc')
-            call vol_sym%mask(msk, 'soft')
-            ! correct for any small discrepancy in shift between the volumes
-            if( DEBUG_HERE ) write(logfhandle,*) 'correcting for any small discrepancy in shift between the volumes'
-            call vol_asym_aligned2axis%fft
-            call vol_sym%fft
-            call vol_srch_init(vol_asym_aligned2axis, vol_sym, hp, lp, SHSRCH_HWDTH)
-            cxyz = vol_shsrch_minimize()
-            ! read back in unmasked volume and shift it before re-applying the mask
-            if( DEBUG_HERE ) write(logfhandle,*) 'shifting volume'
-            call vol_sym%read('vol_sym_'//trim(pgrps(igrp)%str)//'.mrc')
-            call vol_sym%shift(cxyz(2:4))
             if( WRITE_VOLUMES )then
                 call vol_sym%write('vol_sym_'//trim(pgrps(igrp)%str)//'.mrc')
             else

@@ -157,7 +157,7 @@ contains
                 call build%spproj_field%sample4update_reprod([params%fromp,params%top],&
                 &nptcls2update, pinds, ptcl_mask)
             else
-                call build%spproj_field%sample4update_rnd2([params%fromp,params%top],&
+                call build%spproj_field%sample4update_rnd([params%fromp,params%top],&
                 params%update_frac, nptcls2update, pinds, ptcl_mask, .false.) ! no increment of sampled
             endif
         else

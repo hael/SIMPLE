@@ -983,14 +983,9 @@ contains
         allocate(ptcl_mask(1:params_glob%nptcls))
         if( params_glob%startit == 1 ) call build_glob%spproj_field%clean_updatecnt_sampled
         if( params_glob%l_frac_update )then
-            if( params_glob%l_stoch_update )then
-                call build_glob%spproj_field%sample4update_rnd([1,params_glob%nptcls],&
+            call build_glob%spproj_field%sample4update_rnd([1,params_glob%nptcls],&
                 &params_glob%update_frac, nptcls, pinds, ptcl_mask, .true.) ! sampled incremented
-            else
-                call build_glob%spproj_field%sample4update_rnd2([1,params_glob%nptcls],&
-                &params_glob%update_frac, nptcls, pinds, ptcl_mask, .true.) ! sampled incremented
-            endif
-        else                                                    ! we sample all state > 0
+        else                                   ! we sample all state > 0
             call build_glob%spproj_field%sample4update_all([1,params_glob%nptcls],&
             &nptcls, pinds, ptcl_mask, .true.) ! sampled incremented
         endif
