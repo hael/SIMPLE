@@ -92,8 +92,8 @@ contains
         class(kpca_svd),   intent(inout) :: self
         real,              intent(in)    :: pcavecs(self%D,self%N)
         integer, optional, intent(in)    :: maxpcaits
-        integer, parameter :: MAX_ITS = 100
-        real,    parameter :: TOL     = 0.05
+        integer, parameter :: MAX_ITS = 1000
+        real,    parameter :: TOL     = 0.0001
         logical, parameter :: DEBUG   = .false.
         integer(int64)     :: start_time, end_time
         real(real64)       :: rate
@@ -164,12 +164,12 @@ contains
                         norm_prev(:,ithr) = 1. / sqrt(real(self%D))
                         norm_data(:,ithr) = norm_pcavecs(:,ind)
                         iter              = 1
-                        do while( abs(abs(sum(norm_data(:,ithr) * norm_prev(:,ithr))) - 1.) > TOL )
+                        do while( abs(abs(sum(norm_data(:,ithr) * norm_prev(:,ithr))) - 1.) > TOL .and. iter < its )
                             norm_prev(:,ithr) = norm_data(:,ithr)
                             ! 1. projecting each image on kernel space
                             proj_data(:,ithr) = matmul(norm_pcavecs_t, norm_prev(:,ithr)) * ker_weight(:,ind)
                             ! 2. computing the pre-image
-                            denom = dsqrt(sum(real(proj_data(:,ithr),dp)**2))
+                            denom = sum(abs(real(proj_data(:,ithr),dp)))
                             if( denom < DTINY ) exit
                             self%data(:,ind) = matmul(pcavecs, proj_data(:,ithr)) / real(denom)
                             denom            = dsqrt(sum(real(self%data(:,ind),dp)**2))
@@ -187,7 +187,7 @@ contains
                         norm_prev(:,ithr) = 1. / sqrt(real(self%D))
                         norm_data(:,ithr) = norm_pcavecs(:,ind)
                         iter              = 1
-                        do while( abs(abs(sum(norm_data(:,ithr) * norm_prev(:,ithr))) - 1.) > TOL )
+                        do while( abs(abs(sum(norm_data(:,ithr) * norm_prev(:,ithr))) - 1.) > TOL .and. iter < its )
                             norm_prev(:,ithr) = norm_data(:,ithr)
                             ! 1. projecting each image on kernel space
                             proj_data(:,ithr) = matmul(norm_pcavecs_t, norm_prev(:,ithr)) * ker_weight(:,ind)
