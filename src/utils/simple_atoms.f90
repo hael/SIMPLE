@@ -1188,8 +1188,8 @@ contains
         type(image)       :: vol
         real              :: mol_dim(3), center(3), qrt_box(3), max_dist, dist
         integer           :: ldim(3), i_atom, j_atom
-        logical           :: use_center
-        if( present(center_pdb) ) use_center = center_pdb
+        logical           :: use_center = .false.
+        if( present(center_pdb) .and. center_pdb ) use_center = .true.
         if( any(self%xyz(:,:) < 0.) )then
             write(logfhandle,'(A)') 'WARNING: PDB atomic center needs to be moved to the center of the box'
             use_center = .true. ! it needs to be centered because the PDB coordinates does not come from cryoEM
@@ -1209,9 +1209,7 @@ contains
         endif
         if( present(vol_dim) )then
             ldim        = round2even( (mol_dim)/smpd )
-            if( vol_dim(1) < ldim(1) ) THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pdb2mrc')
-            if( vol_dim(2) < ldim(2) ) THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pdb2mrc')
-            if( vol_dim(3) < ldim(3) ) THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pdb2mrc')
+            if( any(vol_dim < ldim) ) THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pdb2mrc')
             ldim        = vol_dim
         else
             max_dist = 0.
