@@ -93,7 +93,7 @@ contains
         real,              intent(in)    :: pcavecs(self%D,self%N)
         integer, optional, intent(in)    :: maxpcaits
         integer, parameter :: MAX_ITS = 100
-        real,    parameter :: TOL     = 1e-4
+        real,    parameter :: TOL     = 0.05
         logical, parameter :: DEBUG   = .false.
         integer(int64)     :: start_time, end_time
         real(real64)       :: rate
@@ -163,14 +163,12 @@ contains
                     norm_prev(:,ithr) = 1. / sqrt(real(self%D))
                     norm_data(:,ithr) = norm_pcavecs(:,ind)
                     iter              = 1
-                    do while( abs(sum(norm_data(:,ithr) * norm_prev(:,ithr)) - 1.) > TOL .and. iter < its )
+                    do while( abs(abs(sum(norm_data(:,ithr) * norm_prev(:,ithr))) - 1.) > TOL )
                         norm_prev(:,ithr) = norm_data(:,ithr)
                         ! 1. projecting each image on kernel space
-                        proj_data(:,ithr) = matmul(norm_pcavecs_t, norm_prev(:,ithr))
-                        ! 2. applying the principle components to the projected vector
-                        proj_data(:,ithr) = proj_data(:,ithr) * ker_weight(:,ind)
-                        ! 3. computing the pre-image (of the image in step 1) using the result in step 2
-                        denom = sum(real(proj_data(:,ithr),dp))
+                        proj_data(:,ithr) = matmul(norm_pcavecs_t, norm_prev(:,ithr)) * ker_weight(:,ind)
+                        ! 2. computing the pre-image
+                        denom = dsqrt(sum(real(proj_data(:,ithr),dp)**2))
                         if( denom < DTINY ) exit
                         self%data(:,ind) = matmul(pcavecs, proj_data(:,ithr)) / real(denom)
                         denom            = dsqrt(sum(real(self%data(:,ind),dp)**2))
