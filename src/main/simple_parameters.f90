@@ -204,6 +204,7 @@ type :: parameters
     character(len=STDLEN)     :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
     character(len=STDLEN)     :: pca_mode='ppca'      !< PCA mode(ppca|pca_svd|kpca){ppca}
     character(len=STDLEN)     :: kpca_ker='cosine'    !< kPCA kernel(rbf|cosine){cosine}
+    character(len=STDLEN)     :: kpca_target='ptcl'   !< kPCA kernel target on ptcls or cavgs (ptcl|cls){ptcl}
     character(len=STDLEN)     :: pcontrast='black'    !< particle contrast(black|white){black}
     character(len=STDLEN)     :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
     character(len=STDLEN)     :: pgrp_start='c1'      !< point-group symmetry(cn|dn|t|o|i)
@@ -595,6 +596,7 @@ contains
         call check_carg('pad',            self%pad)
         call check_carg('pca_mode',       self%pca_mode)
         call check_carg('kpca_ker',       self%kpca_ker)
+        call check_carg('kpca_target',    self%kpca_target)
         call check_carg('pcontrast',      self%pcontrast)
         call check_carg('pgrp',           self%pgrp)
         call check_carg('pgrp_start',     self%pgrp_start)

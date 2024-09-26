@@ -156,28 +156,51 @@ contains
                 enddo
                 !$omp end parallel do
                 norm_pcavecs_t = transpose(norm_pcavecs)
-                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,i,denom)
-                do ind = 1, self%N
-                    ithr              = omp_get_thread_num() + 1
-                    self%data(:,ind)  = pcavecs(:,ind)
-                    norm_prev(:,ithr) = 1. / sqrt(real(self%D))
-                    norm_data(:,ithr) = norm_pcavecs(:,ind)
-                    iter              = 1
-                    do while( abs(abs(sum(norm_data(:,ithr) * norm_prev(:,ithr))) - 1.) > TOL )
-                        norm_prev(:,ithr) = norm_data(:,ithr)
-                        ! 1. projecting each image on kernel space
-                        proj_data(:,ithr) = matmul(norm_pcavecs_t, norm_prev(:,ithr)) * ker_weight(:,ind)
-                        ! 2. computing the pre-image
-                        denom = dsqrt(sum(real(proj_data(:,ithr),dp)**2))
-                        if( denom < DTINY ) exit
-                        self%data(:,ind) = matmul(pcavecs, proj_data(:,ithr)) / real(denom)
-                        denom            = dsqrt(sum(real(self%data(:,ind),dp)**2))
-                        if( denom < DTINY ) exit
-                        norm_data(:,ithr) = self%data(:,ind) / real(denom)
-                        iter = iter + 1
+                if( trim(params_glob%kpca_target) .eq. 'ptcl' )then
+                    !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,i,denom)
+                    do ind = 1, self%N
+                        ithr              = omp_get_thread_num() + 1
+                        self%data(:,ind)  = pcavecs(:,ind)
+                        norm_prev(:,ithr) = 1. / sqrt(real(self%D))
+                        norm_data(:,ithr) = norm_pcavecs(:,ind)
+                        iter              = 1
+                        do while( abs(abs(sum(norm_data(:,ithr) * norm_prev(:,ithr))) - 1.) > TOL )
+                            norm_prev(:,ithr) = norm_data(:,ithr)
+                            ! 1. projecting each image on kernel space
+                            proj_data(:,ithr) = matmul(norm_pcavecs_t, norm_prev(:,ithr)) * ker_weight(:,ind)
+                            ! 2. computing the pre-image
+                            denom = dsqrt(sum(real(proj_data(:,ithr),dp)**2))
+                            if( denom < DTINY ) exit
+                            self%data(:,ind) = matmul(pcavecs, proj_data(:,ithr)) / real(denom)
+                            denom            = dsqrt(sum(real(self%data(:,ind),dp)**2))
+                            if( denom < DTINY ) exit
+                            norm_data(:,ithr) = self%data(:,ind) / real(denom)
+                            iter = iter + 1
+                        enddo
                     enddo
-                enddo
-                !$omp end parallel do
+                    !$omp end parallel do
+                else
+                    !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,i,denom)
+                    do ind = 1, self%N
+                        ithr              = omp_get_thread_num() + 1
+                        self%data(:,ind)  = pcavecs(:,ind)
+                        norm_prev(:,ithr) = 1. / sqrt(real(self%D))
+                        norm_data(:,ithr) = norm_pcavecs(:,ind)
+                        iter              = 1
+                        do while( abs(abs(sum(norm_data(:,ithr) * norm_prev(:,ithr))) - 1.) > TOL )
+                            norm_prev(:,ithr) = norm_data(:,ithr)
+                            ! 1. projecting each image on kernel space
+                            proj_data(:,ithr) = matmul(norm_pcavecs_t, norm_prev(:,ithr)) * ker_weight(:,ind)
+                            ! 2. computing the pre-image
+                            self%data(:,ind)  = matmul(norm_pcavecs, proj_data(:,ithr))
+                            denom             = dsqrt(sum(real(self%data(:,ind),dp)**2))
+                            if( denom < DTINY ) exit
+                            norm_data(:,ithr) = self%data(:,ind) / real(denom)
+                            iter = iter + 1
+                        enddo
+                    enddo
+                    !$omp end parallel do
+                endif
         end select
         if( DEBUG )then
             call system_clock(end_time)
