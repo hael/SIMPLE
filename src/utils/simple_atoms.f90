@@ -1177,15 +1177,23 @@ contains
     !
     ! end subroutine shift2masscen
 
-    subroutine pdb2mrc( self, pdb_file, vol_file, smpd, pdb_out, vol_dim )
+    subroutine pdb2mrc( self, pdb_file, vol_file, smpd, center_pdb, pdb_out, vol_dim )
         use simple_image, only: image
         class(atoms),           intent(inout) :: self
         real,                   intent(in)    :: smpd
-        character(*),           intent(in)    :: pdb_file, vol_file, pdb_out
+        character(*),           intent(in)    :: pdb_file, vol_file
+        character(*), optional, intent(in)    :: pdb_out
+        logical,      optional, intent(in)    :: center_pdb
+        integer,      optional, intent(in)    :: vol_dim(3)
         type(image)       :: vol
-        real              :: mol_dim(3), center(3), qrt_box(3), max_dist, dist, corner(3)
+        real              :: mol_dim(3), center(3), qrt_box(3), max_dist, dist
         integer           :: ldim(3), i_atom, j_atom
-        integer, optional :: vol_dim(3)
+        logical           :: use_center
+        if( present(center_pdb) ) use_center = center_pdb
+        if( any(self%xyz(:,:) < 0.) )then
+            write(logfhandle,'(A)') 'WARNING: PDB atomic center needs to be moved to the center of the box'
+            use_center = .true. ! it needs to be centered because the PDB coordinates does not come from cryoEM
+        endif
         write(logfhandle,'(A,f8.3,A)') 'Sampling distance: ',smpd,' Angstrom'
         call self%new(pdb_file)
         ! dimensions of the molecule
@@ -1195,10 +1203,12 @@ contains
         mol_dim(1) = maxval(self%xyz(:,1)) - minval(self%xyz(:,1))
         mol_dim(2) = maxval(self%xyz(:,2)) - minval(self%xyz(:,2))
         mol_dim(3) = maxval(self%xyz(:,3)) - minval(self%xyz(:,3))
-        center = self%get_geom_center()
-        write(logfhandle,'(A,2(f6.1,","),f6.1,A)') " Atomic center at ", center," (center of volume at 0, 0, 0)"
+        if( use_center )then
+            center = self%get_geom_center()
+            write(logfhandle,'(A,2(f6.1,","),f6.1,A)') "Atomic center at ", center," (center of volume at 0, 0, 0)"
+        endif
         if( present(vol_dim) )then
-            ldim        = ceiling( (mol_dim)/smpd )
+            ldim        = round2even( (mol_dim)/smpd )
             if( vol_dim(1) < ldim(1) ) THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pdb2mrc')
             if( vol_dim(2) < ldim(2) ) THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pdb2mrc')
             if( vol_dim(3) < ldim(3) ) THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pdb2mrc')
@@ -1214,13 +1224,15 @@ contains
             ldim(:) = ( ((max_dist * 2.)/smpd) )
         endif
         call vol%new([ldim(1), ldim(2), ldim(3)], smpd)
-        ! 0,0,0 in PDB space is map to the center of the volume 
-        call self%center_pdbcoord(ldim, smpd)
+        if( use_center )then
+            ! 0,0,0 in PDB space is map to the center of the volume 
+            call self%center_pdbcoord(ldim, smpd)
+            call self%writepdb(pdb_out)
+        endif
         call self%convolve(vol, cutoff = 8*smpd)
-        call self%writepdb(pdb_out)
         call vol%write(vol_file)
         call vol%kill()
-        write(logfhandle,'(A,3I8,A)') " 3D MRC simulated volume created (", ldim," ) voxels"
+        write(logfhandle,'(A,3I6,A)') "3D MRC simulated volume created (", ldim," ) voxels"
     end subroutine pdb2mrc
 
     !>brief translate PDB coordinates to center of the volume
@@ -1229,11 +1241,9 @@ contains
         integer, intent(in) :: ldim(3)
         real, intent(in)    :: smpd
         real                :: center(3), half_box(3)
-        !center(1)   = sum(self%xyz(:,1)) / self%n;  center(2) = sum(self%xyz(:,2)) / self%n; center(3) = sum(self%xyz(:,3)) / self%n
         center      = self%get_geom_center()
         half_box(:) = smpd*(real(ldim(:)/2.))
-        !call self%translate(-center+half_box)
-        call self%translate(half_box)
+        call self%translate(-center+half_box)
     end subroutine center_pdbcoord
 
     subroutine map_validation( self, vol1, vol2, filename )

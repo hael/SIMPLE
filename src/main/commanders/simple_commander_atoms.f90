@@ -64,7 +64,11 @@ contains
             params%pdbout = trim(get_fbody(params%pdbout,'pdb'))
         endif
         if( .not.cline%defined('outvol') ) params%outvol = swap_suffix(params%pdbfile,'mrc','pdb')
-        call molecule%pdb2mrc(params%pdbfile, params%outvol, params%smpd, params%pdbout)
+        if( params%center_pdb .eq. 'yes' )then
+            call molecule%pdb2mrc(params%pdbfile, params%outvol, params%smpd, center_pdb=.true., pdb_out=params%pdbout)
+        else
+            call molecule%pdb2mrc(params%pdbfile, params%outvol, params%smpd, pdb_out=params%pdbout)
+        endif
         call molecule%kill
         ! end gracefully
         call simple_end('**** SIMPLE_PDB2MRC NORMAL STOP ****')

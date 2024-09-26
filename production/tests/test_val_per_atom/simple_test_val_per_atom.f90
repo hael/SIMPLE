@@ -40,7 +40,7 @@ endif
 vol_file = swap_suffix(pdb_file,'mrc','pdb')
 pdb_out  = trim(get_fbody(pdb_file,'pdb'))//'_centered'
 call molecule%new(pdb_file)
-call molecule%pdb2mrc(pdb_file, vol_file, smpd, pdb_out)
+call molecule%pdb2mrc(pdb_file, vol_file, smpd, pdb_out=pdb_out)
 call find_ldim_nptcls(vol_file, ldim, ifoo)
 call vol%new(ldim, smpd)
 call vol%read(vol_file)

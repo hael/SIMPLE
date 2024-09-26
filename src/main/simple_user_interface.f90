@@ -243,6 +243,7 @@ type(simple_input_param) :: groupframes
 type(simple_input_param) :: hp
 type(simple_input_param) :: icefracthreshold
 type(simple_input_param) :: icm
+type(simple_input_param) :: center_pdb
 type(simple_input_param) :: job_memory_per_task
 type(simple_input_param) :: kv
 type(simple_input_param) :: kweight
@@ -1230,6 +1231,7 @@ contains
         call set_param(pickrefs,       'pickrefs',     'file',   'Stack of class-averages/reprojections for picking', 'Stack of class-averages/reprojections for picking', 'e.g. pickrefs.mrc', .false., '')
         call set_param(icm,            'icm',          'binary', 'Whether to perform ICM filtering of reference(s)', 'Whether to perform ICM filtering of reference(s)(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(flipgain,       'flipgain',     'multi',  'Flip the gain reference', 'Flip the gain reference along the provided axis(no|x|y|xy|yx){no}', '(no|x|y|xy|yx){no}', .false., 'no')
+        call set_param(center_pdb,     'center_pdb',   'binary', 'Whether to move the PDB atomic center to the center of the box', 'Whether to move the PDB atomic center to the center of the box (yes|no){no}', '(yes|no){no}', .false., 'no')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -2146,7 +2148,7 @@ contains
         &'PDB to MRC simulator',&                          ! descr_short
         &'is a program to simulate a 3D density map in MRC format using a PDB format coordinadinates file',& ! descr long
         &'all',&                                           ! executable
-        &1, 3, 0, 0, 0, 0, 0, .false.)                     ! # entries in each group, requires sp_project
+        &1, 4, 0, 0, 0, 0, 0, .false.)                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call pdb2mrc%set_input('img_ios', 1, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'molecule.pdb')
@@ -2155,6 +2157,7 @@ contains
         pdb2mrc%parm_ios(1)%required = .false.
         call pdb2mrc%set_input('parm_ios', 2, outvol)
         call pdb2mrc%set_input('parm_ios', 3, pdbout)
+        call pdb2mrc%set_input('parm_ios', 4, center_pdb)
         ! alternative inputs
         ! <empty>
         ! search controls

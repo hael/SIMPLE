@@ -27,6 +27,7 @@ type :: parameters
     character(len=3)          :: beamtilt='no'        !< use beamtilt values when generating optics groups
     character(len=3)          :: bin='no'             !< binarize image(yes|no){no}
     character(len=3)          :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
+    character(len=3)          :: center_pdb='no'      !< move PDB atomic center to the center of the box(yes|no){no}
     character(len=3)          :: classtats='no'       !< calculate class population statistics(yes|no){no}
     character(len=3)          :: cluster_cavgs='no'   !< Wheter to perform clustering of the class-averages(yes|no){no}
     character(len=3)          :: combine_eo='no'      !< Whether combined e/o volumes have been used for alignment(yes|no){no}
@@ -527,6 +528,7 @@ contains
         call check_carg('bin_cls',        self%bin_cls)
         call check_carg('boxtype',        self%boxtype)
         call check_carg('center',         self%center)
+        call check_carg('center_pdb',     self%center_pdb)
         call check_carg('classtats',      self%classtats)
         call check_carg('cls_init',       self%cls_init)
         call check_carg('cluster_cavgs',  self%cluster_cavgs)
