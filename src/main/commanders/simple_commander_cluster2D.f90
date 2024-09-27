@@ -1574,25 +1574,25 @@ contains
         use simple_pftcc_shsrch_fm
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(pftcc_shsrch_fm), allocatable :: correlators(:)
+        type(pftcc_shsrch_fm), allocatable :: fm_correlators(:)
         type(parameters)              :: params
         type(sp_project)              :: spproj
         type(class_frcs)              :: clsfrcs
         type(image)                   :: img_msk
         type(polarft_corrcalc)        :: pftcc
         type(aff_prop)                :: aprop
-        type(image),      allocatable :: cavg_imgs(:), tmp_imgs(:)
+        type(image),      allocatable :: cavg_imgs(:), tmp_imgs(:), ccimgs(:,:)
         type(polarizer)               :: polartransform
         character(len=:), allocatable :: cavgsstk, cavgsstk_shifted, classname, frcs_fname
-        real,             allocatable :: states(:), orig_cls_inds(:), frc(:), filter(:), clspops(:), clsres(:)
+        real,             allocatable :: states(:), frc(:), filter(:), clspops(:), clsres(:)
         real,             allocatable :: corrs(:), corrmat(:,:), corrs_top_ranking(:)
         logical,          allocatable :: l_msk(:,:,:), mask_top_ranking(:), mask_otsu(:), mask_icls(:)
         integer,          allocatable :: order(:), nloc(:), centers(:), labels(:), cntarr(:), clsinds(:), pops(:)
         integer,          allocatable :: labels_mapped(:), classmapping(:)
         logical,          parameter   :: DEBUG = .true.
-        integer :: ldim(3), clpair(2), loc(1), ncls, n, ncls_sel, i, j, icls, cnt, filtsz, pop1, pop2, nsel, ii,jj
-        integer :: irot, irotm, ithr, ncls_aff_prop, icen, jcen
-        real    :: smpd, sdev_noise, simsum, cmin, cmax, pref, corr_icls, offset(2), offsetm(2), cc,ccm, trsstep
+        integer :: ldim(3), clpair(2), loc(1), ncls, n, ncls_sel, i, j, icls, cnt, filtsz, pop1, pop2, nsel
+        integer :: ithr, ncls_aff_prop, icen, jcen
+        real    :: smpd, simsum, cmin, cmax, pref, corr_icls, cc,ccm, trsstep
         logical :: l_apply_optlp, use_shifted, l_mag
         ! defaults
         call cline%set('oritype', 'cls2D')
@@ -1794,7 +1794,7 @@ contains
             allocate(corrmat(ncls_sel,ncls_sel), source=-1.)
             select case(trim(params%algorithm))
             case('magcc')
-                ! Pseudo-Fourier Mellin transform
+                ! Fourier-Mellin transform
                 write(logfhandle,'(A)') '>>> CALCULATING CORRELATION OF MAGNITUDES MATRIX'
                 ! polarizer, pftcc
                 params%sh_inv = 'yes'
@@ -1807,50 +1807,43 @@ contains
                     call polartransform%polarize(pftcc, cavg_imgs(icls), icls, isptcl=.false., iseven=.true.)
                     call pftcc%cp_even_ref2ptcl(icls,icls)
                     call pftcc%mirror_pft(pftcc%pfts_refs_even(:,:,icls), pftcc%pfts_refs_odd(:,:,icls))
-                    call cavg_imgs(icls)%ifft()
                 end do
                 !$omp end parallel do
                 call pftcc%memoize_refs
                 call pftcc%memoize_ptcls
-                allocate(corrs(pftcc%pftsz),correlators(nthr_glob))
+                allocate(fm_correlators(nthr_glob),ccimgs(nthr_glob,2))
                 do i = 1,nthr_glob
-                    call correlators(i)%new(params%trs,trsstep,opt_angle=.false.)
+                    call fm_correlators(i)%new(params%trs,trsstep,opt_angle=.false.)
+                    call ccimgs(i,1)%new(ldim, smpd, wthreads=.false.)
+                    call ccimgs(i,2)%new(ldim, smpd, wthreads=.false.)
                 enddo
-                !$omp parallel do default(shared) private(i,j,irot,irotm,cc,ccm,ithr,corrs,offset,offsetm) schedule(static) proc_bind(close)
+                !$omp parallel do default(shared) private(i,j,cc,ccm,ithr)&
+                !$omp schedule(dynamic) proc_bind(close)
                 do i = 1, ncls_sel - 1
                     ithr = omp_get_thread_num()+1
                     corrmat(i,i) = 1.
-                    do j = i + 1, ncls_sel
+                    do j = i, ncls_sel
                         ! correlation of reference to particle
                         call pftcc%set_eo(i,.true.)
-                        ! rotational correlations of magnitudes
-                        call pftcc%gencorrs_mag_cc(j, i, corrs, kweight=params%l_kweight_rot)
-                        irot = maxloc(corrs,dim=1)
-                        if( params%l_doshift )then
-                            ! shift optimization of both irot & irot+pi
-                            call correlators(ithr)%minimize(j,i, irot, cc, offset)
-                        else
-                            cc = corrs(irot)
-                        endif
+                        call fm_correlators(ithr)%calc_phasecorr(j, i, cavg_imgs(j), cavg_imgs(i),&
+                            &ccimgs(ithr,1), ccimgs(ithr,2), cc)
                         ! correlation of mirrored reference to particle
                         call pftcc%set_eo(i,.false.)
-                        call pftcc%gencorrs_mag_cc(j, i, corrs, kweight=params%l_kweight_rot)
-                        irotm = maxloc(corrs,dim=1)
-                        if( params%l_doshift )then
-                             call correlators(ithr)%minimize(j,i, irotm, ccm, offsetm)
-                        else
-                            ccm = corrs(irotm)
-                        endif
-                        ! highest correlation
+                        call fm_correlators(ithr)%calc_phasecorr(j, i, cavg_imgs(j), cavg_imgs(i),&
+                            &ccimgs(ithr,1), ccimgs(ithr,2), ccm, mirror=.true.)
                         cc = max(cc,ccm)
                         corrmat(i,j) = cc
                         corrmat(j,i) = cc
                     enddo
-                    call pftcc%set_eo(i,.true.) ! restore
                 enddo
                 !$omp end parallel do
                 corrmat(ncls_sel,ncls_sel) = 1.
-                deallocate(corrs)
+                do i = 1,nthr_glob
+                    call fm_correlators(i)%kill
+                    call ccimgs(i,1)%kill
+                    call ccimgs(i,2)%kill
+                enddo
+                deallocate(fm_correlators,ccimgs)
             case DEFAULT
                 write(logfhandle,'(A)') '>>> CALCULATING COMMON-LINE CORRELATION MATRIX'
                 call pftcc%new(ncls_sel, [1,ncls_sel], params%kfromto)
@@ -2278,7 +2271,8 @@ contains
         class(cmdline),                       intent(inout) :: cline
         character(len=STDLEN),   parameter :: SIMMAT_FNAME = 'simmat.bin'
         character(len=STDLEN),   parameter :: LABELS_FNAME = 'labels.txt'
-        type(pftcc_shsrch_fm), allocatable :: correlators(:)
+        type(pftcc_shsrch_fm), allocatable :: fm_correlators(:)
+        type(image),           allocatable :: cavg_imgs(:), ccimgs(:,:)
         type(parameters)              :: params
         type(sp_project)              :: spproj
         type(class_frcs)              :: clsfrcs
@@ -2286,24 +2280,21 @@ contains
         type(polarft_corrcalc)        :: pftcc
         type(aff_prop)                :: aprop
         type(polarizer)               :: polartransform
-        type(image),      allocatable :: cavg_imgs(:)
         character(len=:), allocatable :: cavgsstk, classname, frcs_fname, fmt
         real,             allocatable :: states(:), frc(:), filter(:), clspops(:), clsres(:)
-        real,             allocatable :: corrs(:), corrmat(:,:), S(:,:)
-        logical,          allocatable :: l_msk(:,:,:), mask_icls(:)
+        real,             allocatable :: corrmat(:,:), S(:,:)
         integer,          allocatable :: centers(:), labels(:), clsinds(:), multi_labels(:,:)
+        logical,          allocatable :: l_msk(:,:,:), mask_icls(:)
         logical,          parameter   :: DEBUG = .true.
         integer :: ldim(3), n, ncls_sel, i, j, icls, cnt, filtsz, pop
-        integer :: irot, irotm, ithr, ncls_aff_prop, icen, jcen, funit, io_stat
-        real    :: offset(2), offsetm(2)
-        real    :: smpd, simsum, simmin, simmax, simmed, pref, corr_icls, cc,ccm, trsstep
+        integer :: ithr, ncls_aff_prop, icen, jcen, funit, io_stat
+        real    :: smpd, simsum, simmin, simmax, simmed, pref, corr_icls, cc,ccm
         logical :: l_apply_optlp, l_mirr
         ! defaults
         call cline%set('oritype', 'cls2D')
         call cline%set('ctf',     'no')
         call cline%set('objfun',  'cc')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
-        if( .not. cline%defined('trs')     ) call cline%set('trs',       15.)
         if( .not. cline%defined('kweight') ) call cline%set('kweight', 'all')
         if( .not. cline%defined('frac')    ) call cline%set('frac',       0.)
         if( .not. cline%defined('nsearch') ) call cline%set('nsearch',    0 )
@@ -2352,7 +2343,6 @@ contains
             if( DEBUG ) call read_classes
         else
             ! Similarity matrix calculation
-            trsstep = min(1.,params%trs/10.) ! offset stepping
             ! get FRCs
             l_apply_optlp = .false.
             call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
@@ -2413,8 +2403,10 @@ contains
             params%kfromto(1) = max(2, calc_fourier_index(params%hp, params%box, params%smpd))
             params%kfromto(2) =        calc_fourier_index(params%lp, params%box, params%smpd)
             allocate(corrmat(ncls_sel,ncls_sel), source=-1.)
-            ! Pseudo-Fourier Mellin transform
+            ! Fourier-Mellin transform
             write(logfhandle,'(A)') '>>> CALCULATING CORRELATION OF MAGNITUDES MATRIX'
+            ! Shift boundaries
+            if( .not. cline%defined('trs') ) params%trs = real(params%box)/6.
             ! pftcc init
             params%sh_inv = 'yes'
             call pftcc%new(ncls_sel, [1,ncls_sel], params%kfromto)
@@ -2435,11 +2427,13 @@ contains
             call pftcc%memoize_refs
             call pftcc%memoize_ptcls
             ! correlation matrix calculation
-            allocate(corrs(pftcc%pftsz),correlators(nthr_glob))
+            allocate(fm_correlators(nthr_glob),ccimgs(nthr_glob,2))
             do i = 1,nthr_glob
-                call correlators(i)%new(params%trs,trsstep,opt_angle=.false.)
+                call fm_correlators(i)%new(params%trs,1.,opt_angle=.false.)
+                call ccimgs(i,1)%new(ldim, smpd, wthreads=.false.)
+                call ccimgs(i,2)%new(ldim, smpd, wthreads=.false.)
             enddo
-            !$omp parallel do default(shared) private(i,j,irot,irotm,cc,ccm,ithr,corrs,offset,offsetm)&
+            !$omp parallel do default(shared) private(i,j,cc,ccm,ithr)&
             !$omp schedule(dynamic) proc_bind(close)
             do i = 1, ncls_sel - 1
                 ithr = omp_get_thread_num()+1
@@ -2447,18 +2441,13 @@ contains
                 do j = i + 1, ncls_sel
                     ! correlation of reference to particle
                     call pftcc%set_eo(i,.true.)
-                    ! rotational correlations of magnitudes
-                    call pftcc%gencorrs_mag_cc(j, i, corrs, kweight=params%l_kweight_rot)
-                    irot = maxloc(corrs,dim=1)
-                    ! shift optimization of both irot & irot+pi
-                    call correlators(ithr)%minimize(j,i, irot, cc, offset)
+                    call fm_correlators(ithr)%calc_phasecorr(j, i, cavg_imgs(j), cavg_imgs(i),&
+                        &ccimgs(ithr,1), ccimgs(ithr,2), cc)
+                    ! correlation of mirrored reference to particle
                     if( l_mirr )then
-                        ! correlation of mirrored reference to particle
                         call pftcc%set_eo(i,.false.)
-                        call pftcc%gencorrs_mag_cc(j, i, corrs, kweight=params%l_kweight_rot)
-                        irotm = maxloc(corrs,dim=1)
-                        call correlators(ithr)%minimize(j,i, irotm, ccm, offsetm)
-                        ! highest correlation
+                        call fm_correlators(ithr)%calc_phasecorr(j, i, cavg_imgs(j), cavg_imgs(i),&
+                        &ccimgs(ithr,1), ccimgs(ithr,2), ccm, mirror=.true.)
                         cc = max(cc,ccm)
                     endif
                     corrmat(i,j) = cc
@@ -2468,10 +2457,10 @@ contains
             !$omp end parallel do
             corrmat(ncls_sel,ncls_sel) = 1.
             ! taking negative squared euclidian distance as similarity to circumvent
-            !  possible correlation sign change. All values are within [-4.;0]
+            ! possible correlation sign change. All values are within [-4.;0]
             corrmat = -2.*(1.-corrmat)
             where( corrmat > 0. )  corrmat =  0.
-            where( corrmat < -4. ) corrmat = -4.
+            where( corrmat < -4.) corrmat = -4.
             ! write similarity matrix
             call rmat2file(corrmat, SIMMAT_FNAME)
             ! Preference bounds
@@ -2481,8 +2470,11 @@ contains
             simmed      = median(pack(corrmat,.true.))  ! taken as upper bound
             ! tidy
             do i = 1,nthr_glob
-                call correlators(i)%kill
+                call fm_correlators(i)%kill
+                call ccimgs(i,1)%kill
+                call ccimgs(i,2)%kill
             enddo
+            deallocate(ccimgs,fm_correlators)
         endif
         ! Single or multiple runs of affinity propagation
         write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH AFFINITY PROPAGATION'
