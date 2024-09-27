@@ -2152,7 +2152,7 @@ contains
         if( .not. cline%defined('objfun')       ) call cline%set('objfun',       'euclid')
         if( .not. cline%defined('ml_reg')       ) call cline%set('ml_reg',       'no')
         if( .not. cline%defined('tau')          ) call cline%set('tau',          5)
-        if( .not. cline%defined('cls_init')     ) call cline%set('cls_init',     'no')
+        if( .not. cline%defined('cls_init')     ) call cline%set('cls_init',     'ptcl')
         if( .not. cline%defined('remove_chunks')) call cline%set('remove_chunks','yes')
         if( .not. cline%defined('refine')       ) call cline%set('refine',       'snhc_smpl')
         ! write cmdline for GUI
