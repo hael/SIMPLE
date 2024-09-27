@@ -1620,6 +1620,8 @@ contains
         call self%os_out%set(ind, 'ctf',     'no')
         if( present(clspath) )then
             if( clspath ) call self%os_out%set(ind, 'stkpath', trim(CWD_GLOB))
+        else
+            if(self%os_out%isthere(ind, 'stkpath')) call self%os_out%delete_entry(ind, 'stkpath')
         endif
         ! add congruent os_cls2D & os_cls3D
         if( self%os_cls2D%get_noris() /= nptcls )then

@@ -84,7 +84,8 @@ contains
         integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection, nsets, i,j
         integer                                :: cnt, n_imported, n_added, n_failed_jobs, n_fail_iter, nmic_star, iset, envlen
         logical                                :: l_movies_left, l_haschanged
-        real                                   :: avg_tmp, preproc_nthr
+        real                                   :: avg_tmp, preproc_nthr, stat_dfx_threshold, stat_dfy_threshold
+        real                                   :: stat_astig_threshold, stat_icefrac_threshold, stat_ctfres_threshold
         call cline%set('oritype',     'mic')
         call cline%set('mkdir',       'yes')
         call cline%set('reject_mics', 'no')
@@ -220,6 +221,11 @@ contains
         l_movies_left  = .false.
         l_haschanged   = .false.
         cline_exec     = cline
+        stat_dfx_threshold     = 0.
+        stat_dfy_threshold     = 0.
+        stat_astig_threshold   = 0.
+        stat_icefrac_threshold = 0.
+        stat_ctfres_threshold  = 0.
         call cline_exec%set('fromp',1)
         call cline_exec%set('top',  NMOVS_SET)
         do
@@ -327,6 +333,14 @@ contains
                 last_injection = simple_gettime()
                 l_haschanged = .true.
                 n_imported   = spproj_glob%os_mic%get_noris()
+                ! sliding window test
+                if(n_imported > 100) then
+                    if(stat_dfx_threshold == 0) then
+                        call set_stat_thresholds()
+                    else
+                        call test_stat_thresholds()
+                    endif
+                endif
                 ! always write micrographs snapshot if less than 1000 mics, else every 100
                 if( n_imported < 1000 .and. l_haschanged )then
                     call update_user_params(cline)
@@ -367,6 +381,74 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_STREAM_PREPROC NORMAL STOP ****')
         contains
+
+            subroutine mics_window_stats(key, fromto, avg, sdev)
+                character(len=*), intent(in)    :: key
+                integer,          intent(in)    :: fromto(2)
+                real,             intent(inout) :: avg, sdev
+                real,             allocatable   :: arr(:)
+                arr = spproj_glob%os_mic%get_all(key, fromto)
+                call avg_sdev(arr, avg, sdev)
+                if(allocated(arr)) deallocate(arr)
+            end subroutine mics_window_stats
+
+            subroutine set_stat_thresholds()
+                real    :: avg_window, sdev_window
+                integer :: window(2)
+                window(1) = 1
+                window(2) = 100
+                call mics_window_stats("astig", window, avg_window, sdev_window)
+                stat_astig_threshold = avg_window + sdev_window
+                call mics_window_stats("ctfres", window, avg_window, sdev_window)
+                stat_ctfres_threshold = avg_window + sdev_window
+                call mics_window_stats("icefrac", window, avg_window, sdev_window)
+                stat_icefrac_threshold = avg_window + sdev_window
+                call mics_window_stats("dfx", window, avg_window, sdev_window)
+                stat_dfx_threshold = avg_window + sdev_window
+                call mics_window_stats("dfy", window, avg_window, sdev_window)
+                stat_dfy_threshold = avg_window + sdev_window
+            end subroutine set_stat_thresholds
+
+            subroutine test_stat_thresholds()
+                real    :: avg_window, sdev_window, avg_glob
+                integer :: window(2)
+                window(1) = spproj_glob%os_mic%get_noris() - 100
+                window(2) = spproj_glob%os_mic%get_noris()
+                call mics_window_stats("astig", window, avg_window, sdev_window)
+                if(avg_window > stat_astig_threshold) then
+                    avg_glob = spproj_glob%os_mic%get_avg("astig")
+                    call gui_stats%set('micrographs', 'avg_astigmatism', avg_glob, primary=.true., alert=.true., alerttext='average astigmatism &
+                            &has increased by more that 1 sigma within the past 100 micrographs. Please check collection', notify=.false.)
+                endif
+                call mics_window_stats("ctfres", window, avg_window, sdev_window)
+                if(avg_window > stat_ctfres_threshold) then
+                    avg_glob = spproj_glob%os_mic%get_avg("ctfres")
+                    call gui_stats%set('micrographs', 'avg_ctf_resolution', avg_glob, primary=.true., alert=.true., alerttext='average ctf resolution &
+                            &has decreased by more that 1 sigma within the past 100 micrographs. Please check collection', notify=.false.)
+                endif
+                call mics_window_stats("icefrac", window, avg_window, sdev_window)
+                if(avg_window > stat_icefrac_threshold) then
+                    avg_glob = spproj_glob%os_mic%get_avg("icefrac")
+                    call gui_stats%set('micrographs', 'avg_ice_score', avg_glob, primary=.true., alert=.true., alerttext='average ice score &
+                            &has increased by more that 1 sigma within the past 100 micrographs. Please check collection', notify=.false.)
+                endif
+                call mics_window_stats("dfx", window, avg_window, sdev_window)
+                if(avg_window > stat_dfx_threshold) then
+                    avg_glob = spproj_glob%os_mic%get_avg("dfx")
+                    call gui_stats%set('micrographs', 'avg_defocus_x', avg_glob, primary=.true., alert=.true., alerttext='average defocus in x &
+                            &has increased by more that 1 sigma within the past 100 micrographs. Please check collection', notify=.false.)
+                else
+                    call gui_stats%delete('micrographs', 'avg_defocus_x')
+                endif
+                call mics_window_stats("dfy", window, avg_window, sdev_window)
+                if(avg_window > stat_dfy_threshold) then
+                    avg_glob = spproj_glob%os_mic%get_avg("dfy")
+                    call gui_stats%set('micrographs', 'avg_defocus_y', avg_glob, primary=.true., alert=.true., alerttext='average defocus in y &
+                            &has increased by more that 1 sigma within the past 100 micrographs. Please check collection', notify=.false.)
+                else
+                    call gui_stats%delete('micrographs', 'avg_defocus_y')
+                endif
+            end subroutine test_stat_thresholds
 
             subroutine write_mic_star_and_field( write_field, copy_optics )
                 logical, optional, intent(in) :: write_field, copy_optics

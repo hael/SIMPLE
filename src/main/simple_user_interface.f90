@@ -2300,7 +2300,7 @@ contains
         &gui_advanced=.false., gui_submenu_list = "extract,compute")            ! GUI      
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call extract%set_input('img_ios', 1, 'dir_box', 'file', 'Box files directory', 'Directory to read the box files from', 'e.g. boxes/', .false., '',&
+        call extract%set_input('img_ios', 1, 'dir_box', 'dir', 'Box files directory', 'Directory to read the box files from', 'e.g. boxes/', .false., '',&
         &gui_submenu="extract")
         ! parameter input/output
         call extract%set_input('parm_ios', 1, box, gui_submenu="extract", gui_advanced=.false.)
