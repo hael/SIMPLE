@@ -24,13 +24,13 @@ end type abinitio2D_commander
 ! class constants
 real,             parameter :: SMPD_TARGET    = 2.67
 integer,          parameter :: NSTAGES        = 6
+integer,          parameter :: ITS_INCR       = 5
 integer,          parameter :: PHASES(2)      = [4, 6]
 integer,          parameter :: MINBOXSZ       = 88
 integer,          parameter :: EXTR_LIM_LOCAL = 20
 
 ! class variables
 type(lp_crop_inf) :: lpinfo(NSTAGES)
-type(cmdline)     :: cline_cluster2D, cline_calc_pspec_distr
 
 contains
 
@@ -40,13 +40,17 @@ contains
         class(cmdline),              intent(inout) :: cline
         ! commanders
         type(cluster2D_commander_distr)  :: xcluster2D_distr
+        type(cluster2D_commander)        :: xcluster2D
         type(calc_pspec_commander_distr) :: xcalc_pspec_distr
+        ! command lines
+        type(cmdline)                    :: cline_cluster2D, cline_calc_pspec
         ! other
         type(parameters)              :: params
         type(sp_project)              :: spproj
         class(oris),          pointer :: spproj_field
         character(len=:), allocatable :: inirefs
         integer :: maxits(2), istage, last_iter
+        logical :: l_shmem
         call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('autoscale')) call cline%set('autoscale', 'yes')
         if( .not. cline%defined('mkdir')    ) call cline%set('mkdir',     'yes')
@@ -55,11 +59,17 @@ contains
         if( .not. cline%defined('sh_first') ) call cline%set('sh_first',  'yes')
         if( .not. cline%defined('cls_init') ) call cline%set('cls_init',  'rand')
         if( .not. cline%defined('extr_lim') ) call cline%set('extr_lim',  EXTR_LIM_LOCAL)
+        if( cline%defined('nparts') )then
+            l_shmem = nint(cline%get_rarg('nparts')) == 1
+        else
+            l_shmem = .true.
+        endif
+        if( l_shmem ) call cline%delete('nparts')
         ! make master parameters
         call params%new(cline)
         call cline%set('mkdir', 'no')
         call spproj%ptr2oritype(params%oritype, spproj_field)
-        maxits = [params%extr_lim, params%extr_lim+10]
+        maxits = [params%extr_lim, params%extr_lim+2*ITS_INCR]
         ! set downscaling
         call set_dims
         ! set resolutions limits
@@ -76,23 +86,22 @@ contains
         if( spproj_field%get_nevenodd() == 0 ) call spproj_field%partition_eo
         call spproj%write_segment_inside(params%oritype, params%projfile)
         call spproj%split_stk(params%nparts, dir=PATH_PARENT)
-        ! Initial sigma2
-        call xcalc_pspec_distr%execute_safe(cline_calc_pspec_distr)
         ! Frequency marching
         do istage = 1, NSTAGES
             write(logfhandle,'(A)')'>>>'
             if( lpinfo(istage)%l_lpset )then
                 write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', lpinfo(istage)%lp
             else
-                write(logfhandle,'(A,I3)')'>>> STAGE ', istage
+                write(logfhandle,'(A,I3,A)')'>>> STAGE ', istage,' WITH GOLD STANDARD E/O'
             endif
             ! parameters update
             call set_cline_cluster2D(istage)
-            ! Search
-            call xcluster2D_distr%execute_safe(cline_cluster2D)
+            ! classify
+            call execute_cluster2D
         enddo
         ! transfer 2D shifts to 3D field
         call spproj%read_segment(params%oritype,params%projfile)
+        call spproj%read_segment('ptcl3D',params%projfile)
         call spproj%os_ptcl3D%transfer_2Dshifts(spproj_field)
         call spproj%write_segment_inside('ptcl3D', params%projfile)
         ! final class generation & ranking
@@ -165,12 +174,12 @@ contains
         subroutine prep_command_lines( cline )
             use simple_default_clines, only: set_automask2D_defaults
             class(cmdline),   intent(in) :: cline
-            cline_cluster2D        = cline
-            cline_calc_pspec_distr = cline
+            cline_cluster2D  = cline
+            cline_calc_pspec = cline
             ! initial sigma2
-            call cline_calc_pspec_distr%set('prg', 'calc_pspec')
+            call cline_calc_pspec%set('prg',      'calc_pspec')
             ! cluster2D
-            call cline_cluster2D%set('prg',       'cluster2D_distr')
+            call cline_cluster2D%set('prg',       'cluster2D')
             call cline_cluster2D%set('wiener',    'full')
             call cline_cluster2D%set('sigma_est', 'group')
             call cline_cluster2D%set('ptclw',     'no')
@@ -203,7 +212,7 @@ contains
             select case(iphase)
             case(1)
                 ! phase constants
-                maxits_glob   = params%extr_lim+5
+                maxits_glob   = params%extr_lim+ITS_INCR
                 snr_noise_reg = params%snr_noise_reg
                 extr_iter     = 0
                 minits        = imaxits
@@ -257,7 +266,7 @@ contains
                 end select
             case(2)
                 ! phase constants
-                imaxits           = iter+4
+                imaxits           = iter+ITS_INCR-1
                 minits            = iter+1
                 sh_first          = trim(params%sh_first)
                 trs               = lpinfo(istage)%trslim
@@ -269,7 +278,7 @@ contains
                 ! phase variables
                 select case(istage)
                 case(5)
-                    maxits_glob   = params%extr_lim+5
+                    maxits_glob   = params%extr_lim+ITS_INCR
                     snr_noise_reg = params%snr_noise_reg
                 case(6)
                     maxits_glob   = 0
@@ -309,6 +318,19 @@ contains
             call cline_cluster2D%delete('endit')
         end subroutine set_cline_cluster2D
 
+        subroutine execute_cluster2D
+            ! Initial sigma2
+            if( (params%cc_objfun == OBJFUN_EUCLID) .and. (istage == 1) )then
+                call xcalc_pspec_distr%execute_safe(cline_calc_pspec)
+            endif
+            ! Classification
+            if( l_shmem )then
+                call xcluster2D%execute_safe(cline_cluster2D)
+            else
+                call xcluster2D_distr%execute_safe(cline_cluster2D)
+            endif
+        end subroutine execute_cluster2D
+
         subroutine gen_final_cavgs( iter )
             type(make_cavgs_commander_distr) :: xmake_cavgs_distr
             type(make_cavgs_commander)       :: xmake_cavgs
@@ -325,7 +347,11 @@ contains
                 call cline_make_cavgs%set('prg',        'make_cavgs')
                 call cline_make_cavgs%set('refs',       finalcavgs)
                 call cline_make_cavgs%set('which_iter', iter)
-                call xmake_cavgs_distr%execute_safe(cline_make_cavgs)
+                if( l_shmem )then
+                    call xmake_cavgs%execute_safe(cline_make_cavgs)
+                else
+                    call xmake_cavgs_distr%execute_safe(cline_make_cavgs)
+                endif
             endif
             ! adding cavgs & FRCs to project
             call spproj%read_segment('out', params%projfile)
@@ -345,8 +371,12 @@ contains
             real, intent(in)    :: mskdiam
             real, intent(inout) :: lpstart,lpstop, lpcen
             lpstart = min(max(mskdiam/12., 15.), 20.)
-            lpstop  = min(max(mskdiam/22.,  5.),  8.)
+            lpstop  = min(max(mskdiam/22.,  6.),  8.)
             lpcen   = min(max(mskdiam/6.,  20.), 30.)
+            ! was:
+            ! lpstart = max(min(mskdiam/12., 15.),  8.)
+            ! lpstop  = min(max(mskdiam/22.,  5.),  8.)
+            ! lpcen   = min(max(mskdiam/6.,  20.), 30.)
         end subroutine mskdiam2lplimits_here
 
     end subroutine exec_abinitio2D

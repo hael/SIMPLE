@@ -164,16 +164,18 @@ contains
         if( l_stream )then
             ! deactivated for now
         else
-            if( params_glob%l_noise_reg .and. (which_iter > 1) )then
-                if( which_iter <= params_glob%maxits_glob )then
+            if( params_glob%l_noise_reg )then
+                if( which_iter == 1 )then
+                    ! add negligible noise
+                    params_glob%eps = 1.e6
+                else if( which_iter <= params_glob%maxits_glob )then
+                    ! annealed amount of noise
                     params_glob%eps = inv_cos_decay(which_iter, params_glob%maxits_glob, params_glob%eps_bounds)
                     write(logfhandle,'(A,F8.3)') '>>> SNR, WHITE NOISE REGULARIZATION', params_glob%eps
                 else
+                    ! turned off
                     params_glob%l_noise_reg = .false.
                 endif
-            else
-                ! deactivated for the first iteration
-                params_glob%l_noise_reg = .false.
             endif
         endif
 
