@@ -65,8 +65,8 @@ contains
     !>  \brief  is for getting a feature vector
     function get_feat_svd( self, i ) result( feat )
         class(pca_svd), intent(inout) :: self
-        integer,    intent(in)    :: i
-        real,       allocatable   :: feat(:)
+        integer,        intent(in)    :: i
+        real,           allocatable   :: feat(:)
         allocate(feat(self%Q), source=self%E_zn(:,i))
     end function get_feat_svd
 
@@ -93,8 +93,8 @@ contains
     end subroutine master_svd
 
     subroutine master_ori( self, pcavecs )
-        class(pca_svd),    intent(inout) :: self
-        real,              intent(in)    :: pcavecs(self%D,self%N)
+        class(pca_svd), intent(inout) :: self
+        real,           intent(in)    :: pcavecs(self%D,self%N)
         real    :: eig_vecs(self%D,self%N), eig_vals(self%N), tmp(self%N,self%N)
         integer :: i, inds(self%N)
         eig_vecs = pcavecs
