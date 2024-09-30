@@ -58,10 +58,12 @@ contains
         type(ori) :: e
         type(sym) :: ico
         call self%kill
-        if( vol_ref.eqdims.vol_target )then
-            ! all good
-        else
-            THROW_HARD('The volumes to be matched are not of the same dimension; new_1')
+        if( present(vol_target) )then
+            if( vol_ref.eqdims.vol_target )then
+                ! all good
+            else
+                THROW_HARD('The volumes to be matched are not of the same dimension; new')
+            endif
         endif
         ! set pointers, we assume that the volumes have been masked and prepared
         self%vol_ref => vol_ref
