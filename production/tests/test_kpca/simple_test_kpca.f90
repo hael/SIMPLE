@@ -4,7 +4,7 @@ use simple_cmdline,    only: cmdline
 use simple_parameters, only: parameters
 use simple_kpca_svd,   only: kpca_svd
 implicit none
-integer, parameter :: D = 2, Q = 4
+integer, parameter :: D = 2
 type(kpca_svd)     :: kpca_obj
 type(cmdline)      :: cline
 type(parameters)   :: p
@@ -20,7 +20,7 @@ read(funit,*) N
 allocate(XY(D,N))
 read(funit,*) XY
 call fclose(funit)
-call kpca_obj%new(N, D, Q)
+call kpca_obj%new(N, D, p%neigs)
 call kpca_obj%master(XY)
 allocate( data_here(D,N), source=0.)
 avg = 0.
