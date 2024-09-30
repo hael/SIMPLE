@@ -92,7 +92,7 @@ contains
         class(kpca_svd),   intent(inout) :: self
         real,              intent(in)    :: pcavecs(self%D,self%N)
         integer, optional, intent(in)    :: maxpcaits
-        integer, parameter :: MAX_ITS = 100
+        integer, parameter :: MAX_ITS = 500
         real,    parameter :: TOL     = 0.0001
         logical, parameter :: DEBUG   = .false.
         integer(int64)     :: start_time, end_time
@@ -164,7 +164,7 @@ contains
                         norm_prev(:,ithr) = 1. / sqrt(real(self%D))
                         norm_data(:,ithr) = norm_pcavecs(:,ind)
                         iter              = 1
-                        do while( abs(abs(sum(norm_data(:,ithr) * norm_prev(:,ithr))) - 1.) > TOL .and. iter < its )
+                        do while( abs(sum(norm_data(:,ithr) * norm_prev(:,ithr)) - 1.) > TOL .and. iter < its )
                             norm_prev(:,ithr) = norm_data(:,ithr)
                             ! 1. projecting each image on kernel space
                             proj_data(:,ithr) = matmul(norm_pcavecs_t, norm_prev(:,ithr)) * ker(:,ind)
@@ -187,7 +187,7 @@ contains
                         norm_prev(:,ithr) = 1. / sqrt(real(self%D))
                         norm_data(:,ithr) = norm_pcavecs(:,ind)
                         iter              = 1
-                        do while( abs(abs(sum(norm_data(:,ithr) * norm_prev(:,ithr))) - 1.) > TOL .and. iter < its )
+                        do while( abs(sum(norm_data(:,ithr) * norm_prev(:,ithr)) - 1.) > TOL .and. iter < its )
                             norm_prev(:,ithr) = norm_data(:,ithr)
                             ! 1. projecting each image on kernel space
                             proj_data(:,ithr) = matmul(norm_pcavecs_t, norm_prev(:,ithr)) * ker(:,ind)
