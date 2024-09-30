@@ -24,9 +24,7 @@ type :: volpft_corrcalc
     logical                   :: existence = .false.    !< to indicate existence
   contains
     ! CONSTRUCTOR
-    procedure, private :: new_1
-    procedure, private :: new_2
-    generic            :: new => new_1, new_2
+    procedure          :: new
     ! GETTERS
     procedure          :: get_nspace
     procedure          :: get_nspace_nonred
@@ -50,10 +48,11 @@ real, parameter :: i_startvec(3) = (/.2259467440, .3054884673, .9249998733/)
 contains
 
     !>  \brief  is a constructor
-    subroutine new_1( self, vol_ref, vol_target, hp, lp, alpha )
-        class(volpft_corrcalc),    intent(inout) :: self
-        class(projector), target , intent(in)    :: vol_ref, vol_target
-        real,                      intent(in)    :: hp, lp, alpha
+    subroutine new( self, vol_ref, hp, lp, alpha, vol_target )
+        class(volpft_corrcalc),             intent(inout) :: self
+        class(projector), target,           intent(in)    :: vol_ref
+        real,                               intent(in)    :: hp, lp, alpha
+        class(projector), target, optional, intent(in)    :: vol_target
         integer   :: ispace, k
         real      :: vec(3), rmat(3,3)
         type(ori) :: e
@@ -65,8 +64,12 @@ contains
             THROW_HARD('The volumes to be matched are not of the same dimension; new_1')
         endif
         ! set pointers, we assume that the volumes have been masked and prepared
-        self%vol_ref    => vol_ref
-        self%vol_target => vol_target
+        self%vol_ref => vol_ref
+        if( present(vol_target) )then
+            self%vol_target => vol_target
+        else
+            self%vol_target => self%vol_ref
+        endif
         ! make the icosahedral group
         call ico%new('ico')
         self%nspace = ico%get_nsym()
@@ -105,8 +108,10 @@ contains
         ! prepare for fast interpolation
         call self%vol_ref%fft()
         call self%vol_ref%expand_cmat(alpha)
-        call self%vol_target%fft()
-        call self%vol_target%expand_cmat(alpha)
+        if( present(vol_target) )then
+            call self%vol_target%fft()
+            call self%vol_target%expand_cmat(alpha)
+        endif
         ! extract the reference lines
         call self%extract_ref
         ! destruct
@@ -114,67 +119,7 @@ contains
         call ico%kill
         ! flag existence
         self%existence = .true.
-    end subroutine new_1
-
-    !>  \brief  is a constructor
-    subroutine new_2( self, vol, hp, lp, alpha )
-        class(volpft_corrcalc),   intent(inout) :: self
-        class(projector), target, intent(in)    :: vol
-        real,                     intent(in)    :: hp, lp, alpha
-        integer   :: ispace, k
-        real      :: vec(3), rmat(3,3)
-        type(ori) :: e
-        type(sym) :: ico
-        call self%kill
-        ! set pointers, we assume that the volumes have been masked and prepared
-        self%vol_ref    => vol
-        self%vol_target => self%vol_ref
-        ! make the icosahedral group (defines sampling geometry)
-        call ico%new('i')
-        self%nspace = ico%get_nsym()
-        self%nspace_nonred = self%nspace/2
-        ! set other stuff
-        self%kfromto_vpft(1) = self%vol_ref%get_find(hp)
-        self%kfromto_vpft(2) = self%vol_ref%get_find(lp)
-        allocate( self%vpft_ref_nonred(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace_nonred  ),  &
-                  self%locs_ref       (self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace,       3),  &
-                  self%locs_ref_nonred(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace_nonred,3) )
-        ! generate sampling space
-        do ispace=1,self%nspace
-            ! get sampling space rotation matrix
-            call ico%get_symori(ispace, e)
-            rmat = e%get_mat()
-            ! loop over resolution shells
-            do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
-                ! calculate sampling location
-                vec(1) = real(k)*i_startvec(1)
-                vec(2) = real(k)*i_startvec(2)
-                vec(3) = real(k)*i_startvec(3)
-                self%locs_ref(k,ispace,:) = matmul(vec,rmat)
-            end do
-        end do
-        ! record the non-redundant lines (note they are slightly fragmented)
-        do ispace=1,5
-            do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
-                self%locs_ref_nonred(k,ispace,:) = self%locs_ref(k,ispace,:)
-            end do
-        end do
-        do ispace=11,35
-            do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
-                self%locs_ref_nonred(k,ispace-5,:) = self%locs_ref(k,ispace,:)
-            end do
-        end do
-        ! prepare for fast interpolation
-        call self%vol_ref%fft()
-        call self%vol_ref%expand_cmat(alpha)
-        ! extract the reference lines
-        call self%extract_ref
-        ! destruct
-        call e%kill
-        call ico%kill
-        ! flag existence
-        self%existence = .true.
-    end subroutine new_2
+    end subroutine new
 
     ! GETTERS
 
