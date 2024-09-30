@@ -275,7 +275,7 @@ contains
     procedure          :: remove_neg
     procedure          :: ran
     procedure          :: gauran
-    procedure          :: add_gauran
+    procedure          :: add_gauran, add_gauran2cavg
     procedure          :: dead_hot_positions
     procedure          :: taper_edges, taper_edges_hann
     procedure          :: subtr_backgr_ramp
@@ -6072,6 +6072,48 @@ contains
             end do
         end do
     end subroutine add_gauran
+
+    !> \brief add_gauran  is for adding Gaussian noise to a class average
+    !! The resulting estimated ssnr is var(signal) / ((1+1/snrfac)*var(noise))
+    subroutine add_gauran2cavg( self, snrfac )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: snrfac
+        real    :: rmat(self%ldim(1),self%ldim(2)), sdev_noise, var1, var2, sdev, ave, ep
+        integer :: i, j, npix
+        logical :: lmsk(self%ldim(1),self%ldim(2))
+        npix = product(self%ldim)
+        rmat = self%rmat(:self%ldim(1),:self%ldim(2),1)
+        ! first pass
+        ave  = sum(rmat) / real(npix)
+        rmat = rmat - ave
+        ep   = sum(rmat)
+        var1 = sum(rmat**2.0)
+        var1 = (var1-ep**2.0/real(npix))/(real(npix-1)) ! corrected two-pass formula
+        if( var1 < TINY )then
+            THROW_WARN('variance of image is zero; 1')
+            return
+        endif
+        sdev = sqrt(var1)
+        ! variance ignoring outliers (assumed to be ~signal)
+        lmsk = abs(rmat) < 3.*sdev ! threshold 3 sigmas
+        npix = count(lmsk)
+        if( npix < 3 ) return
+        ave  = sum(rmat, mask=lmsk) / real(npix)
+        rmat = rmat - ave
+        ep   = sum(rmat, mask=lmsk)
+        var2  = sum(rmat**2.0, mask=lmsk)
+        var2  = (var2-ep**2.0/real(npix))/(real(npix-1)) ! corrected two-pass formula
+        if( var2 < TINY )then
+            THROW_WARN('variance of image is zero; 2')
+            return
+        endif
+        sdev_noise = sqrt(var2/snrfac)
+        do j=1,self%ldim(2)
+            do i=1,self%ldim(1)
+                self%rmat(i,j,1) = self%rmat(i,j,1) + gasdev(0., sdev_noise)
+            end do
+        end do
+    end subroutine add_gauran2cavg
 
     !>  \brief dead_hot_positions is for generating dead/hot pixel positions in an image
     !! \param frac fraction of ON/OFF pixels

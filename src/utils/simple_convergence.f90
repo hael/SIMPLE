@@ -112,7 +112,9 @@ contains
         write(logfhandle,604) '>>> SCORE [0,1]            AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
         ! dynamic shift search range update
         if( self%frac_srch%avg >= FRAC_SH_LIM )then
-            if( .not. cline%defined('trs') .or. params_glob%trs <  MINSHIFT )then
+            if( cline%defined('trs') .or. params_glob%trs >  MINSHIFT)then
+                ! no change: bound was explicitely defined or is large enough
+            else
                 ! determine shift bounds
                 params_glob%trs = MSK_FRAC*msk
                 params_glob%trs = max(MINSHIFT,params_glob%trs)
