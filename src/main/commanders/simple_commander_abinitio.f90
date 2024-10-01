@@ -314,7 +314,7 @@ contains
         type(parameters)               :: params
         type(sp_project)               :: spproj
         type(image)                    :: noisevol
-        integer :: istage, s, state
+        integer :: istage, s
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',         'yes')
@@ -505,7 +505,7 @@ contains
         call clsfrcs%read(frcs_fname)
         filtsz = clsfrcs%get_filtsz()
         allocate(frcs_avg(filtsz), source=0.)
-        states  = nint(spproj%os_cls2D%get_all('state'))
+        states = nint(spproj%os_cls2D%get_all('state'))
         call clsfrcs%avg_frc_getter(frcs_avg, states)
         if( allocated(lpinfo) ) deallocate(lpinfo)
         allocate(lpinfo(NSTAGES))
@@ -516,9 +516,9 @@ contains
         contains
 
             function calc_lplim_final_stage( nbest ) result( lplim )
-                integer,           intent(in) :: nbest
+                integer, intent(in)  :: nbest
                 real,    allocatable :: res(:), tmp_rarr(:)
-                integer, allocatable :: states(:), tmp_iarr(:)
+                integer, allocatable :: tmp_iarr(:)
                 real :: lplim
                 tmp_rarr  = spproj%os_cls2D%get_all('res')
                 tmp_iarr  = nint(spproj%os_cls2D%get_all('state'))
@@ -531,10 +531,10 @@ contains
     end subroutine set_lplims_from_frcs
 
     subroutine set_cline_refine3D( istage, l_noise_reg )
-        integer, intent(in) :: istage
-        logical, intent(in) :: l_noise_reg
+        integer,          intent(in)  :: istage
+        logical,          intent(in)  :: l_noise_reg
         character(len=:), allocatable :: silence_fsc, sh_first, prob_sh, ml_reg, refine, icm
-        integer :: iphase, s, iter, inspace, imaxits, imaxits_glob
+        integer :: iphase, iter, inspace, imaxits, imaxits_glob
         real    :: trs, snr_noise_reg
         ! iteration number bookkeeping
         if( cline_refine3D%defined('endit') )then
@@ -628,7 +628,7 @@ contains
     subroutine exec_refine3D( istage, xrefine3D )
         integer,               intent(in)    :: istage
         class(commander_base), intent(inout) :: xrefine3D
-        character(len=:), allocatable :: stage, str_state, vol_name, vol_pproc
+        character(len=:),      allocatable   :: stage, str_state, vol_name, vol_pproc
         integer :: state
         call cline_refine3D%delete('endit')
         call xrefine3D%execute_safe(cline_refine3D)
@@ -650,7 +650,7 @@ contains
         integer,           intent(in)    :: istage
         class(sp_project), intent(inout) :: spproj
         character(len=*),  intent(in)    :: projfile
-        character(len=:), allocatable    :: vol_iter, vol_sym
+        character(len=:),  allocatable   :: vol_iter, vol_sym
         type(symmetrize_map_commander)   :: xsymmap
         real :: lpsym
         if( l_symran )then
@@ -697,7 +697,7 @@ contains
         class(sp_project),     intent(inout) :: spproj
         character(len=*),      intent(in)    :: projfile
         class(commander_base), intent(inout) :: xreconstruct3D
-        character(len=:), allocatable :: str_state, vol_name
+        character(len=:),      allocatable   :: str_state, vol_name
         integer :: state
         write(logfhandle,'(A)') '>>>'
         write(logfhandle,'(A)') '>>> RECONSTRUCTION AT ORIGINAL SAMPLING'
@@ -714,9 +714,9 @@ contains
     end subroutine calc_final_rec
 
     subroutine postprocess_final_rec
-        type(postprocess_commander) :: xpostprocess
-        integer :: state
+        type(postprocess_commander)   :: xpostprocess
         character(len=:), allocatable :: str_state, vol_name, vol_pproc, vol_pproc_mirr, vol_final
+        integer :: state
         do state = 1, params_glob%nstates
             call cline_postprocess%set('state', state)
             call xpostprocess%execute_safe(cline_postprocess)
