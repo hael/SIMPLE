@@ -305,6 +305,7 @@ contains
         call debug_print('end calc_sigma2')
     end subroutine calc_sigma2
 
+    ! read project and deals with arrays used for fractional update
     subroutine read( self, box )
         class(stream_chunk), intent(inout) :: self
         integer,             intent(in)    :: box
@@ -316,22 +317,23 @@ contains
         projfile = trim(self%path)//trim(self%projfile_out)
         call self%spproj%read(projfile)
         ! classes, to account for nparts /= nparts_chunk
-        call img%new([box,box,1],1.0)
-        call avg%new([box,box,1],1.0)
-        call average_into(trim(self%path)//'cavgs_even_part')
-        call average_into(trim(self%path)//'cavgs_odd_part')
-        call average_into(trim(self%path)//'ctfsqsums_even_part')
-        call average_into(trim(self%path)//'ctfsqsums_odd_part')
-        call img%kill
-        call avg%kill
+        if( self%toclassify )then
+            call img%new([box,box,1],1.0)
+            call avg%new([box,box,1],1.0)
+            call average_into(trim(self%path)//'cavgs_even_part')
+            call average_into(trim(self%path)//'cavgs_odd_part')
+            call average_into(trim(self%path)//'ctfsqsums_even_part')
+            call average_into(trim(self%path)//'ctfsqsums_odd_part')
+            call img%kill
+            call avg%kill
+        endif
         call debug_print('end chunk%read '//int2str(self%id))
-
         contains
 
             subroutine average_into(tmpl)
                 character(len=*), intent(in) :: tmpl
-                character(len=XLONGSTRLEN) :: fname
-                integer                    :: icls, ipart, numlen_chunk, iostat
+                character(len=XLONGSTRLEN)   :: fname
+                integer                      :: icls, ipart, numlen_chunk, iostat
                 if( params_glob%nparts_chunk > 1  )then
                     numlen_chunk = len(int2str(params_glob%nparts_chunk)) ! as per parameters
                     call img%zero_and_flag_ft
