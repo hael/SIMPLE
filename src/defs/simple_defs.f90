@@ -208,6 +208,7 @@ real, parameter    :: FRAC_SKIP_REJECTION      = 0.7   !< When the number of cla
 real, parameter    :: PICK_LP_DEFAULT          = 20.   !< Picking resolution limit
 real, parameter    :: BOX_EXP_FACTOR_DEFAULT   = 1.2   !< Multilication factor to increase the image size as determined bu muti-diameter picking
 real, parameter    :: RES_THRESHOLD_STREAM     = 35.0  !< Default streaming resolution rejection threshold
+real, parameter    :: LOWRES_REJECT_THRESHOLD  = 199.  ! Deactivates resolution-based rejection when lpthres > LOWRES_REJECT_THRESHOLD
 
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)

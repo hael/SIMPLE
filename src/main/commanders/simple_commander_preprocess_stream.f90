@@ -89,7 +89,7 @@ contains
         if( .not. cline%defined('ctfresthreshold')  ) call cline%set('ctfresthreshold',  CTFRES_THRESHOLD_STREAM)
         if( .not. cline%defined('icefracthreshold') ) call cline%set('icefracthreshold', ICEFRAC_THRESHOLD_STREAM)
         ! picking
-        if( .not. cline%defined('picker')          ) call cline%set('picker',         'old')
+        if( .not. cline%defined('picker')          ) call cline%set('picker',         'new')
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',         PICK_LP_DEFAULT)
         if( .not. cline%defined('ndev')            ) call cline%set('ndev',              2.)
         if( .not. cline%defined('thres')           ) call cline%set('thres',            24.)
@@ -195,23 +195,21 @@ contains
         call qenv%new(1,stream=.true.)
         ! prepares picking references
         if( l_pick .and. cline%defined('pickrefs') )then
-            if( trim(params%picker).eq.'old' )then
-                cline_make_pickrefs = cline
-                call cline_make_pickrefs%set('prg','make_pickrefs')
-                call cline_make_pickrefs%set('stream','no')
-                call cline_make_pickrefs%set('neg','yes')
-                call cline_make_pickrefs%delete('ncls')
-                call cline_make_pickrefs%delete('mskdiam')
-                pickrefs_smpd = params%smpd / params%scale
-                if( cline_make_pickrefs%defined('eer_upsampling') )then
-                    pickrefs_smpd = pickrefs_smpd / real(params%eer_upsampling)
-                endif
-                call cline_make_pickrefs%set('smpd',pickrefs_smpd)
-                call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
-                call cline%set('pickrefs', '../'//trim(PICKREFS_FBODY)//trim(params%ext))
-                write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
-                call qsys_cleanup
+            cline_make_pickrefs = cline
+            call cline_make_pickrefs%set('prg','make_pickrefs')
+            call cline_make_pickrefs%set('stream','no')
+            if( trim(params%picker).eq.'old' ) call cline_make_pickrefs%set('neg','yes')
+            call cline_make_pickrefs%delete('ncls')
+            call cline_make_pickrefs%delete('mskdiam')
+            pickrefs_smpd = params%smpd / params%scale
+            if( cline_make_pickrefs%defined('eer_upsampling') )then
+                pickrefs_smpd = pickrefs_smpd / real(params%eer_upsampling)
             endif
+            call cline_make_pickrefs%set('smpd',pickrefs_smpd)
+            call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
+            call cline%set('pickrefs', '../'//trim(PICKREFS_FBODY)//trim(params%ext))
+            write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
+            call qsys_cleanup
         endif
         ! movie watcher init
         movie_buff = moviewatcher(LONGTIME, params%dir_movies)

@@ -210,7 +210,7 @@ type :: parameters
     character(len=STDLEN)     :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
     character(len=STDLEN)     :: pgrp_start='c1'      !< point-group symmetry(cn|dn|t|o|i)
     character(len=STDLEN)     :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
-    character(len=STDLEN)     :: picker='old'         !< which picker to use (old|new){old}
+    character(len=STDLEN)     :: picker='new'         !< which picker to use (old|new){new}
     character(len=STDLEN)     :: prg=''               !< SIMPLE program being executed
     character(len=STDLEN)     :: projname=''          !< SIMPLE  project name
     character(len=STDLEN)     :: protocol=''          !< generic option

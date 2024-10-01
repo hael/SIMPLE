@@ -465,7 +465,9 @@ contains
         ! moments & total variation distance
         if( trim(params_glob%reject_cls).ne.'old' ) call self%spproj%os_cls2D%class_robust_rejection(moments_mask)
         ! correlation and resolution
-        call self%spproj%os_cls2D%find_best_classes(box, smpd_here, res_thresh, corres_mask, ndev)
+        if( params_glob%lpthres < LOWRES_REJECT_THRESHOLD )then
+            call self%spproj%os_cls2D%find_best_classes(box, smpd_here, res_thresh, corres_mask, ndev)
+        endif
         ! overall class rejection
         cls_mask      = moments_mask .and. corres_mask
         ncls_rejected = count(.not.cls_mask)

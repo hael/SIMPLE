@@ -33,21 +33,21 @@ type, extends(commander_base) :: cluster2D_commander_subsets
     procedure :: execute      => exec_cluster2D_subsets
 end type cluster2D_commander_subsets
 
-integer,               parameter   :: MINBOXSZ            = 128    ! minimum boxsize for scaling
-integer,               parameter   :: CHUNK_MINITS        = 13
-integer,               parameter   :: CHUNK_MAXITS        = CHUNK_MINITS + 2
-integer,               parameter   :: CHUNK_CC_ITERS      = 8
-integer,               parameter   :: CHUNK_EXTR_ITER     = 3
-integer,               parameter   :: FREQ_POOL_REJECTION = 5     !
-character(len=STDLEN), parameter   :: USER_PARAMS         = 'stream2D_user_params.txt'
-character(len=STDLEN), parameter   :: PROJFILE_POOL       = 'cluster2D.simple'
-character(len=STDLEN), parameter   :: POOL_DIR            = '' ! should be './pool/' for tidyness but difficult with gui
-character(len=STDLEN), parameter   :: SIGMAS_DIR          = './sigma2/'
-character(len=STDLEN), parameter   :: DISTR_EXEC_FNAME    = './distr_cluster2D_pool'
-character(len=STDLEN), parameter   :: LOGFILE             = 'simple_log_cluster2D_pool'
-character(len=STDLEN), parameter   :: CHECKPOINT_DIR      = 'checkpoint/'
-logical,               parameter   :: DEBUG_HERE          = .false.
-integer(timer_int_kind)            :: t
+integer,               parameter :: MINBOXSZ            = 12                  ! minimum boxsize for scaling
+integer,               parameter :: CHUNK_MINITS        = 13                  ! minimum number of iterations for chunks
+integer,               parameter :: CHUNK_MAXITS        = CHUNK_MINITS + 2    ! maximum number of iterations for chunks
+integer,               parameter :: CHUNK_CC_ITERS      = 8                   ! maximum number of correlatiion-based iterations for chunks
+integer,               parameter :: CHUNK_EXTR_ITER     = 3                   ! starting extremal iteration for chunks
+integer,               parameter :: FREQ_POOL_REJECTION = 5                   ! pool class rejection performed every FREQ_POOL_REJECTION iteration
+character(len=STDLEN), parameter :: USER_PARAMS         = 'stream2D_user_params.txt'
+character(len=STDLEN), parameter :: PROJFILE_POOL       = 'cluster2D.simple'
+character(len=STDLEN), parameter :: POOL_DIR            = '' ! should be './pool/' for tidyness but difficult with gui
+character(len=STDLEN), parameter :: SIGMAS_DIR          = './sigma2/'
+character(len=STDLEN), parameter :: DISTR_EXEC_FNAME    = './distr_cluster2D_pool'
+character(len=STDLEN), parameter :: LOGFILE             = 'simple_log_cluster2D_pool'
+character(len=STDLEN), parameter :: CHECKPOINT_DIR      = 'checkpoint/'
+logical,               parameter :: DEBUG_HERE          = .false.
+integer(timer_int_kind)          :: t
 
 ! Pool related
 type(sp_project)                       :: pool_proj
@@ -886,8 +886,10 @@ contains
         ! moments & total variation distance
         if( trim(params_glob%reject_cls).ne.'old' ) call pool_proj%os_cls2D%class_robust_rejection(moments_mask)
         ! correlation & resolution
-        ndev_here = 1.25*params_glob%ndev ! less stringent rejection than chunk
-        call pool_proj%os_cls2D%find_best_classes(box,smpd,params_glob%lpthres,corres_mask,ndev_here)
+        if( params_glob%lpthres < LOWRES_REJECT_THRESHOLD )then
+            ndev_here = 1.25*params_glob%ndev ! less stringent rejection than chunk
+            call pool_proj%os_cls2D%find_best_classes(box,smpd,params_glob%lpthres,corres_mask,ndev_here)
+        endif
         ! overall class rejection
         cls_mask = moments_mask .and. corres_mask
         ! rejecting associated particles
@@ -1081,12 +1083,14 @@ contains
     subroutine update_user_params_dev( cline_here, updated )
         type(cmdline), intent(inout) :: cline_here
         logical,       intent(out)   :: updated
-        type(oris) :: os
-        real       :: lpthres, ndev
+        type(oris)            :: os
+        character(len=STDLEN) :: val
+        real                  :: lpthres, ndev
         updated = .false.
         call os%new(1, is_ptcl=.false.)
         if( file_exists(USER_PARAMS) )then
             call os%read(USER_PARAMS)
+            ! class resolution threshold for rejection
             if( os%isthere(1,'lpthres') )then
                 lpthres = os%get(1,'lpthres')
                 if( abs(lpthres-params_glob%lpthres) > 0.001 )then
@@ -1099,6 +1103,7 @@ contains
                     endif
                 endif
             endif
+            ! class standard deviation of resolution threshold for rejection
             if( os%isthere(1,'ndev2D') )then ! to drop '2D', see with joe
                 ndev = os%get(1,'ndev2D')
                 if( abs(ndev-params_glob%ndev) > 0.001 )then
@@ -1111,6 +1116,29 @@ contains
                     endif
                 endif
             endif
+            ! class rejection
+            if( os%isthere(1,'reject_cls') )then
+                val = os%get_static(1, 'reject_cls')
+                if( trim(val) .ne. trim(params_glob%reject_cls) )then
+                    select case(trim(val))
+                    case('yes')
+                        write(logfhandle,'(A)')'>>> ACTIVATING CLASS REJECTION'
+                        params_glob%reject_cls = trim(val)
+                        updated = .true.
+                    case('no')
+                        write(logfhandle,'(A)')'>>> DE-ACTIVATING CLASS REJECTION'
+                        params_glob%reject_cls = trim(val)
+                        updated = .true.
+                    case('old')
+                        write(logfhandle,'(A)')'>>> DE-ACTIVATING IMAGE MOMENTS-BASED CLASS REJECTION'
+                        params_glob%reject_cls = trim(val)
+                        updated = .true.
+                    case DEFAULT
+                        THROW_WARN('Unknown flag for class rejection: '//trim(val))
+                    end select
+                endif
+            endif
+            ! remove once processed
             call del_file(USER_PARAMS)
         endif
         call os%kill
