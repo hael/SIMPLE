@@ -84,7 +84,7 @@ implicit none
             write(45,'(f8.4,a,f8.4,a,f8.4)') coords(cc,1), ',', coords(cc,2), ',', coords(cc,3)-1
         enddo
         close(45)
-        call centers_pdb%writepdb(fname)
+        call centers_pdb%writepdb(trim(fname)//'.pdb')
     end subroutine write_centers
 
     subroutine threshold_img(img_in, img_out, level, threshold_out)

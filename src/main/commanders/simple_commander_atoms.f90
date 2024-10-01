@@ -59,9 +59,7 @@ contains
         call params%new(cline)
         call molecule%new(params%pdbfile)
         if( .not.cline%defined('pdbout') )then
-            params%pdbout = trim(get_fbody(params%pdbfile,'pdb'))//'_centered'
-        else
-            params%pdbout = trim(get_fbody(params%pdbout,'pdb'))
+            params%pdbout = trim(get_fbody(params%pdbfile,'pdb'))//'_centered.pdb'
         endif
         if( .not.cline%defined('outvol') ) params%outvol = swap_suffix(params%pdbfile,'mrc','pdb')
         if( params%center_pdb .eq. 'yes' )then

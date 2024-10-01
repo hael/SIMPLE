@@ -485,7 +485,7 @@ contains
         character(len=LONGSTRLEN) :: fname
         integer          :: i, funit, io_stat
         logical          :: long
-        fname = trim(adjustl(fbody)) // '.pdb'
+        fname = trim(adjustl(fbody))
         long  = self%n >= 99999
         if(.not.self%exists) THROW_HARD('Cannot write non existent atoms type; writePDB')
         call fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=io_stat)
@@ -517,7 +517,7 @@ contains
         real,             intent(in) :: aniso(3, 3, self%n) ! Each matrix is 3x3 real symmetric
         character(len=LONGSTRLEN) :: fname
         integer          :: i, funit, io_stat, aniso_out(3, 3)
-        fname = trim(adjustl(fbody)) // '.pdb'
+        fname = trim(adjustl(fbody))
         if(.not.self%exists) THROW_HARD('Cannot write non existent atoms type; writePDB')
         call fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=io_stat)
         call fileiochk('writepdb; simple_atoms opening '//trim(fname), io_stat)
@@ -1022,7 +1022,7 @@ contains
                     call final_atoms%set_beta(cnt_intersect,self%beta(i))
                 endif
             enddo
-            call final_atoms%writePDB('AtomColumn')
+            call final_atoms%writePDB('AtomColumn.pdb')
             call final_atoms%kill
             ! Find the line that best fits the atoms
             allocate(points(3,count(flag)), source = 0.)
@@ -1114,7 +1114,7 @@ contains
                     call final_atoms%set_beta(cnt_intersect,self%beta(i))
                 endif
             enddo
-            call final_atoms%writePDB('AtomPlane')
+            call final_atoms%writePDB('AtomPlane.pdb')
             call final_atoms%kill
             allocate(points(3, count(flag)), source = 0.)
             ! calculate center of mass of the points
@@ -1191,7 +1191,7 @@ contains
         logical           :: use_center = .false.
         if( present(center_pdb) .and. center_pdb ) use_center = .true.
         if( any(self%xyz(:,:) < 0.) )then
-            write(logfhandle,'(A)') 'WARNING: PDB atomic center needs to be moved to the center of the box'
+            write(logfhandle,'(A)') 'Warning: PDB atomic center moved to the center of the box'
             use_center = .true. ! it needs to be centered because the PDB coordinates does not come from cryoEM
         endif
         write(logfhandle,'(A,f8.3,A)') 'Sampling distance: ',smpd,' Angstrom'
@@ -1291,7 +1291,7 @@ contains
         if(present(filename))then
             ! close(45)
             close(46)
-            call self%writepdb(filename)
+            call self%writepdb(trim(filename)//'.pdb')
         endif
 
     end subroutine map_validation
@@ -1344,7 +1344,7 @@ contains
         if(present(filename))then
             close(45)
             close(46)
-            call self%writepdb(filename)
+            call self%writepdb(trim(filename)//'.pdb')
         endif
     end subroutine atom_validation
 

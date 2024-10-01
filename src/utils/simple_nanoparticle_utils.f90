@@ -667,12 +667,12 @@ contains
             strain_array(i,6) = list_eXZ(i,4)
         enddo
         ! output PDB files
-        call Exx_strain%writepdb('Exx_strain')
-        call Eyy_strain%writepdb('Eyy_strain')
-        call Ezz_strain%writepdb('Ezz_strain')
-        call Exy_strain%writepdb('Exy_strain')
-        call Eyz_strain%writepdb('Eyz_strain')
-        call Exz_strain%writepdb('Exz_strain')
+        call Exx_strain%writepdb('Exx_strain.pdb')
+        call Eyy_strain%writepdb('Eyy_strain.pdb')
+        call Ezz_strain%writepdb('Ezz_strain.pdb')
+        call Exy_strain%writepdb('Exy_strain.pdb')
+        call Eyz_strain%writepdb('Eyz_strain.pdb')
+        call Exz_strain%writepdb('Exz_strain.pdb')
         ! Output ideal lattice for visualization
         call write_ideal_lattice_pdb(element, modelFromABC)
         ! kill
@@ -756,7 +756,7 @@ contains
             strain_array(i,7) = list_eRR(i,4)
         enddo
         ! output PDB file
-        call Err_strain%writepdb('radial_strain')
+        call Err_strain%writepdb('radial_strain.pdb')
         call Err_strain%kill
         allocate(list_Ux(natoms,4), list_Uy(natoms,4), list_Uz(natoms,4), source = 0.)
         call Ux_atoms%new(natoms, dummy=.true.)
@@ -798,9 +798,9 @@ contains
         enddo
         if( DEBUG )then
             ! PDB files
-            call Ux_atoms%writepdb('Ux')
-            call Uy_atoms%writepdb('Uy')
-            call Uz_atoms%writepdb('Uz')
+            call Ux_atoms%writepdb('Ux.pdb')
+            call Uy_atoms%writepdb('Uy.pdb')
+            call Uz_atoms%writepdb('Uz.pdb')
            ! CSV files
            call fopen(filnum, file='Ux.csv', iostat=io_stat)
            write (filnum,*) 'ux'
@@ -887,9 +887,7 @@ contains
             if( betas_present ) call a%set_beta(i, betas(i))
         enddo
         ! write PDB
-        ext   = fname2ext(trim(pdbfile))
-        fbody = get_fbody(trim(pdbfile), ext)
-        call a%writePDB(fbody)
+        call a%writePDB(pdbfile)
         call a%kill
     end subroutine write_matrix2pdb
 
@@ -923,9 +921,7 @@ contains
             if( betas_present ) call a%set_beta(i, betas(i))
         enddo
         ! write PDB
-        ext   = fname2ext(trim(pdbfile))
-        fbody = get_fbody(trim(pdbfile), ext)
-        call a%writePDB(fbody)
+        call a%writepdb(pdbfile)
         call a%kill
     end subroutine write_ideal_lattice_pdb
 
