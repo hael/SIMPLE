@@ -1030,7 +1030,6 @@ contains
         integer,          allocatable :: pinds(:)
         real,             allocatable :: rstates(:), corrs(:), euldists(:)
         logical,          allocatable :: state_mask(:), pind_mask(:)
-        character(len=:), allocatable :: iter_tag
         character(len=STDLEN) :: fbody, fbody_split
         integer :: i, iter, cnt, cnt2, funit, io_stat, endit, noris, pind_plus_one
         real    :: smpd
@@ -1087,11 +1086,6 @@ contains
             endit = nint(cline_refine3D_nano%get_rarg('endit'))  ! last iteration executed by refine3D_nano
             call cline_refine3D_nano%delete('endit')             ! used internally but not technically allowed
             call cline_refine3D_nano%set('prg', 'refine3D_nano') ! because the command line is modified refine3D_nano -> refine3D internally
-            ! rename relevant outputs (because the shared-mem workflow adds the iter tag)
-            iter_tag = '_iter'//int2str_pad(endit,3)
-            call simple_rename(trim(fbody)//iter_tag//'.mrc',    RECVOL)
-            call simple_rename(trim(fbody)//iter_tag//'_even.mrc', EVEN)
-            call simple_rename(trim(fbody)//iter_tag//'_odd.mrc',   ODD)
             ! model building
             params_ptr  => params_glob
             params_glob => null()
