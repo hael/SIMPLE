@@ -35,7 +35,7 @@ exp_vol_file  = swap_suffix(pdb_file,'mrc','pdb')
 sim_vol_file  = trim(get_fbody(pdb_file,'pdb'))//'_sim.mrc'
 even_vol_file = trim(get_fbody(pdb_file,'pdb'))//'_even.mrc'
 odd_vol_file  = trim(get_fbody(pdb_file,'pdb'))//'_odd.mrc'
-pdb_out       = trim(get_fbody(pdb_file,'pdb'))//'_centered'
+pdb_out       = trim(get_fbody(pdb_file,'pdb'))//'_centered.pdb'
 ! the dimensions of all volumes need to be consisted
 call find_ldim_nptcls(exp_vol_file,  ldim, ifoo)
 call find_ldim_nptcls(odd_vol_file,  ldim1, ifoo)

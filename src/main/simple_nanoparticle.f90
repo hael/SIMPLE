@@ -518,7 +518,7 @@ contains
             self%atominfo(i)%center(:) = self%atominfo(i)%center(:) + vec
             call atom_centers%set_coord(i,(self%atominfo(i)%center(:)-1.)*self%smpd)
         enddo
-        call atom_centers%writePDB(pdbfile_out)
+        call atom_centers%writePDB(pdbfile_out//'.pdb')
         call atom_centers%kill
     end subroutine center_on_atom
 
@@ -1547,7 +1547,7 @@ contains
                 ! make cn mask
                 cn_mask = self%atominfo(:)%cn_std == cn_std
                 call self%simulate_atoms(simatms, mask=cn_mask, atoms_obj=atoms_obj)
-                call atoms_obj%writepdb('atoms_cn'//int2str_pad(cn_std,2))
+                call atoms_obj%writepdb('atoms_cn'//int2str_pad(cn_std,2)//'.pdb')
                 call simatms%write('simvol_cn'//int2str_pad(cn_std,2)//'.mrc')
                 ! make binary image of atoms with given cn_std
                 call img_atom%copy_bimg(self%img_cc)
@@ -1992,9 +1992,9 @@ contains
             enddo
         endif
         if( present(fname) )then
-            call centers_pdb%writepdb(fname)
+            call centers_pdb%writepdb(trim(fname)//'.pdb')
         else
-            call centers_pdb%writepdb(trim(self%fbody)//'_ATMS')
+            call centers_pdb%writepdb(trim(self%fbody)//'_ATMS'//'.pdb')
             write(logfhandle,'(A)') 'output, atomic coordinates:       '//trim(self%fbody)//'_ATMS'
         endif
 
@@ -2039,7 +2039,7 @@ contains
             end select
             call centers_pdb%set_resnum(cc,cc)
         enddo
-        call centers_pdb%writepdb(fname)
+        call centers_pdb%writepdb(trim(fname)//'.pdb')
     end subroutine write_centers_2
 
     subroutine write_centers_aniso( self, fname )
@@ -2056,7 +2056,7 @@ contains
             call centers_pdb%set_resnum(cc,cc)
             aniso(:,:,cc) = self%atominfo(cc)%aniso(:,:) ! in Angstroms
         enddo
-        call centers_pdb%writepdb_aniso(fname, aniso)
+        call centers_pdb%writepdb_aniso(trim(fname)//'.pdb', aniso)
     end subroutine write_centers_aniso
 
     subroutine write_individual_atoms( self )

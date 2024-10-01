@@ -26,10 +26,10 @@ if( command_argument_count() /= 2 )then
     write(logfhandle,'(a)') 'DEFAULT TEST (example above) is running now...', NEW_LINE('a')
     inquire(file="1JYX.mrc", exist=mrc_exists)
     if( .not. mrc_exists )then
-        write(*, *) 'Downloading the example dataset...'
+        write(logfhandle,'(a)') 'Downloading the example dataset...'
         cmd = 'curl -s -o 1JYX.pdb https://files.rcsb.org/download/1JYX.pdb'
         call execute_command_line(cmd, exitstat=rc)
-        write(*, *) 'Converting .pdb to .mrc...'
+        write(logfhandle,'(a)') 'Converting .pdb to .mrc...'
         cmd = 'e2pdb2mrc.py 1JYX.pdb 1JYX.mrc'
         call execute_command_line(cmd, exitstat=rc)
         cmd = 'rm 1JYX.pdb'

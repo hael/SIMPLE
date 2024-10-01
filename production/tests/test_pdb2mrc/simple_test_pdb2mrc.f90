@@ -59,9 +59,8 @@ else
         endif
     endif 
 endif
-write(logfhandle,'(A,f8.4)') 'smpd: ', smpd
 vol_file = swap_suffix(pdb_file,'mrc','pdb') 
-pdb_out  = trim(get_fbody(pdb_file,'pdb'))//'_centered' 
+pdb_out  = trim(get_fbody(pdb_file,'pdb'))//'_centered'//'.pdb'
 call molecule%new(pdb_file)
 call molecule%pdb2mrc(pdb_file, vol_file, smpd, pdb_out=pdb_out)
 call molecule%kill

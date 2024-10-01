@@ -84,7 +84,7 @@ contains
             else if( cline%defined('pdbfile') )then
                 ! focus masking
                 call pdb%new(params%pdbfile)
-                pdbout_fname = trim(get_fbody(params%pdbfile, 'pdb')) // '_centered'
+                pdbout_fname = trim(get_fbody(params%pdbfile, 'pdb')) // '_centered.pdb'
                 if( params%center.eq.'yes' )then
                     call msker%mask_from_pdb( pdb, build%vol, os=build%spproj_field, pdbout=pdbout_fname)
                 else
