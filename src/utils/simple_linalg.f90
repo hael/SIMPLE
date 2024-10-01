@@ -1509,7 +1509,7 @@ contains
         integer(int64) :: start_time, end_time
         integer        :: lwmax, info, il, iu, m, isuppz(n)
         real(real64)   :: rate
-        real           :: vl, vu, w(n)
+        real           :: vl, vu
         if( DEBUG ) call system_clock(start_time, rate)
         lwmax = 26 * n     ! explained in dsyevr.f90
         allocate(iwork(lwmax), work(lwmax))
@@ -1517,13 +1517,12 @@ contains
         iu = n
         ! Solve eigenproblem.
         call ssyevr( 'Vectors', 'Indices', 'Lower', n, mat, n, vl, vu, il, iu, ABSTOL,&
-                    & m, w, eigvecs, n, isuppz, work, lwmax, iwork, lwmax, info )
+                    & m, eigvals, eigvecs, n, isuppz, work, lwmax, iwork, lwmax, info )
         ! Check for convergence.
         if( info > 0 )then
             print *, 'The algorithm failed to compute eigenvalues.'
             STOP
         endif
-        eigvals = w(1:neigs)
         if( DEBUG )then
             call system_clock(end_time)
             print *, real(end_time-start_time)/real(rate), " seconds"

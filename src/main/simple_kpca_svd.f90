@@ -171,8 +171,8 @@ contains
                             ! 2. computing the pre-image
                             denom = sum(abs(real(proj_data(:,ithr),dp)))
                             if( denom < DTINY ) exit
-                            self%data(:,ind) = matmul(pcavecs, proj_data(:,ithr)) / real(denom)
-                            denom            = dsqrt(sum(real(self%data(:,ind),dp)**2))
+                            self%data(:,ind)  = matmul(pcavecs, proj_data(:,ithr)) / real(denom)
+                            denom             = dsqrt(sum(real(self%data(:,ind),dp)**2))
                             if( denom < DTINY ) exit
                             norm_data(:,ithr) = self%data(:,ind) / real(denom)
                             iter = iter + 1
@@ -270,7 +270,7 @@ contains
         tmp_ker = ker
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i)
         do i = 1, self%N
-            tmp_ker(:,i) = tmp_ker(:,i) - sum(tmp_ker(:,i))/real(self%N,dp)
+            tmp_ker(:,i) = tmp_ker(:,i) - sum(tmp_ker(:,i))/real(self%N)
         enddo
         !$omp end parallel do
         ! computing eigvals/eigvecs
