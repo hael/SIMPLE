@@ -1434,6 +1434,7 @@ contains
         type(guistats)            :: pool_stats
         character(len=LONGSTRLEN) :: cwd
         integer                   :: iter_loc
+        real                      :: lpthres_sugg
         call simple_getcwd(cwd)
         if(file_exists(trim(adjustl(cwd))//'/'//trim(CLS2D_STARFBODY)//'_iter'//int2str_pad(pool_iter,3)//'.star')) then
             iter_loc = pool_iter
@@ -1446,7 +1447,13 @@ contains
         call pool_stats%set('2D', 'iteration',                  iter_loc,             primary=.true.)
         call pool_stats%set('2D', 'number_classes',             ncls_glob,            primary=.true.)
         call pool_stats%set('2D', 'number_classes_rejected',    ncls_rejected_glob,   primary=.true.)
-        call pool_stats%set('2D', 'maximum_resolution',         current_resolution,   primary=.true.)
+        call mskdiam2streamresthreshold(params_glob%mskdiam, lpthres_sugg)
+        if(current_resolution < lpthres_sugg / 4 .and. params_glob%lpthres > lpthres_sugg) then
+            call pool_stats%set('2D', 'maximum_resolution', current_resolution, primary=.true., alert=.true., alerttext='maximum_resolution_suggests_&
+            &using_a_cutoff_of_' // int2str(int(lpthres_sugg)) // 'Å_or_better' , notify=.false.)
+        else
+            call pool_stats%set('2D', 'maximum_resolution', current_resolution, primary=.true., alert=.false., notify=.true.)
+        endif
         if(.not. file_exists(trim(adjustl(cwd)) // '/' // trim(CAVGS_ITER_FBODY) // int2str_pad(iter_loc, 3) // '.jpg')) then
             if(iter_loc > 0) call pool_stats%set_now('2D', 'iteration_time')
             call pool_stats%generate_2D_thumbnail('2D', 'top_classes', pool_proj%os_cls2D, iter_loc)
