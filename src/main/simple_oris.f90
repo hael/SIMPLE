@@ -210,6 +210,7 @@ type :: oris
     procedure, private :: nearest_proj_neighbors_2
     procedure, private :: nearest_proj_neighbors_3
     generic            :: nearest_proj_neighbors => nearest_proj_neighbors_1, nearest_proj_neighbors_2, nearest_proj_neighbors_3
+    procedure          :: extract_subspace
     procedure          :: detect_peaks
     procedure          :: min_euldist
     procedure          :: find_angres
@@ -3046,6 +3047,23 @@ contains
             end do
         end do
     end subroutine nearest_proj_neighbors_3
+
+    subroutine extract_subspace( self, lnns, subself )
+        class(oris), intent(in)    :: self
+        logical,     intent(in)    :: lnns(self%n)
+        class(oris), intent(inout) :: subself
+        integer :: n, cnt, i
+        n = count(lnns)
+        if( n < 1 ) THROW_HARD('logical array for subspace generation empty')
+        call subself%new(n, is_ptcl=self%o(1)%is_particle())
+        cnt = 0
+        do i = 1, self%n
+            if( lnns(i) )then
+                cnt            = cnt + 1
+                subself%o(cnt) = self%o(i)
+            endif
+        enddo
+    end subroutine extract_subspace
 
     subroutine detect_peaks( self, nnmat, corrs, peaks )
         class(oris), intent(in)    :: self
