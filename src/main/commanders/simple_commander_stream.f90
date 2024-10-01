@@ -2146,7 +2146,6 @@ contains
         call cline%set('wiener',       'full')
         if( .not. cline%defined('dir_target')   ) THROW_HARD('DIR_TARGET must be defined!')
         if( .not. cline%defined('walltime')     ) call cline%set('walltime',     29*60) ! 29 minutes
-        if( .not. cline%defined('lpthres')      ) call cline%set('lpthres',      RES_THRESHOLD_STREAM)
         if( .not. cline%defined('ndev')         ) call cline%set('ndev',         CLS_REJECT_STD)
         if( .not. cline%defined('reject_cls')   ) call cline%set('reject_cls',   'yes')
         if( .not. cline%defined('objfun')       ) call cline%set('objfun',       'euclid')
@@ -2203,6 +2202,12 @@ contains
             call cline%set('mskdiam', params%mskdiam)
             write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER SET TO', params%mskdiam
         endif
+        ! Resolution based class rejection
+        if( .not.cline%defined('lpthres') )then
+            call mskdiam2streamresthreshold(params%mskdiam, params%lpthres)
+            call cline%set('lpthres', params%lpthres)
+        endif
+        ! Number of particles per class
         if(params%nptcls_per_cls == 0) write(logfhandle,'(A)')   '>>> # PARTICLES PER CLASS WILL BE AUTO DETERMINED AFTER 100 IMPORTED MICROGRAPHS'
         ! initialise progress monitor
         call progressfile_init()

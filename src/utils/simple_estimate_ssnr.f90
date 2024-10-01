@@ -12,8 +12,8 @@ use simple_fileio
 implicit none
 
 public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp
-public :: lowpass_from_klim, mskdiam2lplimits, calc_dose_weights, get_resolution
-public :: lpstages
+public :: lowpass_from_klim, mskdiam2lplimits, mskdiam2streamresthreshold
+public :: calc_dose_weights, get_resolution, lpstages
 private
 #include "simple_local_flags.inc"
 
@@ -115,6 +115,12 @@ contains
         lpstop  = min(max(mskdiam/22.,  5.),  8.)
         lpcen   = min(max(mskdiam/6.,  20.), 30.)
     end subroutine mskdiam2lplimits
+
+    subroutine mskdiam2streamresthreshold( mskdiam, res_threshold )
+        real, intent(in)  :: mskdiam
+        real, intent(out) :: res_threshold
+        res_threshold = max(min(mskdiam/6.,150.),RES_THRESHOLD_STREAM)
+    end subroutine mskdiam2streamresthreshold
 
     ! Following Grant & Grigorieff; eLife 2015;4:e06980
     subroutine calc_dose_weights( nframes, box, smpd, kV, total_dose, weights )

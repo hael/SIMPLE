@@ -132,7 +132,6 @@ type(simple_program), target :: map_cavgs_states
 type(simple_program), target :: mask
 type(simple_program), target :: mkdir_
 type(simple_program), target :: motion_correct
-type(simple_program), target :: multipick_cleanup2D
 type(simple_program), target :: new_project
 type(simple_program), target :: nununiform_filter3D
 type(simple_program), target :: noisevol
@@ -431,7 +430,6 @@ contains
         call new_mask
         call new_mkdir_
         call new_motion_correct
-        call new_multipick_cleanup2D
         call new_new_project
         call new_nununiform_filter3D
         call new_noisevol
@@ -556,7 +554,6 @@ contains
         call push2prg_ptr_array(mask)
         call push2prg_ptr_array(mkdir_)
         call push2prg_ptr_array(motion_correct)
-        call push2prg_ptr_array(multipick_cleanup2D)
         call push2prg_ptr_array(new_project)
         call push2prg_ptr_array(nununiform_filter3D)
         call push2prg_ptr_array(noisevol)
@@ -752,8 +749,6 @@ contains
                 ptr2prg => mkdir_
             case('motion_correct')
                 ptr2prg => motion_correct
-            case('multipick_cleanup2D')
-                ptr2prg => multipick_cleanup2D
             case('new_project')
                 ptr2prg => new_project
             case('nununiform_filter3D')
@@ -930,7 +925,6 @@ contains
         write(logfhandle,'(A)') mask%name
         write(logfhandle,'(A)') mkdir_%name
         write(logfhandle,'(A)') motion_correct%name
-        write(logfhandle,'(A)') multipick_cleanup2D%name
         write(logfhandle,'(A)') new_project%name
         write(logfhandle,'(A)') nununiform_filter3D%name
         write(logfhandle,'(A)') noisevol%name
@@ -1217,7 +1211,7 @@ contains
         call set_param(sigma_est,      'sigma_est',    'multi',  'Sigma estimation method', 'Sigma estimation method(group|global){group}', '(group|global){group}', .false., 'group')
         call set_param(combine_eo,     'combine_eo',   'binary', 'Whether e/o references are combined for final alignment(yes|no){no}', 'whether e/o references are combined for final alignment(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(maxnchunks,     'maxnchunks',   'num',    'Number of subsets after which 2D classification ends', 'After this number of subsets has been classified all processing will stop(0=no end){0}','{0}',.false., 0.0)
-        call set_param(picker,         'picker',       'multi',  'Which picker to use', 'Which picker to use(old|new|seg){old}', '(old|new|seg){old}', .false., 'old')
+        call set_param(picker,         'picker',       'multi',  'Which picker to use', 'Which picker to use(old|new|seg){new}', '(old|new|seg){new}', .false., 'new')
         call set_param(pick_roi,       'pick_roi',     'binary', 'Artefactual regions exclusion(new picker only)', 'Whether to exclude regions of disinterest(carbon, thick ice, new picker only){yes|no}', '{yes|no}', .false., 'no')
         call set_param(remove_chunks,  'remove_chunks','binary', 'Whether to remove subsets', 'Whether to remove subsets after completion(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(cls_init,       'cls_init',     'multi',  'Scheme for initial class generation', 'Initiate 2D classification from raw images|random classes|noise images(ptcl|randcls|rand){ptcl}', '(ptcl|randcls|rand){ptcl}', .false., 'ptcl')
@@ -3278,48 +3272,6 @@ contains
         call motion_correct%set_input('comp_ctrls', 1, nparts, gui_submenu="compute")
         call motion_correct%set_input('comp_ctrls', 2, nthr, gui_submenu="compute")
     end subroutine new_motion_correct
-
-    subroutine new_multipick_cleanup2D
-        ! PROGRAM SPECIFICATION
-        call multipick_cleanup2D%new(&
-        &'multipick_cleanup2D', &                                                               ! name
-        &'Blind picker references generation',&                                                 ! descr_short
-        &'is a distributed workflow for bling picking references generation from micrographs',& ! descr_long
-        &'simple_exec',&                                                                        ! executable
-        &0, 4, 0, 5, 0, 0, 2, .true.,&                                                          ! # entries in each group, requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "CTF estimation,picking,compute")             ! GUI   
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call multipick_cleanup2D%set_input('parm_ios', 1, 'nmoldiams', 'num', 'Number of molecular diameters to investigate', 'Number of molecular diameters tested',&
-        &'e.g. 5', .false., 5., gui_submenu="picking")
-        multipick_cleanup2D%parm_ios(1)%required = .true.
-        call multipick_cleanup2D%set_input('parm_ios', 2, moldiam, gui_submenu="picking")
-        multipick_cleanup2D%parm_ios(2)%required    = .true.
-        multipick_cleanup2D%parm_ios(2)%descr_short = 'Lower bound molecular diameter'
-        call multipick_cleanup2D%set_input_1('parm_ios', 3, 'moldiam_max', 'num', 'Upper bound molecular diameter', 'Upper bound molecular diameter in multipick',&
-        &'e.g. 200', .false., 200., gui_submenu="picking")
-        multipick_cleanup2D%parm_ios(3)%required = .true.
-        call multipick_cleanup2D%set_input('parm_ios', 4, nran, gui_submenu="picking")
-        multipick_cleanup2D%parm_ios(4)%descr_short = 'Number of micrographs to select'
-        multipick_cleanup2D%parm_ios(4)%required = .true.
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call multipick_cleanup2D%set_input('srch_ctrls', 1, ctfresthreshold, gui_submenu="CTF estimation")
-        call multipick_cleanup2D%set_input('srch_ctrls', 2, icefracthreshold, gui_submenu="CTF estimation")
-        call multipick_cleanup2D%set_input('srch_ctrls', 3, pick_roi, gui_submenu="picking")
-        call multipick_cleanup2D%set_input('srch_ctrls', 4, backgr_subtr, gui_submenu="picking")
-        call multipick_cleanup2D%set_input('srch_ctrls', 5, crowded, gui_submenu="picking")
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call multipick_cleanup2D%set_input('comp_ctrls', 1, nparts, gui_submenu="compute", gui_advanced=.false.)
-        call multipick_cleanup2D%set_input('comp_ctrls', 2, nthr, gui_submenu="compute", gui_advanced=.false.)
-    end subroutine new_multipick_cleanup2D
 
     subroutine new_nununiform_filter3D
         ! PROGRAM SPECIFICATION
