@@ -22,15 +22,15 @@ type, extends(commander_base) :: abinitio2D_commander
 end type abinitio2D_commander
 
 ! class constants
-real,             parameter :: SMPD_TARGET    = 2.67
-integer,          parameter :: NSTAGES        = 6
-integer,          parameter :: ITS_INCR       = 5
-integer,          parameter :: PHASES(2)      = [4, 6]
-integer,          parameter :: MINBOXSZ       = 88
-integer,          parameter :: EXTR_LIM_LOCAL = 20
+real,    parameter :: SMPD_TARGET    = 2.67
+integer, parameter :: NSTAGES        = 6
+integer, parameter :: ITS_INCR       = 5
+integer, parameter :: PHASES(2)      = [4, 6]
+integer, parameter :: MINBOXSZ       = 88
+integer, parameter :: EXTR_LIM_LOCAL = 20
 
 ! class variables
-type(lp_crop_inf) :: lpinfo(NSTAGES)
+type(lp_crop_inf)  :: lpinfo(NSTAGES)
 
 contains
 
@@ -45,10 +45,9 @@ contains
         ! command lines
         type(cmdline)                    :: cline_cluster2D, cline_calc_pspec
         ! other
-        type(parameters)              :: params
-        type(sp_project)              :: spproj
-        class(oris),          pointer :: spproj_field
-        character(len=:), allocatable :: inirefs
+        type(parameters)                 :: params
+        type(sp_project)                 :: spproj
+        class(oris),             pointer :: spproj_field
         integer :: maxits(2), istage, last_iter
         logical :: l_shmem
         call cline%set('oritype', 'ptcl2D')
@@ -119,7 +118,7 @@ contains
 
         ! Downscaling/cropping dimensions used throughout
         subroutine set_dims
-            real    :: smpd_target_eff, scale_factor
+            real :: smpd_target_eff, scale_factor
             smpd_target_eff  = max(SMPD_TARGET, params%smpd)
             scale_factor     = 1.0
             params%smpd_crop = params%smpd
@@ -142,7 +141,6 @@ contains
 
         ! Set resolution limits
         subroutine set_lplims
-            use simple_estimate_ssnr, only: mskdiam2lplimits
             real    :: lpstart, lpstop, cenlp
             integer :: istage
             ! Resolution limits
@@ -173,7 +171,7 @@ contains
 
         subroutine prep_command_lines( cline )
             use simple_default_clines, only: set_automask2D_defaults
-            class(cmdline),   intent(in) :: cline
+            class(cmdline), intent(in) :: cline
             cline_cluster2D  = cline
             cline_calc_pspec = cline
             ! initial sigma2
@@ -190,11 +188,11 @@ contains
         end subroutine prep_command_lines
 
         subroutine set_cline_cluster2D( istage )
-            integer, intent(in) :: istage
+            integer,          intent(in)  :: istage
             character(len=:), allocatable :: sh_first, refine, center, objfun, refs
             integer :: iphase, iter, imaxits, maxits_glob, cc_iters, minits, extr_iter
             real    :: trs, snr_noise_reg
-            refine      = 'snhc_smpl' ! not optional
+            refine = 'snhc_smpl' ! not optional
             ! iteration number bookkeeping
             iter = 0
             if( cline_cluster2D%defined('endit') ) iter = nint(cline_cluster2D%get_rarg('endit'))
