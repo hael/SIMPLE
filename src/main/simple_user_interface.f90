@@ -91,6 +91,7 @@ type(simple_program), target :: center
 type(simple_program), target :: cleanup2D
 type(simple_program), target :: center2D_nano
 type(simple_program), target :: check_states
+type(simple_program), target :: conv_atom_denoise
 type(simple_program), target :: cluster2D
 type(simple_program), target :: cluster2D_nano
 type(simple_program), target :: cluster2D_subsets
@@ -390,6 +391,7 @@ contains
         call new_cleanup2D
         call new_center2D_nano
         call new_check_states
+        call new_conv_atom_denoise
         call new_cluster2D
         call new_cluster2D_nano
         call new_cluster2D_subsets
@@ -517,6 +519,7 @@ contains
         call push2prg_ptr_array(cleanup2D)
         call push2prg_ptr_array(center2D_nano)
         call push2prg_ptr_array(check_states)
+        call push2prg_ptr_array(conv_atom_denoise)
         call push2prg_ptr_array(cluster2D)
         call push2prg_ptr_array(cluster2D_nano)
         call push2prg_ptr_array(cluster2D_subsets)
@@ -672,6 +675,8 @@ contains
                 ptr2prg => center2D_nano
             case('check_states')
                 ptr2prg => check_states
+            case('conv_atom_denoise')
+                ptr2prg => conv_atom_denoise
             case('cluster2D')
                 ptr2prg => cluster2D
             case('cluster2D_nano')
@@ -1028,6 +1033,7 @@ contains
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') format_str('MODEL BULDING/ANALYSIS PROGRAMS:', C_UNDERLINED)
         write(logfhandle,'(A)') pdb2mrc%name
+        write(logfhandle,'(A)') conv_atom_denoise%name
         write(logfhandle,'(A)') detect_atoms%name
         write(logfhandle,'(A)') atoms_stats%name
         write(logfhandle,'(A)') tseries_atoms_analysis%name
@@ -1770,6 +1776,32 @@ contains
         ! computer controls
         call check_states%set_input('comp_ctrls', 1, nthr)
     end subroutine new_check_states
+
+    subroutine new_conv_atom_denoise
+        ! PROGRAM SPECIFICATION
+        call conv_atom_denoise%new(&
+        &'conv_atom_denoise', &                                                  ! name
+        &'Denoise atomic-resolution nanoparticle map through atom convolution',& ! descr_short
+        &'is a program for denoising atomic-resolution nanoparticle maps exactly as in detect_atoms',& ! descr long
+        &'single_exec',&                                        ! executable
+        &1, 1, 0, 0, 1, 1, 1, .false.)                         ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call conv_atom_denoise%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
+        & 'input volume e.g. vol.mrc', .true., '')
+        ! parameter input/output
+        call conv_atom_denoise%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call conv_atom_denoise%set_input('filt_ctrls', 1, element)
+        ! mask controls
+        call conv_atom_denoise%set_input('mask_ctrls', 1, mskdiam)
+        ! computer controls
+        call conv_atom_denoise%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_conv_atom_denoise
 
     subroutine new_cluster2D
         ! PROGRAM SPECIFICATION

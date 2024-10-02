@@ -9,7 +9,7 @@ use simple_atoms, only: atoms
 use simple_image, only: image
 implicit none
 
-public :: phasecorr_one_atom, fit_lattice, calc_contact_scores, run_cn_analysis, strain_analysis
+public :: thres_detect_conv_atom_denoised, phasecorr_one_atom, fit_lattice, calc_contact_scores, run_cn_analysis, strain_analysis
 public :: read_pdb2matrix, write_matrix2pdb, find_couples
 public :: remove_atoms, find_atoms_subset, find_rMax
 private
@@ -22,7 +22,6 @@ contains
 
     ! FORMULA: phasecorr = ifft(fft(field).*conj(fft(reference)));
     subroutine phasecorr_one_atom( img, element )
-        use simple_image, only: image
         class(image),     intent(inout) :: img
         character(len=2), intent(in)    :: element
         type(image) :: one_atom, img_copy
@@ -51,6 +50,31 @@ contains
         call one_atom%kill()
         if( didft ) call img%ifft
     end subroutine phasecorr_one_atom
+
+    subroutine thres_detect_conv_atom_denoised( img, ncls, ts )
+        class(image), intent(inout) :: img
+        integer,      intent(in)    :: ncls
+        real,         intent(inout) :: ts(ncls)
+        ! type(image) :: binimg
+        integer :: MAXITS = 10
+        real,    allocatable :: vec_pos(:), means(:)
+        integer, allocatable :: labels(:)
+        integer :: icls
+        real    :: t1
+        vec_pos = img%serialize(0.)           ! only positive pixels
+        call otsu(size(vec_pos), vec_pos, t1) ! first treshold by otsu
+        vec_pos = img%serialize(t1)
+        allocate(means(ncls), source=0.)      
+        call sortmeans(vec_pos, MAXITS, means, labels) ! clustering with sortmeans to obtain a set of thresholds
+        ! call binimg%new(img%get_ldim(), img%get_smpd())
+        do icls = 1, ncls
+            ts(icls) = minval(vec_pos, mask=labels == icls)
+            ! call img%binarize(ts(icls), binimg)
+            ! call binimg%write('binarized_thres'//int2str(icls)//'.mrc')
+            ! print *, ts(icls)
+        end do
+        ! call binimg%kill
+    end subroutine thres_detect_conv_atom_denoised
 
     ! Identify the bound for defining the neighbourhood in
     ! fit_lattice and strain_analysis routines below

@@ -108,8 +108,8 @@ contains
     procedure          :: rmat_associated
     procedure          :: cmat_associated
     procedure          :: is_wthreads
-    procedure, private :: serialize_1, serialize_2
-    generic            :: serialize => serialize_1, serialize_2
+    procedure, private :: serialize_1, serialize_2, serialize_3
+    generic            :: serialize => serialize_1, serialize_2, serialize_3
     procedure          :: unserialize
     procedure          :: winserialize
     procedure          :: zero2one
@@ -1778,6 +1778,13 @@ contains
             end do
         end do
     end function serialize_2
+
+    function serialize_3( self, thres ) result( vec )
+        class(image), intent(in) :: self
+        real,         intent(in) :: thres
+        real, allocatable :: vec(:)
+        vec = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) > thres)
+    end function serialize_3
 
     subroutine unserialize( self, pcavec, l_msk )
         class(image),      intent(inout) :: self

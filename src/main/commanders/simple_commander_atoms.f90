@@ -11,6 +11,7 @@ use simple_atoms,          only: atoms
 implicit none
 
 public :: pdb2mrc_commander
+public :: conv_atom_denoise_commander
 public :: detect_atoms_commander
 public :: atoms_stats_commander
 public :: tseries_atoms_analysis_commander
@@ -21,6 +22,11 @@ type, extends(commander_base) :: pdb2mrc_commander
   contains
     procedure :: execute      => exec_pdb2mrc
 end type pdb2mrc_commander
+
+type, extends(commander_base) :: conv_atom_denoise_commander
+  contains
+    procedure :: execute      => exec_conv_atom_denoise
+end type conv_atom_denoise_commander
 
 type, extends(commander_base) :: detect_atoms_commander
   contains
@@ -71,6 +77,20 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_PDB2MRC NORMAL STOP ****')
     end subroutine exec_pdb2mrc
+
+    subroutine exec_conv_atom_denoise( self, cline )
+        class(conv_atom_denoise_commander), intent(inout) :: self
+        class(cmdline),                     intent(inout) :: cline
+        type(parameters)   :: params
+        type(nanoparticle) :: nano
+        if( .not. cline%defined('outvol') ) call cline%set('outvol', 'denoised.mrc')
+        call params%new(cline)
+        call nano%new(params%vols(1), params%msk)
+        call nano%conv_denoise(params%outvol)
+        call nano%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_CONV_ATOM_DENOISE NORMAL STOP ****')
+    end subroutine exec_conv_atom_denoise
 
     subroutine exec_detect_atoms( self, cline )
         class(detect_atoms_commander), intent(inout) :: self

@@ -114,7 +114,6 @@ type :: atom_stats
     real    :: isocorr           = 0. ! correlation of isotropic B-Factor fit to input map          ISO_CORR
     real    :: anisocorr         = 0. ! correlation of anisotropic B-Factor fit to input map        ANISO_CORR
     real    :: center(3)         = 0. ! atom center                                                 X Y Z
-    
     ! strain
     real    :: exx_strain        = 0. ! tensile strain in %                                         EXX_STRAIN
     real    :: eyy_strain        = 0. ! -"-                                                         EYY_STRAIN
@@ -123,11 +122,9 @@ type :: atom_stats
     real    :: eyz_strain        = 0. ! -"-                                                         EYZ_STRAIN
     real    :: exz_strain        = 0. ! -"-                                                         EXZ_STRAIN
     real    :: radial_strain     = 0. ! -"-                                                         RADIAL_STRAIN
-
     ! Auxiliary (non-output)
     real    :: aniso(3,3)        = 0. ! ADP Matrix for ANISOU PDB file                              N/A
     logical :: tossADP           = .false. ! true if atom inadequate for ADP calculations           N/A
-
 end type atom_stats
 
 type :: nanoparticle
@@ -218,6 +215,7 @@ type :: nanoparticle
     procedure          :: update_ncc
     procedure          :: per_atom_valid_corr_from_pdb
     ! atomic position determination
+    procedure          :: conv_denoise 
     procedure          :: identify_lattice_params
     procedure          :: identify_atomic_pos
     procedure, private :: binarize_and_find_centers
@@ -560,6 +558,13 @@ contains
 
     ! atomic position determination
 
+    subroutine conv_denoise( self, fname )
+        class(nanoparticle), intent(inout) :: self
+        character(len=*),    intent(in)    :: fname 
+        call phasecorr_one_atom(self%img, self%element)
+        call self%img%write(fname)
+    end subroutine conv_denoise
+
     subroutine identify_lattice_params( self, a, use_auto_corr_thres )
         class(nanoparticle), intent(inout) :: self
         real,                intent(inout) :: a(3)                ! lattice parameters
@@ -649,6 +654,162 @@ contains
     ! Among those thresholds, the selected one is the for which
     ! that correlation between the raw map and a simulated distribution
     ! obtained with that threshold reaches the maximum value.
+    ! subroutine binarize_and_find_centers( self )
+    !     class(nanoparticle), intent(inout) :: self
+    !     type(binimage)       :: img_bin_t
+    !     type(binimage)       :: img_ccs_t
+    !     type(atoms)          :: atom
+    !     type(image)          :: simulated_distrib
+    !     integer, allocatable :: imat_t(:,:,:)
+    !     real,    allocatable :: x_mat(:)  ! vectorization of the volume
+    !     real,    allocatable :: coords(:,:)
+    !     real,    allocatable :: rmat(:,:,:)
+    !     integer :: i, fnr
+    !     real    :: otsu_thresh, corr, step, step_refine, max_corr, thresh, thresh_opt, lbt, rbt
+    !     logical, parameter      :: L_BENCH = .false.
+    !     real(timer_int_kind)    :: rt_find_ccs, rt_find_centers, rt_gen_sim, rt_real_corr, rt_tot
+    !     integer(timer_int_kind) ::  t_find_ccs,  t_find_centers,  t_gen_sim,  t_real_corr,  t_tot
+    !     call otsu_nano(self%img,otsu_thresh) ! find initial threshold
+    !     write(logfhandle,'(A)') '>>> BINARIZATION'
+    !     rmat = self%img%get_rmat()
+    !     x_mat = pack(rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
+    !                 &rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) >= 0.)
+    !     allocate(imat_t(self%ldim(1), self%ldim(2), self%ldim(3)), source = 0)
+    !     step = (maxval(x_mat)-otsu_thresh )/real(NBIN_THRESH)
+    !     step_refine = step / 6.
+    !     deallocate(x_mat)
+    !     call simulated_distrib%new(self%ldim,self%smpd)
+    !     rt_find_ccs     =  0.
+    !     rt_find_centers =  0.
+    !     rt_gen_sim      =  0.
+    !     rt_real_corr    =  0.
+    !     t_tot           =  tic()
+    !     max_corr        = -1.
+    !     ! discrete search
+    !     do i = 1, NBIN_THRESH
+    !         if( i == 1 )then
+    !             thresh = otsu_thresh
+    !         else
+    !             thresh = thresh + step
+    !         endif
+    !         corr = t2c( thresh )
+    !         write(logfhandle,*) 'threshold: ', thresh , 'corr: ', corr
+    !         if( corr > max_corr )then
+    !             max_corr   = corr
+    !             thresh_opt = thresh
+    !         endif
+    !         if( corr < max_corr ) exit ! convex goal function
+    !     enddo
+    !     ! refinement
+    !     lbt    = thresh_opt - step + step_refine
+    !     rbt    = thresh_opt + step - step_refine
+    !     thresh = lbt
+    !     i      = NBIN_THRESH
+    !     do while( thresh <= rbt )
+    !         i = i + 1
+    !         corr = t2c( thresh )
+    !         write(logfhandle,*) 'threshold: ', thresh, 'corr: ', corr
+    !         if( corr > max_corr )then
+    !             max_corr   = corr
+    !             thresh_opt = thresh
+    !         endif
+    !         thresh = thresh + step_refine
+    !     end do
+    !     rt_tot = toc(t_tot)
+    !     if( L_BENCH )then
+    !         call fopen(fnr, FILE='BINARIZE_AND_FIND_CENTERS_BENCH.txt', STATUS='REPLACE', action='WRITE')
+    !         write(fnr,'(a)') '*** TIMINGS (s) ***'
+    !         write(fnr,'(a,1x,f9.2)') 'find_ccs       : ', rt_find_ccs
+    !         write(fnr,'(a,1x,f9.2)') 'find_centers   : ', rt_find_centers
+    !         write(fnr,'(a,1x,f9.2)') 'gen_sim        : ', rt_gen_sim
+    !         write(fnr,'(a,1x,f9.2)') 'real_corr      : ', rt_real_corr
+    !         write(fnr,'(a,1x,f9.2)') 'total time     : ', rt_tot
+    !         write(fnr,'(a)') ''
+    !         write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
+    !         write(fnr,'(a,1x,f9.2)') 'find_ccs       : ', (rt_find_ccs/rt_tot)     * 100.
+    !         write(fnr,'(a,1x,f9.2)') 'find_centers   : ', (rt_find_centers/rt_tot) * 100.
+    !         write(fnr,'(a,1x,f9.2)') 'gen_sim        : ', (rt_gen_sim/rt_tot)      * 100.
+    !         write(fnr,'(a,1x,f9.2)') 'real_corr      : ', (rt_real_corr/rt_tot)    * 100.
+    !         write(fnr,'(a,1x,f9.2)') 'total time     : ', rt_tot
+    !         write(fnr,'(a,1x,f9.2)') '% accounted for: ',&
+    !         &((rt_find_ccs+rt_find_centers+rt_gen_sim+rt_real_corr)/rt_tot)     * 100.
+    !         call fclose(fnr)
+    !     endif
+    !     write(logfhandle,*) 'optimal threshold: ', thresh_opt, 'max_corr: ', max_corr
+    !     ! Update img_bin and img_cc
+    !     corr = t2c( thresh_opt )
+    !     call self%img_bin%copy_bimg(img_bin_t)
+    !     call self%img_cc%copy_bimg(img_ccs_t)
+    !     call self%update_ncc()
+    !     call self%find_centers()
+    !     call img_bin_t%kill_bimg
+    !     call img_ccs_t%kill_bimg
+    !     ! deallocate and kill
+    !     if(allocated(rmat))   deallocate(rmat)
+    !     if(allocated(imat_t)) deallocate(imat_t)
+    !     if(allocated(coords)) deallocate(coords)
+    !     call simulated_distrib%kill
+    !     write(logfhandle,'(A)') '>>> BINARIZATION, COMPLETED'
+
+    ! contains
+
+    !     ! Otsu binarization for nanoparticle maps
+    !     ! It considers the grey level value only in the positive range.
+    !     ! It doesn't threshold the map. It just returns the ideal threshold.
+    !     ! This is based on the implementation of 1D otsu
+    !     subroutine otsu_nano( img, scaled_thresh )
+    !         type(image),    intent(inout) :: img
+    !         real,           intent(out)   :: scaled_thresh ! returns the threshold in the correct range
+    !         real, pointer     :: rmat(:,:,:)
+    !         real, allocatable :: x(:)
+    !         call img%get_rmat_ptr(rmat)
+    !         x = pack(rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
+    !                 &rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) > 0.)
+    !         call otsu(size(x), x, scaled_thresh)
+    !     end subroutine otsu_nano
+
+    !     real function t2c( thres )
+    !         real, intent(in) :: thres
+    !         where(rmat > thres)
+    !             imat_t = 1
+    !         elsewhere
+    !             imat_t = 0
+    !         endwhere
+    !         ! Generate binary image and cc image
+    !         call img_bin_t%new_bimg(self%ldim, self%smpd)
+    !         call img_bin_t%set_imat(imat_t)
+    !         t_find_ccs = tic()
+    !         call img_ccs_t%new_bimg(self%ldim, self%smpd)
+    !         call img_bin_t%find_ccs(img_ccs_t)
+    !         rt_find_ccs = rt_find_ccs + toc(t_find_ccs)
+    !         ! Find atom centers in the generated distributions
+    !         call self%update_ncc(img_ccs_t) ! self%n_cc is needed in find_centers
+    !         t_find_centers = tic()
+    !         call self%find_centers(img_bin_t, img_ccs_t, coords)
+    !         rt_find_centers = rt_find_centers + toc(t_find_centers)
+    !         ! Generate a simulated distribution based on those center
+    !         t_gen_sim = tic()
+    !         call self%write_centers('centers_'//trim(int2str(i))//'_iteration', coords)
+    !         call atom%new          ('centers_'//trim(int2str(i))//'_iteration.pdb')
+    !         call atom%convolve(simulated_distrib, cutoff = 8.*self%smpd)
+    !         call del_file('centers_'//trim(int2str(i))//'_iteration.pdb')
+    !         call atom%kill
+    !         rt_gen_sim = rt_gen_sim + toc(t_gen_sim)
+    !         ! correlate volumes
+    !         t_real_corr = tic()
+    !         t2c = self%img%real_corr(simulated_distrib)
+    !         rt_real_corr = rt_real_corr + toc(t_real_corr)
+    !         if( WRITE_OUTPUT ) call simulated_distrib%write('simvol_thres'//trim(real2str(thres))//'_corr'//trim(real2str(t2c))//'.mrc')
+    !     end function t2c
+
+    ! end subroutine binarize_and_find_centers
+
+    ! This subrotuine takes in input a nanoparticle and
+    ! binarizes it by thresholding. The gray level histogram is split
+    ! in 20 parts, which corresponds to 20 possible thresholds
+    ! Among those thresholds, the selected one is the for which
+    ! that correlation between the raw map and a simulated distribution
+    ! obtained with that threshold reaches the maximum value.
     subroutine binarize_and_find_centers( self )
         class(nanoparticle), intent(inout) :: self
         type(binimage)       :: img_bin_t
@@ -656,23 +817,19 @@ contains
         type(atoms)          :: atom
         type(image)          :: simulated_distrib
         integer, allocatable :: imat_t(:,:,:)
-        real,    allocatable :: x_mat(:)  ! vectorization of the volume
         real,    allocatable :: coords(:,:)
         real,    allocatable :: rmat(:,:,:)
-        integer :: i, fnr
-        real    :: otsu_thresh, corr, step, step_refine, max_corr, thresh, thresh_opt, lbt, rbt
-        logical, parameter      :: L_BENCH = .false.
+        integer, parameter :: NBIN_THRESH_HERE = 20
+        logical, parameter :: L_BENCH          = .false.
+        real    :: ts(NBIN_THRESH_HERE)
+        integer :: i, fnr, ind_opt, low, high, mid
+        real    :: otsu_thresh, corr, step_refine, max_corr, thresh, thresh_opt, lbt, rbt
+        logical                 :: found_better
         real(timer_int_kind)    :: rt_find_ccs, rt_find_centers, rt_gen_sim, rt_real_corr, rt_tot
         integer(timer_int_kind) ::  t_find_ccs,  t_find_centers,  t_gen_sim,  t_real_corr,  t_tot
-        call otsu_nano(self%img,otsu_thresh) ! find initial threshold
         write(logfhandle,'(A)') '>>> BINARIZATION'
         rmat = self%img%get_rmat()
-        x_mat = pack(rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
-                    &rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) >= 0.)
         allocate(imat_t(self%ldim(1), self%ldim(2), self%ldim(3)), source = 0)
-        step = (maxval(x_mat)-otsu_thresh )/real(NBIN_THRESH)
-        step_refine = step / 6.
-        deallocate(x_mat)
         call simulated_distrib%new(self%ldim,self%smpd)
         rt_find_ccs     =  0.
         rt_find_centers =  0.
@@ -680,35 +837,24 @@ contains
         rt_real_corr    =  0.
         t_tot           =  tic()
         max_corr        = -1.
-        ! discrete search
-        do i = 1, NBIN_THRESH
-            if( i == 1 )then
-                thresh = otsu_thresh
+        call thres_detect_conv_atom_denoised(self%img, NBIN_THRESH_HERE, ts)
+        low      = 1
+        high     = NBIN_THRESH_HERE
+        max_corr = t2c(ts(1))
+        ind_opt  = 1
+        do while( low <= high ) 
+            mid  = (low + high) / 2
+            corr = t2c(ts(mid))
+            write(logfhandle,*) 'low/high/mid ', low, high, mid, 'threshold: ', ts(mid) , 'corr: ', corr
+            if( corr > max_corr )then
+                max_corr   = corr
+                thresh_opt = ts(mid)
+                ind_opt    = mid
+                low        = mid + 1
+                write(logfhandle,*) 'NEW OPT', 'threshold: ', thresh_opt, 'corr: ', max_corr
             else
-                thresh = thresh + step
+                high       = mid - 1
             endif
-            corr = t2c( thresh )
-            write(logfhandle,*) 'threshold: ', thresh , 'corr: ', corr
-            if( corr > max_corr )then
-                max_corr   = corr
-                thresh_opt = thresh
-            endif
-            if( corr < max_corr ) exit ! convex goal function
-        enddo
-        ! refinement
-        lbt    = thresh_opt - step + step_refine
-        rbt    = thresh_opt + step - step_refine
-        thresh = lbt
-        i      = NBIN_THRESH
-        do while( thresh <= rbt )
-            i = i + 1
-            corr = t2c( thresh )
-            write(logfhandle,*) 'threshold: ', thresh, 'corr: ', corr
-            if( corr > max_corr )then
-                max_corr   = corr
-                thresh_opt = thresh
-            endif
-            thresh = thresh + step_refine
         end do
         rt_tot = toc(t_tot)
         if( L_BENCH )then
@@ -747,21 +893,6 @@ contains
         write(logfhandle,'(A)') '>>> BINARIZATION, COMPLETED'
 
     contains
-
-        ! Otsu binarization for nanoparticle maps
-        ! It considers the grey level value only in the positive range.
-        ! It doesn't threshold the map. It just returns the ideal threshold.
-        ! This is based on the implementation of 1D otsu
-        subroutine otsu_nano( img, scaled_thresh )
-            type(image),    intent(inout) :: img
-            real,           intent(out)   :: scaled_thresh ! returns the threshold in the correct range
-            real, pointer     :: rmat(:,:,:)
-            real, allocatable :: x(:)
-            call img%get_rmat_ptr(rmat)
-            x = pack(rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
-                    &rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) > 0.)
-            call otsu(size(x), x, scaled_thresh)
-        end subroutine otsu_nano
 
         real function t2c( thres )
             real, intent(in) :: thres
