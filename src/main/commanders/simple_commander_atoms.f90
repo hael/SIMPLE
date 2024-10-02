@@ -43,10 +43,6 @@ type, extends(commander_base) :: tseries_atoms_analysis_commander
     procedure :: execute      => exec_tseries_atoms_analysis
 end type tseries_atoms_analysis_commander
 
-integer, parameter :: CNMIN             = 5
-integer, parameter :: CNMAX             = 13
-integer, parameter :: CN_THRESH_DEFAULT = 5
-
 type :: common_atoms
     integer           :: ind1, ind2, ncommon
     real, allocatable :: coords1(:,:), coords2(:,:)
@@ -98,38 +94,24 @@ contains
         type(parameters)   :: params
         type(nanoparticle) :: nano
         real               :: a(3) ! lattice parameters
-        logical            :: prefit_lattice, use_cs_thres, use_auto_corr_thres
+        logical            :: prefit_lattice
         prefit_lattice = cline%defined('vol2')
         call params%new(cline)
-        use_cs_thres        = trim(params%use_thres) .eq. 'yes'
-        use_auto_corr_thres = .not.cline%defined('corr_thres')
         if( prefit_lattice )then
             call nano%new(params%vols(2), params%msk)
             ! execute
-            call nano%identify_lattice_params(a, use_auto_corr_thres=use_auto_corr_thres)
+            call nano%identify_lattice_params(a)
             ! kill
             call nano%kill
             call nano%new(params%vols(1), params%msk)
             ! execute
-            if( cline%defined('cs_thres') )then
-                call nano%identify_atomic_pos(a, l_fit_lattice=.false., use_cs_thres=use_cs_thres,&
-                &use_auto_corr_thres=use_auto_corr_thres, cs_thres=params%cs_thres)
-            else
-                call nano%identify_atomic_pos(a, l_fit_lattice=.false., use_cs_thres=use_cs_thres,&
-                &use_auto_corr_thres=use_auto_corr_thres)
-            endif
+            call nano%identify_atomic_pos(a, l_fit_lattice=.false.)
             ! kill
             call nano%kill
         else
             call nano%new(params%vols(1), params%msk)
             ! execute
-            if( cline%defined('cs_thres') )then
-                call nano%identify_atomic_pos(a, l_fit_lattice=.true., use_cs_thres=use_cs_thres,&
-                &use_auto_corr_thres=use_auto_corr_thres, cs_thres=params%cs_thres)
-            else
-                call nano%identify_atomic_pos(a, l_fit_lattice=.true., use_cs_thres=use_cs_thres,&
-                &use_auto_corr_thres=use_auto_corr_thres)
-            endif
+            call nano%identify_atomic_pos(a, l_fit_lattice=.true.)
             ! kill
             call nano%kill
         endif
@@ -143,15 +125,14 @@ contains
         type(parameters)      :: params
         type(nanoparticle)    :: nano
         real                  :: a(3) ! lattice parameters
-        logical               :: prefit_lattice, use_subset_coords, use_auto_corr_thres
-        prefit_lattice      = cline%defined('vol3')
-        use_subset_coords   = cline%defined('pdbfile2')
-        use_auto_corr_thres = .not.cline%defined('corr_thres')
+        logical               :: prefit_lattice, use_subset_coords
+        prefit_lattice    = cline%defined('vol3')
+        use_subset_coords = cline%defined('pdbfile2')
         call params%new(cline)
         if( prefit_lattice )then
             ! fit lattice using vol3
             call nano%new(params%vols(3), params%msk)
-            call nano%identify_lattice_params(a, use_auto_corr_thres=use_auto_corr_thres)
+            call nano%identify_lattice_params(a)
             call nano%kill
             ! calc stats
             call nano%new(params%vols(1), params%msk)
