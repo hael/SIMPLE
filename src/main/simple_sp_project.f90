@@ -297,90 +297,85 @@ contains
         endif
     end subroutine update_compenv
 
-    !> append segment to current project. BOTH projects must be read in first!
-    subroutine append_project( self, proj, oritype )
-        class(sp_project), target, intent(inout) :: self, proj
-        character(len=*),          intent(in)    :: oritype
-        class(oris),          pointer :: os_ptr, os_append_ptr
-        type(ori)                     :: o
-        type(ctfparams)               :: ctfvar
-        character(len=:), allocatable :: stk
-        real                          :: smpd, smpd_self, dfx,dfy,angast,phshift
-        integer                       :: boxcoords(2),i,iptcl,cnt,n,n2append,nptcls,istate
-        select case(trim(oritype))
-            case('mic')
-                os_ptr => self%os_mic
-                os_append_ptr => proj%os_mic
-            case('stk')
-                os_ptr => self%os_stk
-                os_append_ptr => proj%os_stk
-            case DEFAULT
-                THROW_HARD('oritype: '//trim(oritype)//' unsupported for this purpose; append_project')
-        end select
-        n2append = os_append_ptr%get_noris()
-        if( n2append == 0 )return
-        smpd   = os_append_ptr%get(1, 'smpd')
-        n      = os_ptr%get_noris()
-        if( n == 0 )then
-            ! first entry
-        else
-            smpd_self = os_ptr%get(1, 'smpd')
-            if( abs(smpd-smpd_self) > 0.001 )then
-                write(logfhandle,*) 'smpd self', smpd_self
-                write(logfhandle,*) 'smpd 2 append', smpd
-                THROW_HARD('only a project with the same smpd can be appended to the project; append_project')
+    !>  append project2 to project1
+    !   cls2D,cls3D,projinfo,jobproc,compenv fields from project2 are ignored
+    subroutine append_project( self1, self2 )
+        class(sp_project), intent(inout) :: self1
+        class(sp_project), intent(in)    :: self2
+        integer :: nmics1, nstks1, nptcls1, nmics2, nstks2, nptcls2, nogs1, nogs2
+        integer :: i, iptcl, imic, istk, fromp, top, og_offset, ogid
+        logical :: l_has_mics, l_has_stks, l_has_ptcls, l_has_optics
+        nmics1  = self1%os_mic%get_noris()
+        nmics2  = self2%os_mic%get_noris()
+        nstks1  = self1%get_nstks()
+        nstks2  = self2%get_nstks()
+        nptcls1 = self1%get_nptcls()
+        nptcls2 = self2%get_nptcls()
+        nogs1   = self1%os_optics%get_noris()
+        nogs2   = self2%os_optics%get_noris()
+        ! sanity checks
+        if( (nmics1==0) .neqv.(nmics2==0)  ) THROW_HARD('Only one mic field is populated!')
+        if( (nstks1==0) .neqv.(nstks2==0)  ) THROW_HARD('Only one stk field is populated!')
+        if( (nptcls1==0).neqv.(nptcls2==0) ) THROW_HARD('Only one ptcl field is populated!')
+        if( (nogs1==0)  .neqv.(nogs2==0)   ) THROW_HARD('Only one optics field is populated!')
+        l_has_mics   = (nmics1 > 0)  .and. (nmics2 > 0)
+        l_has_stks   = (nstks1 > 0)  .and. (nstks2 > 0)
+        l_has_ptcls  = (nptcls1 > 0) .and. (nptcls2 > 0)
+        l_has_optics = (nogs1 > 0)   .and. (nogs2 > 0)
+        if( l_has_stks .neqv. l_has_ptcls ) THROW_HARD('Missing stk/ptcl field!')
+        ! micrograph field
+        if( l_has_mics ) call self1%os_mic%append(self2%os_mic)
+        ! stacks & particles
+        if( l_has_stks )then
+            ! stack
+            call self1%os_stk%append(self2%os_stk)
+            ! particles
+            call self1%os_ptcl2D%append(self2%os_ptcl2D)
+            call self1%os_ptcl3D%append(self2%os_ptcl3D)
+            ! update particles/stk indices
+            do istk = nstks1+1,nstks1+nstks2
+                fromp = nint(self1%os_stk%get(istk,'fromp')) + nptcls1
+                top   = nint(self1%os_stk%get(istk,'top'))   + nptcls1
+                call self1%os_stk%set(istk, 'fromp', fromp)
+                call self1%os_stk%set(istk, 'top',   top)
+                do iptcl = fromp,top
+                    call self1%os_ptcl2D%set(iptcl, 'stkind', istk)
+                    call self1%os_ptcl3D%set(iptcl, 'stkind', istk)
+                enddo
+            enddo
+        endif
+        ! optic groups
+        if( l_has_optics )then
+            call self1%os_optics%append(self2%os_optics)
+            ! determining numbering offset
+            og_offset = -1
+            do i = 1,nogs1
+                og_offset = max(og_offset, nint(self1%os_optics%get(i,'ogid')))
+            end do
+            if( og_offset < 1 ) THROW_HARD('Invalid optics field!')
+            og_offset = max(nogs1, og_offset)
+            ! updating os_optics
+            do i = nogs1+1,nogs2
+                ogid = nint(self1%os_optics%get(i,'ogid')) + og_offset
+                call self1%os_optics%set(i,'ogid',  ogid)
+                call self1%os_optics%set(i,'ogname','opticsgroup'//int2str(ogid))
+            enddo
+            if( l_has_mics )then
+                ! updating os_mic
+                do imic = nmics1+1,nmics2
+                    ogid = nint(self1%os_mic%get(i,'ogid')) + og_offset
+                    call self1%os_mic%set(i,'ogid', ogid)
+                enddo
+            endif
+            if( l_has_ptcls )then
+                ! updating particles
+                do iptcl = nptcls1+1,nptcls2
+                    ogid = nint(self1%os_ptcl2D%get(i,'ogid')) + og_offset
+                    call self1%os_ptcl2D%set(iptcl, 'ogid', ogid)
+                    call self1%os_ptcl3D%set(iptcl, 'ogid', ogid)
+                enddo
             endif
         endif
-        ! dealing with states
-        istate = 1
-        if( os_append_ptr%isthere(1,'state') ) istate = os_append_ptr%get_state(1)
-        call os_append_ptr%set(1,'state',real(istate))
-        ! appending
-        select case(trim(oritype))
-            case('mic')
-                if( n == 0 )then
-                    call os_ptr%copy(os_append_ptr, is_ptcl=.false.)
-                else
-                    ! append
-                    call os_ptr%reallocate(n+n2append)
-                    cnt = n
-                    do i=1,n2append
-                        cnt = cnt + 1
-                        call os_append_ptr%get_ori(i, o)
-                        call os_ptr%set_ori(cnt, o)
-                    enddo
-                endif
-            case('stk')
-                ! this assumes there's only one stack in the project to append
-                call os_append_ptr%getter(1, 'stk', stk)
-                ctfvar = proj%get_ctfparams('ptcl2D', 1)
-                cnt    = self%os_ptcl2D%get_noris()
-                call self%add_stk(stk, ctfvar)
-                nptcls = proj%os_ptcl2D%get_noris()
-                do iptcl=1,nptcls
-                    cnt = cnt + 1
-                    call proj%get_boxcoords(iptcl, boxcoords)
-                    call self%set_boxcoords(cnt, boxcoords)
-                    if( ctfvar%ctfflag /= CTFFLAG_NO )then
-                        dfx    = proj%os_ptcl2D%get_dfx(iptcl)
-                        dfy    = proj%os_ptcl2D%get_dfy(iptcl)
-                        angast = proj%os_ptcl2D%get(iptcl, 'angast')
-                        call self%os_ptcl2D%set_dfx(cnt,dfx)
-                        call self%os_ptcl2D%set_dfy(cnt,dfy)
-                        call self%os_ptcl3D%set_dfx(cnt,dfx)
-                        call self%os_ptcl3D%set_dfy(cnt,dfy)
-                        call self%os_ptcl2D%set(cnt,'angast',angast)
-                        call self%os_ptcl3D%set(cnt,'angast',angast)
-                        if( proj%os_ptcl2D%isthere(iptcl,'phshift') )then
-                            phshift = proj%os_ptcl2D%get(iptcl, 'phshift')
-                            call self%os_ptcl2D%set(cnt,'phshift',phshift)
-                            call self%os_ptcl3D%set(cnt,'phshift',phshift)
-                        endif
-                    endif
-                enddo
-        end select
-        nullify(os_ptr, os_append_ptr)
-        call o%kill
     end subroutine append_project
 
     subroutine append_job_descr2jobproc( self, exec_dir, job_descr, did_update )
@@ -2133,7 +2128,7 @@ contains
     end function get_n_insegment_state
 
     integer function get_nptcls( self )
-        class(sp_project), target, intent(inout) :: self
+        class(sp_project), target, intent(in) :: self
         integer :: i, nos
         get_nptcls = 0
         nos        = self%os_stk%get_noris()

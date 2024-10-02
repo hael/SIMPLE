@@ -130,6 +130,7 @@ type(simple_program), target :: make_pickrefs
 type(simple_program), target :: map_cavgs_selection
 type(simple_program), target :: map_cavgs_states
 type(simple_program), target :: mask
+type(simple_program), target :: merge_projects
 type(simple_program), target :: mkdir_
 type(simple_program), target :: motion_correct
 type(simple_program), target :: new_project
@@ -428,6 +429,7 @@ contains
         call new_map_cavgs_selection
         call new_map_cavgs_states
         call new_mask
+        call new_merge_projects
         call new_mkdir_
         call new_motion_correct
         call new_new_project
@@ -552,6 +554,7 @@ contains
         call push2prg_ptr_array(map_cavgs_selection)
         call push2prg_ptr_array(map_cavgs_states)
         call push2prg_ptr_array(mask)
+        call push2prg_ptr_array(merge_projects)
         call push2prg_ptr_array(mkdir_)
         call push2prg_ptr_array(motion_correct)
         call push2prg_ptr_array(new_project)
@@ -745,6 +748,8 @@ contains
                 ptr2prg => map_cavgs_states
             case('mask')
                 ptr2prg => mask
+            case('merge_projects')
+                ptr2prg => merge_projects
             case('mkdir')
                 ptr2prg => mkdir_
             case('motion_correct')
@@ -923,6 +928,7 @@ contains
         write(logfhandle,'(A)') map_cavgs_selection%name
         write(logfhandle,'(A)') map_cavgs_states%name
         write(logfhandle,'(A)') mask%name
+        write(logfhandle,'(A)') merge_projects%name
         write(logfhandle,'(A)') mkdir_%name
         write(logfhandle,'(A)') motion_correct%name
         write(logfhandle,'(A)') new_project%name
@@ -3194,6 +3200,31 @@ contains
         ! computer controls
         call mask%set_input('comp_ctrls', 1, nthr)
     end subroutine new_mask
+
+    subroutine new_merge_projects
+        ! PROGRAM SPECIFICATION
+        call merge_projects%new(&
+        &'merge_projects', &                                            ! name
+        &'merge projects',&                                             ! descr_short
+        &'is a program to merge multiple projects into one', &          ! descr_long
+        &'simple_exec',&                                                ! executable
+        &0, 1, 0, 0, 0, 0, 0, .true.)                                   ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call merge_projects%set_input('parm_ios', 1, projfile_target, gui_submenu="data", gui_advanced=.false.)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_merge_projects
 
     subroutine new_mkdir_
         ! PROGRAM SPECIFICATION

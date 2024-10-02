@@ -58,8 +58,7 @@ type :: oris
     procedure          :: get_sampled
     procedure          :: get_updatecnt
     procedure          :: get_tseries_neighs
-    procedure, private :: isthere_1
-    procedure, private :: isthere_2
+    procedure, private :: isthere_1, isthere_2
     generic            :: isthere => isthere_1, isthere_2
     procedure          :: ischar
     procedure          :: is_particle
@@ -98,7 +97,8 @@ type :: oris
     procedure          :: prec2ori
     procedure          :: get_ctfvars
     ! SETTERS
-    procedure          :: append
+    procedure, private :: append_1, append_2
+    generic            :: append => append_1, append_2
     procedure          :: copy
     procedure          :: reject
     generic            :: delete_entry => delete_entry_1, delete_entry_2
@@ -122,9 +122,8 @@ type :: oris
     procedure          :: e1set
     procedure          :: e2set
     procedure          :: e3set
-    procedure, private :: set_1
-    procedure, private :: set_2
-    generic            :: set => set_1, set_2
+    procedure, private :: set_1, set_2, set_3
+    generic            :: set => set_1, set_2, set_3
     procedure          :: set_dfx, set_dfy
     procedure          :: set_ori
     procedure          :: transfer_ori
@@ -1462,7 +1461,7 @@ contains
 
     ! SETTERS
 
-    subroutine append( self, i, ori_in )
+    subroutine append_1( self, i, ori_in )
         class(oris), intent(inout) :: self
         class(ori),  intent(in)    :: ori_in
         integer,     intent(in)    :: i
@@ -1471,18 +1470,37 @@ contains
             return
         endif
         call self%o(i)%append_ori(ori_in)
-    end subroutine append
+    end subroutine append_1
 
-    subroutine copy( self_out, self_in, is_ptcl, no_new )
+    subroutine append_2( self1, self2 )
+        class(oris), intent(inout) :: self1
+        class(oris), intent(in)    :: self2
+        integer :: i,nprev
+        logical :: self1_isptcl, self2_isptcl
+        if( self2%n == 0 ) return
+        self2_isptcl = self2%o(1)%is_particle()
+        if( self1%n == 0 )then
+            call self1%copy(self2, self2_isptcl)
+        else
+            self1_isptcl = self1%o(1)%is_particle()
+            if( self1_isptcl.eqv.self2_isptcl )then
+                nprev = self1%n
+                call self1%reallocate(self1%n+self2%n)
+                do i = 1,self2%n
+                    self1%o(nprev+i) = self2%o(i)
+                end do
+            else
+                THROW_HARD('self1 and self2 do not have equivalent is_ptcl status')
+            endif
+        endif
+    end subroutine append_2
+
+    subroutine copy( self_out, self_in, is_ptcl )
         class(oris),       intent(inout) :: self_out
         class(oris),       intent(in)    :: self_in
         logical,           intent(in)    :: is_ptcl
-        logical, optional, intent(in)    :: no_new
         integer :: i
-        logical :: l_new
-        l_new = .true.
-        if( present(no_new) .and. no_new ) l_new = .false.
-        if( l_new) call self_out%new(self_in%n, is_ptcl)
+        call self_out%new(self_in%n, is_ptcl)
         do i=1,self_in%n
             self_out%o(i) = self_in%o(i)
         end do
@@ -1632,6 +1650,14 @@ contains
         character(len=*), intent(in)    :: val
         call self%o(i)%set(key, val)
     end subroutine set_2
+
+    subroutine set_3( self, i, key, val )
+        class(oris),      intent(inout) :: self
+        integer,          intent(in)    :: i
+        character(len=*), intent(in)    :: key
+        integer,          intent(in)    :: val
+        call self%o(i)%set(key, val)
+    end subroutine set_3
 
     subroutine set_dfx( self, i, dfx )
         class(oris), intent(inout) :: self
