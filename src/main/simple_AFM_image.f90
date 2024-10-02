@@ -8,12 +8,15 @@ use simple_parameters
 use simple_segmentation
 use simple_binimage
 use simple_neighs
+use simple_fileio
+use simple_syslib
 implicit none 
 
 logical     :: L_DEBUG = .false.
 type :: AFM_image
     type(image), allocatable :: img_array(:)
     character(len = 50), allocatable :: img_names(:)
+    character(len = 50)              :: stack_string
 contains
     procedure   :: read_ibw
     procedure   :: pick_valid
@@ -120,18 +123,16 @@ contains
             call AFM%img_array(img_ind)%new([waveheader%nDim(1), waveheader%nDim(2), 1], real(waveheader%sfA(1)) * 10.**10.)
             call AFM%img_array(img_ind)%set_rmat(Rank3_Data_4byte(:, :, img_ind, :), .false.)
             call AFM%img_array(img_ind)%norm_minmax()
-            call AFM%img_array(img_ind)%bin_inv
+            ! call AFM%img_array(img_ind)%bin_inv
         end do 
         deallocate(Rank3_Data_4byte)
-        
     end subroutine read_ibw
 
-    subroutine pick_valid(AFM_in, refs)
+    subroutine pick_valid(AFM_in, outname)
         class(AFM_image), intent(inout)    :: AFM_in 
         type(image)                        :: HeightTrace, HeightRetrace, AvgHeight
         CHARACTER(len=255)                 :: cwd
         type(pickseg)                      :: avg_p, trace_p, retrace_p
-        type(pickseg), intent(out)         :: refs(3)
         type(image)                        :: avg_slim, trace_slim, retrace_slim 
         integer                            :: ldim_box(3), box_iter, search_iter, neighbor_iter, box_count
         real                               :: smpd_box, neighbor_corr(8), coord_corr(3,8), max_corr(20)
@@ -141,6 +142,9 @@ contains
         integer                            :: neighbor(3, 8), nsiz, center(3)
         real                               :: corr_r, corr_t, val_score_t, val_score_r 
         real, allocatable                  :: corr_final_t(:), corr_final_r(:)
+        character(len = 50)                :: outname
+        character(len = 255)               :: temp_dir 
+        
         
         call get_AFM(AFM_in, 'AvgHeight', AvgHeight)
         call get_AFM(AFM_in, 'HeightTrace', HeightTrace)
@@ -151,13 +155,17 @@ contains
         call HeightRetrace%norm_minmax()
         
         call getcwd(cwd)
-        call AvgHeight%write(trim(cwd) // 'avg.mrc')
-        call avg_p%pick(trim(cwd) // 'avg.mrc')
-        call HeightTrace%write(trim(cwd) // 'trace.mrc')
-        call trace_p%pick(trim(cwd) // 'trace.mrc')
-        call HeightRetrace%write(trim(cwd) // 'retrace.mrc')
-        call retrace_p%pick(trim(cwd) // 'retrace.mrc')
-        refs = [avg_p, trace_p, retrace_p]
+
+        call simple_mkdir(trim(cwd) // '/temp')
+
+        call AvgHeight%write(trim(cwd) // '/temp/' // trim(outname) // 'avg.mrc')
+        call avg_p%pick(trim(cwd) // '/temp/' // trim(outname) // 'avg.mrc')
+        call HeightTrace%write(trim(cwd) // '/temp/' // trim(outname) // 'trace.mrc')
+        call trace_p%pick(trim(cwd) // '/temp/' // trim(outname) // 'trace.mrc')
+        call HeightRetrace%write(trim(cwd) // '/temp/' // trim(outname) // 'retrace.mrc')
+        call retrace_p%pick(trim(cwd) // '/temp/' // trim(outname) // 'retrace.mrc')
+        
+        call simple_rmdir(trim(cwd) // '/temp')
 
         ldim_box = [avg_p%box_raw, avg_p%box_raw, 1]
         smpd_box =  AvgHeight%get_smpd()
@@ -257,8 +265,13 @@ contains
             dim = AFM_pad%img_array(img_ind)%get_ldim()
             if( dim(1) /= dim(2) ) then 
                 call AFM_pad%img_array(img_ind)%pad_inplace([maxval(dim), maxval(dim), 1])
-            end if 
+            end if
+            ! pad so boxes are within image
+            ! maybe set value to something other than 0 ( might have issues with binarization...)
+            ! call AFM_pad%img_array(img_ind)%pad_inplace([dim(1) + 100, dim(2) + 100, 1])
+
         end do 
+
     end subroutine zero_padding
     
     subroutine align_avg(AFM_in, Align_AFM)
@@ -317,5 +330,71 @@ contains
            count = count + 1
         end do 
     end subroutine align_avg
+
+    ! Hough transform to identify and remove lines. 
+    subroutine hough_lines(img_in, img_denoised, theta_range)
+        class(image), intent(inout)     :: img_in
+        class(image), intent(out)     :: img_denoised
+        real, intent(in), optional        :: theta_range(2)
+        type(image)     :: img_edge 
+        real            :: min_theta = -PI/2.,  theta_step = PI/180., threshold, rad_step = 10, curr_rad, theta_range_def(2)
+        real, allocatable   :: angles(:), rad(:), curr_rads(:), sins(:), coss(:), emat(:, :, :)
+        integer             :: dims(3), diagonal, a_grid, r_grid = 300, i, count, x, y, t, r, curr_rad_r
+        integer, allocatable    :: accumulator(:, :)
+        theta_range_def = [-PI/2,PI/2]
+        if( present(theta_range)) theta_range_def = theta_range
+        a_grid = nint(abs(theta_range_def(2) - theta_range_def(1))* theta_step**(-1)) + 1
+        ! pre-processing
+        call canny(img_in, img_edge)
+        ! call img_edge%vis()
+        dims = img_edge%get_ldim()
+        ! max radius
+        diagonal = ceiling(sqrt(real(dims(1))**2. + real(dims(2))**2.))
+        allocate(angles(a_grid))
+        allocate(rad(r_grid))
+        allocate(curr_rads(r_grid))
+        angles = [(theta_range_def(1) + (i - 1)*theta_step, i = 1, size(angles))]
+        rad  = [(-diagonal + (i - 1)*rad_step, i = 1, r_grid)]
+        allocate(accumulator(size(rad), size(angles)))
+        accumulator = 0
+        allocate(sins(size(angles)))
+        allocate(coss(size(angles)))
+        do i = 1, size(angles)
+            sins(i) = sin(angles(i))
+            coss(i) = cos(angles(i))
+        end do 
+
+        allocate(emat(dims(1), dims(2), dims(3)))
+        emat = img_edge%get_rmat()
+        r = 1
+        do x = 1, dims(1)
+            do y = 1, dims(2)
+                if(emat(x, y, 1) > 0.) then 
+                    do t = 1, size(angles)
+                        curr_rad = x*coss(t) + y*sins(t)
+                        curr_rads = curr_rad
+                        curr_rad_r = minloc(abs(rad - curr_rads), 1)
+                        print *, curr_rad, curr_rad_r 
+                        do while (r < curr_rad_r)
+                            if(emat(nint(rad(r) * coss(t)), nint(rad(r) * sins(t)), 1) > 0.) then
+                                accumulator(curr_rad_r,t) = accumulator(curr_rad_r,t) + 1
+                            end if 
+                            r = r + 1
+                        end do 
+                    end do
+                end if 
+            end do 
+        end do 
+        ! print *, accumulator
+        ! not setting up accumalator correctly.
+        ! only consideredges (so, only 1s. )
+        
+        ! should have some visualization of hough transform. 
+        ! make a test image with horizontal lines. 
+        ! median filter? but it preserves edges
+        ! use bilateral filter on lines. 
+    end subroutine hough_lines
+    ! if there is only one cc, do not need to do anything. else, choose the best cc and move the center of the box 
+    ! to its center of mass. the best cc, is the largest one or maybe the one that is completely within the box. reevaluate box and mask if neccessary. 
 
 end module simple_AFM_image 
