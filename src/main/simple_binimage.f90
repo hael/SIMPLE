@@ -32,6 +32,7 @@ type, extends(image) :: binimage
     procedure          :: read_bimg
     ! CONNECTED COMPONENTS
     procedure          :: find_ccs
+    procedure          :: find2_ccs
     procedure          :: size_ccs
     procedure          :: elim_ccs
     procedure          :: order_ccs
@@ -257,6 +258,75 @@ contains
         endif
         call self%update_img_rmat
     end subroutine find_ccs
+
+    subroutine find2_ccs( self, ccimage )
+        class(binimage), intent(inout) :: self
+        class(binimage), intent(inout) :: ccimage
+        integer :: i, j, k, comp_ind
+        logical :: visited(self%bldim(1),self%bldim(2),self%bldim(3))
+        call ccimage%new_bimg(self%bldim, self%bsmpd)
+        visited  = .false.
+        comp_ind = 0
+        do k = 1, self%bldim(3)
+            do j = 1, self%bldim(2)
+                do i = 1, self%bldim(1)
+                    if( (.not. visited(i,j,k)) .and. self%bimat(i,j,k) > 0 )then
+                        comp_ind = comp_ind + 1
+                        call flood_fill(i,j,k,self%bimat(i,j,k))
+                    endif
+                enddo
+            enddo
+        enddo
+        ! update instance
+        ccimage%bimat_is_set = .true.
+        ccimage%nccs = maxval(ccimage%bimat)
+        call ccimage%update_img_rmat
+      contains
+        function valid(i,j,k) result(val)
+            integer, intent(in) :: i,j,k
+            logical :: val
+            val = .true.
+            if( i < 1 .or. i > self%bldim(1) .or. j < 1 .or. j > self%bldim(2) .or. k < 1 .or. k > self%bldim(3) ) val = .false.
+        end function valid
+
+        recursive subroutine flood_fill(i, j, k, iVal)
+            integer, intent(in) :: i,j,k
+            integer, intent(in) :: iVal
+            if( valid(i,j,k) .and. (.not. visited(i,j,k)) )then
+                if( self%bimat(i,j,k) == iVal )then
+                    visited(i,j,k)       = .true.
+                    ccimage%bimat(i,j,k) = comp_ind
+                    ! k-1
+                    call flood_fill(i-1, j,   k-1, iVal)
+                    call flood_fill(i+1, j,   k-1, iVal)
+                    call flood_fill(i,   j-1, k-1, iVal)
+                    call flood_fill(i,   j+1, k-1, iVal)
+                    call flood_fill(i-1, j-1, k-1, iVal)
+                    call flood_fill(i-1, j+1, k-1, iVal)
+                    call flood_fill(i+1, j-1, k-1, iVal)
+                    call flood_fill(i+1, j+1, k-1, iVal)
+                    ! k
+                    call flood_fill(i-1, j,   k,   iVal)
+                    call flood_fill(i+1, j,   k,   iVal)
+                    call flood_fill(i,   j-1, k,   iVal)
+                    call flood_fill(i,   j+1, k,   iVal)
+                    call flood_fill(i-1, j-1, k,   iVal)
+                    call flood_fill(i-1, j+1, k,   iVal)
+                    call flood_fill(i+1, j-1, k,   iVal)
+                    call flood_fill(i+1, j+1, k,   iVal)
+                    ! k + 1
+                    call flood_fill(i-1, j,   k+1, iVal)
+                    call flood_fill(i+1, j,   k+1, iVal)
+                    call flood_fill(i,   j-1, k+1, iVal)
+                    call flood_fill(i,   j+1, k+1, iVal)
+                    call flood_fill(i-1, j-1, k+1, iVal)
+                    call flood_fill(i-1, j+1, k+1, iVal)
+                    call flood_fill(i+1, j-1, k+1, iVal)
+                    call flood_fill(i+1, j+1, k+1, iVal)
+                endif
+            endif
+        end subroutine flood_fill
+    end subroutine find2_ccs
 
     ! The result is the size(# of pixels) of each cc.
     !  (cc = connected component)
