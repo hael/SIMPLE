@@ -30,6 +30,7 @@ public :: scale_project_commander_distr
 public :: projops_commander
 public :: prune_project_commander_distr
 public :: prune_project_commander
+public :: merge_projects_commander
 private
 #include "simple_local_flags.inc"
 
@@ -117,6 +118,11 @@ type, extends(commander_base) :: prune_project_commander
   contains
     procedure :: execute      => exec_prune_project
 end type prune_project_commander
+
+type, extends(commander_base) :: merge_projects_commander
+  contains
+    procedure :: execute      => exec_merge_projects
+end type merge_projects_commander
 
 contains
 
@@ -1455,5 +1461,45 @@ contains
         ! end gracefully
         call qsys_job_finished('simple_commander_project :: exec_prune_project')
     end subroutine exec_prune_project
+
+    subroutine exec_merge_projects( self, cline )
+        use simple_cmdline,   only: cmdline
+        class(merge_projects_commander), intent(inout) :: self
+        class(cmdline),                  intent(inout) :: cline
+        type(parameters)              :: params
+        type(sp_project), allocatable :: spprojs(:)
+        integer,          allocatable :: boxes(:)
+        real,             allocatable :: smpds(:)
+        integer :: nprojs, iproj
+        logical :: l_reextract, l_has_ptcls
+        call cline%set('mkdir','yes')
+        ! init
+        call params%new(cline)
+        ! projects info & dimensions
+        nprojs = 2
+        allocate(spprojs(nprojs),boxes(nprojs),smpds(nprojs))
+        call spprojs(1)%read(params%projfile)
+        call spprojs(2)%read(params%projfile_target)
+        l_has_ptcls = spprojs(1)%os_ptcl2D%get_noris() > 0
+        do iproj = 2,nprojs
+            l_has_ptcls = l_has_ptcls .and. (spprojs(iproj)%os_ptcl2D%get_noris() > 0)
+        enddo
+        l_reextract = .false.
+        if( l_has_ptcls )then
+            do iproj = 1,nprojs
+                boxes(iproj) = spprojs(iproj)%get_box()
+                smpds(iproj) = spprojs(iproj)%get_smpd()
+            enddo
+            l_reextract = all(boxes==boxes(1)) .and. all(abs(smpds-smpds(1)) < 0.001)
+        endif
+        ! append
+        do iproj = 2,nprojs
+            call spprojs(1)%append_project(spprojs(iproj))
+            call spprojs(iproj)%kill
+        enddo
+        ! write
+        call spprojs(1)%write(params%projfile)
+        call spprojs(1)%kill
+    end subroutine exec_merge_projects
 
 end module simple_commander_project
