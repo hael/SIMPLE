@@ -54,6 +54,7 @@ type(ptclsproc_nano_commander)                :: xptclsproc
 ! MODEL BUILDING/ANALYSIS PROGRAMS
 type(pdb2mrc_commander)                       :: xpdb2mrc   
 type(detect_atoms_commander)                  :: xdetect_atoms
+type(conv_atom_denoise_commander)             :: xconv_atom_denoise
 type(atoms_stats_commander)                   :: xatoms_stats
 type(tseries_atoms_analysis_commander)        :: xtseries_atoms_analysis
 type(tseries_make_projavgs_commander)         :: xtseries_make_projavgs
@@ -162,7 +163,8 @@ select case(prg)
     ! MODEL BUILDING/ANALYSIS PROGRAMS
     case( 'pdb2mrc' )
         call cline%set('mkdir', 'no')
-        call xpdb2mrc%execute(cline)
+    case( 'conv_atom_denoise')
+        call xconv_atom_denoise%execute(cline)
     case( 'detect_atoms' )
         call cline%set('mkdir', 'no')
         call xdetect_atoms%execute(cline)
@@ -183,7 +185,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('724d1be7')
+call simple_print_git_version('08f4c60f')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
