@@ -220,6 +220,7 @@ type :: nanoparticle
     procedure          :: identify_atomic_pos
     procedure, private :: binarize_and_find_centers
     procedure          :: find_centers
+    procedure          :: find2_centers
     procedure          :: discard_atoms
     procedure, private :: discard_atoms_with_low_contact_score
     procedure, private :: discard_lowly_coordinated
@@ -987,6 +988,53 @@ contains
         endif
     end subroutine find_centers
 
+    subroutine find2_centers( self, img_cc, coords, imat )
+        class(nanoparticle),            intent(inout) :: self
+        type(binimage),       optional, intent(inout) :: img_cc
+        integer,              optional, intent(in)    :: imat(:,:,:)
+        real,    allocatable, optional, intent(out)   :: coords(:,:)
+        integer, allocatable :: imat_cc_in(:,:,:)
+        real,        pointer :: rmat_raw(:,:,:)
+        integer  :: i, ii, jj, kk
+        real(dp) :: m(3,self%n_cc), sum_mass(self%n_cc)
+        ! global variables allocation
+        if( allocated(self%atominfo) ) deallocate(self%atominfo)
+        allocate( self%atominfo(self%n_cc) )
+        if( present(img_cc) )then
+            call img_cc%get_imat(imat_cc_in)
+        else if (present(imat)) then
+            imat_cc_in = imat
+        else
+            call self%img_cc%get_imat(imat_cc_in)
+        endif
+        call self%img_raw%get_rmat_ptr(rmat_raw)
+        m        = 0._dp
+        sum_mass = 0._dp
+        !$omp parallel do collapse(3) default(shared) private(i,ii,jj,kk) schedule(static) proc_bind(close)
+        do kk = 1, self%ldim(3)
+            do jj = 1, self%ldim(2)
+                do ii = 1, self%ldim(1)
+                    i = imat_cc_in(ii,jj,kk)
+                    if( i >= 1 .and. i <= self%n_cc )then
+                        m(:,i)      = m(:,i)      + real(rmat_raw(ii,jj,kk),dp) * real([ii,jj,kk],dp)
+                        sum_mass(i) = sum_mass(i) + real(rmat_raw(ii,jj,kk),dp)
+                    endif
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        do i = 1, self%n_cc
+            self%atominfo(i)%center = real([self%ldim(1),self%ldim(2),self%ldim(3)]) / 2.
+            if( sum_mass(i) > DTINY ) self%atominfo(i)%center = real(m(:,i) / sum_mass(i))
+        enddo
+        ! saving centers coordinates, optional
+        if( present(coords) )then
+            allocate(coords(3,self%n_cc))
+            do i=1,self%n_cc
+                coords(:,i) = self%atominfo(i)%center
+            enddo
+        endif
+    end subroutine find2_centers
 
     subroutine split_atoms( self, fname )
         class(nanoparticle),        intent(inout) :: self
