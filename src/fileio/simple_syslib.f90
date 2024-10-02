@@ -289,28 +289,24 @@ contains
         character(len=:),              allocatable :: msg, errormsg
         integer :: file_status
         logical :: force_overwrite
-        force_overwrite=.true.
-        if(present(overwrite)) force_overwrite=overwrite
+        if( present(errmsg) )then
+            allocate(errormsg, source=". Message: "//trim(errmsg))
+        else
+            allocate(errormsg, source=". ")
+        end if
+        if( .not. file_exists(filein) ) THROW_ERROR("designated input file doesn't exist "//trim(filein)//trim(errormsg))
+        force_overwrite = .true.
+        if( present(overwrite) ) force_overwrite=overwrite
         if( file_exists(trim(fileout)) .and. (force_overwrite) ) call del_file(trim(fileout))
-        if (present(errmsg))then
-            allocate(errormsg,source=". Message: "//trim(errmsg))
-        else
-            allocate(errormsg,source=". ")
-        end if
-        if( file_exists(filein) )then
-            allocate(f1, source=trim(adjustl(filein))//achar(0))
-            allocate(f2, source=trim(adjustl(fileout))//achar(0))
-            file_status = rename(trim(f1), trim(f2))
-            if(file_status /= 0)then
-                allocate(msg,source="simple_rename failed to rename file "//trim(filein)//trim(errormsg))
-                call simple_error_check(file_status, trim(msg))
-                deallocate(msg)
-            endif
-            deallocate(f1,f2)
-        else
-            THROW_ERROR("designated input file doesn't exist "//trim(filein)//trim(errormsg))
-        end if
-        deallocate(errormsg)
+        allocate(f1, source=trim(adjustl(filein))//achar(0))
+        allocate(f2, source=trim(adjustl(fileout))//achar(0))
+        file_status = rename(trim(f1), trim(f2))
+        if( file_status /= 0 )then
+            allocate(msg,source="simple_rename failed to rename file "//trim(filein)//trim(errormsg))
+            call simple_error_check(file_status, trim(msg))
+            deallocate(msg)
+        endif
+        deallocate(f1,f2,errormsg)
     end subroutine simple_rename
 
     function simple_chmod(pathname, mode ) result( status )
