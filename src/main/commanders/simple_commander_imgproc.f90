@@ -14,6 +14,7 @@ public :: binarize_commander
 public :: edge_detect_commander
 public :: convert_commander
 public :: ctfops_commander
+public :: ctf_phaseflip_commander
 public :: filter_commander
 public :: ppca_denoise_commander
 public :: normalize_commander
@@ -44,6 +45,11 @@ type, extends(commander_base) :: ctfops_commander
   contains
     procedure :: execute      => exec_ctfops
 end type ctfops_commander
+
+type, extends(commander_base) :: ctf_phaseflip_commander
+  contains
+    procedure :: execute      => exec_ctf_phaseflip
+end type ctf_phaseflip_commander
 
 type, extends(commander_base) :: filter_commander
   contains
@@ -363,6 +369,43 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CTFOPS NORMAL STOP ****')
     end subroutine exec_ctfops
+
+    subroutine exec_ctf_phaseflip( self, cline )
+        use simple_ctf,                 only: ctf
+        use simple_strategy2D3D_common, only: read_imgbatch
+        use simple_ori,                 only: ori
+        class(ctf_phaseflip_commander), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
+        type(stack_io)   :: stkio_w
+        type(ctf)        :: tfun
+        type(parameters) :: params
+        type(builder)    :: build
+        type(ori)        :: o
+        integer          :: nptcls, ldim(3), iptcl
+        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('outstk') ) call cline%set('outstk', 'phaseflipped'//trim(STK_EXT))
+        call build%init_params_and_build_general_tbox(cline,params)
+        call build%spproj%update_projinfo(cline)
+        nptcls = build%spproj%get_nptcls()
+        ldim   = build%img%get_ldim()
+        call stkio_w%open(params%outstk, params%smpd, 'write', box=ldim(1))
+        do iptcl = 1, nptcls
+            call read_imgbatch(iptcl, build%img)
+            call build%spproj_field%get_ori(iptcl, o)
+            tfun = ctf(params%smpd, o%get('kv'), o%get('cs'), o%get('fraca'))
+            if( o%isthere('dfy') )then ! astigmatic CTF
+                call tfun%apply(build%img, o%get_dfx(), 'flip', dfy=o%get_dfy(), angast=o%get('angast'))
+            else ! non-astigmatic CTF
+                call tfun%apply(build%img, o%get_dfx(), 'flip')
+            endif
+            call stkio_w%write(iptcl, build%img)
+        end do
+        call stkio_w%close
+        ! cleanup
+        call build%kill_general_tbox
+        ! end gracefully
+        call simple_end('**** SIMPLE_CTF_PHASEFLIP NORMAL STOP ****')
+    end subroutine exec_ctf_phaseflip
 
     subroutine exec_filter( self, cline )
         use simple_procimgstk

@@ -101,6 +101,7 @@ type(simple_program), target :: comparemc
 type(simple_program), target :: convert
 type(simple_program), target :: ctf_estimate
 type(simple_program), target :: ctfops
+type(simple_program), target :: ctf_phaseflip
 type(simple_program), target :: detect_atoms
 type(simple_program), target :: dock_volpair
 type(simple_program), target :: estimate_lpstages
@@ -401,6 +402,7 @@ contains
         call new_convert
         call new_ctf_estimate
         call new_ctfops
+        call new_ctf_phaseflip
         call new_pdb2mrc
         call new_detect_atoms
         call new_dock_volpair
@@ -529,6 +531,7 @@ contains
         call push2prg_ptr_array(convert)
         call push2prg_ptr_array(ctf_estimate)
         call push2prg_ptr_array(ctfops)
+        call push2prg_ptr_array(ctf_phaseflip)
         call push2prg_ptr_array(pdb2mrc)
         call push2prg_ptr_array(detect_atoms)
         call push2prg_ptr_array(dock_volpair)
@@ -695,6 +698,8 @@ contains
                 ptr2prg => ctf_estimate
             case('ctfops')
                 ptr2prg => ctfops
+            case('ctf_phaseflip')
+                ptr2prg => ctf_phaseflip
             case('pdb2mrc')
                 ptr2prg => pdb2mrc
             case('detect_atoms')
@@ -908,6 +913,7 @@ contains
         write(logfhandle,'(A)') convert%name
         write(logfhandle,'(A)') ctf_estimate%name
         write(logfhandle,'(A)') ctfops%name
+        write(logfhandle,'(A)') ctf_phaseflip%name
         write(logfhandle,'(A)') dock_volpair%name
         write(logfhandle,'(A)') estimate_lpstages%name
         write(logfhandle,'(A)') extract%name
@@ -2172,6 +2178,31 @@ contains
         ! computer controls
         call ctfops%set_input('comp_ctrls', 1, nthr)
     end subroutine new_ctfops
+
+    subroutine new_ctf_phaseflip
+        ! PROGRAM SPECIFICATION
+        call ctf_phaseflip%new(&
+        &'ctf_phaseflip', &                                        ! name
+        &'CTF phaseflip images in project',&                       ! descr_short
+        &'is a program for CTF phase flipping images in project',& ! descr long
+        &'simple_exec',&                                           ! executable
+        &0, 1, 0, 0, 0, 0, 0, .true.)                              ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call ctf_phaseflip%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_ctf_phaseflip
 
     subroutine new_pdb2mrc
         ! PROGRAM SPECIFICATION
