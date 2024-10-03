@@ -25,7 +25,7 @@ program simple_test_binimage
     do i = 1,4
         print *, imat_ccs(i,:,1)
     enddo
-    call test_binimage%find2_ccs(ccimage)
+    call test_binimage%find_ccs(ccimage)
     print *, nccs
     call ccimage%get_imat(imat_ccs)
     do i = 1,4
