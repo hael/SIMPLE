@@ -60,7 +60,7 @@ contains
         real    :: frac_srch_space, neigh_frac
         integer :: iptcl, ithr, fnr, updatecnt, iptcl_map, nptcls2update, nptcls2restore
         integer :: batchsz, nbatches, batch_start, batch_end, iptcl_batch, ibatch
-        logical :: doprint, l_partial_sums, l_frac_update, have_frcs
+        logical :: doprint, l_partial_sums, l_frac_update
         logical :: l_snhc, l_greedy, l_np_cls_defined, l_snhc_smpl, l_greedy_smpl
         if( L_BENCH_GLOB )then
             t_init = tic()
@@ -180,10 +180,8 @@ contains
         endif
 
         ! READ FOURIER RING CORRELATIONS
-        have_frcs = .false.
         if( file_exists(params_glob%frcs) )then
             call build_glob%clsfrcs%read(params_glob%frcs)
-            have_frcs = .true.
         endif
 
         ! PREP REFERENCES

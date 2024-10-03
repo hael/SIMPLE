@@ -413,17 +413,26 @@ contains
         if( params_glob%l_ml_reg )then
             ! no filtering
         else
-            call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
-            if( any(frc > 0.143) )then
-                call fsc2optlp_sub(filtsz, frc, filter)
-                call img_in%fft() ! needs to be here in case the shift was never applied (above)
-                call img_in%apply_filter_serial(filter)
+            if( params_glob%l_lpset.and.params_glob%l_icm )then
+                ! ICM filter only applied when lp is set and performed below, FRC filtering turned off
+            else
+                ! FRC-based filtering
+                call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
+                if( any(frc > 0.143) )then
+                    call fsc2optlp_sub(filtsz, frc, filter, merged=params_glob%l_lpset)
+                    call img_in%fft() ! needs to be here in case the shift was never applied (above)
+                    call img_in%apply_filter_serial(filter)
+                endif
             endif
         endif
         ! ensure we are in real-space
         call img_in%ifft()
         ! clip image if needed
         call img_in%clip(img_out)
+        ! ICM filter
+        if( params_glob%l_lpset.and.params_glob%l_icm )then
+            call img_out%ICM2D( params_glob%lambda, verbose=.false. )
+        endif
         ! noise regularization
         if( params_glob%l_noise_reg )then
             call img_out%add_gauran2cavg(params_glob%eps)

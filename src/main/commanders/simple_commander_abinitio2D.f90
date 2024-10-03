@@ -23,6 +23,7 @@ end type abinitio2D_commander
 
 ! class constants
 real,    parameter :: SMPD_TARGET    = 2.67
+real,    parameter :: ICM_LAMBDA     = 1.0
 integer, parameter :: NSTAGES        = 6
 integer, parameter :: ITS_INCR       = 5
 integer, parameter :: PHASES(2)      = [4, 6]
@@ -57,6 +58,8 @@ contains
         if( .not. cline%defined('center')   ) call cline%set('center',    'yes')
         if( .not. cline%defined('sh_first') ) call cline%set('sh_first',  'yes')
         if( .not. cline%defined('cls_init') ) call cline%set('cls_init',  'rand')
+        if( .not. cline%defined('icm')      ) call cline%set('icm',       'no')
+        if( .not. cline%defined('lambda')   ) call cline%set('lambda',    ICM_LAMBDA)
         if( .not. cline%defined('extr_lim') ) call cline%set('extr_lim',  EXTR_LIM_LOCAL)
         if( cline%defined('nparts') )then
             l_shmem = nint(cline%get_rarg('nparts')) == 1
@@ -189,7 +192,7 @@ contains
 
         subroutine set_cline_cluster2D( istage )
             integer,          intent(in)  :: istage
-            character(len=:), allocatable :: sh_first, refine, center, objfun, refs
+            character(len=:), allocatable :: sh_first, refine, center, objfun, refs, icm
             integer :: iphase, iter, imaxits, maxits_glob, cc_iters, minits, extr_iter
             real    :: trs, snr_noise_reg
             refine = 'snhc_smpl' ! not optional
@@ -232,6 +235,11 @@ contains
                     else
                         objfun   = 'euclid'
                     endif
+                    if( params%l_icm )then
+                        icm      = 'yes'
+                    else
+                        icm      = 'no'
+                    endif
                 case(2)
                     trs          = lpinfo(istage)%trslim
                     sh_first     = trim(params%sh_first)
@@ -242,6 +250,11 @@ contains
                         objfun   = 'cc'
                     else
                         objfun   = 'euclid'
+                    endif
+                    if( params%l_icm )then
+                        icm      = 'yes'
+                    else
+                        icm      = 'no'
                     endif
                 case(3)
                     trs          = lpinfo(istage)%trslim
@@ -254,6 +267,7 @@ contains
                         cc_iters = 0
                     endif
                     objfun        = 'euclid'
+                    icm           = 'no'
                 case(4)
                     trs           = lpinfo(istage)%trslim
                     sh_first      = trim(params%sh_first)
@@ -261,6 +275,7 @@ contains
                     refs          = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
                     cc_iters      = 0
                     objfun        = 'euclid'
+                    icm           = 'no'
                 end select
             case(2)
                 ! phase constants
@@ -273,6 +288,7 @@ contains
                 objfun            = 'euclid'
                 extr_iter         = params%extr_lim+1
                 refs              = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
+                icm               = 'no'
                 ! phase variables
                 select case(istage)
                 case(5)
@@ -313,6 +329,7 @@ contains
             else
                 call cline_cluster2D%delete('extr_iter')
             endif
+            call cline_cluster2D%set('icm', icm)
             call cline_cluster2D%delete('endit')
         end subroutine set_cline_cluster2D
 
