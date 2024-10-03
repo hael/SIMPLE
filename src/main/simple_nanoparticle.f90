@@ -16,22 +16,17 @@ private
 #include "simple_local_flags.inc"
 
 ! module global constants
-real,             parameter :: CORR_THRES_SIGMA    = -2.0    ! sigma for valid_corr thresholding
-integer,          parameter :: NBIN_THRESH         = 15      ! number of thresholds for binarization
-integer,          parameter :: CN_THRESH_XTAL      = 5       ! cn-threshold highly crystalline NPs
+integer,          parameter :: NBIN_THRESH         = 20      ! number of thresholds for binarization
 integer,          parameter :: NVOX_THRESH         = 3       ! min # voxels per atom is 3
-logical,          parameter :: DEBUG               = .false. ! for debugging purposes
 logical,          parameter :: WRITE_OUTPUT        = .false. ! for figures generation
 logical,          parameter :: ATOMS_STATS_OMIT    = .false. ! omit = shorter atoms stats output
 integer,          parameter :: SOFT_EDGE           = 6
-integer,          parameter :: N_DISCRET           = 1000
 integer,          parameter :: CNMIN               = 3
 integer,          parameter :: CNMAX               = 13
 integer,          parameter :: NSTRAIN_COMPS       = 7
 character(len=*), parameter :: ATOMS_STATS_FILE    = 'atoms_stats.csv'
 character(len=*), parameter :: NP_STATS_FILE       = 'nanoparticle_stats.csv'
 character(len=*), parameter :: CN_STATS_FILE       = 'cn_dependent_stats.csv'
-character(len=*), parameter :: ATOM_VAR_CORRS_FILE = 'atom_param_corrs.txt'
 
 character(len=*), parameter :: ATOM_STATS_HEAD = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//&
 &'CN_STD'//CSV_DELIM//'NN_BONDL'//CSV_DELIM//'CN_GEN'//CSV_DELIM//'DIAM'//CSV_DELIM//&
@@ -194,7 +189,7 @@ type :: nanoparticle
     character(len=STDLEN) :: fbody     = '' ! fbody
   contains
     ! constructor
-    procedure          :: new => new_nanoparticle
+    procedure          :: new
     ! getters/setters
     procedure          :: get_ldim
     procedure          :: get_natoms
@@ -219,8 +214,8 @@ type :: nanoparticle
     procedure          :: identify_lattice_params
     procedure          :: identify_atomic_pos
     procedure, private :: binarize_and_find_centers
+    ! procedure          :: find_centers
     procedure          :: find_centers
-    procedure          :: find2_centers
     procedure, private :: discard_small_ccs
     procedure, private :: discard_atoms
     procedure, private :: split_atoms
@@ -244,12 +239,12 @@ type :: nanoparticle
     procedure, private :: write_np_stats
     procedure, private :: write_cn_stats
     ! kill
-    procedure          :: kill => kill_nanoparticle
+    procedure          :: kill
 end type nanoparticle
 
 contains
 
-    subroutine new_nanoparticle( self, fname, msk )
+    subroutine new( self, fname, msk )
         class(nanoparticle), intent(inout) :: self
         character(len=*),    intent(in)    :: fname
         real, optional,      intent(in)    :: msk
@@ -274,7 +269,7 @@ contains
         if( present(msk) ) call self%img%mask(msk, 'soft')
         call self%img_raw%copy(self%img)
         call self%img_raw%stats(self%map_stats%avg, self%map_stats%sdev, self%map_stats%maxv, self%map_stats%minv)
-    end subroutine new_nanoparticle
+    end subroutine new
 
     ! getters/setters
 
@@ -566,8 +561,8 @@ contains
 
     subroutine identify_lattice_params( self, a )
         class(nanoparticle), intent(inout) :: self
-        real,                intent(inout) :: a(3)                ! lattice parameters
-        real, allocatable :: centers_A(:,:)                       ! coordinates of the atoms in ANGSTROMS
+        real,                intent(inout) :: a(3) ! lattice parameters
+        real, allocatable :: centers_A(:,:)        ! coordinates of the atoms in ANGSTROMS
         type(image)       :: simatms
         integer           :: n_discard
         ! MODEL BUILDING
@@ -649,9 +644,8 @@ contains
         integer, allocatable :: imat_t(:,:,:)
         real,    allocatable :: coords(:,:)
         real,    allocatable :: rmat(:,:,:)
-        integer, parameter :: NBIN_THRESH_HERE = 20
         logical, parameter :: L_BENCH          = .false.
-        real    :: ts(NBIN_THRESH_HERE)
+        real    :: ts(NBIN_THRESH)
         integer :: i, fnr, ind_opt, low, high, mid
         real    :: otsu_thresh, corr, step_refine, max_corr, thresh, thresh_opt, lbt, rbt
         logical                 :: found_better
@@ -667,9 +661,9 @@ contains
         rt_real_corr    =  0.
         t_tot           =  tic()
         max_corr        = -1.
-        call thres_detect_conv_atom_denoised(self%img, NBIN_THRESH_HERE, ts)
+        call thres_detect_conv_atom_denoised(self%img, NBIN_THRESH, ts)
         low      = 1
-        high     = NBIN_THRESH_HERE
+        high     = NBIN_THRESH
         max_corr = t2c(ts(1))
         ind_opt  = 1
         do while( low <= high ) 
@@ -740,7 +734,7 @@ contains
             ! Find atom centers in the generated distributions
             call self%update_ncc(img_ccs_t) ! self%n_cc is needed in find_centers
             t_find_centers = tic()
-            call self%find_centers(img_bin_t, img_ccs_t, coords)
+            call self%find_centers(img_ccs_t, coords)
             rt_find_centers = rt_find_centers + toc(t_find_centers)
             ! Generate a simulated distribution based on those center
             t_gen_sim = tic()
@@ -759,64 +753,7 @@ contains
 
     end subroutine binarize_and_find_centers
 
-    ! Find the centers coordinates of the atoms in the particle
-    ! and save it in the global variable centers.
-    ! If coords is present, it saves it also in coords.
-    subroutine find_centers( self, img_bin, img_cc, coords, imat )
-        class(nanoparticle),                   intent(inout) :: self
-        type(binimage), optional,              intent(inout) :: img_bin, img_cc
-        integer,        optional,              intent(in)    :: imat(:,:,:)
-        real,           optional, allocatable, intent(out)   :: coords(:,:)
-        real,        pointer :: rmat_raw(:,:,:)
-        integer, allocatable :: imat_cc_in(:,:,:)
-        logical, allocatable :: mask(:,:,:)
-        integer :: i, ii, jj, kk
-        real    :: m(3), sum_mass
-        ! sanity check
-        if( present(img_bin) .and. .not. present(img_cc) ) then
-            if( .not. present(imat)) THROW_HARD('img_bin and img_cc have to be both present')
-        end if
-        ! global variables allocation
-        if( allocated(self%atominfo) ) deallocate(self%atominfo)
-        allocate( self%atominfo(self%n_cc) )
-        if( present(img_cc) )then
-            call img_cc%get_imat(imat_cc_in)
-        else if (present(imat)) then
-            imat_cc_in = imat
-        else
-            call self%img_cc%get_imat(imat_cc_in)
-        endif
-        call self%img_raw%get_rmat_ptr(rmat_raw)
-        allocate(mask(self%ldim(1),self%ldim(2),self%ldim(3)), source=.true.)
-        !$omp parallel do default(shared) private(i,ii,jj,kk,mask,m,sum_mass) schedule(static) proc_bind(close)
-        do i=1,self%n_cc
-            mask     = .true.
-            where( imat_cc_in /= i ) mask = .false.
-            m        = 0.
-            sum_mass = 0.
-            do ii = 1, self%ldim(1)
-                do jj = 1, self%ldim(2)
-                    do kk = 1, self%ldim(3)
-                        if( mask(ii,jj,kk) )then
-                            m = m + real([ii,jj,kk]) * rmat_raw(ii,jj,kk)
-                            sum_mass = sum_mass + rmat_raw(ii,jj,kk)
-                        endif
-                    enddo
-                enddo
-            enddo
-            self%atominfo(i)%center(:) = m / sum_mass
-        enddo
-        !$omp end parallel do
-        ! saving centers coordinates, optional
-        if( present(coords) )then
-            allocate(coords(3,self%n_cc))
-            do i=1,self%n_cc
-                coords(:,i) = self%atominfo(i)%center(:)
-            enddo
-        endif
-    end subroutine find_centers
-
-    subroutine find2_centers( self, img_cc, coords, imat )
+    subroutine find_centers( self, img_cc, coords, imat )
         class(nanoparticle),            intent(inout) :: self
         type(binimage),       optional, intent(inout) :: img_cc
         integer,              optional, intent(in)    :: imat(:,:,:)
@@ -862,8 +799,8 @@ contains
                 coords(:,i) = self%atominfo(i)%center
             enddo
         endif
-    end subroutine find2_centers
-    
+    end subroutine find_centers
+
     subroutine discard_small_ccs( self )
         class(nanoparticle), intent(inout) :: self
         integer, allocatable :: imat_bin(:,:,:), imat_cc(:,:,:)
@@ -1138,7 +1075,6 @@ contains
         real                 :: tmp_diam, a(3)
         integer              :: i, cc, cn, max_size
         character(*), parameter :: fn_fit_isotropic="fit_isotropic.mrc", fn_fit_anisotropic="fit_anisotropic.mrc"
-
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS'
         write(logfhandle, '(A)') '---Dev Note: ADP and Max Neighboring Displacements Under Testing---'
         ! calc cn and cn_gen
@@ -1228,7 +1164,6 @@ contains
         call fit_isotropic%write(fn_fit_isotropic)
         call fit_anisotropic%write(fn_fit_anisotropic)
         if( WRITE_OUTPUT ) call write_2D_slice()
-
         ! CALCULATE GLOBAL NP PARAMETERS
         call calc_stats(  real(self%atominfo(:)%size),    self%size_stats,         mask=self%atominfo(:)%size >= NVOX_THRESH )
         call calc_stats(  real(self%atominfo(:)%cn_std),  self%cn_std_stats        )
@@ -1251,7 +1186,6 @@ contains
         call calc_stats(  self%atominfo(:)%isocorr,       self%isocorr_stats       )
         call calc_stats(  self%atominfo(:)%anisocorr,     self%anisocorr_stats,     mask=.not.self%atominfo(:)%tossADP )
         call calc_stats(  self%atominfo(:)%radial_strain, self%radial_strain_stats )
-        
         ! CALCULATE CN-DEPENDENT STATS & WRITE CN-ATOMS
         do cn = CNMIN, CNMAX
             call calc_cn_stats( cn )
@@ -1384,44 +1318,44 @@ contains
 
     ! calc the avg of the centers coords
     function masscen( self ) result( m )
-       class(nanoparticle), intent(inout) :: self
-       real    :: m(3) ! mass center coords
-       integer :: i
-       m = 0.
-       do i = 1, self%n_cc
-           m = m + self%atominfo(i)%center(:)
-       enddo
-       m = m / real(self%n_cc)
+        class(nanoparticle), intent(inout) :: self
+        real    :: m(3) ! mass center coords
+        integer :: i
+        m = 0.
+        do i = 1, self%n_cc
+            m = m + self%atominfo(i)%center(:)
+        enddo
+        m = m / real(self%n_cc)
     end function masscen
 
     subroutine calc_longest_atm_dist( self, label, longest_dist, imat )
-       class(nanoparticle), intent(inout) :: self
-       integer,             intent(in)    :: label
-       real,                intent(out)   :: longest_dist
-       integer, optional,   intent(in)    :: imat(:,:,:)
-       integer, allocatable :: pos(:,:)
-       integer, allocatable :: imat_cc(:,:,:)
-       logical, allocatable :: mask_dist(:) ! for min and max dist calculation
-       integer :: location(1)               ! location of vxls of the atom farthest from its center
-       if (present(imat)) then
+        class(nanoparticle), intent(inout) :: self
+        integer,             intent(in)    :: label
+        real,                intent(out)   :: longest_dist
+        integer, optional,   intent(in)    :: imat(:,:,:)
+        integer, allocatable :: pos(:,:)
+        integer, allocatable :: imat_cc(:,:,:)
+        logical, allocatable :: mask_dist(:) ! for min and max dist calculation
+        integer :: location(1)               ! location of vxls of the atom farthest from its center
+        if (present(imat)) then
             imat_cc = imat
-       else
+        else
             call self%img_cc%get_imat(imat_cc)
-       endif
-       where(imat_cc.eq.label)
+        endif
+        where(imat_cc.eq.label)
            imat_cc = 1
-       elsewhere
+        elsewhere
            imat_cc = 0
-       endwhere
-       call get_pixel_pos( imat_cc, pos ) ! pxls positions of the shell
-       allocate(mask_dist(size(pos, dim=2)), source = .true.)
-       if( size(pos,2) == 1 ) then ! if the connected component has size 1 (just 1 vxl)
+        endwhere
+        call get_pixel_pos( imat_cc, pos ) ! pxls positions of the shell
+        allocate(mask_dist(size(pos, dim=2)), source = .true.)
+        if( size(pos,2) == 1 ) then ! if the connected component has size 1 (just 1 vxl)
            longest_dist  = self%smpd
            return
-       else
+        else
            longest_dist  = pixels_dist(self%atominfo(label)%center(:), real(pos),'max', mask_dist, location) * self%smpd
-       endif
-       deallocate(imat_cc, pos, mask_dist)
+        endif
+        deallocate(imat_cc, pos, mask_dist)
     end subroutine calc_longest_atm_dist
 
     ! For a given cc in an NP with lattice params a, finds the number
@@ -1453,7 +1387,6 @@ contains
             endif
         enddo
     end subroutine check_neighbors_cn
-
 
     ! Calculates the isotropic displacement parameter U_ISO of a given cc by fitting
     ! the real space intensity distribution of the 3D reconstructed volume stored
@@ -2128,13 +2061,13 @@ contains
         write(funit,602)              self%radial_strain_stats_cns(cn)%maxv            ! MAX_RADIAL_STRAIN
     end subroutine write_cn_stats
 
-    subroutine kill_nanoparticle( self )
+    subroutine kill( self )
         class(nanoparticle), intent(inout) :: self
         call self%img%kill()
         call self%img_raw%kill
         call self%img_bin%kill_bimg()
         call self%img_cc%kill_bimg()
         if( allocated(self%atominfo) ) deallocate(self%atominfo)
-    end subroutine kill_nanoparticle
+    end subroutine kill
 
 end module simple_nanoparticle

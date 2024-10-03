@@ -32,7 +32,6 @@ type, extends(image) :: binimage
     procedure          :: read_bimg
     ! CONNECTED COMPONENTS
     procedure          :: find_ccs
-    procedure          :: find2_ccs
     procedure          :: size_ccs
     procedure          :: elim_ccs
     procedure          :: order_ccs
@@ -156,114 +155,20 @@ contains
 
     ! CONNECTED COMPONENTS
 
-    ! Finds connected components in the binary input image and saves
-    ! them in the output connected component image.
-    ! Black = .true. finds the black connected components instead of the white ones
     subroutine find_ccs( self, ccimage, black, update_imat )
-        class(binimage),   intent(inout) :: self
-        class(binimage),   intent(inout) :: ccimage
-        logical, optional, intent(in)    :: black, update_imat
-        type(binimage)       :: ccimage_unordered ! in this img will be stored the cc with no specific order
-        integer, allocatable :: mat4compare(:,:,:), neigh_8_pixs(:)
-        integer :: i, j, k, n_it, n_maxit, nsz, cnt, diff, tmp
-        logical :: finished_job, black_present
-        if( present(update_imat) ) then
-          if( update_imat ) call self%set_imat
-        endif
-        if( .not. self%bimat_is_set ) call self%set_imat
+        class(binimage), intent(inout) :: self
+        class(binimage), intent(inout) :: ccimage
+        logical, optional, intent(in)  :: black, update_imat
+        integer :: i, j, k, comp_ind
+        logical :: visited(self%bldim(1),self%bldim(2),self%bldim(3)), black_present
         black_present = present(black)
-        call ccimage_unordered%new_bimg(self%bldim,self%bsmpd)
-        call ccimage%new_bimg          (self%bldim,self%bsmpd)
-        if( self%bldim(3) > 1 )then
-            allocate(neigh_8_pixs(27), source=0)
-        else
-            allocate(neigh_8_pixs(9),  source=0)
+        if( present(update_imat) ) then
+            if( update_imat ) call self%set_imat
         endif
         if( black_present )then
             ! flip foreground to background and vice versa
             if( black .eqv. .true. ) self%bimat = -1 * (self%bimat - 1)
         endif
-        ! enumerate white pixels
-        cnt = 0 ! # labels
-        do i = 1, self%bldim(1)
-            do j = 1, self%bldim(2)
-                do k = 1, self%bldim(3)
-                    if( self%bimat(i,j,k) > 0 )then
-                        cnt = cnt + 1
-                        ccimage_unordered%bimat(i,j,k) = cnt
-                    endif
-                enddo
-            enddo
-        enddo
-        n_maxit = cnt
-        ! find connected components
-        finished_job = .false.
-        allocate(mat4compare(self%bldim(1),self%bldim(2),self%bldim(3)), source = 0)
-        do n_it = 1, n_maxit
-            if( .not. finished_job )then
-                mat4compare = ccimage_unordered%bimat
-                diff = 0
-                if( self%bldim(3) > 1 ) then
-                    do i = 1, self%bldim(1)
-                        do j = 1, self%bldim(2)
-                            do k = 1, self%bldim(3)
-                                if( self%bimat(i,j,k) > 0) then ! not background
-                                    call neigh_8_3D(ccimage_unordered%bldim, ccimage_unordered%bimat, [i,j,k], neigh_8_pixs, nsz)
-                                    ccimage_unordered%bimat(i,j,k) = minval(neigh_8_pixs(:nsz), neigh_8_pixs(:nsz) > 0)
-                                    diff = diff + abs(mat4compare(i,j,k) - ccimage_unordered%bimat(i,j,k))
-                                endif
-                            enddo
-                        enddo
-                    enddo
-                else
-                    do i = 1, self%bldim(1)
-                        do j = 1, self%bldim(2)
-                            if( self%bimat(i,j,1) > 0) then ! not background
-                                call neigh_8(ccimage_unordered%bldim, ccimage_unordered%bimat, [i,j,1], neigh_8_pixs, nsz)
-                                ccimage_unordered%bimat(i,j,1) = minval(neigh_8_pixs(:nsz), neigh_8_pixs(:nsz) > 0)
-                                diff = diff + abs(mat4compare(i,j,1) - ccimage_unordered%bimat(i,j,1))
-                            endif
-                        enddo
-                    enddo
-                endif
-                if( diff <= 0 ) finished_job = .true.
-            endif
-        enddo
-        ! enumerate connected components
-        cnt = 0
-        do i = 1, self%bldim(1)
-            do j = 1, self%bldim(2)
-                do k = 1, self%bldim(3)
-                    if( ccimage_unordered%bimat(i,j,k) > 0) then ! rmat == 0  --> background
-                        cnt = cnt + 1
-                        tmp = ccimage_unordered%bimat(i,j,k)
-                        where(ccimage_unordered%bimat == tmp)
-                            ccimage%bimat = cnt
-                            ccimage_unordered%bimat  = 0         ! Not to consider this cc again
-                        endwhere
-                    endif
-                enddo
-            enddo
-        enddo
-        ! update instance
-        ccimage%bimat_is_set = .true.
-        ccimage%nccs = maxval(ccimage%bimat)
-        call ccimage%update_img_rmat
-        ! kill
-        deallocate(mat4compare)
-        call ccimage_unordered%kill_bimg
-        if( black_present ) then
-            ! flip foreground to background and vice versa
-            if( black .eqv. .true. ) self%bimat = -1 * (self%bimat - 1)
-        endif
-        call self%update_img_rmat
-    end subroutine find_ccs
-
-    subroutine find2_ccs( self, ccimage )
-        class(binimage), intent(inout) :: self
-        class(binimage), intent(inout) :: ccimage
-        integer :: i, j, k, comp_ind
-        logical :: visited(self%bldim(1),self%bldim(2),self%bldim(3))
         call ccimage%new_bimg(self%bldim, self%bsmpd)
         visited  = .false.
         comp_ind = 0
@@ -280,8 +185,14 @@ contains
         ! update instance
         ccimage%bimat_is_set = .true.
         ccimage%nccs = maxval(ccimage%bimat)
+        if( black_present ) then
+            ! flip foreground to background and vice versa
+            if( black .eqv. .true. ) self%bimat = -1 * (self%bimat - 1)
+        endif
         call ccimage%update_img_rmat
+
       contains
+
         function valid(i,j,k) result(val)
             integer, intent(in) :: i,j,k
             logical :: val
@@ -290,8 +201,7 @@ contains
         end function valid
 
         recursive subroutine flood_fill(i, j, k, iVal)
-            integer, intent(in) :: i,j,k
-            integer, intent(in) :: iVal
+            integer, intent(in) :: i,j,k,iVal
             if( valid(i,j,k) .and. (.not. visited(i,j,k)) )then
                 if( self%bimat(i,j,k) == iVal )then
                     visited(i,j,k)       = .true.
@@ -326,7 +236,8 @@ contains
                 endif
             endif
         end subroutine flood_fill
-    end subroutine find2_ccs
+
+    end subroutine find_ccs
 
     ! The result is the size(# of pixels) of each cc.
     !  (cc = connected component)
