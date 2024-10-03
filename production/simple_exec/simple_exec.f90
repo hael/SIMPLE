@@ -103,6 +103,7 @@ type(reproject_commander)                   :: xreproject
 type(volops_commander)                      :: xvolops
 type(convert_commander)                     :: xconvert
 type(ctfops_commander)                      :: xctfops
+type(ctf_phaseflip_commander)               :: xctf_phaseflip
 type(filter_commander)                      :: xfilter
 type(normalize_commander)                   :: xnormalize
 type(ppca_denoise_commander)                :: xppca_denoise
@@ -327,6 +328,8 @@ select case(trim(prg))
         call xconvert%execute(cline)
     case( 'ctfops' )
         call xctfops%execute(cline)
+    case( 'ctf_phaseflip' )
+        call xctf_phaseflip%execute(cline)
     case( 'filter' )
         call xfilter%execute(cline)
     case( 'normalize' )
@@ -411,7 +414,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('d1e63c99')
+call simple_print_git_version('c1e2cc05')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
