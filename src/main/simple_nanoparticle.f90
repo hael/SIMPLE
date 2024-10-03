@@ -214,7 +214,6 @@ type :: nanoparticle
     procedure          :: identify_lattice_params
     procedure          :: identify_atomic_pos
     procedure, private :: binarize_and_find_centers
-    ! procedure          :: find_centers
     procedure          :: find_centers
     procedure, private :: discard_small_ccs
     procedure, private :: discard_atoms
