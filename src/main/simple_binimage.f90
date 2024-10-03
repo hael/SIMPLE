@@ -156,19 +156,13 @@ contains
     ! CONNECTED COMPONENTS
 
     subroutine find_ccs( self, ccimage, black, update_imat )
-        class(binimage), intent(inout) :: self
-        class(binimage), intent(inout) :: ccimage
-        logical, optional, intent(in)  :: black, update_imat
+        class(binimage),   intent(inout) :: self
+        class(binimage),   intent(inout) :: ccimage
+        logical, optional, intent(in)    :: black, update_imat
         integer :: i, j, k, comp_ind
-        logical :: visited(self%bldim(1),self%bldim(2),self%bldim(3)), black_present
-        black_present = present(black)
-        if( present(update_imat) ) then
-            if( update_imat ) call self%set_imat
-        endif
-        if( black_present )then
-            ! flip foreground to background and vice versa
-            if( black .eqv. .true. ) self%bimat = -1 * (self%bimat - 1)
-        endif
+        logical :: visited(self%bldim(1),self%bldim(2),self%bldim(3))
+        if( present(update_imat) .and. update_imat ) call self%set_imat
+        if( present(black)       .and. black)        self%bimat = -1 * (self%bimat - 1)
         call ccimage%new_bimg(self%bldim, self%bsmpd)
         visited  = .false.
         comp_ind = 0
@@ -184,57 +178,47 @@ contains
         enddo
         ! update instance
         ccimage%bimat_is_set = .true.
-        ccimage%nccs = maxval(ccimage%bimat)
-        if( black_present ) then
-            ! flip foreground to background and vice versa
-            if( black .eqv. .true. ) self%bimat = -1 * (self%bimat - 1)
-        endif
+        ccimage%nccs         = maxval(ccimage%bimat)
+        if( present(black) .and. black ) self%bimat = -1 * (self%bimat - 1)
         call ccimage%update_img_rmat
 
       contains
 
-        function valid(i,j,k) result(val)
-            integer, intent(in) :: i,j,k
-            logical :: val
-            val = .true.
-            if( i < 1 .or. i > self%bldim(1) .or. j < 1 .or. j > self%bldim(2) .or. k < 1 .or. k > self%bldim(3) ) val = .false.
-        end function valid
-
         recursive subroutine flood_fill(i, j, k, iVal)
             integer, intent(in) :: i,j,k,iVal
-            if( valid(i,j,k) .and. (.not. visited(i,j,k)) )then
-                if( self%bimat(i,j,k) == iVal )then
-                    visited(i,j,k)       = .true.
-                    ccimage%bimat(i,j,k) = comp_ind
-                    ! k-1
-                    call flood_fill(i-1, j,   k-1, iVal)
-                    call flood_fill(i+1, j,   k-1, iVal)
-                    call flood_fill(i,   j-1, k-1, iVal)
-                    call flood_fill(i,   j+1, k-1, iVal)
-                    call flood_fill(i-1, j-1, k-1, iVal)
-                    call flood_fill(i-1, j+1, k-1, iVal)
-                    call flood_fill(i+1, j-1, k-1, iVal)
-                    call flood_fill(i+1, j+1, k-1, iVal)
-                    ! k
-                    call flood_fill(i-1, j,   k,   iVal)
-                    call flood_fill(i+1, j,   k,   iVal)
-                    call flood_fill(i,   j-1, k,   iVal)
-                    call flood_fill(i,   j+1, k,   iVal)
-                    call flood_fill(i-1, j-1, k,   iVal)
-                    call flood_fill(i-1, j+1, k,   iVal)
-                    call flood_fill(i+1, j-1, k,   iVal)
-                    call flood_fill(i+1, j+1, k,   iVal)
-                    ! k + 1
-                    call flood_fill(i-1, j,   k+1, iVal)
-                    call flood_fill(i+1, j,   k+1, iVal)
-                    call flood_fill(i,   j-1, k+1, iVal)
-                    call flood_fill(i,   j+1, k+1, iVal)
-                    call flood_fill(i-1, j-1, k+1, iVal)
-                    call flood_fill(i-1, j+1, k+1, iVal)
-                    call flood_fill(i+1, j-1, k+1, iVal)
-                    call flood_fill(i+1, j+1, k+1, iVal)
-                endif
-            endif
+            if( i < 1 .or. i > self%bldim(1) .or.&
+               &j < 1 .or. j > self%bldim(2) .or.&
+               &k < 1 .or. k > self%bldim(3) .or.&
+               &visited(i,j,k) .or. self%bimat(i,j,k) /= iVal ) return
+            visited(i,j,k)       = .true.
+            ccimage%bimat(i,j,k) = comp_ind
+            ! k-1
+            call flood_fill(i-1, j,   k-1, iVal)
+            call flood_fill(i+1, j,   k-1, iVal)
+            call flood_fill(i,   j-1, k-1, iVal)
+            call flood_fill(i,   j+1, k-1, iVal)
+            call flood_fill(i-1, j-1, k-1, iVal)
+            call flood_fill(i-1, j+1, k-1, iVal)
+            call flood_fill(i+1, j-1, k-1, iVal)
+            call flood_fill(i+1, j+1, k-1, iVal)
+            ! k
+            call flood_fill(i-1, j,   k,   iVal)
+            call flood_fill(i+1, j,   k,   iVal)
+            call flood_fill(i,   j-1, k,   iVal)
+            call flood_fill(i,   j+1, k,   iVal)
+            call flood_fill(i-1, j-1, k,   iVal)
+            call flood_fill(i-1, j+1, k,   iVal)
+            call flood_fill(i+1, j-1, k,   iVal)
+            call flood_fill(i+1, j+1, k,   iVal)
+            ! k + 1
+            call flood_fill(i-1, j,   k+1, iVal)
+            call flood_fill(i+1, j,   k+1, iVal)
+            call flood_fill(i,   j-1, k+1, iVal)
+            call flood_fill(i,   j+1, k+1, iVal)
+            call flood_fill(i-1, j-1, k+1, iVal)
+            call flood_fill(i-1, j+1, k+1, iVal)
+            call flood_fill(i+1, j-1, k+1, iVal)
+            call flood_fill(i+1, j+1, k+1, iVal)
         end subroutine flood_fill
 
     end subroutine find_ccs
