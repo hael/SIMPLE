@@ -106,9 +106,9 @@ contains
                 do k=self%pdim(2),self%pdim(3)
                     loc = pftcc%get_coord(i,k)
                     f1  = int(floor(loc(1)))
-                    d1  = loc(1) - f1
+                    d1  = loc(1) - real(f1)
                     f2  = int(floor(loc(2)))
-                    d2  = loc(2) - f2
+                    d2  = loc(2) - real(f2)
                     self%polcyc1_mat(i, k,  1)  = cyci_1d(lims(:,1), f1)
                     self%polcyc1_mat(i, k,  2)  = cyci_1d(lims(:,1), f1+1)
                     self%polcyc2_mat(i, k,  1)  = cyci_1d(lims(:,2), f2)
