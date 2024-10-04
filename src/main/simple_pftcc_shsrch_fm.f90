@@ -98,13 +98,13 @@ contains
         real,                   intent(out)   :: cc
         logical,      optional, intent(in)    :: mirror
         type(image_ptr) :: p1, p2, pcc1, pcc2
-        complex :: fcomp1, fcomp2, fcompl, fcompll
+        complex  :: fcomp1, fcomp2, fcompl, fcompll
         real(dp) :: var1, var2
-        real :: corrs(self%pftsz), rmat(2,2), dist(2), loc(2)
-        real :: kw, norm, pftcc_ang, cc1,cc2, angstep, alpha,beta,gamma,denom
-        integer :: logilims(3,2), cyclims(3,2), cyclimsR(2,2), win_corner(2), phys(2)
-        integer :: irot,h,k,l,ll,m,mm,sh,box,c,shlim
-        logical :: l_mirr
+        real     :: corrs(self%pftsz), rmat(2,2), dist(2), loc(2), offset1(2), offset2(2)
+        real     :: kw, norm, pftcc_ang, cc1,cc2, angstep, alpha,beta,gamma,denom
+        integer  :: logilims(3,2), cyclims(3,2), cyclimsR(2,2), win(2), phys(2)
+        integer  :: irot,h,k,l,ll,m,mm,sh,c,shlim
+        logical  :: l_mirr
         l_mirr = .false.
         if( present(mirror) ) l_mirr = mirror
         ! evaluate best orientation from rotational correlation of image magnitudes
@@ -113,42 +113,49 @@ contains
         pftcc_ang = pftcc_glob%get_rot(irot)
         ! interpolate rotational peak
         angstep = pftcc_glob%get_rot(2)
-        alpha   = merge(corrs(self%pftsz), corrs(irot-1), irot==1)
-        beta    = corrs(irot)
-        gamma   = merge(corrs(1), corrs(irot+1), irot==self%pftsz)
+        if( irot==1 )then
+            alpha = corrs(self%pftsz)
+        else
+            alpha = corrs(irot-1)
+        endif
+        beta = corrs(irot)
+        if( irot==self%pftsz )then
+            gamma = corrs(1)
+        else
+            gamma = corrs(irot+1)
+        endif
         denom   = alpha + gamma - 2.*beta
         if( abs(denom) > TINY ) pftcc_ang = pftcc_ang + angstep * 0.5 * (alpha-gamma) / denom
-        ! rotation matrix
-        call rotmat2d(pftcc_ang, rmat)
         ! phase correlations of image rotated by irot & irot+pi
+        call rotmat2d(pftcc_ang, rmat)
         call img1%get_cmat_ptr(p1%cmat)
         call img2%get_cmat_ptr(p2%cmat)
-        logilims = img1%loop_lims(2)
-        cyclims  = img2%loop_lims(3)
+        logilims      = img1%loop_lims(2)
+        cyclims       = img2%loop_lims(3)
         cyclimsR(:,1) = cyclims(1,:)
         cyclimsR(:,2) = cyclims(2,:)
-        box = img1%get_box()
         imgcc1 = cmplx(0.,0.)
         imgcc2 = cmplx(0.,0.)
-        var1 = 0.d0
-        var2 = 0.d0
+        var1   = 0.d0
+        var2   = 0.d0
         do h = logilims(1,1),logilims(1,2)
             do k = logilims(2,1),logilims(2,2)
                 sh = nint(hyp(h,k))
                 if( sh < pftcc_glob%kfromto(1) )cycle
                 if( sh > pftcc_glob%kfromto(2) )cycle
-                ! Rotation img2 & bilinear interpolation
+                ! Rotation img2
                 if( l_mirr )then
                     loc = matmul(real([-h,k]),rmat)
                 else
                     loc = matmul(real([h,k]),rmat)
                 endif
-                win_corner = floor(loc)
-                dist       = loc - real(win_corner)
-                l     = cyci_1d(cyclimsR(:,1), win_corner(1))
-                ll    = cyci_1d(cyclimsR(:,1), win_corner(1)+1)
-                m     = cyci_1d(cyclimsR(:,2), win_corner(2))
-                mm    = cyci_1d(cyclimsR(:,2), win_corner(2)+1)
+                ! bilinear interpolation
+                win    = floor(loc)
+                dist   = loc - real(win)
+                l      = cyci_1d(cyclimsR(:,1), win(1))
+                ll     = cyci_1d(cyclimsR(:,1), win(1)+1)
+                m      = cyci_1d(cyclimsR(:,2), win(2))
+                mm     = cyci_1d(cyclimsR(:,2), win(2)+1)
                 phys   = img2%comp_addr_phys(l,m)
                 kw     = (1.-dist(1))*(1.-dist(2))
                 fcompl = kw * p2%cmat(phys(1), phys(2),1)
@@ -177,36 +184,61 @@ contains
                 var2 = var2 + real(fcomp2*conjg(fcomp2),dp)
             end do
         end do
-        ! inverse FT
+        ! correlation images
         call imgcc1%ifft
         call imgcc2%ifft
         ! normalization
         norm = real(2.d0*sqrt(var1*var2))
         call imgcc1%div(norm)
         call imgcc2%div(norm)
-        ! offsets & maxima
+        ! offsets, interpolation & re-evaluation in polar space
         call imgcc1%get_rmat_ptr(pcc1%rmat)
         call imgcc2%get_rmat_ptr(pcc2%rmat)
-        c     = box/2+1
+        c     = img1%get_box()/2+1 ! image center
         shlim = floor(self%trslim)
-        cc1   = maxval(pcc1%rmat(c-shlim:c+shlim,c-shlim:c+shlim,1))
-        cc2   = maxval(pcc2%rmat(c-shlim:c+shlim,c-shlim:c+shlim,1))
-        cc    = max(cc1,cc2)
-        ! For when the location of maxima matter
-        ! Conventions for angle & influence of mirror are TBD
-        ! pos1  = maxloc(pcc1%rmat(c-shlim:c+shlim,c-shlim:c+shlim,1))
-        ! pos2  = maxloc(pcc2%rmat(c-shlim:c+shlim,c-shlim:c+shlim,1))
-        ! cc1   = pcc1%rmat(pos1(1)+c-shlim-1,pos1(2)+c-shlim-1,1)
-        ! cc2   = pcc2%rmat(pos2(1)+c-shlim-1,pos2(2)+c-shlim-1,1)
-        ! if( cc1 > cc2 )then
-        !     offset = real(pos1-shlim-1)
-        !     cc     = cc1
-        ! else
-        !     offset = real(pos2-shlim-1)
-        !     cc     = cc2
-        !     irot   = irot + self%pftsz
-        ! endif
-        ! cc & pftcc_glob%gencorr_for_rot_8(ind1,ind2,real(offset,dp),irot) should be close
+        call interpolate_offset_peak(pcc1, irot,            offset1, cc1)
+        call interpolate_offset_peak(pcc2, irot+self%pftsz, offset2, cc2)
+        if( cc1 > cc2 )then
+            ! offset = offset1
+            ! ang    = 360.-pftcc_ang
+            cc     = cc1
+        else
+            ! offset = offset2
+            ! ang    = 180.-pftcc_ang
+            cc     = cc2
+            irot   = irot + self%pftsz
+        endif
+        contains
+
+            subroutine interpolate_offset_peak( p, rotind, offset,cc )
+                class(image_ptr), intent(in)  :: p
+                integer,          intent(in)  :: rotind
+                real,             intent(out) :: offset(2), cc
+                real    :: tmp(2), ccinterp
+                integer :: pos(2), i,j
+                pos    = maxloc(p%rmat(c-shlim:c+shlim,c-shlim:c+shlim,1))
+                i      = pos(1)+c-shlim-1
+                j      = pos(2)+c-shlim-1
+                tmp    = real(pos-shlim-1)
+                offset = tmp
+                alpha   = p%rmat(i-1,j,1)
+                beta    = p%rmat(i,  j,1)
+                gamma   = p%rmat(i+1,j,1)
+                denom   = alpha + gamma - 2.*beta
+                if( abs(denom) > TINY ) offset(1) = offset(1) + 0.5 * (alpha-gamma) / denom
+                alpha  = p%rmat(i,j-1,1)
+                gamma  = p%rmat(i,j+1,1)
+                denom  = alpha + gamma - 2.*beta
+                if( abs(denom) > TINY ) offset(2) = offset(2) + 0.5 * (alpha-gamma) / denom
+                cc       = real(pftcc_glob%gencorr_for_rot_8(ind1,ind2,real(tmp,dp),   rotind))
+                ccinterp = real(pftcc_glob%gencorr_for_rot_8(ind1,ind2,real(offset,dp),rotind))
+                if( ccinterp > cc )then
+                    cc     = ccinterp
+                else
+                    offset = tmp
+                endif
+            end subroutine interpolate_offset_peak
+
     end subroutine calc_phasecorr
 
     ! exhaustive coarse grid search fllowed by peak interpolation
@@ -295,7 +327,7 @@ contains
                 if( abs(denom) > TINY ) offset(2) = offset(2) + self%trsincr * 0.5 * (alpha-gamma) / denom
             endif
         endif
-        score = pftcc_glob%gencorr_for_rot_8(self%ref, self%ptcl, real(offset,dp), irot)
+        score = real(pftcc_glob%gencorr_for_rot_8(self%ref, self%ptcl, real(offset,dp), irot))
         if( score < beta )then
             ! fallback
             offset = [self%coords(i), self%coords(j)]
