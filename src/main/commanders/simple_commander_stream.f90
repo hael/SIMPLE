@@ -2121,7 +2121,8 @@ contains
         class(cmdline),                    intent(inout) :: cline
         character(len=STDLEN),     parameter   :: micspproj_fname = './streamdata.simple'
         integer,                   parameter   :: FLUSH_NITERS    = 5    ! # of iterations after which leftover particles join the pool
-        integer(kind=dp),          parameter   :: FLUSH_TIMELIMIT = 600  ! time (secs) after which leftover particles join the pool
+        ! integer(kind=dp),          parameter   :: FLUSH_TIMELIMIT = 600  ! time (secs) after which leftover particles join the pool
+        integer(kind=dp),          parameter   :: FLUSH_TIMELIMIT = 36000  ! 10hours, Effectively deactivating this scheme
         type(projrecord),          allocatable :: projrecords(:)
         type(parameters)                       :: params
         type(guistats)                         :: gui_stats
