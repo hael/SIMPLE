@@ -2120,10 +2120,9 @@ contains
         class(commander_stream_cluster2D), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         character(len=STDLEN),     parameter   :: micspproj_fname = './streamdata.simple'
-        ! integer,                   parameter   :: FLUSH_NITERS    = 5    ! # of iterations after which leftover particles join the pool
-        integer,                   parameter   :: FLUSH_NITERS    = 50000  ! Effectively deactivating this scheme
-        ! integer(kind=dp),          parameter   :: FLUSH_TIMELIMIT = 600  ! time (secs) after which leftover particles join the pool
-        integer(kind=dp),          parameter   :: FLUSH_TIMELIMIT = 36000  ! 10hours, Effectively deactivating this scheme
+        integer,                   parameter   :: PAUSE_NITERS    = 5   ! # of iterations after which classification is paused
+        integer,                   parameter   :: PAUSE_TIMELIMIT = 600 ! time (secs) after which classification is paused
+        integer(kind=dp),          parameter   :: FLUSH_TIMELIMIT = 900 ! time (secs) after which leftover particles join the pool IF the classification is paused
         type(projrecord),          allocatable :: projrecords(:)
         type(parameters)                       :: params
         type(guistats)                         :: gui_stats
@@ -2132,7 +2131,7 @@ contains
         type(sp_project)                       :: spproj_glob
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=LONGSTRLEN)              :: cwd_job
-        integer(kind=dp)                       :: pool_time_last_chunk
+        integer(kind=dp)                       :: pool_time_last_chunk, time_last_import
         integer                                :: nmics_rejected_glob, nchunks_imported_glob, nchunks_imported, nprojects, iter
         integer                                :: n_imported, n_imported_prev, n_added, nptcls_glob, n_failed_jobs, ncls_in
         integer                                :: pool_iter_last_chunk, pool_iter_max_chunk_imported
@@ -2230,8 +2229,9 @@ contains
         n_failed_jobs         = 0
         l_nchunks_maxed       = .false. ! Whether a minimum number of chunks as been met
         l_pause               = .false. ! whether pool classification is skipped
-        pool_iter_last_chunk  = -1                          ! used for flushing unclassified particles
-        pool_time_last_chunk  = huge(pool_time_last_chunk)  ! used for flushing unclassified particles
+        pool_iter_last_chunk  = -1                          ! used for pausing classification
+        pool_time_last_chunk  = huge(pool_time_last_chunk)  ! used for pausing classification
+        time_last_import      = huge(time_last_import)      ! used for flushing unclassified particles
         ! guistats init
         call gui_stats%init(.true.)
         call gui_stats%set('particles', 'particles_imported',          0,            primary=.true.)
@@ -2266,6 +2266,7 @@ contains
                 call gui_stats%set_now('particles', 'last_particles_imported')
                 ! update progress monitor
                 call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
+                time_last_import = time8()
                 ! remove this??
                 if( n_imported < 1000 )then
                     call update_user_params(cline)
@@ -2305,20 +2306,25 @@ contains
                     l_nchunks_maxed = .true.
                 endif
                 if( l_pause )then
-                    ! skipping pool classification
+                    ! Whether to flush particles
+                    if( (time8()-time_last_import > FLUSH_TIMELIMIT) .and. all_chunks_available() )then
+                        ! Remaining unclassified particles will join the pool directly if already paused,
+                        ! and all chunks are inactive and no new particles are being imported
+                        call flush_remaining_particles(projrecords)
+                    endif
                 else
-                    if( ((pool_iter_last_chunk>0) .and. (get_pool_iter() >= pool_iter_last_chunk+FLUSH_NITERS))&
-                        &.or.(time8()-pool_time_last_chunk > FLUSH_TIMELIMIT) )then
-                        ! pause pool classification & rejection in absence of new chunks, resumes
-                        ! when new chunks are added or classification parameters have been updated
-                        l_pause = is_pool_available_dev()
-                        if( l_pause )then
-                            ! Remaining unclassified particles will join the pool directly
-                            ! if pool & all chunks are inactive
-                            if( all_chunks_available() ) call flush_remaining_particles(projrecords)
+                    ! whether to pause
+                    if( pool_iter_last_chunk > 0 )then
+                        if( (get_pool_iter() >= pool_iter_last_chunk+PAUSE_NITERS) .or.&
+                            &(time8()-pool_time_last_chunk > PAUSE_TIMELIMIT) )then
+                            ! pause pool classification & rejection in absence of new chunks, resumes
+                            ! when new chunks are added or classification parameters have been updated
+                            l_pause = is_pool_available_dev()
+                            if( l_pause ) write(logfhandle,'(A)')'>>> PAUSING CLASSIFICATION'
                         endif
                     endif
                 endif
+                ! Classifications
                 if( l_pause )then
                     call generate_pool_stats
                 else
