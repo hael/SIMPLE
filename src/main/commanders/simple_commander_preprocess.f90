@@ -1877,7 +1877,7 @@ contains
         type(parameters)              :: params
         type(sp_project)              :: spproj, spproj_in
         type(builder)                 :: build
-        type(image)                   :: micrograph
+        type(image)                   :: micrograph, micrograph_sc
         type(ori)                     :: o_mic, o_stk
         type(ctf)                     :: tfun
         type(ctfparams)               :: ctfparms
@@ -1885,14 +1885,25 @@ contains
         type(ptcl_extractor)          :: extractor
         character(len=:), allocatable :: mic_name, imgkind, ext
         logical,          allocatable :: mic_mask(:), ptcl_mask(:)
-        integer,          allocatable :: mic2stk_inds(:), boxcoords(:,:), ptcl_inds(:)
+        integer,          allocatable :: mic2stk_inds(:), boxcoords(:,:), ptcl_inds(:), mic_dims(:,:)
         character(len=LONGSTRLEN)     :: stack, rel_stack
-        real    :: prev_shift(2), shift2d(2), shift3d(2), stk_min,stk_max,stk_mean,stk_sdev
-        integer :: i,nframes,imic,iptcl,nmics,prev_box,box_foo,cnt,nmics_tot,nptcls,stk_ind
-        integer :: prev_pos(2),new_pos(2),ishift(2),ldim(3),ldim_foo(3),fromp,top,istk,nptcls2extract
-        logical :: l_3d
+        real    :: prev_shift(2),shift2d(2),shift3d(2),prev_center_sc(2),prev_shift_sc(2)
+        real    :: translation(2), new_center_sc(2), stk_min, stk_max, stk_mean, stk_sdev, scale
+        integer :: prev_pos(2), new_pos(2), ishift(2), ldim(3), prev_center(2), new_center(2), ldim_sc(3)
+        integer :: i, nframes, imic, iptcl, nmics, prev_box, box_foo, cnt, nmics_tot, stk_ind
+        integer :: fromp, top, istk, nptcls2extract, nptcls
+        logical :: l_3d, l_scale_particles, l_movie_frames
         call cline%set('mkdir','no')
         call params%new(cline)
+        l_movie_frames    = trim(params%extractfrommov).eq.'yes'
+        l_scale_particles = cline%defined('osmpd')
+        if( l_scale_particles )then
+            if( .not.cline%defined('box') ) THROW_HARD('BOX must be defined with OSMPD!')
+            if( l_movie_frames ) THROW_HARD('Particle scaling and extraction of movie frames is not supported!')
+        endif
+        if( l_movie_frames .and. (trim(params%ctf).eq.'flip') )then
+            THROW_HARD('extractfrommov=yes does not support ctf=flip!')
+        endif
         ! set normalization radius
         params%msk = RADFRAC_NORM_EXTRACT * real(params%box/2)
         ! whether to use shifts from 2D or 3D
@@ -1906,7 +1917,6 @@ contains
         ! sanity checks, dimensions & indexing
         box_foo  = 0
         prev_box = 0
-        ldim_foo = 0
         ldim     = 0
         allocate(mic2stk_inds(nmics_tot), source=0)
         allocate(mic_mask(nmics_tot),     source=.false.)
@@ -1939,7 +1949,7 @@ contains
         nmics = count(mic_mask)
         if( nmics > 0 )then
             call build%build_general_tbox(params, cline, do3d=.false.)
-            call spproj_in%read_segment('ptcl2D', params%projfile)
+            allocate(mic_dims(3,nmics_tot),source=0)
             ! sanity checks
             do imic = 1,nmics_tot
                 if( .not.mic_mask(imic) )cycle
@@ -1947,32 +1957,50 @@ contains
                 call spproj_in%os_mic%get_ori(imic, o_mic)
                 call o_mic%getter('intg', mic_name)
                 if( .not.file_exists(mic_name) )cycle
-                call find_ldim_nptcls(mic_name, ldim_foo, nframes )
+                 ! micrograph dimensions
+                call find_ldim_nptcls(mic_name, ldim, nframes )
                 if( nframes > 1 ) THROW_HARD('multi-frame extraction not supported; exec_reextract')
-                if( any(ldim == 0) ) ldim = ldim_foo
-                stk_ind = mic2stk_inds(imic)
-                call spproj_in%os_stk%get_ori(stk_ind, o_stk)
-                fromp   = nint(o_stk%get('fromp'))
-                top     = nint(o_stk%get('top'))
-                box_foo = nint(o_stk%get('box'))
-                if( prev_box == 0 ) prev_box = box_foo
-                if( prev_box /= box_foo ) THROW_HARD('Inconsistent box size; exec_reextract')
+                mic_dims(:,imic) = [ldim(1),ldim(2),1]
+                if( l_scale_particles )then
+                    ! the following checks are not performed
+                else
+                    stk_ind = mic2stk_inds(imic)
+                    call spproj_in%os_stk%get_ori(stk_ind, o_stk)
+                    box_foo = nint(o_stk%get('box'))
+                    if( prev_box == 0 ) prev_box = box_foo
+                    if( prev_box /= box_foo ) THROW_HARD('Inconsistent box size; exec_reextract')
+                endif
             enddo
             if( .not.cline%defined('box') ) params%box = prev_box
             if( is_odd(params%box) ) THROW_HARD('Box size must be of even dimension! exec_extract')
             ! extraction
             write(logfhandle,'(A)')'>>> EXTRACTING... '
+            call spproj_in%read_segment('ptcl2D', params%projfile)
             call spproj_in%read_segment('ptcl3D', params%projfile)
             allocate(ptcl_mask(spproj_in%os_ptcl2D%get_noris()),source=.false.)
-            call micrograph%new([ldim(1),ldim(2),1], params%smpd)
-            if( trim(params%extractfrommov).ne.'yes' ) call extractor%init_mic(params%box, (params%pcontrast .eq. 'black'))
+            ldim = 0
             do imic = params%fromp,params%top
                 if( .not.mic_mask(imic) ) cycle
-                stk_ind = mic2stk_inds(imic)
+                ! init micrograph object and extractor
                 call spproj_in%os_mic%get_ori(imic, o_mic)
-                call spproj_in%os_stk%get_ori(stk_ind, o_stk)
                 call o_mic%getter('intg', mic_name)
                 ctfparms = o_mic%get_ctfvars()
+                if( any(ldim /= mic_dims(:,imic)) )then
+                    ! first iteration or different micrograph size
+                    ldim = mic_dims(:,imic)
+                    call micrograph%new(ldim, ctfparms%smpd)
+                    if( .not.l_movie_frames ) call extractor%init_mic(params%box, (params%pcontrast .eq. 'black'))
+                    if( l_scale_particles )then
+                        scale    = ctfparms%smpd / params%osmpd
+                        ldim_sc(1:2) = round2even(scale*real(ldim(1:2)))
+                        ldim_sc(3)   = 1
+                        call micrograph_sc%new(ldim_sc, params%osmpd)
+                    endif
+                endif
+                ! stack
+                stk_ind = mic2stk_inds(imic)
+                call spproj_in%os_stk%get_ori(stk_ind, o_stk)
+                prev_box = nint(o_stk%get('box'))
                 fromp    = nint(o_stk%get('fromp'))
                 top      = nint(o_stk%get('top'))
                 ext      = fname2ext(trim(basename(mic_name)))
@@ -1990,23 +2018,49 @@ contains
                     else
                         prev_shift = spproj_in%os_ptcl2D%get_2Dshift(iptcl)
                     endif
-                    ! calc new position & shift
-                    ishift  = nint(prev_shift)
-                    new_pos = prev_pos - ishift
-                    if( prev_box /= params%box ) new_pos = new_pos + (prev_box-params%box)/2
-                    boxcoords(:,iptcl) = new_pos
-                    if( box_inside(ldim, new_pos, params%box) )then
-                        ptcl_mask(iptcl) = .true.
+                    if( l_scale_particles )then
+                        ! scale center, shift & positions
+                        prev_center      = prev_pos + prev_box/2
+                        prev_center_sc   = scale * real(prev_center)
+                        prev_shift_sc    = scale * real(prev_shift)
+                        new_center_sc    = prev_center_sc - prev_shift_sc
+                        new_center       = nint(new_center_sc)
+                        new_pos          = new_center - params%box/2
+                        translation      = -(prev_center_sc - real(new_center))
+                        ptcl_mask(iptcl) = box_inside(ldim, new_pos, params%box)
+                        if( ptcl_mask(iptcl) )then
+                            ! updates shifts
+                            if( l_3d )then
+                                shift2d = scale * spproj_in%os_ptcl2D%get_2Dshift(iptcl) + translation
+                                shift3d = scale * prev_shift                             + translation
+                            else
+                                shift2d = scale * prev_shift                             + translation
+                                shift3d = scale * spproj_in%os_ptcl3D%get_2Dshift(iptcl) + translation
+                            endif
+                        endif
+                    else
+                        ! calc new position & shift
+                        ishift      = nint(prev_shift)
+                        new_pos     = prev_pos - ishift
+                        translation = -real(ishift)
+                        if( prev_box /= params%box ) new_pos = new_pos + (prev_box-params%box)/2
+                        ptcl_mask(iptcl) = box_inside(ldim, new_pos, params%box)
+                        if( ptcl_mask(iptcl) )then
+                            ! updates shifts
+                            if( l_3d )then
+                                shift2d = spproj_in%os_ptcl2D%get_2Dshift(iptcl) + translation
+                                shift3d = prev_shift                             + translation
+                            else
+                                shift2d = prev_shift                             + translation
+                                shift3d = spproj_in%os_ptcl3D%get_2Dshift(iptcl) + translation
+                            endif
+                        endif
+                    endif
+                    ! updates document
+                    if( ptcl_mask(iptcl) )then
                         ! updates picking position
                         call spproj_in%set_boxcoords(iptcl, new_pos)
                         ! updates shifts
-                        if( l_3d )then
-                            shift2d = spproj_in%os_ptcl2D%get_2Dshift(iptcl) - real(ishift)
-                            shift3d = prev_shift - real(ishift)
-                        else
-                            shift2d = prev_shift - real(ishift)
-                            shift3d = spproj_in%os_ptcl3D%get_2Dshift(iptcl) - real(ishift)
-                        endif
                         call spproj_in%os_ptcl2D%set_shift(iptcl, shift2d)
                         call spproj_in%os_ptcl3D%set_shift(iptcl, shift3d)
                     else
@@ -2014,6 +2068,8 @@ contains
                         call spproj_in%os_ptcl2D%set_state(iptcl, 0)
                         call spproj_in%os_ptcl3D%set_state(iptcl, 0)
                     endif
+                    ! for actual extraction
+                    boxcoords(:,iptcl) = new_pos
                 enddo
                 nptcls2extract = count(ptcl_mask(fromp:top))
                 if( nptcls2extract > 0 )then
@@ -2025,21 +2081,19 @@ contains
                         cnt = cnt + 1
                         ptcl_inds(cnt) = iptcl
                         ! updating index of particle in stack
-                        call spproj_in%os_ptcl2D%set(iptcl, 'indstk', real(cnt))
-                        call spproj_in%os_ptcl3D%set(iptcl, 'indstk', real(cnt))
+                        call spproj_in%os_ptcl2D%set(iptcl, 'indstk', cnt)
+                        call spproj_in%os_ptcl3D%set(iptcl, 'indstk', cnt)
                     enddo
                     ptcl_inds = ptcl_inds -fromp+1 ! because indexing range lost when passed to extractor
                     call prepimgbatch(nptcls2extract)
-                    if( trim(params%extractfrommov).eq.'yes' )then
+                    if( l_movie_frames )then
                         ! extraction from movie
-                        if( trim(params%ctf).eq.'flip' .and. o_mic%isthere('dfx') )then
-                            THROW_HARD('extractfrommov=yes does not support ctf=flip yet')
-                        endif
                         call extractor%init_mov(o_mic, params%box, (params%pcontrast .eq. 'black'))
                         call extractor%extract_particles(ptcl_inds, boxcoords, build%imgbatch, stk_min,stk_max,stk_mean,stk_sdev)
                     else
-                        ! preprocess micrograph
+                        ! read micrograph
                         call micrograph%read(mic_name)
+                        ! preprocess micrograph
                         if( trim(params%backgr_subtr).eq.'yes') call micrograph%subtract_background(HP_BACKGR_SUBTR)
                         if( ctfparms%ctfflag == CTFFLAG_FLIP )then
                             if( o_mic%isthere('dfx') )then
@@ -2051,32 +2105,63 @@ contains
                                 call micrograph%ifft
                             endif
                         endif
-                        ! extraction
-                        call extractor%extract_particles_from_mic(micrograph, ptcl_inds, boxcoords, build%imgbatch,&
+                        ! Actual extraction
+                        if( l_scale_particles )then
+                            ! scale & extract
+                            if( all(ldim_sc == ldim) )then
+                                call micrograph_sc%copy_fast(micrograph)
+                            else
+                                call micrograph%fft
+                                if( any(ldim_sc < ldim) )then
+                                    call micrograph%clip(micrograph_sc)
+                                else
+                                    call micrograph%pad(micrograph_sc)
+                                endif
+                                call micrograph_sc%ifft
+                                call micrograph%set_ft(.false.)
+                            endif
+                            call micrograph_sc%set_smpd(params%osmpd)
+                            call extractor%extract_particles_from_mic(micrograph_sc, ptcl_inds, boxcoords, build%imgbatch,&
                             &stk_min,stk_max,stk_mean,stk_sdev)
+                        else
+                            ! extract
+                            call extractor%extract_particles_from_mic(micrograph, ptcl_inds, boxcoords, build%imgbatch,&
+                                &stk_min,stk_max,stk_mean,stk_sdev)
+                        endif
                     endif
                     ! write stack
-                    call stkio_w%open(trim(adjustl(stack)), params%smpd, 'write', box=params%box)
+                    if( l_scale_particles )then
+                        call stkio_w%open(trim(adjustl(stack)), params%osmpd, 'write', box=params%box)
+                    else
+                        call stkio_w%open(trim(adjustl(stack)), params%smpd, 'write', box=params%box)
+                    endif
                     do i = 1,nptcls2extract
                         call stkio_w%write(i, build%imgbatch(i))
                     enddo
                     call stkio_w%close
-                    call micrograph%update_header_stats(trim(adjustl(stack)), [stk_min, stk_max, stk_mean, stk_sdev])
+                    if( l_scale_particles )then
+                        call spproj_in%os_stk%set(stk_ind,'smpd',params%osmpd) !!
+                        call micrograph_sc%update_header_stats(trim(adjustl(stack)), [stk_min, stk_max, stk_mean, stk_sdev])
+                    else
+                        call micrograph%update_header_stats(trim(adjustl(stack)), [stk_min, stk_max, stk_mean, stk_sdev])
+                    endif
                     call make_relativepath(CWD_GLOB, stack, rel_stack)
                     call spproj_in%os_stk%set(stk_ind,'stk',   rel_stack)
-                    call spproj_in%os_stk%set(stk_ind,'box',   real(params%box))
-                    call spproj_in%os_stk%set(stk_ind,'nptcls',real(nptcls2extract))
-                    call spproj_in%os_mic%set(imic,   'nptcls',real(nptcls2extract))
+                    call spproj_in%os_stk%set(stk_ind,'box',   params%box)
+                    call spproj_in%os_stk%set(stk_ind,'nptcls',nptcls2extract)
+                    call spproj_in%os_mic%set(imic,   'nptcls',nptcls2extract)
                     call spproj_in%os_mic%delete_entry(imic,'boxfile')
                 else
                     ! all particles in this micrograph excluded
-                    call spproj_in%os_stk%set(stk_ind,'state',0.)
-                    call spproj_in%os_mic%set(imic,'state',0.)
+                    call spproj_in%os_stk%set(stk_ind,'state',0)
+                    call spproj_in%os_mic%set(imic,'state',0)
                     mic_mask(imic) = .false.
                     mic2stk_inds(imic) = 0
                 endif
             enddo
         endif
+        call micrograph%kill
+        call micrograph_sc%kill
         call extractor%kill
         call killimgbatch
         ! OUTPUT

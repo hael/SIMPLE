@@ -836,7 +836,7 @@ contains
         call fclose(funit)
     end subroutine arr2file_sp
 
-        !> \brief  for converting a real array 2 file
+    !> \brief  for converting a real array 2 file
     subroutine arr2file_dp( arr, fnam )
         real(kind=dp),    intent(in) :: arr(:)
         character(len=*), intent(in) :: fnam      !< input table filename
@@ -853,6 +853,7 @@ contains
         call fclose(funit)
     end subroutine arr2file_dp
 
+    !> \brief  for writing real array
     subroutine arr2txtfile_1( arr, fnam )
         real,             intent(in) :: arr(:)
         character(len=*), intent(in) :: fnam
@@ -865,6 +866,7 @@ contains
         call fclose(funit)
     end subroutine arr2txtfile_1
 
+    !> \brief  for writing integer array
     subroutine arr2txtfile_2( arr, fnam )
         integer,          intent(in) :: arr(:)
         character(len=*), intent(in) :: fnam
