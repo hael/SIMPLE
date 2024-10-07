@@ -746,7 +746,6 @@ contains
     end subroutine exec_import_cavgs
 
     subroutine exec_export_cavgs( self, cline )
-        use simple_image, only: image
         class(export_cavgs_commander),   intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(parameters)              :: params
@@ -794,7 +793,7 @@ contains
     end subroutine exec_export_cavgs
 
     subroutine exec_selection( self, cline )
-        use simple_sp_project, only: sp_project, oritype2segment
+        use simple_sp_project, only: oritype2segment
         class(selection_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(parameters)                :: params
@@ -973,7 +972,6 @@ contains
 
     subroutine exec_scale_project_distr( self, cline )
         use simple_builder,    only: builder
-        use simple_parameters, only: params_glob
         class(scale_project_commander_distr), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(chash),      allocatable :: part_params(:)
@@ -1148,7 +1146,6 @@ contains
                 
             end function generate_randomisation_map
             
-        
     end subroutine exec_projops
 
     subroutine exec_prune_project_distr( self, cline )
@@ -1319,8 +1316,6 @@ contains
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_qsys_funs, only: qsys_job_finished
-        use simple_image,     only: image
-        use simple_cmdline,   only: cmdline
         class(prune_project_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters)              :: params
@@ -1463,43 +1458,81 @@ contains
     end subroutine exec_prune_project
 
     subroutine exec_merge_projects( self, cline )
-        use simple_cmdline,   only: cmdline
+        use simple_commander_preprocess, only: reextract_commander_distr
         class(merge_projects_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        type(parameters)              :: params
-        type(sp_project), allocatable :: spprojs(:)
-        integer,          allocatable :: boxes(:)
-        real,             allocatable :: smpds(:)
-        integer :: nprojs, iproj
+        type(parameters)                :: params
+        type(cmdline)                   :: cline_reextract
+        type(reextract_commander_distr) :: xreextract_distr
+        type(sp_project),   allocatable :: spprojs(:)
+        integer,            allocatable :: boxes(:)
+        real,               allocatable :: smpds(:)
+        real    :: smpd
+        integer :: nprojs, iproj, box
         logical :: l_reextract, l_has_ptcls
         call cline%set('mkdir','yes')
-        ! init
+        if( .not.cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        if( .not.cline%defined('outside') ) call cline%set('outside', 'no')
+        ! parameters
         call params%new(cline)
+        call cline%set('mkdir','no')
         ! projects info & dimensions
-        nprojs = 2
+        nprojs = 2 ! only 2 at a time for now
         allocate(spprojs(nprojs),boxes(nprojs),smpds(nprojs))
         call spprojs(1)%read(params%projfile)
+        call spprojs(1)%update_projinfo( cline )
         call spprojs(2)%read(params%projfile_target)
+        ! all projects have particles?
         l_has_ptcls = spprojs(1)%os_ptcl2D%get_noris() > 0
         do iproj = 2,nprojs
             l_has_ptcls = l_has_ptcls .and. (spprojs(iproj)%os_ptcl2D%get_noris() > 0)
         enddo
+        ! gather dimensions
         l_reextract = .false.
         if( l_has_ptcls )then
             do iproj = 1,nprojs
                 boxes(iproj) = spprojs(iproj)%get_box()
                 smpds(iproj) = spprojs(iproj)%get_smpd()
             enddo
-            l_reextract = all(boxes==boxes(1)) .and. all(abs(smpds-smpds(1)) < 0.001)
+            l_reextract = any(boxes/=boxes(1)) .or. any(abs(smpds-smpds(1)) > 0.001)
         endif
-        ! append
+        ! append projects iteratively
         do iproj = 2,nprojs
             call spprojs(1)%append_project(spprojs(iproj))
             call spprojs(iproj)%kill
         enddo
-        ! write
+        ! write project
         call spprojs(1)%write(params%projfile)
         call spprojs(1)%kill
+        deallocate(spprojs)
+        ! reextract/scale particles if necessary
+        if( l_reextract )then
+            cline_reextract = cline
+            call cline_reextract%set('prg', 'reextract')
+            if( all(abs(smpds-smpds(1)) < 0.001) )then
+                ! all projects have the same pixel size but different particle size
+                if( .not.cline%defined('box') )then
+                    ! defaults to largest box
+                    box = maxval(boxes)
+                    call cline_reextract%set('box', box)
+                endif
+            else
+                ! some projects have different pixel size
+                ! defaults to largets pixel size
+                smpd = maxval(smpds)
+                call cline_reextract%set('osmpd', smpd)
+                ! defaults to largest particle physical size
+                if( .not.cline%defined('box') )then
+                    box = nint(maxval(smpds*real(boxes)) / smpd)
+                    box = find_larger_magic_box(box)
+                    call cline_reextract%set('box', box)
+                endif
+            endif
+            ! reextract
+            call xreextract_distr%execute_safe(cline_reextract)
+        endif
+        ! end gracefully
+        call simple_end('**** SIMPLE_MERGE_PROJECTS NORMAL STOP ****')
     end subroutine exec_merge_projects
 
 end module simple_commander_project

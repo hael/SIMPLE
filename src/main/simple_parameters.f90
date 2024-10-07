@@ -416,6 +416,7 @@ type :: parameters
     real    :: ndev=2.5            !< # deviations in one-cluster clustering
     real    :: ndev2D=CLS_REJECT_STD    !< # deviations for 2D class selection/rejection
     real    :: nsig=2.5            !< # sigmas
+    real    :: osmpd=0.            !< target output pixel size
     real    :: overlap=0.9         !< required parameters overlap for convergence
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
     real    :: power=2.
@@ -862,6 +863,7 @@ contains
         call check_rarg('ndev',           self%ndev)
         call check_rarg('ndev2D',         self%ndev2D)
         call check_rarg('nsig',           self%nsig)
+        call check_rarg('osmpd',          self%osmpd)
         call check_rarg('overlap',        self%overlap)
         call check_rarg('phranlp',        self%phranlp)
         call check_rarg('prob_athres',    self%prob_athres)

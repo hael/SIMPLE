@@ -3268,15 +3268,18 @@ contains
         ! PROGRAM SPECIFICATION
         call merge_projects%new(&
         &'merge_projects', &                                            ! name
-        &'merge projects',&                                             ! descr_short
-        &'is a program to merge multiple projects into one', &          ! descr_long
+        &'Merge two projects',&                                         ! descr_short
+        &'is a program to merge two projects into one', &               ! descr_long
         &'simple_exec',&                                                ! executable
-        &0, 1, 0, 0, 0, 0, 0, .true.)                                   ! # entries in each group, requires sp_project
+        &0, 3, 0, 0, 0, 0, 2, .true.)                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call merge_projects%set_input('parm_ios', 1, projfile_target, gui_submenu="data", gui_advanced=.false.)
+        call merge_projects%set_input('parm_ios', 2, oritype, gui_submenu="data", gui_advanced=.false.)
+        call merge_projects%set_input('parm_ios', 3, box, gui_submenu="data", gui_advanced=.false.)
+        merge_projects%parm_ios(3)%required = .false.
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3286,7 +3289,8 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        ! <empty>
+        call merge_projects%set_input('comp_ctrls', 1, nparts, gui_submenu="compute")
+        call merge_projects%set_input('comp_ctrls', 2, nthr,   gui_submenu="compute")
     end subroutine new_merge_projects
 
     subroutine new_mkdir_

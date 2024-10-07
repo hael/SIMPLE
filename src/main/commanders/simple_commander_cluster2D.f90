@@ -2481,7 +2481,7 @@ contains
         if( params%nsearch > 1 )then
             ! clustering nsearch times with preference in [min,median]
             call fopen(funit,LABELS_FNAME, 'replace', 'unknown', iostat=io_stat, form='formatted')
-            call fileiochk("arr2txtfile fopen failed "//trim(LABELS_FNAME),io_stat)
+            call fileiochk("fopen failed "//trim(LABELS_FNAME),io_stat)
             write(funit,'(A2,2I6)') '# ',params%ncls,params%nsearch
             allocate(multi_labels(params%ncls,params%nsearch),source=0)
             do i = 1,params%nsearch
