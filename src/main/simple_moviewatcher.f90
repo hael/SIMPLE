@@ -9,7 +9,9 @@ public :: moviewatcher
 private
 #include "simple_local_flags.inc"
 
-character(len=STDLEN), parameter :: stream_dirs = 'SIMPLE_STREAM_DIRS'
+character(len=STDLEN), parameter :: STREAM_DIRS     = 'SIMPLE_STREAM_DIRS'
+character(len=STDLEN), parameter :: WATCHER_HISTORY = 'watcher_history.txt'
+character(len=STDLEN), parameter :: WATCHER_DIRS    = 'watcher_dirs.txt'
 
 type moviewatcher
     private
@@ -30,6 +32,8 @@ type moviewatcher
 contains
     ! getters
     procedure          :: does_exist
+    ! I/O
+    procedure          :: write_checkpoint
     ! doers
     procedure          :: watch
     procedure, private :: watchdirs
@@ -54,18 +58,45 @@ integer, parameter :: FAIL_TIME   = 7200 ! 2 hours
 contains
 
     !>  \brief  is a constructor
-    function constructor( report_time, dir, spproj )result( self )
-        integer,           intent(in) :: report_time  ! in seconds
-        character(len=*),  intent(in) :: dir
-        logical, optional, intent(in) :: spproj
-        type(moviewatcher)  :: self
-        logical :: l_movies
+    function constructor( report_time, dir, spproj, checkpoint_dir )result( self )
+        integer,                    intent(in) :: report_time  ! in seconds
+        character(len=*),           intent(in) :: dir
+        logical,          optional, intent(in) :: spproj
+        character(len=*), optional, intent(in) :: checkpoint_dir
+        type(moviewatcher)                     :: self
+        character(len=LONGSTRLEN), allocatable :: strings(:)
+        integer :: i
+        logical :: l_movies, l_checkpoint
         call self%kill
-        l_movies = .true.
+        l_movies     = .true.
+        l_checkpoint = present(checkpoint_dir)
         if( present(spproj) ) l_movies = .not.spproj
-        self%watch_dir = trim(adjustl(dir))
+        self%watch_dir   = trim(adjustl(dir))
         self%cwd         = trim(params_glob%cwd)
         self%report_time = report_time
+        if( l_checkpoint )then
+            if( .not.dir_exists(checkpoint_dir) )then
+                THROW_HARD('Could not find checkpoint directory: '//trim(checkpoint_dir))
+            endif
+            if(         (.not.file_exists(trim(checkpoint_dir)//'/'//trim(WATCHER_HISTORY)))&
+                &.and.  (.not.file_exists(trim(checkpoint_dir)//'/'//trim(WATCHER_DIRS))))then
+                THROW_HARD('Insufficient information for checkpoint inititalization')
+            endif
+            ! directories to watch
+            call read_filetable(trim(checkpoint_dir)//trim(WATCHER_DIRS), strings)
+            if( .not.allocated(strings) ) THROW_HARD('No directory defined in moviewatcher checkpoint')
+            do i = 1,size(strings)
+                call self%add2watchdirs(strings(i))
+            enddo
+            deallocate(strings)
+            ! history of files watched
+            call read_filetable(trim(checkpoint_dir)//trim(WATCHER_HISTORY), strings)
+            if( allocated(strings) )then
+                call self%add2history(strings)
+                deallocate(strings)
+                write(logfhandle,'(A,I6,A)')'>>> ADDED ',self%n_history,' FILES TO WATCHING HISTORY'
+            endif
+        endif
         if( l_movies )then
             ! watching movies
             if( .not.file_exists(self%watch_dir) )then
@@ -96,6 +127,23 @@ contains
         class(moviewatcher), intent(in) :: self
         does_exist = self%exists
     end function does_exist
+
+    ! I/O
+
+    subroutine write_checkpoint( self )
+        class(moviewatcher), intent(in) :: self
+        if( self%exists )then
+            if( self%n_history == 0 ) return
+            call write_filetable(WATCHER_HISTORY, self%history)
+            if( allocated(self%watch_dirs))then
+                call write_filetable(WATCHER_DIRS, [self%watch_dir, self%watch_dirs(:)])
+            else
+                call write_singlelineoftext(WATCHER_DIRS, self%watch_dir)
+            endif
+        endif
+    end subroutine write_checkpoint
+
+    ! DOERS
 
     !>  \brief  is the watching procedure
     subroutine watch( self, n_movies, movies, max_nmovies )
@@ -264,8 +312,9 @@ contains
             write(logfhandle,'(A)')'>>> Directory does not exist: '//trim(fname)
             return
         endif
-        new = .true.
         abs_fname = simple_abspath(fname)
+        if( trim(abs_fname).eq.trim(self%watch_dir) ) return ! is already base directory
+        new = .true.
         if( .not.allocated(self%watch_dirs) )then
             allocate(self%watch_dirs(1))
             self%watch_dirs(1) = trim(adjustl(abs_fname))
@@ -285,7 +334,7 @@ contains
             endif
         endif
         if( new )then
-            write(logfhandle,'(A,A)')'>>> MOVIES DETECTED FROM DIRECTORY: ',trim(adjustl(abs_fname))
+            write(logfhandle,'(A,A)')'>>> MOVIES DETECTED FROM NEW DIRECTORY: ',trim(adjustl(abs_fname))
         endif
     end subroutine add2watchdirs
 
