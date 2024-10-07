@@ -25,7 +25,23 @@ program simple_test_binimage
     do i = 1,4
         print *, imat_ccs(i,:,1)
     enddo
+    ! extreme unit test case of 1
+    imat = 1
+    call test_binimage%set_imat(imat)
+    call test_binimage%max_dist(dist)
     call test_binimage%find_ccs(ccimage)
+    call ccimage%get_nccs(nccs)
+    print *, nccs
+    call ccimage%get_imat(imat_ccs)
+    do i = 1,4
+        print *, imat_ccs(i,:,1)
+    enddo
+    ! extreme unit test case of 0
+    imat = 0
+    call test_binimage%set_imat(imat)
+    call test_binimage%max_dist(dist)
+    call test_binimage%find_ccs(ccimage)
+    call ccimage%get_nccs(nccs)
     print *, nccs
     call ccimage%get_imat(imat_ccs)
     do i = 1,4
