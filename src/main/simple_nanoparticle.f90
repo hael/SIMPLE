@@ -643,7 +643,7 @@ contains
         integer, allocatable :: imat_t(:,:,:)
         real,    allocatable :: coords(:,:)
         real,    allocatable :: rmat(:,:,:)
-        logical, parameter :: L_BENCH          = .false.
+        logical, parameter   :: L_BENCH = .false.
         real    :: ts(NBIN_THRESH)
         integer :: i, fnr, ind_opt, low, high, mid
         real    :: otsu_thresh, corr, step_refine, max_corr, thresh, thresh_opt, lbt, rbt

@@ -159,13 +159,15 @@ contains
         class(binimage),   intent(inout) :: self
         class(binimage),   intent(inout) :: ccimage
         logical, optional, intent(in)    :: black, update_imat
-        integer :: i, j, k, comp_ind
+        integer,           allocatable   :: dqueue(:,:)     ! queue data structure
+        integer :: i, j, k, comp_ind, queue_first, queue_last
         logical :: visited(self%bldim(1),self%bldim(2),self%bldim(3))
         if( present(update_imat) .and. update_imat ) call self%set_imat
         if( present(black)       .and. black)        self%bimat = -1 * (self%bimat - 1)
         call ccimage%new_bimg(self%bldim, self%bsmpd)
         visited  = .false.
         comp_ind = 0
+        allocate(dqueue(3,self%bldim(1)*self%bldim(2)*self%bldim(3)))
         do k = 1, self%bldim(3)
             do j = 1, self%bldim(2)
                 do i = 1, self%bldim(1)
@@ -184,41 +186,77 @@ contains
 
       contains
 
-        recursive subroutine flood_fill(i, j, k, iVal)
+        subroutine enqueue( i,j,k,iVal )
             integer, intent(in) :: i,j,k,iVal
-            if( i < 1 .or. i > self%bldim(1) .or.&
-               &j < 1 .or. j > self%bldim(2) .or.&
-               &k < 1 .or. k > self%bldim(3) .or.&
-               &visited(i,j,k) .or. self%bimat(i,j,k) /= iVal ) return
-            visited(i,j,k)       = .true.
+            if(  i < 1 .or. i > self%bldim(1) .or.&
+                &j < 1 .or. j > self%bldim(2) .or.&
+                &k < 1 .or. k > self%bldim(3) .or.&
+                &visited(i,j,k) .or. self%bimat(i,j,k) /= iVal ) return
+            visited(i, j, k)     = .true.
             ccimage%bimat(i,j,k) = comp_ind
-            ! k-1
-            call flood_fill(i-1, j,   k-1, iVal)
-            call flood_fill(i+1, j,   k-1, iVal)
-            call flood_fill(i,   j-1, k-1, iVal)
-            call flood_fill(i,   j+1, k-1, iVal)
-            call flood_fill(i-1, j-1, k-1, iVal)
-            call flood_fill(i-1, j+1, k-1, iVal)
-            call flood_fill(i+1, j-1, k-1, iVal)
-            call flood_fill(i+1, j+1, k-1, iVal)
-            ! k
-            call flood_fill(i-1, j,   k,   iVal)
-            call flood_fill(i+1, j,   k,   iVal)
-            call flood_fill(i,   j-1, k,   iVal)
-            call flood_fill(i,   j+1, k,   iVal)
-            call flood_fill(i-1, j-1, k,   iVal)
-            call flood_fill(i-1, j+1, k,   iVal)
-            call flood_fill(i+1, j-1, k,   iVal)
-            call flood_fill(i+1, j+1, k,   iVal)
-            ! k + 1
-            call flood_fill(i-1, j,   k+1, iVal)
-            call flood_fill(i+1, j,   k+1, iVal)
-            call flood_fill(i,   j-1, k+1, iVal)
-            call flood_fill(i,   j+1, k+1, iVal)
-            call flood_fill(i-1, j-1, k+1, iVal)
-            call flood_fill(i-1, j+1, k+1, iVal)
-            call flood_fill(i+1, j-1, k+1, iVal)
-            call flood_fill(i+1, j+1, k+1, iVal)
+            queue_last           = queue_last + 1
+            dqueue(:,queue_last) = [i,j,k]
+        end subroutine enqueue
+
+        subroutine dequeue( i,j,k )
+            integer, intent(out) :: i,j,k
+            if( is_empty() ) THROW_HARD('Queue data structure is empty and cannot be dequeued!')
+            i           = dqueue(1,queue_first)
+            j           = dqueue(2,queue_first)
+            k           = dqueue(3,queue_first)
+            queue_first = queue_first + 1
+        end subroutine dequeue
+
+        function is_empty() result( flag )
+            logical :: flag
+            flag = .false.
+            if( queue_first == 0 .or. queue_last == 0 .or. queue_first > queue_last ) flag = .true.
+        end function is_empty
+
+        subroutine empty_queue()
+            queue_first = 1
+            queue_last  = 0
+        end subroutine empty_queue
+
+        subroutine flood_fill(init_i, init_j, init_k, iVal)
+            integer, intent(in) :: init_i,init_j,init_k,iVal
+            integer :: i,j,k
+            ! initialize the queue
+            call empty_queue()
+            ! adding the first node of the queue
+            call enqueue(init_i,init_j,init_k,iVal)
+            do while( .not. is_empty() )
+                ! removing the current node from the queue
+                call dequeue(i,j,k)
+                ! enqueuing the neighbors (with necessary index and flood-fill logic checking)
+                ! k-1
+                call enqueue(i-1, j,   k-1, iVal)
+                call enqueue(i+1, j,   k-1, iVal)
+                call enqueue(i,   j-1, k-1, iVal)
+                call enqueue(i,   j+1, k-1, iVal)
+                call enqueue(i-1, j-1, k-1, iVal)
+                call enqueue(i-1, j+1, k-1, iVal)
+                call enqueue(i+1, j-1, k-1, iVal)
+                call enqueue(i+1, j+1, k-1, iVal)
+                ! k
+                call enqueue(i-1, j,   k,   iVal)
+                call enqueue(i+1, j,   k,   iVal)
+                call enqueue(i,   j-1, k,   iVal)
+                call enqueue(i,   j+1, k,   iVal)
+                call enqueue(i-1, j-1, k,   iVal)
+                call enqueue(i-1, j+1, k,   iVal)
+                call enqueue(i+1, j-1, k,   iVal)
+                call enqueue(i+1, j+1, k,   iVal)
+                ! k + 1
+                call enqueue(i-1, j,   k+1, iVal)
+                call enqueue(i+1, j,   k+1, iVal)
+                call enqueue(i,   j-1, k+1, iVal)
+                call enqueue(i,   j+1, k+1, iVal)
+                call enqueue(i-1, j-1, k+1, iVal)
+                call enqueue(i-1, j+1, k+1, iVal)
+                call enqueue(i+1, j-1, k+1, iVal)
+                call enqueue(i+1, j+1, k+1, iVal)
+            end do
         end subroutine flood_fill
 
     end subroutine find_ccs
