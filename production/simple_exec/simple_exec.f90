@@ -45,6 +45,7 @@ type(export_relion_commander)               :: xexport_relion
 type(import_starproject_commander)          :: ximport_starproject
 type(export_starproject_commander)          :: xexport_starproject
 type(assign_optics_groups_commander)        :: xassign_optics_groups
+type(merge_projects_commander)              :: xmerge_projects
 
 ! PRE-PROCESSING WORKFLOWS
 type(preprocess_commander_distr)            :: xpreprocess
@@ -208,6 +209,8 @@ select case(trim(prg))
         call xexport_starproject%execute(cline)
     case( 'assign_optics_groups' )
         call xassign_optics_groups%execute(cline)
+    case( 'merge_projects' )
+        call xmerge_projects%execute(cline)
 
     ! PRE-PROCESSING WORKFLOWS
     case( 'preprocess' )
@@ -414,7 +417,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('c1e2cc05')
+call simple_print_git_version('6892357b')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

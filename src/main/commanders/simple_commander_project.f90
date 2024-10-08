@@ -1465,20 +1465,22 @@ contains
         type(cmdline)                   :: cline_reextract
         type(reextract_commander_distr) :: xreextract_distr
         type(sp_project),   allocatable :: spprojs(:)
-        integer,            allocatable :: boxes(:)
+        integer,            allocatable :: boxes(:), nmics(:)
         real,               allocatable :: smpds(:)
         real    :: smpd
         integer :: nprojs, iproj, box
-        logical :: l_reextract, l_has_ptcls
+        logical :: l_reextract, l_has_ptcls, l_has_mics
         call cline%set('mkdir','yes')
-        if( .not.cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
-        if( .not.cline%defined('outside') ) call cline%set('outside', 'no')
+        if( .not.cline%defined('oritype')      ) call cline%set('oritype',      'ptcl3D')
+        if( .not.cline%defined('outside')      ) call cline%set('outside',      'no')
+        if( .not.cline%defined('backgr_subtr') ) call cline%set('backgr_subtr', 'no')
+        if( .not.cline%defined('pcontrast')    ) call cline%set('pcontrast',    'black')
         ! parameters
         call params%new(cline)
         call cline%set('mkdir','no')
         ! projects info & dimensions
         nprojs = 2 ! only 2 at a time for now
-        allocate(spprojs(nprojs),boxes(nprojs),smpds(nprojs))
+        allocate(spprojs(nprojs),boxes(nprojs),smpds(nprojs),nmics(nprojs))
         call spprojs(1)%read(params%projfile)
         call spprojs(1)%update_projinfo( cline )
         call spprojs(2)%read(params%projfile_target)
@@ -1493,8 +1495,12 @@ contains
             do iproj = 1,nprojs
                 boxes(iproj) = spprojs(iproj)%get_box()
                 smpds(iproj) = spprojs(iproj)%get_smpd()
+                nmics(iproj) = spprojs(iproj)%get_nintgs()
             enddo
             l_reextract = any(boxes/=boxes(1)) .or. any(abs(smpds-smpds(1)) > 0.001)
+            if( l_reextract .and. any(nmics==0) )then
+                THROW_HARD('Cannot merge projects with different particle/pixel sizes without micrographs!')
+            endif
         endif
         ! append projects iteratively
         do iproj = 2,nprojs
@@ -1511,6 +1517,7 @@ contains
             call cline_reextract%set('prg', 'reextract')
             if( all(abs(smpds-smpds(1)) < 0.001) )then
                 ! all projects have the same pixel size but different particle size
+                smpd = smpds(1)
                 if( .not.cline%defined('box') )then
                     ! defaults to largest box
                     box = maxval(boxes)
@@ -1523,12 +1530,14 @@ contains
                 call cline_reextract%set('osmpd', smpd)
                 ! defaults to largest particle physical size
                 if( .not.cline%defined('box') )then
-                    box = nint(maxval(smpds*real(boxes)) / smpd)
+                    box = floor(maxval(smpds*real(boxes)) / smpd)
                     box = find_larger_magic_box(box)
                     call cline_reextract%set('box', box)
                 endif
             endif
             ! reextract
+            write(logfhandle,'(A,F6.3)')'>>> NEW PIXEL    SIZE: ',smpd
+            write(logfhandle,'(A,I6)')  '>>> NEW PARTICLE SIZE: ',box
             call xreextract_distr%execute_safe(cline_reextract)
         endif
         ! end gracefully

@@ -300,6 +300,7 @@ type(simple_input_param) :: oritab2
 type(simple_input_param) :: oritype
 type(simple_input_param) :: outdir
 type(simple_input_param) :: outfile
+type(simple_input_param) :: outside
 type(simple_input_param) :: outstk
 type(simple_input_param) :: outvol
 type(simple_input_param) :: pcontrast
@@ -1244,6 +1245,7 @@ contains
         call set_param(icm,            'icm',          'binary', 'Whether to perform ICM filtering of reference(s)', 'Whether to perform ICM filtering of reference(s)(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(flipgain,       'flipgain',     'multi',  'Flip the gain reference', 'Flip the gain reference along the provided axis(no|x|y|xy|yx){no}', '(no|x|y|xy|yx){no}', .false., 'no')
         call set_param(center_pdb,     'center_pdb',   'binary', 'Whether to move the PDB atomic center to the center of the box', 'Whether to move the PDB atomic center to the center of the box (yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(outside,        'outside',      'binary', 'Extract outside stage boundaries', 'Extract boxes outside the micrograph boundaries(yes|no){no}', '(yes|no){no}', .false., 'no')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -2369,8 +2371,7 @@ contains
         call extract%set_input('parm_ios', 1, box, gui_submenu="extract", gui_advanced=.false.)
         extract%parm_ios(1)%required = .false.
         call extract%set_input('parm_ios', 2, pcontrast, gui_submenu="extract", gui_advanced=.false.)
-        call extract%set_input('parm_ios', 3, 'outside', 'binary', 'Extract outside boundaries', 'Extract boxes outside the micrograph boundaries(yes|no){no}',&
-        &'(yes|no){no}', .false., 'no', gui_submenu="extract")
+        call extract%set_input('parm_ios', 3, outside, gui_submenu="extract")
         call extract%set_input('parm_ios', 4, 'ctf', 'multi', 'Whether to extract particles with phases flipped', 'Whether to extract particles with phases &
         &flipped(flip|no){no}', '(flip|no){no}', .false., 'no', gui_submenu="extract")
         call extract%set_input('parm_ios', 5, backgr_subtr, gui_submenu="extract")
@@ -3271,15 +3272,19 @@ contains
         &'Merge two projects',&                                         ! descr_short
         &'is a program to merge two projects into one', &               ! descr_long
         &'simple_exec',&                                                ! executable
-        &0, 3, 0, 0, 0, 0, 2, .true.)                                   ! # entries in each group, requires sp_project
+        &0, 6, 0, 0, 0, 0, 2, .true.)                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call merge_projects%set_input('parm_ios', 1, projfile_target, gui_submenu="data", gui_advanced=.false.)
-        call merge_projects%set_input('parm_ios', 2, oritype, gui_submenu="data", gui_advanced=.false.)
-        call merge_projects%set_input('parm_ios', 3, box, gui_submenu="data", gui_advanced=.false.)
+        call merge_projects%set_input('parm_ios', 2, oritype, gui_submenu="extract", gui_advanced=.false.)
+        merge_projects%parm_ios(2)%descr_placeholder = '(ptcl2D|ptcl3D){ptcl3D}'
+        call merge_projects%set_input('parm_ios', 3, box, gui_submenu="extract", gui_advanced=.false.)
         merge_projects%parm_ios(3)%required = .false.
+        call merge_projects%set_input('parm_ios', 4, pcontrast, gui_submenu="extract")
+        call merge_projects%set_input('parm_ios', 5, backgr_subtr, gui_submenu="extract")
+        call merge_projects%set_input('parm_ios', 6, outside, gui_submenu="extract")
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3994,7 +3999,7 @@ contains
         &'Re-extract particle images from integrated movies',&                  ! descr_short
         &'is a program for re-extracting particle images from integrated movies based on determined 2D/3D shifts',& ! descr long
         &'simple_exec',&                                                  ! executable
-        &0, 5, 0, 0, 0, 0, 2, .true.)                                           ! # entries in each group, requires sp_project
+        &0, 6, 0, 0, 0, 0, 2, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -4006,6 +4011,7 @@ contains
         call reextract%set_input('parm_ios', 3, pcontrast)
         call reextract%set_input('parm_ios', 4, 'ctf', 'multi', 'Whether to extract particles with phases flipped', 'Whether to extract particles with phases flipped(flip|no){no}', '(flip|no){no}', .false., 'no')
         call reextract%set_input('parm_ios', 5, backgr_subtr)
+        call reextract%set_input('parm_ios', 6, outside)
         ! alternative inputs
         ! <empty>
         ! search controls

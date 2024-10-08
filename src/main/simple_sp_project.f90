@@ -298,12 +298,12 @@ contains
     end subroutine update_compenv
 
     !>  append project2 to project1
-    !   cls2D,cls3D,projinfo,jobproc,compenv fields from project2 are ignored
+    !   projinfo,jobproc,compenv fields from project2 are ignored
     subroutine append_project( self1, self2 )
         class(sp_project), intent(inout) :: self1
         class(sp_project), intent(in)    :: self2
-        integer :: nmics1, nstks1, nptcls1, nmics2, nstks2, nptcls2, nogs1, nogs2
-        integer :: i, iptcl, imic, istk, fromp, top, og_offset, ogid
+        integer :: nmics1, nstks1, nptcls1, nmics2, nstks2, nptcls2, nogs1, nogs2, icls
+        integer :: ncls2d1, ncls2d2, i, iptcl, imic, istk, fromp, top, og_offset, ogid
         logical :: l_has_mics, l_has_stks, l_has_ptcls, l_has_optics
         nmics1  = self1%os_mic%get_noris()
         nmics2  = self2%os_mic%get_noris()
@@ -324,11 +324,15 @@ contains
         l_has_optics = (nogs1 > 0)   .and. (nogs2 > 0)
         if( l_has_stks .neqv. l_has_ptcls ) THROW_HARD('Missing stk/ptcl field!')
         ! micrograph field
-        if( l_has_mics ) call self1%os_mic%append(self2%os_mic)
+        if( l_has_mics )then
+            call self1%os_mic%append(self2%os_mic)
+            write(logfhandle,'(A,I8)')'>>> CURRENT # OF MOVIES/MICROGRAPHS: ',nmics1+nmics2
+        endif
         ! stacks & particles
         if( l_has_stks )then
             ! stack
             call self1%os_stk%append(self2%os_stk)
+            write(logfhandle,'(A,I8)')'>>> CURRENT # OF STACKS:             ',nstks1+nstks2
             ! particles
             call self1%os_ptcl2D%append(self2%os_ptcl2D)
             call self1%os_ptcl3D%append(self2%os_ptcl3D)
@@ -343,7 +347,34 @@ contains
                     call self1%os_ptcl3D%set(iptcl, 'stkind', istk)
                 enddo
             enddo
+            write(logfhandle,'(A,I8)')'>>> CURRENT # OF PARTICLES:          ',nptcls1+nptcls2
         endif
+        ! cls2D/3D
+        ncls2d1 = self1%os_cls2D%get_noris()
+        ncls2d2 = self2%os_cls2D%get_noris()
+        call self1%os_cls2D%append(self2%os_cls2D)
+        if( l_has_ptcls .and. (ncls2d1 > 0) .and. (ncls2d2 > 0) )then
+            ! class numbering is updated, for testing
+            do i = ncls2d1+1,ncls2d1+ncls2d2
+                if( self1%os_cls2D%get_state(i) > 0 )then
+                    icls = self1%os_cls2D%get_class(i) + ncls2d1
+                    call self1%os_cls2D%set_class(i, icls)
+                endif
+            enddo
+            do iptcl = nptcls1+1,nptcls1+nptcls2
+                if( self1%os_ptcl2D%isthere(iptcl, 'class') )then
+                    icls = self1%os_ptcl2D%get_class(iptcl) + ncls2d1
+                    call self1%os_ptcl2D%set_class(iptcl, icls)
+                endif
+            enddo
+            ! cls3D is wiped, states are transferred
+            call self1%os_cls3D%new(ncls2d1+ncls2d2, is_ptcl=.false.)
+            do icls = 1,ncls2d1+ncls2d2
+                call self1%os_cls3D%set_state(icls, self1%os_cls2D%get_state(icls))
+            enddo
+        endif
+        ! out is wiped
+        call self1%os_out%kill
         ! optic groups
         if( l_has_optics )then
             call self1%os_optics%append(self2%os_optics)
@@ -355,26 +386,27 @@ contains
             if( og_offset < 1 ) THROW_HARD('Invalid optics field!')
             og_offset = max(nogs1, og_offset)
             ! updating os_optics
-            do i = nogs1+1,nogs2
+            do i = nogs1+1,nogs1+nogs2
                 ogid = nint(self1%os_optics%get(i,'ogid')) + og_offset
                 call self1%os_optics%set(i,'ogid',  ogid)
                 call self1%os_optics%set(i,'ogname','opticsgroup'//int2str(ogid))
             enddo
             if( l_has_mics )then
                 ! updating os_mic
-                do imic = nmics1+1,nmics2
+                do imic = nmics1+1,nmics1+nmics2
                     ogid = nint(self1%os_mic%get(i,'ogid')) + og_offset
                     call self1%os_mic%set(i,'ogid', ogid)
                 enddo
             endif
             if( l_has_ptcls )then
                 ! updating particles
-                do iptcl = nptcls1+1,nptcls2
+                do iptcl = nptcls1+1,nptcls1+nptcls2
                     ogid = nint(self1%os_ptcl2D%get(i,'ogid')) + og_offset
                     call self1%os_ptcl2D%set(iptcl, 'ogid', ogid)
                     call self1%os_ptcl3D%set(iptcl, 'ogid', ogid)
                 enddo
             endif
+            write(logfhandle,'(A,I8)')'CURRENT # OF OPTICS GROUPS:      ',nogs1+nogs2
         endif
     end subroutine append_project
 
