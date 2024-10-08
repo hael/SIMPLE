@@ -1721,11 +1721,14 @@ contains
                 THROW_HARD('Only CTF=NO/FLIP are allowed')
             endif
         endif
+        if( cline%defined('osmpd') )then
+            if( .not.cline%defined('box') ) THROW_HARD('BOX must be defined with OSMPD!')
+        endif
         if( .not. cline%defined('mkdir')     )     call cline%set('mkdir',          'yes')
         if( .not. cline%defined('pcontrast') )     call cline%set('pcontrast',    'black')
         if( .not. cline%defined('oritype')   )     call cline%set('oritype',     'ptcl3D')
         if( .not. cline%defined('extractfrommov')) call cline%set('extractfrommov',  'no')
-        if( .not. cline%defined('back_subtr'))     call cline%set('backgr_subtr',    'no')
+        if( .not. cline%defined('backgr_subtr'))   call cline%set('backgr_subtr',    'no')
         call params%new(cline)
         call cline%set('mkdir', 'no')
         ! read in integrated movies
@@ -1887,8 +1890,8 @@ contains
         logical,          allocatable :: mic_mask(:), ptcl_mask(:)
         integer,          allocatable :: mic2stk_inds(:), boxcoords(:,:), ptcl_inds(:), mic_dims(:,:)
         character(len=LONGSTRLEN)     :: stack, rel_stack
-        real    :: prev_shift(2),shift2d(2),shift3d(2),prev_center_sc(2),prev_shift_sc(2)
-        real    :: translation(2), new_center_sc(2), stk_min, stk_max, stk_mean, stk_sdev, scale
+        real    :: prev_shift(2),shift2d(2),shift3d(2),prev_shift_sc(2), translation(2), prev_center_sc(2)
+        real    :: stk_min, stk_max, stk_mean, stk_sdev, scale
         integer :: prev_pos(2), new_pos(2), ishift(2), ldim(3), prev_center(2), new_center(2), ldim_sc(3)
         integer :: i, nframes, imic, iptcl, nmics, prev_box, box_foo, cnt, nmics_tot, stk_ind
         integer :: fromp, top, istk, nptcls2extract, nptcls
@@ -1991,7 +1994,7 @@ contains
                     call micrograph%new(ldim, ctfparms%smpd)
                     if( .not.l_movie_frames ) call extractor%init_mic(params%box, (params%pcontrast .eq. 'black'))
                     if( l_scale_particles )then
-                        scale    = ctfparms%smpd / params%osmpd
+                        scale        = ctfparms%smpd / params%osmpd
                         ldim_sc(1:2) = round2even(scale*real(ldim(1:2)))
                         ldim_sc(3)   = 1
                         call micrograph_sc%new(ldim_sc, params%osmpd)
@@ -2008,7 +2011,10 @@ contains
                 ! updating shifts, positions, states and doc
                 if( allocated(boxcoords) ) deallocate(boxcoords)
                 allocate(boxcoords(2,fromp:top),source=0)
-                do iptcl=fromp,top
+                !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+                !$omp private(iptcl,prev_pos,prev_shift,prev_center,prev_center_sc,prev_shift_sc,new_center)&
+                !$omp private(new_pos,translation,shift2d,shift3d,ishift)
+                do iptcl = fromp,top
                     if( spproj_in%os_ptcl2D%get_state(iptcl) == 0 ) cycle
                     if( spproj_in%os_ptcl3D%get_state(iptcl) == 0 ) cycle
                     ! previous position & shift
@@ -2023,8 +2029,7 @@ contains
                         prev_center      = prev_pos + prev_box/2
                         prev_center_sc   = scale * real(prev_center)
                         prev_shift_sc    = scale * real(prev_shift)
-                        new_center_sc    = prev_center_sc - prev_shift_sc
-                        new_center       = nint(new_center_sc)
+                        new_center       = nint(prev_center_sc - prev_shift_sc)
                         new_pos          = new_center - params%box/2
                         translation      = -(prev_center_sc - real(new_center))
                         ptcl_mask(iptcl) = box_inside(ldim, new_pos, params%box)
@@ -2071,6 +2076,7 @@ contains
                     ! for actual extraction
                     boxcoords(:,iptcl) = new_pos
                 enddo
+                !$omp end parallel do
                 nptcls2extract = count(ptcl_mask(fromp:top))
                 if( nptcls2extract > 0 )then
                     if( allocated(ptcl_inds) ) deallocate(ptcl_inds)
@@ -2107,7 +2113,7 @@ contains
                         endif
                         ! Actual extraction
                         if( l_scale_particles )then
-                            ! scale & extract
+                            ! scale
                             if( all(ldim_sc == ldim) )then
                                 call micrograph_sc%copy_fast(micrograph)
                             else
@@ -2115,12 +2121,13 @@ contains
                                 if( any(ldim_sc < ldim) )then
                                     call micrograph%clip(micrograph_sc)
                                 else
-                                    call micrograph%pad(micrograph_sc)
+                                    call micrograph%pad(micrograph_sc, antialiasing=.false.)
                                 endif
                                 call micrograph_sc%ifft
                                 call micrograph%set_ft(.false.)
                             endif
-                            call micrograph_sc%set_smpd(params%osmpd)
+                            call micrograph_sc%set_smpd(params%osmpd) ! safety
+                            ! extract
                             call extractor%extract_particles_from_mic(micrograph_sc, ptcl_inds, boxcoords, build%imgbatch,&
                             &stk_min,stk_max,stk_mean,stk_sdev)
                         else
