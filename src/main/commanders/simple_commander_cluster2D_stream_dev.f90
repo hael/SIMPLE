@@ -2041,13 +2041,14 @@ contains
                 call spproj%os_stk%new(nstks, is_ptcl=.false.)
                 call spproj%os_mic%new(nstks, is_ptcl=.false.)
                 call spproj%os_ptcl2D%new(nptcls, is_ptcl=.true.)
-                cnt  = 0
-                ctop = 0
+                cnt   = 0
+                ctop  = 0
+                jptcl = 0 ! particle index in local project
                 do istk = chunks_map(ichunk,1),chunks_map(ichunk,2)
                     cnt = cnt + 1
                     n   = stk_all_nptcls(istk)
                     ! dummy micrograph field
-                    call spproj%os_mic%set(cnt,'nptcls',real(n))
+                    call spproj%os_mic%set(cnt,'nptcls', n)
                     call spproj%os_mic%set_state(cnt,spproj_glob%os_stk%get_state(istk))
                     ! stack
                     call spproj%os_stk%transfer_ori(cnt, spproj_glob%os_stk, istk)
@@ -2055,26 +2056,26 @@ contains
                     absfname = simple_abspath(fname)
                     call spproj%os_stk%set(cnt,'stk',absfname)
                     ! particle
-                    jptcl = 0
                     fromp = nint(spproj_glob%os_stk%get(istk,'fromp'))
                     top   = nint(spproj_glob%os_stk%get(istk,'top'))
                     do iptcl = fromp,top
                         jptcl = jptcl + 1
                         call spproj%os_ptcl2D%transfer_ori(jptcl, spproj_glob%os_ptcl2D, iptcl)
-                        call spproj%os_ptcl2D%set(jptcl, 'stkind', real(cnt))
+                        call spproj%os_ptcl2D%set(jptcl, 'stkind', cnt)
                     enddo
                     cfromp = ctop + 1
                     ctop   = cfromp + n - 1
-                    call spproj%os_stk%set(cnt,'fromp',real(cfromp))
-                    call spproj%os_stk%set(cnt,'top',  real(ctop))
+                    call spproj%os_stk%set(cnt,'fromp',cfromp)
+                    call spproj%os_stk%set(cnt,'top',  ctop)
                     micproj_records(istk)%projname   = trim(projfile)
                     micproj_records(istk)%micind     = cnt
                     micproj_records(istk)%nptcls     = n
-                    micproj_records(istk)%nptcls_sel = stk_all_nptcls(istk)
+                    micproj_records(istk)%nptcls_sel = stk_nptcls(istk)
                     micproj_records(istk)%included   = .false.
                 enddo
                 call spproj%os_ptcl2D%delete_2Dclustering(keepshifts=.true., keepcls=.false.)
                 call spproj%write(projfile)
+                nptcls = sum(micproj_records(chunks_map(ichunk,1):chunks_map(ichunk,2))%nptcls_sel)
                 write(logfhandle,'(A,I8,A,I8,A,I8)')'>>> CHUNK ID; # OF PARTICLES  : ',  ichunk, ' ; ',nptcls,' / ',sum(stk_nptcls)        
             enddo
             call spproj%kill
