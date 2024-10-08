@@ -331,25 +331,28 @@ contains
         end do 
     end subroutine align_avg
 
-    ! Hough transform to identify and remove lines. 
+    ! Hough transform to identify and remove horizontal lines to eliminate cc. 
     subroutine hough_lines(img_in, img_denoised, theta_range)
         class(image), intent(inout)     :: img_in
         class(image), intent(out)     :: img_denoised
         real, intent(in), optional        :: theta_range(2)
         type(image)     :: img_edge 
-        real            :: min_theta = -PI/2.,  theta_step = PI/180., threshold, rad_step = 10, curr_rad, theta_range_def(2)
+        real            :: min_theta = -PI/2.,  theta_step = PI/180., threshold, rad_step = 1, curr_rad, theta_range_def(2)
         real, allocatable   :: angles(:), rad(:), curr_rads(:), sins(:), coss(:), emat(:, :, :)
-        integer             :: dims(3), diagonal, a_grid, r_grid = 300, i, count, x, y, t, r, curr_rad_r
-        integer, allocatable    :: accumulator(:, :)
+        integer             :: dims(3), diagonal, a_grid, r_grid, i, count, x, y, t, r, curr_rad_r, cnt 
+        integer             :: draw
+        integer, allocatable    :: accumulator(:, :), line_pos(:)
+        logical             :: debug_m = .false. 
         theta_range_def = [-PI/2,PI/2]
         if( present(theta_range)) theta_range_def = theta_range
         a_grid = nint(abs(theta_range_def(2) - theta_range_def(1))* theta_step**(-1)) + 1
         ! pre-processing
-        call canny(img_in, img_edge)
-        ! call img_edge%vis()
-        dims = img_edge%get_ldim()
+        ! call canny(img_in, img_edge)
+
+        dims = img_in%get_ldim()
         ! max radius
         diagonal = ceiling(sqrt(real(dims(1))**2. + real(dims(2))**2.))
+        r_grid = 2*diagonal
         allocate(angles(a_grid))
         allocate(rad(r_grid))
         allocate(curr_rads(r_grid))
@@ -363,30 +366,65 @@ contains
             sins(i) = sin(angles(i))
             coss(i) = cos(angles(i))
         end do 
-
         allocate(emat(dims(1), dims(2), dims(3)))
-        emat = img_edge%get_rmat()
-        r = 1
+        emat = img_in%get_rmat()
+        ! print *, angles, rad
+
         do x = 1, dims(1)
             do y = 1, dims(2)
                 if(emat(x, y, 1) > 0.) then 
+                    if(debug_m) then
+                        print *, 'coordinate:', x,y
+                    end if 
                     do t = 1, size(angles)
                         curr_rad = x*coss(t) + y*sins(t)
                         curr_rads = curr_rad
                         curr_rad_r = minloc(abs(rad - curr_rads), 1)
-                        print *, curr_rad, curr_rad_r 
-                        do while (r < curr_rad_r)
-                            if(emat(nint(rad(r) * coss(t)), nint(rad(r) * sins(t)), 1) > 0.) then
-                                accumulator(curr_rad_r,t) = accumulator(curr_rad_r,t) + 1
-                            end if 
-                            r = r + 1
-                        end do 
+                        if(debug_m) then
+                            print *, 'radius:', curr_rad, 'angle:', angles(t)
+                        end if 
+                        accumulator(curr_rad_r,t) = accumulator(curr_rad_r,t) + 1                
                     end do
                 end if 
             end do 
+        end do  
+
+        print *, accumulator
+        do r=1,size(rad)
+            do t = 1, size(angles)
+                if( accumulator(r,t) > 0) write(6,*) r,t, accumulator(r,t)
+            end do 
         end do 
-        ! print *, accumulator
-        ! not setting up accumalator correctly.
+    
+        allocate(line_pos(dims(2)))
+        call img_denoised%new(dims, 1.0)
+       
+        ! finding local maxima
+        do t = 1, size(angles)
+            do r = 1, size(rad)
+                if(accumulator(r, t) > 10 .and. angles(t) > PI/2. - 0.01 .and. angles(t) < PI/2. + 0.01 ) then 
+                    print *, angles(t), accumulator(r,t), rad(r)*coss(t), rad(r)*sins(t)
+                    do draw = 0, accumulator(r,t)
+                        call img_denoised%set_rmat_at(nint(rad(r)*coss(t)) + draw, nint(rad(r)*sins(t)), 1, 1.0)
+                        line_pos(nint(rad(r)*sins(t))) = accumulator(r,t)
+                    end do 
+                end if 
+            end do 
+        end do 
+        
+        ! Radon transform can't differentiate between lines on the same coordinate axis bc the intersection will be the same 
+        ! so iterate found line of length L across (:, y). if we have 01111111111110, subtract this length from the L. If, we 
+        ! have a length of <5 e.g. 0110 ignore unless and do not subtract from L (provided that this cannot connect between larger line segments)
+        ! stop once we L = 0 or reached the end of the x-axis of the micrograph.
+        ! probably need space between lines if I want to use a bilateral filter. 
+
+
+        call img_denoised%vis()
+        
+        ! call img_edge%set_rmat(emat, .false.) 
+        ! call img_edge%vis()
+        ! call img_denoised%set_rmat(emat, .false.)
+        ! call img_denoised%vis()
         ! only consideredges (so, only 1s. )
         
         ! should have some visualization of hough transform. 
