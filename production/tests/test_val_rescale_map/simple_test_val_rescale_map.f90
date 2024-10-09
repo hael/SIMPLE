@@ -50,7 +50,7 @@ upscaling_factor = real(box_new) / real(box)
 smpd_new         = smpd / upscaling_factor
 write(logfhandle,'(a,3i6,a,f8.3,a)') 'Scaled dimensions   (', ldim_new,' ) voxels, smpd: ', smpd_new, ' Angstrom'
 call molecule%new(pdb_file)
-call molecule%pdb2mrc(pdb_file, sim_vol_file, smpd_new, vol_dim=ldim_new)
+call molecule%pdb2mrc(pdb_file, sim_vol_file, smpd_new, pdb_out=pdb_out, vol_dim=ldim_new)
 call sim_vol%new(ldim_new, smpd_new)
 call sim_vol%read(sim_vol_file)
 call molecule%atom_validation(sim_vol, 'sim_val_corr')
