@@ -340,8 +340,8 @@ contains
         real            :: min_theta = -PI/2.,  theta_step = PI/180., threshold, rad_step = 1, curr_rad, theta_range_def(2)
         real, allocatable   :: angles(:), rad(:), curr_rads(:), sins(:), coss(:), emat(:, :, :)
         integer             :: dims(3), diagonal, a_grid, r_grid, i, count, x, y, t, r, curr_rad_r, cnt 
-        integer             :: draw
-        integer, allocatable    :: accumulator(:, :), line_pos(:)
+        integer             :: draw, line_num, traversed 
+        integer, allocatable    :: accumulator(:, :), line_pos(:, :)
         logical             :: debug_m = .false. 
         theta_range_def = [-PI/2,PI/2]
         if( present(theta_range)) theta_range_def = theta_range
@@ -389,33 +389,62 @@ contains
             end do 
         end do  
 
-        print *, accumulator
-        do r=1,size(rad)
-            do t = 1, size(angles)
-                if( accumulator(r,t) > 0) write(6,*) r,t, accumulator(r,t)
-            end do 
-        end do 
+        ! print *, accumulator
+        ! do r=1,size(rad)
+        !     do t = 1, size(angles)
+        !         if( accumulator(r,t) > 0) write(6,*) r,t, accumulator(r,t)
+        !     end do 
+        ! end do 
     
-        allocate(line_pos(dims(2)))
         call img_denoised%new(dims, 1.0)
-       
+        allocate(line_pos(dims(1), dims(2)))
         ! finding local maxima
         do t = 1, size(angles)
             do r = 1, size(rad)
                 if(accumulator(r, t) > 10 .and. angles(t) > PI/2. - 0.01 .and. angles(t) < PI/2. + 0.01 ) then 
                     print *, angles(t), accumulator(r,t), rad(r)*coss(t), rad(r)*sins(t)
                     do draw = 0, accumulator(r,t)
-                        call img_denoised%set_rmat_at(nint(rad(r)*coss(t)) + draw, nint(rad(r)*sins(t)), 1, 1.0)
-                        line_pos(nint(rad(r)*sins(t))) = accumulator(r,t)
+                        ! call img_denoised%set_rmat_at(nint(rad(r)*coss(t)) + draw, nint(rad(r)*sins(t)), 1, 1.0)
+                        line_pos(1, nint(rad(r)*sins(t))) = accumulator(r,t)
                     end do 
                 end if 
             end do 
         end do 
+
+        ! line alignment + multiple lines in row
+        do line_num = 1, size(line_pos(1, :))
+            if(line_pos(1, line_num) > 0 .and. line_pos(1, line_num) < dims(1)) then 
+                x = 1
+                traversed = 0 
+                print *, 'y = ', line_num
+                do while( line_pos(1, line_num) > 0)
+                    if(nint(sum(emat(x:x + 10, line_num, 1))) == size(emat(x:x+10, line_num, 1)) .and. x < dims(1)) then 
+                        do while(emat(x, line_num, 1) > 0 )
+                            traversed = traversed + 1
+                            x = x + 1
+                        end do 
+                        line_pos(1, line_num) = line_pos(1, line_num) - traversed 
+                        print *, x, traversed 
+                        line_pos(x - traversed, line_num) = traversed 
+                        traversed = 0
+                    end if 
+                    x = x + 1
+                end do
+            end if  
+        end do 
         
-        ! Radon transform can't differentiate between lines on the same coordinate axis bc the intersection will be the same 
-        ! so iterate found line of length L across (:, y). if we have 01111111111110, subtract this length from the L. If, we 
-        ! have a length of <5 e.g. 0110 ignore unless and do not subtract from L (provided that this cannot connect between larger line segments)
-        ! stop once we L = 0 or reached the end of the x-axis of the micrograph.
+        
+        do x = 1, dims(1)
+            do y = 1, dims(2)
+                if(line_pos(x, y) > 0) then 
+                    print *, x, y, line_pos(x, y)
+                    do draw = 1, line_pos(x,y)
+                        call img_denoised%set_rmat_at(x + draw, y, 1, 1.0)
+                    end do
+                end if 
+            end do 
+        end do 
+        ! sum of line_pos should remain the samwe
         ! probably need space between lines if I want to use a bilateral filter. 
 
 
