@@ -1185,11 +1185,19 @@ contains
         character(*), optional, intent(in)    :: pdb_out
         logical,      optional, intent(in)    :: center_pdb
         integer,      optional, intent(in)    :: vol_dim(3)
-        type(image)       :: vol
-        real              :: mol_dim(3), center(3), qrt_box(3), max_dist, dist
-        integer           :: ldim(3), i_atom, j_atom
-        logical           :: use_center = .false.
-        if( present(center_pdb) .and. center_pdb ) use_center = .true.
+        character(:), allocatable :: pdbfile_centered
+        type(image)               :: vol
+        real                      :: mol_dim(3), center(3), qrt_box(3), max_dist, dist
+        integer                   :: ldim(3), i_atom, j_atom
+        logical                   :: use_center = .false.
+        if(present(pdb_out))then
+            pdbfile_centered = trim(pdb_out)
+        else
+            pdbfile_centered = trim(get_fbody(pdb_file,'pdb'))//'_centered.pdb'
+        endif
+        if(present(center_pdb))then
+            if( center_pdb ) use_center = .true.
+        endif
         if( any(self%xyz(:,:) < 0.) )then
             write(logfhandle,'(A)') 'Warning: PDB atomic center moved to the center of the box'
             use_center = .true. ! it needs to be centered because the PDB coordinates does not come from cryoEM
@@ -1225,7 +1233,7 @@ contains
         if( use_center )then
             ! 0,0,0 in PDB space is map to the center of the volume 
             call self%center_pdbcoord(ldim, smpd)
-            call self%writepdb(pdb_out)
+            call self%writepdb(pdbfile_centered)
         endif
         call self%convolve(vol, cutoff = 8*smpd)
         call vol%write(vol_file)
