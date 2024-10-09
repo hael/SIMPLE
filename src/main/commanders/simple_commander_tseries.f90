@@ -756,12 +756,9 @@ contains
         class(cluster2D_nano_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         ! commander
-        type(cluster2D_commander)           :: xcluster2D ! shared-memory
-        type(cluster2D_autoscale_commander) :: xcluster2D_distr
-        type(parameters)           :: params
-        class(parameters), pointer :: params_ptr => null()
-        logical :: l_shmem
+        type(cluster2D_commander) :: xcluster2D ! shared-memory
         ! static parameters
+        call cline%delete('nparts') ! always shared-memory
         call cline%set('prg',           'cluster2D')
         call cline%set('dir_exec', 'cluster2D_nano')
         call cline%set('center',              'yes')
@@ -793,29 +790,9 @@ contains
         if( .not. cline%defined('kweight')        ) call cline%set('kweight',  'default') ! best resolution weighting scheme for this kind of data
         if( .not. cline%defined('ml_reg')         ) call cline%set('ml_reg',        'no') ! ml_reg=yes -> too few atoms 
         if( .not. cline%defined('oritype')        ) call cline%set('oritype',   'ptcl2D')
-        ! set shared-memory flag
-        if( cline%defined('nparts') )then
-            if( nint(cline%get_rarg('nparts')) == 1 )then
-                l_shmem = .true.
-                call cline%delete('nparts')
-            else
-                l_shmem = .false.
-            endif
-        else
-            l_shmem = .true.
-        endif
-        call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
-        if( l_shmem )then
-            params_ptr  => params_glob
-            params_glob => null()
-            call xcluster2D%execute(cline)
-            params_glob => params_ptr
-            params_ptr  => null()
-        else
-            call xcluster2D_distr%execute(cline)
-        endif
+        call xcluster2D%execute_safe(cline)
         call simple_end('**** SIMPLE_CLUSTER2D_NANO NORMAL STOP ****')
     end subroutine exec_cluster2D_nano
 

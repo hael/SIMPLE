@@ -12,6 +12,7 @@ use simple_fftw3
 use simple_binoris
 use simple_error
 use simple_fileio
+use simple_class_sample_io
 use simple_imghead
 use simple_nrtxtfile
 use simple_syslib
