@@ -11,13 +11,14 @@ program simple_test_lbfgsb_cosine
     character(len=8)  :: str_opts                       ! string descriptors for the NOPTS optimizers
     real              :: lims(NDIM,2), lowest_cost, y_norm(2), y(2)
     str_opts  = 'lbfgsb'
-    lims(:,1) = -1000.
-    lims(:,2) =  1000.
+    lims(:,1) = -100.
+    lims(:,2) =  100.
     y         = [.75, .25]
     y_norm    = y / sqrt(sum(y**2))
     call spec%specify(str_opts, NDIM, limits=lims, nrestarts=NRESTARTS) ! make optimizer spec
     call spec%set_costfun(costfct)                                      ! set pointer to costfun
     call spec%set_gcostfun(gradfct)                                     ! set pointer to gradient of costfun
+    spec%opt_callback => callback_fct
     call ofac%new(spec, opt_ptr)                                        ! generate optimizer object with the factory
     spec%x = [0.5, 0.75]
     call opt_ptr%minimize(spec, opt_ptr, lowest_cost)                   ! minimize the test function
@@ -48,6 +49,12 @@ program simple_test_lbfgsb_cosine
         abs_x  = sqrt(sum(x**2))
         x_norm = x / abs_x
         grad   = - 180. / PI * y_norm * (abs_x**2 - x**2) / abs_x**3 / sqrt(1. - sum(x_norm * y_norm)**2)
+        grad   = grad * sqrt(sum(y**2)) / sqrt(sum(grad**2))
     end subroutine
+
+    subroutine callback_fct( self )
+        class(*), intent(inout) :: self
+        spec%x = spec%x * sqrt(sum(y**2)) / sqrt(sum(spec%x**2))
+    end subroutine callback_fct
 
 end program simple_test_lbfgsb_cosine
