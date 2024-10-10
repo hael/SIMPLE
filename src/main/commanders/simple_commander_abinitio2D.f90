@@ -23,7 +23,7 @@ end type abinitio2D_commander
 
 ! class constants
 real,    parameter :: SMPD_TARGET    = 2.67
-real,    parameter :: ICM_LAMBDA     = 1.0
+real,    parameter :: ICM_LAMBDA     = 0.5
 integer, parameter :: NSTAGES        = 6
 integer, parameter :: ITS_INCR       = 5
 integer, parameter :: PHASES(2)      = [4, 6]
@@ -56,9 +56,9 @@ contains
         if( .not. cline%defined('mkdir')    ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('masscen')  ) call cline%set('masscen',   'yes')
         if( .not. cline%defined('center')   ) call cline%set('center',    'yes')
-        if( .not. cline%defined('sh_first') ) call cline%set('sh_first',  'yes')
+        if( .not. cline%defined('sh_first') ) call cline%set('sh_first',  'no')
         if( .not. cline%defined('cls_init') ) call cline%set('cls_init',  'rand')
-        if( .not. cline%defined('icm')      ) call cline%set('icm',       'no')
+        if( .not. cline%defined('icm')      ) call cline%set('icm',       'yes')
         if( .not. cline%defined('lambda')   ) call cline%set('lambda',    ICM_LAMBDA)
         if( .not. cline%defined('extr_lim') ) call cline%set('extr_lim',  EXTR_LIM_LOCAL)
         if( cline%defined('nparts') )then
@@ -194,7 +194,7 @@ contains
             integer,          intent(in)  :: istage
             character(len=:), allocatable :: sh_first, refine, center, objfun, refs, icm
             integer :: iphase, iter, imaxits, maxits_glob, cc_iters, minits, extr_iter
-            real    :: trs, snr_noise_reg
+            real    :: trs, snr_noise_reg, lambda
             refine = 'snhc_smpl' ! not optional
             ! iteration number bookkeeping
             iter = 0
@@ -216,9 +216,9 @@ contains
                 maxits_glob   = params%extr_lim+ITS_INCR
                 snr_noise_reg = params%snr_noise_reg
                 extr_iter     = 0
-                minits        = imaxits
                 ! phase variables
                 imaxits       = nint(real(istage)*real(maxits(1))/real(PHASES(1)))
+                minits        = imaxits
                 select case(istage)
                 case(1)
                     trs          = 0.
@@ -237,6 +237,7 @@ contains
                     endif
                     if( params%l_icm )then
                         icm      = 'yes'
+                        lambda   = params%lambda
                     else
                         icm      = 'no'
                     endif
@@ -245,7 +246,7 @@ contains
                     sh_first     = trim(params%sh_first)
                     center       = trim(params%center)
                     refs         = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
-                    cc_iters     = 0
+                    cc_iters     = imaxits
                     if( params%cc_objfun == OBJFUN_CC )then
                         objfun   = 'cc'
                     else
@@ -253,6 +254,7 @@ contains
                     endif
                     if( params%l_icm )then
                         icm      = 'yes'
+                        lambda   = params%lambda/2.
                     else
                         icm      = 'no'
                     endif
@@ -261,13 +263,14 @@ contains
                     sh_first     = trim(params%sh_first)
                     center       = trim(params%center)
                     refs         = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
-                    if( params%cc_objfun == OBJFUN_CC )then
-                        cc_iters = iter-1
-                    else
-                        cc_iters = 0
-                    endif
+                    cc_iters      = 0
                     objfun        = 'euclid'
-                    icm           = 'no'
+                    if( params%l_icm )then
+                        icm      = 'yes'
+                        lambda   = params%lambda/4.
+                    else
+                        icm      = 'no'
+                    endif
                 case(4)
                     trs           = lpinfo(istage)%trslim
                     sh_first      = trim(params%sh_first)
@@ -280,7 +283,6 @@ contains
             case(2)
                 ! phase constants
                 imaxits           = iter+ITS_INCR-1
-                minits            = iter+1
                 sh_first          = trim(params%sh_first)
                 trs               = lpinfo(istage)%trslim
                 center            = trim(params%center)
@@ -292,9 +294,11 @@ contains
                 ! phase variables
                 select case(istage)
                 case(5)
+                    minits        = iter + 1
                     maxits_glob   = params%extr_lim+ITS_INCR
                     snr_noise_reg = params%snr_noise_reg
                 case(6)
+                    minits        = iter
                     maxits_glob   = 0
                     snr_noise_reg = 0.
                 end select
@@ -329,13 +333,18 @@ contains
             else
                 call cline_cluster2D%delete('extr_iter')
             endif
-            call cline_cluster2D%set('icm', icm)
+            call cline_cluster2D%set('icm',    icm)
+            if( trim(icm).eq.'yes' )then
+                call cline_cluster2D%set('lambda', lambda)
+            else
+                call cline_cluster2D%delete('lambda')
+            endif
             call cline_cluster2D%delete('endit')
         end subroutine set_cline_cluster2D
 
         subroutine execute_cluster2D
             ! Initial sigma2
-            if( (params%cc_objfun == OBJFUN_EUCLID) .and. (istage == 1) )then
+            if( istage == 1 )then
                 call xcalc_pspec_distr%execute_safe(cline_calc_pspec)
             endif
             ! Classification
