@@ -2,11 +2,13 @@ program simple_test_opt_reg
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_cmdline,           only: cmdline
 use simple_builder,           only: builder
 use simple_image,             only: image
 use simple_parameters,        only: parameters
+use simple_optimizer,         only: optimizer
+use simple_opt_factory,       only: opt_factory
+use simple_opt_spec,          only: opt_spec
 use simple_strategy2D3D_common
 use simple_simulator
 use simple_ctf
@@ -20,13 +22,19 @@ type(ctf)                :: tfun
 type(ori)                :: o
 type(oris)               :: os
 type(ctfparams)          :: ctfparms
+type(opt_factory)        :: ofac                           ! the optimization factory object
+type(opt_spec)           :: spec                           ! the optimizer specification object
+class(optimizer),pointer :: opt_ptr=>null()                ! the generic optimizer object
 type(image), allocatable :: match_imgs(:), ptcl_match_imgs(:)
 logical,     allocatable :: ptcl_mask(:)
 integer,     allocatable :: pinds(:)
-real,        allocatable :: truth_sh(:,:)
-real,        parameter   :: SHMAG = 3.0, SNR = 0.01, BFAC = 10.
-integer,     parameter   :: N_PTCLS = 100, ITERS = 1
-integer                  :: iptcl, nptcls2update, ithr, iter
+real,        allocatable :: truth_sh(:,:), lims(:,:)
+real,        pointer     :: rmat_cavg_odd(:,:,:), rmat_cavg_even(:,:,:), rmat_tmp(:,:,:)
+real,        parameter   :: SHMAG = 2.0, SNR = 0.5, BFAC = 10.
+integer,     parameter   :: N_PTCLS = 100, NRESTARTS = 10
+integer                  :: iptcl, nptcls2update, ithr, ndim
+real                     :: lowest_cost
+character(len=8)         :: str_opts                       ! string descriptors for the NOPTS optimizers
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)',advance='no') 'ERROR! required arguments: '
 endif
@@ -103,29 +111,31 @@ enddo
 ! references
 call restore_read_polarize_cavgs(0)
 
-! particles
-!$omp parallel do default(shared) private(iptcl,ithr)&
-!$omp schedule(static) proc_bind(close)
-do iptcl = p%fromp,p%top
-    ithr = omp_get_thread_num() + 1
-    call prepimg4align(iptcl, b%imgbatch(iptcl), ptcl_match_imgs(ithr))
-    call b%imgbatch(iptcl)%ifft
-end do
-!$omp end parallel do
-
-do iter = 1, ITERS
-    do iptcl = p%fromp,p%top
-        call b%spproj_field%get_ori(iptcl, o)
-        ! do stuffs with o
-    enddo
-    call restore_read_polarize_cavgs(iter)
-enddo
+call cavgs_even(1)%get_rmat_ptr(rmat_cavg_even)
+call  cavgs_odd(1)%get_rmat_ptr(rmat_cavg_odd)
+ndim      = p%box_crop**2
+allocate(lims(ndim,2))
+str_opts  = 'lbfgsb'
+lims(:,1) = -100.
+lims(:,2) =  100.
+call spec%specify(str_opts, ndim, limits=lims, nrestarts=NRESTARTS) ! make optimizer spec
+call spec%set_costfun(costfct)                                      ! set pointer to costfun
+call spec%set_gcostfun(gradfct)                                     ! set pointer to gradient of costfun
+call ofac%new(spec, opt_ptr)                                        ! generate optimizer object with the factory
+spec%x = reshape(rmat_cavg_even(1:p%box_crop,1:p%box_crop,1), (/ndim/))
+call opt_ptr%minimize(spec, opt_ptr, lowest_cost)                   ! minimize the test function
+rmat_cavg_even(1:p%box_crop,1:p%box_crop,1) = reshape(spec%x, (/p%box_crop, p%box_crop/))
+call opt_ptr%kill
+deallocate(opt_ptr)
+p%refs_even = trim(CAVGS_ITER_FBODY)//int2str_pad(p%which_iter,3)//'_even_tmp'//p%ext
+call cavger_write(trim(p%refs_even), 'even')
+call restore_read_polarize_cavgs(1)
 
 ! last one is truth
 do iptcl = p%fromp,p%top
     call b%spproj_field%set_shift(iptcl, truth_sh(iptcl,:))
 enddo
-call restore_read_polarize_cavgs(iter)
+call restore_read_polarize_cavgs(2)
 
 
 contains
@@ -149,5 +159,52 @@ contains
         call cavger_read(trim(p%refs_even), 'even' )
         call cavger_read(trim(p%refs_even), 'odd' )
     end subroutine restore_read_polarize_cavgs
+
+    function costfct( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self
+        integer,  intent(in)    :: d
+        real,     intent(in)    :: x(d)
+        real                    :: r
+        real :: x_norm(d), y_norm(d)
+        x_norm = x / sqrt(sum(x**2))
+        r      = 0.
+        do iptcl = p%fromp,p%top
+            ithr = omp_get_thread_num() + 1
+            call prepimg4align(iptcl, b%imgbatch(iptcl), ptcl_match_imgs(ithr))
+            call b%imgbatch(iptcl)%ifft
+            call ptcl_match_imgs(ithr)%ifft
+            call ptcl_match_imgs(ithr)%get_rmat_ptr(rmat_tmp)
+            ! call b%imgbatch(iptcl)%get_rmat_ptr(rmat_tmp)
+            y_norm = reshape(rmat_tmp(1:p%box_crop,1:p%box_crop,1), (/ndim/))
+            y_norm = y_norm / sqrt(sum(y_norm**2))
+            r      = r + acos(sum(x_norm * y_norm))
+        end do
+        r = r / real(p%nptcls) * 180 / PI
+        print *, r
+    end function
+
+    subroutine gradfct( fun_self, x, grad, d )
+        class(*), intent(inout) :: fun_self
+        integer,  intent(in)    :: d
+        real,     intent(inout) :: x(d)
+        real,     intent(out)   :: grad(d)
+        real :: abs_x, x_norm(d), y_norm(d), xy
+        abs_x  = sqrt(sum(x**2))
+        x_norm = x / abs_x
+        grad   = 0.
+        do iptcl = p%fromp,p%top
+            ithr = omp_get_thread_num() + 1
+            call prepimg4align(iptcl, b%imgbatch(iptcl), ptcl_match_imgs(ithr))
+            call b%imgbatch(iptcl)%ifft
+            call ptcl_match_imgs(ithr)%ifft
+            call ptcl_match_imgs(ithr)%get_rmat_ptr(rmat_tmp)
+            ! call b%imgbatch(iptcl)%get_rmat_ptr(rmat_tmp)
+            y_norm = reshape(rmat_tmp(1:p%box_crop,1:p%box_crop,1), (/ndim/))
+            y_norm = y_norm / sqrt(sum(y_norm**2))
+            xy     = sum(x_norm * y_norm)
+            grad   = grad - (y_norm * abs_x - xy * x) / abs_x**2 / sqrt(1. - xy**2) / real(p%nptcls)
+        end do
+        grad = grad * 180 / PI
+    end subroutine
 
 end program simple_test_opt_reg
