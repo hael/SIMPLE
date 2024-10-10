@@ -337,39 +337,42 @@ contains
         class(image), intent(out)     :: img_denoised
         real, intent(in), optional        :: theta_range(2)
         type(image)     :: img_edge 
-        real            :: min_theta = -PI/2.,  theta_step = PI/180., threshold, rad_step = 1, curr_rad, theta_range_def(2)
+        real            :: min_theta = -PI/2.,  theta_step = PI/180., threshold, rad_step = 1, curr_rad, theta_range_def(2), smpd 
         real, allocatable   :: angles(:), rad(:), curr_rads(:), sins(:), coss(:), emat(:, :, :)
-        integer             :: dims(3), diagonal, a_grid, r_grid, i, count, x, y, t, r, curr_rad_r, cnt 
-        integer             :: draw, line_num, traversed 
+        integer             :: dims(3), diagonal, a_grid, r_grid, i, count, x, y, t, r, curr_rad_r, cnct_px = 3, end_px, pix_cnt
+        integer             :: draw, line_num, traversed, min_line = 10 
         integer, allocatable    :: accumulator(:, :), line_pos(:, :)
         logical             :: debug_m = .false. 
         theta_range_def = [-PI/2,PI/2]
         if( present(theta_range)) theta_range_def = theta_range
-        a_grid = nint(abs(theta_range_def(2) - theta_range_def(1))* theta_step**(-1)) + 1
-        ! pre-processing
-        ! call canny(img_in, img_edge)
-
         dims = img_in%get_ldim()
+        smpd = img_in%get_smpd()
+        
+        ! pre-processing
+        call canny(img_in, img_edge)
+        allocate(emat(dims(1), dims(2), dims(3)))
+        emat = img_edge%get_rmat()
+        
         ! max radius
         diagonal = ceiling(sqrt(real(dims(1))**2. + real(dims(2))**2.))
         r_grid = 2*diagonal
-        allocate(angles(a_grid))
         allocate(rad(r_grid))
         allocate(curr_rads(r_grid))
-        angles = [(theta_range_def(1) + (i - 1)*theta_step, i = 1, size(angles))]
         rad  = [(-diagonal + (i - 1)*rad_step, i = 1, r_grid)]
-        allocate(accumulator(size(rad), size(angles)))
-        accumulator = 0
+
+        a_grid = nint(abs(theta_range_def(2) - theta_range_def(1))* theta_step**(-1)) + 1
+        allocate(angles(a_grid))
+        angles = [(theta_range_def(1) + (i - 1)*theta_step, i = 1, size(angles))]
         allocate(sins(size(angles)))
         allocate(coss(size(angles)))
         do i = 1, size(angles)
             sins(i) = sin(angles(i))
             coss(i) = cos(angles(i))
         end do 
-        allocate(emat(dims(1), dims(2), dims(3)))
-        emat = img_in%get_rmat()
-        ! print *, angles, rad
 
+        allocate(accumulator(size(rad), size(angles)))
+        accumulator = 0
+        
         do x = 1, dims(1)
             do y = 1, dims(2)
                 if(emat(x, y, 1) > 0.) then 
@@ -388,43 +391,43 @@ contains
                 end if 
             end do 
         end do  
-
-        ! print *, accumulator
-        ! do r=1,size(rad)
-        !     do t = 1, size(angles)
-        !         if( accumulator(r,t) > 0) write(6,*) r,t, accumulator(r,t)
-        !     end do 
-        ! end do 
-    
-        call img_denoised%new(dims, 1.0)
+        
+        
+        call img_denoised%new(dims, smpd)
         allocate(line_pos(dims(1), dims(2)))
+        line_pos = 0 
         ! finding local maxima
         do t = 1, size(angles)
             do r = 1, size(rad)
                 if(accumulator(r, t) > 10 .and. angles(t) > PI/2. - 0.01 .and. angles(t) < PI/2. + 0.01 ) then 
-                    print *, angles(t), accumulator(r,t), rad(r)*coss(t), rad(r)*sins(t)
+                    if(debug_m) then
+                        print *, angles(t), accumulator(r,t), rad(r)*coss(t), rad(r)*sins(t)
+                    end if 
                     do draw = 0, accumulator(r,t)
-                        ! call img_denoised%set_rmat_at(nint(rad(r)*coss(t)) + draw, nint(rad(r)*sins(t)), 1, 1.0)
                         line_pos(1, nint(rad(r)*sins(t))) = accumulator(r,t)
                     end do 
                 end if 
             end do 
         end do 
-
+       
         ! line alignment + multiple lines in row
         do line_num = 1, size(line_pos(1, :))
             if(line_pos(1, line_num) > 0 .and. line_pos(1, line_num) < dims(1)) then 
                 x = 1
-                traversed = 0 
-                print *, 'y = ', line_num
-                do while( line_pos(1, line_num) > 0)
-                    if(nint(sum(emat(x:x + 10, line_num, 1))) == size(emat(x:x+10, line_num, 1)) .and. x < dims(1)) then 
-                        do while(emat(x, line_num, 1) > 0 )
+                traversed = 0
+                if(debug_m) then
+                    print *, 'y = ', line_num
+                end if 
+                do while( line_pos(1, line_num) > 0 .and. x < dims(1) - min_line)
+                    if( x < dims(1) .and. nint(sum(emat(x:x + min_line, line_num, 1))) == size(emat(x:x + min_line, line_num, 1))) then 
+                        do while(emat(x, line_num, 1) > 0 .and. x < dims(1) - min_line ) 
                             traversed = traversed + 1
                             x = x + 1
                         end do 
                         line_pos(1, line_num) = line_pos(1, line_num) - traversed 
-                        print *, x, traversed 
+                        if(debug_m) then
+                            print *, x, traversed 
+                        end if 
                         line_pos(x - traversed, line_num) = traversed 
                         traversed = 0
                     end if 
@@ -432,36 +435,33 @@ contains
                 end do
             end if  
         end do 
-        
-        
-        do x = 1, dims(1)
+
+        ! connect pixels, final line detection
+        do x = 2, dims(1)
             do y = 1, dims(2)
-                if(line_pos(x, y) > 0) then 
-                    print *, x, y, line_pos(x, y)
-                    do draw = 1, line_pos(x,y)
-                        call img_denoised%set_rmat_at(x + draw, y, 1, 1.0)
-                    end do
+                if(line_pos(x,y) + x < dims(1)) then
+                    end_px = line_pos(x, y) + x
+                    if (sum(line_pos(end_px:end_px + pix_cnt, y)) < 1) then 
+                        line_pos(x, y) = line_pos(x, y) + sum(line_pos(end_px:end_px + pix_cnt + 1, y))      
+                    end if  
+                    if(line_pos(x, y) > 40) then 
+                        do draw = 1, line_pos(x,y)
+                            call img_denoised%set_rmat_at(x + draw, y, 1, 1.0)
+                        end do
+                    end if 
                 end if 
             end do 
-        end do 
-        ! sum of line_pos should remain the samwe
-        ! probably need space between lines if I want to use a bilateral filter. 
-
-
+        end do
+       
         call img_denoised%vis()
         
         ! call img_edge%set_rmat(emat, .false.) 
         ! call img_edge%vis()
         ! call img_denoised%set_rmat(emat, .false.)
         ! call img_denoised%vis()
-        ! only consideredges (so, only 1s. )
-        
-        ! should have some visualization of hough transform. 
-        ! make a test image with horizontal lines. 
+
         ! median filter? but it preserves edges
         ! use bilateral filter on lines. 
-    end subroutine hough_lines
-    ! if there is only one cc, do not need to do anything. else, choose the best cc and move the center of the box 
-    ! to its center of mass. the best cc, is the largest one or maybe the one that is completely within the box. reevaluate box and mask if neccessary. 
+    end subroutine hough_lines 
 
 end module simple_AFM_image 
