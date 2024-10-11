@@ -5,6 +5,7 @@ implicit none
 
 public :: aff_prop, test_aff_prop
 private
+#include "simple_local_flags.inc"
 
 type aff_prop
     private
@@ -90,7 +91,7 @@ contains
         real,                 intent(inout) :: simsum     !< similarity sum
         real, allocatable :: similarities(:)
         real              :: x, realmax
-        integer           :: i, j, k,  ncls, loc(1)
+        integer           :: i, j, k, ncls
         ! initialize
         realmax   = huge(x)
         self%A    = 0.
@@ -168,8 +169,7 @@ contains
                     similarities(k) = realmax
                 endif
             end do
-            loc = maxloc(similarities)
-            labels(j) = loc(1)
+            labels(j) = maxloc(similarities,dim=1)
             if( j .ne. centers(labels(j)) ) simsum = simsum + similarities(labels(j))
         end do
         simsum = simsum / real(self%N)
@@ -197,11 +197,13 @@ contains
             datavecs(i,:) = 10.
         end do
         do i=1,900-1
+            simmat(i,i) = 0.
             do j=i+1,900
                 simmat(i,j) = -euclid(datavecs(i,:),datavecs(j,:))
                 simmat(j,i) = simmat(i,j)
             end do
         end do
+        simmat(900,900) = 0.
         call apcls%new(900, simmat)
         call apcls%propagate(centers, labels, simsum)
         ncls = size(centers)
