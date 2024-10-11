@@ -1496,12 +1496,13 @@ contains
         end if
     end function pythag_dp
 
-    subroutine eigh_sp(n, mat, neigs, eigvals, eigvecs)
-        integer,  intent(in)    :: n
-        real,     intent(inout) :: mat(n,n)
-        integer,  intent(in)    :: neigs
-        real,     intent(out)   :: eigvals(neigs)
-        real,     intent(out)   :: eigvecs(n,neigs)
+    subroutine eigh_sp(n, mat, neigs, eigvals, eigvecs, smallest)
+        integer,  intent(in)          :: n
+        real,     intent(inout)       :: mat(n,n)
+        integer,  intent(in)          :: neigs
+        real,     intent(out)         :: eigvals(neigs)
+        real,     intent(out)         :: eigvecs(n,neigs)
+        logical, optional, intent(in) :: smallest
         integer,  allocatable   :: iwork(:)
         real,     allocatable   :: work(:)
         logical,  parameter     :: DEBUG  = .false.
@@ -1510,11 +1511,21 @@ contains
         integer        :: lwmax, info, il, iu, m, isuppz(n)
         real(real64)   :: rate
         real           :: vl, vu
+        logical        :: l_smallest
         if( DEBUG ) call system_clock(start_time, rate)
+        l_smallest = .false.
+        if( present(smallest) ) l_smallest = smallest
         lwmax = 26 * n     ! explained in dsyevr.f90
         allocate(iwork(lwmax), work(lwmax))
-        il = n-neigs+1
-        iu = n
+        if( l_smallest )then
+            ! computes the neigs smallest eigenvalues/vectors
+            il = 1
+            iu = neigs
+        else
+            ! computes the neigs largest eigenvalues/vectors
+            il = n-neigs+1
+            iu = n
+        endif
         ! Solve eigenproblem.
         call ssyevr( 'Vectors', 'Indices', 'Lower', n, mat, n, vl, vu, il, iu, ABSTOL,&
                     & m, eigvals, eigvecs, n, isuppz, work, lwmax, iwork, lwmax, info )

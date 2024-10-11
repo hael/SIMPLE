@@ -32,7 +32,6 @@ type :: eul_prob_tab
     procedure :: fill_tab
     procedure :: write_tab
     procedure :: read_assignment
-    procedure :: trim_tab
     ! GLOBAL PROCEDURES (used only by the global eul_prob_tab object)
     procedure :: read_tab_to_glob
     procedure :: prob_assign
@@ -459,28 +458,6 @@ contains
             enddo
         enddo
     end subroutine state_assign
-
-    subroutine trim_tab( self, os )
-        class(eul_prob_tab), intent(inout) :: self
-        class(oris),         intent(in)    :: os
-        integer, allocatable :: states(:), sampled(:), inds(:)
-        logical, allocatable :: mask(:)
-        integer :: i, n, ntot
-        ntot = os%get_noris()
-        allocate(sampled(ntot), source=nint(os%get_all('sampled')))
-        allocate(states(ntot), source=nint(os%get_all('state')))
-        mask = sampled > 0 .and. states > 0
-        n    = count(mask)
-        deallocate(states,sampled)
-        if( n == self%nptcls )return
-        inds           = pack((/(i,i=1,size(self%pinds))/), mask=mask(self%pinds(:)))
-        self%loc_tab   = self%loc_tab(:,inds(:),:)
-        self%assgn_map = self%assgn_map(inds(:))
-        self%state_tab = self%state_tab(:,inds(:))
-        self%pinds     = self%pinds(inds(:))
-        self%nptcls    = n
-        deallocate(mask,inds)
-    end subroutine trim_tab
 
     ! FILE IO
 

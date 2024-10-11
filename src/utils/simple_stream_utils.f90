@@ -25,27 +25,26 @@ integer                            :: ncls_rejected_glob  = 0 ! counter of rejec
 
 ! Convenience type to hold information about individual project files
 type projrecord
-    character(len=:), allocatable :: projname           ! project file name
-    integer                       :: micind     = 0     ! index of micrograph in project
-    integer                       :: nptcls     = 0     ! # of particles
-    integer                       :: nptcls_sel = 0     ! # of particles (state=1)
-    logical                       :: included   = .false.
+    character(len=:), allocatable :: projname               ! project file name
+    integer                       :: micind     = 0         ! index of micrograph in project
+    integer                       :: nptcls     = 0         ! # of particles
+    integer                       :: nptcls_sel = 0         ! # of particles (state=1)
+    logical                       :: included   = .false.   ! whether record has been imported
 end type projrecord
 
 ! Type to handle a single chunk
 type stream_chunk
-    type(sp_project)                       :: spproj
-    type(qsys_env)                         :: qenv
-    character(len=LONGSTRLEN), allocatable :: orig_stks(:)
-    character(len=LONGSTRLEN)              :: path, projfile_out
-    integer                                :: id
-    integer                                :: it
-    integer                                :: nmics
-    integer                                :: nptcls
-    logical                                :: toclassify = .true.
-    logical                                :: converged  = .false.
-    logical                                :: autoscale  = .false.
-    logical                                :: available  = .true.
+    type(sp_project)                       :: spproj                ! master project
+    type(qsys_env)                         :: qenv                  ! submission handler
+    character(len=LONGSTRLEN), allocatable :: orig_stks(:)          ! list of stacks
+    character(len=LONGSTRLEN)              :: path, projfile_out    ! physical location
+    integer                                :: id                    ! unique id
+    integer                                :: it                    ! # of iterations performed
+    integer                                :: nmics                 ! # of micrographs
+    integer                                :: nptcls                ! # number of particles
+    logical                                :: toclassify = .true.   ! whether to perform classification or only calculate sigmas2
+    logical                                :: converged  = .false.  ! whether classification is over
+    logical                                :: available  = .true.   ! has been initialized but no classification peformed
   contains
     procedure          :: init
     procedure, private :: generate_1, generate_2
@@ -112,7 +111,7 @@ contains
         call debug_print('end chunk%init '//int2str(id))
     end subroutine init
 
-    ! Backward compatibility
+    ! For backward compatibility with preprocess_stream_dev
     subroutine generate_1( self, fnames, nptcls, ind_glob )
         class(stream_chunk),       intent(inout) :: self
         character(len=LONGSTRLEN), intent(in)    :: fnames(:)
@@ -174,7 +173,7 @@ contains
         call debug_print('end chunk%generate '//int2str(self%id))
     end subroutine generate_1
 
-    ! for use by cluster2D_stream_dev
+    ! For use by cluster2D_stream_dev
     subroutine generate_2( self, micproj_records )
         class(stream_chunk), intent(inout) :: self
         type(projrecord),    intent(in)    :: micproj_records(:)
@@ -192,6 +191,7 @@ contains
         call debug_print('end chunk%generate_2 '//int2str(self%id))
     end subroutine generate_2
 
+    ! Initiates classification
     subroutine exec_classify( self, cline_classify, orig_smpd, orig_box, box, calc_pspec )
         class(stream_chunk), intent(inout) :: self
         class(cmdline),      intent(inout) :: cline_classify
@@ -375,6 +375,7 @@ contains
         deallocate(stks)
     end subroutine split_sigmas_into
 
+    ! removes processing folder
     subroutine remove_folder( self )
         class(stream_chunk), intent(inout) :: self
         call debug_print('in chunk%remove_folder '//int2str(self%id))
@@ -383,6 +384,7 @@ contains
         call debug_print('end chunk%remove_folder '//int2str(self%id))
     end subroutine remove_folder
 
+    ! to interrupt processing
     subroutine terminate( self )
         class(stream_chunk), intent(inout) :: self
         character(len=XLONGSTRLEN)  :: cwd
@@ -403,6 +405,7 @@ contains
         endif
     end subroutine terminate
 
+    ! get & display convergence stats
     subroutine display_iter( self )
         class(stream_chunk), intent(inout) :: self
         type(oris)                 :: os
@@ -428,6 +431,7 @@ contains
         call debug_print('end chunk%display_iter '//int2str(self%id))
     end subroutine display_iter
 
+    ! Whether classification is complete
     logical function has_converged( self )
         class(stream_chunk), intent(inout) :: self
         if( .not.self%converged )then
@@ -440,6 +444,7 @@ contains
         has_converged  = self%converged
     end function has_converged
 
+    ! Handles automated classification
     subroutine reject( self, res_thresh, ndev, box )
         class(stream_chunk), intent(inout) :: self
         real,                intent(in)    :: res_thresh, ndev
@@ -518,6 +523,7 @@ contains
         call debug_print('end chunk%reject '//int2str(self%id))
     end subroutine reject
 
+    ! For debugging
     subroutine print_info( self )
         class(stream_chunk), intent(inout) :: self
         print *,'self%id           : ',self%id
@@ -541,7 +547,6 @@ contains
         self%projfile_out = ''
         if( allocated(self%orig_stks) ) deallocate(self%orig_stks)
         self%toclassify = .true.
-        self%autoscale  = .false.
         self%converged  = .false.
         self%available  = .false.
     end subroutine kill
