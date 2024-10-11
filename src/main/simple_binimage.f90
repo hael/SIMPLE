@@ -275,8 +275,9 @@ contains
         if( allocated(sz) ) deallocate( sz )
         imax = maxval(self%bimat)
         allocate(sz(imax), source = 0)
+    
         do n_cc = 1, imax
-            sz(n_cc) = count(self%bimat == n_cc)
+            sz(n_cc) = count(self%bimat == n_cc)    
         enddo
     end function size_ccs
 

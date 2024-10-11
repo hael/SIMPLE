@@ -859,11 +859,13 @@ contains
         else
             allocate(fromc(2), toc(2))
         endif
+        
         fromc         = coord + 1         ! compensate for the c-range that starts at 0
         toc           = fromc + (box - 1) ! the lower left corner is 1,1
         self_out%rmat = 0.
         self_out%ft   = .false.
         outside       = .false.
+        
         if( isvol )then
             if( size(coord) /= 3 ) THROW_HARD("Error! expecting 3D coordinates; window_slim")
             if( fromc(1) < 1 .or. fromc(2) < 1 .or. fromc(3) < 1 .or. toc(1) > self_in%ldim(1) .or. toc(2) > self_in%ldim(2) .or. toc(3) > self_in%ldim(3) )then

@@ -57,6 +57,6 @@ program simple_test_CED
         write(*, *) 'Particle # ', iptcl
         call img%read(p%stk, iptcl)
         call ced_filter_2D(img, 0.7)
-        call img%write('test_CED_output.mrc', iptcl)
+        call img%write('/Users/atifao/Downloads/test_CED_output.mrc', iptcl)
     enddo
 end program simple_test_CED

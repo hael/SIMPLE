@@ -340,7 +340,7 @@ contains
         real            :: min_theta = -PI/2.,  theta_step = PI/180., threshold, rad_step = 1, curr_rad, theta_range_def(2), smpd 
         real, allocatable   :: angles(:), rad(:), curr_rads(:), sins(:), coss(:), emat(:, :, :)
         integer             :: dims(3), diagonal, a_grid, r_grid, i, count, x, y, t, r, curr_rad_r, cnct_px = 3, end_px, pix_cnt
-        integer             :: draw, line_num, traversed, min_line = 10 
+        integer             :: draw, line_num, traversed, min_line = 5
         integer, allocatable    :: accumulator(:, :), line_pos(:, :)
         logical             :: debug_m = .false. 
         theta_range_def = [-PI/2,PI/2]
@@ -391,7 +391,6 @@ contains
                 end if 
             end do 
         end do  
-        
         
         call img_denoised%new(dims, smpd)
         allocate(line_pos(dims(1), dims(2)))
@@ -455,10 +454,6 @@ contains
        
         call img_denoised%vis()
         
-        ! call img_edge%set_rmat(emat, .false.) 
-        ! call img_edge%vis()
-        ! call img_denoised%set_rmat(emat, .false.)
-        ! call img_denoised%vis()
 
         ! median filter? but it preserves edges
         ! use bilateral filter on lines. 

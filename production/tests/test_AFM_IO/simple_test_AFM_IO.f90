@@ -27,10 +27,11 @@ call simple_list_files(trim(directory) // '*.ibw', file_list)
 allocate(stack_stack(size(file_list)))
 allocate(stack_avg(size(file_list)))
 
-! do file_iter = 4, size(file_list)
-!     call read_ibw(stack_stack(file_iter), file_list(file_iter))
-!     call zero_padding(stack_stack(file_iter))
-!     call hough_lines(stack_stack(file_iter)%img_array(1), img_edg, [PI/2 - PI/180, PI/2 + PI/180])
+do file_iter = 4, size(file_list)
+    call read_ibw(stack_stack(file_iter), file_list(file_iter))
+    call stack_stack(file_iter)%img_array(1)%vis()
+    ! call zero_padding(stack_stack(file_iter))
+    call hough_lines(stack_stack(file_iter)%img_array(1), img_edg, [PI/2 - PI/180, PI/2 + PI/180])
 !     ! call img_edg%vis()
 !     ! call stack_stack(file_iter)%img_array(1)%write_jpg('test.jpg', norm = .true. )
 !     ! call otsu_img(stack_stack(file_iter)%img_array(1))
@@ -54,40 +55,50 @@ allocate(stack_avg(size(file_list)))
 !     ! end if
 !     ! stack_avg(file_iter)%stack_string = get_fbody(basename(trim(file_list(file_iter))), 'ibw')
 !     ! call pick_valid(stack_avg(file_iter), stack_avg(file_iter)%stack_string)
-!     if(file_iter > 4) exit 
-! end do
+    if(file_iter > 3) exit 
+end do
 
 call cpu_time(finish)
 print *, finish - start 
 
 ! test image with only one line 
-call test_img%new(test_dim, 1.0)
-do i = 1, test_dim(1)
-    do j = 1, test_dim(2)
-        if( j == 400 .or. j == 600 .or. j == 800) then 
-            call test_img%set_rmat_at(i, j, 1, 1.0)
-        end if 
+! call test_img%new(test_dim, 1.0)
+! do i = 1, test_dim(1)
+!     do j = 1, test_dim(2)
 
-        if(j == 500 .and. i > 200 .and. i < 451 ) then 
-            call test_img%set_rmat_at(i, j, 1, 1.0)
-        end if 
+!         if(j == 300 .and. i > 10 .and. i < 895 ) then 
+!             call test_img%set_rmat_at(i, j, 1, 1.0)
+!         end if 
 
-        if(j == 500 .and. i > 600 .and. i < 751 ) then 
-            call test_img%set_rmat_at(i, j, 1, 1.0)
-        end if 
+!         if( j == 400 .or. j == 600 .or. j == 800) then 
+!             call test_img%set_rmat_at(i, j, 1, 1.0)
+!         end if 
 
-        if(j == 200 .and. i > 600 .and. i < 625 ) then 
-            call test_img%set_rmat_at(i, j, 1, 1.0)
-        end if 
+!         if(j == 500 .and. i > 200 .and. i < 451 ) then 
+!             call test_img%set_rmat_at(i, j, 1, 1.0)
+!         end if 
 
-        if(i == 500 .and. j > 200 .and. j < 451 ) then 
-            call test_img%set_rmat_at(i, j, 1, 1.0)
-        end if 
+!         if(j == 500 .and. i > 600 .and. i < 751 ) then 
+!             call test_img%set_rmat_at(i, j, 1, 1.0)
+!         end if 
 
-    end do 
-end do 
-call test_img%vis()
-call test_img%write_jpg('test_hough.jpg')
-call hough_lines(test_img, test_denoised)
+!         if(j == 500 .and. i > 800 .and. i < 895 ) then 
+!             call test_img%set_rmat_at(i, j, 1, 1.0)
+!         end if 
+        
+
+!         if(j == 200 .and. i > 600 .and. i < 625 ) then 
+!             call test_img%set_rmat_at(i, j, 1, 1.0)
+!         end if 
+
+!         if(i == 500 .and. j > 200 .and. j < 451 ) then 
+!             call test_img%set_rmat_at(i, j, 1, 1.0)
+!         end if 
+
+!     end do 
+! end do 
+! call test_img%vis()
+! call test_img%write_jpg('test_hough.jpg')
+! call hough_lines(test_img, test_denoised)
 
 end program AFM_File_IO

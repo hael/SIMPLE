@@ -108,6 +108,18 @@ contains
             call J22%ifft()
             call J22%get_rmat_ptr(J22_rmat)
             J22_rmat = J22_rmat*product(ldim)
+
+            deallocate(J22_rmat)
+            allocate(J22_rmat(ldim(1), ldim(2), ldim(3)))
+            deallocate(J11_rmat)
+            allocate(J11_rmat(ldim(1), ldim(2), ldim(3)))
+            deallocate(J12_rmat)
+            allocate(J12_rmat(ldim(1), ldim(2), ldim(3)))
+            deallocate(ker_rmat)
+            allocate(ker_rmat(ldim(1), ldim(2), ldim(3)))
+            deallocate(cur_img_rmat)
+            allocate(cur_img_rmat(ldim(1), ldim(2), ldim(3)))
+            
             ! computing eigenvalues/eigenvectors of the structure tensor
             eig_val(:,:,:,1) = (J11_rmat + J22_rmat + sqrt((J11_rmat - J22_rmat)**2 + 4*J12_rmat**2))/2.
             eig_val(:,:,:,2) = (J11_rmat + J22_rmat - sqrt((J11_rmat - J22_rmat)**2 + 4*J12_rmat**2))/2.
@@ -122,10 +134,12 @@ contains
                 if( sh > epsilon(sh) ) eig_vec(k,l,1,:) = eig_vec(k,l,1,:)/sh
             enddo
             enddo
+            
             a =  lambda(:,:,:,1)*eig_vec(:,:,:,1)**2 + lambda(:,:,:,2)*eig_vec(:,:,:,2)**2
             c =  lambda(:,:,:,1)*eig_vec(:,:,:,2)**2 + lambda(:,:,:,2)*eig_vec(:,:,:,1)**2
             b = (lambda(:,:,:,1) - lambda(:,:,:,2))*eig_vec(:,:,:,1)*eig_vec(:,:,:,2)
             ! solving the diffusion equations
+            
             discrete_table(:,:,1,1,1) = (cur_img_rmat(neg_ind_1, pos_ind_2, 1) - cur_img_rmat(:,:,1))*&
                                     &( abs(b(neg_ind_1, pos_ind_2, 1)) - b(neg_ind_1, pos_ind_2, 1)+&
                                     &  abs(b(:,:,1)) - b(:,:,1) )/4.
@@ -145,7 +159,7 @@ contains
                                     &( c(:, neg_ind_2, 1) + c(:,:,1) - abs(b(:,neg_ind_2,1)) - abs(b(:,:,1)) )/2.
             discrete_table(:,:,1,3,3) = (cur_img_rmat(pos_ind_1, neg_ind_2, 1) - cur_img_rmat(:,:,1))*&
                                     &( abs(b(pos_ind_1, neg_ind_2, 1)) - b(pos_ind_1, neg_ind_2, 1)+&
-                                    &  abs(b(:,:,1)) - b(:,:,1) )/4.
+                                    &  abs(b(:,:,1)) - b(:,:,1) )/4.                    
             cur_img_rmat = cur_img_rmat + step_size*sum(sum(discrete_table,5),4)
         enddo
     end subroutine ced_filter_2D
