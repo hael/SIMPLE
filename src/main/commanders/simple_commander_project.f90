@@ -801,11 +801,12 @@ contains
         type(ran_tabu)                  :: rt
         integer,            allocatable :: states(:), ptcls_in_state(:), ptcls_rnd(:), tmpinds(:), clsinds(:)
         real,               allocatable :: rstates(:)
-        type(class_sample), allocatable :: clssmp(:)
+        type(class_sample), allocatable :: clssmp(:), clssmp_read(:)
         integer(kind=kind(ENUM_ORISEG)) :: iseg
         integer                         :: n_lines,fnr,noris,i,nstks,noris_in_state,ncls,icls,nstates,nptcls
         real                            :: state
         logical                         :: l_ctfres, l_icefrac, l_append
+        logical, parameter              :: L_TST_CLS_SMPL_IO = .false.
         class(oris), pointer :: pos => NULL()
         l_append = .false.
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir',  'yes')
@@ -914,12 +915,24 @@ contains
             clsinds = pack(tmpinds, mask=rstates > 0.5)
             allocate(states(nptcls), source=0)
             call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
+            if( L_TST_CLS_SMPL_IO )then 
+                call write_class_samples(clssmp, 'clssmp.bin')
+                call read_class_samples(clssmp_read, 'clssmp.bin')
+                if( size(clssmp) /= size(clssmp_read) ) THROW_HARD('clssmp i/o error right after read')
+                do i = 1, size(clssmp)
+                    if( class_samples_same(clssmp(i),clssmp_read(i)) )then
+                        ! all good
+                    else
+                        THROW_HARD('clssmp i/o error , umatched records')
+                    endif
+                end do
+            endif
             call spproj%os_ptcl2D%sample_balanced(clssmp, params%nptcls, states)
-            deallocate(clssmp)
             call spproj%os_ptcl2D%set_all('state', real(states))
             call spproj%os_ptcl3D%set_all('state', real(states))
             if( trim(params%prune).eq.'yes' ) call spproj%prune_particles
             call spproj%map_ptcls_state_to_cls
+            
         else
             ! updates relevant segments
             select case(iseg)
