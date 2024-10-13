@@ -6,7 +6,7 @@ use simple_syslib
 use simple_fileio
 implicit none
 
-public :: print_class_sample, write_class_samples, read_class_samples
+public :: print_class_sample, class_samples_same, write_class_samples, read_class_samples
 private
 #include "simple_local_flags.inc"
 
@@ -20,6 +20,25 @@ contains
         print *, cs_entry%pinds
         print *, cs_entry%ccs
     end subroutine print_class_sample
+
+    function class_samples_same( cs1, cs2 ) result( l_same )
+        type(class_sample), intent(inout) :: cs1, cs2
+        real, allocatable :: rarr1(:), rarr2(:)
+        integer :: sz1, sz2, sz_pinds, sz_ints
+        logical :: l_same
+        rarr1  = serialize_class_sample(cs1)
+        rarr2  = serialize_class_sample(cs2)
+        sz1    = size(rarr1)
+        sz2    = size(rarr2)
+        l_same = .false.
+        if( sz1 == sz2 )then
+            sz_pinds = (sz1 - 3) / 2
+            if( sz_pinds > 0 )then
+                sz_ints = 3 + sz_pinds
+                if( all(nint(rarr1(:sz_ints)) == nint(rarr2(:sz_ints))) ) l_same = .true.
+            endif
+        endif
+    end function class_samples_same
 
     function serialize_class_sample( cs_entry ) result( rarr )
         type(class_sample), intent(in)  :: cs_entry
@@ -65,7 +84,7 @@ contains
             end do
             do i = 1,sz_pinds
                 cnt = cnt + 1
-                cs_entry%ccs(i) = nint(rarr(cnt))
+                cs_entry%ccs(i) = rarr(cnt)
             end do
         endif
     end function unserialize_class_sample
