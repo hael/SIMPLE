@@ -47,7 +47,7 @@ enum, bind(c)
     enumerator :: I_FRAC_SH    = 43
     enumerator :: I_BETTER_L   = 44
     enumerator :: I_SAMPLED    = 45
-    enumerator :: I_BATCH      = 46
+    enumerator :: I_CLUSTER    = 46
     ! empties
     enumerator :: I_EMPTY7     = 47
     enumerator :: I_EMPTY8     = 48
@@ -154,8 +154,8 @@ contains
                 get_oriparam_ind = I_BETTER_L
             case('sampled')
                 get_oriparam_ind = I_SAMPLED
-            case('batch')
-                get_oriparam_ind = I_BATCH
+            case('cluster')
+                get_oriparam_ind = I_CLUSTER
         end select
     end function get_oriparam_ind
 
@@ -253,8 +253,8 @@ contains
                 flag ='better_l'
             case(I_SAMPLED)
                 flag ='sampled'
-            case(I_BATCH)
-                flag ='batch'
+            case(I_CLUSTER)
+                flag ='cluster'
             case DEFAULT
                 flag = 'empty'
         end select
@@ -309,6 +309,8 @@ contains
             case(I_CC_NONPEAK)
                 oriparam_isthere = abs(val) > TINY
             case(I_FRAC_SH)
+                oriparam_isthere = abs(val) > TINY
+            case(I_CLUSTER)
                 oriparam_isthere = abs(val) > TINY
             case DEFAULT
                 ! default case is defined
