@@ -45,6 +45,7 @@ contains
     procedure          :: checkvar
     procedure          :: check
     procedure          :: printline
+    procedure          :: readline
     procedure          :: writeline
     procedure          :: defined
     procedure          :: get_rarg
@@ -513,6 +514,37 @@ contains
         endif
     end subroutine printline
 
+    !> \brief  for reading the command line from file
+    subroutine readline( self, filename )
+        class(cmdline),   intent(inout) :: self
+        character(len=*), intent(in)    :: filename
+        character(len=:), allocatable :: key, arg
+        character(len=XLONGSTRLEN)    :: line, tmp
+        real    :: rarg
+        integer :: i, funit, ok, nl
+        call self%kill
+        if( .not.file_exists(adjustl(filename))) THROW_HARD('Could not find file: '//trim(filename))
+        nl = nlines(filename)
+        if( nl > MAX_CMDARGS ) THROW_HARD('Number of entries > maximum!')
+        call fopen(funit, file=trim(adjustl(filename)), status='old', iostat=ok)
+        call fileiochk('readline fopen failed '//trim(filename),ok)
+        do i = 1,nl
+            read(funit,'(A)',iostat=ok) line
+            call fileiochk('readline reading failed'//trim(filename),iostat=ok)
+            line = adjustl(trim(line))
+            call split_str(line, ' ', tmp)
+            key = adjustl(trim(tmp))
+            arg = adjustl(trim(line))
+            read(arg,*,iostat=ok) rarg
+            if( ok == 0 )then
+                call self%set(key, rarg)
+            else
+                call self%set(key, arg)
+            endif
+        enddo
+        call fclose(funit)
+    end subroutine readline
+
     !> \brief  for writing the command line to file
     subroutine writeline( self, filename, tag )
         class(cmdline),             intent(inout) :: self
@@ -644,6 +676,8 @@ contains
             if( allocated(self%cmds(icmd)%key) ) deallocate(self%cmds(icmd)%key)
             if( allocated(self%cmds(icmd)%carg) ) deallocate(self%cmds(icmd)%carg)
         end do
+        self%argcnt = 0
+        self%ncheck = 0
     end subroutine kill
 
     ! EXCEPTION-HANDLING
