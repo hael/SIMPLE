@@ -900,10 +900,8 @@ contains
             ! switch to diameter refinement
             if( l_multipick_refine .and. params%updated .eq. 'yes' .and. params%moldiam_refine .gt. 0.0) then
                 write(logfhandle,'(A,I3)') '>>> REFINING MOLECULAR DIAMETER        : ', int(params%moldiam_refine)
-                !! necessary??
                 odir_picker = filepath(trim(PATH_HERE), trim(DIR_PICKER))
                 call simple_mkdir(odir_picker, errmsg="commander_stream :: exec_stream_pick_extract;  ")
-                !!
                 params%updated     = 'no'
                 params%moldiam     = params%moldiam_refine - 50.0
                 params%moldiam_max = params%moldiam_refine + 50.0
@@ -2236,7 +2234,7 @@ contains
         call gui_stats%init(.true.)
         call gui_stats%set('particles', 'particles_imported',          0,            primary=.true.)
         call gui_stats%set('2D',        'iteration',                   0,            primary=.true.)
-        ! ?? nparts is not an input, also see project_buff below
+        ! Joe: nparts is not an input, also see project_buff below
         call gui_stats%set('compute',   'compute_in_use',      int2str(0) // '/' // int2str(params%nparts), primary=.true.)
         do
             if( file_exists(trim(TERM_STREAM)) )then
@@ -2267,7 +2265,6 @@ contains
                 ! update progress monitor
                 call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
                 time_last_import = time8()
-                ! remove this??
                 if( n_imported < 1000 )then
                     call update_user_params(cline)
                 else if( n_imported > n_imported_prev + 100 )then
@@ -2343,7 +2340,7 @@ contains
         end do
         ! termination
         call terminate_stream2D_dev( projrecords )
-        call update_user_params(cline) !!??
+        call update_user_params(cline) ! Joe: bit late for this?
         ! final stats
         if(file_exists(POOLSTATS_FILE)) call gui_stats%merge(POOLSTATS_FILE, delete = .true.)
         call gui_stats%hide('compute', 'compute_in_use')
