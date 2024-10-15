@@ -35,8 +35,8 @@ type(image), allocatable :: match_imgs(:), ptcl_match_imgs(:)
 logical,     allocatable :: ptcl_mask(:)
 integer,     allocatable :: pinds(:)
 real,        allocatable :: truth_sh(:,:), lims(:,:), sigma2_group(:,:,:)
-real,        pointer     :: rmat_cavg_odd(:,:,:), rmat_cavg_even(:,:,:), rmat_tmp(:,:,:)
-real,        parameter   :: SHMAG = 3.0, SNR = 0.01, BFAC = 10.
+real,        pointer     :: rmat_cavg_even(:,:,:), rmat_tmp(:,:,:)
+real,        parameter   :: SHMAG = 3.0, SNR = 0.05, BFAC = 10.
 integer,     parameter   :: N_PTCLS = 100, NRESTARTS = 10, SH_ITERS = 5
 integer                  :: iptcl, nptcls2update, ithr, ndim, iter, irot, ne, no
 real                     :: lowest_cost, cxy(3), lims_init(2,2), lims_sh(2,2)
@@ -90,16 +90,23 @@ do iptcl = p%fromp,p%top
     call os%set(iptcl,'state',1.)
     call os%set(iptcl,'w',    1.)
     call os%set(iptcl,'class',1.)
-    call b%img%read(p%stk, 1)
-    truth_sh(iptcl,:) = [gasdev( 0., SHMAG), gasdev( 0., SHMAG)]
-    call os%set(iptcl,'x', truth_sh(iptcl,1))
-    call os%set(iptcl,'y', truth_sh(iptcl,2))
-    call os%get_ori(iptcl, o)
-    call b%img%pad(b%img_pad)
-    call b%img_pad%fft
-    call b%img_pad%shift2Dserial(truth_sh(iptcl,:) )
-    call simimg(b%img_pad, o, tfun, p%ctf, SNR, bfac=BFAC)
-    call b%img_pad%clip(b%imgbatch(iptcl))
+    if( mod(iptcl, 2) == 0 )then
+        b%imgbatch(iptcl) = b%imgbatch(iptcl-1)
+        truth_sh(iptcl,:) = truth_sh(iptcl-1,:)
+        call os%set(iptcl,'x', truth_sh(iptcl,1))
+        call os%set(iptcl,'y', truth_sh(iptcl,2))
+    else
+        call b%img%read(p%stk, 1)
+        truth_sh(iptcl,:) = [gasdev( 0., SHMAG), gasdev( 0., SHMAG)]
+        call os%set(iptcl,'x', truth_sh(iptcl,1))
+        call os%set(iptcl,'y', truth_sh(iptcl,2))
+        call os%get_ori(iptcl, o)
+        call b%img%pad(b%img_pad)
+        call b%img_pad%fft
+        call b%img_pad%shift2Dserial(truth_sh(iptcl,:) )
+        call simimg(b%img_pad, o, tfun, p%ctf, SNR, bfac=BFAC)
+        call b%img_pad%clip(b%imgbatch(iptcl))
+    endif
     call b%imgbatch(iptcl)%write('particles.mrc',iptcl)
 enddo
 do iptcl = p%fromp,p%top
@@ -185,7 +192,8 @@ do iter = 1, SH_ITERS
         call grad_shsrch_obj%set_indices(1, iptcl)
         irot = 1 ! zero angle
         cxy  = grad_shsrch_obj%minimize(irot=irot)
-        if( iptcl == 4 )then
+        if( iptcl == 3 .or. iptcl == 4 )then
+            print *,'iptcl = ',   iptcl
             print *,'irot  ',     irot
             print *,'score ',     cxy(1)
             print *,'cur shift ', b%spproj_field%get_2Dshift(iptcl)
@@ -197,13 +205,25 @@ do iter = 1, SH_ITERS
 
     call restore_read_polarize_cavgs(iter)
 
-    call cavgs_even(1)%get_rmat_ptr(rmat_cavg_even)
-    call  cavgs_odd(1)%get_rmat_ptr(rmat_cavg_odd)
-    spec%x = reshape(rmat_cavg_even(1:p%box_crop,1:p%box_crop,1), (/ndim/))
-    call opt_ptr%minimize(spec, opt_ptr, lowest_cost)                   ! minimize the test function
-    rmat_cavg_even(1:p%box_crop,1:p%box_crop,1) = reshape(spec%x, (/p%box_crop, p%box_crop/))
-    p%refs_even = trim(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//'_even_tmp'//p%ext
-    call cavger_write(trim(p%refs_even), 'even')
+    if( iter < SH_ITERS )then
+        call cavgs_even(1)%get_rmat_ptr(rmat_cavg_even)
+        spec%x = reshape(rmat_cavg_even(1:p%box_crop,1:p%box_crop,1), (/ndim/))
+        call opt_ptr%minimize(spec, opt_ptr, lowest_cost)                   ! minimize the test function
+        rmat_cavg_even(1:p%box_crop,1:p%box_crop,1) = reshape(spec%x, (/p%box_crop, p%box_crop/))
+        p%refs_even = trim(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//'_even'//p%ext
+        p%refs_odd  = trim(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//'_odd' //p%ext
+        call cavger_write(trim(p%refs_even), 'even')
+        call b%clsfrcs%read(FRCS_FILE)
+        call cavger_read(trim(p%refs_even), 'even' )
+        call cavger_read(trim(p%refs_odd),  'odd' )
+        call b%img_crop_polarizer%init_polarizer(pftcc, p%alpha)
+        call match_imgs(1)%new([p%box_crop, p%box_crop, 1], p%smpd_crop, wthreads=.false.)
+        call prep2Dref(cavgs_even(1), match_imgs(1), 1, iseven=.true., center=.false.)
+        call b%img_crop_polarizer%polarize(pftcc, match_imgs(1), 1, isptcl=.false., iseven=.true.)
+        call prep2Dref(cavgs_odd(1), match_imgs(1), 1, iseven=.false., center=.false.)
+        call b%img_crop_polarizer%polarize(pftcc, match_imgs(1), 1, isptcl=.false., iseven=.false.)
+        call pftcc%memoize_refs
+    endif
 enddo
 
 ! last one is truth
@@ -234,7 +254,7 @@ contains
         call cavger_write(trim(p%refs_odd),  'odd'   )
         call b%clsfrcs%read(FRCS_FILE)
         call cavger_read(trim(p%refs_even), 'even' )
-        call cavger_read(trim(p%refs_even), 'odd' )
+        call cavger_read(trim(p%refs_odd),  'odd' )
         call b%img_crop_polarizer%init_polarizer(pftcc, p%alpha)
         call match_imgs(1)%new([p%box_crop, p%box_crop, 1], p%smpd_crop, wthreads=.false.)
         call prep2Dref(cavgs_even(1), match_imgs(1), 1, iseven=.true., center=.false.)
@@ -258,12 +278,11 @@ contains
             call b%imgbatch(iptcl)%ifft
             call ptcl_match_imgs(ithr)%ifft
             call ptcl_match_imgs(ithr)%get_rmat_ptr(rmat_tmp)
-            ! call b%imgbatch(iptcl)%get_rmat_ptr(rmat_tmp)
             y_norm = reshape(rmat_tmp(1:p%box_crop,1:p%box_crop,1), (/ndim/))
             y_norm = y_norm / sqrt(sum(y_norm**2))
             r      = r + acos(sum(x_norm * y_norm))
         end do
-        r = r / real(p%nptcls) * 180 / PI
+        r = r / real(p%nptcls)
         print *, r
     end function
 
@@ -282,13 +301,11 @@ contains
             call b%imgbatch(iptcl)%ifft
             call ptcl_match_imgs(ithr)%ifft
             call ptcl_match_imgs(ithr)%get_rmat_ptr(rmat_tmp)
-            ! call b%imgbatch(iptcl)%get_rmat_ptr(rmat_tmp)
             y_norm = reshape(rmat_tmp(1:p%box_crop,1:p%box_crop,1), (/ndim/))
             y_norm = y_norm / sqrt(sum(y_norm**2))
             xy     = sum(x_norm * y_norm)
             grad   = grad - (y_norm * abs_x - xy * x) / abs_x**2 / sqrt(1. - xy**2) / real(p%nptcls)
         end do
-        grad = grad * 180 / PI
     end subroutine
 
 end program simple_test_opt_reg
