@@ -213,7 +213,7 @@ contains
         call cavger_write(trim(p%refs_odd),  'odd'   )
         call b%clsfrcs%read(FRCS_FILE)
         call cavger_read(trim(p%refs_even), 'even' )
-        call cavger_read(trim(p%refs_even), 'odd' )
+        call cavger_read(trim(p%refs_odd),  'odd' )
         call b%img_crop_polarizer%init_polarizer(pftcc, p%alpha)
         call match_imgs(1)%new([p%box_crop, p%box_crop, 1], p%smpd_crop, wthreads=.false.)
         call prep2Dref(cavgs_even(1), match_imgs(1), 1, iseven=.true., center=.false.)
