@@ -9,31 +9,37 @@ use simple_parameters,        only: parameters
 use simple_optimizer,         only: optimizer
 use simple_opt_factory,       only: opt_factory
 use simple_opt_spec,          only: opt_spec
+use simple_polarft_corrcalc,  only: polarft_corrcalc
+use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
 use simple_strategy2D3D_common
 use simple_simulator
 use simple_ctf
 use simple_ori
 use simple_classaverager
+use simple_euclid_sigma2
 implicit none
 type(cmdline)            :: cline
 type(builder)            :: b
 type(parameters)         :: p
+type(polarft_corrcalc)   :: pftcc
+type(pftcc_shsrch_grad)  :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
 type(ctf)                :: tfun
 type(ori)                :: o
 type(oris)               :: os
 type(ctfparams)          :: ctfparms
+type(euclid_sigma2)      :: eucl
 type(opt_factory)        :: ofac                           ! the optimization factory object
 type(opt_spec)           :: spec                           ! the optimizer specification object
 class(optimizer),pointer :: opt_ptr=>null()                ! the generic optimizer object
 type(image), allocatable :: match_imgs(:), ptcl_match_imgs(:)
 logical,     allocatable :: ptcl_mask(:)
 integer,     allocatable :: pinds(:)
-real,        allocatable :: truth_sh(:,:), lims(:,:)
+real,        allocatable :: truth_sh(:,:), lims(:,:), sigma2_group(:,:,:)
 real,        pointer     :: rmat_cavg_odd(:,:,:), rmat_cavg_even(:,:,:), rmat_tmp(:,:,:)
-real,        parameter   :: SHMAG = 2.0, SNR = 0.5, BFAC = 10.
-integer,     parameter   :: N_PTCLS = 100, NRESTARTS = 10
-integer                  :: iptcl, nptcls2update, ithr, ndim
-real                     :: lowest_cost
+real,        parameter   :: SHMAG = 3.0, SNR = 0.01, BFAC = 10.
+integer,     parameter   :: N_PTCLS = 100, NRESTARTS = 10, SH_ITERS = 5
+integer                  :: iptcl, nptcls2update, ithr, ndim, iter, irot, ne, no
+real                     :: lowest_cost, cxy(3), lims_init(2,2), lims_sh(2,2)
 character(len=8)         :: str_opts                       ! string descriptors for the NOPTS optimizers
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)',advance='no') 'ERROR! required arguments: '
@@ -84,6 +90,7 @@ do iptcl = p%fromp,p%top
     call os%set(iptcl,'state',1.)
     call os%set(iptcl,'w',    1.)
     call os%set(iptcl,'class',1.)
+    call b%img%read(p%stk, 1)
     truth_sh(iptcl,:) = [gasdev( 0., SHMAG), gasdev( 0., SHMAG)]
     call os%set(iptcl,'x', truth_sh(iptcl,1))
     call os%set(iptcl,'y', truth_sh(iptcl,2))
@@ -103,7 +110,13 @@ call b%spproj%add_single_stk('particles.mrc', ctfparms, os)
 call b%spproj_field%partition_eo
 allocate(ptcl_mask(p%fromp:p%top))
 call b%spproj_field%sample4update_all([p%fromp,p%top],nptcls2update, pinds, ptcl_mask, .true.)
+
+! pftcc
+call pftcc%new(p%nptcls, [1,p%nptcls], p%kfromto)
+call eucl%new('dummy.dat', p%box)
+call eucl%allocate_ptcls
 allocate(match_imgs(p%ncls),ptcl_match_imgs(nthr_glob))
+call pftcc%reallocate_ptcls(p%nptcls, pinds)
 do ithr = 1,nthr_glob
     call ptcl_match_imgs(ithr)%new([p%box_crop, p%box_crop, 1], p%smpd_crop, wthreads=.false.)
 enddo
@@ -111,8 +124,27 @@ enddo
 ! references
 call restore_read_polarize_cavgs(0)
 
-call cavgs_even(1)%get_rmat_ptr(rmat_cavg_even)
-call  cavgs_odd(1)%get_rmat_ptr(rmat_cavg_odd)
+! particles
+!$omp parallel do default(shared) private(iptcl,ithr)&
+!$omp schedule(static) proc_bind(close)
+do iptcl = 1,p%nptcls
+    ithr  = omp_get_thread_num() + 1
+    call prepimg4align(iptcl, b%imgbatch(iptcl), ptcl_match_imgs(ithr))
+    call b%imgbatch(iptcl)%ifft
+    call b%img_crop_polarizer%polarize(pftcc, ptcl_match_imgs(ithr), iptcl, .true., .true.)
+    call pftcc%set_eo(iptcl, nint(b%spproj_field%get(iptcl,'eo'))<=0 )
+end do
+!$omp end parallel do
+call pftcc%create_polar_absctfmats(b%spproj, 'ptcl2D')
+
+! prep for shift search
+lims_sh(:,1)    = -p%trs
+lims_sh(:,2)    =  p%trs
+lims_init(:,1)  = -SHC_INPL_TRSHWDTH
+lims_init(:,2)  =  SHC_INPL_TRSHWDTH
+call grad_shsrch_obj%new(lims_sh, lims_init=lims_init, maxits=p%maxits_sh, opt_angle=.true., coarse_init=.false.)
+
+! prep for vol gradient descent
 ndim      = p%box_crop**2
 allocate(lims(ndim,2))
 str_opts  = 'lbfgsb'
@@ -122,21 +154,66 @@ call spec%specify(str_opts, ndim, limits=lims, nrestarts=NRESTARTS) ! make optim
 call spec%set_costfun(costfct)                                      ! set pointer to costfun
 call spec%set_gcostfun(gradfct)                                     ! set pointer to gradient of costfun
 call ofac%new(spec, opt_ptr)                                        ! generate optimizer object with the factory
-spec%x = reshape(rmat_cavg_even(1:p%box_crop,1:p%box_crop,1), (/ndim/))
-call opt_ptr%minimize(spec, opt_ptr, lowest_cost)                   ! minimize the test function
-rmat_cavg_even(1:p%box_crop,1:p%box_crop,1) = reshape(spec%x, (/p%box_crop, p%box_crop/))
-call opt_ptr%kill
-deallocate(opt_ptr)
-p%refs_even = trim(CAVGS_ITER_FBODY)//int2str_pad(p%which_iter,3)//'_even_tmp'//p%ext
-call cavger_write(trim(p%refs_even), 'even')
-call restore_read_polarize_cavgs(1)
+
+! initial sigma2
+allocate( sigma2_group(2,1,1:fdim(p%box)-1), source=0. )
+do iter = 1, SH_ITERS
+    ne = 0
+    no = 0
+    do iptcl = p%fromp,p%top
+        call b%spproj_field%get_ori(iptcl, o)
+        call eucl%calc_sigma2(pftcc, iptcl, o, 'class')
+        if( o%get_eo() == 0 )then
+            ne = ne+1
+            sigma2_group(1,1,:) = sigma2_group(1,1,:) + eucl%sigma2_part(:,iptcl)
+        else
+            no = no+1
+            sigma2_group(2,1,:) = sigma2_group(2,1,:) + eucl%sigma2_part(:,iptcl)
+        endif
+    enddo
+    sigma2_group(1,:,:) = sigma2_group(1,:,:) / real(ne)
+    sigma2_group(2,:,:) = sigma2_group(2,:,:) / real(no)
+    call write_groups_starfile(sigma2_star_from_iter(iter-1), sigma2_group, 1)
+    call eucl%read_groups(b%spproj_field, ptcl_mask)
+    do iptcl = p%fromp,p%top
+        call pftcc%memoize_sqsum_ptcl(iptcl)
+    enddo
+    call pftcc%memoize_ptcls
+
+    ! shift search
+    do iptcl = p%fromp,p%top
+        call grad_shsrch_obj%set_indices(1, iptcl)
+        irot = 1 ! zero angle
+        cxy  = grad_shsrch_obj%minimize(irot=irot)
+        if( iptcl == 4 )then
+            print *,'irot  ',     irot
+            print *,'score ',     cxy(1)
+            print *,'cur shift ', b%spproj_field%get_2Dshift(iptcl)
+            print *,'opt shift ', cxy(2:3)
+            print *,'truth ',     truth_sh(iptcl,:)
+        endif
+        call b%spproj_field%set_shift(iptcl, cxy(2:3)) !!
+    enddo
+
+    call restore_read_polarize_cavgs(iter)
+
+    call cavgs_even(1)%get_rmat_ptr(rmat_cavg_even)
+    call  cavgs_odd(1)%get_rmat_ptr(rmat_cavg_odd)
+    spec%x = reshape(rmat_cavg_even(1:p%box_crop,1:p%box_crop,1), (/ndim/))
+    call opt_ptr%minimize(spec, opt_ptr, lowest_cost)                   ! minimize the test function
+    rmat_cavg_even(1:p%box_crop,1:p%box_crop,1) = reshape(spec%x, (/p%box_crop, p%box_crop/))
+    p%refs_even = trim(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//'_even_tmp'//p%ext
+    call cavger_write(trim(p%refs_even), 'even')
+enddo
 
 ! last one is truth
 do iptcl = p%fromp,p%top
     call b%spproj_field%set_shift(iptcl, truth_sh(iptcl,:))
 enddo
-call restore_read_polarize_cavgs(2)
+call restore_read_polarize_cavgs(iter)
 
+call opt_ptr%kill
+deallocate(opt_ptr)
 
 contains
 
@@ -158,6 +235,13 @@ contains
         call b%clsfrcs%read(FRCS_FILE)
         call cavger_read(trim(p%refs_even), 'even' )
         call cavger_read(trim(p%refs_even), 'odd' )
+        call b%img_crop_polarizer%init_polarizer(pftcc, p%alpha)
+        call match_imgs(1)%new([p%box_crop, p%box_crop, 1], p%smpd_crop, wthreads=.false.)
+        call prep2Dref(cavgs_even(1), match_imgs(1), 1, iseven=.true., center=.false.)
+        call b%img_crop_polarizer%polarize(pftcc, match_imgs(1), 1, isptcl=.false., iseven=.true.)
+        call prep2Dref(cavgs_odd(1), match_imgs(1), 1, iseven=.false., center=.false.)
+        call b%img_crop_polarizer%polarize(pftcc, match_imgs(1), 1, isptcl=.false., iseven=.false.)
+        call pftcc%memoize_refs
     end subroutine restore_read_polarize_cavgs
 
     function costfct( fun_self, x, d ) result( r )
