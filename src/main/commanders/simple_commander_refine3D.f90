@@ -869,18 +869,14 @@ contains
         real     :: xyz(3)
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-        allocate(ptcl_mask(params%fromp:params%top))        
-        if( params%l_frac_update )then
-            if( build%spproj_field%has_been_sampled() )then
-                call build%spproj_field%sample4update_reprod([params%fromp,params%top],&
-                &nptcls, pinds, ptcl_mask)
-            else
-                call build%spproj_field%sample4update_rnd([params%fromp,params%top],&
-                &params%update_frac, nptcls, pinds, ptcl_mask, .false.) ! no increment of sampled
-            endif
+        allocate(ptcl_mask(params%fromp:params%top))
+        ! The policy here ought to be that nothing is done with regards to sampling other than reproducing
+        ! what was generated in the driver (prob_align, below). Sampling is delegated to prob_align (below)
+        ! and merely reproduced here
+        if( build%spproj_field%has_been_sampled() )then
+            call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds, ptcl_mask)
         else
-            call build%spproj_field%sample4update_all([params%fromp,params%top],&
-            &nptcls, pinds, ptcl_mask, .false.) ! no increement of sampled
+            THROW_HARD('exec_prob_tab requires prior particle sampling (in exec_prob_align)')
         endif
         ! more prep
         call set_bp_range( cline )
@@ -956,20 +952,21 @@ contains
     subroutine exec_prob_align( self, cline )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        use simple_eul_prob_tab, only: eul_prob_tab
+        use simple_eul_prob_tab,        only: eul_prob_tab
+        use simple_strategy2D3D_common, only: sample_ptcls4update
         use simple_image
         class(prob_align_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        integer,          allocatable :: pinds(:)
-        logical,          allocatable :: ptcl_mask(:)
-        character(len=:), allocatable :: fname
-        type(builder)                 :: build
-        type(parameters)              :: params
-        type(prob_tab_commander)      :: xprob_tab
-        type(eul_prob_tab)            :: eulprob_obj_glob
-        type(cmdline)                 :: cline_prob_tab
-        type(qsys_env)                :: qenv
-        type(chash)                   :: job_descr
+        integer,            allocatable :: pinds(:)
+        logical,            allocatable :: ptcl_mask(:)
+        character(len=:),   allocatable :: fname
+        type(builder)                   :: build
+        type(parameters)                :: params
+        type(prob_tab_commander)        :: xprob_tab
+        type(eul_prob_tab)              :: eulprob_obj_glob
+        type(cmdline)                   :: cline_prob_tab
+        type(qsys_env)                  :: qenv
+        type(chash)                     :: job_descr
         integer :: nptcls, ipart
         if( associated(build_glob) )then
             if( .not.associated(params_glob) )then
@@ -982,15 +979,8 @@ contains
         endif
         allocate(ptcl_mask(1:params_glob%nptcls))
         if( params_glob%startit == 1 ) call build_glob%spproj_field%clean_updatecnt_sampled
-        if( params_glob%l_frac_update )then
-            call build_glob%spproj_field%sample4update_rnd([1,params_glob%nptcls],&
-                &params_glob%update_frac, nptcls, pinds, ptcl_mask, .true.) ! sampled incremented
-        else                                   ! we sample all state > 0
-            call build_glob%spproj_field%sample4update_all([1,params_glob%nptcls],&
-            &nptcls, pinds, ptcl_mask, .true.) ! sampled incremented
-        endif
-        ! increment update counter
-        call build_glob%spproj_field%incr_updatecnt([1,params_glob%nptcls], ptcl_mask)
+        ! sampled incremented
+        call sample_ptcls4update([1,params_glob%nptcls], .true., nptcls, pinds, ptcl_mask)
         ! communicate to project file
         call build_glob%spproj%write_segment_inside(params_glob%oritype)        
         ! more prep

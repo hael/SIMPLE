@@ -310,18 +310,21 @@ contains
         type(refine3D_commander_distr)      :: xrefine3D
         type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
         ! other
-        character(len=:),  allocatable :: vol_name
-        type(parameters)               :: params
-        type(sp_project)               :: spproj
-        type(image)                    :: noisevol
-        integer :: istage, s
+        character(len=:),   allocatable :: vol_name
+        real,               allocatable :: rstates(:)
+        integer,            allocatable :: tmpinds(:), clsinds(:)
+        type(class_sample), allocatable :: clssmp(:) 
+        type(parameters)                :: params
+        type(sp_project)                :: spproj
+        type(image)                     :: noisevol
+        integer :: istage, s, ncls, icls
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',         'yes')
         if( .not. cline%defined('overlap')     ) call cline%set('overlap',        0.95)
         if( .not. cline%defined('prob_athres') ) call cline%set('prob_athres',     10.)
         ! if( .not. cline%defined('stoch_update') ) call cline%set('stoch_update', 'yes') ! off 4 now
-        call cline%set('stoch_update', 'no')
+        ! call cline%set('stoch_update', 'no')
         if( .not. cline%defined('center')      ) call cline%set('center',         'no')
         if( .not. cline%defined('cenlp')       ) call cline%set('cenlp', CENLP_DEFAULT)
         if( .not. cline%defined('oritype')     ) call cline%set('oritype',    'ptcl3D')
@@ -341,6 +344,22 @@ contains
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
         call spproj%write_segment_inside('projinfo', params%projfile)
+        ! take care of possibly class-biased particle sampling
+        if( trim(params%balance_smpl).eq.'yes' )then ! balanced particle sampling in iterations
+            if( spproj%is_virgin_field('ptcl2D') )then
+                THROW_HARD('Prior 2D clustering required when balance_smpl is set to yes')
+            else
+                ! generate a data structure for class sampling on disk
+                ncls    = spproj%os_cls2D%get_noris()
+                tmpinds = (/(icls,icls=1,ncls)/)
+                rstates = spproj%os_cls2D%get_all('state')
+                clsinds = pack(tmpinds, mask=rstates > 0.5)
+                call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
+                call write_class_samples(clssmp, CLASS_SAMPLING_FILE)
+                deallocate(rstates, tmpinds, clsinds)
+                call deallocate_class_samples(clssmp)
+            endif
+        endif
         ! set low-pass limits and downscaling info from FRCs
         call set_lplims_from_frcs(spproj)
         ! starting volume logics

@@ -10,7 +10,7 @@ use simple_discrete_stack_io, only: dstack_io
 use simple_polarft_corrcalc,  only: pftcc_glob
 implicit none
 
-public :: prepimgbatch, killimgbatch, read_imgbatch, set_bp_range, set_bp_range2D, prepimg4align,&
+public :: prepimgbatch, killimgbatch, read_imgbatch, set_bp_range, set_bp_range2D, sample_ptcls4update, prepimg4align,&
 &prep2Dref, preprecvols, killrecvols, calcrefvolshift_and_mapshifts2ptcls, read_and_filter_refvols,&
 &preprefvol, grid_ptcl, calc_3Drec, calc_projdir3Drec, norm_struct_facts, discrete_read_imgbatch
 private
@@ -304,6 +304,37 @@ contains
         ! update low-pas limit in project
         call build_glob%spproj_field%set_all2single('lp',lplim)
     end subroutine set_bp_range2D
+
+    subroutine sample_ptcls4update( pfromto, l_incr_sampl, nptcls2update, pinds, ptcl_mask )
+        integer,              intent(in)    :: pfromto(2)
+        logical,              intent(in)    :: l_incr_sampl
+        integer,              intent(inout) :: nptcls2update
+        integer, allocatable, intent(inout) :: pinds(:)
+        logical, allocatable, intent(inout) :: ptcl_mask(:)
+        type(class_sample),   allocatable   :: clssmp(:)
+        integer :: icls
+        if( params_glob%l_frac_update )then
+            if( trim(params_glob%balance_smpl).eq.'yes' )then
+                if( file_exists(CLASS_SAMPLING_FILE) )then
+                    call read_class_samples(clssmp, CLASS_SAMPLING_FILE)
+                else
+                    THROW_HARD('File for class-biased sampling in fractional update: '//CLASS_SAMPLING_FILE//' does not exists!')
+                endif
+                call build_glob%spproj_field%sample4update_class(clssmp, pfromto,&
+                &params_glob%update_frac, nptcls2update, pinds, ptcl_mask, l_incr_sampl)
+                call deallocate_class_samples(clssmp)
+            else
+                call build_glob%spproj_field%sample4update_rnd(pfromto,&
+                &params_glob%update_frac, nptcls2update, pinds, ptcl_mask, l_incr_sampl)
+            endif
+        else ! we sample all state > 0
+            call build_glob%spproj_field%sample4update_all(pfromto, nptcls2update, pinds, ptcl_mask, l_incr_sampl)
+        endif
+        if( l_incr_sampl )then
+            ! increment update counter
+            call build_glob%spproj_field%incr_updatecnt(pfromto, ptcl_mask)
+        endif
+    end subroutine sample_ptcls4update
 
     !>  \brief  prepares one particle image for alignment
     !!          serial routine
