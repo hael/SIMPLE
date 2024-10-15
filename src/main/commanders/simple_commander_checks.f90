@@ -8,6 +8,7 @@ implicit none
 
 public :: check_box_commander
 public :: check_nptcls_commander
+public :: check_stoch_update_commander
 public :: info_image_commander
 public :: info_stktab_commander
 private
@@ -22,6 +23,11 @@ type, extends(commander_base) :: check_nptcls_commander
   contains
     procedure :: execute      => exec_check_nptcls
 end type check_nptcls_commander
+
+type, extends(commander_base) :: check_stoch_update_commander
+  contains
+    procedure :: execute      => exec_check_stoch_update
+end type check_stoch_update_commander
 
 type, extends(commander_base) :: info_image_commander
  contains
@@ -63,6 +69,23 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CHECK_NPTCLS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check_nptcls
+
+    subroutine exec_check_stoch_update( self, cline )
+        use simple_decay_funs
+        class(check_stoch_update_commander), intent(inout) :: self
+        class(cmdline),                      intent(inout) :: cline
+        type(parameters) :: params
+        integer          :: i, nsampl_fromto(2), nsampl
+        call params%new(cline)
+        nsampl_fromto = calc_nsampl_fromto(params%nptcls)
+        write(logfhandle,'(A,1X,I7,1X,I7)') '>>> NSAMPLE, FROM/TO:', nsampl_fromto(1), nsampl_fromto(2)
+        do i = 1, params%maxits
+            nsampl = inv_nsampl_decay(i, params%maxits, params%nptcls)
+            write(logfhandle,'(A,1X,I7,1X,I7)') 'ITER/NSAMPLE:', i, nsampl
+        end do
+        ! end gracefully
+        call simple_end('**** SIMPLE_CHECK_STOCH_UPDATE NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_check_stoch_update
 
     !> for printing header information in MRC and SPIDER stacks and volumes
     subroutine exec_info_image( self, cline)

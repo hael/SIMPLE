@@ -5,7 +5,6 @@ implicit none
 public :: nsampl_decay, inv_nsampl_decay, calc_nsampl_fromto, inv_cos_decay, extremal_decay2D
 private
 
-real,    parameter :: UPDATE_FRAC_MIN = 0.1
 real,    parameter :: UPDATE_FRAC_MAX = 0.5
 integer, parameter :: NSAMPL_MIN      = 10000
 integer, parameter :: NSAMPL_MAX      = 200000
@@ -49,10 +48,11 @@ contains
             nsampl_fromto(1) = nptcls/4
             nsampl_fromto(2) = nptcls
         else
-            nsampl_fromto(1) = nint(UPDATE_FRAC_MIN * real(nptcls))
-            nsampl_fromto(1) = max(nsampl_fromto(1), NSAMPL_MIN)
+            ! upper limit has half of the particles or NSAMPLE_MAX if overshoot
             nsampl_fromto(2) = nint(UPDATE_FRAC_MAX * real(nptcls))
             nsampl_fromto(2) = min(nsampl_fromto(2), NSAMPL_MAX)
+            nsampl_fromto(1) = nint(real(nsampl_fromto(2)) / 20.)
+            nsampl_fromto(1) = max(nsampl_fromto(1), NSAMPL_MIN)
         endif
     end function calc_nsampl_fromto
 

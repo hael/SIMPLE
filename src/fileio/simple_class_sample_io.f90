@@ -6,7 +6,7 @@ use simple_syslib
 use simple_fileio
 implicit none
 
-public :: print_class_sample, class_samples_same, write_class_samples, read_class_samples
+public :: print_class_sample, class_samples_same, write_class_samples, read_class_samples, deallocate_class_samples
 private
 #include "simple_local_flags.inc"
 
@@ -14,11 +14,11 @@ contains
     
     subroutine print_class_sample( cs_entry )
         type(class_sample), intent(in)  :: cs_entry
-        print *, 'clsind  ', cs_entry%clsind
-        print *, 'pop     ', cs_entry%pop
-        print *, 'nsample ', cs_entry%nsample
-        print *, cs_entry%pinds
-        print *, cs_entry%ccs
+        print *, 'clsind             ', cs_entry%clsind
+        print *, 'pop                ', cs_entry%pop
+        print *, 'nsample            ', cs_entry%nsample
+        print *, 'size(pinds)        ', size(cs_entry%pinds)
+        print *, 'size(cs_entry%ccs) ', size(cs_entry%ccs)
     end subroutine print_class_sample
 
     function class_samples_same( cs1, cs2 ) result( l_same )
@@ -122,14 +122,7 @@ contains
         ny = size(rmat, dim=1)
         nx = size(rmat, dim=2)
         ! deallocate class sample array
-        if( allocated(csarr) )then
-            sz = size(csarr)
-            do i = 1, sz
-                if( allocated(csarr(i)%pinds) ) deallocate(csarr(i)%pinds)
-                if( allocated(csarr(i)%ccs)   ) deallocate(csarr(i)%ccs)
-            end do
-            deallocate(csarr)
-        endif
+        call deallocate_class_samples(csarr)
         ! fill up class sample array
         allocate(csarr(ny))
         do i = 1, ny 
@@ -149,5 +142,18 @@ contains
             end do
         end do
     end subroutine read_class_samples
+
+    subroutine deallocate_class_samples( csarr )
+        type(class_sample), allocatable, intent(inout) :: csarr(:)
+        integer :: sz, i
+        if( allocated(csarr) )then
+            sz = size(csarr)
+            do i = 1, sz
+                if( allocated(csarr(i)%pinds) ) deallocate(csarr(i)%pinds)
+                if( allocated(csarr(i)%ccs)   ) deallocate(csarr(i)%ccs)
+            end do
+            deallocate(csarr)
+        endif
+    end subroutine deallocate_class_samples
 
 end module simple_class_sample_io

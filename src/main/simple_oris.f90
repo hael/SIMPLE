@@ -67,8 +67,6 @@ type :: oris
     procedure          :: get_pop
     procedure          :: get_pops
     procedure          :: get_pinds
-    procedure          :: get_class_sample_stats
-    procedure          :: sample_balanced
     procedure          :: gen_mask
     procedure          :: mask_from_state
     procedure, private :: get_all_normals
@@ -85,7 +83,10 @@ type :: oris
     procedure          :: print_matrices
     procedure          :: sample4update_all
     procedure          :: sample4update_rnd
+    procedure          :: sample4update_class
     procedure          :: sample4update_reprod
+    procedure          :: get_class_sample_stats
+    procedure          :: sample_balanced
     procedure          :: incr_updatecnt
     procedure          :: clean_updatecnt
     procedure          :: clean_updatecnt_sampled
@@ -956,76 +957,6 @@ contains
         endif
     end subroutine get_pinds
 
-    subroutine get_class_sample_stats( self, clsinds, clssmp )
-        class(oris),                     intent(inout) :: self
-        integer,                         intent(in)    :: clsinds(:) ! class indices to sample from
-        type(class_sample), allocatable, intent(inout) :: clssmp(:)  ! data structure for balanced samplign
-        integer :: n, i, j, nc
-        n = size(clsinds)
-        if( allocated(clssmp) )then
-            nc = size(clssmp)
-            do i = 1, nc
-                if( allocated(clssmp(i)%ccs)   ) deallocate(clssmp(i)%ccs)
-                if( allocated(clssmp(i)%pinds) ) deallocate(clssmp(i)%pinds)
-            end do
-            deallocate(clssmp)
-        endif
-        allocate(clssmp(n))
-        ! fetch information necessary for balanced sampling
-        do i = 1, n
-            call self%get_pinds(clsinds(i), 'class', clssmp(i)%pinds)
-            if( allocated(clssmp(i)%pinds) )then
-                clssmp(i)%clsind = clsinds(i)
-                clssmp(i)%pop    = size(clssmp(i)%pinds)
-                allocate(clssmp(i)%ccs(clssmp(i)%pop), source=0.)
-                do j = 1, clssmp(i)%pop
-                    clssmp(i)%ccs(j) = self%o(clssmp(i)%pinds(j))%get('corr')
-                end do
-                call hpsort(clssmp(i)%ccs, clssmp(i)%pinds)
-                call reverse(clssmp(i)%ccs)   ! best first
-                call reverse(clssmp(i)%pinds) ! best first
-            endif
-        end do
-    end subroutine get_class_sample_stats
-
-    subroutine sample_balanced( self, clssmp, nptcls, states )
-        class(oris),        intent(inout) :: self
-        type(class_sample), intent(inout) :: clssmp(:) ! data structure for balanced samplign
-        integer,            intent(in)    :: nptcls    ! # particles to sample in total
-        integer,            intent(inout) :: states(self%n)
-        integer,            allocatable   :: pinds(:), pinds_left(:)
-        type(ran_tabu) :: rt
-        integer        :: n, i, j, cnt, nleft
-        ! calculate sampling size for each class
-        do while( sum(clssmp(:)%nsample) < nptcls )
-            where( clssmp(:)%nsample < clssmp(:)%pop ) clssmp(:)%nsample = clssmp(:)%nsample + 1
-        end do
-        states = 0
-        do i = 1, n 
-            ! sample first half as the best ones
-            nleft = clssmp(i)%pop - clssmp(i)%nsample/2
-            allocate(pinds_left(nleft), source=0)
-            cnt = 0
-            do j = 1, clssmp(i)%pop      
-                if( j <= clssmp(i)%nsample/2 )then
-                    states(clssmp(i)%pinds(j)) = 1
-                else
-                    cnt             = cnt + 1
-                    pinds_left(cnt) = clssmp(i)%pinds(j)
-                endif
-            end do
-            ! sample second half randomly from what is left
-            rt = ran_tabu(nleft)
-            call rt%shuffle(pinds_left)
-            call rt%kill
-            nleft = clssmp(i)%nsample - clssmp(i)%nsample/2
-            do j = 1, nleft
-                 states(pinds_left(j)) = 1
-            end do
-            deallocate(pinds_left)
-        enddo
-    end subroutine sample_balanced
-
     !>  \brief  generate a mask with the oris with mystate == state/ind == get(label)
     subroutine gen_mask( self, state, ind, label, l_mask, fromto )
         class(oris),          intent(inout) :: self
@@ -1289,9 +1220,9 @@ contains
         else
             sample_ind = maxval(sampled, mask=states > 0)
         endif
-        nsamples   = count(states > 0)
-        inds       = pack(inds, mask=states > 0)
-        mask       = .false.
+        nsamples = count(states > 0)
+        inds     = pack(inds, mask=states > 0)
+        mask     = .false.
         do i = 1, nsamples
             call self%o(inds(i))%set('sampled', real(sample_ind))
             mask(inds(i)) = .true.
@@ -1324,9 +1255,9 @@ contains
         else
             sample_ind = maxval(sampled, mask=states > 0)
         endif
-        nptcls     = count(states > 0)
-        inds       = pack(inds,   mask=states > 0)
-        nsamples   = min(nptcls, nint(update_frac * real(nptcls)))
+        nptcls   = count(states > 0)
+        inds     = pack(inds,   mask=states > 0)
+        nsamples = min(nptcls, nint(update_frac * real(nptcls)))
         rt = ran_tabu(nptcls)
         call rt%shuffle(inds)
         call rt%kill
@@ -1338,6 +1269,50 @@ contains
             mask(inds(i)) = .true.
         end do
     end subroutine sample4update_rnd
+
+    subroutine sample4update_class( self, clssmp, fromto, update_frac, nsamples, inds, mask, incr_sampled )
+        class(oris),          intent(inout) :: self
+        type(class_sample),   intent(inout) :: clssmp(:) ! data structure for balanced samplign
+        integer,              intent(in)    :: fromto(2)
+        real,                 intent(in)    :: update_frac
+        integer,              intent(inout) :: nsamples
+        integer, allocatable, intent(inout) :: inds(:)
+        logical,              intent(inout) :: mask(fromto(1):fromto(2))
+        logical,              intent(in)    :: incr_sampled
+        type(ran_tabu) :: rt
+        integer, allocatable :: states(:), sampled(:)
+        real,    allocatable :: rstates(:)
+        integer :: i, cnt, nptcls, sample_ind, nsamples_class, states_bal(self%n)
+        ! balanced sampling is global
+        rstates = self%get_all('state')
+        nsamples_class = nint(update_frac * real(count(rstates > 0.5)))
+        deallocate(rstates)
+        call self%sample_balanced(clssmp, nsamples_class, states_bal)
+        ! now, we deal with the partition
+        nptcls = fromto(2) - fromto(1) + 1
+        if( allocated(inds) ) deallocate(inds)
+        allocate(states(nptcls), inds(nptcls), sampled(nptcls), source=0)
+        cnt = 0
+        do i = fromto(1), fromto(2)
+            cnt          = cnt + 1
+            states(cnt)  = states_bal(i)
+            sampled(cnt) = self%o(i)%get_sampled()
+            inds(cnt)    = i
+        end do
+        if( incr_sampled )then
+            sample_ind = maxval(sampled, mask=states > 0) + 1
+        else
+            sample_ind = maxval(sampled, mask=states > 0)
+        endif
+        nsamples = count(states > 0)
+        inds     = pack(inds, mask=states > 0)
+        call hpsort(inds)
+        mask = .false.
+        do i = 1, nsamples
+            call self%o(inds(i))%set('sampled', real(sample_ind))
+            mask(inds(i)) = .true.
+        end do
+    end subroutine sample4update_class
 
     subroutine sample4update_reprod( self, fromto, nsamples, inds, mask )
         class(oris),          intent(inout) :: self
@@ -1358,13 +1333,84 @@ contains
         end do
         sample_ind = maxval(sampled)
         if( sample_ind  == 0 ) THROW_HARD('requires previous sampling')
-        nsamples   = count(sampled == sample_ind)
-        inds       = pack(inds, mask=sampled == sample_ind)
-        mask       = .false.
+        nsamples = count(sampled == sample_ind)
+        inds     = pack(inds, mask=sampled == sample_ind)
+        mask     = .false.
         do i = 1, nsamples
             mask(inds(i)) = .true.
         end do
     end subroutine sample4update_reprod
+
+    subroutine get_class_sample_stats( self, clsinds, clssmp )
+        class(oris),                     intent(inout) :: self
+        integer,                         intent(in)    :: clsinds(:) ! class indices to sample from
+        type(class_sample), allocatable, intent(inout) :: clssmp(:)  ! data structure for balanced samplign
+        integer :: n, i, j, nc
+        n = size(clsinds)
+        if( allocated(clssmp) )then
+            nc = size(clssmp)
+            do i = 1, nc
+                if( allocated(clssmp(i)%ccs)   ) deallocate(clssmp(i)%ccs)
+                if( allocated(clssmp(i)%pinds) ) deallocate(clssmp(i)%pinds)
+            end do
+            deallocate(clssmp)
+        endif
+        allocate(clssmp(n))
+        ! fetch information necessary for balanced sampling
+        do i = 1, n
+            call self%get_pinds(clsinds(i), 'class', clssmp(i)%pinds)
+            if( allocated(clssmp(i)%pinds) )then
+                clssmp(i)%clsind = clsinds(i)
+                clssmp(i)%pop    = size(clssmp(i)%pinds)
+                allocate(clssmp(i)%ccs(clssmp(i)%pop), source=0.)
+                do j = 1, clssmp(i)%pop
+                    clssmp(i)%ccs(j) = self%o(clssmp(i)%pinds(j))%get('corr')
+                end do
+                call hpsort(clssmp(i)%ccs, clssmp(i)%pinds)
+                call reverse(clssmp(i)%ccs)   ! best first
+                call reverse(clssmp(i)%pinds) ! best first
+            endif
+        end do
+    end subroutine get_class_sample_stats
+
+    subroutine sample_balanced( self, clssmp, nptcls, states )
+        class(oris),        intent(inout) :: self
+        type(class_sample), intent(inout) :: clssmp(:) ! data structure for balanced samplign
+        integer,            intent(in)    :: nptcls    ! # particles to sample in total
+        integer,            intent(inout) :: states(self%n)
+        integer,            allocatable   :: pinds(:), pinds_left(:)
+        type(ran_tabu) :: rt
+        integer        :: i, j, cnt, nleft
+        ! calculate sampling size for each class
+        clssmp(:)%nsample = 0
+        do while( sum(clssmp(:)%nsample) < nptcls )
+            where( clssmp(:)%nsample < clssmp(:)%pop ) clssmp(:)%nsample = clssmp(:)%nsample + 1
+        end do
+        states = 0
+        do i = 1, size(clssmp) 
+            ! sample first half as the best ones
+            nleft = clssmp(i)%pop - clssmp(i)%nsample/2
+            allocate(pinds_left(nleft), source=0)
+            cnt = 0
+            do j = 1, clssmp(i)%pop      
+                if( j <= clssmp(i)%nsample/2 )then
+                    states(clssmp(i)%pinds(j)) = 1
+                else
+                    cnt = cnt + 1
+                    pinds_left(cnt) = clssmp(i)%pinds(j)
+                endif
+            end do
+            ! sample second half randomly from what is left
+            rt = ran_tabu(nleft)
+            call rt%shuffle(pinds_left)
+            call rt%kill
+            nleft = clssmp(i)%nsample - clssmp(i)%nsample/2
+            do j = 1, nleft
+                 states(pinds_left(j)) = 1
+            end do
+            deallocate(pinds_left)
+        enddo
+    end subroutine sample_balanced
 
     subroutine incr_updatecnt( self, fromto, mask )
         class(oris), intent(inout) :: self

@@ -50,15 +50,14 @@ character(len=*), parameter :: STARTVOL_FBODY       = 'startvol_state'
 character(len=*), parameter :: VOL_FBODY            = 'recvol_state'
 ! 2D/3D COMMON
 character(len=*), parameter :: FSC_FBODY            = 'fsc_state'
-character(len=*), parameter :: PSSNR_FBODY          = 'pssnr_state'
 character(len=*), parameter :: FRCS_FILE            = 'frcs'//BIN_EXT
 character(len=*), parameter :: ALGN_FBODY           = 'algndoc_'
 character(len=*), parameter :: ARRAY_SCRIPT         = 'simple_script_array'
 ! STATS
 character(len=*), parameter :: STATS_FILE           = 'simple_stats'//trim(TXT_EXT)
 character(len=*), parameter :: ITERSTATS_FILE       = 'simple_iter_stats'//trim(TXT_EXT)
-! LOCAL RESOLUTION
-character(len=*), parameter :: LOCRESMAP3D_FILE     = 'locresmap3D_finds.bin'
+! SAMPLING
+character(len=*), parameter :: CLASS_SAMPLING_FILE  = 'clssmp.bin' 
 ! PREPROCESSING
 character(len=*), parameter :: PICKREFS_FBODY       = 'pickrefs'
 character(len=*), parameter :: EXTRACT_STK_FBODY    = 'ptcls_from_'
@@ -76,7 +75,6 @@ character(len=*), parameter :: DIR_PICKER           = 'picker/'
 character(len=*), parameter :: DIR_PREPROC          = './'
 ! REG CORR/ASSIGNMENT
 character(len=*), parameter :: DIST_FBODY           = 'dist_part'
-character(len=*), parameter :: SHIFT_FBODY          = 'shift_dist_part'
 character(len=*), parameter :: ASSIGNMENT_FBODY     = 'assignment_part'
 ! STREAMING
 character(len=*), parameter :: PREPROCESS_PREFIX    = 'preprocess_'
