@@ -20,7 +20,6 @@ type(cmdline)                 :: cline
 type(builder)                 :: b
 type(parameters)              :: p
 type(polarft_corrcalc)        :: pftcc
-type(polarizer)               :: img_copy
 type(pftcc_shsrch_grad)       :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
 type(ctf)                     :: tfun
 type(ori)                     :: o
@@ -31,7 +30,7 @@ logical                :: be_verbose=.false.
 real,    parameter     :: SHMAG=3.0
 real,    parameter     :: SNR  =0.01
 real,    parameter     :: BFAC =10.
-integer, parameter     :: N_PTCLS = 100, SH_ITERS = 1
+integer, parameter     :: N_PTCLS = 100, SH_ITERS = 5
 logical, allocatable   :: ptcl_mask(:)
 integer, allocatable   :: pinds(:)
 type(ctfparams)        :: ctfparms
@@ -54,7 +53,6 @@ call cline%set('oritype','ptcl2D')
 if( .not.cline%defined('objfun') ) call cline%set('objfun', 'euclid')
 call cline%set('ml_reg', 'no')
 call cline%set('ncls',   1.)
-call cline%set('ctf',    'yes')
 call cline%set('kv',     300)
 call cline%set('cs',     2.7)
 call cline%set('fraca',  0.1)
@@ -73,6 +71,9 @@ p%frcs   = trim(FRCS_FILE)
 ctfparms%smpd  = p%smpd
 ctfparms%kv    = p%kv
 ctfparms%cs    = p%cs
+if( trim(p%ctf) .eq. 'no' )then
+    ctfparms%ctfflag = CTFFLAG_NO
+endif
 ctfparms%fraca = p%fraca
 tfun = ctf(p%smpd, p%kv, p%cs, p%fraca)
 
@@ -80,17 +81,16 @@ tfun = ctf(p%smpd, p%kv, p%cs, p%fraca)
 call b%img%read(p%stk, p%iptcl)
 call prepimgbatch(N_PTCLS)
 call os%new(p%nptcls,is_ptcl=.true.)
-call os%rnd_ctf(p%kv, 2.7, 0.1, 2.5, 1.5, 0.001)
+if( trim(p%ctf) .eq. 'no' )then
+else
+    call os%rnd_ctf(p%kv, p%cs, p%fraca, 2.5, 1.5, 0.001)
+endif
 allocate(truth_sh(p%fromp:p%top,2))
 do iptcl = p%fromp,p%top
     call os%set(iptcl,'state',1.)
     call os%set(iptcl,'w',    1.)
     call os%set(iptcl,'class',1.)
-    if( is_odd(iptcl) )then
-        call b%img%read(p%stk, 1)
-    else
-        call b%img%read(p%stk, 2)
-    endif
+    call b%img%read(p%stk, 1)
     truth_sh(iptcl,:) = [gasdev( 0., SHMAG), gasdev( 0., SHMAG)]
     call os%set(iptcl,'x', truth_sh(iptcl,1))
     call os%set(iptcl,'y', truth_sh(iptcl,2))
