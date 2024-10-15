@@ -759,7 +759,13 @@ contains
         call private_prgs(25)%push_req_key('infile')
         call private_prgs(25)%push_req_key('infile2')
 
-        n_private_prgs = 25
+        ! check stochastic update scheme
+        call private_prgs(26)%set_name('check_stoch_update')
+        ! required keys
+        call private_prgs(26)%push_req_key('maxits')
+        call private_prgs(26)%push_req_key('nptcls')
+
+        n_private_prgs = 26
     end subroutine new_private_prgs
 
 end module simple_private_prgs

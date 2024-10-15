@@ -63,6 +63,7 @@ contains
         type(strategy3D_spec), allocatable :: strategy3Dspecs(:)
         real,                  allocatable :: resarr(:)
         integer,               allocatable :: batches(:,:)
+        type(class_sample),    allocatable :: clssmp(:) 
         type(convergence) :: conv
         type(oris)        :: prev_oris
         type(ori)         :: orientation
@@ -95,21 +96,14 @@ contains
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
         if( allocated(pinds) )     deallocate(pinds)
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
-        allocate(ptcl_mask(params_glob%fromp:params_glob%top))        
+        allocate(ptcl_mask(params_glob%fromp:params_glob%top)) 
         if( trim(params_glob%refine).eq.'prob' )then
             ! generation of random sample and incr of updatecnts delegated to prob_align
             call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
             &nptcls2update, pinds, ptcl_mask )
         else
-            if( params_glob%l_frac_update )then
-                call build_glob%spproj_field%sample4update_rnd([params_glob%fromp,params_glob%top],&
-                        &params_glob%update_frac, nptcls2update, pinds, ptcl_mask, .true.) ! sampled incremented
-            else                                                                           ! we sample all state > 0
-                call build_glob%spproj_field%sample4update_all([params_glob%fromp,params_glob%top],&
-                                            &nptcls2update, pinds, ptcl_mask, .true.)      ! sampled incremented
-            endif
-            ! increment update counter
-            call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top], ptcl_mask)
+            ! sampled incremented
+            call sample_ptcls4update([params_glob%fromp,params_glob%top], .true., nptcls2update, pinds, ptcl_mask )
         endif
 
         ! PREP BATCH ALIGNEMENT
@@ -225,6 +219,7 @@ contains
         end do
         deallocate(strategy3Dsrch,strategy3Dspecs,batches)
         call eulprob_obj_part%kill
+        call deallocate_class_samples(clssmp)
 
         ! WRITE SIGMAS FOR ML-BASED REFINEMENT
         if( params_glob%l_needs_sigma ) call eucl_sigma%write_sigma2
