@@ -51,7 +51,7 @@ real,             parameter :: LPSYMSRCH_LB         = 12.
 integer,          parameter :: NSTAGES              = 8
 integer,          parameter :: PHASES(3)            = [2,6,8]
 integer,          parameter :: MAXITS(3)            = [20,15,10]
-integer,          parameter :: MAXITS_GLOB(3)       = [2*20,4*15,2*10]
+integer,          parameter :: MAXITS_GLOB          = 2 * 20 + 4 * 15 + 2 * 10
 integer,          parameter :: NSPACE(3)            = [500,1000,2500]
 integer,          parameter :: SYMSRCH_STAGE        = 3
 integer,          parameter :: PROBREFINE_STAGE     = 5
@@ -60,7 +60,6 @@ type(lp_crop_inf), allocatable :: lpinfo(:)
 logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false.
 type(sym)        :: se1,se2
 type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_postprocess, cline_reproject
-
 
 contains
 
@@ -553,7 +552,7 @@ contains
         integer,          intent(in)  :: istage
         logical,          intent(in)  :: l_noise_reg
         character(len=:), allocatable :: silence_fsc, sh_first, prob_sh, ml_reg, refine, icm
-        integer :: iphase, iter, inspace, imaxits, imaxits_glob
+        integer :: iphase, iter, inspace, imaxits
         real    :: trs, snr_noise_reg
         ! iteration number bookkeeping
         if( cline_refine3D%defined('endit') )then
@@ -577,7 +576,6 @@ contains
             case(1)
                 inspace       = NSPACE(1)
                 imaxits       = MAXITS(1)
-                imaxits_glob  = MAXITS_GLOB(1)
                 silence_fsc   = 'yes'
                 trs           = 0.
                 sh_first      = 'no'
@@ -587,7 +585,6 @@ contains
             case(2)
                 inspace       = NSPACE(2)
                 imaxits       = MAXITS(2)
-                imaxits_glob  = MAXITS_GLOB(2)
                 silence_fsc   = 'yes'
                 trs           = lpinfo(istage)%trslim
                 sh_first      = 'yes'
@@ -597,7 +594,6 @@ contains
             case(3)
                 inspace       = NSPACE(3)
                 imaxits       = MAXITS(3)
-                imaxits_glob  = MAXITS_GLOB(3)
                 silence_fsc   = 'no'
                 trs           = lpinfo(istage)%trslim
                 sh_first      = 'yes'
@@ -632,7 +628,7 @@ contains
         call cline_refine3D%set('box_crop',   lpinfo(istage)%box_crop)
         call cline_refine3D%set('nspace',                     inspace)
         call cline_refine3D%set('maxits',                     imaxits)
-        call cline_refine3D%set('maxits_glob',           imaxits_glob)
+        call cline_refine3D%set('maxits_glob',            MAXITS_GLOB)
         call cline_refine3D%set('silence_fsc',            silence_fsc)
         call cline_refine3D%set('trs',                            trs)
         call cline_refine3D%set('sh_first',                  sh_first)
