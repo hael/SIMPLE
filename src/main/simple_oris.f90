@@ -1287,7 +1287,8 @@ contains
         rstates = self%get_all('state')
         nsamples_class = nint(update_frac * real(count(rstates > 0.5)))
         deallocate(rstates)
-        call self%sample_balanced(clssmp, nsamples_class, states_bal)
+        ! random selection within classes, greediness=0
+        call self%sample_balanced(clssmp, nsamples_class, 0, states_bal)
         ! now, we deal with the partition
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
@@ -1373,10 +1374,11 @@ contains
         end do
     end subroutine get_class_sample_stats
 
-    subroutine sample_balanced( self, clssmp, nptcls, states )
+    subroutine sample_balanced( self, clssmp, nptcls, greediness, states )
         class(oris),        intent(inout) :: self
-        type(class_sample), intent(inout) :: clssmp(:) ! data structure for balanced samplign
-        integer,            intent(in)    :: nptcls    ! # particles to sample in total
+        type(class_sample), intent(inout) :: clssmp(:)  ! data structure for balanced samplign
+        integer,            intent(in)    :: nptcls     ! # particles to sample in total
+        integer,            intent(in)    :: greediness ! greediness level (see below)
         integer,            intent(inout) :: states(self%n)
         integer,            allocatable   :: pinds(:), pinds_left(:)
         type(ran_tabu) :: rt
@@ -1387,29 +1389,53 @@ contains
             where( clssmp(:)%nsample < clssmp(:)%pop ) clssmp(:)%nsample = clssmp(:)%nsample + 1
         end do
         states = 0
-        do i = 1, size(clssmp) 
-            ! sample first half as the best ones
-            nleft = clssmp(i)%pop - clssmp(i)%nsample/2
-            allocate(pinds_left(nleft), source=0)
-            cnt = 0
-            do j = 1, clssmp(i)%pop      
-                if( j <= clssmp(i)%nsample/2 )then
-                    states(clssmp(i)%pinds(j)) = 1
-                else
-                    cnt = cnt + 1
-                    pinds_left(cnt) = clssmp(i)%pinds(j)
-                endif
-            end do
-            ! sample second half randomly from what is left
-            rt = ran_tabu(nleft)
-            call rt%shuffle(pinds_left)
-            call rt%kill
-            nleft = clssmp(i)%nsample - clssmp(i)%nsample/2
-            do j = 1, nleft
-                 states(pinds_left(j)) = 1
-            end do
-            deallocate(pinds_left)
-        enddo
+        select case(greediness)
+            case(0)
+                ! completely random selection (only class assignment matters)
+                do i = 1, size(clssmp)
+                    allocate(pinds_left(clssmp(i)%pop), source=clssmp(i)%pinds)
+                    rt = ran_tabu(clssmp(i)%pop)
+                    call rt%shuffle(pinds_left)
+                    call rt%kill
+                    do j = 1, clssmp(i)%nsample
+                        states(pinds_left(j)) = 1
+                    end do
+                    deallocate(pinds_left)
+                end do
+            case(1)
+                do i = 1, size(clssmp) 
+                    ! sample first half as the best ones
+                    nleft = clssmp(i)%pop - clssmp(i)%nsample/2
+                    allocate(pinds_left(nleft), source=0)
+                    cnt = 0
+                    do j = 1, clssmp(i)%pop      
+                        if( j <= clssmp(i)%nsample/2 )then
+                            states(clssmp(i)%pinds(j)) = 1
+                        else
+                            cnt = cnt + 1
+                            pinds_left(cnt) = clssmp(i)%pinds(j)
+                        endif
+                    end do
+                    ! sample second half randomly from what is left
+                    rt = ran_tabu(nleft)
+                    call rt%shuffle(pinds_left)
+                    call rt%kill
+                    nleft = clssmp(i)%nsample - clssmp(i)%nsample/2
+                    do j = 1, nleft
+                        states(pinds_left(j)) = 1
+                    end do
+                    deallocate(pinds_left)
+                enddo
+            case(2)
+                ! completely greedy selection based on objective function value
+                do i = 1, size(clssmp)
+                    do j = 1, clssmp(i)%nsample
+                        states(clssmp(i)%pinds(j)) = 1
+                    end do
+                end do
+            case DEFAULT
+                THROW_HARD('only greediness 0-2 is allowed')
+        end select
     end subroutine sample_balanced
 
     subroutine incr_updatecnt( self, fromto, mask )
