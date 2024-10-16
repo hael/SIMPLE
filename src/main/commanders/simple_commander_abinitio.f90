@@ -409,7 +409,7 @@ contains
             call exec_refine3D(istage, xrefine3D)
             ! Symmetrization
             if( istage == SYMSRCH_STAGE )then
-                call symmetrize(istage, spproj, params%projfile)
+                call symmetrize(istage, spproj, params%projfile, xreconstruct3D_distr)
             endif
         enddo
         ! for visualization
@@ -661,18 +661,21 @@ contains
         enddo
     end subroutine exec_refine3D
 
-    subroutine symmetrize( istage, spproj, projfile )
-        integer,           intent(in)    :: istage
-        class(sp_project), intent(inout) :: spproj
-        character(len=*),  intent(in)    :: projfile
-        character(len=:),  allocatable   :: vol_iter, vol_sym
-        type(symmetrize_map_commander)   :: xsymmap
+    subroutine symmetrize( istage, spproj, projfile, xreconstruct3D )
+        integer,                         intent(in)    :: istage
+        class(sp_project),               intent(inout) :: spproj
+        character(len=*),                intent(in)    :: projfile
+        class(commander_base), optional, intent(inout) :: xreconstruct3D
+        type(symmetrize_map_commander) :: xsymmap
+        type(cmdline)                  :: cline_symrec
+        character(len=:),  allocatable :: vol_iter, vol_sym
         real :: lpsym
         if( l_symran )then
             call se1%symrandomize(spproj%os_ptcl3D)
             call spproj%write_segment_inside('ptcl3D', projfile)
         endif
         if( l_srch4symaxis )then
+            ! symmetry determination & map symmetrization
             vol_iter = VOL_FBODY//STR_STATE_GLOB//params_glob%ext
             if( .not. file_exists(vol_iter) ) THROW_HARD('input volume to map symmetrization does not exist')
             call cline_symmap%set('vol1', vol_iter)
@@ -688,6 +691,22 @@ contains
             write(logfhandle,'(A)') '>>>'
             call xsymmap%execute_safe(cline_symmap)
             call del_file('SYMAXIS_SEARCH_FINISHED')
+            if( present(xreconstruct3D) )then
+                ! symmetric reconstruction
+                cline_symrec = cline_refine3D
+                call cline_symrec%set('prg',        'reconstruct3D')
+                call cline_symrec%set('mkdir',      'no')
+                call cline_symrec%set('projfile',   projfile)
+                call cline_symrec%set('pgrp',       params_glob%pgrp)
+                call cline_symrec%set('which_iter', cline_refine3D%get_rarg('endit'))
+                call cline_symrec%delete('update_frac')
+                call cline_symrec%delete('stoch_update')
+                call cline_symrec%delete('endit')
+                call xreconstruct3D%execute_safe(cline_symrec)
+                vol_sym = VOL_FBODY//int2str_pad(1,2)//params_glob%ext
+                call simple_copy_file(vol_sym,  'symmetric_map'//params_glob%ext)
+                call cline_symrec%kill
+            endif
             call cline_refine3D%set('vol1', vol_sym)
         endif
     end subroutine symmetrize
