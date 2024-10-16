@@ -809,9 +809,10 @@ contains
         logical, parameter              :: L_TST_CLS_SMPL_IO = .false.
         class(oris), pointer :: pos => NULL()
         l_append = .false.
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir',  'yes')
-        if( .not. cline%defined('prune') ) call cline%set('prune',  'no')
-        if( .not. cline%defined('append')) call cline%set('append', 'no')
+        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',   'yes')
+        if( .not. cline%defined('prune')      ) call cline%set('prune',    'no')
+        if( .not. cline%defined('append')     ) call cline%set('append',   'no')
+        if( .not. cline%defined('greediness') ) call cline%set('greediness', 2.)
         call params%new(cline, silent=.true.)
         if(params%append .eq. 'yes') l_append = .true.
         iseg = oritype2segment(trim(params%oritype))
@@ -927,12 +928,11 @@ contains
                     endif
                 end do
             endif
-            call spproj%os_ptcl2D%sample_balanced(clssmp, params%nptcls, states)
+            call spproj%os_ptcl2D%sample_balanced(clssmp, params%nptcls, params%greediness, states)
             call spproj%os_ptcl2D%set_all('state', real(states))
             call spproj%os_ptcl3D%set_all('state', real(states))
             if( trim(params%prune).eq.'yes' ) call spproj%prune_particles
             call spproj%map_ptcls_state_to_cls
-            
         else
             ! updates relevant segments
             select case(iseg)
