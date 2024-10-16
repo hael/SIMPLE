@@ -138,8 +138,8 @@ do iptcl = 1,p%nptcls
     ithr  = omp_get_thread_num() + 1
     call prepimg4align(iptcl, b%imgbatch(iptcl), ptcl_match_imgs(ithr))
     call b%imgbatch(iptcl)%ifft
-    call b%img_crop_polarizer%polarize(pftcc, ptcl_match_imgs(ithr), iptcl, .true., .true.)
-    call pftcc%set_eo(iptcl, nint(b%spproj_field%get(iptcl,'eo'))<=0 )
+    call b%img_crop_polarizer%polarize(pftcc, ptcl_match_imgs(ithr), iptcl, .true., mod(iptcl,2)==0)
+    call pftcc%set_eo(iptcl, mod(iptcl,2)==0 )
 end do
 !$omp end parallel do
 call pftcc%create_polar_absctfmats(b%spproj, 'ptcl2D')
@@ -214,8 +214,7 @@ do iter = 1, SH_ITERS
         p%refs_odd  = trim(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//'_odd' //p%ext
         call cavger_write(trim(p%refs_even), 'even')
         call b%clsfrcs%read(FRCS_FILE)
-        call cavger_read(trim(p%refs_even), 'even' )
-        call cavger_read(trim(p%refs_odd),  'odd' )
+        call cavger_read(trim(p%refs_odd),   'odd' )
         call b%img_crop_polarizer%init_polarizer(pftcc, p%alpha)
         call match_imgs(1)%new([p%box_crop, p%box_crop, 1], p%smpd_crop, wthreads=.false.)
         call prep2Dref(cavgs_even(1), match_imgs(1), 1, iseven=.true., center=.false.)
