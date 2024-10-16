@@ -27,16 +27,17 @@ type(oris)                    :: os
 type(image), allocatable      :: match_imgs(:), ptcl_match_imgs(:)
 ! character(len=:), allocatable :: cmd
 logical                :: be_verbose=.false.
-real,    parameter     :: SHMAG=3.0
-real,    parameter     :: SNR  =0.01
-real,    parameter     :: BFAC =10.
-integer, parameter     :: N_PTCLS = 100, SH_ITERS = 5
+real,    parameter     :: SHMAG = 3.0
+real,    parameter     :: SNR   = 0.1
+real,    parameter     :: BFAC  = 10.
+integer, parameter     :: SH_ITERS = 5, N_SH = 5, N_PTCLS = N_SH**2
 logical, allocatable   :: ptcl_mask(:)
 integer, allocatable   :: pinds(:)
 type(ctfparams)        :: ctfparms
 type(euclid_sigma2)    :: eucl
 real, allocatable      :: sigma2_group(:,:,:), truth_sh(:,:)
-real                   :: cxy(3), lims(2,2), lims_init(2,2)
+real                   :: cxy(3), lims(2,2), lims_init(2,2), rnd_shifts(2,N_SH), sh, shifts_cnt(N_SH), shifts_dist(N_SH),&
+                         &min_truth, correct_cnt, truth_cnt(N_SH)
 integer                :: xsh, ysh, xbest, ybest, i, irot, ne, no, iptcl, nptcls2update, ithr, iter
 logical                :: mrc_exists
 if( command_argument_count() < 4 )then
@@ -85,13 +86,21 @@ if( trim(p%ctf) .eq. 'no' )then
 else
     call os%rnd_ctf(p%kv, p%cs, p%fraca, 2.5, 1.5, 0.001)
 endif
+call seed_rnd
+do i = 1, N_SH
+    sh = SHMAG * real(i - 1) / real(N_SH - 1)
+    if( ran3() < 0.5 ) sh = -sh
+    rnd_shifts(1,i) = sh
+    if( ran3() < 0.5 ) sh = -sh
+    rnd_shifts(2,i) = sh
+enddo
 allocate(truth_sh(p%fromp:p%top,2))
 do iptcl = p%fromp,p%top
     call os%set(iptcl,'state',1.)
     call os%set(iptcl,'w',    1.)
     call os%set(iptcl,'class',1.)
     call b%img%read(p%stk, 1)
-    truth_sh(iptcl,:) = [gasdev( 0., SHMAG), gasdev( 0., SHMAG)]
+    truth_sh(iptcl,:) = rnd_shifts(:,floor(ran3() * N_SH) + 1)
     call os%set(iptcl,'x', truth_sh(iptcl,1))
     call os%set(iptcl,'y', truth_sh(iptcl,2))
     call os%get_ori(iptcl, o)
@@ -146,6 +155,8 @@ call grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=p%maxits_sh, opt_angl
 
 ! initial sigma2
 allocate( sigma2_group(2,1,1:fdim(p%box)-1), source=0. )
+shifts_cnt = 0
+min_truth  = 0.
 do iter = 1, SH_ITERS
     ne = 0
     no = 0
@@ -182,14 +193,43 @@ do iter = 1, SH_ITERS
             print *,'truth ',     truth_sh(iptcl,:)
         endif
         call b%spproj_field%set_shift(iptcl, cxy(2:3)) !!
+        ! correct shifts statistics
+        if( iter == SH_ITERS )then
+            do i = 1, N_SH
+                shifts_dist(i) = euclid(cxy(2:3), rnd_shifts(:,i))
+            enddo
+            min_truth                         = min_truth + minval(shifts_dist)
+            shifts_cnt(minloc(shifts_dist,1)) = shifts_cnt(minloc(shifts_dist,1)) + 1
+        endif
     enddo
 
     call restore_read_polarize_cavgs(iter)
 enddo
 
+print *, 'SHIFT COUNTS with total/total_min_dist = ', sum(shifts_cnt), min_truth
+do i = 1, N_SH
+    print *, shifts_cnt(i)
+enddo
+
+truth_cnt = 0
+min_truth = 0.
 do iptcl = p%fromp,p%top
     call b%spproj_field%set_shift(iptcl, truth_sh(iptcl,:))
+    do i = 1, N_SH
+        shifts_dist(i) = euclid(truth_sh(iptcl,:), rnd_shifts(:,i))
+    enddo
+    min_truth                        = min_truth + minval(shifts_dist)
+    truth_cnt(minloc(shifts_dist,1)) = truth_cnt(minloc(shifts_dist,1)) + 1
 enddo
+
+correct_cnt = 0
+print *, 'TRUTH SHIFT COUNTS with total/total_min_dist = ', sum(truth_cnt), min_truth
+do i = 1, N_SH
+    print *, truth_cnt(i)
+    correct_cnt = correct_cnt + min(truth_cnt(i), shifts_cnt(i))
+enddo
+
+print *, 'correct shifts cnt / total = ', correct_cnt, ' / ', sum(truth_cnt)
 
 call restore_read_polarize_cavgs(iter)
 
