@@ -99,6 +99,7 @@ contains
     procedure          :: map2Dshifts23D
     procedure          :: map2ptcls
     procedure          :: map2ptcls_state
+    procedure          :: map_cls2D_flag_to_ptcls
     procedure          :: map_ptcls_state_to_cls
     procedure          :: replace_project
     procedure          :: report_state2stk
@@ -1542,7 +1543,7 @@ contains
             write(logfhandle,*) 'nptcl2D: ', self%os_ptcl2D%get_noris()
             THROW_HARD('iptcl index out of range; get_micname')
         end if
-        imic = self%os_ptcl2D%get(iptcl, 'stkind')
+        imic = nint(self%os_ptcl2D%get(iptcl, 'stkind'))
         if(imic < 1 .or. imic > self%os_mic%get_noris()) then
             write(logfhandle,*) 'imic : ', imic
             write(logfhandle,*) 'nmics: ', self%os_mic%get_noris()
@@ -2138,7 +2139,7 @@ contains
         character(len=*),          intent(in)    :: oritype
         real,                      intent(in)    :: state
         class(oris), pointer :: pos => NULL()
-        integer              :: iori
+        integer              :: iori, istate
         get_n_insegment_state = 0
         select case(oritype)
             case('ptcl2D','ptcl3D')
@@ -2148,11 +2149,12 @@ contains
                 endif
         end select
         call self%ptr2oritype(oritype, pos)
+        istate = nint(state)
         do iori=1,pos%get_noris()
             if(.not. pos%isthere(iori,'state') )then
                 THROW_HARD('state flag missing from ori; get_n_insegment_state')
             endif
-            if( pos%get_state(iori) == state )then
+            if( pos%get_state(iori) == istate )then
                 get_n_insegment_state = get_n_insegment_state + 1
             endif
         enddo
@@ -2950,6 +2952,54 @@ contains
         end do
         !$omp end parallel do
     end subroutine map2ptcls_state
+
+    ! report a real flag from the cls2D field back to the corresponding particles
+    subroutine map_cls2D_flag_to_ptcls( self, flag )
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: flag
+        integer, allocatable             :: particles(:)
+        real    :: val
+        integer :: icls, iptcl, nptcl3D, nptcl2D, ncls2D, pind
+        nptcl2D = self%os_ptcl2D%get_noris()
+        nptcl3D = self%os_ptcl3D%get_noris()
+        ncls2D  = self%os_cls2D%get_noris()
+        ! sanity
+        if( nptcl2D == 0 )then
+            THROW_WARN('empty PTCL2D field. Nothing to do; map_cls_flag_to_ptcls')
+            return
+        endif
+        if( nptcl3D == 0 )then
+            THROW_WARN('empty PTCL3D field. Nothing to do; map_cls_flag_to_ptcls')
+            return
+        endif
+        if( ncls2D == 0 )then
+            THROW_WARN('empty CLS2D field. Nothing to do; map_cls_flag_to_ptcls')
+            return
+        endif
+        if( .not.self%os_cls2D%isthere(flag) )then
+            THROW_WARN('flag is missing from the CLS2D field. Nothing to do; map_cls_flag_to_ptcls')
+            return
+        endif
+        if( get_oriparam_ind(flag) == 0 )then
+            THROW_WARN('flag is missing from the PTCL field. Nothing to do; map_cls_flag_to_ptcls')
+            return
+        endif
+        ! do the class to particles mapping
+        do icls = 1,ncls2D
+            if( self%os_cls2D%get_state(icls)==0 ) cycle
+            val = self%os_cls2D%get(icls, flag)
+            ! get particle indices
+            call self%os_ptcl2D%get_pinds(icls, 'class', particles)
+            if( allocated(particles) )then
+                do iptcl=1,size(particles)
+                    pind = particles(iptcl)
+                    call self%os_ptcl2D%set(pind, flag, val)
+                    call self%os_ptcl3D%set(pind, flag, val)
+                end do
+                deallocate(particles)
+            endif
+        end do
+    end subroutine map_cls2D_flag_to_ptcls
 
     ! this updates cls fields with respect to ptcl2D/3D states
     subroutine map_ptcls_state_to_cls( self )
