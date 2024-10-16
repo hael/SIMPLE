@@ -337,12 +337,14 @@ contains
         class(image), intent(out)     :: img_denoised
         real, intent(in), optional        :: theta_range(2)
         type(image)     :: img_edge 
-        real            :: min_theta = -PI/2.,  theta_step = PI/180., threshold, rad_step = 1, curr_rad, theta_range_def(2), smpd 
-        real, allocatable   :: angles(:), rad(:), curr_rads(:), sins(:), coss(:), emat(:, :, :)
+        real            :: min_theta = -PI/2.,  theta_step = PI/180., threshold, rad_step = 1, curr_rad, theta_range_def(2), smpd, fil_val
+        real, allocatable   :: angles(:), rad(:), curr_rads(:), sins(:), coss(:), emat(:, :, :), rmat(:, :, :), imat(:, :, :)
         integer             :: dims(3), diagonal, a_grid, r_grid, i, count, x, y, t, r, curr_rad_r, cnct_px = 3, end_px, pix_cnt
-        integer             :: draw, line_num, traversed, min_line = 5
+        integer             :: draw, line_num, traversed, min_line = 5, center(3), nsz, neigh_filter(3, 8) = 0, m, n 
         integer, allocatable    :: accumulator(:, :), line_pos(:, :)
-        logical             :: debug_m = .false. 
+        logical             :: debug_m = .false.
+        logical, allocatable :: mask(:, :, :)
+
         theta_range_def = [-PI/2,PI/2]
         if( present(theta_range)) theta_range_def = theta_range
         dims = img_in%get_ldim()
@@ -350,7 +352,9 @@ contains
         
         ! pre-processing
         call canny(img_in, img_edge)
+        allocate(rmat(dims(1), dims(2), dims(3)))
         allocate(emat(dims(1), dims(2), dims(3)))
+        allocate(imat(dims(1), dims(2), dims(3)))
         emat = img_edge%get_rmat()
         
         ! max radius
@@ -435,7 +439,7 @@ contains
             end if  
         end do 
 
-        ! connect pixels, final line detection
+        ! connect close lines, final line detection
         do x = 2, dims(1)
             do y = 1, dims(2)
                 if(line_pos(x,y) + x < dims(1)) then
@@ -454,9 +458,25 @@ contains
        
         call img_denoised%vis()
         
+        emat = img_denoised%get_rmat()
+        rmat = img_in%get_rmat()
 
-        ! median filter? but it preserves edges
-        ! use bilateral filter on lines. 
+        allocate(mask(1:dims(1), 1:dims(2), 1:dims(3)))
+        where(emat > 0.5)
+            mask = .true. 
+        else where
+            mask = .false.
+        end where 
+
+        call real_space_filter()
+        
+
+        rmat = rmat + emat 
+        call img_denoised%set_rmat(rmat,  .false.)
+
+        call img_denoised%vis()
+        
+
     end subroutine hough_lines 
 
 end module simple_AFM_image 
