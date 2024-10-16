@@ -94,7 +94,6 @@ type :: parameters
     character(len=3)          :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
     character(len=3)          :: sh_first='no'        !< shifting before orientation search(yes|no){no}
     character(len=3)          :: sh_inv='no'          !< whether to use shift invariant metric for projection direction assignment(yes|no){no}
-    character(len=3)          :: stoch_update='no'    !< update of random sampling in each iteration
     character(len=3)          :: newstream='no'       !< new streaming version
     character(len=3)          :: stream='no'          !< stream (real time) execution mode(yes|no){no}
     character(len=3)          :: symrnd='no'          !< randomize over symmetry operations(yes|no){no}
@@ -260,6 +259,7 @@ type :: parameters
     integer :: fromp=1             !< start ptcl index
     integer :: fromf=1             !< frame start index
     integer :: grow=0              !< # binary layers to grow(in pixels)
+    integer :: greediness=0        !< greediness level in balanced selection (0-2)
     integer :: hpind_fsc           !< high-pass Fourier index for FSC
     integer :: icm_stage=0
     integer :: iptcl=1
@@ -456,7 +456,6 @@ type :: parameters
     logical :: l_filemsk      = .false.
     logical :: l_focusmsk     = .false.
     logical :: l_frac_update  = .false.
-    logical :: l_stoch_update = .false.
     logical :: l_graphene     = .false.
     logical :: l_kweight      = .false.
     logical :: l_kweight_shift= .true.
@@ -642,7 +641,6 @@ contains
         call check_carg('speckind',       self%speckind)
         call check_carg('split_mode',     self%split_mode)
         call check_carg('stats',          self%stats)
-        call check_carg('stoch_update',   self%stoch_update)
         call check_carg('stream',         self%stream)
         call check_carg('symrnd',         self%symrnd)
         call check_carg('tag',            self%tag)
@@ -731,6 +729,7 @@ contains
         call check_iarg('fromp',          self%fromp)
         call check_iarg('fromf',          self%fromf)
         call check_iarg('grow',           self%grow)
+        call check_iarg('greediness',     self%greediness)
         call check_iarg('icm_stage',      self%icm_stage)
         call check_iarg('iptcl',          self%iptcl)
         call check_iarg('job_memory_per_task2D', self%job_memory_per_task2D)
@@ -1263,17 +1262,6 @@ contains
         else
             self%update_frac   = 1.0
             self%l_frac_update = .false.
-        endif
-        ! set stochastic update flag
-        self%l_stoch_update = trim(self%stoch_update) .ne. 'no'
-        if( self%l_stoch_update )then
-            self%l_frac_update = .true. ! update_frac set dynamically (see below)
-            if( cline%defined('maxits_glob') )then
-                self%update_frac = real(inv_nsampl_decay(self%which_iter, self%maxits_glob, self%nptcls)) / real(self%nptcls)
-            else
-                self%update_frac = real(inv_nsampl_decay(self%which_iter, self%maxits,      self%nptcls)) / real(self%nptcls)
-            endif
-            call cline%set('update_frac', self%update_frac)
         endif
         if( .not. cline%defined('ncunits') )then
             ! we assume that the number of computing units is equal to the number of partitions
