@@ -106,6 +106,7 @@ type :: atoms
     procedure          :: pdb2mrc
     procedure          :: atom_validation
     procedure          :: map_validation
+    procedure          :: model_validation
     ! MODIFIERS
     procedure          :: translate
     procedure          :: center_pdbcoord
@@ -1301,8 +1302,40 @@ contains
             close(46)
             call self%writepdb(trim(filename)//'.pdb')
         endif
-
     end subroutine map_validation
+
+    subroutine model_validation( self, pdb_file, exp_vol_file, smpd, smpd_target )
+        use simple_image, only: image
+        class(atoms), intent(inout) :: self
+        real,         intent(in)    :: smpd, smpd_target
+        character(*), intent(in)    :: pdb_file, exp_vol_file
+        character(len=STDLEN) :: upscale_vol_file
+        type(image)           :: exp_vol
+        real                  :: smpd_new, upscaling_factor
+        integer               :: ifoo, ldim(3), ldim_new(3), box, box_new     
+        upscale_vol_file = trim(get_fbody(exp_vol_file,'mrc'))//'_upscale.mrc'
+        call find_ldim_nptcls(exp_vol_file, ldim, ifoo)
+        call exp_vol%new(ldim, smpd)
+        call exp_vol%read(exp_vol_file)
+        !smpd             = exp_vol%get_smpd()
+        write(logfhandle,'(a,3i6,a,f8.3,a)') 'Original dimensions (', ldim,' ) voxels, smpd: ', smpd, ' Angstrom'
+        box              = ldim(1)
+        upscaling_factor = smpd / smpd_target
+        box_new          = round2even(real(ldim(1)) * upscaling_factor)
+        ldim_new(:)      = box_new
+        upscaling_factor = real(box_new) / real(box)
+        smpd_new         = smpd / upscaling_factor
+        write(logfhandle,'(a,3i6,a,f8.3,a)') 'Scaled dimensions  (', ldim_new,' ) voxels, smpd: ', smpd_new, ' Angstrom'
+        call self%new(pdb_file)
+        if( any(self%xyz(:,:) < 0.) )then
+            write(logfhandle,'(A)') 'Warning: PDB atomic center moved to the center of the box'
+            call self%center_pdbcoord(ldim, smpd)
+        endif
+        call exp_vol%read_and_crop(exp_vol_file, smpd, box_new, smpd_new)
+        call exp_vol%write(upscale_vol_file)
+        call self%atom_validation(exp_vol, 'model_val_corr')
+        call exp_vol%kill()
+    end subroutine model_validation
 
     subroutine atom_validation( self, vol, filename )
         use simple_image, only: image
@@ -1317,9 +1350,6 @@ contains
         smpd = vol%get_smpd()
         if(present(filename))then
             open(unit=46,file=trim(filename//".csv"))
-            open(unit=45,file=trim("atomic_centers.xyz"))
-            write(45,*) self%n
-            write(45,*) " "
         endif
         do i_atom = 1, self%n
             atom_box = round2even(2 * (((self%radius(i_atom))*1.5)/smpd))
@@ -1343,14 +1373,12 @@ contains
             call self%set_beta(i_atom, cc)
             if(present(filename))then
                 write(46,'(a,1x,4(a,f10.6))') self%element(i_atom),",",self%xyz(i_atom,1),",",self%xyz(i_atom,2),",",self%xyz(i_atom,3),",",self%atom_corr(i_atom)
-                write(45,'(a,1x,f10.6,1x,f10.6,1x,f10.6)') trim(adjustl(self%element(i_atom))), self%xyz(i_atom,1), self%xyz(i_atom,2), self%xyz(i_atom,3)
             endif
             call vol_atom%kill
             call vol_at%kill
             call atom%kill
         enddo
         if(present(filename))then
-            close(45)
             close(46)
             call self%writepdb(trim(filename)//'.pdb')
         endif
