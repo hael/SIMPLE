@@ -1259,13 +1259,12 @@ contains
         ! fractional search and volume update
         if( self%update_frac <= .99)then
             self%l_update_frac = .true.
+            self%l_trail_rec   = trim(self%trail_rec).eq.'yes'
         else
             self%update_frac   = 1.0
             self%l_update_frac = .false.
-            if( trim(self%trail_rec).eq.'yes' ) THROW_HARD('Trailing reconstruction requires update_frac < 1.0')
-        endif
-        ! trailing 3D reconstruction
-        self%l_trail_rec = trim(self%trail_rec).eq.'yes'
+            self%l_trail_rec   = .false.
+        endif    
         if( .not. cline%defined('ncunits') )then
             ! we assume that the number of computing units is equal to the number of partitions
             self%ncunits = self%nparts
