@@ -62,6 +62,7 @@ type(reconstruct3D_commander)           :: xreconstruct3D
 type(check_box_commander)               :: xcheck_box
 type(check_nptcls_commander)            :: xcheck_nptcls
 type(check_stoch_update_commander)      :: xcheck_stoch_update
+type(check_update_frac_commander)       :: xcheck_update_frac
 
 ! VOLOPS PROGRAMS
 type(postprocess_commander)             :: xpostprocess
@@ -193,6 +194,8 @@ select case(prg)
         call xcheck_nptcls%execute(cline)
     case( 'check_stoch_update' )
         call xcheck_stoch_update%execute(cline)
+    case( 'check_update_frac' )
+        call xcheck_update_frac%execute(cline)
 
     ! VOLOPS PROGRAMS
     case( 'postprocess' )

@@ -93,6 +93,7 @@ type :: oris
     procedure          :: has_been_sampled
     procedure          :: has_been_searched
     procedure          :: any_state_zero
+    procedure          :: count_state_gt_zero
     procedure          :: ori2str
     procedure          :: ori2prec
     procedure          :: prec2ori
@@ -1270,10 +1271,10 @@ contains
         end do
     end subroutine sample4update_rnd
 
-    subroutine sample4update_class( self, clssmp, fromto, update_frac, nsamples, inds, mask, incr_sampled )
+    subroutine sample4update_class( self, clssmp, greediness, fromto, update_frac, nsamples, inds, mask, incr_sampled )
         class(oris),          intent(inout) :: self
         type(class_sample),   intent(inout) :: clssmp(:) ! data structure for balanced samplign
-        integer,              intent(in)    :: fromto(2)
+        integer,              intent(in)    :: greediness, fromto(2)
         real,                 intent(in)    :: update_frac
         integer,              intent(inout) :: nsamples
         integer, allocatable, intent(inout) :: inds(:)
@@ -1287,8 +1288,8 @@ contains
         rstates = self%get_all('state')
         nsamples_class = nint(update_frac * real(count(rstates > 0.5)))
         deallocate(rstates)
-        ! random selection within classes, greediness=0
-        call self%sample_balanced(clssmp, nsamples_class, 0, states_bal)
+        ! class-biased selection
+        call self%sample_balanced(clssmp, nsamples_class, greediness, states_bal)
         ! now, we deal with the partition
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
@@ -1501,6 +1502,15 @@ contains
             endif
         end do
     end function any_state_zero
+
+    function count_state_gt_zero( self ) result( cnt )
+        class(oris), intent(in) :: self
+        integer :: i, cnt
+        cnt = 0
+        do i = 1, self%n
+            if( self%o(i)%get_state() > 0 ) cnt = cnt + 1
+        end do
+    end function count_state_gt_zero
 
     !>  \brief  joins the hashes into a string that represent the ith ori
     function ori2str( self, i ) result( str )

@@ -259,7 +259,7 @@ contains
         here(4)  = file_exists(odd_rho)
         if( all(here) )then
             l_pad_with_zeros = .false.
-            if( params_glob%l_frac_update )then
+            if( params_glob%l_update_frac )then
                 ! check dimensions
                 call find_ldim_nptcls(even_vol, prev_ldim, dummy, smpd=prev_smpd)
                 if( prev_ldim(1) == self%ldim(1) )then

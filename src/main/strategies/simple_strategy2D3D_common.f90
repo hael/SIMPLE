@@ -313,21 +313,29 @@ contains
         logical, allocatable, intent(inout) :: ptcl_mask(:)
         type(class_sample),   allocatable   :: clssmp(:)
         integer :: icls
-        if( params_glob%l_frac_update )then
-            if( trim(params_glob%balance_smpl).eq.'yes' )then
+        if( params_glob%l_update_frac )then
+            if( trim(params_glob%balance).eq.'yes' )then
                 if( file_exists(CLASS_SAMPLING_FILE) )then
                     call read_class_samples(clssmp, CLASS_SAMPLING_FILE)
                 else
                     THROW_HARD('File for class-biased sampling in fractional update: '//CLASS_SAMPLING_FILE//' does not exists!')
                 endif
-                call build_glob%spproj_field%sample4update_class(clssmp, pfromto,&
-                &params_glob%update_frac, nptcls2update, pinds, ptcl_mask, l_incr_sampl)
+                if( params_glob%l_trail_rec )then
+                    ! balanced class sampling with greediness = 0
+                    call build_glob%spproj_field%sample4update_class(clssmp, 0, pfromto,&
+                    &params_glob%update_frac, nptcls2update, pinds, ptcl_mask, l_incr_sampl)
+                else
+                    ! balanced class sampling with greediness = 2
+                    call build_glob%spproj_field%sample4update_class(clssmp, 2, pfromto,&
+                    &params_glob%update_frac, nptcls2update, pinds, ptcl_mask, l_incr_sampl)
+                endif
                 call deallocate_class_samples(clssmp)
             else
                 call build_glob%spproj_field%sample4update_rnd(pfromto,&
                 &params_glob%update_frac, nptcls2update, pinds, ptcl_mask, l_incr_sampl)
             endif
-        else ! we sample all state > 0
+        else
+            ! we sample all state > 0
             call build_glob%spproj_field%sample4update_all(pfromto, nptcls2update, pinds, ptcl_mask, l_incr_sampl)
         endif
         if( l_incr_sampl )then
@@ -487,7 +495,7 @@ contains
             if( pops(istate) > 0)then
                 call build_glob%eorecvols(istate)%new(build_glob%spproj)
                 call build_glob%eorecvols(istate)%reset_all
-                if( params_glob%l_frac_update )then
+                if( params_glob%l_trail_rec )then
                     fbody = trim(VOL_FBODY)//int2str_pad(istate,2)//'_part'//part_str
                     if( build_glob%eorecvols(istate)%ldim_even_match(fbody) )then
                         call build_glob%eorecvols(istate)%read_eos(fbody)
@@ -523,7 +531,7 @@ contains
         ! centering
         if( params_glob%center .eq. 'no' .or. params_glob%nstates > 1 .or. &
             .not. params_glob%l_doshift .or. params_glob%pgrp(:1) .ne. 'c' .or. &
-            params_glob%l_filemsk .or. params_glob%l_frac_update )then
+            params_glob%l_filemsk .or. params_glob%l_update_frac )then
             do_center = .false.
             xyz       = 0.
             return

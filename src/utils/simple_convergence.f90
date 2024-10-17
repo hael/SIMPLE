@@ -87,7 +87,7 @@ contains
         percen_sampled = (real(count(sampled    > sampled_lb .and. states > 0.5)) / real(nptcls)) * 100.
         percen_updated = (real(count(updatecnts > 0.5        .and. states > 0.5)) / real(nptcls)) * 100.
         percen_avg     = percen_sampled
-        if( params_glob%l_frac_update )then
+        if( params_glob%l_update_frac )then
             allocate(mask(n), source=sampled    > sampled_lb .and. states > 0.5)
         else
             allocate(mask(n), source=updatecnts > 0.5 .and. states > 0.5)
@@ -139,7 +139,7 @@ contains
             if( ncls > 1 )then
                 converged = .false.
                 ! set limits for convergence
-                if( (params_glob%l_frac_update) .or. (params_glob%stream.eq.'yes') )then
+                if( (params_glob%l_update_frac) .or. (params_glob%stream.eq.'yes') )then
                     overlap_lim  = OVERLAP_2D_FRAC
                     fracsrch_lim = FRACSRCHSPACE_FRAC
                 else if( trim(params_glob%tseries) .eq. 'yes' )then
@@ -152,7 +152,7 @@ contains
                 if( cline%defined('overlap')  ) overlap_lim  = cline%get_rarg('overlap')
                 if( cline%defined('fracsrch') ) fracsrch_lim = cline%get_rarg('fracsrch')
                 ! test for convergence
-                if( (params_glob%l_frac_update) .or. (params_glob%stream.eq.'yes') )then
+                if( (params_glob%l_update_frac) .or. (params_glob%stream.eq.'yes') )then
                     converged = ( self%mi_class > overlap_lim .and. self%frac_srch%avg > fracsrch_lim )
                     self%progress = progress_estimate_2D(real(params_glob%which_iter), self%mi_class, overlap_lim, self%frac_srch%avg, fracsrch_lim, 0.0, 0.0)
                 else if( trim(params_glob%tseries) .eq. 'yes' )then
@@ -215,7 +215,7 @@ contains
         percen_sampled = (real(count(sampled    > sampled_lb .and. states > 0.5)) / real(nptcls)) * 100.
         percen_updated = (real(count(updatecnts > 0.5        .and. states > 0.5)) / real(nptcls)) * 100.
         percen_avg     = percen_sampled
-        if( params_glob%l_frac_update )then
+        if( params_glob%l_update_frac )then
             allocate(mask(n), source=sampled    > sampled_lb .and. states > 0.5)
         else
             allocate(mask(n), source=updatecnts > 0.5 .and. states > 0.5)
