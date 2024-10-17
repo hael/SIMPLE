@@ -152,7 +152,7 @@ contains
             call build%spproj%write_segment_inside(params%oritype)
         endif
         allocate(ptcl_mask(params%fromp:params%top)) 
-        if( params%l_frac_update .and. build%spproj_field%has_been_sampled() )then
+        if( params%l_update_frac .and. build%spproj_field%has_been_sampled() )then
             call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls2update, pinds, ptcl_mask)
         else
             ! no increment of sampled

@@ -765,7 +765,12 @@ contains
         call private_prgs(26)%push_req_key('maxits')
         call private_prgs(26)%push_req_key('nptcls')
 
-        n_private_prgs = 26
+        ! check fractional update scheme
+        call private_prgs(27)%set_name('check_update_frac')
+        ! required keys
+        call private_prgs(27)%push_req_key('nptcls')
+
+        n_private_prgs = 27
     end subroutine new_private_prgs
 
 end module simple_private_prgs

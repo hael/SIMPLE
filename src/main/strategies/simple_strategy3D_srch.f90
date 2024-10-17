@@ -31,9 +31,6 @@ type strategy3D_srch
     integer                 :: nrefs_sub       = 0         !< total # references (nstates*nprojs), subspace
     integer                 :: npeaks          = 0         !< # peak subspace orientations to consider
     integer                 :: npeaks_inpl     = 0         !< # # multi-neighborhood peaks to refine with L-BFGS
-    integer                 :: nsample         = 0         !< # of continuous 3D rotational orientations to sample uniformly
-    integer                 :: nsample_neigh   = 0         !< # of continuous 3D rotational orientations to sample Gaussian
-    integer                 :: nsample_trs     = 0         !< # of continuous origin shifts (2D) to sample Gaussian
     integer                 :: nstates         = 0         !< # states
     integer                 :: nprojs          = 0         !< # projections
     integer                 :: nprojs_sub      = 0         !< # projections, subspace
@@ -83,9 +80,6 @@ contains
         self%nrefs_sub     = self%nprojs_sub * self%nstates
         self%npeaks        = params_glob%npeaks
         self%npeaks_inpl   = params_glob%npeaks_inpl
-        self%nsample       = params_glob%nsample
-        self%nsample_neigh = params_glob%nsample_neigh
-        self%nsample_trs   = params_glob%nsample_trs
         self%athres        = params_glob%athres
         self%nbetter       = 0
         self%nrefs_eval    = 0

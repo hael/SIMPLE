@@ -60,7 +60,7 @@ contains
         real    :: frac_srch_space, neigh_frac
         integer :: iptcl, ithr, fnr, updatecnt, iptcl_map, nptcls2update, nptcls2restore
         integer :: batchsz, nbatches, batch_start, batch_end, iptcl_batch, ibatch
-        logical :: doprint, l_partial_sums, l_frac_update
+        logical :: doprint, l_partial_sums, l_update_frac
         logical :: l_snhc, l_greedy, l_np_cls_defined, l_snhc_smpl, l_greedy_smpl
         if( L_BENCH_GLOB )then
             t_init = tic()
@@ -76,7 +76,7 @@ contains
         l_greedy       = .false.
         l_greedy_smpl  = .false.
         l_snhc_smpl    = .false.
-        l_frac_update  = .false.
+        l_update_frac  = .false.
         l_stream       = trim(params_glob%stream).eq.'yes'
         if( params_glob%extr_iter == 1 )then
             ! greedy start
@@ -96,8 +96,8 @@ contains
             end select
         else
             ! optional fractional update and shc optimization (=snhc with all classes)
-            l_frac_update  = params_glob%l_frac_update
-            l_partial_sums = params_glob%l_frac_update
+            l_update_frac  = params_glob%l_update_frac
+            l_partial_sums = params_glob%l_update_frac
             l_greedy       = trim(params_glob%refine).eq.'greedy'
             l_greedy_smpl  = trim(params_glob%refine).eq.'greedy_smpl'
             l_snhc_smpl    = .false. ! defaults to snhc
@@ -109,13 +109,13 @@ contains
             case('snhc_smpl')
                 l_snhc_smpl = .true.
             end select
-            l_frac_update              = .false.
+            l_update_frac              = .false.
             l_partial_sums             = .false.
-            params_glob%l_frac_update  = .false.
+            params_glob%l_update_frac  = .false.
             if( which_iter > 1 )then
                 if( params_glob%update_frac < 0.99 )then
                     l_partial_sums            = .true.
-                    params_glob%l_frac_update = .true.
+                    params_glob%l_update_frac = .true.
                 else
                     params_glob%update_frac = 1.
                 endif
@@ -128,7 +128,7 @@ contains
         if( allocated(pinds) )     deallocate(pinds)
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
         allocate(ptcl_mask(params_glob%fromp:params_glob%top))
-        if( l_frac_update )then
+        if( l_update_frac )then
             if( build_glob%spproj_field%has_been_sampled() )then ! we have a random subset
                 call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
                                         &nptcls2update, pinds, ptcl_mask)
@@ -492,7 +492,7 @@ contains
                 ! prepare the references
                 ! here we are determining the shifts and map them back to classes
                 do_center = (has_been_searched .and. (pop > MINCLSPOPLIM) .and. (which_iter > 2)&
-                    &.and. .not.params_glob%l_frac_update)
+                    &.and. .not.params_glob%l_update_frac)
                 call prep2Dref(cavgs_merged(icls), match_imgs(icls), icls, iseven=.false., center=do_center, xyz_out=xyz)
                 if( .not.params_glob%l_lpset )then
                     if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then

@@ -9,6 +9,7 @@ implicit none
 public :: check_box_commander
 public :: check_nptcls_commander
 public :: check_stoch_update_commander
+public :: check_update_frac_commander
 public :: info_image_commander
 public :: info_stktab_commander
 private
@@ -28,6 +29,11 @@ type, extends(commander_base) :: check_stoch_update_commander
   contains
     procedure :: execute      => exec_check_stoch_update
 end type check_stoch_update_commander
+
+type, extends(commander_base) :: check_update_frac_commander
+  contains
+    procedure :: execute      => exec_check_update_frac
+end type check_update_frac_commander
 
 type, extends(commander_base) :: info_image_commander
  contains
@@ -86,6 +92,21 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CHECK_STOCH_UPDATE NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check_stoch_update
+
+    subroutine exec_check_update_frac( self, cline )
+        use simple_decay_funs
+        class(check_update_frac_commander), intent(inout) :: self
+        class(cmdline),                     intent(inout) :: cline
+        type(parameters) :: params
+        integer          :: nsampl
+        real             :: update_frac
+        call params%new(cline)
+        update_frac = calc_update_frac(params%nptcls)
+        nsampl      = update_frac * real(params%nptcls)
+        write(logfhandle,'(A,1X,I7)') 'NSAMPLE:', nsampl
+        ! end gracefully
+        call simple_end('**** SIMPLE_CHECK_UPDATE_FRAC NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_check_update_frac
 
     !> for printing header information in MRC and SPIDER stacks and volumes
     subroutine exec_info_image( self, cline)
