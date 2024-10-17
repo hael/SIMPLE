@@ -134,6 +134,7 @@ type(simple_program), target :: map_cavgs_states
 type(simple_program), target :: mask
 type(simple_program), target :: merge_projects
 type(simple_program), target :: mkdir_
+type(simple_program), target :: model_validation
 type(simple_program), target :: motion_correct
 type(simple_program), target :: new_project
 type(simple_program), target :: nununiform_filter3D
@@ -329,6 +330,7 @@ type(simple_input_param) :: sigma
 type(simple_input_param) :: sigma_est
 type(simple_input_param) :: smooth_ext
 type(simple_input_param) :: smpd
+type(simple_input_param) :: smpd_target
 type(simple_input_param) :: star_datadir
 type(simple_input_param) :: starfile
 type(simple_input_param) :: star_mic
@@ -437,6 +439,7 @@ contains
         call new_merge_projects
         call new_mkdir_
         call new_motion_correct
+        call new_model_validation
         call new_new_project
         call new_nununiform_filter3D
         call new_noisevol
@@ -564,6 +567,7 @@ contains
         call push2prg_ptr_array(merge_projects)
         call push2prg_ptr_array(mkdir_)
         call push2prg_ptr_array(motion_correct)
+        call push2prg_ptr_array(model_validation)
         call push2prg_ptr_array(new_project)
         call push2prg_ptr_array(nununiform_filter3D)
         call push2prg_ptr_array(noisevol)
@@ -765,6 +769,8 @@ contains
                 ptr2prg => mkdir_
             case('motion_correct')
                 ptr2prg => motion_correct
+            case('model_validation')
+                ptr2prg => model_validation
             case('new_project')
                 ptr2prg => new_project
             case('nununiform_filter3D')
@@ -943,6 +949,7 @@ contains
         write(logfhandle,'(A)') merge_projects%name
         write(logfhandle,'(A)') mkdir_%name
         write(logfhandle,'(A)') motion_correct%name
+        write(logfhandle,'(A)') model_validation%name
         write(logfhandle,'(A)') new_project%name
         write(logfhandle,'(A)') nununiform_filter3D%name
         write(logfhandle,'(A)') noisevol%name
@@ -1036,6 +1043,7 @@ contains
         write(logfhandle,'(A)') vizoris%name
         write(logfhandle,'(A)') cavgsproc_nano%name
         write(logfhandle,'(A)') cavgseoproc_nano%name
+        write(logfhandle,'(A)') model_validation%name
         write(logfhandle,'(A)') ptclsproc_nano%name
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') format_str('MODEL BULDING/ANALYSIS PROGRAMS:', C_UNDERLINED)
@@ -1089,8 +1097,9 @@ contains
         call set_param(ctfpatch,      'ctfpatch',      'binary', 'Patch CTF estimation', 'Whether to perform patch CTF estimation(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(ctfresthreshold,'ctfresthreshold','num',  'CTF Resolution rejection threshold', 'Micrographs with a CTF resolution above the threshold (in Angs) will be ignored from further processing{50}', 'CTF resolution threshold(in Angstroms){50}', .false., 50.0)
         call set_param(icefracthreshold,'icefracthreshold','num','Ice Fraction rejection threshold', 'Micrographs with an ice ring/1st pspec maxima fraction above the threshold will be ignored from further processing{1.0}', 'Ice fraction threshold{1.0}', .false., 1.0)
-        call set_param(astigthreshold,  'astigthreshold'  ,'num','Astigmatism rejection threshold', 'Micrographs with astigmatism (%) above the threshold will be ignored from further processing{10.0}', 'Astigmatism threshold{10.0}', .false., 10.0)
-        call set_param(smpd,          'smpd',          'num',    'Sampling distance', 'Distance between neighbouring pixels in Angstroms', 'pixel size in Angstroms', .true., 1.0)
+        call set_param(astigthreshold,  'astigthreshold',  'num','Astigmatism rejection threshold', 'Micrographs with astigmatism (%) above the threshold will be ignored from further processing{10.0}', 'Astigmatism threshold{10.0}', .false., 10.0)
+        call set_param(smpd,          'smpd',              'num','Sampling distance', 'Distance between neighbouring pixels in Angstroms', 'pixel size in Angstroms', .true., 1.0)
+        call set_param(smpd_target,   'smpd_target',       'num','Target sampling distance', 'Distance between neighbouring pixels in Angstroms', 'pixel size in Angstroms', .true., 1.0)
         call set_param(phaseplate,    'phaseplate',    'binary', 'Phase-plate images', 'Images obtained with Volta phase-plate(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(deftab,        'deftab',        'file',   'CTF parameter file', 'CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format with dfx, dfy and angast values',&
         &'.simple|.txt parameter file', .false., 'deftab'//trim(METADATA_EXT))
@@ -2206,32 +2215,6 @@ contains
         ! <empty>
     end subroutine new_ctf_phaseflip
 
-    subroutine new_pdb2mrc
-        ! PROGRAM SPECIFICATION
-        call pdb2mrc%new(&
-        &'pdb2mrc', &                                      ! name
-        &'PDB to MRC simulator',&                          ! descr_short
-        &'is a program to simulate a 3D density map in MRC format using a PDB format coordinadinates file',& ! descr long
-        &'all',&                                           ! executable
-        &1, 4, 0, 0, 0, 0, 0, .false.)                     ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call pdb2mrc%set_input('img_ios', 1, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'molecule.pdb')
-        ! parameter input/output
-        call pdb2mrc%set_input('parm_ios', 1, smpd)
-        pdb2mrc%parm_ios(1)%required = .false.
-        call pdb2mrc%set_input('parm_ios', 2, outvol)
-        call pdb2mrc%set_input('parm_ios', 3, pdbout)
-        call pdb2mrc%set_input('parm_ios', 4, center_pdb)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! mask controls
-        ! computer controls
-    end subroutine new_pdb2mrc
-
     subroutine new_detect_atoms
         ! PROGRAM SPECIFICATION
         call detect_atoms%new(&
@@ -3323,6 +3306,30 @@ contains
         ! <empty>
     end subroutine new_mkdir_
 
+    subroutine new_model_validation
+        ! PROGRAM SPECIFICATION
+        call model_validation%new(&
+        &'model_validation', &                             ! name
+        &'Validation of atomic model',&                    ! descr_short
+        &'is a program to validate the PDB atomic model given a 3D experimental density map in MRC',& ! descr long
+        &'all',&                                           ! executable
+        &2, 2, 0, 0, 0, 0, 0, .false.)                     ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call model_validation%set_input('img_ios', 1, 'vol1', 'file', 'Experimental volume',  'Experimental volume',  'vol.mrc file', .true., '')
+        call model_validation%set_input('img_ios', 2, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'molecule.pdb')
+        ! parameter input/output
+        call model_validation%set_input('parm_ios', 1, smpd)
+        call model_validation%set_input('parm_ios', 2, smpd_target)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! mask controls
+        ! computer controls
+    end subroutine new_model_validation
+
     subroutine new_motion_correct
         ! PROGRAM SPECIFICATION
         call motion_correct%new(&
@@ -3475,6 +3482,32 @@ contains
         call new_project%set_input('comp_ctrls', 8, qsys_name)
         call new_project%set_input('comp_ctrls', 9, walltime)
     end subroutine new_new_project
+
+    subroutine new_pdb2mrc
+        ! PROGRAM SPECIFICATION
+        call pdb2mrc%new(&
+        &'pdb2mrc', &                                      ! name
+        &'PDB to MRC simulator',&                          ! descr_short
+        &'is a program to simulate a 3D density map in MRC format using a PDB format coordinadinates file',& ! descr long
+        &'all',&                                           ! executable
+        &1, 4, 0, 0, 0, 0, 0, .false.)                     ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call pdb2mrc%set_input('img_ios', 1, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'molecule.pdb')
+        ! parameter input/output
+        call pdb2mrc%set_input('parm_ios', 1, smpd)
+        pdb2mrc%parm_ios(1)%required = .false.
+        call pdb2mrc%set_input('parm_ios', 2, outvol)
+        call pdb2mrc%set_input('parm_ios', 3, pdbout)
+        call pdb2mrc%set_input('parm_ios', 4, center_pdb)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! mask controls
+        ! computer controls
+    end subroutine new_pdb2mrc
 
     subroutine new_pick
         ! PROGRAM SPECIFICATION
@@ -5444,7 +5477,7 @@ contains
         &'update_project',&                  ! name
         &'Update an existing project',&      ! descr_short
         &'is a program for updating an existing project: changing the name/user_email/computer controls',& ! descr_long
-        &'all',&                          ! executable
+        &'all',&                             ! executable
         &0, 2, 0, 0, 0, 0, 9, .true.)        ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output

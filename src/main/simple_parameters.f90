@@ -426,6 +426,7 @@ type :: parameters
     real    :: sherr=0.            !< shift error(in pixels){2}
     real    :: sigma=1.0           !< for gaussian function generation {1.}
     real    :: smpd=2.             !< sampling distance; same as EMANs apix(in A)
+    real    :: smpd_target=0.5     !< target sampling distance; same as EMANs apix(in A) refers to paddep cavg/volume
     real    :: smpd_crop=2.        !< sampling distance; same as EMANs apix(in A) refers to cropped cavg/volume
     real    :: smpd_targets2D(2)
     real    :: snr=0.              !< signal-to-noise ratio

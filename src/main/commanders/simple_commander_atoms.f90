@@ -10,18 +10,19 @@ use simple_nanoparticle_utils
 use simple_atoms,          only: atoms
 implicit none
 
-public :: pdb2mrc_commander
+public :: atoms_stats_commander
 public :: conv_atom_denoise_commander
 public :: detect_atoms_commander
-public :: atoms_stats_commander
+public :: model_validation_commander
+public :: pdb2mrc_commander
 public :: tseries_atoms_analysis_commander
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: pdb2mrc_commander
+type, extends(commander_base) :: atoms_stats_commander
   contains
-    procedure :: execute      => exec_pdb2mrc
-end type pdb2mrc_commander
+    procedure :: execute      => exec_atoms_stats
+end type atoms_stats_commander
 
 type, extends(commander_base) :: conv_atom_denoise_commander
   contains
@@ -33,10 +34,15 @@ type, extends(commander_base) :: detect_atoms_commander
     procedure :: execute      => exec_detect_atoms
 end type detect_atoms_commander
 
-type, extends(commander_base) :: atoms_stats_commander
+type, extends(commander_base) :: model_validation_commander
   contains
-    procedure :: execute      => exec_atoms_stats
-end type atoms_stats_commander
+    procedure :: execute      => exec_model_validation
+end type model_validation_commander
+
+type, extends(commander_base) :: pdb2mrc_commander
+  contains
+    procedure :: execute      => exec_pdb2mrc
+end type pdb2mrc_commander
 
 type, extends(commander_base) :: tseries_atoms_analysis_commander
   contains
@@ -53,27 +59,44 @@ end type common_atoms
 
 contains
 
-    subroutine exec_pdb2mrc( self, cline )
-        class(pdb2mrc_commander), intent(inout) :: self
-        class(cmdline),           intent(inout) :: cline
-        type(parameters) :: params
-        type(atoms)      :: molecule
-        call params%new(cline)
-        call molecule%new(params%pdbfile)
-        if( .not.cline%defined('pdbout') )then
-            params%pdbout = trim(get_fbody(params%pdbfile,'pdb'))//'_centered.pdb'
-        endif
-        if( .not.cline%defined('outvol') ) params%outvol = swap_suffix(params%pdbfile,'mrc','pdb')
-        if( params%center_pdb .eq. 'yes' )then
-            call molecule%pdb2mrc(params%pdbfile, params%outvol, params%smpd, center_pdb=.true., pdb_out=params%pdbout)
-        else
-            call molecule%pdb2mrc(params%pdbfile, params%outvol, params%smpd, pdb_out=params%pdbout)
-        endif
-        call molecule%kill
-        ! end gracefully
-        call simple_end('**** SIMPLE_PDB2MRC NORMAL STOP ****')
-    end subroutine exec_pdb2mrc
-
+subroutine exec_atoms_stats( self, cline )
+    class(atoms_stats_commander), intent(inout) :: self
+    class(cmdline),               intent(inout) :: cline !< command line input
+    type(parameters)      :: params
+    type(nanoparticle)    :: nano
+    real                  :: a(3) ! lattice parameters
+    logical               :: prefit_lattice, use_subset_coords
+    prefit_lattice    = cline%defined('vol3')
+    use_subset_coords = cline%defined('pdbfile2')
+    call params%new(cline)
+    if( prefit_lattice )then
+        ! fit lattice using vol3
+        call nano%new(params%vols(3), params%msk)
+        call nano%identify_lattice_params(a)
+        call nano%kill
+        ! calc stats
+        call nano%new(params%vols(1), params%msk)
+        call nano%set_atomic_coords(params%pdbfile)
+        if( use_subset_coords ) call nano%set_coords4stats(params%pdbfile2)
+        call nano%set_img(params%vols(2), 'img_cc')
+        call nano%update_ncc()
+        call nano%fillin_atominfo( a )
+        call nano%write_csv_files
+        call nano%kill
+    else
+        ! calc stats
+        call nano%new(params%vols(1), params%msk)
+        call nano%set_atomic_coords(params%pdbfile)
+        if( use_subset_coords ) call nano%set_coords4stats(params%pdbfile2)
+        call nano%set_img(params%vols(2), 'img_cc')
+        call nano%update_ncc()
+        call nano%fillin_atominfo()
+        call nano%write_csv_files
+        call nano%kill
+    endif
+    ! end gracefully
+    call simple_end('**** SIMPLE_ATOMS_STATS NORMAL STOP ****')
+end subroutine exec_atoms_stats
     subroutine exec_conv_atom_denoise( self, cline )
         class(conv_atom_denoise_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
@@ -119,44 +142,39 @@ contains
         call simple_end('**** SIMPLE_DETECT_ATOMS NORMAL STOP ****')
     end subroutine exec_detect_atoms
 
-    subroutine exec_atoms_stats( self, cline )
-        class(atoms_stats_commander), intent(inout) :: self
-        class(cmdline),               intent(inout) :: cline !< command line input
-        type(parameters)      :: params
-        type(nanoparticle)    :: nano
-        real                  :: a(3) ! lattice parameters
-        logical               :: prefit_lattice, use_subset_coords
-        prefit_lattice    = cline%defined('vol3')
-        use_subset_coords = cline%defined('pdbfile2')
+    subroutine exec_model_validation( self, cline )
+        class(model_validation_commander), intent(inout) :: self
+        class(cmdline),                    intent(inout) :: cline
+        type(parameters) :: params
+        type(atoms)      :: molecule
         call params%new(cline)
-        if( prefit_lattice )then
-            ! fit lattice using vol3
-            call nano%new(params%vols(3), params%msk)
-            call nano%identify_lattice_params(a)
-            call nano%kill
-            ! calc stats
-            call nano%new(params%vols(1), params%msk)
-            call nano%set_atomic_coords(params%pdbfile)
-            if( use_subset_coords ) call nano%set_coords4stats(params%pdbfile2)
-            call nano%set_img(params%vols(2), 'img_cc')
-            call nano%update_ncc()
-            call nano%fillin_atominfo( a )
-            call nano%write_csv_files
-            call nano%kill
-        else
-            ! calc stats
-            call nano%new(params%vols(1), params%msk)
-            call nano%set_atomic_coords(params%pdbfile)
-            if( use_subset_coords ) call nano%set_coords4stats(params%pdbfile2)
-            call nano%set_img(params%vols(2), 'img_cc')
-            call nano%update_ncc()
-            call nano%fillin_atominfo()
-            call nano%write_csv_files
-            call nano%kill
-        endif
+        call molecule%new(params%pdbfile)
+        call molecule%model_validation(params%pdbfile, params%vols(1), params%smpd, params%smpd_target)
+        call molecule%kill()
         ! end gracefully
-        call simple_end('**** SIMPLE_ATOMS_STATS NORMAL STOP ****')
-    end subroutine exec_atoms_stats
+        call simple_end('**** SIMPLE_MODEL_VALIDATION NORMAL STOP ****')
+    end subroutine exec_model_validation
+
+    subroutine exec_pdb2mrc( self, cline )
+        class(pdb2mrc_commander), intent(inout) :: self
+        class(cmdline),           intent(inout) :: cline
+        type(parameters) :: params
+        type(atoms)      :: molecule
+        call params%new(cline)
+        call molecule%new(params%pdbfile)
+        if( .not.cline%defined('pdbout') )then
+            params%pdbout = trim(get_fbody(params%pdbfile,'pdb'))//'_centered.pdb'
+        endif
+        if( .not.cline%defined('outvol') ) params%outvol = swap_suffix(params%pdbfile,'mrc','pdb')
+        if( params%center_pdb .eq. 'yes' )then
+            call molecule%pdb2mrc(params%pdbfile, params%outvol, params%smpd, center_pdb=.true., pdb_out=params%pdbout)
+        else
+            call molecule%pdb2mrc(params%pdbfile, params%outvol, params%smpd, pdb_out=params%pdbout)
+        endif
+        call molecule%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_PDB2MRC NORMAL STOP ****')
+    end subroutine exec_pdb2mrc
 
     subroutine exec_tseries_atoms_analysis( self, cline )
         class(tseries_atoms_analysis_commander), intent(inout) :: self
