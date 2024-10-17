@@ -347,7 +347,8 @@ contains
         call spproj%write_segment_inside('projinfo', params%projfile)
         ! take care of class-biased particle sampling
         if( trim(params%balance).eq.'yes' )then ! balanced particle sampling in iterations
-            nptcls_eff = spproj%count_state_gt_zero()
+            update_frac = 1.0
+            nptcls_eff  = spproj%count_state_gt_zero()
             if( cline%defined('nsample') )then
                 update_frac = min(1.0, real(params%nsample) / real(nptcls_eff))
             else if( cline%defined('update_frac') )then
@@ -371,7 +372,6 @@ contains
                     call deallocate_class_samples(clssmp)
                 endif
             else
-                update_frac   = 1.0
                 l_update_frac = .false.
             endif
         endif
@@ -640,7 +640,7 @@ contains
             prob_sh = 'yes'
         endif
         ! trailing reconstruction
-        if( istage > PROBREFINE_STAGE .and. l_update_frac )then
+        if( istage >= PROBREFINE_STAGE .and. l_update_frac )then
             trail_rec = 'yes'
         else
             trail_rec = 'no'
