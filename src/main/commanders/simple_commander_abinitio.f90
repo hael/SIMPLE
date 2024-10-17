@@ -624,12 +624,11 @@ contains
             balance = 'no'
         endif
         ! symmetry
+        pgrp = trim(params_glob%pgrp)
         if( l_srch4symaxis )then
             if( istage <= SYMSRCH_STAGE )then
                 ! need to replace original point-group flag with c1/pgrp_start
                 pgrp = trim(params_glob%pgrp_start)
-            else
-                pgrp = trim(params_glob%pgrp)
             endif
         endif
         ! refinement mode
