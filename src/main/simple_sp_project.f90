@@ -73,6 +73,7 @@ contains
     ! getters
     procedure          :: get_n_insegment
     procedure          :: get_n_insegment_state
+    procedure          :: count_state_gt_zero
     procedure          :: get_nptcls
     procedure          :: get_box
     procedure          :: get_boxcoords
@@ -2145,7 +2146,7 @@ contains
             case('ptcl2D','ptcl3D')
                 ! # ptcl2D = # ptcl3D
                 if( self%os_ptcl2D%get_noris() /= self%os_ptcl3D%get_noris() )then
-                   THROW_HARD('Inconsistent number of particles in STK/PTCL2D/PTCL3D segments; get_n_insegment_state')
+                   THROW_HARD('Inconsistent number of particles in PTCL2D/PTCL3D segments; get_n_insegment_state')
                 endif
         end select
         call self%ptr2oritype(oritype, pos)
@@ -2160,6 +2161,37 @@ contains
         enddo
         nullify(pos)
     end function get_n_insegment_state
+
+    integer function count_state_gt_zero( self )
+        class(sp_project), target, intent(inout) :: self
+        integer :: iori, cnt_s_gt_zero_ptcl2D, cnt_s_gt_zero_ptcl3D
+        ! # ptcl2D = # ptcl3D
+        if( self%os_ptcl2D%get_noris() /= self%os_ptcl3D%get_noris() )then
+            THROW_HARD('Inconsistent number of particles in PTCL2D/PTCL3D segments; count_state_gt_zero')
+        endif
+        ! check ptcl2D/ptcl3D fields
+        cnt_s_gt_zero_ptcl2D = 0
+        cnt_s_gt_zero_ptcl3D = 0
+        do iori = 1,self%os_ptcl2D%get_noris()
+            if( .not. self%os_ptcl2D%isthere(iori,'state') )then
+                THROW_HARD('state flag missing from self%os_ptcl2D; count_state_gt_zero')
+            endif
+             if( .not. self%os_ptcl3D%isthere(iori,'state') )then
+                THROW_HARD('state flag missing from self%os_ptcl3D; count_state_gt_zero')
+            endif
+            if( self%os_ptcl2D%get_state(iori) > 0 )then
+                cnt_s_gt_zero_ptcl2D = cnt_s_gt_zero_ptcl2D + 1
+            endif
+            if( self%os_ptcl3D%get_state(iori) > 0 )then
+                cnt_s_gt_zero_ptcl3D = cnt_s_gt_zero_ptcl3D + 1
+            endif
+        enddo
+        if( cnt_s_gt_zero_ptcl2D == cnt_s_gt_zero_ptcl3D )then
+            count_state_gt_zero = cnt_s_gt_zero_ptcl2D
+        else
+            THROW_HARD('state labelling incosistent between PTCL2D/PTCL3D segments')
+        endif 
+    end function count_state_gt_zero
 
     integer function get_nptcls( self )
         class(sp_project), target, intent(in) :: self

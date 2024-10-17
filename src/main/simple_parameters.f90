@@ -24,7 +24,6 @@ type :: parameters
     character(len=3)          :: avg='no'             !< calculate average (yes|no){no}
     character(len=3)          :: backgr_subtr='no'    !< Whether to perform micrograph background subtraction
     character(len=3)          :: balance='no'         !< Balance class populations to smallest selected
-    character(len=3)          :: balance_smpl='no'    !< Balanced sampling of particles in fractional update based on 2D class info
     character(len=3)          :: beamtilt='no'        !< use beamtilt values when generating optics groups
     character(len=3)          :: bin='no'             !< binarize image(yes|no){no}
     character(len=3)          :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
@@ -99,6 +98,7 @@ type :: parameters
     character(len=3)          :: symrnd='no'          !< randomize over symmetry operations(yes|no){no}
     character(len=3)          :: taper_edges='no'     !< self-explanatory
     character(len=3)          :: tophat='no'          !< tophat filter(yes|no){no}
+    character(len=3)          :: trail_rec='no'       !< trailing (weighted average) reconstruction when update_frac=yes 
     character(len=3)          :: trsstats='no'        !< provide origin shift statistics(yes|no){no}
     character(len=3)          :: tseries='no'         !< images represent a time-series(yes|no){no}
     character(len=3)          :: updated='no'         !< Whether parameters has been updated
@@ -301,9 +301,8 @@ type :: parameters
     integer :: nrefs=100           !< # references used for picking{100}
     integer :: nrestarts=1
     integer :: nrots=0             !< number of in-plane rotations in greedy Cartesian search
-    integer :: nsample=0           !< # continuous 3D rotational orientations to sample during stochastic (shcc)   search
-    integer :: nsample_neigh=0     !< # continuous 3D rotational orientations to sample during stochastic (neighc) search
-    integer :: nsample_trs=0       !< # continuous translations (2D origin shifts) to sample during stochastic search
+    integer :: nsample=0           !< # particles to sample in refinement with fractional update
+    integer :: nsample_max=0       !< maximum # particles to sample in refinement with fractional update
     integer :: nsearch=40          !< # search grid points{40}
     integer :: nspace=2500         !< # projection directions
     integer :: nspace_sub=500      !< # projection directions in subspace
@@ -456,7 +455,7 @@ type :: parameters
     logical :: l_envfsc       = .false.
     logical :: l_filemsk      = .false.
     logical :: l_focusmsk     = .false.
-    logical :: l_frac_update  = .false.
+    logical :: l_update_frac  = .false.
     logical :: l_graphene     = .false.
     logical :: l_kweight      = .false.
     logical :: l_kweight_shift= .true.
@@ -473,6 +472,7 @@ type :: parameters
     logical :: l_prob_sh      = .false.
     logical :: l_sh_first     = .false.
     logical :: l_sigma_glob   = .false.
+    logical :: l_trail_rec    = .false.
     logical :: l_remap_cls    = .false.
     logical :: l_use_denoised = .false.
     logical :: l_wiener_part  = .false.
@@ -526,7 +526,6 @@ contains
         call check_carg('avg',            self%avg)
         call check_carg('backgr_subtr',   self%backgr_subtr)
         call check_carg('balance',        self%balance)
-        call check_carg('balance_smpl',   self%balance_smpl)
         call check_carg('bin',            self%bin)
         call check_carg('bin_cls',        self%bin_cls)
         call check_carg('boxtype',        self%boxtype)
@@ -647,6 +646,7 @@ contains
         call check_carg('tag',            self%tag)
         call check_carg('taper_edges',    self%taper_edges)
         call check_carg('tophat',         self%tophat)
+        call check_carg('trail_rec',      self%trail_rec)
         call check_carg('transp_pca',     self%transp_pca)
         call check_carg('trsstats',       self%trsstats)
         call check_carg('tseries',        self%tseries)
@@ -759,8 +759,7 @@ contains
         call check_iarg('nrefs',          self%nrefs)
         call check_iarg('nrestarts',      self%nrestarts)
         call check_iarg('nsample',        self%nsample)
-        call check_iarg('nsample_neigh',  self%nsample_neigh)
-        call check_iarg('nsample_trs',    self%nsample_trs)
+        call check_iarg('nsample_max',    self%nsample_max)
         call check_iarg('nspace',         self%nspace)
         call check_iarg('nspace_sub',     self%nspace_sub)
         call check_iarg('nstages',        self%nstages)
@@ -1259,11 +1258,14 @@ contains
         call set_ldim_box_from_stk
         ! fractional search and volume update
         if( self%update_frac <= .99)then
-            self%l_frac_update = .true.
+            self%l_update_frac = .true.
         else
             self%update_frac   = 1.0
-            self%l_frac_update = .false.
+            self%l_update_frac = .false.
+            if( trim(self%trail_rec).eq.'yes' ) THROW_HARD('Trailing reconstruction requires update_frac < 1.0')
         endif
+        ! trailing 3D reconstruction
+        self%l_trail_rec = trim(self%trail_rec).eq.'yes'
         if( .not. cline%defined('ncunits') )then
             ! we assume that the number of computing units is equal to the number of partitions
             self%ncunits = self%nparts

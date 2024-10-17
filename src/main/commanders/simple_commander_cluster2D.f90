@@ -665,7 +665,7 @@ contains
         if( params%l_noise_reg .and. .not.cline%defined('maxits_glob'))then
             call cline_cluster2D_stage1%set('maxits_glob', params%extr_lim)
         endif
-        if( params%l_frac_update )then
+        if( params%l_update_frac )then
             call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
             call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1_EXTR))
             if( l_euclid )then
@@ -704,7 +704,7 @@ contains
         call cline_cluster2D_stage2%delete('cc_iters')
         call cline_cluster2D_stage2%set('refs',       cavgs)
         call cline_cluster2D_stage2%set('startit',    last_iter_stage1+1)
-        if( params%l_frac_update )then
+        if( params%l_update_frac )then
             call cline_cluster2D_stage2%set('update_frac', params%update_frac)
         endif
         if( l_euclid )then

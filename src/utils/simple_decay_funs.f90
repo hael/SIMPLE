@@ -2,14 +2,28 @@ module simple_decay_funs
 include 'simple_lib.f08'
 implicit none
 
-public :: nsampl_decay, inv_nsampl_decay, calc_nsampl_fromto, inv_cos_decay, extremal_decay2D
+public :: calc_update_frac, nsampl_decay, inv_nsampl_decay, calc_nsampl_fromto, inv_cos_decay, extremal_decay2D
 private
 
 real,    parameter :: UPDATE_FRAC_MAX = 0.5
 integer, parameter :: NSAMPL_MIN      = 10000
-integer, parameter :: NSAMPL_MAX      = 200000
+integer, parameter :: NSAMPL_MAX      = 50000
 
 contains
+
+    function calc_update_frac( nptcls, nsample_max ) result( update_frac )
+        integer,           intent(in) :: nptcls
+        integer, optional, intent(in) :: nsample_max
+        real    :: update_frac
+        integer :: nnsample_max, nsampl
+        nnsample_max = NSAMPL_MAX
+        if( present(nsample_max) ) nnsample_max = nsample_max
+        nsampl       = nint(UPDATE_FRAC_MAX * real(nptcls))
+        nsampl       = max(nsampl, NSAMPL_MIN)
+        nsampl       = min(nsampl, nnsample_max)
+        update_frac  = real(nsampl) / real(nptcls)
+        update_frac  = min(1.0, update_frac)
+    end function calc_update_frac
 
     function nsampl_decay( it, maxits, nptcls ) result( nsampl )
         integer, intent(in) :: it, maxits, nptcls

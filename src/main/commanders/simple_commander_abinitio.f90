@@ -18,6 +18,7 @@ use simple_convergence,        only: convergence
 use simple_commander_euclid
 use simple_euclid_sigma2
 use simple_qsys_funs
+use simple_decay_funs
 implicit none
 
 public :: initial_3Dmodel_commander, abinitio_3Dmodel_commander
@@ -60,6 +61,8 @@ type(lp_crop_inf), allocatable :: lpinfo(:)
 logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false.
 type(sym)        :: se1,se2
 type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_postprocess, cline_reproject
+real             :: update_frac   = 1.0
+logical          :: l_update_frac = .false.
 
 contains
 
@@ -316,7 +319,7 @@ contains
         type(parameters)                :: params
         type(sp_project)                :: spproj
         type(image)                     :: noisevol
-        integer :: istage, s, ncls, icls
+        integer :: istage, s, ncls, icls, nptcls_eff
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',         'yes')
@@ -329,6 +332,8 @@ contains
         if( .not. cline%defined('pgrp_start')  ) call cline%set('pgrp_start',     'c1')
         if( .not. cline%defined('ptclw')       ) call cline%set('ptclw',          'no')
         if( .not. cline%defined('projrec')     ) call cline%set('projrec',       'yes')
+        if( .not. cline%defined('balance')     ) call cline%set('balance',       'yes')
+        if( .not. cline%defined('nsample_max') ) call cline%set('nsample_max',  50000.)
         ! make master parameters
         call params%new(cline)
         call cline%set('mkdir', 'no')
@@ -340,20 +345,34 @@ contains
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
         call spproj%write_segment_inside('projinfo', params%projfile)
-        ! take care of possibly class-biased particle sampling
-        if( trim(params%balance_smpl).eq.'yes' )then ! balanced particle sampling in iterations
-            if( spproj%is_virgin_field('ptcl2D') )then
-                THROW_HARD('Prior 2D clustering required when balance_smpl is set to yes')
+        ! take care of class-biased particle sampling
+        if( trim(params%balance).eq.'yes' )then ! balanced particle sampling in iterations
+            nptcls_eff = spproj%count_state_gt_zero()
+            if( cline%defined('nsample') )then
+                update_frac = min(1.0, real(params%nsample) / real(nptcls_eff))
+            else if( cline%defined('update_frac') )then
+                update_frac = params%update_frac
             else
-                ! generate a data structure for class sampling on disk
-                ncls    = spproj%os_cls2D%get_noris()
-                tmpinds = (/(icls,icls=1,ncls)/)
-                rstates = spproj%os_cls2D%get_all('state')
-                clsinds = pack(tmpinds, mask=rstates > 0.5)
-                call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
-                call write_class_samples(clssmp, CLASS_SAMPLING_FILE)
-                deallocate(rstates, tmpinds, clsinds)
-                call deallocate_class_samples(clssmp)
+                update_frac = calc_update_frac(nptcls_eff, params%nsample_max)
+            endif
+            if( update_frac <= .99 )then
+                l_update_frac = .true.
+                if( spproj%is_virgin_field('ptcl2D') )then
+                    THROW_HARD('Prior 2D clustering required when balance is set to yes')
+                else
+                    ! generate a data structure for class sampling on disk
+                    ncls    = spproj%os_cls2D%get_noris()
+                    tmpinds = (/(icls,icls=1,ncls)/)
+                    rstates = spproj%os_cls2D%get_all('state')
+                    clsinds = pack(tmpinds, mask=rstates > 0.5)
+                    call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
+                    call write_class_samples(clssmp, CLASS_SAMPLING_FILE)
+                    deallocate(rstates, tmpinds, clsinds)
+                    call deallocate_class_samples(clssmp)
+                endif
+            else
+                update_frac   = 1.0
+                l_update_frac = .false.
             endif
         endif
         ! set low-pass limits and downscaling info from FRCs
@@ -452,7 +471,7 @@ contains
         call cline_reconstruct3D%set('ml_reg',                       'no')
         call cline_reconstruct3D%set('needs_sigma',                  'no')
         call cline_reconstruct3D%set('objfun',                       'cc')
-        ! no fractional or stochastic updates
+        ! no fractional update
         call cline_reconstruct3D%delete('update_frac')
         ! individual particles reconstruction
         call cline_reconstruct3D%set('projrec', 'no')
@@ -547,7 +566,8 @@ contains
     subroutine set_cline_refine3D( istage, l_noise_reg )
         integer,          intent(in)  :: istage
         logical,          intent(in)  :: l_noise_reg
-        character(len=:), allocatable :: silence_fsc, sh_first, prob_sh, ml_reg, refine, icm
+        character(len=:), allocatable :: silence_fsc, sh_first, prob_sh, ml_reg
+        character(len=:), allocatable :: refine, icm, trail_rec, pgrp, balance
         integer :: iphase, iter, inspace, imaxits
         real    :: trs, snr_noise_reg
         ! iteration number bookkeeping
@@ -597,13 +617,19 @@ contains
                 icm           = 'yes'
                 snr_noise_reg = 6.0
         end select
+        ! balance
+        if( l_update_frac )then
+            balance = 'yes'
+        else
+            balance = 'no'
+        endif
         ! symmetry
         if( l_srch4symaxis )then
             if( istage <= SYMSRCH_STAGE )then
                 ! need to replace original point-group flag with c1/pgrp_start
-                call cline_refine3D%set('pgrp', trim(params_glob%pgrp_start))
+                pgrp = trim(params_glob%pgrp_start)
             else
-                call cline_refine3D%set('pgrp', trim(params_glob%pgrp))
+                pgrp = trim(params_glob%pgrp)
             endif
         endif
         ! refinement mode
@@ -614,8 +640,15 @@ contains
             refine  = 'prob'
             prob_sh = 'yes'
         endif
+        ! trailing reconstruction
+        if( istage > PROBREFINE_STAGE .and. l_update_frac )then
+            trail_rec = 'yes'
+        else
+            trail_rec = 'no'
+        endif
         ! command line update
         call cline_refine3D%set('prg',                     'refine3D')
+        call cline_refine3D%set('pgrp',                          pgrp)
         call cline_refine3D%set('startit',                       iter)
         call cline_refine3D%set('which_iter',                    iter)
         call cline_refine3D%set('refine',                      refine)
@@ -631,6 +664,9 @@ contains
         call cline_refine3D%set('prob_sh',                    prob_sh)
         call cline_refine3D%set('ml_reg',                      ml_reg)
         call cline_refine3D%set('icm',                            icm)
+        call cline_refine3D%set('balance',                    balance)
+        call cline_refine3D%set('update_frac',            update_frac)
+        call cline_refine3D%set('trail_rec',                trail_rec)
         if( l_noise_reg )then
             call cline_refine3D%set('snr_noise_reg',    snr_noise_reg)
         endif
@@ -695,8 +731,6 @@ contains
                 call cline_symrec%set('projfile',   projfile)
                 call cline_symrec%set('pgrp',       params_glob%pgrp)
                 call cline_symrec%set('which_iter', cline_refine3D%get_rarg('endit'))
-                call cline_symrec%delete('update_frac')
-                call cline_symrec%delete('stoch_update')
                 call cline_symrec%delete('endit')
                 call xreconstruct3D%execute_safe(cline_symrec)
                 vol_sym = VOL_FBODY//int2str_pad(1,2)//params_glob%ext
