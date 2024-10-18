@@ -42,27 +42,27 @@ type, extends(commander_base) :: abinitio_3Dmodel2_commander
 end type abinitio_3Dmodel2_commander
 
 ! class constants
-character(len=*), parameter :: REC_FBODY            = 'rec_final_state'
-character(len=*), parameter :: STR_STATE_GLOB       = '01'
-real,             parameter :: LPSTART_LB           = 10.
-real,             parameter :: LPSTART_DEFAULT      = 20.
-real,             parameter :: LPSTOP_LB            = 6.
-real,             parameter :: CENLP_DEFAULT        = 30.
-real,             parameter :: LPSYMSRCH_LB         = 12.
-integer,          parameter :: NSTAGES              = 8
-integer,          parameter :: PHASES(3)            = [2,6,8]
-integer,          parameter :: MAXITS(3)            = [20,15,10]
-integer,          parameter :: MAXITS_GLOB          = 2 * 20 + 4 * 15 + 2 * 10
-integer,          parameter :: NSPACE(3)            = [500,1000,2500]
-integer,          parameter :: SYMSRCH_STAGE        = 3
-integer,          parameter :: PROBREFINE_STAGE     = 5
+character(len=*), parameter :: REC_FBODY        = 'rec_final_state'
+character(len=*), parameter :: STR_STATE_GLOB   = '01'
+real,             parameter :: LPSTART_LB       = 10.
+real,             parameter :: LPSTART_DEFAULT  = 20.
+real,             parameter :: LPSTOP_LB        = 6.
+real,             parameter :: CENLP_DEFAULT    = 30.
+real,             parameter :: LPSYMSRCH_LB     = 12.
+integer,          parameter :: NSTAGES          = 8
+integer,          parameter :: PHASES(3)        = [2,6,8]
+integer,          parameter :: MAXITS(3)        = [20,17,15]
+integer,          parameter :: MAXITS_GLOB      = 2*20 + 4*17 + 2*15
+integer,          parameter :: NSPACE(3)        = [500,1000,2500]
+integer,          parameter :: SYMSRCH_STAGE    = 3
+integer,          parameter :: PROBREFINE_STAGE = 5
+integer,          parameter :: TRAILREC_STAGE   = 6
 ! class variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
-logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false.
+logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false., l_update_frac=.false.
 type(sym)        :: se1,se2
 type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_postprocess, cline_reproject
 real             :: update_frac   = 1.0
-logical          :: l_update_frac = .false.
 
 contains
 
@@ -312,6 +312,7 @@ contains
         type(refine3D_commander_distr)      :: xrefine3D
         type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
         ! other
+        real,               parameter   :: UPDATE_FRAC_MAX = 0.8 ! to ensure fractional update is always on 
         character(len=:),   allocatable :: vol_name
         real,               allocatable :: rstates(:)
         integer,            allocatable :: tmpinds(:), clsinds(:)
@@ -332,7 +333,6 @@ contains
         if( .not. cline%defined('pgrp_start')  ) call cline%set('pgrp_start',     'c1')
         if( .not. cline%defined('ptclw')       ) call cline%set('ptclw',          'no')
         if( .not. cline%defined('projrec')     ) call cline%set('projrec',       'yes')
-        if( .not. cline%defined('balance')     ) call cline%set('balance',       'yes')
         if( .not. cline%defined('nsample_max') ) call cline%set('nsample_max',  50000.)
         ! make master parameters
         call params%new(cline)
@@ -346,34 +346,29 @@ contains
         call spproj%update_projinfo(cline)
         call spproj%write_segment_inside('projinfo', params%projfile)
         ! take care of class-biased particle sampling
-        if( trim(params%balance).eq.'yes' )then ! balanced particle sampling in iterations
-            update_frac = 1.0
-            nptcls_eff  = spproj%count_state_gt_zero()
+        if( spproj%is_virgin_field('ptcl2D') )then
+            THROW_HARD('Prior 2D clustering required for abinitio workflow')
+        else
+            l_update_frac = .true.
+            update_frac   = 1.0
+            nptcls_eff    = spproj%count_state_gt_zero()
             if( cline%defined('nsample') )then
-                update_frac = min(1.0, real(params%nsample) / real(nptcls_eff))
+                update_frac = real(params%nsample) / real(nptcls_eff)
             else if( cline%defined('update_frac') )then
                 update_frac = params%update_frac
             else
                 update_frac = calc_update_frac(nptcls_eff, params%nsample_max)
             endif
-            if( update_frac <= .99 )then
-                l_update_frac = .true.
-                if( spproj%is_virgin_field('ptcl2D') )then
-                    THROW_HARD('Prior 2D clustering required when balance is set to yes')
-                else
-                    ! generate a data structure for class sampling on disk
-                    ncls    = spproj%os_cls2D%get_noris()
-                    tmpinds = (/(icls,icls=1,ncls)/)
-                    rstates = spproj%os_cls2D%get_all('state')
-                    clsinds = pack(tmpinds, mask=rstates > 0.5)
-                    call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
-                    call write_class_samples(clssmp, CLASS_SAMPLING_FILE)
-                    deallocate(rstates, tmpinds, clsinds)
-                    call deallocate_class_samples(clssmp)
-                endif
-            else
-                l_update_frac = .false.
-            endif
+            update_frac = min(UPDATE_FRAC_MAX, update_frac) ! to ensure fractional update is always on                 
+            ! generate a data structure for class sampling on disk
+            ncls    = spproj%os_cls2D%get_noris()
+            tmpinds = (/(icls,icls=1,ncls)/)
+            rstates = spproj%os_cls2D%get_all('state')
+            clsinds = pack(tmpinds, mask=rstates > 0.5)
+            call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
+            call write_class_samples(clssmp, CLASS_SAMPLING_FILE)
+            deallocate(rstates, tmpinds, clsinds)
+            call deallocate_class_samples(clssmp)
         endif
         ! set low-pass limits and downscaling info from FRCs
         call set_lplims_from_frcs(spproj)
@@ -386,7 +381,6 @@ contains
                         THROW_HARD('Particles could not be found in the project')
                     endif
                     call spproj%os_ptcl3D%rnd_oris
-                    ! call spproj%os_ptcl3D%set_all2single('w',1.) !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                 case DEFAULT
                     THROW_HARD('Unsupported ORITYPE; exec_abinitio_3Dmodel')
             end select
@@ -640,7 +634,7 @@ contains
             prob_sh = 'yes'
         endif
         ! trailing reconstruction
-        if( istage >= PROBREFINE_STAGE .and. l_update_frac )then
+        if( istage >= TRAILREC_STAGE .and. l_update_frac )then
             trail_rec = 'yes'
         else
             trail_rec = 'no'
