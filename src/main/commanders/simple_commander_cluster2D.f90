@@ -660,9 +660,6 @@ contains
         endif
         call cline_cluster2D_stage1%set('lpstop',     params%lpstart)
         call cline_cluster2D_stage1%set('ml_reg',     'no')
-        if( params%l_noise_reg .and. .not.cline%defined('maxits_glob'))then
-            call cline_cluster2D_stage1%set('maxits_glob', params%extr_lim)
-        endif
         if( params%l_update_frac )then
             call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
             call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1_EXTR))
@@ -715,9 +712,6 @@ contains
         ! for testing
         if( cline%defined('extr_iter') )then
             call cline_cluster2D_stage2%set('extr_iter', cline_cluster2D_stage1%get_rarg('extr_iter'))
-        endif
-        if( params%l_noise_reg .and. .not.cline%defined('maxits_glob'))then
-            call cline_cluster2D_stage2%set('maxits_glob', params%extr_lim)
         endif
         ! execution
         if( l_shmem )then

@@ -1777,6 +1777,8 @@ contains
         character(len=:), allocatable :: dest, tmpl
         if( pool_iter < 1 )return
         call simple_mkdir(CHECKPOINT_DIR)
+        call cline_cluster2D_pool%writeline(trim(CHECKPOINT_DIR)//'pool.cline')
+        call cline_cluster2D_chunk%writeline(trim(CHECKPOINT_DIR)//'chunk.cline')
         call pool_proj%write(fname=trim(CHECKPOINT_DIR)//'mics.simple',  isegment=MIC_SEG)
         call pool_proj%write(fname=trim(CHECKPOINT_DIR)//'stks.simple',  isegment=STK_SEG)
         call pool_proj%write(fname=trim(CHECKPOINT_DIR)//'ptcls.simple', isegment=PTCL2D_SEG)
