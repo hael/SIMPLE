@@ -19,7 +19,9 @@ contains
     integer pure function calc_fourier_index( res, box, smpd )
         real, intent(in)    :: res, smpd
         integer, intent(in) :: box
-        calc_fourier_index = nint((real(box)*smpd)/res)
+        real :: res_here
+        res_here = max(res,2.*smpd)
+        calc_fourier_index = min(box/2,nint((real(box)*smpd)/res_here))
     end function calc_fourier_index
 
     !> \brief calculate logical mask filtering out the Graphene bands

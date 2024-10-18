@@ -193,8 +193,8 @@ contains
         subroutine set_cline_cluster2D( istage )
             integer,          intent(in)  :: istage
             character(len=:), allocatable :: sh_first, refine, center, objfun, refs, icm
-            integer :: iphase, iter, imaxits, maxits_glob, cc_iters, minits, extr_iter
-            real    :: trs, snr_noise_reg, lambda
+            integer :: iphase, iter, imaxits, cc_iters, minits, extr_iter
+            real    :: trs, lambda
             refine = 'snhc_smpl' ! not optional
             ! iteration number bookkeeping
             iter = 0
@@ -213,8 +213,6 @@ contains
             select case(iphase)
             case(1)
                 ! phase constants
-                maxits_glob   = params%extr_lim+ITS_INCR
-                snr_noise_reg = params%snr_noise_reg
                 extr_iter     = 0
                 ! phase variables
                 imaxits       = nint(real(istage)*real(maxits(1))/real(PHASES(1)))
@@ -295,12 +293,8 @@ contains
                 select case(istage)
                 case(5)
                     minits        = iter + 1
-                    maxits_glob   = params%extr_lim+ITS_INCR
-                    snr_noise_reg = params%snr_noise_reg
                 case(6)
                     minits        = iter
-                    maxits_glob   = 0
-                    snr_noise_reg = 0.
                 end select
             end select
             ! command line update
@@ -321,13 +315,6 @@ contains
                 call cline_cluster2D%delete('lp')
             endif
             if( trim(refs) /= NIL ) call cline_cluster2D%set('refs', refs)
-            if( params%l_noise_reg .and. snr_noise_reg > 0.001)then
-                call cline_cluster2D%set('snr_noise_reg', snr_noise_reg)
-                call cline_cluster2D%set('maxits_glob',   maxits_glob)
-            else
-                call cline_cluster2D%delete('snr_noise_reg')
-                call cline_cluster2D%delete('maxits_glob')
-            endif
             if( extr_iter > 0 )then
                 call cline_cluster2D%set('extr_iter', extr_iter)
             else
