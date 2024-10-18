@@ -4,9 +4,11 @@ use simple_AFM_image
 use simple_syslib
 use simple_binimage
 use simple_segmentation
+use simple_pickseg
 
 type(AFM_image), allocatable :: stack_stack(:)
 type(AFM_image), allocatable :: stack_avg(:)
+logical, allocatable         :: mask_array(:,:,:,:)
 type(image)                  :: img_edg  
 type(image)                  :: test_img, test_denoised     
 type(binimage)               :: test_bin 
@@ -26,28 +28,20 @@ call cpu_time(start)
 call simple_list_files(trim(directory) // '*.ibw', file_list)
 allocate(stack_stack(size(file_list)))
 allocate(stack_avg(size(file_list)))
+allocate(mask_array(1024, 1024, 1, size(file_list)))
 
-do file_iter = 4, size(file_list)
+do file_iter = 1, size(file_list)
     call read_ibw(stack_stack(file_iter), file_list(file_iter))
-    ! call stack_stack(file_iter)%img_array(1)%vis()
-    
-    ! call stack_stack(file_iter)%img_array(1)%write_jpg('test.jpg', norm = .true. )
-    ! call otsu_img(stack_stack(file_iter)%img_array(1))
-    ! call test_bin%transfer2bimg(stack_stack(file_iter)%img_array(1))
-    ! call stack_stack(file_iter)%img_array(1)%write('Users/atifao/Downloads/' // int2str(file_iter) // '.mrc')
-    ! call stack_stack(file_iter)%img_array(1)%write_jpg('test.jpg')
     call align_avg(stack_stack(file_iter), stack_avg(file_iter))
     if(file_list(file_iter) == trim(directory) // 'Cob_450007.ibw' .or. file_list(file_iter) == trim(directory) // 'Cob_450010.ibw') then 
         do clip_len = 1, size(stack_avg(file_iter)%img_array)
             call stack_avg(file_iter)%img_array(clip_len)%clip_inplace([1024, 900, 1])
         end do
     end if
-    ! call zero_padding(stack_avg(file_iter))
-    call stack_avg(file_iter)%img_array(9)%vis()
-    call hough_lines(stack_avg(file_iter)%img_array(9), img_edg, [PI/2 - PI/180, PI/2 + PI/180])
-    ! stack_avg(file_iter)%stack_string = get_fbody(basename(trim(file_list(file_iter))), 'ibw')
-    ! call pick_valid(stack_avg(file_iter), stack_avg(file_iter)%stack_string)
-    if(file_iter > 3) exit 
+    call zero_padding(stack_avg(file_iter))
+    call hough_lines(stack_avg(file_iter)%img_array(9), [PI/2 - PI/180, PI/2 + PI/180], mask_array(:, :, :, file_iter))
+    stack_avg(file_iter)%stack_string = get_fbody(basename(trim(file_list(file_iter))), 'ibw')
+    call pick_valid(stack_avg(file_iter), stack_avg(file_iter)%stack_string)
 end do
 
 call cpu_time(finish)
