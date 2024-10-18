@@ -472,10 +472,6 @@ contains
         if( params_glob%l_lpset.and.params_glob%l_icm )then
             call img_out%ICM2D( params_glob%lambda, verbose=.false. )
         endif
-        ! noise regularization
-        if( params_glob%l_noise_reg )then
-            call img_out%add_gauran2cavg(params_glob%eps)
-        endif
         ! apply mask
         call img_out%mask(params_glob%msk_crop, 'soft', backgr=0.0)
         ! gridding prep
