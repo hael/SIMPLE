@@ -111,7 +111,7 @@ type(simple_program), target :: export_starproject
 type(simple_program), target :: extract
 type(simple_program), target :: filter
 type(simple_program), target :: fsc
-type(simple_program), target :: gen_cavgs_partition
+type(simple_program), target :: partition_cavgs
 type(simple_program), target :: gen_pspecs_and_thumbs
 type(simple_program), target :: gen_picking_refs
 type(simple_program), target :: icm2D
@@ -417,7 +417,7 @@ contains
         call new_filter
         call new_fractionate_movies
         call new_fsc
-        call new_gen_cavgs_partition
+        call new_partition_cavgs
         call new_gen_pspecs_and_thumbs
         call new_gen_picking_refs
         call new_icm2D
@@ -545,7 +545,7 @@ contains
         call push2prg_ptr_array(filter)
         call push2prg_ptr_array(fractionate_movies)
         call push2prg_ptr_array(fsc)
-        call push2prg_ptr_array(gen_cavgs_partition)
+        call push2prg_ptr_array(partition_cavgs)
         call push2prg_ptr_array(gen_pspecs_and_thumbs)
         call push2prg_ptr_array(gen_picking_refs)
         call push2prg_ptr_array(icm2D)
@@ -725,8 +725,8 @@ contains
                 ptr2prg => filter
             case('fsc')
                 ptr2prg => fsc
-            case('gen_cavgs_partition')
-                ptr2prg => gen_cavgs_partition
+            case('partition_cavgs')
+                ptr2prg => partition_cavgs
             case('gen_pspecs_and_thumbs')
                 ptr2prg => gen_pspecs_and_thumbs
             case('gen_picking_refs')
@@ -928,7 +928,7 @@ contains
         write(logfhandle,'(A)') export_starproject%name
         write(logfhandle,'(A)') filter%name
         write(logfhandle,'(A)') fsc%name
-        write(logfhandle,'(A)') gen_cavgs_partition%name
+        write(logfhandle,'(A)') partition_cavgs%name
         write(logfhandle,'(A)') gen_pspecs_and_thumbs%name
         write(logfhandle,'(A)') icm2D%name
         write(logfhandle,'(A)') icm3D%name
@@ -2466,43 +2466,42 @@ contains
         call fsc%set_input('comp_ctrls', 1, nthr)
     end subroutine new_fsc
 
-    subroutine new_gen_cavgs_partition
+    subroutine new_partition_cavgs
         ! PROGRAM SPECIFICATION
-        call gen_cavgs_partition%new(&
-        &'gen_cavgs_partition', &                                           ! name
+        call partition_cavgs%new(&
+        &'partition_cavgs', &                                           ! name
         &'Generate class averages partitions based on their simmilarity',&  ! descr_short
         &'is an application to cluster class averages with affinity propagation',   &! descr_long
         &'simple_exec',&                                                    ! executable
-        &0, 0, 1, 3, 3, 1, 1, .true.)                                       ! # entries in each group, requires sp_project
+        &0, 0, 0, 3, 3, 1, 1, .true.)                                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         ! <empty>
         ! alternative inputs
-        call gen_cavgs_partition%set_input('alt_ios', 1, 'fname',   'file', 'Input/Output Similarity Matrix', 'Binary file (.bin)','simmat.bin', .false., '')
+        ! <empty>
         ! search controls
-        call gen_cavgs_partition%set_input('srch_ctrls', 1, nsearch)
-        gen_cavgs_partition%srch_ctrls(1)%descr_long        = 'Number of clustering attempts with a range preference values{0.}'
-        gen_cavgs_partition%srch_ctrls(1)%descr_placeholder = 'Number of clustering attempts{0.}'
-        gen_cavgs_partition%srch_ctrls(1)%rval_default      = 0.
-        call gen_cavgs_partition%set_input('srch_ctrls', 2, frac)
-        gen_cavgs_partition%srch_ctrls(2)%descr_long        = 'Preference value within the [minimum=0;median=1] range{0.}'
-        gen_cavgs_partition%srch_ctrls(2)%descr_placeholder = 'Preference value{0.}'
-        gen_cavgs_partition%srch_ctrls(2)%rval_default      = 0.
-        call gen_cavgs_partition%set_input('srch_ctrls', 3, trs)
-        gen_cavgs_partition%srch_ctrls(3)%descr_long        = 'Image alignment half-offset{15.}'
-        gen_cavgs_partition%srch_ctrls(3)%descr_placeholder = 'Half-offset{15.}'
-        gen_cavgs_partition%srch_ctrls(3)%rval_default      = 15.
+        call partition_cavgs%set_input('srch_ctrls', 1, nsearch)
+        partition_cavgs%srch_ctrls(1)%descr_long        = 'Number of clustering attempts with a range preference values{0.}'
+        partition_cavgs%srch_ctrls(1)%descr_placeholder = 'Number of clustering attempts{0.}'
+        partition_cavgs%srch_ctrls(1)%rval_default      = 0.
+        call partition_cavgs%set_input('srch_ctrls', 2, trs)
+        partition_cavgs%srch_ctrls(2)%descr_long        = 'Image alignment half-offset{15.}'
+        partition_cavgs%srch_ctrls(2)%descr_placeholder = 'Half-offset{15.}'
+        partition_cavgs%srch_ctrls(2)%rval_default      = 15.
+        call partition_cavgs%set_input('srch_ctrls', 3, mirr)
+        partition_cavgs%srch_ctrls(3)%descr_long        = 'Take into account mirror class averages(yes|no){no}'
+        partition_cavgs%srch_ctrls(3)%descr_placeholder = '(yes|no){no}'
         ! filter controls
-        call gen_cavgs_partition%set_input('filt_ctrls', 1, hp)
-        call gen_cavgs_partition%set_input('filt_ctrls', 2, lp)
-        call gen_cavgs_partition%set_input('filt_ctrls', 3, lpthres)
+        call partition_cavgs%set_input('filt_ctrls', 1, hp)
+        call partition_cavgs%set_input('filt_ctrls', 2, lp)
+        call partition_cavgs%set_input('filt_ctrls', 3, lpthres)
         ! mask controls
-        call gen_cavgs_partition%set_input('mask_ctrls', 1, mskdiam)
+        call partition_cavgs%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
-        call gen_cavgs_partition%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_gen_cavgs_partition
+        call partition_cavgs%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_partition_cavgs
 
     subroutine new_gen_pspecs_and_thumbs
         ! PROGRAM SPECIFICATION

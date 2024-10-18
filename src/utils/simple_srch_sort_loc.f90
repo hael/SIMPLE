@@ -554,5 +554,24 @@ contains
         goto 22
     end function selec
 
+    ! Returns the sorted unique values of input vector
+    subroutine unique( vec, vec_unique )
+        integer,              intent(in)    :: vec(:)
+        integer, allocatable, intent(inout) :: vec_unique(:)
+        integer :: sorted(size(vec))
+        logical :: mask(size(vec))
+        integer :: i, n
+        if( allocated(vec_unique) ) deallocate(vec_unique)
+        n      = size(vec)
+        sorted = vec
+        call hpsort(sorted)
+        mask    = .false.
+        mask(1) = .true.
+        do i = 2,n
+            if( sorted(i) /= sorted(i-1) ) mask(i) = .true.
+        enddo
+        vec_unique = pack(sorted, mask)
+    end subroutine unique
+
 end module simple_srch_sort_loc
     

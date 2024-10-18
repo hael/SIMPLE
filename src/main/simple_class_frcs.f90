@@ -262,19 +262,27 @@ contains
         find = max(K4EOAVGLB,get_find_at_corr(self%frcs(sstate,cls,:), FSC4EOAVG2D))
     end function estimate_find_for_eoavg
 
-    function estimate_lp_for_align( self, state ) result( lp )
-        class(class_frcs), intent(in)  :: self
-        integer, optional, intent(in)  :: state
+    function estimate_lp_for_align( self, state, crit0143 ) result( lp )
+        class(class_frcs), intent(in) :: self
+        integer, optional, intent(in) :: state
+        logical, optional, intent(in) :: crit0143
         real    :: lplims(self%ncls),lp3(3)
-        integer :: sstate, icls
         real    :: lp, res_frc05, res_frc0143
+        integer :: sstate, icls
+        logical :: l_crit0413
         sstate = 1
         if( present(state) ) sstate = state
+        l_crit0413 = .true. ! default is freq@frc=0.143, otherwise frc=0.5
+        if( present(crit0143) ) l_crit0413 = crit0143
         ! order FRCs according to low-pass limit (best first)
         do icls=1,self%ncls
             call get_resolution(self%frcs(sstate,icls,:), self%res4frc_calc, res_frc05, res_frc0143)
             call self%bound_res(self%frcs(sstate,icls,:), res_frc05, res_frc0143)
-            lplims(icls) = res_frc0143
+            if( l_crit0413 )then
+                lplims(icls) = res_frc0143
+            else
+                lplims(icls) = res_frc05
+            endif
         end do
         lp3 = min3(lplims)
         ! return median of top three clusters
