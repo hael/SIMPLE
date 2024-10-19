@@ -320,15 +320,9 @@ contains
                 else
                     THROW_HARD('File for class-biased sampling in fractional update: '//CLASS_SAMPLING_FILE//' does not exists!')
                 endif
-                if( params_glob%l_trail_rec )then
-                    ! balanced class sampling with greediness = 0
-                    call build_glob%spproj_field%sample4update_class(clssmp, 0, pfromto,&
-                    &params_glob%update_frac, nptcls2update, pinds, ptcl_mask, l_incr_sampl)
-                else
-                    ! balanced class sampling with greediness = 2
-                    call build_glob%spproj_field%sample4update_class(clssmp, 2, pfromto,&
-                    &params_glob%update_frac, nptcls2update, pinds, ptcl_mask, l_incr_sampl)
-                endif
+                ! balanced class sampling 
+                call build_glob%spproj_field%sample4update_class(clssmp, params_glob%greediness,&
+                &pfromto, params_glob%update_frac, nptcls2update, pinds, ptcl_mask, l_incr_sampl)
                 call deallocate_class_samples(clssmp)
             else
                 call build_glob%spproj_field%sample4update_rnd(pfromto,&
