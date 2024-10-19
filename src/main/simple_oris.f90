@@ -87,6 +87,7 @@ type :: oris
     procedure          :: sample4update_reprod
     procedure          :: get_class_sample_stats
     procedure          :: sample_balanced
+    procedure          :: sample_balanced_parts
     procedure          :: incr_updatecnt
     procedure          :: clean_updatecnt
     procedure          :: clean_updatecnt_sampled
@@ -1377,7 +1378,7 @@ contains
 
     subroutine sample_balanced( self, clssmp, nptcls, greediness, states )
         class(oris),        intent(inout) :: self
-        type(class_sample), intent(inout) :: clssmp(:)  ! data structure for balanced samplign
+        type(class_sample), intent(inout) :: clssmp(:)  ! data structure for balanced sampling
         integer,            intent(in)    :: nptcls     ! # particles to sample in total
         integer,            intent(in)    :: greediness ! greediness level (see below)
         integer,            intent(inout) :: states(self%n)
@@ -1438,6 +1439,32 @@ contains
                 THROW_HARD('only greediness 0-2 is allowed')
         end select
     end subroutine sample_balanced
+
+    subroutine sample_balanced_parts( self, clssmp, nparts, nptcls_per_part, states )
+        class(oris),        intent(inout) :: self
+        type(class_sample), intent(inout) :: clssmp(:)  ! data structure for balanced sampling
+        integer,            intent(in)    :: nparts, nptcls_per_part
+        integer,            intent(inout) :: states(self%n)
+        integer :: nptcls, i, j, k
+        nptcls = nparts * nptcls_per_part
+        ! calculate sampling size for each class
+        clssmp(:)%nsample = 0
+        do while( sum(clssmp(:)%nsample) < nptcls )
+            where( clssmp(:)%nsample < clssmp(:)%pop ) clssmp(:)%nsample = clssmp(:)%nsample + 1
+        end do
+        ! create nparts balanced partitions of unique particles, state=1 is part 1, state=2 is part 2, etc.
+        states = 0
+        do i = 1, size(clssmp)
+            j = 1
+            do while( j < clssmp(i)%nsample )
+                if( j + nparts > clssmp(i)%pop ) exit
+                do k = 1, nparts
+                    states(clssmp(i)%pinds(j)) = k
+                    j = j + 1
+                end do
+            end do
+        end do
+    end subroutine sample_balanced_parts
 
     subroutine incr_updatecnt( self, fromto, mask )
         class(oris), intent(inout) :: self
