@@ -42,21 +42,21 @@ type, extends(commander_base) :: abinitio_3Dmodel2_commander
 end type abinitio_3Dmodel2_commander
 
 ! class constants
-character(len=*), parameter :: REC_FBODY        = 'rec_final_state'
-character(len=*), parameter :: STR_STATE_GLOB   = '01'
-real,             parameter :: LPSTART_LB       = 10.
-real,             parameter :: LPSTART_DEFAULT  = 20.
-real,             parameter :: LPSTOP_LB        = 6.
-real,             parameter :: CENLP_DEFAULT    = 30.
-real,             parameter :: LPSYMSRCH_LB     = 12.
-integer,          parameter :: NSTAGES          = 8
-integer,          parameter :: PHASES(3)        = [2,6,8]
-integer,          parameter :: MAXITS(3)        = [20,17,15]
-integer,          parameter :: MAXITS_GLOB      = 2*20 + 4*17 + 2*15
-integer,          parameter :: NSPACE(3)        = [500,1000,2500]
-integer,          parameter :: SYMSRCH_STAGE    = 3
-integer,          parameter :: PROBREFINE_STAGE = 5
-integer,          parameter :: TRAILREC_STAGE   = 6
+character(len=*), parameter :: REC_FBODY         = 'rec_final_state'
+character(len=*), parameter :: STR_STATE_GLOB    = '01'
+real,             parameter :: LPSTART_LB        = 10.
+real,             parameter :: LPSTART_DEFAULT   = 20.
+real,             parameter :: LPSTOP_LB         = 6.
+real,             parameter :: CENLP_DEFAULT     = 30.
+real,             parameter :: LPSYMSRCH_LB      = 12.
+integer,          parameter :: NSTAGES           = 8
+integer,          parameter :: PHASES(3)         = [2,6,8]
+integer,          parameter :: MAXITS(3)         = [20,17,15]
+integer,          parameter :: MAXITS_GLOB       = 2*20 + 4*17 + 2*15
+integer,          parameter :: NSPACE(3)         = [500,1000,2500]
+integer,          parameter :: SYMSRCH_STAGE     = 3
+integer,          parameter :: PROBREFINE_STAGE  = 5
+integer,          parameter :: TRAILREC_STAGE    = 7
 ! class variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
 logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false., l_update_frac=.false.
@@ -563,7 +563,7 @@ contains
         character(len=:), allocatable :: silence_fsc, sh_first, prob_sh, ml_reg
         character(len=:), allocatable :: refine, icm, trail_rec, pgrp, balance
         integer :: iphase, iter, inspace, imaxits
-        real    :: trs, snr_noise_reg
+        real    :: trs, snr_noise_reg, greediness
         ! iteration number bookkeeping
         if( cline_refine3D%defined('endit') )then
             iter = nint(cline_refine3D%get_rarg('endit'))
@@ -571,6 +571,34 @@ contains
             iter = 0
         endif
         iter = iter + 1
+        ! symmetry
+        pgrp = trim(params_glob%pgrp)
+        if( l_srch4symaxis )then
+            if( istage <= SYMSRCH_STAGE )then
+                ! need to replace original point-group flag with c1/pgrp_start
+                pgrp = trim(params_glob%pgrp_start)
+            endif
+        endif
+        ! refinement mode
+        if( istage < PROBREFINE_STAGE )then
+            refine  = 'shc_smpl'
+            prob_sh = 'no'
+        else
+            refine  = 'prob'
+            prob_sh = 'yes'
+        endif
+        ! balance
+        if( l_update_frac )then
+            balance = 'yes'
+        else
+            balance = 'no'
+        endif
+        ! trailing reconstruction
+        if( istage >= TRAILREC_STAGE .and. l_update_frac )then
+            trail_rec = 'yes'
+        else
+            trail_rec = 'no'
+        endif
         ! phase logics
         if(      istage <= PHASES(1) )then
             iphase = 1
@@ -591,6 +619,7 @@ contains
                 sh_first      = 'no'
                 ml_reg        = 'no'
                 icm           = 'no'
+                greediness    = 2. ! completely greedy balanced sampling based on objective function value
                 snr_noise_reg = 2.0
             case(2)
                 inspace       = NSPACE(2)
@@ -600,6 +629,7 @@ contains
                 sh_first      = 'yes'
                 ml_reg        = 'yes'
                 icm           = 'no'
+                greediness    = 1.0 ! sample first half of each class as the best ones and the rest randomly
                 snr_noise_reg = 4.0
             case(3)
                 inspace       = NSPACE(3)
@@ -609,57 +639,35 @@ contains
                 sh_first      = 'yes'
                 ml_reg        = 'yes'
                 icm           = 'yes'
+                greediness    = 0.0 ! completely random balanced sampling (only class assignment matters)
                 snr_noise_reg = 6.0
         end select
-        ! balance
-        if( l_update_frac )then
-            balance = 'yes'
-        else
-            balance = 'no'
-        endif
-        ! symmetry
-        pgrp = trim(params_glob%pgrp)
-        if( l_srch4symaxis )then
-            if( istage <= SYMSRCH_STAGE )then
-                ! need to replace original point-group flag with c1/pgrp_start
-                pgrp = trim(params_glob%pgrp_start)
-            endif
-        endif
-        ! refinement mode
-        if( istage < PROBREFINE_STAGE )then
-            refine  = 'shc_smpl'
-            prob_sh = 'no'
-        else
-            refine  = 'prob'
-            prob_sh = 'yes'
-        endif
-        ! trailing reconstruction
-        if( istage >= TRAILREC_STAGE .and. l_update_frac )then
-            trail_rec = 'yes'
-        else
-            trail_rec = 'no'
-        endif
         ! command line update
         call cline_refine3D%set('prg',                     'refine3D')
-        call cline_refine3D%set('pgrp',                          pgrp)
-        call cline_refine3D%set('startit',                       iter)
-        call cline_refine3D%set('which_iter',                    iter)
-        call cline_refine3D%set('refine',                      refine)
+        ! class global control parameters
+        call cline_refine3D%set('update_frac',            update_frac)
         call cline_refine3D%set('lp',               lpinfo(istage)%lp)
         call cline_refine3D%set('smpd_crop', lpinfo(istage)%smpd_crop)
         call cline_refine3D%set('box_crop',   lpinfo(istage)%box_crop)
+        call cline_refine3D%set('maxits_glob',            MAXITS_GLOB)
+        ! iteration number
+        call cline_refine3D%set('startit',                       iter)
+        call cline_refine3D%set('which_iter',                    iter)
+        ! dynamic control parameters
+        call cline_refine3D%set('pgrp',                          pgrp)
+        call cline_refine3D%set('refine',                      refine)
+        call cline_refine3D%set('balance',                    balance)
+        call cline_refine3D%set('trail_rec',                trail_rec)
+        ! phase control parameters
         call cline_refine3D%set('nspace',                     inspace)
         call cline_refine3D%set('maxits',                     imaxits)
-        call cline_refine3D%set('maxits_glob',            MAXITS_GLOB)
         call cline_refine3D%set('silence_fsc',            silence_fsc)
         call cline_refine3D%set('trs',                            trs)
         call cline_refine3D%set('sh_first',                  sh_first)
         call cline_refine3D%set('prob_sh',                    prob_sh)
         call cline_refine3D%set('ml_reg',                      ml_reg)
         call cline_refine3D%set('icm',                            icm)
-        call cline_refine3D%set('balance',                    balance)
-        call cline_refine3D%set('update_frac',            update_frac)
-        call cline_refine3D%set('trail_rec',                trail_rec)
+        call cline_refine3D%set('greediness',              greediness)
         if( l_noise_reg )then
             call cline_refine3D%set('snr_noise_reg',    snr_noise_reg)
         endif
