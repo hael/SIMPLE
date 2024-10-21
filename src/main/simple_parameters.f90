@@ -872,6 +872,7 @@ contains
         call check_rarg('sherr',          self%sherr)
         call check_rarg('smpd',           self%smpd)
         call check_rarg('smpd_crop',      self%smpd_crop)
+        call check_rarg('smpd_target',    self%smpd_target)
         call check_rarg('sigma',          self%sigma)
         call check_rarg('snr',            self%snr)
         call check_rarg('snr_noise_reg',  self%snr_noise_reg)
