@@ -140,6 +140,7 @@ type(simulate_subtomogram_commander)        :: xsimulate_subtomogram
 
 ! MISCELLANEOUS WORKFLOWS
 type(scale_project_commander_distr)         :: xscale_project
+type(model_validation_commander)            :: xmodel_validation
 type(projops_commander)                     :: xprojops
 type(prune_project_commander_distr)         :: xprune_project
 type(pdb2mrc_commander)                     :: xpdb2mrc     
@@ -391,6 +392,10 @@ select case(trim(prg))
         call xsimulate_movie%execute(cline)
     case( 'simulate_subtomogram' )
         call xsimulate_subtomogram%execute(cline)
+
+    ! VALIDATION PROGRAMS
+    case( 'model_validation' )
+        call xmodel_validation%execute(cline)
 
     ! MISCELLANEOUS WORKFLOWS
     case( 'scale_project' )
