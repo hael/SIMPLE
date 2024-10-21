@@ -237,7 +237,7 @@ contains
             frcs_avg = 0.
             do k = 1,self%filtsz
                 do icls = 1, ncls
-                    if( states(sstate) > 0 .and. self%frcs(sstate,icls,k) > 0. )then
+                    if( states(icls) > 0 .and. self%frcs(sstate,icls,k) > 0. )then
                         frcs_avg(k) = frcs_avg(k) + self%frcs(sstate,icls,k) * real(cls_pops(icls))
                     endif
                 enddo
