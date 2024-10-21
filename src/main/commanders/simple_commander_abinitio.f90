@@ -333,7 +333,6 @@ contains
         if( .not. cline%defined('pgrp_start')  ) call cline%set('pgrp_start',     'c1')
         if( .not. cline%defined('ptclw')       ) call cline%set('ptclw',          'no')
         if( .not. cline%defined('projrec')     ) call cline%set('projrec',       'yes')
-        if( .not. cline%defined('nsample_max') ) call cline%set('nsample_max',  50000.)
         ! make master parameters
         call params%new(cline)
         call cline%set('mkdir', 'no')
@@ -357,9 +356,13 @@ contains
             else if( cline%defined('update_frac') )then
                 update_frac = params%update_frac
             else
-                update_frac = calc_update_frac(nptcls_eff, params%nsample_max)
+                if( cline%defined('nsample_max') )then
+                    update_frac = calc_update_frac(nptcls_eff, [NSAMPLE_MINMAX_DEFAULT(1),params%nsample_max])
+                else
+                    update_frac = calc_update_frac(nptcls_eff, NSAMPLE_MINMAX_DEFAULT)
+                endif
             endif
-            update_frac = min(UPDATE_FRAC_MAX, update_frac) ! to ensure fractional update is always on                 
+            update_frac = min(UPDATE_FRAC_MAX, update_frac) ! to ensure fractional update is always on      
             ! generate a data structure for class sampling on disk
             ncls    = spproj%os_cls2D%get_noris()
             tmpinds = (/(icls,icls=1,ncls)/)

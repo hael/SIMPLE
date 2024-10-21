@@ -32,7 +32,7 @@ nptcls = 36000
 ! end do
 
 do i = 1,MAXITS
-    nsampl      = inv_nsampl_decay( i, MAXITS, NPTCLS)
+    nsampl      = inv_nsampl_decay( i, MAXITS, NPTCLS, NSAMPLE_MINMAX_DEFAULT)
     update_frac = real(nsampl) / real(NPTCLS)
     print *, i, nsampl, update_frac
 end do

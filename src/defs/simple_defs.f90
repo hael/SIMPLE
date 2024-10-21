@@ -211,24 +211,25 @@ real, parameter    :: RES_THRESHOLD_STREAM     = 35.0  !< Default streaming reso
 real, parameter    :: LOWRES_REJECT_THRESHOLD  = 199.  ! Deactivates resolution-based rejection when lpthres > LOWRES_REJECT_THRESHOLD
 
 ! integer #/threshold constants
-integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)
-integer, parameter :: LPLIM3ITERBOUND      = 7         !< # iteration bound lplim stage 2 (PRIME2D)
-integer, parameter :: MINCLSPOPLIM         = 5         !< limit for adaptive cluster splitting/spreading (PRIME2D)
-integer, parameter :: GRIDCORR_MAXITS      = 2         !< # iterations for reconstruction gridding correction
-integer, parameter :: MAXIMGBATCHSZ        = 500       !< max # images in batch
-integer, parameter :: MAX_EXTRLIM2D        = 15        !< maximum # of iterations for which 2D extremal opt is performed
-integer, parameter :: MAX_STREAM_NPTCLS    = 500000    !< cap for adjusting update_frac in 2D streaming
-integer, parameter :: NPEAKS_DEFAULT       = 3         !< # of greedy subspace peaks to construct multi-neighborhood search spaces from
-integer, parameter :: NPEAKS_INPL_DEFAULT  = 10        !< # neighborhood search peaks to refine with L-BFGS
-integer, parameter :: STREAM_SRCHLIM       = 5         !< maximum # of systematic iterations for streaming 2D pool
-integer, parameter :: MC_NPATCH            = 5         !< number of patches in x/y-direction for motion correction
-integer, parameter :: MC_MINPATCHSZ        = 200       !< Minimum patch size in pixels for motion correction
-integer, parameter :: MIN_ITERS_SHC        = 5         !< minimum number of iterations of stochastic search
-integer, parameter :: BATCHTHRSZ           = 50        !< # of images per thread
-integer, parameter :: FAST2D_MINSZ         = 25000     !< Minimum # of particles to sample for fast subset 2D classification
-integer, parameter :: FAST2D_NPTCLS_PER_CLS = 500      !< # of particles per class to sample for fast subset 2D classification
-integer, parameter :: FAST2D_ITER_BATCH    = 3         !< # of iterations after which # of particles is updated
-integer, parameter :: AMSK_FREQ            = 3         !< automasking every third iteration (each for now)
+integer, parameter :: LPLIM1ITERBOUND           = 5              !< # iteration bound lplim stage 1 (PRIME2D)
+integer, parameter :: LPLIM3ITERBOUND           = 7              !< # iteration bound lplim stage 2 (PRIME2D)
+integer, parameter :: MINCLSPOPLIM              = 5              !< limit for adaptive cluster splitting/spreading (PRIME2D)
+integer, parameter :: GRIDCORR_MAXITS           = 2              !< # iterations for reconstruction gridding correction
+integer, parameter :: MAXIMGBATCHSZ             = 500            !< max # images in batch
+integer, parameter :: MAX_EXTRLIM2D             = 15             !< maximum # of iterations for which 2D extremal opt is performed
+integer, parameter :: MAX_STREAM_NPTCLS         = 500000         !< cap for adjusting update_frac in 2D streaming
+integer, parameter :: NPEAKS_DEFAULT            = 3              !< # of greedy subspace peaks to construct multi-neighborhood search spaces from
+integer, parameter :: NPEAKS_INPL_DEFAULT       = 10             !< # neighborhood search peaks to refine with L-BFGS
+integer, parameter :: NSAMPLE_MINMAX_DEFAULT(2) = [25000,50000]  !< default minimum and maximum particle sampling size
+integer, parameter :: STREAM_SRCHLIM            = 5              !< maximum # of systematic iterations for streaming 2D pool
+integer, parameter :: MC_NPATCH                 = 5              !< number of patches in x/y-direction for motion correction
+integer, parameter :: MC_MINPATCHSZ             = 200            !< Minimum patch size in pixels for motion correction
+integer, parameter :: MIN_ITERS_SHC             = 5              !< minimum number of iterations of stochastic search
+integer, parameter :: BATCHTHRSZ                = 50             !< # of images per thread
+integer, parameter :: FAST2D_MINSZ              = 25000          !< Minimum # of particles to sample for fast subset 2D classification
+integer, parameter :: FAST2D_NPTCLS_PER_CLS     = 500            !< # of particles per class to sample for fast subset 2D classification
+integer, parameter :: FAST2D_ITER_BATCH         = 3              !< # of iterations after which # of particles is updated
+integer, parameter :: AMSK_FREQ                 = 3              !< automasking every third iteration (each for now)
 
 ! weighting scheme
 real, parameter :: RANKW_EXP = 2.0              !< Exponent for exponential rank weights
