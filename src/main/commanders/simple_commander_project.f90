@@ -797,16 +797,16 @@ contains
         class(selection_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(parameters)                :: params
-        type(sp_project)                :: spproj
         type(ran_tabu)                  :: rt
-        integer,            allocatable :: states(:), ptcls_in_state(:), ptcls_rnd(:), tmpinds(:), clsinds(:)
+        type(sp_project)                :: spproj, spproj_part
+        integer,            allocatable :: states(:), ptcls_in_state(:), ptcls_rnd(:), tmpinds(:), clsinds(:), states_map(:)
         real,               allocatable :: rstates(:)
         type(class_sample), allocatable :: clssmp(:), clssmp_read(:)
+        character(len=:),   allocatable :: projfname
         integer(kind=kind(ENUM_ORISEG)) :: iseg
-        integer                         :: n_lines,fnr,noris,i,nstks,noris_in_state,ncls,icls,nstates,nptcls
+        integer                         :: n_lines,fnr,noris,i,nstks,noris_in_state,ncls,icls,nstates,nptcls,ipart
         real                            :: state
         logical                         :: l_ctfres, l_icefrac, l_append
-        logical, parameter              :: L_TST_CLS_SMPL_IO = .false.
         class(oris), pointer :: pos => NULL()
         l_append = .false.
         if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',   'yes')
@@ -914,25 +914,41 @@ contains
             tmpinds = (/(icls,icls=1,ncls)/)
             rstates = spproj%os_cls2D%get_all('state')
             clsinds = pack(tmpinds, mask=rstates > 0.5)
-            allocate(states(nptcls), source=0)
+            allocate(states(nptcls), states_map(nptcls), source=0)
             call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
-            if( L_TST_CLS_SMPL_IO )then 
-                call write_class_samples(clssmp, 'clssmp.bin')
-                call read_class_samples(clssmp_read, 'clssmp.bin')
-                if( size(clssmp) /= size(clssmp_read) ) THROW_HARD('clssmp i/o error right after read')
-                do i = 1, size(clssmp)
-                    if( class_samples_same(clssmp(i),clssmp_read(i)) )then
-                        ! all good
-                    else
-                        THROW_HARD('clssmp i/o error , umatched records')
-                    endif
+            if( cline%defined('nparts') )then
+                call spproj%os_ptcl2D%sample_balanced_parts(clssmp, params%nparts, params%nptcls, states)
+                do ipart = 1, params%nparts
+                    ! count # particles in part
+                    write(logfhandle,*) '# particles in part '//int2str(ipart)//': ', count(states == ipart)
+                    ! copy project
+                    call spproj_part%copy(spproj)
+                    ! create state mapping
+                    where(states == ipart)
+                        states_map = 1
+                    elsewhere
+                        states_map = 0
+                    endwhere
+                    ! communicate state mapping to copied project
+                    call spproj_part%os_ptcl2D%set_all('state', real(states_map))
+                    call spproj_part%os_ptcl3D%set_all('state', real(states_map))
+                    ! prune
+                    call spproj_part%prune_particles
+                    ! map ptcl states to classes
+                    call spproj_part%map_ptcls_state_to_cls
+                    ! write project
+                    projfname = BALPROJPARTFBODY//int2str(ipart)//'.simple'
+                    call spproj_part%write(projfname)
+                    ! destruct
+                    call spproj_part%kill
                 end do
+            else
+                call spproj%os_ptcl2D%sample_balanced(clssmp, params%nptcls, params%greediness, states)
+                call spproj%os_ptcl2D%set_all('state', real(states))
+                call spproj%os_ptcl3D%set_all('state', real(states))
+                if( trim(params%prune).eq.'yes' ) call spproj%prune_particles
+                call spproj%map_ptcls_state_to_cls
             endif
-            call spproj%os_ptcl2D%sample_balanced(clssmp, params%nptcls, params%greediness, states)
-            call spproj%os_ptcl2D%set_all('state', real(states))
-            call spproj%os_ptcl3D%set_all('state', real(states))
-            if( trim(params%prune).eq.'yes' ) call spproj%prune_particles
-            call spproj%map_ptcls_state_to_cls
         else
             ! updates relevant segments
             select case(iseg)
