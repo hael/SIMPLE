@@ -1325,7 +1325,7 @@ contains
         ldim_new(:)      = box_new
         upscaling_factor = real(box_new) / real(box)
         smpd_new         = smpd / upscaling_factor
-        write(logfhandle,'(a,3i6,a,f8.3,a)') 'Scaled dimensions  (', ldim_new,' ) voxels, smpd: ', smpd_new, ' Angstrom'
+        write(logfhandle,'(a,3i6,a,f8.3,a)') 'Scaled dimensions   (', ldim_new,' ) voxels, smpd: ', smpd_new, ' Angstrom'
         call self%new(pdb_file)
         if( any(self%xyz(:,:) < 0.) )then
             write(logfhandle,'(A)') 'Warning: PDB atomic center moved to the center of the box'
