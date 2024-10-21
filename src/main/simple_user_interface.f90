@@ -4523,7 +4523,7 @@ contains
         &'Reports external selection through state 0/1 tags to project',&               ! descr_short
         &'is a program for reporting external (GUI) selections to the SIMPLE project',& ! descr_long
         &'simple_exec',&                                                                ! executable
-        &0, 7, 4, 0, 0, 0, 0, .true.)                                                   ! # entries in each group, requires sp_project
+        &0, 8, 4, 0, 0, 0, 0, .true.)                                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -4532,9 +4532,10 @@ contains
         call selection%set_input('parm_ios', 2, 'state',      'num',    'State number', 'Map selection to oris with this state only', '{1}', .false., 1.0)
         call selection%set_input('parm_ios', 3, prune)
         call selection%set_input('parm_ios', 4, 'append',     'binary', 'Append selection to existing', 'Previously deselected particles will stay deselected(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call selection%set_input('parm_ios', 5, 'balance',    'binary', 'Prune particles so each class has the same population', 'Balance class populations to smallest(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call selection%set_input('parm_ios', 6, 'nptcls',     'num',    'Total number ptcls to select when balancing', 'Total ptcls after balancing', '{100000}', .false., 100000.0)
+        call selection%set_input('parm_ios', 5, 'balance',    'binary', 'Balanced selection of particles across classes', 'Balanced selection(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call selection%set_input('parm_ios', 6, 'nptcls',     'num',    'Number of ptcls per part to select when balancing', '# ptcls per part after balancing', '{100000}', .false., 100000.0)
         call selection%set_input('parm_ios', 7, 'greediness', 'num',    'Greediness level in balanced selection', 'Greediness level in balancing(0-2)', '(0-2)', .false., 2.)
+        call selection%set_input('parm_ios', 8, 'nparts',     'num',    'Number of partitions in balancing', '# balanced parts', '# balanced parts', .false., 1.)
         ! alternative inputs
         call selection%set_input('alt_ios', 1, 'infile', 'file', 'File with selection state (0/1) flags', 'Plain text file (.txt) with selection state (0/1) flags',&
         &'give .txt selection file', .false., '')
