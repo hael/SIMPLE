@@ -211,18 +211,45 @@ contains
         if( hpind_fsc > 0 ) frc(:hpind_fsc) = frc(hpind_fsc + 1)
     end subroutine frc_getter
 
-    subroutine avg_frc_getter( self, frcs_avg, states, state )
-        class(class_frcs), intent(in)  :: self
-        real,              intent(out) :: frcs_avg(self%filtsz)
-        integer,           intent(in)  :: states(self%ncls)
-        integer, optional, intent(in)  :: state
-        integer :: sstate, icls, k
+    subroutine avg_frc_getter( self, frcs_avg, states, state, cur_oris )
+        class(class_frcs),    intent(in)    :: self
+        real,                 intent(out)   :: frcs_avg(self%filtsz)
+        integer,              intent(in)    :: states(self%ncls)
+        integer,    optional, intent(in)    :: state
+        type(oris), optional, intent(inout) :: cur_oris
+        integer,    allocatable :: cls_inds(:), pinds(:), cls_pops(:)
+        integer :: sstate, k, ncls, nptcls, icls
         sstate = 1
         if( present(state) ) sstate = state
-        do k = 1,self%filtsz
-            frcs_avg(k) = sum(self%frcs(sstate,:,k), mask=states > 0 .and. self%frcs(sstate,:,k) > 0.)
-        enddo
-        frcs_avg = frcs_avg / real(count(states > 0))
+        if( present(cur_oris) )then
+            cls_inds = cur_oris%get_label_inds('class')
+            ncls     = size(cls_inds)
+            nptcls   = 0
+            allocate(cls_pops(ncls), source=0)
+            do icls = 1, ncls
+                call cur_oris%get_pinds(cls_inds(icls), 'class', pinds)
+                if( allocated(pinds) )then
+                    cls_pops(icls) = size(pinds)
+                    nptcls = nptcls + cls_pops(icls)
+                    deallocate(pinds)
+                endif
+            end do
+            frcs_avg = 0.
+            do k = 1,self%filtsz
+                do icls = 1, ncls
+                    if( states(sstate) > 0 .and. self%frcs(sstate,icls,k) > 0. )then
+                        frcs_avg(k) = frcs_avg(k) + self%frcs(sstate,icls,k) * real(cls_pops(icls))
+                    endif
+                enddo
+                ! normalization
+                frcs_avg(k) = frcs_avg(k) / sum(real(cls_pops))
+            enddo
+        else
+            do k = 1,self%filtsz
+                frcs_avg(k) = sum(self%frcs(sstate,:,k), mask=states > 0 .and. self%frcs(sstate,:,k) > 0.)
+            enddo
+            frcs_avg = frcs_avg / real(count(states > 0))
+        endif
     end subroutine avg_frc_getter
 
     !>  getter for raw values
