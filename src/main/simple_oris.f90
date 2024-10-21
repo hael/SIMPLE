@@ -1457,7 +1457,7 @@ contains
         do i = 1, size(clssmp)
             j = 1
             do while( j < clssmp(i)%nsample )
-                if( j + nparts > clssmp(i)%pop ) exit
+                if( j + nparts - 1 > clssmp(i)%pop ) exit
                 do k = 1, nparts
                     states(clssmp(i)%pinds(j)) = k
                     j = j + 1

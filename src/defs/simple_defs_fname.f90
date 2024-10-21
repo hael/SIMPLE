@@ -57,7 +57,8 @@ character(len=*), parameter :: ARRAY_SCRIPT         = 'simple_script_array'
 character(len=*), parameter :: STATS_FILE           = 'simple_stats'//trim(TXT_EXT)
 character(len=*), parameter :: ITERSTATS_FILE       = 'simple_iter_stats'//trim(TXT_EXT)
 ! SAMPLING
-character(len=*), parameter :: CLASS_SAMPLING_FILE  = 'clssmp.bin' 
+character(len=*), parameter :: CLASS_SAMPLING_FILE  = 'clssmp.bin'
+character(len=*), parameter :: BALPROJPARTFBODY     = 'balanced_project_part'
 ! PREPROCESSING
 character(len=*), parameter :: PICKREFS_FBODY       = 'pickrefs'
 character(len=*), parameter :: EXTRACT_STK_FBODY    = 'ptcls_from_'
