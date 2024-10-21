@@ -176,16 +176,17 @@ contains
         !     print *, eul, cc
         ! end do
         ! final refinement step
-        deallocate(rmats_refine, ccs_refine)
-        ! fill-in the rotation matrices
-        allocate(rmats_refine(360,3,3), ccs_refine(360), source=0.)
+        ! top orientation from previous step
+        eul = m2euler(rmats_refine(nloc(1),:,:))
         call e%set_euler(eul)
+        ! fill-in the rotation matrices
+        deallocate(rmats_refine, ccs_refine)
+        allocate(rmats_refine(360,3,3), ccs_refine(360), source=0.)
         do inpl = 1, 360
             e3     = e%e3get()
             e3_new = real(inpl-1)
             call e%e3set(e3_new)
-            eul    = e%get_euler()
-            rmats_refine(inpl,:,:) = euler2m(eul)
+            rmats_refine(inpl,:,:) = euler2m(e%get_euler())
             call e%e3set(e3)
         end do
         ! search
