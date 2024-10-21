@@ -5,37 +5,31 @@ implicit none
 public :: calc_update_frac, nsampl_decay, inv_nsampl_decay, calc_nsampl_fromto, inv_cos_decay, extremal_decay2D
 private
 
-real,    parameter :: UPDATE_FRAC_MAX = 0.5
-integer, parameter :: NSAMPL_MIN      = 10000
-integer, parameter :: NSAMPL_MAX      = 50000
-
 contains
 
-    function calc_update_frac( nptcls, nsample_max ) result( update_frac )
+    function calc_update_frac( nptcls, nsample_minmax ) result( update_frac )
         integer,           intent(in) :: nptcls
-        integer, optional, intent(in) :: nsample_max
+        integer, optional, intent(in) :: nsample_minmax(2)
         real    :: update_frac
-        integer :: nnsample_max, nsampl
-        nnsample_max = NSAMPL_MAX
-        if( present(nsample_max) ) nnsample_max = nsample_max
-        nsampl       = nint(UPDATE_FRAC_MAX * real(nptcls))
-        nsampl       = max(nsampl, NSAMPL_MIN)
-        nsampl       = min(nsampl, nnsample_max)
+        integer :: nsampl
+        nsampl       = nint(0.5 * real(nptcls))
+        nsampl       = max(nsampl, nsample_minmax(1))
+        nsampl       = min(nsampl, nsample_minmax(2))
         update_frac  = real(nsampl) / real(nptcls)
         update_frac  = min(1.0, update_frac)
     end function calc_update_frac
 
-    function nsampl_decay( it, maxits, nptcls ) result( nsampl )
-        integer, intent(in) :: it, maxits, nptcls
+    function nsampl_decay( it, maxits, nptcls, nsample_minmax ) result( nsampl )
+        integer, intent(in) :: it, maxits, nptcls, nsample_minmax(2)
         integer :: nsampl, nsampl_fromto(2)
-        nsampl_fromto = calc_nsampl_fromto(nptcls)
+        nsampl_fromto = calc_nsampl_fromto(nptcls, nsample_minmax)
         nsampl = nint(cos_decay(min(it,maxits), maxits, real(nsampl_fromto)))
     end function nsampl_decay
 
-    function inv_nsampl_decay( it, maxits, nptcls ) result( nsampl )
-        integer, intent(in) :: it, maxits, nptcls
+    function inv_nsampl_decay( it, maxits, nptcls, nsample_minmax ) result( nsampl )
+        integer, intent(in) :: it, maxits, nptcls, nsample_minmax(2)
         integer :: nsampl, nsampl_fromto(2)
-        nsampl_fromto = calc_nsampl_fromto(nptcls)
+        nsampl_fromto = calc_nsampl_fromto(nptcls, nsample_minmax)
         nsampl = nint(inv_cos_decay(min(it,maxits), maxits, real(nsampl_fromto)))
     end function inv_nsampl_decay
 
@@ -55,18 +49,18 @@ contains
         eps   = eps_fromto(1) + delta + delta * cos((real(maxits - i) * PI) / real(MAXITS))
     end function inv_cos_decay
 
-    function calc_nsampl_fromto( nptcls ) result( nsampl_fromto )
-        integer, intent(in)  :: nptcls
+    function calc_nsampl_fromto( nptcls, nsample_minmax ) result( nsampl_fromto )
+        integer, intent(in)  :: nptcls, nsample_minmax(2)
         integer :: nsampl_fromto(2)
-        if( nint(UPDATE_FRAC_MAX * real(nptcls)) < NSAMPL_MIN )then
+        if( nint(0.5 * real(nptcls)) < nsample_minmax(1) )then
             nsampl_fromto(1) = nptcls/4
             nsampl_fromto(2) = nptcls
         else
             ! upper limit has half of the particles or NSAMPLE_MAX if overshoot
-            nsampl_fromto(2) = nint(UPDATE_FRAC_MAX * real(nptcls))
-            nsampl_fromto(2) = min(nsampl_fromto(2), NSAMPL_MAX)
+            nsampl_fromto(2) = nint(0.5 * real(nptcls))
+            nsampl_fromto(2) = min(nsampl_fromto(2), nsample_minmax(2))
             nsampl_fromto(1) = nint(real(nsampl_fromto(2)) / 20.)
-            nsampl_fromto(1) = max(nsampl_fromto(1), NSAMPL_MIN)
+            nsampl_fromto(1) = max(nsampl_fromto(1), nsample_minmax(1))
         endif
     end function calc_nsampl_fromto
 

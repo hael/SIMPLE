@@ -83,10 +83,10 @@ contains
         type(parameters) :: params
         integer          :: i, nsampl_fromto(2), nsampl
         call params%new(cline)
-        nsampl_fromto = calc_nsampl_fromto(params%nptcls)
+        nsampl_fromto = calc_nsampl_fromto(params%nptcls, NSAMPLE_MINMAX_DEFAULT)
         write(logfhandle,'(A,1X,I7,1X,I7)') '>>> NSAMPLE, FROM/TO:', nsampl_fromto(1), nsampl_fromto(2)
         do i = 1, params%maxits
-            nsampl = inv_nsampl_decay(i, params%maxits, params%nptcls)
+            nsampl = inv_nsampl_decay(i, params%maxits, params%nptcls, NSAMPLE_MINMAX_DEFAULT)
             write(logfhandle,'(A,1X,I7,1X,I7)') 'ITER/NSAMPLE:', i, nsampl
         end do
         ! end gracefully
