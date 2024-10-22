@@ -296,6 +296,7 @@ type :: parameters
     integer :: npix=0              !< # pixles/voxels in binary representation
     integer :: nptcls=1            !< # images in stk/# orientations in oritab
     integer :: nptcls_per_cls=400  !< # images in stk/# orientations in oritab
+    integer :: nptcls_per_part=0   !< # particles per part in balanced selection
     integer :: nquanta=0           !< # quanta in quantization
     integer :: nran=0              !< # random images to select
     integer :: nrefs=100           !< # references used for picking{100}
@@ -773,6 +774,7 @@ contains
         call check_iarg('npix',           self%npix)
         call check_iarg('nptcls',         self%nptcls)
         call check_iarg('nptcls_per_cls', self%nptcls_per_cls)
+        call check_iarg('nptcls_per_part', self%nptcls_per_part)
         call check_iarg('nquanta',        self%nquanta)
         call check_iarg('nthr',           self%nthr)
         call check_iarg('nthr2D',         self%nthr2D)

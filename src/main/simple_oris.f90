@@ -1440,13 +1440,20 @@ contains
         end select
     end subroutine sample_balanced
 
-    subroutine sample_balanced_parts( self, clssmp, nparts, nptcls_per_part, states )
+    subroutine sample_balanced_parts( self, clssmp, nparts, states, nptcls_per_part )
         class(oris),        intent(inout) :: self
-        type(class_sample), intent(inout) :: clssmp(:)  ! data structure for balanced sampling
-        integer,            intent(in)    :: nparts, nptcls_per_part
+        type(class_sample), intent(inout) :: clssmp(:) ! data structure for balanced sampling
+        integer,            intent(in)    :: nparts
         integer,            intent(inout) :: states(self%n)
-        integer :: nptcls, i, j, k
-        nptcls = nparts * nptcls_per_part
+        integer, optional,  intent(in)    :: nptcls_per_part
+        integer :: nptcls, i, j, k, nptcls_eff
+        ! calculate total # particles to sample
+        nptcls_eff = self%count_state_gt_zero() 
+        if( present(nptcls_per_part) )then
+            nptcls = min(nptcls_eff, nparts * nptcls_per_part)
+        else
+            nptcls = nptcls_eff
+        endif
         ! calculate sampling size for each class
         clssmp(:)%nsample = 0
         do while( sum(clssmp(:)%nsample) < nptcls )

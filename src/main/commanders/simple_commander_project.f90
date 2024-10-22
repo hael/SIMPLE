@@ -917,12 +917,20 @@ contains
             allocate(states(nptcls), states_map(nptcls), source=0)
             call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
             if( cline%defined('nparts') )then
-                call spproj%os_ptcl2D%sample_balanced_parts(clssmp, params%nparts, params%nptcls, states)
+                if( cline%defined('nptcls_per_part') )then
+                    call spproj%os_ptcl2D%sample_balanced_parts(clssmp, params%nparts, states, params%nptcls_per_part)
+                else
+                    call spproj%os_ptcl2D%sample_balanced_parts(clssmp, params%nparts, states)
+                endif
                 do ipart = 1, params%nparts
                     ! count # particles in part
                     write(logfhandle,*) '# particles in part '//int2str(ipart)//': ', count(states == ipart)
                     ! copy project
-                    call spproj_part%copy(spproj)
+                    projfname = BALPROJPARTFBODY//int2str(ipart)//'.simple'
+                    call simple_copy_file(trim(params%projfile), projfname)
+
+                    call spproj_part%read(projfname)
+
                     ! create state mapping
                     where(states == ipart)
                         states_map = 1
@@ -937,7 +945,6 @@ contains
                     ! map ptcl states to classes
                     call spproj_part%map_ptcls_state_to_cls
                     ! write project
-                    projfname = BALPROJPARTFBODY//int2str(ipart)//'.simple'
                     call spproj_part%write(projfname)
                     ! destruct
                     call spproj_part%kill
