@@ -35,8 +35,8 @@ type :: volpft_corrcalc
     procedure, private :: extract_target_2
     generic            :: extract_target => extract_target_1, extract_target_2
     ! CORRELATORS
-    procedure, private :: corr_1
-    procedure, private :: corr_2
+    procedure          :: corr_mag
+    procedure, private :: corr_1, corr_2
     generic            :: corr => corr_1, corr_2
     ! DESTRUCTOR
     procedure          :: kill
@@ -154,11 +154,10 @@ contains
         do ispace=1,self%nspace_nonred
             do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
                 loc = self%locs_ref_nonred(k,ispace,:)
-                self%vpft_ref_nonred(k,ispace) =&
-                self%vol_ref%interp_fcomp_trilinear(loc)
+                self%vpft_ref_nonred(k,ispace) = self%vol_ref%interp_fcomp_trilinear(loc)
             end do
         end do
-        self%sqsum_ref = sum(csq(self%vpft_ref_nonred))
+        self%sqsum_ref = sum(real(self%vpft_ref_nonred*conjg(self%vpft_ref_nonred)))
     end subroutine extract_ref
 
     subroutine extract_target_1( self, rmat, vpft_target, sqsum_target )
@@ -174,7 +173,7 @@ contains
                 vpft_target(k,ispace) = self%vol_target%interp_fcomp_trilinear(loc)
             end do
         end do
-        sqsum_target = sum(csq(vpft_target))
+        sqsum_target = sum(real(vpft_target*conjg(vpft_target)))
     end subroutine extract_target_1
 
     subroutine extract_target_2( self, rmat, shvec, vpft_target, sqsum_target )
@@ -191,8 +190,18 @@ contains
                 vpft_target(k,ispace) = self%vol_target%interp_fcomp_trilinear(loc) * self%vol_target%oshift(loc, shvec)
             end do
         end do
-        sqsum_target = sum(csq(vpft_target))
+        sqsum_target = sum(real(vpft_target*conjg(vpft_target)))
     end subroutine extract_target_2
+
+    function corr_mag( self, rmat ) result( cc )
+        class(volpft_corrcalc), intent(inout) :: self
+        real,                   intent(in)    :: rmat(3,3)
+        complex :: vpft_target(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace_nonred)
+        real    :: sqsum_target, cc
+        call self%extract_target_1(rmat, vpft_target, sqsum_target)
+        cc = sum(abs(self%vpft_ref_nonred) * abs(vpft_target))
+        cc = cc / sqrt(self%sqsum_ref * sqsum_target)
+    end function corr_mag
 
     function corr_1( self, rmat ) result( cc )
         class(volpft_corrcalc), intent(inout) :: self
