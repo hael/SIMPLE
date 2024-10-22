@@ -246,7 +246,7 @@ contains
     generic            :: real_corr => real_corr_1, real_corr_2
     procedure          :: euclid_dist_two_imgs
     procedure          :: phase_corr
-    procedure          :: fcorr_shift
+    procedure          :: fcorr_shift, fcorr_shift3D
     procedure          :: norm_within
     procedure          :: prenorm4real_corr_1, prenorm4real_corr_2, prenorm4real_corr_3
     generic            :: prenorm4real_corr => prenorm4real_corr_1, prenorm4real_corr_2, prenorm4real_corr_3
@@ -2636,7 +2636,7 @@ contains
         type(image) :: self_out
         if( self%ft )then
             call self_out%copy(self)
-            self%cmat = conjg(self%cmat)
+            self_out%cmat = conjg(self%cmat)
         else
             THROW_WARN('cannot conjugate real image')
         endif
@@ -5414,22 +5414,15 @@ contains
     ! Preserves Fourier state
     ! lp: frequencies below lp are set to 0 in a
     ! smooth way (cos edge).
-    subroutine phase_corr(self1, self2, pc, lp, border )
+    subroutine phase_corr(self1, self2, pc, lp )
         class(image),      intent(inout) :: self1, self2, pc
         real,              intent(in)    :: lp
-        integer, optional, intent(in)    :: border
         real, parameter :: width = 3.
         complex     :: c1,c2
         real        :: w,rw,rlplim,rsh,normsq
         real(dp)    :: sqsum1,sqsum2
         integer     :: nrflims(3,2),phys(3)
         integer     :: h,k,l,shsq, lplim, lplimsq, bplplimsq
-        if( present(border) )then
-            if( self1%ldim(3) > 1 ) THROW_HARD('Border discarding not implemented for 3D')
-            if( border >= self1%ldim(1)/2 .or. border >= self1%ldim(2)/2 )then
-                THROW_HARD('Input border parameter too big; phase_corr')
-            endif
-        endif
         if( .not. all([self1%is_ft(),self2%is_ft(),pc%is_ft()]) )then
             THROW_HARD('All inputted images must be FTed')
         endif
@@ -5498,18 +5491,10 @@ contains
         if( is_a_number(normsq) )then
             if( normsq > 1.0e-12 ) pc%rmat = pc%rmat / sqrt(normsq)
         endif
-        if( present(border) ) then
-            if( border > 1 )then
-                pc%rmat(1:border,:,1) = 0.
-                pc%rmat(pc%ldim(1)-border:pc%ldim(1),:,1) = 0.
-                pc%rmat(:,1:border,1) = 0.
-                pc%rmat(:,pc%ldim(2)-border:pc%ldim(2),1) = 0.
-            endif
-        endif
     end subroutine phase_corr
 
     ! returns the discrete shift that registers self2 to self1. self1 is the unnormalized correlation image on output
-    subroutine fcorr_shift(self1, self2, trs, shift, peak_interp )
+    subroutine fcorr_shift( self1, self2, trs, shift, peak_interp )
         class(image),      intent(inout) :: self1, self2
         real,              intent(in)    :: trs
         real,              intent(inout) :: shift(2)
@@ -5533,10 +5518,9 @@ contains
         ! peak interpolation
         if( l_interp )then
             shift = real(pos)
-            pos   = pos+itrs+1
             beta  = self1%rmat(center(1)+pos(1),center(2)+pos(2), 1)
             ! along x
-            if( abs(pos(1)-center(1)) < itrs )then ! within limits
+            if( abs(pos(1)) < itrs )then ! within limits
                 alpha = self1%rmat(center(1)+pos(1)-1,center(2)+pos(2), 1)
                 gamma = self1%rmat(center(1)+pos(1)+1,center(2)+pos(2), 1)
                 if( alpha<beta .and. gamma<beta )then
@@ -5545,9 +5529,9 @@ contains
                 endif
             endif
             ! along y
-            if( abs(pos(2)-center(2)) < itrs )then
+            if( abs(pos(2)) < itrs )then
                 alpha = self1%rmat(center(1)+pos(1),center(2)+pos(2)-1, 1)
-                gamma = self1%rmat(center(1)+pos(1),center(2)+pos(2)-1, 1)
+                gamma = self1%rmat(center(1)+pos(1),center(2)+pos(2)+1, 1)
                 if( alpha<beta .and. gamma<beta )then
                     denom = alpha + gamma - 2.*beta
                     if( abs(denom) > TINY ) shift(2) = shift(2) + 0.5 * (alpha-gamma) / denom
@@ -5559,6 +5543,67 @@ contains
             shift = -real(pos)
         endif
     end subroutine fcorr_shift
+
+    ! returns the discrete shift that registers self2 to self1. self1 is the unnormalized correlation image on output
+    subroutine fcorr_shift3D( self1, self2, trs, shift, peak_interp )
+        class(image),      intent(inout) :: self1, self2
+        real,              intent(in)    :: trs
+        real,              intent(inout) :: shift(3)
+        logical, optional, intent(in)    :: peak_interp
+        real    :: alpha, beta, gamma, denom
+        integer :: cen(3), pos(3), itrs
+        logical :: l_interp
+        if( self1%is_2d() .or. self2%is_2d() ) THROW_HARD('3d only supported')
+        if( .not.(self1%is_ft() .and. self2%is_ft()) ) THROW_HARD('FTed only supported')
+        if( .not.(self1.eqdims.self2) ) THROW_HARD('Inconsistent dimensions in fcorr_shift')
+        l_interp = .false.
+        if(present(peak_interp)) l_interp = peak_interp
+        ! dimensions
+        cen  = self1%ldim/2+1
+        itrs = min(floor(trs),minval(cen)-1)
+        ! Correlation image
+        self1%cmat = self1%cmat * conjg(self2%cmat)
+        call self1%ifft
+        ! maximum correlation & offset
+        pos = maxloc(self1%rmat(cen(1)-itrs:cen(1)+itrs, cen(2)-itrs:cen(2)+itrs, cen(3)-itrs:cen(3)+itrs)) -itrs-1
+        ! peak interpolation
+        if( l_interp )then
+            shift = real(pos)
+            ! pos   = pos+itrs+1
+            beta  = self1%rmat(cen(1)+pos(1),cen(2)+pos(2), cen(3)+pos(3))
+            ! along x
+            if( abs(pos(1)) < itrs )then ! within limits
+                alpha = self1%rmat(cen(1)+pos(1)-1, cen(2)+pos(2), cen(3)+pos(3))
+                gamma = self1%rmat(cen(1)+pos(1)+1, cen(2)+pos(2), cen(3)+pos(3))
+                if( alpha<beta .and. gamma<beta )then
+                    denom = alpha + gamma - 2.*beta
+                    if( abs(denom) > TINY ) shift(1) = shift(1) + 0.5 * (alpha-gamma) / denom
+                endif
+            endif
+            ! along y
+            if( abs(pos(2)) < itrs )then
+                alpha = self1%rmat(cen(1)+pos(1), cen(2)+pos(2)-1, cen(3)+pos(3))
+                gamma = self1%rmat(cen(1)+pos(1), cen(2)+pos(2)+1, cen(3)+pos(3))
+                if( alpha<beta .and. gamma<beta )then
+                    denom = alpha + gamma - 2.*beta
+                    if( abs(denom) > TINY ) shift(2) = shift(2) + 0.5 * (alpha-gamma) / denom
+                endif
+            endif
+            ! along z
+            if( abs(pos(3)) < itrs )then
+                alpha = self1%rmat(cen(1)+pos(1), cen(2)+pos(2), cen(3)+pos(3)-1)
+                gamma = self1%rmat(cen(1)+pos(1), cen(2)+pos(2), cen(3)+pos(3)+1)
+                if( alpha<beta .and. gamma<beta )then
+                    denom = alpha + gamma - 2.*beta
+                    if( abs(denom) > TINY ) shift(3) = shift(3) + 0.5 * (alpha-gamma) / denom
+                endif
+            endif
+            ! convention
+            shift = -shift
+        else
+            shift = -real(pos)
+        endif
+    end subroutine fcorr_shift3D
 
     !> \brief prenorm4real_corr pre-normalises the reference in preparation for real_corr_prenorm
     subroutine prenorm4real_corr_1( self, sxx )
