@@ -59,7 +59,7 @@ integer,          parameter :: PROBREFINE_STAGE  = 5
 integer,          parameter :: TRAILREC_STAGE    = 7
 ! class variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
-logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false., l_update_frac=.false.
+logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false., l_update_frac=.false., l_icm_reg=.true.
 type(sym)        :: se1,se2
 type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_postprocess, cline_reproject
 real             :: update_frac   = 1.0
@@ -99,6 +99,8 @@ contains
         call params%new(cline)
         call cline%set('mkdir',       'no')   ! to avoid nested directory structure
         call cline%set('oritype', 'ptcl3D')   ! from now on we are in the ptcl3D segment, final report is in the cls3D segment
+        ! set class globnal ICM regularization flag
+        l_icm_reg = params%l_icm
         ! prepare class command lines
         call prep_class_command_lines(cline, work_projfile)
         ! set symmetry class variables
@@ -336,6 +338,8 @@ contains
         ! make master parameters
         call params%new(cline)
         call cline%set('mkdir', 'no')
+        ! set class globnal ICM regularization flag
+        l_icm_reg = params%l_icm
         ! prepare class command lines
         call prep_class_command_lines(cline, params%projfile)
         ! set symmetry class variables
@@ -641,7 +645,11 @@ contains
                 trs           = lpinfo(istage)%trslim
                 sh_first      = 'yes'
                 ml_reg        = 'yes'
+                if( l_icm_reg )then
                 icm           = 'yes'
+                else
+                icm           = 'no'
+                endif
                 greediness    = 0.0 ! completely random balanced sampling (only class assignment matters)
                 snr_noise_reg = 6.0
         end select
