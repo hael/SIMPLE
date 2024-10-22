@@ -32,7 +32,6 @@ type sp_project
 contains
     ! field constructors
     procedure          :: new_seg_with_ptr
-    procedure          :: copy
     ! field updaters
     procedure          :: update_projinfo
     procedure          :: update_compenv
@@ -170,55 +169,6 @@ contains
                 THROW_HARD('unsupported oritype: '//trim(oritype)//'; new_seg_with_ptr')
         end select
     end subroutine new_seg_with_ptr
-
-
-    subroutine copy( self, self_copy )
-        class(sp_project), intent(inout) :: self, self_copy
-        ! micrographs,              segment 1
-        if( self%os_mic%get_noris() > 0 )then
-            call self%os_mic%copy(self_copy%os_mic,       is_ptcl=.false.)
-        endif
-        ! per-micrograph stack os,  segment 2
-        if( self%os_stk%get_noris() > 0 )then
-            call self%os_stk%copy(self_copy%os_stk,       is_ptcl=.false.)
-        endif
-        ! per-particle 2D os,       segment 3
-        if( self%os_ptcl2D%get_noris() > 0 )then
-            call self%os_ptcl2D%copy(self_copy%os_ptcl2D, is_ptcl=.true.)
-        endif
-        ! per-cluster 2D os,        segment 4
-        if( self%os_cls2D%get_noris() > 0 )then
-            call self%os_cls2D%copy(self_copy%os_cls2D,   is_ptcl=.false.)
-        endif
-        ! per-cluster 3D os,        segment 5
-        if( self%os_cls3D%get_noris() > 0 )then
-            call self%os_cls3D%copy(self_copy%os_cls3D,   is_ptcl=.false.)
-        endif
-        ! per-particle 3D os,       segment 6
-        if( self%os_ptcl3D%get_noris() > 0 )then
-            call self%os_ptcl3D%copy(self_copy%os_ptcl3D, is_ptcl=.true.)
-        endif
-        ! critical project outputs, segment 7
-        if( self%os_out%get_noris() > 0 )then
-            call self%os_out%copy(self_copy%os_out,       is_ptcl=.false.)
-        endif
-        ! optics groups,            segment 8
-        if( self%os_optics%get_noris() > 0 )then
-            call self%os_optics%copy(self_copy%os_optics, is_ptcl=.false.)
-        endif
-        ! project information      segment 11
-        if( self%projinfo%get_noris() > 0 )then
-            call self%projinfo%copy(self_copy%projinfo,   is_ptcl=.false.)
-        endif
-        ! jobid + PID + etc.       segment 12
-        if( self%jobproc%get_noris() > 0 )then
-            call self%jobproc%copy(self_copy%jobproc,     is_ptcl=.false.)
-        endif
-        ! computing environment    segment 13
-        if( self%compenv%get_noris() > 0 )then
-            call self%compenv%copy(self_copy%compenv,     is_ptcl=.false.)
-        endif
-    end subroutine copy
 
     ! field updaters
 
