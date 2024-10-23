@@ -399,7 +399,7 @@ contains
             end do
             if(newstack) then
                 entrystr = trim(adjustl(stktmp%get_static(i, "stk")))
-                stknames = [stknames, trim(adjustl(entrystr))]
+                stknames = [stknames, entrystr]
                 stkzmax = [stkzmax, int(stktmp%get(i, "stkind"))]
                 stkoriids = [stkoriids, i]
                 self%starfile%stkmap(i, 1) = size(stkoriids)
