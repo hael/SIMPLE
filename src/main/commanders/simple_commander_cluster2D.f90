@@ -2269,7 +2269,7 @@ contains
         integer,          allocatable :: centers(:), labels(:), clsinds(:), multi_labels(:,:)
         logical,          allocatable :: l_msk(:,:,:)
         character(len=8)              :: tmpstr
-        real    :: smpd, simsum, simmin, simmax, simmed, pref, cc,ccm, bic, bicmin
+        real    :: smpd, simsum, simmin, simmax, simmed, pref, cc,ccm, dunn, dunnmax
         integer :: ldim(3), n, ncls_sel, i, j, k, icls, filtsz, ind, ithr, funit, io_stat
         logical :: l_apply_optlp, l_mirr
         ! defaults
@@ -2280,7 +2280,7 @@ contains
         if( .not. cline%defined('kweight')   ) call cline%set('kweight',   'all')
         if( .not. cline%defined('mirr')      ) call cline%set('mirr',      'no')
         if( .not. cline%defined('algorithm') ) call cline%set('algorithm', 'affprop')
-        if( .not. cline%defined('nsearch')   ) call cline%set('nsearch',   5)
+        if( .not. cline%defined('nsearch')   ) call cline%set('nsearch',   7)
         ! parse parameters
         call params%new(cline)
         l_mirr = trim(params%mirr).eq.'yes'
@@ -2494,31 +2494,31 @@ contains
             ! update & write project with labelling with smallest preference
             call update_project(multi_labels(1,:))
         case('spc')
-            bicmin  = huge(bicmin)
+            dunnmax = -1.
             ind     = 0
-            header2 = '# BIC   '
+            header2 = '# Dunn  '
             do i = 1,params%nsearch
                 ! clustering
                 k = i+1
                 call specclust%new(ncls_sel,k,corrmat,algorithm='cpqr')
                 call specclust%cluster
                 call specclust%get_labels(labels)
-                bic = specclust%BIC()
+                dunn = specclust%dunnindex()
                 call specclust%kill
-                if( bic < bicmin )then
-                    bicmin = bic
-                    ind    = i
+                if( dunn > dunnmax )then
+                    dunnmax = dunn
+                    ind     = i
                 endif
-                write(*,'(A12,I3,F9.3)') '>>> K,BIC: ',k,bic
+                write(*,'(A12,I3,F9.3)') '>>> K,Dunn: ',k,dunn
                 ! update labels & header
                 write(tmpstr,'(I8)') k
                 header1 = header1//tmpstr
-                write(tmpstr,'(F8.3)') bic
+                write(tmpstr,'(F8.3)') dunn
                 header2 = header2//tmpstr
                 multi_labels(clsinds(:),i) = labels(:)
                 if( DEBUG )call write_partition('part'//int2str_pad(k,3))
             enddo
-            ! update & write project with labelling with lowest BIC
+            ! update & write project with labelling with highest Dunn index
             call update_project(multi_labels(ind,:))
         end select
         ! write nsearch labellings
