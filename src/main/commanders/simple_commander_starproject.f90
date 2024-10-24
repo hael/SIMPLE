@@ -55,6 +55,10 @@ contains
         call params%new(cline)
         if( file_exists(params%projfile) )then
             call spproj%read(params%projfile)
+            if( (spproj%get_nptcls() > 0) .or. (spproj%get_nstks() > 0) .or.&
+                &(spproj%get_nintgs() > 0) .or. (spproj%get_nmovies() > 0) )then
+                THROW_HARD('The destination PROJFILE should be empty!')
+            endif
         else
             THROW_HARD('Inputted projfile: '//trim(params%projfile)//' does not exist!')
         endif 
