@@ -40,7 +40,7 @@ type spec_clust
     procedure          :: cluster
     procedure          :: get_labels
     procedure          :: get_centers
-    procedure          :: BIC
+    procedure          :: DunnIndex
     procedure          :: kill
 end type spec_clust
 
@@ -246,36 +246,36 @@ contains
         allocate(c,source=self%centroids)
     end subroutine get_centers
 
-    real function BIC( self )
+    real function DunnIndex( self )
         class(spec_clust), intent(in) :: self
-        integer :: pops(self%K)
-        real    :: sumdistsq(self%K), ll, mle_var
-        integer :: ncls,i,l,pop
-        ! cluster populations
-        do i = 1,self%K
-            pops(i) = count(self%labels==i)
-        enddo
-        ncls = count(pops>0)
-        ! un-normalized variances
-        sumdistsq = 0.
+        real    :: distmat(self%K,self%K), mininter, maxintra
+        integer :: distpops(self%K,self%K)
+        integer :: i,j,li,lj
+        ! intra/inter cluster mean distance
+        distpops = 0
+        distmat  = 0.
         do i = 1,self%N
-            l = self%labels(i)
-            sumdistsq(l) = sumdistsq(l) + sum((self%features(:,i)-self%centroids(:,l))**2)
+            li = self%labels(i)
+            do j = i+1,self%N
+                lj = self%labels(j)
+                distmat(li,lj)  = distmat(li,lj) + self%S(i,j)
+                distpops(li,lj) = distpops(li,lj) + 1
+            enddo
         enddo
-        mle_var = sum(sumdistsq) / real((self%N - ncls) * self%neigs)
-        ! BIC
-        ll = 0.
-        do l = 1,self%K
-            if( pops(l) == 0 ) cycle
-            pop = pops(l)
-            ll = ll + real(pop)*log(real(pop))
-            ll = ll - real(pop)*log(real(self%N))
-            ll = ll - (real(pop*self%neigs)/2.0) * log(TWOPI*mle_var)
-            ll = ll - real((pop-1)*self%neigs)/2.0
+        where( distpops > 1 ) distmat = distmat / real(distpops)
+        mininter = huge(mininter)
+        maxintra = -1.
+        do i=1,self%K
+            do j=i,self%K
+                if( i==j )then
+                    maxintra = max(distmat(i,j), maxintra)
+                else
+                    mininter = min(distmat(i,j), mininter)
+                endif
+            enddo
         enddo
-        bic = real(ncls*(self%neigs+1))*log(real(self%N)) - 2.0*ll
-        ! aic = real(2*ncls*(self%neigs+1)) - 2.0*ll
-    end function BIC
+        DunnIndex = mininter / maxintra
+    end function DunnIndex
 
     ! UNIT TEST
 
