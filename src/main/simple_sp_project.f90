@@ -2610,22 +2610,22 @@ contains
             enddo
         endif
         ! state consistency
-        ! do imic = 1,nmics
-        !     istk = mic2stk_inds(imic)
-        !     if( istk == 0 ) cycle
-        !     nptcls_mic = nint(self%os_mic%get(imic,'nptcls'))
-        !     nptcls_stk = nint(self%os_stk%get(istk,'nptcls'))
-        !     if( nptcls_mic /= nptcls_stk )then
-        !         print *, 'nptcls_mic ', nptcls_mic
-        !         print *, 'nptcls_stk ', nptcls_stk
-        !         THROW_HARD('Inconsistent number of particles!  get_mic2stk_inds')
-        !     endif
-        !     state_mic = self%os_mic%get_state(imic)
-        !     state_stk = self%os_stk%get_state(istk)
-        !     if( state_mic /= state_stk )then
-        !         THROW_HARD('Inconsistent state!  get_mic2stk_inds')
-        !     endif
-        ! enddo
+        do imic = 1,nmics
+            istk = mic2stk_inds(imic)
+            if( istk == 0 ) cycle
+            nptcls_mic = nint(self%os_mic%get(imic,'nptcls'))
+            nptcls_stk = nint(self%os_stk%get(istk,'nptcls'))
+            if( nptcls_mic /= nptcls_stk )then
+                print *, 'nptcls_mic ', nptcls_mic
+                print *, 'nptcls_stk ', nptcls_stk
+                THROW_HARD('Inconsistent number of particles!  get_mic2stk_inds')
+            endif
+            state_mic = self%os_mic%get_state(imic)
+            state_stk = self%os_stk%get_state(istk)
+            if( state_mic /= state_stk )then
+                THROW_HARD('Inconsistent state!  get_mic2stk_inds')
+            endif
+        enddo
     end subroutine get_mic2stk_inds
 
     ! modifiers
