@@ -8,8 +8,8 @@ private
 contains
 
     function calc_update_frac( nptcls, nsample_minmax ) result( update_frac )
-        integer,           intent(in) :: nptcls
-        integer, optional, intent(in) :: nsample_minmax(2)
+        integer, intent(in) :: nptcls
+        integer, intent(in) :: nsample_minmax(2)
         real    :: update_frac
         integer :: nsampl
         nsampl       = nint(0.5 * real(nptcls))
