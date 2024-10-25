@@ -98,10 +98,12 @@ contains
         class(check_update_frac_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters) :: params
-        integer          :: nsampl
+        integer          :: minmax(2), nsampl
         real             :: update_frac
         call params%new(cline)
-        update_frac = calc_update_frac(params%nptcls)
+        minmax = NSAMPLE_MINMAX_DEFAULT
+        if( cline%defined('nsample_max') ) minmax(2) = params%nsample_max
+        update_frac = calc_update_frac(params%nptcls, minmax)
         nsampl      = update_frac * real(params%nptcls)
         write(logfhandle,'(A,1X,I7)') 'NSAMPLE:', nsampl
         ! end gracefully
