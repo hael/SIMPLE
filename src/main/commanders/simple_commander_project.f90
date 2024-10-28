@@ -1506,8 +1506,8 @@ contains
         real    :: smpd
         integer :: nprojs, iproj, box
         logical :: l_reextract, l_has_ptcls, l_has_mics
-        call cline%set('mkdir','yes')
-        if( .not.cline%defined('oritype')      ) call cline%set('oritype',      'ptcl3D')
+        if( .not.cline%defined('mkdir')        ) call cline%set('mkdir',        'yes')
+        if( .not.cline%defined('oritype')      ) call cline%set('oritype',      'ptcl2D')
         if( .not.cline%defined('outside')      ) call cline%set('outside',      'no')
         if( .not.cline%defined('backgr_subtr') ) call cline%set('backgr_subtr', 'no')
         if( .not.cline%defined('pcontrast')    ) call cline%set('pcontrast',    'black')
@@ -1554,6 +1554,7 @@ contains
             if( all(abs(smpds-smpds(1)) < 0.001) )then
                 ! all projects have the same pixel size but different particle size
                 smpd = smpds(1)
+                call cline_reextract%set('osmpd', smpd)
                 if( .not.cline%defined('box') )then
                     ! defaults to largest box
                     box = maxval(boxes)
