@@ -1554,24 +1554,26 @@ contains
             if( all(abs(smpds-smpds(1)) < 0.001) )then
                 ! all projects have the same pixel size but different particle size
                 smpd = smpds(1)
-                call cline_reextract%set('osmpd', smpd)
                 if( .not.cline%defined('box') )then
                     ! defaults to largest box
                     box = maxval(boxes)
-                    call cline_reextract%set('box', box)
+                else
+                    box = params%box
                 endif
             else
                 ! some projects have different pixel size
                 ! defaults to largets pixel size
                 smpd = maxval(smpds)
-                call cline_reextract%set('osmpd', smpd)
                 ! defaults to largest particle physical size
                 if( .not.cline%defined('box') )then
                     box = floor(maxval(smpds*real(boxes)) / smpd)
                     box = find_larger_magic_box(box)
-                    call cline_reextract%set('box', box)
+                else
+                    box = params%box
                 endif
             endif
+            call cline_reextract%set('osmpd', smpd)
+            call cline_reextract%set('box',   box)
             ! reextract
             write(logfhandle,'(A,F6.3)')'>>> NEW PIXEL    SIZE: ',smpd
             write(logfhandle,'(A,I6)')  '>>> NEW PARTICLE SIZE: ',box
