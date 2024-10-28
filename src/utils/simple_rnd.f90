@@ -7,7 +7,7 @@ use simple_error,  only: simple_exception
 use simple_syslib, only: get_process_id
 implicit none
 
-public :: seed_rnd, ran3, ran3arr, randn, multinomal, greedy_sampling, gasdev, irnd_uni, irnd_uni_pair
+public :: seed_rnd, ran3, ran3arr, randn, multinomal, nmultinomal, greedy_sampling, gasdev, irnd_uni, irnd_uni_pair
 public :: irnd_gasdev, rnd_4dim_sphere_pnt, shcloc, mnorm_smp, r8po_fa
 private
 #include "simple_local_flags.inc"
@@ -149,6 +149,38 @@ contains
         which = inds(max(which,1))
         deallocate(pvec_sorted,inds)
     end function multinomal
+
+    function nmultinomal( pvec, nsmpl ) result( which )
+        use simple_math, only: hpsort
+        real,     intent(in) :: pvec(:) !< probabilities
+        integer,  intent(in) :: nsmpl
+        real,    allocatable :: pvec_sorted(:)
+        integer, allocatable :: inds(:)
+        integer :: i, j, n, which(nsmpl), cnt
+        real    :: bound, vals(nsmpl)
+        n = size(pvec)
+        allocate(pvec_sorted(n), source=pvec)
+        inds = (/(i,i=1,n)/)
+        call hpsort(pvec_sorted, inds)
+        do i = 1, nsmpl
+            vals(i) = ran3()
+        enddo
+        call hpsort(vals)
+        cnt = 1
+        do j=n,1,-1
+            bound = sum(pvec_sorted(j:n))
+            if( vals(cnt) <= bound )then
+                which(cnt) = inds(j)
+                cnt        = cnt + 1
+                if( cnt > nsmpl ) exit
+            endif
+        enddo
+        ! extreme case
+        do j = cnt, nsmpl
+            which(j) = which(j-1) + 1
+        enddo
+        deallocate(pvec_sorted,inds)
+    end function nmultinomal
 
     ! using the multinomal sampling idea to be more greedy towards the best probabilistic candidates
     function greedy_sampling_1( pvec, nsmpl_ub, nsmpl_lb ) result( which )
