@@ -42,22 +42,23 @@ type, extends(commander_base) :: abinitio_3Dmodel2_commander
 end type abinitio_3Dmodel2_commander
 
 ! class constants
-character(len=*), parameter :: REC_FBODY         = 'rec_final_state'
-character(len=*), parameter :: STR_STATE_GLOB    = '01'
-real,             parameter :: LPSTART_LB        = 10.
-real,             parameter :: LPSTART_DEFAULT   = 20.
-real,             parameter :: LPSTOP_LB         = 6.
-real,             parameter :: CENLP_DEFAULT     = 30.
-real,             parameter :: LPSYMSRCH_LB      = 12.
-integer,          parameter :: NSTAGES           = 8
-integer,          parameter :: PHASES(3)         = [2,6,8]
-integer,          parameter :: MAXITS(3)         = [20,17,15]
-integer,          parameter :: MAXITS_GLOB       = 2*20 + 4*17 + 2*15
-integer,          parameter :: NSPACE(3)         = [500,1000,2500]
-integer,          parameter :: SYMSRCH_STAGE     = 3
-integer,          parameter :: PROBREFINE_STAGE  = 5
-integer,          parameter :: ICM_STAGE         = 5
-integer,          parameter :: TRAILREC_STAGE    = 7
+character(len=*), parameter :: REC_FBODY             = 'rec_final_state'
+character(len=*), parameter :: STR_STATE_GLOB        = '01'
+real,             parameter :: LPSTART_LB            = 10.
+real,             parameter :: LPSTART_DEFAULT       = 20.
+real,             parameter :: LPSTOP_LB             = 6.
+real,             parameter :: CENLP_DEFAULT         = 30.
+real,             parameter :: LPSYMSRCH_LB          = 12.
+integer,          parameter :: NSTAGES               = 8
+integer,          parameter :: PHASES(3)             = [2,6,8]
+integer,          parameter :: MAXITS(3)             = [20,17,15]
+integer,          parameter :: MAXITS_GLOB           = 2*20 + 4*17 + 2*15
+integer,          parameter :: NSPACE(3)             = [500,1000,2500]
+integer,          parameter :: SYMSRCH_STAGE         = 3
+integer,          parameter :: PROBREFINE_STAGE      = 5
+integer,          parameter :: INCR_GREEDINESS_STAGE = 5
+integer,          parameter :: ICM_STAGE             = 5
+integer,          parameter :: TRAILREC_STAGE        = 7
 ! class variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
 logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false., l_update_frac=.false., l_icm_reg=.true.
@@ -318,7 +319,7 @@ contains
         type(refine3D_commander_distr)      :: xrefine3D
         type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
         ! other
-        real,               parameter   :: UPDATE_FRAC_MAX = 0.8 ! to ensure fractional update is always on 
+        real,               parameter   :: UPDATE_FRAC_MAX = 0.9 ! to ensure fractional update is always on 
         character(len=:),   allocatable :: vol_name
         real,               allocatable :: rstates(:)
         integer,            allocatable :: tmpinds(:), clsinds(:)
@@ -638,7 +639,7 @@ contains
                 trs           = 0.
                 sh_first      = 'no'
                 ml_reg        = 'no'
-                greediness    = 2. ! completely greedy balanced sampling based on objective function value
+                greediness    = 2.0 ! completely greedy balanced sampling based on objective function value
                 snr_noise_reg = 2.0
             case(2)
                 inspace       = NSPACE(2)
@@ -647,7 +648,11 @@ contains
                 trs           = lpinfo(istage)%trslim
                 sh_first      = 'yes'
                 ml_reg        = 'yes'
+                if( istage >= INCR_GREEDINESS_STAGE )then
                 greediness    = 1.0 ! sample first half of each class as the best ones and the rest randomly
+                else
+                greediness    = 2.0 ! completely greedy balanced sampling based on objective function value
+                endif
                 snr_noise_reg = 4.0
             case(3)
                 inspace       = NSPACE(3)
