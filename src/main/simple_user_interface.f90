@@ -3260,8 +3260,11 @@ contains
         ! <empty>
         ! parameter input/output
         call merge_projects%set_input('parm_ios', 1, projfile_target, gui_submenu="data", gui_advanced=.false.)
+        merge_projects%parm_ios(1)%descr_short = 'Project to merge'
+        merge_projects%parm_ios(1)%descr_long  = 'Location of project file to append'
         call merge_projects%set_input('parm_ios', 2, oritype, gui_submenu="extract", gui_advanced=.false.)
-        merge_projects%parm_ios(2)%descr_placeholder = '(ptcl2D|ptcl3D){ptcl3D}'
+        merge_projects%parm_ios(2)%descr_long        = 'Oritype segment in project(ptcl2D|ptcl3D){ptcl2D}'
+        merge_projects%parm_ios(2)%descr_placeholder = '(ptcl2D|ptcl3D){ptcl2D}'
         call merge_projects%set_input('parm_ios', 3, box, gui_submenu="extract", gui_advanced=.false.)
         merge_projects%parm_ios(3)%required = .false.
         call merge_projects%set_input('parm_ios', 4, pcontrast, gui_submenu="extract")

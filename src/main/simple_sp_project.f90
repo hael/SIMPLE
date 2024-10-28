@@ -301,6 +301,7 @@ contains
 
     !>  append project2 to project1
     !   projinfo,jobproc,compenv fields from project2 are ignored
+    !   cls2D/cls3D/out fields are wiped
     subroutine append_project( self1, self2 )
         class(sp_project), intent(inout) :: self1
         class(sp_project), intent(in)    :: self2
@@ -352,29 +353,32 @@ contains
             write(logfhandle,'(A,I8)')'>>> CURRENT # OF PARTICLES:          ',nptcls1+nptcls2
         endif
         ! cls2D/3D
-        ncls2d1 = self1%os_cls2D%get_noris()
-        ncls2d2 = self2%os_cls2D%get_noris()
-        call self1%os_cls2D%append(self2%os_cls2D)
-        if( l_has_ptcls .and. (ncls2d1 > 0) .and. (ncls2d2 > 0) )then
-            ! class numbering is updated, for testing
-            do i = ncls2d1+1,ncls2d1+ncls2d2
-                if( self1%os_cls2D%get_state(i) > 0 )then
-                    icls = self1%os_cls2D%get_class(i) + ncls2d1
-                    call self1%os_cls2D%set_class(i, icls)
-                endif
-            enddo
-            do iptcl = nptcls1+1,nptcls1+nptcls2
-                if( self1%os_ptcl2D%isthere(iptcl, 'class') )then
-                    icls = self1%os_ptcl2D%get_class(iptcl) + ncls2d1
-                    call self1%os_ptcl2D%set_class(iptcl, icls)
-                endif
-            enddo
-            ! cls3D is wiped, states are transferred
-            call self1%os_cls3D%new(ncls2d1+ncls2d2, is_ptcl=.false.)
-            do icls = 1,ncls2d1+ncls2d2
-                call self1%os_cls3D%set_state(icls, self1%os_cls2D%get_state(icls))
-            enddo
-        endif
+        call self1%os_cls2D%kill
+        call self1%os_cls3D%kill
+        ! the following was used to make sure this routine works
+        ! ncls2d1 = self1%os_cls2D%get_noris()
+        ! ncls2d2 = self2%os_cls2D%get_noris()
+        ! call self1%os_cls2D%append(self2%os_cls2D)
+        ! if( l_has_ptcls .and. (ncls2d1 > 0) .and. (ncls2d2 > 0) )then
+        !     ! class numbering is updated, for testing
+        !     do i = ncls2d1+1,ncls2d1+ncls2d2
+        !         if( self1%os_cls2D%get_state(i) > 0 )then
+        !             icls = self1%os_cls2D%get_class(i) + ncls2d1
+        !             call self1%os_cls2D%set_class(i, icls)
+        !         endif
+        !     enddo
+        !     do iptcl = nptcls1+1,nptcls1+nptcls2
+        !         if( self1%os_ptcl2D%isthere(iptcl, 'class') )then
+        !             icls = self1%os_ptcl2D%get_class(iptcl) + ncls2d1
+        !             call self1%os_ptcl2D%set_class(iptcl, icls)
+        !         endif
+        !     enddo
+        !     ! cls3D is wiped, states are transferred
+        !     call self1%os_cls3D%new(ncls2d1+ncls2d2, is_ptcl=.false.)
+        !     do icls = 1,ncls2d1+ncls2d2
+        !         call self1%os_cls3D%set_state(icls, self1%os_cls2D%get_state(icls))
+        !     enddo
+        ! endif
         ! out is wiped
         call self1%os_out%kill
         ! optic groups
@@ -408,7 +412,7 @@ contains
                     call self1%os_ptcl3D%set(iptcl, 'ogid', ogid)
                 enddo
             endif
-            write(logfhandle,'(A,I8)')'CURRENT # OF OPTICS GROUPS:      ',nogs1+nogs2
+            write(logfhandle,'(A,I8)')'>>> CURRENT # OF OPTICS GROUPS:      ',nogs1+nogs2
         endif
     end subroutine append_project
 
