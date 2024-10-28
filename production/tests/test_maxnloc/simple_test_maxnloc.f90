@@ -2,7 +2,7 @@ program simple_test_maxnloc
 include 'simple_lib.f08'
 implicit none
 integer, parameter :: NNRS = 1000, NSEL = 10, NTST=100000
-real    :: arr(NNRS), arr_copy(NNRS)
+real    :: arr(NNRS), arr_copy(NNRS), arr_tmp(NNRS)
 integer :: indxarr(NNRS), i, loc(NSEL)
 type(ran_tabu) :: rt
 rt = ran_tabu(NNRS)
@@ -26,6 +26,17 @@ loc = minnloc(arr, NSEL)
 arr_copy = arr
 indxarr = (/(i,i=1,NNRS)/)
 call hpsort(arr, indxarr)
+do i=1,NSEL
+    print *, i, arr_copy(indxarr(i)), arr_copy(loc(i))
+end do
+print *, 'testing max nmultinomal'
+call rt%shuffle(arr)
+arr_tmp = arr / sum(arr)
+loc = nmultinomal(arr_tmp, NSEL)
+arr_copy = arr
+indxarr = (/(i,i=1,NNRS)/)
+call hpsort(arr, indxarr)
+call reverse(indxarr)
 do i=1,NSEL
     print *, i, arr_copy(indxarr(i)), arr_copy(loc(i))
 end do
