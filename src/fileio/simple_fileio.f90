@@ -28,6 +28,11 @@ interface filepath
     module procedure filepath_2
 end interface filepath
 
+interface del_files
+    module procedure del_files_1
+    module procedure del_files_2
+end interface del_files
+
 integer, parameter :: MAX_UNIT_NUMBER = 1000
 
 contains
@@ -698,7 +703,7 @@ contains
     end function filepath_2
 
     !> \brief  is for deleting consecutively numbered files with padded number strings
-    subroutine del_files( body, n, ext, numlen, suffix )
+    subroutine del_files_1( body, n, ext, numlen, suffix )
         character(len=*),           intent(in) :: body !< input filename body
         integer,                    intent(in) :: n    !< total num for del, formatted as body[n].ext
         character(len=*), optional, intent(in) :: ext  !< input filename extension
@@ -714,7 +719,16 @@ contains
         do ifile=1,n
             if( file_exists(names(ifile)) ) call del_file(names(ifile))
         end do
-    end subroutine del_files
+    end subroutine del_files_1
+
+    subroutine del_files_2( list )
+        character(len=LONGSTRLEN), intent(in) :: list(:)
+        integer :: ifile, n
+        n = size(list)
+        do ifile=1,n
+            if( file_exists(list(ifile)) ) call del_file(list(ifile))
+        end do
+    end subroutine del_files_2
 
     !>  \brief Return a one letter code for the file format designated by the extension in the fname
     !!         if .mrc: M

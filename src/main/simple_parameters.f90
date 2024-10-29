@@ -26,6 +26,7 @@ type :: parameters
     character(len=3)          :: balance='no'         !< Balance class populations to smallest selected
     character(len=3)          :: beamtilt='no'        !< use beamtilt values when generating optics groups
     character(len=3)          :: bin='no'             !< binarize image(yes|no){no}
+    character(len=3)          :: cavg_ini='no'        !< use class averages for initialization(yes|no){no}
     character(len=3)          :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
     character(len=3)          :: center_pdb='no'      !< move PDB atomic center to the center of the box(yes|no){no}
     character(len=3)          :: classtats='no'       !< calculate class population statistics(yes|no){no}
@@ -53,7 +54,7 @@ type :: parameters
     character(len=3)          :: loc_sdev='no'        !< Whether to calculate local standard deviations(yes|no){no}
     character(len=3)          :: lp_auto='no'         !< automatically estimate lp(yes|no|fsc){no}
     character(len=3)          :: makemovie='no'
-    character(len=3)          :: masscen='yes'         !< center to center of gravity(yes|no){yes}
+    character(len=3)          :: masscen='yes'        !< center to center of gravity(yes|no){yes}
     character(len=3)          :: mcpatch='yes'        !< whether to perform patch-based alignment during motion correction
     character(len=3)          :: mcpatch_thres='yes'  !< whether to use the threshold for motion correction patch solution(yes|no){yes}
     character(len=3)          :: mirr='no'            !< mirror(no|x|y){no}
@@ -312,6 +313,7 @@ type :: parameters
     integer :: nsym=1
     integer :: nthr=1              !< # OpenMP threads{1}
     integer :: nthr2D=1            !< # OpenMP threads{1}
+    integer :: nthr_ini3D=1        !< # OpenMP threads{1}
     integer :: numlen=0            !< length of number string
     integer :: nxpatch=MC_NPATCH   !< # of patches along x for motion correction{5}
     integer :: nypatch=MC_NPATCH   !< # of patches along y for motion correction{5}
@@ -530,6 +532,7 @@ contains
         call check_carg('bin',            self%bin)
         call check_carg('bin_cls',        self%bin_cls)
         call check_carg('boxtype',        self%boxtype)
+        call check_carg('cavg_ini',       self%cavg_ini)
         call check_carg('center',         self%center)
         call check_carg('center_pdb',     self%center_pdb)
         call check_carg('classtats',      self%classtats)
@@ -778,6 +781,7 @@ contains
         call check_iarg('nquanta',        self%nquanta)
         call check_iarg('nthr',           self%nthr)
         call check_iarg('nthr2D',         self%nthr2D)
+        call check_iarg('nthr_ini3D',     self%nthr_ini3D)
         call check_iarg('numlen',         self%numlen)
         call check_iarg('nxpatch',        self%nxpatch)
         call check_iarg('nypatch',        self%nypatch)
