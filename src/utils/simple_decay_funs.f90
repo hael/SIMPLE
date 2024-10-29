@@ -12,9 +12,9 @@ contains
         integer, intent(in) :: nsample_minmax(2)
         real    :: update_frac
         integer :: nsampl
-        nsampl       = nint(0.5 * real(nptcls))
+        nsampl       = min(nsample_minmax(2), nint(0.5 * real(nptcls)))
         nsampl       = max(nsampl, nsample_minmax(1))
-        nsampl       = min(nsampl, nsample_minmax(2))
+        nsampl       = min(nptcls, max(nsampl,nsample_minmax(2)))
         update_frac  = real(nsampl) / real(nptcls)
         update_frac  = min(1.0, update_frac)
     end function calc_update_frac
