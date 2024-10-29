@@ -147,68 +147,68 @@ end enum
 integer(kind=kind(ENUM_STARTYPE)), parameter :: GENERIC_STAR = PTCL_STAR
 
 ! general parameters
-real,    parameter :: PRUNE_FRAC            = 0.3      !< fraction of particles after which a project is automatically pruned
-integer, parameter :: BUFSZ_DEFAULT         = 1024     !< Default stack_io buffer size
+real,    parameter :: PRUNE_FRAC                = 0.3            !< fraction of particles after which a project is automatically pruned
+integer, parameter :: BUFSZ_DEFAULT             = 1024           !< Default stack_io buffer size
 
 ! power spectrum related stuff
-integer, parameter :: GUI_PSPECSZ           = 512      !< hard-coded image size for gui
-real,    parameter :: SMPD4VIZ              = 1.25     !< default sampling distance for powerspectrum visualisation
-real,    parameter :: LP_PSPEC_BACKGR_SUBTR = 20.      !< default low-pass limit for power spectrum background subtraction
+integer, parameter :: GUI_PSPECSZ               = 512            !< hard-coded image size for gui
+real,    parameter :: SMPD4VIZ                  = 1.25           !< default sampling distance for powerspectrum visualisation
+real,    parameter :: LP_PSPEC_BACKGR_SUBTR     = 20.            !< default low-pass limit for power spectrum background subtraction
 
 ! constants for picker & extraction
-real,    parameter :: PICKER_SHRINK        = 4.        !< picker shrink factor
-real,    parameter :: PICKER_SHRINK_REFINE = 2.        !< picker shrink factor, peak refine step
-real,    parameter :: GAUPICK_SIGMA_SHRINK = 13.0      !< picker shrink factor, Gaussian convolution
-real,    parameter :: RADFRAC_NORM_EXTRACT = 0.75      !< radius fraction for extraction background normalization
-integer, parameter :: PICKER_OFFSET        = 3         !< picker offset for grid search
+real,    parameter :: PICKER_SHRINK             = 4.             !< picker shrink factor
+real,    parameter :: PICKER_SHRINK_REFINE      = 2.             !< picker shrink factor, peak refine step
+real,    parameter :: GAUPICK_SIGMA_SHRINK      = 13.0           !< picker shrink factor, Gaussian convolution
+real,    parameter :: RADFRAC_NORM_EXTRACT      = 0.75           !< radius fraction for extraction background normalization
+integer, parameter :: PICKER_OFFSET             = 3              !< picker offset for grid search
 
 ! constants for masking/interpolation
-real, parameter    :: COSMSKHALFWIDTH      = 6.0       !< spherical soft masking
-real, parameter    :: KBWINSZ              = 1.5       !< interpolation window size for 2D
-real, parameter    :: KBALPHA              = 2.        !< interpolation alpha (oversampling constant), previously sqrt(2)
-real, parameter    :: RECWINSZ             = 1.5       !< half-window size for 3D reconstruction
+real, parameter    :: COSMSKHALFWIDTH           = 6.0            !< spherical soft masking
+real, parameter    :: KBWINSZ                   = 1.5            !< interpolation window size for 2D
+real, parameter    :: KBALPHA                   = 2.             !< interpolation alpha (oversampling constant), previously sqrt(2)
+real, parameter    :: RECWINSZ                  = 1.5            !< half-window size for 3D reconstruction
 
 ! real constants that control search and convergence
-real, parameter    :: FRAC_SH_LIM          = 75.0      !< at what frac to turn on the shift search
-real, parameter    :: NEIGH_MINFRAC        = 0.3       !< minimum fraction of search space scanned in refine=neigh
-real, parameter    :: FRAC_GREEDY_LIM      = 99.0      !< at what frac to turn to greedy search
-real, parameter    :: EXTRINITHRES         = 0.5       !< initial randomization threshold for extremal search
-real, parameter    :: EXTRTHRESH_CONST     = 0.2       !< threshold for factorial decay in extremal search
-real, parameter    :: SNHC2D_INITFRAC      = 0.5       !< initial neighbourhood fraction for 2D SNHC
-real, parameter    :: SNHC2D_DECAY         = 0.2       !< factorial decay in 2D SNHC
-real, parameter    :: GREEDY_FREQ          = 0.1       !< frequency of greedy search in refine3D with refine=shc/neigh
-real, parameter    :: GLOB_FREQ            = 0.2       !< frequency of global stoachastic search in  with refine=neigh
-real, parameter    :: LP2SMPDFAC           = 0.4125    !< low-pass limit scaling constant
-real, parameter    :: LP2SMPDFAC2D         = 0.4       !< low-pass limit scaling constant
-real, parameter    :: SHC_INPL_TRSHWDTH    = 2.0       !< shift search halfwidht (pixels)ch
-real, parameter    :: STREAM_SRCHFRAC      = 0.4       !< fraction of times full 2D search is performed in the pool
-real, parameter    :: MC_PATCHSZ           = 200.      !< recommended patch size (in Angstroms) for motion correction
-real, parameter    :: ENVMSK_FSC_THRESH    = 0.8       !< FSC value after which phase-randomization and FSC correction is applied in enveloppe masking
-real, parameter    :: MAX_SMPD             = 2.67      !< maximum sampling distance in scaling
-real, parameter    :: TAU_DEFAULT          = 3.0       !< TAU fudge factor to control strength or regularization [0.5,5] more -> less low-pass effect
-                                                       !! tau < 3 leads to excessive low-pass filtering
-real, parameter    :: CLS_REJECT_STD       = 2.5       !< # deviations for 2D class selection/rejection
-real, parameter    :: CENTHRESH            = 0.5       ! threshold for performing volume/cavg centering in pixels
-real, parameter    :: MAXCENTHRESH2D       = 3.0       ! max threshold for performing cavg centering in pixels
+real, parameter    :: FRAC_SH_LIM               = 75.0           !< at what frac to turn on the shift search
+real, parameter    :: NEIGH_MINFRAC             = 0.3            !< minimum fraction of search space scanned in refine=neigh
+real, parameter    :: FRAC_GREEDY_LIM           = 99.0           !< at what frac to turn to greedy search
+real, parameter    :: EXTRINITHRES              = 0.5            !< initial randomization threshold for extremal search
+real, parameter    :: EXTRTHRESH_CONST          = 0.2            !< threshold for factorial decay in extremal search
+real, parameter    :: SNHC2D_INITFRAC           = 0.5            !< initial neighbourhood fraction for 2D SNHC
+real, parameter    :: SNHC2D_DECAY              = 0.2            !< factorial decay in 2D SNHC
+real, parameter    :: GREEDY_FREQ               = 0.1            !< frequency of greedy search in refine3D with refine=shc/neigh
+real, parameter    :: GLOB_FREQ                 = 0.2            !< frequency of global stoachastic search in  with refine=neigh
+real, parameter    :: LP2SMPDFAC                = 0.4125         !< low-pass limit scaling constant
+real, parameter    :: LP2SMPDFAC2D              = 0.4            !< low-pass limit scaling constant
+real, parameter    :: SHC_INPL_TRSHWDTH         = 2.0            !< shift search halfwidht (pixels)ch
+real, parameter    :: STREAM_SRCHFRAC           = 0.4            !< fraction of times full 2D search is performed in the pool
+real, parameter    :: MC_PATCHSZ                = 200.           !< recommended patch size (in Angstroms) for motion correction
+real, parameter    :: ENVMSK_FSC_THRESH         = 0.8            !< FSC value after which phase-randomization and FSC correction is applied in enveloppe masking
+real, parameter    :: MAX_SMPD                  = 2.67           !< maximum sampling distance in scaling
+real, parameter    :: TAU_DEFAULT               = 3.0            !< TAU fudge factor to control strength or regularization [0.5,5] more -> less low-pass effect
+                                                                 !! tau < 3 leads to excessive low-pass filtering
+real, parameter    :: CLS_REJECT_STD            = 2.5            !< # deviations for 2D class selection/rejection
+real, parameter    :: CENTHRESH                 = 0.5            ! threshold for performing volume/cavg centering in pixels
+real, parameter    :: MAXCENTHRESH2D            = 3.0            ! max threshold for performing cavg centering in pixels
 
 ! preprocessing constants
-real, parameter    :: FRACTION_DOSE_TARGET_DEFAULT=1.0 !< EER target fraction dose in e/A2
-real, parameter    :: DFMAX_DEFAULT            = 5.0   !< Default maximum bound for defocus search (microns)
-real, parameter    :: DFMIN_DEFAULT            = 0.2   !< Default minimum bound for defocus search (microns)
-real, parameter    :: LP_CTF_ESTIMATE          = 5.0   !< Default low-pass limit for defocus search (Angstroms)
-real, parameter    :: HP_CTF_ESTIMATE          = 30.0  !< Default high-pass limit for defocus search (Angstroms)
-real, parameter    :: HP_BACKGR_SUBTR          = 400.0 !< High-pass frequency for micrograph background subtraction (Angstroms)
-real, parameter    :: CTFRES_THRESHOLD         = 50.0  !< Ctfres rejection threshold (Angstroms)
-real, parameter    :: CTFRES_THRESHOLD_STREAM  = 10.0  !< Stream ctfres rejection threshold (Angstroms)
-real, parameter    :: ICEFRAC_THRESHOLD        = 1.0   !< Icefrac rejection threshold
-real, parameter    :: ICEFRAC_THRESHOLD_STREAM = 1.0   !< Stream icefrac rejection threshold
-real, parameter    :: ASTIG_THRESHOLD          = 10.0  !< Astigmatism rejection threshold
-real, parameter    :: ASTIG_THRESHOLD_STREAM   = 10.0  !< Stream astigmatism rejection threshold
-real, parameter    :: FRAC_SKIP_REJECTION      = 0.7   !< When the number of classes to reject is too high rejection is skipped
-real, parameter    :: PICK_LP_DEFAULT          = 20.   !< Picking resolution limit
-real, parameter    :: BOX_EXP_FACTOR_DEFAULT   = 1.2   !< Multilication factor to increase the image size as determined bu muti-diameter picking
-real, parameter    :: RES_THRESHOLD_STREAM     = 35.0  !< Default streaming resolution rejection threshold
-real, parameter    :: LOWRES_REJECT_THRESHOLD  = 199.  ! Deactivates resolution-based rejection when lpthres > LOWRES_REJECT_THRESHOLD
+real, parameter    :: FRACTION_DOSE_TARGET_DEFAULT=1.0           !< EER target fraction dose in e/A2
+real, parameter    :: DFMAX_DEFAULT             = 5.0            !< Default maximum bound for defocus search (microns)
+real, parameter    :: DFMIN_DEFAULT             = 0.2            !< Default minimum bound for defocus search (microns)
+real, parameter    :: LP_CTF_ESTIMATE           = 5.0            !< Default low-pass limit for defocus search (Angstroms)
+real, parameter    :: HP_CTF_ESTIMATE           = 30.0           !< Default high-pass limit for defocus search (Angstroms)
+real, parameter    :: HP_BACKGR_SUBTR           = 400.0          !< High-pass frequency for micrograph background subtraction (Angstroms)
+real, parameter    :: CTFRES_THRESHOLD          = 50.0           !< Ctfres rejection threshold (Angstroms)
+real, parameter    :: CTFRES_THRESHOLD_STREAM   = 10.0           !< Stream ctfres rejection threshold (Angstroms)
+real, parameter    :: ICEFRAC_THRESHOLD         = 1.0            !< Icefrac rejection threshold
+real, parameter    :: ICEFRAC_THRESHOLD_STREAM  = 1.0            !< Stream icefrac rejection threshold
+real, parameter    :: ASTIG_THRESHOLD           = 10.0           !< Astigmatism rejection threshold
+real, parameter    :: ASTIG_THRESHOLD_STREAM    = 10.0           !< Stream astigmatism rejection threshold
+real, parameter    :: FRAC_SKIP_REJECTION       = 0.7            !< When the number of classes to reject is too high rejection is skipped
+real, parameter    :: PICK_LP_DEFAULT           = 20.            !< Picking resolution limit
+real, parameter    :: BOX_EXP_FACTOR_DEFAULT    = 1.2            !< Multilication factor to increase the image size as determined bu muti-diameter picking
+real, parameter    :: RES_THRESHOLD_STREAM      = 35.0           !< Default streaming resolution rejection threshold
+real, parameter    :: LOWRES_REJECT_THRESHOLD   = 199.           ! Deactivates resolution-based rejection when lpthres > LOWRES_REJECT_THRESHOLD
 
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND           = 5              !< # iteration bound lplim stage 1 (PRIME2D)
@@ -231,26 +231,19 @@ integer, parameter :: FAST2D_NPTCLS_PER_CLS     = 500            !< # of particl
 integer, parameter :: FAST2D_ITER_BATCH         = 3              !< # of iterations after which # of particles is updated
 integer, parameter :: AMSK_FREQ                 = 3              !< automasking every third iteration (each for now)
 
-! weighting scheme
-real, parameter :: RANKW_EXP = 2.0              !< Exponent for exponential rank weights
-
 ! Graphene
-real, parameter :: GRAPHENE_BAND1 = 2.14        !< graphene band 1 for omission in score function
-real, parameter :: GRAPHENE_BAND2 = 1.23        !< graphene band 2 for omission in score function
+real, parameter    :: GRAPHENE_BAND1            = 2.14           !< graphene band 1 for omission in score function
+real, parameter    :: GRAPHENE_BAND2            = 1.23           !< graphene band 2 for omission in score function
 
 ! Ice
-real, parameter :: ICE_BAND1 = 3.7
-real, parameter :: ICE_BAND2 = 1.23
-
-! C-compatible boolean constants
-logical(c_bool), parameter :: C_FALSE = logical(.false.,kind=c_bool)
-logical(c_bool), parameter :: C_TRUE  = logical(.true. ,kind=c_bool)
+real, parameter    :: ICE_BAND1                 = 3.7
+real, parameter    :: ICE_BAND2                 = 1.23
 
 ! criterion for even/odd averaging in gold-FSC
-real,    parameter :: FREQ4EOAVG3D = 20.        !< Frequencry criterion for eo-averaging in 3D
-real,    parameter :: FSC4EOAVG3D  = 0.95       !< corr criterion for eo-averaging in 3D
-real,    parameter :: FSC4EOAVG2D  = 0.7        !< corr criterion for eo-averaging in 2D
-integer, parameter :: K4EOAVGLB    = 4          !< Fourier index lower-bound
+real,    parameter :: FREQ4EOAVG3D              = 20.            !< Frequencry criterion for eo-averaging in 3D
+real,    parameter :: FSC4EOAVG3D               = 0.95           !< corr criterion for eo-averaging in 3D
+real,    parameter :: FSC4EOAVG2D               = 0.7            !< corr criterion for eo-averaging in 2D
+integer, parameter :: K4EOAVGLB                 = 4              !< Fourier index lower-bound
 
 ! qsys related
 integer, parameter :: QSYS_SUBMISSION_RETRY_LIMIT = 5
@@ -259,11 +252,15 @@ integer, parameter :: QSYS_SUBMISSION_RETRY_MULTI = 3
 
 ! computer related
 integer, parameter :: JOB_MEMORY_PER_TASK_DEFAULT = 16000
-integer, parameter :: TIME_PER_IMAGE_DEFAULT      = 100     ! seconds
-integer, parameter :: WALLTIME_DEFAULT            = 172740  ! seconds, 47h59mins
+integer, parameter :: TIME_PER_IMAGE_DEFAULT      = 100          !< seconds
+integer, parameter :: WALLTIME_DEFAULT            = 172740       !< seconds, 47h59mins
 
 ! precision constants
 integer, parameter :: fp_kind  = DP
+
+! C-compatible boolean constants
+logical(c_bool), parameter :: C_FALSE = logical(.false.,kind=c_bool)
+logical(c_bool), parameter :: C_TRUE  = logical(.true. ,kind=c_bool)
 
 ! append SIMPLE_VERSION and SIMPLE_GIT_VERSION strings to simple_defs
 #include "SimpleGitVersion.h"
