@@ -9,11 +9,12 @@ use simple_pickseg
 type(AFM_image), allocatable :: stack_stack(:)
 type(AFM_image), allocatable :: stack_avg(:)
 logical, allocatable         :: mask_array(:,:,:,:)
+type(pickseg), allocatable   :: pick_array(:)
 type(image)                  :: img_edg  
 type(image)                  :: test_img, test_denoised     
-type(binimage)               :: test_bin 
+type(binimage), allocatable  :: bin_cc_array(:)
 type(parameters), target     :: params
-real                         :: start, finish 
+real                         :: start, finish, count
 integer                      :: clip_len, file_num, file_iter, test_dim(3) = [1000, 1000, 1], i, j
 character(len=LONGSTRLEN), allocatable  :: file_list(:)
 real    :: thresh1(2) = [0.5, 0.2]
@@ -29,7 +30,8 @@ call simple_list_files(trim(directory) // '*.ibw', file_list)
 allocate(stack_stack(size(file_list)))
 allocate(stack_avg(size(file_list)))
 allocate(mask_array(1024, 1024, 1, size(file_list)))
-
+allocate(pick_array(size(file_list)))
+allocate(bin_cc_array(size(file_list)))
 do file_iter = 1, size(file_list)
     call read_ibw(stack_stack(file_iter), file_list(file_iter))
     call align_avg(stack_stack(file_iter), stack_avg(file_iter))
@@ -38,10 +40,11 @@ do file_iter = 1, size(file_list)
             call stack_avg(file_iter)%img_array(clip_len)%clip_inplace([1024, 900, 1])
         end do
     end if
+    stack_avg(file_iter)%stack_string = get_fbody(basename(trim(file_list(file_iter))), 'ibw')
+    call pick_valid(stack_avg(file_iter), stack_avg(file_iter)%stack_string, pick_array(file_iter))
     call zero_padding(stack_avg(file_iter))
     call hough_lines(stack_avg(file_iter)%img_array(9), [PI/2 - PI/180, PI/2 + PI/180], mask_array(:, :, :, file_iter))
-    stack_avg(file_iter)%stack_string = get_fbody(basename(trim(file_list(file_iter))), 'ibw')
-    call pick_valid(stack_avg(file_iter), stack_avg(file_iter)%stack_string)
+    call mask42D(stack_avg(file_iter)%img_array(9), pick_array(file_iter), bin_cc_array(file_iter), mask_array(:, :, :, file_iter))
 end do
 
 call cpu_time(finish)
