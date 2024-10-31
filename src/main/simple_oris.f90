@@ -89,6 +89,7 @@ type :: oris
     procedure          :: sample_balanced
     procedure          :: sample_balanced_parts
     procedure          :: incr_updatecnt
+    procedure          :: is_first_update
     procedure          :: clean_updatecnt
     procedure          :: clean_updatecnt_sampled
     procedure          :: has_been_sampled
@@ -1486,6 +1487,12 @@ contains
             endif
         end do
     end subroutine incr_updatecnt
+
+    logical function is_first_update( self, iter, iptcl )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: iter, iptcl
+        is_first_update = nint(self%o(iptcl)%get('updatecnt')) == 1 .and. iter > 1
+    end function is_first_update
 
     subroutine clean_updatecnt( self )
         class(oris), intent(inout) :: self

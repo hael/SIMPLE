@@ -62,12 +62,12 @@ contains
         !      relevant strategy3D base class
         type(strategy3D_spec), allocatable :: strategy3Dspecs(:)
         real,                  allocatable :: resarr(:)
-        integer,               allocatable :: batches(:,:)
+        integer,               allocatable :: batches(:,:), cnt_greedy(:), cnt_all(:)
         type(class_sample),    allocatable :: clssmp(:) 
         type(convergence) :: conv
         type(oris)        :: prev_oris
         type(ori)         :: orientation
-        real    :: frac_srch_space, extr_thresh, extr_score_thresh, anneal_ratio
+        real    :: frac_srch_space, extr_thresh, extr_score_thresh, anneal_ratio, frac_greedy
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz
         integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map
         integer :: ibatch, iextr_lim, lpind_anneal, lpind_start
@@ -147,7 +147,9 @@ contains
             rt_build_batch_particles = 0.
             rt_align                 = 0.
         endif
-        ! Batch loop
+
+        ! BATCH LOOP
+        allocate(cnt_greedy(params_glob%nthr), cnt_all(params_glob%nthr), source=0)
         do ibatch=1,nbatches
             batch_start = batches(ibatch,1)
             batch_end   = batches(ibatch,2)
@@ -169,15 +171,24 @@ contains
                     case('shc')
                         if( .not. has_been_searched )then
                             allocate(strategy3D_greedy           :: strategy3Dsrch(iptcl_batch)%ptr)
+                            cnt_greedy(ithr) = cnt_greedy(ithr) + 1
                         else
                             if( ran3() < GREEDY_FREQ )then
                                 allocate(strategy3D_greedy       :: strategy3Dsrch(iptcl_batch)%ptr)
+                                cnt_greedy(ithr) = cnt_greedy(ithr) + 1
                             else
                                 allocate(strategy3D_shc          :: strategy3Dsrch(iptcl_batch)%ptr)
                             endif
                         endif
+                        cnt_all(ithr) = cnt_all(ithr) + 1
                     case('shc_smpl')
-                        allocate(strategy3D_shc_smpl             :: strategy3Dsrch(iptcl_batch)%ptr)
+                        if( build_glob%spproj_field%is_first_update(which_iter, iptcl) )then
+                            allocate(strategy3D_greedy_smpl      :: strategy3Dsrch(iptcl_batch)%ptr)
+                            cnt_greedy(ithr) = cnt_greedy(ithr) + 1
+                        else
+                            allocate(strategy3D_shc_smpl         :: strategy3Dsrch(iptcl_batch)%ptr)
+                        endif
+                        cnt_all(ithr) = cnt_all(ithr) + 1
                     case('neigh')
                         allocate(strategy3D_greedy_sub           :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('greedy')
@@ -213,6 +224,12 @@ contains
             !$omp end parallel do
             if( L_BENCH_GLOB ) rt_align = rt_align + toc(t_align)
         enddo
+        ! report fraction of greedy searches
+        frac_greedy = 0.
+        if( any(cnt_greedy > 0) .and. any(cnt_all > 0) )then
+            frac_greedy = real(sum(cnt_greedy)) / real(sum(cnt_all))
+        endif
+        call build_glob%spproj_field%set_all2single('frac_greedy', frac_greedy)
         ! cleanup
         do iptcl_batch = 1,batchsz_max
             nullify(strategy3Dsrch(iptcl_batch)%ptr)

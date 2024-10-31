@@ -2,57 +2,57 @@ module simple_defs_ori
 implicit none
 
 enum, bind(c)
-    enumerator :: I_ANGAST     = 1
-    enumerator :: I_CLASS      = 2
-    enumerator :: I_CORR       = 3
-    enumerator :: I_DFX        = 4
-    enumerator :: I_DFY        = 5
-    enumerator :: I_DIST       = 6
-    enumerator :: I_DIST_INPL  = 7
-    enumerator :: I_E1         = 8
-    enumerator :: I_E2         = 9
-    enumerator :: I_E3         = 10
-    enumerator :: I_EO         = 11
-    enumerator :: I_FRAC       = 12
-    enumerator :: I_INDSTK     = 13
-    enumerator :: I_INPL       = 14
-    enumerator :: I_LP         = 15
-    enumerator :: I_MI_CLASS   = 16
-    enumerator :: I_MI_PROJ    = 17
-    enumerator :: I_MI_STATE   = 18
-    enumerator :: I_PHSHIFT    = 19
-    enumerator :: I_PROJ       = 20
-    enumerator :: I_SHINCARG   = 21
-    enumerator :: I_SPECSCORE  = 22 ! unused
-    enumerator :: I_STATE      = 23
-    enumerator :: I_STKIND     = 24
-    enumerator :: I_UPDATECNT  = 25
-    enumerator :: I_W          = 26
-    enumerator :: I_X          = 27
-    enumerator :: I_XINCR      = 28
-    enumerator :: I_XPOS       = 29
-    enumerator :: I_Y          = 30
-    enumerator :: I_YINCR      = 31
-    enumerator :: I_YPOS       = 32
-    enumerator :: I_GID        = 33
-    enumerator :: I_OGID       = 34
-    enumerator :: I_PIND       = 35
-    enumerator :: I_NEVALS     = 36
-    enumerator :: I_NGEVALS    = 37
-    enumerator :: I_BETTER     = 38
-    enumerator :: I_NPEAKS     = 39
-    enumerator :: I_DIST_PEAKS = 40 ! unused
-    enumerator :: I_CC_PEAK    = 41 ! unused
-    enumerator :: I_CC_NONPEAK = 42 ! unused
-    enumerator :: I_FRAC_SH    = 43
-    enumerator :: I_BETTER_L   = 44
-    enumerator :: I_SAMPLED    = 45
-    enumerator :: I_CLUSTER    = 46
+    enumerator :: I_ANGAST      = 1
+    enumerator :: I_CLASS       = 2
+    enumerator :: I_CORR        = 3
+    enumerator :: I_DFX         = 4
+    enumerator :: I_DFY         = 5
+    enumerator :: I_DIST        = 6
+    enumerator :: I_DIST_INPL   = 7
+    enumerator :: I_E1          = 8
+    enumerator :: I_E2          = 9
+    enumerator :: I_E3          = 10
+    enumerator :: I_EO          = 11
+    enumerator :: I_FRAC        = 12
+    enumerator :: I_INDSTK      = 13
+    enumerator :: I_INPL        = 14
+    enumerator :: I_LP          = 15
+    enumerator :: I_MI_CLASS    = 16
+    enumerator :: I_MI_PROJ     = 17
+    enumerator :: I_MI_STATE    = 18
+    enumerator :: I_PHSHIFT     = 19
+    enumerator :: I_PROJ        = 20
+    enumerator :: I_SHINCARG    = 21
+    enumerator :: I_SPECSCORE   = 22 ! unused
+    enumerator :: I_STATE       = 23
+    enumerator :: I_STKIND      = 24
+    enumerator :: I_UPDATECNT   = 25
+    enumerator :: I_W           = 26
+    enumerator :: I_X           = 27
+    enumerator :: I_XINCR       = 28
+    enumerator :: I_XPOS        = 29
+    enumerator :: I_Y           = 30
+    enumerator :: I_YINCR       = 31
+    enumerator :: I_YPOS        = 32
+    enumerator :: I_GID         = 33
+    enumerator :: I_OGID        = 34
+    enumerator :: I_PIND        = 35
+    enumerator :: I_NEVALS      = 36
+    enumerator :: I_NGEVALS     = 37
+    enumerator :: I_BETTER      = 38
+    enumerator :: I_NPEAKS      = 39
+    enumerator :: I_DIST_PEAKS  = 40 ! unused
+    enumerator :: I_CC_PEAK     = 41 ! unused
+    enumerator :: I_CC_NONPEAK  = 42 ! unused
+    enumerator :: I_FRAC_GREEDY = 43
+    enumerator :: I_BETTER_L    = 44
+    enumerator :: I_SAMPLED     = 45
+    enumerator :: I_CLUSTER     = 46
     ! empties
-    enumerator :: I_EMPTY7     = 47
-    enumerator :: I_EMPTY8     = 48
-    enumerator :: I_EMPTY9     = 49
-    enumerator :: I_EMPTY10    = 50
+    enumerator :: I_EMPTY7      = 47
+    enumerator :: I_EMPTY8      = 48
+    enumerator :: I_EMPTY9      = 49
+    enumerator :: I_EMPTY10     = 50
 end enum
 
 integer, parameter :: N_PTCL_ORIPARAMS = 50
@@ -148,8 +148,8 @@ contains
                 get_oriparam_ind = I_CC_PEAK    ! unused
             case('cc_nonpeak')
                 get_oriparam_ind = I_CC_NONPEAK ! unused
-            case('frac_sh')
-                get_oriparam_ind = I_FRAC_SH
+            case('frac_greedy')
+                get_oriparam_ind = I_FRAC_GREEDY
             case('better_l')
                 get_oriparam_ind = I_BETTER_L
             case('sampled')
@@ -247,8 +247,8 @@ contains
                 flag = 'cc_peak'    ! unused
             case(I_CC_NONPEAK)
                 flag = 'cc_nonpeak' ! unused
-            case(I_FRAC_SH)
-                flag = 'frac_sh'
+            case(I_FRAC_GREEDY)
+                flag = 'frac_greedy'
             case(I_BETTER_L)
                 flag ='better_l'
             case(I_SAMPLED)
@@ -307,8 +307,6 @@ contains
             case(I_CC_PEAK)
                 oriparam_isthere = abs(val) > TINY
             case(I_CC_NONPEAK)
-                oriparam_isthere = abs(val) > TINY
-            case(I_FRAC_SH)
                 oriparam_isthere = abs(val) > TINY
             case(I_CLUSTER)
                 oriparam_isthere = abs(val) > TINY
