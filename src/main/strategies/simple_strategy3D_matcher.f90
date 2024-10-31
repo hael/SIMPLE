@@ -186,7 +186,12 @@ contains
                             allocate(strategy3D_greedy_smpl      :: strategy3Dsrch(iptcl_batch)%ptr)
                             cnt_greedy(ithr) = cnt_greedy(ithr) + 1
                         else
-                            allocate(strategy3D_shc_smpl         :: strategy3Dsrch(iptcl_batch)%ptr)
+                            if( ran3() < GREEDY_FREQ )then
+                                allocate(strategy3D_greedy_smpl  :: strategy3Dsrch(iptcl_batch)%ptr)
+                                cnt_greedy(ithr) = cnt_greedy(ithr) + 1
+                            else
+                                allocate(strategy3D_shc_smpl     :: strategy3Dsrch(iptcl_batch)%ptr)
+                            endif
                         endif
                         cnt_all(ithr) = cnt_all(ithr) + 1
                     case('neigh')

@@ -55,9 +55,9 @@ integer,          parameter :: MAXITS(3)             = [20,17,15]
 integer,          parameter :: MAXITS_GLOB           = 2*20 + 4*17 + 2*15
 integer,          parameter :: NSPACE(3)             = [500,1000,2500]
 integer,          parameter :: SYMSRCH_STAGE         = 3
+integer,          parameter :: INCR_GREEDINESS_STAGE = 4 ! INCR_GREEDINESS_STAGE < PROBREFINE_STAGE must be true for it to have an effect
 integer,          parameter :: PROBREFINE_STAGE      = 5
-integer,          parameter :: INCR_GREEDINESS_STAGE = 5
-integer,          parameter :: ICM_STAGE             = 5
+integer,          parameter :: ICM_STAGE             = PROBREFINE_STAGE
 integer,          parameter :: TRAILREC_STAGE        = 7
 ! class variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
