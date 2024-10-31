@@ -16,20 +16,16 @@ type convergence
     type(stats_struct) :: dist       !< angular distance stats
     type(stats_struct) :: dist_inpl  !< in-plane angular distance stats
     type(stats_struct) :: frac_srch  !< fraction of search space scanned stats
-    type(stats_struct) :: frac_sh    !< fraction of search space scanned stats, shifts
     type(stats_struct) :: shincarg   !< shift increment
-    type(stats_struct) :: nevals     !< # cost function evaluations
-    type(stats_struct) :: ngevals    !< # gradient evaluations
-    type(stats_struct) :: better     !< improvement statistics
-    type(stats_struct) :: better_l   !< improvement statistics, LBFGS-B
     type(stats_struct) :: pw         !< particle weights
     type(stats_struct) :: lp         !< low-pass limit
     type(oris)         :: ostats     !< centralize stats for writing
-    integer :: iteration = 0         !< current interation
-    real    :: mi_class  = 0.        !< class parameter distribution overlap
-    real    :: mi_proj   = 0.        !< projection parameter distribution overlap
-    real    :: mi_state  = 0.        !< state parameter distribution overlap
-    real    :: progress  = 0.        !< progress estimation
+    integer :: iteration   = 0       !< current interation
+    real    :: mi_class    = 0.      !< class parameter distribution overlap
+    real    :: mi_proj     = 0.      !< projection parameter distribution overlap
+    real    :: mi_state    = 0.      !< state parameter distribution overlap
+    real    :: frac_greedy = 0.      !< fraction of greedy searches
+    real    :: progress    = 0.      !< progress estimation
   contains
     procedure :: read
     procedure :: check_conv2D
@@ -227,8 +223,9 @@ contains
         call build_glob%spproj_field%stats('shincarg',   self%shincarg,   mask=mask)
         call build_glob%spproj_field%stats('w',          self%pw,         mask=mask)
         call build_glob%spproj_field%stats('lp',         self%lp,         mask=mask)
-        self%mi_proj   = build_glob%spproj_field%get_avg('mi_proj',   mask=mask)
-        self%mi_state  = build_glob%spproj_field%get_avg('mi_state',  mask=mask)
+        self%mi_proj     = build_glob%spproj_field%get_avg('mi_proj',     mask=mask)
+        self%mi_state    = build_glob%spproj_field%get_avg('mi_state',    mask=mask)
+        self%frac_greedy = build_glob%spproj_field%get_avg('frac_greedy', mask=mask)
         ! overlaps and particle updates
         write(logfhandle,601) '>>> ORIENTATION OVERLAP:                      ', self%mi_proj
         if( params_glob%nstates > 1 )then
@@ -237,6 +234,7 @@ contains
         write(logfhandle,601) '>>> % PARTICLES SAMPLED THIS ITERATION        ', percen_sampled
         write(logfhandle,601) '>>> % PARTICLES UPDATED SO FAR                ', percen_updated
         write(logfhandle,601) '>>> % PARTICLES USED FOR AVERAGING            ', percen_avg
+        write(logfhandle,601) '>>> % GREEDY SEARCHES                         ', self%frac_greedy * 100.
         ! dists and % search space
         write(logfhandle,604) '>>> DIST BTW BEST ORIS (DEG) AVG/SDEV/MIN/MAX:', self%dist%avg,      self%dist%sdev,      self%dist%minv,      self%dist%maxv
         write(logfhandle,604) '>>> IN-PLANE DIST      (DEG) AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
