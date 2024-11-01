@@ -10,6 +10,7 @@ use simple_image,          only: image
 use simple_projector_hlev, only: reproject, rotvol
 use simple_masker,         only: masker
 use simple_projector,      only: projector
+use simple_dock_vols,      only: dock_vols
 implicit none
 
 public :: centervol_commander
@@ -439,32 +440,30 @@ contains
         ! use simple_vol_srch
         class(dock_volpair_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        real,  parameter :: SHSRCH_HWDTH  = 5.0
-        type(parameters) :: params
-        type(projector)  :: vol1, vol2
-        type(projector)  :: vol_out
-        integer          :: i
+        type(dock_vols)        :: dvols
+        real,  parameter       :: SHSRCH_HWDTH  = 5.0
+        type(parameters)       :: params
+        integer                :: i
+        character, allocatable :: fn_vol_docked
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
-
-
-
+        fn_vol_docked = trim(get_fbody(params%vols(2),'mrc'))//'_docked.mrc'
         select case( trim(params%dockmode) )
             case('shift')
                 ! to be implemented
             case('rot')
                 ! to be implemented
             case('rotshift')
-                ! to be implemented
+                call dvols%new(params%vols(1), params%vols(2), params%smpd, params%lpstop, params%lpstart, params%mskdiam, mag=.true.)
+                call dvols%srch()
+                call dvols%rotate_target(params%vols(2), fn_vol_docked)
             case('refine')
                 ! to be implemented
             case DEFAULT
                 write(logfhandle,*) 'dockmode: ', trim(params%dockmode), ' is unsupported'
         end select
         ! cleanup
-        call vol1%kill
-        call vol2%kill
-        call vol_out%kill
+        call dvols%kill()
         ! end gracefully
         call simple_end('**** SIMPLE_DOCK_VOLPAIR NORMAL STOP ****')
     end subroutine exec_dock_volpair

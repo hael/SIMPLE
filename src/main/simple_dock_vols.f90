@@ -32,6 +32,7 @@ contains
     procedure, private    :: srch_shift
     procedure             :: srch
     procedure             :: rotate_target
+    procedure             :: kill
 end type dock_vols
 
 character(len=*), parameter :: PGRP           = 'c1'
@@ -41,6 +42,16 @@ integer,          parameter :: NBEST          = 3
 real,             parameter :: LP2SMPD_TARGET = 1./3.
 
 contains
+
+    subroutine kill( self )
+        class(dock_vols), intent(inout) :: self
+        call self%vol_ref%kill
+        call self%vol%kill
+        call self%vol_ref%kill
+        call self%eulspace%kill
+        call self%eulspace_sub%kill
+        call self%pgrpsym%kill
+    end subroutine kill
 
     subroutine new( self, vol_ref_fname, vol_fname, smpd, hp, lp, mskdiam, mag )
         class(dock_vols),  intent(inout) :: self
