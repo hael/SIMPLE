@@ -69,7 +69,7 @@ type(estimate_lpstages_commander)           :: xestimate_lpstages
 type(noisevol_commander)                    :: xnoisevol
 type(initial_3Dmodel_commander)             :: xinitial_3Dmodel
 type(abinitio_3Dmodel_commander)            :: xabinitio_3Dmodel
-type(abinitio_3Dmodel2_commander)           :: xabinitio_3Dmodel2
+type(abinitio_3Dmodel_parts_commander)      :: xabinitio_3Dmodel_parts
 
 ! REFINE3D WORKFLOWS
 type(calc_pspec_commander_distr)            :: xcalc_pspec_distr
@@ -260,12 +260,8 @@ select case(trim(prg))
         else
             call xabinitio_3Dmodel%execute(cline)
         endif
-    case( 'abinitio_3Dmodel2' )
-        if( cline%defined('nrestarts') )then
-            call restarted_exec(cline, 'abinitio_3Dmodel2', 'simple_exec')
-        else
-            call xabinitio_3Dmodel2%execute(cline)
-        endif
+    case( 'abinitio_3Dmodel_parts' )
+        call xabinitio_3Dmodel_parts%execute(cline)
 
     ! REFINE3D WORKFLOWS
     case( 'calc_pspec' )
@@ -422,7 +418,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('0e614eec')
+call simple_print_git_version('44cb766e')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

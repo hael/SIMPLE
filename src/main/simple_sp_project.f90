@@ -6,7 +6,8 @@ public :: sp_project, oritype2segment
 private
 #include "simple_local_flags.inc"
 
-integer(kind(ENUM_ORISEG)), parameter :: MAXN_OS_SEG = 13
+integer(kind(ENUM_ORISEG)), parameter :: MAXN_OS_SEG     = 13
+logical,                    parameter :: L_RELATIVE_PATH = .false.
 
 type sp_project
     ! ORIS REPRESENTATIONS OF BINARY FILE SEGMENTS
@@ -605,7 +606,11 @@ contains
         endif
         ! update ori
         call os_ptr%new(1, is_ptcl=.false.)
-        call make_relativepath(CWD_GLOB, moviename, rel_fname)
+        if( L_RELATIVE_PATH )then
+            call make_relativepath(CWD_GLOB, moviename, rel_fname)
+        else
+            rel_fname = simple_abspath(moviename)
+        endif
         call find_ldim_nptcls(trim(rel_fname), ldim, nframes)
         if( nframes <= 0 )then
             THROW_WARN('# frames in movie: '//trim(rel_fname)//' <= zero, omitting')
@@ -683,7 +688,11 @@ contains
         nframes_first = 0
         do imic=nprev_mics + 1,ntot
             cnt = cnt + 1
-            call make_relativepath(CWD_GLOB,movies_array(cnt),rel_moviename)
+            if( L_RELATIVE_PATH )then
+                call make_relativepath(CWD_GLOB,movies_array(cnt),rel_moviename)
+            else
+                rel_moviename = simple_abspath(movies_array(cnt))
+            endif
             call find_ldim_nptcls(trim(rel_moviename), ldim, nframes)
             if( cnt == 1 )then
                 ldim_orig = ldim
@@ -808,7 +817,11 @@ contains
         cnt = 0
         do imic=nprev_intgs+1,ntot
             cnt = cnt + 1
-            call make_relativepath(CWD_GLOB,intgs_array(cnt),rel_micname)
+            if( L_RELATIVE_PATH )then
+                call make_relativepath(CWD_GLOB,intgs_array(cnt),rel_micname)
+            else
+                rel_micname = simple_abspath(intgs_array(cnt))
+            endif
             call find_ldim_nptcls(trim(rel_micname), ldim, nframes, smpd=intg_smpd)
             if( nframes <= 0 )then
                 THROW_HARD('# frames in movie: '//trim(intgs_array(cnt))//' <= zero; add_intgs')
@@ -921,7 +934,11 @@ contains
         integer :: i, fromp, top, pind
         ! full path and existence check
         call simple_getcwd(cwd)
-        call make_relativepath(cwd, stk, stk_relpath)
+        if( L_RELATIVE_PATH )then
+            call make_relativepath(cwd, stk, stk_relpath)
+        else
+            stk_relpath = simple_abspath(stk)
+        endif
         ! find dimension of inputted stack
         call find_ldim_nptcls(stk_relpath, ldim, nptcls)
         if( ldim(1) /= ldim(2) )then
@@ -1041,7 +1058,11 @@ contains
             THROW_HARD('nonsquare particle images not supported; add_single_stk')
         endif
         ! path
-        call make_relativepath(CWD_GLOB, stk_abspath, stk_relpath)
+        if( L_RELATIVE_PATH )then
+            call make_relativepath(CWD_GLOB, stk_abspath, stk_relpath)
+        else
+            stk_relpath = simple_abspath(stk_abspath)
+        endif
         ! records
         call self%os_stk%new(1, is_ptcl=.false.)
         call self%os_stk%set(1, 'stk',     trim(stk_relpath))
@@ -1099,7 +1120,11 @@ contains
             THROW_HARD('nonsquare particle images not supported; add_single_stk_denoised')
         endif
         ! path
-        call make_relativepath(CWD_GLOB, stk_den_abspath, stk_den_relpath)
+        if( L_RELATIVE_PATH )then
+            call make_relativepath(CWD_GLOB, stk_den_abspath, stk_den_relpath)
+        else
+            stk_den_relpath = simple_abspath(stk_den_abspath)
+        endif
         ! update record
         call self%os_stk%set(1, 'stk_den', trim(stk_den_relpath))
     end subroutine add_single_stk_denoised
@@ -1126,7 +1151,11 @@ contains
         allocate(nptcls_arr(nstks),source=0)
         do istk=1,nstks
             ! full path and existence check
-            call make_relativepath(CWD_GLOB,stkfnames(istk),stk_relpath)
+            if( L_RELATIVE_PATH )then
+                call make_relativepath(CWD_GLOB,stkfnames(istk),stk_relpath)
+            else
+                stk_relpath = simple_abspath(stkfnames(istk))
+            endif
             stkfnames(istk) = trim(stk_relpath)
             call os%get_ori(istk, o_stk)
             ! logical dimension management
@@ -1236,7 +1265,11 @@ contains
         allocate(nptcls_arr(nstks),source=0)
         do istk=1,nstks
             ! full path and existence check
-            call make_relativepath(CWD_GLOB,stkfnames(istk),stk_relpath)
+            if( L_RELATIVE_PATH )then
+                call make_relativepath(CWD_GLOB,stkfnames(istk),stk_relpath)
+            else
+                stk_relpath = simple_abspath(stkfnames(istk))
+            endif
             stkfnames(istk) = trim(stk_relpath)
             ! logical dimension management
             call find_ldim_nptcls(stkfnames(istk), ldim, nptcls)
@@ -1459,7 +1492,11 @@ contains
                 allocate(dest_stkpart, source=trim(STKPARTFBODY)//int2str_pad(istk,numlen)//EXT)
             endif
             call simple_rename(trim(stkpart), trim(dest_stkpart))
-            call make_relativepath(cwd, dest_stkpart, stk_relpath)
+            if( L_RELATIVE_PATH )then
+                call make_relativepath(cwd, dest_stkpart, stk_relpath)
+            else
+                stk_relpath = simple_abspath(dest_stkpart)
+            endif
             nptcls_part = parts(istk,2) - parts(istk,1) + 1
             ! set original before overriding
             call self%os_stk%set_ori(istk, orig_stk)
@@ -1481,7 +1518,11 @@ contains
                     allocate(dest_stkpart, source=trim(STKDENPARTFBODY)//int2str_pad(istk,numlen)//EXT)
                 endif
                 call simple_rename(trim(stkpart), trim(dest_stkpart))
-                call make_relativepath(cwd, dest_stkpart, stk_relpath)
+                if( L_RELATIVE_PATH )then
+                    call make_relativepath(cwd, dest_stkpart, stk_relpath)
+                else
+                    stk_relpath = simple_abspath(dest_stkpart)
+                endif
                 call self%os_stk%set(istk, 'stk_den', trim(stk_relpath))
             endif
             deallocate(stkpart, dest_stkpart)
@@ -1636,7 +1677,11 @@ contains
             allocate(iimgkind, source='cavg')
         endif
         ! path and existence check
-        call make_relativepath(CWD_GLOB, stk, relpath)
+        if( L_RELATIVE_PATH )then
+            call make_relativepath(CWD_GLOB, stk, relpath)
+        else
+            relpath = simple_abspath(stk)
+        endif
         ! find dimension of inputted stack
         call find_ldim_nptcls(relpath, ldim, nptcls)
         ! add os_out entry
@@ -1681,9 +1726,13 @@ contains
         if( present(absolutepath) ) abspath = absolutepath
         ! full path and existence check
         if( abspath )then
-            path = trim(simple_abspath(frc,check_exists=.true.))
+            path = simple_abspath(frc)
         else
-            call make_relativepath(CWD_GLOB, frc, path)
+            if( L_RELATIVE_PATH )then
+                call make_relativepath(CWD_GLOB, frc, path)
+            else    
+                path = simple_abspath(frc)
+            endif
         endif
         ! add os_out entry
         call self%add_entry2os_out(which_imgkind, ind)
@@ -1700,7 +1749,11 @@ contains
         character(len=LONGSTRLEN)     :: relpath
         integer                       :: i, ind, n_os_out
         ! full path and existence check
-        call make_relativepath(CWD_GLOB, fsc, relpath)
+        if( L_RELATIVE_PATH )then
+            call make_relativepath(CWD_GLOB, fsc, relpath)
+        else
+            relpath = simple_abspath(fsc)
+        endif
         ! add os_out entry
         ! check if field is empty
         n_os_out = self%os_out%get_noris()
@@ -1756,7 +1809,11 @@ contains
                 THROW_HARD('invalid VOL kind: '//trim(which_imgkind)//'; add_vol2os_out 3')
         end select
         ! path and existence check
-        call make_relativepath(CWD_GLOB, vol, relpath)
+        if( L_RELATIVE_PATH )then
+            call make_relativepath(CWD_GLOB, vol, relpath)
+        else
+            relpath = simple_abspath(vol)
+        endif  
         ! check if field is empty
         n_os_out = self%os_out%get_noris()
         if( n_os_out == 0 )then
@@ -3128,7 +3185,11 @@ contains
                 if( o_src%isthere('stk') )then
                     call o_src%getter('stk',stkfname)
                     if( stkfname(1:1).ne.'/' ) stkfname = trim(src_path)//'/'//trim(stkfname)
-                    call make_relativepath(CWD_GLOB, stkfname, relstkname)
+                    if( L_RELATIVE_PATH )then
+                        call make_relativepath(CWD_GLOB, stkfname, relstkname)
+                    else
+                        relstkname = simple_abspath(stkfname)
+                    endif
                     if( file_exists(relstkname) )then
                         call o_src%set('stk', relstkname)
                     else
@@ -3140,7 +3201,11 @@ contains
                 if( o_src%isthere('boxfile') )then
                     call o_src%getter('boxfile',boxfname)
                     if( boxfname(1:1).ne.'/' ) boxfname = trim(src_path)//'/'//trim(boxfname)
-                    call make_relativepath(CWD_GLOB, boxfname, relboxname)
+                    if( L_RELATIVE_PATH )then
+                        call make_relativepath(CWD_GLOB, boxfname, relboxname)
+                    else
+                        relboxname = simple_abspath(boxfname)
+                    endif
                     if( file_exists(relboxname) )then
                         call o_src%set('boxfile', relboxname)
                     else
@@ -3175,7 +3240,11 @@ contains
                 if( o_src%isthere('movie') )then
                     call o_src%getter('movie',movfname)
                     if( movfname(1:1).ne.'/' ) movfname = trim(src_path)//'/'//trim(movfname)
-                    call make_relativepath(CWD_GLOB, movfname, relmovname)
+                    if( L_RELATIVE_PATH )then
+                        call make_relativepath(CWD_GLOB, movfname, relmovname)
+                    else
+                        relmovname = simple_abspath(movfname)
+                    endif
                     if( file_exists(relmovname) )then
                         call o_src%set('movie', relmovname)
                     else
@@ -3185,7 +3254,11 @@ contains
                 if( o_src%isthere('intg') )then
                     call o_src%getter('intg',micfname)
                     if( micfname(1:1).ne.'/' ) micfname = trim(src_path)//'/'//trim(micfname)
-                    call make_relativepath(CWD_GLOB, micfname, relmicname)
+                    if( L_RELATIVE_PATH )then
+                        call make_relativepath(CWD_GLOB, micfname, relmicname)
+                    else
+                        relmicname = simple_abspath(micfname)
+                    endif
                     if( file_exists(relmicname) )then
                         call o_src%set('movie', relmicname)
                     else

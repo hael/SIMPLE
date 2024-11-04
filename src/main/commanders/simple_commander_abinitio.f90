@@ -21,8 +21,7 @@ use simple_qsys_funs
 use simple_decay_funs
 implicit none
 
-public :: initial_3Dmodel_commander, abinitio_3Dmodel_commander
-public :: abinitio_3Dmodel2_commander
+public :: initial_3Dmodel_commander, abinitio_3Dmodel_commander, abinitio_3Dmodel_parts_commander
 private
 #include "simple_local_flags.inc"
 
@@ -509,12 +508,12 @@ contains
         type(selection_commander)   :: xsel
         type(new_project_commander) :: xnew_project
         ! command lines
-        type(cmdline)               :: cline_split_bal, cline_new_proj
+        type(cmdline)               :: cline_split_bal, cline_new_proj      
         ! other vars
         type(parameters) :: params
         integer          :: iproj
         character(len=STDLEN), allocatable :: projnames(:), projfnames(:)
-
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         ! command-line inputs
         ! REQUIRED: nparts    
         ! OPTIONAL: nptcls_per_part
@@ -528,22 +527,18 @@ contains
         call cline_split_bal%set('oritype', 'cls2D')
         call xsel%execute(cline_split_bal)
         ! make projects
-        allocate(projfnames(params%nparts))
+        allocate(projfnames(params%nparts), projnames(params%nparts))
         do iproj = 1, params%nparts
             projnames(iproj)  = BALPROJPARTFBODY//int2str(iproj)
             projfnames(iproj) = BALPROJPARTFBODY//int2str(iproj)//'.simple'
             call cline_new_proj%set('projname', trim(projnames(iproj)))
+            call cline_new_proj%set('projfile', trim(projfnames(iproj)))
             call xnew_project%execute(cline_new_proj)
+            call chdir('../')
+            call del_file(trim(projfnames(iproj)))
         end do
-
-
-
-
         
-
-        
-
-
+        ! simple_exec prg=make_cavgs nparts=1 nthr=4 refs=cavgs_balanced_part1.mrc
 
     end subroutine exec_abinitio_3Dmodel_parts
 

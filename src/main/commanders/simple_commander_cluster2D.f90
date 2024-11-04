@@ -101,15 +101,14 @@ contains
         class(make_cavgs_commander_distr), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(parameters) :: params
+        type(builder)    :: build
         type(cmdline)    :: cline_cavgassemble
         type(qsys_env)   :: qenv
         type(chash)      :: job_descr
+        integer          :: ncls_here
         call cline%set('wiener', 'full')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('ml_reg')  ) call cline%set('ml_reg',      'no')
-        if( (.not.cline%defined('ncls')) .and. (.not.cline%defined('nspace')) )then
-            THROW_HARD('NCLS or NSPACE need be defined!')
-        endif
         if( (cline%defined('ncls')).and. cline%defined('nspace') )then
             THROW_HARD('NCLS and NSPACE cannot be both defined!')
         endif
@@ -121,7 +120,12 @@ contains
         else
             call cline%set('oritype', 'ptcl2D')
         endif
-        call params%new(cline)
+        call build%init_params_and_build_spproj(cline, params)
+        ncls_here = build%spproj_field%get_n('class')
+        if( .not. cline%defined('ncls') )then
+            call cline%set('ncls', real(ncls_here))
+            params%ncls = ncls_here
+        endif
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! setup the environment for distributed execution
@@ -150,9 +154,6 @@ contains
         type(builder)    :: build
         integer :: ncls_here, icls
         logical :: l_shmem
-        if( (.not.cline%defined('ncls')) .and. (.not.cline%defined('nspace')) )then
-            THROW_HARD('NCLS or NSPACE need be defined!')
-        endif
         if( (cline%defined('ncls')).and. cline%defined('nspace') )then
             THROW_HARD('NCLS and NSPACE cannot be both defined!')
         endif
