@@ -3448,12 +3448,14 @@ contains
         &file is mirrored by an abstract data type in the back-end, which manages the parameters and &
         &meta-data I/O required for execution of SIMPLE',& ! descr_longg
         &'all',&                             ! executable
-        &0, 1, 2, 0, 0, 0, 9, .false.)       ! # entries in each group, requires sp_project
+        &0, 2, 2, 0, 0, 0, 9, .false.)       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call new_project%set_input('parm_ios', 1, user_email)
+        call new_project%set_input('parm_ios', 2, projfile)
+        new_project%parm_ios(2)%required = .false.
         ! alternative inputs
         call new_project%set_input('alt_ios', 1, projname)
         new_project%alt_ios(1)%required = .false.

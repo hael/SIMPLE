@@ -36,6 +36,11 @@ type, extends(commander_base) :: abinitio_3Dmodel_commander
     procedure :: execute => exec_abinitio_3Dmodel
 end type abinitio_3Dmodel_commander
 
+type, extends(commander_base) :: abinitio_3Dmodel_parts_commander
+    contains
+    procedure :: execute => exec_abinitio_3Dmodel_parts
+end type abinitio_3Dmodel_parts_commander
+
 type, extends(commander_base) :: abinitio_3Dmodel2_commander
     contains
     procedure :: execute => exec_abinitio_3Dmodel2
@@ -495,6 +500,52 @@ contains
         call qsys_cleanup
         call simple_end('**** SIMPLE_ABINITIO_3DMODEL NORMAL STOP ****')
     end subroutine exec_abinitio_3Dmodel
+
+    subroutine exec_abinitio_3Dmodel_parts( self, cline )
+        use simple_commander_project, only: new_project_commander, selection_commander
+        class(abinitio_3Dmodel_parts_commander), intent(inout) :: self
+        class(cmdline),                          intent(inout) :: cline
+        ! commanders
+        type(selection_commander)   :: xsel
+        type(new_project_commander) :: xnew_project
+        ! command lines
+        type(cmdline)               :: cline_split_bal, cline_new_proj
+        ! other vars
+        type(parameters) :: params
+        integer          :: iproj
+        character(len=STDLEN), allocatable :: projnames(:), projfnames(:)
+
+        ! command-line inputs
+        ! REQUIRED: nparts    
+        ! OPTIONAL: nptcls_per_part
+
+        ! make master parameters
+        call params%new(cline)
+        call cline%set('mkdir', 'no')
+        ! conduct balanced split
+        cline_split_bal = cline
+        call cline_split_bal%set('balance', 'yes')
+        call cline_split_bal%set('oritype', 'cls2D')
+        call xsel%execute(cline_split_bal)
+        ! make projects
+        allocate(projfnames(params%nparts))
+        do iproj = 1, params%nparts
+            projnames(iproj)  = BALPROJPARTFBODY//int2str(iproj)
+            projfnames(iproj) = BALPROJPARTFBODY//int2str(iproj)//'.simple'
+            call cline_new_proj%set('projname', trim(projnames(iproj)))
+            call xnew_project%execute(cline_new_proj)
+        end do
+
+
+
+
+        
+
+        
+
+
+
+    end subroutine exec_abinitio_3Dmodel_parts
 
     ! private helper routines
 
