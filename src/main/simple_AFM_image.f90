@@ -304,7 +304,7 @@ contains
     subroutine hough_lines( img_in, theta_range, mask )
         class(image),   intent(inout) :: img_in
         real, optional, intent(in)    :: theta_range(2)
-        logical, intent(out)    :: mask(:,:,:)
+        real, intent(out)    :: mask(:,:,:)
         type(image) :: img_denoised
         type(image) :: img_edge 
         real        :: min_theta = -PI/2.,  theta_step = PI/180., threshold, rad_step = 1, curr_rad, theta_range_def(2), smpd, fil_val
@@ -418,9 +418,9 @@ contains
         enddo
         emat = img_denoised%get_rmat()
         ! rmat = img_in%get_rmat()
-        mask = .false.
+        mask = 0.
         where( emat > 0.5 )
-            mask = .true. 
+            mask = 1. 
         end where
     end subroutine hough_lines 
 
@@ -428,18 +428,21 @@ contains
         type(pickseg), intent(in)       :: AFM_pick
         type(image), intent(inout)      :: img_in 
         type(binimage), intent(inout)   :: bin_cc 
-        logical,      intent(in)        :: hough_mask(:,:,:)
+        real,      intent(in)        :: hough_mask(:,:,:)
         integer, allocatable    :: pos(:, :) 
         real,    allocatable    :: im_in_rmat(:,:,:), im_win_rmat(:,:,:), bin_win_rmat(:,:,:), area(:,:)
-        type(image)    :: img_win, bin_win 
+        type(image)    :: img_win, bin_win, lin_win, lines
+        type(binimage) :: bin_erode 
         real           :: smpd,new_cen(3)
-        integer        :: ldim(3), i, windim(3), j, num_parts
+        integer        :: ldim(3), i, windim(3), j, num_parts, counts
         logical        :: outside
         ldim = img_in%get_ldim()
         smpd = img_in%get_smpd()
         windim = [AFM_pick%box_raw,AFM_pick%box_raw,1]
         call bin_cc%new(AFM_pick%ldim, AFM_pick%smpd_shrink)
         call bin_cc%read('mic_shrink_lp_tv_bin_erode_cc.mrc')
+        call lines%new(ldim,smpd)
+        call lines%set_rmat(hough_mask,.false.)
         if( AFM_pick%ldim(1) /= AFM_pick%ldim(2) )then 
             call bin_cc%pad_inplace([maxval(AFM_pick%ldim), maxval(AFM_pick%ldim), 1])
         endif
@@ -452,23 +455,26 @@ contains
         allocate(pos(AFM_pick%nboxes, 2))
         call img_win%new(windim,AFM_pick%smpd_shrink)
         call bin_win%new(windim,AFM_pick%smpd_shrink)
+        call lin_win%new(windim,AFM_pick%smpd_shrink)
+        call bin_erode%new(windim,AFM_pick%smpd_shrink)
         allocate(im_win_rmat(windim(1),windim(2),windim(3)))
         allocate(bin_win_rmat(windim(1),windim(2),windim(3)))
         allocate(area(AFM_pick%get_nboxes(),AFM_pick%get_nboxes()))
         area(:,:) = 0.
+        counts = 0
         do i = 1, AFM_pick%nboxes
             call AFM_pick%get_positions(pos, i)
             outside = .false. 
             if(minval(pos(i,:)) < 0.) outside = .true. 
             call bin_cc%window_slim(pos(i,:), AFM_pick%box_raw, bin_win, outside)
-            ! only keep largest cc in box, and recenter. 
+            ! only keep largest cc in box, and recenter.
             do j = 1, AFM_pick%nboxes
-                if(count(nint(bin_win%get_rmat()) == j) > 0) then 
+                if(count(nint(bin_win%get_rmat()) == j) > 0 .and. area(i,j) /= 1.) then 
                     area(i,j) = count(nint(bin_win%get_rmat()) == j)
                 end if
             end do 
-            if(i > 1) area(:i-1,maxloc(area(i,:),1)) = 0.
-            area(i+1:,maxloc(area(i,:),1)) = 0.
+            if(i > 1) area(:i-1,maxloc(area(i,:),1)) = 1.
+            area(i+1:,maxloc(area(i,:),1)) = 1.
             bin_win_rmat = 0.
             where(nint(bin_win%get_rmat()) == maxloc(area(i,:),1))
                 bin_win_rmat = 1.
@@ -483,14 +489,25 @@ contains
             end where 
             call bin_win%set_rmat(bin_win_rmat,.false.)
             call img_in%window_slim(pos(i,:), AFM_pick%box_raw, img_win, outside)
+            im_win_rmat = img_win%get_rmat()
+            where(bin_win%get_rmat() < 1.)
+                im_win_rmat = 0.
+            end where
+            call img_win%set_rmat(im_win_rmat, .false.)
+            call lines%window_slim(pos(i,:), AFM_pick%box_raw, lin_win, outside)
+            if(lin_win%mean() > 0.01 .and. lin_win%real_corr(img_win) > 0.05) then   
+                ! lin_win = lin_win + img_win
+                ! call lin_win%vis()
+                ! print *, lin_win%real_corr(img_win)
+                cycle
+            end if 
+            ! if(outside) cycle 
         end do 
-        print *, area(1,:)
-        ! compute areas of all particles in the ith box. 
-        ! now take maximum 
-        ! this is largest particle within box
-        ! zero out all other particles within the box. 
-        ! to avoid repeating, the jth row/column(?) should be zeroed out 
-        ! similarity matrix 
+        ! counts = AFM_pick%nboxes - counts 
+        ! print *, counts 
     end subroutine 
-    
+    ! generate similarity matrix with cross-correlation metric 
+    ! which is shift,rotation,and reflection invariant (i.e., 
+    ! maximize cross correlation wrt these properties).
+
 end module simple_afm_image 
