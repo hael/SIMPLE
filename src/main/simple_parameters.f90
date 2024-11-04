@@ -290,6 +290,7 @@ type :: parameters
     integer :: nmoldiams=1         !< # moldiams
     integer :: noris=0
     integer :: nparts=1            !< # partitions in distributed execution
+    integer :: nparts_per_part=1   !< # partitions in distributed execution of balanced parts
     integer :: nparts_chunk=1      !< # partitions in chunks distributed execution
     integer :: nparts_pool =1      !< # partitions for pool distributed execution
     integer :: npeaks=NPEAKS_DEFAULT !< # of greedy subspace peaks to construct multi-neighborhood search spaces from
@@ -770,6 +771,7 @@ contains
         call check_iarg('nstates',        self%nstates)
         call check_iarg('class',          self%class)
         call check_iarg('nparts',         self%nparts)
+        call check_iarg('npart_per_part', self%nparts_per_part)
         call check_iarg('nparts_chunk',   self%nparts_chunk)
         call check_iarg('nparts_pool',    self%nparts_pool)
         call check_iarg('npeaks',         self%npeaks)
