@@ -7,7 +7,7 @@ private
 #include "simple_local_flags.inc"
 
 integer(kind(ENUM_ORISEG)), parameter :: MAXN_OS_SEG     = 13
-logical,                    parameter :: L_RELATIVE_PATH = .false.
+logical,                    parameter :: L_RELATIVE_PATH = .true.
 
 type sp_project
     ! ORIS REPRESENTATIONS OF BINARY FILE SEGMENTS
