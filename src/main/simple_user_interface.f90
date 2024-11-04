@@ -125,7 +125,7 @@ type(simple_program), target :: info_image
 type(simple_program), target :: info_stktab
 type(simple_program), target :: initial_3Dmodel
 type(simple_program), target :: abinitio_3Dmodel
-type(simple_program), target :: abinitio_3Dmodel2
+type(simple_program), target :: abinitio_3Dmodel_parts
 type(simple_program), target :: make_cavgs
 type(simple_program), target :: make_oris
 type(simple_program), target :: make_pickrefs
@@ -377,7 +377,7 @@ contains
         call set_prg_ptr_array
         call new_abinitio2D
         call new_abinitio_3Dmodel
-        call new_abinitio_3Dmodel2
+        call new_abinitio_3Dmodel_parts
         call new_analysis2D_nano
         call new_assign_optics
         call new_assign_optics_groups
@@ -508,7 +508,7 @@ contains
         n_prg_ptrs = 0
         call push2prg_ptr_array(abinitio2D)
         call push2prg_ptr_array(abinitio_3Dmodel)
-        call push2prg_ptr_array(abinitio_3Dmodel2)
+        call push2prg_ptr_array(abinitio_3Dmodel_parts)
         call push2prg_ptr_array(analysis2D_nano)
         call push2prg_ptr_array(assign_optics_groups)
         call push2prg_ptr_array(automask)
@@ -647,8 +647,8 @@ contains
                 ptr2prg => abinitio2D
             case('abinitio_3Dmodel')
                 ptr2prg => abinitio_3Dmodel
-            case('abinitio_3Dmodel2')
-                ptr2prg => abinitio_3Dmodel2
+            case('abinitio_3Dmodel_parts')
+                ptr2prg => abinitio_3Dmodel_parts
             case('analysis2D_nano')
                 ptr2prg => analysis2D_nano
             case('assign_optics')
@@ -903,7 +903,7 @@ contains
     subroutine list_simple_prgs_in_ui
         write(logfhandle,'(A)') abinitio2D%name
         write(logfhandle,'(A)') abinitio_3Dmodel%name
-        write(logfhandle,'(A)') abinitio_3Dmodel2%name
+        write(logfhandle,'(A)') abinitio_3Dmodel_parts%name
         write(logfhandle,'(A)') assign_optics_groups%name
         write(logfhandle,'(A)') automask%name
         write(logfhandle,'(A)') automask2D%name
@@ -2840,49 +2840,46 @@ contains
         abinitio_3Dmodel%comp_ctrls(3)%required = .false.
     end subroutine new_abinitio_3Dmodel
 
-    subroutine new_abinitio_3Dmodel2
+    subroutine new_abinitio_3Dmodel_parts
         ! PROGRAM SPECIFICATION
-        call abinitio_3Dmodel2%new(&
-        &'abinitio_3Dmodel',&                                                         ! name
-        &'3D ab initio model generation from particles',&                             ! descr_short
+        call abinitio_3Dmodel_parts%new(&
+        &'abinitio_3Dmodel',&                                                   ! name
+        &'3D ab initio model generation from particles',&                       ! descr_short
         &'is a distributed workflow for generating an initial 3D model&
-        & from particles',&                                                           ! descr_long
-        &'simple_exec',&                                                              ! executable
-        &0, 1, 0, 3, 7, 1, 1, .true.,&                                                ! # entries in each group, requires sp_project    
-        &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute" )       ! GUI                                                      
-        ! INPUT PARAMETER SPECIFICATIONS
+        & from particles',&                                                     ! descr_long
+        &'simple_exec',&                                                        ! executable
+        &0, 2, 0, 4, 3, 1, 3, .true.,&                                          ! # entries in each group, requires sp_project    
+        &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute" ) ! GUI                                                      
+         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call abinitio_3Dmodel2%set_input('parm_ios', 1, oritype)
-        abinitio_3Dmodel2%parm_ios(1)%descr_long = 'Oritype segment in project(cls3D|ptcl3D){ptcl3D}'
-        abinitio_3Dmodel2%parm_ios(1)%descr_placeholder = '(cls3D|ptcl3D){ptcl3D}'
+        call abinitio_3Dmodel_parts%set_input('parm_ios', 1, 'nparts', 'num', 'Number of parts for balanced splitting of the particles', '# parts after balancing', '# parts after balancing', .true., 1.0)
+        call abinitio_3Dmodel_parts%set_input('parm_ios', 2, 'nptcls_per_part', 'num', 'Number of ptcls per part to select when balancing', '# ptcls per part after balancing', '{100000}', .false., 0.0)
         ! alternative inputs
         ! <empty>
         ! search controls
-        call abinitio_3Dmodel2%set_input('srch_ctrls', 1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
+        call abinitio_3Dmodel_parts%set_input('srch_ctrls', 1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
         &center of gravity and map shifts back to the particles(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
-        call abinitio_3Dmodel2%set_input('srch_ctrls', 2, pgrp, gui_submenu="model", gui_advanced=.false.)
-        call abinitio_3Dmodel2%set_input('srch_ctrls', 3, pgrp_start, gui_submenu="model")
+        call abinitio_3Dmodel_parts%set_input('srch_ctrls', 2, pgrp, gui_submenu="model", gui_advanced=.false.)
+        call abinitio_3Dmodel_parts%set_input('srch_ctrls', 3, pgrp_start, gui_submenu="model")
+        call abinitio_3Dmodel_parts%set_input('srch_ctrls', 4, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
         ! filter controls
-        call abinitio_3Dmodel2%set_input('filt_ctrls', 1, hp, gui_submenu="filter")
-        call abinitio_3Dmodel2%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        call abinitio_3Dmodel_parts%set_input('filt_ctrls', 1, hp, gui_submenu="filter")
+        call abinitio_3Dmodel_parts%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30., gui_submenu="filter")
-        call abinitio_3Dmodel2%set_input('filt_ctrls', 3, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit for the first stage of ab-initio model generation',&
-            &'low-pass limit in Angstroms', .false., 30., gui_submenu="filter")
-        call abinitio_3Dmodel2%set_input('filt_ctrls', 4, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
-            &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 6., gui_submenu="filter")
-        call abinitio_3Dmodel2%set_input('filt_ctrls', 5, lp, gui_submenu="filter")
-        call abinitio_3Dmodel2%set_input('filt_ctrls', 6, ml_reg, gui_submenu="filter")
-        abinitio_3Dmodel2%filt_ctrls(6)%descr_placeholder = '(yes|no){no}'
-        abinitio_3Dmodel2%filt_ctrls(6)%cval_default      = 'no'
-        call abinitio_3Dmodel2%set_input('filt_ctrls', 7, icm)
+        call abinitio_3Dmodel_parts%set_input('filt_ctrls', 3, icm)
         ! mask controls
-        call abinitio_3Dmodel2%set_input('mask_ctrls', 1, mskdiam, gui_submenu="mask", gui_advanced=.false.)
+        call abinitio_3Dmodel_parts%set_input('mask_ctrls', 1, mskdiam, gui_submenu="mask", gui_advanced=.false.)
         ! computer controls
-        call abinitio_3Dmodel2%set_input('comp_ctrls', 1, nthr, gui_submenu="compute", gui_advanced=.false.)
-    end subroutine new_abinitio_3Dmodel2
+        call abinitio_3Dmodel_parts%set_input('comp_ctrls', 1, 'nparts_per_part', 'num', 'Number of computing nodes per part', '# partitions for distributed memory execution of balanced parts', 'divide each balanced part job into # parts', .false., 1.0)
+        abinitio_3Dmodel_parts%comp_ctrls(1)%required = .false.
+        call abinitio_3Dmodel_parts%set_input('comp_ctrls', 2, nthr,       gui_submenu="compute", gui_advanced=.false.)
+        call abinitio_3Dmodel_parts%set_input('comp_ctrls', 3, 'nthr_ini3D', 'num', 'Number of threads for ini3D phase, give 0 if unsure', 'Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of &
+        &logical threads in a socket.', '# shared-memory CPU threads', .true., 0., gui_submenu="compute", gui_advanced=.false.)
+        abinitio_3Dmodel_parts%comp_ctrls(3)%required = .false.
+    end subroutine new_abinitio_3Dmodel_parts
 
     subroutine new_import_boxes
         ! PROGRAM SPECIFICATION
