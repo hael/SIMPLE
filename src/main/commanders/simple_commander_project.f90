@@ -133,6 +133,9 @@ contains
         type(sp_project) :: spproj
         call cline%set('mkdir', 'no')
         call params%new(cline)
+        if( cline%defined('projfile') )then
+            call spproj%read(trim(params%projfile))
+        endif
         if( cline%defined('projname') .and. cline%defined('dir') )then
             THROW_HARD('both projname and dir defined on command line, use either or; exec_new_project')
         else if( cline%defined('projname') )then
@@ -928,9 +931,7 @@ contains
                     ! copy project
                     projfname = BALPROJPARTFBODY//int2str(ipart)//'.simple'
                     call simple_copy_file(trim(params%projfile), projfname)
-
                     call spproj_part%read(projfname)
-
                     ! create state mapping
                     where(states == ipart)
                         states_map = 1
