@@ -445,9 +445,10 @@ contains
         type(parameters)       :: params
         integer                :: i
         character(:), allocatable :: fn_vol_docked
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        !if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         fn_vol_docked = trim(get_fbody(params%vols(2),'mrc'))//'_docked.mrc'
+        !fn_vol_docked = trim(get_fbody(basename(params%vols(2)),'mrc'))//'_docked.mrc'
         select case( trim(params%dockmode) )
             case('shift')
                 call dvols%new(params%vols(1), params%vols(2), params%smpd, params%lpstop, params%lpstart, params%mskdiam, mag=.true.)

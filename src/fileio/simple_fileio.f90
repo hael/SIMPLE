@@ -448,7 +448,7 @@ contains
         call str2int(nrstr, istat, fname2iter)
     end function fname2iter
 
-    pure function basename( fname ) result( new_fname)
+    pure function basename( fname ) result( new_fname )
         character(len=*), intent(in)  :: fname     !< abs filename
         character(len=:), allocatable :: new_fname
         integer :: length, pos
