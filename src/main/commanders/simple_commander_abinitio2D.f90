@@ -213,19 +213,15 @@ contains
             select case(iphase)
             case(1)
                 ! phase constants
-                extr_iter     = 0
+                extr_iter = 0
                 ! phase variables
-                imaxits       = nint(real(istage)*real(maxits(1))/real(PHASES(1)))
-                minits        = imaxits
+                imaxits   = nint(real(istage)*real(maxits(1))/real(PHASES(1)))
+                minits    = imaxits
                 select case(istage)
                 case(1)
-                    trs          = 0.
-                    sh_first     = 'no'
-                    if( params%iter_center .eq. 'yes' )then
-                        center   = trim(params%center)
-                    else
-                        center   = 'no'
-                    endif
+                    trs      = 0.
+                    sh_first = 'no'
+                    center   = 'no'
                     if( cline%defined('refs') )then
                         refs     = trim(params%refs)
                     else
@@ -265,8 +261,8 @@ contains
                     sh_first     = trim(params%sh_first)
                     center       = trim(params%center)
                     refs         = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
-                    cc_iters      = 0
-                    objfun        = 'euclid'
+                    cc_iters     = 0
+                    objfun       = 'euclid'
                     if( params%l_icm )then
                         icm      = 'yes'
                         lambda   = params%lambda/4.
@@ -274,31 +270,31 @@ contains
                         icm      = 'no'
                     endif
                 case(4)
-                    trs           = lpinfo(istage)%trslim
-                    sh_first      = trim(params%sh_first)
-                    center        = trim(params%center)
-                    refs          = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
-                    cc_iters      = 0
-                    objfun        = 'euclid'
-                    icm           = 'no'
+                    trs          = lpinfo(istage)%trslim
+                    sh_first     = trim(params%sh_first)
+                    center       = trim(params%center)
+                    refs         = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
+                    cc_iters     = 0
+                    objfun       = 'euclid'
+                    icm          = 'no'
                 end select
             case(2)
                 ! phase constants
-                imaxits           = iter+ITS_INCR-1
-                sh_first          = trim(params%sh_first)
-                trs               = lpinfo(istage)%trslim
-                center            = trim(params%center)
-                cc_iters          = 0
-                objfun            = 'euclid'
-                extr_iter         = params%extr_lim+1
-                refs              = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
-                icm               = 'no'
+                imaxits          = iter+ITS_INCR-1
+                sh_first         = trim(params%sh_first)
+                trs              = lpinfo(istage)%trslim
+                center           = trim(params%center)
+                cc_iters         = 0
+                objfun           = 'euclid'
+                extr_iter        = params%extr_lim+1
+                refs             = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
+                icm              = 'no'
                 ! phase variables
                 select case(istage)
                 case(5)
-                    minits        = iter + 1
+                    minits       = iter + 1
                 case(6)
-                    minits        = iter
+                    minits       = iter
                 end select
             end select
             ! command line update
