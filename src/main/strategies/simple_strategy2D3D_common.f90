@@ -425,11 +425,11 @@ contains
                         xyz(1:2) = xy_cavg * crop_factor
                         xyz(3)   = 0.
                     else
-                        xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
+                        xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop, iter_center=(params_glob%iter_center .eq. 'yes'))
                         if( arg(xyz(1:2)/crop_factor - xy_cavg) > MAXCENTHRESH2D ) xyz = 0.
                     endif
                 else
-                    xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
+                    xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop, iter_center=(params_glob%iter_center .eq. 'yes'))
                 endif
                 sharg = arg(xyz)
                 if( sharg > CENTHRESH )then
@@ -529,7 +529,7 @@ contains
         ! taking care of volume dimensions
         call build_glob%vol%read_and_crop(volfname, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
         ! offset
-        xyz = build_glob%vol%calc_shiftcen(params_glob%cenlp,params_glob%msk_crop)
+        xyz = build_glob%vol%calc_shiftcen(params_glob%cenlp,params_glob%msk_crop, iter_center=(params_glob%iter_center .eq. 'yes'))
         if( params_glob%pgrp .ne. 'c1' ) xyz(1:2) = 0.     ! shifts only along z-axis for C2 and above
         if( arg(xyz) <= CENTHRESH )then
             do_center = .false.
