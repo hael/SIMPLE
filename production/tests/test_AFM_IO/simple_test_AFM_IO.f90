@@ -8,10 +8,11 @@ use simple_pickseg
 
 type(AFM_image), allocatable :: stack_stack(:)
 type(AFM_image), allocatable :: stack_avg(:)
-logical, allocatable         :: mask_array(:,:,:,:)
+real, allocatable            :: mask_array(:,:,:,:)
 type(pickseg), allocatable   :: pick_array(:)
 type(image)                  :: img_edg  
 type(image)                  :: test_img, test_denoised     
+type(image), allocatable     :: pick_mat(:,:)
 type(binimage), allocatable  :: bin_cc_array(:)
 type(parameters), target     :: params
 real                         :: start, finish, count
@@ -32,6 +33,8 @@ allocate(stack_avg(size(file_list)))
 allocate(mask_array(1024, 1024, 1, size(file_list)))
 allocate(pick_array(size(file_list)))
 allocate(bin_cc_array(size(file_list)))
+! can adjust max number of particles sampled for clustering.
+allocate(pick_mat(size(file_list), 500))
 do file_iter = 1, size(file_list)
     call read_ibw(stack_stack(file_iter), file_list(file_iter))
     call align_avg(stack_stack(file_iter), stack_avg(file_iter))
@@ -44,10 +47,9 @@ do file_iter = 1, size(file_list)
     call pick_valid(stack_avg(file_iter), stack_avg(file_iter)%stack_string, pick_array(file_iter))
     call zero_padding(stack_avg(file_iter))
     call hough_lines(stack_avg(file_iter)%img_array(9), [PI/2 - PI/180, PI/2 + PI/180], mask_array(:, :, :, file_iter))
-    call mask42D(stack_avg(file_iter)%img_array(9), pick_array(file_iter), bin_cc_array(file_iter), mask_array(:, :, :, file_iter))
+    call mask42D(stack_avg(file_iter)%img_array(9), pick_array(file_iter), bin_cc_array(file_iter), mask_array(:, :, :, file_iter), pick_mat(file_iter, :))
 end do
-
+! call pick_mat(3, 20)%vis()
 call cpu_time(finish)
 print *, finish - start 
-
 end program AFM_File_IO

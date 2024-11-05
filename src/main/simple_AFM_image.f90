@@ -424,17 +424,18 @@ contains
         end where
     end subroutine hough_lines 
 
-    subroutine mask42D( img_in, AFM_pick, bin_cc, hough_mask )
+    subroutine mask42D( img_in, AFM_pick, bin_cc, hough_mask, pick_vec )
         type(pickseg), intent(in)       :: AFM_pick
         type(image), intent(inout)      :: img_in 
         type(binimage), intent(inout)   :: bin_cc 
-        real,      intent(in)        :: hough_mask(:,:,:)
+        real,      intent(in)           :: hough_mask(:,:,:)
+        type(image), intent(inout)         :: pick_vec(:)
         integer, allocatable    :: pos(:, :) 
         real,    allocatable    :: im_in_rmat(:,:,:), im_win_rmat(:,:,:), bin_win_rmat(:,:,:), area(:,:)
         type(image)    :: img_win, bin_win, lin_win, lines
         type(binimage) :: bin_erode 
         real           :: smpd,new_cen(3)
-        integer        :: ldim(3), i, windim(3), j, num_parts, counts
+        integer        :: ldim(3), i, windim(3), j, num_parts, counts, pad = 200
         logical        :: outside
         ldim = img_in%get_ldim()
         smpd = img_in%get_smpd()
@@ -446,6 +447,8 @@ contains
         if( AFM_pick%ldim(1) /= AFM_pick%ldim(2) )then 
             call bin_cc%pad_inplace([maxval(AFM_pick%ldim), maxval(AFM_pick%ldim), 1])
         endif
+        call bin_cc%pad_inplace([ldim(1) + pad, ldim(2) + pad, 1])
+        call img_in%pad_inplace([ldim(1) + pad, ldim(2) + pad, 1])
         allocate(im_in_rmat(ldim(1),ldim(2),ldim(3)))
         im_in_rmat = img_in%get_rmat()
         where(nint(bin_cc%get_rmat()) < 1. )
@@ -460,16 +463,31 @@ contains
         allocate(im_win_rmat(windim(1),windim(2),windim(3)))
         allocate(bin_win_rmat(windim(1),windim(2),windim(3)))
         allocate(area(AFM_pick%get_nboxes(),AFM_pick%get_nboxes()))
+        ! allocate(pick_vec(AFM_pick%get_nboxes()))
+        ! make copy, pad the copy in place and window slim on that 
         area(:,:) = 0.
         counts = 0
         do i = 1, AFM_pick%nboxes
             call AFM_pick%get_positions(pos, i)
             outside = .false. 
             if(minval(pos(i,:)) < 0.) outside = .true. 
+            ! accounting for positions outside mic. 
+            if(pos(i,1) < 0 .and. pos(i,2) < 0) then
+                pos(i,1) = pos(i,1) + pad 
+                pos(i,2) = pos(i,2) + pad 
+            else if(pos(i,1) < 0) then 
+                pos(i,1) = pos(i,1) + pad 
+            else if(pos(i,2) < 0) then  
+                pos(i,2) = pos(i,2) + pad 
+            end if 
             call bin_cc%window_slim(pos(i,:), AFM_pick%box_raw, bin_win, outside)
+            if(outside) then 
+                print *, i, bin_win%mean() 
+                call bin_win%vis()
+            end if 
             ! only keep largest cc in box, and recenter.
             do j = 1, AFM_pick%nboxes
-                if(count(nint(bin_win%get_rmat()) == j) > 0 .and. area(i,j) /= 1.) then 
+                if(count(nint(bin_win%get_rmat()) == j) > 20 .and. area(i,j) /= 1.) then 
                     area(i,j) = count(nint(bin_win%get_rmat()) == j)
                 end if
             end do 
@@ -495,19 +513,16 @@ contains
             end where
             call img_win%set_rmat(im_win_rmat, .false.)
             call lines%window_slim(pos(i,:), AFM_pick%box_raw, lin_win, outside)
+            ! throw some hough lines away. can adjust parameters.
             if(lin_win%mean() > 0.01 .and. lin_win%real_corr(img_win) > 0.05) then   
-                ! lin_win = lin_win + img_win
-                ! call lin_win%vis()
-                ! print *, lin_win%real_corr(img_win)
                 cycle
             end if 
-            ! if(outside) cycle 
+            pick_vec(i) = img_win
+            if(outside) call img_win%vis()
         end do 
-        ! counts = AFM_pick%nboxes - counts 
-        ! print *, counts 
     end subroutine 
-    ! generate similarity matrix with cross-correlation metric 
-    ! which is shift,rotation,and reflection invariant (i.e., 
-    ! maximize cross correlation wrt these properties).
-
+    ! need to fix picks which are contain some part outside the image
+    subroutine corr_clus( pick_mat )
+        type(image), intent(in)     :: pick_mat
+    end subroutine 
 end module simple_afm_image 
