@@ -216,7 +216,7 @@ contains
         real,                 intent(out)   :: frcs_avg(self%filtsz)
         integer,              intent(in)    :: states(self%ncls)
         integer,    optional, intent(in)    :: state
-        type(oris), optional, intent(inout) :: cur_oris
+        type(oris), optional, intent(in)    :: cur_oris
         integer,    allocatable :: cls_inds(:), pinds(:), cls_pops(:)
         integer :: sstate, k, ncls, nptcls, icls
         sstate = 1
@@ -230,7 +230,7 @@ contains
                 call cur_oris%get_pinds(cls_inds(icls), 'class', pinds)
                 if( allocated(pinds) )then
                     cls_pops(icls) = size(pinds)
-                    nptcls = nptcls + cls_pops(icls)
+                    nptcls         = nptcls + cls_pops(icls)
                     deallocate(pinds)
                 endif
             end do
@@ -241,9 +241,9 @@ contains
                         frcs_avg(k) = frcs_avg(k) + self%frcs(sstate,icls,k) * real(cls_pops(icls))
                     endif
                 enddo
-                ! normalization
-                frcs_avg(k) = frcs_avg(k) / sum(real(cls_pops))
             enddo
+            ! normalization
+            frcs_avg = frcs_avg / real(nptcls)
         else
             do k = 1,self%filtsz
                 frcs_avg(k) = sum(self%frcs(sstate,:,k), mask=states > 0 .and. self%frcs(sstate,:,k) > 0.)

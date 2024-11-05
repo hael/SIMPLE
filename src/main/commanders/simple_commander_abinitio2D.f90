@@ -221,7 +221,11 @@ contains
                 case(1)
                     trs          = 0.
                     sh_first     = 'no'
-                    center       = 'no'
+                    if( params%iter_center .eq. 'yes' )then
+                        center   = trim(params%center)
+                    else
+                        center   = 'no'
+                    endif
                     if( cline%defined('refs') )then
                         refs     = trim(params%refs)
                     else

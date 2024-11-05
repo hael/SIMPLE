@@ -43,6 +43,7 @@ type :: parameters
     character(len=3)          :: extractfrommov='no'  !< whether to extract particles from the movie(yes|no){no}
     character(len=3)          :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
     character(len=3)          :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
+    character(len=3)          :: frc_weight='no'      !< considering particle numbers of classes in computing frc (yes|no){no}
     character(len=3)          :: guinier='no'         !< calculate Guinier plot(yes|no){no}
     character(len=3)          :: graphene_filt='no'   !< filter out graphene bands in correcation search
     character(len=3)          :: gridding='no'        !< to test gridding correction
@@ -565,6 +566,7 @@ contains
         call check_carg('flipgain',       self%flipgain)
         call check_carg('groupframes',    self%groupframes)
         call check_carg('ft2img',         self%ft2img)
+        call check_carg('frc_weight',     self%frc_weight)
         call check_carg('guinier',        self%guinier)
         call check_carg('graphene_filt',  self%graphene_filt)
         call check_carg('gridding',       self%gridding)
