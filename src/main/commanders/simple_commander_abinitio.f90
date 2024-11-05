@@ -641,7 +641,11 @@ contains
         filtsz = clsfrcs%get_filtsz()
         allocate(frcs_avg(filtsz), source=0.)
         states = nint(spproj%os_cls2D%get_all('state'))
-        call clsfrcs%avg_frc_getter(frcs_avg, states)
+        if( params_glob%frc_weight .eq. 'yes' )then
+            call clsfrcs%avg_frc_getter(frcs_avg, states, cur_oris=spproj%os_ptcl2D)
+        else
+            call clsfrcs%avg_frc_getter(frcs_avg, states)
+        endif
         if( allocated(lpinfo) ) deallocate(lpinfo)
         allocate(lpinfo(NSTAGES))
         lpfinal = max(LPSTOP_LB,calc_lplim_final_stage(3))

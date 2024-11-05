@@ -929,11 +929,11 @@ contains
 
     !>  \brief  is for getting an allocatable array with ptcl indices of the label 'label'
     subroutine get_pinds( self, ind, label, indices, l_shuffle )
-        class(oris),          intent(inout) :: self
-        character(len=*),     intent(in)    :: label
-        integer,              intent(in)    :: ind
-        integer, allocatable, intent(out)   :: indices(:)
-        logical, optional,    intent(in)    :: l_shuffle
+        class(oris),          intent(in)  :: self
+        character(len=*),     intent(in)  :: label
+        integer,              intent(in)  :: ind
+        integer, allocatable, intent(out) :: indices(:)
+        logical, optional,    intent(in)  :: l_shuffle
         type(ran_tabu) :: rt
         integer :: pop, cnt, myval, i
         logical :: ll_shuffle
