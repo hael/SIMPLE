@@ -50,6 +50,7 @@ type :: parameters
     character(len=3)          :: icm='no'             !< whether to apply ICM filter to reference
     character(len=3)          :: incrreslim='yes'     !< Whether to add ten shells to the FSC resolution limit
     character(len=3)          :: iterstats='no'       !< Whether to keep track alignment stats throughout iterations
+    character(len=3)          :: iter_center='no'     !< iterative centering
     character(len=3)          :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
     character(len=3)          :: loc_sdev='no'        !< Whether to calculate local standard deviations(yes|no){no}
     character(len=3)          :: lp_auto='no'         !< automatically estimate lp(yes|no|fsc){no}
@@ -572,6 +573,7 @@ contains
         call check_carg('incrreslim',     self%incrreslim)
         call check_carg('interpfun',      self%interpfun)
         call check_carg('iterstats',      self%iterstats)
+        call check_carg('iter_center',    self%iter_center)
         call check_carg('keepvol',        self%keepvol)
         call check_carg('loc_sdev',       self%loc_sdev)
         call check_carg('lp_auto',        self%lp_auto)
