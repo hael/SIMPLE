@@ -251,7 +251,7 @@ contains
             call read_img%read(params_glob%stk,i)
             call read_img%norm_noise(l_msk, sdev_noise)
             ! center image
-            sh1 = read_img%calc_shiftcen(params_glob%cenlp, params_glob%msk)
+            sh1 = read_img%calc_shiftcen(params_glob%cenlp, params_glob%msk, iter_center=(params_glob%iter_center .eq. 'yes'))
             call read_img%shift(-sh1)
             call dsym_os%set_shift(i, -sh1)
             ! rotational image

@@ -105,12 +105,12 @@ contains
                     else if( arg(xyz) > MAXCENTHRESH2D )then
                         shvec(i,:) = xyz
                     else
-                        shvec(i,:) = build%img%calc_shiftcen_serial(params%cenlp, params%msk)
+                        shvec(i,:) = build%img%calc_shiftcen_serial(params%cenlp, params%msk, iter_center=(params%iter_center .eq. 'yes'))
                         if( arg(shvec(i,1:2) - xyz(1:2)) > MAXCENTHRESH2D ) shvec(i,:) = 0.
                     endif
                     call build%spproj_field%add_shift2class(i, -shvec(i,:))
                 else
-                    shvec(i,:) = build%img%calc_shiftcen_serial(params%cenlp, params%msk)
+                    shvec(i,:) = build%img%calc_shiftcen_serial(params%cenlp, params%msk, iter_center=(params%iter_center .eq. 'yes'))
                     if( cline%defined('oritab') .or. cline%defined('projfile') )then
                         call build%spproj_field%add_shift2class(i, -shvec(i,:))
                     endif
@@ -131,7 +131,7 @@ contains
                     call build%spproj_field%calc_avg_offset3D(shvec(istate,:), state=istate)
                     call build%spproj_field%map3dshift22d(-shvec(istate,:), state=istate)
                 else
-                    shvec(istate,:) = build%vol%calc_shiftcen(params%cenlp, params%msk)
+                    shvec(istate,:) = build%vol%calc_shiftcen(params%cenlp, params%msk, iter_center=(params%iter_center .eq. 'yes'))
                     if( cline%defined('oritab') .or. cline%defined('projfile') )then
                         call build%spproj_field%map3dshift22d(-shvec(istate,:), state=istate)
                     endif
@@ -492,7 +492,7 @@ contains
         ! center volume
         shvec = 0.
         if( params%center.eq.'yes' )then
-            shvec = build%vol%calc_shiftcen(params%cenlp,params%msk_crop)
+            shvec = build%vol%calc_shiftcen(params%cenlp,params%msk_crop, iter_center=(params%iter_center .eq. 'yes'))
             call build%vol%shift(shvec)
             fbody = get_fbody(params%vols(1),fname2ext(params%vols(1)))
             call build%vol%write(trim(fbody)//'_centered.mrc')
@@ -579,7 +579,7 @@ contains
         endif
         shvec = 0.
         if( params%center.eq.'yes' )then
-            shvec = build%vol%calc_shiftcen(params%cenlp,params%msk)
+            shvec = build%vol%calc_shiftcen(params%cenlp,params%msk, iter_center=(params%iter_center .eq. 'yes'))
             call build%vol%shift(shvec)
             ! store un-scaled shift parameters
             params%xsh = shvec(1) / scale
@@ -663,7 +663,7 @@ contains
         ! centering
         shvec = 0.
         if( params%center.eq.'yes' )then
-            shvec = build%vol%calc_shiftcen(params%cenlp,params%msk)
+            shvec = build%vol%calc_shiftcen(params%cenlp,params%msk, iter_center=(params%iter_center .eq. 'yes'))
             call build%vol%shift(shvec)
         endif
         ! mask volume

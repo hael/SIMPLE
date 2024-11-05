@@ -2835,58 +2835,119 @@ contains
     end function box_cen_arg
 
     !>  \brief is for estimating the center of an image based on center of mass
-    function calc_shiftcen( self, lp, msk, hp ) result( xyz )
-        class(image),   intent(inout) :: self
-        real,           intent(in)    :: lp
-        real, optional, intent(in)    :: msk, hp
+    function calc_shiftcen( self, lp, msk, hp, iter_center ) result( xyz )
+        class(image),      intent(inout) :: self
+        real,              intent(in)    :: lp
+        real,    optional, intent(in)    :: msk, hp
+        logical, optional, intent(in)    :: iter_center
+        integer,           parameter     :: MAX_ITS = 5
         type(image) :: tmp
-        real        :: xyz(3), rmsk
-        call tmp%copy(self)
-        if( present(hp) )then
-            call tmp%bp(hp, lp)
-        else
-            call tmp%bp(0., lp)
-        endif
-        call tmp%ifft()
+        real        :: xyz(3), rmsk, cur_xyz(3)
+        integer     :: iter
         if( present(msk) )then
             rmsk = msk
         else
             rmsk = real( self%ldim(1) )/2. - 5. ! 5 pixels outer width
         endif
-        call tmp%mask(rmsk, 'hard')
-        ! such that norm_minmax will neglect everything < 0. and preserve zero
-        where(tmp%rmat < TINY) tmp%rmat=0.
-        call tmp%norm_minmax
-        call tmp%masscen(xyz)
+        if( present(iter_center) )then
+            if( iter_center )then
+                cur_xyz = -1.
+                xyz     =  0.
+                iter    = 1
+                do while(maxval(abs(cur_xyz)) > TINY .and. iter < MAX_ITS)
+                    call tmp%copy(self)
+                    call tmp%fft()
+                    call tmp%shift(xyz)
+                    if( present(hp) )then
+                        call tmp%bp(hp, lp)
+                    else
+                        call tmp%bp(0., lp)
+                    endif
+                    call tmp%ifft()
+                    call tmp%mask(rmsk, 'hard')
+                    ! such that norm_minmax will neglect everything < 0. and preserve zero
+                    where(tmp%rmat < TINY) tmp%rmat=0.
+                    call tmp%norm_minmax
+                    call tmp%masscen(cur_xyz)
+                    xyz  = xyz  + cur_xyz
+                    iter = iter + 1
+                enddo
+            endif
+        else
+            call tmp%copy(self)
+            if( present(hp) )then
+                call tmp%bp(hp, lp)
+            else
+                call tmp%bp(0., lp)
+            endif
+            call tmp%ifft()
+            call tmp%mask(rmsk, 'hard')
+            ! such that norm_minmax will neglect everything < 0. and preserve zero
+            where(tmp%rmat < TINY) tmp%rmat=0.
+            call tmp%norm_minmax
+            call tmp%masscen(xyz)
+        endif
         call tmp%kill
     end function calc_shiftcen
 
-    function calc_shiftcen_serial( self, lp, msk, hp ) result( xyz )
-        class(image),   intent(inout) :: self
-        real,           intent(in)    :: lp
-        real,           intent(in)    :: msk
-        real, optional, intent(in)    :: hp
-        real    :: xyz(3)
-        integer :: ithr
+    function calc_shiftcen_serial( self, lp, msk, hp, iter_center ) result( xyz )
+        class(image),      intent(inout) :: self
+        real,              intent(in)    :: lp
+        real,              intent(in)    :: msk
+        real,    optional, intent(in)    :: hp
+        logical, optional, intent(in)    :: iter_center
+        integer,           parameter     :: MAX_ITS = 5
+        real    :: xyz(3), cur_xyz(3)
+        integer :: ithr, iter
         ! get thread index
         ithr = omp_get_thread_num() + 1
-        if( all(self%ldim == thread_safe_tmp_imgs(ithr)%ldim) )then
-            ! copy rmat
-            thread_safe_tmp_imgs(ithr)%rmat = self%rmat
-            thread_safe_tmp_imgs(ithr)%ft   = .false.
-            call thread_safe_tmp_imgs(ithr)%fft()
-            if( present(hp) )then
-                call thread_safe_tmp_imgs(ithr)%bp(hp, lp)
-            else
-                call thread_safe_tmp_imgs(ithr)%bp(0., lp)
+        if( present(iter_center) )then
+            if( iter_center )then
+                if( all(self%ldim == thread_safe_tmp_imgs(ithr)%ldim) )then
+                    cur_xyz = -1.
+                    xyz     =  0.
+                    iter    = 1
+                    do while(maxval(abs(cur_xyz(1:2))) > TINY .and. iter < MAX_ITS)
+                        thread_safe_tmp_imgs(ithr)%rmat = self%rmat
+                        thread_safe_tmp_imgs(ithr)%ft   = .false.
+                        call thread_safe_tmp_imgs(ithr)%fft()
+                        call thread_safe_tmp_imgs(ithr)%shift2Dserial(xyz(1:2))
+                        if( present(hp) )then
+                            call thread_safe_tmp_imgs(ithr)%bp(hp, lp)
+                        else
+                            call thread_safe_tmp_imgs(ithr)%bp(0., lp)
+                        endif
+                        call thread_safe_tmp_imgs(ithr)%ifft()
+                        call thread_safe_tmp_imgs(ithr)%mask(msk, 'hard')
+                        where(thread_safe_tmp_imgs(ithr)%rmat < TINY) thread_safe_tmp_imgs(ithr)%rmat = 0.
+                        call thread_safe_tmp_imgs(ithr)%norm_minmax
+                        call thread_safe_tmp_imgs(ithr)%masscen(cur_xyz)
+                        xyz  = xyz  + cur_xyz
+                        iter = iter + 1
+                    enddo
+                else
+                    THROW_HARD('Incompatible dimensions bwetween self and thread_safe_tmp_imgs; calc_shiftcen_serial')
+                endif
             endif
-            call thread_safe_tmp_imgs(ithr)%ifft()
-            call thread_safe_tmp_imgs(ithr)%mask(msk, 'hard')
-            where(thread_safe_tmp_imgs(ithr)%rmat < TINY) thread_safe_tmp_imgs(ithr)%rmat = 0.
-            call thread_safe_tmp_imgs(ithr)%norm_minmax
-            call thread_safe_tmp_imgs(ithr)%masscen(xyz)
         else
-            THROW_HARD('Incompatible dimensions bwetween self and thread_safe_tmp_imgs; calc_shiftcen_serial')
+            if( all(self%ldim == thread_safe_tmp_imgs(ithr)%ldim) )then
+                ! copy rmat
+                thread_safe_tmp_imgs(ithr)%rmat = self%rmat
+                thread_safe_tmp_imgs(ithr)%ft   = .false.
+                call thread_safe_tmp_imgs(ithr)%fft()
+                if( present(hp) )then
+                    call thread_safe_tmp_imgs(ithr)%bp(hp, lp)
+                else
+                    call thread_safe_tmp_imgs(ithr)%bp(0., lp)
+                endif
+                call thread_safe_tmp_imgs(ithr)%ifft()
+                call thread_safe_tmp_imgs(ithr)%mask(msk, 'hard')
+                where(thread_safe_tmp_imgs(ithr)%rmat < TINY) thread_safe_tmp_imgs(ithr)%rmat = 0.
+                call thread_safe_tmp_imgs(ithr)%norm_minmax
+                call thread_safe_tmp_imgs(ithr)%masscen(xyz)
+            else
+                THROW_HARD('Incompatible dimensions bwetween self and thread_safe_tmp_imgs; calc_shiftcen_serial')
+            endif
         endif
     end function calc_shiftcen_serial
 

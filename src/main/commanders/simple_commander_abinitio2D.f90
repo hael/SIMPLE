@@ -153,7 +153,7 @@ contains
             cenlp   = max(cenlp,   2.*params%smpd_crop)
             if( .not. cline%defined('lpstart') ) params%lpstart = lpstart
             if( .not. cline%defined('lpstop')  ) params%lpstop  = lpstop
-            if( .not. cline%defined('lpstart') ) params%cenlp   = cenlp
+            if( .not. cline%defined('cenlp') )   params%cenlp   = cenlp
             write(logfhandle,'(A,F5.1)') '>>> DID SET STARTING  LOW-PASS LIMIT (IN A) TO: ', params%lpstart
             write(logfhandle,'(A,F5.1)') '>>> DID SET HARD      LOW-PASS LIMIT (IN A) TO: ', params%lpstop
             write(logfhandle,'(A,F5.1)') '>>> DID SET CENTERING LOW-PASS LIMIT (IN A) TO: ', params%cenlp
