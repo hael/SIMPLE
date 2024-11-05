@@ -213,7 +213,7 @@ contains
     procedure          :: phase_rand
     procedure          :: hannw
     procedure          :: real_space_filter
-    procedure          :: NLmean, NLmean3D
+    procedure          :: NLmean, NLmean3D, NLmean3D_eo
     procedure          :: ICM2D
     procedure          :: ICM2D_eo
     procedure          :: ICM3D
@@ -4213,6 +4213,57 @@ contains
         !$omp end parallel do
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = sum(rmat_threads, dim=1)
     end subroutine NLmean3D
+
+    !>  \brief Non-local mean filter
+    subroutine NLmean3D_eo( even, odd, avg )
+        class(image), intent(inout) :: even, odd, avg
+        real,  allocatable :: rmat_pad(:,:,:), rmat_threads(:,:,:,:)
+        integer, parameter :: DIM_SW  = 1
+        integer, parameter :: CFR_BOX = 3
+        type(image) :: noise, noise_var
+        real    :: exponentials(-CFR_BOX:CFR_BOX,-CFR_BOX:CFR_BOX,-CFR_BOX:CFR_BOX), sw_px(DIM_SW,DIM_SW,DIM_SW)
+        real    :: z, sigma, sigma2t2, pixavg
+        integer :: i, j, k, m, n, o, pad, ithr
+        if( even%is_2d() ) THROW_HARD('3D images only; NLmean3D')
+        if( even%ft )      THROW_HARD('Real space only; 3DNLmean3D')
+        call noise%copy(even)
+        call noise%subtr(odd)
+        call noise%loc_var3D(noise_var)
+        call noise_var%norm([5.,2.])
+        call avg%copy(even)
+        call avg%add(odd)
+        call avg%mul(0.5)
+        pad     = CFR_BOX + 2
+        pixavg  = sum(avg%rmat(:avg%ldim(1),:avg%ldim(2),:avg%ldim(3))) / real(product(avg%ldim))
+        allocate(rmat_threads(nthr_glob,avg%ldim(1),avg%ldim(2),avg%ldim(3)), source=0.)
+        allocate(rmat_pad(-pad:avg%ldim(1)+pad,-pad:avg%ldim(2)+pad,-pad:avg%ldim(3)+pad), source=pixavg)
+        rmat_pad(1:avg%ldim(1),1:avg%ldim(2),1:avg%ldim(3)) = avg%rmat(1:avg%ldim(1),1:avg%ldim(2),1:avg%ldim(3))
+        !$omp parallel do schedule(static) default(shared) private(m,n,o,ithr,sw_px,exponentials,sigma2t2,i,j,k,z)&
+        !$omp proc_bind(close) firstprivate(rmat_pad) collapse(3)
+        do o = 1, avg%ldim(3)
+            do n = 1, avg%ldim(2)
+                do m = 1, avg%ldim(1)
+                    ithr         = omp_get_thread_num() + 1
+                    sw_px        = rmat_pad(m:m+DIM_SW-1,n:n+DIM_SW-1,o:o+DIM_SW-1)
+                    exponentials = 0.
+                    sigma2t2     = 2. * noise_var%rmat(m,n,o)
+                    do k = -CFR_BOX,CFR_BOX
+                        do j = -CFR_BOX,CFR_BOX
+                            do i = -CFR_BOX,CFR_BOX
+                                exponentials(i,j,k) = &
+                                & exp(-sum((sw_px - rmat_pad(m+i:m+i+DIM_SW-1,n+j:n+j+DIM_SW-1,o+k:o+k+DIM_SW-1))**2.)/sigma2t2) ! euclidean norm
+                            enddo
+                        enddo
+                    enddo
+                    z = sum(exponentials)
+                    if( z < 0.0000001 ) cycle
+                    rmat_threads(ithr,m,n,o) = sum(exponentials * rmat_pad(m-CFR_BOX:m+CFR_BOX,n-CFR_BOX:n+CFR_BOX,o-CFR_BOX:o+CFR_BOX)) / z
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        avg%rmat(:avg%ldim(1),:avg%ldim(2),:avg%ldim(3)) = sum(rmat_threads, dim=1)
+    end subroutine NLmean3D_eo
 
     ! uniform noise variance (sigma2 constant, set to 5)
     subroutine ICM2D( self, lambda, verbose )

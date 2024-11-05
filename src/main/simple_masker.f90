@@ -27,6 +27,7 @@ type, extends(binimage) :: masker
     integer :: idim(3)       = 0    !< image dimension
   contains
     procedure          :: automask3D
+    procedure          :: automask3D_icm
     procedure          :: automask3D_otsu
     procedure, private :: automask3D_otsu_priv
     procedure          :: mask_from_pdb
@@ -71,6 +72,67 @@ contains
         if( was_ft ) call vol_inout%fft()
     end subroutine automask3D
 
+    subroutine automask3D_icm( self, vol_even, vol_odd, vol_masked )
+        class(masker), intent(inout) :: self
+        class(image),  intent(inout) :: vol_even, vol_odd, vol_masked
+        real, allocatable  :: fsc(:), filt(:)
+        type(image)        :: vol_avg
+        integer            :: ldim(3), filtsz
+        real               :: msk
+        real,    parameter :: LAM = 100.
+        logical, parameter :: L_NLMEAN = .false. 
+        if( vol_even%is_2d() )THROW_HARD('automask3D_icm is intended for volumes only; automask3D')
+        self%amsklp   = params_glob%amsklp
+        self%binwidth = params_glob%binwidth
+        self%edge     = params_glob%edge
+        ldim   = vol_even%get_ldim()
+        msk    = real(ldim(1) / 2) - COSMSKHALFWIDTH - 1.
+        filtsz = fdim(ldim(1)) - 1
+        call vol_masked%copy(vol_even)
+        call vol_masked%add(vol_odd)
+        call vol_masked%mul(0.5)
+        ! zero mean of outer pixels
+        call vol_even%zero_background
+        call vol_odd%zero_background
+        ! spherical mask
+        call vol_even%mask(msk, 'soft', backgr=0.)
+        call vol_odd%mask(msk,  'soft', backgr=0.)
+        ! calculate FSC
+        allocate(fsc(filtsz), filt(filtsz), source=0.)
+        call vol_even%fft()
+        call vol_odd%fft()
+        call vol_even%fsc(vol_odd, fsc)
+        ! calculate a filter to be applied to the individual e/o pairs
+        where( fsc > 0.        ) filt = fsc / (fsc + 1.)
+        where( filt  > 0.99999 ) filt = 0.99999
+        call vol_even%apply_filter(filt)
+        call vol_odd%apply_filter(filt)
+        ! put back in real-space
+        call vol_even%ifft()
+        call vol_odd%ifft()
+        ! ICM filter
+        call vol_even%ICM3D_eo(vol_odd, LAM)
+        call vol_avg%copy(vol_even)
+        call vol_avg%add(vol_odd)
+        call vol_avg%mul(0.5)
+        if( L_WRITE ) call vol_avg%write('ICM_avg.mrc')
+        ! NLMEAN filter
+        if( L_NLMEAN )then
+            call vol_even%NLmean3D_eo(vol_odd, vol_avg)
+            if( L_WRITE ) call vol_avg%write('NLmean3D_eo.mrc')
+        else
+            call vol_avg%bp(0., self%amsklp)
+        endif
+        call self%transfer2bimg(vol_avg)
+        ! automasking
+        call self%automask3D_otsu_priv(l_tight=.true.)
+        ! apply mask to volume
+        call vol_masked%zero_background()
+        call vol_masked%mul(self)
+        ! destruct
+        call vol_avg%kill
+    end subroutine automask3D_icm
+
     subroutine automask3D_otsu( self, vol_inout, do_apply )
         class(masker),     intent(inout) :: self
         class(image),      intent(inout) :: vol_inout
@@ -110,14 +172,16 @@ contains
     subroutine automask3D_otsu_priv( self, l_tight, amsklp )
         class(masker),  intent(inout) :: self
         logical,        intent(in)    :: l_tight
-        real,           intent(in)    :: amsklp
+        real, optional, intent(in)    :: amsklp
         real,    allocatable :: ccsizes(:)
         integer, allocatable :: imat_cc(:,:,:)
         type(binimage)       :: ccimage
         integer              :: loc(1), imax, sz, nccs
-        ! low-pass filter volume
-        call self%bp(0., amsklp)
-        if( L_WRITE ) call self%write('lped.mrc')
+        if( present(amsklp) )then
+            ! low-pass filter volume
+            call self%bp(0., amsklp)
+            if( L_WRITE ) call self%write('lped.mrc')
+        endif
         ! binarize volume
         call otsu_img(self, tight=l_tight)
         call self%set_imat

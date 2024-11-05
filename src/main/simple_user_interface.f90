@@ -1366,10 +1366,11 @@ contains
         &'envelope masking',&                            ! descr_short
         &'is a program for automated envelope masking',& ! descr_long
         &'simple_exec',&                                 ! executable
-        &1, 1, 0, 0, 2, 4, 1, .false.)                   ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 2, 4, 1, .false.)                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call automask%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume subjected to envelope masking', 'input volume e.g. vol.mrc', .true., '')
+        call automask%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume subjected to envelope masking', 'input volume e.g. vol.mrc', .true.,  '')
+        call automask%set_input('img_ios', 2, 'vol2', 'file', 'Volume', 'Volume subjected to envelope masking', 'input volume e.g. vol.mrc', .false., '')
         ! parameter input/output
         call automask%set_input('parm_ios', 1, smpd)
         ! alternative inputs
