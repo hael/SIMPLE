@@ -28,8 +28,8 @@ contains
     procedure, private    :: set_ref
     procedure, private    :: set_target
     procedure, private    :: setup_srch_spaces
-    procedure, private    :: srch_rots
-    procedure, private    :: srch_shift
+    procedure             :: srch_rots
+    procedure             :: srch_shift
     procedure             :: srch
     procedure             :: rotate_target
     procedure             :: kill

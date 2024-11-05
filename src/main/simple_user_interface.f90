@@ -2255,7 +2255,7 @@ contains
         &'Dock a pair of volumes',&                     ! descr_short
         &'is a program for docking a pair of volumes',& ! descr long
         &'simple_exec',&                                ! executable
-        &3, 2, 0, 2, 3, 1, 1, .false.)                  ! # entries in each group, requires sp_project
+        &3, 2, 0, 2, 2, 1, 1, .false.)                  ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call dock_volpair%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Reference volume', &
@@ -2272,10 +2272,10 @@ contains
         call dock_volpair%set_input('srch_ctrls', 1, trs)
         dock_volpair%srch_ctrls(1)%rval_default = 5.
         call dock_volpair%set_input('srch_ctrls', 2, 'dockmode', 'multi', 'Docking mode', 'Docking mode(rot|shift|rotshift|refine){rotshift}', '(rot|shift|rotshift|refine){rotshift}', .false., 'rotshift')
+        dock_volpair%srch_ctrls(2)%required = .true.
         ! filter controls
         call dock_volpair%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit', 'low-pass limit in Angstroms', .true., 0.)
         call dock_volpair%set_input('filt_ctrls', 2, 'lpstop',   'num', 'Final low-pass limit',   'Final low-pass resolution limit',   'low-pass limit in Angstroms', .true., 0.)
-        call dock_volpair%set_input('filt_ctrls', 3, hp)
         ! mask controls
         call dock_volpair%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
