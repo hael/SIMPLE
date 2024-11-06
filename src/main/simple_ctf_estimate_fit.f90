@@ -304,11 +304,8 @@ contains
         self%parms%phshift = os%get(1,'phshift')
         phaseplate         = os%get_static(1,'phaseplate')
         self%parms%l_phaseplate = trim(phaseplate).eq.'yes'
-        self%ntotpatch     = nint(os%get(1,'npatch'))
-        ! micrograph dimensions
-        self%ldim_mic(1) = nint(os%get(1,'xdim'))
-        self%ldim_mic(2) = nint(os%get(1,'ydim'))
-        self%ldim_mic(3) = 1
+        self%ntotpatch     = os%get_int(1,'npatch')
+        self%ldim_mic      = [os%get_int(1,'xdim'), os%get_int(1,'ydim'), 1]
         ! polynomes
         do i = 1,POLYDIM
             self%polyx(i) = real(os%get(2,'px'//int2str(i)),dp)
@@ -414,7 +411,7 @@ contains
         type(ctfparams),         intent(inout) :: parms
         class(image),  optional, intent(inout) :: spec
         logical,       optional, intent(in)    :: nano
-        real    :: freslims1d(2)
+        integer :: freslims1d(2)
         logical :: l_nano
         if( BENCH ) self%t_tot = tic()
         l_nano = .false.
@@ -1397,7 +1394,7 @@ contains
                 real                :: peaksum
                 peaksum = 0.
                 n = 0
-                do cnt = peak - width, peak + width
+                do cnt = peak - width, min(self%flims1d(2),peak + width)
                     if(self%roavg_spec1d(cnt) > 0.) then 
                         peaksum = peaksum + self%roavg_spec1d(cnt)
                         n = n + 1
