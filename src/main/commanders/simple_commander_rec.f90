@@ -227,10 +227,6 @@ contains
                 s     = ss
                 state = ss
             endif
-            if( L_BENCH_GLOB )then
-                rt_read       = 0.
-                rt_sum_reduce = 0.
-            endif
             call build%eorecvol%reset_all
             ! assemble volumes
             do part=1,params%nparts
@@ -256,13 +252,9 @@ contains
                 call build%eorecvol%sum_eos
                 if( L_BENCH_GLOB ) rt_sum_eos = rt_sum_eos + toc(t_sum_eos)
             endif
-            if( L_BENCH_GLOB )then
-                t_sampl_dens_correct_eos = tic()
-            endif
+            if( L_BENCH_GLOB ) t_sampl_dens_correct_eos = tic()
             call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg)
-            if( L_BENCH_GLOB )then
-                rt_sampl_dens_correct_eos = rt_sampl_dens_correct_eos + toc(t_sampl_dens_correct_eos)
-            endif
+            if( L_BENCH_GLOB ) rt_sampl_dens_correct_eos = rt_sampl_dens_correct_eos + toc(t_sampl_dens_correct_eos)
             if( l_euclid_regularization )then
                 if( L_BENCH_GLOB ) t_sum_eos = tic()
                 call build%eorecvol%sum_eos
@@ -309,7 +301,7 @@ contains
         call simple_touch( finished_fname , errmsg='In: commander_rec::volassemble')
         if( L_BENCH_GLOB )then
             rt_tot     = toc(t_tot)
-            benchfname = 'VOLASSEMBLE_BENCH.txt'
+            benchfname = 'VOLASSEMBLE_BENCH_ITER'//int2str_pad(params%which_iter,3)//'.txt'
             call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** TIMINGS (s) ***'
             write(fnr,'(a,1x,f9.2)') 'initialisation           : ', rt_init
