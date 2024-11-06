@@ -509,7 +509,7 @@ contains
         integer   :: i, s
         if( present(state) )then
             do i=1,os%get_noris()
-                s = nint(os%get(i, 'state'))
+                s = os%get_state(i)
                 if(s .ne. state) cycle
                 call os%map3dshift22d(i, shvec)
                 ! transposed rotation to get the correct sign on rotation

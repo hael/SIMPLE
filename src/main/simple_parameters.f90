@@ -1284,7 +1284,7 @@ contains
         endif
         ! OpenMP threads
         if( cline%defined('nthr') )then
-            nthr = nint(cline%get_rarg('nthr'))
+            nthr = cline%get_iarg('nthr')
             if( nthr == 0 )then
                 !$ self%nthr = omp_get_max_threads()
                 !$ call omp_set_num_threads(self%nthr)
@@ -1878,13 +1878,13 @@ contains
             character(len=*), intent(in)  :: iarg
             integer,          intent(out) :: var
             if( cline%defined(iarg) )then
-                var = nint(cline%get_rarg(iarg))
+                var = cline%get_iarg(iarg)
             endif
         end subroutine check_iarg
 
         subroutine check_rarg( rarg, var )
             character(len=*), intent(in)  :: rarg
-            real, intent(out) :: var
+            real,             intent(out) :: var
             if( cline%defined(rarg) )then
                 var = cline%get_rarg(rarg)
             endif

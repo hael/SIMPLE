@@ -146,7 +146,7 @@ contains
             if( .not.spproj_mask(iproj) ) cycle
             iiproj = iiproj + 1
             call spproj%read_mic_stk_ptcl2D_segments(fnames(iproj))
-            inptcls = nint(spproj%os_mic%get(1,'nptcls'))
+            inptcls = spproj%os_mic%get_int(1,'nptcls')
             call self%spproj%os_mic%transfer_ori(iiproj, spproj%os_mic, 1)
             call self%spproj%os_stk%transfer_ori(iiproj, spproj%os_stk, 1)
             ! update to stored stack file name because we are in the root folder
@@ -164,8 +164,8 @@ contains
                 call self%spproj%os_ptcl2D%transfer_ori(cnt, spproj%os_ptcl2D, iptcl)
                 call self%spproj%os_ptcl2D%set_stkind(cnt, iiproj)
             enddo
-            call self%spproj%os_stk%set(iiproj, 'fromp', real(fromp))
-            call self%spproj%os_stk%set(iiproj, 'top',   real(fromp+inptcls-1))
+            call self%spproj%os_stk%set(iiproj, 'fromp', fromp)
+            call self%spproj%os_stk%set(iiproj, 'top',   fromp+inptcls-1)
             fromp = fromp + inptcls
         enddo
         call spproj%kill
@@ -218,21 +218,21 @@ contains
         allocate(clines(nclines))
         ! noise estimates
         if( calc_pspec )then
-            call cline_pspec%set('prg',     'calc_pspec_distr')
+            call cline_pspec%set('prg',      'calc_pspec_distr')
             call cline_pspec%set('oritype',  'ptcl2D')
             call cline_pspec%set('projfile', self%projfile_out)
-            call cline_pspec%set('nthr',     cline_classify%get_rarg('nthr'))
+            call cline_pspec%set('nthr',     cline_classify%get_iarg('nthr'))
             call cline_pspec%set('mkdir',    'yes')
-            call cline_pspec%set('nparts',   1.)
-            if( params_glob%nparts_chunk > 1 ) call cline_pspec%set('nparts',real(params_glob%nparts_chunk))
+            call cline_pspec%set('nparts',   1)
+            if( params_glob%nparts_chunk > 1 ) call cline_pspec%set('nparts',params_glob%nparts_chunk)
             clines(1) = cline_pspec
         endif
         if( box < orig_box )then
             scale = real(box) / real(orig_box)
             call cline_classify%set('smpd',      orig_smpd)
-            call cline_classify%set('box',       real(orig_box))
+            call cline_classify%set('box',       orig_box)
             call cline_classify%set('smpd_crop', orig_smpd / scale)
-            call cline_classify%set('box_crop',  real(box))
+            call cline_classify%set('box_crop',  box)
         endif
         call cline_classify%set('projfile', self%projfile_out)
         call cline_classify%set('projname', trim(PROJNAME_CHUNK))
@@ -277,10 +277,10 @@ contains
         nptcls_sel = self%spproj%os_ptcl2D%get_noris(consider_state=.true.)
         call cline_pspec%set('prg',     'calc_pspec_distr')
         call cline_pspec%set('oritype',  'ptcl2D')
-        call cline_pspec%set('nthr',     cline_classify%get_rarg('nthr'))
+        call cline_pspec%set('nthr',     cline_classify%get_iarg('nthr'))
         call cline_pspec%set('mkdir',    'yes')
-        call cline_pspec%set('nparts',   1.)
-        if( params_glob%nparts_chunk > 1 ) call cline_pspec%set('nparts',real(params_glob%nparts_chunk))
+        call cline_pspec%set('nparts',   1)
+        if( params_glob%nparts_chunk > 1 ) call cline_pspec%set('nparts',params_glob%nparts_chunk)
         call cline_pspec%set('projfile', self%projfile_out)
         call cline_pspec%set('projname', trim(PROJNAME_CHUNK))
         call self%spproj%update_projinfo(cline_pspec)
@@ -604,15 +604,15 @@ contains
                 THROW_HARD('Unexpected file path format for: '//trim(stack_name))
             endif
             ! particles
-            ifromp = nint(spproj%os_stk%get(imic,'fromp'))
-            itop   = nint(spproj%os_stk%get(imic,'top'))
+            ifromp = spproj%os_stk%get_fromp(imic)
+            itop   = spproj%os_stk%get_top(imic)
             do iptcl = ifromp,itop
                 jptcl = jptcl+1 ! global index
                 call spproj%os_ptcl2D%transfer_ori(jptcl, tmpproj%os_ptcl2D, iptcl)
                 call spproj%os_ptcl2D%set_stkind(jptcl, imic)
             enddo
-            call spproj%os_stk%set(imic, 'fromp', real(fromp))
-            call spproj%os_stk%set(imic, 'top',   real(fromp+nptcls-1))
+            call spproj%os_stk%set(imic, 'fromp', fromp)
+            call spproj%os_stk%set(imic, 'top',   fromp+nptcls-1)
             fromp = fromp + nptcls
         enddo
         call tmpproj%kill

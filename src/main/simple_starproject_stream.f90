@@ -115,8 +115,8 @@ contains
             if(spproj%os_optics%get(i, 'state') .eq. 0.0 ) cycle
             call starfile_table__addObject(self%starfile)
             ! ints
-            if(spproj%os_optics%isthere(i, 'ogid'))   call starfile_table__setValue_int(self%starfile, EMDL_IMAGE_OPTICS_GROUP, int(spproj%os_optics%get(i, 'ogid')))
-            if(spproj%os_optics%isthere(i, 'pop'))    call starfile_table__setValue_int(self%starfile, SMPL_OPTICS_POPULATION,  int(spproj%os_optics%get(i, 'pop' )))
+            if(spproj%os_optics%isthere(i, 'ogid'))   call starfile_table__setValue_int(self%starfile, EMDL_IMAGE_OPTICS_GROUP, spproj%os_optics%get_int(i, 'ogid'))
+            if(spproj%os_optics%isthere(i, 'pop'))    call starfile_table__setValue_int(self%starfile, SMPL_OPTICS_POPULATION,  spproj%os_optics%get_int(i, 'pop' ))
             ! doubles
             if(spproj%os_optics%isthere(i, 'kv'))     call starfile_table__setValue_double(self%starfile, EMDL_CTF_VOLTAGE,      real(spproj%os_optics%get(i, 'kv'),    dp))
             if(spproj%os_optics%isthere(i, 'smpd'))   call starfile_table__setValue_double(self%starfile, EMDL_IMAGE_PIXEL_SIZE, real(spproj%os_optics%get(i, 'smpd'),  dp))
@@ -139,11 +139,11 @@ contains
         call starfile_table__setIsList(self%starfile, .false.)
         call starfile_table__setname(self%starfile, 'opticsgroup_' // int2str(ogid))
         do i=1,spproj%os_mic%get_noris()
-            if(spproj%os_mic%isthere(i, 'ogid') .and. int(spproj%os_mic%get(i, 'ogid')) == ogid) then
-                if(spproj%os_mic%get(i, 'state') .eq. 0.0 ) cycle
+            if(spproj%os_mic%isthere(i, 'ogid') .and. spproj%os_mic%get_int(i, 'ogid') == ogid) then
+                if(spproj%os_mic%get_state(i) .eq. 0 ) cycle
                 call starfile_table__addObject(self%starfile)
                 ! ints
-                call starfile_table__setValue_int(self%starfile, EMDL_IMAGE_OPTICS_GROUP, int(spproj%os_mic%get(i, 'ogid')))
+                call starfile_table__setValue_int(self%starfile, EMDL_IMAGE_OPTICS_GROUP, spproj%os_mic%get_int(i, 'ogid'))
                 ! doubles
                 if(spproj%os_mic%isthere(i, 'shiftx')) call starfile_table__setValue_double(self%starfile, SMPL_OPTICS_SHIFTX, real(spproj%os_mic%get(i, 'shiftx'), dp))
                 if(spproj%os_mic%isthere(i, 'shifty')) call starfile_table__setValue_double(self%starfile, SMPL_OPTICS_SHIFTY, real(spproj%os_mic%get(i, 'shifty'), dp))
@@ -178,16 +178,16 @@ contains
         call starfile_table__setIsList(self%starfile, .false.)
         call starfile_table__setname(self%starfile, 'micrographs')
         do i=1,spproj%os_mic%get_noris()
-            if(spproj%os_mic%get(i, 'state') .eq. 0.0 ) cycle
+            if(spproj%os_mic%get_state(i) .eq. 0 ) cycle
             call starfile_table__addObject(self%starfile)
             ! ints
-            if(spproj%os_mic%isthere(i, 'ogid'   )) call starfile_table__setValue_int(self%starfile, EMDL_IMAGE_OPTICS_GROUP, int(spproj%os_mic%get(i, 'ogid'   )))
-            if(spproj%os_mic%isthere(i, 'xdim'   )) call starfile_table__setValue_int(self%starfile, EMDL_IMAGE_SIZE_X,       int(spproj%os_mic%get(i, 'xdim'   )))           
-            if(spproj%os_mic%isthere(i, 'ydim'   )) call starfile_table__setValue_int(self%starfile, EMDL_IMAGE_SIZE_Y,       int(spproj%os_mic%get(i, 'ydim'   )))
-            if(spproj%os_mic%isthere(i, 'nframes')) call starfile_table__setValue_int(self%starfile, EMDL_IMAGE_SIZE_Z,       int(spproj%os_mic%get(i, 'nframes')))
-            if(spproj%os_mic%isthere(i, 'nptcls' )) call starfile_table__setValue_int(self%starfile, SMPL_N_PTCLS,            int(spproj%os_mic%get(i, 'nptcls' )))
-            if(spproj%os_mic%isthere(i, 'nmics'  )) call starfile_table__setValue_int(self%starfile, SMPL_N_MICS,             int(spproj%os_mic%get(i, 'nmics'  )))
-            if(spproj%os_mic%isthere(i, 'micid'  )) call starfile_table__setValue_int(self%starfile, SMPL_MIC_ID,             int(spproj%os_mic%get(i, 'micid'  )))
+            if(spproj%os_mic%isthere(i, 'ogid'   )) call starfile_table__setValue_int(self%starfile, EMDL_IMAGE_OPTICS_GROUP, spproj%os_mic%get_int(i, 'ogid'   ))
+            if(spproj%os_mic%isthere(i, 'xdim'   )) call starfile_table__setValue_int(self%starfile, EMDL_IMAGE_SIZE_X,       spproj%os_mic%get_int(i, 'xdim'   ))
+            if(spproj%os_mic%isthere(i, 'ydim'   )) call starfile_table__setValue_int(self%starfile, EMDL_IMAGE_SIZE_Y,       spproj%os_mic%get_int(i, 'ydim'   ))
+            if(spproj%os_mic%isthere(i, 'nframes')) call starfile_table__setValue_int(self%starfile, EMDL_IMAGE_SIZE_Z,       spproj%os_mic%get_int(i, 'nframes'))
+            if(spproj%os_mic%isthere(i, 'nptcls' )) call starfile_table__setValue_int(self%starfile, SMPL_N_PTCLS,            spproj%os_mic%get_int(i, 'nptcls' ))
+            if(spproj%os_mic%isthere(i, 'nmics'  )) call starfile_table__setValue_int(self%starfile, SMPL_N_MICS,             spproj%os_mic%get_int(i, 'nmics'  ))
+            if(spproj%os_mic%isthere(i, 'micid'  )) call starfile_table__setValue_int(self%starfile, SMPL_MIC_ID,             spproj%os_mic%get_int(i, 'micid'  ))
             ! doubles
             if(spproj%os_mic%isthere(i, 'dfx'    )) call starfile_table__setValue_double(self%starfile,  EMDL_CTF_DEFOCUSU,      real(spproj%os_mic%get(i, 'dfx') / 0.0001, dp))
             if(spproj%os_mic%isthere(i, 'dfy'    )) call starfile_table__setValue_double(self%starfile,  EMDL_CTF_DEFOCUSV,      real(spproj%os_mic%get(i, 'dfy') / 0.0001, dp))
@@ -232,9 +232,9 @@ contains
             stkind = floor(spproj%os_ptcl2d%get(ind_in_stk, 'stkind'))
             half_boxsize = floor(spproj%os_stk%get(stkind, 'box') / 2.0)
             ! ints
-            if(spproj%os_ptcl2d%isthere(i, 'ogid'   )) call starfile_table__setValue_int(self%starfile, EMDL_IMAGE_OPTICS_GROUP, int(spproj%os_ptcl2d%get(i, 'ogid' )))
-            if(spproj%os_ptcl2d%isthere(i, 'class'  )) call starfile_table__setValue_int(self%starfile, EMDL_PARTICLE_CLASS,     int(spproj%os_ptcl2d%get(i, 'class')))
-            if(spproj%os_ptcl2d%isthere(i, 'gid'    )) call starfile_table__setValue_int(self%starfile, EMDL_MLMODEL_GROUP_NO,   int(spproj%os_ptcl2d%get(i, 'gid'  )))
+            if(spproj%os_ptcl2d%isthere(i, 'ogid'   )) call starfile_table__setValue_int(self%starfile, EMDL_IMAGE_OPTICS_GROUP, spproj%os_ptcl2d%get_int(i, 'ogid'))
+            if(spproj%os_ptcl2d%isthere(i, 'class'  )) call starfile_table__setValue_int(self%starfile, EMDL_PARTICLE_CLASS,     spproj%os_ptcl2d%get_class(i))
+            if(spproj%os_ptcl2d%isthere(i, 'gid'    )) call starfile_table__setValue_int(self%starfile, EMDL_MLMODEL_GROUP_NO,   spproj%os_ptcl2d%get_int(i, 'gid'))
             ! doubles
             if(spproj%os_ptcl2d%isthere(i, 'dfx'    )) call starfile_table__setValue_double(self%starfile,  EMDL_CTF_DEFOCUSU,              real(spproj%os_ptcl2d%get(i, 'dfx') / 0.0001,        dp))
             if(spproj%os_ptcl2d%isthere(i, 'dfy'    )) call starfile_table__setValue_double(self%starfile,  EMDL_CTF_DEFOCUSV,              real(spproj%os_ptcl2d%get(i, 'dfy') / 0.0001,        dp))
@@ -282,9 +282,9 @@ contains
             stkind = floor(spproj%os_ptcl2d%get(ind_in_stk, 'stkind'))
             half_boxsize = floor(spproj%os_stk%get(stkind, 'box') / 2.0)
     !        ! ints
-            if(spproj%os_ptcl2d%isthere(i, 'ogid'   )) call starfile_table__setValue_int(part%startable, EMDL_IMAGE_OPTICS_GROUP, int(spproj%os_ptcl2d%get(i, 'ogid' )))
-            if(spproj%os_ptcl2d%isthere(i, 'class'  )) call starfile_table__setValue_int(part%startable, EMDL_PARTICLE_CLASS,     int(spproj%os_ptcl2d%get(i, 'class')))
-            if(spproj%os_ptcl2d%isthere(i, 'gid'    )) call starfile_table__setValue_int(part%startable, EMDL_MLMODEL_GROUP_NO,   int(spproj%os_ptcl2d%get(i, 'gid'  )))
+            if(spproj%os_ptcl2d%isthere(i, 'ogid'   )) call starfile_table__setValue_int(part%startable, EMDL_IMAGE_OPTICS_GROUP, spproj%os_ptcl2d%get_int(i, 'ogid'))
+            if(spproj%os_ptcl2d%isthere(i, 'class'  )) call starfile_table__setValue_int(part%startable, EMDL_PARTICLE_CLASS,     spproj%os_ptcl2d%get_class(i))
+            if(spproj%os_ptcl2d%isthere(i, 'gid'    )) call starfile_table__setValue_int(part%startable, EMDL_MLMODEL_GROUP_NO,   spproj%os_ptcl2d%get_int(i, 'gid'))
     !        ! doubles
             if(spproj%os_ptcl2d%isthere(i, 'dfx'    )) call starfile_table__setValue_double(part%startable,  EMDL_CTF_DEFOCUSU,              real(spproj%os_ptcl2d%get(i, 'dfx') / 0.0001,        dp))
             if(spproj%os_ptcl2d%isthere(i, 'dfy'    )) call starfile_table__setValue_double(part%startable,  EMDL_CTF_DEFOCUSV,              real(spproj%os_ptcl2d%get(i, 'dfy') / 0.0001,        dp))
@@ -331,7 +331,7 @@ contains
             if(spproj%os_cls2D%get(i, 'state') .eq. 0.0 ) cycle
             call starfile_table__addObject(self%starfile)
             ! ints
-            if(spproj%os_cls2D%isthere(i, 'ncls')) call starfile_table__setValue_int(self%starfile, SMPL_N_CLS, int(spproj%os_cls2D%get(i, 'ncls')))
+            if(spproj%os_cls2D%isthere(i, 'ncls')) call starfile_table__setValue_int(self%starfile, SMPL_N_CLS, spproj%os_cls2D%get_int(i, 'ncls'))
             ! doubles
             if(spproj%os_cls2D%isthere(i, 'res'  )) call starfile_table__setValue_double(self%starfile, EMDL_MLMODEL_ESTIM_RESOL_REF, real(spproj%os_cls2D%get(i, 'res'),   dp))
             if(spproj%os_cls2D%isthere(i, 'pop'  )) call starfile_table__setValue_double(self%starfile, EMDL_MLMODEL_PDF_CLASS,       real(spproj%os_cls2D%get(i, 'pop') ,  dp))
@@ -764,7 +764,7 @@ contains
     subroutine copy_optics( self, spproj, spproj_src )
         class(starproject_stream),  intent(inout) :: self
         class(sp_project),          intent(inout) :: spproj, spproj_src
-        real, allocatable                         :: ogmap(:)
+        integer, allocatable :: ogmap(:)
         real    :: min_importind, max_importind
         integer :: i, stkind
         call spproj%os_mic%minmax('importind', min_importind, max_importind)
@@ -774,24 +774,24 @@ contains
             ogmap(i) = 1
         end do
         do i=1, spproj_src%os_mic%get_noris()
-            if(spproj_src%os_mic%isthere(i, 'importind') .and. spproj_src%os_mic%isthere(i, 'ogid') .and. .not. spproj_src%os_mic%get(i, 'importind') .gt. max_importind) then
-               ogmap(int(spproj_src%os_mic%get(i, 'importind'))) = spproj_src%os_mic%get(i, 'ogid')
+            if(spproj_src%os_mic%isthere(i, 'importind') .and. spproj_src%os_mic%isthere(i, 'ogid') .and. .not. spproj_src%os_mic%get_int(i, 'importind') .gt. max_importind) then
+               ogmap(spproj_src%os_mic%get_int(i, 'importind')) = spproj_src%os_mic%get_int(i, 'ogid')
             end if
         end do
         do i=1, spproj%os_mic%get_noris()
             if(spproj%os_mic%isthere(i, 'importind')) then
-                call spproj%os_mic%set(i, 'ogid', ogmap(int(spproj%os_mic%get(i, 'importind'))))
+                call spproj%os_mic%set(i, 'ogid', ogmap(spproj%os_mic%get_int(i, 'importind')))
             end if
         end do
         if(spproj%os_ptcl2d%get_noris() .gt. 0) then
             do i=1, spproj%os_ptcl2d%get_noris()
                 if(spproj%os_ptcl2d%isthere(i, 'stkind')) then
-                    stkind = int(spproj%os_ptcl2d%get(i, 'stkind'))
-                    call spproj%os_ptcl2d%set(i, 'ogid', spproj%os_mic%get(stkind, 'ogid'))
+                    stkind = spproj%os_ptcl2d%get_int(i, 'stkind')
+                    call spproj%os_ptcl2d%set(i, 'ogid', spproj%os_mic%get_int(stkind, 'ogid'))
                 end if
             end do
         end if
-        if(allocated(ogmap)) deallocate(ogmap)
+        deallocate(ogmap)
     end subroutine copy_optics  
 
     subroutine copy_micrographs_optics( self, spproj_dest, write, verbose )

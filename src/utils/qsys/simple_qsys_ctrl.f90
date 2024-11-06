@@ -687,7 +687,7 @@ contains
                     if( self%jobs_done(ipart) )then
                         self%stream_cline_submitted(ipart) = self%stream_cline_stack(1)
                         call updatestack
-                        call self%stream_cline_submitted(ipart)%set('part', real(ipart)) ! computing unit allocation
+                        call self%stream_cline_submitted(ipart)%set('part', ipart) ! computing unit allocation
                         call self%stream_cline_submitted(ipart)%gen_job_descr(job_descr)
                         self%jobs_submitted(ipart) = .true.
                         self%jobs_done(ipart)      = .false.
@@ -801,8 +801,8 @@ contains
         if( self%cline_stacksz == 0 )then
             get_stack_range = 0
         else
-            get_stack_range =                   sum(nint(self%stream_cline_stack(:)%get_rarg('top')))
-            get_stack_range = get_stack_range - sum(nint(self%stream_cline_stack(:)%get_rarg('fromp')))
+            get_stack_range =                   sum(self%stream_cline_stack(:)%get_iarg('top'))
+            get_stack_range = get_stack_range - sum(self%stream_cline_stack(:)%get_iarg('fromp'))
             get_stack_range = get_stack_range + self%cline_stacksz
         endif
     end function get_stack_range

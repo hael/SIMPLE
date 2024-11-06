@@ -47,17 +47,13 @@ type :: ori
     procedure          :: swape1e3
     procedure          :: set_shift
     procedure          :: set_dfx, set_dfy
-    procedure, private :: set_1, set_2, set_3
-    generic            :: set => set_1, set_2, set_3
+    procedure, private :: set_1, set_2, set_3, set_4
+    generic            :: set => set_1, set_2, set_3, set_4
     procedure          :: set_state
     procedure          :: set_class
     procedure          :: set_stkind
     procedure          :: set_ogid
-    procedure, private :: rnd_euler_1
-    procedure, private :: rnd_euler_2
-    procedure, private :: rnd_euler_3
-    procedure, private :: rnd_euler_4
-    procedure, private :: rnd_euler_5
+    procedure, private :: rnd_euler_1, rnd_euler_2, rnd_euler_3, rnd_euler_4, rnd_euler_5
     generic            :: rnd_euler => rnd_euler_1, rnd_euler_2, rnd_euler_3, rnd_euler_4, rnd_euler_5
     procedure          :: rnd_ori
     procedure          :: rnd_inpl
@@ -68,16 +64,14 @@ type :: ori
     procedure          :: exists
     procedure          :: is_particle
     procedure          :: get_euler
-    procedure          :: e1get
-    procedure          :: e2get
-    procedure          :: e3get
+    procedure          :: e1get, e2get, e3get
     procedure          :: get_normal
     procedure          :: get_mat
     procedure          :: get
+    procedure          :: get_int
     procedure          :: get_static
-    procedure, private :: getter_1
-    procedure, private :: getter_2
-    generic            :: getter => getter_1, getter_2
+    procedure, private :: getter_1, getter_2, getter_3
+    generic            :: getter => getter_1, getter_2, getter_3
     procedure          :: get_2Dshift
     procedure          :: get_3Dshift
     procedure          :: get_state
@@ -86,6 +80,7 @@ type :: ori
     procedure          :: get_eo
     procedure          :: get_sampled
     procedure          :: get_updatecnt
+    procedure          :: get_fromp, get_top
     procedure          :: isthere
     procedure          :: ischar
     procedure          :: isstatezero
@@ -186,9 +181,9 @@ contains
             self%pparms(I_CORR)  = -1.
             self%pparms(I_EO)    = -1.
         else
-            call self%htab%set('state', 0.)
-            if( self%isthere('corr') ) call self%htab%set('corr',     -1.)
-            if( self%isthere('eo')   ) call self%htab%set('eo', -1.)
+            call self%htab%set('state', 0)
+            if( self%isthere('corr') ) call self%htab%set('corr', -1.)
+            if( self%isthere('eo')   ) call self%htab%set('eo',   -1 )
         endif
     end subroutine reject
 
@@ -466,6 +461,23 @@ contains
     subroutine set_1( self, key, rval )
         class(ori),       intent(inout) :: self
         character(len=*), intent(in)    :: key
+        real(dp),         intent(in)    :: rval
+        integer :: ind
+        if( self%is_ptcl )then
+            ind = get_oriparam_ind(key)
+            if( ind == 0 )then
+                call self%htab%set(key, rval)
+            else
+                self%pparms(ind) = real(rval)
+            endif
+        else
+            call self%htab%set(key, rval)
+        endif
+    end subroutine set_1
+
+    subroutine set_2( self, key, rval )
+        class(ori),       intent(inout) :: self
+        character(len=*), intent(in)    :: key
         real,             intent(in)    :: rval
         integer :: ind
         if( self%is_ptcl )then
@@ -478,20 +490,20 @@ contains
         else
             call self%htab%set(key, rval)
         endif
-    end subroutine set_1
+    end subroutine set_2
 
-    subroutine set_2( self, key, cval )
+    subroutine set_3( self, key, cval )
         class(ori),       intent(inout) :: self
         character(len=*), intent(in)    :: key, cval
         call self%chtab%set(key, cval)
-    end subroutine set_2
+    end subroutine set_3
 
-    subroutine set_3( self, key, ival )
+    subroutine set_4( self, key, ival )
         class(ori),       intent(inout) :: self
         character(len=*), intent(in)    :: key
         integer,          intent(in)    :: ival
-        call self%set_1(key, real(ival))
-    end subroutine set_3
+        call self%set_1(key, real(ival,dp))
+    end subroutine set_4
 
     subroutine set_state( self, state )
         class(ori), intent(inout) :: self
@@ -499,7 +511,7 @@ contains
         if( self%is_ptcl )then
             self%pparms(I_STATE) = real(state)
         else
-            call self%set('state', real(state))
+            call self%set('state', state)
         endif
     end subroutine set_state
 
@@ -509,7 +521,7 @@ contains
         if( self%is_ptcl )then
             self%pparms(I_CLASS) = real(cls)
         else
-            call self%set('class', real(cls))
+            call self%set('class', cls)
         endif
     end subroutine set_class
 
@@ -519,7 +531,7 @@ contains
         if( self%is_ptcl )then
             self%pparms(I_STKIND) = real(stkind)
         else
-            call self%set('stkind', real(stkind))
+            call self%set('stkind', stkind)
         endif
     end subroutine set_stkind
 
@@ -529,7 +541,7 @@ contains
         if( self%is_ptcl )then
             self%pparms(I_OGID) = real(ogid)
         else
-            call self%set('ogid', real(ogid))
+            call self%set('ogid', ogid)
         endif
     end subroutine set_ogid
 
@@ -710,7 +722,7 @@ contains
         if( present(nptcls) )then
             nptcls_here = nptcls
             if( nptcls_here == 0 )then
-                call self%set('nptcls',  0.)
+                call self%set('nptcls',  0)
                 return
             endif
         else
@@ -718,8 +730,8 @@ contains
             nptcls_here = boxfile%get_ndatalines()
             call boxfile%kill
         endif
-        call self%set('boxfile', trim(boxfname))
-        call self%set('nptcls',  real(nptcls_here))
+        call self%set('boxfile', boxfname)
+        call self%set('nptcls',  nptcls_here)
     end subroutine set_boxfile
 
     ! GETTERS
@@ -796,22 +808,37 @@ contains
         mat  = euler2m(euls)
     end function get_mat
 
-    elemental function get( self, key ) result( val )
+    elemental real function get( self, key )
         class(ori),       intent(in) :: self
         character(len=*), intent(in) :: key
         integer :: ind
-        real    :: val
         if( self%is_ptcl )then
             ind = get_oriparam_ind(key)
             if( ind == 0 )then
-                val = self%htab%get(key)
+                get = self%htab%get(key)
             else
-                val = self%pparms(ind)
+                get = self%pparms(ind)
             endif
         else
-            val = self%htab%get(key)
+            get = self%htab%get(key)
         endif
     end function get
+
+    elemental integer function get_int( self, key )
+        class(ori),       intent(in) :: self
+        character(len=*), intent(in) :: key
+        integer :: ind
+        if( self%is_ptcl )then
+            ind = get_oriparam_ind(key)
+            if( ind == 0 )then
+                get_int = nint(self%htab%get(key))
+            else
+                get_int = nint(self%pparms(ind))
+            endif
+        else
+            get_int = nint(self%htab%get(key))
+        endif
+    end function get_int
 
     !>  \brief  is a getter with fixed length return string
     function get_static( self, key )result( val )
@@ -822,14 +849,14 @@ contains
     end function get_static
 
     subroutine getter_1( self, key, val )
-        class(ori),                    intent(inout) :: self
+        class(ori),                    intent(in)    :: self
         character(len=*),              intent(in)    :: key
         character(len=:), allocatable, intent(inout) :: val
         if( allocated(val) ) deallocate(val)
         allocate(val,source=trim(self%chtab%get(key)))
     end subroutine getter_1
 
-    subroutine getter_2( self, key, val )
+    pure subroutine getter_2( self, key, val )
         class(ori),       intent(in)    :: self
         character(len=*), intent(in)    :: key
         real,             intent(inout) :: val
@@ -845,6 +872,23 @@ contains
             val = self%htab%get(key)
         endif
     end subroutine getter_2
+
+    pure subroutine getter_3( self, key, ival )
+        class(ori),       intent(in)    :: self
+        character(len=*), intent(in)    :: key
+        integer,          intent(inout) :: ival
+        integer :: ind
+        if( self%is_ptcl )then
+            ind = get_oriparam_ind(key)
+            if( ind == 0 )then
+                ival = nint(self%htab%get(key))
+            else
+                ival = nint(self%pparms(ind))
+            endif
+        else
+            ival = nint(self%htab%get(key))
+        endif
+    end subroutine getter_3
 
     pure function get_2Dshift( self ) result( vec )
         class(ori), intent(in) :: self
@@ -916,6 +960,18 @@ contains
             get_updatecnt = nint(self%htab%get('updatecnt'))
         endif
     end function get_updatecnt
+
+    pure integer function get_fromp( self )
+        class(ori), intent(in) :: self
+        ! 'fromp' is not part of pparms
+        call self%htab%getter('fromp', get_fromp)
+    end function get_fromp
+
+    pure integer function get_top( self )
+        class(ori), intent(in) :: self
+        ! 'top' is not part of pparms
+        call self%htab%getter('top', get_top)
+    end function get_top
 
     pure real function get_dfx( self )
         class(ori), intent(in) :: self

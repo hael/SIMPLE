@@ -21,11 +21,11 @@ contains
         if( .not. cline%defined('nrestarts') )then
             THROW_HARD('nrestarts needs to be defined on command line for restarted_exec')
         else
-            nrestarts = cline%get_rarg('nrestarts')
+            nrestarts = cline%get_iarg('nrestarts')
             call cline%delete('nrestarts')
             istart = 1
             if( cline%defined('istart') )then
-                istart = cline%get_rarg('istart')
+                istart = cline%get_iarg('istart')
             endif
         endif
         if( .not. cline%defined('projfile') )then

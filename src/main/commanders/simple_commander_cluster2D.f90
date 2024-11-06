@@ -123,7 +123,7 @@ contains
         call build%init_params_and_build_spproj(cline, params)
         ncls_here = build%spproj_field%get_n('class')
         if( .not. cline%defined('ncls') )then
-            call cline%set('ncls', real(ncls_here))
+            call cline%set('ncls', ncls_here)
             params%ncls = ncls_here
         endif
         ! set mkdir to no (to avoid nested directory structure)
@@ -162,13 +162,13 @@ contains
                 THROW_HARD('NSPACE & PTCL2D are incompatible!')
             endif
             call cline%set('oritype', 'ptcl3D')
-            call cline%set('ncls',    cline%get_rarg('nspace'))
+            call cline%set('ncls',    cline%get_iarg('nspace'))
         else
             call cline%set('oritype', 'ptcl2D')
         endif
         ! set shared-memory flag
         if( cline%defined('nparts') )then
-            if( nint(cline%get_rarg('nparts')) == 1 )then
+            if( cline%get_iarg('nparts') == 1 )then
                 l_shmem = .true.
                 call cline%delete('nparts')
             else
@@ -294,7 +294,7 @@ contains
         real,    parameter    :: MAXITS      = 15.
         real                  :: SMPD_TARGET_DEFAULT = 3.
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',      'yes')
-        if( .not. cline%defined('ncls')      ) call cline%set('ncls',        200.)
+        if( .not. cline%defined('ncls')      ) call cline%set('ncls',         200)
         if( .not. cline%defined('center')    ) call cline%set('center',      'no')
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale',  'yes')
         if( .not. cline%defined('refine')    ) call cline%set('refine',  'greedy_smpl')
@@ -307,7 +307,7 @@ contains
         call cline%set('stream', 'no')
         ! set shared-memory flag
         if( cline%defined('nparts') )then
-            if( nint(cline%get_rarg('nparts')) == 1 )then
+            if( cline%get_iarg('nparts') == 1 )then
                 l_shmem = .true.
                 call cline%delete('nparts')
             else
@@ -387,9 +387,9 @@ contains
         cline_cluster2D1 = cline
         cline_cluster2D2 = cline
         call cline_cluster2D1%set('smpd_crop', params%smpd_crop)
-        call cline_cluster2D1%set('box_crop',  real(params%box_crop))
+        call cline_cluster2D1%set('box_crop',  params%box_crop)
         call cline_cluster2D2%set('smpd_crop', params%smpd_crop)
-        call cline_cluster2D2%set('box_crop',  real(params%box_crop))
+        call cline_cluster2D2%set('box_crop',  params%box_crop)
         ! resolution limits
         call cline_cluster2D1%set('lp', lp1)
         call cline_cluster2D2%set('lp', lp2)
@@ -419,7 +419,7 @@ contains
         call cline_cluster2D2%set('minits', min(MINITS+3,MAXITS))
         if( l_euclid )then
             call cline_cluster2D2%set('objfun',   trim(cline%get_carg('objfun')))
-            call cline_cluster2D2%set('cc_iters', 0.)
+            call cline_cluster2D2%set('cc_iters', 0)
         else
             call cline_cluster2D2%set('objfun', 'cc')
         endif
@@ -432,7 +432,7 @@ contains
                 call cline_scalerefs%set('stk',    trim(params%refs))
                 call cline_scalerefs%set('outstk', trim(refs_sc))
                 call cline_scalerefs%set('smpd',   params%smpd)
-                call cline_scalerefs%set('newbox', real(params%box_crop))
+                call cline_scalerefs%set('newbox', params%box_crop)
                 call xscale%execute(cline_scalerefs)
                 call cline_cluster2D1%set('refs',trim(refs_sc))
             endif
@@ -448,7 +448,7 @@ contains
         else
             call xcluster2D_distr%execute(cline_cluster2D1)
         endif
-        last_iter  = nint(cline_cluster2D1%get_rarg('endit'))
+        last_iter  = cline_cluster2D1%get_iarg('endit')
         finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//params%ext
         if( .not. file_exists(trim(finalcavgs)) ) THROW_HARD('File '//trim(finalcavgs)//' does not exist')
         ! execution stage 2
@@ -457,19 +457,19 @@ contains
                 write(logfhandle,'(A)') '>>>'
                 write(logfhandle,'(A,F6.1)') '>>> STAGE 2, LOW-PASS LIMIT: ',lp2
                 write(logfhandle,'(A)') '>>>'
-                call cline_cluster2D2%set('startit',  real(last_iter+1))
+                call cline_cluster2D2%set('startit',  last_iter+1)
                 call cline_cluster2D2%set('refs',     trim(finalcavgs))
                 if( l_shmem )then
                     call xcluster2D%execute_safe(cline_cluster2D2)
                 else
                     call xcluster2D_distr%execute(cline_cluster2D2)
                 endif
-                last_iter  = nint(cline_cluster2D2%get_rarg('endit'))
+                last_iter  = cline_cluster2D2%get_iarg('endit')
                 finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//params%ext
             endif
         endif
         ! update project
-        call cline%set('endit',real(last_iter))
+        call cline%set('endit', last_iter)
         if( l_scaling )then
             call rescale_cavgs(finalcavgs)
             cavgs = add2fbody(finalcavgs,params%ext,'_even')
@@ -566,7 +566,7 @@ contains
         call cline%delete('clip')
         ! set shared-memory flag
         if( cline%defined('nparts') )then
-            if( nint(cline%get_rarg('nparts')) == 1 )then
+            if( cline%get_iarg('nparts') == 1 )then
                 l_shmem = .true.
                 call cline%delete('nparts')
             else
@@ -636,9 +636,9 @@ contains
         cline_cluster2D_stage1 = cline
         cline_cluster2D_stage2 = cline
         call cline_cluster2D_stage1%set('smpd_crop', params%smpd_crop)
-        call cline_cluster2D_stage1%set('box_crop',  real(params%box_crop))
+        call cline_cluster2D_stage1%set('box_crop',  params%box_crop)
         call cline_cluster2D_stage2%set('smpd_crop', params%smpd_crop)
-        call cline_cluster2D_stage2%set('box_crop',  real(params%box_crop))
+        call cline_cluster2D_stage2%set('box_crop',  params%box_crop)
         if( l_scaling )then
             ! scale references
             if( cline%defined('refs') )then
@@ -646,7 +646,7 @@ contains
                 call cline_scalerefs%set('stk',    trim(params%refs))
                 call cline_scalerefs%set('outstk', trim(refs_sc))
                 call cline_scalerefs%set('smpd',   params%smpd)
-                call cline_scalerefs%set('newbox', real(params%box_crop))
+                call cline_scalerefs%set('newbox', params%box_crop)
                 call xscale%execute(cline_scalerefs)
                 call cline_cluster2D_stage1%set('refs',trim(refs_sc))
             endif
@@ -663,23 +663,23 @@ contains
         call cline_cluster2D_stage1%set('ml_reg',     'no')
         if( params%l_update_frac )then
             call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
-            call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1_EXTR))
+            call cline_cluster2D_stage1%set('maxits', MAXITS_STAGE1_EXTR)
             if( l_euclid )then
                 if( l_cc_iters )then
                     params%cc_iters = min(params%cc_iters,MAXITS_STAGE1_EXTR)
-                    call cline_cluster2D_stage1%set('cc_iters', real(params%cc_iters))
+                    call cline_cluster2D_stage1%set('cc_iters', params%cc_iters)
                 else
-                    call cline_cluster2D_stage1%set('cc_iters', real(MAXITS_STAGE1))
+                    call cline_cluster2D_stage1%set('cc_iters', MAXITS_STAGE1)
                 endif
             endif
         else
-            call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1))
+            call cline_cluster2D_stage1%set('maxits', MAXITS_STAGE1)
             if( l_euclid )then
                 if( l_cc_iters )then
                     params%cc_iters = min(params%cc_iters,MAXITS_STAGE1)
-                    call cline_cluster2D_stage1%set('cc_iters', real(params%cc_iters))
+                    call cline_cluster2D_stage1%set('cc_iters', params%cc_iters)
                 else
-                    call cline_cluster2D_stage1%set('cc_iters', real(MAXITS_STAGE1))
+                    call cline_cluster2D_stage1%set('cc_iters', MAXITS_STAGE1)
                 endif
             endif
         endif
@@ -693,7 +693,7 @@ contains
         else
             call xcluster2D_distr%execute(cline_cluster2D_stage1)
         endif
-        last_iter_stage1 = nint(cline_cluster2D_stage1%get_rarg('endit'))
+        last_iter_stage1 = cline_cluster2D_stage1%get_iarg('endit')
         cavgs            = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage1,3)//params%ext
         ! Stage 2: refinement stage, little extremal updates, optional incremental
         !          learning for acceleration
@@ -712,7 +712,7 @@ contains
         call cline_cluster2D_stage2%set('trs', trs_stage2)
         ! for testing
         if( cline%defined('extr_iter') )then
-            call cline_cluster2D_stage2%set('extr_iter', cline_cluster2D_stage1%get_rarg('extr_iter'))
+            call cline_cluster2D_stage2%set('extr_iter', cline_cluster2D_stage1%get_iarg('extr_iter'))
         endif
         ! execution
         if( l_shmem )then
@@ -724,7 +724,7 @@ contains
         else
             call xcluster2D_distr%execute(cline_cluster2D_stage2)
         endif
-        last_iter_stage2 = nint(cline_cluster2D_stage2%get_rarg('endit'))
+        last_iter_stage2 = cline_cluster2D_stage2%get_iarg('endit')
         finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//params%ext
         ! Updates project and references
         if( l_scaling )then
@@ -733,10 +733,10 @@ contains
             call cline_make_cavgs%delete('autoscale')
             call cline_make_cavgs%delete('balance')
             call cline_make_cavgs%set('prg',      'make_cavgs')
-            call cline_make_cavgs%set('nparts',   real(params%nparts))
+            call cline_make_cavgs%set('nparts',   params%nparts)
             call cline_make_cavgs%set('refs',     trim(finalcavgs))
             call cline_make_cavgs%delete('wiener') ! to ensure that full Wiener restoration is done for the final cavgs
-            call cline_make_cavgs%set('which_iter', real(last_iter_stage2)) ! to ensure masks are generated and used
+            call cline_make_cavgs%set('which_iter', last_iter_stage2) ! to ensure masks are generated and used
             if( l_shmem )then
                 params_ptr  => params_glob
                 params_glob => null()
@@ -761,7 +761,7 @@ contains
             ! rank based on maximum of power spectrum
             call cline_pspec_rank%set('mkdir',   'no')
             call cline_pspec_rank%set('moldiam', params%moldiam)
-            call cline_pspec_rank%set('nthr',    real(params%nthr))
+            call cline_pspec_rank%set('nthr',    params%nthr)
             call cline_pspec_rank%set('smpd',    params%smpd)
             call cline_pspec_rank%set('stk',     finalcavgs)
             if( cline%defined('lp_backgr') ) call cline_pspec_rank%set('lp_backgr', params%lp_backgr)
@@ -896,13 +896,13 @@ contains
                             cnt = cnt + 1
                             params%ncls = cnt
                             do ptclind=iptcl,min(params%nptcls, iptcl + params%nptcls_per_cls - 1)
-                                call build%spproj%os_ptcl2D%set(ptclind, 'class', real(cnt))
+                                call build%spproj%os_ptcl2D%set(ptclind, 'class', cnt)
                             end do
                         end do
                         call job_descr%set('ncls',int2str(params%ncls))
-                        call cline%set('ncls', real(params%ncls))
-                        call cline_make_cavgs%set('ncls', real(params%ncls))
-                        call cline_cavgassemble%set('ncls', real(params%ncls))
+                        call cline%set('ncls', params%ncls)
+                        call cline_make_cavgs%set('ncls', params%ncls)
+                        call cline_cavgassemble%set('ncls', params%ncls)
                         call cline_make_cavgs%set('refs', params%refs)
                         call xmake_cavgs%execute(cline_make_cavgs)
                         l_scale_inirefs = .false.
@@ -910,10 +910,10 @@ contains
                         if( trim(params%refine).eq.'inpl' )then
                             params%ncls = build%spproj%os_ptcl2D%get_n('class')
                             call job_descr%set('ncls',int2str(params%ncls))
-                            call cline%set('ncls', real(params%ncls))
-                            call cline_make_cavgs%set('ncls', real(params%ncls))
+                            call cline%set('ncls', params%ncls)
+                            call cline_make_cavgs%set('ncls', params%ncls)
                             call cline_make_cavgs%delete('tseries')
-                            call cline_cavgassemble%set('ncls', real(params%ncls))
+                            call cline_cavgassemble%set('ncls', params%ncls)
                             call cline_make_cavgs%set('refs', params%refs)
                             call xmake_cavgs%execute(cline_make_cavgs)
                             l_scale_inirefs = .false.
@@ -937,7 +937,7 @@ contains
                         ! initialization from random classes
                         do iptcl=1,params%nptcls
                             if( build%spproj_field%get_state(iptcl) == 0 ) cycle
-                            call build%spproj_field%set(iptcl, 'class', real(irnd_uni(params%ncls)))
+                            call build%spproj_field%set(iptcl, 'class', irnd_uni(params%ncls))
                             call build%spproj_field%set(iptcl, 'w',     1.0)
                             call build%spproj_field%e3set(iptcl,ran3()*360.0)
                         end do
@@ -960,7 +960,7 @@ contains
                 call cline_scalerefs%set('stk',    trim(params%refs))
                 call cline_scalerefs%set('outstk', trim(refs_sc))
                 call cline_scalerefs%set('smpd',   params%smpd)
-                call cline_scalerefs%set('newbox', real(params%box_crop))
+                call cline_scalerefs%set('newbox', params%box_crop)
                 call xscale%execute(cline_scalerefs)
                 call simple_rename(refs_sc, params%refs)
             endif
@@ -1000,7 +1000,7 @@ contains
             ! cooling of the randomization rate
             params%extr_iter = params%extr_iter + 1
             call job_descr%set('extr_iter', trim(int2str(params%extr_iter)))
-            call cline%set('extr_iter', real(params%extr_iter))
+            call cline%set('extr_iter', params%extr_iter)
             ! objfun function part 3: activate sigma2 calculation
             if( iter==iter_switch2euclid )then
                 call cline%set('needs_sigma','yes')
@@ -1040,7 +1040,7 @@ contains
             if( L_BENCH_GLOB ) rt_cavgassemble = toc(t_cavgassemble)
             ! objfun=euclid, part 4: sigma2 consolidation
             if( params%l_needs_sigma )then
-                call cline_calc_sigma%set('which_iter',real(params%which_iter+1))
+                call cline_calc_sigma%set('which_iter', params%which_iter+1)
                 call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
             endif
             ! print out particle parameters per iteration
@@ -1114,7 +1114,7 @@ contains
         call qsys_cleanup
         ! report the last iteration on exit
         call cline%delete( 'startit' )
-        call cline%set('endit', real(iter))
+        call cline%set('endit', iter)
         ! end gracefully
         call build%spproj_field%kill
         call simple_touch(CLUSTER2D_FINISHED)
@@ -1178,19 +1178,19 @@ contains
                                 cnt = cnt + 1
                                 params%ncls = cnt
                                 do ptclind=iptcl,min(params%nptcls, iptcl + params%nptcls_per_cls - 1)
-                                    call build%spproj%os_ptcl2D%set(ptclind, 'class', real(cnt))
+                                    call build%spproj%os_ptcl2D%set(ptclind, 'class', cnt)
                                 end do
                             end do
-                            call cline%set('ncls', real(params%ncls))
-                            call cline_make_cavgs%set('ncls', real(params%ncls))
+                            call cline%set('ncls', params%ncls)
+                            call cline_make_cavgs%set('ncls', params%ncls)
                             call cline_make_cavgs%set('refs', params%refs)
                             call xmake_cavgs%execute(cline_make_cavgs)
                             l_scale_inirefs  = .false.
                         else
                             if( trim(params%refine).eq.'inpl' )then
                                 params%ncls = build%spproj%os_ptcl2D%get_n('class')
-                                call cline%set('ncls', real(params%ncls))
-                                call cline_make_cavgs%set('ncls', real(params%ncls))
+                                call cline%set('ncls', params%ncls)
+                                call cline_make_cavgs%set('ncls', params%ncls)
                                 call cline_make_cavgs%delete('tseries')
                                 call cline_make_cavgs%set('refs', params%refs)
                                 call xmake_cavgs%execute(cline_make_cavgs)
@@ -1215,7 +1215,7 @@ contains
                             ! initialization from random classes
                             do iptcl=1,params%nptcls
                                 if( build%spproj_field%get_state(iptcl) == 0 ) cycle
-                                call build%spproj_field%set(iptcl, 'class', real(irnd_uni(params%ncls)))
+                                call build%spproj_field%set(iptcl, 'class', irnd_uni(params%ncls))
                                 call build%spproj_field%set(iptcl, 'w',     1.0)
                                 call build%spproj_field%e3set(iptcl,ran3()*360.0)
                             end do
@@ -1233,7 +1233,7 @@ contains
                         call cline_scalerefs%set('stk',    trim(params%refs))
                         call cline_scalerefs%set('outstk', trim(refs_sc))
                         call cline_scalerefs%set('smpd',   params%smpd)
-                        call cline_scalerefs%set('newbox', real(params%box_crop))
+                        call cline_scalerefs%set('newbox', params%box_crop)
                         call xscale%execute(cline_scalerefs)
                         call simple_rename(refs_sc, params%refs)
                     endif
@@ -1300,7 +1300,7 @@ contains
                 write(logfhandle,'(A)')   '>>>'
                 write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
                 write(logfhandle,'(A)')   '>>>'
-                call cline%set('which_iter', real(params%which_iter))
+                call cline%set('which_iter', params%which_iter)
                 if( params%which_iter == iter_switch2euclid )then
                     call cline%set('needs_sigma','yes')
                     params%needs_sigma   = 'yes'
@@ -1334,7 +1334,7 @@ contains
                 if( converged .or. params%which_iter >= params%maxits )then
                     ! report the last iteration on exit
                     call cline%delete( 'startit' )
-                    call cline%set('endit', real(params%startit))
+                    call cline%set('endit', params%startit)
                     call del_file(params%outfile)
                     ! update os_out
                     finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(params%startit,3)//params%ext
@@ -1519,8 +1519,8 @@ contains
             call stkio_r%read_whole ! because need asynchronous access
             call stkio_w%open(params%outstk, params%smpd, 'write', box=ldim(1), bufsz=params%ncls)
             do icls=1,params%ncls
-                call clsdoc_ranked%set(icls, 'class',     real(order(icls)))
-                call clsdoc_ranked%set(icls, 'rank',      real(icls))
+                call clsdoc_ranked%set(icls, 'class',     order(icls))
+                call clsdoc_ranked%set(icls, 'rank',      icls)
                 call clsdoc_ranked%set(icls, 'pop',       spproj%os_cls2D%get(order(icls),  'pop'))
                 call clsdoc_ranked%set(icls, 'res',       spproj%os_cls2D%get(order(icls),  'res'))
                 call clsdoc_ranked%set(icls, 'corr',      spproj%os_cls2D%get(order(icls), 'corr'))
@@ -2104,7 +2104,7 @@ contains
         logical          :: l_phflip, l_transp_pca, l_pre_norm ! pixel-wise learning
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
-        if( .not. cline%defined('neigs')   ) call cline%set('neigs',    4.0)
+        if( .not. cline%defined('neigs')   ) call cline%set('neigs',    4)
         call build%init_params_and_build_general_tbox(cline, params, do3d=(trim(params%oritype) .eq. 'ptcl3D'))
         call spproj%read(params%projfile)
         select case(trim(params%oritype))
