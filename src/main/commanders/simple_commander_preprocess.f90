@@ -153,7 +153,7 @@ contains
         if( .not. cline%defined('mcpatch_thres')   ) call cline%set('mcpatch_thres',  'yes')
         if( .not. cline%defined('algorithm')       ) call cline%set('algorithm',    'patch')
         ! ctf estimation
-        if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz',         512.)
+        if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz',          512)
         if( .not. cline%defined('hp_ctf_estimate') ) call cline%set('hp_ctf_estimate',  30.)
         if( .not. cline%defined('lp_ctf_estimate') ) call cline%set('lp_ctf_estimate',   5.)
         if( .not. cline%defined('dfmin')           ) call cline%set('dfmin',          DFMIN_DEFAULT)
@@ -182,7 +182,7 @@ contains
         if( params%nparts > params%nptcls ) THROW_HARD('# partitions (nparts) must be < number of entries in filetable')
         ! deal with numlen so that length matches JOB_FINISHED indicator files
         params%numlen = len(int2str(params%nparts))
-        call cline%set('numlen', real(params%numlen))
+        call cline%set('numlen', params%numlen)
         ! gain reference
         call flip_gain(cline, params%gainref, params%flipgain)
         ! setup the environment for distributed execution
@@ -384,12 +384,12 @@ contains
                 ! based on CTFRES
                 if( l_pick .and. o_mov%isthere('ctfres') )then
                     l_skip_pick = o_mov%get('ctfres') > (params%ctfresthreshold-0.001)
-                    if( l_skip_pick ) call o_mov%set('nptcls',0.)
+                    if( l_skip_pick ) call o_mov%set('nptcls',0)
                 end if
                 ! based on ice fraction
                 if( l_pick .and. .not.l_skip_pick .and. o_mov%isthere('icefrac') )then
                     l_skip_pick = o_mov%get('icefrac') > (params%icefracthreshold-0.001)
-                    if( l_skip_pick ) call o_mov%set('nptcls',0.)
+                    if( l_skip_pick ) call o_mov%set('nptcls',0)
                 endif
             endif
             ! read xml
@@ -423,7 +423,7 @@ contains
                 params_glob%lp = max(2.*smpd_pick, params%lp_pick)
                 call o_mov%getter('intg', moviename_intg)
                 call piter%iterate(cline, smpd_pick, moviename_intg, output_dir_picker, boxfile, nptcls_out)
-                call o_mov%set('nptcls',  real(nptcls_out))
+                call o_mov%set('nptcls',  nptcls_out)
                 if( nptcls_out > 0 )then
                     call o_mov%set('boxfile', trim(boxfile))
                 else
@@ -441,7 +441,7 @@ contains
                         call cline_extract%set('dir',       trim(output_dir_extract))
                         call cline_extract%set('pcontrast', params%pcontrast)
                         call cline_extract%delete('msk')
-                        if( cline%defined('box_extract') )call cline_extract%set('box', real(params%box_extract))
+                        if( cline%defined('box_extract') )call cline_extract%set('box', params%box_extract)
                         call xextract%execute(cline_extract)
                         call spproj%kill
                     endif
@@ -471,21 +471,21 @@ contains
         type(sp_project) :: spproj
         type(qsys_env)   :: qenv
         type(chash)      :: job_descr
-        if( .not. cline%defined('mkdir')         ) call cline%set('mkdir',       'yes')
-        if( .not. cline%defined('trs')           ) call cline%set('trs',           20.)
-        if( .not. cline%defined('lpstart')       ) call cline%set('lpstart',        8.)
-        if( .not. cline%defined('lpstop')        ) call cline%set('lpstop',         5.)
-        if( .not. cline%defined('bfac')          ) call cline%set('bfac',          50.)
-        if( .not. cline%defined('groupframes')   ) call cline%set('groupframes',  'no')
-        if( .not. cline%defined('mcconvention')  ) call cline%set('mcconvention','simple')
-        if( .not. cline%defined('wcrit')         ) call cline%set('wcrit',   'softmax')
-        if( .not. cline%defined('eer_upsampling')) call cline%set('eer_upsampling', 1.)
-        if( .not. cline%defined('mcpatch')       ) call cline%set('mcpatch',      'yes')
-        if( .not. cline%defined('mcpatch_thres'))call cline%set('mcpatch_thres','yes')
-        if( .not. cline%defined('algorithm')     ) call cline%set('algorithm', 'patch')
+        if( .not. cline%defined('mkdir')         ) call cline%set('mkdir',           'yes')
+        if( .not. cline%defined('trs')           ) call cline%set('trs',               20.)
+        if( .not. cline%defined('lpstart')       ) call cline%set('lpstart',            8.)
+        if( .not. cline%defined('lpstop')        ) call cline%set('lpstop',             5.)
+        if( .not. cline%defined('bfac')          ) call cline%set('bfac',              50.)
+        if( .not. cline%defined('groupframes')   ) call cline%set('groupframes',      'no')
+        if( .not. cline%defined('mcconvention')  ) call cline%set('mcconvention', 'simple')
+        if( .not. cline%defined('wcrit')         ) call cline%set('wcrit',       'softmax')
+        if( .not. cline%defined('eer_upsampling')) call cline%set('eer_upsampling',      1)
+        if( .not. cline%defined('mcpatch')       ) call cline%set('mcpatch',         'yes')
+        if( .not. cline%defined('mcpatch_thres') ) call cline%set('mcpatch_thres',   'yes')
+        if( .not. cline%defined('algorithm')     ) call cline%set('algorithm',     'patch')
         call cline%set('oritype', 'mic')
         call params%new(cline)
-        call cline%set('numlen', real(params%numlen))
+        call cline%set('numlen', params%numlen)
         ! sanity check
         call spproj%read_segment(params%oritype, params%projfile)
         if( spproj%get_nmovies() ==0 ) THROW_HARD('no movies to process! exec_motion_correct_distr')
@@ -592,7 +592,7 @@ contains
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         params%numlen = len(int2str(params%nparts))
-        call cline%set('numlen', real(params%numlen))
+        call cline%set('numlen', params%numlen)
         ! sanity check
         call spproj%read_segment(params%oritype, params%projfile)
         nintgs = spproj%get_nintgs()
@@ -600,7 +600,7 @@ contains
             THROW_HARD('no integrated movies to process! exec_gen_pspecs_and_thumbs_distr')
         endif
         if( params%nparts > nintgs )then
-            call cline%set('nparts', real(nintgs))
+            call cline%set('nparts', nintgs)
             params%nparts = nintgs
         endif
         call spproj%kill
@@ -684,12 +684,12 @@ contains
         type(chash)                   :: job_descr
         type(qsys_env)                :: qenv
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',  'yes')
-        if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
+        if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz',  512)
         if( .not. cline%defined('hp')      ) call cline%set('hp',       30.)
         if( .not. cline%defined('lp')      ) call cline%set('lp',        5.)
         if( .not. cline%defined('dfmin')   ) call cline%set('dfmin',    DFMIN_DEFAULT)
         if( .not. cline%defined('dfmax')   ) call cline%set('dfmax',    DFMAX_DEFAULT)
-        if( .not. cline%defined('oritype') ) call cline%set('oritype','mic')
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         if( .not. cline%defined('ctfpatch')) call cline%set('ctfpatch','yes')
         call params%new(cline)
         ! sanity check
@@ -701,7 +701,7 @@ contains
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         params%numlen = len(int2str(params%nparts))
-        call cline%set('numlen', real(params%numlen))
+        call cline%set('numlen', params%numlen)
         ! setup the environment for distributed execution
         call qenv%new(params%nparts)
         ! prepare job description
@@ -746,8 +746,7 @@ contains
             fromto(:) = 1
         else
             if( cline%defined('fromp') .and. cline%defined('top') )then
-                fromto(1) = params%fromp
-                fromto(2) = params%top
+                fromto = [params%fromp, params%top]
             else
                 THROW_HARD('fromp & top args need to be defined in parallel execution; exec_ctf_estimate')
             endif
@@ -759,7 +758,7 @@ contains
             cnt   = cnt + 1
             call spproj%os_mic%get_ori(imic, o)
             state = 1
-            if( o%isthere('state') ) state = nint(o%get('state'))
+            if( o%isthere('state') ) state = o%get_state()
             if( state == 0 ) cycle
             if( o%isthere('imgkind') )then
                 call o%getter('imgkind', imgkind)
@@ -942,9 +941,9 @@ contains
         if( .not. cline%defined('lp')          ) call cline%set('lp',PICK_LP_DEFAULT)
         which_picker = cline%get_carg('picker')
         if( trim(which_picker) .eq. 'seg' )then
-            if( .not. cline%defined('ndev')        ) call cline%set('ndev',         1.5)
+            if( .not. cline%defined('ndev')        ) call cline%set('ndev',      1.5)
         else
-            if( .not. cline%defined('ndev')        ) call cline%set('ndev',           2.)
+            if( .not. cline%defined('ndev')        ) call cline%set('ndev',       2.)
         endif
         call params%new(cline)
         ! sanity check
@@ -959,7 +958,7 @@ contains
             call cline%set('nparts', params%nparts)
         endif
         params%numlen = len(int2str(params%nparts))
-        call cline%set('numlen', real(params%numlen))
+        call cline%set('numlen', params%numlen)
         ! more sanity checks
         if( trim(params%pick_roi).eq.'yes' )then
             params%backgr_subtr = 'yes'
@@ -1057,8 +1056,7 @@ contains
             fromto(:) = 1
         else
             if( cline%defined('fromp') .and. cline%defined('top') )then
-                fromto(1) = params%fromp
-                fromto(2) = params%top
+                fromto = [params%fromp, params%top]
             else
                 THROW_HARD('fromp & top args need to be defined in parallel execution; exec_pick')
             endif
@@ -1076,7 +1074,7 @@ contains
             cnt   = cnt + 1
             call spproj%os_mic%get_ori(imic, o)
             state = 1
-            if( o%isthere('state') ) state = nint(o%get('state'))
+            if( o%isthere('state') ) state = o%get_state()
             if( state == 0 ) cycle
             if( o%isthere('imgkind') )then
                 call o%getter('imgkind', imgkind)
@@ -1171,7 +1169,7 @@ contains
         do imic = 1, nmics_tot
             call spproj%os_mic%get_ori(imic, o_mic)
             state = 1
-            if( o_mic%isthere('state') ) state = nint(o_mic%get('state'))
+            if( o_mic%isthere('state') ) state = o_mic%get_state()
             if( state == 0 ) cycle
             if( .not. o_mic%isthere('imgkind') )cycle
             if( .not. o_mic%isthere('intg')    )cycle
@@ -1219,7 +1217,7 @@ contains
                 call spproj_part%os_mic%get_ori(imic, o_mic)
                 call spproj%os_mic%set_ori(cnt,o_mic)
                 if( o_mic%isthere('nptcls') )then
-                    if( nint(o_mic%get('nptcls')) > 0 ) nstks = nstks + 1
+                    if( o_mic%get_int('nptcls') > 0 ) nstks = nstks + 1
                 endif
             enddo
             call spproj_part%kill
@@ -1378,7 +1376,7 @@ contains
             prog_write = .true.
             if( cline%defined('part') ) then 
                 prog_part = .true.
-                call progressfile_init_part(int(cline%get_rarg('part')))
+                call progressfile_init_part(cline%get_iarg('part'))
             else
                 call progressfile_init()
             endif
@@ -1398,7 +1396,7 @@ contains
         do imic = 1,nmics_here
             call spproj%os_mic%get_ori(imic, o_mic)
             state = 1
-            if( o_mic%isthere('state') ) state = nint(o_mic%get('state'))
+            if( o_mic%isthere('state') ) state = o_mic%get_state()
             if( state == 0 ) cycle
             if( .not. o_mic%isthere('imgkind') )cycle
             if( .not. o_mic%isthere('intg')    )cycle
@@ -1430,7 +1428,7 @@ contains
                     nptcls = boxfile%get_ndatalines()
                 endif
                 if( nptcls == 0 )then
-                    call spproj%os_mic%set(imic, 'nptcls', 0.)
+                    call spproj%os_mic%set(imic, 'nptcls', 0)
                     cycle
                 endif
                 allocate( boxdata(boxfile%get_nrecs_per_line(),nptcls) )
@@ -1452,7 +1450,7 @@ contains
             prog = 0.0
             do imic = 1,nmics_here
                 if( .not.mics_mask(imic) )then
-                    call spproj%os_mic%set(imic, 'nptcls', 0.)
+                    call spproj%os_mic%set(imic, 'nptcls', 0)
                     call spproj%os_mic%set_state(imic, 0)
                     cycle
                 endif
@@ -1490,7 +1488,7 @@ contains
                 end do
                 ! update micrograph field
                 nptcls2extract = count(oris_mask)
-                call spproj%os_mic%set(imic, 'nptcls', real(nptcls2extract))
+                call spproj%os_mic%set(imic, 'nptcls', nptcls2extract)
                 if( nptcls2extract == 0 )then
                     ! no particles to extract
                     mics_mask(imic) = .false.
@@ -1606,7 +1604,7 @@ contains
                     if( (real(imic) / real(nmics_here)) > prog + 0.05 ) then
                         prog = real(imic) / real(nmics_here)
                         if(prog_part) then 
-                            call progressfile_update_part(int(cline%get_rarg('part')), prog)
+                            call progressfile_update_part(cline%get_iarg('part'), prog)
                         else
                             call progressfile_update(prog)
                         endif
@@ -1745,7 +1743,7 @@ contains
         do imic = 1, nmics_tot
             call spproj%os_mic%get_ori(imic, o_mic)
             state = 1
-            if( o_mic%isthere('state') ) state = nint(o_mic%get('state'))
+            if( o_mic%isthere('state') ) state = o_mic%get_state()
             if( state == 0 ) cycle
             if( .not. o_mic%isthere('imgkind') )cycle
             if( .not. o_mic%isthere('intg')    )cycle
@@ -1834,11 +1832,11 @@ contains
                 endif
                 do i = 1,nptcls
                     cnt    = cnt + 1
-                    stkind = nint(spproj%os_ptcl2D%get(cnt,'stkind'))
+                    stkind = spproj%os_ptcl2D%get_int(cnt,'stkind')
                     call spproj%os_ptcl2D%transfer_ori(cnt, spproj_parts(ipart)%os_ptcl2D, i)
                     call spproj%os_ptcl3D%transfer_ori(cnt, spproj_parts(ipart)%os_ptcl3D, i)
-                    call spproj%os_ptcl2D%set(cnt,'stkind',real(stkind))
-                    call spproj%os_ptcl3D%set(cnt,'stkind',real(stkind))
+                    call spproj%os_ptcl2D%set(cnt,'stkind',stkind)
+                    call spproj%os_ptcl3D%set(cnt,'stkind',stkind)
                 enddo
                 call spproj_parts(ipart)%kill
             enddo
@@ -1969,7 +1967,7 @@ contains
                 else
                     stk_ind = mic2stk_inds(imic)
                     call spproj_in%os_stk%get_ori(stk_ind, o_stk)
-                    box_foo = nint(o_stk%get('box'))
+                    box_foo = o_stk%get_int('box')
                     if( prev_box == 0 ) prev_box = box_foo
                     if( prev_box /= box_foo ) THROW_HARD('Inconsistent box size; exec_reextract')
                 endif
@@ -2003,9 +2001,9 @@ contains
                 ! stack
                 stk_ind = mic2stk_inds(imic)
                 call spproj_in%os_stk%get_ori(stk_ind, o_stk)
-                prev_box = nint(o_stk%get('box'))
-                fromp    = nint(o_stk%get('fromp'))
-                top      = nint(o_stk%get('top'))
+                prev_box = o_stk%get_int('box')
+                fromp    = o_stk%get_fromp()
+                top      = o_stk%get_top()
                 ext      = fname2ext(trim(basename(mic_name)))
                 stack    = trim(EXTRACT_STK_FBODY)//trim(get_fbody(trim(basename(mic_name)), trim(ext)))//trim(STK_EXT)
                 ! updating shifts, positions, states and doc
@@ -2273,7 +2271,7 @@ contains
             cline_extract = cline
             call cline_extract%set('dir', trim(output_dir_extract))
             call cline_extract%set('pcontrast', params%pcontrast)
-            if( cline%defined('box_extract') ) call cline_extract%set('box', real(params%box_extract))
+            if( cline%defined('box_extract') ) call cline_extract%set('box', params%box_extract)
             call cline%delete('box')
             call cline_extract%delete('box_extract')
         endif
@@ -2296,7 +2294,7 @@ contains
             call spproj%os_mic%get_ori(imic, o_mic)
             ! sanity check
             state = 1
-            if( o_mic%isthere('state') ) state = nint(o_mic%get('state'))
+            if( o_mic%isthere('state') ) state = o_mic%get_state()
             if( state == 0 ) cycle
             if( .not.o_mic%isthere('intg')   )cycle
             call o_mic%getter('intg', micname)
@@ -2304,7 +2302,7 @@ contains
             ! picker
             params_glob%lp = max(params%fny, params%lp_pick)
             call piter%iterate(cline, params%smpd, micname, output_dir_picker, boxfile, nptcls, moldiam_opt=moldiam_opt)
-            call o_mic%set('nptcls', real(nptcls))
+            call o_mic%set('nptcls', nptcls)
             if( nptcls > 0 )then
                 call o_mic%set('boxfile', trim(boxfile))
                 if( l_multipick ) call o_mic%set('moldiam', moldiam_opt)
@@ -2328,7 +2326,7 @@ contains
                 i = 0
                 do imic = fromto(1),fromto(2)
                     state  = spproj%os_mic%get_state(imic)
-                    nptcls = nint(spproj%os_mic%get(imic,'nptcls'))
+                    nptcls = spproj%os_mic%get_int(imic,'nptcls')
                     if( (state == 1) .and. (nptcls > 0) )then
                         i = i+1
                         call os_mic%transfer_ori(i, spproj%os_mic, imic)

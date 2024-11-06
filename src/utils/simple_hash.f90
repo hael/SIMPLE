@@ -15,28 +15,31 @@ integer, parameter :: BUFFSZ_DEFAULT = 10
 type :: hash
     private
     type(str4arr), allocatable :: keys(:)   !< hash keys
-    real,          allocatable :: values(:) !< hash values
+    real(dp),      allocatable :: values(:) !< hash values
     integer :: buffsz     = BUFFSZ_DEFAULT  !< size of first buffer and subsequent allocation increments
     integer :: hash_index = 0               !< index
     logical :: exists     = .false.
   contains
     !< CONSTRUCTORS
-    procedure, private :: new_1
-    procedure, private :: new_2
+    procedure, private :: new_1, new_2
     generic            :: new => new_1, new_2
     procedure, private :: alloc_hash
     procedure, private :: realloc_hash
     procedure, private :: copy
     generic            :: assignment(=) => copy
     !< SETTERS
-    procedure          :: push
-    procedure          :: set
+    procedure, private :: push_1, push_2
+    generic            :: push => push_1, push_2
+    procedure, private :: set_1, set_2, set_3
+    generic            :: set => set_1, set_2, set_3
     procedure          :: delete
     !< GETTERS
     procedure          :: isthere
     procedure          :: lookup
     procedure          :: get
-    procedure          :: get_values
+    procedure, private :: get_dp
+    procedure, private :: getter_1, getter_2, getter_3
+    generic            :: getter => getter_1, getter_2, getter_3
     procedure          :: get_keys
     procedure          :: get_str
     procedure          :: get_value_at
@@ -108,8 +111,8 @@ contains
     !>  \brief  re-allocates keys and values without touching buffsz and hash_index and preserving previous key-value pairs
     subroutine realloc_hash( self )
         class(hash), intent(inout) :: self
-        type(str4arr), allocatable :: keys_copy(:)
-        real,          allocatable :: values_copy(:)
+        type(str4arr),  allocatable :: keys_copy(:)
+        real(dp),       allocatable :: values_copy(:)
         integer :: newsz, oldsz, i
         if( self%exists )then
             ! old/new size
@@ -153,11 +156,11 @@ contains
 
     ! SETTERS
 
-    !>  \brief  pushes values to the hash
-    subroutine push( self, key, val )
+    !>  \brief  pushes real values to the hash
+    subroutine push_1( self, key, val )
         class(hash),      intent(inout) :: self
         character(len=*), intent(in)    :: key
-        real,             intent(in)    :: val
+        real(dp),         intent(in)    :: val
         integer :: sz
         ! increment index
         self%hash_index = self%hash_index + 1
@@ -167,25 +170,76 @@ contains
         ! set key
         self%keys(self%hash_index)%str = trim(adjustl(key))
         ! set value
-        self%values(self%hash_index) = val
-    end subroutine push
+        self%values(self%hash_index) = real(val,dp)
+    end subroutine push_1
 
-    !>  \brief  sets a value in the hash
-    subroutine set( self, key, val )
+    !>  \brief  pushes real values to the hash
+    subroutine push_2( self, key, val )
         class(hash),      intent(inout) :: self
+        character(len=*), intent(in)    :: key
+        integer,          intent(in)    :: val
+        integer :: sz
+        ! increment index
+        self%hash_index = self%hash_index + 1
+        ! reallocate if needed
+        sz = size(self%keys)
+        if( self%hash_index > sz ) call self%realloc_hash
+        ! set key
+        self%keys(self%hash_index)%str = trim(adjustl(key))
+        ! set value
+        self%values(self%hash_index) = real(val,dp)
+    end subroutine push_2
+
+    !>  \brief  sets a real value in the hash
+    subroutine set_1( self, key, val )
+        class(hash),     intent(inout) :: self
         character(len=*), intent(in)    :: key
         real,             intent(in)    :: val
         integer :: i
         if( self%hash_index >= 1 )then
             do i=1,self%hash_index
                 if( trim(self%keys(i)%str) .eq. trim(key) )then
-                    self%values(i) = val
+                    self%values(i) = real(val,dp)
                     return
                 endif
             end do
         endif
-        call self%push(key, val)
-    end subroutine set
+        call self%push(key, real(val,dp))
+    end subroutine set_1
+
+    !>  \brief  sets an integer value in the hash
+    subroutine set_2( self, key, ival )
+        class(hash),     intent(inout) :: self
+        character(len=*), intent(in)    :: key
+        integer,          intent(in)    :: ival
+        integer :: i
+        if( self%hash_index >= 1 )then
+            do i=1,self%hash_index
+                if( trim(self%keys(i)%str) .eq. trim(key) )then
+                    self%values(i) = real(ival,dp)
+                    return
+                endif
+            end do
+        endif
+        call self%push(key, real(ival,dp))
+    end subroutine set_2
+
+    !>  \brief  sets a real(kind=8) value in the hash
+    subroutine set_3( self, key, rval )
+        class(hash),     intent(inout) :: self
+        character(len=*), intent(in)    :: key
+        real(dp),         intent(in)    :: rval
+        integer :: i
+        if( self%hash_index >= 1 )then
+            do i=1,self%hash_index
+                if( trim(self%keys(i)%str) .eq. trim(key) )then
+                    self%values(i) = rval
+                    return
+                endif
+            end do
+        endif
+        call self%push(key, rval)
+    end subroutine set_3
 
     !>  \brief  deletes a value in the hash
     subroutine delete( self, key )
@@ -210,16 +264,15 @@ contains
     ! GETTERS
 
     !>  \brief  check for presence of key in the hash
-    pure function isthere( self, key ) result( found )
+    pure logical function isthere( self, key )
         class(hash),      intent(in) :: self
-        character(len=*), intent(in)    :: key
+        character(len=*), intent(in)  :: key
         integer :: i
-        logical :: found
-        found = .false.
+        isthere = .false.
         if( self%hash_index >= 1 )then
             do i=1,self%hash_index
                 if( trim(self%keys(i)%str) .eq. trim(key) )then
-                    found = .true.
+                    isthere = .true.
                     return
                 endif
             end do
@@ -240,48 +293,77 @@ contains
         end do
     end function lookup
 
-    !>  \brief  gets a value in the hash
-    pure function get( self, key ) result( val )
+    !>  \brief  gets a value in the hash as real(kind=4)
+    pure real(kind=sp) function get( self, key )
         class(hash),      intent(in) :: self
         character(len=*), intent(in) :: key
-        real    :: val
-        integer :: i
-        val = 0.
+        integer  :: i
+        get = 0.0
         do i=1,self%hash_index
             if( trim(self%keys(i)%str) .eq. trim(key) )then
-                val = self%values(i)
+                get = real(self%values(i))
                 return
             endif
         end do
     end function get
 
+    !>  \brief  gets a value in the hash as real(kind=4)
+    pure real(kind=dp) function get_dp( self, key )
+        class(hash),      intent(in) :: self
+        character(len=*), intent(in) :: key
+        integer  :: i
+        get_dp = 0.0d0
+        do i=1,self%hash_index
+            if( trim(self%keys(i)%str) .eq. trim(key) )then
+                get_dp = self%values(i)
+                return
+            endif
+        end do
+    end function get_dp
+
+    !>  \brief  returns real(kind=4)
+    pure subroutine getter_1( self, key, rvalsp )
+        class(hash),      intent(in)  :: self
+        character(len=*), intent(in)  :: key
+        real(kind=sp),    intent(out) :: rvalsp
+        rvalsp = real(self%get_dp(key))
+    end subroutine getter_1
+
+    !>  \brief  returns real(kind=8)
+    pure subroutine getter_2( self, key, rvaldp )
+        class(hash),      intent(in)  :: self
+        character(len=*), intent(in)  :: key
+        real(kind=dp),    intent(out) :: rvaldp
+        rvaldp = self%get_dp(key)
+    end subroutine getter_2
+
+    !>  \brief  returns integer(kind=4)
+    pure subroutine getter_3( self, key, ival )
+        class(hash),      intent(in)  :: self
+        character(len=*), intent(in)  :: key
+        integer(kind=sp), intent(out) :: ival
+        ival = nint(self%get_dp(key))
+    end subroutine getter_3
+
     !>  \brief  gets a value in the hash
-    function get_str( self, keyindx ) result( vstr )
-        class(hash),      intent(inout) :: self
-        integer,          intent(in)    :: keyindx
-        character(len=:), allocatable   :: vstr
+    pure function get_str( self, keyindx ) result( vstr )
+        class(hash), intent(in) :: self
+        integer,      intent(in) :: keyindx
+        character(len=:), allocatable :: vstr
         if( keyindx > 0 .and.  keyindx .le. self%hash_index )then
             vstr = trim(self%keys(keyindx)%str)
         endif
    end function get_str
 
     !>  \brief  gets a value in the hash
-    function get_value_at( self, keyindx ) result( val )
-        class(hash),      intent(inout) :: self
-        integer,          intent(in)    :: keyindx
-        real :: val
-        val=0.
+    pure real function get_value_at( self, keyindx )
+        class(hash), intent(in) :: self
+        integer,      intent(in) :: keyindx
+        get_value_at = 0.0
         if(keyindx > 0 .and.  keyindx .le. self%hash_index)then
-            val = self%values(keyindx)
+            get_value_at = real(self%values(keyindx))
         endif
     end function get_value_at
-
-    !>  \brief  returns the values of the hash
-    function get_values( self ) result( values )
-        class(hash), intent(inout) :: self
-        real, allocatable  :: values(:)
-        allocate(values(self%hash_index), source=self%values(:self%hash_index))
-    end function get_values
 
     function get_keys( self ) result( keys )
         class(hash), intent(in)    :: self
@@ -292,7 +374,7 @@ contains
     !>  \brief  convert hash to string
     pure function hash2str( self ) result( str )
         class(hash),intent(in)     :: self
-        character(len=XLONGSTRLEN)  :: str
+        character(len=XLONGSTRLEN) :: str
         character(len=XLONGSTRLEN) :: tmpstr
         integer :: i,cnt
         str = repeat(' ',LONGSTRLEN)

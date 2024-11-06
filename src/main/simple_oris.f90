@@ -40,10 +40,10 @@ type :: oris
     procedure          :: get_noris
     procedure          :: get_ori
     procedure          :: get
+    procedure          :: get_int
     procedure          :: get_static
-    procedure, private :: getter_1
-    procedure, private :: getter_2
-    generic            :: getter => getter_1, getter_2
+    procedure, private :: getter_1, getter_2, getter_3
+    generic            :: getter => getter_1, getter_2, getter_3
     procedure          :: get_all
     procedure          :: get_all_sampled
     procedure          :: get_all_rmats
@@ -55,6 +55,7 @@ type :: oris
     procedure          :: get_class
     procedure          :: get_label_inds
     procedure          :: get_eo
+    procedure          :: get_fromp, get_top
     procedure          :: get_sampled
     procedure          :: get_updatecnt
     procedure          :: get_tseries_neighs
@@ -105,9 +106,8 @@ type :: oris
     generic            :: append => append_1, append_2
     procedure          :: copy
     procedure          :: reject
+    procedure, private :: delete_entry_1, delete_entry_2
     generic            :: delete_entry => delete_entry_1, delete_entry_2
-    procedure          :: delete_entry_1
-    procedure          :: delete_entry_2
     procedure, private :: delete_2Dclustering_1, delete_2Dclustering_2
     generic            :: delete_2Dclustering => delete_2Dclustering_1, delete_2Dclustering_2
     procedure          :: delete_3Dalignment
@@ -126,17 +126,15 @@ type :: oris
     procedure          :: e1set
     procedure          :: e2set
     procedure          :: e3set
-    procedure, private :: set_1, set_2, set_3
-    generic            :: set => set_1, set_2, set_3
+    procedure, private :: set_1, set_2, set_3, set_4
+    generic            :: set => set_1, set_2, set_3, set_4
     procedure          :: set_dfx, set_dfy
     procedure          :: set_ori
     procedure          :: transfer_ori
-    procedure, private :: set_all_1
-    procedure, private :: set_all_2
+    procedure, private :: set_all_1, set_all_2
     generic            :: set_all => set_all_1, set_all_2
-    procedure, private :: set_all2single_1
-    procedure, private :: set_all2single_2
-    generic            :: set_all2single => set_all2single_1, set_all2single_2
+    procedure, private :: set_all2single_1, set_all2single_2, set_all2single_3
+    generic            :: set_all2single => set_all2single_1, set_all2single_2, set_all2single_3
     procedure          :: set_projs
     procedure          :: remap_projs
     procedure          :: proj2class
@@ -169,8 +167,7 @@ type :: oris
     ! I/O
     procedure          :: read
     procedure          :: read_ctfparams_state_eo
-    procedure, private :: write_1
-    procedure, private :: write_2
+    procedure, private :: write_1, write_2
     generic            :: write => write_1, write_2
     procedure          :: write2bild
     ! CALCULATORS
@@ -178,26 +175,21 @@ type :: oris
     procedure          :: split_state
     procedure          :: split_class
     procedure          :: expand_classes
-    procedure          :: fill_empty_classes
     procedure          :: remap_cls
     procedure          :: merge_classes
     procedure          :: round_shifts
     procedure          :: introd_alig_err
     procedure          :: introd_ctf_err
-    procedure, private :: rot_1
-    procedure, private :: rot_2
+    procedure, private :: rot_1, rot_2
     generic            :: rot => rot_1, rot_2
-    procedure, private :: rot_transp_1
-    procedure, private :: rot_transp_2
+    procedure, private :: rot_transp_1, rot_transp_2
     generic            :: rot_transp => rot_transp_1, rot_transp_2
     procedure, private :: median_1
     generic            :: median => median_1
-    procedure, private :: stats_1
-    procedure, private :: stats_2
+    procedure, private :: stats_1, stats_2
     generic            :: stats => stats_1, stats_2
     procedure          :: minmax
-    procedure          :: spiral_1
-    procedure          :: spiral_2
+    procedure, private :: spiral_1, spiral_2
     generic            :: spiral => spiral_1, spiral_2
     procedure          :: order
     procedure          :: order_cls
@@ -209,9 +201,7 @@ type :: oris
     procedure          :: class_robust_rejection
     procedure          :: find_closest_proj
     procedure          :: discretize
-    procedure, private :: nearest_proj_neighbors_1
-    procedure, private :: nearest_proj_neighbors_2
-    procedure, private :: nearest_proj_neighbors_3
+    procedure, private :: nearest_proj_neighbors_1, nearest_proj_neighbors_2, nearest_proj_neighbors_3
     generic            :: nearest_proj_neighbors => nearest_proj_neighbors_1, nearest_proj_neighbors_2, nearest_proj_neighbors_3
     procedure          :: extract_subspace
     procedure          :: detect_peaks
@@ -219,16 +209,14 @@ type :: oris
     procedure          :: find_angres
     procedure          :: extremal_bound
     procedure          :: set_extremal_vars
-    procedure, private :: map3dshift22d_1
-    procedure, private :: map3dshift22d_2
+    procedure, private :: map3dshift22d_1, map3dshift22d_2
     generic            :: map3dshift22d => map3dshift22d_1, map3dshift22d_2
     procedure          :: calc_avg_offset2D, calc_avg_offset3D
     procedure          :: mirror2d
     procedure          :: mirror3d
     procedure          :: add_shift2class
     procedure          :: corr_oris
-    procedure, private :: diststat_1
-    procedure, private :: diststat_2
+    procedure, private :: diststat_1, diststat_2
     generic            :: diststat => diststat_1, diststat_2
     procedure          :: overlap
     ! DESTRUCTORS
@@ -354,16 +342,22 @@ contains
         o = self%o(i)
     end subroutine get_ori
 
-    pure function get( self, i, key ) result( val )
+    pure real function get( self, i, key )
         class(oris),      intent(in) :: self
-        integer,          intent(in)    :: i
-        character(len=*), intent(in)    :: key
-        real :: val
-        val = self%o(i)%get(key)
+        integer,          intent(in) :: i
+        character(len=*), intent(in) :: key
+        get = self%o(i)%get(key)
     end function get
 
+    pure integer function get_int( self, i, key )
+        class(oris),      intent(in) :: self
+        integer,          intent(in) :: i
+        character(len=*), intent(in) :: key
+        call self%o(i)%getter(key, get_int)
+    end function get_int
+
     subroutine getter_1( self, i, key, val )
-        class(oris),                   intent(inout) :: self
+        class(oris),                   intent(in)    :: self
         integer,                       intent(in)    :: i
         character(len=*),              intent(in)    :: key
         character(len=:), allocatable, intent(inout) :: val
@@ -371,19 +365,27 @@ contains
     end subroutine getter_1
 
     subroutine getter_2( self, i, key, val )
-        class(oris),      intent(inout) :: self
+        class(oris),      intent(in)    :: self
         integer,          intent(in)    :: i
         character(len=*), intent(in)    :: key
         real,             intent(inout) :: val
         call self%o(i)%getter(key, val)
     end subroutine getter_2
 
-    !>  \brief  is a getter with fixed length return string
-    function get_static( self, i, key )result( val )
-        class(oris),      intent(inout) :: self
+    subroutine getter_3( self, i, key, ival )
+        class(oris),      intent(in)    :: self
         integer,          intent(in)    :: i
         character(len=*), intent(in)    :: key
-        character(len=STDLEN)           :: val
+        integer,          intent(inout) :: ival
+        call self%o(i)%getter(key, ival)
+    end subroutine getter_3
+
+    !>  \brief  is a getter with fixed length return string
+    function get_static( self, i, key )result( val )
+        class(oris),      intent(in) :: self
+        integer,          intent(in) :: i
+        character(len=*), intent(in) :: key
+        character(len=STDLEN)        :: val
         val = trim(self%o(i)%get_static(key))
     end function get_static
 
@@ -478,7 +480,6 @@ contains
     function get_label_inds( self, label ) result( inds )
         class(oris),      intent(in) :: self
         character(len=*), intent(in) :: label
-        integer :: ninds
         integer :: i, icls, icls_max
         integer, allocatable :: inds(:), inds_all(:)
         logical, allocatable :: isthere(:)
@@ -497,6 +498,18 @@ contains
         integer,     intent(in) :: i
         get_eo = self%o(i)%get_eo()
     end function get_eo
+
+    pure integer function get_fromp( self, i )
+        class(oris), intent(in) :: self
+        integer,     intent(in) :: i
+        get_fromp = self%o(i)%get_fromp()
+    end function get_fromp
+
+    pure integer function get_top( self, i )
+        class(oris), intent(in) :: self
+        integer,     intent(in) :: i
+        get_top = self%o(i)%get_top()
+    end function get_top
 
      pure integer function get_sampled( self, i )
         class(oris), intent(in) :: self
@@ -519,8 +532,8 @@ contains
        if( allocated(ptcls2neigh) ) deallocate(ptcls2neigh)
        allocate(ptcls2neigh(self%n,2), source=0)
        do i=1,self%n-nsz
-           cls1 = nint(self%o(i)%get('class'))
-           cls2 = nint(self%o(i+1)%get('class'))
+           cls1 = self%o(i)%get_class()
+           cls2 = self%o(i+1)%get_class()
            if( cls2 == cls1 )then
                cycle
            else
@@ -588,7 +601,7 @@ contains
         integer :: i, n, ival
         n = 1
         do i=1,self%n
-            ival = nint(self%o(i)%get(trim(label)))
+            ival = self%o(i)%get_int(label)
             if( ival > n ) n = ival
         end do
     end function get_n
@@ -609,7 +622,7 @@ contains
             if( consider_eo )then
                 if( self%o(i)%get_eo() /= eo ) cycle
             endif
-            mylab = nint(self%o(i)%get(label))
+            mylab = self%o(i)%get_int(label)
             if( mylab == ind )  pop = pop + 1
         end do
     end function get_pop
@@ -648,7 +661,7 @@ contains
             if( consider_eo )then
                 if( self%o(i)%get_eo() /= eo ) cycle
             endif
-            myval = nint(self%o(i)%get(label))
+            myval = self%o(i)%get_int(label)
             if( myval > 0 ) pops(myval) = pops(myval) + 1
         end do
     end subroutine get_pops
@@ -721,7 +734,7 @@ contains
             if( states(iptcl) == 1 )then
                 ! do nothing, leave this state as is
             else
-                call self%o(ptcls_in_which(iptcl))%set('state', real(nstates+1))
+                call self%o(ptcls_in_which(iptcl))%set_state(nstates+1)
             endif
         end do
         call rt%kill
@@ -749,7 +762,7 @@ contains
             if( members(iptcl) == 1 )then
                 ! do nothing, leave this state as is
             else
-                call self%o(ptcls_in_which(iptcl))%set('class', real(nmembers+1))
+                call self%o(ptcls_in_which(iptcl))%set_class(nmembers+1)
             endif
         end do
         call rt%kill
@@ -783,112 +796,6 @@ contains
         end do
     end subroutine expand_classes
 
-    !>  \brief  is for filling empty classes from a stochastically selected highly populated one
-    subroutine fill_empty_classes( self, ncls, chunk, fromtocls)
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: ncls, chunk
-        integer, allocatable, intent(out)   :: fromtocls(:,:)
-        integer, allocatable :: inds2split(:), pops(:), fromtoall(:,:)
-        real,    allocatable :: probs(:), corrs(:)
-        logical, allocatable :: chunk_mask(:), ptcl_mask(:)
-        integer              :: cnt, n_incl, pop, i, icls, ncls_here, iptcl
-        integer              :: cls2split, halfpop, fromto(2)
-        if(allocated(fromtocls))deallocate(fromtocls)
-        ncls_here = max(self%get_n('class'), ncls)
-        allocate(pops(ncls_here),fromtoall(ncls,2),source=0)
-        ! chunks & populations
-        allocate(ptcl_mask(self%n),chunk_mask(ncls_here),source=.false.)
-        fromto(1) = huge(fromto(1))
-        fromto(2) = -huge(fromto(2))
-        do iptcl=1,self%n
-            if( self%get(iptcl,'state') < 0.5 ) cycle
-            if( nint(self%get(iptcl,'chunk')) == chunk )then
-                icls = nint(self%get(iptcl,'class'))
-                if( icls<1 .or. icls>ncls_here ) cycle
-                ptcl_mask(iptcl) = .true.
-                pops(icls)       = pops(icls)+1
-                chunk_mask(icls) = .true.
-                fromto(1)        = min(fromto(1),icls)
-                fromto(2)        = max(fromto(2),icls)
-            endif
-        enddo
-        if(count(pops==0) == 0)then
-            deallocate(pops,fromtoall,chunk_mask,ptcl_mask)
-            return
-        endif
-        ! temptatively assign empty classes to chunks
-        chunk_mask(fromto(1):fromto(2)) = .true.
-        ! randomly reassign lowly populated classes
-        do icls=fromto(1),fromto(2)
-            if( maxval(pops) <= 2*MINCLSPOPLIM ) exit
-            if( .not.chunk_mask(icls) ) cycle
-            if( pops(icls)>2 .or. pops(icls)==0 ) cycle
-            call self%get_pinds(icls, 'class', inds2split)
-            do i=1,size(inds2split)
-                iptcl = inds2split(i)
-                cnt   = irnd_uni(ncls)
-                do while( .not.chunk_mask(cnt) )
-                    cnt = irnd_uni(ncls)
-                enddo
-                pops(cnt)  = pops(cnt)+1
-                call self%set(iptcl,'class',real(cnt))
-            enddo
-            pops(icls) = 0
-            deallocate(inds2split)
-        enddo
-        ! splitting
-        do icls = 1,ncls_here
-            if( maxval(pops) <= 2*MINCLSPOPLIM ) exit
-            if( .not.chunk_mask(icls) ) cycle
-            if( pops(icls) > 0 )cycle
-            ! full remapping for empty classes
-            chunk_mask(icls) = .false. ! exclude
-            ! split class preferentially with high population
-            allocate(probs(ncls))
-            probs = real(pops - 2*MINCLSPOPLIM)
-            where( probs<0. .or. .not.chunk_mask ) probs=0.
-            probs     = probs/sum(probs)
-            cls2split = multinomal(probs)
-            pop       = pops(cls2split)
-            if( pop <= 2*MINCLSPOPLIM )exit
-            ! migration: the worst moves
-            call self%get_pinds(cls2split, 'class', inds2split)
-            allocate(corrs(pop),source=-1.)
-            do i=1,pop
-                corrs(i) = self%get(inds2split(i),'corr')
-            enddo
-            call hpsort(corrs,inds2split)
-            halfpop = floor(real(pop)/2.)
-            do i=1,halfpop
-                iptcl = inds2split(i)
-                if(.not.ptcl_mask(iptcl))cycle
-                ! updates populations
-                call self%o(iptcl)%set('class', real(icls))
-                pops(icls)      = pops(icls) + 1
-                pops(cls2split) = pops(cls2split) - 1
-            enddo
-            ! updates populations and migration
-            fromtoall(icls,1) = cls2split
-            fromtoall(icls,2) = icls
-            ! cleanup
-            deallocate(corrs,inds2split,probs)
-        enddo
-        ! updates classes migration
-        n_incl = count(fromtoall(:,1)>0)
-        if(n_incl>0)then
-            allocate(fromtocls(n_incl,2))
-            cnt = 0
-            do icls = 1,ncls
-                if( fromtoall(icls,1) > 0 )then
-                    cnt = cnt + 1
-                    fromtocls(cnt,:) = fromtoall(icls,:)
-                endif
-            enddo
-        endif
-        ! cleanup
-        deallocate(fromtoall,pops,ptcl_mask,chunk_mask)
-    end subroutine fill_empty_classes
-
     !>  \brief  for remapping clusters
     subroutine remap_cls( self )
         class(oris), intent(inout) :: self
@@ -906,22 +813,22 @@ contains
                 if( pop > 1 )then
                     clsind_remap = clsind_remap + 1
                     do iptcl=1,self%n
-                        old_cls = nint(self%o(iptcl)%get('class'))
-                        if( old_cls == icls ) call self%o(iptcl)%set('class', real(clsind_remap))
+                        old_cls = self%o(iptcl)%get_class()
+                        if( old_cls == icls ) call self%o(iptcl)%set_class(clsind_remap)
                     end do
                 else
                     do iptcl=1,self%n
-                        old_cls = nint(self%o(iptcl)%get('class'))
+                        old_cls = self%o(iptcl)%get_class()
                         if( old_cls == icls )then
-                            call self%o(iptcl)%set('class', 0.)
-                            call self%o(iptcl)%set('state', 0.)
+                            call self%o(iptcl)%set_class(0)
+                            call self%o(iptcl)%set_state(0)
                         endif
                     end do
                 endif
             end do
             do iptcl=1,self%n
-                old_cls = nint(self%o(iptcl)%get('class'))
-                if( old_cls /= 0 ) call self%o(iptcl)%set('class', real(old_cls-ncls))
+                old_cls = self%o(iptcl)%get_class()
+                if( old_cls /= 0 ) call self%o(iptcl)%set_class(old_cls-ncls)
             end do
         endif
         deallocate(clspops)
@@ -946,7 +853,7 @@ contains
             cnt = 0
             do i=1,self%n
                 if( self%o(i)%isstatezero() ) cycle
-                myval = nint(self%get(i, trim(label)))
+                myval = self%o(i)%get_int(label)
                 if( myval == ind )then
                     cnt = cnt + 1
                     indices(cnt) = i
@@ -975,8 +882,8 @@ contains
         allocate(l_mask(ffromto(1):ffromto(2)))
         l_mask = .false.
         do i=ffromto(1),ffromto(2)
-            mystate = nint(self%o(i)%get('state'))
-            myval   = nint(self%o(i)%get(trim(label)))
+            mystate = self%o(i)%get_state()
+            myval   = self%o(i)%get_int(label)
             if( mystate == state .and. myval == ind ) l_mask(i) = .true.
         end do
     end subroutine gen_mask
@@ -1034,16 +941,16 @@ contains
             do i=1,self%n
                 val = self%get(i, which)
                 if( class_present )then
-                    mystate = nint(self%get( i, 'state'))
+                    mystate = self%o(i)%get_state()
                     if( mystate > 0 )then
-                        clsnr   = nint(self%get( i, 'class'))
+                        clsnr   = self%o(i)%get_class()
                         if( clsnr == class )then
                             cnt = cnt+1
                             vals(cnt) = val
                         endif
                     endif
                 else if( state_present )then
-                    mystate = nint(self%get( i, 'state'))
+                    mystate = self%o(i)%get_state()
                     if( mystate == state )then
                         cnt = cnt+1
                         vals(cnt) = val
@@ -1088,7 +995,7 @@ contains
             istop  = self%n
         endif
         do i=istart,istop
-            mystate = nint(self%get( i, 'state'))
+            mystate = self%o(i)%get_state()
             if( mystate == 0 ) cycle
             if( mask_present )then
                 proceed = mask(i)
@@ -1099,7 +1006,7 @@ contains
                 val = self%get(i, which)
                 if( .not. is_a_number(val) ) val=0.
                 if( class_present )then
-                    clsnr = nint(self%get( i, 'class'))
+                    clsnr = self%o(i)%get_class()
                     if( clsnr == class )then
                         cnt = cnt+1
                         sum = sum+val
@@ -1150,12 +1057,11 @@ contains
     function included( self ) result( incl )
         class(oris),       intent(inout) :: self
         logical, allocatable :: incl(:)
-        integer :: i, istate
+        integer :: i
         if(.not.allocated(incl))allocate(incl(self%n))
         incl = .false.
         do i=1,self%n
-            istate = nint(self%o(i)%get('state'))
-            if( istate > 0 ) incl(i) = .true.
+            incl(i) = self%o(i)%get_state() > 0
         end do
     end function included
 
@@ -1165,7 +1071,7 @@ contains
         get_neven = 0
         do i=1,self%n
             if(self%o(i)%isthere('eo'))then
-                if( nint(self%o(i)%get('eo'))==0) get_neven = get_neven + 1
+                if( self%o(i)%get_eo()==0) get_neven = get_neven + 1
             endif
         enddo
     end function get_neven
@@ -1227,7 +1133,7 @@ contains
         inds     = pack(inds, mask=states > 0)
         mask     = .false.
         do i = 1, nsamples
-            call self%o(inds(i))%set('sampled', real(sample_ind))
+            call self%o(inds(i))%set('sampled', sample_ind)
             mask(inds(i)) = .true.
         end do
     end subroutine sample4update_all
@@ -1268,7 +1174,7 @@ contains
         call hpsort(inds)
         mask = .false.
         do i = 1, nsamples
-            call self%o(inds(i))%set('sampled', real(sample_ind))
+            call self%o(inds(i))%set('sampled', sample_ind)
             mask(inds(i)) = .true.
         end do
     end subroutine sample4update_rnd
@@ -1282,7 +1188,6 @@ contains
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(inout) :: mask(fromto(1):fromto(2))
         logical,              intent(in)    :: incr_sampled
-        type(ran_tabu) :: rt
         integer, allocatable :: states(:), sampled(:)
         real,    allocatable :: rstates(:)
         integer :: i, cnt, nptcls, sample_ind, nsamples_class, states_bal(self%n)
@@ -1313,7 +1218,7 @@ contains
         call hpsort(inds)
         mask = .false.
         do i = 1, nsamples
-            call self%o(inds(i))%set('sampled', real(sample_ind))
+            call self%o(inds(i))%set('sampled', sample_ind)
             mask(inds(i)) = .true.
         end do
     end subroutine sample4update_class
@@ -1383,7 +1288,7 @@ contains
         integer,            intent(in)    :: nptcls     ! # particles to sample in total
         integer,            intent(in)    :: greediness ! greediness level (see below)
         integer,            intent(inout) :: states(self%n)
-        integer,            allocatable   :: pinds(:), pinds_left(:)
+        integer,            allocatable   :: pinds_left(:)
         type(ran_tabu) :: rt
         integer        :: i, j, cnt, nleft
         ! calculate sampling size for each class
@@ -1491,7 +1396,7 @@ contains
     logical function is_first_update( self, iter, iptcl )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: iter, iptcl
-        is_first_update = nint(self%o(iptcl)%get('updatecnt')) == 1 .and. iter > 1
+        is_first_update = self%o(iptcl)%get_int('updatecnt') == 1 .and. iter > 1
     end function is_first_update
 
     subroutine clean_updatecnt( self )
@@ -1517,7 +1422,7 @@ contains
         has_been_sampled =.false.
         do i = 1,self%n
             if( self%o(i)%get_state() > 0 )then
-                if( nint(self%o(i)%get('sampled')) > 0 )then
+                if( self%o(i)%get_sampled() > 0 )then
                     has_been_sampled = .true.
                     exit
                 endif
@@ -1782,6 +1687,14 @@ contains
         call self%o(i)%set(key, val)
     end subroutine set_3
 
+    subroutine set_4( self, i, key, val )
+        class(oris),      intent(inout) :: self
+        integer,          intent(in)    :: i
+        character(len=*), intent(in)    :: key
+        real(dp),         intent(in)    :: val
+        call self%o(i)%set(key, val)
+    end subroutine set_4
+
     subroutine set_dfx( self, i, dfx )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
@@ -1851,13 +1764,23 @@ contains
         end do
     end subroutine set_all2single_2
 
+    subroutine set_all2single_3( self, which, ival )
+        class(oris),      intent(inout) :: self
+        character(len=*), intent(in)    :: which
+        integer,          intent(in)    :: ival
+        integer :: i
+        do i=1,self%n
+            call self%o(i)%set(which, ival)
+        end do
+    end subroutine set_all2single_3
+
     subroutine set_projs( self, e_space )
         class(oris), intent(inout) :: self
         class(oris), intent(in)    :: e_space
         integer :: i
         !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i=1,self%n
-            call self%set(i, 'proj', real(e_space%find_closest_proj(self%o(i))))
+            call self%set(i, 'proj', e_space%find_closest_proj(self%o(i)))
         end do
         !$omp end parallel do
     end subroutine set_projs
@@ -2072,7 +1995,7 @@ contains
         parts = split_nobjs_even(self%n, nsplit)
         do ipart=1,nsplit
             do iptcl=parts(ipart,1),parts(ipart,2)
-                call self%o(iptcl)%set(trim(state_or_class), real(ipart))
+                call self%o(iptcl)%set(trim(state_or_class), ipart)
             end do
         end do
         if(allocated(parts))deallocate(parts)
@@ -2153,9 +2076,9 @@ contains
             rt = ran_tabu(self%n)
             call rt%balanced(nstates, states)
             do i=1,self%n
-                state = nint(self%o(i)%get('state'))
+                state = self%o(i)%get_state()
                 if( state /= 0 )then
-                    call self%o(i)%set('state', real(states(i)))
+                    call self%o(i)%set_state(states(i))
                 endif
             end do
             call rt%kill
@@ -2165,8 +2088,8 @@ contains
         else
             ! nstates = 1; zero-preserving
             do i=1,self%n
-                state = nint(self%o(i)%get('state'))
-                if(  state /= 0 )call self%o(i)%set('state', 1.)
+                state = self%o(i)%get_state()
+                if(  state /= 0 ) call self%o(i)%set_state(1)
             end do
         endif
     end subroutine rnd_states
@@ -2219,8 +2142,8 @@ contains
         integer,     intent(in)    :: class_merged, class
         integer                    :: i, clsnr
         do i=1,self%n
-            clsnr = nint(self%get(i, 'class'))
-            if(clsnr == class) call self%set(i, 'class', real(class_merged))
+            clsnr = self%get_class(i)
+            if(clsnr == class) call self%set_class(i, class_merged)
         end do
     end subroutine merge_classes
 
@@ -2665,7 +2588,7 @@ contains
         minv = huge(x)
         maxv = -huge(x)
         do i=1,self%n
-            mystate = nint(self%o(i)%get('state'))
+            mystate = self%o(i)%get_state()
             if( mystate /= 0 )then
                 val = self%o(i)%get(which)
                 if( val < minv ) minv = val
@@ -2876,7 +2799,7 @@ contains
         real,    allocatable :: vals(:), x(:)
         logical, allocatable :: msk(:)
         integer :: icls, i
-        logical :: has_mean, has_var, has_skew, has_tvd, has_minmax, l_err
+        logical :: has_mean, has_var, has_tvd, has_minmax
         msk = mask
         if( self%isthere('pop') )then
             do icls=1,self%n
@@ -3126,7 +3049,7 @@ contains
                 closest = d%find_closest_proj(self%o(i))
                 call self%o(i)%e1set(d%e1get(closest))
                 call self%o(i)%e2set(d%e2get(closest))
-                call self%o(i)%set('class', real(closest))
+                call self%o(i)%set_class(closest)
             end do
         else
             THROW_HARD('the number of discrete oris is too large; discretize')
@@ -3354,7 +3277,7 @@ contains
         integer, optional, intent(in)    :: state
         integer :: mystate
         if( present(state) )then
-            mystate = nint(self%o(i)%get('state'))
+            mystate = self%o(i)%get_state()
             if( mystate == state ) call self%o(i)%map3dshift22d(sh3d)
         else
             call self%o(i)%map3dshift22d(sh3d)
@@ -3485,7 +3408,7 @@ contains
         sh3d(1:2) = sh2d
         sh3d(3)   = 0.
         do i=1,self%n
-            if( nint(self%o(i)%get('class')) == class )then
+            if( self%o(i)%get_class() == class )then
                 call self%o(i)%map3dshift22d(sh3d)
             endif
         end do

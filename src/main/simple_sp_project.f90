@@ -256,17 +256,17 @@ contains
             call self%compenv%set(1, 'user_email', trim(env_var))
         endif
         if( cline%defined('time_per_image') )then
-            call self%compenv%set(1, 'time_per_image', cline%get_rarg('time_per_image'))
+            call self%compenv%set(1, 'time_per_image', cline%get_iarg('time_per_image'))
         else
             if( .not. self%compenv%isthere('time_per_image') )then
-                call self%compenv%set(1, 'time_per_image', real(TIME_PER_IMAGE_DEFAULT))
+                call self%compenv%set(1, 'time_per_image', TIME_PER_IMAGE_DEFAULT)
             endif
         endif
         if( cline%defined('walltime') )then
-            call self%compenv%set(1, 'walltime', cline%get_rarg('walltime'))
+            call self%compenv%set(1, 'walltime', cline%get_iarg('walltime'))
         else
             if( .not. self%compenv%isthere('walltime') )then
-                call self%compenv%set(1, 'walltime', real(WALLTIME_DEFAULT))
+                call self%compenv%set(1, 'walltime', WALLTIME_DEFAULT)
             endif
         endif
         if( cline%defined('user_account') )then
@@ -292,10 +292,10 @@ contains
             call self%compenv%set(1, 'job_name', 'simple_'//trim(projname) )
         endif
         if( cline%defined('job_memory_per_task') )then
-            call self%compenv%set(1, 'job_memory_per_task', cline%get_rarg('job_memory_per_task') )
+            call self%compenv%set(1, 'job_memory_per_task', cline%get_iarg('job_memory_per_task') )
         else
             if( .not. self%compenv%isthere('job_memory_per_task') )then
-                call self%compenv%set(1, 'job_memory_per_task', real(JOB_MEMORY_PER_TASK_DEFAULT))
+                call self%compenv%set(1, 'job_memory_per_task', JOB_MEMORY_PER_TASK_DEFAULT)
             endif
         endif
     end subroutine update_compenv
@@ -342,13 +342,15 @@ contains
             call self1%os_ptcl3D%append(self2%os_ptcl3D)
             ! update particles/stk indices
             do istk = nstks1+1,nstks1+nstks2
-                fromp = nint(self1%os_stk%get(istk,'fromp')) + nptcls1
-                top   = nint(self1%os_stk%get(istk,'top'))   + nptcls1
+                fromp = self1%os_stk%get_fromp(istk)
+                top   = self1%os_stk%get_top(istk)
+                fromp = fromp + nptcls1
+                top   = top   + nptcls1
                 call self1%os_stk%set(istk, 'fromp', fromp)
                 call self1%os_stk%set(istk, 'top',   top)
                 do iptcl = fromp,top
-                    call self1%os_ptcl2D%set(iptcl, 'stkind', istk)
-                    call self1%os_ptcl3D%set(iptcl, 'stkind', istk)
+                    call self1%os_ptcl2D%set_stkind(iptcl, istk)
+                    call self1%os_ptcl3D%set_stkind(iptcl, istk)
                 enddo
             enddo
             write(logfhandle,'(A,I8)')'>>> CURRENT # OF PARTICLES:          ',nptcls1+nptcls2
@@ -388,27 +390,27 @@ contains
             ! determining numbering offset
             og_offset = -1
             do i = 1,nogs1
-                og_offset = max(og_offset, nint(self1%os_optics%get(i,'ogid')))
+                og_offset = max(og_offset, self1%os_optics%get_int(i,'ogid'))
             end do
             if( og_offset < 1 ) THROW_HARD('Invalid optics field!')
             og_offset = max(nogs1, og_offset)
             ! updating os_optics
             do i = nogs1+1,nogs1+nogs2
-                ogid = nint(self1%os_optics%get(i,'ogid')) + og_offset
+                ogid = self1%os_optics%get_int(i,'ogid') + og_offset
                 call self1%os_optics%set(i,'ogid',  ogid)
                 call self1%os_optics%set(i,'ogname','opticsgroup'//int2str(ogid))
             enddo
             if( l_has_mics )then
                 ! updating os_mic
                 do imic = nmics1+1,nmics1+nmics2
-                    ogid = nint(self1%os_mic%get(i,'ogid')) + og_offset
+                    ogid = self1%os_mic%get_int(i,'ogid') + og_offset
                     call self1%os_mic%set(i,'ogid', ogid)
                 enddo
             endif
             if( l_has_ptcls )then
                 ! updating particles
                 do iptcl = nptcls1+1,nptcls1+nptcls2
-                    ogid = nint(self1%os_ptcl2D%get(i,'ogid')) + og_offset
+                    ogid = self1%os_ptcl2D%get_int(i,'ogid') + og_offset
                     call self1%os_ptcl2D%set(iptcl, 'ogid', ogid)
                     call self1%os_ptcl3D%set(iptcl, 'ogid', ogid)
                 enddo
@@ -504,13 +506,13 @@ contains
             write(logfhandle,*) 'iptcl: ', iptcl
             THROW_HARD('stkind not present in field: '//trim(oritype)//'; map_ptcl_ind2stk_ind')
         endif
-        stkind = nint(ptcl_field%get(iptcl, 'stkind'))
+        stkind = ptcl_field%get_int(iptcl, 'stkind')
         if( ptcl_field%isthere(iptcl, 'indstk') )then
-            ind_in_stk = nint(ptcl_field%get(iptcl, 'indstk'))
+            ind_in_stk = ptcl_field%get_int(iptcl, 'indstk')
         else
             ! third sanity check, particle index in range
-            fromp = nint(self%os_stk%get(stkind, 'fromp'))
-            top   = nint(self%os_stk%get(stkind, 'top'))
+            fromp = self%os_stk%get_fromp(stkind)
+            top   = self%os_stk%get_top(stkind)
             if( iptcl < fromp .or. iptcl > top )then
                 write(logfhandle,*) 'iptcl            : ', iptcl
                 write(logfhandle,*) 'stkind           : ', stkind
@@ -529,8 +531,7 @@ contains
         integer,           intent(in)    :: states(:)
         logical, optional, intent(in)    :: cavg3D  ! indicates the classes were generated from ptcl3D
         integer, allocatable :: pinds(:)
-        integer :: icls, sz_cls2D, sz_states, sz_cls3D, ncls, i
-        real    :: rstate
+        integer :: icls, sz_cls2D, sz_states, sz_cls3D, ncls, i, s
         logical :: l_cavg3D
         l_cavg3D = .false.
         if( present(cavg3D) ) l_cavg3D = cavg3D
@@ -545,7 +546,7 @@ contains
             endif
             ! map selection to self%os_cls3D
             do icls=1,sz_cls3D
-                call self%os_cls3D%set(icls, 'state', real(states(icls)))
+                call self%os_cls3D%set(icls, 'state', states(icls))
             end do
         else
             sz_cls2D  = self%os_cls2D%get_noris()
@@ -556,14 +557,14 @@ contains
             endif
             ! map selection to self%os_cls2D
             do icls=1,sz_cls2D
-                call self%os_cls2D%set(icls, 'state', real(states(icls)))
+                call self%os_cls2D%set(icls, 'state', states(icls))
             end do
             ! map selection to self%os_cls3D
             sz_cls3D = self%os_cls3D%get_noris()
             if( sz_cls3D /= sz_cls2D ) call self%os_cls3D%new(sz_cls2D, is_ptcl=.false.)
             sz_cls3D = sz_cls2D
             do icls=1,sz_cls3D
-                call self%os_cls3D%set(icls, 'state', real(states(icls)))
+                call self%os_cls3D%set(icls, 'state', states(icls))
             end do
         endif
         ! map selection to self%os_ptcl2D & os_ptcl3D
@@ -576,10 +577,10 @@ contains
                     call self%os_ptcl2D%get_pinds(icls, 'class', pinds)
                 endif
                 if( allocated(pinds) )then
-                    rstate = real(states(icls))
+                    s = states(icls)
                     do i=1,size(pinds)
-                        call self%os_ptcl2D%set(pinds(i), 'state', rstate)
-                        call self%os_ptcl3D%set(pinds(i), 'state', rstate)
+                        call self%os_ptcl2D%set(pinds(i), 'state', s)
+                        call self%os_ptcl3D%set(pinds(i), 'state', s)
                     end do
                     deallocate(pinds)
                 endif
@@ -617,14 +618,14 @@ contains
         else if( nframes > 1 )then
             call os_ptr%set(1, 'movie', trim(rel_fname))
             call os_ptr%set(1, 'imgkind', 'movie')
-            call os_ptr%set(1, 'nframes',    real(nframes))
+            call os_ptr%set(1, 'nframes', nframes)
         else
             call os_ptr%set(1, 'intg',  trim(rel_fname))
             call os_ptr%set(1, 'imgkind', 'mic')
         endif
         ! updates segment
-        call os_ptr%set(1, 'xdim',       real(ldim(1)))
-        call os_ptr%set(1, 'ydim',       real(ldim(2)))
+        call os_ptr%set(1, 'xdim',       ldim(1))
+        call os_ptr%set(1, 'ydim',       ldim(2))
         call os_ptr%set(1, 'smpd',       ctfvars%smpd)
         call os_ptr%set(1, 'kv',         ctfvars%kv)
         call os_ptr%set(1, 'cs',         ctfvars%cs)
@@ -732,9 +733,9 @@ contains
                 endif
             endif
             ! updates segment
-            call os_ptr%set(imic, 'xdim',    real(ldim(1)))
-            call os_ptr%set(imic, 'ydim',    real(ldim(2)))
-            call os_ptr%set(imic, 'nframes', real(nframes))
+            call os_ptr%set(imic, 'xdim',    ldim(1))
+            call os_ptr%set(imic, 'ydim',    ldim(2))
+            call os_ptr%set(imic, 'nframes', nframes)
             call os_ptr%set(imic, 'smpd',    ctfvars%smpd)
             call os_ptr%set(imic, 'kv',      ctfvars%kv)
             call os_ptr%set(imic, 'cs',      ctfvars%cs)
@@ -835,10 +836,10 @@ contains
             endif
             ! updates segment
             ctfparms = os%get_ctfvars(cnt)
-            call self%os_mic%set(imic, 'intg', rel_micname)
+            call self%os_mic%set(imic, 'intg',    rel_micname)
             call self%os_mic%set(imic, 'imgkind', 'mic')
-            call self%os_mic%set(imic, 'xdim',    real(ldim(1)))
-            call self%os_mic%set(imic, 'ydim',    real(ldim(2)))
+            call self%os_mic%set(imic, 'xdim',    ldim(1))
+            call self%os_mic%set(imic, 'ydim',    ldim(2))
             call self%os_mic%set(imic, 'smpd',    ctfvars%smpd)
             call self%os_mic%set(imic, 'kv',      ctfvars%kv)
             call self%os_mic%set(imic, 'cs',      ctfvars%cs)
@@ -846,7 +847,7 @@ contains
             if( os%isthere(cnt,'state') )then
                 call self%os_mic%set(imic, 'state', os%get(cnt,'state'))
             else
-                call self%os_mic%set(imic, 'state', 1.0)
+                call self%os_mic%set(imic, 'state', 1)
             endif
             if( ctfvars%l_phaseplate )then
                 call self%os_mic%set(imic, 'phaseplate', 'yes')
@@ -966,18 +967,18 @@ contains
             call self%os_ptcl2D%reallocate(n_os_ptcl2D + nptcls)
             ! 3d
             call self%os_ptcl3D%reallocate(n_os_ptcl3D + nptcls)
-            fromp = nint(self%os_stk%get(n_os_stk-1,'top')) + 1
+            fromp = self%os_stk%get_top(n_os_stk-1) + 1
             top   = fromp + nptcls - 1
         endif
         ! updates oris_objects
         call self%os_stk%set(n_os_stk, 'stk',     trim(stk_relpath))
-        call self%os_stk%set(n_os_stk, 'box',     real(ldim(1)))
-        call self%os_stk%set(n_os_stk, 'nptcls',  real(nptcls))
-        call self%os_stk%set(n_os_stk, 'fromp',   real(fromp))
-        call self%os_stk%set(n_os_stk, 'top',     real(top))
+        call self%os_stk%set(n_os_stk, 'box',     ldim(1))
+        call self%os_stk%set(n_os_stk, 'nptcls',  nptcls)
+        call self%os_stk%set(n_os_stk, 'fromp',   fromp)
+        call self%os_stk%set(n_os_stk, 'top',     top)
         call self%os_stk%set(n_os_stk, 'stkkind', 'split')
         call self%os_stk%set(n_os_stk, 'imgkind', 'ptcl')
-        call self%os_stk%set(n_os_stk, 'state',   1.0) ! default on import
+        call self%os_stk%set(n_os_stk, 'state',   1) ! default on import
         select case(ctfvars%ctfflag)
             case(CTFFLAG_NO,CTFFLAG_YES,CTFFLAG_FLIP)
                 call self%os_stk%set_ctfvars(n_os_stk, ctfvars)
@@ -993,9 +994,9 @@ contains
             call o%set_dfy(      ctfvars%dfy)
             call o%set('angast', ctfvars%angast)
             if( ctfvars%l_phaseplate ) call o%set('phshift', ctfvars%phshift)
-            call o%set('stkind', real(n_os_stk))
-            call o%set('state',1.)         ! default on import
-            call o%set('pind', real(pind)) ! to keep track of particle indices
+            call o%set('stkind', n_os_stk)
+            call o%set('state',  1)         ! default on import
+            call o%set('pind',   pind)      ! to keep track of particle indices
             call self%os_ptcl2D%set_ori(n_os_ptcl2D+i, o)
             call self%os_ptcl3D%set_ori(n_os_ptcl3D+i, o)
             pind = pind + 1
@@ -1039,15 +1040,15 @@ contains
         endif
         ! set particle indices
         do pind = 1,os%get_noris()
-            call os%set(pind, 'pind', real(pind))
+            call os%set(pind, 'pind', pind)
         end do
         ! copy os
         call self%os_ptcl2D%copy(os, is_ptcl=.true.)
         call self%os_ptcl3D%copy(os, is_ptcl=.true.)
-        call self%os_ptcl2D%set_all2single('stkind', 1.)
-        call self%os_ptcl3D%set_all2single('stkind', 1.)
-        if( .not. self%os_ptcl2D%isthere('state') ) call self%os_ptcl2D%set_all2single('state',  1.) ! default on import
-        if( .not. self%os_ptcl3D%isthere('state') ) call self%os_ptcl3D%set_all2single('state',  1.) ! default on import
+        call self%os_ptcl2D%set_all2single('stkind', 1)
+        call self%os_ptcl3D%set_all2single('stkind', 1)
+        if( .not. self%os_ptcl2D%isthere('state') ) call self%os_ptcl2D%set_all2single('state',  1) ! default on import
+        if( .not. self%os_ptcl3D%isthere('state') ) call self%os_ptcl3D%set_all2single('state',  1) ! default on import
         ! full path and existence check
         stk_abspath = simple_abspath(stk,'sp_project :: add_single_stk')
         ! find dimension of inputted stack
@@ -1066,17 +1067,17 @@ contains
         ! records
         call self%os_stk%new(1, is_ptcl=.false.)
         call self%os_stk%set(1, 'stk',     trim(stk_relpath))
-        call self%os_stk%set(1, 'box',     real(ldim(1)))
-        call self%os_stk%set(1, 'nptcls',  real(nptcls))
-        call self%os_stk%set(1, 'fromp',   1.0)
-        call self%os_stk%set(1, 'top',     real(nptcls))
+        call self%os_stk%set(1, 'box',     ldim(1))
+        call self%os_stk%set(1, 'nptcls',  nptcls)
+        call self%os_stk%set(1, 'fromp',   1)
+        call self%os_stk%set(1, 'top',     nptcls)
         call self%os_stk%set(1, 'stkkind', 'single')
         call self%os_stk%set(1, 'imgkind', 'ptcl')
         call self%os_stk%set(1, 'smpd',    ctfvars%smpd)
         call self%os_stk%set(1, 'kv',      ctfvars%kv)
         call self%os_stk%set(1, 'cs',      ctfvars%cs)
         call self%os_stk%set(1, 'fraca',   ctfvars%fraca)
-        call self%os_stk%set(1, 'state',   1.0) ! default on import
+        call self%os_stk%set(1, 'state',   1) ! default on import
         if( ctfvars%l_phaseplate )then
             if( .not. os%isthere('phshift') ) THROW_HARD('phaseplate=yes & input oris lack phshift; add_single_stk')
             call self%os_stk%set(1, 'phaseplate', 'yes')
@@ -1207,7 +1208,7 @@ contains
             call self%os_stk%reallocate(n_os_stk + nstks)
             call self%os_ptcl2D%reallocate(n_os_ptcl2D + nptcls_tot)
             call self%os_ptcl3D%reallocate(n_os_ptcl3D + nptcls_tot)
-            fromp = nint(self%os_stk%get(n_os_stk,'top')) + 1
+            fromp = self%os_stk%get_top(n_os_stk) + 1
         endif
         ! parameters transfer
         do istk=1,nstks
@@ -1217,26 +1218,26 @@ contains
             ! updates stk segment
             call self%os_stk%set_ori(stk_ind, o_stk)
             call self%os_stk%set(stk_ind, 'stk',     trim(stkfnames(istk)))
-            call self%os_stk%set(stk_ind, 'box',     real(ldim(1)))
-            call self%os_stk%set(stk_ind, 'nptcls',  real(nptcls_arr(istk)))
-            call self%os_stk%set(stk_ind, 'fromp',   real(fromp))
-            call self%os_stk%set(stk_ind, 'top',     real(top))
+            call self%os_stk%set(stk_ind, 'box',     ldim(1))
+            call self%os_stk%set(stk_ind, 'nptcls',  nptcls_arr(istk))
+            call self%os_stk%set(stk_ind, 'fromp',   fromp)
+            call self%os_stk%set(stk_ind, 'top',     top)
             call self%os_stk%set(stk_ind, 'stkkind', 'split')
             call self%os_stk%set(stk_ind, 'imgkind', 'ptcl')
             istate = 1 ! default on import
             if( o_stk%isthere('state') ) istate = o_stk%get_state()
-            call self%os_stk%set(stk_ind, 'state', real(istate))
+            call self%os_stk%set(stk_ind, 'state', istate)
             ! updates particles segment
             call o_ptcl%new(is_ptcl=.true.)
             call o_ptcl%set_dfx(      o_stk%get_dfx())
             call o_ptcl%set_dfy(      o_stk%get_dfy())
             call o_ptcl%set('angast', o_stk%get('angast'))
             if( o_stk%isthere('phshift') ) call o_ptcl%set('phshift', o_stk%get('phshift'))
-            call o_ptcl%set('stkind', real(stk_ind))
-            call o_ptcl%set('state',  real(istate))
+            call o_ptcl%set_stkind(stk_ind)
+            call o_ptcl%set_state(istate)
             pind = fromp
             do i=1,nptcls_arr(istk)
-                call o_ptcl%set('pind', real(pind)) ! to keep track of particle indices
+                call o_ptcl%set('pind', pind) ! to keep track of particle indices
                 call self%os_ptcl2D%set_ori(fromp+i-1, o_ptcl)
                 call self%os_ptcl3D%set_ori(fromp+i-1, o_ptcl)
                 pind = pind + 1
@@ -1316,7 +1317,7 @@ contains
             call self%os_stk%reallocate(n_os_stk + nstks)
             call self%os_ptcl2D%reallocate(n_os_ptcl2D + nptcls_tot)
             call self%os_ptcl3D%reallocate(n_os_ptcl3D + nptcls_tot)
-            fromp = nint(self%os_stk%get(n_os_stk,'top')) + 1
+            fromp = self%os_stk%get_top(n_os_stk) + 1
         endif
         ! parameters transfer
         do istk=1,nstks
@@ -1325,10 +1326,10 @@ contains
             ! updates stk segment
             call o_stk%new(is_ptcl=.false.)
             call o_stk%set('stk',     trim(stkfnames(istk)))
-            call o_stk%set('box',     real(ldim(1)))
-            call o_stk%set('nptcls',  real(nptcls_arr(istk)))
-            call o_stk%set('fromp',   real(fromp))
-            call o_stk%set('top',     real(top))
+            call o_stk%set('box',     ldim(1))
+            call o_stk%set('nptcls',  nptcls_arr(istk))
+            call o_stk%set('fromp',   fromp)
+            call o_stk%set('top',     top)
             call o_stk%set('stkkind', 'split')
             call o_stk%set('imgkind', 'ptcl')
             call o_stk%set('smpd',    ctfvars%smpd)
@@ -1357,11 +1358,11 @@ contains
             do i=1,nptcls_arr(istk)
                 pind = fromp+i-1
                 call os%get_ori(pind, o_ptcl)
-                call o_ptcl%set('stkind', real(stk_ind))
-                call o_ptcl%set('pind',   real(pind)) ! to keep track of particle indices
+                call o_ptcl%set_stkind(stk_ind)
+                call o_ptcl%set('pind',   pind) ! to keep track of particle indices
                 istate = 1
                 if( o_ptcl%isthere('state') ) istate = o_ptcl%get_state()
-                call o_ptcl%set('state',  real(istate))
+                call o_ptcl%set_state(istate)
                 select case(ctfvars%ctfflag)
                     case(CTFFLAG_YES,CTFFLAG_FLIP)
                         if( .not.o_ptcl%isthere('dfx') )then
@@ -1426,7 +1427,7 @@ contains
         numlen  = len_trim(int2str(nparts))
         ! images copy
         smpd = orig_stk%get('smpd')
-        box  = nint(orig_stk%get('box'))
+        box  = orig_stk%get_int('box')
         call img%new([box,box,1], smpd)
         call simple_getcwd(cwd)
         if( present(dir) )then
@@ -1502,13 +1503,13 @@ contains
             call self%os_stk%set_ori(istk, orig_stk)
             ! override
             call self%os_stk%set(istk, 'stk',     trim(stk_relpath))
-            call self%os_stk%set(istk, 'nptcls',  real(nptcls_part))
-            call self%os_stk%set(istk, 'fromp',   real(parts(istk,1)))
-            call self%os_stk%set(istk, 'top',     real(parts(istk,2)))
+            call self%os_stk%set(istk, 'nptcls',  nptcls_part)
+            call self%os_stk%set(istk, 'fromp',   parts(istk,1))
+            call self%os_stk%set(istk, 'top',     parts(istk,2))
             call self%os_stk%set(istk, 'stkkind', 'split')
             do iptcl=parts(istk,1),parts(istk,2)
-                call self%os_ptcl2D%set(iptcl,'stkind',real(istk))
-                call self%os_ptcl3D%set(iptcl,'stkind',real(istk))
+                call self%os_ptcl2D%set(iptcl,'stkind', istk)
+                call self%os_ptcl3D%set(iptcl,'stkind', istk)
             enddo
             if( l_has_stk_den )then
                 stkpart = filepath(trim(tmp_dir),'stack_den_part'//int2str_pad(istk,numlen)//EXT)
@@ -1562,7 +1563,7 @@ contains
         if( ffromto(2) < 1 ) ffromto(2) = nptcls
         ! images copy
         smpd = orig_stk%get('smpd')
-        box  = nint(orig_stk%get('box'))
+        box  = orig_stk%get_int('box')
         call img%new([box,box,1], smpd)
         call dstkio_r%new(smpd, box)
         call stkio_w%open(stkout, smpd, 'write', box=box, is_ft=.false.)
@@ -1589,7 +1590,7 @@ contains
             write(logfhandle,*) 'nptcl2D: ', self%os_ptcl2D%get_noris()
             THROW_HARD('iptcl index out of range; get_micname')
         end if
-        imic = nint(self%os_ptcl2D%get(iptcl, 'stkind'))
+        imic = self%os_ptcl2D%get_int(iptcl, 'stkind')
         if(imic < 1 .or. imic > self%os_mic%get_noris()) then
             write(logfhandle,*) 'imic : ', imic
             write(logfhandle,*) 'nmics: ', self%os_mic%get_noris()
@@ -1688,11 +1689,11 @@ contains
         call self%add_entry2os_out(iimgkind, ind)
         ! fill-in field
         call self%os_out%set(ind, 'stk',     trim(relpath))
-        call self%os_out%set(ind, 'box',     real(ldim(1)))
-        call self%os_out%set(ind, 'nptcls',  real(nptcls))
-        call self%os_out%set(ind, 'fromp',   1.0)
-        call self%os_out%set(ind, 'top',     real(nptcls))
-        call self%os_out%set(ind, 'smpd',    real(smpd))
+        call self%os_out%set(ind, 'box',     ldim(1))
+        call self%os_out%set(ind, 'nptcls',  nptcls)
+        call self%os_out%set(ind, 'fromp',   1)
+        call self%os_out%set(ind, 'top',     nptcls)
+        call self%os_out%set(ind, 'smpd',    smpd)
         call self%os_out%set(ind, 'stkkind', 'single')
         call self%os_out%set(ind, 'imgkind', iimgkind)
         call self%os_out%set(ind, 'ctf',     'no')
@@ -1783,8 +1784,8 @@ contains
         ! fill-in field
         call self%os_out%set(ind, 'fsc',     trim(relpath))
         call self%os_out%set(ind, 'imgkind', 'fsc')
-        call self%os_out%set(ind, 'state',   real(state))
-        call self%os_out%set(ind, 'box',     real(box))
+        call self%os_out%set(ind, 'state',   state)
+        call self%os_out%set(ind, 'box',     box)
     end subroutine add_fsc2os_out
 
     subroutine add_vol2os_out( self, vol, smpd, state, which_imgkind, box )
@@ -1862,10 +1863,10 @@ contains
         endif
         ! fill-in field
         call self%os_out%set(ind, 'vol',     trim(relpath))
-        call self%os_out%set(ind, 'box',     real(ldim(1)))
+        call self%os_out%set(ind, 'box',     ldim(1))
         call self%os_out%set(ind, 'smpd',    smpd)
         call self%os_out%set(ind, 'imgkind', trim(which_imgkind))
-        call self%os_out%set(ind, 'state',   real(state))
+        call self%os_out%set(ind, 'state',   state)
     end subroutine add_vol2os_out
 
     subroutine add_entry2os_out( self, which_imgkind, ind )
@@ -1953,8 +1954,8 @@ contains
         ! set return values
         if( allocated(stkname) ) deallocate(stkname)
         stkname = trim(self%os_out%get_static(ind,'stk'))
-        ncls = nint(self%os_out%get(ind, 'nptcls'))
-        smpd = self%os_out%get(ind, 'smpd')
+        ncls    = self%os_out%get_int(ind, 'nptcls')
+        smpd    = self%os_out%get(ind, 'smpd')
         if(present(stkpath)) then
             if( allocated(stkpath) ) deallocate(stkpath)
             if(self%os_out%isthere(ind, 'stkpath')) stkpath = trim(self%os_out%get_static(ind,'stkpath'))
@@ -2021,7 +2022,7 @@ contains
         deallocate(vol_fname)
         call self%os_out%getter(ind, 'vol', vol_fname)
         smpd = self%os_out%get(ind,  'smpd')
-        box  = nint(self%os_out%get(ind,  'box'))
+        box  = self%os_out%get_int(ind, 'box')
     end subroutine get_vol
 
     subroutine get_fsc( self, state, fsc_fname, box )
@@ -2053,7 +2054,7 @@ contains
         ! set output
         deallocate(fsc_fname)
         call self%os_out%getter(ind, 'fsc', fsc_fname)
-        box = nint(self%os_out%get(ind, 'box'))
+        box = self%os_out%get_int(ind, 'box')
     end subroutine get_fsc
 
     subroutine get_frcs( self, frcs, which_imgkind, fail )
@@ -2119,7 +2120,7 @@ contains
                 imgkind = trim(self%os_out%get_static(i,'imgkind'))
                 if(trim(imgkind).eq.'cavg')then
                     if( self%os_out%isthere(i,'fromp').and.self%os_out%isthere(i,'top') )then
-                        nptcls = nptcls + nint(self%os_out%get(i,'top')) - nint(self%os_out%get(i,'fromp')) + 1
+                        nptcls = nptcls + self%os_out%get_top(i) - self%os_out%get_fromp(i) + 1
                     else
                         THROW_HARD('Missing fromp and top entries in cavg; get_imginfo_from_osout')
                     endif
@@ -2130,7 +2131,7 @@ contains
         do i=1,nos
             if( self%os_out%isthere(i,'smpd').and.self%os_out%isthere(i,'box') )then
                 smpd = self%os_out%get(i,'smpd')
-                box  = nint(self%os_out%get(i,'box'))
+                box  = self%os_out%get_int(i,'box')
                 return
             endif
         end do
@@ -2164,7 +2165,7 @@ contains
                 if( trim(self%os_out%get_static(i,'imgkind')) .eq. trim(imgkind_target))then
                     if( self%os_out%isthere(i,'smpd').and.self%os_out%isthere(i,'box') )then
                         smpd = self%os_out%get(i,'smpd')
-                        box  = nint(self%os_out%get(i,'box'))
+                        box  = self%os_out%get_int(i,'box')
                         return
                     endif
                 endif
@@ -2199,9 +2200,9 @@ contains
     integer function get_n_insegment_state( self, oritype, state )
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
-        real,                      intent(in)    :: state
+        integer,                   intent(in)    :: state
         class(oris), pointer :: pos => NULL()
-        integer              :: iori, istate
+        integer              :: iori
         get_n_insegment_state = 0
         select case(oritype)
             case('ptcl2D','ptcl3D')
@@ -2211,12 +2212,11 @@ contains
                 endif
         end select
         call self%ptr2oritype(oritype, pos)
-        istate = nint(state)
         do iori=1,pos%get_noris()
             if(.not. pos%isthere(iori,'state') )then
                 THROW_HARD('state flag missing from ori; get_n_insegment_state')
             endif
-            if( pos%get_state(iori) == istate )then
+            if( pos%get_state(iori) == state )then
                 get_n_insegment_state = get_n_insegment_state + 1
             endif
         enddo
@@ -2256,18 +2256,18 @@ contains
 
     integer function get_nptcls( self )
         class(sp_project), target, intent(in) :: self
-        integer :: i, nos
+        integer :: i, nos, nptcls
         get_nptcls = 0
         nos        = self%os_stk%get_noris()
         if( nos == 0 )return
         do i=1,nos
-            get_nptcls = get_nptcls + nint(self%os_stk%get(i,'nptcls'))
+            get_nptcls = get_nptcls + self%os_stk%get_int(i,'nptcls')
         enddo
         ! sanity check
         if( self%os_stk%isthere(nos,'top') )then
-            if( nint(self%os_stk%get(nos,'top')) /=  get_nptcls )then
+            if( self%os_stk%get_top(nos) /=  get_nptcls )then
                 write(logfhandle,*) 'nptcls from ptcls', get_nptcls
-                write(logfhandle,*) 'nptcls from top', nint(self%os_stk%get(nos,'top'))
+                write(logfhandle,*) 'nptcls from top  ', self%os_stk%get_top(nos)
                 THROW_HARD('total # particles .ne. last top index; get_nptcls')
             endif
         endif
@@ -2281,15 +2281,15 @@ contains
         if( n_os_stk == 0 )then
             THROW_HARD('empty os_stk field! get_box')
         endif
-        get_box = nint( self%os_stk%get(1,'box') )
+        get_box = self%os_stk%get_int(1,'box')
     end function get_box
 
     subroutine get_boxcoords( self, iptcl, coords )
         class(sp_project), target, intent(in)  :: self
         integer,                   intent(in)  :: iptcl
         integer,                   intent(out) :: coords(2)
-        coords(1) = nint(self%os_ptcl2D%get(iptcl,'xpos'))
-        coords(2) = nint(self%os_ptcl2D%get(iptcl,'ypos'))
+        coords(1) = self%os_ptcl2D%get_int(iptcl,'xpos')
+        coords(2) = self%os_ptcl2D%get_int(iptcl,'ypos')
     end subroutine get_boxcoords
 
     real function get_smpd( self )
@@ -2658,7 +2658,7 @@ contains
         else
             istk = 0
             do imic = 1,nmics
-                nptcls_mic = nint(self%os_mic%get(imic,'nptcls'))
+                nptcls_mic = self%os_mic%get_int(imic, 'nptcls')
                 if( nptcls_mic > 0 )then
                     istk = istk+1
                     if( istk > nstks ) THROW_HARD('Too many stacks!  get_mic2stk_inds')
@@ -2674,8 +2674,8 @@ contains
         do imic = 1,nmics
             istk = mic2stk_inds(imic)
             if( istk == 0 ) cycle
-            nptcls_mic = nint(self%os_mic%get(imic,'nptcls'))
-            nptcls_stk = nint(self%os_stk%get(istk,'nptcls'))
+            nptcls_mic = self%os_mic%get_int(imic,'nptcls')
+            nptcls_stk = self%os_stk%get_int(istk,'nptcls')
             if( nptcls_mic /= nptcls_stk )then
                 print *, 'nptcls_mic ', nptcls_mic
                 print *, 'nptcls_stk ', nptcls_stk
@@ -2757,8 +2757,8 @@ contains
         endif
         ! parameter updates
         do istk = 1,n_os_stk
-            call self%os_stk%set(istk, 'smpd', real(smpd_sc))
-            call self%os_stk%set(istk, 'box', real(box_sc))
+            call self%os_stk%set(istk, 'smpd', smpd_sc)
+            call self%os_stk%set(istk, 'box',  box_sc)
         enddo
         call self%os_ptcl2D%mul_shifts(scale_factor)
         call self%os_ptcl3D%mul_shifts(scale_factor)
@@ -2776,10 +2776,10 @@ contains
         ! save
         call self%write
         ! command line for scaling
-        call cline_scale%set('newbox', real(box_sc))
-        if( cline%defined('state') )  call cline_scale%set('state', cline%get_rarg('state'))
-        if( cline%defined('nthr') )   call cline_scale%set('nthr', cline%get_rarg('nthr'))
-        if( cline%defined('nparts') ) call cline_scale%set('nparts', cline%get_rarg('nparts'))
+        call cline_scale%set('newbox', box_sc)
+        if( cline%defined('state') )  call cline_scale%set('state',  cline%get_iarg('state'))
+        if( cline%defined('nthr') )   call cline_scale%set('nthr',   cline%get_iarg('nthr'))
+        if( cline%defined('nparts') ) call cline_scale%set('nparts', cline%get_iarg('nparts'))
     end subroutine scale_projfile
 
     !> for merging alignment documents from SIMPLE runs in distributed mode
@@ -3025,7 +3025,7 @@ contains
                     endif
                 end do
                 deallocate(particles)
-                if(present(maxpop)) call self%os_cls2D%set(icls, 'pop', real(nptcls))
+                if(present(maxpop)) call self%os_cls2D%set(icls, 'pop', nptcls)
             endif
         end do
         ! cls3D mirrors cls2D
@@ -3168,7 +3168,7 @@ contains
                 THROW_HARD('Inconsistent # of stk/ptcls in project files!')
             endif
             nstks = self_src%os_stk%get_noris()
-            if( nint(self_src%os_stk%get(nstks,'top')) /= self%os_ptcl2D%get_noris() )then
+            if( self_src%os_stk%get_top(nstks) /= self%os_ptcl2D%get_noris() )then
                 THROW_HARD('Inconsistent # of particles between stk & particles fields')
             endif
             if( nstks == 0 ) return
@@ -3176,7 +3176,7 @@ contains
                 err   = .false.
                 call self_src%os_stk%get_ori(istk, o_src)
                 call self%os_stk%get_ori(istk, o)
-                if( nint(o%get('box')) /= nint(o_src%get('box')) )then
+                if( o%get_int('box') /= o_src%get_int('box') )then
                     THROW_HARD('Inconsistent box size')
                 endif
                 if( .not.is_equal(o%get('smpd'),o_src%get('smpd')) )then
@@ -3230,8 +3230,8 @@ contains
             do imic = 1,nmics
                 call self%os_mic%get_ori(imic, o)
                 call self_src%os_mic%get_ori(imic, o_src)
-                if(  nint(o%get('xdim')) /= nint(o_src%get('xdim')) .or.&
-                    &nint(o%get('ydim')) /= nint(o_src%get('ydim')))then
+                if(  o%get_int('xdim') /= o_src%get_int('xdim') .or.&
+                    &o%get_int('ydim') /= o_src%get_int('ydim'))then
                     THROW_HARD('Inconsistent dimensions')
                 endif
                 if( .not.is_equal(o%get('smpd'),o_src%get('smpd')) )then
@@ -3292,7 +3292,7 @@ contains
         endif
         ! update stacks
         do istk=1,nstks
-            call self%os_stk%set(istk, 'state', real(states(istk)))
+            call self%os_stk%set(istk, 'state', states(istk))
         enddo
         ! ensure ptcl fields congruent
         noris_ptcl2D = self%os_ptcl2D%get_noris()
@@ -3301,9 +3301,9 @@ contains
             THROW_HARD('Inconsistent # number of 2D/3D particles; report_state2stk')
         else
             do istk=1,nstks
-                fromp  = nint(self%os_stk%get(istk,'fromp'))
-                top    = nint(self%os_stk%get(istk,'top'))
-                nptcls = nint(self%os_stk%get(istk,'nptcls'))
+                fromp  = self%os_stk%get_fromp(istk)
+                top    = self%os_stk%get_top(istk)
+                nptcls = self%os_stk%get_int(istk,'nptcls')
                 if(top-fromp+1 /= nptcls)then
                     call self%os_stk%print_(istk)
                     THROW_HARD('Incorrect # number of particles in stack '//int2str(istk)//'; report_state2stk')
@@ -3353,10 +3353,10 @@ contains
     end subroutine report_state2mic
 
     subroutine set_boxcoords( self, iptcl, coords )
-        class(sp_project), target, intent(inout) :: self
-        integer,                   intent(in)    :: iptcl, coords(2)
-        call self%os_ptcl2D%set(iptcl,'xpos',real(coords(1)))
-        call self%os_ptcl2D%set(iptcl,'ypos',real(coords(2)))
+        class(sp_project), intent(inout) :: self
+        integer,           intent(in)    :: iptcl, coords(2)
+        call self%os_ptcl2D%set(iptcl,'xpos',coords(1))
+        call self%os_ptcl2D%set(iptcl,'ypos',coords(2))
     end subroutine set_boxcoords
 
     ! Removes in place mics, stacks and particles with state=0
@@ -3380,7 +3380,7 @@ contains
         do iptcl = 1,nptcls_tot
             ptcls_mask(iptcl) = self%os_ptcl2D%get_state(iptcl) > 0
             if( ptcls_mask(iptcl) )then
-                stkinds(iptcl) = nint(self%os_ptcl2D%get(iptcl,'stkind'))
+                stkinds(iptcl) = self%os_ptcl2D%get_int(iptcl,'stkind')
                 nptcls_eff     = nptcls_eff+1
             endif
         enddo
@@ -3408,10 +3408,10 @@ contains
         ptcl_glob  = 0
         do istk = 1,nstks_tot
             if( .not.stks_mask(istk) ) cycle
-            stk_cnt = stk_cnt + 1
-            stkind  = stkind  + 1
-            fromp      = nint(self%os_stk%get(istk,'fromp'))
-            top        = nint(self%os_stk%get(istk,'top'))
+            stk_cnt    = stk_cnt + 1
+            stkind     = stkind  + 1
+            fromp      = self%os_stk%get_fromp(istk)
+            top        = self%os_stk%get_top(istk)
             fromp_glob = top_glob+1
             ptcl_cnt   = 0
             do iptcl = fromp,top
@@ -3423,20 +3423,20 @@ contains
                 ! update orientations
                 call os_ptcl2D%transfer_ori(ptcl_glob, self%os_ptcl2D, iptcl)
                 call os_ptcl3D%transfer_ori(ptcl_glob, self%os_ptcl3D, iptcl)
-                call os_ptcl2D%set(ptcl_glob,'stkind',real(stkind))
-                call os_ptcl3D%set(ptcl_glob,'stkind',real(stkind))
-                call os_ptcl2D%set(ptcl_glob,'indstk',real(indstk))
-                call os_ptcl3D%set(ptcl_glob,'indstk',real(indstk))
+                call os_ptcl2D%set(ptcl_glob,'stkind',stkind)
+                call os_ptcl3D%set(ptcl_glob,'stkind',stkind)
+                call os_ptcl2D%set(ptcl_glob,'indstk',indstk)
+                call os_ptcl3D%set(ptcl_glob,'indstk',indstk)
             enddo
             ! update stack
             call os_stk%transfer_ori(stk_cnt, self%os_stk, istk)
-            call os_stk%set(stk_cnt, 'fromp', real(fromp_glob))
-            call os_stk%set(stk_cnt, 'top',   real(top_glob))
-            call os_stk%set(stk_cnt, 'nptcls',real(ptcl_cnt))
+            call os_stk%set(stk_cnt, 'fromp',  fromp_glob)
+            call os_stk%set(stk_cnt, 'top',    top_glob)
+            call os_stk%set(stk_cnt, 'nptcls', ptcl_cnt)
             ! update micrograph
             if( nmics_tot > 0 ) then
                 call os_mic%transfer_ori(stk_cnt, self%os_mic, stk2mic_inds(istk))
-                call os_mic%set(stk_cnt,'nptcls',real(ptcl_cnt))
+                call os_mic%set(stk_cnt,'nptcls', ptcl_cnt)
             endif
         enddo
         self%os_stk    = os_stk

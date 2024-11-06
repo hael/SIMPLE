@@ -257,7 +257,7 @@ contains
             !$omp schedule(static) proc_bind(close) reduction(max:ngroups)
             do iptcl = 1,nptcls
                 if( build%spproj_field%get_state(iptcl) == 0 ) cycle
-                igroup  = nint(build%spproj_field%get(iptcl,'stkind'))
+                igroup  = build%spproj_field%get_int(iptcl,'stkind')
                 ngroups = max(igroup,ngroups)
             enddo
             !$omp end parallel do
@@ -266,11 +266,11 @@ contains
         allocate(group_weights(2,ngroups),source=0)
         do iptcl = 1,nptcls
             if( build%spproj_field%get_state(iptcl) == 0 ) cycle
-            eo     = nint(build%spproj_field%get(iptcl,'eo')) ! 0/1
+            eo = build%spproj_field%get_eo(iptcl) ! 0/1
             if( params_glob%l_sigma_glob )then
                 igroup = 1
             else
-                igroup = nint(build%spproj_field%get(iptcl,'stkind'))
+                igroup = build%spproj_field%get_int(iptcl, 'stkind')
             endif
             group_pspecs(eo+1,igroup,:) = group_pspecs(eo+1,igroup,:) + real(pspecs(:, iptcl),dp)
             group_weights(eo+1,igroup)  = group_weights(eo+1,igroup)  + 1

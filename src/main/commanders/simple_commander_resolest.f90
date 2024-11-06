@@ -1094,7 +1094,7 @@ contains
                     if(.not.selected(i))cycle
                     iptcl = pinds(i)
                     call pftcc%gencorr_sigma_contrib(iref, iptcl, shifts(:,i), rots(i), sig2_contrib)
-                    istk = nint(build%spproj_field%get(iptcl,'stkind'))
+                    istk = build%spproj_field%get_int(iptcl,'stkind')
                     if( pftcc%iseven(i) )then
                         neven(istk) = neven(istk) + 1
                         sig2_even(:,istk) = sig2_even(:,istk) + sig2_contrib
@@ -1254,6 +1254,6 @@ contains
                 deallocate(tmp_rarr, tmp_iarr, res)
             end function calc_lplim_final_stage
 
-        end subroutine exec_estimate_lpstages
+    end subroutine exec_estimate_lpstages
 
 end module simple_commander_resolest

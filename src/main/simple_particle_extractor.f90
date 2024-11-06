@@ -150,9 +150,7 @@ contains
                     endif
                 endif
                 ! outliers curation
-                if( self%nhotpix > 0 )then
-                    call self%cure_outliers
-                endif
+                if( self%nhotpix > 0 ) call self%cure_outliers
                 call self%gain%kill
                 ! downscale frames & dose-weighing
                 !$omp parallel do schedule(guided) default(shared) private(iframe) proc_bind(close)
@@ -602,7 +600,7 @@ contains
         endif
     end subroutine cure_outliers
 
-        ! Frames assumed in fourier space
+    ! Frames assumed in fourier space
     subroutine apply_dose_weighing( self )
         class(ptcl_extractor), intent(inout) :: self
         real, parameter :: A=0.245, B=-1.665, C=2.81

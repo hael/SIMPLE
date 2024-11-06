@@ -97,14 +97,14 @@ contains
         if( .not. cline%defined('lpstop')           ) call cline%set('lpstop',            5.)
         if( .not. cline%defined('bfac')             ) call cline%set('bfac',             50.)
         if( .not. cline%defined('mcconvention')     ) call cline%set('mcconvention','simple')
-        if( .not. cline%defined('eer_upsampling')   ) call cline%set('eer_upsampling',    1.)
+        if( .not. cline%defined('eer_upsampling')   ) call cline%set('eer_upsampling',     1)
         if( .not. cline%defined('algorithm')        ) call cline%set('algorithm',    'patch')
         if( .not. cline%defined('mcpatch')          ) call cline%set('mcpatch',        'yes')
         if( .not. cline%defined('mcpatch_thres')    ) call cline%set('mcpatch_thres','  yes')
         if( .not. cline%defined('tilt_thres')       ) call cline%set('tilt_thres',      0.05)
         if( .not. cline%defined('beamtilt')         ) call cline%set('beamtilt',        'no')
         ! ctf estimation
-        if( .not. cline%defined('pspecsz')          ) call cline%set('pspecsz',         512.)
+        if( .not. cline%defined('pspecsz')          ) call cline%set('pspecsz',          512)
         if( .not. cline%defined('hp_ctf_estimate')  ) call cline%set('hp_ctf_estimate', HP_CTF_ESTIMATE)
         if( .not. cline%defined('lp_ctf_estimate')  ) call cline%set('lp_ctf_estimate', LP_CTF_ESTIMATE)
         if( .not. cline%defined('dfmin')            ) call cline%set('dfmin',           DFMIN_DEFAULT)
@@ -719,7 +719,7 @@ contains
         call cline%set('mkdir',   'yes')
         call cline%set('picker',  'new')
         if( .not. cline%defined('outdir')          ) call cline%set('outdir',           '')
-        if( .not. cline%defined('walltime')        ) call cline%set('walltime',         29.0*60.0) ! 29 minutes
+        if( .not. cline%defined('walltime')        ) call cline%set('walltime',         29*60) ! 29 minutes
         ! micrograph selection
         if( .not. cline%defined('reject_mics')     ) call cline%set('reject_mics',      'yes')
         if( .not. cline%defined('ctfresthreshold') ) call cline%set('ctfresthreshold',  CTFRES_THRESHOLD_STREAM)
@@ -1132,14 +1132,14 @@ contains
                             call stream_spproj%read_segment('stk', projrecords(imic)%projname)
                             prev_projname = trim(projrecords(imic)%projname)
                         endif
-                        micind = projrecords(imic)%micind
-                        fromps(imic) = nint(stream_spproj%os_stk%get(micind,'fromp')) ! fromp from individual project
+                        micind       = projrecords(imic)%micind
+                        fromps(imic) = stream_spproj%os_stk%get_fromp(micind) ! fromp from individual project
                         fromp        = nptcls + 1
                         nptcls       = nptcls + projrecords(imic)%nptcls
                         top          = nptcls
                         call spproj_glob%os_stk%transfer_ori(imic, stream_spproj%os_stk, micind)
-                        call spproj_glob%os_stk%set(imic, 'fromp',real(fromp))
-                        call spproj_glob%os_stk%set(imic, 'top',  real(top))
+                        call spproj_glob%os_stk%set(imic, 'fromp',fromp)
+                        call spproj_glob%os_stk%set(imic, 'top',  top)
                     enddo
                     call spproj_glob%write_segment_inside('stk', params%projfile)
                     ! particles
@@ -1184,7 +1184,7 @@ contains
                 type(projrecord), allocatable :: old_records(:)
                 character(len=:), allocatable :: fname, abs_fname, new_fname
                 type(sp_project)              :: tmpproj
-                integer :: n_spprojs, n_old, j, nprev_imports, n_completed, nptcls, nmics, imic
+                integer :: n_spprojs, n_old, j, nprev_imports, n_completed, nptcls, nmics, imic, iproj
                 n_completed = 0
                 nimported   = 0
                 ! previously imported
@@ -1248,7 +1248,7 @@ contains
                             if( l_multipick )then
                                 projrecords(j)%nptcls = 0
                             else
-                                nptcls      = nint(spprojs(iproj)%os_mic%get(imic,'nptcls'))
+                                nptcls      = spprojs(iproj)%os_mic%get_int(imic,'nptcls')
                                 nptcls_glob = nptcls_glob + nptcls ! global update
                                 projrecords(j)%nptcls = nptcls
                             endif
@@ -1421,7 +1421,7 @@ contains
                             irec = irec + 1
                             records(irec)%projname = trim(completed_fnames(iproj))
                             records(irec)%micind   = imic
-                            records(irec)%nptcls   = nint(spprojs(iproj)%os_mic%get(imic, 'nptcls'))
+                            records(irec)%nptcls   = spprojs(iproj)%os_mic%get_int(imic, 'nptcls')
                             call spproj_glob%os_mic%transfer_ori(irec, spprojs(iproj)%os_mic, imic)
                         endif
                     enddo
@@ -1825,7 +1825,7 @@ contains
                             j = j + 1
                             projrecords(j)%projname = trim(abs_fname)
                             projrecords(j)%micind   = imic
-                            nptcls      = nint(spprojs(iproj)%os_mic%get(imic,'nptcls'))
+                            nptcls      = spprojs(iproj)%os_mic%get_int(imic,'nptcls')
                             nptcls_glob = nptcls_glob + nptcls ! global update
                             projrecords(j)%nptcls     = nptcls
                             projrecords(j)%nptcls_sel = nptcls
@@ -2164,7 +2164,7 @@ contains
         ncls_in = 0
         if( cline%defined('ncls') )then
             ! to circumvent parameters class stringency, restored after params%new
-            ncls_in = nint(cline%get_rarg('ncls'))
+            ncls_in = cline%get_iarg('ncls')
             call cline%delete('ncls')
         endif        
         ! master parameters
@@ -2398,7 +2398,7 @@ contains
                 do iproj = 1,n_spprojs
                     do imic = 1,spprojs(iproj)%os_mic%get_noris()
                         irec      = irec + 1
-                        nptcls    = nint(spprojs(iproj)%os_mic%get(imic,'nptcls'))
+                        nptcls    = spprojs(iproj)%os_mic%get_int(imic,'nptcls')
                         n_ptcls   = n_ptcls + nptcls ! global update
                         fname     = trim(projectnames(iproj))
                         abs_fname = simple_abspath(fname, errmsg='stream_cluster2D :: update_projects_list 1')

@@ -400,10 +400,10 @@ contains
         !STAR data
         do i=1, spproj%os_ptcl2D%get_noris()
             if(stkind) then
-                stkindex = int(spproj%os_ptcl2D%get(i, 'stkind'))
+                stkindex = spproj%os_ptcl2D%get_int(i, 'stkind')
                 ptclcount(stkindex) = ptclcount(stkindex) + 1
-                if((state .AND. (spproj%os_ptcl2D%get(i,'state') .GT. 0)) .OR. (.NOT. state)) then
-                    if((stkstate .AND. (spproj%os_stk%get(stkindex, 'state') .GT. 0)) .OR. (.NOT. stkstate)) then
+                if((state .AND. (spproj%os_ptcl2D%get_state(i) .GT. 0)) .OR. (.NOT. state)) then
+                    if((stkstate .AND. (spproj%os_stk%get_state(stkindex) .GT. 0)) .OR. (.NOT. stkstate)) then
                         call starfile_table__addObject(startable)
 
                         if(stk) then
@@ -433,12 +433,12 @@ contains
                         endif
 
                         if(cline%get_rarg('reliongroups') > 0 .AND. dfx) then
-                            group = ceiling((real(spproj%os_stk%get_dfx(stkindex)) - dfxmin) / dfxstep)
+                            group = ceiling((spproj%os_stk%get_dfx(stkindex) - dfxmin) / dfxstep)
                             write(groupname, *) group
                             call starfile_table__setValue_string(startable, EMDL_MLMODEL_GROUP_NAME, trim(adjustl(groupname)))
                         endif
 
-                        if(opticsgroup) call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, int(spproj%os_stk%get(stkindex, 'opticsgroup') + int(cline%get_rarg('optics_offset'))))
+                        if(opticsgroup) call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, spproj%os_stk%get_int(stkindex, 'opticsgroup') + cline%get_iarg('optics_offset'))
 
                     endif
                 endif

@@ -75,7 +75,7 @@ contains
                 call build%spproj_field%set(i, 'x', x)
                 call build%spproj_field%set(i, 'y', y)
                 call build%spproj_field%e3set(i, e3)
-                call build%spproj_field%set(i, 'class', real(class))
+                call build%spproj_field%set(i, 'class', class)
             end do
         else if( cline%defined('ndiscrete') )then
             if( params%ndiscrete > 0 )then
@@ -141,7 +141,7 @@ contains
             call orientation%set_euler([params%e1,params%e2,params%e3])
             if( cline%defined('state') )then
                 do i=1,build%spproj_field%get_noris()
-                    s = nint(build%spproj_field%get(i, 'state'))
+                    s = build%spproj_field%get_state(i)
                     if( s == params%state )then
                         call build%spproj_field%rot_transp(i,orientation)
                     endif

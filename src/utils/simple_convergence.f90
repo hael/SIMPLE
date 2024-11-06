@@ -175,14 +175,14 @@ contains
         endif
         ! stats
         call self%ostats%new(1, is_ptcl=.false.)
-        call self%ostats%set(1,'ITERATION',real(params_glob%which_iter))
-        call self%ostats%set(1,'CLASS_OVERLAP',self%mi_class)
+        call self%ostats%set(1,'ITERATION',                params_glob%which_iter)
+        call self%ostats%set(1,'CLASS_OVERLAP',            self%mi_class)
         call self%ostats%set(1,'PERCEN_PARTICLES_SAMPLED', percen_sampled)
         call self%ostats%set(1,'PERCEN_PARTICLES_UPDATED', percen_updated)
-        call self%ostats%set(1,'PERCEN_PARTICLES_AVERAGED', percen_avg)
-        call self%ostats%set(1,'IN-PLANE_DIST',self%dist_inpl%avg)
-        call self%ostats%set(1,'SEARCH_SPACE_SCANNED',self%frac_srch%avg)
-        call self%ostats%set(1,'SCORE',self%score%avg)
+        call self%ostats%set(1,'PERCEN_PARTICLES_AVERAGED',percen_avg)
+        call self%ostats%set(1,'IN-PLANE_DIST',            self%dist_inpl%avg)
+        call self%ostats%set(1,'SEARCH_SPACE_SCANNED',     self%frac_srch%avg)
+        call self%ostats%set(1,'SCORE',                    self%score%avg)
         call self%ostats%write(STATS_FILE)
         ! destruct
         deallocate(mask, updatecnts, states, scores, sampled)
@@ -310,17 +310,17 @@ contains
         endif
         ! stats
         call self%ostats%new(1, is_ptcl=.false.)
-        call self%ostats%set(1,'ITERATION',real(params_glob%which_iter))
-        call self%ostats%set(1,'ORIENTATION_OVERLAP',self%mi_proj)
+        call self%ostats%set(1,'ITERATION',                params_glob%which_iter)
+        call self%ostats%set(1,'ORIENTATION_OVERLAP',      self%mi_proj)
         if( params_glob%nstates > 1 ) call self%ostats%set(1,'STATE_OVERLAP', self%mi_state)
         call self%ostats%set(1,'PERCEN_PARTICLES_SAMPLED', percen_sampled)
         call self%ostats%set(1,'PERCEN_PARTICLES_UPDATED', percen_updated)
-        call self%ostats%set(1,'PERCEN_PARTICLES_AVERAGED', percen_avg)
-        call self%ostats%set(1,'DIST_BTW_BEST_ORIS',self%dist%avg)
-        call self%ostats%set(1,'IN-PLANE_DIST',self%dist_inpl%avg)
-        call self%ostats%set(1,'SEARCH_SPACE_SCANNED',self%frac_srch%avg)
-        call self%ostats%set(1,'SCORE',self%score%avg)
-        call self%ostats%set(1,'SHIFT_INCR_ARG',self%shincarg%avg)
+        call self%ostats%set(1,'PERCEN_PARTICLES_AVERAGED',percen_avg)
+        call self%ostats%set(1,'DIST_BTW_BEST_ORIS',       self%dist%avg)
+        call self%ostats%set(1,'IN-PLANE_DIST',            self%dist_inpl%avg)
+        call self%ostats%set(1,'SEARCH_SPACE_SCANNED',     self%frac_srch%avg)
+        call self%ostats%set(1,'SCORE',                    self%score%avg)
+        call self%ostats%set(1,'SHIFT_INCR_ARG',           self%shincarg%avg)
         call self%ostats%write(STATS_FILE)
         call self%append_stats
         call self%plot_projdirs(mask)
@@ -410,7 +410,7 @@ contains
         ! raw populations output
         call os%new(nprojs,is_ptcl=.false.)
         do proj = 1,nprojs
-            call os%set(proj,'pop',real(pops(proj)))
+            call os%set(proj,'pop',pops(proj))
             if( pops(proj) == 0 ) cycle
             call os%set(proj,'e1',phi(proj))
             call os%set(proj,'e2',psi(proj))

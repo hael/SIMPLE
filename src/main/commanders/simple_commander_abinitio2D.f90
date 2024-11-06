@@ -62,7 +62,7 @@ contains
         if( .not. cline%defined('lambda')   ) call cline%set('lambda',    ICM_LAMBDA)
         if( .not. cline%defined('extr_lim') ) call cline%set('extr_lim',  EXTR_LIM_LOCAL)
         if( cline%defined('nparts') )then
-            l_shmem = nint(cline%get_rarg('nparts')) == 1
+            l_shmem = cline%get_iarg('nparts') == 1
         else
             l_shmem = .true.
         endif
@@ -107,7 +107,7 @@ contains
         call spproj%os_ptcl3D%transfer_2Dshifts(spproj_field)
         call spproj%write_segment_inside('ptcl3D', params%projfile)
         ! final class generation & ranking
-        last_iter = nint(cline_cluster2D%get_rarg('endit'))
+        last_iter = cline_cluster2D%get_iarg('endit')
         call gen_final_cavgs(last_iter)
         ! cleanup
         call del_file('start2Drefs'//params%ext)
@@ -198,7 +198,7 @@ contains
             refine = 'snhc_smpl' ! not optional
             ! iteration number bookkeeping
             iter = 0
-            if( cline_cluster2D%defined('endit') ) iter = nint(cline_cluster2D%get_rarg('endit'))
+            if( cline_cluster2D%defined('endit') ) iter = cline_cluster2D%get_iarg('endit')
             iter = iter + 1
             call cline_cluster2D%delete('which_iter')
             ! phase logics

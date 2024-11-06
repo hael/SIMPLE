@@ -3,7 +3,6 @@
 module simple_sauron
 use simple_hash,    only: hash
 use simple_chash,   only: chash
-use simple_syslib,  only: sscanf
 use simple_defs
 use simple_defs_ori
 use simple_strings
@@ -19,12 +18,12 @@ end interface
 
 contains
 
-    !> whether a string represents a real (and its value) or characters
-    subroutine str2real_local( str, isreal, rvar)
+    !> whether a string represents a double precision real (and its value) or characters
+    subroutine str2realdp_local( str, isreal, rvar)
         use simple_strings, only: char_is_a_letter
         character(len=*), intent(in)  :: str
-        logical         , intent(out) :: isreal
-        real,             intent(out) :: rvar
+        logical,          intent(out) :: isreal
+        real(dp),         intent(out) :: rvar
         integer :: i, l
         isreal = .false.
         i = index(str, '.')
@@ -37,13 +36,13 @@ contains
         if( index(str, PATH_SEPARATOR) /= 0 ) return
         ! real
         ! On Apple M1 some combinations of XCode & GNU compilers make sscanf fail systematically,
-        ! Fortran instrinsic is a bit slower but safer it seems
+        ! Fortran instrinsic is a bit slower but safer
         read(str, *, iostat=i) rvar
         isreal = i==0
         ! isreal = .true.
         ! rvar = str2real(str)
         ! isreal = sscanf(str(1:l)//C_NULL_CHAR,"%f"//C_NULL_CHAR,rvar) /= 0
-    end subroutine str2real_local
+    end subroutine str2realdp_local
 
     !> This parser is optimised for real/character output types.
     !  Refer to sauron_ori_parser_old for more generic cases
@@ -54,7 +53,7 @@ contains
         logical               :: is_real(196)
         character(len=32)     :: keys(196)
         character(len=STDLEN) :: args(196), vals(196), arg
-        real                  :: rvals(196)
+        real(dp)              :: rvals(196)
         integer               :: eq_pos(196), nargs, iarg, lenstr, ipos, ipos_prev, nreals, i
         call compact(line)
         lenstr = len_trim(line)
@@ -84,7 +83,7 @@ contains
             ipos = eq_pos(iarg)
             keys(iarg) = adjustl(trim(arg(1:ipos-1)))
             vals(iarg) = adjustl(arg(ipos+1:))
-            call str2real_local(vals(iarg), is_real(iarg), rvals(iarg))
+            call str2realdp_local(vals(iarg), is_real(iarg), rvals(iarg))
         end do
         nreals = count(is_real(:nargs))
         ! alloc
@@ -108,7 +107,7 @@ contains
         logical               :: is_real(96)
         character(len=32)     :: keys(96)
         character(len=STDLEN) :: args(96), vals(96), arg
-        real                  :: rvals(96)
+        real(dp)              :: rvals(96)
         integer               :: eq_pos(96), nargs, iarg, lenstr, ipos, ipos_prev, nreals, i, ind
         call compact(line)
         lenstr = len_trim(line)
@@ -138,7 +137,7 @@ contains
             ipos = eq_pos(iarg)
             keys(iarg) = adjustl(trim(arg(1:ipos - 1)))
             vals(iarg) = adjustl(arg(ipos + 1:))
-            call str2real_local(vals(iarg), is_real(iarg), rvals(iarg))
+            call str2realdp_local(vals(iarg), is_real(iarg), rvals(iarg))
         end do
         nreals = 0
         do iarg = 1, nargs
@@ -157,7 +156,7 @@ contains
                 if( ind == 0 )then
                     call htab%push(keys(iarg), rvals(iarg))
                 else
-                    pparms(ind) = rvals(iarg)
+                    pparms(ind) = real(rvals(iarg))
                 endif
             else
                 call chtab%push(keys(iarg), vals(iarg))

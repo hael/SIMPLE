@@ -117,8 +117,8 @@ contains
         ! pftcc
         call cline%set('prg',      'dummy')
         call cline%set('smpd',     smpd)
-        call cline%set('box',      real(box))
-        call cline%set('nthr',     1.)
+        call cline%set('box',      box)
+        call cline%set('nthr',     1)
         call cline%set('ctf',      'no')
         call params%new(cline, silent=.true.)
         params_glob%kfromto(1) = 5

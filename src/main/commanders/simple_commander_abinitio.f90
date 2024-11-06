@@ -213,7 +213,7 @@ contains
             call spproj%os_cls3D%transfer_ori(icls, work_proj%os_ptcl3D, icls)
         enddo
         ! revert splitting
-        call spproj%os_cls3D%set_all2single('stkind', 1.)
+        call spproj%os_cls3D%set_all2single('stkind', 1)
         ! map the orientation parameters obtained for the clusters back to the particles
         call spproj%map2ptcls
         if( nstages_ini3D == NSTAGES )then ! produce validation info
@@ -361,7 +361,7 @@ contains
         l_ini3D = .false.
         if( trim(params%cavg_ini).eq.'yes' )then 
             cline_ini3D = cline
-            call cline_ini3D%set('nstages', real(NSTAGES_INI3D))
+            call cline_ini3D%set('nstages', NSTAGES_INI3D)
             if( cline%defined('nthr_ini3D') )then
                 call cline_ini3D%set('nthr', params%nthr_ini3D)
                 call cline_ini3D%delete('nthr_ini3D')
@@ -678,7 +678,7 @@ contains
         real    :: trs, snr_noise_reg, greediness
         ! iteration number bookkeeping
         if( cline_refine3D%defined('endit') )then
-            iter = nint(cline_refine3D%get_rarg('endit'))
+            iter = cline_refine3D%get_iarg('endit')
         else
             iter = 0
         endif
@@ -856,7 +856,7 @@ contains
                 call cline_symrec%set('mkdir',      'no')
                 call cline_symrec%set('projfile',   projfile)
                 call cline_symrec%set('pgrp',       params_glob%pgrp)
-                call cline_symrec%set('which_iter', cline_refine3D%get_rarg('endit'))
+                call cline_symrec%set('which_iter', cline_refine3D%get_iarg('endit'))
                 call cline_symrec%delete('endit')
                 call xreconstruct3D%execute_safe(cline_symrec)
                 vol_sym = VOL_FBODY//int2str_pad(1,2)//params_glob%ext
@@ -1130,7 +1130,7 @@ contains
         call cline_refine3D%set('maxits',                    999)
         call cline_refine3D%delete('nparts')
         call cline_reconstruct3D%set('prg',      'reconstruct3D')
-        call cline_reconstruct3D%set('box',     real(params%box))
+        call cline_reconstruct3D%set('box',           params%box)
         call cline_reconstruct3D%set('projfile', params%projfile)
         call cline_reconstruct3D%set('ml_reg',              'no')
         call cline_reconstruct3D%set('needs_sigma',         'no')

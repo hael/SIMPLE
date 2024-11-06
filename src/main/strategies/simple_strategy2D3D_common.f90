@@ -697,7 +697,7 @@ contains
         s = o%get_state()
         if( s == 0 ) return
         ! eo flag
-        eo = nint(o%get('eo'))
+        eo = o%get_eo()
         ! particle-weight
         pw = 1.0
         if( o%isthere('w') ) pw = o%get('w')
@@ -793,7 +793,7 @@ contains
         !$omp do schedule(static) reduction(+:eopops)
         do i = 1,nptcls2update
             iptcl  = pinds(i)
-            iproj  = nint(build_glob%spproj_field%get(iptcl, 'proj'))
+            iproj  = build_glob%spproj_field%get_int(iptcl, 'proj')
             eo     = build_glob%spproj_field%get_eo(iptcl)+1
             eopops(iproj,eo) = eopops(iproj,eo) + 1
         end do
@@ -865,7 +865,7 @@ contains
                 if( tmp(iproj,eo)==0 ) cycle
                 do i = batchlims(1),batchlims(2)
                     iptcl  = pinds(i)
-                    pproj  = nint(build_glob%spproj_field%get(iptcl, 'proj'))
+                    pproj  = build_glob%spproj_field%get_int(iptcl, 'proj')
                     if( iproj /= pproj ) cycle
                     peo = build_glob%spproj_field%get_eo(iptcl)+1
                     if( peo /= eo ) cycle
@@ -891,14 +891,14 @@ contains
         if( DEBUG ) t = tic()
         do iproj = 1,params_glob%nspace
             call build_glob%eulspace%get_ori(iproj, orientation)
-            call orientation%set('state',1.)
+            call orientation%set('state', 1)
             call orientation%set('w',    1.)
             if( eopops(iproj,1) > 0 )then
-                call orientation%set('eo',0.)
+                call orientation%set('eo',0)
                 call grid_ptcl(projdirs(iproj,1), build_glob%pgrpsyms, orientation)
             endif
             if( eopops(iproj,2) > 0 )then
-                call orientation%set('eo',1.)
+                call orientation%set('eo',1)
                 call grid_ptcl(projdirs(iproj,2), build_glob%pgrpsyms, orientation)
             endif
         end do

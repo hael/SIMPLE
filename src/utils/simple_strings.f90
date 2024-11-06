@@ -21,6 +21,16 @@ private :: LOWER_CASE_LETTERS, UPPER_CASE_LETTERS, INTEGERS, NEW_LINES_C, BLANK_
 BLANK_CHARACTERS, BLANKS_AND_NEW_LINES, INTEGER_DIGITS
 public
 
+interface real2str
+    module procedure realsp2str
+    module procedure realdp2str
+end interface real2str
+
+interface str2format
+    module procedure str2format_1
+    module procedure str2format_2
+end interface str2format
+
 contains
 
     pure function spaces( n ) result( str )
@@ -32,7 +42,7 @@ contains
     end function spaces
 
     !> \brief  assesses whether a string represents a filename
-    subroutine str2format( str, format, rvar, ivar )
+    subroutine str2format_1( str, format, rvar, ivar )
         character(len=*),              intent(in)  :: str
         character(len=:), allocatable, intent(out) :: format
         real,                          intent(out) :: rvar
@@ -75,7 +85,53 @@ contains
         endif
         ! char is last resort
         allocate( format, source='char' )
-    end subroutine str2format
+    end subroutine str2format_1
+
+    !> \brief  assesses whether a string represents a filename
+    subroutine str2format_2( str, format, rvar, ivar )
+        character(len=*),              intent(in)  :: str
+        character(len=:), allocatable, intent(out) :: format
+        real(kind=dp),                 intent(out) :: rvar
+        integer,                       intent(out) :: ivar
+        integer :: iostat, i
+        logical :: str_is_file
+        i = index(str, '.')
+        ! check if first symbol after . is a character
+        str_is_file = .false.
+        if( i /= 0 .and. i < len_trim(str)  )then
+            if( char_is_a_letter(str(i+1:i+1)) )str_is_file = .true.
+        endif
+        ! file name
+        if( str_is_file )then
+            allocate( format, source='file' )
+            return
+        endif
+        ! check if string contains / -> directory
+        i = index(str, PATH_SEPARATOR)
+        if( i /= 0 )then
+            allocate(format, source='dir')
+            return
+        endif
+        i = index(str,',')
+        if( i /= 0 )then
+            allocate(format,source='char')
+            return
+        endif
+        ! real
+        read(str,*,iostat=iostat) rvar
+        if( iostat == 0 )then
+            allocate( format, source='real' )
+            return
+        endif
+        ! integer
+        read(str,*, iostat=iostat) ivar
+        if( iostat == 0 )then
+            allocate( format, source='int' )
+            return
+        endif
+        ! char is last resort
+        allocate( format, source='char' )
+    end subroutine str2format_2
 
     function str2latex( str2convert ) result( str_latex )
         character(len=*), intent(in)  :: str2convert
@@ -291,20 +347,20 @@ contains
     end function str2real
 
     !> \brief  converts a real number to a string
-    pure function real2str(rval) result(str)
+    pure function realsp2str(rval) result(str)
         real, intent(in)  :: rval
         character(len=32) :: str
         write(str,*) rval
         call removesp(str)
-    end function real2str
+    end function realsp2str
 
     !> \brief  converts a real number to a string
-    pure function dbl2str(rval) result(str)
-        real(dp), intent(in)  :: rval
-        character(len=32) :: str
+    pure function realdp2str(rval) result(str)
+        real(kind=dp), intent(in) :: rval
+        character(len=32)         :: str
         write(str,*) rval
         call removesp(str)
-    end function dbl2str
+    end function realdp2str
 
     !>  \brief  turn integer variable into character variable
     !! - now supports negative values

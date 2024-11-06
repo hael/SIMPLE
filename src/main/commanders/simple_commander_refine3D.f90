@@ -753,8 +753,8 @@ contains
         call cline_first_sigmas%set('prg', 'refine3D')
         call cline_first_sigmas%set('center',    'no')
         call cline_first_sigmas%set('continue',  'no')
-        call cline_first_sigmas%set('maxits',     1.0)
-        call cline_first_sigmas%set('which_iter', 1.0)
+        call cline_first_sigmas%set('maxits',       1)
+        call cline_first_sigmas%set('which_iter',   1)
         call cline_first_sigmas%set('objfun','euclid')
         call cline_first_sigmas%set('refine', 'sigma')
         call cline_first_sigmas%delete('update_frac') ! all particles neeed to contribute

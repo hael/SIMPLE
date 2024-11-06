@@ -6,22 +6,18 @@ use simple_private_prgs   ! use all in there
 use simple_args, only: args
 implicit none
 private
-public :: cmdarg, cmdline, cmdline_err
+public :: cmdline, cmdline_err
 #include "simple_local_flags.inc"
 
 integer, parameter :: MAX_CMDARGS = 100
 logical, parameter :: DEBUG_HERE  = .false.
+
 !> cmdarg key/value pair command-line type
 type cmdarg
     character(len=:), allocatable :: key, carg
     logical                       :: defined=.false.
-    real                          :: rarg=0.
-contains
-    procedure :: new
+    real(dp)                      :: rarg=0.d0
 end type cmdarg
-interface cmdarg
-    module procedure constructor
-end interface
 
 type cmdline
     private
@@ -29,7 +25,7 @@ type cmdline
     character(len=KEYLEN) :: checker(MAX_CMDARGS)
     character(len=8192)   :: entire_line        !! PATH_MAX is 4096 https://github.com/torvalds/linux/blob/master/include/uapi/linux/limits.h
     integer               :: argcnt=0, ncheck=0 !! max system args `getconf ARG_MAX`
-contains
+  contains
     procedure          :: parse
     procedure          :: parse_private
     procedure          :: parse_oldschool
@@ -37,8 +33,8 @@ contains
     procedure, private :: copy
     procedure, private :: assign
     generic            :: assignment(=) => assign
-    procedure, private :: set_1, set_2, set_3
-    generic            :: set => set_1, set_2, set_3
+    procedure, private :: set_1, set_2, set_3, set_4
+    generic            :: set => set_1, set_2, set_3, set_4
     procedure, private :: lookup
     procedure          :: get_keys
     procedure          :: delete
@@ -49,30 +45,13 @@ contains
     procedure          :: writeline
     procedure          :: defined
     procedure          :: get_rarg
+    procedure          :: get_iarg
     procedure          :: get_carg
     procedure          :: gen_job_descr
     procedure          :: kill
 end type cmdline
 
 contains
-
-    function constructor( key, carg, rarg ) result( self )
-        character(len=*),  intent(in) :: key
-        character(len=*),  intent(in), optional :: carg
-        real,              intent(in), optional :: rarg
-        type(cmdarg) :: self
-        call self%new( key, carg, rarg )
-    end function constructor
-
-    subroutine new( self, key, carg, rarg )
-        class(cmdarg),     intent(inout)        :: self
-        character(len=*),  intent(in)           :: key
-        character(len=*),  intent(in), optional :: carg
-        real,              intent(in), optional :: rarg
-        allocate(self%key, source=key)
-        if(present(carg)) allocate(self%carg, source=carg)
-        if(present(rarg)) self%rarg = rarg
-    end subroutine new
 
     !> \brief for parsing the command line arguments passed as key=val
     subroutine parse( self )
@@ -308,8 +287,8 @@ contains
         character(len=*), intent(in)    :: arg
         class(args),      intent(in)    :: allowed_args
         character(len=:), allocatable   :: form
-        real    :: rval
-        integer :: pos1, io_stat, ival
+        real(kind=dp) :: rval
+        integer       :: pos1, io_stat, ival
         pos1 = index(arg, '=') ! position of '='
         ! parse everyting containing '='
         if( pos1 /= 0 )then
@@ -328,7 +307,7 @@ contains
                 case('int')
                     call str2int(adjustl(arg(pos1+1:)), io_stat, ival)
                     if( io_stat == 0 )then
-                        self%cmds(i)%rarg = real(ival)
+                        self%cmds(i)%rarg = real(ival,kind=dp)
                     else
                         self%cmds(i)%carg = adjustl(arg(pos1+1:))
                     endif
@@ -370,11 +349,11 @@ contains
         call self%copy(self2copy)
     end subroutine assign
 
-    !> \brief  for setting a real valued command line argument
+    !> \brief  for setting a real(kind=8) valued command line argument
     subroutine set_1( self, key, rarg )
         class(cmdline),   intent(inout) :: self
         character(len=*), intent(in)    :: key
-        real,             intent(in)    :: rarg
+        real(kind=dp),    intent(in)    :: rarg
         integer :: which
         which = self%lookup(key)
         if( which == 0 )then
@@ -384,16 +363,24 @@ contains
                 write(logfhandle,*) 'MAX_CMDARGS: ', MAX_CMDARGS
                 THROW_HARD('stack overflow; set_1')
             endif
-            self%cmds(self%argcnt)%key = trim(key)
-            self%cmds(self%argcnt)%rarg = rarg
+            self%cmds(self%argcnt)%key     = trim(key)
+            self%cmds(self%argcnt)%rarg    = rarg
             self%cmds(self%argcnt)%defined = .true.
         else
             self%cmds(which)%rarg = rarg
         endif
     end subroutine set_1
 
+    !> \brief  for setting a real valued command line argument
+    subroutine set_2( self, key, rarg )
+        class(cmdline),   intent(inout) :: self
+        character(len=*), intent(in)    :: key
+        real,             intent(in)    :: rarg
+        call self%set_1(key, real(rarg,dp))
+    end subroutine set_2
+
     !> \brief  for setting a char valued command line argument
-    subroutine set_2( self, key, carg )
+    subroutine set_3( self, key, carg )
         class(cmdline),   intent(inout) :: self
         character(len=*), intent(in)    :: key
         character(len=*), intent(in)    :: carg
@@ -412,15 +399,15 @@ contains
         else
             self%cmds(which)%carg = trim(carg)
         endif
-    end subroutine set_2
+    end subroutine set_3
 
     !> \brief  for setting an integer valued command line argument as a real
-    subroutine set_3( self, key, iarg )
+    subroutine set_4( self, key, iarg )
         class(cmdline),   intent(inout) :: self
         character(len=*), intent(in)    :: key
         integer,          intent(in)    :: iarg
-        call self%set_1(key, real(iarg))
-    end subroutine set_3
+        call self%set_1(key, real(iarg,dp))
+    end subroutine set_4
 
     !> \brief for removing a command line argument
     subroutine delete( self, key )
@@ -432,7 +419,7 @@ contains
             self%cmds( which:self%argcnt-1 ) = self%cmds( which+1:self%argcnt )
             if( allocated(self%cmds(self%argcnt)%key)  ) deallocate(self%cmds(self%argcnt)%key)
             if( allocated(self%cmds(self%argcnt)%carg) ) deallocate(self%cmds(self%argcnt)%carg)
-            self%cmds(self%argcnt)%rarg = 0.
+            self%cmds(self%argcnt)%rarg = 0.d0
             self%cmds(self%argcnt)%defined = .true.
             self%argcnt = self%argcnt - 1
         endif
@@ -518,10 +505,10 @@ contains
     subroutine readline( self, filename )
         class(cmdline),   intent(inout) :: self
         character(len=*), intent(in)    :: filename
-        character(len=:), allocatable :: key, arg
-        character(len=XLONGSTRLEN)    :: line, tmp
-        real    :: rarg
-        integer :: i, funit, ok, nl
+        character(len=:), allocatable   :: key, arg
+        character(len=XLONGSTRLEN)      :: line, tmp
+        real(kind=dp) :: rarg
+        integer       :: i, funit, ok, nl
         call self%kill
         if( .not.file_exists(adjustl(filename))) THROW_HARD('Could not find file: '//trim(filename))
         nl = nlines(filename)
@@ -558,7 +545,7 @@ contains
                 if( self%cmds(i)%defined .and. allocated(self%cmds(i)%carg) )then
                     write(parameters_fhandle, '(RD,A,A,A,A,A)') trim(self%cmds(i)%key), ' ', trim(self%cmds(i)%carg), ' ', trim(tag)
                 else if( self%cmds(i)%defined )then
-                    write(parameters_fhandle, '(RD,A,F12.4,A)') trim(self%cmds(i)%key), self%cmds(i)%rarg, trim(tag)
+                    write(parameters_fhandle, '(RD,A,F14.4,A)') trim(self%cmds(i)%key), self%cmds(i)%rarg, trim(tag)
                 endif
             end do
         else
@@ -566,7 +553,7 @@ contains
                 if( self%cmds(i)%defined .and. allocated(self%cmds(i)%carg) )then
                     write(parameters_fhandle, '(RD,A,A,A)') trim(self%cmds(i)%key), ' ', trim(self%cmds(i)%carg)
                 else if( self%cmds(i)%defined )then
-                    write(parameters_fhandle, '(RD,A,F12.4,A)') trim(self%cmds(i)%key), self%cmds(i)%rarg
+                    write(parameters_fhandle, '(RD,A,F14.4,A)') trim(self%cmds(i)%key), self%cmds(i)%rarg
                 endif
             end do
         endif
@@ -627,12 +614,28 @@ contains
         do i=1,self%argcnt
             if( allocated(self%cmds(i)%key) )then
                 if( trim(self%cmds(i)%key) .eq. trim(key) )then
-                    rval = self%cmds(i)%rarg
+                    rval = real(self%cmds(i)%rarg)
                     return
                 endif
             endif
         end do
     end function get_rarg
+
+    !> \brief for getting real args
+    elemental integer function get_iarg( self, key )
+        class(cmdline),   intent(in) :: self
+        character(len=*), intent(in) :: key
+        integer :: i
+        get_iarg = 0
+        do i=1,self%argcnt
+            if( allocated(self%cmds(i)%key) )then
+                if( trim(self%cmds(i)%key) .eq. trim(key) )then
+                    get_iarg = nint(self%cmds(i)%rarg)
+                    return
+                endif
+            endif
+        end do
+    end function get_iarg
 
     !> \brief for getting char args
     pure function get_carg( self, key ) result( cval )
