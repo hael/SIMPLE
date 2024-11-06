@@ -15,22 +15,26 @@ private
 type dock_vols
     private
     integer               :: box = 0, box_clip = 0, ldim(3) = [0,0,0], ldim_clip(3) = [0,0,0]
-    real                  :: smpd, hp, lp, mskdiam, smpd_clip, scale, eul(3), cc
+    real                  :: smpd, hp, lp, msk, smpd_clip, scale
+    real                  :: eul(3)=0., shift(3)=0., cc
     type(projector)       :: vol_ref, vol
     type(oris)            :: eulspace, eulspace_sub
     type(volpft_corrcalc) :: vpcc
     type(sym)             :: pgrpsym
     logical, allocatable  :: lnns(:)
+    logical               :: mag
 contains
     procedure             :: new
     procedure, private    :: set_ref
     procedure, private    :: set_target
     procedure, private    :: setup_srch_spaces
-    procedure             :: srch_rots
+    procedure, private    :: srch_rots
+    procedure, private    :: srch_shift
+    procedure             :: srch
     procedure             :: rotate_target
 end type dock_vols
 
-character(len=*), parameter :: PGRP           = 'c2'
+character(len=*), parameter :: PGRP           = 'c1'
 integer,          parameter :: NSPACE         = 20000
 integer,          parameter :: NSPACE_SUB     = 500
 integer,          parameter :: NBEST          = 3
@@ -38,10 +42,13 @@ real,             parameter :: LP2SMPD_TARGET = 1./3.
 
 contains
 
-    subroutine new( self, vol_ref_fname, vol_fname, smpd, hp, lp, mskdiam )
-        class(dock_vols), intent(inout) :: self
-        character(len=*), intent(in)    :: vol_ref_fname, vol_fname
-        real,             intent(in)    :: smpd, hp, lp, mskdiam
+    subroutine new( self, vol_ref_fname, vol_fname, smpd, hp, lp, mskdiam, mag )
+        class(dock_vols),  intent(inout) :: self
+        character(len=*),  intent(in)    :: vol_ref_fname, vol_fname
+        real,              intent(in)    :: smpd, hp, lp, mskdiam
+        logical, optional, intent(in)    :: mag
+        self%mag = .false.
+        if( present(mag) ) self%mag = mag
         call self%set_ref(vol_ref_fname, smpd, hp, lp, mskdiam)
         call self%set_target(vol_fname)
         call self%setup_srch_spaces
@@ -57,14 +64,14 @@ contains
         self%smpd    = smpd
         self%hp      = hp
         self%lp      = lp
-        self%mskdiam = mskdiam
+        self%msk     = mskdiam/self%smpd/2.
         call find_ldim_nptcls(vol_ref_fname, self%ldim, ifoo, smpd=smpd_here)
         ! HE, I would not trust the smpd from the header
         if( self%ldim(3) /= self%ldim(1) ) THROW_HARD('Only for volumes')
         self%box = self%ldim(1)
         call self%vol_ref%new(self%ldim, self%smpd)
         call self%vol_ref%read(vol_ref_fname)
-        call self%vol_ref%mask(self%mskdiam, 'soft')
+        call self%vol_ref%mask(self%msk, 'soft')
         smpd_target = max(self%smpd, (self%lp * LP2SMPD_TARGET))
         call autoscale(self%box, self%smpd, smpd_target, self%box_clip, self%smpd_clip, self%scale, minbox=64)
         self%ldim_clip = [self%box_clip,self%box_clip,self%box_clip]
@@ -85,7 +92,7 @@ contains
         if( any(ldim_here /= self%ldim ) ) THROW_HARD('Nonconforming volume dimensions')
         call self%vol%new(self%ldim, self%smpd)
         call self%vol%read(vol_fname)
-        call self%vol%mask(self%mskdiam, 'soft')
+        call self%vol%mask(self%msk, 'soft')
         ! clip
         call self%vol%fft
         call self%vol%clip_inplace(self%ldim_clip)
@@ -106,11 +113,17 @@ contains
         allocate(self%lnns(NSPACE), source=.false.)
     end subroutine setup_srch_spaces
 
+    subroutine srch( self )
+        class(dock_vols), intent(inout) :: self
+        call self%srch_rots
+        if( self%mag ) call self%srch_shift
+    end subroutine srch
+
     subroutine srch_rots( self )
         class(dock_vols), intent(inout) :: self
         type(oris)        :: eulspace_refine
         type(ori)         :: e
-        real              :: rmats(36*NSPACE_SUB,3,3), eul(3), e3, e3_new, ccs(36*NSPACE_SUB), cc
+        real              :: rmats(3,3,36*NSPACE_SUB), eul(3), e3, e3_new, ccs(36*NSPACE_SUB)
         real, allocatable :: rmats_refine(:,:,:), ccs_refine(:)
         integer           :: inpl, cnt, iproj, i, nloc(NBEST), nspace_refine
         ! fill-in the rotation matrices
@@ -121,8 +134,7 @@ contains
                 e3     = self%eulspace_sub%e3get(iproj)
                 e3_new = real(inpl-1) * 10.
                 call self%eulspace_sub%e3set(iproj, e3_new)
-                eul = self%eulspace_sub%get_euler(iproj)
-                rmats(cnt,:,:) = euler2m(eul)
+                rmats(:,:,cnt) = self%eulspace_sub%get_mat(iproj)
                 call self%eulspace_sub%e3set(iproj, e3)
             end do
         end do
@@ -130,12 +142,16 @@ contains
         ccs(:) = -1.
         !$omp parallel do schedule(static) default(shared) private(i) proc_bind(close)
         do i = 1, 36*NSPACE_SUB
-            ccs(i) = self%vpcc%corr(rmats(i,:,:))
+            if( self%mag )then
+                ccs(i) = self%vpcc%corr_mag(rmats(:,:,i))
+            else
+                ccs(i) = self%vpcc%corr(rmats(:,:,i))
+            endif
         end do
         !$omp end parallel do
         nloc = maxnloc(ccs, NBEST)
         ! do i = 1, NBEST
-        !     eul = m2euler(rmats(nloc(i),:,:))
+        !     eul = m2euler(rmats(:,:,nloc(i)))
         !     cc  = ccs(nloc(i))
         !     print *, eul, cc
         ! end do
@@ -143,13 +159,13 @@ contains
         self%lnns = .false.
         call e%new_ori(is_ptcl=.false.)
         do i = 1, NBEST 
-            call e%set_euler(m2euler(rmats(nloc(i),:,:)))
+            call e%set_euler(m2euler(rmats(:,:,nloc(i))))
             call self%pgrpsym%nearest_proj_neighbors(self%eulspace, e, 10., self%lnns)
         end do
         nspace_refine = count(self%lnns)
         call self%eulspace%extract_subspace(self%lnns, eulspace_refine)
         ! fill-in the rotation matrices
-        allocate(rmats_refine(72*nspace_refine,3,3), ccs_refine(72*nspace_refine), source=0.)
+        allocate(rmats_refine(3,3,72*nspace_refine), ccs_refine(72*nspace_refine), source=0.)
         cnt = 0
         do iproj = 1, nspace_refine 
             do inpl = 1, 72
@@ -157,8 +173,7 @@ contains
                 e3     = eulspace_refine%e3get(iproj)
                 e3_new = real(inpl-1) * 5.
                 call eulspace_refine%e3set(iproj, e3_new)
-                eul = eulspace_refine%get_euler(iproj)
-                rmats_refine(cnt,:,:) = euler2m(eul)
+                rmats_refine(:,:,cnt) = eulspace_refine%get_mat(iproj)
                 call eulspace_refine%e3set(iproj, e3)
             end do
         end do
@@ -166,41 +181,49 @@ contains
         ccs_refine(:) = -1.
         !$omp parallel do schedule(static) default(shared) private(i) proc_bind(close)
         do i = 1, 72*nspace_refine
-            ccs_refine(i) = self%vpcc%corr(rmats_refine(i,:,:))
+            if( self%mag )then
+                ccs_refine(i) = self%vpcc%corr_mag(rmats_refine(:,:,i))
+            else
+                ccs_refine(i) = self%vpcc%corr(rmats_refine(:,:,i))
+            endif
         end do
         !$omp end parallel do
         nloc = maxnloc(ccs_refine, NBEST)
         ! do i = 1, NBEST
-        !     eul = m2euler(rmats_refine(nloc(i),:,:))
+        !     eul = m2euler(rmats_refine(:,:,nloc(i)))
         !     cc  = ccs_refine(nloc(i))
         !     print *, eul, cc
         ! end do
         ! final refinement step
         ! top orientation from previous step
-        eul = m2euler(rmats_refine(nloc(1),:,:))
+        eul = m2euler(rmats_refine(:,:,nloc(1)))
         call e%set_euler(eul)
         ! fill-in the rotation matrices
         deallocate(rmats_refine, ccs_refine)
-        allocate(rmats_refine(360,3,3), ccs_refine(360), source=0.)
+        allocate(rmats_refine(3,3,360), ccs_refine(360), source=0.)
         do inpl = 1, 360
             e3     = e%e3get()
             e3_new = real(inpl-1)
             call e%e3set(e3_new)
-            rmats_refine(inpl,:,:) = euler2m(e%get_euler())
+            rmats_refine(:,:,inpl) = e%get_mat()
             call e%e3set(e3)
         end do
         ! search
         ccs_refine(:) = -1.
         !$omp parallel do schedule(static) default(shared) private(i) proc_bind(close)
         do i = 1, 360
-            ccs_refine(i) = self%vpcc%corr(rmats_refine(i,:,:))
+            if( self%mag )then
+                ccs_refine(i) = self%vpcc%corr_mag(rmats_refine(:,:,i))
+            else
+                ccs_refine(i) = self%vpcc%corr(rmats_refine(:,:,i))
+            endif
         end do
         !$omp end parallel do
         nloc     = maxnloc(ccs_refine, NBEST)
-        self%eul = m2euler(rmats_refine(nloc(1),:,:))
+        self%eul = m2euler(rmats_refine(:,:,nloc(1)))
         self%cc  = ccs_refine(nloc(1))
         ! do i = 1, NBEST
-        !     eul = m2euler(rmats_refine(nloc(i),:,:))
+        !     eul = m2euler(rmats_refine(:,:,nloc(i)))
         !     cc  = ccs_refine(nloc(i))
         !     print *, eul, cc
         ! end do
@@ -208,6 +231,45 @@ contains
         call e%kill
         call eulspace_refine%kill
     end subroutine srch_rots
+
+    subroutine srch_shift( self )
+        class(dock_vols), intent(inout) :: self
+        type(image) :: volrot
+        type(ori)   :: e1, e2
+        real        :: offset1(3), offset2(3), cc1, cc2, trs
+        ! shift limit
+        trs = real(self%ldim_clip(1)) / 6.
+        call self%vol_ref%fft
+        ! first orientation
+        e1  = ori(is_ptcl=.true.)
+        call e1%set_euler(self%eul)
+        call self%vol%ifft
+        volrot = rotvol(self%vol, e1)
+        call volrot%fft
+        call volrot%fcorr_shift3D( self%vol_ref, trs, offset1, peak_interp=.true.)
+        offset1 = -matmul(offset1,e1%get_mat())
+        cc1     = self%vpcc%corr(e1%get_mat(), offset1)
+        ! second orientation
+        e2 = e1
+        call e2%transp
+        volrot = rotvol(self%vol, e2)
+        call volrot%fft
+        call volrot%fcorr_shift3D( self%vol_ref, trs, offset2, peak_interp=.true.)
+        offset2 = -matmul(offset2,e2%get_mat())
+        cc2     = self%vpcc%corr(e2%get_mat(), offset2)
+        ! solution
+        if( cc1 > cc2 )then
+            self%shift = (self%smpd_clip / self%smpd) * offset1
+            self%cc    = cc1
+        else
+            self%eul   = e2%get_euler()
+            self%shift = (self%smpd_clip / self%smpd) * offset2
+            self%cc    = cc2
+        endif
+        call volrot%kill
+        call e1%kill
+        call e2%kill
+    end subroutine srch_shift
 
     subroutine rotate_target( self, vol_fname, vol_rot_fname )
         class(dock_vols), intent(inout) :: self
@@ -222,7 +284,11 @@ contains
         call self%vol%read(vol_fname)
         call e%new_ori(is_ptcl=.false.)
         call e%set_euler(self%eul)
-        vol_rot = rotvol(self%vol, e)
+        if( self%mag )then
+            vol_rot = rotvol(self%vol, e, shvec=self%shift)
+        else
+            vol_rot = rotvol(self%vol, e)
+        endif
         call vol_rot%write(vol_rot_fname)
         call vol_rot%kill
         call e%kill
