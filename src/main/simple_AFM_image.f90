@@ -9,6 +9,11 @@ use simple_binimage
 use simple_neighs
 use simple_fileio
 use simple_syslib
+use simple_polarizer,           only: polarizer
+use simple_class_frcs,          only: class_frcs
+use simple_polarft_corrcalc,    only: polarft_corrcalc
+use simple_aff_prop,            only: aff_prop
+
 implicit none 
 #include "simple_local_flags.inc"
 
@@ -435,7 +440,7 @@ contains
         type(image)    :: img_win, bin_win, lin_win, lines
         type(binimage) :: bin_erode 
         real           :: smpd,new_cen(3)
-        integer        :: ldim(3), i, windim(3), j, num_parts, counts, pad = 200
+        integer        :: ldim(3), i, windim(3), j, num_parts, counts, pad = 150
         logical        :: outside
         ldim = img_in%get_ldim()
         smpd = img_in%get_smpd()
@@ -465,6 +470,7 @@ contains
         allocate(area(AFM_pick%get_nboxes(),AFM_pick%get_nboxes()))
         ! allocate(pick_vec(AFM_pick%get_nboxes()))
         ! make copy, pad the copy in place and window slim on that 
+        ! pad = 2*windim(1)
         area(:,:) = 0.
         counts = 0
         do i = 1, AFM_pick%nboxes
@@ -481,10 +487,10 @@ contains
                 pos(i,2) = pos(i,2) + pad 
             end if 
             call bin_cc%window_slim(pos(i,:), AFM_pick%box_raw, bin_win, outside)
-            if(outside) then 
-                print *, i, bin_win%mean() 
-                call bin_win%vis()
-            end if 
+            ! if(outside) then 
+            !     print *, i, bin_win%mean() 
+            !     call bin_win%vis()
+            ! end if 
             ! only keep largest cc in box, and recenter.
             do j = 1, AFM_pick%nboxes
                 if(count(nint(bin_win%get_rmat()) == j) > 20 .and. area(i,j) /= 1.) then 
@@ -517,12 +523,13 @@ contains
             if(lin_win%mean() > 0.01 .and. lin_win%real_corr(img_win) > 0.05) then   
                 cycle
             end if 
-            pick_vec(i) = img_win
-            if(outside) call img_win%vis()
+            if(img_win%mean() > 0.) pick_vec(i) = img_win
         end do 
+
     end subroutine 
     ! need to fix picks which are contain some part outside the image
     subroutine corr_clus( pick_mat )
         type(image), intent(in)     :: pick_mat
+        
     end subroutine 
 end module simple_afm_image 

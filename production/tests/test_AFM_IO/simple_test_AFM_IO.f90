@@ -35,7 +35,7 @@ allocate(pick_array(size(file_list)))
 allocate(bin_cc_array(size(file_list)))
 ! can adjust max number of particles sampled for clustering.
 allocate(pick_mat(size(file_list), 500))
-do file_iter = 1, size(file_list)
+do file_iter = 6, size(file_list)
     call read_ibw(stack_stack(file_iter), file_list(file_iter))
     call align_avg(stack_stack(file_iter), stack_avg(file_iter))
     if(file_list(file_iter) == trim(directory) // 'Cob_450007.ibw' .or. file_list(file_iter) == trim(directory) // 'Cob_450010.ibw') then 

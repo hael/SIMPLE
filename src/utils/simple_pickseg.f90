@@ -15,10 +15,10 @@ private
 #include "simple_local_flags.inc"
 
 ! class constants
-real,    parameter :: SHRINK   = 4.
+real,    parameter :: SHRINK   = 1. !this was 4 initially 
 real,    parameter :: LAMBDA   = 3.
-logical, parameter :: L_WRITE  = .false.
-logical, parameter :: L_DEBUG  = .true.
+logical, parameter :: L_WRITE  = .true.
+logical, parameter :: L_DEBUG  = .false.
 
 ! class variables
 integer                       :: ldim_raw(3)
@@ -55,10 +55,8 @@ contains
         integer :: i, boxcoord(2), sz_max, sz_min, nframes
         logical :: outside, is_AFM_l
         logical, optional, intent(in) :: is_AFM 
-        CHARACTER(len=255) :: cwd
-        is_AFM_l = .false. 
+        is_AFM_l = .true. 
         if( present(is_AFM) ) is_AFM_l = is_AFM 
-        call getcwd(cwd)
         ! set micrograph info
         call find_ldim_nptcls(micname, ldim_raw, nframes, smpd_raw)
         if( ldim_raw(3) /= 1 .or. nframes /= 1 ) THROW_HARD('Only for 2D images')
@@ -101,8 +99,8 @@ contains
         call self%mic_shrink%set_imat
         if( L_WRITE ) call self%mic_shrink%write_bimg('mic_shrink_lp_tv_bin.mrc')
         call self%mic_shrink%erode
-        call self%mic_shrink%erode
-        ! call self%mic_shrink%dilate
+        ! call self%mic_shrink%erode
+        call self%mic_shrink%dilate
         if( L_WRITE ) call self%mic_shrink%write_bimg('mic_shrink_lp_tv_bin_erode.mrc')
         ! identify connected components
         call self%mic_shrink%find_ccs(self%img_cc)
@@ -125,9 +123,7 @@ contains
         call self%img_cc%elim_ccs([sz_min,sz_max])
         call self%img_cc%get_nccs(self%nboxes)
         sz = self%img_cc%size_ccs()
-        do i = 1, size(sz)
-            print *, 'box', i, sz(i)
-        end do 
+        
         call calc_stats(real(sz), self%sz_stats)
         if( L_DEBUG )then
             print *, 'nboxes after  elimination: ', self%nboxes
@@ -150,8 +146,8 @@ contains
             print *, 'min diam: ', self%diam_stats%minv
             print *, 'max diam: ', self%diam_stats%maxv
         end if 
-        self%box_raw = nint(2.0*find_magic_box(2 * nint(self%diam_stats%med/smpd_raw)))
-        if(is_AFM_l) self%box_raw = nint(1.*find_magic_box(2 * nint(self%diam_stats%med/smpd_raw)))
+        self%box_raw = nint(1.*find_magic_box(2 * nint(self%diam_stats%med/smpd_raw)))
+        if(is_AFM_l) self%box_raw = nint(1.5*find_magic_box(2 * nint(self%diam_stats%med/smpd_raw)))
         
         call img_win%new([self%box_raw,self%box_raw,1], smpd_raw)
         if( allocated(self%masscens) ) deallocate(self%masscens)
@@ -162,8 +158,8 @@ contains
             if( L_DEBUG )then
                 boxcoord = nint((real(SHRINK)*self%masscens(i,:2))-real(self%box_raw)/2.)
                 call mic_raw%window_slim(boxcoord, self%box_raw, img_win, outside)
-                call simple_mkdir(trim(cwd) // '/ref4class')
-                call img_win%write(trim(cwd) // '/ref4class/' // trim(get_fbody(basename(trim(micname)), 'mrc')) //  'extracted.mrc', i)
+                call simple_mkdir('ref4class')
+                call img_win%write('ref4class/' // trim(get_fbody(basename(trim(micname)), 'mrc')) //  'extracted.mrc', i)
             endif
         end do
         contains
@@ -182,6 +178,7 @@ contains
                 if(allocated(imat_cc)) deallocate(imat_cc)
             end function center_mass_cc
 
+            ! let's center the mass based on the area of particles within the box for crowded micrographs. weight center of mass with area of ccs within box.  
     end subroutine pick
 
     subroutine get_positions( self, pos, box )
@@ -226,5 +223,7 @@ contains
         end do
         call fclose(funit)
     end subroutine report_boxfile
+
+    ! pickseg_multi diams or area. 
 
 end module simple_pickseg
