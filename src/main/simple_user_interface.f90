@@ -4211,7 +4211,7 @@ contains
         & tables (oritab and oritab2) are inputted, statistics of the distances between the orientations&
         & in the two documents are provided',&
         &'simple_exec',&                          ! executable
-        &0, 10, 0, 0, 0, 0, 1, .false.)            ! # entries in each group, requires sp_project
+        &0, 9, 0, 0, 0, 0, 1, .false.)            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
