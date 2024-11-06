@@ -425,11 +425,13 @@ contains
                         xyz(1:2) = xy_cavg * crop_factor
                         xyz(3)   = 0.
                     else
-                        xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop, iter_center=(params_glob%iter_center .eq. 'yes'))
+                        xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
+                        ! xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop, iter_center=(params_glob%iter_center .eq. 'yes'))
                         if( arg(xyz(1:2)/crop_factor - xy_cavg) > MAXCENTHRESH2D ) xyz = 0.
                     endif
                 else
-                    xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop, iter_center=(params_glob%iter_center .eq. 'yes'))
+                    xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
+                    ! xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop, iter_center=(params_glob%iter_center .eq. 'yes'))
                 endif
                 sharg = arg(xyz)
                 if( sharg > CENTHRESH )then
