@@ -173,7 +173,7 @@ contains
             iptcl              = precs(cnt)%pind
             if( iptcl == 0 ) cycle
             ithr               = omp_get_thread_num() + 1
-            precs(cnt)%eo      = nint(spproj_field%get(iptcl,'eo'))
+            precs(cnt)%eo      = spproj_field%get_eo(iptcl)
             precs(cnt)%pw      = spproj_field%get(iptcl,'w')
             ctfvars(ithr)      = spproj%get_ctfparams(params_glob%oritype,iptcl)
             precs(cnt)%tfun    = ctf(params_glob%smpd_crop, ctfvars(ithr)%kv, ctfvars(ithr)%cs, ctfvars(ithr)%fraca)
@@ -193,8 +193,8 @@ contains
             do i = 1,ncls
                 icls = spproj%os_cls2D%get_class(i)
                 if( .not.spproj%os_cls2D%isthere(i,'prev_pop_even') ) cycle
-                prev_eo_pops(icls,1) = nint(spproj%os_cls2D%get(i,'prev_pop_even'))
-                prev_eo_pops(icls,2) = nint(spproj%os_cls2D%get(i,'prev_pop_odd'))
+                prev_eo_pops(icls,1) = spproj%os_cls2D%get_int(i,'prev_pop_even')
+                prev_eo_pops(icls,2) = spproj%os_cls2D%get_int(i,'prev_pop_odd')
             enddo
         endif
     end subroutine cavger_transf_oridat
@@ -240,7 +240,7 @@ contains
             if( rstate < 0.5 ) cycle
             w = ptcl_field%get(iptcl,'w')
             if( w < SMALL ) cycle
-            icls = nint(ptcl_field%get(iptcl,'class'))
+            icls = ptcl_field%get_class(iptcl)
             if( icls<1 .or. icls>params_glob%ncls )cycle
             pops(icls)       = pops(icls)      + 1
             corrs(icls)      = corrs(icls)     + ptcl_field%get(iptcl,'corr')
@@ -249,10 +249,10 @@ contains
         !$omp end parallel do
         if( l_stream  .and. cls_field%get_noris()==ncls .and. params_glob%update_frac<.99 )then
             do i = 1,ncls
-                icls = nint(cls_field%get(i,'class'))
+                icls = cls_field%get_class(i)
                 if( .not.cls_field%isthere(i,'prev_pop_even') ) cycle
-                prev_eo_pops(icls,1) = nint(cls_field%get(i,'prev_pop_even'))
-                prev_eo_pops(icls,2) = nint(cls_field%get(i,'prev_pop_odd'))
+                prev_eo_pops(icls,1) = cls_field%get_int(i,'prev_pop_even')
+                prev_eo_pops(icls,2) = cls_field%get_int(i,'prev_pop_odd')
                 pop = sum(prev_eo_pops(icls,:))
                 if( pop == 0 ) cycle
                 corrs(icls)      = corrs(icls)      + real(pop) * cls_field%get(i,'corr')
@@ -271,11 +271,11 @@ contains
         do icls=1,params_glob%ncls
             pop = pops(icls)
             call build_glob%clsfrcs%estimate_res(icls, frc05, frc0143)
-            call cls_field%set(icls, 'class',     real(icls))
-            call cls_field%set(icls, 'pop',       real(pop))
+            call cls_field%set(icls, 'class',     icls)
+            call cls_field%set(icls, 'pop',       pop)
             call cls_field%set(icls, 'res',       frc0143)
-            call cls_field%set(icls, 'corr',      real(corrs(icls)))
-            call cls_field%set(icls, 'w',         real(ws(icls)))
+            call cls_field%set(icls, 'corr',      corrs(icls))
+            call cls_field%set(icls, 'w',         ws(icls))
             if( pop > 0 )then
                 call cls_field%set(icls, 'state', 1.0) ! needs to be default val if no selection has been done
             else
@@ -409,8 +409,8 @@ contains
         iprec_glob = 0 ! global record index
         do istk = first_stkind,last_stkind
             ! Particles range in stack
-            fromp  = nint(build_glob%spproj%os_stk%get(istk,'fromp'))
-            top    = nint(build_glob%spproj%os_stk%get(istk,'top'))
+            fromp = build_glob%spproj%os_stk%get_fromp(istk)
+            top   = build_glob%spproj%os_stk%get_top(istk)
             nptcls_in_stk = top - fromp + 1 ! # of particles in stack
             call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, max(params_glob%fromp,fromp), stk_fname, ind_in_stk)
             ! batch loop

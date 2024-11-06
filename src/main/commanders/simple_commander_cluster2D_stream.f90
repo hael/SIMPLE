@@ -27,12 +27,12 @@ private
 #include "simple_local_flags.inc"
 
 integer,               parameter   :: MINBOXSZ             = 128    ! minimum boxsize for scaling
-real,                  parameter   :: CHUNK_MINITS         = 6.0
-real,                  parameter   :: CHUNK_MAXITS         = 12.0
-real,                  parameter   :: CHUNK_MINITS_TEST    = 13.0
-real,                  parameter   :: CHUNK_MAXITS_TEST    = CHUNK_MINITS_TEST + 1.0
-real,                  parameter   :: CHUNK_CC_ITERS_TEST  = 8.0
-real,                  parameter   :: CHUNK_EXTR_ITER_TEST = 3.0
+integer,               parameter   :: CHUNK_MINITS         = 6
+integer,               parameter   :: CHUNK_MAXITS         = 12
+integer,               parameter   :: CHUNK_MINITS_TEST    = 13
+integer,               parameter   :: CHUNK_MAXITS_TEST    = CHUNK_MINITS_TEST + 1
+integer,               parameter   :: CHUNK_CC_ITERS_TEST  = 8
+integer,               parameter   :: CHUNK_EXTR_ITER_TEST = 3
 ! integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 600  ! dev settings
 integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 7200  ! Frequency at which the original project file should be updated
 integer,               parameter   :: FREQ_POOL_REJECTION = 5     !
@@ -180,13 +180,13 @@ contains
         call cline_cluster2D_chunk%set('autoscale', 'no')
         call cline_cluster2D_chunk%set('mkdir',     'no')
         call cline_cluster2D_chunk%set('stream',    'no')
-        call cline_cluster2D_chunk%set('startit',   1.)
+        call cline_cluster2D_chunk%set('startit',   1)
         call cline_cluster2D_chunk%set('mskdiam',   mskdiam)
-        call cline_cluster2D_chunk%set('ncls',      real(params_glob%ncls_start))
-        call cline_cluster2D_chunk%set('nthr',      real(params_glob%nthr2D))
+        call cline_cluster2D_chunk%set('ncls',      params_glob%ncls_start)
+        call cline_cluster2D_chunk%set('nthr',      params_glob%nthr2D)
         call cline_cluster2D_chunk%set('minits',    CHUNK_MINITS)
         call cline_cluster2D_chunk%set('kweight',   params_glob%kweight_chunk)
-        if( l_update_sigmas ) call cline_cluster2D_chunk%set('cc_iters', CHUNK_MINITS-1.0)
+        if( l_update_sigmas ) call cline_cluster2D_chunk%set('cc_iters', CHUNK_MINITS-1)
         if( l_wfilt ) call cline_cluster2D_chunk%set('wiener', 'partial')
         if( cline%defined('cls_init') )then
             call cline_cluster2D_chunk%set('cls_init', params_glob%cls_init)
@@ -214,14 +214,14 @@ contains
             call cline_cluster2D_pool%set('center','yes')
         endif
         if( l_wfilt ) call cline_cluster2D_pool%set('wiener', 'partial')
-        call cline_cluster2D_pool%set('extr_iter', 100.)
+        call cline_cluster2D_pool%set('extr_iter', 100)
         call cline_cluster2D_pool%set('mkdir',     'no')
         call cline_cluster2D_pool%set('mskdiam',   mskdiam)
         call cline_cluster2D_pool%set('async',     'yes') ! to enable hard termination
         call cline_cluster2D_pool%set('stream',    'yes') ! use for dual CTF treatment
-        call cline_cluster2D_pool%set('nthr',     real(params_glob%nthr2D))
-        call cline_cluster2D_pool%set('nparts',   real(params_glob%nparts_pool))
-        if( l_update_sigmas ) call cline_cluster2D_pool%set('cc_iters', 0.0)
+        call cline_cluster2D_pool%set('nthr',      params_glob%nthr2D)
+        call cline_cluster2D_pool%set('nparts',    params_glob%nparts_pool)
+        if( l_update_sigmas ) call cline_cluster2D_pool%set('cc_iters', 0)
         call qenv_pool%new(params_glob%nparts_pool,exec_bin='simple_private_exec',qsys_name='local')
         ! objective function
         select case(params_glob%cc_objfun)
@@ -441,7 +441,7 @@ contains
             call pool_proj%os_mic%reallocate(nmics_imported+nmics2import)
             call pool_proj%os_stk%reallocate(nmics_imported+nmics2import)
             call pool_proj%os_ptcl2D%reallocate(nptcls_imported+nptcls2import)
-            fromp = nint(pool_proj%os_stk%get(nmics_imported,'top'))+1
+            fromp = pool_proj%os_stk%get_top(nmics_imported)+1
             call move_alloc(imported_stks, tmp)
             allocate(imported_stks(nmics_imported+nmics2import))
             imported_stks(1:nmics_imported) = tmp(:)
@@ -471,9 +471,9 @@ contains
                 endif
                 ! so stacks are relative to root folder
                 call pool_proj%os_stk%transfer_ori(imic, converged_chunks(ichunk)%spproj%os_stk, iproj)
-                nptcls = nint(converged_chunks(ichunk)%spproj%os_stk%get(iproj,'nptcls'))
-                call pool_proj%os_stk%set(imic, 'fromp', real(fromp))
-                call pool_proj%os_stk%set(imic, 'top',   real(fromp+nptcls-1))
+                nptcls = converged_chunks(ichunk)%spproj%os_stk%get_int(iproj,'nptcls')
+                call pool_proj%os_stk%set(imic, 'fromp', fromp)
+                call pool_proj%os_stk%set(imic, 'top',   fromp+nptcls-1)
                 call make_relativepath(cwd_glob, converged_chunks(ichunk)%orig_stks(iproj), stk_relpath)
                 imported_stks(imic) = trim(stk_relpath)
                 ! particles
@@ -482,7 +482,7 @@ contains
                     jptcl = jptcl + 1
                     call pool_proj%os_ptcl2D%transfer_ori(iptcl, converged_chunks(ichunk)%spproj%os_ptcl2D, jptcl)
                     call pool_proj%os_ptcl2D%set_stkind(iptcl, imic)
-                    call pool_proj%os_ptcl2D%set(iptcl, 'updatecnt', 0.) ! new particle
+                    call pool_proj%os_ptcl2D%set(iptcl, 'updatecnt', 0 ) ! new particle
                     call pool_proj%os_ptcl2D%set(iptcl, 'frac',      0.) ! new particle
                 enddo
                 fromp = fromp + nptcls
@@ -692,8 +692,8 @@ contains
             do istk = 1,size(pool_stacks_mask)
                 if( pool_stacks_mask(istk) )then
                     i = i+1
-                    iptcl = nint(pool_proj%os_stk%get(istk,'fromp'))
-                    do jptcl = nint(spproj%os_stk%get(i,'fromp')),nint(spproj%os_stk%get(i,'top'))
+                    iptcl = pool_proj%os_stk%get_fromp(istk)
+                    do jptcl = spproj%os_stk%get_fromp(i),spproj%os_stk%get_top(i)
                         if( spproj%os_ptcl2D%get_state(jptcl) > 0 )then
                             call pool_proj%os_ptcl2D%transfer_2Dparams(iptcl, spproj%os_ptcl2D, jptcl)
                         endif
@@ -1010,8 +1010,8 @@ contains
         !$omp parallel do schedule(static) proc_bind(close) private(istk,fromp,top,iptcl)&
         !$omp default(shared) reduction(+:nptcls_old)
         do istk = 1,nstks_tot
-            fromp = nint(pool_proj%os_stk%get(istk,'fromp'))
-            top   = nint(pool_proj%os_stk%get(istk,'top'))
+            fromp = pool_proj%os_stk%get_fromp(istk)
+            top   = pool_proj%os_stk%get_top(istk)
             min_update_cnts_per_stk(istk) = huge(istk)
             do iptcl = fromp,top
                 if( pool_proj%os_ptcl2D%get_state(iptcl) > 0 )then
@@ -1026,8 +1026,8 @@ contains
         !$omp end parallel do
         nptcls_rejected_glob = nptcls_glob - sum(nptcls_per_stk)
         ! update info for gui
-        call spproj%projinfo%set(1,'nptcls_tot',     real(nptcls_glob))
-        call spproj%projinfo%set(1,'nptcls_rejected',real(nptcls_rejected_glob))
+        call spproj%projinfo%set(1,'nptcls_tot',     nptcls_glob)
+        call spproj%projinfo%set(1,'nptcls_rejected',nptcls_rejected_glob)
         ! poolstats
         call pool_stats%set('2D', 'ptcls',    nptcls_glob,          primary=.true.)
         call pool_stats%set('2D', 'rejected', nptcls_rejected_glob, primary=.true.)
@@ -1048,8 +1048,8 @@ contains
             do i = 1,nstks_tot
                 istk = stk_order(i)
                 if( (min_update_cnts_per_stk(istk) > STREAM_SRCHLIM) .and. (nptcls_sel > MAX_STREAM_NPTCLS) ) cycle
-                nptcls_sel    = nptcls_sel + nptcls_per_stk(istk)
-                nptcls2update = nptcls2update + nint(pool_proj%os_stk%get(istk,'nptcls'))
+                nptcls_sel    = nptcls_sel    + nptcls_per_stk(istk)
+                nptcls2update = nptcls2update + pool_proj%os_stk%get_int(istk,'nptcls')
                 pool_stacks_mask(istk) = .true.
             enddo
             call random_generator%kill
@@ -1066,13 +1066,13 @@ contains
         i     = 0
         jptcl = 0
         do istk = 1,nstks_tot
-            fromp = nint(pool_proj%os_stk%get(istk,'fromp'))
-            top   = nint(pool_proj%os_stk%get(istk,'top'))
+            fromp = pool_proj%os_stk%get_fromp(istk)
+            top   = pool_proj%os_stk%get_top(istk)
             if( pool_stacks_mask(istk) )then
                 ! transfer alignement parameters for selected particles
                 i = i + 1 ! stack index in spproj
                 call spproj%os_stk%transfer_ori(i, pool_proj%os_stk, istk)
-                call spproj%os_stk%set(i, 'fromp', real(jptcl+1))
+                call spproj%os_stk%set(i, 'fromp', jptcl+1)
                 !$omp parallel do private(iptcl,jjptcl) proc_bind(close) default(shared)
                 do iptcl = fromp,top
                     jjptcl = jptcl+iptcl-fromp+1
@@ -1081,7 +1081,7 @@ contains
                 enddo
                 !$omp end parallel do
                 jptcl = jptcl + (top-fromp+1)
-                call spproj%os_stk%set(i, 'top', real(jptcl))
+                call spproj%os_stk%set(i, 'top', jptcl)
             else
                 ! keeps track of skipped particles
                 prev_eo_pops_thread = 0

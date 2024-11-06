@@ -254,10 +254,10 @@ contains
         call cline%set('oritype',    'mic')
         call cline%set('groupframes', 'no')
         if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',      'yes')
-        if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',    5.)
+        if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',     5)
         if( .not. cline%defined('mcpatch')    ) call cline%set('mcpatch',    'yes')
-        if( .not. cline%defined('nxpatch')    ) call cline%set('nxpatch',      10.)
-        if( .not. cline%defined('nypatch')    ) call cline%set('nypatch',      10.)
+        if( .not. cline%defined('nxpatch')    ) call cline%set('nxpatch',       10)
+        if( .not. cline%defined('nypatch')    ) call cline%set('nypatch',       10)
         if( .not. cline%defined('trs')        ) call cline%set('trs',          10.)
         if( .not. cline%defined('lpstart')    ) call cline%set('lpstart',       5.)
         if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',        3.)
@@ -308,10 +308,10 @@ contains
         integer :: numlen_nframes, cnt
         call cline%set('mkdir',       'no') ! shared-memory workflow, dir making in driver
         call cline%set('groupframes', 'no')
-        if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',    5.)
+        if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',     5)
         if( .not. cline%defined('mcpatch')    ) call cline%set('mcpatch',    'yes')
-        if( .not. cline%defined('nxpatch')    ) call cline%set('nxpatch',      10.)
-        if( .not. cline%defined('nypatch')    ) call cline%set('nypatch',      10.)
+        if( .not. cline%defined('nxpatch')    ) call cline%set('nxpatch',       10)
+        if( .not. cline%defined('nypatch')    ) call cline%set('nypatch',       10)
         if( .not. cline%defined('trs')        ) call cline%set('trs',          10.)
         if( .not. cline%defined('lpstart')    ) call cline%set('lpstart',       5.)
         if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',        3.)
@@ -398,10 +398,10 @@ contains
         type(image)               :: img_intg
         integer                   :: istart, istop
         integer :: i, nframes, frame_counter, ldim(3), ifoo, cnt
-        if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',    10.)
-        if( .not. cline%defined('mcpatch')    ) call cline%set('mcpatch',    'yes')
-        if( .not. cline%defined('nxpatch')    ) call cline%set('nxpatch',        3.)
-        if( .not. cline%defined('nypatch')    ) call cline%set('nypatch',        3.)
+        if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',     10)
+        if( .not. cline%defined('mcpatch')    ) call cline%set('mcpatch',     'yes')
+        if( .not. cline%defined('nxpatch')    ) call cline%set('nxpatch',         3)
+        if( .not. cline%defined('nypatch')    ) call cline%set('nypatch',         3)
         if( .not. cline%defined('trs')        ) call cline%set('trs',           10.)
         if( .not. cline%defined('lpstart')    ) call cline%set('lpstart',        5.)
         if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',         3.)
@@ -433,7 +433,7 @@ contains
         call cline_stack%set('filetab', filetabname)
         call cline_stack%set('outstk',  'frames2align.mrc')
         call cline_stack%set('smpd',    params%smpd)
-        call cline_stack%set('nthr',    1.0)
+        call cline_stack%set('nthr',    1)
         ! execute stack commander
         call xstack%execute(cline_stack)
         ! prepare 4 motion_correct
@@ -479,7 +479,7 @@ contains
         if( .not. cline%defined('neg')       ) call cline%set('neg',      'yes')
         if( .not. cline%defined('lp')        ) call cline%set('lp',         2.3)
         if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      5.0)
-        if( .not. cline%defined('nframesgrp')) call cline%set('nframesgrp', 30.)
+        if( .not. cline%defined('nframesgrp')) call cline%set('nframesgrp',  30)
         if( .not. cline%defined('filter'))     call cline%set('filter',    'tv')
         if( .not. cline%defined('offset'))     call cline%set('offset',     10.)
         call cline%set('oritype','mic')
@@ -631,11 +631,11 @@ contains
         call xcenter2D%execute(cline)
         ! prep for diameter estimation
         call spproj%read(trim(params%projfile))
-        call spproj%get_cavgs_stk(stkname,   ncls,   smpd)
-        call cline_est_diam%set('stk',            stkname)
-        call cline_est_diam%set('smpd',              smpd)
+        call spproj%get_cavgs_stk(stkname, ncls, smpd)
+        call cline_est_diam%set('stk',     stkname)
+        call cline_est_diam%set('smpd',    smpd)
         call cline_est_diam%set('mskdiam', params%mskdiam)
-        call cline_est_diam%set('nthr', real(params%nthr))
+        call cline_est_diam%set('nthr',    params%nthr)
         ! estimate diameter
         call xest_diam%execute(cline_est_diam)
         diam = cline_est_diam%get_rarg('min_diam')
@@ -645,8 +645,8 @@ contains
         call cline_sim_atms%set('smpd',    params%smpd)
         call cline_sim_atms%set('element', params%element)
         call cline_sim_atms%set('moldiam', diam)
-        call cline_sim_atms%set('box',     real(ldim(1)))
-        call cline_sim_atms%set('nthr',    real(params%nthr))
+        call cline_sim_atms%set('box',     ldim(1))
+        call cline_sim_atms%set('nthr',    params%nthr)
         call xsim_atms%execute(cline_sim_atms)
         ! run final 2D analysis
         cline = cline_copy
@@ -679,7 +679,7 @@ contains
         if( .not. cline%defined('graphene_filt')  ) call cline%set('graphene_filt',  'no')
         if( .not. cline%defined('hp')             ) call cline%set('hp',               3.)
         if( .not. cline%defined('lp')             ) call cline%set('lp',               1.)
-        if( .not. cline%defined('ncls')           ) call cline%set('ncls',            20.)
+        if( .not. cline%defined('ncls')           ) call cline%set('ncls',             20)
         ! if( .not. cline%defined('nptcls_per_cls') ) call cline%set('nptcls_per_cls', 500.)
         if( .not. cline%defined('cenlp')          ) call cline%set('cenlp',            5.)
         if( .not. cline%defined('trs')            ) call cline%set('trs',              5.)
@@ -690,7 +690,7 @@ contains
         if( .not. cline%defined('oritype')        ) call cline%set('oritype',    'ptcl2D')
         ! set shared-memory flag
         if( cline%defined('nparts') )then
-            if( nint(cline%get_rarg('nparts')) == 1 )then
+            if( cline%get_iarg('nparts') == 1 )then
                 l_shmem = .true.
                 call cline%delete('nparts')
             else
@@ -721,7 +721,7 @@ contains
         prev_ctfflag = spproj%get_ctfflag(params%oritype)
         ! chronological initialisation
         params%nptcls_per_cls = ceiling(real(nptcls)/real(params%ncls))
-        call cline%set('nptcls_per_cls', real(params%nptcls_per_cls))
+        call cline%set('nptcls_per_cls', params%nptcls_per_cls)
         ! splitting
         if( .not. l_shmem ) call spproj%split_stk(params%nparts, dir=PATH_PARENT)
         ! no auto-scaling
@@ -735,7 +735,7 @@ contains
         else
             call xcluster2D_distr%execute(cline)
         endif
-        last_iter_stage2 = nint(cline%get_rarg('endit'))
+        last_iter_stage2 = cline%get_iarg('endit')
         finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//params%ext
         ! adding cavgs & FRCs to project
         params%projfile = trim(orig_projfile)
@@ -769,11 +769,11 @@ contains
         select case(trim(cline%get_carg('refine')))
             case('no','greedy')
                 call cline%set('refine','greedy')
-                if( .not. cline%defined('nptcls_per_cls') ) call cline%set('nptcls_per_cls', 35.)
-                if( .not. cline%defined('maxits')         ) call cline%set('maxits',        15.0)
+                if( .not. cline%defined('nptcls_per_cls') ) call cline%set('nptcls_per_cls', 35)
+                if( .not. cline%defined('maxits')         ) call cline%set('maxits',         15)
             case('inpl')
                 call cline%set('center','no')
-                if( .not. cline%defined('maxits')         ) call cline%set('maxits',         5.0)
+                if( .not. cline%defined('maxits')         ) call cline%set('maxits',          5)
             case DEFAULT
                 THROW_HARD('Unsupported refinement mode!')
         end select
@@ -944,7 +944,7 @@ contains
         if( .not. cline%defined('lp')             ) call cline%set('lp',              1.0)
         if( .not. cline%defined('lpstart_nonuni') ) call cline%set('lpstart_nonuni',  2.5)
         if( .not. cline%defined('lpstop')         ) call cline%set('lpstop',          0.5)
-        if( .not. cline%defined('maxits')         ) call cline%set('maxits',          30.)
+        if( .not. cline%defined('maxits')         ) call cline%set('maxits',           30)
         if( .not. cline%defined('refine')         ) call cline%set('refine',      'neigh')
         if( .not. cline%defined('oritype')        ) call cline%set('oritype',    'ptcl3D')
         if( .not. cline%defined('trs')            ) call cline%set('trs',             5.0)
@@ -1014,8 +1014,8 @@ contains
         fbody       = get_fbody(RECVOL,   'mrc')
         fbody_split = get_fbody(SPLITTED, 'mrc')
         if(       cline%defined('nparts')         ) call cline%delete('nparts') ! shared-memory workflow
-        if( .not. cline%defined('maxits')         ) call cline%set('maxits',          5.)
-        if( .not. cline%defined('maxits_between') ) call cline%set('maxits_between', 10.)
+        if( .not. cline%defined('maxits')         ) call cline%set('maxits',           5)
+        if( .not. cline%defined('maxits_between') ) call cline%set('maxits_between',  10)
         if( .not. cline%defined('overlap')        ) call cline%set('overlap',        0.9)
         if( .not. cline%defined('fracsrch')       ) call cline%set('fracsrch',       0.9)
         if( .not. cline%defined('objfun')         ) call cline%set('objfun',         'cc') ! needs to be here to avoid ERROR! file sigma2_it_10.star does not exist; simple_fileio.f90; line:   932
@@ -1060,7 +1060,7 @@ contains
             params_ptr  => null()
             call cline_refine3D_nano%set('vol1', SIMVOL)         ! the reference volume is ALWAYS SIMVOL
             call cline_refine3D_nano%delete('lp')                ! uses the default 1.0 A low-pass limit
-            endit = nint(cline_refine3D_nano%get_rarg('endit'))  ! last iteration executed by refine3D_nano
+            endit = cline_refine3D_nano%get_iarg('endit')        ! last iteration executed by refine3D_nano
             call cline_refine3D_nano%delete('endit')             ! used internally but not technically allowed
             call cline_refine3D_nano%set('prg', 'refine3D_nano') ! because the command line is modified refine3D_nano -> refine3D internally
             ! model building
@@ -1143,7 +1143,7 @@ contains
         call cline_reproject%set('smpd',   params%smpd)
         call cline_reproject%set('oritab', 'cavgs_oris.txt')
         call cline_reproject%set('pgrp',   params%pgrp)
-        call cline_reproject%set('nthr',   real(params%nthr))
+        call cline_reproject%set('nthr',   params%nthr)
         params_ptr  => params_glob
         params_glob => null()
         call xreproject%execute(cline_reproject)
@@ -1417,16 +1417,16 @@ contains
             call cline_refine3D_cavgs%set('vol1',      params%vols(1))
             call cline_refine3D_cavgs%set('pgrp',         params%pgrp)
             call cline_refine3D_cavgs%set('mskdiam',   params%mskdiam)
-            call cline_refine3D_cavgs%set('nthr',   real(params%nthr))
+            call cline_refine3D_cavgs%set('nthr',         params%nthr)
             call cline_refine3D_cavgs%set('mkdir',               'no')
-            call cline_refine3D_cavgs%set('maxits',                1.)
+            call cline_refine3D_cavgs%set('maxits',                 1)
             call cline_refine3D_cavgs%set('projfile', params%projfile)
             call cline_refine3D_cavgs%set('oritype',          'cls3D')
             call cline_refine3D_cavgs%set('objfun',              'cc')
             call cline_refine3D_cavgs%set('lp',                   1.0)
             call cline_refine3D_cavgs%set('silence_fsc',        'yes')
             call cline_refine3D_cavgs%set('trs',                  5.0)
-            call cline_refine3D_cavgs%set('nspace',            10000.)
+            call cline_refine3D_cavgs%set('nspace',             10000)
             call cline_refine3D_cavgs%set('center',              'no')
             ! convention for executing shared-memory workflows from within another workflow with a parameters object declared
             params_ptr  => params_glob
@@ -1447,7 +1447,7 @@ contains
             call cline_reproject%set('smpd',                smpd)
             call cline_reproject%set('oritab',  'cavgs_oris.txt')
             call cline_reproject%set('pgrp',         params%pgrp)
-            call cline_reproject%set('nthr',   real(params%nthr))
+            call cline_reproject%set('nthr',         params%nthr)
             params_ptr  => params_glob
             params_glob => null()
             call xreproject%execute(cline_reproject)
@@ -1634,8 +1634,8 @@ contains
         spproj%os_ptcl3D = spproj_tmp%os_ptcl3D
         call spproj_tmp%kill
         if( nstks > 1 )then
-            call spproj%os_ptcl2D%set_all2single('stkind',1.)
-            call spproj%os_ptcl3D%set_all2single('stkind',1.)
+            call spproj%os_ptcl2D%set_all2single('stkind',1)
+            call spproj%os_ptcl3D%set_all2single('stkind',1)
         endif
         call spproj%write(params%projfile)
         call simple_end('**** SINGLE_TSERIES_SWAP_STACK NORMAL STOP ****')
@@ -1681,15 +1681,13 @@ contains
             THROW_HARD('unsupported ORITYPE')
         end select
         if( fall_over ) THROW_HARD('No images found!')
-        if( cline%defined('fromp') .or. cline%defined('top') )then
-            if( cline%defined('fromp') .and. cline%defined('top') )then
-                call cline%delete('nparts')   ! shared-memory implementation
-                call cline%set('mkdir', 'no') ! to avoid nested directory structure
-                call xrec3D_shmem%execute(cline)
-                return
-            else
-                THROW_HARD('Both fromp and top need to be defined on command-line for reconstruction of a specific range of the time-series')
-            endif
+        if( cline%defined('fromp') .and. cline%defined('top') )then
+            call cline%delete('nparts')   ! shared-memory implementation
+            call cline%set('mkdir', 'no') ! to avoid nested directory structure
+            call xrec3D_shmem%execute(cline)
+            return
+        else
+            THROW_HARD('Both fromp and top need to be defined on command-line for reconstruction of a specific range of the time-series')
         endif
         ! save a states array for putting pack later
         rstates = build%spproj_field%get_all('state')
@@ -1855,8 +1853,8 @@ contains
         call cline%set('pgrp',    'c1')
         call cline%set('oritype', 'ptcl3D')
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
-        if( .not. cline%defined('nspace') ) call cline%set('nspace', 300.)
-        if( .not. cline%defined('athres') ) call cline%set('athres', 10.)
+        if( .not. cline%defined('nspace') ) call cline%set('nspace',  300)
+        if( .not. cline%defined('athres') ) call cline%set('athres',  10.)
         call build%init_params_and_build_strategy3D_tbox(cline, params)
         ! sanity check
         fall_over = .false.

@@ -118,7 +118,7 @@ contains
         ncls_in = 0
         if( cline%defined('ncls') )then
             ! to circumvent parameters class stringency, restored after params%new
-            ncls_in = nint(cline%get_rarg('ncls'))
+            ncls_in = cline%get_iarg('ncls')
             call cline%delete('ncls')
         endif
         ! master parameters
@@ -463,7 +463,7 @@ contains
                     allocate(stk_mask(nmics))
                     allocate(states(nmics))
                     do iproj = 1,nmics
-                        stk_mask(iproj) = nint(spproj%os_mic%get(iproj,'nptcls')) > 0
+                        stk_mask(iproj) = spproj%os_mic%get_int(iproj,'nptcls') > 0
                         states(iproj)   = spproj%os_mic%get_state(iproj)
                     enddo
                     nstks = count(stk_mask)
@@ -477,13 +477,13 @@ contains
                         istk = istk+1
                         call stream_spproj%read_segment('stk', completed_fnames(iproj))
                         call stream_spproj%os_stk%set_state(1, states(iproj))
-                        n      = nint(stream_spproj%os_stk%get(1,'nptcls'))
+                        n      = stream_spproj%os_stk%get_int(1,'nptcls')
                         fromp  = nptcls + 1
                         nptcls = nptcls + n
                         top    = nptcls
                         call spproj%os_stk%transfer_ori(istk,stream_spproj%os_stk,1)
-                        call spproj%os_stk%set(istk, 'fromp',real(fromp))
-                        call spproj%os_stk%set(istk, 'top',  real(top))
+                        call spproj%os_stk%set(istk, 'fromp', fromp)
+                        call spproj%os_stk%set(istk, 'top',   top)
                     enddo
                     call spproj%write_segment_inside('stk', params%projfile)
                     call spproj%os_stk%kill
@@ -580,7 +580,7 @@ contains
                         completedfnames(n_old+j) = trim(abs_fname)
                         call streamspproj%read_segment('mic', abs_fname)
                         if( l_pick )then
-                            nptcls = nint(streamspproj%os_mic%get(1,'nptcls'))
+                            nptcls = streamspproj%os_mic%get_int(1,'nptcls')
                             if( nptcls > 0 ) nptcls_here = nptcls_here + nptcls
                         endif
                         call spproj%os_mic%transfer_ori(n_old+j, streamspproj%os_mic, 1)
@@ -707,7 +707,7 @@ contains
                     if( l_pick )then
                         ! import mic & updates stk segment
                         call movefile2folder('boxfile', dir, output_dir_picker, o, err)
-                        nptcls = nptcls + nint(o%get('nptcls'))
+                        nptcls = nptcls + o%get_int('nptcls')
                         call streamspproj%os_mic%set_ori(1, o)
                         if( .not.err )then
                             call streamspproj%read_segment('stk', sp_files(iproj))
@@ -822,7 +822,7 @@ contains
                 nptcls = 0
             else
                 call spproj_here%read_segment('mic',fname)
-                nptcls = nint(spproj_here%os_mic%get(1,'nptcls'))
+                nptcls = spproj_here%os_mic%get_int(1,'nptcls')
                 state  = spproj_here%os_mic%get_state(1)
                 call spproj_here%kill
             endif

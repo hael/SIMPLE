@@ -170,7 +170,7 @@ contains
                 read(chunk_nthr_env,*) chunk_nthr
                 call cline_cluster2D_chunk%set('nthr', chunk_nthr)
             else
-                call cline_cluster2D_chunk%set('nthr', real(params_glob%nthr2D))
+                call cline_cluster2D_chunk%set('nthr', params_glob%nthr2D)
             end if
             allocate(chunks(params_glob%nchunks))
             ! deal with nthr2d .ne. nthr
@@ -178,7 +178,7 @@ contains
             ! also why not introduce params%nthr_chunk/pool and we do not have to deal with environment
             ! variables at all, everything is set on startup. Same goes for qsys_partition?
             nthr2D = params_glob%nthr2D
-            params_glob%nthr2D = int(cline_cluster2D_chunk%get_rarg('nthr'))
+            params_glob%nthr2D = int(cline_cluster2D_chunk%get_iarg('nthr'))
             do ichunk = 1,params_glob%nchunks
                 call chunks(ichunk)%init(ichunk, pool_proj)
             enddo
@@ -225,7 +225,7 @@ contains
                 read(refgen_nthr_env,*) refgen_nthr
                 call cline_cluster2D_pool%set('nthr', refgen_nthr)
             else
-                call cline_cluster2D_pool%set('nthr', real(params_glob%nthr2D))
+                call cline_cluster2D_pool%set('nthr', params_glob%nthr2D)
             end if
             call get_environment_variable(SIMPLE_STREAM_REFGEN_PARTITION, refgen_part_env, envlen)
             if(envlen > 0) then
@@ -237,10 +237,10 @@ contains
             call get_environment_variable(SIMPLE_STREAM_POOL_NTHR, pool_nthr_env, envlen)
             if(envlen > 0) then
                 read(pool_nthr_env,*) pool_nthr
-                call cline_cluster2D_pool%set('nthr', pool_nthr)
+                call cline_cluster2D_pool%set('nthr',   pool_nthr)
                 call cline_cluster2D_pool%set('nthr2D', pool_nthr)
             else
-                call cline_cluster2D_pool%set('nthr', real(params_glob%nthr2D))
+                call cline_cluster2D_pool%set('nthr', params_glob%nthr2D)
             end if
             call get_environment_variable(SIMPLE_STREAM_POOL_PARTITION, pool_part_env, envlen)
             if(envlen > 0) then
@@ -294,14 +294,14 @@ contains
         boxpd = 2 * round2even(params_glob%alpha * real(params_glob%box_crop/2)) ! logics from parameters
         ! Scaling-related command lines update
         call cline_cluster2D_chunk%set('smpd_crop', smpd)
-        call cline_cluster2D_chunk%set('box_crop',  real(box))
+        call cline_cluster2D_chunk%set('box_crop',  box)
         call cline_cluster2D_chunk%set('msk_crop',  params_glob%msk_crop)
-        call cline_cluster2D_chunk%set('box',       real(params_glob%box))
+        call cline_cluster2D_chunk%set('box',       params_glob%box)
         call cline_cluster2D_chunk%set('smpd',      params_glob%smpd)
         call cline_cluster2D_pool%set('smpd_crop',  smpd)
-        call cline_cluster2D_pool%set('box_crop',   real(box))
+        call cline_cluster2D_pool%set('box_crop',   box)
         call cline_cluster2D_pool%set('msk_crop',   params_glob%msk_crop)
-        call cline_cluster2D_pool%set('box',        real(params_glob%box))
+        call cline_cluster2D_pool%set('box',        params_glob%box)
         call cline_cluster2D_pool%set('smpd',       params_glob%smpd)
         ! updates command-lines with resolution limits
         call set_resolution_limits( cline )
@@ -566,7 +566,7 @@ contains
             call pool_proj%os_mic%reallocate(nmics_imported+nmics2import)
             call pool_proj%os_stk%reallocate(nmics_imported+nmics2import)
             call pool_proj%os_ptcl2D%reallocate(nptcls_imported+nptcls2import)
-            fromp = nint(pool_proj%os_stk%get(nmics_imported,'top'))+1
+            fromp = pool_proj%os_stk%get_top(nmics_imported)+1
         endif
         imic     = nmics_imported
         iptcl    = nptcls_imported
@@ -581,17 +581,17 @@ contains
             imic = imic + 1
             call pool_proj%os_mic%transfer_ori(imic, spproj%os_mic, records(irec)%micind)
             call pool_proj%os_stk%transfer_ori(imic, spproj%os_stk, records(irec)%micind)
-            call pool_proj%os_stk%set(imic, 'fromp', real(fromp))
-            call pool_proj%os_stk%set(imic, 'top',   real(fromp+records(irec)%nptcls-1))
+            call pool_proj%os_stk%set(imic, 'fromp', fromp)
+            call pool_proj%os_stk%set(imic, 'top',   fromp+records(irec)%nptcls-1)
             ! particles
             do jptcl = 1,records(irec)%nptcls
                 iptcl = iptcl + 1
                 call pool_proj%os_ptcl2D%transfer_ori(iptcl, spproj%os_ptcl2D, jptcl)
                 call pool_proj%os_ptcl2D%set_stkind(iptcl, imic)
-                call pool_proj%os_ptcl2D%set(iptcl, 'updatecnt', 0.)
-                call pool_proj%os_ptcl2D%set(iptcl, 'frac',      0.)
-                call pool_proj%os_ptcl2D%set(iptcl, 'eo', merge(0., 1., is_even(iptcl)))
-                call pool_proj%os_ptcl2D%set(iptcl, 'w',         1.)
+                call pool_proj%os_ptcl2D%set(iptcl, 'updatecnt', 0)
+                call pool_proj%os_ptcl2D%set(iptcl, 'frac',      0.0)
+                call pool_proj%os_ptcl2D%set(iptcl, 'eo',        merge(0, 1, is_even(iptcl)))
+                call pool_proj%os_ptcl2D%set(iptcl, 'w',         1.0)
                 call pool_proj%os_ptcl2D%set_class(iptcl, irnd_uni(params_glob%ncls))
             enddo
             fromp = fromp + records(irec)%nptcls
@@ -613,7 +613,7 @@ contains
         character(len=:),          allocatable :: stack_fname, ext, fbody
         character(len=LONGSTRLEN), allocatable :: sigma_fnames(:)
         real                    :: frac_update
-        integer                 :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl
+        integer                 :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl, nptcls
         integer                 :: eo, icls, nptcls_sel, istk, nptcls2update, nstks2update, jjptcl
         integer(timer_int_kind) :: t_tot
         if( .not. stream2D_active ) return
@@ -671,7 +671,7 @@ contains
                     call clines(1)%set('prg',        'calc_pspec_distr')
                     call clines(1)%set('oritype',    'ptcl2D')
                     call clines(1)%set('projfile',   PROJFILE_POOL)
-                    call clines(1)%set('nthr',       cline_cluster2D_pool%get_rarg('nthr'))
+                    call clines(1)%set('nthr',       cline_cluster2D_pool%get_iarg('nthr'))
                     call clines(1)%set('which_iter', pool_iter)
                     call clines(1)%set('mkdir',      'yes')
                     call clines(1)%set('sigma_est',  'global')
@@ -713,8 +713,8 @@ contains
         !$omp parallel do schedule(static) proc_bind(close) private(istk,fromp,top,iptcl)&
         !$omp default(shared) reduction(+:nptcls_old)
         do istk = 1,nstks_tot
-            fromp = nint(pool_proj%os_stk%get(istk,'fromp'))
-            top   = nint(pool_proj%os_stk%get(istk,'top'))
+            fromp = pool_proj%os_stk%get_fromp(istk)
+            top   = pool_proj%os_stk%get_top(istk)
             min_update_cnts_per_stk(istk) = huge(istk)
             do iptcl = fromp,top
                 if( pool_proj%os_ptcl2D%get_state(iptcl) > 0 )then
@@ -729,8 +729,8 @@ contains
         !$omp end parallel do
         nptcls_rejected_glob = nptcls_glob - sum(nptcls_per_stk)
         ! update info for gui
-        call spproj%projinfo%set(1,'nptcls_tot',     real(nptcls_glob))
-        call spproj%projinfo%set(1,'nptcls_rejected',real(nptcls_rejected_glob))
+        call spproj%projinfo%set(1,'nptcls_tot',     nptcls_glob)
+        call spproj%projinfo%set(1,'nptcls_rejected',nptcls_rejected_glob)
         ! flagging stacks to be skipped
         if( allocated(pool_stacks_mask) ) deallocate(pool_stacks_mask)
         allocate(pool_stacks_mask(nstks_tot), source=.false.)
@@ -744,7 +744,7 @@ contains
                 istk = stk_order(i)
                 if( (min_update_cnts_per_stk(istk) > STREAM_SRCHLIM) .and. (nptcls_sel > MAX_STREAM_NPTCLS) ) cycle
                 nptcls_sel    = nptcls_sel + nptcls_per_stk(istk)
-                nptcls2update = nptcls2update + nint(pool_proj%os_stk%get(istk,'nptcls'))
+                nptcls2update = nptcls2update + pool_proj%os_stk%get_int(istk, 'nptcls')
                 pool_stacks_mask(istk) = .true.
             enddo
             call random_generator%kill
@@ -761,13 +761,13 @@ contains
         i     = 0
         jptcl = 0
         do istk = 1,nstks_tot
-            fromp = nint(pool_proj%os_stk%get(istk,'fromp'))
-            top   = nint(pool_proj%os_stk%get(istk,'top'))
+            fromp = pool_proj%os_stk%get_fromp(istk)
+            top   = pool_proj%os_stk%get_top(istk)
             if( pool_stacks_mask(istk) )then
                 ! transfer alignement parameters for selected particles
                 i = i + 1 ! stack index in spproj
                 call spproj%os_stk%transfer_ori(i, pool_proj%os_stk, istk)
-                call spproj%os_stk%set(i, 'fromp', real(jptcl+1))
+                call spproj%os_stk%set(i, 'fromp', jptcl+1)
                 !$omp parallel do private(iptcl,jjptcl) proc_bind(close) default(shared)
                 do iptcl = fromp,top
                     jjptcl = jptcl+iptcl-fromp+1
@@ -776,7 +776,7 @@ contains
                 enddo
                 !$omp end parallel do
                 jptcl = jptcl + (top-fromp+1)
-                call spproj%os_stk%set(i, 'top', real(jptcl))
+                call spproj%os_stk%set(i, 'top', jptcl)
             else
                 ! keeps track of skipped particles
                 prev_eo_pops_thread = 0
@@ -899,8 +899,8 @@ contains
             do istk = 1,size(pool_stacks_mask)
                 if( pool_stacks_mask(istk) )then
                     i = i+1
-                    iptcl = nint(pool_proj%os_stk%get(istk,'fromp'))
-                    do jptcl = nint(spproj%os_stk%get(i,'fromp')),nint(spproj%os_stk%get(i,'top'))
+                    iptcl = pool_proj%os_stk%get_fromp(istk)
+                    do jptcl = spproj%os_stk%get_fromp(i),spproj%os_stk%get_top(i)
                         if( spproj%os_ptcl2D%get_state(jptcl) > 0 )then
                             call pool_proj%os_ptcl2D%transfer_2Dparams(iptcl, spproj%os_ptcl2D, jptcl)
                         endif
@@ -1136,7 +1136,7 @@ contains
             else
                 call pool_proj%os_cls2D%set_state(icls, 1)
                 call pool_proj%os_cls2D%set(icls,'stk', trim(cwd_glob) // '/' // STREAM_SELECTED_REFS // trim(STK_EXT))
-                call pool_proj%os_cls2D%set(icls,'stkind', real(isel))
+                call pool_proj%os_cls2D%set_stkind(icls, isel)
                 call stkio_r%get_image(icls, img)
                 call stkio_w%write(isel, img)
                 call jpegimg%tile(img, 1, isel) 
@@ -1357,7 +1357,7 @@ contains
                 glob_chunk_id = glob_chunk_id + 1
                 ! deal with nthr2d .ne. nthr
                 nthr2D = params_glob%nthr2D
-                params_glob%nthr2D = int(cline_cluster2D_chunk%get_rarg('nthr'))
+                params_glob%nthr2D = cline_cluster2D_chunk%get_iarg('nthr')
                 call chunks(ichunk)%init(glob_chunk_id, pool_proj)
                 params_glob%nthr2D = nthr2D
             endif
@@ -1401,7 +1401,7 @@ contains
             call pool_proj%os_mic%reallocate(nmics_imported+nmics2import)
             call pool_proj%os_stk%reallocate(nmics_imported+nmics2import)
             call pool_proj%os_ptcl2D%reallocate(nptcls_imported+nptcls2import)
-            fromp = nint(pool_proj%os_stk%get(nmics_imported,'top'))+1
+            fromp = pool_proj%os_stk%get_top(nmics_imported)+1
         endif
         imic  = nmics_imported
         iptcl = nptcls_imported
@@ -1417,17 +1417,17 @@ contains
                 call pool_proj%os_mic%transfer_ori(imic, converged_chunks(ichunk)%spproj%os_mic, iproj)
                 ! stacks
                 call pool_proj%os_stk%transfer_ori(imic, converged_chunks(ichunk)%spproj%os_stk, iproj)
-                nptcls = nint(converged_chunks(ichunk)%spproj%os_stk%get(iproj,'nptcls'))
-                call pool_proj%os_stk%set(imic, 'fromp', real(fromp))
-                call pool_proj%os_stk%set(imic, 'top',   real(fromp+nptcls-1))
+                nptcls = converged_chunks(ichunk)%spproj%os_stk%get_int(iproj,'nptcls')
+                call pool_proj%os_stk%set(imic, 'fromp', fromp)
+                call pool_proj%os_stk%set(imic, 'top',   fromp+nptcls-1)
                 ! particles
                 do i = 1,nptcls
                     iptcl = iptcl + 1
                     jptcl = jptcl + 1
                     call pool_proj%os_ptcl2D%transfer_ori(iptcl, converged_chunks(ichunk)%spproj%os_ptcl2D, jptcl)
                     call pool_proj%os_ptcl2D%set_stkind(iptcl, imic)
-                    call pool_proj%os_ptcl2D%set(iptcl, 'updatecnt', 0) ! new particle
-                    call pool_proj%os_ptcl2D%set(iptcl, 'frac',      0) ! new particle
+                    call pool_proj%os_ptcl2D%set(iptcl, 'updatecnt', 0)  ! new particle
+                    call pool_proj%os_ptcl2D%set(iptcl, 'frac',      0.) ! new particle
                 enddo
                 fromp = fromp + nptcls
             enddo
@@ -1972,16 +1972,16 @@ contains
         call cline%set('autoscale',   'yes')
         call cline%set('ml_reg_chunk', 'no')
         call cline%set('ml_reg_pool',  'no')
-        call cline%set('nthr2D', cline%get_rarg('nthr'))
+        call cline%set('nthr2D', cline%get_iarg('nthr'))
         if( .not. cline%defined('mkdir')        ) call cline%set('mkdir',       'yes')
         if( .not. cline%defined('center')       ) call cline%set('center',      'yes')
         if( .not. cline%defined('lpthres')      ) call cline%set('lpthres',      30.0)
         if( .not. cline%defined('ndev')         ) call cline%set('ndev',         1.5)
         if( .not. cline%defined('oritype')      ) call cline%set('oritype',      'ptcl2D')
-        if( .not. cline%defined('walltime')     ) call cline%set('walltime',     29.0*60.0) ! 29 minutes
-        if( .not. cline%defined('nparts_chunk') ) call cline%set('nparts_chunk', 1.0)
-        if( .not. cline%defined('nchunks')      ) call cline%set('nchunks',      2.0)
-        if( .not. cline%defined('numlen')       ) call cline%set('numlen',       5.0)
+        if( .not. cline%defined('walltime')     ) call cline%set('walltime',     29*60) ! 29 minutes
+        if( .not. cline%defined('nparts_chunk') ) call cline%set('nparts_chunk', 1)
+        if( .not. cline%defined('nchunks')      ) call cline%set('nchunks',      2)
+        if( .not. cline%defined('numlen')       ) call cline%set('numlen',       5)
         if( .not. cline%defined('objfun')       ) call cline%set('objfun',       'euclid')
         if( .not. cline%defined('sigma_est')    ) call cline%set('sigma_est',    'group')
         if( .not. cline%defined('reject_cls')   ) call cline%set('reject_cls',   'no')
@@ -2147,9 +2147,9 @@ contains
         ntot_chunks = 0
         cnt         = 0
         do istk = 1,nstks
-            if( (spproj_glob%os_stk%get_state(istk)==0) .or. (nint(spproj_glob%os_stk%get(istk,'nptcls'))==0) )cycle
-            fromp = nint(spproj_glob%os_stk%get(istk,'fromp'))
-            top   = nint(spproj_glob%os_stk%get(istk,'top'))
+            if( (spproj_glob%os_stk%get_state(istk)==0) .or. (spproj_glob%os_stk%get_int(istk,'nptcls')==0) )cycle
+            fromp = spproj_glob%os_stk%get_fromp(istk)
+            top   = spproj_glob%os_stk%get_top(istk)
             do iptcl = fromp,top
                 stk_all_nptcls(istk) = stk_all_nptcls(istk) + 1 ! including state=0
                 if( spproj_glob%os_ptcl2D%get_state(iptcl) == 0 ) cycle
@@ -2236,16 +2236,16 @@ contains
         enddo
         pool_stk_mask = .true.
         do istk = 1,nstks
-            if( (spproj_glob%os_stk%get_state(istk)==0) .or. (nint(spproj_glob%os_stk%get(istk,'nptcls'))==0) )cycle
+            if( (spproj_glob%os_stk%get_state(istk)==0) .or. (spproj_glob%os_stk%get_int(istk,'nptcls')==0) )cycle
             call spproj_glob%os_stk%getter(istk,'stk',fname)
             orig_stack_fname = basename(fname)
             stack_fname = trim(orig_stack_fname)
             do jstk = 1,pool_nstks
                 if( pool_stk_mask(jstk) )then
                     if( trim(stack_fname) == pool_stacks(jstk) )then
-                        fromp  = nint(spproj_glob%os_stk%get(istk,'fromp'))
-                        top    = nint(spproj_glob%os_stk%get(istk,'top'))
-                        jptcl  = nint(pool_proj%os_stk%get(jstk,'fromp'))
+                        fromp  = spproj_glob%os_stk%get_fromp(istk)
+                        top    = spproj_glob%os_stk%get_top(istk)
+                        jptcl  = pool_proj%os_stk%get_fromp(jstk)
                         do iptcl = fromp,top
                             call spproj_glob%os_ptcl2D%transfer_2Dparams(iptcl, pool_proj%os_ptcl2D, jptcl)
                             jptcl = jptcl+1
@@ -2361,12 +2361,12 @@ contains
                     absfname = simple_abspath(fname)
                     call spproj%os_stk%set(cnt,'stk',absfname)
                     ! particle
-                    fromp = nint(spproj_glob%os_stk%get(istk,'fromp'))
-                    top   = nint(spproj_glob%os_stk%get(istk,'top'))
+                    fromp = spproj_glob%os_stk%get_fromp(istk)
+                    top   = spproj_glob%os_stk%get_top(istk)
                     do iptcl = fromp,top
                         jptcl = jptcl + 1
                         call spproj%os_ptcl2D%transfer_ori(jptcl, spproj_glob%os_ptcl2D, iptcl)
-                        call spproj%os_ptcl2D%set(jptcl, 'stkind', cnt)
+                        call spproj%os_ptcl2D%set_stkind(jptcl, cnt)
                     enddo
                     cfromp = ctop + 1
                     ctop   = cfromp + n - 1

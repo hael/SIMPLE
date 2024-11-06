@@ -58,7 +58,7 @@ contains
             THROW_HARD('Either stack (stk) or volume (vol1) needs to be defined on command line!')
         endif
         call params%new(cline)
-        call cline%set('box', real(params%box))
+        call cline%set('box', params%box)
         write(logfhandle,'(A,1X,I7)') '>>> BOX:', params%box
         ! end gracefully
         call simple_end('**** SIMPLE_CHECK_BOX NORMAL STOP ****', print_simple=.false.)
@@ -70,7 +70,7 @@ contains
         class(cmdline),                intent(inout) :: cline
         type(parameters) :: params
         call params%new(cline)
-        call cline%set('nptcls', real(params%nptcls))
+        call cline%set('nptcls', params%nptcls)
         write(logfhandle,'(A,1X,I7)') '>>> NPTCLS:', params%nptcls
         ! end gracefully
         call simple_end('**** SIMPLE_CHECK_NPTCLS NORMAL STOP ****', print_simple=.false.)

@@ -229,7 +229,7 @@ contains
                 write(logfhandle,'(i9,a)',advance='no') iori, ' '
                 ! then the state
                 if( os%isthere(iori,'state') )then
-                    state = nint(os%get(iori,'state'))
+                    state = os%get_state(iori)
                 else
                     state = 1
                 endif
@@ -807,8 +807,8 @@ contains
         type(class_sample), allocatable :: clssmp(:), clssmp_read(:)
         character(len=:),   allocatable :: projfname
         integer(kind=kind(ENUM_ORISEG)) :: iseg
-        integer                         :: n_lines,fnr,noris,i,nstks,noris_in_state,ncls,icls,nstates,nptcls,ipart
-        real                            :: state
+        integer                         :: n_lines,fnr,noris,i,nstks,noris_in_state,ncls,icls
+        integer                         :: state,nstates,nptcls,ipart
         logical                         :: l_ctfres, l_icefrac, l_append
         class(oris), pointer :: pos => NULL()
         l_append = .false.
@@ -878,9 +878,9 @@ contains
             ! sanity check
             n_lines = nlines(trim(params%infile))
             if( cline%defined('state') ) then
-                if( spproj%get_n_insegment_state(params%oritype, cline%get_rarg("state")) /= n_lines )then
+                if( spproj%get_n_insegment_state(params%oritype, cline%get_iarg("state")) /= n_lines )then
                     write(logfhandle,*) '# lines in infile '//trim(params%infile)//': ', n_lines
-                    write(logfhandle,*) '# entries in '//trim(params%oritype)//' segment with requested state: ', spproj%get_n_insegment_state(params%oritype, cline%get_rarg("state"))
+                    write(logfhandle,*) '# entries in '//trim(params%oritype)//' segment with requested state: ', spproj%get_n_insegment_state(params%oritype, cline%get_iarg("state"))
                     THROW_WARN('# entries in infile/project file '//trim(params%oritype)//' segment with requested state do not match, aborting; exec_selection')
                     return
                 endif
@@ -896,7 +896,7 @@ contains
             allocate(states(noris))
             call fopen(fnr, FILE=trim(params%infile), STATUS='OLD', action='READ')
             if( cline%defined('state') ) then
-                state = cline%get_rarg("state")
+                state = cline%get_iarg("state")
                 do i=1,noris
                     if( pos%get_state(i) == state ) then
                         read(fnr,*) states(i)
@@ -1047,7 +1047,7 @@ contains
         else
             nparts = params%nthr
         endif
-        call cline_scale%set('nparts', real(nparts))
+        call cline_scale%set('nparts', nparts)
         smpd = build%spproj%get_smpd()
         box  = build%spproj%get_box()
         if( gen_sc_project )then
@@ -1057,7 +1057,7 @@ contains
             if( cline%defined('dir_target') ) dir_target = trim(cline%get_carg('dir_target'))
             call simple_mkdir(dir_target, errmsg="commander_distr_wflows::exec_scale_project_distr ")
             call build%spproj%scale_projfile(smpd_target, projfile_sc, cline, cline_scale, dir=dir_target)
-            newbox = nint(cline_scale%get_rarg('newbox'))
+            newbox = cline_scale%get_iarg('newbox')
             if( newbox == box )then
                 write(logfhandle,*)'Inconsistent input dimensions: from ',box,' to ',newbox
                 THROW_HARD('inconsistent input dimensions; exec_scale_project_distr')
@@ -1067,7 +1067,7 @@ contains
         endif
         ! needs to be re-set
         call cline_scale%set('smpd', smpd)
-        call cline_scale%set('box',  real(box))
+        call cline_scale%set('box',  box)
         ! setup the environment for distributed execution
         params%nparts       = nparts
         params_glob%nparts  = nparts
@@ -1228,8 +1228,8 @@ contains
         ! DISTRIBUTED EXECUTION
         ! setup the environment for distributed execution
         cline_distr = cline
-        call cline_distr%set('prg',  'prune_project')
-        call cline_distr%set('nthr', 1.)
+        call cline_distr%set('prg',     'prune_project')
+        call cline_distr%set('nthr',    1)
         call cline_distr%set('oritype', 'stk')
         nparts = min(params%nparts, nstks)
         allocate(spproj_part(nparts),part_mask(nparts))
@@ -1270,7 +1270,7 @@ contains
                     do imic = 1,spproj_part(ipart)%os_mic%get_noris()
                         cnt = cnt + 1
                         call spproj%os_mic%transfer_ori(cnt, spproj_part(ipart)%os_mic, imic)
-                        if( nint(spproj%os_mic%get(cnt,'nptcls')) > 0 ) nstks = nstks + 1
+                        if( spproj%os_mic%get_int(cnt,'nptcls') > 0 ) nstks = nstks + 1
                     enddo
                     call spproj_part(ipart)%kill
                 enddo
@@ -1383,7 +1383,7 @@ contains
         do iptcl=1,nptcls_tot
             ptcls_mask(iptcl) = spproj%os_ptcl2D%get_state(iptcl) > 0
             if( ptcls_mask(iptcl) )then
-                stkinds(iptcl) = nint(spproj%os_ptcl2D%get(iptcl,'stkind'))
+                stkinds(iptcl) = spproj%os_ptcl2D%get_int(iptcl,'stkind')
                 if( stkinds(iptcl) >= params%fromp .and. stkinds(iptcl) <= params%top )then
                     nptcls_part = nptcls_part+1
                 endif
@@ -1430,7 +1430,7 @@ contains
         if( params%fromp == 1 )then
             top_glob   = 0
         else
-            top = nint(spproj%os_stk%get(params%fromp-1,'top'))
+            top       = spproj%os_stk%get_top(params%fromp-1)
             top_glob  = count(ptcls_mask(1:top))
         endif
         ptcl_glob  = 0
@@ -1442,8 +1442,8 @@ contains
             call o_stk%getter('stk',stkname)
             ext        = fname2ext(stkname)
             newstkname = trim(stkdir)//trim(get_fbody(basename(stkname),ext))//trim(STK_EXT)
-            fromp      = nint(o_stk%get('fromp'))
-            top        = nint(o_stk%get('top'))
+            fromp = o_stk%get_fromp()
+            top   = o_stk%get_top()
             fromp_glob = top_glob+1
             ptcl_cnt   = 0
             do iptcl=fromp,top
@@ -1453,32 +1453,32 @@ contains
                 ptcl_cnt  = ptcl_cnt+1
                 ! copy image
                 if(spproj%os_ptcl2D%isthere(iptcl, 'indstk') .and. spproj%os_ptcl2D%get(iptcl, 'indstk') > 0.0) then
-                        write(logfhandle, *) "STK ", spproj%os_ptcl2D%get(iptcl,'indstk')
-                        call img%read(stkname, nint(spproj%os_ptcl2D%get(iptcl,'indstk')))
+                    write(logfhandle, *) "STK ", spproj%os_ptcl2D%get(iptcl,'indstk')
+                    call img%read(stkname, spproj%os_ptcl2D%get_int(iptcl,'indstk'))
                 else
-                        write(logfhandle, *) "STK2 " // int2str(nint(spproj%os_ptcl2D%get(iptcl,'indstk')))
-                        call img%read(stkname, iptcl-fromp+1)
+                    write(logfhandle, *) "STK2 " // int2str(spproj%os_ptcl2D%get_int(iptcl,'indstk'))
+                    call img%read(stkname, iptcl-fromp+1)
                 endif
                 call img%write(newstkname, ptcl_cnt)
                 ! update orientations
                 call spproj_out%os_ptcl2D%transfer_ori(ptcl_glob, spproj%os_ptcl2D, iptcl)
                 call spproj_out%os_ptcl3D%transfer_ori(ptcl_glob, spproj%os_ptcl3D, iptcl)
-                call spproj_out%os_ptcl2D%set(ptcl_glob,'stkind',real(stkind))
-                call spproj_out%os_ptcl3D%set(ptcl_glob,'stkind',real(stkind))
-                call spproj_out%os_ptcl2D%set(ptcl_glob,'indstk',real(ptcl_cnt))
-                call spproj_out%os_ptcl3D%set(ptcl_glob,'indstk',real(ptcl_cnt))
+                call spproj_out%os_ptcl2D%set(ptcl_glob,'stkind',stkind)
+                call spproj_out%os_ptcl3D%set(ptcl_glob,'stkind',stkind)
+                call spproj_out%os_ptcl2D%set(ptcl_glob,'indstk',ptcl_cnt)
+                call spproj_out%os_ptcl3D%set(ptcl_glob,'indstk',ptcl_cnt)
             enddo
             ! update stack
             call make_relativepath(CWD_GLOB, newstkname, relstkname)
             call o_stk%set('stk',   relstkname)
-            call o_stk%set('fromp', real(fromp_glob))
-            call o_stk%set('top',   real(top_glob))
-            call o_stk%set('nptcls',real(ptcl_cnt))
+            call o_stk%set('fromp', fromp_glob)
+            call o_stk%set('top',   top_glob)
+            call o_stk%set('nptcls',ptcl_cnt)
             call spproj_out%os_stk%set_ori(stk_cnt, o_stk)
             ! update micrograph
             if( nmics_tot > 0 ) then
                 call spproj_out%os_mic%transfer_ori(stk_cnt, spproj%os_mic, stk2mic_inds(istk))
-                call spproj_out%os_mic%set(stk_cnt,'nptcls',real(ptcl_cnt))
+                call spproj_out%os_mic%set(stk_cnt,'nptcls',ptcl_cnt)
             endif
         enddo
         spproj_out%projinfo = spproj%projinfo

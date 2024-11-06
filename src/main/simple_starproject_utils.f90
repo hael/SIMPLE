@@ -171,14 +171,14 @@ contains
     subroutine center_boxes(spproj, sporis)
         class(sp_project),        intent(inout) :: spproj
         class(oris),              intent(inout) :: sporis
-        integer                                 :: iori
-        real                                    :: stkind, stkbox, xpos, ypos
+        integer                                 :: iori, stkind
+        real                                    :: stkbox, xpos, ypos
         do iori=1, sporis%get_noris()
             if(sporis%get_state(iori) > 0) then
-                stkind = sporis%get(iori, "stkind")
-                stkbox = spproj%os_stk%get(int(stkind), "box")
-                xpos = sporis%get(iori, "xpos") + (stkbox / 2)
-                ypos = sporis%get(iori, "ypos") + (stkbox / 2)
+                stkind = sporis%get_int(iori, "stkind")
+                stkbox = spproj%os_stk%get(stkind, "box")
+                xpos = sporis%get(iori, "xpos") + (stkbox / 2.)
+                ypos = sporis%get(iori, "ypos") + (stkbox / 2.)
                 call sporis%set(iori, "xpos", xpos)
                 call sporis%set(iori, "ypos", ypos)
             end if

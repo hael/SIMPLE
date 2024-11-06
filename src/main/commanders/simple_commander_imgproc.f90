@@ -678,8 +678,8 @@ contains
             do istk = params%fromp, params%top
                 call progress(istk, nstks)
                 stkin      = build%spproj%get_stkname(istk)
-                ptcl_fromp = nint(build%spproj%os_stk%get(istk,'fromp'))
-                ptcl_top   = nint(build%spproj%os_stk%get(istk,'top'))
+                ptcl_fromp = build%spproj%os_stk%get_fromp(istk)
+                ptcl_top   = build%spproj%os_stk%get_top(istk)
                 ext        = '.'//fname2ext(stkin)
                 if( cline%defined('dir_target') )then
                     stkout = filepath(trim(params%dir_target),add2fbody(basename(stkin),ext,SCALE_SUFFIX))

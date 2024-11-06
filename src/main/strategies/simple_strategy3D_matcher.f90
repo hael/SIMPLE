@@ -202,7 +202,7 @@ contains
                     case('sigma')
                         ! first sigma estimation (done below)
                         call build_glob%spproj_field%get_ori(iptcl, orientation)
-                        call build_glob%spproj_field%set(iptcl, 'proj', real(build_glob%eulspace%find_closest_proj(orientation)))
+                        call build_glob%spproj_field%set(iptcl, 'proj', build_glob%eulspace%find_closest_proj(orientation))
                     case DEFAULT
                         THROW_HARD('refinement mode: '//trim(params_glob%refine)//' unsupported')
                 end select

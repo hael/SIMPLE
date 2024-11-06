@@ -111,7 +111,7 @@ contains
                 do i = 1,nptcls
                     if( iters(i) == icnt )then
                         iptcl  = pinds(i)
-                        igroup = nint(os%get(iptcl,'stkind'))
+                        igroup = os%get_int(iptcl,'stkind')
                         eo     = os%get_eo(iptcl) + 1
                         self%sigma2_noise(:,iptcl) = pspecs(eo,igroup,:)
                     endif
@@ -184,8 +184,8 @@ contains
             !$omp parallel do default(shared) private(iptcl,eo,igroup) proc_bind(close) schedule(static)
             do iptcl = params_glob%fromp, params_glob%top
                 if(os%get_state(iptcl) == 0 ) cycle
-                igroup  = nint(os%get(iptcl, 'stkind'))
-                eo      = nint(os%get(iptcl, 'eo'    )) ! 0/1
+                igroup = os%get_int(iptcl, 'stkind')
+                eo     = os%get_eo(iptcl)  ! 0/1
                 self%sigma2_noise(:,iptcl) = self%sigma2_groups(eo+1,igroup,:)
             end do
             !$omp end parallel do

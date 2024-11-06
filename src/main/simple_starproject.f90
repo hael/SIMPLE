@@ -287,7 +287,7 @@ contains
             call sporis%new(self%starfile%stkptclcount, .true.)
             !set all stkind to 1
             do ival = 1, self%starfile%stkptclcount
-               call sporis%set(ival, "stkind", real(1))
+               call sporis%set(ival, "stkind", 1)
             end do 
         else
             call sporis%new(stardata%dataend - stardata%datastart, .false.)
@@ -311,7 +311,7 @@ contains
                         if(.not. stardata%flags(flagsindex)%splflag2 == "") then
                             entrystr = trim(adjustl(splitimage(1:index(splitimage, "@") - 1)))
                             read(entrystr,*) ival
-                            call sporis%set(projindex, stardata%flags(flagsindex)%splflag2, real(ival))
+                            call sporis%set(projindex, stardata%flags(flagsindex)%splflag2, ival)
                         end if
                         entrystr = trim(adjustl(splitimage(index(splitimage, "@") + 1:)))
                     else
@@ -336,7 +336,7 @@ contains
                         if(stardata%flags(flagsindex)%mult > 0) then
                             ival = ival * stardata%flags(flagsindex)%mult
                         end if
-                        call sporis%set(projindex, stardata%flags(flagsindex)%splflag, real(ival))
+                        call sporis%set(projindex, stardata%flags(flagsindex)%splflag, ival)
                     else
                         read(entrystr,*) rval
                         if(stardata%flags(flagsindex)%mult > 0) then
@@ -348,7 +348,7 @@ contains
                 end if
             end do
             if(present(spoptics)) then
-                ogid = sporis%get(lineindex, "ogid")
+                ogid = sporis%get_int(lineindex, "ogid")
                 if(ogid > 0) then
                     ogmapid = self%starfile%opticsmap(ogid)
                     call spoptics%get_ori(ogmapid, opticsori)
@@ -358,9 +358,9 @@ contains
                 end if
             end if
             if(isptcl) then
-                call sporis%set(projindex, "stkind", real(self%starfile%stkmap(lineindex, 1)))
+                call sporis%set(projindex, "stkind", self%starfile%stkmap(lineindex, 1))
             end if
-            call sporis%set(projindex, "state", real(1))
+            call sporis%set_state(projindex, 1)
         end do
         call fclose(fhandle)
         if(allocated(splitline)) deallocate(splitline)
@@ -389,21 +389,21 @@ contains
             do j = 1, size(stknames)
                 if(trim(adjustl(stknames(j))) == trim(adjustl(stktmp%get_static(i, "stk")))) then
                     newstack = .false.
-                    if(stkzmax(j) < int(stktmp%get(i, "stkind"))) then
-                        stkzmax(j) = int(stktmp%get(i, "stkind"))
+                    if(stkzmax(j) < stktmp%get_int(i, "stkind")) then
+                        stkzmax(j) = stktmp%get_int(i, "stkind")
                     end if
                     self%starfile%stkmap(i, 1) = j
-                    self%starfile%stkmap(i, 2) = int(stktmp%get(i, "stkind"))
+                    self%starfile%stkmap(i, 2) = stktmp%get_int(i, "stkind")
                     exit
                 end if
             end do
             if(newstack) then
                 entrystr = trim(adjustl(stktmp%get_static(i, "stk")))
                 stknames = [stknames, entrystr]
-                stkzmax = [stkzmax, int(stktmp%get(i, "stkind"))]
+                stkzmax = [stkzmax, stktmp%get_int(i, "stkind")]
                 stkoriids = [stkoriids, i]
                 self%starfile%stkmap(i, 1) = size(stkoriids)
-                self%starfile%stkmap(i, 2) = int(stktmp%get(i, "stkind"))
+                self%starfile%stkmap(i, 2) = stktmp%get_int(i, "stkind")
             end if
         end do
         call stkoris%new(size(stknames), .false.)
@@ -437,11 +437,11 @@ contains
             end if
             if(stkexists) then
                 call stkoris%set(i, "stk", trim(adjustl(entrystr)))
-                call stkoris%set(i, "state",  real(1))
+                call stkoris%set_state(i, 1)
                 self%starfile%stkstates(i) = 1
             else
                 write(logfhandle,*) char(9), "no stack found for ", trim(adjustl(basename(entrystr))), ". pruning referenced particles"
-                call stkoris%set(i, "state",  real(0))
+                call stkoris%set_state(i, 0)
                 self%starfile%stkstates(i) = 0
             end if
             if(allocated(seppos)) deallocate(seppos)
@@ -450,14 +450,14 @@ contains
         self%starfile%stkptclcount = 0
         do i = 1, size(stknames)
             top = fromp + stkzmax(i)
-            call stkoris%set(i, "nptcls", real(stkzmax(i)))
-            call stkoris%set(i, "fromp",  real(fromp))
-            call stkoris%set(i, "top",    real(top - 1))
+            call stkoris%set(i, "nptcls", stkzmax(i))
+            call stkoris%set(i, "fromp",  fromp)
+            call stkoris%set(i, "top",    top - 1)
             fromp = top
             self%starfile%stkptclcount = self%starfile%stkptclcount + stkzmax(i)
         end do
         do i = 1,stktmp%get_noris()
-            self%starfile%stkmap(i, 2) =  self%starfile%stkmap(i, 2) + int(stkoris%get(self%starfile%stkmap(i, 1), "fromp")) - 1
+            self%starfile%stkmap(i, 2) = self%starfile%stkmap(i, 2) + stkoris%get_int(self%starfile%stkmap(i, 1), "fromp") - 1
         end do
         if(allocated(stknames))  deallocate(stknames)
         if(allocated(stkzmax))   deallocate(stkzmax)
@@ -560,14 +560,14 @@ contains
         class(starproject), intent(inout) :: self
         class(sp_project),  intent(inout) :: spproj
         class(ImgHead), allocatable       :: header
-        integer                           :: i, fromp, top, funit, ios
-        real                              :: foundval, detpix, mag, ogid, stkbox, box
+        integer                           :: i, fromp, top, funit, ios, ogid, stkbox, box
+        real                              :: foundval, detpix, mag
         character(len=LONGSTRLEN)         :: datapath
         character(len=1)                  :: format_descriptor
         character(len=7)                  :: stat_str
         do i = 1, spproj%os_stk%get_noris()
-            fromp = nint(spproj%os_stk%get(i, "fromp"))
-            top   = nint(spproj%os_stk%get(i, "fromp"))
+            fromp = spproj%os_stk%get_fromp(i)
+            top   = spproj%os_stk%get_top(i)
             if(.not. spproj%os_stk%isthere(i, "smpd")) then
                 foundval = get_value_from_ptcls(spproj%os_ptcl2D, fromp, top, "smpd")
                 if(foundval > 0) then
@@ -596,7 +596,7 @@ contains
                     call spproj%os_stk%set(i, "cs", foundval)  
                 end if
             end if
-           if(spproj%os_stk%get(i, "box") == 0.0) then
+           if(spproj%os_stk%get_int(i, "box") == 0) then
                 datapath = spproj%os_stk%get_static(i, "stk")
                 format_descriptor = fname2format(trim(adjustl(datapath)))
                 select case(format_descriptor)
@@ -623,16 +623,16 @@ contains
                         case('J','L')
                             call header%read_tiff(datapath)
                     end select
-                    call spproj%os_stk%set(i, "box", real(header%getDim(1)))
+                    call spproj%os_stk%set(i, "box", header%getDim(1))
                 end if
                 if(allocated(header)) deallocate(header)
            end if
-           ogid   = spproj%os_stk%get(i, 'ogid')
-           stkbox = spproj%os_stk%get(i, 'box')
-           if(ogid > 0.0 .and. stkbox > 0.0) then
-                box = spproj%os_optics%get(nint(ogid), 'box')
-                if(box == 0.0) then
-                    call spproj%os_optics%set(nint(ogid), 'box', stkbox)
+           ogid   = spproj%os_stk%get_int(i, 'ogid')
+           stkbox = spproj%os_stk%get_int(i, 'box')
+           if(ogid > 0 .and. stkbox > 0) then
+                box = spproj%os_optics%get_int(ogid, 'box')
+                if(box == 0) then
+                    call spproj%os_optics%set(ogid, 'box', stkbox)
                 end if
            end if
         end do
@@ -658,8 +658,8 @@ contains
         if( file_exists(self%starfile%filename) ) call del_file(self%starfile%filename)
         if(.not. self%starfile%initialised) call self%initialise()
         do i=1, spproj%os_mic%get_noris()
-            call spproj%os_mic%set(i, "nmics", real(spproj%os_mic%get_noris()))
-            call spproj%os_mic%set(i, "micid", real(i))
+            call spproj%os_mic%set(i, "nmics", spproj%os_mic%get_noris())
+            call spproj%os_mic%set(i, "micid", i)
         end do
         call enable_splflags(spproj%os_optics, self%starfile%optics%flags)
         call enable_splflags(spproj%os_mic,    self%starfile%micrographs%flags)
@@ -703,7 +703,7 @@ contains
                     call spproj%os_cls2D%set(i, "stk", trim(adjustl(stkname)))
                 endif
             end if
-            call spproj%os_cls2D%set(i, "ncls", real(spproj%os_cls2D%get_noris()))
+            call spproj%os_cls2D%set(i, "ncls", spproj%os_cls2D%get_noris())
         end do
         call enable_splflags(spproj%os_cls2D, self%starfile%clusters2D%flags)
         call self%export_stardata(spproj, self%starfile%clusters2D%flags, spproj%os_cls2D, "clusters", mapstks=.false.)
@@ -778,7 +778,7 @@ contains
             if(file_exists(lpvol)) then
               call classproj%os_cls3D%set(state, 'lpvol', trim(basename(cwd))//"/"//trim(lpvol))
             end if
-            call classproj%os_cls3D%set(state, 'state',    1.0)
+            call classproj%os_cls3D%set_state(state, 1)
             call classproj%os_cls3D%set(state, 'speceres', maxres0128(state))
             call classproj%os_cls3D%set(state, 'fsc05',    maxres05(state))
             call classproj%os_cls3D%set(state, 'fsc0128',  maxres0128(state))
@@ -804,15 +804,15 @@ contains
         do state = 1, states
             call fscproj%os_cls3D%new(i, is_ptcl=.false.)
             do j = 1, i
-                call fscproj%os_cls3D%set(j, "state", 1.0)
-                call fscproj%os_cls3D%set(j, "specind", real(j) - 1.0)
+                call fscproj%os_cls3D%set_state(j, 1)
+                call fscproj%os_cls3D%set(j, "specind", j - 1)
                 if( j > 1) then
                     call fscproj%os_cls3D%set(j, "specres", 1.0/(real(j) - 1.0))
                 else
                     call fscproj%os_cls3D%set(j, "specres", 999.99)
                 end if 
-                call fscproj%os_cls3D%set(j, "specares", real(fscs(state, j, 1)))
-                call fscproj%os_cls3D%set(j, "specfsc",  real(fscs(state, j, 2)))
+                call fscproj%os_cls3D%set(j, "specares", fscs(state, j, 1))
+                call fscproj%os_cls3D%set(j, "specfsc",  fscs(state, j, 2))
             end do
             call enable_splflags(fscproj%os_cls3D, self%starfile%class3D%flags)
             call self%export_stardata(fscproj, self%starfile%class3D%flags, fscproj%os_cls3D, "model_class_"//state, mapstks=.false.)
@@ -1105,9 +1105,8 @@ contains
         class(cmdline),        intent(inout)   :: cline
         class(sp_project)                      :: spproj
         logical,    optional,  intent(in)      :: propagate
-        integer                                :: i, element, noptics
+        integer                                :: i, element, noptics, ogid, box, stkbox
         integer                                :: ptclstkid, nmics, nstks
-        real                                   :: ogid, box, stkbox
         character(len=LONGSTRLEN)              :: ogname
         character(len=XLONGSTRLEN)             :: cwd
         logical                                :: beamtilt, l_propagate
@@ -1144,11 +1143,11 @@ contains
             call self%assign_xml_tiltinfo(cline%get_carg("xmldir"))
         end if
         call self%cluster_tiltinfo(cline%get_rarg("tilt_thres"))
-        if(cline%get_rarg("maxpop") > 0) then
+        if(cline%get_iarg("maxpop") > 0) then
             if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "plotting beamtilt groups (prior to splitting on maxpop) ... "
             call self%plot_opticsgroups("optics_groups_pre_maxpop.eps")
-            call self%sort_optics_maxpop(int(cline%get_rarg("maxpop")))
+            call self%sort_optics_maxpop(cline%get_iarg("maxpop"))
             if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "plotting beamtilt groups (after splitting on maxpop) ... "
             call self%plot_opticsgroups("optics_groups_post_maxpop.eps")
@@ -1157,17 +1156,17 @@ contains
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "plotting beamtilt groups ... "
             call self%plot_opticsgroups("optics_groups.eps")
         end if
-        if(cline%get_rarg("optics_offset") > 0) then
-            call self%apply_optics_offset(int(cline%get_rarg("optics_offset")))
+        if(cline%get_iarg("optics_offset") > 0) then
+            call self%apply_optics_offset(cline%get_iarg("optics_offset"))
         end if
         if(nmics > 0) then
             if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "updating micrographs in project file with updated optics groups ... "
             do i = 1,nmics
                 if(spproj%os_mic%isthere(i, "tind")) then
-                    element = nint(spproj%os_mic%get(i, "tind"))
+                    element = spproj%os_mic%get_int(i, "tind")
                     if(element > 0) then
-                        call spproj%os_mic%set(i, 'ogid', real(self%tiltinfo(element)%finaltiltgroupid))
+                        call spproj%os_mic%set(i, 'ogid', self%tiltinfo(element)%finaltiltgroupid)
                     else
                         THROW_HARD('failed to locate optics info for mic ' // trim(adjustl(spproj%os_mic%get_static(i, "intg"))))
                     end if
@@ -1181,9 +1180,9 @@ contains
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "updating stacks in project file with updated optics groups ... "
             do i = 1, nstks
                 if(spproj%os_mic%isthere(i, "tind")) then
-                    element = nint(spproj%os_mic%get(i, "tind"))
+                    element = spproj%os_mic%get_int(i, "tind")
                     if(element > 0) then
-                        call spproj%os_stk%set(i, 'ogid', real(self%tiltinfo(element)%finaltiltgroupid))
+                        call spproj%os_stk%set(i, 'ogid', self%tiltinfo(element)%finaltiltgroupid)
                     else
                         THROW_HARD('failed to locate optics info for stk ' // trim(adjustl(spproj%os_mic%get_static(i, "intg"))))
                     end if
@@ -1193,12 +1192,12 @@ contains
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "updating optics groups in project file with box sizes ... "
             noptics = spproj%os_optics%get_noris()
             do i = 1, nstks
-                ogid   = spproj%os_stk%get(i, 'ogid')
-                stkbox = spproj%os_stk%get(i, 'box')
-                if(ogid > 0.0 .and. stkbox > 0.0 .and. ogid <= noptics) then
-                    box = spproj%os_optics%get(nint(ogid), 'box')
-                    if(box == 0.0) then
-                        call spproj%os_optics%set(nint(ogid), 'box', stkbox)
+                ogid   = spproj%os_stk%get_int(i, 'ogid')
+                stkbox = spproj%os_stk%get_int(i, 'box')
+                if(ogid > 0 .and. stkbox > 0 .and. ogid <= noptics) then
+                    box = spproj%os_optics%get_int(ogid, 'box')
+                    if(box == 0) then
+                        call spproj%os_optics%set(ogid, 'box', stkbox)
                     end if
                 end if
             end do
@@ -1207,16 +1206,16 @@ contains
             if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "updating particles 2d in project file with updated optics groups ... "
             do i = 1, spproj%os_ptcl2D%get_noris()
-                ptclstkid = int(spproj%os_ptcl2D%get(i, 'stkind'))
-                call spproj%os_ptcl2D%set(i, 'ogid', spproj%os_stk%get(ptclstkid, 'ogid'))
+                ptclstkid = spproj%os_ptcl2D%get_int(i, 'stkind')
+                call spproj%os_ptcl2D%set(i, 'ogid', spproj%os_stk%get_int(ptclstkid, 'ogid'))
             end do
         end if
         if(l_propagate .and. spproj%os_ptcl3D%get_noris() > 0) then
             if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "updating particles 3d in project file with updated optics groups ... "
             do i = 1, spproj%os_ptcl3D%get_noris()
-                ptclstkid = int(spproj%os_ptcl2D%get(i, 'stkind'))
-                call spproj%os_ptcl3D%set(i, 'ogid', spproj%os_stk%get(ptclstkid, 'ogid'))
+                ptclstkid = spproj%os_ptcl2D%get_int(i, 'stkind')
+                call spproj%os_ptcl3D%set(i, 'ogid', spproj%os_stk%get_int(ptclstkid, 'ogid'))
             end do
         end if
         if(size(self%tiltinfo) > 0) then
@@ -1228,17 +1227,17 @@ contains
                 element = findloc(self%tiltinfo%finaltiltgroupid, i, 1)
                 if(element > 0) then
                     write(ogname,"(I6)") i
-                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "ogid", real(i))
-                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "ogname", "opticsgroup" // trim(adjustl(ogname)))
-                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "smpd", self%tiltinfo(element)%smpd)
-                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "cs", self%tiltinfo(element)%cs)
-                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "kv", self%tiltinfo(element)%kv)
+                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "ogid",  i)
+                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "ogname","opticsgroup" // trim(adjustl(ogname)))
+                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "smpd",  self%tiltinfo(element)%smpd)
+                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "cs",    self%tiltinfo(element)%cs)
+                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "kv",    self%tiltinfo(element)%kv)
                     call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "fraca", self%tiltinfo(element)%fraca)
-                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "box", self%tiltinfo(element)%box)
-                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "state", 1.0)
-                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "opcx", self%tiltinfo(element)%centroidx)
-                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "opcy", self%tiltinfo(element)%centroidy)
-                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "pop", real(count(self%tiltinfo%finaltiltgroupid == i)))
+                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "box",   self%tiltinfo(element)%box)
+                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "state", 1)
+                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "opcx",  self%tiltinfo(element)%centroidx)
+                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "opcy",  self%tiltinfo(element)%centroidy)
+                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "pop",   count(self%tiltinfo%finaltiltgroupid == i))
                 end if
             end do
         end if
@@ -1377,13 +1376,13 @@ contains
             if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "ensuring optics groups in project file have correct box ... "
             do i = 1, spproj%os_stk%get_noris()
-                stkbox  = int(spproj%os_stk%get(i, 'box'))
-                stkogid = int(spproj%os_stk%get(i, 'ogid'))
+                stkbox  = spproj%os_stk%get_int(i, 'box')
+                stkogid = spproj%os_stk%get_int(i, 'ogid')
                 if(stkbox > 0 .and. stkogid > 0) then
                     do j = 1, spproj%os_optics%get_noris()
-                        if(spproj%os_optics%get(j, 'ogid') == real(stkogid)) then
-                            if(spproj%os_optics%get(j, 'box') == 0.0) then
-                                call spproj%os_optics%set(j, 'box', real(stkbox))
+                        if(spproj%os_optics%get_int(j, 'ogid') == stkogid) then
+                            if(spproj%os_optics%get_int(j, 'box') == 0) then
+                                call spproj%os_optics%set(j, 'box', stkbox)
                             end if    
                             exit
                         end if
@@ -1401,10 +1400,10 @@ contains
             if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "ensuring particles 2d in project file have updated optics groups ... "
             do i = 1, spproj%os_ptcl2D%get_noris()
-                ogid = int(spproj%os_ptcl2D%get(i, 'ogid'))
-                stkind = int(spproj%os_ptcl2D%get(i, 'stkind'))
+                ogid   = spproj%os_ptcl2D%get_int(i, 'ogid')
+                stkind = spproj%os_ptcl2D%get_int(i, 'stkind')
                 if(ogid .eq. 0 .and. stkind .ne. 0) then
-                    call spproj%os_ptcl2D%set(i, 'ogid', spproj%os_stk%get(stkind, 'ogid'))
+                    call spproj%os_ptcl2D%set(i, 'ogid', spproj%os_stk%get_int(stkind, 'ogid'))
                 end if
             end do
         end if
@@ -1418,10 +1417,10 @@ contains
             if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "ensuring particles 3d in project file have updated optics groups ... "
             do i = 1, spproj%os_ptcl3D%get_noris()
-                ogid = int(spproj%os_ptcl3D%get(i, 'ogid'))
-                stkind = int(spproj%os_ptcl3D%get(i, 'stkind'))
+                ogid   = spproj%os_ptcl3D%get_int(i, 'ogid')
+                stkind = spproj%os_ptcl3D%get_int(i, 'stkind')
                 if(ogid .eq. 0 .and. stkind .ne. 0) then
-                    call spproj%os_ptcl3D%set(i, 'ogid', spproj%os_stk%get(stkind, 'ogid'))
+                    call spproj%os_ptcl3D%set(i, 'ogid', spproj%os_stk%get_int(stkind, 'ogid'))
                 end if
             end do
         end if
@@ -1440,7 +1439,7 @@ contains
         ntiltinfo = size(self%tiltinfo)
         itmp = 1
         do i=1, sporis%get_noris()
-            call sporis%set(i, "tind", 0.0)
+            call sporis%set(i, "tind", 0)
         end do
         do i=1, sporis%get_noris()
             path = sporis%get_static(i, splflag)
@@ -1457,7 +1456,7 @@ contains
             if(index(filename, '_EER') > 0) then
                 filename = filename(:index(filename, '_EER') - 1)
             end if
-            if(sporis%get(i,"tind") == 0.0) then
+            if(sporis%get_int(i,"tind") == 0) then
                 tiltinfo%basename = trim(adjustl(filename))
                 tiltinfo%smpd     = sporis%get(i, "smpd")
                 tiltinfo%kv       = sporis%get(i, "kv")
@@ -1475,11 +1474,11 @@ contains
                     tiltinfo%tilty = 0.0
                 end if
                 tiltinfotmp(itmp) = tiltinfo
-                call sporis%set(i, "tind", real(ntiltinfo + itmp))
+                call sporis%set(i, "tind", ntiltinfo + itmp)
                 itmp = itmp + 1
             else
-                if(self%tiltinfo(nint(sporis%get(i,"tind")))%box < sporis%get(i, "box")) then
-                    self%tiltinfo(nint(sporis%get(i,"tind")))%box = sporis%get(i, "box")
+                if(self%tiltinfo(sporis%get_int(i,"tind"))%box < sporis%get(i, "box")) then
+                    self%tiltinfo(sporis%get_int(i,"tind"))%box = sporis%get(i, "box")
                 end if
             end if
         end do
