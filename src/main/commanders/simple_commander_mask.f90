@@ -143,31 +143,32 @@ contains
         type(builder)    :: build
         type(parameters) :: params
         type(masker)     :: mskvol
+        logical          :: l_tight
         character(len=:), allocatable :: fname_out
         if(.not.cline%defined('mkdir') ) call cline%set('mkdir','yes')
         call params%new(cline)
         call build%build_spproj(params, cline)
         call build%build_general_tbox(params, cline)
-        if( cline%defined('vol2') )then
-            call build%vol%read(params%vols(2))
-            call build%vol_odd%read(params%vols(1))
-            call mskvol%automask3D_icm(build%vol, build%vol_odd, build%vol2)
-            call mskvol%write('automask'//params%ext)
-            fname_out = basename(add2fbody(trim(params%vols(1)), params%ext, '_automsk'))
-            call build%vol2%write(fname_out)
-            write(logfhandle,'(A)') '>>> WROTE OUTPUT '//'automask'//params%ext//' & '//fname_out
-        else
-            call build%vol%read(params%vols(1))
-            if( cline%defined('thres') )then
-                call mskvol%automask3D(build%vol)
+        call build%vol%read(params%vols(2))
+        call build%vol_odd%read(params%vols(1))
+        l_tight = trim(params%automsk).eq.'tight'
+        if( cline%defined('thres') )then
+            if( params%thres < TINY )then
+                write(logfhandle,'(A)') '>>> GENERATING FILTERED VOLUME FOR THRESHOLD DETERMINATION'
+                call mskvol%automask3D_filter(build%vol, build%vol_odd,  build%vol2)
+                fname_out = 'automask3D_filtered.mrc'
             else
-                call mskvol%automask3D_otsu(build%vol)
+                call mskvol%automask3D(build%vol, build%vol_odd, build%vol2, l_tight, params%thres)
+                call mskvol%write('automask3D_mask'//params%ext)
+                fname_out = 'automask3D_masked_vol.mrc'
             endif
-            call mskvol%write('automask'//params%ext)
-            fname_out = basename(add2fbody(trim(params%vols(1)), params%ext, '_automsk'))
-            call build%vol%write(fname_out)
-            write(logfhandle,'(A)') '>>> WROTE OUTPUT '//'automask'//params%ext//' & '//fname_out
+        else
+            call mskvol%automask3D(build%vol, build%vol_odd, build%vol2, l_tight)
+            call mskvol%write('automask3D_mask'//params%ext)
+            fname_out = 'automask3D_masked_vol.mrc'
         endif
+        call build%vol2%write(fname_out)
+        write(logfhandle,'(A)') '>>> WROTE OUTPUT '//fname_out
         call simple_end('**** SIMPLE_AUTOMASK NORMAL STOP ****')
     end subroutine exec_automask
 

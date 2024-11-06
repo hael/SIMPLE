@@ -1366,11 +1366,11 @@ contains
         &'envelope masking',&                            ! descr_short
         &'is a program for automated envelope masking',& ! descr_long
         &'simple_exec',&                                 ! executable
-        &2, 1, 0, 0, 2, 4, 1, .false.)                   ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 1, 4, 1, .false.)                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call automask%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume subjected to envelope masking', 'input volume e.g. vol.mrc', .true.,  '')
-        call automask%set_input('img_ios', 2, 'vol2', 'file', 'Volume', 'Volume subjected to envelope masking', 'input volume e.g. vol.mrc', .false., '')
+        call automask%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
+        call automask%set_input('img_ios', 2, 'vol2', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '')
         ! parameter input/output
         call automask%set_input('parm_ios', 1, smpd)
         ! alternative inputs
@@ -1379,14 +1379,12 @@ contains
         ! <empty>
         ! filter controls
         call automask%set_input('filt_ctrls', 1, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
-        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 12.)
-        call automask%set_input('filt_ctrls', 2, 'amsklp_prelim', 'num', 'Preliminary low-pass limit for envelope mask generation',&
         & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 8.)
         ! mask controls
         call automask%set_input('mask_ctrls', 1, 'binwidth', 'num', 'Envelope binary layers width',&
         &'Binary layers grown for molecular envelope in pixels{1}', 'Molecular envelope binary layers width in pixels{1}', .false., 1.)
         call automask%set_input('mask_ctrls', 2, 'thres', 'num', 'Volume threshold',&
-        &'Volume threshold for enevlope mask generation', 'Volume threshold', .false., 0.)
+        &'Volume threshold for envelope mask generation', 'Volume threshold, give 0 if unknown', .false., 0.)
         call automask%set_input('mask_ctrls', 3, 'edge', 'num', 'Envelope mask soft edge',&
         &'Cosine edge size for softening molecular envelope in pixels{6}', '# pixels cosine edge{6}', .false., 6.)
         call automask%set_input('mask_ctrls', 4, automsk)
