@@ -18,79 +18,59 @@ logical, parameter :: L_WRITE       = .true.
 
 type, extends(binimage) :: masker
     private
-    real    :: msk           = 0.   !< maximum circular mask
-    real    :: amsklp        = 0.   !< low-pass limit
-    real    :: amsklp_prelim = 0.   !< low-pass limit
-    real    :: pix_thres     = 0.   !< binarisation threshold
-    integer :: edge          = 6    !< edge width
-    integer :: binwidth      = 1    !< additional layers to grow
-    integer :: idim(3)       = 0    !< image dimension
+    real    :: msk       = 0.   !< maximum circular mask
+    real    :: amsklp    = 0.   !< low-pass limit
+    real    :: pix_thres = 0.   !< binarisation threshold
+    integer :: edge      = 6    !< edge width
+    integer :: binwidth  = 1    !< additional layers to grow
+    integer :: idim(3)    = 0    !< image dimension
   contains
     procedure          :: automask3D
-    procedure          :: automask3D_icm
-    procedure          :: automask3D_otsu
-    procedure, private :: automask3D_otsu_priv
+    procedure          :: automask3D_filter
+    procedure, private :: automask3D_binarize
     procedure          :: mask_from_pdb
     procedure, private :: env_rproject
 end type masker
 
 contains
 
-    !>  \brief  is for 3D automasking. On output the parent volume is the envelope mask
-    !!          The returned volume is envelope masked.
-    subroutine automask3D( self, vol_inout )
-        class(masker), intent(inout) :: self
-        class(image),  intent(inout) :: vol_inout
-        logical        :: was_ft
-        type(binimage) :: msk_prelim
-        if( vol_inout%is_2d() )THROW_HARD('automask3D is intended for volumes only; automask3D')
-        self%amsklp_prelim = params_glob%amsklp_prelim
-        self%amsklp        = params_glob%amsklp
-        self%binwidth      = params_glob%binwidth
-        self%edge          = params_glob%edge
-        self%pix_thres     = params_glob%thres
-        write(logfhandle,'(A,F7.1,A)') '>>> AUTOMASK LOW-PASS:           ', self%amsklp,  ' ANGSTROMS'
-        write(logfhandle,'(A,I7,A)'  ) '>>> AUTOMASK SOFT EDGE WIDTH:    ', self%edge,    ' PIXEL(S)'
-        write(logfhandle,'(A,I7,A)'  ) '>>> AUTOMASK BINARY LAYERS WIDTH:', self%binwidth,' PIXEL(S)'
-        was_ft = vol_inout%is_ft()
-        if( was_ft ) call vol_inout%ifft()
-        call self%transfer2bimg(vol_inout)
-        ! preliminary masking
-        call msk_prelim%copy(self)
-        call msk_prelim%binarize(self%pix_thres)
-        call msk_prelim%grow_bins(self%binwidth)
-        call msk_prelim%cos_edge(self%edge)
-        if( L_WRITE ) call msk_prelim%write('msk_prelim.mrc')
-        call self%mul(msk_prelim)
-        if( L_WRITE ) call self%write('pre-masked.mrc')
-        ! automasking
-        call self%automask3D_otsu_priv(l_tight=.false., amsklp=self%amsklp)
-        ! apply mask to volume
-        call vol_inout%zero_background()
-        call vol_inout%mul(self)
-        call msk_prelim%kill_bimg
-        if( was_ft ) call vol_inout%fft()
-    end subroutine automask3D
-
-    subroutine automask3D_icm( self, vol_even, vol_odd, vol_masked )
-        class(masker), intent(inout) :: self
-        class(image),  intent(inout) :: vol_even, vol_odd, vol_masked
-        real, allocatable  :: fsc(:), filt(:)
-        type(image)        :: vol_avg
-        integer            :: ldim(3), filtsz
-        real               :: msk
-        real,    parameter :: LAM = 100.
-        logical, parameter :: L_NLMEAN = .false. 
-        if( vol_even%is_2d() )THROW_HARD('automask3D_icm is intended for volumes only; automask3D')
+    subroutine automask3D( self, vol_even, vol_odd, vol_masked, l_tight, pix_thres )
+        class(masker),  intent(inout) :: self
+        class(image),   intent(inout) :: vol_even, vol_odd, vol_masked
+        logical,        intent(in)    :: l_tight
+        real, optional, intent(in)    :: pix_thres 
+        type(image) :: vol_filt
+        if( vol_even%is_2d() )THROW_HARD('automask3D is intended for volumes only; automask3D')
         self%amsklp   = params_glob%amsklp
         self%binwidth = params_glob%binwidth
         self%edge     = params_glob%edge
-        ldim   = vol_even%get_ldim()
-        msk    = real(ldim(1) / 2) - COSMSKHALFWIDTH - 1.
-        filtsz = fdim(ldim(1)) - 1
+        ! prepare volume for masking
         call vol_masked%copy(vol_even)
         call vol_masked%add(vol_odd)
         call vol_masked%mul(0.5)
+        ! filter 
+        call self%automask3D_filter(vol_even, vol_odd, vol_filt)
+        ! automasking
+        call self%automask3D_binarize(l_tight, pix_thres)
+        ! apply mask to volume
+        call vol_masked%zero_background()
+        call vol_masked%mul(self)
+        ! destruct
+        call vol_filt%kill
+    end subroutine automask3D
+
+    subroutine automask3D_filter( self, vol_even, vol_odd, vol_filt )
+        class(masker), intent(inout) :: self
+        class(image),  intent(inout) :: vol_even, vol_odd, vol_filt
+        real, allocatable  :: fsc(:), filt(:)
+        integer            :: ldim(3), filtsz
+        real               :: msk
+        real,    parameter :: LAM = 100.
+        if( vol_even%is_2d() )THROW_HARD('automask3D_filter is intended for volumes only; automask3D')
+        self%amsklp = params_glob%amsklp
+        ldim        = vol_even%get_ldim()
+        msk         = real(ldim(1) / 2) - COSMSKHALFWIDTH - 1.
+        filtsz      = fdim(ldim(1)) - 1
         ! zero mean of outer pixels
         call vol_even%zero_background
         call vol_odd%zero_background
@@ -112,78 +92,30 @@ contains
         call vol_odd%ifft()
         ! ICM filter
         call vol_even%ICM3D_eo(vol_odd, LAM)
-        call vol_avg%copy(vol_even)
-        call vol_avg%add(vol_odd)
-        call vol_avg%mul(0.5)
-        if( L_WRITE ) call vol_avg%write('ICM_avg.mrc')
-        ! NLMEAN filter
-        if( L_NLMEAN )then
-            call vol_even%NLmean3D_eo(vol_odd, vol_avg)
-            if( L_WRITE ) call vol_avg%write('NLmean3D_eo.mrc')
-        else
-            call vol_avg%bp(0., self%amsklp)
-        endif
-        call self%transfer2bimg(vol_avg)
-        ! automasking
-        call self%automask3D_otsu_priv(l_tight=.true.)
-        ! apply mask to volume
-        call vol_masked%zero_background()
-        call vol_masked%mul(self)
-        ! destruct
-        call vol_avg%kill
-    end subroutine automask3D_icm
+        call vol_filt%copy(vol_even)
+        call vol_filt%add(vol_odd)
+        call vol_filt%mul(0.5)
+        if( L_WRITE ) call vol_filt%write('ICM_avg.mrc')
+        ! low-pass filter
+        call vol_filt%bp(0., self%amsklp)
+        ! transfer image to binary image
+        call self%transfer2bimg(vol_filt)
+    end subroutine automask3D_filter
 
-    subroutine automask3D_otsu( self, vol_inout, do_apply )
-        class(masker),     intent(inout) :: self
-        class(image),      intent(inout) :: vol_inout
-        logical, optional, intent(in)    :: do_apply
-        type(masker) :: msk_prelim
-        logical      :: was_ft, ddo_apply
-        ddo_apply = .true.
-        if( present(do_apply) ) ddo_apply = do_apply
-        if( vol_inout%is_2d() )THROW_HARD('automask3D_otsu is intended for volumes only; automask3D')
-        self%amsklp_prelim = params_glob%amsklp_prelim
-        self%amsklp        = params_glob%amsklp
-        self%binwidth      = params_glob%binwidth
-        self%edge          = params_glob%edge
-        self%pix_thres     = params_glob%thres
-        write(logfhandle,'(A,F7.1,A)') '>>> AUTOMASK FIRST  LOW-PASS:    ', self%amsklp_prelim, ' ANGSTROMS'
-        write(logfhandle,'(A,F7.1,A)') '>>> AUTOMASK SECOND LOW-PASS:    ', self%amsklp,        ' ANGSTROMS'
-        write(logfhandle,'(A,I7,A)'  ) '>>> AUTOMASK SOFT EDGE WIDTH:    ', self%edge,          ' PIXEL(S)'
-        write(logfhandle,'(A,I7,A)'  ) '>>> AUTOMASK BINARY LAYERS WIDTH:', self%binwidth,      ' PIXEL(S)'
-        was_ft = vol_inout%is_ft()
-        if( was_ft ) call vol_inout%ifft()
-        call self%transfer2bimg(vol_inout)
-        ! preliminary masking
-        call msk_prelim%transfer2bimg(vol_inout)
-        call msk_prelim%automask3D_otsu_priv(l_tight=.true., amsklp=self%amsklp_prelim)
-        call self%mul(msk_prelim)
-        ! automasking
-        call self%automask3D_otsu_priv(l_tight=.false., amsklp=self%amsklp)
-        if( ddo_apply )then
-            ! apply mask to volume
-            call vol_inout%zero_background()
-            call vol_inout%mul(self)
-        endif
-        call msk_prelim%kill_bimg
-        if( was_ft ) call vol_inout%fft()
-    end subroutine automask3D_otsu
-
-    subroutine automask3D_otsu_priv( self, l_tight, amsklp )
+    subroutine automask3D_binarize( self, l_tight, pix_thres )
         class(masker),  intent(inout) :: self
         logical,        intent(in)    :: l_tight
-        real, optional, intent(in)    :: amsklp
+        real, optional, intent(in)    :: pix_thres
         real,    allocatable :: ccsizes(:)
         integer, allocatable :: imat_cc(:,:,:)
         type(binimage)       :: ccimage
         integer              :: loc(1), imax, sz, nccs
-        if( present(amsklp) )then
-            ! low-pass filter volume
-            call self%bp(0., amsklp)
-            if( L_WRITE ) call self%write('lped.mrc')
-        endif
         ! binarize volume
-        call otsu_img(self, tight=l_tight)
+        if( present(pix_thres) )then
+            call self%binarize(pix_thres)
+        else
+            call otsu_img(self, tight=l_tight)
+        endif
         call self%set_imat
         if( L_WRITE ) call self%write('binarized.mrc')
         ! identify connected components
@@ -191,7 +123,7 @@ contains
         ! extract all cc sizes (in # pixels)
         ccsizes = ccimage%size_ccs()
         sz      = size(ccsizes)
-        write(logfhandle,'(A,I7,A)'  ) '>>> FOUND:                       ', sz,   ' CONNECTED COMPONENT(S)'
+        write(logfhandle,'(A,I7,A)'  ) '>>> FOUND: ', sz, ' CONNECTED COMPONENT(S)'
         if( sz > 1 )then
             loc = maxloc(ccsizes)
             call ccimage%cc2bin(loc(1))
@@ -206,7 +138,7 @@ contains
         call self%cos_edge(self%edge)
         ! destruct
         call ccimage%kill_bimg
-    end subroutine automask3D_otsu_priv
+    end subroutine automask3D_binarize
 
     subroutine mask_from_pdb( self,  pdb, vol_inout, os, pdbout )
         use simple_atoms, only: atoms
