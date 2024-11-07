@@ -18,6 +18,7 @@ public :: uniform_filter2D_commander
 public :: uniform_filter3D_commander
 public :: icm3D_commander
 public :: icm2D_commander
+public :: denoise_cavgs_commander
 public :: cavg_filter2D_commander
 public :: prune_cavgs_commander
 public :: estimate_lpstages_commander
@@ -53,6 +54,11 @@ type, extends(commander_base) :: icm2D_commander
   contains
     procedure :: execute      => exec_icm2D
 end type icm2D_commander
+
+type, extends(commander_base) :: denoise_cavgs_commander
+  contains
+    procedure :: execute      => exec_denoise_cavgs
+end type denoise_cavgs_commander
 
 type, extends(commander_base) :: cavg_filter2D_commander
   contains
@@ -352,7 +358,6 @@ contains
             call even (iptcl)%read(params%stk2, iptcl)
             minmax      = even(iptcl)%minmax()
             mask(iptcl) = .not.is_equal(minmax(2)-minmax(1),0.) ! empty image
-            if( mask(iptcl) ) call even(iptcl)%mul(0.5)
         enddo
         ! filter
         !$omp parallel do schedule(static) default(shared) private(iptcl) proc_bind(close)
@@ -373,6 +378,94 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_ICM2D NORMAL STOP ****')
     end subroutine exec_icm2D
+
+    subroutine exec_denoise_cavgs( self, cline )
+        class(denoise_cavgs_commander), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
+        character(len=:), allocatable :: file_tag
+        type(image),      allocatable :: odd(:), even(:), avg(:)
+        logical,          allocatable :: mask(:)
+        real,             allocatable :: fsc(:), filt(:)
+        integer,          allocatable :: pinds(:)
+        type(parameters) :: params
+        real             :: minmax(2), msk
+        integer          :: iptcl, filtsz, n_nonempty, i
+        ! init
+        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('lambda') ) call cline%set('lambda',  0.1)
+        call params%new(cline)
+        call find_ldim_nptcls(params%stk, params%ldim, params%nptcls)
+        params%box     = params%ldim(1)
+        params%ldim(3) = 1 ! because we operate on stacks
+        msk            = real(params%ldim(1) / 2) - COSMSKHALFWIDTH - 1.
+        filtsz         = fdim(params%ldim(1)) - 1
+        file_tag       = 'cavgs_denoised'
+        ! allocate
+        allocate(odd(params%nptcls), even(params%nptcls), mask(params%nptcls), pinds(params%nptcls))
+        do iptcl = 1, params%nptcls
+            ! construct & read
+            call odd (iptcl)%new( params%ldim, params%smpd, .false.)
+            call odd (iptcl)%read(params%stk,  iptcl)
+            call even(iptcl)%new( params%ldim, params%smpd, .false.)
+            call even(iptcl)%read(params%stk2, iptcl)
+            minmax       = even(iptcl)%minmax()
+            mask(iptcl)  = .not.is_equal(minmax(2)-minmax(1),0.) ! empty image
+            pinds(iptcl) = iptcl
+        enddo
+        n_nonempty = count(mask)
+        pinds      = pack(pinds, mask=mask)
+        ! filter
+        allocate(fsc(filtsz), filt(filtsz), source=0.)
+        !$omp parallel do schedule(static) default(shared) private(i,iptcl,fsc,filt) proc_bind(close)
+        do i = 1, n_nonempty
+            iptcl = pinds(i)
+            ! zero mean of outer pixels
+            call odd (iptcl)%zero_edgeavg
+            call even(iptcl)%zero_edgeavg
+            ! spherical mask
+            call odd (iptcl)%mask(msk, 'soft', backgr=0.)
+            call even(iptcl)%mask(msk, 'soft', backgr=0.)
+            ! fwd FFT
+            call odd (iptcl)%fft
+            call even(iptcl)%fft
+            ! FSC
+            call even(iptcl)%fsc(odd(iptcl), fsc)
+            ! calculate a filter to be applied to the individual e/o pairs
+            where( fsc > 0.        ) filt = fsc / (fsc + 1.)
+            where( filt  > 0.99999 ) filt = 0.99999
+            ! apply filter
+            call even(iptcl)%apply_filter_serial(filt)
+            call odd (iptcl)%apply_filter_serial(filt)
+            ! bwd FFT
+            call odd (iptcl)%ifft
+            call even(iptcl)%ifft
+            ! ICM
+            call even(iptcl)%ICM2D_eo(odd(iptcl), params%lambda)
+        enddo
+        !$omp end parallel do
+
+        ! write output
+        do iptcl = 1, params%nptcls
+            call even(iptcl)%write(trim(file_tag)//'_even.mrc', iptcl)
+            call odd (iptcl)%write(trim(file_tag)//'_odd.mrc',  iptcl)
+            call even(iptcl)%add(odd(iptcl))
+            call even(iptcl)%mul(0.5)
+            call even(iptcl)%write(trim(file_tag)//'_avg.mrc', iptcl)
+        end do
+
+        do i = 1, n_nonempty
+            iptcl = pinds(i)
+            call even(iptcl)%write(trim(file_tag)//'_nonempty.mrc', i)
+        end do
+
+        ! destruct
+        do iptcl = 1, params%nptcls
+            call odd (iptcl)%kill()
+            call even(iptcl)%kill()
+        end do
+        ! end gracefully
+        call simple_end('**** SIMPLE_DENOISE_CAVGS NORMAL STOP ****')
+    end subroutine exec_denoise_cavgs
 
     subroutine exec_cavg_filter2D( self, cline )
         use simple_strategy2D3D_common, only: read_imgbatch, prepimgbatch, prepimg4align
