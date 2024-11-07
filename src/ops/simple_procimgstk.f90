@@ -582,9 +582,9 @@ contains
             call progress(i,n)
             call stkio_r%read(i, img)
             if( noise_sdev_present )then
-                call img%nlmean(sdev_noise=noise_sdev)
+                call img%nlmean2D(sdev_noise=noise_sdev)
             else
-                call img%nlmean
+                call img%nlmean2D
             endif
             call stkio_w%write(i, img)
         end do

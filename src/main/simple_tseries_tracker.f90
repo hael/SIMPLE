@@ -130,7 +130,7 @@ contains
                 call ptcls(i)%norm
                 select case(trim(params_glob%filter))
                     case('nlmean')
-                        call ptcls(i)%nlmean
+                        call ptcls(i)%nlmean2D
                     case('tv')
                         call tv(i)%apply_filter(ptcls(i), TVLAMBDA)
                     case DEFAULT
@@ -171,7 +171,7 @@ contains
             if( l_neg ) call reference%neg
             select case(trim(params_glob%filter))
                 case('nlmean')
-                    call reference%nlmean
+                    call reference%nlmean2D
                     call reference%fft
                 case('tv')
                     call reference%fft

@@ -1190,7 +1190,7 @@ contains
             call stkio_w1%write(i, img_pspec)
             call img_pspec%mul(graphene_mask)
             call stkio_w2%write(i, img_pspec)
-            call img_pspec%nlmean
+            call img_pspec%nlmean2D
             call stkio_w3%write(i, img_pspec)
             call img_pspec%stats(ave, sdev, peakvals(i), minv)
             write(funit, '(A,1X,F7.3,1X,F7.3,1X,F7.3,1X,F7.3)') 'AVE/SDEV/MAXV/MINV: ', ave, sdev, peakvals(i), minv
@@ -1259,7 +1259,7 @@ contains
             call imgs_mask(i)%zero_edgeavg
             call imgs_mask(i)%bp(0.,params%lp)
             ! non-local mneans filter for denoising
-            call imgs_mask(i)%NLmean
+            call imgs_mask(i)%NLmean2D
             call imgs_mask(i)%write(FILT, i)
             ! rotational averaging
             if( params%roavg .eq. 'yes' )then

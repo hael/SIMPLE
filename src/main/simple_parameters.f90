@@ -380,6 +380,7 @@ type :: parameters
     real    :: frac=1.             !< fraction of ptcls(0-1){1}
     real    :: fraca=0.1           !< fraction of amplitude contrast used for fitting CTF{0.1}
     real    :: fracdeadhot=0.05    !< fraction of dead or hot pixels{0.01}
+    real    :: frac_best=1.0       !< fraction of best particles to sample from per class when balance=yes
     real    :: frac_diam=0.8       !< fraction of atomic diameter
     real    :: fracsrch=0.9        !< fraction of serach space scanned for convergence
     real    :: fraction_dose_target=FRACTION_DOSE_TARGET_DEFAULT !< dose (in e/A2)
@@ -460,6 +461,7 @@ type :: parameters
     logical :: l_envfsc       = .false.
     logical :: l_filemsk      = .false.
     logical :: l_focusmsk     = .false.
+    logical :: l_frac_best    = .false.
     logical :: l_update_frac  = .false.
     logical :: l_graphene     = .false.
     logical :: l_kweight      = .false.
@@ -840,6 +842,7 @@ contains
         call check_rarg('frac',           self%frac)
         call check_rarg('fraca',          self%fraca)
         call check_rarg('fracdeadhot',    self%fracdeadhot)
+        call check_rarg('frac_best',      self%frac_best)
         call check_rarg('frac_diam',      self%frac_diam)
         call check_rarg('fracsrch',       self%fracsrch)
         call check_rarg('fraction_dose_target',self%fraction_dose_target)
@@ -1275,7 +1278,9 @@ contains
             self%update_frac   = 1.0
             self%l_update_frac = .false.
             self%l_trail_rec   = .false.
-        endif    
+        endif
+        ! set frac_best flag
+        self%l_frac_best = self%frac_best <= 0.99
         if( .not. cline%defined('ncunits') )then
             ! we assume that the number of computing units is equal to the number of partitions
             self%ncunits = self%nparts

@@ -320,9 +320,14 @@ contains
                 else
                     THROW_HARD('File for class-biased sampling in fractional update: '//CLASS_SAMPLING_FILE//' does not exists!')
                 endif
-                ! balanced class sampling 
-                call build_glob%spproj_field%sample4update_class(clssmp, params_glob%greediness,&
-                &pfromto, params_glob%update_frac, nptcls2update, pinds, ptcl_mask, l_incr_sampl)
+                ! balanced class sampling
+                if( params_glob%l_frac_best )then
+                    call build_glob%spproj_field%sample4update_class(clssmp, params_glob%greediness,&
+                    &pfromto, params_glob%update_frac, nptcls2update, pinds, ptcl_mask, l_incr_sampl, params_glob%frac_best)
+                else
+                    call build_glob%spproj_field%sample4update_class(clssmp, params_glob%greediness,&
+                    &pfromto, params_glob%update_frac, nptcls2update, pinds, ptcl_mask, l_incr_sampl)
+                endif
                 call deallocate_class_samples(clssmp)
             else
                 call build_glob%spproj_field%sample4update_rnd(pfromto,&
@@ -553,13 +558,20 @@ contains
         type(image) :: mskvol
         integer     :: npix
         logical     :: l_update_lp
-        call mskvol%disc([params_glob%box_crop,params_glob%box_crop,params_glob%box_crop],&
-                            &params_glob%smpd_crop, params_glob%msk_crop, npix )
-        if( params_glob%lp_auto.eq.'fsc' )then
+         if( params_glob%lp_auto.eq.'fsc' )then
             lpopt = calc_lowpass_lim(get_find_at_corr(build_glob%fsc(s,:), params_glob%lplim_crit),&
             &params_glob%box_crop, params_glob%smpd_crop)
         else
+            call mskvol%disc([params_glob%box_crop,params_glob%box_crop,params_glob%box_crop],&
+                            &params_glob%smpd_crop, params_glob%msk_crop, npix )
+            if( params_glob%l_filemsk )then
+                ! envelope masking
+                call mskvol%read(params_glob%mskfile)
+                call mskvol%remove_edge
+            endif
             call estimate_lplim(build_glob%vol_odd, build_glob%vol, mskvol, [params_glob%lpstart,params_glob%lpstop], lpopt)
+            ! destruct
+            call mskvol%kill
         endif
         l_update_lp = .false.
         if( s == 1 )then
@@ -577,8 +589,6 @@ contains
             ! update low-pass limit in project
             call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
         endif
-        ! destruct
-        call mskvol%kill
     end subroutine estimate_lp_refvols
 
     subroutine read_and_filter_refvols( s )
