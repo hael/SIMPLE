@@ -675,7 +675,7 @@ contains
         character(len=:), allocatable :: silence_fsc, sh_first, prob_sh, ml_reg
         character(len=:), allocatable :: refine, icm, trail_rec, pgrp, balance
         integer :: iphase, iter, inspace, imaxits
-        real    :: trs, snr_noise_reg, greediness
+        real    :: trs, snr_noise_reg, greediness, frac_best, overlap, fracsrch
         ! iteration number bookkeeping
         if( cline_refine3D%defined('endit') )then
             iter = cline_refine3D%get_iarg('endit')
@@ -737,6 +737,9 @@ contains
                 sh_first      = 'no'
                 ml_reg        = 'no'
                 greediness    = 2.0 ! completely greedy balanced sampling based on objective function value
+                frac_best     = 1.0 ! means it does not control sampling
+                overlap       = 0.90
+                fracsrch      = 90.
                 snr_noise_reg = 2.0
             case(2)
                 inspace       = NSPACE(2)
@@ -747,9 +750,13 @@ contains
                 ml_reg        = 'yes'
                 if( istage >= INCR_GREEDINESS_STAGE )then
                 greediness    = 1.0 ! sample first half of each class as the best ones and the rest randomly
+                frac_best     = 0.5 ! means sampling is done from top-ranking 50% particles in class
                 else
                 greediness    = 2.0 ! completely greedy balanced sampling based on objective function value
+                frac_best     = 1.0 ! means it does not control sampling
                 endif
+                overlap       = 0.95
+                fracsrch      = 95.
                 snr_noise_reg = 4.0
             case(3)
                 inspace       = NSPACE(3)
@@ -762,7 +769,10 @@ contains
                 trs           = lpinfo(istage)%trslim
                 sh_first      = 'yes'
                 ml_reg        = 'yes'
-                greediness    = 0.0 ! completely random balanced sampling (only class assignment matters)
+                greediness    = 0.0  ! completely random balanced sampling (only class assignment matters)
+                frac_best     = 0.85 ! means sampling is done from top-ranking 85% particles in class
+                overlap       = 0.99
+                fracsrch      = 99.
                 snr_noise_reg = 6.0
         end select
         ! override phased greediness
@@ -793,6 +803,9 @@ contains
         call cline_refine3D%set('ml_reg',                      ml_reg)
         call cline_refine3D%set('icm',                            icm)
         call cline_refine3D%set('greediness',              greediness)
+        call cline_refine3D%set('frac_best',                frac_best)
+        call cline_refine3D%set('overlap',                    overlap)
+        call cline_refine3D%set('fracsrch',                  fracsrch)
         if( l_cavgs )then
             call cline_refine3D%set('snr_noise_reg',    snr_noise_reg)
         endif

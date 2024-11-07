@@ -87,7 +87,8 @@ type :: oris
     procedure          :: sample4update_class
     procedure          :: sample4update_reprod
     procedure          :: get_class_sample_stats
-    procedure          :: sample_balanced
+    procedure, private :: sample_balanced_1, sample_balanced_2
+    generic            :: sample_balanced => sample_balanced_1, sample_balanced_2
     procedure          :: sample_balanced_parts
     procedure          :: incr_updatecnt
     procedure          :: is_first_update
@@ -1179,7 +1180,7 @@ contains
         end do
     end subroutine sample4update_rnd
 
-    subroutine sample4update_class( self, clssmp, greediness, fromto, update_frac, nsamples, inds, mask, incr_sampled )
+    subroutine sample4update_class( self, clssmp, greediness, fromto, update_frac, nsamples, inds, mask, incr_sampled, frac_best )
         class(oris),          intent(inout) :: self
         type(class_sample),   intent(inout) :: clssmp(:) ! data structure for balanced samplign
         integer,              intent(in)    :: greediness, fromto(2)
@@ -1188,6 +1189,7 @@ contains
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(inout) :: mask(fromto(1):fromto(2))
         logical,              intent(in)    :: incr_sampled
+        real, optional,       intent(in)    :: frac_best
         integer, allocatable :: states(:), sampled(:)
         real,    allocatable :: rstates(:)
         integer :: i, cnt, nptcls, sample_ind, nsamples_class, states_bal(self%n)
@@ -1196,7 +1198,11 @@ contains
         nsamples_class = nint(update_frac * real(count(rstates > 0.5)))
         deallocate(rstates)
         ! class-biased selection
-        call self%sample_balanced(clssmp, nsamples_class, greediness, states_bal)
+        if( present(frac_best) )then
+            call self%sample_balanced(clssmp, nsamples_class, frac_best,  states_bal)
+        else
+            call self%sample_balanced(clssmp, nsamples_class, greediness, states_bal)
+        endif
         ! now, we deal with the partition
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
@@ -1282,7 +1288,7 @@ contains
         end do
     end subroutine get_class_sample_stats
 
-    subroutine sample_balanced( self, clssmp, nptcls, greediness, states )
+    subroutine sample_balanced_1( self, clssmp, nptcls, greediness, states )
         class(oris),        intent(inout) :: self
         type(class_sample), intent(inout) :: clssmp(:)  ! data structure for balanced sampling
         integer,            intent(in)    :: nptcls     ! # particles to sample in total
@@ -1344,7 +1350,43 @@ contains
             case DEFAULT
                 THROW_HARD('only greediness 0-2 is allowed')
         end select
-    end subroutine sample_balanced
+    end subroutine sample_balanced_1
+
+    subroutine sample_balanced_2( self, clssmp, nptcls, frac_best, states )
+        class(oris),        intent(inout) :: self
+        type(class_sample), intent(inout) :: clssmp(:)  ! data structure for balanced sampling
+        integer,            intent(in)    :: nptcls     ! # particles to sample in total
+        real,               intent(in)    :: frac_best  ! fraction of best scoring particles to sample from
+        integer,            intent(inout) :: states(self%n)
+        integer,            allocatable   :: pinds2sample(:)
+        type(ran_tabu) :: rt
+        integer        :: i, j, cnt, nbest
+        ! calculate sampling size for each class
+        clssmp(:)%nsample = 0
+        do while( sum(clssmp(:)%nsample) < nptcls )
+            where( clssmp(:)%nsample < clssmp(:)%pop ) clssmp(:)%nsample = clssmp(:)%nsample + 1
+        end do
+        states = 0    
+        do i = 1, size(clssmp)
+            nbest = max(clssmp(i)%nsample, nint(frac_best * real(clssmp(i)%pop)))
+            if( nbest == clssmp(i)%nsample )then
+                ! completely greedy selection based on objective function value
+                do j = 1, clssmp(i)%nsample
+                    states(clssmp(i)%pinds(j)) = 1
+                end do
+            else
+                ! random selection from the frac_best scoring ones
+                allocate(pinds2sample(nbest), source=clssmp(i)%pinds(:nbest))
+                rt = ran_tabu(nbest)
+                call rt%shuffle(pinds2sample)
+                call rt%kill
+                do j = 1, clssmp(i)%nsample
+                    states(pinds2sample(j)) = 1
+                end do
+                deallocate(pinds2sample)
+            endif
+        end do
+    end subroutine sample_balanced_2
 
     subroutine sample_balanced_parts( self, clssmp, nparts, states, nptcls_per_part )
         class(oris),        intent(inout) :: self

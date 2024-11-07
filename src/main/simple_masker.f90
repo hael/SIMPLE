@@ -297,7 +297,7 @@ contains
             ! low-pass filter
             call img_bin(i)%bp(0., params_glob%amsklp)
             ! filter with non-local means
-            call img_bin(i)%NLmean
+            call img_bin(i)%NLmean2D
             ! if( l_write ) call img_bin(i)%write('NLmean_filtered.mrc', i)
             ! binarize with Otsu
             call otsu_img(img_bin(i), mskrad=params_glob%msk, positive=trim(params_glob%automsk).eq.'tight')
