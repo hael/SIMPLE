@@ -109,6 +109,7 @@ type(filter_commander)                      :: xfilter
 type(normalize_commander)                   :: xnormalize
 type(ppca_denoise_commander)                :: xppca_denoise
 type(ppca_denoise_classes_commander)        :: xppca_denoise_classes
+type(denoise_cavgs_commander)               :: xdenoise_cavgs
 type(scale_commander)                       :: xscale
 type(stack_commander)                       :: xstack
 type(stackops_commander)                    :: xstackops
@@ -338,6 +339,8 @@ select case(trim(prg))
         call xppca_denoise%execute(cline)
     case( 'ppca_denoise_classes' )
         call xppca_denoise_classes%execute(cline)
+    case( 'denoise_cavgs' )
+        call xdenoise_cavgs%execute(cline)
     case( 'scale' )
         call xscale%execute(cline)
     case( 'stack' )
@@ -418,7 +421,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('95094eaa')
+call simple_print_git_version('dea9e3dd')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

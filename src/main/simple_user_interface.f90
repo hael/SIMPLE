@@ -102,6 +102,7 @@ type(simple_program), target :: convert
 type(simple_program), target :: ctf_estimate
 type(simple_program), target :: ctfops
 type(simple_program), target :: ctf_phaseflip
+type(simple_program), target :: denoise_cavgs
 type(simple_program), target :: detect_atoms
 type(simple_program), target :: dock_volpair
 type(simple_program), target :: estimate_lpstages
@@ -407,6 +408,7 @@ contains
         call new_ctfops
         call new_ctf_phaseflip
         call new_pdb2mrc
+        call new_denoise_cavgs
         call new_detect_atoms
         call new_dock_volpair
         call new_estimate_lpstages
@@ -537,6 +539,7 @@ contains
         call push2prg_ptr_array(ctfops)
         call push2prg_ptr_array(ctf_phaseflip)
         call push2prg_ptr_array(pdb2mrc)
+        call push2prg_ptr_array(denoise_cavgs)
         call push2prg_ptr_array(detect_atoms)
         call push2prg_ptr_array(dock_volpair)
         call push2prg_ptr_array(extract)
@@ -707,6 +710,8 @@ contains
                 ptr2prg => ctf_phaseflip
             case('pdb2mrc')
                 ptr2prg => pdb2mrc
+            case('denoise_cavgs')
+                ptr2prg => denoise_cavgs
             case('detect_atoms')
                 ptr2prg => detect_atoms
             case('dock_volpair')
@@ -921,6 +926,7 @@ contains
         write(logfhandle,'(A)') ctf_estimate%name
         write(logfhandle,'(A)') ctfops%name
         write(logfhandle,'(A)') ctf_phaseflip%name
+        write(logfhandle,'(A)') denoise_cavgs%name
         write(logfhandle,'(A)') dock_volpair%name
         write(logfhandle,'(A)') estimate_lpstages%name
         write(logfhandle,'(A)') extract%name
@@ -2213,6 +2219,32 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_ctf_phaseflip
+
+    subroutine new_denoise_cavgs
+        ! PROGRAM SPECIFICATION
+        call denoise_cavgs%new(&
+        &'denoise_cavgs',&                                 ! name
+        &'composite denoising filter for class averages',& ! descr_short
+        &'is a program for denoising class averages',&     ! descr_long
+        &'simple_exec',&                                   ! executable
+        &2, 1, 0, 0, 1, 0, 1, .false.)                     ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call denoise_cavgs%set_input('img_ios', 1, 'stk',  'file', 'Odd stack',  'Odd stack',  'stack_even.mrc file', .true., '')
+        call denoise_cavgs%set_input('img_ios', 2, 'stk2', 'file', 'Even stack', 'Even stack', 'stack_odd.mrc file',  .true., '')
+        ! parameter input/output
+        call denoise_cavgs%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call denoise_cavgs%set_input('filt_ctrls', 1, 'lambda', 'num', 'ICM lambda regularization parameter', 'Strength of noise reduction', '(0.01-3.0){1.0}', .false., 1.0)
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call denoise_cavgs%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_denoise_cavgs
 
     subroutine new_detect_atoms
         ! PROGRAM SPECIFICATION
