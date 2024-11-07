@@ -381,6 +381,8 @@ contains
             do i = 1, size(file_list)
                 if( str_has_substr(trim(file_list(i)), basename(trim(params%projfile))) )then
                     ! this stays
+                else if( str_has_substr(trim(file_list(i)), 'nice_') )then
+                    ! this stays
                 else
                     call simple_rename(trim(file_list(i)), INI3D_DIR//trim(file_list(i)))
                 endif

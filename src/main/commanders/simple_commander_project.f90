@@ -848,6 +848,14 @@ contains
             do i=1,params%nran
                 states(ptcls_rnd(i)) = 1
             enddo
+        else if( cline%defined('state') )then
+            call pos%get_pinds(params%state, 'state', ptcls_in_state)
+            noris_in_state = size(ptcls_in_state)
+            ! allocate states and set the state-flags
+            allocate(states(noris), source=0)
+            do i=1,noris_in_state
+                states(ptcls_in_state(i)) = 1
+            enddo
         else if( cline%defined('ctfresthreshold') .or. cline%defined('icefracthreshold') )then
             l_ctfres  = cline%defined('ctfresthreshold')
             l_icefrac = cline%defined('icefracthreshold')
