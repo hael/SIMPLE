@@ -331,6 +331,7 @@ contains
     procedure          :: div_below
     procedure          :: ellipse
     procedure          :: flip
+    procedure          :: reshape2cube
     ! FFTs
     procedure          :: fft  => fwd_ft
     procedure          :: ifft => bwd_ft
@@ -8620,6 +8621,26 @@ contains
             end where
         enddo
     end subroutine radial_cc
+
+    subroutine reshape2cube( self, self_out )
+        class(image), intent(inout) :: self
+        class(image), intent(out)   :: self_out
+        logical     :: isvol
+        integer     :: ldim(3), ldim_max
+        real        :: smpd
+        type(image) :: tmp
+        smpd              = self%get_smpd()
+        isvol             = self%is_3d()
+        if(.not.isvol) THROW_HARD('this is only for volumes; reshape2cube')
+        ldim              = self%ldim
+        if( ldim(1) == ldim(2) .and. ldim(2) == ldim(3) ) return
+        ldim_max          = max(ldim(1),ldim(2),ldim(3))
+        call self_out%new([ldim_max,ldim_max,ldim_max], self%smpd, wthreads=self%wthreads)
+        self_out%rmat     = 0.
+        self_out%rmat     = self%rmat
+        self_out%ft       = .false.
+        call self_out%set_smpd(smpd)
+    end subroutine reshape2cube
 
     !>  \brief  is the image class unit test
     subroutine test_image( doplot )
