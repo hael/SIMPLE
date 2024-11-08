@@ -121,10 +121,14 @@ contains
             call cline%set('oritype', 'ptcl2D')
         endif
         call build%init_params_and_build_spproj(cline, params)
-        ncls_here = build%spproj_field%get_n('class')
-        if( .not. cline%defined('ncls') )then
-            call cline%set('ncls', ncls_here)
-            params%ncls = ncls_here
+        if( cline%defined('nspace') )then
+            ! handled in exec_make_cavgs
+        else
+            ncls_here = build%spproj_field%get_n('class')
+            if( .not. cline%defined('ncls') )then
+                call cline%set('ncls', ncls_here)
+                params%ncls = ncls_here
+            endif
         endif
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
