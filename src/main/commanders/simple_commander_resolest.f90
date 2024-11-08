@@ -380,19 +380,30 @@ contains
     end subroutine exec_icm2D
 
     subroutine exec_denoise_cavgs( self, cline )
+        use simple_polarizer,         only: polarizer
+        use simple_polarft_corrcalc,  only: polarft_corrcalc
+        use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
         class(denoise_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
+        type(pftcc_shsrch_grad), allocatable :: grad_shsrch_obj(:)
         character(len=:), allocatable :: file_tag
         type(image),      allocatable :: odd(:), even(:), avg(:)
         logical,          allocatable :: mask(:)
-        real,             allocatable :: fsc(:), filt(:)
+        real,             allocatable :: fsc(:), filt(:), inpl_corrs(:), corrmat(:,:)
         integer,          allocatable :: pinds(:)
+        type(polarizer)               :: polartransform
+        type(polarft_corrcalc)        :: pftcc
+        
+        real, parameter  :: HP_SCORE = 60., LP_SCORE = 6.
         type(parameters) :: params
-        real             :: minmax(2), msk
-        integer          :: iptcl, filtsz, n_nonempty, i
+        real             :: minmax(2), msk, lims(2,2), lims_init(2,2), cxy(3)
+        integer          :: iptcl, filtsz, n_nonempty, i, j, loc(1), nrots, irot, ithr
         ! init
+        call cline%set('ctf',    'no')
+        call cline%set('objfun', 'cc')
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('lambda') ) call cline%set('lambda',  0.1)
+        if( .not. cline%defined('trs')    ) call cline%set('trs',     5.0)
         call params%new(cline)
         call find_ldim_nptcls(params%stk, params%ldim, params%nptcls)
         params%box     = params%ldim(1)
@@ -452,11 +463,73 @@ contains
             call even(iptcl)%mul(0.5)
             call even(iptcl)%write(trim(file_tag)//'_avg.mrc', iptcl)
         end do
-
+        ! write non-empty
         do i = 1, n_nonempty
             iptcl = pinds(i)
             call even(iptcl)%write(trim(file_tag)//'_nonempty.mrc', i)
         end do
+        
+        ! resolution limits
+        params%kfromto(1) = max(2, calc_fourier_index(HP_SCORE, params%box, params%smpd))
+        params%kfromto(2) =        calc_fourier_index(LP_SCORE, params%box, params%smpd)
+        ! initialize pftcc, polarizer
+        call pftcc%new(n_nonempty, [1,n_nonempty], params%kfromto)
+        call polartransform%new([params%box,params%box,1], params%smpd)
+        call polartransform%init_polarizer(pftcc, params%alpha)
+        ! in-plane search object
+        lims(:,1)      = -params%trs
+        lims(:,2)      =  params%trs
+        lims_init(:,1) = -SHC_INPL_TRSHWDTH
+        lims_init(:,2) =  SHC_INPL_TRSHWDTH
+        allocate(grad_shsrch_obj(nthr_glob))
+        do ithr = 1, nthr_glob
+            call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=params%shbarrier,&
+            &maxits=params_glob%maxits_sh, opt_angle=.true.)
+        end do
+        ! allocate
+        nrots = pftcc%get_nrots()
+        allocate(inpl_corrs(nrots), corrmat(n_nonempty,n_nonempty), source=0.)
+        !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
+        do i = 1, n_nonempty
+            iptcl = pinds(i)
+            call even(iptcl)%fft()
+            call polartransform%polarize(pftcc, even(iptcl), i, isptcl=.false., iseven=.true.)
+            call pftcc%cp_even2odd_ref(i)
+            call pftcc%cp_even_ref2ptcl(i, i)
+            call even(iptcl)%ifft()
+        end do
+        !$omp end parallel do
+        call pftcc%memoize_refs
+        call pftcc%memoize_ptcls
+
+
+        ! generate nearest neighbor structure
+
+       
+
+        !$omp parallel do default(shared) private(i,j,ithr,inpl_corrs,loc,irot,cxy) schedule(dynamic) proc_bind(close)
+        do i = 1, n_nonempty - 1
+            do j = i + 1, n_nonempty
+                ithr = omp_get_thread_num() + 1
+                call pftcc%gencorrs(i, j, inpl_corrs)
+                loc  = maxloc(inpl_corrs)
+                irot = loc(1) 
+                call grad_shsrch_obj(ithr)%set_indices(i, j)
+                cxy = grad_shsrch_obj(ithr)%minimize(irot=irot)
+                if( irot > 0 )then
+                    corrmat(i,j)= cxy(1)
+                else
+                    corrmat(i,j) = inpl_corrs(loc(1))
+                endif
+                corrmat(j,i) = corrmat(i,j)
+            enddo
+            corrmat(i,i) = 1.
+        enddo
+        !$omp end parallel do
+
+        print *, corrmat
+
+        
 
         ! destruct
         do iptcl = 1, params%nptcls
