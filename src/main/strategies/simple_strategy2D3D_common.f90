@@ -921,15 +921,10 @@ contains
             do iproj = 1,params_glob%nspace
                 if( eopops(iproj,1) > 0 )then
                     call projdirs(iproj,1)%convert2img(numimg, denomimg)
-                    ! call numimg%ctf_dens_correct(denomimg)
-                    ! call numimg%ifft
-                    call denomimg%write('projdirs_even.mrc',iproj)
-                endif
-                if( eopops(iproj,2) > 0 )then
-                    call projdirs(iproj,2)%convert2img(numimg, denomimg)
-                    ! call numimg%ctf_dens_correct(denomimg)
-                    ! call numimg%ifft
-                    call denomimg%write('projdirs_odd.mrc',iproj)
+                    call numimg%ctf_dens_correct(denomimg)
+                    call numimg%ifft
+                    call numimg%clip_inplace([params_glob%box_crop,params_glob%box_crop,1])
+                    call numimg%write('projdirs_even.mrc',iproj)
                 endif
             end do
             call numimg%kill
