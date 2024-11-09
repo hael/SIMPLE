@@ -321,8 +321,9 @@ contains
                 dmat(j,i) = dmat(i,j)
             end do
         end do
-        call dev_from_dmat( dmat, i_median, ddev )
-        cnt = 0
+        call medoid_from_dmat(dmat, i_median)
+        ddev = median(dmat(i_median,:))
+        cnt  = 0
         do ipeak=1,nmax
             if( selected_peak_positions(ipeak) )then
                 cnt = cnt + 1

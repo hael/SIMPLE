@@ -494,7 +494,6 @@ contains
             iptcl = pinds(i)
             call even(iptcl)%fft()
             call polartransform%polarize(pftcc, even(iptcl), i, isptcl=.false., iseven=.true.)
-            call pftcc%cp_even2odd_ref(i)
             call pftcc%cp_even_ref2ptcl(i, i)
             call even(iptcl)%ifft()
         end do
