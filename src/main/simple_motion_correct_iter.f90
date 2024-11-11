@@ -45,7 +45,6 @@ contains
         type(nrtxtfile)               :: boxfile
         real,             allocatable :: boxdata(:,:)
         character(len=:), allocatable :: fbody_here, ext, star_fname, poly_fname
-        character(len=LONGSTRLEN)     :: rel_fname
         real    :: goodnessoffit(2), scale, bfac_here, bid
         integer :: ldim(3), ldim_thumb(3), iptcl, nxpatch, nypatch
         logical :: patch_success, l_tseries
@@ -223,23 +222,15 @@ contains
         call self%img_jpg%write_jpg(self%moviename_thumb, norm=.true., quality=92)
         ! report to ori object
         if( .not. l_tseries )then
-            call make_relativepath(CWD_GLOB,self%moviename,rel_fname)
-            call orientation%set('movie',      trim(rel_fname))
-            call make_relativepath(CWD_GLOB,self%moviename_forctf,rel_fname)
-            call orientation%set('forctf',     trim(rel_fname))
-            call make_relativepath(CWD_GLOB,star_fname,rel_fname)
-            call orientation%set('mc_starfile',rel_fname)
-            call orientation%set('bid',        bid)
+            call orientation%set('movie',       simple_abspath(self%moviename))
+            call orientation%set('forctf',      simple_abspath(self%moviename_forctf))
+            call orientation%set('mc_starfile', simple_abspath(star_fname))
+            call orientation%set('bid',         bid)
         endif
-        call make_relativepath(CWD_GLOB,self%moviename_intg,rel_fname)
-        call orientation%set('intg',   trim(rel_fname))
-        call make_relativepath(CWD_GLOB,self%moviename_thumb,rel_fname)
-        call orientation%set('thumb',  trim(rel_fname))
+        call orientation%set('intg',    simple_abspath(self%moviename_intg))
+        call orientation%set('thumb',   simple_abspath(self%moviename_thumb))
         call orientation%set('imgkind', 'mic')
-        if( motion_correct_with_patched )then
-            call make_relativepath(CWD_GLOB, patched_shift_fname, rel_fname)
-            call orientation%set('mceps', rel_fname)
-        endif
+        if( motion_correct_with_patched ) call orientation%set('mceps', simple_abspath(patched_shift_fname))
         call motion_correct_kill_common
     end subroutine iterate
 

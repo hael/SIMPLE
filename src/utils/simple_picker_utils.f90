@@ -81,7 +81,7 @@ contains
             if( nptcls == 0 )then
                 boxfile_out = ''
             else
-                call make_relativepath(CWD_GLOB, boxfile, boxfile_out)
+                boxfile_out = simple_abspath(boxfile)
             endif
             call gaup%kill
             call gaup_refine%kill
@@ -103,7 +103,7 @@ contains
             if( nptcls == 0 )then
                 boxfile_out = ''
             else
-                call make_relativepath(CWD_GLOB, boxfile, boxfile_out)
+                boxfile_out = simple_abspath(boxfile)
             endif
             call gaup%kill
             call gaup_refine%kill
@@ -122,9 +122,9 @@ contains
         call picker%pick(micname)
         call picker%report_boxfile(boxfile, nptcls)
         if( nptcls == 0 )then
-                boxfile_out = ''
+            boxfile_out = ''
         else
-            call make_relativepath(CWD_GLOB, boxfile, boxfile_out)
+            boxfile_out = simple_abspath(boxfile)
         endif
     end subroutine exec_segpick
 

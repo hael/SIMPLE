@@ -133,7 +133,7 @@ contains
         peak_positions_refined = nint(PICKER_SHRINK_REFINE)*peak_positions_refined
         call write_boxfile
         ! returns absolute path
-        call make_relativepath(CWD_GLOB, boxname, boxname_out)
+        boxname_out = simple_abspath(boxname)
     end subroutine exec_picker
 
     subroutine extract_peaks

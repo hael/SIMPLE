@@ -276,7 +276,7 @@ contains
         character(len=LEN_LINE), allocatable :: splitline(:)
         character(len=XLONGSTRLEN)           :: cwd
         character(len=LEN_LINE)              :: line, entrystr, splitimage
-        character(len=LONGSTRLEN)            :: abspath
+        character(len=LONGSTRLEN)            :: fname, abspath
         type(ori)                            :: opticsori, spori
         logical                              :: isptcl
         real                                 :: rval
@@ -322,15 +322,19 @@ contains
                             if(index(entrystr, ':mrc') > 0) then ! relion ctf names!
                                 entrystr = trim(adjustl(entrystr(:index(entrystr, ':mrc') - 1)))
                             end if
-                            if(file_exists(trim(adjustl(stemname(self%starfile%rootdir))) // "/" // trim(adjustl(entrystr)))) then
-                                call make_relativepath(cwd, trim(adjustl(stemname(self%starfile%rootdir))) // "/" // trim(adjustl(entrystr)), abspath, checkexists=.false.)
-                                entrystr = trim(adjustl(abspath))
-                            else
-                                call make_relativepath(cwd, trim(adjustl(self%starfile%rootdir)) // "/" // trim(adjustl(entrystr)), abspath, checkexists=.false.)
-                                entrystr = trim(adjustl(abspath))
+                            fname = trim(adjustl(stemname(self%starfile%rootdir))) // "/" // trim(entrystr)
+                            if( .not.file_exists(fname) )then
+                                fname = trim(adjustl(self%starfile%rootdir)) // "/" // trim(entrystr)
+                                if( .not.file_exists(fname) )then
+                                    fname = trim(adjustl(self%starfile%rootdir)) // "/../" // trim(entrystr)
+                                    if( .not.file_exists(fname) )then
+                                        fname = trim(adjustl(self%starfile%rootdir)) // "/../../" // trim(entrystr)
+                                    endif
+                                endif
                             end if
+                            entrystr = trim(adjustl(simple_abspath(fname, check_exists=.false.)))
                         end if
-                        call sporis%set(projindex, stardata%flags(flagsindex)%splflag, trim(adjustl(entrystr)))
+                        call sporis%set(projindex, stardata%flags(flagsindex)%splflag, adjustl(entrystr))
                     else if(stardata%flags(flagsindex)%int) then
                         read(entrystr,*) ival
                         if(stardata%flags(flagsindex)%mult > 0) then
@@ -364,6 +368,8 @@ contains
         end do
         call fclose(fhandle)
         if(allocated(splitline)) deallocate(splitline)
+        call opticsori%kill
+        call spori%kill
     end subroutine import_stardata
 
     subroutine populate_stkmap(self, stkoris, opticsoris)

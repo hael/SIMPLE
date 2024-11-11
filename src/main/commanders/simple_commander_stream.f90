@@ -515,15 +515,7 @@ contains
                         do i = 1,NMOVS_SET
                             imic = imic+1
                             if( mics_mask(imic) )then
-                                j   = j + 1
-                                ! From now on all MC/CTF metadata use absolute path
-                                call update_relative_path_to_absolute(streamspprojs(iproj)%os_mic, i, 'mc_starfile')
-                                call update_relative_path_to_absolute(streamspprojs(iproj)%os_mic, i, 'intg')
-                                call update_relative_path_to_absolute(streamspprojs(iproj)%os_mic, i, 'thumb')
-                                call update_relative_path_to_absolute(streamspprojs(iproj)%os_mic, i, 'mceps')
-                                call update_relative_path_to_absolute(streamspprojs(iproj)%os_mic, i, 'ctfdoc')
-                                call update_relative_path_to_absolute(streamspprojs(iproj)%os_mic, i, 'ctfjpg')
-                                ! transfer info
+                                j = j + 1
                                 call spproj_glob%os_mic%transfer_ori(j, streamspprojs(iproj)%os_mic, i)
                             endif
                         enddo
@@ -543,25 +535,6 @@ contains
                 call completed_jobs_clines(:)%kill
                 deallocate(completed_jobs_clines,streamspprojs,mics_mask,completed_fnames)
             end subroutine update_projects_list
-
-            subroutine update_relative_path_to_absolute(os, i, key)
-                class(oris),      intent(inout) :: os
-                integer,          intent(in)    :: i
-                character(len=*), intent(in)    :: key
-                character(len=:), allocatable :: fname
-                character(len=LONGSTRLEN)     :: newfname
-                if( os%isthere(i,key) )then
-                    call os%getter(i,key,fname)
-                    if( fname(1:1) == '/' )then
-                        ! already absolute path
-                        call os%set(i,key,fname)
-                    else
-                        ! is relative to ./spprojs
-                        newfname = simple_abspath(fname(4:len_trim(fname)))
-                        call os%set(i,key,newfname)
-                    endif
-                endif
-            end subroutine update_relative_path_to_absolute
 
             subroutine create_movies_set_project( movie_names )
                 character(len=LONGSTRLEN), intent(in) :: movie_names(NMOVS_SET)
@@ -803,7 +776,7 @@ contains
             call gui_stats%set('current_search', 'range', int2str(floor(params%moldiam)) // 'Å - ' // int2str(floor(params%moldiam_max)) // 'Å')
             call gui_stats%set('current_search', 'status', 'running')
         endif
-        call gui_stats%set('compute',     'compute_in_use',       int2str(0) // '/' // int2str(params%nparts), primary=.true.)
+        call gui_stats%set('compute', 'compute_in_use', int2str(0) // '/' // int2str(params%nparts), primary=.true.)
         ! directories structure & restart
         odir                       = trim(DIR_STREAM)
         odir_completed             = trim(DIR_STREAM_COMPLETED)
@@ -1983,9 +1956,9 @@ contains
                 projname   = trim(get_fbody(trim(proj_fname), trim(METADATA_EXT), separator=.false.))
                 projfile   = trim(projname)//trim(METADATA_EXT)
                 call spproj_here%projinfo%new(1, is_ptcl=.false.)
-                call spproj_here%projinfo%set(1,'projname', trim(projname))
-                call spproj_here%projinfo%set(1,'projfile', trim(projfile))
-                call spproj_here%projinfo%set(1,'cwd',      trim(path))
+                call spproj_here%projinfo%set(1,'projname', projname)
+                call spproj_here%projinfo%set(1,'projfile', projfile)
+                call spproj_here%projinfo%set(1,'cwd',      path)
                 ! from current global project
                 spproj_here%compenv = spproj_glob%compenv
                 spproj_here%jobproc = spproj_glob%jobproc

@@ -7,7 +7,6 @@ private
 #include "simple_local_flags.inc"
 
 integer(kind(ENUM_ORISEG)), parameter :: MAXN_OS_SEG     = 13
-logical,                    parameter :: L_RELATIVE_PATH = .true.
 
 type sp_project
     ! ORIS REPRESENTATIONS OF BINARY FILE SEGMENTS
@@ -49,6 +48,7 @@ contains
     procedure          :: get_mics_table
     procedure          :: get_micparams
     procedure          :: get_micname
+    procedure          :: set_boxfile
     ! os_stk related methods
     procedure          :: add_stk
     procedure, private :: add_stktab_1
@@ -595,7 +595,7 @@ contains
         character(len=*),          intent(in)    :: moviename
         type(ctfparams),           intent(in)    :: ctfvars
         class(oris),      pointer     :: os_ptr
-        character(len=LONGSTRLEN)     :: rel_fname
+        character(len=LONGSTRLEN)     :: abs_fname
         integer :: n_os_mic, ldim(3), nframes
         ! oris object pointer
         os_ptr => self%os_mic
@@ -607,20 +607,16 @@ contains
         endif
         ! update ori
         call os_ptr%new(1, is_ptcl=.false.)
-        if( L_RELATIVE_PATH )then
-            call make_relativepath(CWD_GLOB, moviename, rel_fname)
-        else
-            rel_fname = simple_abspath(moviename)
-        endif
-        call find_ldim_nptcls(trim(rel_fname), ldim, nframes)
+        abs_fname = simple_abspath(moviename)
+        call find_ldim_nptcls(trim(abs_fname), ldim, nframes)
         if( nframes <= 0 )then
-            THROW_WARN('# frames in movie: '//trim(rel_fname)//' <= zero, omitting')
+            THROW_WARN('# frames in movie: '//trim(abs_fname)//' <= zero, omitting')
         else if( nframes > 1 )then
-            call os_ptr%set(1, 'movie', trim(rel_fname))
+            call os_ptr%set(1, 'movie',   abs_fname)
             call os_ptr%set(1, 'imgkind', 'movie')
             call os_ptr%set(1, 'nframes', nframes)
         else
-            call os_ptr%set(1, 'intg',  trim(rel_fname))
+            call os_ptr%set(1, 'intg',    abs_fname)
             call os_ptr%set(1, 'imgkind', 'mic')
         endif
         ! updates segment
@@ -658,7 +654,7 @@ contains
         class(oris),      pointer     :: os_ptr
         type(ctfparams)               :: prev_ctfvars
         character(len=:), allocatable :: name
-        character(len=LONGSTRLEN)     :: rel_moviename
+        character(len=LONGSTRLEN)     :: abs_moviename
         integer                       :: ldim_orig(3), imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot, nframes_first
         logical                       :: is_movie, l_singleframe, l_verbose
         l_verbose = .true.
@@ -689,12 +685,8 @@ contains
         nframes_first = 0
         do imic=nprev_mics + 1,ntot
             cnt = cnt + 1
-            if( L_RELATIVE_PATH )then
-                call make_relativepath(CWD_GLOB,movies_array(cnt),rel_moviename)
-            else
-                rel_moviename = simple_abspath(movies_array(cnt))
-            endif
-            call find_ldim_nptcls(trim(rel_moviename), ldim, nframes)
+            abs_moviename = simple_abspath(movies_array(cnt))
+            call find_ldim_nptcls(trim(abs_moviename), ldim, nframes)
             if( cnt == 1 )then
                 ldim_orig = ldim
             else
@@ -709,15 +701,15 @@ contains
                 cycle
             else
                 if( nframes > 1 )then
-                    call os_ptr%set(imic, 'movie', trim(rel_moviename))
+                    call os_ptr%set(imic, 'movie',   abs_moviename)
                     call os_ptr%set(imic, 'imgkind', 'movie')
                     is_movie = .true.
                 else
                     if( l_singleframe )then
-                        call os_ptr%set(imic, 'frame',   trim(rel_moviename))
+                        call os_ptr%set(imic, 'frame',   abs_moviename)
                         call os_ptr%set(imic, 'imgkind', 'frame')
                     else
-                        call os_ptr%set(imic, 'intg',    trim(rel_moviename))
+                        call os_ptr%set(imic, 'intg',    abs_moviename)
                         call os_ptr%set(imic, 'imgkind', 'mic')
                     endif
                     is_movie = .false.
@@ -726,7 +718,7 @@ contains
                     nframes_first = nframes
                 else
                     if( nframes /= nframes_first )then
-                        write(logfhandle,*) trim(rel_moviename), ' has ', nframes, ' frame(s)'
+                        write(logfhandle,*) trim(abs_moviename), ' has ', nframes, ' frame(s)'
                         write(logfhandle,*) 'Previous import have ', nframes_first, ' frame(s)'
                         THROW_HARD('You cannot import both micrographs and movies at the same time! add_movies')
                     endif
@@ -818,11 +810,7 @@ contains
         cnt = 0
         do imic=nprev_intgs+1,ntot
             cnt = cnt + 1
-            if( L_RELATIVE_PATH )then
-                call make_relativepath(CWD_GLOB,intgs_array(cnt),rel_micname)
-            else
-                rel_micname = simple_abspath(intgs_array(cnt))
-            endif
+            rel_micname = simple_abspath(intgs_array(cnt))
             call find_ldim_nptcls(trim(rel_micname), ldim, nframes, smpd=intg_smpd)
             if( nframes <= 0 )then
                 THROW_HARD('# frames in movie: '//trim(intgs_array(cnt))//' <= zero; add_intgs')
@@ -935,11 +923,7 @@ contains
         integer :: i, fromp, top, pind
         ! full path and existence check
         call simple_getcwd(cwd)
-        if( L_RELATIVE_PATH )then
-            call make_relativepath(cwd, stk, stk_relpath)
-        else
-            stk_relpath = simple_abspath(stk)
-        endif
+        stk_relpath = simple_abspath(stk)
         ! find dimension of inputted stack
         call find_ldim_nptcls(stk_relpath, ldim, nptcls)
         if( ldim(1) /= ldim(2) )then
@@ -1010,7 +994,6 @@ contains
         type(ctfparams),   intent(in)    :: ctfvars ! CTF parameters associated with stk (smpd,kv,cs,fraca,phaseplate)
         class(oris),       intent(inout) :: os      ! parameters associated with stk (dfx,dfy,angast,phshift)
         character(len=:), allocatable :: stk_abspath, projname, fbody
-        character(len=LONGSTRLEN)     :: stk_relpath
         integer                       :: n_os_stk, n_os_ptcl2D, n_os_ptcl3D, ldim(3), nptcls, pind
         call self%projinfo%getter(1, 'projname', projname)
         if( str_has_substr(stk, 'mrc') )then
@@ -1058,15 +1041,9 @@ contains
             write(logfhandle,*) 'ydim: ', ldim(2)
             THROW_HARD('nonsquare particle images not supported; add_single_stk')
         endif
-        ! path
-        if( L_RELATIVE_PATH )then
-            call make_relativepath(CWD_GLOB, stk_abspath, stk_relpath)
-        else
-            stk_relpath = simple_abspath(stk_abspath)
-        endif
         ! records
         call self%os_stk%new(1, is_ptcl=.false.)
-        call self%os_stk%set(1, 'stk',     trim(stk_relpath))
+        call self%os_stk%set(1, 'stk',     stk_abspath)
         call self%os_stk%set(1, 'box',     ldim(1))
         call self%os_stk%set(1, 'nptcls',  nptcls)
         call self%os_stk%set(1, 'fromp',   1)
@@ -1121,13 +1098,9 @@ contains
             THROW_HARD('nonsquare particle images not supported; add_single_stk_denoised')
         endif
         ! path
-        if( L_RELATIVE_PATH )then
-            call make_relativepath(CWD_GLOB, stk_den_abspath, stk_den_relpath)
-        else
-            stk_den_relpath = simple_abspath(stk_den_abspath)
-        endif
+        stk_den_relpath = simple_abspath(stk_den_abspath)
         ! update record
-        call self%os_stk%set(1, 'stk_den', trim(stk_den_relpath))
+        call self%os_stk%set(1, 'stk_den', stk_den_relpath)
     end subroutine add_single_stk_denoised
 
     ! adds stktab given per-stk parameters
@@ -1137,7 +1110,6 @@ contains
         class(oris),           intent(inout) :: os ! parameters associated with stktab
         integer,  allocatable :: nptcls_arr(:)
         type(ori)             :: o_ptcl, o_stk
-        character(LONGSTRLEN) :: stk_relpath
         integer   :: ldim(3), ldim_here(3), n_os_ptcl2D, n_os_ptcl3D, n_os_stk, istate
         integer   :: i, istk, fromp, top, nptcls, n_os, nstks, nptcls_tot, stk_ind, pind
         nstks = size(stkfnames)
@@ -1152,12 +1124,7 @@ contains
         allocate(nptcls_arr(nstks),source=0)
         do istk=1,nstks
             ! full path and existence check
-            if( L_RELATIVE_PATH )then
-                call make_relativepath(CWD_GLOB,stkfnames(istk),stk_relpath)
-            else
-                stk_relpath = simple_abspath(stkfnames(istk))
-            endif
-            stkfnames(istk) = trim(stk_relpath)
+            stkfnames(istk) = trim(simple_abspath(stkfnames(istk)))
             call os%get_ori(istk, o_stk)
             ! logical dimension management
             call find_ldim_nptcls(stkfnames(istk), ldim, nptcls)
@@ -1217,7 +1184,7 @@ contains
             stk_ind = n_os_stk + istk
             ! updates stk segment
             call self%os_stk%set_ori(stk_ind, o_stk)
-            call self%os_stk%set(stk_ind, 'stk',     trim(stkfnames(istk)))
+            call self%os_stk%set(stk_ind, 'stk',     stkfnames(istk))
             call self%os_stk%set(stk_ind, 'box',     ldim(1))
             call self%os_stk%set(stk_ind, 'nptcls',  nptcls_arr(istk))
             call self%os_stk%set(stk_ind, 'fromp',   fromp)
@@ -1257,7 +1224,6 @@ contains
         class(oris),           intent(inout) :: os ! parameters associated with stktab
         integer,  allocatable :: nptcls_arr(:)
         type(ori)             :: o_ptcl, o_stk
-        character(LONGSTRLEN) :: stk_relpath
         integer   :: ldim(3), ldim_here(3), n_os_ptcl2D, n_os_ptcl3D, n_os_stk, istate
         integer   :: i, istk, fromp, top, nptcls, n_os, nstks, nptcls_tot, stk_ind, pind
         nstks = size(stkfnames)
@@ -1266,12 +1232,7 @@ contains
         allocate(nptcls_arr(nstks),source=0)
         do istk=1,nstks
             ! full path and existence check
-            if( L_RELATIVE_PATH )then
-                call make_relativepath(CWD_GLOB,stkfnames(istk),stk_relpath)
-            else
-                stk_relpath = simple_abspath(stkfnames(istk))
-            endif
-            stkfnames(istk) = trim(stk_relpath)
+            stkfnames(istk) = trim(simple_abspath(stkfnames(istk)))
             ! logical dimension management
             call find_ldim_nptcls(stkfnames(istk), ldim, nptcls)
             ldim(3) = 1
@@ -1325,7 +1286,7 @@ contains
             stk_ind = n_os_stk + istk
             ! updates stk segment
             call o_stk%new(is_ptcl=.false.)
-            call o_stk%set('stk',     trim(stkfnames(istk)))
+            call o_stk%set('stk',     stkfnames(istk))
             call o_stk%set('box',     ldim(1))
             call o_stk%set('nptcls',  nptcls_arr(istk))
             call o_stk%set('fromp',   fromp)
@@ -1493,16 +1454,12 @@ contains
                 allocate(dest_stkpart, source=trim(STKPARTFBODY)//int2str_pad(istk,numlen)//EXT)
             endif
             call simple_rename(trim(stkpart), trim(dest_stkpart))
-            if( L_RELATIVE_PATH )then
-                call make_relativepath(cwd, dest_stkpart, stk_relpath)
-            else
-                stk_relpath = simple_abspath(dest_stkpart)
-            endif
+            stk_relpath = simple_abspath(dest_stkpart)
             nptcls_part = parts(istk,2) - parts(istk,1) + 1
             ! set original before overriding
             call self%os_stk%set_ori(istk, orig_stk)
             ! override
-            call self%os_stk%set(istk, 'stk',     trim(stk_relpath))
+            call self%os_stk%set(istk, 'stk',     stk_relpath)
             call self%os_stk%set(istk, 'nptcls',  nptcls_part)
             call self%os_stk%set(istk, 'fromp',   parts(istk,1))
             call self%os_stk%set(istk, 'top',     parts(istk,2))
@@ -1519,12 +1476,8 @@ contains
                     allocate(dest_stkpart, source=trim(STKDENPARTFBODY)//int2str_pad(istk,numlen)//EXT)
                 endif
                 call simple_rename(trim(stkpart), trim(dest_stkpart))
-                if( L_RELATIVE_PATH )then
-                    call make_relativepath(cwd, dest_stkpart, stk_relpath)
-                else
-                    stk_relpath = simple_abspath(dest_stkpart)
-                endif
-                call self%os_stk%set(istk, 'stk_den', trim(stk_relpath))
+                stk_relpath = simple_abspath(dest_stkpart)
+                call self%os_stk%set(istk, 'stk_den', stk_relpath)
             endif
             deallocate(stkpart, dest_stkpart)
         enddo
@@ -1599,6 +1552,28 @@ contains
         micname = trim(self%os_mic%get_static(imic, 'intg'))
     end function get_micname
 
+    subroutine set_boxfile( self, i, boxfname, nptcls )
+        class(sp_project), intent(inout) :: self
+        integer,           intent(in)    :: i
+        character(len=*),  intent(in)    :: boxfname
+        integer, optional, intent(in)    :: nptcls
+        type(nrtxtfile) :: boxfile
+        integer         :: nptcls_here
+        if( present(nptcls) )then
+            nptcls_here = nptcls
+            if( nptcls_here == 0 )then
+                call self%os_mic%set(i, 'nptcls', 0)
+                return
+            endif
+        else
+            call boxfile%new(boxfname, 1)
+            nptcls_here = boxfile%get_ndatalines()
+            call boxfile%kill
+        endif
+        call self%os_mic%set(i, 'boxfile', boxfname)
+        call self%os_mic%set(i, 'nptcls',  nptcls_here)
+    end subroutine set_boxfile
+
     function get_stkname( self, imic ) result( stkname )
         class(sp_project), intent(inout) :: self
         integer,           intent(in)    :: imic
@@ -1670,7 +1645,7 @@ contains
         character(len=*), optional, intent(in)    :: imgkind
         logical,          optional, intent(in)    :: clspath
         character(len=:), allocatable :: iimgkind
-        character(len=LONGSTRLEN)     :: relpath
+        character(len=LONGSTRLEN)     :: abspath
         integer                       :: ldim(3), nptcls, ind
         if( present(imgkind) )then
             allocate(iimgkind, source=trim(imgkind))
@@ -1678,17 +1653,13 @@ contains
             allocate(iimgkind, source='cavg')
         endif
         ! path and existence check
-        if( L_RELATIVE_PATH )then
-            call make_relativepath(CWD_GLOB, stk, relpath)
-        else
-            relpath = simple_abspath(stk)
-        endif
+        abspath = simple_abspath(stk)
         ! find dimension of inputted stack
-        call find_ldim_nptcls(relpath, ldim, nptcls)
+        call find_ldim_nptcls(abspath, ldim, nptcls)
         ! add os_out entry
         call self%add_entry2os_out(iimgkind, ind)
         ! fill-in field
-        call self%os_out%set(ind, 'stk',     trim(relpath))
+        call self%os_out%set(ind, 'stk',     abspath)
         call self%os_out%set(ind, 'box',     ldim(1))
         call self%os_out%set(ind, 'nptcls',  nptcls)
         call self%os_out%set(ind, 'fromp',   1)
@@ -1710,36 +1681,24 @@ contains
         if( self%os_cls3D%get_noris() /= nptcls ) self%os_cls3D = self%os_cls2D
     end subroutine add_cavgs2os_out
 
-    subroutine add_frcs2os_out( self, frc, which_imgkind, absolutepath )
+    subroutine add_frcs2os_out( self, frc, which_imgkind )
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: frc, which_imgkind
         character(len=LONGSTRLEN)        :: path
         integer                          :: ind
-        logical, optional, intent(in)    :: absolutepath
-        logical :: abspath
         select case(trim(which_imgkind))
             case('frc2D','frc3D')
                 ! all good
             case DEFAULT
                 THROW_HARD('invalid FRC kind: '//trim(which_imgkind)//'; add_frcs2os_out')
         end select
-        abspath = .false.
-        if( present(absolutepath) ) abspath = absolutepath
         ! full path and existence check
-        if( abspath )then
-            path = simple_abspath(frc)
-        else
-            if( L_RELATIVE_PATH )then
-                call make_relativepath(CWD_GLOB, frc, path)
-            else    
-                path = simple_abspath(frc)
-            endif
-        endif
+        path = simple_abspath(frc)
         ! add os_out entry
         call self%add_entry2os_out(which_imgkind, ind)
         ! fill-in field
-        call self%os_out%set(ind, 'frcs',    trim(path))
-        call self%os_out%set(ind, 'imgkind', trim(which_imgkind))
+        call self%os_out%set(ind, 'frcs',    path)
+        call self%os_out%set(ind, 'imgkind', which_imgkind)
     end subroutine add_frcs2os_out
 
     subroutine add_fsc2os_out( self, fsc, state, box)
@@ -1747,14 +1706,10 @@ contains
         character(len=*),  intent(in)    :: fsc
         integer,           intent(in)    :: state, box
         character(len=:), allocatable :: imgkind
-        character(len=LONGSTRLEN)     :: relpath
+        character(len=LONGSTRLEN)     :: abspath
         integer                       :: i, ind, n_os_out
         ! full path and existence check
-        if( L_RELATIVE_PATH )then
-            call make_relativepath(CWD_GLOB, fsc, relpath)
-        else
-            relpath = simple_abspath(fsc)
-        endif
+        abspath = simple_abspath(fsc)
         ! add os_out entry
         ! check if field is empty
         n_os_out = self%os_out%get_noris()
@@ -1782,7 +1737,7 @@ contains
             endif
         endif
         ! fill-in field
-        call self%os_out%set(ind, 'fsc',     trim(relpath))
+        call self%os_out%set(ind, 'fsc',     abspath)
         call self%os_out%set(ind, 'imgkind', 'fsc')
         call self%os_out%set(ind, 'state',   state)
         call self%os_out%set(ind, 'box',     box)
@@ -1795,7 +1750,7 @@ contains
         integer,           intent(in)    :: state
         integer, optional, intent(in)    :: box
         character(len=:), allocatable :: imgkind
-        character(len=LONGSTRLEN)     :: relpath
+        character(len=LONGSTRLEN)     :: abspath
         integer                       :: n_os_out, ind, i, ldim(3), ifoo
         select case(trim(which_imgkind))
             case('vol_cavg','vol','vol_msk')
@@ -1810,11 +1765,7 @@ contains
                 THROW_HARD('invalid VOL kind: '//trim(which_imgkind)//'; add_vol2os_out 3')
         end select
         ! path and existence check
-        if( L_RELATIVE_PATH )then
-            call make_relativepath(CWD_GLOB, vol, relpath)
-        else
-            relpath = simple_abspath(vol)
-        endif  
+        abspath = simple_abspath(vol)
         ! check if field is empty
         n_os_out = self%os_out%get_noris()
         if( n_os_out == 0 )then
@@ -1862,10 +1813,10 @@ contains
             end select
         endif
         ! fill-in field
-        call self%os_out%set(ind, 'vol',     trim(relpath))
+        call self%os_out%set(ind, 'vol',     abspath)
         call self%os_out%set(ind, 'box',     ldim(1))
         call self%os_out%set(ind, 'smpd',    smpd)
-        call self%os_out%set(ind, 'imgkind', trim(which_imgkind))
+        call self%os_out%set(ind, 'imgkind', which_imgkind)
         call self%os_out%set(ind, 'state',   state)
     end subroutine add_vol2os_out
 
@@ -3131,7 +3082,7 @@ contains
         character(len=*),      intent(in)    :: projfile_src
         character(len=STDLEN), intent(in)    :: oritype
         character(len=:), allocatable :: boxfname, stkfname, movfname, micfname, src_path
-        character(len=LONGSTRLEN)     :: relstkname, relboxname, relmicname, relmovname
+        character(len=LONGSTRLEN)     :: absstkname, absboxname, absmicname, absmovname
         type(sp_project) :: self_src
         type(ori)        :: o, o_src
         integer          :: istk, nstks, imic, nmics, iptcl
@@ -3185,13 +3136,9 @@ contains
                 if( o_src%isthere('stk') )then
                     call o_src%getter('stk',stkfname)
                     if( stkfname(1:1).ne.'/' ) stkfname = trim(src_path)//'/'//trim(stkfname)
-                    if( L_RELATIVE_PATH )then
-                        call make_relativepath(CWD_GLOB, stkfname, relstkname)
-                    else
-                        relstkname = simple_abspath(stkfname)
-                    endif
-                    if( file_exists(relstkname) )then
-                        call o_src%set('stk', relstkname)
+                    absstkname = simple_abspath(stkfname, check_exists=.false.)
+                    if( file_exists(absstkname) )then
+                        call o_src%set('stk', absstkname)
                     else
                         err = .true.
                     endif
@@ -3201,21 +3148,17 @@ contains
                 if( o_src%isthere('boxfile') )then
                     call o_src%getter('boxfile',boxfname)
                     if( boxfname(1:1).ne.'/' ) boxfname = trim(src_path)//'/'//trim(boxfname)
-                    if( L_RELATIVE_PATH )then
-                        call make_relativepath(CWD_GLOB, boxfname, relboxname)
-                    else
-                        relboxname = simple_abspath(boxfname)
-                    endif
-                    if( file_exists(relboxname) )then
-                        call o_src%set('boxfile', relboxname)
+                    absboxname = simple_abspath(boxfname, check_exists=.false.)
+                    if( file_exists(absboxname) )then
+                        call o_src%set('boxfile', absboxname)
                     else
                         err = .true.
                     endif
                 endif
                 if( err )then
                     call o_src%print_ori
-                    write(logfhandle,*) trim(relstkname)
-                    write(logfhandle,*) trim(relboxname)
+                    write(logfhandle,*) trim(absstkname)
+                    write(logfhandle,*) trim(absboxname)
                     THROW_HARD('Missing stack or boxfile!')
                 else
                     call self%os_stk%set_ori(istk,o_src)
@@ -3240,30 +3183,22 @@ contains
                 if( o_src%isthere('movie') )then
                     call o_src%getter('movie',movfname)
                     if( movfname(1:1).ne.'/' ) movfname = trim(src_path)//'/'//trim(movfname)
-                    if( L_RELATIVE_PATH )then
-                        call make_relativepath(CWD_GLOB, movfname, relmovname)
+                    absmovname = simple_abspath(movfname, check_exists=.false.)
+                    if( file_exists(absmovname) )then
+                        call o_src%set('movie', absmovname)
                     else
-                        relmovname = simple_abspath(movfname)
-                    endif
-                    if( file_exists(relmovname) )then
-                        call o_src%set('movie', relmovname)
-                    else
-                        THROW_WARN('Movie could not be substituted: '//trim(movfname))
+                        THROW_WARN('Movie could not be substituted: '//trim(absmovname))
                     endif
                 endif
                 if( o_src%isthere('intg') )then
                     call o_src%getter('intg',micfname)
                     if( micfname(1:1).ne.'/' ) micfname = trim(src_path)//'/'//trim(micfname)
-                    if( L_RELATIVE_PATH )then
-                        call make_relativepath(CWD_GLOB, micfname, relmicname)
-                    else
-                        relmicname = simple_abspath(micfname)
-                    endif
-                    if( file_exists(relmicname) )then
-                        call o_src%set('movie', relmicname)
+                    absmicname = simple_abspath(micfname, check_exists=.false.)
+                    if( file_exists(absmicname) )then
+                        call o_src%set('movie', absmicname)
                     else
                         call o_src%print_ori
-                        write(logfhandle,*) trim(relmicname)
+                        write(logfhandle,*) trim(absmicname)
                         THROW_HARD('Missing micrograph!')
                     endif
                 endif
