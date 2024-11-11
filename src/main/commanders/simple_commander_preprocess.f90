@@ -1084,7 +1084,7 @@ contains
                 if( params_glob%nmoldiams > 1 )then
                     call spproj%os_mic%set(imic, 'moldiam', moldiam_opt)
                 else
-                    call spproj%os_mic%set_boxfile(imic, boxfile, nptcls=nptcls_out)
+                    call spproj%set_boxfile(imic, boxfile, nptcls=nptcls_out)
                 endif
             endif
             write(logfhandle,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the micrographs processed'
@@ -1408,8 +1408,8 @@ contains
             if( cline%defined('dir_box') )then
                 box_fname = trim(params%dir_box)//'/'//fname_new_ext(basename(mic_name),'box')
                 if( .not.file_exists(box_fname) )cycle
-                call make_relativepath(CWD_GLOB,trim(box_fname),boxfile_name, checkexists=.false.)
-                call spproj%os_mic%set_boxfile(imic, boxfile_name)
+                boxfile_name = simple_abspath(box_fname, check_exists=.false.)
+                call spproj%set_boxfile(imic, boxfile_name)
             else
                 boxfile_name = trim(o_mic%get_static('boxfile'))
                 if( .not.file_exists(boxfile_name) )cycle
@@ -1552,7 +1552,7 @@ contains
                 call stkio_w%close
                 ! update stack stats
                 call imgs(1)%update_header_stats(trim(adjustl(stack)), [stk_min, stk_max, stk_mean, stk_sdev])
-                ! IMPORT INTO PROJECT
+                ! IMPORT INTO PROJECT (with absolute path)
                 call spproj%add_stk(trim(adjustl(stack)), ctfparms)
                 ! add box coordinates to ptcl2D field only & updates patch-based defocus
                 l_ctfpatch = .false.
@@ -1637,18 +1637,6 @@ contains
                             enddo
                             spproj%os_mic = os_mic
                         endif
-                        ! update to boxfile path
-                        do imic = 1,nmics
-                            boxfile_name = trim(spproj%os_mic%get_static(imic, 'boxfile'))
-                            boxfile_name = trim(simple_abspath(boxfile_name, check_exists=.false.))
-                            call spproj%os_mic%set(imic, 'boxfile', boxfile_name)
-                        enddo
-                        ! and update to stack path
-                        do istk = 1,spproj%os_stk%get_noris(),1
-                            stack = trim(spproj%os_stk%get_static(istk, 'stk'))
-                            stack = trim(simple_abspath(stack, check_exists=.false.))
-                            call spproj%os_stk%set(istk, 'stk', stack)
-                        enddo
                     endif
                 endif
             endif
@@ -2150,8 +2138,7 @@ contains
                     else
                         call micrograph%update_header_stats(trim(adjustl(stack)), [stk_min, stk_max, stk_mean, stk_sdev])
                     endif
-                    call make_relativepath(CWD_GLOB, stack, rel_stack)
-                    call spproj_in%os_stk%set(stk_ind,'stk',   rel_stack)
+                    call spproj_in%os_stk%set(stk_ind,'stk',   simple_abspath(stack,check_exists=.false.))
                     call spproj_in%os_stk%set(stk_ind,'box',   params%box)
                     call spproj_in%os_stk%set(stk_ind,'nptcls',nptcls2extract)
                     call spproj_in%os_mic%set(imic,   'nptcls',nptcls2extract)

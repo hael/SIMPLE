@@ -415,7 +415,7 @@ contains
         type(ori)                     :: o
         type(image)                   :: micrograph_dw, micrograph_nodw, mic, background
         real,             allocatable :: frc(:), res(:)
-        character(len=LONGSTRLEN)     :: rel_fname, orig_mic
+        character(len=LONGSTRLEN)     :: abs_fname, orig_mic
         integer :: nmovies, imov, cnt, n
         logical :: l_bilinear_interp
         call cline%set('mkdir',   'no')
@@ -489,14 +489,11 @@ contains
             endif
             call generator%write_star(star_fname)
             ! parameters update
-            call make_relativepath(CWD_GLOB, mic_fname,    rel_fname)
-            call o%set('intg',   rel_fname)
-            call make_relativepath(CWD_GLOB, forctf_fname, rel_fname)
-            call o%set('forctf', rel_fname)
-            call make_relativepath(CWD_GLOB, star_fname,   rel_fname)
-            call o%set('mc_starfile', rel_fname)
-            call o%set('imgkind','mic')
-            call o%set('smpd',   micrograph_nodw%get_smpd())
+            call o%set('intg',        simple_abspath(mic_fname))
+            call o%set('forctf',      simple_abspath(forctf_fname))
+            call o%set('mc_starfile', simple_abspath(star_fname))
+            call o%set('imgkind',     'mic')
+            call o%set('smpd',        micrograph_nodw%get_smpd())
             call o%delete_entry('thumb')
             call spproj%os_mic%set_ori(imov, o)
             if( L_DEBUG )then
@@ -559,7 +556,7 @@ contains
                 if( trim(params%mkdir).eq.'yes')then
                     projects_fnames(i) = '../'//trim(projects_fnames(i))
                 endif
-                projects_fnames(i) = simple_abspath(projects_fnames(i), errmsg='simple_fileio::make_relativepath: '//trim(projects_fnames(i)))
+                projects_fnames(i) = simple_abspath(projects_fnames(i), errmsg='simple_fileio::simple_abspath: '//trim(projects_fnames(i)))
             endif
             if( .not.file_exists(projects_fnames(i))) THROW_HARD('Could not find: '//trim(projects_fnames(i)))
         enddo

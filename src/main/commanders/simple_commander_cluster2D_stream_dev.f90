@@ -131,18 +131,16 @@ contains
         call pool_proj%projinfo%delete_entry('projname')
         call pool_proj%projinfo%delete_entry('projfile')
         ! update to computational parameters to pool, will be transferred to chunks upon init
-        if( cline%defined('walltime') )then
-            call pool_proj%compenv%set(1,'walltime', real(params_glob%walltime))
-        endif
+        if( cline%defined('walltime') ) call pool_proj%compenv%set(1,'walltime', params_glob%walltime)
         call pool_proj%write(trim(POOL_DIR)//trim(PROJFILE_POOL))
         ! initialize chunks parameters and objects
         if( params_glob%nchunks > 0 )then
             if( params_glob%nparts_chunk > 1 )then
                 call cline_cluster2D_chunk%set('prg',    'cluster2D_distr')
-                call cline_cluster2D_chunk%set('nparts', real(params_glob%nparts_chunk))
+                call cline_cluster2D_chunk%set('nparts', params_glob%nparts_chunk)
             else
                 ! shared memory execution
-                call cline_cluster2D_chunk%set('prg',       'cluster2D')
+                call cline_cluster2D_chunk%set('prg',    'cluster2D')
             endif
             call cline_cluster2D_chunk%set('oritype',   'ptcl2D')
             call cline_cluster2D_chunk%set('center',    'no')
@@ -151,7 +149,7 @@ contains
             call cline_cluster2D_chunk%set('stream',    'no')
             call cline_cluster2D_chunk%set('startit',   1)
             call cline_cluster2D_chunk%set('mskdiam',   params_glob%mskdiam)
-            call cline_cluster2D_chunk%set('ncls',      real(params_glob%ncls_start))
+            call cline_cluster2D_chunk%set('ncls',      params_glob%ncls_start)
             call cline_cluster2D_chunk%set('minits',    CHUNK_MINITS)
             call cline_cluster2D_chunk%set('maxits',    CHUNK_MAXITS)
             call cline_cluster2D_chunk%set('extr_iter', CHUNK_EXTR_ITER)
@@ -178,7 +176,7 @@ contains
             ! also why not introduce params%nthr_chunk/pool and we do not have to deal with environment
             ! variables at all, everything is set on startup. Same goes for qsys_partition?
             nthr2D = params_glob%nthr2D
-            params_glob%nthr2D = int(cline_cluster2D_chunk%get_iarg('nthr'))
+            params_glob%nthr2D = cline_cluster2D_chunk%get_iarg('nthr')
             do ichunk = 1,params_glob%nchunks
                 call chunks(ichunk)%init(ichunk, pool_proj)
             enddo
@@ -195,7 +193,7 @@ contains
         call cline_cluster2D_pool%set('oritype',   'ptcl2D')
         call cline_cluster2D_pool%set('autoscale', 'no')
         call cline_cluster2D_pool%set('trs',       MINSHIFT)
-        call cline_cluster2D_pool%set('projfile',  trim(PROJFILE_POOL))
+        call cline_cluster2D_pool%set('projfile',  PROJFILE_POOL)
         call cline_cluster2D_pool%set('projname',  trim(get_fbody(trim(PROJFILE_POOL),trim('simple'))))
         call cline_cluster2D_pool%set('kweight',   params_glob%kweight_pool)
         if( cline%defined('center') )then
@@ -504,7 +502,7 @@ contains
             call frcs%write(frcsfname)
             call frcs%kill
             call frcs_sc%kill
-            call pool_proj%add_frcs2os_out(frcsfname, 'frc2D', absolutepath=.true.)
+            call pool_proj%add_frcs2os_out(frcsfname, 'frc2D')
             ! write
             pool_proj%os_ptcl3D = pool_proj%os_ptcl2D
             call pool_proj%os_ptcl3D%delete_2Dclustering
@@ -515,7 +513,7 @@ contains
                 src = add2fbody(cavgsfname,params_glob%ext,trim(WFILT_SUFFIX))
                 call pool_proj%add_cavgs2os_out(src, params_glob%smpd, 'cavg'//trim(WFILT_SUFFIX))
             endif
-            call pool_proj%add_frcs2os_out(frcsfname, 'frc2D', absolutepath=.true.)
+            call pool_proj%add_frcs2os_out(frcsfname, 'frc2D')
             ! write
             pool_proj%os_ptcl3D = pool_proj%os_ptcl2D
             call pool_proj%os_ptcl3D%delete_2Dclustering
@@ -625,10 +623,10 @@ contains
         if( nptcls_tot == 0 ) return
         pool_iter = pool_iter + 1 ! Global iteration counter update
         call cline_cluster2D_pool%set('refs',    refs_glob)
-        call cline_cluster2D_pool%set('ncls',    real(ncls_glob))
-        call cline_cluster2D_pool%set('startit', real(pool_iter))
-        call cline_cluster2D_pool%set('maxits',  real(pool_iter))
-        call cline_cluster2D_pool%set('frcs',    trim(FRCS_FILE))
+        call cline_cluster2D_pool%set('ncls',    ncls_glob)
+        call cline_cluster2D_pool%set('startit', pool_iter)
+        call cline_cluster2D_pool%set('maxits',  pool_iter)
+        call cline_cluster2D_pool%set('frcs',    FRCS_FILE)
         if( l_no_chunks )then
             ! for reference generation everything is defined here
             call cline_cluster2D_pool%set('extr_iter', CHUNK_EXTR_ITER+pool_iter-1)
@@ -818,8 +816,8 @@ contains
                 call cline_cluster2D_pool%set('update_frac', frac_update)
                 call cline_cluster2D_pool%set('center',      'no')
                 do icls = 1,ncls_glob
-                    call spproj%os_cls2D%set(icls,'prev_pop_even',real(prev_eo_pops(icls,1)))
-                    call spproj%os_cls2D%set(icls,'prev_pop_odd', real(prev_eo_pops(icls,2)))
+                    call spproj%os_cls2D%set(icls,'prev_pop_even',prev_eo_pops(icls,1))
+                    call spproj%os_cls2D%set(icls,'prev_pop_odd', prev_eo_pops(icls,2))
                 enddo
             endif
         endif
@@ -874,7 +872,7 @@ contains
         if( file_exists(fname) )then
             call os%new(1,is_ptcl=.false.)
             call os%read(fname)
-            it = nint(os%get(1,'ITERATION'))
+            it = os%get_int(1,'ITERATION')
             if( it == pool_iter )then
                 conv_mi_class = os%get(1,'CLASS_OVERLAP')
                 conv_frac     = os%get(1,'SEARCH_SPACE_SCANNED')
@@ -1046,7 +1044,7 @@ contains
             icls = cls2reject%get_class(i)
             if( icls == 0 ) cycle
             if( icls > ncls_glob ) cycle
-            if( nint(pool_proj%os_cls2D%get(icls,'pop')) == 0 ) cycle
+            if( pool_proj%os_cls2D%get_int(icls,'pop') == 0 ) cycle
             cls_mask(icls) = .true.
         enddo
         call cls2reject%kill
@@ -1111,8 +1109,8 @@ contains
         if( cls2reject%get_noris() == 0 ) return
         allocate(cls_mask(ncls_glob), source=.true.)
         do i = 1,pool_proj%os_cls2D%get_noris()
-            if( nint(pool_proj%os_cls2D%get(i,'pop'))   == 0 ) cls_mask(i) = .false.
-            if( nint(pool_proj%os_cls2D%get(i,'state')) == 0 ) cls_mask(i) = .false.
+            if( pool_proj%os_cls2D%get_int(i,'pop') == 0 ) cls_mask(i) = .false.
+            if( pool_proj%os_cls2D%get_state(i)     == 0 ) cls_mask(i) = .false.
         enddo
         do i = 1,cls2reject%get_noris()
             icls = cls2reject%get_class(i)
@@ -1816,7 +1814,7 @@ contains
         found = .true.
         call os%new(1,is_ptcl=.false.)
         call os%read(trim(CHECKPOINT_DIR)//STATS_FILE)
-        iter = nint(os%get(1,'ITERATION'))
+        iter = os%get_int(1,'ITERATION')
         call os%kill
     end subroutine read_checkpoint
 
@@ -2040,7 +2038,7 @@ contains
         ! chunk classification
         if( params%nparts_chunk > 1 )then
             call cline_cluster2D_chunk%set('prg', 'cluster2D_distr')
-            call cline_cluster2D_chunk%set('nparts', real(params%nparts_chunk))
+            call cline_cluster2D_chunk%set('nparts', params%nparts_chunk)
         else
             ! shared memory execution
             call cline_cluster2D_chunk%set('prg','cluster2D')
@@ -2050,8 +2048,8 @@ contains
         call cline_cluster2D_chunk%set('autoscale', 'no')
         call cline_cluster2D_chunk%set('mkdir',     'no')
         call cline_cluster2D_chunk%set('stream',    'no')
-        call cline_cluster2D_chunk%set('startit',   1.)
-        call cline_cluster2D_chunk%set('ncls',      real(params%ncls_start))
+        call cline_cluster2D_chunk%set('startit',   1)
+        call cline_cluster2D_chunk%set('ncls',      params%ncls_start)
         call cline_cluster2D_chunk%set('kweight',   params%kweight_chunk)
         call cline_cluster2D_chunk%set('ml_reg',    params%ml_reg_chunk)
         call cline_cluster2D_chunk%set('minits',    CHUNK_MINITS)
@@ -2066,17 +2064,17 @@ contains
         call cline_cluster2D_pool%set('prg',       'cluster2D_distr')
         call cline_cluster2D_pool%set('autoscale', 'no')
         call cline_cluster2D_pool%set('trs',       MINSHIFT)
-        call cline_cluster2D_pool%set('projfile',  trim(PROJFILE_POOL))
+        call cline_cluster2D_pool%set('projfile',  PROJFILE_POOL)
         call cline_cluster2D_pool%set('projname',  trim(get_fbody(trim(PROJFILE_POOL),trim('simple'))))
-        call cline_cluster2D_pool%set('extr_iter', 100.)
+        call cline_cluster2D_pool%set('extr_iter', 100)
         call cline_cluster2D_pool%set('mkdir',     'no')
         call cline_cluster2D_pool%set('async',     'yes') ! to enable hard termination
         call cline_cluster2D_pool%set('stream',    'yes') ! use for dual CTF treatment, sigma bookkeeping
-        call cline_cluster2D_pool%set('nparts',    real(params%nparts_pool))
+        call cline_cluster2D_pool%set('nparts',    params%nparts_pool)
         call cline_cluster2D_pool%set('kweight',   params%kweight_pool)
         call cline_cluster2D_pool%set('ml_reg',    params%ml_reg_pool)
         if( l_wfilt ) call cline_cluster2D_pool%set('wiener', 'partial')
-        if( l_update_sigmas ) call cline_cluster2D_pool%set('cc_iters', 0.0)
+        if( l_update_sigmas ) call cline_cluster2D_pool%set('cc_iters', 0)
         call cline_cluster2D_pool%delete('lpstop')
         ! Cropping-related command lines update
         call cline_cluster2D_chunk%set('smpd_crop', smpd)
@@ -2333,14 +2331,14 @@ contains
             spproj%jobproc = spproj_glob%jobproc
             call spproj%projinfo%new(1, is_ptcl=.false.)
             path = trim(cwd_glob)//'/'//trim(DIR_PROJS)
-            call spproj%projinfo%set(1,'cwd',trim(path))
+            call spproj%projinfo%set(1,'cwd', path)
             ! stacks/ptcls transfer
             allocate(micproj_records(nstks))
             do ichunk = 1,ntot_chunks
                 projname = trim(int2str_pad(ichunk,6))
                 projfile = trim(path)//trim(projname)//trim(METADATA_EXT)
-                call spproj%projinfo%set(1,'projname', trim(projname))
-                call spproj%projinfo%set(1,'projfile', trim(projfile))
+                call spproj%projinfo%set(1,'projname', projname)
+                call spproj%projinfo%set(1,'projfile', projfile)
                 nstks  = chunks_map(ichunk,2) - chunks_map(ichunk,1) + 1
                 nptcls = sum(stk_all_nptcls(chunks_map(ichunk,1):chunks_map(ichunk,2)))
                 call spproj%os_stk%new(nstks, is_ptcl=.false.)

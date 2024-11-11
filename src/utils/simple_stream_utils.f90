@@ -596,7 +596,7 @@ contains
             ! update stack path to absolute
             stack_name = trim(spproj%get_stkname(imic))
             if( stack_name(1:1) == '/' )then
-                ! already absolute path
+                ! already absolute path, should always be the case
             else if( stack_name(1:3) == '../' )then
                 stack_name = simple_abspath(trim(stack_name))
                 call spproj%os_stk%set(imic, 'stk', stack_name)

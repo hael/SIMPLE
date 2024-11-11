@@ -29,7 +29,7 @@ contains
         logical,                  intent(in)    :: l_gen_thumb
         type(ctf_estimate_fit)        :: ctffit
         character(len=:), allocatable :: fname_diag
-        character(len=LONGSTRLEN)     :: moviename_thumb, rel_moviename_thumb, rel_fname, docname, tmpl_fname
+        character(len=LONGSTRLEN)     :: moviename_thumb, docname, tmpl_fname
         integer                       :: nframes, ldim(3)
         if( .not. file_exists(moviename_forctf) )&
         & write(logfhandle,*) 'inputted micrograph does not exist: ', trim(adjustl(moviename_forctf))
@@ -59,19 +59,16 @@ contains
         if( l_gen_thumb )then
             call self%gen_thumbnail( ctffit )
             call self%img_jpg%write_jpg(moviename_thumb, norm=.true., quality=92)
-            call make_relativepath(CWD_GLOB,moviename_thumb, rel_moviename_thumb)
-            call orientation%set('thumb', trim(rel_moviename_thumb))
+            call orientation%set('thumb', simple_abspath(moviename_thumb))
         endif
         ! patch based fitting
         if( trim(params_glob%ctfpatch).eq.'yes' )then
             call ctffit%fit_patches
             call ctffit%write_doc(moviename_forctf, docname)
-            call make_relativepath(CWD_GLOB,docname,rel_fname)
-            call orientation%set('ctfdoc', rel_fname)
+            call orientation%set('ctfdoc', simple_abspath(docname))
         endif
         ! diagnostic image
         call ctffit%write_diagnostic(fname_diag)
-        call make_relativepath(CWD_GLOB,fname_diag, rel_fname)
         ! reporting
         call orientation%set_dfx(              ctfvars%dfx)
         call orientation%set_dfy(              ctfvars%dfy)
@@ -81,7 +78,7 @@ contains
         call orientation%set('ctfres',         ctffit%get_ctfres())
         call orientation%set('icefrac',        ctffit%get_icefrac())
         call orientation%set('astig',          ctffit%get_astig())
-        call orientation%set('ctfjpg',         rel_fname)
+        call orientation%set('ctfjpg',         simple_abspath(fname_diag))
         ! clean
         call ctffit%kill
     end subroutine iterate

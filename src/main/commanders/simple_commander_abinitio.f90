@@ -1355,7 +1355,7 @@ contains
                 call vol_even%fft()
                 call vol_odd%fft()
                 call vol_even%fsc(vol_odd, fsc)
-                fsc_fname = trim(FSC_FBODY)//int2str_pad(1,2)//BIN_EXT
+                fsc_fname = simple_abspath(trim(FSC_FBODY)//int2str_pad(1,2)//BIN_EXT, check_exists=.false.)
                 call arr2file(fsc, fsc_fname)
                 call cline_refine3D%set('fsc', '../'//trim(fsc_fname))
                 res = get_resarr(params%box_crop, params%smpd_crop)
