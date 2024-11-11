@@ -13,9 +13,8 @@ use simple_commander_mask
 use simple_commander_misc
 use simple_commander_oris
 use simple_commander_preprocess
-use simple_commander_preprocess_stream
 use simple_commander_cluster2D
-use simple_commander_cluster2D_stream_dev
+use simple_commander_cluster2D_stream
 use simple_commander_abinitio
 use simple_commander_abinitio2D
 use simple_commander_refine3D
@@ -49,7 +48,6 @@ type(merge_projects_commander)              :: xmerge_projects
 
 ! PRE-PROCESSING WORKFLOWS
 type(preprocess_commander_distr)            :: xpreprocess
-type(preprocess_commander_stream_dev)       :: xpreprocess_stream_dev
 type(extract_commander_distr)               :: xextract_distr
 type(reextract_commander_distr)             :: xreextract_distr
 type(motion_correct_commander_distr)        :: xmotion_correct_distr
@@ -217,8 +215,6 @@ select case(trim(prg))
     ! PRE-PROCESSING WORKFLOWS
     case( 'preprocess' )
         call xpreprocess%execute(cline)
-    case( 'preprocess_stream_dev' )
-        call xpreprocess_stream_dev%execute(cline)
     case( 'extract' )
         call xextract_distr%execute(cline)
     case( 'reextract' )
@@ -421,7 +417,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('be302bf6')
+call simple_print_git_version('4959cd31')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

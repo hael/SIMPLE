@@ -1615,29 +1615,25 @@ contains
         endif
         ! write
         if( trim(params%stream).eq.'yes' )then
-            if( cline%defined('newstream') )then
-                if( trim(cline%get_carg('newstream')).eq.'yes' )then
-                    ! purging state=0 and nptcls=0 mics such that all mics (nmics>1)
-                    ! can be assumed associated with particles in streaming
-                    nmics = count(mics_mask)
-                    if( nmics == 0 )then
-                        call spproj%os_mic%kill
-                        call spproj%os_stk%kill
-                        call spproj%os_ptcl2D%kill
-                        call spproj%os_ptcl3D%kill
-                    else
-                        if( nmics < nmics_here )then
-                            call os_mic%new(nmics, is_ptcl=.false.)
-                            cnt = 0
-                            do imic = 1, nmics_here
-                                if( mics_mask(imic) )then
-                                    cnt = cnt+1
-                                    call os_mic%transfer_ori(cnt, spproj%os_mic, imic)
-                                endif
-                            enddo
-                            spproj%os_mic = os_mic
+            ! purging state=0 and nptcls=0 mics such that all mics (nmics>1)
+            ! can be assumed associated with particles in streaming
+            nmics = count(mics_mask)
+            if( nmics == 0 )then
+                call spproj%os_mic%kill
+                call spproj%os_stk%kill
+                call spproj%os_ptcl2D%kill
+                call spproj%os_ptcl3D%kill
+            else
+                if( nmics < nmics_here )then
+                    call os_mic%new(nmics, is_ptcl=.false.)
+                    cnt = 0
+                    do imic = 1, nmics_here
+                        if( mics_mask(imic) )then
+                            cnt = cnt+1
+                            call os_mic%transfer_ori(cnt, spproj%os_mic, imic)
                         endif
-                    endif
+                    enddo
+                    spproj%os_mic = os_mic
                 endif
             endif
         endif

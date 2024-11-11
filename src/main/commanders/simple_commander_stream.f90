@@ -11,7 +11,7 @@ use simple_starproject_stream, only: starproject_stream
 use simple_guistats,           only: guistats
 use simple_moviewatcher,       only: moviewatcher
 use simple_stream_utils,       only: projrecord
-use simple_commander_cluster2D_stream_dev
+use simple_commander_cluster2D_stream
 use simple_qsys_funs
 use simple_commander_preprocess
 use simple_progress
@@ -850,8 +850,6 @@ contains
         else
             call cline_pick_extract%set('extract','no')
         endif
-        ! ugly single use flag for backwards compatibility, will need to go
-        call cline_pick_extract%set('newstream','yes')
         ! Infinite loop
         last_injection        = simple_gettime()
         prev_stacksz          = 0
@@ -1576,8 +1574,6 @@ contains
             else
                 params%box = 0
             endif
-            ! ugly single use flag for backwards compatibility, will need to go
-            call cline_pick_extract%set('newstream','yes')
         else
             ! extraction only
             cline_extract = cline
@@ -1591,8 +1587,6 @@ contains
             else
                 params%box = 0
             endif
-            ! ugly single use flag for backwards compatibility, will need to go
-            call cline_extract%set('newstream','yes')
         endif
         ! Infinite loop
         prev_stacksz          = 0
@@ -1697,13 +1691,13 @@ contains
             ! 2D section
             if( l_once .and. (nptcls_glob > params%nptcls_per_cls*params%ncls) )then
                 if( .not.cline%defined('mskdiam') ) params%mskdiam = 0.85 * real(params%box) * params%smpd
-                call init_cluster2D_stream_dev( cline, spproj_glob, params%box, micspproj_fname, reference_generation=.true. )
+                call init_cluster2D_stream( cline, spproj_glob, params%box, micspproj_fname, reference_generation=.true. )
                 l_once = .false.
             endif
-            call update_pool_status_dev
-            call update_pool_dev
+            call update_pool_status
+            call update_pool
             call import_records_into_pool( projrecords )
-            call classify_pool_dev
+            call classify_pool
             if(  params%nparts > 1 ) then
                 call sleep(WAITTIME)
             else
@@ -1719,7 +1713,7 @@ contains
         if( l_once )then
             ! nothing to write
         else
-            call terminate_stream2D_dev(projrecords)
+            call terminate_stream2D(projrecords)
         endif
         if(file_exists(STREAM_REJECT_CLS)) call write_pool_cls_selected_user
         call gui_stats%delete('latest', '')
@@ -2246,25 +2240,25 @@ contains
                 endif
             endif
             ! 2D classification section
-            call update_user_params_dev(cline, l_params_updated)
+            call update_user_params2D(cline, l_params_updated)
             if( l_params_updated ) l_pause = .false.
-            call update_chunks_dev
+            call update_chunks
             if( l_pause )then
-                call update_user_params_dev(cline, l_params_updated)
+                call update_user_params2D(cline, l_params_updated)
                 if( l_params_updated ) l_pause = .false.    ! resuming classification
             else
-                call update_pool_status_dev
-                call update_pool_dev
-                call update_user_params_dev(cline, l_params_updated)
-                call reject_from_pool_dev
+                call update_pool_status
+                call update_pool
+                call update_user_params2D(cline, l_params_updated)
+                call reject_from_pool
             endif
-            call reject_from_pool_user_dev
+            call reject_from_pool_user
             if( l_nchunks_maxed )then
                 ! # of chunks is above desired number
-                if( is_pool_available_dev() .and. (get_pool_iter()>=pool_iter_max_chunk_imported+10) ) exit
-                call classify_pool_dev
+                if( is_pool_available() .and. (get_pool_iter()>=pool_iter_max_chunk_imported+10) ) exit
+                call classify_pool
             else
-                call import_chunks_into_pool_dev( nchunks_imported )
+                call import_chunks_into_pool( nchunks_imported )
                 if( nchunks_imported > 0 )then
                     nchunks_imported_glob = nchunks_imported_glob + nchunks_imported
                     pool_iter_last_chunk  = get_pool_iter()
@@ -2289,7 +2283,7 @@ contains
                             &(time8()-pool_time_last_chunk > PAUSE_TIMELIMIT) )then
                             ! pause pool classification & rejection in absence of new chunks, resumes
                             ! when new chunks are added or classification parameters have been updated
-                            l_pause = is_pool_available_dev()
+                            l_pause = is_pool_available()
                             if( l_pause ) write(logfhandle,'(A)')'>>> PAUSING CLASSIFICATION'
                         endif
                     endif
@@ -2298,9 +2292,9 @@ contains
                 if( l_pause )then
                     call generate_pool_stats
                 else
-                    call classify_pool_dev
+                    call classify_pool
                 endif
-                call classify_new_chunks_dev(projrecords)
+                call classify_new_chunks(projrecords)
             endif
             call sleep(WAITTIME)
             ! guistats
@@ -2312,7 +2306,7 @@ contains
             call gui_stats%write_json
         end do
         ! termination
-        call terminate_stream2D_dev( projrecords )
+        call terminate_stream2D( projrecords )
         call update_user_params(cline) ! Joe: bit late for this?
         ! final stats
         if(file_exists(POOLSTATS_FILE)) call gui_stats%merge(POOLSTATS_FILE, delete = .true.)
@@ -2399,14 +2393,14 @@ contains
                         params%smpd = spprojs(first)%os_mic%get(1,'smpd')
                         call spprojs(first)%read_segment('stk', trim(projectnames(first)))
                         params%box  = nint(spprojs(first)%os_stk%get(1,'box'))
-                        call init_cluster2D_stream_dev(cline, spproj_glob, params%box, micspproj_fname)
+                        call init_cluster2D_stream(cline, spproj_glob, params%box, micspproj_fname)
                         call cline%delete('ncls')
                     end if
                 else if( n_old == 0 )then
                     params%smpd = spprojs(first)%os_mic%get(1,'smpd')
                     call spprojs(first)%read_segment('stk', trim(projectnames(first)))
                     params%box  = nint(spprojs(first)%os_stk%get(1,'box'))
-                    call init_cluster2D_stream_dev(cline, spproj_glob, params%box, micspproj_fname)
+                    call init_cluster2D_stream(cline, spproj_glob, params%box, micspproj_fname)
                     call cline%delete('ncls')
                 endif
                 ! cleanup
