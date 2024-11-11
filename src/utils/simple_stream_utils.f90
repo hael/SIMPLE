@@ -47,8 +47,7 @@ type stream_chunk
     logical                                :: available  = .true.   ! has been initialized but no classification peformed
   contains
     procedure          :: init
-    procedure, private :: generate_1, generate_2
-    generic            :: generate => generate_1, generate_2
+    procedure          :: generate
     procedure          :: calc_sigma2
     procedure          :: exec_classify
     procedure          :: read
@@ -111,70 +110,7 @@ contains
         call debug_print('end chunk%init '//int2str(id))
     end subroutine init
 
-    ! For backward compatibility with preprocess_stream_dev
-    subroutine generate_1( self, fnames, nptcls, ind_glob )
-        class(stream_chunk),       intent(inout) :: self
-        character(len=LONGSTRLEN), intent(in)    :: fnames(:)
-        integer,                   intent(in)    :: nptcls, ind_glob
-        type(sp_project)              :: spproj
-        character(len=:), allocatable :: stack_name
-        logical, allocatable          :: spproj_mask(:)
-        integer :: iproj, iptcl, cnt, inptcls, nptcls_tot, fromp, iiproj, n_in, inmics, instks
-        if( .not.self%available ) THROW_HARD('chunk unavailable; chunk%generate')
-        n_in = size(fnames)
-        if( n_in == 0 ) THROW_HARD('# ptcls == 0; chunk%generate')
-        call debug_print('in chunk%generate '//int2str(self%id)//' '//int2str(ind_glob)//' '//int2str(nptcls)//' '//int2str(n_in))
-        allocate(spproj_mask(n_in),source=.false.)
-        nptcls_tot = 0
-        do iproj = 1,n_in
-            call spproj%read_data_info(fnames(iproj), inmics, instks, inptcls)
-            spproj_mask(iproj) = inptcls > 0
-            if( spproj_mask(iproj) ) nptcls_tot = nptcls_tot + inptcls
-        enddo
-        call spproj%kill
-        if( nptcls /= nptcls_tot ) THROW_HARD('Inconsistent # of particles; chunk%generate')
-        self%nmics  = count(spproj_mask)
-        self%nptcls = nptcls
-        call self%spproj%os_mic%new(self%nmics, is_ptcl=.false.)
-        call self%spproj%os_stk%new(self%nmics, is_ptcl=.false.)
-        call self%spproj%os_ptcl2D%new(self%nptcls, is_ptcl=.true.)
-        allocate(self%orig_stks(self%nmics))
-        cnt    = 0
-        fromp  = 1
-        iiproj = 0
-        do iproj = 1,n_in
-            if( .not.spproj_mask(iproj) ) cycle
-            iiproj = iiproj + 1
-            call spproj%read_mic_stk_ptcl2D_segments(fnames(iproj))
-            inptcls = spproj%os_mic%get_int(1,'nptcls')
-            call self%spproj%os_mic%transfer_ori(iiproj, spproj%os_mic, 1)
-            call self%spproj%os_stk%transfer_ori(iiproj, spproj%os_stk, 1)
-            ! update to stored stack file name because we are in the root folder
-            stack_name = trim(spproj%get_stkname(1))
-            if( .not.file_exists(stack_name) )then
-                ! for cluster2D_stream, 4 is for '../'
-                self%orig_stks(iiproj) = simple_abspath(trim(stack_name(4:)))
-            else
-                ! for cluster2d_subsets
-                self%orig_stks(iiproj) = simple_abspath(trim(stack_name))
-            endif
-            call self%spproj%os_stk%set(iiproj, 'stk', self%orig_stks(iiproj))
-            do iptcl = 1,inptcls
-                cnt = cnt + 1
-                call self%spproj%os_ptcl2D%transfer_ori(cnt, spproj%os_ptcl2D, iptcl)
-                call self%spproj%os_ptcl2D%set_stkind(cnt, iiproj)
-            enddo
-            call self%spproj%os_stk%set(iiproj, 'fromp', fromp)
-            call self%spproj%os_stk%set(iiproj, 'top',   fromp+inptcls-1)
-            fromp = fromp + inptcls
-        enddo
-        call spproj%kill
-        self%spproj%os_ptcl3D = self%spproj%os_ptcl2D
-        call debug_print('end chunk%generate '//int2str(self%id))
-    end subroutine generate_1
-
-    ! For use by cluster2D_stream_dev
-    subroutine generate_2( self, micproj_records )
+    subroutine generate( self, micproj_records )
         class(stream_chunk), intent(inout) :: self
         type(projrecord),    intent(in)    :: micproj_records(:)
         integer :: istk
@@ -189,7 +125,7 @@ contains
             self%orig_stks(istk) = self%spproj%get_stkname(istk)
         enddo
         call debug_print('end chunk%generate_2 '//int2str(self%id))
-    end subroutine generate_2
+    end subroutine generate
 
     ! Initiates classification
     subroutine exec_classify( self, cline_classify, orig_smpd, orig_box, box, calc_pspec )

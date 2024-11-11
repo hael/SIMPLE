@@ -96,7 +96,6 @@ type :: parameters
     character(len=3)          :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
     character(len=3)          :: sh_first='no'        !< shifting before orientation search(yes|no){no}
     character(len=3)          :: sh_inv='no'          !< whether to use shift invariant metric for projection direction assignment(yes|no){no}
-    character(len=3)          :: newstream='no'       !< new streaming version
     character(len=3)          :: stream='no'          !< stream (real time) execution mode(yes|no){no}
     character(len=3)          :: symrnd='no'          !< randomize over symmetry operations(yes|no){no}
     character(len=3)          :: taper_edges='no'     !< self-explanatory
@@ -597,7 +596,6 @@ contains
         call check_carg('multi_moldiams', self%multi_moldiams)
         call check_carg('needs_sigma',    self%needs_sigma)
         call check_carg('neg',            self%neg)
-        call check_carg('newstream',      self%newstream)
         call check_carg('noise_norm',     self%noise_norm)
         call check_carg('norm',           self%norm)
         call check_carg('nonuniform',     self%nonuniform)
