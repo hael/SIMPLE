@@ -960,7 +960,7 @@ contains
         real, allocatable :: sims(:)
         integer :: loc(1), i, j, n
         n = size(smat,1)
-        if( n /= size(smat,2) ) THROW_HARD('symmetric similarity matrix assumed; stat :: dev_from_smat')
+        if( n /= size(smat,2) ) THROW_HARD('symmetric similarity matrix assumed; stat :: medoid_from_smat')
         allocate(sims(n))
         do i=1,n
             sims(i) = 0.0
@@ -974,12 +974,13 @@ contains
         i_medoid = loc(1)
         ! sdev     = median(smat(i_medoid,:))
     end subroutine medoid_from_smat
-
-    subroutine medoid_ranking_from_smat( smat, rank )
+    
+    subroutine medoid_ranking_from_smat( smat, i_medoid, rank )
         real,                 intent(in)    :: smat(:,:)
+        integer,              intent(out)   :: i_medoid
         integer, allocatable, intent(inout) :: rank(:)
         real,    allocatable :: sims(:)
-        integer :: i_medoid, i, n 
+        integer :: i, n 
         call medoid_from_smat( smat, i_medoid )
         n = size(smat,1)
         allocate(sims(n), source=smat(i_medoid,:))
