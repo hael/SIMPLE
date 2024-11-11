@@ -7,7 +7,7 @@ use simple_image,      only: image
 use simple_parameters, only: params_glob
 implicit none
 
-public :: calc_cartesian_corrmat
+public :: calc_cartesian_corrmat, calc_inplane_invariant_corrmat
 private
 #include "simple_local_flags.inc"
 
