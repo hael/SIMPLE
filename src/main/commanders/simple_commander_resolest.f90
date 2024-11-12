@@ -446,7 +446,12 @@ contains
             call even(i)%fsc(odd(i), fsc)
             call get_resolution(fsc, res, resolutions(i), res_frc0143)
             ! calculate a filter to be applied to the individual e/o pairs
-            where( fsc > 0.        ) filt = fsc / (fsc + 1.)
+            where( fsc > 0. )
+                filt = 2. * fsc / (fsc + 1.)   ! gold standard
+                ! filt = fsc                     ! e/o merged
+            else where
+                filt = 0.
+            end where
             where( filt  > 0.99999 ) filt = 0.99999
             ! apply filter
             call even(i)%apply_filter_serial(filt)
