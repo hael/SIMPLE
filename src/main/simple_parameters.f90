@@ -173,7 +173,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: xmlloc=''
     ! other character variables in ascending alphabetical order
     character(len=STDLEN)     :: algorithm=''         !< algorithm to be used
-    character(len=STDLEN)     :: bin_cls='yes'        !< binary clustering applied(yes|no|only){yes}
+    character(len=STDLEN)     :: bin_cls='yes'        !< binary clustering applied(yes|no){yes}
     character(len=STDLEN)     :: cls_init='ptcl'      !< Scheme to generate initial references for 2D classification(ptcl|randcls|rand)
     character(len=STDLEN)     :: cn_type='cn_std'     !< generalised coordination number (cn_gen) or stardard (cn_std)
     character(len=STDLEN)     :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
