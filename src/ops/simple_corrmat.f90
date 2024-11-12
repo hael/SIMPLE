@@ -175,6 +175,7 @@ contains
         ! generate nearest neighbor structure
         nrots = pftcc%get_nrots()
         allocate(inpl_corrs(nrots), corrmat(n,n), source=0.)
+        corrmat = 1.
         !$omp parallel do default(shared) private(i,j,ithr,inpl_corrs,loc,irot,cxy) schedule(dynamic) proc_bind(close)
         do i = 1, n - 1
             do j = i + 1, n
@@ -191,7 +192,6 @@ contains
                 endif
                 corrmat(j,i) = corrmat(i,j)
             enddo
-            corrmat(i,i) = 1.
         enddo
         !$omp end parallel do
         ! destruct
