@@ -144,8 +144,6 @@ type :: polarft_corrcalc
     procedure          :: calc_corr_rot_shift, calc_magcorr_rot
     procedure          :: bidirectional_shift_search
     procedure          :: gencorrs_mag, gencorrs_mag_cc
-    procedure          :: genmaxcorr_comlin
-    procedure          :: comlin_shift_search
     procedure          :: gencorrs_weighted_cc, gencorrs_shifted_weighted_cc
     procedure          :: gencorrs_cc,          gencorrs_shifted_cc
     procedure          :: gencorrs_euclid,      gencorrs_shifted_euclid
@@ -1455,116 +1453,6 @@ contains
             endif
         end do
     end subroutine calc_frc
-
-    ! Identifies optimal pair of common-lines & correlation (no CTF)
-    subroutine genmaxcorr_comlin( self, ieven, jeven, clcc, magnitude, pair )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: ieven, jeven
-        real,                    intent(out)   :: clcc
-        logical, optional,       intent(in)    :: magnitude
-        integer, optional,       intent(out)   :: pair(2)
-        complex(sp), pointer :: pft_ref_i(:,:), pft_ref_j(:,:)
-        real     :: cc
-        integer  :: ithr, i,j,el,ol
-        logical  :: mag
-        mag = .false.
-        if( present(magnitude) ) mag = magnitude
-        ithr      =       omp_get_thread_num() + 1
-        pft_ref_i =>      self%heap_vars(ithr)%pft_ref
-        pft_ref_j =>      self%heap_vars(ithr)%pft_ref_tmp
-        pft_ref_i =       self%pfts_refs_even(:,:,ieven)
-        pft_ref_j = conjg(self%pfts_refs_even(:,:,jeven)) ! pre-conjugate
-        if( mag )then
-            ! conversion to magnitudes
-            pft_ref_i = cmplx(real(pft_ref_i*conjg(pft_ref_i)),0.)
-            pft_ref_j = cmplx(real(pft_ref_j*conjg(pft_ref_j)),0.)
-        endif
-        clcc = -2.
-        el   = 0
-        ol   = 0
-        if( mag )then
-            do i = 1, self%pftsz
-                pft_ref_i(i,:) = pft_ref_i(i,:) / sqrt(sum(real(pft_ref_i(i,:))**2))
-                pft_ref_j(i,:) = pft_ref_j(i,:) / sqrt(sum(real(pft_ref_j(i,:))**2))
-            enddo
-            do i = 1, self%pftsz
-                do j = 1, self%pftsz
-                    cc = sum(real(pft_ref_i(i,:)) * real(pft_ref_j(j,:)))
-                    if( cc > clcc )then
-                        el   = i
-                        ol   = j
-                        clcc = cc
-                    endif
-                end do
-            end do
-        else
-            ! normalization
-            do i = 1, self%pftsz
-                pft_ref_i(i,:) = pft_ref_i(i,:) / sqrt(sum(real(pft_ref_i(i,:)*conjg(pft_ref_i(i,:)))))
-                pft_ref_j(i,:) = pft_ref_j(i,:) / sqrt(sum(real(pft_ref_j(i,:)*conjg(pft_ref_j(i,:)))))
-            enddo
-            do i = 1, self%pftsz
-                do j = 1, self%pftsz
-                    ! i in [0,pi[ / j in [0,pi[
-                    cc = sum(real(pft_ref_i(i,:) * pft_ref_j(j,:)))
-                    if( cc > clcc )then
-                        el   = i
-                        ol   = j
-                        clcc = cc
-                    endif
-                    ! i in [0,pi[ / j in [pi,2pi[
-                    cc = sum(real(pft_ref_i(i,:) * conjg(pft_ref_j(j,:))))
-                    if( cc > clcc )then
-                        el   = i
-                        ol   = self%pftsz + j
-                        clcc = cc
-                    endif
-                enddo
-            end do
-        endif
-        clcc = max(0.,min(1.0,clcc))
-        if( present(pair) ) pair = [el, ol]
-    end subroutine genmaxcorr_comlin
-
-    ! Optimal offset correlation between pairs of common lines (no CTF)
-    subroutine comlin_shift_search( self, eind, oind, el, ol, trs, step, clcc )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: eind, oind    ! pft indices
-        integer,                 intent(in)    :: el, ol        ! rotation indices
-        real,                    intent(in)    :: trs, step     ! half-limit
-        real,                    intent(out)   :: clcc
-        complex(sp) :: eline(self%kfromto(1):self%kfromto(2))
-        complex(sp) :: oline(self%kfromto(1):self%kfromto(2))
-        complex(sp) :: argvec(self%kfromto(1):self%kfromto(2))
-        real    :: cc, offset, phase_diff
-        integer :: k
-        if( el <= self%pftsz )then
-            eline = self%pfts_refs_even(el,:,eind)
-        else
-            eline = conjg(self%pfts_refs_even(el-self%pftsz,:,eind))
-        endif
-        if( ol <= self%pftsz )then
-            oline = self%pfts_refs_even(ol,:,oind)
-        else
-            oline = conjg(self%pfts_refs_even(ol-self%pftsz,:,oind))
-        endif
-        ! normalization
-        eline = eline / sqrt(sum(real(eline*conjg(eline))))
-        oline = oline / sqrt(sum(real(oline*conjg(oline))))
-        ! offset loop
-        clcc   = -2.0
-        offset = -trs
-        do while( offset <= trs+0.001 )
-            phase_diff = offset*TWOPI / real(self%ldim(1))
-            do k = self%kfromto(1),self%kfromto(2)
-                argvec(k) = cmplx(cos(real(k)*phase_diff), sin(real(k)*phase_diff))
-            enddo
-            cc     = sum( real((argvec*eline) * conjg(oline)) )
-            clcc   = max(cc,clcc)
-            offset = offset + step
-        enddo
-        clcc = max(0.,min(1.0,clcc))
-    end subroutine comlin_shift_search
 
     subroutine gencorrs_1( self, iref, iptcl, cc, kweight )
         class(polarft_corrcalc), intent(inout) :: self

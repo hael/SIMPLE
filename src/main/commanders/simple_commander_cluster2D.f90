@@ -1566,7 +1566,7 @@ contains
         type(image)                   :: img_msk
         type(polarft_corrcalc)        :: pftcc
         type(aff_prop)                :: aprop
-        type(image),      allocatable :: cavg_imgs(:), tmp_imgs(:), ccimgs(:,:)
+        type(image),      allocatable :: cavg_imgs(:), ccimgs(:,:)
         type(polarizer)               :: polartransform
         character(len=:), allocatable :: cavgsstk, cavgsstk_shifted, classname, frcs_fname
         real,             allocatable :: states(:), frc(:), filter(:), clspops(:), clsres(:)
@@ -1575,10 +1575,10 @@ contains
         integer,          allocatable :: order(:), nloc(:), centers(:), labels(:), cntarr(:), clsinds(:), pops(:)
         integer,          allocatable :: labels_mapped(:), classmapping(:)
         logical,          parameter   :: DEBUG = .true.
-        integer :: ldim(3), clpair(2), loc(1), ncls, n, ncls_sel, i, j, icls, cnt, filtsz, pop1, pop2, nsel
+        integer :: ldim(3), loc(1), ncls, n, ncls_sel, i, j, icls, cnt, filtsz, pop1, pop2, nsel
         integer :: ithr, ncls_aff_prop, icen, jcen
-        real    :: smpd, simsum, cmin, cmax, pref, corr_icls, cc,ccm, trsstep
-        logical :: l_apply_optlp, use_shifted, l_mag
+        real    :: smpd, simsum, cmin, cmax, pref, corr_icls, cc,ccm
+        logical :: l_apply_optlp, use_shifted
         ! defaults
         call cline%set('oritype', 'cls2D')
         call cline%set('ctf',     'no')
@@ -1683,47 +1683,68 @@ contains
         ! resolution limits
         params%kfromto(1) = max(2, calc_fourier_index(params%hp, params%box, params%smpd))
         params%kfromto(2) =        calc_fourier_index(params%lp, params%box, params%smpd)
-        if( trim(params%bin_cls).ne.'no' )then
-            ! initialize pftcc, polarizer
-            call pftcc%new(ncls_sel, [1,1], params%kfromto)
-            call polartransform%init_polarizer(pftcc, params%alpha)
-            !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
-            do icls = 1, ncls_sel
-                call cavg_imgs(icls)%fft()
-                call polartransform%polarize(pftcc, cavg_imgs(icls), icls, isptcl=.false., iseven=.true.) ! 2 polar coords
-                call cavg_imgs(icls)%ifft()
-            end do
-            !$omp end parallel do
-            ! some allocations needed
-            nsel = ceiling(0.1 * real(ncls_sel))
-            allocate(nloc(nsel), order(ncls_sel),                                    source=0)
-            allocate(corrmat(ncls_sel,ncls_sel), corrs_top_ranking(ncls_sel), source=-1.)
-            allocate(mask_top_ranking(ncls_sel),                                     source=.true.)
-            write(logfhandle,'(A)') '>>> CALCULATING COMMON-LINE CORRELATION MATRIX'
-            !$omp parallel do default(shared) private(i,j) schedule(dynamic) proc_bind(close)
-            do i = 1, ncls_sel - 1
-                do j = i + 1, ncls_sel
-                    ! Common line correlation
-                    call pftcc%genmaxcorr_comlin(i,j,corrmat(i,j))
-                    corrmat(j,i) = corrmat(i,j)
-                enddo
-                corrmat(i,i) = 1.
+        ! Fourier-Mellin transform
+        write(logfhandle,'(A)') '>>> CALCULATING CORRELATION OF MAGNITUDES MATRIX'
+        allocate(corrmat(ncls_sel,ncls_sel), source=-1.)
+        ! polarizer, pftcc
+        params%sh_inv = 'yes'
+        call pftcc%new(ncls_sel, [1,ncls_sel], params%kfromto)
+        call polartransform%init_polarizer(pftcc, params%alpha)
+        !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
+        do icls = 1, ncls_sel
+            call cavg_imgs(icls)%fft()
+            ! particles & even refs are the same, odd refs are even mirrored
+            call polartransform%polarize(pftcc, cavg_imgs(icls), icls, isptcl=.false., iseven=.true.)
+            call pftcc%cp_even_ref2ptcl(icls,icls)
+            call pftcc%mirror_pft(pftcc%pfts_refs_even(:,:,icls), pftcc%pfts_refs_odd(:,:,icls))            
+        end do
+        !$omp end parallel do
+        call pftcc%memoize_refs
+        call pftcc%memoize_ptcls
+        allocate(fm_correlators(nthr_glob),ccimgs(nthr_glob,2))
+        do i = 1,nthr_glob
+            call fm_correlators(i)%new(params%trs,1.,opt_angle=.false.)
+            call ccimgs(i,1)%new(ldim, smpd, wthreads=.false.)
+            call ccimgs(i,2)%new(ldim, smpd, wthreads=.false.)
+        enddo
+        !$omp parallel do default(shared) private(i,j,cc,ccm,ithr)&
+        !$omp schedule(dynamic) proc_bind(close)
+        do i = 1, ncls_sel - 1
+            ithr = omp_get_thread_num()+1
+            corrmat(i,i) = 1.
+            do j = i, ncls_sel
+                ! correlation of reference to particle
+                call pftcc%set_eo(i,.true.)
+                call fm_correlators(ithr)%calc_phasecorr(j, i, cavg_imgs(j), cavg_imgs(i),&
+                    &ccimgs(ithr,1), ccimgs(ithr,2), cc)
+                ! correlation of mirrored reference to particle
+                ! call pftcc%set_eo(i,.false.)
+                ! call fm_correlators(ithr)%calc_phasecorr(j, i, cavg_imgs(j), cavg_imgs(i),&
+                !     &ccimgs(ithr,1), ccimgs(ithr,2), ccm, mirror=.true.)
+                ! cc = max(cc,ccm)
+                corrmat(i,j) = cc
+                corrmat(j,i) = cc
             enddo
-            !$omp end parallel do
-            ! take care of the last diagonal element
-            corrmat(ncls_sel,ncls_sel) = 1.
+        enddo
+        !$omp end parallel do
+        corrmat(ncls_sel,ncls_sel) = 1.
+        do i = 1,nthr_glob
+            call fm_correlators(i)%kill
+            call ccimgs(i,1)%kill
+            call ccimgs(i,2)%kill
+        enddo
+        deallocate(fm_correlators,ccimgs)
+        if( trim(params%bin_cls).eq.'yes' )then
             write(logfhandle,'(A)') '>>> GOOD/BAD CLASSIFICATION AND RANKING OF CLASS AVERAGES'
+            nsel = ceiling(0.1 * real(ncls_sel))
+            allocate(mask_top_ranking(ncls_sel),corrs_top_ranking(ncls_sel),nloc(nsel))
             ! average the nsel best correlations (excluding self) to create a scoring function for garbage removal
             do i = 1, ncls_sel
                 mask_top_ranking    = .true.
                 mask_top_ranking(i) = .false. ! to remove the diagonal element
                 corrs = pack(corrmat(i,:), mask_top_ranking)
-                nloc = maxnloc(corrs, nsel)
-                corrs_top_ranking(i) = 0.
-                do j = 1, nsel
-                    corrs_top_ranking(i) = corrs_top_ranking(i) + corrs(nloc(j))
-                end do
-                corrs_top_ranking(i) = corrs_top_ranking(i) / real(nsel)
+                nloc  = maxnloc(corrs, nsel)
+                corrs_top_ranking(i) = sum(corrs(nloc(1:nsel))) / real(nsel)
             end do
             ! use Otsu's algorithm to remove the junk
             allocate(mask_otsu(ncls_sel))
@@ -1735,6 +1756,7 @@ contains
             pop1 = 0
             pop2 = 0
             do i = 1, ncls_sel
+                call cavg_imgs(i)%ifft()
                 if( mask_otsu(i) )then
                     pop1 = pop1 + 1
                     call cavg_imgs(i)%write('good.mrc', pop1)
@@ -1749,117 +1771,11 @@ contains
             do i = 1, ncls_sel
                 call cavg_imgs(order(i))%write('ranked.mrc', i)
             end do
-            ! update the states array according to the good/bad classification
-            do i = 1, ncls_sel
-                if( .not. mask_otsu(i) ) states(clsinds(i)) = 0.
-            end do
-            ! update the class indices (bookkeeping is getting hairy)
-            deallocate(clsinds)
-            allocate(clsinds(ncls))
-            clsinds = (/(i,i=1,ncls)/)
-            clsinds = pack(clsinds, mask=states > 0.5)
-            ! toss out the bad ones
-            allocate(tmp_imgs(pop1))
-            pop1 = 0
-            do i = 1, ncls_sel
-                if( mask_otsu(i) )then
-                    pop1 = pop1 + 1
-                    call tmp_imgs(pop1)%copy(cavg_imgs(i))
-                endif
-                call cavg_imgs(i)%kill
-            end do
-            deallocate(cavg_imgs)
-            call move_alloc(tmp_imgs, cavg_imgs)
-            ncls_sel = pop1
-            write(logfhandle,'(A,I3)') '# classes left after binary classification rejection ', ncls_sel
-        endif
-        trsstep = min(1.,params%trs/10.)
-        if( trim(params%bin_cls).ne.'only' )then
-            if( allocated(corrmat) ) deallocate(corrmat)
-            allocate(corrmat(ncls_sel,ncls_sel), source=-1.)
-            select case(trim(params%algorithm))
-            case('magcc')
-                ! Fourier-Mellin transform
-                write(logfhandle,'(A)') '>>> CALCULATING CORRELATION OF MAGNITUDES MATRIX'
-                ! polarizer, pftcc
-                params%sh_inv = 'yes'
-                call pftcc%new(ncls_sel, [1,ncls_sel], params%kfromto)
-                call polartransform%init_polarizer(pftcc, params%alpha)
-                !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
-                do icls = 1, ncls_sel
-                    call cavg_imgs(icls)%fft()
-                    ! particles & even refs are the same, odd refs are even mirrored
-                    call polartransform%polarize(pftcc, cavg_imgs(icls), icls, isptcl=.false., iseven=.true.)
-                    call pftcc%cp_even_ref2ptcl(icls,icls)
-                    call pftcc%mirror_pft(pftcc%pfts_refs_even(:,:,icls), pftcc%pfts_refs_odd(:,:,icls))
-                end do
-                !$omp end parallel do
-                call pftcc%memoize_refs
-                call pftcc%memoize_ptcls
-                allocate(fm_correlators(nthr_glob),ccimgs(nthr_glob,2))
-                do i = 1,nthr_glob
-                    call fm_correlators(i)%new(params%trs,trsstep,opt_angle=.false.)
-                    call ccimgs(i,1)%new(ldim, smpd, wthreads=.false.)
-                    call ccimgs(i,2)%new(ldim, smpd, wthreads=.false.)
-                enddo
-                !$omp parallel do default(shared) private(i,j,cc,ccm,ithr)&
-                !$omp schedule(dynamic) proc_bind(close)
-                do i = 1, ncls_sel - 1
-                    ithr = omp_get_thread_num()+1
-                    corrmat(i,i) = 1.
-                    do j = i, ncls_sel
-                        ! correlation of reference to particle
-                        call pftcc%set_eo(i,.true.)
-                        call fm_correlators(ithr)%calc_phasecorr(j, i, cavg_imgs(j), cavg_imgs(i),&
-                            &ccimgs(ithr,1), ccimgs(ithr,2), cc)
-                        ! correlation of mirrored reference to particle
-                        call pftcc%set_eo(i,.false.)
-                        call fm_correlators(ithr)%calc_phasecorr(j, i, cavg_imgs(j), cavg_imgs(i),&
-                            &ccimgs(ithr,1), ccimgs(ithr,2), ccm, mirror=.true.)
-                        cc = max(cc,ccm)
-                        corrmat(i,j) = cc
-                        corrmat(j,i) = cc
-                    enddo
-                enddo
-                !$omp end parallel do
-                corrmat(ncls_sel,ncls_sel) = 1.
-                do i = 1,nthr_glob
-                    call fm_correlators(i)%kill
-                    call ccimgs(i,1)%kill
-                    call ccimgs(i,2)%kill
-                enddo
-                deallocate(fm_correlators,ccimgs)
-            case DEFAULT
-                write(logfhandle,'(A)') '>>> CALCULATING COMMON-LINE CORRELATION MATRIX'
-                call pftcc%new(ncls_sel, [1,ncls_sel], params%kfromto)
-                call polartransform%init_polarizer(pftcc, params%alpha)
-                l_mag = trim(params%algorithm)=='mag'
-                !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
-                do icls = 1, ncls_sel
-                    call cavg_imgs(icls)%fft()
-                    call polartransform%polarize(pftcc, cavg_imgs(icls), icls, isptcl=.false., iseven=.true.) ! 2 polar coords
-                    call cavg_imgs(icls)%ifft()
-                end do
-                !$omp end parallel do
-                if( allocated(corrmat) ) deallocate(corrmat)
-                allocate(corrmat(ncls_sel,ncls_sel), source=-1.)
-                !$omp parallel do default(shared) private(i,j,cc,clpair) schedule(dynamic) proc_bind(close)
-                do i = 1, ncls_sel-1
-                    corrmat(i,i) = 1.
-                    do j = i+1, ncls_sel
-                        call pftcc%genmaxcorr_comlin(i, j, cc, magnitude=l_mag, pair=clpair)
-                        if( l_mag ) call pftcc%comlin_shift_search(i,j, clpair(1), clpair(2), params%trs, trsstep, cc)
-                        corrmat(i,j) = cc
-                        corrmat(j,i) = cc
-                    enddo
-                enddo
-                !$omp end parallel do
-                corrmat(ncls_sel,ncls_sel) = 1.
-            end select
+        else
+            write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH AFFINITY PROPAGATION'
             ! calculate a preference that generates a small number of clusters
             call analyze_smat(corrmat, .false., cmin, cmax)
             pref = cmin - (cmax - cmin)
-            write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH AFFINITY PROPAGATION'
             call aprop%new(ncls_sel, corrmat, pref=pref)
             call aprop%propagate(centers, labels, simsum)
             call aprop%kill
@@ -1929,8 +1845,18 @@ contains
                 endif
                 call cavg_imgs(cnt)%read(cavgsstk, i)
             end do
-            ! write the classes
             if( DEBUG )then
+                ! put back the original (unprocessed) images
+                cnt = 0
+                do i = 1 , ncls
+                    if( states(i) > 0.5 )then
+                        cnt = cnt + 1
+                    else
+                        cycle
+                    endif
+                    call cavg_imgs(cnt)%read(cavgsstk, i)
+                end do
+                ! write the classes
                 cntarr = 0
                 do icls = 1, ncls_aff_prop
                     do i=1,ncls_sel
@@ -1943,7 +1869,7 @@ contains
                     end do
                 end do
             endif
-            ! calculate average common line correlation of the AP clusters
+            ! calculate average correlation of the AP clusters
             if( allocated(mask_icls) ) deallocate(mask_icls)
             allocate( mask_icls(ncls_sel) )
             do icls = 1, ncls_aff_prop
@@ -1953,7 +1879,7 @@ contains
                 elsewhere
                     mask_icls = .false.
                 end where
-                ! calculate the average common line correlation of the cluster
+                ! calculate the average correlation of the cluster
                 if( count(mask_icls) == 1 )then
                     corr_icls = 1.
                 else
@@ -1972,7 +1898,7 @@ contains
                 write(logfhandle,*) 'average corr AP cluster '//int2str_pad(icls,3)//': ', corr_icls, ' pop ', count(mask_icls)
             end do
             ! print the correlations between the cluster centers
-            write(logfhandle,'(A)') '>>> COMMON LINE CORRELATIONS BETWEEN CLUSTER CENTERS'
+            write(logfhandle,'(A)') '>>> CORRELATIONS BETWEEN CLUSTER CENTERS'
             do i = 1,ncls_aff_prop - 1
                 icen = centers(i)
                 do j = i + 1,ncls_aff_prop
