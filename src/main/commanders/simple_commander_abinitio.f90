@@ -15,6 +15,7 @@ use simple_image,              only: image
 use simple_builder,            only: builder
 use simple_class_frcs,         only: class_frcs
 use simple_convergence,        only: convergence
+use simple_cluster_seed,       only: gen_labelling
 use simple_commander_euclid
 use simple_euclid_sigma2
 use simple_qsys_funs
@@ -66,7 +67,7 @@ integer,          parameter :: TRAILREC_STAGE        = 7
 ! class variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
 logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false., l_update_frac=.false.
-logical          :: l_icm_reg=.true., l_ini3D=.false., l_greediness_given = .false.
+logical          :: l_icm_reg=.true., l_ini3D=.false., l_greediness_given = .false., l_multistates = .false.
 type(sym)        :: se1,se2
 type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_postprocess, cline_reproject
 real             :: update_frac   = 1.0
@@ -357,6 +358,13 @@ contains
         ! make master parameters
         call params%new(cline)
         call cline%set('mkdir', 'no')
+        l_multistates = .false.
+        if( cline%defined('nstates') )then
+            if( params%nstates > 1  )then
+                l_multistates = .true.
+                call cline%set('projrec', 'no') ! not yet supported for multi-state
+            endif
+        endif
         ! provide initialization of 3D alignment using class averages?
         l_ini3D = .false.
         if( trim(params%cavg_ini).eq.'yes' )then 
@@ -366,6 +374,7 @@ contains
                 call cline_ini3D%set('nthr', params%nthr_ini3D)
                 call cline_ini3D%delete('nthr_ini3D')
             endif
+            call cline_ini3D%delete('nstates') ! cavg_ini under the assumption of one state
             call cline_ini3D%delete('nparts')
             call cline_ini3D%delete('projrec')
             call cline_ini3D%delete('oritype')
@@ -449,6 +458,10 @@ contains
                     case DEFAULT
                         THROW_HARD('Unsupported ORITYPE; exec_abinitio_3Dmodel')
                 end select
+                ! randomize states
+                if( l_multistates )then
+                    call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
+                endif
                 call spproj%write_segment_inside(params%oritype, params%projfile)
                 ! create noise starting volume(s)
                 call noisevol%new([lpinfo(1)%box_crop,lpinfo(1)%box_crop,lpinfo(1)%box_crop], lpinfo(1)%smpd_crop)
@@ -471,6 +484,12 @@ contains
                 end do
                 call noisevol%kill
             else
+                ! randomize states
+                if( l_multistates )then
+                    call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
+                endif
+                call spproj%write_segment_inside(params%oritype, params%projfile)
+                ! create starting volume(s)
                 call calc_start_rec(params%projfile, xreconstruct3D_distr)
             endif
         endif
