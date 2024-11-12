@@ -6,7 +6,7 @@ use simple_cmdline,    only: cmdline
 use simple_sp_project, only: sp_project
 implicit none
 
-public :: restarted_exec, script_exec, update_job_descriptions_in_project, copy_project_file_to_root_dir
+public :: restarted_exec, async_exec, gen_exec_cmd, script_exec, update_job_descriptions_in_project, copy_project_file_to_root_dir
 private
 #include "simple_local_flags.inc"
 
@@ -29,7 +29,7 @@ contains
             endif
         endif
         if( .not. cline%defined('projfile') )then
-            THROW_HARD('projfile needs to be defined on command line for restarted_exec ')
+            THROW_HARD('projfile needs to be defined on command line for restarted_exec')
         endif
         call cline%set('prg', trim(prg))
         call cline%gen_job_descr(job_descr)
@@ -39,7 +39,39 @@ contains
             ! execute
             call exec_cmdline(cmd)
         end do
+        call job_descr%kill
     end subroutine restarted_exec
+
+    subroutine async_exec( cline, executable, output )
+        class(cmdline),   intent(inout) :: cline
+        character(len=*), intent(in)    :: executable, output
+        character(len=:), allocatable   :: cmd
+        type(chash) :: job_descr
+        if( .not. cline%defined('projfile') )then
+            THROW_HARD('projfile needs to be defined on command line')
+        endif
+        call cline%gen_job_descr(job_descr)
+        ! compose the command line
+        cmd = 'nohup '//trim(executable)//' '//trim(job_descr%chash2str())//' > '//trim(output)//' &'
+        ! execute asynchronously
+        call exec_cmdline(cmd, waitflag=.false.)
+        call job_descr%kill
+    end subroutine async_exec
+
+    function gen_exec_cmd( cline, executable, output ) result( cmd )
+        class(cmdline),             intent(inout) :: cline
+        character(len=*),           intent(in)    :: executable
+        character(len=*), optional, intent(in)    :: output
+        character(len=:), allocatable  :: cmd
+        type(chash) :: job_descr
+        call cline%gen_job_descr(job_descr)
+        if( present(output) )then
+            cmd = trim(executable)//' '//trim(job_descr%chash2str())//' > '//trim(output)
+        else
+            cmd = trim(executable)//' '//trim(job_descr%chash2str())
+        endif
+        call job_descr%kill
+    end function gen_exec_cmd
 
     subroutine script_exec( cline, prg, executable )
         class(cmdline),   intent(inout) :: cline
