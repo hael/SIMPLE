@@ -100,12 +100,13 @@ contains
     subroutine exec_make_cavgs_distr( self, cline )
         class(make_cavgs_commander_distr), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
-        type(parameters) :: params
-        type(builder)    :: build
-        type(cmdline)    :: cline_cavgassemble
-        type(qsys_env)   :: qenv
-        type(chash)      :: job_descr
-        integer          :: ncls_here
+        type(parameters)           :: params
+        type(builder)              :: build
+        type(cmdline)              :: cline_cavgassemble
+        type(qsys_env)             :: qenv
+        type(chash)                :: job_descr
+        type(make_cavgs_commander) :: xmk_cavgs_shmem
+        integer                    :: ncls_here
         call cline%set('wiener', 'full')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('ml_reg')  ) call cline%set('ml_reg',      'no')
@@ -129,6 +130,10 @@ contains
                 call cline%set('ncls', ncls_here)
                 params%ncls = ncls_here
             endif
+        endif
+        if( .not. cline%defined('nparts') .or. params%nparts == 1  )then
+            call xmk_cavgs_shmem%execute_safe(cline)
+            return
         endif
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -241,7 +246,9 @@ contains
             call cavger_write(trim(params%refs_odd),  'odd'   )
             select case(trim(params%oritype))
                 case('ptcl2D')
-                    ! all done
+                    call build%spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
+                    call build%spproj%add_cavgs2os_out(trim(params%refs), build%spproj%get_smpd(), imgkind='cavg')
+                    call build%spproj%write_segment_inside('out', params%projfile)
                 case('ptcl3D')
                     do icls = 1,params%nspace
                         call build%spproj%os_cls3D%set_euler(icls, build%eulspace%get_euler(icls))
@@ -1456,33 +1463,33 @@ contains
         call cavger_kill()
         ! updates project
         select case(trim(params%oritype))
-        case('ptcl2D')
-            ! cls2D and state congruent cls3D
-            call build%spproj%os_cls3D%new(params%ncls, is_ptcl=.false.)
-            states = build%spproj%os_cls2D%get_all('state')
-            call build%spproj%os_cls3D%set_all('state',states)
-            deallocate(states)
-            if( trim(params%oritype).eq.'ptcl2D' )then
-                call build%spproj%write_segment_inside('cls2D', params%projfile)
-            endif
-            call build%spproj%write_segment_inside('cls3D', params%projfile)
-        case('ptcl3D')
-            call build%eulspace%new(params%nspace, is_ptcl=.false.)
-            call build%pgrpsyms%build_refspiral(build%eulspace)
-            do icls = 1,params%ncls
-                call build%spproj%os_cls3D%set_euler(icls, build%eulspace%get_euler(icls))
-            enddo
-            call build%spproj%write_segment_inside('cls3D', params%projfile)
-            if( cline%defined('outfile') )then
-                call build%spproj%os_cls3D%write(params%outfile)
-            else
-                call build%spproj%os_cls3D%write('cls3D_oris.txt')
-            endif
-            call build%spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc3D')
-            call build%spproj%add_cavgs2os_out(trim(params%refs), build%spproj%get_smpd(), imgkind='cavg3D')
-            call build%spproj%write_segment_inside('out', params%projfile)
-        case DEFAULT
-            THROW_HARD('Unsupported ORITYPE: '//trim(params%oritype))
+            case('ptcl2D')
+                ! cls2D and state congruent cls3D
+                call build%spproj%os_cls3D%new(params%ncls, is_ptcl=.false.)
+                states = build%spproj%os_cls2D%get_all('state')
+                call build%spproj%os_cls3D%set_all('state',states)
+                deallocate(states)
+                call build%spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
+                call build%spproj%add_cavgs2os_out(trim(params%refs), build%spproj%get_smpd(), imgkind='cavg')
+                ! multiple fields updated, do a full write
+                call build%spproj%write(params%projfile)
+            case('ptcl3D')
+                call build%eulspace%new(params%nspace, is_ptcl=.false.)
+                call build%pgrpsyms%build_refspiral(build%eulspace)
+                do icls = 1,params%ncls
+                    call build%spproj%os_cls3D%set_euler(icls, build%eulspace%get_euler(icls))
+                enddo
+                call build%spproj%write_segment_inside('cls3D', params%projfile)
+                if( cline%defined('outfile') )then
+                    call build%spproj%os_cls3D%write(params%outfile)
+                else
+                    call build%spproj%os_cls3D%write('cls3D_oris.txt')
+                endif
+                call build%spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc3D')
+                call build%spproj%add_cavgs2os_out(trim(params%refs), build%spproj%get_smpd(), imgkind='cavg3D')
+                call build%spproj%write_segment_inside('out', params%projfile)
+            case DEFAULT
+                THROW_HARD('Unsupported ORITYPE: '//trim(params%oritype))
         end select
         ! end gracefully
         call starproj%kill

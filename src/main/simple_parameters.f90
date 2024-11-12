@@ -103,7 +103,7 @@ type :: parameters
     character(len=3)          :: trail_rec='no'       !< trailing (weighted average) reconstruction when update_frac=yes 
     character(len=3)          :: trsstats='no'        !< provide origin shift statistics(yes|no){no}
     character(len=3)          :: tseries='no'         !< images represent a time-series(yes|no){no}
-    character(len=3)          :: updated='no'         !< Whether parameters has been updated
+    character(len=3)          :: updated='no'         !< whether parameters has been updated
     character(len=3)          :: use_denoised='no'    !< use denoised particle representations for alignment (not 3D rec)
     character(len=3)          :: use_thres='yes'      !< Use contact-based thresholding(yes|no){yes}
     character(len=3)          :: vis='no'             !< visualise(yes|no)
@@ -774,7 +774,7 @@ contains
         call check_iarg('nstates',        self%nstates)
         call check_iarg('class',          self%class)
         call check_iarg('nparts',         self%nparts)
-        call check_iarg('npart_per_part', self%nparts_per_part)
+        call check_iarg('nparts_per_part', self%nparts_per_part)
         call check_iarg('nparts_chunk',   self%nparts_chunk)
         call check_iarg('nparts_pool',    self%nparts_pool)
         call check_iarg('npeaks',         self%npeaks)

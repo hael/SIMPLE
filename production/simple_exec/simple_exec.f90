@@ -65,9 +65,9 @@ type(cleanup2D_commander_hlev)              :: xcleanup2D_distr
 ! AB INITIO 3D RECONSTRUCTION WORKFLOW
 type(estimate_lpstages_commander)           :: xestimate_lpstages
 type(noisevol_commander)                    :: xnoisevol
-type(initial_3Dmodel_commander)             :: xinitial_3Dmodel
-type(abinitio_3Dmodel_commander)            :: xabinitio_3Dmodel
-type(abinitio_3Dmodel_parts_commander)      :: xabinitio_3Dmodel_parts
+type(abinitio3D_cavgs_commander)            :: xabinitio3D_cavgs
+type(abinitio3D_commander)                  :: xabinitio3D
+type(abinitio3D_parts_commander)            :: xabinitio3D_parts
 
 ! REFINE3D WORKFLOWS
 type(calc_pspec_commander_distr)            :: xcalc_pspec_distr
@@ -245,20 +245,20 @@ select case(trim(prg))
         call xestimate_lpstages%execute(cline)
     case( 'noisevol' )
         call xnoisevol%execute(cline)
-    case( 'initial_3Dmodel' )
+    case( 'abinitio3D_cavgs' )
         if( cline%defined('nrestarts') )then
-            call restarted_exec(cline, 'initial_3Dmodel', 'simple_exec')
+            call restarted_exec(cline, 'abinitio3D_cavgs', 'simple_exec')
         else
-            call xinitial_3Dmodel%execute(cline)
+            call xabinitio3D_cavgs%execute(cline)
         endif
-    case( 'abinitio_3Dmodel' )
+    case( 'abinitio3D' )
         if( cline%defined('nrestarts') )then
-            call restarted_exec(cline, 'abinitio_3Dmodel', 'simple_exec')
+            call restarted_exec(cline, 'abinitio3D', 'simple_exec')
         else
-            call xabinitio_3Dmodel%execute(cline)
+            call xabinitio3D%execute(cline)
         endif
-    case( 'abinitio_3Dmodel_parts' )
-        call xabinitio_3Dmodel_parts%execute(cline)
+    case( 'abinitio3D_parts' )
+        call xabinitio3D_parts%execute(cline)
 
     ! REFINE3D WORKFLOWS
     case( 'calc_pspec' )
@@ -417,7 +417,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('cda16875')
+call simple_print_git_version('6a2d8f47')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
