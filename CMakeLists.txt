@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/Modules/")
+option(USE_AFM "Use AFM support" OFF )
 include(FortranOverride)
 
 project(SIMPLE LANGUAGES Fortran C CXX)
