@@ -7967,9 +7967,8 @@ contains
         character(len=*),  intent(in)    :: volfname
         integer,           intent(in)    :: box_crop
         real,              intent(in)    :: smpd, smpd_crop
-        real    :: smpd_here
         integer :: ldim(3), ifoo, box
-        call find_ldim_nptcls(volfname, ldim, ifoo, smpd=smpd_here)
+        call find_ldim_nptcls(volfname, ldim, ifoo)
         ! HE, I would not trust the smpd from the header
         if( ldim(3) /= ldim(1) ) THROW_HARD('Only for volumes')
         box = ldim(1)
@@ -7980,14 +7979,13 @@ contains
             call self%fft
             call self%pad_inplace([box_crop,box_crop,box_crop], antialiasing=.false.)
             call self%ifft
-            call self%set_smpd(smpd_crop) ! safety
         else if( box > box_crop )then
             ! clip
             call self%fft
             call self%clip_inplace([box_crop,box_crop,box_crop])
             call self%ifft
-            call self%set_smpd(smpd_crop) ! safety
         endif
+        call self%set_smpd(smpd_crop) ! safety
     end subroutine read_and_crop
 
     ! This subroutine rescales the pixel intensities to a new input range.
