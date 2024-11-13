@@ -98,8 +98,11 @@ contains
         open(newunit = check, file = fn_in, status = 'old', access='stream')
         read(check) binheader%version
         if( binheader%version > 5) then
-            !open(newunit = in, file = fn_in, status = 'old', access='stream', convert='swap')
+#if USE_AFM
+            open(newunit = in, file = fn_in, status = 'old', access='stream', convert='swap')
+#else
             open(newunit = in, file = fn_in, status = 'old', access='stream')
+#endif
         else
             open(newunit = in, file = fn_in, status = 'old', access='stream')
         endif
