@@ -388,8 +388,8 @@ contains
             call spproj%get_cavgs_stk(cavgs_stk, ncavgs, params%smpd, imgkind='cavg')
             allocate(files_that_stay(7))
             files_that_stay(1)%str = basename(trim(cavgs_stk))
-            files_that_stay(2)%str = basename(trim(cavgs_stk))//'_even'
-            files_that_stay(3)%str = basename(trim(cavgs_stk))//'_odd'
+            files_that_stay(2)%str = add2fbody(files_that_stay(1)%str , fname2ext(files_that_stay(1)%str), '_even')
+            files_that_stay(3)%str = add2fbody(files_that_stay(1)%str , fname2ext(files_that_stay(1)%str), '_odd')
             files_that_stay(4)%str = basename(trim(params%projfile))
             files_that_stay(5)%str = 'nice_'
             files_that_stay(6)%str = 'frcs'
