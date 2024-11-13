@@ -50,6 +50,7 @@ real,             parameter :: LPSTOP_LB             = 6.
 real,             parameter :: CENLP_DEFAULT         = 30.
 real,             parameter :: LPSYMSRCH_LB          = 12.
 integer,          parameter :: NSTAGES               = 8
+integer,          parameter :: NSTAGES_INI3D         = 4 ! # of ini3D stages used for initialization
 integer,          parameter :: PHASES(3)             = [2,6,8]
 integer,          parameter :: MAXITS(3)             = [20,17,15]
 integer,          parameter :: MAXITS_GLOB           = 2*20 + 4*17 + 2*15
@@ -320,24 +321,18 @@ contains
         class(abinitio3D_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         ! commanders
-        type(abinitio3D_cavgs_commander)       :: xini3D
         type(refine3D_commander_distr)         :: xrefine3D
         type(reconstruct3D_commander_distr)    :: xreconstruct3D_distr
-        ! command lines
-        type(cmdline)                          :: cline_ini3D
         ! other
         real,                      parameter   :: UPDATE_FRAC_MAX = 0.9 !< to ensure fractional update is always on
-        integer,                   parameter   :: NSTAGES_INI3D   = 4   !< # of ini3D stages
-        character(len=*),          parameter   :: INI3D_DIR='abinitio3D_cavgs/'
-        character(len=:),          allocatable :: vol_name, cavgs_stk
+        character(len=:),          allocatable :: vol_name
         real,                      allocatable :: rstates(:)
         integer,                   allocatable :: tmpinds(:), clsinds(:)
         type(class_sample),        allocatable :: clssmp(:)
-        type(str4arr),             allocatable :: files_that_stay(:)
         type(parameters)                       :: params
         type(sp_project)                       :: spproj
         type(image)                            :: noisevol
-        integer :: istage, s, ncls, icls, nptcls_eff, i, ncavgs
+        integer :: istage, s, ncls, icls, nptcls_eff, i
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',         'yes')
@@ -367,36 +362,14 @@ contains
         ! provide initialization of 3D alignment using class averages?
         l_ini3D = .false.
         if( trim(params%cavg_ini).eq.'yes' )then
-            cline_ini3D = cline
-            call cline_ini3D%set('nstages', NSTAGES_INI3D)
-            if( cline%defined('nthr_ini3D') )then
-                call cline_ini3D%set('nthr', params%nthr_ini3D)
-                call cline_ini3D%delete('nthr_ini3D')
+            call ini3D_from_cavgs(cline)
+        endif
+        ! initialization on class averages done outside this workflow (externally)?
+        if( trim(params%cavg_ini_ext).eq.'yes' )then 
+            ! check that ptcl3D field is not virgin
+            if( spproj%is_virgin_field('ptcl3D') )then
+                THROW_HARD('Prior 3D alignment required for abinitio workflow when cavg_ini_ext is set to yes')
             endif
-            call cline_ini3D%delete('nstates') ! cavg_ini under the assumption of one state
-            call cline_ini3D%delete('nparts')
-            call cline_ini3D%delete('projrec')
-            call cline_ini3D%delete('oritype')
-            call cline_ini3D%delete('imgkind')
-            call cline_ini3D%delete('prob_athres')
-            call xini3D%execute_safe(cline_ini3D)
-            ! update point-group symmetry
-            call cline%set('pgrp_start', params%pgrp)
-            params%pgrp_start = params%pgrp
-            ! stash away files
-            ! identfy files that stay
-            call spproj%get_cavgs_stk(cavgs_stk, ncavgs, params%smpd, imgkind='cavg')
-            allocate(files_that_stay(7))
-            files_that_stay(1)%str = basename(trim(cavgs_stk))
-            files_that_stay(2)%str = add2fbody(files_that_stay(1)%str , fname2ext(files_that_stay(1)%str), '_even')
-            files_that_stay(3)%str = add2fbody(files_that_stay(1)%str , fname2ext(files_that_stay(1)%str), '_odd')
-            files_that_stay(4)%str = basename(trim(params%projfile))
-            files_that_stay(5)%str = 'nice_'
-            files_that_stay(6)%str = 'frcs'
-            files_that_stay(7)%str = 'ABINITIO3D'
-            ! make the move
-            call move_files_in_cwd(INI3D_DIR, files_that_stay)
-            ! flag completion
             l_ini3D = .true.
         endif
         ! set class global ICM regularization flag
@@ -515,7 +488,7 @@ contains
         call qsys_cleanup
         call simple_end('**** SIMPLE_ABINITIO3D NORMAL STOP ****')
     end subroutine exec_abinitio3D
-
+    
     subroutine exec_abinitio3D_parts( self, cline )
         use simple_commander_project,   only: new_project_commander, selection_commander
         use simple_exec_helpers,        only: gen_exec_cmd, async_exec
@@ -540,6 +513,14 @@ contains
         ! make master parameters
         call params%new(cline)
         call cline%set('mkdir', 'no')
+        ! provide initialization of 3D alignment using class averages?
+        l_ini3D = .false.
+        if( trim(params%cavg_ini).eq.'yes' )then
+            call ini3D_from_cavgs(cline)
+            call cline%set('cavg_ini_ext', 'yes')
+        else
+            call cline%set('cavg_ini_ext', 'no')
+        endif
         ! split stack so it does not happen downstream
         call spproj%read(params%projfile)
         call spproj%split_stk(max(params%nparts,params%nparts_per_part*params%nparts))
@@ -560,24 +541,24 @@ contains
             call chdir('../')
             call del_file(trim(projfnames(iproj)))
         end do
-        ! make class averages
-        do iproj = 1, params%nparts
-            call chdir('./'//trim(projnames(iproj)))
-            call simple_getcwd(cwd)
-            write(logfhandle,'(A)') 'CWD: '//trim(cwd)
-            call cline_mk_cavgs%set('prg',      'make_cavgs')
-            call cline_mk_cavgs%set('projfile',  trim(projfnames(iproj)))
-            call cline_mk_cavgs%set('mkdir',    'no') ! to avoid nested directory structure
-            call cline_mk_cavgs%set('refs',     'cavgs_'//BALPROJPARTFBODY//int2str(iproj)//'.mrc')
-            call cline_mk_cavgs%set('nparts',    params%nparts_per_part)
-            call cline_mk_cavgs%set('nthr',      params%nthr)
-            ! cmd = gen_exec_cmd(cline_mk_cavgs, 'simple_exec')
-            ! call exec_cmdline(cmd)
-            call xmake_cavgs_distr%execute_safe(cline_mk_cavgs)
-            call chdir('../')
-        end do
-        ! execute independent jobs for cross validation asynchronously
         if( L_USE_CAVGS )then
+            ! make class averages
+            do iproj = 1, params%nparts
+                call chdir('./'//trim(projnames(iproj)))
+                call simple_getcwd(cwd)
+                write(logfhandle,'(A)') 'CWD: '//trim(cwd)
+                call cline_mk_cavgs%set('prg',      'make_cavgs')
+                call cline_mk_cavgs%set('projfile',  trim(projfnames(iproj)))
+                call cline_mk_cavgs%set('mkdir',    'no') ! to avoid nested directory structure
+                call cline_mk_cavgs%set('refs',     'cavgs_'//BALPROJPARTFBODY//int2str(iproj)//'.mrc')
+                call cline_mk_cavgs%set('nparts',    params%nparts_per_part)
+                call cline_mk_cavgs%set('nthr',      params%nthr)
+                ! cmd = gen_exec_cmd(cline_mk_cavgs, 'simple_exec')
+                ! call exec_cmdline(cmd)
+                call xmake_cavgs_distr%execute_safe(cline_mk_cavgs)
+                call chdir('../')
+            end do
+            ! execute independent jobs for cross validation asynchronously
             do iproj = 1, params%nparts
                 call chdir('./'//trim(projnames(iproj)))
                 call simple_getcwd(cwd)
@@ -593,12 +574,15 @@ contains
                 call chdir('../')
             end do
         else
+            ! execute independent jobs for cross validation asynchronously
             do iproj = 1, params%nparts
                 call chdir('./'//trim(projnames(iproj)))
                 call simple_getcwd(cwd)
                 write(logfhandle,'(A)') 'CWD: '//trim(cwd)
                 cline_abinitio3D = cline
                 call cline_abinitio3D%delete('nparts_per_part')
+                call cline_abinitio3D%delete('nthr_ini3D')
+                call cline_abinitio3D%set('cavg_ini',   'no')
                 call cline_abinitio3D%set('prg',        'abinitio3D')
                 call cline_abinitio3D%set('projfile',    trim(projfnames(iproj)))
                 call cline_abinitio3D%set('mkdir',      'no') ! to avoid nested directory structure
@@ -728,6 +712,44 @@ contains
             end function calc_lplim_final_stage
 
     end subroutine set_lplims_from_frcs
+
+    subroutine ini3D_from_cavgs( cline )
+        class(cmdline),    intent(inout) :: cline
+        type(abinitio3D_cavgs_commander) :: xini3D
+        type(cmdline)                    :: cline_ini3D
+        character(len=:), allocatable    :: cavgs_stk
+        type(str4arr),    allocatable    :: files_that_stay(:)
+        character(len=*), parameter      :: INI3D_DIR='abinitio3D_cavgs/'
+        integer :: ncavgs
+        cline_ini3D = cline
+        call cline_ini3D%set('nstages', NSTAGES_INI3D)
+        if( cline%defined('nthr_ini3D') )then
+            call cline_ini3D%set('nthr', params_glob%nthr_ini3D)
+            call cline_ini3D%delete('nthr_ini3D')
+        endif
+        call cline_ini3D%delete('nstates') ! cavg_ini under the assumption of one state
+        call cline_ini3D%delete('nparts')
+        call cline_ini3D%delete('projrec')
+        call cline_ini3D%delete('oritype')
+        call cline_ini3D%delete('imgkind')
+        call cline_ini3D%delete('prob_athres')
+        call xini3D%execute_safe(cline_ini3D)
+        ! update point-group symmetry
+        call cline%set('pgrp_start', params_glob%pgrp)
+        params_glob%pgrp_start = params_glob%pgrp
+        ! stash away files
+        ! identfy files that stay
+        allocate(files_that_stay(5))
+        files_that_stay(1)%str = basename(trim(params_glob%projfile))
+        files_that_stay(2)%str = 'cavgs'
+        files_that_stay(3)%str = 'nice_'
+        files_that_stay(4)%str = 'frcs'
+        files_that_stay(5)%str = 'ABINITIO3D'
+        ! make the move
+        call move_files_in_cwd(INI3D_DIR, files_that_stay)
+        ! flag completion
+        l_ini3D = .true.
+    end subroutine ini3D_from_cavgs
 
     subroutine set_cline_refine3D( istage, l_cavgs )
         integer,          intent(in)  :: istage

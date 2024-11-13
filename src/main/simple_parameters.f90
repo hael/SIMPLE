@@ -27,6 +27,7 @@ type :: parameters
     character(len=3)          :: beamtilt='no'        !< use beamtilt values when generating optics groups
     character(len=3)          :: bin='no'             !< binarize image(yes|no){no}
     character(len=3)          :: cavg_ini='no'        !< use class averages for initialization(yes|no){no}
+    character(len=3)          :: cavg_ini_ext='no'    !< use class averages for (external) initialization(yes|no){no}
     character(len=3)          :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
     character(len=3)          :: center_pdb='no'      !< move PDB atomic center to the center of the box(yes|no){no}
     character(len=3)          :: classtats='no'       !< calculate class population statistics(yes|no){no}
@@ -536,6 +537,7 @@ contains
         call check_carg('bin_cls',        self%bin_cls)
         call check_carg('boxtype',        self%boxtype)
         call check_carg('cavg_ini',       self%cavg_ini)
+        call check_carg('cavg_ini_ext',   self%cavg_ini_ext)
         call check_carg('center',         self%center)
         call check_carg('center_pdb',     self%center_pdb)
         call check_carg('classtats',      self%classtats)
