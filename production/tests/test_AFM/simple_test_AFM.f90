@@ -41,7 +41,7 @@ program simple_test_AFM
     !AFM = AFM*256.
     ! call AFM%ICM2D(1.0)
     call AFM%bin_inv()
-    !call otsu_img(AFM, positive=.FALSE.)
+    call otsu_img(AFM, positive=.FALSE.)
     ! call AFM%write(fn_out)
     ! print *, AFM%get_cmat()
     call AFM_h%new(AFM, 100)
