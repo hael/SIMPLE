@@ -98,7 +98,8 @@ contains
         open(newunit = check, file = fn_in, status = 'old', access='stream')
         read(check) binheader%version
         if( binheader%version > 5) then
-            open(newunit = in, file = fn_in, status = 'old', access='stream', convert='swap')
+            !open(newunit = in, file = fn_in, status = 'old', access='stream', convert='swap')
+            open(newunit = in, file = fn_in, status = 'old', access='stream')
         else
             open(newunit = in, file = fn_in, status = 'old', access='stream')
         endif
@@ -358,7 +359,7 @@ contains
                         curr_rads = curr_rad
                         curr_rad_r = minloc(abs(rad - curr_rads), 1)
                         if(debug_m) then
-                            write(logfhandle,'(2(A,f8.4))'), 'radius:', curr_rad, 'angle:', angles(t)
+                            write(logfhandle,'(2(A,f8.4))') 'radius:', curr_rad, 'angle:', angles(t)
                         endif 
                         accumulator(curr_rad_r,t) = accumulator(curr_rad_r,t) + 1                
                     enddo
