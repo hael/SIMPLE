@@ -320,7 +320,7 @@ contains
         class(abinitio3D_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         ! commanders
-        type(abinitio3D_cavgs_commander)        :: xini3D
+        type(abinitio3D_cavgs_commander)       :: xini3D
         type(refine3D_commander_distr)         :: xrefine3D
         type(reconstruct3D_commander_distr)    :: xreconstruct3D_distr
         ! command lines
@@ -328,16 +328,16 @@ contains
         ! other
         real,                      parameter   :: UPDATE_FRAC_MAX = 0.9 !< to ensure fractional update is always on
         integer,                   parameter   :: NSTAGES_INI3D   = 4   !< # of ini3D stages
-        character(len=*),          parameter   :: INI3D_DIR='ini3D_on_cavgs/'
-        character(len=:),          allocatable :: vol_name
+        character(len=*),          parameter   :: INI3D_DIR='abinitio3D_cavgs/'
+        character(len=:),          allocatable :: vol_name, cavgs_stk
         real,                      allocatable :: rstates(:)
         integer,                   allocatable :: tmpinds(:), clsinds(:)
         type(class_sample),        allocatable :: clssmp(:)
-        character(len=LONGSTRLEN), allocatable :: file_list(:)
+        type(str4arr),             allocatable :: files_that_stay(:)
         type(parameters)                       :: params
         type(sp_project)                       :: spproj
         type(image)                            :: noisevol
-        integer :: istage, s, ncls, icls, nptcls_eff, i
+        integer :: istage, s, ncls, icls, nptcls_eff, i, ncavgs
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',         'yes')
@@ -360,9 +360,13 @@ contains
                 call cline%set('projrec', 'no') ! not yet supported for multi-state
             endif
         endif
+        ! read project
+        call spproj%read(params%projfile)
+        call spproj%update_projinfo(cline)
+        call spproj%write_segment_inside('projinfo', params%projfile)
         ! provide initialization of 3D alignment using class averages?
         l_ini3D = .false.
-        if( trim(params%cavg_ini).eq.'yes' )then 
+        if( trim(params%cavg_ini).eq.'yes' )then
             cline_ini3D = cline
             call cline_ini3D%set('nstages', NSTAGES_INI3D)
             if( cline%defined('nthr_ini3D') )then
@@ -380,20 +384,18 @@ contains
             call cline%set('pgrp_start', params%pgrp)
             params%pgrp_start = params%pgrp
             ! stash away files
-            call simple_list_files('*', file_list)
-            call simple_mkdir(INI3D_DIR)
-            do i = 1, size(file_list)
-                if( str_has_substr(trim(file_list(i)), basename(trim(params%projfile))) )then
-                    ! this stays
-                else if( str_has_substr(trim(file_list(i)), 'nice_') )then
-                    ! this stays
-                else if( str_has_substr(trim(file_list(i)), 'frcs') )then
-                    ! this stays
-                else
-                    call simple_rename(trim(file_list(i)), INI3D_DIR//trim(file_list(i)))
-                endif
-            end do
-            deallocate(file_list)
+            ! identfy files that stay
+            call spproj%get_cavgs_stk(cavgs_stk, ncavgs, params%smpd, imgkind='cavg')
+            allocate(files_that_stay(7))
+            files_that_stay(1)%str = basename(trim(cavgs_stk))
+            files_that_stay(2)%str = basename(trim(cavgs_stk))//'_even'
+            files_that_stay(3)%str = basename(trim(cavgs_stk))//'_odd'
+            files_that_stay(4)%str = basename(trim(params%projfile))
+            files_that_stay(5)%str = 'nice_'
+            files_that_stay(6)%str = 'frcs'
+            files_that_stay(7)%str = 'ABINITIO3D'
+            ! make the move
+            call move_files_in_cwd(INI3D_DIR, files_that_stay)
             ! flag completion
             l_ini3D = .true.
         endif
@@ -408,10 +410,6 @@ contains
         call prep_class_command_lines(cline, params%projfile)
         ! set symmetry class variables
         call set_symmetry_class_vars
-        ! read project
-        call spproj%read(params%projfile)
-        call spproj%update_projinfo(cline)
-        call spproj%write_segment_inside('projinfo', params%projfile)
         ! fall over if there are no particles
         if( spproj%os_ptcl3D%get_noris() < 1 ) THROW_HARD('Particles could not be found in the project')
         ! take care of class-biased particle sampling
