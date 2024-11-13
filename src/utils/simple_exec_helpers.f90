@@ -54,7 +54,7 @@ contains
         ! compose the command line
         cmd = 'nohup '//trim(executable)//' '//trim(job_descr%chash2str())//' > '//trim(output)//' &'
         ! execute asynchronously
-        call exec_cmdline(cmd, waitflag=.false.)
+        call exec_cmdline(cmd, waitflag=.false., suppress_errors=.true.)
         call job_descr%kill
     end subroutine async_exec
 

@@ -7,9 +7,9 @@ implicit none
 
 public :: fileiochk, fopen, fclose, wait_for_closure, nlines, filelength, funit_size, is_funit_open, get_open_funits
 public :: add2fbody, rm_from_fbody, swap_suffix, get_fbody, fname_new_ext, fname2ext, fname2iter, basename, stemname
-public :: get_fpath, make_dirnames, make_filenames, filepath, del_files, fname2format, read_filetable, write_filetable
-public :: write_singlelineoftext, read_exit_code, arr2file, arr2txtfile, file2rarr, file2drarr, rmat2file, file2rmat
-public :: simple_copy_file, make_relativepath, basename_safe
+public :: get_fpath, make_dirnames, make_filenames, filepath, del_files, move_files_in_cwd, fname2format, read_filetable
+public :: write_filetable, write_singlelineoftext, read_exit_code, arr2file, arr2txtfile, file2rarr, file2drarr, rmat2file
+public :: file2rmat, simple_copy_file, make_relativepath, basename_safe
 private
 #include "simple_local_flags.inc"
 
@@ -729,6 +729,39 @@ contains
             if( file_exists(list(ifile)) ) call del_file(list(ifile))
         end do
     end subroutine del_files_2
+
+    subroutine move_files_in_cwd( dir, files_that_stay )
+        character(len=*),        intent(in) :: dir
+        type(str4arr), optional, intent(in) :: files_that_stay(:)
+        character(len=LONGSTRLEN), allocatable :: file_list(:)
+        integer :: n_stay, n_move, i, j
+        logical :: l_move
+        n_stay = 0
+        if( present(files_that_stay) )then
+            n_stay = size(files_that_stay)
+        endif
+        call simple_list_files('*', file_list)
+        n_move = 0
+        if( allocated(file_list) ) n_move = size(file_list)
+        if( n_move > 0 ) call simple_mkdir(trim(dir))
+        if( n_stay > 0 .and. n_move > 0 )then
+            do i = 1, n_move
+                l_move = .true.
+                do j = 1, n_stay
+                    if( str_has_substr(trim(file_list(i)),files_that_stay(j)%str) )then
+                        l_move = .false.
+                        exit
+                    endif
+                end do
+                if( l_move ) call simple_rename(trim(file_list(i)), trim(dir)//trim(file_list(i)))
+            end do
+        else if( n_move > 0 )then
+            do i = 1, n_move
+                call simple_rename(trim(file_list(i)), trim(dir)//trim(file_list(i)))
+            end do
+        endif
+        if( n_move > 0 ) deallocate(file_list)
+    end subroutine move_files_in_cwd
 
     !>  \brief Return a one letter code for the file format designated by the extension in the fname
     !!         if .mrc: M
