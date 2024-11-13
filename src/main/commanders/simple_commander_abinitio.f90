@@ -535,12 +535,17 @@ contains
         character(len=STDLEN), allocatable :: projnames(:), projfnames(:)
         character(len=LONGSTRLEN)          :: cwd
         type(parameters)                   :: params
+        type(sp_project)                   :: spproj
         integer                            :: iproj
         logical, parameter                 :: L_USE_CAVGS = .false.
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         ! make master parameters
         call params%new(cline)
         call cline%set('mkdir', 'no')
+        ! split stack so it does not happen downstream
+        call spproj%read(params%projfile)
+        call spproj%split_stk(max(params%nparts,params%nparts_per_part*params%nparts))
+        call spproj%kill
         ! conduct balanced split
         cline_split_bal = cline
         call cline_split_bal%set('balance', 'yes')
