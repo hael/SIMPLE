@@ -105,7 +105,7 @@ contains
         call cline%set('oritype', 'ptcl3D')   ! from now on we are in the ptcl3D segment, final report is in the cls3D segment
         ! set class global ML regularization flag
         l_ml_reg = .true.
-        if( cline%defined('icm') )then
+        if( cline%defined('ml_reg') )then
             l_ml_reg = params%l_ml_reg   
         endif
         ! set class global ICM regularization flag
@@ -380,7 +380,7 @@ contains
         endif
         ! set class global ML regularization flag
         l_ml_reg = .true.
-        if( cline%defined('icm') )then
+        if( cline%defined('ml_reg') )then
             l_ml_reg = params%l_ml_reg   
         endif
         ! set class global ICM regularization flag
