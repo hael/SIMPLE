@@ -4,7 +4,6 @@ module simple_polarft_corrcalc
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_parameters, only: params_glob
-use simple_ori,        only: geodesic_frobdev
 implicit none
 
 public :: polarft_corrcalc, pftcc_glob
