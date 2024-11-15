@@ -63,10 +63,10 @@ integer,          parameter :: TRAILREC_STAGE        = 7
 ! class variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
 logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false., l_update_frac=.false.
-logical          :: l_icm_reg=.true., l_ini3D=.false., l_greediness_given = .false., l_multistates = .false.
-type(sym)        :: se1,se2
+logical          :: l_ml_reg=.true., l_icm_reg=.true., l_ini3D=.false., l_multistates = .false.
+type(sym)        :: se1, se2
 type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_postprocess, cline_reproject
-real             :: update_frac   = 1.0
+real             :: update_frac = 1.0
 
 contains
 
@@ -103,6 +103,11 @@ contains
         call params%new(cline)
         call cline%set('mkdir',       'no')   ! to avoid nested directory structure
         call cline%set('oritype', 'ptcl3D')   ! from now on we are in the ptcl3D segment, final report is in the cls3D segment
+        ! set class global ML regularization flag
+        l_ml_reg = .true.
+        if( cline%defined('icm') )then
+            l_ml_reg = params%l_ml_reg   
+        endif
         ! set class global ICM regularization flag
         l_icm_reg = .true.
         if( cline%defined('icm') )then
@@ -372,13 +377,16 @@ contains
             endif
             l_ini3D = .true.
         endif
+        ! set class global ML regularization flag
+        l_ml_reg = .true.
+        if( cline%defined('icm') )then
+            l_ml_reg = params%l_ml_reg   
+        endif
         ! set class global ICM regularization flag
         l_icm_reg = .true.
         if( cline%defined('icm') )then
             l_icm_reg = params%l_icm
         endif
-        ! set greediness flag
-        l_greediness_given = cline%defined('greediness')
         ! prepare class command lines
         call prep_class_command_lines(cline, params%projfile)
         ! set symmetry class variables
@@ -857,8 +865,9 @@ contains
                 fracsrch      = 99.
                 snr_noise_reg = 6.0
         end select
-        ! override phased greediness
-        if( l_greediness_given ) greediness = params_glob%greediness
+        ! overrride regularization parameters
+        if( .not. l_ml_reg  ) ml_reg = 'no'
+        if( .not. l_icm_reg ) icm    = 'no'
         ! command line update
         call cline_refine3D%set('prg',                     'refine3D')
         ! class global control parameters
