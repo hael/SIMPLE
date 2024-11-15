@@ -350,16 +350,14 @@ contains
         if( .not. cline%defined('pgrp_start')  ) call cline%set('pgrp_start',     'c1')
         if( .not. cline%defined('ptclw')       ) call cline%set('ptclw',          'no')
         if( .not. cline%defined('projrec')     ) call cline%set('projrec',       'yes')
+        if( cline%defined('nstates') )then
+            call cline%set('projrec', 'no') ! not yet supported for multi-state
+        endif
         ! make master parameters
         call params%new(cline)
         call cline%set('mkdir', 'no')
         l_multistates = .false.
-        if( cline%defined('nstates') )then
-            if( params%nstates > 1  )then
-                l_multistates = .true.
-                call cline%set('projrec', 'no') ! not yet supported for multi-state
-            endif
-        endif
+        if( params%nstates > 1  ) l_multistates = .true.
         ! read project
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
@@ -368,6 +366,9 @@ contains
         l_ini3D = .false.
         if( trim(params%cavg_ini).eq.'yes' )then
             call ini3D_from_cavgs(cline)
+            ! re-read the project file to update info in spproj
+            call spproj%read(params%projfile)
+            l_ini3D = .true.
         endif
         ! initialization on class averages done outside this workflow (externally)?
         if( trim(params%cavg_ini_ext).eq.'yes' )then 
@@ -460,11 +461,15 @@ contains
                 end do
                 call noisevol%kill
             else
+                ! check that ptcl3D field is not virgin
+                if( spproj%is_virgin_field('ptcl3D') )then
+                    THROW_HARD('Prior 3D alignment is lacking for starting volume generation')
+                endif
                 ! randomize states
                 if( l_multistates )then
                     call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
+                    call spproj%write_segment_inside(params%oritype, params%projfile)
                 endif
-                call spproj%write_segment_inside(params%oritype, params%projfile)
                 ! create starting volume(s)
                 call calc_start_rec(params%projfile, xreconstruct3D_distr)
             endif
@@ -526,6 +531,7 @@ contains
         if( trim(params%cavg_ini).eq.'yes' )then
             call ini3D_from_cavgs(cline)
             call cline%set('cavg_ini_ext', 'yes')
+            l_ini3D = .true.
         else
             call cline%set('cavg_ini_ext', 'no')
         endif
@@ -755,8 +761,6 @@ contains
         files_that_stay(5)%str = 'ABINITIO3D'
         ! make the move
         call move_files_in_cwd(INI3D_DIR, files_that_stay)
-        ! flag completion
-        l_ini3D = .true.
     end subroutine ini3D_from_cavgs
 
     subroutine set_cline_refine3D( istage, l_cavgs )
