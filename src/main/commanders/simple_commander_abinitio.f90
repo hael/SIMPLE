@@ -105,14 +105,8 @@ contains
         call cline%set('oritype', 'ptcl3D')   ! from now on we are in the ptcl3D segment, final report is in the cls3D segment
         ! set class global ML regularization flag
         l_ml_reg = .true.
-        if( cline%defined('ml_reg') )then
-            l_ml_reg = params%l_ml_reg   
-        endif
         ! set class global ICM regularization flag
         l_icm_reg = .true.
-        if( cline%defined('icm') )then
-            l_icm_reg = params%l_icm   
-        endif
         ! set nstages_ini3D
         nstages_ini3D = NSTAGES
         if( cline%defined('nstages') )then
