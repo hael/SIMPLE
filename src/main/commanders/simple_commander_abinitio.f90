@@ -44,9 +44,11 @@ end type abinitio3D_parts_commander
 ! class constants
 character(len=*), parameter :: REC_FBODY             = 'rec_final_state'
 character(len=*), parameter :: STR_STATE_GLOB        = '01'
-real,             parameter :: LPSTART_LB            = 10.
-real,             parameter :: LPSTART_DEFAULT       = 20.
-real,             parameter :: LPSTOP_LB             = 6.
+! real,             parameter :: LPSTART_LB            = 10.
+! real,             parameter :: LPSTART_DEFAULT       = 20.
+! real,             parameter :: LPSTOP_LB             = 6.
+real,             parameter :: LPSTOP_BOUNDS(2)      = [4.5,6.0]
+real,             parameter :: LPSTART_BOUNDS(2)     = [10.,20.] 
 real,             parameter :: CENLP_DEFAULT         = 30.
 real,             parameter :: LPSYMSRCH_LB          = 12.
 integer,          parameter :: NSTAGES               = 8
@@ -700,8 +702,9 @@ contains
         endif
         if( allocated(lpinfo) ) deallocate(lpinfo)
         allocate(lpinfo(NSTAGES))
-        lpfinal = max(LPSTOP_LB,calc_lplim_final_stage(3))
-        call lpstages(params_glob%box, NSTAGES, frcs_avg, params_glob%smpd, LPSTART_LB, LPSTART_DEFAULT, lpfinal, lpinfo, verbose=.true.)
+        lpfinal = max(LPSTOP_BOUNDS(1),calc_lplim_final_stage(3))
+        lpfinal = min(LPSTOP_BOUNDS(2),lpfinal)
+        call lpstages(params_glob%box, NSTAGES, frcs_avg, params_glob%smpd, LPSTART_BOUNDS(1), LPSTART_BOUNDS(2), lpfinal, lpinfo, verbose=.true.)
         call clsfrcs%kill
 
         contains
