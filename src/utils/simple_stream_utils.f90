@@ -75,11 +75,12 @@ contains
 
     ! Chunk type related routines
 
-    subroutine init( self, id, master_spproj )
+    subroutine init( self, id, cline, master_spproj )
         class(stream_chunk), intent(inout) :: self
+        class(cmdline),      intent(in)    :: cline
         integer,             intent(in)    :: id
         class(sp_project),   intent(in)    :: master_spproj
-        character(len=STDLEN)              :: chunk_part_env
+        character(len=STDLEN)              :: chunk_part_env, exec
         integer                            :: envlen
         call debug_print('in chunk%init '//int2str(id))
         call self%spproj%kill
@@ -91,13 +92,18 @@ contains
         self%projfile_out = ''
         self%spproj%projinfo = master_spproj%projinfo
         self%spproj%compenv  = master_spproj%compenv
+        if( str_has_substr(cline%get_carg('prg'), 'abinitio') )then
+            exec = 'simple_exec'
+        else
+            exec = 'simple_private_exec'
+        endif
         if( params_glob%nparts_chunk == 1 )then
             ! shared memory
-            call self%qenv%new(params_glob%nparts_chunk, exec_bin='simple_private_exec', qsys_nthr=params_glob%nthr2D)
+            call self%qenv%new(params_glob%nparts_chunk, exec_bin=trim(exec), qsys_nthr=params_glob%nthr2D)
             call self%spproj%compenv%set(1,'qsys_name','local')
         else
             ! we need to override the qsys_name for non local distributed execution
-            call self%qenv%new(params_glob%nparts_chunk, exec_bin='simple_private_exec', qsys_name='local')
+            call self%qenv%new(params_glob%nparts_chunk, exec_bin=trim(exec), qsys_name='local')
             call get_environment_variable(SIMPLE_STREAM_CHUNK_PARTITION, chunk_part_env, envlen)
             if(envlen > 0) call self%spproj%compenv%set(1,'qsys_partition',trim(chunk_part_env))
         endif
@@ -150,18 +156,22 @@ contains
         call simple_mkdir(STDERROUT_DIR)
         nptcls_sel = self%spproj%os_ptcl2D%get_noris(consider_state=.true.)
         nclines = 1
-        if( calc_pspec ) nclines = nclines + 1
-        allocate(clines(nclines))
-        ! noise estimates
-        if( calc_pspec )then
-            call cline_pspec%set('prg',      'calc_pspec_distr')
-            call cline_pspec%set('oritype',  'ptcl2D')
-            call cline_pspec%set('projfile', self%projfile_out)
-            call cline_pspec%set('nthr',     cline_classify%get_iarg('nthr'))
-            call cline_pspec%set('mkdir',    'yes')
-            call cline_pspec%set('nparts',   1)
-            if( params_glob%nparts_chunk > 1 ) call cline_pspec%set('nparts',params_glob%nparts_chunk)
-            clines(1) = cline_pspec
+        if( trim(cline_classify%get_carg('prg')).eq.'abinitio2D' )then
+            allocate(clines(nclines))
+        else
+            if( calc_pspec ) nclines = nclines + 1
+            allocate(clines(nclines))
+            ! noise estimates
+            if( calc_pspec )then
+                call cline_pspec%set('prg',      'calc_pspec_distr')
+                call cline_pspec%set('oritype',  'ptcl2D')
+                call cline_pspec%set('projfile', self%projfile_out)
+                call cline_pspec%set('nthr',     cline_classify%get_iarg('nthr'))
+                call cline_pspec%set('mkdir',    'yes')
+                call cline_pspec%set('nparts',   1)
+                if( params_glob%nparts_chunk > 1 ) call cline_pspec%set('nparts',params_glob%nparts_chunk)
+                clines(1) = cline_pspec
+            endif
         endif
         if( box < orig_box )then
             scale = real(box) / real(orig_box)

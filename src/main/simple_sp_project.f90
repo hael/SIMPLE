@@ -2915,8 +2915,8 @@ contains
         logical, optional, intent(in)    :: append
         integer, optional, intent(in)    :: maxpop
         integer, allocatable             :: particles(:)
-        integer :: ncls, icls, iptcl, pind, nptcls, noris_ptcl3D, noris_ptcl2D
-        integer :: maxnptcls, pstate, rstate
+        integer :: ncls, icls, iptcl, i, nptcls, noris_ptcl3D, noris_ptcl2D
+        integer :: maxnptcls, pstate, istate
         logical :: l_append
         noris_ptcl2D = self%os_ptcl2D%get_noris()
         if( noris_ptcl2D == 0 )then
@@ -2952,29 +2952,24 @@ contains
             ! get particle indices
             call self%os_ptcl2D%get_pinds(icls, 'class', particles, l_shuffle=.true.)
             if( allocated(particles) )then
-                nptcls = 0
-                rstate = self%os_cls2D%get_state(icls)
-                do iptcl=1,size(particles)
-                    ! get particle index
-                    pind = particles(iptcl)
-                    if( nptcls .ge. maxnptcls ) then
-                        call self%os_ptcl2D%set_state(pind, 0)
-                        call self%os_ptcl3D%set_state(pind, 0)
-                    else if(l_append) then
-                        pstate = self%os_ptcl2D%get_state(pind)
-                        if ( pstate .gt. 0 ) then
-                            nptcls = nptcls + 1
-                            ! update state in self%os_ptcl2D & 3D
-                            call self%os_ptcl2D%set_state(pind, rstate)
-                            call self%os_ptcl3D%set_state(pind, rstate)
-                        endif
-                    else
-                        nptcls = nptcls + 1
-                        ! update state in self%os_ptcl2D & 3D
-                        call self%os_ptcl2D%set_state(pind, rstate)
-                        call self%os_ptcl3D%set_state(pind, rstate)
-                    endif
-                end do
+                istate = self%os_cls2D%get_state(icls)
+                nptcls = size(particles)
+                !$omp parallel do proc_bind(close) default(shared) private(i,iptcl)
+                do i = 1,min(nptcls,maxnptcls)
+                    iptcl = particles(i)
+                    call self%os_ptcl2D%set_state(iptcl, istate)
+                    call self%os_ptcl3D%set_state(iptcl, istate)
+                enddo
+                !$omp end parallel do
+                if( maxnptcls < nptcls)then
+                    !$omp parallel do proc_bind(close) default(shared) private(i,iptcl)
+                    do i = maxnptcls+1,nptcls
+                        iptcl = particles(i)
+                        call self%os_ptcl2D%set_state(iptcl, 0)
+                        call self%os_ptcl3D%set_state(iptcl, 0)
+                    enddo
+                    !$omp end parallel do
+                endif
                 deallocate(particles)
                 if(present(maxpop)) call self%os_cls2D%set(icls, 'pop', nptcls)
             endif
@@ -3037,11 +3032,13 @@ contains
             ! get particle indices
             call self%os_ptcl2D%get_pinds(icls, 'class', particles)
             if( allocated(particles) )then
+                !$omp parallel do proc_bind(close) default(shared) private(iptcl,pind)
                 do iptcl=1,size(particles)
                     pind = particles(iptcl)
                     call self%os_ptcl2D%set(pind, flag, val)
                     call self%os_ptcl3D%set(pind, flag, val)
                 end do
+                !$omp end parallel do
                 deallocate(particles)
             endif
         end do

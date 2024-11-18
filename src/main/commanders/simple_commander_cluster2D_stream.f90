@@ -41,20 +41,22 @@ type, extends(commander_base) :: cluster2D_commander_subsets
     procedure :: execute      => exec_cluster2D_subsets
 end type cluster2D_commander_subsets
 
-integer,               parameter :: MINBOXSZ            = 12                  ! minimum boxsize for scaling
-integer,               parameter :: CHUNK_MINITS        = 13                  ! minimum number of iterations for chunks
-integer,               parameter :: CHUNK_MAXITS        = CHUNK_MINITS + 2    ! maximum number of iterations for chunks
-integer,               parameter :: CHUNK_CC_ITERS      = 8                   ! maximum number of correlatiion-based iterations for chunks
-integer,               parameter :: CHUNK_EXTR_ITER     = 3                   ! starting extremal iteration for chunks
-integer,               parameter :: FREQ_POOL_REJECTION = 5                   ! pool class rejection performed every FREQ_POOL_REJECTION iteration
-character(len=STDLEN), parameter :: USER_PARAMS         = 'stream2D_user_params.txt'
-character(len=STDLEN), parameter :: PROJFILE_POOL       = 'cluster2D.simple'
-character(len=STDLEN), parameter :: POOL_DIR            = '' ! should be './pool/' for tidyness but difficult with gui
-character(len=STDLEN), parameter :: SIGMAS_DIR          = './sigma2/'
-character(len=STDLEN), parameter :: DISTR_EXEC_FNAME    = './distr_cluster2D_pool'
-character(len=STDLEN), parameter :: LOGFILE             = 'simple_log_cluster2D_pool'
-character(len=STDLEN), parameter :: CHECKPOINT_DIR      = 'checkpoint/'
-logical,               parameter :: DEBUG_HERE          = .false.
+integer,               parameter :: MINBOXSZ             = 128              ! minimum boxsize for scaling
+integer,               parameter :: CHUNK_MINITS         = 13               ! minimum number of iterations for chunks
+integer,               parameter :: CHUNK_MAXITS         = CHUNK_MINITS + 2 ! maximum number of iterations for chunks
+integer,               parameter :: CHUNK_CC_ITERS       = 8                ! maximum number of correlatiion-based iterations for chunks
+integer,               parameter :: CHUNK_EXTR_ITER      = 3                ! starting extremal iteration for chunks
+integer,               parameter :: FREQ_POOL_REJECTION  = 5                ! pool class rejection performed every FREQ_POOL_REJECTION iteration
+integer,               parameter :: MIN_NPTCLS_REJECTION = 200000           ! Minimum number of particles required to activate rejection
+real,                  parameter :: RELAXED_REJECTION    = 1.25             ! To relax rejection stringency in pool
+character(len=STDLEN), parameter :: USER_PARAMS          = 'stream2D_user_params.txt'
+character(len=STDLEN), parameter :: PROJFILE_POOL        = 'cluster2D.simple'
+character(len=STDLEN), parameter :: POOL_DIR             = ''               ! should be './pool/' for tidyness but difficult with gui
+character(len=STDLEN), parameter :: SIGMAS_DIR           = './sigma2/'
+character(len=STDLEN), parameter :: DISTR_EXEC_FNAME     = './distr_cluster2D_pool'
+character(len=STDLEN), parameter :: LOGFILE              = 'simple_log_cluster2D_pool'
+character(len=STDLEN), parameter :: CHECKPOINT_DIR       = 'checkpoint/'
+logical,               parameter :: DEBUG_HERE           = .false.
 integer(timer_int_kind)          :: t
 
 ! Pool related
@@ -76,7 +78,7 @@ real                                   :: conv_score=0., conv_mi_class=0., conv_
 integer                                :: nptcls_glob=0, nptcls_rejected_glob=0, ncls_rejected_glob=0
 integer                                :: ncls_glob                         ! global number of classes
 integer                                :: iterswitch2euclid = 0             ! only used by gen_picking_refs
-logical                                :: stream2D_active = .false.         ! initiation flag
+logical                                :: stream2D_active   = .false.       ! initiation flag
 ! GUI-related
 type(starproject)                      :: starproj
 type(starproject_stream)               :: starproj_stream
@@ -87,6 +89,7 @@ integer  :: box, boxpd, max_ncls, nptcls_per_chunk, nmics_last, numlen
 logical  :: l_wfilt                     ! flags partial wiener restoration
 logical  :: l_scaling                   ! flags downscaling
 logical  :: l_update_sigmas = .false.   ! flags objective function (cc/euclid)
+logical  :: l_abinitio2D    = .false.   ! Whether to use abinitio2D/cluster2D
 
 contains
 
@@ -116,6 +119,9 @@ contains
         projfile4gui        = trim(projfilegui)
         l_update_sigmas     = params_glob%l_needs_sigma
         nmics_last          = 0
+        l_abinitio2D        = cline%defined('algorithm')
+        if( l_abinitio2D ) l_abinitio2D = str_has_substr(params_glob%algorithm,'abinitio')
+        if( l_abinitio2D ) THROW_HARD('algorithm=abinitio2D not functional yet!')
         ! bookkeeping & directory structure
         numlen         = len(int2str(params_glob%nparts_pool))
         refs_glob      = 'start_cavgs'//params_glob%ext
@@ -133,35 +139,47 @@ contains
         ! update to computational parameters to pool, will be transferred to chunks upon init
         if( cline%defined('walltime') ) call pool_proj%compenv%set(1,'walltime', params_glob%walltime)
         call pool_proj%write(trim(POOL_DIR)//trim(PROJFILE_POOL))
-        ! initialize chunks parameters and objects
+        ! chunk master command line
         if( params_glob%nchunks > 0 )then
-            if( params_glob%nparts_chunk > 1 )then
-                call cline_cluster2D_chunk%set('prg',    'cluster2D_distr')
-                call cline_cluster2D_chunk%set('nparts', params_glob%nparts_chunk)
+            if( l_abinitio2D )then
+                call cline_cluster2D_chunk%set('prg', 'abinitio2D')
+                if( params_glob%nparts_chunk > 1 )then
+                    call cline_cluster2D_chunk%set('nparts', params_glob%nparts_chunk)
+                endif
+                if( cline%defined('cls_init') )then
+                    call cline_cluster2D_chunk%set('cls_init', params_glob%cls_init)
+                else
+                    call cline_cluster2D_chunk%set('cls_init','rand')
+                endif
             else
-                ! shared memory execution
-                call cline_cluster2D_chunk%set('prg',    'cluster2D')
+                if( params_glob%nparts_chunk > 1 )then
+                    call cline_cluster2D_chunk%set('prg',    'cluster2D_distr')
+                    call cline_cluster2D_chunk%set('nparts', params_glob%nparts_chunk)
+                else
+                    ! shared memory execution
+                    call cline_cluster2D_chunk%set('prg',    'cluster2D')
+                endif
+                call cline_cluster2D_chunk%set('minits',    CHUNK_MINITS)
+                call cline_cluster2D_chunk%set('maxits',    CHUNK_MAXITS)
+                call cline_cluster2D_chunk%set('extr_iter', CHUNK_EXTR_ITER)
+                call cline_cluster2D_chunk%set('extr_lim',  MAX_EXTRLIM2D)
+                call cline_cluster2D_chunk%set('startit',   1)
+                if( l_update_sigmas ) call cline_cluster2D_chunk%set('cc_iters', CHUNK_CC_ITERS)
+                if( cline%defined('cls_init') )then
+                    call cline_cluster2D_chunk%set('cls_init', params_glob%cls_init)
+                else
+                    call cline_cluster2D_chunk%set('cls_init','ptcl')
+                endif
             endif
             call cline_cluster2D_chunk%set('oritype',   'ptcl2D')
             call cline_cluster2D_chunk%set('center',    'no')
             call cline_cluster2D_chunk%set('autoscale', 'no')
             call cline_cluster2D_chunk%set('mkdir',     'no')
             call cline_cluster2D_chunk%set('stream',    'no')
-            call cline_cluster2D_chunk%set('startit',   1)
             call cline_cluster2D_chunk%set('mskdiam',   params_glob%mskdiam)
             call cline_cluster2D_chunk%set('ncls',      params_glob%ncls_start)
-            call cline_cluster2D_chunk%set('minits',    CHUNK_MINITS)
-            call cline_cluster2D_chunk%set('maxits',    CHUNK_MAXITS)
-            call cline_cluster2D_chunk%set('extr_iter', CHUNK_EXTR_ITER)
-            call cline_cluster2D_chunk%set('extr_lim',  MAX_EXTRLIM2D)
-            if( l_update_sigmas ) call cline_cluster2D_chunk%set('cc_iters', CHUNK_CC_ITERS)
             call cline_cluster2D_chunk%set('kweight',   params_glob%kweight_chunk)
             if( l_wfilt ) call cline_cluster2D_chunk%set('wiener', 'partial')
-            if( cline%defined('cls_init') )then
-                call cline_cluster2D_chunk%set('cls_init', params_glob%cls_init)
-            else
-                call cline_cluster2D_chunk%set('cls_init','ptcl')
-            endif
             ! EV override
             call get_environment_variable(SIMPLE_STREAM_CHUNK_NTHR, chunk_nthr_env, envlen)
             if(envlen > 0) then
@@ -178,7 +196,7 @@ contains
             nthr2D = params_glob%nthr2D
             params_glob%nthr2D = cline_cluster2D_chunk%get_iarg('nthr')
             do ichunk = 1,params_glob%nchunks
-                call chunks(ichunk)%init(ichunk, pool_proj)
+                call chunks(ichunk)%init(ichunk, cline_cluster2D_chunk, pool_proj)
             enddo
             params_glob%nthr2D = nthr2D
             glob_chunk_id = params_glob%nchunks
@@ -188,7 +206,7 @@ contains
             ncls_glob         = params_glob%ncls
             iterswitch2euclid = 0
         endif
-        ! initialize pool parameters and objects
+        ! Pool command line
         call cline_cluster2D_pool%set('prg',       'cluster2D_distr')
         call cline_cluster2D_pool%set('oritype',   'ptcl2D')
         call cline_cluster2D_pool%set('autoscale', 'no')
@@ -331,6 +349,14 @@ contains
         else
             call cline_cluster2D_chunk%set('cenlp', params_glob%cenlp)
             call cline_cluster2D_pool%set( 'cenlp', params_glob%cenlp)
+        endif
+        ! Will use resolution update scheme from abinitio2D
+        if( l_abinitio2D .and. (.not.l_no_chunks))then
+            if( master_cline%defined('lpstop') )then
+                ! already set above
+            else
+                call cline_cluster2D_chunk%delete('lpstop')
+            endif
         endif
         write(logfhandle,'(A,F5.1)') '>>> POOL STARTING LOW-PASS LIMIT (IN A): ', lpstart
         write(logfhandle,'(A,F5.1)') '>>> POOL   HARD RESOLUTION LIMIT (IN A): ', params_glob%lpstop
@@ -942,21 +968,25 @@ contains
         real                 :: ndev_here
         integer              :: nptcls_rejected, ncls_rejected, ncls2reject, iptcl
         integer              :: icls, ncls2reject_populated, ncls_populated
-        if( .not. stream2D_active ) return
-        if( .not.pool_available )   return
-        if( trim(params_glob%reject_cls).eq.'no' ) return
-        ! rejection frequency
-        if( pool_iter <= 2*FREQ_POOL_REJECTION .or. mod(pool_iter,FREQ_POOL_REJECTION)/=0 ) return
-        if( pool_proj%os_cls2D%get_noris() == 0 ) return
+        if( .not. stream2D_active )                return       ! has been initiated
+        if( trim(params_glob%reject_cls).eq.'no' ) return       ! obviously
+        if( .not.pool_available )                  return       ! parameters accessible and synched
+        if( ncls_glob < max_ncls )                 return       ! pool has been filled
+        if( (pool_iter <= 2*FREQ_POOL_REJECTION) .or.&          ! From 3xFREQ_POOL_REJECTION
+            &(mod(pool_iter,FREQ_POOL_REJECTION)/=0) ) return   ! occurs every FREQ_POOL_REJECTION
+        if( nptcls_glob < MIN_NPTCLS_REJECTION )  return        ! More than MIN_NPTCLS_REJECTION in pool
+        if( pool_proj%os_cls2D%get_noris() == 0 ) return        ! safeguard
         ncls_rejected   = 0
         nptcls_rejected = 0
         allocate(cls_mask(ncls_glob),moments_mask(ncls_glob),corres_mask(ncls_glob),source=.true.)
         allocate(pops(ncls_glob),source=nint(pool_proj%os_cls2D%get_all('pop')))
         ! moments & total variation distance
-        if( trim(params_glob%reject_cls).ne.'old' ) call pool_proj%os_cls2D%class_robust_rejection(moments_mask)
+        if( trim(params_glob%reject_cls).ne.'old' )then
+            call pool_proj%os_cls2D%class_robust_rejection(moments_mask, adjust=RELAXED_REJECTION)
+        endif
         ! correlation & resolution
         if( params_glob%lpthres < LOWRES_REJECT_THRESHOLD )then
-            ndev_here = 1.25*params_glob%ndev ! less stringent rejection than chunk
+            ndev_here = RELAXED_REJECTION*params_glob%ndev
             call pool_proj%os_cls2D%find_best_classes(box,smpd,params_glob%lpthres,corres_mask,ndev_here)
         endif
         ! overall class rejection
@@ -1356,7 +1386,7 @@ contains
                 ! deal with nthr2d .ne. nthr
                 nthr2D = params_glob%nthr2D
                 params_glob%nthr2D = cline_cluster2D_chunk%get_iarg('nthr')
-                call chunks(ichunk)%init(glob_chunk_id, pool_proj)
+                call chunks(ichunk)%init(glob_chunk_id, cline_cluster2D_chunk, pool_proj)
                 params_glob%nthr2D = nthr2D
             endif
         enddo
@@ -2134,7 +2164,7 @@ contains
         ! initialize chunks
         allocate(chunks(params%nchunks))
         do ichunk = 1,params%nchunks
-            call chunks(ichunk)%init(ichunk, pool_proj)
+            call chunks(ichunk)%init(ichunk, cline_cluster2D_chunk, pool_proj)
         enddo
         glob_chunk_id = params%nchunks
         ! Pool execution init
