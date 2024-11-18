@@ -1559,12 +1559,8 @@ contains
         self%l_lpauto = trim(self%lp_auto).ne.'no'
         select case(trim(self%lp_auto))
             case('yes')
-                if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
-                    ! all good, this is an lpset mode (no eo alignment), so update flag
-                    self%l_lpset = .true.
-                else
-                    THROW_HARD('Automatic low-pass limit estimation requires LPSTART/LPSTOP range input')
-                endif
+                ! this is an lpset mode (no eo alignment), so update flag
+                self%l_lpset = .true.
             case('no')
                 ! don't touch l_lpset flag
             case('fsc')
