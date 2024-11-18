@@ -59,10 +59,11 @@ integer,          parameter :: INCR_GREEDINESS_STAGE = 4 ! INCR_GREEDINESS_STAGE
 integer,          parameter :: PROBREFINE_STAGE      = 5
 integer,          parameter :: ICM_STAGE             = PROBREFINE_STAGE
 integer,          parameter :: TRAILREC_STAGE        = 7
+integer,          parameter :: LPAUTO_STAGE          = TRAILREC_STAGE
 ! class variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
 logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false., l_update_frac=.false.
-logical          :: l_ml_reg=.true., l_icm_reg=.true., l_ini3D=.false., l_multistates = .false.
+logical          :: l_ml_reg=.true., l_icm_reg=.true., l_ini3D=.false., l_multistates = .false., l_lpauto=.false.
 type(sym)        :: se1, se2
 type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_postprocess, cline_reproject
 real             :: update_frac = 1.0
@@ -106,6 +107,8 @@ contains
         l_ml_reg = .true.
         ! set class global ICM regularization flag
         l_icm_reg = .true.
+        ! set class global lp_auto flag for low-pass limit estimation
+        l_lpauto = .false.
         ! set nstages_ini3D
         nstages_ini3D = NSTAGES
         if( cline%defined('nstages') )then
@@ -374,12 +377,19 @@ contains
         ! set class global ML regularization flag
         l_ml_reg = .false. ! this produces the best results on the gate
         if( cline%defined('ml_reg') )then
-            l_ml_reg = params%l_ml_reg   
+            l_ml_reg = params%l_ml_reg
         endif
         ! set class global ICM regularization flag
         l_icm_reg = .true.
         if( cline%defined('icm') )then
             l_icm_reg = params%l_icm
+        endif
+        ! set class global lp_auto flag for low-pass limit estimation
+        l_lpauto = .false.
+        if( cline%defined('lp_auto') )then
+            l_lpauto = params%l_lpauto
+            params%lplim_crit = 0.5
+            call cline%set('lplim_crit', params%lplim_crit)
         endif
         ! prepare class command lines
         call prep_class_command_lines(cline, params%projfile)
@@ -761,14 +771,13 @@ contains
         integer,          intent(in)  :: istage
         logical,          intent(in)  :: l_cavgs
         character(len=:), allocatable :: silence_fsc, sh_first, prob_sh, ml_reg
-        character(len=:), allocatable :: refine, icm, trail_rec, pgrp, balance
+        character(len=:), allocatable :: refine, icm, trail_rec, pgrp, balance, lp_auto
         integer :: iphase, iter, inspace, imaxits
-        real    :: trs, snr_noise_reg, greediness, frac_best, overlap, fracsrch
+        real    :: trs, snr_noise_reg, greediness, frac_best, overlap, fracsrch, lpstart, lpstop
         ! iteration number bookkeeping
+        iter = 0
         if( cline_refine3D%defined('endit') )then
             iter = cline_refine3D%get_iarg('endit')
-        else
-            iter = 0
         endif
         iter = iter + 1
         ! symmetry
@@ -780,30 +789,27 @@ contains
             endif
         endif
         ! refinement mode
-        if( istage < PROBREFINE_STAGE )then
-            refine    = 'shc_smpl'
-            prob_sh   = 'no'
-        else
-            refine    = 'prob'
-            prob_sh   = 'yes'
+        refine  = 'shc_smpl'
+        prob_sh = 'no'
+        if( istage >= PROBREFINE_STAGE )then
+            refine  = 'prob'
+            prob_sh = 'yes'
         endif
         ! ICM regularization
-        if( istage < ICM_STAGE )then
-            icm       = 'no'
-        else
-            icm       = 'yes'
-        endif
+        icm = 'no'
+        if( istage >= ICM_STAGE ) icm = 'yes'
         ! balance
-        if( l_update_frac )then
-            balance   = 'yes'
-        else
-            balance   = 'no'
-        endif
+        balance = 'no'
+        if( l_update_frac ) balance = 'yes'
         ! trailing reconstruction
-        if( istage >= TRAILREC_STAGE .and. l_update_frac )then
-            trail_rec = 'yes'
-        else
-            trail_rec = 'no'
+        trail_rec = 'no'
+        if( istage >= TRAILREC_STAGE .and. l_update_frac ) trail_rec = 'yes'
+        ! automatic low-pass limit estimation
+        lp_auto = 'no'
+        if( istage >= LPAUTO_STAGE .and. l_lpauto )then
+            lp_auto = trim(params_glob%lp_auto)
+            lpstart = lpinfo(istage - 1)%lp
+            lpstop  = lpinfo(NSTAGES)%lp
         endif
         ! phase logics
         if(      istage <= PHASES(1) )then
@@ -882,6 +888,11 @@ contains
         call cline_refine3D%set('refine',                      refine)
         call cline_refine3D%set('balance',                    balance)
         call cline_refine3D%set('trail_rec',                trail_rec)
+        call cline_refine3D%set('lp_auto',                    lp_auto)
+        if( lp_auto.eq.'yes' )then
+        call cline_refine3D%set('lpstart',                    lpstart)
+        call cline_refine3D%set('lpstop',                      lpstop)
+        endif
         ! phase control parameters
         call cline_refine3D%set('nspace',                     inspace)
         call cline_refine3D%set('maxits',                     imaxits)

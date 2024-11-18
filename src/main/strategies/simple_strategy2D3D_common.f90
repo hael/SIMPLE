@@ -602,7 +602,7 @@ contains
         if( params_glob%l_lpauto .and. params_glob%l_ml_reg )then
             vol_even_unfil = add2fbody(vol_even,params_glob%ext,'_unfil')
             vol_odd_unfil  = add2fbody(vol_odd,params_glob%ext,'_unfil')
-            ! estimate low-pass limit from unifiltered volumes
+            ! estimate low-pass limit from unfiltered volumes
             call build_glob%vol%read_and_crop(vol_even_unfil,    params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
             call build_glob%vol_odd%read_and_crop(vol_odd_unfil, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
             call estimate_lp_refvols(s, lpopt)

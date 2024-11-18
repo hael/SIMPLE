@@ -340,6 +340,14 @@ contains
         real      :: xyz(3)
         integer   :: cnt, s, iref, nrefs
         logical   :: do_center
+        ! exception handling for lp_auto==yes
+        if( trim(params_glob%lp_auto).eq.'yes' )then
+            if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
+                ! all good
+            else
+                THROW_HARD('Automatic low-pass limit estimation requires LPSTART/LPSTOP range input')
+            endif
+        endif
         if( L_BENCH_GLOB ) rt_read_and_filter_refvols = 0.
         ! first the polar
         nrefs = params_glob%nspace * params_glob%nstates
