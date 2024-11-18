@@ -44,9 +44,6 @@ end type abinitio3D_parts_commander
 ! class constants
 character(len=*), parameter :: REC_FBODY             = 'rec_final_state'
 character(len=*), parameter :: STR_STATE_GLOB        = '01'
-! real,             parameter :: LPSTART_LB            = 10.
-! real,             parameter :: LPSTART_DEFAULT       = 20.
-! real,             parameter :: LPSTOP_LB             = 6.
 real,             parameter :: LPSTOP_BOUNDS(2)      = [4.5,6.0]
 real,             parameter :: LPSTART_BOUNDS(2)     = [10.,20.] 
 real,             parameter :: CENLP_DEFAULT         = 30.
@@ -375,7 +372,7 @@ contains
             l_ini3D = .true.
         endif
         ! set class global ML regularization flag
-        l_ml_reg = .true.
+        l_ml_reg = .false. ! this produces the best results on the gate
         if( cline%defined('ml_reg') )then
             l_ml_reg = params%l_ml_reg   
         endif
