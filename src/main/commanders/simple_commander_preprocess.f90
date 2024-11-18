@@ -2,14 +2,15 @@
 module simple_commander_preprocess
 include 'simple_lib.f08'
 use simple_binoris_io
-use simple_builder,        only: builder
-use simple_cmdline,        only: cmdline
-use simple_parameters,     only: parameters, params_glob
-use simple_commander_base, only: commander_base
-use simple_image,          only: image
-use simple_sp_project,     only: sp_project
-use simple_qsys_env,       only: qsys_env
-use simple_stack_io,       only: stack_io
+use simple_builder,              only: builder
+use simple_cmdline,              only: cmdline
+use simple_parameters,           only: parameters, params_glob
+use simple_commander_base,       only: commander_base
+use simple_image,                only: image
+use simple_sp_project,           only: sp_project
+use simple_qsys_env,             only: qsys_env
+use simple_stack_io,             only: stack_io
+use simple_motion_correct_utils, only: flip_gain
 use simple_qsys_funs
 use simple_progress
 implicit none
@@ -128,7 +129,6 @@ end type make_pickrefs_commander
 contains
 
     subroutine exec_preprocess_distr( self, cline )
-        use simple_motion_correct, only: flip_gain
         class(preprocess_commander_distr), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(parameters)              :: params
@@ -464,7 +464,6 @@ contains
     end subroutine exec_preprocess
 
     subroutine exec_motion_correct_distr( self, cline )
-        use simple_motion_correct, only: flip_gain
         class(motion_correct_commander_distr), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
         type(parameters) :: params

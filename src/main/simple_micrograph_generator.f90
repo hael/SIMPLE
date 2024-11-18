@@ -4,7 +4,7 @@ module simple_micrograph_generator
 include 'simple_lib.f08'
 use simple_image,                         only: image, image_ptr
 use simple_eer_factory,                   only: eer_decoder
-use simple_motion_correct,                only: correct_gain
+use simple_motion_correct_utils,          only: correct_gain, apply_dose_weighing
 use simple_starfile_wrappers
 implicit none
 ! private
@@ -43,7 +43,6 @@ type :: mic_generator
   contains
     procedure          :: new
     procedure, private :: parse_movie_metadata
-    procedure, private :: apply_dose_weighing
     procedure          :: generate_micrographs
     procedure          :: write_star
     procedure          :: display
@@ -339,7 +338,7 @@ contains
                     call local_frames(iframe)%fft
                 end do
                 !$omp end parallel do
-                call self%apply_dose_weighing
+                call apply_dose_weighing(self%nframes, local_frames, self%fromtof, self%total_dose, self%kv)
                 !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
                 do iframe = self%fromtof(1),self%fromtof(2)
                     call local_frames(iframe)%ifft
@@ -379,7 +378,7 @@ contains
                 call bimc(micrograph_nodw)
                 ! dose-weighted
                 if( self%l_doseweighing )then
-                    call self%apply_dose_weighing
+                    call apply_dose_weighing(self%nframes, local_frames, self%fromtof, self%total_dose, self%kv)
                     !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
                     do iframe = self%fromtof(1),self%fromtof(2)
                         call local_frames(iframe)%copy_fast(self%frames(iframe))
@@ -409,7 +408,7 @@ contains
                 end do
                 call micrograph_nodw%ifft
                 if( self%l_doseweighing )then
-                    call self%apply_dose_weighing
+                    call apply_dose_weighing(self%nframes, self%frames, self%fromtof, self%total_dose, self%kv)
                     call micrograph_dw%new(ldim, self%smpd_out)
                     call micrograph_dw%zero_and_flag_ft
                     call micrograph_dw%get_cmat_ptr(cmat_sum)
@@ -692,7 +691,6 @@ contains
         class(mic_generator), intent(inout)  :: self
         real,    parameter   :: CS_STDEV = 10.0
         integer, parameter   :: hwinsz = 1
-        type(image_ptr)      :: prmats(self%nframes)
         real,        pointer :: prmat(:,:,:)
         real,    allocatable :: rsum(:,:)
         real    :: ave, sdev, var, lthresh,uthresh
@@ -888,46 +886,6 @@ contains
             !$omp end parallel do
         endif
     end subroutine cure_outliers_2
-
-    ! Frames assumed in fourier space
-    subroutine apply_dose_weighing( self )
-        class(mic_generator), intent(inout) :: self
-        real, parameter :: A=0.245, B=-1.665, C=2.81
-        real            :: qs(self%fromtof(1):self%fromtof(2)), acc_doses(self%nframes)
-        real            :: spaFreqk, twoNe, spafreq, limhsq,limksq
-        integer         :: nrflims(3,2), ldim(3), hphys,kphys, iframe, h,k
-        if( .not.self%l_doseweighing ) return
-        if( .not.self%frames(self%fromtof(1))%is_ft() ) THROW_HARD('Frames should be in in the Fourier domain')
-        nrflims = self%frames(self%fromtof(1))%loop_lims(2)
-        ldim    = self%frames(self%fromtof(1))%get_ldim()
-        limhsq  = (real(ldim(1))*self%smpd_out)**2.
-        limksq  = (real(ldim(2))*self%smpd_out)**2.
-        do iframe=1,self%nframes
-            acc_doses(iframe) = real(iframe) * self%doseperframe
-        end do
-        if( is_equal(self%kV,200.) )then
-            acc_doses = acc_doses / 0.8
-        else if( is_equal(self%kV,100.) )then
-            acc_doses = acc_doses / 0.64
-        endif
-        !$omp parallel do private(h,k,spafreq,spafreqk,twone,kphys,hphys,iframe,qs)&
-        !$omp default(shared) schedule(static) proc_bind(close)
-        do k = nrflims(2,1),nrflims(2,2)
-            kphys    = k + 1 + merge(ldim(2),0,k<0)
-            spaFreqk = real(k*k)/limksq
-            do h = nrflims(1,1),nrflims(1,2)
-                hphys   = h + 1
-                spaFreq = sqrt( real(h*h)/limhsq + spaFreqk )
-                twoNe   = 2.*(A*spaFreq**B + C)
-                qs = exp(-acc_doses(self%fromtof(1):self%fromtof(2))/twoNe)
-                qs = qs / sqrt(sum(qs*qs))
-                do iframe = self%fromtof(1),self%fromtof(2)
-                    call self%frames(iframe)%mul_cmat_at([hphys,kphys,1], qs(iframe))
-                enddo
-            enddo
-        enddo
-        !$omp end parallel do
-    end subroutine apply_dose_weighing
 
     pure function get_moviename( self )result( fname )
         class(mic_generator), intent(in)  :: self
