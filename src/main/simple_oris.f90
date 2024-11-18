@@ -612,19 +612,27 @@ contains
         integer,           intent(in)    :: ind
         character(len=*),  intent(in)    :: label
         integer, optional, intent(in)    :: eo
-        integer :: mylab, pop, i
+        integer :: pop, i
         logical :: consider_eo
         consider_eo = .false.
         if( present(eo) ) consider_eo = .true.
         pop = 0
-        do i=1,self%n
-            if( self%o(i)%isstatezero() ) cycle
-            if( consider_eo )then
+        if( consider_eo )then
+            !$omp parallel do private(i) default(shared) proc_bind(close) reduction(+:pop)
+            do i=1,self%n
+                if( self%o(i)%isstatezero()  ) cycle
                 if( self%o(i)%get_eo() /= eo ) cycle
-            endif
-            mylab = self%o(i)%get_int(label)
-            if( mylab == ind )  pop = pop + 1
-        end do
+                if( self%o(i)%get_int(label) == ind )  pop = pop + 1
+            end do
+            !$omp end parallel do
+        else
+            !$omp parallel do private(i) default(shared) proc_bind(close) reduction(+:pop)
+            do i=1,self%n
+                if( self%o(i)%isstatezero() ) cycle
+                if( self%o(i)%get_int(label) == ind )  pop = pop + 1
+            end do
+            !$omp end parallel do
+        endif
     end function get_pop
 
     !>  \brief  is for getting all rotation matrices
@@ -841,29 +849,35 @@ contains
         integer,              intent(in)  :: ind
         integer, allocatable, intent(out) :: indices(:)
         logical, optional,    intent(in)  :: l_shuffle
-        type(ran_tabu) :: rt
-        integer :: pop, cnt, myval, i
+        type(ran_tabu)       :: rt
+        logical, allocatable :: mask(:)
+        integer :: pop, i
         logical :: ll_shuffle
         ll_shuffle = .false.
         if( present(l_shuffle) ) ll_shuffle = l_shuffle
         if( allocated(indices) )deallocate(indices)
-        pop = self%get_pop(ind, label)
+        allocate(indices(self%n),mask(self%n))
+        !$omp parallel do private(i) default(shared) proc_bind(close)
+        do i = 1,self%n
+            if( self%o(i)%isstatezero() )then
+                mask(i) = .false.
+            else
+                mask(i) = self%o(i)%get_int(label) == ind
+            endif
+            if( mask(i) ) indices(i) = i
+        end do
+        !$omp end parallel do
+        pop = count(mask)
         if( pop > 0 )then
-            allocate( indices(pop) )
-            cnt = 0
-            do i=1,self%n
-                if( self%o(i)%isstatezero() ) cycle
-                myval = self%o(i)%get_int(label)
-                if( myval == ind )then
-                    cnt = cnt + 1
-                    indices(cnt) = i
-                endif
-            end do
+            indices = pack(indices, mask=mask)
+            deallocate(mask)
             if( ll_shuffle )then
-                rt = ran_tabu(pop)
+                rt  = ran_tabu(pop)
                 call rt%shuffle(indices)
                 call rt%kill
             endif
+        else
+            deallocate(indices,mask)
         endif
     end subroutine get_pinds
 
@@ -2820,9 +2834,10 @@ contains
         deallocate(msk,rfinds,corrs)
     end subroutine find_best_classes
 
-    subroutine class_robust_rejection( self, mask )
-        class(oris), intent(in)    :: self
-        logical,     intent(inout) :: mask(1:self%n)
+    subroutine class_robust_rejection( self, mask, adjust )
+        class(oris),    intent(in)    :: self
+        logical,        intent(inout) :: mask(1:self%n)
+        real, optional, intent(in)    :: adjust
         real,    parameter   :: MEAN_THRESHOLD    = -8.0
         real,    parameter   :: REL_VAR_THRESHOLD =  6.0
         real,    parameter   :: ABS_VAR_THRESHOLD =  1.5
@@ -2831,6 +2846,8 @@ contains
         real,    parameter   :: MAX_THRESHOLD     =  2.0
         real,    allocatable :: vals(:), x(:)
         logical, allocatable :: msk(:)
+        real    :: eff_mean_thresh, eff_rel_var_thresh, eff_abs_var_thresh
+        real    :: eff_tvd_thresh, eff_min_thresh, eff_max_thresh
         integer :: icls, i
         logical :: has_mean, has_var, has_tvd, has_minmax
         msk = mask
@@ -2844,6 +2861,22 @@ contains
             deallocate(msk)
             return
         endif
+        ! Effective threshold
+        eff_mean_thresh    = MEAN_THRESHOLD
+        eff_rel_var_thresh = REL_VAR_THRESHOLD
+        eff_abs_var_thresh = ABS_VAR_THRESHOLD
+        eff_tvd_thresh     = TVD_THRESHOLD
+        eff_min_thresh     = MIN_THRESHOLD
+        eff_max_thresh     = MAX_THRESHOLD
+        if( present(adjust) )then
+            eff_mean_thresh    = adjust * eff_mean_thresh
+            eff_rel_var_thresh = adjust * eff_rel_var_thresh
+            eff_abs_var_thresh = adjust * eff_abs_var_thresh
+            eff_tvd_thresh     = min(0.999, adjust * eff_tvd_thresh)
+            eff_min_thresh     = adjust * eff_min_thresh
+            eff_max_thresh     = adjust * eff_max_thresh
+        endif
+        ! selection
         has_mean   = self%isthere('mean')
         has_var    = self%isthere('var')
         has_tvd    = self%isthere('tvd')
@@ -2856,7 +2889,7 @@ contains
             do icls = 1,self%n
                 if( msk(icls) )then
                     i = i+1
-                    if( mask(icls) ) mask(icls) = x(i) > MEAN_THRESHOLD
+                    if( mask(icls) ) mask(icls) = x(i) > eff_mean_thresh
                 endif
             enddo
         endif
@@ -2868,22 +2901,22 @@ contains
             do icls = 1,self%n
                 if( msk(icls) )then
                     i = i+1
-                    if( mask(icls) ) mask(icls) = x(i)       < REL_VAR_THRESHOLD
-                    if( mask(icls) ) mask(icls) = vals(icls) < ABS_VAR_THRESHOLD
+                    if( mask(icls) ) mask(icls) = x(i)       < eff_rel_var_thresh
+                    if( mask(icls) ) mask(icls) = vals(icls) < eff_abs_var_thresh
                 endif
             enddo
         endif
         if( has_tvd )then
             vals = self%get_all('tvd')
             do icls = 1,self%n
-                if( mask(icls) ) mask(icls) = vals(icls) < TVD_THRESHOLD
+                if( mask(icls) ) mask(icls) = vals(icls) < eff_tvd_thresh
             enddo
         endif
         if( has_minmax )then
             do icls = 1,self%n
                 if( mask(icls) )then
-                    if(  (self%get(icls,'min') < MIN_THRESHOLD).and.&
-                        &(self%get(icls,'max') > MAX_THRESHOLD) )then
+                    if(  (self%get(icls,'min') < eff_min_thresh).and.&
+                        &(self%get(icls,'max') > eff_max_thresh) )then
                         mask(icls) = .false.
                     endif
                 endif
