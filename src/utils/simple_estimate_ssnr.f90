@@ -201,7 +201,7 @@ contains
         real,              intent(in)  :: frcs_avg(:), smpd, lpstart_lb, lpstart_default, lpfinal
         type(lp_crop_inf), intent(out) :: lpinfo(nstages)
         logical, optional, intent(in)  :: verbose
-        real, parameter :: FRCLIMS_DEFAULT(2) = [0.8,0.05], LP2SMPD_TARGET = 1./3.
+        real, parameter :: FRCLIMS_DEFAULT(2) = [0.8,0.03], LP2SMPD_TARGET = 1./3.
         integer :: findlims(2), istage, box_trial
         real    :: frclims(2), frc_stepsz, lp_max, lp_min, lp_stepsz, rbox_stepsz
         logical :: l_verbose
@@ -211,16 +211,8 @@ contains
         findlims(1) = calc_fourier_index(lpstart_lb, box, smpd)
         findlims(2) = calc_fourier_index(lpfinal,    box, smpd)
         ! -- letting the shape of the FRC influence the limit choice, if needed
-
-        print *, 'frclim1', frcs_avg(findlims(1))
-        print *, 'frclim2', frcs_avg(findlims(2))
-
         frclims(1)  = max(frcs_avg(findlims(1)),FRCLIMS_DEFAULT(1)) ! always moving the limit towards lower resolution
         frclims(2)  = max(frcs_avg(findlims(2)),FRCLIMS_DEFAULT(2))
-
-        print *, 'frclim1', frclims(1)
-        print *, 'frclim2', frclims(2)
-
         ! (3) calculate critical FRC limits and corresponding low-pass limits for the nstages
         call calc_lpinfo(1, frclims(1))
         frc_stepsz = (frclims(1) - frclims(2)) / real(nstages - 1)
@@ -237,9 +229,7 @@ contains
         if( all(lpinfo(:)%l_lpset) )then
             ! nothing to do
         else
-
             print *, 'reverting to linear scheme'
-
             ! revert to linear scheme
             lpinfo(1)%lp      = lpstart_default
             lpinfo(1)%l_lpset = .true.
@@ -247,10 +237,10 @@ contains
                 lpinfo(istage)%lp      = lpinfo(istage-1)%lp - (lpinfo(istage-1)%lp - lpfinal) / 2.
                 lpinfo(istage)%l_lpset = .true.
             end do
-        endif
-        if( l_verbose )then
-            print *, '########## 2nd pass'
-            call print_lpinfo
+            if( l_verbose )then
+                print *, '########## 2nd pass'
+                call print_lpinfo
+            endif
         endif
         if( .not. all(lpinfo(:)%l_lpset) ) THROW_HARD('Not all lp limits set')
         ! (4) gather downscaling information

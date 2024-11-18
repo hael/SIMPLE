@@ -876,7 +876,9 @@ contains
         class(cmdline),                     intent(inout) :: cline
         type(builder)    :: build
         type(parameters) :: params
-        real, parameter :: LPSTART_LB=10., LPSTART_DEFAULT=20., LPSTOP_LB=6.
+        real, parameter  :: LPSTART_LB=10., LPSTART_DEFAULT=20.
+        real, parameter  :: LPSTOP_BOUNDS(2)  = [4.5,6.0]
+        real, parameter  :: LPSTART_BOUNDS(2) = [10.,20.] 
         character(len=:),  allocatable :: frcs_fname
         real,              allocatable :: frcs_avg(:)
         integer,           allocatable :: states(:)
@@ -895,8 +897,10 @@ contains
             call build%clsfrcs%avg_frc_getter(frcs_avg, states)
         endif
         allocate(lpinfo(params%nstages))
-        lpfinal = max(LPSTOP_LB,calc_lplim_final_stage(3))
-        call lpstages(params%box, params%nstages, frcs_avg, params%smpd, LPSTART_LB, LPSTART_DEFAULT, lpfinal, lpinfo, verbose=.true. )
+        lpfinal = max(LPSTOP_BOUNDS(1),calc_lplim_final_stage(3))
+        lpfinal = min(LPSTOP_BOUNDS(2),lpfinal)
+        ! call lpstages(params%box, params%nstages, frcs_avg, params%smpd, LPSTART_LB,        LPSTART_DEFAULT,   lpfinal, lpinfo, verbose=.true. )
+        call lpstages(params%box, params%nstages, frcs_avg, params%smpd, LPSTART_BOUNDS(1), LPSTART_BOUNDS(2), lpfinal, lpinfo, verbose=.true. )
         call simple_end('**** SIMPLE_ESTIMATE_LPSTAGES NORMAL STOP ****')
 
         contains
