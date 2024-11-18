@@ -11,6 +11,7 @@ use simple_optimizer,                     only: optimizer
 use simple_image,                         only: image, image_stack
 use simple_ft_expanded,                   only: ftexp_transfmat_init, ftexp_transfmat_kill
 use simple_motion_align_hybrid,           only: motion_align_hybrid
+use simple_motion_correct_utils
 use CPlot2D_wrapper_module
 implicit none
 private
@@ -825,97 +826,8 @@ contains
         type(image),           intent(inout) :: frames(self%nframes)
         real,                  intent(in)    :: weights(self%nframes)
         type(image),           intent(inout) :: frame_output
-        real, pointer :: rmatin(:,:,:), rmatout(:,:,:)
-        real(dp)      :: t,ti, dt,dt2,dt3, x,x2,y,y2,xy, A1,A2, B1x,B1x2,B1xy,B2x,B2x2,B2xy
-        integer       :: ldim(3), i, j, iframe
-        real          :: w, pixx,pixy
-        ldim    = frames(1)%get_ldim()
-        call frame_output%zero_and_unflag_ft
-        call frame_output%get_rmat_ptr(rmatout)
-        ti = real(self%interp_fixed_frame-self%fixed_frame, dp)
-        do iframe = 1,self%nframes
-            call frames(iframe)%get_rmat_ptr(rmatin)
-            w = weights(iframe)
-            t = real(iframe-self%fixed_frame, dp)
-            dt  = ti-t
-            dt2 = ti*ti - t*t
-            dt3 = ti*ti*ti - t*t*t
-            B1x  = sum(self%poly_coeffs(4:6,1)   * [dt,dt2,dt3])
-            B1x2 = sum(self%poly_coeffs(7:9,1)   * [dt,dt2,dt3])
-            B1xy = sum(self%poly_coeffs(16:18,1) * [dt,dt2,dt3])
-            B2x  = sum(self%poly_coeffs(4:6,2)   * [dt,dt2,dt3])
-            B2x2 = sum(self%poly_coeffs(7:9,2)   * [dt,dt2,dt3])
-            B2xy = sum(self%poly_coeffs(16:18,2) * [dt,dt2,dt3])
-            !$omp parallel do default(shared) private(i,j,x,x2,y,y2,xy,A1,A2,pixx,pixy)&
-            !$omp proc_bind(close) schedule(static)
-            do j = 1, ldim(2)
-                y  = real(j-1,dp) / real(ldim(2)-1,dp) - 0.5d0
-                y2 = y*y
-                A1 =           sum(self%poly_coeffs(1:3,1)   * [dt,dt2,dt3])
-                A1 = A1 + y  * sum(self%poly_coeffs(10:12,1) * [dt,dt2,dt3])
-                A1 = A1 + y2 * sum(self%poly_coeffs(13:15,1) * [dt,dt2,dt3])
-                A2 =           sum(self%poly_coeffs(1:3,2)   * [dt,dt2,dt3])
-                A2 = A2 + y  * sum(self%poly_coeffs(10:12,2) * [dt,dt2,dt3])
-                A2 = A2 + y2 * sum(self%poly_coeffs(13:15,2) * [dt,dt2,dt3])
-                do i = 1, ldim(1)
-                    x  = real(i-1,dp) / real(ldim(1)-1,dp) - 0.5d0
-                    x2 = x*x
-                    xy = x*y
-                    pixx = real(i) + real(A1 + B1x*x + B1x2*x2 + B1xy*xy)
-                    pixy = real(j) + real(A2 + B2x*x + B2x2*x2 + B2xy*xy)
-                    rmatout(i,j,1) = rmatout(i,j,1) + w*interp_bilin(pixx,pixy)
-                end do
-            end do
-            !$omp end parallel do
-        enddo
-    contains
-
-        pure real function interp_bilin( xval, yval )
-            real, intent(in) :: xval, yval
-            integer  :: x1_h,  x2_h,  y1_h,  y2_h
-            real     :: t, u
-            logical  :: outside
-            outside = .false.
-            x1_h = floor(xval)
-            x2_h = x1_h + 1
-            if( x1_h<1 .or. x2_h<1 )then
-                x1_h    = 1
-                outside = .true.
-            endif
-            if( x1_h>ldim(1) .or. x2_h>ldim(1) )then
-                x1_h    = ldim(1)
-                outside = .true.
-            endif
-            y1_h = floor(yval)
-            y2_h = y1_h + 1
-            if( y1_h<1 .or. y2_h<1 )then
-                y1_h    = 1
-                outside = .true.
-            endif
-            if( y1_h>ldim(2) .or. y2_h>ldim(2) )then
-                y1_h    = ldim(2)
-                outside = .true.
-            endif
-            if( outside )then
-                interp_bilin = rmatin(x1_h, y1_h, 1)
-                return
-            endif
-            t  = xval - real(x1_h)
-            u  = yval - real(y1_h)
-            interp_bilin =  (1. - t) * (1. - u) * rmatin(x1_h, y1_h, 1) + &
-                                 &t  * (1. - u) * rmatin(x2_h, y1_h, 1) + &
-                                 &t  *       u  * rmatin(x2_h, y2_h, 1) + &
-                           &(1. - t) *       u  * rmatin(x1_h, y2_h, 1)
-        end function interp_bilin
-
-        pure real function interp_nn( xval, yval )
-            real, intent(in) :: xval, yval
-            integer  :: x, y
-            x = min(max(nint(xval),1),ldim(1))
-            y = min(max(nint(yval),1),ldim(2))
-            interp_nn = rmatin(x,y,1)
-        end function interp_nn
-
+        call micrograph_interp(self%interp_fixed_frame, self%fixed_frame, self%nframes,&
+            &frames, weights, PATCH_PDIM, self%poly_coeffs, frame_output)
     end subroutine polytransfo
 
     subroutine set_size_frames_ref( self )

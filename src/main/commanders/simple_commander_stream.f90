@@ -64,7 +64,7 @@ integer,               parameter :: SHORTWAIT       = 2                         
 contains
 
     subroutine exec_stream_preprocess( self, cline )
-        use simple_motion_correct, only: flip_gain
+        use simple_motion_correct_utils, only: flip_gain
         class(commander_stream_preprocess), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters)                       :: params
