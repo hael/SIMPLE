@@ -808,7 +808,7 @@ contains
         lp_auto = 'no'
         if( istage >= LPAUTO_STAGE .and. l_lpauto )then
             lp_auto = trim(params_glob%lp_auto)
-            lpstart = lpinfo(istage - 1)%lp
+            lpstart = lpinfo(LPAUTO_STAGE - 1)%lp
             lpstop  = lpinfo(NSTAGES)%lp
         endif
         ! phase logics
