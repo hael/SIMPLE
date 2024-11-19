@@ -33,6 +33,7 @@ type :: qsys_env
     procedure :: exec_simple_prg_in_queue
     procedure :: exec_simple_prg_in_queue_async
     procedure :: exec_simple_prgs_in_queue_async
+    procedure :: get_exec_bin
     procedure :: get_qsys
     procedure :: get_navail_computing_units
     procedure :: kill
@@ -115,9 +116,9 @@ contains
         call self%qsys_fac%new(qsnam, self%myqsys)
         ! create the user specific qsys and qsys controller (script generator)
         if(present(exec_bin))then
-                self%simple_exec_bin = filepath(trim(self%qdescr%get('simple_path')),'bin',trim(exec_bin), nonalloc=.true.)
+            self%simple_exec_bin = filepath(trim(self%qdescr%get('simple_path')),'bin',trim(exec_bin), nonalloc=.true.)
         else
-                self%simple_exec_bin = filepath(trim(self%qdescr%get('simple_path')),'bin','simple_private_exec', nonalloc=.true.)
+            self%simple_exec_bin = filepath(trim(self%qdescr%get('simple_path')),'bin','simple_private_exec', nonalloc=.true.)
         endif
         if( present(numlen) )then
             call self%qscripts%new(self%simple_exec_bin, self%myqsys, self%parts,&
@@ -203,15 +204,20 @@ contains
         call job_descr%kill
     end subroutine exec_simple_prg_in_queue
 
-    subroutine exec_simple_prg_in_queue_async( self, cline, script_name, outfile )
+    subroutine exec_simple_prg_in_queue_async( self, cline, script_name, outfile, exec_bin )
         use simple_cmdline, only: cmdline
         class(qsys_env),            intent(inout) :: self
         class(cmdline),             intent(in)    :: cline
         character(len=*),           intent(in)    :: script_name, outfile
+        character(len=*), optional, intent(in)    :: exec_bin
         type(chash) :: job_descr
         call cline%gen_job_descr(job_descr)
-        call self%qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, script_name,&
-            & outfile=outfile)
+        if( present(exec_bin) )then
+            call self%qscripts%generate_script(job_descr, self%qdescr, exec_bin, script_name, outfile=outfile)
+        else
+            call self%qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, script_name,&
+                & outfile=outfile)
+        endif
         call wait_for_closure(script_name)
         call self%qscripts%submit_script(script_name)
         call job_descr%kill
@@ -238,6 +244,12 @@ contains
         enddo
         deallocate(jobs_descr)
     end subroutine exec_simple_prgs_in_queue_async
+
+    function get_exec_bin( self ) result( exec_bin )
+        class(qsys_env), intent(in) :: self
+        character(len=STDLEN)   :: exec_bin
+        exec_bin = trim(self%simple_exec_bin)
+    end function get_exec_bin
 
     function get_qsys( self )result( qsys )
         class(qsys_env), intent(in)   :: self

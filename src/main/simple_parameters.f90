@@ -41,6 +41,7 @@ type :: parameters
     character(len=3)          :: doprint='no'
     character(len=3)          :: envfsc='yes'         !< envelope mask even/odd pairs for FSC calculation(yes|no){yes}
     character(len=3)          :: even='no'            !< even orientation distribution(yes|no){no}
+    character(len=3)          :: extract='yes'        !< whether to extract particles after picking (streaming only)
     character(len=3)          :: extractfrommov='no'  !< whether to extract particles from the movie(yes|no){no}
     character(len=3)          :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
     character(len=3)          :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
@@ -72,7 +73,6 @@ type :: parameters
     character(len=3)          :: nonuniform='no'      !< nonuniform filtering(yes|no){no}
     character(len=3)          :: omit_neg='no'        !< omit negative pixels(yes|no){no}
     character(len=3)          :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
-    character(len=3)          :: extract='yes'        !< whether to extract particles after picking (streaming only)
     character(len=3)          :: pad='no'
     character(len=3)          :: phaseplate='no'      !< images obtained with Volta phaseplate(yes|no){no}
     character(len=3)          :: phrand='no'          !< phase randomize(yes|no){no}
@@ -83,12 +83,13 @@ type :: parameters
     character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes
     character(len=3)          :: projstats='no'
     character(len=3)          :: prune='no'
-    character(len=3)          :: randomise='no'       !< whether to randomise particle order
-    character(len=3)          :: remove_chunks='yes'  !< whether to remove chunks after completion
     character(len=3)          :: prob_sh='no'         !< shift information in the prob tab (yes|no){no}
     character(len=3)          :: projrec='no'         !< Ehether to reconstruct from summed projection directions (yes|no){no}
+    character(len=3)          :: randomise='no'       !< whether to randomise particle order
+    character(len=3)          :: rank_cavgs='yes'     !< Whether to rank class averages(yes|no)
     character(len=3)          :: reject_cls='no'      !< whether to reject poor classes
     character(len=3)          :: reject_mics='no'     !< whether to reject micrographs based on ctfres/icefrac
+    character(len=3)          :: remove_chunks='yes'  !< whether to remove chunks after completion
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
     character(len=3)          :: remap_cls='no'
     character(len=3)          :: transp_pca='no'
@@ -631,12 +632,13 @@ contains
         call check_carg('ptclw',          self%ptclw)
         call check_carg('qsys_name',      self%qsys_name)
         call check_carg('qsys_partition2D',self%qsys_partition2D)
-        call check_carg('remove_chunks',  self%remove_chunks)
+        call check_carg('randomise',      self%randomise)
+        call check_carg('rank_cavgs',     self%rank_cavgs)
         call check_carg('real_filter',    self%real_filter)
+        call check_carg('refine',         self%refine)
         call check_carg('reject_cls',     self%reject_cls)
         call check_carg('reject_mics',    self%reject_mics)
-        call check_carg('refine',         self%refine)
-        call check_carg('randomise',      self%randomise)
+        call check_carg('remove_chunks',  self%remove_chunks)
         call check_carg('prob_sh',        self%prob_sh)
         call check_carg('projrec',        self%projrec)
         call check_carg('projfile_optics',self%projfile_optics)

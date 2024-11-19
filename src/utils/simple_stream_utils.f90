@@ -36,6 +36,7 @@ end type projrecord
 type stream_chunk
     type(sp_project)                       :: spproj                ! master project
     type(qsys_env)                         :: qenv                  ! submission handler
+    type(cmdline)                          :: cline
     character(len=LONGSTRLEN), allocatable :: orig_stks(:)          ! list of stacks
     character(len=LONGSTRLEN)              :: path, projfile_out    ! physical location
     integer                                :: id                    ! unique id
@@ -49,7 +50,7 @@ type stream_chunk
     procedure          :: init
     procedure          :: generate
     procedure          :: calc_sigma2
-    procedure          :: exec_classify
+    procedure          :: classify
     procedure          :: read
     procedure          :: split_sigmas_into
     procedure          :: remove_folder
@@ -84,15 +85,16 @@ contains
         integer                            :: envlen
         call debug_print('in chunk%init '//int2str(id))
         call self%spproj%kill
-        self%id        = id
-        self%it        = 0
-        self%nmics     = 0 ! # of micrographs & stacks in chunk
-        self%nptcls    = 0
-        self%path      = './'//trim(DIR_CHUNK)//int2str(id)//'/'
-        self%projfile_out = ''
+        self%id     = id
+        self%it     = 0
+        self%nmics  = 0 ! # of micrographs & stacks in chunk
+        self%nptcls = 0
+        self%path   = './'//trim(DIR_CHUNK)//int2str(id)//'/'
+        self%cline  = cline
+        self%projfile_out    = ''
         self%spproj%projinfo = master_spproj%projinfo
         self%spproj%compenv  = master_spproj%compenv
-        if( str_has_substr(cline%get_carg('prg'), 'abinitio') )then
+        if( str_has_substr(self%cline%get_carg('prg'), 'abinitio') )then
             exec = 'simple_exec'
         else
             exec = 'simple_private_exec'
@@ -134,9 +136,8 @@ contains
     end subroutine generate
 
     ! Initiates classification
-    subroutine exec_classify( self, cline_classify, orig_smpd, orig_box, box, calc_pspec )
+    subroutine classify( self, orig_smpd, orig_box, box, calc_pspec )
         class(stream_chunk), intent(inout) :: self
-        class(cmdline),      intent(inout) :: cline_classify
         real,                intent(in)    :: orig_smpd
         integer,             intent(in)    :: orig_box, box
         logical,             intent(in)    :: calc_pspec
@@ -145,7 +146,7 @@ contains
         character(len=XLONGSTRLEN) :: cwd
         real                       :: scale
         integer                    :: nptcls_sel, nclines
-        call debug_print('in chunk%exec_classify '//int2str(self%id))
+        call debug_print('in chunk%classify '//int2str(self%id))
         if( .not.self%available ) return
         if( self%nptcls == 0 ) return
         call simple_mkdir(self%path)
@@ -156,7 +157,7 @@ contains
         call simple_mkdir(STDERROUT_DIR)
         nptcls_sel = self%spproj%os_ptcl2D%get_noris(consider_state=.true.)
         nclines = 1
-        if( trim(cline_classify%get_carg('prg')).eq.'abinitio2D' )then
+        if( str_has_substr(self%cline%get_carg('prg'), 'abinitio') )then
             allocate(clines(nclines))
         else
             if( calc_pspec ) nclines = nclines + 1
@@ -166,7 +167,7 @@ contains
                 call cline_pspec%set('prg',      'calc_pspec_distr')
                 call cline_pspec%set('oritype',  'ptcl2D')
                 call cline_pspec%set('projfile', self%projfile_out)
-                call cline_pspec%set('nthr',     cline_classify%get_iarg('nthr'))
+                call cline_pspec%set('nthr',     self%cline%get_iarg('nthr'))
                 call cline_pspec%set('mkdir',    'yes')
                 call cline_pspec%set('nparts',   1)
                 if( params_glob%nparts_chunk > 1 ) call cline_pspec%set('nparts',params_glob%nparts_chunk)
@@ -175,17 +176,17 @@ contains
         endif
         if( box < orig_box )then
             scale = real(box) / real(orig_box)
-            call cline_classify%set('smpd',      orig_smpd)
-            call cline_classify%set('box',       orig_box)
-            call cline_classify%set('smpd_crop', orig_smpd / scale)
-            call cline_classify%set('box_crop',  box)
+            call self%cline%set('smpd',      orig_smpd)
+            call self%cline%set('box',       orig_box)
+            call self%cline%set('smpd_crop', orig_smpd / scale)
+            call self%cline%set('box_crop',  box)
         endif
-        call cline_classify%set('projfile', self%projfile_out)
-        call cline_classify%set('projname', trim(PROJNAME_CHUNK))
-        call self%spproj%update_projinfo(cline_classify)
+        call self%cline%set('projfile', self%projfile_out)
+        call self%cline%set('projname', trim(PROJNAME_CHUNK))
+        call self%spproj%update_projinfo(self%cline)
         call self%spproj%write()
         ! 2D classification
-        clines(nclines) = cline_classify
+        clines(nclines) = self%cline
         ! submission
         call self%qenv%exec_simple_prgs_in_queue_async(clines, './distr_chunk2D', 'simple_log_chunk2d')
         call chdir('..')
@@ -200,17 +201,18 @@ contains
         self%available = .false.
         self%converged = .false.
         write(logfhandle,'(A,I6,A,I6,A)')'>>> CHUNK ',self%id,' INITIATED CLASSIFICATION WITH ',nptcls_sel,' PARTICLES'
-        call debug_print('end chunk%exec_classify')
-    end subroutine exec_classify
+        call debug_print('end chunk%classify')
+    end subroutine classify
 
     ! To calculate noise power estimates only
     subroutine calc_sigma2( self, cline_classify, need_sigma )
         class(stream_chunk), intent(inout) :: self
         class(cmdline),      intent(in)    :: cline_classify
         logical,             intent(in)    :: need_sigma
-        type(cmdline)              :: cline_pspec
-        character(len=XLONGSTRLEN) :: cwd
-        integer                    :: nptcls_sel
+        type(cmdline)                 :: cline_pspec
+        character(len=XLONGSTRLEN)    :: cwd
+        character(len=:), allocatable :: exec
+        integer :: nptcls_sel
         call debug_print('in calc_sigma2 '//int2str(self%id))
         if( .not.self%available ) return
         if( self%nptcls == 0 ) return
@@ -221,7 +223,7 @@ contains
         self%projfile_out = trim(PROJNAME_CHUNK)//trim(METADATA_EXT)
         call simple_mkdir(STDERROUT_DIR)
         nptcls_sel = self%spproj%os_ptcl2D%get_noris(consider_state=.true.)
-        call cline_pspec%set('prg',     'calc_pspec_distr')
+        call cline_pspec%set('prg',      'calc_pspec_distr')
         call cline_pspec%set('oritype',  'ptcl2D')
         call cline_pspec%set('nthr',     cline_classify%get_iarg('nthr'))
         call cline_pspec%set('mkdir',    'yes')
@@ -235,9 +237,12 @@ contains
         self%toclassify = .false. ! not to be classified
         self%it         = 1
         if( need_sigma )then
+            ! making sure the executable is *always* simple_private_exec
+            exec = trim(self%qenv%get_exec_bin())
+            call replace_substring(exec,'/simple_exec','/simple_private_exec',one=.true.,back=.true.)
             ! submission
             self%converged  = .false.
-            call self%qenv%exec_simple_prg_in_queue_async(cline_pspec, './distr_chunk2D', 'simple_log_chunk2d')
+            call self%qenv%exec_simple_prg_in_queue_async(cline_pspec, './distr_chunk2D', 'simple_log_chunk2d', exec_bin=exec)
             write(logfhandle,'(A,I6,A,I6,A)')'>>> CHUNK ',self%id,' INITIATED SIGMA2 CALCULATION WITH ',nptcls_sel,' PARTICLES'
         else
             self%converged  = .true. ! nothing to calculate
@@ -382,7 +387,11 @@ contains
         class(stream_chunk), intent(inout) :: self
         if( .not.self%converged )then
             if( self%toclassify )then
-                self%converged = file_exists(trim(self%path)//trim(CLUSTER2D_FINISHED))
+                if( str_has_substr(self%cline%get_carg('prg'), 'abinitio') )then
+                    self%converged = file_exists(trim(self%path)//trim(ABINITIO2D_FINISHED))
+                else
+                    self%converged = file_exists(trim(self%path)//trim(CLUSTER2D_FINISHED))
+                endif
             else
                 self%converged = file_exists(trim(self%path)//trim(CALCPSPEC_FINISHED))
             endif
@@ -456,8 +465,8 @@ contains
             ! updates cls2D field
             do icls=1,ncls
                 if( .not.cls_mask(icls) )then
-                    call self%spproj%os_cls2D%set(icls,'pop',   0.)
-                    call self%spproj%os_cls2D%set(icls,'state', 0.)
+                    call self%spproj%os_cls2D%set(icls,'pop',    0)
+                    call self%spproj%os_cls2D%set_state(icls,    0)
                     call self%spproj%os_cls2D%set(icls,'corr', -1.)
                 endif
             enddo
@@ -487,6 +496,7 @@ contains
         self%it        = 0
         call self%spproj%kill
         call self%qenv%kill
+        call self%cline%kill
         self%nmics     = 0
         self%nptcls    = 0
         self%path      = ''
