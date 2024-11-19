@@ -375,7 +375,7 @@ contains
             l_ini3D = .true.
         endif
         ! set class global ML regularization flag
-        l_ml_reg = .false. ! this produces the best results on the gate
+        l_ml_reg = .true.
         if( cline%defined('ml_reg') )then
             l_ml_reg = params%l_ml_reg
         endif
@@ -872,6 +872,8 @@ contains
         ! overrride regularization parameters
         if( .not. l_ml_reg  ) ml_reg = 'no'
         if( .not. l_icm_reg ) icm    = 'no'
+        ! turn off ML-regularization when icm is on
+        if( trim(icm).eq.'yes' ) ml_reg = 'no' 
         ! command line update
         call cline_refine3D%set('prg',                     'refine3D')
         ! class global control parameters
