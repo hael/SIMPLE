@@ -29,6 +29,7 @@ contains
     procedure, private    :: set_target
     procedure, private    :: setup_srch_spaces
     procedure             :: srch_rots
+    procedure, private    :: rotpeak_interp
     procedure             :: srch_shift
     procedure             :: srch
     procedure             :: rotate_target
@@ -219,7 +220,7 @@ contains
             rmats_refine(:,:,inpl) = e%get_mat()
             call e%e3set(e3)
         end do
-        ! search
+        ! search with in-plane angular step of 1 degree
         ccs_refine(:) = -1.
         !$omp parallel do schedule(static) default(shared) private(i) proc_bind(close)
         do i = 1, 360
@@ -238,10 +239,42 @@ contains
         !     cc  = ccs_refine(nloc(i))
         !     print *, eul, cc
         ! end do
+        ! in-plane peak interpolation using previous angular step of 1 degree
+        call self%rotpeak_interp(1., ccs_refine, e3_new, self%cc)
+        call e%e3set(e3_new)
+        self%eul = e%get_euler()
         ! destruct
         call e%kill
         call eulspace_refine%kill
     end subroutine srch_rots
+
+    subroutine rotpeak_interp( self, angstep, corrs, peak_ang, peak_cc )
+        class(dock_vols), intent(in) :: self
+        real, intent(in)             :: angstep, corrs(:)
+        real, intent(out)            :: peak_ang, peak_cc
+        real    :: denom, alpha,beta,gamma
+        integer :: nangs, maxpos
+        nangs  = size(corrs)
+        maxpos = maxloc(corrs,dim=1)
+        beta   = corrs(maxpos)
+        if( maxpos == 1 )then
+            alpha = corrs(nangs)
+            gamma = corrs(2)
+        else if( maxpos == nangs )then
+            alpha = corrs(nangs-1)
+            gamma = corrs(1)
+        else
+            alpha = corrs(maxpos-1)
+            gamma = corrs(maxpos+1)
+        endif
+        peak_ang = 0.
+        if( alpha<beta .and. gamma<beta )then
+            denom = alpha + gamma - 2.*beta
+            if( abs(denom) > TINY ) peak_ang = 0.5 * (alpha-gamma) / denom
+        endif
+        peak_cc  = max(-1.0,min(1.0,beta - 0.25 * peak_ang * (alpha-gamma)))
+        peak_ang = angstep * (real(maxpos-1) + peak_ang)
+    end subroutine rotpeak_interp
 
     subroutine srch_shift( self )
         class(dock_vols), intent(inout) :: self
