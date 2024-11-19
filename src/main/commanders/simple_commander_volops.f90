@@ -437,18 +437,16 @@ contains
     end subroutine exec_noisevol
     
     subroutine exec_dock_volpair( self, cline )
-        ! use simple_vol_srch
         class(dock_volpair_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        type(dock_vols)        :: dvols
-        real,  parameter       :: SHSRCH_HWDTH  = 5.0
-        type(parameters)       :: params
-        integer                :: i
+        type(dock_vols)  :: dvols
+        real, parameter  :: SHSRCH_HWDTH  = 5.0
+        type(parameters) :: params
+        integer          :: i
         character(:), allocatable :: fn_vol_docked
-        !if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('gridding') ) call cline%set('gridding', 'yes')
         call params%new(cline)
         fn_vol_docked = trim(get_fbody(params%vols(2),'mrc'))//'_docked.mrc'
-        !fn_vol_docked = trim(get_fbody(basename(params%vols(2)),'mrc'))//'_docked.mrc'
         select case( trim(params%dockmode) )
             case('shift')
                 call dvols%new(params%vols(1), params%vols(2), params%smpd, params%lpstop, params%lpstart, params%mskdiam, mag=.true.)

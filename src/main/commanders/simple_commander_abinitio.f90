@@ -55,11 +55,11 @@ integer,          parameter :: MAXITS(3)             = [20,17,15]
 integer,          parameter :: MAXITS_GLOB           = 2*20 + 4*17 + 2*15
 integer,          parameter :: NSPACE(3)             = [500,1000,2500]
 integer,          parameter :: SYMSRCH_STAGE         = 3
+integer,          parameter :: LPAUTO_STAGE          = 4
 integer,          parameter :: INCR_GREEDINESS_STAGE = 4 ! INCR_GREEDINESS_STAGE < PROBREFINE_STAGE must be true for it to have an effect
 integer,          parameter :: PROBREFINE_STAGE      = 5
 integer,          parameter :: ICM_STAGE             = PROBREFINE_STAGE
 integer,          parameter :: TRAILREC_STAGE        = 7
-integer,          parameter :: LPAUTO_STAGE          = TRAILREC_STAGE
 ! class variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
 logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false., l_update_frac=.false.
@@ -808,7 +808,7 @@ contains
         lp_auto = 'no'
         if( istage >= LPAUTO_STAGE .and. l_lpauto )then
             lp_auto = trim(params_glob%lp_auto)
-            lpstart = lpinfo(LPAUTO_STAGE - 1)%lp
+            lpstart = lpinfo(istage - 2)%lp
             lpstop  = lpinfo(NSTAGES)%lp
         endif
         ! phase logics
