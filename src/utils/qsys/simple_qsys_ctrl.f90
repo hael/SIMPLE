@@ -41,7 +41,6 @@ type qsys_ctrl
     ! CONSTRUCTORS
     procedure          :: new
     ! GETTERS
-    procedure          :: get_exec_bin
     procedure          :: get_jobs_status
     procedure          :: print_jobs_status
     procedure          :: exists
@@ -149,12 +148,6 @@ contains
     end subroutine new
 
     ! GETTERS
-
-    function get_exec_bin( self ) result( exec_bin )
-        class(qsys_ctrl), intent(in) :: self
-        character(len=STDLEN)        :: exec_bin
-        exec_bin = self%exec_binary
-    end function get_exec_bin
 
     subroutine get_jobs_status( self, jobs_done, jobs_submitted )
         class(qsys_ctrl), intent(in) :: self

@@ -52,15 +52,16 @@ contains
         integer :: maxits(2), istage, last_iter
         logical :: l_shmem
         call cline%set('oritype', 'ptcl2D')
-        if( .not. cline%defined('autoscale')) call cline%set('autoscale', 'yes')
-        if( .not. cline%defined('mkdir')    ) call cline%set('mkdir',     'yes')
-        if( .not. cline%defined('masscen')  ) call cline%set('masscen',   'yes')
-        if( .not. cline%defined('center')   ) call cline%set('center',    'yes')
-        if( .not. cline%defined('sh_first') ) call cline%set('sh_first',  'no')
-        if( .not. cline%defined('cls_init') ) call cline%set('cls_init',  'rand')
-        if( .not. cline%defined('icm')      ) call cline%set('icm',       'yes')
-        if( .not. cline%defined('lambda')   ) call cline%set('lambda',    ICM_LAMBDA)
-        if( .not. cline%defined('extr_lim') ) call cline%set('extr_lim',  EXTR_LIM_LOCAL)
+        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
+        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
+        if( .not. cline%defined('masscen')   ) call cline%set('masscen',   'yes')
+        if( .not. cline%defined('center')    ) call cline%set('center',    'yes')
+        if( .not. cline%defined('sh_first')  ) call cline%set('sh_first',  'no')
+        if( .not. cline%defined('cls_init')  ) call cline%set('cls_init',  'rand')
+        if( .not. cline%defined('icm')       ) call cline%set('icm',       'yes')
+        if( .not. cline%defined('lambda')    ) call cline%set('lambda',    ICM_LAMBDA)
+        if( .not. cline%defined('extr_lim')  ) call cline%set('extr_lim',  EXTR_LIM_LOCAL)
+        if( .not. cline%defined('rank_cavgs')) call cline%set('rank_cavgs','yes')
         if( cline%defined('nparts') )then
             l_shmem = cline%get_iarg('nparts') == 1
         else
@@ -107,8 +108,10 @@ contains
         call spproj%os_ptcl3D%transfer_2Dshifts(spproj_field)
         call spproj%write_segment_inside('ptcl3D', params%projfile)
         ! final class generation & ranking
-        last_iter = cline_cluster2D%get_iarg('endit')
-        call gen_final_cavgs(last_iter)
+        if ( trim(params%rank_cavgs).eq.'yes' )then
+            last_iter = cline_cluster2D%get_iarg('endit')
+            call gen_final_cavgs(last_iter)
+        endif
         ! cleanup
         call del_file('start2Drefs'//params%ext)
         call del_file('start2Drefs_even'//params%ext)
@@ -116,6 +119,7 @@ contains
         call spproj%kill
         nullify(spproj_field)
         call qsys_cleanup
+        call simple_touch(ABINITIO2D_FINISHED)
         call simple_end('**** SIMPLE_ABINITIO2D NORMAL STOP ****')
       contains
 
@@ -330,6 +334,7 @@ contains
         end subroutine set_cline_cluster2D
 
         subroutine execute_cluster2D
+            call del_file(CLUSTER2D_FINISHED)
             ! Initial sigma2
             if( istage == 1 )then
                 call xcalc_pspec_distr%execute_safe(cline_calc_pspec)
