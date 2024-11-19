@@ -35,12 +35,12 @@ call params%new(cline)
 euls  = [360.*ran3(), 180.*ran3(), 360.*ran3()]
 shift = 10.*[ran3()-0.5, ran3()-0.5, ran3()-0.5]
 ! some singular values
-! euls  =[   217.004868,       106.567047,       335.972809]    
+! euls  = [ 52.3584137,      53.7275314,      325.139801]
+! shift = [ -4.54392052,     -1.00544930,      -3.04297638]
+! euls  =[   217.004868,       106.567047,       335.972809]
 ! shift =[  -2.45968294,      0.471755266,      -6.28441572E-02]
-! euls     29.5008869       99.0748367       194.840454    
-! shift    3.88919878       4.76009178       3.89923334 
-! euls     24.4146461       96.9638443       30.8624840    
-! shift   -4.10592651       1.55140400       1.88858926  
+! euls    =[ 29.5008869,       99.0748367,       194.840454]
+! shift   =[3.88919878,       4.76009178,       3.89923334]
 o = ori(is_ptcl=.true.)
 call o%set_euler(euls)
 ! shifted rotated volume
@@ -58,19 +58,4 @@ call dvols%new(VREF, VTARG, params%smpd, params%hp, params%lp, params%mskdiam, m
 call dvols%srch
 ! target docked to reference (vol1)
 call dvols%rotate_target(VTARG, VTARG_DOCKED)
-!!!!!!!!!!!!!
-! PREVIOUS TEST
-! real,             parameter :: SMPD = 1.2156, HP = 100., LP = 8.0, MSKDIAM = 175.
-! integer,          parameter :: NTHR = 64
-! type(dock_vols)  :: dvols
-! type(parameters) :: params
-! type(cmdline)    :: cline
-! real    :: smpd
-! integer :: ldim(3),nptcls
-
-! call cline%set('nthr', NTHR)
-! call params%new(cline)
-! call dvols%new(VREF, VTARG, SMPD, HP, LP, MSKDIAM)
-! call dvols%srch
-! call dvols%rotate_target(VTARG, VTARG_DOCKED)
 end program test_dock_vols
