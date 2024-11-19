@@ -19,7 +19,6 @@ character(len=*), parameter :: INTEGER_DIGITS = '10' !< Maximum number of digits
 
 private :: LOWER_CASE_LETTERS, UPPER_CASE_LETTERS, INTEGERS, NEW_LINES_C, BLANK_C_CHARACTERS,&
 BLANK_CHARACTERS, BLANKS_AND_NEW_LINES, INTEGER_DIGITS
-private :: replace_substr
 public
 
 interface real2str
