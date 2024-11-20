@@ -126,18 +126,25 @@ contains
         ! Downscaling/cropping dimensions used throughout
         subroutine set_dims
             real :: smpd_target_eff, scale_factor
-            smpd_target_eff  = max(SMPD_TARGET, params%smpd)
-            scale_factor     = 1.0
-            params%smpd_crop = params%smpd
-            params%box_crop  = params%box
-            params%msk_crop  = params%msk
-            if( params%l_autoscale .and. params%box >= MINBOXSZ )then
-                call autoscale(params%box, params%smpd, smpd_target_eff, params%box_crop, params%smpd_crop, scale_factor, minbox=MINBOXSZ)
+            if( cline%defined('box_crop') )then
+                scale_factor = real(params%box_crop) / real(params%box)
+                if( .not.cline%defined('smpd_crop') ) params%smpd_crop = params%smpd / scale_factor
+                if( .not.cline%defined('msk_crop')  ) params%msk_crop  = round2even(params%msk * scale_factor)
                 params%l_autoscale = params%box_crop < params%box
-                if( params%l_autoscale )then
-                    params%msk_crop = round2even(params%msk * scale_factor)
-                    write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
+            else
+                smpd_target_eff  = max(SMPD_TARGET, params%smpd)
+                scale_factor     = 1.0
+                params%smpd_crop = params%smpd
+                params%box_crop  = params%box
+                params%msk_crop  = params%msk
+                if( params%l_autoscale .and. params%box >= MINBOXSZ )then
+                    call autoscale(params%box, params%smpd, smpd_target_eff, params%box_crop, params%smpd_crop, scale_factor, minbox=MINBOXSZ)
+                    params%l_autoscale = params%box_crop < params%box
                 endif
+                if( params%l_autoscale ) params%msk_crop = round2even(params%msk * scale_factor)
+            endif
+            if( params%l_autoscale )then
+                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
             endif
             lpinfo(:)%box_crop    = params%box_crop
             lpinfo(:)%smpd_crop   = params%smpd_crop
