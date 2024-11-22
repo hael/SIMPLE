@@ -82,6 +82,7 @@ type :: oris
     procedure          :: get_nodd
     procedure          :: print_
     procedure          :: print_matrices
+    procedure          :: sample4rec
     procedure          :: sample4update_all
     procedure          :: sample4update_rnd
     procedure          :: sample4update_class
@@ -1118,6 +1119,32 @@ contains
             call self%o(i)%print_mat()
         end do
     end subroutine print_matrices
+
+    subroutine sample4rec( self, fromto, nsamples, inds, mask )
+        class(oris),          intent(inout) :: self
+        integer,              intent(in)    :: fromto(2)
+        integer,              intent(inout) :: nsamples
+        integer, allocatable, intent(inout) :: inds(:)
+        logical,              intent(inout) :: mask(fromto(1):fromto(2))
+        integer, allocatable :: states(:), updatecnts(:)
+        integer :: i, cnt, nptcls
+        nptcls = fromto(2) - fromto(1) + 1
+        if( allocated(inds) ) deallocate(inds)
+        allocate(states(nptcls), updatecnts(nptcls), inds(nptcls), source=0)
+        cnt = 0
+        do i = fromto(1), fromto(2)
+            cnt             = cnt + 1
+            states(cnt)     = self%o(i)%get_state()
+            updatecnts(cnt) = self%o(i)%get_int('updatecnt')
+            inds(cnt)       = i
+        end do
+        nsamples = count(states > 0 .and. updatecnts > 0)
+        inds     = pack(inds, mask=states > 0 .and. updatecnts > 0)
+        mask     = .false.
+        do i = 1, nsamples
+            mask(inds(i)) = .true.
+        end do
+    end subroutine sample4rec
 
     subroutine sample4update_all( self, fromto, nsamples, inds, mask, incr_sampled )
         class(oris),          intent(inout) :: self
