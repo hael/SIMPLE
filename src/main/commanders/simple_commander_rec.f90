@@ -1,13 +1,13 @@
 ! concrete commander: 3D reconstruction routines
 module simple_commander_rec
 include 'simple_lib.f08'
-use simple_builder,             only: builder
-use simple_cmdline,             only: cmdline
-use simple_commander_base,      only: commander_base
-use simple_parameters,          only: parameters
-use simple_qsys_env,            only: qsys_env
-use simple_strategy2D3D_common
+use simple_builder,        only: builder
+use simple_cmdline,        only: cmdline
+use simple_commander_base, only: commander_base
+use simple_parameters,     only: parameters
+use simple_qsys_env,       only: qsys_env
 use simple_qsys_funs
+use simple_strategy2D3D_common
 implicit none
 
 public :: reconstruct3D_commander_distr
@@ -155,8 +155,8 @@ contains
         if( params%l_update_frac .and. build%spproj_field%has_been_sampled() )then
             call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls2update, pinds, ptcl_mask)
         else
-            ! no increment of sampled
-            call sample_ptcls4update([params%fromp,params%top], .false., nptcls2update, pinds, ptcl_mask)
+            ! we sample all state > 0 and updatecnt > 0
+            call build%spproj_field%sample4rec([params%fromp,params%top], nptcls2update, pinds, ptcl_mask)
         endif
         if( params%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'

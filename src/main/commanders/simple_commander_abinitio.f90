@@ -320,19 +320,19 @@ contains
     !> for generation of an initial 3d model from particles
     subroutine exec_abinitio3D( self, cline )
         class(abinitio3D_commander), intent(inout) :: self
-        class(cmdline),                    intent(inout) :: cline
+        class(cmdline),              intent(inout) :: cline
         ! commanders
         type(refine3D_commander_distr)         :: xrefine3D
         type(reconstruct3D_commander_distr)    :: xreconstruct3D_distr
         ! other
-        real,                      parameter   :: UPDATE_FRAC_MAX = 0.9 !< to ensure fractional update is always on
-        character(len=:),          allocatable :: vol_name
-        real,                      allocatable :: rstates(:)
-        integer,                   allocatable :: tmpinds(:), clsinds(:)
-        type(class_sample),        allocatable :: clssmp(:)
-        type(parameters)                       :: params
-        type(sp_project)                       :: spproj
-        type(image)                            :: noisevol
+        real,               parameter   :: UPDATE_FRAC_MAX = 0.9 !< to ensure fractional update is always on
+        character(len=:),   allocatable :: vol_name
+        real,               allocatable :: rstates(:)
+        integer,            allocatable :: tmpinds(:), clsinds(:)
+        type(class_sample), allocatable :: clssmp(:)
+        type(parameters)                :: params
+        type(sp_project)                :: spproj
+        type(image)                     :: noisevol
         integer :: istage, s, ncls, icls, nptcls_eff, i
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
@@ -385,7 +385,7 @@ contains
             l_icm_reg = params%l_icm
         endif
         ! set class global lp_auto flag for low-pass limit estimation
-        l_lpauto = .false.
+        l_lpauto = .true.
         if( cline%defined('lp_auto') )then
             l_lpauto = params%l_lpauto
             params%lplim_crit = 0.5
