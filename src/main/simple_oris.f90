@@ -1138,9 +1138,14 @@ contains
             updatecnts(cnt) = self%o(i)%get_int('updatecnt')
             inds(cnt)       = i
         end do
-        nsamples = count(states > 0 .and. updatecnts > 0)
-        inds     = pack(inds, mask=states > 0 .and. updatecnts > 0)
-        mask     = .false.
+        if( any(updatecnts > 0) )then
+            nsamples = count(states > 0 .and. updatecnts > 0)
+            inds     = pack(inds, mask=states > 0 .and. updatecnts > 0)
+        else
+            nsamples = count(states > 0)
+            inds     = pack(inds, mask=states > 0)
+        endif
+        mask = .false.
         do i = 1, nsamples
             mask(inds(i)) = .true.
         end do
