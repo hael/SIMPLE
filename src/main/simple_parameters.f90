@@ -195,6 +195,7 @@ type :: parameters
     character(len=STDLEN)     :: fbody=''             !< file body
     character(len=STDLEN)     :: filter='no'          !< filter type{no}
     character(len=STDLEN)     :: flipgain='no'        !< gain reference flipping (no|x|y|xy|yx)
+    character(len=STDLEN)     :: het_mode='independent' !< heterogeneity analysis mode in abinitio3D (independent|docked){independent}
     character(len=STDLEN)     :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}
     character(len=STDLEN)     :: interpfun='kb'       !< Interpolation function projection/reconstruction/polar representation(kb|linear){kb}
@@ -573,6 +574,7 @@ contains
         call check_carg('guinier',        self%guinier)
         call check_carg('graphene_filt',  self%graphene_filt)
         call check_carg('gridding',       self%gridding)
+        call check_carg('het_mode',       self%het_mode)
         call check_carg('icm',            self%icm)
         call check_carg('imgkind',        self%imgkind)
         call check_carg('incrreslim',     self%incrreslim)
