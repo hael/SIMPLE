@@ -63,10 +63,11 @@ integer,          parameter :: TRAILREC_STAGE        = 7
 ! class variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
 logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false., l_update_frac=.false.
-logical          :: l_ml_reg=.true., l_icm_reg=.true., l_ini3D=.false., l_multistates = .false., l_lpauto=.false.
+logical          :: l_ml_reg=.true., l_icm_reg=.true., l_ini3D=.false., l_lpauto=.false.
 type(sym)        :: se1, se2
 type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_postprocess, cline_reproject
-real             :: update_frac = 1.0
+real             :: update_frac  = 1.0
+integer          :: nstates_glob = 1
 
 contains
 
@@ -334,6 +335,7 @@ contains
         type(sp_project)                :: spproj
         type(image)                     :: noisevol
         integer :: istage, s, ncls, icls, nptcls_eff, i
+        logical :: l_multistates = .false.
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',         'yes')
@@ -354,6 +356,11 @@ contains
         call cline%set('mkdir', 'no')
         l_multistates = .false.
         if( params%nstates > 1  ) l_multistates = .true.
+        if( trim(params%het_mode).eq.'docked' )then
+            nstates_glob   = params%nstates  
+            params%nstates = 1
+            call cline%delete('nstates')
+        endif
         ! read project
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
@@ -386,10 +393,15 @@ contains
         endif
         ! set class global lp_auto flag for low-pass limit estimation
         l_lpauto = .true.
-        if( cline%defined('lp_auto') )then
-            l_lpauto = params%l_lpauto
+        if( cline%defined('lp_auto') ) l_lpauto = params%l_lpauto
+        if( l_lpauto )then
             params%lplim_crit = 0.5
             call cline%set('lplim_crit', params%lplim_crit)
+        endif
+        ! override l_lpauto when l_multistates=.true. & het_mode='independent'
+        if( l_multistates .and. trim(params%het_mode).eq.'independent' )then
+            l_lpauto        = .false.
+            params%l_lpauto = l_lpauto
         endif
         ! prepare class command lines
         call prep_class_command_lines(cline, params%projfile)
@@ -439,7 +451,7 @@ contains
                         THROW_HARD('Unsupported ORITYPE; exec_abinitio3D')
                 end select
                 ! randomize states
-                if( l_multistates )then
+                if( l_multistates .and. trim(params%het_mode).eq.'independent' )then
                     call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
                 endif
                 call spproj%write_segment_inside(params%oritype, params%projfile)
@@ -469,7 +481,7 @@ contains
                     THROW_HARD('Prior 3D alignment is lacking for starting volume generation')
                 endif
                 ! randomize states
-                if( l_multistates )then
+                if( l_multistates .and. trim(params%het_mode).eq.'independent' )then
                     call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
                     call spproj%write_segment_inside(params%oritype, params%projfile)
                 endif
@@ -491,6 +503,10 @@ contains
             ! Symmetrization
             if( istage == SYMSRCH_STAGE )then
                 call symmetrize(istage, spproj, params%projfile, xreconstruct3D_distr)
+            endif
+            ! State labelling
+            if( l_multistates .and. params%het_mode.eq.'docked' )then
+                if( istage == PROBREFINE_STAGE - 1 ) call randomize_states(spproj, params%projfile, xreconstruct3D_distr)
             endif
         enddo
         ! for visualization
@@ -1022,6 +1038,21 @@ contains
         enddo
         call cline_startrec%kill
     end subroutine calc_start_rec
+
+    subroutine randomize_states( spproj, projfile, xreconstruct3D )
+        class(sp_project),     intent(inout) :: spproj
+        character(len=*),      intent(in)    :: projfile
+        class(commander_base), intent(inout) :: xreconstruct3D
+        call spproj%read_segment('ptcl3D', projfile)
+        call gen_labelling(spproj%os_ptcl3D, nstates_glob, 'squared_uniform')
+        call spproj%write_segment_inside(params_glob%oritype, projfile)
+        params_glob%nstates = nstates_glob
+        call cline_refine3D%set(     'nstates', nstates_glob)
+        call cline_reconstruct3D%set('nstates', nstates_glob)
+        call cline_postprocess%set(  'nstates', nstates_glob)
+        call cline_reproject%set(    'nstates', nstates_glob)
+        call calc_start_rec(projfile, xreconstruct3D)
+    end subroutine randomize_states
 
     subroutine gen_ortho_reprojs4viz
         character(len=:), allocatable :: str_state
