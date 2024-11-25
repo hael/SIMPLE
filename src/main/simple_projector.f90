@@ -43,6 +43,7 @@ type, extends(image) :: projector
     generic            :: fproject_serial => fproject_serial_1, fproject_serial_2
     ! procedure          :: fproject_correlate
     procedure          :: fproject_polar
+    procedure          :: fproject_common
     procedure          :: interp_fcomp_norm
     procedure          :: interp_fcomp_grid
     procedure          :: interp_fcomp_trilinear
@@ -230,6 +231,94 @@ contains
     !     end do
     !     !$omp end parallel do
     ! end subroutine fproject4cartftcc
+
+    !> \brief  extracts a Fourier plane from the expanded FT matrix of a volume (self)
+    subroutine fproject_common( self, e1, e2, fplane1, fplane2, line1, line2 )
+        class(projector),     intent(inout) :: self
+        class(ori),           intent(in)    :: e1, e2
+        class(image),         intent(inout) :: fplane1, fplane2
+        integer, allocatable, intent(inout) :: line1(:,:), line2(:,:)
+        real        :: loc1(3), loc2(3), e1_rotmat(3,3), e2_rotmat(3,3), e1_inv(3,3), e2_inv(3,3)
+        integer     :: h, k, lims(3,2), phys(3), ldim(3), sqlp, sqarg, cnt1, cnt2, errflg, inv_loc1(3), inv_loc2(3)
+        complex(sp) :: comp1, comp2
+        lims = self%loop_lims(2)
+        sqlp = (maxval(lims(:,2)))**2
+        ldim = fplane1%get_ldim()
+        call fplane1%zero_and_flag_ft()
+        call fplane2%zero_and_flag_ft()
+        e1_rotmat = e1%get_mat()
+        e2_rotmat = e2%get_mat()
+        cnt1 = 0
+        cnt2 = 0
+        do k = lims(2,1),lims(2,2)
+            do h = lims(1,1),lims(1,2)
+                sqarg = dot_product([h,k],[h,k])
+                if( sqarg > sqlp ) cycle
+                loc1  = matmul(real([h,k,0]), e1_rotmat)
+                loc2  = matmul(real([h,k,0]), e2_rotmat)
+                comp1 = self%interp_fcomp(loc1)
+                comp2 = self%interp_fcomp(loc2)
+                if (h .ge. 0) then
+                    phys(1) = h + 1
+                    phys(2) = k + 1 + MERGE(ldim(2),0,k < 0)
+                    phys(3) = 1
+                    call fplane1%set_cmat_at(phys, comp1)
+                    call fplane2%set_cmat_at(phys, comp2)
+                else
+                    phys(1) = -h + 1
+                    phys(2) = -k + 1 + MERGE(ldim(2),0,-k < 0)
+                    phys(3) = 1
+                    call fplane1%set_cmat_at(phys, conjg(comp1))
+                    call fplane2%set_cmat_at(phys, conjg(comp2))
+                endif
+                ! inverse 2D location for checking the lines
+                call matinv(e1_rotmat, e1_inv, 3, errflg)
+                call matinv(e2_rotmat, e2_inv, 3, errflg)
+                inv_loc1 = nint(matmul(loc2, e1_inv))
+                inv_loc2 = nint(matmul(loc1, e2_inv))
+                if( inv_loc1(1) >= lims(1,1) .and. inv_loc1(1) <= lims(1,2) .and. &
+                   &inv_loc1(2) >= lims(2,1) .and. inv_loc1(2) <= lims(2,2) .and. inv_loc1(3) == 0 )then
+                    cnt1 = cnt1 + 1
+                endif
+                if( inv_loc2(1) >= lims(1,1) .and. inv_loc2(1) <= lims(1,2) .and. &
+                   &inv_loc2(2) >= lims(2,1) .and. inv_loc2(2) <= lims(2,2) .and. inv_loc2(3) == 0 )then
+                    cnt2 = cnt2 + 1
+                endif
+            end do
+        end do
+        if( cnt1 > 0 .and. cnt2 > 0 )then
+            allocate(line1(cnt1,2), line2(cnt2,2))
+        else
+            print *, 'CANNOT FIND COMMON LINE'
+            STOP
+        endif
+        ! populate the common lines coordinates
+        cnt1 = 0
+        cnt2 = 0
+        do k = lims(2,1),lims(2,2)
+            do h = lims(1,1),lims(1,2)
+                sqarg = dot_product([h,k],[h,k])
+                if( sqarg > sqlp ) cycle
+                loc1  = matmul(real([h,k,0]), e1_rotmat)
+                loc2  = matmul(real([h,k,0]), e2_rotmat)
+                ! inverse 2D location for checking the lines
+                call matinv(e1_rotmat, e1_inv, 3, errflg)
+                call matinv(e2_rotmat, e2_inv, 3, errflg)
+                inv_loc1 = nint(matmul(loc2, e1_inv))
+                inv_loc2 = nint(matmul(loc1, e2_inv))
+                if( inv_loc1(1) >= lims(1,1) .and. inv_loc1(1) <= lims(1,2) .and. &
+                   &inv_loc1(2) >= lims(2,1) .and. inv_loc1(2) <= lims(2,2) .and. inv_loc1(3) == 0 )then
+                    cnt1 = cnt1 + 1
+                    line1(cnt1,:) = inv_loc1(1:2)
+                endif
+                if( inv_loc2(1) >= lims(1,1) .and. inv_loc2(1) <= lims(1,2) .and. &
+                   &inv_loc2(2) >= lims(2,1) .and. inv_loc2(2) <= lims(2,2) .and. inv_loc2(3) == 0 )then
+                    cnt2 = cnt2 + 1
+                    line2(cnt2,:) = inv_loc2(1:2)
+                endif
+            end do
+        end do
+    end subroutine fproject_common
 
     !> \brief  extracts a Fourier plane from the expanded FT matrix of a volume (self)
     subroutine fproject_serial_1( self, e, fplane )
