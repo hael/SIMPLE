@@ -16,6 +16,7 @@ implicit none
 public :: centervol_commander
 public :: postprocess_commander
 public :: reproject_commander
+public :: volanalyze_commander
 public :: volops_commander
 public :: noisevol_commander
 public :: dock_volpair_commander
@@ -40,6 +41,11 @@ type, extends(commander_base) :: reproject_commander
  contains
    procedure :: execute      => exec_reproject
 end type reproject_commander
+
+type, extends(commander_base) :: volanalyze_commander
+  contains
+    procedure :: execute      => exec_volanalyze
+end type volanalyze_commander
 
 type, extends(commander_base) :: volops_commander
   contains
@@ -345,6 +351,25 @@ contains
         call simple_end('**** SIMPLE_REPROJECT NORMAL STOP ****')
     end subroutine exec_reproject
 
+    subroutine exec_volanalyze( self, cline )
+        use simple_volanalyzer
+        class(volanalyze_commander), intent(inout) :: self
+        class(cmdline),              intent(inout) :: cline
+        type(parameters) :: params
+
+        ! smpd
+        ! hp
+        ! lp
+        ! mskdiam
+        ! filetab
+
+        ! parse command-line
+        call params%new(cline)
+
+        call init_volanalyzer(params%filetab)
+        
+    end subroutine exec_volanalyze
+
     !> volume calculations and operations - incl Guinier, snr, mirror or b-factor
     subroutine exec_volops( self, cline )
         class(volops_commander), intent(inout) :: self
@@ -440,31 +465,15 @@ contains
         class(dock_volpair_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(dock_vols)  :: dvols
-        real, parameter  :: SHSRCH_HWDTH  = 5.0
         type(parameters) :: params
         integer          :: i
         character(:), allocatable :: fn_vol_docked
         if( .not. cline%defined('gridding') ) call cline%set('gridding', 'yes')
         call params%new(cline)
         fn_vol_docked = trim(get_fbody(params%vols(2),'mrc'))//'_docked.mrc'
-        select case( trim(params%dockmode) )
-            case('shift')
-                call dvols%new(params%vols(1), params%vols(2), params%smpd, params%lpstop, params%lpstart, params%mskdiam, mag=.true.)
-                call dvols%srch_shift()
-                call dvols%rotate_target(params%vols(2), fn_vol_docked)
-            case('rot')
-                call dvols%new(params%vols(1), params%vols(2), params%smpd, params%lpstop, params%lpstart, params%mskdiam, mag=.true.)
-                call dvols%srch_rots()
-                call dvols%rotate_target(params%vols(2), fn_vol_docked)
-            case('rotshift')
-                call dvols%new(params%vols(1), params%vols(2), params%smpd, params%lpstop, params%lpstart, params%mskdiam, mag=.true.)
-                call dvols%srch()
-                call dvols%rotate_target(params%vols(2), fn_vol_docked)
-            case('refine')
-                ! to be implemented
-            case DEFAULT
-                write(logfhandle,*) 'dockmode: ', trim(params%dockmode), ' is unsupported'
-        end select
+        call dvols%new(params%vols(1), params%vols(2), params%smpd, params%hp, params%lp, params%mskdiam)
+        call dvols%srch()
+        call dvols%rotate_target(params%vols(2), fn_vol_docked)
         ! cleanup
         call dvols%kill()
         ! end gracefully

@@ -187,7 +187,6 @@ type :: parameters
     character(len=STDLEN)     :: detector='bin'       !< detector for edge detection (sobel|bin|otsu)
     character(len=STDLEN)     :: dfunit='microns'     !< defocus unit (A|microns){microns}
     character(len=STDLEN)     :: dir_exec=''          !< name of execution directory
-    character(len=STDLEN)     :: dockmode='rotshift'  !< mode for docking (rot|shift|rotshift)
     character(len=STDLEN)     :: executable=''        !< name of executable
     character(len=STDLEN)     :: startype=''          !< export type for STAR format (micrograph|select|extract|class2d|initmodel|refine3d|post){all}
     character(len=4)          :: element ='    '      !< atom kind
@@ -555,7 +554,6 @@ contains
         call check_carg('detector',       self%detector)
         call check_carg('dfunit',         self%dfunit)
         call check_carg('dir_exec',       self%dir_exec)
-        call check_carg('dockmode',       self%dockmode)
         call check_carg('dihedral',       self%dihedral)
         call check_carg('doprint',        self%doprint)
         call check_carg('element',        self%element)

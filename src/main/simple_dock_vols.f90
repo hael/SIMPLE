@@ -25,12 +25,14 @@ type dock_vols
     logical               :: mag
 contains
     procedure             :: new
+    procedure             :: get_dock_info
+    procedure             :: set_dock_info
     procedure, private    :: set_ref
     procedure, private    :: set_target
     procedure, private    :: setup_srch_spaces
-    procedure             :: srch_rots
+    procedure, private    :: srch_rots
     procedure, private    :: rotpeak_interp
-    procedure             :: srch_shift
+    procedure, private    :: srch_shift
     procedure             :: srch
     procedure             :: rotate_target
     procedure             :: kill
@@ -44,27 +46,32 @@ real,             parameter :: LP2SMPD_TARGET = 1./3.
 
 contains
 
-    subroutine kill( self )
-        class(dock_vols), intent(inout) :: self
-        call self%vol_ref%kill
-        call self%vol%kill
-        call self%vol_ref%kill
-        call self%eulspace%kill
-        call self%eulspace_sub%kill
-        call self%pgrpsym%kill
-    end subroutine kill
-
     subroutine new( self, vol_ref_fname, vol_fname, smpd, hp, lp, mskdiam, mag )
         class(dock_vols),  intent(inout) :: self
         character(len=*),  intent(in)    :: vol_ref_fname, vol_fname
         real,              intent(in)    :: smpd, hp, lp, mskdiam
         logical, optional, intent(in)    :: mag
-        self%mag = .false.
+        self%mag = .true.
         if( present(mag) ) self%mag = mag
         call self%set_ref(vol_ref_fname, smpd, hp, lp, mskdiam)
         call self%set_target(vol_fname)
         call self%setup_srch_spaces
     end subroutine new
+
+    subroutine get_dock_info( self, eul, shift, cc )
+        class(dock_vols), intent(in)  :: self
+        real,             intent(out) :: eul(3), shift(3), cc
+        eul   = self%eul
+        shift = self%shift
+        cc    = self%cc
+    end subroutine get_dock_info
+
+    subroutine set_dock_info( self, eul, shift )
+        class(dock_vols), intent(inout) :: self
+        real,             intent(in)    :: eul(3), shift(3)
+        self%eul   = eul
+        self%shift = shift
+    end subroutine set_dock_info
 
     ! (1)
     subroutine set_ref( self, vol_ref_fname, smpd, hp, lp, mskdiam )
@@ -162,11 +169,6 @@ contains
         end do
         !$omp end parallel do
         nloc = maxnloc(ccs, NBEST)
-        ! do i = 1, NBEST
-        !     eul = m2euler(rmats(:,:,nloc(i)))
-        !     cc  = ccs(nloc(i))
-        !     print *, eul, cc
-        ! end do
         ! construct multi-neighborhood search space from subspace peaks
         self%lnns = .false.
         call e%new_ori(is_ptcl=.false.)
@@ -201,11 +203,6 @@ contains
         end do
         !$omp end parallel do
         nloc = maxnloc(ccs_refine, NBEST)
-        ! do i = 1, NBEST
-        !     eul = m2euler(rmats_refine(:,:,nloc(i)))
-        !     cc  = ccs_refine(nloc(i))
-        !     print *, eul, cc
-        ! end do
         ! final refinement step
         ! top orientation from previous step
         eul = m2euler(rmats_refine(:,:,nloc(1)))
@@ -234,11 +231,6 @@ contains
         nloc     = maxnloc(ccs_refine, NBEST)
         self%eul = m2euler(rmats_refine(:,:,nloc(1)))
         self%cc  = ccs_refine(nloc(1))
-        ! do i = 1, NBEST
-        !     eul = m2euler(rmats_refine(:,:,nloc(i)))
-        !     cc  = ccs_refine(nloc(i))
-        !     print *, eul, cc
-        ! end do
         ! in-plane peak interpolation using previous angular step of 1 degree
         call self%rotpeak_interp(1., ccs_refine, e3_new, self%cc)
         call e%e3set(e3_new)
@@ -337,6 +329,16 @@ contains
         call vol_rot%kill
         call e%kill
     end subroutine rotate_target
+
+    subroutine kill( self )
+        class(dock_vols), intent(inout) :: self
+        call self%vol_ref%kill
+        call self%vol%kill
+        call self%eulspace%kill
+        call self%eulspace_sub%kill
+        call self%pgrpsym%kill
+        if( allocated(self%lnns) ) deallocate(self%lnns)
+    end subroutine kill
 
 end module simple_dock_vols
 

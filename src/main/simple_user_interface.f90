@@ -196,6 +196,7 @@ type(simple_program), target :: uniform_filter2D
 type(simple_program), target :: uniform_filter3D
 type(simple_program), target :: update_project
 type(simple_program), target :: vizoris
+type(simple_program), target :: volanalyze
 type(simple_program), target :: volops
 type(simple_program), target :: write_classes
 type(simple_program), target :: zero_project_shifts
@@ -499,6 +500,7 @@ contains
         call new_uniform_filter3D
         call new_update_project
         call new_vizoris
+        call new_volanalyze
         call new_volops
         call new_write_classes
         call new_zero_project_shifts
@@ -626,6 +628,7 @@ contains
         call push2prg_ptr_array(uniform_filter3D)
         call push2prg_ptr_array(update_project)
         call push2prg_ptr_array(vizoris)
+        call push2prg_ptr_array(volanalyze)
         call push2prg_ptr_array(volops)
         call push2prg_ptr_array(write_classes)
         call push2prg_ptr_array(zero_project_shifts)
@@ -891,6 +894,8 @@ contains
                 ptr2prg => update_project
             case('vizoris')
                 ptr2prg => vizoris
+            case('volanalyze')
+                ptr2prg => volanalyze
             case('volops')
                 ptr2prg => volops
             case('write_classes')
@@ -998,6 +1003,7 @@ contains
         write(logfhandle,'(A)') uniform_filter3D%name
         write(logfhandle,'(A)') update_project%name
         write(logfhandle,'(A)') vizoris%name
+        write(logfhandle,'(A)') volanalyze%name
         write(logfhandle,'(A)') volops%name
         write(logfhandle,'(A)') write_classes%name
         write(logfhandle,'(A)') zero_project_shifts%name
@@ -2284,7 +2290,7 @@ contains
         &'Dock a pair of volumes',&                     ! descr_short
         &'is a program for docking a pair of volumes',& ! descr long
         &'simple_exec',&                                ! executable
-        &3, 2, 0, 2, 2, 1, 1, .false.)                  ! # entries in each group, requires sp_project
+        &3, 2, 0, 1, 2, 1, 1, .false.)                  ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call dock_volpair%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Reference volume', &
@@ -2300,11 +2306,9 @@ contains
         ! search controls
         call dock_volpair%set_input('srch_ctrls', 1, trs)
         dock_volpair%srch_ctrls(1)%rval_default = 5.
-        call dock_volpair%set_input('srch_ctrls', 2, 'dockmode', 'multi', 'Docking mode', 'Docking mode(rot|shift|rotshift|refine){rotshift}', '(rot|shift|rotshift|refine){rotshift}', .false., 'rotshift')
-        dock_volpair%srch_ctrls(2)%required = .true.
         ! filter controls
-        call dock_volpair%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit', 'low-pass limit in Angstroms', .true., 0.)
-        call dock_volpair%set_input('filt_ctrls', 2, 'lpstop',   'num', 'Final low-pass limit',   'Final low-pass resolution limit',   'low-pass limit in Angstroms', .true., 0.)
+        call dock_volpair%set_input('filt_ctrls', 1, hp)
+        call dock_volpair%set_input('filt_ctrls', 2, lp)
         ! mask controls
         call dock_volpair%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
@@ -5424,6 +5428,34 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_vizoris
+
+    subroutine new_volanalyze
+        ! PROGRAM SPECIFICATION
+        call volanalyze%new(&
+        &'volanalyze',&                                                             ! name
+        &'Analyze an emsemble of ab initio volumes',&                               ! descr_short
+        &'is a program for statistical analysis an ensemble of ab initio volumes',& ! descr_long
+        &'simple_exec',&                                                            ! executable
+        &1, 1, 0, 0, 2, 1, 1, .false.)                                              ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call volanalyze%set_input('img_ios', 1, 'filetab', 'file', 'Volumes list',&
+        &'List of volumes to analyze', 'list input e.g. voltab.txt', .true., '')
+        ! parameter input/output
+        call volanalyze%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call volanalyze%set_input('filt_ctrls', 1, hp)
+        call volanalyze%set_input('filt_ctrls', 2, lp)
+        volanalyze%filt_ctrls(2)%required = .true.
+        ! mask controls
+        call volanalyze%set_input('mask_ctrls', 1, mskdiam)
+        ! computer controls
+        call volanalyze%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_volanalyze
 
     subroutine new_volops
         ! PROGRAM SPECIFICATION
