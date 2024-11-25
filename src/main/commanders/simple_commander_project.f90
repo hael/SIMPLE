@@ -754,7 +754,7 @@ contains
         type(parameters)              :: params
         type(sp_project)              :: spproj
         type(image)                   :: img
-        character(len=:), allocatable :: cavgs_fname, projfile_path, stk_path
+        character(len=:), allocatable :: cavgs_fname, stk_path
         logical,          allocatable :: lstates(:)
         integer :: ldim(3), icls, ncls, ncavgs, cnt
         real    :: smpd, smpd_phys
@@ -769,10 +769,7 @@ contains
         if( count(lstates) == 0 ) THROW_HARD('All class averages are deselected')
         call spproj%get_cavgs_stk(cavgs_fname, ncls, smpd)
         if( spproj%os_cls2D%get_noris() /= ncls ) THROW_HARD('Inconsistent # of entries cls2D/out!')
-        ! takes care of path
-        projfile_path = get_fpath(simple_abspath(params%projfile))
-        cavgs_fname   = trim(projfile_path)//'/'//trim(cavgs_fname)
-        if(.not. file_exists(cavgs_fname)) then
+        if(.not. file_exists(trim(cavgs_fname))) then
             !try using stkpath if present in projfile
             call spproj%get_cavgs_stk(cavgs_fname, ncls, smpd, stkpath=stk_path)
             if(allocated(stk_path)) cavgs_fname = trim(stk_path)//'/'//trim(cavgs_fname)
