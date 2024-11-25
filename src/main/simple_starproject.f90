@@ -703,10 +703,14 @@ contains
         do i=1, spproj%os_cls2D%get_noris()
             if(.not. spproj%os_cls2D%isthere(i, "stk")) then
                 call spproj%get_cavgs_stk(stkname, ncls, smpd, stkpath=stk_path)
-                if(allocated(stk_path) .and. len(stk_path) .gt. 0) then
-                    call spproj%os_cls2D%set(i, "stk", trim(adjustl(stk_path)) // '/' // trim(adjustl(stkname)))
-                else
+                if(file_exists(trim(stkname))) then
                     call spproj%os_cls2D%set(i, "stk", trim(adjustl(stkname)))
+                else
+                    if(allocated(stk_path) .and. len(stk_path) .gt. 0) then
+                        call spproj%os_cls2D%set(i, "stk", trim(adjustl(stk_path)) // '/' // trim(adjustl(stkname)))
+                    else
+                        call spproj%os_cls2D%set(i, "stk", trim(adjustl(stkname)))
+                    endif
                 endif
             end if
             call spproj%os_cls2D%set(i, "ncls", spproj%os_cls2D%get_noris())
