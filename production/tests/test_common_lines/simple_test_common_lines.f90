@@ -1,32 +1,95 @@
 program simple_test_common_lines
-use simple_stack_io,   only: stack_io
-use simple_image,      only: image
+include 'simple_lib.f08'
+use simple_cmdline,    only: cmdline
 use simple_builder,    only: builder
 use simple_parameters, only: parameters
-use simple_cmdline,    only: cmdline
+use simple_image,      only: image
+use simple_projector,  only: projector
 implicit none
-type(stack_io)   :: stkio_r1, stkio_r2
-type(image)      :: img1, img2
-type(builder)    :: build
-type(parameters) :: params
-type(cmdline)    :: cline
-character(len=*), parameter :: stkname1 = 'reprojs_fine.mrcs'
-character(len=*), parameter :: stkname2 = 'reprojs.mrcs'
-real,             parameter :: smpd     = 1.72
-integer :: nptcls1, nptcls2, iptcl, ldim(3)
-call stkio_r1%open(stkname1, smpd, 'read', bufsz=100)
-call stkio_r2%open(stkname2, smpd, 'read', bufsz=100)
-nptcls1 = stkio_r1%get_nptcls()
-nptcls2 = stkio_r2%get_nptcls()
-ldim    = stkio_r1%get_ldim()
-call img1%new(ldim, smpd)
-call img2%new(ldim, smpd)
-! read
-call stkio_r1%read(iptcl, img1)
-do iptcl = 1, nptcls2
-    call stkio_r2%read(iptcl, img2)
-    ! investigating img1 vs all img2 in stkio_r2
-end do
-call stkio_r1%close
-call stkio_r2%close
+integer,          parameter   :: NPLANES = 100
+character(len=:), allocatable :: cmd
+integer,          allocatable :: line1(:,:), line2(:,:)
+type(parameters)              :: p
+type(cmdline)                 :: cline
+type(image)                   :: vol, noise, fplane1, fplane2, fplane1_pad, fplane2_pad
+type(oris)                    :: spiral
+type(ori)                     :: o1, o2
+type(projector)               :: vol_pad
+integer                       :: ifoo, rc, errflg, i
+real                          :: res_fsc05, res_fsc0143, ave, sdev, maxv, minv, med
+logical                       :: mrc_exists
+real                          :: vec(1,3), A(3,3), vec_A(1,3), A_inv(3,3), inv_vec_A(1,3)
+if( command_argument_count() < 4 )then
+    write(logfhandle,'(a)') 'ERROR! Usage: simple_test_3D_opt_filt smpd=xx nthr=yy vol1=volume.mrc mskdiam=zz'
+    write(logfhandle,'(a)') 'Example: https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180'
+    write(logfhandle,'(a)') 'DEFAULT TEST (example above) is running now...'
+    inquire(file="1JYX.mrc", exist=mrc_exists)
+    if( .not. mrc_exists )then
+        write(*, *) 'Downloading the example dataset...'
+        cmd = 'curl -s -o 1JYX.pdb https://files.rcsb.org/download/1JYX.pdb'
+        call execute_command_line(cmd, exitstat=rc)
+        write(*, *) 'Converting .pdb to .mrc...'
+        cmd = 'e2pdb2mrc.py 1JYX.pdb 1JYX.mrc'
+        call execute_command_line(cmd, exitstat=rc)
+        cmd = 'rm 1JYX.pdb'
+        call execute_command_line(cmd, exitstat=rc)
+    endif
+    call cline%set('smpd'   , 1.)
+    call cline%set('nthr'   , 16.)
+    call cline%set('vol1'   , '1JYX.mrc')
+    call cline%set('mskdiam', 180.)
+else
+    call cline%parse_oldschool
+endif
+call cline%checkvar('smpd',    1)
+call cline%checkvar('nthr',    2)
+call cline%checkvar('vol1',    3)
+call cline%checkvar('mskdiam', 4)
+call cline%check
+call p%new(cline)
+call find_ldim_nptcls(p%vols(1), p%ldim, ifoo)
+call vol%new(p%ldim, p%smpd)
+call noise%new(p%ldim, p%smpd)
+call vol%read(p%vols(1))
+call vol%stats('foreground', ave, sdev, maxv, minv)
+! add noise in a small center region of the vol
+call noise%gauran(0., 5. * sdev)
+call noise%mask(p%msk, 'soft')
+call vol%add(noise)
+call vol%write('vol_noisy.mrc')
+call spiral%new(NPLANES, is_ptcl=.false.)
+call spiral%spiral
+call spiral%get_ori(25,  o1)
+call spiral%get_ori(50, o2)
+call fplane1%new([p%box, p%box, 1], p%smpd)
+call fplane2%new([p%box, p%box, 1], p%smpd)
+call vol_pad%new(    [p%boxpd, p%boxpd, p%boxpd], p%smpd)
+call fplane1_pad%new([p%boxpd, p%boxpd, 1],       p%smpd)
+call fplane2_pad%new([p%boxpd, p%boxpd, 1],       p%smpd)
+call vol%pad(vol_pad)
+call vol_pad%fft
+call vol_pad%expand_cmat(p%alpha)
+call vol_pad%fproject_common(o1,o2,fplane1_pad,fplane2_pad,line1,line2)
+call fplane1_pad%ifft
+call fplane2_pad%ifft
+call fplane1_pad%clip(fplane1)
+call fplane2_pad%clip(fplane2)
+call fplane1%write('fplane.mrc', 1)
+call fplane2%write('fplane.mrc', 2)
+print *, 'line1 length = ', size(line1,1)
+do i = 1, size(line1,1)
+    print *, line1(i,:)
+enddo
+print *, 'line2 length = ', size(line2,1)
+do i = 1, size(line2,1)
+    print *, line2(i,:)
+enddo
+! testing
+A(1,:)   = [1., 2., 3.]
+A(2,:)   = [4., 5., 6.]
+A(3,:)   = [7., 9., 10.]
+vec(1,:) = [1., 2., 0.]
+vec_A = matmul(vec, A)
+call matinv(A, A_inv, 3, errflg)
+inv_vec_A = matmul(vec_A, A_inv)
 end program simple_test_common_lines
