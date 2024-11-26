@@ -6,16 +6,16 @@ use simple_parameters, only: parameters
 use simple_image,      only: image
 use simple_projector,  only: projector
 implicit none
-integer,          parameter   :: NPLANES = 100
+integer,          parameter   :: NPLANES = 100, ORI_IND = 15
 character(len=:), allocatable :: cmd
-type(ori_coord),  allocatable :: coord_map(:)
+type(fplan_map),  allocatable :: coord_map(:)
 type(parameters)              :: p
 type(cmdline)                 :: cline
 type(image)                   :: vol, noise, fplane1, fplane2, fplane1_pad, fplane2_pad, fplanes(NPLANES)
 type(oris)                    :: spiral
 type(ori)                     :: o1, o2
 type(projector)               :: vol_pad
-integer                       :: ifoo, rc, errflg, i, xy_ori(3), xy_map(3), f_ind
+integer                       :: ifoo, rc, errflg, i, ori_phys(3), target_phys(3), f_ind
 real                          :: res_fsc05, res_fsc0143, ave, sdev, maxv, minv, med
 logical                       :: mrc_exists
 real                          :: vec(1,3), A(3,3), vec_A(1,3), A_inv(3,3), inv_vec_A(1,3)
@@ -55,8 +55,8 @@ call vol%stats('foreground', ave, sdev, maxv, minv)
 ! add noise in a small center region of the vol
 call noise%gauran(0., 5. * sdev)
 call noise%mask(p%msk, 'soft')
-call vol%add(noise)
-call vol%write('vol_noisy.mrc')
+! call vol%add(noise)
+! call vol%write('vol_noisy.mrc')
 call spiral%new(NPLANES, is_ptcl=.false.)
 call spiral%spiral
 call fplane1%new([p%box, p%box, 1], p%smpd)
@@ -67,20 +67,20 @@ call fplane2_pad%new([p%boxpd, p%boxpd, 1],       p%smpd)
 call vol%pad(vol_pad)
 call vol_pad%fft
 call vol_pad%expand_cmat(p%alpha)
-call spiral%get_ori(25, o1)
+call spiral%get_ori(ORI_IND, o1)
 call vol_pad%fproject(o1,fplane1_pad)
 do i = 1, spiral%get_noris()
     call spiral%get_ori(i, o2)
     call fplanes(i)%new([p%boxpd, p%boxpd, 1], p%smpd)
     call vol_pad%fproject(o2,fplanes(i))
 enddo
-call vol_pad%fproject_map(25, spiral, coord_map)
+call vol_pad%fproject_map(ORI_IND, spiral, coord_map)
 call fplane2_pad%zero_and_flag_ft
 do i = 1, size(coord_map)
-    xy_ori = coord_map(i)%xy_ori
-    xy_map = coord_map(i)%xy_map
-    f_ind  = coord_map(i)%ind
-    call fplane2_pad%set_cmat_at(xy_ori, fplanes(f_ind)%get_cmat_at(xy_map))
+    ori_phys    = coord_map(i)%ori_phys
+    target_phys = coord_map(i)%target_phys
+    f_ind       = coord_map(i)%target_find
+    call fplane2_pad%set_cmat_at(ori_phys, fplanes(f_ind)%get_cmat_at(target_phys))
 enddo
 call fplane1_pad%ifft
 call fplane2_pad%ifft
