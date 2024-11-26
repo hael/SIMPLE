@@ -1357,7 +1357,8 @@ contains
 
     ! Deals with chunk completion, rejection, reset
     subroutine update_chunks
-        integer :: ichunk, nthr2D, n
+        type(stream_chunk), allocatable :: tmpchunks(:)
+        integer :: ichunk, jchunk, nthr2D, n
         logical :: chunk_complete
         if( .not. stream2D_active ) return
         do ichunk = 1,params_glob%nchunks
@@ -1380,9 +1381,20 @@ contains
             if( chunk_complete )then
                 ! updates list of chunks to import
                 if( allocated(converged_chunks) )then
+                    ! append item
                     n = size(converged_chunks)
-                    converged_chunks = [converged_chunks(1:n), chunks(ichunk)]
+                    allocate(tmpchunks(n+1),source=[converged_chunks(:), chunks(ichunk)])
+                    do jchunk = 1,n
+                        call converged_chunks(jchunk)%kill
+                    enddo
+                    deallocate(converged_chunks)
+                    allocate(converged_chunks(n+1),source=tmpchunks)
+                    do jchunk = 1,n+1
+                        call tmpchunks(jchunk)%kill
+                    enddo
+                    deallocate(tmpchunks)
                 else
+                    ! first item
                     allocate(converged_chunks(1),source=[chunks(ichunk)])
                 endif
                 ! reinit and deal with nthr2D != nthr

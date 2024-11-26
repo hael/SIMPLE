@@ -48,6 +48,9 @@ type stream_chunk
     logical                                :: available  = .true.   ! has been initialized but no classification peformed
   contains
     procedure          :: init
+    procedure          :: copy
+    procedure, private :: assign
+    generic            :: assignment(=) => assign
     procedure          :: generate
     procedure          :: calc_sigma2
     procedure          :: classify
@@ -76,6 +79,7 @@ contains
 
     ! Chunk type related routines
 
+    !>  Instantiator
     subroutine init( self, id, cline, master_spproj )
         class(stream_chunk), intent(inout) :: self
         class(cmdline),      intent(in)    :: cline
@@ -117,6 +121,32 @@ contains
         self%available  = .true.
         call debug_print('end chunk%init '//int2str(id))
     end subroutine init
+
+    subroutine copy( dest, src )
+        class(stream_chunk), intent(inout) :: dest
+        class(stream_chunk), intent(in)    :: src
+        call dest%kill
+        dest%spproj       = src%spproj
+        dest%qenv         = src%qenv
+        dest%cline        = src%cline
+        dest%orig_stks    = src%orig_stks(:)
+        dest%path         = trim(src%path)
+        dest%projfile_out = trim(src%projfile_out)
+        dest%id           = src%id
+        dest%it           = src%it
+        dest%nmics        = src%nmics
+        dest%nptcls       = src%nptcls
+        dest%toclassify   = src%toclassify
+        dest%converged    = src%converged
+        dest%available    = src%available
+    end subroutine copy
+
+    !>  \brief  assign, polymorphic assignment (=)
+    subroutine assign( selfout, selfin )
+        class(stream_chunk), intent(inout) :: selfout
+        class(stream_chunk), intent(in)    :: selfin
+        call selfout%copy(selfin)
+    end subroutine assign
 
     subroutine generate( self, micproj_records )
         class(stream_chunk), intent(inout) :: self
