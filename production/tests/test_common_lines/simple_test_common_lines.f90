@@ -8,14 +8,14 @@ use simple_projector,  only: projector
 implicit none
 integer,          parameter   :: NPLANES = 100
 character(len=:), allocatable :: cmd
-integer,          allocatable :: line1(:,:), line2(:,:)
+type(ori_coord),  allocatable :: coord_map(:)
 type(parameters)              :: p
 type(cmdline)                 :: cline
-type(image)                   :: vol, noise, fplane1, fplane2, fplane1_pad, fplane2_pad
+type(image)                   :: vol, noise, fplane1, fplane2, fplane1_pad, fplane2_pad, fplanes(NPLANES)
 type(oris)                    :: spiral
 type(ori)                     :: o1, o2
 type(projector)               :: vol_pad
-integer                       :: ifoo, rc, errflg, i
+integer                       :: ifoo, rc, errflg, i, xy_ori(3), xy_map(3), f_ind
 real                          :: res_fsc05, res_fsc0143, ave, sdev, maxv, minv, med
 logical                       :: mrc_exists
 real                          :: vec(1,3), A(3,3), vec_A(1,3), A_inv(3,3), inv_vec_A(1,3)
@@ -59,8 +59,6 @@ call vol%add(noise)
 call vol%write('vol_noisy.mrc')
 call spiral%new(NPLANES, is_ptcl=.false.)
 call spiral%spiral
-call spiral%get_ori(25,  o1)
-call spiral%get_ori(50, o2)
 call fplane1%new([p%box, p%box, 1], p%smpd)
 call fplane2%new([p%box, p%box, 1], p%smpd)
 call vol_pad%new(    [p%boxpd, p%boxpd, p%boxpd], p%smpd)
@@ -69,21 +67,27 @@ call fplane2_pad%new([p%boxpd, p%boxpd, 1],       p%smpd)
 call vol%pad(vol_pad)
 call vol_pad%fft
 call vol_pad%expand_cmat(p%alpha)
-call vol_pad%fproject_common(o1,o2,fplane1_pad,fplane2_pad,line1,line2)
+call spiral%get_ori(25, o1)
+call vol_pad%fproject(o1,fplane1_pad)
+do i = 1, spiral%get_noris()
+    call spiral%get_ori(i, o2)
+    call fplanes(i)%new([p%boxpd, p%boxpd, 1], p%smpd)
+    call vol_pad%fproject(o2,fplanes(i))
+enddo
+call vol_pad%fproject_map(25, spiral, coord_map)
+call fplane2_pad%zero_and_flag_ft
+do i = 1, size(coord_map)
+    xy_ori = coord_map(i)%xy_ori
+    xy_map = coord_map(i)%xy_map
+    f_ind  = coord_map(i)%ind
+    call fplane2_pad%set_cmat_at(xy_ori, fplanes(f_ind)%get_cmat_at(xy_map))
+enddo
 call fplane1_pad%ifft
 call fplane2_pad%ifft
 call fplane1_pad%clip(fplane1)
 call fplane2_pad%clip(fplane2)
 call fplane1%write('fplane.mrc', 1)
 call fplane2%write('fplane.mrc', 2)
-print *, 'line1 length = ', size(line1,1)
-do i = 1, size(line1,1)
-    print *, line1(i,:)
-enddo
-print *, 'line2 length = ', size(line2,1)
-do i = 1, size(line2,1)
-    print *, line2(i,:)
-enddo
 ! testing
 A(1,:)   = [1., 2., 3.]
 A(2,:)   = [4., 5., 6.]
