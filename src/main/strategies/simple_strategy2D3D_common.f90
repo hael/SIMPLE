@@ -322,11 +322,11 @@ contains
                 endif
                 ! balanced class sampling
                 if( params_glob%l_frac_best )then
-                    call build_glob%spproj_field%sample4update_class(clssmp, params_glob%greediness,&
-                    &pfromto, params_glob%update_frac, nptcls2update, pinds, ptcl_mask, l_incr_sampl, params_glob%frac_best)
+                    call build_glob%spproj_field%sample4update_class(clssmp, pfromto, params_glob%update_frac,&
+                    nptcls2update, pinds, ptcl_mask, l_incr_sampl, params_glob%frac_best)
                 else
-                    call build_glob%spproj_field%sample4update_class(clssmp, params_glob%greediness,&
-                    &pfromto, params_glob%update_frac, nptcls2update, pinds, ptcl_mask, l_incr_sampl)
+                    call build_glob%spproj_field%sample4update_class(clssmp, pfromto, params_glob%update_frac,&
+                    nptcls2update, pinds, ptcl_mask, l_incr_sampl)
                 endif
                 call deallocate_class_samples(clssmp)
             else
@@ -577,8 +577,8 @@ contains
         if( s == 1 )then
             l_update_lp = .true. ! always update for state == 1       
         else
-            if( lpopt > params_glob%lp )then
-                l_update_lp = .true. ! the limit for the state with the worst resolution wins
+            if( lpopt < params_glob%lp )then
+                l_update_lp = .true. ! the limit for the state with the best resolution wins
             endif
         endif
         if( l_update_lp )then

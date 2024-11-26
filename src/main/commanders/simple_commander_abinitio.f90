@@ -42,32 +42,33 @@ type, extends(commander_base) :: abinitio3D_parts_commander
 end type abinitio3D_parts_commander
 
 ! class constants
-character(len=*), parameter :: REC_FBODY             = 'rec_final_state'
-character(len=*), parameter :: STR_STATE_GLOB        = '01'
-real,             parameter :: LPSTOP_BOUNDS(2)      = [4.5,6.0]
-real,             parameter :: LPSTART_BOUNDS(2)     = [10.,20.] 
-real,             parameter :: CENLP_DEFAULT         = 30.
-real,             parameter :: LPSYMSRCH_LB          = 12.
-integer,          parameter :: NSTAGES               = 8
-integer,          parameter :: NSTAGES_INI3D         = 4 ! # of ini3D stages used for initialization
-integer,          parameter :: PHASES(3)             = [2,6,8]
-integer,          parameter :: MAXITS(3)             = [20,17,15]
-integer,          parameter :: MAXITS_GLOB           = 2*20 + 4*17 + 2*15
-integer,          parameter :: NSPACE(3)             = [500,1000,2500]
-integer,          parameter :: SYMSRCH_STAGE         = 3
-integer,          parameter :: LPAUTO_STAGE          = 4
-integer,          parameter :: INCR_GREEDINESS_STAGE = 4 ! INCR_GREEDINESS_STAGE < PROBREFINE_STAGE must be true for it to have an effect
-integer,          parameter :: PROBREFINE_STAGE      = 5
-integer,          parameter :: ICM_STAGE             = PROBREFINE_STAGE
-integer,          parameter :: TRAILREC_STAGE        = 7
+character(len=*), parameter :: REC_FBODY         = 'rec_final_state'
+character(len=*), parameter :: STR_STATE_GLOB    = '01'
+real,             parameter :: LPSTOP_BOUNDS(2)  = [4.5,6.0]
+real,             parameter :: LPSTART_BOUNDS(2) = [10.,20.] 
+real,             parameter :: CENLP_DEFAULT     = 30.
+real,             parameter :: LPSYMSRCH_LB      = 12.
+integer,          parameter :: NSTAGES           = 8
+integer,          parameter :: NSTAGES_INI3D     = 4 ! # of ini3D stages used for initialization
+integer,          parameter :: PHASES(3)         = [2,6,8]
+integer,          parameter :: MAXITS(3)         = [20,17,15]
+integer,          parameter :: MAXITS_ARR(8)     = [20,20,17,17,17,17,15,15]
+integer,          parameter :: MAXITS_GLOB       = 2*20 + 4*17 + 2*15
+integer,          parameter :: NSPACE(3)         = [500,1000,2500]
+integer,          parameter :: SYMSRCH_STAGE     = 3
+integer,          parameter :: LPAUTO_STAGE      = 4
+integer,          parameter :: PROBREFINE_STAGE  = 5
+integer,          parameter :: ICM_STAGE         = PROBREFINE_STAGE  ! we switch from ML regularization when global prob srch is switched on
+integer,          parameter :: STOCH_SAMPL_STAGE = 6
+integer,          parameter :: TRAILREC_STAGE    = STOCH_SAMPL_STAGE ! we start trailing when stochastic sampling starts
 ! class variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
-logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false., l_update_frac=.false.
+logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false., l_update_frac=.false., l_update_frac_dyn=.false.
 logical          :: l_ml_reg=.true., l_icm_reg=.true., l_ini3D=.false., l_lpauto=.false.
 type(sym)        :: se1, se2
 type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_postprocess, cline_reproject
-real             :: update_frac  = 1.0
-integer          :: nstates_glob = 1
+real             :: update_frac  = 1.0, update_frac_dyn  = 1.0
+integer          :: nstates_glob = 1, nptcls_eff = 0, nsample_minmax(2), maxits_dyn=0
 
 contains
 
@@ -334,10 +335,11 @@ contains
         type(parameters)                :: params
         type(sp_project)                :: spproj
         type(image)                     :: noisevol
-        integer :: istage, s, ncls, icls, nptcls_eff, i, start_stage
+        integer :: istage, s, ncls, icls, i, start_stage
         logical :: l_multistates = .false.
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
+        call cline%set('bfac',            0.) ! because initial models should not be sharpened
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',         'yes')
         if( .not. cline%defined('overlap')     ) call cline%set('overlap',        0.95)
         if( .not. cline%defined('prob_athres') ) call cline%set('prob_athres',     10.)
@@ -355,9 +357,9 @@ contains
         call params%new(cline)
         call cline%set('mkdir', 'no')
         l_multistates = .false.
+        nstates_glob  = params%nstates  
         if( params%nstates > 1  ) l_multistates = .true.
         if( trim(params%het_mode).eq.'docked' )then
-            nstates_glob   = params%nstates  
             params%nstates = 1
             call cline%delete('nstates')
         endif
@@ -372,7 +374,7 @@ contains
             call ini3D_from_cavgs(cline)
             ! re-read the project file to update info in spproj
             call spproj%read(params%projfile)
-            start_stage = NSTAGES_INI3D ! compute reduced to one overlapping stage
+            start_stage = NSTAGES_INI3D - 1 ! compute reduced to two overlapping stages
             l_ini3D     = .true.
         endif
         ! initialization on class averages done outside this workflow (externally)?
@@ -381,7 +383,7 @@ contains
             if( spproj%is_virgin_field('ptcl3D') )then
                 THROW_HARD('Prior 3D alignment required for abinitio workflow when cavg_ini_ext is set to yes')
             endif
-            start_stage = NSTAGES_INI3D ! compute reduced to one overlapping stage
+            start_stage = NSTAGES_INI3D - 1 ! compute reduced to two overlapping stages
             l_ini3D     = .true.
         endif
         ! set class global ML regularization flag
@@ -416,21 +418,32 @@ contains
         if( spproj%is_virgin_field('ptcl2D') )then
             THROW_HARD('Prior 2D clustering required for abinitio workflow')
         else
-            l_update_frac = .true.
-            update_frac   = 1.0
-            nptcls_eff    = spproj%count_state_gt_zero()
+            l_update_frac     = .true.
+            l_update_frac_dyn = .false.
+            update_frac       = 1.0
+            nptcls_eff        = spproj%count_state_gt_zero()
             if( cline%defined('nsample') )then
-                update_frac = real(params%nsample) / real(nptcls_eff)
+                update_frac = real(params%nsample * nstates_glob) / real(nptcls_eff)
             else if( cline%defined('update_frac') )then
                 update_frac = params%update_frac
-            else
-                if( cline%defined('nsample_max') )then
-                    update_frac = calc_update_frac(nptcls_eff, [NSAMPLE_MINMAX_DEFAULT(1),params%nsample_max])
+            else if( cline%defined('nsample_start') )then
+                if( params%nsample_start > nptcls_eff ) THROW_HARD('nsample_start > effective # ptcls, decrease!')
+                nsample_minmax(1) = params%nsample_start
+                if( cline%defined('nsample_stop') )then
+                    nsample_minmax(2) = min(nptcls_eff,params%nsample_stop)
                 else
-                    update_frac = calc_update_frac(nptcls_eff, NSAMPLE_MINMAX_DEFAULT)
+                    nsample_minmax(2) = nptcls_eff
+                endif
+                update_frac = calc_update_frac_dyn(nptcls_eff, nstates_glob, nsample_minmax, 1, MAXITS_GLOB)
+                l_update_frac_dyn = .true.
+             else
+                if( cline%defined('nsample_max') )then
+                    update_frac = calc_update_frac(nptcls_eff, nstates_glob, [NSAMPLE_MINMAX_DEFAULT(1),params%nsample_max])
+                else
+                    update_frac = calc_update_frac(nptcls_eff, nstates_glob, NSAMPLE_MINMAX_DEFAULT)
                 endif
             endif
-            update_frac = min(UPDATE_FRAC_MAX, update_frac) ! to ensure fractional update is always on      
+            update_frac = min(UPDATE_FRAC_MAX, update_frac) ! to ensure fractional update is always on
             ! generate a data structure for class sampling on disk
             ncls    = spproj%os_cls2D%get_noris()
             tmpinds = (/(icls,icls=1,ncls)/)
@@ -493,6 +506,7 @@ contains
             endif
         endif
         ! Frequency marching
+        maxits_dyn = sum(MAXITS_ARR(start_stage:NSTAGES))
         do istage = start_stage, NSTAGES
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', lpinfo(istage)%lp
@@ -672,7 +686,6 @@ contains
         call cline_postprocess%set('projfile',             trim(projfile))
         call cline_postprocess%set('mkdir',                          'no')
         call cline_postprocess%set('imgkind',                       'vol')
-        call cline_postprocess%delete('bfac') ! sharpen final map
         call cline_postprocess%delete('lp')   ! to obtain optimal filtration
         ! re-project volume
         call cline_reproject%set('prg',                       'reproject')
@@ -792,13 +805,15 @@ contains
         character(len=:), allocatable :: silence_fsc, sh_first, prob_sh, ml_reg
         character(len=:), allocatable :: refine, icm, trail_rec, pgrp, balance, lp_auto
         integer :: iphase, iter, inspace, imaxits
-        real    :: trs, snr_noise_reg, greediness, frac_best, overlap, fracsrch, lpstart, lpstop
+        real    :: trs, snr_noise_reg, frac_best, overlap, fracsrch, lpstart, lpstop
         ! iteration number bookkeeping
         iter = 0
         if( cline_refine3D%defined('endit') )then
             iter = cline_refine3D%get_iarg('endit')
         endif
         iter = iter + 1
+        ! dynamic update frac
+        update_frac_dyn = calc_update_frac_dyn(nptcls_eff, nstates_glob, nsample_minmax, iter, maxits_dyn)
         ! symmetry
         pgrp = trim(params_glob%pgrp)
         if( l_srch4symaxis )then
@@ -849,8 +864,7 @@ contains
                 trs           = 0.
                 sh_first      = 'no'
                 ml_reg        = 'no'
-                greediness    = 2.0 ! completely greedy balanced sampling based on objective function value
-                frac_best     = 1.0 ! means it does not control sampling
+                frac_best     = 1.0 ! means it does not control sampling, greedy selection
                 overlap       = 0.90
                 fracsrch      = 90.
                 snr_noise_reg = 2.0
@@ -861,11 +875,9 @@ contains
                 trs           = lpinfo(istage)%trslim
                 sh_first      = 'yes'
                 ml_reg        = 'yes'
-                if( istage >= INCR_GREEDINESS_STAGE )then
-                greediness    = 1.0 ! sample first half of each class as the best ones and the rest randomly
+                if( istage >= STOCH_SAMPL_STAGE )then
                 frac_best     = 0.5 ! means sampling is done from top-ranking 50% particles in class
                 else
-                greediness    = 2.0 ! completely greedy balanced sampling based on objective function value
                 frac_best     = 1.0 ! means it does not control sampling
                 endif
                 overlap       = 0.95
@@ -882,7 +894,6 @@ contains
                 trs           = lpinfo(istage)%trslim
                 sh_first      = 'yes'
                 ml_reg        = 'yes'
-                greediness    = 0.0  ! completely random balanced sampling (only class assignment matters)
                 frac_best     = 0.85 ! means sampling is done from top-ranking 85% particles in class
                 overlap       = 0.99
                 fracsrch      = 99.
@@ -896,11 +907,14 @@ contains
         ! command line update
         call cline_refine3D%set('prg',                     'refine3D')
         ! class global control parameters
+        if( l_update_frac_dyn )then
+        call cline_refine3D%set('update_frac',        update_frac_dyn)
+        else
         call cline_refine3D%set('update_frac',            update_frac)
+        endif
         call cline_refine3D%set('lp',               lpinfo(istage)%lp)
         call cline_refine3D%set('smpd_crop', lpinfo(istage)%smpd_crop)
         call cline_refine3D%set('box_crop',   lpinfo(istage)%box_crop)
-        call cline_refine3D%set('maxits_glob',            MAXITS_GLOB)
         ! iteration number
         call cline_refine3D%set('startit',                       iter)
         call cline_refine3D%set('which_iter',                    iter)
@@ -923,7 +937,6 @@ contains
         call cline_refine3D%set('prob_sh',                    prob_sh)
         call cline_refine3D%set('ml_reg',                      ml_reg)
         call cline_refine3D%set('icm',                            icm)
-        call cline_refine3D%set('greediness',              greediness)
         call cline_refine3D%set('frac_best',                frac_best)
         call cline_refine3D%set('overlap',                    overlap)
         call cline_refine3D%set('fracsrch',                  fracsrch)

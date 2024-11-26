@@ -309,6 +309,8 @@ type :: parameters
     integer :: nrots=0             !< number of in-plane rotations in greedy Cartesian search
     integer :: nsample=0           !< # particles to sample in refinement with fractional update
     integer :: nsample_max=0       !< maximum # particles to sample in refinement with fractional update
+    integer :: nsample_start=0     !< # particles to sample in refinement with fractional update, lower bound
+    integer :: nsample_stop=0      !< # particles to sample in refinement with fractional update, upper bound
     integer :: nsearch=40          !< # search grid points{40}
     integer :: nspace=2500         !< # projection directions
     integer :: nspace_sub=500      !< # projection directions in subspace
@@ -772,6 +774,8 @@ contains
         call check_iarg('nrestarts',      self%nrestarts)
         call check_iarg('nsample',        self%nsample)
         call check_iarg('nsample_max',    self%nsample_max)
+        call check_iarg('nsample_start',  self%nsample_start)
+        call check_iarg('nsample_stop',   self%nsample_stop)
         call check_iarg('nspace',         self%nspace)
         call check_iarg('nspace_sub',     self%nspace_sub)
         call check_iarg('nstages',        self%nstages)
