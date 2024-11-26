@@ -237,8 +237,8 @@ contains
         class(projector),             intent(inout) :: self
         integer,                      intent(in)    :: e_ind
         class(oris),                  intent(in)    :: eall
-        type(ori_coord), allocatable, intent(inout) :: coord_map(:)
-        type(ori_coord), allocatable :: all_coords(:)
+        type(fplan_map), allocatable, intent(inout) :: coord_map(:)
+        type(fplan_map), allocatable :: all_coords(:)
         type(ori) :: e, e2
         integer   :: i, h, k, lims(3,2), sqlp, sqarg, xy2(2), cnt, phys(3), ldim(3)
         logical   :: good_coord
@@ -258,7 +258,7 @@ contains
                     call self%fproject_coord([h,k], e, e2, xy2, good_coord)
                     if( good_coord )then
                         cnt = cnt + 1
-                        all_coords(cnt)%ind = i
+                        all_coords(cnt)%target_find = i
                         if (h .ge. 0) then
                             phys(1) = h + 1
                             phys(2) = k + 1 + MERGE(ldim(2),0,k < 0)
@@ -268,7 +268,7 @@ contains
                             phys(2) = -k + 1 + MERGE(ldim(2),0,-k < 0)
                             phys(3) = 1
                         endif
-                        all_coords(cnt)%xy_ori = phys
+                        all_coords(cnt)%ori_phys = phys
                         if (xy2(1) .ge. 0) then
                             phys(1) = xy2(1) + 1
                             phys(2) = xy2(2) + 1 + MERGE(ldim(2),0,xy2(2) < 0)
@@ -278,7 +278,7 @@ contains
                             phys(2) = -xy2(2) + 1 + MERGE(ldim(2),0,-xy2(2) < 0)
                             phys(3) = 1
                         endif
-                        all_coords(cnt)%xy_map = phys
+                        all_coords(cnt)%target_phys = phys
                         exit
                     endif
                 enddo
@@ -297,8 +297,9 @@ contains
         integer,          intent(inout) :: xy2(2)
         logical,          intent(out)   :: good_coord
         real    :: e1_rotmat(3,3), e2_rotmat(3,3), e2_inv(3,3), loc1_3D(3)
-        integer :: errflg, xy(3), lims(3,2)
+        integer :: errflg, xy(3), lims(3,2), sqlp, sqarg
         lims      = self%loop_lims(2)
+        sqlp      = (maxval(lims(:,2)))**2
         e1_rotmat = e1%get_mat()
         e2_rotmat = e2%get_mat()
         loc1_3D   = matmul(real([xy1(1),xy1(2),0]), e1_rotmat)
@@ -308,6 +309,11 @@ contains
            &xy(2) >= lims(2,1) .and. xy(2) <= lims(2,2) .and. xy(3) == 0 )then
             good_coord = .true.
             xy2        = xy(1:2)
+            sqarg      = dot_product(xy2,xy2)
+            if( sqarg > sqlp ) then
+                good_coord = .false.
+                xy2        = 0.
+            endif
         else
             good_coord = .false.
             xy2        = 0.

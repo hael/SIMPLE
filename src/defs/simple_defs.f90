@@ -118,11 +118,11 @@ type class_sample
     real,    allocatable :: ccs(:)
 end type class_sample
 
-type ori_coord
-    integer :: ind
-    integer :: xy_ori(3)
-    integer :: xy_map(3)
-end type ori_coord
+type fplan_map
+    integer :: target_find
+    integer :: ori_phys(3)
+    integer :: target_phys(3)
+end type fplan_map
 
 ! oritype enumeration
 enum, bind(c)
