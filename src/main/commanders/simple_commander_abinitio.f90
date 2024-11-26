@@ -334,7 +334,7 @@ contains
         type(parameters)                :: params
         type(sp_project)                :: spproj
         type(image)                     :: noisevol
-        integer :: istage, s, ncls, icls, nptcls_eff, i
+        integer :: istage, s, ncls, icls, nptcls_eff, i, start_stage
         logical :: l_multistates = .false.
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
@@ -366,12 +366,14 @@ contains
         call spproj%update_projinfo(cline)
         call spproj%write_segment_inside('projinfo', params%projfile)
         ! provide initialization of 3D alignment using class averages?
-        l_ini3D = .false.
+        start_stage = 1
+        l_ini3D     = .false.
         if( trim(params%cavg_ini).eq.'yes' )then
             call ini3D_from_cavgs(cline)
             ! re-read the project file to update info in spproj
             call spproj%read(params%projfile)
-            l_ini3D = .true.
+            start_stage = NSTAGES_INI3D ! compute reduced to one overlapping stage
+            l_ini3D     = .true.
         endif
         ! initialization on class averages done outside this workflow (externally)?
         if( trim(params%cavg_ini_ext).eq.'yes' )then 
@@ -379,7 +381,8 @@ contains
             if( spproj%is_virgin_field('ptcl3D') )then
                 THROW_HARD('Prior 3D alignment required for abinitio workflow when cavg_ini_ext is set to yes')
             endif
-            l_ini3D = .true.
+            start_stage = NSTAGES_INI3D ! compute reduced to one overlapping stage
+            l_ini3D     = .true.
         endif
         ! set class global ML regularization flag
         l_ml_reg = .true.
@@ -490,7 +493,7 @@ contains
             endif
         endif
         ! Frequency marching
-        do istage = 1, NSTAGES
+        do istage = start_stage, NSTAGES
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', lpinfo(istage)%lp
             ! Preparation of command line for probabilistic search
