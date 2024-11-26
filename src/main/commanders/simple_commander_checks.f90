@@ -98,14 +98,22 @@ contains
         class(check_update_frac_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters) :: params
-        integer          :: minmax(2), nsampl
+        integer          :: minmax(2), nsampl, i
         real             :: update_frac
         call params%new(cline)
         minmax = NSAMPLE_MINMAX_DEFAULT
-        if( cline%defined('nsample_max') ) minmax(2) = params%nsample_max
-        update_frac = calc_update_frac(params%nptcls, minmax)
-        nsampl      = update_frac * real(params%nptcls)
-        write(logfhandle,'(A,1X,I7)') 'NSAMPLE:', nsampl
+        if( cline%defined('nsample_start') .and. cline%defined('nsample_stop') )then
+            do i = 1, params%maxits
+                update_frac = calc_update_frac_dyn(params%nptcls, 1, [params%nsample_start,params%nsample_stop], i, params%maxits)
+                nsampl      = update_frac * real(params%nptcls)
+                write(logfhandle,'(A,1X,I7,1X,A,1X,I7)') 'ITER:', i, 'NSAMPLE:', nsampl
+            enddo
+        else
+            if( cline%defined('nsample_max') ) minmax(2) = params%nsample_max
+            update_frac = calc_update_frac(params%nptcls, 1, minmax)
+            nsampl      = update_frac * real(params%nptcls)
+            write(logfhandle,'(A,1X,I7)') 'NSAMPLE:', nsampl
+        endif
         ! end gracefully
         call simple_end('**** SIMPLE_CHECK_UPDATE_FRAC NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check_update_frac

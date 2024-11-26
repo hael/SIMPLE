@@ -201,7 +201,7 @@ contains
         real,              intent(in)  :: frcs_avg(:), smpd, lpstart_lb, lpstart_default, lpfinal
         type(lp_crop_inf), intent(out) :: lpinfo(nstages)
         logical, optional, intent(in)  :: verbose
-        real, parameter :: FRCLIMS_DEFAULT(2) = [0.8,0.03], LP2SMPD_TARGET = 1./3.
+        real, parameter :: FRCLIMS_DEFAULT(2) = [0.65,0.03], LP2SMPD_TARGET = 1./3., SMPD_TARGET_MIN=2.0
         integer :: findlims(2), istage, box_trial
         real    :: frclims(2), frc_stepsz, lp_max, lp_min, lp_stepsz, rbox_stepsz
         logical :: l_verbose
@@ -284,7 +284,7 @@ contains
             subroutine calc_scaleinfo( istage )
                 integer, intent(in) :: istage
                 real :: smpd_target
-                smpd_target                = max(smpd, (lpinfo(istage)%lp * LP2SMPD_TARGET))
+                smpd_target                = max(SMPD_TARGET_MIN, (lpinfo(istage)%lp * LP2SMPD_TARGET))
                 call autoscale(box, smpd, smpd_target, lpinfo(istage)%box_crop, lpinfo(istage)%smpd_crop, lpinfo(istage)%scale, minbox=64)
                 lpinfo(istage)%trslim      = min(8.,max(2.0, AHELIX_WIDTH / lpinfo(istage)%smpd_crop))
                 lpinfo(istage)%l_autoscale = lpinfo(istage)%box_crop < box

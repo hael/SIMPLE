@@ -1225,16 +1225,17 @@ contains
         end do
     end subroutine sample4update_rnd
 
-    subroutine sample4update_class( self, clssmp, greediness, fromto, update_frac, nsamples, inds, mask, incr_sampled, frac_best )
+    subroutine sample4update_class( self, clssmp, fromto, update_frac, nsamples, inds, mask, incr_sampled, frac_best )
         class(oris),          intent(inout) :: self
         type(class_sample),   intent(inout) :: clssmp(:) ! data structure for balanced samplign
-        integer,              intent(in)    :: greediness, fromto(2)
+        integer,              intent(in)    :: fromto(2)
         real,                 intent(in)    :: update_frac
         integer,              intent(inout) :: nsamples
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(inout) :: mask(fromto(1):fromto(2))
         logical,              intent(in)    :: incr_sampled
         real, optional,       intent(in)    :: frac_best
+        integer, parameter   :: GREEDINESS = 2
         integer, allocatable :: states(:), sampled(:)
         real,    allocatable :: rstates(:)
         integer :: i, cnt, nptcls, sample_ind, nsamples_class, states_bal(self%n)
@@ -1244,9 +1245,9 @@ contains
         deallocate(rstates)
         ! class-biased selection
         if( present(frac_best) )then
-            call self%sample_balanced(clssmp, nsamples_class, frac_best,  states_bal)
+            call self%sample_balanced(clssmp, nsamples_class, frac_best,  states_bal) ! stochastic sampling from frac_best fraction
         else
-            call self%sample_balanced(clssmp, nsamples_class, greediness, states_bal)
+            call self%sample_balanced(clssmp, nsamples_class, GREEDINESS, states_bal) ! completely greedy selection
         endif
         ! now, we deal with the partition
         nptcls = fromto(2) - fromto(1) + 1

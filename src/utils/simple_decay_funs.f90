@@ -2,22 +2,36 @@ module simple_decay_funs
 include 'simple_lib.f08'
 implicit none
 
-public :: calc_update_frac, nsampl_decay, inv_nsampl_decay, calc_nsampl_fromto, inv_cos_decay, extremal_decay2D
+public :: calc_update_frac, calc_update_frac_dyn, nsampl_decay, inv_nsampl_decay, calc_nsampl_fromto, inv_cos_decay, extremal_decay2D
 private
 
 contains
 
-    function calc_update_frac( nptcls, nsample_minmax ) result( update_frac )
-        integer, intent(in) :: nptcls
-        integer, intent(in) :: nsample_minmax(2)
+    function calc_update_frac( nptcls, nstates, nsample_minmax ) result( update_frac )
+        integer, intent(in) :: nptcls, nstates, nsample_minmax(2)
         real    :: update_frac
-        integer :: nsampl
-        nsampl       = min(nsample_minmax(2), nint(0.5 * real(nptcls)))
-        nsampl       = max(nsampl, nsample_minmax(1))
-        nsampl       = min(nptcls, max(nsampl,nsample_minmax(2)))
+        integer :: nsampl, nsample_minmax_here(2)
+        nsample_minmax_here    = nsample_minmax * nstates
+        nsample_minmax_here(1) = min(nptcls,nsample_minmax_here(1))
+        nsample_minmax_here(2) = min(nptcls,nsample_minmax_here(2))
+        nsampl       = min(nsample_minmax_here(2), nint(0.5 * real(nptcls)))
+        nsampl       = max(nsampl, nsample_minmax_here(1))
+        nsampl       = min(nptcls, max(nsampl,nsample_minmax_here(2)))
         update_frac  = real(nsampl) / real(nptcls)
         update_frac  = min(1.0, update_frac)
     end function calc_update_frac
+
+    function calc_update_frac_dyn( nptcls, nstates, nsample_minmax, it, maxits ) result( update_frac )
+        integer, intent(in) :: nptcls, nstates, nsample_minmax(2), it, maxits
+        real    :: update_frac
+        integer :: nsampl, nsample_minmax_here(2)
+        nsample_minmax_here    = nsample_minmax * nstates
+        nsample_minmax_here(1) = min(nptcls,nsample_minmax_here(1))
+        nsample_minmax_here(2) = min(nptcls,nsample_minmax_here(2))
+        nsampl      = inv_nsampl_decay(it, maxits, nptcls, nsample_minmax_here)
+        update_frac = real(nsampl) / real(nptcls)
+        update_frac = min(1.0, update_frac)
+    end function calc_update_frac_dyn
 
     function nsampl_decay( it, maxits, nptcls, nsample_minmax ) result( nsampl )
         integer, intent(in) :: it, maxits, nptcls, nsample_minmax(2)
