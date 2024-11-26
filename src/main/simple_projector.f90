@@ -44,6 +44,7 @@ type, extends(image) :: projector
     ! procedure          :: fproject_correlate
     procedure          :: fproject_polar
     procedure          :: fproject_map
+    procedure          :: scalar_map
     procedure          :: fproject_coord
     procedure          :: interp_fcomp_norm
     procedure          :: interp_fcomp_grid
@@ -240,7 +241,7 @@ contains
         type(fplan_map), allocatable, intent(inout) :: coord_map(:)
         type(fplan_map), allocatable :: all_coords(:)
         type(ori) :: e, e2
-        integer   :: i, h, k, lims(3,2), sqlp, sqarg, xy2(2), cnt, phys(3), ldim(3)
+        integer   :: i, h, k, lims(3,2), sqlp, sqarg, xy2(2), cnt, ori_phys(3), phys(3), ldim(3)
         logical   :: good_coord
         call eall%get_ori(e_ind, e)
         lims = self%loop_lims(2)
@@ -252,6 +253,15 @@ contains
             do h = lims(1,1),lims(1,2)
                 sqarg = dot_product([h,k],[h,k])
                 if( sqarg > sqlp ) cycle
+                if (h .ge. 0) then
+                    ori_phys(1) = h + 1
+                    ori_phys(2) = k + 1 + MERGE(ldim(2),0,k < 0)
+                    ori_phys(3) = 1
+                else
+                    ori_phys(1) = -h + 1
+                    ori_phys(2) = -k + 1 + MERGE(ldim(2),0,-k < 0)
+                    ori_phys(3) = 1
+                endif
                 do i = 1, eall%get_noris()
                     if( i == e_ind ) cycle
                     call eall%get_ori(i, e2)
@@ -259,16 +269,7 @@ contains
                     if( good_coord )then
                         cnt = cnt + 1
                         all_coords(cnt)%target_find = i
-                        if (h .ge. 0) then
-                            phys(1) = h + 1
-                            phys(2) = k + 1 + MERGE(ldim(2),0,k < 0)
-                            phys(3) = 1
-                        else
-                            phys(1) = -h + 1
-                            phys(2) = -k + 1 + MERGE(ldim(2),0,-k < 0)
-                            phys(3) = 1
-                        endif
-                        all_coords(cnt)%ori_phys = phys
+                        all_coords(cnt)%ori_phys    = ori_phys
                         if (xy2(1) .ge. 0) then
                             phys(1) = xy2(1) + 1
                             phys(2) = xy2(2) + 1 + MERGE(ldim(2),0,xy2(2) < 0)
@@ -287,6 +288,62 @@ contains
         if( allocated(coord_map) ) deallocate(coord_map)
         allocate(coord_map(cnt), source=all_coords(1:cnt))
     end subroutine fproject_map
+
+    subroutine scalar_map( self, e_ind, eall, all_planes, fplane )
+        class(projector), intent(inout) :: self
+        integer,          intent(in)    :: e_ind
+        class(oris),      intent(in)    :: eall
+        class(image),     intent(in)    :: all_planes(:)
+        class(image),     intent(inout) :: fplane
+        complex(kind=c_float_complex), pointer :: cmat(:,:,:)=>null()
+        type(ori) :: e, e2
+        integer   :: i, h, k, lims(3,2), sqlp, sqarg, xy2(2), ori_phys(3), phys(3), ldim(3), cnt
+        logical   :: good_coord
+        call eall%get_ori(e_ind, e)
+        lims = self%loop_lims(2)
+        sqlp = (maxval(lims(:,2)))**2
+        ldim = self%get_ldim()
+        call fplane%zero_and_flag_ft
+        call fplane%get_cmat_ptr(cmat)
+        do k = lims(2,1),lims(2,2)
+            do h = lims(1,1),lims(1,2)
+                sqarg = dot_product([h,k],[h,k])
+                if( sqarg > sqlp ) cycle
+                if (h .ge. 0) then
+                    ori_phys(1) = h + 1
+                    ori_phys(2) = k + 1 + MERGE(ldim(2),0,k < 0)
+                    ori_phys(3) = 1
+                else
+                    ori_phys(1) = -h + 1
+                    ori_phys(2) = -k + 1 + MERGE(ldim(2),0,-k < 0)
+                    ori_phys(3) = 1
+                endif
+                cnt = 0
+                do i = 1, eall%get_noris()
+                    if( i == e_ind ) cycle
+                    call eall%get_ori(i, e2)
+                    call self%fproject_coord([h,k], e, e2, xy2, good_coord)
+                    if( good_coord )then
+                        cnt = cnt + 1
+                        if (xy2(1) .ge. 0) then
+                            phys(1) = xy2(1) + 1
+                            phys(2) = xy2(2) + 1 + MERGE(ldim(2),0,xy2(2) < 0)
+                            phys(3) = 1
+                        else
+                            phys(1) = -xy2(1) + 1
+                            phys(2) = -xy2(2) + 1 + MERGE(ldim(2),0,-xy2(2) < 0)
+                            phys(3) = 1
+                        endif
+                        cmat(ori_phys(1),ori_phys(2),ori_phys(3)) = cmat(ori_phys(1),ori_phys(2),ori_phys(3)) +&
+                                                                   &all_planes(i)%get_cmat_at(phys)
+                    endif
+                enddo
+                if( cnt > 0 )then
+                    cmat(ori_phys(1),ori_phys(2),ori_phys(3)) = cmat(ori_phys(1),ori_phys(2),ori_phys(3)) / real(cnt)
+                endif
+            enddo
+        enddo
+    end subroutine scalar_map
 
     ! projecting coordinates xy1 of the plane at orientation e1 to the coordinates xy1 of the plane at e2
     subroutine fproject_coord(self, xy1, e1, e2, xy2, good_coord)

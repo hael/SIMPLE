@@ -6,7 +6,7 @@ use simple_parameters, only: parameters
 use simple_image,      only: image
 use simple_projector,  only: projector
 implicit none
-integer,          parameter   :: NPLANES = 100, ORI_IND = 15
+integer,          parameter   :: NPLANES = 50, ORI_IND = 15
 character(len=:), allocatable :: cmd
 type(fplan_map),  allocatable :: coord_map(:)
 type(parameters)              :: p
@@ -88,6 +88,10 @@ call fplane1_pad%clip(fplane1)
 call fplane2_pad%clip(fplane2)
 call fplane1%write('fplane.mrc', 1)
 call fplane2%write('fplane.mrc', 2)
+call vol_pad%scalar_map(ORI_IND, spiral, fplanes, fplane2_pad)
+call fplane2_pad%ifft
+call fplane2_pad%clip(fplane2)
+call fplane2%write('fplane.mrc', 3)
 ! testing
 A(1,:)   = [1., 2., 3.]
 A(2,:)   = [4., 5., 6.]
