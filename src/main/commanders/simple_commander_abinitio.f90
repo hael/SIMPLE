@@ -51,9 +51,8 @@ real,             parameter :: LPSYMSRCH_LB      = 12.
 integer,          parameter :: NSTAGES           = 8
 integer,          parameter :: NSTAGES_INI3D     = 4 ! # of ini3D stages used for initialization
 integer,          parameter :: PHASES(3)         = [2,6,8]
-integer,          parameter :: MAXITS(3)         = [20,17,15]
-integer,          parameter :: MAXITS_ARR(8)     = [20,20,17,17,17,17,15,30]
-integer,          parameter :: MAXITS_GLOB       = 2*20 + 4*17 + 1*15 ! the last 30 iterations are not included in this eastimate since the sampling method changes
+integer,          parameter :: MAXITS(8)         = [20,20,17,17,17,17,15,30]
+integer,          parameter :: MAXITS_GLOB       = 2*20 + 4*17 + 1*15 ! the last 30 iterations are not included in this estimate since the sampling method changes
 integer,          parameter :: NSPACE(3)         = [500,1000,2500]
 integer,          parameter :: SYMSRCH_STAGE     = 3
 integer,          parameter :: LPAUTO_STAGE      = 4
@@ -510,7 +509,7 @@ contains
             endif
         endif
         ! Frequency marching
-        maxits_dyn = sum(MAXITS_ARR(start_stage:NSTAGES - 1)) ! the last stage is omitted in this estimate since the sampling method changes
+        maxits_dyn = sum(MAXITS(start_stage:NSTAGES - 1)) ! the last stage is omitted in this estimate since the sampling method changes
         do istage = start_stage, NSTAGES
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', lpinfo(istage)%lp
@@ -873,7 +872,7 @@ contains
         select case(iphase)
             case(1)
                 inspace       = NSPACE(1)
-                imaxits       = MAXITS(1)
+                imaxits       = MAXITS(istage)
                 silence_fsc   = 'yes'
                 trs           = 0.
                 sh_first      = 'no'
@@ -884,7 +883,7 @@ contains
                 snr_noise_reg = 2.0
             case(2)
                 inspace       = NSPACE(2)
-                imaxits       = MAXITS(2)
+                imaxits       = MAXITS(istage)
                 silence_fsc   = 'yes'
                 trs           = lpinfo(istage)%trslim
                 sh_first      = 'yes'
@@ -899,7 +898,7 @@ contains
                 snr_noise_reg = 4.0
             case(3)
                 inspace       = NSPACE(3)
-                imaxits       = MAXITS(3)
+                imaxits       = MAXITS(istage)
                 if( l_cavgs )then
                 silence_fsc   = 'yes'
                 else
