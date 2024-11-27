@@ -612,57 +612,32 @@ contains
         endif
     end subroutine vis_ref
 
-    subroutine polar2cartesian_1( self, i, isref, cmat, box )
+    subroutine polar2cartesian_1( self, i, isref, cmat, box, box_in )
         class(polarft_corrcalc), intent(in)    :: self
         integer,                 intent(in)    :: i
         logical,                 intent(in)    :: isref
         complex,    allocatable, intent(inout) :: cmat(:,:)
         integer,                 intent(out)   :: box
-        integer, allocatable :: norm(:,:)
-        complex :: comp
-        integer :: k,c,irot,physh,physk
-        if( allocated(cmat) ) deallocate(cmat)
-        box = 2*self%kfromto(2)
-        c   = box/2+1
-        allocate(cmat(box/2+1,box),source=cmplx(0.0,0.0))
-        allocate(norm(box/2+1,box),source=0)
-        do irot=1,self%pftsz
-            do k=self%kfromto(1),self%kfromto(2)
-                ! Nearest-neighbour interpolation
-                physh = nint(self%polar(irot,k)) + 1
-                physk = nint(self%polar(irot+self%nrots,k)) + c
-                if( physk > box ) cycle
-                if( isref )then
-                    comp = self%pfts_refs_even(irot,k,i)
-                else
-                    comp = self%pfts_ptcls(irot,k,i)
-                endif
-                cmat(physh,physk) = cmat(physh,physk) + comp
-                norm(physh,physk) = norm(physh,physk) + 1
-            end do
-        end do
-        ! normalization
-        where(norm>0)
-            cmat = cmat / real(norm)
-        end where
-        ! irot = self%pftsz+1, eg. angle=180.
-        do k = 1,box/2-1
-            cmat(1,k+c) = conjg(cmat(1,c-k))
-        enddo
-        ! arbitrary magnitude
-        cmat(1,c) = (0.0,0.0)
+        integer,    optional,    intent(in)    :: box_in
+        if( isref )then
+            call self%polar2cartesian_2(self%pfts_refs_even(:,:,i), cmat, box, box_in)
+        else
+            call self%polar2cartesian_2(self%pfts_ptcls(:,:,i),     cmat, box, box_in)
+        endif
     end subroutine polar2cartesian_1
 
-    subroutine polar2cartesian_2( self, cmat_in, cmat, box )
+    subroutine polar2cartesian_2( self, cmat_in, cmat, box, box_in )
         class(polarft_corrcalc), intent(in)    :: self
         complex,                 intent(in)    :: cmat_in(self%pftsz,self%kfromto(1):self%kfromto(2))
         complex,    allocatable, intent(inout) :: cmat(:,:)
         integer,                 intent(out)   :: box
+        integer,    optional,    intent(in)    :: box_in
         integer, allocatable :: norm(:,:)
         complex :: comp
         integer :: k,c,irot,physh,physk
         if( allocated(cmat) ) deallocate(cmat)
         box = 2*self%kfromto(2)
+        if( present(box_in) ) box = box_in
         c   = box/2+1
         allocate(cmat(box/2+1,box),source=cmplx(0.0,0.0))
         allocate(norm(box/2+1,box),source=0)
