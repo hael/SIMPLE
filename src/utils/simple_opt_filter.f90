@@ -219,13 +219,20 @@ contains
         class(image), optional, intent(out)   :: odd_filt_out
         integer :: ldim(3), box, kfromto(2), best_ind
         real    :: smpd
+        write(logfhandle,'(A)') '>>> 3D UNIFORM FILTERING FOR LP ESTIMATION'
+        print *, 'lpstart    ', lprange(1)
+        print *, 'lpstop     ', lprange(2)
         ldim       = odd%get_ldim()
         box        = ldim(1)
         smpd       = odd%get_smpd()
         kfromto(1) = calc_fourier_index(lprange(1), box, smpd)
         kfromto(2) = calc_fourier_index(lprange(2), box, smpd)
+        print *, 'kfromto(1) ', kfromto(1)
+        print *, 'kfromto(2) ', kfromto(2)
         call estimate_lplim_1( odd, even, mskimg, kfromto, best_ind, odd_filt_out )
+        print *, 'best_ind   ', best_ind
         lpopt = calc_lowpass_lim(best_ind, box, smpd)
+        print *, 'lpopt      ', lpopt
     end subroutine estimate_lplim_2
 
     subroutine estimate_lplims2D( odd, even, mskrad_px, lprange, lpsopt, odd_filt_out )
