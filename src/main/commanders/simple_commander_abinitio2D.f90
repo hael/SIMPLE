@@ -7,8 +7,6 @@ use simple_parameters,          only: parameters
 use simple_sp_project,          only: sp_project
 use simple_commander_cluster2D
 use simple_commander_euclid
-
-! use simple_euclid_sigma2
 use simple_qsys_funs
 implicit none
 
@@ -23,7 +21,7 @@ end type abinitio2D_commander
 
 ! class constants
 real,    parameter :: SMPD_TARGET    = 2.67
-real,    parameter :: ICM_LAMBDA     = 0.5
+real,    parameter :: ICM_LAMBDA     = 1.0
 integer, parameter :: NSTAGES        = 6
 integer, parameter :: ITS_INCR       = 5
 integer, parameter :: PHASES(2)      = [4, 6]
@@ -62,6 +60,7 @@ contains
         if( .not. cline%defined('lambda')    ) call cline%set('lambda',    ICM_LAMBDA)
         if( .not. cline%defined('extr_lim')  ) call cline%set('extr_lim',  EXTR_LIM_LOCAL)
         if( .not. cline%defined('rank_cavgs')) call cline%set('rank_cavgs','yes')
+        if( .not. cline%defined('sigma_est') ) call cline%set('sigma_est', 'group')
         if( cline%defined('nparts') )then
             l_shmem = cline%get_iarg('nparts') == 1
         else
@@ -193,7 +192,6 @@ contains
             ! cluster2D
             call cline_cluster2D%set('prg',       'cluster2D')
             call cline_cluster2D%set('wiener',    'full')
-            call cline_cluster2D%set('sigma_est', 'group')
             call cline_cluster2D%set('ptclw',     'no')
             call cline_cluster2D%set('ml_reg',    'no')
             call cline_cluster2D%set('kweight',   'default')
@@ -291,22 +289,16 @@ contains
                 end select
             case(2)
                 ! phase constants
-                imaxits          = iter+ITS_INCR-1
-                sh_first         = trim(params%sh_first)
-                trs              = lpinfo(istage)%trslim
-                center           = trim(params%center)
-                cc_iters         = 0
-                objfun           = 'euclid'
-                extr_iter        = params%extr_lim+1
-                refs             = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
-                icm              = 'no'
-                ! phase variables
-                select case(istage)
-                case(5)
-                    minits       = iter + 1
-                case(6)
-                    minits       = iter
-                end select
+                imaxits   = iter+ITS_INCR-1
+                sh_first  = trim(params%sh_first)
+                trs       = lpinfo(istage)%trslim
+                center    = trim(params%center)
+                cc_iters  = 0
+                objfun    = 'euclid'
+                extr_iter = params%extr_lim+1
+                refs      = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
+                icm       = 'no'
+                minits    = iter
             end select
             ! command line update
             call cline_cluster2D%set('startit',   iter)
