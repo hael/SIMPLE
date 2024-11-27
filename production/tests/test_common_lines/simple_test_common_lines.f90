@@ -1,21 +1,25 @@
 program simple_test_common_lines
 include 'simple_lib.f08'
-use simple_cmdline,    only: cmdline
-use simple_builder,    only: builder
-use simple_parameters, only: parameters
-use simple_image,      only: image
-use simple_projector,  only: projector
+use simple_cmdline,          only: cmdline
+use simple_parameters,       only: parameters
+use simple_image,            only: image
+use simple_projector,        only: projector
+use simple_polarft_corrcalc, only: polarft_corrcalc
+use simple_polarizer,        only: polarizer
 implicit none
 integer,          parameter   :: NPLANES = 50, ORI_IND = 15
 character(len=:), allocatable :: cmd
 type(fplan_map),  allocatable :: coord_map(:)
+complex,          allocatable :: cmat(:,:)
 type(parameters)              :: p
+type(polarft_corrcalc)        :: pftcc
+type(polarizer)               :: img_polarizer
 type(cmdline)                 :: cline
-type(image)                   :: vol, noise, fplane1, fplane2, fplane1_pad, fplane2_pad, fplanes(NPLANES)
+type(image)                   :: vol, noise, fplane1, fplane2, fplane1_pad, fplane2_pad, fplanes(NPLANES), fplane1_polar
 type(oris)                    :: spiral
 type(ori)                     :: o1, o2
 type(projector)               :: vol_pad
-integer                       :: ifoo, rc, errflg, i, ori_phys(3), target_phys(3), f_ind
+integer                       :: ifoo, rc, errflg, i, ori_phys(3), target_phys(3), f_ind, box
 real                          :: res_fsc05, res_fsc0143, ave, sdev, maxv, minv, med
 logical                       :: mrc_exists
 real                          :: vec(1,3), A(3,3), vec_A(1,3), A_inv(3,3), inv_vec_A(1,3)
@@ -38,6 +42,7 @@ if( command_argument_count() < 4 )then
     call cline%set('nthr'   , 16.)
     call cline%set('vol1'   , '1JYX.mrc')
     call cline%set('mskdiam', 180.)
+    call cline%set('lp'   ,   3.)
 else
     call cline%parse_oldschool
 endif
@@ -45,6 +50,7 @@ call cline%checkvar('smpd',    1)
 call cline%checkvar('nthr',    2)
 call cline%checkvar('vol1',    3)
 call cline%checkvar('mskdiam', 4)
+call cline%checkvar('lp',      5)
 call cline%check
 call p%new(cline)
 call find_ldim_nptcls(p%vols(1), p%ldim, ifoo)
@@ -92,6 +98,18 @@ call vol_pad%scalar_map(ORI_IND, spiral, fplanes, fplane2_pad)
 call fplane2_pad%ifft
 call fplane2_pad%clip(fplane2)
 call fplane2%write('fplane.mrc', 3)
+! polar stuffs
+call img_polarizer%new([p%box,p%box,1],p%smpd, wthreads=.false.)
+call pftcc%new(NPLANES, [1,NPLANES], p%kfromto)
+call img_polarizer%init_polarizer(pftcc, p%alpha)
+call fplane1%fft
+call img_polarizer%polarize(pftcc, fplane1, ORI_IND, isptcl=.false., iseven=.true.)
+call pftcc%polar2cartesian(ORI_IND, .true., cmat, box, box_in=p%box)
+call fplane1_polar%new([box,box,1],1.0)
+call fplane1_polar%set_cmat(cmat)
+call fplane1_polar%shift_phorig()
+call fplane1_polar%ifft
+call fplane1_polar%write('fplane_polar.mrc', 1)
 ! testing
 A(1,:)   = [1., 2., 3.]
 A(2,:)   = [4., 5., 6.]
