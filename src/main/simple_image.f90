@@ -4361,7 +4361,7 @@ contains
             end do
             if( l_verbose )then
                 eucl = self%euclid_norm(self_prev)
-                write(logfhandle,'(A,I2,A,F8.4)') 'ICM Iteration ', i, ', Euclidean distance ', eucl
+                ! write(logfhandle,'(A,I2,A,F8.4)') 'ICM Iteration ', i, ', Euclidean distance ', eucl
             endif
             if( i < MAXITS ) self_prev%rmat = self%rmat
         end do
@@ -4435,7 +4435,7 @@ contains
             end do
             if( l_verbose )then
                 eucl = (even%euclid_norm(even_prev) + odd%euclid_norm(odd_prev)) / 2.
-                write(logfhandle,'(A,I2,A,F8.4)') 'ICM Iteration ', i, ', Euclidean distance ', eucl
+                ! write(logfhandle,'(A,I2,A,F8.4)') 'ICM Iteration ', i, ', Euclidean distance ', eucl
             endif
             if( i < MAXITS)then
                 even_prev%rmat = even%rmat
@@ -4501,7 +4501,7 @@ contains
             end do
             !$omp end parallel do
             eucl = self%euclid_norm(self_prev)
-            write(logfhandle,'(A,I2,A,F8.4)') 'ICM Iteration ', i, ', Euclidean distance ', eucl 
+            ! write(logfhandle,'(A,I2,A,F8.4)') 'ICM Iteration ', i, ', Euclidean distance ', eucl 
             call self_prev%copy(self)
         end do
         call self%quantize_bwd(NQUANTA, transl_tab)
@@ -4577,7 +4577,7 @@ contains
             end do
             !$omp end parallel do
             eucl = (even%euclid_norm(even_prev) + odd%euclid_norm(odd_prev)) / 2.
-            write(logfhandle,'(A,I2,A,F8.4)') 'ICM Iteration ', i, ', Euclidean distance ', eucl
+            ! write(logfhandle,'(A,I2,A,F8.4)') 'ICM Iteration ', i, ', Euclidean distance ', eucl
             call even_prev%copy(even)
             call odd_prev%copy(odd)
         end do
