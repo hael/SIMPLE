@@ -10,6 +10,6 @@ real,    parameter :: SMPD=1.3, LPSTART_DEFAULT=20., LPSTART_LB=10., LPFINAL=6.
 real               :: frc(FILTSZ) = 1.
 type(lp_crop_inf)  :: lpinfo(NSTAGES)
 
-call lpstages(BOX, NSTAGES, frc, SMPD, LPSTART_LB, LPSTART_DEFAULT, LPFINAL, lpinfo, verbose=.true.)
+call lpstages(BOX, NSTAGES, frc, SMPD, LPSTART_LB, LPSTART_DEFAULT, LPFINAL, lpinfo, l_cavgs=.false.)
 
 end program simple_test_lpstages

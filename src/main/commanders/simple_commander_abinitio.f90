@@ -125,7 +125,7 @@ contains
         call spproj%update_projinfo(cline)
         call spproj%write_segment_inside('projinfo', params%projfile)
         ! set low-pass limits and downscaling info from FRCs
-        call set_lplims_from_frcs(spproj)
+        call set_lplims_from_frcs(spproj, l_cavgs=.true.)
         ! whether to use classes generated from 2D or 3D
         select case(trim(params%imgkind))
             case('cavg')
@@ -455,7 +455,7 @@ contains
             call deallocate_class_samples(clssmp)
         endif
         ! set low-pass limits and downscaling info from FRCs
-        call set_lplims_from_frcs(spproj)
+        call set_lplims_from_frcs(spproj, l_cavgs=.false.)
         ! starting volume logics
         if( .not. cline%defined('vol1') )then
             if( .not. l_ini3D )then
@@ -718,8 +718,9 @@ contains
         endif
     end subroutine set_symmetry_class_vars
 
-    subroutine set_lplims_from_frcs( spproj )
+    subroutine set_lplims_from_frcs( spproj, l_cavgs )
         class(sp_project), intent(inout) :: spproj
+        logical,           intent(in)    :: l_cavgs
         character(len=:),  allocatable   :: frcs_fname, stk, imgkind, stkpath
         real,              allocatable   :: frcs_avg(:)
         integer,           allocatable   :: states(:)
@@ -743,7 +744,8 @@ contains
         allocate(lpinfo(NSTAGES))
         lpfinal = max(LPSTOP_BOUNDS(1),calc_lplim_final_stage(3))
         lpfinal = min(LPSTOP_BOUNDS(2),lpfinal)
-        call lpstages(params_glob%box, NSTAGES, frcs_avg, params_glob%smpd, LPSTART_BOUNDS(1), LPSTART_BOUNDS(2), lpfinal, lpinfo, verbose=.true.)
+        call lpstages(params_glob%box, NSTAGES, frcs_avg, params_glob%smpd,&
+        &LPSTART_BOUNDS(1), LPSTART_BOUNDS(2), lpfinal, lpinfo, l_cavgs )
         call clsfrcs%kill
 
         contains
