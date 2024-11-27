@@ -899,8 +899,8 @@ contains
         allocate(lpinfo(params%nstages))
         lpfinal = max(LPSTOP_BOUNDS(1),calc_lplim_final_stage(3))
         lpfinal = min(LPSTOP_BOUNDS(2),lpfinal)
-        ! call lpstages(params%box, params%nstages, frcs_avg, params%smpd, LPSTART_LB,        LPSTART_DEFAULT,   lpfinal, lpinfo, verbose=.true. )
-        call lpstages(params%box, params%nstages, frcs_avg, params%smpd, LPSTART_BOUNDS(1), LPSTART_BOUNDS(2), lpfinal, lpinfo, verbose=.true. )
+        call lpstages(params%box, params%nstages, frcs_avg, params%smpd,&
+        &LPSTART_BOUNDS(1), LPSTART_BOUNDS(2), lpfinal, lpinfo, l_cavgs=.false.)
         call simple_end('**** SIMPLE_ESTIMATE_LPSTAGES NORMAL STOP ****')
 
         contains

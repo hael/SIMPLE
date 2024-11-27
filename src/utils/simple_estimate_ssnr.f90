@@ -195,24 +195,30 @@ contains
         endif
     end subroutine get_resolution
 
-    subroutine lpstages( box, nstages, frcs_avg, smpd, lpstart_lb, lpstart_default, lpfinal, lpinfo, verbose )
+    subroutine lpstages( box, nstages, frcs_avg, smpd, lpstart_lb, lpstart_default, lpfinal, lpinfo, l_cavgs )
         use simple_magic_boxes
         integer,           intent(in)  :: box, nstages
         real,              intent(in)  :: frcs_avg(:), smpd, lpstart_lb, lpstart_default, lpfinal
         type(lp_crop_inf), intent(out) :: lpinfo(nstages)
-        logical, optional, intent(in)  :: verbose
-        real, parameter :: FRCLIMS_DEFAULT(2) = [0.65,0.03], LP2SMPD_TARGET = 1./3., SMPD_TARGET_MIN=2.0
+        logical,           intent(in)  :: l_cavgs
+        real,    parameter :: FRCLIMS_PTCLS(2) = [0.65,0.03]
+        real,    parameter :: FRCLIMS_CAVGS(2) = [0.80,0.05]
+        real,    parameter :: LP2SMPD_TARGET   = 1./3.
+        real,    parameter :: SMPD_TARGET_MIN  = 2.0
+        logical, parameter :: L_VERBOSE        = .true. 
         integer :: findlims(2), istage, box_trial
         real    :: frclims(2), frc_stepsz, lp_max, lp_min, lp_stepsz, rbox_stepsz
-        logical :: l_verbose
-        l_verbose = .false.
-        if( present(verbose) ) l_verbose = verbose
         ! (1) calculate FRC values at the inputted boundaries
         findlims(1) = calc_fourier_index(lpstart_lb, box, smpd)
         findlims(2) = calc_fourier_index(lpfinal,    box, smpd)
-        ! -- letting the shape of the FRC influence the limit choice, if needed
-        frclims(1)  = max(frcs_avg(findlims(1)),FRCLIMS_DEFAULT(1)) ! always moving the limit towards lower resolution
-        frclims(2)  = max(frcs_avg(findlims(2)),FRCLIMS_DEFAULT(2))
+        ! (2) letting the shape of the FRC influence the limit choice, if needed
+        if( l_cavgs )then
+            frclims(1)  = max(frcs_avg(findlims(1)),FRCLIMS_CAVGS(1)) ! always moving the limit towards lower resolution
+            frclims(2)  = max(frcs_avg(findlims(2)),FRCLIMS_CAVGS(2))
+        else
+            frclims(1)  = max(frcs_avg(findlims(1)),FRCLIMS_PTCLS(1))
+            frclims(2)  = max(frcs_avg(findlims(2)),FRCLIMS_PTCLS(2))
+        endif
         ! (3) calculate critical FRC limits and corresponding low-pass limits for the nstages
         call calc_lpinfo(1, frclims(1))
         frc_stepsz = (frclims(1) - frclims(2)) / real(nstages - 1)
@@ -221,7 +227,7 @@ contains
         end do
         lpinfo(nstages)%lp      = lpfinal
         lpinfo(nstages)%l_lpset = .true.
-        if( l_verbose )then
+        if( L_VERBOSE )then
             print *, '########## 1st pass'
             call print_lpinfo
         endif
@@ -237,7 +243,7 @@ contains
                 lpinfo(istage)%lp      = lpinfo(istage-1)%lp - (lpinfo(istage-1)%lp - lpfinal) / 2.
                 lpinfo(istage)%l_lpset = .true.
             end do
-            if( l_verbose )then
+            if( L_VERBOSE )then
                 print *, '########## 2nd pass'
                 call print_lpinfo
             endif
@@ -254,7 +260,7 @@ contains
             lpinfo(istage)%smpd_crop = smpd / lpinfo(istage)%scale
             lpinfo(istage)%trslim    = min(8.,max(2.0, AHELIX_WIDTH / lpinfo(istage)%smpd_crop))
         end do
-        if( l_verbose )then
+        if( L_VERBOSE )then
             print *, '########## scale info'
             call print_scaleinfo
         endif
