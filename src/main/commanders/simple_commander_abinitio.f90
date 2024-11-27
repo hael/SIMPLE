@@ -52,15 +52,17 @@ integer,          parameter :: NSTAGES           = 8
 integer,          parameter :: NSTAGES_INI3D     = 4 ! # of ini3D stages used for initialization
 integer,          parameter :: PHASES(3)         = [2,6,8]
 integer,          parameter :: MAXITS(3)         = [20,17,15]
-integer,          parameter :: MAXITS_ARR(8)     = [20,20,17,17,17,17,15,15]
-integer,          parameter :: MAXITS_GLOB       = 2*20 + 4*17 + 2*15
+integer,          parameter :: MAXITS_ARR(8)     = [20,20,17,17,17,17,15,30]
+integer,          parameter :: MAXITS_GLOB       = 2*20 + 4*17 + 1*15 ! the last 30 iterations are not included in this eastimate since the sampling method changes
 integer,          parameter :: NSPACE(3)         = [500,1000,2500]
 integer,          parameter :: SYMSRCH_STAGE     = 3
 integer,          parameter :: LPAUTO_STAGE      = 4
 integer,          parameter :: PROBREFINE_STAGE  = 5
-integer,          parameter :: ICM_STAGE         = PROBREFINE_STAGE  ! we switch from ML regularization when global prob srch is switched on
-integer,          parameter :: STOCH_SAMPL_STAGE = 6
-integer,          parameter :: TRAILREC_STAGE    = STOCH_SAMPL_STAGE ! we start trailing when stochastic sampling starts
+integer,          parameter :: ICM_STAGE         = PROBREFINE_STAGE  ! we switch from ML regularization when prob is switched on
+integer,          parameter :: STOCH_SAMPL_STAGE = PROBREFINE_STAGE  ! we switch from greedy to stochastic blanced class sampling when prob is switched on
+integer,          parameter :: TRAILREC_STAGE    = NSTAGES  - 1      ! we start trailing one stage before the last
+integer,          parameter :: NSAMPLE_MAX_LAST  = 25000             ! maximum # particles to sample per iteration in the last stage 
+
 ! class variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
 logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false., l_update_frac=.false., l_update_frac_dyn=.false.
@@ -350,6 +352,7 @@ contains
         if( .not. cline%defined('pgrp_start')  ) call cline%set('pgrp_start',     'c1')
         if( .not. cline%defined('ptclw')       ) call cline%set('ptclw',          'no')
         if( .not. cline%defined('projrec')     ) call cline%set('projrec',       'yes')
+        if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'yes')
         if( cline%defined('nstates') )then
             call cline%set('projrec', 'no') ! not yet supported for multi-state
         endif
@@ -407,6 +410,7 @@ contains
         if( l_multistates .and. trim(params%het_mode).eq.'independent' )then
             l_lpauto        = .false.
             params%l_lpauto = l_lpauto
+            params%lp_auto  = 'no'
         endif
         ! prepare class command lines
         call prep_class_command_lines(cline, params%projfile)
@@ -506,7 +510,7 @@ contains
             endif
         endif
         ! Frequency marching
-        maxits_dyn = sum(MAXITS_ARR(start_stage:NSTAGES))
+        maxits_dyn = sum(MAXITS_ARR(start_stage:NSTAGES - 1)) ! the last stage is omitted in this estimate since the sampling method changes
         do istage = start_stage, NSTAGES
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', lpinfo(istage)%lp
@@ -815,7 +819,15 @@ contains
         endif
         iter = iter + 1
         ! dynamic update frac
-        update_frac_dyn = calc_update_frac_dyn(nptcls_eff, nstates_glob, nsample_minmax, iter, maxits_dyn)
+        if( istage == NSTAGES )then
+            ! we change the sampling method for the last stage (accelerated refinement)
+            update_frac_dyn = 0.1 ! 10% of the particles updated each iteration
+            if( nint(real(nptcls_eff) * update_frac_dyn ) > NSAMPLE_MAX_LAST )then
+                update_frac_dyn = real(NSAMPLE_MAX_LAST) / real(nptcls_eff)
+            endif
+        else
+            update_frac_dyn = calc_update_frac_dyn(nptcls_eff, nstates_glob, nsample_minmax, iter, maxits_dyn)
+        endif
         ! symmetry
         pgrp = trim(params_glob%pgrp)
         if( l_srch4symaxis )then
@@ -844,7 +856,7 @@ contains
         lp_auto = 'no'
         if( istage >= LPAUTO_STAGE .and. l_lpauto )then
             lp_auto = trim(params_glob%lp_auto)
-            lpstart = lpinfo(istage - 2)%lp
+            lpstart = lpinfo(istage - 1)%lp
             lpstop  = lpinfo(NSTAGES)%lp
         endif
         ! phase logics
@@ -880,7 +892,7 @@ contains
                 if( istage >= STOCH_SAMPL_STAGE )then
                 frac_best     = 0.5 ! means sampling is done from top-ranking 50% particles in class
                 else
-                frac_best     = 1.0 ! means it does not control sampling
+                frac_best     = 1.0 ! means it does not control sampling, greedy selection
                 endif
                 overlap       = 0.95
                 fracsrch      = 95.
@@ -905,11 +917,11 @@ contains
         if( .not. l_ml_reg  ) ml_reg = 'no'
         if( .not. l_icm_reg ) icm    = 'no'
         ! turn off ML-regularization when icm is on
-        if( trim(icm).eq.'yes' ) ml_reg = 'no' 
+        if( trim(icm).eq.'yes' ) ml_reg = 'no'
         ! command line update
         call cline_refine3D%set('prg',                     'refine3D')
         ! class global control parameters
-        if( l_update_frac_dyn )then
+        if( l_update_frac_dyn .or. istage == NSTAGES )then
         call cline_refine3D%set('update_frac',        update_frac_dyn)
         else
         call cline_refine3D%set('update_frac',            update_frac)
