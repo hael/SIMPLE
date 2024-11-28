@@ -405,12 +405,6 @@ contains
             params%lplim_crit = 0.5
             call cline%set('lplim_crit', params%lplim_crit)
         endif
-        ! override l_lpauto when l_multistates=.true. & het_mode='independent'
-        if( l_multistates .and. trim(params%het_mode).eq.'independent' )then
-            l_lpauto        = .false.
-            params%l_lpauto = l_lpauto
-            params%lp_auto  = 'no'
-        endif
         ! prepare class command lines
         call prep_class_command_lines(cline, params%projfile)
         ! set symmetry class variables
