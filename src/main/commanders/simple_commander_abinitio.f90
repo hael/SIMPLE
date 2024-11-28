@@ -856,7 +856,11 @@ contains
         if( istage >= LPAUTO_STAGE .and. l_lpauto )then
             lp_auto = trim(params_glob%lp_auto)
             lpstart = lpinfo(istage - 1)%lp
-            lpstop  = lpinfo(min(NSTAGES,istage + 1))%lp
+            if( istage == NSTAGES )then
+                lpstop = lpinfo(istage)%smpd_crop * 2. ! Nyqvist limit
+            else
+                lpstop = lpinfo(istage + 1)%lp
+            endif
         endif
         ! phase logics
         if(      istage <= PHASES(1) )then
