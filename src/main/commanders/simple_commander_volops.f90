@@ -356,18 +356,11 @@ contains
         class(volanalyze_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(parameters) :: params
-
-        ! smpd
-        ! hp
-        ! lp
-        ! mskdiam
-        ! filetab
-
-        ! parse command-line
+        if( .not. cline%defined('mkdir')    ) call cline%set('mkdir',    'yes')
+        if( .not. cline%defined('gridding') ) call cline%set('gridding', 'yes')
         call params%new(cline)
-
         call init_volanalyzer(params%filetab)
-        
+        call rank_dock_compare_volumes
     end subroutine exec_volanalyze
 
     !> volume calculations and operations - incl Guinier, snr, mirror or b-factor
