@@ -1894,7 +1894,6 @@ contains
                             selected_moldiam = maxval(entries(4,:))
                         endif
                         allocate(mask(nl),source=.false.)
-                        !Cyril check
                         if(params%box == 0) then
                             mask = abs(entries(4,:)-selected_moldiam) < 0.001
                         else

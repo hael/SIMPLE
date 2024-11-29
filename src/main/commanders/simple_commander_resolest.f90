@@ -20,7 +20,7 @@ public :: icm3D_commander
 public :: icm2D_commander
 public :: denoise_cavgs_commander
 public :: cavg_filter2D_commander
-public :: prune_cavgs_commander
+public :: score_ptcls_commander
 public :: estimate_lpstages_commander
 private
 #include "simple_local_flags.inc"
@@ -65,10 +65,10 @@ type, extends(commander_base) :: cavg_filter2D_commander
     procedure :: execute      => exec_cavg_filter2D
 end type cavg_filter2D_commander
 
-type, extends(commander_base) :: prune_cavgs_commander
+type, extends(commander_base) :: score_ptcls_commander
   contains
-    procedure :: execute      => exec_prune_cavgs
-end type prune_cavgs_commander
+    procedure :: execute      => exec_score_ptcls
+end type score_ptcls_commander
 
 type, extends(commander_base) :: estimate_lpstages_commander
   contains
@@ -670,13 +670,14 @@ contains
         call simple_end('**** SIMPLE_CAVG_FILTER2D NORMAL STOP ****')
     end subroutine exec_cavg_filter2D
 
-    subroutine exec_prune_cavgs( self, cline )
-        use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimgbatch, prepimg4align
+    subroutine exec_score_ptcls( self, cline )
+        use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimgbatch, prepimg4align, killimgbatch
         use simple_polarft_corrcalc,    only: polarft_corrcalc
         use simple_pftcc_shsrch_grad,   only: pftcc_shsrch_grad
+        use simple_class_frcs,          only: class_frcs
         use simple_euclid_sigma2
         use simple_commander_euclid
-        class(prune_cavgs_commander), intent(inout) :: self
+        class(score_ptcls_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(pftcc_shsrch_grad), allocatable :: grad_shsrch_objs(:)
         type(image),             allocatable :: eimgs(:), oimgs(:), cls_even(:), cls_odd(:)
@@ -686,12 +687,14 @@ contains
         type(parameters)       :: params
         type(cmdline)          :: cline_calc_pspec_distr
         type(euclid_sigma2)    :: eucl_sigma
-        real(sp),  allocatable :: scores(:,:), frc(:), filt(:), res(:), corrs(:)
-        integer,   allocatable :: pinds(:), batches(:,:)
+        type(class_frcs)       :: frcs
+        real(sp),  allocatable :: scores(:,:), frc(:), filt(:), corrs(:)
+        integer,   allocatable :: pinds(:), batches(:,:), cls(:)
         logical,   allocatable :: ptcl_mask(:), cls_mask(:)
-        real     :: cxy(3), lims(2,2), lims_init(2,2), minmax(2), msk
-        integer  :: nptcls, iptcl, icls, batch_start, batch_end, filtsz, irot, inpl_ind
+        real     :: cxy(3), lims(2,2), lims_init(2,2), minmax(2), msk, best_corr,best_xy(2)
+        integer  :: nptcls, iptcl, icls, batch_start, batch_end, filtsz, irot, inpl_ind,best_rot
         integer  :: ibatch, batchsz, ithr, i, j, nbatches, batchsz_max, funit, stat
+        integer  :: best_class
         logical  :: l_ctf
         call cline%set('oritype',  'ptcl2D')
         call cline%set('mkdir',    'yes')
@@ -699,9 +702,11 @@ contains
         call cline%set('part',     1)
         call cline%set('gridding', 'yes')
         call cline%set('ctf',      'yes')
-        if( .not.cline%defined('trs') ) call cline%set('trs',     MAXSHIFT)
+        if( .not.cline%defined('trs') ) call cline%set('trs', MAXSHIFT)
+        ! trs should be 0.1*box?
         call cline%delete('nparts')
         call build%init_params_and_build_general_tbox(cline, params)
+        call build%spproj%update_projinfo(cline)
         ! some init
         params%which_iter = 1
         call build%spproj%os_ptcl2D%set_all2single('w', 1.0)
@@ -712,25 +717,18 @@ contains
         ! Number of classes
         call find_ldim_nptcls(params%stk, params%ldim, params%ncls)
         params%ldim(3) = 1
-        ! Resolution limits
-        params%kfromto(1) = max(2,calc_fourier_index(params%hp, params%box, params%smpd))
-        params%kfromto(2) = min(fdim(params%box)-1, calc_fourier_index(params%lp, params%box, params%smpd))
-        ! PFTCC
-        batchsz_max = min(params%nptcls, params%nthr*BATCHTHRSZ)
+        call frcs%new(params%ncls, params%box, params%smpd, nstates=1)
+        ! Batch dimensions
+        batchsz_max = min(params%nptcls, 2*params%nthr*BATCHTHRSZ)
         nbatches    = ceiling(real(params%nptcls)/real(batchsz_max))
         batches     = split_nobjs_even(params%nptcls, nbatches)
         batchsz_max = maxval(batches(:,2)-batches(:,1)+1)
         call prepimgbatch(batchsz_max)
-        call pftcc%new(params%ncls, [1,batchsz_max], params%kfromto)
-        call build%img_crop_polarizer%init_polarizer(pftcc, params%alpha)
         ! Noise sigma2
         cline_calc_pspec_distr  = cline
         call cline_calc_pspec_distr%set('prg',   'calc_pspec' )
         call cline_calc_pspec_distr%set('mkdir', 'no')
         call xcalc_pspec_distr%execute_safe( cline_calc_pspec_distr )
-        call eucl_sigma%new(SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat', params%box)
-        call eucl_sigma%read_part(  build%spproj_field, ptcl_mask)
-        call eucl_sigma%read_groups(build%spproj_field, ptcl_mask)
         ! Read classes
         allocate(cls_odd(params%ncls), cls_even(params%ncls), cls_mask(params%nptcls),&
         &eimgs(params%nthr),oimgs(params%nthr))
@@ -761,6 +759,7 @@ contains
                 call eimgs(ithr)%fft
                 call oimgs(ithr)%fft
                 call eimgs(ithr)%fsc(oimgs(ithr), frc)
+                call frcs%set_frc(icls, frc, 1)
                 where( frc > 0. )
                     filt = 2. * frc / (frc + 1.)   ! gold standard
                     ! filt = frc                     ! e/o merged
@@ -776,6 +775,27 @@ contains
                 call cls_odd(icls)%ifft
                 call cls_even(icls)%mask(params%msk, 'soft', backgr=0.)
                 call cls_odd(icls)%mask( params%msk, 'soft', backgr=0.)
+            endif
+        enddo
+        !$omp end parallel do
+        ! Resolution limits
+        if( .not. cline%defined('lp') )then
+            params%lp = frcs%estimate_lp_for_align(state=1, crit0143=.false.)
+        endif
+        call frcs%write(FRCS_FILE)
+        params%kfromto(1) = max(2,calc_fourier_index(params%hp, params%box, params%smpd))
+        params%kfromto(2) = min(fdim(params%box)-1, calc_fourier_index(params%lp, params%box, params%smpd))
+        write(logfhandle,'(A,F6.1)')'>>> RESOLUTION LIMIT(ANGS): ', params%lp
+        ! PFTCC
+        call pftcc%new(params%ncls, [1,batchsz_max], params%kfromto)
+        call build%img_crop_polarizer%init_polarizer(pftcc, params%alpha)
+        call eucl_sigma%new(SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat', params%box)
+        call eucl_sigma%read_part(  build%spproj_field, ptcl_mask)
+        call eucl_sigma%read_groups(build%spproj_field, ptcl_mask)
+        !$omp parallel do schedule(static) default(shared) private(icls,ithr) proc_bind(close)
+        do icls = 1, params%ncls
+            ithr = omp_get_thread_num() + 1
+            if( cls_mask(icls) )then
                 call build%img_crop_polarizer%div_by_instrfun(cls_even(icls))
                 call build%img_crop_polarizer%div_by_instrfun(cls_odd(icls))
                 call cls_even(icls)%fft
@@ -808,15 +828,15 @@ contains
         allocate(grad_shsrch_objs(params%nthr))
         do ithr = 1, params%nthr
             call grad_shsrch_objs(ithr)%new(lims, lims_init=lims_init,&
-                &shbarrier=params%shbarrier, maxits=60, opt_angle=.true.)
+                &shbarrier=params%shbarrier, maxits=60, opt_angle=.true., coarse_init=.true.)
         enddo
         ! Particles loop
         do ibatch=1,nbatches
-            call progress(ibatch, nbatches)
+            call progress_gfortran(ibatch, nbatches)
             batch_start = batches(ibatch,1)
             batch_end   = batches(ibatch,2)
             batchsz     = batch_end - batch_start + 1
-            ! Fills pftcc
+            ! Refills pftcc
             call discrete_read_imgbatch(batchsz, pinds(batch_start:batch_end), [1,batchsz])
             call pftcc%reallocate_ptcls(batchsz, pinds(batch_start:batch_end))
             !$omp parallel do private(j,i,iptcl,ithr) default(shared) proc_bind(close)
@@ -835,12 +855,17 @@ contains
             if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, params%oritype)
             call pftcc%memoize_ptcls
             ! Scoring
-            !$omp parallel do private(j,i,iptcl,icls,ithr,cxy,irot,inpl_ind,corrs) default(shared) proc_bind(close)
+            !$omp parallel do private(j,i,iptcl,icls,ithr,cxy,irot,inpl_ind,corrs,best_class,best_corr,best_xy,best_rot)&
+            !$omp schedule(dynamic) proc_bind(close) default(shared)
             do j = batch_start,batch_end
                 ithr  = omp_get_thread_num()+1
                 i     = j - batch_start +  1
                 iptcl = pinds(j)
                 if( .not.ptcl_mask(iptcl) ) cycle
+                best_corr  = -1.
+                best_class = 0
+                best_xy    = 0.
+                best_rot   = 0
                 do icls = 1,params%ncls
                     if( .not. cls_mask(icls) ) cycle
                     call pftcc%gencorrs(icls, iptcl, corrs)
@@ -848,28 +873,49 @@ contains
                     inpl_ind = irot
                     call grad_shsrch_objs(ithr)%set_indices(icls, iptcl)
                     cxy = grad_shsrch_objs(ithr)%minimize(irot=inpl_ind)
-                    if( inpl_ind == 0 ) cxy = [real(pftcc%gencorr_for_rot_8(icls, iptcl, irot)), 0.,0.]
+                    if( inpl_ind == 0 )then
+                        inpl_ind = irot
+                        cxy      = [real(pftcc%gencorr_for_rot_8(icls, iptcl, irot)), 0.,0.]
+                    endif
                     scores(icls,j) = cxy(1)
+                    if( cxy(1) > best_corr )then
+                        best_corr  = cxy(1)
+                        best_class = icls
+                        best_xy    = cxy(2:3)
+                        best_rot   = inpl_ind
+                    endif
                 enddo
+                call build%spproj_field%e3set(iptcl, 360.-pftcc%get_rot(best_rot))
+                call build%spproj_field%set_shift(iptcl,    best_xy)
+                call build%spproj_field%set(iptcl, 'inpl',  best_rot)
+                call build%spproj_field%set(iptcl, 'class', best_class)
+                call build%spproj_field%set(iptcl, 'corr',  best_corr)
             enddo
             !$omp end parallel do
         enddo
+        call killimgbatch
         call pftcc%kill
+        call build%spproj%write(params%projfile)
         ! Write array
         call fopen(funit, 'scores.mat', form='UNFORMATTED', iostat=stat)
         write(funit) [params%ncls,nptcls]
         write(funit) pinds
+        if( l_ctf) write(funit) build%spproj_field%get_all('dfx')
+        cls = nint(build%spproj_field%get_all('class'))
+        write(funit) cls
         write(funit) scores
         call fclose(funit)
         ! from scipy.io import FortranFile
         ! import numpy as np
-        ! f     = FortranFile('test.unf', 'r')
+        ! f     = FortranFile('scores.mat', 'r')
         ! dims  = f.read_reals(dtype=np.int32)
         ! pinds = f.read_reals(dtype=np.int32)
+        ! dfx   = f.read_reals(dtype=np.float32)
+        ! pcls  = f.read_reals(dtype=np.int32)
         ! A     = f.read_reals(dtype=np.float32).reshape(dims, order='F')
         ! f.close()
-        call simple_end('**** SIMPLE_PRUNE_CAVGS NORMAL STOP ****')
-    end subroutine exec_prune_cavgs
+        call simple_end('**** SIMPLE_score_ptcls NORMAL STOP ****')
+    end subroutine exec_score_ptcls
 
     subroutine exec_estimate_lpstages( self, cline )
         class(estimate_lpstages_commander), intent(inout) :: self

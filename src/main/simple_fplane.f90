@@ -43,6 +43,7 @@ type :: fplane
     procedure :: gen_planes
     procedure :: gen_planes_pad
     ! MODIFIERS
+    procedure :: zero
     procedure :: neg
     ! DESTRUCTOR
     procedure :: kill
@@ -92,8 +93,7 @@ contains
             allocate(self%cmplx_plane(self%frlims_crop(1,1):self%frlims_crop(1,2),self%frlims_crop(2,1):self%frlims_crop(2,2)),&
             &self%ctfsq_plane(self%frlims_crop(1,1):self%frlims_crop(1,2),self%frlims_crop(2,1):self%frlims_crop(2,2)))
         endif
-        self%cmplx_plane  = cmplx(0.,0.)
-        self%ctfsq_plane  = 0.
+        call self%zero
         if( self%genplane )then
             ! the object will be used to prep image for reconstruction
             ! otherwise the following allocations are not done to reduce memory usage
@@ -468,6 +468,12 @@ contains
         call ctfsqimg%shift_phorig
         nullify(pcmat)
     end subroutine convert2img
+
+    elemental subroutine zero( self )
+        class(fplane), intent(inout) :: self
+        self%cmplx_plane  = cmplx(0.,0.)
+        self%ctfsq_plane  = 0.
+    end subroutine zero
 
     subroutine neg( self )
         class(fplane),    intent(inout) :: self

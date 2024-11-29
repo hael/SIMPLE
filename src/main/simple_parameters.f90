@@ -90,6 +90,7 @@ type :: parameters
     character(len=3)          :: reject_cls='no'      !< whether to reject poor classes
     character(len=3)          :: reject_mics='no'     !< whether to reject micrographs based on ctfres/icefrac
     character(len=3)          :: remove_chunks='yes'  !< whether to remove chunks after completion
+    character(len=3)          :: ring='yes'           !< whether to perform ring shaped picking 
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
     character(len=3)          :: remap_cls='no'
     character(len=3)          :: transp_pca='no'
@@ -641,6 +642,7 @@ contains
         call check_carg('reject_cls',     self%reject_cls)
         call check_carg('reject_mics',    self%reject_mics)
         call check_carg('remove_chunks',  self%remove_chunks)
+        call check_carg('ring',           self%ring)
         call check_carg('prob_sh',        self%prob_sh)
         call check_carg('projrec',        self%projrec)
         call check_carg('projfile_optics',self%projfile_optics)
