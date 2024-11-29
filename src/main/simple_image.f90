@@ -40,10 +40,9 @@ contains
     procedure          :: new
     procedure          :: set_wthreads
     procedure          :: construct_thread_safe_tmp_imgs
-    procedure, private :: disc_1
-    procedure, private :: disc_2
+    procedure, private :: disc_1, disc_2
     generic            :: disc => disc_1, disc_2
-    procedure          :: ring
+    procedure          :: ring, soft_ring
     procedure          :: copy
     procedure          :: copy_fast
     procedure          :: img2spec
@@ -557,6 +556,37 @@ contains
         end where
         if( present(npix) )npix = count(self%rmat>0.5)
     end subroutine ring
+
+    !>  \brief soft ring based on gamma distribution
+    subroutine soft_ring( self, ldim, smpd, radius )
+        class(image),      intent(inout) :: self
+        integer,           intent(in)    :: ldim(3)
+        real,              intent(in)    :: smpd, radius
+        real, parameter :: K     = 2.0
+        real, parameter :: THETA = 2.0
+        real    :: d,modeval,km1,mode,val,scale
+        integer :: c(3),i,j,l
+        call self%new(ldim, smpd)
+        c     = nint(real(self%ldim)/2.)+1
+        km1   = K-1.
+        mode  = km1 * THETA
+        val   = mode**km1 * exp(-mode/THETA)
+        scale = 1./val
+        do l=1,self%ldim(3)
+        do j=1,self%ldim(2)
+        do i=1,self%ldim(1)
+            d = hyp(i-c(1),j-c(2),l-c(3))
+            if( d > radius )then
+                val = 0.
+            else
+                d   = 20. * (radius - d) / radius
+                val = max(0.,min(1.0,scale * (d**km1 * exp(-d/THETA))))
+            endif
+            self%rmat(i,j,l) = val
+        enddo
+        enddo
+        enddo
+    end subroutine soft_ring
 
     subroutine copy( self, self_in )
         class(image), intent(inout) :: self

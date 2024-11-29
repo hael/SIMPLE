@@ -158,7 +158,7 @@ type(simple_program), target :: print_project_field
 type(simple_program), target :: print_project_info
 type(simple_program), target :: projops
 type(simple_program), target :: prune_project
-type(simple_program), target :: prune_cavgs
+type(simple_program), target :: score_ptcls
 type(simple_program), target :: atoms_stats
 type(simple_program), target :: reconstruct3D
 type(simple_program), target :: reextract
@@ -463,7 +463,7 @@ contains
         call new_print_project_field
         call new_projops
         call new_prune_project
-        call new_prune_cavgs
+        call new_score_ptcls
         call new_atoms_stats
         call new_reproject
         call new_reconstruct3D
@@ -592,7 +592,7 @@ contains
         call push2prg_ptr_array(print_project_field)
         call push2prg_ptr_array(projops)
         call push2prg_ptr_array(prune_project)
-        call push2prg_ptr_array(prune_cavgs)
+        call push2prg_ptr_array(score_ptcls)
         call push2prg_ptr_array(atoms_stats)
         call push2prg_ptr_array(reproject)
         call push2prg_ptr_array(reconstruct3D)
@@ -818,8 +818,8 @@ contains
                 ptr2prg => projops  
             case('prune_project')
                 ptr2prg => prune_project
-            case('prune_cavgs')
-                ptr2prg => prune_cavgs
+            case('score_ptcls')
+                ptr2prg => score_ptcls
             case('atoms_stats')
                 ptr2prg => atoms_stats
             case('reproject')
@@ -977,7 +977,7 @@ contains
         write(logfhandle,'(A)') print_project_field%name
         write(logfhandle,'(A)') projops%name
         write(logfhandle,'(A)') prune_project%name
-        write(logfhandle,'(A)') prune_cavgs%name
+        write(logfhandle,'(A)') score_ptcls%name
         write(logfhandle,'(A)') reconstruct3D%name
         write(logfhandle,'(A)') reextract%name
         write(logfhandle,'(A)') refine3D%name
@@ -4189,10 +4189,10 @@ contains
         call prune_project%set_input('comp_ctrls', 1, nparts)
     end subroutine new_prune_project
 
-    subroutine new_prune_cavgs
+    subroutine new_score_ptcls
         ! PROGRAM SPECIFICATION
-        call prune_cavgs%new(&
-        &'prune_cavgs',&                              ! name
+        call score_ptcls%new(&
+        &'score_ptcls',&                              ! name
         &'prune poor particles from class averages',& ! descr_short
         &'is a program for discarding bad particles from class averages',& ! descr_long
         &'all',&                                      ! executable
@@ -4201,18 +4201,18 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call prune_cavgs%set_input('parm_ios', 1, 'infile', 'file', 'Ground truth(0/1)', 'Plain text file (.txt)','xxx.txt', .false., '')
+        call score_ptcls%set_input('parm_ios', 1, 'infile', 'file', 'Ground truth(0/1)', 'Plain text file (.txt)','xxx.txt', .false., '')
         ! alternative inputs
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
-        call prune_cavgs%set_input('filt_ctrls', 1, lp)
+        call score_ptcls%set_input('filt_ctrls', 1, lp)
         ! mask controls
-        call prune_cavgs%set_input('mask_ctrls', 1, mskdiam)
+        call score_ptcls%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
-        call prune_cavgs%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_prune_cavgs
+        call score_ptcls%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_score_ptcls
 
     subroutine new_reconstruct3D
         ! PROGRAM SPECIFICATION

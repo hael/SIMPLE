@@ -79,7 +79,7 @@ type(map_cavgs_selection_commander)         :: xmap_cavgs_selection
 type(map_cavgs_states_commander)            :: xmap_cavgs_states
 type(cluster_cavgs_commander)               :: xcluster_cavgs
 type(partition_cavgs_commander)             :: xpartition_cavgs
-type(prune_cavgs_commander)                 :: xprune_cavgs
+type(score_ptcls_commander)                 :: xscore_ptcls
 type(write_classes_commander)               :: xwrite_classes
 type(symaxis_search_commander)              :: xsymsrch
 type(symmetry_test_commander)               :: xsymtst
@@ -282,8 +282,8 @@ select case(trim(prg))
         call xcluster_cavgs%execute(cline)
     case( 'partition_cavgs' )
         call xpartition_cavgs%execute(cline)
-    case( 'prune_cavgs' )
-        call xprune_cavgs%execute(cline)
+    case( 'score_ptcls' )
+        call xscore_ptcls%execute(cline)
     case( 'write_classes' )
         call xwrite_classes%execute(cline)
     case( 'symaxis_search' )
@@ -420,7 +420,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('58fd94e4')
+call simple_print_git_version('464c3042')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
