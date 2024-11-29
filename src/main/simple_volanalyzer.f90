@@ -31,7 +31,7 @@ contains
     subroutine init_volanalyzer( voltab )
         character(len=*), intent(in)  :: voltab
         type(image) :: vol_mirr
-        integer     :: i, j, ifoo, ldim_read(3)
+        integer     :: i, j, ifoo, ldim_read(3), ipair, npairs
         real        :: eul(3), eul_mirr(3), shift(3), shift_mirr(3), cc, cc_mirr, smpd_here
         call read_filetable(voltab, volnames)
         nvols = size(volnames)
@@ -58,8 +58,13 @@ contains
         end do
         allocate(dock_mat(nvols,nvols))
         ! loop over volume pairs
+        write(logfhandle,'(A)') '>>> DOCKING ALL PAIRS OF VOLUMES'
+        npairs = (nvols * (nvols - 1)) / 2
+        ipair  = 0
         do i = 1, nvols - 1
             do j = i + 1, nvols
+                ipair = ipair + 1
+                call progress_gfortran(ipair, npairs)
                 ! evaluate un-mirrored version
                 call dvols%new(trim(volnames(i)), trim(volnames(j)), params_glob%smpd,&
                 &params_glob%hp, params_glob%lp, params_glob%mskdiam)
@@ -116,7 +121,9 @@ contains
         end do
         call write_filetable('vols_ranked.txt', volnames_ranked)
         ! write ranked volumes
+        write(logfhandle,'(A)') '>>> DOCKING VOLUMES WITH RESPECT TO THE MEDOID'
         do i = 1, nvols
+            call progress_gfortran(i, nvols)
             if( dock_mat(i_medoid,rank(i))%l_mirr )then
                 ! the mirrored version is the one
                 volfname = trim(volnames_mirr(rank(i)))
@@ -131,7 +138,6 @@ contains
             call dvols%set_dock_info(dock_mat(i_medoid,rank(i))%eul, dock_mat(i_medoid,rank(i))%shift)
             volnames_docked(i) = 'vol_docked'//int2str_pad(i,2)//'.mrc'
             call dvols%rotate_target(volfname, trim(volnames_docked(i)))
-            
             call dvols%kill
         end do
         call vol%new(       ldim, params_glob%smpd)
@@ -140,13 +146,20 @@ contains
         call vol%read(trim(volnames_docked(1)))
         call fopen(fhandle, 'volanalyze_stats.txt', 'replace', 'unknown') 
         write(fhandle,'(A,1X,I3,1X,A,1X,F6.2,1X,A,1X,F7.3)') '>>> RANK:', 1, '>>> RESOLUTION:', params_glob%lpstop, '>>> CORRELATION:', dock_mat(i_medoid,rank(1))%cc
+        write(logfhandle,'(A)') '>>> ESTIMATING THE LOW-PASS LIMITS OF DOCKED VOLUMES WITH RESPECT TO THE MEDOID'
         do i = 2, nvols
+            call progress_gfortran(i, nvols)
             call vol_docked%read(trim(volnames_docked(i)))
             call estimate_lplim(vol, vol_docked, mskvol, [params_glob%lpstart,params_glob%lpstop], lpopt)
             write(fhandle,'(A,1X,I3,1X,A,1X,F6.2,1X,A,1X,F7.3)') '>>> RANK:', i, '>>> RESOLUTION:', lpopt, '>>> CORRELATION:', dock_mat(i_medoid,rank(i))%cc
         end do
         call fclose(fhandle)
-        ! destruct
+        ! delete mirrored volumes
+        call del_files(volnames_mirr)
+        ! destruct class vars
+        deallocate(volnames, volnames_mirr, volnames_ranked, volnames_docked, dock_mat, corrmat)
+        call dvols%kill
+        ! destruct local vars
         call vol%kill
         call vol_docked%kill
         call mskvol%kill
