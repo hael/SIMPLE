@@ -55,11 +55,11 @@ integer,          parameter :: MAXITS(8)         = [20,20,17,17,17,17,15,30]
 integer,          parameter :: MAXITS_GLOB       = 2*20 + 4*17 + 1*15 ! the last 30 iterations are not included in this estimate since the sampling method changes
 integer,          parameter :: NSPACE(3)         = [500,1000,2500]
 integer,          parameter :: SYMSRCH_STAGE     = 3
-integer,          parameter :: LPAUTO_STAGE      = 4
 integer,          parameter :: PROBREFINE_STAGE  = 5
 integer,          parameter :: ICM_STAGE         = PROBREFINE_STAGE  ! we switch from ML regularization when prob is switched on
 integer,          parameter :: STOCH_SAMPL_STAGE = PROBREFINE_STAGE  ! we switch from greedy to stochastic blanced class sampling when prob is switched on
 integer,          parameter :: TRAILREC_STAGE    = NSTAGES  - 1      ! we start trailing one stage before the last
+integer,          parameter :: LPAUTO_STAGE      = TRAILREC_STAGE    ! automatic low-pass limit estimation switched on when trailing is 
 integer,          parameter :: NSAMPLE_MAX_LAST  = 25000             ! maximum # particles to sample per iteration in the last stage 
 
 ! class variables
@@ -815,8 +815,8 @@ contains
         if( istage == NSTAGES )then
             ! we change the sampling method for the last stage (accelerated refinement)
             update_frac_dyn = 0.1 ! 10% of the particles updated each iteration
-            if( nint(real(nptcls_eff) * update_frac_dyn ) > NSAMPLE_MAX_LAST )then
-                update_frac_dyn = real(NSAMPLE_MAX_LAST) / real(nptcls_eff)
+            if( nint(real(nptcls_eff) * update_frac_dyn ) > (NSAMPLE_MAX_LAST * nstates_glob) )then
+                update_frac_dyn = real(NSAMPLE_MAX_LAST * nstates_glob) / real(nptcls_eff)
             endif
         else
             update_frac_dyn = calc_update_frac_dyn(nptcls_eff, nstates_glob, nsample_minmax, iter, maxits_dyn)

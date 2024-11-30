@@ -480,12 +480,17 @@ contains
     end subroutine prep2Dref
 
     !>  \brief  initializes all volumes for reconstruction
-    subroutine preprecvols
+    subroutine preprecvols( pinds )
+        integer, intent(in) :: pinds(:)
         character(len=:), allocatable :: part_str, fbody
         integer,          allocatable :: pops(:)
         integer :: istate
+        real    :: update_frac_states(params_glob%nstates)
         allocate(part_str, source=int2str_pad(params_glob%part,params_glob%numlen))
         call build_glob%spproj_field%get_pops(pops, 'state')
+        call build_glob%spproj_field%calc_update_frac_states(pinds, params_glob%nstates, update_frac_states)
+        ! update_frac_states now contains the per-state fraction, multiply in the overall fracion
+        update_frac_states = update_frac_states * params_glob%update_frac
         do istate = 1, params_glob%nstates
             if( pops(istate) > 0)then
                 call build_glob%eorecvols(istate)%new(build_glob%spproj)
@@ -494,7 +499,7 @@ contains
                     fbody = trim(VOL_FBODY)//int2str_pad(istate,2)//'_part'//part_str
                     if( build_glob%eorecvols(istate)%ldim_even_match(fbody) )then
                         call build_glob%eorecvols(istate)%read_eos(fbody)
-                        call build_glob%eorecvols(istate)%apply_weight(1.-params_glob%update_frac)
+                        call build_glob%eorecvols(istate)%apply_weight(1.-update_frac_states(istate))
                         call build_glob%eorecvols(istate)%expand_exp
                     endif
                 endif
@@ -726,7 +731,7 @@ contains
         real             :: shift(2), sdev_noise
         integer          :: batchlims(2), iptcl, i, i_batch, ibatch
         ! init volumes
-        call preprecvols
+        call preprecvols(pinds)
         ! prep batch imgs
         call prepimgbatch(MAXIMGBATCHSZ)
         ! allocate array
@@ -792,7 +797,7 @@ contains
         if( params_glob%nstates /= 1   ) THROW_HARD('PROJREC & NSTATES>1 not supported yet')
         if( DEBUG ) t = tic()
         ! init volumes
-        call preprecvols
+        call preprecvols(pinds)
         ! prep batch imgs
         call prepimgbatch(MAXIMGBATCHSZ)
         ! allocations
