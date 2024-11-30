@@ -87,6 +87,7 @@ type :: oris
     procedure          :: sample4update_rnd
     procedure          :: sample4update_class
     procedure          :: sample4update_reprod
+    procedure          :: calc_update_frac_states
     procedure          :: get_class_sample_stats
     procedure, private :: sample_balanced_1, sample_balanced_2
     generic            :: sample_balanced => sample_balanced_1, sample_balanced_2
@@ -1301,6 +1302,25 @@ contains
             mask(inds(i)) = .true.
         end do
     end subroutine sample4update_reprod
+
+    subroutine calc_update_frac_states( self, pinds, nstates, update_frac_states )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: pinds(:), nstates
+        real,        intent(out)   :: update_frac_states(nstates)
+        integer :: state_cnts(nstates), n, sum_state_cnts, i, iptcl, s
+        n = size(pinds)
+        state_cnts = 0
+        do i = 1, n
+            iptcl = pinds(i)
+            do s = 1, nstates
+                if( self%o(iptcl)%get_state() == s ) state_cnts(s) = state_cnts(s) + 1
+            end do
+        end do
+        sum_state_cnts = sum(state_cnts)
+        do s = 1, nstates
+            update_frac_states(s) = real(state_cnts(s)) / real(sum_state_cnts)
+        end do
+    end subroutine calc_update_frac_states
 
     subroutine get_class_sample_stats( self, clsinds, clssmp )
         class(oris),                     intent(inout) :: self
@@ -3330,8 +3350,7 @@ contains
     end function extremal_bound
 
     !>  \brief  utility function for setting extremal optimization parameters
-    subroutine set_extremal_vars(self, extr_init, extr_iter, iter, frac_srch_space,&
-            &do_extr, iextr_lim, update_frac)
+    subroutine set_extremal_vars(self, extr_init, extr_iter, iter, frac_srch_space, do_extr, iextr_lim, update_frac)
         class(oris),       intent(in)  :: self
         real,              intent(in)  :: extr_init
         integer,           intent(in)  :: extr_iter, iter
