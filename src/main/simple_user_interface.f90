@@ -5436,7 +5436,7 @@ contains
         &'Analyze an emsemble of ab initio volumes',&                               ! descr_short
         &'is a program for statistical analysis an ensemble of ab initio volumes',& ! descr_long
         &'simple_exec',&                                                            ! executable
-        &1, 1, 0, 0, 4, 1, 1, .false.)                                              ! # entries in each group, requires sp_project
+        &1, 1, 0, 0, 2, 1, 1, .false.)                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call volanalyze%set_input('img_ios', 1, 'filetab', 'file', 'Volumes list',&
@@ -5451,8 +5451,6 @@ contains
         call volanalyze%set_input('filt_ctrls', 1, hp)
         call volanalyze%set_input('filt_ctrls', 2, lp)
         volanalyze%filt_ctrls(2)%required = .true.
-        call volanalyze%set_input('filt_ctrls', 3, 'lpstart', 'num', 'Starting lp for estimation', 'Starting lp for estimation(in Angstroms)', 'in Angstroms', .true., -1.)
-        call volanalyze%set_input('filt_ctrls', 4, 'lpstop',  'num', 'Stopping lp for estimation', 'Stopping lp for estimation(in Angstroms)', 'in Angstroms', .true., -1.)
         ! mask controls
         ! mask controls
         call volanalyze%set_input('mask_ctrls', 1, mskdiam)
