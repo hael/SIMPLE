@@ -360,7 +360,7 @@ contains
         if( .not. cline%defined('gridding') ) call cline%set('gridding', 'yes')
         call params%new(cline)
         call init_volanalyzer(params%filetab)
-        call rank_dock_compare_volumes
+        call dock_compare_volumes
     end subroutine exec_volanalyze
 
     !> volume calculations and operations - incl Guinier, snr, mirror or b-factor
