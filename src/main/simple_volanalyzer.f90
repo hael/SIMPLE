@@ -79,8 +79,9 @@ contains
 
     subroutine dock_compare_volumes
         character(len=:), allocatable :: volfname
-        integer :: i_medoid, i
+        integer :: i_medoid, i, funit
         real    :: eul(3), eul_mirr(3), shift(3), shift_mirr(3), cc, cc_mirr
+        type(image) :: vol_medoid, vol_docked
         call medoid_from_smat(corrmat, i_medoid)
         ! write ranked volumes
         write(logfhandle,'(A)') '>>> DOCKING VOLUMES WITH RESPECT TO THE MEDOID'
@@ -110,11 +111,32 @@ contains
                 call del_file('vol_tmp1.mrc')
             endif
         end do
+        ! calculate volume correlations
+        call vol_medoid%new(ldim, params_glob%smpd)
+        call vol_medoid%read(trim(volnames(i_medoid)))
+        call vol_medoid%mask(params_glob%msk, 'soft')
+        call vol_docked%new(ldim, params_glob%smpd)
+        call fopen(funit, 'volanayze_stats.txt', 'replace', 'unknown')
+        do i = 1, nvols
+            volfname = 'vol_docked'//int2str_pad(i,2)//'.mrc'
+            call vol_docked%read(volfname)
+            call vol_docked%mask(params_glob%msk, 'soft')
+            cc = vol_medoid%corr(vol_docked, params_glob%lp, params_glob%hp)
+            if( i == i_medoid )then
+                write(funit,'(A,1X,I2,1X,A,1X,F7.3,1X,A)') '>>> VOLUME:', i, '>>> CORRELATION:', cc, '***MEDOID***'
+            else
+                write(funit,'(A,1X,I2,1X,A,1X,F7.3)')      '>>> VOLUME:', i, '>>> CORRELATION:', cc
+            endif
+        end do
+        call fclose(funit)
         ! delete mirrored volumes
         call del_files(volnames_mirr)
         ! destruct class vars
         deallocate(volnames, volnames_mirr, corrmat)
         call dvols%kill
+        ! destruct local vars
+        call vol_medoid%kill
+        call vol_docked%kill
     end subroutine dock_compare_volumes
 
 end module simple_volanalyzer
