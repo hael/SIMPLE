@@ -55,9 +55,14 @@ contains
         call params%new(cline)
         if( file_exists(params%projfile) )then
             call spproj%read(params%projfile)
-            if( (spproj%get_nptcls() > 0) .or. (spproj%get_nstks() > 0) .or.&
-                &(spproj%get_nintgs() > 0) .or. (spproj%get_nmovies() > 0) )then
-                THROW_HARD('The destination PROJFILE should be empty!')
+            if( trim(params%import_type).eq.'mic' )then
+                if( spproj%get_nintgs() > 0 .or. spproj%get_nmovies() > 0 )then
+                    THROW_HARD('The mic field of the destination PROJFILE should be empty!')
+                endif
+            else if( str_has_substr(trim(params%import_type),'ptcl') ) then
+                 if( spproj%get_nptcls() > 0 )then
+                    THROW_HARD('The ptcl fileds of the destination PROJFILE should be empty!')
+                endif
             endif
         else
             THROW_HARD('Inputted projfile: '//trim(params%projfile)//' does not exist!')
