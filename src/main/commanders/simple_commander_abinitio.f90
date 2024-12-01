@@ -64,8 +64,8 @@ integer,          parameter :: NSAMPLE_MAX_LAST  = 25000             ! maximum #
 
 ! class variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
-logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false., l_update_frac=.false., l_update_frac_dyn=.false.
-logical          :: l_ml_reg=.true., l_icm_reg=.true., l_ini3D=.false., l_lpauto=.false.
+logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false., l_update_frac_dyn=.false.
+logical          :: l_ini3D=.false., l_lpauto=.false., l_nsample_inputted_by_user=.false.
 type(sym)        :: se1, se2
 type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_postprocess, cline_reproject
 real             :: update_frac  = 1.0, update_frac_dyn  = 1.0
@@ -106,10 +106,6 @@ contains
         call params%new(cline)
         call cline%set('mkdir',       'no')   ! to avoid nested directory structure
         call cline%set('oritype', 'ptcl3D')   ! from now on we are in the ptcl3D segment, final report is in the cls3D segment
-        ! set class global ML regularization flag
-        l_ml_reg = .true.
-        ! set class global ICM regularization flag
-        l_icm_reg = .true.
         ! set class global lp_auto flag for low-pass limit estimation
         l_lpauto = .false.
         ! set nstages_ini3D
@@ -388,16 +384,6 @@ contains
             start_stage = NSTAGES_INI3D - 1 ! compute reduced to two overlapping stages
             l_ini3D     = .true.
         endif
-        ! set class global ML regularization flag
-        l_ml_reg = .true.
-        if( cline%defined('ml_reg') )then
-            l_ml_reg = params%l_ml_reg
-        endif
-        ! set class global ICM regularization flag
-        l_icm_reg = .true.
-        if( cline%defined('icm') )then
-            l_icm_reg = params%l_icm
-        endif
         ! set class global lp_auto flag for low-pass limit estimation
         l_lpauto = .true.
         if( cline%defined('lp_auto') ) l_lpauto = params%l_lpauto
@@ -415,14 +401,16 @@ contains
         if( spproj%is_virgin_field('ptcl2D') )then
             THROW_HARD('Prior 2D clustering required for abinitio workflow')
         else
-            l_update_frac     = .true.
-            l_update_frac_dyn = .false.
-            update_frac       = 1.0
-            nptcls_eff        = spproj%count_state_gt_zero()
+            l_update_frac_dyn          = .false.
+            l_nsample_inputted_by_user = .false.
+            update_frac                = 1.0
+            nptcls_eff                 = spproj%count_state_gt_zero()
             if( cline%defined('nsample') )then
                 update_frac = real(params%nsample * nstates_glob) / real(nptcls_eff)
+                l_nsample_inputted_by_user = .true.
             else if( cline%defined('update_frac') )then
                 update_frac = params%update_frac
+                l_nsample_inputted_by_user = .true.
             else if( cline%defined('nsample_start') )then
                 if( params%nsample_start > nptcls_eff ) THROW_HARD('nsample_start > effective # ptcls, decrease!')
                 nsample_minmax(1) = params%nsample_start
@@ -452,7 +440,11 @@ contains
             call deallocate_class_samples(clssmp)
         endif
         ! set low-pass limits and downscaling info from FRCs
-        call set_lplims_from_frcs(spproj, l_cavgs=.false.)
+        if( cline%defined('lpstop') )then
+            call set_lplims_from_frcs(spproj, l_cavgs=.false., lpstop=params%lpstop)
+        else
+            call set_lplims_from_frcs(spproj, l_cavgs=.false.)
+        endif
         ! starting volume logics
         if( .not. cline%defined('vol1') )then
             if( .not. l_ini3D )then
@@ -715,9 +707,10 @@ contains
         endif
     end subroutine set_symmetry_class_vars
 
-    subroutine set_lplims_from_frcs( spproj, l_cavgs )
+    subroutine set_lplims_from_frcs( spproj, l_cavgs, lpstop )
         class(sp_project), intent(inout) :: spproj
         logical,           intent(in)    :: l_cavgs
+        real, optional,    intent(in)    :: lpstop
         character(len=:),  allocatable   :: frcs_fname, stk, imgkind, stkpath
         real,              allocatable   :: frcs_avg(:)
         integer,           allocatable   :: states(:)
@@ -741,6 +734,7 @@ contains
         allocate(lpinfo(NSTAGES))
         lpfinal = max(LPSTOP_BOUNDS(1),calc_lplim_final_stage(3))
         lpfinal = min(LPSTOP_BOUNDS(2),lpfinal)
+        if( present(lpstop) ) lpfinal = max(lpstop,lpfinal)
         call lpstages(params_glob%box, NSTAGES, frcs_avg, params_glob%smpd,&
         &LPSTART_BOUNDS(1), LPSTART_BOUNDS(2), lpfinal, lpinfo, l_cavgs )
         call clsfrcs%kill
@@ -813,10 +807,14 @@ contains
         iter = iter + 1
         ! dynamic update frac
         if( istage == NSTAGES )then
-            ! we change the sampling method for the last stage (accelerated refinement)
-            update_frac_dyn = 0.1 ! 10% of the particles updated each iteration
-            if( nint(real(nptcls_eff) * update_frac_dyn ) > (NSAMPLE_MAX_LAST * nstates_glob) )then
-                update_frac_dyn = real(NSAMPLE_MAX_LAST * nstates_glob) / real(nptcls_eff)
+            if( l_nsample_inputted_by_user )then
+                update_frac_dyn = update_frac
+            else
+                ! we change the sampling method for the last stage (accelerated refinement)
+                update_frac_dyn = 0.1 ! 10% of the particles updated each iteration
+                if( nint(real(nptcls_eff) * update_frac_dyn ) > (NSAMPLE_MAX_LAST * nstates_glob) )then
+                    update_frac_dyn = real(NSAMPLE_MAX_LAST * nstates_glob) / real(nptcls_eff)
+                endif
             endif
         else
             update_frac_dyn = calc_update_frac_dyn(nptcls_eff, nstates_glob, nsample_minmax, iter, maxits_dyn)
@@ -840,11 +838,10 @@ contains
         icm = 'no'
         if( istage >= ICM_STAGE ) icm = 'yes'
         ! balance
-        balance = 'no'
-        if( l_update_frac ) balance = 'yes'
+        balance = 'yes'
         ! trailing reconstruction
         trail_rec = 'no'
-        if( istage >= TRAILREC_STAGE .and. l_update_frac ) trail_rec = 'yes'
+        if( istage >= TRAILREC_STAGE ) trail_rec = 'yes'
         ! automatic low-pass limit estimation
         lp_auto = 'no'
         if( istage >= LPAUTO_STAGE .and. l_lpauto )then
@@ -910,9 +907,6 @@ contains
                 fracsrch      = 99.
                 snr_noise_reg = 6.0
         end select
-        ! overrride regularization parameters
-        if( .not. l_ml_reg  ) ml_reg = 'no'
-        if( .not. l_icm_reg ) icm    = 'no'
         ! turn off ML-regularization when icm is on
         if( trim(icm).eq.'yes' ) ml_reg = 'no'
         ! command line update
@@ -938,6 +932,9 @@ contains
         if( lp_auto.eq.'yes' )then
         call cline_refine3D%set('lpstart',                    lpstart)
         call cline_refine3D%set('lpstop',                      lpstop)
+        else
+        call cline_refine3D%delete('lpstart')
+        call cline_refine3D%delete('lpstop')
         endif
         ! phase control parameters
         call cline_refine3D%set('nspace',                     inspace)
@@ -952,7 +949,9 @@ contains
         call cline_refine3D%set('overlap',                    overlap)
         call cline_refine3D%set('fracsrch',                  fracsrch)
         if( l_cavgs )then
-            call cline_refine3D%set('snr_noise_reg',    snr_noise_reg)
+        call cline_refine3D%set('snr_noise_reg',        snr_noise_reg)
+        else
+        call cline_refine3D%delete('snr_noise_reg')
         endif
     end subroutine set_cline_refine3D
 

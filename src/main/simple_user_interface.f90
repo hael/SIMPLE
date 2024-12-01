@@ -2801,7 +2801,7 @@ contains
         &'3D ab initio model generation from class averages',&                                  ! descr_short
         &'is a distributed workflow for generating an ab initio 3D model from class averages',& ! descr_long
         &'simple_exec',&                                                                        ! executable
-        &0, 0, 0, 4, 4, 1, 1, .true., gui_advanced=.false.)                                     ! # entries in each group, requires sp_project                                         
+        &0, 0, 0, 3, 2, 1, 1, .true., gui_advanced=.false.)                                     ! # entries in each group, requires sp_project                                         
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2813,18 +2813,12 @@ contains
         call abinitio3D_cavgs%set_input('srch_ctrls', 1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
         &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call abinitio3D_cavgs%set_input('srch_ctrls', 2, pgrp)
-        call abinitio3D_cavgs%set_input('srch_ctrls', 3, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
-        &for accelerated convergence rate. Final low-pass limit controls the degree of down-scaling(yes|no){yes}','(yes|no){yes}', .false., 'yes')
-        call abinitio3D_cavgs%set_input('srch_ctrls', 4, pgrp_start)
+        call abinitio3D_cavgs%set_input('srch_ctrls', 3, pgrp_start)
         ! filter controls
         call abinitio3D_cavgs%set_input('filt_ctrls', 1, hp, gui_submenu="filter")
         call abinitio3D_cavgs%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30., gui_submenu="filter")
-        call abinitio3D_cavgs%set_input('filt_ctrls', 3, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit for the first stage of ab-initio model generation',&
-            &'low-pass limit in Angstroms', .false., 0., gui_submenu="filter")
-        call abinitio3D_cavgs%set_input('filt_ctrls', 4, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
-            &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 8., gui_submenu="filter")
         ! mask controls
         call abinitio3D_cavgs%set_input('mask_ctrls', 1, mskdiam, gui_submenu="mask", gui_advanced=.false.)
         ! computer controls
@@ -2860,7 +2854,8 @@ contains
         call abinitio3D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30., gui_submenu="filter")
-        call abinitio3D%set_input('filt_ctrls', 3, icm)
+        call abinitio3D%set_input('filt_ctrls', 3, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
+            &'low-pass limit for the final stage in Angstroms', .false., 8., gui_submenu="filter")
         ! mask controls
         call abinitio3D%set_input('mask_ctrls', 1, mskdiam, gui_submenu="mask", gui_advanced=.false.)
         ! computer controls
