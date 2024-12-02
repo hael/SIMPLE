@@ -2801,7 +2801,7 @@ contains
         &'3D ab initio model generation from class averages',&                                  ! descr_short
         &'is a distributed workflow for generating an ab initio 3D model from class averages',& ! descr_long
         &'simple_exec',&                                                                        ! executable
-        &0, 0, 0, 3, 2, 1, 1, .true., gui_advanced=.false.)                                     ! # entries in each group, requires sp_project                                         
+        &0, 0, 0, 3, 4, 1, 1, .true., gui_advanced=.false.)                                     ! # entries in each group, requires sp_project                                         
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2819,6 +2819,10 @@ contains
         call abinitio3D_cavgs%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30., gui_submenu="filter")
+        call abinitio3D_cavgs%set_input('filt_ctrls', 3, 'lpstart',  'num', 'Starting low-pass limit', 'Starting low-pass limit',&
+            &'low-pass limit for the initial stage in Angstroms', .false., 20., gui_submenu="filter")
+        call abinitio3D_cavgs%set_input('filt_ctrls', 4, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
+            &'low-pass limit for the final stage in Angstroms', .false., 8., gui_submenu="filter")
         ! mask controls
         call abinitio3D_cavgs%set_input('mask_ctrls', 1, mskdiam, gui_submenu="mask", gui_advanced=.false.)
         ! computer controls
@@ -2832,7 +2836,7 @@ contains
         &'3D ab initio model generation from particles',&                                  ! descr_short
         &'is a distributed workflow for generating an ab initio 3D model from particles',& ! descr_long                                                         ! descr_long
         &'simple_exec',&                                                                   ! executable
-        &0, 0, 0, 6, 3, 1, 3, .true.,&                                                     ! # entries in each group, requires sp_project
+        &0, 0, 0, 6, 6, 1, 3, .true.,&                                                     ! # entries in each group, requires sp_project
         &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute"  )           ! GUI                                                      
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2854,8 +2858,14 @@ contains
         call abinitio3D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30., gui_submenu="filter")
-        call abinitio3D%set_input('filt_ctrls', 3, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
-            &'low-pass limit for the final stage in Angstroms', .false., 8., gui_submenu="filter")
+        call abinitio3D%set_input('filt_ctrls', 3, 'lpstart',  'num', 'Starting low-pass limit', 'Starting low-pass limit',&
+            &'low-pass limit for the initial stage in Angstroms',  .false., 20., gui_submenu="filter")
+        call abinitio3D%set_input('filt_ctrls', 4, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
+            &'low-pass limit for the final stage in Angstroms',    .false., 8., gui_submenu="filter")
+        call abinitio3D%set_input('filt_ctrls', 5, 'lpstart_ini3D',  'num', 'Starting low-pass limit ini3D', 'Starting low-pass limit ini3D',&
+            &'low-pass limit for the initial stage of ini3D in Angstroms',  .false., 20., gui_submenu="filter")
+        call abinitio3D%set_input('filt_ctrls', 6, 'lpstop_ini3D',  'num', 'Final low-pass limit ini3D', 'Final low-pass limit ini3D',&
+            &'low-pass limit for the final stage of ini3D in Angstroms',    .false., 8., gui_submenu="filter")
         ! mask controls
         call abinitio3D%set_input('mask_ctrls', 1, mskdiam, gui_submenu="mask", gui_advanced=.false.)
         ! computer controls
