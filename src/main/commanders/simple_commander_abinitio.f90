@@ -1076,6 +1076,7 @@ contains
         call cline_startrec%set('objfun',      'cc') ! ugly, but this is how it works in parameters 
         call cline_startrec%set('silence_fsc', 'yes')
         call cline_startrec%set('box_crop',    lpinfo(istage)%box_crop)
+        call cline_startrec%set('update_frac', update_frac)
         call cline_startrec%delete('which_iter')
         call cline_startrec%delete('endit')
         call cline_startrec%delete('needs_sigma')
