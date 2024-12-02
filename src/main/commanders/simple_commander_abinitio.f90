@@ -335,12 +335,13 @@ contains
         real,               parameter   :: UPDATE_FRAC_MAX = 0.9 !< to ensure fractional update is always on
         character(len=:),   allocatable :: vol_name
         real,               allocatable :: rstates(:)
-        integer,            allocatable :: tmpinds(:), clsinds(:)
+        integer,            allocatable :: tmpinds(:), clsinds(:), pinds(:)
+        logical,            allocatable :: ptcl_mask(:)
         type(class_sample), allocatable :: clssmp(:)
         type(parameters)                :: params
         type(sp_project)                :: spproj
-        type(image)                     :: noisevol
-        integer :: istage, s, ncls, icls, i, start_stage
+        type(image)                     :: noisevol 
+        integer :: istage, s, ncls, icls, i, start_stage, nptcls2update, noris
         logical :: l_multistates = .false.
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
@@ -445,7 +446,6 @@ contains
             call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
             call write_class_samples(clssmp, CLASS_SAMPLING_FILE)
             deallocate(rstates, tmpinds, clsinds)
-            call deallocate_class_samples(clssmp)
         endif
         ! set low-pass limits and downscaling info from FRCs
          if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
@@ -500,10 +500,18 @@ contains
                 ! randomize states
                 if( l_multistates .and. trim(params%het_mode).eq.'independent' )then
                     call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
-                    call spproj%write_segment_inside(params%oritype, params%projfile)
                 endif
+                ! create an initial balanced greedy sampling
+                noris = spproj%os_ptcl3D%get_noris()
+                allocate(ptcl_mask(1:noris))
+                call spproj%os_ptcl3D%sample4update_class(clssmp, [1,noris], update_frac,&
+                    nptcls2update, pinds, ptcl_mask, .false.)
+                deallocate(pinds, ptcl_mask)          ! these are not needed
+                call deallocate_class_samples(clssmp) ! done with this one
+                ! write updated project file
+                call spproj%write_segment_inside(params%oritype, params%projfile)
                 ! create starting volume(s)
-                call calc_start_rec(params%projfile, xreconstruct3D_distr)
+                call calc_start_rec(params%projfile, xreconstruct3D_distr, istage=1)
             endif
         endif
         ! Frequency marching
@@ -1053,9 +1061,10 @@ contains
         endif
     end subroutine symmetrize
 
-    subroutine calc_start_rec( projfile, xreconstruct3D )
+    subroutine calc_start_rec( projfile, xreconstruct3D, istage )
         character(len=*),      intent(in)    :: projfile
         class(commander_base), intent(inout) :: xreconstruct3D
+        integer,               intent(in)    :: istage
         character(len=:),  allocatable :: str_state, vol, str, vol_even, vol_odd
         type(cmdline) :: cline_startrec
         integer       :: state
@@ -1066,6 +1075,7 @@ contains
         call cline_startrec%set('pgrp',        params_glob%pgrp)
         call cline_startrec%set('objfun',      'cc') ! ugly, but this is how it works in parameters 
         call cline_startrec%set('silence_fsc', 'yes')
+        call cline_startrec%set('box_crop',    lpinfo(istage)%box_crop)
         call cline_startrec%delete('which_iter')
         call cline_startrec%delete('endit')
         call cline_startrec%delete('needs_sigma')
@@ -1106,7 +1116,7 @@ contains
         call cline_reconstruct3D%set('nstates', nstates_glob)
         call cline_postprocess%set(  'nstates', nstates_glob)
         call cline_reproject%set(    'nstates', nstates_glob)
-        call calc_start_rec(projfile, xreconstruct3D)
+        call calc_start_rec(projfile, xreconstruct3D, istage=PROBREFINE_STAGE)
     end subroutine randomize_states
 
     subroutine gen_ortho_reprojs4viz
