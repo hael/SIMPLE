@@ -927,7 +927,11 @@ contains
                 trs           = lpinfo(istage)%trslim
                 sh_first      = 'yes'
                 ml_reg        = 'yes'
+                if( nstates_glob > 1 )then
+                frac_best     = 0.98 ! max out balanced sampling
+                else
                 frac_best     = 0.85 ! means sampling is done from top-ranking 85% particles in class
+                endif
                 overlap       = 0.99
                 fracsrch      = 99.
                 snr_noise_reg = 6.0
