@@ -370,10 +370,6 @@ contains
             params%nstates = 1
             call cline%delete('nstates')
         endif
-        if( l_multistates .and. trim(params%het_mode).eq.'independent' )then
-            ! turn off symmetry axis search and put the symmetry in from the start
-            params%pgrp_start = params%pgrp
-        endif
         ! read project
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
@@ -381,18 +377,17 @@ contains
         ! provide initialization of 3D alignment using class averages?
         start_stage = 1
         l_ini3D     = .false.
-        if( nstates_glob > 1 .and. trim(params%het_mode).eq.'independent' )then
-            ! never do initialization from class averages in this mode
-            THROW_WARN('het_mode=independent is incomaptible with cavg_ini=yes, proceeding with cavg_ini=no')
-            params%cavg_ini = 'no'
-            call cline%set('cavg_ini', 'no')
+        if( trim(params%cavg_ini).eq.'yes' )then
+            call ini3D_from_cavgs(cline)
+            ! re-read the project file to update info in spproj
+            call spproj%read(params%projfile)
+            start_stage = NSTAGES_INI3D - 1 ! compute reduced to two overlapping stages
+            l_ini3D     = .true.
+            ! symmetry dealt with by ini3D
         else
-            if( trim(params%cavg_ini).eq.'yes' )then
-                call ini3D_from_cavgs(cline)
-                ! re-read the project file to update info in spproj
-                call spproj%read(params%projfile)
-                start_stage = NSTAGES_INI3D - 1 ! compute reduced to two overlapping stages
-                l_ini3D     = .true.
+            if( l_multistates .and. trim(params%het_mode).eq.'independent' )then
+                ! turn off symmetry axis search and put the symmetry in from the start
+                params%pgrp_start = params%pgrp
             endif
         endif
         ! initialization on class averages done outside this workflow (externally)?
