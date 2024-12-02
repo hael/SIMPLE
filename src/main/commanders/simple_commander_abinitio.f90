@@ -377,12 +377,19 @@ contains
         ! provide initialization of 3D alignment using class averages?
         start_stage = 1
         l_ini3D     = .false.
-        if( trim(params%cavg_ini).eq.'yes' )then
-            call ini3D_from_cavgs(cline)
-            ! re-read the project file to update info in spproj
-            call spproj%read(params%projfile)
-            start_stage = NSTAGES_INI3D - 1 ! compute reduced to two overlapping stages
-            l_ini3D     = .true.
+        if( nstates_glob > 1 .and. trim(params%het_mode).eq.'independent' )then
+            ! never do initialization from class averages in this mode
+            THROW_WARN('het_mode=independent is incomaptible with cavg_ini=yes, proceeding with cavg_ini=no')
+            params%cavg_ini = 'no'
+            call cline%set('cavg_ini', 'no')
+        else
+            if( trim(params%cavg_ini).eq.'yes' )then
+                call ini3D_from_cavgs(cline)
+                ! re-read the project file to update info in spproj
+                call spproj%read(params%projfile)
+                start_stage = NSTAGES_INI3D - 1 ! compute reduced to two overlapping stages
+                l_ini3D     = .true.
+            endif
         endif
         ! initialization on class averages done outside this workflow (externally)?
         if( trim(params%cavg_ini_ext).eq.'yes' )then 
