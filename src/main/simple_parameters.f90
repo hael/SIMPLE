@@ -410,6 +410,8 @@ type :: parameters
     real    :: lplims2D(3)
     real    :: lpstart=0.          !< start low-pass limit(in A){15}
     real    :: lpstop=8.0          !< stop low-pass limit(in A){8}
+    real    :: lpstart_ini3D=0.    !< start low-pass limit(in A){15}
+    real    :: lpstop_ini3D=8.0    !< stop low-pass limit(in A){8}
     real    :: lpstop2D=8.0        !< stop low-pass limit(in A){8}
     real    :: lpthres=RES_THRESHOLD_STREAM
     real    :: max_dose=0.         !< maximum dose threshold (e/A2)
@@ -873,6 +875,8 @@ contains
         call check_rarg('lplim_crit',     self%lplim_crit)
         call check_rarg('lpstart',        self%lpstart)
         call check_rarg('lpstop',         self%lpstop)
+        call check_rarg('lpstart_ini3D',  self%lpstart_ini3D)
+        call check_rarg('lpstop_ini3D',   self%lpstop_ini3D)
         call check_rarg('lpstop2D',       self%lpstop2D)
         call check_rarg('lpthres',        self%lpthres)
         call check_rarg('max_dose',       self%max_dose)

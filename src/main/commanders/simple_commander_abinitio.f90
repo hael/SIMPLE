@@ -122,7 +122,15 @@ contains
         call spproj%update_projinfo(cline)
         call spproj%write_segment_inside('projinfo', params%projfile)
         ! set low-pass limits and downscaling info from FRCs
-        call set_lplims_from_frcs(spproj, l_cavgs=.true.)
+        if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
+            call set_lplims_from_frcs(spproj, l_cavgs=.true., lpstart=params%lpstart, lpstop=params%lpstop)
+        else if( cline%defined('lpstart') )then
+            call set_lplims_from_frcs(spproj, l_cavgs=.true., lpstart=params%lpstart)
+        else if( cline%defined('lpstop') )then
+            call set_lplims_from_frcs(spproj, l_cavgs=.true., lpstop=params%lpstop)
+        else
+            call set_lplims_from_frcs(spproj, l_cavgs=.true.)
+        endif
         ! whether to use classes generated from 2D or 3D
         select case(trim(params%imgkind))
             case('cavg')
@@ -440,7 +448,11 @@ contains
             call deallocate_class_samples(clssmp)
         endif
         ! set low-pass limits and downscaling info from FRCs
-        if( cline%defined('lpstop') )then
+         if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
+            call set_lplims_from_frcs(spproj, l_cavgs=.false., lpstart=params%lpstart, lpstop=params%lpstop)
+        else if( cline%defined('lpstart') )then
+            call set_lplims_from_frcs(spproj, l_cavgs=.false., lpstart=params%lpstart)
+        else if( cline%defined('lpstop') )then
             call set_lplims_from_frcs(spproj, l_cavgs=.false., lpstop=params%lpstop)
         else
             call set_lplims_from_frcs(spproj, l_cavgs=.false.)
@@ -707,10 +719,10 @@ contains
         endif
     end subroutine set_symmetry_class_vars
 
-    subroutine set_lplims_from_frcs( spproj, l_cavgs, lpstop )
+    subroutine set_lplims_from_frcs( spproj, l_cavgs, lpstart, lpstop )
         class(sp_project), intent(inout) :: spproj
         logical,           intent(in)    :: l_cavgs
-        real, optional,    intent(in)    :: lpstop
+        real, optional,    intent(in)    :: lpstart, lpstop
         character(len=:),  allocatable   :: frcs_fname, stk, imgkind, stkpath
         real,              allocatable   :: frcs_avg(:)
         integer,           allocatable   :: states(:)
@@ -735,8 +747,13 @@ contains
         lpfinal = max(LPSTOP_BOUNDS(1),calc_lplim_final_stage(3))
         lpfinal = min(LPSTOP_BOUNDS(2),lpfinal)
         if( present(lpstop) ) lpfinal = max(lpstop,lpfinal)
-        call lpstages(params_glob%box, NSTAGES, frcs_avg, params_glob%smpd,&
-        &LPSTART_BOUNDS(1), LPSTART_BOUNDS(2), lpfinal, lpinfo, l_cavgs )
+        if( present(lpstart) )then
+            call lpstages(params_glob%box, NSTAGES, frcs_avg, params_glob%smpd,&
+            &lpstart, lpstart, lpfinal, lpinfo, l_cavgs )
+        else
+            call lpstages(params_glob%box, NSTAGES, frcs_avg, params_glob%smpd,&
+            &LPSTART_BOUNDS(1), LPSTART_BOUNDS(2), lpfinal, lpinfo, l_cavgs )
+        endif
         call clsfrcs%kill
 
         contains
@@ -766,6 +783,14 @@ contains
         integer :: ncavgs
         cline_ini3D = cline
         call cline_ini3D%set('nstages', NSTAGES_INI3D)
+        if( cline%defined('lpstart_ini3D') )then
+            call cline_ini3D%set('lpstart', params_glob%lpstart_ini3D)
+            call cline_ini3D%delete('lpstart_ini3D')
+        endif
+        if( cline%defined('lpstop_ini3D') )then
+            call cline_ini3D%set('lpstop', params_glob%lpstop_ini3D)
+            call cline_ini3D%delete('lpstop_ini3D')
+        endif
         if( cline%defined('nthr_ini3D') )then
             call cline_ini3D%set('nthr', params_glob%nthr_ini3D)
             call cline_ini3D%delete('nthr_ini3D')
