@@ -198,7 +198,7 @@ contains
         real    :: min_state_mi_joint, overlap_lim, fracsrch_lim
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
         logical :: converged
-        integer :: iptcl, istate, n, nptcls, nsamples
+        integer :: iptcl, istate, n, nptcls, nsamples, ucnt
         601 format(A,1X,F12.3)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
         states         = build_glob%spproj_field%get_all('state')
@@ -282,8 +282,9 @@ contains
             state_mi_joint = 0.
             statepops      = 0.
             do iptcl=1,build_glob%spproj_field%get_noris()
+                ucnt   = build_glob%spproj_field%get_updatecnt(iptcl)
                 istate = build_glob%spproj_field%get_state(iptcl)
-                if( istate==0 )cycle
+                if( istate==0 .or. ucnt==0 ) cycle
                 state_mi_joint(istate) = state_mi_joint(istate) + build_glob%spproj_field%get(iptcl,'mi_proj')
                 statepops(istate)      = statepops(istate) + 1.
             end do
