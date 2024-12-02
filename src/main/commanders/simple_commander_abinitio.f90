@@ -366,9 +366,13 @@ contains
         l_multistates = .false.
         nstates_glob  = params%nstates  
         if( params%nstates > 1  ) l_multistates = .true.
-        if( trim(params%het_mode).eq.'docked' )then
+        if( l_multistates .and. trim(params%het_mode).eq.'docked' )then
             params%nstates = 1
             call cline%delete('nstates')
+        endif
+        if( l_multistates .and. trim(params%het_mode).eq.'independent' )then
+            ! turn off symmetry axis search and put the symmetry in from the start
+            params%pgrp_start = params%pgrp
         endif
         ! read project
         call spproj%read(params%projfile)
