@@ -24,7 +24,7 @@ real                          :: res_fsc05, res_fsc0143, ave, sdev, maxv, minv, 
 logical                       :: mrc_exists
 real                          :: vec(1,3), A(3,3), vec_A(1,3), A_inv(3,3), inv_vec_A(1,3)
 if( command_argument_count() < 4 )then
-    write(logfhandle,'(a)') 'ERROR! Usage: simple_test_3D_opt_filt smpd=xx nthr=yy vol1=volume.mrc mskdiam=zz'
+    write(logfhandle,'(a)') 'ERROR! Usage: simple_test_common_lines smpd=xx nthr=yy vol1=volume.mrc mskdiam=zz'
     write(logfhandle,'(a)') 'Example: https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180'
     write(logfhandle,'(a)') 'DEFAULT TEST (example above) is running now...'
     inquire(file="1JYX.mrc", exist=mrc_exists)
@@ -103,13 +103,14 @@ call img_polarizer%new([p%box,p%box,1],p%smpd, wthreads=.false.)
 call pftcc%new(NPLANES, [1,NPLANES], p%kfromto)
 call img_polarizer%init_polarizer(pftcc, p%alpha)
 call fplane1%fft
-call img_polarizer%polarize(pftcc, fplane1, ORI_IND, isptcl=.false., iseven=.true.)
+! call img_polarizer%polarize(pftcc, fplane1, ORI_IND, isptcl=.false., iseven=.true.)
+call img_polarizer%cartesian2polar(pftcc, fplane1, ORI_IND, isptcl=.false., iseven=.true.)
 call pftcc%polar2cartesian(ORI_IND, .true., cmat, box, box_in=p%box)
 call fplane1_polar%new([box,box,1],1.0)
 call fplane1_polar%set_cmat(cmat)
 call fplane1_polar%shift_phorig()
 call fplane1_polar%ifft
-call fplane1_polar%write('fplane_polar.mrc', 1)
+call fplane1_polar%write('fplane.mrc', 4)
 ! testing
 A(1,:)   = [1., 2., 3.]
 A(2,:)   = [4., 5., 6.]

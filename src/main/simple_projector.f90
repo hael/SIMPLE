@@ -289,6 +289,49 @@ contains
         allocate(coord_map(cnt), source=all_coords(1:cnt))
     end subroutine fproject_map
 
+    subroutine fproject_polar_map( self, e_ind, eall, pftcc, polar_map )
+        use simple_polarft_corrcalc, only: polarft_corrcalc
+        class(projector),              intent(inout) :: self
+        integer,                       intent(in)    :: e_ind
+        class(oris),                   intent(in)    :: eall
+        class(polarft_corrcalc),       intent(in)    :: pftcc
+        type(polar_fmap), allocatable, intent(inout) :: polar_map(:)
+        type(polar_fmap), allocatable :: all_coords(:)
+        type(ori) :: e, e2
+        integer   :: i, hk(2), lims(3,2), sqlp, sqarg, xy2(2), cnt, irot, kpolar, target_irot, target_kpolar, pdim(3)
+        logical   :: good_coord
+        call eall%get_ori(e_ind, e)
+        pdim = pftcc%get_pdim()
+        lims = self%loop_lims(2)
+        sqlp = (maxval(lims(:,2)))**2
+        allocate(all_coords((lims(1,2)-lims(1,1)+1)*(lims(2,2)-lims(2,1)+1)))
+        cnt = 0
+        do irot = 1,pdim(1)
+            do kpolar = pdim(2),pdim(3)
+                hk    = pftcc%get_coord(irot,kpolar)
+                sqarg = dot_product([hk(1),hk(2)],[hk(1),hk(2)])
+                if( sqarg > sqlp ) cycle
+                do i = 1, eall%get_noris()
+                    if( i == e_ind ) cycle
+                    call eall%get_ori(i, e2)
+                    call self%fproject_coord(hk, e, e2, xy2, good_coord)
+                    if( good_coord )then
+                        target_kpolar = nint(sqrt(real(xy2(1)**2+xy2(2)**2)))
+                        target_irot   = nint(atan(real(xy2(2)), real(xy2(1))) * real(pdim(1)) / twopi )
+                        if( target_kpolar < pdim(2) .or. target_kpolar > pdim(3) .or. target_irot < 1 .or. target_irot > pdim(1) ) cycle
+                        cnt = cnt + 1
+                        all_coords(cnt)%target_find = i
+                        all_coords(cnt)%ori_inds    = [irot, kpolar]
+                        all_coords(cnt)%target_inds = [target_irot, target_kpolar]
+                        exit
+                    endif
+                enddo
+            enddo
+        enddo
+        if( allocated(polar_map) ) deallocate(polar_map)
+        allocate(polar_map(cnt), source=all_coords(1:cnt))
+    end subroutine fproject_polar_map
+
     subroutine scalar_map( self, e_ind, eall, all_planes, fplane )
         class(projector), intent(inout) :: self
         integer,          intent(in)    :: e_ind
@@ -484,20 +527,23 @@ contains
         class(polarft_corrcalc), intent(inout) :: pftcc   !< object that holds the polar image
         logical,                 intent(in)    :: iseven  !< eo flag
         logical,                 intent(in)    :: mask(:) !< interpolation mask, all .false. set to CMPLX_ZERO
-        integer :: irot, k, pdim(3)
-        real    :: vec(3), loc(3), e_rotmat(3,3)
-        pdim = pftcc%get_pdim()
+        integer :: irot, k, pdim(3), lims(3,2), sqlp, sqarg, hk(2)
+        real    :: loc(3), e_rotmat(3,3)
+        lims     = self%loop_lims(2)
+        sqlp     = (maxval(lims(:,2)))**2
+        pdim     = pftcc%get_pdim()
         e_rotmat = e%get_mat()
         do irot = 1,pdim(1)
             do k = pdim(2),pdim(3)
-                if( mask(k) )then
-                    vec(:2) = pftcc%get_coord(irot,k)
-                    vec(3)  = 0.
-                    loc     = matmul(vec,e_rotmat)
-                    call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp(loc), iseven)
-                else
+                if( .not. mask(k) ) call pftcc%set_ref_fcomp(iref, irot, k, CMPLX_ZERO, iseven)
+                hk    = pftcc%get_coord(irot,k)
+                sqarg = dot_product([hk(1),hk(2)],[hk(1),hk(2)])
+                if( sqarg > sqlp .or. hk(1) < lims(1,1) .or. hk(1) > lims(1,2) .or. &
+                                     &hk(2) < lims(2,1) .or. hk(2) > lims(2,2) )then
                     call pftcc%set_ref_fcomp(iref, irot, k, CMPLX_ZERO, iseven)
                 endif
+                loc = matmul(real([hk(1), hk(2), 0]),e_rotmat)
+                call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp(loc), iseven)
             end do
         end do
     end subroutine fproject_polar

@@ -29,6 +29,7 @@ type, extends(image) :: polarizer
     procedure          :: div_by_instrfun
     procedure, private :: polarize_1, polarize_2
     generic            :: polarize => polarize_1, polarize_2
+    procedure          :: cartesian2polar
     procedure          :: polarizer_initialized
     procedure          :: kill_polarizer
 end type polarizer
@@ -206,6 +207,49 @@ contains
         endif
         nullify(pft)
     end subroutine polarize_2
+
+    subroutine cartesian2polar( self, pftcc, img, img_ind, isptcl, iseven, mask )
+        use simple_polarft_corrcalc, only: polarft_corrcalc
+        class(polarizer),        intent(in)    :: self    !< projector instance
+        class(polarft_corrcalc), intent(inout) :: pftcc   !< polarft_corrcalc object to be filled
+        class(image),            intent(in)    :: img
+        integer,                 intent(in)    :: img_ind !< image index
+        logical,                 intent(in)    :: isptcl  !< is ptcl (or reference)
+        logical,                 intent(in)    :: iseven  !< is even (or odd)
+        logical, optional,       intent(in)    :: mask(:) !< interpolation mask, all .false. set to CMPLX_ZERO
+        complex, pointer :: pft(:,:)
+        integer :: h, k, sqlp, sqarg, kind, irot, lims(3,2), pdim(3)
+        real    :: tan_inv
+        pdim = pftcc%get_pdim()
+        lims = img%loop_lims(3)
+        sqlp = (maxval(lims(:,2)))**2
+        ! get temporary pft matrix
+        call pftcc%get_work_pft_ptr(pft)
+        pft = CMPLX_ZERO
+        do k = lims(2,1),lims(2,2)
+            do h = lims(1,1),lims(1,2)
+                sqarg = dot_product([h,k],[h,k])
+                if( sqarg > sqlp ) cycle
+                kind    = nint(sqrt(real(h**2+k**2)))
+                tan_inv = atan(real(k), real(h)) * 2 + PI
+                irot    = nint(tan_inv * real(pdim(1)) / TWOPI) + 1
+                if( kind < pdim(2) .or. kind > pdim(3) .or. irot < 1 .or. irot > pftcc%pftsz ) cycle
+                pft(irot,kind) = img%get_fcomp2D(h,k)
+            enddo
+        enddo
+        if( present(mask) )then
+            ! band masking
+            do k=pdim(2),pdim(3)
+                if( .not.mask(k) ) pft(:,k) = CMPLX_ZERO
+            enddo
+        endif
+        if( isptcl )then
+            call pftcc%set_ptcl_pft(img_ind, pft)
+        else
+            call pftcc%set_ref_pft(img_ind, pft, iseven)
+        endif
+        nullify(pft)
+    end subroutine cartesian2polar
 
     logical function polarizer_initialized( self )
         class(polarizer), intent(in) :: self
