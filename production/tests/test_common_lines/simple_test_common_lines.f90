@@ -93,24 +93,30 @@ call fplane2_pad%ifft
 call fplane1_pad%clip(fplane1)
 call fplane2_pad%clip(fplane2)
 call fplane1%write('fplane.mrc', 1)
-call fplane2%write('fplane.mrc', 2)
+! call fplane2%write('fplane.mrc', 2)
 call vol_pad%scalar_map(ORI_IND, spiral, fplanes, fplane2_pad)
 call fplane2_pad%ifft
 call fplane2_pad%clip(fplane2)
-call fplane2%write('fplane.mrc', 3)
+! call fplane2%write('fplane.mrc', 3)
 ! polar stuffs
 call img_polarizer%new([p%box,p%box,1],p%smpd, wthreads=.false.)
 call pftcc%new(NPLANES, [1,NPLANES], p%kfromto)
 call img_polarizer%init_polarizer(pftcc, p%alpha)
 call fplane1%fft
-! call img_polarizer%polarize(pftcc, fplane1, ORI_IND, isptcl=.false., iseven=.true.)
 call img_polarizer%cartesian2polar(pftcc, fplane1, ORI_IND, isptcl=.false., iseven=.true.)
 call pftcc%polar2cartesian(ORI_IND, .true., cmat, box, box_in=p%box)
 call fplane1_polar%new([box,box,1],1.0)
 call fplane1_polar%set_cmat(cmat)
 call fplane1_polar%shift_phorig()
 call fplane1_polar%ifft
-call fplane1_polar%write('fplane.mrc', 4)
+call fplane1_polar%write('fplane.mrc', 2)
+call img_polarizer%polarize(pftcc, fplane1, ORI_IND, isptcl=.false., iseven=.true.)
+call pftcc%polar2cartesian(ORI_IND, .true., cmat, box, box_in=p%box)
+call fplane1_polar%fft
+call fplane1_polar%set_cmat(cmat)
+call fplane1_polar%shift_phorig()
+call fplane1_polar%ifft
+call fplane1_polar%write('fplane.mrc', 3)
 ! testing
 A(1,:)   = [1., 2., 3.]
 A(2,:)   = [4., 5., 6.]
