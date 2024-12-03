@@ -188,11 +188,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-<<<<<<< Updated upstream
-call simple_print_git_version('a5865b89')
-=======
-call simple_print_git_version('3f0df536')
->>>>>>> Stashed changes
+call simple_print_git_version('cb0173dd')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
