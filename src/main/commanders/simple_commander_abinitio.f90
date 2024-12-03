@@ -876,7 +876,7 @@ contains
             prob_sh = 'yes'
         endif
         if( nstates_glob > 1 .and. params_glob%het_mode.eq.'docked' )then
-            if( istage == NSTAGES ) refine = 'shc_inpl' ! works best on simulated ribosome data
+            if( istage == NSTAGES ) refine = 'shc_smpl' ! works best on simulated ribosome data
         endif
         ! ICM regularization
         icm = 'no'
