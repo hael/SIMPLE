@@ -53,7 +53,11 @@ contains
         if(.not. dir_exists(trim(adjustl(cline%get_carg("import_dir"))))) THROW_HARD('import_dir does not exist ' // trim(adjustl(cline%get_carg("import_dir"))))
         if(cline%defined("starfile") .and. .not. file_exists(trim(adjustl(cline%get_carg("starfile"))))) THROW_HARD('starfile does not exist')
         call params%new(cline)
-        if( file_exists(params%projfile) )then
+        if( .not. file_exists(params%projfile) ) then
+            params%projfile = "workspace.simple"
+            call cline%set('projfile', 'workspace.simple')
+        end if
+        if(file_exists(params%projfile)) then
             call spproj%read(params%projfile)
             if( trim(params%import_type).eq.'mic' )then
                 if( spproj%get_nintgs() > 0 .or. spproj%get_nmovies() > 0 )then

@@ -1258,12 +1258,22 @@ contains
     subroutine populate_opticsmap(self, opticsoris)
         class(starproject), intent(inout) :: self
         class(oris),        intent(inout) :: opticsoris
-        integer                           :: i
+        type(oris)                        :: tmp
+        type(ori)                         :: tmp_ori
+        integer                           :: i, old_n, maxori, ogid
         call self%import_stardata(self%starfile%optics, opticsoris, .false.)
-        allocate(self%starfile%opticsmap(opticsoris%get_noris()))
-        do i = 1,opticsoris%get_noris()
-            self%starfile%opticsmap(int(opticsoris%get(i, "ogid"))) = i
+        maxori = maxval(opticsoris%get_all("ogid"))
+        allocate(self%starfile%opticsmap(maxori))
+        old_n = opticsoris%get_noris()
+        call tmp%copy(opticsoris, .false.)
+        call opticsoris%new(maxori, .false.)
+        do i = 1,old_n
+            ogid = int(tmp%get(i, "ogid"))
+            call tmp%get_ori(i, tmp_ori)
+            call opticsoris%append(ogid, tmp_ori)
+            self%starfile%opticsmap(ogid) = ogid
         end do
+        call tmp%kill
     end subroutine populate_opticsmap
 
     subroutine plot_opticsgroups(self, fname_eps)
