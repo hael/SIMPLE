@@ -129,6 +129,7 @@ contains
         real    :: sdev_noise
         integer :: batchlims(2),kfromto(2)
         integer :: i,iptcl,imatch,nyq,nptcls_part_sel,batchsz_max,nbatch
+        logical :: l_scale_update_frac
         call cline%set('mkdir', 'no')
         call cline%set('stream','no')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
@@ -138,11 +139,13 @@ contains
         ! (including class stats) so instead of setting a sampling for the following oprations when
         ! l_update_frac, we sample uniformly AND do not write the corresponding field
         allocate(ptcl_mask(params_glob%fromp:params_glob%top))
+        l_scale_update_frac = .false.
         if( build%spproj_field%has_been_sampled() )then
             call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls_part_sel, pinds, ptcl_mask)
         else
             if( params%l_update_frac )then
                 call build%spproj_field%sample4update_rnd([params%fromp,params%top], params_glob%update_frac, nptcls_part_sel, pinds, ptcl_mask, .false. )
+                l_scale_update_frac = .true.
             else
                 call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls_part_sel, pinds, ptcl_mask, .false.)
             endif
@@ -175,7 +178,12 @@ contains
                 ! power spectrum
                 call build%imgbatch(imatch)%fft
                 call build%imgbatch(imatch)%power_spectrum(pspec)
-                sigma2(:,iptcl) = pspec / 2.0
+                if( l_scale_update_frac )then
+                    ! To account for spectra not included in sampling and yield the correct average
+                    sigma2(:,iptcl) = pspec / (2.0 * params_glob%update_frac)
+                else
+                    sigma2(:,iptcl) = pspec / 2.0
+                endif
             end do
             !$omp end parallel do
             ! global average
