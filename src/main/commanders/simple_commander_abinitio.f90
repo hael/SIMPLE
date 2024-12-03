@@ -45,7 +45,7 @@ end type abinitio3D_parts_commander
 character(len=*), parameter :: REC_FBODY         = 'rec_final_state'
 character(len=*), parameter :: STR_STATE_GLOB    = '01'
 real,             parameter :: LPSTOP_BOUNDS(2)  = [4.5,6.0]
-real,             parameter :: LPSTART_BOUNDS(2) = [10.,20.] 
+real,             parameter :: LPSTART_BOUNDS(2) = [10.,20.]
 real,             parameter :: CENLP_DEFAULT     = 30.
 real,             parameter :: LPSYMSRCH_LB      = 12.
 integer,          parameter :: NSTAGES           = 8
@@ -342,7 +342,6 @@ contains
         type(sp_project)                :: spproj
         type(image)                     :: noisevol 
         integer :: istage, s, ncls, icls, i, start_stage, nptcls2update, noris
-        logical :: l_multistates = .false.
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
@@ -363,10 +362,8 @@ contains
         ! make master parameters
         call params%new(cline)
         call cline%set('mkdir', 'no')
-        l_multistates = .false.
-        nstates_glob  = params%nstates  
-        if( params%nstates > 1  ) l_multistates = .true.
-        if( l_multistates .and. trim(params%het_mode).eq.'docked' )then
+        nstates_glob = params%nstates  
+        if( nstates_glob > 1 .and. trim(params%het_mode).eq.'docked' )then
             params%nstates = 1
             call cline%delete('nstates')
         endif
@@ -385,7 +382,7 @@ contains
             l_ini3D     = .true.
             ! symmetry dealt with by ini3D
         else
-            if( l_multistates .and. trim(params%het_mode).eq.'independent' )then
+            if( nstates_glob > 1 .and. trim(params%het_mode).eq.'independent' )then
                 ! turn off symmetry axis search and put the symmetry in from the start
                 params%pgrp_start = params%pgrp
             endif
@@ -474,7 +471,7 @@ contains
                         THROW_HARD('Unsupported ORITYPE; exec_abinitio3D')
                 end select
                 ! randomize states
-                if( l_multistates .and. trim(params%het_mode).eq.'independent' )then
+                if( nstates_glob > 1 .and. trim(params%het_mode).eq.'independent' )then
                     call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
                 endif
                 call spproj%write_segment_inside(params%oritype, params%projfile)
@@ -504,7 +501,7 @@ contains
                     THROW_HARD('Prior 3D alignment is lacking for starting volume generation')
                 endif
                 ! randomize states
-                if( l_multistates .and. trim(params%het_mode).eq.'independent' )then
+                if( nstates_glob > 1 .and. trim(params%het_mode).eq.'independent' )then
                     call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
                 endif
                 ! create an initial balanced greedy sampling
@@ -537,8 +534,8 @@ contains
                 call symmetrize(istage, spproj, params%projfile, xreconstruct3D_distr)
             endif
             ! State labelling
-            if( l_multistates .and. params%het_mode.eq.'docked' )then
-                if( istage == PROBREFINE_STAGE - 1 ) call randomize_states(spproj, params%projfile, xreconstruct3D_distr)
+            if( nstates_glob > 1 .and. params%het_mode.eq.'docked' )then
+                if( istage == NSTAGES - 1 ) call randomize_states(spproj, params%projfile, xreconstruct3D_distr)
             endif
         enddo
         ! for visualization
@@ -872,6 +869,9 @@ contains
         if( istage >= PROBREFINE_STAGE )then
             refine  = 'prob'
             prob_sh = 'yes'
+        endif
+        if( nstates_glob > 1 .and. params_glob%het_mode.eq.'docked' )then
+            if( istage == NSTAGES ) refine = 'shc_inpl' ! works best on simulated ribosome data
         endif
         ! ICM regularization
         icm = 'no'
