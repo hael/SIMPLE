@@ -124,6 +124,12 @@ type fplan_map
     integer :: target_phys(3)
 end type fplan_map
 
+type polar_fmap
+    integer :: target_find
+    integer :: ori_inds(2)
+    integer :: target_inds(2)
+end type polar_fmap
+
 ! oritype enumeration
 enum, bind(c)
     enumerator :: ENUM_ORISEG  = 0
