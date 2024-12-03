@@ -846,7 +846,7 @@ contains
                 states(ptcls_rnd(i)) = 1
             enddo
         else if( cline%defined('state') )then
-            call pos%get_pinds(params%state, 'state', ptcls_in_state)
+            call pos%get_pinds(params%state, 'state', ptcls_in_state, l_require_updated=.true.)
             noris_in_state = size(ptcls_in_state)
             ! allocate states and set the state-flags
             allocate(states(noris), source=0)
