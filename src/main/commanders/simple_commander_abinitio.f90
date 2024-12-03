@@ -449,6 +449,11 @@ contains
             call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
             call write_class_samples(clssmp, CLASS_SAMPLING_FILE)
             deallocate(rstates, tmpinds, clsinds)
+            if( spproj%os_ptcl3D%has_been_sampled() )then
+                ! the ptcl3D field should be clean at this stage
+                call spproj%os_ptcl3D%clean_updatecnt_sampled()
+                call spproj%write_segment_inside('ptcl3D', params%projfile)
+            endif
         endif
         ! set low-pass limits and downscaling info from FRCs
          if( cline%defined('lpstart') .and. cline%defined('lpstop') )then

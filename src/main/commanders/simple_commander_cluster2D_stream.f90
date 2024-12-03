@@ -533,9 +533,6 @@ contains
             call frcs%kill
             call frcs_sc%kill
             call pool_proj%add_frcs2os_out(frcsfname, 'frc2D')
-            ! write
-            pool_proj%os_ptcl3D = pool_proj%os_ptcl2D
-            call pool_proj%os_ptcl3D%delete_2Dclustering
         else
             call pool_proj%os_out%kill
             call pool_proj%add_cavgs2os_out(cavgsfname, params_glob%smpd, 'cavg', clspath=l_clspath)
@@ -544,10 +541,11 @@ contains
                 call pool_proj%add_cavgs2os_out(src, params_glob%smpd, 'cavg'//trim(WFILT_SUFFIX))
             endif
             call pool_proj%add_frcs2os_out(frcsfname, 'frc2D')
-            ! write
-            pool_proj%os_ptcl3D = pool_proj%os_ptcl2D
-            call pool_proj%os_ptcl3D%delete_2Dclustering
         endif
+        ! 3d field
+        pool_proj%os_ptcl3D = pool_proj%os_ptcl2D
+        call pool_proj%os_ptcl3D%delete_2Dclustering
+        call pool_proj%os_ptcl3D%clean_updatecnt_sampled()
         ! write starfiles
         call starproj%export_cls2D(pool_proj)
         if(l_write_star) then
