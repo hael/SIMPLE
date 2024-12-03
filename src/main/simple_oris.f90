@@ -845,18 +845,20 @@ contains
     end subroutine remap_cls
 
     !>  \brief  is for getting an allocatable array with ptcl indices of the label 'label'
-    subroutine get_pinds( self, ind, label, indices, l_shuffle )
+    subroutine get_pinds( self, ind, label, indices, l_shuffle, l_require_updated )
         class(oris),          intent(in)  :: self
         character(len=*),     intent(in)  :: label
         integer,              intent(in)  :: ind
         integer, allocatable, intent(out) :: indices(:)
-        logical, optional,    intent(in)  :: l_shuffle
+        logical, optional,    intent(in)  :: l_shuffle, l_require_updated
         type(ran_tabu)       :: rt
         logical, allocatable :: mask(:)
         integer :: pop, i
-        logical :: ll_shuffle
+        logical :: ll_shuffle, ll_require_updated
         ll_shuffle = .false.
         if( present(l_shuffle) ) ll_shuffle = l_shuffle
+        ll_require_updated = .false.
+        if( present(l_require_updated) ) ll_require_updated = l_require_updated
         if( allocated(indices) )deallocate(indices)
         allocate(indices(self%n),mask(self%n))
         !$omp parallel do private(i) default(shared) proc_bind(close)
@@ -864,7 +866,13 @@ contains
             if( self%o(i)%isstatezero() )then
                 mask(i) = .false.
             else
-                mask(i) = self%o(i)%get_int(label) == ind
+                if( ll_require_updated )then
+                    if( self%o(i)%get_int('updatecnt') == 0 )then
+                        mask(i) = .false.
+                    else
+                        mask(i) = self%o(i)%get_int(label) == ind
+                    endif
+                endif
             endif
             if( mask(i) ) indices(i) = i
         end do
