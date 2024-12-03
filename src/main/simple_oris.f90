@@ -872,6 +872,8 @@ contains
                     else
                         mask(i) = self%o(i)%get_int(label) == ind
                     endif
+                else
+                    mask(i) = self%o(i)%get_int(label) == ind
                 endif
             endif
             if( mask(i) ) indices(i) = i
