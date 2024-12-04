@@ -20,6 +20,7 @@ use simple_strategy3D_greedy,       only: strategy3D_greedy
 use simple_strategy3D_greedy_smpl,  only: strategy3D_greedy_smpl
 use simple_strategy3D_greedy_sub,   only: strategy3D_greedy_sub
 use simple_strategy3D_prob,         only: strategy3D_prob
+use simple_strategy3D_prob_state,   only: strategy3D_prob_state
 use simple_strategy3D,              only: strategy3D
 use simple_strategy3D_srch,         only: strategy3D_spec
 use simple_convergence,             only: convergence
@@ -27,19 +28,18 @@ use simple_euclid_sigma2,           only: euclid_sigma2
 use simple_strategy2D3D_common
 implicit none
 
-public :: refine3D_exec, prepare_polar_references, pftcc
+public :: refine3D_exec
 private
 #include "simple_local_flags.inc"
 
-logical, parameter             :: DEBUG_HERE = .false.
 logical                        :: has_been_searched
-type(polarft_corrcalc), target :: pftcc
 type(eul_prob_tab),     target :: eulprob_obj_part
 type(image),       allocatable :: ptcl_match_imgs(:)
-integer,           allocatable :: prev_states(:), pinds(:)
+integer,           allocatable :: pinds(:)
 logical,           allocatable :: ptcl_mask(:)
 integer                        :: nptcls2update
 type(euclid_sigma2)            :: eucl_sigma
+type(polarft_corrcalc)         :: pftcc
 ! benchmarking
 integer(timer_int_kind)        :: t_init,   t_build_batch_particles,  t_prep_orisrch,  t_align,  t_rec,  t_tot,  t_projio
 integer(timer_int_kind)        :: t_prepare_polar_references, t_read_and_filter_refvols
@@ -97,7 +97,7 @@ contains
         if( allocated(pinds) )     deallocate(pinds)
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
         allocate(ptcl_mask(params_glob%fromp:params_glob%top))
-        if( trim(params_glob%refine).eq.'prob' )then
+        if( str_has_substr(params_glob%refine, 'prob') )then
             ! generation of random sample and incr of updatecnts delegated to prob_align
             call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
             &nptcls2update, pinds, ptcl_mask )
@@ -126,10 +126,7 @@ contains
         call build_glob%vol%kill
         call build_glob%vol_odd%kill
         call build_glob%vol2%kill
-        ! array allocation for strategy3D
-        if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: array allocation for strategy3D'
         call prep_strategy3D ! allocate s3D singleton
-        if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: array allocation for strategy3D, DONE'
         ! generate particles image objects
         allocate(strategy3Dspecs(batchsz_max),strategy3Dsrch(batchsz_max))
         call prepimgbatch(batchsz_max)
@@ -195,6 +192,8 @@ contains
                         allocate(strategy3D_greedy               :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('prob')
                         allocate(strategy3D_prob                 :: strategy3Dsrch(iptcl_batch)%ptr)
+                    case('prob_state')
+                        allocate(strategy3D_prob_state           :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('smpl')
                         allocate(strategy3D_smpl                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('smpl_neigh')
@@ -349,7 +348,6 @@ contains
             endif
         endif
         if( L_BENCH_GLOB ) rt_read_and_filter_refvols = 0.
-        ! first the polar
         nrefs = params_glob%nspace * params_glob%nstates
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read reference volumes and create polar projections
@@ -371,7 +369,7 @@ contains
                     endif
                 endif
             endif
-            if( trim(params_glob%refine).eq.'prob' )then
+            if( str_has_substr(params_glob%refine, 'prob') )then
                 ! already mapping shifts in prob_tab with shared-memory execution
                 call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=l_distr_exec_glob)
             else
@@ -406,7 +404,6 @@ contains
             !$omp end parallel do
         end do
         call pftcc%memoize_refs
-        if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: finished prepare_polar_references'
     end subroutine prepare_polar_references
 
     subroutine build_batch_particles( nptcls_here, pinds_here )
