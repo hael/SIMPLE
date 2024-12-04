@@ -235,11 +235,11 @@ contains
     ! end subroutine fproject4cartftcc
 
     subroutine fproject_map( self, e_ind, eall, coord_map )
-        class(projector),             intent(inout) :: self
-        integer,                      intent(in)    :: e_ind
-        class(oris),                  intent(in)    :: eall
-        type(fplan_map), allocatable, intent(inout) :: coord_map(:)
-        type(fplan_map), allocatable :: all_coords(:)
+        class(projector), intent(inout) :: self
+        integer,          intent(in)    :: e_ind
+        class(oris),      intent(in)    :: eall
+        type(fplan_map),  intent(inout) :: coord_map
+        type(fplan_map) :: all_coords
         type(ori) :: e, e2
         integer   :: i, h, k, lims(3,2), sqlp, sqarg, xy2(2), cnt, ori_phys(3), phys(3), ldim(3)
         logical   :: good_coord
@@ -247,7 +247,9 @@ contains
         lims = self%loop_lims(2)
         sqlp = (maxval(lims(:,2)))**2
         ldim = self%get_ldim()
-        allocate(all_coords((lims(1,2)-lims(1,1)+1)*(lims(2,2)-lims(2,1)+1)))
+        allocate(all_coords%target_find(  (lims(1,2)-lims(1,1)+1)*(lims(2,2)-lims(2,1)+1)),&
+                &all_coords%ori_phys(   3,(lims(1,2)-lims(1,1)+1)*(lims(2,2)-lims(2,1)+1)),&
+                &all_coords%target_phys(3,(lims(1,2)-lims(1,1)+1)*(lims(2,2)-lims(2,1)+1)))
         cnt = 0
         do k = lims(2,1),lims(2,2)
             do h = lims(1,1),lims(1,2)
@@ -268,8 +270,8 @@ contains
                     call self%fproject_coord([h,k], e, e2, xy2, good_coord)
                     if( good_coord )then
                         cnt = cnt + 1
-                        all_coords(cnt)%target_find = i
-                        all_coords(cnt)%ori_phys    = ori_phys
+                        all_coords%target_find(cnt) = i
+                        all_coords%ori_phys(:,cnt)  = ori_phys
                         if (xy2(1) .ge. 0) then
                             phys(1) = xy2(1) + 1
                             phys(2) = xy2(2) + 1 + MERGE(ldim(2),0,xy2(2) < 0)
@@ -279,14 +281,16 @@ contains
                             phys(2) = -xy2(2) + 1 + MERGE(ldim(2),0,-xy2(2) < 0)
                             phys(3) = 1
                         endif
-                        all_coords(cnt)%target_phys = phys
+                        all_coords%target_phys(:,cnt) = phys
                         exit
                     endif
                 enddo
             enddo
         enddo
-        if( allocated(coord_map) ) deallocate(coord_map)
-        allocate(coord_map(cnt), source=all_coords(1:cnt))
+        allocate(coord_map%target_find(  cnt), source=all_coords%target_find(  1:cnt))
+        allocate(coord_map%ori_phys(   3,cnt), source=all_coords%ori_phys(:,   1:cnt))
+        allocate(coord_map%target_phys(3,cnt), source=all_coords%target_phys(:,1:cnt))
+        coord_map%n_points = cnt
     end subroutine fproject_map
 
     subroutine fproject_polar_map( self, e_ind, eall, pftcc, polar_map )

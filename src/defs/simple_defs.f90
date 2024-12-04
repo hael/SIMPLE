@@ -119,9 +119,10 @@ type class_sample
 end type class_sample
 
 type fplan_map
-    integer :: target_find
-    integer :: ori_phys(3)
-    integer :: target_phys(3)
+    integer              :: n_points
+    integer, allocatable :: target_find(:)
+    integer, allocatable :: ori_phys(:,:)
+    integer, allocatable :: target_phys(:,:)
 end type fplan_map
 
 type polar_fmap
