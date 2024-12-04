@@ -9,20 +9,21 @@ use simple_polarizer,        only: polarizer
 implicit none
 integer,          parameter   :: NPLANES = 50, ORI_IND = 15
 character(len=:), allocatable :: cmd
-type(fplan_map),  allocatable :: coord_map(:)
 complex,          allocatable :: cmat(:,:)
+type(fplan_map)               :: coord_map(NPLANES)
 type(parameters)              :: p
 type(polarft_corrcalc)        :: pftcc
 type(polarizer)               :: img_polarizer
 type(cmdline)                 :: cline
-type(image)                   :: vol, noise, fplane1, fplane2, fplane1_pad, fplane2_pad, fplanes(NPLANES), fplane1_polar
+type(image)                   :: vol, noise, ptcl, ptcl_pad, fplanes(NPLANES), ptcl_polar
 type(oris)                    :: spiral
 type(ori)                     :: o1, o2
 type(projector)               :: vol_pad
-integer                       :: ifoo, rc, errflg, i, ori_phys(3), target_phys(3), f_ind, box
+integer                       :: ifoo, rc, errflg, i, j, ori_phys(3), target_phys(3), f_ind, box
 real                          :: res_fsc05, res_fsc0143, ave, sdev, maxv, minv, med
+complex                       :: diff
 logical                       :: mrc_exists
-real                          :: vec(1,3), A(3,3), vec_A(1,3), A_inv(3,3), inv_vec_A(1,3)
+real                          :: vec(1,3), A(3,3), vec_A(1,3), A_inv(3,3), inv_vec_A(1,3), total_costs(NPLANES)
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)') 'ERROR! Usage: simple_test_common_lines smpd=xx nthr=yy vol1=volume.mrc mskdiam=zz'
     write(logfhandle,'(a)') 'Example: https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180'
@@ -55,68 +56,77 @@ call cline%check
 call p%new(cline)
 call find_ldim_nptcls(p%vols(1), p%ldim, ifoo)
 call vol%new(p%ldim, p%smpd)
-call noise%new(p%ldim, p%smpd)
 call vol%read(p%vols(1))
 call vol%stats('foreground', ave, sdev, maxv, minv)
-! add noise in a small center region of the vol
-call noise%gauran(0., 5. * sdev)
-call noise%mask(p%msk, 'soft')
-! call vol%add(noise)
-! call vol%write('vol_noisy.mrc')
 call spiral%new(NPLANES, is_ptcl=.false.)
 call spiral%spiral
-call fplane1%new([p%box, p%box, 1], p%smpd)
-call fplane2%new([p%box, p%box, 1], p%smpd)
-call vol_pad%new(    [p%boxpd, p%boxpd, p%boxpd], p%smpd)
-call fplane1_pad%new([p%boxpd, p%boxpd, 1],       p%smpd)
-call fplane2_pad%new([p%boxpd, p%boxpd, 1],       p%smpd)
+call ptcl%new(    [p%box,   p%box,   1],       p%smpd)
+call vol_pad%new( [p%boxpd, p%boxpd, p%boxpd], p%smpd)
+call ptcl_pad%new([p%boxpd, p%boxpd, 1],       p%smpd)
+call noise%new(   [p%boxpd, p%boxpd, 1],       p%smpd)
 call vol%pad(vol_pad)
 call vol_pad%fft
 call vol_pad%expand_cmat(p%alpha)
 call spiral%get_ori(ORI_IND, o1)
-call vol_pad%fproject(o1,fplane1_pad)
+call vol_pad%fproject(o1,ptcl_pad)
+call ptcl_pad%ifft
+! add noise in a small center region of the vol
+call noise%gauran(0., 0.05 * sdev)
+call noise%mask(p%msk, 'soft')
+call ptcl_pad%add(noise)
+call ptcl_pad%clip(ptcl)
+call ptcl%write('test_images.mrc', 1)
 do i = 1, spiral%get_noris()
     call spiral%get_ori(i, o2)
     call fplanes(i)%new([p%boxpd, p%boxpd, 1], p%smpd)
     call vol_pad%fproject(o2,fplanes(i))
+    call vol_pad%fproject_map(i, spiral, coord_map(i))
 enddo
-call vol_pad%fproject_map(ORI_IND, spiral, coord_map)
-call fplane2_pad%zero_and_flag_ft
-do i = 1, size(coord_map)
-    ori_phys    = coord_map(i)%ori_phys
-    target_phys = coord_map(i)%target_phys
-    f_ind       = coord_map(i)%target_find
-    call fplane2_pad%set_cmat_at(ori_phys, fplanes(f_ind)%get_cmat_at(target_phys))
+call ptcl_pad%fft
+total_costs = 0.
+do i = 1, spiral%get_noris()
+    do j = 1, coord_map(i)%n_points
+        f_ind          = coord_map(i)%target_find(j)
+        if( f_ind == i ) cycle
+        ori_phys       = coord_map(i)%ori_phys(:,j)
+        target_phys    = coord_map(i)%target_phys(:,j)
+        diff           = ptcl_pad%get_cmat_at(ori_phys) - fplanes(f_ind)%get_cmat_at(target_phys)
+        total_costs(i) = total_costs(i) + diff * conjg(diff)
+    enddo
+    total_costs(i) = sqrt(total_costs(i) / real(coord_map(i)%n_points))
 enddo
-call fplane1_pad%ifft
-call fplane2_pad%ifft
-call fplane1_pad%clip(fplane1)
-call fplane2_pad%clip(fplane2)
-call fplane1%write('fplane.mrc', 1)
-! call fplane2%write('fplane.mrc', 2)
-call vol_pad%scalar_map(ORI_IND, spiral, fplanes, fplane2_pad)
-call fplane2_pad%ifft
-call fplane2_pad%clip(fplane2)
-! call fplane2%write('fplane.mrc', 3)
+print *, 'original ptcl ind = ', ORI_IND
+print *, 'searched ptcl ind = ', minloc(total_costs)
+print *, total_costs
+
+
+
+! call vol_pad%fproject_map(ORI_IND, spiral, coord_map)
+! do i = 1, size(coord_map)
+!     ori_phys    = coord_map(i)%ori_phys
+!     target_phys = coord_map(i)%target_phys
+!     f_ind       = coord_map(i)%target_find
+!     call fplane2_pad%set_cmat_at(ori_phys, fplanes(f_ind)%get_cmat_at(target_phys))
+! enddo
 ! polar stuffs
 call img_polarizer%new([p%box,p%box,1],p%smpd, wthreads=.false.)
 call pftcc%new(NPLANES, [1,NPLANES], p%kfromto)
 call img_polarizer%init_polarizer(pftcc, p%alpha)
-call fplane1%fft
-call img_polarizer%cartesian2polar(pftcc, fplane1, ORI_IND, isptcl=.false., iseven=.true.)
+call ptcl%fft
+call img_polarizer%cartesian2polar(pftcc, ptcl, ORI_IND, isptcl=.false., iseven=.true.)
 call pftcc%polar2cartesian(ORI_IND, .true., cmat, box, box_in=p%box)
-call fplane1_polar%new([box,box,1],1.0)
-call fplane1_polar%set_cmat(cmat)
-call fplane1_polar%shift_phorig()
-call fplane1_polar%ifft
-call fplane1_polar%write('fplane.mrc', 2)
-call img_polarizer%polarize(pftcc, fplane1, ORI_IND, isptcl=.false., iseven=.true.)
+call ptcl_polar%new([box,box,1],1.0)
+call ptcl_polar%set_cmat(cmat)
+call ptcl_polar%shift_phorig()
+call ptcl_polar%ifft
+call ptcl_polar%write('test_images.mrc', 2)
+call img_polarizer%polarize(pftcc, ptcl, ORI_IND, isptcl=.false., iseven=.true.)
 call pftcc%polar2cartesian(ORI_IND, .true., cmat, box, box_in=p%box)
-call fplane1_polar%fft
-call fplane1_polar%set_cmat(cmat)
-call fplane1_polar%shift_phorig()
-call fplane1_polar%ifft
-call fplane1_polar%write('fplane.mrc', 3)
+call ptcl_polar%fft
+call ptcl_polar%set_cmat(cmat)
+call ptcl_polar%shift_phorig()
+call ptcl_polar%ifft
+call ptcl_polar%write('test_images.mrc', 3)
 ! testing
 A(1,:)   = [1., 2., 3.]
 A(2,:)   = [4., 5., 6.]
