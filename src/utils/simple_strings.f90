@@ -564,20 +564,29 @@ contains
         endif
     end subroutine replace_substr
 
-    !>  \brief  Convert string to all upper case
-    !!  Adapted from
-    !!  Figure 3.5B, pg 80, "Upgrading to Fortran 90", by Cooper Redwine,
-    !!  1995 Springer-Verlag, New York.
-    function upperCase( str )
-        character(len=*),   intent(in)  ::  str
-        character(len=len(str))  ::  upperCase
+    !>  \brief  Convert string to lower case
+    pure function lowercase( str )
+        character(len=*), intent(in) :: str
+        character(len=(len(str)))    :: lowercase
         integer :: i, n
-        upperCase = str
+        lowercase = str
+        do i = 1, len(str)
+            n = index(UPPER_CASE_LETTERS,lowercase(i:i))
+            if( n /= 0 ) lowercase(i:i) = LOWER_CASE_LETTERS(n:n)
+        end do
+    end function lowercase
+
+    !>  \brief  Convert string to upper case
+    pure function uppercase( str )
+        character(len=*), intent(in)  ::  str
+        character(len=len(str))       :: uppercase
+        integer :: i, n
+        uppercase = str
         do i=1,len(str)
-            n = index(LOWER_CASE_LETTERS,upperCase(i:i))
-            if( n .ne. 0 ) upperCase(i:i) = UPPER_CASE_LETTERS(n:n)
+            n = index(LOWER_CASE_LETTERS,uppercase(i:i))
+            if( n /= 0 ) uppercase(i:i) = UPPER_CASE_LETTERS(n:n)
         enddo
-    end function upperCase
+    end function uppercase
 
     !>  \brief works out whether a character string is a comment line
     logical function strIsComment( line )
