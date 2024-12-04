@@ -602,7 +602,7 @@ contains
         startit = 1
         if( cline%defined('startit') ) startit = params%startit
         select case(trim(params%refine))
-            case('prob')
+            case('prob', 'prob_state')
                 ! random sampling and updatecnt dealt with in prob_align
             case DEFAULT
                 if( startit == 1 ) call build%spproj_field%clean_updatecnt_sampled
@@ -938,9 +938,14 @@ contains
         ! make CTFs
         if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, params%oritype)
         call pftcc%memoize_ptcls
-        call eulprob_obj_part%fill_tab(pftcc)
         fname = trim(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
-        call eulprob_obj_part%write_tab(fname)
+        if( str_has_substr(params%refine, 'prob_state') )then
+            call eulprob_obj_part%fill_tab_state_only(pftcc)
+            call eulprob_obj_part%write_state_tab(fname)
+        else
+            call eulprob_obj_part%fill_tab(pftcc)
+            call eulprob_obj_part%write_tab(fname)
+        endif
         call eulprob_obj_part%kill
         call killimgbatch
         call pftcc%kill
@@ -999,11 +1004,19 @@ contains
             call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
         endif
         ! reading corrs from all parts
-        do ipart = 1, params_glob%nparts
-            fname = trim(DIST_FBODY)//int2str_pad(ipart,params_glob%numlen)//'.dat'
-            call eulprob_obj_glob%read_tab_to_glob(fname)
-        enddo
-        call eulprob_obj_glob%prob_assign
+        if( str_has_substr(params%refine, 'prob_state') )then
+            do ipart = 1, params_glob%nparts
+                fname = trim(DIST_FBODY)//int2str_pad(ipart,params_glob%numlen)//'.dat'
+                call eulprob_obj_glob%read_state_tab(fname)
+            enddo
+            call eulprob_obj_glob%prob_assign
+        else
+            do ipart = 1, params_glob%nparts
+                fname = trim(DIST_FBODY)//int2str_pad(ipart,params_glob%numlen)//'.dat'
+                call eulprob_obj_glob%read_tab_to_glob(fname)
+            enddo
+            call eulprob_obj_glob%just_state_assign
+        endif
         ! write the iptcl->(iref,istate) assignment
         fname = trim(ASSIGNMENT_FBODY)//'.dat'
         call eulprob_obj_glob%write_assignment(fname)

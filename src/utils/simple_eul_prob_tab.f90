@@ -30,12 +30,16 @@ type :: eul_prob_tab
     generic            :: new => new_1, new_2
     ! PARTITION-WISE PROCEDURES (used only by partition-wise eul_prob_tab objects)
     procedure :: fill_tab
+    procedure :: fill_tab_state_only
     procedure :: write_tab
+    procedure :: write_state_tab
     procedure :: read_assignment
     ! GLOBAL PROCEDURES (used only by the global eul_prob_tab object)
+    procedure :: read_state_tab
     procedure :: read_tab_to_glob
     procedure :: prob_assign
     procedure :: write_assignment
+    procedure :: just_state_assign
     ! DESTRUCTOR
     procedure :: kill
     ! PRIVATE
@@ -209,7 +213,7 @@ contains
                         self%loc_tab(iproj,i,istate)%has_sh = .true.
                     enddo
                     ! (3) see if we can refine the shifts by re-searching them for individual references in the 
-                    !     identified probabilsitic neighborhood
+                    !     identified probabilistic neighborhood
                     if( params_glob%l_prob_sh )then
                         locn = minnloc(dists_projs(:,ithr), projs_ns)
                         do j = 1,projs_ns
@@ -302,18 +306,93 @@ contains
         endif
     end subroutine fill_tab
 
+    subroutine fill_tab_state_only( self, pftcc )
+        use simple_polarft_corrcalc,  only: polarft_corrcalc
+        use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
+        class(eul_prob_tab),     intent(inout) :: self
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        type(pftcc_shsrch_grad) :: grad_shsrch_obj(nthr_glob) !< origin shift search object, L-BFGS with gradient
+        type(ori)               :: o_prev
+        integer :: i, iproj, iptcl, ithr, irot, istate, iref_start
+        real    :: lims(2,2), lims_init(2,2), cxy(3)
+        call seed_rnd
+        if( params_glob%l_doshift )then
+            ! make shift search objects
+            lims(:,1)      = -params_glob%trs
+            lims(:,2)      =  params_glob%trs
+            lims_init(:,1) = -SHC_INPL_TRSHWDTH
+            lims_init(:,2) =  SHC_INPL_TRSHWDTH
+            do ithr = 1,nthr_glob
+                call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier,&
+                    &maxits=params_glob%maxits_sh, opt_angle=.true., coarse_init=.true.)
+            end do
+            ! fill the table
+            do istate = 1, self%nstates
+                iref_start  = (istate-1)*params_glob%nspace
+                !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,iproj,irot,cxy)&
+                !$omp proc_bind(close) schedule(static)
+                do i = 1, self%nptcls
+                    iptcl = self%pinds(i)
+                    ithr  = omp_get_thread_num() + 1
+                    ! identify shifts using the previously assigned best reference
+                    call build_glob%spproj_field%get_ori(iptcl, o_prev)   ! previous ori
+                    irot  = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
+                    iproj = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
+                    ! BFGS over shifts
+                    call grad_shsrch_obj(ithr)%set_indices(iref_start + iproj, iptcl)
+                    cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true.)
+                    if( irot == 0 ) cxy(2:3) = 0.
+                    self%state_tab(istate,i)%dist   = eulprob_dist_switch(cxy(1))
+                    self%state_tab(istate,i)%inpl   = iproj
+                    self%state_tab(istate,i)%inpl   = irot
+                    self%state_tab(istate,i)%x      = cxy(2)
+                    self%state_tab(istate,i)%y      = cxy(3)
+                    self%state_tab(istate,i)%has_sh = .true.
+                enddo
+                !$omp end parallel do
+            enddo
+        else
+            ! fill the table
+            do istate = 1, self%nstates
+                iref_start  = (istate-1)*params_glob%nspace
+                !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,iproj,irot,cxy)&
+                !$omp proc_bind(close) schedule(static)
+                do i = 1, self%nptcls
+                    iptcl = self%pinds(i)
+                    ithr  = omp_get_thread_num() + 1
+                    ! identify shifts using the previously assigned best reference
+                    call build_glob%spproj_field%get_ori(iptcl, o_prev)   ! previous ori
+                    irot  = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
+                    iproj = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
+                    self%state_tab(istate,i)%dist   = eulprob_dist_switch(real(pftcc%gencorr_for_rot_8(iref_start+iproj, iptcl, irot)))
+                    self%state_tab(istate,i)%inpl   = iproj
+                    self%state_tab(istate,i)%inpl   = irot
+                    self%state_tab(istate,i)%x      = 0.
+                    self%state_tab(istate,i)%y      = 0.
+                    self%state_tab(istate,i)%has_sh = .true.
+                enddo
+                !$omp end parallel do
+            enddo
+        endif
+    end subroutine fill_tab_state_only
+
     ! ptcl -> (proj, state) assignment used in the global prob_align commander, in 'exec_prob_align'
     subroutine prob_assign( self )
         class(eul_prob_tab), intent(inout) :: self
         call self%proj_normalize
         call self%proj_assign
+        call self%just_state_assign
+    end subroutine prob_assign
+
+    subroutine just_state_assign( self )
+        class(eul_prob_tab), intent(inout) :: self
         if( self%nstates > 1 )then
             call self%state_normalize
             call self%state_assign
         else
             self%assgn_map = self%state_tab(1,:)
         endif
-    end subroutine prob_assign
+    end subroutine just_state_assign
 
     ! projection normalization (same energy) of the 3D loc_tab (for each state)
     ! [0,1] normalization for each state
@@ -509,6 +588,45 @@ contains
         !$omp end parallel do
     end subroutine read_tab_to_glob
 
+    subroutine write_state_tab( self, binfname )
+        class(eul_prob_tab), intent(in) :: self
+        character(len=*),    intent(in) :: binfname
+        integer :: funit, io_stat, headsz
+        headsz = sizeof(self%nptcls)
+        call fopen(funit,trim(binfname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
+        write(unit=funit,pos=1)          self%nptcls
+        write(unit=funit,pos=headsz + 1) self%state_tab
+        call fclose(funit)
+    end subroutine write_state_tab
+
+    subroutine read_state_tab( self, binfname )
+        class(eul_prob_tab), intent(inout) :: self
+        character(len=*),    intent(in)    :: binfname
+        type(ptcl_ref),      allocatable   :: state_tab_glob(:,:)
+        integer :: funit, io_stat, nptcls_glob, headsz, i_loc, i_glob
+        headsz = sizeof(nptcls_glob)
+        if( .not. file_exists(trim(binfname)) )then
+            THROW_HARD('file '//trim(binfname)//' does not exists!')
+        else
+            call fopen(funit,trim(binfname),access='STREAM',action='READ',status='OLD', iostat=io_stat)
+        end if
+        call fileiochk('simple_eul_prob_tab; read_state_tab; file: '//trim(binfname), io_stat)
+        read(unit=funit,pos=1) nptcls_glob
+        allocate(state_tab_glob(self%nstates,nptcls_glob))
+        read(unit=funit,pos=headsz + 1) state_tab_glob
+        call fclose(funit)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i_loc,i_glob)
+        do i_loc = 1, self%nptcls
+            do i_glob = 1, nptcls_glob
+                if( self%state_tab(1,i_loc)%pind == state_tab_glob(1,i_glob)%pind )then
+                    self%state_tab(:,i_loc) = state_tab_glob(:,i_glob)
+                    exit
+                endif
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine read_state_tab
+
     ! write a global assignment map to binary file
     subroutine write_assignment( self, binfname )
         class(eul_prob_tab), intent(in) :: self
@@ -533,7 +651,7 @@ contains
         else
             call fopen(funit,trim(binfname),access='STREAM',action='READ',status='OLD', iostat=io_stat)
         end if
-        call fileiochk('read_tab_to_glob; read_assignment; file: '//trim(binfname), io_stat)
+        call fileiochk('simple_eul_prob_tab; read_assignment; file: '//trim(binfname), io_stat)
         read(unit=funit,pos=1) nptcls_glob
         allocate(assgn_glob(nptcls_glob))
         read(unit=funit,pos=headsz + 1) assgn_glob
