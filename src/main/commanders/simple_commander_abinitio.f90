@@ -719,7 +719,7 @@ contains
         l_srch4symaxis = trim(params_glob%pgrp) .ne. trim(params_glob%pgrp_start)
         l_symran       = .false.
         l_sym          = l_srch4symaxis
-        if( params_glob%pgrp_start.ne.'c1' .or. params_glob%pgrp.ne.'c1' )then
+        if( uppercase(trim(params_glob%pgrp_start)).ne.'C1' .or. uppercase(trim(params_glob%pgrp)).ne.'C1' )then
             se1 = sym(params_glob%pgrp_start)
             se2 = sym(params_glob%pgrp)
             if(se1%get_nsym() > se2%get_nsym())then
