@@ -716,21 +716,24 @@ contains
     end subroutine prep_class_command_lines
 
     subroutine set_symmetry_class_vars
-        l_srch4symaxis = trim(params_glob%pgrp) .ne. trim(params_glob%pgrp_start)
+        character(len=:), allocatable :: pgrp, pgrp_start
+        pgrp           = lowercase(trim(params_glob%pgrp))
+        pgrp_start     = lowercase(trim(params_glob%pgrp_start))
+        l_srch4symaxis = trim(pgrp) .ne. trim(pgrp_start)
         l_symran       = .false.
         l_sym          = l_srch4symaxis
-        if( uppercase(trim(params_glob%pgrp_start)).ne.'C1' .or. uppercase(trim(params_glob%pgrp)).ne.'C1' )then
-            se1 = sym(params_glob%pgrp_start)
-            se2 = sym(params_glob%pgrp)
+        if( trim(pgrp_start).ne.'c1' .or. trim(pgrp).ne.'c1' )then
+            se1 = sym(pgrp_start)
+            se2 = sym(pgrp)
             if(se1%get_nsym() > se2%get_nsym())then
                 ! ensure se2 is a subgroup of se1
-                if( .not. se1%has_subgrp(params_glob%pgrp) )THROW_HARD('Incompatible symmetry groups; exec_abinitio3D')
+                if( .not. se1%has_subgrp(pgrp) )THROW_HARD('Incompatible symmetry groups; exec_abinitio3D')
                 ! set flag for symmetry randomisation
                 ! in case we are moving from a higher to lower group
                 l_symran = .true.
             else if( se2%get_nsym() > se1%get_nsym() )then
                 ! ensure se1 is a subgroup of se2
-                if( .not. se2%has_subgrp(params_glob%pgrp_start) )THROW_HARD('Incompatible symmetry groups; exec_abinitio3D')
+                if( .not. se2%has_subgrp(pgrp_start) )THROW_HARD('Incompatible symmetry groups; exec_abinitio3D')
             endif
         endif
     end subroutine set_symmetry_class_vars
