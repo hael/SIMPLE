@@ -341,7 +341,11 @@ contains
                     ! BFGS over shifts
                     call grad_shsrch_obj(ithr)%set_indices(iref_start + iproj, iptcl)
                     cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true.)
-                    if( irot == 0 ) cxy(2:3) = 0.
+                    if( irot == 0 )then
+                        irot     = pftcc%get_roind(360.-o_prev%e3get())
+                        cxy(1)   = real(pftcc%gencorr_for_rot_8(iref_start+iproj, iptcl, irot))
+                        cxy(2:3) = 0.
+                    endif
                     self%state_tab(istate,i)%dist   = eulprob_dist_switch(cxy(1))
                     self%state_tab(istate,i)%inpl   = iproj
                     self%state_tab(istate,i)%inpl   = irot
@@ -355,11 +359,10 @@ contains
             ! fill the table
             do istate = 1, self%nstates
                 iref_start  = (istate-1)*params_glob%nspace
-                !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,iproj,irot,cxy)&
+                !$omp parallel do default(shared) private(i,iptcl,o_prev,iproj,irot)&
                 !$omp proc_bind(close) schedule(static)
                 do i = 1, self%nptcls
                     iptcl = self%pinds(i)
-                    ithr  = omp_get_thread_num() + 1
                     ! identify shifts using the previously assigned best reference
                     call build_glob%spproj_field%get_ori(iptcl, o_prev)   ! previous ori
                     irot  = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
