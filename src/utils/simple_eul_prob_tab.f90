@@ -322,7 +322,7 @@ contains
             lims_init(:,2) =  SHC_INPL_TRSHWDTH
             do ithr = 1,nthr_glob
                 call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier,&
-                    &maxits=params_glob%maxits_sh, opt_angle=.true., coarse_init=.true.)
+                    &maxits=params_glob%maxits_sh, opt_angle=.true.)
             end do
             ! fill the table
             do istate = 1, self%nstates
@@ -408,7 +408,7 @@ contains
         enddo
     end subroutine proj_normalize
 
-    ! (for each state) ptcl -> (proj, state) assignment using the global normalized dist value table
+    ! ptcl -> (proj, state) assignment using the global normalized dist value table
     subroutine proj_state_assign( self )
         class(eul_prob_tab), intent(inout) :: self
         integer :: i, iproj, istate, assigned_iproj, assigned_ptcl, proj_dist_inds(params_glob%nspace, self%nstates),&
@@ -490,7 +490,7 @@ contains
         endif
     end subroutine state_normalize
 
-    ! ptcl -> state assignment
+    ! ptcl -> state (using assigned iproj or previous iproj) assignment
     subroutine state_assign( self )
         class(eul_prob_tab), intent(inout) :: self
         integer :: i, istate, assigned_istate, assigned_ptcl, state_dist_inds(self%nstates),&
