@@ -51,6 +51,8 @@ contains
         use simple_sp_project, only: sp_project
         class(calc_pspec_commander_distr), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
+        ! commanders
+        type(calc_pspec_assemble_commander) :: xcalc_pspec_assemble
         ! command lines
         type(cmdline)        :: cline_calc_pspec
         type(cmdline)        :: cline_calc_pspec_assemble
@@ -102,7 +104,7 @@ contains
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
         ! assemble
-        call qenv%exec_simple_prg_in_queue(cline_calc_pspec_assemble, 'CALC_PSPEC_FINISHED')
+        call xcalc_pspec_assemble%execute_safe(cline_calc_pspec_assemble)
         ! end gracefully
         call spproj%kill
         call cline_calc_pspec%kill
@@ -135,20 +137,16 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         ! Sampling
-        ! Because this is always run prior to reconstruction/search, sampling is rarely informed
-        ! (including class stats) so instead of setting a sampling for the following oprations when
+        ! Because this is always run prior to reconstruction/search, sampling is not always informed informed
+        ! or may change with workflows. Instead of setting a sampling for the following oprations when
         ! l_update_frac, we sample uniformly AND do not write the corresponding field
         allocate(ptcl_mask(params_glob%fromp:params_glob%top))
         l_scale_update_frac = .false.
-        if( build%spproj_field%has_been_sampled() )then
-            call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls_part_sel, pinds, ptcl_mask)
+        if( params%l_update_frac )then
+            call build%spproj_field%sample4update_rnd([params%fromp,params%top], params_glob%update_frac, nptcls_part_sel, pinds, ptcl_mask, .false. )
+            l_scale_update_frac = .true.
         else
-            if( params%l_update_frac )then
-                call build%spproj_field%sample4update_rnd([params%fromp,params%top], params_glob%update_frac, nptcls_part_sel, pinds, ptcl_mask, .false. )
-                l_scale_update_frac = .true.
-            else
-                call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls_part_sel, pinds, ptcl_mask, .false.)
-            endif
+            call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls_part_sel, pinds, ptcl_mask, .false.)
         endif
         deallocate(ptcl_mask)
         ! init
