@@ -9,7 +9,7 @@ use simple_srch_sort_loc
 use simple_is_check_assert
 implicit none
 
-public :: avg_sdev, moment, moment_serial, pearsn, normalize, normalize_sigm, normalize_minmax, std_mean_diff
+public :: avg_sdev, moment, moment_serial, pearsn, spear, normalize, normalize_sigm, normalize_minmax, std_mean_diff
 public :: corrs2weights, corr2distweight, analyze_smat, medoid_from_smat, medoid_ranking_from_smat, cluster_smat_bin, medoid_from_dmat
 public :: z_scores, pearsn_serial_8, kstwo
 public :: rank_sum_weights, rank_inverse_weights, rank_centroid_weights, rank_exponent_weights
@@ -648,6 +648,12 @@ contains
             r = 0.
         endif
     end function pearsn_3
+
+    function spear( n, rank1, rank2 ) result( r )
+        integer, intent(in) :: n, rank1(n), rank2(n)
+        real :: r
+        r = 1. - (6. * real(sum((rank1 - rank2)**2))) / real((n * (n**2 - 1)))
+    end function spear
 
     subroutine normalize_1( arr, err )
         real, intent(inout)  :: arr(:)
