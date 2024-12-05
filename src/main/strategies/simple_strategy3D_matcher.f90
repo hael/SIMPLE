@@ -20,7 +20,6 @@ use simple_strategy3D_greedy,       only: strategy3D_greedy
 use simple_strategy3D_greedy_smpl,  only: strategy3D_greedy_smpl
 use simple_strategy3D_greedy_sub,   only: strategy3D_greedy_sub
 use simple_strategy3D_prob,         only: strategy3D_prob
-use simple_strategy3D_prob_state,   only: strategy3D_prob_state
 use simple_strategy3D,              only: strategy3D
 use simple_strategy3D_srch,         only: strategy3D_spec
 use simple_convergence,             only: convergence
@@ -190,10 +189,8 @@ contains
                         allocate(strategy3D_greedy_sub           :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('greedy')
                         allocate(strategy3D_greedy               :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('prob')
+                    case('prob','prob_state')
                         allocate(strategy3D_prob                 :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('prob_state')
-                        allocate(strategy3D_prob_state           :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('smpl')
                         allocate(strategy3D_smpl                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('smpl_neigh')
