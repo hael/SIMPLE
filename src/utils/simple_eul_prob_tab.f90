@@ -37,16 +37,14 @@ type :: eul_prob_tab
     ! GLOBAL PROCEDURES (used only by the global eul_prob_tab object)
     procedure :: read_state_tab
     procedure :: read_tab_to_glob
-    procedure :: prob_assign
+    procedure :: proj_state_assign
     procedure :: write_assignment
-    procedure :: just_state_assign
+    procedure :: state_assign
     ! DESTRUCTOR
     procedure :: kill
     ! PRIVATE
     procedure, private :: proj_normalize
-    procedure, private :: proj_assign
     procedure, private :: state_normalize
-    procedure, private :: state_assign
 end type eul_prob_tab
 
 contains
@@ -347,7 +345,7 @@ contains
                         cxy(2:3) = 0.
                     endif
                     self%state_tab(istate,i)%dist   = eulprob_dist_switch(cxy(1))
-                    self%state_tab(istate,i)%inpl   = iproj
+                    self%state_tab(istate,i)%iproj  = iproj
                     self%state_tab(istate,i)%inpl   = irot
                     self%state_tab(istate,i)%x      = cxy(2)
                     self%state_tab(istate,i)%y      = cxy(3)
@@ -368,7 +366,7 @@ contains
                     irot  = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
                     iproj = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
                     self%state_tab(istate,i)%dist   = eulprob_dist_switch(real(pftcc%gencorr_for_rot_8(iref_start+iproj, iptcl, irot)))
-                    self%state_tab(istate,i)%inpl   = iproj
+                    self%state_tab(istate,i)%iproj  = iproj
                     self%state_tab(istate,i)%inpl   = irot
                     self%state_tab(istate,i)%x      = 0.
                     self%state_tab(istate,i)%y      = 0.
@@ -378,24 +376,6 @@ contains
             enddo
         endif
     end subroutine fill_tab_state_only
-
-    ! ptcl -> (proj, state) assignment used in the global prob_align commander, in 'exec_prob_align'
-    subroutine prob_assign( self )
-        class(eul_prob_tab), intent(inout) :: self
-        call self%proj_normalize
-        call self%proj_assign
-        call self%just_state_assign
-    end subroutine prob_assign
-
-    subroutine just_state_assign( self )
-        class(eul_prob_tab), intent(inout) :: self
-        if( self%nstates > 1 )then
-            call self%state_normalize
-            call self%state_assign
-        else
-            self%assgn_map = self%state_tab(1,:)
-        endif
-    end subroutine just_state_assign
 
     ! projection normalization (same energy) of the 3D loc_tab (for each state)
     ! [0,1] normalization for each state
@@ -428,14 +408,16 @@ contains
         enddo
     end subroutine proj_normalize
 
-    ! (for each state) ptcl -> proj assignment using the global normalized dist value table
-    subroutine proj_assign( self )
+    ! (for each state) ptcl -> (proj, state) assignment using the global normalized dist value table
+    subroutine proj_state_assign( self )
         class(eul_prob_tab), intent(inout) :: self
         integer :: i, iproj, istate, assigned_iproj, assigned_ptcl, proj_dist_inds(params_glob%nspace, self%nstates),&
                     &stab_inds(self%nptcls, params_glob%nspace, self%nstates), inds_sorted(params_glob%nspace, self%nstates)
         real    :: sorted_tab(self%nptcls, params_glob%nspace, self%nstates), projs_athres,&
                     &proj_dist(params_glob%nspace, self%nstates), dists_sorted(params_glob%nspace, self%nstates)
         logical :: ptcl_avail(self%nptcls, self%nstates)
+        ! normalization
+        call self%proj_normalize
         ! sorting each columns
         do istate = 1, self%nstates
             sorted_tab(:,:,istate) = transpose(self%loc_tab(:,:,istate)%dist)
@@ -470,7 +452,9 @@ contains
             enddo
         enddo
         !$omp end parallel do
-    end subroutine proj_assign
+        ! state assign if needed
+        call self%state_assign
+    end subroutine proj_state_assign
 
     ! state normalization (same energy) of the state_tab
     ! [0,1] normalization of the whole table
@@ -513,6 +497,11 @@ contains
                     &stab_inds(self%nptcls, self%nstates)
         real    :: sorted_tab(self%nptcls, self%nstates), state_dist(self%nstates)
         logical :: ptcl_avail(self%nptcls)
+        if( self%nstates == 1 )then
+            self%assgn_map = self%state_tab(1,:)
+            return
+        endif
+        call self%state_normalize
         ! sorting each columns
         sorted_tab = transpose(self%state_tab%dist)
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(istate,i)
