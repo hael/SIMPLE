@@ -1009,13 +1009,13 @@ contains
                 fname = trim(DIST_FBODY)//int2str_pad(ipart,params_glob%numlen)//'.dat'
                 call eulprob_obj_glob%read_state_tab(fname)
             enddo
-            call eulprob_obj_glob%just_state_assign
+            call eulprob_obj_glob%state_assign
         else
             do ipart = 1, params_glob%nparts
                 fname = trim(DIST_FBODY)//int2str_pad(ipart,params_glob%numlen)//'.dat'
                 call eulprob_obj_glob%read_tab_to_glob(fname)
             enddo
-            call eulprob_obj_glob%prob_assign
+            call eulprob_obj_glob%proj_state_assign
         endif
         ! write the iptcl->(iref,istate) assignment
         fname = trim(ASSIGNMENT_FBODY)//'.dat'
