@@ -320,9 +320,14 @@ contains
                 else
                     THROW_HARD('File for class-biased sampling in fractional update: '//CLASS_SAMPLING_FILE//' does not exists!')
                 endif
-                ! balanced class sampling 
-                call build_glob%spproj_field%sample4update_class(clssmp, params_glob%greediness,&
-                &pfromto, params_glob%update_frac, nptcls2update, pinds, ptcl_mask, l_incr_sampl)
+                ! balanced class sampling
+                if( params_glob%l_frac_best )then
+                    call build_glob%spproj_field%sample4update_class(clssmp, pfromto, params_glob%update_frac,&
+                    nptcls2update, pinds, ptcl_mask, l_incr_sampl, params_glob%frac_best)
+                else
+                    call build_glob%spproj_field%sample4update_class(clssmp, pfromto, params_glob%update_frac,&
+                    nptcls2update, pinds, ptcl_mask, l_incr_sampl)
+                endif
                 call deallocate_class_samples(clssmp)
             else
                 call build_glob%spproj_field%sample4update_rnd(pfromto,&
@@ -475,12 +480,17 @@ contains
     end subroutine prep2Dref
 
     !>  \brief  initializes all volumes for reconstruction
-    subroutine preprecvols
+    subroutine preprecvols( pinds )
+        integer, intent(in) :: pinds(:)
         character(len=:), allocatable :: part_str, fbody
         integer,          allocatable :: pops(:)
         integer :: istate
+        real    :: update_frac_states(params_glob%nstates)
         allocate(part_str, source=int2str_pad(params_glob%part,params_glob%numlen))
         call build_glob%spproj_field%get_pops(pops, 'state')
+        call build_glob%spproj_field%calc_update_frac_states(pinds, params_glob%nstates, update_frac_states)
+        ! update_frac_states now contains the per-state fraction, multiply in the overall fracion
+        update_frac_states = update_frac_states * params_glob%update_frac
         do istate = 1, params_glob%nstates
             if( pops(istate) > 0)then
                 call build_glob%eorecvols(istate)%new(build_glob%spproj)
@@ -489,7 +499,7 @@ contains
                     fbody = trim(VOL_FBODY)//int2str_pad(istate,2)//'_part'//part_str
                     if( build_glob%eorecvols(istate)%ldim_even_match(fbody) )then
                         call build_glob%eorecvols(istate)%read_eos(fbody)
-                        call build_glob%eorecvols(istate)%apply_weight(1.-params_glob%update_frac)
+                        call build_glob%eorecvols(istate)%apply_weight(1.-update_frac_states(istate))
                         call build_glob%eorecvols(istate)%expand_exp
                     endif
                 endif
@@ -553,20 +563,27 @@ contains
         type(image) :: mskvol
         integer     :: npix
         logical     :: l_update_lp
-        call mskvol%disc([params_glob%box_crop,params_glob%box_crop,params_glob%box_crop],&
-                            &params_glob%smpd_crop, params_glob%msk_crop, npix )
-        if( params_glob%lp_auto.eq.'fsc' )then
+         if( params_glob%lp_auto.eq.'fsc' )then
             lpopt = calc_lowpass_lim(get_find_at_corr(build_glob%fsc(s,:), params_glob%lplim_crit),&
             &params_glob%box_crop, params_glob%smpd_crop)
         else
+            call mskvol%disc([params_glob%box_crop,params_glob%box_crop,params_glob%box_crop],&
+                            &params_glob%smpd_crop, params_glob%msk_crop, npix )
+            if( params_glob%l_filemsk )then
+                ! envelope masking
+                call mskvol%read(params_glob%mskfile)
+                call mskvol%remove_edge
+            endif
             call estimate_lplim(build_glob%vol_odd, build_glob%vol, mskvol, [params_glob%lpstart,params_glob%lpstop], lpopt)
+            ! destruct
+            call mskvol%kill
         endif
         l_update_lp = .false.
         if( s == 1 )then
             l_update_lp = .true. ! always update for state == 1       
         else
-            if( lpopt > params_glob%lp )then
-                l_update_lp = .true. ! the limit for the state with the worst resolution wins
+            if( lpopt < params_glob%lp )then
+                l_update_lp = .true. ! the limit for the state with the best resolution wins
             endif
         endif
         if( l_update_lp )then
@@ -577,8 +594,6 @@ contains
             ! update low-pass limit in project
             call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
         endif
-        ! destruct
-        call mskvol%kill
     end subroutine estimate_lp_refvols
 
     subroutine read_and_filter_refvols( s )
@@ -592,7 +607,7 @@ contains
         if( params_glob%l_lpauto .and. params_glob%l_ml_reg )then
             vol_even_unfil = add2fbody(vol_even,params_glob%ext,'_unfil')
             vol_odd_unfil  = add2fbody(vol_odd,params_glob%ext,'_unfil')
-            ! estimate low-pass limit from unifiltered volumes
+            ! estimate low-pass limit from unfiltered volumes
             call build_glob%vol%read_and_crop(vol_even_unfil,    params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
             call build_glob%vol_odd%read_and_crop(vol_odd_unfil, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
             call estimate_lp_refvols(s, lpopt)
@@ -716,7 +731,7 @@ contains
         real             :: shift(2), sdev_noise
         integer          :: batchlims(2), iptcl, i, i_batch, ibatch
         ! init volumes
-        call preprecvols
+        call preprecvols(pinds)
         ! prep batch imgs
         call prepimgbatch(MAXIMGBATCHSZ)
         ! allocate array
@@ -782,7 +797,7 @@ contains
         if( params_glob%nstates /= 1   ) THROW_HARD('PROJREC & NSTATES>1 not supported yet')
         if( DEBUG ) t = tic()
         ! init volumes
-        call preprecvols
+        call preprecvols(pinds)
         ! prep batch imgs
         call prepimgbatch(MAXIMGBATCHSZ)
         ! allocations
@@ -911,15 +926,10 @@ contains
             do iproj = 1,params_glob%nspace
                 if( eopops(iproj,1) > 0 )then
                     call projdirs(iproj,1)%convert2img(numimg, denomimg)
-                    ! call numimg%ctf_dens_correct(denomimg)
-                    ! call numimg%ifft
-                    call denomimg%write('projdirs_even.mrc',iproj)
-                endif
-                if( eopops(iproj,2) > 0 )then
-                    call projdirs(iproj,2)%convert2img(numimg, denomimg)
-                    ! call numimg%ctf_dens_correct(denomimg)
-                    ! call numimg%ifft
-                    call denomimg%write('projdirs_odd.mrc',iproj)
+                    call numimg%ctf_dens_correct(denomimg)
+                    call numimg%ifft
+                    call numimg%clip_inplace([params_glob%box_crop,params_glob%box_crop,1])
+                    call numimg%write('projdirs_even.mrc',iproj)
                 endif
             end do
             call numimg%kill

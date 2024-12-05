@@ -322,8 +322,8 @@ contains
         if( .not. cline%defined('ctf')   ) call cline%set('ctf',   'yes')
         call params%new(cline)
         ! parameter input management
-        inputted_boxtab = cline%defined('boxtab')
-        inputted_deftab = cline%defined('deftab')
+        inputted_boxtab     = cline%defined('boxtab')
+        inputted_deftab     = cline%defined('deftab')
         inputted_dir_movies = cline%defined('dir_movies')
         inputted_filetab    = cline%defined('filetab')
         if(inputted_dir_movies .and. inputted_filetab)                        THROW_HARD ('dir_movies cannot be set with a filetab! exec_import_movies')
@@ -420,14 +420,14 @@ contains
                 THROW_HARD('# boxfiles .ne. # movies; exec_import_movies')
             endif
             do i=1,nmovf
-                if( params%mkdir.eq.'yes' )then
+                if( trim(params%mkdir).eq.'yes' )then
                     if(boxfnames(i)(1:1).ne.'/') boxfnames(i) = PATH_PARENT//trim(boxfnames(i))
                 endif
-                call make_relativepath(CWD_GLOB, boxfnames(i), boxfname)
+                boxfname = simple_abspath(boxfnames(i))
                 if( first_import )then
-                    call spproj%os_mic%set_boxfile(i, boxfname)
+                    call spproj%set_boxfile(i, boxfname)
                 else
-                    call spproj%os_mic%set_boxfile(nprev_intgs+i, boxfname)
+                    call spproj%set_boxfile(nprev_intgs+i, boxfname)
                 endif
             end do
         endif 
@@ -466,8 +466,8 @@ contains
             if( params%mkdir.eq.'yes' )then
                 if(boxfnames(i)(1:1).ne.'/') boxfnames(i) = PATH_PARENT//trim(boxfnames(i))
             endif
-            call make_relativepath(CWD_GLOB,boxfnames(i),boxfname)
-            call spproj%os_mic%set_boxfile(i, boxfname)
+            boxfname = simple_abspath(boxfnames(i))
+            call spproj%set_boxfile(i, boxfname)
         end do
         ! write project file
         call spproj%write_segment_inside('mic') ! all that's needed here
@@ -754,7 +754,7 @@ contains
         type(parameters)              :: params
         type(sp_project)              :: spproj
         type(image)                   :: img
-        character(len=:), allocatable :: cavgs_fname, projfile_path, stk_path
+        character(len=:), allocatable :: cavgs_fname, stk_path
         logical,          allocatable :: lstates(:)
         integer :: ldim(3), icls, ncls, ncavgs, cnt
         real    :: smpd, smpd_phys
@@ -769,10 +769,7 @@ contains
         if( count(lstates) == 0 ) THROW_HARD('All class averages are deselected')
         call spproj%get_cavgs_stk(cavgs_fname, ncls, smpd)
         if( spproj%os_cls2D%get_noris() /= ncls ) THROW_HARD('Inconsistent # of entries cls2D/out!')
-        ! takes care of path
-        projfile_path = get_fpath(simple_abspath(params%projfile))
-        cavgs_fname   = trim(projfile_path)//'/'//trim(cavgs_fname)
-        if(.not. file_exists(cavgs_fname)) then
+        if(.not. file_exists(trim(cavgs_fname))) then
             !try using stkpath if present in projfile
             call spproj%get_cavgs_stk(cavgs_fname, ncls, smpd, stkpath=stk_path)
             if(allocated(stk_path)) cavgs_fname = trim(stk_path)//'/'//trim(cavgs_fname)
@@ -847,6 +844,14 @@ contains
             allocate(states(noris), source=0)
             do i=1,params%nran
                 states(ptcls_rnd(i)) = 1
+            enddo
+        else if( cline%defined('state') )then
+            call pos%get_pinds(params%state, 'state', ptcls_in_state, l_require_updated=.true.)
+            noris_in_state = size(ptcls_in_state)
+            ! allocate states and set the state-flags
+            allocate(states(noris), source=0)
+            do i=1,noris_in_state
+                states(ptcls_in_state(i)) = 1
             enddo
         else if( cline%defined('ctfresthreshold') .or. cline%defined('icefracthreshold') )then
             l_ctfres  = cline%defined('ctfresthreshold')
@@ -1362,7 +1367,7 @@ contains
         character(len=:), allocatable :: newstkname,stkname,ext
         logical,          allocatable :: stks_mask(:), ptcls_mask(:)
         integer,          allocatable :: stkinds(:), stk2mic_inds(:), mic2stk_inds(:)
-        character(len=LONGSTRLEN) :: relstkname, stkdir
+        character(len=LONGSTRLEN) :: absstkname, stkdir
         real                      :: smpd
         integer                   :: iptcl, istk, stk_cnt, nptcls_tot, ptcl_cnt
         integer                   :: box, nstks, nstks_tot, fromp, top, fromp_glob, top_glob, nmics_tot
@@ -1469,8 +1474,8 @@ contains
                 call spproj_out%os_ptcl3D%set(ptcl_glob,'indstk',ptcl_cnt)
             enddo
             ! update stack
-            call make_relativepath(CWD_GLOB, newstkname, relstkname)
-            call o_stk%set('stk',   relstkname)
+            absstkname = simple_abspath(newstkname)
+            call o_stk%set('stk',   absstkname)
             call o_stk%set('fromp', fromp_glob)
             call o_stk%set('top',   top_glob)
             call o_stk%set('nptcls',ptcl_cnt)

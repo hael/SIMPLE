@@ -2,14 +2,15 @@
 module simple_commander_preprocess
 include 'simple_lib.f08'
 use simple_binoris_io
-use simple_builder,        only: builder
-use simple_cmdline,        only: cmdline
-use simple_parameters,     only: parameters, params_glob
-use simple_commander_base, only: commander_base
-use simple_image,          only: image
-use simple_sp_project,     only: sp_project
-use simple_qsys_env,       only: qsys_env
-use simple_stack_io,       only: stack_io
+use simple_builder,              only: builder
+use simple_cmdline,              only: cmdline
+use simple_parameters,           only: parameters, params_glob
+use simple_commander_base,       only: commander_base
+use simple_image,                only: image
+use simple_sp_project,           only: sp_project
+use simple_qsys_env,             only: qsys_env
+use simple_stack_io,             only: stack_io
+use simple_motion_correct_utils, only: flip_gain
 use simple_qsys_funs
 use simple_progress
 implicit none
@@ -128,7 +129,6 @@ end type make_pickrefs_commander
 contains
 
     subroutine exec_preprocess_distr( self, cline )
-        use simple_motion_correct, only: flip_gain
         class(preprocess_commander_distr), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(parameters)              :: params
@@ -464,7 +464,6 @@ contains
     end subroutine exec_preprocess
 
     subroutine exec_motion_correct_distr( self, cline )
-        use simple_motion_correct, only: flip_gain
         class(motion_correct_commander_distr), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
         type(parameters) :: params
@@ -1084,7 +1083,7 @@ contains
                 if( params_glob%nmoldiams > 1 )then
                     call spproj%os_mic%set(imic, 'moldiam', moldiam_opt)
                 else
-                    call spproj%os_mic%set_boxfile(imic, boxfile, nptcls=nptcls_out)
+                    call spproj%set_boxfile(imic, boxfile, nptcls=nptcls_out)
                 endif
             endif
             write(logfhandle,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the micrographs processed'
@@ -1408,8 +1407,8 @@ contains
             if( cline%defined('dir_box') )then
                 box_fname = trim(params%dir_box)//'/'//fname_new_ext(basename(mic_name),'box')
                 if( .not.file_exists(box_fname) )cycle
-                call make_relativepath(CWD_GLOB,trim(box_fname),boxfile_name, checkexists=.false.)
-                call spproj%os_mic%set_boxfile(imic, boxfile_name)
+                boxfile_name = simple_abspath(box_fname, check_exists=.false.)
+                call spproj%set_boxfile(imic, boxfile_name)
             else
                 boxfile_name = trim(o_mic%get_static('boxfile'))
                 if( .not.file_exists(boxfile_name) )cycle
@@ -1552,7 +1551,7 @@ contains
                 call stkio_w%close
                 ! update stack stats
                 call imgs(1)%update_header_stats(trim(adjustl(stack)), [stk_min, stk_max, stk_mean, stk_sdev])
-                ! IMPORT INTO PROJECT
+                ! IMPORT INTO PROJECT (with absolute path)
                 call spproj%add_stk(trim(adjustl(stack)), ctfparms)
                 ! add box coordinates to ptcl2D field only & updates patch-based defocus
                 l_ctfpatch = .false.
@@ -1615,41 +1614,25 @@ contains
         endif
         ! write
         if( trim(params%stream).eq.'yes' )then
-            if( cline%defined('newstream') )then
-                if( trim(cline%get_carg('newstream')).eq.'yes' )then
-                    ! purging state=0 and nptcls=0 mics such that all mics (nmics>1)
-                    ! can be assumed associated with particles in streaming
-                    nmics = count(mics_mask)
-                    if( nmics == 0 )then
-                        call spproj%os_mic%kill
-                        call spproj%os_stk%kill
-                        call spproj%os_ptcl2D%kill
-                        call spproj%os_ptcl3D%kill
-                    else
-                        if( nmics < nmics_here )then
-                            call os_mic%new(nmics, is_ptcl=.false.)
-                            cnt = 0
-                            do imic = 1, nmics_here
-                                if( mics_mask(imic) )then
-                                    cnt = cnt+1
-                                    call os_mic%transfer_ori(cnt, spproj%os_mic, imic)
-                                endif
-                            enddo
-                            spproj%os_mic = os_mic
+            ! purging state=0 and nptcls=0 mics such that all mics (nmics>1)
+            ! can be assumed associated with particles in streaming
+            nmics = count(mics_mask)
+            if( nmics == 0 )then
+                call spproj%os_mic%kill
+                call spproj%os_stk%kill
+                call spproj%os_ptcl2D%kill
+                call spproj%os_ptcl3D%kill
+            else
+                if( nmics < nmics_here )then
+                    call os_mic%new(nmics, is_ptcl=.false.)
+                    cnt = 0
+                    do imic = 1, nmics_here
+                        if( mics_mask(imic) )then
+                            cnt = cnt+1
+                            call os_mic%transfer_ori(cnt, spproj%os_mic, imic)
                         endif
-                        ! update to boxfile path
-                        do imic = 1,nmics
-                            boxfile_name = trim(spproj%os_mic%get_static(imic, 'boxfile'))
-                            boxfile_name = trim(simple_abspath(boxfile_name, check_exists=.false.))
-                            call spproj%os_mic%set(imic, 'boxfile', boxfile_name)
-                        enddo
-                        ! and update to stack path
-                        do istk = 1,spproj%os_stk%get_noris(),1
-                            stack = trim(spproj%os_stk%get_static(istk, 'stk'))
-                            stack = trim(simple_abspath(stack, check_exists=.false.))
-                            call spproj%os_stk%set(istk, 'stk', stack)
-                        enddo
-                    endif
+                    enddo
+                    spproj%os_mic = os_mic
                 endif
             endif
         endif
@@ -2150,8 +2133,7 @@ contains
                     else
                         call micrograph%update_header_stats(trim(adjustl(stack)), [stk_min, stk_max, stk_mean, stk_sdev])
                     endif
-                    call make_relativepath(CWD_GLOB, stack, rel_stack)
-                    call spproj_in%os_stk%set(stk_ind,'stk',   rel_stack)
+                    call spproj_in%os_stk%set(stk_ind,'stk',   simple_abspath(stack,check_exists=.false.))
                     call spproj_in%os_stk%set(stk_ind,'box',   params%box)
                     call spproj_in%os_stk%set(stk_ind,'nptcls',nptcls2extract)
                     call spproj_in%os_mic%set(imic,   'nptcls',nptcls2extract)

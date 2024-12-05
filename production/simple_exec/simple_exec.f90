@@ -13,9 +13,8 @@ use simple_commander_mask
 use simple_commander_misc
 use simple_commander_oris
 use simple_commander_preprocess
-use simple_commander_preprocess_stream
 use simple_commander_cluster2D
-use simple_commander_cluster2D_stream_dev
+use simple_commander_cluster2D_stream
 use simple_commander_abinitio
 use simple_commander_abinitio2D
 use simple_commander_refine3D
@@ -49,7 +48,6 @@ type(merge_projects_commander)              :: xmerge_projects
 
 ! PRE-PROCESSING WORKFLOWS
 type(preprocess_commander_distr)            :: xpreprocess
-type(preprocess_commander_stream_dev)       :: xpreprocess_stream_dev
 type(extract_commander_distr)               :: xextract_distr
 type(reextract_commander_distr)             :: xreextract_distr
 type(motion_correct_commander_distr)        :: xmotion_correct_distr
@@ -67,9 +65,9 @@ type(cleanup2D_commander_hlev)              :: xcleanup2D_distr
 ! AB INITIO 3D RECONSTRUCTION WORKFLOW
 type(estimate_lpstages_commander)           :: xestimate_lpstages
 type(noisevol_commander)                    :: xnoisevol
-type(initial_3Dmodel_commander)             :: xinitial_3Dmodel
-type(abinitio_3Dmodel_commander)            :: xabinitio_3Dmodel
-type(abinitio_3Dmodel_parts_commander)      :: xabinitio_3Dmodel_parts
+type(abinitio3D_cavgs_commander)            :: xabinitio3D_cavgs
+type(abinitio3D_commander)                  :: xabinitio3D
+type(abinitio3D_parts_commander)            :: xabinitio3D_parts
 
 ! REFINE3D WORKFLOWS
 type(calc_pspec_commander_distr)            :: xcalc_pspec_distr
@@ -81,7 +79,7 @@ type(map_cavgs_selection_commander)         :: xmap_cavgs_selection
 type(map_cavgs_states_commander)            :: xmap_cavgs_states
 type(cluster_cavgs_commander)               :: xcluster_cavgs
 type(partition_cavgs_commander)             :: xpartition_cavgs
-type(prune_cavgs_commander)                 :: xprune_cavgs
+type(score_ptcls_commander)                 :: xscore_ptcls
 type(write_classes_commander)               :: xwrite_classes
 type(symaxis_search_commander)              :: xsymsrch
 type(symmetry_test_commander)               :: xsymtst
@@ -101,6 +99,7 @@ type(nununiform_filter3D_commander)         :: xnununiform_filter3D
 type(cavg_filter2D_commander)               :: xcavg_filter2D
 type(centervol_commander)                   :: xcenter
 type(reproject_commander)                   :: xreproject
+type(volanalyze_commander)                  :: xvolanalyze
 type(volops_commander)                      :: xvolops
 type(convert_commander)                     :: xconvert
 type(ctfops_commander)                      :: xctfops
@@ -109,6 +108,7 @@ type(filter_commander)                      :: xfilter
 type(normalize_commander)                   :: xnormalize
 type(ppca_denoise_commander)                :: xppca_denoise
 type(ppca_denoise_classes_commander)        :: xppca_denoise_classes
+type(denoise_cavgs_commander)               :: xdenoise_cavgs
 type(scale_commander)                       :: xscale
 type(stack_commander)                       :: xstack
 type(stackops_commander)                    :: xstackops
@@ -216,8 +216,6 @@ select case(trim(prg))
     ! PRE-PROCESSING WORKFLOWS
     case( 'preprocess' )
         call xpreprocess%execute(cline)
-    case( 'preprocess_stream_dev' )
-        call xpreprocess_stream_dev%execute(cline)
     case( 'extract' )
         call xextract_distr%execute(cline)
     case( 'reextract' )
@@ -248,20 +246,20 @@ select case(trim(prg))
         call xestimate_lpstages%execute(cline)
     case( 'noisevol' )
         call xnoisevol%execute(cline)
-    case( 'initial_3Dmodel' )
+    case( 'abinitio3D_cavgs' )
         if( cline%defined('nrestarts') )then
-            call restarted_exec(cline, 'initial_3Dmodel', 'simple_exec')
+            call restarted_exec(cline, 'abinitio3D_cavgs', 'simple_exec')
         else
-            call xinitial_3Dmodel%execute(cline)
+            call xabinitio3D_cavgs%execute(cline)
         endif
-    case( 'abinitio_3Dmodel' )
+    case( 'abinitio3D' )
         if( cline%defined('nrestarts') )then
-            call restarted_exec(cline, 'abinitio_3Dmodel', 'simple_exec')
+            call restarted_exec(cline, 'abinitio3D', 'simple_exec')
         else
-            call xabinitio_3Dmodel%execute(cline)
+            call xabinitio3D%execute(cline)
         endif
-    case( 'abinitio_3Dmodel_parts' )
-        call xabinitio_3Dmodel_parts%execute(cline)
+    case( 'abinitio3D_parts' )
+        call xabinitio3D_parts%execute(cline)
 
     ! REFINE3D WORKFLOWS
     case( 'calc_pspec' )
@@ -284,8 +282,8 @@ select case(trim(prg))
         call xcluster_cavgs%execute(cline)
     case( 'partition_cavgs' )
         call xpartition_cavgs%execute(cline)
-    case( 'prune_cavgs' )
-        call xprune_cavgs%execute(cline)
+    case( 'score_ptcls' )
+        call xscore_ptcls%execute(cline)
     case( 'write_classes' )
         call xwrite_classes%execute(cline)
     case( 'symaxis_search' )
@@ -324,6 +322,8 @@ select case(trim(prg))
         call xreproject%execute(cline)
     case( 'volops' )
         call xvolops%execute(cline)
+    case( 'volanalyze' )
+        call xvolanalyze%execute(cline)
     case( 'convert' )
         call xconvert%execute(cline)
     case( 'ctfops' )
@@ -338,6 +338,8 @@ select case(trim(prg))
         call xppca_denoise%execute(cline)
     case( 'ppca_denoise_classes' )
         call xppca_denoise_classes%execute(cline)
+    case( 'denoise_cavgs' )
+        call xdenoise_cavgs%execute(cline)
     case( 'scale' )
         call xscale%execute(cline)
     case( 'stack' )
@@ -418,7 +420,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('f47afefa')
+call simple_print_git_version('07aa1956')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

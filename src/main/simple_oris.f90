@@ -82,12 +82,15 @@ type :: oris
     procedure          :: get_nodd
     procedure          :: print_
     procedure          :: print_matrices
+    procedure          :: sample4rec
     procedure          :: sample4update_all
     procedure          :: sample4update_rnd
     procedure          :: sample4update_class
     procedure          :: sample4update_reprod
+    procedure          :: calc_update_frac_states
     procedure          :: get_class_sample_stats
-    procedure          :: sample_balanced
+    procedure, private :: sample_balanced_1, sample_balanced_2
+    generic            :: sample_balanced => sample_balanced_1, sample_balanced_2
     procedure          :: sample_balanced_parts
     procedure          :: incr_updatecnt
     procedure          :: is_first_update
@@ -163,7 +166,6 @@ type :: oris
     procedure          :: str2ori
     procedure          :: str2ori_ctfparams_state_eo
     procedure          :: set_ctfvars
-    procedure          :: set_boxfile
     ! I/O
     procedure          :: read
     procedure          :: read_ctfparams_state_eo
@@ -612,19 +614,27 @@ contains
         integer,           intent(in)    :: ind
         character(len=*),  intent(in)    :: label
         integer, optional, intent(in)    :: eo
-        integer :: mylab, pop, i
+        integer :: pop, i
         logical :: consider_eo
         consider_eo = .false.
         if( present(eo) ) consider_eo = .true.
         pop = 0
-        do i=1,self%n
-            if( self%o(i)%isstatezero() ) cycle
-            if( consider_eo )then
+        if( consider_eo )then
+            !$omp parallel do private(i) default(shared) proc_bind(close) reduction(+:pop)
+            do i=1,self%n
+                if( self%o(i)%isstatezero()  ) cycle
                 if( self%o(i)%get_eo() /= eo ) cycle
-            endif
-            mylab = self%o(i)%get_int(label)
-            if( mylab == ind )  pop = pop + 1
-        end do
+                if( self%o(i)%get_int(label) == ind )  pop = pop + 1
+            end do
+            !$omp end parallel do
+        else
+            !$omp parallel do private(i) default(shared) proc_bind(close) reduction(+:pop)
+            do i=1,self%n
+                if( self%o(i)%isstatezero() ) cycle
+                if( self%o(i)%get_int(label) == ind )  pop = pop + 1
+            end do
+            !$omp end parallel do
+        endif
     end function get_pop
 
     !>  \brief  is for getting all rotation matrices
@@ -835,35 +845,51 @@ contains
     end subroutine remap_cls
 
     !>  \brief  is for getting an allocatable array with ptcl indices of the label 'label'
-    subroutine get_pinds( self, ind, label, indices, l_shuffle )
+    subroutine get_pinds( self, ind, label, indices, l_shuffle, l_require_updated )
         class(oris),          intent(in)  :: self
         character(len=*),     intent(in)  :: label
         integer,              intent(in)  :: ind
         integer, allocatable, intent(out) :: indices(:)
-        logical, optional,    intent(in)  :: l_shuffle
-        type(ran_tabu) :: rt
-        integer :: pop, cnt, myval, i
-        logical :: ll_shuffle
+        logical, optional,    intent(in)  :: l_shuffle, l_require_updated
+        type(ran_tabu)       :: rt
+        logical, allocatable :: mask(:)
+        integer :: pop, i
+        logical :: ll_shuffle, ll_require_updated
         ll_shuffle = .false.
         if( present(l_shuffle) ) ll_shuffle = l_shuffle
+        ll_require_updated = .false.
+        if( present(l_require_updated) ) ll_require_updated = l_require_updated
         if( allocated(indices) )deallocate(indices)
-        pop = self%get_pop(ind, label)
-        if( pop > 0 )then
-            allocate( indices(pop) )
-            cnt = 0
-            do i=1,self%n
-                if( self%o(i)%isstatezero() ) cycle
-                myval = self%o(i)%get_int(label)
-                if( myval == ind )then
-                    cnt = cnt + 1
-                    indices(cnt) = i
+        allocate(indices(self%n),mask(self%n))
+        !$omp parallel do private(i) default(shared) proc_bind(close)
+        do i = 1,self%n
+            if( self%o(i)%isstatezero() )then
+                mask(i) = .false.
+            else
+                if( ll_require_updated )then
+                    if( self%o(i)%get_int('updatecnt') == 0 )then
+                        mask(i) = .false.
+                    else
+                        mask(i) = self%o(i)%get_int(label) == ind
+                    endif
+                else
+                    mask(i) = self%o(i)%get_int(label) == ind
                 endif
-            end do
+            endif
+            if( mask(i) ) indices(i) = i
+        end do
+        !$omp end parallel do
+        pop = count(mask)
+        if( pop > 0 )then
+            indices = pack(indices, mask=mask)
+            deallocate(mask)
             if( ll_shuffle )then
-                rt = ran_tabu(pop)
+                rt  = ran_tabu(pop)
                 call rt%shuffle(indices)
                 call rt%kill
             endif
+        else
+            deallocate(indices,mask)
         endif
     end subroutine get_pinds
 
@@ -1105,6 +1131,37 @@ contains
         end do
     end subroutine print_matrices
 
+    subroutine sample4rec( self, fromto, nsamples, inds, mask )
+        class(oris),          intent(inout) :: self
+        integer,              intent(in)    :: fromto(2)
+        integer,              intent(inout) :: nsamples
+        integer, allocatable, intent(inout) :: inds(:)
+        logical,              intent(inout) :: mask(fromto(1):fromto(2))
+        integer, allocatable :: states(:), updatecnts(:)
+        integer :: i, cnt, nptcls
+        nptcls = fromto(2) - fromto(1) + 1
+        if( allocated(inds) ) deallocate(inds)
+        allocate(states(nptcls), updatecnts(nptcls), inds(nptcls), source=0)
+        cnt = 0
+        do i = fromto(1), fromto(2)
+            cnt             = cnt + 1
+            states(cnt)     = self%o(i)%get_state()
+            updatecnts(cnt) = self%o(i)%get_int('updatecnt')
+            inds(cnt)       = i
+        end do
+        if( any(updatecnts > 0) )then
+            nsamples = count(states > 0 .and. updatecnts > 0)
+            inds     = pack(inds, mask=states > 0 .and. updatecnts > 0)
+        else
+            nsamples = count(states > 0)
+            inds     = pack(inds, mask=states > 0)
+        endif
+        mask = .false.
+        do i = 1, nsamples
+            mask(inds(i)) = .true.
+        end do
+    end subroutine sample4rec
+
     subroutine sample4update_all( self, fromto, nsamples, inds, mask, incr_sampled )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
@@ -1179,15 +1236,17 @@ contains
         end do
     end subroutine sample4update_rnd
 
-    subroutine sample4update_class( self, clssmp, greediness, fromto, update_frac, nsamples, inds, mask, incr_sampled )
+    subroutine sample4update_class( self, clssmp, fromto, update_frac, nsamples, inds, mask, incr_sampled, frac_best )
         class(oris),          intent(inout) :: self
         type(class_sample),   intent(inout) :: clssmp(:) ! data structure for balanced samplign
-        integer,              intent(in)    :: greediness, fromto(2)
+        integer,              intent(in)    :: fromto(2)
         real,                 intent(in)    :: update_frac
         integer,              intent(inout) :: nsamples
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(inout) :: mask(fromto(1):fromto(2))
         logical,              intent(in)    :: incr_sampled
+        real, optional,       intent(in)    :: frac_best
+        integer, parameter   :: GREEDINESS = 2
         integer, allocatable :: states(:), sampled(:)
         real,    allocatable :: rstates(:)
         integer :: i, cnt, nptcls, sample_ind, nsamples_class, states_bal(self%n)
@@ -1196,7 +1255,11 @@ contains
         nsamples_class = nint(update_frac * real(count(rstates > 0.5)))
         deallocate(rstates)
         ! class-biased selection
-        call self%sample_balanced(clssmp, nsamples_class, greediness, states_bal)
+        if( present(frac_best) )then
+            call self%sample_balanced(clssmp, nsamples_class, frac_best,  states_bal) ! stochastic sampling from frac_best fraction
+        else
+            call self%sample_balanced(clssmp, nsamples_class, GREEDINESS, states_bal) ! completely greedy selection
+        endif
         ! now, we deal with the partition
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
@@ -1250,6 +1313,25 @@ contains
         end do
     end subroutine sample4update_reprod
 
+    subroutine calc_update_frac_states( self, pinds, nstates, update_frac_states )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: pinds(:), nstates
+        real,        intent(out)   :: update_frac_states(nstates)
+        integer :: state_cnts(nstates), n, sum_state_cnts, i, iptcl, s
+        n = size(pinds)
+        state_cnts = 0
+        do i = 1, n
+            iptcl = pinds(i)
+            do s = 1, nstates
+                if( self%o(iptcl)%get_state() == s ) state_cnts(s) = state_cnts(s) + 1
+            end do
+        end do
+        sum_state_cnts = sum(state_cnts)
+        do s = 1, nstates
+            update_frac_states(s) = real(state_cnts(s)) / real(sum_state_cnts)
+        end do
+    end subroutine calc_update_frac_states
+
     subroutine get_class_sample_stats( self, clsinds, clssmp )
         class(oris),                     intent(inout) :: self
         integer,                         intent(in)    :: clsinds(:) ! class indices to sample from
@@ -1282,7 +1364,7 @@ contains
         end do
     end subroutine get_class_sample_stats
 
-    subroutine sample_balanced( self, clssmp, nptcls, greediness, states )
+    subroutine sample_balanced_1( self, clssmp, nptcls, greediness, states )
         class(oris),        intent(inout) :: self
         type(class_sample), intent(inout) :: clssmp(:)  ! data structure for balanced sampling
         integer,            intent(in)    :: nptcls     ! # particles to sample in total
@@ -1344,7 +1426,43 @@ contains
             case DEFAULT
                 THROW_HARD('only greediness 0-2 is allowed')
         end select
-    end subroutine sample_balanced
+    end subroutine sample_balanced_1
+
+    subroutine sample_balanced_2( self, clssmp, nptcls, frac_best, states )
+        class(oris),        intent(inout) :: self
+        type(class_sample), intent(inout) :: clssmp(:)  ! data structure for balanced sampling
+        integer,            intent(in)    :: nptcls     ! # particles to sample in total
+        real,               intent(in)    :: frac_best  ! fraction of best scoring particles to sample from
+        integer,            intent(inout) :: states(self%n)
+        integer,            allocatable   :: pinds2sample(:)
+        type(ran_tabu) :: rt
+        integer        :: i, j, cnt, nbest
+        ! calculate sampling size for each class
+        clssmp(:)%nsample = 0
+        do while( sum(clssmp(:)%nsample) < nptcls )
+            where( clssmp(:)%nsample < clssmp(:)%pop ) clssmp(:)%nsample = clssmp(:)%nsample + 1
+        end do
+        states = 0    
+        do i = 1, size(clssmp)
+            nbest = max(clssmp(i)%nsample, nint(frac_best * real(clssmp(i)%pop)))
+            if( nbest == clssmp(i)%nsample )then
+                ! completely greedy selection based on objective function value
+                do j = 1, clssmp(i)%nsample
+                    states(clssmp(i)%pinds(j)) = 1
+                end do
+            else
+                ! random selection from the frac_best scoring ones
+                allocate(pinds2sample(nbest), source=clssmp(i)%pinds(:nbest))
+                rt = ran_tabu(nbest)
+                call rt%shuffle(pinds2sample)
+                call rt%kill
+                do j = 1, clssmp(i)%nsample
+                    states(pinds2sample(j)) = 1
+                end do
+                deallocate(pinds2sample)
+            endif
+        end do
+    end subroutine sample_balanced_2
 
     subroutine sample_balanced_parts( self, clssmp, nparts, states, nptcls_per_part )
         class(oris),        intent(inout) :: self
@@ -2249,14 +2367,6 @@ contains
         call self%o(i)%set_ctfvars(ctfvars)
     end subroutine set_ctfvars
 
-    subroutine set_boxfile( self, i, boxfname, nptcls )
-        class(oris),       intent(inout) :: self
-        integer,           intent(in)    :: i
-        character(len=*),  intent(in)    :: boxfname
-        integer, optional, intent(in)    :: nptcls
-        call self%o(i)%set_boxfile(boxfname, nptcls)
-    end subroutine set_boxfile
-
     ! I/O
 
     !>  \brief  reads orientation info from file
@@ -2787,9 +2897,10 @@ contains
         deallocate(msk,rfinds,corrs)
     end subroutine find_best_classes
 
-    subroutine class_robust_rejection( self, mask )
-        class(oris), intent(in)    :: self
-        logical,     intent(inout) :: mask(1:self%n)
+    subroutine class_robust_rejection( self, mask, adjust )
+        class(oris),    intent(in)    :: self
+        logical,        intent(inout) :: mask(1:self%n)
+        real, optional, intent(in)    :: adjust
         real,    parameter   :: MEAN_THRESHOLD    = -8.0
         real,    parameter   :: REL_VAR_THRESHOLD =  6.0
         real,    parameter   :: ABS_VAR_THRESHOLD =  1.5
@@ -2798,6 +2909,8 @@ contains
         real,    parameter   :: MAX_THRESHOLD     =  2.0
         real,    allocatable :: vals(:), x(:)
         logical, allocatable :: msk(:)
+        real    :: eff_mean_thresh, eff_rel_var_thresh, eff_abs_var_thresh
+        real    :: eff_tvd_thresh, eff_min_thresh, eff_max_thresh
         integer :: icls, i
         logical :: has_mean, has_var, has_tvd, has_minmax
         msk = mask
@@ -2811,6 +2924,22 @@ contains
             deallocate(msk)
             return
         endif
+        ! Effective threshold
+        eff_mean_thresh    = MEAN_THRESHOLD
+        eff_rel_var_thresh = REL_VAR_THRESHOLD
+        eff_abs_var_thresh = ABS_VAR_THRESHOLD
+        eff_tvd_thresh     = TVD_THRESHOLD
+        eff_min_thresh     = MIN_THRESHOLD
+        eff_max_thresh     = MAX_THRESHOLD
+        if( present(adjust) )then
+            eff_mean_thresh    = adjust * eff_mean_thresh
+            eff_rel_var_thresh = adjust * eff_rel_var_thresh
+            eff_abs_var_thresh = adjust * eff_abs_var_thresh
+            eff_tvd_thresh     = min(0.999, adjust * eff_tvd_thresh)
+            eff_min_thresh     = adjust * eff_min_thresh
+            eff_max_thresh     = adjust * eff_max_thresh
+        endif
+        ! selection
         has_mean   = self%isthere('mean')
         has_var    = self%isthere('var')
         has_tvd    = self%isthere('tvd')
@@ -2823,7 +2952,7 @@ contains
             do icls = 1,self%n
                 if( msk(icls) )then
                     i = i+1
-                    if( mask(icls) ) mask(icls) = x(i) > MEAN_THRESHOLD
+                    if( mask(icls) ) mask(icls) = x(i) > eff_mean_thresh
                 endif
             enddo
         endif
@@ -2835,22 +2964,22 @@ contains
             do icls = 1,self%n
                 if( msk(icls) )then
                     i = i+1
-                    if( mask(icls) ) mask(icls) = x(i)       < REL_VAR_THRESHOLD
-                    if( mask(icls) ) mask(icls) = vals(icls) < ABS_VAR_THRESHOLD
+                    if( mask(icls) ) mask(icls) = x(i)       < eff_rel_var_thresh
+                    if( mask(icls) ) mask(icls) = vals(icls) < eff_abs_var_thresh
                 endif
             enddo
         endif
         if( has_tvd )then
             vals = self%get_all('tvd')
             do icls = 1,self%n
-                if( mask(icls) ) mask(icls) = vals(icls) < TVD_THRESHOLD
+                if( mask(icls) ) mask(icls) = vals(icls) < eff_tvd_thresh
             enddo
         endif
         if( has_minmax )then
             do icls = 1,self%n
                 if( mask(icls) )then
-                    if(  (self%get(icls,'min') < MIN_THRESHOLD).and.&
-                        &(self%get(icls,'max') > MAX_THRESHOLD) )then
+                    if(  (self%get(icls,'min') < eff_min_thresh).and.&
+                        &(self%get(icls,'max') > eff_max_thresh) )then
                         mask(icls) = .false.
                     endif
                 endif
@@ -3231,8 +3360,7 @@ contains
     end function extremal_bound
 
     !>  \brief  utility function for setting extremal optimization parameters
-    subroutine set_extremal_vars(self, extr_init, extr_iter, iter, frac_srch_space,&
-            &do_extr, iextr_lim, update_frac)
+    subroutine set_extremal_vars(self, extr_init, extr_iter, iter, frac_srch_space, do_extr, iextr_lim, update_frac)
         class(oris),       intent(in)  :: self
         real,              intent(in)  :: extr_init
         integer,           intent(in)  :: extr_iter, iter

@@ -276,7 +276,7 @@ contains
         character(len=LEN_LINE), allocatable :: splitline(:)
         character(len=XLONGSTRLEN)           :: cwd
         character(len=LEN_LINE)              :: line, entrystr, splitimage
-        character(len=LONGSTRLEN)            :: abspath
+        character(len=LONGSTRLEN)            :: fname, abspath
         type(ori)                            :: opticsori, spori
         logical                              :: isptcl
         real                                 :: rval
@@ -322,15 +322,19 @@ contains
                             if(index(entrystr, ':mrc') > 0) then ! relion ctf names!
                                 entrystr = trim(adjustl(entrystr(:index(entrystr, ':mrc') - 1)))
                             end if
-                            if(file_exists(trim(adjustl(stemname(self%starfile%rootdir))) // "/" // trim(adjustl(entrystr)))) then
-                                call make_relativepath(cwd, trim(adjustl(stemname(self%starfile%rootdir))) // "/" // trim(adjustl(entrystr)), abspath, checkexists=.false.)
-                                entrystr = trim(adjustl(abspath))
-                            else
-                                call make_relativepath(cwd, trim(adjustl(self%starfile%rootdir)) // "/" // trim(adjustl(entrystr)), abspath, checkexists=.false.)
-                                entrystr = trim(adjustl(abspath))
+                            fname = trim(adjustl(stemname(self%starfile%rootdir))) // "/" // trim(entrystr)
+                            if( .not.file_exists(fname) )then
+                                fname = trim(adjustl(self%starfile%rootdir)) // "/" // trim(entrystr)
+                                if( .not.file_exists(fname) )then
+                                    fname = trim(adjustl(self%starfile%rootdir)) // "/../" // trim(entrystr)
+                                    if( .not.file_exists(fname) )then
+                                        fname = trim(adjustl(self%starfile%rootdir)) // "/../../" // trim(entrystr)
+                                    endif
+                                endif
                             end if
+                            entrystr = trim(adjustl(simple_abspath(fname, check_exists=.false.)))
                         end if
-                        call sporis%set(projindex, stardata%flags(flagsindex)%splflag, trim(adjustl(entrystr)))
+                        call sporis%set(projindex, stardata%flags(flagsindex)%splflag, adjustl(entrystr))
                     else if(stardata%flags(flagsindex)%int) then
                         read(entrystr,*) ival
                         if(stardata%flags(flagsindex)%mult > 0) then
@@ -364,6 +368,8 @@ contains
         end do
         call fclose(fhandle)
         if(allocated(splitline)) deallocate(splitline)
+        call opticsori%kill
+        call spori%kill
     end subroutine import_stardata
 
     subroutine populate_stkmap(self, stkoris, opticsoris)
@@ -697,10 +703,14 @@ contains
         do i=1, spproj%os_cls2D%get_noris()
             if(.not. spproj%os_cls2D%isthere(i, "stk")) then
                 call spproj%get_cavgs_stk(stkname, ncls, smpd, stkpath=stk_path)
-                if(allocated(stk_path) .and. len(stk_path) .gt. 0) then
-                    call spproj%os_cls2D%set(i, "stk", trim(adjustl(stk_path)) // '/' // trim(adjustl(stkname)))
-                else
+                if(file_exists(trim(stkname))) then
                     call spproj%os_cls2D%set(i, "stk", trim(adjustl(stkname)))
+                else
+                    if(allocated(stk_path) .and. len(stk_path) .gt. 0) then
+                        call spproj%os_cls2D%set(i, "stk", trim(adjustl(stk_path)) // '/' // trim(adjustl(stkname)))
+                    else
+                        call spproj%os_cls2D%set(i, "stk", trim(adjustl(stkname)))
+                    endif
                 endif
             end if
             call spproj%os_cls2D%set(i, "ncls", spproj%os_cls2D%get_noris())
@@ -1248,12 +1258,22 @@ contains
     subroutine populate_opticsmap(self, opticsoris)
         class(starproject), intent(inout) :: self
         class(oris),        intent(inout) :: opticsoris
-        integer                           :: i
+        type(oris)                        :: tmp
+        type(ori)                         :: tmp_ori
+        integer                           :: i, old_n, maxori, ogid
         call self%import_stardata(self%starfile%optics, opticsoris, .false.)
-        allocate(self%starfile%opticsmap(opticsoris%get_noris()))
-        do i = 1,opticsoris%get_noris()
-            self%starfile%opticsmap(int(opticsoris%get(i, "ogid"))) = i
+        maxori = maxval(opticsoris%get_all("ogid"))
+        allocate(self%starfile%opticsmap(maxori))
+        old_n = opticsoris%get_noris()
+        call tmp%copy(opticsoris, .false.)
+        call opticsoris%new(maxori, .false.)
+        do i = 1,old_n
+            ogid = int(tmp%get(i, "ogid"))
+            call tmp%get_ori(i, tmp_ori)
+            call opticsoris%append(ogid, tmp_ori)
+            self%starfile%opticsmap(ogid) = ogid
         end do
+        call tmp%kill
     end subroutine populate_opticsmap
 
     subroutine plot_opticsgroups(self, fname_eps)

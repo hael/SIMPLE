@@ -3,13 +3,15 @@ module simple_stat
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_defs
+use simple_math
 use simple_error, only: simple_exception
 use simple_srch_sort_loc
 use simple_is_check_assert
 implicit none
 
-public :: avg_sdev, moment, moment_serial, pearsn, normalize, normalize_sigm, normalize_minmax, std_mean_diff
-public :: corrs2weights, corr2distweight, analyze_smat, dev_from_dmat, z_scores, pearsn_serial_8, kstwo
+public :: avg_sdev, moment, moment_serial, pearsn, spear, normalize, normalize_sigm, normalize_minmax, std_mean_diff
+public :: corrs2weights, corr2distweight, analyze_smat, medoid_from_smat, medoid_ranking_from_smat, cluster_smat_bin, medoid_from_dmat
+public :: z_scores, pearsn_serial_8, kstwo
 public :: rank_sum_weights, rank_inverse_weights, rank_centroid_weights, rank_exponent_weights
 public :: conv2rank_weights, calc_stats, pearsn_serial, norm_corr, norm_corr_8, skewness, kurtosis
 public :: median, median_nocopy, mad, mad_gau, robust_scaling, robust_z_scores, robust_normalization, robust_sigma_thres
@@ -647,6 +649,12 @@ contains
         endif
     end function pearsn_3
 
+    function spear( n, rank1, rank2 ) result( r )
+        integer, intent(in) :: n, rank1(n), rank2(n)
+        real :: r
+        r = 1. - (6. * real(sum((rank1 - rank2)**2))) / real((n * (n**2 - 1)))
+    end function spear
+
     subroutine normalize_1( arr, err )
         real, intent(inout)  :: arr(:)
         logical, intent(out) :: err
@@ -951,18 +959,14 @@ contains
         end do
     end subroutine analyze_smat
 
-    !>  measure of cluster spread (for use in one-class clustering)
-    !!  (1) estimate median of cluster (member most similar to all others)
-    !!  (2) calculate the median of the similarities between the median and all others
-    !!  suggested exclusion based on 2 * ddev (sigma) criterion
-    subroutine dev_from_smat( smat, i_median, sdev )
+    subroutine medoid_from_smat( smat, i_medoid )!, sdev )
         real,    intent(in)  :: smat(:,:)
-        integer, intent(out) :: i_median
-        real,    intent(out) :: sdev
+        integer, intent(out) :: i_medoid
+        ! real,    intent(out) :: sdev
         real, allocatable :: sims(:)
         integer :: loc(1), i, j, n
         n = size(smat,1)
-        if( n /= size(smat,2) ) THROW_HARD('symmetric similarity matrix assumed; stat :: dev_from_smat')
+        if( n /= size(smat,2) ) THROW_HARD('symmetric similarity matrix assumed; stat :: medoid_from_smat')
         allocate(sims(n))
         do i=1,n
             sims(i) = 0.0
@@ -972,19 +976,48 @@ contains
                 endif
             end do
         end do
-        loc      = maxloc(sims)
-        i_median = loc(1)
-        sdev     = median(smat(i_median,:))
-    end subroutine dev_from_smat
+        loc      = maxloc(sims) ! loc(1) now contains the one element most similar to all others
+        i_medoid = loc(1)
+        ! sdev     = median(smat(i_medoid,:))
+    end subroutine medoid_from_smat
+    
+    subroutine medoid_ranking_from_smat( smat, i_medoid, rank )
+        real,                 intent(in)    :: smat(:,:)
+        integer,              intent(out)   :: i_medoid
+        integer, allocatable, intent(inout) :: rank(:)
+        real,    allocatable :: sims(:)
+        integer :: i, n 
+        call medoid_from_smat( smat, i_medoid )
+        n = size(smat,1)
+        allocate(sims(n), source=smat(i_medoid,:))
+        if( allocated(rank) ) deallocate(rank)
+        allocate(rank(n), source=(/(i,i=1,n)/)   )
+        call hpsort(sims, rank)
+        call reverse(rank)
+    end subroutine medoid_ranking_from_smat
 
-    !>  measure of cluster spread (for use in one-class clustering)
-    !!  (1) estimate median of cluster (member most similar to all others)
-    !!  (2) calculate the median of the distances between the median and all others
-    !!  suggested exclusion based on 2 * ddev (sigma) criterion
-    subroutine dev_from_dmat( dmat, i_median, ddev )
+    subroutine cluster_smat_bin( smat, mask )
+        real,                 intent(in)    :: smat(:,:)
+        logical, allocatable, intent(inout) :: mask(:)
+        real,    allocatable :: sims(:), tmp(:)
+        integer :: i_medoid, i, n
+        real    :: otsu_t, s_max
+        call medoid_from_smat(smat, i_medoid)
+        n = size(smat,1)
+        allocate(sims(n), source=smat(i_medoid,:))
+        ! remove the diagonal element
+        s_max = maxval(sims)
+        tmp   = pack(sims, mask=sims < s_max)
+        ! Otsu
+        call otsu(size(tmp), tmp, otsu_t)
+        if( allocated(mask) ) deallocate(mask)
+        allocate(mask(n), source=sims >= otsu_t)
+    end subroutine cluster_smat_bin
+
+    subroutine medoid_from_dmat( dmat, i_medoid ) !, ddev )
         real,    intent(in)  :: dmat(:,:)
-        integer, intent(out) :: i_median
-        real,    intent(out) :: ddev
+        integer, intent(out) :: i_medoid
+        ! real,    intent(out) :: ddev
         real, allocatable :: dists(:)
         integer :: loc(1), i, j, n
         n = size(dmat,1)
@@ -998,10 +1031,10 @@ contains
                 endif
             end do
         end do
-        loc      = minloc(dists)
-        i_median = loc(1)
-        ddev     = median(dmat(i_median,:))
-    end subroutine dev_from_dmat
+        loc      = minloc(dists) ! loc(1) now contains the one element most similar to all others
+        i_medoid = loc(1)
+        ! ddev     = median(dmat(i_medoid,:))
+    end subroutine medoid_from_dmat
 
     ! ROBUST STATISTICS
 

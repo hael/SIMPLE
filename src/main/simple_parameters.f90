@@ -27,6 +27,7 @@ type :: parameters
     character(len=3)          :: beamtilt='no'        !< use beamtilt values when generating optics groups
     character(len=3)          :: bin='no'             !< binarize image(yes|no){no}
     character(len=3)          :: cavg_ini='no'        !< use class averages for initialization(yes|no){no}
+    character(len=3)          :: cavg_ini_ext='no'    !< use class averages for (external) initialization(yes|no){no}
     character(len=3)          :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
     character(len=3)          :: center_pdb='no'      !< move PDB atomic center to the center of the box(yes|no){no}
     character(len=3)          :: classtats='no'       !< calculate class population statistics(yes|no){no}
@@ -40,6 +41,7 @@ type :: parameters
     character(len=3)          :: doprint='no'
     character(len=3)          :: envfsc='yes'         !< envelope mask even/odd pairs for FSC calculation(yes|no){yes}
     character(len=3)          :: even='no'            !< even orientation distribution(yes|no){no}
+    character(len=3)          :: extract='yes'        !< whether to extract particles after picking (streaming only)
     character(len=3)          :: extractfrommov='no'  !< whether to extract particles from the movie(yes|no){no}
     character(len=3)          :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
     character(len=3)          :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
@@ -71,7 +73,6 @@ type :: parameters
     character(len=3)          :: nonuniform='no'      !< nonuniform filtering(yes|no){no}
     character(len=3)          :: omit_neg='no'        !< omit negative pixels(yes|no){no}
     character(len=3)          :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
-    character(len=3)          :: extract='yes'        !< whether to extract particles after picking (streaming only)
     character(len=3)          :: pad='no'
     character(len=3)          :: phaseplate='no'      !< images obtained with Volta phaseplate(yes|no){no}
     character(len=3)          :: phrand='no'          !< phase randomize(yes|no){no}
@@ -82,12 +83,14 @@ type :: parameters
     character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes
     character(len=3)          :: projstats='no'
     character(len=3)          :: prune='no'
-    character(len=3)          :: randomise='no'       !< whether to randomise particle order
-    character(len=3)          :: remove_chunks='yes'  !< whether to remove chunks after completion
     character(len=3)          :: prob_sh='no'         !< shift information in the prob tab (yes|no){no}
     character(len=3)          :: projrec='no'         !< Ehether to reconstruct from summed projection directions (yes|no){no}
+    character(len=3)          :: randomise='no'       !< whether to randomise particle order
+    character(len=3)          :: rank_cavgs='yes'     !< Whether to rank class averages(yes|no)
     character(len=3)          :: reject_cls='no'      !< whether to reject poor classes
     character(len=3)          :: reject_mics='no'     !< whether to reject micrographs based on ctfres/icefrac
+    character(len=3)          :: remove_chunks='yes'  !< whether to remove chunks after completion
+    character(len=3)          :: ring='yes'           !< whether to perform ring shaped picking 
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
     character(len=3)          :: remap_cls='no'
     character(len=3)          :: transp_pca='no'
@@ -96,7 +99,6 @@ type :: parameters
     character(len=3)          :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
     character(len=3)          :: sh_first='no'        !< shifting before orientation search(yes|no){no}
     character(len=3)          :: sh_inv='no'          !< whether to use shift invariant metric for projection direction assignment(yes|no){no}
-    character(len=3)          :: newstream='no'       !< new streaming version
     character(len=3)          :: stream='no'          !< stream (real time) execution mode(yes|no){no}
     character(len=3)          :: symrnd='no'          !< randomize over symmetry operations(yes|no){no}
     character(len=3)          :: taper_edges='no'     !< self-explanatory
@@ -104,7 +106,7 @@ type :: parameters
     character(len=3)          :: trail_rec='no'       !< trailing (weighted average) reconstruction when update_frac=yes 
     character(len=3)          :: trsstats='no'        !< provide origin shift statistics(yes|no){no}
     character(len=3)          :: tseries='no'         !< images represent a time-series(yes|no){no}
-    character(len=3)          :: updated='no'         !< Whether parameters has been updated
+    character(len=3)          :: updated='no'         !< whether parameters has been updated
     character(len=3)          :: use_denoised='no'    !< use denoised particle representations for alignment (not 3D rec)
     character(len=3)          :: use_thres='yes'      !< Use contact-based thresholding(yes|no){yes}
     character(len=3)          :: vis='no'             !< visualise(yes|no)
@@ -174,7 +176,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: xmlloc=''
     ! other character variables in ascending alphabetical order
     character(len=STDLEN)     :: algorithm=''         !< algorithm to be used
-    character(len=STDLEN)     :: bin_cls='yes'        !< binary clustering applied(yes|no|only){yes}
+    character(len=STDLEN)     :: bin_cls='yes'        !< binary clustering applied(yes|no){yes}
     character(len=STDLEN)     :: cls_init='ptcl'      !< Scheme to generate initial references for 2D classification(ptcl|randcls|rand)
     character(len=STDLEN)     :: cn_type='cn_std'     !< generalised coordination number (cn_gen) or stardard (cn_std)
     character(len=STDLEN)     :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
@@ -186,7 +188,6 @@ type :: parameters
     character(len=STDLEN)     :: detector='bin'       !< detector for edge detection (sobel|bin|otsu)
     character(len=STDLEN)     :: dfunit='microns'     !< defocus unit (A|microns){microns}
     character(len=STDLEN)     :: dir_exec=''          !< name of execution directory
-    character(len=STDLEN)     :: dockmode='rotshift'  !< mode for docking (rot|shift|rotshift)
     character(len=STDLEN)     :: executable=''        !< name of executable
     character(len=STDLEN)     :: startype=''          !< export type for STAR format (micrograph|select|extract|class2d|initmodel|refine3d|post){all}
     character(len=4)          :: element ='    '      !< atom kind
@@ -194,6 +195,7 @@ type :: parameters
     character(len=STDLEN)     :: fbody=''             !< file body
     character(len=STDLEN)     :: filter='no'          !< filter type{no}
     character(len=STDLEN)     :: flipgain='no'        !< gain reference flipping (no|x|y|xy|yx)
+    character(len=STDLEN)     :: het_mode='independent' !< heterogeneity analysis mode in abinitio3D (independent|docked){independent}
     character(len=STDLEN)     :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}
     character(len=STDLEN)     :: interpfun='kb'       !< Interpolation function projection/reconstruction/polar representation(kb|linear){kb}
@@ -308,6 +310,8 @@ type :: parameters
     integer :: nrots=0             !< number of in-plane rotations in greedy Cartesian search
     integer :: nsample=0           !< # particles to sample in refinement with fractional update
     integer :: nsample_max=0       !< maximum # particles to sample in refinement with fractional update
+    integer :: nsample_start=0     !< # particles to sample in refinement with fractional update, lower bound
+    integer :: nsample_stop=0      !< # particles to sample in refinement with fractional update, upper bound
     integer :: nsearch=40          !< # search grid points{40}
     integer :: nspace=2500         !< # projection directions
     integer :: nspace_sub=500      !< # projection directions in subspace
@@ -380,6 +384,7 @@ type :: parameters
     real    :: frac=1.             !< fraction of ptcls(0-1){1}
     real    :: fraca=0.1           !< fraction of amplitude contrast used for fitting CTF{0.1}
     real    :: fracdeadhot=0.05    !< fraction of dead or hot pixels{0.01}
+    real    :: frac_best=1.0       !< fraction of best particles to sample from per class when balance=yes
     real    :: frac_diam=0.8       !< fraction of atomic diameter
     real    :: fracsrch=0.9        !< fraction of serach space scanned for convergence
     real    :: fraction_dose_target=FRACTION_DOSE_TARGET_DEFAULT !< dose (in e/A2)
@@ -405,6 +410,8 @@ type :: parameters
     real    :: lplims2D(3)
     real    :: lpstart=0.          !< start low-pass limit(in A){15}
     real    :: lpstop=8.0          !< stop low-pass limit(in A){8}
+    real    :: lpstart_ini3D=0.    !< start low-pass limit(in A){15}
+    real    :: lpstop_ini3D=8.0    !< stop low-pass limit(in A){8}
     real    :: lpstop2D=8.0        !< stop low-pass limit(in A){8}
     real    :: lpthres=RES_THRESHOLD_STREAM
     real    :: max_dose=0.         !< maximum dose threshold (e/A2)
@@ -460,6 +467,7 @@ type :: parameters
     logical :: l_envfsc       = .false.
     logical :: l_filemsk      = .false.
     logical :: l_focusmsk     = .false.
+    logical :: l_frac_best    = .false.
     logical :: l_update_frac  = .false.
     logical :: l_graphene     = .false.
     logical :: l_kweight      = .false.
@@ -535,6 +543,7 @@ contains
         call check_carg('bin_cls',        self%bin_cls)
         call check_carg('boxtype',        self%boxtype)
         call check_carg('cavg_ini',       self%cavg_ini)
+        call check_carg('cavg_ini_ext',   self%cavg_ini_ext)
         call check_carg('center',         self%center)
         call check_carg('center_pdb',     self%center_pdb)
         call check_carg('classtats',      self%classtats)
@@ -550,7 +559,6 @@ contains
         call check_carg('detector',       self%detector)
         call check_carg('dfunit',         self%dfunit)
         call check_carg('dir_exec',       self%dir_exec)
-        call check_carg('dockmode',       self%dockmode)
         call check_carg('dihedral',       self%dihedral)
         call check_carg('doprint',        self%doprint)
         call check_carg('element',        self%element)
@@ -569,6 +577,7 @@ contains
         call check_carg('guinier',        self%guinier)
         call check_carg('graphene_filt',  self%graphene_filt)
         call check_carg('gridding',       self%gridding)
+        call check_carg('het_mode',       self%het_mode)
         call check_carg('icm',            self%icm)
         call check_carg('imgkind',        self%imgkind)
         call check_carg('incrreslim',     self%incrreslim)
@@ -595,7 +604,6 @@ contains
         call check_carg('multi_moldiams', self%multi_moldiams)
         call check_carg('needs_sigma',    self%needs_sigma)
         call check_carg('neg',            self%neg)
-        call check_carg('newstream',      self%newstream)
         call check_carg('noise_norm',     self%noise_norm)
         call check_carg('norm',           self%norm)
         call check_carg('nonuniform',     self%nonuniform)
@@ -629,12 +637,14 @@ contains
         call check_carg('ptclw',          self%ptclw)
         call check_carg('qsys_name',      self%qsys_name)
         call check_carg('qsys_partition2D',self%qsys_partition2D)
-        call check_carg('remove_chunks',  self%remove_chunks)
+        call check_carg('randomise',      self%randomise)
+        call check_carg('rank_cavgs',     self%rank_cavgs)
         call check_carg('real_filter',    self%real_filter)
+        call check_carg('refine',         self%refine)
         call check_carg('reject_cls',     self%reject_cls)
         call check_carg('reject_mics',    self%reject_mics)
-        call check_carg('refine',         self%refine)
-        call check_carg('randomise',      self%randomise)
+        call check_carg('remove_chunks',  self%remove_chunks)
+        call check_carg('ring',           self%ring)
         call check_carg('prob_sh',        self%prob_sh)
         call check_carg('projrec',        self%projrec)
         call check_carg('projfile_optics',self%projfile_optics)
@@ -768,13 +778,15 @@ contains
         call check_iarg('nrestarts',      self%nrestarts)
         call check_iarg('nsample',        self%nsample)
         call check_iarg('nsample_max',    self%nsample_max)
+        call check_iarg('nsample_start',  self%nsample_start)
+        call check_iarg('nsample_stop',   self%nsample_stop)
         call check_iarg('nspace',         self%nspace)
         call check_iarg('nspace_sub',     self%nspace_sub)
         call check_iarg('nstages',        self%nstages)
         call check_iarg('nstates',        self%nstates)
         call check_iarg('class',          self%class)
         call check_iarg('nparts',         self%nparts)
-        call check_iarg('npart_per_part', self%nparts_per_part)
+        call check_iarg('nparts_per_part', self%nparts_per_part)
         call check_iarg('nparts_chunk',   self%nparts_chunk)
         call check_iarg('nparts_pool',    self%nparts_pool)
         call check_iarg('npeaks',         self%npeaks)
@@ -840,6 +852,7 @@ contains
         call check_rarg('frac',           self%frac)
         call check_rarg('fraca',          self%fraca)
         call check_rarg('fracdeadhot',    self%fracdeadhot)
+        call check_rarg('frac_best',      self%frac_best)
         call check_rarg('frac_diam',      self%frac_diam)
         call check_rarg('fracsrch',       self%fracsrch)
         call check_rarg('fraction_dose_target',self%fraction_dose_target)
@@ -862,6 +875,8 @@ contains
         call check_rarg('lplim_crit',     self%lplim_crit)
         call check_rarg('lpstart',        self%lpstart)
         call check_rarg('lpstop',         self%lpstop)
+        call check_rarg('lpstart_ini3D',  self%lpstart_ini3D)
+        call check_rarg('lpstop_ini3D',   self%lpstop_ini3D)
         call check_rarg('lpstop2D',       self%lpstop2D)
         call check_rarg('lpthres',        self%lpthres)
         call check_rarg('max_dose',       self%max_dose)
@@ -1275,7 +1290,9 @@ contains
             self%update_frac   = 1.0
             self%l_update_frac = .false.
             self%l_trail_rec   = .false.
-        endif    
+        endif
+        ! set frac_best flag
+        self%l_frac_best = self%frac_best <= 0.99
         if( .not. cline%defined('ncunits') )then
             ! we assume that the number of computing units is equal to the number of partitions
             self%ncunits = self%nparts
@@ -1554,12 +1571,8 @@ contains
         self%l_lpauto = trim(self%lp_auto).ne.'no'
         select case(trim(self%lp_auto))
             case('yes')
-                if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
-                    ! all good, this is an lpset mode (no eo alignment), so update flag
-                    self%l_lpset = .true.
-                else
-                    THROW_HARD('Automatic low-pass limit estimation requires LPSTART/LPSTOP range input')
-                endif
+                ! this is an lpset mode (no eo alignment), so update flag
+                self%l_lpset = .true.
             case('no')
                 ! don't touch l_lpset flag
             case('fsc')

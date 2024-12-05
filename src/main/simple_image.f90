@@ -40,10 +40,9 @@ contains
     procedure          :: new
     procedure          :: set_wthreads
     procedure          :: construct_thread_safe_tmp_imgs
-    procedure, private :: disc_1
-    procedure, private :: disc_2
+    procedure, private :: disc_1, disc_2
     generic            :: disc => disc_1, disc_2
-    procedure          :: ring
+    procedure          :: ring, soft_ring
     procedure          :: copy
     procedure          :: copy_fast
     procedure          :: img2spec
@@ -213,11 +212,8 @@ contains
     procedure          :: phase_rand
     procedure          :: hannw
     procedure          :: real_space_filter
-    procedure          :: NLmean, NLmean3D, NLmean3D_eo
-    procedure          :: ICM2D
-    procedure          :: ICM2D_eo
-    procedure          :: ICM3D
-    procedure          :: ICM3D_eo
+    procedure          :: NLmean2D, NLmean2D_eo, NLmean3D, NLmean3D_eo
+    procedure          :: ICM2D, ICM2D_eo, ICM3D, ICM3D_eo
     procedure          :: lpgau2D
     ! CALCULATORS
     procedure          :: minmax
@@ -334,6 +330,7 @@ contains
     procedure          :: div_below
     procedure          :: ellipse
     procedure          :: flip
+    procedure          :: reshape2cube
     ! FFTs
     procedure          :: fft  => fwd_ft
     procedure          :: ifft => bwd_ft
@@ -559,6 +556,37 @@ contains
         end where
         if( present(npix) )npix = count(self%rmat>0.5)
     end subroutine ring
+
+    !>  \brief soft ring based on gamma distribution
+    subroutine soft_ring( self, ldim, smpd, radius )
+        class(image),      intent(inout) :: self
+        integer,           intent(in)    :: ldim(3)
+        real,              intent(in)    :: smpd, radius
+        real, parameter :: K     = 2.0
+        real, parameter :: THETA = 2.0
+        real    :: d,modeval,km1,mode,val,scale
+        integer :: c(3),i,j,l
+        call self%new(ldim, smpd)
+        c     = nint(real(self%ldim)/2.)+1
+        km1   = K-1.
+        mode  = km1 * THETA
+        val   = mode**km1 * exp(-mode/THETA)
+        scale = 1./val
+        do l=1,self%ldim(3)
+        do j=1,self%ldim(2)
+        do i=1,self%ldim(1)
+            d = hyp(i-c(1),j-c(2),l-c(3))
+            if( d > radius )then
+                val = 0.
+            else
+                d   = 20. * (radius - d) / radius
+                val = max(0.,min(1.0,scale * (d**km1 * exp(-d/THETA))))
+            endif
+            self%rmat(i,j,l) = val
+        enddo
+        enddo
+        enddo
+    end subroutine soft_ring
 
     subroutine copy( self, self_in )
         class(image), intent(inout) :: self
@@ -4037,7 +4065,7 @@ contains
                 end do
                 !$omp end parallel do
             case('NLmean')
-                call self%NLmean()
+                call self%NLmean2D()
                 img_filt%rmat = self%rmat
             case('laplacian')
                 k2 = (1./8.)*reshape([0.,1.,0.,1.,-4., 1., 0., 1., 0.], [3,3])
@@ -4106,8 +4134,8 @@ contains
         call img_filt%kill()
     end subroutine real_space_filter
 
-    !>  \brief Non-local mean filter
-    subroutine NLmean( self, msk, sdev_noise )
+    !>  \brief Non-local mean filter, don't touch default parameters here. This routine is being actively used
+    subroutine NLmean2D( self, msk, sdev_noise )
         class(image),   intent(inout) :: self
         real, optional, intent(in)    :: msk
         real, optional, intent(in)    :: sdev_noise
@@ -4117,8 +4145,8 @@ contains
         real    :: exponentials(-CFR_BOX:CFR_BOX,-CFR_BOX:CFR_BOX), sw_px(DIM_SW,DIM_SW)
         real    :: z, sigma, h, h_sq, avg, mmsk
         integer :: i, j, m, n, pad, ithr
-        if( self%is_3d() ) THROW_HARD('2D images only; NLmean')
-        if( self%ft )      THROW_HARD('Real space only;NLmean')
+        if( self%is_3d() ) THROW_HARD('2D images only; NLmean2D')
+        if( self%ft )      THROW_HARD('Real space only;NLmean2D')
         mmsk = real(self%ldim(1)) / 2. - real(DIM_SW)
         if( present(msk) ) mmsk = msk
         if( present(sdev_noise) )then
@@ -4157,7 +4185,52 @@ contains
         enddo
         !$omp end parallel do
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = sum(rmat_threads, dim=1)
-    end subroutine NLmean
+    end subroutine NLmean2D
+
+    subroutine NLmean2D_eo( even, odd, avg )
+        class(image), intent(inout) :: even, odd, avg
+        type(image)        :: noise, noise_var
+        real,  allocatable :: rmat_pad(:,:), rmat_threads(:,:,:,:)
+        integer, parameter :: DIM_SW  = 1
+        integer, parameter :: CFR_BOX = 3
+        real    :: exponentials(-CFR_BOX:CFR_BOX,-CFR_BOX:CFR_BOX), sw_px(DIM_SW,DIM_SW)
+        real    :: z, sigma, pix_avg, sigma2t2
+        integer :: i, j, m, n, pad, ithr
+        if( even%is_3d() ) THROW_HARD('2D images only; NLmean2D_eo')
+        if( even%ft )      THROW_HARD('Real space only;NLmean2D_eo')
+        call noise%copy(even)
+        call noise%subtr(odd)
+        call noise%loc_var(noise_var)
+        call noise_var%norm([5.,2.])
+        call avg%copy(even)
+        call avg%add(odd)
+        call avg%mul(0.5)
+        pad     = CFR_BOX + 2
+        pix_avg = sum(avg%rmat(:avg%ldim(1),:avg%ldim(2),1)) / real(product(avg%ldim))
+        allocate(rmat_threads(nthr_glob,avg%ldim(1),avg%ldim(2),1),   source=0.)
+        allocate(rmat_pad(-pad:avg%ldim(1)+pad,-pad:avg%ldim(2)+pad), source=pix_avg)
+        rmat_pad(1:avg%ldim(1),1:avg%ldim(2)) = avg%rmat(1:avg%ldim(1),1:avg%ldim(2),1)
+        do n = 1,avg%ldim(2)
+            do m = 1,avg%ldim(1)
+                ithr         = omp_get_thread_num() + 1
+                sw_px        = rmat_pad(m:m+DIM_SW-1,n:n+DIM_SW-1)
+                exponentials = 0.
+                sigma2t2     = 2. * noise_var%rmat(m,n,1)
+                do j = -CFR_BOX,CFR_BOX
+                    do i = -CFR_BOX,CFR_BOX
+                      exponentials(i,j) = &
+                      & exp( -sum( (sw_px - rmat_pad(m+i:m+i+DIM_SW-1, n+j:n+j+DIM_SW-1))**2. )/sigma2t2) ! Euclidean norm
+                  enddo
+                enddo
+                z = sum(exponentials)
+                if( z < 0.0000001 ) cycle
+                rmat_threads(ithr,m,n,1) = sum(exponentials * rmat_pad(m-CFR_BOX:m+CFR_BOX,n-CFR_BOX:n+CFR_BOX)) / z
+            enddo
+        enddo
+        avg%rmat(:avg%ldim(1),:avg%ldim(2),:avg%ldim(3)) = sum(rmat_threads, dim=1)
+        call noise%kill
+        call noise_var%kill
+    end subroutine NLmean2D_eo
 
     !>  \brief Non-local mean filter
     subroutine NLmean3D( self, msk, sdev_noise )
@@ -4226,8 +4299,8 @@ contains
         real    :: exponentials(-CFR_BOX:CFR_BOX,-CFR_BOX:CFR_BOX,-CFR_BOX:CFR_BOX), sw_px(DIM_SW,DIM_SW,DIM_SW)
         real    :: z, sigma, sigma2t2, pixavg
         integer :: i, j, k, m, n, o, pad, ithr
-        if( even%is_2d() ) THROW_HARD('3D images only; NLmean3D')
-        if( even%ft )      THROW_HARD('Real space only; 3DNLmean3D')
+        if( even%is_2d() ) THROW_HARD('3D images only; NLmean3D_eo')
+        if( even%ft )      THROW_HARD('Real space only; 3DNLmean3D_eo')
         call noise%copy(even)
         call noise%subtr(odd)
         call noise%loc_var3D(noise_var)
@@ -4318,7 +4391,7 @@ contains
             end do
             if( l_verbose )then
                 eucl = self%euclid_norm(self_prev)
-                write(logfhandle,'(A,I2,A,F8.4)') 'ICM Iteration ', i, ', Euclidean distance ', eucl
+                ! write(logfhandle,'(A,I2,A,F8.4)') 'ICM Iteration ', i, ', Euclidean distance ', eucl
             endif
             if( i < MAXITS ) self_prev%rmat = self%rmat
         end do
@@ -4392,7 +4465,7 @@ contains
             end do
             if( l_verbose )then
                 eucl = (even%euclid_norm(even_prev) + odd%euclid_norm(odd_prev)) / 2.
-                write(logfhandle,'(A,I2,A,F8.4)') 'ICM Iteration ', i, ', Euclidean distance ', eucl
+                ! write(logfhandle,'(A,I2,A,F8.4)') 'ICM Iteration ', i, ', Euclidean distance ', eucl
             endif
             if( i < MAXITS)then
                 even_prev%rmat = even%rmat
@@ -4458,7 +4531,7 @@ contains
             end do
             !$omp end parallel do
             eucl = self%euclid_norm(self_prev)
-            write(logfhandle,'(A,I2,A,F8.4)') 'ICM Iteration ', i, ', Euclidean distance ', eucl 
+            ! write(logfhandle,'(A,I2,A,F8.4)') 'ICM Iteration ', i, ', Euclidean distance ', eucl 
             call self_prev%copy(self)
         end do
         call self%quantize_bwd(NQUANTA, transl_tab)
@@ -4534,7 +4607,7 @@ contains
             end do
             !$omp end parallel do
             eucl = (even%euclid_norm(even_prev) + odd%euclid_norm(odd_prev)) / 2.
-            write(logfhandle,'(A,I2,A,F8.4)') 'ICM Iteration ', i, ', Euclidean distance ', eucl
+            ! write(logfhandle,'(A,I2,A,F8.4)') 'ICM Iteration ', i, ', Euclidean distance ', eucl
             call even_prev%copy(even)
             call odd_prev%copy(odd)
         end do
@@ -7924,9 +7997,8 @@ contains
         character(len=*),  intent(in)    :: volfname
         integer,           intent(in)    :: box_crop
         real,              intent(in)    :: smpd, smpd_crop
-        real    :: smpd_here
         integer :: ldim(3), ifoo, box
-        call find_ldim_nptcls(volfname, ldim, ifoo, smpd=smpd_here)
+        call find_ldim_nptcls(volfname, ldim, ifoo)
         ! HE, I would not trust the smpd from the header
         if( ldim(3) /= ldim(1) ) THROW_HARD('Only for volumes')
         box = ldim(1)
@@ -7937,14 +8009,13 @@ contains
             call self%fft
             call self%pad_inplace([box_crop,box_crop,box_crop], antialiasing=.false.)
             call self%ifft
-            call self%set_smpd(smpd_crop) ! safety
         else if( box > box_crop )then
             ! clip
             call self%fft
             call self%clip_inplace([box_crop,box_crop,box_crop])
             call self%ifft
-            call self%set_smpd(smpd_crop) ! safety
         endif
+        call self%set_smpd(smpd_crop) ! safety
     end subroutine read_and_crop
 
     ! This subroutine rescales the pixel intensities to a new input range.
@@ -8578,6 +8649,26 @@ contains
             end where
         enddo
     end subroutine radial_cc
+
+    subroutine reshape2cube( self, self_out )
+        class(image), intent(inout) :: self
+        class(image), intent(out)   :: self_out
+        logical     :: isvol
+        integer     :: ldim(3), ldim_max
+        real        :: smpd
+        type(image) :: tmp
+        smpd              = self%get_smpd()
+        isvol             = self%is_3d()
+        if(.not.isvol) THROW_HARD('this is only for volumes; reshape2cube')
+        ldim              = self%ldim
+        if( ldim(1) == ldim(2) .and. ldim(2) == ldim(3) ) return
+        ldim_max          = max(ldim(1),ldim(2),ldim(3))
+        call self_out%new([ldim_max,ldim_max,ldim_max], self%smpd, wthreads=self%wthreads)
+        self_out%rmat     = 0.
+        self_out%rmat     = self%rmat
+        self_out%ft       = .false.
+        call self_out%set_smpd(smpd)
+    end subroutine reshape2cube
 
     !>  \brief  is the image class unit test
     subroutine test_image( doplot )

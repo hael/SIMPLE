@@ -133,7 +133,7 @@ contains
         peak_positions_refined = nint(PICKER_SHRINK_REFINE)*peak_positions_refined
         call write_boxfile
         ! returns absolute path
-        call make_relativepath(CWD_GLOB, boxname, boxname_out)
+        boxname_out = simple_abspath(boxname)
     end subroutine exec_picker
 
     subroutine extract_peaks
@@ -321,8 +321,9 @@ contains
                 dmat(j,i) = dmat(i,j)
             end do
         end do
-        call dev_from_dmat( dmat, i_median, ddev )
-        cnt = 0
+        call medoid_from_dmat(dmat, i_median)
+        ddev = median(dmat(i_median,:))
+        cnt  = 0
         do ipeak=1,nmax
             if( selected_peak_positions(ipeak) )then
                 cnt = cnt + 1

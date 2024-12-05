@@ -154,7 +154,7 @@ contains
         do ispace=1,self%nspace_nonred
             do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
                 loc = self%locs_ref_nonred(k,ispace,:)
-                self%vpft_ref_nonred(k,ispace) = self%vol_ref%interp_fcomp_trilinear(loc)
+                self%vpft_ref_nonred(k,ispace) = self%vol_ref%interp_fcomp_norm(loc)
             end do
         end do
         self%sqsum_ref = sum(real(self%vpft_ref_nonred*conjg(self%vpft_ref_nonred)))
@@ -170,7 +170,7 @@ contains
         do ispace=1,self%nspace_nonred
             do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
                 loc = matmul(self%locs_ref_nonred(k,ispace,:),rmat)
-                vpft_target(k,ispace) = self%vol_target%interp_fcomp_trilinear(loc)
+                vpft_target(k,ispace) = self%vol_target%interp_fcomp_norm(loc)
             end do
         end do
         sqsum_target = sum(real(vpft_target*conjg(vpft_target)))
@@ -187,7 +187,7 @@ contains
         do ispace=1,self%nspace_nonred
             do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
                 loc  = matmul(self%locs_ref_nonred(k,ispace,:),rmat)
-                vpft_target(k,ispace) = self%vol_target%interp_fcomp_trilinear(loc) * self%vol_target%oshift(loc, shvec)
+                vpft_target(k,ispace) = self%vol_target%interp_fcomp_norm(loc) * self%vol_target%oshift(loc, shvec)
             end do
         end do
         sqsum_target = sum(real(vpft_target*conjg(vpft_target)))

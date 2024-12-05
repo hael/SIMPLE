@@ -10,6 +10,7 @@ use simple_opt_image_weights,             only: opt_image_weights
 use simple_image,                         only: image
 use simple_eer_factory,                   only: eer_decoder
 use simple_parameters,                    only: params_glob
+use simple_motion_correct_utils
 implicit none
 
 ! Stage drift
@@ -22,7 +23,7 @@ public :: motion_correct_with_patched
 public :: motion_correct_kill_common, motion_correct_mic2spec, patched_shift_fname, motion_correct_write_poly
 public :: motion_correct_write2star, motion_correct_calc_opt_weights, motion_correct_calc_bid
 ! Utils
-public :: motion_correct_get_ref_frame, correct_gain, flip_gain
+public :: motion_correct_get_ref_frame
 private
 #include "simple_local_flags.inc"
 
@@ -386,7 +387,9 @@ contains
         if( l_BENCH ) rt_forctf = toc(t_forctf)
         ! dose-weighting
         if( l_BENCH ) t_dose = tic()
-        call apply_dose_weighting(movie_frames_scaled(:))
+        if( params_glob%l_dose_weight )then
+            call apply_dose_weighing(nframes, movie_frames_scaled(:), [1,nframes], total_dose, kV)
+        endif
         if( l_BENCH ) rt_dose = toc(t_dose)
         ! Micrograph
         if( l_BENCH ) t_mic = tic()
@@ -614,7 +617,9 @@ contains
                 call movie_frames_scaled(iframe)%fft
             end do
             !$omp end parallel do
-            call apply_dose_weighting(movie_frames_scaled(:))
+            if( params_glob%l_dose_weight )then
+                call apply_dose_weighing(nframes, movie_frames_scaled(:), [1,nframes], total_dose, kV)
+            endif
             !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(guided)
             do iframe=1,nframes
                 call movie_frames_scaled(iframe)%ifft
@@ -641,7 +646,6 @@ contains
         call ftexp_transfmat_kill
     end subroutine motion_correct_patched_kill
 
-    !!!!!!!!!!!!!!!!!!!!!!!!!
     !> motion_correction of DDD movie
     subroutine motion_correct_dev( movie_stack_fname, ctfvars, movie_sum, movie_sum_corrected,&
             &movie_sum_ctf, aniso_success, poly_rmsd, gainref, boxdata )
@@ -808,138 +812,13 @@ contains
 
     ! PUBLIC UTILITY METHODS
 
-    ! gain correction, calculate image sum and identify outliers
-    subroutine correct_gain( frames_here, gainref_fname, gainimg, eerdecoder, frames_range )
-        type(image),     allocatable, intent(inout) :: frames_here(:)
-        character(len=*),             intent(in)    :: gainref_fname
-        class(image),                 intent(inout) :: gainimg
-        class(eer_decoder), optional, intent(in)    :: eerdecoder
-        integer,            optional, intent(in)    :: frames_range(2)
-        integer :: ldim_here(3), ldim_gain(3), iframe, ifoo, nframes_here, from, to
-        write(logfhandle,'(a)') '>>> PERFORMING GAIN CORRECTION'
-        nframes_here = size(frames_here)
-        if( present(frames_range) )then
-            from = frames_range(1)
-            to   = frames_range(2)
-        else
-            from = 1
-            to   = nframes_here
-        endif
-        if( to > nframes_here ) THROW_HARD('Invalid frame range 1; correct_gain')
-        if( (from < 1) .or. (from > to) ) THROW_HARD('Invalid frame range 2; correct_gain')
-        if( present(eerdecoder) )then
-            call eerdecoder%prep_gainref(gainref_fname, gainimg)
-        else
-            if( fname2format(gainref_fname)=='L' )then
-                THROW_HARD('''.gain'' files only for use with EER movies! correct_gain')
-            endif
-            ldim_here = frames_here(from)%get_ldim()
-            call find_ldim_nptcls(gainref_fname,ldim_gain,ifoo)
-            if( ldim_gain(1).ne.ldim_here(1) .or. ldim_gain(2).ne.ldim_here(2) )then
-                THROW_HARD('Inconsistent dimensions between movie frames & gain reference! correct_gain')
-            endif
-            call gainimg%new(ldim_gain, frames_here(from)%get_smpd())
-            call gainimg%read(gainref_fname)
-        endif
-        !$omp parallel do schedule(static) default(shared) private(iframe) proc_bind(close)
-        do iframe = from,to
-            call frames_here(iframe)%mul(gainimg)
-        enddo
-        !$omp end parallel do
-    end subroutine correct_gain
-
     integer function motion_correct_get_ref_frame()
         motion_correct_get_ref_frame = fixed_frame
     end function motion_correct_get_ref_frame
 
-    ! flips, writes gain reference & update command line
-    subroutine flip_gain( cline, gainref_fname, mode )
-        use simple_cmdline, only: cmdline
-        class(cmdline),   intent(inout) :: cline
-        character(len=*), intent(inout) :: gainref_fname, mode
-        type(image)                   :: gain
-        character(len=:), allocatable :: new_fname
-        real    :: smpd
-        integer :: ldim(3), n
-        if( .not.cline%defined('gainref') ) return
-        if( .not.cline%defined('flipgain') ) return
-        select case(trim(uppercase(mode)))
-        case('NO')
-            return
-        case('X','Y','XY','YX')
-            ! supported
-        case DEFAULT
-            THROW_HARD('UNSUPPORTED GAIN REFERENCE FLIPPING MODE: '//trim(mode))
-        end select
-        if( .not.file_exists(gainref_fname) )then
-            THROW_HARD('Could not find gain reference: '//trim(gainref_fname))
-        endif
-        call find_ldim_nptcls(gainref_fname, ldim, n, smpd=smpd)
-        ldim(3) = 1
-        call gain%new(ldim, smpd, wthreads=.false.)
-        call gain%read(gainref_fname)
-        call gain%flip(mode)
-        gainref_fname = basename(gainref_fname)
-        gainref_fname = get_fbody(gainref_fname, trim(fname2ext(gainref_fname)), separator=.true.)
-        gainref_fname = './'//trim(gainref_fname)//'_flip'//trim(uppercase(mode))//'.mrc'
-        call gain%write(gainref_fname)
-        new_fname     = simple_abspath(gainref_fname)
-        gainref_fname = trim(new_fname)
-        call cline%set('gainref', gainref_fname)
-        call gain%kill
-        deallocate(new_fname)
-    end subroutine flip_gain
-
     ! COMMON PRIVATE UTILITY METHODS
 
-    ! Following Grant & Grigorieff; eLife 2015;4:e06980
-    ! Frames assumed in fourier space
-    subroutine apply_dose_weighting( frames )
-        class(image), intent(inout) :: frames(nframes)
-        real, parameter   :: A=0.245, B=-1.665, C=2.81
-        real, allocatable :: qs(:)
-        real    :: acc_doses(nframes), spaFreqk, dose_per_frame
-        real    :: twoNe, smpd, spafreq, limhsq,limksq
-        integer :: nrflims(3,2), ldim(3), hphys,kphys, iframe, h,k
-        if( .not.params_glob%l_dose_weight ) return
-        if( .not.frames(1)%is_ft() ) THROW_HARD('Frames should be in in the Fourier domain')
-        nrflims = frames(1)%loop_lims(2)
-        smpd    = frames(1)%get_smpd()
-        allocate(qs(nframes),source=0.)
-        ! doses
-        ldim           = frames(1)%get_ldim()
-        limhsq         = (real(ldim(1))*smpd)**2.
-        limksq         = (real(ldim(2))*smpd)**2.
-        dose_per_frame = total_dose / real(nframes)
-        do iframe=1,nframes
-            acc_doses(iframe) = real(iframe) * dose_per_frame
-        end do
-        if( is_equal(kV,200.) )then
-            acc_doses = acc_doses / 0.8
-        else if( is_equal(kV,100.) )then
-            acc_doses = acc_doses / 0.64
-        endif
-        ! dose normalization
-        !$omp parallel do private(h,k,spafreq,spafreqk,twone,kphys,hphys,iframe,qs)&
-        !$omp default(shared) schedule(static) proc_bind(close)
-        do k = nrflims(2,1),nrflims(2,2)
-            kphys    = k + 1 + merge(ldim(2),0,k<0)
-            spaFreqk = real(k*k)/limksq
-            do h = nrflims(1,1),nrflims(1,2)
-                hphys   = h + 1
-                spaFreq = sqrt( real(h*h)/limhsq + spaFreqk )
-                twoNe   = 2.*(A*spaFreq**B + C)
-                qs = exp(-acc_doses/twoNe)
-                qs = qs / sqrt(sum(qs*qs))
-                do iframe = 1,nframes
-                    call frames(iframe)%mul_cmat_at([hphys,kphys,1], qs(iframe))
-                enddo
-            enddo
-        enddo
-        !$omp end parallel do
-    end subroutine apply_dose_weighting
-
-    ! gain correction, calculate image sum and identify outliers
+    ! identify and cure outliers
     subroutine cure_outliers( frames )
         use simple_image, only: image_ptr
         class(image), intent(inout) :: frames(nframes)
@@ -1069,30 +948,5 @@ contains
             write(logfhandle,'(a)') '>>> NO DEAD/HOT PIXELS DETECTED'
         endif
     end subroutine cure_outliers
-
-    !>  Utility to calculate the number fractions, # eer frames per fraction and adjusted total_dose
-    !   while minimizing the number of leftover frames given total dose, total # of eer frames & a dose target
-    subroutine calc_eer_fraction(n_eer_frames, fraction_dose_target, tot_dose, nfractions, eerfraction)
-        integer, intent(in)    :: n_eer_frames
-        real,    intent(in)    :: fraction_dose_target
-        real,    intent(inout) :: tot_dose
-        integer, intent(out)   :: nfractions, eerfraction
-        real    :: dose_per_eer_frame
-        integer :: ffloor, fceil, nffloor, nfceil
-        ffloor  = floor(real(n_eer_frames) / (tot_dose / fraction_dose_target))
-        fceil   = ffloor+1
-        nffloor = floor(real(n_eer_frames) / real(ffloor))
-        nfceil  = floor(real(n_eer_frames) / real(fceil))
-        if( nffloor*ffloor > nfceil*fceil )then
-            nfractions   = nffloor
-            eer_fraction = ffloor
-        else
-            nfractions   = nfceil
-            eer_fraction = fceil
-        endif
-        ! adjusting total dose
-        dose_per_eer_frame = tot_dose / real(n_eer_frames)
-        tot_dose           = dose_per_eer_frame * real(eerfraction) * real(nfractions)
-    end subroutine calc_eer_fraction
 
 end module simple_motion_correct

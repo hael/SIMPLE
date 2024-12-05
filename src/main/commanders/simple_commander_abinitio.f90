@@ -15,69 +15,69 @@ use simple_image,              only: image
 use simple_builder,            only: builder
 use simple_class_frcs,         only: class_frcs
 use simple_convergence,        only: convergence
+use simple_cluster_seed,       only: gen_labelling
 use simple_commander_euclid
 use simple_euclid_sigma2
 use simple_qsys_funs
 use simple_decay_funs
 implicit none
 
-public :: initial_3Dmodel_commander, abinitio_3Dmodel_commander, abinitio_3Dmodel_parts_commander
+public :: abinitio3D_cavgs_commander, abinitio3D_commander, abinitio3D_parts_commander
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: initial_3Dmodel_commander
+type, extends(commander_base) :: abinitio3D_cavgs_commander
     contains
-    procedure :: execute => exec_initial_3Dmodel
-end type initial_3Dmodel_commander
+    procedure :: execute => exec_abinitio3D_cavgs
+end type abinitio3D_cavgs_commander
 
-type, extends(commander_base) :: abinitio_3Dmodel_commander
+type, extends(commander_base) :: abinitio3D_commander
     contains
-    procedure :: execute => exec_abinitio_3Dmodel
-end type abinitio_3Dmodel_commander
+    procedure :: execute => exec_abinitio3D
+end type abinitio3D_commander
 
-type, extends(commander_base) :: abinitio_3Dmodel_parts_commander
+type, extends(commander_base) :: abinitio3D_parts_commander
     contains
-    procedure :: execute => exec_abinitio_3Dmodel_parts
-end type abinitio_3Dmodel_parts_commander
-
-type, extends(commander_base) :: abinitio_3Dmodel2_commander
-    contains
-    procedure :: execute => exec_abinitio_3Dmodel2
-end type abinitio_3Dmodel2_commander
+    procedure :: execute => exec_abinitio3D_parts
+end type abinitio3D_parts_commander
 
 ! class constants
-character(len=*), parameter :: REC_FBODY             = 'rec_final_state'
-character(len=*), parameter :: STR_STATE_GLOB        = '01'
-real,             parameter :: LPSTART_LB            = 10.
-real,             parameter :: LPSTART_DEFAULT       = 20.
-real,             parameter :: LPSTOP_LB             = 6.
-real,             parameter :: CENLP_DEFAULT         = 30.
-real,             parameter :: LPSYMSRCH_LB          = 12.
-integer,          parameter :: NSTAGES               = 8
-integer,          parameter :: PHASES(3)             = [2,6,8]
-integer,          parameter :: MAXITS(3)             = [20,17,15]
-integer,          parameter :: MAXITS_GLOB           = 2*20 + 4*17 + 2*15
-integer,          parameter :: NSPACE(3)             = [500,1000,2500]
-integer,          parameter :: SYMSRCH_STAGE         = 3
-integer,          parameter :: INCR_GREEDINESS_STAGE = 4 ! INCR_GREEDINESS_STAGE < PROBREFINE_STAGE must be true for it to have an effect
-integer,          parameter :: PROBREFINE_STAGE      = 5
-integer,          parameter :: ICM_STAGE             = PROBREFINE_STAGE
-integer,          parameter :: TRAILREC_STAGE        = 7
+character(len=*), parameter :: REC_FBODY         = 'rec_final_state'
+character(len=*), parameter :: STR_STATE_GLOB    = '01'
+real,             parameter :: LPSTOP_BOUNDS(2)  = [4.5,6.0]
+real,             parameter :: LPSTART_BOUNDS(2) = [10.,20.]
+real,             parameter :: CENLP_DEFAULT     = 30.
+real,             parameter :: LPSYMSRCH_LB      = 12.
+integer,          parameter :: NSTAGES           = 8
+integer,          parameter :: NSTAGES_INI3D     = 4 ! # of ini3D stages used for initialization
+integer,          parameter :: PHASES(3)         = [2,6,8]
+integer,          parameter :: MAXITS(8)         = [20,20,17,17,17,17,15,30]
+integer,          parameter :: MAXITS_GLOB       = 2*20 + 4*17 + 1*15 ! the last 30 iterations are not included in this estimate since the sampling method changes
+integer,          parameter :: NSPACE(3)         = [500,1000,2500]
+integer,          parameter :: SYMSRCH_STAGE     = 3
+integer,          parameter :: PROBREFINE_STAGE  = 5
+integer,          parameter :: ICM_STAGE         = PROBREFINE_STAGE  ! we switch from ML regularization when prob is switched on
+integer,          parameter :: STOCH_SAMPL_STAGE = PROBREFINE_STAGE  ! we switch from greedy to stochastic blanced class sampling when prob is switched on
+integer,          parameter :: TRAILREC_STAGE    = NSTAGES  - 1      ! we start trailing one stage before the last
+integer,          parameter :: LPAUTO_STAGE      = TRAILREC_STAGE    ! automatic low-pass limit estimation switched on when trailing is 
+integer,          parameter :: NSAMPLE_MAX_LAST  = 25000             ! maximum # particles to sample per iteration in the last stage 
+
 ! class variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
-logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false., l_update_frac=.false.
-logical          :: l_icm_reg=.true., l_ini3D=.false., l_greediness_given = .false.
-type(sym)        :: se1,se2
+logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false., l_update_frac_dyn=.false.
+logical          :: l_ini3D=.false., l_lpauto=.false., l_nsample_inputted_by_user=.false.
+type(sym)        :: se1, se2
 type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_postprocess, cline_reproject
-real             :: update_frac   = 1.0
+real             :: update_frac  = 1.0, update_frac_dyn  = 1.0
+integer          :: nstates_glob = 1, nptcls_eff = 0, nsample_minmax(2), maxits_dyn=0
 
 contains
 
     !> for generation of an initial 3D model from class averages
-    subroutine exec_initial_3Dmodel( self, cline )
-        class(initial_3Dmodel_commander), intent(inout) :: self
+    subroutine exec_abinitio3D_cavgs( self, cline )
+        class(abinitio3D_cavgs_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
-        character(len=*),      parameter :: work_projfile = 'initial_3Dmodel_tmpproj.simple'
+        character(len=*),      parameter :: work_projfile = 'abinitio3D_cavgs_tmpproj.simple'
         ! shared-mem commanders
         type(refine3D_commander)         :: xrefine3D
         type(reconstruct3D_commander)    :: xreconstruct3D
@@ -106,11 +106,8 @@ contains
         call params%new(cline)
         call cline%set('mkdir',       'no')   ! to avoid nested directory structure
         call cline%set('oritype', 'ptcl3D')   ! from now on we are in the ptcl3D segment, final report is in the cls3D segment
-        ! set class global ICM regularization flag
-        l_icm_reg = .true.
-        if( cline%defined('icm') )then
-            l_icm_reg = params%l_icm   
-        endif
+        ! set class global lp_auto flag for low-pass limit estimation
+        l_lpauto = .false.
         ! set nstages_ini3D
         nstages_ini3D = NSTAGES
         if( cline%defined('nstages') )then
@@ -125,7 +122,15 @@ contains
         call spproj%update_projinfo(cline)
         call spproj%write_segment_inside('projinfo', params%projfile)
         ! set low-pass limits and downscaling info from FRCs
-        call set_lplims_from_frcs(spproj)
+        if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
+            call set_lplims_from_frcs(spproj, l_cavgs=.true., lpstart=params%lpstart, lpstop=params%lpstop)
+        else if( cline%defined('lpstart') )then
+            call set_lplims_from_frcs(spproj, l_cavgs=.true., lpstart=params%lpstart)
+        else if( cline%defined('lpstop') )then
+            call set_lplims_from_frcs(spproj, l_cavgs=.true., lpstop=params%lpstop)
+        else
+            call set_lplims_from_frcs(spproj, l_cavgs=.true.)
+        endif
         ! whether to use classes generated from 2D or 3D
         select case(trim(params%imgkind))
             case('cavg')
@@ -150,7 +155,7 @@ contains
         ctfvars%smpd    = params%smpd
         shifted_stk     = basename(add2fbody(stk, ext, '_shifted'))
         if( count(states==0) .eq. ncavgs )then
-            THROW_HARD('no class averages detected in project file: '//trim(params%projfile)//'; initial_3Dmodel')
+            THROW_HARD('no class averages detected in project file: '//trim(params%projfile)//'; abinitio3D_cavgs')
         endif
         ! prepare a temporary project file
         work_proj%projinfo = spproj%projinfo
@@ -268,7 +273,7 @@ contains
         call work_proj%kill
         call del_file(work_projfile)
         call simple_rmdir(STKPARTSDIR)
-        call simple_end('**** SIMPLE_INITIAL_3DMODEL NORMAL STOP ****')
+        call simple_end('**** SIMPLE_ABINITIO3D_CAVGS NORMAL STOP ****')
 
         contains
 
@@ -317,33 +322,29 @@ contains
                 write(logfhandle,'(A,F6.1)')'>>> EVEN/ODD AVERAGE ANGULAR DISTANCE: ', avg_euldist
             end subroutine conv_eo
 
-    end subroutine exec_initial_3Dmodel
+    end subroutine exec_abinitio3D_cavgs
 
     !> for generation of an initial 3d model from particles
-    subroutine exec_abinitio_3Dmodel( self, cline )
-        class(abinitio_3Dmodel_commander), intent(inout) :: self
-        class(cmdline),                    intent(inout) :: cline
+    subroutine exec_abinitio3D( self, cline )
+        class(abinitio3D_commander), intent(inout) :: self
+        class(cmdline),              intent(inout) :: cline
         ! commanders
-        type(initial_3Dmodel_commander)        :: xini3D
         type(refine3D_commander_distr)         :: xrefine3D
         type(reconstruct3D_commander_distr)    :: xreconstruct3D_distr
-        ! command lines
-        type(cmdline)                          :: cline_ini3D
         ! other
-        real,                      parameter   :: UPDATE_FRAC_MAX = 0.9 !< to ensure fractional update is always on
-        integer,                   parameter   :: NSTAGES_INI3D   = 4   !< # of ini3D stages
-        character(len=*),          parameter   :: INI3D_DIR='ini3D_on_cavgs/'
-        character(len=:),          allocatable :: vol_name
-        real,                      allocatable :: rstates(:)
-        integer,                   allocatable :: tmpinds(:), clsinds(:)
-        type(class_sample),        allocatable :: clssmp(:)
-        character(len=LONGSTRLEN), allocatable :: file_list(:)
-        type(parameters)                       :: params
-        type(sp_project)                       :: spproj
-        type(image)                            :: noisevol
-        integer :: istage, s, ncls, icls, nptcls_eff, i
+        real,               parameter   :: UPDATE_FRAC_MAX = 0.9 !< to ensure fractional update is always on
+        character(len=:),   allocatable :: vol_name
+        real,               allocatable :: rstates(:)
+        integer,            allocatable :: tmpinds(:), clsinds(:), pinds(:)
+        logical,            allocatable :: ptcl_mask(:)
+        type(class_sample), allocatable :: clssmp(:)
+        type(parameters)                :: params
+        type(sp_project)                :: spproj
+        type(image)                     :: noisevol 
+        integer :: istage, s, ncls, icls, i, start_stage, nptcls2update, noris
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
+        call cline%set('bfac',            0.) ! because initial models should not be sharpened
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',         'yes')
         if( .not. cline%defined('overlap')     ) call cline%set('overlap',        0.95)
         if( .not. cline%defined('prob_athres') ) call cline%set('prob_athres',     10.)
@@ -354,77 +355,92 @@ contains
         if( .not. cline%defined('pgrp_start')  ) call cline%set('pgrp_start',     'c1')
         if( .not. cline%defined('ptclw')       ) call cline%set('ptclw',          'no')
         if( .not. cline%defined('projrec')     ) call cline%set('projrec',       'yes')
+        if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'yes')
+        if( cline%defined('nstates') )then
+            call cline%set('projrec', 'no') ! not yet supported for multi-state
+        endif
         ! make master parameters
         call params%new(cline)
         call cline%set('mkdir', 'no')
-        ! provide initialization of 3D alignment using class averages?
-        l_ini3D = .false.
-        if( trim(params%cavg_ini).eq.'yes' )then 
-            cline_ini3D = cline
-            call cline_ini3D%set('nstages', NSTAGES_INI3D)
-            if( cline%defined('nthr_ini3D') )then
-                call cline_ini3D%set('nthr', params%nthr_ini3D)
-                call cline_ini3D%delete('nthr_ini3D')
-            endif
-            call cline_ini3D%delete('nparts')
-            call cline_ini3D%delete('projrec')
-            call cline_ini3D%delete('oritype')
-            call cline_ini3D%delete('imgkind')
-            call cline_ini3D%delete('prob_athres')
-            call xini3D%execute_safe(cline_ini3D)
-            ! update point-group symmetry
-            call cline%set('pgrp_start', params%pgrp)
-            params%pgrp_start = params%pgrp
-            ! stash away files
-            call simple_list_files('*', file_list)
-            call simple_mkdir(INI3D_DIR)
-            do i = 1, size(file_list)
-                if( str_has_substr(trim(file_list(i)), basename(trim(params%projfile))) )then
-                    ! this stays
-                else
-                    call simple_rename(trim(file_list(i)), INI3D_DIR//trim(file_list(i)))
-                endif
-            end do
-            deallocate(file_list)
-            ! flag completion
-            l_ini3D = .true.
+        nstates_glob = params%nstates  
+        if( nstates_glob > 1 .and. trim(params%het_mode).eq.'docked' )then
+            params%nstates = 1
+            call cline%delete('nstates')
         endif
-        ! set class global ICM regularization flag
-        l_icm_reg = .true.
-        if( cline%defined('icm') )then
-            l_icm_reg = params%l_icm
-        endif
-        ! set greediness flag
-        l_greediness_given = cline%defined('greediness')
-        ! prepare class command lines
-        call prep_class_command_lines(cline, params%projfile)
-        ! set symmetry class variables
-        call set_symmetry_class_vars
         ! read project
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
         call spproj%write_segment_inside('projinfo', params%projfile)
+        ! provide initialization of 3D alignment using class averages?
+        start_stage = 1
+        l_ini3D     = .false.
+        if( trim(params%cavg_ini).eq.'yes' )then
+            call ini3D_from_cavgs(cline)
+            ! re-read the project file to update info in spproj
+            call spproj%read(params%projfile)
+            start_stage = NSTAGES_INI3D - 1 ! compute reduced to two overlapping stages
+            l_ini3D     = .true.
+            ! symmetry dealt with by ini3D
+        else
+            if( nstates_glob > 1 .and. trim(params%het_mode).eq.'independent' )then
+                ! turn off symmetry axis search and put the symmetry in from the start
+                params%pgrp_start = params%pgrp
+            endif
+        endif
+        ! initialization on class averages done outside this workflow (externally)?
+        if( trim(params%cavg_ini_ext).eq.'yes' )then 
+            ! check that ptcl3D field is not virgin
+            if( spproj%is_virgin_field('ptcl3D') )then
+                THROW_HARD('Prior 3D alignment required for abinitio workflow when cavg_ini_ext is set to yes')
+            endif
+            start_stage = NSTAGES_INI3D - 1 ! compute reduced to two overlapping stages
+            l_ini3D     = .true.
+        endif
+        ! set class global lp_auto flag for low-pass limit estimation
+        l_lpauto = .true.
+        if( cline%defined('lp_auto') ) l_lpauto = params%l_lpauto
+        if( l_lpauto )then
+            params%lplim_crit = 0.5
+            call cline%set('lplim_crit', params%lplim_crit)
+        endif
+        ! prepare class command lines
+        call prep_class_command_lines(cline, params%projfile)
+        ! set symmetry class variables
+        call set_symmetry_class_vars
         ! fall over if there are no particles
         if( spproj%os_ptcl3D%get_noris() < 1 ) THROW_HARD('Particles could not be found in the project')
         ! take care of class-biased particle sampling
         if( spproj%is_virgin_field('ptcl2D') )then
             THROW_HARD('Prior 2D clustering required for abinitio workflow')
         else
-            l_update_frac = .true.
-            update_frac   = 1.0
-            nptcls_eff    = spproj%count_state_gt_zero()
+            l_update_frac_dyn          = .false.
+            l_nsample_inputted_by_user = .false.
+            update_frac                = 1.0
+            nptcls_eff                 = spproj%count_state_gt_zero()
             if( cline%defined('nsample') )then
-                update_frac = real(params%nsample) / real(nptcls_eff)
+                update_frac = real(params%nsample * nstates_glob) / real(nptcls_eff)
+                l_nsample_inputted_by_user = .true.
             else if( cline%defined('update_frac') )then
                 update_frac = params%update_frac
-            else
-                if( cline%defined('nsample_max') )then
-                    update_frac = calc_update_frac(nptcls_eff, [NSAMPLE_MINMAX_DEFAULT(1),params%nsample_max])
+                l_nsample_inputted_by_user = .true.
+            else if( cline%defined('nsample_start') )then
+                if( params%nsample_start > nptcls_eff ) THROW_HARD('nsample_start > effective # ptcls, decrease!')
+                nsample_minmax(1) = params%nsample_start
+                if( cline%defined('nsample_stop') )then
+                    nsample_minmax(2) = min(nptcls_eff,params%nsample_stop)
                 else
-                    update_frac = calc_update_frac(nptcls_eff, NSAMPLE_MINMAX_DEFAULT)
+                    nsample_minmax(2) = nptcls_eff
+                endif
+                update_frac = calc_update_frac_dyn(nptcls_eff, nstates_glob, nsample_minmax, 1, MAXITS_GLOB)
+                l_update_frac_dyn = .true.
+             else
+                if( cline%defined('nsample_max') )then
+                    update_frac = calc_update_frac(nptcls_eff, nstates_glob, [NSAMPLE_MINMAX_DEFAULT(1),params%nsample_max])
+                else
+                    update_frac = calc_update_frac(nptcls_eff, nstates_glob, NSAMPLE_MINMAX_DEFAULT)
                 endif
             endif
-            update_frac = min(UPDATE_FRAC_MAX, update_frac) ! to ensure fractional update is always on      
+            update_frac = min(UPDATE_FRAC_MAX, update_frac) ! to ensure fractional update is always on
             ! generate a data structure for class sampling on disk
             ncls    = spproj%os_cls2D%get_noris()
             tmpinds = (/(icls,icls=1,ncls)/)
@@ -433,10 +449,22 @@ contains
             call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
             call write_class_samples(clssmp, CLASS_SAMPLING_FILE)
             deallocate(rstates, tmpinds, clsinds)
-            call deallocate_class_samples(clssmp)
+            if( spproj%os_ptcl3D%has_been_sampled() )then
+                ! the ptcl3D field should be clean at this stage
+                call spproj%os_ptcl3D%clean_updatecnt_sampled()
+                call spproj%write_segment_inside('ptcl3D', params%projfile)
+            endif
         endif
         ! set low-pass limits and downscaling info from FRCs
-        call set_lplims_from_frcs(spproj)
+         if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
+            call set_lplims_from_frcs(spproj, l_cavgs=.false., lpstart=params%lpstart, lpstop=params%lpstop)
+        else if( cline%defined('lpstart') )then
+            call set_lplims_from_frcs(spproj, l_cavgs=.false., lpstart=params%lpstart)
+        else if( cline%defined('lpstop') )then
+            call set_lplims_from_frcs(spproj, l_cavgs=.false., lpstop=params%lpstop)
+        else
+            call set_lplims_from_frcs(spproj, l_cavgs=.false.)
+        endif
         ! starting volume logics
         if( .not. cline%defined('vol1') )then
             if( .not. l_ini3D )then
@@ -445,8 +473,12 @@ contains
                     case('ptcl3D')
                         call spproj%os_ptcl3D%rnd_oris
                     case DEFAULT
-                        THROW_HARD('Unsupported ORITYPE; exec_abinitio_3Dmodel')
+                        THROW_HARD('Unsupported ORITYPE; exec_abinitio3D')
                 end select
+                ! randomize states
+                if( nstates_glob > 1 .and. trim(params%het_mode).eq.'independent' )then
+                    call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
+                endif
                 call spproj%write_segment_inside(params%oritype, params%projfile)
                 ! create noise starting volume(s)
                 call noisevol%new([lpinfo(1)%box_crop,lpinfo(1)%box_crop,lpinfo(1)%box_crop], lpinfo(1)%smpd_crop)
@@ -469,11 +501,30 @@ contains
                 end do
                 call noisevol%kill
             else
-                call calc_start_rec(params%projfile, xreconstruct3D_distr)
+                ! check that ptcl3D field is not virgin
+                if( spproj%is_virgin_field('ptcl3D') )then
+                    THROW_HARD('Prior 3D alignment is lacking for starting volume generation')
+                endif
+                ! randomize states
+                if( nstates_glob > 1 .and. trim(params%het_mode).eq.'independent' )then
+                    call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
+                endif
+                ! create an initial balanced greedy sampling
+                noris = spproj%os_ptcl3D%get_noris()
+                allocate(ptcl_mask(1:noris))
+                call spproj%os_ptcl3D%sample4update_class(clssmp, [1,noris], update_frac,&
+                    nptcls2update, pinds, ptcl_mask, .false.)
+                deallocate(pinds, ptcl_mask)          ! these are not needed
+                call deallocate_class_samples(clssmp) ! done with this one
+                ! write updated project file
+                call spproj%write_segment_inside(params%oritype, params%projfile)
+                ! create starting volume(s)
+                call calc_start_rec(params%projfile, xreconstruct3D_distr, istage=1)
             endif
         endif
         ! Frequency marching
-        do istage = 1, NSTAGES
+        maxits_dyn = sum(MAXITS(start_stage:NSTAGES - 1)) ! the last stage is omitted in this estimate since the sampling method changes
+        do istage = start_stage, NSTAGES
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', lpinfo(istage)%lp
             ! Preparation of command line for probabilistic search
@@ -487,6 +538,10 @@ contains
             if( istage == SYMSRCH_STAGE )then
                 call symmetrize(istage, spproj, params%projfile, xreconstruct3D_distr)
             endif
+            ! State labelling
+            if( nstates_glob > 1 .and. params%het_mode.eq.'docked' )then
+                if( istage == NSTAGES - 1 ) call randomize_states(spproj, params%projfile, xreconstruct3D_distr)
+            endif
         enddo
         ! for visualization
         call gen_ortho_reprojs4viz
@@ -497,30 +552,46 @@ contains
         ! cleanup
         call spproj%kill
         call qsys_cleanup
-        call simple_end('**** SIMPLE_ABINITIO_3DMODEL NORMAL STOP ****')
-    end subroutine exec_abinitio_3Dmodel
-
-    subroutine exec_abinitio_3Dmodel_parts( self, cline )
-        use simple_commander_project, only: new_project_commander, selection_commander
-        class(abinitio_3Dmodel_parts_commander), intent(inout) :: self
+        call simple_end('**** SIMPLE_ABINITIO3D NORMAL STOP ****')
+    end subroutine exec_abinitio3D
+    
+    subroutine exec_abinitio3D_parts( self, cline )
+        use simple_commander_project,   only: new_project_commander, selection_commander
+        use simple_exec_helpers,        only: gen_exec_cmd, async_exec
+        use simple_commander_cluster2D, only: make_cavgs_commander_distr
+        class(abinitio3D_parts_commander), intent(inout) :: self
         class(cmdline),                          intent(inout) :: cline
         ! commanders
-        type(selection_commander)   :: xsel
-        type(new_project_commander) :: xnew_project
+        type(selection_commander)          :: xsel
+        type(new_project_commander)        :: xnew_project
+        type(make_cavgs_commander_distr)   :: xmake_cavgs_distr
         ! command lines
-        type(cmdline)               :: cline_split_bal, cline_new_proj      
+        type(cmdline)                      :: cline_split_bal, cline_new_proj, cline_mk_cavgs, cline_abinitio3D
         ! other vars
-        type(parameters) :: params
-        integer          :: iproj
+        character(len=:),      allocatable :: cmd
         character(len=STDLEN), allocatable :: projnames(:), projfnames(:)
+        character(len=LONGSTRLEN)          :: cwd
+        type(parameters)                   :: params
+        type(sp_project)                   :: spproj
+        integer                            :: iproj
+        logical, parameter                 :: L_USE_CAVGS = .false.
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        ! command-line inputs
-        ! REQUIRED: nparts    
-        ! OPTIONAL: nptcls_per_part
-
         ! make master parameters
         call params%new(cline)
         call cline%set('mkdir', 'no')
+        ! provide initialization of 3D alignment using class averages?
+        l_ini3D = .false.
+        if( trim(params%cavg_ini).eq.'yes' )then
+            call ini3D_from_cavgs(cline)
+            call cline%set('cavg_ini_ext', 'yes')
+            l_ini3D = .true.
+        else
+            call cline%set('cavg_ini_ext', 'no')
+        endif
+        ! split stack so it does not happen downstream
+        call spproj%read(params%projfile)
+        call spproj%split_stk(max(params%nparts,params%nparts_per_part*params%nparts))
+        call spproj%kill
         ! conduct balanced split
         cline_split_bal = cline
         call cline_split_bal%set('balance', 'yes')
@@ -533,14 +604,64 @@ contains
             projfnames(iproj) = BALPROJPARTFBODY//int2str(iproj)//'.simple'
             call cline_new_proj%set('projname', trim(projnames(iproj)))
             call cline_new_proj%set('projfile', trim(projfnames(iproj)))
-            call xnew_project%execute(cline_new_proj)
+            call xnew_project%execute_safe(cline_new_proj)
             call chdir('../')
             call del_file(trim(projfnames(iproj)))
         end do
-        
-        ! simple_exec prg=make_cavgs nparts=1 nthr=4 refs=cavgs_balanced_part1.mrc
-
-    end subroutine exec_abinitio_3Dmodel_parts
+        if( L_USE_CAVGS )then
+            ! make class averages
+            do iproj = 1, params%nparts
+                call chdir('./'//trim(projnames(iproj)))
+                call simple_getcwd(cwd)
+                write(logfhandle,'(A)') 'CWD: '//trim(cwd)
+                call cline_mk_cavgs%set('prg',      'make_cavgs')
+                call cline_mk_cavgs%set('projfile',  trim(projfnames(iproj)))
+                call cline_mk_cavgs%set('mkdir',    'no') ! to avoid nested directory structure
+                call cline_mk_cavgs%set('refs',     'cavgs_'//BALPROJPARTFBODY//int2str(iproj)//'.mrc')
+                call cline_mk_cavgs%set('nparts',    params%nparts_per_part)
+                call cline_mk_cavgs%set('nthr',      params%nthr)
+                ! cmd = gen_exec_cmd(cline_mk_cavgs, 'simple_exec')
+                ! call exec_cmdline(cmd)
+                call xmake_cavgs_distr%execute_safe(cline_mk_cavgs)
+                call chdir('../')
+            end do
+            ! execute independent jobs for cross validation asynchronously
+            do iproj = 1, params%nparts
+                call chdir('./'//trim(projnames(iproj)))
+                call simple_getcwd(cwd)
+                write(logfhandle,'(A)') 'CWD: '//trim(cwd)
+                cline_abinitio3D = cline
+                call cline_abinitio3D%delete('nparts_per_part')
+                call cline_abinitio3D%delete('nparts')
+                call cline_abinitio3D%set('prg',        'abinitio3D_cavgs')
+                call cline_abinitio3D%set('projfile',    trim(projfnames(iproj)))
+                call cline_abinitio3D%set('mkdir',      'no') ! to avoid nested directory structure
+                ! cmd = gen_exec_cmd(cline_abinitio3D, 'simple_exec', 'ABINITIO3D_CAVGS')
+                call async_exec(cline_abinitio3D, 'simple_exec', 'ABINITIO3D_CAVGS')
+                call chdir('../')
+            end do
+        else
+            ! execute independent jobs for cross validation asynchronously
+            do iproj = 1, params%nparts
+                call chdir('./'//trim(projnames(iproj)))
+                call simple_getcwd(cwd)
+                write(logfhandle,'(A)') 'CWD: '//trim(cwd)
+                cline_abinitio3D = cline
+                call cline_abinitio3D%delete('nparts_per_part')
+                call cline_abinitio3D%delete('nthr_ini3D')
+                call cline_abinitio3D%set('cavg_ini',   'no')
+                call cline_abinitio3D%set('prg',        'abinitio3D')
+                call cline_abinitio3D%set('projfile',    trim(projfnames(iproj)))
+                call cline_abinitio3D%set('mkdir',      'no') ! to avoid nested directory structure
+                call cline_abinitio3D%set('nparts',      params%nparts_per_part)
+                call cline_abinitio3D%set('update_frac', 1.0) ! maximal nsample
+                ! cmd = gen_exec_cmd(cline_abinitio3D, 'simple_exec', 'ABINITIO3D')
+                call async_exec(cline_abinitio3D, 'simple_exec', 'ABINITIO3D')
+                call chdir('../')
+            end do
+        endif
+        call simple_end('**** SIMPLE_ABINITIO3D_PARTS NORMAL STOP ****')
+    end subroutine exec_abinitio3D_parts
 
     ! private helper routines
 
@@ -582,7 +703,6 @@ contains
         call cline_postprocess%set('projfile',             trim(projfile))
         call cline_postprocess%set('mkdir',                          'no')
         call cline_postprocess%set('imgkind',                       'vol')
-        call cline_postprocess%delete('bfac') ! sharpen final map
         call cline_postprocess%delete('lp')   ! to obtain optimal filtration
         ! re-project volume
         call cline_reproject%set('prg',                       'reproject')
@@ -596,27 +716,32 @@ contains
     end subroutine prep_class_command_lines
 
     subroutine set_symmetry_class_vars
-        l_srch4symaxis = trim(params_glob%pgrp) .ne. trim(params_glob%pgrp_start)
+        character(len=:), allocatable :: pgrp, pgrp_start
+        pgrp           = lowercase(trim(params_glob%pgrp))
+        pgrp_start     = lowercase(trim(params_glob%pgrp_start))
+        l_srch4symaxis = trim(pgrp) .ne. trim(pgrp_start)
         l_symran       = .false.
         l_sym          = l_srch4symaxis
-        if( params_glob%pgrp_start.ne.'c1' .or. params_glob%pgrp.ne.'c1' )then
-            se1 = sym(params_glob%pgrp_start)
-            se2 = sym(params_glob%pgrp)
+        if( trim(pgrp_start).ne.'c1' .or. trim(pgrp).ne.'c1' )then
+            se1 = sym(pgrp_start)
+            se2 = sym(pgrp)
             if(se1%get_nsym() > se2%get_nsym())then
                 ! ensure se2 is a subgroup of se1
-                if( .not. se1%has_subgrp(params_glob%pgrp) )THROW_HARD('Incompatible symmetry groups; exec_abinitio_3Dmodel')
+                if( .not. se1%has_subgrp(pgrp) )THROW_HARD('Incompatible symmetry groups; exec_abinitio3D')
                 ! set flag for symmetry randomisation
                 ! in case we are moving from a higher to lower group
                 l_symran = .true.
             else if( se2%get_nsym() > se1%get_nsym() )then
                 ! ensure se1 is a subgroup of se2
-                if( .not. se2%has_subgrp(params_glob%pgrp_start) )THROW_HARD('Incompatible symmetry groups; exec_abinitio_3Dmodel')
+                if( .not. se2%has_subgrp(pgrp_start) )THROW_HARD('Incompatible symmetry groups; exec_abinitio3D')
             endif
         endif
     end subroutine set_symmetry_class_vars
 
-    subroutine set_lplims_from_frcs( spproj )
+    subroutine set_lplims_from_frcs( spproj, l_cavgs, lpstart, lpstop )
         class(sp_project), intent(inout) :: spproj
+        logical,           intent(in)    :: l_cavgs
+        real, optional,    intent(in)    :: lpstart, lpstop
         character(len=:),  allocatable   :: frcs_fname, stk, imgkind, stkpath
         real,              allocatable   :: frcs_avg(:)
         integer,           allocatable   :: states(:)
@@ -625,16 +750,6 @@ contains
         integer          :: filtsz, ncavgs
         ! retrieve FRC info
         call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
-        if( .not.file_exists(frcs_fname) )then
-            ! 08/24 This is a backwards compatibility patch to account for error in metadata
-            ! on exit of streaming related to GUI directory structure (now fixed and cf above get_cavgs_stk).
-            ! Will need to harmonize (move to absolute path?).
-            call spproj%get_cavgs_stk(stk, ncavgs, smpd, imgkind=imgkind, stkpath=stkpath)
-            frcs_fname = trim(stkpath)//'/'//trim(frcs_fname)
-            if( .not.file_exists(frcs_fname) )then
-                THROW_HARD('the project file does not contain an FRCs file, which is required')
-            endif
-        endif
         ! work out low-pass limits and downscaling parameters
         params_glob%frcs = trim(frcs_fname)
         call clsfrcs%read(frcs_fname)
@@ -648,8 +763,16 @@ contains
         endif
         if( allocated(lpinfo) ) deallocate(lpinfo)
         allocate(lpinfo(NSTAGES))
-        lpfinal = max(LPSTOP_LB,calc_lplim_final_stage(3))
-        call lpstages(params_glob%box, NSTAGES, frcs_avg, params_glob%smpd, LPSTART_LB, LPSTART_DEFAULT, lpfinal, lpinfo, verbose=.true.)
+        lpfinal = max(LPSTOP_BOUNDS(1),calc_lplim_final_stage(3))
+        lpfinal = min(LPSTOP_BOUNDS(2),lpfinal)
+        if( present(lpstop) ) lpfinal = max(lpstop,lpfinal)
+        if( present(lpstart) )then
+            call lpstages(params_glob%box, NSTAGES, frcs_avg, params_glob%smpd,&
+            &lpstart, lpstart, lpfinal, lpinfo, l_cavgs )
+        else
+            call lpstages(params_glob%box, NSTAGES, frcs_avg, params_glob%smpd,&
+            &LPSTART_BOUNDS(1), LPSTART_BOUNDS(2), lpfinal, lpinfo, l_cavgs )
+        endif
         call clsfrcs%kill
 
         contains
@@ -669,20 +792,77 @@ contains
 
     end subroutine set_lplims_from_frcs
 
+    subroutine ini3D_from_cavgs( cline )
+        class(cmdline),    intent(inout) :: cline
+        type(abinitio3D_cavgs_commander) :: xini3D
+        type(cmdline)                    :: cline_ini3D
+        character(len=:), allocatable    :: cavgs_stk
+        type(str4arr),    allocatable    :: files_that_stay(:)
+        character(len=*), parameter      :: INI3D_DIR='abinitio3D_cavgs/'
+        integer :: ncavgs
+        cline_ini3D = cline
+        call cline_ini3D%set('nstages', NSTAGES_INI3D)
+        if( cline%defined('lpstart_ini3D') )then
+            call cline_ini3D%set('lpstart', params_glob%lpstart_ini3D)
+            call cline_ini3D%delete('lpstart_ini3D')
+        endif
+        if( cline%defined('lpstop_ini3D') )then
+            call cline_ini3D%set('lpstop', params_glob%lpstop_ini3D)
+            call cline_ini3D%delete('lpstop_ini3D')
+        endif
+        if( cline%defined('nthr_ini3D') )then
+            call cline_ini3D%set('nthr', params_glob%nthr_ini3D)
+            call cline_ini3D%delete('nthr_ini3D')
+        endif
+        call cline_ini3D%delete('nstates') ! cavg_ini under the assumption of one state
+        call cline_ini3D%delete('nparts')
+        call cline_ini3D%delete('projrec')
+        call cline_ini3D%delete('oritype')
+        call cline_ini3D%delete('imgkind')
+        call cline_ini3D%delete('prob_athres')
+        call xini3D%execute_safe(cline_ini3D)
+        ! update point-group symmetry
+        call cline%set('pgrp_start', params_glob%pgrp)
+        params_glob%pgrp_start = params_glob%pgrp
+        ! stash away files
+        ! identfy files that stay
+        allocate(files_that_stay(5))
+        files_that_stay(1)%str = basename(trim(params_glob%projfile))
+        files_that_stay(2)%str = 'cavgs'
+        files_that_stay(3)%str = 'nice_'
+        files_that_stay(4)%str = 'frcs'
+        files_that_stay(5)%str = 'ABINITIO3D'
+        ! make the move
+        call move_files_in_cwd(INI3D_DIR, files_that_stay)
+    end subroutine ini3D_from_cavgs
+
     subroutine set_cline_refine3D( istage, l_cavgs )
         integer,          intent(in)  :: istage
         logical,          intent(in)  :: l_cavgs
         character(len=:), allocatable :: silence_fsc, sh_first, prob_sh, ml_reg
-        character(len=:), allocatable :: refine, icm, trail_rec, pgrp, balance
+        character(len=:), allocatable :: refine, icm, trail_rec, pgrp, balance, lp_auto
         integer :: iphase, iter, inspace, imaxits
-        real    :: trs, snr_noise_reg, greediness
+        real    :: trs, snr_noise_reg, frac_best, overlap, fracsrch, lpstart, lpstop
         ! iteration number bookkeeping
+        iter = 0
         if( cline_refine3D%defined('endit') )then
             iter = cline_refine3D%get_iarg('endit')
-        else
-            iter = 0
         endif
         iter = iter + 1
+        ! dynamic update frac
+        if( istage == NSTAGES )then
+            if( l_nsample_inputted_by_user )then
+                update_frac_dyn = update_frac
+            else
+                ! we change the sampling method for the last stage (accelerated refinement)
+                update_frac_dyn = 0.1 ! 10% of the particles updated each iteration
+                if( nint(real(nptcls_eff) * update_frac_dyn ) > (NSAMPLE_MAX_LAST * nstates_glob) )then
+                    update_frac_dyn = real(NSAMPLE_MAX_LAST * nstates_glob) / real(nptcls_eff)
+                endif
+            endif
+        else
+            update_frac_dyn = calc_update_frac_dyn(nptcls_eff, nstates_glob, nsample_minmax, iter, maxits_dyn)
+        endif
         ! symmetry
         pgrp = trim(params_glob%pgrp)
         if( l_srch4symaxis )then
@@ -692,30 +872,33 @@ contains
             endif
         endif
         ! refinement mode
-        if( istage < PROBREFINE_STAGE )then
-            refine    = 'shc_smpl'
-            prob_sh   = 'no'
-        else
-            refine    = 'prob'
-            prob_sh   = 'yes'
+        refine  = 'shc_smpl'
+        prob_sh = 'no'
+        if( istage >= PROBREFINE_STAGE )then
+            refine  = 'prob'
+            prob_sh = 'yes'
+        endif
+        if( nstates_glob > 1 .and. params_glob%het_mode.eq.'docked' )then
+            if( istage == NSTAGES ) refine = 'shc_smpl' ! works best on simulated ribosome data
         endif
         ! ICM regularization
-        if( istage < ICM_STAGE )then
-            icm       = 'no'
-        else
-            icm       = 'yes'
-        endif
+        icm = 'no'
+        if( istage >= ICM_STAGE ) icm = 'yes'
         ! balance
-        if( l_update_frac )then
-            balance   = 'yes'
-        else
-            balance   = 'no'
-        endif
+        balance = 'yes'
         ! trailing reconstruction
-        if( istage >= TRAILREC_STAGE .and. l_update_frac )then
-            trail_rec = 'yes'
-        else
-            trail_rec = 'no'
+        trail_rec = 'no'
+        if( istage >= TRAILREC_STAGE ) trail_rec = 'yes'
+        ! automatic low-pass limit estimation
+        lp_auto = 'no'
+        if( istage >= LPAUTO_STAGE .and. l_lpauto )then
+            lp_auto = trim(params_glob%lp_auto)
+            lpstart = lpinfo(istage - 1)%lp
+            if( istage == NSTAGES )then
+                lpstop = lpinfo(istage)%smpd_crop * 2. ! Nyqvist limit
+            else
+                lpstop = lpinfo(istage + 1)%lp
+            endif
         endif
         ! phase logics
         if(      istage <= PHASES(1) )then
@@ -731,29 +914,33 @@ contains
         select case(iphase)
             case(1)
                 inspace       = NSPACE(1)
-                imaxits       = MAXITS(1)
+                imaxits       = MAXITS(istage)
                 silence_fsc   = 'yes'
                 trs           = 0.
                 sh_first      = 'no'
                 ml_reg        = 'no'
-                greediness    = 2.0 ! completely greedy balanced sampling based on objective function value
+                frac_best     = 1.0 ! means it does not control sampling, greedy selection
+                overlap       = 0.90
+                fracsrch      = 90.
                 snr_noise_reg = 2.0
             case(2)
                 inspace       = NSPACE(2)
-                imaxits       = MAXITS(2)
+                imaxits       = MAXITS(istage)
                 silence_fsc   = 'yes'
                 trs           = lpinfo(istage)%trslim
                 sh_first      = 'yes'
                 ml_reg        = 'yes'
-                if( istage >= INCR_GREEDINESS_STAGE )then
-                greediness    = 1.0 ! sample first half of each class as the best ones and the rest randomly
+                if( istage >= STOCH_SAMPL_STAGE )then
+                frac_best     = 0.5 ! means sampling is done from top-ranking 50% particles in class
                 else
-                greediness    = 2.0 ! completely greedy balanced sampling based on objective function value
+                frac_best     = 1.0 ! means it does not control sampling, greedy selection
                 endif
+                overlap       = 0.95
+                fracsrch      = 95.
                 snr_noise_reg = 4.0
             case(3)
                 inspace       = NSPACE(3)
-                imaxits       = MAXITS(3)
+                imaxits       = MAXITS(istage)
                 if( l_cavgs )then
                 silence_fsc   = 'yes'
                 else
@@ -762,19 +949,28 @@ contains
                 trs           = lpinfo(istage)%trslim
                 sh_first      = 'yes'
                 ml_reg        = 'yes'
-                greediness    = 0.0 ! completely random balanced sampling (only class assignment matters)
+                if( nstates_glob > 1 )then
+                frac_best     = 0.98 ! max out balanced sampling
+                else
+                frac_best     = 0.85 ! means sampling is done from top-ranking 85% particles in class
+                endif
+                overlap       = 0.99
+                fracsrch      = 99.
                 snr_noise_reg = 6.0
         end select
-        ! override phased greediness
-        if( l_greediness_given ) greediness = params_glob%greediness
+        ! turn off ML-regularization when icm is on
+        if( trim(icm).eq.'yes' ) ml_reg = 'no'
         ! command line update
         call cline_refine3D%set('prg',                     'refine3D')
         ! class global control parameters
+        if( l_update_frac_dyn .or. istage == NSTAGES )then
+        call cline_refine3D%set('update_frac',        update_frac_dyn)
+        else
         call cline_refine3D%set('update_frac',            update_frac)
+        endif
         call cline_refine3D%set('lp',               lpinfo(istage)%lp)
         call cline_refine3D%set('smpd_crop', lpinfo(istage)%smpd_crop)
         call cline_refine3D%set('box_crop',   lpinfo(istage)%box_crop)
-        call cline_refine3D%set('maxits_glob',            MAXITS_GLOB)
         ! iteration number
         call cline_refine3D%set('startit',                       iter)
         call cline_refine3D%set('which_iter',                    iter)
@@ -783,6 +979,14 @@ contains
         call cline_refine3D%set('refine',                      refine)
         call cline_refine3D%set('balance',                    balance)
         call cline_refine3D%set('trail_rec',                trail_rec)
+        call cline_refine3D%set('lp_auto',                    lp_auto)
+        if( lp_auto.eq.'yes' )then
+        call cline_refine3D%set('lpstart',                    lpstart)
+        call cline_refine3D%set('lpstop',                      lpstop)
+        else
+        call cline_refine3D%delete('lpstart')
+        call cline_refine3D%delete('lpstop')
+        endif
         ! phase control parameters
         call cline_refine3D%set('nspace',                     inspace)
         call cline_refine3D%set('maxits',                     imaxits)
@@ -792,9 +996,13 @@ contains
         call cline_refine3D%set('prob_sh',                    prob_sh)
         call cline_refine3D%set('ml_reg',                      ml_reg)
         call cline_refine3D%set('icm',                            icm)
-        call cline_refine3D%set('greediness',              greediness)
+        call cline_refine3D%set('frac_best',                frac_best)
+        call cline_refine3D%set('overlap',                    overlap)
+        call cline_refine3D%set('fracsrch',                  fracsrch)
         if( l_cavgs )then
-            call cline_refine3D%set('snr_noise_reg',    snr_noise_reg)
+        call cline_refine3D%set('snr_noise_reg',        snr_noise_reg)
+        else
+        call cline_refine3D%delete('snr_noise_reg')
         endif
     end subroutine set_cline_refine3D
 
@@ -867,9 +1075,10 @@ contains
         endif
     end subroutine symmetrize
 
-    subroutine calc_start_rec( projfile, xreconstruct3D )
+    subroutine calc_start_rec( projfile, xreconstruct3D, istage )
         character(len=*),      intent(in)    :: projfile
         class(commander_base), intent(inout) :: xreconstruct3D
+        integer,               intent(in)    :: istage
         character(len=:),  allocatable :: str_state, vol, str, vol_even, vol_odd
         type(cmdline) :: cline_startrec
         integer       :: state
@@ -880,6 +1089,8 @@ contains
         call cline_startrec%set('pgrp',        params_glob%pgrp)
         call cline_startrec%set('objfun',      'cc') ! ugly, but this is how it works in parameters 
         call cline_startrec%set('silence_fsc', 'yes')
+        call cline_startrec%set('box_crop',    lpinfo(istage)%box_crop)
+        call cline_startrec%set('update_frac', update_frac)
         call cline_startrec%delete('which_iter')
         call cline_startrec%delete('endit')
         call cline_startrec%delete('needs_sigma')
@@ -907,6 +1118,21 @@ contains
         enddo
         call cline_startrec%kill
     end subroutine calc_start_rec
+
+    subroutine randomize_states( spproj, projfile, xreconstruct3D )
+        class(sp_project),     intent(inout) :: spproj
+        character(len=*),      intent(in)    :: projfile
+        class(commander_base), intent(inout) :: xreconstruct3D
+        call spproj%read_segment('ptcl3D', projfile)
+        call gen_labelling(spproj%os_ptcl3D, nstates_glob, 'squared_uniform')
+        call spproj%write_segment_inside(params_glob%oritype, projfile)
+        params_glob%nstates = nstates_glob
+        call cline_refine3D%set(     'nstates', nstates_glob)
+        call cline_reconstruct3D%set('nstates', nstates_glob)
+        call cline_postprocess%set(  'nstates', nstates_glob)
+        call cline_reproject%set(    'nstates', nstates_glob)
+        call calc_start_rec(projfile, xreconstruct3D, istage=PROBREFINE_STAGE)
+    end subroutine randomize_states
 
     subroutine gen_ortho_reprojs4viz
         character(len=:), allocatable :: str_state
@@ -963,529 +1189,5 @@ contains
             if( file_exists(vol_pproc_mirr) ) call simple_rename(vol_pproc_mirr, add2fbody(vol_final,params_glob%ext,PPROC_SUFFIX//MIRR_SUFFIX))
         enddo
     end subroutine postprocess_final_rec
-
-    !> for generation of an initial 3d model from particles
-    subroutine exec_abinitio_3Dmodel2( self, cline )
-        use simple_convergence, only: convergence
-        use simple_fsc,         only: plot_fsc
-        class(abinitio_3Dmodel2_commander), intent(inout) :: self
-        class(cmdline),                     intent(inout) :: cline
-        real,    parameter :: SCALEFAC        = 0.667
-        real,    parameter :: CENLP_DEFAULT   = 30.
-        real,    parameter :: LP_DEFAULT      = 6.
-        real,    parameter :: LPSTART_DEFAULT = 30., LPSTOP_DEFAULT=LP_DEFAULT
-        integer, parameter :: NPARTS  = 4
-        integer, parameter :: MINBOX  = 64
-        integer, parameter :: NSTAGES_DEFAULT = 22
-        integer, parameter :: MAXITS_SHORT = 5
-        integer, parameter :: NSPACE1 = 500, NSPACE2 = 1000, NSPACE3 = 2000
-        integer, parameter :: SYMSEARCH_DEFAULT = 5
-        integer, parameter :: MLREG_ITER        = 1
-        integer, parameter :: SHIFT_STAGE_DEFAULT = NSTAGES_DEFAULT-5 ! in [1;NSTAGES+1]
-        ! commanders
-        type(refine3D_commander_distr)      :: xrefine3D_distr
-        type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
-        type(postprocess_commander)         :: xpostprocess
-        type(symaxis_search_commander)      :: xsymsrch
-        type(calc_pspec_commander_distr)    :: xcalc_pspec_distr
-        ! command lines
-        type(cmdline)                 :: cline_refine3D, cline_reconstruct3D, cline_reconstruct3D_mlreg
-        type(cmdline)                 :: cline_postprocess, cline_symsrch, cline_calc_pspec_distr
-        ! other
-        type(parameters)              :: params
-        type(sp_project)              :: spproj, spproj_part
-        type(convergence)             :: conv
-        type(sym)                     :: se1, se2
-        ! type(class_frcs)              :: clsfrcs
-        type(image)                   :: vol_even, vol_odd, tmpvol, vol
-        type(qsys_env)                :: qenv
-        real,             allocatable :: fsc(:), res(:)
-        character(len=:), allocatable :: str_state, vol_pproc, vol_pproc_mirr
-        character(len=:), allocatable :: stack_name, dir, fsc_fname
-        integer,          allocatable :: states(:), tmp(:), iters(:), prev_iters(:)
-        character(len=STDLEN), allocatable :: completion_fnames(:)
-        character(len=LONGSTRLEN)     :: vol_str
-        real    :: lps(NSTAGES_DEFAULT), smpds(NSTAGES_DEFAULT), trs(NSTAGES_DEFAULT)
-        integer :: boxs(NSTAGES_DEFAULT)
-        real    :: smpd_target, lp_target, scale, trslim, cenlp, symlp, dummy, msk
-        integer :: it, prev_box_crop, maxits, nptcls_sel, filtsz
-        integer :: nstages, symsearch_iter, istk, part, iter, nptcls_part, i,j, cnt
-        logical :: l_autoscale, l_lpset, l_err, l_srch4symaxis, l_symran, l_sym, l_lpstop_set
-        logical :: l_lpstart_set
-        call cline%set('oritype',      'ptcl3D')
-        call cline%set('ml_reg',       'yes')
-        call cline%set('icm',          'no')
-        if( .not. cline%defined('mkdir')        ) call cline%set('mkdir',        'yes')
-        if( .not. cline%defined('refine')       ) call cline%set('refine',      'prob')
-        if( .not. cline%defined('autoscale')    ) call cline%set('autoscale',    'yes')
-        if( .not. cline%defined('sigma_est')    ) call cline%set('sigma_est', 'global')
-        if( .not. cline%defined('prob_sh')      ) call cline%set('prob_sh',      'yes')
-        if( .not. cline%defined('prob_athres')  ) call cline%set('prob_athres',    10.)
-        if( .not. cline%defined('center')       ) call cline%set('center',        'no')
-        if( .not. cline%defined('objfun')       ) call cline%set('objfun',    'euclid')
-        if( .not. cline%defined('oritype')      ) call cline%set('oritype',   'ptcl3D')
-        if( .not. cline%defined('pgrp')         ) call cline%set('pgrp',          'c1')
-        if( .not. cline%defined('pgrp_start')   ) call cline%set('pgrp_start',    'c1')
-        if( .not. cline%defined('shift_stage')  ) call cline%set('shift_stage', SHIFT_STAGE_DEFAULT)
-        if( .not. cline%defined('ptclw')        ) call cline%set('ptclw',         'no')
-        if( .not. cline%defined('nparts')       ) call cline%set('nparts',      NPARTS)
-        ! resolution limit strategy
-        l_lpset       = .false.
-        l_lpstop_set  = cline%defined('lpstop')
-        l_lpstart_set = cline%defined('lpstart')
-        if( cline%defined('lp') )then
-            if( l_lpstart_set .or. l_lpstop_set )then
-                THROW_HARD('One of LP or LPSTART & LPSTOP must be defined!')
-            endif
-            l_lpset = .true.
-        else
-            if( .not.l_lpstart_set ) call cline%set('lpstart',LPSTART_DEFAULT)
-            if( .not.l_lpstop_set  ) call cline%set('lpstop', LPSTOP_DEFAULT)
-        endif
-        ! make master parameters
-        call params%new(cline)
-        call cline%set('mkdir', 'no')
-        call cline%delete('autoscale')
-        call cline%delete('lpstart')
-        call cline%delete('lpstop')
-        call cline%delete('lp')
-        call cline%delete('shift_stage')
-        allocate(completion_fnames(params%nparts),iters(params%nparts),prev_iters(params%nparts))
-        call qenv%new(1)
-        str_state = int2str_pad(1,2)
-        ! stages specific parameters
-        nstages        = NSTAGES_DEFAULT
-        symsearch_iter = SYMSEARCH_DEFAULT
-        if( l_lpset )then
-            params%lpstop  = params%lp
-            params%lpstart = params%lp
-        endif
-        if( params%shift_stage < 1 .or. params%shift_stage > nstages+1 )then
-            params%shift_stage = min(nstages+1,max(1,params%shift_stage))
-            THROW_WARN('SHIFT_STAGE out of range, defaulting to: '//int2str(params%shift_stage))
-        endif
-        ! read project
-        call spproj%read(params%projfile)
-        call spproj%update_projinfo(cline)
-        call spproj%write_segment_inside('projinfo', params%projfile)
-        if( .not. cline%defined('vol1') )then
-            ! randomize projection directions
-            if( spproj%os_ptcl3D%get_noris() < 1 )then
-                THROW_HARD('Particles could not be found in the project')
-            endif
-            call spproj%os_ptcl3D%rnd_oris
-            call spproj%os_ptcl3D%set_all2single('w',1.)
-            states = nint(spproj%os_ptcl3D%get_all('state'))
-            call spproj%write_segment_inside(params%oritype, params%projfile)
-        endif
-        write(logfhandle,'(A,F5.1)') '>>> STARTING RESOLUTION LIMIT (IN A): ', params%lpstart
-        write(logfhandle,'(A,F5.1)') '>>> HARD     RESOLUTION LIMIT (IN A): ', params%lpstop
-        if( trim(params%center).eq.'yes' )then
-            write(logfhandle,'(A,F5.1)') '>>> CENTERING  LOW-PASS LIMIT (IN A): ', params%cenlp
-        endif
-        ! centering & symmetry resolution limit
-        call mskdiam2lplimits(params%mskdiam, symlp, dummy, cenlp)
-        if( .not. cline%defined('cenlp') )then
-            params%cenlp = cenlp
-            call cline%set('cenlp', params%cenlp)
-        endif
-        ! symmetry
-        if( l_lpset )then
-            ! from mskdiam2lplimits lpstart above
-        else
-            symlp = (params%lpstart+params%lpstop)/2.
-        endif
-        l_srch4symaxis = trim(params%pgrp) .ne. trim(params%pgrp_start)
-        l_symran       = .false.
-        l_sym          = l_srch4symaxis
-        if( params%pgrp_start.ne.'c1' .or. params%pgrp.ne.'c1' )then
-            se1 = sym(params%pgrp_start)
-            se2 = sym(params%pgrp)
-            if(se1%get_nsym() > se2%get_nsym())then
-                ! ensure se2 is a subgroup of se1
-                if( .not. se1%has_subgrp(params%pgrp) )THROW_HARD('Incompatible symmetry groups; exec_abinitio_3Dmodel')
-                ! set flag for symmetry randomisation
-                ! in case we are moving from a higher to lower group
-                l_symran = .true.
-            else if( se2%get_nsym() > se1%get_nsym() )then
-                ! ensure se1 is a subgroup of se2
-                if( .not. se2%has_subgrp(params%pgrp_start) )THROW_HARD('Incompatible symmetry groups; exec_abinitio_3Dmodel')
-            endif
-        endif
-        ! dimensions defaults
-        params%box       = spproj%get_box()
-        params%smpd_crop = params%smpd
-        params%box_crop  = params%box
-        l_autoscale      = .false.
-        ! command-lines
-        cline_refine3D            = cline
-        cline_reconstruct3D       = cline
-        cline_postprocess         = cline
-        cline_symsrch             = cline
-        cline_reconstruct3D_mlreg = cline_reconstruct3D
-        cline_calc_pspec_distr    = cline
-        call cline_refine3D%set('prg',                'refine3D')
-        call cline_refine3D%set('projfile',      params%projfile)
-        call cline_refine3D%set('pgrp',        params%pgrp_start)
-        call cline_refine3D%set('maxits',                    999)
-        call cline_refine3D%delete('nparts')
-        call cline_reconstruct3D%set('prg',      'reconstruct3D')
-        call cline_reconstruct3D%set('box',           params%box)
-        call cline_reconstruct3D%set('projfile', params%projfile)
-        call cline_reconstruct3D%set('ml_reg',              'no')
-        call cline_reconstruct3D%set('needs_sigma',         'no')
-        call cline_reconstruct3D%set('objfun',              'cc')
-        call cline_reconstruct3D%set('pgrp',   params%pgrp_start)
-        call cline_postprocess%set('prg',          'postprocess')
-        call cline_postprocess%set('projfile',   params%projfile)
-        call cline_postprocess%set('imgkind',              'vol')
-        if( l_srch4symaxis )then
-            call cline_symsrch%set('prg',     'symaxis_search') ! needed for cluster exec
-            call cline_symsrch%set('pgrp',     params%pgrp)
-            call cline_symsrch%set('projfile', params%projfile)
-            call cline_symsrch%set('hp',       params%hp)
-            call cline_symsrch%set('center',   'yes')
-        endif
-        call cline_reconstruct3D_mlreg%set('prg',         'reconstruct3D')
-        call cline_reconstruct3D_mlreg%set('objfun',      'euclid')
-        call cline_reconstruct3D_mlreg%set('needs_sigma', 'yes')
-        call cline_reconstruct3D_mlreg%set('sigma_est',   params%sigma_est)
-        call cline_reconstruct3D_mlreg%set('ml_reg',      'yes')
-        call cline_calc_pspec_distr%set('prg',      'calc_pspec')
-        ! Frequency marching plan
-        lps(1) = params%lpstart
-        do it = 2,nstages-1
-            lps(it) = params%lpstop + (params%lpstart-params%lpstop) * real(nstages-it) / real(nstages)
-        enddo
-        lps(nstages) = params%lpstop
-        if( l_lpset )then
-            ! from mskdiam2lplimits lpstart above
-        else
-            symlp = (params%lpstart+params%lpstop)/2.
-        endif
-        ! dimensions
-        do it = 1,nstages
-            lp_target   = lps(it) * SCALEFAC
-            smpd_target = max(params%smpd, lp_target/2.)
-            call autoscale(params%box, params%smpd, smpd_target, boxs(it), smpds(it), scale, minbox=MINBOX)
-            if( it < params%shift_stage )then
-                trs(it) = 0.
-            else
-                trs(it) = max(2.0, AHELIX_WIDTH / smpds(it) / 2.0)
-            endif
-        enddo
-        ! random reconstruction
-        params%smpd_crop = smpds(1)
-        params%box_crop  = boxs(1)
-        call cline_reconstruct3D%set('smpd_crop', params%smpd_crop)
-        call cline_reconstruct3D%set('box_crop',  params%box_crop)
-        if( params%l_ml_reg .and. MLREG_ITER==1 )then
-            call xcalc_pspec_distr%execute_safe(cline_calc_pspec_distr)
-            call cline_reconstruct3D%set('which_iter', 1)
-            call cline_reconstruct3D%set('ml_reg',     'yes')
-            call cline_reconstruct3D%set('needs_sigma','yes')
-            call cline_reconstruct3D%set('objfun',     'euclid')
-        endif
-        call xreconstruct3D_distr%execute_safe(cline_reconstruct3D)
-        call spproj%read_segment('ptcl3D', params%projfile)
-        call spproj%os_ptcl3D%set_all2single('updatecnt',0.)
-        call spproj%write_segment_inside('ptcl3D', params%projfile)
-        call spproj%read_segment('out', params%projfile)
-        call spproj%add_vol2os_out('recvol_state01.mrc', params%smpd_crop, 1, 'vol')
-        call spproj%write_segment_inside('out', params%projfile)
-        ! updating stack names to absolute path
-        call spproj%read_segment('stk', params%projfile)
-        do istk = 1,spproj%os_stk%get_noris()
-            stack_name = trim(spproj%get_stkname(istk))
-            stack_name = simple_abspath(stack_name, check_exists=.false.)
-            call spproj%os_stk%set(istk, 'stk', stack_name)
-        enddo
-        call spproj%write_segment_inside('stk', params%projfile)
-        call spproj%read_segment('ptcl2D', params%projfile)
-        call spproj%read_segment('ptcl3D', params%projfile)
-        ! directory structure
-        do part = 1,params%nparts
-            dir = int2str(part)//'/'
-            call simple_mkdir(dir)
-        enddo
-        ! Parts partitioning
-        call cline_refine3D%delete('projfile')
-        call cline_refine3D%set('projname', get_fbody(basename(params%projfile), 'simple'))
-        call cline_refine3D%set('projfile', basename(params%projfile))
-        nptcls_sel  = count(states==1)
-        nptcls_part = ceiling(real(nptcls_sel)/real(params%nparts))
-        tmp = states
-        j   = 0
-        do part = 1,params%nparts
-            spproj_part%os_stk    = spproj%os_stk
-            spproj_part%os_ptcl2D = spproj%os_ptcl2D
-            spproj_part%os_ptcl3D = spproj%os_ptcl3D
-            spproj_part%projinfo  = spproj%projinfo
-            spproj_part%compenv   = spproj%compenv
-            tmp = states
-            if( j > 0 ) tmp(1:j) = 0
-            cnt = 0
-            do i = j+1,params%nptcls
-                if( states(i) == 1)then
-                    cnt       = cnt+1
-                    states(i) = part
-                    if( cnt == nptcls_part )then
-                        j = i
-                        exit
-                    endif
-                endif
-            enddo
-            if( part < params%nparts ) tmp(j+1:) = 0
-            call spproj_part%os_ptcl2D%set_all('state', real(tmp))
-            call spproj_part%os_ptcl3D%set_all('state', real(tmp))
-            call spproj_part%prune_particles
-            call chdir(int2str(part)//'/')
-            call spproj_part%update_projinfo(cline_refine3D)
-            call spproj_part%write
-            call chdir('../')
-            completion_fnames(part) = int2str(part)//'/'//trim(JOB_FINISHED_FBODY)
-            call spproj_part%kill
-        enddo
-        deallocate(tmp)
-        ! Stages loop
-        iters(:) = 0
-        do it = 1,nstages
-            params%smpd_crop = smpds(it)
-            params%box_crop  = boxs(it)
-            params%lp        = lps(it)
-            params%trs       = trs(it)
-            write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ',it,' WITH LP =',params%lp
-            write(logfhandle,'(A,I3)')        '>>> CROPPED IMAGE SIZE: ',params%box_crop
-            call cline_refine3D%set('smpd_crop', params%smpd_crop)
-            call cline_refine3D%set('box_crop',  params%box_crop)
-            call cline_refine3D%set('lp',        params%lp)
-            if( it == 1 )then
-                call cline_refine3D%set('vol1', '../recvol_state01.mrc')
-            else
-                call cline_refine3D%set('vol1', '../recvol_state01_stage'//int2str_pad(it-1,2)//'.mrc')
-            endif
-            ! # of iterations
-            call cline_refine3D%set('maxits', MAXITS_SHORT)
-            ! projection directions & shift
-            if( it < params%shift_stage )then
-                call cline_refine3D%set('nspace', NSPACE1)
-            else
-                call cline_refine3D%set('nspace', NSPACE2)
-            end if
-            if( it >= nstages-2 ) call cline_refine3D%set('nspace', NSPACE3)
-            call cline_refine3D%set('trs', params%trs)
-            ! execution
-            do part = 1,params%nparts
-                call exec_refine3D(part)
-            enddo
-            ! waiting
-            call qsys_watcher(completion_fnames)
-            ! convergence, volume averaging, padding & cleanup
-            prev_iters = iters
-            call vol%new([params%box_crop, params%box_crop,params%box_crop],params%smpd_crop)
-            call vol_even%new([params%box_crop, params%box_crop,params%box_crop],params%smpd_crop)
-            call vol_odd%new([params%box_crop, params%box_crop,params%box_crop],params%smpd_crop)
-            call tmpvol%new([params%box_crop, params%box_crop,params%box_crop],params%smpd_crop)
-            do part = 1,params%nparts
-                call chdir(int2str(part)//'/')
-                ! convergence parameters
-                call conv%read(l_err)
-                iters(part) = nint(conv%get('iter'))
-                write(logfhandle,'(A,I3,A,F7.3,A,F7.3)')'>>> PART ',part,'; PROJ OVERLAP: ',&
-                    &conv%get('mi_proj'),'; SCORE: ',conv%get('score')
-                ! volumes
-                if( part == 1)then
-                    call vol%read('recvol_state01_iter'//int2str_pad(iters(part),3)//'.mrc')
-                    call vol_even%read('recvol_state01_iter'//int2str_pad(iters(part),3)//'_even.mrc')
-                    call vol_odd%read('recvol_state01_iter'//int2str_pad(iters(part),3)//'_odd.mrc')
-                else
-                    call tmpvol%read('recvol_state01_iter'//int2str_pad(iters(part),3)//'.mrc')
-                    call vol%add(tmpvol)
-                    call tmpvol%read('recvol_state01_iter'//int2str_pad(iters(part),3)//'_even.mrc')
-                    call vol_even%add(tmpvol)
-                    call tmpvol%read('recvol_state01_iter'//int2str_pad(iters(part),3)//'_odd.mrc')
-                    call vol_odd%add(tmpvol)
-                endif
-                ! cleanup
-                call qsys_cleanup
-                call del_files(DIST_FBODY,      1,ext='.dat')
-                call del_files(ASSIGNMENT_FBODY,1,ext='.dat')
-                call del_file(trim(DIST_FBODY)      //'.dat')
-                call del_file(trim(ASSIGNMENT_FBODY)//'.dat')
-                call del_file(JOB_FINISHED_FBODY)
-                call del_file(trim(FSC_FBODY)//int2str_pad(1,2)//BIN_EXT)
-                do i = prev_iters(part)+1,iters(part)-1
-                    call del_file(trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(i,3)//PPROC_SUFFIX//params%ext)
-                    call del_file(trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(i,3)//LP_SUFFIX//params%ext)
-                    call del_file(trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(i,3)//'_even'//params%ext)
-                    call del_file(trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(i,3)//'_odd'//params%ext)
-                    call del_file(trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(i,3)//'_even_unfil'//params%ext)
-                    call del_file(trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(i,3)//'_odd_unfil'//params%ext)
-                    call del_file(trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(i,3)//params%ext)
-                enddo
-                call chdir('../')
-            enddo
-            ! averaging & fsc
-            if( it < NSTAGES_DEFAULT )then
-                ! Volume & FSC will be padded on the fly at the next refine3D run
-                call vol%div(real(params%nparts))
-                call vol_even%div(real(params%nparts))
-                call vol_odd%div(real(params%nparts))
-                call vol%write(trim(VOL_FBODY)//trim(str_state)//'_stage'//int2str_pad(it,2)//'.mrc')
-                filtsz = fdim(params%box_crop) - 1
-                msk    = real(params%box_crop / 2) - COSMSKHALFWIDTH - 1.
-                allocate(fsc(filtsz),source=0.)
-                call vol_even%mask(msk, 'soft', backgr=0.)
-                call vol_odd%mask(msk, 'soft', backgr=0.)
-                call vol_even%fft()
-                call vol_odd%fft()
-                call vol_even%fsc(vol_odd, fsc)
-                fsc_fname = trim(FSC_FBODY)//int2str_pad(1,2)//BIN_EXT
-                call arr2file(fsc, fsc_fname)
-                call cline_refine3D%set('fsc', '../'//trim(fsc_fname))
-                res = get_resarr(params%box_crop, params%smpd_crop)
-                call plot_fsc(size(fsc), fsc, res, params%smpd_crop, 'fsc_stage_'//int2str_pad(it,2))
-                deallocate(fsc,res)
-                call vol%kill
-                call vol_even%kill
-                call vol_odd%kill
-                call tmpvol%kill
-            endif
-            ! symmetrization
-            if( it == SYMSEARCH_ITER-1 )then
-                call consolidate_alnparms
-                call cline_symsrch%set('vol1', trim(VOL_FBODY)//trim(str_state)//'_stage'//int2str_pad(it,2)//'.mrc')
-                call symmetrize
-                call cline_refine3D%set('pgrp', params%pgrp)
-                call cline_reconstruct3D%set('pgrp', params%pgrp)
-                l_srch4symaxis = .false.
-                l_symran       = .false.
-                ! transfer symmetrized parameters
-                call spproj%read_segment('ptcl3D',params%projfile)
-                do part = 1,params%nparts
-                    call spproj_part%read_segment('ptcl3D', int2str(part)//'/'//basename(params%projfile))
-                    j = 0
-                    do i = 1,params%nptcls
-                        if( states(i) /= part ) cycle
-                        j = j+1
-                        call spproj_part%os_ptcl3D%transfer_3Dparams(j, spproj%os_ptcl3D, i)
-                    enddo
-                    call spproj_part%write_segment_inside('ptcl3D',int2str(part)//'/'//basename(params%projfile))
-                enddo
-                call spproj_part%kill
-            endif
-        enddo
-        ! gathering alignment parameters
-        call consolidate_alnparms
-        ! final reconstruction
-        write(logfhandle,'(A)') '>>>'
-        write(logfhandle,'(A)') '>>> RECONSTRUCTION AT ORIGINAL SAMPLING'
-        write(logfhandle,'(A)') '>>>'
-        ! no ML-filtering
-        call cline_reconstruct3D%set('ml_reg',      'no')
-        call cline_reconstruct3D%set('needs_sigma', 'no')
-        call cline_reconstruct3D%set('objfun',      'cc')
-        call cline_reconstruct3D%delete('smpd_crop')
-        call cline_reconstruct3D%delete('box_crop')
-        call xreconstruct3D_distr%execute_safe(cline_reconstruct3D)
-        vol_str = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
-        call spproj%read_segment('out',params%projfile)
-        call spproj%add_vol2os_out(vol_str, params%smpd, 1, 'vol')
-        call spproj%add_fsc2os_out(FSC_FBODY//str_state//trim(BIN_EXT), 1, params%box)
-        call spproj%write_segment_inside('out',params%projfile)
-        ! post-processing
-        call cline_postprocess%delete('lp')
-        call cline_postprocess%set('state', 1)
-        call xpostprocess%execute_safe(cline_postprocess)
-        vol_pproc      = add2fbody(vol_str,params%ext,PPROC_SUFFIX)
-        vol_pproc_mirr = add2fbody(vol_str,params%ext,trim(PPROC_SUFFIX)//trim(MIRR_SUFFIX))
-        call simple_rename(vol_str, trim(REC_FBODY)//trim(str_state)//trim(params%ext))
-        if(file_exists(vol_pproc)     ) call simple_rename(vol_pproc,      add2fbody(vol_str,params%ext,PPROC_SUFFIX))
-        if(file_exists(vol_pproc_mirr)) call simple_rename(vol_pproc_mirr, add2fbody(vol_str,params%ext,PPROC_SUFFIX//MIRR_SUFFIX))
-        ! cleanup
-        call spproj%kill
-        call qsys_cleanup
-        call simple_end('**** SIMPLE_ABINITIO_3DMODEL2 NORMAL STOP ****')
-        contains
-
-            subroutine exec_refine3D( part )
-                integer,          intent(in)  :: part
-                character(len=XLONGSTRLEN) :: cwd
-                call cline_refine3D%set('startit', iters(part)+1)
-                dir = int2str(part)//'/'
-                call chdir(dir)
-                call simple_getcwd(cwd)
-                cwd_glob = trim(cwd)
-                call qenv%new(1)
-                call qenv%exec_simple_prg_in_queue_async(cline_refine3D, './refine3D', 'log_refine3D')
-                call chdir('../')
-                call simple_getcwd(cwd_glob)
-            end subroutine exec_refine3D
-
-            subroutine symmetrize()
-                use simple_projector_hlev, only: rotvol_slim
-                use simple_projector,      only: projector
-                type(projector) :: vol_pad
-                type(image)     :: rovol_pad, rovol
-                type(ori)       :: o
-                real    :: symaxis_rmat(3,3), symop_rmat(3,3), rmat(3,3)
-                integer :: ldim_pd(3), boxpd,isym, nsym
-                if( l_symran )then
-                    call spproj%read_segment(params%oritype, params%projfile)
-                    call se1%symrandomize(spproj%os_ptcl3D)
-                    call spproj%write_segment_inside(params%oritype, params%projfile)
-                endif
-                if( l_srch4symaxis )then
-                    write(logfhandle,'(A)') '>>>'
-                    write(logfhandle,'(A)') '>>> SYMMETRY AXIS SEARCH'
-                    write(logfhandle,'(A)') '>>>'
-                    symlp = max(symlp, params%lp)
-                    call cline_symsrch%set('lp',       symlp)
-                    call cline_symsrch%set('box_crop', params%box_crop)
-                    call xsymsrch%execute_safe(cline_symsrch)
-                    call del_file('SYMAXIS_SEARCH_FINISHED')
-                    ! symmetrize volume
-                    call vol%new([params%box_crop, params%box_crop,params%box_crop],params%smpd_crop)
-                    call rovol%new([params%box_crop, params%box_crop,params%box_crop],params%smpd_crop)
-                    boxpd   = 2 * round2even(KBALPHA * real(params%box_crop))
-                    ldim_pd = [boxpd,boxpd,boxpd]
-                    call rovol_pad%new(ldim_pd, params%smpd_crop)
-                    call vol_pad%new(ldim_pd, params%smpd_crop)
-                    call vol%read('vol_aligned2_'//trim(params%pgrp)//'axis'//params%ext)
-                    call vol%pad(vol_pad)
-                    call vol_pad%fft
-                    call vol_pad%expand_cmat(KBALPHA)
-                    nsym = se2%get_nsym()
-                    do isym =2,nsym
-                        call se2%get_symori(isym, o)
-                        call rotvol_slim(vol_pad, rovol_pad, rovol, o)
-                        call vol%add_workshare(rovol)
-                    end do
-                    call vol%div(real(nsym))
-                    call vol%write(trim(VOL_FBODY)//trim(str_state)//'_stage'//int2str_pad(it,2)//'.mrc')
-                    call o%kill
-                    call rovol%kill
-                    call rovol_pad%kill
-                    call vol%kill
-                    call vol_pad%kill
-                endif
-            end subroutine symmetrize
-
-            subroutine consolidate_alnparms
-                integer :: i,j,part
-                do part = 1,params%nparts
-                    call spproj_part%read_segment('ptcl3D', int2str(part)//'/'//basename(params%projfile))
-                    j = 0
-                    do i = 1,params%nptcls
-                        if( states(i) /= part ) cycle
-                        j = j+1
-                        call spproj%os_ptcl3D%transfer_3Dparams(i, spproj_part%os_ptcl3D, j)
-                    enddo
-                enddo
-                call spproj_part%kill
-                call spproj%write_segment_inside('ptcl3D',params%projfile)
-            end subroutine consolidate_alnparms
-
-    end subroutine exec_abinitio_3Dmodel2
 
 end module simple_commander_abinitio

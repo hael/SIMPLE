@@ -26,7 +26,6 @@ contains
         class(ori),              intent(inout) :: orientation
         character(len=*),        intent(in)    :: moviename_intg, dir_out
         character(len=:), allocatable :: fbody_here, ext
-        character(len=LONGSTRLEN) :: rel_fname
         type(image)    :: img_jpg
         integer        :: ldim(3), ldim_thumb(3), nframes
         real           :: scale, smpd
@@ -63,10 +62,8 @@ contains
         call self%pspec%collage(self%thumbnail, img_jpg)
         call img_jpg%write_jpg(self%moviename_thumb, norm=.true., quality=90)
         ! report to ori object
-        call make_relativepath(CWD_GLOB,moviename_intg,rel_fname)
-        call orientation%set('intg',   trim(rel_fname))
-        call make_relativepath(CWD_GLOB,self%moviename_thumb,rel_fname)
-        call orientation%set('thumb',  trim(rel_fname))
+        call orientation%set('intg',    simple_abspath(moviename_intg))
+        call orientation%set('thumb',   simple_abspath(self%moviename_thumb))
         call orientation%set('imgkind', 'intg')
         ! destruct
         call self%pspec%kill

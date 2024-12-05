@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 cmake_policy(VERSION 3.19...3.23)
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/Modules/")
+option(USE_AFM "Use AFM support" OFF )
 include(FortranOverride)
 
 project(SIMPLE

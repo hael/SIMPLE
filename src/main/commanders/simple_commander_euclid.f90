@@ -51,6 +51,8 @@ contains
         use simple_sp_project, only: sp_project
         class(calc_pspec_commander_distr), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
+        ! commanders
+        type(calc_pspec_assemble_commander) :: xcalc_pspec_assemble
         ! command lines
         type(cmdline)        :: cline_calc_pspec
         type(cmdline)        :: cline_calc_pspec_assemble
@@ -102,7 +104,7 @@ contains
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
         ! assemble
-        call qenv%exec_simple_prg_in_queue(cline_calc_pspec_assemble, 'CALC_PSPEC_FINISHED')
+        call xcalc_pspec_assemble%execute_safe(cline_calc_pspec_assemble)
         ! end gracefully
         call spproj%kill
         call cline_calc_pspec%kill
@@ -117,37 +119,40 @@ contains
         use simple_strategy2D3D_common, only: prepimgbatch, discrete_read_imgbatch, killimgbatch
         class(calc_pspec_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        type(parameters)              :: params
-        type(image)                   :: sum_img
-        type(builder)                 :: build
-        type(sigma2_binfile)          :: binfile
-        complex, pointer              :: cmat(:,:,:), cmat_sum(:,:,:)
-        integer, allocatable          :: pinds(:), states(:)
-        real,    allocatable          :: pspec(:), sigma2(:,:)
-        character(len=:), allocatable :: binfname
+        type(parameters)                :: params
+        type(image)                     :: sum_img
+        type(builder)                   :: build
+        type(sigma2_binfile)            :: binfile
+        complex, pointer                :: cmat(:,:,:), cmat_sum(:,:,:)
+        integer,            allocatable :: pinds(:)
+        real,               allocatable :: pspec(:), sigma2(:,:)
+        character(len=:),   allocatable :: binfname
+        logical,            allocatable :: ptcl_mask(:)
         real    :: sdev_noise
         integer :: batchlims(2),kfromto(2)
-        integer :: i,iptcl,imatch,nyq,nptcls_part,nptcls_part_sel,batchsz_max,nbatch
+        integer :: i,iptcl,imatch,nyq,nptcls_part_sel,batchsz_max,nbatch
+        logical :: l_scale_update_frac
         call cline%set('mkdir', 'no')
         call cline%set('stream','no')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
+        ! Sampling
+        ! Because this is always run prior to reconstruction/search, sampling is not always informed informed
+        ! or may change with workflows. Instead of setting a sampling for the following oprations when
+        ! l_update_frac, we sample uniformly AND do not write the corresponding field
+        allocate(ptcl_mask(params_glob%fromp:params_glob%top))
+        l_scale_update_frac = .false.
+        if( params%l_update_frac )then
+            call build%spproj_field%sample4update_rnd([params%fromp,params%top], params_glob%update_frac, nptcls_part_sel, pinds, ptcl_mask, .false. )
+            l_scale_update_frac = .true.
+        else
+            call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls_part_sel, pinds, ptcl_mask, .false.)
+        endif
+        deallocate(ptcl_mask)
         ! init
-        nyq         = build%img%get_nyq()
-        batchsz_max = 50 * nthr_glob
-        ! indices of particles with state=1
-        states          = nint(build%spproj_field%get_all('state',[params%fromp,params%top]))
-        nptcls_part_sel = count(states>0)
-        nptcls_part     = size(states)
-        allocate(pinds(nptcls_part_sel),source=0)
-        imatch = 0
-        do i = 1,nptcls_part
-            if( states(i) > 0 )then
-                imatch = imatch + 1
-                pinds(imatch) = params%fromp+i-1
-            endif
-        enddo
+        nyq = build%img%get_nyq()
         allocate(sigma2(nyq,params%fromp:params%top),pspec(nyq),source=0.)
+        batchsz_max = min(nptcls_part_sel,50 * nthr_glob)
         call prepimgbatch(batchsz_max)
         call sum_img%new([params%box,params%box,1],params%smpd)
         call sum_img%zero_and_flag_ft
@@ -171,7 +176,12 @@ contains
                 ! power spectrum
                 call build%imgbatch(imatch)%fft
                 call build%imgbatch(imatch)%power_spectrum(pspec)
-                sigma2(:,iptcl) = pspec / 2.0
+                if( l_scale_update_frac )then
+                    ! To account for spectra not included in sampling and yield the correct average
+                    sigma2(:,iptcl) = pspec / (2.0 * params_glob%update_frac)
+                else
+                    sigma2(:,iptcl) = pspec / 2.0
+                endif
             end do
             !$omp end parallel do
             ! global average

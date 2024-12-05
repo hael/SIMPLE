@@ -36,6 +36,7 @@ end type projrecord
 type stream_chunk
     type(sp_project)                       :: spproj                ! master project
     type(qsys_env)                         :: qenv                  ! submission handler
+    type(cmdline)                          :: cline
     character(len=LONGSTRLEN), allocatable :: orig_stks(:)          ! list of stacks
     character(len=LONGSTRLEN)              :: path, projfile_out    ! physical location
     integer                                :: id                    ! unique id
@@ -47,10 +48,12 @@ type stream_chunk
     logical                                :: available  = .true.   ! has been initialized but no classification peformed
   contains
     procedure          :: init
-    procedure, private :: generate_1, generate_2
-    generic            :: generate => generate_1, generate_2
+    procedure          :: copy
+    procedure, private :: assign
+    generic            :: assignment(=) => assign
+    procedure          :: generate
     procedure          :: calc_sigma2
-    procedure          :: exec_classify
+    procedure          :: classify
     procedure          :: read
     procedure          :: split_sigmas_into
     procedure          :: remove_folder
@@ -76,29 +79,37 @@ contains
 
     ! Chunk type related routines
 
-    subroutine init( self, id, master_spproj )
+    !>  Instantiator
+    subroutine init( self, id, cline, master_spproj )
         class(stream_chunk), intent(inout) :: self
+        class(cmdline),      intent(in)    :: cline
         integer,             intent(in)    :: id
         class(sp_project),   intent(in)    :: master_spproj
-        character(len=STDLEN)              :: chunk_part_env
+        character(len=STDLEN)              :: chunk_part_env, exec
         integer                            :: envlen
         call debug_print('in chunk%init '//int2str(id))
         call self%spproj%kill
-        self%id        = id
-        self%it        = 0
-        self%nmics     = 0 ! # of micrographs & stacks in chunk
-        self%nptcls    = 0
-        self%path      = './'//trim(DIR_CHUNK)//int2str(id)//'/'
-        self%projfile_out = ''
+        self%id     = id
+        self%it     = 0
+        self%nmics  = 0 ! # of micrographs & stacks in chunk
+        self%nptcls = 0
+        self%path   = './'//trim(DIR_CHUNK)//int2str(id)//'/'
+        self%cline  = cline
+        self%projfile_out    = ''
         self%spproj%projinfo = master_spproj%projinfo
         self%spproj%compenv  = master_spproj%compenv
+        if( str_has_substr(self%cline%get_carg('prg'), 'abinitio') )then
+            exec = 'simple_exec'
+        else
+            exec = 'simple_private_exec'
+        endif
         if( params_glob%nparts_chunk == 1 )then
             ! shared memory
-            call self%qenv%new(params_glob%nparts_chunk, exec_bin='simple_private_exec', qsys_nthr=params_glob%nthr2D)
+            call self%qenv%new(params_glob%nparts_chunk, exec_bin=trim(exec), qsys_nthr=params_glob%nthr2D)
             call self%spproj%compenv%set(1,'qsys_name','local')
         else
             ! we need to override the qsys_name for non local distributed execution
-            call self%qenv%new(params_glob%nparts_chunk, exec_bin='simple_private_exec', qsys_name='local')
+            call self%qenv%new(params_glob%nparts_chunk, exec_bin=trim(exec), qsys_name='local')
             call get_environment_variable(SIMPLE_STREAM_CHUNK_PARTITION, chunk_part_env, envlen)
             if(envlen > 0) call self%spproj%compenv%set(1,'qsys_partition',trim(chunk_part_env))
         endif
@@ -111,70 +122,33 @@ contains
         call debug_print('end chunk%init '//int2str(id))
     end subroutine init
 
-    ! For backward compatibility with preprocess_stream_dev
-    subroutine generate_1( self, fnames, nptcls, ind_glob )
-        class(stream_chunk),       intent(inout) :: self
-        character(len=LONGSTRLEN), intent(in)    :: fnames(:)
-        integer,                   intent(in)    :: nptcls, ind_glob
-        type(sp_project)              :: spproj
-        character(len=:), allocatable :: stack_name
-        logical, allocatable          :: spproj_mask(:)
-        integer :: iproj, iptcl, cnt, inptcls, nptcls_tot, fromp, iiproj, n_in, inmics, instks
-        if( .not.self%available ) THROW_HARD('chunk unavailable; chunk%generate')
-        n_in = size(fnames)
-        if( n_in == 0 ) THROW_HARD('# ptcls == 0; chunk%generate')
-        call debug_print('in chunk%generate '//int2str(self%id)//' '//int2str(ind_glob)//' '//int2str(nptcls)//' '//int2str(n_in))
-        allocate(spproj_mask(n_in),source=.false.)
-        nptcls_tot = 0
-        do iproj = 1,n_in
-            call spproj%read_data_info(fnames(iproj), inmics, instks, inptcls)
-            spproj_mask(iproj) = inptcls > 0
-            if( spproj_mask(iproj) ) nptcls_tot = nptcls_tot + inptcls
-        enddo
-        call spproj%kill
-        if( nptcls /= nptcls_tot ) THROW_HARD('Inconsistent # of particles; chunk%generate')
-        self%nmics  = count(spproj_mask)
-        self%nptcls = nptcls
-        call self%spproj%os_mic%new(self%nmics, is_ptcl=.false.)
-        call self%spproj%os_stk%new(self%nmics, is_ptcl=.false.)
-        call self%spproj%os_ptcl2D%new(self%nptcls, is_ptcl=.true.)
-        allocate(self%orig_stks(self%nmics))
-        cnt    = 0
-        fromp  = 1
-        iiproj = 0
-        do iproj = 1,n_in
-            if( .not.spproj_mask(iproj) ) cycle
-            iiproj = iiproj + 1
-            call spproj%read_mic_stk_ptcl2D_segments(fnames(iproj))
-            inptcls = spproj%os_mic%get_int(1,'nptcls')
-            call self%spproj%os_mic%transfer_ori(iiproj, spproj%os_mic, 1)
-            call self%spproj%os_stk%transfer_ori(iiproj, spproj%os_stk, 1)
-            ! update to stored stack file name because we are in the root folder
-            stack_name = trim(spproj%get_stkname(1))
-            if( .not.file_exists(stack_name) )then
-                ! for cluster2D_stream, 4 is for '../'
-                self%orig_stks(iiproj) = simple_abspath(trim(stack_name(4:)))
-            else
-                ! for cluster2d_subsets
-                self%orig_stks(iiproj) = simple_abspath(trim(stack_name))
-            endif
-            call self%spproj%os_stk%set(iiproj, 'stk', self%orig_stks(iiproj))
-            do iptcl = 1,inptcls
-                cnt = cnt + 1
-                call self%spproj%os_ptcl2D%transfer_ori(cnt, spproj%os_ptcl2D, iptcl)
-                call self%spproj%os_ptcl2D%set_stkind(cnt, iiproj)
-            enddo
-            call self%spproj%os_stk%set(iiproj, 'fromp', fromp)
-            call self%spproj%os_stk%set(iiproj, 'top',   fromp+inptcls-1)
-            fromp = fromp + inptcls
-        enddo
-        call spproj%kill
-        self%spproj%os_ptcl3D = self%spproj%os_ptcl2D
-        call debug_print('end chunk%generate '//int2str(self%id))
-    end subroutine generate_1
+    subroutine copy( dest, src )
+        class(stream_chunk), intent(inout) :: dest
+        class(stream_chunk), intent(in)    :: src
+        call dest%kill
+        dest%spproj       = src%spproj
+        dest%qenv         = src%qenv
+        dest%cline        = src%cline
+        dest%orig_stks    = src%orig_stks(:)
+        dest%path         = trim(src%path)
+        dest%projfile_out = trim(src%projfile_out)
+        dest%id           = src%id
+        dest%it           = src%it
+        dest%nmics        = src%nmics
+        dest%nptcls       = src%nptcls
+        dest%toclassify   = src%toclassify
+        dest%converged    = src%converged
+        dest%available    = src%available
+    end subroutine copy
 
-    ! For use by cluster2D_stream_dev
-    subroutine generate_2( self, micproj_records )
+    !>  \brief  assign, polymorphic assignment (=)
+    subroutine assign( selfout, selfin )
+        class(stream_chunk), intent(inout) :: selfout
+        class(stream_chunk), intent(in)    :: selfin
+        call selfout%copy(selfin)
+    end subroutine assign
+
+    subroutine generate( self, micproj_records )
         class(stream_chunk), intent(inout) :: self
         type(projrecord),    intent(in)    :: micproj_records(:)
         integer :: istk
@@ -189,12 +163,11 @@ contains
             self%orig_stks(istk) = self%spproj%get_stkname(istk)
         enddo
         call debug_print('end chunk%generate_2 '//int2str(self%id))
-    end subroutine generate_2
+    end subroutine generate
 
     ! Initiates classification
-    subroutine exec_classify( self, cline_classify, orig_smpd, orig_box, box, calc_pspec )
+    subroutine classify( self, orig_smpd, orig_box, box, calc_pspec )
         class(stream_chunk), intent(inout) :: self
-        class(cmdline),      intent(inout) :: cline_classify
         real,                intent(in)    :: orig_smpd
         integer,             intent(in)    :: orig_box, box
         logical,             intent(in)    :: calc_pspec
@@ -203,7 +176,7 @@ contains
         character(len=XLONGSTRLEN) :: cwd
         real                       :: scale
         integer                    :: nptcls_sel, nclines
-        call debug_print('in chunk%exec_classify '//int2str(self%id))
+        call debug_print('in chunk%classify '//int2str(self%id))
         if( .not.self%available ) return
         if( self%nptcls == 0 ) return
         call simple_mkdir(self%path)
@@ -214,32 +187,36 @@ contains
         call simple_mkdir(STDERROUT_DIR)
         nptcls_sel = self%spproj%os_ptcl2D%get_noris(consider_state=.true.)
         nclines = 1
-        if( calc_pspec ) nclines = nclines + 1
-        allocate(clines(nclines))
-        ! noise estimates
-        if( calc_pspec )then
-            call cline_pspec%set('prg',      'calc_pspec_distr')
-            call cline_pspec%set('oritype',  'ptcl2D')
-            call cline_pspec%set('projfile', self%projfile_out)
-            call cline_pspec%set('nthr',     cline_classify%get_iarg('nthr'))
-            call cline_pspec%set('mkdir',    'yes')
-            call cline_pspec%set('nparts',   1)
-            if( params_glob%nparts_chunk > 1 ) call cline_pspec%set('nparts',params_glob%nparts_chunk)
-            clines(1) = cline_pspec
+        if( str_has_substr(self%cline%get_carg('prg'), 'abinitio') )then
+            allocate(clines(nclines))
+        else
+            if( calc_pspec ) nclines = nclines + 1
+            allocate(clines(nclines))
+            ! noise estimates
+            if( calc_pspec )then
+                call cline_pspec%set('prg',      'calc_pspec_distr')
+                call cline_pspec%set('oritype',  'ptcl2D')
+                call cline_pspec%set('projfile', self%projfile_out)
+                call cline_pspec%set('nthr',     self%cline%get_iarg('nthr'))
+                call cline_pspec%set('mkdir',    'yes')
+                call cline_pspec%set('nparts',   1)
+                if( params_glob%nparts_chunk > 1 ) call cline_pspec%set('nparts',params_glob%nparts_chunk)
+                clines(1) = cline_pspec
+            endif
         endif
         if( box < orig_box )then
             scale = real(box) / real(orig_box)
-            call cline_classify%set('smpd',      orig_smpd)
-            call cline_classify%set('box',       orig_box)
-            call cline_classify%set('smpd_crop', orig_smpd / scale)
-            call cline_classify%set('box_crop',  box)
+            call self%cline%set('smpd',      orig_smpd)
+            call self%cline%set('box',       orig_box)
+            call self%cline%set('smpd_crop', orig_smpd / scale)
+            call self%cline%set('box_crop',  box)
         endif
-        call cline_classify%set('projfile', self%projfile_out)
-        call cline_classify%set('projname', trim(PROJNAME_CHUNK))
-        call self%spproj%update_projinfo(cline_classify)
+        call self%cline%set('projfile', self%projfile_out)
+        call self%cline%set('projname', trim(PROJNAME_CHUNK))
+        call self%spproj%update_projinfo(self%cline)
         call self%spproj%write()
         ! 2D classification
-        clines(nclines) = cline_classify
+        clines(nclines) = self%cline
         ! submission
         call self%qenv%exec_simple_prgs_in_queue_async(clines, './distr_chunk2D', 'simple_log_chunk2d')
         call chdir('..')
@@ -254,17 +231,18 @@ contains
         self%available = .false.
         self%converged = .false.
         write(logfhandle,'(A,I6,A,I6,A)')'>>> CHUNK ',self%id,' INITIATED CLASSIFICATION WITH ',nptcls_sel,' PARTICLES'
-        call debug_print('end chunk%exec_classify')
-    end subroutine exec_classify
+        call debug_print('end chunk%classify')
+    end subroutine classify
 
     ! To calculate noise power estimates only
     subroutine calc_sigma2( self, cline_classify, need_sigma )
         class(stream_chunk), intent(inout) :: self
         class(cmdline),      intent(in)    :: cline_classify
         logical,             intent(in)    :: need_sigma
-        type(cmdline)              :: cline_pspec
-        character(len=XLONGSTRLEN) :: cwd
-        integer                    :: nptcls_sel
+        type(cmdline)                 :: cline_pspec
+        character(len=XLONGSTRLEN)    :: cwd
+        character(len=:), allocatable :: exec
+        integer :: nptcls_sel
         call debug_print('in calc_sigma2 '//int2str(self%id))
         if( .not.self%available ) return
         if( self%nptcls == 0 ) return
@@ -275,7 +253,7 @@ contains
         self%projfile_out = trim(PROJNAME_CHUNK)//trim(METADATA_EXT)
         call simple_mkdir(STDERROUT_DIR)
         nptcls_sel = self%spproj%os_ptcl2D%get_noris(consider_state=.true.)
-        call cline_pspec%set('prg',     'calc_pspec_distr')
+        call cline_pspec%set('prg',      'calc_pspec_distr')
         call cline_pspec%set('oritype',  'ptcl2D')
         call cline_pspec%set('nthr',     cline_classify%get_iarg('nthr'))
         call cline_pspec%set('mkdir',    'yes')
@@ -289,9 +267,12 @@ contains
         self%toclassify = .false. ! not to be classified
         self%it         = 1
         if( need_sigma )then
+            ! making sure the executable is *always* simple_private_exec
+            exec = trim(self%qenv%get_exec_bin())
+            call replace_substring(exec,'/simple_exec','/simple_private_exec',one=.true.,back=.true.)
             ! submission
             self%converged  = .false.
-            call self%qenv%exec_simple_prg_in_queue_async(cline_pspec, './distr_chunk2D', 'simple_log_chunk2d')
+            call self%qenv%exec_simple_prg_in_queue_async(cline_pspec, './distr_chunk2D', 'simple_log_chunk2d', exec_bin=exec)
             write(logfhandle,'(A,I6,A,I6,A)')'>>> CHUNK ',self%id,' INITIATED SIGMA2 CALCULATION WITH ',nptcls_sel,' PARTICLES'
         else
             self%converged  = .true. ! nothing to calculate
@@ -436,7 +417,11 @@ contains
         class(stream_chunk), intent(inout) :: self
         if( .not.self%converged )then
             if( self%toclassify )then
-                self%converged = file_exists(trim(self%path)//trim(CLUSTER2D_FINISHED))
+                if( str_has_substr(self%cline%get_carg('prg'), 'abinitio') )then
+                    self%converged = file_exists(trim(self%path)//trim(ABINITIO2D_FINISHED))
+                else
+                    self%converged = file_exists(trim(self%path)//trim(CLUSTER2D_FINISHED))
+                endif
             else
                 self%converged = file_exists(trim(self%path)//trim(CALCPSPEC_FINISHED))
             endif
@@ -510,8 +495,8 @@ contains
             ! updates cls2D field
             do icls=1,ncls
                 if( .not.cls_mask(icls) )then
-                    call self%spproj%os_cls2D%set(icls,'pop',   0.)
-                    call self%spproj%os_cls2D%set(icls,'state', 0.)
+                    call self%spproj%os_cls2D%set(icls,'pop',    0)
+                    call self%spproj%os_cls2D%set_state(icls,    0)
                     call self%spproj%os_cls2D%set(icls,'corr', -1.)
                 endif
             enddo
@@ -541,6 +526,7 @@ contains
         self%it        = 0
         call self%spproj%kill
         call self%qenv%kill
+        call self%cline%kill
         self%nmics     = 0
         self%nptcls    = 0
         self%path      = ''
@@ -596,7 +582,7 @@ contains
             ! update stack path to absolute
             stack_name = trim(spproj%get_stkname(imic))
             if( stack_name(1:1) == '/' )then
-                ! already absolute path
+                ! already absolute path, should always be the case
             else if( stack_name(1:3) == '../' )then
                 stack_name = simple_abspath(trim(stack_name))
                 call spproj%os_stk%set(imic, 'stk', stack_name)

@@ -7,8 +7,6 @@ use simple_parameters,          only: parameters
 use simple_sp_project,          only: sp_project
 use simple_commander_cluster2D
 use simple_commander_euclid
-
-! use simple_euclid_sigma2
 use simple_qsys_funs
 implicit none
 
@@ -23,7 +21,7 @@ end type abinitio2D_commander
 
 ! class constants
 real,    parameter :: SMPD_TARGET    = 2.67
-real,    parameter :: ICM_LAMBDA     = 0.5
+real,    parameter :: ICM_LAMBDA     = 1.0
 integer, parameter :: NSTAGES        = 6
 integer, parameter :: ITS_INCR       = 5
 integer, parameter :: PHASES(2)      = [4, 6]
@@ -52,15 +50,17 @@ contains
         integer :: maxits(2), istage, last_iter
         logical :: l_shmem
         call cline%set('oritype', 'ptcl2D')
-        if( .not. cline%defined('autoscale')) call cline%set('autoscale', 'yes')
-        if( .not. cline%defined('mkdir')    ) call cline%set('mkdir',     'yes')
-        if( .not. cline%defined('masscen')  ) call cline%set('masscen',   'yes')
-        if( .not. cline%defined('center')   ) call cline%set('center',    'yes')
-        if( .not. cline%defined('sh_first') ) call cline%set('sh_first',  'no')
-        if( .not. cline%defined('cls_init') ) call cline%set('cls_init',  'rand')
-        if( .not. cline%defined('icm')      ) call cline%set('icm',       'yes')
-        if( .not. cline%defined('lambda')   ) call cline%set('lambda',    ICM_LAMBDA)
-        if( .not. cline%defined('extr_lim') ) call cline%set('extr_lim',  EXTR_LIM_LOCAL)
+        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
+        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
+        if( .not. cline%defined('masscen')   ) call cline%set('masscen',   'yes')
+        if( .not. cline%defined('center')    ) call cline%set('center',    'yes')
+        if( .not. cline%defined('sh_first')  ) call cline%set('sh_first',  'no')
+        if( .not. cline%defined('cls_init')  ) call cline%set('cls_init',  'rand')
+        if( .not. cline%defined('icm')       ) call cline%set('icm',       'yes')
+        if( .not. cline%defined('lambda')    ) call cline%set('lambda',    ICM_LAMBDA)
+        if( .not. cline%defined('extr_lim')  ) call cline%set('extr_lim',  EXTR_LIM_LOCAL)
+        if( .not. cline%defined('rank_cavgs')) call cline%set('rank_cavgs','yes')
+        if( .not. cline%defined('sigma_est') ) call cline%set('sigma_est', 'group')
         if( cline%defined('nparts') )then
             l_shmem = cline%get_iarg('nparts') == 1
         else
@@ -107,8 +107,10 @@ contains
         call spproj%os_ptcl3D%transfer_2Dshifts(spproj_field)
         call spproj%write_segment_inside('ptcl3D', params%projfile)
         ! final class generation & ranking
-        last_iter = cline_cluster2D%get_iarg('endit')
-        call gen_final_cavgs(last_iter)
+        if ( trim(params%rank_cavgs).eq.'yes' )then
+            last_iter = cline_cluster2D%get_iarg('endit')
+            call gen_final_cavgs(last_iter)
+        endif
         ! cleanup
         call del_file('start2Drefs'//params%ext)
         call del_file('start2Drefs_even'//params%ext)
@@ -116,24 +118,32 @@ contains
         call spproj%kill
         nullify(spproj_field)
         call qsys_cleanup
+        call simple_touch(ABINITIO2D_FINISHED)
         call simple_end('**** SIMPLE_ABINITIO2D NORMAL STOP ****')
       contains
 
         ! Downscaling/cropping dimensions used throughout
         subroutine set_dims
             real :: smpd_target_eff, scale_factor
-            smpd_target_eff  = max(SMPD_TARGET, params%smpd)
-            scale_factor     = 1.0
-            params%smpd_crop = params%smpd
-            params%box_crop  = params%box
-            params%msk_crop  = params%msk
-            if( params%l_autoscale .and. params%box >= MINBOXSZ )then
-                call autoscale(params%box, params%smpd, smpd_target_eff, params%box_crop, params%smpd_crop, scale_factor, minbox=MINBOXSZ)
+            if( cline%defined('box_crop') )then
+                scale_factor = real(params%box_crop) / real(params%box)
+                if( .not.cline%defined('smpd_crop') ) params%smpd_crop = params%smpd / scale_factor
+                if( .not.cline%defined('msk_crop')  ) params%msk_crop  = round2even(params%msk * scale_factor)
                 params%l_autoscale = params%box_crop < params%box
-                if( params%l_autoscale )then
-                    params%msk_crop = round2even(params%msk * scale_factor)
-                    write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
+            else
+                smpd_target_eff  = max(SMPD_TARGET, params%smpd)
+                scale_factor     = 1.0
+                params%smpd_crop = params%smpd
+                params%box_crop  = params%box
+                params%msk_crop  = params%msk
+                if( params%l_autoscale .and. params%box >= MINBOXSZ )then
+                    call autoscale(params%box, params%smpd, smpd_target_eff, params%box_crop, params%smpd_crop, scale_factor, minbox=MINBOXSZ)
+                    params%l_autoscale = params%box_crop < params%box
                 endif
+                if( params%l_autoscale ) params%msk_crop = round2even(params%msk * scale_factor)
+            endif
+            if( params%l_autoscale )then
+                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
             endif
             lpinfo(:)%box_crop    = params%box_crop
             lpinfo(:)%smpd_crop   = params%smpd_crop
@@ -182,7 +192,6 @@ contains
             ! cluster2D
             call cline_cluster2D%set('prg',       'cluster2D')
             call cline_cluster2D%set('wiener',    'full')
-            call cline_cluster2D%set('sigma_est', 'group')
             call cline_cluster2D%set('ptclw',     'no')
             call cline_cluster2D%set('ml_reg',    'no')
             call cline_cluster2D%set('kweight',   'default')
@@ -280,22 +289,16 @@ contains
                 end select
             case(2)
                 ! phase constants
-                imaxits          = iter+ITS_INCR-1
-                sh_first         = trim(params%sh_first)
-                trs              = lpinfo(istage)%trslim
-                center           = trim(params%center)
-                cc_iters         = 0
-                objfun           = 'euclid'
-                extr_iter        = params%extr_lim+1
-                refs             = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
-                icm              = 'no'
-                ! phase variables
-                select case(istage)
-                case(5)
-                    minits       = iter + 1
-                case(6)
-                    minits       = iter
-                end select
+                imaxits   = iter+ITS_INCR-1
+                sh_first  = trim(params%sh_first)
+                trs       = lpinfo(istage)%trslim
+                center    = trim(params%center)
+                cc_iters  = 0
+                objfun    = 'euclid'
+                extr_iter = params%extr_lim+1
+                refs      = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
+                icm       = 'no'
+                minits    = iter
             end select
             ! command line update
             call cline_cluster2D%set('startit',   iter)
@@ -330,6 +333,7 @@ contains
         end subroutine set_cline_cluster2D
 
         subroutine execute_cluster2D
+            call del_file(CLUSTER2D_FINISHED)
             ! Initial sigma2
             if( istage == 1 )then
                 call xcalc_pspec_distr%execute_safe(cline_calc_pspec)

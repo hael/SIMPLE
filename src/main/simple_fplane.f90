@@ -43,6 +43,7 @@ type :: fplane
     procedure :: gen_planes
     procedure :: gen_planes_pad
     ! MODIFIERS
+    procedure :: zero
     procedure :: neg
     ! DESTRUCTOR
     procedure :: kill
@@ -92,8 +93,7 @@ contains
             allocate(self%cmplx_plane(self%frlims_crop(1,1):self%frlims_crop(1,2),self%frlims_crop(2,1):self%frlims_crop(2,2)),&
             &self%ctfsq_plane(self%frlims_crop(1,1):self%frlims_crop(1,2),self%frlims_crop(2,1):self%frlims_crop(2,2)))
         endif
-        self%cmplx_plane  = cmplx(0.,0.)
-        self%ctfsq_plane  = 0.
+        call self%zero
         if( self%genplane )then
             ! the object will be used to prep image for reconstruction
             ! otherwise the following allocations are not done to reduce memory usage
@@ -441,10 +441,18 @@ contains
         real,    pointer :: prmat(:,:,:)
         integer :: c
         if( self%padded )then
-            call ctfsqimg%new([params_glob%box_croppd,params_glob%box_croppd,1], params_glob%smpd)
-            call ctfsqimg%get_rmat_ptr(prmat)
-            prmat(1:params_glob%box_croppd,1:params_glob%box_croppd,1) = self%ctfsq_plane(self%frlims_croppd(1,1):self%frlims_croppd(1,2)-1,self%frlims_croppd(2,1):self%frlims_croppd(2,2))
-            nullify(prmat)
+            call fcimg%new([params_glob%box_croppd,params_glob%box_croppd,1], params_glob%smpd_crop)
+            call ctfsqimg%new([params_glob%box_croppd,params_glob%box_croppd,1], params_glob%smpd_crop)
+            c = params_glob%box_croppd/2+1
+            call fcimg%set_ft(.true.)
+            call fcimg%get_cmat_ptr(pcmat)
+            pcmat(1:self%frlims_croppd(1,2),c+self%frlims_croppd(2,1):c+self%frlims_croppd(2,2),1) =&
+                &self%cmplx_plane(0:self%frlims_croppd(1,2)-1,:)
+            call fcimg%shift_phorig
+            call ctfsqimg%set_ft(.true.)
+            call ctfsqimg%get_cmat_ptr(pcmat)
+            pcmat(1:self%frlims_croppd(1,2),c+self%frlims_croppd(2,1):c+self%frlims_croppd(2,2),1) =&
+                &cmplx(self%ctfsq_plane(0:self%frlims_croppd(1,2)-1,:),0.)
         else
             call fcimg%new(self%ldim, params_glob%smpd)
             call ctfsqimg%new(self%ldim, params_glob%smpd)
@@ -456,10 +464,16 @@ contains
             call ctfsqimg%set_ft(.true.)
             call ctfsqimg%get_cmat_ptr(pcmat)
             pcmat(1:self%frlims_crop(1,2),c+self%frlims_crop(2,1):c+self%frlims_crop(2,2),1) = cmplx(self%ctfsq_plane(0:self%frlims_crop(1,2)-1,:),0.)
-            call ctfsqimg%shift_phorig
-            nullify(pcmat)
         endif
+        call ctfsqimg%shift_phorig
+        nullify(pcmat)
     end subroutine convert2img
+
+    elemental subroutine zero( self )
+        class(fplane), intent(inout) :: self
+        self%cmplx_plane  = cmplx(0.,0.)
+        self%ctfsq_plane  = 0.
+    end subroutine zero
 
     subroutine neg( self )
         class(fplane),    intent(inout) :: self

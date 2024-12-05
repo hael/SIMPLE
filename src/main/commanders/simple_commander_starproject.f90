@@ -53,11 +53,20 @@ contains
         if(.not. dir_exists(trim(adjustl(cline%get_carg("import_dir"))))) THROW_HARD('import_dir does not exist ' // trim(adjustl(cline%get_carg("import_dir"))))
         if(cline%defined("starfile") .and. .not. file_exists(trim(adjustl(cline%get_carg("starfile"))))) THROW_HARD('starfile does not exist')
         call params%new(cline)
-        if( file_exists(params%projfile) )then
+        if( .not. file_exists(params%projfile) ) then
+            params%projfile = "workspace.simple"
+            call cline%set('projfile', 'workspace.simple')
+        end if
+        if(file_exists(params%projfile)) then
             call spproj%read(params%projfile)
-            if( (spproj%get_nptcls() > 0) .or. (spproj%get_nstks() > 0) .or.&
-                &(spproj%get_nintgs() > 0) .or. (spproj%get_nmovies() > 0) )then
-                THROW_HARD('The destination PROJFILE should be empty!')
+            if( trim(params%import_type).eq.'mic' )then
+                if( spproj%get_nintgs() > 0 .or. spproj%get_nmovies() > 0 )then
+                    THROW_HARD('The mic field of the destination PROJFILE should be empty!')
+                endif
+            else if( str_has_substr(trim(params%import_type),'ptcl') ) then
+                 if( spproj%get_nptcls() > 0 )then
+                    THROW_HARD('The ptcl fileds of the destination PROJFILE should be empty!')
+                endif
             endif
         else
             THROW_HARD('Inputted projfile: '//trim(params%projfile)//' does not exist!')

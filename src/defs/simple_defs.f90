@@ -46,7 +46,7 @@ integer                       :: nthr_glob = 1                 !< number of thre
 logical                       :: l_distr_exec_glob             !< global distributed execution flag
 integer                       :: part_glob                     !< global part index
 character(len=:), allocatable :: cmdline_glob                  !< global command line string
-logical,          parameter   :: L_BENCH_GLOB       = .true.   !< global benchmarking flag
+logical,          parameter   :: L_BENCH_GLOB       = .false.  !< global benchmarking flag
 logical,          parameter   :: L_DO_GRIDCORR_GLOB = .false.  !< global gridding correction flag
 logical,          parameter   :: L_USE_SLURM_ARR    = .false.  !< use SLURM arrays for jobs where we know nparts
 logical,          parameter   :: L_USE_AUTO_MEM     = .false.  !< auto estmate memory usage for parts
@@ -117,6 +117,19 @@ type class_sample
     integer, allocatable :: pinds(:)
     real,    allocatable :: ccs(:)
 end type class_sample
+
+type fplan_map
+    integer              :: n_points
+    integer, allocatable :: target_find(:)
+    integer, allocatable :: ori_phys(:,:)
+    integer, allocatable :: target_phys(:,:)
+end type fplan_map
+
+type polar_fmap
+    integer :: target_find
+    integer :: ori_inds(2)
+    integer :: target_inds(2)
+end type polar_fmap
 
 ! oritype enumeration
 enum, bind(c)

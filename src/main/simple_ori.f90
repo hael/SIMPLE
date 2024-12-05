@@ -59,7 +59,6 @@ type :: ori
     procedure          :: rnd_inpl
     procedure          :: rnd_shift, gau_rnd_shift
     procedure          :: str2ori
-    procedure          :: set_boxfile
     ! GETTERS
     procedure          :: exists
     procedure          :: is_particle
@@ -712,27 +711,6 @@ contains
             call sauron_ori_parser(line, self%htab, self%chtab)
         endif
     end subroutine str2ori
-
-    subroutine set_boxfile( self, boxfname, nptcls )
-        class(ori),        intent(inout) :: self
-        character(len=*),  intent(in)    :: boxfname
-        integer, optional, intent(in)    :: nptcls
-        type(nrtxtfile) :: boxfile
-        integer         :: nptcls_here
-        if( present(nptcls) )then
-            nptcls_here = nptcls
-            if( nptcls_here == 0 )then
-                call self%set('nptcls',  0)
-                return
-            endif
-        else
-            call boxfile%new(boxfname, 1)
-            nptcls_here = boxfile%get_ndatalines()
-            call boxfile%kill
-        endif
-        call self%set('boxfile', boxfname)
-        call self%set('nptcls',  nptcls_here)
-    end subroutine set_boxfile
 
     ! GETTERS
 

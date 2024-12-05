@@ -74,6 +74,9 @@ end type simple_program
 ! instances of this class - special
 
 type(simple_program), target :: abinitio2D
+type(simple_program), target :: abinitio3D_cavgs
+type(simple_program), target :: abinitio3D
+type(simple_program), target :: abinitio3D_parts
 type(simple_program), target :: analysis2D_nano
 type(simple_program), target :: assign_optics_groups
 type(simple_program), target :: assign_optics
@@ -102,6 +105,7 @@ type(simple_program), target :: convert
 type(simple_program), target :: ctf_estimate
 type(simple_program), target :: ctfops
 type(simple_program), target :: ctf_phaseflip
+type(simple_program), target :: denoise_cavgs
 type(simple_program), target :: detect_atoms
 type(simple_program), target :: dock_volpair
 type(simple_program), target :: estimate_lpstages
@@ -123,9 +127,6 @@ type(simple_program), target :: import_particles
 type(simple_program), target :: import_starproject
 type(simple_program), target :: info_image
 type(simple_program), target :: info_stktab
-type(simple_program), target :: initial_3Dmodel
-type(simple_program), target :: abinitio_3Dmodel
-type(simple_program), target :: abinitio_3Dmodel_parts
 type(simple_program), target :: make_cavgs
 type(simple_program), target :: make_oris
 type(simple_program), target :: make_pickrefs
@@ -150,7 +151,6 @@ type(simple_program), target :: ppca_denoise
 type(simple_program), target :: ppca_denoise_classes
 type(simple_program), target :: preproc
 type(simple_program), target :: preprocess
-type(simple_program), target :: preprocess_stream_dev
 type(simple_program), target :: print_dose_weights
 type(simple_program), target :: print_fsc
 type(simple_program), target :: print_magic_boxes
@@ -158,7 +158,7 @@ type(simple_program), target :: print_project_field
 type(simple_program), target :: print_project_info
 type(simple_program), target :: projops
 type(simple_program), target :: prune_project
-type(simple_program), target :: prune_cavgs
+type(simple_program), target :: score_ptcls
 type(simple_program), target :: atoms_stats
 type(simple_program), target :: reconstruct3D
 type(simple_program), target :: reextract
@@ -196,6 +196,7 @@ type(simple_program), target :: uniform_filter2D
 type(simple_program), target :: uniform_filter3D
 type(simple_program), target :: update_project
 type(simple_program), target :: vizoris
+type(simple_program), target :: volanalyze
 type(simple_program), target :: volops
 type(simple_program), target :: write_classes
 type(simple_program), target :: zero_project_shifts
@@ -286,6 +287,7 @@ type(simple_input_param) :: nptcls
 type(simple_input_param) :: nptcls_per_cls
 type(simple_input_param) :: nran
 type(simple_input_param) :: nrestarts
+type(simple_input_param) :: nsample
 type(simple_input_param) :: nsearch
 type(simple_input_param) :: nsig
 type(simple_input_param) :: nspace
@@ -376,8 +378,9 @@ contains
         call set_common_params
         call set_prg_ptr_array
         call new_abinitio2D
-        call new_abinitio_3Dmodel
-        call new_abinitio_3Dmodel_parts
+        call new_abinitio3D_cavgs
+        call new_abinitio3D
+        call new_abinitio3D_parts
         call new_analysis2D_nano
         call new_assign_optics
         call new_assign_optics_groups
@@ -407,6 +410,7 @@ contains
         call new_ctfops
         call new_ctf_phaseflip
         call new_pdb2mrc
+        call new_denoise_cavgs
         call new_detect_atoms
         call new_dock_volpair
         call new_estimate_lpstages
@@ -424,7 +428,6 @@ contains
         call new_icm3D
         call new_info_image
         call new_info_stktab
-        call new_initial_3Dmodel
         call new_import_boxes
         call new_import_cavgs
         call new_import_movies
@@ -453,7 +456,6 @@ contains
         call new_ppca_denoise_classes
         call new_preproc
         call new_preprocess
-        call new_preprocess_stream_dev
         call new_print_dose_weights
         call new_print_fsc
         call new_print_magic_boxes
@@ -461,7 +463,7 @@ contains
         call new_print_project_field
         call new_projops
         call new_prune_project
-        call new_prune_cavgs
+        call new_score_ptcls
         call new_atoms_stats
         call new_reproject
         call new_reconstruct3D
@@ -498,6 +500,7 @@ contains
         call new_uniform_filter3D
         call new_update_project
         call new_vizoris
+        call new_volanalyze
         call new_volops
         call new_write_classes
         call new_zero_project_shifts
@@ -507,8 +510,9 @@ contains
     subroutine set_prg_ptr_array
         n_prg_ptrs = 0
         call push2prg_ptr_array(abinitio2D)
-        call push2prg_ptr_array(abinitio_3Dmodel)
-        call push2prg_ptr_array(abinitio_3Dmodel_parts)
+        call push2prg_ptr_array(abinitio3D_cavgs)
+        call push2prg_ptr_array(abinitio3D)
+        call push2prg_ptr_array(abinitio3D_parts)
         call push2prg_ptr_array(analysis2D_nano)
         call push2prg_ptr_array(assign_optics_groups)
         call push2prg_ptr_array(automask)
@@ -537,6 +541,7 @@ contains
         call push2prg_ptr_array(ctfops)
         call push2prg_ptr_array(ctf_phaseflip)
         call push2prg_ptr_array(pdb2mrc)
+        call push2prg_ptr_array(denoise_cavgs)
         call push2prg_ptr_array(detect_atoms)
         call push2prg_ptr_array(dock_volpair)
         call push2prg_ptr_array(extract)
@@ -552,7 +557,6 @@ contains
         call push2prg_ptr_array(icm3D)
         call push2prg_ptr_array(info_image)
         call push2prg_ptr_array(info_stktab)
-        call push2prg_ptr_array(initial_3Dmodel)
         call push2prg_ptr_array(import_boxes)
         call push2prg_ptr_array(import_cavgs)
         call push2prg_ptr_array(import_movies)
@@ -581,7 +585,6 @@ contains
         call push2prg_ptr_array(ppca_denoise_classes)
         call push2prg_ptr_array(preproc)
         call push2prg_ptr_array(preprocess)
-        call push2prg_ptr_array(preprocess_stream_dev)
         call push2prg_ptr_array(print_dose_weights)
         call push2prg_ptr_array(print_fsc)
         call push2prg_ptr_array(print_magic_boxes)
@@ -589,7 +592,7 @@ contains
         call push2prg_ptr_array(print_project_field)
         call push2prg_ptr_array(projops)
         call push2prg_ptr_array(prune_project)
-        call push2prg_ptr_array(prune_cavgs)
+        call push2prg_ptr_array(score_ptcls)
         call push2prg_ptr_array(atoms_stats)
         call push2prg_ptr_array(reproject)
         call push2prg_ptr_array(reconstruct3D)
@@ -625,6 +628,7 @@ contains
         call push2prg_ptr_array(uniform_filter3D)
         call push2prg_ptr_array(update_project)
         call push2prg_ptr_array(vizoris)
+        call push2prg_ptr_array(volanalyze)
         call push2prg_ptr_array(volops)
         call push2prg_ptr_array(write_classes)
         call push2prg_ptr_array(zero_project_shifts)
@@ -645,10 +649,12 @@ contains
         select case(trim(which_program))
             case('abinitio2D')
                 ptr2prg => abinitio2D
-            case('abinitio_3Dmodel')
-                ptr2prg => abinitio_3Dmodel
-            case('abinitio_3Dmodel_parts')
-                ptr2prg => abinitio_3Dmodel_parts
+            case('abinitio3D_cavgs')
+                ptr2prg => abinitio3D_cavgs
+            case('abinitio3D')
+                ptr2prg => abinitio3D
+            case('abinitio3D_parts')
+                ptr2prg => abinitio3D_parts
             case('analysis2D_nano')
                 ptr2prg => analysis2D_nano
             case('assign_optics')
@@ -707,6 +713,8 @@ contains
                 ptr2prg => ctf_phaseflip
             case('pdb2mrc')
                 ptr2prg => pdb2mrc
+            case('denoise_cavgs')
+                ptr2prg => denoise_cavgs
             case('detect_atoms')
                 ptr2prg => detect_atoms
             case('dock_volpair')
@@ -739,8 +747,7 @@ contains
                 ptr2prg => info_image
             case('info_stktab')
                 ptr2prg => info_stktab
-            case('initial_3Dmodel')
-                ptr2prg => initial_3Dmodel
+            
             case('import_boxes')
                 ptr2prg => import_boxes
             case('import_cavgs')
@@ -797,8 +804,6 @@ contains
                 ptr2prg => preproc
             case('preprocess')
                 ptr2prg => preprocess
-            case('preprocess_stream_dev')
-                ptr2prg => preprocess_stream_dev
             case('print_dose_weights')
                 ptr2prg => print_dose_weights
             case('print_fsc')
@@ -813,8 +818,8 @@ contains
                 ptr2prg => projops  
             case('prune_project')
                 ptr2prg => prune_project
-            case('prune_cavgs')
-                ptr2prg => prune_cavgs
+            case('score_ptcls')
+                ptr2prg => score_ptcls
             case('atoms_stats')
                 ptr2prg => atoms_stats
             case('reproject')
@@ -889,6 +894,8 @@ contains
                 ptr2prg => update_project
             case('vizoris')
                 ptr2prg => vizoris
+            case('volanalyze')
+                ptr2prg => volanalyze
             case('volops')
                 ptr2prg => volops
             case('write_classes')
@@ -902,8 +909,9 @@ contains
 
     subroutine list_simple_prgs_in_ui
         write(logfhandle,'(A)') abinitio2D%name
-        write(logfhandle,'(A)') abinitio_3Dmodel%name
-        write(logfhandle,'(A)') abinitio_3Dmodel_parts%name
+        write(logfhandle,'(A)') abinitio3D_cavgs%name
+        write(logfhandle,'(A)') abinitio3D%name
+        write(logfhandle,'(A)') abinitio3D_parts%name
         write(logfhandle,'(A)') assign_optics_groups%name
         write(logfhandle,'(A)') automask%name
         write(logfhandle,'(A)') automask2D%name
@@ -921,6 +929,7 @@ contains
         write(logfhandle,'(A)') ctf_estimate%name
         write(logfhandle,'(A)') ctfops%name
         write(logfhandle,'(A)') ctf_phaseflip%name
+        write(logfhandle,'(A)') denoise_cavgs%name
         write(logfhandle,'(A)') dock_volpair%name
         write(logfhandle,'(A)') estimate_lpstages%name
         write(logfhandle,'(A)') extract%name
@@ -932,7 +941,6 @@ contains
         write(logfhandle,'(A)') gen_pspecs_and_thumbs%name
         write(logfhandle,'(A)') icm2D%name
         write(logfhandle,'(A)') icm3D%name
-        write(logfhandle,'(A)') initial_3Dmodel%name
         write(logfhandle,'(A)') info_image%name
         write(logfhandle,'(A)') info_stktab%name
         write(logfhandle,'(A)') import_boxes%name
@@ -969,7 +977,7 @@ contains
         write(logfhandle,'(A)') print_project_field%name
         write(logfhandle,'(A)') projops%name
         write(logfhandle,'(A)') prune_project%name
-        write(logfhandle,'(A)') prune_cavgs%name
+        write(logfhandle,'(A)') score_ptcls%name
         write(logfhandle,'(A)') reconstruct3D%name
         write(logfhandle,'(A)') reextract%name
         write(logfhandle,'(A)') refine3D%name
@@ -995,6 +1003,7 @@ contains
         write(logfhandle,'(A)') uniform_filter3D%name
         write(logfhandle,'(A)') update_project%name
         write(logfhandle,'(A)') vizoris%name
+        write(logfhandle,'(A)') volanalyze%name
         write(logfhandle,'(A)') volops%name
         write(logfhandle,'(A)') write_classes%name
         write(logfhandle,'(A)') zero_project_shifts%name
@@ -1250,6 +1259,7 @@ contains
         call set_param(backgr_subtr,   'backgr_subtr', 'binary', 'Perform micrograph background subtraction(new picker only)', 'Perform micrograph background subtraction before picking/extraction(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(crowded,        'crowded',      'binary', 'Picking in crowded micrographs?', 'Picking in crowded micrographs?(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(nran,           'nran',         'num',    'Number of random samples', 'Number of entries to randomly sample', '# random samples', .false., 0.)        
+        call set_param(nsample,        'nsample',      'num',    'Number of particles to sample', 'Number of particles to sample each iteration', '# particles to sample', .false., 0.)
         call set_param(pickrefs,       'pickrefs',     'file',   'Stack of class-averages/reprojections for picking', 'Stack of class-averages/reprojections for picking', 'e.g. pickrefs.mrc', .false., '')
         call set_param(icm,            'icm',          'binary', 'Whether to perform ICM filtering of reference(s)', 'Whether to perform ICM filtering of reference(s)(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(flipgain,       'flipgain',     'multi',  'Flip the gain reference', 'Flip the gain reference along the provided axis(no|x|y|xy|yx){no}', '(no|x|y|xy|yx){no}', .false., 'no')
@@ -2054,7 +2064,7 @@ contains
         call cluster_cavgs%set_input('img_ios', 1, stk)
         ! parameter input/output
         call cluster_cavgs%set_input('parm_ios', 1, 'bin_cls', 'multi', 'Perform good/bad classification based on common lines',&
-        &'Classes with lower common line correlation to the rest are rejected by Otsu(yes|no|only){yes}', '(yes|no|only){yes}', .false., 'yes')
+        &'Classes with lower common line correlation to the rest are rejected by Otsu(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call cluster_cavgs%set_input('parm_ios', 2,  'ncls', 'num', 'Number of highest populated AP clusters', 'Number of highest populated AP clusters to map the AP solution onto', '# classes', .false., 0.)
         ! alternative inputs
         ! <empty>
@@ -2214,6 +2224,32 @@ contains
         ! <empty>
     end subroutine new_ctf_phaseflip
 
+    subroutine new_denoise_cavgs
+        ! PROGRAM SPECIFICATION
+        call denoise_cavgs%new(&
+        &'denoise_cavgs',&                                 ! name
+        &'composite denoising filter for class averages',& ! descr_short
+        &'is a program for denoising class averages',&     ! descr_long
+        &'simple_exec',&                                   ! executable
+        &2, 1, 0, 0, 1, 0, 1, .false.)                     ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call denoise_cavgs%set_input('img_ios', 1, 'stk',  'file', 'Odd stack',  'Odd stack',  'stack_even.mrc file', .true., '')
+        call denoise_cavgs%set_input('img_ios', 2, 'stk2', 'file', 'Even stack', 'Even stack', 'stack_odd.mrc file',  .true., '')
+        ! parameter input/output
+        call denoise_cavgs%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call denoise_cavgs%set_input('filt_ctrls', 1, 'lambda', 'num', 'ICM lambda regularization parameter', 'Strength of noise reduction', '(0.01-3.0){1.0}', .false., 1.0)
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call denoise_cavgs%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_denoise_cavgs
+
     subroutine new_detect_atoms
         ! PROGRAM SPECIFICATION
         call detect_atoms%new(&
@@ -2254,7 +2290,7 @@ contains
         &'Dock a pair of volumes',&                     ! descr_short
         &'is a program for docking a pair of volumes',& ! descr long
         &'simple_exec',&                                ! executable
-        &3, 2, 0, 2, 2, 1, 1, .false.)                  ! # entries in each group, requires sp_project
+        &3, 2, 0, 1, 2, 1, 1, .false.)                  ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call dock_volpair%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Reference volume', &
@@ -2270,11 +2306,9 @@ contains
         ! search controls
         call dock_volpair%set_input('srch_ctrls', 1, trs)
         dock_volpair%srch_ctrls(1)%rval_default = 5.
-        call dock_volpair%set_input('srch_ctrls', 2, 'dockmode', 'multi', 'Docking mode', 'Docking mode(rot|shift|rotshift|refine){rotshift}', '(rot|shift|rotshift|refine){rotshift}', .false., 'rotshift')
-        dock_volpair%srch_ctrls(2)%required = .true.
         ! filter controls
-        call dock_volpair%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit', 'low-pass limit in Angstroms', .true., 0.)
-        call dock_volpair%set_input('filt_ctrls', 2, 'lpstop',   'num', 'Final low-pass limit',   'Final low-pass resolution limit',   'low-pass limit in Angstroms', .true., 0.)
+        call dock_volpair%set_input('filt_ctrls', 1, hp)
+        call dock_volpair%set_input('filt_ctrls', 2, lp)
         ! mask controls
         call dock_volpair%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
@@ -2716,54 +2750,15 @@ contains
         ! computer controls
     end subroutine new_info_stktab
 
-    subroutine new_initial_3Dmodel
-        ! PROGRAM SPECIFICATION
-        call initial_3Dmodel%new(&
-        &'initial_3Dmodel',&                                                         ! name
-        &'3D ab initio model generation from class averages',&                        ! descr_short
-        &'is a distributed workflow for generating an initial 3D model from class&
-        & averages obtained with cluster2D',&                                         ! descr_long
-        &'simple_exec',&                                                              ! executable
-        &0, 0, 0, 4, 4, 1, 1, .true., gui_advanced=.false.)                           ! # entries in each group, requires sp_project                                         
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        ! <empty>
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call initial_3Dmodel%set_input('srch_ctrls', 1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
-        &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call initial_3Dmodel%set_input('srch_ctrls', 2, pgrp)
-        call initial_3Dmodel%set_input('srch_ctrls', 3, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
-        &for accelerated convergence rate. Final low-pass limit controls the degree of down-scaling(yes|no){yes}','(yes|no){yes}', .false., 'yes')
-        call initial_3Dmodel%set_input('srch_ctrls', 4, pgrp_start)
-        ! filter controls
-        call initial_3Dmodel%set_input('filt_ctrls', 1, hp, gui_submenu="filter")
-        call initial_3Dmodel%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
-        &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30., gui_submenu="filter")
-        call initial_3Dmodel%set_input('filt_ctrls', 3, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit for the first stage of ab-initio model generation',&
-            &'low-pass limit in Angstroms', .false., 0., gui_submenu="filter")
-        call initial_3Dmodel%set_input('filt_ctrls', 4, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
-            &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 8., gui_submenu="filter")
-        ! mask controls
-        call initial_3Dmodel%set_input('mask_ctrls', 1, mskdiam, gui_submenu="mask", gui_advanced=.false.)
-        ! computer controls
-        call initial_3Dmodel%set_input('comp_ctrls', 1, nthr, gui_submenu="compute", gui_advanced=.false.)
-    end subroutine new_initial_3Dmodel
-
     subroutine new_abinitio2D
         ! PROGRAM SPECIFICATION
         call abinitio2D%new(&
-        &'abinitio2D',&                                                         ! name
-        &'3D ab initio model generation from particles',&                             ! descr_short
-        &'is a distributed workflow for generating an initial 3D model&
-        & from particles',&                                                           ! descr_long
-        &'simple_exec',&                                                              ! executable
-        &0, 0, 0, 6, 5, 1, 2, .true.,&                                                ! # entries in each group, requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute"  )      ! GUI
+        &'abinitio2D',&                                                                ! name
+        &'ab initio 2D analysis from particles',&                                      ! descr_short
+        &'is a distributed workflow for generating 2D class averages from particles',& ! descr_long                                                           ! descr_long
+        &'simple_exec',&                                                               ! executable
+        &0, 0, 0, 6, 5, 1, 2, .true.,&                                                 ! # entries in each group, requires sp_project
+        &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute"  )       ! GUI
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2799,16 +2794,14 @@ contains
         call abinitio2D%set_input('comp_ctrls', 2, nthr, gui_submenu="compute", gui_advanced=.false.)
     end subroutine new_abinitio2D
 
-    subroutine new_abinitio_3Dmodel
+    subroutine new_abinitio3D_cavgs
         ! PROGRAM SPECIFICATION
-        call abinitio_3Dmodel%new(&
-        &'abinitio_3Dmodel',&                                                         ! name
-        &'3D ab initio model generation from particles',&                             ! descr_short
-        &'is a distributed workflow for generating an initial 3D model&
-        & from particles',&                                                           ! descr_long
-        &'simple_exec',&                                                              ! executable
-        &0, 0, 0, 4, 3, 1, 3, .true.,&                                                ! # entries in each group, requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute"  )      ! GUI                                                      
+        call abinitio3D_cavgs%new(&
+        &'abinitio3D_cavgs',&                                                                   ! name
+        &'3D ab initio model generation from class averages',&                                  ! descr_short
+        &'is a distributed workflow for generating an ab initio 3D model from class averages',& ! descr_long
+        &'simple_exec',&                                                                        ! executable
+        &0, 0, 0, 3, 4, 1, 1, .true., gui_advanced=.false.)                                     ! # entries in each group, requires sp_project                                         
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2817,35 +2810,79 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call abinitio_3Dmodel%set_input('srch_ctrls', 1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
-        &center of gravity and map shifts back to the particles(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
-        call abinitio_3Dmodel%set_input('srch_ctrls', 2, pgrp, gui_submenu="model", gui_advanced=.false.)
-        call abinitio_3Dmodel%set_input('srch_ctrls', 3, pgrp_start, gui_submenu="model")
-        call abinitio_3Dmodel%set_input('srch_ctrls', 4, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
+        call abinitio3D_cavgs%set_input('srch_ctrls', 1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
+        &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call abinitio3D_cavgs%set_input('srch_ctrls', 2, pgrp)
+        call abinitio3D_cavgs%set_input('srch_ctrls', 3, pgrp_start)
         ! filter controls
-        call abinitio_3Dmodel%set_input('filt_ctrls', 1, hp, gui_submenu="filter")
-        call abinitio_3Dmodel%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        call abinitio3D_cavgs%set_input('filt_ctrls', 1, hp, gui_submenu="filter")
+        call abinitio3D_cavgs%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30., gui_submenu="filter")
-        call abinitio_3Dmodel%set_input('filt_ctrls', 3, icm)
+        call abinitio3D_cavgs%set_input('filt_ctrls', 3, 'lpstart',  'num', 'Starting low-pass limit', 'Starting low-pass limit',&
+            &'low-pass limit for the initial stage in Angstroms', .false., 20., gui_submenu="filter")
+        call abinitio3D_cavgs%set_input('filt_ctrls', 4, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
+            &'low-pass limit for the final stage in Angstroms', .false., 8., gui_submenu="filter")
         ! mask controls
-        call abinitio_3Dmodel%set_input('mask_ctrls', 1, mskdiam, gui_submenu="mask", gui_advanced=.false.)
+        call abinitio3D_cavgs%set_input('mask_ctrls', 1, mskdiam, gui_submenu="mask", gui_advanced=.false.)
         ! computer controls
-        call abinitio_3Dmodel%set_input('comp_ctrls', 1, nparts, gui_submenu="compute", gui_advanced=.false.)
-        abinitio_3Dmodel%comp_ctrls(1)%required = .false.
-        call abinitio_3Dmodel%set_input('comp_ctrls', 2, nthr,       gui_submenu="compute", gui_advanced=.false.)
-        call abinitio_3Dmodel%set_input('comp_ctrls', 3, 'nthr_ini3D', 'num', 'Number of threads for ini3D phase, give 0 if unsure', 'Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of &
-        &logical threads in a socket.', '# shared-memory CPU threads', .true., 0., gui_submenu="compute", gui_advanced=.false.)
-        abinitio_3Dmodel%comp_ctrls(3)%required = .false.
-    end subroutine new_abinitio_3Dmodel
+        call abinitio3D_cavgs%set_input('comp_ctrls', 1, nthr, gui_submenu="compute", gui_advanced=.false.)
+    end subroutine new_abinitio3D_cavgs
 
-    subroutine new_abinitio_3Dmodel_parts
+    subroutine new_abinitio3D
         ! PROGRAM SPECIFICATION
-        call abinitio_3Dmodel_parts%new(&
-        &'abinitio_3Dmodel',&                                                   ! name
-        &'3D ab initio model generation from particles',&                       ! descr_short
-        &'is a distributed workflow for generating an initial 3D model&
-        & from particles',&                                                     ! descr_long
+        call abinitio3D%new(&
+        &'abinitio3D',&                                                                    ! name
+        &'3D ab initio model generation from particles',&                                  ! descr_short
+        &'is a distributed workflow for generating an ab initio 3D model from particles',& ! descr_long                                                         ! descr_long
+        &'simple_exec',&                                                                   ! executable
+        &0, 0, 0, 6, 6, 1, 3, .true.,&                                                     ! # entries in each group, requires sp_project
+        &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute"  )           ! GUI                                                      
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call abinitio3D%set_input('srch_ctrls', 1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
+        &center of gravity and map shifts back to the particles(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
+        call abinitio3D%set_input('srch_ctrls', 2, pgrp, gui_submenu="model", gui_advanced=.false.)
+        call abinitio3D%set_input('srch_ctrls', 3, pgrp_start, gui_submenu="model")
+        call abinitio3D%set_input('srch_ctrls', 4, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
+        call abinitio3D%set_input('srch_ctrls', 5, nsample,     gui_submenu="search", gui_advanced=.true.)
+        call abinitio3D%set_input('srch_ctrls', 6, update_frac, gui_submenu="search", gui_advanced=.true.)
+        ! filter controls
+        call abinitio3D%set_input('filt_ctrls', 1, hp, gui_submenu="filter")
+        call abinitio3D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
+        &Angstroms{30}', .false., 30., gui_submenu="filter")
+        call abinitio3D%set_input('filt_ctrls', 3, 'lpstart',  'num', 'Starting low-pass limit', 'Starting low-pass limit',&
+            &'low-pass limit for the initial stage in Angstroms',  .false., 20., gui_submenu="filter")
+        call abinitio3D%set_input('filt_ctrls', 4, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
+            &'low-pass limit for the final stage in Angstroms',    .false., 8., gui_submenu="filter")
+        call abinitio3D%set_input('filt_ctrls', 5, 'lpstart_ini3D',  'num', 'Starting low-pass limit ini3D', 'Starting low-pass limit ini3D',&
+            &'low-pass limit for the initial stage of ini3D in Angstroms',  .false., 20., gui_submenu="filter")
+        call abinitio3D%set_input('filt_ctrls', 6, 'lpstop_ini3D',  'num', 'Final low-pass limit ini3D', 'Final low-pass limit ini3D',&
+            &'low-pass limit for the final stage of ini3D in Angstroms',    .false., 8., gui_submenu="filter")
+        ! mask controls
+        call abinitio3D%set_input('mask_ctrls', 1, mskdiam, gui_submenu="mask", gui_advanced=.false.)
+        ! computer controls
+        call abinitio3D%set_input('comp_ctrls', 1, nparts, gui_submenu="compute", gui_advanced=.false.)
+        abinitio3D%comp_ctrls(1)%required = .false.
+        call abinitio3D%set_input('comp_ctrls', 2, nthr,       gui_submenu="compute", gui_advanced=.false.)
+        call abinitio3D%set_input('comp_ctrls', 3, 'nthr_ini3D', 'num', 'Number of threads for ini3D phase, give 0 if unsure', 'Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of &
+        &logical threads in a socket.', '# shared-memory CPU threads', .true., 0., gui_submenu="compute", gui_advanced=.false.)
+        abinitio3D%comp_ctrls(3)%required = .false.
+    end subroutine new_abinitio3D
+
+    subroutine new_abinitio3D_parts
+        ! PROGRAM SPECIFICATION
+        call abinitio3D_parts%new(&
+        &'abinitio3D_parts',&                                                   ! name
+        &'cross-validated 3D ab initio model generation from particles',&       ! descr_short
+        &'is a distributed workflow for generating a set of ab initio 3D models for cross-validation',&                                                     ! descr_long
         &'simple_exec',&                                                        ! executable
         &0, 2, 0, 4, 3, 1, 3, .true.,&                                          ! # entries in each group, requires sp_project    
         &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute" ) ! GUI                                                      
@@ -2853,32 +2890,32 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call abinitio_3Dmodel_parts%set_input('parm_ios', 1, 'nparts', 'num', 'Number of parts for balanced splitting of the particles', '# parts after balancing', '# parts after balancing', .true., 1.0)
-        call abinitio_3Dmodel_parts%set_input('parm_ios', 2, 'nptcls_per_part', 'num', 'Number of ptcls per part to select when balancing', '# ptcls per part after balancing', '{100000}', .false., 0.0)
+        call abinitio3D_parts%set_input('parm_ios', 1, 'nparts', 'num', 'Number of parts for balanced splitting of the particles', '# parts after balancing', '# parts after balancing', .true., 1.0)
+        call abinitio3D_parts%set_input('parm_ios', 2, 'nptcls_per_part', 'num', 'Number of ptcls per part to select when balancing', '# ptcls per part after balancing', '{100000}', .false., 0.0)
         ! alternative inputs
         ! <empty>
         ! search controls
-        call abinitio_3Dmodel_parts%set_input('srch_ctrls', 1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
+        call abinitio3D_parts%set_input('srch_ctrls', 1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
         &center of gravity and map shifts back to the particles(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
-        call abinitio_3Dmodel_parts%set_input('srch_ctrls', 2, pgrp, gui_submenu="model", gui_advanced=.false.)
-        call abinitio_3Dmodel_parts%set_input('srch_ctrls', 3, pgrp_start, gui_submenu="model")
-        call abinitio_3Dmodel_parts%set_input('srch_ctrls', 4, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
+        call abinitio3D_parts%set_input('srch_ctrls', 2, pgrp, gui_submenu="model", gui_advanced=.false.)
+        call abinitio3D_parts%set_input('srch_ctrls', 3, pgrp_start, gui_submenu="model")
+        call abinitio3D_parts%set_input('srch_ctrls', 4, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
         ! filter controls
-        call abinitio_3Dmodel_parts%set_input('filt_ctrls', 1, hp, gui_submenu="filter")
-        call abinitio_3Dmodel_parts%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        call abinitio3D_parts%set_input('filt_ctrls', 1, hp, gui_submenu="filter")
+        call abinitio3D_parts%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30., gui_submenu="filter")
-        call abinitio_3Dmodel_parts%set_input('filt_ctrls', 3, icm)
+        call abinitio3D_parts%set_input('filt_ctrls', 3, icm)
         ! mask controls
-        call abinitio_3Dmodel_parts%set_input('mask_ctrls', 1, mskdiam, gui_submenu="mask", gui_advanced=.false.)
+        call abinitio3D_parts%set_input('mask_ctrls', 1, mskdiam, gui_submenu="mask", gui_advanced=.false.)
         ! computer controls
-        call abinitio_3Dmodel_parts%set_input('comp_ctrls', 1, 'nparts_per_part', 'num', 'Number of computing nodes per part', '# partitions for distributed memory execution of balanced parts', 'divide each balanced part job into # parts', .false., 1.0)
-        abinitio_3Dmodel_parts%comp_ctrls(1)%required = .false.
-        call abinitio_3Dmodel_parts%set_input('comp_ctrls', 2, nthr,       gui_submenu="compute", gui_advanced=.false.)
-        call abinitio_3Dmodel_parts%set_input('comp_ctrls', 3, 'nthr_ini3D', 'num', 'Number of threads for ini3D phase, give 0 if unsure', 'Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of &
+        call abinitio3D_parts%set_input('comp_ctrls', 1, 'nparts_per_part', 'num', 'Number of computing nodes per part', '# partitions for distributed memory execution of balanced parts', 'divide each balanced part job into # parts', .false., 1.0)
+        abinitio3D_parts%comp_ctrls(1)%required = .false.
+        call abinitio3D_parts%set_input('comp_ctrls', 2, nthr,       gui_submenu="compute", gui_advanced=.false.)
+        call abinitio3D_parts%set_input('comp_ctrls', 3, 'nthr_ini3D', 'num', 'Number of threads for ini3D phase, give 0 if unsure', 'Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of &
         &logical threads in a socket.', '# shared-memory CPU threads', .true., 0., gui_submenu="compute", gui_advanced=.false.)
-        abinitio_3Dmodel_parts%comp_ctrls(3)%required = .false.
-    end subroutine new_abinitio_3Dmodel_parts
+        abinitio3D_parts%comp_ctrls(3)%required = .false.
+    end subroutine new_abinitio3D_parts
 
     subroutine new_import_boxes
         ! PROGRAM SPECIFICATION
@@ -3750,137 +3787,6 @@ contains
         call preprocess%set_input('comp_ctrls', 2, nthr)
     end subroutine new_preprocess
 
-    subroutine new_preprocess_stream_dev
-        ! PROGRAM SPECIFICATION
-        call preprocess_stream_dev%new(&
-        &'preprocess_stream_dev', &                                                                                     ! name
-        &'Preprocessing in streaming mode',&                                                                            ! descr_short
-        &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//&                             ! descr_long
-        &' in streaming mode as the microscope collects the data',&
-        &'simple_exec',&                                                                                                ! executable
-        &5, 17, 0, 27, 9, 1, 9, .true.,&                                                                                ! # entries in each group, requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "data,motion correction,CTF estimation,picking,cluster 2D,compute")   ! GUI
-        ! image input/output
-        call preprocess_stream_dev%set_input('img_ios', 1, dir_movies, gui_submenu="data", gui_advanced=.false.)
-        call preprocess_stream_dev%set_input('img_ios', 2, gainref, gui_submenu="data", gui_advanced=.false.)
-        call preprocess_stream_dev%set_input('img_ios', 3, pickrefs, gui_submenu="picking", gui_advanced=.false., gui_exclusive_group="pickrefs")
-        call preprocess_stream_dev%set_input('img_ios', 4, 'dir_prev', 'file', 'Previous run directory',&
-        &'Directory where a previous preprocess_stream application was run', 'e.g. 2_preprocess_stream', .false., '', gui_submenu="data")
-        call preprocess_stream_dev%set_input('img_ios', 5, 'dir_meta', 'dir', 'Directory containing per-movie metadata in XML format',&
-        &'Directory containing per-movie metadata XML files from EPU', 'e.g. /dataset/metadata', .false., '', gui_submenu="data", gui_advanced=.false.)
-        ! parameter input/output
-        call preprocess_stream_dev%set_input('parm_ios', 1, total_dose, gui_submenu="data", gui_advanced=.false.)
-        call preprocess_stream_dev%set_input('parm_ios', 2, fraction_dose_target, gui_submenu="data", gui_advanced=.false.)
-        call preprocess_stream_dev%set_input('parm_ios', 3, scale_movies, gui_submenu="motion correction", gui_advanced=.false.)
-        call preprocess_stream_dev%set_input('parm_ios', 4, eer_fraction, gui_submenu="motion correction")
-        call preprocess_stream_dev%set_input('parm_ios', 5, eer_upsampling, gui_submenu="motion correction", gui_advanced=.false.)
-        call preprocess_stream_dev%set_input('parm_ios', 6, pcontrast, gui_submenu="picking")
-        call preprocess_stream_dev%set_input('parm_ios', 7, box_extract, gui_submenu="picking")
-        call preprocess_stream_dev%set_input('parm_ios', 8, pspecsz, gui_submenu="picking")
-        call preprocess_stream_dev%set_input('parm_ios', 9, max_dose, gui_submenu="motion correction")
-        call preprocess_stream_dev%set_input('parm_ios',10, kv, gui_submenu="data", gui_advanced=.false.)
-        preprocess_stream_dev%parm_ios(10)%required = .true.
-        call preprocess_stream_dev%set_input('parm_ios',11, cs, gui_submenu="data", gui_advanced=.false.)
-        preprocess_stream_dev%parm_ios(11)%required = .true.
-        call preprocess_stream_dev%set_input('parm_ios',12, fraca, gui_submenu="data", gui_advanced=.false.)
-        preprocess_stream_dev%parm_ios(12)%required = .true.
-        call preprocess_stream_dev%set_input('parm_ios',13, smpd, gui_submenu="data", gui_advanced=.false.)
-        preprocess_stream_dev%parm_ios(13)%required = .true.
-        call preprocess_stream_dev%set_input('parm_ios',14, ctfpatch, gui_submenu="CTF estimation")
-        call preprocess_stream_dev%set_input('parm_ios',15, prune, gui_submenu="cluster 2D")
-        call preprocess_stream_dev%set_input('parm_ios',16, moldiam, gui_submenu="picking")
-        call preprocess_stream_dev%set_input('parm_ios',17, picker, gui_submenu="picking")
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call preprocess_stream_dev%set_input('srch_ctrls', 1, trs, gui_submenu="motion correction")
-        preprocess_stream_dev%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{20}'
-        preprocess_stream_dev%srch_ctrls(1)%rval_default      = 20.
-        call preprocess_stream_dev%set_input('srch_ctrls', 2, dfmin, gui_submenu="CTF estimation")
-        call preprocess_stream_dev%set_input('srch_ctrls', 3, dfmax, gui_submenu="CTF estimation")
-        call preprocess_stream_dev%set_input('srch_ctrls', 4, astigtol, gui_submenu="CTF estimation")
-        call preprocess_stream_dev%set_input('srch_ctrls', 5, 'thres', 'num', 'Picking distance threshold','Picking distance filter (in Angs)', 'in Angs{24.}',&
-        & .false., 24., gui_submenu="picking", gui_advanced=.false.)
-        call preprocess_stream_dev%set_input('srch_ctrls', 6, 'ndev',  'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking &
-        &one cluster clustering{2}', '{2}', .false., 2., gui_submenu="picking", gui_advanced=.false.)
-        call preprocess_stream_dev%set_input('srch_ctrls', 7, pgrp, gui_submenu="picking", gui_advanced=.false.)
-        preprocess_stream_dev%srch_ctrls(7)%required = .false.
-        call preprocess_stream_dev%set_input('srch_ctrls', 8, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}',&
-        &.false., 50., gui_submenu="motion correction")
-        call preprocess_stream_dev%set_input('srch_ctrls', 9, mcpatch, gui_submenu="motion correction")
-        call preprocess_stream_dev%set_input('srch_ctrls',10, nxpatch, gui_submenu="motion correction")
-        call preprocess_stream_dev%set_input('srch_ctrls',11, nypatch, gui_submenu="motion correction")
-        call preprocess_stream_dev%set_input('srch_ctrls',12, mcconvention, gui_submenu="motion correction")
-        call preprocess_stream_dev%set_input('srch_ctrls',13, algorithm, gui_submenu="motion correction")
-        call preprocess_stream_dev%set_input('srch_ctrls',14, ncls_start, gui_submenu="motion correction")
-        preprocess_stream_dev%srch_ctrls(14)%required = .false.
-        call preprocess_stream_dev%set_input('srch_ctrls',15, nptcls_per_cls, gui_submenu="cluster 2D", gui_advanced=.false.)
-        preprocess_stream_dev%srch_ctrls(15)%rval_default = 300.
-        call preprocess_stream_dev%set_input('srch_ctrls',16, 'autoscale', 'binary', 'Automatic down-scaling for 2D classification', 'Automatic down-scaling of images &
-        &for accelerated convergence rate. (yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="cluster 2D")
-        call preprocess_stream_dev%set_input('srch_ctrls',17, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
-        &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="cluster 2D")
-        call preprocess_stream_dev%set_input('srch_ctrls',18, 'ncls', 'num', 'Maximum number of 2D clusters*',&
-        &'Maximum number of 2D class averages for the pooled particles subsets', 'Maximum # 2D clusters', .false., 200., gui_submenu="cluster 2D", gui_advanced=.false.)
-        call preprocess_stream_dev%set_input('srch_ctrls',19, lpthres, gui_submenu="cluster 2D", gui_online=.true.)
-        call preprocess_stream_dev%set_input('srch_ctrls',20, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}', '(no|greedy){no}', .false., 'no',&
-        &gui_submenu="cluster 2D")
-        call preprocess_stream_dev%set_input('srch_ctrls',21, mcpatch_thres, gui_submenu="motion correction")
-        call preprocess_stream_dev%set_input('srch_ctrls', 22, 'tilt_thres', 'num', 'Threshold for hierarchical clustering of beamtilts',&
-        & 'Threshold for hierarchical clustering of beamtilts', 'e.g 0.05', .false., 0.05, gui_submenu="optics groups", gui_online=.true.)
-        call preprocess_stream_dev%set_input('srch_ctrls', 23, 'beamtilt', 'binary', 'Use beamtilts in optics group assignment',&
-        & 'Use beamtilt values (if found in EPU filenames) during optics group assignment(yes|no){yes}', 'beamtilt(yes|no){no}', .false., 'no', gui_submenu="optics groups")
-        call preprocess_stream_dev%set_input('srch_ctrls',24, objfun, gui_submenu="cluster 2D")
-        call preprocess_stream_dev%set_input('srch_ctrls',25, maxnchunks, gui_submenu="cluster 2D", gui_online=.true.)
-        call preprocess_stream_dev%set_input('srch_ctrls',26, pick_roi, gui_submenu="picking", gui_online=.true.)
-        call preprocess_stream_dev%set_input('srch_ctrls',27, backgr_subtr, gui_submenu="picking", gui_online=.true.)
-        ! filter controls
-        call preprocess_stream_dev%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
-        &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8., gui_submenu="motion correction")
-        call preprocess_stream_dev%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit for movie alignment', 'Low-pass limit to be applied in the last &
-        &iterations of movie alignment(in Angstroms){5}', 'in Angstroms{5}', .false., 5., gui_submenu="motion correction")
-        call preprocess_stream_dev%set_input('filt_ctrls', 3, 'lp_ctf_estimate', 'num', 'Low-pass limit for CTF parameter estimation',&
-        & 'Low-pass limit for CTF parameter estimation in Angstroms{5}', 'in Angstroms{5}', .false., 5., gui_submenu="CTF estimation")
-        call preprocess_stream_dev%set_input('filt_ctrls', 4, 'hp_ctf_estimate', 'num', 'High-pass limit for CTF parameter estimation',&
-        & 'High-pass limit for CTF parameter estimation  in Angstroms{30}', 'in Angstroms{30}', .false., 30., gui_submenu="CTF estimation")
-        call preprocess_stream_dev%set_input('filt_ctrls', 5, lp_pick, gui_submenu="picking")
-        call preprocess_stream_dev%set_input('filt_ctrls', 6, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
-        &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30., gui_submenu="cluster 2D")
-        call preprocess_stream_dev%set_input('filt_ctrls', 7, 'lp2D', 'num', 'Static low-pass limit for 2D classification', 'Static low-pass limit for 2D classification',&
-        &'low-pass limit in Angstroms', .false., 15., gui_submenu="cluster 2D")
-        call preprocess_stream_dev%set_input('filt_ctrls', 8, ctfresthreshold, gui_submenu="CTF estimation")
-        preprocess_stream_dev%filt_ctrls(8)%descr_long        = 'Micrographs with a CTF resolution above the threshold (in Angs) will be ignored from further processing{10}'
-        preprocess_stream_dev%filt_ctrls(8)%descr_placeholder = 'CTF resolution threshold(in Angstroms){10.}'
-        preprocess_stream_dev%filt_ctrls(8)%rval_default      = CTFRES_THRESHOLD_STREAM
-        call preprocess_stream_dev%set_input('filt_ctrls', 9, icefracthreshold, gui_submenu="CTF estimation")
-        preprocess_stream_dev%filt_ctrls(9)%descr_long        = 'Micrographs with an ice ring/1st pspec maxima fraction above the threshold will be ignored from further processing{1.0}'
-        preprocess_stream_dev%filt_ctrls(9)%descr_placeholder = 'Ice fraction threshold{1.0}'
-        preprocess_stream_dev%filt_ctrls(9)%rval_default      = ICEFRAC_THRESHOLD_STREAM
-        ! mask controls
-        call preprocess_stream_dev%set_input('mask_ctrls', 1, mskdiam, gui_submenu="cluster 2D", gui_advanced=.false.)
-        preprocess_stream_dev%mask_ctrls(1)%required    = .false.
-        preprocess_stream_dev%mask_ctrls(1)%descr_short = 'Mask Diameter*'
-        ! computer controls
-        call preprocess_stream_dev%set_input('comp_ctrls', 1, nchunks, gui_submenu="compute", gui_advanced=.false.)
-        preprocess_stream_dev%comp_ctrls(1)%required = .false.
-        call preprocess_stream_dev%set_input('comp_ctrls', 2, nparts_chunk, gui_submenu="compute", gui_advanced=.false.)
-        call preprocess_stream_dev%set_input('comp_ctrls', 3, nparts_pool, gui_submenu="compute", gui_advanced=.false.)
-        call preprocess_stream_dev%set_input('comp_ctrls', 4, nparts, gui_submenu="compute", gui_advanced=.false.)
-        preprocess_stream_dev%comp_ctrls(4)%descr_short = 'Number of computing nodes allocated to preprocessing'
-        call preprocess_stream_dev%set_input('comp_ctrls', 5, nthr, gui_submenu="compute", gui_advanced=.false.)
-        preprocess_stream_dev%comp_ctrls(5)%descr_short = 'Number of threads/node for preprocessing'
-        preprocess_stream_dev%comp_ctrls(5)%descr_long  = 'Number of threads per node allocated to preprocessing steps (motion correction, CTF estimation, picking)'
-        call preprocess_stream_dev%set_input('comp_ctrls', 6, 'nthr2D', 'num', 'Number of threads/node for 2D classification', 'Number of threads per node allocated to 2D classification',&
-        &'# of threads for per node', .true., 1., gui_submenu="compute")
-        call preprocess_stream_dev%set_input('comp_ctrls', 7, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
-        &'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
-        call preprocess_stream_dev%set_input('comp_ctrls', 8, 'job_memory_per_task2D','str', 'Memory per 2D computing node',&
-        &'Memory dedicated to 2D classification per computing node (in MB){16000}', 'MB per part{16000}', .false., 16000., gui_submenu="compute")
-        call preprocess_stream_dev%set_input('comp_ctrls', 9, 'qsys_partition2D','str', 'Name of SLURM/PBS partition for 2D classification',&
-        &'Name of target partition of distributed computer system (SLURM/PBS) dedicated to 2D classification', 'parttion name', .false., '', gui_submenu="compute")
-    end subroutine new_preprocess_stream_dev
-
     subroutine new_print_dose_weights
         ! PROGRAM SPECIFICATION
         call print_dose_weights%new(&
@@ -4288,10 +4194,10 @@ contains
         call prune_project%set_input('comp_ctrls', 1, nparts)
     end subroutine new_prune_project
 
-    subroutine new_prune_cavgs
+    subroutine new_score_ptcls
         ! PROGRAM SPECIFICATION
-        call prune_cavgs%new(&
-        &'prune_cavgs',&                              ! name
+        call score_ptcls%new(&
+        &'score_ptcls',&                              ! name
         &'prune poor particles from class averages',& ! descr_short
         &'is a program for discarding bad particles from class averages',& ! descr_long
         &'all',&                                      ! executable
@@ -4300,18 +4206,18 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call prune_cavgs%set_input('parm_ios', 1, 'infile', 'file', 'Ground truth(0/1)', 'Plain text file (.txt)','xxx.txt', .false., '')
+        call score_ptcls%set_input('parm_ios', 1, 'infile', 'file', 'Ground truth(0/1)', 'Plain text file (.txt)','xxx.txt', .false., '')
         ! alternative inputs
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
-        call prune_cavgs%set_input('filt_ctrls', 1, lp)
+        call score_ptcls%set_input('filt_ctrls', 1, lp)
         ! mask controls
-        call prune_cavgs%set_input('mask_ctrls', 1, mskdiam)
+        call score_ptcls%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
-        call prune_cavgs%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_prune_cavgs
+        call score_ptcls%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_score_ptcls
 
     subroutine new_reconstruct3D
         ! PROGRAM SPECIFICATION
@@ -5527,6 +5433,35 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_vizoris
+
+    subroutine new_volanalyze
+        ! PROGRAM SPECIFICATION
+        call volanalyze%new(&
+        &'volanalyze',&                                                             ! name
+        &'Analyze an emsemble of ab initio volumes',&                               ! descr_short
+        &'is a program for statistical analysis an ensemble of ab initio volumes',& ! descr_long
+        &'simple_exec',&                                                            ! executable
+        &1, 1, 0, 0, 2, 1, 1, .false.)                                              ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call volanalyze%set_input('img_ios', 1, 'filetab', 'file', 'Volumes list',&
+        &'List of volumes to analyze', 'list input e.g. voltab.txt', .true., '')
+        ! parameter input/output
+        call volanalyze%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call volanalyze%set_input('filt_ctrls', 1, hp)
+        call volanalyze%set_input('filt_ctrls', 2, lp)
+        volanalyze%filt_ctrls(2)%required = .true.
+        ! mask controls
+        ! mask controls
+        call volanalyze%set_input('mask_ctrls', 1, mskdiam)
+        ! computer controls
+        call volanalyze%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_volanalyze
 
     subroutine new_volops
         ! PROGRAM SPECIFICATION
