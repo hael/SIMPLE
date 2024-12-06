@@ -564,19 +564,20 @@ contains
         real        :: lpopt, lpest
         ! for safety in case this subroutine is called when lp_auto is off
         if( .not. params_glob%l_lpauto ) return
-        if( params_glob%lp_auto.eq.'fsc' )then
-            lpopt = calc_lowpass_lim(get_find_at_corr(build_glob%fsc(s,:), params_glob%lplim_crit),&
-            &params_glob%box_crop, params_glob%smpd_crop)
-        else
-            call mskvol%disc([params_glob%box_crop,  params_glob%box_crop, params_glob%box_crop],&
-                             &params_glob%smpd_crop, params_glob%msk_crop, npix )
-            if( params_glob%l_filemsk )then
-                ! envelope masking
-                call mskvol%read(params_glob%mskfile)
-                call mskvol%remove_edge
-            endif
-            lpopt = params_glob%lp
-            do s = 1, params_glob%nstates
+        ! finding optimal lp over all states
+        call mskvol%disc([params_glob%box_crop,  params_glob%box_crop, params_glob%box_crop],&
+                         &params_glob%smpd_crop, params_glob%msk_crop, npix )
+        if( params_glob%l_filemsk )then
+            ! envelope masking
+            call mskvol%read(params_glob%mskfile)
+            call mskvol%remove_edge
+        endif
+        lpopt = params_glob%lp
+        do s = 1, params_glob%nstates
+            if( params_glob%lp_auto.eq.'fsc' )then
+                lpest = calc_lowpass_lim(get_find_at_corr(build_glob%fsc(s,:), params_glob%lplim_crit),&
+                                        &params_glob%box_crop, params_glob%smpd_crop)
+            else
                 vol_even = params_glob%vols_even(s)
                 vol_odd  = params_glob%vols_odd(s)
                 if( params_glob%l_ml_reg )then
@@ -587,17 +588,17 @@ contains
                 call build_glob%vol%read_and_crop(    vol_even,params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
                 call build_glob%vol_odd%read_and_crop(vol_odd, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
                 call estimate_lplim(build_glob%vol_odd, build_glob%vol, mskvol, [params_glob%lpstart,params_glob%lpstop], lpest)
-                if( lpest < lpopt ) lpopt = lpest
-            enddo
-            ! destruct
-            call mskvol%kill
-        endif
+            endif
+            if( lpest < lpopt ) lpopt = lpest
+        enddo
         ! re-set the low-pass limit
         params_glob%lp = lpopt
         ! update the Fourier index limit
         params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, params_glob%box_crop, params_glob%smpd_crop)
         ! update low-pass limit in project
         call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
+        ! destruct
+        call mskvol%kill
     end subroutine estimate_lp_refvols
 
     subroutine read_and_filter_refvols( s )
