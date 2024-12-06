@@ -334,7 +334,7 @@ contains
         character(len=:), allocatable :: fname
         type(ori) :: o_tmp
         real      :: xyz(3)
-        integer   :: cnt, s, iref, nrefs
+        integer   :: s, iref, nrefs
         logical   :: do_center
         ! exception handling for lp_auto==yes
         if( trim(params_glob%lp_auto).eq.'yes' )then
@@ -346,26 +346,18 @@ contains
         endif
         if( L_BENCH_GLOB ) rt_read_and_filter_refvols = 0.
         nrefs = params_glob%nspace * params_glob%nstates
-        ! PREPARATION OF REFERENCES IN PFTCC
+        ! (if needed) estimating lp (over all states) and reseting params_glob%lp and params_glob%kfromto
+        if( params_glob%l_lpauto ) call estimate_lp_refvols
+        ! pftcc and sigmas
+        call pftcc%new(nrefs, [1,batchsz_max], params_glob%kfromto)
+        if( params_glob%l_needs_sigma )then
+            fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
+            call eucl_sigma%new(fname, params_glob%box)
+            call eucl_sigma%read_part(  build_glob%spproj_field, ptcl_mask)
+            call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
+        end if
         ! read reference volumes and create polar projections
-        cnt = 0
         do s=1,params_glob%nstates
-            if( str_has_substr(params_glob%refine,'greedy') )then
-                if( .not.file_exists(params_glob%vols(s)) )then
-                    cnt = cnt + params_glob%nspace
-                    call progress(cnt, nrefs)
-                    cycle
-                endif
-            else
-                if( has_been_searched )then
-                    if( build_glob%spproj_field%get_pop(s, 'state') == 0 )then
-                        ! empty state
-                        cnt = cnt + params_glob%nspace
-                        call progress(cnt, nrefs)
-                        cycle
-                    endif
-                endif
-            endif
             if( str_has_substr(params_glob%refine, 'prob') )then
                 ! already mapping shifts in prob_tab with shared-memory execution
                 call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=l_distr_exec_glob)
@@ -375,16 +367,6 @@ contains
             if( L_BENCH_GLOB ) t_read_and_filter_refvols = tic()
             call read_and_filter_refvols(s)
             if( L_BENCH_GLOB ) rt_read_and_filter_refvols = rt_read_and_filter_refvols + toc(t_read_and_filter_refvols)
-            ! must be done here since params_glob%kfromto is dynamically set when lp_auto=yes
-            if( s == 1 )then
-                call pftcc%new(nrefs, [1,batchsz_max], params_glob%kfromto)
-                if( params_glob%l_needs_sigma )then
-                    fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
-                    call eucl_sigma%new(fname, params_glob%box)
-                    call eucl_sigma%read_part(  build_glob%spproj_field, ptcl_mask)
-                    call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
-                end if
-            endif
             ! PREPARE E/O VOLUMES
             call preprefvol(cline, s, do_center, xyz, .false.)
             call preprefvol(cline, s, do_center, xyz, .true.)

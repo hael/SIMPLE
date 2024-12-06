@@ -12,7 +12,7 @@ implicit none
 
 public :: prepimgbatch, killimgbatch, read_imgbatch, set_bp_range, set_bp_range2D, sample_ptcls4update, prepimg4align,&
 &prep2Dref, preprecvols, killrecvols, calcrefvolshift_and_mapshifts2ptcls, read_and_filter_refvols,&
-&preprefvol, grid_ptcl, calc_3Drec, calc_projdir3Drec, norm_struct_facts, discrete_read_imgbatch
+&preprefvol, grid_ptcl, calc_3Drec, calc_projdir3Drec, norm_struct_facts, discrete_read_imgbatch, estimate_lp_refvols
 private
 #include "simple_local_flags.inc"
 
@@ -556,69 +556,60 @@ contains
         endif
     end subroutine calcrefvolshift_and_mapshifts2ptcls
 
-    subroutine estimate_lp_refvols( s, lpopt )
+    subroutine estimate_lp_refvols( )
         use simple_opt_filter, only: estimate_lplim
-        integer, intent(in)  :: s
-        real,    intent(out) :: lpopt
+        character(len=:), allocatable :: vol_even, vol_odd
         type(image) :: mskvol
-        integer     :: npix
-        logical     :: l_update_lp
-         if( params_glob%lp_auto.eq.'fsc' )then
+        integer     :: npix, s
+        real        :: lpopt, lpest
+        ! for safety in case this subroutine is called when lp_auto is off
+        if( .not. params_glob%l_lpauto ) return
+        if( params_glob%lp_auto.eq.'fsc' )then
             lpopt = calc_lowpass_lim(get_find_at_corr(build_glob%fsc(s,:), params_glob%lplim_crit),&
             &params_glob%box_crop, params_glob%smpd_crop)
         else
-            call mskvol%disc([params_glob%box_crop,params_glob%box_crop,params_glob%box_crop],&
-                            &params_glob%smpd_crop, params_glob%msk_crop, npix )
+            call mskvol%disc([params_glob%box_crop,  params_glob%box_crop, params_glob%box_crop],&
+                             &params_glob%smpd_crop, params_glob%msk_crop, npix )
             if( params_glob%l_filemsk )then
                 ! envelope masking
                 call mskvol%read(params_glob%mskfile)
                 call mskvol%remove_edge
             endif
-            call estimate_lplim(build_glob%vol_odd, build_glob%vol, mskvol, [params_glob%lpstart,params_glob%lpstop], lpopt)
+            lpopt = params_glob%lp
+            do s = 1, params_glob%nstates
+                vol_even = params_glob%vols_even(s)
+                vol_odd  = params_glob%vols_odd(s)
+                if( params_glob%l_ml_reg )then
+                    ! estimate low-pass limit from unfiltered volumes
+                    vol_even = add2fbody(vol_even,params_glob%ext,'_unfil')
+                    vol_odd  = add2fbody(vol_odd, params_glob%ext,'_unfil')
+                endif
+                call build_glob%vol%read_and_crop(    vol_even,params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+                call build_glob%vol_odd%read_and_crop(vol_odd, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+                call estimate_lplim(build_glob%vol_odd, build_glob%vol, mskvol, [params_glob%lpstart,params_glob%lpstop], lpest)
+                if( lpest < lpopt ) lpopt = lpest
+            enddo
             ! destruct
             call mskvol%kill
         endif
-        l_update_lp = .false.
-        if( s == 1 )then
-            l_update_lp = .true. ! always update for state == 1       
-        else
-            if( lpopt < params_glob%lp )then
-                l_update_lp = .true. ! the limit for the state with the best resolution wins
-            endif
-        endif
-        if( l_update_lp )then
-            ! re-set the low-pass limit
-            params_glob%lp = lpopt
-            ! update the Fourier index limit
-            params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, params_glob%box_crop, params_glob%smpd_crop)
-            ! update low-pass limit in project
-            call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
-        endif
+        ! re-set the low-pass limit
+        params_glob%lp = lpopt
+        ! update the Fourier index limit
+        params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, params_glob%box_crop, params_glob%smpd_crop)
+        ! update low-pass limit in project
+        call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
     end subroutine estimate_lp_refvols
 
     subroutine read_and_filter_refvols( s )
         integer, intent(in) :: s
         character(len=:), allocatable :: vol_even, vol_even_unfil, vol_odd, vol_odd_unfil, vol_avg
-        real    :: cur_fil(params_glob%box_crop), lpopt, lpest
+        real    :: cur_fil(params_glob%box_crop)
         integer :: filtsz
         vol_even = params_glob%vols_even(s)
         vol_odd  = params_glob%vols_odd(s)
         vol_avg  = params_glob%vols(s)
-        if( params_glob%l_lpauto .and. params_glob%l_ml_reg )then
-            vol_even_unfil = add2fbody(vol_even,params_glob%ext,'_unfil')
-            vol_odd_unfil  = add2fbody(vol_odd,params_glob%ext,'_unfil')
-            ! estimate low-pass limit from unfiltered volumes
-            call build_glob%vol%read_and_crop(vol_even_unfil,    params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
-            call build_glob%vol_odd%read_and_crop(vol_odd_unfil, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
-            call estimate_lp_refvols(s, lpopt)
-            ! read in filtered volumes (ML-reg)
-            call build_glob%vol%read_and_crop(vol_even,          params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
-            call build_glob%vol_odd%read_and_crop(vol_odd,       params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
-        else
-            call build_glob%vol%read_and_crop(vol_even,          params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
-            call build_glob%vol_odd%read_and_crop(vol_odd,       params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
-            if( params_glob%l_lpauto ) call estimate_lp_refvols(s, lpopt)
-        endif
+        call build_glob%vol%read_and_crop(   vol_even, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+        call build_glob%vol_odd%read_and_crop(vol_odd, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
         if( params_glob%l_icm )then
             call build_glob%vol%ICM3D_eo(build_glob%vol_odd, params_glob%lambda)
             if( params_glob%l_lpset )then ! no independent volume registration, so average eo pairs
@@ -633,15 +624,13 @@ contains
         endif
         call build_glob%vol%fft
         call build_glob%vol_odd%fft
-        lpest = params_glob%lp
-        if( params_glob%l_lpauto ) lpest = lpopt
         if( params_glob%l_ml_reg )then
             ! filtering done when volumes are assembled
         else if( params_glob%l_icm )then
             ! filtering done above
         else if( params_glob%l_lpset )then
             ! Cosine low-pass filter, works best for nanoparticles
-            call build_glob%vol%bp(0., lpest)
+            call build_glob%vol%bp(0., params_glob%lp)
         else
             filtsz = build_glob%vol%get_filtsz()
             if( any(build_glob%fsc(s,:) > 0.143) )then
