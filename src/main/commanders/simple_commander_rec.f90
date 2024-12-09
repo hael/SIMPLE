@@ -189,9 +189,9 @@ contains
         type(image)                   :: vol_prev_even, vol_prev_odd
         character(len=:), allocatable :: finished_fname, recname, volname, volname_prev, volname_prev_even, volname_prev_odd
         character(len=LONGSTRLEN)     :: eonames(2), benchfname
-        real, allocatable             :: fsc(:), fsc_states(:,:), res05s(:), res0143s(:)
+        real, allocatable             :: fsc(:), res05s(:), res0143s(:)
         real                          :: res, weight_prev, update_frac_trail_rec
-        integer                       :: part, s, n, ss, state, find4eoavg, fnr
+        integer                       :: part, s, ss, state, find4eoavg, fnr
         integer(timer_int_kind)       :: t_init, t_read, t_sum_reduce, t_sum_eos, t_sampl_dens_correct_eos
         integer(timer_int_kind)       :: t_sampl_dens_correct_sum, t_eoavg, t_tot
         real(timer_int_kind)          :: rt_init, rt_read, rt_sum_reduce, rt_sum_eos, rt_sampl_dens_correct_eos
@@ -207,7 +207,6 @@ contains
         res0143s = 0.
         res05s   = 0.
         call eorecvol_read%new(build%spproj, expand=.false.)
-        n = params%nstates*params%nparts
         if( L_BENCH_GLOB )then
             ! end of init
             rt_init = toc(t_init)
@@ -219,24 +218,9 @@ contains
             rt_sampl_dens_correct_sum  = 0.
             rt_eoavg                   = 0.
         endif
-        ! read in previous reconstruction when trail_req==yes
+        ! read in previous reconstruction when trail_rec==yes
         update_frac_trail_rec = 1.0
         if( params%l_trail_rec )then
-            do s =1, params%nstates
-                if( .not. cline%defined('vol'//int2str(s)) ) THROW_HARD('vol'//int2str(s)//' required in volassemble cline when trail_rec==yes')
-                volname_prev      = cline%get_carg('vol'//int2str(s))
-                volname_prev_even = add2fbody(volname_prev, params%ext, '_even')
-                volname_prev_odd  = add2fbody(volname_prev, params%ext, '_odd')
-                if( .not. file_exists(volname_prev_even) ) THROW_HARD('File: '//trim(volname_prev_even)//' does not exist!')
-                if( .not. file_exists(volname_prev_odd)  ) THROW_HARD('File: '//trim(volname_prev_odd)//' does not exist!')
-                call vol_prev_even%read_and_crop(volname_prev_even, params%smpd, params%box_crop, params%smpd_crop)
-                call vol_prev_odd %read_and_crop(volname_prev_odd,  params%smpd, params%box_crop, params%smpd_crop)
-                call build%eorecvol%calc_fsc4sampl_dens_correct(vol_prev_even, vol_prev_odd, fsc)
-                if( .not. allocated(fsc_states) )then
-                    allocate(fsc_states(params%nstates,size(fsc)), source=0.)
-                endif
-                fsc_states(s,:) = fsc
-            end do
             call build%spproj%read_segment(params%oritype, params%projfile)
             update_frac_trail_rec = build%spproj%os_ptcl3D%calc_update_frac()
         endif
@@ -276,7 +260,17 @@ contains
             endif
             if( L_BENCH_GLOB ) t_sampl_dens_correct_eos = tic()
             if( params%l_trail_rec )then
-                call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg, fsc_states(state,:))
+                if( .not. cline%defined('vol'//int2str(s)) ) THROW_HARD('vol'//int2str(s)//' required in volassemble cline when trail_rec==yes')
+                volname_prev      = cline%get_carg('vol'//int2str(s))
+                volname_prev_even = add2fbody(volname_prev, params%ext, '_even')
+                volname_prev_odd  = add2fbody(volname_prev, params%ext, '_odd')
+                if( .not. file_exists(volname_prev_even) ) THROW_HARD('File: '//trim(volname_prev_even)//' does not exist!')
+                if( .not. file_exists(volname_prev_odd)  ) THROW_HARD('File: '//trim(volname_prev_odd)//' does not exist!')
+                call vol_prev_even%read_and_crop(volname_prev_even, params%smpd, params%box_crop, params%smpd_crop)
+                call vol_prev_odd%read_and_crop( volname_prev_odd,  params%smpd, params%box_crop, params%smpd_crop)
+                if( allocated(fsc) ) deallocate(fsc)
+                call build%eorecvol%calc_fsc4sampl_dens_correct(vol_prev_even, vol_prev_odd, fsc)
+                call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg, fsc)
             else 
                 call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg)
             endif
