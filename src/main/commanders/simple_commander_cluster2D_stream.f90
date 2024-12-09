@@ -545,7 +545,7 @@ contains
         ! 3d field
         pool_proj%os_ptcl3D = pool_proj%os_ptcl2D
         call pool_proj%os_ptcl3D%delete_2Dclustering
-        call pool_proj%os_ptcl3D%clean_updatecnt_sampled()
+        call pool_proj%os_ptcl3D%clean_entry('updatecnt', 'sampled')
         ! write starfiles
         call starproj%export_cls2D(pool_proj)
         if(l_write_star) then

@@ -632,7 +632,7 @@ contains
 
     subroutine add_invtausq2rho( self, fsc )
         class(reconstructor),  intent(inout) :: self !< this instance
-        real,     allocatable, intent(in)    :: fsc(:)
+        real,                  intent(in)    :: fsc(:)
         real,     allocatable :: sig2(:), tau2(:), ssnr(:)
         integer,  allocatable :: cnt(:)
         real(dp), allocatable :: rsum(:)

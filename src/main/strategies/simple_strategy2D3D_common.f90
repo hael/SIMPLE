@@ -234,7 +234,7 @@ contains
                         build_glob%fsc(s,:) = 0.
                     endif
                 end do
-                loc = maxloc(mapres) ! worst resolved
+                loc = minloc(mapres) ! best resolved
                 if( params_glob%nstates == 1 )then
                     ! get median updatecnt
                     if( build_glob%spproj_field%median('updatecnt') > 1.0 )then ! more than half have been updated
@@ -455,7 +455,7 @@ contains
                 ! ICM filter only applied when lp is set and performed below, FRC filtering turned off
             else
                 ! FRC-based filtering
-                call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
+                call build_glob%clsfrcs%frc_getter(icls, frc)
                 if( any(frc > 0.143) )then
                     call fsc2optlp_sub(filtsz, frc, filter, merged=params_glob%l_lpset)
                     call img_in%fft() ! needs to be here in case the shift was never applied (above)
@@ -480,29 +480,14 @@ contains
     end subroutine prep2Dref
 
     !>  \brief  initializes all volumes for reconstruction
-    subroutine preprecvols( pinds )
-        integer, intent(in) :: pinds(:)
-        character(len=:), allocatable :: part_str, fbody
-        integer,          allocatable :: pops(:)
+    subroutine preprecvols
+        integer, allocatable :: pops(:)
         integer :: istate
-        real    :: update_frac_states(params_glob%nstates)
-        allocate(part_str, source=int2str_pad(params_glob%part,params_glob%numlen))
         call build_glob%spproj_field%get_pops(pops, 'state', maxn=params_glob%nstates)
-        call build_glob%spproj_field%calc_update_frac_states(pinds, params_glob%nstates, update_frac_states)
-        ! update_frac_states now contains the per-state fraction, multiply in the overall fraction
-        update_frac_states = update_frac_states * params_glob%update_frac
         do istate = 1, params_glob%nstates
             if( pops(istate) > 0)then
                 call build_glob%eorecvols(istate)%new(build_glob%spproj)
                 call build_glob%eorecvols(istate)%reset_all
-                if( params_glob%l_trail_rec )then
-                    fbody = trim(VOL_FBODY)//int2str_pad(istate,2)//'_part'//part_str
-                    if( build_glob%eorecvols(istate)%ldim_even_match(fbody) )then
-                        call build_glob%eorecvols(istate)%read_eos(fbody)
-                        call build_glob%eorecvols(istate)%apply_weight(1.-update_frac_states(istate))
-                        call build_glob%eorecvols(istate)%expand_exp
-                    endif
-                endif
             endif
         end do
         deallocate(pops)
@@ -721,7 +706,7 @@ contains
         real             :: shift(2), sdev_noise
         integer          :: batchlims(2), iptcl, i, i_batch, ibatch
         ! init volumes
-        call preprecvols(pinds)
+        call preprecvols
         ! prep batch imgs
         call prepimgbatch(MAXIMGBATCHSZ)
         ! allocate array
@@ -786,7 +771,7 @@ contains
         real(timer_int_kind)    :: t_ini, t_pad, t_sum, t_rec
         if( DEBUG ) t = tic()
         ! init volumes
-        call preprecvols(pinds)
+        call preprecvols
         ! prep batch imgs
         call prepimgbatch(MAXIMGBATCHSZ)
         ! allocations
@@ -959,18 +944,43 @@ contains
 
     subroutine norm_struct_facts( cline )
         use simple_masker, only: masker
+        use simple_image,  only: image
         class(cmdline),    intent(inout) :: cline
+        character(len=:), allocatable    :: recname, volname, volname_prev, volname_prev_even, volname_prev_odd
+        character(len=LONGSTRLEN)        :: eonames(2)
+        type(image)           :: vol_prev_even, vol_prev_odd
         character(len=STDLEN) :: pprocvol, lpvol
-        real, allocatable     :: optlp(:), res(:)
+        real, allocatable     :: optlp(:), res(:), fsc(:), fsc_states(:,:)
         type(masker)          :: envmsk
         integer               :: s, find4eoavg, ldim(3)
-        real                  :: res05s(params_glob%nstates), res0143s(params_glob%nstates), lplim, bfac
+        real                  :: res05s(params_glob%nstates), res0143s(params_glob%nstates), lplim, bfac, weight_prev, update_frac_trail_rec
         ! init
         ldim = [params_glob%box_crop,params_glob%box_crop,params_glob%box_crop]
         call build_glob%vol%new(ldim,params_glob%smpd_crop)
         call build_glob%vol2%new(ldim,params_glob%smpd_crop)
         res0143s = 0.
         res05s   = 0.
+        ! read in previous reconstruction when trail_req==yes
+        update_frac_trail_rec = 1.0
+        if( .not. params_glob%l_distr_exec .and. params_glob%l_trail_rec )then
+            if( .not. params_glob%l_update_frac ) THROW_HARD('trail_rec==yes requires update_frac in norm_struct_facts cline')
+            do s =1, params_glob%nstates
+                if( .not. cline%defined('vol'//int2str(s)) ) THROW_HARD('vol'//int2str(s)//'required in norm_struct_facts cline when trail_rec==yes')
+                volname_prev      = cline%get_carg('vol'//int2str(s))
+                volname_prev_even = add2fbody(volname_prev, params_glob%ext, '_even')
+                volname_prev_odd  = add2fbody(volname_prev, params_glob%ext, '_odd')
+                if( .not. file_exists(volname_prev_even) ) THROW_HARD('File: '//trim(volname_prev_even)//' does not exist!')
+                if( .not. file_exists(volname_prev_odd)  ) THROW_HARD('File: '//trim(volname_prev_odd)//' does not exist!')
+                call vol_prev_even%read_and_crop(volname_prev_even, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+                call vol_prev_odd %read_and_crop(volname_prev_odd,  params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+                call build_glob%eorecvols(s)%calc_fsc4sampl_dens_correct(vol_prev_even, vol_prev_odd, fsc)
+                if( .not. allocated(fsc_states) )then
+                    allocate(fsc_states(params_glob%nstates,size(fsc)), source=0.)
+                endif
+                fsc_states(s,:) = fsc
+            end do
+            update_frac_trail_rec = build_glob%spproj_field%calc_update_frac()
+        endif
         ! cycle through states
         do s=1,params_glob%nstates
             if( build_glob%spproj_field%get_pop(s, 'state') == 0 )then
@@ -984,44 +994,61 @@ contains
                     int2str_pad(params_glob%part,params_glob%numlen))
             else
                 ! global volume name update
-                params_glob%vols(s) = VOL_FBODY//int2str_pad(s,2)//params_glob%ext
-                ! updating command-line according (needed in multi-stage wflows)
-                call cline%set('vol'//int2str(s), params_glob%vols(s))
+                allocate(recname, source=VOL_FBODY//int2str_pad(s,2))
+                allocate(volname, source=recname//params_glob%ext)
                 if( params_glob%l_filemsk .and. params_glob%l_envfsc )then
                     call build_glob%eorecvols(s)%set_automsk(.true.)
                 endif
-                params_glob%vols_even(s) = add2fbody(params_glob%vols(s), params_glob%ext, '_even')
-                params_glob%vols_odd(s)  = add2fbody(params_glob%vols(s), params_glob%ext, '_odd')
+                eonames(1) = trim(recname)//'_even'//params_glob%ext
+                eonames(2) = trim(recname)//'_odd'//params_glob%ext
                 if( params_glob%l_ml_reg )then
-                    call build_glob%eorecvols(s)%sampl_dens_correct_eos(s, params_glob%vols_even(s), &
-                        &params_glob%vols_odd(s), find4eoavg)
-                    call build_glob%eorecvols(s)%get_res(res05s(s), res0143s(s))
-                    call build_glob%eorecvols(s)%sum_eos
+                    ! the sum is done after regularization
                 else
                     call build_glob%eorecvols(s)%sum_eos
-                    call build_glob%eorecvols(s)%sampl_dens_correct_eos(s, params_glob%vols_even(s), &
-                        &params_glob%vols_odd(s), find4eoavg)
-                    call build_glob%eorecvols(s)%get_res(res05s(s), res0143s(s))
                 endif
+                if( params_glob%l_trail_rec )then
+                    call build_glob%eorecvols(s)%sampl_dens_correct_eos(s, eonames(1), eonames(2), find4eoavg, fsc_states(s,:))
+                else 
+                    call build_glob%eorecvols(s)%sampl_dens_correct_eos(s, eonames(1), eonames(2), find4eoavg)
+                endif
+                if( params_glob%l_ml_reg )then
+                    call build_glob%eorecvols(s)%sum_eos
+                endif
+                call build_glob%eorecvols(s)%get_res(res05s(s), res0143s(s))
                 call build_glob%eorecvols(s)%sampl_dens_correct_sum(build_glob%vol)
-                call build_glob%vol%write(params_glob%vols(s), del_if_exists=.true.)
+                call build_glob%vol%write(volname, del_if_exists=.true.)
                 ! need to put the sum back at lowres for the eo pairs
                 call build_glob%vol%fft()
                 call build_glob%vol2%zero_and_unflag_ft
-                call build_glob%vol2%read(params_glob%vols_even(s))
+                call build_glob%vol2%read(eonames(1))
                 call build_glob%vol2%fft()
                 call build_glob%vol2%insert_lowres(build_glob%vol, find4eoavg)
                 call build_glob%vol2%ifft()
-                call build_glob%vol2%write(params_glob%vols_even(s), del_if_exists=.true.)
+                call build_glob%vol2%write(eonames(1), del_if_exists=.true.)
                 call build_glob%vol2%zero_and_unflag_ft
-                call build_glob%vol2%read(params_glob%vols_odd(s))
+                call build_glob%vol2%read(eonames(2))
                 call build_glob%vol2%fft()
                 call build_glob%vol2%insert_lowres(build_glob%vol, find4eoavg)
                 call build_glob%vol2%ifft()
-                call build_glob%vol2%write(params_glob%vols_odd(s), del_if_exists=.true.)
+                call build_glob%vol2%write(eonames(2), del_if_exists=.true.)
+                if( params_glob%l_trail_rec .and. update_frac_trail_rec < 0.99 )then
+                    call build_glob%vol%read(eonames(1))  ! even current
+                    call build_glob%vol2%read(eonames(2)) ! odd current
+                    weight_prev = 1. - update_frac_trail_rec
+                    call vol_prev_even%mul(weight_prev)
+                    call vol_prev_odd%mul (weight_prev)
+                    call build_glob%vol%mul(update_frac_trail_rec)
+                    call build_glob%vol2%mul(update_frac_trail_rec)
+                    call build_glob%vol%add(vol_prev_even)
+                    call build_glob%vol2%add(vol_prev_odd)
+                    call build_glob%vol%write(eonames(1))  ! even trailed
+                    call build_glob%vol2%write(eonames(2)) ! odd trailed
+                    call vol_prev_even%kill
+                    call vol_prev_odd%kill
+                endif
                 ! post-process volume
-                pprocvol = add2fbody(trim(params_glob%vols(s)), params_glob%ext, PPROC_SUFFIX)
-                lpvol    = add2fbody(trim(params_glob%vols(s)), params_glob%ext, LP_SUFFIX)
+                pprocvol = add2fbody(volname, params_glob%ext, PPROC_SUFFIX)
+                lpvol    = add2fbody(volname, params_glob%ext, LP_SUFFIX)
                 build_glob%fsc(s,:) = file2rarr('fsc_state'//int2str_pad(s,2)//'.bin')
                 ! low-pass limit
                 if( params_glob%l_lpset )then
@@ -1065,27 +1092,25 @@ contains
                 call build_glob%vol2%write(lpvol)
                 ! masking
                 if( params_glob%l_filemsk )then
-                    if( params_glob%l_filemsk )then
-                        call envmsk%new(ldim, params_glob%smpd_crop)
-                        call envmsk%read(params_glob%mskfile)
-                    endif
+                    call envmsk%new(ldim, params_glob%smpd_crop)
+                    call envmsk%read(params_glob%mskfile)
                     call build_glob%vol%zero_background
-                    if( cline%defined('lp_backgr') )then
-                        call build_glob%vol%lp_background(envmsk,params_glob%lp_backgr)
-                    else
-                        call build_glob%vol%mul(envmsk)
-                    endif
+                    call build_glob%vol%mul(envmsk)
                     call envmsk%kill
                 else
                     call build_glob%vol%mask(params_glob%msk_crop, 'soft')
                 endif
                 ! write
                 call build_glob%vol%write(pprocvol)
+                ! updating command-line accordingly (needed in multi-stage wflows)
+                call cline%set('vol'//int2str(s), volname)
+                ! updating the global parameter object accordingly (needed in multi-stage wflows)
+                params_glob%vols(s) = volname
             endif
         end do
         if((.not.params_glob%l_distr_exec) .and. (.not.params_glob%l_lpset))then
-            ! set the resolution limit according to the worst resolved model
-            params_glob%lp = min(params_glob%lp,max(params_glob%lpstop,maxval(res0143s)))
+            ! set the resolution limit according to the best resolved model
+            params_glob%lp = min(params_glob%lp,max(params_glob%lpstop,minval(res0143s)))
         endif
         call build_glob%vol2%kill
     end subroutine norm_struct_facts

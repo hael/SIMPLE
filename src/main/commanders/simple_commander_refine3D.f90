@@ -170,7 +170,6 @@ contains
         cline_reconstruct3D_distr = cline
         cline_calc_pspec_distr    = cline
         cline_check_3Dconv        = cline
-        cline_volassemble         = cline
         cline_postprocess         = cline
         cline_calc_sigma          = cline
         cline_prob_align          = cline
@@ -191,11 +190,10 @@ contains
         do state = 1,params%nstates
             vol = 'vol'//int2str( state )
             call cline_check_3Dconv%delete( vol )
-            call cline_volassemble%delete( vol )
             call cline_postprocess%delete( vol )
             state_assemble_finished(state) = 'VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2)
         enddo
-        if( trim(params%objfun).eq.'euclid' ) call cline_volassemble%set('needs_sigma','yes')
+        if( trim(params%objfun).eq.'euclid' ) call cline%set('needs_sigma','yes')
         ! E/O PARTITIONING
         if( build%spproj_field%get_nevenodd() == 0 )then
             call build%spproj_field%partition_eo
@@ -241,7 +239,6 @@ contains
                 if( trim(params%objfun).eq.'euclid' )then
                     call cline%set('needs_sigma','yes')
                     call cline_reconstruct3D_distr%set('needs_sigma','yes')
-                    call cline_volassemble%set('needs_sigma','yes')
                     if( .not.l_griddingset ) call cline%set('gridding','yes')
                     call simple_list_files(prev_refine_path//trim(SIGMA2_FBODY)//'*', list)
                     nfiles = size(list)
@@ -256,23 +253,10 @@ contains
                     fsc_file  = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
                     call simple_copy_file(trim(prev_refine_path)//trim(fsc_file), fsc_file)
                 end do
-                ! if we are doing moving average volume update, partial reconstructions need to be carried over
-                if( params%l_update_frac )then
-                    call simple_list_files(prev_refine_path//'*recvol_state*part*', list)
-                    nfiles = size(list)
-                    err = params%nparts * 4 /= nfiles
-                    if( err ) THROW_HARD('# partitions not consistent with previous refinement round')
-                    do i=1,nfiles
-                        target_name = PATH_HERE//basename(trim(list(i)))
-                        call simple_copy_file(trim(list(i)), target_name)
-                    end do
-                    deallocate(list)
-                endif
-                ! if we are doing objfun=euclid the sigm estimates need to be carried over
+                ! if we are doing objfun=euclid the sigma estimates need to be carried over
                 if( trim(params%objfun).eq.'euclid' )then
                     call cline%set('needs_sigma','yes')
                     call cline_reconstruct3D_distr%set('needs_sigma','yes')
-                    call cline_volassemble%set('needs_sigma','yes')
                     if( .not.l_griddingset ) call cline%set('gridding','yes')
                     call simple_list_files(prev_refine_path//trim(SIGMA2_FBODY)//'*', list)
                     nfiles = size(list)
@@ -292,16 +276,7 @@ contains
             ! check if we have input volume(s) and/or 3D orientations
             vol_defined = .false.
             do state = 1,params%nstates
-                vol = 'vol' // int2str(state)
-                if( cline%defined(trim(vol)) )then
-                    vol_defined = .true.
-                    !!!!!!!!!!!!!!!!!!!! cropping done in strategy2D3D_common :: read_and_filter_refvvols
-                    ! call find_ldim_nptcls(trim(params%vols(state)),ldim,ifoo)
-                    ! if( (ldim(1) /= params%box_crop) .and.  (ldim(1) /= params%box) )then
-                    !     THROW_HARD('Incompatible dimensions between input volume and images: '//params%vols(state))
-                    ! endif
-                    !!!!!!!!!!!!!!!!!!!! cropping done in strategy2D3D_common :: read_and_filter_refvvols
-                endif
+                vol_defined = cline%defined('vol'//int2str(state))
             enddo
             have_oris = .not. build%spproj%is_virgin_field(params%oritype)
             if( .not. have_oris )then
@@ -312,6 +287,7 @@ contains
             if( .not. vol_defined )then
                 ! reconstructions needed
                 cline_tmp = cline_reconstruct3D_distr
+                call cline_tmp%delete('trail_rec')
                 call cline_tmp%delete('objfun')
                 call cline_tmp%delete('needs_sigma')
                 call cline_tmp%delete('sigma_est')
@@ -323,6 +299,7 @@ contains
                     vol       = trim(VOL_FBODY)//trim(str_state)//params%ext
                     str       = trim(STARTVOL_FBODY)//trim(str_state)//params%ext
                     call      simple_rename( trim(vol), trim(str) )
+                    ! update command line
                     params%vols(state) = trim(str)
                     vol       = 'vol'//trim(int2str(state))
                     call      cline%set( trim(vol), trim(str) )
@@ -350,7 +327,6 @@ contains
                 call xfirst_sigmas%execute(cline)
                 ! update command lines
                 call cline%set('needs_sigma','yes')
-                call cline_volassemble%set('needs_sigma','yes')
                 call cline_reconstruct3D_distr%set('needs_sigma','yes')
             endif
         endif
@@ -427,8 +403,8 @@ contains
                 case('eval')
                     ! nothing to do
                 case DEFAULT
+                    cline_volassemble = cline ! transfer run-time command-line
                     call cline_volassemble%set( 'prg', 'volassemble' ) ! required for cmdline exec
-                    call cline_volassemble%set( 'which_iter', params%which_iter)
                     do state = 1,params%nstates
                         str_state = int2str_pad(state,2)
                         volassemble_output = 'RESOLUTION_STATE'//trim(str_state)//'_ITER'//trim(str_iter)
@@ -605,7 +581,14 @@ contains
             case('prob', 'prob_state')
                 ! random sampling and updatecnt dealt with in prob_align
             case DEFAULT
-                if( startit == 1 ) call build%spproj_field%clean_updatecnt_sampled
+                if( startit == 1 )then
+                    if( cline%defined('updatecnt_ini') )then
+                        call build%spproj_field%set_nonzero_updatecnt(params%updatecnt_ini)
+                         call build%spproj_field%clean_entry('sampled')
+                    else
+                        call build%spproj_field%clean_entry('updatecnt', 'sampled')
+                    endif
+                endif
         end select
         if( params%l_distr_exec )then
             if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
@@ -983,7 +966,14 @@ contains
             call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         endif
         allocate(ptcl_mask(1:params_glob%nptcls))
-        if( params_glob%startit == 1 ) call build_glob%spproj_field%clean_updatecnt_sampled
+        if( params_glob%startit == 1 )then
+            if( cline%defined('updatecnt_ini') )then
+                call build%spproj_field%set_nonzero_updatecnt(params%updatecnt_ini)
+                call build%spproj_field%clean_entry('sampled')
+            else
+                call build%spproj_field%clean_entry('updatecnt', 'sampled')
+            endif
+        endif
         ! sampled incremented
         call sample_ptcls4update([1,params_glob%nptcls], .true., nptcls, pinds, ptcl_mask)
         ! communicate to project file

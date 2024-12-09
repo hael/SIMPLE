@@ -86,7 +86,7 @@ contains
         type(masker)                   :: mskvol
         character(len=LONGSTRLEN) :: fsc_templ
         real,              allocatable :: res(:), fsc(:), fsc_t(:), fsc_n(:)
-        integer :: j, find_plate, k_hp, k_lp, nyq
+        integer :: j, k_hp, k_lp, nyq
         real    :: res_fsc05, res_fsc0143
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
@@ -110,7 +110,6 @@ contains
             allocate(fsc(nyq),source=0.)
             call even%fsc(odd, fsc)
         endif
-        if( params%l_phaseplate ) call phaseplate_correct_fsc(fsc, find_plate)
         do j=1,nyq
             write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', fsc(j)
         end do

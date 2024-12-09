@@ -338,6 +338,7 @@ type :: parameters
     integer :: tofny=0
     integer :: top=1
     integer :: tof=0               !< end index
+    integer :: updatecnt_ini=0     !< update count initialization value
     integer :: walltime=WALLTIME_DEFAULT  !< Walltime in seconds for workload management
     integer :: which_iter=0        !< iteration nr
     integer :: smooth_ext=8        !< smoothing window extension
@@ -394,7 +395,6 @@ type :: parameters
     real    :: motion_correctftol = 1e-6   !< tolerance (gradient) for motion_correct
     real    :: motion_correctgtol = 1e-6   !< tolerance (function value) for motion_correct
     real    :: hp=100.             !< high-pass limit(in A)
-    real    :: hp_fsc=0.           !< FSC high-pass limit(in A)
     real    :: hp_ctf_estimate=HP_CTF_ESTIMATE !< high-pass limit 4 ctf_estimate(in A)
     real    :: icefracthreshold=ICEFRAC_THRESHOLD !< ice fraction threshold{1.0}
     real    :: kv=300.             !< acceleration voltage(in kV){300.}
@@ -812,6 +812,7 @@ contains
         call check_iarg('stepsz',         self%stepsz)
         call check_iarg('top',            self%top)
         call check_iarg('tof',            self%tof)
+        call check_iarg('updatecnt_ini',  self%updatecnt_ini)
         call check_iarg('which_iter',     self%which_iter)
         call check_iarg('smooth_ext',     self%smooth_ext)
         call check_iarg('walltime',       self%walltime)
@@ -861,7 +862,6 @@ contains
         call check_rarg('ftol',           self%ftol)
         call check_rarg('hp',             self%hp)
         call check_rarg('hp_ctf_estimate',self%hp_ctf_estimate)
-        call check_rarg('hp_fsc',         self%hp_fsc)
         call check_rarg('icefracthreshold',self%icefracthreshold)
         call check_rarg('kv',             self%kv)
         call check_rarg('lambda',         self%lambda)
@@ -1331,8 +1331,6 @@ contains
             self%lpstop = self%fny                                 ! deafult lpstop
         endif
         if( self%fny > 0. ) self%tofny = nint(self%dstep/self%fny) ! Nyqvist Fourier index
-        self%hpind_fsc = 0                                         ! high-pass Fourier index FSC
-        if( cline%defined('hp_fsc') ) self%hpind_fsc = nint(self%dstep/self%hp_fsc)
         self%lpstart = max(self%lpstart, self%fny)
         self%lpstop  = max(self%lpstop,  self%fny)
         ! set 2D low-pass limits and smpd_targets 4 scaling

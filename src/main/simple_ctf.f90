@@ -296,11 +296,9 @@ contains
         ! defaults
         ctfvars%dfy     = ctfvars%dfx
         ctfvars%angast  = 0.
-        ctfvars%phshift = 0.
         ! optionals
-        if(present(dfy))         ctfvars%dfy     = dfy
-        if(present(angast))      ctfvars%angast  = angast
-        if(present(add_phshift)) ctfvars%phshift = add_phshift
+        if(present(dfy))    ctfvars%dfy     = dfy
+        if(present(angast)) ctfvars%angast  = angast
         if( img%is_ft() )then
             call self%apply_serial(img, mode, ctfvars)
         else
@@ -405,7 +403,7 @@ contains
                         kinv      = real(k) * inv_ldim(2)
                         spaFreqSq = hinv * hinv + kinv * kinv
                         ang       = atan2(real(k),real(h))
-                        tval      = self%eval(spaFreqSq, ang, ctfparms%phshift)
+                        tval      = self%eval(spaFreqSq, ang, 0.)
                         phys      = img%comp_addr_phys([h,k,0])
                         call img%mul_cmat_at(phys(1),phys(2),phys(3), abs(tval))
                     end do
@@ -417,7 +415,7 @@ contains
                         kinv      = real(k) * inv_ldim(2)
                         spaFreqSq = hinv * hinv + kinv * kinv
                         ang       = atan2(real(k),real(h))
-                        tval      = self%eval(spaFreqSq, ang, ctfparms%phshift)
+                        tval      = self%eval(spaFreqSq, ang, 0.)
                         phys      = img%comp_addr_phys([h,k,0])
                         call img%mul_cmat_at(phys(1),phys(2),phys(3), tval)
                     end do
@@ -429,7 +427,7 @@ contains
                         kinv      = real(k) * inv_ldim(2)
                         spaFreqSq = hinv * hinv + kinv * kinv
                         ang       = atan2(real(k),real(h))
-                        tval      = self%eval(spaFreqSq, ang, ctfparms%phshift)
+                        tval      = self%eval(spaFreqSq, ang, 0.)
                         phys      = img%comp_addr_phys([h,k,0])
                         call img%mul_cmat_at(phys(1),phys(2),phys(3), sign(1.,tval))
                     end do
@@ -441,7 +439,7 @@ contains
                         kinv      = real(k) * inv_ldim(2)
                         spaFreqSq = hinv * hinv + kinv * kinv
                         ang       = atan2(real(k),real(h))
-                        tval      = self%eval(spaFreqSq, ang, ctfparms%phshift)
+                        tval      = self%eval(spaFreqSq, ang, 0.)
                         phys      = img%comp_addr_phys([h,k,0])
                         call img%mul_cmat_at(phys(1),phys(2),phys(3), -sign(1.,tval))
                     end do
@@ -453,7 +451,7 @@ contains
                         kinv      = real(k) * inv_ldim(2)
                         spaFreqSq = hinv * hinv + kinv * kinv
                         ang       = atan2(real(k),real(h))
-                        tval      = self%eval(spaFreqSq, ang, ctfparms%phshift)
+                        tval      = self%eval(spaFreqSq, ang, 0.)
                         phys      = img%comp_addr_phys([h,k,0])
                         call img%mul_cmat_at( phys(1),phys(2),phys(3), -tval)
                     end do
@@ -465,7 +463,7 @@ contains
                         kinv      = real(k) * inv_ldim(2)
                         spaFreqSq = hinv * hinv + kinv * kinv
                         ang       = atan2(real(k),real(h))
-                        tval      = self%eval(spaFreqSq, ang, ctfparms%phshift)
+                        tval      = self%eval(spaFreqSq, ang, 0.)
                         phys      = img%comp_addr_phys([h,k,0])
                         call img%mul_cmat_at( phys(1),phys(2),phys(3), min(1.,max(tval**2.,0.001)))
                     end do
@@ -506,7 +504,7 @@ contains
                 spaFreqSq = hinv * hinv + kinv * kinv
                 r         = sqrt(spaFreqSq)
                 ang       = atan2(real(k),real(h))
-                tval      = self%eval(spaFreqSq, ang, ctfparms%phshift)
+                tval      = self%eval(spaFreqSq, ang, 0.)
                 snr       = exp(bb_fac*r/ctfparms%smpd)
                 if( snr < 1.e-10 )then
                     w = 0.
@@ -541,7 +539,7 @@ contains
                 kinv      = real(k) * inv_ldim(2)
                 spaFreqSq = hinv * hinv + kinv * kinv
                 ang       = atan2(real(k),real(h))
-                tval      = self%eval(spaFreqSq, ang, ctfparms%phshift)
+                tval      = self%eval(spaFreqSq, ang, 0.)
                 logi      = [h, k, 0]
                 phys      = img%comp_addr_phys(logi)
                 call img%mul_cmat_at(phys, sign(1.,tval))
@@ -680,7 +678,7 @@ contains
         res = get_resarr(box, self%smpd)
         lims = img%loop_lims(2)
         call self%init(ctfparms%dfx, ctfparms%dfy, ctfparms%angast)
-        phshift    = merge(ctfparms%phshift, 0. ,ctfparms%l_phaseplate)
+        phshift    = 0.
         start_freq = sqrt(self%SpaFreqSqAtNthZero(1, phshift, deg2rad(ctfparms%angast)))
         end_freq   = sqrt(self%SpaFreqSqAtNthZero(2, phshift, deg2rad(ctfparms%angast)))
         call get_find_at_crit(size(res), res, ICE_BAND1, ice_maxind)

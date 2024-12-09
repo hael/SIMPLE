@@ -25,8 +25,7 @@ type :: reconstructor_eo
     real                :: smpd, msk, fny
     real                :: mag_correction=1.  !< scaling factor to correct for slice insertion, cropping & padding
     integer             :: ldim(3), box=0, boxpd=0
-    integer             :: nstates=1, numlen=2, hpind_fsc=0
-    logical             :: phaseplate = .false.
+    integer             :: nstates=1, numlen=2, filtsz=0
     logical             :: automsk    = .false.
     logical             :: exists     = .false.
   contains
@@ -53,7 +52,6 @@ type :: reconstructor_eo
     ! readers
     procedure          :: read_eos
     procedure, private :: read_eos_parallel_io
-    procedure          :: ldim_even_match
     procedure, private :: read_even
     procedure, private :: read_odd
     ! INTERPOLATION
@@ -63,6 +61,7 @@ type :: reconstructor_eo
     procedure          :: sum_eos    !< for merging even and odd into sum
     procedure          :: sum_reduce !< for summing eo_recs obtained by parallel exec
     procedure          :: sampl_dens_correct_eos
+    procedure          :: calc_fsc4sampl_dens_correct
     procedure          :: sampl_dens_correct_sum
     ! DESTRUCTORS
     procedure          :: kill_exp
@@ -80,17 +79,16 @@ contains
         logical,       optional, intent(in)    :: expand
         call self%kill
         ! set constants
-        self%box        = params_glob%box_crop
-        self%boxpd      = params_glob%box_croppd
-        self%smpd       = params_glob%smpd_crop
-        self%fny        = 2.*self%smpd
-        self%nstates    = params_glob%nstates
-        self%ext        = params_glob%ext
-        self%numlen     = params_glob%numlen
-        self%msk        = params_glob%msk_crop
-        self%automsk    = params_glob%l_filemsk .and. params_glob%l_envfsc
-        self%phaseplate = params_glob%l_phaseplate
-        self%hpind_fsc  = params_glob%hpind_fsc
+        self%box     = params_glob%box_crop
+        self%boxpd   = params_glob%box_croppd
+        self%smpd    = params_glob%smpd_crop
+        self%fny     = 2.*self%smpd
+        self%nstates = params_glob%nstates
+        self%ext     = params_glob%ext
+        self%numlen  = params_glob%numlen
+        self%filtsz  = fdim(self%box) - 1
+        self%msk     = real(self%box / 2) - COSMSKHALFWIDTH - 1.
+        self%automsk = params_glob%l_filemsk .and. params_glob%l_envfsc
         ! overall magnitude correction (interpolation padding + downscaling)
         self%mag_correction = real(params_glob%box)                                        ! insertion of 2D slice into 3D
         self%mag_correction = self%mag_correction * (real(self%boxpd) / real(self%box))**3 ! 3D padding factor
@@ -366,23 +364,6 @@ contains
         endif
     end subroutine read_eos_parallel_io
 
-    function ldim_even_match( self, fbody ) result( l_match )
-        class(reconstructor_eo), intent(inout) :: self
-        character(len=*),        intent(in)    :: fbody
-        character(len=:), allocatable :: fname
-        logical :: l_match
-        integer :: dummy, ldim_read(3), ldim(3)
-        fname = trim(adjustl(fbody))//'_even'//self%ext
-        if( file_exists(fname) )then
-            call find_ldim_nptcls(fname, ldim_read, dummy)
-        else
-            l_match = .false.
-            return
-        endif
-        ldim    = self%even%get_ldim()
-        l_match = ldim_read(1) <= ldim(1)
-    end function ldim_even_match
-
     !>  \brief  read the even reconstruction
     subroutine read_even( self, fbody )
         class(reconstructor_eo), intent(inout) :: self
@@ -471,27 +452,27 @@ contains
     end subroutine expand_exp
 
     !> \brief  for sampling density correction of the eo pairs
-    subroutine sampl_dens_correct_eos( self, state, fname_even, fname_odd, find4eoavg )
-        class(reconstructor_eo), intent(inout) :: self                  !< instance
-        integer,                 intent(in)    :: state                 !< state
-        character(len=*),        intent(in)    :: fname_even, fname_odd !< even/odd filenames
-        integer,                 intent(out)   :: find4eoavg            !< Fourier index for eo averaging
+    subroutine sampl_dens_correct_eos( self, state, fname_even, fname_odd, find4eoavg, fsc_in )
+        class(reconstructor_eo), intent(inout) :: self                   !< instance
+        integer,                 intent(in)    :: state                  !< state
+        character(len=*),        intent(in)    :: fname_even, fname_odd  !< even/odd filenames
+        integer,                 intent(out)   :: find4eoavg             !< Fourier index for eo averaging
+        real, optional,          intent(in)    :: fsc_in(self%filtsz)    !< inputted fsc
         type(image)           :: even, odd
         complex,  allocatable :: cmat(:,:,:)
         real,     allocatable :: res(:), fsc(:)
-        real                  :: msk
-        integer               :: k, find_plate, filtsz
-        logical               :: l_combined, l_euclid_regularization
-        msk    = real(self%box / 2) - COSMSKHALFWIDTH - 1.
-        ! msk  = self%msk ! for a tighter spherical mask
-        filtsz = fdim(self%box) - 1
-        res    = get_resarr(self%box, self%smpd)
-        allocate(fsc(filtsz),source=0.)
-        ! if e=o then SSNR will be adjusted
-        l_combined = trim(params_glob%combine_eo).eq.'yes'
+        integer               :: k
+        logical               :: l_have_fsc
+        res = get_resarr(self%box, self%smpd)
+        if( present(fsc_in) )then
+            allocate(fsc(self%filtsz),source=fsc_in)
+            l_have_fsc = .true.
+        else
+            allocate(fsc(self%filtsz),source=0.)
+            l_have_fsc = .false.
+        endif
         ! ML-regularization
-        l_euclid_regularization = params_glob%l_ml_reg
-        if( l_euclid_regularization )then
+        if( params_glob%l_ml_reg )then
             ! preprocessing for FSC calculation
             ! even
             cmat = self%even%get_cmat()
@@ -513,18 +494,20 @@ contains
             call odd%clip_inplace([self%box,self%box,self%box])
             call odd%div(self%mag_correction)
             call odd%write(add2fbody(fname_odd,params_glob%ext,'_unfil'))
-            ! masking
-            if( self%automsk )then
-                call even%mul(self%envmask)
-                call odd%mul(self%envmask)
-            else
-                call even%mask(msk, 'soft', backgr=0.)
-                call odd%mask(msk, 'soft', backgr=0.)
+            if( .not. l_have_fsc )then
+                ! masking
+                if( self%automsk )then
+                    call even%mul(self%envmask)
+                    call odd%mul(self%envmask)
+                else
+                    call even%mask(self%msk, 'soft', backgr=0.)
+                    call odd%mask(self%msk, 'soft', backgr=0.)
+                endif
+                ! calculate FSC
+                call even%fft()
+                call odd%fft()
+                call even%fsc(odd, fsc)
             endif
-            ! calculate FSC
-            call even%fft()
-            call odd%fft()
-            call even%fsc(odd, fsc)
             ! regularization
             call self%even%add_invtausq2rho(fsc)
             call self%odd%add_invtausq2rho(fsc)
@@ -569,22 +552,21 @@ contains
             ! write un-normalised unmasked even/odd volumes
             call even%write(trim(fname_even), del_if_exists=.true.)
             call odd%write(trim(fname_odd),   del_if_exists=.true.)
-            ! masking
-            if( self%automsk )then
-                call even%mul(self%envmask)
-                call odd%mul(self%envmask)
-            else
-                call even%mask(msk, 'soft', backgr=0.)
-                call odd%mask(msk, 'soft', backgr=0.)
+            if( .not. l_have_fsc )then
+                ! masking
+                if( self%automsk )then
+                    call even%mul(self%envmask)
+                    call odd%mul(self%envmask)
+                else
+                    call even%mask(self%msk, 'soft', backgr=0.)
+                    call odd%mask(self%msk, 'soft', backgr=0.)
+                endif
+                ! calculate FSC
+                call even%fft()
+                call odd%fft()
+                call even%fsc(odd, fsc)
             endif
-            ! calculate FSC
-            call even%fft()
-            call odd%fft()
-            call even%fsc(odd, fsc)
         endif
-        find_plate = 0
-        if( self%phaseplate ) call phaseplate_correct_fsc(fsc, find_plate)
-        if( self%hpind_fsc > 0 ) fsc(:self%hpind_fsc) = fsc(self%hpind_fsc + 1)
         ! save, get & print resolution
         call arr2file(fsc, trim(FSC_FBODY)//int2str_pad(state,2)//BIN_EXT)
         call get_resolution(fsc, res, self%res_fsc05, self%res_fsc0143)
@@ -598,17 +580,38 @@ contains
             write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', self%res_fsc0143
         endif
         ! Fourier index for eo averaging
-        if( self%hpind_fsc > 0 )then
-            find4eoavg = self%hpind_fsc
-        else
-            find4eoavg = max(K4EOAVGLB,  calc_fourier_index(FREQ4EOAVG3D,self%box,self%smpd))
-            find4eoavg = min(find4eoavg, get_find_at_corr(fsc, FSC4EOAVG3D))
-            find4eoavg = max(find4eoavg, find_plate)
-        endif
+        find4eoavg = max(K4EOAVGLB,  calc_fourier_index(FREQ4EOAVG3D,self%box,self%smpd))
+        find4eoavg = min(find4eoavg, get_find_at_corr(fsc, FSC4EOAVG3D))
         deallocate(fsc, res)
         call even%kill
         call odd%kill
     end subroutine sampl_dens_correct_eos
+
+    subroutine calc_fsc4sampl_dens_correct( self, even, odd, fsc )
+        class(reconstructor_eo), intent(in)    :: self
+        class(image),            intent(in)    :: even, odd
+        real, allocatable,       intent(inout) :: fsc(:)
+        type(image) :: even_tmp, odd_tmp
+        if( allocated(fsc) ) deallocate(fsc)
+        allocate(fsc(self%filtsz), source=0.)
+        ! create temporary e/o:s
+        call even_tmp%copy(even)
+        call odd_tmp%copy(odd)
+        ! masking
+        if( self%automsk )then
+            call even_tmp%mul(self%envmask)
+            call odd_tmp%mul(self%envmask)
+        else
+            call even_tmp%mask(self%msk, 'soft', backgr=0.)
+            call odd_tmp%mask(self%msk, 'soft', backgr=0.)
+        endif
+        ! calculate FSC
+        call even_tmp%fft()
+        call odd_tmp%fft()
+        call even_tmp%fsc(odd_tmp, fsc)
+        call even_tmp%kill
+        call odd_tmp%kill
+    end subroutine calc_fsc4sampl_dens_correct
 
     !> \brief  for sampling density correction, antialiasing, ifft & normalization of the sum
     subroutine sampl_dens_correct_sum( self, reference )

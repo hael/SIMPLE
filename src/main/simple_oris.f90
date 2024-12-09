@@ -87,15 +87,15 @@ type :: oris
     procedure          :: sample4update_rnd
     procedure          :: sample4update_class
     procedure          :: sample4update_reprod
-    procedure          :: calc_update_frac_states
+    procedure          :: calc_update_frac
     procedure          :: get_class_sample_stats
     procedure, private :: sample_balanced_1, sample_balanced_2
     generic            :: sample_balanced => sample_balanced_1, sample_balanced_2
     procedure          :: sample_balanced_parts
     procedure          :: incr_updatecnt
     procedure          :: is_first_update
-    procedure          :: clean_updatecnt
-    procedure          :: clean_updatecnt_sampled
+    procedure          :: set_nonzero_updatecnt
+    procedure          :: clean_entry
     procedure          :: has_been_sampled
     procedure          :: has_been_searched
     procedure          :: any_state_zero
@@ -1174,21 +1174,22 @@ contains
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
         allocate(states(nptcls), sampled(nptcls), inds(nptcls), source=0)
-        cnt = 0
+        cnt        = 0
+        sample_ind = 0
+        nsamples   = 0
         do i = fromto(1), fromto(2)
             cnt          = cnt + 1
             states(cnt)  = self%o(i)%get_state()
             sampled(cnt) = self%o(i)%get_sampled()
             inds(cnt)    = i
+            if( states(cnt) > 0 )then
+                sample_ind = max(sample_ind,sampled(cnt))
+                nsamples   = nsamples + 1
+            endif
         end do
-        if( incr_sampled )then
-            sample_ind = maxval(sampled, mask=states > 0) + 1
-        else
-            sample_ind = maxval(sampled, mask=states > 0)
-        endif
-        nsamples = count(states > 0)
-        inds     = pack(inds, mask=states > 0)
-        mask     = .false.
+        if( incr_sampled ) sample_ind = sample_ind + 1
+        inds = pack(inds, mask=states > 0)
+        mask = .false.
         do i = 1, nsamples
             call self%o(inds(i))%set('sampled', sample_ind)
             mask(inds(i)) = .true.
@@ -1209,19 +1210,20 @@ contains
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
         allocate(states(nptcls), inds(nptcls), sampled(nptcls), source=0)
-        cnt = 0
+        cnt        = 0
+        nptcls     = 0
+        sample_ind = 0
         do i = fromto(1), fromto(2)
             cnt          = cnt + 1
             states(cnt)  = self%o(i)%get_state()
             sampled(cnt) = self%o(i)%get_sampled()
             inds(cnt)    = i
+            if( states(cnt) > 0 )then
+                nptcls     = nptcls + 1
+                sample_ind = max(sample_ind,sampled(cnt))
+            endif
         end do
-        if( incr_sampled )then
-            sample_ind = maxval(sampled, mask=states > 0) + 1
-        else
-            sample_ind = maxval(sampled, mask=states > 0)
-        endif
-        nptcls   = count(states > 0)
+        if( incr_sampled ) sample_ind = sample_ind + 1
         inds     = pack(inds,   mask=states > 0)
         nsamples = min(nptcls, nint(update_frac * real(nptcls)))
         rt = ran_tabu(nptcls)
@@ -1264,18 +1266,16 @@ contains
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
         allocate(states(nptcls), inds(nptcls), sampled(nptcls), source=0)
-        cnt = 0
+        cnt        = 0
+        sample_ind = 0
         do i = fromto(1), fromto(2)
             cnt          = cnt + 1
             states(cnt)  = states_bal(i)
             sampled(cnt) = self%o(i)%get_sampled()
             inds(cnt)    = i
+            if( states(cnt) > 0 ) sample_ind = max(sample_ind,sampled(cnt))
         end do
-        if( incr_sampled )then
-            sample_ind = maxval(sampled, mask=states > 0) + 1
-        else
-            sample_ind = maxval(sampled, mask=states > 0)
-        endif
+        if( incr_sampled ) sample_ind = sample_ind + 1
         nsamples = count(states > 0)
         inds     = pack(inds, mask=states > 0)
         call hpsort(inds)
@@ -1297,13 +1297,14 @@ contains
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
         allocate(inds(nptcls), sampled(nptcls), source=0)
-        cnt = 0
+        cnt        = 0
+        sample_ind = 0 
         do i = fromto(1), fromto(2)
             cnt          = cnt + 1
             inds(cnt)    = i
             sampled(cnt) = self%o(i)%get_sampled()
+            sample_ind   = max(sample_ind,sampled(cnt))
         end do
-        sample_ind = maxval(sampled)
         if( sample_ind  == 0 ) THROW_HARD('requires previous sampling')
         nsamples = count(sampled == sample_ind)
         inds     = pack(inds, mask=sampled == sample_ind)
@@ -1313,24 +1314,23 @@ contains
         end do
     end subroutine sample4update_reprod
 
-    subroutine calc_update_frac_states( self, pinds, nstates, update_frac_states )
+    function calc_update_frac( self ) result( update_frac )
         class(oris), intent(inout) :: self
-        integer,     intent(in)    :: pinds(:), nstates
-        real,        intent(out)   :: update_frac_states(nstates)
-        integer :: state_cnts(nstates), n, sum_state_cnts, i, iptcl, s
-        n = size(pinds)
-        state_cnts = 0
-        do i = 1, n
-            iptcl = pinds(i)
-            do s = 1, nstates
-                if( self%o(iptcl)%get_state() == s ) state_cnts(s) = state_cnts(s) + 1
-            end do
+        integer :: updatecnts(self%n), sampled(self%n), states(self%n), updatecnt_max, sampled_max, i
+        real    :: update_frac
+        sampled_max   = 0
+        updatecnt_max = 0
+        do i = 1, self%n
+            updatecnts(i) = self%o(i)%get_updatecnt()
+            sampled(i)    = self%o(i)%get_sampled()
+            states(i)     = self%o(i)%get_state()
+            sampled_max   = max(sampled_max,sampled(i))
+            updatecnt_max = max(updatecnt_max,updatecnts(i))
         end do
-        sum_state_cnts = sum(state_cnts)
-        do s = 1, nstates
-            update_frac_states(s) = real(state_cnts(s)) / real(sum_state_cnts)
-        end do
-    end subroutine calc_update_frac_states
+        if( sampled_max   == 0 ) THROW_HARD('requires previous sampling')
+        if( updatecnt_max == 0 ) THROW_HARD('requires previous update')
+        update_frac = real(count(sampled == sampled_max .and. states > 0)) / real(count(updatecnts > 0 .and. states > 0))
+    end function calc_update_frac
 
     subroutine get_class_sample_stats( self, clsinds, clssmp )
         class(oris),                     intent(inout) :: self
@@ -1517,22 +1517,29 @@ contains
         is_first_update = self%o(iptcl)%get_int('updatecnt') == 1 .and. iter > 1
     end function is_first_update
 
-    subroutine clean_updatecnt( self )
+    subroutine set_nonzero_updatecnt( self, updatecnt  )
         class(oris), intent(inout) :: self
+        integer,     intent(in)    :: updatecnt
         integer :: i
         do i = 1,self%n
-            call self%o(i)%delete_entry('updatecnt')
+            if( self%o(i)%get('updatecnt') > 0 )then
+                call self%o(i)%set('updatecnt', updatecnt)
+            endif
         enddo
-    end subroutine clean_updatecnt
+    end subroutine set_nonzero_updatecnt
 
-    subroutine clean_updatecnt_sampled( self )
-        class(oris), intent(inout) :: self
+    subroutine clean_entry( self, varflag1, varflag2 )
+        class(oris),                 intent(inout) :: self
+        character (len=*),           intent(in)    :: varflag1
+        character (len=*), optional, intent(in)    :: varflag2
+        logical :: varflag2_present
         integer :: i
+        varflag2_present = present(varflag2)
         do i = 1,self%n
-            call self%o(i)%delete_entry('updatecnt')
-            call self%o(i)%delete_entry('sampled')
+            call self%o(i)%delete_entry(varflag1)
+            if( varflag2_present ) call self%o(i)%delete_entry(varflag2)
         enddo
-    end subroutine clean_updatecnt_sampled
+    end subroutine clean_entry
 
     logical function has_been_sampled( self )
         class(oris), intent(inout) :: self
