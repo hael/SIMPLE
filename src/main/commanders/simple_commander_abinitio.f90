@@ -356,9 +356,6 @@ contains
         if( .not. cline%defined('ptclw')       ) call cline%set('ptclw',          'no')
         if( .not. cline%defined('projrec')     ) call cline%set('projrec',       'yes')
         if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'yes')
-        if( cline%defined('nstates') )then
-            call cline%set('projrec', 'no') ! not yet supported for multi-state
-        endif
         ! make master parameters
         call params%new(cline)
         call cline%set('mkdir', 'no')

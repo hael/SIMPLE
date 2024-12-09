@@ -64,7 +64,6 @@ contains
         integer,               allocatable :: batches(:,:), cnt_greedy(:), cnt_all(:)
         type(class_sample),    allocatable :: clssmp(:) 
         type(convergence) :: conv
-        type(oris)        :: prev_oris
         type(ori)         :: orientation
         real    :: frac_srch_space, extr_thresh, extr_score_thresh, anneal_ratio, frac_greedy
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz

@@ -1266,9 +1266,6 @@ contains
                 endif
             endif
         endif
-        if ( trim(self%projrec).eq.'yes' )then
-            if( self%nstates /= 1 ) THROW_HARD('PROJREC & multi states not implemented yet!')
-        endif
         !<<< END, SANITY CHECKING AND PARAMETER EXTRACTION FROM VOL(S)/STACK(S)
 
         !>>> START, PARALLELISATION-RELATED
