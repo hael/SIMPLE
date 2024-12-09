@@ -950,7 +950,7 @@ contains
         character(len=LONGSTRLEN)        :: eonames(2)
         type(image)           :: vol_prev_even, vol_prev_odd
         character(len=STDLEN) :: pprocvol, lpvol
-        real, allocatable     :: optlp(:), res(:), fsc(:), fsc_states(:,:)
+        real, allocatable     :: optlp(:), res(:), fsc(:)
         type(masker)          :: envmsk
         integer               :: s, find4eoavg, ldim(3)
         real                  :: res05s(params_glob%nstates), res0143s(params_glob%nstates), lplim, bfac, weight_prev, update_frac_trail_rec
@@ -963,22 +963,6 @@ contains
         ! read in previous reconstruction when trail_rec==yes
         update_frac_trail_rec = 1.0
         if( .not. params_glob%l_distr_exec .and. params_glob%l_trail_rec )then
-            if( .not. params_glob%l_update_frac ) THROW_HARD('trail_rec==yes requires update_frac in norm_struct_facts cline')
-            do s =1, params_glob%nstates
-                if( .not. cline%defined('vol'//int2str(s)) ) THROW_HARD('vol'//int2str(s)//'required in norm_struct_facts cline when trail_rec==yes')
-                volname_prev      = cline%get_carg('vol'//int2str(s))
-                volname_prev_even = add2fbody(volname_prev, params_glob%ext, '_even')
-                volname_prev_odd  = add2fbody(volname_prev, params_glob%ext, '_odd')
-                if( .not. file_exists(volname_prev_even) ) THROW_HARD('File: '//trim(volname_prev_even)//' does not exist!')
-                if( .not. file_exists(volname_prev_odd)  ) THROW_HARD('File: '//trim(volname_prev_odd)//' does not exist!')
-                call vol_prev_even%read_and_crop(volname_prev_even, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
-                call vol_prev_odd %read_and_crop(volname_prev_odd,  params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
-                call build_glob%eorecvols(s)%calc_fsc4sampl_dens_correct(vol_prev_even, vol_prev_odd, fsc)
-                if( .not. allocated(fsc_states) )then
-                    allocate(fsc_states(params_glob%nstates,size(fsc)), source=0.)
-                endif
-                fsc_states(s,:) = fsc
-            end do
             update_frac_trail_rec = build_glob%spproj_field%calc_update_frac()
         endif
         ! cycle through states
@@ -1007,7 +991,17 @@ contains
                     call build_glob%eorecvols(s)%sum_eos
                 endif
                 if( params_glob%l_trail_rec )then
-                    call build_glob%eorecvols(s)%sampl_dens_correct_eos(s, eonames(1), eonames(2), find4eoavg, fsc_states(s,:))
+                    if( .not. cline%defined('vol'//int2str(s)) ) THROW_HARD('vol'//int2str(s)//'required in norm_struct_facts cline when trail_rec==yes')
+                    volname_prev      = cline%get_carg('vol'//int2str(s))
+                    volname_prev_even = add2fbody(volname_prev, params_glob%ext, '_even')
+                    volname_prev_odd  = add2fbody(volname_prev, params_glob%ext, '_odd')
+                    if( .not. file_exists(volname_prev_even) ) THROW_HARD('File: '//trim(volname_prev_even)//' does not exist!')
+                    if( .not. file_exists(volname_prev_odd)  ) THROW_HARD('File: '//trim(volname_prev_odd)//' does not exist!')
+                    call vol_prev_even%read_and_crop(volname_prev_even, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+                    call vol_prev_odd %read_and_crop(volname_prev_odd,  params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+                    if( allocated(fsc) ) deallocate(fsc)
+                    call build_glob%eorecvols(s)%calc_fsc4sampl_dens_correct(vol_prev_even, vol_prev_odd, fsc)
+                    call build_glob%eorecvols(s)%sampl_dens_correct_eos(s, eonames(1), eonames(2), find4eoavg, fsc)
                 else 
                     call build_glob%eorecvols(s)%sampl_dens_correct_eos(s, eonames(1), eonames(2), find4eoavg)
                 endif
