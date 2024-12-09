@@ -288,6 +288,7 @@ contains
             call wait_for_closure( volname )
             ! need to put the sum back at lowres for the eo pairs
             if( L_BENCH_GLOB ) t_eoavg = tic()
+            call build%vol%fft
             call build%vol2%zero_and_unflag_ft
             call build%vol2%read(eonames(1))
             call build%vol2%fft()
@@ -301,6 +302,7 @@ contains
             call build%vol2%ifft()
             call build%vol2%write(eonames(2), del_if_exists=.true.)
             if( params%l_trail_rec .and. update_frac_trail_rec < 0.99 )then
+                call build%vol%ifft
                 call build%vol%read(eonames(1))  ! even current
                 call build%vol2%read(eonames(2)) ! odd current
                 weight_prev = 1. - update_frac_trail_rec
