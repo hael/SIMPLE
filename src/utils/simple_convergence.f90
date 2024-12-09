@@ -201,6 +201,8 @@ contains
         integer :: iptcl, istate, n, nptcls, nsamples, ucnt
         601 format(A,1X,F12.3)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
+        607 format(A,1X,F4.2)
+        609 format(A)
         states         = build_glob%spproj_field%get_all('state')
         scores         = build_glob%spproj_field%get_all('corr')
         updatecnts     = build_glob%spproj_field%get_all('updatecnt')
@@ -233,7 +235,7 @@ contains
         endif
         write(logfhandle,601) '>>> % PARTICLES SAMPLED THIS ITERATION        ', percen_sampled
         write(logfhandle,601) '>>> % PARTICLES UPDATED SO FAR                ', percen_updated
-        write(logfhandle,601) '>>> % PARTICLES USED FOR AVERAGING            ', percen_avg
+        write(logfhandle,601) '>>> % PARTICLES USED FOR UPDATING THE MODEL   ', percen_avg
         write(logfhandle,601) '>>> % GREEDY SEARCHES                         ', self%frac_greedy * 100.
         ! dists and % search space
         write(logfhandle,604) '>>> DIST BTW BEST ORIS (DEG) AVG/SDEV/MIN/MAX:', self%dist%avg,      self%dist%sdev,      self%dist%minv,      self%dist%maxv
@@ -244,6 +246,22 @@ contains
         write(logfhandle,604) '>>> LOW-PASS LIMIT           AVG/SDEV/MIN/MAX:', self%lp%avg,        self%lp%sdev,        self%lp%minv,        self%lp%maxv
         ! score
         write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
+        write(logfhandle,609) '>>> REFINEMENT MODE IS '//trim(params_glob%refine)
+        if( params_glob%l_ml_reg )then
+        write(logfhandle,607) '>>> ML  REGULARIZATION IS ON, TAU:    ', params_glob%tau
+        else
+        write(logfhandle,609) '>>> ML  REGULARIZATION IS OFF'
+        endif
+        if( params_glob%l_icm )then
+        
+        write(logfhandle,607) '>>> ICM REGULARIZATION IS ON, LAMBDA: ', params_glob%lambda
+        
+        else
+        write(logfhandle,609) '>>> ICM REGULARIZATION IS OFF'
+        endif
+        if( params_glob%l_update_frac )then
+        write(logfhandle,607) '>>> TRAILING REC UPDATE FRACTION:     ', real(count(mask)) / real(count(updatecnts > 0.5 .and. states > 0.5))
+        endif
         ! dynamic shift search range update
         if( self%frac_srch%avg >= FRAC_SH_LIM )then
             if( .not. cline%defined('trs') .or. &

@@ -1164,7 +1164,7 @@ contains
         endif
         startit = 1
         if( cline%defined('startit') )startit = params%startit
-        if( startit == 1 ) call build%spproj_field%clean_updatecnt_sampled
+        if( startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
         if( params%l_distr_exec )then
             if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
             call cluster2D_exec( cline, startit, converged )
@@ -1667,7 +1667,7 @@ contains
             j = clsinds(i)
             ! FRC-based filter
             if( l_apply_optlp )then
-                call clsfrcs%frc_getter(j, params%hpind_fsc, params%l_phaseplate, frc)
+                call clsfrcs%frc_getter(j, frc)
                 if( any(frc > 0.143) )then
                     call fsc2optlp_sub(clsfrcs%get_filtsz(), frc, filter)
                     where( filter > TINY ) filter = sqrt(filter) ! because the filter is applied to the average not the even or odd
@@ -2295,7 +2295,7 @@ contains
         do i = 1, ncls_sel
             j = clsinds(i)
             if( l_apply_optlp )then                                 ! FRC-based filter
-                call clsfrcs%frc_getter(j, params%hpind_fsc, params%l_phaseplate, frc)
+                call clsfrcs%frc_getter(j, frc)
                 if( any(frc > 0.143) )then
                     call fsc2optlp_sub(clsfrcs%get_filtsz(), frc, filter)
                     where( filter > TINY ) filter = sqrt(filter)

@@ -180,17 +180,18 @@ contains
 
     subroutine exec_volassemble( self, cline )
         use simple_reconstructor_eo, only: reconstructor_eo
+        use simple_image,            only: image
         class(volassemble_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters)              :: params
         type(builder)                 :: build
         type(reconstructor_eo)        :: eorecvol_read
-        character(len=:), allocatable :: finished_fname, recname, volname
+        type(image)                   :: vol_prev_even, vol_prev_odd
+        character(len=:), allocatable :: finished_fname, recname, volname, volname_prev, volname_prev_even, volname_prev_odd
         character(len=LONGSTRLEN)     :: eonames(2), benchfname
-        real, allocatable             :: res05s(:), res0143s(:)
-        real                          :: res
+        real, allocatable             :: fsc(:), fsc_states(:,:), res05s(:), res0143s(:)
+        real                          :: res, weight_prev, update_frac_trail_rec
         integer                       :: part, s, n, ss, state, find4eoavg, fnr
-        logical                       :: l_euclid_regularization
         integer(timer_int_kind)       :: t_init, t_read, t_sum_reduce, t_sum_eos, t_sampl_dens_correct_eos
         integer(timer_int_kind)       :: t_sampl_dens_correct_sum, t_eoavg, t_tot
         real(timer_int_kind)          :: rt_init, rt_read, rt_sum_reduce, rt_sum_eos, rt_sampl_dens_correct_eos
@@ -205,9 +206,8 @@ contains
         allocate(res05s(params%nstates), res0143s(params%nstates))
         res0143s = 0.
         res05s   = 0.
-        call eorecvol_read%new( build%spproj, expand=.false.)
+        call eorecvol_read%new(build%spproj, expand=.false.)
         n = params%nstates*params%nparts
-        l_euclid_regularization = params%l_ml_reg
         if( L_BENCH_GLOB )then
             ! end of init
             rt_init = toc(t_init)
@@ -219,6 +219,28 @@ contains
             rt_sampl_dens_correct_sum  = 0.
             rt_eoavg                   = 0.
         endif
+        ! read in previous reconstruction when trail_req==yes
+        update_frac_trail_rec = 1.0
+        if( params%l_trail_rec )then
+            do s =1, params%nstates
+                if( .not. cline%defined('vol'//int2str(s)) ) THROW_HARD('vol'//int2str(s)//' required in volassemble cline when trail_rec==yes')
+                volname_prev      = cline%get_carg('vol'//int2str(s))
+                volname_prev_even = add2fbody(volname_prev, params%ext, '_even')
+                volname_prev_odd  = add2fbody(volname_prev, params%ext, '_odd')
+                if( .not. file_exists(volname_prev_even) ) THROW_HARD('File: '//trim(volname_prev_even)//' does not exist!')
+                if( .not. file_exists(volname_prev_odd)  ) THROW_HARD('File: '//trim(volname_prev_odd)//' does not exist!')
+                call vol_prev_even%read_and_crop(volname_prev_even, params%smpd, params%box_crop, params%smpd_crop)
+                call vol_prev_odd %read_and_crop(volname_prev_odd,  params%smpd, params%box_crop, params%smpd_crop)
+                call build%eorecvol%calc_fsc4sampl_dens_correct(vol_prev_even, vol_prev_odd, fsc)
+                if( .not. allocated(fsc_states) )then
+                    allocate(fsc_states(params%nstates,size(fsc)), source=0.)
+                endif
+                fsc_states(s,:) = fsc
+            end do
+            call build%spproj%read_segment(params%oritype, params%projfile)
+            update_frac_trail_rec = build%spproj%os_ptcl3D%calc_update_frac()
+        endif
+        ! assemble volumes
         do ss=1,params%nstates
             if( cline%defined('state') )then
                 s     = 1             ! index in reconstruct3D
@@ -241,11 +263,11 @@ contains
                 if( L_BENCH_GLOB ) rt_sum_reduce = rt_sum_reduce + toc(t_sum_reduce)
             end do
             ! correct for sampling density and estimate resolution
-            allocate(recname, source=trim(VOL_FBODY)//int2str_pad(state,2))
+            allocate(recname, source=VOL_FBODY//int2str_pad(state,2))
             allocate(volname, source=recname//params%ext)
             eonames(1) = trim(recname)//'_even'//params%ext
             eonames(2) = trim(recname)//'_odd'//params%ext
-            if( l_euclid_regularization )then
+            if( params%l_ml_reg )then
                 ! the sum is done after regularization
             else
                 if( L_BENCH_GLOB ) t_sum_eos = tic()
@@ -253,9 +275,13 @@ contains
                 if( L_BENCH_GLOB ) rt_sum_eos = rt_sum_eos + toc(t_sum_eos)
             endif
             if( L_BENCH_GLOB ) t_sampl_dens_correct_eos = tic()
-            call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg)
+            if( params%l_trail_rec )then
+                call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg, fsc_states(state,:))
+            else 
+                call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg)
+            endif
             if( L_BENCH_GLOB ) rt_sampl_dens_correct_eos = rt_sampl_dens_correct_eos + toc(t_sampl_dens_correct_eos)
-            if( l_euclid_regularization )then
+            if( params%l_ml_reg )then
                 if( L_BENCH_GLOB ) t_sum_eos = tic()
                 call build%eorecvol%sum_eos
                 if( L_BENCH_GLOB ) rt_sum_eos = rt_sum_eos + toc(t_sum_eos)
@@ -281,14 +307,30 @@ contains
             call build%vol2%insert_lowres(build%vol, find4eoavg)
             call build%vol2%ifft()
             call build%vol2%write(eonames(2), del_if_exists=.true.)
+            if( params%l_trail_rec .and. update_frac_trail_rec < 0.99 )then
+                call build%vol%read(eonames(1))  ! even current
+                call build%vol2%read(eonames(2)) ! odd current
+                weight_prev = 1. - update_frac_trail_rec
+                call vol_prev_even%mul(weight_prev)
+                call vol_prev_odd%mul (weight_prev)
+                call build%vol%mul(update_frac_trail_rec)
+                call build%vol2%mul(update_frac_trail_rec)
+                call build%vol%add(vol_prev_even)
+                call build%vol2%add(vol_prev_odd)
+                call build%vol%write(eonames(1))  ! even trailed
+                call build%vol2%write(eonames(2)) ! odd trailed
+                call vol_prev_even%kill
+                call vol_prev_odd%kill
+            endif
             if( L_BENCH_GLOB ) rt_eoavg = rt_eoavg + toc(t_eoavg)
             deallocate(recname, volname)
             if( cline%defined('state') )exit
         end do
         ! set the resolution limit according to the worst resolved model
-        res  = maxval(res0143s)
+        res = maxval(res0143s)
         params%lp = max(params%lpstop, res)
-        write(logfhandle,'(a,1x,F6.2)') '>>> LOW-PASS LIMIT:', params%lp
+        write(logfhandle,'(a,1x,F6.2)') '>>> LOW-PASS LIMIT:  ', params%lp
+        write(logfhandle,'(a,1x,F6.2)') '>>> TRAIL REC WEIGHT:', update_frac_trail_rec
         call eorecvol_read%kill
         ! end gracefully
         call simple_end('**** SIMPLE_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)

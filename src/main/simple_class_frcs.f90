@@ -20,7 +20,6 @@ type class_frcs
     real              :: dstep        = 0.0
     real, allocatable :: res4frc_calc(:)
     real, allocatable :: frcs(:,:,:)
-    logical           :: phaseplate   = .false.
     logical           :: exists       = .false.
 contains
     ! constructor
@@ -194,10 +193,9 @@ contains
     end function get_frc
 
     !>  getter for values interepreted as FRCs
-    subroutine frc_getter( self, cls, hpind_fsc, phaseplate, frc, state )
+    subroutine frc_getter( self, cls, frc, state )
         class(class_frcs), intent(in)  :: self
-        integer,           intent(in)  :: cls, hpind_fsc
-        logical,           intent(in)  :: phaseplate
+        integer,           intent(in)  :: cls
         real,              intent(out) :: frc(self%filtsz)
         integer, optional, intent(in)  :: state
         integer :: sstate, find_plate
@@ -205,10 +203,6 @@ contains
         if( present(state) ) sstate = state
         call self%raise_exception( cls, sstate, 'ERROR, out of bounds in frc_getter')
         frc = self%frcs(sstate,cls,:)
-        if( phaseplate )then
-            if( any(frc > 0.5) )call phaseplate_correct_fsc(frc, find_plate)
-        endif
-        if( hpind_fsc > 0 ) frc(:hpind_fsc) = frc(hpind_fsc + 1)
     end subroutine frc_getter
 
     subroutine avg_frc_getter( self, frcs_avg, states, state, cur_oris )

@@ -58,8 +58,10 @@ integer,          parameter :: SYMSRCH_STAGE     = 3
 integer,          parameter :: PROBREFINE_STAGE  = 5
 integer,          parameter :: ICM_STAGE         = PROBREFINE_STAGE  ! we switch from ML regularization when prob is switched on
 integer,          parameter :: STOCH_SAMPL_STAGE = PROBREFINE_STAGE  ! we switch from greedy to stochastic blanced class sampling when prob is switched on
-integer,          parameter :: TRAILREC_STAGE    = NSTAGES  - 1      ! we start trailing one stage before the last
-integer,          parameter :: LPAUTO_STAGE      = TRAILREC_STAGE    ! automatic low-pass limit estimation switched on when trailing is 
+! integer,          parameter :: TRAILREC_STAGE    = NSTAGES  - 1      ! we start trailing one stage before the last
+integer,          parameter :: TRAILREC_STAGE    = STOCH_SAMPL_STAGE ! we start trailing when we start sampling particles randomly
+! integer,          parameter :: LPAUTO_STAGE      = TRAILREC_STAGE    ! automatic low-pass limit estimation switched on when trailing is
+integer,          parameter :: LPAUTO_STAGE      = NSTAGES  - 1
 integer,          parameter :: NSAMPLE_MAX_LAST  = 25000             ! maximum # particles to sample per iteration in the last stage 
 
 ! class variables
@@ -447,8 +449,8 @@ contains
             call write_class_samples(clssmp, CLASS_SAMPLING_FILE)
             deallocate(rstates, tmpinds, clsinds)
             if( spproj%os_ptcl3D%has_been_sampled() )then
-                ! the ptcl3D field should be clean at this stage
-                call spproj%os_ptcl3D%clean_updatecnt_sampled()
+                ! the ptcl3D field should be clean of sampling and updatecnt at this stage
+                call spproj%os_ptcl3D%clean_entry('sampled', 'updatecnt')
                 call spproj%write_segment_inside('ptcl3D', params%projfile)
             endif
         endif
@@ -998,6 +1000,7 @@ contains
         call cline_refine3D%set('fracsrch',                  fracsrch)
         if( l_cavgs )then
         call cline_refine3D%set('snr_noise_reg',        snr_noise_reg)
+        call cline_refine3D%delete('update_frac') ! never on cavgs
         else
         call cline_refine3D%delete('snr_noise_reg')
         endif

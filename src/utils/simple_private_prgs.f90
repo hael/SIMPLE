@@ -323,7 +323,6 @@ contains
         call cmd_dict%push('hfun',          'function used for normalization(sigm|tanh|lin){sigm}')
         call cmd_dict%push('hist',          'give variable for histogram plot')
         call cmd_dict%push('hp',            'high-pass limit(in A)')
-        call cmd_dict%push('hp_fsc',        'FSC high-pass limit(in A)')
         call cmd_dict%push('hp_ctf_estimate', 'high-pass limit 4 ctf_estimate(in A)')
         call cmd_dict%push('iares',         'integer angular resolution{10}')
         call cmd_dict%push('icefracthreshold','ice fraction rejection theshold{1.0}')

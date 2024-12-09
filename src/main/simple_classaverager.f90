@@ -773,7 +773,7 @@ contains
         integer,          intent(in) :: which_iter
         type(image), allocatable     :: even_imgs(:), odd_imgs(:)
         real,        allocatable     :: frc(:)
-        integer :: eo_pop(2), icls, find, find_plate, pop, filtsz_crop
+        integer :: eo_pop(2), icls, find, pop, filtsz_crop
         filtsz_crop = cavgs_even(1)%get_filtsz()
         allocate(even_imgs(ncls), odd_imgs(ncls), frc(filtsz_crop))
         do icls=1,ncls
@@ -781,7 +781,7 @@ contains
             call odd_imgs(icls)%copy(cavgs_odd(icls))
         end do
         if( l_ml_reg )then
-            !$omp parallel do default(shared) private(icls,frc,find,find_plate,pop,eo_pop) schedule(static) proc_bind(close)
+            !$omp parallel do default(shared) private(icls,frc,find,pop,eo_pop) schedule(static) proc_bind(close)
             do icls=1,ncls
                 eo_pop = prev_eo_pops(icls,:) + eo_class_pop(icls)
                 pop    = sum(eo_pop)
@@ -791,11 +791,8 @@ contains
                     call even_imgs(icls)%fft()
                     call odd_imgs(icls)%fft()
                     call even_imgs(icls)%fsc(odd_imgs(icls), frc)
-                    find_plate = 0
-                    if( phaseplate ) call phaseplate_correct_fsc(frc, find_plate)
                     call build_glob%clsfrcs%set_frc(icls, frc, 1)
                     find = build_glob%clsfrcs%estimate_find_for_eoavg(icls, 1)
-                    find = max(find, find_plate)
                     ! add noise term to denominator
                     call add_invtausq2rho(ctfsqsums_even(icls), frc)
                     call add_invtausq2rho(ctfsqsums_odd(icls), frc)
@@ -878,19 +875,17 @@ contains
             end do
             !$omp end parallel do
         else
-            !$omp parallel do default(shared) private(icls,frc,find,find_plate) schedule(static) proc_bind(close)
+            !$omp parallel do default(shared) private(icls,frc,find) schedule(static) proc_bind(close)
             do icls=1,ncls
                 call even_imgs(icls)%mask(params_glob%msk_crop, 'soft')
                 call odd_imgs(icls)%mask(params_glob%msk_crop, 'soft')
                 call even_imgs(icls)%fft()
                 call odd_imgs(icls)%fft()
                 call even_imgs(icls)%fsc(odd_imgs(icls), frc)
-                find_plate = 0
-                if( phaseplate ) call phaseplate_correct_fsc(frc, find_plate)
+
                 call build_glob%clsfrcs%set_frc(icls, frc, 1)
                 ! average low-resolution info between eo pairs to keep things in register
                 find = build_glob%clsfrcs%estimate_find_for_eoavg(icls, 1)
-                find = max(find, find_plate)
                 call cavgs_merged(icls)%fft()
                 call cavgs_even(icls)%fft()
                 call cavgs_odd(icls)%fft()

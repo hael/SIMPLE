@@ -4,7 +4,7 @@ use simple_image, only: image
 use CPlot2D_wrapper_module
 implicit none
 
-public :: phase_rand_fsc, plot_fsc, plot_fsc2, plot_phrand_fsc, phaseplate_correct_fsc
+public :: phase_rand_fsc, plot_fsc, plot_fsc2, plot_phrand_fsc
 private
 #include "simple_local_flags.inc"
 
@@ -207,31 +207,5 @@ contains
         call exec_cmdline(trim(adjustl(ps2pdf_cmd)), suppress_errors=.true., exitstat=iostat)
         if( iostat == 0 ) call del_file(fname_eps)
     end subroutine plot_phrand_fsc
-
-    subroutine phaseplate_correct_fsc( fsc, find_plate )
-        real,    intent(inout) :: fsc(:)
-        integer, intent(out)   :: find_plate
-        logical, allocatable :: peakpos(:)
-        integer :: k, n
-        real    :: peakavg
-        n = size(fsc)
-        ! find FSC peaks
-        peakpos = peakfinder(fsc)
-        ! filter out all peaks FSC < 0.5
-        where(fsc < 0.5) peakpos = .false.
-        ! calculate peak average
-        peakavg = sum(fsc, mask=peakpos)/real(count(peakpos))
-        ! identify peak with highest frequency
-        do k=n,1,-1
-            if( peakpos(k) )then
-                find_plate = k
-                exit
-            endif
-        end do
-        ! replace with average FSC peak value up to last peak (find_plate)
-        do k=1,find_plate
-            fsc(k) = peakavg
-        end do
-    end subroutine phaseplate_correct_fsc
 
 end module simple_fsc
