@@ -294,7 +294,6 @@ contains
             call wait_for_closure( volname )
             ! need to put the sum back at lowres for the eo pairs
             if( L_BENCH_GLOB ) t_eoavg = tic()
-            call build%vol%fft()
             call build%vol2%zero_and_unflag_ft
             call build%vol2%read(eonames(1))
             call build%vol2%fft()
