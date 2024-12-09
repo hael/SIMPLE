@@ -1224,7 +1224,7 @@ contains
             endif
         end do
         if( incr_sampled ) sample_ind = sample_ind + 1
-        inds     = pack(inds,   mask=states > 0)
+        inds     = pack(inds,  mask=states > 0)
         nsamples = min(nptcls, nint(update_frac * real(nptcls)))
         rt = ran_tabu(nptcls)
         call rt%shuffle(inds)
