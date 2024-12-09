@@ -960,7 +960,7 @@ contains
         call build_glob%vol2%new(ldim,params_glob%smpd_crop)
         res0143s = 0.
         res05s   = 0.
-        ! read in previous reconstruction when trail_req==yes
+        ! read in previous reconstruction when trail_rec==yes
         update_frac_trail_rec = 1.0
         if( .not. params_glob%l_distr_exec .and. params_glob%l_trail_rec )then
             if( .not. params_glob%l_update_frac ) THROW_HARD('trail_rec==yes requires update_frac in norm_struct_facts cline')
@@ -1018,7 +1018,6 @@ contains
                 call build_glob%eorecvols(s)%sampl_dens_correct_sum(build_glob%vol)
                 call build_glob%vol%write(volname, del_if_exists=.true.)
                 ! need to put the sum back at lowres for the eo pairs
-                call build_glob%vol%fft()
                 call build_glob%vol2%zero_and_unflag_ft
                 call build_glob%vol2%read(eonames(1))
                 call build_glob%vol2%fft()
@@ -1046,6 +1045,8 @@ contains
                     call vol_prev_even%kill
                     call vol_prev_odd%kill
                 endif
+                call build_glob%vol%fft()
+                call build_glob%vol2%fft()
                 ! post-process volume
                 pprocvol = add2fbody(volname, params_glob%ext, PPROC_SUFFIX)
                 lpvol    = add2fbody(volname, params_glob%ext, LP_SUFFIX)
