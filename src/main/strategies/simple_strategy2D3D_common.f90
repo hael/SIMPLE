@@ -1018,6 +1018,7 @@ contains
                 call build_glob%eorecvols(s)%sampl_dens_correct_sum(build_glob%vol)
                 call build_glob%vol%write(volname, del_if_exists=.true.)
                 ! need to put the sum back at lowres for the eo pairs
+                call build_glob%vol%fft
                 call build_glob%vol2%zero_and_unflag_ft
                 call build_glob%vol2%read(eonames(1))
                 call build_glob%vol2%fft()
@@ -1031,6 +1032,7 @@ contains
                 call build_glob%vol2%ifft()
                 call build_glob%vol2%write(eonames(2), del_if_exists=.true.)
                 if( params_glob%l_trail_rec .and. update_frac_trail_rec < 0.99 )then
+                    call build_glob%vol%ifft
                     call build_glob%vol%read(eonames(1))  ! even current
                     call build_glob%vol2%read(eonames(2)) ! odd current
                     weight_prev = 1. - update_frac_trail_rec
