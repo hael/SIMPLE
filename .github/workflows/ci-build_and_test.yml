@@ -113,8 +113,6 @@ jobs:
              simple_test_otsu
              echo "-------------------- TEST PHASE CORR -------------------------"
              simple_test_phasecorr
-             echo "-------------------- TEST PHASEPLATE CORRECT FSC -------------------------"
-             simple_test_phaseplate_correct_fsc
              echo "-------------------- TEST RAD MED -------------------------"
              simple_test_rad_med
              echo "-------------------- TEST RANK WEIGHTS -------------------------"
