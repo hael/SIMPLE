@@ -4,6 +4,7 @@ implicit none
 
 public :: calc_update_frac, calc_update_frac_dyn, nsampl_decay, inv_nsampl_decay, calc_nsampl_fromto, inv_cos_decay, extremal_decay2D
 private
+#include "simple_local_flags.inc"
 
 contains
 
@@ -25,6 +26,7 @@ contains
         integer, intent(in) :: nptcls, nstates, nsample_minmax(2), it, maxits
         real    :: update_frac
         integer :: nsampl, nsample_minmax_here(2)
+        if( maxits < 1 ) THROW_HARD('Invalid maxits input')
         nsample_minmax_here    = nsample_minmax * nstates
         nsample_minmax_here(1) = min(nptcls,nsample_minmax_here(1))
         nsample_minmax_here(2) = min(nptcls,nsample_minmax_here(2))

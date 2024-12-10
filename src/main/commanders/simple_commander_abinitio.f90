@@ -22,7 +22,7 @@ use simple_qsys_funs
 use simple_decay_funs
 implicit none
 
-public :: abinitio3D_cavgs_commander, abinitio3D_commander, abinitio3D_parts_commander
+public :: abinitio3D_cavgs_commander, abinitio3D_commander, multivol_assign_commander, abinitio3D_parts_commander
 private
 #include "simple_local_flags.inc"
 
@@ -35,6 +35,11 @@ type, extends(commander_base) :: abinitio3D_commander
     contains
     procedure :: execute => exec_abinitio3D
 end type abinitio3D_commander
+
+type, extends(commander_base) :: multivol_assign_commander
+    contains
+    procedure :: execute => exec_multivol_assign
+end type multivol_assign_commander
 
 type, extends(commander_base) :: abinitio3D_parts_commander
     contains
@@ -59,6 +64,7 @@ integer,          parameter :: PROBREFINE_STAGE  = 5
 integer,          parameter :: ICM_STAGE         = PROBREFINE_STAGE  ! we switch from ML regularization when prob is switched on
 integer,          parameter :: STOCH_SAMPL_STAGE = PROBREFINE_STAGE  ! we switch from greedy to stochastic blanced class sampling when prob is switched on
 integer,          parameter :: TRAILREC_STAGE    = STOCH_SAMPL_STAGE ! we start trailing when we start sampling particles randomly
+integer,          parameter :: HET_DOCKED_STAGE  = NSTAGES           ! stage at which state splitting is done when multivol_mode==docked
 integer,          parameter :: LPAUTO_STAGE      = NSTAGES - 1
 integer,          parameter :: NSAMPLE_MAX_LAST  = 25000             ! maximum # particles to sample per iteration in the last stage 
 
@@ -359,8 +365,16 @@ contains
         ! make master parameters
         call params%new(cline)
         call cline%set('mkdir', 'no')
-        nstates_glob = params%nstates  
-        if( nstates_glob > 1 .and. trim(params%het_mode).eq.'docked' )then
+        nstates_glob = params%nstates
+        select case(trim(params%multivol_mode))
+            case('single')
+                if( nstates_glob /= 1 ) THROW_HARD('nstates /= 1 incompatible with multivol_mode:' //trim(params%multivol_mode))
+            case('independent', 'docked', 'input_oris_start', 'input_oris_fixed')
+                if( nstates_glob == 1 ) THROW_HARD('nstates == 1 incompatible with multivol_mode: '//trim(params%multivol_mode))
+            case DEFAULT
+                THROW_HARD('Unsupported multivol_mode: '//trim(params%multivol_mode))
+        end select
+        if( trim(params%multivol_mode).eq.'docked' )then
             params%nstates = 1
             call cline%delete('nstates')
         endif
@@ -372,6 +386,7 @@ contains
         start_stage = 1
         l_ini3D     = .false.
         if( trim(params%cavg_ini).eq.'yes' )then
+            if( str_has_substr(params%multivol_mode,'input_oris') ) THROW_HARD('Ini3D on cavgs not allowed for multivol_mode=input_oris*')
             call ini3D_from_cavgs(cline)
             ! re-read the project file to update info in spproj
             call spproj%read(params%projfile)
@@ -379,7 +394,7 @@ contains
             l_ini3D     = .true.
             ! symmetry dealt with by ini3D
         else
-            if( nstates_glob > 1 .and. trim(params%het_mode).eq.'independent' )then
+            if( trim(params%multivol_mode).eq.'independent' )then
                 ! turn off symmetry axis search and put the symmetry in from the start
                 params%pgrp_start = params%pgrp
             endif
@@ -447,8 +462,9 @@ contains
             call write_class_samples(clssmp, CLASS_SAMPLING_FILE)
             deallocate(rstates, tmpinds, clsinds)
             if( spproj%os_ptcl3D%has_been_sampled() )then
-                ! the ptcl3D field should be clean of sampling and updatecnt at this stage
-                call spproj%os_ptcl3D%clean_entry('sampled', 'updatecnt')
+                ! the ptcl3D field should be clean of sampling at this stage
+                call spproj%os_ptcl3D%clean_entry('sampled')
+                ! call spproj%os_ptcl3D%clean_entry('sampled', 'updatecnt')
                 call spproj%write_segment_inside('ptcl3D', params%projfile)
             endif
         endif
@@ -463,64 +479,86 @@ contains
             call set_lplims_from_frcs(spproj, l_cavgs=.false.)
         endif
         ! starting volume logics
-        if( .not. cline%defined('vol1') )then
-            if( .not. l_ini3D )then
-                ! randomize projection directions
-                select case(trim(params%oritype))
-                    case('ptcl3D')
-                        call spproj%os_ptcl3D%rnd_oris
-                    case DEFAULT
-                        THROW_HARD('Unsupported ORITYPE; exec_abinitio3D')
-                end select
-                ! randomize states
-                if( nstates_glob > 1 .and. trim(params%het_mode).eq.'independent' )then
-                    call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
-                endif
-                call spproj%write_segment_inside(params%oritype, params%projfile)
-                ! create noise starting volume(s)
-                call noisevol%new([lpinfo(1)%box_crop,lpinfo(1)%box_crop,lpinfo(1)%box_crop], lpinfo(1)%smpd_crop)
-                do s = 1, params%nstates
-                    call noisevol%ran()
-                    vol_name = 'startvol_state'//int2str_pad(s,2)//'.mrc'
-                    call cline_refine3D%set('vol'//int2str(s), vol_name)
-                    params%vols(s) = vol_name
-                    call noisevol%write(vol_name)
-                    call noisevol%ran()
-                    vol_name = 'startvol_state'//int2str_pad(s,2)//'_even.mrc'
-                    call noisevol%write(vol_name)
-                    vol_name = 'startvol_state'//int2str_pad(s,2)//'_even_unfil.mrc'
-                    call noisevol%write(vol_name)
-                    call noisevol%ran()
-                    vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd.mrc'
-                    call noisevol%write(vol_name)
-                    vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd_unfil.mrc'
-                    call noisevol%write(vol_name)
-                end do
-                call noisevol%kill
-            else
-                ! check that ptcl3D field is not virgin
-                if( spproj%is_virgin_field('ptcl3D') )then
-                    THROW_HARD('Prior 3D alignment is lacking for starting volume generation')
-                endif
-                ! randomize states
-                if( nstates_glob > 1 .and. trim(params%het_mode).eq.'independent' )then
-                    call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
-                endif
-                ! create an initial balanced greedy sampling
-                noris = spproj%os_ptcl3D%get_noris()
-                allocate(ptcl_mask(1:noris))
-                call spproj%os_ptcl3D%sample4update_class(clssmp, [1,noris], update_frac,&
-                    nptcls2update, pinds, ptcl_mask, .false.)
-                deallocate(pinds, ptcl_mask)          ! these are not needed
-                call deallocate_class_samples(clssmp) ! done with this one
-                ! write updated project file
-                call spproj%write_segment_inside(params%oritype, params%projfile)
-                ! create starting volume(s)
-                call calc_start_rec(params%projfile, xreconstruct3D_distr, istage=1)
+        if( str_has_substr(params%multivol_mode,'input_oris') )then
+            ! check that ptcl3D field is not virgin
+            if( spproj%is_virgin_field('ptcl3D') )then
+                THROW_HARD('Prior 3D alignment is lacking for multi-volume assignment')
             endif
+            call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
+            ! create an initial sampling of all updated ptcls for 3D reconstruction
+            noris = spproj%os_ptcl3D%get_noris()
+            allocate(ptcl_mask(1:noris))
+            call spproj%os_ptcl3D%sample4update_updated([1,noris], nptcls2update, pinds, ptcl_mask, .true.)
+            call spproj%os_ptcl3D%set_updatecnt(1, pinds) ! set all sampled updatecnts to 1 & the rest to zero
+            deallocate(pinds, ptcl_mask) ! these are not needed
+            ! write updated project file
+            call spproj%write_segment_inside(params%oritype, params%projfile)
+            ! start at the same stage as for multivol_mode==docked
+            start_stage = HET_DOCKED_STAGE
+            ! create starting volume(s)
+            call calc_start_rec(params%projfile, xreconstruct3D_distr, istage=start_stage)
+        else if( .not. l_ini3D )then
+            ! the ptcl3D field should be clean of updates at this stage
+            call spproj%os_ptcl3D%clean_entry('updatecnt')
+            ! randomize projection directions
+            select case(trim(params%oritype))
+                case('ptcl3D')
+                    call spproj%os_ptcl3D%rnd_oris
+                case DEFAULT
+                    THROW_HARD('Unsupported ORITYPE; exec_abinitio3D')
+            end select
+            ! randomize states
+            if( trim(params%multivol_mode).eq.'independent' )then
+                call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
+            endif
+            call spproj%write_segment_inside(params%oritype, params%projfile)
+            ! create noise starting volume(s)
+            call noisevol%new([lpinfo(1)%box_crop,lpinfo(1)%box_crop,lpinfo(1)%box_crop], lpinfo(1)%smpd_crop)
+            do s = 1, params%nstates
+                call noisevol%ran()
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'.mrc'
+                call cline_refine3D%set('vol'//int2str(s), vol_name)
+                params%vols(s) = vol_name
+                call noisevol%write(vol_name)
+                call noisevol%ran()
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'_even.mrc'
+                call noisevol%write(vol_name)
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'_even_unfil.mrc'
+                call noisevol%write(vol_name)
+                call noisevol%ran()
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd.mrc'
+                call noisevol%write(vol_name)
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd_unfil.mrc'
+                call noisevol%write(vol_name)
+            end do
+            call noisevol%kill
+        else
+            ! check that ptcl3D field is not virgin
+            if( spproj%is_virgin_field('ptcl3D') )then
+                THROW_HARD('Prior 3D alignment is lacking for starting volume generation')
+            endif
+            ! randomize states
+            if( trim(params%multivol_mode).eq.'independent' )then
+                call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
+            endif
+            ! create an initial balanced greedy sampling
+            noris = spproj%os_ptcl3D%get_noris()
+            allocate(ptcl_mask(1:noris))
+            call spproj%os_ptcl3D%sample4update_class(clssmp, [1,noris], update_frac,&
+                nptcls2update, pinds, ptcl_mask, .true.)
+            call spproj%os_ptcl3D%set_updatecnt(1, pinds) ! set all sampled updatecnts to 1 & the rest to zero
+            deallocate(pinds, ptcl_mask)                  ! these are not needed
+            call deallocate_class_samples(clssmp)         ! done with this one
+            ! write updated project file
+            call spproj%write_segment_inside(params%oritype, params%projfile)
+            ! create starting volume(s)
+            call calc_start_rec(params%projfile, xreconstruct3D_distr, istage=start_stage)
         endif
         ! Frequency marching
-        maxits_dyn = sum(MAXITS(start_stage:NSTAGES - 1)) ! the last stage is omitted in this estimate since the sampling method changes
+        maxits_dyn = 0
+        if( start_stage < NSTAGES )then
+            maxits_dyn = sum(MAXITS(start_stage:NSTAGES - 1)) ! the last stage is omitted in this estimate since the sampling method changes
+        endif
         do istage = start_stage, NSTAGES
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', lpinfo(istage)%lp
@@ -536,8 +574,8 @@ contains
                 call symmetrize(istage, spproj, params%projfile, xreconstruct3D_distr)
             endif
             ! State labelling
-            if( nstates_glob > 1 .and. params%het_mode.eq.'docked' )then
-                if( istage == NSTAGES - 1 ) call randomize_states(spproj, params%projfile, xreconstruct3D_distr)
+            if( params%multivol_mode.eq.'docked' )then
+                if( istage == HET_DOCKED_STAGE - 1 ) call randomize_states(spproj, params%projfile, xreconstruct3D_distr)
             endif
         enddo
         ! for visualization
@@ -551,6 +589,29 @@ contains
         call qsys_cleanup
         call simple_end('**** SIMPLE_ABINITIO3D NORMAL STOP ****')
     end subroutine exec_abinitio3D
+
+    subroutine exec_multivol_assign( self, cline )
+        class(multivol_assign_commander), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
+        type(abinitio3D_commander)    :: xabini3D
+        character(len=:), allocatable :: srch_oris
+        call cline%set('center',   'no')
+        call cline%set('cavg_ini', 'no')
+        if( .not. cline%defined('nstates')  ) THROW_HARD('nstates required on command line')
+        srch_oris = 'yes'
+        if( cline%defined('srch_oris') )then
+            srch_oris = cline%get_carg('srch_oris')
+        endif
+        select case(trim(srch_oris))
+            case('yes')
+                call cline%set('multivol_mode', 'input_oris_start')
+            case('no')
+                call cline%set('multivol_mode', 'input_oris_fixed')
+            case DEFAULT
+                THROW_HARD('Unsupported srch_oris flag')
+        end select
+        call xabini3D%execute(cline)
+    end subroutine exec_multivol_assign
     
     subroutine exec_abinitio3D_parts( self, cline )
         use simple_commander_project,   only: new_project_commander, selection_commander
@@ -875,8 +936,8 @@ contains
             refine  = 'prob'
             prob_sh = 'yes'
         endif
-        if( nstates_glob > 1 .and. params_glob%het_mode.eq.'docked' )then
-            if( istage == NSTAGES ) refine = 'shc_smpl' ! works best on simulated ribosome data
+        if( trim(params_glob%multivol_mode).eq.'input_oris_fixed' )then ! only state sorting, no 3D ori refinement
+            refine = 'prob_state'
         endif
         ! ICM regularization
         icm = 'no'
@@ -1129,7 +1190,7 @@ contains
         call cline_reconstruct3D%set('nstates', nstates_glob)
         call cline_postprocess%set(  'nstates', nstates_glob)
         call cline_reproject%set(    'nstates', nstates_glob)
-        call calc_start_rec(projfile, xreconstruct3D, istage=PROBREFINE_STAGE)
+        call calc_start_rec(projfile, xreconstruct3D, istage=HET_DOCKED_STAGE - 1)
     end subroutine randomize_states
 
     subroutine gen_ortho_reprojs4viz

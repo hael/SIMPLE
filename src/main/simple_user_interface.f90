@@ -137,6 +137,7 @@ type(simple_program), target :: merge_projects
 type(simple_program), target :: mkdir_
 type(simple_program), target :: model_validation
 type(simple_program), target :: motion_correct
+type(simple_program), target :: multivol_assign
 type(simple_program), target :: new_project
 type(simple_program), target :: nununiform_filter3D
 type(simple_program), target :: noisevol
@@ -291,6 +292,7 @@ type(simple_input_param) :: nsample
 type(simple_input_param) :: nsearch
 type(simple_input_param) :: nsig
 type(simple_input_param) :: nspace
+type(simple_input_param) :: nstates
 type(simple_input_param) :: nthr
 type(simple_input_param) :: nonuniform
 type(simple_input_param) :: numlen
@@ -443,6 +445,7 @@ contains
         call new_mkdir_
         call new_motion_correct
         call new_model_validation
+        call new_multivol_assign
         call new_new_project
         call new_nununiform_filter3D
         call new_noisevol
@@ -572,6 +575,7 @@ contains
         call push2prg_ptr_array(mkdir_)
         call push2prg_ptr_array(motion_correct)
         call push2prg_ptr_array(model_validation)
+        call push2prg_ptr_array(multivol_assign)
         call push2prg_ptr_array(new_project)
         call push2prg_ptr_array(nununiform_filter3D)
         call push2prg_ptr_array(noisevol)
@@ -778,6 +782,8 @@ contains
                 ptr2prg => motion_correct
             case('model_validation')
                 ptr2prg => model_validation
+            case('multivol_assign')
+                ptr2prg => multivol_assign
             case('new_project')
                 ptr2prg => new_project
             case('nununiform_filter3D')
@@ -958,6 +964,7 @@ contains
         write(logfhandle,'(A)') mkdir_%name
         write(logfhandle,'(A)') motion_correct%name
         write(logfhandle,'(A)') model_validation%name
+        write(logfhandle,'(A)') multivol_assign%name
         write(logfhandle,'(A)') new_project%name
         write(logfhandle,'(A)') nununiform_filter3D%name
         write(logfhandle,'(A)') noisevol%name
@@ -1260,6 +1267,7 @@ contains
         call set_param(crowded,        'crowded',      'binary', 'Picking in crowded micrographs?', 'Picking in crowded micrographs?(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(nran,           'nran',         'num',    'Number of random samples', 'Number of entries to randomly sample', '# random samples', .false., 0.)        
         call set_param(nsample,        'nsample',      'num',    'Number of particles to sample', 'Number of particles to sample each iteration', '# particles to sample', .false., 0.)
+        call set_param(nstates,        'nstates',      'num',    'Number of states', 'Number of conformational/compositional states to reconstruct', '# states to reconstruct', .false., 1.0)
         call set_param(pickrefs,       'pickrefs',     'file',   'Stack of class-averages/reprojections for picking', 'Stack of class-averages/reprojections for picking', 'e.g. pickrefs.mrc', .false., '')
         call set_param(icm,            'icm',          'binary', 'Whether to perform ICM filtering of reference(s)', 'Whether to perform ICM filtering of reference(s)(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(flipgain,       'flipgain',     'multi',  'Flip the gain reference', 'Flip the gain reference along the provided axis(no|x|y|xy|yx){no}', '(no|x|y|xy|yx){no}', .false., 'no')
@@ -2836,7 +2844,7 @@ contains
         &'3D ab initio model generation from particles',&                                  ! descr_short
         &'is a distributed workflow for generating an ab initio 3D model from particles',& ! descr_long                                                         ! descr_long
         &'simple_exec',&                                                                   ! executable
-        &0, 0, 0, 8, 6, 1, 3, .true.,&                                                     ! # entries in each group, requires sp_project
+        &0, 0, 0, 10, 6, 1, 3, .true.,&                                                     ! # entries in each group, requires sp_project
         &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute"  )           ! GUI                                                      
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2846,15 +2854,17 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call abinitio3D%set_input('srch_ctrls', 1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
+        call abinitio3D%set_input('srch_ctrls',  1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
         &center of gravity and map shifts back to the particles(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
-        call abinitio3D%set_input('srch_ctrls', 2, pgrp, gui_submenu="model", gui_advanced=.false.)
-        call abinitio3D%set_input('srch_ctrls', 3, pgrp_start, gui_submenu="model")
-        call abinitio3D%set_input('srch_ctrls', 4, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
-        call abinitio3D%set_input('srch_ctrls', 5, nsample, gui_submenu="search", gui_advanced=.false.)
-        call abinitio3D%set_input('srch_ctrls', 6, 'nsample_start', 'num', 'Dynamic particle sampling lower bound', 'Dynamic particle sampling lower bound', 'min # particles to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
-        call abinitio3D%set_input('srch_ctrls', 7, 'nsample_stop',  'num', 'Dynamic particle sampling upper bound', 'Dynamic particle sampling upper bound', 'max # particles to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
-        call abinitio3D%set_input('srch_ctrls', 8, update_frac, gui_submenu="search", gui_advanced=.true.)
+        call abinitio3D%set_input('srch_ctrls',  2, pgrp, gui_submenu="model", gui_advanced=.false.)
+        call abinitio3D%set_input('srch_ctrls',  3, pgrp_start, gui_submenu="model")
+        call abinitio3D%set_input('srch_ctrls',  4, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
+        call abinitio3D%set_input('srch_ctrls',  5, nsample, gui_submenu="search", gui_advanced=.false.)
+        call abinitio3D%set_input('srch_ctrls',  6, 'nsample_start', 'num', 'Dynamic particle sampling lower bound', 'Dynamic particle sampling lower bound', 'min # particles to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
+        call abinitio3D%set_input('srch_ctrls',  7, 'nsample_stop',  'num', 'Dynamic particle sampling upper bound', 'Dynamic particle sampling upper bound', 'max # particles to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
+        call abinitio3D%set_input('srch_ctrls',  8, update_frac, gui_submenu="search", gui_advanced=.true.)
+        call abinitio3D%set_input('srch_ctrls',  9, nstates, gui_submenu="search", gui_advanced=.false.)
+        call abinitio3D%set_input('srch_ctrls', 10, 'multivol_mode', 'multi', 'Multi-volume ab initio mode', 'Multi-volume ab initio mode(single|independent|docked){single}', '(single|independent|docked){single}', .false., 'single')
         ! filter controls
         call abinitio3D%set_input('filt_ctrls', 1, hp, gui_submenu="filter")
         call abinitio3D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
@@ -3411,6 +3421,43 @@ contains
         call motion_correct%set_input('comp_ctrls', 1, nparts, gui_submenu="compute")
         call motion_correct%set_input('comp_ctrls', 2, nthr, gui_submenu="compute")
     end subroutine new_motion_correct
+
+    subroutine new_multivol_assign
+        ! PROGRAM SPECIFICATION
+        call multivol_assign%new(&
+        &'multivol_assign',&                                                               ! name
+        &'multi-volume assignment and 3D reconstruction from particles',&                  ! descr_short
+        &'is a distributed workflow for generating multiple structural state volumes from particles',& ! descr_long                                                         ! descr_long
+        &'simple_exec',&                                                                   ! executable
+        &0, 0, 0, 4, 3, 1, 2, .true.,&                                                    ! # entries in each group, requires sp_project
+        &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute"  )           ! GUI                                                      
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call multivol_assign%set_input('srch_ctrls', 1, pgrp,        gui_submenu="model",  gui_advanced=.false.)
+        call multivol_assign%set_input('srch_ctrls', 2, update_frac, gui_submenu="search", gui_advanced=.true.)
+        call multivol_assign%set_input('srch_ctrls', 3, nstates,     gui_submenu="search", gui_advanced=.false.)
+        multivol_assign%srch_ctrls(3)%required = .true.
+        call multivol_assign%set_input('srch_ctrls', 4, 'srch_oris', 'multi', 'Search orientations',&
+        &'Search orientations(yes|no){yes}', '(yes|no){yes}', .false., 'single', gui_submenu="search", gui_advanced=.true.)
+        ! filter controls
+        call multivol_assign%set_input('filt_ctrls', 1, hp, gui_submenu="filter")
+        call multivol_assign%set_input('filt_ctrls', 2, 'lpstart',  'num', 'Starting low-pass limit', 'Starting low-pass limit',&
+            &'low-pass limit for the initial stage in Angstroms',  .false., 20., gui_submenu="filter")
+        call multivol_assign%set_input('filt_ctrls', 3, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
+            &'low-pass limit for the final stage in Angstroms',    .false., 8., gui_submenu="filter")
+        ! mask controls
+        call multivol_assign%set_input('mask_ctrls', 1, mskdiam, gui_submenu="mask",    gui_advanced=.false.)
+        ! computer controls
+        call multivol_assign%set_input('comp_ctrls', 1, nparts,  gui_submenu="compute", gui_advanced=.false.)
+        multivol_assign%comp_ctrls(1)%required = .false.
+        call multivol_assign%set_input('comp_ctrls', 2, nthr,    gui_submenu="compute", gui_advanced=.false.)
+    end subroutine new_multivol_assign
 
     subroutine new_nununiform_filter3D
         ! PROGRAM SPECIFICATION
@@ -4279,8 +4326,7 @@ contains
         call refine3D%set_input('srch_ctrls', 5, update_frac, gui_submenu="search")
         call refine3D%set_input('srch_ctrls', 6, frac, gui_submenu="search")
         call refine3D%set_input('srch_ctrls', 7, pgrp, gui_submenu="search", gui_advanced=.false.)
-        call refine3D%set_input('srch_ctrls', 8, 'nstates', 'num', 'Number of states', 'Number of conformational/compositional states to reconstruct',&
-        '# states to reconstruct', .false., 1.0, gui_submenu="search")
+        call refine3D%set_input('srch_ctrls', 8, nstates, gui_submenu="search")
         call refine3D%set_input('srch_ctrls', 9, objfun, gui_submenu="search")
         call refine3D%set_input('srch_ctrls', 10, 'refine', 'multi', 'Refinement mode', 'Refinement mode(shc_smpl|neigh|prob|prob_state){shc}', '(snhc|shc|neigh|shc_neigh){shc}',&
         &.false., 'shc', gui_submenu="search")

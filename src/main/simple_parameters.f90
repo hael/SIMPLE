@@ -99,6 +99,7 @@ type :: parameters
     character(len=3)          :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
     character(len=3)          :: sh_first='no'        !< shifting before orientation search(yes|no){no}
     character(len=3)          :: sh_inv='no'          !< whether to use shift invariant metric for projection direction assignment(yes|no){no}
+    character(len=3)          :: srch_oris='yes'      !< whether to search orientations in multivolume assignment(yes|no){yes} 
     character(len=3)          :: stream='no'          !< stream (real time) execution mode(yes|no){no}
     character(len=3)          :: symrnd='no'          !< randomize over symmetry operations(yes|no){no}
     character(len=3)          :: taper_edges='no'     !< self-explanatory
@@ -195,7 +196,7 @@ type :: parameters
     character(len=STDLEN)     :: fbody=''             !< file body
     character(len=STDLEN)     :: filter='no'          !< filter type{no}
     character(len=STDLEN)     :: flipgain='no'        !< gain reference flipping (no|x|y|xy|yx)
-    character(len=STDLEN)     :: het_mode='independent' !< heterogeneity analysis mode in abinitio3D (independent|docked){independent}
+    character(len=STDLEN)     :: multivol_mode='single' !< multivolume abinitio3D mode(single|independent|docked|input_oris_start|input_oris_fixed){single}
     character(len=STDLEN)     :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}
     character(len=STDLEN)     :: interpfun='kb'       !< Interpolation function projection/reconstruction/polar representation(kb|linear){kb}
@@ -577,7 +578,7 @@ contains
         call check_carg('guinier',        self%guinier)
         call check_carg('graphene_filt',  self%graphene_filt)
         call check_carg('gridding',       self%gridding)
-        call check_carg('het_mode',       self%het_mode)
+        call check_carg('multivol_mode',  self%multivol_mode)
         call check_carg('icm',            self%icm)
         call check_carg('imgkind',        self%imgkind)
         call check_carg('incrreslim',     self%incrreslim)
@@ -658,6 +659,7 @@ contains
         call check_carg('sigma_est',      self%sigma_est)
         call check_carg('speckind',       self%speckind)
         call check_carg('split_mode',     self%split_mode)
+        call check_carg('srch_oris',      self%srch_oris)
         call check_carg('stats',          self%stats)
         call check_carg('stream',         self%stream)
         call check_carg('symrnd',         self%symrnd)
