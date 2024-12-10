@@ -2836,7 +2836,7 @@ contains
         &'3D ab initio model generation from particles',&                                  ! descr_short
         &'is a distributed workflow for generating an ab initio 3D model from particles',& ! descr_long                                                         ! descr_long
         &'simple_exec',&                                                                   ! executable
-        &0, 0, 0, 6, 6, 1, 3, .true.,&                                                     ! # entries in each group, requires sp_project
+        &0, 0, 0, 8, 6, 1, 3, .true.,&                                                     ! # entries in each group, requires sp_project
         &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute"  )           ! GUI                                                      
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2851,8 +2851,10 @@ contains
         call abinitio3D%set_input('srch_ctrls', 2, pgrp, gui_submenu="model", gui_advanced=.false.)
         call abinitio3D%set_input('srch_ctrls', 3, pgrp_start, gui_submenu="model")
         call abinitio3D%set_input('srch_ctrls', 4, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
-        call abinitio3D%set_input('srch_ctrls', 5, nsample,     gui_submenu="search", gui_advanced=.true.)
-        call abinitio3D%set_input('srch_ctrls', 6, update_frac, gui_submenu="search", gui_advanced=.true.)
+        call abinitio3D%set_input('srch_ctrls', 5, nsample, gui_submenu="search", gui_advanced=.false.)
+        call abinitio3D%set_input('srch_ctrls', 6, 'nsample_start', 'num', 'Dynamic particle sampling lower bound', 'Dynamic particle sampling lower bound', 'min # particles to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
+        call abinitio3D%set_input('srch_ctrls', 7, 'nsample_stop',  'num', 'Dynamic particle sampling upper bound', 'Dynamic particle sampling upper bound', 'max # particles to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
+        call abinitio3D%set_input('srch_ctrls', 8, update_frac, gui_submenu="search", gui_advanced=.true.)
         ! filter controls
         call abinitio3D%set_input('filt_ctrls', 1, hp, gui_submenu="filter")
         call abinitio3D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
