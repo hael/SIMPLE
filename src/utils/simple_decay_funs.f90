@@ -26,7 +26,6 @@ contains
         integer, intent(in) :: nptcls, nstates, nsample_minmax(2), it, maxits
         real    :: update_frac
         integer :: nsampl, nsample_minmax_here(2)
-        if( maxits < 1 ) THROW_HARD('Invalid maxits input')
         nsample_minmax_here    = nsample_minmax * nstates
         nsample_minmax_here(1) = min(nptcls,nsample_minmax_here(1))
         nsample_minmax_here(2) = min(nptcls,nsample_minmax_here(2))
