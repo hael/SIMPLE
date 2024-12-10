@@ -617,13 +617,18 @@ contains
                         call build%spproj_field%partition_eo
                         call build%spproj%write_segment_inside(params%oritype)
                     endif
+                    if( startit == 1 )then
+                        ! make sure we have weights for first_sigmas
+                        call build%spproj_field%set_all2single('w', 1.0)
+                        call build%spproj%write_segment_inside(params%oritype)
+                    endif
                     cline_calc_pspec   = cline
                     cline_first_sigmas = cline
                     call xcalc_pspec%execute_safe( cline_calc_pspec )
                     call cline_calc_sigma%set('which_iter', startit)
                     call xcalc_pspec_assemble%execute_safe(cline_calc_sigma)
-                    if( .not.cline_first_sigmas%defined('nspace') ) call cline_first_sigmas%set('nspace', real(params%nspace))
-                    if( .not.cline_first_sigmas%defined('athres') ) call cline_first_sigmas%set('athres', real(params%athres))
+                    if( .not.cline_first_sigmas%defined('nspace') ) call cline_first_sigmas%set('nspace', params%nspace)
+                    if( .not.cline_first_sigmas%defined('athres') ) call cline_first_sigmas%set('athres', params%athres)
                     call xfirst_sigmas%execute_safe(cline)
                 endif
             endif
@@ -654,24 +659,24 @@ contains
                 ! in strategy3D_matcher:
                 call refine3D_exec(cline, params%which_iter, converged)
                 ! volumes book-keeping
-                    do state = 1, params%nstates
-                        str_state = int2str_pad(state,2)
-                        iter_str  = '_iter'//int2str_pad(params%which_iter,3)
-                        if( trim(params_glob%keepvol).eq.'yes' )then
-                            call simple_copy_file(params%vols(state), add2fbody(params%vols(state),params%ext,iter_str))
-                       endif
+                do state = 1, params%nstates
+                    str_state = int2str_pad(state,2)
+                    iter_str  = '_iter'//int2str_pad(params%which_iter,3)
+                    if( trim(params_glob%keepvol).eq.'yes' )then
+                        call simple_copy_file(params%vols(state), add2fbody(params%vols(state),params%ext,iter_str))
+                    endif
+                    vol_iter = add2fbody(params%vols(state), params%ext, PPROC_SUFFIX)
+                    call simple_copy_file(vol_iter, add2fbody(vol_iter,params%ext,iter_str))
+                    vol_iter = add2fbody(params%vols(state), params%ext, LP_SUFFIX)
+                    call simple_copy_file(vol_iter, add2fbody(vol_iter,params%ext,iter_str))
+                    if( params%which_iter > 1 )then
+                        iter_str = '_iter'//int2str_pad(params%which_iter-1,3)
                         vol_iter = add2fbody(params%vols(state), params%ext, PPROC_SUFFIX)
-                        call simple_copy_file(vol_iter, add2fbody(vol_iter,params%ext,iter_str))
+                        call del_file(add2fbody(vol_iter, params%ext,iter_str))
                         vol_iter = add2fbody(params%vols(state), params%ext, LP_SUFFIX)
-                        call simple_copy_file(vol_iter, add2fbody(vol_iter,params%ext,iter_str))
-                        if( params%which_iter > 1 )then
-                            iter_str = '_iter'//int2str_pad(params%which_iter-1,3)
-                            vol_iter = add2fbody(params%vols(state), params%ext, PPROC_SUFFIX)
-                            call del_file(add2fbody(vol_iter, params%ext,iter_str))
-                            vol_iter = add2fbody(params%vols(state), params%ext, LP_SUFFIX)
-                            call del_file(add2fbody(vol_iter, params%ext,iter_str))
-                        endif
-                    enddo
+                        call del_file(add2fbody(vol_iter, params%ext,iter_str))
+                    endif
+                enddo
                 ! convergence
                 if( converged .or. i == params%maxits )then
                     ! report the last iteration on exit
