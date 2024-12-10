@@ -67,6 +67,7 @@ type(estimate_lpstages_commander)           :: xestimate_lpstages
 type(noisevol_commander)                    :: xnoisevol
 type(abinitio3D_cavgs_commander)            :: xabinitio3D_cavgs
 type(abinitio3D_commander)                  :: xabinitio3D
+type(multivol_assign_commander)             :: xmultivol_assign
 type(abinitio3D_parts_commander)            :: xabinitio3D_parts
 
 ! REFINE3D WORKFLOWS
@@ -258,6 +259,8 @@ select case(trim(prg))
         else
             call xabinitio3D%execute(cline)
         endif
+    case('multivol_assign')
+        call xmultivol_assign%execute(cline)
     case( 'abinitio3D_parts' )
         call xabinitio3D_parts%execute(cline)
 
@@ -420,7 +423,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('6a595796')
+call simple_print_git_version('52102c17')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

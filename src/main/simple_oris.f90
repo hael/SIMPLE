@@ -87,6 +87,7 @@ type :: oris
     procedure          :: sample4update_rnd
     procedure          :: sample4update_class
     procedure          :: sample4update_reprod
+    procedure          :: sample4update_updated
     procedure          :: calc_update_frac
     procedure          :: get_class_sample_stats
     procedure, private :: sample_balanced_1, sample_balanced_2
@@ -95,6 +96,7 @@ type :: oris
     procedure          :: incr_updatecnt
     procedure          :: is_first_update
     procedure          :: set_nonzero_updatecnt
+    procedure          :: set_updatecnt
     procedure          :: clean_entry
     procedure          :: has_been_sampled
     procedure          :: has_been_searched
@@ -1314,6 +1316,37 @@ contains
         end do
     end subroutine sample4update_reprod
 
+    subroutine sample4update_updated( self, fromto, nsamples, inds, mask, incr_sampled )
+        class(oris),          intent(inout) :: self
+        integer,              intent(in)    :: fromto(2)
+        integer,              intent(inout) :: nsamples
+        integer, allocatable, intent(inout) :: inds(:)
+        logical,              intent(inout) :: mask(fromto(1):fromto(2))
+        logical,              intent(in)    :: incr_sampled
+        integer, allocatable :: updatecnts(:)
+        integer :: i, cnt, nptcls, sample_ind
+        nptcls = fromto(2) - fromto(1) + 1
+        if( allocated(inds) ) deallocate(inds)
+        allocate(inds(nptcls), updatecnts(nptcls), source=0)
+        cnt        = 0
+        sample_ind = 0
+        do i = fromto(1), fromto(2)
+            cnt             = cnt + 1
+            inds(cnt)       = i
+            updatecnts(cnt) = self%o(i)%get_updatecnt()
+            sample_ind      = max(sample_ind,self%o(i)%get_sampled())
+        end do
+        if( .not. any(updatecnts > 0) ) THROW_HARD('requires previous update')
+        if( incr_sampled ) sample_ind = sample_ind + 1
+        nsamples = count(updatecnts > 0)
+        inds     = pack(inds, mask=updatecnts > 0)
+        mask     = .false.
+        do i = 1, nsamples
+            call self%o(inds(i))%set('sampled', sample_ind)
+            mask(inds(i)) = .true.
+        end do
+    end subroutine sample4update_updated
+
     function calc_update_frac( self ) result( update_frac )
         class(oris), intent(inout) :: self
         integer :: updatecnts(self%n), sampled(self%n), states(self%n), updatecnt_max, sampled_max, i
@@ -1527,6 +1560,21 @@ contains
             endif
         enddo
     end subroutine set_nonzero_updatecnt
+
+    subroutine set_updatecnt( self, updatecnt, pinds )
+        class(oris),       intent(inout) :: self
+        integer,           intent(in)    :: updatecnt, pinds(:)
+        integer :: i, n
+        ! zero them all
+        do i = 1, self%n
+            call self%o(i)%set('updatecnt', 0)
+        enddo
+        ! set the pinds to inputted value
+        n = size(pinds)
+        do i = 1, n
+            call self%o(pinds(i))%set('updatecnt', updatecnt)
+        enddo
+    end subroutine set_updatecnt
 
     subroutine clean_entry( self, varflag1, varflag2 )
         class(oris),                 intent(inout) :: self
