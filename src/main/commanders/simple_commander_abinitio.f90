@@ -71,7 +71,7 @@ integer,          parameter :: NSAMPLE_MAX_LAST  = 25000             ! maximum #
 ! class variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
 logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false., l_update_frac_dyn=.false.
-logical          :: l_ini3D=.false., l_lpauto=.false., l_nsample_inputted_by_user=.false.
+logical          :: l_ini3D=.false., l_lpauto=.false., l_nsample_given=.false., l_nsample_stop_given=.false.
 type(sym)        :: se1, se2
 type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_postprocess, cline_reproject
 real             :: update_frac  = 1.0, update_frac_dyn  = 1.0
@@ -425,25 +425,27 @@ contains
         if( spproj%is_virgin_field('ptcl2D') )then
             THROW_HARD('Prior 2D clustering required for abinitio workflow')
         else
-            l_update_frac_dyn          = .false.
-            l_nsample_inputted_by_user = .false.
-            update_frac                = 1.0
-            nptcls_eff                 = spproj%count_state_gt_zero()
+            l_update_frac_dyn    = .false.
+            l_nsample_given      = .false.
+            l_nsample_stop_given = .false.
+            update_frac          = 1.0
+            nptcls_eff           = spproj%count_state_gt_zero()
             if( cline%defined('nsample') )then
                 update_frac = real(params%nsample * nstates_glob) / real(nptcls_eff)
-                l_nsample_inputted_by_user = .true.
+                l_nsample_given = .true.
             else if( cline%defined('update_frac') )then
                 update_frac = params%update_frac
-                l_nsample_inputted_by_user = .true.
+                l_nsample_given = .true.
             else if( cline%defined('nsample_start') )then
                 if( params%nsample_start > nptcls_eff ) THROW_HARD('nsample_start > effective # ptcls, decrease!')
                 nsample_minmax(1) = params%nsample_start
                 if( cline%defined('nsample_stop') )then
-                    nsample_minmax(2) = min(nptcls_eff,params%nsample_stop)
+                    nsample_minmax(2)    = min(nptcls_eff,params%nsample_stop)
+                    l_nsample_stop_given = .true.
                 else
                     nsample_minmax(2) = nptcls_eff
                 endif
-                update_frac = calc_update_frac_dyn(nptcls_eff, nstates_glob, nsample_minmax, 1, MAXITS_GLOB)
+                update_frac       = calc_update_frac_dyn(nptcls_eff, nstates_glob, nsample_minmax, 1, MAXITS_GLOB)
                 l_update_frac_dyn = .true.
              else
                 if( cline%defined('nsample_max') )then
@@ -909,7 +911,9 @@ contains
         iter = iter + 1
         ! dynamic update frac
         if( istage == NSTAGES )then
-            if( l_nsample_inputted_by_user )then
+            if( l_nsample_stop_given )then
+                update_frac_dyn = real(nsample_minmax(2)) / real(nptcls_eff)
+            else if( l_nsample_given )then
                 update_frac_dyn = update_frac
             else
                 ! we change the sampling method for the last stage (accelerated refinement)
