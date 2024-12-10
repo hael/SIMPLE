@@ -58,10 +58,8 @@ integer,          parameter :: SYMSRCH_STAGE     = 3
 integer,          parameter :: PROBREFINE_STAGE  = 5
 integer,          parameter :: ICM_STAGE         = PROBREFINE_STAGE  ! we switch from ML regularization when prob is switched on
 integer,          parameter :: STOCH_SAMPL_STAGE = PROBREFINE_STAGE  ! we switch from greedy to stochastic blanced class sampling when prob is switched on
-! integer,          parameter :: TRAILREC_STAGE    = NSTAGES  - 1      ! we start trailing one stage before the last
 integer,          parameter :: TRAILREC_STAGE    = STOCH_SAMPL_STAGE ! we start trailing when we start sampling particles randomly
-! integer,          parameter :: LPAUTO_STAGE      = TRAILREC_STAGE    ! automatic low-pass limit estimation switched on when trailing is
-integer,          parameter :: LPAUTO_STAGE      = NSTAGES  - 1
+integer,          parameter :: LPAUTO_STAGE      = NSTAGES - 1
 integer,          parameter :: NSAMPLE_MAX_LAST  = 25000             ! maximum # particles to sample per iteration in the last stage 
 
 ! class variables
@@ -559,7 +557,7 @@ contains
         use simple_exec_helpers,        only: gen_exec_cmd, async_exec
         use simple_commander_cluster2D, only: make_cavgs_commander_distr
         class(abinitio3D_parts_commander), intent(inout) :: self
-        class(cmdline),                          intent(inout) :: cline
+        class(cmdline),                    intent(inout) :: cline
         ! commanders
         type(selection_commander)          :: xsel
         type(new_project_commander)        :: xnew_project
