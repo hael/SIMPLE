@@ -18,12 +18,13 @@ interface angle_sampling
 end interface
 
 type :: eul_prob_tab
-    type(ptcl_ref), allocatable :: loc_tab(:,:,:) !< 3D search table (nspace,  nptcls, nstates)
-    type(ptcl_ref), allocatable :: state_tab(:,:) !< 2D search table (nstates, nptcls)
-    type(ptcl_ref), allocatable :: assgn_map(:)   !< assignment map           (nptcls)
+    type(ptcl_ref), allocatable :: loc_tab(:,:)   !< 2D search table (nspace*nstates,  nptcls)
+    type(ptcl_ref), allocatable :: state_tab(:,:) !< 2D search table (nstates,         nptcls)
+    type(ptcl_ref), allocatable :: assgn_map(:)   !< assignment map                   (nptcls)
     integer,        allocatable :: pinds(:)       !< particle indices for processing
     integer                     :: nptcls         !< size of pinds array
     integer                     :: nstates        !< states number
+    integer                     :: nrefs          !< reference number
     contains
     ! CONSTRUCTOR
     procedure, private :: new_1, new_2
@@ -37,13 +38,13 @@ type :: eul_prob_tab
     ! GLOBAL PROCEDURES (used only by the global eul_prob_tab object)
     procedure :: read_state_tab
     procedure :: read_tab_to_glob
-    procedure :: proj_state_assign
+    procedure :: ref_assign
     procedure :: write_assignment
     procedure :: state_assign
     ! DESTRUCTOR
     procedure :: kill
     ! PRIVATE
-    procedure, private :: proj_normalize
+    procedure, private :: ref_normalize
     procedure, private :: state_normalize
 end type eul_prob_tab
 
@@ -54,15 +55,15 @@ contains
     subroutine new_1( self, pinds )
         class(eul_prob_tab), intent(inout) :: self
         integer,             intent(in)    :: pinds(:)
-        integer :: i, iproj, iptcl, istate
+        integer :: i, iproj, iptcl, istate, iref
         real    :: x
         call self%kill
         self%nptcls  = size(pinds)
         self%nstates = params_glob%nstates
+        self%nrefs   = params_glob%nspace*self%nstates
         allocate(self%pinds(self%nptcls), source=pinds)
-        allocate(self%loc_tab(params_glob%nspace,self%nptcls,self%nstates), self%assgn_map(self%nptcls),&
-                    &self%state_tab(self%nstates,self%nptcls))
-        !$omp parallel do default(shared) private(i,iptcl,istate,iproj) proc_bind(close) schedule(static)
+        allocate(self%loc_tab(self%nrefs,self%nptcls), self%assgn_map(self%nptcls),self%state_tab(self%nstates,self%nptcls))
+        !$omp parallel do default(shared) private(i,iptcl,istate,iproj,iref) proc_bind(close) schedule(static)
         do i = 1,self%nptcls
             iptcl = self%pinds(i)
             self%assgn_map(i)%pind   = iptcl
@@ -83,14 +84,15 @@ contains
                 self%state_tab(istate,i)%y      = 0.
                 self%state_tab(istate,i)%has_sh = .false.
                 do iproj = 1,params_glob%nspace
-                    self%loc_tab(iproj,i,istate)%pind   = iptcl
-                    self%loc_tab(iproj,i,istate)%istate = istate
-                    self%loc_tab(iproj,i,istate)%iproj  = iproj
-                    self%loc_tab(iproj,i,istate)%inpl   = 0
-                    self%loc_tab(iproj,i,istate)%dist   = huge(x)
-                    self%loc_tab(iproj,i,istate)%x      = 0.
-                    self%loc_tab(iproj,i,istate)%y      = 0.
-                    self%loc_tab(iproj,i,istate)%has_sh = .false.
+                    iref = (istate-1)*params_glob%nspace + iproj
+                    self%loc_tab(iref,i)%pind   = iptcl
+                    self%loc_tab(iref,i)%istate = istate
+                    self%loc_tab(iref,i)%iproj  = iproj
+                    self%loc_tab(iref,i)%inpl   = 0
+                    self%loc_tab(iref,i)%dist   = huge(x)
+                    self%loc_tab(iref,i)%x      = 0.
+                    self%loc_tab(iref,i)%y      = 0.
+                    self%loc_tab(iref,i)%has_sh = .false.
                 end do
             end do
         end do
@@ -101,7 +103,7 @@ contains
         class(eul_prob_tab), intent(inout) :: self
         class(oris),         intent(in)    :: os
         integer, allocatable :: states(:)
-        integer :: i, iproj, iptcl, istate, n
+        integer :: i, iproj, iptcl, istate, n, iref
         real    :: x
         call self%kill
         self%nptcls  = os%get_noris(consider_state=.true.)
@@ -110,9 +112,8 @@ contains
         allocate(states(n), source=nint(os%get_all('state')))
         self%pinds = pack((/(i,i=1,n)/), mask=states > 0)
         deallocate(states)
-        allocate(self%loc_tab(params_glob%nspace,self%nptcls,self%nstates), self%assgn_map(self%nptcls),&
-                    &self%state_tab(self%nstates,self%nptcls))
-        !$omp parallel do default(shared) private(i,iptcl,istate,iproj) proc_bind(close) schedule(static)
+        allocate(self%loc_tab(self%nrefs,self%nptcls), self%assgn_map(self%nptcls),self%state_tab(self%nstates,self%nptcls))
+        !$omp parallel do default(shared) private(i,iptcl,istate,iproj,iref) proc_bind(close) schedule(static)
         do i = 1,self%nptcls
             iptcl = self%pinds(i)
             self%assgn_map(i)%pind   = iptcl
@@ -133,14 +134,15 @@ contains
                 self%state_tab(istate,i)%y      = 0.
                 self%state_tab(istate,i)%has_sh = .false.
                 do iproj = 1,params_glob%nspace
-                    self%loc_tab(iproj,i,istate)%pind   = iptcl
-                    self%loc_tab(iproj,i,istate)%istate = istate
-                    self%loc_tab(iproj,i,istate)%iproj  = iproj
-                    self%loc_tab(iproj,i,istate)%inpl   = 0
-                    self%loc_tab(iproj,i,istate)%dist   = huge(x)
-                    self%loc_tab(iproj,i,istate)%x      = 0.
-                    self%loc_tab(iproj,i,istate)%y      = 0.
-                    self%loc_tab(iproj,i,istate)%has_sh = .false.
+                    iref = (istate-1)*params_glob%nspace + iproj
+                    self%loc_tab(iref,i)%pind   = iptcl
+                    self%loc_tab(iref,i)%istate = istate
+                    self%loc_tab(iref,i)%iproj  = iproj
+                    self%loc_tab(iref,i)%inpl   = 0
+                    self%loc_tab(iref,i)%dist   = huge(x)
+                    self%loc_tab(iref,i)%x      = 0.
+                    self%loc_tab(iref,i)%y      = 0.
+                    self%loc_tab(iref,i)%has_sh = .false.
                 end do
             end do
         end do
@@ -159,11 +161,10 @@ contains
         integer,                 allocatable   :: locn(:)
         type(pftcc_shsrch_grad) :: grad_shsrch_obj(nthr_glob) !< origin shift search object, L-BFGS with gradient
         type(ori)               :: o_prev
-        integer :: i, j, iproj, iptcl, projs_ns, ithr, irot, inds_sorted(pftcc%nrots,nthr_glob), istate, iref_start
+        integer :: i, j, iproj, iptcl, n, projs_ns, ithr, irot, inds_sorted(pftcc%nrots,nthr_glob), istate, iref_start, iref
         logical :: l_doshift
-        real    :: dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob), rotmat(2,2)
-        real    :: dists_projs(params_glob%nspace,nthr_glob), lims(2,2), lims_init(2,2), cxy(3), cxy_prob(3)
-        real    ::  rot_xy(2), inpl_athres
+        real    :: rotmat(2,2), lims(2,2), lims_init(2,2), cxy(3), cxy_prob(3), rot_xy(2), inpl_athres
+        real    :: dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob), dists_refs(self%nrefs,nthr_glob)
         call seed_rnd
         if( params_glob%l_sh_first .and. params_glob%l_doshift )then
             ! make shift search objects
@@ -176,62 +177,69 @@ contains
                     &maxits=params_glob%maxits_sh, opt_angle=.true., coarse_init=.true.)
             end do
             ! fill the table
+            projs_ns = 0
             do istate = 1, self%nstates
-                iref_start  = (istate-1)*params_glob%nspace
-                inpl_athres = calc_athres('dist_inpl', state=istate)
-                call calc_num2sample(params_glob%nspace, 'dist', projs_ns, state=istate)
-                if( allocated(locn) ) deallocate(locn)
-                allocate(locn(projs_ns), source=0)
-                !$omp parallel do default(shared) private(i,j,iptcl,ithr,o_prev,iproj,irot,cxy,cxy_prob,rot_xy,rotmat,locn)&
-                !$omp proc_bind(close) schedule(static)
-                do i = 1, self%nptcls
-                    iptcl = self%pinds(i)
-                    ithr  = omp_get_thread_num() + 1
-                    ! (1) identify shifts using the previously assigned best reference
-                    call build_glob%spproj_field%get_ori(iptcl, o_prev)   ! previous ori
-                    irot  = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
-                    iproj = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
-                    ! BFGS over shifts
-                    call grad_shsrch_obj(ithr)%set_indices(iref_start + iproj, iptcl)
-                    cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
-                    if( irot == 0 ) cxy(2:3) = 0.
-                    ! (2) search projection directions using those shifts for all references
+                call calc_num2sample(params_glob%nspace, 'dist', n, state=istate)
+                projs_ns = max(projs_ns, n)
+            enddo
+            if( allocated(locn) ) deallocate(locn)
+            allocate(locn(projs_ns), source=0)
+            !$omp parallel do default(shared) private(i,j,iptcl,ithr,o_prev,istate,inpl_athres,iproj,iref_start,iref,irot,cxy,cxy_prob,rot_xy,rotmat,locn)&
+            !$omp proc_bind(close) schedule(static)
+            do i = 1, self%nptcls
+                iptcl = self%pinds(i)
+                ithr  = omp_get_thread_num() + 1
+                ! (1) identify shifts using the previously assigned best reference
+                call build_glob%spproj_field%get_ori(iptcl, o_prev)   ! previous ori
+                istate     = o_prev%get_state()
+                irot       = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
+                iproj      = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
+                iref_start = (istate-1)*params_glob%nspace
+                ! BFGS over shifts
+                call grad_shsrch_obj(ithr)%set_indices(iref_start + iproj, iptcl)
+                cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
+                if( irot == 0 ) cxy(2:3) = 0.
+                ! (2) search projection directions using those shifts for all references
+                do istate = 1, self%nstates
+                    iref_start  = (istate-1)*params_glob%nspace
+                    inpl_athres = calc_athres('dist_inpl', state=istate)
                     do iproj = 1, params_glob%nspace
-                        call pftcc%gencorrs(iref_start + iproj, iptcl, cxy(2:3), dists_inpl(:,ithr))
+                        iref = iref_start + iproj
+                        call pftcc%gencorrs(iref, iptcl, cxy(2:3), dists_inpl(:,ithr))
                         dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
                         irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres)
                         ! rotate the shift vector to the frame of reference
                         call rotmat2d(pftcc%get_rot(irot), rotmat)
                         rot_xy = matmul(cxy(2:3), rotmat)
-                        self%loc_tab(iproj,i,istate)%dist   = dists_inpl(irot,ithr)
-                        dists_projs(iproj,ithr)             = dists_inpl(irot,ithr)
-                        self%loc_tab(iproj,i,istate)%inpl   = irot
-                        self%loc_tab(iproj,i,istate)%x      = rot_xy(1)
-                        self%loc_tab(iproj,i,istate)%y      = rot_xy(2)
-                        self%loc_tab(iproj,i,istate)%has_sh = .true.
+                        self%loc_tab(iref,i)%dist   = dists_inpl(irot,ithr)
+                        dists_refs(  iref,ithr)     = dists_inpl(irot,ithr)
+                        self%loc_tab(iref,i)%inpl   = irot
+                        self%loc_tab(iref,i)%x      = rot_xy(1)
+                        self%loc_tab(iref,i)%y      = rot_xy(2)
+                        self%loc_tab(iref,i)%has_sh = .true.
                     enddo
-                    ! (3) see if we can refine the shifts by re-searching them for individual references in the 
-                    !     identified probabilistic neighborhood
-                    if( params_glob%l_prob_sh )then
-                        locn = minnloc(dists_projs(:,ithr), projs_ns)
-                        do j = 1,projs_ns
-                            iproj = locn(j)
-                            ! BFGS over shifts
-                            call grad_shsrch_obj(ithr)%set_indices(iref_start + iproj, iptcl)
-                            irot     = self%loc_tab(iproj,i,istate)%inpl
-                            cxy_prob = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true., xy_in=cxy(2:3))
-                            if( irot > 0 )then
-                                self%loc_tab(iproj,i,istate)%inpl   = irot
-                                self%loc_tab(iproj,i,istate)%dist   = eulprob_dist_switch(cxy_prob(1))
-                                self%loc_tab(iproj,i,istate)%x      = cxy_prob(2)
-                                self%loc_tab(iproj,i,istate)%y      = cxy_prob(3)
-                                self%loc_tab(iproj,i,istate)%has_sh = .true.
-                            endif
-                        end do
-                    endif
                 enddo
-                !$omp end parallel do
+                ! (3) see if we can refine the shifts by re-searching them for individual references in the 
+                !     identified probabilistic neighborhood
+                if( params_glob%l_prob_sh )then
+                    locn = minnloc(dists_refs(:,ithr), projs_ns)
+                    do j = 1,projs_ns
+                        iref = locn(j)
+                        ! BFGS over shifts
+                        call grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
+                        irot     = self%loc_tab(iref,i)%inpl
+                        cxy_prob = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true., xy_in=cxy(2:3))
+                        if( irot > 0 )then
+                            self%loc_tab(iref,i)%inpl   = irot
+                            self%loc_tab(iref,i)%dist   = eulprob_dist_switch(cxy_prob(1))
+                            self%loc_tab(iref,i)%x      = cxy_prob(2)
+                            self%loc_tab(iref,i)%y      = cxy_prob(3)
+                            self%loc_tab(iref,i)%has_sh = .true.
+                        endif
+                    end do
+                endif
             enddo
+            !$omp end parallel do
         else
             l_doshift = params_glob%l_prob_sh .and. params_glob%l_doshift
             if( l_doshift )then
@@ -245,57 +253,63 @@ contains
                         &maxits=params_glob%maxits_sh, opt_angle=.true.)
                 end do
                 ! fill the table
+                projs_ns = 0
                 do istate = 1, self%nstates
-                    iref_start  = (istate-1)*params_glob%nspace
-                    inpl_athres = calc_athres('dist_inpl', state=istate)
-                    call calc_num2sample(params_glob%nspace, 'dist', projs_ns, state=istate)
-                    if( allocated(locn) ) deallocate(locn)
-                    allocate(locn(projs_ns), source=0)
-                    !$omp parallel do default(shared) private(i,j,iptcl,ithr,iproj,irot,cxy,locn) proc_bind(close) schedule(static)
-                    do i = 1, self%nptcls
-                        iptcl = self%pinds(i)
-                        ithr  = omp_get_thread_num() + 1
+                    call calc_num2sample(params_glob%nspace, 'dist', n, state=istate)
+                    projs_ns = max(projs_ns, n)
+                enddo
+                if( allocated(locn) ) deallocate(locn)
+                allocate(locn(projs_ns), source=0)
+                !$omp parallel do default(shared) private(i,j,iptcl,ithr,istate,iref_start,inpl_athres,iproj,iref,irot,cxy,locn) proc_bind(close) schedule(static)
+                do i = 1, self%nptcls
+                    iptcl = self%pinds(i)
+                    ithr  = omp_get_thread_num() + 1
+                    do istate = 1, self%nstates
+                        iref_start  = (istate-1)*params_glob%nspace
+                        inpl_athres = calc_athres('dist_inpl', state=istate)
                         do iproj = 1, params_glob%nspace
-                            call pftcc%gencorrs(iref_start + iproj, iptcl, dists_inpl(:,ithr))
+                            iref = iref_start + iproj
+                            call pftcc%gencorrs(iref, iptcl, dists_inpl(:,ithr))
                             dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
                             irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres)
-                            self%loc_tab(iproj,i,istate)%dist = dists_inpl(irot,ithr)
-                            self%loc_tab(iproj,i,istate)%inpl = irot
-                            dists_projs(iproj,ithr) = dists_inpl(irot,ithr)
+                            self%loc_tab(iref,i)%dist = dists_inpl(irot,ithr)
+                            self%loc_tab(iref,i)%inpl = irot
+                            dists_refs(  iref,ithr)   = dists_inpl(irot,ithr)
                         enddo
-                        locn = minnloc(dists_projs(:,ithr), projs_ns)
-                        do j = 1,projs_ns
-                            iproj = locn(j)
-                            ! BFGS over shifts
-                            call grad_shsrch_obj(ithr)%set_indices(iref_start + iproj, iptcl)
-                            irot = self%loc_tab(iproj,i,istate)%inpl
-                            cxy  = grad_shsrch_obj(ithr)%minimize(irot=irot)
-                            if( irot > 0 )then
-                                self%loc_tab(iproj,i,istate)%inpl = irot
-                                self%loc_tab(iproj,i,istate)%dist = eulprob_dist_switch(cxy(1))
-                                self%loc_tab(iproj,i,istate)%x    = cxy(2)
-                                self%loc_tab(iproj,i,istate)%y    = cxy(3)
-                            endif
-                            self%loc_tab(iproj,i,istate)%has_sh = .true.
-                        end do
                     enddo
-                    !$omp end parallel do
+                    locn = minnloc(dists_refs(:,ithr), projs_ns)
+                    do j = 1,projs_ns
+                        iref = locn(j)
+                        ! BFGS over shifts
+                        call grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
+                        irot = self%loc_tab(iref,i)%inpl
+                        cxy  = grad_shsrch_obj(ithr)%minimize(irot=irot)
+                        if( irot > 0 )then
+                            self%loc_tab(iref,i)%inpl = irot
+                            self%loc_tab(iref,i)%dist = eulprob_dist_switch(cxy(1))
+                            self%loc_tab(iref,i)%x    = cxy(2)
+                            self%loc_tab(iref,i)%y    = cxy(3)
+                        endif
+                        self%loc_tab(iref,i)%has_sh = .true.
+                    end do
                 enddo
+                !$omp end parallel do
             else
                 ! fill the table
                 do istate = 1, self%nstates
                     iref_start  = (istate-1)*params_glob%nspace
                     inpl_athres = calc_athres('dist_inpl', state=istate)
-                    !$omp parallel do default(shared) private(i,iptcl,ithr,iproj,irot) proc_bind(close) schedule(static)
+                    !$omp parallel do default(shared) private(i,iptcl,ithr,iproj,iref,irot) proc_bind(close) schedule(static)
                     do i = 1, self%nptcls
                         iptcl = self%pinds(i)
                         ithr  = omp_get_thread_num() + 1
                         do iproj = 1, params_glob%nspace
-                            call pftcc%gencorrs(iref_start + iproj, iptcl, dists_inpl(:,ithr))
+                            iref = iref_start + iproj
+                            call pftcc%gencorrs(iref, iptcl, dists_inpl(:,ithr))
                             dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
                             irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres)
-                            self%loc_tab(iproj,i,istate)%dist = dists_inpl(irot,ithr)
-                            self%loc_tab(iproj,i,istate)%inpl = irot
+                            self%loc_tab(iref,i)%dist = dists_inpl(irot,ithr)
+                            self%loc_tab(iref,i)%inpl = irot
                         enddo
                     enddo
                     !$omp end parallel do
@@ -377,84 +391,75 @@ contains
         endif
     end subroutine fill_tab_state_only
 
-    ! projection normalization (same energy) of the 3D loc_tab (for each state)
-    ! [0,1] normalization for each state
-    subroutine proj_normalize( self )
+    ! reference normalization (same energy) of the loc_tab
+    ! [0,1] normalization
+    subroutine ref_normalize( self )
         class(eul_prob_tab), intent(inout) :: self
         real    :: sum_dist_all, min_dist, max_dist
-        integer :: i, istate
-        do istate = 1,self%nstates
-            ! normalize so prob of each ptcl is between [0,1] for all projs
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,sum_dist_all)
-            do i = 1, self%nptcls
-                sum_dist_all = sum(self%loc_tab(:,i,istate)%dist)
-                if( sum_dist_all < TINY )then
-                    self%loc_tab(:,i,istate)%dist = 0.
-                else
-                    self%loc_tab(:,i,istate)%dist = self%loc_tab(:,i,istate)%dist / sum_dist_all
-                endif
-            enddo
-            !$omp end parallel do
-            ! min/max normalization to obtain values between 0 and 1
-            !$omp parallel workshare proc_bind(close)
-            min_dist = minval(self%loc_tab(:,:,istate)%dist)
-            max_dist = maxval(self%loc_tab(:,:,istate)%dist)
-            !$omp end parallel workshare
-            if( (max_dist - min_dist) < TINY )then
-                self%loc_tab(:,:,istate)%dist = 0.
+        integer :: i
+        ! normalize so prob of each ptcl is between [0,1] for all projs
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,sum_dist_all)
+        do i = 1, self%nptcls
+            sum_dist_all = sum(self%loc_tab(:,i)%dist)
+            if( sum_dist_all < TINY )then
+                self%loc_tab(:,i)%dist = 0.
             else
-                self%loc_tab(:,:,istate)%dist = (self%loc_tab(:,:,istate)%dist - min_dist) / (max_dist - min_dist)
+                self%loc_tab(:,i)%dist = self%loc_tab(:,i)%dist / sum_dist_all
             endif
         enddo
-    end subroutine proj_normalize
+        !$omp end parallel do
+        ! min/max normalization to obtain values between 0 and 1
+        !$omp parallel workshare proc_bind(close)
+        min_dist = minval(self%loc_tab(:,:)%dist)
+        max_dist = maxval(self%loc_tab(:,:)%dist)
+        !$omp end parallel workshare
+        if( (max_dist - min_dist) < TINY )then
+            self%loc_tab(:,:)%dist = 0.
+        else
+            self%loc_tab(:,:)%dist = (self%loc_tab(:,:)%dist - min_dist) / (max_dist - min_dist)
+        endif
+    end subroutine ref_normalize
 
     ! ptcl -> (proj, state) assignment using the global normalized dist value table
-    subroutine proj_state_assign( self )
+    subroutine ref_assign( self )
         class(eul_prob_tab), intent(inout) :: self
-        integer :: i, iproj, istate, assigned_iproj, assigned_ptcl, proj_dist_inds(params_glob%nspace, self%nstates),&
-                    &stab_inds(self%nptcls, params_glob%nspace, self%nstates), inds_sorted(params_glob%nspace, self%nstates)
-        real    :: sorted_tab(self%nptcls, params_glob%nspace, self%nstates), projs_athres,&
-                    &proj_dist(params_glob%nspace, self%nstates), dists_sorted(params_glob%nspace, self%nstates)
-        logical :: ptcl_avail(self%nptcls, self%nstates)
+        integer :: i, iref, assigned_iref, assigned_ptcl, istate,&
+                    &stab_inds(self%nptcls, self%nrefs), inds_sorted(self%nrefs), iref_dist_inds(self%nrefs)
+        real    :: sorted_tab(self%nptcls, self%nrefs), projs_athres,iref_dist(self%nrefs), dists_sorted(self%nrefs)
+        logical :: ptcl_avail(self%nptcls)
         ! normalization
-        call self%proj_normalize
+        call self%ref_normalize
         ! sorting each columns
-        do istate = 1, self%nstates
-            sorted_tab(:,:,istate) = transpose(self%loc_tab(:,:,istate)%dist)
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iproj,i)
-            do iproj = 1, params_glob%nspace
-                stab_inds(:,iproj,istate) = (/(i,i=1,self%nptcls)/)
-                call hpsort(sorted_tab(:,iproj,istate), stab_inds(:,iproj,istate))
-            enddo
-            !$omp end parallel do
+        sorted_tab = transpose(self%loc_tab(:,:)%dist)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,i)
+        do iref = 1, self%nrefs
+            stab_inds(:,iref) = (/(i,i=1,self%nptcls)/)
+            call hpsort(sorted_tab(:,iref), stab_inds(:,iref))
         enddo
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(istate,projs_athres,assigned_iproj,assigned_ptcl,iproj)
+        !$omp end parallel do
+        projs_athres = 0.
         do istate = 1, self%nstates
-            projs_athres             = calc_athres('dist', state=istate)
-            ! first row is the current best proj distribution
-            proj_dist_inds(:,istate) = 1
-            proj_dist(     :,istate) = sorted_tab(1,:,istate)
-            ptcl_avail(    :,istate) = .true.
-            do while( any(ptcl_avail(:,istate)) )
-                ! sampling the proj distribution to choose next iproj to assign
-                assigned_iproj = angle_sampling(proj_dist(:,istate), dists_sorted(:,istate), inds_sorted(:,istate), projs_athres)
-                assigned_ptcl  = stab_inds(proj_dist_inds(assigned_iproj,istate), assigned_iproj, istate)
-                ptcl_avail(assigned_ptcl,istate)     = .false.
-                self%state_tab(istate,assigned_ptcl) = self%loc_tab(assigned_iproj,assigned_ptcl,istate)
-                ! update the proj_dist and proj_dist_inds
-                do iproj = 1, params_glob%nspace
-                    do while( proj_dist_inds(iproj,istate) < self%nptcls .and. &
-                                .not.(ptcl_avail(stab_inds(proj_dist_inds(iproj,istate),iproj,istate),istate)))
-                        proj_dist_inds(iproj,istate) = proj_dist_inds(iproj,istate) + 1
-                        proj_dist(     iproj,istate) = sorted_tab(proj_dist_inds(iproj,istate), iproj, istate)
-                    enddo
+            projs_athres = max(projs_athres, calc_athres('dist', state=istate))
+        enddo
+        ! first row is the current best reference distribution
+        iref_dist_inds = 1
+        iref_dist      = sorted_tab(1,:)
+        ptcl_avail     = .true.
+        do while( any(ptcl_avail) )
+            ! sampling the ref distribution to choose next iref to assign
+            assigned_iref = angle_sampling(iref_dist, dists_sorted, inds_sorted, projs_athres)
+            assigned_ptcl = stab_inds(iref_dist_inds(assigned_iref), assigned_iref)
+            ptcl_avail(assigned_ptcl)     = .false.
+            self%assgn_map(assigned_ptcl) = self%loc_tab(assigned_iref,assigned_ptcl)
+            ! update the iref_dist and iref_dist_inds
+            do iref = 1, self%nrefs
+                do while( iref_dist_inds(iref) < self%nptcls .and. .not.(ptcl_avail(stab_inds(iref_dist_inds(iref),iref))))
+                    iref_dist_inds(iref) = iref_dist_inds(iref) + 1
+                    iref_dist(     iref) = sorted_tab(iref_dist_inds(iref), iref)
                 enddo
             enddo
         enddo
-        !$omp end parallel do
-        ! state assign if needed
-        call self%state_assign
-    end subroutine proj_state_assign
+    end subroutine ref_assign
 
     ! state normalization (same energy) of the state_tab
     ! [0,1] normalization of the whole table
@@ -550,7 +555,7 @@ contains
     subroutine read_tab_to_glob( self, binfname )
         class(eul_prob_tab), intent(inout) :: self
         character(len=*),    intent(in)    :: binfname
-        type(ptcl_ref),      allocatable   :: mat_loc(:,:,:)
+        type(ptcl_ref),      allocatable   :: mat_loc(:,:)
         integer :: funit, addr, io_stat, file_header(2), nptcls_loc, nprojs_loc, i_loc, i_glob
         if( file_exists(trim(binfname)) )then
             call fopen(funit,trim(binfname),access='STREAM',action='READ',status='OLD', iostat=io_stat)
@@ -562,8 +567,8 @@ contains
         read(unit=funit,pos=1) file_header
         nprojs_loc = file_header(1)
         nptcls_loc = file_header(2)
-        allocate(mat_loc(nprojs_loc, nptcls_loc, self%nstates))
         if( nprojs_loc .ne. params_glob%nspace ) THROW_HARD( 'npsace should be the same as nprojs in this partition file!' )
+        allocate(mat_loc(nprojs_loc*self%nstates, nptcls_loc))
         ! read partition information
         addr = sizeof(file_header) + 1
         read(unit=funit,pos=addr) mat_loc
@@ -571,8 +576,8 @@ contains
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i_loc,i_glob)
         do i_glob = 1, self%nptcls
             do i_loc = 1, nptcls_loc
-                if( mat_loc(1,i_loc,1)%pind == self%loc_tab(1,i_glob,1)%pind )then
-                    self%loc_tab(:,i_glob,:) = mat_loc(:,i_loc,:)
+                if( mat_loc(1,i_loc)%pind == self%loc_tab(1,i_glob)%pind )then
+                    self%loc_tab(:,i_glob) = mat_loc(:,i_loc)
                     exit
                 endif
             end do
