@@ -834,8 +834,7 @@ contains
     subroutine exec_prob_tab( self, cline )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        use simple_strategy2D3D_common, only: prepimgbatch, prepimg4align, calcrefvolshift_and_mapshifts2ptcls,killimgbatch,&
-                                             &read_and_filter_refvols, preprefvol, discrete_read_imgbatch, set_bp_range
+        use simple_strategy2D3D_common
         use simple_polarft_corrcalc,    only: polarft_corrcalc
         use simple_eul_prob_tab,        only: eul_prob_tab
         use simple_euclid_sigma2,       only: euclid_sigma2
@@ -857,6 +856,14 @@ contains
         real     :: xyz(3)
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
+        ! exception handling for lp_auto==yes
+        if( trim(params%lp_auto).eq.'yes' )then
+            if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
+                ! all good
+            else
+                THROW_HARD('Automatic low-pass limit estimation requires LPSTART/LPSTOP range input')
+            endif
+        endif
         allocate(ptcl_mask(params%fromp:params%top))
         ! The policy here ought to be that nothing is done with regards to sampling other than reproducing
         ! what was generated in the driver (prob_align, below). Sampling is delegated to prob_align (below)
@@ -881,6 +888,9 @@ contains
         enddo
         !$omp end parallel do
         ! PREPARATION OF REFERENCES IN PFTCC
+        ! (if needed) estimating lp (over all states) and reseting params_glob%lp and params_glob%kfromto
+        if( params%l_lpauto ) call estimate_lp_refvols
+        ! pftcc and sigmas
         if( params%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
             call eucl_sigma%new(fname, params%box)
