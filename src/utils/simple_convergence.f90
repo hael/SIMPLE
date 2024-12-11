@@ -253,9 +253,7 @@ contains
         write(logfhandle,609) '>>> ML  REGULARIZATION IS OFF'
         endif
         if( params_glob%l_icm )then
-        
         write(logfhandle,607) '>>> ICM REGULARIZATION IS ON, LAMBDA: ', params_glob%lambda
-        
         else
         write(logfhandle,609) '>>> ICM REGULARIZATION IS OFF'
         endif
