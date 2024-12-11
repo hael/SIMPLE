@@ -431,7 +431,7 @@ contains
             update_frac          = 1.0
             nptcls_eff           = spproj%count_state_gt_zero()
             if( cline%defined('nsample') )then
-                update_frac = real(params%nsample * nstates_glob) / real(nptcls_eff)
+                update_frac = real(params%nsample * params%nstates) / real(nptcls_eff)
                 l_nsample_given = .true.
             else if( cline%defined('update_frac') )then
                 update_frac = params%update_frac
@@ -445,13 +445,13 @@ contains
                 else
                     nsample_minmax(2) = nptcls_eff
                 endif
-                update_frac       = calc_update_frac_dyn(nptcls_eff, nstates_glob, nsample_minmax, 1, MAXITS_GLOB)
+                update_frac       = calc_update_frac_dyn(nptcls_eff, params%nstates, nsample_minmax, 1, MAXITS_GLOB)
                 l_update_frac_dyn = .true.
-             else
+            else
                 if( cline%defined('nsample_max') )then
-                    update_frac = calc_update_frac(nptcls_eff, nstates_glob, [NSAMPLE_MINMAX_DEFAULT(1),params%nsample_max])
+                    update_frac = calc_update_frac(nptcls_eff, params%nstates, [NSAMPLE_MINMAX_DEFAULT(1),params%nsample_max])
                 else
-                    update_frac = calc_update_frac(nptcls_eff, nstates_glob, NSAMPLE_MINMAX_DEFAULT)
+                    update_frac = calc_update_frac(nptcls_eff, params%nstates, NSAMPLE_MINMAX_DEFAULT)
                 endif
             endif
             update_frac = min(UPDATE_FRAC_MAX, update_frac) ! to ensure fractional update is always on
@@ -564,20 +564,20 @@ contains
         do istage = start_stage, NSTAGES
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', lpinfo(istage)%lp
-            ! Preparation of command line for probabilistic search
+            ! At the splitting stage of docked mode
+            if( params%multivol_mode.eq.'docked' .and. istage == HET_DOCKED_STAGE )then
+                call randomize_states(spproj, params%projfile, xreconstruct3D_distr)
+            endif
+            ! Preparation of command line for refinement
             call set_cline_refine3D(istage, l_cavgs=.false.)
             if( lpinfo(istage)%l_autoscale )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',lpinfo(istage)%box_crop
             endif
-            ! Probabilistic search
+            ! Executing the refinement with the above settings
             call exec_refine3D(istage, xrefine3D)
             ! Symmetrization
             if( istage == SYMSRCH_STAGE )then
                 call symmetrize(istage, spproj, params%projfile, xreconstruct3D_distr)
-            endif
-            ! State labelling
-            if( params%multivol_mode.eq.'docked' )then
-                if( istage == HET_DOCKED_STAGE - 1 ) call randomize_states(spproj, params%projfile, xreconstruct3D_distr)
             endif
         enddo
         ! for visualization
@@ -924,7 +924,7 @@ contains
                 endif
             endif
         else
-            update_frac_dyn = calc_update_frac_dyn(nptcls_eff, nstates_glob, nsample_minmax, iter, maxits_dyn)
+            update_frac_dyn = calc_update_frac_dyn(nptcls_eff, params_glob%nstates, nsample_minmax, iter, maxits_dyn)
         endif
         ! symmetry
         pgrp = trim(params_glob%pgrp)
@@ -1012,7 +1012,7 @@ contains
                 trs           = lpinfo(istage)%trslim
                 sh_first      = 'yes'
                 ml_reg        = 'yes'
-                if( nstates_glob > 1 )then
+                if( params_glob%nstates > 1 )then
                 frac_best     = 0.98 ! max out balanced sampling
                 else
                 frac_best     = 0.85 ! means sampling is done from top-ranking 85% particles in class
@@ -1195,7 +1195,7 @@ contains
         call cline_reconstruct3D%set('nstates', nstates_glob)
         call cline_postprocess%set(  'nstates', nstates_glob)
         call cline_reproject%set(    'nstates', nstates_glob)
-        call calc_start_rec(projfile, xreconstruct3D, istage=HET_DOCKED_STAGE - 1)
+        call calc_start_rec(projfile, xreconstruct3D, istage=HET_DOCKED_STAGE)
     end subroutine randomize_states
 
     subroutine gen_ortho_reprojs4viz
