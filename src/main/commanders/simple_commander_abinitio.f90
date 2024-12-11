@@ -889,7 +889,7 @@ contains
         allocate(files_that_stay(5))
         files_that_stay(1)%str = basename(trim(params_glob%projfile))
         files_that_stay(2)%str = 'cavgs'
-        files_that_stay(3)%str = 'nice_'
+        files_that_stay(3)%str = 'nice'
         files_that_stay(4)%str = 'frcs'
         files_that_stay(5)%str = 'ABINITIO3D'
         ! make the move
