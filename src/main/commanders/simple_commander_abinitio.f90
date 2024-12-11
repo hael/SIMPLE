@@ -599,6 +599,7 @@ contains
         character(len=:), allocatable :: srch_oris
         call cline%set('center',   'no')
         call cline%set('cavg_ini', 'no')
+        call cline%set('prg',      'multivol_assign')
         if( .not. cline%defined('nstates')  ) THROW_HARD('nstates required on command line')
         srch_oris = 'yes'
         if( cline%defined('srch_oris') )then
