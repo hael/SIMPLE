@@ -3429,7 +3429,7 @@ contains
         &'multi-volume assignment and 3D reconstruction from particles',&                  ! descr_short
         &'is a distributed workflow for generating multiple structural state volumes from particles',& ! descr_long                                                         ! descr_long
         &'simple_exec',&                                                                   ! executable
-        &0, 0, 0, 4, 3, 1, 2, .true.,&                                                    ! # entries in each group, requires sp_project
+        &0, 0, 0, 5, 3, 1, 2, .true.,&                                                    ! # entries in each group, requires sp_project
         &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute"  )           ! GUI                                                      
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -3440,10 +3440,11 @@ contains
         ! <empty>
         ! search controls
         call multivol_assign%set_input('srch_ctrls', 1, pgrp,        gui_submenu="model",  gui_advanced=.false.)
-        call multivol_assign%set_input('srch_ctrls', 2, update_frac, gui_submenu="search", gui_advanced=.true.)
-        call multivol_assign%set_input('srch_ctrls', 3, nstates,     gui_submenu="search", gui_advanced=.false.)
+        call multivol_assign%set_input('srch_ctrls', 2, nsample,     gui_submenu="search", gui_advanced=.false.)
+        call multivol_assign%set_input('srch_ctrls', 3, update_frac, gui_submenu="search", gui_advanced=.true.)
+        call multivol_assign%set_input('srch_ctrls', 4, nstates,     gui_submenu="search", gui_advanced=.false.)
         multivol_assign%srch_ctrls(3)%required = .true.
-        call multivol_assign%set_input('srch_ctrls', 4, 'srch_oris', 'multi', 'Search orientations',&
+        call multivol_assign%set_input('srch_ctrls', 5, 'srch_oris', 'multi', 'Search orientations',&
         &'Search orientations(yes|no){yes}', '(yes|no){yes}', .false., 'single', gui_submenu="search", gui_advanced=.true.)
         ! filter controls
         call multivol_assign%set_input('filt_ctrls', 1, hp, gui_submenu="filter")
