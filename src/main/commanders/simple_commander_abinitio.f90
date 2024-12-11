@@ -347,7 +347,7 @@ contains
         type(parameters)                :: params
         type(sp_project)                :: spproj
         type(image)                     :: noisevol 
-        integer :: istage, s, ncls, icls, i, start_stage, nptcls2update, noris
+        integer :: istage, s, ncls, icls, i, start_stage, nptcls2update, noris, nstates_in_project
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
@@ -486,18 +486,27 @@ contains
             if( spproj%is_virgin_field('ptcl3D') )then
                 THROW_HARD('Prior 3D alignment is lacking for multi-volume assignment')
             endif
-            call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
             ! create an initial sampling of all updated ptcls for 3D reconstruction
             noris = spproj%os_ptcl3D%get_noris()
             allocate(ptcl_mask(1:noris))
             call spproj%os_ptcl3D%sample4update_updated([1,noris], nptcls2update, pinds, ptcl_mask, .true.)
             call spproj%os_ptcl3D%set_updatecnt(1, pinds) ! set all sampled updatecnts to 1 & the rest to zero
             deallocate(pinds, ptcl_mask) ! these are not needed
-            ! write updated project file
-            call spproj%write_segment_inside(params%oritype, params%projfile)
             ! start at the same stage as for multivol_mode==docked
             start_stage = HET_DOCKED_STAGE
-            ! create starting volume(s)
+            ! create state labelling
+            nstates_in_project = spproj%os_ptcl3D%get_n('state')
+            if( nstates_in_project == params%nstates )then
+                THROW_WARN('exec_abinitio3D: prior nstates equal to given nstates. No randomization!')
+            elseif( nstates_in_project == 1 )then
+                THROW_WARN('No previous state assignment detected in project. Randomizing states!')
+                call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
+            else
+                THROW_HARD('Previous state assignment inconsistent with given number of states!')
+            endif
+            ! write updated project file
+            call spproj%write_segment_inside(params%oritype, params%projfile)
+            ! calc recs
             call calc_start_rec(params%projfile, xreconstruct3D_distr, istage=start_stage)
         else if( .not. l_ini3D )then
             ! the ptcl3D field should be clean of updates at this stage
