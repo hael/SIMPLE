@@ -347,7 +347,7 @@ contains
         type(parameters)                :: params
         type(sp_project)                :: spproj
         type(image)                     :: noisevol 
-        integer :: istage, s, ncls, icls, i, start_stage, nptcls2update, noris, nstates_in_project
+        integer :: istage, s, ncls, icls, i, start_stage, nptcls2update, noris, nstates_on_cline, nstates_in_project
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
@@ -362,6 +362,13 @@ contains
         if( .not. cline%defined('ptclw')       ) call cline%set('ptclw',          'no')
         if( .not. cline%defined('projrec')     ) call cline%set('projrec',       'yes')
         if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'yes')
+        ! adjust default multivol_mode unless given on command line
+        if( cline%defined('nstates') )then
+            nstates_on_cline = cline%get_iarg('nstates')
+            if( nstates_on_cline > 1 .and. .not. cline%defined('multivol_mode') )then
+                call cline%set('multivol_mode', 'independent')
+            endif
+        endif
         ! make master parameters
         call params%new(cline)
         call cline%set('mkdir', 'no')
