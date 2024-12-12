@@ -15,6 +15,10 @@ use simple_polarft_corrcalc,    only: polarft_corrcalc
 use simple_aff_prop,            only: aff_prop
 use simple_spectral_clustering, only: spec_clust
 use simple_pftcc_shsrch_fm,     only: pftcc_shsrch_fm
+use simple_corrmat
+use simple_cmdline,        only: cmdline
+use simple_parameters
+use simple_ftiter
 
 implicit none 
 #include "simple_local_flags.inc"
@@ -445,7 +449,7 @@ contains
         real,    allocatable    :: im_in_rmat(:,:,:), im_win_rmat(:,:,:), bin_win_rmat(:,:,:), area(:,:)
         type(image)    :: img_win, bin_win, lin_win, lines
         type(binimage) :: bin_erode 
-        real           :: smpd,new_cen(3)
+        real           :: smpd,new_cen(3), msk_rad = 50.
         integer        :: ldim(3), i, windim(3), j, num_parts, counts, pad = 150
         logical        :: outside
         ldim = img_in%get_ldim()
@@ -494,7 +498,7 @@ contains
             end if 
             call bin_cc%window_slim(pos(i,:), AFM_pick%box_raw, bin_win, outside)
             do j = 1, AFM_pick%nboxes
-                if(count(nint(bin_win%get_rmat()) == j) > 20 .and. area(i,j) /= 1.) then 
+                if(count(nint(bin_win%get_rmat()) == j) > 300 .and. area(i,j) /= 1.) then 
                     area(i,j) = count(nint(bin_win%get_rmat()) == j)
                 end if
             end do 
@@ -521,62 +525,70 @@ contains
             call img_win%set_rmat(im_win_rmat, .false.)
             call lines%window_slim(pos(i,:), AFM_pick%box_raw, lin_win, outside)
             ! throw some hough lines away. can adjust parameters.
-            if(lin_win%mean() > 0.01 .and. lin_win%real_corr(img_win) > 0.01) then   
+            if(lin_win%mean() > 0.01 .and. lin_win%real_corr(img_win) > 0.) then   
                 cycle
             end if 
+            ! can change to each indiv. particle radius 
+            ! call img_win%mask(msk_rad,'soft') 
             if(img_win%mean() > 0.) then  
                 pick_vec(i) = img_win
-                ! print *, img_win%get_ldim()
             end if 
         end do 
 
     end subroutine 
-    subroutine corr_clus( pick_mat )
-        ! pass in pick_vec instead. change structure of commander. 
-        type(image), intent(inout)  :: pick_mat(:,:)
-        real, allocatable        :: corr_mat(:,:)
+    subroutine pre_proc( pick_vec )
+        type(image), intent(inout)  :: pick_vec(:)
+        logical, allocatable     :: log_mat(:,:)
+        real, allocatable        :: corr_mat(:,:), hann_w(:)
         integer, allocatable     ::  max_box(:)
-        type(image), allocatable :: pick_vec(:,:)
-        type(polarft_corrcalc)      :: pftcc
-        type(polarizer)             :: polartransform
-        integer                     :: dims(2), row, col, ldim(3), ncls_ini, icls 
-        type(pftcc_shsrch_fm), allocatable :: fm_correlators(:)
+        integer                     :: pick_dims(2), row, col, ldim(3), ncls_ini, icls
+        integer                     :: h, k, l, lims(3,2), phys(3)
         type(parameters)            :: params
-        real                        :: smpd 
-        ! should rethink memory... 
-        smpd = pick_mat(1,1)%get_smpd()
-        dims = shape(pick_mat)
-        allocate(max_box(dims(1)))
-        params%kfromto(1) = max(2, calc_fourier_index(params%hp, ncls_ini, smpd))
-        params%kfromto(2) =        calc_fourier_index(params%lp, ncls_ini, params%smpd)
-        params%sh_inv = 'yes'
-        params%trs = real(params%box)/6.
-        ! params%l_mirr = 'yes'
-        ! this is hard coded. fix later/
-        do row = 1, dims(1)
-            max_box(row) = maxval(pick_mat(row,2)%get_ldim())
+        real                        :: smpd, w
+        real                        :: hp = 10., lp = 1., ave, sdev, maxv, minv
+        type(image)                 :: noise 
+        type(ftiter)                :: ft_iter
+        ! pick_dims = shape(pick_mat)
+        ! allocate(log_mat(pick_dims(1),pick_dims(2)), source = .false.)
+        ! allocate(max_box(pick_dims(1)))
+        ! do row = 1, pick_dims(1)
+        !     max_box(row) = maxval(pick_mat(row,2)%get_ldim())
+        ! end do 
+        ! ldim = [maxval(max_box),maxval(max_box),1]
+        ! ncls_ini = 0
+        ! do row = 1, pick_dims(1)
+        !     do col = 1, pick_dims(2)
+        !         if(sum(pick_mat(row,col)%get_ldim()) > 3) then
+        !             call pick_mat(row,col)%pad_inplace(ldim)
+        !             log_mat(row,col) = .true.
+        !             ncls_ini = ncls_ini + 1
+        !         end if 
+        !     end do 
+        ! end do 
+        ! pick_vec = pack(pick_mat, log_mat .eqv. .true.)
+        ! params%box = ldim(1)
+        ldim = pick_vec(1)%get_ldim()
+        call ft_iter%new(ldim, pick_vec(1)%get_smpd())
+        lims = ft_iter%loop_lims(1)
+        do icls = 1, size(pick_vec)
+            ! call pick_vec(icls)%add_gauran(5.)
+            call pick_vec(icls)%fft()
+            hann_w = pick_vec(icls)%hannw()
+            !$omp parallel do collapse(3) schedule(static) default(shared)&
+            !$omp private(h,k,l,w,phys) proc_bind(close)
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    do l=lims(3,1),lims(3,2)
+                        w = hann_w(max(1,abs(h)))*hann_w(max(1,abs(k)))*hann_w(max(1,abs(l)))
+                        phys = ft_iter%comp_addr_phys(h,k,l)
+                        call pick_vec(icls)%mul_cmat_at(phys,w)
+                    end do
+                end do
+            end do
+            !$omp end parallel do
+            deallocate(hann_w)
+            call pick_vec(icls)%ifft()
+            ! need a soft mask 
         end do 
-        ldim = [maxval(max_box),maxval(max_box),1]
-        ncls_ini = 0
-        do row = 1, dims(1)
-            do col = 1, dims(2)
-                if(sum(pick_mat(row,col)%get_ldim()) > 3) then
-                    call pick_mat(row,col)%pad_inplace(ldim)
-                    call pick_mat(row,col)%fft()
-                    ncls_ini = ncls_ini + 1
-                end if 
-            end do 
-        end do 
-        allocate(corr_mat(ncls_ini,ncls_ini), source=-1.)
-        allocate(pick_vec(ncls_ini,1))
-        call polartransform%new(ldim,smpd)
-        call pftcc%new(ncls_ini, [1,ncls_ini], params%kfromto)
-        call polartransform%init_polarizer(pftcc, params%alpha)
-        ! not sure about order... 
-        pick_vec = reshape(pick_mat,[ncls_ini,1])
-
-    
-        ! ncls_sel is max number of intials clusters.
-        ! different resolutions(?), maybe depends on class population
     end subroutine 
 end module simple_afm_image 

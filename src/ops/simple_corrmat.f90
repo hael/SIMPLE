@@ -130,7 +130,7 @@ contains
         endif
     end subroutine calc_cartesian_corrmat_2
 
-    subroutine calc_inplane_invariant_corrmat( imgs, hp, lp, corrmat)
+    subroutine calc_inplane_invariant_corrmat( imgs, hp, lp, corrmat, mirr)
         use simple_polarizer,         only: polarizer
         use simple_polarft_corrcalc,  only: polarft_corrcalc
         use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
@@ -142,7 +142,11 @@ contains
         type(polarft_corrcalc)               :: pftcc
         real, allocatable :: inpl_corrs(:)
         integer :: n, i, j, ithr, nrots, loc(1), irot
-        real    :: lims(2,2), lims_init(2,2), cxy(3)
+        real    :: lims(2,2), lims_init(2,2), cxy(3), cxy_m(3)
+        logical, optional, intent(in)        :: mirr
+        logical                              :: l_mirr
+        l_mirr = .false.
+        if(present(mirr)) l_mirr = mirr
         n = size(imgs)
         ! resolution limits
         params_glob%kfromto(1) = max(2, calc_fourier_index(hp, params_glob%box, params_glob%smpd))
@@ -162,11 +166,13 @@ contains
             &maxits=params_glob%maxits_sh, opt_angle=.true.)
         end do
         
+
         !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i = 1, n
             call imgs(i)%fft()
             call polartransform%polarize(pftcc, imgs(i), i, isptcl=.false., iseven=.true.)
             call pftcc%cp_even_ref2ptcl(i, i)
+            if( l_mirr ) call pftcc%mirror_pft(pftcc%pfts_refs_even(:,:,i), pftcc%pfts_refs_odd(:,:,i))
             call imgs(i)%ifft()
         end do
         !$omp end parallel do
@@ -189,6 +195,14 @@ contains
                     corrmat(i,j)= cxy(1)
                 else
                     corrmat(i,j) = inpl_corrs(loc(1))
+                endif
+                if( l_mirr )then
+                    call pftcc%set_eo(i,.false.)
+                    loc  = maxloc(inpl_corrs)
+                    irot = loc(1) 
+                    call grad_shsrch_obj(ithr)%set_indices(i, j)
+                    cxy_m = grad_shsrch_obj(ithr)%minimize(irot=irot)
+                    corrmat(i,j) = max(corrmat(i,j),cxy_m(1))
                 endif
                 corrmat(j,i) = corrmat(i,j)
             enddo
