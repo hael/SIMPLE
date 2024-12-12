@@ -953,7 +953,7 @@ contains
         real, allocatable     :: optlp(:), res(:), fsc(:)
         type(masker)          :: envmsk
         integer               :: s, find4eoavg, ldim(3)
-        real                  :: res05s(params_glob%nstates), res0143s(params_glob%nstates), lplim, bfac, weight_prev, update_frac_trail_rec
+        real                  :: res05s(params_glob%nstates), res0143s(params_glob%nstates), bfac, weight_prev, update_frac_trail_rec
         ! init
         ldim = [params_glob%box_crop,params_glob%box_crop,params_glob%box_crop]
         call build_glob%vol%new(ldim,params_glob%smpd_crop)
@@ -1047,18 +1047,12 @@ contains
                 pprocvol = add2fbody(volname, params_glob%ext, PPROC_SUFFIX)
                 lpvol    = add2fbody(volname, params_glob%ext, LP_SUFFIX)
                 build_glob%fsc(s,:) = file2rarr('fsc_state'//int2str_pad(s,2)//'.bin')
-                ! low-pass limit
-                if( params_glob%l_lpset )then
-                    lplim = params_glob%lp
-                else
-                    lplim = res0143s(s)
-                endif
                 ! B-factor estimation
                 if( cline%defined('bfac') )then
                     bfac = params_glob%bfac
                 else
-                    if( lplim < 5. )then
-                        bfac = build_glob%vol%guinier_bfac(HPLIM_GUINIER, lplim)
+                    if( res0143s(s) < 5. )then
+                        bfac = build_glob%vol%guinier_bfac(HPLIM_GUINIER, res0143s(s))
                         write(logfhandle,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', bfac
                     else
                         bfac = 0.
@@ -1068,21 +1062,15 @@ contains
                 call build_glob%vol2%copy(build_glob%vol)
                 call build_glob%vol%apply_bfac(bfac)
                 ! low-pass filter
-                if( params_glob%l_lpset )then
-                    call build_glob%vol%bp(0., lplim)
-                    call build_glob%vol2%bp(0., lplim)
-                else
-                    res   = build_glob%vol%get_res()
-                    optlp = fsc2optlp(build_glob%fsc(s,:))
-                    where( res < TINY ) optlp = 0.
-                    lplim = res0143s(s)
-                    ! optimal low-pass filter from FSC
-                    call build_glob%vol%apply_filter(optlp)
-                    call build_glob%vol2%apply_filter(optlp)
-                    ! final low-pass filtering for smoothness
-                    call build_glob%vol%bp(0., res0143s(s))
-                    call build_glob%vol2%bp(0., res0143s(s))
-                endif
+                res   = build_glob%vol%get_res()
+                optlp = fsc2optlp(build_glob%fsc(s,:))
+                where( res < TINY ) optlp = 0.
+                ! optimal low-pass filter from FSC
+                call build_glob%vol%apply_filter(optlp)
+                call build_glob%vol2%apply_filter(optlp)
+                ! final low-pass filtering for smoothness
+                call build_glob%vol%bp(0., res0143s(s))
+                call build_glob%vol2%bp(0., res0143s(s))
                 call build_glob%vol%ifft()
                 call build_glob%vol2%ifft()
                 ! write low-pass filtered without B-factor or mask

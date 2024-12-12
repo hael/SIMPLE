@@ -173,8 +173,7 @@ contains
         integer :: state, box, fsc_box, mskfile_box, ldim(3)
         logical :: has_fsc, has_mskfile
         ! set defaults
-        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',     'yes')
-        if( .not. cline%defined('nonuniform') ) call cline%set('nonuniform', 'no')
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call cline%set('oritype', 'out')
         ! parse commad-line
         call params%new(cline)
@@ -206,28 +205,31 @@ contains
         call vol_bfac%new(ldim, smpd)
         call vol_bfac%read(fname_vol)
         ! check fsc filter & determine resolution
-        has_fsc = .false.
-        if( cline%defined('lp') )then
-            lplim = params%lp
+        has_fsc = .false.        
+        if( cline%defined('fsc') )then
+            if( .not.file_exists(params%fsc) ) THROW_HARD('FSC file: '//trim(params%fsc)//' not found')
+            has_fsc = .true.
         else
-            if( .not.cline%defined('fsc') )then
-                call spproj%get_fsc(state, fname_fsc, fsc_box)
-                params%fsc = trim(fname_fsc)
-            endif
-            if( .not.file_exists(params%fsc) )then
-                THROW_HARD('FSC file: '//trim(params%fsc)//' not found')
-            else
+            call spproj%get_fsc(state, fname_fsc, fsc_box)
+            params%fsc = trim(fname_fsc)
+            if( file_exists(params%fsc) )then
                 has_fsc = .true.
-            endif
+            else
+                THROW_WARN('FSC file: '//trim(params%fsc)//' not found')
+                has_fsc = .false.
+                if( .not. cline%defined('lp') ) THROW_HARD('no method for low-pass filtering defined; give fsc|lp on command line; exec_postprocess')
+            endif 
         endif
         if( has_fsc )then
             ! resolution & optimal low-pass filter from FSC
             res   = vol_bfac%get_res()
             fsc   = file2rarr(params%fsc)
             optlp = fsc2optlp(fsc)
-            call get_resolution( fsc, res, fsc05, fsc0143 )
+            call get_resolution(fsc, res, fsc05, fsc0143)
             where( res < TINY ) optlp = 0.
             lplim = fsc0143
+        else
+            lplim = params%lp
         endif
         if( cline%defined('bfac') )then
             ! already in params%bfac
@@ -241,37 +243,29 @@ contains
         endif
         ! check volume mask
         has_mskfile = params%l_filemsk
-        if( .not. has_mskfile )then
-            call spproj%get_vol('vol_msk', 1, fname_msk, mskfile_smpd, mskfile_box)
-            params%mskfile = trim(fname_msk)
-            if( file_exists(params%mskfile) ) has_mskfile = .true.
-        endif
         if( has_mskfile )then
             call mskvol%new(ldim, smpd)
             call mskvol%read(params%mskfile)
+        else
+            call spproj%get_vol('vol_msk', 1, fname_msk, mskfile_smpd, mskfile_box)
+            params%mskfile = trim(fname_msk)
+            if( file_exists(params%mskfile) ) has_mskfile = .true.
         endif
         ! B-factor
         call vol_bfac%fft()
         call vol_no_bfac%copy(vol_bfac)
         call vol_bfac%apply_bfac(params%bfac)
-        ! low-pass filter
-        if( cline%defined('lp') )then
-            ! low-pass overrides all input
-            call vol_bfac%bp(0., params%lp)
-            call vol_no_bfac%bp(0., params%lp)
-        else if( has_fsc )then
+        ! low-pass filter    
+        if( has_fsc )then
             ! optimal low-pass filter of unfiltered volumes from FSC
-            if( params%cc_objfun == OBJFUN_CC )then
-                call vol_bfac%apply_filter(optlp)
-                call vol_no_bfac%apply_filter(optlp)
-            else
-                ! FSC-based regularization is performed upon assembly
-            endif
+            call vol_bfac%apply_filter(optlp)
+            call vol_no_bfac%apply_filter(optlp)
             ! final low-pass filtering for smoothness
             call vol_bfac%bp(0., fsc0143)
             call vol_no_bfac%bp(0., fsc0143)
         else
-            THROW_HARD('no method for low-pass filtering defined; give fsc|lp on command line; exec_postprocess')
+            call vol_bfac%bp(0., lplim)
+            call vol_no_bfac%bp(0., lplim)
         endif
         ! write low-pass filtered without B-factor or mask & read the original back in
         call vol_no_bfac%ifft
@@ -280,11 +274,7 @@ contains
         call vol_bfac%ifft()
         if( has_mskfile )then
             call vol_bfac%zero_background
-            if( cline%defined('lp_backgr') )then
-                call vol_bfac%lp_background(mskvol,params%lp_backgr)
-            else
-                call vol_bfac%mul(mskvol)
-            endif
+            call vol_bfac%mul(mskvol)
             call mskvol%kill
         else
             call vol_bfac%mask(params%msk_crop, 'soft')
