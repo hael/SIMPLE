@@ -339,17 +339,17 @@ contains
                     &maxits=params_glob%maxits_sh, opt_angle=.true.)
             end do
             ! fill the table
-            do istate = 1, self%nstates
-                iref_start  = (istate-1)*params_glob%nspace
-                !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,iproj,irot,cxy)&
-                !$omp proc_bind(close) schedule(static)
-                do i = 1, self%nptcls
-                    iptcl = self%pinds(i)
-                    ithr  = omp_get_thread_num() + 1
-                    ! identify shifts using the previously assigned best reference
-                    call build_glob%spproj_field%get_ori(iptcl, o_prev)   ! previous ori
-                    irot  = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
-                    iproj = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
+            !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,iproj,irot,cxy,istate,iref_start)&
+            !$omp proc_bind(close) schedule(static)
+            do i = 1, self%nptcls
+                iptcl = self%pinds(i)
+                ithr  = omp_get_thread_num() + 1
+                ! identify shifts using the previously assigned best reference
+                call build_glob%spproj_field%get_ori(iptcl, o_prev)   ! previous ori
+                iproj = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
+                do istate = 1, self%nstates
+                    irot       = pftcc%get_roind(360.-o_prev%e3get()) ! in-plane angle index
+                    iref_start = (istate-1)*params_glob%nspace
                     ! BFGS over shifts
                     call grad_shsrch_obj(ithr)%set_indices(iref_start + iproj, iptcl)
                     cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true.)
@@ -365,20 +365,20 @@ contains
                     self%state_tab(istate,i)%y      = cxy(3)
                     self%state_tab(istate,i)%has_sh = .true.
                 enddo
-                !$omp end parallel do
             enddo
+            !$omp end parallel do
         else
             ! fill the table
-            do istate = 1, self%nstates
-                iref_start  = (istate-1)*params_glob%nspace
-                !$omp parallel do default(shared) private(i,iptcl,o_prev,iproj,irot)&
-                !$omp proc_bind(close) schedule(static)
-                do i = 1, self%nptcls
-                    iptcl = self%pinds(i)
-                    ! identify shifts using the previously assigned best reference
-                    call build_glob%spproj_field%get_ori(iptcl, o_prev)   ! previous ori
-                    irot  = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
-                    iproj = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
+            !$omp parallel do default(shared) private(i,iptcl,o_prev,iproj,irot,istate,iref_start)&
+            !$omp proc_bind(close) schedule(static)
+            do i = 1, self%nptcls
+                iptcl = self%pinds(i)
+                ! identify shifts using the previously assigned best reference
+                call build_glob%spproj_field%get_ori(iptcl, o_prev)   ! previous ori
+                irot  = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
+                iproj = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
+                do istate = 1, self%nstates
+                    iref_start  = (istate-1)*params_glob%nspace
                     self%state_tab(istate,i)%dist   = eulprob_dist_switch(real(pftcc%gencorr_for_rot_8(iref_start+iproj, iptcl, irot)))
                     self%state_tab(istate,i)%iproj  = iproj
                     self%state_tab(istate,i)%inpl   = irot
@@ -386,8 +386,8 @@ contains
                     self%state_tab(istate,i)%y      = 0.
                     self%state_tab(istate,i)%has_sh = .true.
                 enddo
-                !$omp end parallel do
             enddo
+            !$omp end parallel do
         endif
     end subroutine fill_tab_state_only
 
