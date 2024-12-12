@@ -202,7 +202,6 @@ type :: oris
     procedure          :: calc_hard_weights2D
     procedure          :: calc_soft_weights2D
     procedure          :: find_best_classes
-    procedure          :: class_robust_rejection
     procedure          :: find_closest_proj
     procedure          :: discretize
     procedure, private :: nearest_proj_neighbors_1, nearest_proj_neighbors_2, nearest_proj_neighbors_3
@@ -2951,98 +2950,6 @@ contains
         enddo
         deallocate(msk,rfinds,corrs)
     end subroutine find_best_classes
-
-    subroutine class_robust_rejection( self, mask, adjust )
-        class(oris),    intent(in)    :: self
-        logical,        intent(inout) :: mask(1:self%n)
-        real, optional, intent(in)    :: adjust
-        real,    parameter   :: MEAN_THRESHOLD    = -8.0
-        real,    parameter   :: REL_VAR_THRESHOLD =  6.0
-        real,    parameter   :: ABS_VAR_THRESHOLD =  1.5
-        real,    parameter   :: TVD_THRESHOLD     =  0.55
-        real,    parameter   :: MIN_THRESHOLD     = -2.0
-        real,    parameter   :: MAX_THRESHOLD     =  2.0
-        real,    allocatable :: vals(:), x(:)
-        logical, allocatable :: msk(:)
-        real    :: eff_mean_thresh, eff_rel_var_thresh, eff_abs_var_thresh
-        real    :: eff_tvd_thresh, eff_min_thresh, eff_max_thresh
-        integer :: icls, i
-        logical :: has_mean, has_var, has_tvd, has_minmax
-        msk = mask
-        if( self%isthere('pop') )then
-            do icls=1,self%n
-                msk(icls) = self%get(icls,'pop') > 0.5
-            enddo
-        endif
-        mask = msk
-        if( count(msk) <= 5 )then
-            deallocate(msk)
-            return
-        endif
-        ! Effective threshold
-        eff_mean_thresh    = MEAN_THRESHOLD
-        eff_rel_var_thresh = REL_VAR_THRESHOLD
-        eff_abs_var_thresh = ABS_VAR_THRESHOLD
-        eff_tvd_thresh     = TVD_THRESHOLD
-        eff_min_thresh     = MIN_THRESHOLD
-        eff_max_thresh     = MAX_THRESHOLD
-        if( present(adjust) )then
-            eff_mean_thresh    = adjust * eff_mean_thresh
-            eff_rel_var_thresh = adjust * eff_rel_var_thresh
-            eff_abs_var_thresh = adjust * eff_abs_var_thresh
-            eff_tvd_thresh     = min(0.999, adjust * eff_tvd_thresh)
-            eff_min_thresh     = adjust * eff_min_thresh
-            eff_max_thresh     = adjust * eff_max_thresh
-        endif
-        ! selection
-        has_mean   = self%isthere('mean')
-        has_var    = self%isthere('var')
-        has_tvd    = self%isthere('tvd')
-        has_minmax = self%isthere('min') .and. self%isthere('max')
-        if( has_mean )then
-            vals = self%get_all('mean')
-            x    = pack(vals, mask=msk)
-            call robust_scaling(x)
-            i = 0
-            do icls = 1,self%n
-                if( msk(icls) )then
-                    i = i+1
-                    if( mask(icls) ) mask(icls) = x(i) > eff_mean_thresh
-                endif
-            enddo
-        endif
-        if( has_var )then
-            vals = self%get_all('var')
-            x    = pack(vals, mask=msk)
-            call robust_scaling(x)
-            i = 0
-            do icls = 1,self%n
-                if( msk(icls) )then
-                    i = i+1
-                    if( mask(icls) ) mask(icls) = x(i)       < eff_rel_var_thresh
-                    if( mask(icls) ) mask(icls) = vals(icls) < eff_abs_var_thresh
-                endif
-            enddo
-        endif
-        if( has_tvd )then
-            vals = self%get_all('tvd')
-            do icls = 1,self%n
-                if( mask(icls) ) mask(icls) = vals(icls) < eff_tvd_thresh
-            enddo
-        endif
-        if( has_minmax )then
-            do icls = 1,self%n
-                if( mask(icls) )then
-                    if(  (self%get(icls,'min') < eff_min_thresh).and.&
-                        &(self%get(icls,'max') > eff_max_thresh) )then
-                        mask(icls) = .false.
-                    endif
-                endif
-            enddo
-        endif
-        deallocate(msk)
-        if(allocated(vals) ) deallocate(vals, x)
-    end subroutine class_robust_rejection
 
     !>  \brief  calculates hard weights based on ptcl ranking
     subroutine calc_hard_weights( self, frac )

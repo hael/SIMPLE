@@ -41,6 +41,11 @@ type, extends(commander_base) :: cluster2D_commander_subsets
     procedure :: execute      => exec_cluster2D_subsets
 end type cluster2D_commander_subsets
 
+type scaled_dims
+    real    :: smpd=0., msk=0.
+    integer :: box=0, boxpd=0
+end type scaled_dims
+
 integer,               parameter :: MINBOXSZ             = 128              ! minimum boxsize for scaling
 integer,               parameter :: CHUNK_MINITS         = 13               ! minimum number of iterations for chunks
 integer,               parameter :: CHUNK_MAXITS         = CHUNK_MINITS + 2 ! maximum number of iterations for chunks
@@ -48,7 +53,6 @@ integer,               parameter :: CHUNK_CC_ITERS       = 8                ! ma
 integer,               parameter :: CHUNK_EXTR_ITER      = 3                ! starting extremal iteration for chunks
 integer,               parameter :: FREQ_POOL_REJECTION  = 5                ! pool class rejection performed every FREQ_POOL_REJECTION iteration
 integer,               parameter :: MIN_NPTCLS_REJECTION = 200000           ! Minimum number of particles required to activate rejection
-real,                  parameter :: RELAXED_REJECTION    = 1.25             ! To relax rejection stringency in pool
 character(len=STDLEN), parameter :: USER_PARAMS          = 'stream2D_user_params.txt'
 character(len=STDLEN), parameter :: PROJFILE_POOL        = 'cluster2D.simple'
 character(len=STDLEN), parameter :: POOL_DIR             = ''               ! should be './pool/' for tidyness but difficult with gui
@@ -56,6 +60,7 @@ character(len=STDLEN), parameter :: SIGMAS_DIR           = './sigma2/'
 character(len=STDLEN), parameter :: DISTR_EXEC_FNAME     = './distr_cluster2D_pool'
 character(len=STDLEN), parameter :: LOGFILE              = 'simple_log_cluster2D_pool'
 character(len=STDLEN), parameter :: CHECKPOINT_DIR       = 'checkpoint/'
+character(len=STDLEN), parameter :: CLS_POOL_REJECTED    = 'cls_rejected_pool.mrc'
 logical,               parameter :: DEBUG_HERE           = .false.
 integer(timer_int_kind)          :: t
 
@@ -63,6 +68,7 @@ integer(timer_int_kind)          :: t
 type(sp_project)                       :: pool_proj                         ! master project
 type(qsys_env)                         :: qenv_pool
 type(cmdline)                          :: cline_cluster2D_pool              ! master pool classification command line
+type(scaled_dims)                      :: pool_dims                         ! crop dimensions used for pool
 logical,                   allocatable :: pool_stacks_mask(:)               ! subset of stacks undergoing classification
 integer                                :: pool_iter                         ! Iteration counter
 logical                                :: pool_available
@@ -70,6 +76,7 @@ logical                                :: l_no_chunks                       ! fo
 ! Chunk related
 type(stream_chunk),        allocatable :: chunks(:), converged_chunks(:)
 type(cmdline)                          :: cline_cluster2D_chunk             ! master chunk classification command line
+type(scaled_dims)                      :: chunk_dims                        ! crop dimensions used for chunks
 integer                                :: glob_chunk_id                     ! ID book-keeping
 ! Book-keeping
 character(len=:),          allocatable :: orig_projfile
@@ -84,8 +91,8 @@ type(starproject)                      :: starproj
 type(starproject_stream)               :: starproj_stream
 character(len=:),          allocatable :: projfile4gui                      ! Joe: is this output still used?
 ! other
-real     :: smpd, scale_factor, lpstart, lpstop, lpcen
-integer  :: box, boxpd, max_ncls, nptcls_per_chunk, nmics_last, numlen
+real     :: lpstart, lpstop, lpcen
+integer  :: max_ncls, nptcls_per_chunk, nmics_last, numlen
 logical  :: l_wfilt                     ! flags partial wiener restoration
 logical  :: l_scaling                   ! flags downscaling
 logical  :: l_update_sigmas = .false.   ! flags objective function (cc/euclid)
@@ -93,15 +100,13 @@ logical  :: l_abinitio2D    = .false.   ! Whether to use abinitio2D/cluster2D
 
 contains
 
-    subroutine init_cluster2D_stream( cline, spproj, box_in, projfilegui, reference_generation )
+    subroutine init_cluster2D_stream( cline, spproj, projfilegui, reference_generation )
         class(cmdline),    intent(inout) :: cline
         class(sp_project), intent(inout) :: spproj
-        integer,           intent(in)    :: box_in
         character(len=*),  intent(in)    :: projfilegui
         logical, optional, intent(in)    :: reference_generation    ! Joe: redundant with l_no_chunks (nchunks==0), will remove
         character(len=:), allocatable    :: carg
         character(len=STDLEN)            :: chunk_nthr_env, pool_nthr_env, pool_part_env, refgen_nthr_env, refgen_part_env
-        real    :: SMPD_TARGET = MAX_SMPD  ! target sampling distance
         real    :: chunk_nthr, pool_nthr, refgen_nthr
         integer :: ichunk, envlen, nthr2D
         logical :: refgen
@@ -277,36 +282,8 @@ contains
         case DEFAULT
             THROW_HARD('UNSUPPORTED REFINE PARAMETER!')
         end select
-        ! auto-scaling
-        if( params_glob%box == 0 ) THROW_HARD('FATAL ERROR')
-        scale_factor          = 1.0
-        params_glob%smpd_crop = params_glob%smpd
-        params_glob%box_crop  = params_glob%box
-        params_glob%msk_crop  = params_glob%mskdiam / params_glob%smpd / 2.
-        if( l_scaling .and. params_glob%box >= MINBOXSZ )then
-            call autoscale(params_glob%box, params_glob%smpd, SMPD_TARGET, box, smpd, scale_factor, minbox=MINBOXSZ)
-            l_scaling = box < params_glob%box
-            if( l_scaling )then
-                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params_glob%box,'/',box
-                params_glob%smpd_crop = smpd
-                params_glob%box_crop  = box
-            endif
-        endif
-        smpd = params_glob%smpd_crop
-        box  = params_glob%box_crop
-        params_glob%msk_crop = round2even(params_glob%mskdiam / smpd / 2.)
-        boxpd = 2 * round2even(params_glob%alpha * real(params_glob%box_crop/2)) ! logics from parameters
-        ! Scaling-related command lines update
-        call cline_cluster2D_chunk%set('smpd_crop', smpd)
-        call cline_cluster2D_chunk%set('box_crop',  box)
-        call cline_cluster2D_chunk%set('msk_crop',  params_glob%msk_crop)
-        call cline_cluster2D_chunk%set('box',       params_glob%box)
-        call cline_cluster2D_chunk%set('smpd',      params_glob%smpd)
-        call cline_cluster2D_pool%set('smpd_crop',  smpd)
-        call cline_cluster2D_pool%set('box_crop',   box)
-        call cline_cluster2D_pool%set('msk_crop',   params_glob%msk_crop)
-        call cline_cluster2D_pool%set('box',        params_glob%box)
-        call cline_cluster2D_pool%set('smpd',       params_glob%smpd)
+        ! Determines dimensions for downscaling
+        call set_scaling_dims
         ! updates command-lines with resolution limits
         call set_resolution_limits( cline )
         ! Initialize subsets
@@ -329,17 +306,54 @@ contains
         stream2D_active = .true.
     end subroutine init_cluster2D_stream
 
+    subroutine set_scaling_dims
+        real    :: SMPD_TARGET = MAX_SMPD  ! target sampling distance
+        real    :: smpd, scale_factor
+        integer :: box
+        ! Determines dimensions for downscaling
+        if( params_glob%box == 0 ) THROW_HARD('FATAL ERROR')
+        scale_factor          = 1.0
+        params_glob%smpd_crop = params_glob%smpd
+        params_glob%box_crop  = params_glob%box
+        if( l_scaling .and. params_glob%box >= MINBOXSZ )then
+            call autoscale(params_glob%box, params_glob%smpd, SMPD_TARGET, box, smpd, scale_factor, minbox=MINBOXSZ)
+            l_scaling = box < params_glob%box
+            if( l_scaling )then
+                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params_glob%box,'/',box
+                params_glob%smpd_crop = smpd
+                params_glob%box_crop  = box
+            endif
+        endif
+        params_glob%msk_crop = round2even(params_glob%mskdiam / params_glob%smpd_crop / 2.)
+        pool_dims%smpd  = params_glob%smpd_crop
+        pool_dims%box   = params_glob%box_crop
+        pool_dims%boxpd = 2 * round2even(params_glob%alpha * real(params_glob%box_crop/2)) ! logics from parameters
+        pool_dims%msk   = params_glob%msk_crop
+        chunk_dims = pool_dims  ! chunk & pool have the same dimensions to start with
+        ! Scaling-related command lines update
+        call cline_cluster2D_chunk%set('smpd_crop', chunk_dims%smpd)
+        call cline_cluster2D_chunk%set('box_crop',  chunk_dims%box)
+        call cline_cluster2D_chunk%set('msk_crop',  chunk_dims%msk)
+        call cline_cluster2D_chunk%set('box',       params_glob%box)
+        call cline_cluster2D_chunk%set('smpd',      params_glob%smpd)
+        call cline_cluster2D_pool%set('smpd_crop',  pool_dims%smpd)
+        call cline_cluster2D_pool%set('box_crop',   pool_dims%box)
+        call cline_cluster2D_pool%set('msk_crop',   pool_dims%msk)
+        call cline_cluster2D_pool%set('box',        params_glob%box)
+        call cline_cluster2D_pool%set('smpd',       params_glob%smpd)
+    end subroutine set_scaling_dims
+
     ! private routine for resolution-related updates to command-lines
     subroutine set_resolution_limits( master_cline )
         type(cmdline), intent(in) :: master_cline
-        lpstart = max(lpstart, 2.0*smpd)
+        lpstart = max(lpstart, 2.0*params_glob%smpd_crop)
         if( l_no_chunks )then
             params_glob%lpstop = lpstop
         else
             if( master_cline%defined('lpstop') )then
-                params_glob%lpstop = max(2.0*smpd,params_glob%lpstop)
+                params_glob%lpstop = max(2.0*params_glob%smpd_crop,params_glob%lpstop)
             else
-                params_glob%lpstop = 2.0*smpd
+                params_glob%lpstop = 2.0*params_glob%smpd_crop
             endif
             call cline_cluster2D_chunk%delete('lp')
             call cline_cluster2D_chunk%set('lpstart', lpstart)
@@ -382,7 +396,7 @@ contains
             if( os%isthere(1,'lpthres') )then
                 lpthres = os%get(1,'lpthres')
                 if( abs(lpthres-params_glob%lpthres) > 0.001 )then
-                    if( lpthres < 3.0*smpd )then
+                    if( lpthres < 3.0*chunk_dims%smpd )then
                         write(logfhandle,'(A,F8.2)')'>>> REJECTION lpthres TOO LOW: ',lpthres
                     else
                         params_glob%lpthres = lpthres
@@ -984,12 +998,12 @@ contains
         allocate(pops(ncls_glob),source=nint(pool_proj%os_cls2D%get_all('pop')))
         ! moments & total variation distance
         if( trim(params_glob%reject_cls).ne.'old' )then
-            call pool_proj%os_cls2D%class_robust_rejection(moments_mask, adjust=RELAXED_REJECTION)
+            call class_rejection(pool_proj%os_cls2D, moments_mask, adjust=params_glob%pool_threshold_factor)
         endif
         ! correlation & resolution
         if( params_glob%lpthres < LOWRES_REJECT_THRESHOLD )then
-            ndev_here = RELAXED_REJECTION*params_glob%ndev
-            call pool_proj%os_cls2D%find_best_classes(box,smpd,params_glob%lpthres,corres_mask,ndev_here)
+            ndev_here = params_glob%pool_threshold_factor*params_glob%ndev
+            call pool_proj%os_cls2D%find_best_classes(pool_dims%box,pool_dims%smpd,params_glob%lpthres,corres_mask,ndev_here)
         endif
         ! overall class rejection
         cls_mask = moments_mask .and. corres_mask
@@ -1012,13 +1026,13 @@ contains
             !$omp end parallel do
             if( nptcls_rejected > 0 )then
                 ! classes
-                call img%new([box,box,1],smpd)
+                call img%new([pool_dims%box,pool_dims%box,1], pool_dims%smpd)
                 do icls = 1,ncls_glob
                     if( cls_mask(icls) ) cycle
                     if( pops(icls) > 0 )then
                         ncls_rejected_glob = ncls_rejected_glob + 1
                         call img%read(trim(POOL_DIR)//trim(refs_glob),icls)
-                        call img%write(trim(POOL_DIR)//'cls_rejected_pool.mrc',ncls_rejected_glob)
+                        call img%write(trim(POOL_DIR)//trim(CLS_POOL_REJECTED),ncls_rejected_glob)
                         img = 0.
                         call img%write(trim(POOL_DIR)//trim(refs_glob),icls)
                         if( l_wfilt )then
@@ -1036,11 +1050,11 @@ contains
                 do icls=1,ncls_glob
                     if( .not.cls_mask(icls) )then
                         if( pops(icls) > 0 ) ncls_rejected = ncls_rejected+1
-                        call pool_proj%os_cls2D%set(icls, 'pop',         0.)
-                        call pool_proj%os_cls2D%set(icls, 'corr',       -1.)
-                        call pool_proj%os_cls2D%set_state(icls,          0 )
-                        call pool_proj%os_cls2D%set(icls,'prev_pop_even',0.)
-                        call pool_proj%os_cls2D%set(icls,'prev_pop_odd', 0.)
+                        call pool_proj%os_cls2D%set(icls, 'pop',         0)
+                        call pool_proj%os_cls2D%set(icls, 'corr',       -1.0)
+                        call pool_proj%os_cls2D%set_state(icls,          0)
+                        call pool_proj%os_cls2D%set(icls,'prev_pop_even',0)
+                        call pool_proj%os_cls2D%set(icls,'prev_pop_odd', 0)
                     endif
                 enddo
                 deallocate(cls_mask)
@@ -1081,7 +1095,7 @@ contains
         enddo
         call cls2reject%kill
         if( count(cls_mask) == 0 ) return
-        call img%new([box,box,1],smpd)
+        call img%new([pool_dims%box,pool_dims%box,1], pool_dims%smpd)
         img = 0.
         ncls_rejected   = 0
         do icls = 1,ncls_glob
@@ -1210,7 +1224,7 @@ contains
         if(.not. file_exists(trim(adjustl(cwd)) // '/' // trim(CAVGS_ITER_FBODY) // int2str_pad(iter_loc, 3) // '.jpg')) then
             if(iter_loc > 0) call pool_stats%set_now('2D', 'iteration_time')
             call pool_stats%generate_2D_thumbnail('2D', 'top_classes', pool_proj%os_cls2D, iter_loc)
-            call pool_stats%generate_2D_jpeg('latest', '', pool_proj%os_cls2D, iter_loc, smpd)
+            call pool_stats%generate_2D_jpeg('latest', '', pool_proj%os_cls2D, iter_loc, pool_dims%smpd)
         endif
         call pool_stats%write(POOLSTATS_FILE)
         call pool_stats%kill
@@ -1272,10 +1286,10 @@ contains
         type(starproject)             :: starproj
         character(len=:), allocatable :: src
         os_backup = pool_proj%os_cls2D
-        call pool_proj%add_cavgs2os_out(trim(POOL_DIR)//trim(refs_glob), smpd, 'cavg')
+        call pool_proj%add_cavgs2os_out(trim(POOL_DIR)//trim(refs_glob), pool_dims%smpd, 'cavg')
         if( l_wfilt )then
             src = trim(POOL_DIR)//add2fbody(refs_glob,params_glob%ext,trim(WFILT_SUFFIX))
-            call pool_proj%add_cavgs2os_out(src, smpd, 'cavg'//trim(WFILT_SUFFIX))
+            call pool_proj%add_cavgs2os_out(src, pool_dims%smpd, 'cavg'//trim(WFILT_SUFFIX))
         endif
         pool_proj%os_cls2D = os_backup
         call pool_proj%write_segment_inside('out',   projfile4gui)
@@ -1347,7 +1361,7 @@ contains
                 call chunks(ichunk)%generate(micproj_records(first2import:last2import))
                 micproj_records(first2import:last2import)%included = .true.
                 ! execution
-                call chunks(ichunk)%classify(params_glob%smpd, params_glob%box, box, l_update_sigmas)
+                call chunks(ichunk)%classify(l_update_sigmas)
                 first2import = last2import + 1 ! to avoid cycling through all projects
             endif
         enddo
@@ -1369,7 +1383,7 @@ contains
                     call chunks(ichunk)%display_iter
                     ! rejection
                     if( trim(params_glob%reject_cls).ne.'no' )then
-                        call chunks(ichunk)%reject(params_glob%lpthres, params_glob%ndev, box)
+                        call chunks(ichunk)%reject(params_glob%lpthres, params_glob%ndev)
                     endif
                 endif
             else
@@ -1449,7 +1463,7 @@ contains
         call debug_print('in import_chunks_into_pool 2 '//int2str(imic)//' '//int2str(nptcls_imported))
         do ichunk = 1,nchunks2import
             fromp_prev = fromp
-            call converged_chunks(ichunk)%read(boxpd)
+            call converged_chunks(ichunk)%read(chunk_dims%boxpd)
             ! transfer micrographs, stacks & particles parameters
             ind = 1
             do iproj = 1,converged_chunks(ichunk)%nmics
@@ -1491,7 +1505,7 @@ contains
                 call converged_chunks(ichunk)%spproj%get_cavgs_stk(cavgs_chunk, ncls_tmp, smpd_here)
                 dir_chunk   = trim(converged_chunks(ichunk)%path)
                 cavgs_chunk = trim(dir_chunk)//basename(cavgs_chunk)
-                call frcs_chunk%new(params_glob%ncls_start, box, smpd, nstates=1)
+                call frcs_chunk%new(params_glob%ncls_start, chunk_dims%box, chunk_dims%smpd, nstates=1)
                 call frcs_chunk%read(trim(dir_chunk)//trim(FRCS_FILE))
                 if( l_maxed )then
                     ! the pool has been previously filled, some re-mapping of classes may occur
@@ -1503,7 +1517,7 @@ contains
                         if( all(cls_pop==0) ) THROW_HARD('Empty os_cls2D!')
                         ! remapping
                         cls_chunk_pop = nint(converged_chunks(ichunk)%spproj%os_cls2D%get_all('pop'))
-                        call frcs_glob%new(ncls_glob, box, smpd, nstates=1)
+                        call frcs_glob%new(ncls_glob, pool_dims%box, pool_dims%smpd, nstates=1)
                         call frcs_glob%read(trim(POOL_DIR)//trim(FRCS_FILE))
                         do icls=1,ncls_glob
                             if( cls_pop(icls)>0 ) cycle          ! class already filled
@@ -1517,7 +1531,7 @@ contains
                             ! class average
                             call transfer_cavg(cavgs_chunk, dir_chunk, ind, refs_glob, icls)
                             ! frcs
-                            call frcs_glob%set_frc(icls,frcs_chunk%get_frc(ind, box, 1), 1)
+                            call frcs_glob%set_frc(icls,frcs_chunk%get_frc(ind, chunk_dims%box, 1), 1)
                             ! class parameters transfer
                             call pool_proj%os_cls2D%transfer_ori(icls, converged_chunks(ichunk)%spproj%os_cls2D, ind)
                             call pool_proj%os_cls2D%set_class(icls, icls)
@@ -1586,14 +1600,14 @@ contains
                             call transfer_cavg(cavgs_chunk, dir_chunk, icls, refs_glob, ncls_glob+icls)
                         enddo
                         ! FRCs
-                        call frcs_glob%new(ncls_here, box, smpd, nstates=1)
-                        call frcs_prev%new(ncls_glob, box, smpd, nstates=1)
+                        call frcs_glob%new(ncls_here, pool_dims%box, pool_dims%smpd, nstates=1)
+                        call frcs_prev%new(ncls_glob, pool_dims%box, pool_dims%smpd, nstates=1)
                         call frcs_prev%read(trim(POOL_DIR)//trim(FRCS_FILE))
                         do icls=1,ncls_glob
-                            call frcs_glob%set_frc(icls,frcs_prev%get_frc(icls, box, 1), 1)
+                            call frcs_glob%set_frc(icls,frcs_prev%get_frc(icls, pool_dims%box, 1), 1)
                         enddo
                         do icls=1,params_glob%ncls_start
-                            call frcs_glob%set_frc(ncls_glob+icls,frcs_chunk%get_frc(icls, box, 1), 1)
+                            call frcs_glob%set_frc(ncls_glob+icls,frcs_chunk%get_frc(icls, pool_dims%box, 1), 1)
                         enddo
                         call frcs_glob%write(trim(POOL_DIR)//trim(FRCS_FILE))
                         ! class parameters
@@ -1680,7 +1694,7 @@ contains
         ! making sure we are writing to the correct folder
         refs_out_here = trim(POOL_DIR)//trim(refs_out)
         ! merged class
-        call img%new([box,box,1],smpd)
+        call img%new([chunk_dims%box,chunk_dims%box,1], chunk_dims%smpd) ! will need to be different chunk/pool
         call img%read( refs_in_here, indin)
         call img%write(refs_out_here,indout)
         if( l_wfilt )then
@@ -1697,7 +1711,7 @@ contains
         call img%read( stkin, indin)
         call img%write(stkout,indout)
         ! temporary matrices, logics from chunk%read
-        call img%new([boxpd,boxpd,1],smpd)
+        call img%new([chunk_dims%boxpd,chunk_dims%boxpd,1], chunk_dims%smpd)
         call img%zero_and_flag_ft
         if( l_self )then
             do ipart = 1,params_glob%nparts_pool
@@ -1939,11 +1953,11 @@ contains
         else
             dest_here = trim(dest)
         endif
-        call img%new([box,box,1],smpd)
+        call img%new([pool_dims%box,pool_dims%box,1],pool_dims%smpd)
         call img_pad%new([params_glob%box,params_glob%box,1],params_glob%smpd)
         cls_pop = nint(pool_proj%os_cls2D%get_all('pop'))
         call find_ldim_nptcls(src,ldim,ncls_here)
-        call stkio_r%open(trim(src), smpd, 'read', bufsz=ncls_here)
+        call stkio_r%open(trim(src), pool_dims%smpd, 'read', bufsz=ncls_here)
         call stkio_r%read_whole
         call stkio_w%open(dest_here, params_glob%smpd, 'write', box=params_glob%box, bufsz=ncls_here)
         do icls = 1,ncls_here
@@ -2003,7 +2017,6 @@ contains
         class(cmdline),                     intent(inout) :: cline
         character(len=STDLEN), parameter :: DIR_PROJS   = trim(PATH_HERE)//'spprojs/'
         integer,               parameter :: WAITTIME    = 5
-        real,                  parameter :: SMPD_TARGET = MAX_SMPD
         type(projrecord),         allocatable  :: micproj_records(:)
         type(parameters)                       :: params
         type(sp_project)                       :: spproj_glob
@@ -2058,24 +2071,6 @@ contains
         ncls_rejected_glob = 0
         l_abinitio2D       = cline%defined('algorithm')
         if( l_abinitio2D ) l_abinitio2D = str_has_substr(params_glob%algorithm,'abinitio')
-        ! scaling (fourier cropping)
-        scale_factor          = 1.0
-        params%smpd_crop = params%smpd
-        params%box_crop  = params%box
-        params%msk_crop  = params%mskdiam / params%smpd / 2.
-        if( l_scaling .and. params%box >= MINBOXSZ )then
-            call autoscale(params%box, params%smpd, SMPD_TARGET, box, smpd, scale_factor, minbox=MINBOXSZ)
-            l_scaling = box < params%box
-            if( l_scaling )then
-                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',box
-                params%smpd_crop = smpd
-                params%box_crop  = box
-            endif
-        endif
-        smpd            = params%smpd_crop
-        box             = params%box_crop
-        params%msk_crop = round2even(params%mskdiam / smpd / 2.)
-        boxpd           = 2 * round2even(params%alpha * real(params%box_crop/2)) ! logics from parameters
         ! init command-lines
         call cline%delete('lp')
         call cline%delete('refine')
@@ -2089,6 +2084,8 @@ contains
         call cline%delete('autoscale')
         cline_cluster2D_pool   = cline
         cline_cluster2D_chunk  = cline
+        ! scaling dimensions (fourier cropping)
+        call set_scaling_dims
         ! subset classification
         if( l_abinitio2D )then
             ! prg=abinitio2D
@@ -2149,17 +2146,6 @@ contains
         if( l_wfilt ) call cline_cluster2D_pool%set('wiener', 'partial')
         if( l_update_sigmas ) call cline_cluster2D_pool%set('cc_iters', 0)
         call cline_cluster2D_pool%delete('lpstop')
-        ! Dimensions
-        call cline_cluster2D_chunk%set('smpd_crop', smpd)
-        call cline_cluster2D_chunk%set('box_crop',  box)
-        call cline_cluster2D_chunk%set('msk_crop',  params%msk_crop)
-        call cline_cluster2D_chunk%set('box',       params%box)
-        call cline_cluster2D_chunk%set('smpd',      params%smpd)
-        call cline_cluster2D_pool%set('smpd_crop',  smpd)
-        call cline_cluster2D_pool%set('box_crop',   box)
-        call cline_cluster2D_pool%set('msk_crop',   params_glob%msk_crop)
-        call cline_cluster2D_pool%set('box',        params%box)
-        call cline_cluster2D_pool%set('smpd',       params%smpd)
         ! read strictly required fields
         call spproj_glob%read_non_data_segments(params%projfile)
         call spproj_glob%read_segment('mic',   params%projfile)
