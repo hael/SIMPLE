@@ -14,6 +14,7 @@ public :: atoms_stats_commander
 public :: conv_atom_denoise_commander
 public :: detect_atoms_commander
 public :: model_validation_commander
+public :: model_validation_eo_commander
 public :: pdb2mrc_commander
 public :: tseries_atoms_analysis_commander
 private
@@ -38,6 +39,11 @@ type, extends(commander_base) :: model_validation_commander
   contains
     procedure :: execute      => exec_model_validation
 end type model_validation_commander
+
+type, extends(commander_base) :: model_validation_eo_commander
+  contains
+    procedure :: execute      => exec_model_validation_eo
+end type model_validation_eo_commander
 
 type, extends(commander_base) :: pdb2mrc_commander
   contains
@@ -154,6 +160,19 @@ end subroutine exec_atoms_stats
         ! end gracefully
         call simple_end('**** SIMPLE_MODEL_VALIDATION NORMAL STOP ****')
     end subroutine exec_model_validation
+
+    subroutine exec_model_validation_eo( self, cline )
+        class(model_validation_eo_commander), intent(inout) :: self
+        class(cmdline),                       intent(inout) :: cline
+        type(parameters) :: params
+        type(atoms)      :: molecule
+        call params%new(cline)
+        call molecule%new(params%pdbfile)
+        call molecule%model_validation_eo(params%pdbfile, params%vols(1), params%vols(2), params%vols(3), params%smpd, params%smpd_target)
+        call molecule%kill()
+        ! end gracefully
+        call simple_end('**** SIMPLE_MODEL_VALIDATION_EO NORMAL STOP ****')
+    end subroutine exec_model_validation_eo
 
     subroutine exec_pdb2mrc( self, cline )
         class(pdb2mrc_commander), intent(inout) :: self

@@ -136,6 +136,7 @@ type(simple_program), target :: mask
 type(simple_program), target :: merge_projects
 type(simple_program), target :: mkdir_
 type(simple_program), target :: model_validation
+type(simple_program), target :: model_validation_eo
 type(simple_program), target :: motion_correct
 type(simple_program), target :: multivol_assign
 type(simple_program), target :: new_project
@@ -445,6 +446,7 @@ contains
         call new_mkdir_
         call new_motion_correct
         call new_model_validation
+        call new_model_validation_eo
         call new_multivol_assign
         call new_new_project
         call new_nununiform_filter3D
@@ -575,6 +577,7 @@ contains
         call push2prg_ptr_array(mkdir_)
         call push2prg_ptr_array(motion_correct)
         call push2prg_ptr_array(model_validation)
+        call push2prg_ptr_array(model_validation_eo)
         call push2prg_ptr_array(multivol_assign)
         call push2prg_ptr_array(new_project)
         call push2prg_ptr_array(nununiform_filter3D)
@@ -782,6 +785,8 @@ contains
                 ptr2prg => motion_correct
             case('model_validation')
                 ptr2prg => model_validation
+            case('model_validation_eo')
+                ptr2prg => model_validation_eo
             case('multivol_assign')
                 ptr2prg => multivol_assign
             case('new_project')
@@ -964,6 +969,7 @@ contains
         write(logfhandle,'(A)') mkdir_%name
         write(logfhandle,'(A)') motion_correct%name
         write(logfhandle,'(A)') model_validation%name
+        write(logfhandle,'(A)') model_validation_eo%name
         write(logfhandle,'(A)') multivol_assign%name
         write(logfhandle,'(A)') new_project%name
         write(logfhandle,'(A)') nununiform_filter3D%name
@@ -3369,6 +3375,30 @@ contains
         ! mask controls
         ! computer controls
     end subroutine new_model_validation
+
+    subroutine new_model_validation_eo
+        ! ! PROGRAM SPECIFICATION
+        ! call model_validation%new(&
+        ! &'model_validation', &                             ! name
+        ! &'Validation of atomic model',&                    ! descr_short
+        ! &'is a program to validate the PDB atomic model given a 3D experimental even/odd density map in MRC',& ! descr long
+        ! &'all',&                                           ! executable
+        ! &2, 2, 0, 0, 0, 0, 0, .false.)                     ! # entries in each group, requires sp_project
+        ! ! INPUT PARAMETER SPECIFICATIONS
+        ! ! image input/output
+        ! call model_validation%set_input('img_ios', 1, 'vol1', 'file', 'Experimental volume',  'Experimental volume',  'vol.mrc file', .true., '')
+        ! call model_validation%set_input('img_ios', 2, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'molecule.pdb')
+        ! ! parameter input/output
+        ! call model_validation%set_input('parm_ios', 1, smpd)
+        ! call model_validation%set_input('parm_ios', 2, smpd_target)
+        ! ! alternative inputs
+        ! ! <empty>
+        ! ! search controls
+        ! ! <empty>
+        ! ! filter controls
+        ! ! mask controls
+        ! ! computer controls
+    end subroutine new_model_validation_eo
 
     subroutine new_motion_correct
         ! PROGRAM SPECIFICATION
