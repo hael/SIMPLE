@@ -1331,7 +1331,7 @@ contains
         real                      :: ptcl_pos(2), stk_mean,stk_sdev,stk_max,stk_min,dfx,dfy,prog
         integer                   :: ldim(3), lfoo(3), fromto(2)
         integer                   :: nframes, imic, iptcl, nptcls,nmics,nmics_here,box, i, iptcl_g
-        integer                   :: cnt, nmics_tot, ifoo, state, iptcl_glob, nptcls2extract, istk
+        integer                   :: cnt, nmics_tot, ifoo, state, iptcl_glob, nptcls2extract
         logical                   :: l_ctfpatch, l_gid_present, l_ogid_present,prog_write,prog_part
         call cline%set('oritype', 'mic')
         call cline%set('mkdir',   'no')
@@ -1870,7 +1870,7 @@ contains
         character(len=:), allocatable :: mic_name, imgkind, ext
         logical,          allocatable :: mic_mask(:), ptcl_mask(:)
         integer,          allocatable :: mic2stk_inds(:), boxcoords(:,:), ptcl_inds(:), mic_dims(:,:)
-        character(len=LONGSTRLEN)     :: stack, rel_stack
+        character(len=LONGSTRLEN)     :: stack
         real    :: prev_shift(2),shift2d(2),shift3d(2),prev_shift_sc(2), translation(2), prev_center_sc(2)
         real    :: stk_min, stk_max, stk_mean, stk_sdev, scale
         integer :: prev_pos(2), new_pos(2), ishift(2), ldim(3), prev_center(2), new_center(2), ldim_sc(3)
@@ -2374,6 +2374,8 @@ contains
                 ldim_sc    = [b,b,1]
                 params%msk = real(b/2) - COSMSKHALFWIDTH
             endif
+        else
+            ldim_sc = ldim
         endif
         ! read
         allocate( projs(ncavgs), masks(ncavgs) )
@@ -2409,6 +2411,7 @@ contains
         end if
         lp      = min(max(LP_LB,MSKDIAM2LP * diam_max),LP_UB)
         new_box = round2even(diam_max / params%smpd + 2. * COSMSKHALFWIDTH)
+        new_box = min(new_box, ldim_sc(1)) ! fail safe: new dimensions cannot be larger than required
         write(logfhandle,'(A,1X,I4)') 'ESTIMATED BOX SIZE: ', new_box
         ldim_clip = [new_box, new_box, 1]
         do icavg=1,ncavgs
@@ -2426,9 +2429,9 @@ contains
         if( nrots > 1 )then
             call ref2D%new([ldim(1),ldim(2),1], params%smpd)
             ang = 360./real(nrots)
-            rot = 0.
             cnt = 0
             do iref=1,norefs
+                rot = 0.
                 do irot=1,nrots
                     cnt = cnt + 1
                     call projs(iref)%rtsq(rot, 0., 0., ref2D)
