@@ -43,6 +43,7 @@ character(len=78), parameter :: pdbfmt_anisou   = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A
 type :: atoms
     private
     integer                       :: n = 0
+    integer                       :: nres = 0
     character(len=4), allocatable :: name(:)
     character(len=1), allocatable :: altloc(:)
     character(len=1), allocatable :: chain(:)
@@ -110,7 +111,7 @@ type :: atoms
     procedure          :: atom_validation
     procedure          :: map_validation
     procedure          :: model_validation
-    procedure          :: model_validation_half
+    procedure          :: model_validation_eo
     ! MODIFIERS
     procedure          :: translate
     procedure          :: center_pdbcoord
@@ -343,7 +344,7 @@ contains
         get_nres = maxval( self%resnum(:) )
     end function get_nres
 
-    function get_coord( self, i )result( xyz )
+    function get_coord( self, i ) result( xyz )
         class(atoms), intent(in) :: self
         integer,      intent(in) :: i
         real :: xyz(3)
@@ -387,10 +388,10 @@ contains
     end function get_radius
 
     real function get_resnum( self, i )
-    class(atoms), intent(in) :: self
-    integer,      intent(in) :: i
-    if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; get_resnum')
-    get_resnum = self%resnum(i)
+        class(atoms), intent(in) :: self
+        integer,      intent(in) :: i
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; get_resnum')
+        get_resnum = self%resnum(i)
     end function get_resnum
 
     real function get_atom_corr( self, i )
@@ -1351,7 +1352,7 @@ contains
         endif
     end subroutine map_validation
 
-    subroutine model_validation_half( self, pdb_file, exp_vol_file, even_vol_file, odd_vol_file, smpd, smpd_target )
+    subroutine model_validation_eo( self, pdb_file, exp_vol_file, even_vol_file, odd_vol_file, smpd, smpd_target )
         use simple_image, only: image
         class(atoms), intent(inout) :: self
         real,         intent(in)    :: smpd, smpd_target
@@ -1360,7 +1361,7 @@ contains
         real                  :: smpd_new, upscaling_factor, beta
         real,     allocatable :: beta_map_model(:), beta_even_odd(:)
         integer               :: ifoo, ldim(3), ldim_new(3), box, box_new, i, natoms
-        natoms = self%get_n(); allocate(beta_map_model(natoms),beta_even_odd(natoms))
+        natoms = self%n; allocate(beta_map_model(natoms),beta_even_odd(natoms))
         call find_ldim_nptcls(exp_vol_file, ldim, ifoo)
         write(logfhandle,'(a,3i6,a,f8.3,a)') 'Original dimensions (', ldim,' ) voxels, smpd: ', smpd, ' Angstrom'
         box              = ldim(1)
@@ -1392,7 +1393,7 @@ contains
         call exp_vol%kill
         call even_vol%kill
         call odd_vol%kill
-    end subroutine model_validation_half
+    end subroutine model_validation_eo
 
     subroutine model_validation( self, pdb_file, exp_vol_file, smpd, smpd_target )
         use simple_image, only: image
@@ -1434,9 +1435,11 @@ contains
         character(len=*), optional, intent(in)    :: filename
         type(image) :: vol_atom, vol_at
         type(atoms) :: atom
-        integer     :: i_atom, atom_box, center(3)
-        real        :: atom_coord(3), smpd, cc
+        integer     :: i_atom, atom_box, center(3), i_res
+        real        :: atom_coord(3), smpd, cc, cc_score, cc_score_byres, sdev
         logical     :: outside
+        logical, allocatable :: mask_byres(:)
+        cc_score = 0.
         smpd = vol%get_smpd()
         if(present(filename))then
             open(unit=46,file=trim(filename//".csv"))
@@ -1459,6 +1462,7 @@ contains
             call vol_at%mask(real(atom_box)/2., 'soft')
             ! compute cross-correlation between both volumes
             cc = vol_atom%real_corr(vol_at)
+            cc_score = cc_score + cc
             call self%set_atom_corr(i_atom, cc)
             call self%set_beta(i_atom, cc)
             if(present(filename))then
@@ -1469,6 +1473,21 @@ contains
             call atom%kill
         enddo
         if(present(filename))then
+            write(46,'(a,/,a)') 'CC Score by Residue [-1 1]',' Res    CC Res Score'
+            !n_residues = self%get_nres
+            print *, 'total number of residues', self%get_nres()
+            do i_res = 1, self%get_nres()
+                allocate(mask_byres(self%n),source=.false.)
+                do i_atom = 1, self%n
+                    if( self%get_resnum(i_atom) .eq. i_res ) mask_byres(i_atom) = .true.
+                enddo
+                call avg_sdev(self%atom_corr, cc_score_byres, sdev, mask=mask_byres)
+                write(46,'(i4,f10.3)') i_res, cc_score_byres
+                deallocate(mask_byres)
+            enddo
+            call avg_sdev(self%atom_corr, cc_score, sdev )
+            write(46,'(a,f10.3)')         'Global CC Score [-1 1]:', cc_score
+            write(logfhandle,'(a,f10.3)') 'Global CC Score [-1 1]:', cc_score
             close(46)
             call self%writepdb(trim(filename)//'.pdb')
         endif
