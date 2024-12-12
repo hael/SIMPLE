@@ -13,15 +13,16 @@ use simple_timer
 implicit none
 
 public :: stream_chunk, DIR_CHUNK
-public :: projrecord, projrecords2proj
+public :: projrecord, projrecords2proj, class_rejection
 
 private
 #include "simple_local_flags.inc"
 
-character(len=STDLEN), parameter   :: DIR_CHUNK           = 'chunk_'
-character(len=STDLEN), parameter   :: PROJNAME_CHUNK      = 'chunk'
-logical,               parameter   :: DEBUG_HERE          = .false.
-integer                            :: ncls_rejected_glob  = 0 ! counter of rejected classes
+character(len=STDLEN), parameter   :: DIR_CHUNK          = 'chunk_'
+character(len=STDLEN), parameter   :: PROJNAME_CHUNK     = 'chunk'
+character(len=STDLEN), parameter   :: CLS_CHUNK_REJECTED = 'cls_rejected_chunks.mrc'
+logical,               parameter   :: DEBUG_HERE         = .false.
+integer                            :: ncls_rejected_glob = 0 ! counter of rejected classes
 
 ! Convenience type to hold information about individual project files
 type projrecord
@@ -95,6 +96,10 @@ contains
         self%nptcls = 0
         self%path   = './'//trim(DIR_CHUNK)//int2str(id)//'/'
         self%cline  = cline
+        if( .not.cline%defined('box') )      THROW_HARD('Missing BOX on chunk command-line')
+        if( .not.cline%defined('box_crop') ) THROW_HARD('Missing BOX_CROP on chunk command-line')
+        if( .not.cline%defined('smpd') )     THROW_HARD('Missing SMPD on chunk command-line')
+        if( .not.cline%defined('smpd_crop') )THROW_HARD('Missing SMPD_CROP on chunk command-line')
         self%projfile_out    = ''
         self%spproj%projinfo = master_spproj%projinfo
         self%spproj%compenv  = master_spproj%compenv
@@ -166,15 +171,12 @@ contains
     end subroutine generate
 
     ! Initiates classification
-    subroutine classify( self, orig_smpd, orig_box, box, calc_pspec )
+    subroutine classify( self, calc_pspec )
         class(stream_chunk), intent(inout) :: self
-        real,                intent(in)    :: orig_smpd
-        integer,             intent(in)    :: orig_box, box
         logical,             intent(in)    :: calc_pspec
         type(cmdline), allocatable :: clines(:)
         type(cmdline)              :: cline_pspec
         character(len=XLONGSTRLEN) :: cwd
-        real                       :: scale
         integer                    :: nptcls_sel, nclines
         call debug_print('in chunk%classify '//int2str(self%id))
         if( .not.self%available ) return
@@ -203,13 +205,6 @@ contains
                 if( params_glob%nparts_chunk > 1 ) call cline_pspec%set('nparts',params_glob%nparts_chunk)
                 clines(1) = cline_pspec
             endif
-        endif
-        if( box < orig_box )then
-            scale = real(box) / real(orig_box)
-            call self%cline%set('smpd',      orig_smpd)
-            call self%cline%set('box',       orig_box)
-            call self%cline%set('smpd_crop', orig_smpd / scale)
-            call self%cline%set('box_crop',  box)
         endif
         call self%cline%set('projfile', self%projfile_out)
         call self%cline%set('projname', trim(PROJNAME_CHUNK))
@@ -430,17 +425,16 @@ contains
     end function has_converged
 
     ! Handles automated classification
-    subroutine reject( self, res_thresh, ndev, box )
+    subroutine reject( self, res_thresh, ndev)
         class(stream_chunk), intent(inout) :: self
         real,                intent(in)    :: res_thresh, ndev
-        integer,             intent(in)    :: box
         type(image)                   :: img
         logical,          allocatable :: cls_mask(:), moments_mask(:), corres_mask(:)
         integer,          allocatable :: pops(:)
         character(len=:), allocatable :: cavgs
         character(len=XLONGSTRLEN)    :: projfile
         real                  :: smpd_here
-        integer               :: nptcls_rejected, ncls_rejected, iptcl
+        integer               :: nptcls_rejected, ncls_rejected, iptcl, box
         integer               :: icls, ncls, ncls_rejected_populated, ncls_populated
         call debug_print('in chunk%reject '//int2str(self%id))
         projfile        = trim(self%path)//self%projfile_out
@@ -450,10 +444,13 @@ contains
         call self%spproj%read_segment('out',  projfile)
         call self%spproj%get_cavgs_stk(cavgs, ncls, smpd_here)
         cavgs = trim(self%path)//basename(cavgs)
+        box   = self%cline%get_iarg('box_crop')
         allocate(cls_mask(ncls),moments_mask(ncls),corres_mask(ncls),source=.true.)
         allocate(pops(ncls),source=nint(self%spproj%os_cls2D%get_all('pop')))
         ! moments & total variation distance
-        if( trim(params_glob%reject_cls).ne.'old' ) call self%spproj%os_cls2D%class_robust_rejection(moments_mask)
+        if( trim(params_glob%reject_cls).ne.'old' )then
+            call class_rejection(self%spproj%os_cls2D, moments_mask)
+        endif
         ! correlation and resolution
         if( params_glob%lpthres < LOWRES_REJECT_THRESHOLD )then
             call self%spproj%os_cls2D%find_best_classes(box, smpd_here, res_thresh, corres_mask, ndev)
@@ -488,7 +485,7 @@ contains
                     ! update to global counter, does not include empty classes
                     ncls_rejected_glob = ncls_rejected_glob + 1
                     call img%read(cavgs,icls)
-                    call img%write('cls_rejected_chunks.mrc',ncls_rejected_glob)
+                    call img%write(CLS_CHUNK_REJECTED,ncls_rejected_glob)
                 endif
             enddo
             call img%kill
@@ -604,5 +601,100 @@ contains
         call tmpproj%kill
         if( has_ptcl ) spproj%os_ptcl3D = spproj%os_ptcl2D
     end subroutine projrecords2proj
+
+    ! Public utility
+
+    ! Class rejection routine based on image moments & Total Variation Distance
+    subroutine class_rejection( os, mask, adjust )
+        class(oris),    intent(in)    :: os
+        logical,        intent(inout) :: mask(:)
+        real, optional, intent(in)    :: adjust
+        real,    allocatable :: vals(:), x(:)
+        logical, allocatable :: msk(:)
+        real    :: eff_mean_thresh, eff_rel_var_thresh, eff_abs_var_thresh
+        real    :: eff_tvd_thresh, eff_min_thresh, eff_max_thresh
+        integer :: icls, i, n
+        logical :: has_mean, has_var, has_tvd, has_minmax
+        n   = os%get_noris()
+        if( size(mask) /= n )THROW_HARD('Incompatible sizes! class rejection')
+        msk = mask
+        if( os%isthere('pop') )then
+            do icls=1,n
+                msk(icls) = os%get(icls,'pop') > 0.5
+            enddo
+        endif
+        mask = msk
+        if( count(msk) <= 5 )then
+            deallocate(msk)
+            return
+        endif
+        ! Effective threshold
+        eff_mean_thresh    = params_glob%stream_mean_threshold
+        eff_rel_var_thresh = params_glob%stream_rel_var_threshold
+        eff_abs_var_thresh = params_glob%stream_abs_var_threshold
+        eff_tvd_thresh     = max(0.001,min(0.999,params_glob%stream_tvd_theshold))
+        eff_min_thresh     = -params_glob%stream_minmax_threshold
+        eff_max_thresh     =  params_glob%stream_minmax_threshold
+        if( present(adjust) )then
+            eff_mean_thresh    = adjust * eff_mean_thresh
+            eff_rel_var_thresh = adjust * eff_rel_var_thresh
+            eff_abs_var_thresh = adjust * eff_abs_var_thresh
+            eff_tvd_thresh     = min(0.999, adjust * eff_tvd_thresh)
+            eff_min_thresh     = adjust * eff_min_thresh
+            eff_max_thresh     = adjust * eff_max_thresh
+        endif
+        ! selection
+        has_mean   = os%isthere('mean')
+        has_var    = os%isthere('var')
+        has_tvd    = os%isthere('tvd')
+        has_minmax = os%isthere('min') .and. os%isthere('max')
+        ! Mean
+        if( has_mean )then
+            vals = os%get_all('mean')
+            x    = pack(vals, mask=msk)
+            call robust_scaling(x)
+            i = 0
+            do icls = 1,n
+                if( msk(icls) )then
+                    i = i+1
+                    if( mask(icls) ) mask(icls) = x(i) > eff_mean_thresh
+                endif
+            enddo
+        endif
+        ! Variance
+        if( has_var )then
+            vals = os%get_all('var')
+            x    = pack(vals, mask=msk)
+            call robust_scaling(x)
+            i = 0
+            do icls = 1,n
+                if( msk(icls) )then
+                    i = i+1
+                    if( mask(icls) ) mask(icls) = x(i)       < eff_rel_var_thresh
+                    if( mask(icls) ) mask(icls) = vals(icls) < eff_abs_var_thresh
+                endif
+            enddo
+        endif
+        ! Total Variation Distance
+        if( has_tvd )then
+            vals = os%get_all('tvd')
+            do icls = 1,n
+                if( mask(icls) ) mask(icls) = vals(icls) < eff_tvd_thresh
+            enddo
+        endif
+        ! Min/max
+        if( has_minmax )then
+            do icls = 1,n
+                if( mask(icls) )then
+                    if(  (os%get(icls,'min') < eff_min_thresh).and.&
+                        &(os%get(icls,'max') > eff_max_thresh) )then
+                        mask(icls) = .false.
+                    endif
+                endif
+            enddo
+        endif
+        deallocate(msk)
+        if(allocated(vals) ) deallocate(vals, x)
+    end subroutine class_rejection
 
 end module simple_stream_utils

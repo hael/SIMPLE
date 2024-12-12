@@ -432,6 +432,7 @@ type :: parameters
     real    :: osmpd=0.            !< target output pixel size
     real    :: overlap=0.9         !< required parameters overlap for convergence
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
+    real    :: pool_threshold_factor=POOL_THRESHOLD_FACTOR  !< stream pool class rejection adjustment
     real    :: power=2.
     real    :: prob_athres=10.     !< angle threshold for prob distribution samplings
     real    :: scale=1.            !< image scale factor{1}
@@ -442,7 +443,12 @@ type :: parameters
     real    :: smpd_crop=2.        !< sampling distance; same as EMANs apix(in A) refers to cropped cavg/volume
     real    :: smpd_targets2D(2)
     real    :: snr=0.              !< signal-to-noise ratio
-    real    :: snr_noise_reg=0.    !< signal to noise ratio of noise regularization 
+    real    :: snr_noise_reg=0.    !< signal to noise ratio of noise regularization
+    real    :: stream_mean_threshold=MEAN_THRESHOLD         !< stream class rejection based on image mean (relative)
+    real    :: stream_rel_var_threshold=REL_VAR_THRESHOLD   !< stream class rejection based on image variance (relative)
+    real    :: stream_abs_var_threshold=ABS_VAR_THRESHOLD   !< stream class rejection based on image variance (absolute)
+    real    :: stream_tvd_theshold=TVD_THRESHOLD            !< stream class rejection based on total variation distance
+    real    :: stream_minmax_threshold=MINMAX_THRESHOLD     !< stream class rejection based on min.max absolute values
     real    :: tau=TAU_DEFAULT     !< for empirical scaling of cc-based particle weights
     real    :: tilt_thres=0.05
     real    :: thres=0.            !< threshold (binarisation: 0-1; distance filer: in pixels)
@@ -894,6 +900,7 @@ contains
         call check_rarg('osmpd',          self%osmpd)
         call check_rarg('overlap',        self%overlap)
         call check_rarg('phranlp',        self%phranlp)
+        call check_rarg('pool_threshold_factor', self%pool_threshold_factor)
         call check_rarg('prob_athres',    self%prob_athres)
         call check_rarg('scale',          self%scale)
         call check_rarg('sherr',          self%sherr)
@@ -903,6 +910,11 @@ contains
         call check_rarg('sigma',          self%sigma)
         call check_rarg('snr',            self%snr)
         call check_rarg('snr_noise_reg',  self%snr_noise_reg)
+        call check_rarg('stream_mean_threshold',    self%stream_mean_threshold)
+        call check_rarg('stream_rel_var_threshold', self%stream_rel_var_threshold)
+        call check_rarg('stream_abs_var_threshold', self%stream_abs_var_threshold)
+        call check_rarg('stream_tvd_theshold',      self%stream_tvd_theshold)
+        call check_rarg('stream_minmax_threshold',  self%stream_minmax_threshold)
         call check_rarg('tau',            self%tau)
         call check_rarg('tilt_thres',     self%tilt_thres)
         call check_rarg('thres',          self%thres)

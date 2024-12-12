@@ -80,7 +80,7 @@ public :: args, test_args
 private
 #include \"simple_local_flags.inc\"
 
-integer, parameter :: NARGMAX=500, MINVARS=100
+integer, parameter :: NARGMAX=1000, MINVARS=100
 
 type args
     private

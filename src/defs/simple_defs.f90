@@ -194,13 +194,11 @@ real, parameter    :: GLOB_FREQ                 = 0.2            !< frequency of
 real, parameter    :: LP2SMPDFAC                = 0.4125         !< low-pass limit scaling constant
 real, parameter    :: LP2SMPDFAC2D              = 0.4            !< low-pass limit scaling constant
 real, parameter    :: SHC_INPL_TRSHWDTH         = 2.0            !< shift search halfwidht (pixels)ch
-real, parameter    :: STREAM_SRCHFRAC           = 0.4            !< fraction of times full 2D search is performed in the pool
 real, parameter    :: MC_PATCHSZ                = 200.           !< recommended patch size (in Angstroms) for motion correction
 real, parameter    :: ENVMSK_FSC_THRESH         = 0.8            !< FSC value after which phase-randomization and FSC correction is applied in enveloppe masking
 real, parameter    :: MAX_SMPD                  = 2.67           !< maximum sampling distance in scaling
 real, parameter    :: TAU_DEFAULT               = 3.0            !< TAU fudge factor to control strength or regularization [0.5,5] more -> less low-pass effect
                                                                  !! tau < 3 leads to excessive low-pass filtering
-real, parameter    :: CLS_REJECT_STD            = 2.5            !< # deviations for 2D class selection/rejection
 real, parameter    :: CENTHRESH                 = 0.5            ! threshold for performing volume/cavg centering in pixels
 real, parameter    :: MAXCENTHRESH2D            = 3.0            ! max threshold for performing cavg centering in pixels
 
@@ -212,16 +210,10 @@ real, parameter    :: LP_CTF_ESTIMATE           = 5.0            !< Default low-
 real, parameter    :: HP_CTF_ESTIMATE           = 30.0           !< Default high-pass limit for defocus search (Angstroms)
 real, parameter    :: HP_BACKGR_SUBTR           = 400.0          !< High-pass frequency for micrograph background subtraction (Angstroms)
 real, parameter    :: CTFRES_THRESHOLD          = 50.0           !< Ctfres rejection threshold (Angstroms)
-real, parameter    :: CTFRES_THRESHOLD_STREAM   = 10.0           !< Stream ctfres rejection threshold (Angstroms)
 real, parameter    :: ICEFRAC_THRESHOLD         = 1.0            !< Icefrac rejection threshold
-real, parameter    :: ICEFRAC_THRESHOLD_STREAM  = 1.0            !< Stream icefrac rejection threshold
 real, parameter    :: ASTIG_THRESHOLD           = 10.0           !< Astigmatism rejection threshold
-real, parameter    :: ASTIG_THRESHOLD_STREAM    = 10.0           !< Stream astigmatism rejection threshold
-real, parameter    :: FRAC_SKIP_REJECTION       = 0.7            !< When the number of classes to reject is too high rejection is skipped
 real, parameter    :: PICK_LP_DEFAULT           = 20.            !< Picking resolution limit
 real, parameter    :: BOX_EXP_FACTOR_DEFAULT    = 1.2            !< Multilication factor to increase the image size as determined bu muti-diameter picking
-real, parameter    :: RES_THRESHOLD_STREAM      = 35.0           !< Default streaming resolution rejection threshold
-real, parameter    :: LOWRES_REJECT_THRESHOLD   = 199.           ! Deactivates resolution-based rejection when lpthres > LOWRES_REJECT_THRESHOLD
 
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND           = 5              !< # iteration bound lplim stage 1 (PRIME2D)
@@ -230,19 +222,31 @@ integer, parameter :: MINCLSPOPLIM              = 5              !< limit for ad
 integer, parameter :: GRIDCORR_MAXITS           = 2              !< # iterations for reconstruction gridding correction
 integer, parameter :: MAXIMGBATCHSZ             = 500            !< max # images in batch
 integer, parameter :: MAX_EXTRLIM2D             = 15             !< maximum # of iterations for which 2D extremal opt is performed
-integer, parameter :: MAX_STREAM_NPTCLS         = 500000         !< cap for adjusting update_frac in 2D streaming
 integer, parameter :: NPEAKS_DEFAULT            = 3              !< # of greedy subspace peaks to construct multi-neighborhood search spaces from
 integer, parameter :: NPEAKS_INPL_DEFAULT       = 10             !< # neighborhood search peaks to refine with L-BFGS
 integer, parameter :: NSAMPLE_MINMAX_DEFAULT(2) = [10000,25000]  !< default minimum and maximum particle sampling size
-integer, parameter :: STREAM_SRCHLIM            = 5              !< maximum # of systematic iterations for streaming 2D pool
 integer, parameter :: MC_NPATCH                 = 5              !< number of patches in x/y-direction for motion correction
 integer, parameter :: MC_MINPATCHSZ             = 200            !< Minimum patch size in pixels for motion correction
 integer, parameter :: MIN_ITERS_SHC             = 5              !< minimum number of iterations of stochastic search
 integer, parameter :: BATCHTHRSZ                = 50             !< # of images per thread
-integer, parameter :: FAST2D_MINSZ              = 25000          !< Minimum # of particles to sample for fast subset 2D classification
-integer, parameter :: FAST2D_NPTCLS_PER_CLS     = 500            !< # of particles per class to sample for fast subset 2D classification
-integer, parameter :: FAST2D_ITER_BATCH         = 3              !< # of iterations after which # of particles is updated
 integer, parameter :: AMSK_FREQ                 = 3              !< automasking every third iteration (each for now)
+
+! stream-related constants & thresholds
+real,    parameter :: CTFRES_THRESHOLD_STREAM   = 10.0           !< preprocessing: Stream ctfres rejection threshold (Angstroms)
+real,    parameter :: ICEFRAC_THRESHOLD_STREAM  = 1.0            !< preprocessing: Stream icefrac rejection threshold
+real,    parameter :: ASTIG_THRESHOLD_STREAM    = 10.0           !< preprocessing: Stream astigmatism rejection threshold
+real,    parameter :: RES_THRESHOLD_STREAM      = 35.0           !< class rejection: Default streaming best resolution rejection threshold
+real,    parameter :: LOWRES_REJECT_THRESHOLD   = 199.           !< class rejection: Deactivates resolution-based rejection when lpthres > LOWRES_REJECT_THRESHOLD
+real,    parameter :: CLS_REJECT_STD            = 2.5            !< class rejection: # deviations for 2D class selection/rejection
+real,    parameter :: MEAN_THRESHOLD            = -8.0           !< class rejection: image mean     threshold (Mahalabonis distance)
+real,    parameter :: REL_VAR_THRESHOLD         = 6.0            !< class rejection: image variance threshold (Mahalabonis distance)
+real,    parameter :: ABS_VAR_THRESHOLD         = 1.5            !< class rejection: image variance threshold (absolute value)
+real,    parameter :: TVD_THRESHOLD             = 0.55           !< class rejection: Total Variation Distance of image distributions
+real,    parameter :: MINMAX_THRESHOLD          = 2.0            !< class rejection: image min & max threshold (absolute value)
+real,    parameter :: POOL_THRESHOLD_FACTOR     = 1.25            !< class rejection: pool class rejection adjustment
+real,    parameter :: FRAC_SKIP_REJECTION       = 0.7            !< classification: When the number of classes to reject is too high rejection is skipped
+integer, parameter :: STREAM_SRCHLIM            = 5              !< classification: maximum # of systematic iterations for streaming 2D pool
+integer, parameter :: MAX_STREAM_NPTCLS         = 500000         !< classification: cap for adjusting update_frac in 2D streaming
 
 ! Graphene
 real, parameter    :: GRAPHENE_BAND1            = 2.14           !< graphene band 1 for omission in score function

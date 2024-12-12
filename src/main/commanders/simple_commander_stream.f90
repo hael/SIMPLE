@@ -1691,7 +1691,7 @@ contains
             ! 2D section
             if( l_once .and. (nptcls_glob > params%nptcls_per_cls*params%ncls) )then
                 if( .not.cline%defined('mskdiam') ) params%mskdiam = 0.85 * real(params%box) * params%smpd
-                call init_cluster2D_stream( cline, spproj_glob, params%box, micspproj_fname, reference_generation=.true. )
+                call init_cluster2D_stream( cline, spproj_glob, micspproj_fname, reference_generation=.true. )
                 l_once = .false.
             endif
             call update_pool_status
@@ -2391,14 +2391,14 @@ contains
                         params%smpd = spprojs(first)%os_mic%get(1,'smpd')
                         call spprojs(first)%read_segment('stk', trim(projectnames(first)))
                         params%box  = nint(spprojs(first)%os_stk%get(1,'box'))
-                        call init_cluster2D_stream(cline, spproj_glob, params%box, micspproj_fname)
+                        call init_cluster2D_stream(cline, spproj_glob, micspproj_fname)
                         call cline%delete('ncls')
                     end if
                 else if( n_old == 0 )then
                     params%smpd = spprojs(first)%os_mic%get(1,'smpd')
                     call spprojs(first)%read_segment('stk', trim(projectnames(first)))
                     params%box  = nint(spprojs(first)%os_stk%get(1,'box'))
-                    call init_cluster2D_stream(cline, spproj_glob, params%box, micspproj_fname)
+                    call init_cluster2D_stream(cline, spproj_glob, micspproj_fname)
                     call cline%delete('ncls')
                 endif
                 ! cleanup
