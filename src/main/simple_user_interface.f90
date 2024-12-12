@@ -2540,6 +2540,7 @@ contains
         call partition_cavgs%set_input('filt_ctrls', 3, lpthres)
         ! mask controls
         call partition_cavgs%set_input('mask_ctrls', 1, mskdiam)
+        partition_cavgs%mask_ctrls(1)%required = .false.
         ! computer controls
         call partition_cavgs%set_input('comp_ctrls', 1, nthr)
     end subroutine new_partition_cavgs

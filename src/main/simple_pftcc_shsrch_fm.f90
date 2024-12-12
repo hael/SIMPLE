@@ -90,18 +90,19 @@ contains
     end subroutine minimize
 
     ! Fourier-Mellin transform appproach without scale
-    subroutine calc_phasecorr( self, ind1, ind2, img1, img2, imgcc1, imgcc2, cc, mirror )
+    subroutine calc_phasecorr( self, ind1, ind2, img1, img2, imgcc1, imgcc2, cc, mirror, rotang )
         class(pftcc_shsrch_fm), intent(inout) :: self
         integer,                intent(in)    :: ind1, ind2     ! iref,iptcl indices for pftcc
         class(image),           intent(in)    :: img1, img2     ! ref,ptcl corresponding images
         class(image),           intent(inout) :: imgcc1, imgcc2 ! temporary correlation images
         real,                   intent(out)   :: cc
         logical,      optional, intent(in)    :: mirror
+        real,         optional, intent(out)   :: rotang
         type(image_ptr) :: p1, p2, pcc1, pcc2
         complex  :: fcomp1, fcomp2, fcompl, fcompll
         real(dp) :: var1, var2
         real     :: corrs(self%pftsz), rmat(2,2), dist(2), loc(2), offset1(2), offset2(2)
-        real     :: kw, norm, pftcc_ang, cc1,cc2, angstep, alpha,beta,gamma,denom
+        real     :: kw, norm, pftcc_ang, cc1,cc2, angstep, alpha,beta,gamma,denom, ang
         integer  :: logilims(3,2), cyclims(3,2), cyclimsR(2,2), win(2), phys(2)
         integer  :: irot,h,k,l,ll,m,mm,sh,c,shlim
         logical  :: l_mirr
@@ -200,14 +201,15 @@ contains
         call interpolate_offset_peak(pcc2, irot+self%pftsz, offset2, cc2)
         if( cc1 > cc2 )then
             ! offset = offset1
-            ! ang    = 360.-pftcc_ang
+            ang    = 360.-pftcc_ang
             cc     = cc1
         else
             ! offset = offset2
-            ! ang    = 180.-pftcc_ang
+            ang    = 180.-pftcc_ang
             cc     = cc2
             irot   = irot + self%pftsz
         endif
+        if( present(rotang) ) rotang = ang
         contains
 
             subroutine interpolate_offset_peak( p, rotind, offset,cc )

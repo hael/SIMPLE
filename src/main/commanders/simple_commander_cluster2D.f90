@@ -797,8 +797,9 @@ contains
         class(cluster2D_commander_distr), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         ! commanders
-        type(make_cavgs_commander_distr) :: xmake_cavgs
-        type(scale_commander)            :: xscale
+        type(make_cavgs_commander_distr)  :: xmake_cavgs
+        type(scale_commander)             :: xscale
+        type(calc_group_sigmas_commander) :: xcalc_group_sigmas
         ! command lines
         type(cmdline) :: cline_check_2Dconv
         type(cmdline) :: cline_cavgassemble
@@ -1052,7 +1053,7 @@ contains
             ! objfun=euclid, part 4: sigma2 consolidation
             if( params%l_needs_sigma )then
                 call cline_calc_sigma%set('which_iter', params%which_iter+1)
-                call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
+                call xcalc_group_sigmas%execute_safe(cline_calc_sigma)
             endif
             ! print out particle parameters per iteration
             if( trim(params%print_corrs).eq.'yes' )then
@@ -2190,6 +2191,7 @@ contains
         class(cmdline),                       intent(inout) :: cline
         character(len=STDLEN),   parameter :: SIMMAT_FNAME = 'simmat.bin'
         character(len=STDLEN),   parameter :: LABELS_FNAME = 'labels.txt'
+        real,                    parameter :: LP_DEFAULT   = 6.0 ! Angs
         logical,                 parameter :: DEBUG = .true.
         type(pftcc_shsrch_fm), allocatable :: fm_correlators(:)
         type(image),           allocatable :: cavg_imgs(:), ccimgs(:,:)
@@ -2201,19 +2203,20 @@ contains
         type(aff_prop)                :: aprop
         type(spec_clust)              :: specclust
         type(polarizer)               :: polartransform
-        character(len=:), allocatable :: cavgsstk, classname, frcs_fname, fmt, header1, header2, header3
+        character(len=:), allocatable :: cavgsstk, frcs_fname, fmt, header1, header2, header3
         real,             allocatable :: states(:), frc(:), filter(:), clspops(:), clsres(:)
-        real,             allocatable :: corrmat(:,:), S(:,:)
-        integer,          allocatable :: centers(:), labels(:), clsinds(:), multi_labels(:,:)
+        real,             allocatable :: corrmat(:,:), S(:,:), rotmat(:,:)
+        integer,          allocatable :: centers(:), labels(:), clsinds(:), multi_labels(:,:),tmp(:)
         logical,          allocatable :: l_msk(:,:,:)
         character(len=8)              :: tmpstr
-        real    :: smpd, simsum, simmin, simmax, simmed, pref, cc,ccm, dunn, dunnmax
+        real    :: minmax(2), smpd, simsum, simmin, simmax, simmed, pref, cc,ccm, dunn, dunnmax
         integer :: ldim(3), n, ncls_sel, i, j, k, icls, filtsz, ind, ithr, funit, io_stat
         logical :: l_apply_optlp, l_mirr
         ! defaults
-        call cline%set('oritype', 'cls2D')
+        call cline%set('oritype', 'out')
         call cline%set('ctf',     'no')
         call cline%set('objfun',  'cc')
+        call cline%set('sh_inv',  'yes')
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('kweight')   ) call cline%set('kweight',   'all')
         if( .not. cline%defined('mirr')      ) call cline%set('mirr',      'no')
@@ -2242,18 +2245,21 @@ contains
         if( n /= params%ncls ) THROW_HARD('Inconsistent # classes in project file vs cavgs stack; partition_cavgs')
         ! threshold based on states/population/resolution
         states = spproj%os_cls2D%get_all('state')
-        clspops = spproj%os_cls2D%get_all('pop')
-        where( clspops <  real(MINCLSPOPLIM) ) states = 0.
-        if( cline%defined('lpthres') )then
-            clsres  = spproj%os_cls2D%get_all('res')
-            where( clsres  >= params%lpthres ) states = 0.
+        if( spproj%os_cls2D%isthere('pop') )then
+            clspops = spproj%os_cls2D%get_all('pop')
+            where( clspops <  real(MINCLSPOPLIM) ) states = 0.
+        endif
+        if( spproj%os_cls2D%isthere('res') )then
+            if( cline%defined('lpthres') )then
+                clsres  = spproj%os_cls2D%get_all('res')
+                where( clsres  >= params%lpthres ) states = 0.
+            endif
         endif
         ! number of classes to partition
         ncls_sel = count(states>0.5)
         ! keep track of the original class indices
         clsinds = pack((/(i,i=1,params%ncls)/), mask=states > 0.5)
         ! get FRCs
-        l_apply_optlp = .false.
         call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
         if( trim(params%mkdir).eq.'no' )then
             ! to deal with relative path, the project will be updated in place
@@ -2261,29 +2267,54 @@ contains
                 if( frcs_fname(1:3) == '../' ) frcs_fname = frcs_fname(4:len_trim(frcs_fname))
             endif
         endif
-        if( file_exists(frcs_fname) )then
-            call clsfrcs%read(frcs_fname)
-            ! whether to filter
-            l_apply_optlp = .true.
-            ! resolution limit
-            if( .not.cline%defined('lp') )then
-                params%lp = clsfrcs%estimate_lp_for_align(crit0143=.false.)
-            endif
-        endif
-        filtsz = clsfrcs%get_filtsz()
         ! ensure correct smpd/box in params class
         params%smpd = smpd
         params%box  = ldim(1)
-        params%msk  = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
+        if( cline%defined('mskdiam') )then
+            params%msk = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
+        else
+            params%msk = 0.85*real(params%box/2)-COSMSKHALFWIDTH-1.
+        endif
         write(logfhandle,'(A)') '>>> PREPARING CLASS AVERAGES'
-        allocate(frc(filtsz), filter(filtsz))
         ! read images
         allocate(cavg_imgs(ncls_sel))
         do i = 1, ncls_sel
             call cavg_imgs(i)%new(ldim, smpd, wthreads=.false.)
             j = clsinds(i)
             call cavg_imgs(i)%read(params%stk, j)
+            minmax = cavg_imgs(i)%minmax()
+            if( is_equal(minmax(1),minmax(2)) )then
+                ! empty class
+                clsinds(i) = 0
+                states(j)  = 0
+            endif
         enddo
+        if( ncls_sel /= count(clsinds>0) )then
+            ! updating for empty classes
+            cavg_imgs(:) = pack(cavg_imgs(:), mask=clsinds(:)>0)
+            ncls_sel     = count(clsinds>0)
+            tmp          = pack(clsinds(:), mask=clsinds(:)>0)
+            clsinds      = tmp(:)
+            deallocate(tmp)
+        endif
+        ! resolution limits
+        l_apply_optlp = .false.
+        if( file_exists(frcs_fname) )then
+            call clsfrcs%read(frcs_fname)
+            ! whether to filter
+            l_apply_optlp = .true.
+            ! resolution limit
+            if( .not.cline%defined('lp') )then
+                ! FRC=0.5 criterion
+                params%lp = clsfrcs%estimate_lp_for_align(crit0143=.false.)
+            endif
+            filtsz = clsfrcs%get_filtsz()
+            allocate(frc(filtsz), filter(filtsz))
+        else
+            THROW_WARN('LP or frcs.bin must be present to determine resolution, default value used')
+            params%lp = LP_DEFAULT
+        endif
+        write(logfhandle,'(A,F6.1)')'>>> RESOLUTION LIMIT: ',params%lp
         ! prep mask
         call img_msk%new([params%box,params%box,1], params%smpd)
         img_msk = 1.
@@ -2322,7 +2353,6 @@ contains
         ! Shift boundaries
         if( .not. cline%defined('trs') ) params%trs = real(params%box)/6.
         ! pftcc init
-        params%sh_inv = 'yes'
         call pftcc%new(ncls_sel, [1,ncls_sel], params%kfromto)
         ! PFT transform
         call polartransform%new([params%box,params%box,1], params%smpd)
@@ -2339,12 +2369,13 @@ contains
         call pftcc%memoize_refs
         call pftcc%memoize_ptcls
         ! correlation matrix calculation
-        allocate(fm_correlators(nthr_glob),ccimgs(nthr_glob,2))
+        allocate(fm_correlators(nthr_glob),ccimgs(nthr_glob,2),rotmat(ncls_sel,ncls_sel))
         do i = 1,nthr_glob
             call fm_correlators(i)%new(params%trs,1.,opt_angle=.false.)
             call ccimgs(i,1)%new(ldim, smpd, wthreads=.false.)
             call ccimgs(i,2)%new(ldim, smpd, wthreads=.false.)
         enddo
+        rotmat = 0.
         !$omp parallel do default(shared) private(i,j,cc,ccm,ithr)&
         !$omp schedule(dynamic) proc_bind(close)
         do i = 1, ncls_sel - 1
@@ -2354,7 +2385,7 @@ contains
                 ! reference to particle
                 call pftcc%set_eo(i,.true.)
                 call fm_correlators(ithr)%calc_phasecorr(j, i, cavg_imgs(j), cavg_imgs(i),&
-                    &ccimgs(ithr,1), ccimgs(ithr,2), cc)
+                    &ccimgs(ithr,1), ccimgs(ithr,2), cc, rotang=rotmat(i,j))
                 ! mirrored reference to particle
                 if( l_mirr )then
                     call pftcc%set_eo(i,.false.)
@@ -2364,6 +2395,7 @@ contains
                 endif
                 corrmat(i,j) = cc
                 corrmat(j,i) = cc
+                rotmat(j,i)  = rotmat(i,j)
             enddo
         enddo
         !$omp end parallel do
@@ -2383,16 +2415,17 @@ contains
         ! CLUSTERING
         allocate(multi_labels(params%ncls,params%nsearch),source=0)
         ! correlation matrix preprocessing
+        ! correlation to squared euclidian distance, values within [0.;4.]
+        corrmat = 2.*(1.-corrmat)
+        where( corrmat < 0. ) corrmat = 0.
+        where( corrmat > 4. ) corrmat = 4.
         select case(trim(params%algorithm))
         case('affprop')
             ! Affinity Propagation: negative squared euclidian distance as similarity
-            ! to circumvent possible correlation sign change. Values are within [-4.;0]
-            corrmat = -2.*(1.-corrmat)
-            where( corrmat > 0. ) corrmat =  0.
-            where( corrmat < -4.) corrmat = -4.
+            ! to circumvent possible correlation sign change. Values within [-4.;0]
+            corrmat = -corrmat
         case('spc')
-            ! Spectral Clustering: taking euclidian distance as similarity
-            corrmat = 2.*(1.-corrmat)
+            ! Spectral Clustering: euclidian distance as similarity
             where( corrmat < 0. ) corrmat =  0.
             corrmat = sqrt(corrmat)
         end select
@@ -2480,7 +2513,7 @@ contains
             enddo
         endif
         ! end gracefully
-        call simple_end('**** SIMPLE_partition_cavgs NORMAL STOP ****')
+        call simple_end('**** SIMPLE_PARTITION_CAVGS NORMAL STOP ****')
         contains
 
             ! write labels to project
@@ -2506,21 +2539,33 @@ contains
             ! write the classes for debugging purpose
             subroutine write_partition( flag )
                 character(len=*), intent(in) :: flag
-                integer, allocatable :: cntarr(:)
-                integer :: ncls_here, icls, i
+                type(image)                   :: img
+                character(len=:), allocatable :: classname
+                integer,          allocatable :: cntarr(:)
+                integer :: ncls_here, icls, i, ifirst
+                logical :: first
                 ncls_here = size(labels)
                 allocate(cntarr(ncls_here), source=0)
                 do icls = 1, ncls_here
+                    classname  = trim(flag)//'_class'//int2str_pad(icls,3)//trim(STK_EXT)
+                    first = .true.
                     do i = 1,ncls_sel
                         if( labels(i) == icls )then
-                            classname = trim(flag)//'_class'//int2str_pad(icls,3)//trim(STK_EXT)
                             cntarr(labels(i)) = cntarr(labels(i)) + 1
                             call cavg_imgs(i)%ifft
-                            call cavg_imgs(i)%write(classname, cntarr(labels(i)))
+                            if( first )then
+                                ifirst = i
+                                first  = .false.
+                                call img%copy(cavg_imgs(i))
+                            else
+                                call cavg_imgs(i)%rtsq(rotmat(ifirst,i), 0., 0.,img)
+                            endif
+                            call img%write(classname, cntarr(labels(i)))
                         endif
                     end do
                 end do
                 deallocate(cntarr)
+                call img%kill
             end subroutine write_partition
 
     end subroutine exec_partition_cavgs
