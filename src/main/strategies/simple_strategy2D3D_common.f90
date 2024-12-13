@@ -1,5 +1,7 @@
 ! common PRIME2D/PRIME3D routines used primarily by the Hadamard matchers
 module simple_strategy2D3D_common
+!$ use omp_lib
+!$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_image,             only: image
 use simple_cmdline,           only: cmdline
@@ -13,7 +15,7 @@ implicit none
 public :: prepimgbatch, killimgbatch, read_imgbatch, discrete_read_imgbatch
 public :: set_bp_range, set_bp_range2D, sample_ptcls4update, prepimg4align, prep2Dref
 public :: calcrefvolshift_and_mapshifts2ptcls, read_and_filter_refvols, preprefvol, estimate_lp_refvols
-public :: preprecvols, killrecvols, grid_ptcl, calc_3Drec, calc_projdir3Drec, norm_struct_facts
+public :: preprecvols, killrecvols, grid_ptcl, calc_3Drec, calc_projdir3Drec, norm_struct_facts, build_batch_particles, prepare_polar_references
 private
 #include "simple_local_flags.inc"
 
@@ -1097,5 +1099,81 @@ contains
         endif
         call build_glob%vol2%kill
     end subroutine norm_struct_facts
+
+    subroutine prepare_polar_references( pftcc, cline, batchsz_max )
+        use simple_polarft_corrcalc,       only:  polarft_corrcalc
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        class(cmdline),          intent(in)    :: cline !< command line
+        integer,                 intent(in)    :: batchsz_max
+        type(ori) :: o_tmp
+        real      :: xyz(3)
+        integer   :: s, iref, nrefs
+        logical   :: do_center
+        ! exception handling for lp_auto==yes
+        if( trim(params_glob%lp_auto).eq.'yes' )then
+            if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
+                ! all good
+            else
+                THROW_HARD('Automatic low-pass limit estimation requires LPSTART/LPSTOP range input')
+            endif
+        endif
+        nrefs = params_glob%nspace * params_glob%nstates
+        ! (if needed) estimating lp (over all states) and reseting params_glob%lp and params_glob%kfromto
+        if( params_glob%l_lpauto ) call estimate_lp_refvols
+        ! pftcc
+        call pftcc%new(nrefs, [1,batchsz_max], params_glob%kfromto)
+        ! read reference volumes and create polar projections
+        do s=1,params_glob%nstates
+            if( str_has_substr(params_glob%refine, 'prob') )then
+                ! already mapping shifts in prob_tab with shared-memory execution
+                call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=l_distr_exec_glob)
+            else
+                call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=.true.)
+            endif
+            call read_and_filter_refvols(s)
+            ! PREPARE E/O VOLUMES
+            call preprefvol(cline, s, do_center, xyz, .false.)
+            call preprefvol(cline, s, do_center, xyz, .true.)
+            ! PREPARE REFERENCES
+            !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
+            do iref=1,params_glob%nspace
+                call build_glob%eulspace%get_ori(iref, o_tmp)
+                call build_glob%vol_odd%fproject_polar((s - 1) * params_glob%nspace + iref,&
+                    &o_tmp, pftcc, iseven=.false., mask=build_glob%l_resmsk)
+                call build_glob%vol%fproject_polar(    (s - 1) * params_glob%nspace + iref,&
+                    &o_tmp, pftcc, iseven=.true.,  mask=build_glob%l_resmsk)
+                call o_tmp%kill
+            end do
+            !$omp end parallel do
+        end do
+        call pftcc%memoize_refs
+    end subroutine prepare_polar_references
+
+    subroutine build_batch_particles( pftcc, nptcls_here, pinds_here, tmp_imgs )
+        use simple_polarft_corrcalc,       only:  polarft_corrcalc
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        integer,                 intent(in)    :: nptcls_here
+        integer,                 intent(in)    :: pinds_here(nptcls_here)
+        type(image),             intent(inout) :: tmp_imgs(params_glob%nthr)
+        integer :: iptcl_batch, iptcl, ithr
+        call discrete_read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here], params_glob%l_use_denoised )
+        ! reassign particles indices & associated variables
+        call pftcc%reallocate_ptcls(nptcls_here, pinds_here)
+        !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
+        do iptcl_batch = 1,nptcls_here
+            ithr  = omp_get_thread_num() + 1
+            iptcl = pinds_here(iptcl_batch)
+            ! prep
+            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), tmp_imgs(ithr))
+            ! transfer to polar coordinates
+            call build_glob%img_crop_polarizer%polarize(pftcc, tmp_imgs(ithr), iptcl, .true., .true., mask=build_glob%l_resmsk)
+            ! e/o flags
+            call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
+        end do
+        !$omp end parallel do
+        call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
+        ! Memoize particles FFT parameters
+        call pftcc%memoize_ptcls
+    end subroutine build_batch_particles
     
 end module simple_strategy2D3D_common

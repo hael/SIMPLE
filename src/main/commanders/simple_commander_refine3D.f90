@@ -848,23 +848,13 @@ contains
         type(polarft_corrcalc)        :: pftcc
         type(builder)                 :: build
         type(parameters)              :: params
-        type(ori)                     :: o_tmp
         type(eul_prob_tab)            :: eulprob_obj_part
         type(euclid_sigma2)           :: eucl_sigma
-        integer  :: nptcls, iptcl, s, ithr, iref, i
-        logical  :: l_ctf, do_center
-        real     :: xyz(3)
+        integer  :: nptcls, ithr
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-        ! exception handling for lp_auto==yes
-        if( trim(params%lp_auto).eq.'yes' )then
-            if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
-                ! all good
-            else
-                THROW_HARD('Automatic low-pass limit estimation requires LPSTART/LPSTOP range input')
-            endif
-        endif
         allocate(ptcl_mask(params%fromp:params%top))
+        call set_bp_range( cline )
         ! The policy here ought to be that nothing is done with regards to sampling other than reproducing
         ! what was generated in the driver (prob_align, below). Sampling is delegated to prob_align (below)
         ! and merely reproduced here
@@ -873,23 +863,7 @@ contains
         else
             THROW_HARD('exec_prob_tab requires prior particle sampling (in exec_prob_align)')
         endif
-        ! more prep
-        call set_bp_range( cline )
-        call pftcc%new(params%nspace * params%nstates, [1,nptcls], params%kfromto)
-        call eulprob_obj_part%new(pinds)
-        call prepimgbatch(nptcls)
-        call discrete_read_imgbatch( nptcls, pinds, [1,nptcls] )
-        call pftcc%reallocate_ptcls(nptcls, pinds)
-        call build%img_crop_polarizer%init_polarizer(pftcc, params%alpha)
-        allocate(tmp_imgs(nthr_glob))
-        !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
-        do ithr = 1,nthr_glob
-            call tmp_imgs(ithr)%new([params%box_crop,params%box_crop,1], params%smpd_crop, wthreads=.false.)
-        enddo
-        !$omp end parallel do
-        ! PREPARATION OF REFERENCES IN PFTCC
-        ! (if needed) estimating lp (over all states) and reseting params_glob%lp and params_glob%kfromto
-        if( params%l_lpauto ) call estimate_lp_refvols
+        ! PREPARATION OF SIGMAS
         ! pftcc and sigmas
         if( params%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
@@ -897,45 +871,21 @@ contains
             call eucl_sigma%read_part(  build%spproj_field, ptcl_mask)
             call eucl_sigma%read_groups(build%spproj_field, ptcl_mask)
         end if
-        ! read reference volumes and create polar projections
-        do s=1,params%nstates
-            call calcrefvolshift_and_mapshifts2ptcls( cline, s, params%vols(s), do_center, xyz, map_shift=.true.)
-            call read_and_filter_refvols(s)
-            ! PREPARE E/O VOLUMES
-            call preprefvol(cline, s, do_center, xyz, .false.)
-            call preprefvol(cline, s, do_center, xyz, .true.)
-            ! PREPARE REFERENCES
-            !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
-            do iref=1, params%nspace
-                call build%eulspace%get_ori(iref, o_tmp)
-                call build%vol_odd%fproject_polar((s - 1) * params%nspace + iref,&
-                    &o_tmp, pftcc, iseven=.false., mask=build%l_resmsk)
-                call build%vol%fproject_polar(    (s - 1) * params%nspace + iref,&
-                    &o_tmp, pftcc, iseven=.true.,  mask=build%l_resmsk)
-                call o_tmp%kill
-            end do
-            !$omp end parallel do
-        end do
-        call pftcc%memoize_refs
+        ! PREPARATION OF PFTCC AND REFERENCES
+        ! (if needed) estimating lp (over all states) and reseting params_glob%lp and params_glob%kfromto
+        call prepare_polar_references(pftcc, cline, nptcls)
         ! PREPARATION OF PARTICLES
-        !$omp parallel do default(shared) private(i,iptcl,ithr) schedule(static) proc_bind(close)
-        do i = 1,nptcls
-            ithr  = omp_get_thread_num()+1
-            iptcl = pinds(i)
-            if( .not.ptcl_mask(iptcl) ) cycle
-            ! prep
-            call prepimg4align(iptcl, build%imgbatch(i), tmp_imgs(ithr))
-            ! transfer to polar coordinates
-            call build%img_crop_polarizer%polarize(pftcc, tmp_imgs(ithr), iptcl, .true., .true., mask=build%l_resmsk)
-            ! e/o flags
-            call pftcc%set_eo(iptcl, mod(iptcl, 2)==0)
+        call prepimgbatch(nptcls)
+        allocate(tmp_imgs(nthr_glob))
+        !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
+        do ithr = 1,nthr_glob
+            call tmp_imgs(ithr)%new([params%box_crop,params%box_crop,1], params%smpd_crop, wthreads=.false.)
         enddo
         !$omp end parallel do
-        ! getting the ctfs
-        l_ctf = build%spproj%get_ctfflag(params%oritype,iptcl=pinds(1)).ne.'no'
-        ! make CTFs
-        if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, params%oritype)
-        call pftcc%memoize_ptcls
+        call build%img_crop_polarizer%init_polarizer(pftcc, params%alpha)
+        call build_batch_particles(pftcc, nptcls, pinds, tmp_imgs)
+        ! Filling prob table in eul_prob_tab
+        call eulprob_obj_part%new(pinds)
         fname = trim(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
         if( str_has_substr(params%refine, 'prob_state') )then
             call eulprob_obj_part%fill_tab_state_only(pftcc)
