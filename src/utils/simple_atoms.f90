@@ -1474,8 +1474,6 @@ contains
         enddo
         if(present(filename))then
             write(46,'(a,/,a)') 'CC Score by Residue [-1 1]',' Res    CC Res Score'
-            !n_residues = self%get_nres
-            print *, 'total number of residues', self%get_nres()
             do i_res = 1, self%get_nres()
                 allocate(mask_byres(self%n),source=.false.)
                 do i_atom = 1, self%n
