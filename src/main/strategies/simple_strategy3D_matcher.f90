@@ -36,6 +36,7 @@ type(eul_prob_tab),     target :: eulprob_obj_part
 type(image),       allocatable :: ptcl_match_imgs(:)
 integer,           allocatable :: pinds(:)
 logical,           allocatable :: ptcl_mask(:)
+character(len=:),  allocatable :: fname
 integer                        :: nptcls2update
 type(euclid_sigma2)            :: eucl_sigma
 type(polarft_corrcalc)         :: pftcc
@@ -65,7 +66,7 @@ contains
         type(class_sample),    allocatable :: clssmp(:) 
         type(convergence) :: conv
         type(ori)         :: orientation
-        real    :: frac_srch_space, extr_thresh, extr_score_thresh, anneal_ratio, frac_greedy
+        real    :: extr_thresh, extr_score_thresh, anneal_ratio, frac_greedy
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz
         integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map
         integer :: ibatch, iextr_lim, lpind_anneal, lpind_start
@@ -88,9 +89,6 @@ contains
         ! SET FOURIER INDEX RANGE
         call set_bp_range(cline)
 
-        ! SET FRACTION OF SEARCH SPACE
-        frac_srch_space = build_glob%spproj_field%get_avg('frac')
-
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
         if( allocated(pinds) )     deallocate(pinds)
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
@@ -104,6 +102,14 @@ contains
             call sample_ptcls4update([params_glob%fromp,params_glob%top], .true., nptcls2update, pinds, ptcl_mask )
         endif
 
+        ! PREP sigmas
+        if( params_glob%l_needs_sigma )then
+            fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
+            call eucl_sigma%new(fname, params_glob%box)
+            call eucl_sigma%read_part(  build_glob%spproj_field, ptcl_mask)
+            call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
+        end if
+
         ! PREP BATCH ALIGNEMENT
         batchsz_max = min(nptcls2update,params_glob%nthr*BATCHTHRSZ)
         nbatches    = ceiling(real(nptcls2update)/real(batchsz_max))
@@ -115,7 +121,7 @@ contains
             rt_init                    = toc(t_init)
             t_prepare_polar_references = tic()
         endif
-        call prepare_polar_references(cline, batchsz_max)
+        call prepare_polar_references(pftcc, cline, batchsz_max)
         if( L_BENCH_GLOB )then
             rt_prepare_polar_references = toc(t_prepare_polar_references)
             t_prep_orisrch              = tic()
@@ -151,7 +157,7 @@ contains
             batchsz     = batch_end - batch_start + 1
             ! Prep particles in pftcc
             if( L_BENCH_GLOB ) t_build_batch_particles = tic()
-            call build_batch_particles(batchsz, pinds(batch_start:batch_end))
+            call build_batch_particles(pftcc, batchsz, pinds(batch_start:batch_end), ptcl_match_imgs)
             if( L_BENCH_GLOB ) rt_build_batch_particles = rt_build_batch_particles + toc(t_build_batch_particles)
             ! Particles loop
             if( L_BENCH_GLOB ) t_align = tic()
@@ -326,87 +332,5 @@ contains
             endif
         endif
     end subroutine refine3D_exec
-
-    subroutine prepare_polar_references( cline, batchsz_max )
-        class(cmdline), intent(in)    :: cline !< command line
-        integer,        intent(in)    :: batchsz_max
-        character(len=:), allocatable :: fname
-        type(ori) :: o_tmp
-        real      :: xyz(3)
-        integer   :: s, iref, nrefs
-        logical   :: do_center
-        ! exception handling for lp_auto==yes
-        if( trim(params_glob%lp_auto).eq.'yes' )then
-            if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
-                ! all good
-            else
-                THROW_HARD('Automatic low-pass limit estimation requires LPSTART/LPSTOP range input')
-            endif
-        endif
-        if( L_BENCH_GLOB ) rt_read_and_filter_refvols = 0.
-        nrefs = params_glob%nspace * params_glob%nstates
-        ! (if needed) estimating lp (over all states) and reseting params_glob%lp and params_glob%kfromto
-        if( params_glob%l_lpauto ) call estimate_lp_refvols
-        ! pftcc and sigmas
-        call pftcc%new(nrefs, [1,batchsz_max], params_glob%kfromto)
-        if( params_glob%l_needs_sigma )then
-            fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
-            call eucl_sigma%new(fname, params_glob%box)
-            call eucl_sigma%read_part(  build_glob%spproj_field, ptcl_mask)
-            call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
-        end if
-        ! read reference volumes and create polar projections
-        do s=1,params_glob%nstates
-            if( str_has_substr(params_glob%refine, 'prob') )then
-                ! already mapping shifts in prob_tab with shared-memory execution
-                call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=l_distr_exec_glob)
-            else
-                call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=.true.)
-            endif
-            if( L_BENCH_GLOB ) t_read_and_filter_refvols = tic()
-            call read_and_filter_refvols(s)
-            if( L_BENCH_GLOB ) rt_read_and_filter_refvols = rt_read_and_filter_refvols + toc(t_read_and_filter_refvols)
-            ! PREPARE E/O VOLUMES
-            call preprefvol(cline, s, do_center, xyz, .false.)
-            call preprefvol(cline, s, do_center, xyz, .true.)
-            ! PREPARE REFERENCES
-            !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
-            do iref=1,params_glob%nspace
-                call build_glob%eulspace%get_ori(iref, o_tmp)
-                call build_glob%vol_odd%fproject_polar((s - 1) * params_glob%nspace + iref,&
-                    &o_tmp, pftcc, iseven=.false., mask=build_glob%l_resmsk)
-                call build_glob%vol%fproject_polar(    (s - 1) * params_glob%nspace + iref,&
-                    &o_tmp, pftcc, iseven=.true.,  mask=build_glob%l_resmsk)
-                call o_tmp%kill
-            end do
-            !$omp end parallel do
-        end do
-        call pftcc%memoize_refs
-    end subroutine prepare_polar_references
-
-    subroutine build_batch_particles( nptcls_here, pinds_here )
-        use simple_strategy2D3D_common, only: read_imgbatch, prepimg4align
-        integer, intent(in) :: nptcls_here
-        integer, intent(in) :: pinds_here(nptcls_here)
-        integer :: iptcl_batch, iptcl, ithr
-        call discrete_read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here], params_glob%l_use_denoised )
-        ! reassign particles indices & associated variables
-        call pftcc%reallocate_ptcls(nptcls_here, pinds_here)
-        !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
-        do iptcl_batch = 1,nptcls_here
-            ithr  = omp_get_thread_num() + 1
-            iptcl = pinds_here(iptcl_batch)
-            ! prep
-            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), ptcl_match_imgs(ithr))
-            ! transfer to polar coordinates
-            call build_glob%img_crop_polarizer%polarize(pftcc, ptcl_match_imgs(ithr), iptcl, .true., .true., mask=build_glob%l_resmsk)
-            ! e/o flags
-            call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
-        end do
-        !$omp end parallel do
-        call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
-        ! Memoize particles FFT parameters
-        call pftcc%memoize_ptcls
-    end subroutine build_batch_particles
     
 end module simple_strategy3D_matcher
