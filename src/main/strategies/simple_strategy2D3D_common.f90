@@ -546,7 +546,7 @@ contains
         character(len=:), allocatable :: vol_even, vol_odd
         type(image) :: mskvol
         integer     :: npix, s
-        real        :: lpopt, lpest
+        real        :: lpest(params_glob%nstates)
         ! for safety in case this subroutine is called when lp_auto is off
         if( .not. params_glob%l_lpauto ) return
         ! finding optimal lp over all states
@@ -557,7 +557,6 @@ contains
             call mskvol%read(params_glob%mskfile)
             call mskvol%remove_edge
         endif
-        lpopt = params_glob%lp
         do s = 1, params_glob%nstates
             if( params_glob%lp_auto.eq.'fsc' )then
                 lpest = calc_lowpass_lim(get_find_at_corr(build_glob%fsc(s,:), params_glob%lplim_crit),&
@@ -572,12 +571,11 @@ contains
                 endif
                 call build_glob%vol%read_and_crop(    vol_even,params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
                 call build_glob%vol_odd%read_and_crop(vol_odd, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
-                call estimate_lplim(build_glob%vol_odd, build_glob%vol, mskvol, [params_glob%lpstart,params_glob%lpstop], lpest)
+                call estimate_lplim(build_glob%vol_odd, build_glob%vol, mskvol, [params_glob%lpstart,params_glob%lpstop], lpest(s))
             endif
-            if( lpest < lpopt ) lpopt = lpest
         enddo
         ! re-set the low-pass limit
-        params_glob%lp = lpopt
+        params_glob%lp = minval(lpest)
         ! update the Fourier index limit
         params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, params_glob%box_crop, params_glob%smpd_crop)
         ! update low-pass limit in project
