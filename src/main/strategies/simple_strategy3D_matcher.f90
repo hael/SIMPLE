@@ -102,14 +102,6 @@ contains
             call sample_ptcls4update([params_glob%fromp,params_glob%top], .true., nptcls2update, pinds, ptcl_mask )
         endif
 
-        ! PREP sigmas
-        if( params_glob%l_needs_sigma )then
-            fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
-            call eucl_sigma%new(fname, params_glob%box)
-            call eucl_sigma%read_part(  build_glob%spproj_field, ptcl_mask)
-            call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
-        end if
-
         ! PREP BATCH ALIGNEMENT
         batchsz_max = min(nptcls2update,params_glob%nthr*BATCHTHRSZ)
         nbatches    = ceiling(real(nptcls2update)/real(batchsz_max))
@@ -126,6 +118,14 @@ contains
             rt_prepare_polar_references = toc(t_prepare_polar_references)
             t_prep_orisrch              = tic()
         endif
+        ! PREP sigmas
+        if( params_glob%l_needs_sigma )then
+            fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
+            call eucl_sigma%new(fname, params_glob%box)
+            call eucl_sigma%read_part(  build_glob%spproj_field, ptcl_mask)
+            call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
+        end if
+        ! PREPARATION OF PARTICLES
         call build_glob%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
         call build_glob%vol%kill
         call build_glob%vol_odd%kill
