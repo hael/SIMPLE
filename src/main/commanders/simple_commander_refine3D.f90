@@ -863,17 +863,16 @@ contains
         else
             THROW_HARD('exec_prob_tab requires prior particle sampling (in exec_prob_align)')
         endif
+        ! PREPARATION OF PFTCC AND REFERENCES
+        ! (if needed) estimating lp (over all states) and reseting params_glob%lp and params_glob%kfromto
+        call prepare_polar_references(pftcc, cline, nptcls)
         ! PREPARATION OF SIGMAS
-        ! pftcc and sigmas
         if( params%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
             call eucl_sigma%new(fname, params%box)
             call eucl_sigma%read_part(  build%spproj_field, ptcl_mask)
             call eucl_sigma%read_groups(build%spproj_field, ptcl_mask)
         end if
-        ! PREPARATION OF PFTCC AND REFERENCES
-        ! (if needed) estimating lp (over all states) and reseting params_glob%lp and params_glob%kfromto
-        call prepare_polar_references(pftcc, cline, nptcls)
         ! PREPARATION OF PARTICLES
         call prepimgbatch(nptcls)
         allocate(tmp_imgs(nthr_glob))
