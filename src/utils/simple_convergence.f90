@@ -19,6 +19,8 @@ type convergence
     type(stats_struct) :: shincarg   !< shift increment
     type(stats_struct) :: pw         !< particle weights
     type(stats_struct) :: lp         !< low-pass limit
+    type(stats_struct) :: lp_est     !< low-pass limit, estimated
+    type(stats_struct) :: res        !< resolution @ FSC=0.143
     type(oris)         :: ostats     !< centralize stats for writing
     integer :: iteration   = 0       !< current interation
     real    :: mi_class    = 0.      !< class parameter distribution overlap
@@ -93,19 +95,23 @@ contains
         call os%stats('frac',      self%frac_srch, mask=mask)
         call os%stats('shincarg',  self%shincarg,  mask=mask)
         call os%stats('lp',        self%lp,        mask=mask)
+        call os%stats('lp_est',    self%lp_est,    mask=mask)
+        call os%stats('res',       self%res,       mask=mask)
         self%mi_class = os%get_avg('mi_class',     mask=mask)
         ! overlaps and particle updates
-        write(logfhandle,601) '>>> CLASS OVERLAP:                          ', self%mi_class
-        write(logfhandle,601) '>>> % PARTICLES SAMPLED THIS ITERATION      ', percen_sampled
-        write(logfhandle,601) '>>> % PARTICLES UPDATED SO FAR              ', percen_updated
-        write(logfhandle,601) '>>> % PARTICLES USED FOR AVERAGING          ', percen_avg
+        write(logfhandle,601) '>>> CLASS OVERLAP:                            ', self%mi_class
+        write(logfhandle,601) '>>> % PARTICLES SAMPLED THIS ITERATION        ', percen_sampled
+        write(logfhandle,601) '>>> % PARTICLES UPDATED SO FAR                ', percen_updated
+        write(logfhandle,601) '>>> % PARTICLES USED FOR AVERAGING            ', percen_avg
         ! dists and % search space
-        write(logfhandle,604) '>>> IN-PLANE DIST    (DEG) AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
-        write(logfhandle,604) '>>> SHIFT INCR ARG         AVG/SDEV/MIN/MAX:', self%shincarg%avg,  self%shincarg%sdev,  self%shincarg%minv,  self%shincarg%maxv
-        write(logfhandle,604) '>>> % SEARCH SPACE SCANNED AVG/SDEV/MIN/MAX:', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
-        write(logfhandle,604) '>>> LOW-PASS LIMIT         AVG/SDEV/MIN/MAX:', self%lp%avg,        self%lp%sdev,        self%lp%minv,        self%lp%maxv
+        write(logfhandle,604) '>>> IN-PLANE DIST    (DEG)   AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
+        write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX:', self%shincarg%avg,  self%shincarg%sdev,  self%shincarg%minv,  self%shincarg%maxv
+        write(logfhandle,604) '>>> % SEARCH SPACE SCANNED   AVG/SDEV/MIN/MAX:', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
+        write(logfhandle,604) '>>> MATCHING  LOW-PASS LIMIT AVG/SDEV/MIN/MAX:', self%lp%avg,        self%lp%sdev,        self%lp%minv,        self%lp%maxv
+        write(logfhandle,604) '>>> ESTIMATED LOW-PASS LIMIT AVG/SDEV/MIN/MAX:', self%lp_est%avg,    self%lp_est%sdev,    self%lp_est%minv,    self%lp_est%maxv
+        write(logfhandle,604) '>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:', self%res%avg,       self%res%sdev,       self%res%minv,       self%res%maxv
         ! score
-        write(logfhandle,604) '>>> SCORE [0,1]            AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
+        write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
         ! dynamic shift search range update
         if( self%frac_srch%avg >= FRAC_SH_LIM )then
             if( cline%defined('trs') .or. params_glob%trs >  MINSHIFT)then
@@ -195,7 +201,7 @@ contains
         real,               intent(in)    :: msk
         real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), states(:), scores(:), sampled(:), selected(:)
         logical, allocatable :: mask(:)
-        real    :: min_state_mi_joint, overlap_lim, fracsrch_lim
+        real    :: min_state_mi_joint, overlap_lim, fracsrch_lim, trail_rec_ufrac
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
         logical :: converged
         integer :: iptcl, istate, n, nptcls, nsamples, ucnt
@@ -225,6 +231,8 @@ contains
         call build_glob%spproj_field%stats('shincarg',   self%shincarg,   mask=mask)
         call build_glob%spproj_field%stats('w',          self%pw,         mask=mask)
         call build_glob%spproj_field%stats('lp',         self%lp,         mask=mask)
+        call build_glob%spproj_field%stats('lp_est',     self%lp_est,     mask=mask)
+        call build_glob%spproj_field%stats('res',        self%res,        mask=mask)
         self%mi_proj     = build_glob%spproj_field%get_avg('mi_proj',     mask=mask)
         self%mi_state    = build_glob%spproj_field%get_avg('mi_state',    mask=mask)
         self%frac_greedy = build_glob%spproj_field%get_avg('frac_greedy', mask=mask)
@@ -243,7 +251,9 @@ contains
         write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX:', self%shincarg%avg,  self%shincarg%sdev,  self%shincarg%minv,  self%shincarg%maxv
         write(logfhandle,604) '>>> % SEARCH SPACE SCANNED   AVG/SDEV/MIN/MAX:', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
         write(logfhandle,604) '>>> PARTICLE WEIGHTS         AVG/SDEV/MIN/MAX:', self%pw%avg,        self%pw%sdev,        self%pw%minv,        self%pw%maxv
-        write(logfhandle,604) '>>> LOW-PASS LIMIT           AVG/SDEV/MIN/MAX:', self%lp%avg,        self%lp%sdev,        self%lp%minv,        self%lp%maxv
+        write(logfhandle,604) '>>> MATCHING  LOW-PASS LIMIT AVG/SDEV/MIN/MAX:', self%lp%avg,        self%lp%sdev,        self%lp%minv,        self%lp%maxv
+        write(logfhandle,604) '>>> ESTIMATED LOW-PASS LIMIT AVG/SDEV/MIN/MAX:', self%lp_est%avg,    self%lp_est%sdev,    self%lp_est%minv,    self%lp_est%maxv
+        write(logfhandle,604) '>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:', self%res%avg,       self%res%sdev,       self%res%minv,       self%res%maxv
         ! score
         write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
         write(logfhandle,609) '>>> REFINEMENT MODE IS '//trim(params_glob%refine)
@@ -258,7 +268,8 @@ contains
         write(logfhandle,609) '>>> ICM REGULARIZATION IS OFF'
         endif
         if( params_glob%l_update_frac )then
-        write(logfhandle,607) '>>> TRAILING REC UPDATE FRACTION:     ', real(count(mask)) / real(count(updatecnts > 0.5 .and. states > 0.5))
+        trail_rec_ufrac = real(count(mask)) / real(count(updatecnts > 0.5 .and. states > 0.5))
+        write(logfhandle,607) '>>> TRAILING REC UPDATE FRACTION:     ', trail_rec_ufrac
         endif
         ! dynamic shift search range update
         if( self%frac_srch%avg >= FRAC_SH_LIM )then
@@ -327,17 +338,35 @@ contains
         endif
         ! stats
         call self%ostats%new(1, is_ptcl=.false.)
-        call self%ostats%set(1,'ITERATION',                params_glob%which_iter)
-        call self%ostats%set(1,'ORIENTATION_OVERLAP',      self%mi_proj)
+        call self%ostats%set(1,'ITERATION',                   params_glob%which_iter)
+        call self%ostats%set(1,'ORIENTATION_OVERLAP',         self%mi_proj)
         if( params_glob%nstates > 1 ) call self%ostats%set(1,'STATE_OVERLAP', self%mi_state)
-        call self%ostats%set(1,'PERCEN_PARTICLES_SAMPLED', percen_sampled)
-        call self%ostats%set(1,'PERCEN_PARTICLES_UPDATED', percen_updated)
-        call self%ostats%set(1,'PERCEN_PARTICLES_AVERAGED',percen_avg)
-        call self%ostats%set(1,'DIST_BTW_BEST_ORIS',       self%dist%avg)
-        call self%ostats%set(1,'IN-PLANE_DIST',            self%dist_inpl%avg)
-        call self%ostats%set(1,'SEARCH_SPACE_SCANNED',     self%frac_srch%avg)
-        call self%ostats%set(1,'SCORE',                    self%score%avg)
-        call self%ostats%set(1,'SHIFT_INCR_ARG',           self%shincarg%avg)
+        call self%ostats%set(1,'PERCEN_PARTICLES_SAMPLED',    percen_sampled)
+        call self%ostats%set(1,'PERCEN_PARTICLES_UPDATED',    percen_updated)
+        call self%ostats%set(1,'PERCEN_PARTICLES_AVERAGED',   percen_avg)
+        call self%ostats%set(1,'PERCEN_GREEDY_SEARCHES',      self%frac_greedy * 100.)
+        call self%ostats%set(1,'DIST_BTW_BEST_ORIS',          self%dist%avg)
+        call self%ostats%set(1,'IN-PLANE_DIST',               self%dist_inpl%avg)
+        call self%ostats%set(1,'SHIFT_INCR_ARG',              self%shincarg%avg)
+        call self%ostats%set(1,'PERCEN_SEARCH_SPACE_SCANNED', self%frac_srch%avg)
+        call self%ostats%set(1,'LP_MATCHING',                 self%lp%avg)
+        call self%ostats%set(1,'LP_ESTIMATED',                self%lp_est%avg)
+        call self%ostats%set(1,'RESOLUTION',                  self%res%avg)
+        call self%ostats%set(1,'SCORE',                       self%score%avg)
+        if( params_glob%l_ml_reg )then
+            call self%ostats%set(1,'ML_REGULARIZATION',                        1.0)
+            call self%ostats%set(1,'ML_REGULARIZATION_TAU',        params_glob%tau)
+        else
+            call self%ostats%set(1,'ML_REGULARIZATION',                        0.0)
+        endif
+        if( params_glob%l_icm )then
+            call self%ostats%set(1,'ICM_REGULARIZATION',                       1.0)
+            call self%ostats%set(1,'ICM_REGULARIZATION_LAMBDA', params_glob%lambda)
+        endif
+        if( params_glob%l_update_frac )then
+            call self%ostats%set(1,'TRAIL_REC_UPDATE_FRACTION',    trail_rec_ufrac)
+        endif
+        
         call self%ostats%write(STATS_FILE)
         call self%append_stats
         call self%plot_projdirs(mask)

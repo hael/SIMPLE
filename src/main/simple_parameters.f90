@@ -55,7 +55,7 @@ type :: parameters
     character(len=3)          :: iter_center='no'     !< iterative centering
     character(len=3)          :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
     character(len=3)          :: loc_sdev='no'        !< Whether to calculate local standard deviations(yes|no){no}
-    character(len=3)          :: lp_auto='no'         !< automatically estimate lp(yes|no|fsc){no}
+    character(len=3)          :: lp_auto='no'         !< automatically estimate lp(yes|no){no}
     character(len=3)          :: makemovie='no'
     character(len=3)          :: masscen='yes'        !< center to center of gravity(yes|no){yes}
     character(len=3)          :: mcpatch='yes'        !< whether to perform patch-based alignment during motion correction

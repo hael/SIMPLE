@@ -543,14 +543,17 @@ contains
         endif
     end subroutine calcrefvolshift_and_mapshifts2ptcls
 
-    subroutine estimate_lp_refvols( )
+    subroutine estimate_lp_refvols( lpfromto )
         use simple_opt_filter, only: estimate_lplim
-        character(len=:), allocatable :: vol_even, vol_odd
+        real, optional, intent(in)    :: lpfromto(2)
+        character(len=:), allocatable :: vol_even, vol_odd, tmp
+        real,             allocatable :: res(:)
+        logical, parameter :: DEBUG=.false.
         type(image) :: mskvol
-        integer     :: npix, s
-        real        :: lpest(params_glob%nstates)
-        ! for safety in case this subroutine is called when lp_auto is off
-        if( .not. params_glob%l_lpauto ) return
+        integer     :: npix, s, loc(1)
+        real        :: lpest(params_glob%nstates), lpopt, res_fsc05, res_fsc0143, llpfromto(2)
+        601 format(A,1X,F12.3)
+        602 format(A,1X,F12.3,1X,F12.3)
         ! finding optimal lp over all states
         call mskvol%disc([params_glob%box_crop,  params_glob%box_crop, params_glob%box_crop],&
                          &params_glob%smpd_crop, params_glob%msk_crop, npix )
@@ -559,29 +562,53 @@ contains
             call mskvol%read(params_glob%mskfile)
             call mskvol%remove_edge
         endif
+        ! find best resolved state
+        res = get_resarr(params_glob%box_crop, params_glob%smpd_crop)
         do s = 1, params_glob%nstates
-            if( params_glob%lp_auto.eq.'fsc' )then
-                lpest = calc_lowpass_lim(get_find_at_corr(build_glob%fsc(s,:), params_glob%lplim_crit),&
-                                        &params_glob%box_crop, params_glob%smpd_crop)
-            else
-                vol_even = params_glob%vols_even(s)
-                vol_odd  = params_glob%vols_odd(s)
-                if( params_glob%l_ml_reg )then
-                    ! estimate low-pass limit from unfiltered volumes
-                    vol_even = add2fbody(vol_even,params_glob%ext,'_unfil')
-                    vol_odd  = add2fbody(vol_odd, params_glob%ext,'_unfil')
-                endif
-                call build_glob%vol%read_and_crop(    vol_even,params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
-                call build_glob%vol_odd%read_and_crop(vol_odd, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
-                call estimate_lplim(build_glob%vol_odd, build_glob%vol, mskvol, [params_glob%lpstart,params_glob%lpstop], lpest(s))
-            endif
-        enddo
-        ! re-set the low-pass limit
-        params_glob%lp = minval(lpest)
-        ! update the Fourier index limit
-        params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, params_glob%box_crop, params_glob%smpd_crop)
+            call get_resolution_at_fsc(build_glob%fsc(s,:), res, 0.5, lpest(s))
+        end do
+        loc = minloc(lpest)
+        ! set range for low-pass limit estimation
+        if( present(lpfromto) )then
+            llpfromto = lpfromto
+        else
+            call get_resolution_at_fsc(build_glob%fsc(loc(1),:), res, 0.6, llpfromto(1))
+            call get_resolution_at_fsc(build_glob%fsc(loc(1),:), res, 0.1, llpfromto(2))
+        endif
+        ! read volumes
+        vol_even = params_glob%vols_even(loc(1))
+        vol_odd  = params_glob%vols_odd(loc(1))
+        if( params_glob%l_ml_reg )then
+            ! estimate low-pass limit from unfiltered volumes
+            tmp = add2fbody(vol_even,params_glob%ext,'_unfil')
+            if( file_exists(tmp) ) vol_even = tmp
+            tmp = add2fbody(vol_odd, params_glob%ext,'_unfil')
+            if( file_exists(tmp) ) vol_even = tmp
+        endif
+        call build_glob%vol%read_and_crop(    vol_even, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+        call build_glob%vol_odd%read_and_crop(vol_odd,  params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+        ! estimate low-pass limit
+        call estimate_lplim(build_glob%vol_odd, build_glob%vol, mskvol, llpfromto, lpopt)
+        ! generate output
+        call get_resolution_at_fsc(build_glob%fsc(loc(1),:), res, 0.50,  res_fsc05)
+        call get_resolution_at_fsc(build_glob%fsc(loc(1),:), res, 0.143, res_fsc0143)
+        call build_glob%spproj_field%set_all2single('res', res_fsc0143)
+        if( params_glob%part == 1 .and. DEBUG )then
+        write(logfhandle,601) '>>> RESOLUTION @ FSC=0.5:                     ', res_fsc05
+        write(logfhandle,601) '>>> RESOLUTION @ FSC=0.143:                   ', res_fsc0143
+        write(logfhandle,602) '>>> LOW-PASS LIMIT RANGE FOR OPTIMIZATION:    ', llpfromto(1), llpfromto(2)
+        write(logfhandle,601) '>>> OPTIMAL LOW-PASS LIMIT:                   ', lpopt
+        endif
         ! update low-pass limit in project
-        call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
+        call build_glob%spproj_field%set_all2single('lp_est', lpopt)
+        if( params_glob%l_lpauto )then
+            ! re-set the low-pass limit
+            params_glob%lp = lpopt
+            ! update the Fourier index limit
+            params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, params_glob%box_crop, params_glob%smpd_crop)
+            ! update low-pass limit in project
+            call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
+        endif
         ! destruct
         call mskvol%kill
     end subroutine estimate_lp_refvols
@@ -1109,18 +1136,13 @@ contains
         real      :: xyz(3)
         integer   :: s, iref, nrefs
         logical   :: do_center
-        ! exception handling for lp_auto==yes
-        if( trim(params_glob%lp_auto).eq.'yes' )then
-            if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
-                ! all good
-            else
-                THROW_HARD('Automatic low-pass limit estimation requires LPSTART/LPSTOP range input')
-            endif
+        if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
+            call estimate_lp_refvols([params_glob%lpstart,params_glob%lpstop])
+        else
+            call estimate_lp_refvols
         endif
-        nrefs = params_glob%nspace * params_glob%nstates
-        ! (if needed) estimating lp (over all states) and reseting params_glob%lp and params_glob%kfromto
-        if( params_glob%l_lpauto ) call estimate_lp_refvols
         ! pftcc
+        nrefs = params_glob%nspace * params_glob%nstates
         call pftcc%new(nrefs, [1,batchsz_max], params_glob%kfromto)
         ! read reference volumes and create polar projections
         do s=1,params_glob%nstates

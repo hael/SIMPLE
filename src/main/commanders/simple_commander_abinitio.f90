@@ -64,8 +64,8 @@ integer,          parameter :: PROBREFINE_STAGE  = 5
 integer,          parameter :: ICM_STAGE         = PROBREFINE_STAGE  ! we switch from ML regularization when prob is switched on
 integer,          parameter :: STOCH_SAMPL_STAGE = PROBREFINE_STAGE  ! we switch from greedy to stochastic blanced class sampling when prob is switched on
 integer,          parameter :: TRAILREC_STAGE    = STOCH_SAMPL_STAGE ! we start trailing when we start sampling particles randomly
+integer,          parameter :: LPAUTO_STAGE      = PROBREFINE_STAGE  ! we start estimating the low-pass limit automatically when prob is switched on
 integer,          parameter :: HET_DOCKED_STAGE  = NSTAGES           ! stage at which state splitting is done when multivol_mode==docked
-integer,          parameter :: LPAUTO_STAGE      = NSTAGES - 1
 integer,          parameter :: NSAMPLE_MAX_LAST  = 25000             ! maximum # particles to sample per iteration in the last stage 
 
 ! class variables
@@ -418,10 +418,6 @@ contains
         ! set class global lp_auto flag for low-pass limit estimation
         l_lpauto = .true.
         if( cline%defined('lp_auto') ) l_lpauto = params%l_lpauto
-        if( l_lpauto )then
-            params%lplim_crit = 0.5
-            call cline%set('lplim_crit', params%lplim_crit)
-        endif
         ! prepare class command lines
         call prep_class_command_lines(cline, params%projfile)
         ! set symmetry class variables
@@ -972,7 +968,7 @@ contains
         lp_auto = 'no'
         if( istage >= LPAUTO_STAGE .and. l_lpauto )then
             lp_auto = trim(params_glob%lp_auto)
-            lpstart = lpinfo(istage - 1)%lp
+            lpstart = lpinfo(LPAUTO_STAGE)%lp
             if( istage == NSTAGES )then
                 lpstop = lpinfo(istage)%smpd_crop * 2. ! Nyqvist limit
             else
@@ -1014,8 +1010,8 @@ contains
                 else
                 frac_best     = 1.0 ! means it does not control sampling, greedy selection
                 endif
-                overlap       = 0.95
-                fracsrch      = 95.
+                overlap       = 0.90
+                fracsrch      = 90.
                 snr_noise_reg = 4.0
             case(3)
                 inspace       = NSPACE(3)
@@ -1033,8 +1029,13 @@ contains
                 else
                 frac_best     = 0.85 ! means sampling is done from top-ranking 85% particles in class
                 endif
+                if( istage == NSTAGES )then
                 overlap       = 0.99
                 fracsrch      = 99.
+                else
+                overlap       = 0.90
+                fracsrch      = 90.
+                endif
                 snr_noise_reg = 6.0
         end select
         ! turn off ML-regularization when icm is on
