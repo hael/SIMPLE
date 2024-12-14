@@ -23,7 +23,7 @@ enum, bind(c)
     enumerator :: I_PHSHIFT     = 19
     enumerator :: I_PROJ        = 20
     enumerator :: I_SHINCARG    = 21
-    enumerator :: I_SPECSCORE   = 22 ! unused
+    enumerator :: I_RES         = 22
     enumerator :: I_STATE       = 23
     enumerator :: I_STKIND      = 24
     enumerator :: I_UPDATECNT   = 25
@@ -41,7 +41,7 @@ enum, bind(c)
     enumerator :: I_NGEVALS     = 37
     enumerator :: I_BETTER      = 38
     enumerator :: I_NPEAKS      = 39
-    enumerator :: I_DIST_PEAKS  = 40 ! unused
+    enumerator :: I_LP_EST      = 40
     enumerator :: I_CC_PEAK     = 41 ! unused
     enumerator :: I_CC_NONPEAK  = 42 ! unused
     enumerator :: I_FRAC_GREEDY = 43
@@ -106,8 +106,8 @@ contains
                 get_oriparam_ind = I_PROJ
             case('shincarg')
                 get_oriparam_ind = I_SHINCARG
-            case('specscore')
-                get_oriparam_ind = I_SPECSCORE ! unused
+            case('res')
+                get_oriparam_ind = I_RES
             case('state')
                 get_oriparam_ind = I_STATE
             case('stkind')
@@ -142,8 +142,8 @@ contains
                 get_oriparam_ind = I_BETTER
             case('npeaks')
                 get_oriparam_ind = I_NPEAKS
-            case('dist_peaks')
-                get_oriparam_ind = I_DIST_PEAKS ! unused
+            case('lp_est')
+                get_oriparam_ind = I_LP_EST
             case('cc_peak')
                 get_oriparam_ind = I_CC_PEAK    ! unused
             case('cc_nonpeak')
@@ -205,8 +205,8 @@ contains
                 flag ='proj'
             case(I_SHINCARG)
                 flag ='shincarg'
-            case(I_SPECSCORE)
-                flag ='specscore' ! unused
+            case(I_RES)
+                flag ='res'
             case(I_STATE)
                 flag ='state'
             case(I_STKIND)
@@ -241,8 +241,8 @@ contains
                 flag ='better'
             case(I_NPEAKS)
                 flag = 'npeaks'
-            case(I_DIST_PEAKS)
-                flag = 'dist_peaks' ! unused
+            case(I_LP_EST)
+                flag = 'lp_est'
             case(I_CC_PEAK)
                 flag = 'cc_peak'    ! unused
             case(I_CC_NONPEAK)
@@ -288,7 +288,7 @@ contains
                 oriparam_isthere = abs(val) > TINY
             case(I_PROJ)
                 oriparam_isthere = abs(val) > TINY
-            case(I_SPECSCORE)
+            case(I_RES)
                 oriparam_isthere = abs(val) > TINY
             case(I_STKIND)
                 oriparam_isthere = abs(val) > TINY
@@ -302,7 +302,7 @@ contains
                 oriparam_isthere = abs(val) > TINY
             case(I_PIND)
                 oriparam_isthere = abs(val) > TINY
-            case(I_DIST_PEAKS)
+            case(I_LP_EST)
                 oriparam_isthere = abs(val) > TINY
             case(I_CC_PEAK)
                 oriparam_isthere = abs(val) > TINY
