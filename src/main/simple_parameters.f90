@@ -31,7 +31,6 @@ type :: parameters
     character(len=3)          :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
     character(len=3)          :: center_pdb='no'      !< move PDB atomic center to the center of the box(yes|no){no}
     character(len=3)          :: classtats='no'       !< calculate class population statistics(yes|no){no}
-    character(len=3)          :: cluster_cavgs='no'   !< Wheter to perform clustering of the class-averages(yes|no){no}
     character(len=3)          :: combine_eo='no'      !< Whether combined e/o volumes have been used for alignment(yes|no){no}
     character(len=3)          :: continue='no'        !< continue previous refinement(yes|no){no}
     character(len=3)          :: crowded='yes'        !< wheter picking is done in crowded micrographs or not (yes|no){yes}
@@ -74,6 +73,7 @@ type :: parameters
     character(len=3)          :: omit_neg='no'        !< omit negative pixels(yes|no){no}
     character(len=3)          :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
     character(len=3)          :: pad='no'
+    character(len=3)          :: partition='no'
     character(len=3)          :: phaseplate='no'      !< images obtained with Volta phaseplate(yes|no){no}
     character(len=3)          :: phrand='no'          !< phase randomize(yes|no){no}
     character(len=3)          :: pick_roi='no'
@@ -555,7 +555,6 @@ contains
         call check_carg('center_pdb',     self%center_pdb)
         call check_carg('classtats',      self%classtats)
         call check_carg('cls_init',       self%cls_init)
-        call check_carg('cluster_cavgs',  self%cluster_cavgs)
         call check_carg('cn_type',        self%cn_type)
         call check_carg('combine_eo',     self%combine_eo)
         call check_carg('continue',       self%continue)
@@ -621,6 +620,7 @@ contains
         call check_carg('outdir',         self%outdir)
         call check_carg('outside',        self%outside)
         call check_carg('pad',            self%pad)
+        call check_carg('partition',      self%partition)
         call check_carg('pca_mode',       self%pca_mode)
         call check_carg('kpca_ker',       self%kpca_ker)
         call check_carg('kpca_target',    self%kpca_target)

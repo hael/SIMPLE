@@ -1364,11 +1364,19 @@ contains
         update_frac = real(count(sampled == sampled_max .and. states > 0)) / real(count(updatecnts > 0 .and. states > 0))
     end function calc_update_frac
 
-    subroutine get_class_sample_stats( self, clsinds, clssmp )
+    subroutine get_class_sample_stats( self, clsinds, clssmp, label )
         class(oris),                     intent(inout) :: self
         integer,                         intent(in)    :: clsinds(:) ! class indices to sample from
         type(class_sample), allocatable, intent(inout) :: clssmp(:)  ! data structure for balanced samplign
+        character(len=*),      optional, intent(in)    :: label
+        character(len=:), allocatable :: flag
         integer :: n, i, j, nc
+        if( present(label) )then
+            flag = trim(label)
+        else
+            flag = 'class'
+        endif
+        ! init data structure
         n = size(clsinds)
         if( allocated(clssmp) )then
             nc = size(clssmp)
@@ -1381,7 +1389,7 @@ contains
         allocate(clssmp(n))
         ! fetch information necessary for balanced sampling
         do i = 1, n
-            call self%get_pinds(clsinds(i), 'class', clssmp(i)%pinds)
+            call self%get_pinds(clsinds(i), flag, clssmp(i)%pinds)
             if( allocated(clssmp(i)%pinds) )then
                 clssmp(i)%clsind = clsinds(i)
                 clssmp(i)%pop    = size(clssmp(i)%pinds)

@@ -2205,11 +2205,11 @@ contains
         type(polarizer)               :: polartransform
         character(len=:), allocatable :: cavgsstk, frcs_fname, fmt, header1, header2, header3
         real,             allocatable :: states(:), frc(:), filter(:), clspops(:), clsres(:)
-        real,             allocatable :: corrmat(:,:), S(:,:), rotmat(:,:)
+        real,             allocatable :: corrmat(:,:), S(:,:), rotmat(:,:), xoffset(:,:), yoffset(:,:)
         integer,          allocatable :: centers(:), labels(:), clsinds(:), multi_labels(:,:),tmp(:)
         logical,          allocatable :: l_msk(:,:,:)
         character(len=8)              :: tmpstr
-        real    :: minmax(2), smpd, simsum, simmin, simmax, simmed, pref, cc,ccm, dunn, dunnmax
+        real    :: offset(2),minmax(2),smpd,simsum,simmin,simmax,simmed,pref,cc,ccm,dunn,dunnmax
         integer :: ldim(3), n, ncls_sel, i, j, k, icls, filtsz, ind, ithr, funit, io_stat
         logical :: l_apply_optlp, l_mirr
         ! defaults
@@ -2273,7 +2273,7 @@ contains
         if( cline%defined('mskdiam') )then
             params%msk = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
         else
-            params%msk = 0.85*real(params%box/2)-COSMSKHALFWIDTH-1.
+            params%msk = 0.9*real(params%box/2)-COSMSKHALFWIDTH-1.
         endif
         write(logfhandle,'(A)') '>>> PREPARING CLASS AVERAGES'
         ! read images
@@ -2369,14 +2369,15 @@ contains
         call pftcc%memoize_refs
         call pftcc%memoize_ptcls
         ! correlation matrix calculation
-        allocate(fm_correlators(nthr_glob),ccimgs(nthr_glob,2),rotmat(ncls_sel,ncls_sel))
+        allocate(fm_correlators(nthr_glob),ccimgs(nthr_glob,2),rotmat(ncls_sel,ncls_sel),&
+            &xoffset(ncls_sel,ncls_sel),yoffset(ncls_sel,ncls_sel))
         do i = 1,nthr_glob
             call fm_correlators(i)%new(params%trs,1.,opt_angle=.false.)
             call ccimgs(i,1)%new(ldim, smpd, wthreads=.false.)
             call ccimgs(i,2)%new(ldim, smpd, wthreads=.false.)
         enddo
         rotmat = 0.
-        !$omp parallel do default(shared) private(i,j,cc,ccm,ithr)&
+        !$omp parallel do default(shared) private(i,j,cc,ccm,ithr,offset)&
         !$omp schedule(dynamic) proc_bind(close)
         do i = 1, ncls_sel - 1
             ithr = omp_get_thread_num()+1
@@ -2385,7 +2386,10 @@ contains
                 ! reference to particle
                 call pftcc%set_eo(i,.true.)
                 call fm_correlators(ithr)%calc_phasecorr(j, i, cavg_imgs(j), cavg_imgs(i),&
-                    &ccimgs(ithr,1), ccimgs(ithr,2), cc, rotang=rotmat(i,j))
+                    &ccimgs(ithr,1), ccimgs(ithr,2), cc, rotang=rotmat(i,j), shift=offset)
+                rotmat(j,i)  = rotmat(i,j)
+                xoffset(i,j) = offset(1); xoffset(j,i) = offset(1)
+                yoffset(i,j) = offset(2); yoffset(j,i) = offset(2)
                 ! mirrored reference to particle
                 if( l_mirr )then
                     call pftcc%set_eo(i,.false.)
@@ -2395,7 +2399,6 @@ contains
                 endif
                 corrmat(i,j) = cc
                 corrmat(j,i) = cc
-                rotmat(j,i)  = rotmat(i,j)
             enddo
         enddo
         !$omp end parallel do
@@ -2539,13 +2542,14 @@ contains
             ! write the classes for debugging purpose
             subroutine write_partition( flag )
                 character(len=*), intent(in) :: flag
-                type(image)                   :: img
+                type(image)                   :: img1,img2
                 character(len=:), allocatable :: classname
                 integer,          allocatable :: cntarr(:)
                 integer :: ncls_here, icls, i, ifirst
                 logical :: first
                 ncls_here = size(labels)
                 allocate(cntarr(ncls_here), source=0)
+                call img1%copy(cavg_imgs(1))
                 do icls = 1, ncls_here
                     classname  = trim(flag)//'_class'//int2str_pad(icls,3)//trim(STK_EXT)
                     first = .true.
@@ -2556,16 +2560,21 @@ contains
                             if( first )then
                                 ifirst = i
                                 first  = .false.
-                                call img%copy(cavg_imgs(i))
+                                call img2%copy(cavg_imgs(i))
                             else
-                                call cavg_imgs(i)%rtsq(rotmat(ifirst,i), 0., 0.,img)
+                                call img1%copy_fast(cavg_imgs(i))
+                                call img1%fft
+                                call img1%shift2Dserial([xoffset(ifirst,i), yoffset(ifirst,i)])
+                                call img1%ifft
+                                call img1%rtsq(rotmat(ifirst,i), 0., 0.,img2)
                             endif
-                            call img%write(classname, cntarr(labels(i)))
+                            call img2%write(classname, cntarr(labels(i)))
                         endif
                     end do
                 end do
                 deallocate(cntarr)
-                call img%kill
+                call img1%kill
+                call img2%kill
             end subroutine write_partition
 
     end subroutine exec_partition_cavgs
