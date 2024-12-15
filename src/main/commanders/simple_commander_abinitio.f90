@@ -64,7 +64,7 @@ integer,          parameter :: PROBREFINE_STAGE  = 5
 integer,          parameter :: ICM_STAGE         = PROBREFINE_STAGE  ! we switch from ML regularization when prob is switched on
 integer,          parameter :: STOCH_SAMPL_STAGE = PROBREFINE_STAGE  ! we switch from greedy to stochastic blanced class sampling when prob is switched on
 integer,          parameter :: TRAILREC_STAGE    = STOCH_SAMPL_STAGE ! we start trailing when we start sampling particles randomly
-integer,          parameter :: LPAUTO_STAGE      = PROBREFINE_STAGE  ! we start estimating the low-pass limit automatically when prob is switched on
+integer,          parameter :: LPAUTO_STAGE      = NSTAGES - 1       ! cannot be switched on too early
 integer,          parameter :: HET_DOCKED_STAGE  = NSTAGES           ! stage at which state splitting is done when multivol_mode==docked
 integer,          parameter :: NSAMPLE_MAX_LAST  = 25000             ! maximum # particles to sample per iteration in the last stage 
 
@@ -968,7 +968,7 @@ contains
         lp_auto = 'no'
         if( istage >= LPAUTO_STAGE .and. l_lpauto )then
             lp_auto = trim(params_glob%lp_auto)
-            lpstart = lpinfo(LPAUTO_STAGE)%lp
+            lpstart = lpinfo(stage - 1)%lp
             if( istage == NSTAGES )then
                 lpstop = lpinfo(istage)%smpd_crop * 2. ! Nyqvist limit
             else
