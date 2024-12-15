@@ -968,7 +968,7 @@ contains
         lp_auto = 'no'
         if( istage >= LPAUTO_STAGE .and. l_lpauto )then
             lp_auto = trim(params_glob%lp_auto)
-            lpstart = lpinfo(stage - 1)%lp
+            lpstart = lpinfo(istage - 1)%lp
             if( istage == NSTAGES )then
                 lpstop = lpinfo(istage)%smpd_crop * 2. ! Nyqvist limit
             else
