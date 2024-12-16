@@ -195,7 +195,6 @@ contains
         class(cmdline),                    intent(inout) :: cline
         type(parameters)  :: params
         type(image)       :: even, odd, mskvol, odd_filt
-        logical           :: have_mask_file
         real              :: lpopt
         character(len=90) :: file_tag
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -206,23 +205,17 @@ contains
         call odd %read(params%vols(1))
         call even%read(params%vols(2))
         file_tag = 'uniform_3D_filter'
-        have_mask_file = .false.
         if( params%l_filemsk )then
             call mskvol%new([params%box,params%box,params%box], params%smpd)
             call mskvol%read(params%mskfile)
-            call even%zero_background
-            call  odd%zero_background
-            call even%mul(mskvol)
-            call  odd%mul(mskvol)
             call mskvol%one_at_edge ! to expand before masking of reference internally
-            have_mask_file = .true.
         else
-            ! spherical masking
-            call even%mask(params%msk, 'soft')
-            call  odd%mask(params%msk, 'soft')
             call mskvol%disc([params%box,params%box,params%box], params%smpd,&
                     &real(min(params%box/2, int(params%msk + COSMSKHALFWIDTH))))
         endif
+        ! soft masking needed for FT
+        call even%mask(params%msk, 'soft')
+        call  odd%mask(params%msk, 'soft')
         call estimate_lplim(odd, even, mskvol, [params%lpstart,params%lpstop], lpopt, odd_filt)
         print *, 'found optimal low-pass limit: ', lpopt
         call odd_filt%write('odd_filt.mrc')
@@ -238,11 +231,13 @@ contains
     subroutine exec_icm3D( self, cline )
         class(icm3D_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
-        type(parameters)  :: params
-        type(image)       :: even, odd, even_icm, odd_icm, avg, avg_icm
-        real, allocatable :: fsc(:), res(:), pspec(:), pspec_icm(:)
-        character(len=90) :: file_tag
-        real              :: mskrad
+        type(parameters)     :: params
+        type(image)          :: even, odd, even_icm, odd_icm, avg, avg_icm
+        type(masker)         :: envmsk
+        logical, allocatable :: l_msk(:,:,:)
+        real,    allocatable :: fsc(:), res(:), pspec(:), pspec_icm(:)
+        character(len=90)    :: file_tag
+        real                 :: mskrad
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         call odd %new([params%box,params%box,params%box], params%smpd)
@@ -254,7 +249,19 @@ contains
         call avg%mul(0.5)
         call even_icm%copy(even)
         call odd_icm%copy(odd)
-        call even_icm%ICM3D_eo(odd_icm, params%lambda)
+        if( params%automsk.ne.'no' )then
+            call envmsk%automask3D(even, odd, l_tight=params%automsk.eq.'tight')
+            ! apply mask to volumes
+            call even_icm%zero_background()
+            call odd_icm%zero_background()
+            call even_icm%mul(envmsk)
+            call odd_icm%mul(envmsk)
+            call envmsk%one_at_edge ! to expand before masking of reference internally
+            l_msk = envmsk%bin2logical()
+            call even_icm%ICM3D_eo(odd_icm, params%lambda, l_msk)
+        else
+            call even_icm%ICM3D_eo(odd_icm, params%lambda)
+        endif
         call avg_icm%copy(even_icm)
         call avg_icm%add(odd_icm)
         call avg_icm%mul(0.5)

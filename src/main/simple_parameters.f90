@@ -1370,6 +1370,13 @@ contains
                     self%msk     = msk_default
                 endif
             endif
+             if( self%msk < 0.1 )then
+                if( msk_default > 0. )then
+                    THROW_WARN('Mask diameter zero, falling back on default value')
+                    self%mskdiam = mskdiam_default
+                    self%msk     = msk_default
+                endif
+            endif
         else
             self%mskdiam = mskdiam_default
             self%msk     = msk_default
