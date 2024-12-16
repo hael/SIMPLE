@@ -29,6 +29,7 @@ public :: cavgassemble_commander
 public :: rank_cavgs_commander
 public :: cluster_cavgs_commander
 public :: write_classes_commander
+public :: ppca_denoise_class_commander
 public :: ppca_denoise_classes_commander
 public :: partition_cavgs_commander
 public :: check_2dconv
@@ -84,6 +85,11 @@ type, extends(commander_base) :: write_classes_commander
   contains
     procedure :: execute      => exec_write_classes
 end type write_classes_commander
+
+type, extends(commander_base) :: ppca_denoise_class_commander
+  contains
+    procedure :: execute      => exec_ppca_denoise_class
+end type ppca_denoise_class_commander
 
 type, extends(commander_base) :: ppca_denoise_classes_commander
   contains
@@ -2177,6 +2183,169 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_PPCA_DENOISE_CLASSES NORMAL STOP ****')
     end subroutine exec_ppca_denoise_classes
+
+    subroutine exec_ppca_denoise_class( self, cline )
+        use simple_imgproc,       only: make_pcavecs
+        use simple_image,         only: image
+        use simple_classaverager, only: transform_ptcls
+        use simple_pca,           only: pca
+        use simple_pca_svd,       only: pca_svd
+        use simple_kpca_svd,      only: kpca_svd
+        use simple_ppca_inmem,    only: ppca_inmem
+        class(ppca_denoise_class_commander), intent(inout) :: self
+        class(cmdline),                      intent(inout) :: cline
+        integer,          parameter   :: MAXPCAITS = 15
+        class(pca),       pointer     :: pca_ptr  => null()
+        type(parameters)              :: params
+        type(builder)                 :: build
+        type(image),      allocatable :: imgs(:)
+        type(image),      allocatable :: imgs_ori(:)
+        type(image)                   :: cavg
+        type(oris)                    :: os
+        type(sp_project), target      :: spproj
+        character(len=:), allocatable :: label, fname, fname_denoised, fname_cavgs, fname_cavgs_denoised, fname_oris
+        integer,          allocatable :: pinds(:), cls_inds(:)
+        real,             allocatable :: avg(:), avg_pix(:), pcavecs(:,:), tmpvec(:)
+        real    :: std
+        integer :: npix, iclass, j, ncls, nptcls, cnt1, cnt2, neigs
+        logical :: l_phflip, l_transp_pca, l_pre_norm ! pixel-wise learning
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
+        if( .not. cline%defined('neigs')   ) call cline%set('neigs',    4)
+        call build%init_params_and_build_general_tbox(cline, params, do3d=(trim(params%oritype) .eq. 'ptcl3D'))
+        call spproj%read(params%projfile)
+        select case(trim(params%oritype))
+            case('ptcl2D')
+                label = 'class'
+            case('ptcl3D')
+                label = 'proj'
+                call build%spproj_field%proj2class
+            case DEFAULT
+                THROW_HARD('ORITYPE not supported!')
+        end select
+        l_transp_pca = (trim(params%transp_pca) .eq. 'yes')
+        l_pre_norm   = (trim(params%pre_norm)   .eq. 'yes')
+        l_phflip     = .false.
+        select case( spproj%get_ctfflag_type(params%oritype) )
+            case(CTFFLAG_NO)
+                THROW_WARN('No CTF information could be found, phase flipping is deactivated')
+            case(CTFFLAG_FLIP)
+                THROW_WARN('Images have already been phase-flipped, phase flipping is deactivated')
+            case(CTFFLAG_YES)
+                l_phflip = .true.
+            case DEFAULT
+                THROW_HARD('UNSUPPORTED CTF FLAG')
+        end select
+        cls_inds = build%spproj_field%get_label_inds(label)
+        ncls     = size(cls_inds)
+        ! check class here
+        iclass   = cls_inds(params%class)
+        deallocate(cls_inds)
+        call build%spproj_field%get_pinds(iclass, label, pinds)
+        if( allocated(pinds) )then
+            nptcls = size(pinds)
+            deallocate(pinds)
+        endif
+        call os%new(nptcls, is_ptcl=.true.)
+        fname                = 'ptcls.mrcs'
+        fname_denoised       = 'ptcls_denoised.mrcs'
+        fname_cavgs          = 'cavg.mrcs'
+        fname_cavgs_denoised = 'cavg_denoised.mrcs'
+        fname_oris           = 'oris_denoised.txt'
+        cnt1 = 0
+        cnt2 = 0
+        ! pca allocation
+        select case(trim(params_glob%pca_mode))
+            case('ppca')
+                allocate(ppca_inmem :: pca_ptr)
+            case('pca_svd')
+                allocate(pca_svd    :: pca_ptr)
+            case('kpca')
+                allocate(kpca_svd   :: pca_ptr)
+        end select
+        neigs = params%neigs
+        if( params%neigs >= nptcls )then
+            THROW_WARN('neigs is greater than the number of particles within this class. All eigens are used now!')
+            neigs = nptcls - 1
+        endif
+        call transform_ptcls(spproj, params%oritype, iclass, imgs, pinds, phflip=l_phflip, cavg=cavg, imgs_ori=imgs_ori)
+        nptcls = size(imgs)
+        if( trim(params%pca_img_ori) .eq. 'yes' )then
+            do j = 1, nptcls
+                call imgs(j)%copy_fast(imgs_ori(j))
+                call imgs_ori(j)%kill
+            enddo
+        endif
+        if( l_pre_norm )then
+            do j = 1, nptcls
+                call imgs(j)%norm
+            end do
+        endif
+        do j = 1, nptcls
+            cnt1 = cnt1 + 1
+            call imgs(j)%write(fname, cnt1)
+        end do
+        call cavg%write(fname_cavgs, 1)
+        ! performs ppca
+        if( trim(params%projstats).eq.'yes' )then
+            call make_pcavecs(imgs, npix, avg, pcavecs, transp=l_transp_pca, avg_pix=avg_pix)
+        else
+            call make_pcavecs(imgs, npix, avg, pcavecs, transp=l_transp_pca)
+        endif
+        if( allocated(tmpvec) ) deallocate(tmpvec)
+        if( l_transp_pca )then
+            call pca_ptr%new(npix, nptcls, neigs)
+            call pca_ptr%master(pcavecs, MAXPCAITS)
+            allocate(tmpvec(nptcls))
+            !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
+            do j = 1, npix
+                call pca_ptr%generate(j, avg, tmpvec)
+                pcavecs(:,j) = tmpvec
+            end do
+            !$omp end parallel do
+            pcavecs = transpose(pcavecs)
+        else
+            call pca_ptr%new(nptcls, npix, neigs)
+            call pca_ptr%master(pcavecs, MAXPCAITS)
+            allocate(tmpvec(npix))
+            !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
+            do j = 1, nptcls
+                call pca_ptr%generate(j, avg, tmpvec)
+                pcavecs(:,j) = tmpvec
+            end do
+            !$omp end parallel do
+        endif
+        if( trim(params%projstats).eq.'yes' )then
+            call cavg%unserialize(avg_pix)
+            call cavg%write('cavgs_unserialized.mrcs', 1)
+            !$omp parallel do private(j,std) default(shared) proc_bind(close) schedule(static)
+            do j = 1,nptcls
+                std = sqrt(sum((pcavecs(:,j)-avg_pix)**2) / real(npix))
+            enddo
+            !$omp end parallel do
+        endif
+        ! output
+        call cavg%zero_and_unflag_ft
+        do j = 1, nptcls
+            cnt2 = cnt2 + 1
+            call imgs(j)%unserialize(pcavecs(:,j))
+            call cavg%add(imgs(j))
+            call os%transfer_ori(cnt2, build%spproj_field, pinds(j))
+            call imgs(j)%write(fname_denoised, cnt2)
+            call imgs(j)%kill
+        end do
+        call cavg%div(real(nptcls))
+        call cavg%write(fname_cavgs_denoised, 1)
+        call os%zero_inpl
+        call os%write(fname_oris)
+        if( trim(params%projstats).eq.'yes' ) call build%spproj_field%write('ptcl_field.txt')
+        ! cleanup
+        deallocate(imgs)
+        call build%kill_general_tbox
+        call os%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_PPCA_DENOISE_CLASS NORMAL STOP ****')
+    end subroutine exec_ppca_denoise_class
 
     subroutine exec_partition_cavgs( self, cline )
         !$ use omp_lib

@@ -1513,16 +1513,17 @@ contains
 
     ! PUBLIC UTILITIES
 
-    subroutine transform_ptcls( spproj, oritype, icls, timgs, pinds, phflip, cavg )
+    subroutine transform_ptcls( spproj, oritype, icls, timgs, pinds, phflip, cavg, imgs_ori)
         use simple_sp_project,          only: sp_project
         use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimgbatch
-        class(sp_project),        intent(inout) :: spproj
-        character(len=*),         intent(in)    :: oritype
-        integer,                  intent(in)    :: icls
-        type(image), allocatable, intent(inout) :: timgs(:)
-        integer,     allocatable, intent(inout) :: pinds(:)
-        logical,     optional,    intent(in)    :: phflip
-        type(image), optional,    intent(inout) :: cavg
+        class(sp_project),                  intent(inout) :: spproj
+        character(len=*),                   intent(in)    :: oritype
+        integer,                            intent(in)    :: icls
+        type(image),           allocatable, intent(inout) :: timgs(:)
+        integer,               allocatable, intent(inout) :: pinds(:)
+        logical,     optional,              intent(in)    :: phflip
+        type(image), optional,              intent(inout) :: cavg
+        type(image), optional, allocatable, intent(inout) :: imgs_ori(:)
         class(oris),  pointer :: pos
         type(image)           :: img(nthr_glob), timg(nthr_glob)
         type(ctfparams)       :: ctfparms
@@ -1532,12 +1533,22 @@ contains
         real    :: mat(2,2), shift(2), loc(2), dist(2), e3, kw
         integer :: logi_lims(3,2),cyc_lims(3,2),cyc_limsR(2,2),phys(2),win_corner(2)
         integer :: i,iptcl, l,ll,m,mm, pop, h,k, ithr
-        logical :: l_phflip
+        logical :: l_phflip, l_imgs
+        l_imgs = .false.
+        if( present(imgs_ori) ) l_imgs = .true.
         if( allocated(timgs) )then
             do i = 1,size(timgs)
                 call timgs(i)%kill
             enddo
             deallocate(timgs)
+        endif
+        if( l_imgs )then
+            if( allocated(imgs_ori) )then
+                do i = 1,size(imgs_ori)
+                    call imgs_ori(i)%kill
+                enddo
+                deallocate(imgs_ori)
+            endif
         endif
         if(present(cavg)) call cavg%kill
         select case(trim(oritype))
@@ -1573,6 +1584,12 @@ contains
         do i = 1,size(timgs)
             call timgs(i)%new([params_glob%box,params_glob%box,1],params_glob%smpd, wthreads=.false.)
         enddo
+        if( l_imgs )then
+            allocate(imgs_ori(pop))
+            do i = 1,size(imgs_ori)
+                call imgs_ori(i)%new([params_glob%box,params_glob%box,1],params_glob%smpd, wthreads=.false.)
+            enddo
+        endif
         ! temporary objects
         call prepimgbatch(pop)
         do ithr = 1, nthr_glob
@@ -1593,6 +1610,9 @@ contains
             e3    = pos%e3get(iptcl)
             call img(ithr)%zero_and_flag_ft
             call timg(ithr)%zero_and_flag_ft
+            if( l_imgs )then
+                call imgs_ori(i)%copy(build_glob%imgbatch(i))
+            endif
             ! normalisation
             call build_glob%imgbatch(i)%norm_noise_pad_fft(build_glob%lmsk,img(ithr))
             ! optional phase-flipping
