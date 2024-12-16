@@ -36,6 +36,7 @@ type(analysis2D_nano_commander)               :: xanalysis2D_nano
 type(center2D_nano_commander)                 :: xcenter2D
 type(cluster2D_nano_commander)                :: xcluster2D
 type(map_cavgs_selection_commander)           :: xmap_cavgs_selection
+type(ppca_denoise_class_commander)            :: xppca_denoise_class
 type(ppca_denoise_classes_commander)          :: xppca_denoise_classes
 type(estimate_diam_commander)                 :: xestimate_diam
 type(simulate_atoms_commander)                :: xsimulate_atoms
@@ -128,6 +129,8 @@ select case(prg)
         call xcluster2D%execute(cline)
     case( 'map_cavgs_selection' )
         call xmap_cavgs_selection%execute(cline)
+    case( 'ppca_denoise_class' )
+        call xppca_denoise_class%execute(cline)
     case( 'ppca_denoise_classes' )
         call xppca_denoise_classes%execute(cline)
     case( 'estimate_diam' )

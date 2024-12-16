@@ -108,6 +108,7 @@ type(ctf_phaseflip_commander)               :: xctf_phaseflip
 type(filter_commander)                      :: xfilter
 type(normalize_commander)                   :: xnormalize
 type(ppca_denoise_commander)                :: xppca_denoise
+type(ppca_denoise_class_commander)          :: xppca_denoise_class
 type(ppca_denoise_classes_commander)        :: xppca_denoise_classes
 type(denoise_cavgs_commander)               :: xdenoise_cavgs
 type(scale_commander)                       :: xscale
@@ -339,6 +340,8 @@ select case(trim(prg))
         call xnormalize%execute(cline)
     case( 'ppca_denoise' )
         call xppca_denoise%execute(cline)
+    case( 'ppca_denoise_class' )
+        call xppca_denoise_class%execute(cline)
     case( 'ppca_denoise_classes' )
         call xppca_denoise_classes%execute(cline)
     case( 'denoise_cavgs' )
