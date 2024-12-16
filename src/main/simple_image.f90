@@ -4539,10 +4539,11 @@ contains
     end subroutine ICM3D
 
     ! nonuniform
-    subroutine ICM3D_eo( even, odd, lambda )
+    subroutine ICM3D_eo( even, odd, lambda, l_msk )
         use simple_neighs
-        class(image), intent(inout) :: even, odd
-        real,         intent(in)    :: lambda
+        class(image),      intent(inout) :: even, odd
+        real,              intent(in)    :: lambda
+        logical, optional, intent(in)    :: l_msk(even%ldim(1),even%ldim(2),even%ldim(3))
         integer, parameter :: MAXITS    = 3
         integer, parameter :: NQUANTA   = 256
         type(image) :: even_prev, odd_prev, noise, noise_var
@@ -4556,8 +4557,13 @@ contains
         call noise%subtr(odd)
         call noise%loc_var3D(noise_var)
         call noise_var%norm([5.,2.])
-        call even%quantize_fwd(NQUANTA, transl_tab_even)
-        call odd%quantize_fwd(NQUANTA, transl_tab_odd)
+        if( present(l_msk) )then
+            call even%quantize_fwd(NQUANTA, transl_tab_even, l_msk)
+            call odd%quantize_fwd(NQUANTA, transl_tab_odd, l_msk)
+        else
+            call even%quantize_fwd(NQUANTA, transl_tab_even)
+            call odd%quantize_fwd(NQUANTA, transl_tab_odd)
+        endif
         call even_prev%copy(even)
         call odd_prev%copy(odd)
         do i = 1, MAXITS
@@ -8172,14 +8178,19 @@ contains
         endif
     end subroutine norm_noise
 
-    subroutine quantize_fwd( self, nquanta, transl_tab )
-        class(image), intent(inout) :: self
-        integer,      intent(in)    :: nquanta
-        real,         intent(inout) :: transl_tab(nquanta)
+    subroutine quantize_fwd( self, nquanta, transl_tab, l_msk )
+        class(image),      intent(inout) :: self
+        integer,           intent(in)    :: nquanta
+        real,              intent(inout) :: transl_tab(nquanta)
+        logical, optional, intent(in)    :: l_msk(self%ldim(1),self%ldim(2),self%ldim(3)) 
         real, allocatable :: pixvals(:)
         integer :: i, j, k, ind
         real    :: dist
-        pixvals = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), .true.)
+        if( present(l_msk) )then
+            pixvals = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=l_msk)
+        else
+            pixvals = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.true.)
+        endif
         call quantize_vec(pixvals, nquanta, transl_tab)
         do k = 1,self%ldim(3)
             do j = 1,self%ldim(2)
