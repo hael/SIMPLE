@@ -8191,15 +8191,27 @@ contains
         else
             pixvals = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.true.)
         endif
-        call quantize_vec(pixvals, nquanta, transl_tab)
-        do k = 1,self%ldim(3)
+        if( self%ldim(3) > 1 )then
+            call quantize_vec(pixvals, nquanta, transl_tab)
+            !$omp parallel do schedule(static) default(shared) private(k,j,i,ind,dist) collapse(3) proc_bind(close)
+            do k = 1,self%ldim(3)
+                do j = 1,self%ldim(2)
+                    do i = 1,self%ldim(1)
+                        call find(transl_tab, nquanta, self%rmat(i,j,k), ind, dist)
+                        self%rmat(i,j,k) = real(ind - 1)
+                    end do
+                end do
+            end do
+            !$omp end parallel do
+        else
+            call quantize_vec_serial(pixvals, nquanta, transl_tab)
             do j = 1,self%ldim(2)
                 do i = 1,self%ldim(1)
-                    call find(transl_tab, nquanta, self%rmat(i,j,k), ind, dist)
+                    call find(transl_tab, nquanta, self%rmat(i,j,1), ind, dist)
                     self%rmat(i,j,k) = real(ind - 1)
                 end do
             end do
-        end do
+        endif
     end subroutine quantize_fwd
 
     subroutine quantize_bwd( self, nquanta, transl_tab )
@@ -8210,14 +8222,25 @@ contains
         integer :: i, j, k, ind
         real    :: dist
         pixvals = real((/(k,k=1,nquanta)/)) - 1.0
-        do k = 1,self%ldim(3)
-            do j = 1,self%ldim(2)
-                do i = 1,self%ldim(1)
-                    call find(pixvals, nquanta, self%rmat(i,j,k), ind, dist)
-                    self%rmat(i,j,k) = transl_tab(ind)
+        if( self%ldim(3) > 1 )then
+            !$omp parallel do schedule(static) default(shared) private(k,j,i,ind,dist) collapse(3) proc_bind(close)
+            do k = 1,self%ldim(3)
+                do j = 1,self%ldim(2)
+                    do i = 1,self%ldim(1)
+                        call find(pixvals, nquanta, self%rmat(i,j,k), ind, dist)
+                        self%rmat(i,j,k) = transl_tab(ind)
+                    end do
                 end do
             end do
-        end do
+            !$omp end parallel do
+        else
+            do j = 1,self%ldim(2)
+                do i = 1,self%ldim(1)
+                    call find(pixvals, nquanta, self%rmat(i,j,1), ind, dist)
+                    self%rmat(i,j,1) = transl_tab(ind)
+                end do
+            end do
+        endif
     end subroutine quantize_bwd
 
     !>  \brief  putting the edge around the image to zero (necessary for avoiding FT artefacts)
