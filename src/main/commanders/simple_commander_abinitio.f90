@@ -47,26 +47,27 @@ type, extends(commander_base) :: abinitio3D_parts_commander
 end type abinitio3D_parts_commander
 
 ! class constants
-character(len=*), parameter :: REC_FBODY         = 'rec_final_state'
-character(len=*), parameter :: STR_STATE_GLOB    = '01'
-real,             parameter :: LPSTOP_BOUNDS(2)  = [4.5,6.0]
-real,             parameter :: LPSTART_BOUNDS(2) = [10.,20.]
-real,             parameter :: CENLP_DEFAULT     = 30.
-real,             parameter :: LPSYMSRCH_LB      = 12.
-integer,          parameter :: NSTAGES           = 8
-integer,          parameter :: NSTAGES_INI3D     = 4 ! # of ini3D stages used for initialization
-integer,          parameter :: PHASES(3)         = [2,6,8]
-integer,          parameter :: MAXITS(8)         = [20,20,17,17,17,17,15,30]
-integer,          parameter :: MAXITS_GLOB       = 2*20 + 4*17 + 1*15 ! the last 30 iterations are not included in this estimate since the sampling method changes
-integer,          parameter :: NSPACE(3)         = [500,1000,2500]
-integer,          parameter :: SYMSRCH_STAGE     = 3
-integer,          parameter :: PROBREFINE_STAGE  = 5
-integer,          parameter :: ICM_STAGE         = PROBREFINE_STAGE  ! we switch from ML regularization when prob is switched on
-integer,          parameter :: STOCH_SAMPL_STAGE = PROBREFINE_STAGE  ! we switch from greedy to stochastic blanced class sampling when prob is switched on
-integer,          parameter :: TRAILREC_STAGE    = STOCH_SAMPL_STAGE ! we start trailing when we start sampling particles randomly
-integer,          parameter :: LPAUTO_STAGE      = NSTAGES - 1       ! cannot be switched on too early
-integer,          parameter :: HET_DOCKED_STAGE  = NSTAGES           ! stage at which state splitting is done when multivol_mode==docked
-integer,          parameter :: NSAMPLE_MAX_LAST  = 25000             ! maximum # particles to sample per iteration in the last stage 
+character(len=*), parameter :: REC_FBODY             = 'rec_final_state'
+character(len=*), parameter :: STR_STATE_GLOB        = '01'
+real,             parameter :: LPSTOP_BOUNDS(2)      = [4.5,6.0]
+real,             parameter :: LPSTART_BOUNDS(2)     = [10.,20.]
+real,             parameter :: CENLP_DEFAULT         = 30.
+real,             parameter :: LPSYMSRCH_LB          = 12.
+integer,          parameter :: NSTAGES               = 8
+integer,          parameter :: NSTAGES_INI3D         = 4 ! # of ini3D stages used for initialization
+integer,          parameter :: PHASES(3)             = [2,6,8]
+integer,          parameter :: MAXITS(8)             = [20,20,17,17,17,17,15,30]
+integer,          parameter :: MAXITS_GLOB           = 2*20 + 4*17 + 1*15 ! the last 30 iterations are not included in this estimate since the sampling method changes
+integer,          parameter :: NSPACE(3)             = [500,1000,2500]
+integer,          parameter :: SYMSRCH_STAGE         = 3
+integer,          parameter :: PROBREFINE_STAGE      = 5
+integer,          parameter :: ICM_STAGE             = PROBREFINE_STAGE  ! we switch from ML regularization when prob is switched on
+integer,          parameter :: STOCH_SAMPL_STAGE     = PROBREFINE_STAGE  ! we switch from greedy to stochastic blanced class sampling when prob is switched on
+integer,          parameter :: TRAILREC_STAGE_SINGLE = STOCH_SAMPL_STAGE ! we start trailing when we start sampling particles randomly
+integer,          parameter :: TRAILREC_STAGE_MULTI  = NSTAGES
+integer,          parameter :: LPAUTO_STAGE          = NSTAGES - 1       ! cannot be switched on too early
+integer,          parameter :: HET_DOCKED_STAGE      = NSTAGES           ! stage at which state splitting is done when multivol_mode==docked
+integer,          parameter :: NSAMPLE_MAX_LAST      = 25000             ! maximum # particles to sample per iteration in the last stage 
 
 ! class variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
@@ -963,7 +964,24 @@ contains
         balance = 'yes'
         ! trailing reconstruction
         trail_rec = 'no'
-        if( istage >= TRAILREC_STAGE ) trail_rec = 'yes'
+        select case(trim(params_glob%multivol_mode))
+            case('single')
+                if( istage >= TRAILREC_STAGE_SINGLE ) trail_rec = 'yes'
+            case('independent')
+                if( istage >= TRAILREC_STAGE_MULTI  ) trail_rec = 'yes'
+            case('docked')
+                if( istage == NSTAGES )then
+                    trail_rec = 'no'
+                else if( istage >= TRAILREC_STAGE_SINGLE )then
+                    trail_rec = 'yes'
+                endif
+            case('input_oris_fixed')
+                trail_rec = 'no'
+            case('input_oris_start')
+                trail_rec = 'no'
+            case DEFAULT
+                trail_rec = 'no' ! defaults to 'no' for safety
+        end select
         ! automatic low-pass limit estimation
         lp_auto = 'no'
         if( istage >= LPAUTO_STAGE .and. l_lpauto )then
