@@ -3007,8 +3007,8 @@ contains
 
     !>  \brief  generates a logical mask from a binary one
     function bin2logical( self ) result( mask )
-        class(image), intent(in) :: self
-        logical, allocatable :: mask(:,:,:)
+        class(image), intent(in)  :: self
+        logical,      allocatable :: mask(:,:,:)
         allocate(mask(self%ldim(1),self%ldim(2),self%ldim(3)),source=.false.)
         where( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) > TINY )
             mask = .true.
@@ -8217,7 +8217,7 @@ contains
     subroutine quantize_bwd( self, nquanta, transl_tab )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: nquanta
-        real,         intent(in) :: transl_tab(nquanta)
+        real,         intent(in)    :: transl_tab(nquanta)
         real    :: pixvals(nquanta)
         integer :: i, j, k, ind
         real    :: dist
