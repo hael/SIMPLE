@@ -559,7 +559,7 @@ contains
                          &params_glob%smpd_crop, params_glob%msk_crop, npix )
         if( params_glob%l_filemsk )then
             ! envelope masking
-            call mskvol%read(params_glob%mskfile)
+            call mskvol%copy(build_glob%mskvol)
             call mskvol%remove_edge
         endif
         ! find best resolved state
@@ -616,6 +616,7 @@ contains
     subroutine read_and_filter_refvols( s )
         integer, intent(in) :: s
         character(len=:), allocatable :: vol_even, vol_odd, vol_avg
+        logical,          allocatable :: l_msk(:,:,:)
         real    :: cur_fil(params_glob%box_crop)
         integer :: filtsz
         vol_even = params_glob%vols_even(s)
@@ -623,8 +624,23 @@ contains
         vol_avg  = params_glob%vols(s)
         call build_glob%vol%read_and_crop(   vol_even, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
         call build_glob%vol_odd%read_and_crop(vol_odd, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+        if( s == 1 .and. params_glob%l_filemsk )then
+            ! read 3D envelope mask
+            call build_glob%mskvol%new([params_glob%box_crop,params_glob%box_crop,params_glob%box_crop],params_glob%smpd_crop)
+            call build_glob%mskvol%read(params_glob%mskfile)
+            l_msk = build_glob%mskvol%bin2logical()
+        endif
         if( params_glob%l_icm )then
-            call build_glob%vol%ICM3D_eo(build_glob%vol_odd, params_glob%lambda)
+            if( params_glob%l_filemsk )then
+                ! apply mask to volumes before ICM
+                call build_glob%vol%zero_env_background(build_glob%mskvol)
+                call build_glob%vol_odd%zero_env_background(build_glob%mskvol)
+                call build_glob%vol%mul(build_glob%mskvol)
+                call build_glob%vol_odd%mul(build_glob%mskvol)
+                call build_glob%vol%ICM3D_eo(build_glob%vol_odd, params_glob%lambda, l_msk)
+            else
+                call build_glob%vol%ICM3D_eo(build_glob%vol_odd, params_glob%lambda)
+            endif
             if( params_glob%l_lpset )then ! no independent volume registration, so average eo pairs
                 call build_glob%vol%add(build_glob%vol_odd)
                 call build_glob%vol%mul(0.5)
@@ -664,7 +680,6 @@ contains
         real,           intent(in) :: xyz(3)
         logical,        intent(in) :: iseven
         type(projector), pointer :: vol_ptr => null()
-        type(image)              :: mskvol
         if( iseven )then
             vol_ptr => build_glob%vol
         else
@@ -682,12 +697,8 @@ contains
         endif
         ! masking
         if( params_glob%l_filemsk )then
-            ! envelope masking
-            call mskvol%new([params_glob%box_crop,params_glob%box_crop,params_glob%box_crop],params_glob%smpd_crop)
-            call mskvol%read(params_glob%mskfile)
-            call vol_ptr%zero_env_background(mskvol)
-            call vol_ptr%mul(mskvol)
-            call mskvol%kill
+            call vol_ptr%zero_env_background(build_glob%mskvol)
+            call vol_ptr%mul(build_glob%mskvol)
         else
             ! circular masking
             call vol_ptr%mask(params_glob%msk_crop, 'soft', backgr=0.0)
@@ -973,14 +984,15 @@ contains
         use simple_masker, only: masker
         use simple_image,  only: image
         class(cmdline),    intent(inout) :: cline
-        character(len=:), allocatable    :: recname, volname, volname_prev, volname_prev_even, volname_prev_odd
+        character(len=:), allocatable    :: recname, volname, volname_prev, volname_prev_even
+        character(len=:), allocatable    :: volname_prev_odd, str_state, str_iter, fsc_txt_file
         character(len=LONGSTRLEN)        :: eonames(2)
         type(image)           :: vol_prev_even, vol_prev_odd
         character(len=STDLEN) :: pprocvol, lpvol
         real, allocatable     :: optlp(:), res(:), fsc(:)
-        type(masker)          :: envmsk
         integer               :: s, find4eoavg, ldim(3)
-        real                  :: res05s(params_glob%nstates), res0143s(params_glob%nstates), bfac, weight_prev, update_frac_trail_rec
+        real                  :: res05s(params_glob%nstates), res0143s(params_glob%nstates)
+        real                  :: bfac, weight_prev, update_frac_trail_rec
         ! init
         ldim = [params_glob%box_crop,params_glob%box_crop,params_glob%box_crop]
         call build_glob%vol%new(ldim,params_glob%smpd_crop)
@@ -1032,6 +1044,14 @@ contains
                 else 
                     call build_glob%eorecvols(s)%sampl_dens_correct_eos(s, eonames(1), eonames(2), find4eoavg)
                 endif
+                str_state = int2str_pad(s,2)
+                if( cline%defined('which_iter') )then
+                    str_iter     = int2str_pad(params_glob%which_iter,3)
+                    fsc_txt_file = 'RESOLUTION_STATE'//str_state//'_ITER'//str_iter
+                else
+                    fsc_txt_file = 'RESOLUTION_STATE'//str_state
+                endif
+                call build_glob%eorecvols(s)%write_fsc2txt(fsc_txt_file)
                 if( params_glob%l_ml_reg )then
                     call build_glob%eorecvols(s)%sum_eos
                 endif
@@ -1070,60 +1090,12 @@ contains
                 endif
                 call build_glob%vol%fft()
                 call build_glob%vol2%fft()
-                ! post-process volume
-                pprocvol = add2fbody(volname, params_glob%ext, PPROC_SUFFIX)
-                lpvol    = add2fbody(volname, params_glob%ext, LP_SUFFIX)
-                build_glob%fsc(s,:) = file2rarr('fsc_state'//int2str_pad(s,2)//'.bin')
-                ! B-factor estimation
-                if( cline%defined('bfac') )then
-                    bfac = params_glob%bfac
-                else
-                    if( res0143s(s) < 5. )then
-                        bfac = build_glob%vol%guinier_bfac(HPLIM_GUINIER, res0143s(s))
-                        write(logfhandle,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', bfac
-                    else
-                        bfac = 0.
-                    endif
-                endif
-                ! B-factor application
-                call build_glob%vol2%copy(build_glob%vol)
-                call build_glob%vol%apply_bfac(bfac)
-                ! low-pass filter
-                res   = build_glob%vol%get_res()
-                optlp = fsc2optlp(build_glob%fsc(s,:))
-                where( res < TINY ) optlp = 0.
-                ! optimal low-pass filter from FSC
-                call build_glob%vol%apply_filter(optlp)
-                call build_glob%vol2%apply_filter(optlp)
-                ! final low-pass filtering for smoothness
-                call build_glob%vol%bp(0., res0143s(s))
-                call build_glob%vol2%bp(0., res0143s(s))
-                call build_glob%vol%ifft()
-                call build_glob%vol2%ifft()
-                ! write low-pass filtered without B-factor or mask
-                call build_glob%vol2%write(lpvol)
-                ! masking
-                if( params_glob%l_filemsk )then
-                    call envmsk%new(ldim, params_glob%smpd_crop)
-                    call envmsk%read(params_glob%mskfile)
-                    call build_glob%vol%zero_background
-                    call build_glob%vol%mul(envmsk)
-                    call envmsk%kill
-                else
-                    call build_glob%vol%mask(params_glob%msk_crop, 'soft')
-                endif
-                ! write
-                call build_glob%vol%write(pprocvol)
                 ! updating command-line accordingly (needed in multi-stage wflows)
                 call cline%set('vol'//int2str(s), volname)
                 ! updating the global parameter object accordingly (needed in multi-stage wflows)
                 params_glob%vols(s) = volname
             endif
         end do
-        if((.not.params_glob%l_distr_exec) .and. (.not.params_glob%l_lpset))then
-            ! set the resolution limit according to the best resolved model
-            params_glob%lp = min(params_glob%lp,max(params_glob%lpstop,minval(res0143s)))
-        endif
         call build_glob%vol2%kill
     end subroutine norm_struct_facts
 

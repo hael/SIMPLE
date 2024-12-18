@@ -42,15 +42,15 @@ contains
     subroutine exec_reconstruct3D_distr( self, cline )
         class(reconstruct3D_commander_distr), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        character(len=STDLEN),     allocatable :: state_assemble_finished(:)
         type(reconstruct3D_commander)          :: xrec3D_shmem
-        character(len=STDLEN)     :: volassemble_output, str_state, fsc_file
+        character(len=STDLEN)       :: str_state, fsc_file, nthr_here_str
+        type(volassemble_commander) :: xvolassemble
         type(parameters) :: params
         type(builder)    :: build
         type(qsys_env)   :: qenv
         type(cmdline)    :: cline_volassemble
         type(chash)      :: job_descr
-        integer          :: state
+        integer          :: state, envlen, io_stat, nthr_here
         logical          :: fall_over
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('trs')     ) call cline%set('trs', 5.) ! to assure that shifts are being used
@@ -60,6 +60,15 @@ contains
             call xrec3D_shmem%execute(cline)
             return
         endif
+         ! deal with # threads for the master process
+        call get_environment_variable('SLURM_CPUS_PER_TASK', nthr_here_str, envlen)
+        if( envlen > 0 )then
+            call str2int(trim(nthr_here_str), io_stat, nthr_here)
+        else
+            !$ nthr_here = omp_get_max_threads()
+            nthr_here = min(NTHR_SHMEM_MAX,nthr_here)
+        end if
+        write(logfhandle,'(A,I6)')'>>> # SHARED-MEMORY THREADS USED BY RECONSTRUCT3D MASTER PROCESS: ', nthr_here
         call build%init_params_and_build_spproj(cline, params)
         call build%spproj%update_projinfo(cline)
         call build%spproj%write_segment_inside('projinfo')
@@ -90,24 +99,11 @@ contains
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR)
         ! assemble volumes
-        ! this is for parallel volassemble over states
-        allocate(state_assemble_finished(params%nstates) )
-        do state = 1, params%nstates
-            state_assemble_finished(state) = 'VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2)
-        enddo
         cline_volassemble = cline
         call cline_volassemble%set('prg', 'volassemble')
-        ! parallel assembly
-        do state = 1,params%nstates
-            str_state = int2str_pad(state,2)
-            volassemble_output = 'RESOLUTION_STATE'//trim(str_state)
-            call cline_volassemble%set( 'state', real(state) )
-            if( params%nstates>1 )call cline_volassemble%set('part', real(state))
-            call qenv%exec_simple_prg_in_queue_async(cline_volassemble,&
-            'simple_script_state'//trim(str_state), trim(volassemble_output))
-        end do
-        call qsys_watcher(state_assemble_finished)
-        ! updates project file only if called from another workflow
+        call cline_volassemble%set('nthr',    nthr_here)
+        call xvolassemble%execute_safe(cline_volassemble)
+        ! updates project file only if mkdir is set to yes
         if( params%mkdir.eq.'yes' )then
             do state = 1,params%nstates
                 str_state = int2str_pad(state,2)
@@ -187,11 +183,12 @@ contains
         type(builder)                 :: build
         type(reconstructor_eo)        :: eorecvol_read
         type(image)                   :: vol_prev_even, vol_prev_odd
-        character(len=:), allocatable :: finished_fname, recname, volname, volname_prev, volname_prev_even, volname_prev_odd
+        character(len=:), allocatable :: finished_fname, recname, volname, volname_prev, fsc_txt_file
+        character(len=:), allocatable :: volname_prev_even, volname_prev_odd, str_state, str_iter
         character(len=LONGSTRLEN)     :: eonames(2), benchfname
         real, allocatable             :: fsc(:), res05s(:), res0143s(:)
-        real                          :: res, weight_prev, update_frac_trail_rec
-        integer                       :: part, s, ss, state, find4eoavg, fnr
+        real                          :: weight_prev, update_frac_trail_rec
+        integer                       :: part, state, find4eoavg, fnr
         integer(timer_int_kind)       :: t_init, t_read, t_sum_reduce, t_sum_eos, t_sampl_dens_correct_eos
         integer(timer_int_kind)       :: t_sampl_dens_correct_sum, t_eoavg, t_tot
         real(timer_int_kind)          :: rt_init, rt_read, rt_sum_reduce, rt_sum_eos, rt_sampl_dens_correct_eos
@@ -225,14 +222,7 @@ contains
             update_frac_trail_rec = build%spproj%os_ptcl3D%calc_update_frac()
         endif
         ! assemble volumes
-        do ss=1,params%nstates
-            if( cline%defined('state') )then
-                s     = 1             ! index in reconstruct3D
-                state = params%state  ! actual state
-            else
-                s     = ss
-                state = ss
-            endif
+        do state=1,params%nstates
             call build%eorecvol%reset_all
             ! assemble volumes
             do part=1,params%nparts
@@ -260,8 +250,8 @@ contains
             endif
             if( L_BENCH_GLOB ) t_sampl_dens_correct_eos = tic()
             if( params%l_trail_rec )then
-                if( .not. cline%defined('vol'//int2str(s)) ) THROW_HARD('vol'//int2str(s)//' required in volassemble cline when trail_rec==yes')
-                volname_prev      = cline%get_carg('vol'//int2str(s))
+                if( .not. cline%defined('vol'//int2str(state)) ) THROW_HARD('vol'//int2str(state)//' required in volassemble cline when trail_rec==yes')
+                volname_prev      = cline%get_carg('vol'//int2str(state))
                 volname_prev_even = add2fbody(volname_prev, params%ext, '_even')
                 volname_prev_odd  = add2fbody(volname_prev, params%ext, '_odd')
                 if( .not. file_exists(volname_prev_even) ) THROW_HARD('File: '//trim(volname_prev_even)//' does not exist!')
@@ -274,13 +264,21 @@ contains
             else 
                 call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg)
             endif
+            str_state = int2str_pad(state,2)
+            if( cline%defined('which_iter') )then
+                str_iter     = int2str_pad(params%which_iter,3)
+                fsc_txt_file = 'RESOLUTION_STATE'//str_state//'_ITER'//str_iter
+            else
+                fsc_txt_file = 'RESOLUTION_STATE'//str_state
+            endif
+            call build%eorecvol%write_fsc2txt(fsc_txt_file)
             if( L_BENCH_GLOB ) rt_sampl_dens_correct_eos = rt_sampl_dens_correct_eos + toc(t_sampl_dens_correct_eos)
             if( params%l_ml_reg )then
                 if( L_BENCH_GLOB ) t_sum_eos = tic()
                 call build%eorecvol%sum_eos
                 if( L_BENCH_GLOB ) rt_sum_eos = rt_sum_eos + toc(t_sum_eos)
             endif
-            call build%eorecvol%get_res(res05s(s), res0143s(s))
+            call build%eorecvol%get_res(res05s(state), res0143s(state))
             if( L_BENCH_GLOB ) t_sampl_dens_correct_sum = tic()
             call build%eorecvol%sampl_dens_correct_sum( build%vol )
             if( L_BENCH_GLOB ) rt_sampl_dens_correct_sum = rt_sampl_dens_correct_sum + toc(t_sampl_dens_correct_sum)
@@ -319,22 +317,12 @@ contains
             endif
             if( L_BENCH_GLOB ) rt_eoavg = rt_eoavg + toc(t_eoavg)
             deallocate(recname, volname)
-            if( cline%defined('state') )exit
         end do
-        ! set the resolution limit according to the worst resolved model
-        res = maxval(res0143s)
-        params%lp = max(params%lpstop, res)
-        write(logfhandle,'(a,1x,F6.2)') '>>> LOW-PASS LIMIT:  ', params%lp
-        write(logfhandle,'(a,1x,F6.2)') '>>> TRAIL REC WEIGHT:', update_frac_trail_rec
         call eorecvol_read%kill
         ! end gracefully
         call simple_end('**** SIMPLE_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)
-        if( cline%defined('state') )then
-            allocate( finished_fname, source='VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2))
-        else
-            allocate( finished_fname, source='VOLASSEMBLE_FINISHED' )
-        endif
+        allocate( finished_fname, source='VOLASSEMBLE_FINISHED' )
         call simple_touch( finished_fname , errmsg='In: commander_rec::volassemble')
         if( L_BENCH_GLOB )then
             rt_tot     = toc(t_tot)

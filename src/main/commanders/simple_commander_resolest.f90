@@ -150,8 +150,8 @@ contains
         if( params%l_filemsk )then
             call mskvol%new([params%box,params%box,params%box], params%smpd)
             call mskvol%read(params%mskfile)
-            call even%zero_background
-            call odd%zero_background
+            call even%zero_env_background(mskvol)
+            call odd%zero_env_background(mskvol)
             call even%mul(mskvol)
             call odd%mul(mskvol)
             call mskvol%one_at_edge ! to expand before masking of reference internally
@@ -252,8 +252,8 @@ contains
         if( params%automsk.ne.'no' )then
             call envmsk%automask3D(even, odd, l_tight=params%automsk.eq.'tight')
             ! apply mask to volumes
-            call even_icm%zero_background()
-            call odd_icm%zero_background()
+            call even_icm%zero_env_background(envmsk)
+            call odd_icm%zero_env_background(envmsk)
             call even_icm%mul(envmsk)
             call odd_icm%mul(envmsk)
             call envmsk%one_at_edge ! to expand before masking of reference internally

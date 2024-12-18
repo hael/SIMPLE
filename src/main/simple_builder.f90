@@ -29,6 +29,7 @@ type :: builder
     type(image)                         :: img_pad                !< -"-
     type(projector)                     :: vol, vol_odd
     type(image)                         :: vol2                   !< -"-
+    type(image)                         :: mskvol                 !< envelope mask volume
     type(image),            allocatable :: imgbatch(:)            !< batch of images
     integer,                allocatable :: subspace_inds(:)       !< indices of eulspace_sub in eulspace
     ! STRATEGY2D TOOLBOX
