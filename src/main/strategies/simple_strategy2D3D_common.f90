@@ -626,10 +626,10 @@ contains
             ! read 3D envelope mask
             call build_glob%mskvol%new([params_glob%box_crop,params_glob%box_crop,params_glob%box_crop],params_glob%smpd_crop)
             call build_glob%mskvol%read(params_glob%mskfile)
-            l_msk = build_glob%mskvol%bin2logical()
         endif
         if( params_glob%l_icm )then
             if( params_glob%l_filemsk )then
+                l_msk = build_glob%mskvol%bin2logical()
                 ! apply mask to volumes before ICM
                 call build_glob%vol%zero_env_background(build_glob%mskvol)
                 call build_glob%vol_odd%zero_env_background(build_glob%mskvol)
