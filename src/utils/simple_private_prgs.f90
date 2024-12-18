@@ -679,9 +679,9 @@ contains
         call private_prgs(19)%push_req_key('mskdiam')
         ! optional keys
         call private_prgs(19)%push_opt_key('nthr')
-        call private_prgs(19)%push_opt_key('state')
         call private_prgs(19)%push_opt_key('nstates')
         call private_prgs(19)%push_opt_key('mskfile')
+        call private_prgs(19)%push_opt_key('which_iter')
 
         ! CALC_PSPEC, for asssembling power spectra for refine3D
         call private_prgs(20)%set_name('calc_pspec')

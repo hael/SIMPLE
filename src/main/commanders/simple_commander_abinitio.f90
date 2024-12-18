@@ -55,6 +55,7 @@ real,             parameter :: CENLP_DEFAULT         = 30.
 real,             parameter :: LPSYMSRCH_LB          = 12.
 integer,          parameter :: NSTAGES               = 8
 integer,          parameter :: NSTAGES_INI3D         = 4 ! # of ini3D stages used for initialization
+integer,          parameter :: NSTAGES_INI3D_MAX     = 7
 integer,          parameter :: PHASES(3)             = [2,6,8]
 integer,          parameter :: MAXITS(8)             = [20,20,17,17,17,17,15,30]
 integer,          parameter :: MAXITS_GLOB           = 2*20 + 4*17 + 1*15 ! the last 30 iterations are not included in this estimate since the sampling method changes
@@ -64,7 +65,7 @@ integer,          parameter :: PROBREFINE_STAGE      = 5
 integer,          parameter :: ICM_STAGE             = PROBREFINE_STAGE  ! we switch from ML regularization when prob is switched on
 integer,          parameter :: STOCH_SAMPL_STAGE     = PROBREFINE_STAGE  ! we switch from greedy to stochastic blanced class sampling when prob is switched on
 integer,          parameter :: TRAILREC_STAGE_SINGLE = STOCH_SAMPL_STAGE ! we start trailing when we start sampling particles randomly
-integer,          parameter :: TRAILREC_STAGE_MULTI  = NSTAGES
+integer,          parameter :: TRAILREC_STAGE_MULTI  = NSTAGES           ! we start trailing in the last stage
 integer,          parameter :: LPAUTO_STAGE          = NSTAGES - 1       ! cannot be switched on too early
 integer,          parameter :: HET_DOCKED_STAGE      = NSTAGES           ! stage at which state splitting is done when multivol_mode==docked
 integer,          parameter :: NSAMPLE_MAX_LAST      = 25000             ! maximum # particles to sample per iteration in the last stage 
@@ -100,6 +101,7 @@ contains
         type(stack_io)                   :: stkio_r, stkio_r2, stkio_w
         character(len=STDLEN)            :: final_vol
         integer                          :: icls, ncavgs, cnt, even_ind, odd_ind, istage, nstages_ini3D
+        if( cline%defined('nparts') ) THROW_HARD('abinitio3D_cavgs does not support distributed execution, remove nparts from command line')
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('oritype',      'out') ! because cavgs are part of out segment
@@ -108,17 +110,19 @@ contains
         if( .not. cline%defined('overlap')     ) call cline%set('overlap',     0.95)
         if( .not. cline%defined('prob_athres') ) call cline%set('prob_athres',  90.) ! reduces # failed runs on trpv1 from 4->2/10
         if( .not. cline%defined('cenlp')       ) call cline%set('cenlp', CENLP_DEFAULT)
-        if( .not. cline%defined('imgkind')     ) call cline%set('imgkind',   'cavg') ! whether to use classes generated from 2D/3D
+        if( .not. cline%defined('imgkind')     ) call cline%set('imgkind',   'cavg')
+        if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',    'yes')
         ! make master parameters
         call params%new(cline)
         call cline%set('mkdir',       'no')   ! to avoid nested directory structure
         call cline%set('oritype', 'ptcl3D')   ! from now on we are in the ptcl3D segment, final report is in the cls3D segment
         ! set class global lp_auto flag for low-pass limit estimation
-        l_lpauto = .false.
+        l_lpauto = .true.
+        if( cline%defined('lp_auto') ) l_lpauto = params%l_lpauto
         ! set nstages_ini3D
-        nstages_ini3D = NSTAGES
+        nstages_ini3D = NSTAGES_INI3D_MAX
         if( cline%defined('nstages') )then
-            nstages_ini3D = params%nstages   
+            nstages_ini3D = min(NSTAGES_INI3D_MAX,params%nstages)   
         endif
         ! prepare class command lines
         call prep_class_command_lines(cline, work_projfile)
@@ -228,7 +232,7 @@ contains
         call spproj%os_cls3D%set_all2single('stkind', 1)
         ! map the orientation parameters obtained for the clusters back to the particles
         call spproj%map2ptcls
-        if( nstages_ini3D == NSTAGES )then ! produce validation info
+        if( nstages_ini3D == NSTAGES_INI3D_MAX )then ! produce validation info
             ! check even odd convergence
             call conv_eo(work_proj%os_ptcl3D)
             ! for visualization
@@ -291,7 +295,6 @@ contains
                 call work_proj%write_segment_inside('ptcl3D', work_projfile)
                 call cline%set('mkdir', 'no') ! to avoid nested dirs
                 call cline%set('objfun', 'cc')
-                call cline%set('silence_fsc', 'yes')
                 call xreconstruct3D%execute_safe(cline)
                 call cline%set('objfun', trim(params%objfun))
                 call simple_copy_file('recvol_state01_even.mrc', 'startvol_even_unfil.mrc')
@@ -913,7 +916,7 @@ contains
     subroutine set_cline_refine3D( istage, l_cavgs )
         integer,          intent(in)  :: istage
         logical,          intent(in)  :: l_cavgs
-        character(len=:), allocatable :: silence_fsc, sh_first, prob_sh, ml_reg
+        character(len=:), allocatable :: sh_first, prob_sh, ml_reg
         character(len=:), allocatable :: refine, icm, trail_rec, pgrp, balance, lp_auto
         integer :: iphase, iter, inspace, imaxits
         real    :: trs, snr_noise_reg, frac_best, overlap, fracsrch, lpstart, lpstop
@@ -1008,7 +1011,6 @@ contains
             case(1)
                 inspace       = NSPACE(1)
                 imaxits       = MAXITS(istage)
-                silence_fsc   = 'yes'
                 trs           = 0.
                 sh_first      = 'no'
                 ml_reg        = 'no'
@@ -1019,7 +1021,6 @@ contains
             case(2)
                 inspace       = NSPACE(2)
                 imaxits       = MAXITS(istage)
-                silence_fsc   = 'yes'
                 trs           = lpinfo(istage)%trslim
                 sh_first      = 'yes'
                 ml_reg        = 'yes'
@@ -1034,11 +1035,6 @@ contains
             case(3)
                 inspace       = NSPACE(3)
                 imaxits       = MAXITS(istage)
-                if( l_cavgs )then
-                silence_fsc   = 'yes'
-                else
-                silence_fsc   = 'no'
-                endif
                 trs           = lpinfo(istage)%trslim
                 sh_first      = 'yes'
                 ml_reg        = 'yes'
@@ -1048,8 +1044,8 @@ contains
                 frac_best     = 0.85 ! means sampling is done from top-ranking 85% particles in class
                 endif
                 if( istage == NSTAGES )then
-                overlap       = 0.99
-                fracsrch      = 99.
+                overlap       = 0.95
+                fracsrch      = 95.
                 else
                 overlap       = 0.90
                 fracsrch      = 90.
@@ -1088,7 +1084,6 @@ contains
         ! phase control parameters
         call cline_refine3D%set('nspace',                     inspace)
         call cline_refine3D%set('maxits',                     imaxits)
-        call cline_refine3D%set('silence_fsc',            silence_fsc)
         call cline_refine3D%set('trs',                            trs)
         call cline_refine3D%set('sh_first',                  sh_first)
         call cline_refine3D%set('prob_sh',                    prob_sh)
@@ -1187,7 +1182,6 @@ contains
         call cline_startrec%set('projfile',    projfile)
         call cline_startrec%set('pgrp',        params_glob%pgrp)
         call cline_startrec%set('objfun',      'cc') ! ugly, but this is how it works in parameters 
-        call cline_startrec%set('silence_fsc', 'yes')
         call cline_startrec%set('box_crop',    lpinfo(istage)%box_crop)
         call cline_startrec%set('update_frac', update_frac)
         call cline_startrec%delete('which_iter')
@@ -1235,10 +1229,14 @@ contains
 
     subroutine gen_ortho_reprojs4viz
         character(len=:), allocatable :: str_state
+        character(len=:), allocatable :: fname
         type(image) :: final_vol, reprojs
-        integer     :: state, box_crop
-        box_crop = lpinfo(NSTAGES)%box_crop 
-        call final_vol%new([box_crop,box_crop,box_crop],lpinfo(NSTAGES)%smpd_crop)
+        integer     :: state, box_crop, ifoo, ldim(3)
+        real        :: smpd
+        str_state = int2str_pad(1,2)
+        fname = VOL_FBODY//str_state//params_glob%ext
+        call find_ldim_nptcls(fname, ldim, ifoo, smpd)
+        call final_vol%new(ldim, smpd)
         do state = 1, params_glob%nstates
             str_state = int2str_pad(state,2)
             call final_vol%read(VOL_FBODY//str_state//params_glob%ext)

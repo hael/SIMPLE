@@ -45,6 +45,8 @@ character(len=*), parameter :: BIN_OTSU_MED         = 'binarized_otsu_median.mrc
 character(len=*), parameter :: BIN_OTSU_HOLES_FILL  = 'binarized_otsu_holes_fill.mrc'
 character(len=*), parameter :: MSK_OTSU             = 'masks_otsu.mrc'
 character(len=*), parameter :: AMSK_OTSU            = 'automasked_otsu.mrc'
+! AUTOMASK3D
+character(len=*), parameter :: MSKVOL_FILE          = 'automask3D.mrc'
 ! REFINE3D
 character(len=*), parameter :: REFINE3D_ITER_FBODY  = 'refine3Ddoc_'
 character(len=*), parameter :: STARTVOL_FBODY       = 'startvol_state'

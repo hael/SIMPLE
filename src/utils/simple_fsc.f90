@@ -25,8 +25,8 @@ contains
         call even%ifft()                        ! Fourier space
         call odd%ifft()
         ! Enveloppe-masked FSC
-        call even%zero_background
-        call odd%zero_background
+        call even%zero_env_background(envmask)
+        call odd%zero_env_background(envmask)
         call even%mul(envmask)                  ! mask
         call odd%mul(envmask)
         call even%fft()                         ! Fourier space
@@ -51,8 +51,8 @@ contains
             ! mask
             call even%ifft()
             call odd%ifft()
-            call even%zero_background
-            call odd%zero_background
+            call even%zero_env_background(envmask)
+            call odd%zero_env_background(envmask)
             call even%mul(envmask)
             call odd%mul(envmask)
             ! FSC phase-randomized

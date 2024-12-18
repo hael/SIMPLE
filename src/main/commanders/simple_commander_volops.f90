@@ -159,7 +159,6 @@ contains
 
     subroutine exec_postprocess( self, cline )
         use simple_sp_project, only: sp_project
-        use simple_opt_filter, only: nonuni_filt3D
         class(postprocess_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         character(len=:), allocatable :: fname_vol, fname_fsc, fname_msk, fname_mirr
@@ -273,7 +272,7 @@ contains
         ! mask
         call vol_bfac%ifft()
         if( has_mskfile )then
-            call vol_bfac%zero_background
+            call vol_bfac%zero_env_background(mskvol)
             call vol_bfac%mul(mskvol)
             call mskvol%kill
         else

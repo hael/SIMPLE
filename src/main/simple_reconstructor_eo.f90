@@ -20,6 +20,7 @@ type :: reconstructor_eo
     type(reconstructor) :: eosum
     type(masker)        :: envmask
     character(len=4)    :: ext
+    real, allocatable   :: fsc(:)
     real                :: res_fsc05          !< target resolution at FSC=0.5
     real                :: res_fsc0143        !< target resolution at FSC=0.143
     real                :: smpd, msk, fny
@@ -62,6 +63,7 @@ type :: reconstructor_eo
     procedure          :: sum_reduce !< for summing eo_recs obtained by parallel exec
     procedure          :: sampl_dens_correct_eos
     procedure          :: calc_fsc4sampl_dens_correct
+    procedure          :: write_fsc2txt
     procedure          :: sampl_dens_correct_sum
     ! DESTRUCTORS
     procedure          :: kill_exp
@@ -460,15 +462,16 @@ contains
         real, optional,          intent(in)    :: fsc_in(self%filtsz)    !< inputted fsc
         type(image)           :: even, odd
         complex,  allocatable :: cmat(:,:,:)
-        real,     allocatable :: res(:), fsc(:)
+        real,     allocatable :: res(:)
         integer               :: k
         logical               :: l_have_fsc
         res = get_resarr(self%box, self%smpd)
+        if( allocated(self%fsc) ) deallocate(self%fsc)
         if( present(fsc_in) )then
-            allocate(fsc(self%filtsz),source=fsc_in)
+            allocate(self%fsc(self%filtsz),source=fsc_in)
             l_have_fsc = .true.
         else
-            allocate(fsc(self%filtsz),source=0.)
+            allocate(self%fsc(self%filtsz),source=0.)
             l_have_fsc = .false.
         endif
         ! ML-regularization
@@ -506,11 +509,11 @@ contains
                 ! calculate FSC
                 call even%fft()
                 call odd%fft()
-                call even%fsc(odd, fsc)
+                call even%fsc(odd, self%fsc)
             endif
             ! regularization
-            call self%even%add_invtausq2rho(fsc)
-            call self%odd%add_invtausq2rho(fsc)
+            call self%even%add_invtausq2rho(self%fsc)
+            call self%odd%add_invtausq2rho(self%fsc)
             ! Even: uneven sampling density correction, clip, & write
             cmat = self%even%get_cmat()
             call self%even%sampl_dens_correct(do_gridcorr=.false.)
@@ -564,35 +567,29 @@ contains
                 ! calculate FSC
                 call even%fft()
                 call odd%fft()
-                call even%fsc(odd, fsc)
+                call even%fsc(odd, self%fsc)
             endif
         endif
         ! save, get & print resolution
-        call arr2file(fsc, trim(FSC_FBODY)//int2str_pad(state,2)//BIN_EXT)
-        call get_resolution(fsc, res, self%res_fsc05, self%res_fsc0143)
+        call arr2file(self%fsc, trim(FSC_FBODY)//int2str_pad(state,2)//BIN_EXT)
+        call get_resolution(self%fsc, res, self%res_fsc05, self%res_fsc0143)
         self%res_fsc05   = max(self%res_fsc05,self%fny)
         self%res_fsc0143 = max(self%res_fsc0143,self%fny)
-        if( trim(params_glob%silence_fsc) .eq. 'no' )then
-            do k=1,size(res)
-               write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(k), '>>> CORRELATION:', fsc(k)
-            end do
-            write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', self%res_fsc05
-            write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', self%res_fsc0143
-        endif
         ! Fourier index for eo averaging
         find4eoavg = max(K4EOAVGLB,  calc_fourier_index(FREQ4EOAVG3D,self%box,self%smpd))
-        find4eoavg = min(find4eoavg, get_find_at_corr(fsc, FSC4EOAVG3D))
-        deallocate(fsc, res)
+        find4eoavg = min(find4eoavg, get_find_at_corr(self%fsc, FSC4EOAVG3D))
+        deallocate(res)
         call even%kill
         call odd%kill
     end subroutine sampl_dens_correct_eos
 
     subroutine calc_fsc4sampl_dens_correct( self, even, odd, fsc )
-        class(reconstructor_eo), intent(in)    :: self
+        class(reconstructor_eo), intent(inout) :: self
         class(image),            intent(in)    :: even, odd
         real, allocatable,       intent(inout) :: fsc(:)
         type(image) :: even_tmp, odd_tmp
-        if( allocated(fsc) ) deallocate(fsc)
+        if( allocated(fsc)      ) deallocate(fsc)
+        if( allocated(self%fsc) ) deallocate(self%fsc)
         allocate(fsc(self%filtsz), source=0.)
         ! create temporary e/o:s
         call even_tmp%copy(even)
@@ -609,9 +606,26 @@ contains
         call even_tmp%fft()
         call odd_tmp%fft()
         call even_tmp%fsc(odd_tmp, fsc)
+        allocate(self%fsc(self%filtsz), source=fsc)
         call even_tmp%kill
         call odd_tmp%kill
     end subroutine calc_fsc4sampl_dens_correct
+
+    subroutine write_fsc2txt( self, fname )
+        class(reconstructor_eo), intent(in) :: self
+        character(len=*),        intent(in) :: fname
+        real, allocatable :: res(:)
+        integer :: k, fnr
+        if( .not. allocated(self%fsc) ) THROW_HARD('No FSC available to write to text file!')
+        res = get_resarr(self%box, self%smpd)
+        call fopen(fnr, FILE=trim(fname), STATUS='REPLACE', action='WRITE')
+        do k=1,size(res)
+            write(fnr,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(k), '>>> CORRELATION:', self%fsc(k)
+        end do
+        write(fnr,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', self%res_fsc05
+        write(fnr,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', self%res_fsc0143
+        call fclose(fnr)
+    end subroutine write_fsc2txt
 
     !> \brief  for sampling density correction, antialiasing, ifft & normalization of the sum
     subroutine sampl_dens_correct_sum( self, reference )
@@ -652,6 +666,7 @@ contains
             ! set existence
             self%exists = .false.
         endif
+        if( allocated(self%fsc) ) deallocate(self%fsc)
     end subroutine kill
 
 end module simple_reconstructor_eo
