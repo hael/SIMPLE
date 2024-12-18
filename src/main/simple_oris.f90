@@ -88,7 +88,7 @@ type :: oris
     procedure          :: sample4update_class
     procedure          :: sample4update_reprod
     procedure          :: sample4update_updated
-    procedure          :: calc_update_frac
+    procedure          :: get_update_frac
     procedure          :: get_class_sample_stats
     procedure, private :: sample_balanced_1, sample_balanced_2
     generic            :: sample_balanced => sample_balanced_1, sample_balanced_2
@@ -1346,7 +1346,7 @@ contains
         end do
     end subroutine sample4update_updated
 
-    function calc_update_frac( self ) result( update_frac )
+    function get_update_frac( self ) result( update_frac )
         class(oris), intent(inout) :: self
         integer :: updatecnts(self%n), sampled(self%n), states(self%n), updatecnt_max, sampled_max, i
         real    :: update_frac
@@ -1362,7 +1362,7 @@ contains
         if( sampled_max   == 0 ) THROW_HARD('requires previous sampling')
         if( updatecnt_max == 0 ) THROW_HARD('requires previous update')
         update_frac = real(count(sampled == sampled_max .and. states > 0)) / real(count(updatecnts > 0 .and. states > 0))
-    end function calc_update_frac
+    end function get_update_frac
 
     subroutine get_class_sample_stats( self, clsinds, clssmp, label )
         class(oris),                     intent(inout) :: self

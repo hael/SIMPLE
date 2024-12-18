@@ -53,12 +53,14 @@ real,             parameter :: LPSTOP_BOUNDS(2)      = [4.5,6.0]
 real,             parameter :: LPSTART_BOUNDS(2)     = [10.,20.]
 real,             parameter :: CENLP_DEFAULT         = 30.
 real,             parameter :: LPSYMSRCH_LB          = 12.
+real,             parameter :: UPDATE_FRAC_MAX       = 0.9               !< to ensure fractional update is always on
+real,             parameter :: UPDATE_FRAC_MIN       = 0.1               !< 10% of the particles updated each iteration
 integer,          parameter :: NSTAGES               = 8
 integer,          parameter :: NSTAGES_INI3D         = 4 ! # of ini3D stages used for initialization
 integer,          parameter :: NSTAGES_INI3D_MAX     = 7
 integer,          parameter :: PHASES(3)             = [2,6,8]
 integer,          parameter :: MAXITS(8)             = [20,20,17,17,17,17,15,30]
-integer,          parameter :: MAXITS_GLOB           = 2*20 + 4*17 + 1*15 ! the last 30 iterations are not included in this estimate since the sampling method changes
+integer,          parameter :: MAXITS_GLOB           = SUM(MAXITS(1:7))  ! the last 30 iterations are not included in this estimate since the sampling method changes
 integer,          parameter :: NSPACE(3)             = [500,1000,2500]
 integer,          parameter :: SYMSRCH_STAGE         = 3
 integer,          parameter :: PROBREFINE_STAGE      = 5
@@ -68,7 +70,6 @@ integer,          parameter :: TRAILREC_STAGE_SINGLE = STOCH_SAMPL_STAGE ! we st
 integer,          parameter :: TRAILREC_STAGE_MULTI  = NSTAGES           ! we start trailing in the last stage
 integer,          parameter :: LPAUTO_STAGE          = NSTAGES - 1       ! cannot be switched on too early
 integer,          parameter :: HET_DOCKED_STAGE      = NSTAGES           ! stage at which state splitting is done when multivol_mode==docked
-integer,          parameter :: NSAMPLE_MAX_LAST      = 25000             ! maximum # particles to sample per iteration in the last stage 
 
 ! class variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
@@ -342,7 +343,6 @@ contains
         type(refine3D_commander_distr)         :: xrefine3D
         type(reconstruct3D_commander_distr)    :: xreconstruct3D_distr
         ! other
-        real,               parameter   :: UPDATE_FRAC_MAX = 0.9 !< to ensure fractional update is always on
         character(len=:),   allocatable :: vol_name
         real,               allocatable :: rstates(:)
         integer,            allocatable :: tmpinds(:), clsinds(:), pinds(:)
@@ -582,6 +582,7 @@ contains
             write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', lpinfo(istage)%lp
             ! At the splitting stage of docked mode
             if( params%multivol_mode.eq.'docked' .and. istage == HET_DOCKED_STAGE )then
+                params_glob%nstates = nstates_glob
                 call randomize_states(spproj, params%projfile, xreconstruct3D_distr)
             endif
             ! Preparation of command line for refinement
@@ -918,7 +919,7 @@ contains
         logical,          intent(in)  :: l_cavgs
         character(len=:), allocatable :: sh_first, prob_sh, ml_reg
         character(len=:), allocatable :: refine, icm, trail_rec, pgrp, balance, lp_auto
-        integer :: iphase, iter, inspace, imaxits
+        integer :: iphase, iter, inspace, imaxits, nsample_dyn
         real    :: trs, snr_noise_reg, frac_best, overlap, fracsrch, lpstart, lpstop
         ! iteration number bookkeeping
         iter = 0
@@ -934,14 +935,14 @@ contains
                 update_frac_dyn = update_frac
             else
                 ! we change the sampling method for the last stage (accelerated refinement)
-                update_frac_dyn = 0.1 ! 10% of the particles updated each iteration
-                if( nint(real(nptcls_eff) * update_frac_dyn ) > (NSAMPLE_MAX_LAST * nstates_glob) )then
-                    update_frac_dyn = real(NSAMPLE_MAX_LAST * nstates_glob) / real(nptcls_eff)
-                endif
+                nsample_dyn     = nint(UPDATE_FRAC_MIN * real(nptcls_eff) / real(params_glob%nstates))
+                nsample_dyn     = max(NSAMPLE_MINMAX_DEFAULT(1), min(NSAMPLE_MINMAX_DEFAULT(2), nsample_dyn))
+                update_frac_dyn = real(nsample_dyn * params_glob%nstates) / real(nptcls_eff)
             endif
         else
             update_frac_dyn = calc_update_frac_dyn(nptcls_eff, params_glob%nstates, nsample_minmax, iter, maxits_dyn)
         endif
+        update_frac_dyn = min(UPDATE_FRAC_MAX, update_frac_dyn) ! to ensure fractional update is always on
         ! symmetry
         pgrp = trim(params_glob%pgrp)
         if( l_srch4symaxis )then
@@ -1217,13 +1218,12 @@ contains
         character(len=*),      intent(in)    :: projfile
         class(commander_base), intent(inout) :: xreconstruct3D
         call spproj%read_segment('ptcl3D', projfile)
-        call gen_labelling(spproj%os_ptcl3D, nstates_glob, 'squared_uniform')
+        call gen_labelling(spproj%os_ptcl3D, params_glob%nstates, 'squared_uniform')
         call spproj%write_segment_inside(params_glob%oritype, projfile)
-        params_glob%nstates = nstates_glob
-        call cline_refine3D%set(     'nstates', nstates_glob)
-        call cline_reconstruct3D%set('nstates', nstates_glob)
-        call cline_postprocess%set(  'nstates', nstates_glob)
-        call cline_reproject%set(    'nstates', nstates_glob)
+        call cline_refine3D%set(     'nstates', params_glob%nstates)
+        call cline_reconstruct3D%set('nstates', params_glob%nstates)
+        call cline_postprocess%set(  'nstates', params_glob%nstates)
+        call cline_reproject%set(    'nstates', params_glob%nstates)
         call calc_start_rec(projfile, xreconstruct3D, istage=HET_DOCKED_STAGE)
     end subroutine randomize_states
 
