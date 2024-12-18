@@ -99,11 +99,8 @@ contains
             call build%spproj_field%delete_entry('kv')
             call build%spproj_field%delete_entry('fraca')
         endif
-        if( params%nstates > 1 )then
-            call build%spproj_field%rnd_states(params%nstates)
-        else
-            call build%spproj_field%set_all2single('state',1.)
-        endif
+        call build%spproj_field%set_all2single('state',1.)
+        if( params%nstates > 1 ) call build%spproj_field%rnd_states(params%nstates)
         call build%spproj_field%set_all2single('w',1.)
         call binwrite_oritab(params%outfile, build%spproj, build%spproj_field, [1,build%spproj_field%get_noris()])
         call orientation%kill

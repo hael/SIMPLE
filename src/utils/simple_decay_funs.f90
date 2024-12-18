@@ -4,6 +4,7 @@ implicit none
 
 public :: calc_update_frac, calc_update_frac_dyn, nsampl_decay, inv_nsampl_decay, calc_nsampl_fromto, inv_cos_decay, extremal_decay2D
 private
+#include "simple_local_flags.inc"
 
 contains
 

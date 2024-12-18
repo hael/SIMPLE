@@ -43,6 +43,7 @@ character(len=78), parameter :: pdbfmt_anisou   = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A
 type :: atoms
     private
     integer                       :: n = 0
+    integer                       :: nres = 0
     character(len=4), allocatable :: name(:)
     character(len=1), allocatable :: altloc(:)
     character(len=1), allocatable :: chain(:)
@@ -73,29 +74,32 @@ type :: atoms
     procedure          :: element_exists
     ! GETTERS/SETTERS
     procedure          :: does_exist
+    procedure          :: get_atom_corr
+    procedure          :: get_atomicnumber
     procedure          :: get_beta
+    procedure          :: get_coord
+    procedure          :: get_element
     procedure          :: get_n
     procedure          :: get_name
-    procedure          :: get_element
-    procedure          :: get_coord
     procedure          :: get_num
-    procedure          :: get_atomicnumber
+    procedure          :: get_nres
     procedure          :: get_radius
-    procedure          :: get_atom_corr
+    procedure          :: get_resnum
+    procedure          :: set_atom_corr
+    procedure          :: set_beta
     procedure          :: set_coord
     procedure          :: set_chain
-    procedure          :: set_name
     procedure          :: set_element
+    procedure          :: set_name
     procedure          :: set_num
-    procedure          :: set_beta
     procedure          :: set_resnum
     procedure          :: set_occupancy
-    procedure          :: set_atom_corr
     ! I/O
     procedure          :: print_atom
     procedure          :: writepdb
     procedure          :: writepdb_aniso
     ! CALCULATORS
+    procedure          :: cc_res
     procedure          :: guess_element
     procedure, private :: guess_an_element
     procedure, private :: Z_and_radius_from_name
@@ -107,6 +111,7 @@ type :: atoms
     procedure          :: atom_validation
     procedure          :: map_validation
     procedure          :: model_validation
+    procedure          :: model_validation_eo
     ! MODIFIERS
     procedure          :: translate
     procedure          :: center_pdbcoord
@@ -333,8 +338,13 @@ contains
         class(atoms), intent(in) :: self
         get_n = self%n
     end function get_n
+    
+    integer function get_nres( self )
+        class(atoms), intent(in) :: self
+        get_nres = maxval( self%resnum(:) )
+    end function get_nres
 
-    function get_coord( self, i )result( xyz )
+    function get_coord( self, i ) result( xyz )
         class(atoms), intent(in) :: self
         integer,      intent(in) :: i
         real :: xyz(3)
@@ -376,6 +386,13 @@ contains
         if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; get_radius')
         get_radius = self%radius(i)
     end function get_radius
+
+    real function get_resnum( self, i )
+        class(atoms), intent(in) :: self
+        integer,      intent(in) :: i
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; get_resnum')
+        get_resnum = self%resnum(i)
+    end function get_resnum
 
     real function get_atom_corr( self, i )
         class(atoms), intent(in) :: self
@@ -987,7 +1004,7 @@ contains
         t_vec(N_DISCRET/2+1:N_DISCRET) = -t_vec(1:N_DISCRET/2)
         s_vec(:) = t_vec(:)
         n_tot    = self%n
-        ! fetch thoretical radius
+        ! fetch theoretical radius
         element  = self%element(1) ! pick the first atom (should be heterogeneous)
         allocate(flag(n_tot), source = .false.)
         if( n == 2 )then
@@ -999,13 +1016,13 @@ contains
             do t = 1, N_DISCRET
                 line(1,t) = atom1(1) + t_vec(t)* dir_1(1)
                 line(2,t) = atom1(2) + t_vec(t)* dir_1(2)
-              line(3,t) = atom1(3) + t_vec(t)* dir_1(3)
+                line(3,t) = atom1(3) + t_vec(t)* dir_1(3)
             enddo
             ! calculate how many atoms does the line intersect and flag them
             do i = 1, n_tot
                 do t = 1, N_DISCRET
                     dist_line = euclid(self%xyz(i,:3),line(:3,t))
-                    if(dist_line <= 0.6*tthresh) then ! it intersects atoms
+                    if( dist_line <= 0.6*tthresh )then ! it intersects atoms
                         flag(i) = .true. !flags also itself
                     endif
                 enddo
@@ -1065,18 +1082,18 @@ contains
             enddo
             ! it's already in A
             call fopen(filnum, file='Radii.csv', iostat=io_stat)
-            write (filnum,*) 'r'
+            write(filnum,*) 'r'
             do i = 1, cnt
-                write (filnum,'(A)', advance='yes') trim(real2str(radii(i)))
+                write(filnum,'(A)', advance='yes') trim(real2str(radii(i)))
             enddo
             call fclose(filnum)
             call fopen(filnum, file='DistancesToTheLine.csv',iostat=io_stat)
-            write (filnum,*) 'd'
+            write(filnum,*) 'd'
             do i = 1, cnt
-                write (filnum,'(A)', advance='yes') trim(real2str(distances_totheline(i)))
+                write(filnum,'(A)', advance='yes') trim(real2str(distances_totheline(i)))
             enddo
             call fclose(filnum)
-        elseif(n == 3) then
+        elseif( n == 3 )then
             write(logfhandle,*)'PLANE IDENTIFICATION, INITIATION'
             atom1(:) = init_atoms%get_coord(1)
             atom2(:) = init_atoms%get_coord(2)
@@ -1143,15 +1160,15 @@ contains
             enddo
             ! it's already in A
             call fopen(filnum, file='Radii.csv', iostat=io_stat)
-            write (filnum,*) 'r'
+            write(filnum,*) 'r'
             do i = 1, cnt
-                write (filnum,'(A)', advance='yes') trim(real2str(radii(i)))
+                write(filnum,'(A)', advance='yes') trim(real2str(radii(i)))
             enddo
             call fclose(filnum)
             call fopen(filnum, file='DistancesToThePlane.csv',iostat=io_stat)
-            write (filnum,*) 'd'
+            write(filnum,*) 'd'
             do i = 1, cnt
-                write (filnum,'(A)', advance='yes') trim(real2str(distances_totheplane(i)))
+                write(filnum,'(A)', advance='yes') trim(real2str(distances_totheplane(i)))
             enddo
             call fclose(filnum)
         endif
@@ -1177,6 +1194,37 @@ contains
     !     call translate(m)
     !
     ! end subroutine shift2masscen
+
+    !>brief compute average volume-model atomic cross correlation by residue
+    function cc_res( self, resnum ) result(cc)
+        class(atoms), intent(in) :: self
+        integer,      intent(in) :: resnum
+        integer :: i_atom, cnt
+        real    :: cc
+        cnt  = 0
+        do i_atom = 1, self%n
+            if( self%resnum(i_atom) .eq. resnum )then
+                cc  = cc + self%get_atom_corr(i_atom)
+                cnt = cnt + 1
+            endif
+        enddo
+        cc = cc / real(cnt)
+    end function cc_res
+
+    ! ! calculate list of neighbor atoms
+    ! subroutine neighbors( iatom, max_dist )
+    !     class(atoms), intent(inout) :: self
+    !     integer,      intent(in)    :: iatom
+    !     real,         intent(in)    :: max_dist
+    !     integer :: i_atom, j_atom
+    !     max_dist = 0.
+    !     do i_atom = 1, self%n
+    !         do j_atom = i_atom + 1, self%n
+    !             dist = euclid( self%xyz(i_atom,:), self%xyz(j_atom,:) )
+    !             if( dist <= max_dist ) 
+    !         enddo
+    !     enddo
+    ! end subroutine neighbors
 
     subroutine pdb2mrc( self, pdb_file, vol_file, smpd, center_pdb, pdb_out, vol_dim )
         use simple_image, only: image
@@ -1304,6 +1352,49 @@ contains
         endif
     end subroutine map_validation
 
+    subroutine model_validation_eo( self, pdb_file, exp_vol_file, even_vol_file, odd_vol_file, smpd, smpd_target )
+        use simple_image, only: image
+        class(atoms), intent(inout) :: self
+        real,         intent(in)    :: smpd, smpd_target
+        character(*), intent(in)    :: pdb_file, exp_vol_file, even_vol_file, odd_vol_file
+        type(image)           :: exp_vol, even_vol, odd_vol
+        real                  :: smpd_new, upscaling_factor, beta
+        real,     allocatable :: beta_map_model(:), beta_even_odd(:)
+        integer               :: ifoo, ldim(3), ldim_new(3), box, box_new, i, natoms
+        natoms = self%n; allocate(beta_map_model(natoms),beta_even_odd(natoms))
+        call find_ldim_nptcls(exp_vol_file, ldim, ifoo)
+        write(logfhandle,'(a,3i6,a,f8.3,a)') 'Original dimensions (', ldim,' ) voxels, smpd: ', smpd, ' Angstrom'
+        box              = ldim(1)
+        upscaling_factor = smpd / smpd_target
+        box_new          = round2even(real(ldim(1)) * upscaling_factor)
+        ldim_new(:)      = box_new
+        upscaling_factor = real(box_new) / real(box)
+        smpd_new         = smpd / upscaling_factor
+        write(logfhandle,'(a,3i6,a,f8.3,a)') 'Scaled dimensions   (', ldim_new,' ) voxels, smpd: ', smpd_new, ' Angstrom'
+        call self%new(pdb_file)
+        if( any(self%xyz(:,:) < 0.) )then
+            write(logfhandle,'(A)') 'Warning: PDB atomic center moved to the center of the box'
+            call self%center_pdbcoord(ldim, smpd)
+        endif
+        call exp_vol%read_and_crop( exp_vol_file, smpd, box_new, smpd_new)
+        call even_vol%read_and_crop(even_vol_file, smpd, box_new, smpd_new)
+        call odd_vol%read_and_crop( odd_vol_file, smpd, box_new, smpd_new)
+        call self%atom_validation(exp_vol, 'model_val_corr_map-model')
+        do i = 1, natoms
+            beta_map_model(i) = self%get_beta(i)
+        enddo
+        ! beta_map-model = beta
+        call self%map_validation(even_vol, odd_vol, 'model_val_corr_even-odd')
+        do i = 1, natoms
+            beta_even_odd(i) = self%get_beta(i)
+            call self%set_atom_corr(i, beta_map_model(i) - beta_even_odd(i))
+        enddo
+        call self%writepdb(trim(get_fbody(exp_vol_file,'pdb'))//'_half.pdb')
+        call exp_vol%kill
+        call even_vol%kill
+        call odd_vol%kill
+    end subroutine model_validation_eo
+
     subroutine model_validation( self, pdb_file, exp_vol_file, smpd, smpd_target )
         use simple_image, only: image
         class(atoms), intent(inout) :: self
@@ -1315,8 +1406,8 @@ contains
         integer               :: ifoo, ldim(3), ldim_new(3), box, box_new     
         upscale_vol_file = trim(get_fbody(exp_vol_file,'mrc'))//'_upscale.mrc'
         call find_ldim_nptcls(exp_vol_file, ldim, ifoo)
-        call exp_vol%new(ldim, smpd)
-        call exp_vol%read(exp_vol_file)
+        !call exp_vol%new(ldim, smpd)
+        !call exp_vol%read(exp_vol_file)
         !smpd             = exp_vol%get_smpd()
         write(logfhandle,'(a,3i6,a,f8.3,a)') 'Original dimensions (', ldim,' ) voxels, smpd: ', smpd, ' Angstrom'
         box              = ldim(1)
@@ -1344,9 +1435,11 @@ contains
         character(len=*), optional, intent(in)    :: filename
         type(image) :: vol_atom, vol_at
         type(atoms) :: atom
-        integer     :: i_atom, atom_box, center(3)
-        real        :: atom_coord(3), smpd, cc
+        integer     :: i_atom, atom_box, center(3), i_res
+        real        :: atom_coord(3), smpd, cc, cc_score, cc_score_byres, sdev
         logical     :: outside
+        logical, allocatable :: mask_byres(:)
+        cc_score = 0.
         smpd = vol%get_smpd()
         if(present(filename))then
             open(unit=46,file=trim(filename//".csv"))
@@ -1369,6 +1462,7 @@ contains
             call vol_at%mask(real(atom_box)/2., 'soft')
             ! compute cross-correlation between both volumes
             cc = vol_atom%real_corr(vol_at)
+            cc_score = cc_score + cc
             call self%set_atom_corr(i_atom, cc)
             call self%set_beta(i_atom, cc)
             if(present(filename))then
@@ -1379,6 +1473,19 @@ contains
             call atom%kill
         enddo
         if(present(filename))then
+            write(46,'(a,/,a)') 'CC Score by Residue [-1 1]',' Res    CC Res Score'
+            do i_res = 1, self%get_nres()
+                allocate(mask_byres(self%n),source=.false.)
+                do i_atom = 1, self%n
+                    if( self%get_resnum(i_atom) .eq. i_res ) mask_byres(i_atom) = .true.
+                enddo
+                call avg_sdev(self%atom_corr, cc_score_byres, sdev, mask=mask_byres)
+                write(46,'(i4,f10.3)') i_res, cc_score_byres
+                deallocate(mask_byres)
+            enddo
+            call avg_sdev(self%atom_corr, cc_score, sdev )
+            write(46,'(a,f10.3)')         'Global CC Score [-1 1]:', cc_score
+            write(logfhandle,'(a,f10.3)') 'Global CC Score [-1 1]:', cc_score
             close(46)
             call self%writepdb(trim(filename)//'.pdb')
         endif

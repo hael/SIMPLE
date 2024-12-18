@@ -31,7 +31,6 @@ type :: parameters
     character(len=3)          :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
     character(len=3)          :: center_pdb='no'      !< move PDB atomic center to the center of the box(yes|no){no}
     character(len=3)          :: classtats='no'       !< calculate class population statistics(yes|no){no}
-    character(len=3)          :: cluster_cavgs='no'   !< Wheter to perform clustering of the class-averages(yes|no){no}
     character(len=3)          :: combine_eo='no'      !< Whether combined e/o volumes have been used for alignment(yes|no){no}
     character(len=3)          :: continue='no'        !< continue previous refinement(yes|no){no}
     character(len=3)          :: crowded='yes'        !< wheter picking is done in crowded micrographs or not (yes|no){yes}
@@ -56,7 +55,7 @@ type :: parameters
     character(len=3)          :: iter_center='no'     !< iterative centering
     character(len=3)          :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
     character(len=3)          :: loc_sdev='no'        !< Whether to calculate local standard deviations(yes|no){no}
-    character(len=3)          :: lp_auto='no'         !< automatically estimate lp(yes|no|fsc){no}
+    character(len=3)          :: lp_auto='no'         !< automatically estimate lp(yes|no){no}
     character(len=3)          :: makemovie='no'
     character(len=3)          :: masscen='yes'        !< center to center of gravity(yes|no){yes}
     character(len=3)          :: mcpatch='yes'        !< whether to perform patch-based alignment during motion correction
@@ -74,6 +73,8 @@ type :: parameters
     character(len=3)          :: omit_neg='no'        !< omit negative pixels(yes|no){no}
     character(len=3)          :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
     character(len=3)          :: pad='no'
+    character(len=3)          :: partition='no'
+    character(len=3)          :: pca_img_ori='no'     !< original or rotated/shifts ptcl stack to pca(yes|no){no}
     character(len=3)          :: phaseplate='no'      !< images obtained with Volta phaseplate(yes|no){no}
     character(len=3)          :: phrand='no'          !< phase randomize(yes|no){no}
     character(len=3)          :: pick_roi='no'
@@ -99,6 +100,7 @@ type :: parameters
     character(len=3)          :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
     character(len=3)          :: sh_first='no'        !< shifting before orientation search(yes|no){no}
     character(len=3)          :: sh_inv='no'          !< whether to use shift invariant metric for projection direction assignment(yes|no){no}
+    character(len=3)          :: srch_oris='yes'      !< whether to search orientations in multivolume assignment(yes|no){yes} 
     character(len=3)          :: stream='no'          !< stream (real time) execution mode(yes|no){no}
     character(len=3)          :: symrnd='no'          !< randomize over symmetry operations(yes|no){no}
     character(len=3)          :: taper_edges='no'     !< self-explanatory
@@ -195,7 +197,7 @@ type :: parameters
     character(len=STDLEN)     :: fbody=''             !< file body
     character(len=STDLEN)     :: filter='no'          !< filter type{no}
     character(len=STDLEN)     :: flipgain='no'        !< gain reference flipping (no|x|y|xy|yx)
-    character(len=STDLEN)     :: het_mode='independent' !< heterogeneity analysis mode in abinitio3D (independent|docked){independent}
+    character(len=STDLEN)     :: multivol_mode='single' !< multivolume abinitio3D mode(single|independent|docked|input_oris_start|input_oris_fixed){single}
     character(len=STDLEN)     :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}
     character(len=STDLEN)     :: interpfun='kb'       !< Interpolation function projection/reconstruction/polar representation(kb|linear){kb}
@@ -338,6 +340,7 @@ type :: parameters
     integer :: tofny=0
     integer :: top=1
     integer :: tof=0               !< end index
+    integer :: updatecnt_ini=0     !< update count initialization value
     integer :: walltime=WALLTIME_DEFAULT  !< Walltime in seconds for workload management
     integer :: which_iter=0        !< iteration nr
     integer :: smooth_ext=8        !< smoothing window extension
@@ -394,7 +397,6 @@ type :: parameters
     real    :: motion_correctftol = 1e-6   !< tolerance (gradient) for motion_correct
     real    :: motion_correctgtol = 1e-6   !< tolerance (function value) for motion_correct
     real    :: hp=100.             !< high-pass limit(in A)
-    real    :: hp_fsc=0.           !< FSC high-pass limit(in A)
     real    :: hp_ctf_estimate=HP_CTF_ESTIMATE !< high-pass limit 4 ctf_estimate(in A)
     real    :: icefracthreshold=ICEFRAC_THRESHOLD !< ice fraction threshold{1.0}
     real    :: kv=300.             !< acceleration voltage(in kV){300.}
@@ -431,6 +433,7 @@ type :: parameters
     real    :: osmpd=0.            !< target output pixel size
     real    :: overlap=0.9         !< required parameters overlap for convergence
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
+    real    :: pool_threshold_factor=POOL_THRESHOLD_FACTOR  !< stream pool class rejection adjustment
     real    :: power=2.
     real    :: prob_athres=10.     !< angle threshold for prob distribution samplings
     real    :: scale=1.            !< image scale factor{1}
@@ -441,7 +444,12 @@ type :: parameters
     real    :: smpd_crop=2.        !< sampling distance; same as EMANs apix(in A) refers to cropped cavg/volume
     real    :: smpd_targets2D(2)
     real    :: snr=0.              !< signal-to-noise ratio
-    real    :: snr_noise_reg=0.    !< signal to noise ratio of noise regularization 
+    real    :: snr_noise_reg=0.    !< signal to noise ratio of noise regularization
+    real    :: stream_mean_threshold=MEAN_THRESHOLD         !< stream class rejection based on image mean (relative)
+    real    :: stream_rel_var_threshold=REL_VAR_THRESHOLD   !< stream class rejection based on image variance (relative)
+    real    :: stream_abs_var_threshold=ABS_VAR_THRESHOLD   !< stream class rejection based on image variance (absolute)
+    real    :: stream_tvd_theshold=TVD_THRESHOLD            !< stream class rejection based on total variation distance
+    real    :: stream_minmax_threshold=MINMAX_THRESHOLD     !< stream class rejection based on min.max absolute values
     real    :: tau=TAU_DEFAULT     !< for empirical scaling of cc-based particle weights
     real    :: tilt_thres=0.05
     real    :: thres=0.            !< threshold (binarisation: 0-1; distance filer: in pixels)
@@ -548,7 +556,6 @@ contains
         call check_carg('center_pdb',     self%center_pdb)
         call check_carg('classtats',      self%classtats)
         call check_carg('cls_init',       self%cls_init)
-        call check_carg('cluster_cavgs',  self%cluster_cavgs)
         call check_carg('cn_type',        self%cn_type)
         call check_carg('combine_eo',     self%combine_eo)
         call check_carg('continue',       self%continue)
@@ -577,7 +584,7 @@ contains
         call check_carg('guinier',        self%guinier)
         call check_carg('graphene_filt',  self%graphene_filt)
         call check_carg('gridding',       self%gridding)
-        call check_carg('het_mode',       self%het_mode)
+        call check_carg('multivol_mode',  self%multivol_mode)
         call check_carg('icm',            self%icm)
         call check_carg('imgkind',        self%imgkind)
         call check_carg('incrreslim',     self%incrreslim)
@@ -614,12 +621,14 @@ contains
         call check_carg('outdir',         self%outdir)
         call check_carg('outside',        self%outside)
         call check_carg('pad',            self%pad)
+        call check_carg('partition',      self%partition)
         call check_carg('pca_mode',       self%pca_mode)
         call check_carg('kpca_ker',       self%kpca_ker)
         call check_carg('kpca_target',    self%kpca_target)
         call check_carg('pcontrast',      self%pcontrast)
         call check_carg('pgrp',           self%pgrp)
         call check_carg('pgrp_start',     self%pgrp_start)
+        call check_carg('pca_img_ori',    self%pca_img_ori)
         call check_carg('phaseplate',     self%phaseplate)
         call check_carg('phrand',         self%phrand)
         call check_carg('phshiftunit',    self%phshiftunit)
@@ -658,6 +667,7 @@ contains
         call check_carg('sigma_est',      self%sigma_est)
         call check_carg('speckind',       self%speckind)
         call check_carg('split_mode',     self%split_mode)
+        call check_carg('srch_oris',      self%srch_oris)
         call check_carg('stats',          self%stats)
         call check_carg('stream',         self%stream)
         call check_carg('symrnd',         self%symrnd)
@@ -812,6 +822,7 @@ contains
         call check_iarg('stepsz',         self%stepsz)
         call check_iarg('top',            self%top)
         call check_iarg('tof',            self%tof)
+        call check_iarg('updatecnt_ini',  self%updatecnt_ini)
         call check_iarg('which_iter',     self%which_iter)
         call check_iarg('smooth_ext',     self%smooth_ext)
         call check_iarg('walltime',       self%walltime)
@@ -861,7 +872,6 @@ contains
         call check_rarg('ftol',           self%ftol)
         call check_rarg('hp',             self%hp)
         call check_rarg('hp_ctf_estimate',self%hp_ctf_estimate)
-        call check_rarg('hp_fsc',         self%hp_fsc)
         call check_rarg('icefracthreshold',self%icefracthreshold)
         call check_rarg('kv',             self%kv)
         call check_rarg('lambda',         self%lambda)
@@ -892,6 +902,7 @@ contains
         call check_rarg('osmpd',          self%osmpd)
         call check_rarg('overlap',        self%overlap)
         call check_rarg('phranlp',        self%phranlp)
+        call check_rarg('pool_threshold_factor', self%pool_threshold_factor)
         call check_rarg('prob_athres',    self%prob_athres)
         call check_rarg('scale',          self%scale)
         call check_rarg('sherr',          self%sherr)
@@ -901,6 +912,11 @@ contains
         call check_rarg('sigma',          self%sigma)
         call check_rarg('snr',            self%snr)
         call check_rarg('snr_noise_reg',  self%snr_noise_reg)
+        call check_rarg('stream_mean_threshold',    self%stream_mean_threshold)
+        call check_rarg('stream_rel_var_threshold', self%stream_rel_var_threshold)
+        call check_rarg('stream_abs_var_threshold', self%stream_abs_var_threshold)
+        call check_rarg('stream_tvd_theshold',      self%stream_tvd_theshold)
+        call check_rarg('stream_minmax_threshold',  self%stream_minmax_threshold)
         call check_rarg('tau',            self%tau)
         call check_rarg('tilt_thres',     self%tilt_thres)
         call check_rarg('thres',          self%thres)
@@ -1266,9 +1282,6 @@ contains
                 endif
             endif
         endif
-        if ( trim(self%projrec).eq.'yes' )then
-            if( self%nstates /= 1 ) THROW_HARD('PROJREC & multi states not implemented yet!')
-        endif
         !<<< END, SANITY CHECKING AND PARAMETER EXTRACTION FROM VOL(S)/STACK(S)
 
         !>>> START, PARALLELISATION-RELATED
@@ -1334,8 +1347,6 @@ contains
             self%lpstop = self%fny                                 ! deafult lpstop
         endif
         if( self%fny > 0. ) self%tofny = nint(self%dstep/self%fny) ! Nyqvist Fourier index
-        self%hpind_fsc = 0                                         ! high-pass Fourier index FSC
-        if( cline%defined('hp_fsc') ) self%hpind_fsc = nint(self%dstep/self%hp_fsc)
         self%lpstart = max(self%lpstart, self%fny)
         self%lpstop  = max(self%lpstop,  self%fny)
         ! set 2D low-pass limits and smpd_targets 4 scaling
@@ -1357,6 +1368,13 @@ contains
             if( self%msk > msk_default )then
                 if( msk_default > 0. )then
                     THROW_WARN('Mask diameter too large, falling back on default value')
+                    self%mskdiam = mskdiam_default
+                    self%msk     = msk_default
+                endif
+            endif
+             if( self%msk < 0.1 )then
+                if( msk_default > 0. )then
+                    THROW_WARN('Mask diameter zero, falling back on default value')
                     self%mskdiam = mskdiam_default
                     self%msk     = msk_default
                 endif

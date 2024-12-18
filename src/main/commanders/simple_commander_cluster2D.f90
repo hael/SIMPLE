@@ -29,6 +29,7 @@ public :: cavgassemble_commander
 public :: rank_cavgs_commander
 public :: cluster_cavgs_commander
 public :: write_classes_commander
+public :: ppca_denoise_class_commander
 public :: ppca_denoise_classes_commander
 public :: partition_cavgs_commander
 public :: check_2dconv
@@ -84,6 +85,11 @@ type, extends(commander_base) :: write_classes_commander
   contains
     procedure :: execute      => exec_write_classes
 end type write_classes_commander
+
+type, extends(commander_base) :: ppca_denoise_class_commander
+  contains
+    procedure :: execute      => exec_ppca_denoise_class
+end type ppca_denoise_class_commander
 
 type, extends(commander_base) :: ppca_denoise_classes_commander
   contains
@@ -797,8 +803,9 @@ contains
         class(cluster2D_commander_distr), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         ! commanders
-        type(make_cavgs_commander_distr) :: xmake_cavgs
-        type(scale_commander)            :: xscale
+        type(make_cavgs_commander_distr)  :: xmake_cavgs
+        type(scale_commander)             :: xscale
+        type(calc_group_sigmas_commander) :: xcalc_group_sigmas
         ! command lines
         type(cmdline) :: cline_check_2Dconv
         type(cmdline) :: cline_cavgassemble
@@ -1052,7 +1059,7 @@ contains
             ! objfun=euclid, part 4: sigma2 consolidation
             if( params%l_needs_sigma )then
                 call cline_calc_sigma%set('which_iter', params%which_iter+1)
-                call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
+                call xcalc_group_sigmas%execute_safe(cline_calc_sigma)
             endif
             ! print out particle parameters per iteration
             if( trim(params%print_corrs).eq.'yes' )then
@@ -1164,7 +1171,7 @@ contains
         endif
         startit = 1
         if( cline%defined('startit') )startit = params%startit
-        if( startit == 1 ) call build%spproj_field%clean_updatecnt_sampled
+        if( startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
         if( params%l_distr_exec )then
             if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
             call cluster2D_exec( cline, startit, converged )
@@ -1667,7 +1674,7 @@ contains
             j = clsinds(i)
             ! FRC-based filter
             if( l_apply_optlp )then
-                call clsfrcs%frc_getter(j, params%hpind_fsc, params%l_phaseplate, frc)
+                call clsfrcs%frc_getter(j, frc)
                 if( any(frc > 0.143) )then
                     call fsc2optlp_sub(clsfrcs%get_filtsz(), frc, filter)
                     where( filter > TINY ) filter = sqrt(filter) ! because the filter is applied to the average not the even or odd
@@ -2177,6 +2184,169 @@ contains
         call simple_end('**** SIMPLE_PPCA_DENOISE_CLASSES NORMAL STOP ****')
     end subroutine exec_ppca_denoise_classes
 
+    subroutine exec_ppca_denoise_class( self, cline )
+        use simple_imgproc,       only: make_pcavecs
+        use simple_image,         only: image
+        use simple_classaverager, only: transform_ptcls
+        use simple_pca,           only: pca
+        use simple_pca_svd,       only: pca_svd
+        use simple_kpca_svd,      only: kpca_svd
+        use simple_ppca_inmem,    only: ppca_inmem
+        class(ppca_denoise_class_commander), intent(inout) :: self
+        class(cmdline),                      intent(inout) :: cline
+        integer,          parameter   :: MAXPCAITS = 15
+        class(pca),       pointer     :: pca_ptr  => null()
+        type(parameters)              :: params
+        type(builder)                 :: build
+        type(image),      allocatable :: imgs(:)
+        type(image),      allocatable :: imgs_ori(:)
+        type(image)                   :: cavg
+        type(oris)                    :: os
+        type(sp_project), target      :: spproj
+        character(len=:), allocatable :: label, fname, fname_denoised, fname_cavgs, fname_cavgs_denoised, fname_oris
+        integer,          allocatable :: pinds(:), cls_inds(:)
+        real,             allocatable :: avg(:), avg_pix(:), pcavecs(:,:), tmpvec(:)
+        real    :: std
+        integer :: npix, iclass, j, ncls, nptcls, cnt1, cnt2, neigs
+        logical :: l_phflip, l_transp_pca, l_pre_norm ! pixel-wise learning
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
+        if( .not. cline%defined('neigs')   ) call cline%set('neigs',    4)
+        call build%init_params_and_build_general_tbox(cline, params, do3d=(trim(params%oritype) .eq. 'ptcl3D'))
+        call spproj%read(params%projfile)
+        select case(trim(params%oritype))
+            case('ptcl2D')
+                label = 'class'
+            case('ptcl3D')
+                label = 'proj'
+                call build%spproj_field%proj2class
+            case DEFAULT
+                THROW_HARD('ORITYPE not supported!')
+        end select
+        l_transp_pca = (trim(params%transp_pca) .eq. 'yes')
+        l_pre_norm   = (trim(params%pre_norm)   .eq. 'yes')
+        l_phflip     = .false.
+        select case( spproj%get_ctfflag_type(params%oritype) )
+            case(CTFFLAG_NO)
+                THROW_WARN('No CTF information could be found, phase flipping is deactivated')
+            case(CTFFLAG_FLIP)
+                THROW_WARN('Images have already been phase-flipped, phase flipping is deactivated')
+            case(CTFFLAG_YES)
+                l_phflip = .true.
+            case DEFAULT
+                THROW_HARD('UNSUPPORTED CTF FLAG')
+        end select
+        cls_inds = build%spproj_field%get_label_inds(label)
+        ncls     = size(cls_inds)
+        ! check class here
+        iclass   = cls_inds(params%class)
+        deallocate(cls_inds)
+        call build%spproj_field%get_pinds(iclass, label, pinds)
+        if( allocated(pinds) )then
+            nptcls = size(pinds)
+            deallocate(pinds)
+        endif
+        call os%new(nptcls, is_ptcl=.true.)
+        fname                = 'ptcls.mrcs'
+        fname_denoised       = 'ptcls_denoised.mrcs'
+        fname_cavgs          = 'cavg.mrcs'
+        fname_cavgs_denoised = 'cavg_denoised.mrcs'
+        fname_oris           = 'oris_denoised.txt'
+        cnt1 = 0
+        cnt2 = 0
+        ! pca allocation
+        select case(trim(params_glob%pca_mode))
+            case('ppca')
+                allocate(ppca_inmem :: pca_ptr)
+            case('pca_svd')
+                allocate(pca_svd    :: pca_ptr)
+            case('kpca')
+                allocate(kpca_svd   :: pca_ptr)
+        end select
+        neigs = params%neigs
+        if( params%neigs >= nptcls )then
+            THROW_WARN('neigs is greater than the number of particles within this class. All eigens are used now!')
+            neigs = nptcls - 1
+        endif
+        call transform_ptcls(spproj, params%oritype, iclass, imgs, pinds, phflip=l_phflip, cavg=cavg, imgs_ori=imgs_ori)
+        nptcls = size(imgs)
+        if( trim(params%pca_img_ori) .eq. 'yes' )then
+            do j = 1, nptcls
+                call imgs(j)%copy_fast(imgs_ori(j))
+                call imgs_ori(j)%kill
+            enddo
+        endif
+        if( l_pre_norm )then
+            do j = 1, nptcls
+                call imgs(j)%norm
+            end do
+        endif
+        do j = 1, nptcls
+            cnt1 = cnt1 + 1
+            call imgs(j)%write(fname, cnt1)
+        end do
+        call cavg%write(fname_cavgs, 1)
+        ! performs ppca
+        if( trim(params%projstats).eq.'yes' )then
+            call make_pcavecs(imgs, npix, avg, pcavecs, transp=l_transp_pca, avg_pix=avg_pix)
+        else
+            call make_pcavecs(imgs, npix, avg, pcavecs, transp=l_transp_pca)
+        endif
+        if( allocated(tmpvec) ) deallocate(tmpvec)
+        if( l_transp_pca )then
+            call pca_ptr%new(npix, nptcls, neigs)
+            call pca_ptr%master(pcavecs, MAXPCAITS)
+            allocate(tmpvec(nptcls))
+            !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
+            do j = 1, npix
+                call pca_ptr%generate(j, avg, tmpvec)
+                pcavecs(:,j) = tmpvec
+            end do
+            !$omp end parallel do
+            pcavecs = transpose(pcavecs)
+        else
+            call pca_ptr%new(nptcls, npix, neigs)
+            call pca_ptr%master(pcavecs, MAXPCAITS)
+            allocate(tmpvec(npix))
+            !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
+            do j = 1, nptcls
+                call pca_ptr%generate(j, avg, tmpvec)
+                pcavecs(:,j) = tmpvec
+            end do
+            !$omp end parallel do
+        endif
+        if( trim(params%projstats).eq.'yes' )then
+            call cavg%unserialize(avg_pix)
+            call cavg%write('cavgs_unserialized.mrcs', 1)
+            !$omp parallel do private(j,std) default(shared) proc_bind(close) schedule(static)
+            do j = 1,nptcls
+                std = sqrt(sum((pcavecs(:,j)-avg_pix)**2) / real(npix))
+            enddo
+            !$omp end parallel do
+        endif
+        ! output
+        call cavg%zero_and_unflag_ft
+        do j = 1, nptcls
+            cnt2 = cnt2 + 1
+            call imgs(j)%unserialize(pcavecs(:,j))
+            call cavg%add(imgs(j))
+            call os%transfer_ori(cnt2, build%spproj_field, pinds(j))
+            call imgs(j)%write(fname_denoised, cnt2)
+            call imgs(j)%kill
+        end do
+        call cavg%div(real(nptcls))
+        call cavg%write(fname_cavgs_denoised, 1)
+        call os%zero_inpl
+        call os%write(fname_oris)
+        if( trim(params%projstats).eq.'yes' ) call build%spproj_field%write('ptcl_field.txt')
+        ! cleanup
+        deallocate(imgs)
+        call build%kill_general_tbox
+        call os%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_PPCA_DENOISE_CLASS NORMAL STOP ****')
+    end subroutine exec_ppca_denoise_class
+
     subroutine exec_partition_cavgs( self, cline )
         !$ use omp_lib
         !$ use omp_lib_kinds
@@ -2190,6 +2360,7 @@ contains
         class(cmdline),                       intent(inout) :: cline
         character(len=STDLEN),   parameter :: SIMMAT_FNAME = 'simmat.bin'
         character(len=STDLEN),   parameter :: LABELS_FNAME = 'labels.txt'
+        real,                    parameter :: LP_DEFAULT   = 6.0 ! Angs
         logical,                 parameter :: DEBUG = .true.
         type(pftcc_shsrch_fm), allocatable :: fm_correlators(:)
         type(image),           allocatable :: cavg_imgs(:), ccimgs(:,:)
@@ -2201,19 +2372,20 @@ contains
         type(aff_prop)                :: aprop
         type(spec_clust)              :: specclust
         type(polarizer)               :: polartransform
-        character(len=:), allocatable :: cavgsstk, classname, frcs_fname, fmt, header1, header2, header3
+        character(len=:), allocatable :: cavgsstk, frcs_fname, fmt, header1, header2, header3
         real,             allocatable :: states(:), frc(:), filter(:), clspops(:), clsres(:)
-        real,             allocatable :: corrmat(:,:), S(:,:)
-        integer,          allocatable :: centers(:), labels(:), clsinds(:), multi_labels(:,:)
+        real,             allocatable :: corrmat(:,:), S(:,:), rotmat(:,:), xoffset(:,:), yoffset(:,:)
+        integer,          allocatable :: centers(:), labels(:), clsinds(:), multi_labels(:,:),tmp(:)
         logical,          allocatable :: l_msk(:,:,:)
         character(len=8)              :: tmpstr
-        real    :: smpd, simsum, simmin, simmax, simmed, pref, cc,ccm, dunn, dunnmax
+        real    :: offset(2),minmax(2),smpd,simsum,simmin,simmax,simmed,pref,cc,ccm,dunn,dunnmax
         integer :: ldim(3), n, ncls_sel, i, j, k, icls, filtsz, ind, ithr, funit, io_stat
         logical :: l_apply_optlp, l_mirr
         ! defaults
-        call cline%set('oritype', 'cls2D')
+        call cline%set('oritype', 'out')
         call cline%set('ctf',     'no')
         call cline%set('objfun',  'cc')
+        call cline%set('sh_inv',  'yes')
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('kweight')   ) call cline%set('kweight',   'all')
         if( .not. cline%defined('mirr')      ) call cline%set('mirr',      'no')
@@ -2242,18 +2414,21 @@ contains
         if( n /= params%ncls ) THROW_HARD('Inconsistent # classes in project file vs cavgs stack; partition_cavgs')
         ! threshold based on states/population/resolution
         states = spproj%os_cls2D%get_all('state')
-        clspops = spproj%os_cls2D%get_all('pop')
-        where( clspops <  real(MINCLSPOPLIM) ) states = 0.
-        if( cline%defined('lpthres') )then
-            clsres  = spproj%os_cls2D%get_all('res')
-            where( clsres  >= params%lpthres ) states = 0.
+        if( spproj%os_cls2D%isthere('pop') )then
+            clspops = spproj%os_cls2D%get_all('pop')
+            where( clspops <  real(MINCLSPOPLIM) ) states = 0.
+        endif
+        if( spproj%os_cls2D%isthere('res') )then
+            if( cline%defined('lpthres') )then
+                clsres  = spproj%os_cls2D%get_all('res')
+                where( clsres  >= params%lpthres ) states = 0.
+            endif
         endif
         ! number of classes to partition
         ncls_sel = count(states>0.5)
         ! keep track of the original class indices
         clsinds = pack((/(i,i=1,params%ncls)/), mask=states > 0.5)
         ! get FRCs
-        l_apply_optlp = .false.
         call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
         if( trim(params%mkdir).eq.'no' )then
             ! to deal with relative path, the project will be updated in place
@@ -2261,29 +2436,54 @@ contains
                 if( frcs_fname(1:3) == '../' ) frcs_fname = frcs_fname(4:len_trim(frcs_fname))
             endif
         endif
-        if( file_exists(frcs_fname) )then
-            call clsfrcs%read(frcs_fname)
-            ! whether to filter
-            l_apply_optlp = .true.
-            ! resolution limit
-            if( .not.cline%defined('lp') )then
-                params%lp = clsfrcs%estimate_lp_for_align(crit0143=.false.)
-            endif
-        endif
-        filtsz = clsfrcs%get_filtsz()
         ! ensure correct smpd/box in params class
         params%smpd = smpd
         params%box  = ldim(1)
-        params%msk  = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
+        if( cline%defined('mskdiam') )then
+            params%msk = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
+        else
+            params%msk = 0.9*real(params%box/2)-COSMSKHALFWIDTH-1.
+        endif
         write(logfhandle,'(A)') '>>> PREPARING CLASS AVERAGES'
-        allocate(frc(filtsz), filter(filtsz))
         ! read images
         allocate(cavg_imgs(ncls_sel))
         do i = 1, ncls_sel
             call cavg_imgs(i)%new(ldim, smpd, wthreads=.false.)
             j = clsinds(i)
             call cavg_imgs(i)%read(params%stk, j)
+            minmax = cavg_imgs(i)%minmax()
+            if( is_equal(minmax(1),minmax(2)) )then
+                ! empty class
+                clsinds(i) = 0
+                states(j)  = 0
+            endif
         enddo
+        if( ncls_sel /= count(clsinds>0) )then
+            ! updating for empty classes
+            cavg_imgs(:) = pack(cavg_imgs(:), mask=clsinds(:)>0)
+            ncls_sel     = count(clsinds>0)
+            tmp          = pack(clsinds(:), mask=clsinds(:)>0)
+            clsinds      = tmp(:)
+            deallocate(tmp)
+        endif
+        ! resolution limits
+        l_apply_optlp = .false.
+        if( file_exists(frcs_fname) )then
+            call clsfrcs%read(frcs_fname)
+            ! whether to filter
+            l_apply_optlp = .true.
+            ! resolution limit
+            if( .not.cline%defined('lp') )then
+                ! FRC=0.5 criterion
+                params%lp = clsfrcs%estimate_lp_for_align(crit0143=.false.)
+            endif
+            filtsz = clsfrcs%get_filtsz()
+            allocate(frc(filtsz), filter(filtsz))
+        else
+            THROW_WARN('LP or frcs.bin must be present to determine resolution, default value used')
+            params%lp = LP_DEFAULT
+        endif
+        write(logfhandle,'(A,F6.1)')'>>> RESOLUTION LIMIT: ',params%lp
         ! prep mask
         call img_msk%new([params%box,params%box,1], params%smpd)
         img_msk = 1.
@@ -2295,7 +2495,7 @@ contains
         do i = 1, ncls_sel
             j = clsinds(i)
             if( l_apply_optlp )then                                 ! FRC-based filter
-                call clsfrcs%frc_getter(j, params%hpind_fsc, params%l_phaseplate, frc)
+                call clsfrcs%frc_getter(j, frc)
                 if( any(frc > 0.143) )then
                     call fsc2optlp_sub(clsfrcs%get_filtsz(), frc, filter)
                     where( filter > TINY ) filter = sqrt(filter)
@@ -2322,7 +2522,6 @@ contains
         ! Shift boundaries
         if( .not. cline%defined('trs') ) params%trs = real(params%box)/6.
         ! pftcc init
-        params%sh_inv = 'yes'
         call pftcc%new(ncls_sel, [1,ncls_sel], params%kfromto)
         ! PFT transform
         call polartransform%new([params%box,params%box,1], params%smpd)
@@ -2339,13 +2538,15 @@ contains
         call pftcc%memoize_refs
         call pftcc%memoize_ptcls
         ! correlation matrix calculation
-        allocate(fm_correlators(nthr_glob),ccimgs(nthr_glob,2))
+        allocate(fm_correlators(nthr_glob),ccimgs(nthr_glob,2),rotmat(ncls_sel,ncls_sel),&
+            &xoffset(ncls_sel,ncls_sel),yoffset(ncls_sel,ncls_sel))
         do i = 1,nthr_glob
             call fm_correlators(i)%new(params%trs,1.,opt_angle=.false.)
             call ccimgs(i,1)%new(ldim, smpd, wthreads=.false.)
             call ccimgs(i,2)%new(ldim, smpd, wthreads=.false.)
         enddo
-        !$omp parallel do default(shared) private(i,j,cc,ccm,ithr)&
+        rotmat = 0.
+        !$omp parallel do default(shared) private(i,j,cc,ccm,ithr,offset)&
         !$omp schedule(dynamic) proc_bind(close)
         do i = 1, ncls_sel - 1
             ithr = omp_get_thread_num()+1
@@ -2354,7 +2555,10 @@ contains
                 ! reference to particle
                 call pftcc%set_eo(i,.true.)
                 call fm_correlators(ithr)%calc_phasecorr(j, i, cavg_imgs(j), cavg_imgs(i),&
-                    &ccimgs(ithr,1), ccimgs(ithr,2), cc)
+                    &ccimgs(ithr,1), ccimgs(ithr,2), cc, rotang=rotmat(i,j), shift=offset)
+                rotmat(j,i)  = rotmat(i,j)
+                xoffset(i,j) = offset(1); xoffset(j,i) = offset(1)
+                yoffset(i,j) = offset(2); yoffset(j,i) = offset(2)
                 ! mirrored reference to particle
                 if( l_mirr )then
                     call pftcc%set_eo(i,.false.)
@@ -2383,16 +2587,17 @@ contains
         ! CLUSTERING
         allocate(multi_labels(params%ncls,params%nsearch),source=0)
         ! correlation matrix preprocessing
+        ! correlation to squared euclidian distance, values within [0.;4.]
+        corrmat = 2.*(1.-corrmat)
+        where( corrmat < 0. ) corrmat = 0.
+        where( corrmat > 4. ) corrmat = 4.
         select case(trim(params%algorithm))
         case('affprop')
             ! Affinity Propagation: negative squared euclidian distance as similarity
-            ! to circumvent possible correlation sign change. Values are within [-4.;0]
-            corrmat = -2.*(1.-corrmat)
-            where( corrmat > 0. ) corrmat =  0.
-            where( corrmat < -4.) corrmat = -4.
+            ! to circumvent possible correlation sign change. Values within [-4.;0]
+            corrmat = -corrmat
         case('spc')
-            ! Spectral Clustering: taking euclidian distance as similarity
-            corrmat = 2.*(1.-corrmat)
+            ! Spectral Clustering: euclidian distance as similarity
             where( corrmat < 0. ) corrmat =  0.
             corrmat = sqrt(corrmat)
         end select
@@ -2480,7 +2685,7 @@ contains
             enddo
         endif
         ! end gracefully
-        call simple_end('**** SIMPLE_partition_cavgs NORMAL STOP ****')
+        call simple_end('**** SIMPLE_PARTITION_CAVGS NORMAL STOP ****')
         contains
 
             ! write labels to project
@@ -2506,21 +2711,39 @@ contains
             ! write the classes for debugging purpose
             subroutine write_partition( flag )
                 character(len=*), intent(in) :: flag
-                integer, allocatable :: cntarr(:)
-                integer :: ncls_here, icls, i
+                type(image)                   :: img1,img2
+                character(len=:), allocatable :: classname
+                integer,          allocatable :: cntarr(:)
+                integer :: ncls_here, icls, i, ifirst
+                logical :: first
                 ncls_here = size(labels)
                 allocate(cntarr(ncls_here), source=0)
+                call img1%copy(cavg_imgs(1))
                 do icls = 1, ncls_here
+                    classname  = trim(flag)//'_class'//int2str_pad(icls,3)//trim(STK_EXT)
+                    first = .true.
                     do i = 1,ncls_sel
                         if( labels(i) == icls )then
-                            classname = trim(flag)//'_class'//int2str_pad(icls,3)//trim(STK_EXT)
                             cntarr(labels(i)) = cntarr(labels(i)) + 1
                             call cavg_imgs(i)%ifft
-                            call cavg_imgs(i)%write(classname, cntarr(labels(i)))
+                            if( first )then
+                                ifirst = i
+                                first  = .false.
+                                call img2%copy(cavg_imgs(i))
+                            else
+                                call img1%copy_fast(cavg_imgs(i))
+                                call img1%fft
+                                call img1%shift2Dserial([xoffset(ifirst,i), yoffset(ifirst,i)])
+                                call img1%ifft
+                                call img1%rtsq(rotmat(ifirst,i), 0., 0.,img2)
+                            endif
+                            call img2%write(classname, cntarr(labels(i)))
                         endif
                     end do
                 end do
                 deallocate(cntarr)
+                call img1%kill
+                call img2%kill
             end subroutine write_partition
 
     end subroutine exec_partition_cavgs

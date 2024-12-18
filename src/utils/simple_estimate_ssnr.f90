@@ -13,7 +13,7 @@ implicit none
 
 public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp
 public :: lowpass_from_klim, mskdiam2lplimits, mskdiam2streamresthreshold
-public :: calc_dose_weights, get_resolution, lpstages
+public :: calc_dose_weights, get_resolution, get_resolution_at_fsc, lpstages
 private
 #include "simple_local_flags.inc"
 
@@ -194,6 +194,28 @@ contains
             fsc05 = res(ires05)
         endif
     end subroutine get_resolution
+
+    subroutine get_resolution_at_fsc( corrs, res, fsc_val, res_at_fsc )
+        real, intent(in)  :: corrs(:), res(:), fsc_val
+        real, intent(out) :: res_at_fsc
+        integer           :: n, ires
+        n    = size(corrs)
+        ires = 1
+        do while( ires <= n )
+            if( corrs(ires) >= fsc_val )then
+                ires = ires + 1
+                cycle
+            else
+                exit
+            endif
+        end do
+        ires = ires - 1
+        if( ires == 0 )then
+            res_at_fsc = 0.
+        else
+            res_at_fsc = res(ires)
+        endif 
+    end subroutine get_resolution_at_fsc
 
     subroutine lpstages( box, nstages, frcs_avg, smpd, lpstart_lb, lpstart_default, lpfinal, lpinfo, l_cavgs )
         use simple_magic_boxes

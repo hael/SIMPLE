@@ -739,6 +739,8 @@ contains
         call params%new(cline)
         if( file_exists(trim(params%projfile)) ) call spproj%read(params%projfile)
         call spproj%add_cavgs2os_out(params%stk, params%smpd)
+        if( cline%defined('frcs') ) call spproj%add_frcs2os_out(params%frcs,'frc2D')
+        call spproj%os_cls2D%set_all2single('state',1.)
         ! update project info
         call spproj%update_projinfo( cline )
         ! update computer environment

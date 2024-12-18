@@ -23,9 +23,10 @@ type, extends(binimage) :: masker
     real    :: pix_thres = 0.   !< binarisation threshold
     integer :: edge      = 6    !< edge width
     integer :: binwidth  = 1    !< additional layers to grow
-    integer :: idim(3)    = 0    !< image dimension
+    integer :: idim(3)   = 0    !< image dimension
   contains
-    procedure          :: automask3D
+    procedure, private :: automask3D_1, automask3D_2
+    generic            :: automask3D => automask3D_1, automask3D_2
     procedure          :: automask3D_filter
     procedure, private :: automask3D_binarize
     procedure          :: mask_from_pdb
@@ -34,9 +35,26 @@ end type masker
 
 contains
 
-    subroutine automask3D( self, vol_even, vol_odd, vol_masked, l_tight, pix_thres )
+    subroutine automask3D_1( self, vol_even, vol_odd, vol_masked, l_tight, pix_thres )
         class(masker),  intent(inout) :: self
         class(image),   intent(inout) :: vol_even, vol_odd, vol_masked
+        logical,        intent(in)    :: l_tight
+        real, optional, intent(in)    :: pix_thres 
+        type(image) :: vol_filt
+        ! prepare volume for masking
+        call vol_masked%copy(vol_even)
+        call vol_masked%add(vol_odd)
+        call vol_masked%mul(0.5)
+        ! automasking
+        call self%automask3D_2(vol_even, vol_odd, l_tight, pix_thres)
+        ! apply mask to volume
+        call vol_masked%zero_background()
+        call vol_masked%mul(self)
+    end subroutine automask3D_1
+
+    subroutine automask3D_2( self, vol_even, vol_odd, l_tight, pix_thres )
+        class(masker),  intent(inout) :: self
+        class(image),   intent(inout) :: vol_even, vol_odd
         logical,        intent(in)    :: l_tight
         real, optional, intent(in)    :: pix_thres 
         type(image) :: vol_filt
@@ -44,52 +62,24 @@ contains
         self%amsklp   = params_glob%amsklp
         self%binwidth = params_glob%binwidth
         self%edge     = params_glob%edge
-        ! prepare volume for masking
-        call vol_masked%copy(vol_even)
-        call vol_masked%add(vol_odd)
-        call vol_masked%mul(0.5)
         ! filter 
         call self%automask3D_filter(vol_even, vol_odd, vol_filt)
-        ! automasking
+        ! binarization
         call self%automask3D_binarize(l_tight, pix_thres)
-        ! apply mask to volume
-        call vol_masked%zero_background()
-        call vol_masked%mul(self)
+        ! add layers
+        call self%grow_bins(self%binwidth)
+        ! add volume soft edge
+        call self%cos_edge(self%edge)
         ! destruct
         call vol_filt%kill
-    end subroutine automask3D
+    end subroutine automask3D_2
 
     subroutine automask3D_filter( self, vol_even, vol_odd, vol_filt )
         class(masker), intent(inout) :: self
         class(image),  intent(inout) :: vol_even, vol_odd, vol_filt
-        real, allocatable  :: fsc(:), filt(:)
-        integer            :: ldim(3), filtsz
-        real               :: msk
         real,    parameter :: LAM = 100.
         if( vol_even%is_2d() )THROW_HARD('automask3D_filter is intended for volumes only; automask3D')
         self%amsklp = params_glob%amsklp
-        ldim        = vol_even%get_ldim()
-        msk         = real(ldim(1) / 2) - COSMSKHALFWIDTH - 1.
-        filtsz      = fdim(ldim(1)) - 1
-        ! zero mean of outer pixels
-        call vol_even%zero_background
-        call vol_odd%zero_background
-        ! spherical mask
-        call vol_even%mask(msk, 'soft', backgr=0.)
-        call vol_odd%mask(msk,  'soft', backgr=0.)
-        ! calculate FSC
-        allocate(fsc(filtsz), filt(filtsz), source=0.)
-        call vol_even%fft()
-        call vol_odd%fft()
-        call vol_even%fsc(vol_odd, fsc)
-        ! calculate a filter to be applied to the individual e/o pairs
-        where( fsc > 0.        ) filt = fsc / (fsc + 1.)
-        where( filt  > 0.99999 ) filt = 0.99999
-        call vol_even%apply_filter(filt)
-        call vol_odd%apply_filter(filt)
-        ! put back in real-space
-        call vol_even%ifft()
-        call vol_odd%ifft()
         ! ICM filter
         call vol_even%ICM3D_eo(vol_odd, LAM)
         call vol_filt%copy(vol_even)
@@ -98,6 +88,7 @@ contains
         if( L_WRITE ) call vol_filt%write('ICM_avg.mrc')
         ! low-pass filter
         call vol_filt%bp(0., self%amsklp)
+        if( L_WRITE ) call vol_filt%write('ICM_avg_lp.mrc')
         ! transfer image to binary image
         call self%transfer2bimg(vol_filt)
     end subroutine automask3D_filter
@@ -132,10 +123,6 @@ contains
         endif
         call self%copy_bimg(ccimage)
         if( L_WRITE ) call self%write('largest_cc.mrc')
-        ! add layers
-        call self%grow_bins(self%binwidth)
-        ! add volume soft edge
-        call self%cos_edge(self%edge)
         ! destruct
         call ccimage%kill_bimg
     end subroutine automask3D_binarize

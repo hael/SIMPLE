@@ -773,7 +773,7 @@ contains
         integer,          intent(in) :: which_iter
         type(image), allocatable     :: even_imgs(:), odd_imgs(:)
         real,        allocatable     :: frc(:)
-        integer :: eo_pop(2), icls, find, find_plate, pop, filtsz_crop
+        integer :: eo_pop(2), icls, find, pop, filtsz_crop
         filtsz_crop = cavgs_even(1)%get_filtsz()
         allocate(even_imgs(ncls), odd_imgs(ncls), frc(filtsz_crop))
         do icls=1,ncls
@@ -781,7 +781,7 @@ contains
             call odd_imgs(icls)%copy(cavgs_odd(icls))
         end do
         if( l_ml_reg )then
-            !$omp parallel do default(shared) private(icls,frc,find,find_plate,pop,eo_pop) schedule(static) proc_bind(close)
+            !$omp parallel do default(shared) private(icls,frc,find,pop,eo_pop) schedule(static) proc_bind(close)
             do icls=1,ncls
                 eo_pop = prev_eo_pops(icls,:) + eo_class_pop(icls)
                 pop    = sum(eo_pop)
@@ -791,11 +791,8 @@ contains
                     call even_imgs(icls)%fft()
                     call odd_imgs(icls)%fft()
                     call even_imgs(icls)%fsc(odd_imgs(icls), frc)
-                    find_plate = 0
-                    if( phaseplate ) call phaseplate_correct_fsc(frc, find_plate)
                     call build_glob%clsfrcs%set_frc(icls, frc, 1)
                     find = build_glob%clsfrcs%estimate_find_for_eoavg(icls, 1)
-                    find = max(find, find_plate)
                     ! add noise term to denominator
                     call add_invtausq2rho(ctfsqsums_even(icls), frc)
                     call add_invtausq2rho(ctfsqsums_odd(icls), frc)
@@ -878,19 +875,17 @@ contains
             end do
             !$omp end parallel do
         else
-            !$omp parallel do default(shared) private(icls,frc,find,find_plate) schedule(static) proc_bind(close)
+            !$omp parallel do default(shared) private(icls,frc,find) schedule(static) proc_bind(close)
             do icls=1,ncls
                 call even_imgs(icls)%mask(params_glob%msk_crop, 'soft')
                 call odd_imgs(icls)%mask(params_glob%msk_crop, 'soft')
                 call even_imgs(icls)%fft()
                 call odd_imgs(icls)%fft()
                 call even_imgs(icls)%fsc(odd_imgs(icls), frc)
-                find_plate = 0
-                if( phaseplate ) call phaseplate_correct_fsc(frc, find_plate)
+
                 call build_glob%clsfrcs%set_frc(icls, frc, 1)
                 ! average low-resolution info between eo pairs to keep things in register
                 find = build_glob%clsfrcs%estimate_find_for_eoavg(icls, 1)
-                find = max(find, find_plate)
                 call cavgs_merged(icls)%fft()
                 call cavgs_even(icls)%fft()
                 call cavgs_odd(icls)%fft()
@@ -1518,16 +1513,17 @@ contains
 
     ! PUBLIC UTILITIES
 
-    subroutine transform_ptcls( spproj, oritype, icls, timgs, pinds, phflip, cavg )
+    subroutine transform_ptcls( spproj, oritype, icls, timgs, pinds, phflip, cavg, imgs_ori)
         use simple_sp_project,          only: sp_project
         use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimgbatch
-        class(sp_project),        intent(inout) :: spproj
-        character(len=*),         intent(in)    :: oritype
-        integer,                  intent(in)    :: icls
-        type(image), allocatable, intent(inout) :: timgs(:)
-        integer,     allocatable, intent(inout) :: pinds(:)
-        logical,     optional,    intent(in)    :: phflip
-        type(image), optional,    intent(inout) :: cavg
+        class(sp_project),                  intent(inout) :: spproj
+        character(len=*),                   intent(in)    :: oritype
+        integer,                            intent(in)    :: icls
+        type(image),           allocatable, intent(inout) :: timgs(:)
+        integer,               allocatable, intent(inout) :: pinds(:)
+        logical,     optional,              intent(in)    :: phflip
+        type(image), optional,              intent(inout) :: cavg
+        type(image), optional, allocatable, intent(inout) :: imgs_ori(:)
         class(oris),  pointer :: pos
         type(image)           :: img(nthr_glob), timg(nthr_glob)
         type(ctfparams)       :: ctfparms
@@ -1537,12 +1533,22 @@ contains
         real    :: mat(2,2), shift(2), loc(2), dist(2), e3, kw
         integer :: logi_lims(3,2),cyc_lims(3,2),cyc_limsR(2,2),phys(2),win_corner(2)
         integer :: i,iptcl, l,ll,m,mm, pop, h,k, ithr
-        logical :: l_phflip
+        logical :: l_phflip, l_imgs
+        l_imgs = .false.
+        if( present(imgs_ori) ) l_imgs = .true.
         if( allocated(timgs) )then
             do i = 1,size(timgs)
                 call timgs(i)%kill
             enddo
             deallocate(timgs)
+        endif
+        if( l_imgs )then
+            if( allocated(imgs_ori) )then
+                do i = 1,size(imgs_ori)
+                    call imgs_ori(i)%kill
+                enddo
+                deallocate(imgs_ori)
+            endif
         endif
         if(present(cavg)) call cavg%kill
         select case(trim(oritype))
@@ -1578,6 +1584,12 @@ contains
         do i = 1,size(timgs)
             call timgs(i)%new([params_glob%box,params_glob%box,1],params_glob%smpd, wthreads=.false.)
         enddo
+        if( l_imgs )then
+            allocate(imgs_ori(pop))
+            do i = 1,size(imgs_ori)
+                call imgs_ori(i)%new([params_glob%box,params_glob%box,1],params_glob%smpd, wthreads=.false.)
+            enddo
+        endif
         ! temporary objects
         call prepimgbatch(pop)
         do ithr = 1, nthr_glob
@@ -1598,6 +1610,9 @@ contains
             e3    = pos%e3get(iptcl)
             call img(ithr)%zero_and_flag_ft
             call timg(ithr)%zero_and_flag_ft
+            if( l_imgs )then
+                call imgs_ori(i)%copy(build_glob%imgbatch(i))
+            endif
             ! normalisation
             call build_glob%imgbatch(i)%norm_noise_pad_fft(build_glob%lmsk,img(ithr))
             ! optional phase-flipping

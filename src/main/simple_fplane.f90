@@ -482,7 +482,7 @@ contains
     end subroutine neg
 
     !>  \brief  is a destructor
-    subroutine kill( self )
+    elemental subroutine kill( self )
         class(fplane), intent(inout) :: self !< this instance
         if( allocated(self%cmplx_plane)  ) deallocate(self%cmplx_plane)
         if( allocated(self%ctfsq_plane)  ) deallocate(self%ctfsq_plane)

@@ -170,7 +170,6 @@ contains
         cline_reconstruct3D_distr = cline
         cline_calc_pspec_distr    = cline
         cline_check_3Dconv        = cline
-        cline_volassemble         = cline
         cline_postprocess         = cline
         cline_calc_sigma          = cline
         cline_prob_align          = cline
@@ -191,11 +190,10 @@ contains
         do state = 1,params%nstates
             vol = 'vol'//int2str( state )
             call cline_check_3Dconv%delete( vol )
-            call cline_volassemble%delete( vol )
             call cline_postprocess%delete( vol )
             state_assemble_finished(state) = 'VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2)
         enddo
-        if( trim(params%objfun).eq.'euclid' ) call cline_volassemble%set('needs_sigma','yes')
+        if( trim(params%objfun).eq.'euclid' ) call cline%set('needs_sigma','yes')
         ! E/O PARTITIONING
         if( build%spproj_field%get_nevenodd() == 0 )then
             call build%spproj_field%partition_eo
@@ -241,7 +239,6 @@ contains
                 if( trim(params%objfun).eq.'euclid' )then
                     call cline%set('needs_sigma','yes')
                     call cline_reconstruct3D_distr%set('needs_sigma','yes')
-                    call cline_volassemble%set('needs_sigma','yes')
                     if( .not.l_griddingset ) call cline%set('gridding','yes')
                     call simple_list_files(prev_refine_path//trim(SIGMA2_FBODY)//'*', list)
                     nfiles = size(list)
@@ -256,23 +253,10 @@ contains
                     fsc_file  = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
                     call simple_copy_file(trim(prev_refine_path)//trim(fsc_file), fsc_file)
                 end do
-                ! if we are doing moving average volume update, partial reconstructions need to be carried over
-                if( params%l_update_frac )then
-                    call simple_list_files(prev_refine_path//'*recvol_state*part*', list)
-                    nfiles = size(list)
-                    err = params%nparts * 4 /= nfiles
-                    if( err ) THROW_HARD('# partitions not consistent with previous refinement round')
-                    do i=1,nfiles
-                        target_name = PATH_HERE//basename(trim(list(i)))
-                        call simple_copy_file(trim(list(i)), target_name)
-                    end do
-                    deallocate(list)
-                endif
-                ! if we are doing objfun=euclid the sigm estimates need to be carried over
+                ! if we are doing objfun=euclid the sigma estimates need to be carried over
                 if( trim(params%objfun).eq.'euclid' )then
                     call cline%set('needs_sigma','yes')
                     call cline_reconstruct3D_distr%set('needs_sigma','yes')
-                    call cline_volassemble%set('needs_sigma','yes')
                     if( .not.l_griddingset ) call cline%set('gridding','yes')
                     call simple_list_files(prev_refine_path//trim(SIGMA2_FBODY)//'*', list)
                     nfiles = size(list)
@@ -292,16 +276,7 @@ contains
             ! check if we have input volume(s) and/or 3D orientations
             vol_defined = .false.
             do state = 1,params%nstates
-                vol = 'vol' // int2str(state)
-                if( cline%defined(trim(vol)) )then
-                    vol_defined = .true.
-                    !!!!!!!!!!!!!!!!!!!! cropping done in strategy2D3D_common :: read_and_filter_refvvols
-                    ! call find_ldim_nptcls(trim(params%vols(state)),ldim,ifoo)
-                    ! if( (ldim(1) /= params%box_crop) .and.  (ldim(1) /= params%box) )then
-                    !     THROW_HARD('Incompatible dimensions between input volume and images: '//params%vols(state))
-                    ! endif
-                    !!!!!!!!!!!!!!!!!!!! cropping done in strategy2D3D_common :: read_and_filter_refvvols
-                endif
+                vol_defined = cline%defined('vol'//int2str(state))
             enddo
             have_oris = .not. build%spproj%is_virgin_field(params%oritype)
             if( .not. have_oris )then
@@ -312,6 +287,7 @@ contains
             if( .not. vol_defined )then
                 ! reconstructions needed
                 cline_tmp = cline_reconstruct3D_distr
+                call cline_tmp%delete('trail_rec')
                 call cline_tmp%delete('objfun')
                 call cline_tmp%delete('needs_sigma')
                 call cline_tmp%delete('sigma_est')
@@ -323,6 +299,7 @@ contains
                     vol       = trim(VOL_FBODY)//trim(str_state)//params%ext
                     str       = trim(STARTVOL_FBODY)//trim(str_state)//params%ext
                     call      simple_rename( trim(vol), trim(str) )
+                    ! update command line
                     params%vols(state) = trim(str)
                     vol       = 'vol'//trim(int2str(state))
                     call      cline%set( trim(vol), trim(str) )
@@ -350,7 +327,6 @@ contains
                 call xfirst_sigmas%execute(cline)
                 ! update command lines
                 call cline%set('needs_sigma','yes')
-                call cline_volassemble%set('needs_sigma','yes')
                 call cline_reconstruct3D_distr%set('needs_sigma','yes')
             endif
         endif
@@ -427,8 +403,8 @@ contains
                 case('eval')
                     ! nothing to do
                 case DEFAULT
+                    cline_volassemble = cline ! transfer run-time command-line
                     call cline_volassemble%set( 'prg', 'volassemble' ) ! required for cmdline exec
-                    call cline_volassemble%set( 'which_iter', params%which_iter)
                     do state = 1,params%nstates
                         str_state = int2str_pad(state,2)
                         volassemble_output = 'RESOLUTION_STATE'//trim(str_state)//'_ITER'//trim(str_iter)
@@ -605,7 +581,14 @@ contains
             case('prob', 'prob_state')
                 ! random sampling and updatecnt dealt with in prob_align
             case DEFAULT
-                if( startit == 1 ) call build%spproj_field%clean_updatecnt_sampled
+                if( startit == 1 )then
+                    if( cline%defined('updatecnt_ini') )then
+                        call build%spproj_field%set_nonzero_updatecnt(params%updatecnt_ini)
+                         call build%spproj_field%clean_entry('sampled')
+                    else
+                        call build%spproj_field%clean_entry('updatecnt', 'sampled')
+                    endif
+                endif
         end select
         if( params%l_distr_exec )then
             if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
@@ -634,13 +617,18 @@ contains
                         call build%spproj_field%partition_eo
                         call build%spproj%write_segment_inside(params%oritype)
                     endif
+                    if( startit == 1 )then
+                        ! make sure we have weights for first_sigmas
+                        call build%spproj_field%set_all2single('w', 1.0)
+                        call build%spproj%write_segment_inside(params%oritype)
+                    endif
                     cline_calc_pspec   = cline
                     cline_first_sigmas = cline
                     call xcalc_pspec%execute_safe( cline_calc_pspec )
                     call cline_calc_sigma%set('which_iter', startit)
                     call xcalc_pspec_assemble%execute_safe(cline_calc_sigma)
-                    if( .not.cline_first_sigmas%defined('nspace') ) call cline_first_sigmas%set('nspace', real(params%nspace))
-                    if( .not.cline_first_sigmas%defined('athres') ) call cline_first_sigmas%set('athres', real(params%athres))
+                    if( .not.cline_first_sigmas%defined('nspace') ) call cline_first_sigmas%set('nspace', params%nspace)
+                    if( .not.cline_first_sigmas%defined('athres') ) call cline_first_sigmas%set('athres', params%athres)
                     call xfirst_sigmas%execute_safe(cline)
                 endif
             endif
@@ -671,24 +659,24 @@ contains
                 ! in strategy3D_matcher:
                 call refine3D_exec(cline, params%which_iter, converged)
                 ! volumes book-keeping
-                    do state = 1, params%nstates
-                        str_state = int2str_pad(state,2)
-                        iter_str  = '_iter'//int2str_pad(params%which_iter,3)
-                        if( trim(params_glob%keepvol).eq.'yes' )then
-                            call simple_copy_file(params%vols(state), add2fbody(params%vols(state),params%ext,iter_str))
-                       endif
+                do state = 1, params%nstates
+                    str_state = int2str_pad(state,2)
+                    iter_str  = '_iter'//int2str_pad(params%which_iter,3)
+                    if( trim(params_glob%keepvol).eq.'yes' )then
+                        call simple_copy_file(params%vols(state), add2fbody(params%vols(state),params%ext,iter_str))
+                    endif
+                    vol_iter = add2fbody(params%vols(state), params%ext, PPROC_SUFFIX)
+                    call simple_copy_file(vol_iter, add2fbody(vol_iter,params%ext,iter_str))
+                    vol_iter = add2fbody(params%vols(state), params%ext, LP_SUFFIX)
+                    call simple_copy_file(vol_iter, add2fbody(vol_iter,params%ext,iter_str))
+                    if( params%which_iter > 1 )then
+                        iter_str = '_iter'//int2str_pad(params%which_iter-1,3)
                         vol_iter = add2fbody(params%vols(state), params%ext, PPROC_SUFFIX)
-                        call simple_copy_file(vol_iter, add2fbody(vol_iter,params%ext,iter_str))
+                        call del_file(add2fbody(vol_iter, params%ext,iter_str))
                         vol_iter = add2fbody(params%vols(state), params%ext, LP_SUFFIX)
-                        call simple_copy_file(vol_iter, add2fbody(vol_iter,params%ext,iter_str))
-                        if( params%which_iter > 1 )then
-                            iter_str = '_iter'//int2str_pad(params%which_iter-1,3)
-                            vol_iter = add2fbody(params%vols(state), params%ext, PPROC_SUFFIX)
-                            call del_file(add2fbody(vol_iter, params%ext,iter_str))
-                            vol_iter = add2fbody(params%vols(state), params%ext, LP_SUFFIX)
-                            call del_file(add2fbody(vol_iter, params%ext,iter_str))
-                        endif
-                    enddo
+                        call del_file(add2fbody(vol_iter, params%ext,iter_str))
+                    endif
+                enddo
                 ! convergence
                 if( converged .or. i == params%maxits )then
                     ! report the last iteration on exit
@@ -846,8 +834,7 @@ contains
     subroutine exec_prob_tab( self, cline )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        use simple_strategy2D3D_common, only: prepimgbatch, prepimg4align, calcrefvolshift_and_mapshifts2ptcls,killimgbatch,&
-                                             &read_and_filter_refvols, preprefvol, discrete_read_imgbatch, set_bp_range
+        use simple_strategy2D3D_common
         use simple_polarft_corrcalc,    only: polarft_corrcalc
         use simple_eul_prob_tab,        only: eul_prob_tab
         use simple_euclid_sigma2,       only: euclid_sigma2
@@ -861,15 +848,13 @@ contains
         type(polarft_corrcalc)        :: pftcc
         type(builder)                 :: build
         type(parameters)              :: params
-        type(ori)                     :: o_tmp
         type(eul_prob_tab)            :: eulprob_obj_part
         type(euclid_sigma2)           :: eucl_sigma
-        integer  :: nptcls, iptcl, s, ithr, iref, i
-        logical  :: l_ctf, do_center
-        real     :: xyz(3)
+        integer  :: nptcls, ithr
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         allocate(ptcl_mask(params%fromp:params%top))
+        call set_bp_range( cline )
         ! The policy here ought to be that nothing is done with regards to sampling other than reproducing
         ! what was generated in the driver (prob_align, below). Sampling is delegated to prob_align (below)
         ! and merely reproduced here
@@ -878,66 +863,28 @@ contains
         else
             THROW_HARD('exec_prob_tab requires prior particle sampling (in exec_prob_align)')
         endif
-        ! more prep
-        call set_bp_range( cline )
-        call pftcc%new(params%nspace * params%nstates, [1,nptcls], params%kfromto)
-        call eulprob_obj_part%new(pinds)
-        call prepimgbatch(nptcls)
-        call discrete_read_imgbatch( nptcls, pinds, [1,nptcls] )
-        call pftcc%reallocate_ptcls(nptcls, pinds)
-        call build%img_crop_polarizer%init_polarizer(pftcc, params%alpha)
-        allocate(tmp_imgs(nthr_glob))
-        !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
-        do ithr = 1,nthr_glob
-            call tmp_imgs(ithr)%new([params%box_crop,params%box_crop,1], params%smpd_crop, wthreads=.false.)
-        enddo
-        !$omp end parallel do
-        ! PREPARATION OF REFERENCES IN PFTCC
+        ! PREPARATION OF PFTCC AND REFERENCES
+        ! (if needed) estimating lp (over all states) and reseting params_glob%lp and params_glob%kfromto
+        call prepare_polar_references(pftcc, cline, nptcls)
+        ! PREPARATION OF SIGMAS
         if( params%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
             call eucl_sigma%new(fname, params%box)
             call eucl_sigma%read_part(  build%spproj_field, ptcl_mask)
             call eucl_sigma%read_groups(build%spproj_field, ptcl_mask)
         end if
-        ! read reference volumes and create polar projections
-        do s=1,params%nstates
-            call calcrefvolshift_and_mapshifts2ptcls( cline, s, params%vols(s), do_center, xyz, map_shift=.true.)
-            call read_and_filter_refvols(s)
-            ! PREPARE E/O VOLUMES
-            call preprefvol(cline, s, do_center, xyz, .false.)
-            call preprefvol(cline, s, do_center, xyz, .true.)
-            ! PREPARE REFERENCES
-            !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
-            do iref=1, params%nspace
-                call build%eulspace%get_ori(iref, o_tmp)
-                call build%vol_odd%fproject_polar((s - 1) * params%nspace + iref,&
-                    &o_tmp, pftcc, iseven=.false., mask=build%l_resmsk)
-                call build%vol%fproject_polar(    (s - 1) * params%nspace + iref,&
-                    &o_tmp, pftcc, iseven=.true.,  mask=build%l_resmsk)
-                call o_tmp%kill
-            end do
-            !$omp end parallel do
-        end do
-        call pftcc%memoize_refs
         ! PREPARATION OF PARTICLES
-        !$omp parallel do default(shared) private(i,iptcl,ithr) schedule(static) proc_bind(close)
-        do i = 1,nptcls
-            ithr  = omp_get_thread_num()+1
-            iptcl = pinds(i)
-            if( .not.ptcl_mask(iptcl) ) cycle
-            ! prep
-            call prepimg4align(iptcl, build%imgbatch(i), tmp_imgs(ithr))
-            ! transfer to polar coordinates
-            call build%img_crop_polarizer%polarize(pftcc, tmp_imgs(ithr), iptcl, .true., .true., mask=build%l_resmsk)
-            ! e/o flags
-            call pftcc%set_eo(iptcl, mod(iptcl, 2)==0)
+        call prepimgbatch(nptcls)
+        allocate(tmp_imgs(nthr_glob))
+        !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
+        do ithr = 1,nthr_glob
+            call tmp_imgs(ithr)%new([params%box_crop,params%box_crop,1], params%smpd_crop, wthreads=.false.)
         enddo
         !$omp end parallel do
-        ! getting the ctfs
-        l_ctf = build%spproj%get_ctfflag(params%oritype,iptcl=pinds(1)).ne.'no'
-        ! make CTFs
-        if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, params%oritype)
-        call pftcc%memoize_ptcls
+        call build%img_crop_polarizer%init_polarizer(pftcc, params%alpha)
+        call build_batch_particles(pftcc, nptcls, pinds, tmp_imgs)
+        ! Filling prob table in eul_prob_tab
+        call eulprob_obj_part%new(pinds)
         fname = trim(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
         if( str_has_substr(params%refine, 'prob_state') )then
             call eulprob_obj_part%fill_tab_state_only(pftcc)
@@ -983,7 +930,14 @@ contains
             call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         endif
         allocate(ptcl_mask(1:params_glob%nptcls))
-        if( params_glob%startit == 1 ) call build_glob%spproj_field%clean_updatecnt_sampled
+        if( params_glob%startit == 1 )then
+            if( cline%defined('updatecnt_ini') )then
+                call build%spproj_field%set_nonzero_updatecnt(params%updatecnt_ini)
+                call build%spproj_field%clean_entry('sampled')
+            else
+                call build%spproj_field%clean_entry('updatecnt', 'sampled')
+            endif
+        endif
         ! sampled incremented
         call sample_ptcls4update([1,params_glob%nptcls], .true., nptcls, pinds, ptcl_mask)
         ! communicate to project file
@@ -1015,7 +969,7 @@ contains
                 fname = trim(DIST_FBODY)//int2str_pad(ipart,params_glob%numlen)//'.dat'
                 call eulprob_obj_glob%read_tab_to_glob(fname)
             enddo
-            call eulprob_obj_glob%proj_state_assign
+            call eulprob_obj_glob%ref_assign
         endif
         ! write the iptcl->(iref,istate) assignment
         fname = trim(ASSIGNMENT_FBODY)//'.dat'

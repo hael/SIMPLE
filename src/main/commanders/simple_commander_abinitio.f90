@@ -22,7 +22,7 @@ use simple_qsys_funs
 use simple_decay_funs
 implicit none
 
-public :: abinitio3D_cavgs_commander, abinitio3D_commander, abinitio3D_parts_commander
+public :: abinitio3D_cavgs_commander, abinitio3D_commander, multivol_assign_commander, abinitio3D_parts_commander
 private
 #include "simple_local_flags.inc"
 
@@ -36,36 +36,43 @@ type, extends(commander_base) :: abinitio3D_commander
     procedure :: execute => exec_abinitio3D
 end type abinitio3D_commander
 
+type, extends(commander_base) :: multivol_assign_commander
+    contains
+    procedure :: execute => exec_multivol_assign
+end type multivol_assign_commander
+
 type, extends(commander_base) :: abinitio3D_parts_commander
     contains
     procedure :: execute => exec_abinitio3D_parts
 end type abinitio3D_parts_commander
 
 ! class constants
-character(len=*), parameter :: REC_FBODY         = 'rec_final_state'
-character(len=*), parameter :: STR_STATE_GLOB    = '01'
-real,             parameter :: LPSTOP_BOUNDS(2)  = [4.5,6.0]
-real,             parameter :: LPSTART_BOUNDS(2) = [10.,20.]
-real,             parameter :: CENLP_DEFAULT     = 30.
-real,             parameter :: LPSYMSRCH_LB      = 12.
-integer,          parameter :: NSTAGES           = 8
-integer,          parameter :: NSTAGES_INI3D     = 4 ! # of ini3D stages used for initialization
-integer,          parameter :: PHASES(3)         = [2,6,8]
-integer,          parameter :: MAXITS(8)         = [20,20,17,17,17,17,15,30]
-integer,          parameter :: MAXITS_GLOB       = 2*20 + 4*17 + 1*15 ! the last 30 iterations are not included in this estimate since the sampling method changes
-integer,          parameter :: NSPACE(3)         = [500,1000,2500]
-integer,          parameter :: SYMSRCH_STAGE     = 3
-integer,          parameter :: PROBREFINE_STAGE  = 5
-integer,          parameter :: ICM_STAGE         = PROBREFINE_STAGE  ! we switch from ML regularization when prob is switched on
-integer,          parameter :: STOCH_SAMPL_STAGE = PROBREFINE_STAGE  ! we switch from greedy to stochastic blanced class sampling when prob is switched on
-integer,          parameter :: TRAILREC_STAGE    = NSTAGES  - 1      ! we start trailing one stage before the last
-integer,          parameter :: LPAUTO_STAGE      = TRAILREC_STAGE    ! automatic low-pass limit estimation switched on when trailing is 
-integer,          parameter :: NSAMPLE_MAX_LAST  = 25000             ! maximum # particles to sample per iteration in the last stage 
+character(len=*), parameter :: REC_FBODY             = 'rec_final_state'
+character(len=*), parameter :: STR_STATE_GLOB        = '01'
+real,             parameter :: LPSTOP_BOUNDS(2)      = [4.5,6.0]
+real,             parameter :: LPSTART_BOUNDS(2)     = [10.,20.]
+real,             parameter :: CENLP_DEFAULT         = 30.
+real,             parameter :: LPSYMSRCH_LB          = 12.
+integer,          parameter :: NSTAGES               = 8
+integer,          parameter :: NSTAGES_INI3D         = 4 ! # of ini3D stages used for initialization
+integer,          parameter :: PHASES(3)             = [2,6,8]
+integer,          parameter :: MAXITS(8)             = [20,20,17,17,17,17,15,30]
+integer,          parameter :: MAXITS_GLOB           = 2*20 + 4*17 + 1*15 ! the last 30 iterations are not included in this estimate since the sampling method changes
+integer,          parameter :: NSPACE(3)             = [500,1000,2500]
+integer,          parameter :: SYMSRCH_STAGE         = 3
+integer,          parameter :: PROBREFINE_STAGE      = 5
+integer,          parameter :: ICM_STAGE             = PROBREFINE_STAGE  ! we switch from ML regularization when prob is switched on
+integer,          parameter :: STOCH_SAMPL_STAGE     = PROBREFINE_STAGE  ! we switch from greedy to stochastic blanced class sampling when prob is switched on
+integer,          parameter :: TRAILREC_STAGE_SINGLE = STOCH_SAMPL_STAGE ! we start trailing when we start sampling particles randomly
+integer,          parameter :: TRAILREC_STAGE_MULTI  = NSTAGES
+integer,          parameter :: LPAUTO_STAGE          = NSTAGES - 1       ! cannot be switched on too early
+integer,          parameter :: HET_DOCKED_STAGE      = NSTAGES           ! stage at which state splitting is done when multivol_mode==docked
+integer,          parameter :: NSAMPLE_MAX_LAST      = 25000             ! maximum # particles to sample per iteration in the last stage 
 
 ! class variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
 logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false., l_update_frac_dyn=.false.
-logical          :: l_ini3D=.false., l_lpauto=.false., l_nsample_inputted_by_user=.false.
+logical          :: l_ini3D=.false., l_lpauto=.false., l_nsample_given=.false., l_nsample_stop_given=.false.
 type(sym)        :: se1, se2
 type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_postprocess, cline_reproject
 real             :: update_frac  = 1.0, update_frac_dyn  = 1.0
@@ -341,7 +348,7 @@ contains
         type(parameters)                :: params
         type(sp_project)                :: spproj
         type(image)                     :: noisevol 
-        integer :: istage, s, ncls, icls, i, start_stage, nptcls2update, noris
+        integer :: istage, s, ncls, icls, i, start_stage, nptcls2update, noris, nstates_on_cline, nstates_in_project
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
@@ -356,14 +363,26 @@ contains
         if( .not. cline%defined('ptclw')       ) call cline%set('ptclw',          'no')
         if( .not. cline%defined('projrec')     ) call cline%set('projrec',       'yes')
         if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'yes')
+        ! adjust default multivol_mode unless given on command line
         if( cline%defined('nstates') )then
-            call cline%set('projrec', 'no') ! not yet supported for multi-state
+            nstates_on_cline = cline%get_iarg('nstates')
+            if( nstates_on_cline > 1 .and. .not. cline%defined('multivol_mode') )then
+                call cline%set('multivol_mode', 'independent')
+            endif
         endif
         ! make master parameters
         call params%new(cline)
         call cline%set('mkdir', 'no')
-        nstates_glob = params%nstates  
-        if( nstates_glob > 1 .and. trim(params%het_mode).eq.'docked' )then
+        nstates_glob = params%nstates
+        select case(trim(params%multivol_mode))
+            case('single')
+                if( nstates_glob /= 1 ) THROW_HARD('nstates /= 1 incompatible with multivol_mode:' //trim(params%multivol_mode))
+            case('independent', 'docked', 'input_oris_start', 'input_oris_fixed')
+                if( nstates_glob == 1 ) THROW_HARD('nstates == 1 incompatible with multivol_mode: '//trim(params%multivol_mode))
+            case DEFAULT
+                THROW_HARD('Unsupported multivol_mode: '//trim(params%multivol_mode))
+        end select
+        if( trim(params%multivol_mode).eq.'docked' )then
             params%nstates = 1
             call cline%delete('nstates')
         endif
@@ -375,6 +394,7 @@ contains
         start_stage = 1
         l_ini3D     = .false.
         if( trim(params%cavg_ini).eq.'yes' )then
+            if( str_has_substr(params%multivol_mode,'input_oris') ) THROW_HARD('Ini3D on cavgs not allowed for multivol_mode=input_oris*')
             call ini3D_from_cavgs(cline)
             ! re-read the project file to update info in spproj
             call spproj%read(params%projfile)
@@ -382,7 +402,7 @@ contains
             l_ini3D     = .true.
             ! symmetry dealt with by ini3D
         else
-            if( nstates_glob > 1 .and. trim(params%het_mode).eq.'independent' )then
+            if( trim(params%multivol_mode).eq.'independent' )then
                 ! turn off symmetry axis search and put the symmetry in from the start
                 params%pgrp_start = params%pgrp
             endif
@@ -399,10 +419,6 @@ contains
         ! set class global lp_auto flag for low-pass limit estimation
         l_lpauto = .true.
         if( cline%defined('lp_auto') ) l_lpauto = params%l_lpauto
-        if( l_lpauto )then
-            params%lplim_crit = 0.5
-            call cline%set('lplim_crit', params%lplim_crit)
-        endif
         ! prepare class command lines
         call prep_class_command_lines(cline, params%projfile)
         ! set symmetry class variables
@@ -413,31 +429,33 @@ contains
         if( spproj%is_virgin_field('ptcl2D') )then
             THROW_HARD('Prior 2D clustering required for abinitio workflow')
         else
-            l_update_frac_dyn          = .false.
-            l_nsample_inputted_by_user = .false.
-            update_frac                = 1.0
-            nptcls_eff                 = spproj%count_state_gt_zero()
+            l_update_frac_dyn    = .false.
+            l_nsample_given      = .false.
+            l_nsample_stop_given = .false.
+            update_frac          = 1.0
+            nptcls_eff           = spproj%count_state_gt_zero()
             if( cline%defined('nsample') )then
-                update_frac = real(params%nsample * nstates_glob) / real(nptcls_eff)
-                l_nsample_inputted_by_user = .true.
+                update_frac = real(params%nsample * params%nstates) / real(nptcls_eff)
+                l_nsample_given = .true.
             else if( cline%defined('update_frac') )then
                 update_frac = params%update_frac
-                l_nsample_inputted_by_user = .true.
+                l_nsample_given = .true.
             else if( cline%defined('nsample_start') )then
                 if( params%nsample_start > nptcls_eff ) THROW_HARD('nsample_start > effective # ptcls, decrease!')
                 nsample_minmax(1) = params%nsample_start
                 if( cline%defined('nsample_stop') )then
-                    nsample_minmax(2) = min(nptcls_eff,params%nsample_stop)
+                    nsample_minmax(2)    = min(nptcls_eff,params%nsample_stop)
+                    l_nsample_stop_given = .true.
                 else
                     nsample_minmax(2) = nptcls_eff
                 endif
-                update_frac = calc_update_frac_dyn(nptcls_eff, nstates_glob, nsample_minmax, 1, MAXITS_GLOB)
+                update_frac       = calc_update_frac_dyn(nptcls_eff, params%nstates, nsample_minmax, 1, MAXITS_GLOB)
                 l_update_frac_dyn = .true.
-             else
+            else
                 if( cline%defined('nsample_max') )then
-                    update_frac = calc_update_frac(nptcls_eff, nstates_glob, [NSAMPLE_MINMAX_DEFAULT(1),params%nsample_max])
+                    update_frac = calc_update_frac(nptcls_eff, params%nstates, [NSAMPLE_MINMAX_DEFAULT(1),params%nsample_max])
                 else
-                    update_frac = calc_update_frac(nptcls_eff, nstates_glob, NSAMPLE_MINMAX_DEFAULT)
+                    update_frac = calc_update_frac(nptcls_eff, params%nstates, NSAMPLE_MINMAX_DEFAULT)
                 endif
             endif
             update_frac = min(UPDATE_FRAC_MAX, update_frac) ! to ensure fractional update is always on
@@ -450,8 +468,9 @@ contains
             call write_class_samples(clssmp, CLASS_SAMPLING_FILE)
             deallocate(rstates, tmpinds, clsinds)
             if( spproj%os_ptcl3D%has_been_sampled() )then
-                ! the ptcl3D field should be clean at this stage
-                call spproj%os_ptcl3D%clean_updatecnt_sampled()
+                ! the ptcl3D field should be clean of sampling at this stage
+                call spproj%os_ptcl3D%clean_entry('sampled')
+                ! call spproj%os_ptcl3D%clean_entry('sampled', 'updatecnt')
                 call spproj%write_segment_inside('ptcl3D', params%projfile)
             endif
         endif
@@ -466,81 +485,112 @@ contains
             call set_lplims_from_frcs(spproj, l_cavgs=.false.)
         endif
         ! starting volume logics
-        if( .not. cline%defined('vol1') )then
-            if( .not. l_ini3D )then
-                ! randomize projection directions
-                select case(trim(params%oritype))
-                    case('ptcl3D')
-                        call spproj%os_ptcl3D%rnd_oris
-                    case DEFAULT
-                        THROW_HARD('Unsupported ORITYPE; exec_abinitio3D')
-                end select
-                ! randomize states
-                if( nstates_glob > 1 .and. trim(params%het_mode).eq.'independent' )then
-                    call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
-                endif
-                call spproj%write_segment_inside(params%oritype, params%projfile)
-                ! create noise starting volume(s)
-                call noisevol%new([lpinfo(1)%box_crop,lpinfo(1)%box_crop,lpinfo(1)%box_crop], lpinfo(1)%smpd_crop)
-                do s = 1, params%nstates
-                    call noisevol%ran()
-                    vol_name = 'startvol_state'//int2str_pad(s,2)//'.mrc'
-                    call cline_refine3D%set('vol'//int2str(s), vol_name)
-                    params%vols(s) = vol_name
-                    call noisevol%write(vol_name)
-                    call noisevol%ran()
-                    vol_name = 'startvol_state'//int2str_pad(s,2)//'_even.mrc'
-                    call noisevol%write(vol_name)
-                    vol_name = 'startvol_state'//int2str_pad(s,2)//'_even_unfil.mrc'
-                    call noisevol%write(vol_name)
-                    call noisevol%ran()
-                    vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd.mrc'
-                    call noisevol%write(vol_name)
-                    vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd_unfil.mrc'
-                    call noisevol%write(vol_name)
-                end do
-                call noisevol%kill
-            else
-                ! check that ptcl3D field is not virgin
-                if( spproj%is_virgin_field('ptcl3D') )then
-                    THROW_HARD('Prior 3D alignment is lacking for starting volume generation')
-                endif
-                ! randomize states
-                if( nstates_glob > 1 .and. trim(params%het_mode).eq.'independent' )then
-                    call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
-                endif
-                ! create an initial balanced greedy sampling
-                noris = spproj%os_ptcl3D%get_noris()
-                allocate(ptcl_mask(1:noris))
-                call spproj%os_ptcl3D%sample4update_class(clssmp, [1,noris], update_frac,&
-                    nptcls2update, pinds, ptcl_mask, .false.)
-                deallocate(pinds, ptcl_mask)          ! these are not needed
-                call deallocate_class_samples(clssmp) ! done with this one
-                ! write updated project file
-                call spproj%write_segment_inside(params%oritype, params%projfile)
-                ! create starting volume(s)
-                call calc_start_rec(params%projfile, xreconstruct3D_distr, istage=1)
+        if( str_has_substr(params%multivol_mode,'input_oris') )then
+            ! check that ptcl3D field is not virgin
+            if( spproj%is_virgin_field('ptcl3D') )then
+                THROW_HARD('Prior 3D alignment is lacking for multi-volume assignment')
             endif
+            ! create an initial sampling of all updated ptcls for 3D reconstruction
+            noris = spproj%os_ptcl3D%get_noris()
+            allocate(ptcl_mask(1:noris))
+            call spproj%os_ptcl3D%sample4update_updated([1,noris], nptcls2update, pinds, ptcl_mask, .true.)
+            call spproj%os_ptcl3D%set_updatecnt(1, pinds) ! set all sampled updatecnts to 1 & the rest to zero
+            deallocate(pinds, ptcl_mask) ! these are not needed
+            ! start at the same stage as for multivol_mode==docked
+            start_stage = HET_DOCKED_STAGE
+            ! create state labelling
+            nstates_in_project = spproj%os_ptcl3D%get_n('state')
+            if( nstates_in_project == params%nstates )then
+                THROW_WARN('exec_abinitio3D: prior nstates equal to given nstates. No randomization!')
+            elseif( nstates_in_project == 1 )then
+                THROW_WARN('No previous state assignment detected in project. Randomizing states!')
+                call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
+            else
+                THROW_HARD('Previous state assignment inconsistent with given number of states!')
+            endif
+            ! write updated project file
+            call spproj%write_segment_inside(params%oritype, params%projfile)
+            ! calc recs
+            call calc_start_rec(params%projfile, xreconstruct3D_distr, istage=start_stage)
+        else if( .not. l_ini3D )then
+            ! the ptcl3D field should be clean of updates at this stage
+            call spproj%os_ptcl3D%clean_entry('updatecnt')
+            ! randomize projection directions
+            select case(trim(params%oritype))
+                case('ptcl3D')
+                    call spproj%os_ptcl3D%rnd_oris
+                case DEFAULT
+                    THROW_HARD('Unsupported ORITYPE; exec_abinitio3D')
+            end select
+            ! randomize states
+            if( trim(params%multivol_mode).eq.'independent' )then
+                call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
+            endif
+            call spproj%write_segment_inside(params%oritype, params%projfile)
+            ! create noise starting volume(s)
+            call noisevol%new([lpinfo(1)%box_crop,lpinfo(1)%box_crop,lpinfo(1)%box_crop], lpinfo(1)%smpd_crop)
+            do s = 1, params%nstates
+                call noisevol%ran()
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'.mrc'
+                call cline_refine3D%set('vol'//int2str(s), vol_name)
+                params%vols(s) = vol_name
+                call noisevol%write(vol_name)
+                call noisevol%ran()
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'_even.mrc'
+                call noisevol%write(vol_name)
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'_even_unfil.mrc'
+                call noisevol%write(vol_name)
+                call noisevol%ran()
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd.mrc'
+                call noisevol%write(vol_name)
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd_unfil.mrc'
+                call noisevol%write(vol_name)
+            end do
+            call noisevol%kill
+        else
+            ! check that ptcl3D field is not virgin
+            if( spproj%is_virgin_field('ptcl3D') )then
+                THROW_HARD('Prior 3D alignment is lacking for starting volume generation')
+            endif
+            ! randomize states
+            if( trim(params%multivol_mode).eq.'independent' )then
+                call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
+            endif
+            ! create an initial balanced greedy sampling
+            noris = spproj%os_ptcl3D%get_noris()
+            allocate(ptcl_mask(1:noris))
+            call spproj%os_ptcl3D%sample4update_class(clssmp, [1,noris], update_frac,&
+                nptcls2update, pinds, ptcl_mask, .true.)
+            call spproj%os_ptcl3D%set_updatecnt(1, pinds) ! set all sampled updatecnts to 1 & the rest to zero
+            deallocate(pinds, ptcl_mask)                  ! these are not needed
+            call deallocate_class_samples(clssmp)         ! done with this one
+            ! write updated project file
+            call spproj%write_segment_inside(params%oritype, params%projfile)
+            ! create starting volume(s)
+            call calc_start_rec(params%projfile, xreconstruct3D_distr, istage=start_stage)
         endif
         ! Frequency marching
-        maxits_dyn = sum(MAXITS(start_stage:NSTAGES - 1)) ! the last stage is omitted in this estimate since the sampling method changes
+        maxits_dyn = 0
+        if( start_stage < NSTAGES )then
+            maxits_dyn = sum(MAXITS(start_stage:NSTAGES - 1)) ! the last stage is omitted in this estimate since the sampling method changes
+        endif
         do istage = start_stage, NSTAGES
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', lpinfo(istage)%lp
-            ! Preparation of command line for probabilistic search
+            ! At the splitting stage of docked mode
+            if( params%multivol_mode.eq.'docked' .and. istage == HET_DOCKED_STAGE )then
+                call randomize_states(spproj, params%projfile, xreconstruct3D_distr)
+            endif
+            ! Preparation of command line for refinement
             call set_cline_refine3D(istage, l_cavgs=.false.)
             if( lpinfo(istage)%l_autoscale )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',lpinfo(istage)%box_crop
             endif
-            ! Probabilistic search
+            ! Executing the refinement with the above settings
             call exec_refine3D(istage, xrefine3D)
             ! Symmetrization
             if( istage == SYMSRCH_STAGE )then
                 call symmetrize(istage, spproj, params%projfile, xreconstruct3D_distr)
-            endif
-            ! State labelling
-            if( nstates_glob > 1 .and. params%het_mode.eq.'docked' )then
-                if( istage == NSTAGES - 1 ) call randomize_states(spproj, params%projfile, xreconstruct3D_distr)
             endif
         enddo
         ! for visualization
@@ -554,13 +604,37 @@ contains
         call qsys_cleanup
         call simple_end('**** SIMPLE_ABINITIO3D NORMAL STOP ****')
     end subroutine exec_abinitio3D
+
+    subroutine exec_multivol_assign( self, cline )
+        class(multivol_assign_commander), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
+        type(abinitio3D_commander)    :: xabini3D
+        character(len=:), allocatable :: srch_oris
+        call cline%set('center',   'no')
+        call cline%set('cavg_ini', 'no')
+        call cline%set('prg',      'multivol_assign')
+        if( .not. cline%defined('nstates')  ) THROW_HARD('nstates required on command line')
+        srch_oris = 'yes'
+        if( cline%defined('srch_oris') )then
+            srch_oris = cline%get_carg('srch_oris')
+        endif
+        select case(trim(srch_oris))
+            case('yes')
+                call cline%set('multivol_mode', 'input_oris_start')
+            case('no')
+                call cline%set('multivol_mode', 'input_oris_fixed')
+            case DEFAULT
+                THROW_HARD('Unsupported srch_oris flag')
+        end select
+        call xabini3D%execute(cline)
+    end subroutine exec_multivol_assign
     
     subroutine exec_abinitio3D_parts( self, cline )
         use simple_commander_project,   only: new_project_commander, selection_commander
         use simple_exec_helpers,        only: gen_exec_cmd, async_exec
         use simple_commander_cluster2D, only: make_cavgs_commander_distr
         class(abinitio3D_parts_commander), intent(inout) :: self
-        class(cmdline),                          intent(inout) :: cline
+        class(cmdline),                    intent(inout) :: cline
         ! commanders
         type(selection_commander)          :: xsel
         type(new_project_commander)        :: xnew_project
@@ -829,7 +903,7 @@ contains
         allocate(files_that_stay(5))
         files_that_stay(1)%str = basename(trim(params_glob%projfile))
         files_that_stay(2)%str = 'cavgs'
-        files_that_stay(3)%str = 'nice_'
+        files_that_stay(3)%str = 'nice'
         files_that_stay(4)%str = 'frcs'
         files_that_stay(5)%str = 'ABINITIO3D'
         ! make the move
@@ -851,7 +925,9 @@ contains
         iter = iter + 1
         ! dynamic update frac
         if( istage == NSTAGES )then
-            if( l_nsample_inputted_by_user )then
+            if( l_nsample_stop_given )then
+                update_frac_dyn = real(nsample_minmax(2)) / real(nptcls_eff)
+            else if( l_nsample_given )then
                 update_frac_dyn = update_frac
             else
                 ! we change the sampling method for the last stage (accelerated refinement)
@@ -861,7 +937,7 @@ contains
                 endif
             endif
         else
-            update_frac_dyn = calc_update_frac_dyn(nptcls_eff, nstates_glob, nsample_minmax, iter, maxits_dyn)
+            update_frac_dyn = calc_update_frac_dyn(nptcls_eff, params_glob%nstates, nsample_minmax, iter, maxits_dyn)
         endif
         ! symmetry
         pgrp = trim(params_glob%pgrp)
@@ -878,8 +954,8 @@ contains
             refine  = 'prob'
             prob_sh = 'yes'
         endif
-        if( nstates_glob > 1 .and. params_glob%het_mode.eq.'docked' )then
-            if( istage == NSTAGES ) refine = 'shc_smpl' ! works best on simulated ribosome data
+        if( trim(params_glob%multivol_mode).eq.'input_oris_fixed' )then ! only state sorting, no 3D ori refinement
+            refine = 'prob_state'
         endif
         ! ICM regularization
         icm = 'no'
@@ -888,7 +964,24 @@ contains
         balance = 'yes'
         ! trailing reconstruction
         trail_rec = 'no'
-        if( istage >= TRAILREC_STAGE ) trail_rec = 'yes'
+        select case(trim(params_glob%multivol_mode))
+            case('single')
+                if( istage >= TRAILREC_STAGE_SINGLE ) trail_rec = 'yes'
+            case('independent')
+                if( istage >= TRAILREC_STAGE_MULTI  ) trail_rec = 'yes'
+            case('docked')
+                if( istage == NSTAGES )then
+                    trail_rec = 'no'
+                else if( istage >= TRAILREC_STAGE_SINGLE )then
+                    trail_rec = 'yes'
+                endif
+            case('input_oris_fixed')
+                trail_rec = 'no'
+            case('input_oris_start')
+                trail_rec = 'no'
+            case DEFAULT
+                trail_rec = 'no' ! defaults to 'no' for safety
+        end select
         ! automatic low-pass limit estimation
         lp_auto = 'no'
         if( istage >= LPAUTO_STAGE .and. l_lpauto )then
@@ -935,8 +1028,8 @@ contains
                 else
                 frac_best     = 1.0 ! means it does not control sampling, greedy selection
                 endif
-                overlap       = 0.95
-                fracsrch      = 95.
+                overlap       = 0.90
+                fracsrch      = 90.
                 snr_noise_reg = 4.0
             case(3)
                 inspace       = NSPACE(3)
@@ -949,13 +1042,18 @@ contains
                 trs           = lpinfo(istage)%trslim
                 sh_first      = 'yes'
                 ml_reg        = 'yes'
-                if( nstates_glob > 1 )then
+                if( params_glob%nstates > 1 )then
                 frac_best     = 0.98 ! max out balanced sampling
                 else
                 frac_best     = 0.85 ! means sampling is done from top-ranking 85% particles in class
                 endif
+                if( istage == NSTAGES )then
                 overlap       = 0.99
                 fracsrch      = 99.
+                else
+                overlap       = 0.90
+                fracsrch      = 90.
+                endif
                 snr_noise_reg = 6.0
         end select
         ! turn off ML-regularization when icm is on
@@ -1001,6 +1099,7 @@ contains
         call cline_refine3D%set('fracsrch',                  fracsrch)
         if( l_cavgs )then
         call cline_refine3D%set('snr_noise_reg',        snr_noise_reg)
+        call cline_refine3D%delete('update_frac') ! never on cavgs
         else
         call cline_refine3D%delete('snr_noise_reg')
         endif
@@ -1131,7 +1230,7 @@ contains
         call cline_reconstruct3D%set('nstates', nstates_glob)
         call cline_postprocess%set(  'nstates', nstates_glob)
         call cline_reproject%set(    'nstates', nstates_glob)
-        call calc_start_rec(projfile, xreconstruct3D, istage=PROBREFINE_STAGE)
+        call calc_start_rec(projfile, xreconstruct3D, istage=HET_DOCKED_STAGE)
     end subroutine randomize_states
 
     subroutine gen_ortho_reprojs4viz
