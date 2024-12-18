@@ -14,8 +14,6 @@ use simple_eul_prob_tab,            only: eul_prob_tab
 use simple_polarft_corrcalc,        only: polarft_corrcalc
 use simple_strategy3D_shc,          only: strategy3D_shc
 use simple_strategy3D_shc_smpl,     only: strategy3D_shc_smpl
-use simple_strategy3D_smpl,         only: strategy3D_smpl
-use simple_strategy3D_smpl_sub,     only: strategy3D_smpl_sub
 use simple_strategy3D_greedy,       only: strategy3D_greedy
 use simple_strategy3D_greedy_smpl,  only: strategy3D_greedy_smpl
 use simple_strategy3D_greedy_sub,   only: strategy3D_greedy_sub
@@ -42,9 +40,9 @@ type(euclid_sigma2)            :: eucl_sigma
 type(polarft_corrcalc)         :: pftcc
 ! benchmarking
 integer(timer_int_kind)        :: t_init,   t_build_batch_particles,  t_prep_orisrch,  t_align,  t_rec,  t_tot,  t_projio
-integer(timer_int_kind)        :: t_prepare_polar_references, t_read_and_filter_refvols
+integer(timer_int_kind)        :: t_prepare_polar_references
 real(timer_int_kind)           :: rt_init, rt_build_batch_particles, rt_prep_orisrch, rt_align, rt_rec, rt_tot, rt_projio
-real(timer_int_kind)           :: rt_prepare_polar_references, rt_read_and_filter_refvols
+real(timer_int_kind)           :: rt_prepare_polar_references
 character(len=STDLEN)          :: benchfname
 
 contains
@@ -196,10 +194,6 @@ contains
                         allocate(strategy3D_greedy               :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('prob','prob_state')
                         allocate(strategy3D_prob                 :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('smpl')
-                        allocate(strategy3D_smpl                 :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('smpl_neigh')
-                        allocate(strategy3D_smpl_sub             :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('sigma')
                         ! first sigma estimation (done below)
                         call build_glob%spproj_field%get_ori(iptcl, orientation)
@@ -310,7 +304,6 @@ contains
                 write(fnr,'(a,1x,f9.2)') 'initialisation           : ', rt_init
                 write(fnr,'(a,1x,f9.2)') 'build_batch_particles    : ', rt_build_batch_particles
                 write(fnr,'(a,1x,f9.2)') 'prepare_polar_references : ', rt_prepare_polar_references
-                write(fnr,'(a,1x,f9.2)') 'read_and_filter_refvols  : ', rt_read_and_filter_refvols
                 write(fnr,'(a,1x,f9.2)') 'orisrch3D preparation    : ', rt_prep_orisrch
                 write(fnr,'(a,1x,f9.2)') '3D alignment             : ', rt_align
                 write(fnr,'(a,1x,f9.2)') 'project file I/O         : ', rt_projio
@@ -321,7 +314,6 @@ contains
                 write(fnr,'(a,1x,f9.2)') 'initialisation           : ', (rt_init/rt_tot)                     * 100.
                 write(fnr,'(a,1x,f9.2)') 'build_batch_particles    : ', (rt_build_batch_particles/rt_tot)    * 100.
                 write(fnr,'(a,1x,f9.2)') 'prepare_polar_references : ', (rt_prepare_polar_references/rt_tot) * 100.
-                write(fnr,'(a,1x,f9.2)') 'read_and_filter_refvols  : ', (rt_read_and_filter_refvols/rt_tot)  * 100.
                 write(fnr,'(a,1x,f9.2)') 'orisrch3D preparation    : ', (rt_prep_orisrch/rt_tot)             * 100.
                 write(fnr,'(a,1x,f9.2)') '3D alignment             : ', (rt_align/rt_tot)                    * 100.
                 write(fnr,'(a,1x,f9.2)') 'project file I/O         : ', (rt_projio/rt_tot)                   * 100.

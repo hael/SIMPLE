@@ -9,13 +9,11 @@ use simple_builder,           only: build_glob
 use simple_parameters,        only: params_glob
 use simple_stack_io,          only: stack_io
 use simple_discrete_stack_io, only: dstack_io
-use simple_polarft_corrcalc,  only: pftcc_glob
 implicit none
 
 public :: prepimgbatch, killimgbatch, read_imgbatch, discrete_read_imgbatch
 public :: set_bp_range, set_bp_range2D, sample_ptcls4update, prepimg4align, prep2Dref
-public :: calcrefvolshift_and_mapshifts2ptcls, read_and_filter_refvols, preprefvol, estimate_lp_refvols
-public :: preprecvols, killrecvols, grid_ptcl, calc_3Drec, calc_projdir3Drec, norm_struct_facts, build_batch_particles, prepare_polar_references
+public :: build_batch_particles, prepare_polar_references, calc_3Drec, calc_projdir3Drec
 private
 #include "simple_local_flags.inc"
 
@@ -981,7 +979,6 @@ contains
     end subroutine calc_projdir3Drec
 
     subroutine norm_struct_facts( cline )
-        use simple_masker, only: masker
         use simple_image,  only: image
         class(cmdline),    intent(inout) :: cline
         character(len=:), allocatable    :: recname, volname, volname_prev, volname_prev_even

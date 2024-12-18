@@ -84,7 +84,7 @@ contains
         end select
         call spproj%ptr2oritype(params%oritype, spproj_field)
         if( fall_over )then
-            THROW_HARD('no particles found! :exec_refine3D_distr')
+            THROW_HARD('no particles found! :exec_calc_pspec_distr')
         endif
         if( spproj_field%get_nevenodd() == 0 )then
             call spproj_field%partition_eo
