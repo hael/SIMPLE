@@ -3384,27 +3384,25 @@ contains
     end subroutine new_model_validation
 
     subroutine new_model_validation_eo
-        ! ! PROGRAM SPECIFICATION
-        ! call model_validation%new(&
-        ! &'model_validation', &                             ! name
-        ! &'Validation of atomic model',&                    ! descr_short
-        ! &'is a program to validate the PDB atomic model given a 3D experimental even/odd density map in MRC',& ! descr long
-        ! &'all',&                                           ! executable
-        ! &2, 2, 0, 0, 0, 0, 0, .false.)                     ! # entries in each group, requires sp_project
-        ! ! INPUT PARAMETER SPECIFICATIONS
-        ! ! image input/output
-        ! call model_validation%set_input('img_ios', 1, 'vol1', 'file', 'Experimental volume',  'Experimental volume',  'vol.mrc file', .true., '')
-        ! call model_validation%set_input('img_ios', 2, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'molecule.pdb')
-        ! ! parameter input/output
-        ! call model_validation%set_input('parm_ios', 1, smpd)
-        ! call model_validation%set_input('parm_ios', 2, smpd_target)
-        ! ! alternative inputs
-        ! ! <empty>
-        ! ! search controls
-        ! ! <empty>
-        ! ! filter controls
-        ! ! mask controls
-        ! ! computer controls
+        ! PROGRAM SPECIFICATION
+        call model_validation_eo%new(&
+        &'model_validation_eo', &                          ! name
+        &'Validation of atomic model',&                    ! descr_short
+        &'is a program to validate the PDB atomic model given a 3D experimental even/odd density map in MRC',& ! descr long
+        &'all',&                                           ! executable
+        &0, 0, 0, 0, 0, 0, 0, .false.)                     ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! mask controls
+        ! computer controls
     end subroutine new_model_validation_eo
 
     subroutine new_motion_correct
