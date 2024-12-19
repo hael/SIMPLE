@@ -69,12 +69,13 @@ integer,          parameter :: STOCH_SAMPL_STAGE     = PROBREFINE_STAGE  ! we sw
 integer,          parameter :: TRAILREC_STAGE_SINGLE = STOCH_SAMPL_STAGE ! we start trailing when we start sampling particles randomly
 integer,          parameter :: TRAILREC_STAGE_MULTI  = NSTAGES           ! we start trailing in the last stage
 integer,          parameter :: LPAUTO_STAGE          = NSTAGES - 1       ! cannot be switched on too early
+integer,          parameter :: AUTOMSK_STAGE         = LPAUTO_STAGE      ! swith on automasking when lpauto is switched on
 integer,          parameter :: HET_DOCKED_STAGE      = NSTAGES           ! stage at which state splitting is done when multivol_mode==docked
 
 ! class variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
 logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false., l_update_frac_dyn=.false.
-logical          :: l_ini3D=.false., l_lpauto=.false., l_nsample_given=.false., l_nsample_stop_given=.false.
+logical          :: l_ini3D=.false., l_lpauto=.false., l_nsample_given=.false., l_nsample_stop_given=.false., l_automsk=.false.
 type(sym)        :: se1, se2
 type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_postprocess, cline_reproject
 real             :: update_frac  = 1.0, update_frac_dyn  = 1.0
@@ -85,7 +86,7 @@ contains
     !> for generation of an initial 3D model from class averages
     subroutine exec_abinitio3D_cavgs( self, cline )
         class(abinitio3D_cavgs_commander), intent(inout) :: self
-        class(cmdline),                   intent(inout) :: cline
+        class(cmdline),                    intent(inout) :: cline
         character(len=*),      parameter :: work_projfile = 'abinitio3D_cavgs_tmpproj.simple'
         ! shared-mem commanders
         type(refine3D_commander)         :: xrefine3D
@@ -422,6 +423,18 @@ contains
         ! set class global lp_auto flag for low-pass limit estimation
         l_lpauto = .true.
         if( cline%defined('lp_auto') ) l_lpauto = params%l_lpauto
+        ! set class global automasking flag
+        l_automsk = .false.
+        if( cline%defined('automsk') )then
+            if( trim(params%automsk).eq.'yes' )then
+                if( trim(params%multivol_mode).eq.'single' )then
+                    l_automsk = .true.
+                else
+                    THROW_WARN('automasking not supported for modes other than multivol_mod.eq.single, turning automasking off')
+                    l_automsk = .false.
+                endif
+            endif
+        endif
         ! prepare class command lines
         call prep_class_command_lines(cline, params%projfile)
         ! set symmetry class variables
@@ -919,7 +932,7 @@ contains
         integer,          intent(in)  :: istage
         logical,          intent(in)  :: l_cavgs
         character(len=:), allocatable :: sh_first, prob_sh, ml_reg
-        character(len=:), allocatable :: refine, icm, trail_rec, pgrp, balance, lp_auto
+        character(len=:), allocatable :: refine, icm, trail_rec, pgrp, balance, lp_auto, automsk
         integer :: iphase, iter, inspace, imaxits, nsample_dyn
         real    :: trs, snr_noise_reg, frac_best, overlap, fracsrch, lpstart, lpstop
         ! iteration number bookkeeping
@@ -996,6 +1009,13 @@ contains
                 lpstop = lpinfo(istage)%smpd_crop * 2. ! Nyqvist limit
             else
                 lpstop = lpinfo(istage + 1)%lp
+            endif
+        endif
+        ! automasking
+        automsk = 'no'
+        if( .not. l_cavgs )then
+            if( istage >= AUTOMSK_STAGE .and. l_automsk )then
+                automsk = 'yes'
             endif
         endif
         ! phase logics
@@ -1083,6 +1103,7 @@ contains
         call cline_refine3D%delete('lpstart')
         call cline_refine3D%delete('lpstop')
         endif
+        call cline_refine3D%set('automsk',                    automsk)
         ! phase control parameters
         call cline_refine3D%set('nspace',                     inspace)
         call cline_refine3D%set('maxits',                     imaxits)

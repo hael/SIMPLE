@@ -552,13 +552,14 @@ contains
         real        :: lpest(params_glob%nstates), lpopt, res_fsc05, res_fsc0143, llpfromto(2)
         601 format(A,1X,F12.3)
         602 format(A,1X,F12.3,1X,F12.3)
-        ! finding optimal lp over all states
-        call mskvol%disc([params_glob%box_crop,  params_glob%box_crop, params_glob%box_crop],&
-                         &params_glob%smpd_crop, params_glob%msk_crop, npix )
         if( params_glob%l_filemsk )then
-            ! envelope masking
-            call mskvol%copy(build_glob%mskvol)
+            ! read 3D envelope mask
+            call mskvol%read_and_crop(params_glob%mskfile, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
             call mskvol%remove_edge
+        else
+            ! finding optimal lp over all states
+            call mskvol%disc([params_glob%box_crop,  params_glob%box_crop, params_glob%box_crop],&
+                         &params_glob%smpd_crop, params_glob%msk_crop, npix )
         endif
         ! find best resolved state
         res = get_resarr(params_glob%box_crop, params_glob%smpd_crop)
@@ -611,12 +612,13 @@ contains
         call mskvol%kill
     end subroutine estimate_lp_refvols
 
-    subroutine read_and_filter_refvols( s )
+    subroutine read_mask_and_filter_refvols( s )
         integer, intent(in) :: s
         character(len=:), allocatable :: vol_even, vol_odd, vol_avg
         logical,          allocatable :: l_msk(:,:,:)
         real    :: cur_fil(params_glob%box_crop)
         integer :: filtsz
+        ! READ
         vol_even = params_glob%vols_even(s)
         vol_odd  = params_glob%vols_odd(s)
         vol_avg  = params_glob%vols(s)
@@ -624,17 +626,29 @@ contains
         call build_glob%vol_odd%read_and_crop(vol_odd, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
         if( s == 1 .and. params_glob%l_filemsk )then
             ! read 3D envelope mask
-            call build_glob%mskvol%new([params_glob%box_crop,params_glob%box_crop,params_glob%box_crop],params_glob%smpd_crop)
-            call build_glob%mskvol%read(params_glob%mskfile)
+            call build_glob%mskvol%read_and_crop(params_glob%mskfile, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
         endif
+        ! noise regularization
+        if( params_glob%l_noise_reg )then
+            call build_glob%vol%add_gauran(params_glob%eps)
+            call build_glob%vol_odd%add_gauran(params_glob%eps)
+        endif
+        ! MASK
+        if( params_glob%l_filemsk )then
+            ! envelope masking
+            call build_glob%vol%zero_env_background(build_glob%mskvol)
+            call build_glob%vol_odd%zero_env_background(build_glob%mskvol)
+            call build_glob%vol%mul(build_glob%mskvol)
+            call build_glob%vol_odd%mul(build_glob%mskvol)
+        else
+            ! circular masking
+            call build_glob%vol%mask(params_glob%msk_crop, 'soft', backgr=0.0)
+            call build_glob%vol_odd%mask(params_glob%msk_crop, 'soft', backgr=0.0)
+        endif
+        ! FILTER
         if( params_glob%l_icm )then
             if( params_glob%l_filemsk )then
                 l_msk = build_glob%mskvol%bin2logical()
-                ! apply mask to volumes before ICM
-                call build_glob%vol%zero_env_background(build_glob%mskvol)
-                call build_glob%vol_odd%zero_env_background(build_glob%mskvol)
-                call build_glob%vol%mul(build_glob%mskvol)
-                call build_glob%vol_odd%mul(build_glob%mskvol)
                 call build_glob%vol%ICM3D_eo(build_glob%vol_odd, params_glob%lambda, l_msk)
             else
                 call build_glob%vol%ICM3D_eo(build_glob%vol_odd, params_glob%lambda)
@@ -665,7 +679,7 @@ contains
                 call build_glob%vol%apply_filter(cur_fil)
             endif
         endif
-    end subroutine read_and_filter_refvols
+    end subroutine read_mask_and_filter_refvols
 
     !>  \brief  prepares one volume for references extraction
     subroutine preprefvol( cline, s, do_center, xyz, iseven )
@@ -689,18 +703,6 @@ contains
         endif
         ! back to real space
         call vol_ptr%ifft()
-        ! noise regularization
-        if( params_glob%l_noise_reg )then
-            call vol_ptr%add_gauran(params_glob%eps)
-        endif
-        ! masking
-        if( params_glob%l_filemsk )then
-            call vol_ptr%zero_env_background(build_glob%mskvol)
-            call vol_ptr%mul(build_glob%mskvol)
-        else
-            ! circular masking
-            call vol_ptr%mask(params_glob%msk_crop, 'soft', backgr=0.0)
-        endif
         ! gridding prep
         if( params_glob%gridding.eq.'yes' )then
             call vol_ptr%div_w_instrfun(params_glob%interpfun, alpha=params_glob%alpha)
@@ -1121,7 +1123,7 @@ contains
             else
                 call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=.true.)
             endif
-            call read_and_filter_refvols(s)
+            call read_mask_and_filter_refvols(s)
             ! PREPARE E/O VOLUMES
             call preprefvol(cline, s, do_center, xyz, .false.)
             call preprefvol(cline, s, do_center, xyz, .true.)
