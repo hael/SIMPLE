@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/Modules/")
-option(USE_AFM "Use AFM support" OFF )
 include(FortranOverride)
 
 project(SIMPLE LANGUAGES Fortran C CXX)
@@ -12,10 +11,11 @@ project(SIMPLE
         LANGUAGES Fortran C CXX)
 
 # OPTIONS
+option(USE_AFM                     "Use AFM support" OFF )
 option(USE_OPENMP                  "Use OpenMP for parallelization - debugging may disable OpemMP." ON )
 option(USE_MPI                     "Use OpenMPI for parallelization - in developement." OFF )
 option(USE_LIBTIFF                 "Use libtiff." ON)
-option(${PROJECT_NAME}_BUILD_TESTS "Build the test examples." ON)
+option(BUILD_TESTS                 "Build the test examples." ON)
 option(BUILD_SHARED_LIBS           "Build the simple library as shared or static (default)." OFF)
 option(BUILD_DOCS                  "Enable the generation of PDF manuals and doxygen API documentation." OFF)
 option(USE_SYSTEM_JPEG_SQLite      "Compile libjpeg9 and sqlite3 from source (default) or use system libraries." OFF)
@@ -91,7 +91,7 @@ list(APPEND EXTRA_LIBS
   ${CMAKE_THREAD_LIBS_INIT}
   ${EXTRA_LIBS})
 link_directories(lib)
-message(STATUS " EXTRA_LIBS  ${EXTRA_LIBS}")
+message(STATUS "EXTRA_LIBS ${EXTRA_LIBS}")
 
 # ADD SCRIPTS
 # The script folder contains some handy perl scripts for running SIMPLE
