@@ -580,13 +580,14 @@ contains
         do istage = start_stage, NSTAGES
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', lpinfo(istage)%lp
-            ! At the splitting stage of docked mode
-            if( params%multivol_mode.eq.'docked' .and. istage == HET_DOCKED_STAGE )then
-                params_glob%nstates = nstates_glob
-                call randomize_states(spproj, params%projfile, xreconstruct3D_distr)
-            endif
+            ! At the splitting stage of docked mode: reset the nstates in params
+            if( params%multivol_mode.eq.'docked' .and. istage == HET_DOCKED_STAGE ) params_glob%nstates = nstates_glob
             ! Preparation of command line for refinement
             call set_cline_refine3D(istage, l_cavgs=.false.)
+            ! Need to be here since rec cline depends on refine3D cline
+            if( params%multivol_mode.eq.'docked' .and. istage == HET_DOCKED_STAGE )then
+                call randomize_states(spproj, params%projfile, xreconstruct3D_distr)
+            endif
             if( lpinfo(istage)%l_autoscale )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',lpinfo(istage)%box_crop
             endif
