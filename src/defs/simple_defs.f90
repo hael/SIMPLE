@@ -230,7 +230,7 @@ integer, parameter :: MC_NPATCH                 = 5              !< number of pa
 integer, parameter :: MC_MINPATCHSZ             = 200            !< Minimum patch size in pixels for motion correction
 integer, parameter :: MIN_ITERS_SHC             = 5              !< minimum number of iterations of stochastic search
 integer, parameter :: BATCHTHRSZ                = 50             !< # of images per thread
-integer, parameter :: AMSK_FREQ                 = 3              !< automasking every third iteration (each for now)
+integer, parameter :: AMSK_FREQ                 = 3              !< automasking every third iteration
 
 ! stream-related constants & thresholds
 real,    parameter :: CTFRES_THRESHOLD_STREAM   = 10.0           !< preprocessing: Stream ctfres rejection threshold (Angstroms)
@@ -244,7 +244,7 @@ real,    parameter :: REL_VAR_THRESHOLD         = 6.0            !< class reject
 real,    parameter :: ABS_VAR_THRESHOLD         = 1.5            !< class rejection: image variance threshold (absolute value)
 real,    parameter :: TVD_THRESHOLD             = 0.55           !< class rejection: Total Variation Distance of image distributions
 real,    parameter :: MINMAX_THRESHOLD          = 2.0            !< class rejection: image min & max threshold (absolute value)
-real,    parameter :: POOL_THRESHOLD_FACTOR     = 1.25            !< class rejection: pool class rejection adjustment
+real,    parameter :: POOL_THRESHOLD_FACTOR     = 1.25           !< class rejection: pool class rejection adjustment
 real,    parameter :: FRAC_SKIP_REJECTION       = 0.7            !< classification: When the number of classes to reject is too high rejection is skipped
 integer, parameter :: STREAM_SRCHLIM            = 5              !< classification: maximum # of systematic iterations for streaming 2D pool
 integer, parameter :: MAX_STREAM_NPTCLS         = 500000         !< classification: cap for adjusting update_frac in 2D streaming

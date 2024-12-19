@@ -458,12 +458,11 @@ contains
                         volpproc = trim(VOL_FBODY)//trim(str_state)//PPROC_SUFFIX//params%ext
                         vollp    = trim(VOL_FBODY)//trim(str_state)//LP_SUFFIX//params%ext
                         if( l_automsk )then
+                            do_automsk = .false.
                             if( niters == 1 .and. .not.params%l_filemsk )then
                                 do_automsk = .true.
                             else if( mod(iter,AMSK_FREQ)==0 )then
                                 do_automsk = .true.
-                            else 
-                                do_automsk = .false. 
                             endif
                             if( do_automsk )then
                                 call build%spproj%get_vol('vol', state, fname_vol, smpd, box)

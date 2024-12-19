@@ -2991,8 +2991,6 @@ contains
     subroutine remove_edge( self )
         class(image), intent(inout) :: self
         if( self%ft ) THROW_HARD('only for real binary images (not FTed ones); remove_edge')
-        if( any(self%rmat > 1.0001) .or. any(self%rmat < 0. ))&
-            THROW_HARD('input to remove edge not binary; remove_edge')
         where( self%rmat < 0.999 ) self%rmat = 0.
     end subroutine remove_edge
 
