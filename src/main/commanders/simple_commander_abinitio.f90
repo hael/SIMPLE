@@ -69,6 +69,7 @@ integer,          parameter :: STOCH_SAMPL_STAGE     = PROBREFINE_STAGE  ! we sw
 integer,          parameter :: TRAILREC_STAGE_SINGLE = STOCH_SAMPL_STAGE ! we start trailing when we start sampling particles randomly
 integer,          parameter :: TRAILREC_STAGE_MULTI  = NSTAGES           ! we start trailing in the last stage
 integer,          parameter :: LPAUTO_STAGE          = NSTAGES - 1       ! cannot be switched on too early
+integer,          parameter :: RECALC_STARTREC_STAGE = LPAUTO_STAGE      ! re-estimate starting volume for optimal LP and AUTOMSK
 integer,          parameter :: AUTOMSK_STAGE         = LPAUTO_STAGE      ! swith on automasking when lpauto is switched on
 integer,          parameter :: HET_DOCKED_STAGE      = NSTAGES           ! stage at which state splitting is done when multivol_mode==docked
 
@@ -600,6 +601,8 @@ contains
             ! Need to be here since rec cline depends on refine3D cline
             if( params%multivol_mode.eq.'docked' .and. istage == HET_DOCKED_STAGE )then
                 call randomize_states(spproj, params%projfile, xreconstruct3D_distr)
+            else if( istage >= RECALC_STARTREC_STAGE )then
+                call calc_start_rec(params%projfile, xreconstruct3D_distr, istage=istage)
             endif
             if( lpinfo(istage)%l_autoscale )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',lpinfo(istage)%box_crop
@@ -1206,11 +1209,19 @@ contains
         call cline_startrec%set('pgrp',        params_glob%pgrp)
         call cline_startrec%set('objfun',      'cc') ! ugly, but this is how it works in parameters 
         call cline_startrec%set('box_crop',    lpinfo(istage)%box_crop)
-        call cline_startrec%set('update_frac', update_frac)
+        call cline_startrec%set('projrec',     'no')
+        call cline_startrec%delete('update_frac')    ! use all particles that have been updated
         call cline_startrec%delete('which_iter')
         call cline_startrec%delete('endit')
         call cline_startrec%delete('needs_sigma')
         call cline_startrec%delete('sigma_est')
+        if( istage >= AUTOMSK_STAGE .and. l_automsk )then
+            call cline_startrec%delete('mskfile') ! automask generated
+            call cline_startrec%set('automsk', 'yes')
+        else
+            call cline_startrec%delete('automsk') ! no automask generated
+            call cline_startrec%delete('mskfile') ! no masked FSC
+        endif
         call xreconstruct3D%execute_safe(cline_startrec)
         do state = 1,params_glob%nstates
             ! rename volumes and update cline
@@ -1232,6 +1243,11 @@ contains
             str       = trim(STARTVOL_FBODY)//trim(str_state)//'_odd'//params_glob%ext
             call      simple_rename( trim(vol_odd), trim(str) )
         enddo
+        if( istage >= AUTOMSK_STAGE .and. l_automsk )then
+            if( .not. file_exists(MSKVOL_FILE) ) THROW_HARD('File: '//MSKVOL_FILE//' does not exist!')
+            params_glob%mskfile = MSKVOL_FILE
+            call cline_refine3D%set('mskfile', MSKVOL_FILE)
+        endif
         call cline_startrec%kill
     end subroutine calc_start_rec
 
