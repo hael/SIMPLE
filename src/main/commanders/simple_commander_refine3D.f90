@@ -477,7 +477,6 @@ contains
                                 else
                                     call mskvol%automask3D(vol_e, vol_o, trim(params%automsk).eq.'tight')
                                 endif
-                                call del_file(MSKVOL_FILE)
                                 call mskvol%write(MSKVOL_FILE)
                                 params%mskfile   = MSKVOL_FILE
                                 params%l_filemsk = .true.

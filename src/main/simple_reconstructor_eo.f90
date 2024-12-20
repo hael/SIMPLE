@@ -502,6 +502,13 @@ contains
                 if( self%automsk )then
                     call even%mul(self%envmask)
                     call odd%mul(self%envmask)
+                else if( trim(params_glob%automsk).eq.'yes' )then
+                    call self%envmask%automask3D(even, odd, trim(params_glob%automsk).eq.'tight')
+                    call even%zero_env_background(self%envmask)
+                    call odd%zero_env_background(self%envmask)
+                    call even%mul(self%envmask)
+                    call odd%mul(self%envmask)
+                    call self%envmask%write(MSKVOL_FILE)
                 else
                     call even%mask(self%msk, 'soft', backgr=0.)
                     call odd%mask(self%msk, 'soft', backgr=0.)
@@ -560,6 +567,13 @@ contains
                 if( self%automsk )then
                     call even%mul(self%envmask)
                     call odd%mul(self%envmask)
+                else if( trim(params_glob%automsk).eq.'yes' )then
+                    call self%envmask%automask3D(even, odd, trim(params_glob%automsk).eq.'tight')
+                    call even%zero_env_background(self%envmask)
+                    call odd%zero_env_background(self%envmask)
+                    call even%mul(self%envmask)
+                    call odd%mul(self%envmask)
+                    call self%envmask%write(MSKVOL_FILE)
                 else
                     call even%mask(self%msk, 'soft', backgr=0.)
                     call odd%mask(self%msk, 'soft', backgr=0.)
