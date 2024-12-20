@@ -159,7 +159,6 @@ contains
 
     subroutine exec_postprocess( self, cline )
         use simple_sp_project, only: sp_project
-        use simple_opt_filter, only: nonuni_filt3D
         class(postprocess_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         character(len=:), allocatable :: fname_vol, fname_fsc, fname_msk, fname_mirr
@@ -169,9 +168,9 @@ contains
         type(image)      :: vol_bfac, vol_no_bfac, vol_even, vol_odd
         type(masker)     :: mskvol, sphere
         type(sp_project) :: spproj
-        real    :: fsc0143, fsc05, smpd, mskfile_smpd, lplim
-        integer :: state, box, fsc_box, mskfile_box, ldim(3)
-        logical :: has_fsc, has_mskfile
+        real    :: fsc0143, fsc05, smpd, lplim
+        integer :: state, box, fsc_box, ldim(3)
+        logical :: has_fsc
         ! set defaults
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call cline%set('oritype', 'out')
@@ -241,16 +240,6 @@ contains
                 params%bfac = 0.
             endif
         endif
-        ! check volume mask
-        has_mskfile = params%l_filemsk
-        if( has_mskfile )then
-            call mskvol%new(ldim, smpd)
-            call mskvol%read(params%mskfile)
-        else
-            call spproj%get_vol('vol_msk', 1, fname_msk, mskfile_smpd, mskfile_box)
-            params%mskfile = trim(fname_msk)
-            if( file_exists(params%mskfile) ) has_mskfile = .true.
-        endif
         ! B-factor
         call vol_bfac%fft()
         call vol_no_bfac%copy(vol_bfac)
@@ -272,13 +261,7 @@ contains
         call vol_no_bfac%write(fname_lp)
         ! mask
         call vol_bfac%ifft()
-        if( has_mskfile )then
-            call vol_bfac%zero_background
-            call vol_bfac%mul(mskvol)
-            call mskvol%kill
-        else
-            call vol_bfac%mask(params%msk_crop, 'soft')
-        endif
+        call vol_bfac%mask(params%msk_crop, 'soft')
         ! output in cwd
         call vol_bfac%write(fname_pproc)
         ! also output mirrored by default (unless otherwise stated on command line)

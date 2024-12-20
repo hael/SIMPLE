@@ -96,7 +96,6 @@ type :: parameters
     character(len=3)          :: remap_cls='no'
     character(len=3)          :: transp_pca='no'
     character(len=3)          :: script='no'          !< do not execute but generate a script for submission to the queue
-    character(len=3)          :: silence_fsc='no'     !< dont print FSC plot to stdout(yes|no){no}
     character(len=3)          :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
     character(len=3)          :: sh_first='no'        !< shifting before orientation search(yes|no){no}
     character(len=3)          :: sh_inv='no'          !< whether to use shift invariant metric for projection direction assignment(yes|no){no}
@@ -659,7 +658,6 @@ contains
         call check_carg('projfile_optics',self%projfile_optics)
         call check_carg('remap_cls',      self%remap_cls)
         call check_carg('roavg',          self%roavg)
-        call check_carg('silence_fsc',    self%silence_fsc)
         call check_carg('script',         self%script)
         call check_carg('shbarrier',      self%shbarrier)
         call check_carg('sh_first',       self%sh_first)

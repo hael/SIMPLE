@@ -390,9 +390,29 @@
       EXTERNAL           IEEECK, IPARMQ, IPARAM2STAGE 
 !     ..                                                                
 !     .. Executable Statements ..                                       
-!                                                                       
-      GO TO ( 10, 10, 10, 80, 90, 100, 110, 120,                        &
-     &        130, 140, 150, 160, 160, 160, 160, 160)ISPEC              
+!
+      select case(ISPEC)
+         case(1, 2, 3)
+            GO TO 10
+         case(4)
+            GO TO 80
+         case(5)
+            GO TO 90
+         case(6)
+            GO TO 100
+         case(7)
+            GO TO 110
+         case(8)
+            GO TO 120
+         case(9)
+            GO TO 130
+         case(10)
+            GO TO 140
+         case(11)
+            GO TO 150
+         case(12, 13, 14, 15, 16)
+            GO TO 160
+      end select
 !                                                                       
 !     Invalid value for ISPEC                                           
 !                                                                       
@@ -462,7 +482,14 @@
       TWOSTAGE = LEN( SUBNAM ).GE.11                                    &
      &           .AND. SUBNAM( 11: 11 ).EQ.'2'                          
 !                                                                       
-      GO TO ( 50, 60, 70 )ISPEC 
+      select case(ISPEC)
+         case(1)
+            GO TO 50
+         case(2)
+            GO TO 60
+         case(3)
+            GO TO 70
+      end select
 !                                                                       
    50 CONTINUE 
 !                                                                       

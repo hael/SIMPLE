@@ -72,7 +72,7 @@ contains
                 if( cline%defined('lp_backgr') )then
                     call build%vol%lp_background(mskvol,params%lp_backgr)
                 else
-                    call build%vol%zero_background
+                    call build%vol%zero_env_background(mskvol)
                     call build%vol%mul(mskvol)
                 endif
                 call mskvol%kill
@@ -159,12 +159,12 @@ contains
                 fname_out = 'automask3D_filtered.mrc'
             else
                 call mskvol%automask3D(build%vol, build%vol_odd, build%vol2, l_tight, params%thres)
-                call mskvol%write('automask3D_mask'//params%ext)
+                call mskvol%write(MSKVOL_FILE)
                 fname_out = 'automask3D_masked_vol.mrc'
             endif
         else
             call mskvol%automask3D(build%vol, build%vol_odd, build%vol2, l_tight)
-            call mskvol%write('automask3D_mask'//params%ext)
+            call mskvol%write(MSKVOL_FILE)
             fname_out = 'automask3D_masked_vol.mrc'
         endif
         call build%vol2%write(fname_out)

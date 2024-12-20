@@ -48,7 +48,7 @@ contains
         ! automasking
         call self%automask3D_2(vol_even, vol_odd, l_tight, pix_thres)
         ! apply mask to volume
-        call vol_masked%zero_background()
+        call vol_masked%zero_env_background(self)
         call vol_masked%mul(self)
     end subroutine automask3D_1
 
@@ -59,6 +59,7 @@ contains
         real, optional, intent(in)    :: pix_thres 
         type(image) :: vol_filt
         if( vol_even%is_2d() )THROW_HARD('automask3D is intended for volumes only; automask3D')
+        write(logfhandle,'(A)'  ) '>>> AUTOMASKING'
         self%amsklp   = params_glob%amsklp
         self%binwidth = params_glob%binwidth
         self%edge     = params_glob%edge
@@ -85,10 +86,10 @@ contains
         call vol_filt%copy(vol_even)
         call vol_filt%add(vol_odd)
         call vol_filt%mul(0.5)
-        if( L_WRITE ) call vol_filt%write('ICM_avg.mrc')
+        if( L_WRITE .and. params_glob%part == 1 ) call vol_filt%write('ICM_avg.mrc')
         ! low-pass filter
         call vol_filt%bp(0., self%amsklp)
-        if( L_WRITE ) call vol_filt%write('ICM_avg_lp.mrc')
+        if( L_WRITE .and. params_glob%part == 1 ) call vol_filt%write('ICM_avg_lp.mrc')
         ! transfer image to binary image
         call self%transfer2bimg(vol_filt)
     end subroutine automask3D_filter
@@ -108,7 +109,7 @@ contains
             call otsu_img(self, tight=l_tight)
         endif
         call self%set_imat
-        if( L_WRITE ) call self%write('binarized.mrc')
+        if( L_WRITE .and. params_glob%part == 1 ) call self%write('binarized.mrc')
         ! identify connected components
         call self%find_ccs(ccimage, update_imat=.true.)
         ! extract all cc sizes (in # pixels)
@@ -122,7 +123,7 @@ contains
             call ccimage%cc2bin(1)
         endif
         call self%copy_bimg(ccimage)
-        if( L_WRITE ) call self%write('largest_cc.mrc')
+        if( L_WRITE .and. params_glob%part == 1 ) call self%write('largest_cc.mrc')
         ! destruct
         call ccimage%kill_bimg
     end subroutine automask3D_binarize
