@@ -13,7 +13,7 @@ implicit none
 
 public :: prepimgbatch, killimgbatch, read_imgbatch, discrete_read_imgbatch
 public :: set_bp_range, set_bp_range2D, sample_ptcls4update, prepimg4align, prep2Dref
-public :: build_batch_particles, prepare_polar_references, calc_3Drec, calc_projdir3Drec
+public :: build_batch_particles, prepare_refs_sigmas_ptcls, calc_3Drec, calc_projdir3Drec
 private
 #include "simple_local_flags.inc"
 
@@ -67,38 +67,21 @@ contains
         endif
     end subroutine killimgbatch
 
-    subroutine read_imgbatch_1( fromptop, ptcl_mask )
+    subroutine read_imgbatch_1( fromptop )
         integer,           intent(in) :: fromptop(2)
-        logical, optional, intent(in) :: ptcl_mask(params_glob%fromp:params_glob%top)
         character(len=:), allocatable :: stkname
         integer :: iptcl, ind_in_batch, ind_in_stk
-        if( present(ptcl_mask) )then
-            do iptcl=fromptop(1),fromptop(2)
-                if( ptcl_mask(iptcl) )then
-                    ind_in_batch = iptcl - fromptop(1) + 1
-                    call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, iptcl, stkname, ind_in_stk)
-                    if( .not. stkio_r%stk_is_open() )then
-                        call stkio_r%open(stkname, params_glob%smpd, 'read')
-                    else if( .not. stkio_r%same_stk(stkname, [params_glob%box,params_glob%box,1]) )then
-                        call stkio_r%close
-                        call stkio_r%open(stkname, params_glob%smpd, 'read')
-                    endif
-                    call stkio_r%read(ind_in_stk, build_glob%imgbatch(ind_in_batch))
-                endif
-            end do
-        else
-            do iptcl=fromptop(1),fromptop(2)
-                ind_in_batch = iptcl - fromptop(1) + 1
-                call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, iptcl, stkname, ind_in_stk)
-                if( .not. stkio_r%stk_is_open() )then
-                    call stkio_r%open(stkname, params_glob%smpd, 'read')
-                else if( .not. stkio_r%same_stk(stkname, [params_glob%box,params_glob%box,1]) )then
-                    call stkio_r%close
-                    call stkio_r%open(stkname, params_glob%smpd, 'read')
-                endif
-                call stkio_r%read(ind_in_stk, build_glob%imgbatch(ind_in_batch))
-            end do
-        endif
+        do iptcl=fromptop(1),fromptop(2)
+            ind_in_batch = iptcl - fromptop(1) + 1
+            call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, iptcl, stkname, ind_in_stk)
+            if( .not. stkio_r%stk_is_open() )then
+                call stkio_r%open(stkname, params_glob%smpd, 'read')
+            else if( .not. stkio_r%same_stk(stkname, [params_glob%box,params_glob%box,1]) )then
+                call stkio_r%close
+                call stkio_r%open(stkname, params_glob%smpd, 'read')
+            endif
+            call stkio_r%read(ind_in_stk, build_glob%imgbatch(ind_in_batch))
+        end do
         call stkio_r%close
     end subroutine read_imgbatch_1
 
@@ -306,13 +289,14 @@ contains
         call build_glob%spproj_field%set_all2single('lp',lplim)
     end subroutine set_bp_range2D
 
-    subroutine sample_ptcls4update( pfromto, l_incr_sampl, nptcls2update, pinds, ptcl_mask )
+    subroutine sample_ptcls4update( pfromto, l_incr_sampl, nptcls2update, pinds )
         integer,              intent(in)    :: pfromto(2)
         logical,              intent(in)    :: l_incr_sampl
         integer,              intent(inout) :: nptcls2update
         integer, allocatable, intent(inout) :: pinds(:)
-        logical, allocatable, intent(inout) :: ptcl_mask(:)
         type(class_sample),   allocatable   :: clssmp(:)
+        logical,              allocatable   :: ptcl_mask(:)
+        allocate(ptcl_mask(pfromto(1):pfromto(2)))
         if( params_glob%l_update_frac )then
             if( trim(params_glob%balance).eq.'yes' )then
                 if( file_exists(CLASS_SAMPLING_FILE) )then
@@ -341,6 +325,7 @@ contains
             ! increment update counter
             call build_glob%spproj_field%incr_updatecnt(pfromto, ptcl_mask)
         endif
+        deallocate(ptcl_mask)
     end subroutine sample_ptcls4update
 
     !>  \brief  prepares one particle image for alignment
@@ -1098,11 +1083,45 @@ contains
         call build_glob%vol2%kill
     end subroutine norm_struct_facts
 
-    subroutine prepare_polar_references( pftcc, cline, batchsz_max )
+    subroutine prepare_refs_sigmas_ptcls( pftcc, cline, eucl_sigma, ptcl_imgs, batchsz )
+        use simple_polarft_corrcalc,        only:  polarft_corrcalc
+        use simple_euclid_sigma2,           only:  euclid_sigma2
+        class(polarft_corrcalc),  intent(inout) :: pftcc
+        class(cmdline),           intent(in)    :: cline !< command line
+        class(euclid_sigma2),     intent(inout) :: eucl_sigma
+        type(image), allocatable, intent(inout) :: ptcl_imgs(:)
+        integer,                  intent(in)    :: batchsz
+        character(len=:), allocatable :: fname
+        integer :: ithr
+        ! PREPARATION OF PFTCC AND REFERENCES
+        ! (if needed) estimating lp (over all states) and reseting params_glob%lp and params_glob%kfromto
+        call prepare_polar_references(pftcc, cline, batchsz)
+        ! PREPARATION OF SIGMAS
+        if( params_glob%l_needs_sigma )then
+            fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
+            call eucl_sigma%new(fname, params_glob%box)
+            call eucl_sigma%read_part(  build_glob%spproj_field)
+            call eucl_sigma%read_groups(build_glob%spproj_field)
+        end if
+        ! PREPARATION OF PARTICLES
+        call prepimgbatch(batchsz)
+        allocate(ptcl_imgs(nthr_glob))
+        !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
+        do ithr = 1,nthr_glob
+            call ptcl_imgs(ithr)%new([params_glob%box_crop,params_glob%box_crop,1], params_glob%smpd_crop, wthreads=.false.)
+        enddo
+        !$omp end parallel do
+        call build_glob%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
+        call build_glob%vol%kill
+        call build_glob%vol_odd%kill
+        call build_glob%vol2%kill
+    end subroutine prepare_refs_sigmas_ptcls
+
+    subroutine prepare_polar_references( pftcc, cline, batchsz )
         use simple_polarft_corrcalc,       only:  polarft_corrcalc
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(cmdline),          intent(in)    :: cline !< command line
-        integer,                 intent(in)    :: batchsz_max
+        integer,                 intent(in)    :: batchsz
         type(ori) :: o_tmp
         real      :: xyz(3)
         integer   :: s, iref, nrefs
@@ -1114,7 +1133,7 @@ contains
         endif
         ! pftcc
         nrefs = params_glob%nspace * params_glob%nstates
-        call pftcc%new(nrefs, [1,batchsz_max], params_glob%kfromto)
+        call pftcc%new(nrefs, [1,batchsz], params_glob%kfromto)
         ! read reference volumes and create polar projections
         do s=1,params_glob%nstates
             if( str_has_substr(params_glob%refine, 'prob') )then

@@ -33,7 +33,6 @@ logical                        :: has_been_searched
 type(eul_prob_tab),     target :: eulprob_obj_part
 type(image),       allocatable :: ptcl_match_imgs(:)
 integer,           allocatable :: pinds(:)
-logical,           allocatable :: ptcl_mask(:)
 character(len=:),  allocatable :: fname
 integer                        :: nptcls2update
 type(euclid_sigma2)            :: eucl_sigma
@@ -88,59 +87,43 @@ contains
         call set_bp_range(cline)
 
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
-        if( allocated(pinds) )     deallocate(pinds)
-        if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
-        allocate(ptcl_mask(params_glob%fromp:params_glob%top))
+        if( allocated(pinds) ) deallocate(pinds)
         if( str_has_substr(params_glob%refine, 'prob') )then
             ! generation of random sample and incr of updatecnts delegated to prob_align
             call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
-            &nptcls2update, pinds, ptcl_mask )
+            &nptcls2update, pinds )
         else
             ! sampled incremented
-            call sample_ptcls4update([params_glob%fromp,params_glob%top], .true., nptcls2update, pinds, ptcl_mask )
+            call sample_ptcls4update([params_glob%fromp,params_glob%top], .true., nptcls2update, pinds)
         endif
 
-        ! PREP BATCH ALIGNEMENT
+        ! PREP BATCH ALIGNMENT
         batchsz_max = min(nptcls2update,params_glob%nthr*BATCHTHRSZ)
         nbatches    = ceiling(real(nptcls2update)/real(batchsz_max))
         batches     = split_nobjs_even(nptcls2update, nbatches)
         batchsz_max = maxval(batches(:,2)-batches(:,1)+1)
 
-        ! PREPARE THE POLARFT DATA STRUCTURES
+        ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, POLARIZER, PTCLS
         if( L_BENCH_GLOB )then
             rt_init                    = toc(t_init)
             t_prepare_polar_references = tic()
         endif
-        call prepare_polar_references(pftcc, cline, batchsz_max)
+        call prepare_refs_sigmas_ptcls( pftcc, cline, eucl_sigma, ptcl_match_imgs, batchsz_max )
         if( L_BENCH_GLOB )then
             rt_prepare_polar_references = toc(t_prepare_polar_references)
             t_prep_orisrch              = tic()
         endif
-        ! PREP sigmas
-        if( params_glob%l_needs_sigma )then
-            fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
-            call eucl_sigma%new(fname, params_glob%box)
-            call eucl_sigma%read_part(  build_glob%spproj_field, ptcl_mask)
-            call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
-        end if
-        ! PREPARATION OF PARTICLES
-        call build_glob%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
-        call build_glob%vol%kill
-        call build_glob%vol_odd%kill
-        call build_glob%vol2%kill
+        
+        ! PREPARE STRATEGY3D
         call prep_strategy3D ! allocate s3D singleton
-        ! generate particles image objects
         allocate(strategy3Dspecs(batchsz_max),strategy3Dsrch(batchsz_max))
-        call prepimgbatch(batchsz_max)
-        allocate(ptcl_match_imgs(params_glob%nthr))
-        do ithr = 1,params_glob%nthr
-            call ptcl_match_imgs(ithr)%new([params_glob%box_crop, params_glob%box_crop, 1], params_glob%smpd_crop, wthreads=.false.)
-        enddo
-        write(logfhandle,'(A,1X,I3)') '>>> REFINE3D SEARCH, ITERATION:', which_iter
+
+        ! READING THE ASSIGNMENT FOR PROB MODE
         if( str_has_substr(params_glob%refine, 'prob') .and. .not.(trim(params_glob%refine) .eq. 'sigma') )then
             call eulprob_obj_part%new(pinds)
             call eulprob_obj_part%read_assignment(trim(ASSIGNMENT_FBODY)//'.dat')
         endif
+
         if( L_BENCH_GLOB )then
             rt_prep_orisrch          = toc(t_prep_orisrch)
             rt_build_batch_particles = 0.
@@ -148,6 +131,7 @@ contains
         endif
 
         ! BATCH LOOP
+        write(logfhandle,'(A,1X,I3)') '>>> REFINE3D SEARCH, ITERATION:', which_iter
         allocate(cnt_greedy(params_glob%nthr), cnt_all(params_glob%nthr), source=0)
         do ibatch=1,nbatches
             batch_start = batches(ibatch,1)

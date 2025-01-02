@@ -1137,7 +1137,7 @@ contains
         integer,              intent(in)    :: fromto(2)
         integer,              intent(inout) :: nsamples
         integer, allocatable, intent(inout) :: inds(:)
-        logical,              intent(inout) :: mask(fromto(1):fromto(2))
+        logical, optional,    intent(inout) :: mask(fromto(1):fromto(2))
         integer, allocatable :: states(:), updatecnts(:)
         integer :: i, cnt, nptcls
         nptcls = fromto(2) - fromto(1) + 1
@@ -1157,10 +1157,12 @@ contains
             nsamples = count(states > 0)
             inds     = pack(inds, mask=states > 0)
         endif
-        mask = .false.
-        do i = 1, nsamples
-            mask(inds(i)) = .true.
-        end do
+        if( present(mask) )then
+            mask = .false.
+            do i = 1, nsamples
+                mask(inds(i)) = .true.
+            end do
+        endif
     end subroutine sample4rec
 
     subroutine sample4update_all( self, fromto, nsamples, inds, mask, incr_sampled )
@@ -1292,7 +1294,7 @@ contains
         integer,              intent(in)    :: fromto(2)
         integer,              intent(inout) :: nsamples
         integer, allocatable, intent(inout) :: inds(:)
-        logical,              intent(inout) :: mask(fromto(1):fromto(2))
+        logical, optional,    intent(inout) :: mask(fromto(1):fromto(2))
         integer, allocatable :: sampled(:)
         integer :: i, cnt, nptcls, sample_ind
         nptcls = fromto(2) - fromto(1) + 1
@@ -1309,10 +1311,12 @@ contains
         if( sample_ind  == 0 ) THROW_HARD('requires previous sampling')
         nsamples = count(sampled == sample_ind)
         inds     = pack(inds, mask=sampled == sample_ind)
-        mask     = .false.
-        do i = 1, nsamples
-            mask(inds(i)) = .true.
-        end do
+        if( present(mask) )then
+            mask = .false.
+            do i = 1, nsamples
+                mask(inds(i)) = .true.
+            end do
+        endif
     end subroutine sample4update_reprod
 
     subroutine sample4update_updated( self, fromto, nsamples, inds, mask, incr_sampled )

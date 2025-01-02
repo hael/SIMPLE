@@ -153,19 +153,17 @@ contains
 
     ! I/O
 
-    subroutine read_part( self, os, ptcl_mask )
+    subroutine read_part( self, os )
         class(euclid_sigma2), intent(inout) :: self
         class(oris),          intent(inout) :: os
-        logical,              intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
         type(sigma2_binfile) :: binfile
         call binfile%new_from_file(self%binfname)
         call binfile%read(self%sigma2_part)
     end subroutine read_part
 
-    subroutine read_groups( self, os, ptcl_mask )
+    subroutine read_groups( self, os )
         class(euclid_sigma2), intent(inout) :: self
         class(oris),          intent(inout) :: os
-        logical,              intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
         integer                             :: iptcl, igroup, ngroups, eo
         if( associated(pftcc_glob) ) call pftcc_glob%assign_pinds(self%pinds)
         call self%read_sigma2_groups( params_glob%which_iter, self%sigma2_groups, ngroups )

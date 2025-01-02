@@ -134,8 +134,7 @@ contains
         type(builder)                   :: build
         type(euclid_sigma2),     target :: eucl_sigma
         character(len=:),   allocatable :: fname
-        integer,            allocatable :: pinds(:), updatecnts(:)
-        logical,            allocatable :: ptcl_mask(:)
+        integer,            allocatable :: pinds(:)
         integer :: nptcls2update
         call build%init_params_and_build_general_tbox(cline, params)
         call build%build_strategy3D_tbox(params)
@@ -147,17 +146,16 @@ contains
             ! to update eo flags and weights
             call build%spproj%write_segment_inside(params%oritype)
         endif
-        allocate(ptcl_mask(params%fromp:params%top)) 
         if( params%l_update_frac .and. build%spproj_field%has_been_sampled() )then
-            call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls2update, pinds, ptcl_mask)
+            call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls2update, pinds)
         else
             ! we sample all state > 0 and updatecnt > 0
-            call build%spproj_field%sample4rec([params%fromp,params%top], nptcls2update, pinds, ptcl_mask)
+            call build%spproj_field%sample4rec([params%fromp,params%top], nptcls2update, pinds)
         endif
         if( params%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
             call eucl_sigma%new(fname, params%box)
-            call eucl_sigma%read_groups(build%spproj_field, ptcl_mask)
+            call eucl_sigma%read_groups(build%spproj_field)
         end if
         if( trim(params%projrec).eq.'yes' )then
             ! making sure the projection directions assignment
