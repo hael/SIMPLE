@@ -181,7 +181,7 @@ do iter = 1, SH_ITERS
     sigma2_group(1,:,:) = sigma2_group(1,:,:) / real(ne)
     sigma2_group(2,:,:) = sigma2_group(2,:,:) / real(no)
     call write_groups_starfile(sigma2_star_from_iter(iter-1), sigma2_group, 1)
-    call eucl%read_groups(b%spproj_field, ptcl_mask)
+    call eucl%read_groups(b%spproj_field)
     do iptcl = p%fromp,p%top
         call pftcc%memoize_sqsum_ptcl(iptcl)
     enddo

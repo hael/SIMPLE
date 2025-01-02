@@ -204,8 +204,8 @@ contains
         if( l_ml_reg )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
             call eucl_sigma%new(fname, params_glob%box)
-            call eucl_sigma%read_part(  build_glob%spproj_field, pptcl_mask)
-            call eucl_sigma%read_groups(build_glob%spproj_field, pptcl_mask)
+            call eucl_sigma%read_part(  build_glob%spproj_field)
+            call eucl_sigma%read_groups(build_glob%spproj_field)
         end if
     end subroutine cavger_read_euclid_sigma2
 

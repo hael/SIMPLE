@@ -52,13 +52,12 @@ contains
         logical,                 intent(inout) :: converged
         type(strategy2D_per_ptcl), allocatable :: strategy2Dsrch(:)
         type(strategy2D_spec),     allocatable :: strategy2Dspecs(:)
-        integer,                   allocatable :: pinds(:), pinds2restore(:), batches(:,:)
+        integer,                   allocatable :: pinds(:), batches(:,:)
         real,                      allocatable :: states(:)
-        logical,                   allocatable :: ptcl_mask2restore(:)
         type(convergence) :: conv
         type(ori)         :: orientation
         real    :: frac_srch_space, neigh_frac
-        integer :: iptcl, ithr, fnr, updatecnt, iptcl_map, nptcls2update, nptcls2restore
+        integer :: iptcl, ithr, fnr, updatecnt, iptcl_map, nptcls2update
         integer :: batchsz, nbatches, batch_start, batch_end, iptcl_batch, ibatch
         logical :: doprint, l_partial_sums, l_update_frac
         logical :: l_snhc, l_greedy, l_np_cls_defined, l_snhc_smpl, l_greedy_smpl
@@ -142,13 +141,7 @@ contains
         endif
         ! increment update counter
         call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top], ptcl_mask)
-        ! particles used for class averages restoration
-        if( allocated(pinds2restore) )     deallocate(pinds2restore)
-        if( allocated(ptcl_mask2restore) ) deallocate(ptcl_mask2restore)
-        ptcl_mask2restore = ptcl_mask
-        pinds2restore     = pinds
-        nptcls2restore    = nptcls2update
-
+        
         ! SNHC LOGICS
         neigh_frac = 0.
         if( params_glob%extr_iter > params_glob%extr_lim )then
@@ -166,7 +159,7 @@ contains
         endif
 
         ! PREP REFERENCES
-        call cavger_new(ptcl_mask2restore)
+        call cavger_new(ptcl_mask)
         if( build_glob%spproj_field%get_nevenodd() == 0 )then
             if( l_distr_exec_glob ) THROW_HARD('no eo partitioning available; cluster2D_exec')
             call build_glob%spproj_field%partition_eo
@@ -444,11 +437,11 @@ contains
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
             call eucl_sigma%new(fname, params_glob%box)
             if( l_stream )then
-                call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
+                call eucl_sigma%read_groups(build_glob%spproj_field)
                 call eucl_sigma%allocate_ptcls
             else
-                call eucl_sigma%read_part(  build_glob%spproj_field, ptcl_mask)
-                if( params_glob%cc_objfun == OBJFUN_EUCLID ) call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
+                call eucl_sigma%read_part(  build_glob%spproj_field)
+                if( params_glob%cc_objfun == OBJFUN_EUCLID ) call eucl_sigma%read_groups(build_glob%spproj_field)
             endif
         endif
         ! prepare the polarizer images

@@ -796,8 +796,8 @@ contains
         call pftcc%new(params%ncls, [1,batchsz_max], params%kfromto)
         call build%img_crop_polarizer%init_polarizer(pftcc, params%alpha)
         call eucl_sigma%new(SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat', params%box)
-        call eucl_sigma%read_part(  build%spproj_field, ptcl_mask)
-        call eucl_sigma%read_groups(build%spproj_field, ptcl_mask)
+        call eucl_sigma%read_part(  build%spproj_field)
+        call eucl_sigma%read_groups(build%spproj_field)
         !$omp parallel do schedule(static) default(shared) private(icls,ithr) proc_bind(close)
         do icls = 1, params%ncls
             ithr = omp_get_thread_num() + 1
