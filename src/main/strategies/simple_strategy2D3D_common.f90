@@ -295,8 +295,6 @@ contains
         integer,              intent(inout) :: nptcls2update
         integer, allocatable, intent(inout) :: pinds(:)
         type(class_sample),   allocatable   :: clssmp(:)
-        logical,              allocatable   :: ptcl_mask(:)
-        allocate(ptcl_mask(pfromto(1):pfromto(2)))
         if( params_glob%l_update_frac )then
             if( trim(params_glob%balance).eq.'yes' )then
                 if( file_exists(CLASS_SAMPLING_FILE) )then
@@ -307,25 +305,20 @@ contains
                 ! balanced class sampling
                 if( params_glob%l_frac_best )then
                     call build_glob%spproj_field%sample4update_class(clssmp, pfromto, params_glob%update_frac,&
-                    nptcls2update, pinds, ptcl_mask, l_incr_sampl, params_glob%frac_best)
+                    nptcls2update, pinds, l_incr_sampl, params_glob%frac_best)
                 else
                     call build_glob%spproj_field%sample4update_class(clssmp, pfromto, params_glob%update_frac,&
-                    nptcls2update, pinds, ptcl_mask, l_incr_sampl)
+                    nptcls2update, pinds, l_incr_sampl)
                 endif
                 call deallocate_class_samples(clssmp)
             else
                 call build_glob%spproj_field%sample4update_rnd(pfromto,&
-                &params_glob%update_frac, nptcls2update, pinds, ptcl_mask, l_incr_sampl)
+                &params_glob%update_frac, nptcls2update, pinds, l_incr_sampl)
             endif
         else
             ! we sample all state > 0
-            call build_glob%spproj_field%sample4update_all(pfromto, nptcls2update, pinds, ptcl_mask, l_incr_sampl)
+            call build_glob%spproj_field%sample4update_all(pfromto, nptcls2update, pinds, l_incr_sampl)
         endif
-        if( l_incr_sampl )then
-            ! increment update counter
-            call build_glob%spproj_field%incr_updatecnt(pfromto, ptcl_mask)
-        endif
-        deallocate(ptcl_mask)
     end subroutine sample_ptcls4update
 
     !>  \brief  prepares one particle image for alignment

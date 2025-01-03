@@ -80,15 +80,17 @@ character(len=STDLEN)   :: benchfname
 
 contains
 
-    subroutine cavger_new( ptcl_mask )
-        logical, optional, intent(in) :: ptcl_mask(params_glob%fromp:params_glob%top)
-        integer :: icls
+    subroutine cavger_new( pinds )
+        integer, optional, intent(in) :: pinds(:)
+        integer :: icls, i
         ! destruct possibly pre-existing instance
         call cavger_kill
-        if( present(ptcl_mask) )then
-            allocate(pptcl_mask(params_glob%fromp:params_glob%top), source=ptcl_mask)
-        else
-            allocate(pptcl_mask(params_glob%fromp:params_glob%top), source=.true.)
+        allocate(pptcl_mask(params_glob%fromp:params_glob%top), source=.true.)
+        if( present(pinds) )then
+            pptcl_mask = .false.
+            do i = 1, size(pinds)
+                pptcl_mask(pinds(i)) = .true.
+            enddo
         endif
         ncls          = params_glob%ncls
         ! work out range and partsz

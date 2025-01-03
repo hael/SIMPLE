@@ -31,7 +31,6 @@ real,    parameter     :: SHMAG = 3.0
 real,    parameter     :: SNR   = 0.1
 real,    parameter     :: BFAC  = 10.
 integer, parameter     :: SH_ITERS = 5, N_SH = 5, N_PTCLS = N_SH**2
-logical, allocatable   :: ptcl_mask(:)
 integer, allocatable   :: pinds(:)
 type(ctfparams)        :: ctfparms
 type(euclid_sigma2)    :: eucl
@@ -117,8 +116,7 @@ do iptcl = p%fromp,p%top
 enddo
 call b%spproj%add_single_stk('particles.mrc', ctfparms, os)
 call b%spproj_field%partition_eo
-allocate(ptcl_mask(p%fromp:p%top))
-call b%spproj_field%sample4update_all([p%fromp,p%top],nptcls2update, pinds, ptcl_mask, .true.)
+call b%spproj_field%sample4update_all([p%fromp,p%top],nptcls2update, pinds, .true.)
 
 ! pftcc
 call pftcc%new(p%nptcls, [1,p%nptcls], p%kfromto)
@@ -240,7 +238,7 @@ contains
         integer, intent(in) :: iter
         p%which_iter = iter
         call cavger_kill()
-        call cavger_new(ptcl_mask)
+        call cavger_new
         call cavger_transf_oridat( b%spproj )
         call cavger_assemble_sums( .false. )
         call cavger_merge_eos_and_norm

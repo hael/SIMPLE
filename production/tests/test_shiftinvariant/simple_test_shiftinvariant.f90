@@ -39,7 +39,6 @@ real,    parameter     :: SHMAG=8.
 real,    parameter     :: SNR  =0.001
 real,    parameter     :: BFAC =20.
 integer, parameter     :: N_PTCLS = 50
-logical, allocatable   :: ptcl_mask(:)
 integer, allocatable   :: pinds(:)
 real, allocatable      :: sigma2_group(:,:,:), orishifts(:,:), scores(:), scores2(:), scores3(:), vals(:)
 real                   :: cxy(3), lims(2,2), lims_init(2,2), sh(2), rsh(2), e3, c, s, angerr, cenerr, aerr
@@ -123,8 +122,7 @@ do iptcl = p%fromp,p%top
 enddo
 call b%spproj%add_single_stk('particles.mrc', ctfparms, os)
 call b%spproj_field%partition_eo
-allocate(ptcl_mask(p%fromp:p%top))
-call b%spproj_field%sample4update_all([p%fromp,p%top],nptcls2update, pinds, ptcl_mask, .true.)
+call b%spproj_field%sample4update_all([p%fromp,p%top],nptcls2update, pinds, .true.)
 
 ! pftcc
 call pftcc%new(p%nptcls, [1,p%nptcls], p%kfromto)
@@ -299,7 +297,7 @@ contains
         integer, intent(in) :: iter
         p%which_iter = iter
         call cavger_kill()
-        call cavger_new(ptcl_mask)
+        call cavger_new
         call cavger_transf_oridat( b%spproj )
         call cavger_assemble_sums( .false. )
         call cavger_merge_eos_and_norm

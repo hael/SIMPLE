@@ -348,7 +348,6 @@ contains
         character(len=:),   allocatable :: vol_name
         real,               allocatable :: rstates(:)
         integer,            allocatable :: tmpinds(:), clsinds(:), pinds(:)
-        logical,            allocatable :: ptcl_mask(:)
         type(class_sample), allocatable :: clssmp(:)
         type(parameters)                :: params
         type(sp_project)                :: spproj
@@ -509,10 +508,9 @@ contains
             endif
             ! create an initial sampling of all updated ptcls for 3D reconstruction
             noris = spproj%os_ptcl3D%get_noris()
-            allocate(ptcl_mask(1:noris))
-            call spproj%os_ptcl3D%sample4update_updated([1,noris], nptcls2update, pinds, ptcl_mask, .true.)
+            call spproj%os_ptcl3D%sample4update_updated([1,noris], nptcls2update, pinds, .true.)
             call spproj%os_ptcl3D%set_updatecnt(1, pinds) ! set all sampled updatecnts to 1 & the rest to zero
-            deallocate(pinds, ptcl_mask) ! these are not needed
+            deallocate(pinds) ! these are not needed
             ! start at the same stage as for multivol_mode==docked
             start_stage = HET_DOCKED_STAGE
             ! create state labelling
@@ -575,11 +573,9 @@ contains
             endif
             ! create an initial balanced greedy sampling
             noris = spproj%os_ptcl3D%get_noris()
-            allocate(ptcl_mask(1:noris))
-            call spproj%os_ptcl3D%sample4update_class(clssmp, [1,noris], update_frac,&
-                nptcls2update, pinds, ptcl_mask, .true.)
+            call spproj%os_ptcl3D%sample4update_class(clssmp, [1,noris], update_frac, nptcls2update, pinds, .true.)
             call spproj%os_ptcl3D%set_updatecnt(1, pinds) ! set all sampled updatecnts to 1 & the rest to zero
-            deallocate(pinds, ptcl_mask)                  ! these are not needed
+            deallocate(pinds)                             ! these are not needed
             call deallocate_class_samples(clssmp)         ! done with this one
             ! write updated project file
             call spproj%write_segment_inside(params%oritype, params%projfile)
