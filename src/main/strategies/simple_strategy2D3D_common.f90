@@ -312,8 +312,8 @@ contains
                 endif
                 call deallocate_class_samples(clssmp)
             else
-                call build_glob%spproj_field%sample4update_rnd(pfromto,&
-                &params_glob%update_frac, nptcls2update, pinds, l_incr_sampl)
+                call build_glob%spproj_field%sample4update_rnd(pfromto, params_glob%update_frac,&
+                    nptcls2update, pinds, l_incr_sampl)
             endif
         else
             ! we sample all state > 0
