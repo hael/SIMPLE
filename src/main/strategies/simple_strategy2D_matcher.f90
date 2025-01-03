@@ -34,7 +34,6 @@ private
 type(polarft_corrcalc)       :: pftcc
 type(euclid_sigma2)          :: eucl_sigma
 type(image),     allocatable :: ptcl_match_imgs(:)
-logical,         allocatable :: ptcl_mask(:)
 integer                      :: batchsz_max
 real(timer_int_kind)         :: rt_init, rt_prep_pftcc, rt_align, rt_cavg, rt_projio, rt_tot
 integer(timer_int_kind)      ::  t_init,  t_prep_pftcc,  t_align,  t_cavg,  t_projio,  t_tot
@@ -125,23 +124,19 @@ contains
 
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
         if( allocated(pinds) )     deallocate(pinds)
-        if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
-        allocate(ptcl_mask(params_glob%fromp:params_glob%top))
         if( l_update_frac )then
             if( build_glob%spproj_field%has_been_sampled() )then ! we have a random subset
                 call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
-                                        &nptcls2update, pinds, ptcl_mask)
+                                        &nptcls2update, pinds)
             else                                                 ! we generate a random subset
                 call build_glob%spproj_field%sample4update_rnd([params_glob%fromp,params_glob%top],&
-                &params_glob%update_frac, nptcls2update, pinds, ptcl_mask, .true.) ! sampled incremented
+                &params_glob%update_frac, nptcls2update, pinds, .true.) ! sampled incremented
             endif
         else                                                     ! we sample all state > 0
             call build_glob%spproj_field%sample4update_all([params_glob%fromp,params_glob%top],&
-                                        &nptcls2update, pinds, ptcl_mask, .true.) ! sampled incremented
+                                        &nptcls2update, pinds, .true.) ! sampled incremented
         endif
-        ! increment update counter
-        call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top], ptcl_mask)
-        
+
         ! SNHC LOGICS
         neigh_frac = 0.
         if( params_glob%extr_iter > params_glob%extr_lim )then
@@ -159,7 +154,7 @@ contains
         endif
 
         ! PREP REFERENCES
-        call cavger_new(ptcl_mask)
+        call cavger_new(pinds)
         if( build_glob%spproj_field%get_nevenodd() == 0 )then
             if( l_distr_exec_glob ) THROW_HARD('no eo partitioning available; cluster2D_exec')
             call build_glob%spproj_field%partition_eo
@@ -305,7 +300,7 @@ contains
         do ithr = 1,params_glob%nthr
             call ptcl_match_imgs(ithr)%kill
         enddo
-        deallocate(strategy2Dsrch,pinds,strategy2Dspecs,batches,ptcl_mask,ptcl_match_imgs)
+        deallocate(strategy2Dsrch,pinds,strategy2Dspecs,batches,ptcl_match_imgs)
 
         ! WRITE SIGMAS FOR ML-BASED REFINEMENT
         if( params_glob%l_needs_sigma ) call eucl_sigma%write_sigma2

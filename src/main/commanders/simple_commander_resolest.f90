@@ -696,7 +696,7 @@ contains
         type(class_frcs)       :: frcs
         real(sp),  allocatable :: scores(:,:), frc(:), filt(:), corrs(:)
         integer,   allocatable :: pinds(:), batches(:,:), cls(:)
-        logical,   allocatable :: ptcl_mask(:), cls_mask(:)
+        logical,   allocatable :: cls_mask(:)
         real     :: cxy(3), lims(2,2), lims_init(2,2), minmax(2), msk, best_corr,best_xy(2)
         integer  :: nptcls, iptcl, icls, batch_start, batch_end, filtsz, irot, inpl_ind,best_rot
         integer  :: ibatch, batchsz, ithr, i, j, nbatches, batchsz_max, funit, stat
@@ -718,8 +718,7 @@ contains
         call build%spproj%os_ptcl2D%set_all2single('w', 1.0)
         call build%spproj%write_segment_inside(params%oritype)
         ! Particles sampling
-        allocate(ptcl_mask(params%fromp:params%top))
-        call build%spproj_field%sample4update_all([params%fromp,params%top],nptcls,pinds,ptcl_mask,.false.)
+        call build%spproj_field%sample4update_all([params%fromp,params%top],nptcls,pinds,.false.)
         ! Number of classes
         call find_ldim_nptcls(params%stk, params%ldim, params%ncls)
         params%ldim(3) = 1
@@ -850,12 +849,10 @@ contains
                 ithr  = omp_get_thread_num()+1
                 i     = j - batch_start +  1
                 iptcl = pinds(j)
-                if( ptcl_mask(iptcl) )then
-                    call eimgs(ithr)%zero_and_flag_ft
-                    call prepimg4align(iptcl, build%imgbatch(i), eimgs(ithr))
-                    call build%img_crop_polarizer%polarize(pftcc, eimgs(ithr), iptcl, .true., .true.)
-                    call pftcc%set_eo(iptcl, (build%spproj_field%get_eo(iptcl)==0))
-                endif
+                call eimgs(ithr)%zero_and_flag_ft
+                call prepimg4align(iptcl, build%imgbatch(i), eimgs(ithr))
+                call build%img_crop_polarizer%polarize(pftcc, eimgs(ithr), iptcl, .true., .true.)
+                call pftcc%set_eo(iptcl, (build%spproj_field%get_eo(iptcl)==0))
             enddo
             !$omp end parallel do
             if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, params%oritype)
@@ -864,10 +861,9 @@ contains
             !$omp parallel do private(j,i,iptcl,icls,ithr,cxy,irot,inpl_ind,corrs,best_class,best_corr,best_xy,best_rot)&
             !$omp schedule(dynamic) proc_bind(close) default(shared)
             do j = batch_start,batch_end
-                ithr  = omp_get_thread_num()+1
-                i     = j - batch_start +  1
-                iptcl = pinds(j)
-                if( .not.ptcl_mask(iptcl) ) cycle
+                ithr       = omp_get_thread_num()+1
+                i          = j - batch_start +  1
+                iptcl      = pinds(j)
                 best_corr  = -1.
                 best_class = 0
                 best_xy    = 0.

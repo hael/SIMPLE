@@ -127,7 +127,6 @@ contains
         integer,            allocatable :: pinds(:)
         real,               allocatable :: pspec(:), sigma2(:,:)
         character(len=:),   allocatable :: binfname
-        logical,            allocatable :: ptcl_mask(:)
         real    :: sdev_noise
         integer :: batchlims(2),kfromto(2)
         integer :: i,iptcl,imatch,nyq,nptcls_part_sel,batchsz_max,nbatch
@@ -140,15 +139,13 @@ contains
         ! Because this is always run prior to reconstruction/search, sampling is not always informed informed
         ! or may change with workflows. Instead of setting a sampling for the following oprations when
         ! l_update_frac, we sample uniformly AND do not write the corresponding field
-        allocate(ptcl_mask(params_glob%fromp:params_glob%top))
         l_scale_update_frac = .false.
         if( params%l_update_frac )then
-            call build%spproj_field%sample4update_rnd([params%fromp,params%top], params_glob%update_frac, nptcls_part_sel, pinds, ptcl_mask, .false. )
+            call build%spproj_field%sample4update_rnd([params%fromp,params%top], params_glob%update_frac, nptcls_part_sel, pinds, .false. )
             l_scale_update_frac = .true.
         else
-            call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls_part_sel, pinds, ptcl_mask, .false.)
+            call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls_part_sel, pinds, .false.)
         endif
-        deallocate(ptcl_mask)
         ! init
         nyq = build%img%get_nyq()
         allocate(sigma2(nyq,params%fromp:params%top),pspec(nyq),source=0.)
