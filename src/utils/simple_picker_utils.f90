@@ -19,14 +19,14 @@ logical, parameter :: L_DEBUG      = .false.
 
 contains
 
-    subroutine exec_gaupick( micname, boxfile_out, smpd, nptcls, pickrefs, moldiam_opt, dir_out )
+    subroutine exec_gaupick( micname, boxfile_out, smpd, nptcls, pickrefs, dir_out, moldiam_opt )
         use simple_strings, only: str2real, parsestr
         character(len=*),           intent(in)    :: micname
         character(len=LONGSTRLEN),  intent(out)   :: boxfile_out
         real,                       intent(in)    :: smpd    !< sampling distance in A
         integer,                    intent(out)   :: nptcls
-        character(len=*), optional, intent(in)    :: dir_out
         class(image),     optional, intent(inout) :: pickrefs(:)
+        character(len=*), optional, intent(in)    :: dir_out
         real,             optional, intent(out)   :: moldiam_opt
         type(pickgau)             :: gaup, gaup_refine
         real,         allocatable :: moldiams(:)
