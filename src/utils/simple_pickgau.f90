@@ -27,7 +27,7 @@ character(len=:), allocatable :: fbody
 type pickgau
     private
     ! control parameters
-    real                     :: smpd_shrink = 0., moldiam = 0., maxdiam = 0., sig = 0., sxx = 0., t = 0., ndev = 0.
+    real                     :: smpd_shrink = 0., moldiam = 0., maxdiam = 0., sxx = 0., t = 0., ndev = 0.
     real                     :: dist_thres  = 0., refine_dist_thres = 0.
     integer                  :: ldim(3), ldim_box(3), ldim_raw_box(3), nboxes = 0, nboxes_ub = 0, nx = 0, ny = 0
     integer                  :: nx_offset = 0, ny_offset = 0, npeaks = 0, nrefs = 0, offset = 0, offset_ub = 0
@@ -46,6 +46,7 @@ type pickgau
     real,        allocatable :: box_scores(:,:), box_scores_mem(:,:), loc_sdevs(:,:), loc_sdevs_mem(:,:)
     ! flags
     logical                  :: l_roi   = .false.
+    logical                  :: l_ring  = .false.
     logical                  :: refpick = .false.
     logical                  :: exists  = .false.
 contains
@@ -90,25 +91,38 @@ contains
         integer,       allocatable :: picker_map(:,:)
         real,          allocatable :: smds_corr(:)
         type(pickgau) :: picker_merged
-        integer :: npickers, ipick, ioff, joff, loc(1)
-        real    :: moldiam_max, dist_threshold
-        logical :: l_merge
-        npickers    = size(moldiams)
-        moldiam_max = maxval(moldiams)
-        allocate(pickers(npickers), smds_corr(npickers))
-        ! multi-gaussian pick
+        integer :: ntot_pickers, npickers, ipick, jpick, ioff, joff, loc
+        real    :: moldiam_max, dist_threshold, m
+        logical :: l_merge, l_ring
+        l_ring       = trim(params_glob%ring).eq.'yes'
+        npickers     = size(moldiams)
+        moldiam_max  = maxval(moldiams)
+        ntot_pickers = npickers
+       if( l_ring ) ntot_pickers = ntot_pickers + npickers
+        allocate(pickers(ntot_pickers), smds_corr(ntot_pickers))
+        ! multi-gaussian picking
         do ipick = 1,npickers
-            call pickers(ipick)%new_gaupicker(pcontrast, smpd_shrink, moldiams(ipick), moldiams(ipick), offset, ndev)
+            m = moldiams(ipick)
+            call pickers(ipick)%new_gaupicker(pcontrast, smpd_shrink, m, m, offset=offset, ndev=ndev)
             dist_threshold = (pickers(ipick)%maxdiam/3.) / pickers(ipick)%smpd_shrink
             call pickers(ipick)%gaupick(dist_thres=dist_threshold)
             smds_corr(ipick) = pickers(ipick)%smd_corr
             call pickers(ipick)%mic_shrink%kill
+            ! additional ring-picking
+            if( l_ring )then
+                jpick = ipick + npickers
+                call pickers(jpick)%new_gaupicker(pcontrast, smpd_shrink, m, m, offset=offset, ndev=ndev, ring=.true.)
+                call pickers(jpick)%gaupick(dist_thres=dist_threshold)
+                smds_corr(jpick) = pickers(jpick)%smd_corr
+                call pickers(jpick)%mic_shrink%kill
+            endif
         end do
-        call report_multipick( npickers, pickers, boxfile_multi)
+        ! ouputs coordinates & metadata
+        call report_multipick( ntot_pickers, pickers, boxfile_multi)
         ! return molecular diameter based on maximizing standard mean distance between peak- and
         ! non-peak distributions of corr
-        loc = maxloc(smds_corr)
-        moldiam_opt = moldiams(loc(1))
+        loc = maxloc(smds_corr(1:npickers), dim=1)
+        moldiam_opt = moldiams(loc)
         write(logfhandle,'(a,1x,f7.2)') 'optimal molecular diameter identified:', moldiam_opt
         ! Is the following necessary since nothing is done with output?
         l_merge = .false.
@@ -120,7 +134,7 @@ contains
             picker_merged%box_scores = -1.
             do ioff = 1,picker_merged%nx_offset
                 do joff = 1,picker_merged%ny_offset
-                    do ipick = 1,npickers
+                    do ipick = 1,ntot_pickers
                         if( pickers(ipick)%box_scores(ioff,joff) > -1. + TINY )then
                             if( pickers(ipick)%box_scores(ioff,joff) > picker_merged%box_scores(ioff,joff) )then
                                 picker_merged%box_scores(ioff,joff) = pickers(ipick)%box_scores(ioff,joff)
@@ -145,7 +159,7 @@ contains
             call picker_merged%kill
         endif
         ! cleanup
-        do ipick = 1,npickers
+        do ipick = 1,ntot_pickers
             call pickers(ipick)%kill
         end do
         deallocate(pickers)
@@ -215,15 +229,14 @@ contains
         fbody = trim(get_fbody(basename(trim(micname)), ext))
     end subroutine read_mic_raw
 
-    subroutine new_gaupicker( self, pcontrast, smpd_shrink, moldiam, moldiam_max, offset, ndev, roi )
+    subroutine new_gaupicker( self, pcontrast, smpd_shrink, moldiam, moldiam_max, offset, ndev, roi, ring )
         class(pickgau),    intent(inout) :: self
         character(len=*),  intent(in)    :: pcontrast
-        real,              intent(in)    :: smpd_shrink, moldiam
-        real,    optional, intent(in)    :: moldiam_max
+        real,              intent(in)    :: smpd_shrink, moldiam, moldiam_max
         integer, optional, intent(in)    :: offset
         real,    optional, intent(in)    :: ndev    !< # std devs for outlier detection
-        logical, optional, intent(in)    :: roi
-        call self%new( pcontrast, smpd_shrink, moldiam, moldiam_max, offset=offset, ndev=ndev, roi=roi )
+        logical, optional, intent(in)    :: roi, ring
+        call self%new( pcontrast, smpd_shrink, moldiam, moldiam_max, offset=offset, ndev=ndev, roi=roi, ring=ring )
     end subroutine new_gaupicker
 
     subroutine new_gaupicker_multi( self, pcontrast, smpd_shrink, moldiams, offset, ndev, roi)
@@ -258,24 +271,24 @@ contains
         call self%set_refs( imgs )
     end subroutine new_refpicker
 
-    subroutine new( self, pcontrast, smpd_shrink, moldiam, moldiam_max, box, offset, ndev, roi )
+    subroutine new( self, pcontrast, smpd_shrink, moldiam, moldiam_max, box, offset, ndev, roi, ring )
         class(pickgau),    intent(inout) :: self
         character(len=*),  intent(in)    :: pcontrast
         real,              intent(in)    :: smpd_shrink, moldiam, moldiam_max
         integer, optional, intent(in)    :: box     !< reference-based picking if present
         integer, optional, intent(in)    :: offset
         real,    optional, intent(in)    :: ndev    !< # std devs for outlier detection
-        logical, optional, intent(in)    :: roi
+        logical, optional, intent(in)    :: roi, ring
         character(len=:), allocatable   :: numstr
-        integer     :: box_max
-        real        :: scale, maxdiam_max, lp
+        integer :: box_max
+        real    :: scale, maxdiam_max, lp, sig
         if( self%exists ) call self%kill
+        self%l_roi = .false.
+        if( present(roi) ) self%l_roi = roi
+        self%l_ring = .false.
+        if( present(ring) ) self%l_ring = ring
+        ! pixel size after downscaling
         self%smpd_shrink = max(smpd_raw,smpd_shrink)
-        if( present(roi) )then
-            self%l_roi = roi
-        else
-            self%l_roi = .false.
-        endif
         ! set peak threshold level
         if( trim(params_glob%crowded) .eq. 'yes' )then
             self%peak_thres_level = 1
@@ -310,10 +323,15 @@ contains
         endif
         self%nx = self%ldim(1) - box_max
         self%ny = self%ldim(2) - box_max
-        ! set Gaussian
-        self%sig = ((self%maxdiam / 2.) / self%smpd_shrink) / GAUSIG
-        call self%gauref%new(self%ldim_box, self%smpd_shrink)
-        call self%gauref%gauimg2D(self%sig, self%sig)
+        ! set gaussian or ring
+        if( self%l_ring )then
+            call self%gauref%soft_ring(self%ldim_box, self%smpd_shrink, 0.5*self%moldiam/self%smpd_shrink)
+        else
+            ! set Gaussian
+            sig = ((self%maxdiam / 2.) / self%smpd_shrink) / GAUSIG
+            call self%gauref%new(self%ldim_box, self%smpd_shrink)
+            call self%gauref%gauimg2D(sig, sig)
+        endif
         call self%gauref%prenorm4real_corr(self%sxx)
         ! set ndev
         self%ndev = NDEV_DEFAULT
@@ -1462,7 +1480,7 @@ contains
         character(len=*), intent(in)  :: fname
         integer, allocatable :: pos(:,:)
         real,    allocatable :: scores(:), loc_sdevs(:)
-        real    :: moldiam
+        real    :: moldiam, src
         integer :: i,j, funit, iostat, npos, box, box_raw
         call fopen(funit, status='REPLACE', action='WRITE', file=trim(adjustl(fname)), iostat=iostat)
         call fileiochk('simple_pickgau; report_multipick ', iostat)
@@ -1474,12 +1492,19 @@ contains
             call picker(i)%get_loc_sdevs(loc_sdevs)
             box_raw = picker(i)%get_box()
             moldiam = picker(i)%get_moldiam()
-            ! to account tight box
+            src = 1.0
+            if(picker(i)%l_ring) src = 2.0
+            ! to account for tight box
             box = find_larger_magic_box( nint(params_glob%box_exp_factor*real(box_raw)) )
             if( box /= box_raw ) pos = nint(real(pos) - real(box-box_raw)/2.)
             ! write
             do j = 1,npos
-                write(funit,'(I7,I7,I7,F8.1,F8.3,F12.3)') pos(j,1),pos(j,2),box,moldiam,scores(j),loc_sdevs(j)
+                !  2I7: coordinates
+                !   I7: box size
+                ! F8.1: diameter
+                ! F8.3: correlation to reference
+                !   I3: gaussian(1)/ring(2) picking
+                write(funit,'(3I7,F8.1,F8.3,F3.1)') pos(j,1:2),box,moldiam,scores(j),src
             enddo
         enddo
         call fclose(funit)
