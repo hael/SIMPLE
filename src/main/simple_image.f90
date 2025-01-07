@@ -8208,7 +8208,7 @@ contains
             do j = 1,self%ldim(2)
                 do i = 1,self%ldim(1)
                     call find(transl_tab, nquanta, self%rmat(i,j,1), ind, dist)
-                    self%rmat(i,j,k) = real(ind - 1)
+                    self%rmat(i,j,1) = real(ind - 1)
                 end do
             end do
         endif
