@@ -6,6 +6,7 @@ use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
 use simple_parameters,     only: parameters
 use simple_qsys_env,       only: qsys_env
+use simple_exec_helpers,   only: set_master_num_threads
 use simple_qsys_funs
 use simple_strategy2D3D_common
 implicit none
@@ -42,15 +43,15 @@ contains
     subroutine exec_reconstruct3D_distr( self, cline )
         class(reconstruct3D_commander_distr), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        type(reconstruct3D_commander)          :: xrec3D_shmem
-        character(len=STDLEN)       :: str_state, fsc_file, nthr_here_str
-        type(volassemble_commander) :: xvolassemble
+        type(reconstruct3D_commander) :: xrec3D_shmem
+        type(volassemble_commander)   :: xvolassemble
+        character(len=STDLEN)         :: str_state, fsc_file
         type(parameters) :: params
         type(builder)    :: build
         type(qsys_env)   :: qenv
         type(cmdline)    :: cline_volassemble
         type(chash)      :: job_descr
-        integer          :: state, envlen, io_stat, nthr_here
+        integer          :: state, nthr_here
         logical          :: fall_over
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('trs')     ) call cline%set('trs', 5.) ! to assure that shifts are being used
@@ -60,15 +61,9 @@ contains
             call xrec3D_shmem%execute(cline)
             return
         endif
-         ! deal with # threads for the master process
-        call get_environment_variable('SLURM_CPUS_PER_TASK', nthr_here_str, envlen)
-        if( envlen > 0 )then
-            call str2int(trim(nthr_here_str), io_stat, nthr_here)
-        else
-            !$ nthr_here = omp_get_max_threads()
-            nthr_here = min(NTHR_SHMEM_MAX,nthr_here)
-        end if
-        write(logfhandle,'(A,I6)')'>>> # SHARED-MEMORY THREADS USED BY RECONSTRUCT3D MASTER PROCESS: ', nthr_here
+        ! deal with # threads for the master process
+        call set_master_num_threads(nthr_here)
+        ! parse parameters and project
         call build%init_params_and_build_spproj(cline, params)
         call build%spproj%update_projinfo(cline)
         call build%spproj%write_segment_inside('projinfo')

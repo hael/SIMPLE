@@ -2053,6 +2053,7 @@ contains
         call mskdiam2lplimits(cline%get_rarg('mskdiam'), lpstart, lpstop, lpcen)
         if( .not. cline%defined('lp') ) call cline%set('lp', lpstart)
         call seed_rnd
+        ! parse & init parameters
         call params%new(cline)
         if( cline%defined('lp') ) lpstart = params%lp
         l_wfilt         = trim(params%wiener) .eq. 'partial'

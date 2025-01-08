@@ -11,6 +11,7 @@ use simple_image,             only: image
 use simple_stack_io,          only: stack_io
 use simple_starproject,       only: starproject
 use simple_commander_imgproc, only: scale_commander
+use simple_exec_helpers,      only: set_shmem_flag
 use simple_euclid_sigma2
 use simple_commander_euclid
 use simple_qsys_funs
@@ -106,13 +107,15 @@ contains
     subroutine exec_make_cavgs_distr( self, cline )
         class(make_cavgs_commander_distr), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
-        type(parameters)           :: params
-        type(builder)              :: build
-        type(cmdline)              :: cline_cavgassemble
-        type(qsys_env)             :: qenv
-        type(chash)                :: job_descr
-        type(make_cavgs_commander) :: xmk_cavgs_shmem
-        integer                    :: ncls_here
+        type(parameters)             :: params
+        type(builder)                :: build
+        type(cmdline)                :: cline_cavgassemble
+        type(qsys_env)               :: qenv
+        type(chash)                  :: job_descr
+        type(make_cavgs_commander)   :: xmk_cavgs_shmem
+        type(cavgassemble_commander) :: xcavgassemble
+        integer :: ncls_here
+        logical :: l_shmem
         call cline%set('wiener', 'full')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('ml_reg')  ) call cline%set('ml_reg',      'no')
@@ -127,6 +130,8 @@ contains
         else
             call cline%set('oritype', 'ptcl2D')
         endif
+        l_shmem = (.not. cline%defined('nparts')) .or. (params%nparts == 1)
+        ! parse parameters & project
         call build%init_params_and_build_spproj(cline, params)
         if( cline%defined('nspace') )then
             ! handled in exec_make_cavgs
@@ -137,7 +142,7 @@ contains
                 params%ncls = ncls_here
             endif
         endif
-        if( .not. cline%defined('nparts') .or. params%nparts == 1  )then
+        if( l_shmem  )then
             call xmk_cavgs_shmem%execute_safe(cline)
             return
         endif
@@ -156,7 +161,8 @@ contains
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR)
         ! assemble class averages
-        call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE_FINISHED')
+        call xcavgassemble%execute_safe(cline_cavgassemble)
+        ! end
         call qsys_cleanup
         call simple_end('**** SIMPLE_DISTR_MAKE_CAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_make_cavgs_distr
@@ -182,16 +188,7 @@ contains
             call cline%set('oritype', 'ptcl2D')
         endif
         ! set shared-memory flag
-        if( cline%defined('nparts') )then
-            if( cline%get_iarg('nparts') == 1 )then
-                l_shmem = .true.
-                call cline%delete('nparts')
-            else
-                l_shmem = .false.
-            endif
-        else
-            l_shmem = .true.
-        endif
+        l_shmem = set_shmem_flag( cline )
         if( l_shmem .and. .not. cline%defined('refs') ) THROW_HARD('need input refs (filename) for shared-memory execution')
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
         if( L_VERBOSE_GLOB ) write(logfhandle,'(a)') '>>> GENERATING CLUSTER CENTERS'
@@ -288,23 +285,23 @@ contains
         class(cleanup2D_commander_hlev), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         ! commanders
-        type(cluster2D_commander_distr)     :: xcluster2D_distr
-        type(cluster2D_commander)           :: xcluster2D ! shared-memory implementation
-        type(scale_commander)               :: xscale
-        type(rank_cavgs_commander)          :: xrank_cavgs
-        type(calc_pspec_commander_distr)    :: xcalc_pspec_distr
+        type(cluster2D_commander_distr)  :: xcluster2D_distr
+        type(cluster2D_commander)        :: xcluster2D ! shared-memory implementation
+        type(scale_commander)            :: xscale
+        type(rank_cavgs_commander)       :: xrank_cavgs
+        type(calc_pspec_commander_distr) :: xcalc_pspec_distr
         ! command lines
-        type(cmdline)                       :: cline_cluster2D1, cline_cluster2D2
-        type(cmdline)                       :: cline_rank_cavgs, cline_scalerefs
-        type(cmdline)                       :: cline_calc_pspec_distr
+        type(cmdline)                    :: cline_cluster2D1, cline_cluster2D2
+        type(cmdline)                    :: cline_rank_cavgs, cline_scalerefs
+        type(cmdline)                    :: cline_calc_pspec_distr
         ! other variables
-        type(parameters)                    :: params
-        type(sp_project)                    :: spproj
-        type(class_frcs)                    :: frcs, frcs_sc
-        character(len=LONGSTRLEN)           :: finalcavgs, finalcavgs_ranked, cavgs, refs_sc
-        real                                :: scale_factor, lp1, lp2, cenlp, smpd_target
-        integer                             :: last_iter
-        logical                             :: l_scaling, l_shmem, l_euclid
+        type(parameters)                 :: params
+        type(sp_project)                 :: spproj
+        type(class_frcs)                 :: frcs, frcs_sc
+        character(len=LONGSTRLEN)        :: finalcavgs, finalcavgs_ranked, cavgs, refs_sc
+        real                             :: scale_factor, lp1, lp2, cenlp, smpd_target
+        integer                          :: last_iter
+        logical                          :: l_scaling, l_shmem, l_euclid
         ! parameters
         integer, parameter    :: MINBOX      = 128
         real,    parameter    :: MINITS      = 5.
@@ -323,16 +320,7 @@ contains
         if( .not. cline%defined('sh_first')  ) call cline%set('sh_first',    'no')
         call cline%set('stream', 'no')
         ! set shared-memory flag
-        if( cline%defined('nparts') )then
-            if( cline%get_iarg('nparts') == 1 )then
-                l_shmem = .true.
-                call cline%delete('nparts')
-            else
-                l_shmem = .false.
-            endif
-        else
-            l_shmem = .true.
-        endif
+        l_shmem = set_shmem_flag( cline )
         ! parse parameters
         call params%new(cline)
         if( .not. cline%defined('maxits') )then
@@ -446,12 +434,12 @@ contains
         if( l_scaling )then
             if( cline%defined('refs') )then
                 refs_sc = 'refs'//trim(SCALE_SUFFIX)//params%ext
-                call cline_scalerefs%set('stk',    trim(params%refs))
-                call cline_scalerefs%set('outstk', trim(refs_sc))
+                call cline_scalerefs%set('stk',    params%refs)
+                call cline_scalerefs%set('outstk', refs_sc)
                 call cline_scalerefs%set('smpd',   params%smpd)
                 call cline_scalerefs%set('newbox', params%box_crop)
-                call xscale%execute(cline_scalerefs)
-                call cline_cluster2D1%set('refs',trim(refs_sc))
+                call xscale%execute_safe(cline_scalerefs)
+                call cline_cluster2D1%set('refs',  refs_sc)
             endif
         endif
         ! initialise progress monitor
@@ -517,10 +505,10 @@ contains
         call spproj%kill
         ! ranking
         finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//'_ranked'//params%ext
-        call cline_rank_cavgs%set('projfile', trim(params%projfile))
-        call cline_rank_cavgs%set('stk',      trim(finalcavgs))
-        call cline_rank_cavgs%set('outstk',   trim(finalcavgs_ranked))
-        call xrank_cavgs%execute(cline_rank_cavgs)
+        call cline_rank_cavgs%set('projfile', params%projfile)
+        call cline_rank_cavgs%set('stk',      finalcavgs)
+        call cline_rank_cavgs%set('outstk',   finalcavgs_ranked)
+        call xrank_cavgs%execute_safe(cline_rank_cavgs)
         ! end gracefully
         call simple_end('**** SIMPLE_CLEANUP2D NORMAL STOP ****')
 
@@ -581,18 +569,9 @@ contains
         call set_cluster2D_defaults( cline )
         if( .not.cline%defined('objfun') ) call cline%set('objfun', 'cc')
         call cline%delete('clip')
-        ! set shared-memory flag
-        if( cline%defined('nparts') )then
-            if( cline%get_iarg('nparts') == 1 )then
-                l_shmem = .true.
-                call cline%delete('nparts')
-            else
-                l_shmem = .false.
-            endif
-        else
-            l_shmem = .true.
-        endif
         l_cc_iters = cline%defined('cc_iters')
+        ! shared memory flag
+        l_shmem = set_shmem_flag( cline )
         ! master parameters
         call params%new(cline)
         ! report limits used
@@ -660,12 +639,12 @@ contains
             ! scale references
             if( cline%defined('refs') )then
                 refs_sc = 'refs'//trim(SCALE_SUFFIX)//params%ext
-                call cline_scalerefs%set('stk',    trim(params%refs))
-                call cline_scalerefs%set('outstk', trim(refs_sc))
+                call cline_scalerefs%set('stk',    params%refs)
+                call cline_scalerefs%set('outstk', refs_sc)
                 call cline_scalerefs%set('smpd',   params%smpd)
                 call cline_scalerefs%set('newbox', params%box_crop)
-                call xscale%execute(cline_scalerefs)
-                call cline_cluster2D_stage1%set('refs',trim(refs_sc))
+                call xscale%execute_safe(cline_scalerefs)
+                call cline_cluster2D_stage1%set('refs', refs_sc)
             endif
         endif
         ! this workflow executes two stages of CLUSTER2D
@@ -715,13 +694,13 @@ contains
         ! Stage 2: refinement stage, little extremal updates, optional incremental
         !          learning for acceleration
         call cline_cluster2D_stage2%delete('cc_iters')
-        call cline_cluster2D_stage2%set('refs',       cavgs)
-        call cline_cluster2D_stage2%set('startit',    last_iter_stage1+1)
+        call cline_cluster2D_stage2%set('refs',    cavgs)
+        call cline_cluster2D_stage2%set('startit', last_iter_stage1+1)
         if( params%l_update_frac )then
             call cline_cluster2D_stage2%set('update_frac', params%update_frac)
         endif
         if( l_euclid )then
-            call cline_cluster2D_stage2%set('objfun',   trim(cline%get_carg('objfun')))
+            call cline_cluster2D_stage2%set('objfun',   cline%get_carg('objfun'))
             call cline_cluster2D_stage2%set('cc_iters', 0.)
         endif
         trs_stage2 = MSK_FRAC * params%mskdiam / (2. * params%smpd_targets2D(2))
@@ -751,7 +730,7 @@ contains
             call cline_make_cavgs%delete('balance')
             call cline_make_cavgs%set('prg',      'make_cavgs')
             call cline_make_cavgs%set('nparts',   params%nparts)
-            call cline_make_cavgs%set('refs',     trim(finalcavgs))
+            call cline_make_cavgs%set('refs',     finalcavgs)
             call cline_make_cavgs%delete('wiener') ! to ensure that full Wiener restoration is done for the final cavgs
             call cline_make_cavgs%set('which_iter', last_iter_stage2) ! to ensure masks are generated and used
             if( l_shmem )then
@@ -782,14 +761,14 @@ contains
             call cline_pspec_rank%set('smpd',    params%smpd)
             call cline_pspec_rank%set('stk',     finalcavgs)
             if( cline%defined('lp_backgr') ) call cline_pspec_rank%set('lp_backgr', params%lp_backgr)
-            call xpspec_rank%execute(cline_pspec_rank)
+            call xpspec_rank%execute_safe(cline_pspec_rank)
         else
             ! rank based on gold-standard resolution estimates
             finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//'_ranked'//params%ext
-            call cline_rank_cavgs%set('projfile', trim(params%projfile))
-            call cline_rank_cavgs%set('stk',      trim(finalcavgs))
-            call cline_rank_cavgs%set('outstk',   trim(finalcavgs_ranked))
-            call xrank_cavgs%execute( cline_rank_cavgs )
+            call cline_rank_cavgs%set('projfile', params%projfile)
+            call cline_rank_cavgs%set('stk',      finalcavgs)
+            call cline_rank_cavgs%set('outstk',   finalcavgs_ranked)
+            call xrank_cavgs%execute_safe( cline_rank_cavgs )
         endif
         ! cleanup
         call del_file('start2Drefs'//params%ext)
@@ -806,6 +785,7 @@ contains
         type(make_cavgs_commander_distr)  :: xmake_cavgs
         type(scale_commander)             :: xscale
         type(calc_group_sigmas_commander) :: xcalc_group_sigmas
+        type(cavgassemble_commander)      :: xcavgassemble
         ! command lines
         type(cmdline) :: cline_check_2Dconv
         type(cmdline) :: cline_cavgassemble
@@ -1054,7 +1034,7 @@ contains
             refs_odd  = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_odd'  // params%ext
             call cline_cavgassemble%set('refs', trim(refs))
             call terminate_stream('SIMPLE_DISTR_CLUSTER2D HARD STOP 2')
-            call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE_FINISHED')
+            call xcavgassemble%execute_safe(cline_cavgassemble)
             if( L_BENCH_GLOB ) rt_cavgassemble = toc(t_cavgassemble)
             ! objfun=euclid, part 4: sigma2 consolidation
             if( params%l_needs_sigma )then

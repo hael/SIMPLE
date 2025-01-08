@@ -5,6 +5,7 @@ use simple_commander_base,      only: commander_base
 use simple_cmdline,             only: cmdline
 use simple_parameters,          only: parameters
 use simple_sp_project,          only: sp_project
+use simple_exec_helpers,        only: set_shmem_flag
 use simple_commander_cluster2D
 use simple_commander_euclid
 use simple_qsys_funs
@@ -61,13 +62,9 @@ contains
         if( .not. cline%defined('extr_lim')  ) call cline%set('extr_lim',  EXTR_LIM_LOCAL)
         if( .not. cline%defined('rank_cavgs')) call cline%set('rank_cavgs','yes')
         if( .not. cline%defined('sigma_est') ) call cline%set('sigma_est', 'group')
-        if( cline%defined('nparts') )then
-            l_shmem = cline%get_iarg('nparts') == 1
-        else
-            l_shmem = .true.
-        endif
-        if( l_shmem ) call cline%delete('nparts')
-        ! make master parameters
+        ! shared memory execution
+        l_shmem = set_shmem_flag(cline)
+        ! master parameters
         call params%new(cline)
         call cline%set('mkdir', 'no')
         call spproj%ptr2oritype(params%oritype, spproj_field)
