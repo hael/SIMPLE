@@ -2094,7 +2094,6 @@ contains
                 call transform_ptcls(spproj, params%oritype, cls_inds(i), imgs, pinds, phflip=l_phflip, cavg=cavg, imgs_ori=imgs_ori)
                 do j = 1, size(imgs)
                     call imgs(j)%copy_fast(imgs_ori(j))
-                    call imgs_ori(j)%kill
                 enddo
             else
                 call transform_ptcls(spproj, params%oritype, cls_inds(i), imgs, pinds, phflip=l_phflip, cavg=cavg)
@@ -2155,15 +2154,25 @@ contains
             endif
             ! output
             call cavg%zero_and_unflag_ft
-            do j = 1, nptcls
-                cnt2 = cnt2 + 1
-                call imgs(j)%unserialize(pcavecs(:,j))
-                call cavg%add(imgs(j))
-                call os%transfer_ori(cnt2, build%spproj_field, pinds(j))
-                call imgs(j)%write(fname_denoised, cnt2)
-                call imgs(j)%kill
-            end do
-            call cavg%div(real(nptcls))
+            if( trim(params%pca_img_ori) .eq. 'yes' )then
+                do j = 1, nptcls
+                    cnt2 = cnt2 + 1
+                    call imgs_ori(j)%unserialize(pcavecs(:,j))
+                    call os%transfer_ori(cnt2, build%spproj_field, pinds(j))
+                    call imgs_ori(j)%write(fname_denoised, cnt2)
+                end do
+                call transform_ptcls(spproj, params%oritype, cls_inds(i), imgs, pinds, phflip=l_phflip, cavg=cavg, imgs_ori=imgs_ori, just_transf=.true.)
+            else
+                do j = 1, nptcls
+                    cnt2 = cnt2 + 1
+                    call imgs(j)%unserialize(pcavecs(:,j))
+                    call cavg%add(imgs(j))
+                    call os%transfer_ori(cnt2, build%spproj_field, pinds(j))
+                    call imgs(j)%write(fname_denoised, cnt2)
+                    call imgs(j)%kill
+                end do
+                call cavg%div(real(nptcls))
+            endif
             call cavg%write(fname_cavgs_denoised, i)
         end do
         call os%zero_inpl
