@@ -1515,7 +1515,7 @@ contains
 
     ! PUBLIC UTILITIES
 
-    subroutine transform_ptcls( spproj, oritype, icls, timgs, pinds, phflip, cavg, imgs_ori)
+    subroutine transform_ptcls( spproj, oritype, icls, timgs, pinds, phflip, cavg, imgs_ori, just_transf)
         use simple_sp_project,          only: sp_project
         use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimgbatch
         class(sp_project),                  intent(inout) :: spproj
@@ -1526,6 +1526,7 @@ contains
         logical,     optional,              intent(in)    :: phflip
         type(image), optional,              intent(inout) :: cavg
         type(image), optional, allocatable, intent(inout) :: imgs_ori(:)
+        logical,     optional,              intent(in)    :: just_transf
         class(oris),  pointer :: pos
         type(image)           :: img(nthr_glob), timg(nthr_glob)
         type(ctfparams)       :: ctfparms
@@ -1535,9 +1536,17 @@ contains
         real    :: mat(2,2), shift(2), loc(2), dist(2), e3, kw
         integer :: logi_lims(3,2),cyc_lims(3,2),cyc_limsR(2,2),phys(2),win_corner(2)
         integer :: i,iptcl, l,ll,m,mm, pop, h,k, ithr
-        logical :: l_phflip, l_imgs
-        l_imgs = .false.
-        if( present(imgs_ori) ) l_imgs = .true.
+        logical :: l_phflip, l_imgs, l_just_transf
+        l_imgs        = .false.
+        l_just_transf = .false.
+        if( present(imgs_ori) )then
+            if( present(just_transf) )then
+                l_imgs        = .false.
+                l_just_transf = just_transf
+            else
+                l_imgs        = .true.
+            endif
+        endif
         if( allocated(timgs) )then
             do i = 1,size(timgs)
                 call timgs(i)%kill
@@ -1613,7 +1622,11 @@ contains
             call img(ithr)%zero_and_flag_ft
             call timg(ithr)%zero_and_flag_ft
             ! normalisation
-            call build_glob%imgbatch(i)%norm_noise_pad_fft(build_glob%lmsk,img(ithr))
+            if( l_just_transf )then
+                call imgs_ori(i)%pad_fft(img(ithr))
+            else
+                call build_glob%imgbatch(i)%norm_noise_pad_fft(build_glob%lmsk,img(ithr))
+            endif
             if( l_imgs )then
                 call img(ithr)%ifft
                 call img(ithr)%clip(imgs_ori(i))
