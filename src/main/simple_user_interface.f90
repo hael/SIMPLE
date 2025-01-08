@@ -150,7 +150,6 @@ type(simple_program), target :: pick
 type(simple_program), target :: pick_extract
 type(simple_program), target :: postprocess
 type(simple_program), target :: ppca_denoise
-type(simple_program), target :: ppca_denoise_class
 type(simple_program), target :: ppca_denoise_classes
 type(simple_program), target :: preproc
 type(simple_program), target :: preprocess
@@ -459,7 +458,6 @@ contains
         call new_pick_extract
         call new_postprocess
         call new_ppca_denoise
-        call new_ppca_denoise_class
         call new_ppca_denoise_classes
         call new_preproc
         call new_preprocess
@@ -591,7 +589,6 @@ contains
         call push2prg_ptr_array(pick_extract)
         call push2prg_ptr_array(postprocess)
         call push2prg_ptr_array(ppca_denoise)
-        call push2prg_ptr_array(ppca_denoise_class)
         call push2prg_ptr_array(ppca_denoise_classes)
         call push2prg_ptr_array(preproc)
         call push2prg_ptr_array(preprocess)
@@ -812,8 +809,6 @@ contains
                 ptr2prg => postprocess
             case('ppca_denoise')
                 ptr2prg => ppca_denoise
-            case('ppca_denoise_class')
-                ptr2prg => ppca_denoise_class
             case('ppca_denoise_classes')
                 ptr2prg => ppca_denoise_classes
             case('preproc')
@@ -986,7 +981,6 @@ contains
         write(logfhandle,'(A)') pick%name
         write(logfhandle,'(A)') postprocess%name
         write(logfhandle,'(A)') ppca_denoise%name
-        write(logfhandle,'(A)') ppca_denoise_class%name
         write(logfhandle,'(A)') ppca_denoise_classes%name
         write(logfhandle,'(A)') preprocess%name
         write(logfhandle,'(A)') print_dose_weights%name
@@ -1058,7 +1052,6 @@ contains
         write(logfhandle,'(A)') center2D_nano%name
         write(logfhandle,'(A)') cluster2D_nano%name
         write(logfhandle,'(A)') map_cavgs_selection%name
-        write(logfhandle,'(A)') ppca_denoise_class%name
         write(logfhandle,'(A)') ppca_denoise_classes%name
         write(logfhandle,'(A)') estimate_diam%name
         write(logfhandle,'(A)') simulate_atoms%name
@@ -3804,33 +3797,6 @@ contains
         ! computer controls
         call ppca_denoise_classes%set_input('comp_ctrls', 1, nthr)
     end subroutine new_ppca_denoise_classes
-
-    subroutine new_ppca_denoise_class
-        ! PROGRAM SPECIFICATION
-        call ppca_denoise_class%new(&
-        &'ppca_denoise_class',&                     ! name
-        &'Filter stack/volume',&                      ! descr_short
-        &'is a program for ppca-based denoising of image classes',&  ! descr_long
-        &'all',&                                      ! executable
-        &0, 1, 0, 0, 3, 0, 1, .true.)                 ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call ppca_denoise_class%set_input('parm_ios', 1, 'pre_norm', 'binary', 'Pre-normalize images', 'Statistical normalization(yes|no){no}', '(yes|no){no}', .false., 'no')
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        call ppca_denoise_class%set_input('filt_ctrls', 1, 'neigs', 'num', '# eigenvecs', '# eigenvecs', '# eigenvecs', .false., 0.0)
-        call ppca_denoise_class%set_input('filt_ctrls', 2, 'transp_pca', 'binary', 'transpose for pixel-wise learning', 'transpose for pixel-wise learning(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call ppca_denoise_class%set_input('filt_ctrls', 3, 'class', 'num', 'class number to apply pca', 'class number to apply pca', 'class number to apply pca', .true., 1.0)
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call ppca_denoise_class%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_ppca_denoise_class
 
     subroutine new_preprocess
         ! PROGRAM SPECIFICATION
