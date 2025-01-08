@@ -74,7 +74,7 @@ type :: parameters
     character(len=3)          :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
     character(len=3)          :: pad='no'
     character(len=3)          :: partition='no'
-    character(len=3)          :: pca_img_ori='no'     !< original or rotated/shifts ptcl stack to pca(yes|no){no}
+    character(len=3)          :: pca_img_ori='no'     !< original (no rotation/shifting within classes) ptcl stack to pca(yes|no){no}
     character(len=3)          :: phaseplate='no'      !< images obtained with Volta phaseplate(yes|no){no}
     character(len=3)          :: phrand='no'          !< phase randomize(yes|no){no}
     character(len=3)          :: pick_roi='no'

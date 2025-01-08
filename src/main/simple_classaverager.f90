@@ -1612,11 +1612,13 @@ contains
             e3    = pos%e3get(iptcl)
             call img(ithr)%zero_and_flag_ft
             call timg(ithr)%zero_and_flag_ft
-            if( l_imgs )then
-                call imgs_ori(i)%copy(build_glob%imgbatch(i))
-            endif
             ! normalisation
             call build_glob%imgbatch(i)%norm_noise_pad_fft(build_glob%lmsk,img(ithr))
+            if( l_imgs )then
+                call img(ithr)%ifft
+                call img(ithr)%clip(imgs_ori(i))
+                call img(ithr)%fft
+            endif
             ! optional phase-flipping
             if( l_phflip )then
                 ctfparms = spproj%get_ctfparams(oritype, iptcl)
