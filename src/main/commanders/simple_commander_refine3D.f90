@@ -13,6 +13,7 @@ use simple_commander_mask,   only: automask_commander
 use simple_decay_funs,       only: inv_cos_decay
 use simple_image,            only: image
 use simple_masker,           only: masker
+use simple_exec_helpers,     only: set_master_num_threads
 use simple_commander_euclid
 use simple_qsys_funs
 implicit none
@@ -121,27 +122,20 @@ contains
         integer,                   allocatable :: state_pops(:)
         real,                      allocatable :: res(:), fsc(:)
         character(len=LONGSTRLEN) :: vol, vol_iter, str, str_iter, fsc_templ
-        character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc, vollp, nthr_here_str
+        character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc, vollp
         character(len=LONGSTRLEN) :: volassemble_output
         logical :: err, vol_defined, have_oris, converged, fall_over, l_continue, l_multistates, l_automsk 
         logical :: l_combine_eo, l_griddingset, do_automsk
         real    :: corr, corr_prev, smpd
-        integer :: ldim(3), i, state, iter, box, nfiles, niters, ifoo, fnr, nthr_here, envlen, io_stat
+        integer :: ldim(3), i, state, iter, box, nfiles, niters, ifoo, fnr, nthr_here
         601 format(A,1X,F12.3)
         if( .not. cline%defined('nparts') )then
             call xrefine3D_shmem%execute(cline)
             return
         endif
         ! deal with # threads for the master process
-        call get_environment_variable('SLURM_CPUS_PER_TASK', nthr_here_str, envlen)
-        if( envlen > 0 )then
-            call str2int(trim(nthr_here_str), io_stat, nthr_here)
-        else
-            !$ nthr_here = omp_get_max_threads()
-            nthr_here = min(NTHR_SHMEM_MAX,nthr_here)
-        end if
-        !$ call omp_set_num_threads(nthr_here)
-        write(logfhandle,'(A,I6)')'>>> # SHARED-MEMORY THREADS USED BY REFINE3D MASTER PROCESS: ', nthr_here
+        call set_master_num_threads( nthr_here )
+        ! local options & flags
         l_multistates = cline%defined('nstates')
         l_griddingset = cline%defined('gridding')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')

@@ -13,6 +13,7 @@ use simple_commander_volops, only: reproject_commander
 use simple_stack_io,         only: stack_io
 use simple_commander_oris,   only: vizoris_commander
 use simple_commander_rec,    only: reconstruct3D_commander
+use simple_exec_helpers,     only: set_shmem_flag
 use simple_commander_cluster2D
 use simple_nanoparticle
 use simple_qsys_funs
@@ -689,16 +690,8 @@ contains
         if( .not. cline%defined('ml_reg')         ) call cline%set('ml_reg',         'no') ! ml_reg=yes -> too few atoms 
         if( .not. cline%defined('oritype')        ) call cline%set('oritype',    'ptcl2D')
         ! set shared-memory flag
-        if( cline%defined('nparts') )then
-            if( cline%get_iarg('nparts') == 1 )then
-                l_shmem = .true.
-                call cline%delete('nparts')
-            else
-                l_shmem = .false.
-            endif
-        else
-            l_shmem = .true.
-        endif
+        l_shmem = set_shmem_flag(cline)
+        ! master parameters
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')

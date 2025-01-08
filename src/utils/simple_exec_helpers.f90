@@ -6,7 +6,8 @@ use simple_cmdline,    only: cmdline
 use simple_sp_project, only: sp_project
 implicit none
 
-public :: restarted_exec, async_exec, gen_exec_cmd, script_exec, update_job_descriptions_in_project, copy_project_file_to_root_dir
+public :: restarted_exec, async_exec, gen_exec_cmd, script_exec, update_job_descriptions_in_project
+public :: copy_project_file_to_root_dir, set_master_num_threads, set_shmem_flag
 private
 #include "simple_local_flags.inc"
 
@@ -137,5 +138,33 @@ contains
         tests(3) = file_exists(params_glob%projfile)
         if( all(tests) ) call simple_copy_file(trim(params_glob%projfile), '../'//trim(params_glob%projfile))
     end subroutine copy_project_file_to_root_dir
+
+    ! deals with # multiprocessing threads of the master process in distributed execution
+    subroutine set_master_num_threads( nthr )
+        integer, optional, intent(inout) :: nthr
+        character(len=STDLEN) :: nthr_str
+        integer               :: envlen, iostat,nthr_here
+        call get_environment_variable('SLURM_CPUS_PER_TASK', nthr_str, envlen)
+        if( envlen > 0 )then
+            call str2int(trim(nthr_str), iostat, nthr_here)
+        else
+            !$ nthr_here = omp_get_max_threads()
+            nthr_here = min(NTHR_SHMEM_MAX, nthr_here)
+        end if
+        !$ call omp_set_num_threads(nthr_here)
+        write(logfhandle,'(A,I6)')'>>> # SHARED-MEMORY THREADS USED BY REFINE3D MASTER PROCESS: ', nthr_here
+        if( present(nthr) ) nthr = nthr_here
+    end subroutine set_master_num_threads
+
+    ! deals with logical flag for shared memory execution
+    logical function set_shmem_flag( cline )
+        class(cmdline), intent(inout) :: cline
+        if( cline%defined('nparts') )then
+            set_shmem_flag = cline%get_iarg('nparts') == 1
+        else
+            set_shmem_flag = .true.
+        endif
+        if( set_shmem_flag ) call cline%delete('nparts')
+    end function
 
 end module simple_exec_helpers
