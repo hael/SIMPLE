@@ -249,6 +249,9 @@ real,    parameter :: FRAC_SKIP_REJECTION       = 0.7            !< classificati
 integer, parameter :: STREAM_SRCHLIM            = 5              !< classification: maximum # of systematic iterations for streaming 2D pool
 integer, parameter :: MAX_STREAM_NPTCLS         = 500000         !< classification: cap for adjusting update_frac in 2D streaming
 
+! nanoparticles
+real,    parameter :: AMSKLP_NANO               = 5.
+
 ! Graphene
 real, parameter    :: GRAPHENE_BAND1            = 2.14           !< graphene band 1 for omission in score function
 real, parameter    :: GRAPHENE_BAND2            = 1.23           !< graphene band 2 for omission in score function

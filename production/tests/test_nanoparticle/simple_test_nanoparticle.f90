@@ -29,32 +29,32 @@ program simple_test_nanoparticle
     print *, 'Shared atoms'
     call nano%new(trim(img_name))
     call nano%set_atomic_coords(trim(pdb_name_shared))
-    call nano%simulate_atoms(simatms=simatms)
-    call nano%validate_atoms(simatms=simatms)
+    call nano%simulate_atoms(simatms)
+    call nano%validate_atoms(simatms)
     call nano%kill
     print *, 'New method'
     call nano%new(trim(img_name))
     call nano%set_atomic_coords(trim(pdb_name_sim))
-    call nano%simulate_atoms(simatms=simatms)
-    call nano%validate_atoms(simatms=simatms)
+    call nano%simulate_atoms(simatms)
+    call nano%validate_atoms(simatms)
     call nano%kill
     print *, 'Old method'
     call nano%new(trim(img_name))
     call nano%set_atomic_coords(trim(pdb_name_henry))
-    call nano%simulate_atoms(simatms=simatms)
-    call nano%validate_atoms(simatms=simatms)
+    call nano%simulate_atoms(simatms)
+    call nano%validate_atoms(simatms)
     call nano%kill
     print *, 'Atoms in old method and not new'
     call nano%new(trim(img_name))
     call nano%set_atomic_coords(trim(pdb_name_henry_not_sim))
-    call nano%simulate_atoms(simatms=simatms)
-    call nano%validate_atoms(simatms=simatms)
+    call nano%simulate_atoms(simatms)
+    call nano%validate_atoms(simatms)
     call nano%kill
     print *, 'Atoms in new method and not old'
     call nano%new(trim(img_name))
     call nano%set_atomic_coords(trim(pdb_name_sim_not_henry))
-    call nano%simulate_atoms(simatms=simatms)
-    call nano%validate_atoms(simatms=simatms)
+    call nano%simulate_atoms(simatms)
+    call nano%validate_atoms(simatms)
     call nano%kill
 
 end program simple_test_nanoparticle

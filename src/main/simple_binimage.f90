@@ -479,27 +479,7 @@ contains
         real,            intent(out)   :: diam
         integer :: i, ii, j, jj, k, kk, maxdistsq, distsq
         if( .not. self%bimat_is_set ) call self%set_imat
-        maxdistsq = 0
-        !$omp parallel do collapse(3) default(shared) private(i,j,k,ii,jj,kk,distsq) schedule(static)&
-        !$omp proc_bind(close) reduction(max:maxdistsq)
-        do i=1,self%bldim(1)
-            do j=1,self%bldim(2)
-                do k=1,self%bldim(3)
-                    if( self%bimat(i,j,k) < 1 ) cycle
-                    do ii=1,self%bldim(1)
-                        do jj=1,self%bldim(2)
-                            do kk=1,self%bldim(3)
-                                if( self%bimat(ii,jj,kk) < 1 ) cycle
-                                distsq = sum(([i,j,k] - [ii,jj,kk])**2)
-                                if( distsq > maxdistsq ) maxdistsq = distsq
-                            end do
-                        end do
-                    end do
-                end do
-            end do
-        end do
-        !$omp end parallel do
-        diam = sqrt(real(maxdistsq))
+        call self%diameter_cc(1, diam)
     end subroutine diameter_bin
 
     subroutine max_dist( self, dist)

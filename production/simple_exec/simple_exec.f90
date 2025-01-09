@@ -88,6 +88,7 @@ type(symmetrize_map_commander)              :: xsymmetrize_map
 type(dock_volpair_commander)                :: xdock_volpair
 type(postprocess_commander)                 :: xpostprocess
 type(automask_commander)                    :: xautomask
+type(auto_spher_mask_commander)             :: xauto_spher_mask
 type(fractionate_movies_commander_distr)    :: xfractionate_movies
 type(comparemc_commander)                   :: xcomparemc
 
@@ -301,6 +302,8 @@ select case(trim(prg))
         call xpostprocess%execute(cline)
     case( 'automask' )
         call xautomask%execute(cline)
+    case( 'auto_spher_mask' )
+        call xauto_spher_mask%execute(cline)
     case( 'fractionate_movies' )
         call xfractionate_movies%execute(cline)
     case( 'comparemc' )
@@ -423,7 +426,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('c9cf7a26')
+call simple_print_git_version('00b2ba3a')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
