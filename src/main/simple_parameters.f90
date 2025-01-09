@@ -74,7 +74,7 @@ type :: parameters
     character(len=3)          :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
     character(len=3)          :: pad='no'
     character(len=3)          :: partition='no'
-    character(len=3)          :: pca_img_ori='no'     !< original or rotated/shifts ptcl stack to pca(yes|no){no}
+    character(len=3)          :: pca_img_ori='no'     !< original (no rotation/shifting within classes) ptcl stack to pca(yes|no){no}
     character(len=3)          :: phaseplate='no'      !< images obtained with Volta phaseplate(yes|no){no}
     character(len=3)          :: phrand='no'          !< phase randomize(yes|no){no}
     character(len=3)          :: pick_roi='no'
@@ -91,7 +91,7 @@ type :: parameters
     character(len=3)          :: reject_cls='no'      !< whether to reject poor classes
     character(len=3)          :: reject_mics='no'     !< whether to reject micrographs based on ctfres/icefrac
     character(len=3)          :: remove_chunks='yes'  !< whether to remove chunks after completion
-    character(len=3)          :: ring='yes'           !< whether to perform ring shaped picking 
+    character(len=3)          :: ring='no'            !< whether to perform ring shaped picking
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
     character(len=3)          :: remap_cls='no'
     character(len=3)          :: transp_pca='no'

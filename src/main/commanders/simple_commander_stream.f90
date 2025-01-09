@@ -1634,7 +1634,7 @@ contains
                 if( nmics > 0 )then
                     write(logfhandle,'(A,I4,A,A)')'>>> ',nmics,' NEW MICROGRAPHS ADDED; ',cast_time_char(simple_gettime())
                 endif
-                ! guistats 
+                ! guistats
                 call gui_stats%set_now('particles', 'last_particles_imported')
             endif
             ! submit jobs
@@ -1665,7 +1665,7 @@ contains
                     deallocate(failed_jobs_clines)
                 endif
             endif
-            ! ! project update
+            ! project update
             if( n_imported > 0 )then
                 n_imported = spproj_glob%os_mic%get_noris()
                 write(logfhandle,'(A,I8)')       '>>> # MICROGRAPHS PROCESSED & IMPORTED  : ',n_imported
@@ -1839,11 +1839,9 @@ contains
                         if( tmp_proj%os_mic%isthere(imic, 'ctfres') )then
                             if( tmp_proj%os_mic%get(imic,'ctfres') > (params%ctfresthreshold-0.001) ) states(imic) = 0
                         end if
-                        if( states(imic) == 0 ) cycle
                         if( tmp_proj%os_mic%isthere(imic, 'icefrac') )then
                             if( tmp_proj%os_mic%get(imic,'icefrac') > (params%icefracthreshold-0.001) ) states(imic) = 0
                         end if
-                        if( states(imic) == 0 ) cycle
                         if( tmp_proj%os_mic%isthere(imic, 'astig') )then
                             if( tmp_proj%os_mic%get(imic,'astig') > (params%astigthreshold-0.001) ) states(imic) = 0
                         end if

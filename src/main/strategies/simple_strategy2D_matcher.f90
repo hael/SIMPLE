@@ -34,7 +34,6 @@ private
 type(polarft_corrcalc)       :: pftcc
 type(euclid_sigma2)          :: eucl_sigma
 type(image),     allocatable :: ptcl_match_imgs(:)
-logical,         allocatable :: ptcl_mask(:)
 integer                      :: batchsz_max
 real(timer_int_kind)         :: rt_init, rt_prep_pftcc, rt_align, rt_cavg, rt_projio, rt_tot
 integer(timer_int_kind)      ::  t_init,  t_prep_pftcc,  t_align,  t_cavg,  t_projio,  t_tot
@@ -52,13 +51,12 @@ contains
         logical,                 intent(inout) :: converged
         type(strategy2D_per_ptcl), allocatable :: strategy2Dsrch(:)
         type(strategy2D_spec),     allocatable :: strategy2Dspecs(:)
-        integer,                   allocatable :: pinds(:), pinds2restore(:), batches(:,:)
+        integer,                   allocatable :: pinds(:), batches(:,:)
         real,                      allocatable :: states(:)
-        logical,                   allocatable :: ptcl_mask2restore(:)
         type(convergence) :: conv
         type(ori)         :: orientation
         real    :: frac_srch_space, neigh_frac
-        integer :: iptcl, ithr, fnr, updatecnt, iptcl_map, nptcls2update, nptcls2restore
+        integer :: iptcl, ithr, fnr, updatecnt, iptcl_map, nptcls2update
         integer :: batchsz, nbatches, batch_start, batch_end, iptcl_batch, ibatch
         logical :: doprint, l_partial_sums, l_update_frac
         logical :: l_snhc, l_greedy, l_np_cls_defined, l_snhc_smpl, l_greedy_smpl
@@ -126,28 +124,18 @@ contains
 
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
         if( allocated(pinds) )     deallocate(pinds)
-        if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
-        allocate(ptcl_mask(params_glob%fromp:params_glob%top))
         if( l_update_frac )then
             if( build_glob%spproj_field%has_been_sampled() )then ! we have a random subset
                 call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
-                                        &nptcls2update, pinds, ptcl_mask)
+                                        &nptcls2update, pinds)
             else                                                 ! we generate a random subset
                 call build_glob%spproj_field%sample4update_rnd([params_glob%fromp,params_glob%top],&
-                &params_glob%update_frac, nptcls2update, pinds, ptcl_mask, .true.) ! sampled incremented
+                &params_glob%update_frac, nptcls2update, pinds, .true.) ! sampled incremented
             endif
         else                                                     ! we sample all state > 0
             call build_glob%spproj_field%sample4update_all([params_glob%fromp,params_glob%top],&
-                                        &nptcls2update, pinds, ptcl_mask, .true.) ! sampled incremented
+                                        &nptcls2update, pinds, .true.) ! sampled incremented
         endif
-        ! increment update counter
-        call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top], ptcl_mask)
-        ! particles used for class averages restoration
-        if( allocated(pinds2restore) )     deallocate(pinds2restore)
-        if( allocated(ptcl_mask2restore) ) deallocate(ptcl_mask2restore)
-        ptcl_mask2restore = ptcl_mask
-        pinds2restore     = pinds
-        nptcls2restore    = nptcls2update
 
         ! SNHC LOGICS
         neigh_frac = 0.
@@ -166,7 +154,7 @@ contains
         endif
 
         ! PREP REFERENCES
-        call cavger_new(ptcl_mask2restore)
+        call cavger_new(pinds)
         if( build_glob%spproj_field%get_nevenodd() == 0 )then
             if( l_distr_exec_glob ) THROW_HARD('no eo partitioning available; cluster2D_exec')
             call build_glob%spproj_field%partition_eo
@@ -312,7 +300,7 @@ contains
         do ithr = 1,params_glob%nthr
             call ptcl_match_imgs(ithr)%kill
         enddo
-        deallocate(strategy2Dsrch,pinds,strategy2Dspecs,batches,ptcl_mask,ptcl_match_imgs)
+        deallocate(strategy2Dsrch,pinds,strategy2Dspecs,batches,ptcl_match_imgs)
 
         ! WRITE SIGMAS FOR ML-BASED REFINEMENT
         if( params_glob%l_needs_sigma ) call eucl_sigma%write_sigma2
@@ -444,11 +432,11 @@ contains
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
             call eucl_sigma%new(fname, params_glob%box)
             if( l_stream )then
-                call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
+                call eucl_sigma%read_groups(build_glob%spproj_field)
                 call eucl_sigma%allocate_ptcls
             else
-                call eucl_sigma%read_part(  build_glob%spproj_field, ptcl_mask)
-                if( params_glob%cc_objfun == OBJFUN_EUCLID ) call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
+                call eucl_sigma%read_part(  build_glob%spproj_field)
+                if( params_glob%cc_objfun == OBJFUN_EUCLID ) call eucl_sigma%read_groups(build_glob%spproj_field)
             endif
         endif
         ! prepare the polarizer images

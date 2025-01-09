@@ -32,7 +32,6 @@ type(opt_factory)        :: ofac                           ! the optimization fa
 type(opt_spec)           :: spec                           ! the optimizer specification object
 class(optimizer),pointer :: opt_ptr=>null()                ! the generic optimizer object
 type(image), allocatable :: match_imgs(:), ptcl_match_imgs(:)
-logical,     allocatable :: ptcl_mask(:)
 integer,     allocatable :: pinds(:)
 real,        allocatable :: truth_sh(:,:), lims(:,:), sigma2_group(:,:,:)
 real,        pointer     :: rmat_cavg_even(:,:,:), rmat_tmp(:,:,:)
@@ -115,8 +114,7 @@ do iptcl = p%fromp,p%top
 enddo
 call b%spproj%add_single_stk('particles.mrc', ctfparms, os)
 call b%spproj_field%partition_eo
-allocate(ptcl_mask(p%fromp:p%top))
-call b%spproj_field%sample4update_all([p%fromp,p%top],nptcls2update, pinds, ptcl_mask, .true.)
+call b%spproj_field%sample4update_all([p%fromp,p%top],nptcls2update, pinds, .true.)
 
 ! pftcc
 call pftcc%new(p%nptcls, [1,p%nptcls], p%kfromto)
@@ -181,7 +179,7 @@ do iter = 1, SH_ITERS
     sigma2_group(1,:,:) = sigma2_group(1,:,:) / real(ne)
     sigma2_group(2,:,:) = sigma2_group(2,:,:) / real(no)
     call write_groups_starfile(sigma2_star_from_iter(iter-1), sigma2_group, 1)
-    call eucl%read_groups(b%spproj_field, ptcl_mask)
+    call eucl%read_groups(b%spproj_field)
     do iptcl = p%fromp,p%top
         call pftcc%memoize_sqsum_ptcl(iptcl)
     enddo
@@ -240,7 +238,7 @@ contains
         integer, intent(in) :: iter
         p%which_iter = iter
         call cavger_kill()
-        call cavger_new(ptcl_mask)
+        call cavger_new
         call cavger_transf_oridat( b%spproj )
         call cavger_assemble_sums( .false. )
         call cavger_merge_eos_and_norm

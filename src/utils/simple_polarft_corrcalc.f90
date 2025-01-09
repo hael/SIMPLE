@@ -178,11 +178,10 @@ contains
 
     ! CONSTRUCTORS
 
-    subroutine new( self, nrefs, pfromto, kfromto, ptcl_mask, eoarr )
+    subroutine new( self, nrefs, pfromto, kfromto, eoarr )
         class(polarft_corrcalc), target, intent(inout) :: self
         integer,                         intent(in)    :: nrefs
         integer,                         intent(in)    :: pfromto(2), kfromto(2)
-        logical, optional,               intent(in)    :: ptcl_mask(pfromto(1):pfromto(2))
         integer, optional,               intent(in)    :: eoarr(pfromto(1):pfromto(2))
         real(sp), allocatable :: polar_here(:)
         real(dp)              :: A(2)
@@ -214,14 +213,10 @@ contains
             THROW_HARD ('only even logical dims supported; new')
         endif
         ! set constants
-        if( present(ptcl_mask) )then
-            self%nptcls  = count(ptcl_mask)                      !< the total number of particles in partition
-        else
-            self%nptcls  = self%pfromto(2) - self%pfromto(1) + 1 !< the total number of particles in partition
-        endif
-        self%nrefs = nrefs                                   !< the number of references (logically indexded [1,nrefs])
-        self%pftsz = magic_pftsz(nint(params_glob%msk_crop)) !< size of reference (number of vectors used for matching,determined by radius of molecule)
-        self%nrots = 2 * self%pftsz                          !< number of in-plane rotations for one pft  (pftsz*2)
+        self%nptcls = self%pfromto(2) - self%pfromto(1) + 1 !< the total number of particles in partition
+        self%nrefs  = nrefs                                   !< the number of references (logically indexded [1,nrefs])
+        self%pftsz  = magic_pftsz(nint(params_glob%msk_crop)) !< size of reference (number of vectors used for matching,determined by radius of molecule)
+        self%nrots  = 2 * self%pftsz                          !< number of in-plane rotations for one pft  (pftsz*2)
         ! generate polar coordinates
         allocate( self%polar(2*self%nrots,self%kfromto(1):self%kfromto(2)),&
                     &self%angtab(self%nrots), self%iseven(1:self%nptcls), polar_here(2*self%nrots))
@@ -241,17 +236,7 @@ contains
         end do
         ! index translation table
         allocate( self%pinds(self%pfromto(1):self%pfromto(2)), source=0 )
-        if( present(ptcl_mask) )then
-            cnt = 0
-            do i=self%pfromto(1),self%pfromto(2)
-                if( ptcl_mask(i) )then
-                    cnt = cnt + 1
-                    self%pinds(i) = cnt
-                endif
-            end do
-        else
-            self%pinds = (/(i,i=1,self%nptcls)/)
-        endif
+        self%pinds = (/(i,i=1,self%nptcls)/)
         ! eo assignment
         if( present(eoarr) )then
             if( all(eoarr == - 1) )then

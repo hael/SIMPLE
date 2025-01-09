@@ -13,6 +13,7 @@ use simple_commander_mask,   only: automask_commander
 use simple_decay_funs,       only: inv_cos_decay
 use simple_image,            only: image
 use simple_masker,           only: masker
+use simple_exec_helpers,     only: set_master_num_threads
 use simple_commander_euclid
 use simple_qsys_funs
 implicit none
@@ -121,27 +122,20 @@ contains
         integer,                   allocatable :: state_pops(:)
         real,                      allocatable :: res(:), fsc(:)
         character(len=LONGSTRLEN) :: vol, vol_iter, str, str_iter, fsc_templ
-        character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc, vollp, nthr_here_str
+        character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc, vollp
         character(len=LONGSTRLEN) :: volassemble_output
         logical :: err, vol_defined, have_oris, converged, fall_over, l_continue, l_multistates, l_automsk 
         logical :: l_combine_eo, l_griddingset, do_automsk
         real    :: corr, corr_prev, smpd
-        integer :: ldim(3), i, state, iter, box, nfiles, niters, ifoo, fnr, nthr_here, envlen, io_stat
+        integer :: ldim(3), i, state, iter, box, nfiles, niters, ifoo, fnr, nthr_here
         601 format(A,1X,F12.3)
         if( .not. cline%defined('nparts') )then
             call xrefine3D_shmem%execute(cline)
             return
         endif
         ! deal with # threads for the master process
-        call get_environment_variable('SLURM_CPUS_PER_TASK', nthr_here_str, envlen)
-        if( envlen > 0 )then
-            call str2int(trim(nthr_here_str), io_stat, nthr_here)
-        else
-            !$ nthr_here = omp_get_max_threads()
-            nthr_here = min(NTHR_SHMEM_MAX,nthr_here)
-        end if
-        !$ call omp_set_num_threads(nthr_here)
-        write(logfhandle,'(A,I6)')'>>> # SHARED-MEMORY THREADS USED BY REFINE3D MASTER PROCESS: ', nthr_here
+        call set_master_num_threads( nthr_here )
+        ! local options & flags
         l_multistates = cline%defined('nstates')
         l_griddingset = cline%defined('gridding')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
@@ -823,7 +817,6 @@ contains
         class(prob_tab_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         integer,          allocatable :: pinds(:)
-        logical,          allocatable :: ptcl_mask(:)
         type(image),      allocatable :: tmp_imgs(:)
         character(len=:), allocatable :: fname
         type(polarft_corrcalc)        :: pftcc
@@ -831,38 +824,21 @@ contains
         type(parameters)              :: params
         type(eul_prob_tab)            :: eulprob_obj_part
         type(euclid_sigma2)           :: eucl_sigma
-        integer  :: nptcls, ithr
+        integer :: nptcls
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-        allocate(ptcl_mask(params%fromp:params%top))
         call set_bp_range( cline )
         ! The policy here ought to be that nothing is done with regards to sampling other than reproducing
         ! what was generated in the driver (prob_align, below). Sampling is delegated to prob_align (below)
         ! and merely reproduced here
         if( build%spproj_field%has_been_sampled() )then
-            call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds, ptcl_mask)
+            call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds)
         else
             THROW_HARD('exec_prob_tab requires prior particle sampling (in exec_prob_align)')
         endif
-        ! PREPARATION OF PFTCC AND REFERENCES
-        ! (if needed) estimating lp (over all states) and reseting params_glob%lp and params_glob%kfromto
-        call prepare_polar_references(pftcc, cline, nptcls)
-        ! PREPARATION OF SIGMAS
-        if( params%l_needs_sigma )then
-            fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
-            call eucl_sigma%new(fname, params%box)
-            call eucl_sigma%read_part(  build%spproj_field, ptcl_mask)
-            call eucl_sigma%read_groups(build%spproj_field, ptcl_mask)
-        end if
-        ! PREPARATION OF PARTICLES
-        call prepimgbatch(nptcls)
-        allocate(tmp_imgs(nthr_glob))
-        !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
-        do ithr = 1,nthr_glob
-            call tmp_imgs(ithr)%new([params%box_crop,params%box_crop,1], params%smpd_crop, wthreads=.false.)
-        enddo
-        !$omp end parallel do
-        call build%img_crop_polarizer%init_polarizer(pftcc, params%alpha)
+        ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, POLARIZER, PTCLS
+        call prepare_refs_sigmas_ptcls( pftcc, cline, eucl_sigma, tmp_imgs, nptcls )
+        ! Build polar particle images
         call build_batch_particles(pftcc, nptcls, pinds, tmp_imgs)
         ! Filling prob table in eul_prob_tab
         call eulprob_obj_part%new(pinds)
@@ -890,7 +866,6 @@ contains
         class(prob_align_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         integer,            allocatable :: pinds(:)
-        logical,            allocatable :: ptcl_mask(:)
         character(len=:),   allocatable :: fname
         type(builder)                   :: build
         type(parameters)                :: params
@@ -909,7 +884,6 @@ contains
             call cline%set('stream', 'no')
             call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         endif
-        allocate(ptcl_mask(1:params_glob%nptcls))
         if( params_glob%startit == 1 )then
             if( cline%defined('updatecnt_ini') )then
                 call build%spproj_field%set_nonzero_updatecnt(params%updatecnt_ini)
@@ -919,7 +893,7 @@ contains
             endif
         endif
         ! sampled incremented
-        call sample_ptcls4update([1,params_glob%nptcls], .true., nptcls, pinds, ptcl_mask)
+        call sample_ptcls4update([1,params_glob%nptcls], .true., nptcls, pinds)
         ! communicate to project file
         call build_glob%spproj%write_segment_inside(params_glob%oritype)        
         ! more prep
