@@ -4,6 +4,7 @@ module simple_nanoparticle
 include 'simple_lib.f08'
 
 use simple_image,      only: image
+use simple_masker,     only: masker
 use simple_binimage,   only: binimage
 use simple_atoms,      only: atoms
 use simple_parameters, only: params_glob
@@ -247,10 +248,11 @@ contains
         class(nanoparticle), intent(inout) :: self
         character(len=*),    intent(in)    :: fname
         real, optional,      intent(in)    :: msk
+        type(masker)     :: mskvol
         character(len=2) :: el_ucase
         integer :: nptcls
         integer :: Z ! atomic number
-        real    :: smpd
+        real    :: smpd, msk_in_pix
         call self%kill
         self%npname    = fname
         self%fbody     = get_fbody(trim(basename(fname)), trim(fname2ext(fname)))
@@ -265,7 +267,14 @@ contains
         call self%img%new(self%ldim, self%smpd)
         call self%img_bin%new_bimg(self%ldim, self%smpd)
         call self%img%read(fname)
-        if( present(msk) ) call self%img%mask(msk, 'soft')
+        if( present(msk) )then
+            call self%img%mask(msk, 'soft')
+        else
+            call mskvol%estimate_spher_mask_diam(self%img, AMSKLP_NANO, msk_in_pix)
+            write(logfhandle,*) 'mask diameter in A: ', 2. * msk_in_pix * self%smpd
+            call self%img%mask(msk_in_pix, 'soft')
+            call mskvol%kill
+        endif
         call self%img_raw%copy(self%img)
         call self%img_raw%stats(self%map_stats%avg, self%map_stats%sdev, self%map_stats%maxv, self%map_stats%minv)
     end subroutine new
@@ -984,11 +993,9 @@ contains
 
     end subroutine split_atoms
 
-    subroutine validate_atoms( self, simatms, avg_valid_corr, filename )
-        class(nanoparticle),        intent(inout) :: self
-        class(image),               intent(in)    :: simatms
-        real, optional,             intent(out)   :: avg_valid_corr
-        character(len=*), optional, intent(in)    :: filename
+    subroutine validate_atoms( self, simatms )
+        class(nanoparticle), intent(inout) :: self
+        class(image),        intent(in)    :: simatms
         real, allocatable :: centers(:,:)           ! coordinates of the atoms in PIXELS
         real, allocatable :: pixels1(:), pixels2(:) ! pixels extracted around the center
         real    :: maxrad
@@ -1000,15 +1007,12 @@ contains
         centers = self%atominfo2centers()
         allocate(pixels1(npix_in), pixels2(npix_in), source=0.)
         ! calculate per-atom correlations
-        if(present(filename)) open(unit=45,file=trim(filename))
         do i = 1, self%n_cc
             ijk = nint(centers(:,i))
             call self%img_raw%win2arr_rad(ijk(1), ijk(2), ijk(3), winsz, npix_in, maxrad, npix_out1, pixels1)
             call simatms%win2arr_rad(     ijk(1), ijk(2), ijk(3), winsz, npix_in, maxrad, npix_out2, pixels2)
             self%atominfo(i)%valid_corr = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))
-            if(present(filename)) write(45,'(1x,4(f8.3,a))') self%atominfo(i)%center(1), ',', self%atominfo(i)%center(2), ',', self%atominfo(i)%center(3), ',', self%atominfo(i)%valid_corr
         enddo
-        if(present(filename)) close(45)
         call calc_stats(self%atominfo(:)%valid_corr, corr_stats)
         write(logfhandle,'(A)') '>>> VALID_CORR (PER-ATOM CORRELATION WITH SIMULATED DENSITY) STATS BELOW'
         write(logfhandle,'(A,F8.4)') 'Average: ', corr_stats%avg
@@ -1016,7 +1020,6 @@ contains
         write(logfhandle,'(A,F8.4)') 'Sigma  : ', corr_stats%sdev
         write(logfhandle,'(A,F8.4)') 'Max    : ', corr_stats%maxv
         write(logfhandle,'(A,F8.4)') 'Min    : ', corr_stats%minv
-        if (present(avg_valid_corr)) avg_valid_corr = corr_stats%avg
     end subroutine validate_atoms
 
     subroutine discard_atoms( self )
@@ -1026,10 +1029,30 @@ contains
         real                 :: valid_corr_t
         integer              :: cscores(self%n_cc), cscore_thres
         type(stats_struct)   :: cscore_stats
-        integer :: cc, n_discard
+        integer :: cc, n_discard, cnt_discard
         write(logfhandle, '(A)') '>>> DISCARDING ATOMS'
         centers_A = self%atominfo2centers_A()
         call calc_contact_scores(self%element,centers_A,cscores)
+        call calc_stats(real(cscores), cscore_stats)
+        cscore_thres        = max(4.,cscore_stats%minv + 2.)
+        valid_corrs_surface = pack(self%atominfo(:)%valid_corr, mask=cscores <= cscore_thres)
+        call otsu(size(valid_corrs_surface), valid_corrs_surface, valid_corr_t)
+        call self%img_cc%get_imat(imat_cc)
+        call self%img_bin%get_imat(imat_bin)
+        n_discard = 0
+        do cc = 1, self%n_cc
+            ! discard based on correlation
+            if( self%atominfo(cc)%valid_corr < valid_corr_t )then
+                where(imat_cc == cc) imat_bin = 0
+                n_discard = n_discard + 1
+            endif
+        enddo
+        if( n_discard > 0 ) call update_centers
+        ! discard based on contact score
+        call discard_based_on_contact(2)
+        if( cnt_discard > 0 )then
+            call discard_based_on_contact(1)
+        endif
         call calc_stats(real(cscores), cscore_stats)
         write(logfhandle,'(A)') '>>> CONTACT SCORE STATS BELOW'
         write(logfhandle,'(A,F8.4)') 'Average: ', cscore_stats%avg
@@ -1037,28 +1060,35 @@ contains
         write(logfhandle,'(A,F8.4)') 'Sigma  : ', cscore_stats%sdev
         write(logfhandle,'(A,F8.4)') 'Max    : ', cscore_stats%maxv
         write(logfhandle,'(A,F8.4)') 'Min    : ', cscore_stats%minv
-        cscore_thres        = cscore_stats%minv + 2
-        valid_corrs_surface = pack(self%atominfo(:)%valid_corr, mask=cscores <= cscore_thres)
-        call otsu(size(valid_corrs_surface), valid_corrs_surface, valid_corr_t)
-        call self%img_cc%get_imat(imat_cc)
-        call self%img_bin%get_imat(imat_bin)
-        n_discard = 0
-        do cc = 1, self%n_cc
-            if( cscores(cc) <= cscore_thres )then
-                if( self%atominfo(cc)%valid_corr < valid_corr_t )then
-                    where(imat_cc == cc) imat_bin = 0
-                    n_discard = n_discard + 1
-                endif
-            endif
-        enddo
-        call self%img_bin%set_imat(imat_bin)
-        call self%img_bin%find_ccs(self%img_cc)
-        call self%img_cc%get_nccs(self%n_cc)
-        call self%find_centers()
         deallocate(imat_bin, imat_cc)
         write(logfhandle, *) '# atoms, discarded ', n_discard
         write(logfhandle, *) '# atoms, final     ', self%n_cc
         write(logfhandle, '(A)') '>>> DISCARDING ATOMS, COMPLETED'
+
+    contains
+
+        subroutine update_centers
+            call self%img_bin%set_imat(imat_bin)
+            call self%img_bin%find_ccs(self%img_cc)
+            call self%img_cc%get_nccs(self%n_cc)
+            call self%find_centers()
+            centers_A = self%atominfo2centers_A()
+            call calc_contact_scores(self%element,centers_A,cscores)
+        end subroutine update_centers
+
+        subroutine discard_based_on_contact( cs_thres )
+            integer, intent(in) :: cs_thres
+            cnt_discard = 0
+            do cc = 1, self%n_cc
+                if( cscores(cc) < cs_thres )then
+                    where(imat_cc == cc) imat_bin = 0
+                    n_discard   = n_discard   + 1
+                    cnt_discard = cnt_discard + 1
+                endif
+            end do
+            if( cnt_discard > 0 ) call update_centers
+        end subroutine discard_based_on_contact
+
     end subroutine discard_atoms
 
     subroutine fillin_atominfo( self, a0, imat )

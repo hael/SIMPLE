@@ -27,6 +27,7 @@ type, extends(binimage) :: masker
   contains
     procedure, private :: automask3D_1, automask3D_2
     generic            :: automask3D => automask3D_1, automask3D_2
+    procedure          :: estimate_spher_mask_diam
     procedure          :: automask3D_filter
     procedure, private :: automask3D_binarize
     procedure          :: mask_from_pdb
@@ -74,6 +75,29 @@ contains
         ! destruct
         call vol_filt%kill
     end subroutine automask3D_2
+
+    subroutine estimate_spher_mask_diam( self, vol, amsklp, msk_in_pix )
+        class(masker),  intent(inout) :: self
+        class(image),   intent(inout) :: vol
+        real,           intent(in)    :: amsklp
+        real,           intent(out)   :: msk_in_pix
+        real        :: diam
+        type(image) :: vol_filt
+        if( vol%is_2d() )THROW_HARD('estimate_spher_mask_diam is intended for volumes only; automask3D')
+        self%amsklp = amsklp
+        ! filter 
+        call vol_filt%copy(vol)
+        call vol_filt%bp(0., self%amsklp)
+        ! transfer image to binary image
+        call self%transfer2bimg(vol_filt)
+        ! binarization
+        call self%automask3D_binarize(l_tight=.false.)
+        ! mask diameter estimation
+        call self%diameter_cc(1, diam)
+        msk_in_pix = diam / 2. + COSMSKHALFWIDTH
+        ! destruct
+        call vol_filt%kill
+    end subroutine estimate_spher_mask_diam
 
     subroutine automask3D_filter( self, vol_even, vol_odd, vol_filt )
         class(masker), intent(inout) :: self

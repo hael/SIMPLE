@@ -82,6 +82,7 @@ type(simple_program), target :: assign_optics_groups
 type(simple_program), target :: assign_optics
 type(simple_program), target :: automask
 type(simple_program), target :: automask2D
+type(simple_program), target :: auto_spher_mask
 type(simple_program), target :: extract_substk
 type(simple_program), target :: autorefine3D_nano
 type(simple_program), target :: binarize
@@ -389,6 +390,7 @@ contains
         call new_assign_optics_groups
         call new_automask
         call new_automask2D
+        call new_auto_spher_mask
         call new_extract_substk
         call new_autorefine3D_nano
         call new_binarize
@@ -522,6 +524,7 @@ contains
         call push2prg_ptr_array(assign_optics_groups)
         call push2prg_ptr_array(automask)
         call push2prg_ptr_array(automask2D)
+        call push2prg_ptr_array(auto_spher_mask)
         call push2prg_ptr_array(extract_substk)
         call push2prg_ptr_array(autorefine3D_nano)
         call push2prg_ptr_array(binarize)
@@ -672,6 +675,8 @@ contains
                 ptr2prg => automask
             case('automask2D')
                 ptr2prg => automask2D
+            case('auto_spher_mask')
+                ptr2prg => auto_spher_mask
             case('extract_substk')
                 ptr2prg => extract_substk
             case('autorefine3D_nano')
@@ -926,6 +931,7 @@ contains
         write(logfhandle,'(A)') assign_optics_groups%name
         write(logfhandle,'(A)') automask%name
         write(logfhandle,'(A)') automask2D%name
+        write(logfhandle,'(A)') auto_spher_mask%name
         write(logfhandle,'(A)') binarize%name
         write(logfhandle,'(A)') calc_pspec%name
         write(logfhandle,'(A)') cavg_filter2D%name
@@ -1450,6 +1456,32 @@ contains
         ! computer controls
         call automask2D%set_input('comp_ctrls', 1, nthr)
     end subroutine new_automask2D
+
+     subroutine new_auto_spher_mask
+        ! PROGRAM SPECIFICATION
+        call auto_spher_mask%new(&
+        &'auto_spher_mask',&                              ! name
+        &'spherical masking with automatic diameter estimation',& ! descr_short
+        &'is a program for automated spherical masking',& ! descr_long
+        &'simple_exec',&                                  ! executable
+        &1, 1, 0, 0, 1, 0, 1, .false.)                    ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call auto_spher_mask%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
+        ! parameter input/output
+        call auto_spher_mask%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call auto_spher_mask%set_input('filt_ctrls', 1, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
+        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .true., 8.)
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call auto_spher_mask%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_auto_spher_mask
 
     subroutine new_extract_substk
         ! PROGRAM SPECIFICATION
@@ -2271,7 +2303,7 @@ contains
         &'Detect atoms in atomic-resolution nanoparticle map',& ! descr_short
         &'is a program for identifying atoms in atomic-resolution nanoparticle maps and generating bin and connected-components map',& ! descr long
         &'single_exec',&                                        ! executable
-        &2, 4, 0, 0, 1, 1, 1, .false.)                         ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 1, 0, 1, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call detect_atoms%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
@@ -2280,11 +2312,6 @@ contains
         & 'input volume 4 lattice fit e.g. vol2.mrc', .false., '')
         ! parameter input/output
         call detect_atoms%set_input('parm_ios', 1, smpd)
-        call detect_atoms%set_input('parm_ios', 2, 'corr_thres', 'num', 'Per-atom corr threshold', 'Per-atom validation correlation threshold for discarding atoms(0.3-0.5){0.5}', &
-        & 'Corr threshold for discarding atoms(0.3-0.5){0.5}', .false., 0.5)
-        call detect_atoms%set_input('parm_ios', 3, 'use_thres', 'binary', 'Use contact-based thresholding', 'Use contact-based thresholding(yes|no){yes}', &
-        & '(yes|no){yes}', .false., 'yes')
-        call detect_atoms%set_input('parm_ios', 4, 'cs_thres', 'num', 'Contact score thresholding', 'Use contact score threshold during autorefine3D_nano(2-3){2}', '(2-3){2}', .false., 2.)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2292,7 +2319,7 @@ contains
         ! filter controls
         call detect_atoms%set_input('filt_ctrls', 1, element)
         ! mask controls
-        call detect_atoms%set_input('mask_ctrls', 1, mskdiam)
+        ! <empty>
         ! computer controls
         call detect_atoms%set_input('comp_ctrls', 1, nthr)
     end subroutine new_detect_atoms

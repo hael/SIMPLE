@@ -13,6 +13,7 @@ implicit none
 public :: mask_commander
 public :: automask2D_commander
 public :: automask_commander
+public :: auto_spher_mask_commander
 private
 #include "simple_local_flags.inc"
 
@@ -30,6 +31,11 @@ type, extends(commander_base) :: automask_commander
  contains
    procedure :: execute      => exec_automask
 end type automask_commander
+
+type, extends(commander_base) :: auto_spher_mask_commander
+ contains
+   procedure :: execute      => exec_auto_spher_mask
+end type auto_spher_mask_commander
 
 contains
 
@@ -171,5 +177,31 @@ contains
         write(logfhandle,'(A)') '>>> WROTE OUTPUT '//fname_out
         call simple_end('**** SIMPLE_AUTOMASK NORMAL STOP ****')
     end subroutine exec_automask
+
+    subroutine exec_auto_spher_mask( self, cline )
+        class(auto_spher_mask_commander), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
+        type(builder)    :: build
+        type(parameters) :: params
+        type(masker)     :: mskvol
+        real             :: msk_in_pix
+        character(len=:), allocatable :: fname_out
+        if(.not.cline%defined('mkdir') ) call cline%set('mkdir','no')
+        call params%new(cline)
+        call build%build_spproj(params, cline)
+        call build%build_general_tbox(params, cline)
+        call build%vol%read(params%vols(1))
+        call mskvol%estimate_spher_mask_diam(build%vol, params%amsklp, msk_in_pix)
+        write(logfhandle,*) 'mask diameter in A: ', 2. * msk_in_pix * params%smpd
+        call build%vol%mask(msk_in_pix, 'soft')
+        if( cline%defined('outfile') )then
+            fname_out = trim(params%outfile)
+        else
+            fname_out = add2fbody(trim(params%vols(1)), params%ext, '_msk')
+        endif
+        call build%vol%write(fname_out)
+        write(logfhandle,'(A)') '>>> WROTE OUTPUT '//fname_out
+        call simple_end('**** SIMPLE_AUTO_SPHER_MASK NORMAL STOP ****')
+    end subroutine exec_auto_spher_mask
 
 end module simple_commander_mask

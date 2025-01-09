@@ -65,44 +65,45 @@ end type common_atoms
 
 contains
 
-subroutine exec_atoms_stats( self, cline )
-    class(atoms_stats_commander), intent(inout) :: self
-    class(cmdline),               intent(inout) :: cline !< command line input
-    type(parameters)      :: params
-    type(nanoparticle)    :: nano
-    real                  :: a(3) ! lattice parameters
-    logical               :: prefit_lattice, use_subset_coords
-    prefit_lattice    = cline%defined('vol3')
-    use_subset_coords = cline%defined('pdbfile2')
-    call params%new(cline)
-    if( prefit_lattice )then
-        ! fit lattice using vol3
-        call nano%new(params%vols(3), params%msk)
-        call nano%identify_lattice_params(a)
-        call nano%kill
-        ! calc stats
-        call nano%new(params%vols(1), params%msk)
-        call nano%set_atomic_coords(params%pdbfile)
-        if( use_subset_coords ) call nano%set_coords4stats(params%pdbfile2)
-        call nano%set_img(params%vols(2), 'img_cc')
-        call nano%update_ncc()
-        call nano%fillin_atominfo( a )
-        call nano%write_csv_files
-        call nano%kill
-    else
-        ! calc stats
-        call nano%new(params%vols(1), params%msk)
-        call nano%set_atomic_coords(params%pdbfile)
-        if( use_subset_coords ) call nano%set_coords4stats(params%pdbfile2)
-        call nano%set_img(params%vols(2), 'img_cc')
-        call nano%update_ncc()
-        call nano%fillin_atominfo()
-        call nano%write_csv_files
-        call nano%kill
-    endif
-    ! end gracefully
-    call simple_end('**** SIMPLE_ATOMS_STATS NORMAL STOP ****')
-end subroutine exec_atoms_stats
+    subroutine exec_atoms_stats( self, cline )
+        class(atoms_stats_commander), intent(inout) :: self
+        class(cmdline),               intent(inout) :: cline !< command line input
+        type(parameters)      :: params
+        type(nanoparticle)    :: nano
+        real                  :: a(3) ! lattice parameters
+        logical               :: prefit_lattice, use_subset_coords
+        prefit_lattice    = cline%defined('vol3')
+        use_subset_coords = cline%defined('pdbfile2')
+        call params%new(cline)
+        if( prefit_lattice )then
+            ! fit lattice using vol3
+            call nano%new(params%vols(3), params%msk)
+            call nano%identify_lattice_params(a)
+            call nano%kill
+            ! calc stats
+            call nano%new(params%vols(1), params%msk)
+            call nano%set_atomic_coords(params%pdbfile)
+            if( use_subset_coords ) call nano%set_coords4stats(params%pdbfile2)
+            call nano%set_img(params%vols(2), 'img_cc')
+            call nano%update_ncc()
+            call nano%fillin_atominfo( a )
+            call nano%write_csv_files
+            call nano%kill
+        else
+            ! calc stats
+            call nano%new(params%vols(1), params%msk)
+            call nano%set_atomic_coords(params%pdbfile)
+            if( use_subset_coords ) call nano%set_coords4stats(params%pdbfile2)
+            call nano%set_img(params%vols(2), 'img_cc')
+            call nano%update_ncc()
+            call nano%fillin_atominfo()
+            call nano%write_csv_files
+            call nano%kill
+        endif
+        ! end gracefully
+        call simple_end('**** SIMPLE_ATOMS_STATS NORMAL STOP ****')
+    end subroutine exec_atoms_stats
+
     subroutine exec_conv_atom_denoise( self, cline )
         class(conv_atom_denoise_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
@@ -127,18 +128,18 @@ end subroutine exec_atoms_stats
         prefit_lattice = cline%defined('vol2')
         call params%new(cline)
         if( prefit_lattice )then
-            call nano%new(params%vols(2), params%msk)
+            call nano%new(params%vols(2))
             ! execute
             call nano%identify_lattice_params(a)
             ! kill
             call nano%kill
-            call nano%new(params%vols(1), params%msk)
+            call nano%new(params%vols(1))
             ! execute
             call nano%identify_atomic_pos(a, l_fit_lattice=.false.)
             ! kill
             call nano%kill
         else
-            call nano%new(params%vols(1), params%msk)
+            call nano%new(params%vols(1))
             ! execute
             call nano%identify_atomic_pos(a, l_fit_lattice=.true.)
             ! kill
