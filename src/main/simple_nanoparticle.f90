@@ -812,14 +812,12 @@ contains
     subroutine discard_small_ccs( self )
         class(nanoparticle), intent(inout) :: self
         integer, allocatable :: imat_bin(:,:,:), imat_cc(:,:,:)
-        integer :: cc, n_discard
+        integer :: cc
         call self%img_cc%get_imat(imat_cc)
         call self%img_bin%get_imat(imat_bin)
-        n_discard = 0
         do cc = 1, self%n_cc
             if( count(imat_cc == cc) < NVOX_THRESH )then ! removes artificial small densities
                 where(imat_cc == cc) imat_bin = 0
-                n_discard = n_discard + 1
             endif
         enddo
         call self%img_bin%set_imat(imat_bin)
@@ -1024,35 +1022,39 @@ contains
 
     subroutine discard_atoms( self )
         class(nanoparticle), intent(inout) :: self
-        integer, allocatable :: imat_bin(:,:,:), imat_cc(:,:,:)
-        real, allocatable    :: centers_A(:,:), valid_corrs_surface(:)
-        real                 :: valid_corr_t
-        integer              :: cscores(self%n_cc), cscore_thres
+        integer, allocatable :: imat_bin(:,:,:), imat_cc(:,:,:), cscores(:)
+        real,    allocatable :: centers_A(:,:)
+        integer              :: cscore_thres
         type(stats_struct)   :: cscore_stats
-        integer :: cc, n_discard, cnt_discard
+        real    :: percen
+        integer :: cc, cn, n_discard, cnt_discard
         write(logfhandle, '(A)') '>>> DISCARDING ATOMS'
+        ! calculate contact scores
         centers_A = self%atominfo2centers_A()
+        allocate(cscores(self%n_cc), source=0)
         call calc_contact_scores(self%element,centers_A,cscores)
-        call calc_stats(real(cscores), cscore_stats)
-        cscore_thres        = max(4.,cscore_stats%minv + 2.)
-        valid_corrs_surface = pack(self%atominfo(:)%valid_corr, mask=cscores <= cscore_thres)
-        call otsu(size(valid_corrs_surface), valid_corrs_surface, valid_corr_t)
+        do cn = 1,12
+            percen = (real(count(cscores >= cn)) / real(self%n_cc)) * 100.
+            write(logfhandle,*) 'percen atoms with contact score > '//int2str(cn)//':', percen
+            if( percen <= 95. )then
+                cscore_thres = cn
+                exit
+            endif
+        end do
+        if( cscore_thres > 6 ) cscore_thres = 6
+        write(logfhandle,*) 'contact score threshold: ', cscore_thres
+        ! get connected components and binary matrices
         call self%img_cc%get_imat(imat_cc)
         call self%img_bin%get_imat(imat_bin)
+        ! discard atoms
         n_discard = 0
-        do cc = 1, self%n_cc
-            ! discard based on correlation
-            if( self%atominfo(cc)%valid_corr < valid_corr_t )then
-                where(imat_cc == cc) imat_bin = 0
-                n_discard = n_discard + 1
-            endif
-        enddo
-        if( n_discard > 0 ) call update_centers
-        ! discard based on contact score
-        call discard_based_on_contact(2)
-        if( cnt_discard > 0 )then
-            call discard_based_on_contact(1)
-        endif
+        call remove_lowly_contacted(cscore_thres - 1) ! remove these without consideration to size
+        write(logfhandle, *) '# atoms, discarded based on cs ', n_discard
+        cnt_discard = 1
+        do while( cnt_discard > 0 )
+            call remove_small_and_lowly_contacted(cscore_thres)
+            write(logfhandle, *) '# atoms, discarded based on sz ', cnt_discard
+        end do
         call calc_stats(real(cscores), cscore_stats)
         write(logfhandle,'(A)') '>>> CONTACT SCORE STATS BELOW'
         write(logfhandle,'(A,F8.4)') 'Average: ', cscore_stats%avg
@@ -1061,33 +1063,69 @@ contains
         write(logfhandle,'(A,F8.4)') 'Max    : ', cscore_stats%maxv
         write(logfhandle,'(A,F8.4)') 'Min    : ', cscore_stats%minv
         deallocate(imat_bin, imat_cc)
-        write(logfhandle, *) '# atoms, discarded ', n_discard
-        write(logfhandle, *) '# atoms, final     ', self%n_cc
+        write(logfhandle, *) '# atoms, discarded in total ', n_discard
+        write(logfhandle, *) '# atoms, final              ', self%n_cc
         write(logfhandle, '(A)') '>>> DISCARDING ATOMS, COMPLETED'
 
     contains
 
-        subroutine update_centers
-            call self%img_bin%set_imat(imat_bin)
-            call self%img_bin%find_ccs(self%img_cc)
-            call self%img_cc%get_nccs(self%n_cc)
-            call self%find_centers()
-            centers_A = self%atominfo2centers_A()
-            call calc_contact_scores(self%element,centers_A,cscores)
-        end subroutine update_centers
-
-        subroutine discard_based_on_contact( cs_thres )
-            integer, intent(in) :: cs_thres
-            cnt_discard = 0
+        subroutine remove_lowly_contacted( cthresh )
+            integer, intent(in) :: cthresh
+            ! discard
+            cnt_discard  = 0
             do cc = 1, self%n_cc
-                if( cscores(cc) < cs_thres )then
+                if( cscores(cc) < cthresh )then
                     where(imat_cc == cc) imat_bin = 0
                     n_discard   = n_discard   + 1
                     cnt_discard = cnt_discard + 1
                 endif
+            enddo
+            if( cnt_discard > 0 )then
+                ! update atoms and contact scores
+                call self%img_bin%set_imat(imat_bin)
+                call self%img_bin%find_ccs(self%img_cc)
+                call self%img_cc%get_nccs(self%n_cc)
+                call self%find_centers()
+                if( allocated(centers_A) ) deallocate(centers_A)
+                if( allocated(cscores)   ) deallocate(cscores)
+                allocate(cscores(self%n_cc), source=0)
+                centers_A = self%atominfo2centers_A()
+                call calc_contact_scores(self%element,centers_A,cscores)
+            endif
+        end subroutine remove_lowly_contacted
+
+        subroutine remove_small_and_lowly_contacted( cthresh )
+            integer, intent(in) :: cthresh
+            real, allocatable   :: radii(:)
+            real :: radius_thres
+            ! calculate atomic radii
+            allocate(radii(self%n_cc), source=0.)
+            do cc = 1, self%n_cc
+                call self%calc_longest_atm_dist(cc, radii(cc), imat=imat_cc)
             end do
-            if( cnt_discard > 0 ) call update_centers
-        end subroutine discard_based_on_contact
+            radius_thres = self%theoretical_radius/2.
+            ! discard
+            cnt_discard  = 0
+            do cc = 1, self%n_cc
+                if( radii(cc) < radius_thres .and. cscores(cc) < cthresh )then
+                    where(imat_cc == cc) imat_bin = 0
+                    n_discard   = n_discard   + 1
+                    cnt_discard = cnt_discard + 1
+                endif
+            enddo
+            if( cnt_discard > 0 )then
+                ! update atoms and contact scores
+                call self%img_bin%set_imat(imat_bin)
+                call self%img_bin%find_ccs(self%img_cc)
+                call self%img_cc%get_nccs(self%n_cc)
+                call self%find_centers()
+                if( allocated(centers_A) ) deallocate(centers_A)
+                if( allocated(cscores)   ) deallocate(cscores)
+                allocate(cscores(self%n_cc), source=0)
+                centers_A = self%atominfo2centers_A()
+                call calc_contact_scores(self%element,centers_A,cscores)
+            endif
+        end subroutine remove_small_and_lowly_contacted
 
     end subroutine discard_atoms
 
