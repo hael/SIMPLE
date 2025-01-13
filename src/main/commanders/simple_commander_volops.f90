@@ -676,12 +676,11 @@ contains
         class(cmdline),               intent(inout) :: cline
         integer,     parameter   :: MAXPCAITS = 15
         class(pca),  pointer     :: pca_ptr  => null()
-        real,        allocatable :: pcavec(:,:), gen(:)
+        real,        allocatable :: pcavec(:,:), gen(:), avg(:)
         type(parameters)  :: params
         type(builder)     :: build
         type(image)       :: vol
         integer           :: npix, iptcl, j
-        real              :: avg
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
         if( .not. cline%defined('outstk') ) call cline%set('outstk', 'ppca_volvar_out'//trim(STK_EXT))
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
@@ -699,10 +698,10 @@ contains
             case('kpca')
                 allocate(kpca_svd   :: pca_ptr)
         end select
-        call pca_ptr%new(1, npix, params%neigs)
+        call pca_ptr%new(npix, npix, params%neigs)
         call pca_ptr%master(pcavec, MAXPCAITS)
         allocate(gen(npix))
-        call pca_ptr%generate(1, [avg], gen)
+        call pca_ptr%generate(1, avg, gen)
         call vol%unserialize(gen)
         call vol%write(params%outstk)
         call vol%kill

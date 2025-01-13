@@ -69,20 +69,26 @@ contains
     subroutine make_pcavol( vol, D, avg, pcavec )
         class(image),      intent(in)    :: vol           !< vol to serialize
         integer,           intent(out)   :: D             !< vector dimension
-        real,              intent(inout) :: avg           !< average of pcavecs
+        real, allocatable, intent(inout) :: avg(:)        !< average of pcavecs
         real, allocatable, intent(inout) :: pcavec(:,:)   !< PCA vector
         logical, allocatable :: ll_mask(:,:,:)
-        integer              :: i, ldim(3)
-        real                 :: smpd
+        real,    allocatable :: volvec(:)
+        integer              :: i, j, ldim(3)
         ldim = vol%get_ldim()
-        smpd = vol%get_smpd()
         allocate(ll_mask(ldim(1),ldim(2),ldim(3)), source=.true.)
         D = count(ll_mask)
         if( allocated(pcavec) ) deallocate(pcavec)
-        allocate(pcavec(D,1), source=0.)
-        pcavec(:,1) = vol%serialize(ll_mask)
-        avg         = sum(pcavec(:,1)) / real(D)
-        pcavec      = pcavec - avg
+        allocate(pcavec(D,D), volvec(D), avg(D), source=0.)
+        volvec = vol%serialize(ll_mask)
+        do i = 1, D
+            do j = 1, D
+                pcavec(i,j) = abs(volvec(i) - volvec(j))
+            enddo
+        enddo
+        avg = sum(pcavec, dim=2) / real(D)
+        do i = 1, D
+            pcavec(:,i) = pcavec(:,i) - avg
+        enddo
     end subroutine make_pcavol
 
 end module simple_imgproc

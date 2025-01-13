@@ -10,8 +10,6 @@ integer, parameter :: NP = 3, NS = 4, NC = 3, MAXPCAITS = 15
 type(ppca_inmem)   :: prob_pca
 type(pca_svd)      :: pca_obj
 type(kpca_svd)     :: kpca_obj
-type(cmdline)      :: cline
-type(parameters)   :: p
 integer :: j
 real    :: data_ori(NP, NS), avg(NP), tmpvec(NP), data_pca(NP, NS), E_zn(NC, NS), data_cen(NP, NS)
 data_ori(1,:) = [ 1, 2, 3, 4]
@@ -71,8 +69,6 @@ do j = 1, NP
 enddo
 print *, '---------------------------------------------------'
 ! kPCA test
-call cline%parse_oldschool
-call p%new(cline)
 call kpca_obj%new(NS, NP, NC)
 call kpca_obj%master(data_cen)
 !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
