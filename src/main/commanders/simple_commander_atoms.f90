@@ -169,8 +169,8 @@ contains
         type(atoms)      :: molecule
         call params%new(cline)
         call molecule%new(params%pdbfile)
-        if( .not.cline%defined('vol2') ) params%pdbout = trim(get_fbody(params%vols(1),'mrc'))//'_even.mrc'
-        if( .not.cline%defined('vol3') ) params%pdbout = trim(get_fbody(params%vols(1),'mrc'))//'_odd.mrc'
+        if( .not.cline%defined('vol2') ) params%vols(2) = trim(get_fbody(params%vols(1),'mrc'))//'_even.mrc'
+        if( .not.cline%defined('vol3') ) params%vols(3) = trim(get_fbody(params%vols(1),'mrc'))//'_odd.mrc'
         call molecule%model_validation_eo(params%pdbfile, params%vols(1), params%vols(2), params%vols(3), params%smpd, params%smpd_target)
         call molecule%kill()
         ! end gracefully
