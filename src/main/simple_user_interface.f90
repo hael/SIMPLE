@@ -1801,7 +1801,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm&
         & suitable for the first pass of cleanup after time-series tracking',&  ! descr_long
         &'single_exec',&                                                        ! executable
-        &0, 0, 0, 4, 3, 1, 3, .true.)                                           ! # entries in each group, requires sp_project
+        &0, 0, 0, 2, 0, 0, 2, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1812,23 +1812,14 @@ contains
         ! search controls
         call center2D_nano%set_input('srch_ctrls', 1, ncls)
         center2D_nano%srch_ctrls(1)%required = .false.
-        call center2D_nano%set_input('srch_ctrls', 2, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
-        &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call center2D_nano%set_input('srch_ctrls', 3, maxits)
-        call center2D_nano%set_input('srch_ctrls', 4, trs)
+        call center2D_nano%set_input('srch_ctrls', 2, trs)
         ! filter controls
-        call center2D_nano%set_input('filt_ctrls', 1, hp)
-        call center2D_nano%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
-        &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
-        &Angstroms{5}', .false., 5.)
-        call center2D_nano%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms{1.0}', .false., 1.)
+        ! <empty>
         ! mask controls
-        call center2D_nano%set_input('mask_ctrls', 1, mskdiam)
+        ! <empty>
         ! computer controls
-        call center2D_nano%set_input('comp_ctrls', 1, nparts)
-        center2D_nano%comp_ctrls(1)%required = .false.
-        call center2D_nano%set_input('comp_ctrls', 2, nthr)
-        call center2D_nano%set_input('comp_ctrls', 3, script)
+        call center2D_nano%set_input('comp_ctrls', 1, nthr)
+        call center2D_nano%set_input('comp_ctrls', 2, script)
     end subroutine new_center2D_nano
 
     subroutine new_check_states

@@ -154,7 +154,9 @@ contains
                 if( cline%defined('overlap')  ) overlap_lim  = cline%get_rarg('overlap')
                 if( cline%defined('fracsrch') ) fracsrch_lim = cline%get_rarg('fracsrch')
                 ! test for convergence
-                if( (params_glob%l_update_frac) .or. (params_glob%stream.eq.'yes') )then
+                if( trim(params_glob%refine).eq.'inpl' )then
+                    converged = self%dist_inpl%avg < 0.5
+                else if( (params_glob%l_update_frac) .or. (params_glob%stream.eq.'yes') )then
                     converged = ( self%mi_class > overlap_lim .and. self%frac_srch%avg > fracsrch_lim )
                     self%progress = progress_estimate_2D(real(params_glob%which_iter), self%mi_class, overlap_lim, self%frac_srch%avg, fracsrch_lim, 0.0, 0.0)
                 else if( trim(params_glob%tseries) .eq. 'yes' )then

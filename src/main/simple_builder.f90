@@ -169,30 +169,22 @@ contains
         logical,      optional, intent(in)    :: wthreads
         logical :: read_spproj
         ! create object for orientations
-        ! b%a is now a pointer to a field in b%spproj
         select case(params%spproj_iseg)
             case(MIC_SEG)
                 call self%spproj%os_mic%new(params%nptcls,    is_ptcl=.false.)
-                self%spproj_field => self%spproj%os_mic
             case(STK_SEG)
                 call self%spproj%os_stk%new(params%nptcls,    is_ptcl=.false.)
-                self%spproj_field => self%spproj%os_stk
             case(PTCL2D_SEG)
                 call self%spproj%os_ptcl2D%new(params%nptcls, is_ptcl=.true.)
-                self%spproj_field => self%spproj%os_ptcl2D
             case(CLS2D_SEG)
                 call self%spproj%os_cls2D%new(params%nptcls,  is_ptcl=.false.)
-                self%spproj_field => self%spproj%os_cls2D
             case(CLS3D_SEG)
                 call self%spproj%os_cls3D%new(params%nptcls,  is_ptcl=.false.)
-                self%spproj_field => self%spproj%os_cls3D
             case(PTCL3D_SEG)
                 call self%spproj%os_ptcl3D%new(params%nptcls, is_ptcl=.true.)
-                self%spproj_field => self%spproj%os_ptcl3D
             case DEFAULT
                 ! using ptcl3D as the generic segment
                 call self%spproj%os_ptcl3D%new(params%nptcls, is_ptcl=.true.)
-                self%spproj_field => self%spproj%os_ptcl3D
         end select
         ! read project file
         read_spproj = .false.
@@ -210,6 +202,23 @@ contains
             if( params%deftab /= '' ) call binread_ctfparams_state_eo(params%deftab,  self%spproj, self%spproj_field, [1,params%nptcls])
             if( params%oritab /= '' ) call binread_oritab(params%oritab,              self%spproj, self%spproj_field, [1,params%nptcls])
         endif
+        ! set field pointer
+        select case(params%spproj_iseg)
+            case(MIC_SEG)
+                self%spproj_field => self%spproj%os_mic
+            case(STK_SEG)
+                self%spproj_field => self%spproj%os_stk
+            case(PTCL2D_SEG)
+                self%spproj_field => self%spproj%os_ptcl2D
+            case(CLS2D_SEG)
+                self%spproj_field => self%spproj%os_cls2D
+            case(CLS3D_SEG)
+                self%spproj_field => self%spproj%os_cls3D
+            case(PTCL3D_SEG)
+                self%spproj_field => self%spproj%os_ptcl3D
+            case DEFAULT
+                self%spproj_field => self%spproj%os_ptcl3D
+        end select
         if( .not. associated(build_glob) ) build_glob => self
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DONE BUILDING SP PROJECT'
     end subroutine build_spproj
