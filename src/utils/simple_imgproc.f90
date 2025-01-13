@@ -4,7 +4,7 @@ include 'simple_lib.f08'
 use simple_image, only: image
 implicit none
 
-public :: make_pcavecs
+public :: make_pcavecs, make_pcavol
 private
 
 #include "simple_local_flags.inc"
@@ -65,5 +65,24 @@ contains
             end do
         endif
     end subroutine make_pcavecs
+
+    subroutine make_pcavol( vol, D, avg, pcavec )
+        class(image),      intent(in)    :: vol           !< vol to serialize
+        integer,           intent(out)   :: D             !< vector dimension
+        real,              intent(inout) :: avg           !< average of pcavecs
+        real, allocatable, intent(inout) :: pcavec(:,:)   !< PCA vector
+        logical, allocatable :: ll_mask(:,:,:)
+        integer              :: i, ldim(3)
+        real                 :: smpd
+        ldim = vol%get_ldim()
+        smpd = vol%get_smpd()
+        allocate(ll_mask(ldim(1),ldim(2),ldim(3)), source=.true.)
+        D = count(ll_mask)
+        if( allocated(pcavec) ) deallocate(pcavec)
+        allocate(pcavec(D,1), source=0.)
+        pcavec(:,1) = vol%serialize(ll_mask)
+        avg         = sum(pcavec(:,1)) / real(D)
+        pcavec      = pcavec - avg
+    end subroutine make_pcavol
 
 end module simple_imgproc

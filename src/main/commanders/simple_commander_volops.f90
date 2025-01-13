@@ -23,6 +23,7 @@ public :: dock_volpair_commander
 public :: symaxis_search_commander
 public :: symmetrize_map_commander
 public :: symmetry_test_commander
+public :: ppca_volvar_commander
 
 private
 #include "simple_local_flags.inc"
@@ -76,6 +77,11 @@ type, extends(commander_base) :: symmetry_test_commander
   contains
     procedure :: execute      => exec_symmetry_test
 end type symmetry_test_commander
+
+type, extends(commander_base) :: ppca_volvar_commander
+  contains
+    procedure :: execute      => exec_ppca_volvar
+end type ppca_volvar_commander
 
 contains
 
@@ -658,5 +664,51 @@ contains
         call build%kill_general_tbox
         call simple_end('**** SIMPLE_SYMMETRY_TEST NORMAL STOP ****')
     end subroutine exec_symmetry_test
+
+    subroutine exec_ppca_volvar( self, cline )
+        use simple_imgproc,    only: make_pcavol
+        use simple_pca,        only: pca
+        use simple_ppca_inmem, only: ppca_inmem
+        use simple_pca_svd,    only: pca_svd
+        use simple_kpca_svd,   only: kpca_svd
+        use simple_image,      only: image
+        class(ppca_volvar_commander), intent(inout) :: self
+        class(cmdline),               intent(inout) :: cline
+        integer,     parameter   :: MAXPCAITS = 15
+        class(pca),  pointer     :: pca_ptr  => null()
+        real,        allocatable :: pcavec(:,:), gen(:)
+        type(parameters)  :: params
+        type(builder)     :: build
+        type(image)       :: vol
+        integer           :: npix, iptcl, j
+        real              :: avg
+        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
+        if( .not. cline%defined('outstk') ) call cline%set('outstk', 'ppca_volvar_out'//trim(STK_EXT))
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
+        if( .not.file_exists(params%vols(1)) ) THROW_HARD('cannot find the inputvolume')
+        call build%vol%read(params%vols(1))
+        ! masking
+        if(cline%defined('mskdiam')) call build%vol%mask(params%msk, 'soft', backgr=0.)
+        call make_pcavol(build%vol, npix, avg, pcavec)
+        ! pca allocation
+        select case(trim(params%pca_mode))
+            case('ppca')
+                allocate(ppca_inmem :: pca_ptr)
+            case('pca_svd')
+                allocate(pca_svd    :: pca_ptr)
+            case('kpca')
+                allocate(kpca_svd   :: pca_ptr)
+        end select
+        call pca_ptr%new(1, npix, params%neigs)
+        call pca_ptr%master(pcavec, MAXPCAITS)
+        allocate(gen(npix))
+        call pca_ptr%generate(1, [avg], gen)
+        call vol%unserialize(gen)
+        call vol%write(params%outstk)
+        call vol%kill
+        call build%kill_general_tbox
+        ! end gracefully
+        call simple_end('**** SIMPLE_PPCA_VOLVAR NORMAL STOP ****')
+    end subroutine exec_ppca_volvar
 
 end module simple_commander_volops
