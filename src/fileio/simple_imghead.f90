@@ -29,7 +29,7 @@ use simple_tifflib
 implicit none
 
 public :: ImgHead, MrcImgHead, SpiImgHead, TiffImgHead
-public :: test_imghead, find_ldim_nptcls, has_ldim_nptcls
+public :: test_imghead, find_ldim_nptcls, has_ldim_nptcls, update_stack_nimgs
 private
 #include "simple_local_flags.inc"
 
@@ -1518,6 +1518,33 @@ contains
         endif
         has_ldim_nptcls = .true.
     end function has_ldim_nptcls
+
+    !>  \brief is updating and writing the number of images in an MRC image stack
+    subroutine update_stack_nimgs( fname, nimgs )
+        character(len=*), intent(in) :: fname
+        integer,          intent(in) :: nimgs
+        class(imghead), allocatable  :: hed
+        integer :: ldim(3),filnum, ios
+        if( file_exists(fname) )then
+            select case(fname2format(fname))
+            case('M')
+                allocate(MrcImgHead :: hed)
+                call hed%new
+                call fopen(filnum, status='OLD', action='READWRITE', file=fname, access='STREAM', iostat=ios)
+                call fileiochk(" update_nimgs "//trim(fname),ios)
+                call hed%read(filnum)
+                ldim    = hed%getDims()
+                ldim(3) = nimgs
+                call hed%setDims(ldim)
+                call hed%write(filnum)
+                call fclose(filnum)
+            case DEFAULT
+                ! Only MRC is the target file format
+            end select
+        else
+            THROW_HARD('file: '//trim(fname)//' does not exists')
+        endif
+    end subroutine update_stack_nimgs
 
     ! polymorphic destructor
     subroutine kill( self )
