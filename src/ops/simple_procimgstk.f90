@@ -52,7 +52,7 @@ contains
         character(len=*), intent(in) :: fname2pad, fname
         integer,          intent(in) :: ldim_pad(3)
         real,             intent(in) :: smpd
-        type(stack_io)               :: stkio_r, stkio_w, stkio_w2
+        type(stack_io)               :: stkio_r, stkio_w
         type(image)                  :: img, img_pad
         integer                      :: n, i, ldim(3)
         real                         :: ave, sdev, maxv, minv, med
@@ -61,27 +61,24 @@ contains
         call raise_exception_imgfile( n, ldim, 'pad_imgfile' )
         if( ldim_pad(1) >= ldim(1) .and. ldim(2) >= ldim(2) )then
             call stkio_r%open(fname2pad, smpd, 'read')
-            call stkio_w%open(fname,     smpd, 'write', box=ldim_pad(1), is_ft=.false.)
-            call stkio_w2%open(fname,    smpd, 'write', box=ldim_pad(1), is_ft=.true.)
             call img%new(ldim,smpd)
             call img_pad%new(ldim_pad,smpd)
-            write(logfhandle,'(a)') '>>> PADDING IMAGES'
+            if( L_VERBOSE_GLOB ) write(logfhandle,'(a)') '>>> PADDING IMAGES'
             do i=1,n
                 call progress(i,n)
                 call stkio_r%read(i, img)
+                if( i == 1 ) call stkio_w%open(fname, smpd, 'write', box=ldim_pad(1), is_ft=img%is_ft())
                 if( img%is_ft() )then
                     call img%pad(img_pad) ! FT state preserved
-                    call stkio_w2%write(i, img_pad)
                 else
                     ! get background statistics
                     call img%stats('background', ave, sdev, maxv, minv, med=med)
                     call img%pad(img_pad, backgr=med) ! FT state preserved
-                    call stkio_w%write(i, img_pad)
                 endif
+                call stkio_w%write(i, img_pad)
             end do
             call stkio_r%close
             call stkio_w%close
-            call stkio_w2%close
             call img%kill
             call img_pad%kill
         end if
