@@ -1376,20 +1376,22 @@ contains
             write(logfhandle,'(A)') 'Warning: PDB atomic center moved to the center of the box'
             call self%center_pdbcoord(ldim, smpd)
         endif
-        call exp_vol%read_and_crop( exp_vol_file, smpd, box_new, smpd_new)
+        call exp_vol%read_and_crop(  exp_vol_file, smpd, box_new, smpd_new)
         call even_vol%read_and_crop(even_vol_file, smpd, box_new, smpd_new)
-        call odd_vol%read_and_crop( odd_vol_file, smpd, box_new, smpd_new)
-        call self%atom_validation(exp_vol, 'model_val_corr_map-model')
-        do i = 1, natoms
-            beta_map_model(i) = self%get_beta(i)
-        enddo
-        ! beta_map-model = beta
-        call self%map_validation(even_vol, odd_vol, 'model_val_corr_even-odd')
-        do i = 1, natoms
-            beta_even_odd(i) = self%get_beta(i)
-            call self%set_atom_corr(i, beta_map_model(i) - beta_even_odd(i))
-        enddo
-        call self%writepdb(trim(get_fbody(exp_vol_file,'pdb'))//'_half.pdb')
+        call odd_vol%read_and_crop(  odd_vol_file, smpd, box_new, smpd_new)
+        call self%atom_validation( exp_vol, 'experimental')
+        call self%atom_validation(even_vol, 'exp-even')
+        call self%atom_validation( odd_vol, 'exp-odd')
+        ! do i = 1, natoms
+        !     beta_map_model(i) = self%get_beta(i)
+        ! enddo
+        ! ! beta_map-model = beta
+        ! call self%map_validation(even_vol, odd_vol, 'model_val_corr_even-odd')
+        ! do i = 1, natoms
+        !     beta_even_odd(i) = self%get_beta(i)
+        !     call self%set_atom_corr(i, beta_map_model(i) - beta_even_odd(i))
+        ! enddo
+        ! call self%writepdb(trim(get_fbody(exp_vol_file,'pdb'))//'_half.pdb')
         call exp_vol%kill
         call even_vol%kill
         call odd_vol%kill

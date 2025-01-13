@@ -50,6 +50,7 @@ type(vizoris_commander)                       :: xvizoris
 type(cavgsproc_nano_commander)                :: xcavgsproc
 type(cavgseoproc_nano_commander)              :: xcavgseoproc
 type(model_validation_commander)              :: xmodel_validation
+type(model_validation_eo_commander)           :: xmodel_validation_eo
 type(ptclsproc_nano_commander)                :: xptclsproc
 
 ! MODEL BUILDING/ANALYSIS PROGRAMS
@@ -160,6 +161,8 @@ select case(prg)
         call xcavgseoproc%execute(cline)
     case( 'model_validation' )
         call xmodel_validation%execute(cline)
+    case( 'model_validation_eo' )
+        call xmodel_validation_eo%execute(cline)
     case( 'ptclsproc_nano' )
         call xptclsproc%execute(cline)
 
