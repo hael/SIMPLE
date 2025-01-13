@@ -1191,7 +1191,7 @@ contains
         end select
     end subroutine write
 
-    !>  \brief  for updating header stast in a real space MRC image file only
+    !>  \brief  for updating header stats in a real space MRC image file only
     subroutine update_header_stats( self, fname, stats)
         class(image),     intent(inout) :: self
         character(len=*), intent(in)    :: fname

@@ -69,7 +69,7 @@ contains
                 call stkio_r%read(i, img)
                 if( i == 1 ) call stkio_w%open(fname, smpd, 'write', box=ldim_pad(1), is_ft=img%is_ft())
                 if( img%is_ft() )then
-                    call img%pad(img_pad) ! FT state preserved
+                    call img%pad(img_pad, antialiasing=.false.) ! FT state preserved
                 else
                     ! get background statistics
                     call img%stats('background', ave, sdev, maxv, minv, med=med)

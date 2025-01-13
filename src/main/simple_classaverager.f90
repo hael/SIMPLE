@@ -35,44 +35,44 @@ type ptcl_record
     integer   :: ind_in_stk = 0    !< index in stack
 end type ptcl_record
 
-integer                        :: ctfflag                   !< ctf flag <yes=1|no=0|flip=2>
-integer                        :: istart      = 0, iend = 0 !< particle index range
-integer                        :: partsz      = 0           !< size of partition
-integer                        :: ncls        = 0           !< # classes
-integer                        :: ldim(3)        = [0,0,0] !< logical dimension of image
-integer                        :: ldim_crop(3)   = [0,0,0] !< logical dimension of cropped image
-integer                        :: ldim_pd(3)     = [0,0,0] !< logical dimension of image, padded
-integer                        :: ldim_croppd(3) = [0,0,0] !< logical dimension of cropped image, padded
-real                           :: smpd       = 0.          !< sampling distance
-real                           :: smpd_crop  = 0.          !< cropped sampling distance
-type(ptcl_record), allocatable :: precs(:)                 !< particle records
-type(image),       allocatable :: cavgs_even(:)            !< class averages
-type(image),       allocatable :: cavgs_odd(:)             !< -"-
-type(image),       allocatable :: cavgs_even_wfilt(:)      !< class averages wiener filtered
-type(image),       allocatable :: cavgs_odd_wfilt(:)       !< -"-
-type(image),       allocatable :: cavgs_merged(:)          !< -"-
-type(image),       allocatable :: cavgs_merged_wfilt(:)    !< -"-
-type(image),       allocatable :: ctfsqsums_even(:)        !< CTF**2 sums for Wiener normalisation
-type(image),       allocatable :: ctfsqsums_odd(:)         !< -"-
-type(image),       allocatable :: ctfsqsums_even_wfilt(:)  !< CTF**2 sums for Wiener normalisation
-type(image),       allocatable :: ctfsqsums_odd_wfilt(:)   !< -"-
-type(image),       allocatable :: ctfsqsums_merged(:)      !< -"-
-type(image),       allocatable :: ctfsqsums_merged_wfilt(:)!< -"-
-type(euclid_sigma2)            :: eucl_sigma
-type(image),       allocatable :: cavgs_even_bak(:)            !< class averages
-type(image),       allocatable :: cavgs_odd_bak(:)             !< -"-
-type(image),       allocatable :: cavgs_even_wfilt_bak(:)      !< class averages wiener filtered
-type(image),       allocatable :: cavgs_odd_wfilt_bak(:)       !< -"-
-type(image),       allocatable :: ctfsqsums_even_bak(:)        !< CTF**2 sums for Wiener normalisation
-type(image),       allocatable :: ctfsqsums_odd_bak(:)         !< -"-
-type(image),       allocatable :: ctfsqsums_even_wfilt_bak(:)  !< CTF**2 sums for Wiener normalisation
-type(image),       allocatable :: ctfsqsums_odd_wfilt_bak(:)   !< -"-
-integer,           allocatable :: prev_eo_pops(:,:)
-logical,           allocatable :: pptcl_mask(:)
-logical                        :: l_stream      = .false.  !< flag for cluster2D_stream
-logical                        :: phaseplate    = .false.  !< Volta phaseplate images or not
-logical                        :: l_ml_reg      = .false.
-logical                        :: exists        = .false.  !< to flag instance existence
+integer                          :: ctfflag                   !< ctf flag <yes=1|no=0|flip=2>
+integer                          :: istart      = 0, iend = 0 !< particle index range
+integer                          :: partsz      = 0           !< size of partition
+integer                          :: ncls        = 0           !< # classes
+integer                          :: ldim(3)        = [0,0,0] !< logical dimension of image
+integer                          :: ldim_crop(3)   = [0,0,0] !< logical dimension of cropped image
+integer                          :: ldim_pd(3)     = [0,0,0] !< logical dimension of image, padded
+integer                          :: ldim_croppd(3) = [0,0,0] !< logical dimension of cropped image, padded
+real                             :: smpd       = 0.          !< sampling distance
+real                             :: smpd_crop  = 0.          !< cropped sampling distance
+type(ptcl_record),   allocatable :: precs(:)                 !< particle records
+type(image), target, allocatable :: cavgs_even(:)            !< class averages
+type(image), target, allocatable :: cavgs_odd(:)             !< -"-
+type(image),         allocatable :: cavgs_even_wfilt(:)      !< class averages wiener filtered
+type(image),         allocatable :: cavgs_odd_wfilt(:)       !< -"-
+type(image), target, allocatable :: cavgs_merged(:)          !< -"-
+type(image),         allocatable :: cavgs_merged_wfilt(:)    !< -"-
+type(image),         allocatable :: ctfsqsums_even(:)        !< CTF**2 sums for Wiener normalisation
+type(image),         allocatable :: ctfsqsums_odd(:)         !< -"-
+type(image),         allocatable :: ctfsqsums_even_wfilt(:)  !< CTF**2 sums for Wiener normalisation
+type(image),         allocatable :: ctfsqsums_odd_wfilt(:)   !< -"-
+type(image),         allocatable :: ctfsqsums_merged(:)      !< -"-
+type(image),         allocatable :: ctfsqsums_merged_wfilt(:)!< -"-
+type(image),         allocatable :: cavgs_even_bak(:)            !< class averages
+type(image),         allocatable :: cavgs_odd_bak(:)             !< -"-
+type(image),         allocatable :: cavgs_even_wfilt_bak(:)      !< class averages wiener filtered
+type(image),         allocatable :: cavgs_odd_wfilt_bak(:)       !< -"-
+type(image),         allocatable :: ctfsqsums_even_bak(:)        !< CTF**2 sums for Wiener normalisation
+type(image),         allocatable :: ctfsqsums_odd_bak(:)         !< -"-
+type(image),         allocatable :: ctfsqsums_even_wfilt_bak(:)  !< CTF**2 sums for Wiener normalisation
+type(image),         allocatable :: ctfsqsums_odd_wfilt_bak(:)   !< -"-
+type(euclid_sigma2)              :: eucl_sigma
+integer,             allocatable :: prev_eo_pops(:,:)
+logical,             allocatable :: pptcl_mask(:)
+logical                          :: l_stream      = .false.  !< flag for cluster2D_stream
+logical                          :: phaseplate    = .false.  !< Volta phaseplate images or not
+logical                          :: l_ml_reg      = .false.
+logical                          :: exists        = .false.  !< to flag instance existence
 
 integer(timer_int_kind) :: t_class_loop,t_batch_loop, t_gridding, t_init, t_tot
 real(timer_int_kind)    :: rt_class_loop,rt_batch_loop, rt_gridding, rt_init, rt_tot
@@ -362,7 +362,7 @@ contains
         ! init cavgs
         call init_cavgs_sums
         if( do_frac_update )then
-            call cavger_readwrite_partial_sums( 'read' )
+            call cavger_readwrite_partial_sums('read')
             call cavger_apply_weights( 1. - params_glob%update_frac )
         endif
         kbwin  = kbinterpol(KBWINSZ, params_glob%alpha)
@@ -1128,33 +1128,44 @@ contains
     !>  \brief  reads class averages from disk
     subroutine cavger_read( fname, which )
         character(len=*),  intent(in) :: fname, which
-        type(stack_io) :: stkio_r
-        integer        :: icls
-        select case(which)
-            case('even')
-                call stkio_r%open(trim(fname), smpd_crop, 'read', bufsz=ncls)
-                do icls=1,ncls
-                    call cavgs_even(icls)%new(ldim_crop,smpd_crop,wthreads=.false.)
-                    call stkio_r%read(icls, cavgs_even(icls))
-                end do
-                call stkio_r%close
-            case('odd')
-                call stkio_r%open(trim(fname), smpd_crop, 'read', bufsz=ncls)
-                do icls=1,ncls
-                    call cavgs_odd(icls)%new(ldim_crop,smpd_crop,wthreads=.false.)
-                    call stkio_r%read(icls, cavgs_odd(icls))
-                end do
-                call stkio_r%close
-            case('merged')
-                call stkio_r%open(trim(fname), smpd_crop, 'read', bufsz=ncls)
-                do icls=1,ncls
-                    call cavgs_merged(icls)%new(ldim_crop,smpd_crop,wthreads=.false.)
-                    call stkio_r%read(icls, cavgs_merged(icls))
-                end do
-                call stkio_r%close
-            case DEFAULT
-                THROW_HARD('unsupported which flag')
+        class(image), pointer :: cavgs(:)
+        type(stack_io)        :: stkio_r
+        integer :: ldim_read(3), icls
+        select case(trim(which))
+        case('even')
+            cavgs => cavgs_even
+        case('odd')
+            cavgs => cavgs_odd
+        case('merged')
+            cavgs => cavgs_merged
+        case DEFAULT
+            THROW_HARD('unsupported which flag')
         end select
+        ! read
+        call stkio_r%open(trim(fname), smpd_crop, 'read', bufsz=ncls)
+        ldim_read = stkio_r%get_ldim()
+        do icls = 1,ncls
+            call cavgs(icls)%new(ldim_read,smpd_crop,wthreads=.false.)
+            call stkio_r%read(icls, cavgs(icls))
+        end do
+        call stkio_r%close
+        ! scale
+        if( any(ldim_read /= ldim_crop) )then
+            if( ldim_read(1) > ldim_crop(1) )then
+                ! Cropping is not covered
+                THROW_HARD('Incompatible cavgs dimensions! ; cavger_read')
+            else if( ldim_read(1) < ldim_crop(1) )then
+                ! Fourier padding
+                !$omp parallel do proc_bind(close) schedule(static) default(shared) private(icls)
+                do icls = 1,ncls
+                    call cavgs(icls)%fft
+                    call cavgs(icls)%pad_inplace(ldim_crop)
+                    call cavgs(icls)%ifft
+                end do
+                !$omp end parallel do
+            endif
+        endif
+        nullify(cavgs)
     end subroutine cavger_read
 
     !>  \brief  writes partial class averages to disk (distributed execution)

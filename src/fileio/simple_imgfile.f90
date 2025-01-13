@@ -716,7 +716,7 @@ contains
         getDims = self%overall_head%getDims()
     end function getDims
 
-    !>  \brief  Return one of the dimensio of the image stack
+    !>  \brief  Return one of the dimension of the image stack
     function getDim( self, which_dim )
         class(imgfile), intent(in) :: self
         integer, intent(in)        :: which_dim
