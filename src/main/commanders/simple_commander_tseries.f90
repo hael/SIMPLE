@@ -661,36 +661,18 @@ contains
         class(center2D_nano_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! commanders
-        type(cluster2D_commander)       :: xcluster2D ! shared-memory
-        type(cluster2D_commander_distr) :: xcluster2D_distr
+        type(cluster2D_nano_commander)   :: xcluster2D_nano ! shared-memory by default
+        type(make_cavgs_commander_distr) :: xmake_cavgs
+        ! constants
+        integer, parameter               :: NCLS_CEN_NANO = 10
         ! other variables
-        type(parameters)                :: params
-        type(sp_project)                :: spproj
-        class(parameters), pointer      :: params_ptr => null()
-        character(len=:), allocatable   :: orig_projfile
-        character(len=STDLEN)           :: prev_ctfflag
-        character(len=LONGSTRLEN)       :: finalcavgs
+        type(parameters)                 :: params
+        type(sp_project)                 :: spproj
+        type(cmdline)                    :: cline_make_cavgs, cline_cluster2D_nano
+        character(len=:), allocatable    :: orig_projfile
+        character(len=LONGSTRLEN)        :: finalcavgs
         integer :: last_iter_stage2, nptcls
-        logical :: l_shmem
         call cline%set('dir_exec', 'center2D_nano')
-        call cline%set('center',             'yes')
-        call cline%set('autoscale',           'no')
-        call cline%set('refine',          'greedy')
-        call cline%set('tseries',            'yes')
-        if( .not. cline%defined('graphene_filt')  ) call cline%set('graphene_filt',  'no')
-        if( .not. cline%defined('hp')             ) call cline%set('hp',               3.)
-        if( .not. cline%defined('lp')             ) call cline%set('lp',               1.)
-        if( .not. cline%defined('ncls')           ) call cline%set('ncls',             20)
-        ! if( .not. cline%defined('nptcls_per_cls') ) call cline%set('nptcls_per_cls', 500.)
-        if( .not. cline%defined('cenlp')          ) call cline%set('cenlp',            5.)
-        if( .not. cline%defined('trs')            ) call cline%set('trs',              5.)
-        if( .not. cline%defined('maxits')         ) call cline%set('maxits',          15.)
-        if( .not. cline%defined('objfun')         ) call cline%set('objfun',         'cc') ! best objfun
-        if( .not. cline%defined('kweight')        ) call cline%set('kweight',   'default') ! best resolution weighting scheme for this kind of data
-        if( .not. cline%defined('ml_reg')         ) call cline%set('ml_reg',         'no') ! ml_reg=yes -> too few atoms 
-        if( .not. cline%defined('oritype')        ) call cline%set('oritype',    'ptcl2D')
-        ! set shared-memory flag
-        l_shmem = set_shmem_flag(cline)
         ! master parameters
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
@@ -710,25 +692,25 @@ contains
             call spproj%os_ptcl2D%delete_2Dclustering
             call spproj%write_segment_inside(params%oritype)
         endif
-        ! de-activating CTF correction for this application
-        prev_ctfflag = spproj%get_ctfflag(params%oritype)
-        ! chronological initialisation
-        params%nptcls_per_cls = ceiling(real(nptcls)/real(params%ncls))
-        call cline%set('nptcls_per_cls', params%nptcls_per_cls)
-        ! splitting
-        if( .not. l_shmem ) call spproj%split_stk(params%nparts, dir=PATH_PARENT)
-        ! no auto-scaling
-        call cline%set('prg', 'cluster2D')
-        if( l_shmem )then
-            params_ptr  => params_glob
-            params_glob => null()
-            call xcluster2D%execute(cline)
-            params_glob => params_ptr
-            params_ptr  => null()
-        else
-            call xcluster2D_distr%execute(cline)
+        ! make initial class averages (averages of time-chunks)
+        cline_make_cavgs = cline
+        call cline_make_cavgs%set('prg',     'make_cavgs')
+        if( .not. cline%defined('ncls'))then
+            call cline_make_cavgs%set('ncls', NCLS_CEN_NANO)
         endif
-        last_iter_stage2 = cline%get_iarg('endit')
+        call cline_make_cavgs%set('tseries', 'yes')
+        call cline_make_cavgs%set('nparts',   1)
+        call cline_make_cavgs%set('refs',    'start2Drefs'//params%ext)
+        call cline_make_cavgs%set('projfile', trim(params%projfile))
+        call xmake_cavgs%execute_safe(cline_make_cavgs)
+        ! do centering
+        cline_cluster2D_nano = cline
+        call cline_cluster2D_nano%set('prg',     'cluster2D_nano')
+        call cline_cluster2D_nano%set('mskdiam',  0.)
+        call cline_cluster2D_nano%set('refine',  'inpl')
+        call cline_cluster2D_nano%set('projfile', trim(params%projfile))
+        call xcluster2D_nano%execute_safe(cline_cluster2D_nano)        
+        last_iter_stage2 = cline_cluster2D_nano%get_iarg('endit')
         finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//params%ext
         ! adding cavgs & FRCs to project
         params%projfile = trim(orig_projfile)
@@ -757,7 +739,6 @@ contains
         call cline%set('center',              'yes')
         call cline%set('autoscale',            'no')
         call cline%set('tseries',             'yes')
-        ! dynamic parameters
         if( .not. cline%defined('refine') ) call cline%set('refine','greedy')
         select case(trim(cline%get_carg('refine')))
             case('no','greedy')
@@ -765,18 +746,13 @@ contains
                 if( .not. cline%defined('nptcls_per_cls') ) call cline%set('nptcls_per_cls', 35)
                 if( .not. cline%defined('maxits')         ) call cline%set('maxits',         15)
             case('inpl')
-                call cline%set('center','no')
-                if( .not. cline%defined('maxits')         ) call cline%set('maxits',          5)
+                if( .not. cline%defined('maxits')         ) call cline%set('maxits',         10)
             case DEFAULT
                 THROW_HARD('Unsupported refinement mode!')
         end select
-        if( .not. cline%defined('center')         ) call cline%set('center',       'yes')
         if( .not. cline%defined('graphene_filt')  ) call cline%set('graphene_filt', 'no')
-        if( .not. cline%defined('lpstart')        ) call cline%set('lpstart',        1.0)
-        if( .not. cline%defined('lpstop')         ) call cline%set('lpstop',         1.0)
         if( .not. cline%defined('hp')             ) call cline%set('hp',             3.0)
         if( .not. cline%defined('lp')             ) call cline%set('lp',             1.0)
-        if( .not. cline%defined('winsz')          ) call cline%set('winsz',           3.)
         if( .not. cline%defined('cenlp')          ) call cline%set('cenlp',           5.)
         if( .not. cline%defined('trs')            ) call cline%set('trs',             5.)
         if( .not. cline%defined('objfun')         ) call cline%set('objfun',        'cc') ! best objfun

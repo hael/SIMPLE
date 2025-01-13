@@ -16,6 +16,7 @@ use simple_strategy2D3D_common,    only: set_bp_range2d, prepimgbatch, killimgba
 use simple_strategy2D,             only: strategy2D, strategy2D_per_ptcl
 use simple_strategy2D_srch,        only: strategy2D_spec
 use simple_strategy2D_greedy,      only: strategy2D_greedy
+use simple_strategy2D_inpl,        only: strategy2D_inpl
 use simple_strategy2D_greedy_smpl, only: strategy2D_greedy_smpl
 use simple_strategy2D_tseries,     only: strategy2D_tseries
 use simple_strategy2D_snhc,        only: strategy2D_snhc
@@ -251,7 +252,9 @@ contains
                     endif
                 else
                     ! offline mode, based on iteration
-                    if( l_greedy .or. l_greedy_smpl .or. (.not.build_glob%spproj_field%has_been_searched(iptcl)&
+                    if( trim(params_glob%refine).eq.'inpl' )then
+                        allocate(strategy2D_inpl                :: strategy2Dsrch(iptcl_batch)%ptr)
+                    else if( l_greedy .or. l_greedy_smpl .or. (.not.build_glob%spproj_field%has_been_searched(iptcl)&
                         &.or. updatecnt==1) )then
                         if( trim(params_glob%tseries).eq.'yes' )then
                             if( l_np_cls_defined )then

@@ -136,12 +136,12 @@ contains
                 params%ncls = ncls_here
             endif
         endif
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
         if( l_shmem  )then
             call xmk_cavgs_shmem%execute_safe(cline)
             return
         endif
-        ! set mkdir to no (to avoid nested directory structure)
-        call cline%set('mkdir', 'no')
         ! setup the environment for distributed execution
         call qenv%new(params%nparts)
         ! prepare job description
