@@ -535,7 +535,6 @@ contains
         real,        allocatable :: avg(:), gen(:), pcavecs(:,:), tmpvec(:)
         type(parameters)  :: params
         type(builder)     :: build
-        type(ppca_inmem)  :: prob_pca
         integer           :: npix, iptcl, j
         logical           :: l_transp_pca
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')

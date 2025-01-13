@@ -152,6 +152,7 @@ type(simple_program), target :: pick_extract
 type(simple_program), target :: postprocess
 type(simple_program), target :: ppca_denoise
 type(simple_program), target :: ppca_denoise_classes
+type(simple_program), target :: ppca_volvar
 type(simple_program), target :: preproc
 type(simple_program), target :: preprocess
 type(simple_program), target :: print_dose_weights
@@ -461,6 +462,7 @@ contains
         call new_postprocess
         call new_ppca_denoise
         call new_ppca_denoise_classes
+        call new_ppca_volvar
         call new_preproc
         call new_preprocess
         call new_print_dose_weights
@@ -593,6 +595,7 @@ contains
         call push2prg_ptr_array(postprocess)
         call push2prg_ptr_array(ppca_denoise)
         call push2prg_ptr_array(ppca_denoise_classes)
+        call push2prg_ptr_array(ppca_volvar)
         call push2prg_ptr_array(preproc)
         call push2prg_ptr_array(preprocess)
         call push2prg_ptr_array(print_dose_weights)
@@ -816,6 +819,8 @@ contains
                 ptr2prg => ppca_denoise
             case('ppca_denoise_classes')
                 ptr2prg => ppca_denoise_classes
+            case('ppca_volvar')
+                ptr2prg => ppca_volvar
             case('preproc')
                 ptr2prg => preproc
             case('preprocess')
@@ -988,6 +993,7 @@ contains
         write(logfhandle,'(A)') postprocess%name
         write(logfhandle,'(A)') ppca_denoise%name
         write(logfhandle,'(A)') ppca_denoise_classes%name
+        write(logfhandle,'(A)') ppca_volvar%name
         write(logfhandle,'(A)') preprocess%name
         write(logfhandle,'(A)') print_dose_weights%name
         write(logfhandle,'(A)') print_fsc%name
@@ -1059,6 +1065,7 @@ contains
         write(logfhandle,'(A)') cluster2D_nano%name
         write(logfhandle,'(A)') map_cavgs_selection%name
         write(logfhandle,'(A)') ppca_denoise_classes%name
+        write(logfhandle,'(A)') ppca_volvar%name
         write(logfhandle,'(A)') estimate_diam%name
         write(logfhandle,'(A)') simulate_atoms%name
         write(logfhandle,'(A)') refine3D_nano%name
@@ -3830,6 +3837,32 @@ contains
         ! computer controls
         call ppca_denoise_classes%set_input('comp_ctrls', 1, nthr)
     end subroutine new_ppca_denoise_classes
+
+    subroutine new_ppca_volvar
+        ! PROGRAM SPECIFICATION
+        call ppca_volvar%new(&
+        &'ppca_volvar',&                              ! name
+        &'Volume variabilit analysis using ppca',&    ! descr_short
+        &'is a program for ppca-based volume variability',&  ! descr_long
+        &'simple_exec',&                              ! executable
+        &1, 1, 0, 0, 1, 1, 1, .false.)                ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call ppca_volvar%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume for creating 2D central sections', 'input volume e.g. vol.mrc', .true., 'vol1.mrc')
+        ! parameter input/output
+        call ppca_volvar%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call ppca_volvar%set_input('filt_ctrls', 1, 'neigs', 'num', '# eigenvecs', '# eigenvecs', '# eigenvecs', .true., 0.0)
+        ! mask controls
+        call ppca_volvar%set_input('mask_ctrls', 1, mskdiam)
+        ppca_volvar%mask_ctrls(1)%required = .false.
+        ! computer controls
+        call ppca_volvar%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_ppca_volvar
 
     subroutine new_preprocess
         ! PROGRAM SPECIFICATION
