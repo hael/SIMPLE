@@ -15,10 +15,10 @@ type(parameters)              :: p
 type(polarft_corrcalc)        :: pftcc
 type(polarizer)               :: img_polarizer
 type(cmdline)                 :: cline
-type(image)                   :: vol, noise, ptcl, ptcl_pad, fplanes(NPLANES), ptcl_polar
+type(image)                   :: noise, ptcl, ptcl_pad, fplanes(NPLANES), pad_fplanes(NPLANES), ptcl_polar
 type(oris)                    :: spiral
 type(ori)                     :: o1, o2
-type(projector)               :: vol_pad
+type(projector)               :: vol_pad, vol
 integer                       :: ifoo, rc, errflg, i, j, ori_phys(3), target_phys(3), f_ind, box
 real                          :: res_fsc05, res_fsc0143, ave, sdev, maxv, minv, med
 complex                       :: diff
@@ -65,10 +65,14 @@ call vol_pad%new( [p%boxpd, p%boxpd, p%boxpd], p%smpd)
 call ptcl_pad%new([p%boxpd, p%boxpd, 1],       p%smpd)
 call noise%new(   [p%boxpd, p%boxpd, 1],       p%smpd)
 call vol%pad(vol_pad)
+print *, 'lims = ', vol%loop_lims(2)
+print *, 'ldim = ', vol%get_ldim()
 call vol_pad%fft
 call vol_pad%expand_cmat(p%alpha)
 call spiral%get_ori(ORI_IND, o1)
 call vol_pad%fproject(o1,ptcl_pad)
+print *, 'lims_pad = ', vol_pad%loop_lims(2)
+print *, 'ldim_pad = ', vol_pad%get_ldim()
 call ptcl_pad%ifft
 ! add noise in a small center region of the vol
 call noise%gauran(0., 0.05 * sdev)
@@ -78,11 +82,16 @@ call ptcl_pad%clip(ptcl)
 call ptcl%write('test_images.mrc', 1)
 do i = 1, spiral%get_noris()
     call spiral%get_ori(i, o2)
-    call fplanes(i)%new([p%boxpd, p%boxpd, 1], p%smpd)
-    call vol_pad%fproject(o2,fplanes(i))
-    call vol_pad%fproject_map(i, spiral, coord_map(i))
+    call fplanes(i)%new(    [p%box,   p%box,   1], p%smpd)
+    call pad_fplanes(i)%new([p%boxpd, p%boxpd, 1], p%smpd)
+    call vol_pad%fproject(o2,pad_fplanes(i))
+    call pad_fplanes(i)%ifft
+    call pad_fplanes(i)%clip(fplanes(i))
+    call fplanes(i)%fft
+    call vol%fproject_map(i, spiral, coord_map(i))
 enddo
 call ptcl_pad%fft
+call ptcl%fft
 total_costs = 0.
 do i = 1, spiral%get_noris()
     do j = 1, coord_map(i)%n_points
@@ -90,7 +99,7 @@ do i = 1, spiral%get_noris()
         if( f_ind == i ) cycle
         ori_phys       = coord_map(i)%ori_phys(:,j)
         target_phys    = coord_map(i)%target_phys(:,j)
-        diff           = ptcl_pad%get_cmat_at(ori_phys) - fplanes(f_ind)%get_cmat_at(target_phys)
+        diff           = ptcl%get_cmat_at(ori_phys) - fplanes(f_ind)%get_cmat_at(target_phys)
         total_costs(i) = total_costs(i) + diff * conjg(diff)
     enddo
     total_costs(i) = sqrt(total_costs(i) / real(coord_map(i)%n_points))
