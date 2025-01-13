@@ -3410,12 +3410,18 @@ contains
         &'Validation of atomic model',&                    ! descr_short
         &'is a program to validate the PDB atomic model given a 3D experimental even/odd density map in MRC',& ! descr long
         &'all',&                                           ! executable
-        &0, 0, 0, 0, 0, 0, 0, .false.)                     ! # entries in each group, requires sp_project
+        &4, 2, 0, 0, 0, 0, 0, .false.)                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        ! <empty>
+        call model_validation_eo%set_input('img_ios', 1, 'vol1', 'file', 'Experimental volume',  'Experimental volume',  'vol.mrc file', .true., '')
+        call model_validation_eo%set_input('img_ios', 2, 'vol2', 'file', 'Even volume',  'Experimental even volume',  'vol_even.mrc file', .true., '')
+        model_validation_eo%img_ios(2)%required = .false.
+        call model_validation_eo%set_input('img_ios', 3, 'vol3', 'file', 'Odd volume',  'Experimental odd volume',  'vol_odd.mrc file', .true., '')
+        model_validation_eo%img_ios(3)%required = .false.
+        call model_validation_eo%set_input('img_ios', 4, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'molecule.pdb')
         ! parameter input/output
-        ! <empty>
+        call model_validation_eo%set_input('parm_ios', 1, smpd)
+        call model_validation_eo%set_input('parm_ios', 2, smpd_target)
         ! alternative inputs
         ! <empty>
         ! search controls
