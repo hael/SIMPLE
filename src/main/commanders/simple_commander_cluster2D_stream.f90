@@ -53,6 +53,7 @@ integer,               parameter :: CHUNK_CC_ITERS       = 8                ! ma
 integer,               parameter :: CHUNK_EXTR_ITER      = 3                ! starting extremal iteration for chunks
 integer,               parameter :: FREQ_POOL_REJECTION  = 5                ! pool class rejection performed every FREQ_POOL_REJECTION iteration
 integer,               parameter :: MIN_NPTCLS_REJECTION = 200000           ! Minimum number of particles required to activate rejection
+integer,               parameter :: NPREV_RES            = 5                ! # of previous resolution resolutions to store for resolution update (>=2)
 character(len=STDLEN), parameter :: USER_PARAMS          = 'stream2D_user_params.txt'
 character(len=STDLEN), parameter :: PROJFILE_POOL        = 'cluster2D.simple'
 character(len=STDLEN), parameter :: POOL_DIR             = ''               ! should be './pool/' for tidyness but difficult with gui
@@ -64,32 +65,37 @@ character(len=STDLEN), parameter :: CLS_POOL_REJECTED    = 'cls_rejected_pool.mr
 logical,               parameter :: DEBUG_HERE           = .false.
 integer(timer_int_kind)          :: t
 
+! TEMPORARY DEV FLAG
+logical, parameter :: DEV_INCRPOOLRESLIM = .false.
+
 ! Pool related
-type(sp_project)                       :: pool_proj                         ! master project
-type(qsys_env)                         :: qenv_pool
-type(cmdline)                          :: cline_cluster2D_pool              ! master pool classification command line
-type(scaled_dims)                      :: pool_dims                         ! crop dimensions used for pool
-logical,                   allocatable :: pool_stacks_mask(:)               ! subset of stacks undergoing classification
-integer                                :: pool_iter                         ! Iteration counter
-logical                                :: pool_available
-logical                                :: l_no_chunks                       ! for not using chunks (cf gen_picking_refs)
+type(sp_project)                 :: pool_proj                         ! master project
+type(qsys_env)                   :: qenv_pool
+type(cmdline)                    :: cline_cluster2D_pool              ! master pool classification command line
+type(scaled_dims)                :: pool_dims                         ! crop dimensions used for pool
+logical,             allocatable :: pool_stacks_mask(:)               ! subset of stacks undergoing classification
+integer                          :: pool_iter                         ! Iteration counter
+logical                          :: pool_available
+logical                          :: l_no_chunks                       ! for not using chunks (cf gen_picking_refs)
 ! Chunk related
-type(stream_chunk),        allocatable :: chunks(:), converged_chunks(:)
-type(cmdline)                          :: cline_cluster2D_chunk             ! master chunk classification command line
-type(scaled_dims)                      :: chunk_dims                        ! crop dimensions used for chunks
-integer                                :: glob_chunk_id                     ! ID book-keeping
+type(stream_chunk),  allocatable :: chunks(:), converged_chunks(:)
+type(cmdline)                    :: cline_cluster2D_chunk             ! master chunk classification command line
+type(scaled_dims)                :: chunk_dims                        ! crop dimensions used for chunks
+integer                          :: glob_chunk_id                     ! ID book-keeping
 ! Book-keeping
-character(len=:),          allocatable :: orig_projfile
-character(len=STDLEN)                  :: refs_glob                         ! global 2D references filename
-real                                   :: conv_score=0., conv_mi_class=0., conv_frac=0., current_resolution=999.
-integer                                :: nptcls_glob=0, nptcls_rejected_glob=0, ncls_rejected_glob=0
-integer                                :: ncls_glob                         ! global number of classes
-integer                                :: iterswitch2euclid = 0             ! only used by gen_picking_refs
-logical                                :: stream2D_active   = .false.       ! initiation flag
+class(cmdline),          pointer :: master_cline
+character(len=:),    allocatable :: orig_projfile
+character(len=STDLEN)            :: refs_glob                         ! global 2D references filename
+real                             :: conv_score=0., conv_mi_class=0., conv_frac=0.
+real                             :: resolutions(NPREV_RES)=999., current_resolution=999.  ! Resolution book-keeping
+integer                          :: nptcls_glob=0, nptcls_rejected_glob=0, ncls_rejected_glob=0
+integer                          :: ncls_glob                         ! global number of classes
+integer                          :: iterswitch2euclid = 0             ! only used by gen_picking_refs
+logical                          :: stream2D_active   = .false.       ! initiation flag
 ! GUI-related
-type(starproject)                      :: starproj
-type(starproject_stream)               :: starproj_stream
-character(len=:),          allocatable :: projfile4gui                      ! Joe: is this output still used?
+type(starproject)                :: starproj
+type(starproject_stream)         :: starproj_stream
+character(len=:),    allocatable :: projfile4gui                      ! Joe: is this output still used?
 ! other
 real     :: lpstart, lpstop, lpcen
 integer  :: max_ncls, nptcls_per_chunk, nmics_last, numlen
@@ -101,7 +107,7 @@ logical  :: l_abinitio2D    = .false.   ! Whether to use abinitio2D/cluster2D
 contains
 
     subroutine init_cluster2D_stream( cline, spproj, projfilegui, reference_generation )
-        class(cmdline),    intent(inout) :: cline
+        class(cmdline),    target, intent(inout) :: cline
         class(sp_project), intent(inout) :: spproj
         character(len=*),  intent(in)    :: projfilegui
         logical, optional, intent(in)    :: reference_generation    ! Joe: redundant with l_no_chunks (nchunks==0), will remove
@@ -112,6 +118,7 @@ contains
         logical :: refgen
         call seed_rnd
         ! general parameters
+        master_cline => cline
         call mskdiam2lplimits(params_glob%mskdiam, lpstart, lpstop, lpcen)
         if( cline%defined('lp') ) lpstart = params_glob%lp
         l_wfilt             = trim(params_glob%wiener) .eq. 'partial'
@@ -283,9 +290,9 @@ contains
             THROW_HARD('UNSUPPORTED REFINE PARAMETER!')
         end select
         ! Determines dimensions for downscaling
-        call set_scaling_dims
+        call set_dimensions
         ! updates command-lines with resolution limits
-        call set_resolution_limits( cline )
+        call set_resolution_limits
         ! Initialize subsets
         if( .not.l_no_chunks )then
             allocate(chunks(params_glob%nchunks))
@@ -306,7 +313,7 @@ contains
         stream2D_active = .true.
     end subroutine init_cluster2D_stream
 
-    subroutine set_scaling_dims
+    subroutine set_dimensions
         real    :: SMPD_TARGET = MAX_SMPD  ! target sampling distance
         real    :: smpd, scale_factor
         integer :: box
@@ -341,11 +348,10 @@ contains
         call cline_cluster2D_pool%set('msk_crop',   pool_dims%msk)
         call cline_cluster2D_pool%set('box',        params_glob%box)
         call cline_cluster2D_pool%set('smpd',       params_glob%smpd)
-    end subroutine set_scaling_dims
+    end subroutine set_dimensions
 
     ! private routine for resolution-related updates to command-lines
-    subroutine set_resolution_limits( master_cline )
-        type(cmdline), intent(in) :: master_cline
+    subroutine set_resolution_limits
         lpstart = max(lpstart, 2.0*params_glob%smpd_crop)
         if( l_no_chunks )then
             params_glob%lpstop = lpstop
@@ -380,6 +386,130 @@ contains
         write(logfhandle,'(A,F5.1)') '>>> POOL   HARD RESOLUTION LIMIT (IN A): ', params_glob%lpstop
         write(logfhandle,'(A,F5.1)') '>>> CENTERING     LOW-PASS LIMIT (IN A): ', lpcen
     end subroutine set_resolution_limits
+
+    ! Deals with pool dimensions & resolution update
+    subroutine update_pool_dims
+        use simple_procimgstk, only: pad_imgfile, scale_imgfile
+        type(scaled_dims)             :: new_dims, prev_dims
+        type(oris)                    :: os
+        type(class_frcs)              :: frcs
+        character(len=:), allocatable :: string
+        real    :: scale_factor
+        integer :: ldim(3), p
+        ! resolution book-keeping
+        resolutions(1:NPREV_RES-1) = resolutions(2:NPREV_RES)
+        resolutions(NPREV_RES)     = current_resolution
+        if( l_no_chunks ) return
+        prev_dims = pool_dims
+        !!!!!!! in developpment !!!!
+        if( .not. DEV_INCRPOOLRESLIM ) return
+        !!!!!!!
+        ! Auto-scaling?
+        if( trim(params_glob%autoscale) .ne. 'yes' ) return
+        ! Hard limit reached?
+        if( pool_dims%smpd < 1.5 ) return
+        ! Too early?
+        if( pool_iter < 3 ) return
+        if( ncls_glob < params_glob%ncls ) return
+        ! Current resolution at Nyquist?
+        if( abs(current_resolution-2.*pool_dims%smpd) > 0.01 ) return
+        ! When NPREV_RES iterations are at Nyquist the pool resolution may be updated
+        if( any(abs(resolutions-current_resolution) > 0.01 ) ) return
+        ! determines new dimensions
+        new_dims%box   = find_larger_magic_box(pool_dims%box+1)
+        scale_factor   = real(new_dims%box) / real(params_glob%box)
+        if( scale_factor > 0.99 ) return ! safety
+        new_dims%smpd  = params_glob%smpd / scale_factor
+        new_dims%boxpd = 2 * round2even(params_glob%alpha * real(new_dims%box/2)) ! logics from parameters
+        new_dims%msk   = round2even(params_glob%mskdiam / new_dims%smpd / 2.)
+        ! New dimensions are accepted when new Nyquist is > 5/4 of original
+        if( new_dims%smpd < 1.25*params_glob%smpd ) return
+        ! Update global variables
+        l_scaling = .true.
+        pool_dims = new_dims
+        if( master_cline%defined('lpstop') )then
+            params_glob%lpstop = max(2.0*pool_dims%smpd, master_cline%get_rarg('lpstop'))
+        else
+            params_glob%lpstop = 2.0*pool_dims%smpd
+        endif
+        call cline_cluster2D_pool%set('lpstop',    params_glob%lpstop)
+        call cline_cluster2D_pool%set('smpd_crop', pool_dims%smpd)
+        call cline_cluster2D_pool%set('box_crop',  pool_dims%box)
+        call cline_cluster2D_pool%set('msk_crop',  pool_dims%msk)
+        write(logfhandle,'(A)')             '>>> UPDATING POOL DIMENSIONS '
+        write(logfhandle,'(A,I5,A1,I5)')    '>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params_glob%box,'/',pool_dims%box
+        write(logfhandle,'(A,F5.2,A1,F5.2)')'>>> ORIGINAL/CROPPED PIXEL SIZE (Angs)  : ',params_glob%smpd,'/',pool_dims%smpd
+        write(logfhandle,'(A,F5.1)')        '>>> POOL   HARD RESOLUTION LIMIT (Angs) : ',params_glob%lpstop
+        ! upsample cavgs
+        ldim = [pool_dims%box,pool_dims%box,1]
+        if( l_wfilt )then
+            string  = add2fbody(refs_glob, params_glob%ext,trim(WFILT_SUFFIX))
+            call scale_imgfile(string, 'tmp.mrc', prev_dims%smpd, ldim, pool_dims%smpd)
+            call simple_rename('tmp.mrc',string)
+            string  = add2fbody(refs_glob, params_glob%ext,trim(WFILT_SUFFIX)//'_even')
+            call scale_imgfile(string, 'tmp.mrc', prev_dims%smpd, ldim, pool_dims%smpd)
+            call simple_rename('tmp.mrc',string)
+            string  = add2fbody(refs_glob, params_glob%ext,trim(WFILT_SUFFIX)//'_odd')
+            call scale_imgfile(string, 'tmp.mrc', prev_dims%smpd, ldim, pool_dims%smpd)
+            call simple_rename('tmp.mrc',string)
+        endif
+        call scale_imgfile(refs_glob, 'tmp.mrc', prev_dims%smpd, ldim, pool_dims%smpd)
+        call simple_rename('tmp.mrc',refs_glob)
+        string  = add2fbody(refs_glob, params_glob%ext,'_even')
+        call scale_imgfile(string, 'tmp.mrc', prev_dims%smpd, ldim, pool_dims%smpd)
+        call simple_rename('tmp.mrc',string)
+        string  = add2fbody(refs_glob, params_glob%ext,'_odd')
+        call scale_imgfile(string, 'tmp.mrc', prev_dims%smpd, ldim, pool_dims%smpd)
+        call simple_rename('tmp.mrc',string)
+        ! upsample cavgs matrices
+        ldim = [pool_dims%boxpd,pool_dims%boxpd,1]
+        do p = 1,params_glob%nparts_pool
+            string = trim(POOL_DIR)//trim('cavgs_even_part')//int2str_pad(p,numlen)//trim(params_glob%ext)
+            call pad_imgfile(string, 'tmp.mrc', ldim, pool_dims%smpd)
+            call simple_rename('tmp.mrc',string)
+            string = trim(POOL_DIR)//trim('cavgs_odd_part')//int2str_pad(p,numlen)//trim(params_glob%ext)
+            call pad_imgfile(string, 'tmp.mrc', ldim, pool_dims%smpd)
+            call simple_rename('tmp.mrc',string)
+            string = trim(POOL_DIR)//trim('ctfsqsums_even_part')//int2str_pad(p,numlen)//trim(params_glob%ext)
+            call pad_imgfile(string, 'tmp.mrc', ldim, pool_dims%smpd)
+            call simple_rename('tmp.mrc',string)
+            string = trim(POOL_DIR)//trim('ctfsqsums_odd_part')//int2str_pad(p,numlen)//trim(params_glob%ext)
+            call pad_imgfile(string, 'tmp.mrc', ldim, pool_dims%smpd)
+            call simple_rename('tmp.mrc',string)
+        enddo
+        if( l_wfilt )then
+            do p = 1,params_glob%nparts_pool
+                string = trim(POOL_DIR)//trim('cavgs_even_wfilt_part')//int2str_pad(p,numlen)//trim(params_glob%ext)
+                call pad_imgfile(string, 'tmp.mrc', ldim, pool_dims%smpd)
+                call simple_rename('tmp.mrc',string)
+                string = trim(POOL_DIR)//trim('cavgs_odd_wfilt_part')//int2str_pad(p,numlen)//trim(params_glob%ext)
+                call pad_imgfile(string, 'tmp.mrc', ldim, pool_dims%smpd)
+                call simple_rename('tmp.mrc',string)
+                string = trim(POOL_DIR)//trim('ctfsqsums_even_wfilt_part')//int2str_pad(p,numlen)//trim(params_glob%ext)
+                call pad_imgfile(string, 'tmp.mrc', ldim, pool_dims%smpd)
+                call simple_rename('tmp.mrc',string)
+                string = trim(POOL_DIR)//trim('ctfsqsums_odd_wfilt_part')//int2str_pad(p,numlen)//trim(params_glob%ext)
+                call pad_imgfile(string, 'tmp.mrc', ldim, pool_dims%smpd)
+                call simple_rename('tmp.mrc',string)
+            enddo
+        endif
+        ! update cls2D field
+        os = pool_proj%os_cls2D
+        call pool_proj%os_out%kill
+        call pool_proj%add_cavgs2os_out(refs_glob, pool_dims%smpd, 'cavg', clspath=.true.)
+        if( l_wfilt )then
+            string = add2fbody(refs_glob,params_glob%ext,trim(WFILT_SUFFIX))
+            call pool_proj%add_cavgs2os_out(string, pool_dims%smpd, 'cavg'//trim(WFILT_SUFFIX), clspath=.true.)
+        endif
+        pool_proj%os_cls2D = os
+        call os%kill
+        ! rescale frcs
+        call frcs%read(FRCS_FILE)
+        call frcs%pad(pool_dims%smpd, pool_dims%box)
+        call frcs%write(FRCS_FILE)
+        call frcs%kill
+        call pool_proj%add_frcs2os_out(FRCS_FILE, 'frc2D')
+    end subroutine update_pool_dims
 
     !> Updates current parameters with user input
     subroutine update_user_params2D( cline_here, updated )
@@ -490,7 +620,7 @@ contains
     subroutine write_project_stream2D( write_star, clspath)
         logical, optional, intent(in) :: write_star
         logical, optional, intent(in) :: clspath
-        type(class_frcs)              :: frcs, frcs_sc
+        type(class_frcs)              :: frcs
         type(oris)                    :: os_backup
         character(len=:), allocatable :: projfile,projfname, cavgsfname, frcsfname, src, dest
         character(len=:), allocatable :: pool_refs
@@ -541,11 +671,10 @@ contains
             pool_proj%os_cls2D = os_backup
             call os_backup%kill
             ! rescale frcs
-            call frcs_sc%read(trim(POOL_DIR)//trim(FRCS_FILE))
-            call frcs_sc%pad(params_glob%smpd, params_glob%box, frcs)
+            call frcs%read(trim(POOL_DIR)//trim(FRCS_FILE))
+            call frcs%pad(params_glob%smpd, params_glob%box)
             call frcs%write(frcsfname)
             call frcs%kill
-            call frcs_sc%kill
             call pool_proj%add_frcs2os_out(frcsfname, 'frc2D')
         else
             call pool_proj%os_out%kill
@@ -970,6 +1099,8 @@ contains
             current_resolution = frcs%estimate_lp_for_align()
             write(logfhandle,'(A,F5.1)')'>>> CURRENT POOL RESOLUTION: ',current_resolution
             call frcs%kill
+            ! deal with dimensions/resolution update
+            call update_pool_dims
             ! for gui
             call update_pool_for_gui
         endif
@@ -1040,11 +1171,9 @@ contains
                         endif
                     endif
                 enddo
-                call img%read(trim(POOL_DIR)//trim(refs_glob), ncls_glob)
-                call img%write(trim(POOL_DIR)//trim(refs_glob), ncls_glob)
+                call update_stack_nimgs(trim(POOL_DIR)//trim(refs_glob), ncls_glob)
                 if( l_wfilt )then
-                    call img%read(trim(POOL_DIR)//trim(add2fbody(refs_glob, params_glob%ext,trim(WFILT_SUFFIX))), ncls_glob)
-                    call img%write(trim(POOL_DIR)//trim(add2fbody(refs_glob, params_glob%ext,trim(WFILT_SUFFIX))), ncls_glob)
+                    call update_stack_nimgs(trim(POOL_DIR)//trim(add2fbody(refs_glob, params_glob%ext,trim(WFILT_SUFFIX))), ncls_glob)
                 endif
                 ! cls2D field
                 do icls=1,ncls_glob
@@ -1126,11 +1255,9 @@ contains
                 write(logfhandle,'(A,I6,A,I4)')'>>> USER REJECTED FROM POOL: ',nptcls_rejected,' PARTICLE(S) IN CLASS ',icls
             endif
         enddo
-        call img%read(trim(POOL_DIR)//trim(refs_glob), ncls_glob)
-        call img%write(trim(POOL_DIR)//trim(refs_glob), ncls_glob)
+        call update_stack_nimgs(trim(POOL_DIR)//trim(refs_glob), ncls_glob)
         if( l_wfilt )then
-            call img%read(trim(POOL_DIR)//trim(add2fbody(refs_glob, params_glob%ext,trim(WFILT_SUFFIX))), ncls_glob)
-            call img%write(trim(POOL_DIR)//trim(add2fbody(refs_glob, params_glob%ext,trim(WFILT_SUFFIX))), ncls_glob)
+            call update_stack_nimgs(trim(POOL_DIR)//trim(add2fbody(refs_glob, params_glob%ext,trim(WFILT_SUFFIX))), ncls_glob)
         endif
         call img%kill
         ! write stream2d.star with ptcl numbers post rejection 
@@ -1424,12 +1551,12 @@ contains
     subroutine import_chunks_into_pool( nchunks_imported )
         integer, intent(out) :: nchunks_imported
         type(class_frcs)              :: frcs_glob, frcs_chunk, frcs_prev
-        character(len=:), allocatable :: cavgs_chunk, dir_chunk
+        character(len=:), allocatable :: cavgs_chunk, dir_chunk, stk
         integer,          allocatable :: cls_pop(:), cls_chunk_pop(:), pinds(:), states(:)
         real    :: smpd_here
         integer :: ichunk, nchunks2import, nptcls2import, nmics2import, nptcls, imic, iproj
         integer :: ncls_tmp, fromp_prev, fromp, ii, jptcl, i, poolind, n_remap, pop, nptcls_sel
-        integer :: nmics_imported, nptcls_imported, iptcl, ind, ncls_here, icls
+        integer :: nmics_imported, nptcls_imported, iptcl, ind, ncls_here, icls, p
         logical :: l_maxed
         nchunks_imported = 0
         if( .not. stream2D_active )            return
@@ -1463,6 +1590,7 @@ contains
         call debug_print('in import_chunks_into_pool 2 '//int2str(imic)//' '//int2str(nptcls_imported))
         do ichunk = 1,nchunks2import
             fromp_prev = fromp
+            ! read metadata & deals with cavg matrices
             call converged_chunks(ichunk)%read(chunk_dims%boxpd)
             ! transfer micrographs, stacks & particles parameters
             ind = 1
@@ -1507,6 +1635,7 @@ contains
                 cavgs_chunk = trim(dir_chunk)//basename(cavgs_chunk)
                 call frcs_chunk%new(params_glob%ncls_start, chunk_dims%box, chunk_dims%smpd, nstates=1)
                 call frcs_chunk%read(trim(dir_chunk)//trim(FRCS_FILE))
+                if( pool_dims%box > chunk_dims%box ) call frcs_chunk%pad(pool_dims%smpd, pool_dims%box)
                 if( l_maxed )then
                     ! the pool has been previously filled, some re-mapping of classes may occur
                     call debug_print('in import_chunks_into_pool 3 '//int2str(ichunk))
@@ -1531,7 +1660,7 @@ contains
                             ! class average
                             call transfer_cavg(cavgs_chunk, dir_chunk, ind, refs_glob, icls)
                             ! frcs
-                            call frcs_glob%set_frc(icls,frcs_chunk%get_frc(ind, chunk_dims%box, 1), 1)
+                            call frcs_glob%set_frc(icls,frcs_chunk%get_frc(ind, pool_dims%box, 1), 1)
                             ! class parameters transfer
                             call pool_proj%os_cls2D%transfer_ori(icls, converged_chunks(ichunk)%spproj%os_cls2D, ind)
                             call pool_proj%os_cls2D%set_class(icls, icls)
@@ -1562,7 +1691,36 @@ contains
                             enddo
                         enddo
                         if( n_remap > 0 )then
-                            call transfer_cavg(refs_glob,dir_chunk,ncls_glob,refs_glob,ncls_glob, self_transfer=.true.)
+                            ! making sure the # of images is correct in header as transfer_cavg has altered it
+                            call update_stack_nimgs(refs_glob, ncls_glob)
+                            stk = add2fbody(refs_glob, params_glob%ext, '_even')
+                            call update_stack_nimgs(stk, ncls_glob)
+                            stk = add2fbody(refs_glob, params_glob%ext, '_odd')
+                            call update_stack_nimgs(stk, ncls_glob)
+                            do p = 1,params_glob%nparts_pool
+                                stk = trim(POOL_DIR)//'cavgs_even_part'//int2str_pad(p,numlen)//trim(params_glob%ext)
+                                call update_stack_nimgs(stk, ncls_glob)
+                                stk = trim(POOL_DIR)//'cavgs_odd_part'//int2str_pad(p,numlen)//trim(params_glob%ext)
+                                call update_stack_nimgs(stk, ncls_glob)
+                                stk = trim(POOL_DIR)//'ctfsqsums_even_part'//int2str_pad(p,numlen)//trim(params_glob%ext)
+                                call update_stack_nimgs(stk, ncls_glob)
+                                stk = trim(POOL_DIR)//'ctfsqsums_odd_part'//int2str_pad(p,numlen)//trim(params_glob%ext)
+                                call update_stack_nimgs(stk, ncls_glob)
+                            enddo
+                            if( l_wfilt )then
+                                stk = add2fbody(refs_glob,params_glob%ext,trim(WFILT_SUFFIX))
+                                call update_stack_nimgs(refs_glob, ncls_glob)
+                                do p = 1,params_glob%nparts_pool
+                                    stk = trim(POOL_DIR)//'cavgs_even_wfilt_part'//int2str_pad(p,numlen)//trim(params_glob%ext)
+                                    call update_stack_nimgs(stk, ncls_glob)
+                                    stk = trim(POOL_DIR)//'cavgs_odd_wfilt_part'//int2str_pad(p,numlen)//trim(params_glob%ext)
+                                    call update_stack_nimgs(stk, ncls_glob)
+                                    stk = trim(POOL_DIR)//'ctfsqsums_even_wfilt_part'//int2str_pad(p,numlen)//trim(params_glob%ext)
+                                    call update_stack_nimgs(stk, ncls_glob)
+                                    stk = trim(POOL_DIR)//'ctfsqsums_odd_wfilt_part'//int2str_pad(p,numlen)//trim(params_glob%ext)
+                                    call update_stack_nimgs(stk, ncls_glob)
+                                enddo
+                            endif
                             call frcs_glob%write(trim(POOL_DIR)//trim(FRCS_FILE))
                             write(logfhandle,'(A,I4)')'>>> # OF RE-MAPPED CLASS AVERAGES: ',n_remap
                         endif
@@ -1674,118 +1832,90 @@ contains
     end subroutine import_chunks_into_pool
 
     !>  Transfers references & partial arrays from a chunk to the pool
-    subroutine transfer_cavg( refs_in, dir, indin, refs_out, indout, self_transfer )
+    subroutine transfer_cavg( refs_in, dir, indin, refs_out, indout )
         character(len=*),  intent(in) :: refs_in, dir, refs_out
         integer,           intent(in) :: indin, indout
-        logical, optional, intent(in) :: self_transfer
-        type(image)                   :: img
+        type(image)                   :: img, img2
         character(len=:), allocatable :: stkout, stkin, refs_out_here, refs_in_here
         integer :: ipart
-        logical :: l_self
         call debug_print('in transfer_cavg '//int2str(indin)//' '//int2str(indout))
-        l_self = .false.
-        if( present(self_transfer) ) l_self = self_transfer
-        if( l_self )then
-            call debug_print('in transfer_cavg self_transfer')
-            refs_in_here = trim(POOL_DIR)//trim(refs_in)
-        else
-            refs_in_here = trim(refs_in)
-        endif
+        refs_in_here = trim(refs_in)
+        call img%new([chunk_dims%box,chunk_dims%box,1], chunk_dims%smpd)
+        call img2%new([pool_dims%box,pool_dims%box,1], pool_dims%smpd)
         ! making sure we are writing to the correct folder
         refs_out_here = trim(POOL_DIR)//trim(refs_out)
         ! merged class
-        call img%new([chunk_dims%box,chunk_dims%box,1], chunk_dims%smpd) ! will need to be different chunk/pool
-        call img%read( refs_in_here, indin)
-        call img%write(refs_out_here,indout)
+        call read_pad_write(refs_in_here, indin, refs_out_here, indout)
         if( l_wfilt )then
             stkout = add2fbody(refs_out_here,params_glob%ext,trim(WFILT_SUFFIX))
-            call img%write(stkout,indout)
+            if( pool_dims%box > chunk_dims%box )then
+                call img2%write(stkout,indout)
+            else
+                call img%write(stkout,indout)
+            endif
         endif
         ! e/o
         stkin  = add2fbody(refs_in_here, params_glob%ext,'_even')
         stkout = add2fbody(refs_out_here,params_glob%ext,'_even')
-        call img%read( stkin, indin)
-        call img%write(stkout,indout)
+        call read_pad_write(stkin, indin, stkout, indout)
         stkin  = add2fbody(refs_in_here,params_glob%ext,'_odd')
         stkout = add2fbody(refs_out_here,params_glob%ext,'_odd')
-        call img%read( stkin, indin)
-        call img%write(stkout,indout)
+        call read_pad_write(stkin, indin, stkout, indout)
         ! temporary matrices, logics from chunk%read
         call img%new([chunk_dims%boxpd,chunk_dims%boxpd,1], chunk_dims%smpd)
         call img%zero_and_flag_ft
-        if( l_self )then
-            do ipart = 1,params_glob%nparts_pool
-                stkin = trim(POOL_DIR)//'cavgs_even_part'//int2str_pad(ipart,numlen)//trim(params_glob%ext)
-                call img%read(stkin, indin)
-                call img%write(stkin,indout)
-                stkin = trim(POOL_DIR)//'cavgs_odd_part'//int2str_pad(ipart,numlen)//trim(params_glob%ext)
-                call img%read(stkin, indin)
-                call img%write(stkin,indout)
-                stkin = trim(POOL_DIR)//'ctfsqsums_even_part'//int2str_pad(ipart,numlen)//trim(params_glob%ext)
-                call img%read(stkin, indin)
-                call img%write(stkin,indout)
-                stkin = trim(POOL_DIR)//'ctfsqsums_odd_part'//int2str_pad(ipart,numlen)//trim(params_glob%ext)
-                call img%read(stkin, indin)
-                call img%write(stkin,indout)
-                if( l_wfilt )then
-                    stkin = trim(POOL_DIR)//'cavgs_even_wfilt_part'//int2str_pad(ipart,numlen)//trim(params_glob%ext)
-                    call img%read(stkin, indin)
-                    call img%write(stkin,indout)
-                    stkin = trim(POOL_DIR)//'cavgs_odd_wfilt_part'//int2str_pad(ipart,numlen)//trim(params_glob%ext)
-                    call img%read(stkin, indin)
-                    call img%write(stkin,indout)
-                    stkin = trim(POOL_DIR)//'ctfsqsums_even_wfilt_part'//int2str_pad(ipart,numlen)//trim(params_glob%ext)
-                    call img%read(stkin, indin)
-                    call img%write(stkin,indout)
-                    stkin = trim(POOL_DIR)//'ctfsqsums_odd_wfilt_part'//int2str_pad(ipart,numlen)//trim(params_glob%ext)
-                    call img%read(stkin, indin)
-                    call img%write(stkin,indout)
-                endif
-            enddo
-        else
-            stkin  = trim(dir)//'/cavgs_even_part'//trim(params_glob%ext)
-            call img%read(stkin, indin)
-            do ipart = 1,params_glob%nparts_pool
-                stkout = trim(POOL_DIR)//'cavgs_even_part'//int2str_pad(ipart,numlen)//trim(params_glob%ext)
-                call img%write(stkout,indout)
-                if( l_wfilt )then
-                    stkout = trim(POOL_DIR)//'cavgs_even_wfilt_part'//int2str_pad(ipart,numlen)//trim(params_glob%ext)
-                    call img%write(stkout,indout)
-                endif
-            enddo
-            stkin  = trim(dir)//'/cavgs_odd_part'//trim(params_glob%ext)
-            call img%read(stkin, indin)
-            do ipart = 1,params_glob%nparts_pool
-                stkout = trim(POOL_DIR)//'cavgs_odd_part'//int2str_pad(ipart,numlen)//trim(params_glob%ext)
-                call img%write(stkout,indout)
-                if( l_wfilt )then
-                    stkout = trim(POOL_DIR)//'cavgs_odd_wfilt_part'//int2str_pad(ipart,numlen)//trim(params_glob%ext)
-                    call img%write(stkout,indout)
-                endif
-            enddo
-            stkin  = trim(dir)//'/ctfsqsums_even_part'//trim(params_glob%ext)
-            call img%read(stkin, indin)
-            do ipart = 1,params_glob%nparts_pool
-                stkout = trim(POOL_DIR)//'ctfsqsums_even_part'//int2str_pad(ipart,numlen)//trim(params_glob%ext)
-                call img%write(stkout,indout)
-                if( l_wfilt )then
-                    stkout = trim(POOL_DIR)//'ctfsqsums_even_wfilt_part'//int2str_pad(ipart,numlen)//trim(params_glob%ext)
-                    call img%write(stkout,indout)
-                endif
-            enddo
-            stkin  = trim(dir)//'/ctfsqsums_odd_part'//trim(params_glob%ext)
-            call img%read(stkin, indin)
-            do ipart = 1,params_glob%nparts_pool
-                stkout = trim(POOL_DIR)//'ctfsqsums_odd_part'//int2str_pad(ipart,numlen)//trim(params_glob%ext)
-                call img%write(stkout,indout)
-                if( l_wfilt )then
-                    stkout = trim(POOL_DIR)//'ctfsqsums_odd_wfilt_part'//int2str_pad(ipart,numlen)//trim(params_glob%ext)
-                    call img%write(stkout,indout)
-                endif
-            enddo
-        endif
+        if( pool_dims%box > chunk_dims%box ) call img2%new([pool_dims%boxpd,pool_dims%boxpd,1], pool_dims%smpd)
+        call write_inside_ftstack('/cavgs_even_part',     'cavgs_even_part',     'cavgs_even_wfilt_part')
+        call write_inside_ftstack('/cavgs_odd_part',      'cavgs_odd_part',      'cavgs_odd_wfilt_part')
+        call write_inside_ftstack('/ctfsqsums_even_part', 'ctfsqsums_even_part', 'ctfsqsums_even_wfilt_part')
+        call write_inside_ftstack('/ctfsqsums_odd_part',  'ctfsqsums_odd_part',  'ctfsqsums_odd_wfilt_part')
         ! cleanup
         call img%kill
+        call img2%kill
+        contains
+
+            subroutine read_pad_write(strin, iin, strout, iout)
+                character(len=*), intent(in) :: strin, strout
+                integer,          intent(in) :: iin, iout
+                call img%read(strin, iin)
+                if( pool_dims%box > chunk_dims%box )then
+                    call img2%zero_and_flag_ft
+                    call img%fft
+                    call img%pad(img2, antialiasing=.false.)
+                    call img2%ifft
+                    call img2%write(strout,iout)
+                    call img%zero_and_unflag_ft
+                else
+                    call img%write(strout,iout)
+                endif
+            end subroutine read_pad_write
+
+            subroutine write_inside_ftstack(tmplin, tmplout, tmplout_wfilt)
+                character(len=*), intent(in) :: tmplin, tmplout, tmplout_wfilt
+                stkin  = trim(dir)//trim(tmplin)//trim(params_glob%ext)
+                call img%read(stkin, indin)
+                if( pool_dims%box > chunk_dims%box )then
+                    call img%pad(img2, antialiasing=.false.)
+                    do ipart = 1,params_glob%nparts_pool
+                        stkout = trim(POOL_DIR)//trim(tmplout)//int2str_pad(ipart,numlen)//trim(params_glob%ext)
+                        call img2%write(stkout,indout)
+                        if( l_wfilt )then
+                            stkout = trim(POOL_DIR)//trim(tmplout_wfilt)//int2str_pad(ipart,numlen)//trim(params_glob%ext)
+                            call img2%write(stkout,indout)
+                        endif
+                    enddo
+                else
+                    do ipart = 1,params_glob%nparts_pool
+                        stkout = trim(POOL_DIR)//trim(tmplout)//int2str_pad(ipart,numlen)//trim(params_glob%ext)
+                        call img%write(stkout,indout)
+                        if( l_wfilt )then
+                            stkout = trim(POOL_DIR)//trim(tmplout_wfilt)//int2str_pad(ipart,numlen)//trim(params_glob%ext)
+                            call img%write(stkout,indout)
+                        endif
+                    enddo
+                endif
+            end subroutine write_inside_ftstack
+
     end subroutine transfer_cavg
 
     ! To transfer unclassified particles to the pool
@@ -1946,8 +2076,7 @@ contains
         character(len=:), allocatable :: dest_here
         integer, allocatable :: cls_pop(:)
         integer              :: ldim(3),icls, ncls_here
-        call debug_print('in rescale_cavgs '//trim(src))
-        call debug_print('in rescale_cavgs '//trim(dest))
+        call debug_print('in rescale_cavgs '//trim(src)//' -> '//trim(dest))
         if(trim(src) == trim(dest))then
             dest_here = 'tmp_cavgs.mrc'
         else
@@ -2020,7 +2149,7 @@ contains
         type(projrecord),         allocatable  :: micproj_records(:)
         type(parameters)                       :: params
         type(sp_project)                       :: spproj_glob
-        type(class_frcs)                       :: frcs, frcs_sc
+        type(class_frcs)                       :: frcs
         character(len=LONGSTRLEN), allocatable :: pool_stacks(:)
         character(len=:),          allocatable :: fname, stack_fname
         character(len=:),          allocatable :: frcsfname, src, orig_stack_fname
@@ -2085,8 +2214,8 @@ contains
         call cline%delete('autoscale')
         cline_cluster2D_pool   = cline
         cline_cluster2D_chunk  = cline
-        ! scaling dimensions (fourier cropping)
-        call set_scaling_dims
+        ! scaling dimensions (Fourier cropping)
+        call set_dimensions
         ! subset classification
         if( l_abinitio2D )then
             ! prg=abinitio2D
@@ -2136,8 +2265,8 @@ contains
         call cline_cluster2D_pool%set('autoscale', 'no')
         call cline_cluster2D_pool%set('trs',       MINSHIFT)
         call cline_cluster2D_pool%set('projfile',  PROJFILE_POOL)
-        call cline_cluster2D_pool%set('projname',  trim(get_fbody(trim(PROJFILE_POOL),trim('simple'))))
-        call cline_cluster2D_pool%set('extr_iter', 100)
+        call cline_cluster2D_pool%set('projname',  get_fbody(trim(PROJFILE_POOL),trim('simple')))
+        call cline_cluster2D_pool%set('extr_iter', 999)
         call cline_cluster2D_pool%set('mkdir',     'no')
         call cline_cluster2D_pool%set('async',     'yes') ! to enable hard termination
         call cline_cluster2D_pool%set('stream',    'yes') ! use for dual CTF treatment, sigma bookkeeping
@@ -2190,7 +2319,7 @@ contains
         call pool_proj%projinfo%delete_entry('projfile')
         call pool_proj%write(trim(POOL_DIR)//PROJFILE_POOL)
         ! updates command-lines with resolution limits
-        call set_resolution_limits( cline )
+        call set_resolution_limits
         ! initialize chunks
         allocate(chunks(params%nchunks))
         do ichunk = 1,params%nchunks
@@ -2332,11 +2461,10 @@ contains
                 call rescale_cavgs(src, src)
             endif
             ! frcs
-            call frcs_sc%read(trim(POOL_DIR)//trim(FRCS_FILE))
-            call frcs_sc%pad(params%smpd, params%box, frcs)
+            call frcs%read(trim(POOL_DIR)//trim(FRCS_FILE))
+            call frcs%pad(params%smpd, params%box)
             call frcs%write(frcsfname)
             call frcs%kill
-            call frcs_sc%kill
         endif
         call spproj_glob%os_out%kill
         call spproj_glob%add_cavgs2os_out(refs_glob, params%smpd, 'cavg')
