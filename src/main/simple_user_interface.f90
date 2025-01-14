@@ -1319,7 +1319,7 @@ contains
         &'2D analysis (centering, diameter estimation & clustering) for nanocrystal time-series',& ! descr_short
         &'is a program for 2D analysis for nanycrystal time-series',& ! descr long
         &'single_exec',&                                              ! executable
-        &0, 1, 0, 1, 0, 1, 3, .true.)                                 ! # entries in each group, requires sp_project
+        &0, 1, 0, 1, 0, 0, 2, .true.)                                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1332,12 +1332,10 @@ contains
         ! filter controls
         ! <empty>
         ! mask controls
-        call analysis2D_nano%set_input('mask_ctrls', 1, mskdiam)
+        ! <empty>
         ! computer controls
-        call analysis2D_nano%set_input('comp_ctrls', 1, nparts)
-        analysis2D_nano%comp_ctrls(1)%required = .false.
-        call analysis2D_nano%set_input('comp_ctrls', 2, nthr)
-        call analysis2D_nano%set_input('comp_ctrls', 3, script)
+        call analysis2D_nano%set_input('comp_ctrls', 1, nthr)
+        call analysis2D_nano%set_input('comp_ctrls', 2, script)
     end subroutine new_analysis2D_nano
 
     subroutine new_assign_optics

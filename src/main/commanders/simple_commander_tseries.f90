@@ -618,9 +618,10 @@ contains
         type(sp_project)               :: spproj
         type(cmdline)                  :: cline_est_diam, cline_sim_atms, cline_copy
         character(len=:), allocatable  :: stkname
-        character(len=*), parameter    :: STARTVOL = 'startvol.mrc'
+        character(len=*), parameter    :: STARTVOL    = 'startvol.mrc'
+        real,             parameter    :: LP_EST_DIAM = 3.
         integer :: ncls, nptcls, ldim(3)
-        real    :: smpd, diam
+        real    :: smpd, diam_min, diam_max, mskdiam
         call cline%set('dir_exec', 'analysis2D_nano')
         if( .not. cline%defined('objfun')  ) call cline%set('objfun', 'cc') ! best objfun
         if( .not. cline%defined('ml_reg')  ) call cline%set('ml_reg', 'no') ! ml_reg=yes -> too few atoms 
@@ -629,29 +630,36 @@ contains
         call cline%set('mkdir', 'no')
         cline_copy = cline
         ! centering
+        call cline%set('center', 'yes')
         call xcenter2D%execute(cline)
         ! prep for diameter estimation
         call spproj%read(trim(params%projfile))
         call spproj%get_cavgs_stk(stkname, ncls, smpd)
         call cline_est_diam%set('stk',     stkname)
         call cline_est_diam%set('smpd',    smpd)
-        call cline_est_diam%set('mskdiam', params%mskdiam)
+        call cline_est_diam%set('mskdiam', 0.)
         call cline_est_diam%set('nthr',    params%nthr)
+        call cline_est_diam%set('lp',      LP_EST_DIAM)
         ! estimate diameter
         call xest_diam%execute(cline_est_diam)
-        diam = cline_est_diam%get_rarg('min_diam')
+        diam_min = cline_est_diam%get_rarg('min_diam')
+        diam_max = cline_est_diam%get_rarg('max_diam')
+        mskdiam  = diam_max * 1.5
+        call cline%set('mskdiam', mskdiam)
+        write(logfhandle,'(A,2F6.1)') '>>> MASK DIAMETER (MSKDIAM) (IN A): ', mskdiam
         ! make a starting volume for initialization of 3D refinement
         call find_ldim_nptcls(stkname, ldim, nptcls)
         call cline_sim_atms%set('outvol',  STARTVOL)
         call cline_sim_atms%set('smpd',    params%smpd)
         call cline_sim_atms%set('element', params%element)
-        call cline_sim_atms%set('moldiam', diam)
+        call cline_sim_atms%set('moldiam', diam_min)
         call cline_sim_atms%set('box',     ldim(1))
         call cline_sim_atms%set('nthr',    params%nthr)
         call xsim_atms%execute(cline_sim_atms)
         ! run final 2D analysis
         cline = cline_copy
         call exec_cmdline('rm -rf cavgs* clusters2D*star *_FINISHED start2Drefs* frcs*')
+        call cline%set('center', 'no')
         call xcluster2D%execute(cline)
         ! end gracefully
         call simple_end('**** SIMPLE_ANALYSIS2D_NANO NORMAL STOP ****')
@@ -736,7 +744,6 @@ contains
         call cline%delete('nparts') ! always shared-memory
         call cline%set('prg',           'cluster2D')
         call cline%set('dir_exec', 'cluster2D_nano')
-        call cline%set('center',              'yes')
         call cline%set('autoscale',            'no')
         call cline%set('tseries',             'yes')
         if( .not. cline%defined('refine') ) call cline%set('refine','greedy')
@@ -750,6 +757,7 @@ contains
             case DEFAULT
                 THROW_HARD('Unsupported refinement mode!')
         end select
+        if( .not. cline%defined('center')         ) call cline%set('center',       'yes')
         if( .not. cline%defined('graphene_filt')  ) call cline%set('graphene_filt', 'no')
         if( .not. cline%defined('hp')             ) call cline%set('hp',             3.0)
         if( .not. cline%defined('lp')             ) call cline%set('lp',             1.0)
