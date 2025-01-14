@@ -1215,71 +1215,33 @@ contains
     end subroutine exec_pspec_int_rank
 
     subroutine exec_estimate_diam( self, cline )
-        use simple_segmentation, only: otsu_robust_fast
+        use simple_segmentation
+        use simple_masker, only: automask2D
         class(estimate_diam_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! constants
-        character(len=*), parameter :: FILT   = 'nlmean_filtered.mrc'
+        character(len=*), parameter :: FILT   = 'filtered.mrc'
+        character(len=*), parameter :: BIN    = 'binarized.mrc'
         character(len=*), parameter :: MASKED = 'masked.mrc'
         ! varables
         type(parameters)            :: params
-        type(binimage), allocatable :: imgs_mask(:) ! images mask
-        type(image),    allocatable :: imgs(:)      ! images
-        type(image)                 :: roavg        ! rotational average
+        type(image),    allocatable :: imgs(:) 
         type(stats_struct)          :: diamstats    ! stats struct
-        real,           allocatable :: diams(:)     ! diameters
-        real,           allocatable :: diams_nonzero(:)
-        integer :: funit, i
-        real    :: med_diam, thresh(3), msk_rad
-        if( .not. cline%defined('lp')    ) call cline%set('lp',     7.0)
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir','yes')
+        real,           allocatable :: diams(:), diams_nonzero(:), shifts(:,:)
+        integer :: i, funit
+        real    :: med_diam
+        if( .not. cline%defined('lp')      ) call cline%set('lp',        7.0)
+        if( .not. cline%defined('automsk') ) call cline%set('automsk', 'yes')
+        if( .not. cline%defined('amsklp')  ) call cline%set('amsklp', cline%get_rarg('lp'))
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
         call params%new(cline)
-        ! set radius for hard mask of binary image
-        if( cline%defined('mskdiam') ) then
-            msk_rad = params%msk
-        else
-            msk_rad = 0.45*params%box
-        endif
         ! allocate & read cavgs
-        allocate(imgs_mask(params%nptcls),diams(params%nptcls),imgs(params%nptcls))
-        diams = 0.
+        allocate(imgs(params%nptcls))
         do i=1,params%nptcls
-            call imgs_mask(i)%new_bimg([params%box,params%box,1],params%smpd)
-            call imgs_mask(i)%read(params%stk, i)
-            call imgs(i)%copy(imgs_mask(i))
+            call imgs(i)%new([params%box,params%box,1],params%smpd)
+            call imgs(i)%read(params%stk, i)
         end do
-        call roavg%new([params%box,params%box,1],params%smpd)
-        ! prepare thread safe images in image class
-        call imgs(1)%construct_thread_safe_tmp_imgs(nthr_glob)
-        write(logfhandle,'(A)') '>>> ESTIMATING DIAMETERS THROUGH BINARY IMAGE PROCESSING'
-        call fopen(funit, file='diameters_in_Angstroms.txt', status='replace')
-        do i=1,params%nptcls
-            call progress(i,params%nptcls)
-            call imgs_mask(i)%zero_edgeavg
-            call imgs_mask(i)%bp(0.,params%lp)
-            ! non-local mneans filter for denoising
-            call imgs_mask(i)%NLmean2D
-            call imgs_mask(i)%write(FILT, i)
-            ! rotational averaging
-            if( params%roavg .eq. 'yes' )then
-                call imgs_mask(i)%roavg(params%angstep, roavg)
-                call imgs_mask(i)%copy(roavg)
-            endif
-            ! binarize with Otsu
-            call otsu_robust_fast(imgs_mask(i), is2D=.true., noneg=.false., thresh=thresh)
-            ! hard mask for removing noise, default diameter 90% of the box size
-            call imgs_mask(i)%mask(msk_rad,'hard')
-            call imgs_mask(i)%set_imat     ! integer matrix set in binimage instance
-            call imgs_mask(i)%grow_bins(9) ! to compensate low-pass erosion/binarization
-            call imgs_mask(i)%update_img_rmat
-            call imgs_mask(i)%diameter_bin(diams(i))
-            call imgs(i)%mul(imgs_mask(i))
-            call imgs(i)%write(MASKED, i)
-            ! estimate diameter
-            diams(i) = diams(i) * params%smpd
-            write(funit,'(F6.1)') diams(i)
-        end do
-        call fclose(funit)
+        call automask2D(imgs, 0, 0, params%edge, diams, shifts)
         diams_nonzero = pack(diams, mask=diams > TINY)
         call calc_stats(diams_nonzero, diamstats)
         ! output
@@ -1296,16 +1258,14 @@ contains
         write(funit,     '(A,2F6.1)') '>>> MAX    DIAMETER (IN A & pix): ', diamstats%maxv, diamstats%maxv/params%smpd
         write(funit,     '(A,2F6.1)') '>>> MIN    DIAMETER (IN A & pix): ', diamstats%minv, diamstats%minv/params%smpd
         call fclose(funit)
-        ! output the minimum diameter value in the command line object
+        ! output the minimum and maximum diameter value in the command line object
         call cline%set('min_diam', diamstats%minv)
+        call cline%set('max_diam', diamstats%maxv)
         ! destruct
         do i=1,size(imgs)
-            call imgs_mask(i)%kill
-            call imgs_mask(i)%kill_bimg
             call imgs(i)%kill
         end do
-        call roavg%kill
-        deallocate(imgs, diams, imgs_mask)
+        deallocate(imgs)
         ! end gracefully
         call simple_end('**** SIMPLE_ESTIMATE_DIAM NORMAL STOP ****')
     end subroutine exec_estimate_diam
