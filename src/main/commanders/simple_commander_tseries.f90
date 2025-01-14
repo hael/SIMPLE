@@ -630,6 +630,7 @@ contains
         call cline%set('mkdir', 'no')
         cline_copy = cline
         ! centering
+        call cline%delete('nptcls_per_cls')
         call cline%set('center', 'yes')
         call xcenter2D%execute(cline)
         ! prep for diameter estimation
@@ -750,7 +751,7 @@ contains
         select case(trim(cline%get_carg('refine')))
             case('no','greedy')
                 call cline%set('refine','greedy')
-                if( .not. cline%defined('nptcls_per_cls') ) call cline%set('nptcls_per_cls', 35)
+                if( .not. cline%defined('nptcls_per_cls') ) call cline%set('nptcls_per_cls', 20)
                 if( .not. cline%defined('maxits')         ) call cline%set('maxits',         15)
             case('inpl')
                 if( .not. cline%defined('maxits')         ) call cline%set('maxits',         10)
@@ -956,7 +957,6 @@ contains
         use simple_commander_atoms, only: detect_atoms_commander
         class(autorefine3D_nano_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
-        class(parameters), pointer    :: params_ptr => null()
         type(parameters)              :: params
         type(refine3D_nano_commander) :: xrefine3D_nano
         type(detect_atoms_commander)  :: xdetect_atms
@@ -1029,22 +1029,14 @@ contains
         iter = 0
         do i = 1, params%maxits
             ! first refinement pass on the initial volume uses the low-pass limit defined by the user
-            params_ptr  => params_glob
-            params_glob => null()
-            call xrefine3D_nano%execute(cline_refine3D_nano)
-            params_glob => params_ptr
-            params_ptr  => null()
+            call xrefine3D_nano%execute_safe(cline_refine3D_nano)
             call cline_refine3D_nano%set('vol1', SIMVOL)         ! the reference volume is ALWAYS SIMVOL
             call cline_refine3D_nano%delete('lp')                ! uses the default 1.0 A low-pass limit
             endit = cline_refine3D_nano%get_iarg('endit')        ! last iteration executed by refine3D_nano
             call cline_refine3D_nano%delete('endit')             ! used internally but not technically allowed
             call cline_refine3D_nano%set('prg', 'refine3D_nano') ! because the command line is modified refine3D_nano -> refine3D internally
             ! model building
-            params_ptr  => params_glob
-            params_glob => null()
-            call xdetect_atms%execute(cline_detect_atms)
-            params_glob => params_ptr
-            params_ptr  => null()
+            call xdetect_atms%execute_safe(cline_detect_atms)
             ! copy critical output
             iter_dir = 'iteration_'//int2str_pad(i,2)//'/'
             call simple_mkdir(iter_dir)
@@ -1073,11 +1065,7 @@ contains
         call cline_detect_atms%delete('corr_thres')
         call cline_detect_atms%delete('cs_thres')
         call cline_detect_atms%delete('use_thres') ! yes is default
-        params_ptr  => params_glob
-        params_glob => null()
-        call xdetect_atms%execute(cline_detect_atms)
-        params_glob => params_ptr
-        params_ptr  => null()
+        call xdetect_atms%execute_safe(cline_detect_atms)
         call simple_mkdir(FINAL_MAPS)
         call simple_copy_file(RECVOL,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'.mrc')
         call simple_copy_file(EVEN,     FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_even.mrc')
@@ -1104,11 +1092,7 @@ contains
         call cline_make_cavgs%set('refs',     cavgs_stk)
         call cline_make_cavgs%set('outfile',  'cavgs_oris.txt')
         call cline_make_cavgs%set('ml_reg',   'no')
-        params_ptr  => params_glob
-        params_glob => null()
-        call xmake_cavgs%execute(cline_make_cavgs)
-        params_glob => params_ptr
-        params_ptr  => null()
+        call xmake_cavgs%execute_safe(cline_make_cavgs)
         call spproj%os_cls3D%new(NSPACE_CLS3D, is_ptcl=.false.)
         call spproj%os_cls3D%read('cavgs_oris.txt') ! will not be written as part of document
         if( allocated(rstates) ) deallocate(rstates)
@@ -1120,19 +1104,11 @@ contains
         call cline_reproject%set('oritab', 'cavgs_oris.txt')
         call cline_reproject%set('pgrp',   params%pgrp)
         call cline_reproject%set('nthr',   params%nthr)
-        params_ptr  => params_glob
-        params_glob => null()
-        call xreproject%execute(cline_reproject)
-        params_glob => params_ptr
-        params_ptr  => null()
+        call xreproject%execute_safe(cline_reproject)
         call cline_reproject%set('vol1',   FINAL_MAPS//trim(fbody)//'_iter'//int2str_pad(iter,3)//'_SIM.mrc')
         call cline_reproject%set('outstk', 'reprojs_SIM.mrc')
         ! re-project
-        params_ptr  => params_glob
-        params_glob => null()
-        call xreproject%execute(cline_reproject)
-        params_glob => params_ptr
-        params_ptr  => null()
+        call xreproject%execute_safe(cline_reproject)
         ! write cavgs & reprojections in triplets
         allocate(imgs(3), state_mask(NSPACE_CLS3D))
         call imgs(1)%new([params%box,params%box,1], smpd)
@@ -1172,11 +1148,7 @@ contains
         call cline_vizoris%set('pgrp',        params%pgrp)
         call cline_vizoris%set('nspace',     NSPACE_CLS3D)
         call cline_vizoris%set('tseries',           'yes')
-        params_ptr  => params_glob
-        params_glob => null()
-        call xvizoris%execute(cline_vizoris)
-        params_glob => params_ptr
-        params_ptr  => null()
+        call xvizoris%execute_safe(cline_vizoris)
         ! print CSV file of correlation vs particle number
         corrs = spproj%os_ptcl3D%get_all('corr')
         fname = 'ptcls_vs_reprojs_corrs.csv'
@@ -1188,39 +1160,39 @@ contains
         end do
         call fclose(funit)
         ! print CSV file of particle indices vs. difference in projection direction to right-hand neighbour
-        noris = spproj%os_ptcl3D%get_noris()
-        if( spproj%os_ptcl3D%isthere('pind') )then
-            pinds = nint(spproj%os_ptcl3D%get_all('pind'))
-        else
-            pinds = (/(i,i=1,noris)/)
-        endif
-        allocate(euldists(size(pinds)),    source = 0.)
-        allocate(pind_mask(maxval(pinds)), source = .false.)
-        fname = 'pinds_vs_rh_neigh_angdiffs.csv'
-        call fopen(funit, trim(fname), 'replace', 'unknown', iostat=io_stat, form='formatted')
-        call fileiochk('autorefine3D_nano fopen failed'//trim(fname), io_stat)
-        write(funit,*) 'PTCL_INDEX'//CSV_DELIM//'ANGULAR_DIFFERENCE'
-        cnt = 0
-        do i = 1,size(pinds) - 1
-            pind_plus_one = pinds(i) + 1
-            if( pinds(i + 1) == pind_plus_one )then
-                if( pind_plus_one > noris ) cycle
-                ! it is meaningful to look at the angular difference
-                call spproj%os_ptcl3D%get_ori(pinds(i),     o1)
-                call spproj%os_ptcl3D%get_ori(pinds(i) + 1, o2)
-                cnt = cnt + 1
-                euldists(cnt) = rad2deg(o1.euldist.o2)
-                write(funit,*) int2str(pinds(i))//CSV_DELIM//real2str(euldists(cnt))
-            endif
-        end do
-        call fclose(funit)
-        call calc_stats(euldists(:cnt), euldist_stats)
-        write(logfhandle,'(A)') '>>> ANGULAR DISTANCE TO RIGHT-HAND NEIGHBOR STATS'
-        write(logfhandle,'(A,F8.4)') 'Average: ', euldist_stats%avg
-        write(logfhandle,'(A,F8.4)') 'Median : ', euldist_stats%med
-        write(logfhandle,'(A,F8.4)') 'Sigma  : ', euldist_stats%sdev
-        write(logfhandle,'(A,F8.4)') 'Max    : ', euldist_stats%maxv
-        write(logfhandle,'(A,F8.4)') 'Min    : ', euldist_stats%minv
+        ! noris = spproj%os_ptcl3D%get_noris()
+        ! if( spproj%os_ptcl3D%isthere('pind') )then
+        !     pinds = nint(spproj%os_ptcl3D%get_all('pind'))
+        ! else
+        !     pinds = (/(i,i=1,noris)/)
+        ! endif
+        ! allocate(euldists(size(pinds)),    source = 0.)
+        ! allocate(pind_mask(maxval(pinds)), source = .false.)
+        ! fname = 'pinds_vs_rh_neigh_angdiffs.csv'
+        ! call fopen(funit, trim(fname), 'replace', 'unknown', iostat=io_stat, form='formatted')
+        ! call fileiochk('autorefine3D_nano fopen failed'//trim(fname), io_stat)
+        ! write(funit,*) 'PTCL_INDEX'//CSV_DELIM//'ANGULAR_DIFFERENCE'
+        ! cnt = 0
+        ! do i = 1,size(pinds) - 1
+        !     pind_plus_one = pinds(i) + 1
+        !     if( pinds(i + 1) == pind_plus_one )then
+        !         if( pind_plus_one > noris ) cycle
+        !         ! it is meaningful to look at the angular difference
+        !         call spproj%os_ptcl3D%get_ori(pinds(i),     o1)
+        !         call spproj%os_ptcl3D%get_ori(pinds(i) + 1, o2)
+        !         cnt = cnt + 1
+        !         euldists(cnt) = rad2deg(o1.euldist.o2)
+        !         write(funit,*) int2str(pinds(i))//CSV_DELIM//real2str(euldists(cnt))
+        !     endif
+        ! end do
+        ! call fclose(funit)
+        ! call calc_stats(euldists(:cnt), euldist_stats)
+        ! write(logfhandle,'(A)') '>>> ANGULAR DISTANCE TO RIGHT-HAND NEIGHBOR STATS'
+        ! write(logfhandle,'(A,F8.4)') 'Average: ', euldist_stats%avg
+        ! write(logfhandle,'(A,F8.4)') 'Median : ', euldist_stats%med
+        ! write(logfhandle,'(A,F8.4)') 'Sigma  : ', euldist_stats%sdev
+        ! write(logfhandle,'(A,F8.4)') 'Max    : ', euldist_stats%maxv
+        ! write(logfhandle,'(A,F8.4)') 'Min    : ', euldist_stats%minv
         ! deallocate
         if( allocated(iter_dir)  ) deallocate(iter_dir)
         if( allocated(cavgs_stk) ) deallocate(cavgs_stk)
@@ -1232,7 +1204,6 @@ contains
         use simple_strategy2D3D_common, only: read_imgbatch, prepimgbatch, discrete_read_imgbatch
         class(ptclsproc_nano_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        class(parameters), pointer    :: params_ptr => null()
         type(parameters)              :: params
         type(builder)                 :: build
         type(image)                   :: cavg_img
@@ -1294,7 +1265,6 @@ contains
     subroutine exec_cavgseoproc_nano( self, cline )
         class(cavgseoproc_nano_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
-        class(parameters), pointer    :: params_ptr => null()
         type(parameters)              :: params
         type(image)                   :: cavg_even, cavg_odd
         type(sp_project)              :: spproj
@@ -1363,7 +1333,6 @@ contains
         !use simple_commander_atoms, only: detect_atoms_commander
         class(cavgsproc_nano_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        class(parameters), pointer    :: params_ptr => null()
         type(parameters)              :: params
         type(refine3D_nano_commander) :: xrefine3D_nano
         type(reproject_commander)     :: xreproject
@@ -1404,11 +1373,7 @@ contains
             call cline_refine3D_cavgs%set('nspace',             10000)
             call cline_refine3D_cavgs%set('center',              'no')
             ! convention for executing shared-memory workflows from within another workflow with a parameters object declared
-            params_ptr  => params_glob
-            params_glob => null()
-            call xrefine3D_nano%execute(cline_refine3D_cavgs)
-            params_glob => params_ptr
-            params_ptr  => null()
+            call xrefine3D_nano%execute_safe(cline_refine3D_cavgs)
             ! align cavgs
             call spproj%read_segment('cls3D', params%projfile) ! now the newly generated cls3D field will be read...
             ! ...so write out its content
@@ -1423,12 +1388,7 @@ contains
             call cline_reproject%set('oritab',  'cavgs_oris.txt')
             call cline_reproject%set('pgrp',         params%pgrp)
             call cline_reproject%set('nthr',         params%nthr)
-            params_ptr  => params_glob
-            params_glob => null()
-            call xreproject%execute(cline_reproject)
-            params_glob => params_ptr
-            params_ptr  => null()
-
+            call xreproject%execute_safe(cline_reproject)
             ! compute radial cross-correlation between cavgs and reproj
             allocate(rad_cc(ncavgs,params%box/2), rad_dists(ncavgs,params%box/2))
             ! write cavgs & reprojections

@@ -203,6 +203,7 @@ type :: oris
     procedure          :: calc_hard_weights2D
     procedure          :: calc_soft_weights2D
     procedure          :: find_best_classes
+    procedure          :: euldist
     procedure          :: find_closest_proj
     procedure          :: discretize
     procedure, private :: nearest_proj_neighbors_1, nearest_proj_neighbors_2, nearest_proj_neighbors_3
@@ -3082,6 +3083,13 @@ contains
             call self%set_all2single('w', 1.)
         endif
     end subroutine calc_soft_weights2D
+
+    pure function euldist( self, i, j ) result( dist )
+        class(oris), intent(in) :: self
+        integer,     intent(in) :: i, j
+        real :: dist
+        dist = self%o(i).euldist.self%o(j)
+    end function euldist
 
     !>  \brief  to find the closest matching projection direction
     !! KEEP THIS ROUTINE SERIAL
