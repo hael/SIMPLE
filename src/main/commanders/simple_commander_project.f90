@@ -925,7 +925,11 @@ contains
             rstates = spproj%os_cls2D%get_all('state')
             clsinds = pack(tmpinds, mask=rstates > 0.5)
             allocate(states(nptcls), states_map(nptcls), source=0)
-            call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
+            if( trim(params%partition).eq.'yes' )then
+                call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp, label='cluster')
+            else
+                call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
+            endif
             if( cline%defined('nparts') )then
                 if( cline%defined('nptcls_per_part') )then
                     call spproj%os_ptcl2D%sample_balanced_parts(clssmp, params%nparts, states, params%nptcls_per_part)
@@ -976,12 +980,21 @@ contains
                 case(STK_SEG)
                     call spproj%report_state2stk(states)
                 case(CLS2D_SEG)
-                    call spproj%os_cls2D%set_all('state', real(states))
-                    call spproj%map2ptcls_state(append=l_append) ! map states to ptcl2D/3D & cls3D segments
+                    if( trim(params%partition).eq.'yes' )then
+                        ! states are partitions of classes
+                        call spproj%os_cls2D%set_all('cluster', real(states))
+                        ! map partitions to ptcl2D/3D
+                        call spproj%map_cls2D_flag_to_ptcls('cluster')
+                    else
+                        call spproj%os_cls2D%set_all('state', real(states))
+                        ! map states to ptcl2D/3D & cls3D segments
+                        call spproj%map2ptcls_state(append=l_append)
+                    endif
                 case(CLS3D_SEG)
                     if(spproj%os_cls3D%get_noris() == spproj%os_cls2D%get_noris())then
                         call spproj%os_cls2D%set_all('state', real(states))
-                        call spproj%map2ptcls_state(append=l_append) ! map states to ptcl2D/3D & cls3D segments
+                        ! map states to ptcl2D/3D & cls3D segments
+                        call spproj%map2ptcls_state(append=l_append)
                     else
                         ! class averages
                         call spproj%os_cls3D%set_all('state', real(states))
