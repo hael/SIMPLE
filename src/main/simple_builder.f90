@@ -197,30 +197,37 @@ contains
             call self%spproj%read(params%projfile, wthreads=wthreads)
             ! update cwd of project (in case the params class changed exec dir)
             call self%spproj%projinfo%set(1, 'cwd', trim(params%cwd))
+            call set_field_ptr
         else
             ! we need the oritab to override the deftab in order not to loose parameters
+            call set_field_ptr
             if( params%deftab /= '' ) call binread_ctfparams_state_eo(params%deftab,  self%spproj, self%spproj_field, [1,params%nptcls])
             if( params%oritab /= '' ) call binread_oritab(params%oritab,              self%spproj, self%spproj_field, [1,params%nptcls])
         endif
-        ! set field pointer
-        select case(params%spproj_iseg)
-            case(MIC_SEG)
-                self%spproj_field => self%spproj%os_mic
-            case(STK_SEG)
-                self%spproj_field => self%spproj%os_stk
-            case(PTCL2D_SEG)
-                self%spproj_field => self%spproj%os_ptcl2D
-            case(CLS2D_SEG)
-                self%spproj_field => self%spproj%os_cls2D
-            case(CLS3D_SEG)
-                self%spproj_field => self%spproj%os_cls3D
-            case(PTCL3D_SEG)
-                self%spproj_field => self%spproj%os_ptcl3D
-            case DEFAULT
-                self%spproj_field => self%spproj%os_ptcl3D
-        end select
         if( .not. associated(build_glob) ) build_glob => self
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DONE BUILDING SP PROJECT'
+
+    contains
+
+        subroutine set_field_ptr
+            select case(params%spproj_iseg)
+                case(MIC_SEG)
+                    self%spproj_field => self%spproj%os_mic
+                case(STK_SEG)
+                    self%spproj_field => self%spproj%os_stk
+                case(PTCL2D_SEG)
+                    self%spproj_field => self%spproj%os_ptcl2D
+                case(CLS2D_SEG)
+                    self%spproj_field => self%spproj%os_cls2D
+                case(CLS3D_SEG)
+                    self%spproj_field => self%spproj%os_cls3D
+                case(PTCL3D_SEG)
+                    self%spproj_field => self%spproj%os_ptcl3D
+                case DEFAULT
+                    self%spproj_field => self%spproj%os_ptcl3D
+            end select
+        end subroutine set_field_ptr
+
     end subroutine build_spproj
 
     subroutine build_general_tbox( self, params, cline, do3d)
