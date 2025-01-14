@@ -198,7 +198,7 @@ contains
         integer,           intent(in)  :: cls
         real,              intent(out) :: frc(self%filtsz)
         integer, optional, intent(in)  :: state
-        integer :: sstate, find_plate
+        integer :: sstate
         sstate = 1
         if( present(state) ) sstate = state
         call self%raise_exception( cls, sstate, 'ERROR, out of bounds in frc_getter')
@@ -310,22 +310,44 @@ contains
         lp = median(lp3)
     end function estimate_lp_for_align
 
+    ! Zero-padding of FRC vectors given new signal size
     subroutine pad( self, newsmpd, newbox, self_out )
-        class(class_frcs), intent(in)  :: self
-        real,              intent(in)  :: newsmpd
-        integer,           intent(in)  :: newbox
-        type(class_frcs),  intent(out) :: self_out
+        class(class_frcs),           intent(inout) :: self
+        real,                        intent(in)    :: newsmpd
+        integer,                     intent(in)    :: newbox
+        type(class_frcs),  optional, intent(out)   :: self_out ! in/out-of-place
+        type(class_frcs) :: tmp
         if( newbox < self%box4frc_calc )then
             THROW_HARD('New <= old filter size; downsample')
         else if( newbox == self%box4frc_calc )then
             ! copy
-            call self_out%new(self%ncls, newbox, newsmpd, self%nstates)
-            self_out%frcs(:,:,:) = self%frcs(:,:,:)
+            if( present(self_out) )then
+                call self_out%new(self%ncls, newbox, newsmpd, self%nstates)
+                self_out%frcs(:,:,:) = self%frcs(:,:,:)
+            else
+                call tmp%new(self%ncls, newbox, newsmpd, self%nstates)
+                tmp%frcs(:,:,:) = self%frcs(:,:,:)
+            endif
         else
             ! zero padding
-            call self_out%new(self%ncls, newbox, newsmpd, self%nstates)
-            self_out%frcs(:,:,:self%filtsz) = self%frcs(:,:,:)
-            if( self_out%filtsz > self%filtsz ) self_out%frcs(:,:,self%filtsz+1:) = 0.0
+            if( present(self_out) )then
+                call self_out%new(self%ncls, newbox, newsmpd, self%nstates)
+                self_out%frcs(:,:,:self%filtsz) = self%frcs(:,:,:)
+                if( self_out%filtsz > self%filtsz ) self_out%frcs(:,:,self%filtsz+1:) = 0.0
+            else
+                call tmp%new(self%ncls, newbox, newsmpd, self%nstates)
+                tmp%frcs(:,:,:self%filtsz) = self%frcs(:,:,:)
+                if( tmp%filtsz > self%filtsz ) tmp%frcs(:,:,self%filtsz+1:) = 0.0
+            endif
+        endif
+        if( present(self_out) )then
+            ! done above
+        else
+            ! in-place
+            call self%kill
+            call self%new(tmp%ncls, tmp%box4frc_calc, tmp%smpd, tmp%nstates)
+            self%frcs(:,:,:) = tmp%frcs(:,:,:)
+            call tmp%kill
         endif
     end subroutine pad
 
@@ -381,7 +403,7 @@ contains
         class(class_frcs), intent(inout) :: self
         if( self%exists )then
             deallocate(self%res4frc_calc, self%frcs)
-            self%ncls       = 0
+            self%ncls         = 0
             self%filtsz       = 0
             self%box4frc_calc = 0
             self%exists       = .false.

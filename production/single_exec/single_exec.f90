@@ -54,7 +54,6 @@ type(model_validation_eo_commander)           :: xmodel_validation_eo
 type(ptclsproc_nano_commander)                :: xptclsproc
 
 ! MODEL BUILDING/ANALYSIS PROGRAMS
-type(pdb2mrc_commander)                       :: xpdb2mrc   
 type(detect_atoms_commander)                  :: xdetect_atoms
 type(conv_atom_denoise_commander)             :: xconv_atom_denoise
 type(atoms_stats_commander)                   :: xatoms_stats
@@ -191,7 +190,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('16aa0f12')
+call simple_print_git_version('853d0984')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

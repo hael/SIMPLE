@@ -291,7 +291,7 @@ contains
         ! other variables
         type(parameters)                 :: params
         type(sp_project)                 :: spproj
-        type(class_frcs)                 :: frcs, frcs_sc
+        type(class_frcs)                 :: frcs
         character(len=LONGSTRLEN)        :: finalcavgs, finalcavgs_ranked, cavgs, refs_sc
         real                             :: scale_factor, lp1, lp2, cenlp, smpd_target
         integer                          :: last_iter
@@ -479,12 +479,11 @@ contains
             call spproj%read_segment('cls2D', params%projfile)
             call spproj%read_segment('cls3D', params%projfile)
             call spproj%add_cavgs2os_out(trim(finalcavgs), params%smpd, imgkind='cavg')
-            call frcs_sc%read(FRCS_FILE)
-            call frcs_sc%pad(params%smpd, params%box, frcs)
+            call frcs%read(FRCS_FILE)
+            call frcs%pad(params%smpd, params%box)
             call frcs%write(FRCS_FILE)
             call spproj%add_frcs2os_out(FRCS_FILE, 'frc2D')
             call frcs%kill
-            call frcs_sc%kill
             ! transfer 2D shift parameters to 3D
             call spproj%read_segment('ptcl2D', params%projfile)
             call spproj%read_segment('ptcl3D', params%projfile)
