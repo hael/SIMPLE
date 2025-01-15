@@ -146,7 +146,6 @@ type(simple_program), target :: noisevol
 type(simple_program), target :: normalize_
 type(simple_program), target :: orisops
 type(simple_program), target :: oristats
-type(simple_program), target :: oristats_nano
 type(simple_program), target :: pdb2mrc
 type(simple_program), target :: pick
 type(simple_program), target :: pick_extract
@@ -458,7 +457,6 @@ contains
         call new_normalize
         call new_orisops
         call new_oristats
-        call new_oristats_nano
         call new_pick
         call new_pick_extract
         call new_postprocess
@@ -592,7 +590,6 @@ contains
         call push2prg_ptr_array(normalize_)
         call push2prg_ptr_array(orisops)
         call push2prg_ptr_array(oristats)
-        call push2prg_ptr_array(oristats_nano)
         call push2prg_ptr_array(pick)
         call push2prg_ptr_array(pick_extract)
         call push2prg_ptr_array(postprocess)
@@ -812,8 +809,6 @@ contains
                 ptr2prg => orisops
             case('oristats')
                 ptr2prg => oristats
-            case('oristats_nano')
-                ptr2prg => oristats_nano
             case('pick')
                 ptr2prg => pick
             case('pick_extract')
@@ -1085,7 +1080,6 @@ contains
         write(logfhandle,'(A)') cavgseoproc_nano%name
         write(logfhandle,'(A)') model_validation%name
         write(logfhandle,'(A)') ptclsproc_nano%name
-        write(logfhandle,'(A)') oristats_nano%name
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') format_str('MODEL BULDING/ANALYSIS PROGRAMS:', C_UNDERLINED)
         write(logfhandle,'(A)') pdb2mrc%name
@@ -4284,31 +4278,6 @@ contains
         ! computer controls
         call oristats%set_input('comp_ctrls', 1, nthr)
     end subroutine new_oristats
-
-    subroutine new_oristats_nano
-        ! PROGRAM SPECIFICATION
-        call oristats_nano%new(&
-        &'oristats_nano',&                                     ! name
-        &'Statistical analyses of nanoparticle orientations',& ! descr_short
-        &'is a program for analyzing orientations of nanoparticles obtained with SINGLE',&
-        &'single_exec',&                                       ! executable
-        &0, 1, 0, 0, 0, 0, 0, .false.)                         ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call oristats_nano%set_input('parm_ios', 1, projfile)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        ! <empty>
-    end subroutine new_oristats_nano
 
     subroutine new_projops
         ! PROGRAM SPECIFICATION

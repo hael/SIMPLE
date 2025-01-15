@@ -1159,40 +1159,6 @@ contains
             write(funit,*) int2str(i)//CSV_DELIM//real2str(corrs(i))
         end do
         call fclose(funit)
-        ! print CSV file of particle indices vs. difference in projection direction to right-hand neighbour
-        ! noris = spproj%os_ptcl3D%get_noris()
-        ! if( spproj%os_ptcl3D%isthere('pind') )then
-        !     pinds = nint(spproj%os_ptcl3D%get_all('pind'))
-        ! else
-        !     pinds = (/(i,i=1,noris)/)
-        ! endif
-        ! allocate(euldists(size(pinds)),    source = 0.)
-        ! allocate(pind_mask(maxval(pinds)), source = .false.)
-        ! fname = 'pinds_vs_rh_neigh_angdiffs.csv'
-        ! call fopen(funit, trim(fname), 'replace', 'unknown', iostat=io_stat, form='formatted')
-        ! call fileiochk('autorefine3D_nano fopen failed'//trim(fname), io_stat)
-        ! write(funit,*) 'PTCL_INDEX'//CSV_DELIM//'ANGULAR_DIFFERENCE'
-        ! cnt = 0
-        ! do i = 1,size(pinds) - 1
-        !     pind_plus_one = pinds(i) + 1
-        !     if( pinds(i + 1) == pind_plus_one )then
-        !         if( pind_plus_one > noris ) cycle
-        !         ! it is meaningful to look at the angular difference
-        !         call spproj%os_ptcl3D%get_ori(pinds(i),     o1)
-        !         call spproj%os_ptcl3D%get_ori(pinds(i) + 1, o2)
-        !         cnt = cnt + 1
-        !         euldists(cnt) = rad2deg(o1.euldist.o2)
-        !         write(funit,*) int2str(pinds(i))//CSV_DELIM//real2str(euldists(cnt))
-        !     endif
-        ! end do
-        ! call fclose(funit)
-        ! call calc_stats(euldists(:cnt), euldist_stats)
-        ! write(logfhandle,'(A)') '>>> ANGULAR DISTANCE TO RIGHT-HAND NEIGHBOR STATS'
-        ! write(logfhandle,'(A,F8.4)') 'Average: ', euldist_stats%avg
-        ! write(logfhandle,'(A,F8.4)') 'Median : ', euldist_stats%med
-        ! write(logfhandle,'(A,F8.4)') 'Sigma  : ', euldist_stats%sdev
-        ! write(logfhandle,'(A,F8.4)') 'Max    : ', euldist_stats%maxv
-        ! write(logfhandle,'(A,F8.4)') 'Min    : ', euldist_stats%minv
         ! deallocate
         if( allocated(iter_dir)  ) deallocate(iter_dir)
         if( allocated(cavgs_stk) ) deallocate(cavgs_stk)
