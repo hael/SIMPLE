@@ -52,7 +52,6 @@ type(cavgseoproc_nano_commander)              :: xcavgseoproc
 type(model_validation_commander)              :: xmodel_validation
 type(model_validation_eo_commander)           :: xmodel_validation_eo
 type(ptclsproc_nano_commander)                :: xptclsproc
-type(oristats_nano_commander)                 :: xoristats_nano
 
 ! MODEL BUILDING/ANALYSIS PROGRAMS
 type(detect_atoms_commander)                  :: xdetect_atoms
@@ -165,8 +164,6 @@ select case(prg)
         call xmodel_validation_eo%execute(cline)
     case( 'ptclsproc_nano' )
         call xptclsproc%execute(cline)
-    case( 'oristats_nano' )
-        call xoristats_nano%execute(cline)
 
     ! MODEL BUILDING/ANALYSIS PROGRAMS
     case( 'pdb2mrc' )
@@ -193,7 +190,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('853d0984')
+call simple_print_git_version('dd8be6ed')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

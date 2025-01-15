@@ -13,7 +13,6 @@ public :: check_states_commander
 public :: make_oris_commander
 public :: orisops_commander
 public :: oristats_commander
-public :: oristats_nano_commander
 public :: rotmats2oris_commander
 public :: vizoris_commander
 private
@@ -33,11 +32,6 @@ type, extends(commander_base) :: oristats_commander
   contains
     procedure :: execute      => exec_oristats
 end type oristats_commander
-
-type, extends(commander_base) :: oristats_nano_commander
-  contains
-    procedure :: execute      => exec_oristats_nano
-end type oristats_nano_commander
 
 type, extends(commander_base) :: rotmats2oris_commander
   contains
@@ -173,46 +167,6 @@ contains
         call binwrite_oritab(params%outfile, build%spproj, build%spproj_field, [1,build%spproj_field%get_noris()])
         call simple_end('**** SIMPLE_ORISOPS NORMAL STOP ****')
     end subroutine exec_orisops
-
-    subroutine exec_oristats_nano( self, cline )
-        class(oristats_nano_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
-        type(parameters)     :: params
-        type(sp_project)     :: spproj
-        integer              :: icls, ncls, sz, i, j
-        integer, allocatable :: pinds(:)
-        logical              :: l_neigh, l_class
-        real                 :: dist_neigh, dist_class
-        call params%new(cline)
-        call spproj%read(params%projfile)
-        ncls = spproj%os_ptcl3D%get_n('class')
-        do icls = 1,ncls
-            call spproj%os_ptcl3D%get_pinds(icls, 'class', pinds)
-            if( allocated(pinds) )then
-                sz = size(pinds)
-                do i = 1, sz - 1
-                    do j = i + 1, sz
-                        l_neigh = .false.
-                        l_class = .false.
-                        if( pinds(i) + 1 == pinds(j) )then
-                            l_neigh = .true.
-                            dist_neigh = rad2deg(spproj%os_ptcl3D%euldist(pinds(i) + 1, pinds(j)))
-                        else if( pinds(i) - 1 == pinds(j) )then
-                            l_neigh = .true.
-                            dist_neigh = rad2deg(spproj%os_ptcl3D%euldist(pinds(i) - 1, pinds(j)))
-                        else
-                            l_class = .true.
-                            dist_class = rad2deg(spproj%os_ptcl3D%euldist(pinds(i),     pinds(j)))
-                        endif
-                        if( l_neigh ) print *, 'dist_neigh ', dist_neigh
-                        if( l_class ) print *, 'dist_class ', dist_class
-                    end do
-                end do
-                deallocate(pinds)
-            endif
-        end do
-        call spproj%kill
-    end subroutine exec_oristats_nano
 
     !> for analyzing SIMPLE orientation/parameter files
     subroutine exec_oristats( self, cline )
