@@ -237,9 +237,25 @@ include(GNUInstallDirs)
 if("${CMAKE_INSTALL_PREFIX}" STREQUAL "/usr/local")
   set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR})
 endif()
+
+#execute_process(COMMAND sysctl -n machdep.cpu.brand_string ERROR_QUIET RESULT_VARIABLE arm64Error)
+#if(arm64Error)
+#    message("cross-compiling for arm64 isn't supported")
+#else()
+#    message("cross-compiling for arm64 is supported")
+#endif()
+
 # There is some bug where -march=native doesn't work on Mac
 IF(APPLE)
-  SET(GNUNATIVE "-mtune=native")
+    execute_process( COMMAND sysctl -n machdep.cpu.brand_string
+                     OUTPUT_VARIABLE APPLE_PROCESSOR
+                    )
+    message(STATUS "Apple Mac Processor: ${APPLE_PROCESSOR}")
+    if( APPLE_PROCESSOR MATCHES "Apple M3 Pro")
+        SET(GNUNATIVE "-mtune=generic")
+    else()
+        SET(GNUNATIVE "-mtune=native")
+    endif()
 ELSE()
   SET(GNUNATIVE "-march=native")
 ENDIF(APPLE)

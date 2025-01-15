@@ -128,29 +128,27 @@ ${CLANG_FATAL_MSG}")
     endif()
   endif()
 
-
 message(STATUS "Making sure your preprocessor points to the correct binary")
 if(TMP_CPP_COMPILER MATCHES "cpp*")
-execute_process(COMMAND "${TMP_CPP_COMPILER}" --version
+  execute_process(COMMAND "${TMP_CPP_COMPILER}" --version
   OUTPUT_VARIABLE ACTUAL_FC_TARGET
   OUTPUT_STRIP_TRAILING_WHITESPACE)
-if(ACTUAL_FC_TARGET MATCHES "Clang|clang")
-  message(STATUS "Found cpp is actually Clang -- Trying other paths")
-  find_file (
-    TMP_CPP_COMPILER cpp-
-    NAMES  cpp-10 cpp-9 cpp-8 cpp-7 cpp-6 cpp-5 cpp-4.9 cpp10 cpp9 cpp8 cpp7 cpp6 cpp5 cpp4.9 cpp
-    PATHS ${FORTRAN_PARENT_DIR} /sw/bin /usr/local/bin /opt/local/bin /usr/bin
-    #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
-    DOC "Searching for GNU cpp preprocessor "
+  if(ACTUAL_FC_TARGET MATCHES "Clang|clang")
+    message(STATUS "Found cpp is actually Clang -- Trying other paths")
+    find_file (
+      CPP_COMPILER_NEW
+      NAMES  cpp-14 cpp-13 cpp-12 cpp-11 cpp-10 cpp-9 cpp-8 cpp-7 cpp-6 cpp-5 cpp-4.9 cpp10 cpp9 cpp8 cpp7 cpp6 cpp5 cpp4.9
+      PATHS ${FORTRAN_PARENT_DIR} /sw/bin /usr/local/bin /opt/local/bin /opt/homebrew/bin /usr/bin
+      DOC "Searching for GNU cpp preprocessor "
     )
-  if(NOT EXISTS "${TMP_CPP_COMPILER}")
-    message( FATAL_ERROR  "Cannot find GNU cpp compiler --
-${CLANG_FATAL_MSG}")
+    if(NOT EXISTS "${CPP_COMPILER_NEW}")
+      message( FATAL_ERROR  "Cannot find GNU cpp compiler -- ${CLANG_FATAL_MSG}")
+    endif()
+    set(TMP_CPP_COMPILER ${CPP_COMPILER_NEW})
   endif()
 endif()
-endif()
 set(CMAKE_CPP_COMPILER ${TMP_CPP_COMPILER})
-
+message(STATUS "C Preprocessor points to ${CMAKE_CPP_COMPILER}")
 
 set(CMAKE_Fortran_SOURCE_FILE_EXTENSIONS ${CMAKE_Fortran_SOURCE_FILE_EXTENSIONS} "f03;F03;f08;F08")
 
