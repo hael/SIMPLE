@@ -406,11 +406,11 @@ contains
         !!!!!!!
         ! Auto-scaling?
         if( trim(params_glob%autoscale) .ne. 'yes' ) return
-        ! Hard limit reached?
+        ! Hard limit reached (3 Angs)?
         if( pool_dims%smpd < 1.5 ) return
         ! Too early?
-        if( pool_iter < 3 ) return
-        if( ncls_glob < params_glob%ncls ) return
+        if( pool_iter < 10 ) return
+        if( ncls_glob < max_ncls ) return
         ! Current resolution at Nyquist?
         if( abs(current_resolution-2.*pool_dims%smpd) > 0.01 ) return
         ! When NPREV_RES iterations are at Nyquist the pool resolution may be updated
