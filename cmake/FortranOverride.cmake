@@ -244,7 +244,7 @@ IF(APPLE)
                      OUTPUT_VARIABLE APPLE_PROCESSOR
                     )
     message(STATUS "Apple Mac Processor: ${APPLE_PROCESSOR}")
-    if( APPLE_PROCESSOR MATCHES "Apple M3 Pro")
+    if( APPLE_PROCESSOR MATCHES "Apple M3 Pro" OR APPLE_PROCESSOR MATCHES "Apple M3")
         SET(GNUNATIVE "-mtune=generic")
     else()
         SET(GNUNATIVE "-mtune=native")
