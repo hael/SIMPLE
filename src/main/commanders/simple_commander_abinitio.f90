@@ -351,7 +351,7 @@ contains
         type(class_sample), allocatable :: clssmp(:)
         type(parameters)                :: params
         type(sp_project)                :: spproj
-        type(image)                     :: noisevol 
+        type(image)                     :: noisevol
         integer :: istage, s, ncls, icls, i, start_stage, nptcls2update, noris, nstates_on_cline, nstates_in_project
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
@@ -476,11 +476,22 @@ contains
             endif
             update_frac = min(UPDATE_FRAC_MAX, update_frac) ! to ensure fractional update is always on
             ! generate a data structure for class sampling on disk
-            ncls    = spproj%os_cls2D%get_noris()
-            tmpinds = (/(icls,icls=1,ncls)/)
             rstates = spproj%os_cls2D%get_all('state')
-            clsinds = pack(tmpinds, mask=rstates > 0.5)
-            call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
+            if( trim(params%partition).eq.'yes' )then
+                tmpinds = nint(spproj%os_cls2D%get_all('cluster'))
+                where( rstates < 0.5 ) tmpinds = 0
+                clsinds = (/(icls,icls=1,maxval(tmpinds))/)
+                do icls = 1,size(clsinds)
+                    if(count(tmpinds==icls) == 0) clsinds(icls) = 0
+                enddo
+                clsinds = pack(clsinds, mask=clsinds>0)
+                call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp, label='cluster')
+            else
+                ncls    = spproj%os_cls2D%get_noris()
+                tmpinds = (/(icls,icls=1,ncls)/)
+                clsinds = pack(tmpinds, mask=rstates > 0.5)
+                call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
+            endif
             call write_class_samples(clssmp, CLASS_SAMPLING_FILE)
             deallocate(rstates, tmpinds, clsinds)
             if( spproj%os_ptcl3D%has_been_sampled() )then
