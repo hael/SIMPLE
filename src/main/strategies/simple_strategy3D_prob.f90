@@ -38,7 +38,7 @@ contains
         use simple_eul_prob_tab, only: eulprob_corr_switch
         class(strategy3D_prob), intent(inout) :: self
         integer,                intent(in)    :: ithr
-        integer   :: iproj, iptcl, iptcl_map, irot, istate, iref
+        integer   :: iproj, iptcl_map, irot, istate, iref
         real      :: corr
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
@@ -46,7 +46,6 @@ contains
             ! prep
             call self%s%prep4srch
             self%s%nrefs_eval = self%s%nrefs
-            iptcl     = self%s%iptcl
             iptcl_map = self%s%iptcl_map
             istate    =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%istate
             iproj     =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%iproj

@@ -228,7 +228,6 @@ contains
         ! CLEAN
         call clean_strategy3D ! deallocate s3D singleton
         call pftcc%kill
-        if( str_has_substr(params_glob%refine, 'prob') ) call eulprob_obj_part%kill
         call build_glob%vol%kill
         call orientation%kill
         do ithr = 1,params_glob%nthr

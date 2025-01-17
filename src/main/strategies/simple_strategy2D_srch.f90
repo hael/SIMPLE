@@ -7,6 +7,7 @@ use simple_polarft_corrcalc,  only: pftcc_glob
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad ! gradient-based angle and shift search
 use simple_parameters,        only: params_glob
 use simple_builder,           only: build_glob
+use simple_eul_prob_tab2D,    only: eul_prob_tab2D
 use simple_strategy2D_alloc   ! s2D singleton
 implicit none
 
@@ -16,6 +17,7 @@ private
 #include "simple_local_flags.inc"
 
 type strategy2D_spec
+    type(eul_prob_tab2D), pointer :: eulprob
     real    :: stoch_bound = 0.
     integer :: iptcl       = 0  ! global particle index
     integer :: iptcl_map   = 0  ! maps to index in batch

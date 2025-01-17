@@ -24,6 +24,8 @@ public :: cleanup2D_commander_hlev
 public :: cluster2D_autoscale_commander
 public :: cluster2D_commander_distr
 public :: cluster2D_commander
+public :: prob_tab2D_commander
+public :: prob_tab2D_commander_distr
 public :: make_cavgs_commander_distr
 public :: make_cavgs_commander
 public :: cavgassemble_commander
@@ -55,6 +57,16 @@ type, extends(commander_base) :: cluster2D_commander
   contains
     procedure :: execute      => exec_cluster2D
 end type cluster2D_commander
+
+type, extends(commander_base) :: prob_tab2D_commander
+  contains
+    procedure :: execute      => exec_prob_tab2D
+end type prob_tab2D_commander
+
+type, extends(commander_base) :: prob_tab2D_commander_distr
+  contains
+    procedure :: execute      => exec_prob_tab2D_distr
+end type prob_tab2D_commander_distr
 
 type, extends(commander_base) :: make_cavgs_commander_distr
   contains
@@ -779,12 +791,14 @@ contains
         type(scale_commander)             :: xscale
         type(calc_group_sigmas_commander) :: xcalc_group_sigmas
         type(cavgassemble_commander)      :: xcavgassemble
+        type(prob_tab2D_commander_distr)  :: xprob_tab2D_distr
         ! command lines
         type(cmdline) :: cline_check_2Dconv
         type(cmdline) :: cline_cavgassemble
         type(cmdline) :: cline_make_cavgs
         type(cmdline) :: cline_calc_sigma
         type(cmdline) :: cline_scalerefs
+        type(cmdline) :: cline_prob_tab2D_distr
         integer(timer_int_kind)   :: t_init,   t_scheduled,  t_merge_algndocs,  t_cavgassemble,  t_tot
         real(timer_int_kind)      :: rt_init, rt_scheduled, rt_merge_algndocs, rt_cavgassemble, rt_tot
         character(len=STDLEN)     :: benchfname, orig_objfun
@@ -999,6 +1013,14 @@ contains
                 params%needs_sigma   = 'yes'
                 params%l_needs_sigma = .true.
             endif
+            ! build probability table
+            if( str_has_substr(params%refine, 'prob') )then
+                cline_prob_tab2D_distr = cline
+                call cline_prob_tab2D_distr%set('refs',      refs)
+                call cline_prob_tab2D_distr%set('frcs',      FRCS_FILE)
+                call cline_prob_tab2D_distr%set('startit',   iter)
+                call xprob_tab2D_distr%execute_safe(cline_prob_tab2D_distr)
+            endif
             ! updates
             call job_descr%set('refs', trim(refs))
             call job_descr%set('startit', trim(int2str(iter)))
@@ -1144,7 +1166,9 @@ contains
         endif
         startit = 1
         if( cline%defined('startit') )startit = params%startit
-        if( startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
+        if( (startit == 1) .and. (.not.str_has_substr(params%refine,'prob')) )then
+            call build%spproj_field%clean_entry('updatecnt', 'sampled')
+        endif
         if( params%l_distr_exec )then
             if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
             call cluster2D_exec( cline, startit, converged )
@@ -1480,6 +1504,148 @@ contains
         ! indicate completion (when run in a qsys env)
         call simple_touch('CAVGASSEMBLE_FINISHED', errmsg='In: commander_rec :: eo_cavgassemble ')
     end subroutine exec_cavgassemble
+
+    subroutine exec_prob_tab2D_distr( self, cline )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
+        use simple_eul_prob_tab2D,      only: eul_prob_tab2D
+        use simple_strategy2D3D_common, only: sample_ptcls4update
+        class(prob_tab2D_commander_distr), intent(inout) :: self
+        class(cmdline),                    intent(inout) :: cline
+        integer,            allocatable :: pinds(:)
+        character(len=:),   allocatable :: fname
+        type(builder)                   :: build
+        type(parameters)                :: params
+        type(prob_tab2D_commander)      :: xprob_tab2D
+        type(eul_prob_tab2D)            :: eulprob
+        type(cmdline)                   :: cline_prob_tab2D
+        type(qsys_env)                  :: qenv
+        type(chash)                     :: job_descr
+        integer :: nptcls, ipart
+        if( associated(build_glob) )then
+            if( .not.associated(params_glob) )then
+                THROW_HARD('Builder & parameters must be associated for shared memory execution!')
+            endif
+        else
+            call cline%set('mkdir',   'no')
+            call cline%set('stream',  'no')
+            call cline%set('oritype', 'ptcl2D')
+            call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+        endif
+        if( params_glob%startit == 1 )then
+            if( cline%defined('updatecnt_ini') )then
+                call build%spproj_field%set_nonzero_updatecnt(params%updatecnt_ini)
+                call build%spproj_field%clean_entry('sampled')
+            else
+                call build%spproj_field%clean_entry('updatecnt', 'sampled')
+            endif
+        endif
+        ! sampled incremented
+        call sample_ptcls4update([1,params_glob%nptcls], .true., nptcls, pinds)
+        ! communicate to project file
+        call build_glob%spproj%write_segment_inside(params_glob%oritype, params_glob%projfile)
+        ! more prep
+        call eulprob%new(pinds)
+        ! generating all scores
+        cline_prob_tab2D = cline
+        call cline_prob_tab2D%set('prg', 'prob_tab2D' )
+        ! execution
+        ! if( .not.cline_prob_tab2D%defined('nparts') )then
+        !     call xprob_tab2D%execute_safe(cline_prob_tab)
+        ! else
+            ! setup the environment for distributed execution
+            call qenv%new(params_glob%nparts, nptcls=params_glob%nptcls)
+            call cline_prob_tab2D%gen_job_descr(job_descr)
+            ! schedule
+            call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
+        ! endif
+        ! reading scores from all parts
+        do ipart = 1, params_glob%nparts
+            fname = trim(DIST_FBODY)//int2str_pad(ipart,params_glob%numlen)//'.dat'
+            call eulprob%read_tab_to_glob(fname)
+        enddo
+        ! perform assignment
+        call eulprob%assign_cls_greedy
+        ! write
+        fname = trim(ASSIGNMENT_FBODY)//'.dat'
+        call eulprob%write_assignment(fname)
+        ! cleanup
+        call eulprob%kill
+        call cline_prob_tab2D%kill
+        call qenv%kill
+        call job_descr%kill
+        call qsys_job_finished('simple_commander_prob_tab2D :: exec_prob_align')
+        call qsys_cleanup
+        call simple_end('**** SIMPLE_PROB_TAB2D_DISTR NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_prob_tab2D_distr
+
+    subroutine exec_prob_tab2D( self, cline )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
+        use simple_strategy2D3D_common
+        use simple_classaverager
+        use simple_strategy2D_matcher
+        use simple_polarft_corrcalc,  only: polarft_corrcalc
+        use simple_eul_prob_tab2D,    only: eul_prob_tab2D
+        class(prob_tab2D_commander), intent(inout) :: self
+        class(cmdline),            intent(inout) :: cline
+        integer,          allocatable :: pinds(:)
+        character(len=:), allocatable :: fname
+        type(polarft_corrcalc)        :: pftcc
+        type(builder)                 :: build
+        type(parameters)              :: params
+        type(eul_prob_tab2D)          :: eulprob
+        type(euclid_sigma2)           :: eucl_sigma_glob
+        real    :: frac_srch_space
+        integer :: nptcls
+        logical :: l_ctf
+        call cline%set('mkdir', 'no')
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
+        ! The policy here ought to be that nothing is done with regards to sampling other than reproducing
+        ! what was generated in the driver (prob_align, below). Sampling is delegated to prob_align (below)
+        ! and merely reproduced here
+        if( build%spproj_field%has_been_sampled() )then
+            call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds)
+        else
+            THROW_HARD('exec_prob_tab requires prior particle sampling (in exec_prob_align)')
+        endif
+        ! Resolution range
+        frac_srch_space = build%spproj_field%get_avg('frac')
+        if( file_exists(params_glob%frcs) ) call build%clsfrcs%read(params_glob%frcs)
+        call set_bp_range2D( cline, params%which_iter, frac_srch_space )
+        ! Read references
+        call cavger_new(pinds)
+        call cavger_read(params%refs, 'merged')
+        if( file_exists(params%refs_even) )then
+            call cavger_read(params%refs_even, 'even')
+        else
+            call cavger_read(params%refs, 'even')
+        endif
+        if( file_exists(params%refs_odd) )then
+            call cavger_read(params%refs_odd, 'odd')
+        else
+            call cavger_read(params%refs, 'odd')
+        endif
+        ! init scorer & prep references
+        call preppftcc4align2D(pftcc, nptcls, params%which_iter)
+        ! prep particles
+        l_ctf = build%spproj%get_ctfflag('ptcl2D',iptcl=params%fromp).ne.'no'
+        call prep_batch_particles2D(nptcls)
+        call build_batch_particles2D(pftcc, nptcls, pinds, l_ctf)
+        ! init prob table
+        call eulprob%new(pinds)
+        fname = trim(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
+        call eulprob%fill_tab_greedy_inpl
+        call eulprob%write_tab(fname)
+        ! clean & end
+        call eucl_sigma2_glob%kill
+        call clean_batch_particles2D
+        call eulprob%kill
+        call pftcc%kill
+        call build%kill_general_tbox
+        call qsys_job_finished('simple_commander_cluster2D :: exec_prob_tab')
+        call simple_end('**** SIMPLE_PROB_TAB2D NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_prob_tab2D
 
     subroutine exec_rank_cavgs( self, cline )
         class(rank_cavgs_commander), intent(inout) :: self

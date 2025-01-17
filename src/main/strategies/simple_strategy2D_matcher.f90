@@ -11,7 +11,6 @@ use simple_builder,                only: build_glob
 use simple_parameters,             only: params_glob
 use simple_image,                  only: image
 use simple_qsys_funs,              only: qsys_job_finished
-use simple_convergence,            only: convergence
 use simple_strategy2D3D_common,    only: set_bp_range2d, prepimgbatch, killimgbatch
 use simple_strategy2D,             only: strategy2D, strategy2D_per_ptcl
 use simple_strategy2D_srch,        only: strategy2D_spec
@@ -22,6 +21,7 @@ use simple_strategy2D_tseries,     only: strategy2D_tseries
 use simple_strategy2D_snhc,        only: strategy2D_snhc
 use simple_strategy2D_snhc_smpl,   only: strategy2D_snhc_smpl
 use simple_strategy2D_eval,        only: strategy2D_eval
+use simple_strategy2D_prob,        only: strategy2D_prob
 use simple_euclid_sigma2,          only: euclid_sigma2
 use simple_masker,                 only: automask2D
 use simple_classaverager
@@ -29,37 +29,39 @@ use simple_progress
 implicit none
 
 public :: cluster2D_exec
+public :: preppftcc4align2D, prep_batch_particles2D, build_batch_particles2D, clean_batch_particles2D
 private
 #include "simple_local_flags.inc"
 
 type(polarft_corrcalc)       :: pftcc
 type(euclid_sigma2)          :: eucl_sigma
 type(image),     allocatable :: ptcl_match_imgs(:)
-integer                      :: batchsz_max
 real(timer_int_kind)         :: rt_init, rt_prep_pftcc, rt_align, rt_cavg, rt_projio, rt_tot
 integer(timer_int_kind)      ::  t_init,  t_prep_pftcc,  t_align,  t_cavg,  t_projio,  t_tot
 character(len=STDLEN)        :: benchfname
 logical                      :: l_stream = .false.
-logical                      :: l_ctf    = .false.
 
 contains
 
     !>  \brief  is the prime2D algorithm
     subroutine cluster2D_exec( cline, which_iter, converged )
-        use simple_decay_funs, only: inv_cos_decay, extremal_decay2D
+        use simple_convergence, only: convergence
+        use simple_eul_prob_tab2D, only: eul_prob_tab2D
+        use simple_decay_funs,     only: inv_cos_decay, extremal_decay2D
         class(cmdline),          intent(inout) :: cline
         integer,                 intent(in)    :: which_iter
         logical,                 intent(inout) :: converged
         type(strategy2D_per_ptcl), allocatable :: strategy2Dsrch(:)
         type(strategy2D_spec),     allocatable :: strategy2Dspecs(:)
-        integer,                   allocatable :: pinds(:), batches(:,:)
         real,                      allocatable :: states(:)
-        type(convergence) :: conv
+        integer,                   allocatable :: pinds(:), batches(:,:)
+        type(eul_prob_tab2D),           target :: eulprob
         type(ori)         :: orientation
+        type(convergence) :: conv
         real    :: frac_srch_space, neigh_frac
-        integer :: iptcl, ithr, fnr, updatecnt, iptcl_map, nptcls2update
-        integer :: batchsz, nbatches, batch_start, batch_end, iptcl_batch, ibatch
-        logical :: doprint, l_partial_sums, l_update_frac
+        integer :: iptcl, fnr, updatecnt, iptcl_map, nptcls2update
+        integer :: batchsz_max, batchsz, nbatches, batch_start, batch_end, iptcl_batch, ibatch
+        logical :: doprint, l_partial_sums, l_update_frac, l_ctf, l_prob
         logical :: l_snhc, l_greedy, l_np_cls_defined, l_snhc_smpl, l_greedy_smpl
         if( L_BENCH_GLOB )then
             t_init = tic()
@@ -70,6 +72,7 @@ contains
         frac_srch_space = build_glob%spproj_field%get_avg('frac')
 
         ! SWITCHES
+        l_prob         = str_has_substr(params_glob%refine,'prob')
         l_partial_sums = .false.
         l_snhc         = .false.
         l_greedy       = .false.
@@ -122,20 +125,39 @@ contains
                 params_glob%update_frac = 1.
             endif
         endif
+        ! This is temporary and will need to be revised
+        if( l_prob )then
+            l_snhc         = .false.
+            l_greedy       = .false.
+            l_greedy_smpl  = .false.
+            l_snhc_smpl    = .false.
+            if( params_glob%extr_iter > params_glob%extr_lim )then
+                l_update_frac = params_glob%l_update_frac
+            else
+                l_update_frac = .false.
+            endif
+            l_partial_sums = l_update_frac
+        endif
 
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
-        if( allocated(pinds) )     deallocate(pinds)
-        if( l_update_frac )then
-            if( build_glob%spproj_field%has_been_sampled() )then ! we have a random subset
-                call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
-                                        &nptcls2update, pinds)
-            else                                                 ! we generate a random subset
-                call build_glob%spproj_field%sample4update_rnd([params_glob%fromp,params_glob%top],&
-                &params_glob%update_frac, nptcls2update, pinds, .true.) ! sampled incremented
+        if( allocated(pinds) ) deallocate(pinds)
+        if( l_prob )then
+            ! generation of random sample and incr of updatecnts delegated to prob_tab2D_distr
+            call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
+            &nptcls2update, pinds )
+        else
+            if( l_update_frac )then
+                if( build_glob%spproj_field%has_been_sampled() )then ! we have a random subset
+                    call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
+                    &nptcls2update, pinds)
+                else                                                 ! we generate a random subset
+                    call build_glob%spproj_field%sample4update_rnd([params_glob%fromp,params_glob%top],&
+                    &params_glob%update_frac, nptcls2update, pinds, .true.) ! sampled incremented
+                endif
+            else                                                     ! we sample all state > 0
+                call build_glob%spproj_field%sample4update_all([params_glob%fromp,params_glob%top],&
+                &nptcls2update, pinds, .true.) ! sampled incremented
             endif
-        else                                                     ! we sample all state > 0
-            call build_glob%spproj_field%sample4update_all([params_glob%fromp,params_glob%top],&
-                                        &nptcls2update, pinds, .true.) ! sampled incremented
         endif
 
         ! SNHC LOGICS
@@ -189,7 +211,7 @@ contains
             rt_init = toc(t_init)
             t_prep_pftcc = tic()
         endif
-        call preppftcc4align( which_iter )
+        call preppftcc4align2D( pftcc, batchsz_max, which_iter )
 
         ! ARRAY ALLOCATION FOR STRATEGY2D after pftcc initialization
         call prep_strategy2D_glob( neigh_frac )
@@ -200,12 +222,14 @@ contains
 
         ! GENERATE PARTICLES IMAGE OBJECTS
         allocate(strategy2Dspecs(batchsz_max),strategy2Dsrch(batchsz_max))
-        call prepimgbatch(batchsz_max)
-        allocate(ptcl_match_imgs(params_glob%nthr))
-        do ithr = 1,params_glob%nthr
-            call ptcl_match_imgs(ithr)%new([params_glob%box_crop, params_glob%box_crop, 1], params_glob%smpd_crop, wthreads=.false.)
-        enddo
+        call prep_batch_particles2D(batchsz_max)
         if( L_BENCH_GLOB ) rt_prep_pftcc = toc(t_prep_pftcc)
+
+        ! READING THE ASSIGNMENT FOR PROB MODE
+        if( l_prob )then
+            call eulprob%new(pinds)
+            call eulprob%read_assignment(trim(ASSIGNMENT_FBODY)//'.dat')
+        endif
 
         ! STOCHASTIC IMAGE ALIGNMENT
         rt_align         = 0.
@@ -220,7 +244,7 @@ contains
             batchsz     = batch_end - batch_start + 1
             ! Prep particles in pftcc
             if( L_BENCH_GLOB ) t_prep_pftcc = tic()
-            call build_batch_particles(batchsz, pinds(batch_start:batch_end))
+            call build_batch_particles2D(pftcc, batchsz, pinds(batch_start:batch_end), l_ctf)
             if( L_BENCH_GLOB ) rt_prep_pftcc = rt_prep_pftcc + toc(t_prep_pftcc)
             ! batch strategy2D objects
             if( L_BENCH_GLOB ) t_init = tic()
@@ -252,27 +276,32 @@ contains
                     endif
                 else
                     ! offline mode, based on iteration
-                    if( trim(params_glob%refine).eq.'inpl' )then
-                        allocate(strategy2D_inpl                :: strategy2Dsrch(iptcl_batch)%ptr)
-                    else if( l_greedy .or. l_greedy_smpl .or. (.not.build_glob%spproj_field%has_been_searched(iptcl)&
-                        &.or. updatecnt==1) )then
-                        if( trim(params_glob%tseries).eq.'yes' )then
-                            if( l_np_cls_defined )then
-                                allocate(strategy2D_tseries     :: strategy2Dsrch(iptcl_batch)%ptr)
-                            else
-                                allocate(strategy2D_greedy      :: strategy2Dsrch(iptcl_batch)%ptr)
-                            endif
-                        else
-                            if( l_greedy_smpl )then
-                                allocate(strategy2D_greedy_smpl :: strategy2Dsrch(iptcl_batch)%ptr)
-                            else
-                                allocate(strategy2D_greedy      :: strategy2Dsrch(iptcl_batch)%ptr)
-                            endif
-                        endif
-                    else if( l_snhc_smpl )then
-                        allocate(strategy2D_snhc_smpl           :: strategy2Dsrch(iptcl_batch)%ptr)
+                    if( l_prob )then
+                        allocate(strategy2D_prob                    :: strategy2Dsrch(iptcl_batch)%ptr)
+                        strategy2Dspecs(iptcl_batch)%eulprob => eulprob
                     else
-                        allocate(strategy2D_snhc                :: strategy2Dsrch(iptcl_batch)%ptr)
+                        if( trim(params_glob%refine).eq.'inpl' )then
+                            allocate(strategy2D_inpl                :: strategy2Dsrch(iptcl_batch)%ptr)
+                        else if( l_greedy .or. l_greedy_smpl .or. (.not.build_glob%spproj_field%has_been_searched(iptcl)&
+                            &.or. updatecnt==1) )then
+                            if( trim(params_glob%tseries).eq.'yes' )then
+                                if( l_np_cls_defined )then
+                                    allocate(strategy2D_tseries     :: strategy2Dsrch(iptcl_batch)%ptr)
+                                else
+                                    allocate(strategy2D_greedy      :: strategy2Dsrch(iptcl_batch)%ptr)
+                                endif
+                            else
+                                if( l_greedy_smpl )then
+                                    allocate(strategy2D_greedy_smpl :: strategy2Dsrch(iptcl_batch)%ptr)
+                                else
+                                    allocate(strategy2D_greedy      :: strategy2Dsrch(iptcl_batch)%ptr)
+                                endif
+                            endif
+                        else if( l_snhc_smpl )then
+                            allocate(strategy2D_snhc_smpl           :: strategy2Dsrch(iptcl_batch)%ptr)
+                        else
+                            allocate(strategy2D_snhc                :: strategy2Dsrch(iptcl_batch)%ptr)
+                        endif
                     endif
                 endif
                 ! Search specification & object
@@ -297,13 +326,12 @@ contains
         ! CLEAN-UP
         call clean_strategy2D
         call orientation%kill
+        call eulprob%kill
         do iptcl_batch = 1,batchsz_max
             nullify(strategy2Dsrch(iptcl_batch)%ptr)
         end do
-        do ithr = 1,params_glob%nthr
-            call ptcl_match_imgs(ithr)%kill
-        enddo
-        deallocate(strategy2Dsrch,pinds,strategy2Dspecs,batches,ptcl_match_imgs)
+        call clean_batch_particles2D
+        deallocate(strategy2Dsrch,pinds,strategy2Dspecs,batches)
 
         ! WRITE SIGMAS FOR ML-BASED REFINEMENT
         if( params_glob%l_needs_sigma ) call eucl_sigma%write_sigma2
@@ -360,7 +388,6 @@ contains
         call eucl_sigma%kill
         ! necessary for shared mem implementation, which otherwise bugs out when the bp-range changes
         call pftcc%kill
-        call killimgbatch
         if( L_BENCH_GLOB ) rt_cavg = toc(t_cavg)
         call qsys_job_finished('simple_strategy2D_matcher :: cluster2D_exec')
         if( L_BENCH_GLOB )then
@@ -391,11 +418,36 @@ contains
         endif
     end subroutine cluster2D_exec
 
-    !>  \brief  prepares batch particle images for alignment
-    subroutine build_batch_particles( nptcls_here, pinds )
+    !>  \brief  initializes convenience objects for particles polar alignment
+    subroutine prep_batch_particles2D( batchsz_max )
+        integer, intent(in) :: batchsz_max
+        integer :: ithr
+        call prepimgbatch(batchsz_max)
+        allocate(ptcl_match_imgs(params_glob%nthr))
+        !$omp parallel do private(ithr) default(shared) proc_bind(close) schedule(static)
+        do ithr = 1,params_glob%nthr
+            call ptcl_match_imgs(ithr)%new([params_glob%box_crop, params_glob%box_crop, 1],&
+                &params_glob%smpd_crop, wthreads=.false.)
+        enddo
+        !$omp end parallel do
+    end subroutine prep_batch_particles2D
+
+    subroutine clean_batch_particles2D
+        integer :: ithr
+        call killimgbatch
+        do ithr = 1,params_glob%nthr
+            call ptcl_match_imgs(ithr)%kill
+        enddo
+        deallocate(ptcl_match_imgs)
+    end subroutine clean_batch_particles2D
+
+    !>  \brief  fills batch particle images for polar alignment
+    subroutine build_batch_particles2D( pftcc, nptcls_here, pinds, l_ctf_here )
         use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimg4align
+        class(polarft_corrcalc), intent(inout) :: pftcc
         integer, intent(in) :: nptcls_here
         integer, intent(in) :: pinds(nptcls_here)
+        logical, intent(in) :: l_ctf_here
         integer :: iptcl_batch, iptcl, ithr
         call discrete_read_imgbatch( nptcls_here, pinds, [1,nptcls_here], params_glob%l_use_denoised  )
         ! reassign particles indices & associated variables
@@ -413,19 +465,19 @@ contains
         end do
         !$omp end parallel do
         ! Memoize particles FFT parameters
-        if( l_ctf ) call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl2D')
+        if( l_ctf_here ) call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl2D')
         call pftcc%memoize_ptcls
-    end subroutine build_batch_particles
+    end subroutine build_batch_particles2D
 
     !>  \brief  prepares the polarft corrcalc object for search and imports the references
-    subroutine preppftcc4align( which_iter )
+    subroutine preppftcc4align2D( pftcc, batchsz_max, which_iter )
         use simple_strategy2D3D_common, only: prep2dref
-        integer,           intent(in) :: which_iter
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        integer,                 intent(in)    :: batchsz_max, which_iter
         type(image),      allocatable :: match_imgs(:)
         character(len=:), allocatable :: fname
-        real      :: xyz(3), xyz_cls(3,params_glob%ncls)
-        integer   :: pops_even(params_glob%ncls), pops_odd(params_glob%ncls), pops(params_glob%ncls)
-        integer   :: icls, pop, pop_even, pop_odd, ncen
+        real      :: xyz(3)
+        integer   :: icls, pop, pop_even, pop_odd
         logical   :: do_center, has_been_searched
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
         ! create the polarft_corrcalc object
@@ -492,6 +544,6 @@ contains
         ! CLEANUP
         deallocate(match_imgs)
         call cavgs_merged(1)%kill_thread_safe_tmp_imgs
-    end subroutine preppftcc4align
+    end subroutine preppftcc4align2D
 
 end module simple_strategy2D_matcher
