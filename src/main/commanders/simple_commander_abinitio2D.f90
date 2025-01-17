@@ -20,7 +20,7 @@ type, extends(commander_base) :: abinitio2D_commander
     procedure :: execute => exec_abinitio2D
 end type abinitio2D_commander
 
-! class constants
+! module constants
 real,    parameter :: SMPD_TARGET    = 2.67
 real,    parameter :: ICM_LAMBDA     = 1.0
 integer, parameter :: NSTAGES        = 6
@@ -201,7 +201,11 @@ contains
             character(len=:), allocatable :: sh_first, refine, center, objfun, refs, icm
             integer :: iphase, iter, imaxits, cc_iters, minits, extr_iter
             real    :: trs, lambda
-            refine = 'snhc_smpl' ! not optional
+            if( str_has_substr(params%refine, 'prob') )then
+                refine = trim(params%refine)
+            else
+                refine = 'snhc_smpl'
+            endif
             ! iteration number bookkeeping
             iter = 0
             if( cline_cluster2D%defined('endit') ) iter = cline_cluster2D%get_iarg('endit')
