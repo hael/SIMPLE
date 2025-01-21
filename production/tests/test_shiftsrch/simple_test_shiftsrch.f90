@@ -71,7 +71,7 @@ p%kfromto(1) = 2
 p%kfromto(2) = 40
 allocate( sigma2_noise(p%kfromto(1):p%kfromto(2), 1:N_PTCLS), source=1. )
 call b%build_general_tbox(p, cline)
-call pftcc%new(N_PTCLS, [1,N_PTCLS], p%kfromto)
+call pftcc%new(N_PTCLS, [1,N_PTCLS], p%kfromto, l_multirefs=.true.)
 call pftcc%assign_sigma2_noise(sigma2_noise)
 allocate(corrs(pftcc%get_nrots()), norm_const(pftcc%get_nrots(), 2))
 call img_copy%new([p%box_crop,p%box_crop,1],p%smpd_crop)
@@ -112,6 +112,13 @@ call pftcc%shift_ptcl(9, [0.,0.,0.]) ! no shift
 call img_copy%ifft()
 call img_copy%write('shifted.mrc', 1)
 pftcc%with_ctf = .false.
+call b%img%ifft
+call b%img%read(p%stk, 5)
+call b%img%norm
+call b%img%fft
+call b%img%clip_inplace([p%box_crop,p%box_crop,1])
+call img_copy%fft
+call img_copy%polarize(pftcc, b%img, 1, isptcl=.false., iseven=.true., mask=b%l_resmsk)
 call pftcc%memoize_refs
 do i = 1, N_PTCLS
     call pftcc%memoize_sqsum_ptcl(i)
@@ -127,8 +134,7 @@ irot = 1
 cxy  = grad_shsrch_obj%minimize(irot)
 print *, cxy(1), cxy(2:3), irot
 do i=5,5
-    call pftcc%gencorrs([i, i], [0.3, 0.7], i, corrs)
-    call pftcc%gencorrs(i, i, corrs)
+    call pftcc%gencorrs([i, i], [.5, .5], i, corrs)
     print *, 'corr: ', maxval(corrs)
     corrmax = 0.
     do xsh=-2,2
