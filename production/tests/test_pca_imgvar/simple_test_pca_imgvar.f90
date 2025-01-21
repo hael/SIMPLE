@@ -13,6 +13,16 @@ type(kpca_svd)     :: kpca_obj
 integer :: i, j, cnt
 real    :: imgs(NX, NY, NC), flat_img(NP), dist_x(NP), dist_y(NP)
 real    :: data_ori(NP, NP), avg(NP), E_zn(NC, NP), data_cen(NP, NP), tmpvec(NP)
+real    :: lists(4), result
+
+lists  = [2., 1., 3., 4.]
+result = 0.
+do i = 1, size(lists)
+    do j = 1, size(lists)
+        result = result + lists(i) * lists(j)
+    enddo
+enddo
+print *, result
 
 imgs(1,:,1) = [ 0., 2., 3., 4., 0.]
 imgs(2,:,1) = [ 0., 1., 5., 0., 0.]
@@ -72,4 +82,8 @@ do j = 1, 1
     print *, imgs(4,:,1)
     print *, imgs(5,:,1)
 enddo
+
+contains
+
+
 end program simple_test_pca_imgvar
