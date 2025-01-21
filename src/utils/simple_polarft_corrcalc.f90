@@ -26,6 +26,8 @@ type fftw_drvec
 end type fftw_drvec
 
 type heap_vars
+    complex(sp), pointer :: pft_tmp(:,:)       => null()
+    complex(sp), pointer :: pft_tmp2(:,:)      => null()
     complex(sp), pointer :: pft_ref(:,:)       => null()
     complex(sp), pointer :: pft_ref_tmp(:,:)   => null()
     real(dp),    pointer :: argvec(:)          => null()
@@ -145,9 +147,11 @@ type :: polarft_corrcalc
     procedure          :: gencorrs_mag, gencorrs_mag_cc
     procedure          :: gencorrs_weighted_cc, gencorrs_shifted_weighted_cc
     procedure          :: gencorrs_cc,          gencorrs_shifted_cc
-    procedure          :: gencorrs_euclid,      gencorrs_shifted_euclid
-    procedure, private :: gencorrs_1,           gencorrs_2
-    generic            :: gencorrs => gencorrs_1, gencorrs_2
+    procedure, private :: gencorrs_euclid_1,    gencorrs_euclid_2
+    generic            :: gencorrs_euclid => gencorrs_euclid_1, gencorrs_euclid_2
+    procedure          :: gencorrs_shifted_euclid
+    procedure, private :: gencorrs_1, gencorrs_2, gencorrs_3
+    generic            :: gencorrs => gencorrs_1, gencorrs_2, gencorrs_3
     procedure, private :: gencorr_for_rot_8_1, gencorr_for_rot_8_2
     generic            :: gencorr_for_rot_8 => gencorr_for_rot_8_1, gencorr_for_rot_8_2
     procedure          :: gencorr_grad_for_rot_8
@@ -278,6 +282,8 @@ contains
         do ithr=1,params_glob%nthr
             allocate(self%heap_vars(ithr)%pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                 &self%heap_vars(ithr)%pft_ref_tmp(self%pftsz,self%kfromto(1):self%kfromto(2)),&
+                &self%heap_vars(ithr)%pft_tmp(self%pftsz,self%kfromto(1):self%kfromto(2)),&
+                &self%heap_vars(ithr)%pft_tmp2(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                 &self%heap_vars(ithr)%argvec(self%pftsz),&
                 &self%heap_vars(ithr)%shvec(self%pftsz),&
                 &self%heap_vars(ithr)%shmat(self%pftsz,self%kfromto(1):self%kfromto(2)),&
@@ -1466,6 +1472,22 @@ contains
         end select
     end subroutine gencorrs_2
 
+    subroutine gencorrs_3( self, irefs, prefs, iptcl, cc, kweight )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: irefs(:)
+        real,                    intent(in)    :: prefs(:)
+        integer,                 intent(in)    :: iptcl
+        real(sp),                intent(out)   :: cc(self%nrots)
+        logical,       optional, intent(in)    :: kweight
+        logical :: kw
+        select case(params_glob%cc_objfun)
+            case(OBJFUN_CC)
+                THROW_HARD('multi-irefs gencorrs are not supported for cc yet!')
+            case(OBJFUN_EUCLID)
+                call self%gencorrs_euclid(iptcl, irefs, prefs, cc)
+        end select
+    end subroutine gencorrs_3
+
     subroutine gencorrs_cc( self, iptcl, iref, corrs)
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl, iref
@@ -1698,7 +1720,7 @@ contains
         endif
     end subroutine gencorrs_shifted_weighted_cc
 
-    subroutine gencorrs_euclid( self, iptcl, iref, euclids )
+    subroutine gencorrs_euclid_1( self, iptcl, iref, euclids )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl, iref
         real(sp),                intent(out)   :: euclids(self%nrots)
@@ -1712,7 +1734,7 @@ contains
         do k = self%kfromto(1),self%kfromto(2)
             w         = real(k,dp) / real(self%sigma2_noise(k,iptcl),dp)
             sumsqptcl = sum(real(self%pfts_ptcls(:,k,i)*conjg(self%pfts_ptcls(:,k,i)),dp))
-            ! FT(CTF2) x FT(REF2)*) - 2 * FT(X.CTF) x FT(REF)*
+            ! FT(CTF2) x FT(REF2)* - 2 * FT(X.CTF) x FT(REF)*
             if( even )then
                 self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c    * self%ft_ref2_even(k,iref)%c - &
                                &2.0*self%ft_ptcl_ctf(k,i)%c * self%ft_ref_even(k,iref)%c
@@ -1720,7 +1742,7 @@ contains
                 self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c    * self%ft_ref2_odd(k,iref)%c - &
                                &2.0*self%ft_ptcl_ctf(k,i)%c * self%ft_ref_odd(k,iref)%c
             endif
-            ! X.CTF.REF = IFFT( FT(CTF2) x FT(REF2)*) - 2 * FT(X.CTF) x FT(REF)* )
+            ! X.CTF.REF = IFFT( FT(CTF2) x FT(REF2)* - 2 * FT(X.CTF) x FT(REF)* )
             call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
             ! k/sig2 x ( |CTF.REF|2 - 2.X.CTF.REF ), fftw normalized
             self%drvec(ithr)%r = (w / real(2*self%nrots,dp)) * real(self%rvec1(ithr)%r(1:self%nrots),dp)
@@ -1728,7 +1750,60 @@ contains
             self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + w * sumsqptcl + self%drvec(ithr)%r
         end do
         euclids = real( dexp( -self%heap_vars(ithr)%kcorrs / self%wsqsums_ptcls(i) ) )
-    end subroutine gencorrs_euclid
+    end subroutine gencorrs_euclid_1
+
+    subroutine gencorrs_euclid_2( self, iptcl, irefs, prefs, euclids )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iptcl
+        integer,                 intent(in)    :: irefs(:)
+        real,                    intent(in)    :: prefs(:)
+        real(sp),                intent(out)   :: euclids(self%nrots)
+        complex(sp), pointer :: pft_ref(:,:), pft_ref2(:,:)
+        real(dp) :: w, sumsqptcl
+        integer  :: k, i, ithr, j, r, jref, rref
+        logical  :: even
+        real     :: pjr
+        ithr     = omp_get_thread_num() + 1
+        i        = self%pinds(iptcl)
+        even     = self%iseven(i)
+        pft_ref  => self%heap_vars(ithr)%pft_tmp
+        pft_ref2 => self%heap_vars(ithr)%pft_tmp2
+        pft_ref  = 0.
+        pft_ref2 = 0.
+        do k = self%kfromto(1),self%kfromto(2)
+            do j = 1, size(irefs)
+                jref = irefs(j)
+                if( even )then
+                    pft_ref(:,k) = pft_ref(:,k) + prefs(j) * self%ft_ref_even(k,jref)%c
+                else
+                    pft_ref(:,k) = pft_ref(:,k) + prefs(j) * self%ft_ref_odd(k,jref)%c
+                endif
+                do r = 1, size(irefs)
+                    rref = irefs(r)
+                    pjr  = prefs(j) * prefs(r)
+                    if( even )then
+                        pft_ref2(:,k) = pft_ref2(:,k) + pjr * self%ft_ref_even(k,jref)%c * conjg(self%ft_ref_even(k,rref)%c)
+                    else
+                        pft_ref2(:,k) = pft_ref2(:,k) + pjr * self%ft_ref_odd(k,jref)%c * conjg(self%ft_ref_odd(k,rref)%c)
+                    endif
+                enddo
+            enddo
+        enddo
+        self%heap_vars(ithr)%kcorrs = 0.d0
+        do k = self%kfromto(1),self%kfromto(2)
+            w         = real(k,dp) / real(self%sigma2_noise(k,iptcl),dp)
+            sumsqptcl = sum(real(self%pfts_ptcls(:,k,i)*conjg(self%pfts_ptcls(:,k,i)),dp))
+            ! FT(CTF2) x FT(REF2)* - 2 * FT(X.CTF) x FT(REF)*
+            self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c * pft_ref2(:,k) - 2.0*self%ft_ptcl_ctf(k,i)%c * pft_ref(:,k)
+            ! X.CTF.REF = IFFT( FT(CTF2) x FT(REF2)* - 2 * FT(X.CTF) x FT(REF)* )
+            call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
+            ! k/sig2 x ( |CTF.REF|2 - 2.X.CTF.REF ), fftw normalized
+            self%drvec(ithr)%r = (w / real(2*self%nrots,dp)) * real(self%rvec1(ithr)%r(1:self%nrots),dp)
+            ! k/sig2 x ( |X|2 + |CTF.REF|2 - 2.X.CTF.REF )
+            self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + w * sumsqptcl + self%drvec(ithr)%r
+        end do
+        euclids = real( dexp( -self%heap_vars(ithr)%kcorrs / self%wsqsums_ptcls(i) ) )
+    end subroutine gencorrs_euclid_2
 
     subroutine gencorrs_shifted_euclid( self, pft_ref, iptcl, iref, euclids )
         class(polarft_corrcalc), intent(inout) :: self
@@ -2434,6 +2509,7 @@ contains
                 deallocate(self%heap_vars(ithr)%pft_ref,self%heap_vars(ithr)%pft_ref_tmp,&
                     &self%heap_vars(ithr)%argvec, self%heap_vars(ithr)%shvec,&
                     &self%heap_vars(ithr)%shmat,self%heap_vars(ithr)%kcorrs,&
+                    &self%heap_vars(ithr)%pft_tmp,self%heap_vars(ithr)%pft_tmp2,&
                     &self%heap_vars(ithr)%pft_ref_8,self%heap_vars(ithr)%pft_ref_tmp_8,&
                     &self%heap_vars(ithr)%pft_dref_8,self%heap_vars(ithr)%pft_r,&
                     &self%heap_vars(ithr)%shmat_8,self%heap_vars(ithr)%pft_r1_8)
