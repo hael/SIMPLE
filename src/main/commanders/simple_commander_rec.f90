@@ -211,8 +211,12 @@ contains
         ! read in previous reconstruction when trail_rec==yes
         update_frac_trail_rec = 1.0
         if( params%l_trail_rec )then
-            call build%spproj%read_segment(params%oritype, params%projfile)
-            update_frac_trail_rec = build%spproj%os_ptcl3D%get_update_frac()
+            if( cline%defined('ufrac_trec') )then
+                update_frac_trail_rec = params%ufrac_trec
+            else
+                call build%spproj%read_segment(params%oritype, params%projfile)
+                update_frac_trail_rec = build%spproj%os_ptcl3D%get_update_frac()
+            endif
         endif
         ! assemble volumes
         do state=1,params%nstates

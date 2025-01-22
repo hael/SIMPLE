@@ -991,11 +991,13 @@ contains
         fbody       = get_fbody(RECVOL,   'mrc')
         fbody_split = get_fbody(SPLITTED, 'mrc')
         if(       cline%defined('nparts')         ) call cline%delete('nparts') ! shared-memory workflow
-        if( .not. cline%defined('maxits')         ) call cline%set('maxits',           5)
-        if( .not. cline%defined('maxits_between') ) call cline%set('maxits_between',  10)
-        if( .not. cline%defined('overlap')        ) call cline%set('overlap',        0.9)
-        if( .not. cline%defined('fracsrch')       ) call cline%set('fracsrch',       0.9)
+        if( .not. cline%defined('maxits')         ) call cline%set('maxits',            5)
+        if( .not. cline%defined('maxits_between') ) call cline%set('maxits_between',   10)
+        if( .not. cline%defined('overlap')        ) call cline%set('overlap',        0.98)
+        if( .not. cline%defined('fracsrch')       ) call cline%set('fracsrch',        0.9)
         if( .not. cline%defined('objfun')         ) call cline%set('objfun',         'cc') ! needs to be here to avoid ERROR! file sigma2_it_10.star does not exist; simple_fileio.f90; line:   932
+        if( .not. cline%defined('trail_rec')      ) call cline%set('trail_rec',     'yes') 
+        if( .not. cline%defined('ufrac_trec')     ) call cline%set('ufrac_trec',      0.5)
         call cline%set('mkdir', 'yes') ! because we want to create the directory X_autorefine3D_nano & copy the project file
         call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
         params%mkdir = 'no'            ! to prevent the input vol to be appended with ../
