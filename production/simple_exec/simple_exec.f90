@@ -143,6 +143,7 @@ type(simulate_subtomogram_commander)        :: xsimulate_subtomogram
 
 ! MISCELLANEOUS WORKFLOWS
 type(scale_project_commander_distr)         :: xscale_project
+type(map_validation_commander)              :: xmap_validation
 type(model_validation_commander)            :: xmodel_validation
 type(model_validation_eo_commander)         :: xmodel_validation_eo
 type(projops_commander)                     :: xprojops
@@ -402,6 +403,8 @@ select case(trim(prg))
         call xsimulate_subtomogram%execute(cline)
 
     ! VALIDATION PROGRAMS
+    case( 'map_validation' )
+        call xmap_validation%execute(cline)
     case( 'model_validation' )
         call xmodel_validation%execute(cline)
     case( 'model_validation_eo' )
@@ -432,7 +435,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('b8c2a2d3')
+call simple_print_git_version('3fe27865')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

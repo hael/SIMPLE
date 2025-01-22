@@ -1260,12 +1260,16 @@ contains
         mol_dim(1) = maxval(self%xyz(:,1)) - minval(self%xyz(:,1))
         mol_dim(2) = maxval(self%xyz(:,2)) - minval(self%xyz(:,2))
         mol_dim(3) = maxval(self%xyz(:,3)) - minval(self%xyz(:,3))
+        print *, 'molecule dimensions', mol_dim
+        print *, 'vol input dimensions', vol_dim
         if( use_center )then
             center = self%get_geom_center()
             write(logfhandle,'(A,2(f6.1,","),f6.1,A)') "Atomic center at ", center," (center of volume at 0, 0, 0)"
         endif
         if( present(vol_dim) )then
             ldim        = round2even( (mol_dim)/smpd )
+            print *, 'molecule dimensions', ldim
+            print *, 'vol dimensions', vol_dim
             if( any(vol_dim < ldim) ) THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pdb2mrc')
             ldim        = vol_dim
         else
@@ -1308,9 +1312,10 @@ contains
         character(len=*), optional, intent(in)    :: filename
         type(image) :: vol_at1, vol_at2
         type(atoms) :: atom
-        integer     :: i_atom, atom_box, center(3)
-        real        :: atom_coord(3), smpd, cc
+        integer     :: i_atom, atom_box, center(3), i_res
+        real        :: atom_coord(3), smpd, cc, cc_score, cc_score_byres, sdev
         logical     :: outside
+        logical, allocatable :: mask_byres(:)
         smpd = vol1%get_smpd()
         if(present(filename))then
              open(unit=46,file=trim(filename//".csv"))
@@ -1346,10 +1351,27 @@ contains
             call atom%kill
         enddo
         if(present(filename))then
-            ! close(45)
+            write(46,'(a,/,a)') 'CC Score by Residue [-1 1]',' Res    CC Res Score'
+            do i_res = 1, self%get_nres()
+                allocate(mask_byres(self%n),source=.false.)
+                do i_atom = 1, self%n
+                    if( self%get_resnum(i_atom) .eq. i_res ) mask_byres(i_atom) = .true.
+                enddo
+                call avg_sdev(self%atom_corr, cc_score_byres, sdev, mask=mask_byres)
+                write(46,'(i4,f10.3)') i_res, cc_score_byres
+                deallocate(mask_byres)
+            enddo
+            call avg_sdev(self%atom_corr, cc_score, sdev )
+            write(46,'(a,f10.3)')         'Global CC Score [-1 1]:', cc_score
+            write(logfhandle,'(a,f10.3)') 'Global CC Score [-1 1]:', cc_score
             close(46)
             call self%writepdb(trim(filename)//'.pdb')
         endif
+        ! if(present(filename))then
+        !     ! close(45)
+        !     close(46)
+        !     call self%writepdb(trim(filename)//'.pdb')
+        ! endif
     end subroutine map_validation
 
     subroutine model_validation_eo( self, pdb_file, exp_vol_file, even_vol_file, odd_vol_file, smpd, smpd_target )
