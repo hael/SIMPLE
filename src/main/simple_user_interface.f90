@@ -136,6 +136,7 @@ type(simple_program), target :: map_cavgs_states
 type(simple_program), target :: mask
 type(simple_program), target :: merge_projects
 type(simple_program), target :: mkdir_
+type(simple_program), target :: map_validation
 type(simple_program), target :: model_validation
 type(simple_program), target :: model_validation_eo
 type(simple_program), target :: motion_correct
@@ -448,6 +449,7 @@ contains
         call new_merge_projects
         call new_mkdir_
         call new_motion_correct
+        call new_map_validation
         call new_model_validation
         call new_model_validation_eo
         call new_multivol_assign
@@ -581,6 +583,7 @@ contains
         call push2prg_ptr_array(merge_projects)
         call push2prg_ptr_array(mkdir_)
         call push2prg_ptr_array(motion_correct)
+        call push2prg_ptr_array(map_validation)
         call push2prg_ptr_array(model_validation)
         call push2prg_ptr_array(model_validation_eo)
         call push2prg_ptr_array(multivol_assign)
@@ -791,6 +794,8 @@ contains
                 ptr2prg => mkdir_
             case('motion_correct')
                 ptr2prg => motion_correct
+            case('map_validation')
+                ptr2prg => map_validation
             case('model_validation')
                 ptr2prg => model_validation
             case('model_validation_eo')
@@ -979,6 +984,7 @@ contains
         write(logfhandle,'(A)') merge_projects%name
         write(logfhandle,'(A)') mkdir_%name
         write(logfhandle,'(A)') motion_correct%name
+        write(logfhandle,'(A)') map_validation%name
         write(logfhandle,'(A)') model_validation%name
         write(logfhandle,'(A)') model_validation_eo%name
         write(logfhandle,'(A)') multivol_assign%name
@@ -3374,6 +3380,30 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_mkdir_
+
+    subroutine new_map_validation
+        ! PROGRAM SPECIFICATION
+        call map_validation%new(& 
+        &'map_validation', &                               ! name
+        &'Validation of experimental map',&                ! descr_short
+        &'is a program to validate the 3D experimental density map in MRC format with respect to the simulated volume map given by the atomic model',& ! descr long
+        &'all',&                                           ! executable
+        &2, 2, 0, 0, 0, 0, 0, .false.)                     ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call map_validation%set_input('img_ios', 1, 'vol1', 'file', 'Experimental volume',  'Experimental volume',  'vol.mrc file', .true., '')
+        call map_validation%set_input('img_ios', 2, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'molecule.pdb')
+        ! parameter input/output
+        call map_validation%set_input('parm_ios', 1, smpd)
+        call map_validation%set_input('parm_ios', 2, smpd_target)
+        ! alternative inputs      
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! mask controls
+        ! computer controls
+    end subroutine new_map_validation
 
     subroutine new_model_validation
         ! PROGRAM SPECIFICATION

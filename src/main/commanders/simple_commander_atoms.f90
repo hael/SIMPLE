@@ -13,6 +13,7 @@ implicit none
 public :: atoms_stats_commander
 public :: conv_atom_denoise_commander
 public :: detect_atoms_commander
+public :: map_validation_commander
 public :: model_validation_commander
 public :: model_validation_eo_commander
 public :: pdb2mrc_commander
@@ -34,6 +35,11 @@ type, extends(commander_base) :: detect_atoms_commander
   contains
     procedure :: execute      => exec_detect_atoms
 end type detect_atoms_commander
+
+type, extends(commander_base) :: map_validation_commander
+  contains
+    procedure :: execute      => exec_map_validation
+end type map_validation_commander
 
 type, extends(commander_base) :: model_validation_commander
   contains
@@ -148,6 +154,40 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_DETECT_ATOMS NORMAL STOP ****')
     end subroutine exec_detect_atoms
+
+    subroutine exec_map_validation( self, cline )
+        class(map_validation_commander), intent(inout) :: self
+        class(cmdline),                  intent(inout) :: cline
+        type(parameters) :: params
+        type(atoms)      :: molecule
+        type(image)      :: exp_vol, sim_vol
+        integer          :: ldim(3), ldim_new(3), ifoo, box, box_new
+        real             :: upscaling_factor, smpd_new
+        character(len=LONGSTRLEN), allocatable :: sim_vol_file, pdbout
+        call params%new(cline)
+        call find_ldim_nptcls(params%vols(1), ldim, ifoo)
+        write(logfhandle,'(a,3i6,a,f8.3,a)') 'Original dimensions (', ldim,' ) voxels, smpd: ', params%smpd, ' Angstrom'
+        box              = ldim(1)
+        upscaling_factor = params%smpd / params%smpd_target
+        box_new          = round2even(real(ldim(1)) * upscaling_factor)
+        ldim_new(:)      = box_new
+        upscaling_factor = real(box_new) / real(box)
+        smpd_new         = params%smpd / upscaling_factor
+        write(logfhandle,'(a,3i6,a,f8.3,a)') 'Scaled dimensions   (', ldim_new,' ) voxels, smpd: ', smpd_new, ' Angstrom'
+        call molecule%new(params%pdbfile)
+        sim_vol_file     = trim(get_fbody(params%pdbfile,'pdb'))//'_sim_vol.mrc'
+        pdbout           = trim(get_fbody(params%pdbfile,'pdb'))//'_centered.pdb'
+        call molecule%pdb2mrc( params%pdbfile, sim_vol_file, smpd_new, pdb_out=pdbout, vol_dim=ldim_new)
+        call sim_vol%new([box_new, box_new, box_new], smpd_new)
+        call sim_vol%read(sim_vol_file)
+        call exp_vol%read_and_crop(params%vols(1), params%smpd, box_new, smpd_new)
+        call molecule%map_validation(exp_vol, sim_vol, filename='map_val_coor')
+        call molecule%kill()
+        call exp_vol%kill()
+        call sim_vol%kill()
+        ! end gracefully
+        call simple_end('**** SIMPLE_MAP_VALIDATION NORMAL STOP ****')
+    end subroutine exec_map_validation
 
     subroutine exec_model_validation( self, cline )
         class(model_validation_commander), intent(inout) :: self
