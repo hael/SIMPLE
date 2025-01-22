@@ -139,7 +139,7 @@ do i=5,5
     corrmax = 0.
     do xsh=-2,2
         do ysh=-2,2
-            call pftcc%gencorrs(i, i, real([xsh,ysh]), corrs)
+            call pftcc%gencorrs([i, i], [.5, .5], i, real([xsh,ysh]), corrs)
             corr  = maxval(corrs)
 
             print *, 'corr: ', corr, xsh, ysh

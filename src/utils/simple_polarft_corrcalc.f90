@@ -147,13 +147,14 @@ type :: polarft_corrcalc
     procedure          :: calc_corr_rot_shift, calc_magcorr_rot
     procedure          :: bidirectional_shift_search
     procedure          :: gencorrs_mag, gencorrs_mag_cc
-    procedure          :: gencorrs_weighted_cc, gencorrs_shifted_weighted_cc
-    procedure          :: gencorrs_cc,          gencorrs_shifted_cc
-    procedure, private :: gencorrs_euclid_1,    gencorrs_euclid_2
-    generic            :: gencorrs_euclid => gencorrs_euclid_1, gencorrs_euclid_2
-    procedure          :: gencorrs_shifted_euclid
-    procedure, private :: gencorrs_1, gencorrs_2, gencorrs_3
-    generic            :: gencorrs => gencorrs_1, gencorrs_2, gencorrs_3
+    procedure          :: gencorrs_weighted_cc,      gencorrs_shifted_weighted_cc
+    procedure          :: gencorrs_cc,               gencorrs_shifted_cc
+    procedure, private :: gencorrs_euclid_1,         gencorrs_euclid_2
+    procedure, private :: gencorrs_shifted_euclid_1, gencorrs_shifted_euclid_2
+    generic            :: gencorrs_euclid         => gencorrs_euclid_1, gencorrs_euclid_2
+    generic            :: gencorrs_shifted_euclid =>gencorrs_shifted_euclid_1, gencorrs_shifted_euclid_2
+    procedure, private :: gencorrs_1, gencorrs_2, gencorrs_3, gencorrs_4
+    generic            :: gencorrs => gencorrs_1, gencorrs_2, gencorrs_3, gencorrs_4
     procedure, private :: gencorr_for_rot_8_1, gencorr_for_rot_8_2
     generic            :: gencorr_for_rot_8 => gencorr_for_rot_8_1, gencorr_for_rot_8_2
     procedure          :: gencorr_grad_for_rot_8
@@ -169,7 +170,7 @@ type :: polarft_corrcalc
     procedure          :: gencorr_cont_shift_grad_euclid_for_rot_8
     procedure          :: gencorr_euclid_grad_for_rot_8
     procedure          :: gencorr_sigma_contrib
-    procedure, private :: calc_frc
+    procedure, private :: calc_frc, linear_memoized_refs
     procedure          :: rotate_ref, rotate_ptcl, rotate_ctf
     ! DESTRUCTOR
     procedure          :: kill
@@ -1456,6 +1457,57 @@ contains
         end do
     end subroutine calc_frc
 
+    subroutine linear_memoized_refs( self, iptcl, irefs, prefs, ft_ref, ft_ref2, pft_ref_or_ft_ref )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iptcl
+        integer,                 intent(in)    :: irefs(:)
+        real,                    intent(in)    :: prefs(:)
+        complex(sp), pointer,    intent(inout) :: ft_ref(:,:)
+        complex(sp), pointer,    intent(inout) :: ft_ref2(:,:)
+        logical,     optional,   intent(in)    :: pft_ref_or_ft_ref     ! true for pft_ref
+        integer  :: k, i, ithr, j, r, jref, rref
+        logical  :: even, l_pft
+        real     :: pjr
+        l_pft = .false.
+        if( present(pft_ref_or_ft_ref) ) l_pft = pft_ref_or_ft_ref
+        ithr    = omp_get_thread_num() + 1
+        i       = self%pinds(iptcl)
+        even    = self%iseven(i)
+        ft_ref  => self%heap_vars(ithr)%pft_tmp
+        ft_ref2 => self%heap_vars(ithr)%pft_tmp2
+        ft_ref  = 0.
+        ft_ref2 = 0.
+        do j = 1, size(irefs)
+            jref = irefs(j)
+            do k = self%kfromto(1),self%kfromto(2)
+                if( even )then
+                    if( l_pft )then
+                        ft_ref(:,k) = ft_ref(:,k) + prefs(j) * self%pfts_refs_even(:,k,jref)
+                    else
+                        ft_ref(:,k) = ft_ref(:,k) + prefs(j) * self%ft_ref_even(k,jref)%c
+                    endif
+                else
+                    if( l_pft )then
+                        ft_ref(:,k) = ft_ref(:,k) + prefs(j) * self%pfts_refs_odd(:,k,jref)
+                    else
+                        ft_ref(:,k) = ft_ref(:,k) + prefs(j) * self%ft_ref_odd(k,jref)%c
+                    endif
+                endif
+            enddo
+            do r = 1, size(irefs)
+                rref = irefs(r)
+                pjr  = prefs(j) * prefs(r)
+                do k = self%kfromto(1),self%kfromto(2)
+                    if( even )then
+                        ft_ref2(:,k) = ft_ref2(:,k) + pjr * self%ft_refs2_even(k,jref,rref)%c
+                    else
+                        ft_ref2(:,k) = ft_ref2(:,k) + pjr * self%ft_refs2_odd(k,jref,rref)%c
+                    endif
+                enddo
+            enddo
+        enddo
+    end subroutine linear_memoized_refs
+
     subroutine gencorrs_1( self, iref, iptcl, cc, kweight )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
@@ -1516,14 +1568,41 @@ contains
         integer,                 intent(in)    :: iptcl
         real(sp),                intent(out)   :: cc(self%nrots)
         logical,       optional, intent(in)    :: kweight
-        logical :: kw
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
-                THROW_HARD('multi-irefs gencorrs are not supported for cc yet!')
+                THROW_HARD('multi-refs gencorrs are not supported for cc yet!')
             case(OBJFUN_EUCLID)
                 call self%gencorrs_euclid(iptcl, irefs, prefs, cc)
         end select
     end subroutine gencorrs_3
+
+    subroutine gencorrs_4( self, irefs, prefs, iptcl, shift, cc, kweight )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: irefs(:)
+        real,                    intent(in)    :: prefs(:)
+        integer,                 intent(in)    :: iptcl
+        real(sp),                intent(in)    :: shift(2)
+        real(sp),                intent(out)   :: cc(self%nrots)
+        logical,       optional, intent(in)    :: kweight
+        complex(sp), pointer :: pft_ref(:,:), pft_ref2(:,:), shmat(:,:)
+        real(dp) :: w, sumsqptcl
+        integer  :: k, i, ithr, j, r, jref, rref
+        logical  :: even
+        real     :: pjr
+        ithr  = omp_get_thread_num() + 1
+        i     = self%pinds(iptcl)
+        even  = self%iseven(i)
+        shmat => self%heap_vars(ithr)%shmat
+        call self%linear_memoized_refs(iptcl, irefs, prefs, pft_ref, pft_ref2, .true.)
+        call self%gen_shmat(ithr, shift, shmat)
+        pft_ref = shmat * pft_ref
+        select case(params_glob%cc_objfun)
+            case(OBJFUN_CC)
+                THROW_HARD('multi-refs gencorrs are not supported for cc yet!')
+            case(OBJFUN_EUCLID)
+                call self%gencorrs_shifted_euclid(pft_ref, pft_ref2, iptcl, cc)
+        end select
+    end subroutine gencorrs_4
 
     subroutine gencorrs_cc( self, iptcl, iref, corrs)
         class(polarft_corrcalc), intent(inout) :: self
@@ -1599,7 +1678,7 @@ contains
         even = self%iseven(i)
         self%heap_vars(ithr)%kcorrs = 0.d0
         if( self%with_ctf )then
-            self%drvec(ithr)%r          = 0.d0
+            self%drvec(ithr)%r = 0.d0
             do k = self%kfromto(1),self%kfromto(2)
                 ! FT(CTF2) x FT(REF2)), REF2 is shift invariant
                 if( even )then
@@ -1797,37 +1876,10 @@ contains
         real(sp),                intent(out)   :: euclids(self%nrots)
         complex(sp), pointer :: pft_ref(:,:), pft_ref2(:,:)
         real(dp) :: w, sumsqptcl
-        integer  :: k, i, ithr, j, r, jref, rref
-        logical  :: even
-        real     :: pjr
-        ithr     = omp_get_thread_num() + 1
-        i        = self%pinds(iptcl)
-        even     = self%iseven(i)
-        pft_ref  => self%heap_vars(ithr)%pft_tmp
-        pft_ref2 => self%heap_vars(ithr)%pft_tmp2
-        pft_ref  = 0.
-        pft_ref2 = 0.
-        do j = 1, size(irefs)
-            jref = irefs(j)
-            do k = self%kfromto(1),self%kfromto(2)
-                if( even )then
-                    pft_ref(:,k) = pft_ref(:,k) + prefs(j) * self%ft_ref_even(k,jref)%c
-                else
-                    pft_ref(:,k) = pft_ref(:,k) + prefs(j) * self%ft_ref_odd(k,jref)%c
-                endif
-            enddo
-            do r = 1, size(irefs)
-                rref = irefs(r)
-                pjr  = prefs(j) * prefs(r)
-                do k = self%kfromto(1),self%kfromto(2)
-                    if( even )then
-                        pft_ref2(:,k) = pft_ref2(:,k) + pjr * self%ft_refs2_even(k,jref,rref)%c
-                    else
-                        pft_ref2(:,k) = pft_ref2(:,k) + pjr * self%ft_refs2_odd(k,jref,rref)%c
-                    endif
-                enddo
-            enddo
-        enddo
+        integer  :: k, i, ithr
+        ithr = omp_get_thread_num() + 1
+        i    = self%pinds(iptcl)
+        call self%linear_memoized_refs(iptcl, irefs, prefs, pft_ref, pft_ref2, .false.)
         self%heap_vars(ithr)%kcorrs = 0.d0
         do k = self%kfromto(1),self%kfromto(2)
             w         = real(k,dp) / real(self%sigma2_noise(k,iptcl),dp)
@@ -1844,7 +1896,7 @@ contains
         euclids = real( dexp( -self%heap_vars(ithr)%kcorrs / self%wsqsums_ptcls(i) ) )
     end subroutine gencorrs_euclid_2
 
-    subroutine gencorrs_shifted_euclid( self, pft_ref, iptcl, iref, euclids )
+    subroutine gencorrs_shifted_euclid_1( self, pft_ref, iptcl, iref, euclids )
         class(polarft_corrcalc), intent(inout) :: self
         complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):self%kfromto(2))
         integer,                 intent(in)    :: iptcl, iref
@@ -1879,7 +1931,39 @@ contains
             self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + w * sumsqptcl + self%drvec(ithr)%r
         end do
         euclids = real( dexp( -self%heap_vars(ithr)%kcorrs / self%wsqsums_ptcls(i) ) )
-    end subroutine gencorrs_shifted_euclid
+    end subroutine gencorrs_shifted_euclid_1
+
+    subroutine gencorrs_shifted_euclid_2( self, pft_ref, pft_ref2, iptcl, euclids )
+        class(polarft_corrcalc), intent(inout) :: self
+        complex(sp),             intent(in)    :: pft_ref( 1:self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(sp),             intent(in)    :: pft_ref2(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer,                 intent(in)    :: iptcl
+        real(sp),                intent(out)   :: euclids(self%nrots)
+        real(dp) :: w, sumsqptcl
+        integer  :: k, i, ithr
+        ithr = omp_get_thread_num() + 1
+        i    = self%pinds(iptcl)
+        self%heap_vars(ithr)%kcorrs = 0.d0
+        do k = self%kfromto(1),self%kfromto(2)
+            w         = real(k,dp) / real(self%sigma2_noise(k,iptcl),dp)
+            sumsqptcl = sum(real(self%pfts_ptcls(:,k,i)*conjg(self%pfts_ptcls(:,k,i)),dp))
+            ! FT(CTF2) x FT(REF2)*
+            self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c * pft_ref2(:,k)
+            ! FT(S.REF), shifted reference
+            self%cvec2(ithr)%c(1:self%pftsz)            =       pft_ref(:,k)
+            self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(pft_ref(:,k))
+            call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
+            ! FT(CTF2) x FT(REF2)* - 2 * FT(X.CTF) x FT(REF)*
+            self%cvec1(ithr)%c = self%cvec1(ithr)%c - 2.0 * self%ft_ptcl_ctf(k,i)%c * conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
+            ! IFFT( FT(CTF2) x FT(REF2)* - 2 * FT(X.CTF) x FT(REF)* )
+            call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
+            ! k/sig2 x ( |CTF.REF|2 - 2X.CTF.REF ), fftw normalized
+            self%drvec(ithr)%r = (w / real(2*self%nrots,dp)) * real(self%rvec1(ithr)%r(1:self%nrots),dp)
+            ! k/sig2 x ( |X|2 + |CTF.REF|2 - 2X.CTF.REF )
+            self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + w * sumsqptcl + self%drvec(ithr)%r
+        end do
+        euclids = real( dexp( -self%heap_vars(ithr)%kcorrs / self%wsqsums_ptcls(i) ) )
+    end subroutine gencorrs_shifted_euclid_2
 
     subroutine bidirectional_shift_search( self, iref, iptcl, irot, hn, shifts, grid1, grid2 )
         class(polarft_corrcalc), intent(inout) :: self
