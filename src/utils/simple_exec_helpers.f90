@@ -140,20 +140,21 @@ contains
     end subroutine copy_project_file_to_root_dir
 
     ! deals with # multiprocessing threads of the master process in distributed execution
-    subroutine set_master_num_threads( nthr )
-        integer, optional, intent(inout) :: nthr
+    subroutine set_master_num_threads( nthr, string )
+        integer,          intent(inout) :: nthr
+        character(len=*), intent(in)    :: string
         character(len=STDLEN) :: nthr_str
         integer               :: envlen, iostat,nthr_here
         call get_environment_variable('SLURM_CPUS_PER_TASK', nthr_str, envlen)
         if( envlen > 0 )then
             call str2int(trim(nthr_str), iostat, nthr_here)
         else
-            !$ nthr_here = omp_get_max_threads()
+            nthr_here = omp_get_max_threads()
             nthr_here = min(NTHR_SHMEM_MAX, nthr_here)
         end if
-        !$ call omp_set_num_threads(nthr_here)
-        write(logfhandle,'(A,I6)')'>>> # SHARED-MEMORY THREADS USED BY REFINE3D MASTER PROCESS: ', nthr_here
-        if( present(nthr) ) nthr = nthr_here
+        call omp_set_num_threads(nthr_here)
+        write(logfhandle,'(A,A,A,I6)')'>>> # SHARED-MEMORY THREADS USED BY ',trim(string),' MASTER PROCESS: ', nthr_here
+        nthr = nthr_here
     end subroutine set_master_num_threads
 
     ! deals with logical flag for shared memory execution

@@ -62,7 +62,7 @@ contains
             return
         endif
         ! deal with # threads for the master process
-        call set_master_num_threads(nthr_here)
+        call set_master_num_threads(nthr_here, 'RECONSTRUCT3D')
         ! parse parameters and project
         call build%init_params_and_build_spproj(cline, params)
         call build%spproj%update_projinfo(cline)

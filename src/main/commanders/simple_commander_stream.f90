@@ -2116,6 +2116,7 @@ contains
         if( .not. cline%defined('tau')          ) call cline%set('tau',          5)
         if( .not. cline%defined('remove_chunks')) call cline%set('remove_chunks','yes')
         if( .not. cline%defined('refine')       ) call cline%set('refine',       'snhc_smpl')
+        if( .not. cline%defined('dynreslim')    ) call cline%set('dynreslim',    'no')
         ! write cmdline for GUI
         call cline%writeline(".cline")
         ! sanity check for restart

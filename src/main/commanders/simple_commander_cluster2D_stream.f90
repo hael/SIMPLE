@@ -65,9 +65,6 @@ character(len=STDLEN), parameter :: CLS_POOL_REJECTED    = 'cls_rejected_pool.mr
 logical,               parameter :: DEBUG_HERE           = .false.
 integer(timer_int_kind)          :: t
 
-! TEMPORARY DEV FLAG
-logical, parameter :: DEV_INCRPOOLRESLIM = .false.
-
 ! Pool related
 type(sp_project)                 :: pool_proj                         ! master project
 type(qsys_env)                   :: qenv_pool
@@ -400,10 +397,9 @@ contains
         resolutions(1:NPREV_RES-1) = resolutions(2:NPREV_RES)
         resolutions(NPREV_RES)     = current_resolution
         if( l_no_chunks ) return
+        ! optional
+        if( trim(params_glob%dynreslim).eq.'yes' ) return
         prev_dims = pool_dims
-        !!!!!!! in developpment !!!!
-        if( .not. DEV_INCRPOOLRESLIM ) return
-        !!!!!!!
         ! Auto-scaling?
         if( trim(params_glob%autoscale) .ne. 'yes' ) return
         ! Hard limit reached (3 Angs)?
