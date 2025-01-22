@@ -1260,16 +1260,12 @@ contains
         mol_dim(1) = maxval(self%xyz(:,1)) - minval(self%xyz(:,1))
         mol_dim(2) = maxval(self%xyz(:,2)) - minval(self%xyz(:,2))
         mol_dim(3) = maxval(self%xyz(:,3)) - minval(self%xyz(:,3))
-        print *, 'molecule dimensions', mol_dim
-        print *, 'vol input dimensions', vol_dim
         if( use_center )then
             center = self%get_geom_center()
             write(logfhandle,'(A,2(f6.1,","),f6.1,A)') "Atomic center at ", center," (center of volume at 0, 0, 0)"
         endif
         if( present(vol_dim) )then
             ldim        = round2even( (mol_dim)/smpd )
-            print *, 'molecule dimensions', ldim
-            print *, 'vol dimensions', vol_dim
             if( any(vol_dim < ldim) ) THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pdb2mrc')
             ldim        = vol_dim
         else
