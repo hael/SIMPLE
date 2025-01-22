@@ -134,7 +134,7 @@ contains
             return
         endif
         ! deal with # threads for the master process
-        call set_master_num_threads( nthr_here )
+        call set_master_num_threads( nthr_here, 'REFINE3D' )
         ! local options & flags
         l_multistates = cline%defined('nstates')
         l_griddingset = cline%defined('gridding')

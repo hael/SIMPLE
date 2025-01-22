@@ -11,7 +11,7 @@ use simple_image,             only: image
 use simple_stack_io,          only: stack_io
 use simple_starproject,       only: starproject
 use simple_commander_imgproc, only: scale_commander
-use simple_exec_helpers,      only: set_shmem_flag
+use simple_exec_helpers,      only: set_shmem_flag, set_master_num_threads
 use simple_euclid_sigma2
 use simple_commander_euclid
 use simple_qsys_funs
@@ -120,7 +120,7 @@ contains
         type(chash)                  :: job_descr
         type(make_cavgs_commander)   :: xmk_cavgs_shmem
         type(cavgassemble_commander) :: xcavgassemble
-        integer :: ncls_here
+        integer :: ncls_here, nthr_here
         logical :: l_shmem
         call cline%set('wiener', 'full')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
@@ -137,6 +137,8 @@ contains
             call cline%set('oritype', 'ptcl2D')
         endif
         l_shmem = (.not. cline%defined('nparts')) .or. (params%nparts == 1)
+        ! deal with # threads for the master process
+        if( .not.l_shmem ) call set_master_num_threads(nthr_here, 'CLUSTER2D')
         ! parse parameters & project
         call build%init_params_and_build_spproj(cline, params)
         if( cline%defined('nspace') )then
@@ -161,6 +163,7 @@ contains
         ! prepare command lines from prototype master
         cline_cavgassemble = cline
         call cline_cavgassemble%set('prg',  'cavgassemble')
+        call cline_cavgassemble%set('nthr',  nthr_here)
         if( trim(params%oritype).eq.'ptcl3D' )then
             call cline_cavgassemble%set('ncls', params%nspace)
         endif
@@ -810,6 +813,7 @@ contains
         integer                   :: iter, cnt, iptcl, ptclind, fnr, iter_switch2euclid
         type(chash)               :: job_descr
         real                      :: frac_srch_space
+        integer                   :: nthr_here
         logical                   :: l_stream, l_switch2euclid, l_griddingset, l_converged, l_ml_reg, l_scale_inirefs
         call cline%set('prg','cluster2D')
         call set_cluster2D_defaults( cline )
@@ -828,6 +832,8 @@ contains
                 l_switch2euclid = .true.
             endif
         endif
+        ! deal with # threads for the master process
+        call set_master_num_threads(nthr_here, 'CLUSTER2D')
         ! builder & params
         call build%init_params_and_build_spproj(cline, params)
         if( l_stream ) call cline%set('stream','yes')
@@ -956,7 +962,7 @@ contains
                 endif
             else
                 call cline_make_cavgs%set('refs', params%refs)
-                call xmake_cavgs%execute(cline_make_cavgs)
+                call xmake_cavgs%execute_safe(cline_make_cavgs)
                 l_scale_inirefs = .false.
             endif
             ! scale references to box_crop
@@ -966,6 +972,7 @@ contains
                 call cline_scalerefs%set('outstk', trim(refs_sc))
                 call cline_scalerefs%set('smpd',   params%smpd)
                 call cline_scalerefs%set('newbox', params%box_crop)
+                call cline_scalerefs%set('nthr',   nthr_here)
                 call xscale%execute(cline_scalerefs)
                 call simple_rename(refs_sc, params%refs)
             endif
@@ -1047,13 +1054,15 @@ contains
             refs      = trim(CAVGS_ITER_FBODY) // trim(str_iter)            // params%ext
             refs_even = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_even' // params%ext
             refs_odd  = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_odd'  // params%ext
-            call cline_cavgassemble%set('refs', trim(refs))
+            call cline_cavgassemble%set('refs', refs)
+            call cline_cavgassemble%set('nthr', nthr_here)
             call terminate_stream('SIMPLE_DISTR_CLUSTER2D HARD STOP 2')
             call xcavgassemble%execute_safe(cline_cavgassemble)
             if( L_BENCH_GLOB ) rt_cavgassemble = toc(t_cavgassemble)
             ! objfun=euclid, part 4: sigma2 consolidation
             if( params%l_needs_sigma )then
                 call cline_calc_sigma%set('which_iter', params%which_iter+1)
+                call cline_calc_sigma%set('nthr',       nthr_here)
                 call xcalc_group_sigmas%execute_safe(cline_calc_sigma)
             endif
             ! print out particle parameters per iteration

@@ -43,6 +43,7 @@ contains
     procedure, private :: disc_1, disc_2
     generic            :: disc => disc_1, disc_2
     procedure          :: ring, soft_ring
+    procedure          :: disc_sideview
     procedure          :: copy
     procedure          :: copy_fast
     procedure          :: img2spec
@@ -561,7 +562,8 @@ contains
     subroutine soft_ring( self, ldim, smpd, radius )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: ldim(3)
-        real,              intent(in)    :: smpd, radius
+        real,              intent(in)    :: smpd
+        real,              intent(in)    :: radius ! in pixels
         real, parameter :: K     = 2.0
         real, parameter :: THETA = 2.0
         real    :: d,modeval,km1,mode,val,scale
@@ -587,6 +589,51 @@ contains
         enddo
         enddo
     end subroutine soft_ring
+
+    ! is an empirical reprojection of the side view of a thick disc
+    subroutine disc_sideview( self, ldim, smpd, radius )
+        class(image),      intent(inout) :: self
+        integer,           intent(in)    :: ldim(3)
+        real,              intent(in)    :: smpd
+        real,              intent(in)    :: radius ! in pixels
+        integer, parameter :: B = 3
+        real    :: t,s,d
+        integer :: c(3),i,j,h,f
+        if( ldim(3) > 1 ) THROW_HARD('2D only; membrane')
+        call self%new(ldim, smpd)
+        c = nint(real(self%ldim)/2.)+1
+        ! central line
+        j = c(2)
+        do i = 1,self%ldim(1)
+            h = i-c(1)
+            d = real(abs(h))
+            if( d >= radius )then
+                if( d > radius+real(B) )then
+                    self%rmat(i,j,1) = 0.
+                else
+                    ! horizontal soft cosine edge
+                    d = (d-radius)/real(B)
+                    self%rmat(i,j,1) = 2.*sqrt(radius-0.25)*max(0.,cos(d*PIO2))
+                endif
+            else
+                self%rmat(i,j,1) = self%rmat(i,j,1) + 2.*sqrt(radius**2-real(h**2))
+            endif
+        enddo
+        ! thickness taken as ~40Angs, soft edge excluded
+        t = 40./self%smpd
+        f = floor(t/2.)
+        do j = c(2)-f-B,c(2)+f+B
+            if( j == c(2) ) cycle
+            if( (j >= c(2)-f) .and. (j <= c(2)+f) )then
+                self%rmat(:,j,1) = self%rmat(:,c(2),1)
+            else
+                ! vertical soft edge
+                d = (real( abs(j-c(2)) - f)) / real(B)
+                self%rmat(:,j,1) = self%rmat(:,c(2),1) * max(0.,cos(d*PIO2))
+            endif
+        enddo
+        self%rmat = self%rmat / maxval(self%rmat(1:self%ldim(1),c(2),1))
+    end subroutine disc_sideview
 
     subroutine copy( self, self_in )
         class(image), intent(inout) :: self

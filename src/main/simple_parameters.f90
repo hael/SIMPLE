@@ -36,8 +36,8 @@ type :: parameters
     character(len=3)          :: crowded='yes'        !< wheter picking is done in crowded micrographs or not (yes|no){yes}
     character(len=3)          :: ctfstats='no'        !< calculate ctf statistics(yes|no){no}
     character(len=3)          :: ctfpatch='yes'       !< whether to perform patched CTF estimation(yes|no){yes}
-    character(len=3)          :: dihedral='no'        !< dihedral symmetry or not(yes|no){no}
     character(len=3)          :: doprint='no'
+    character(len=3)          :: dynreslim='no'       !< Whether the alignement resolution limit should be dynamic in streaming(yes|no){no}
     character(len=3)          :: envfsc='yes'         !< envelope mask even/odd pairs for FSC calculation(yes|no){yes}
     character(len=3)          :: even='no'            !< even orientation distribution(yes|no){no}
     character(len=3)          :: extract='yes'        !< whether to extract particles after picking (streaming only)
@@ -85,13 +85,12 @@ type :: parameters
     character(len=3)          :: projstats='no'
     character(len=3)          :: prune='no'
     character(len=3)          :: prob_sh='no'         !< shift information in the prob tab (yes|no){no}
-    character(len=3)          :: projrec='no'         !< Ehether to reconstruct from summed projection directions (yes|no){no}
+    character(len=3)          :: projrec='no'         !< Whether to reconstruct from summed projection directions (yes|no){no}
     character(len=3)          :: randomise='no'       !< whether to randomise particle order
     character(len=3)          :: rank_cavgs='yes'     !< Whether to rank class averages(yes|no)
     character(len=3)          :: reject_cls='no'      !< whether to reject poor classes
     character(len=3)          :: reject_mics='no'     !< whether to reject micrographs based on ctfres/icefrac
     character(len=3)          :: remove_chunks='yes'  !< whether to remove chunks after completion
-    character(len=3)          :: ring='no'            !< whether to perform ring shaped picking
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
     character(len=3)          :: remap_cls='no'
     character(len=3)          :: transp_pca='no'
@@ -213,6 +212,7 @@ type :: parameters
     character(len=STDLEN)     :: kpca_ker='cosine'    !< kPCA kernel(rbf|cosine){cosine}
     character(len=STDLEN)     :: kpca_target='ptcl'   !< kPCA kernel target on ptcls or cavgs (ptcl|cls){ptcl}
     character(len=STDLEN)     :: pcontrast='black'    !< particle contrast(black|white){black}
+    character(len=STDLEN)     :: pickkind='gau'       !< Picking quasi-template(gau|ring|disc){gau}
     character(len=STDLEN)     :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
     character(len=STDLEN)     :: pgrp_start='c1'      !< point-group symmetry(cn|dn|t|o|i)
     character(len=STDLEN)     :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
@@ -565,8 +565,8 @@ contains
         call check_carg('detector',       self%detector)
         call check_carg('dfunit',         self%dfunit)
         call check_carg('dir_exec',       self%dir_exec)
-        call check_carg('dihedral',       self%dihedral)
         call check_carg('doprint',        self%doprint)
+        call check_carg('dynreslim',      self%dynreslim)
         call check_carg('element',        self%element)
         call check_carg('envfsc',         self%envfsc)
         call check_carg('even',           self%even)
@@ -625,6 +625,7 @@ contains
         call check_carg('kpca_ker',       self%kpca_ker)
         call check_carg('kpca_target',    self%kpca_target)
         call check_carg('pcontrast',      self%pcontrast)
+        call check_carg('pickkind',       self%pickkind)
         call check_carg('pgrp',           self%pgrp)
         call check_carg('pgrp_start',     self%pgrp_start)
         call check_carg('pca_img_ori',    self%pca_img_ori)
@@ -652,7 +653,6 @@ contains
         call check_carg('reject_cls',     self%reject_cls)
         call check_carg('reject_mics',    self%reject_mics)
         call check_carg('remove_chunks',  self%remove_chunks)
-        call check_carg('ring',           self%ring)
         call check_carg('prob_sh',        self%prob_sh)
         call check_carg('projrec',        self%projrec)
         call check_carg('projfile_optics',self%projfile_optics)
