@@ -979,7 +979,11 @@ contains
         ! read in previous reconstruction when trail_rec==yes
         update_frac_trail_rec = 1.0
         if( .not. params_glob%l_distr_exec .and. params_glob%l_trail_rec )then
-            update_frac_trail_rec = build_glob%spproj_field%get_update_frac()
+            if( cline%defined('ufrac_trec') )then
+                update_frac_trail_rec = params_glob%ufrac_trec
+            else
+                update_frac_trail_rec = build_glob%spproj_field%get_update_frac()
+            endif
         endif
         ! cycle through states
         do s=1,params_glob%nstates

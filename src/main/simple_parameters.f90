@@ -458,6 +458,7 @@ type :: parameters
     real    :: total_dose
     real    :: trs=0.              !< maximum halfwidth shift(in pixels)
     real    :: update_frac = 1.
+    real    :: ufrac_trec  = 1.    !< update frac trailing rec
     real    :: width=10.           !< falloff of mask(in pixels){10}
     real    :: winsz=RECWINSZ
     real    :: xsh=0.              !< x shift(in pixels){0}
@@ -923,6 +924,7 @@ contains
         call check_rarg('motion_correctftol', self%motion_correctftol)
         call check_rarg('motion_correctgtol', self%motion_correctgtol)
         call check_rarg('update_frac',    self%update_frac)
+        call check_rarg('ufrac_trec',     self%ufrac_trec)
         call check_rarg('width',          self%width)
         call check_rarg('winsz',          self%winsz)
         call check_rarg('xsh',            self%xsh)
@@ -1300,7 +1302,12 @@ contains
         else
             self%update_frac   = 1.0
             self%l_update_frac = .false.
-            self%l_trail_rec   = .false.
+            if( trim(self%trail_rec).eq.'yes' )then
+                if( .not. cline%defined('ufrac_trec') ) THROW_HARD('Need ufrac_trec to be set when frac=1 and trail_rec=yes')
+                self%l_trail_rec = .true.
+            else
+                self%l_trail_rec = .false.
+            endif
         endif
         ! set frac_best flag
         self%l_frac_best = self%frac_best <= 0.99
