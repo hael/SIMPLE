@@ -164,8 +164,8 @@ contains
         integer          :: ldim(3), ldim_new(3), ifoo, box, box_new
         real             :: upscaling_factor, smpd_new
         character(len=STDLEN), allocatable :: sim_vol_file, pdbout, upscale_vol_file
-        upscale_vol_file = trim(get_fbody(params%vols(1),'mrc'))//'_upscale.mrc'
         call params%new(cline)
+        upscale_vol_file = trim(get_fbody(params%vols(1),'mrc'))//'_upscale.mrc'
         call find_ldim_nptcls(params%vols(1), ldim, ifoo)
         write(logfhandle,'(a,3i6,a,f8.3,a)') 'Original dimensions (', ldim,' ) voxels, smpd: ', params%smpd, ' Angstrom'
         box              = ldim(1)
