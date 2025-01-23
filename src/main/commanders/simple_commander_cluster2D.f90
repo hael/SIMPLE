@@ -136,7 +136,11 @@ contains
         else
             call cline%set('oritype', 'ptcl2D')
         endif
-        l_shmem = (.not. cline%defined('nparts')) .or. (params%nparts == 1)
+        if( cline%defined('nparts') )then
+            l_shmem = cline%get_iarg('nparts') == 1
+        else
+            l_shmem = .true.
+        endif
         ! deal with # threads for the master process
         if( .not.l_shmem ) call set_master_num_threads(nthr_here, 'CLUSTER2D')
         ! parse parameters & project
