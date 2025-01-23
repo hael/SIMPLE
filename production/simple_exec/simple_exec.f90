@@ -142,6 +142,7 @@ type(simulate_movie_commander)              :: xsimulate_movie
 type(simulate_subtomogram_commander)        :: xsimulate_subtomogram
 
 ! MISCELLANEOUS WORKFLOWS
+type(afm_commander)                         :: xafm
 type(scale_project_commander_distr)         :: xscale_project
 type(map_validation_commander)              :: xmap_validation
 type(model_validation_commander)            :: xmodel_validation
@@ -419,6 +420,8 @@ select case(trim(prg))
         call xprune_project%execute( cline )
     case( 'pdb2mrc' )
         call xpdb2mrc%execute( cline )
+    case( 'afm' )
+        call xafm%execute( cline )
 
     ! SYSTEM INTERACTION PROGRAMS
     case( 'mkdir' )
@@ -435,7 +438,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('3fe27865')
+call simple_print_git_version('b4bd5b47')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

@@ -12,6 +12,7 @@ use simple_builder,        only: builder
 use simple_parameters,     only: parameters
 implicit none
 
+public :: afm_commander
 public :: masscen_commander
 public :: print_fsc_commander
 public :: print_magic_boxes_commander
@@ -75,7 +76,84 @@ type, extends(commander_base) :: comparemc_commander
     procedure :: execute       => exec_comparemc
 end type comparemc_commander
 
+type, extends(commander_base) :: afm_commander
+  contains
+    procedure :: execute       => exec_afm
+end type afm_commander
+
 contains
+
+    subroutine exec_afm( self, cline )
+        use simple_pickseg
+        use simple_afm_image
+        use simple_corrmat
+        class(afm_commander), intent(inout) :: self
+        class(cmdline),           intent(inout) :: cline
+        type(parameters), target :: params
+        type(image), allocatable    :: img_arr(:), pick_vec(:)
+        type(image) :: im_stack, sim_test(2), exp_img            
+        type(pickseg), allocatable  :: pick_arr(:)
+        character(len=LONGSTRLEN), allocatable  :: file_list(:)
+        character(len = 255)    :: directory = '/Users/atifao/Downloads/MRC_T/'
+        character(len = 255)    :: sim_dir = '/Users/atifao/Downloads/test_for_clus.mrcs'
+        integer                 :: i, nptcls, temp_ldim(3), pick_dim(3),j
+        integer, allocatable    :: ldim_arr(:,:)
+        real, allocatable       :: smpd_arr(:), stack_rmat(:,:,:,:), rot_test(:,:)
+        real        :: hp = 60., lp =10. 
+        params_glob => params
+        params_glob%pcontrast = 'white'
+        params_glob%lp  = 10.
+        params_glob%nsig  = 1.5 
+        call cline%set('objfun','cc')
+        call cline%set('ctf',    'no')
+        call cline%set('objfun', 'cc')
+        call cline%set('mkdir', 'no')
+        call cline%set('lambda', 0.)
+        call cline%set('trs',     100.0)
+        call cline%set('box',     150)
+        call cline%set('smpd',    4.89)
+        params_glob%cc_objfun = 0
+        params_glob%maxits_sh = 200
+        ! params_glob%shbarrier = 'yes'
+        call params%new(cline)
+        ! call simple_list_files(trim(directory) // '*.mrc', file_list)
+        ! allocate(ldim_arr(size(file_list),3))
+        ! allocate(smpd_arr(size(file_list)))
+        ! allocate(img_arr(size(file_list)))
+        ! allocate(pick_arr(size(file_list)))
+        ! do i = 1, size(file_list)
+        !     call find_ldim_nptcls(file_list(i), ldim_arr(i,:), nptcls)
+        !     temp_ldim = ldim_arr(i,:)
+        !     call img_arr(i)%new(temp_ldim, params%smpd)
+        !     call img_arr(i)%read(file_list(i))
+        !     call img_arr(i)%write(int2str(i) // '.mrc')
+        !     call pick_arr(i)%pick(int2str(i) // '.mrc', .true.)
+        !     if(i > 1) exit 
+        ! end do
+        call find_ldim_nptcls(sim_dir,temp_ldim, nptcls)
+        call im_stack%new(temp_ldim, params%smpd)
+        call im_stack%read(sim_dir)
+        allocate(stack_rmat(temp_ldim(1), temp_ldim(2), 1, temp_ldim(3)))
+        stack_rmat(:,:,1,:) = im_stack%get_rmat()
+        call im_stack%kill()
+        allocate(pick_vec(temp_ldim(3)))
+        do i = 1, temp_ldim(3) 
+            pick_dim = [temp_ldim(1), temp_ldim(2), 1]
+            call pick_vec(i)%new(pick_dim, params%smpd)
+            call pick_vec(i)%set_rmat(stack_rmat(:,:,i,:), .false.)
+        end do
+        allocate(rot_test(temp_ldim(1), temp_ldim(1)))
+        params_glob%box = temp_ldim(1)
+        print *, 'calculating sim matrix...'
+        call calc_inplane_mag_corrmat(pick_vec, hp, lp, rot_test)
+        call exp_img%new(pick_dim, params_glob%smpd)
+        do i = 1, temp_ldim(3)
+            do j = 1, temp_ldim(3)
+                call exp_img%set_rmat_at(i,j,1,rot_test(i,j))
+            end do 
+        end do
+        call exp_img%write('corr_mat_exp')
+    end subroutine exec_afm
 
     !> centers base on centre of mass
      subroutine exec_masscen( self, cline )

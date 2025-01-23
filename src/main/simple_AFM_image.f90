@@ -96,6 +96,7 @@ contains
         end type
         type(bin_header5)  :: binheader
         type(wave_header5) :: waveheader
+        
         iteration  = [character(len = 10) :: 'Trace', 'Retrace']
         properties = [character(len = 10) :: 'Height', 'Amplitude', 'Phase', 'ZSensor' ]
         if( index(fn_in, '.ibw') == 0 ) THROW_HARD('Error: only .ibw files are supported')

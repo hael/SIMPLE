@@ -77,6 +77,7 @@ type(simple_program), target :: abinitio2D
 type(simple_program), target :: abinitio3D_cavgs
 type(simple_program), target :: abinitio3D
 type(simple_program), target :: abinitio3D_parts
+type(simple_program), target :: afm
 type(simple_program), target :: analysis2D_nano
 type(simple_program), target :: assign_optics_groups
 type(simple_program), target :: assign_optics
@@ -387,6 +388,7 @@ contains
         call new_abinitio3D_cavgs
         call new_abinitio3D
         call new_abinitio3D_parts
+        call new_afm
         call new_analysis2D_nano
         call new_assign_optics
         call new_assign_optics_groups
@@ -519,11 +521,12 @@ contains
     end subroutine make_user_interface
 
     subroutine set_prg_ptr_array
-        n_prg_ptrs = 0
+        n_prg_ptrs = 0        
         call push2prg_ptr_array(abinitio2D)
         call push2prg_ptr_array(abinitio3D_cavgs)
         call push2prg_ptr_array(abinitio3D)
         call push2prg_ptr_array(abinitio3D_parts)
+        call push2prg_ptr_array(afm)
         call push2prg_ptr_array(analysis2D_nano)
         call push2prg_ptr_array(assign_optics_groups)
         call push2prg_ptr_array(automask)
@@ -671,6 +674,8 @@ contains
                 ptr2prg => abinitio3D
             case('abinitio3D_parts')
                 ptr2prg => abinitio3D_parts
+            case('afm')
+                ptr2prg => afm
             case('analysis2D_nano')
                 ptr2prg => analysis2D_nano
             case('assign_optics')
@@ -938,6 +943,7 @@ contains
         write(logfhandle,'(A)') abinitio3D_cavgs%name
         write(logfhandle,'(A)') abinitio3D%name
         write(logfhandle,'(A)') abinitio3D_parts%name
+        write(logfhandle,'(A)') afm%name
         write(logfhandle,'(A)') assign_optics_groups%name
         write(logfhandle,'(A)') automask%name
         write(logfhandle,'(A)') automask2D%name
@@ -1317,6 +1323,19 @@ contains
     ! <empty>
     ! computer controls
     ! <empty>
+
+    subroutine new_afm
+        ! PROGRAM SPECIFICATION
+        call afm%new(&
+        &'afm', &                                      ! name
+        &'analysis of afm',&                          ! descr_short
+        &'picking, clustering, and additional analysis of high SNR/conformationally dynamic images',& ! descr long
+        &'all',&                                           ! executable
+        &0, 0, 0, 0, 0, 0, 0, .false.)                     ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+      
+    end subroutine new_afm
 
     subroutine new_analysis2D_nano
         ! PROGRAM SPECIFICATION
