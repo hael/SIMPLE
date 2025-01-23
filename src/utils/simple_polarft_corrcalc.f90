@@ -87,9 +87,9 @@ type :: polarft_corrcalc
     ! Others
     logical,             allocatable :: iseven(:)                   !< eo assignment for gold-standard FSC
     real,                pointer     :: sigma2_noise(:,:) => null() !< for euclidean distances
-    logical                          :: with_ctf     = .false.      !< CTF flag
-    logical                          :: existence    = .false.      !< to indicate existence
-    logical                          :: multirefs    = .false.      !< using multirefs in gencorrs
+    logical                          :: with_ctf  = .false.         !< CTF flag
+    logical                          :: existence = .false.         !< to indicate existence
+    logical                          :: multirefs = .false.         !< using multirefs in gencorrs
 
     contains
     ! CONSTRUCTOR
@@ -125,6 +125,7 @@ type :: polarft_corrcalc
     procedure          :: assign_pinds
     procedure          :: get_npix
     procedure          :: get_work_pft_ptr
+    procedure          :: get_linstates_irefs
     ! PRINTERS/VISUALISERS
     procedure          :: print
     procedure          :: vis_ptcl
@@ -266,7 +267,8 @@ contains
             self%iseven = .true.
         endif
         ! multirefs
-        if( present(l_multirefs) ) self%multirefs = l_multirefs
+        self%multirefs = params_glob%l_linstates
+        if( present(l_multirefs) ) self%multirefs = (l_multirefs .or. self%multirefs)
         ! generate the argument transfer constants for shifting reference polarfts
         allocate( self%argtransf(self%nrots,self%kfromto(1):self%kfromto(2)),&
             &self%argtransf_shellone(self%nrots) )
@@ -586,6 +588,18 @@ contains
         ithr = omp_get_thread_num()+1
         ptr => self%heap_vars(ithr)%pft_ref_tmp
     end subroutine get_work_pft_ptr
+
+    ! return irefs for all states of the same reprojection direction
+    subroutine get_linstates_irefs( self, iref, irefs )
+        class(polarft_corrcalc), intent(in)    :: self
+        integer,                 intent(in)    :: iref
+        integer,                 intent(inout) :: irefs(params_glob%nstates)
+        integer :: istate, iproj
+        iproj = mod(iref, params_glob%nspace)
+        do istate = 1, params_glob%nstates
+            irefs(istate) = (istate - 1) * params_glob%nspace + iproj
+        enddo
+    end subroutine get_linstates_irefs
 
     ! PRINTERS/VISUALISERS
 
