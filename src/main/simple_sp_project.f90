@@ -306,8 +306,8 @@ contains
     subroutine append_project( self1, self2 )
         class(sp_project), intent(inout) :: self1
         class(sp_project), intent(in)    :: self2
-        integer :: nmics1, nstks1, nptcls1, nmics2, nstks2, nptcls2, nogs1, nogs2, icls
-        integer :: ncls2d1, ncls2d2, i, iptcl, imic, istk, fromp, top, og_offset, ogid
+        integer :: nmics1, nstks1, nptcls1, nmics2, nstks2, nptcls2, nogs1, nogs2
+        integer :: i, iptcl, imic, istk, fromp, top, og_offset, ogid
         logical :: l_has_mics, l_has_stks, l_has_ptcls, l_has_optics
         nmics1  = self1%os_mic%get_noris()
         nmics2  = self2%os_mic%get_noris()
@@ -2207,7 +2207,7 @@ contains
 
     integer function get_nptcls( self )
         class(sp_project), target, intent(in) :: self
-        integer :: i, nos, nptcls
+        integer :: i, nos
         get_nptcls = 0
         nos        = self%os_stk%get_noris()
         if( nos == 0 )return
@@ -2916,7 +2916,7 @@ contains
         integer, optional, intent(in)    :: maxpop
         integer, allocatable             :: particles(:)
         integer :: ncls, icls, iptcl, i, nptcls, noris_ptcl3D, noris_ptcl2D
-        integer :: maxnptcls, pstate, istate
+        integer :: maxnptcls, istate
         logical :: l_append
         noris_ptcl2D = self%os_ptcl2D%get_noris()
         if( noris_ptcl2D == 0 )then
@@ -3027,19 +3027,33 @@ contains
         endif
         ! do the class to particles mapping
         do icls = 1,ncls2D
-            if( self%os_cls2D%get_state(icls)==0 ) cycle
-            val = self%os_cls2D%get(icls, flag)
-            ! get particle indices
-            call self%os_ptcl2D%get_pinds(icls, 'class', particles)
-            if( allocated(particles) )then
-                !$omp parallel do proc_bind(close) default(shared) private(iptcl,pind)
-                do iptcl=1,size(particles)
-                    pind = particles(iptcl)
-                    call self%os_ptcl2D%set(pind, flag, val)
-                    call self%os_ptcl3D%set(pind, flag, val)
-                end do
-                !$omp end parallel do
-                deallocate(particles)
+            if( self%os_cls2D%get_state(icls)==0 )then
+                ! making sure particles are turned off
+                call self%os_ptcl2D%get_pinds(icls, 'class', particles)
+                if( allocated(particles) )then
+                    !$omp parallel do proc_bind(close) default(shared) private(iptcl,pind)
+                    do iptcl=1,size(particles)
+                        pind = particles(iptcl)
+                        call self%os_ptcl2D%set_state(pind, 0)
+                        call self%os_ptcl3D%set_state(pind, 0)
+                    end do
+                    !$omp end parallel do
+                    deallocate(particles)
+                endif
+            else
+                val = self%os_cls2D%get(icls, flag)
+                ! get particle indices
+                call self%os_ptcl2D%get_pinds(icls, 'class', particles)
+                if( allocated(particles) )then
+                    !$omp parallel do proc_bind(close) default(shared) private(iptcl,pind)
+                    do iptcl=1,size(particles)
+                        pind = particles(iptcl)
+                        call self%os_ptcl2D%set(pind, flag, val)
+                        call self%os_ptcl3D%set(pind, flag, val)
+                    end do
+                    !$omp end parallel do
+                    deallocate(particles)
+                endif
             endif
         end do
     end subroutine map_cls2D_flag_to_ptcls
