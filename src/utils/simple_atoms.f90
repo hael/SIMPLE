@@ -1254,9 +1254,9 @@ contains
         write(logfhandle,'(A,f8.3,A)') 'Sampling distance: ',smpd,' Angstrom'
         call self%new(pdb_file)
         ! dimensions of the molecule
-        write(logfhandle,'(A,f8.2,1X,A,f8.2)') "Bounding box: x:", minval(self%xyz(:,1)),"-", maxval(self%xyz(:,1))
-        write(logfhandle,'(A,f8.2,1X,A,f8.2)') "              y:", minval(self%xyz(:,2)),"-", maxval(self%xyz(:,2))
-        write(logfhandle,'(A,f8.2,1X,A,f8.2)') "              z:", minval(self%xyz(:,3)),"-", maxval(self%xyz(:,3))
+        write(logfhandle,'(A,f8.2,1X,A,f8.2)') "Bounding box(Angstrom) x:", minval(self%xyz(:,1)),"-", maxval(self%xyz(:,1))
+        write(logfhandle,'(A,f8.2,1X,A,f8.2)') "                       y:", minval(self%xyz(:,2)),"-", maxval(self%xyz(:,2))
+        write(logfhandle,'(A,f8.2,1X,A,f8.2)') "                       z:", minval(self%xyz(:,3)),"-", maxval(self%xyz(:,3))
         mol_dim(1) = maxval(self%xyz(:,1)) - minval(self%xyz(:,1))
         mol_dim(2) = maxval(self%xyz(:,2)) - minval(self%xyz(:,2))
         mol_dim(3) = maxval(self%xyz(:,3)) - minval(self%xyz(:,3))
