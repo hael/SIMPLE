@@ -128,8 +128,8 @@ lims(1,1) = -6.
 lims(1,2) =  6.
 lims(2,1) = -6.
 lims(2,2) =  6.
-call grad_shsrch_obj%new(lims, opt_angle=.false.)
-call grad_shsrch_obj%set_indices(5, 5)
+call grad_shsrch_obj%new(lims, opt_angle=.false., multirefs=.true.)
+call grad_shsrch_obj%set_indices([5, 5], [.3, .7], 5)
 irot = 1
 cxy  = grad_shsrch_obj%minimize(irot)
 print *, cxy(1), cxy(2:3), irot
