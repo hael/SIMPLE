@@ -151,7 +151,7 @@ contains
             print *, 'max diam: ', self%diam_stats%maxv
         end if 
         self%box_raw = find_magic_box(2 * nint(self%diam_stats%med/smpd_raw))
-        if(is_AFM_l) self%box_raw = nint(1.5*find_magic_box(2 * nint(self%diam_stats%med/smpd_raw)))
+        if(is_AFM_l) self%box_raw = nint(3.0*find_magic_box(2 * nint(self%diam_stats%med/smpd_raw)))
         call img_win%new([self%box_raw,self%box_raw,1], smpd_raw)
         if( allocated(self%masscens) ) deallocate(self%masscens)
         allocate(self%masscens(self%nboxes,2), source=0.)
