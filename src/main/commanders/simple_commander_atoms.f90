@@ -163,7 +163,8 @@ contains
         type(image)      :: exp_vol, sim_vol
         integer          :: ldim(3), ldim_new(3), ifoo, box, box_new
         real             :: upscaling_factor, smpd_new
-        character(len=LONGSTRLEN), allocatable :: sim_vol_file, pdbout
+        character(len=STDLEN), allocatable :: sim_vol_file, pdbout, upscale_vol_file
+        upscale_vol_file = trim(get_fbody(params%vols(1),'mrc'))//'_upscale.mrc'
         call params%new(cline)
         call find_ldim_nptcls(params%vols(1), ldim, ifoo)
         write(logfhandle,'(a,3i6,a,f8.3,a)') 'Original dimensions (', ldim,' ) voxels, smpd: ', params%smpd, ' Angstrom'
@@ -181,6 +182,7 @@ contains
         call sim_vol%new([box_new, box_new, box_new], smpd_new)
         call sim_vol%read(sim_vol_file)
         call exp_vol%read_and_crop(params%vols(1), params%smpd, box_new, smpd_new)
+        call exp_vol%write(upscale_vol_file)
         call molecule%map_validation(exp_vol, sim_vol, filename='map_val_coor')
         call molecule%kill()
         call exp_vol%kill()

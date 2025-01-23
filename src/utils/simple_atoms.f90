@@ -1320,7 +1320,7 @@ contains
         !     !  write(45,*) " "
         endif
         do i_atom = 1, self%n
-            atom_box = round2even(2 * (((self%radius(i_atom))*1.)/smpd))
+            atom_box = round2even(2 * (((self%radius(i_atom))*1.5)/smpd))
             if( atom_box <= 2 )then !for cases where the atom box is too small
                 atom_box = 4
             endif 
