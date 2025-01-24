@@ -23,7 +23,6 @@ use simple_strategy2D_snhc_smpl,   only: strategy2D_snhc_smpl
 use simple_strategy2D_eval,        only: strategy2D_eval
 use simple_strategy2D_prob,        only: strategy2D_prob
 use simple_euclid_sigma2,          only: euclid_sigma2
-use simple_masker,                 only: automask2D
 use simple_classaverager
 use simple_progress
 implicit none

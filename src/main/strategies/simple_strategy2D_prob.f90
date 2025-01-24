@@ -46,7 +46,7 @@ contains
                 endif
             endif
             self%s%nrefs_eval = self%s%nrefs
-            call self%s%store_solution
+            call self%s%store_solution(w_in=real(self%spec%eulprob%assgn_map(self%s%iptcl_map)%istate))
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif

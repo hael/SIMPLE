@@ -2,10 +2,12 @@ module simple_strategy2D_greedy_smpl
 include 'simple_lib.f08'
 use simple_strategy2D_alloc
 use simple_strategy2D,       only: strategy2D
-use simple_strategy2D_srch,  only: strategy2D_spec, squared_sampling
+use simple_strategy2D_srch,  only: strategy2D_spec
 use simple_builder,          only: build_glob
 use simple_polarft_corrcalc, only: pftcc_glob
 use simple_parameters,       only: params_glob
+use simple_eul_prob_tab2D,   only: squared_sampling
+
 implicit none
 
 public :: strategy2D_greedy_smpl
