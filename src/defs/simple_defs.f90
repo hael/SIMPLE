@@ -231,6 +231,7 @@ integer, parameter :: MC_MINPATCHSZ             = 200            !< Minimum patc
 integer, parameter :: MIN_ITERS_SHC             = 5              !< minimum number of iterations of stochastic search
 integer, parameter :: BATCHTHRSZ                = 50             !< # of images per thread
 integer, parameter :: AMSK_FREQ                 = 3              !< automasking every third iteration
+integer, parameter :: CLS_MAXPOP                = 2000           !< Max # of particles per class
 
 ! stream-related constants & thresholds
 real,    parameter :: CTFRES_THRESHOLD_STREAM   = 10.0           !< preprocessing: Stream ctfres rejection threshold (Angstroms)

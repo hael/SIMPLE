@@ -1,4 +1,4 @@
-! orientation eul_prob_tab2D, used in refine3D
+! orientation eul_prob_tab2D, used in abinitio2D
 module simple_eul_prob_tab2D
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -7,10 +7,11 @@ use simple_parameters,        only: params_glob
 use simple_builder,           only: build_glob
 use simple_polarft_corrcalc,  only: pftcc_glob
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad
-use simple_eul_prob_tab,      only: eulprob_dist_switch!, eulprob_corr_switch
+use simple_eul_prob_tab,      only: eulprob_dist_switch , eulprob_corr_switch
+use simple_decay_funs,        only: extremal_decay2D
 implicit none
 
-public :: eul_prob_tab2D
+public :: eul_prob_tab2D, squared_sampling
 private
 #include "simple_local_flags.inc"
 
@@ -18,21 +19,26 @@ type :: eul_prob_tab2D
     type(ptcl_ref), allocatable :: loc_tab(:,:)   !< 2D search table (ncls x nptcls)
     type(ptcl_ref), allocatable :: assgn_map(:)   !< assignment map  (nptcls)
     integer,        allocatable :: pinds(:)       !< particle indices
+    integer,        allocatable :: clsinds(:)     !< non-empty class indices
     logical,        allocatable :: populated(:)   !< nonempty classes mask
     integer                     :: nptcls         !< size of pinds array
+    integer                     :: neffcls        !< # of non-empty classes
     integer                     :: ncls           !< # of classes
     contains
     ! CONSTRUCTOR
-    procedure          :: new
-    ! TABLE
-    procedure          :: fill_tab_greedy_inpl
-    procedure, private :: normalize_cls
-    procedure          :: assign_cls_greedy
+    procedure :: new
+    ! TABLE FILLING
+    procedure :: fill_table_greedy_inpl
+    procedure :: fill_table_stoch_inpl
+    ! ASSIGNMENT FROM TABLE
+    procedure :: normalize_table
+    procedure :: assign_cls_stoch
+    procedure :: assign_cls_greedy
     ! I/O
-    procedure          :: write_tab
-    procedure          :: read_tab_to_glob
-    procedure          :: write_assignment
-    procedure          :: read_assignment
+    procedure :: write_table
+    procedure :: read_table_to_glob
+    procedure :: write_assignment
+    procedure :: read_assignment
     ! DESTRUCTOR
     procedure          :: kill
 end type eul_prob_tab2D
@@ -77,7 +83,7 @@ contains
             end do
         end do
         !$omp end parallel do
-        ! Classes
+        ! Classes (similar to strategy2D_alloc)
         if( build_glob%spproj%os_cls2D%get_noris() == 0 )then
             if( build_glob%spproj_field%isthere('class') )then
                 call build_glob%spproj%os_ptcl2D%get_pops(pops, 'class', maxn=self%ncls)
@@ -99,12 +105,15 @@ contains
         endif
         if( all(pops == 0) ) THROW_HARD('All class pops cannot be zero!')
         self%populated = pops > 0
+        self%neffcls   = count(self%populated)
+        self%clsinds   = (/(i,i=1,self%ncls)/)
+        self%clsinds   = pack(self%clsinds,mask=self%populated)
     end subroutine new
 
     ! TABLE
 
-    ! fill the probability table
-    subroutine fill_tab_greedy_inpl( self )
+    ! Fill the probability table taking the best in-plane angle
+    subroutine fill_table_greedy_inpl( self )
         class(eul_prob_tab2D), intent(inout) :: self
         type(pftcc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)
         real    :: scores(pftcc_glob%get_nrots())
@@ -163,13 +172,112 @@ contains
             enddo
             !$omp end parallel do
         endif
-    end subroutine fill_tab_greedy_inpl
+    end subroutine fill_table_greedy_inpl
 
-    subroutine normalize_cls( self )
+    ! Fill the probability table choosing an in-plane angle stochastically
+    subroutine fill_table_stoch_inpl( self )
         class(eul_prob_tab2D), intent(inout) :: self
-        ! PLACEHOLDER
-    end subroutine normalize_cls
+        type(pftcc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)
+        real    :: scores(pftcc_glob%get_nrots()),lims(2,2),lims_init(2,2),cxy(3),score,neigh_frac
+        integer :: vec(pftcc_glob%get_nrots())
+        integer :: nrots, i, j, iptcl, ithr, irot, icls, jrot, rank, ninpl_stoch
+        nrots = pftcc_glob%get_nrots()
+        ! size of stochastic neighborhood (# of in-plane angles to draw from)
+        neigh_frac  = extremal_decay2D(params_glob%extr_iter, params_glob%extr_lim)
+        ninpl_stoch = nint(real(pftcc_glob%get_nrots())*(neigh_frac/3.))
+        ninpl_stoch = max(2,min(ninpl_stoch,pftcc_glob%get_nrots()))
+        if( params_glob%l_doshift )then
+            ! search objects
+            lims(:,1)      = -params_glob%trs
+            lims(:,2)      =  params_glob%trs
+            lims_init(:,1) = -SHC_INPL_TRSHWDTH
+            lims_init(:,2) =  SHC_INPL_TRSHWDTH
+            do ithr = 1,nthr_glob
+                call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier,&
+                    &maxits=params_glob%maxits_sh, opt_angle=.true.)
+            end do
+            ! search
+            !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+            !$omp private(i,iptcl,ithr,icls,j,irot,jrot,score,scores,vec,cxy,rank)
+            do i = 1,self%nptcls
+                iptcl = self%pinds(i)
+                ithr  = omp_get_thread_num() + 1
+                do j = 1,self%neffcls
+                    icls = self%clsinds(j)
+                    call pftcc_glob%gencorrs(icls, iptcl, scores)
+                    call squared_sampling(nrots, scores, vec, ninpl_stoch, irot, rank, score)
+                    jrot = irot
+                    call grad_shsrch_obj(ithr)%set_indices(icls, iptcl)
+                    cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true.)
+                    if( irot == 0 )then
+                        score    = score
+                        cxy(2:3) = 0.
+                    else
+                        jrot  = irot
+                        score = cxy(1)
+                    endif
+                    self%loc_tab(icls,i)%dist   = eulprob_dist_switch(score)
+                    self%loc_tab(icls,i)%inpl   = jrot
+                    self%loc_tab(icls,i)%x      = cxy(2)
+                    self%loc_tab(icls,i)%y      = cxy(3)
+                    self%loc_tab(icls,i)%has_sh = .true.
+                enddo
+            enddo
+            !$omp end parallel do
+        else
+            !$omp parallel do default(shared) private(i,j,iptcl,icls,irot,scores,vec,rank,score)&
+            !$omp proc_bind(close) schedule(static) collapse(2)
+            do i = 1, self%nptcls
+                do j = 1, self%neffcls
+                    iptcl = self%pinds(i)
+                    icls  = self%clsinds(j)
+                    call pftcc_glob%gencorrs(icls, iptcl, scores)
+                    call squared_sampling(nrots, scores, vec, ninpl_stoch, irot, rank, score)
+                    self%loc_tab(icls,i)%dist = eulprob_dist_switch(score)
+                    self%loc_tab(icls,i)%inpl = irot
+                enddo
+            enddo
+            !$omp end parallel do
+        endif
+    end subroutine fill_table_stoch_inpl
 
+    ! Normalization of loc_tab of each class such that prob of each ptcl is in [0,1]
+    subroutine normalize_table( self )
+        class(eul_prob_tab2D), intent(inout) :: self
+        real(dp) :: sumdist
+        real     :: mindist, maxdist
+        integer :: i
+        ! normalize each ptcl for all non-empty classes
+        mindist = huge(mindist)
+        maxdist = -1.
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,sumdist)&
+        !$omp reduction(min:mindist) reduction(max:maxdist)
+        do i = 1, self%nptcls
+            sumdist = sum(real(self%loc_tab(:,i)%dist,dp), mask=self%populated)
+            if( sumdist < DTINY )then
+                self%loc_tab(:,i)%dist = 0.0
+            else
+                where( self%populated )
+                    self%loc_tab(:,i)%dist = self%loc_tab(:,i)%dist / real(sumdist)
+                else where
+                    self%loc_tab(:,i)%dist = huge(mindist)
+                end where
+            endif
+            mindist = min(mindist, minval(self%loc_tab(:,i)%dist, mask=self%populated))
+            maxdist = max(maxdist, maxval(self%loc_tab(:,i)%dist, mask=self%populated))
+        enddo
+        !$omp end parallel do
+        ! min/max normalization to obtain values between 0 and 1
+        if( (maxdist - mindist) < TINY )then
+            self%loc_tab(:,:)%dist = 0.
+        else
+            !$omp parallel workshare proc_bind(close)
+            self%loc_tab(:,:)%dist = (self%loc_tab(:,:)%dist - mindist) / (maxdist - mindist)
+            !$omp end parallel workshare
+        endif
+    end subroutine normalize_table
+
+    ! Assigns best class to all particles
     subroutine assign_cls_greedy( self )
         class(eul_prob_tab2D), intent(inout) :: self
         integer :: i, icls
@@ -181,10 +289,51 @@ contains
         !$omp end parallel do
     end subroutine assign_cls_greedy
 
+    ! Assign class to all particles stochastically
+    subroutine assign_cls_stoch( self )
+        class(eul_prob_tab2D), intent(inout) :: self
+        real,    allocatable :: dists(:)
+        integer, allocatable :: inds(:)
+        real    :: pdists(self%neffcls), score, t, neigh_frac
+        integer :: pops(self%ncls), vec(self%neffcls), i, icls, ind, rank, ncls_stoch
+        ! size of stochastic neighborhood (# of classes to draw from)
+        neigh_frac = extremal_decay2D(params_glob%extr_iter, params_glob%extr_lim)
+        ncls_stoch = nint(real(self%ncls)*(neigh_frac/3.))
+        ncls_stoch = max(2,min(ncls_stoch,self%ncls))
+        ! select class stochastically
+        pops = 0
+        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+        !$omp private(i,pdists,vec,ind,rank,score,icls) reduction(+:pops)
+        do i = 1,self%nptcls
+            pdists = pack(self%loc_tab(:,i)%dist,mask=self%populated)   ! distances for non-empty classes
+            pdists = eulprob_corr_switch(pdists)                        ! distances back to score
+            call squared_sampling(self%neffcls, pdists, vec, ncls_stoch, ind, rank, score) ! stochastic sampling
+            icls = self%clsinds(ind)                                    ! original class number
+            self%assgn_map(i) = self%loc_tab(icls,i)                    ! updates assignement
+            pops(icls) = pops(icls) + 1                                 ! updates population
+        enddo
+        !$omp end parallel do
+        ! taking the best maxpop particles
+        do i = 1,self%neffcls
+            icls = self%clsinds(i)
+            if( pops(icls) > params_glob%maxpop )then
+                inds  = pack((/(ind,ind=1,self%nptcls)/), mask=self%assgn_map(:)%iproj==icls)
+                dists = self%assgn_map(inds(:))%dist
+                call hpsort(dists)
+                t = dists(params_glob%maxpop)   ! threshold within the class
+                where( self%assgn_map(inds(:))%dist > t )
+                    self%assgn_map(inds(:))%istate = 0 ! this will set the restoration weight to ZERO
+                else where
+                    self%assgn_map(inds(:))%istate = 1
+                end where
+            endif
+        enddo
+    end subroutine assign_cls_stoch
+
     ! FILE I/O
 
     ! write the partition-wise (or global) dist value table to a binary file
-    subroutine write_tab( self, binfname )
+    subroutine write_table( self, binfname )
         class(eul_prob_tab2D), intent(in) :: self
         character(len=*),      intent(in) :: binfname
         integer :: funit, addr, io_stat, file_header(2)
@@ -195,17 +344,17 @@ contains
         addr = sizeof(file_header) + 1
         write(funit,pos=addr) self%loc_tab
         call fclose(funit)
-    end subroutine write_tab
+    end subroutine write_table
 
     ! read the partition-wise dist value binary file to global object's table
-    subroutine read_tab_to_glob( self, binfname )
+    subroutine read_table_to_glob( self, binfname )
         class(eul_prob_tab2D), intent(inout) :: self
         character(len=*),      intent(in)    :: binfname
         type(ptcl_ref), allocatable :: mat_loc(:,:)
         integer :: funit, addr, io_stat, file_header(2), nptcls_loc, ncls_loc, i_loc, i_glob
         if( file_exists(trim(binfname)) )then
             call fopen(funit,trim(binfname),access='STREAM',action='READ',status='OLD', iostat=io_stat)
-            call fileiochk('simple_eul_prob_tab2D; read_tab_to_glob; file: '//trim(binfname), io_stat)
+            call fileiochk('simple_eul_prob_tab2D; read_table_to_glob; file: '//trim(binfname), io_stat)
         else
             THROW_HARD( 'corr/rot files of partitions should be ready! ' )
         endif
@@ -229,7 +378,7 @@ contains
             end do
         end do
         !$omp end parallel do
-    end subroutine read_tab_to_glob
+    end subroutine read_table_to_glob
 
     ! write a global assignment map to binary file
     subroutine write_assignment( self, binfname )
@@ -276,12 +425,57 @@ contains
 
     subroutine kill( self )
         class(eul_prob_tab2D), intent(inout) :: self
-        self%ncls   = 0
-        self%nptcls = 0
-        if( allocated(self%loc_tab)   ) deallocate(self%loc_tab)
-        if( allocated(self%assgn_map) ) deallocate(self%assgn_map)
-        if( allocated(self%pinds)     ) deallocate(self%pinds)
-        if( allocated(self%populated) ) deallocate(self%populated)
+        self%neffcls = 0
+        self%ncls    = 0
+        self%nptcls  = 0
+        if( allocated(self%loc_tab)   )then
+            deallocate(self%loc_tab, self%assgn_map, self%pinds,&
+            &self%populated, self%clsinds)
+        endif
     end subroutine kill
+
+    ! PUBLIC FUNCTION
+
+    subroutine squared_sampling( n, corrs, order, nb, ind, rank, cc )
+        integer, intent(in)    :: n, nb
+        real,    intent(inout) :: corrs(n), cc
+        integer, intent(inout) :: order(n), ind, rank
+        integer, parameter :: P=2
+        real    :: cdf(nb), r
+        integer :: i
+        if( nb == 1 )then
+            rank = n
+            ind  = maxloc(corrs,dim=1)
+            cc   = corrs(ind)
+            return
+        endif
+        order = (/(i,i=1,n)/)
+        call hpsort(corrs, order)
+        cdf = corrs(n-nb+1:n)
+        if( all(cdf<TINY) )then
+            rank = n
+            ind  = order(rank)
+            cc   = corrs(rank)
+            return
+        endif
+        where( cdf < TINY ) cdf = 0.
+        do i = 2,nb
+            cdf(i) = cdf(i) + cdf(i-1)
+        enddo
+        cdf = cdf / sum(cdf)
+        r   = ran3()
+        r   = 1.-r**P
+        rank = 0
+        do i = 1,nb
+            if( cdf(i) > r )then
+                rank = i
+                exit
+            endif
+        enddo
+        if( rank == 0 ) rank = nb
+        rank = n - nb + rank ! rank of selected value
+        ind  = order(rank)   ! index
+        cc   = corrs(rank)   ! value
+    end subroutine squared_sampling
 
 end module simple_eul_prob_tab2D

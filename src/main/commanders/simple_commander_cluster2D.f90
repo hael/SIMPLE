@@ -1575,10 +1575,16 @@ contains
         ! reading scores from all parts
         do ipart = 1, params_glob%nparts
             fname = trim(DIST_FBODY)//int2str_pad(ipart,params_glob%numlen)//'.dat'
-            call eulprob%read_tab_to_glob(fname)
+            call eulprob%read_table_to_glob(fname)
         enddo
         ! perform assignment
-        call eulprob%assign_cls_greedy
+        select case(trim(params%refine))
+        case('prob')
+            call eulprob%normalize_table
+            call eulprob%assign_cls_stoch
+        case('prob_greedy')
+            call eulprob%assign_cls_greedy
+        end select
         ! write
         fname = trim(ASSIGNMENT_FBODY)//'.dat'
         call eulprob%write_assignment(fname)
@@ -1648,8 +1654,15 @@ contains
         ! init prob table
         call eulprob%new(pinds)
         fname = trim(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
-        call eulprob%fill_tab_greedy_inpl
-        call eulprob%write_tab(fname)
+        ! algorithm
+        select case(trim(params%refine))
+        case('prob')
+            call eulprob%fill_table_stoch_inpl
+        case('prob_greedy')
+            call eulprob%fill_table_greedy_inpl
+        end select
+        ! write
+        call eulprob%write_table(fname)
         ! clean & end
         call eucl_sigma2_glob%kill
         call clean_batch_particles2D
