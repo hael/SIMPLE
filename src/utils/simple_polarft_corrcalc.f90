@@ -611,9 +611,9 @@ contains
         real    :: prefs_ori( params_glob%nstates), A( params_glob%nstates, params_glob%nstates),&
                   &prefs_comp(params_glob%nstates), Ai(params_glob%nstates, params_glob%nstates)
         integer :: istate, j, errflg
+        prefs_ori = prefs / sum(prefs)
         select case(trim(params_glob%linstates_mode))
             case('forprob')
-                prefs_ori = prefs / sum(prefs)
                 do istate = 1, params_glob%nstates
                     prefs(istate) = 1.
                     if( iref == irefs(istate) ) cycle
@@ -624,7 +624,6 @@ contains
                 enddo
                 prefs = prefs / sum(prefs)
             case('backprob')
-                prefs_ori  = prefs / sum(prefs)
                 prefs_comp = 1.
                 do istate = 1, params_glob%nstates
                     do j = 1, params_glob%nstates
@@ -640,7 +639,12 @@ contains
                     enddo
                 enddo
                 call matinv(A, Ai, params_glob%nstates, errflg)
-                prefs = Ai(iref,:)
+                do istate = 1, params_glob%nstates
+                    if( iref == irefs(istate) )then
+                        prefs = Ai(istate,:)
+                        exit
+                    endif
+                enddo
         end select
     end subroutine get_linstates_prefs
 
