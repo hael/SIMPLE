@@ -7,9 +7,9 @@ module simple_corrmat
     use simple_parameters, only: params_glob
     implicit none
     
-    public :: calc_cartesian_corrmat, calc_inplane_invariant_corrmat
+    public :: calc_cartesian_corrmat, calc_inplane_invariant_corrmat, calc_inplane_mag_corrmat
     private
-    #include "simple_local_flags.inc"
+    ! #include "simple_local_flags.inc"
     
     interface calc_cartesian_corrmat
         module procedure calc_cartesian_corrmat_1
@@ -31,7 +31,7 @@ module simple_corrmat
             ! prep imgs for corrcalc
             do iptcl=1,nptcls
                 if( present(lp) )then
-                    if( .not. present(msk) ) THROW_HARD('need mask radius (msk) 4 Fourier corr calc!')
+                    ! if( .not. present(msk) ) THROW_HARD('need mask radius (msk) 4 Fourier corr calc!')
                     ! apply a soft-edged mask
                     call imgs(iptcl)%mask(msk, 'soft')
                     ! Fourier transform
@@ -90,7 +90,7 @@ module simple_corrmat
             ! prep sel imgs for corrcalc
             do iptcl=1,nsel
                 if( doftcalc )then
-                    if( .not. domsk ) THROW_HARD('need mask radius (msk) 4 Fourier corr calc!')
+                    ! if( .not. domsk ) THROW_HARD('need mask radius (msk) 4 Fourier corr calc!')
                     ! apply a soft-edged mask
                     call imgs_sel(iptcl)%mask(msk, 'soft')
                     ! Fourier transform
@@ -209,7 +209,6 @@ module simple_corrmat
             type(image)                          :: fcorr_shift180, fcorr_shift360, imgj180, imgj360, img_i_temps                                               
             real,                 intent(in)     :: hp, lp
             real, allocatable,    intent(out)    :: corrmat(:,:)
-            type(pftcc_shsrch_grad), allocatable :: grad_shsrch_obj(:)
             type(polarizer)                      :: polartransform
             type(polarft_corrcalc)               :: pftcc
             real, allocatable :: inpl_corrs(:)
@@ -229,11 +228,6 @@ module simple_corrmat
             lims(:,2)      =  params_glob%trs
             lims_init(:,1) = -SHC_INPL_TRSHWDTH
             lims_init(:,2) =  SHC_INPL_TRSHWDTH
-            allocate(grad_shsrch_obj(nthr_glob))
-            do ithr = 1, nthr_glob
-                call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier,&
-                &maxits=params_glob%maxits_sh, opt_angle=.true.)
-            end do
 
             !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
             do i = 1, n
@@ -254,10 +248,11 @@ module simple_corrmat
             allocate(inpl_corrs(nrots), corrmat(n,n), source=0.)
             allocate(imgs_rot(n,n))
             corrmat = 1.
-            !$omp parallel do default(shared) private(i,j,ithr,inpl_corrs,loc,irot,cxy) schedule(dynamic) proc_bind(close)
+            !$omp parallel do default(shared) private(i,j,k,ithr,inpl_corrs,loc,irot) schedule(runtime) proc_bind(close)
             do i = 1, n - 1
                 do j = i + 1, n
                     ithr = omp_get_thread_num() + 1
+
                     do k = 1, nrots 
                         inpl_corrs(k) = pftcc%calc_magcorr_rot(i,j,k) 
                     end do
@@ -275,9 +270,6 @@ module simple_corrmat
                     cxy_m(1) = inpl_corrs(loc(1))
                     if(cxy_m(1) > corrmat(i,j)) mirr_l = .true.  
                     
-                    ! print *, 'cc:', corrmat(i,j), 'cc_mirr', cxy_m(1)
-                    ! print *, 'ang', ang, 'mirr_ang', mirr_ang
-                    ! corrmat(i,j) = max(corrmat(i,j),cxy_m(1))
                     
                     if(mirr_l) then 
                         call imgs(j)%mirror('y')

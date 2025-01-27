@@ -95,7 +95,7 @@ contains
         type(pickseg), allocatable  :: pick_arr(:)
         character(len=LONGSTRLEN), allocatable  :: file_list(:)
         character(len = 255)    :: directory = '/Users/atifao/Downloads/MRC_T/'
-        character(len = 255)    :: sim_dir = '/Users/atifao/Downloads/test_for_clus.mrcs'
+        character(len = 255)    :: sim_dir = '/Users/atifao/Downloads/small_clus.mrc'
         integer                 :: i, nptcls, temp_ldim(3), pick_dim(3),j
         integer, allocatable    :: ldim_arr(:,:)
         real, allocatable       :: smpd_arr(:), stack_rmat(:,:,:,:), rot_test(:,:)
@@ -131,6 +131,7 @@ contains
         !     if(i > 1) exit 
         ! end do
         call find_ldim_nptcls(sim_dir,temp_ldim, nptcls)
+        print *, temp_ldim 
         call im_stack%new(temp_ldim, params%smpd)
         call im_stack%read(sim_dir)
         allocate(stack_rmat(temp_ldim(1), temp_ldim(2), 1, temp_ldim(3)))
@@ -146,13 +147,13 @@ contains
         params_glob%box = temp_ldim(1)
         print *, 'calculating sim matrix...'
         call calc_inplane_mag_corrmat(pick_vec, hp, lp, rot_test)
-        call exp_img%new(pick_dim, params_glob%smpd)
+        call exp_img%new([temp_ldim(3), temp_ldim(3), 1], params_glob%smpd)
         do i = 1, temp_ldim(3)
             do j = 1, temp_ldim(3)
                 call exp_img%set_rmat_at(i,j,1,rot_test(i,j))
             end do 
         end do
-        call exp_img%write('corr_mat_exp')
+        call exp_img%write('corr_mat_exp.mrc')
     end subroutine exec_afm
 
     !> centers base on centre of mass

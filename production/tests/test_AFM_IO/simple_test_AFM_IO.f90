@@ -28,7 +28,7 @@ program AFM_File_IO
     type(spec_clust)             :: spec_clust_test    
     integer, allocatable         :: clus_centers(:)
     integer, allocatable         :: clus_labels(:)
-    real                         :: clus_simsum, test_shift(2)
+    real                         :: clus_simsum, test_shift(2), new_smpd = 15. 
     real                         :: start, finish, count, rmat(150,150,1), hp = 60., lp = 10., comp_val
     real, allocatable            :: corr_mat_test(:,:), rot_test(:,:)
     integer                      :: clip_len, file_num, file_iter, test_dim(3) = [100, 100, 1], i, j, rows, cols, ncls_ini, pick_ldim(3), sums, max, max_i, dims(2), pair(2)
@@ -61,7 +61,7 @@ program AFM_File_IO
     allocate(pick_array(size(file_list)))
     allocate(bin_cc_array(size(file_list)))
     allocate(pick_mat(size(file_list), 500))
-    do file_iter = 3, size(file_list)
+    do file_iter = 1, size(file_list)
         call read_ibw(stack_stack(file_iter), file_list(file_iter))
         call align_avg(stack_stack(file_iter), stack_avg(file_iter))
         if(file_list(file_iter) == trim(directory) // 'Cob_450007.ibw' .or. file_list(file_iter) == trim(directory) // 'Cob_450010.ibw') then 
@@ -74,7 +74,7 @@ program AFM_File_IO
         call zero_padding(stack_avg(file_iter))
         call hough_lines(stack_avg(file_iter)%img_array(9), [PI/2 - PI/180, PI/2 + PI/180], mask_array(:, :, :, file_iter))
         call mask42D(stack_avg(file_iter)%img_array(9), pick_array(file_iter), bin_cc_array(file_iter), mask_array(:, :, :, file_iter), pick_mat(file_iter, :))
-        if(file_iter > 3) exit
+        if(file_iter > 1) exit
     end do
     
     params_glob%smpd = pick_mat(1,1)%get_smpd()
@@ -97,19 +97,27 @@ program AFM_File_IO
         end do 
     end do 
     pick_vec = pack(pick_mat, log_mat .eqv. .true.)
+    do i = 1, size(pick_vec)
+        call pick_vec(i)%write('mrc_for_clus.mrc', i)
+    end do 
     allocate(rot_test(size(pick_vec),size(pick_vec)))
    
   
     ! allocate(rot_test(2,2))
-    call rot_sh%copy(pick_vec(127))
-    call rot_sh%rtsq(143.,42.,12.)
-    call rot_sh%mirror('y')
-    test_vec_corr(1) = pick_vec(127)
-    test_vec_corr(2) = rot_sh
+    ! call rot_sh%copy(pick_vec(127))
+    ! call rot_sh%rtsq(143.,42.,12.)
+    ! call rot_sh%mirror('y')
+    ! test_vec_corr(1) = pick_vec(127)
+    ! test_vec_corr(2) = rot_sh
     ! print *, size(pick_vec), size(rot_test)
+    ! do i = 1, size(pick_vec)
+    !     call pick_vec(i)%scale_pspec4viz(new_smpd)
+    !     ! call pick_vec(i)%vis()
+    ! end do 
     call calc_inplane_mag_corrmat(pick_vec, hp, lp, rot_test)
     ! print *, rot_test
-    print *, rot_test
+
+    ! print *, rot_test
     ! call pick_vec(107)%write('/Users/afan/ref.mrc')
     ! call rot_sh%copy(pick_vec(107))
     ! call rot_sh%rtsq(63.,42.,12.)
@@ -118,16 +126,16 @@ program AFM_File_IO
     ! call calc_inplane_mag_corrmat(pick_vec, hp, lp, rot_test)
    ! 10 most similar pairs
 
-    comp_val = 0.97
-    count = 0
-    do while (count < 20)
-        pair = maxloc(rot_test, mask = rot_test .lt. comp_val)
-        comp_val = maxval(rot_test, mask = rot_test .lt. comp_val)
-        print *, comp_val 
-        call pick_vec(pair(1))%vis()
-        call pick_vec(pair(2))%vis()
-        count = count + 1
-    end do 
+    ! comp_val = 0.97
+    ! count = 0
+    ! do while (count < 20)
+    !     pair = maxloc(rot_test, mask = rot_test .lt. comp_val)
+    !     comp_val = maxval(rot_test, mask = rot_test .lt. comp_val)
+    !     print *, comp_val 
+    !     call pick_vec(pair(1))%vis()
+    !     call pick_vec(pair(2))%vis()
+    !     count = count + 1
+    ! end do 
 
     ! call pick_vec(107)%write('/Users/afan/ref.mrc')
     ! call rot_sh%copy(pick_vec(107))
@@ -195,9 +203,9 @@ program AFM_File_IO
     ! call pre_proc(pick_vec)
     ! call calc_inplane_invariant_corrmat(pick_vec, hp, lp, corr_mat_test, .true.)
 
-    call aff_prop_clus%new(ncls_ini, rot_test)
-    call aff_prop_clus%propagate(clus_centers,clus_labels,clus_simsum)
-    print *, clus_labels
+    ! call aff_prop_clus%new(ncls_ini, rot_test)
+    ! call aff_prop_clus%propagate(clus_centers,clus_labels,clus_simsum)
+    ! print *, clus_labels
     ! do i = 1, size(clus_labels)
     !     if(clus_labels(i) == 4) call pick_vec(i)%vis()
     ! end do 
