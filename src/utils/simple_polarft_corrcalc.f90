@@ -1533,57 +1533,87 @@ contains
         endif
     end subroutine linear_memoized_refs
 
-    subroutine gencorrs_1( self, iref, iptcl, cc, kweight )
+    subroutine gencorrs_1( self, iref, iptcl, cc, kweight, onestate )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(out)   :: cc(self%nrots)
         logical,       optional, intent(in)    :: kweight
-        logical :: kw
-        select case(params_glob%cc_objfun)
-            case(OBJFUN_CC)
-                kw = params_glob%l_kweight
-                if( present(kweight)) kw = kweight ! overrides params_glob%l_kweight
-                if( kw )then
-                    call self%gencorrs_weighted_cc(iptcl, iref, cc)
-                else
-                    call self%gencorrs_cc(iptcl, iref, cc)
-                endif
-            case(OBJFUN_EUCLID)
-                call self%gencorrs_euclid(iptcl, iref, cc)
-        end select
+        logical,       optional, intent(in)    :: onestate
+        logical :: kw, l_onestate
+        integer :: istate, irefs(params_glob%nstates)
+        real    :: prefs(params_glob%nstates)
+        l_onestate = .false.
+        if( present(onestate) ) l_onestate = onestate
+        if( params_glob%l_linstates .and. .not.(l_onestate) )then
+            call self%get_linstates_irefs(iref, irefs)
+            do istate = 1, params_glob%nstates
+                call self%gencorrs_1(irefs(istate), iptcl, cc, kweight, onestate=.true.)
+                prefs(istate) = maxval(cc)
+            enddo
+            prefs = prefs/sum(prefs)
+            call self%gencorrs_3( irefs, prefs, iptcl, cc, kweight )
+        else
+            select case(params_glob%cc_objfun)
+                case(OBJFUN_CC)
+                    kw = params_glob%l_kweight
+                    if( present(kweight)) kw = kweight ! overrides params_glob%l_kweight
+                    if( kw )then
+                        call self%gencorrs_weighted_cc(iptcl, iref, cc)
+                    else
+                        call self%gencorrs_cc(iptcl, iref, cc)
+                    endif
+                case(OBJFUN_EUCLID)
+                    call self%gencorrs_euclid(iptcl, iref, cc)
+            end select
+        endif
     end subroutine gencorrs_1
 
-    subroutine gencorrs_2( self, iref, iptcl, shift, cc, kweight )
+    subroutine gencorrs_2( self, iref, iptcl, shift, cc, kweight, onestate )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shift(2)
         real(sp),                intent(out)   :: cc(self%nrots)
         logical,       optional, intent(in)    :: kweight
+        logical,       optional, intent(in)    :: onestate
         complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
         integer :: i, ithr
-        logical :: kw
-        ithr    = omp_get_thread_num() + 1
-        i       = self%pinds(iptcl)
-        shmat   => self%heap_vars(ithr)%shmat
-        pft_ref => self%heap_vars(ithr)%pft_ref
-        call self%gen_shmat(ithr, shift, shmat)
-        if( self%iseven(i) )then
-            pft_ref = shmat * self%pfts_refs_even(:,:,iref)
+        logical :: kw, l_onestate
+        integer :: istate, irefs(params_glob%nstates)
+        real    :: prefs(params_glob%nstates)
+        l_onestate = .false.
+        if( present(onestate) ) l_onestate = onestate
+        if( params_glob%l_linstates .and. .not.(l_onestate) )then
+            call self%get_linstates_irefs(iref, irefs)
+            do istate = 1, params_glob%nstates
+                call self%gencorrs_2(irefs(istate), iptcl, shift, cc, kweight, onestate=.true.)
+                prefs(istate) = maxval(cc)
+            enddo
+            prefs = prefs/sum(prefs)
+            call self%gencorrs_4( irefs, prefs, iptcl, shift, cc, kweight )
         else
-            pft_ref = shmat * self%pfts_refs_odd(:,:,iref)
+            ithr    = omp_get_thread_num() + 1
+            i       = self%pinds(iptcl)
+            shmat   => self%heap_vars(ithr)%shmat
+            pft_ref => self%heap_vars(ithr)%pft_ref
+            call self%gen_shmat(ithr, shift, shmat)
+            if( self%iseven(i) )then
+                pft_ref = shmat * self%pfts_refs_even(:,:,iref)
+            else
+                pft_ref = shmat * self%pfts_refs_odd(:,:,iref)
+            endif
+            select case(params_glob%cc_objfun)
+                case(OBJFUN_CC)
+                    kw = params_glob%l_kweight
+                    if( present(kweight)) kw = kweight ! overrides params_glob%l_kweight
+                    if( kw )then
+                        call self%gencorrs_shifted_weighted_cc(pft_ref, iptcl, iref, cc)
+                    else
+                        call self%gencorrs_shifted_cc(pft_ref, iptcl, iref, cc)
+                    endif
+                case(OBJFUN_EUCLID)
+                    call self%gencorrs_shifted_euclid(pft_ref, iptcl, iref, cc)
+            end select
         endif
-        select case(params_glob%cc_objfun)
-            case(OBJFUN_CC)
-                kw = params_glob%l_kweight
-                if( present(kweight)) kw = kweight ! overrides params_glob%l_kweight
-                if( kw )then
-                    call self%gencorrs_shifted_weighted_cc(pft_ref, iptcl, iref, cc)
-                else
-                    call self%gencorrs_shifted_cc(pft_ref, iptcl, iref, cc)
-                endif
-            case(OBJFUN_EUCLID)
-                call self%gencorrs_shifted_euclid(pft_ref, iptcl, iref, cc)
-        end select
     end subroutine gencorrs_2
 
     subroutine gencorrs_3( self, irefs, prefs, iptcl, cc, kweight )
@@ -2068,64 +2098,92 @@ contains
         end select
     end subroutine bidirectional_shift_search
 
-    real(dp) function gencorr_for_rot_8_1( self, iref, iptcl, irot )
+    real(dp) function gencorr_for_rot_8_1( self, iref, iptcl, irot, onestate )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl, irot
+        logical, optional,       intent(in)    :: onestate
         complex(dp), pointer :: pft_ref_8(:,:), pft_ref_tmp_8(:,:)
-        integer              :: ithr, i
-        i    =  self%pinds(iptcl)
-        ithr = omp_get_thread_num() + 1
-        pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
-        pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
-        if( self%iseven(i) )then
-            pft_ref_8 = self%pfts_refs_even(:,:,iref)
+        integer :: ithr, i, istate, irefs(params_glob%nstates)
+        logical :: l_onestate
+        real    :: prefs(params_glob%nstates)
+        l_onestate = .false.
+        if( present(onestate) ) l_onestate = onestate
+        if( params_glob%l_linstates .and. .not.(l_onestate) )then
+            call self%get_linstates_irefs(iref, irefs)
+            do istate = 1, params_glob%nstates
+                prefs(istate) = self%gencorr_for_rot_8_1(irefs(istate), iptcl, irot, onestate=.true.)
+            enddo
+            prefs               = prefs/sum(prefs)
+            gencorr_for_rot_8_1 = self%gencorr_for_rot_8_3( irefs, prefs, iptcl, irot )
         else
-            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
+            i    =  self%pinds(iptcl)
+            ithr = omp_get_thread_num() + 1
+            pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
+            pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
+            if( self%iseven(i) )then
+                pft_ref_8 = self%pfts_refs_even(:,:,iref)
+            else
+                pft_ref_8 = self%pfts_refs_odd(:,:,iref)
+            endif
+            ! rotation
+            call self%rotate_ref(pft_ref_8, irot, pft_ref_tmp_8)
+            ! ctf
+            if( self%with_ctf ) pft_ref_tmp_8 = pft_ref_tmp_8 * self%ctfmats(:,:,i)
+            gencorr_for_rot_8_1 = 0.d0
+            select case(params_glob%cc_objfun)
+                case(OBJFUN_CC)
+                    gencorr_for_rot_8_1 = self%gencorr_cc_for_rot_8(pft_ref_tmp_8, i)
+                case(OBJFUN_EUCLID)
+                    gencorr_for_rot_8_1 = self%gencorr_euclid_for_rot_8(pft_ref_tmp_8, iptcl)
+            end select
         endif
-        ! rotation
-        call self%rotate_ref(pft_ref_8, irot, pft_ref_tmp_8)
-        ! ctf
-        if( self%with_ctf ) pft_ref_tmp_8 = pft_ref_tmp_8 * self%ctfmats(:,:,i)
-        gencorr_for_rot_8_1 = 0.d0
-        select case(params_glob%cc_objfun)
-            case(OBJFUN_CC)
-                gencorr_for_rot_8_1 = self%gencorr_cc_for_rot_8(pft_ref_tmp_8, i)
-            case(OBJFUN_EUCLID)
-                gencorr_for_rot_8_1 = self%gencorr_euclid_for_rot_8(pft_ref_tmp_8, iptcl)
-        end select
     end function gencorr_for_rot_8_1
 
-    real(dp) function gencorr_for_rot_8_2( self, iref, iptcl, shvec, irot )
+    real(dp) function gencorr_for_rot_8_2( self, iref, iptcl, shvec, irot, onestate )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(dp),                intent(in)    :: shvec(2)
         integer,                 intent(in)    :: irot
+        logical, optional,       intent(in)    :: onestate
         complex(dp), pointer :: pft_ref_8(:,:), pft_ref_tmp_8(:,:), shmat_8(:,:)
-        integer              :: ithr, i
-        i    =  self%pinds(iptcl)
-        ithr = omp_get_thread_num() + 1
-        pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
-        pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
-        shmat_8       => self%heap_vars(ithr)%shmat_8
-        if( self%iseven(i) )then
-            pft_ref_8 = self%pfts_refs_even(:,:,iref)
+        integer :: ithr, i, istate, irefs(params_glob%nstates)
+        logical :: l_onestate
+        real    :: prefs(params_glob%nstates)
+        l_onestate = .false.
+        if( present(onestate) ) l_onestate = onestate
+        if( params_glob%l_linstates .and. .not.(l_onestate) )then
+            call self%get_linstates_irefs(iref, irefs)
+            do istate = 1, params_glob%nstates
+                prefs(istate) = self%gencorr_for_rot_8_2(irefs(istate), iptcl, shvec, irot, onestate=.true.)
+            enddo
+            prefs               = prefs/sum(prefs)
+            gencorr_for_rot_8_2 = self%gencorr_for_rot_8_4(irefs, prefs, iptcl, shvec, irot )
         else
-            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
+            i    =  self%pinds(iptcl)
+            ithr = omp_get_thread_num() + 1
+            pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
+            pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
+            shmat_8       => self%heap_vars(ithr)%shmat_8
+            if( self%iseven(i) )then
+                pft_ref_8 = self%pfts_refs_even(:,:,iref)
+            else
+                pft_ref_8 = self%pfts_refs_odd(:,:,iref)
+            endif
+            ! shift
+            call self%gen_shmat_8(ithr, shvec, shmat_8)
+            pft_ref_8 = pft_ref_8 * shmat_8
+            ! rotation
+            call self%rotate_ref(pft_ref_8, irot, pft_ref_tmp_8)
+            ! ctf
+            if( self%with_ctf ) pft_ref_tmp_8 = pft_ref_tmp_8 * self%ctfmats(:,:,i)
+            gencorr_for_rot_8_2 = 0.d0
+            select case(params_glob%cc_objfun)
+                case(OBJFUN_CC)
+                    gencorr_for_rot_8_2 = self%gencorr_cc_for_rot_8(pft_ref_tmp_8, i)
+                case(OBJFUN_EUCLID)
+                    gencorr_for_rot_8_2 = self%gencorr_euclid_for_rot_8(pft_ref_tmp_8, iptcl)
+            end select
         endif
-        ! shift
-        call self%gen_shmat_8(ithr, shvec, shmat_8)
-        pft_ref_8 = pft_ref_8 * shmat_8
-        ! rotation
-        call self%rotate_ref(pft_ref_8, irot, pft_ref_tmp_8)
-        ! ctf
-        if( self%with_ctf ) pft_ref_tmp_8 = pft_ref_tmp_8 * self%ctfmats(:,:,i)
-        gencorr_for_rot_8_2 = 0.d0
-        select case(params_glob%cc_objfun)
-            case(OBJFUN_CC)
-                gencorr_for_rot_8_2 = self%gencorr_cc_for_rot_8(pft_ref_tmp_8, i)
-            case(OBJFUN_EUCLID)
-                gencorr_for_rot_8_2 = self%gencorr_euclid_for_rot_8(pft_ref_tmp_8, iptcl)
-        end select
     end function gencorr_for_rot_8_2
 
     real(dp) function gencorr_for_rot_8_3( self, irefs, prefs, iptcl, irot )
@@ -2228,32 +2286,46 @@ contains
         gencorr_euclid_for_rot_8 = dexp( -gencorr_euclid_for_rot_8 / self%wsqsums_ptcls(i) )
     end function gencorr_euclid_for_rot_8
 
-    subroutine gencorr_grad_for_rot_8_1( self, iref, iptcl, shvec, irot, f, grad )
+    subroutine gencorr_grad_for_rot_8_1( self, iref, iptcl, shvec, irot, f, grad, onestate )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(dp),                intent(in)    :: shvec(2)
         integer,                 intent(in)    :: irot
         real(dp),                intent(out)   :: f, grad(2)
+        logical, optional,       intent(in)    :: onestate
         complex(dp), pointer :: pft_ref_8(:,:), shmat_8(:,:), pft_ref_tmp_8(:,:)
-        integer              :: ithr, i
-        i    =  self%pinds(iptcl)
-        ithr = omp_get_thread_num() + 1
-        pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
-        pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
-        shmat_8       => self%heap_vars(ithr)%shmat_8
-        if( self%iseven(i) )then
-            pft_ref_8 = self%pfts_refs_even(:,:,iref)
+        integer :: ithr, i, istate, irefs(params_glob%nstates)
+        logical :: l_onestate
+        real    :: prefs(params_glob%nstates)
+        l_onestate = .false.
+        if( present(onestate) ) l_onestate = onestate
+        if( params_glob%l_linstates .and. .not.(l_onestate) )then
+            call self%get_linstates_irefs(iref, irefs)
+            do istate = 1, params_glob%nstates
+                prefs(istate) = self%gencorr_for_rot_8_2(irefs(istate), iptcl, shvec, irot, onestate=.true.)
+            enddo
+            prefs = prefs/sum(prefs)
+            call self%gencorr_grad_for_rot_8_2(irefs, prefs, iptcl, shvec, irot, f, grad)
         else
-            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
+            i    =  self%pinds(iptcl)
+            ithr = omp_get_thread_num() + 1
+            pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
+            pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
+            shmat_8       => self%heap_vars(ithr)%shmat_8
+            if( self%iseven(i) )then
+                pft_ref_8 = self%pfts_refs_even(:,:,iref)
+            else
+                pft_ref_8 = self%pfts_refs_odd(:,:,iref)
+            endif
+            call self%gen_shmat_8(ithr, shvec, shmat_8)
+            pft_ref_8 = pft_ref_8 * shmat_8
+            select case(params_glob%cc_objfun)
+                case(OBJFUN_CC)
+                    call self%gencorr_cc_grad_for_rot_8(    pft_ref_8, pft_ref_tmp_8, iptcl, irot, f, grad)
+                case(OBJFUN_EUCLID)
+                    call self%gencorr_euclid_grad_for_rot_8(pft_ref_8, pft_ref_tmp_8, iptcl, irot, f, grad)
+            end select
         endif
-        call self%gen_shmat_8(ithr, shvec, shmat_8)
-        pft_ref_8 = pft_ref_8 * shmat_8
-        select case(params_glob%cc_objfun)
-            case(OBJFUN_CC)
-                call self%gencorr_cc_grad_for_rot_8(    pft_ref_8, pft_ref_tmp_8, iptcl, irot, f, grad)
-            case(OBJFUN_EUCLID)
-                call self%gencorr_euclid_grad_for_rot_8(pft_ref_8, pft_ref_tmp_8, iptcl, irot, f, grad)
-        end select
     end subroutine gencorr_grad_for_rot_8_1
 
     subroutine gencorr_grad_for_rot_8_2( self, irefs, prefs, iptcl, shvec, irot, f, grad )
@@ -2400,33 +2472,47 @@ contains
         grad = -f * 2.d0 * grad / denom
     end subroutine gencorr_euclid_grad_for_rot_8
 
-    subroutine gencorr_grad_only_for_rot_8_1( self, iref, iptcl, shvec, irot, grad )
+    subroutine gencorr_grad_only_for_rot_8_1( self, iref, iptcl, shvec, irot, grad, onestate )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(dp),                intent(in)    :: shvec(2)
         integer,                 intent(in)    :: irot
         real(dp),                intent(out)   :: grad(2)
+        logical, optional,       intent(in)    :: onestate
         complex(dp), pointer :: pft_ref_8(:,:), shmat_8(:,:), pft_ref_tmp_8(:,:)
         real(dp) :: f
-        integer  :: ithr, i
-        i    =  self%pinds(iptcl)
-        ithr = omp_get_thread_num() + 1
-        pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
-        pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
-        shmat_8       => self%heap_vars(ithr)%shmat_8
-        if( self%iseven(i) )then
-            pft_ref_8 = self%pfts_refs_even(:,:,iref)
+        integer  :: ithr, i, istate, irefs(params_glob%nstates)
+        logical  :: l_onestate
+        real     :: prefs(params_glob%nstates)
+        l_onestate = .false.
+        if( present(onestate) ) l_onestate = onestate
+        if( params_glob%l_linstates .and. .not.(l_onestate) )then
+            call self%get_linstates_irefs(iref, irefs)
+            do istate = 1, params_glob%nstates
+                prefs(istate) = self%gencorr_for_rot_8_2(irefs(istate), iptcl, shvec, irot, onestate=.true.)
+            enddo
+            prefs = prefs/sum(prefs)
+            call self%gencorr_grad_only_for_rot_8_2(irefs, prefs, iptcl, shvec, irot, grad)
         else
-            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
+            i    =  self%pinds(iptcl)
+            ithr = omp_get_thread_num() + 1
+            pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
+            pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
+            shmat_8       => self%heap_vars(ithr)%shmat_8
+            if( self%iseven(i) )then
+                pft_ref_8 = self%pfts_refs_even(:,:,iref)
+            else
+                pft_ref_8 = self%pfts_refs_odd(:,:,iref)
+            endif
+            call self%gen_shmat_8(ithr, shvec, shmat_8)
+            pft_ref_8 = pft_ref_8 * shmat_8
+            select case(params_glob%cc_objfun)
+                case(OBJFUN_CC)
+                    call self%gencorr_cc_grad_only_for_rot_8(pft_ref_8, pft_ref_tmp_8, i, irot, grad)
+                case(OBJFUN_EUCLID)
+                    call self%gencorr_euclid_grad_for_rot_8(pft_ref_8, pft_ref_tmp_8, iptcl, irot, f, grad)
+            end select
         endif
-        call self%gen_shmat_8(ithr, shvec, shmat_8)
-        pft_ref_8 = pft_ref_8 * shmat_8
-        select case(params_glob%cc_objfun)
-            case(OBJFUN_CC)
-                call self%gencorr_cc_grad_only_for_rot_8(pft_ref_8, pft_ref_tmp_8, i, irot, grad)
-            case(OBJFUN_EUCLID)
-                call self%gencorr_euclid_grad_for_rot_8(pft_ref_8, pft_ref_tmp_8, iptcl, irot, f, grad)
-        end select
     end subroutine gencorr_grad_only_for_rot_8_1
 
     subroutine gencorr_grad_only_for_rot_8_2( self, irefs, prefs, iptcl, shvec, irot, grad )
