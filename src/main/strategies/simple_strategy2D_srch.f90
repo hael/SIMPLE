@@ -11,7 +11,7 @@ use simple_eul_prob_tab2D,    only: eul_prob_tab2D
 use simple_strategy2D_alloc   ! s2D singleton
 implicit none
 
-public :: strategy2D_srch, strategy2D_spec, squared_sampling
+public :: strategy2D_srch, strategy2D_spec
 private
 
 #include "simple_local_flags.inc"
@@ -186,11 +186,12 @@ contains
         endif
     end subroutine inpl_srch
 
-    subroutine store_solution( self, nrefs )
+    subroutine store_solution( self, nrefs, w_in )
         class(strategy2D_srch), intent(in) :: self
         integer,      optional, intent(in) :: nrefs
+        real,         optional, intent(in) :: w_in
         real :: dist, mat(2,2), u(2), x1(2), x2(2)
-        real :: e3, mi_class, frac
+        real :: e3, mi_class, frac, w
         ! get in-plane angle
         e3   = 360. - pftcc_glob%get_rot(self%best_rot) ! change sgn to fit convention
         ! calculate in-plane rot dist (radians)
@@ -210,6 +211,9 @@ contains
         else
             frac = 100.*(real(self%nrefs_eval)/real(self%nrefs))
         endif
+        ! weight
+        w = 1.0
+        if( present(w_in) ) w = w_in
         ! update parameters
         call build_glob%spproj_field%e3set(self%iptcl,e3)
         call build_glob%spproj_field%set_shift(self%iptcl, self%prev_shvec + self%best_shvec)
@@ -220,7 +224,7 @@ contains
         call build_glob%spproj_field%set(self%iptcl, 'dist_inpl',  rad2deg(dist))
         call build_glob%spproj_field%set(self%iptcl, 'mi_class',   mi_class)
         call build_glob%spproj_field%set(self%iptcl, 'frac',       frac)
-        call build_glob%spproj_field%set(self%iptcl, 'w',          1.)
+        call build_glob%spproj_field%set(self%iptcl, 'w',          w)
     end subroutine store_solution
 
     subroutine kill( self )
@@ -229,47 +233,5 @@ contains
         call self%grad_shsrch_obj2%kill
         call self%grad_shsrch_first_obj%kill
     end subroutine kill
-
-    subroutine squared_sampling( n, corrs, order, nb, ind, rank, cc )
-        integer, intent(in)    :: n, nb
-        real,    intent(inout) :: corrs(n), cc
-        integer, intent(inout) :: order(n), ind, rank
-        integer, parameter :: P=2
-        real    :: cdf(nb), r
-        integer :: i
-        if( nb == 1 )then
-            rank = n
-            ind  = maxloc(corrs,dim=1)
-            cc   = corrs(ind)
-            return
-        endif
-        order = (/(i,i=1,n)/)
-        call hpsort(corrs, order)
-        cdf = corrs(n-nb+1:n)
-        if( all(cdf<TINY) )then
-            rank = n
-            ind  = order(rank)
-            cc   = corrs(rank)
-            return
-        endif
-        where( cdf < TINY ) cdf = 0.
-        do i = 2,nb
-            cdf(i) = cdf(i) + cdf(i-1)
-        enddo
-        cdf = cdf / sum(cdf)
-        r   = ran3()
-        r   = 1.-r**P
-        rank = 0
-        do i = 1,nb
-            if( cdf(i) > r )then
-                rank = i
-                exit
-            endif
-        enddo
-        if( rank == 0 ) rank = nb
-        rank = n - nb + rank ! rank of selected value
-        ind  = order(rank)   ! index
-        cc   = corrs(rank)   ! value
-    end subroutine squared_sampling
 
 end module simple_strategy2D_srch
