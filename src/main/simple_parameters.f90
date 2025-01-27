@@ -196,6 +196,7 @@ type :: parameters
     character(len=STDLEN)     :: fbody=''             !< file body
     character(len=STDLEN)     :: filter='no'          !< filter type{no}
     character(len=STDLEN)     :: flipgain='no'        !< gain reference flipping (no|x|y|xy|yx)
+    character(len=STDLEN)     :: linstates_mode='ppca'  !< linearized state mode(forprob|backprob){forprob}
     character(len=STDLEN)     :: multivol_mode='single' !< multivolume abinitio3D mode(single|independent|docked|input_oris_start|input_oris_fixed){single}
     character(len=STDLEN)     :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}
@@ -586,6 +587,7 @@ contains
         call check_carg('guinier',        self%guinier)
         call check_carg('graphene_filt',  self%graphene_filt)
         call check_carg('gridding',       self%gridding)
+        call check_carg('linstates_mode', self%linstates_mode)
         call check_carg('multivol_mode',  self%multivol_mode)
         call check_carg('icm',            self%icm)
         call check_carg('imgkind',        self%imgkind)

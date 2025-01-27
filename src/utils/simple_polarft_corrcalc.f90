@@ -126,6 +126,7 @@ type :: polarft_corrcalc
     procedure          :: get_npix
     procedure          :: get_work_pft_ptr
     procedure          :: get_linstates_irefs
+    procedure          :: get_linstates_prefs
     ! PRINTERS/VISUALISERS
     procedure          :: print
     procedure          :: vis_ptcl
@@ -600,6 +601,49 @@ contains
             irefs(istate) = (istate - 1) * params_glob%nspace + iproj
         enddo
     end subroutine get_linstates_irefs
+
+    ! compute weights of irefs, given the current prefs
+    subroutine get_linstates_prefs( self, iref, irefs, prefs )
+        class(polarft_corrcalc), intent(in)    :: self
+        integer,                 intent(in)    :: iref
+        integer,                 intent(in)    :: irefs(params_glob%nstates)
+        real,                    intent(inout) :: prefs(params_glob%nstates)
+        real    :: prefs_ori( params_glob%nstates), A( params_glob%nstates, params_glob%nstates),&
+                  &prefs_comp(params_glob%nstates), Ai(params_glob%nstates, params_glob%nstates)
+        integer :: istate, j, errflg
+        select case(trim(params_glob%linstates_mode))
+            case('forprob')
+                prefs_ori = prefs / sum(prefs)
+                do istate = 1, params_glob%nstates
+                    prefs(istate) = 1.
+                    if( iref == irefs(istate) ) cycle
+                    do j = 1, params_glob%nstates
+                        if( j == istate ) cycle
+                        prefs(istate) = prefs(istate) * (1. - prefs_ori(j))
+                    enddo
+                enddo
+                prefs = prefs / sum(prefs)
+            case('backprob')
+                prefs_ori  = prefs / sum(prefs)
+                prefs_comp = 1.
+                do istate = 1, params_glob%nstates
+                    do j = 1, params_glob%nstates
+                        if( j == istate ) cycle
+                        prefs_comp(istate) = prefs_comp(istate) * (1. - prefs_ori(j))
+                    enddo
+                enddo
+                A = 1.
+                do istate = 1, params_glob%nstates
+                    do j = 1, params_glob%nstates
+                        if( j == istate ) cycle
+                        A(istate, j) = prefs_comp(j)
+                    enddo
+                enddo
+                call matinv(A, Ai, params_glob%nstates, errflg)
+                prefs = Ai(iref,:)
+                prefs = prefs / sum(prefs)
+        end select
+    end subroutine get_linstates_prefs
 
     ! PRINTERS/VISUALISERS
 
@@ -1550,7 +1594,7 @@ contains
                 call self%gencorrs_1(irefs(istate), iptcl, cc, kweight, onestate=.true.)
                 prefs(istate) = maxval(cc)
             enddo
-            prefs = prefs/sum(prefs)
+            call self%get_linstates_prefs(iref, irefs, prefs)
             call self%gencorrs_3( irefs, prefs, iptcl, cc, kweight )
         else
             select case(params_glob%cc_objfun)
@@ -1588,7 +1632,7 @@ contains
                 call self%gencorrs_2(irefs(istate), iptcl, shift, cc, kweight, onestate=.true.)
                 prefs(istate) = maxval(cc)
             enddo
-            prefs = prefs/sum(prefs)
+            call self%get_linstates_prefs(iref, irefs, prefs)
             call self%gencorrs_4( irefs, prefs, iptcl, shift, cc, kweight )
         else
             ithr    = omp_get_thread_num() + 1
@@ -2113,7 +2157,7 @@ contains
             do istate = 1, params_glob%nstates
                 prefs(istate) = self%gencorr_for_rot_8_1(irefs(istate), iptcl, irot, onestate=.true.)
             enddo
-            prefs               = prefs/sum(prefs)
+            call self%get_linstates_prefs(iref, irefs, prefs)
             gencorr_for_rot_8_1 = self%gencorr_for_rot_8_3( irefs, prefs, iptcl, irot )
         else
             i    =  self%pinds(iptcl)
@@ -2156,7 +2200,7 @@ contains
             do istate = 1, params_glob%nstates
                 prefs(istate) = self%gencorr_for_rot_8_2(irefs(istate), iptcl, shvec, irot, onestate=.true.)
             enddo
-            prefs               = prefs/sum(prefs)
+            call self%get_linstates_prefs(iref, irefs, prefs)
             gencorr_for_rot_8_2 = self%gencorr_for_rot_8_4(irefs, prefs, iptcl, shvec, irot )
         else
             i    =  self%pinds(iptcl)
@@ -2304,10 +2348,10 @@ contains
             do istate = 1, params_glob%nstates
                 prefs(istate) = self%gencorr_for_rot_8_2(irefs(istate), iptcl, shvec, irot, onestate=.true.)
             enddo
-            prefs = prefs/sum(prefs)
+            call self%get_linstates_prefs(iref, irefs, prefs)
             call self%gencorr_grad_for_rot_8_2(irefs, prefs, iptcl, shvec, irot, f, grad)
         else
-            i    =  self%pinds(iptcl)
+            i    = self%pinds(iptcl)
             ithr = omp_get_thread_num() + 1
             pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
             pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
@@ -2339,7 +2383,7 @@ contains
         complex(dp), pointer :: pft_ref_8(:,:), shmat_8(:,:), pft_ref_tmp_8(:,:)
         complex(sp), pointer :: pft_ref(:,:)
         integer              :: ithr, i
-        i    =  self%pinds(iptcl)
+        i    = self%pinds(iptcl)
         ithr = omp_get_thread_num() + 1
         pft_ref       => self%heap_vars(ithr)%pft_ref
         pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
@@ -2364,10 +2408,10 @@ contains
         real(dp),                intent(out)   :: f, grad(2)
         real(dp) :: sqsum_ref, sqsum_ptcl, denom
         integer  :: k, i
-        i           = self%pinds(iptcl)
-        sqsum_ref   = 0.d0
-        f           = 0.d0
-        grad        = 0.d0
+        i         = self%pinds(iptcl)
+        sqsum_ref = 0.d0
+        f         = 0.d0
+        grad      = 0.d0
         if( self%with_ctf )then
             if( params_glob%l_kweight_shift )then
                 sqsum_ptcl = self%ksqsums_ptcls(i)
@@ -2491,10 +2535,10 @@ contains
             do istate = 1, params_glob%nstates
                 prefs(istate) = self%gencorr_for_rot_8_2(irefs(istate), iptcl, shvec, irot, onestate=.true.)
             enddo
-            prefs = prefs/sum(prefs)
+            call self%get_linstates_prefs(iref, irefs, prefs)
             call self%gencorr_grad_only_for_rot_8_2(irefs, prefs, iptcl, shvec, irot, grad)
         else
-            i    =  self%pinds(iptcl)
+            i    = self%pinds(iptcl)
             ithr = omp_get_thread_num() + 1
             pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
             pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
@@ -2527,7 +2571,7 @@ contains
         complex(sp), pointer :: pft_ref(:,:)
         real(dp) :: f
         integer  :: ithr, i
-        i    =  self%pinds(iptcl)
+        i    = self%pinds(iptcl)
         ithr = omp_get_thread_num() + 1
         pft_ref       => self%heap_vars(ithr)%pft_ref
         pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
