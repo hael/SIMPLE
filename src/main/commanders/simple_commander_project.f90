@@ -983,6 +983,8 @@ contains
                     if( trim(params%partition).eq.'yes' )then
                         ! states are partitions of classes
                         call spproj%os_cls2D%set_all('cluster', real(states))
+                        where( states /= 0 ) states = 1
+                        call spproj%os_cls2D%set_all('state', real(states))
                         ! map partitions to ptcl2D/3D
                         call spproj%map_cls2D_flag_to_ptcls('cluster')
                     else
