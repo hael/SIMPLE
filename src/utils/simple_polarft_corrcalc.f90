@@ -641,7 +641,6 @@ contains
                 enddo
                 call matinv(A, Ai, params_glob%nstates, errflg)
                 prefs = Ai(iref,:)
-                prefs = prefs / sum(prefs)
         end select
     end subroutine get_linstates_prefs
 
