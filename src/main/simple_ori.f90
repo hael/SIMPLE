@@ -83,6 +83,7 @@ type :: ori
     procedure          :: isthere
     procedure          :: ischar
     procedure          :: isstatezero
+    procedure          :: isstate
     procedure          :: has_been_searched
     procedure          :: pparms2str
     procedure          :: pparms_strlen
@@ -1003,6 +1004,12 @@ contains
         class(ori), intent(in) :: self
         isstatezero = (self%get_state() == 0)
     end function isstatezero
+
+    logical function isstate( self, state )
+        class(ori), intent(in) :: self
+        integer,    intent(in) :: state
+        isstate = (self%get_state() == state)
+    end function isstate
 
     !>  \brief  check wether the orientation has any typical search parameter
     logical function has_been_searched( self )

@@ -4,7 +4,7 @@ use simple_image, only: image
 implicit none
 #include "simple_local_flags.inc"
 real,    parameter            :: smpd=0.358 
-type(image)                   :: img1, img2
+type(image)                   :: img1, img2, img_w
 real,    allocatable          :: rad_corrs(:), rad_dists(:), filt(:)
 character(len=256)            :: fn_img1, fn_img2
 character(len=:), allocatable :: cmd
@@ -38,18 +38,20 @@ ldim_refs = [ldim1(1), ldim1(2), ldim1(3)]
 n_shells  = nint(ldim_refs(1) / 2.)
 call img1%new(ldim_refs, smpd)
 call img2%new(ldim_refs, smpd)
+call img_w%new(ldim_refs, smpd)
 call img1%read(fn_img1)
 call img2%read(fn_img2)
 if( .not. (img1.eqdims.img2)     ) THROW_HARD('Nonconforming dimensions of images')
 if( .not. (img1%same_smpd(img2)) ) THROW_HARD('Nonconforming smpd of images')
 allocate(rad_corrs(n_shells), rad_dists(n_shells))
-call img1%radial_cc(img2, smpd, rad_corrs, rad_dists)
+call img1%radial_cc(img2, img_w, smpd, rad_corrs, rad_dists)
 write(logfhandle,*) '             Rad. dist.         Rad. corr. '
 do i = 1, n_shells
     write(logfhandle,*) i, rad_dists(i), rad_corrs(i)
 enddo
 call img1%kill()
 call img2%kill()
+call img_w%kill()
 cmd  = 'rm vol1.mrc vol2.mrc .eman2log.txt'
 call execute_command_line(cmd, exitstat=rc)
 end program simple_test_radial_cc
