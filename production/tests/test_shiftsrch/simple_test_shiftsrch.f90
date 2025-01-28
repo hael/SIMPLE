@@ -4,7 +4,7 @@ use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_cmdline,           only: cmdline
 use simple_builder,           only: builder
 use simple_image,             only: image
-use simple_parameters,        only: parameters
+use simple_parameters,        only: parameters, params_glob
 use simple_polarizer,         only: polarizer
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
 use simple_commander_volops,  only: reproject_commander
@@ -71,7 +71,7 @@ p%kfromto(1) = 2
 p%kfromto(2) = 40
 allocate( sigma2_noise(p%kfromto(1):p%kfromto(2), 1:N_PTCLS), source=1. )
 call b%build_general_tbox(p, cline)
-call pftcc%new(N_PTCLS, [1,N_PTCLS], p%kfromto, l_multirefs=.true.)
+call pftcc%new(N_PTCLS, [1,N_PTCLS], p%kfromto)
 call pftcc%assign_sigma2_noise(sigma2_noise)
 allocate(corrs(pftcc%get_nrots()), norm_const(pftcc%get_nrots(), 2))
 call img_copy%new([p%box_crop,p%box_crop,1],p%smpd_crop)
@@ -133,6 +133,7 @@ call grad_shsrch_obj%set_indices([5, 5], [.3, .7], 5)
 irot = 1
 cxy  = grad_shsrch_obj%minimize(irot)
 print *, cxy(1), cxy(2:3), irot
+params_glob%nstates = 2
 do i=5,5
     call pftcc%gencorrs([i, i], [.5, .5], i, corrs)
     print *, 'corr: ', maxval(corrs)
