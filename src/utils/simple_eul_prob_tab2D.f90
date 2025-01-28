@@ -1,4 +1,4 @@
-! orientation eul_prob_tab2D, used in abinitio2D
+! class probability table eul_prob_tab2D, used in abinitio2D
 module simple_eul_prob_tab2D
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -40,7 +40,7 @@ type :: eul_prob_tab2D
     procedure :: write_assignment
     procedure :: read_assignment
     ! DESTRUCTOR
-    procedure          :: kill
+    procedure :: kill
 end type eul_prob_tab2D
 
 contains
@@ -290,29 +290,40 @@ contains
     end subroutine assign_cls_greedy
 
     ! Assign class to all particles stochastically
-    subroutine assign_cls_stoch( self )
+    subroutine assign_cls_stoch( self, os )
         class(eul_prob_tab2D), intent(inout) :: self
+        class(oris),           intent(in)    :: os
         real,    allocatable :: dists(:)
-        integer, allocatable :: inds(:)
-        real    :: pdists(self%neffcls), score, t, neigh_frac
-        integer :: pops(self%ncls), vec(self%neffcls), i, icls, ind, rank, ncls_stoch
+        integer, allocatable :: inds(:), prev_cls(:)
+        real    :: tmp(self%ncls), pdists(self%neffcls), score, t, neigh_frac
+        integer :: pops(self%ncls), vec(self%neffcls), i, icls, ind, rank, ncls_stoch, prev_ref
+        logical :: l_self_subtr
+        ! previous class
+        prev_cls = os%get_all_asint('class')
         ! size of stochastic neighborhood (# of classes to draw from)
-        neigh_frac = extremal_decay2D(params_glob%extr_iter, params_glob%extr_lim)
-        ncls_stoch = nint(real(self%ncls)*(neigh_frac/3.))
-        ncls_stoch = max(2,min(ncls_stoch,self%ncls))
+        l_self_subtr = params_glob%extr_iter <= params_glob%extr_lim ! self-subtraction
+        neigh_frac   = extremal_decay2D(params_glob%extr_iter, params_glob%extr_lim)
+        ncls_stoch   = nint(real(self%ncls)*(neigh_frac/3.))
+        ncls_stoch   = max(2,min(ncls_stoch,self%ncls))
         ! select class stochastically
         pops = 0
         !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-        !$omp private(i,pdists,vec,ind,rank,score,icls) reduction(+:pops)
+        !$omp private(i,pdists,vec,ind,rank,score,icls,tmp,prev_ref) reduction(+:pops)
         do i = 1,self%nptcls
-            pdists = pack(self%loc_tab(:,i)%dist,mask=self%populated)   ! distances for non-empty classes
-            pdists = eulprob_corr_switch(pdists)                        ! distances back to score
+            tmp = self%loc_tab(:,i)%dist
+            if( l_self_subtr )then
+                prev_ref = prev_cls(self%pinds(i))
+                if( prev_ref > 0 ) tmp(prev_ref) = 1.           ! previous class set to maximal distance
+            endif
+            pdists = pack(tmp,mask=self%populated)              ! distances for non-empty classes
+            pdists = eulprob_corr_switch(pdists)                ! distances back to score
             call squared_sampling(self%neffcls, pdists, vec, ncls_stoch, ind, rank, score) ! stochastic sampling
-            icls = self%clsinds(ind)                                    ! original class number
-            self%assgn_map(i) = self%loc_tab(icls,i)                    ! updates assignement
-            pops(icls) = pops(icls) + 1                                 ! updates population
+            icls = self%clsinds(ind)                            ! class ID
+            self%assgn_map(i) = self%loc_tab(icls,i)            ! updates assignement
+            pops(icls) = pops(icls) + 1                         ! updates population
         enddo
         !$omp end parallel do
+        deallocate(prev_cls)
         ! taking the best maxpop particles
         do i = 1,self%neffcls
             icls = self%clsinds(i)
@@ -328,6 +339,7 @@ contains
                 end where
             endif
         enddo
+        deallocate(inds,dists)
     end subroutine assign_cls_stoch
 
     ! FILE I/O

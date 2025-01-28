@@ -44,7 +44,7 @@ type :: oris
     procedure          :: get_static
     procedure, private :: getter_1, getter_2, getter_3
     generic            :: getter => getter_1, getter_2, getter_3
-    procedure          :: get_all
+    procedure          :: get_all, get_all_asint
     procedure          :: get_all_sampled
     procedure          :: get_all_rmats
     procedure          :: get_mat
@@ -406,6 +406,19 @@ contains
         if( present(fromto) ) ffromto = fromto
         allocate( arr(ffromto(1):ffromto(2)), source=self%o(ffromto(1):ffromto(2))%get(key) )
     end function get_all
+
+    !>  \brief  is for getting an array of 'key' values cast to integer
+    function get_all_asint( self, key, fromto ) result( iarr )
+        class(oris),       intent(in) :: self
+        character(len=*),  intent(in) :: key
+        integer, optional, intent(in) :: fromto(2)
+        integer, allocatable :: iarr(:)
+        integer :: ffromto(2)
+        ffromto(1) = 1
+        ffromto(2) = self%n
+        if( present(fromto) ) ffromto = fromto
+        allocate(iarr(ffromto(1):ffromto(2)), source=nint(self%o(ffromto(1):ffromto(2))%get(key)))
+    end function get_all_asint
 
     !>  \brief  is for getting an array of 'key' values
     function get_all_sampled( self, key, state, lowerbound ) result( arr )
@@ -1426,7 +1439,7 @@ contains
         integer,            intent(inout) :: states(self%n)
         integer,            allocatable   :: pinds2sample(:)
         type(ran_tabu) :: rt
-        integer        :: i, j, cnt, nbest
+        integer        :: i, j, nbest
         ! calculate sampling size for each class
         clssmp(:)%nsample = 0
         do while( sum(clssmp(:)%nsample) < nptcls )
