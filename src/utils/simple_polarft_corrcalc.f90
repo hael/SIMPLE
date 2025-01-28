@@ -76,8 +76,9 @@ type :: polarft_corrcalc
     type(fftw_cvec),     allocatable :: ft_ptcl_ctf(:,:)            !< Fourier Transform of particle times CTF
     type(fftw_cvec),     allocatable :: ft_absptcl_ctf(:,:)         !< Fourier Transform of (particle times CTF)**2
     type(fftw_cvec),     allocatable :: ft_ctf2(:,:)                !< Fourier Transform of CTF squared modulus
-    type(fftw_cvec),     allocatable :: ft_ref_even(:,:),  ft_ref_odd(:,:)     !< Fourier Transform of even/odd references
-    type(fftw_cvec),     allocatable :: ft_ref2_even(:,:), ft_ref2_odd(:,:)    !< Fourier Transform of even/odd references squared modulus
+    type(fftw_cvec),     allocatable :: ft_ref_even(:,:),     ft_ref_odd(:,:)     !< Fourier Transform of even/odd references
+    type(fftw_cvec),     allocatable :: ft_ref2_even(:,:),    ft_ref2_odd(:,:)    !< Fourier Transform of even/odd references squared modulus
+    type(fftw_cvec),     allocatable :: ft_refs2_even(:,:,:), ft_refs2_odd(:,:,:) !< Fourier Transform of even/odd references of different pairs
     ! Convenience vectors, thread memoization
     type(heap_vars),     allocatable :: heap_vars(:)
     type(fftw_cvec),     allocatable :: cvec1(:), cvec2(:)
@@ -947,7 +948,7 @@ contains
 
     subroutine memoize_refs( self )
         class(polarft_corrcalc), intent(inout) :: self
-        integer :: k, ithr, iref, jref
+        integer :: k, ithr, iref, istate, jref, irefs(params_glob%nstates)
         ! allocations
         call self%allocate_refs_memoization
         ! memoization
@@ -978,6 +979,29 @@ contains
             enddo
         enddo
         !$omp end parallel do
+        if( params_glob%l_linstates )then
+            !$omp parallel do private(iref,k,ithr,istate,irefs,jref) default(shared) proc_bind(close) schedule(static)
+            do iref = 1,self%nrefs
+                call self%get_linstates_irefs(iref,irefs)
+                do istate = 1,params_glob%nstates
+                    jref = irefs(istate)
+                    do k = self%kfromto(1),self%kfromto(2)
+                        ithr = omp_get_thread_num() + 1
+                        ! FT(iREFeven x jREFeven)*
+                        self%cvec2(ithr)%c(           1:self%pftsz) = self%pfts_refs_even(:,k,iref)*conjg(self%pfts_refs_even(:,k,jref))
+                        self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(self%cvec2(ithr)%c(1:self%pftsz))
+                        call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
+                        self%ft_refs2_even(k,iref,istate)%c = conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
+                        ! FT(iREFodd x jREFodd)*
+                        self%cvec2(ithr)%c(           1:self%pftsz) = self%pfts_refs_odd(:,k,iref)*conjg(self%pfts_refs_odd(:,k,jref))
+                        self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(self%cvec2(ithr)%c(1:self%pftsz))
+                        call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
+                        self%ft_refs2_odd(k,iref,istate)%c = conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
+                    enddo
+                enddo
+            enddo
+            !$omp end parallel do
+        endif
     end subroutine memoize_refs
 
     subroutine kill_memoized_ptcls( self )
@@ -1061,7 +1085,7 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         character(kind=c_char, len=:), allocatable :: fft_wisdoms_fname ! FFTW wisdoms (per part or suffer I/O lag)
         integer(kind=c_int) :: wsdm_ret
-        integer             :: k, ithr, iref, jref
+        integer             :: k, ithr, iref, istate
         if( allocated(self%ft_ref_even) ) call self%kill_memoized_refs
         allocate(self%ft_ref_even( self%kfromto(1):self%kfromto(2),self%nrefs),&
         &self%ft_ref_odd(  self%kfromto(1):self%kfromto(2),self%nrefs),&
@@ -1069,6 +1093,10 @@ contains
         &self%ft_ref2_odd( self%kfromto(1):self%kfromto(2),self%nrefs),&
         &self%rvec1(nthr_glob), self%cvec1(nthr_glob),self%cvec2(nthr_glob),&
         &self%drvec(nthr_glob))
+        if( params_glob%l_linstates )then
+            allocate(self%ft_refs2_even(self%kfromto(1):self%kfromto(2),self%nrefs,params_glob%nstates),&
+                    &self%ft_refs2_odd( self%kfromto(1):self%kfromto(2),self%nrefs,params_glob%nstates))
+        endif
         ! convenience objects
         do ithr = 1,nthr_glob
             self%cvec1(ithr)%p = fftwf_alloc_complex(int(self%pftsz+1, c_size_t))
@@ -1090,6 +1118,14 @@ contains
                 call c_f_pointer(self%ft_ref_odd(  k,iref)%p, self%ft_ref_odd(  k,iref)%c, [self%pftsz+1])
                 call c_f_pointer(self%ft_ref2_even(k,iref)%p, self%ft_ref2_even(k,iref)%c, [self%pftsz+1])
                 call c_f_pointer(self%ft_ref2_odd( k,iref)%p, self%ft_ref2_odd( k,iref)%c, [self%pftsz+1])
+                if( params_glob%l_linstates )then
+                    do istate = 1, params_glob%nstates
+                        self%ft_refs2_even(k,iref,istate)%p = fftwf_alloc_complex(int(self%pftsz+1,c_size_t))
+                        self%ft_refs2_odd( k,iref,istate)%p = fftwf_alloc_complex(int(self%pftsz+1,c_size_t))
+                        call c_f_pointer(self%ft_refs2_even(k,iref,istate)%p, self%ft_refs2_even(k,iref,istate)%c, [self%pftsz+1])
+                        call c_f_pointer(self%ft_refs2_odd( k,iref,istate)%p, self%ft_refs2_odd( k,iref,istate)%c, [self%pftsz+1])
+                    enddo
+                endif
             enddo
         enddo
         ! plans & FFTW3 wisdoms
@@ -1489,7 +1525,7 @@ contains
         complex(sp),           pointer, intent(inout) :: ft_ref(:,:)
         complex(sp), optional, pointer, intent(inout) :: ft_ref2(:,:)
         logical,     optional,          intent(in)    :: pft_ref_or_ft_ref     ! true for pft_ref
-        integer  :: k, i, ithr, j, r, jref, rref
+        integer  :: k, i, ithr, j, r, jref, rref, istate
         logical  :: even, l_pft
         real     :: pjr
         l_pft = .false.
@@ -1527,21 +1563,32 @@ contains
             do j = 1, size(irefs)
                 jref = irefs(j)
                 do r = 1, size(irefs)
-                    rref = irefs(r)
-                    pjr  = prefs(j) * prefs(r)
+                    rref   = irefs(r)
+                    pjr    = prefs(j) * prefs(r)
+                    istate = mod(rref-1, params_glob%nstates) + 1
                     do k = self%kfromto(1),self%kfromto(2)
                         if( even )then
-                            ! FT(jREFeven x rREFeven)*
-                            self%cvec2(ithr)%c(           1:self%pftsz) = self%pfts_refs_even(:,k,rref)*conjg(self%pfts_refs_even(:,k,rref))
-                            self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(self%cvec2(ithr)%c(1:self%pftsz))
-                            call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
-                            ft_ref2(:,k) = ft_ref2(:,k) + pjr * conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
+                            ! ft_refs2_even is cached when linstates is on
+                            if( params_glob%l_linstates )then
+                                ft_ref2(:,k) = ft_ref2(:,k) + pjr * self%ft_refs2_even(k,jref,istate)%c
+                            else
+                                ! FT(jREFeven x rREFeven)*
+                                self%cvec2(ithr)%c(           1:self%pftsz) = self%pfts_refs_even(:,k,rref)*conjg(self%pfts_refs_even(:,k,rref))
+                                self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(self%cvec2(ithr)%c(1:self%pftsz))
+                                call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
+                                ft_ref2(:,k) = ft_ref2(:,k) + pjr * conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
+                            endif
                         else
-                            ! FT(jREFodd x rREFodd)*
-                            self%cvec2(ithr)%c(           1:self%pftsz) = self%pfts_refs_odd(:,k,rref)*conjg(self%pfts_refs_odd(:,k,rref))
-                            self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(self%cvec2(ithr)%c(1:self%pftsz))
-                            call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
-                            ft_ref2(:,k) = ft_ref2(:,k) + pjr * conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
+                            ! ft_refs2_odd is cached when linstates is on
+                            if( params_glob%l_linstates )then
+                                ft_ref2(:,k) = ft_ref2(:,k) + pjr * self%ft_refs2_odd(k,jref,istate)%c
+                            else
+                                ! FT(jREFodd x rREFodd)*
+                                self%cvec2(ithr)%c(           1:self%pftsz) = self%pfts_refs_odd(:,k,rref)*conjg(self%pfts_refs_odd(:,k,rref))
+                                self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(self%cvec2(ithr)%c(1:self%pftsz))
+                                call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
+                                ft_ref2(:,k) = ft_ref2(:,k) + pjr * conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
+                            endif
                         endif
                     enddo
                 enddo
