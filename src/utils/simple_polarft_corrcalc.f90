@@ -1573,7 +1573,7 @@ contains
                                 ft_ref2(:,k) = ft_ref2(:,k) + pjr * self%ft_refs2_even(k,jref,istate)%c
                             else
                                 ! FT(jREFeven x rREFeven)*
-                                self%cvec2(ithr)%c(           1:self%pftsz) = self%pfts_refs_even(:,k,rref)*conjg(self%pfts_refs_even(:,k,rref))
+                                self%cvec2(ithr)%c(           1:self%pftsz) = self%pfts_refs_even(:,k,jref)*conjg(self%pfts_refs_even(:,k,rref))
                                 self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(self%cvec2(ithr)%c(1:self%pftsz))
                                 call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
                                 ft_ref2(:,k) = ft_ref2(:,k) + pjr * conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
@@ -1584,7 +1584,7 @@ contains
                                 ft_ref2(:,k) = ft_ref2(:,k) + pjr * self%ft_refs2_odd(k,jref,istate)%c
                             else
                                 ! FT(jREFodd x rREFodd)*
-                                self%cvec2(ithr)%c(           1:self%pftsz) = self%pfts_refs_odd(:,k,rref)*conjg(self%pfts_refs_odd(:,k,rref))
+                                self%cvec2(ithr)%c(           1:self%pftsz) = self%pfts_refs_odd(:,k,jref)*conjg(self%pfts_refs_odd(:,k,rref))
                                 self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(self%cvec2(ithr)%c(1:self%pftsz))
                                 call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
                                 ft_ref2(:,k) = ft_ref2(:,k) + pjr * conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
