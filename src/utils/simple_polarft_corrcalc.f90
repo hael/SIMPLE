@@ -76,9 +76,8 @@ type :: polarft_corrcalc
     type(fftw_cvec),     allocatable :: ft_ptcl_ctf(:,:)            !< Fourier Transform of particle times CTF
     type(fftw_cvec),     allocatable :: ft_absptcl_ctf(:,:)         !< Fourier Transform of (particle times CTF)**2
     type(fftw_cvec),     allocatable :: ft_ctf2(:,:)                !< Fourier Transform of CTF squared modulus
-    type(fftw_cvec),     allocatable :: ft_ref_even(:,:),     ft_ref_odd(:,:)     !< Fourier Transform of even/odd references
-    type(fftw_cvec),     allocatable :: ft_ref2_even(:,:),    ft_ref2_odd(:,:)    !< Fourier Transform of even/odd references squared modulus
-    type(fftw_cvec),     allocatable :: ft_refs2_even(:,:,:), ft_refs2_odd(:,:,:) !< Fourier Transform of even/odd references of different pairs
+    type(fftw_cvec),     allocatable :: ft_ref_even(:,:),  ft_ref_odd(:,:)     !< Fourier Transform of even/odd references
+    type(fftw_cvec),     allocatable :: ft_ref2_even(:,:), ft_ref2_odd(:,:)    !< Fourier Transform of even/odd references squared modulus
     ! Convenience vectors, thread memoization
     type(heap_vars),     allocatable :: heap_vars(:)
     type(fftw_cvec),     allocatable :: cvec1(:), cvec2(:)
@@ -89,7 +88,6 @@ type :: polarft_corrcalc
     real,                pointer     :: sigma2_noise(:,:) => null() !< for euclidean distances
     logical                          :: with_ctf  = .false.         !< CTF flag
     logical                          :: existence = .false.         !< to indicate existence
-    logical                          :: multirefs = .false.         !< using multirefs in gencorrs
 
     contains
     ! CONSTRUCTOR
@@ -189,12 +187,11 @@ contains
 
     ! CONSTRUCTORS
 
-    subroutine new( self, nrefs, pfromto, kfromto, eoarr, l_multirefs )
+    subroutine new( self, nrefs, pfromto, kfromto, eoarr )
         class(polarft_corrcalc), target, intent(inout) :: self
         integer,                         intent(in)    :: nrefs
         integer,                         intent(in)    :: pfromto(2), kfromto(2)
         integer, optional,               intent(in)    :: eoarr(pfromto(1):pfromto(2))
-        logical, optional,               intent(in)    :: l_multirefs
         real(sp), allocatable :: polar_here(:)
         real(dp)              :: A(2)
         real(sp)              :: ang
@@ -267,9 +264,6 @@ contains
         else
             self%iseven = .true.
         endif
-        ! multirefs
-        self%multirefs = params_glob%l_linstates
-        if( present(l_multirefs) ) self%multirefs = (l_multirefs .or. self%multirefs)
         ! generate the argument transfer constants for shifting reference polarfts
         allocate( self%argtransf(self%nrots,self%kfromto(1):self%kfromto(2)),&
             &self%argtransf_shellone(self%nrots) )
@@ -984,27 +978,6 @@ contains
             enddo
         enddo
         !$omp end parallel do
-        if( self%multirefs )then
-            !$omp parallel do collapse(3) private(iref,k,ithr,jref) default(shared) proc_bind(close) schedule(static)
-            do iref = 1,self%nrefs
-                do jref = 1,self%nrefs
-                    do k = self%kfromto(1),self%kfromto(2)
-                        ithr = omp_get_thread_num() + 1
-                        ! FT(iREFeven x jREFeven)*
-                        self%cvec2(ithr)%c(           1:self%pftsz) = self%pfts_refs_even(:,k,iref)*conjg(self%pfts_refs_even(:,k,jref))
-                        self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(self%cvec2(ithr)%c(1:self%pftsz))
-                        call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
-                        self%ft_refs2_even(k,iref,jref)%c = conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
-                        ! FT(iREFodd x jREFodd)*
-                        self%cvec2(ithr)%c(           1:self%pftsz) = self%pfts_refs_odd(:,k,iref)*conjg(self%pfts_refs_odd(:,k,jref))
-                        self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(self%cvec2(ithr)%c(1:self%pftsz))
-                        call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
-                        self%ft_refs2_odd(k,iref,jref)%c = conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
-                    enddo
-                enddo
-            enddo
-        endif
-        ! clean-up
     end subroutine memoize_refs
 
     subroutine kill_memoized_ptcls( self )
@@ -1096,10 +1069,6 @@ contains
         &self%ft_ref2_odd( self%kfromto(1):self%kfromto(2),self%nrefs),&
         &self%rvec1(nthr_glob), self%cvec1(nthr_glob),self%cvec2(nthr_glob),&
         &self%drvec(nthr_glob))
-        if( self%multirefs )then
-            allocate(self%ft_refs2_even(self%kfromto(1):self%kfromto(2),self%nrefs,self%nrefs),&
-                    &self%ft_refs2_odd( self%kfromto(1):self%kfromto(2),self%nrefs,self%nrefs))
-        endif
         ! convenience objects
         do ithr = 1,nthr_glob
             self%cvec1(ithr)%p = fftwf_alloc_complex(int(self%pftsz+1, c_size_t))
@@ -1121,14 +1090,6 @@ contains
                 call c_f_pointer(self%ft_ref_odd(  k,iref)%p, self%ft_ref_odd(  k,iref)%c, [self%pftsz+1])
                 call c_f_pointer(self%ft_ref2_even(k,iref)%p, self%ft_ref2_even(k,iref)%c, [self%pftsz+1])
                 call c_f_pointer(self%ft_ref2_odd( k,iref)%p, self%ft_ref2_odd( k,iref)%c, [self%pftsz+1])
-                if( self%multirefs )then
-                    do jref = 1, self%nrefs
-                        self%ft_refs2_even(k,iref,jref)%p = fftwf_alloc_complex(int(self%pftsz+1,c_size_t))
-                        self%ft_refs2_odd( k,iref,jref)%p = fftwf_alloc_complex(int(self%pftsz+1,c_size_t))
-                        call c_f_pointer(self%ft_refs2_even(k,iref,jref)%p, self%ft_refs2_even(k,iref,jref)%c, [self%pftsz+1])
-                        call c_f_pointer(self%ft_refs2_odd( k,iref,jref)%p, self%ft_refs2_odd( k,iref,jref)%c, [self%pftsz+1])
-                    enddo
-                endif
             enddo
         enddo
         ! plans & FFTW3 wisdoms
@@ -1570,9 +1531,17 @@ contains
                     pjr  = prefs(j) * prefs(r)
                     do k = self%kfromto(1),self%kfromto(2)
                         if( even )then
-                            ft_ref2(:,k) = ft_ref2(:,k) + pjr * self%ft_refs2_even(k,jref,rref)%c
+                            ! FT(jREFeven x rREFeven)*
+                            self%cvec2(ithr)%c(           1:self%pftsz) = self%pfts_refs_even(:,k,rref)*conjg(self%pfts_refs_even(:,k,rref))
+                            self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(self%cvec2(ithr)%c(1:self%pftsz))
+                            call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
+                            ft_ref2(:,k) = ft_ref2(:,k) + pjr * conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
                         else
-                            ft_ref2(:,k) = ft_ref2(:,k) + pjr * self%ft_refs2_odd(k,jref,rref)%c
+                            ! FT(jREFodd x rREFodd)*
+                            self%cvec2(ithr)%c(           1:self%pftsz) = self%pfts_refs_odd(:,k,rref)*conjg(self%pfts_refs_odd(:,k,rref))
+                            self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(self%cvec2(ithr)%c(1:self%pftsz))
+                            call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
+                            ft_ref2(:,k) = ft_ref2(:,k) + pjr * conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
                         endif
                     enddo
                 enddo
