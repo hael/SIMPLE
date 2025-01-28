@@ -205,7 +205,7 @@ contains
         ! calculate overlap between distributions
         mi_class = 0.
         if( self%prev_class == self%best_class ) mi_class = 1.
-        ! search psace explored
+        ! search space explored
         if( present(nrefs) )then
             frac = 100.*(real(self%nrefs_eval)/real(nrefs))
         else

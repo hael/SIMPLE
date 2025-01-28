@@ -1155,7 +1155,8 @@ contains
         type(make_cavgs_commander)        :: xmake_cavgs
         type(calc_group_sigmas_commander) :: xcalc_group_sigmas
         type(scale_commander)             :: xscale
-        type(cmdline)              :: cline_make_cavgs, cline_scalerefs
+        type(prob_tab2D_commander_distr)  :: xprob_tab2D_distr
+        type(cmdline)              :: cline_make_cavgs, cline_scalerefs, cline_prob_tab2D
         type(parameters)           :: params
         type(builder), target      :: build
         type(starproject)          :: starproj
@@ -1334,6 +1335,17 @@ contains
                     params%needs_sigma   = 'yes'
                     params%l_needs_sigma = .true.
                 endif
+                ! refine=prob
+                if( str_has_substr(params%refine, 'prob') )then
+                    cline_prob_tab2D = cline
+                    call cline_prob_tab2D%set('prg',        'prob_tab2D')
+                    call cline_prob_tab2D%set('which_iter', params%which_iter)
+                    call cline_prob_tab2D%set('startit',    params%which_iter)
+                    call cline_prob_tab2D%set('refs',       params%refs)
+                    call cline_prob_tab2D%set('frcs',       FRCS_FILE)
+                    call xprob_tab2D_distr%execute( cline_prob_tab2D )
+                endif
+                ! stochastic search
                 call cluster2D_exec( cline, params%startit, converged )
                 ! objective functions
                 if( params%l_needs_sigma )then
@@ -1547,10 +1559,10 @@ contains
         endif
         if( params_glob%startit == 1 )then
             if( cline%defined('updatecnt_ini') )then
-                call build%spproj_field%set_nonzero_updatecnt(params%updatecnt_ini)
-                call build%spproj_field%clean_entry('sampled')
+                call build_glob%spproj_field%set_nonzero_updatecnt(params%updatecnt_ini)
+                call build_glob%spproj_field%clean_entry('sampled')
             else
-                call build%spproj_field%clean_entry('updatecnt', 'sampled')
+                call build_glob%spproj_field%clean_entry('updatecnt', 'sampled')
             endif
         endif
         ! sampled incremented
@@ -1580,8 +1592,12 @@ contains
         ! perform assignment
         select case(trim(params%refine))
         case('prob')
-            call eulprob%normalize_table
-            call eulprob%assign_cls_stoch
+            if( params%which_iter == 1 )then
+                call eulprob%assign_cls_greedy
+            else
+                call eulprob%normalize_table
+                call eulprob%assign_cls_stoch(build_glob%spproj_field)
+            endif
         case('prob_greedy')
             call eulprob%assign_cls_greedy
         end select
@@ -1593,7 +1609,7 @@ contains
         call cline_prob_tab2D%kill
         call qenv%kill
         call job_descr%kill
-        call qsys_job_finished('simple_commander_prob_tab2D :: exec_prob_align')
+        call qsys_job_finished('simple_commander_cluster2D :: exec_prob_tab2D_distr')
         call qsys_cleanup
         call simple_end('**** SIMPLE_PROB_TAB2D_DISTR NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_tab2D_distr
@@ -1664,7 +1680,7 @@ contains
         ! write
         call eulprob%write_table(fname)
         ! clean & end
-        call eucl_sigma2_glob%kill
+        if( associated(eucl_sigma2_glob) ) call eucl_sigma2_glob%kill
         call clean_batch_particles2D
         call eulprob%kill
         call pftcc%kill

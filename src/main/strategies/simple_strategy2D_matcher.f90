@@ -511,8 +511,8 @@ contains
                 pop_odd  = build_glob%spproj_field%get_pop(icls, 'class', eo=1)
             endif
             if( pop > 0 )then
-                call match_imgs(icls)%new([params_glob%box_crop, params_glob%box_crop, 1], params_glob%smpd_crop, wthreads=.false.)
                 ! prepare the references
+                call match_imgs(icls)%new([params_glob%box_crop, params_glob%box_crop, 1], params_glob%smpd_crop, wthreads=.false.)
                 ! here we are determining the shifts and map them back to classes
                 do_center = (has_been_searched .and. (pop > MINCLSPOPLIM) .and. (which_iter > 2)&
                     &.and. .not.params_glob%l_update_frac)
