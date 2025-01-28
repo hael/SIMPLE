@@ -108,7 +108,6 @@ type :: parameters
     character(len=3)          :: trsstats='no'        !< provide origin shift statistics(yes|no){no}
     character(len=3)          :: tseries='no'         !< images represent a time-series(yes|no){no}
     character(len=3)          :: updated='no'         !< whether parameters has been updated
-    character(len=3)          :: use_denoised='no'    !< use denoised particle representations for alignment (not 3D rec)
     character(len=3)          :: use_thres='yes'      !< Use contact-based thresholding(yes|no){yes}
     character(len=3)          :: vis='no'             !< visualise(yes|no)
     character(len=3)          :: zero='no'            !< zeroing(yes|no){no}
@@ -498,7 +497,6 @@ type :: parameters
     logical :: l_sigma_glob   = .false.
     logical :: l_trail_rec    = .false.
     logical :: l_remap_cls    = .false.
-    logical :: l_use_denoised = .false.
     logical :: l_wiener_part  = .false.
     logical :: sp_required    = .false.
     contains
@@ -682,7 +680,6 @@ contains
         call check_carg('transp_pca',     self%transp_pca)
         call check_carg('trsstats',       self%trsstats)
         call check_carg('tseries',        self%tseries)
-        call check_carg('use_denoised',   self%use_denoised)
         call check_carg('use_thres',      self%use_thres)
         call check_carg('vis',            self%vis)
         call check_carg('wcrit',          self%wcrit)
@@ -1610,8 +1607,7 @@ contains
                 THROW_HARD('unsupported lp_auto flag')
         end select        
         ! reg options
-        self%l_use_denoised = trim(self%use_denoised).eq.'yes'
-        self%l_noise_reg    = cline%defined('snr_noise_reg')
+        self%l_noise_reg = cline%defined('snr_noise_reg')
         if( self%l_noise_reg )then
             self%eps_bounds(2) = self%snr_noise_reg
             self%eps_bounds(1) = self%eps_bounds(2) / 2.

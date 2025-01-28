@@ -4639,7 +4639,7 @@ contains
                             y(1) = odd_prev%rmat( n_4(1,j),n_4(2,j),n_4(3,j))
                             y(2) = even_prev%rmat(n_4(1,j),n_4(2,j),n_4(3,j))
                             sy   = sy  + y
-                            syy  = syy + y *y
+                            syy  = syy + y * y
                         end do
                         xmin     = 0.
                         pot_term = syy ! x=0
@@ -8687,10 +8687,10 @@ contains
     end subroutine flip  
 
     !> \brief rad_cc calculates the radial correlation function between two images/volumes and weight the intensities of the original image/volume
-    subroutine radial_cc( self1, self2, smpd, rad_corrs, rad_dists )
-        class(image),      intent(inout):: self1, self2
-        real,              intent(in)   :: smpd
-        real, optional,    intent(out)  :: rad_corrs(int(self1%ldim(1)/2.)), rad_dists(int(self1%ldim(1)/2.))
+    subroutine radial_cc( self1, self2, self_w, smpd, rad_corrs, rad_dists )
+        class(image), intent(inout):: self1, self2, self_w
+        real,         intent(in)   :: smpd
+        real,         intent(out)  :: rad_corrs(int(self1%ldim(1)/2.)), rad_dists(int(self1%ldim(1)/2.))
         real                 :: rad_weights(int(self1%ldim(1)/2.))
         type(image)          :: distimg
         real,    allocatable :: rvec1(:), rvec2(:)
@@ -8699,7 +8699,7 @@ contains
         integer :: ldim3, n, n_shells
         real    :: dist_lbound, dist_ubound
         logical :: err
-        if( .not. (self1.eqdims.self2) ) THROW_HARD(' Nonconforming dimensions in image; radial_cc ')
+        if( .not. (self1.eqdims.self2) ) THROW_HARD('Nonconforming dimensions in image; radial_cc')
         call distimg%new(self1%ldim,smpd)
         n_shells    = int(self1%ldim(1) / 2.)
         if( self1%is_3d() )then
@@ -8732,7 +8732,8 @@ contains
             if( rad_weights(n+1) > 0.99999 ) rad_weights(n+1) = 0.99999
             rad_dists(n+1) = ( ( dist_lbound * smpd + dist_ubound * smpd ) / 2. )
             where( shell_mask(:,:,:) .eqv. .true. )
-                self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) = self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) * rad_weights(n+1)
+                self_w%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) = self_w%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) + rad_weights(n+1)
+                self1%rmat (:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) = self1%rmat (:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) * rad_weights(n+1)
             end where
         enddo
     end subroutine radial_cc

@@ -448,7 +448,7 @@ contains
         integer, intent(in) :: pinds(nptcls_here)
         logical, intent(in) :: l_ctf_here
         integer :: iptcl_batch, iptcl, ithr
-        call discrete_read_imgbatch( nptcls_here, pinds, [1,nptcls_here], params_glob%l_use_denoised  )
+        call discrete_read_imgbatch( nptcls_here, pinds, [1,nptcls_here])
         ! reassign particles indices & associated variables
         call pftcc%reallocate_ptcls(nptcls_here, pinds)
         !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr)&

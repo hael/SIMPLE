@@ -119,25 +119,16 @@ contains
         call stkio_r%close
     end subroutine read_imgbatch_3
 
-    subroutine discrete_read_imgbatch( n, pinds, batchlims, use_denoised )
+    subroutine discrete_read_imgbatch( n, pinds, batchlims )
         integer,          intent(in)  :: n, pinds(n), batchlims(2)
         type(dstack_io)               :: dstkio_r
         character(len=:), allocatable :: stkname, stkname_den
-        logical,          optional    :: use_denoised
         integer :: ind_in_stk, i, ii
-        logical :: uuse_denoised
-        uuse_denoised = .false.
-        if( present(use_denoised) ) uuse_denoised = use_denoised
         call dstkio_r%new(params_glob%smpd, params_glob%box)
         do i=batchlims(1),batchlims(2)
             ii = i - batchlims(1) + 1
-            if( uuse_denoised )then
-                call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, pinds(i), stkname, ind_in_stk, stkname_den)
-                call dstkio_r%read(stkname_den, ind_in_stk, build_glob%imgbatch(ii))
-            else
-                call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, pinds(i), stkname, ind_in_stk)
-                call dstkio_r%read(stkname, ind_in_stk, build_glob%imgbatch(ii))
-            endif
+            call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, pinds(i), stkname, ind_in_stk)
+            call dstkio_r%read(stkname, ind_in_stk, build_glob%imgbatch(ii))
         end do
         call dstkio_r%kill
     end subroutine discrete_read_imgbatch
@@ -721,6 +712,8 @@ contains
         type(ori)        :: orientation
         real             :: shift(2), sdev_noise
         integer          :: batchlims(2), iptcl, i, i_batch, ibatch
+        logical          :: l_rec_state
+        l_rec_state = cline%defined('state')
         ! init volumes
         call preprecvols
         ! prep batch imgs
@@ -1165,7 +1158,7 @@ contains
         integer,                 intent(in)    :: pinds_here(nptcls_here)
         type(image),             intent(inout) :: tmp_imgs(params_glob%nthr)
         integer :: iptcl_batch, iptcl, ithr
-        call discrete_read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here], params_glob%l_use_denoised )
+        call discrete_read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here])
         ! reassign particles indices & associated variables
         call pftcc%reallocate_ptcls(nptcls_here, pinds_here)
         !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
