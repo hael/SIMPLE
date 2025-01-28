@@ -596,7 +596,7 @@ contains
         integer,                 intent(in)    :: iref
         integer,                 intent(inout) :: irefs(params_glob%nstates)
         integer :: istate, iproj
-        iproj = mod(iref, params_glob%nspace)
+        iproj = mod(iref-1, params_glob%nspace) + 1
         do istate = 1, params_glob%nstates
             irefs(istate) = (istate - 1) * params_glob%nspace + iproj
         enddo
@@ -2158,7 +2158,7 @@ contains
         if( params_glob%l_linstates .and. .not.(l_onestate) )then
             call self%get_linstates_irefs(iref, irefs)
             do istate = 1, params_glob%nstates
-                prefs(istate) = self%gencorr_for_rot_8_1(irefs(istate), iptcl, irot, onestate=.true.)
+                prefs(istate) = real(self%gencorr_for_rot_8_1(irefs(istate), iptcl, irot, onestate=.true.))
             enddo
             call self%get_linstates_prefs(iref, irefs, prefs)
             gencorr_for_rot_8_1 = self%gencorr_for_rot_8_3( irefs, prefs, iptcl, irot )
@@ -2201,7 +2201,7 @@ contains
         if( params_glob%l_linstates .and. .not.(l_onestate) )then
             call self%get_linstates_irefs(iref, irefs)
             do istate = 1, params_glob%nstates
-                prefs(istate) = self%gencorr_for_rot_8_2(irefs(istate), iptcl, shvec, irot, onestate=.true.)
+                prefs(istate) = real(self%gencorr_for_rot_8_2(irefs(istate), iptcl, shvec, irot, onestate=.true.))
             enddo
             call self%get_linstates_prefs(iref, irefs, prefs)
             gencorr_for_rot_8_2 = self%gencorr_for_rot_8_4(irefs, prefs, iptcl, shvec, irot )
@@ -2349,7 +2349,7 @@ contains
         if( params_glob%l_linstates .and. .not.(l_onestate) )then
             call self%get_linstates_irefs(iref, irefs)
             do istate = 1, params_glob%nstates
-                prefs(istate) = self%gencorr_for_rot_8_2(irefs(istate), iptcl, shvec, irot, onestate=.true.)
+                prefs(istate) = real(self%gencorr_for_rot_8_2(irefs(istate), iptcl, shvec, irot, onestate=.true.))
             enddo
             call self%get_linstates_prefs(iref, irefs, prefs)
             call self%gencorr_grad_for_rot_8_2(irefs, prefs, iptcl, shvec, irot, f, grad)
@@ -2536,7 +2536,7 @@ contains
         if( params_glob%l_linstates .and. .not.(l_onestate) )then
             call self%get_linstates_irefs(iref, irefs)
             do istate = 1, params_glob%nstates
-                prefs(istate) = self%gencorr_for_rot_8_2(irefs(istate), iptcl, shvec, irot, onestate=.true.)
+                prefs(istate) = real(self%gencorr_for_rot_8_2(irefs(istate), iptcl, shvec, irot, onestate=.true.))
             enddo
             call self%get_linstates_prefs(iref, irefs, prefs)
             call self%gencorr_grad_only_for_rot_8_2(irefs, prefs, iptcl, shvec, irot, grad)
