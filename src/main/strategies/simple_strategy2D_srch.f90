@@ -20,7 +20,8 @@ type strategy2D_spec
     type(eul_prob_tab2D), pointer :: eulprob
     real    :: stoch_bound = 0.
     integer :: iptcl       = 0  ! global particle index
-    integer :: iptcl_map   = 0  ! maps to index in batch
+    integer :: iptcl_batch = 0  ! maps to index in batch
+    integer :: iptcl_map   = 0  ! index in all contiguous batches
 end type strategy2D_spec
 
 type strategy2D_srch
@@ -35,7 +36,8 @@ type strategy2D_srch
     integer                 :: best_rot        =  0   !< best in-plane rotation found by search
     integer                 :: prev_rot        =  0   !< previous in-plane rotation found by search
     integer                 :: iptcl           =  0   !< global particle index
-    integer                 :: iptcl_map       =  0   !< index in pre-allocated batch array
+    integer                 :: iptcl_batch     =  0   !< index in pre-allocated batch array
+    integer                 :: iptcl_map       =  0   !< index in all contiguous batches combined
     integer                 :: ithr            =  0   !< current thread
     real                    :: prev_shvec(2)   =  0.  !< previous origin shift vector
     real                    :: best_shvec(2)   =  0.  !< best shift vector found by search
@@ -62,11 +64,12 @@ contains
         real :: lims(2,2), lims_init(2,2)
         call self%kill
         ! set constants
-        self%iptcl      =  spec%iptcl
-        self%iptcl_map  =  spec%iptcl_map
-        self%nrefs      =  params_glob%ncls
-        self%nrots      =  pftcc_glob%get_nrots()
-        self%nrefs_eval =  0
+        self%iptcl       = spec%iptcl
+        self%iptcl_batch = spec%iptcl_batch
+        self%iptcl_map   = spec%iptcl_map
+        self%nrefs       = params_glob%ncls
+        self%nrots       = pftcc_glob%get_nrots()
+        self%nrefs_eval  = 0
         ! construct composites
         self%trs        =  params_glob%trs
         lims(:,1)       = -params_glob%trs
@@ -127,7 +130,7 @@ contains
         endif
         self%best_corr = self%prev_corr
         ! whether to search shifts first
-        self%l_sh_first   = s2D%do_inplsrch(self%iptcl_map) .and. params_glob%l_sh_first
+        self%l_sh_first   = s2D%do_inplsrch(self%iptcl_batch) .and. params_glob%l_sh_first
         self%xy_first     =  0.
         self%xy_first_rot =  0.
     end subroutine prep4srch
@@ -166,7 +169,7 @@ contains
         integer :: irot
         irot = 0
         self%best_shvec = [0.,0.]
-        if( s2D%do_inplsrch(self%iptcl_map) )then
+        if( s2D%do_inplsrch(self%iptcl_batch) )then
             ! BFGS
             call self%grad_shsrch_obj%set_indices(self%best_class, self%iptcl)
             if( .not.self%grad_shsrch_obj%does_opt_angle() )then

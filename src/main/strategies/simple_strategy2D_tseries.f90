@@ -56,7 +56,7 @@ contains
                 endif
             enddo
             self%s%nrefs_eval = self%s%nrefs
-            if( s2D%do_inplsrch(self%s%iptcl_map) )then
+            if( s2D%do_inplsrch(self%s%iptcl_batch) )then
                 ! shift only continuous search
                 call self%s%inpl_srch
             else

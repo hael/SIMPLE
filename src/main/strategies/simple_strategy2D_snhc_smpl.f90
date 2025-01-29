@@ -46,7 +46,7 @@ contains
             cls_inpl_inds = 0
             do isample = 1,self%s%nrefs
                 ! stochastic reference index
-                iref = s2D%srch_order(self%s%iptcl_map, isample)
+                iref = s2D%srch_order(self%s%iptcl_batch, isample)
                 ! keep track of how many references we are evaluating
                 self%s%nrefs_eval = self%s%nrefs_eval + 1
                 ! neighbourhood size
@@ -64,7 +64,7 @@ contains
                 cls_inpl_inds(iref) = inpl_ind
             end do
             ! Performs shift search for top scoring subset
-            if( s2D%do_inplsrch(self%s%iptcl_map) )then
+            if( s2D%do_inplsrch(self%s%iptcl_batch) )then
                 sorted_cls_corrs = cls_corrs
                 sorted_cls_inds  = (/(iref,iref=1,self%s%nrefs)/)
                 call hpsort(sorted_cls_corrs, sorted_cls_inds)

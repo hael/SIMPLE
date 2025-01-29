@@ -39,7 +39,7 @@ contains
             self%s%best_corr  = eulprob_corr_switch(self%spec%eulprob%assgn_map(self%s%iptcl_map)%dist)
             self%s%best_rot   = self%spec%eulprob%assgn_map(self%s%iptcl_map)%inpl
             self%s%best_shvec = 0.
-            if( s2D%do_inplsrch(self%s%iptcl_map) )then
+            if( s2D%do_inplsrch(self%s%iptcl_batch) )then
                 if( self%spec%eulprob%assgn_map(self%s%iptcl_map)%has_sh )then
                     self%s%best_shvec = [self%spec%eulprob%assgn_map(self%s%iptcl_map)%x,&
                     &                    self%spec%eulprob%assgn_map(self%s%iptcl_map)%y]
