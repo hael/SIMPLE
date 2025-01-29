@@ -436,7 +436,7 @@ contains
         endif
         call cline_cluster2D2%set('minits', min(MINITS+3,MAXITS))
         if( l_euclid )then
-            call cline_cluster2D2%set('objfun',   trim(cline%get_carg('objfun')))
+            call cline_cluster2D2%set('objfun',   cline%get_carg('objfun'))
             call cline_cluster2D2%set('cc_iters', 0)
         else
             call cline_cluster2D2%set('objfun', 'cc')
@@ -476,7 +476,7 @@ contains
                 write(logfhandle,'(A,F6.1)') '>>> STAGE 2, LOW-PASS LIMIT: ',lp2
                 write(logfhandle,'(A)') '>>>'
                 call cline_cluster2D2%set('startit',  last_iter+1)
-                call cline_cluster2D2%set('refs',     trim(finalcavgs))
+                call cline_cluster2D2%set('refs',     finalcavgs)
                 if( l_shmem )then
                     call xcluster2D%execute_safe(cline_cluster2D2)
                 else
@@ -972,8 +972,8 @@ contains
             ! scale references to box_crop
             if( l_scale_inirefs )then
                 refs_sc = 'refs'//trim(SCALE_SUFFIX)//params%ext
-                call cline_scalerefs%set('stk',    trim(params%refs))
-                call cline_scalerefs%set('outstk', trim(refs_sc))
+                call cline_scalerefs%set('stk',    params%refs)
+                call cline_scalerefs%set('outstk', refs_sc)
                 call cline_scalerefs%set('smpd',   params%smpd)
                 call cline_scalerefs%set('newbox', params%box_crop)
                 call cline_scalerefs%set('nthr',   nthr_here)
@@ -1082,7 +1082,7 @@ contains
                 if( .not.job_descr%isthere('trs') )then
                     ! activates shift search
                     str = real2str(cline_check_2Dconv%get_rarg('trs'))
-                    call job_descr%set('trs', trim(str) )
+                    call job_descr%set('trs', str)
                 endif
             endif
             l_converged = (iter >= params%minits) .and. (cline_check_2Dconv%get_carg('converged').eq.'yes')
@@ -1259,8 +1259,8 @@ contains
                     ! scale references to box_crop
                     if( l_scale_inirefs )then
                         refs_sc = 'refs'//trim(SCALE_SUFFIX)//params%ext
-                        call cline_scalerefs%set('stk',    trim(params%refs))
-                        call cline_scalerefs%set('outstk', trim(refs_sc))
+                        call cline_scalerefs%set('stk',    params%refs)
+                        call cline_scalerefs%set('outstk', refs_sc)
                         call cline_scalerefs%set('smpd',   params%smpd)
                         call cline_scalerefs%set('newbox', params%box_crop)
                         call xscale%execute(cline_scalerefs)
@@ -1547,6 +1547,7 @@ contains
         type(qsys_env)                  :: qenv
         type(chash)                     :: job_descr
         integer :: nptcls, ipart
+        ! After this condition block, only build_glob & params_glob must be used
         if( associated(build_glob) )then
             if( .not.associated(params_glob) )then
                 THROW_HARD('Builder & parameters must be associated for shared memory execution!')
@@ -1559,7 +1560,7 @@ contains
         endif
         if( params_glob%startit == 1 )then
             if( cline%defined('updatecnt_ini') )then
-                call build_glob%spproj_field%set_nonzero_updatecnt(params%updatecnt_ini)
+                call build_glob%spproj_field%set_nonzero_updatecnt(params_glob%updatecnt_ini)
                 call build_glob%spproj_field%clean_entry('sampled')
             else
                 call build_glob%spproj_field%clean_entry('updatecnt', 'sampled')
@@ -1575,24 +1576,25 @@ contains
         cline_prob_tab2D = cline
         call cline_prob_tab2D%set('prg', 'prob_tab2D' )
         ! execution
-        ! if( .not.cline_prob_tab2D%defined('nparts') )then
-        !     call xprob_tab2D%execute_safe(cline_prob_tab)
-        ! else
+        if( .not.cline_prob_tab2D%defined('nparts') )then
+            ! shared memory
+            call xprob_tab2D%execute_safe(cline_prob_tab2D)
+        else
             ! setup the environment for distributed execution
             call qenv%new(params_glob%nparts, nptcls=params_glob%nptcls)
             call cline_prob_tab2D%gen_job_descr(job_descr)
             ! schedule
             call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
-        ! endif
+        endif
         ! reading scores from all parts
         do ipart = 1, params_glob%nparts
             fname = trim(DIST_FBODY)//int2str_pad(ipart,params_glob%numlen)//'.dat'
             call eulprob%read_table_to_glob(fname)
         enddo
         ! perform assignment
-        select case(trim(params%refine))
+        select case(trim(params_glob%refine))
         case('prob')
-            if( params%which_iter == 1 )then
+            if( params_glob%which_iter == 1 )then
                 call eulprob%assign_cls_greedy
             else
                 call eulprob%normalize_table
@@ -1635,14 +1637,14 @@ contains
         integer :: nptcls
         logical :: l_ctf
         call cline%set('mkdir', 'no')
-        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
+        call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
         ! The policy here ought to be that nothing is done with regards to sampling other than reproducing
         ! what was generated in the driver (prob_align, below). Sampling is delegated to prob_align (below)
         ! and merely reproduced here
         if( build%spproj_field%has_been_sampled() )then
             call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds)
         else
-            THROW_HARD('exec_prob_tab requires prior particle sampling (in exec_prob_align)')
+            THROW_HARD('exec_prob_tab2D requires prior particle sampling')
         endif
         ! Resolution range
         frac_srch_space = build%spproj_field%get_avg('frac')
@@ -1677,14 +1679,15 @@ contains
         case('prob_greedy')
             call eulprob%fill_table_greedy_inpl
         end select
+        call pftcc%kill
+        call clean_batch_particles2D
         ! write
         call eulprob%write_table(fname)
         ! clean & end
-        if( associated(eucl_sigma2_glob) ) call eucl_sigma2_glob%kill
-        call clean_batch_particles2D
+        if(associated(eucl_sigma2_glob)) call eucl_sigma2_glob%kill
         call eulprob%kill
-        call pftcc%kill
         call build%kill_general_tbox
+        call build%kill_strategy2D_tbox
         call qsys_job_finished('simple_commander_cluster2D :: exec_prob_tab')
         call simple_end('**** SIMPLE_PROB_TAB2D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_tab2D

@@ -51,12 +51,12 @@ contains
         integer,                 intent(in)    :: which_iter
         logical,                 intent(inout) :: converged
         type(strategy2D_per_ptcl), allocatable :: strategy2Dsrch(:)
-        type(strategy2D_spec),     allocatable :: strategy2Dspecs(:)
         real,                      allocatable :: states(:)
         integer,                   allocatable :: pinds(:), batches(:,:)
         type(eul_prob_tab2D),           target :: eulprob
-        type(ori)         :: orientation
-        type(convergence) :: conv
+        type(ori)             :: orientation
+        type(convergence)     :: conv
+        type(strategy2D_spec) :: strategy2Dspec
         real    :: frac_srch_space, neigh_frac
         integer :: iptcl, fnr, updatecnt, iptcl_map, nptcls2update
         integer :: batchsz_max, batchsz, nbatches, batch_start, batch_end, iptcl_batch, ibatch
@@ -220,7 +220,7 @@ contains
         call build_glob%spproj_field%set_all2single('w', 1.0)
 
         ! GENERATE PARTICLES IMAGE OBJECTS
-        allocate(strategy2Dspecs(batchsz_max),strategy2Dsrch(batchsz_max))
+        allocate(strategy2Dsrch(batchsz_max))
         call prep_batch_particles2D(batchsz_max)
         if( L_BENCH_GLOB ) rt_prep_pftcc = toc(t_prep_pftcc)
 
@@ -251,8 +251,8 @@ contains
             if( L_BENCH_GLOB ) rt_init = rt_init + toc(t_init)
             ! Particles threaded loop
             if( L_BENCH_GLOB ) t_align = tic()
-            !$omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map,updatecnt,orientation)&
-            !$omp schedule(static) proc_bind(close)
+            !$omp parallel do private(iptcl,iptcl_batch,iptcl_map,updatecnt,orientation,strategy2Dspec)&
+            !$omp default(shared) schedule(static) proc_bind(close)
             do iptcl_batch = 1,batchsz                     ! particle batch index
                 iptcl_map  = batch_start + iptcl_batch - 1 ! masked global index (cumulative batch index)
                 iptcl      = pinds(iptcl_map)              ! global index
@@ -277,7 +277,7 @@ contains
                     ! offline mode, based on iteration
                     if( l_prob )then
                         allocate(strategy2D_prob                    :: strategy2Dsrch(iptcl_batch)%ptr)
-                        strategy2Dspecs(iptcl_batch)%eulprob => eulprob
+                        strategy2Dspec%eulprob => eulprob
                     else
                         if( trim(params_glob%refine).eq.'inpl' )then
                             allocate(strategy2D_inpl                :: strategy2Dsrch(iptcl_batch)%ptr)
@@ -304,10 +304,11 @@ contains
                     endif
                 endif
                 ! Search specification & object
-                strategy2Dspecs(iptcl_batch)%iptcl       = iptcl
-                strategy2Dspecs(iptcl_batch)%iptcl_map   = iptcl_batch
-                strategy2Dspecs(iptcl_batch)%stoch_bound = neigh_frac
-                call strategy2Dsrch(iptcl_batch)%ptr%new(strategy2Dspecs(iptcl_batch))
+                strategy2Dspec%iptcl       = iptcl
+                strategy2Dspec%iptcl_batch = iptcl_batch
+                strategy2Dspec%iptcl_map   = iptcl_map
+                strategy2Dspec%stoch_bound = neigh_frac
+                call strategy2Dsrch(iptcl_batch)%ptr%new(strategy2Dspec)
                 call strategy2Dsrch(iptcl_batch)%ptr%srch
                 ! calculate sigma2 for ML-based refinement
                 if ( params_glob%l_needs_sigma ) then
@@ -330,7 +331,7 @@ contains
             nullify(strategy2Dsrch(iptcl_batch)%ptr)
         end do
         call clean_batch_particles2D
-        deallocate(strategy2Dsrch,pinds,strategy2Dspecs,batches)
+        deallocate(strategy2Dsrch,pinds,batches)
 
         ! WRITE SIGMAS FOR ML-BASED REFINEMENT
         if( params_glob%l_needs_sigma ) call eucl_sigma%write_sigma2

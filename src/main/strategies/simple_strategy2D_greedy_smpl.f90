@@ -66,7 +66,7 @@ contains
             self%s%best_corr  = refs_corrs(self%s%best_class)
             self%s%best_rot   = refs_inplinds(self%s%best_class)
             ! Performs shift search for top scoring subset
-            if( s2D%do_inplsrch(self%s%iptcl_map) )then
+            if( s2D%do_inplsrch(self%s%iptcl_batch) )then
                 call hpsort(refs_corrs, refs_inds)
                 self%s%best_corr = -1.
                 do isample = self%s%nrefs-s2D%smpl_ncls+1,self%s%nrefs

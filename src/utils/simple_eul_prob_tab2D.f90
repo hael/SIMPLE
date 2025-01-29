@@ -106,8 +106,7 @@ contains
         if( all(pops == 0) ) THROW_HARD('All class pops cannot be zero!')
         self%populated = pops > 0
         self%neffcls   = count(self%populated)
-        self%clsinds   = (/(i,i=1,self%ncls)/)
-        self%clsinds   = pack(self%clsinds,mask=self%populated)
+        self%clsinds   = pack((/(i,i=1,self%ncls)/),mask=self%populated)
     end subroutine new
 
     ! TABLE
@@ -118,7 +117,7 @@ contains
         type(pftcc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)
         real    :: scores(pftcc_glob%get_nrots())
         real    :: lims(2,2), lims_init(2,2), cxy(3), best_score
-        integer :: i, iptcl, ithr, irot, icls, best_rot
+        integer :: i, j, iptcl, ithr, irot, icls, best_rot
         if( params_glob%l_doshift )then
             ! search objects
             lims(:,1)      = -params_glob%trs
@@ -158,12 +157,12 @@ contains
             enddo
             !$omp end parallel do
         else
-            !$omp parallel do default(shared) private(i,iptcl,icls,irot,scores)&
-            !$omp proc_bind(close) schedule(static)
+            !$omp parallel do default(shared) private(i,j,iptcl,icls,irot,scores)&
+            !$omp proc_bind(close) schedule(static) collapse(2)
             do i = 1, self%nptcls
-                iptcl = self%pinds(i)
-                do icls = 1, self%ncls
-                    if( .not.self%populated(icls) ) cycle
+                do j = 1, self%neffcls
+                    iptcl = self%pinds(i)
+                    icls  = self%clsinds(j)
                     call pftcc_glob%gencorrs(icls, iptcl, scores)
                     irot = maxloc(scores, dim=1)
                     self%loc_tab(icls,i)%dist = eulprob_dist_switch(scores(irot))
@@ -197,20 +196,19 @@ contains
                     &maxits=params_glob%maxits_sh, opt_angle=.true.)
             end do
             ! search
-            !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2)&
             !$omp private(i,iptcl,ithr,icls,j,irot,jrot,score,scores,vec,cxy,rank)
             do i = 1,self%nptcls
-                iptcl = self%pinds(i)
-                ithr  = omp_get_thread_num() + 1
                 do j = 1,self%neffcls
-                    icls = self%clsinds(j)
+                    iptcl = self%pinds(i)
+                    icls  = self%clsinds(j)
+                    ithr  = omp_get_thread_num() + 1
                     call pftcc_glob%gencorrs(icls, iptcl, scores)
                     call squared_sampling(nrots, scores, vec, ninpl_stoch, irot, rank, score)
                     jrot = irot
                     call grad_shsrch_obj(ithr)%set_indices(icls, iptcl)
                     cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true.)
                     if( irot == 0 )then
-                        score    = score
                         cxy(2:3) = 0.
                     else
                         jrot  = irot
@@ -269,7 +267,9 @@ contains
         !$omp end parallel do
         ! min/max normalization to obtain values between 0 and 1
         if( (maxdist - mindist) < TINY )then
+            !$omp parallel workshare proc_bind(close)
             self%loc_tab(:,:)%dist = 0.
+            !$omp end parallel workshare
         else
             !$omp parallel workshare proc_bind(close)
             self%loc_tab(:,:)%dist = (self%loc_tab(:,:)%dist - mindist) / (maxdist - mindist)
@@ -289,7 +289,7 @@ contains
         !$omp end parallel do
     end subroutine assign_cls_greedy
 
-    ! Assign class to all particles stochastically
+    ! Assign class to all particles stochastically with self-subtraction
     subroutine assign_cls_stoch( self, os )
         class(eul_prob_tab2D), intent(inout) :: self
         class(oris),           intent(in)    :: os
@@ -307,8 +307,9 @@ contains
         ncls_stoch   = max(2,min(ncls_stoch,self%ncls))
         ! select class stochastically
         pops = 0
-        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-        !$omp private(i,pdists,vec,ind,rank,score,icls,tmp,prev_ref) reduction(+:pops)
+        !$omp parallel default(shared) proc_bind(close)&
+        !$omp private(i,pdists,vec,ind,rank,score,icls,tmp,prev_ref,inds,dists,t)
+        !$omp do schedule(static) reduction(+:pops)
         do i = 1,self%nptcls
             tmp = self%loc_tab(:,i)%dist
             if( l_self_subtr )then
@@ -322,24 +323,25 @@ contains
             self%assgn_map(i) = self%loc_tab(icls,i)            ! updates assignement
             pops(icls) = pops(icls) + 1                         ! updates population
         enddo
-        !$omp end parallel do
-        deallocate(prev_cls)
+        !$omp end do
         ! taking the best maxpop particles
+        !$omp do schedule(static)
         do i = 1,self%neffcls
             icls = self%clsinds(i)
             if( pops(icls) > params_glob%maxpop )then
                 inds  = pack((/(ind,ind=1,self%nptcls)/), mask=self%assgn_map(:)%iproj==icls)
                 dists = self%assgn_map(inds(:))%dist
                 call hpsort(dists)
-                t = dists(params_glob%maxpop)   ! threshold within the class
+                t = dists(params_glob%maxpop)           ! threshold within the class
                 where( self%assgn_map(inds(:))%dist > t )
-                    self%assgn_map(inds(:))%istate = 0 ! this will set the restoration weight to ZERO
+                    self%assgn_map(inds(:))%istate = 0  ! this will set the restoration weight to ZERO
                 else where
                     self%assgn_map(inds(:))%istate = 1
                 end where
             endif
         enddo
-        deallocate(inds,dists)
+        !$omp end do
+        !$omp end parallel
     end subroutine assign_cls_stoch
 
     ! FILE I/O
@@ -390,6 +392,7 @@ contains
             end do
         end do
         !$omp end parallel do
+        deallocate(mat_loc)
     end subroutine read_table_to_glob
 
     ! write a global assignment map to binary file
@@ -431,6 +434,7 @@ contains
             end do
         end do
         !$omp end parallel do
+        deallocate(assgn_glob)
     end subroutine read_assignment
 
     ! DESTRUCTOR
