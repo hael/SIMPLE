@@ -1549,8 +1549,10 @@ contains
 
     subroutine exec_tseries_reconstruct3D_distr( self, cline )
         use simple_commander_rec, only: volassemble_commander
+        use simple_opt_mask,      only: estimate_spher_mask
         real, parameter :: LP_LIST(4) = [1.5,2.0,2.5,3.0]
         real, parameter :: HP_LIM = 5.0 ! no information at lower res for these kind of data
+        real, parameter :: RAD_LB = 5.0 ! 5.0 A radial boundary for averaging
         class(tseries_reconstruct3D_distr), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         character(len=STDLEN), allocatable :: vol_fnames(:)
@@ -1565,10 +1567,10 @@ contains
         type(sp_project)              :: spproj
         type(cmdline)                 :: cline_rec
         type(chash)                   :: job_descr
-        type(image)                   :: vol1, vol2, vol_w, vol_sum
+        type(image)                   :: vol1, vol2, vol_w, vol_sum, mskvol, mskvol2
         real                          :: w, sumw
-        integer :: state, ipart, istate, iptcl, nptcls
-        integer :: funit, nparts, i, ind, nlps, ilp, iostat, hp_ind
+        integer :: state, ipart, istate, iptcl, nptcls, mskfromto(2)
+        integer :: funit, nparts, i, ind, nlps, ilp, iostat, hp_ind, best_msk
         logical :: fall_over
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('trs')     ) call cline%set('trs',           5.) ! to assure that shifts are being used
@@ -1579,7 +1581,6 @@ contains
         call cline%delete('refine')
         call params%new(cline)
         call spproj%read(params%projfile)
-
         if( cline%defined('fromp') .and. cline%defined('top') )then
             call cline%delete('nparts')   ! shared-memory implementation
             call cline%set('mkdir', 'no') ! to avoid nested directory structure
@@ -1592,16 +1593,12 @@ contains
         ! states/stepz
         nptcls = size(rstates)
         nparts = ceiling(real(nptcls)/real(params%stepsz))
-
-        print *, 'nptcls ', nptcls
-        print *, 'nparts ', nparts
-
         parts  = split_nobjs_even(nptcls, nparts)
         allocate(vol_fnames(nparts), rad_cc(params%box/2), rad_dists(params%box/2))
         recname = trim(VOL_FBODY)//int2str_pad(1,2)//trim(params%ext)
         do ipart = 1,nparts
             str_state         = int2str_pad(ipart,2)
-            vol_fnames(ipart) = 'state'//trim(str_state)//trim(params%ext)
+            vol_fnames(ipart) = 'partvol'//trim(str_state)//trim(params%ext)
             ! prep 3D rec command line
             cline_rec = cline
             call cline_rec%delete('nparts') ! shared-memory implementation
@@ -1621,39 +1618,53 @@ contains
         call vol2%new([params%box,params%box,params%box],params%smpd)
         call vol_w%new([params%box,params%box,params%box],params%smpd)
         call vol_sum%new([params%box,params%box,params%box],params%smpd)
-
-        ! do state = 1,nparts
-        !     call vol1%zero_and_unflag_ft
-        !     sumw = 0.
-        !     do istate = max(1,state-6),min(nparts,state+6)
-        !         w     = exp(-real(istate-state)**2. / 16.0)
-        !         sumw  = sumw + w
-        !         call vol2%zero_and_unflag_ft
-        !         call vol2%read(vol_fnames(istate))
-        !         call vol1%add(vol2,w)
-        !     enddo
-        !     call vol1%div(sumw)
-        !     call vol1%write('state_'// int2str_pad(state,2)//'.mrc')
-        ! enddo
-
-        ! do state = 1,nparts
-        !     call vol1%zero_and_unflag_ft
-        !     call vol1%read(vol_fnames(state))
-        !     call vol1%mask(params%msk, 'soft')
-        !     call vol_sum%copy(vol1)
-        !     vol_w = 1.
-        !     do istate = 1,nparts
-        !         if( istate == state ) cycle
-        !         call vol2%zero_and_unflag_ft
-        !         call vol2%read(vol_fnames(istate))
-        !         call vol2%mask(params%msk, 'soft')
-        !         ! calculate radial weight
-        !         call vol2%radial_cc(vol1, vol_w, params%smpd, rad_cc, rad_dists)
-        !         call vol_sum%add(vol2)
-        !     enddo
-        !     call vol_sum%div(vol_w)
-        !     call vol_sum%write('state_'// int2str_pad(state,2)//'.mrc')
-        ! enddo
+        mskfromto(1) = int(RAD_LB/params%smpd)
+        mskfromto(2) = int(params%msk)
+        call mskvol%disc([params%box,params%box,params%box], params%smpd, params%msk)
+        write(*,'(I8,A2)', advance='no' ) 0, ', '
+        do istate = 1,nparts
+            if( istate == nparts )then
+                write(*,'(I8)',    advance='yes') istate
+            else
+                write(*,'(I8,A2)', advance='no' ) istate, ', '
+            endif
+        end do
+        do state = 1,nparts
+            call vol1%zero_and_unflag_ft
+            call vol1%read(vol_fnames(state))
+            call vol1%mask(params%msk, 'hard')
+            call vol_sum%copy(vol1)
+            vol_w = 1.
+            write(*,'(I8,A2)', advance='no' ) state, ', '
+            do istate = 1,nparts
+                if( istate == state )then
+                    if( istate == nparts )then
+                        write(*,'(F8.3)',    advance='yes') 2. * real(mskfromto(2)) * params%smpd
+                    else
+                        write(*,'(F8.3,A2)', advance='no' ) 2. * real(mskfromto(2)) * params%smpd, ', '
+                    endif
+                    cycle
+                endif
+                call vol2%zero_and_unflag_ft
+                call vol2%read(vol_fnames(istate))
+                call estimate_spher_mask(vol1, vol2, mskvol, mskfromto, best_msk)
+                if( best_msk > mskfromto(1) )then ! agreement beyond the inputted lower radial limit
+                    call mskvol2%disc([params%box,params%box,params%box], params%smpd, real(best_msk))
+                    call vol2%mul(mskvol2)
+                    call vol_sum%add(vol2)
+                    call vol_w%add(mskvol2)
+                else
+                    best_msk = 0
+                endif
+                if( istate == nparts )then
+                    write(*,'(F8.3)',    advance='yes') 2. * real(best_msk) * params%smpd
+                else
+                    write(*,'(F8.3,A2)', advance='no' ) 2. * real(best_msk) * params%smpd, ', '
+                endif
+            enddo
+            call vol_sum%div(vol_w)
+            call vol_sum%write('state_'// int2str_pad(state,2)//'.mrc')
+        enddo
 
         ! Calculate correlation matrices
         nlps   = size(LP_LIST)
