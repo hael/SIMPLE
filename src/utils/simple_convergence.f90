@@ -327,9 +327,7 @@ contains
                 write(logfhandle,'(A,1X,I3,1X,A,1X,F7.4,1X,A,1X,I8)') '>>> STATE', istate,&
                 'JOINT DISTRIBUTION OVERLAP:', state_mi_joint(istate), 'POPULATION:', nint(statepops(istate))
             end do
-            if( min_state_mi_joint > OVERLAP_STATE_JOINT .and.&
-                self%mi_state      > OVERLAP_STATE       .and.&
-                self%frac_srch%avg > fracsrch_lim        )then
+            if( min_state_mi_joint > OVERLAP_STATE_JOINT .and. self%frac_srch%avg > fracsrch_lim )then
                 write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
                 converged = .true.
             else
