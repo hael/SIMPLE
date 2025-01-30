@@ -415,7 +415,7 @@ contains
             allocate(group_pspecs(2,ngroups,kfromto(1):kfromto(2)), group_weights(2,ngroups),source=0.d0)
             do iptcl = 1,params_glob%nptcls
                 if( build_glob%spproj_field%get_state(iptcl) == 0 ) cycle
-                eo = nint(build_glob%spproj_field%get(iptcl,'eo'    )) ! 0/1
+                eo = build_glob%spproj_field%get_eo(iptcl) ! 0/1
                 w  = real(build_glob%spproj_field%get(iptcl,'w'),dp)
                 if( w < TINY )cycle
                 group_pspecs(eo+1,1,:) = group_pspecs (eo+1,1,:) + w * real(pspecs(:,iptcl),dp)
@@ -434,7 +434,7 @@ contains
             allocate(group_pspecs(2,ngroups,kfromto(1):kfromto(2)), group_weights(2,ngroups),source=0.d0)
             do iptcl = 1,params_glob%nptcls
                 if( build_glob%spproj_field%get_state(iptcl) == 0 ) cycle
-                eo     = nint(build_glob%spproj_field%get(iptcl,'eo'    )) ! 0/1
+                eo     = build_glob%spproj_field%get_eo(iptcl) ! 0/1
                 igroup = nint(build_glob%spproj_field%get(iptcl,'stkind'))
                 w      = real(build_glob%spproj_field%get(iptcl,'w'),dp)
                 if( w < TINY )cycle

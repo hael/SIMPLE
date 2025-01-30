@@ -7,7 +7,7 @@ use simple_parameters,        only: params_glob
 use simple_builder,           only: build_glob
 use simple_polarft_corrcalc,  only: pftcc_glob
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad
-use simple_eul_prob_tab,      only: eulprob_dist_switch , eulprob_corr_switch
+use simple_eul_prob_tab,      only: eulprob_dist_switch, eulprob_corr_switch
 use simple_decay_funs,        only: extremal_decay2D
 implicit none
 
@@ -20,27 +20,30 @@ type :: eul_prob_tab2D
     type(ptcl_ref), allocatable :: assgn_map(:)   !< assignment map  (nptcls)
     integer,        allocatable :: pinds(:)       !< particle indices
     integer,        allocatable :: clsinds(:)     !< non-empty class indices
+    integer,        allocatable :: indcls(:)      !< reverse lookup non-empty class indices
     logical,        allocatable :: populated(:)   !< nonempty classes mask
     integer                     :: nptcls         !< size of pinds array
     integer                     :: neffcls        !< # of non-empty classes
     integer                     :: ncls           !< # of classes
-    contains
+  contains
     ! CONSTRUCTOR
-    procedure :: new
+    procedure          :: new
     ! TABLE FILLING
-    procedure :: fill_table_greedy_inpl
-    procedure :: fill_table_stoch_inpl
+    procedure          :: fill_table_greedy
+    procedure          :: fill_table_stoch
+    procedure          :: fill_table_smpl
     ! ASSIGNMENT FROM TABLE
-    procedure :: normalize_table
-    procedure :: assign_cls_stoch
-    procedure :: assign_cls_greedy
+    procedure          :: normalize_table
+    procedure, private :: select_top_ptcls
+    procedure          :: assign_cls_greedy
+    procedure          :: assign_cls_stoch
     ! I/O
-    procedure :: write_table
-    procedure :: read_table_to_glob
-    procedure :: write_assignment
-    procedure :: read_assignment
+    procedure          :: write_table
+    procedure          :: read_table_to_glob
+    procedure          :: write_assignment
+    procedure          :: read_assignment
     ! DESTRUCTOR
-    procedure :: kill
+    procedure          :: kill
 end type eul_prob_tab2D
 
 contains
@@ -106,13 +109,21 @@ contains
         if( all(pops == 0) ) THROW_HARD('All class pops cannot be zero!')
         self%populated = pops > 0
         self%neffcls   = count(self%populated)
-        self%clsinds   = pack((/(i,i=1,self%ncls)/),mask=self%populated)
+        allocate(self%clsinds(self%neffcls),self%indcls(self%ncls),source=0)
+        i = 0
+        do icls = 1,self%ncls
+            if( self%populated(icls) )then
+                i = i + 1
+                self%clsinds(i)   = icls
+                self%indcls(icls) = i
+            endif
+        enddo
     end subroutine new
 
     ! TABLE
 
     ! Fill the probability table taking the best in-plane angle
-    subroutine fill_table_greedy_inpl( self )
+    subroutine fill_table_greedy( self )
         class(eul_prob_tab2D), intent(inout) :: self
         type(pftcc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)
         real    :: scores(pftcc_glob%get_nrots())
@@ -171,10 +182,11 @@ contains
             enddo
             !$omp end parallel do
         endif
-    end subroutine fill_table_greedy_inpl
+    end subroutine fill_table_greedy
 
     ! Fill the probability table choosing an in-plane angle stochastically
-    subroutine fill_table_stoch_inpl( self )
+    ! after exhaustive shift search
+    subroutine fill_table_stoch( self )
         class(eul_prob_tab2D), intent(inout) :: self
         type(pftcc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)
         real    :: scores(pftcc_glob%get_nrots()),lims(2,2),lims_init(2,2),cxy(3),score,neigh_frac
@@ -183,19 +195,16 @@ contains
         nrots = pftcc_glob%get_nrots()
         ! size of stochastic neighborhood (# of in-plane angles to draw from)
         neigh_frac  = extremal_decay2D(params_glob%extr_iter, params_glob%extr_lim)
-        ninpl_stoch = nint(real(pftcc_glob%get_nrots())*(neigh_frac/3.))
-        ninpl_stoch = max(2,min(ninpl_stoch,pftcc_glob%get_nrots()))
+        ninpl_stoch = neighfrac2nsmpl(neigh_frac, nrots)
         if( params_glob%l_doshift )then
-            ! search objects
             lims(:,1)      = -params_glob%trs
             lims(:,2)      =  params_glob%trs
             lims_init(:,1) = -SHC_INPL_TRSHWDTH
             lims_init(:,2) =  SHC_INPL_TRSHWDTH
             do ithr = 1,nthr_glob
                 call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier,&
-                    &maxits=params_glob%maxits_sh, opt_angle=.true.)
+                    &maxits=params_glob%maxits_sh, opt_angle=.false., coarse_init=.false.)
             end do
-            ! search
             !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2)&
             !$omp private(i,iptcl,ithr,icls,j,irot,jrot,score,scores,vec,cxy,rank)
             do i = 1,self%nptcls
@@ -209,12 +218,11 @@ contains
                     call grad_shsrch_obj(ithr)%set_indices(icls, iptcl)
                     cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true.)
                     if( irot == 0 )then
-                        cxy(2:3) = 0.
+                        cxy = [real(pftcc_glob%gencorr_for_rot_8(icls, iptcl, jrot)), 0.,0.]
                     else
                         jrot  = irot
-                        score = cxy(1)
                     endif
-                    self%loc_tab(icls,i)%dist   = eulprob_dist_switch(score)
+                    self%loc_tab(icls,i)%dist   = eulprob_dist_switch(cxy(1))
                     self%loc_tab(icls,i)%inpl   = jrot
                     self%loc_tab(icls,i)%x      = cxy(2)
                     self%loc_tab(icls,i)%y      = cxy(3)
@@ -237,7 +245,91 @@ contains
             enddo
             !$omp end parallel do
         endif
-    end subroutine fill_table_stoch_inpl
+    end subroutine fill_table_stoch
+
+    ! Fill the probability table choosing an in-plane angle stochastically
+    ! after shift search against a per-particle subset of top ranking classes
+    subroutine fill_table_smpl( self )
+        class(eul_prob_tab2D), intent(inout) :: self
+        type(pftcc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)
+        real,       allocatable :: sorted_scores(:)
+        integer,    allocatable :: sorted_inds(:)
+        real    :: scores(pftcc_glob%get_nrots()),lims(2,2),lims_init(2,2),cxy(3),score,neigh_frac
+        integer :: vec(pftcc_glob%get_nrots())
+        integer :: P, nrots, i, j, iptcl, ithr, irot, icls, jrot, rank, ninpl_stoch, ncls_stoch
+        nrots = pftcc_glob%get_nrots()
+        ! size of stochastic neighborhood (# of in-plane angles to draw from)
+        neigh_frac  = extremal_decay2D(params_glob%extr_iter, params_glob%extr_lim)
+        ninpl_stoch = neighfrac2nsmpl(neigh_frac, nrots)
+        ncls_stoch  = neighfrac2nsmpl(neigh_frac, self%neffcls)
+        P = sampling_power(params_glob%extr_iter, params_glob%extr_lim)
+        ! Fork
+        if( params_glob%l_doshift )then
+            lims(:,1)      = -params_glob%trs
+            lims(:,2)      =  params_glob%trs
+            lims_init(:,1) = -SHC_INPL_TRSHWDTH
+            lims_init(:,2) =  SHC_INPL_TRSHWDTH
+            do ithr = 1,nthr_glob
+                call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init,&
+                    &shbarrier=params_glob%shbarrier, maxits=params_glob%maxits_sh,&
+                    &opt_angle=.true., coarse_init=.false.)
+            end do
+            allocate(sorted_scores(self%neffcls),sorted_inds(self%neffcls))
+            !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+            !$omp private(i,iptcl,ithr,icls,j,irot,jrot,score,scores,sorted_scores,sorted_inds,vec,cxy,rank)
+            do i = 1,self%nptcls
+                iptcl = self%pinds(i)
+                ithr  = omp_get_thread_num() + 1
+                ! exhaustive evaluation without shifts
+                do j = 1,self%neffcls
+                    icls  = self%clsinds(j)
+                    call pftcc_glob%gencorrs(icls, iptcl, scores)
+                    call power_sampling(P, nrots, scores, vec, ninpl_stoch, irot, rank, score)
+                    self%loc_tab(icls,i)%dist   = eulprob_dist_switch(score)
+                    self%loc_tab(icls,i)%inpl   = irot
+                    self%loc_tab(icls,i)%x      = 0.
+                    self%loc_tab(icls,i)%y      = 0.
+                    self%loc_tab(icls,i)%has_sh = .true.
+                enddo
+                ! subset
+                sorted_scores = self%loc_tab(self%clsinds(:),i)%dist
+                sorted_inds   = (/(j,j=1,self%neffcls)/)
+                call hpsort(sorted_scores, sorted_inds)
+                ! shift search of top-ranking subset
+                do j = 1,ncls_stoch
+                    icls = self%clsinds(sorted_inds(j))
+                    call grad_shsrch_obj(ithr)%set_indices(icls, iptcl)
+                    irot = self%loc_tab(icls,i)%inpl
+                    jrot = irot
+                    cxy  = grad_shsrch_obj(ithr)%minimize(irot=irot)
+                    if( irot == 0 )then
+                        irot = jrot
+                        cxy  = [real(pftcc_glob%gencorr_for_rot_8(icls, iptcl, irot)), 0.,0.]
+                    endif
+                    self%loc_tab(icls,i)%dist = eulprob_dist_switch(cxy(1))
+                    self%loc_tab(icls,i)%inpl = irot
+                    self%loc_tab(icls,i)%x    = cxy(2)
+                    self%loc_tab(icls,i)%y    = cxy(3)
+                enddo
+            enddo
+            !$omp end parallel do
+            deallocate(sorted_scores,sorted_inds)
+        else
+            !$omp parallel do default(shared) private(i,j,iptcl,icls,irot,scores,vec,rank,score)&
+            !$omp proc_bind(close) schedule(static) collapse(2)
+            do i = 1, self%nptcls
+                do j = 1, self%neffcls
+                    iptcl = self%pinds(i)
+                    icls  = self%clsinds(j)
+                    call pftcc_glob%gencorrs(icls, iptcl, scores)
+                    call power_sampling(P, nrots, scores, vec, ninpl_stoch, irot, rank, score)
+                    self%loc_tab(icls,i)%dist = eulprob_dist_switch(score)
+                    self%loc_tab(icls,i)%inpl = irot
+                enddo
+            enddo
+            !$omp end parallel do
+        endif
+    end subroutine fill_table_smpl
 
     ! Normalization of loc_tab of each class such that prob of each ptcl is in [0,1]
     subroutine normalize_table( self )
@@ -277,59 +369,20 @@ contains
         endif
     end subroutine normalize_table
 
-    ! Assigns best class to all particles
-    subroutine assign_cls_greedy( self )
+    ! set state/weights to zero for worst ranking particles per class
+    subroutine select_top_ptcls( self, pops )
         class(eul_prob_tab2D), intent(inout) :: self
-        integer :: i, icls
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,icls)
-        do i = 1,self%nptcls
-            icls = minloc(self%loc_tab(:,i)%dist, dim=1, mask=self%populated)
-            self%assgn_map(i) = self%loc_tab(icls,i)
-        enddo
-        !$omp end parallel do
-    end subroutine assign_cls_greedy
-
-    ! Assign class to all particles stochastically with self-subtraction
-    subroutine assign_cls_stoch( self, os )
-        class(eul_prob_tab2D), intent(inout) :: self
-        class(oris),           intent(in)    :: os
+        integer,               intent(in)    :: pops(self%ncls)
         real,    allocatable :: dists(:)
-        integer, allocatable :: inds(:), prev_cls(:)
-        real    :: tmp(self%ncls), pdists(self%neffcls), score, t, neigh_frac
-        integer :: pops(self%ncls), vec(self%neffcls), i, icls, ind, rank, ncls_stoch, prev_ref
-        logical :: l_self_subtr
-        ! previous class
-        prev_cls = os%get_all_asint('class')
-        ! size of stochastic neighborhood (# of classes to draw from)
-        l_self_subtr = params_glob%extr_iter <= params_glob%extr_lim ! self-subtraction
-        neigh_frac   = extremal_decay2D(params_glob%extr_iter, params_glob%extr_lim)
-        ncls_stoch   = nint(real(self%ncls)*(neigh_frac/3.))
-        ncls_stoch   = max(2,min(ncls_stoch,self%ncls))
-        ! select class stochastically
-        pops = 0
-        !$omp parallel default(shared) proc_bind(close)&
-        !$omp private(i,pdists,vec,ind,rank,score,icls,tmp,prev_ref,inds,dists,t)
-        !$omp do schedule(static) reduction(+:pops)
-        do i = 1,self%nptcls
-            tmp = self%loc_tab(:,i)%dist
-            if( l_self_subtr )then
-                prev_ref = prev_cls(self%pinds(i))
-                if( prev_ref > 0 ) tmp(prev_ref) = 1.           ! previous class set to maximal distance
-            endif
-            pdists = pack(tmp,mask=self%populated)              ! distances for non-empty classes
-            pdists = eulprob_corr_switch(pdists)                ! distances back to score
-            call squared_sampling(self%neffcls, pdists, vec, ncls_stoch, ind, rank, score) ! stochastic sampling
-            icls = self%clsinds(ind)                            ! class ID
-            self%assgn_map(i) = self%loc_tab(icls,i)            ! updates assignement
-            pops(icls) = pops(icls) + 1                         ! updates population
-        enddo
-        !$omp end do
-        ! taking the best maxpop particles
-        !$omp do schedule(static)
+        integer, allocatable :: inds(:)
+        real    :: t
+        integer :: i, j, icls
+        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+        !$omp private(i,j,icls,inds,dists,t)
         do i = 1,self%neffcls
             icls = self%clsinds(i)
             if( pops(icls) > params_glob%maxpop )then
-                inds  = pack((/(ind,ind=1,self%nptcls)/), mask=self%assgn_map(:)%iproj==icls)
+                inds  = pack((/(j,j=1,self%nptcls)/), mask=self%assgn_map(:)%iproj==icls)
                 dists = self%assgn_map(inds(:))%dist
                 call hpsort(dists)
                 t = dists(params_glob%maxpop)           ! threshold within the class
@@ -340,8 +393,64 @@ contains
                 end where
             endif
         enddo
-        !$omp end do
-        !$omp end parallel
+        !$omp end parallel do
+    end subroutine select_top_ptcls
+
+    ! Assigns best class to all particles
+    subroutine assign_cls_greedy( self, rank_ptcls )
+        class(eul_prob_tab2D), intent(inout) :: self
+        logical,               intent(in)    :: rank_ptcls
+        integer :: pops(self%ncls), i, icls
+        pops = 0
+        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+        !$omp private(i,icls) reduction(+:pops)
+        do i = 1,self%nptcls
+            icls = minloc(self%loc_tab(:,i)%dist, dim=1, mask=self%populated)
+            self%assgn_map(i) = self%loc_tab(icls,i)
+            pops(icls) = pops(icls) + 1
+        enddo
+        !$omp end parallel do
+        if( rank_ptcls ) call self%select_top_ptcls(pops)
+    end subroutine assign_cls_greedy
+
+    ! Assign class to all particles stochastically with self-subtraction
+    subroutine assign_cls_stoch( self, os, rank_ptcls )
+        class(eul_prob_tab2D), intent(inout) :: self
+        class(oris),           intent(in)    :: os
+        logical,               intent(in)    :: rank_ptcls
+        integer, allocatable :: prev_cls(:)
+        real    :: pdists(self%neffcls), score, t, neigh_frac
+        integer :: pops(self%ncls), vec(self%neffcls), P, i, icls, ind, rank, ncls_stoch, prev_ref
+        logical :: l_self_subtr
+        ! size of stochastic neighborhood (# of classes to draw from)
+        neigh_frac = extremal_decay2D(params_glob%extr_iter, params_glob%extr_lim)
+        ncls_stoch = neighfrac2nsmpl(neigh_frac, self%neffcls)
+        P          = sampling_power(params_glob%extr_iter, params_glob%extr_lim)
+        ! self-subtraction
+        l_self_subtr = params_glob%extr_iter <= params_glob%extr_lim ! self-subtraction
+        if( l_self_subtr ) prev_cls = os%get_all_asint('class')
+        ! select class stochastically
+        pops = 0
+        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+        !$omp private(i,pdists,vec,ind,rank,score,icls,prev_ref) reduction(+:pops)
+        do i = 1,self%nptcls
+            pdists = self%loc_tab(self%clsinds(:),i)%dist       ! distances for non-empty classes
+            if( l_self_subtr )then
+                prev_ref = prev_cls(self%pinds(i))
+                if( prev_ref > 0 )then
+                    prev_ref = self%indcls(prev_ref)
+                    ! pdists(prev_ref) = 1.           ! previous class set to maximal distance
+                    pdists(prev_ref) = huge(t)           ! previous class set to maximal distance
+                endif
+            endif
+            pdists = eulprob_corr_switch(pdists)                ! distances back to score
+            call power_sampling(P, self%neffcls, pdists, vec, ncls_stoch, ind, rank, score) ! stochastic sampling
+            icls = self%clsinds(ind)                            ! class ID
+            self%assgn_map(i) = self%loc_tab(icls,i)            ! updates assignement
+            pops(icls) = pops(icls) + 1                         ! updates population
+        enddo
+        !$omp end parallel do
+        if( rank_ptcls ) call self%select_top_ptcls(pops)
     end subroutine assign_cls_stoch
 
     ! FILE I/O
@@ -446,17 +555,16 @@ contains
         self%nptcls  = 0
         if( allocated(self%loc_tab)   )then
             deallocate(self%loc_tab, self%assgn_map, self%pinds,&
-            &self%populated, self%clsinds)
+            &self%populated, self%clsinds, self%indcls)
         endif
     end subroutine kill
 
-    ! PUBLIC FUNCTION
+    ! PUBLIC FUNCTIONS
 
-    subroutine squared_sampling( n, corrs, order, nb, ind, rank, cc )
-        integer, intent(in)    :: n, nb
+    subroutine power_sampling( P, n, corrs, order, nb, ind, rank, cc )
+        integer, intent(in)    :: P, n, nb
         real,    intent(inout) :: corrs(n), cc
         integer, intent(inout) :: order(n), ind, rank
-        integer, parameter :: P=2
         real    :: cdf(nb), r
         integer :: i
         if( nb == 1 )then
@@ -480,7 +588,7 @@ contains
         enddo
         cdf = cdf / sum(cdf)
         r   = ran3()
-        r   = 1.-r**P
+        r   = min(1.,max(0.,1.-r**P))
         rank = 0
         do i = 1,nb
             if( cdf(i) > r )then
@@ -492,6 +600,28 @@ contains
         rank = n - nb + rank ! rank of selected value
         ind  = order(rank)   ! index
         cc   = corrs(rank)   ! value
+    end subroutine power_sampling
+
+    subroutine squared_sampling( n, corrs, order, nb, ind, rank, cc )
+        integer, intent(in)    :: n, nb
+        real,    intent(inout) :: corrs(n), cc
+        integer, intent(inout) :: order(n), ind, rank
+        call power_sampling( 2, n, corrs, order, nb, ind, rank, cc)
     end subroutine squared_sampling
+
+    ! PRIVATE FUNCTIONS
+
+    pure integer function neighfrac2nsmpl( neighfrac, n )
+        real,    intent(in) :: neighfrac
+        integer, intent(in) :: n
+        neighfrac2nsmpl = nint(real(n)*(neighfrac/3.))
+        neighfrac2nsmpl = max(2,min(neighfrac2nsmpl, n))
+    end function neighfrac2nsmpl
+
+    pure integer function sampling_power( iter, maxiter )
+        integer, intent(in) :: iter, maxiter
+        sampling_power = 2
+        if( iter > maxiter ) sampling_power = 4
+    end function sampling_power
 
 end module simple_eul_prob_tab2D
