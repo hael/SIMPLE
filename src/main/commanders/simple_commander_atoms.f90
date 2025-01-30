@@ -224,16 +224,26 @@ contains
         class(cmdline),           intent(inout) :: cline
         type(parameters) :: params
         type(atoms)      :: molecule
+        integer          :: vol_dims(3)
         call params%new(cline)
         call molecule%new(params%pdbfile)
         if( .not.cline%defined('pdbout') )then
             params%pdbout = trim(get_fbody(params%pdbfile,'pdb'))//'_centered.pdb'
         endif
         if( .not.cline%defined('outvol') ) params%outvol = swap_suffix(params%pdbfile,'mrc','pdb')
-        if( params%center_pdb .eq. 'yes' )then
-            call molecule%pdb2mrc(params%pdbfile, params%outvol, params%smpd, center_pdb=.true., pdb_out=params%pdbout)
+        if( cline%defined('vol_dim') ) vol_dims(:) = params%vol_dim
+        if( cline%defined('vol_dim') )then  
+            if( params%center_pdb .eq. 'yes' )then
+                call molecule%pdb2mrc(params%pdbfile, params%outvol, params%smpd, center_pdb=.true., pdb_out=params%pdbout, vol_dim=vol_dims)
+            else
+                call molecule%pdb2mrc(params%pdbfile, params%outvol, params%smpd, pdb_out=params%pdbout, vol_dim=vol_dims)
+            endif
         else
-            call molecule%pdb2mrc(params%pdbfile, params%outvol, params%smpd, pdb_out=params%pdbout)
+            if( params%center_pdb .eq. 'yes' )then
+                call molecule%pdb2mrc(params%pdbfile, params%outvol, params%smpd, center_pdb=.true., pdb_out=params%pdbout)
+            else
+                call molecule%pdb2mrc(params%pdbfile, params%outvol, params%smpd, pdb_out=params%pdbout)
+            endif
         endif
         call molecule%kill
         ! end gracefully
