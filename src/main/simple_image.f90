@@ -572,7 +572,7 @@ contains
         real,              intent(in)    :: radius ! in pixels
         real, parameter :: K     = 2.0
         real, parameter :: THETA = 2.0
-        real    :: d,modeval,km1,mode,val,scale
+        real    :: d,km1,mode,val,scale
         integer :: c(3),i,j,l
         call self%new(ldim, smpd)
         c     = nint(real(self%ldim)/2.)+1
@@ -603,7 +603,7 @@ contains
         real,              intent(in)    :: smpd
         real,              intent(in)    :: radius ! in pixels
         integer, parameter :: B = 3
-        real    :: t,s,d
+        real    :: t,d
         integer :: c(3),i,j,h,f
         if( ldim(3) > 1 ) THROW_HARD('2D only; membrane')
         call self%new(ldim, smpd)
@@ -3133,7 +3133,7 @@ contains
         class(image), intent(inout) :: reprojs
         integer, parameter :: b=3
         type(image) :: reproj
-        integer     :: ldim_reproj(3),ldim_reprojs(3),n
+        integer     :: ldim_reproj(3),ldim_reprojs(3)
         if( self%is_ft() )      THROW_HARD('Real space only; generate_orthogonal_reprojs')
         if( .not.self%is_3d() ) THROW_HARD('Volumes only; generate_orthogonal_reprojs')
         ldim_reproj(1:2) = self%ldim(1:2)
@@ -4247,7 +4247,7 @@ contains
         integer, parameter :: DIM_SW  = 1
         integer, parameter :: CFR_BOX = 3
         real    :: exponentials(-CFR_BOX:CFR_BOX,-CFR_BOX:CFR_BOX), sw_px(DIM_SW,DIM_SW)
-        real    :: z, sigma, pix_avg, sigma2t2
+        real    :: z, pix_avg, sigma2t2
         integer :: i, j, m, n, pad, ithr
         if( even%is_3d() ) THROW_HARD('2D images only; NLmean2D_eo')
         if( even%ft )      THROW_HARD('Real space only;NLmean2D_eo')
@@ -4350,7 +4350,7 @@ contains
         integer, parameter :: CFR_BOX = 3
         type(image) :: noise, noise_var
         real    :: exponentials(-CFR_BOX:CFR_BOX,-CFR_BOX:CFR_BOX,-CFR_BOX:CFR_BOX), sw_px(DIM_SW,DIM_SW,DIM_SW)
-        real    :: z, sigma, sigma2t2, pixavg
+        real    :: z, sigma2t2, pixavg
         integer :: i, j, k, m, n, o, pad, ithr
         if( even%is_2d() ) THROW_HARD('3D images only; NLmean3D_eo')
         if( even%ft )      THROW_HARD('Real space only; 3DNLmean3D_eo')
@@ -6805,7 +6805,7 @@ contains
         class(image), intent(inout) :: self
         integer,      intent(in)    :: ldim(2)
         type(image) :: upsampled
-        integer :: ldim_pd(2), i,j,fx,fy,fpx,fpy
+        integer :: i,j,fx,fy,fpx,fpy
         real :: scales(2), scale, x,y, dx,dy,b
         if( ldim(1) /= ldim(2) ) THROW_HARD('Unsupported dimensions!')
         scales = real(self%ldim(1:2)) / real(ldim(1:2))
@@ -8693,12 +8693,10 @@ contains
         real,         intent(out)  :: rad_corrs(int(self1%ldim(1)/2.)), rad_dists(int(self1%ldim(1)/2.))
         real                 :: rad_weights(int(self1%ldim(1)/2.))
         type(image)          :: distimg
-        real,    allocatable :: rvec1(:), rvec2(:)
         logical, allocatable :: mask(:,:,:), shell_mask(:,:,:)
         real,    parameter   :: shell_size_pix = 1
         integer :: ldim3, n, n_shells
         real    :: dist_lbound, dist_ubound
-        logical :: err
         if( .not. (self1.eqdims.self2) ) THROW_HARD('Nonconforming dimensions in image; radial_cc')
         call distimg%new(self1%ldim,smpd)
         n_shells    = int(self1%ldim(1) / 2.)
@@ -8741,20 +8739,19 @@ contains
     subroutine reshape2cube( self, self_out )
         class(image), intent(inout) :: self
         class(image), intent(out)   :: self_out
-        logical     :: isvol
-        integer     :: ldim(3), ldim_max
-        real        :: smpd
-        type(image) :: tmp
-        smpd              = self%get_smpd()
-        isvol             = self%is_3d()
+        logical :: isvol
+        integer :: ldim(3), ldim_max
+        real    :: smpd
+        smpd  = self%get_smpd()
+        isvol = self%is_3d()
         if(.not.isvol) THROW_HARD('this is only for volumes; reshape2cube')
-        ldim              = self%ldim
+        ldim  = self%ldim
         if( ldim(1) == ldim(2) .and. ldim(2) == ldim(3) ) return
-        ldim_max          = max(ldim(1),ldim(2),ldim(3))
+        ldim_max      = max(ldim(1),ldim(2),ldim(3))
         call self_out%new([ldim_max,ldim_max,ldim_max], self%smpd, wthreads=self%wthreads)
-        self_out%rmat     = 0.
-        self_out%rmat     = self%rmat
-        self_out%ft       = .false.
+        self_out%rmat = 0.
+        self_out%rmat = self%rmat
+        self_out%ft   = .false.
         call self_out%set_smpd(smpd)
     end subroutine reshape2cube
 
