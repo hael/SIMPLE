@@ -27,7 +27,7 @@ end type fftw_drvec
 
 type heap_vars
     complex(sp), pointer :: pft_tmp(:,:)       => null()
-    complex(sp), pointer :: pft_tmp2(:,:)      => null()
+    complex(sp), pointer :: pft_tmp2(:)        => null()
     complex(sp), pointer :: pft_ref(:,:)       => null()
     complex(sp), pointer :: pft_ref_tmp(:,:)   => null()
     real(dp),    pointer :: argvec(:)          => null()
@@ -173,7 +173,7 @@ type :: polarft_corrcalc
     procedure          :: gencorr_cont_grad_euclid_for_rot_8
     procedure          :: gencorr_cont_shift_grad_euclid_for_rot_8
     procedure          :: gencorr_sigma_contrib
-    procedure, private :: calc_frc, linear_memoized_refs
+    procedure, private :: calc_frc, linear_ft_refs, linear_ft_ref2s
     procedure          :: rotate_ref, rotate_ptcl, rotate_ctf
     ! DESTRUCTOR
     procedure          :: kill
@@ -289,7 +289,7 @@ contains
             allocate(self%heap_vars(ithr)%pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%pft_ref_tmp(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%pft_tmp(self%pftsz+1,self%kfromto(1):self%kfromto(2)),&
-                    &self%heap_vars(ithr)%pft_tmp2(self%pftsz+1,self%kfromto(1):self%kfromto(2)),&
+                    &self%heap_vars(ithr)%pft_tmp2(self%pftsz+1),&
                     &self%heap_vars(ithr)%argvec(self%pftsz),&
                     &self%heap_vars(ithr)%shvec(self%pftsz),&
                     &self%heap_vars(ithr)%shmat(self%pftsz,self%kfromto(1):self%kfromto(2)),&
@@ -301,14 +301,14 @@ contains
                     &self%heap_vars(ithr)%pft_r1_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%pft_r(self%pftsz,self%kfromto(1):self%kfromto(2)))
         end do
-        self%pfts_refs_even  = zero
-        self%pfts_refs_odd   = zero
-        self%norm_refs_even  = zero
-        self%norm_refs_odd   = zero
-        self%pfts_ptcls      = zero
-        self%sqsums_ptcls    = 0.d0
-        self%ksqsums_ptcls   = 0.d0
-        self%wsqsums_ptcls   = 0.d0
+        self%pfts_refs_even = zero
+        self%pfts_refs_odd  = zero
+        self%norm_refs_even = zero
+        self%norm_refs_odd  = zero
+        self%pfts_ptcls     = zero
+        self%sqsums_ptcls   = 0.d0
+        self%ksqsums_ptcls  = 0.d0
+        self%wsqsums_ptcls  = 0.d0
         ! set CTF flag
         self%with_ctf = .false.
         if( params_glob%ctf .ne. 'no' ) self%with_ctf = .true.
@@ -1517,17 +1517,15 @@ contains
         end do
     end subroutine calc_frc
 
-    subroutine linear_memoized_refs( self, iptcl, irefs, prefs, ft_ref, ft_ref2, pft_ref_or_ft_ref )
-        class(polarft_corrcalc),        intent(inout) :: self
-        integer,                        intent(in)    :: iptcl
-        integer,                        intent(in)    :: irefs(:)
-        real,                           intent(in)    :: prefs(:)
-        complex(sp),           pointer, intent(inout) :: ft_ref(:,:)
-        complex(sp), optional, pointer, intent(inout) :: ft_ref2(:,:)
-        logical,     optional,          intent(in)    :: pft_ref_or_ft_ref     ! true for pft_ref
-        integer  :: k, i, ithr, j, r, jref, rref, istate
+    subroutine linear_ft_refs( self, iptcl, irefs, prefs, ft_ref, pft_ref_or_ft_ref )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iptcl
+        integer,                 intent(in)    :: irefs(:)
+        real,                    intent(in)    :: prefs(:)
+        complex(sp),    pointer, intent(inout) :: ft_ref(:,:)
+        logical,       optional, intent(in)    :: pft_ref_or_ft_ref     ! true for pft_ref
+        integer  :: k, i, ithr, j, jref
         logical  :: even, l_pft
-        real     :: pjr
         l_pft = .false.
         if( present(pft_ref_or_ft_ref) ) l_pft = pft_ref_or_ft_ref
         ithr  = omp_get_thread_num() + 1
@@ -1557,44 +1555,54 @@ contains
                 endif
             enddo
         enddo
-        if( present(ft_ref2) )then
-            ft_ref2 => self%heap_vars(ithr)%pft_tmp2
-            ft_ref2 = cmplx(0.)
-            do j = 1, size(irefs)
-                jref = irefs(j)
-                do r = 1, size(irefs)
-                    rref   = irefs(r)
-                    pjr    = prefs(j) * prefs(r)
-                    istate = mod(rref-1, params_glob%nstates) + 1
-                    do k = self%kfromto(1),self%kfromto(2)
-                        if( even )then
-                            ! ft_refs2_even is cached when linstates is on
-                            if( params_glob%l_linstates )then
-                                ft_ref2(:,k) = ft_ref2(:,k) + pjr * self%ft_refs2_even(k,jref,istate)%c
-                            else
-                                ! FT(jREFeven x rREFeven)*
-                                self%cvec2(ithr)%c(           1:self%pftsz) = self%pfts_refs_even(:,k,jref)*conjg(self%pfts_refs_even(:,k,rref))
-                                self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(self%cvec2(ithr)%c(1:self%pftsz))
-                                call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
-                                ft_ref2(:,k) = ft_ref2(:,k) + pjr * conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
-                            endif
-                        else
-                            ! ft_refs2_odd is cached when linstates is on
-                            if( params_glob%l_linstates )then
-                                ft_ref2(:,k) = ft_ref2(:,k) + pjr * self%ft_refs2_odd(k,jref,istate)%c
-                            else
-                                ! FT(jREFodd x rREFodd)*
-                                self%cvec2(ithr)%c(           1:self%pftsz) = self%pfts_refs_odd(:,k,jref)*conjg(self%pfts_refs_odd(:,k,rref))
-                                self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(self%cvec2(ithr)%c(1:self%pftsz))
-                                call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
-                                ft_ref2(:,k) = ft_ref2(:,k) + pjr * conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
-                            endif
-                        endif
-                    enddo
-                enddo
+    end subroutine linear_ft_refs
+
+    subroutine linear_ft_ref2s( self, iptcl, irefs, prefs, k, ft_ref2 )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iptcl
+        integer,                 intent(in)    :: irefs(:)
+        real,                    intent(in)    :: prefs(:)
+        integer,                 intent(in)    :: k
+        complex(sp),    pointer, intent(inout) :: ft_ref2(:)
+        integer  :: i, ithr, j, r, jref, rref, istate
+        logical  :: even
+        real     :: pjr
+        ithr    = omp_get_thread_num() + 1
+        i       = self%pinds(iptcl)
+        even    = self%iseven(i)
+        ft_ref2 = cmplx(0.)
+        do j = 1, size(irefs)
+            jref = irefs(j)
+            do r = 1, size(irefs)
+                rref   = irefs(r)
+                pjr    = prefs(j) * prefs(r)
+                istate = floor(real(rref-1) / real(params_glob%nspace)) + 1
+                if( even )then
+                    ! ft_refs2_even is cached when linstates is on
+                    if( params_glob%l_linstates )then
+                        ft_ref2 = ft_ref2 + pjr * self%ft_refs2_even(k,jref,istate)%c
+                    else
+                        ! FT(jREFeven x rREFeven)*
+                        self%cvec2(ithr)%c(           1:self%pftsz) = self%pfts_refs_even(:,k,jref)*conjg(self%pfts_refs_even(:,k,rref))
+                        self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(self%cvec2(ithr)%c(1:self%pftsz))
+                        call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
+                        ft_ref2 = ft_ref2 + pjr * conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
+                    endif
+                else
+                    ! ft_refs2_odd is cached when linstates is on
+                    if( params_glob%l_linstates )then
+                        ft_ref2 = ft_ref2 + pjr * self%ft_refs2_odd(k,jref,istate)%c
+                    else
+                        ! FT(jREFodd x rREFodd)*
+                        self%cvec2(ithr)%c(           1:self%pftsz) = self%pfts_refs_odd(:,k,jref)*conjg(self%pfts_refs_odd(:,k,rref))
+                        self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(self%cvec2(ithr)%c(1:self%pftsz))
+                        call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
+                        ft_ref2 = ft_ref2 + pjr * conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
+                    endif
+                endif
             enddo
-        endif
-    end subroutine linear_memoized_refs
+        enddo
+    end subroutine linear_ft_ref2s
 
     subroutine gencorrs_1( self, iref, iptcl, cc, kweight, onestate )
         class(polarft_corrcalc), intent(inout) :: self
@@ -1702,19 +1710,19 @@ contains
         real(sp),                intent(in)    :: shift(2)
         real(sp),                intent(out)   :: cc(self%nrots)
         logical,       optional, intent(in)    :: kweight
-        complex(sp), pointer :: pft_ref(:,:), pft_ref2(:,:), shmat(:,:)
+        complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
         integer :: i, ithr
         ithr  = omp_get_thread_num() + 1
         i     = self%pinds(iptcl)
         shmat => self%heap_vars(ithr)%shmat
-        call self%linear_memoized_refs(iptcl, irefs, prefs, pft_ref, pft_ref2, .true.)
+        call self%linear_ft_refs(iptcl, irefs, prefs, pft_ref, .true.)
         call self%gen_shmat(ithr, shift, shmat)
         pft_ref = shmat * pft_ref
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
                 THROW_HARD('multi-refs gencorrs are not supported for cc yet!')
             case(OBJFUN_EUCLID)
-                call self%gencorrs_shifted_euclid(pft_ref, pft_ref2, iptcl, cc)
+                call self%gencorrs_shifted_euclid(pft_ref, iptcl, irefs, prefs, cc)
         end select
     end subroutine gencorrs_4
 
@@ -1988,18 +1996,20 @@ contains
         integer,                 intent(in)    :: irefs(:)
         real,                    intent(in)    :: prefs(:)
         real(sp),                intent(out)   :: euclids(self%nrots)
-        complex(sp), pointer :: ft_ref(:,:), ft_ref2(:,:)
+        complex(sp), pointer :: ft_ref(:,:), ft_ref2(:)
         real(dp) :: w, sumsqptcl
         integer  :: k, i, ithr
         ithr = omp_get_thread_num() + 1
         i    = self%pinds(iptcl)
-        call self%linear_memoized_refs(iptcl, irefs, prefs, ft_ref, ft_ref2, .false.)
+        call self%linear_ft_refs(iptcl, irefs, prefs, ft_ref, .false.)
         self%heap_vars(ithr)%kcorrs = 0.d0
+        ft_ref2 => self%heap_vars(ithr)%pft_tmp2
         do k = self%kfromto(1),self%kfromto(2)
+            call self%linear_ft_ref2s( iptcl, irefs, prefs, k, ft_ref2 )
             w         = real(k,dp) / real(self%sigma2_noise(k,iptcl),dp)
             sumsqptcl = sum(real(self%pfts_ptcls(:,k,i)*conjg(self%pfts_ptcls(:,k,i)),dp))
             ! FT(CTF2) x FT(REF2)* - 2 * FT(X.CTF) x FT(REF)*
-            self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c * ft_ref2(:,k) - 2.0*self%ft_ptcl_ctf(k,i)%c * ft_ref(:,k)
+            self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c * ft_ref2 - 2.0*self%ft_ptcl_ctf(k,i)%c * ft_ref(:,k)
             ! X.CTF.REF = IFFT( FT(CTF2) x FT(REF2)* - 2 * FT(X.CTF) x FT(REF)* )
             call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
             ! k/sig2 x ( |CTF.REF|2 - 2.X.CTF.REF ), fftw normalized
@@ -2047,22 +2057,26 @@ contains
         euclids = real( dexp( -self%heap_vars(ithr)%kcorrs / self%wsqsums_ptcls(i) ) )
     end subroutine gencorrs_shifted_euclid_1
 
-    subroutine gencorrs_shifted_euclid_2( self, pft_ref, ft_ref2, iptcl, euclids )
+    subroutine gencorrs_shifted_euclid_2( self, pft_ref, iptcl, irefs, prefs, euclids )
         class(polarft_corrcalc), intent(inout) :: self
         complex(sp), pointer,    intent(in)    :: pft_ref(:,:)
-        complex(sp), pointer,    intent(in)    :: ft_ref2(:,:)
         integer,                 intent(in)    :: iptcl
+        integer,                 intent(in)    :: irefs(:)
+        real,                    intent(in)    :: prefs(:)
         real(sp),                intent(out)   :: euclids(self%nrots)
+        complex(sp), pointer :: ft_ref2(:)
         real(dp) :: w, sumsqptcl
         integer  :: k, i, ithr
         ithr = omp_get_thread_num() + 1
         i    = self%pinds(iptcl)
         self%heap_vars(ithr)%kcorrs = 0.d0
+        ft_ref2 => self%heap_vars(ithr)%pft_tmp2
         do k = self%kfromto(1),self%kfromto(2)
+            call self%linear_ft_ref2s( iptcl, irefs, prefs, k, ft_ref2 )
             w         = real(k,dp) / real(self%sigma2_noise(k,iptcl),dp)
             sumsqptcl = sum(real(self%pfts_ptcls(:,k,i)*conjg(self%pfts_ptcls(:,k,i)),dp))
             ! FT(CTF2) x FT(REF2)*
-            self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c * ft_ref2(:,k)
+            self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c * ft_ref2
             ! FT(S.REF), shifted reference
             self%cvec2(ithr)%c(1:self%pftsz)            =       pft_ref(:,k)
             self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(pft_ref(:,k))
@@ -2260,7 +2274,7 @@ contains
         pft_ref       => self%heap_vars(ithr)%pft_ref
         pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
-        call self%linear_memoized_refs(iptcl, irefs, prefs, pft_ref, pft_ref_or_ft_ref=.true.)
+        call self%linear_ft_refs(iptcl, irefs, prefs, pft_ref, pft_ref_or_ft_ref=.true.)
         pft_ref_8 = dcmplx(pft_ref)
         ! rotation
         call self%rotate_ref(pft_ref_8, irot, pft_ref_tmp_8)
@@ -2291,7 +2305,7 @@ contains
         pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat_8       => self%heap_vars(ithr)%shmat_8
-        call self%linear_memoized_refs(iptcl, irefs, prefs, pft_ref, pft_ref_or_ft_ref=.true.)
+        call self%linear_ft_refs(iptcl, irefs, prefs, pft_ref, pft_ref_or_ft_ref=.true.)
         pft_ref_8 = dcmplx(pft_ref)
         ! shift
         call self%gen_shmat_8(ithr, shvec, shmat_8)
@@ -2406,7 +2420,7 @@ contains
         pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat_8       => self%heap_vars(ithr)%shmat_8
-        call self%linear_memoized_refs(iptcl, irefs, prefs, pft_ref, pft_ref_or_ft_ref=.true.)
+        call self%linear_ft_refs(iptcl, irefs, prefs, pft_ref, pft_ref_or_ft_ref=.true.)
         pft_ref_8 = dcmplx(pft_ref)
         call self%gen_shmat_8(ithr, shvec, shmat_8)
         pft_ref_8 = pft_ref_8 * shmat_8
@@ -2594,7 +2608,7 @@ contains
         pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat_8       => self%heap_vars(ithr)%shmat_8
-        call self%linear_memoized_refs(iptcl, irefs, prefs, pft_ref, pft_ref_or_ft_ref=.true.)
+        call self%linear_ft_refs(iptcl, irefs, prefs, pft_ref, pft_ref_or_ft_ref=.true.)
         pft_ref_8 = dcmplx(pft_ref)
         call self%gen_shmat_8(ithr, shvec, shmat_8)
         pft_ref_8 = pft_ref_8 * shmat_8
