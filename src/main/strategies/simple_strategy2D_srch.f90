@@ -17,7 +17,6 @@ private
 #include "simple_local_flags.inc"
 
 type strategy2D_spec
-    type(eul_prob_tab2D), pointer :: eulprob
     real    :: stoch_bound = 0.
     integer :: iptcl       = 0  ! global particle index
     integer :: iptcl_batch = 0  ! maps to index in batch

@@ -1,6 +1,8 @@
 ! concrete commander: cluster2D for simultanous 2D alignment and clustering of single-particle images
 module simple_commander_cluster2D
 include 'simple_lib.f08'
+!$ use omp_lib
+!$ use omp_lib_kinds
 use simple_builder,           only: builder, build_glob
 use simple_cmdline,           only: cmdline
 use simple_commander_base,    only: commander_base
@@ -1030,6 +1032,7 @@ contains
                 call cline_prob_tab2D_distr%set('refs',      refs)
                 call cline_prob_tab2D_distr%set('frcs',      FRCS_FILE)
                 call cline_prob_tab2D_distr%set('startit',   iter)
+                call cline_prob_tab2D_distr%set('extr_iter', params%extr_iter)
                 call xprob_tab2D_distr%execute_safe(cline_prob_tab2D_distr)
             endif
             ! updates
@@ -1343,6 +1346,7 @@ contains
                     call cline_prob_tab2D%set('startit',    params%which_iter)
                     call cline_prob_tab2D%set('refs',       params%refs)
                     call cline_prob_tab2D%set('frcs',       FRCS_FILE)
+                    call cline_prob_tab2D%set('extr_iter',  params%extr_iter)
                     call xprob_tab2D_distr%execute( cline_prob_tab2D )
                 endif
                 ! stochastic search
@@ -1531,8 +1535,6 @@ contains
     end subroutine exec_cavgassemble
 
     subroutine exec_prob_tab2D_distr( self, cline )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         use simple_eul_prob_tab2D,      only: eul_prob_tab2D
         use simple_strategy2D3D_common, only: sample_ptcls4update
         class(prob_tab2D_commander_distr), intent(inout) :: self
@@ -1547,6 +1549,7 @@ contains
         type(qsys_env)                  :: qenv
         type(chash)                     :: job_descr
         integer :: nptcls, ipart
+        logical :: l_maxpop
         ! After this condition block, only build_glob & params_glob must be used
         if( associated(build_glob) )then
             if( .not.associated(params_glob) )then
@@ -1566,6 +1569,8 @@ contains
                 call build_glob%spproj_field%clean_entry('updatecnt', 'sampled')
             endif
         endif
+        ! Whether to weight based-on the top maxpop particles
+        l_maxpop = cline%defined('maxpop') .and. (params_glob%maxpop > 0)
         ! sampled incremented
         call sample_ptcls4update([1,params_glob%nptcls], .true., nptcls, pinds)
         ! communicate to project file
@@ -1593,15 +1598,15 @@ contains
         enddo
         ! perform assignment
         select case(trim(params_glob%refine))
-        case('prob')
+        case('prob', 'prob_smpl')
             if( params_glob%which_iter == 1 )then
-                call eulprob%assign_cls_greedy
+                call eulprob%assign_cls_greedy(l_maxpop)
             else
                 call eulprob%normalize_table
-                call eulprob%assign_cls_stoch(build_glob%spproj_field)
+                call eulprob%assign_cls_stoch(build_glob%spproj_field, l_maxpop)
             endif
         case('prob_greedy')
-            call eulprob%assign_cls_greedy
+            call eulprob%assign_cls_greedy(l_maxpop)
         end select
         ! write
         fname = trim(ASSIGNMENT_FBODY)//'.dat'
@@ -1617,15 +1622,13 @@ contains
     end subroutine exec_prob_tab2D_distr
 
     subroutine exec_prob_tab2D( self, cline )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
-        use simple_strategy2D3D_common
         use simple_classaverager
         use simple_strategy2D_matcher
-        use simple_polarft_corrcalc,  only: polarft_corrcalc
-        use simple_eul_prob_tab2D,    only: eul_prob_tab2D
+        use simple_strategy2D3D_common, only: set_bp_range2D
+        use simple_polarft_corrcalc,    only: polarft_corrcalc
+        use simple_eul_prob_tab2D,      only: eul_prob_tab2D
         class(prob_tab2D_commander), intent(inout) :: self
-        class(cmdline),            intent(inout) :: cline
+        class(cmdline),              intent(inout) :: cline
         integer,          allocatable :: pinds(:)
         character(len=:), allocatable :: fname
         type(polarft_corrcalc)        :: pftcc
@@ -1665,6 +1668,7 @@ contains
         endif
         ! init scorer & prep references
         call preppftcc4align2D(pftcc, nptcls, params%which_iter)
+        call cavger_kill
         ! prep particles
         l_ctf = build%spproj%get_ctfflag('ptcl2D',iptcl=params%fromp).ne.'no'
         call prep_batch_particles2D(nptcls)
@@ -1673,12 +1677,19 @@ contains
         call eulprob%new(pinds)
         fname = trim(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
         ! algorithm
-        select case(trim(params%refine))
-        case('prob')
-            call eulprob%fill_table_stoch_inpl
-        case('prob_greedy')
-            call eulprob%fill_table_greedy_inpl
-        end select
+        if( params%which_iter == 1 )then
+            ! always greedy in-plane in first iteration
+            call eulprob%fill_table_greedy
+        else
+            select case(trim(params%refine))
+            case('prob')
+                call eulprob%fill_table_stoch
+            case('prob_smpl')
+                call eulprob%fill_table_smpl
+            case('prob_greedy')
+                call eulprob%fill_table_greedy
+            end select
+        endif
         call pftcc%kill
         call clean_batch_particles2D
         ! write
@@ -1748,8 +1759,6 @@ contains
     end subroutine exec_rank_cavgs
 
     subroutine exec_cluster_cavgs( self, cline )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         use simple_polarizer,        only: polarizer
         use simple_class_frcs,       only: class_frcs
         use simple_polarft_corrcalc, only: polarft_corrcalc
@@ -2397,8 +2406,6 @@ contains
     end subroutine exec_ppca_denoise_classes
 
     subroutine exec_partition_cavgs( self, cline )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         use simple_polarizer,           only: polarizer
         use simple_class_frcs,          only: class_frcs
         use simple_polarft_corrcalc,    only: polarft_corrcalc

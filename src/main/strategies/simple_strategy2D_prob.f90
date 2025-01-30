@@ -35,18 +35,18 @@ contains
             ! Prep
             call self%s%prep4srch
             ! Assignment
-            self%s%best_class = self%spec%eulprob%assgn_map(self%s%iptcl_map)%iproj
-            self%s%best_corr  = eulprob_corr_switch(self%spec%eulprob%assgn_map(self%s%iptcl_map)%dist)
-            self%s%best_rot   = self%spec%eulprob%assgn_map(self%s%iptcl_map)%inpl
+            self%s%best_class = s2D%probtab%assgn_map(self%s%iptcl_map)%iproj
+            self%s%best_corr  = eulprob_corr_switch(s2D%probtab%assgn_map(self%s%iptcl_map)%dist)
+            self%s%best_rot   = s2D%probtab%assgn_map(self%s%iptcl_map)%inpl
             self%s%best_shvec = 0.
             if( s2D%do_inplsrch(self%s%iptcl_batch) )then
-                if( self%spec%eulprob%assgn_map(self%s%iptcl_map)%has_sh )then
-                    self%s%best_shvec = [self%spec%eulprob%assgn_map(self%s%iptcl_map)%x,&
-                    &                    self%spec%eulprob%assgn_map(self%s%iptcl_map)%y]
+                if( s2D%probtab%assgn_map(self%s%iptcl_map)%has_sh )then
+                    self%s%best_shvec = [s2D%probtab%assgn_map(self%s%iptcl_map)%x,&
+                    &                    s2D%probtab%assgn_map(self%s%iptcl_map)%y]
                 endif
             endif
             self%s%nrefs_eval = self%s%nrefs
-            call self%s%store_solution(w_in=real(self%spec%eulprob%assgn_map(self%s%iptcl_map)%istate))
+            call self%s%store_solution(w_in=real(s2D%probtab%assgn_map(self%s%iptcl_map)%istate))
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif

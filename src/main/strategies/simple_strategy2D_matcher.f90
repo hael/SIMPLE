@@ -53,7 +53,7 @@ contains
         type(strategy2D_per_ptcl), allocatable :: strategy2Dsrch(:)
         real,                      allocatable :: states(:)
         integer,                   allocatable :: pinds(:), batches(:,:)
-        type(eul_prob_tab2D),           target :: eulprob
+        type(eul_prob_tab2D),           target :: probtab
         type(ori)             :: orientation
         type(convergence)     :: conv
         type(strategy2D_spec) :: strategy2Dspec
@@ -224,10 +224,11 @@ contains
         call prep_batch_particles2D(batchsz_max)
         if( L_BENCH_GLOB ) rt_prep_pftcc = toc(t_prep_pftcc)
 
-        ! READING THE ASSIGNMENT FOR PROB MODE
+        ! READ THE ASSIGNMENT FOR PROB MODE
         if( l_prob )then
-            call eulprob%new(pinds)
-            call eulprob%read_assignment(trim(ASSIGNMENT_FBODY)//'.dat')
+            call probtab%new(pinds)
+            call probtab%read_assignment(trim(ASSIGNMENT_FBODY)//'.dat')
+            s2D%probtab => probtab ! table accessible to strategies
         endif
 
         ! STOCHASTIC IMAGE ALIGNMENT
@@ -277,7 +278,6 @@ contains
                     ! offline mode, based on iteration
                     if( l_prob )then
                         allocate(strategy2D_prob                    :: strategy2Dsrch(iptcl_batch)%ptr)
-                        strategy2Dspec%eulprob => eulprob
                     else
                         if( trim(params_glob%refine).eq.'inpl' )then
                             allocate(strategy2D_inpl                :: strategy2Dsrch(iptcl_batch)%ptr)
@@ -326,7 +326,7 @@ contains
         ! CLEAN-UP
         call clean_strategy2D
         call orientation%kill
-        call eulprob%kill
+        call probtab%kill
         do iptcl_batch = 1,batchsz_max
             nullify(strategy2Dsrch(iptcl_batch)%ptr)
         end do
