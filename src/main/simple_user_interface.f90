@@ -3829,7 +3829,7 @@ contains
         &'Filter stack/volume',&                      ! descr_short
         &'is a program for ppca-based denoising of an image stack',&  ! descr_long
         &'simple_exec',&                              ! executable
-        &2, 1, 0, 0, 1, 0, 1, .false.)                ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 2, 0, 1, .false.)                ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call ppca_denoise%set_input('img_ios', 1, 'stk',  'file', 'Stack to denoise',  'Stack of images to denoise', 'e.g. stk.mrcs', .true., '')
@@ -3841,7 +3841,8 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call ppca_denoise%set_input('filt_ctrls', 1, 'neigs', 'num', '# eigenvecs', '# eigenvecs', '# eigenvecs', .true., 0.0)
+        call ppca_denoise%set_input('filt_ctrls', 1, 'neigs', 'num', 'Number of eigencomponents, corresponding to the number of classes in the stack', 'Number of eigencomponents, corresponding to the number of classes in the stack', '# eigenvecs', .true., 100.0)
+        call ppca_denoise%set_input('filt_ctrls', 2, 'pca_mode', 'multi', 'PCA methods: probabilistic PCA, standard SVD PCA or kernel PCA', 'PCA methods', '(ppca|pca_svd|kpca){ppca}', .false., 'ppca')
         ! mask controls
         ! <empty>
         ! computer controls
