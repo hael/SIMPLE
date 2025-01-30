@@ -1704,10 +1704,8 @@ contains
         logical,       optional, intent(in)    :: kweight
         complex(sp), pointer :: pft_ref(:,:), pft_ref2(:,:), shmat(:,:)
         integer :: i, ithr
-        logical :: even
         ithr  = omp_get_thread_num() + 1
         i     = self%pinds(iptcl)
-        even  = self%iseven(i)
         shmat => self%heap_vars(ithr)%shmat
         call self%linear_memoized_refs(iptcl, irefs, prefs, pft_ref, pft_ref2, .true.)
         call self%gen_shmat(ithr, shift, shmat)

@@ -24,7 +24,7 @@ contains
         class(image),           intent(inout) :: odd, even
         class(image), optional, intent(inout) :: mskimg
         real,         optional, intent(in)    :: lpstop
-        type(image)                   ::  odd_copy_rmat, odd_copy_cmat, even_copy_rmat, even_copy_cmat, weights_img,&
+        type(image)                   :: odd_copy_rmat, odd_copy_cmat, even_copy_rmat, even_copy_cmat, weights_img,&
                                         &diff_img_opt_odd, diff_img_opt_even, diff_img_odd, diff_img_even, odd_filt, even_filt
         integer                       :: k,l,m, box, ldim(3), find_start, find_stop, iter_no
         integer                       :: filtsz, cutoff_find, lb(3), ub(3), smooth_ext
@@ -34,8 +34,6 @@ contains
         real,             pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:), rmat_odd_filt(:,:,:), rmat_even_filt(:,:,:)
         real,             allocatable :: fsc(:), cur_fil(:)
         character(len=:), allocatable :: fsc_fname
-        real(   kind=c_float),         pointer ::  in(:,:,:,:)
-        complex(kind=c_float_complex), pointer :: out(:,:,:,:)
         ldim       = odd%get_ldim()
         filtsz     = odd%get_filtsz()
         smooth_ext = params_glob%smooth_ext
@@ -43,6 +41,7 @@ contains
         fsc_fname  = trim(params_glob%fsc)
         smpd       = even%get_smpd()
         find_start = calc_fourier_index(params_glob%lpstart_nonuni, box, even%get_smpd())
+        find_stop  = find_start
         if( present(lpstop) )then
             find_stop = calc_fourier_index(lpstop, box, smpd)
         else
@@ -57,7 +56,6 @@ contains
         endif
         find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
         if( find_start >= find_stop ) THROW_HARD('nonuni_filt3D: starting Fourier index is larger than ending Fourier index!')
-        allocate(in(ldim(1),ldim(2),ldim(3),2), out(ldim(1),ldim(2),ldim(3),2))
         call       weights_img%new(ldim, smpd)
         call      diff_img_odd%new(ldim, smpd)
         call     diff_img_even%new(ldim, smpd)
@@ -235,7 +233,7 @@ contains
         type(image), optional, allocatable, intent(inout) :: odd_filt_out(:)
         type(image), allocatable :: masks(:)
         real    :: smpd
-        integer :: iptcl, box, ldim(3), nptcls, find, npix
+        integer :: iptcl, box, ldim(3), nptcls, npix
         write(logfhandle,'(A)') '>>> 2D UNIFORM FILTERING FOR LP ESTIMATION'
         ! init
         ldim    = odd(1)%get_ldim()
@@ -281,7 +279,7 @@ contains
         logical, optional, intent(in)    :: verbose
         logical :: l_verbose
         integer :: ivol, ivar, j, errflg, var_inds(nvol), dist_ind
-        real    :: probs(nvol,nvol), probs_inv(nvol,nvol), truths_inv(npix,nvol), avg_vol(npix),&
+        real    :: probs_inv(nvol,nvol), truths_inv(npix,nvol), avg_vol(npix),&
                   &var(nvol), probs_dist(nvol,nvol), var_sorted(nvol)
         l_verbose = .false.
         if( present(verbose) ) l_verbose = verbose
