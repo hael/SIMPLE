@@ -359,6 +359,7 @@ type(simple_input_param) :: update_frac
 type(simple_input_param) :: user_account
 type(simple_input_param) :: user_email
 type(simple_input_param) :: user_project
+type(simple_input_param) :: vol_dim
 type(simple_input_param) :: walltime
 type(simple_input_param) :: wcrit
 type(simple_input_param) :: width
@@ -1194,7 +1195,7 @@ contains
         call set_param(lplim_crit,    'lplim_crit',    'num',    'Low-pass limit FSC criterion', 'FSC criterion for determining the low-pass limit(0.143-0.5){0.143}',&
         &'low-pass FSC criterion(0.143-0.5){0.143}', .false., 0.143)
         call set_param(cs,            'cs',            'num',    'Spherical aberration', 'Spherical aberration constant(in mm){2.7}', 'in mm{2.7}', .false., 2.7)
-        call set_param(total_dose,    'total_dose',     'num',    'Total exposure dose (e/Ang^2)', 'Total exposure dose (e/Ang^2)', 'in e/Ang^2', .false., 50.)
+        call set_param(total_dose,    'total_dose',    'num',    'Total exposure dose (e/Ang^2)', 'Total exposure dose (e/Ang^2)', 'in e/Ang^2', .false., 50.)
         call set_param(fraction_dose_target,'fraction_dose_target','num','EER fraction dose target (e/Ang^2)', 'EER fraction dose target, used to determine how many EER frames are included in each movie fraction(e/Ang^2)', 'in e/Ang^2', .false., 1.)
         call set_param(fraca,         'fraca',         'num',    'Amplitude contrast fraction', 'Fraction of amplitude contrast used for fitting CTF{0.1}', 'fraction{0.1}', .false., 0.1)
         call set_param(pspecsz,       'pspecsz',       'num',    'Size of power spectrum', 'Size of power spectrum in pixels{512}', 'give # pixels{512}', .false., 512.)
@@ -1304,6 +1305,7 @@ contains
         call set_param(flipgain,       'flipgain',     'multi',  'Flip the gain reference', 'Flip the gain reference along the provided axis(no|x|y|xy|yx){no}', '(no|x|y|xy|yx){no}', .false., 'no')
         call set_param(center_pdb,     'center_pdb',   'binary', 'Whether to move the PDB atomic center to the center of the box', 'Whether to move the PDB atomic center to the center of the box (yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(outside,        'outside',      'binary', 'Extract outside stage boundaries', 'Extract boxes outside the micrograph boundaries(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(vol_dim,        'vol_dim',         'num', 'Simulated volume dimensions', 'Dimensions of the simulated volume in voxels', '# dimensions of the simulated volume', .false., 0.)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -1334,7 +1336,19 @@ contains
         &0, 0, 0, 0, 0, 0, 0, .false.)                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-      
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
     end subroutine new_afm
 
     subroutine new_analysis2D_nano
@@ -3676,16 +3690,18 @@ contains
         &'PDB to MRC simulator',&                          ! descr_short
         &'is a program to simulate a 3D density map in MRC format using a PDB format coordinadinates file',& ! descr long
         &'all',&                                           ! executable
-        &1, 4, 0, 0, 0, 0, 0, .false.)                     ! # entries in each group, requires sp_project
+        &1, 5, 0, 0, 0, 0, 0, .false.)                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call pdb2mrc%set_input('img_ios', 1, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'molecule.pdb')
         ! parameter input/output
         call pdb2mrc%set_input('parm_ios', 1, smpd)
         pdb2mrc%parm_ios(1)%required = .false.
-        call pdb2mrc%set_input('parm_ios', 2, outvol)
-        call pdb2mrc%set_input('parm_ios', 3, pdbout)
-        call pdb2mrc%set_input('parm_ios', 4, center_pdb)
+        call pdb2mrc%set_input('parm_ios', 2, vol_dim)
+        pdb2mrc%parm_ios(2)%required = .false.
+        call pdb2mrc%set_input('parm_ios', 3, outvol)
+        call pdb2mrc%set_input('parm_ios', 4, pdbout)
+        call pdb2mrc%set_input('parm_ios', 5, center_pdb)
         ! alternative inputs
         ! <empty>
         ! search controls

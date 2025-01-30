@@ -341,6 +341,7 @@ type :: parameters
     integer :: top=1
     integer :: tof=0               !< end index
     integer :: updatecnt_ini=0     !< update count initialization value
+    integer :: vol_dim=0           !< input simulated pdb2mrc volume dimensions
     integer :: walltime=WALLTIME_DEFAULT  !< Walltime in seconds for workload management
     integer :: which_iter=0        !< iteration nr
     integer :: smooth_ext=8        !< smoothing window extension
@@ -824,6 +825,7 @@ contains
         call check_iarg('top',            self%top)
         call check_iarg('tof',            self%tof)
         call check_iarg('updatecnt_ini',  self%updatecnt_ini)
+        call check_iarg('vol_dim',        self%vol_dim)
         call check_iarg('which_iter',     self%which_iter)
         call check_iarg('smooth_ext',     self%smooth_ext)
         call check_iarg('walltime',       self%walltime)
