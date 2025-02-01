@@ -259,6 +259,7 @@ contains
             call envmsk%one_at_edge ! to expand before masking of reference internally
             l_msk = envmsk%bin2logical()
             call even_icm%ICM3D_eo(odd_icm, params%lambda, l_msk)
+            call envmsk%kill
         else
             call even_icm%ICM3D_eo(odd_icm, params%lambda)
         endif
@@ -266,42 +267,15 @@ contains
         call avg_icm%add(odd_icm)
         call avg_icm%mul(0.5)
         file_tag = 'icm_3D_filter'
-        call even_icm%write(trim(file_tag)//'_even.mrc')
-        call odd_icm%write(trim(file_tag)//'_odd.mrc')
-        call avg_icm%write(trim(file_tag)//'_avg.mrc')
-        mskrad = real(params%box/2)-COSMSKHALFWIDTH-1
-        call even%mask(mskrad,'soft')
-        call odd%mask(mskrad,'soft')
-        call avg%mask(mskrad,'soft')
-        call even_icm%mask(mskrad,'soft')
-        call odd_icm%mask(mskrad,'soft')
-        call avg_icm%mask(mskrad,'soft')
-        call even%fft
-        call odd%fft
-        call avg%fft
-        call even_icm%fft
-        call odd_icm%fft
-        call avg_icm%fft
-        res = avg%get_res()
-        allocate(fsc(fdim(params%box)-1),source=0.)
-        call even%fsc(even_icm, fsc)
-        call plot_fsc(size(fsc), fsc, res, params%smpd, trim(file_tag)//'_even_fsc')
-        call odd%fsc(odd_icm, fsc)
-        call plot_fsc(size(fsc), fsc, res, params%smpd, trim(file_tag)//'_odd_fsc')
-        call avg%fsc(avg_icm, fsc)
-        call plot_fsc(size(fsc), fsc, res, params%smpd, trim(file_tag)//'_avg_fsc')
-        call even%spectrum('power',pspec,.false.)
-        call even_icm%spectrum('power',pspec_icm, .false.)
-        pspec_icm = sqrt(pspec_icm / pspec)
-        call plot_fsc(size(pspec_icm), pspec_icm, res, params%smpd, trim(file_tag)//'_even_')
-        call odd%spectrum('power',pspec,.false.)
-        call odd_icm%spectrum('power',pspec_icm, .false.)
-        pspec_icm = sqrt(pspec_icm / pspec)
-        call plot_fsc(size(pspec_icm), pspec_icm, res, params%smpd, trim(file_tag)//'_odd_modulation')
-        call avg%spectrum('power',pspec,.false.)
-        call avg_icm%spectrum('power',pspec_icm, .false.)
-        pspec_icm = sqrt(pspec_icm / pspec)
-        call plot_fsc(size(pspec_icm), pspec_icm, res, params%smpd, trim(file_tag)//'_avg_modulation')
+        call even_icm%write('vol2_'//trim(file_tag)//'.mrc')
+        call odd_icm%write('vol1_'//trim(file_tag)//'.mrc')
+        call avg_icm%write('vol_avg_'//trim(file_tag)//'.mrc')
+        call even%kill
+        call odd%kill
+        call even_icm%kill
+        call odd_icm%kill
+        call avg%kill
+        call avg_icm%kill
         call simple_end('**** SIMPLE_ICM3D NORMAL STOP ****')
     end subroutine exec_icm3D
 

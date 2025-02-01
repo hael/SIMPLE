@@ -41,6 +41,7 @@ type(estimate_diam_commander)                 :: xestimate_diam
 type(simulate_atoms_commander)                :: xsimulate_atoms
 type(refine3D_nano_commander)                 :: xrefine3D_nano
 type(extract_substk_commander)                :: xextract_substk
+type(extract_subproj_commander)               :: xextract_subproj
 type(autorefine3D_nano_commander)             :: xautorefine3D_nano
 type(tseries_reconstruct3D_distr)             :: xtseries_reconstruct3D
 type(tseries_swap_stack_commander)            :: xtseries_swap_stack
@@ -141,6 +142,8 @@ select case(prg)
         call xrefine3D_nano%execute(cline)
     case( 'extract_substk' )
         call xextract_substk%execute(cline)
+    case( 'extract_subproj' )
+        call xextract_subproj%execute(cline)
     case( 'autorefine3D_nano' )
         if( cline%defined('nrestarts') )then
             call restarted_exec(cline, 'autorefine3D_nano', 'single_exec')
@@ -193,7 +196,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('a6dea597')
+call simple_print_git_version('4c669d69')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

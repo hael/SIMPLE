@@ -85,6 +85,7 @@ type(simple_program), target :: automask
 type(simple_program), target :: automask2D
 type(simple_program), target :: auto_spher_mask
 type(simple_program), target :: extract_substk
+type(simple_program), target :: extract_subproj
 type(simple_program), target :: autorefine3D_nano
 type(simple_program), target :: binarize
 type(simple_program), target :: calc_pspec
@@ -397,6 +398,7 @@ contains
         call new_automask2D
         call new_auto_spher_mask
         call new_extract_substk
+        call new_extract_subproj
         call new_autorefine3D_nano
         call new_binarize
         call new_calc_pspec
@@ -534,6 +536,7 @@ contains
         call push2prg_ptr_array(automask2D)
         call push2prg_ptr_array(auto_spher_mask)
         call push2prg_ptr_array(extract_substk)
+        call push2prg_ptr_array(extract_subproj)
         call push2prg_ptr_array(autorefine3D_nano)
         call push2prg_ptr_array(binarize)
         call push2prg_ptr_array(calc_pspec)
@@ -691,6 +694,8 @@ contains
                 ptr2prg => auto_spher_mask
             case('extract_substk')
                 ptr2prg => extract_substk
+            case('extract_subproj')
+                ptr2prg => extract_subproj
             case('autorefine3D_nano')
                 ptr2prg => autorefine3D_nano
             case('binarize')
@@ -1083,6 +1088,7 @@ contains
         write(logfhandle,'(A)') simulate_atoms%name
         write(logfhandle,'(A)') refine3D_nano%name
         write(logfhandle,'(A)') extract_substk%name
+        write(logfhandle,'(A)') extract_subproj%name
         write(logfhandle,'(A)') autorefine3D_nano%name
         write(logfhandle,'(A)') tseries_reconstruct3D%name
         write(logfhandle,'(A)') tseries_swap_stack%name
@@ -1530,11 +1536,11 @@ contains
     subroutine new_extract_substk
         ! PROGRAM SPECIFICATION
         call extract_substk%new(&
-        &'extract_substk',&                                                                             ! name
-        &'automatic cleanup of time-series of metallic nanoparticles',&                                 ! descr_short
-        &'is a shared-memory workflow for automatic cleanup of time-series of metallic nanoparticles',& ! descr_long
-        &'single_exec',&                                                                                ! executable
-        &0, 3, 0, 0, 0, 0, 0, .true.)                                                                   ! # entries in each group, requires sp_project
+        &'extract_substk',&                                                                                            ! name
+        &'extraction of a substack segment of time-series of metallic nanoparticles',&                                 ! descr_short
+        &'is a shared-memory workflow for extraction of a substack segment of time-series of metallic nanoparticles',& ! descr_long
+        &'single_exec',&                                                                                               ! executable
+        &0, 3, 0, 0, 0, 0, 0, .true.)                                                                                  ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1553,6 +1559,35 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_extract_substk
+
+    subroutine new_extract_subproj
+        ! PROGRAM SPECIFICATION
+        call extract_subproj%new(&
+        &'extract_subproj',&                                                                                     ! name
+        &'extraction of a subproject of time-series of metallic nanoparticles',&                                 ! descr_short
+        &'is a shared-memory workflow for extraction of a subproject of time-series of metallic nanoparticles',& ! descr_long
+        &'single_exec',&                                                                                         ! executable
+        &0, 4, 0, 0, 0, 0, 0, .true.)                                                                            ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call extract_subproj%set_input('parm_ios', 1, projfile)
+        call extract_subproj%set_input('parm_ios', 2, 'fromp',       'num', 'From index', 'Start index for extraction', 'start index', .false., 1.0)
+        call extract_subproj%set_input('parm_ios', 3, 'top',         'num', 'To index', 'Stop index for extraction', 'stop index', .false., 1.0)
+        call extract_subproj%set_input('parm_ios', 4, 'subprojname', 'str', 'Subproject name', 'Name of subproject to create ./myproject/myproject.simple',&
+        &'e.g. to create ./myproject/myproject.simple', .true., '')
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_extract_subproj
 
     subroutine new_autorefine3D_nano
         ! PROGRAM SPECIFICATION
