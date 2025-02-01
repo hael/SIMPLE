@@ -220,6 +220,7 @@ type :: parameters
     character(len=STDLEN)     :: picker='new'         !< which picker to use (old|new){new}
     character(len=STDLEN)     :: prg=''               !< SIMPLE program being executed
     character(len=STDLEN)     :: projname=''          !< SIMPLE  project name
+    character(len=STDLEN)     :: subprojname=''       !< SIMPLE  subproject name
     character(len=STDLEN)     :: protocol=''          !< generic option
     character(len=STDLEN)     :: ptclw='no'           !< use particle weights(yes|no){no}
     character(len=STDLEN)     :: qsys_name='local'    !< name of queue system (local|slurm|pbs)
@@ -644,6 +645,7 @@ contains
         call check_carg('print_corrs',    self%print_corrs)
         call check_carg('prg',            self%prg)
         call check_carg('projname',       self%projname)
+        call check_carg('subprojname',    self%subprojname)
         call check_carg('proj_is_class',  self%proj_is_class)
         call check_carg('projstats',      self%projstats)
         call check_carg('protocol',       self%protocol)

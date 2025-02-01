@@ -32,6 +32,7 @@ public :: center2D_nano_commander
 public :: cluster2D_nano_commander
 public :: tseries_ctf_estimate_commander
 public :: extract_substk_commander
+public :: extract_subproj_commander
 public :: autorefine3D_nano_commander
 public :: refine3D_nano_commander
 public :: cavgsproc_nano_commander
@@ -108,6 +109,11 @@ type, extends(commander_base) :: extract_substk_commander
 contains
     procedure :: execute      => exec_extract_substk
 end type extract_substk_commander
+
+type, extends(commander_base) :: extract_subproj_commander
+contains
+    procedure :: execute      => exec_extract_subproj
+end type extract_subproj_commander
 
 type, extends(commander_base) :: autorefine3D_nano_commander
   contains
@@ -950,8 +956,56 @@ contains
         call spproj%write_segment_inside('projinfo')
         call spproj%write_substk([params%fromp,params%top], params%outstk)
         ! end gracefully
-        call simple_end('**** SINGLE_extract_substk NORMAL STOP ****')
+        call simple_end('**** SINGLE_EXTRACT_SUBSTK NORMAL STOP ****')
     end subroutine exec_extract_substk
+
+    subroutine exec_extract_subproj( self, cline )
+        use simple_image, only: image
+        use simple_commander_project, only: new_project_commander, import_particles_commander
+        class(extract_subproj_commander), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
+        type(parameters)                 :: params
+        type(sp_project)                 :: spproj
+        type(new_project_commander)      :: xnew_proj
+        type(import_particles_commander) :: ximport_particles
+        type(ctfparams)                  :: ctfvars
+        type(cmdline)                    :: cline_new_proj, cline_import_particles
+        character(len=STDLEN)            :: cwd
+        call cline%set('mkdir', 'no')
+        ! init params
+        call params%new(cline)
+        ! read the project file
+        call spproj%read(params%projfile)
+        call spproj%update_projinfo(cline)
+        call spproj%write_segment_inside('projinfo')
+        ! create substack
+        if( .not. cline%defined('outstk') )then
+            params%outstk = trim(params%subprojname)//'.mrcs'
+        endif
+        call spproj%write_substk([params%fromp,params%top], params%outstk)
+        ! create temporary text file of orientations
+        call spproj%os_ptcl3D%write('temporis.txt', [params%fromp,params%top])
+        ctfvars = spproj%get_ctfparams('stk', 1)
+        ! make new project
+        call cline_new_proj%set('projname', trim(params%subprojname))
+        call xnew_proj%execute_safe(cline_new_proj)
+        ! import particles
+        call cline_import_particles%set('prg',      'import_particles') ! needs to be here for exec_dir creation
+        call cline_import_particles%set('projfile', trim(params%subprojname)//'.simple')
+        call cline_import_particles%set('cs',       ctfvars%cs)
+        call cline_import_particles%set('fraca',    ctfvars%fraca)
+        call cline_import_particles%set('kv',       ctfvars%kv)
+        call cline_import_particles%set('smpd',     ctfvars%smpd)
+        call cline_import_particles%set('stk',      '../'//trim(params%outstk))
+        call cline_import_particles%set('ctf',      'no')
+        call cline_import_particles%set('oritab',   '../temporis.txt')
+        call ximport_particles%execute_safe(cline_import_particles)
+        call simple_chdir('../')
+        call simple_chdir('../')
+        call del_file('temporis.txt')
+        ! end gracefully
+        call simple_end('**** SINGLE_EXTRACT_SUBPROJ NORMAL STOP ****')
+    end subroutine exec_extract_subproj
 
     subroutine exec_autorefine3D_nano( self, cline )
         use simple_commander_atoms, only: detect_atoms_commander
@@ -1569,8 +1623,8 @@ contains
         type(chash)                   :: job_descr
         type(image)                   :: vol1, vol2, vol_w, vol_sum, mskvol, mskvol2
         real                          :: w, sumw
-        integer :: state, ipart, istate, iptcl, nptcls, mskfromto(2)
-        integer :: funit, nparts, i, ind, nlps, ilp, iostat, hp_ind, best_msk
+        integer :: state, ipart, istate, iptcl, nptcls, mskfromto(2), frame_start, frame_end
+        integer :: funit, nparts, i, ind, nlps, ilp, iostat, hp_ind, best_msk, lifetime
         logical :: fall_over
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('trs')     ) call cline%set('trs',           5.) ! to assure that shifts are being used
@@ -1592,10 +1646,17 @@ contains
         if( any(rstates < 0.5) ) THROW_HARD('state=0 entries not allowed, prune project beforehand')
         ! states/stepz
         nptcls = size(rstates)
-        nparts = ceiling(real(nptcls)/real(params%stepsz))
-        parts  = split_nobjs_even(nptcls, nparts)
+        if( cline%defined('nparts') )then
+            nparts = params%nparts
+        else
+            nparts = nint(real(nptcls)/real(params%stepsz))
+        endif
+        parts = split_nobjs_even(nptcls, nparts)
         allocate(vol_fnames(nparts), rad_cc(params%box/2), rad_dists(params%box/2))
         recname = trim(VOL_FBODY)//int2str_pad(1,2)//trim(params%ext)
+        fname = 'lifetimes.csv'
+        call fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=iostat)
+        write(funit,*) 'PARTITION, ', 'FRAME_START, ', 'FRAME_END, ', 'LIFETIME'
         do ipart = 1,nparts
             str_state         = int2str_pad(ipart,2)
             vol_fnames(ipart) = 'partvol'//trim(str_state)//trim(params%ext)
@@ -1604,15 +1665,17 @@ contains
             call cline_rec%delete('nparts') ! shared-memory implementation
             call cline_rec%set('fromp', parts(ipart,1))
             call cline_rec%set('top',   parts(ipart,2))
-
-            print *, 'fromp/top: ', parts(ipart,1), parts(ipart,2)
-
+            frame_start = spproj%os_ptcl3D%get(parts(ipart,1), 'pind')
+            frame_end   = spproj%os_ptcl3D%get(parts(ipart,2), 'pind')
+            lifetime    = frame_end - frame_start
+            write(funit,'(I6,I6,I6,I6)') ipart, frame_start, frame_end, lifetime
             call cline_rec%set('mkdir', 'no')
             ! rec
             call xrec3D_shmem%execute(cline_rec)
             ! rename volume
             call simple_rename(recname, trim(vol_fnames(ipart)))
         end do
+        call fclose(funit)
         ! Assemble states
         call vol1%new([params%box,params%box,params%box],params%smpd)
         call vol2%new([params%box,params%box,params%box],params%smpd)
@@ -1663,7 +1726,7 @@ contains
                 endif
             enddo
             call vol_sum%div(vol_w)
-            call vol_sum%write('state_'// int2str_pad(state,2)//'.mrc')
+            call vol_sum%write('radial_average_vol_'// int2str_pad(state,2)//'.mrc')
         enddo
 
         ! Calculate correlation matrices
