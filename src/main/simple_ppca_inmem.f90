@@ -91,7 +91,7 @@ contains
         class(ppca_inmem), intent(inout) :: self
         real,              intent(in)    :: pcavecs(self%D,self%N)
         integer, optional, intent(in)    :: maxpcaits
-        integer :: k, file_stat, err
+        integer :: k, err
         real    :: p, p_prev
         p = 0.
         k = 0

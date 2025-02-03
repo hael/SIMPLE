@@ -324,8 +324,7 @@ contains
         real,    intent(inout) :: t
         real,    allocatable   :: arr(:)
         integer, allocatable   :: locn(:)
-        real    :: ts(2), y
-        integer :: narr
+        real    :: ts(2)
         if( level < 0 .or. level > 2 )then
             call simple_exception('peak detection level out of range', 'simple_math.f90', __LINE__,l_stop=.true.)
         endif
@@ -348,9 +347,7 @@ contains
         real,    intent(in)    :: x(n)
         real,    intent(inout) :: t
         real,    allocatable   :: arr(:)
-        integer, allocatable   :: locn(:)
-        real    :: ts(2), y
-        integer :: narr
+        real    :: ts(2)
         if( level < 1 .or. level > 2 )then
             call simple_exception('peak detection level out of range', 'simple_math.f90', __LINE__,l_stop=.true.)
         endif
@@ -894,6 +891,15 @@ contains
             r = sin(arg)/(arg)
         endif
     end function sinc
+
+    !>   ceiling between min max
+    function ceiling_minmax( x, minx, maxx ) result( r )
+        real,    intent(in) :: x
+        integer, intent(in) :: minx, maxx
+        integer :: r
+        r = ceiling(x)
+        r = max(min(r, maxx), minx)
+    end function ceiling_minmax
 
     !>   is a truncated Gaussian window function
     function gauwfun( x, alpha ) result( w )
