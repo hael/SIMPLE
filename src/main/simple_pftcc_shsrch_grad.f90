@@ -209,6 +209,7 @@ contains
         integer  :: loc, i, lowest_rot, init_rot
         logical  :: found_better, l_sh_rot, coarse_init_orig
         l_sh_rot = .true.
+        if( params_glob%l_linstates ) call pftcc_glob%set_cache(.false.)     ! no caching in shift searching
         if( present(sh_rot)  ) l_sh_rot = sh_rot
         if( present(xy_in)   )then
             coarse_init_orig = self%coarse_init

@@ -158,7 +158,7 @@ contains
         use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
         class(eul_prob_tab),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
-        integer,                 allocatable   :: locn(:)
+        integer,                 allocatable   :: locn(:,:)
         type(pftcc_shsrch_grad) :: grad_shsrch_obj(nthr_glob) !< origin shift search object, L-BFGS with gradient
         type(ori)               :: o_prev
         integer :: i, j, iproj, iptcl, n, projs_ns, ithr, irot, inds_sorted(pftcc%nrots,nthr_glob), istate, iref_start, iref
@@ -166,6 +166,14 @@ contains
         real    :: rotmat(2,2), lims(2,2), lims_init(2,2), cxy(3), cxy_prob(3), rot_xy(2), inpl_athres(self%nstates)
         real    :: dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob), dists_refs(self%nrefs,nthr_glob)
         call seed_rnd
+        projs_ns = 0
+        do istate = 1, self%nstates
+            call calc_num2sample(params_glob%nspace, 'dist', n, state=istate)
+            projs_ns            = max(projs_ns, n)
+            inpl_athres(istate) = calc_athres('dist_inpl', state=istate)
+        enddo
+        if( allocated(locn) ) deallocate(locn)
+        allocate(locn(projs_ns,nthr_glob), source=0)
         if( params_glob%l_sh_first .and. params_glob%l_doshift )then
             ! make shift search objects
             lims(:,1)      = -params_glob%trs
@@ -177,15 +185,7 @@ contains
                     &maxits=params_glob%maxits_sh, opt_angle=.true., coarse_init=.true.)
             end do
             ! fill the table
-            projs_ns = 0
-            do istate = 1, self%nstates
-                call calc_num2sample(params_glob%nspace, 'dist', n, state=istate)
-                projs_ns            = max(projs_ns, n)
-                inpl_athres(istate) = calc_athres('dist_inpl', state=istate)
-            enddo
-            if( allocated(locn) ) deallocate(locn)
-            allocate(locn(projs_ns), source=0)
-            !$omp parallel do default(shared) private(i,j,iptcl,ithr,o_prev,istate,iproj,iref_start,iref,irot,cxy,cxy_prob,rot_xy,rotmat,locn)&
+            !$omp parallel do default(shared) private(i,j,iptcl,ithr,o_prev,istate,iproj,iref_start,iref,irot,cxy,cxy_prob,rot_xy,rotmat)&
             !$omp proc_bind(close) schedule(static)
             do i = 1, self%nptcls
                 iptcl = self%pinds(i)
@@ -201,6 +201,7 @@ contains
                 cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
                 if( irot == 0 ) cxy(2:3) = 0.
                 ! (2) search projection directions using those shifts for all references
+                call pftcc%reset_cache
                 do istate = 1, self%nstates
                     iref_start = (istate-1)*params_glob%nspace
                     do iproj = 1, params_glob%nspace
@@ -222,9 +223,9 @@ contains
                 ! (3) see if we can refine the shifts by re-searching them for individual references in the 
                 !     identified probabilistic neighborhood
                 if( params_glob%l_prob_sh )then
-                    locn = minnloc(dists_refs(:,ithr), projs_ns)
+                    locn(:,ithr) = minnloc(dists_refs(:,ithr), projs_ns)
                     do j = 1,projs_ns
-                        iref = locn(j)
+                        iref = locn(j,ithr)
                         ! BFGS over shifts
                         call grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
                         irot     = self%loc_tab(iref,i)%inpl
@@ -253,16 +254,9 @@ contains
                         &maxits=params_glob%maxits_sh, opt_angle=.true.)
                 end do
                 ! fill the table
-                projs_ns = 0
-                do istate = 1, self%nstates
-                    call calc_num2sample(params_glob%nspace, 'dist', n, state=istate)
-                    projs_ns            = max(projs_ns, n)
-                    inpl_athres(istate) = calc_athres('dist_inpl', state=istate)
-                enddo
-                if( allocated(locn) ) deallocate(locn)
-                allocate(locn(projs_ns), source=0)
-                !$omp parallel do default(shared) private(i,j,iptcl,ithr,istate,iref_start,iproj,iref,irot,cxy,locn) proc_bind(close) schedule(static)
+                !$omp parallel do default(shared) private(i,j,iptcl,ithr,istate,iref_start,iproj,iref,irot,cxy) proc_bind(close) schedule(static)
                 do i = 1, self%nptcls
+                    call pftcc%reset_cache
                     iptcl = self%pinds(i)
                     ithr  = omp_get_thread_num() + 1
                     do istate = 1, self%nstates
@@ -277,9 +271,9 @@ contains
                             dists_refs(  iref,ithr)   = dists_inpl(irot,ithr)
                         enddo
                     enddo
-                    locn = minnloc(dists_refs(:,ithr), projs_ns)
+                    locn(:,ithr) = minnloc(dists_refs(:,ithr), projs_ns)
                     do j = 1,projs_ns
-                        iref = locn(j)
+                        iref = locn(j,ithr)
                         ! BFGS over shifts
                         call grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
                         irot = self%loc_tab(iref,i)%inpl
@@ -296,13 +290,13 @@ contains
                 !$omp end parallel do
             else
                 ! fill the table
-                do istate = 1, self%nstates
-                    iref_start          = (istate-1)*params_glob%nspace
-                    inpl_athres(istate) = calc_athres('dist_inpl', state=istate)
-                    !$omp parallel do default(shared) private(i,iptcl,ithr,iproj,iref,irot) proc_bind(close) schedule(static)
-                    do i = 1, self%nptcls
-                        iptcl = self%pinds(i)
-                        ithr  = omp_get_thread_num() + 1
+                !$omp parallel do default(shared) private(i,iptcl,ithr,iproj,iref,irot,istate,iref_start) proc_bind(close) schedule(static)
+                do i = 1, self%nptcls
+                    call pftcc%reset_cache
+                    iptcl = self%pinds(i)
+                    ithr  = omp_get_thread_num() + 1
+                    do istate = 1, self%nstates
+                        iref_start = (istate-1)*params_glob%nspace
                         do iproj = 1, params_glob%nspace
                             iref = iref_start + iproj
                             call pftcc%gencorrs(iref, iptcl, dists_inpl(:,ithr))
@@ -312,8 +306,8 @@ contains
                             self%loc_tab(iref,i)%inpl = irot
                         enddo
                     enddo
-                    !$omp end parallel do
                 enddo
+                !$omp end parallel do
             endif
         endif
     end subroutine fill_tab
