@@ -46,6 +46,7 @@ contains
              ! shift search on previous best reference
             call self%s%inpl_srch_first
             ! search
+            call pftcc_glob%reset_cache
             do isample=1,self%s%nrefs
                 iref = s3D%srch_order(isample,self%s%ithr) ! set the reference index
                 if( s3D%state_exists(s3D%proj_space_state(iref)) )then
