@@ -31,6 +31,7 @@ type :: oris
     ! CONSTRUCTORS
     procedure          :: new
     procedure          :: reallocate
+    procedure          :: extract_subset
     ! GETTERS
     procedure          :: exists
     procedure          :: e1get
@@ -277,6 +278,22 @@ contains
         end do
         call tmp%kill
     end subroutine reallocate
+
+    function extract_subset( self, fromto ) result( self_sub )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: fromto(2)
+        type(oris) :: self_sub
+        integer    :: n, cnt, i
+        logical    :: is_ptcl
+        n       = fromto(2) - fromto(1) + 1
+        is_ptcl = self%o(fromto(1))%is_particle()
+        call self_sub%new(n, is_ptcl)
+        cnt = 0
+        do i = fromto(1), fromto(2)
+            cnt = cnt + 1
+            call self_sub%o(cnt)%copy(self%o(i))
+        end do
+    end function extract_subset
 
     ! GETTERS
 
