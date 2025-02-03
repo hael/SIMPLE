@@ -62,7 +62,6 @@ contains
         if( .not. cline%defined('extr_lim')  ) call cline%set('extr_lim',  EXTR_LIM_LOCAL)
         if( .not. cline%defined('rank_cavgs')) call cline%set('rank_cavgs','yes')
         if( .not. cline%defined('sigma_est') ) call cline%set('sigma_est', 'group')
-        if( .not. cline%defined('maxpop')    ) call cline%set('maxpop',    CLS_MAXPOP)
         ! shared memory execution
         l_shmem = set_shmem_flag(cline)
         ! master parameters
@@ -104,6 +103,11 @@ contains
         call spproj%read_segment('ptcl3D',params%projfile)
         call spproj%os_ptcl3D%transfer_2Dshifts(spproj_field)
         call spproj%write_segment_inside('ptcl3D', params%projfile)
+        ! weights
+        if( cline%defined('maxpop') .and. params%maxpop > 0 )then
+            call spproj_field%set_all2single('w',1.)
+            call spproj%write_segment_inside(params%oritype, params%projfile)
+        endif
         ! final class generation & ranking
         if ( trim(params%rank_cavgs).eq.'yes' )then
             last_iter = cline_cluster2D%get_iarg('endit')

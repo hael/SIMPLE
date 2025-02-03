@@ -1598,15 +1598,25 @@ contains
         enddo
         ! perform assignment
         select case(trim(params_glob%refine))
-        case('prob', 'prob_smpl')
+        case('prob')
             if( params_glob%which_iter == 1 )then
-                call eulprob%assign_cls_greedy(l_maxpop)
+                call eulprob%assign_greedy(l_maxpop)
             else
                 call eulprob%normalize_table
-                call eulprob%assign_cls_stoch(build_glob%spproj_field, l_maxpop)
+                if( params_glob%extr_iter <= params_glob%extr_lim )then
+                    call eulprob%assign_prob(build_glob%spproj_field, l_maxpop)
+                else
+                    call eulprob%assign_prob(build_glob%spproj_field, l_maxpop)
+                endif
+            endif
+        case('prob_smpl')
+            if( params_glob%which_iter == 1 )then
+                call eulprob%assign_greedy(l_maxpop)
+            else
+                call eulprob%assign_stoch(build_glob%spproj_field, l_maxpop)
             endif
         case('prob_greedy')
-            call eulprob%assign_cls_greedy(l_maxpop)
+            call eulprob%assign_greedy(l_maxpop)
         end select
         ! write
         fname = trim(ASSIGNMENT_FBODY)//'.dat'
@@ -1635,7 +1645,6 @@ contains
         type(builder)                 :: build
         type(parameters)              :: params
         type(eul_prob_tab2D)          :: eulprob
-        type(euclid_sigma2)           :: eucl_sigma_glob
         real    :: frac_srch_space
         integer :: nptcls
         logical :: l_ctf
@@ -1676,26 +1685,24 @@ contains
         ! init prob table
         call eulprob%new(pinds)
         fname = trim(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
-        ! algorithm
+        ! Fill probability table
         if( params%which_iter == 1 )then
             ! always greedy in-plane in first iteration
             call eulprob%fill_table_greedy
         else
             select case(trim(params%refine))
-            case('prob')
-                call eulprob%fill_table_stoch
-            case('prob_smpl')
+            case('prob','prob_smpl')
                 call eulprob%fill_table_smpl
             case('prob_greedy')
                 call eulprob%fill_table_greedy
             end select
         endif
         call pftcc%kill
+        if(associated(eucl_sigma2_glob)) call eucl_sigma2_glob%kill
         call clean_batch_particles2D
         ! write
         call eulprob%write_table(fname)
         ! clean & end
-        if(associated(eucl_sigma2_glob)) call eucl_sigma2_glob%kill
         call eulprob%kill
         call build%kill_general_tbox
         call build%kill_strategy2D_tbox
