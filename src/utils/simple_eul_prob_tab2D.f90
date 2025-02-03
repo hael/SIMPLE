@@ -35,8 +35,11 @@ type :: eul_prob_tab2D
     ! ASSIGNMENT FROM TABLE
     procedure          :: normalize_table
     procedure, private :: select_top_ptcls
-    procedure          :: assign_cls_greedy
-    procedure          :: assign_cls_stoch
+    procedure, private :: prevcls_subtraction
+    procedure          :: assign_greedy
+    procedure          :: assign_shc
+    procedure          :: assign_stoch
+    procedure          :: assign_prob
     ! I/O
     procedure          :: write_table
     procedure          :: read_table_to_glob
@@ -254,9 +257,9 @@ contains
         type(pftcc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)
         real,       allocatable :: sorted_scores(:)
         integer,    allocatable :: sorted_inds(:)
-        real    :: scores(pftcc_glob%get_nrots()),lims(2,2),lims_init(2,2),cxy(3),score,neigh_frac
+        real    :: scores(pftcc_glob%get_nrots()),lims(2,2),lims_init(2,2),cxy(3),P,score,neigh_frac
         integer :: vec(pftcc_glob%get_nrots())
-        integer :: P, nrots, i, j, iptcl, ithr, irot, icls, jrot, rank, ninpl_stoch, ncls_stoch
+        integer :: nrots, i, j, iptcl, ithr, irot, icls, jrot, rank, ninpl_stoch, ncls_stoch
         nrots = pftcc_glob%get_nrots()
         ! size of stochastic neighborhood (# of in-plane angles to draw from)
         neigh_frac  = extremal_decay2D(params_glob%extr_iter, params_glob%extr_lim)
@@ -372,16 +375,26 @@ contains
     ! set state/weights to zero for worst ranking particles per class
     subroutine select_top_ptcls( self, pops )
         class(eul_prob_tab2D), intent(inout) :: self
-        integer,               intent(in)    :: pops(self%ncls)
+        integer,     optional, intent(in)    :: pops(self%ncls)
         real,    allocatable :: dists(:)
         integer, allocatable :: inds(:)
         real    :: t
-        integer :: i, j, icls
+        integer :: counts(self%ncls), i, j, icls
+        if( present(pops) )then
+            counts = pops
+        else
+            counts = 0
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(icls)
+            do icls = 1,self%ncls
+                if( self%populated(icls) ) counts(icls) = count(self%assgn_map(:)%iproj == icls)
+            enddo
+            !$omp end parallel do
+        endif
         !$omp parallel do default(shared) proc_bind(close) schedule(static)&
         !$omp private(i,j,icls,inds,dists,t)
         do i = 1,self%neffcls
             icls = self%clsinds(i)
-            if( pops(icls) > params_glob%maxpop )then
+            if( counts(icls) > params_glob%maxpop )then
                 inds  = pack((/(j,j=1,self%nptcls)/), mask=self%assgn_map(:)%iproj==icls)
                 dists = self%assgn_map(inds(:))%dist
                 call hpsort(dists)
@@ -396,8 +409,25 @@ contains
         !$omp end parallel do
     end subroutine select_top_ptcls
 
+    ! Self-subtraction, sets distance to previous class to maximum
+    subroutine prevcls_subtraction( self, os )
+        class(eul_prob_tab2D), intent(inout) :: self
+        class(oris),           intent(in)    :: os
+        real    :: a
+        integer :: i,icls
+        if( params_glob%extr_iter <= params_glob%extr_lim )then
+            a = huge(a)
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,icls)
+            do i = 1,self%nptcls
+                icls = os%get_class(self%pinds(i))
+                if( icls > 0 ) self%loc_tab(icls,i)%dist = a
+            enddo
+            !$omp end parallel do
+        endif
+    end subroutine prevcls_subtraction
+
     ! Assigns best class to all particles
-    subroutine assign_cls_greedy( self, rank_ptcls )
+    subroutine assign_greedy( self, rank_ptcls )
         class(eul_prob_tab2D), intent(inout) :: self
         logical,               intent(in)    :: rank_ptcls
         integer :: pops(self%ncls), i, icls
@@ -411,47 +441,116 @@ contains
         enddo
         !$omp end parallel do
         if( rank_ptcls ) call self%select_top_ptcls(pops)
-    end subroutine assign_cls_greedy
+    end subroutine assign_greedy
 
     ! Assign class to all particles stochastically with self-subtraction
-    subroutine assign_cls_stoch( self, os, rank_ptcls )
+    subroutine assign_stoch( self, os, rank_ptcls )
         class(eul_prob_tab2D), intent(inout) :: self
         class(oris),           intent(in)    :: os
         logical,               intent(in)    :: rank_ptcls
-        integer, allocatable :: prev_cls(:)
-        real    :: pdists(self%neffcls), score, t, neigh_frac
-        integer :: pops(self%ncls), vec(self%neffcls), P, i, icls, ind, rank, ncls_stoch, prev_ref
-        logical :: l_self_subtr
+        real    :: pdists(self%neffcls), P, score, neigh_frac
+        integer :: pops(self%ncls), vec(self%neffcls), i, icls, ind, rank, ncls_stoch
+        ! self-subtraction
+        call self%prevcls_subtraction(os)
         ! size of stochastic neighborhood (# of classes to draw from)
         neigh_frac = extremal_decay2D(params_glob%extr_iter, params_glob%extr_lim)
         ncls_stoch = neighfrac2nsmpl(neigh_frac, self%neffcls)
         P          = sampling_power(params_glob%extr_iter, params_glob%extr_lim)
-        ! self-subtraction
-        l_self_subtr = params_glob%extr_iter <= params_glob%extr_lim ! self-subtraction
-        if( l_self_subtr ) prev_cls = os%get_all_asint('class')
         ! select class stochastically
         pops = 0
         !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-        !$omp private(i,pdists,vec,ind,rank,score,icls,prev_ref) reduction(+:pops)
+        !$omp private(i,pdists,vec,ind,rank,score,icls) reduction(+:pops)
         do i = 1,self%nptcls
-            pdists = self%loc_tab(self%clsinds(:),i)%dist       ! distances for non-empty classes
-            if( l_self_subtr )then
-                prev_ref = prev_cls(self%pinds(i))
-                if( prev_ref > 0 )then
-                    prev_ref = self%indcls(prev_ref)
-                    ! pdists(prev_ref) = 1.           ! previous class set to maximal distance
-                    pdists(prev_ref) = huge(t)           ! previous class set to maximal distance
-                endif
-            endif
-            pdists = eulprob_corr_switch(pdists)                ! distances back to score
+            pdists = eulprob_corr_switch(self%loc_tab(self%clsinds(:),i)%dist)  ! distances to score
             call power_sampling(P, self%neffcls, pdists, vec, ncls_stoch, ind, rank, score) ! stochastic sampling
-            icls = self%clsinds(ind)                            ! class ID
-            self%assgn_map(i) = self%loc_tab(icls,i)            ! updates assignement
-            pops(icls) = pops(icls) + 1                         ! updates population
+            icls = self%clsinds(ind)                                            ! class ID
+            self%assgn_map(i) = self%loc_tab(icls,i)                            ! updates assignement
+            pops(icls) = pops(icls) + 1                                         ! updates population
         enddo
         !$omp end parallel do
+        ! toss worst particles
         if( rank_ptcls ) call self%select_top_ptcls(pops)
-    end subroutine assign_cls_stoch
+    end subroutine assign_stoch
+
+    ! Assignment based on basic SHC
+    subroutine assign_shc( self, os, rank_ptcls )
+        class(eul_prob_tab2D), intent(inout) :: self
+        class(oris),           intent(in)    :: os
+        logical,               intent(in)    :: rank_ptcls
+        real    :: scores(self%neffcls)
+        integer :: pops(self%ncls), i, icls, prev_cls
+        pops = 0
+        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+        !$omp private(i,prev_cls,icls,scores) reduction(+:pops)
+        do i = 1,self%nptcls
+            prev_cls = os%get_class(self%pinds(i))
+            if( prev_cls <= 0 )then
+                icls = minloc(self%loc_tab(self%clsinds(:),i)%dist,dim=1)
+            else
+                scores = eulprob_corr_switch(self%loc_tab(self%clsinds(:),i)%dist)
+                icls   = shcloc(self%neffcls, scores, scores(prev_cls))
+                if( icls == 0 ) icls = maxloc(scores,dim=1)
+            endif
+            icls              = self%clsinds(icls)
+            self%assgn_map(i) = self%loc_tab(icls,i)
+            pops(icls)        = pops(icls) + 1
+        enddo
+        !$omp end parallel do
+        ! toss worst particles
+        if( rank_ptcls ) call self%select_top_ptcls(pops)
+    end subroutine assign_shc
+
+    ! Same assignment as 3D (cf eul_prob_tab)
+    subroutine assign_prob( self, os, rank_ptcls )
+        class(eul_prob_tab2D), intent(inout) :: self
+        class(oris),           intent(in)    :: os
+        logical,               intent(in)    :: rank_ptcls
+        real,    allocatable :: sorted_tab(:,:)
+        integer, allocatable :: stab_inds(:,:)
+        integer :: inds_sorted(self%ncls), cls_dist_inds(self%ncls)
+        integer :: i,j,icls, cls, ptcl, ncls_stoch, r, iptcl
+        real    :: cls_dist(self%ncls), tmp(self%ncls), P, neigh_frac, s
+        logical :: ptcl_avail(self%nptcls)
+        ! self-subtraction
+        call self%prevcls_subtraction(os)
+        ! column sorting
+        sorted_tab = transpose(self%loc_tab(:,:)%dist)
+        allocate(stab_inds(self%nptcls, self%ncls))
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(icls,i,j)
+        do i = 1,self%neffcls
+            icls = self%clsinds(i)
+            stab_inds(:,icls) = (/(j,j=1,self%nptcls)/)
+            call hpsort(sorted_tab(:,icls), stab_inds(:,icls))
+        enddo
+        !$omp end parallel do
+        neigh_frac = extremal_decay2D(params_glob%extr_iter, params_glob%extr_lim)
+        ncls_stoch = neighfrac2nsmpl(neigh_frac, self%neffcls)
+        P          = sampling_power(params_glob%extr_iter, params_glob%extr_lim)
+        ! first row is the current best reference distribution
+        cls_dist_inds = 1
+        cls_dist      = sorted_tab(1,:)
+        ptcl_avail    = .true.
+        ! assignment
+        do while( any(ptcl_avail) )
+            tmp = eulprob_corr_switch(cls_dist)
+            call power_sampling(P, self%ncls, tmp, inds_sorted, ncls_stoch, cls, r, s)
+            ptcl                 = stab_inds(cls_dist_inds(cls), cls)
+            ptcl_avail(ptcl)     = .false.
+            self%assgn_map(ptcl) = self%loc_tab(cls,ptcl)
+            do i = 1, self%neffcls
+                icls  = self%clsinds(i)
+                iptcl = cls_dist_inds(icls)
+                do while( iptcl < self%nptcls .and. .not.(ptcl_avail(stab_inds(iptcl,icls))))
+                    iptcl               = iptcl + 1
+                    cls_dist(icls)      = sorted_tab(iptcl, icls)
+                    cls_dist_inds(icls) = iptcl
+                enddo
+            enddo
+        enddo
+        deallocate(sorted_tab,stab_inds)
+        ! toss worst particles
+        if( rank_ptcls ) call self%select_top_ptcls
+    end subroutine assign_prob
 
     ! FILE I/O
 
@@ -562,7 +661,8 @@ contains
     ! PUBLIC FUNCTIONS
 
     subroutine power_sampling( P, n, corrs, order, nb, ind, rank, cc )
-        integer, intent(in)    :: P, n, nb
+        real,    intent(in)    :: P
+        integer, intent(in)    :: n, nb
         real,    intent(inout) :: corrs(n), cc
         integer, intent(inout) :: order(n), ind, rank
         real    :: cdf(nb), r
@@ -606,7 +706,7 @@ contains
         integer, intent(in)    :: n, nb
         real,    intent(inout) :: corrs(n), cc
         integer, intent(inout) :: order(n), ind, rank
-        call power_sampling( 2, n, corrs, order, nb, ind, rank, cc)
+        call power_sampling( 2.0, n, corrs, order, nb, ind, rank, cc)
     end subroutine squared_sampling
 
     ! PRIVATE FUNCTIONS
@@ -618,10 +718,10 @@ contains
         neighfrac2nsmpl = max(2,min(neighfrac2nsmpl, n))
     end function neighfrac2nsmpl
 
-    pure integer function sampling_power( iter, maxiter )
+    pure real function sampling_power( iter, maxiter )
         integer, intent(in) :: iter, maxiter
-        sampling_power = 2
-        if( iter > maxiter ) sampling_power = 4
+        sampling_power = 2.
+        if( iter > maxiter ) sampling_power = 4.0
     end function sampling_power
 
 end module simple_eul_prob_tab2D
