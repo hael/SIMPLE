@@ -1021,11 +1021,9 @@ contains
             THROW_HARD('empty particle fields in project file assumed; add_single_stk')
         endif
         ! set particle indices
-        if( .not. os%isthere('pind') )then
-            do pind = 1,os%get_noris()
-                call os%set(pind, 'pind', pind)
-            end do
-        endif
+        do pind = 1,os%get_noris()
+            call os%set(pind, 'pind', pind)
+        end do
         ! copy os
         call self%os_ptcl2D%copy(os, is_ptcl=.true.)
         call self%os_ptcl3D%copy(os, is_ptcl=.true.)

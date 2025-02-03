@@ -964,13 +964,15 @@ contains
         use simple_commander_project, only: new_project_commander, import_particles_commander
         class(extract_subproj_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
+        integer, allocatable             :: pinds(:)
         type(parameters)                 :: params
         type(sp_project)                 :: spproj
         type(new_project_commander)      :: xnew_proj
         type(import_particles_commander) :: ximport_particles
         type(ctfparams)                  :: ctfvars
         type(cmdline)                    :: cline_new_proj, cline_import_particles
-        character(len=STDLEN)            :: cwd
+        type(oris)                       :: os_ptcl2D_prev, os_ptcl3D_prev
+        integer :: cnt, i, n, np2D, np3D
         call cline%set('mkdir', 'no')
         ! init params
         call params%new(cline)
@@ -983,8 +985,13 @@ contains
             params%outstk = trim(params%subprojname)//'.mrcs'
         endif
         call spproj%write_substk([params%fromp,params%top], params%outstk)
-        ! create temporary text file of orientations
-        call spproj%os_ptcl3D%write('temporis.txt', [params%fromp,params%top])
+        ! extarct previous oris
+        os_ptcl2D_prev = spproj%os_ptcl3D%extract_subset([params%fromp,params%top])
+        os_ptcl3D_prev = spproj%os_ptcl3D%extract_subset([params%fromp,params%top])
+        ! extract previous pinds
+        pinds = nint(os_ptcl3D_prev%get_all('pind'))
+        n     = size(pinds) 
+        ! get ctf variables
         ctfvars = spproj%get_ctfparams('stk', 1)
         ! make new project
         call cline_new_proj%set('projname', trim(params%subprojname))
@@ -998,11 +1005,26 @@ contains
         call cline_import_particles%set('smpd',     ctfvars%smpd)
         call cline_import_particles%set('stk',      '../'//trim(params%outstk))
         call cline_import_particles%set('ctf',      'no')
-        call cline_import_particles%set('oritab',   '../temporis.txt')
         call ximport_particles%execute_safe(cline_import_particles)
+        ! trasnfer previous particle indices to project
+        call spproj%read(trim(params%subprojname)//'.simple')
+        np3D = spproj%os_ptcl3D%get_noris()
+        np2D = spproj%os_ptcl2D%get_noris()
+        if( np3D /= n .or. np2D /= n ) THROW_HARD('Incongruent ptcl2D/ptcl3D fields')
+        do i = 1,n
+            call spproj%os_ptcl2D%transfer_2Dparams(i, os_ptcl2D_prev, i)
+            call spproj%os_ptcl3D%transfer_3Dparams(i, os_ptcl3D_prev, i)
+            call spproj%os_ptcl2D%set(i, 'pind', pinds(i))
+            call spproj%os_ptcl3D%set(i, 'pind', pinds(i))
+        end do
+        call spproj%write
+        ! get back to working dir
         call simple_chdir('../')
         call simple_chdir('../')
-        call del_file('temporis.txt')
+        ! destruct
+        call spproj%kill
+        call os_ptcl2D_prev%kill
+        call os_ptcl3D_prev%kill
         ! end gracefully
         call simple_end('**** SINGLE_EXTRACT_SUBPROJ NORMAL STOP ****')
     end subroutine exec_extract_subproj

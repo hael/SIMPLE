@@ -42,7 +42,7 @@ enum, bind(c)
     enumerator :: I_BETTER      = 38
     enumerator :: I_NPEAKS      = 39
     enumerator :: I_LP_EST      = 40
-    enumerator :: I_CC_PEAK     = 41 ! unused
+    enumerator :: I_PIND_PREV   = 41
     enumerator :: I_CC_NONPEAK  = 42 ! unused
     enumerator :: I_FRAC_GREEDY = 43
     enumerator :: I_BETTER_L    = 44
@@ -144,8 +144,8 @@ contains
                 get_oriparam_ind = I_NPEAKS
             case('lp_est')
                 get_oriparam_ind = I_LP_EST
-            case('cc_peak')
-                get_oriparam_ind = I_CC_PEAK    ! unused
+            case('pind_prev')
+                get_oriparam_ind = I_PIND_PREV
             case('cc_nonpeak')
                 get_oriparam_ind = I_CC_NONPEAK ! unused
             case('frac_greedy')
@@ -243,8 +243,8 @@ contains
                 flag = 'npeaks'
             case(I_LP_EST)
                 flag = 'lp_est'
-            case(I_CC_PEAK)
-                flag = 'cc_peak'    ! unused
+            case(I_PIND_PREV)
+                flag = 'pind_prev'
             case(I_CC_NONPEAK)
                 flag = 'cc_nonpeak' ! unused
             case(I_FRAC_GREEDY)
@@ -304,7 +304,7 @@ contains
                 oriparam_isthere = abs(val) > TINY
             case(I_LP_EST)
                 oriparam_isthere = abs(val) > TINY
-            case(I_CC_PEAK)
+            case(I_PIND_PREV)
                 oriparam_isthere = abs(val) > TINY
             case(I_CC_NONPEAK)
                 oriparam_isthere = abs(val) > TINY
