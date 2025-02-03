@@ -170,9 +170,9 @@ contains
         iptcl = 0
         do i=1,n99,nlabels
             if(i>nincl_ptcls)exit
-            ind = ceiling((ran3()**power)*rnincl)
+            ind = ceiling_minmax((ran3()**power)*rnincl, 1, nincl_ptcls)
             do while(.not.mask(ind))
-                ind = ceiling((ran3()**power)*rnincl)
+                ind = ceiling_minmax((ran3()**power)*rnincl, 1, nincl_ptcls)
             enddo
             config(order(ind)) = 1
             mask(ind)          = .false.
@@ -180,9 +180,9 @@ contains
             do s=2,nlabels
                 iptcl = iptcl+1
                 if(iptcl>nincl_ptcls)exit
-                ind = ceiling(ran3()*rnincl)
+                ind = ceiling_minmax(ran3()*rnincl, 1, nincl_ptcls)
                 do while(.not.mask(ind))
-                    ind = ceiling(ran3()*rnincl)
+                    ind = ceiling_minmax(ran3()*rnincl, 1, nincl_ptcls)
                 enddo
                 config(order(ind)) = s
                 mask(ind)          = .false.
@@ -248,7 +248,7 @@ contains
             call hpsort(dists_part,inds)
             n_drawn = 0
             do while(n_drawn < pops(s))
-                ind   = ceiling((ran3()**power)*real(n_avail))
+                ind   = ceiling_minmax((ran3()**power)*real(n_avail), 1, n_avail)
                 iptcl = inds(ind)
                 if(mask(iptcl))then
                     mask(iptcl)   = .false.
