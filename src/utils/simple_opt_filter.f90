@@ -284,7 +284,9 @@ contains
         l_verbose = .false.
         if( present(verbose) ) l_verbose = verbose
         avg_vol = sum(vols, dim=2)/real(nvol)
-        print *, avg_vol
+        if( l_verbose )then
+            print *, 'avg_vol = ', avg_vol
+        endif
         do ivol = 1, nvol
             var(ivol) = sum((vols(:,ivol) - avg_vol(:))**2)
         enddo
