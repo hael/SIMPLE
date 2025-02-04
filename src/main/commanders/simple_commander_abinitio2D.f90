@@ -61,7 +61,7 @@ contains
         if( .not. cline%defined('lambda')    ) call cline%set('lambda',    ICM_LAMBDA)
         if( .not. cline%defined('extr_lim')  ) call cline%set('extr_lim',  EXTR_LIM_LOCAL)
         if( .not. cline%defined('rank_cavgs')) call cline%set('rank_cavgs','yes')
-        if( .not. cline%defined('sigma_est') ) call cline%set('sigma_est', 'group')
+        if( .not. cline%defined('sigma_est') ) call cline%set('sigma_est', 'global')
         ! shared memory execution
         l_shmem = set_shmem_flag(cline)
         ! master parameters

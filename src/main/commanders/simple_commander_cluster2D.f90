@@ -264,6 +264,7 @@ contains
             call cavger_write(trim(params%refs_odd),  'odd'   )
             select case(trim(params%oritype))
                 case('ptcl2D')
+                    call build%spproj%write_segment_inside('cls2D', params%projfile)
                     call build%spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
                     call build%spproj%add_cavgs2os_out(trim(params%refs), build%spproj%get_smpd(), imgkind='cavg')
                     call build%spproj%write_segment_inside('out', params%projfile)
@@ -1603,11 +1604,7 @@ contains
                 call eulprob%assign_greedy(l_maxpop)
             else
                 call eulprob%normalize_table
-                if( params_glob%extr_iter <= params_glob%extr_lim )then
-                    call eulprob%assign_prob(build_glob%spproj_field, l_maxpop)
-                else
-                    call eulprob%assign_prob(build_glob%spproj_field, l_maxpop)
-                endif
+                call eulprob%assign_prob(build_glob%spproj_field, l_maxpop)
             endif
         case('prob_smpl')
             if( params_glob%which_iter == 1 )then

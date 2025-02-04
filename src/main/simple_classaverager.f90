@@ -8,7 +8,6 @@ use simple_image,             only: image, image_ptr
 use simple_stack_io,          only: stack_io
 use simple_discrete_stack_io, only: dstack_io
 use simple_euclid_sigma2
-use simple_fsc
 implicit none
 
 public :: cavger_new, cavger_transf_oridat, cavger_gen2Dclassdoc, cavger_assemble_sums,&
@@ -884,7 +883,6 @@ contains
                 call even_imgs(icls)%fft()
                 call odd_imgs(icls)%fft()
                 call even_imgs(icls)%fsc(odd_imgs(icls), frc)
-
                 call build_glob%clsfrcs%set_frc(icls, frc, 1)
                 ! average low-resolution info between eo pairs to keep things in register
                 find = build_glob%clsfrcs%estimate_find_for_eoavg(icls, 1)
