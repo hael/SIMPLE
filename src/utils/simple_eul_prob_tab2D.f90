@@ -35,7 +35,7 @@ type :: eul_prob_tab2D
     ! ASSIGNMENT FROM TABLE
     procedure          :: normalize_table
     procedure, private :: select_top_ptcls
-    procedure, private :: prevcls_subtraction
+    procedure, private :: prevcls_withdrawal
     procedure          :: assign_greedy
     procedure          :: assign_shc
     procedure          :: assign_stoch
@@ -410,7 +410,7 @@ contains
     end subroutine select_top_ptcls
 
     ! Self-subtraction, sets distance to previous class to maximum
-    subroutine prevcls_subtraction( self, os )
+    subroutine prevcls_withdrawal( self, os )
         class(eul_prob_tab2D), intent(inout) :: self
         class(oris),           intent(in)    :: os
         real    :: a
@@ -424,7 +424,7 @@ contains
             enddo
             !$omp end parallel do
         endif
-    end subroutine prevcls_subtraction
+    end subroutine prevcls_withdrawal
 
     ! Assigns best class to all particles
     subroutine assign_greedy( self, rank_ptcls )
@@ -451,7 +451,7 @@ contains
         real    :: pdists(self%neffcls), P, score, neigh_frac
         integer :: pops(self%ncls), vec(self%neffcls), i, icls, ind, rank, ncls_stoch
         ! self-subtraction
-        call self%prevcls_subtraction(os)
+        call self%prevcls_withdrawal(os)
         ! size of stochastic neighborhood (# of classes to draw from)
         neigh_frac = extremal_decay2D(params_glob%extr_iter, params_glob%extr_lim)
         ncls_stoch = neighfrac2nsmpl(neigh_frac, self%neffcls)
@@ -512,7 +512,7 @@ contains
         real    :: cls_dist(self%ncls), tmp(self%ncls), P, neigh_frac, s
         logical :: ptcl_avail(self%nptcls)
         ! self-subtraction
-        call self%prevcls_subtraction(os)
+        call self%prevcls_withdrawal(os)
         ! column sorting
         sorted_tab = transpose(self%loc_tab(:,:)%dist)
         allocate(stab_inds(self%nptcls, self%ncls))
@@ -524,8 +524,8 @@ contains
         enddo
         !$omp end parallel do
         neigh_frac = extremal_decay2D(params_glob%extr_iter, params_glob%extr_lim)
-        ncls_stoch = neighfrac2nsmpl(neigh_frac, self%neffcls)
-        P          = sampling_power(params_glob%extr_iter, params_glob%extr_lim)
+        ncls_stoch = neighfrac2nsmpl2(neigh_frac, self%neffcls)
+        P          = sampling_power2(params_glob%extr_iter, params_glob%extr_lim)
         ! first row is the current best reference distribution
         cls_dist_inds = 1
         cls_dist      = sorted_tab(1,:)
@@ -718,10 +718,23 @@ contains
         neighfrac2nsmpl = max(2,min(neighfrac2nsmpl, n))
     end function neighfrac2nsmpl
 
+    pure integer function neighfrac2nsmpl2( neighfrac, n )
+        real,    intent(in) :: neighfrac
+        integer, intent(in) :: n
+        neighfrac2nsmpl2 = nint(real(n)*(neighfrac/3.))
+        neighfrac2nsmpl2 = max(2,min(neighfrac2nsmpl2, n))
+    end function neighfrac2nsmpl2
+
     pure real function sampling_power( iter, maxiter )
         integer, intent(in) :: iter, maxiter
         sampling_power = 2.
         if( iter > maxiter ) sampling_power = 4.0
     end function sampling_power
+
+    pure real function sampling_power2( iter, maxiter )
+        integer, intent(in) :: iter, maxiter
+        sampling_power2 = 2.
+        if( iter > maxiter ) sampling_power2 = 4.0
+    end function sampling_power2
 
 end module simple_eul_prob_tab2D
