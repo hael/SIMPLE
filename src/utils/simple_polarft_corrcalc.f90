@@ -1036,7 +1036,6 @@ contains
 
     subroutine allocate_ptcls_memoization( self )
         class(polarft_corrcalc), intent(inout) :: self
-        integer :: i, k
         allocate(self%ft_ptcl_ctf(self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nptcls),&
                 &self%ft_ctf2(    self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nptcls))
         if( trim(params_glob%sh_inv).eq.'yes' )then
@@ -1048,7 +1047,7 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         character(kind=c_char, len=:), allocatable :: fft_wisdoms_fname ! FFTW wisdoms (per part or suffer I/O lag)
         integer(kind=c_int) :: wsdm_ret
-        integer             :: k, ithr, iref, istate
+        integer             :: ithr
         if( allocated(self%ft_ref_even) ) call self%kill_memoized_refs
         allocate(self%ft_ref_even( self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%ft_ref_odd(  self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nrefs),&
@@ -1649,6 +1648,7 @@ contains
         logical :: kw, l_onestate
         integer :: istate, irefs(params_glob%nstates)
         real    :: prefs(params_glob%nstates)
+        ithr       = omp_get_thread_num() + 1
         l_onestate = .false.
         if( present(onestate) ) l_onestate = onestate
         if( params_glob%l_linstates .and. .not.(l_onestate) )then
@@ -1670,7 +1670,6 @@ contains
             call self%get_linstates_prefs(iref, irefs, prefs)
             call self%gencorrs_4( irefs, prefs, iptcl, shift, cc, kweight )
         else
-            ithr    = omp_get_thread_num() + 1
             i       = self%pinds(iptcl)
             shmat   => self%heap_vars(ithr)%shmat
             pft_ref => self%heap_vars(ithr)%pft_ref
