@@ -146,15 +146,15 @@ contains
         type(oris), intent(inout) :: os
         real,       intent(in)    :: power
         integer        :: order(nptcls), config(nptcls), pops(nlabels)
-        real           :: corrs(nptcls), rnincl
+        real           :: corrs(nptcls), rnincl_1
         integer        :: iptcl, s, ind, i, n99, pop
         logical        :: mask(nincl_ptcls)
         write(logfhandle,'(A)') '>>> MIXED SQUARED & UNIFORM SAMPLING'
-        config = 0
-        rnincl = real(nincl_ptcls)
-        mask   = .true.
-        corrs  = os%get_all('corr')
-        order = (/(iptcl,iptcl=1,nptcls)/)
+        config   = 0
+        rnincl_1 = real(nincl_ptcls-1)
+        mask     = .true.
+        corrs    = os%get_all('corr')
+        order    = (/(iptcl,iptcl=1,nptcls)/)
         where( states<=0 ) corrs = -1.
         call hpsort( corrs, order )
         call reverse(order)
@@ -170,9 +170,9 @@ contains
         iptcl = 0
         do i=1,n99,nlabels
             if(i>nincl_ptcls)exit
-            ind = ceiling_minmax((ran3()**power)*rnincl, 1, nincl_ptcls)
+            ind = ceiling(ran3()**power * rnincl_1) + 1
             do while(.not.mask(ind))
-                ind = ceiling_minmax((ran3()**power)*rnincl, 1, nincl_ptcls)
+                ind = ceiling(ran3()**power * rnincl_1) + 1
             enddo
             config(order(ind)) = 1
             mask(ind)          = .false.
@@ -180,9 +180,9 @@ contains
             do s=2,nlabels
                 iptcl = iptcl+1
                 if(iptcl>nincl_ptcls)exit
-                ind = ceiling_minmax(ran3()*rnincl, 1, nincl_ptcls)
+                ind = ceiling(ran3() * rnincl_1) + 1
                 do while(.not.mask(ind))
-                    ind = ceiling_minmax(ran3()*rnincl, 1, nincl_ptcls)
+                    ind = ceiling(ran3() * rnincl_1) + 1
                 enddo
                 config(order(ind)) = s
                 mask(ind)          = .false.
@@ -248,7 +248,7 @@ contains
             call hpsort(dists_part,inds)
             n_drawn = 0
             do while(n_drawn < pops(s))
-                ind   = ceiling_minmax((ran3()**power)*real(n_avail), 1, n_avail)
+                ind   = ceiling((ran3()**power)*real(n_avail - 1)) + 1
                 iptcl = inds(ind)
                 if(mask(iptcl))then
                     mask(iptcl)   = .false.

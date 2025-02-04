@@ -892,15 +892,6 @@ contains
         endif
     end function sinc
 
-    !>   ceiling between min max
-    function ceiling_minmax( x, minx, maxx ) result( r )
-        real,    intent(in) :: x
-        integer, intent(in) :: minx, maxx
-        integer :: r
-        r = ceiling(x)
-        r = max(min(r, maxx), minx)
-    end function ceiling_minmax
-
     !>   is a truncated Gaussian window function
     function gauwfun( x, alpha ) result( w )
         real, intent(in) :: x, alpha
