@@ -89,6 +89,7 @@ type :: parameters
     character(len=3)          :: projrec='no'         !< Whether to reconstruct from summed projection directions (yes|no){no}
     character(len=3)          :: randomise='no'       !< whether to randomise particle order
     character(len=3)          :: rank_cavgs='yes'     !< Whether to rank class averages(yes|no)
+    character(len=3)          :: refs_delin='no'      !< delinearizing reprojections of different states (yes|no){no}
     character(len=3)          :: reject_cls='no'      !< whether to reject poor classes
     character(len=3)          :: reject_mics='no'     !< whether to reject micrographs based on ctfres/icefrac
     character(len=3)          :: remove_chunks='yes'  !< whether to remove chunks after completion
@@ -495,6 +496,7 @@ type :: parameters
     logical :: l_neigh        = .false.
     logical :: l_phaseplate   = .false.
     logical :: l_prob_sh      = .false.
+    logical :: l_refs_delin   = .false.
     logical :: l_sh_first     = .false.
     logical :: l_sigma_glob   = .false.
     logical :: l_trail_rec    = .false.
@@ -657,6 +659,7 @@ contains
         call check_carg('rank_cavgs',     self%rank_cavgs)
         call check_carg('real_filter',    self%real_filter)
         call check_carg('refine',         self%refine)
+        call check_carg('refs_delin',     self%refs_delin)
         call check_carg('reject_cls',     self%reject_cls)
         call check_carg('reject_mics',    self%reject_mics)
         call check_carg('remove_chunks',  self%remove_chunks)
@@ -1626,6 +1629,8 @@ contains
         self%l_incrreslim = trim(self%incrreslim) == 'yes' .and. .not.self%l_lpset
         ! linearized states
         self%l_linstates = trim(self%linstates) == 'yes'
+        ! refs delinearization
+        self%l_refs_delin = trim(self%refs_delin) == 'yes'
         ! B-facor
         self%l_bfac = cline%defined('bfac')
         ! smoothing extension

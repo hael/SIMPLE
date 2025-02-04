@@ -1109,13 +1109,16 @@ contains
 
     subroutine prepare_polar_references( pftcc, cline, batchsz )
         use simple_polarft_corrcalc,       only:  polarft_corrcalc
+        use simple_projector,              only: projector
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(cmdline),          intent(in)    :: cline !< command line
         integer,                 intent(in)    :: batchsz
-        type(ori) :: o_tmp
-        real      :: xyz(3)
-        integer   :: s, iref, nrefs
-        logical   :: do_center
+        type(projector) :: vols(params_glob%nstates), vols_odd(params_glob%nstates)
+        type(ori)       :: o_tmp
+        type(image)     :: imgs(params_glob%nstates,nthr_glob), imgs_pad(params_glob%nstates,nthr_glob)
+        real    :: xyz(3), smpd
+        integer :: s, iref, nrefs, ldim(3), boxpd, ldim_pd(3), box, ithr
+        logical :: do_center
         if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
             call estimate_lp_refvols([params_glob%lpstart,params_glob%lpstop])
         else
@@ -1125,29 +1128,97 @@ contains
         nrefs = params_glob%nspace * params_glob%nstates
         call pftcc%new(nrefs, [1,batchsz], params_glob%kfromto)
         ! read reference volumes and create polar projections
-        do s=1,params_glob%nstates
-            if( str_has_substr(params_glob%refine, 'prob') )then
-                ! already mapping shifts in prob_tab with shared-memory execution
-                call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=l_distr_exec_glob)
-            else
-                call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=.true.)
-            endif
-            call read_mask_and_filter_refvols(s)
-            ! PREPARE E/O VOLUMES
-            call preprefvol(cline, s, do_center, xyz, .false.)
-            call preprefvol(cline, s, do_center, xyz, .true.)
-            ! PREPARE REFERENCES
-            !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
+        if( params_glob%l_refs_delin )then
+            ! get all the vols of different states
+            do s=1,params_glob%nstates
+                if( str_has_substr(params_glob%refine, 'prob') )then
+                    ! already mapping shifts in prob_tab with shared-memory execution
+                    call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=l_distr_exec_glob)
+                else
+                    call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=.true.)
+                endif
+                call read_mask_and_filter_refvols(s)
+                ! PREPARE E/O VOLUMES
+                call preprefvol(cline, s, do_center, xyz, .false.)
+                call preprefvol(cline, s, do_center, xyz, .true.)
+                ! Padding vols
+                ldim    = build_glob%vol%get_ldim()
+                box     = ldim(1)
+                smpd    = build_glob%vol%get_smpd()
+                boxpd   = 2 * round2even(KBALPHA * real(box / 2))
+                ldim_pd = [boxpd,boxpd,boxpd]
+                call vols(s)%new(ldim_pd, smpd)
+                call vols_odd(s)%new(ldim_pd, smpd)
+                call build_glob%vol%pad(vols(s))
+                call build_glob%vol_odd%pad(vols_odd(s))
+                if( params_glob%gridding.eq.'yes' )then
+                    ! corrects for interpolation function
+                    call vols(s)%div_w_instrfun(params_glob%interpfun, alpha=KBALPHA, padded_dim=boxpd)
+                    call vols_odd(s)%div_w_instrfun(params_glob%interpfun, alpha=KBALPHA, padded_dim=boxpd)
+                endif
+                call vols(s)%fft
+                call vols_odd(s)%fft
+                call vols(s)%mul(real(boxpd))     ! correct for FFTW convention
+                call vols_odd(s)%mul(real(boxpd)) ! correct for FFTW convention
+                call vols(s)%expand_cmat(KBALPHA)
+                call vols_odd(s)%expand_cmat(KBALPHA)
+                ! initializing 2D refs
+                do ithr = 1, nthr_glob
+                    call imgs(s,ithr)%new(    [box,  box,  1], smpd, wthreads=.false.)
+                    call imgs_pad(s,ithr)%new([boxpd,boxpd,1], smpd, wthreads=.false.)
+                enddo
+            enddo
+            ! cartesian reprojections and do delinearization for the reprojections of all states of the same reprojection direction
+            !$omp parallel do default(shared) private(iref,ithr,o_tmp,s) schedule(static) proc_bind(close)
             do iref=1,params_glob%nspace
+                ithr = omp_get_thread_num() + 1
                 call build_glob%eulspace%get_ori(iref, o_tmp)
-                call build_glob%vol_odd%fproject_polar((s - 1) * params_glob%nspace + iref,&
-                    &o_tmp, pftcc, iseven=.false., mask=build_glob%l_resmsk)
-                call build_glob%vol%fproject_polar(    (s - 1) * params_glob%nspace + iref,&
-                    &o_tmp, pftcc, iseven=.true.,  mask=build_glob%l_resmsk)
-                call o_tmp%kill
+                ! for even vols
+                do s=1,params_glob%nstates
+                    call vols(s)%fproject_serial(o_tmp, imgs_pad(s,ithr))
+                    ! back FT
+                    call imgs_pad(s,ithr)%ifft
+                    ! clip
+                    call imgs_pad(s,ithr)%clip(imgs(s,ithr))
+                enddo
+                ! delinearizing and transfer to pftcc
+
+                ! for odd vols
+                do s=1,params_glob%nstates
+                    call vols_odd(s)%fproject_serial(o_tmp, imgs_pad(s,ithr))
+                    ! back FT
+                    call imgs_pad(s,ithr)%ifft
+                    ! clip
+                    call imgs_pad(s,ithr)%clip(imgs(s,ithr))
+                enddo
+                ! delinearizing and transfer to pftcc
             end do
             !$omp end parallel do
-        end do
+        else
+            do s=1,params_glob%nstates
+                if( str_has_substr(params_glob%refine, 'prob') )then
+                    ! already mapping shifts in prob_tab with shared-memory execution
+                    call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=l_distr_exec_glob)
+                else
+                    call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=.true.)
+                endif
+                call read_mask_and_filter_refvols(s)
+                ! PREPARE E/O VOLUMES
+                call preprefvol(cline, s, do_center, xyz, .false.)
+                call preprefvol(cline, s, do_center, xyz, .true.)
+                ! PREPARE REFERENCES
+                !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
+                do iref=1,params_glob%nspace
+                    call build_glob%eulspace%get_ori(iref, o_tmp)
+                    call build_glob%vol_odd%fproject_polar((s - 1) * params_glob%nspace + iref,&
+                        &o_tmp, pftcc, iseven=.false., mask=build_glob%l_resmsk)
+                    call build_glob%vol%fproject_polar(    (s - 1) * params_glob%nspace + iref,&
+                        &o_tmp, pftcc, iseven=.true.,  mask=build_glob%l_resmsk)
+                    call o_tmp%kill
+                end do
+                !$omp end parallel do
+            end do
+        endif
         call pftcc%memoize_refs
     end subroutine prepare_polar_references
 
