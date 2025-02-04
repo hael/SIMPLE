@@ -279,14 +279,13 @@ contains
         logical, optional, intent(in)    :: verbose
         logical :: l_verbose
         integer :: ivol, ivar, j, errflg, var_inds(nvol), dist_ind
-        real    :: probs_inv(nvol,nvol), truths_inv(npix,nvol), avg_vol(npix),&
-                  &var(nvol), probs_dist(nvol,nvol), var_sorted(nvol)
+        real    :: probs_inv(nvol,nvol), avg_vol(npix), var(nvol), probs_dist(nvol,nvol), var_sorted(nvol)
         l_verbose = .false.
         if( present(verbose) ) l_verbose = verbose
         avg_vol = sum(vols, dim=2)/real(nvol)
-        if( l_verbose )then
-            print *, 'avg_vol = ', avg_vol
-        endif
+        ! if( l_verbose )then
+        !     print *, 'avg_vol = ', avg_vol
+        ! endif
         do ivol = 1, nvol
             var(ivol) = sum((vols(:,ivol) - avg_vol(:))**2)
         enddo
@@ -312,13 +311,18 @@ contains
             if( l_verbose ) print *, 'probs', ivol, ' = ', probs_dist(ivol,:)
         enddo
         call matinv(probs_dist, probs_inv, nvol, errflg)
+        if( l_verbose )then
+            do ivol = 1, nvol
+                print *, 'probs_inv', ivol, ' = ', probs_inv(ivol,:)
+            enddo
+        endif
         ! recovering
-        truths_inv = 0.
+        vols_out = 0.
         do ivol = 1, nvol
             do j = 1, nvol
-                truths_inv(:,ivol) = truths_inv(:,ivol) + probs_inv(ivol,j) * vols(:,j)
+                vols_out(:,ivol) = vols_out(:,ivol) + probs_inv(ivol,j) * vols(:,j)
             enddo
-            if( l_verbose ) print *, truths_inv(:,ivol)
+            ! if( l_verbose ) print *, vols_out(:,ivol)
         enddo
     end subroutine uni_inv_linear
 

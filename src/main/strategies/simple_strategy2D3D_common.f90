@@ -1107,17 +1107,17 @@ contains
 
     subroutine prepare_polar_references( pftcc, cline, batchsz )
         use simple_polarft_corrcalc,       only:  polarft_corrcalc
-        use simple_projector,              only: projector
-        use simple_opt_filter,             only: uni_inv_linear
+        use simple_projector,              only:  projector
+        use simple_opt_filter,             only:  uni_inv_linear
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(cmdline),          intent(in)    :: cline !< command line
         integer,                 intent(in)    :: batchsz
-        real, allocatable :: imgvecs(:,:,:), imgvecs_delin(:,:,:)
-        type(projector)   :: vols(params_glob%nstates), vols_odd(params_glob%nstates)
-        type(ori)         :: o_tmp
-        type(image)       :: imgs(params_glob%nstates,nthr_glob), imgs_pad(params_glob%nstates,nthr_glob)
+        real,        allocatable :: imgvecs(:,:,:), imgvecs_delin(:,:,:)
+        type(image), allocatable :: imgs(:)
+        type(projector) :: vols(params_glob%nstates), vols_odd(params_glob%nstates)
+        type(ori)       :: o_tmp
         real    :: xyz(3), smpd
-        integer :: s, iproj, iref, nrefs, ldim(3), boxpd, ldim_pd(3), box, ithr
+        integer :: s, iproj, iref, nrefs, ldim(3), box, ithr
         logical :: do_center
         if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
             call estimate_lp_refvols([params_glob%lpstart,params_glob%lpstop])
@@ -1130,11 +1130,15 @@ contains
         call build_glob%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
         ! read reference volumes and create polar projections
         if( params_glob%l_refs_delin )then
-            ldim    = build_glob%vol%get_ldim()
-            box     = ldim(1)
-            smpd    = build_glob%vol%get_smpd()
-            boxpd   = 2 * round2even(KBALPHA * real(box / 2))
-            ldim_pd = [boxpd,boxpd,boxpd]
+            ! allocations
+            allocate(imgs(nthr_glob))
+            ! initializing 2D refs
+            ldim = build_glob%vol%get_ldim()
+            box  = ldim(1)
+            smpd = build_glob%vol%get_smpd()
+            do ithr = 1, nthr_glob
+                call imgs(ithr)%new([box,box,1], smpd, wthreads=.false.)
+            enddo
             ! get all the vols of different states
             do s=1,params_glob%nstates
                 if( str_has_substr(params_glob%refine, 'prob') )then
@@ -1147,27 +1151,11 @@ contains
                 ! PREPARE E/O VOLUMES
                 call preprefvol(cline, s, do_center, xyz, .false.)
                 call preprefvol(cline, s, do_center, xyz, .true.)
-                ! Padding vols
-                call vols(s)%new(ldim_pd, smpd)
-                call vols_odd(s)%new(ldim_pd, smpd)
-                call build_glob%vol%pad(vols(s))
-                call build_glob%vol_odd%pad(vols_odd(s))
-                if( params_glob%gridding.eq.'yes' )then
-                    ! corrects for interpolation function
-                    call vols(s)%div_w_instrfun(params_glob%interpfun, alpha=KBALPHA, padded_dim=boxpd)
-                    call vols_odd(s)%div_w_instrfun(params_glob%interpfun, alpha=KBALPHA, padded_dim=boxpd)
-                endif
-                call vols(s)%fft
-                call vols_odd(s)%fft
-                call vols(s)%mul(real(boxpd))     ! correct for FFTW convention
-                call vols_odd(s)%mul(real(boxpd)) ! correct for FFTW convention
-                call vols(s)%expand_cmat(KBALPHA)
-                call vols_odd(s)%expand_cmat(KBALPHA)
-                ! initializing 2D refs
-                do ithr = 1, nthr_glob
-                    call imgs(s,ithr)%new(    [box,  box,  1], smpd, wthreads=.false.)
-                    call imgs_pad(s,ithr)%new([boxpd,boxpd,1], smpd, wthreads=.false.)
-                enddo
+                ! Copying vols
+                call vols(s)%copy(build_glob%vol)
+                call vols_odd(s)%copy(build_glob%vol_odd)
+                call vols(s)%expand_cmat(params_glob%alpha,norm4proj=.true.)
+                call vols_odd(s)%expand_cmat(params_glob%alpha,norm4proj=.true.)
             enddo
             ! cartesian reprojections and do delinearization for the reprojections of all states of the same reprojection direction
             allocate(imgvecs(box*box,params_glob%nstates,nthr_glob),imgvecs_delin(box*box,params_glob%nstates,nthr_glob), source=0.)
@@ -1177,40 +1165,37 @@ contains
                 call build_glob%eulspace%get_ori(iproj, o_tmp)
                 ! for even vols
                 do s=1,params_glob%nstates
-                    call vols(s)%fproject_serial(o_tmp, imgs_pad(s,ithr))
+                    call vols(s)%fproject_serial(o_tmp, imgs(ithr))
                     ! back FT
-                    call imgs_pad(s,ithr)%ifft
-                    ! clip
-                    call imgs_pad(s,ithr)%clip(imgs(s,ithr))
-                    imgvecs(:,s,ithr) = imgs(s,ithr)%serialize()
+                    call imgs(ithr)%ifft
+                    imgvecs(:,s,ithr) = imgs(ithr)%serialize()
                 enddo
                 ! delinearizing and transfer to pftcc
                 call uni_inv_linear(params_glob%nstates, box*box, imgvecs(:,:,ithr), imgvecs_delin(:,:,ithr))
                 do s=1,params_glob%nstates
                     iref = (s - 1) * params_glob%nspace + iproj
-                    call imgs(s,ithr)%unserialize(imgvecs_delin(:,s,ithr))
-                    call imgs(s,ithr)%fft
+                    call imgs(ithr)%unserialize(imgvecs_delin(:,s,ithr))
+                    call imgs(ithr)%fft
                     ! transfer to polar coordinates
-                    call build_glob%img_crop_polarizer%polarize(pftcc, imgs(s,ithr), iref, .false., .true., mask=build_glob%l_resmsk)
+                    call build_glob%img_crop_polarizer%polarize(pftcc, imgs(ithr), iref, .false., .true., mask=build_glob%l_resmsk)
                 enddo
                 ! for odd vols
                 do s=1,params_glob%nstates
-                    call vols_odd(s)%fproject_serial(o_tmp, imgs_pad(s,ithr))
+                    call vols_odd(s)%fproject_serial(o_tmp, imgs(ithr))
                     ! back FT
-                    call imgs_pad(s,ithr)%ifft
-                    ! clip
-                    call imgs_pad(s,ithr)%clip(imgs(s,ithr))
-                    imgvecs(:,s,ithr) = imgs(s,ithr)%serialize()
+                    call imgs(ithr)%ifft
+                    imgvecs(:,s,ithr) = imgs(ithr)%serialize()
                 enddo
                 ! delinearizing and transfer to pftcc
                 call uni_inv_linear(params_glob%nstates, box*box, imgvecs(:,:,ithr), imgvecs_delin(:,:,ithr))
                 do s=1,params_glob%nstates
                     iref = (s - 1) * params_glob%nspace + iproj
-                    call imgs(s,ithr)%unserialize(imgvecs_delin(:,s,ithr))
-                    call imgs(s,ithr)%fft
+                    call imgs(ithr)%unserialize(imgvecs_delin(:,s,ithr))
+                    call imgs(ithr)%fft
                     ! transfer to polar coordinates
-                    call build_glob%img_crop_polarizer%polarize(pftcc, imgs(s,ithr), iref, .false., .false., mask=build_glob%l_resmsk)
+                    call build_glob%img_crop_polarizer%polarize(pftcc, imgs(ithr), iref, .false., .false., mask=build_glob%l_resmsk)
                 enddo
+                call o_tmp%kill
             end do
             !$omp end parallel do
             ! cleaning up
@@ -1218,10 +1203,9 @@ contains
             do s=1,params_glob%nstates
                 call vols(s)%kill
                 call vols_odd(s)%kill
-                do ithr = 1, nthr_glob
-                    call imgs(s,ithr)%kill
-                    call imgs_pad(s,ithr)%kill
-                enddo
+            enddo
+            do ithr = 1, nthr_glob
+                call imgs(ithr)%kill
             enddo
         else
             do s=1,params_glob%nstates
@@ -1236,13 +1220,12 @@ contains
                 call preprefvol(cline, s, do_center, xyz, .false.)
                 call preprefvol(cline, s, do_center, xyz, .true.)
                 ! PREPARE REFERENCES
-                !$omp parallel do default(shared) private(iproj, o_tmp) schedule(static) proc_bind(close)
+                !$omp parallel do default(shared) private(iproj,o_tmp,iref) schedule(static) proc_bind(close)
                 do iproj=1,params_glob%nspace
+                    iref = (s - 1) * params_glob%nspace + iproj
                     call build_glob%eulspace%get_ori(iproj, o_tmp)
-                    call build_glob%vol_odd%fproject_polar((s - 1) * params_glob%nspace + iproj,&
-                        &o_tmp, pftcc, iseven=.false., mask=build_glob%l_resmsk)
-                    call build_glob%vol%fproject_polar(    (s - 1) * params_glob%nspace + iproj,&
-                        &o_tmp, pftcc, iseven=.true.,  mask=build_glob%l_resmsk)
+                    call build_glob%vol_odd%fproject_polar(iref, o_tmp, pftcc, iseven=.false., mask=build_glob%l_resmsk)
+                    call build_glob%vol%fproject_polar(    iref, o_tmp, pftcc, iseven=.true.,  mask=build_glob%l_resmsk)
                     call o_tmp%kill
                 end do
                 !$omp end parallel do
