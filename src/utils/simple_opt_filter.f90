@@ -302,7 +302,7 @@ contains
             do ivar = 1, nvol
                 jvol = var_inds(ivar)
                 if( jvol == ivol ) cycle
-                probs_dist(ivol,jvol) = exp(-(dist_ind - 0.)**2/2./var(jvol))/sqrt(2. * PI * var(jvol))
+                probs_dist(ivol,jvol) = exp(-(dist_ind - 0.)**2/2./var(ivol))/sqrt(2. * PI * var(ivol))
                 dist_ind = dist_ind + 1
             enddo
             probs_dist(ivol,:) = probs_dist(ivol,:) / sum(probs_dist(ivol,:))
