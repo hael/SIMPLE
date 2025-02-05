@@ -46,8 +46,8 @@ program AFM_File_IO
     call cline%set('objfun', 'cc')
     call cline%set('mkdir', 'no')
     call cline%set('lambda', 0.)
-    call cline%set('trs',     100.0)
-    call cline%set('box',     150)
+    call cline%set('trs',     50.0)
+    call cline%set('box',     300)
     call cline%set('smpd',    4.89)
     params_glob%cc_objfun = 0
     params_glob%maxits_sh = 200
@@ -100,22 +100,20 @@ program AFM_File_IO
     do i = 1, size(pick_vec)
         call pick_vec(i)%write('mrc_for_clus.mrc', i)
     end do 
-    allocate(rot_test(size(pick_vec),size(pick_vec)))
+    ! allocate(rot_test(size(pick_vec),size(pick_vec)))
    
-  
-    ! allocate(rot_test(2,2))
-    ! call rot_sh%copy(pick_vec(127))
-    ! call rot_sh%rtsq(143.,42.,12.)
-    ! call rot_sh%mirror('y')
-    ! test_vec_corr(1) = pick_vec(127)
-    ! test_vec_corr(2) = rot_sh
-    ! print *, size(pick_vec), size(rot_test)
-    ! do i = 1, size(pick_vec)
-    !     call pick_vec(i)%scale_pspec4viz(new_smpd)
-    !     ! call pick_vec(i)%vis()
-    ! end do 
-    call calc_inplane_mag_corrmat(pick_vec, hp, lp, rot_test)
+    
+    allocate(rot_test(2,2))
+    call rot_sh%copy(pick_vec(127))
+    call rot_sh%rtsq(143.,42.,12.)
+    call rot_sh%mirror('y')
+    test_vec_corr(1) = pick_vec(127)
+    test_vec_corr(2) = rot_sh
+    
+    ! call calc_inplane_invariant_corrmat(test_vec_corr, hp, lp, rot_test)
     ! print *, rot_test
+    ! call calc_inplane_fast(pick_vec, hp, lp, rot_test)
+    print *, rot_test
 
     ! print *, rot_test
     ! call pick_vec(107)%write('/Users/afan/ref.mrc')
