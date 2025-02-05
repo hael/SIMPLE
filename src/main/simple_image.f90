@@ -1848,9 +1848,9 @@ contains
         sz = count(l_msk)
         allocate(pcavec(sz))
         cnt = 0
-        do i=1,self%ldim(1)
+        do k=1,self%ldim(3)
             do j=1,self%ldim(2)
-                do k=1,self%ldim(3)
+                do i=1,self%ldim(1)
                     if( l_msk(i,j,k) )then
                         cnt         = cnt + 1
                         pcavec(cnt) = self%rmat(i,j,k)
@@ -1886,9 +1886,9 @@ contains
         self%rmat = 0.
         cnt = 0
         if( present(l_msk) )then
-            do i=1,self%ldim(1)
+            do k=1,self%ldim(3)
                 do j=1,self%ldim(2)
-                    do k=1,self%ldim(3)
+                    do i=1,self%ldim(1)
                         if( l_msk(i,j,k) )then
                             cnt = cnt + 1
                             self%rmat(i,j,k) =  pcavec(cnt)
@@ -1897,9 +1897,9 @@ contains
                 end do
             end do
         else
-            do i=1,self%ldim(1)
+            do k=1,self%ldim(3)
                 do j=1,self%ldim(2)
-                    do k=1,self%ldim(3)
+                    do i=1,self%ldim(1)
                         cnt = cnt + 1
                         self%rmat(i,j,k) =  pcavec(cnt)
                     end do
