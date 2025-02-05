@@ -15,13 +15,20 @@ probs(1,:)  = [0.8,  0.1,  0.1]
 probs(2,:)  = [0.12, 0.7,  0.18]
 probs(3,:)  = [0.04, 0.06, 0.9]
 vols        = 0.
+print *, 'current data'
 do ivol = 1, NSTATES
     do j = 1, NSTATES
         vols(:,ivol) = vols(:,ivol) + probs(ivol,j) * truths(:,j)
     enddo
     print *, vols(:,ivol)
 enddo
+print *, '-----'
 call uni_delinear(NSTATES, HIGH_IND - LOW_IND + 1, vols(LOW_IND:HIGH_IND,:), truths_inv(LOW_IND:HIGH_IND,:), verbose=.true.)
+print *, '-----'
+print *, 'reconstructed data'
+do ivol = 1, NSTATES
+    print *, truths_inv(:,ivol)
+enddo
 ! PCA
 data_cen = transpose(vols(LOW_IND:HIGH_IND,:))
 avg      = sum(data_cen, dim=2) / real(NSTATES)
