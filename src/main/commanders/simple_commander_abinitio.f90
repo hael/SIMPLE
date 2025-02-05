@@ -352,7 +352,7 @@ contains
         type(parameters)                :: params
         type(sp_project)                :: spproj
         type(image)                     :: noisevol
-        integer :: istage, s, ncls, icls, i, start_stage, nptcls2update, noris, nstates_on_cline, nstates_in_project
+        integer :: istage, s, ncls, icls, i, start_stage, nptcls2update, noris, nstates_on_cline, nstates_in_project, split_stage
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
@@ -367,6 +367,11 @@ contains
         if( .not. cline%defined('ptclw')       ) call cline%set('ptclw',          'no')
         if( .not. cline%defined('projrec')     ) call cline%set('projrec',       'yes')
         if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'yes')
+        ! splitting stage
+        split_stage = HET_DOCKED_STAGE
+        if( cline%defined('split_stage') )then
+            split_stage = cline%get_iarg('split_stage')
+        endif
         ! adjust default multivol_mode unless given on command line
         if( cline%defined('nstates') )then
             nstates_on_cline = cline%get_iarg('nstates')
@@ -523,7 +528,7 @@ contains
             call spproj%os_ptcl3D%set_updatecnt(1, pinds) ! set all sampled updatecnts to 1 & the rest to zero
             deallocate(pinds) ! these are not needed
             ! start at the same stage as for multivol_mode==docked
-            start_stage = HET_DOCKED_STAGE
+            start_stage = split_stage
             ! create state labelling
             nstates_in_project = spproj%os_ptcl3D%get_n('state')
             if( nstates_in_project == params%nstates )then
@@ -602,12 +607,12 @@ contains
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', lpinfo(istage)%lp
             ! At the splitting stage of docked mode: reset the nstates in params
-            if( params%multivol_mode.eq.'docked' .and. istage == HET_DOCKED_STAGE ) params_glob%nstates = nstates_glob
+            if( params%multivol_mode.eq.'docked' .and. istage == split_stage ) params_glob%nstates = nstates_glob
             ! Preparation of command line for refinement
             call set_cline_refine3D(istage, l_cavgs=.false.)
             ! Need to be here since rec cline depends on refine3D cline
-            if( params%multivol_mode.eq.'docked' .and. istage == HET_DOCKED_STAGE )then
-                call randomize_states(spproj, params%projfile, xreconstruct3D_distr)
+            if( params%multivol_mode.eq.'docked' .and. istage == split_stage )then
+                call randomize_states(spproj, params%projfile, xreconstruct3D_distr, istage=split_stage)
             else if( istage >= RECALC_STARTREC_STAGE )then
                 call calc_start_rec(params%projfile, xreconstruct3D_distr, istage=istage)
             endif
@@ -1258,10 +1263,11 @@ contains
         call cline_startrec%kill
     end subroutine calc_start_rec
 
-    subroutine randomize_states( spproj, projfile, xreconstruct3D )
+    subroutine randomize_states( spproj, projfile, xreconstruct3D, istage )
         class(sp_project),     intent(inout) :: spproj
         character(len=*),      intent(in)    :: projfile
         class(commander_base), intent(inout) :: xreconstruct3D
+        integer,               intent(in)    :: istage
         call spproj%read_segment('ptcl3D', projfile)
         call gen_labelling(spproj%os_ptcl3D, params_glob%nstates, 'squared_uniform')
         call spproj%write_segment_inside(params_glob%oritype, projfile)
@@ -1269,7 +1275,7 @@ contains
         call cline_reconstruct3D%set('nstates', params_glob%nstates)
         call cline_postprocess%set(  'nstates', params_glob%nstates)
         call cline_reproject%set(    'nstates', params_glob%nstates)
-        call calc_start_rec(projfile, xreconstruct3D, istage=HET_DOCKED_STAGE)
+        call calc_start_rec(projfile, xreconstruct3D, istage=istage)
     end subroutine randomize_states
 
     subroutine gen_ortho_reprojs4viz

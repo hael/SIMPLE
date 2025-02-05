@@ -1129,7 +1129,7 @@ contains
         call pftcc%new(nrefs, [1,batchsz], params_glob%kfromto)
         call build_glob%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
         ! read reference volumes and create polar projections
-        if( params_glob%l_refs_delin )then
+        if( params_glob%l_refs_delin .and. params_glob%nstates > 1 )then
             ! allocations
             allocate(imgs(nthr_glob))
             ! initializing 2D refs
