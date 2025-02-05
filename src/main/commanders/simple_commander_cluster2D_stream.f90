@@ -398,7 +398,7 @@ contains
         resolutions(NPREV_RES)     = current_resolution
         if( l_no_chunks ) return
         ! optional
-        if( trim(params_glob%dynreslim).eq.'yes' ) return
+        if( trim(params_glob%dynreslim).ne.'yes' ) return
         prev_dims = pool_dims
         ! Auto-scaling?
         if( trim(params_glob%autoscale) .ne. 'yes' ) return
