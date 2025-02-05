@@ -7,7 +7,7 @@ module simple_corrmat
     use simple_parameters, only: params_glob
     implicit none
     
-    public :: calc_cartesian_corrmat, calc_inplane_invariant_corrmat, calc_inplane_mag_corrmat
+    public :: calc_cartesian_corrmat, calc_inplane_invariant_corrmat, calc_inplane_fast
     private
     ! #include "simple_local_flags.inc"
     
@@ -133,7 +133,7 @@ module simple_corrmat
         subroutine calc_inplane_invariant_corrmat( imgs, hp, lp, corrmat)
             use simple_polarizer,         only: polarizer
             use simple_polarft_corrcalc,  only: polarft_corrcalc
-            use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
+            use simple_pftcc_shsrch_grad ! gradient-based in-plane angle and shift search
             class(image),         intent(inout)  :: imgs(:)
             real,                 intent(in)     :: hp, lp
             real, allocatable,    intent(out)    :: corrmat(:,:)
@@ -142,7 +142,7 @@ module simple_corrmat
             type(polarft_corrcalc)               :: pftcc
             real, allocatable :: inpl_corrs(:)
             integer :: n, i, j, ithr, nrots, loc(1), irot
-            real    :: lims(2,2), lims_init(2,2), cxy(3)
+            real    :: lims(2,2), lims_init(2,2), cxy(3), xy_in(2) = [0.,0.], ang, cxy_m(3)
             n = size(imgs)
             ! resolution limits
             params_glob%kfromto(1) = max(2, calc_fourier_index(hp, params_glob%box, params_glob%smpd))
@@ -156,6 +156,7 @@ module simple_corrmat
             lims(:,2)      =  params_glob%trs
             lims_init(:,1) = -SHC_INPL_TRSHWDTH
             lims_init(:,2) =  SHC_INPL_TRSHWDTH
+            nthr_glob = 40
             allocate(grad_shsrch_obj(nthr_glob))
             do ithr = 1, nthr_glob
                 call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier,&
@@ -167,7 +168,7 @@ module simple_corrmat
                 call imgs(i)%fft()
                 call polartransform%polarize(pftcc, imgs(i), i, isptcl=.false., iseven=.true.)
                 call pftcc%cp_even_ref2ptcl(i, i)
-                call imgs(i)%ifft()
+                call pftcc%mirror_pft(pftcc%pfts_refs_even(:,:,i), pftcc%pfts_refs_odd(:,:,i))
             end do
             !$omp end parallel do
             call pftcc%memoize_refs
@@ -176,17 +177,31 @@ module simple_corrmat
             nrots = pftcc%get_nrots()
             allocate(inpl_corrs(nrots), corrmat(n,n), source=0.)
             corrmat = 1.
-            !$omp parallel do default(shared) private(i,j,ithr,inpl_corrs,loc,irot,cxy) schedule(dynamic) proc_bind(close)
+            !$omp parallel do  default(shared) private(i,j,ithr,inpl_corrs,loc,irot,cxy) proc_bind(close) schedule(dynamic)
             do i = 1, n - 1
                 do j = i + 1, n
+                    inpl_corrs = 0.
                     ithr = omp_get_thread_num() + 1
                     call pftcc%gencorrs(i, j, inpl_corrs)
                     loc  = maxloc(inpl_corrs)
-                    irot = loc(1) 
+                    irot = loc(1)
                     call grad_shsrch_obj(ithr)%set_indices(i, j)
                     cxy = grad_shsrch_obj(ithr)%minimize(irot=irot)
                     if( irot > 0 )then
                         corrmat(i,j)= cxy(1)
+                    else
+                        corrmat(i,j) = inpl_corrs(loc(1))
+                    endif
+                    call pftcc%set_eo(j, .false.)
+                    call pftcc%gencorrs(i,j,inpl_corrs)
+                    loc  = maxloc(inpl_corrs)
+                    irot = loc(1)
+                    call grad_shsrch_obj(ithr)%set_indices(i, j)
+                    cxy_m = grad_shsrch_obj(ithr)%minimize(irot=irot)
+                    corrmat(j,i) = corrmat(i,j)
+                    if(cxy(1) > cxy_m(1)) cycle
+                    if( irot > 0 )then
+                        corrmat(i,j)= cxy_m(1)
                     else
                         corrmat(i,j) = inpl_corrs(loc(1))
                     endif
@@ -199,118 +214,82 @@ module simple_corrmat
             call pftcc%kill
         end subroutine calc_inplane_invariant_corrmat
 
-        ! calc angle offset, derotate particle, phase correlation, calc cc. 
-        subroutine calc_inplane_mag_corrmat( imgs, hp, lp, corrmat )
+        subroutine calc_inplane_fast( imgs, hp, lp, corrmat )
+            use simple_pftcc_shsrch_fm
             use simple_polarizer,         only: polarizer
             use simple_polarft_corrcalc,  only: polarft_corrcalc
-            use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
             class(image),         intent(inout)  :: imgs(:)
-            class(image), allocatable    :: imgs_rot(:,:)   
-            type(image)                          :: fcorr_shift180, fcorr_shift360, imgj180, imgj360, img_i_temps                                               
             real,                 intent(in)     :: hp, lp
             real, allocatable,    intent(out)    :: corrmat(:,:)
-            type(polarizer)                      :: polartransform
-            type(polarft_corrcalc)               :: pftcc
-            real, allocatable :: inpl_corrs(:)
-            integer :: n, i, j, ithr, nrots, loc(1), irot, k 
-            real    :: lims(2,2), lims_init(2,2), cxy(3), cxy_m(3), mirr_ang, ang, sh_xy(2) = 0., cc180, cc360
+            class(image), allocatable    :: imgs_rot(:,:), ccimgs(:,:)  
+            real,             allocatable :: rotmat(:,:), xoffset(:,:), yoffset(:,:)
+            type(polarizer)                    :: polartransform
+            type(polarft_corrcalc)             :: pftcc
+            type(pftcc_shsrch_fm), allocatable              :: fm_correlators(:)  
+            integer :: n, i, j, ithr, nrots, loc(1), irot, nthr 
+            real    :: lims(2,2), lims_init(2,2), cxy(3), cxy_m(3), mirr_ang, ang, sh_xy(2) = 0., cc, ccm, offset(2)
             logical :: mirr_l
             n = size(imgs)
-            ! resolution limits
+            nthr = 11
             params_glob%kfromto(1) = max(2, calc_fourier_index(hp, params_glob%box, params_glob%smpd))
             params_glob%kfromto(2) =        calc_fourier_index(lp, params_glob%box, params_glob%smpd)
             ! initialize pftcc, polarizer
             call pftcc%new(n, [1,n], params_glob%kfromto)
             call polartransform%new([params_glob%box,params_glob%box,1], params_glob%smpd)
             call polartransform%init_polarizer(pftcc, params_glob%alpha)
-            ! in-plane search object
-            lims(:,1)      = -params_glob%trs
-            lims(:,2)      =  params_glob%trs
-            lims_init(:,1) = -SHC_INPL_TRSHWDTH
-            lims_init(:,2) =  SHC_INPL_TRSHWDTH
-
+            allocate(corrmat(n,n), source=-1.)
+            ! FOURIER-MELLIN TRANSFORM
+            write(logfhandle,'(A)') '>>> CALCULATING CORRELATION OF MAGNITUDES MATRIX'
+            ! Shift boundaries
+            ! if( .not. cline%defined('trs') ) params%trs = real(params%box)/6.
             !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
             do i = 1, n
                 call imgs(i)%fft()
                 call polartransform%polarize(pftcc, imgs(i), i, isptcl=.false., iseven=.true.)
                 call pftcc%cp_even_ref2ptcl(i, i)
-                !pfts_refs_odd are mirrored references. 
                 call pftcc%mirror_pft(pftcc%pfts_refs_even(:,:,i), pftcc%pfts_refs_odd(:,:,i))
-                call imgs(i)%ifft()
             end do
             !$omp end parallel do
             call pftcc%memoize_refs
-            call pftcc%memoize_ptcls       
-            
-
-            ! generate nearest neighbor structure
-            nrots = pftcc%get_nrots()
-            allocate(inpl_corrs(nrots), corrmat(n,n), source=0.)
-            allocate(imgs_rot(n,n))
-            corrmat = 1.
-            !$omp parallel do default(shared) private(i,j,k,ithr,inpl_corrs,loc,irot) schedule(runtime) proc_bind(close)
+            call pftcc%memoize_ptcls
+            ! correlation matrix calculation
+            allocate(fm_correlators(nthr),ccimgs(nthr,2))
+            do i = 1,nthr
+                call fm_correlators(i)%new(params_glob%trs,1.,opt_angle=.false.)
+                call ccimgs(i,1)%new(params_glob%ldim, params_glob%smpd, wthreads=.false.)
+                call ccimgs(i,2)%new(params_glob%ldim, params_glob%smpd, wthreads=.false.)
+            enddo
+            !$omp parallel do default(shared) private(i,j,cc,ccm,ithr,offset)&
+            !$omp schedule(dynamic) proc_bind(close)
             do i = 1, n - 1
+                ithr = omp_get_thread_num()+1
+                corrmat(i,i) = 1.
                 do j = i + 1, n
-                    ithr = omp_get_thread_num() + 1
-
-                    do k = 1, nrots 
-                        inpl_corrs(k) = pftcc%calc_magcorr_rot(i,j,k) 
-                    end do
-                    loc  = maxloc(inpl_corrs)
-                    irot = loc(1) 
-                    ang = pftcc%get_rot(irot)
-                    corrmat(i,j) = inpl_corrs(loc(1))
-                    call pftcc%set_eo(j,.false.)
-                    do k = 1, nrots 
-                        inpl_corrs(k) = pftcc%calc_magcorr_rot(i,j,k)  
-                    end do 
-                    loc  = maxloc(inpl_corrs)
-                    irot = loc(1) 
-                    mirr_ang = pftcc%get_rot(irot)
-                    cxy_m(1) = inpl_corrs(loc(1))
-                    if(cxy_m(1) > corrmat(i,j)) mirr_l = .true.  
-                    
-                    
-                    if(mirr_l) then 
-                        call imgs(j)%mirror('y')
-                        ang = mirr_ang
-                    else 
-                        ang = -ang
-                    end if 
-                    
-                    call calc_final_cc(imgs(i),imgs(j), 360. - ang, cc360)
-                    call calc_final_cc(imgs(i), imgs(j), 180. - ang, cc180)
-                    
-                    corrmat(i,j) = max(cc180, cc360)
-                    corrmat(j,i) = corrmat(i,j)
+                    ! reference to particle
+                    call pftcc%set_eo(i,.true.)
+                    call fm_correlators(ithr)%calc_phasecorr(j, i, imgs(j), imgs(i),&
+                        &ccimgs(ithr,1), ccimgs(ithr,2), cc)
+                    ! mirrored reference to particle
+                    call pftcc%set_eo(i,.false.)
+                    call fm_correlators(ithr)%calc_phasecorr(j, i, imgs(j), imgs(i),&
+                    &ccimgs(ithr,1), ccimgs(ithr,2), ccm, mirror=.true.)
+                    cc = max(cc,ccm)
+                    corrmat(i,j) = cc
+                    corrmat(j,i) = cc
                 enddo
             enddo
-            
             !$omp end parallel do
-
-            ! destruct
-            call polartransform%kill
+            corrmat(n,n) = 1.
+            ! write similarity matrix
+            ! tidy
             call pftcc%kill
-            contains
-            subroutine calc_final_cc(img_i,img_j,rot,cc)
-                class(image), intent(inout)     :: img_i,img_j  
-                real, intent(inout)             :: cc 
-                real, intent(in)                :: rot 
-                real        :: shift(2)
-                type(image) :: img_i_temp, img_j_temp    
-                call img_i_temp%copy(img_i)
-                call img_j_temp%copy(img_j)
-                call img_j_temp%rtsq(rot,0.,0.)
-                call img_i_temp%fft()
-                call img_j_temp%fft()
-                call img_i_temp%fcorr_shift(img_j_temp, 200., shift)
-                call img_j_temp%ifft()
-                call img_j_temp%shift([shift(1), shift(2), 0.])
-                cc = img_j_temp%real_corr(img_i)
-            end subroutine 
-
-        end subroutine calc_inplane_mag_corrmat
-    
-      
+            call polartransform%kill_polarizer
+            call polartransform%kill
+            do i = 1,nthr
+                call fm_correlators(i)%kill
+                call ccimgs(i,1)%kill
+                call ccimgs(i,2)%kill
+            enddo
+        end subroutine 
     end module simple_corrmat
     
