@@ -9,7 +9,7 @@ use simple_butterworth
 implicit none
 #include "simple_local_flags.inc"
 
-public :: nonuni_filt3D, estimate_lplim, estimate_lplims2D, uni_inv_linear
+public :: nonuni_filt3D, estimate_lplim, estimate_lplims2D, uni_delinear
 private
 
 interface estimate_lplim
@@ -272,25 +272,22 @@ contains
         deallocate(masks)
     end subroutine estimate_lplims2D
 
-    subroutine uni_inv_linear(nvol, npix, vols, vols_out, verbose)
+    subroutine uni_delinear(nvol, npix, vols, vols_out, verbose)
         integer,           intent(in)    :: nvol, npix
         real,              intent(in)    :: vols(npix,nvol)
         real,              intent(inout) :: vols_out(npix,nvol)
         logical, optional, intent(in)    :: verbose
         logical :: l_verbose
-        integer :: ivol, ivar, j, errflg, var_inds(nvol), dist_ind
+        integer :: ivol, ivar, jvol, errflg, var_inds(nvol), dist_ind
         real    :: probs_inv(nvol,nvol), avg_vol(npix), var(nvol), probs_dist(nvol,nvol), var_sorted(nvol)
         l_verbose = .false.
         if( present(verbose) ) l_verbose = verbose
         avg_vol = sum(vols, dim=2)/real(nvol)
-        ! if( l_verbose )then
-        !     print *, 'avg_vol = ', avg_vol
-        ! endif
         do ivol = 1, nvol
             var(ivol) = sum((vols(:,ivol) - avg_vol(:))**2)
         enddo
         var        = var/sum(var)
-        var_inds   = (/(j,j=1,nvol)/)
+        var_inds   = (/(jvol,jvol=1,nvol)/)
         var_sorted = var
         call hpsort(var_sorted, var_inds)
         if( l_verbose )then
@@ -303,8 +300,9 @@ contains
             probs_dist(ivol,ivol) = exp(-(dist_ind - 0.)**2/2./var(ivol))/sqrt(2. * PI * var(ivol))
             dist_ind = dist_ind + 1
             do ivar = 1, nvol
-                if( var_inds(ivar) == ivol ) cycle
-                probs_dist(ivol,var_inds(ivar)) = exp(-(dist_ind - 0.)**2/2./var(ivol))/sqrt(2. * PI * var(ivol))
+                jvol = var_inds(ivar)
+                if( jvol == ivol ) cycle
+                probs_dist(ivol,jvol) = exp(-(dist_ind - 0.)**2/2./var(jvol))/sqrt(2. * PI * var(jvol))
                 dist_ind = dist_ind + 1
             enddo
             probs_dist(ivol,:) = probs_dist(ivol,:) / sum(probs_dist(ivol,:))
@@ -319,11 +317,10 @@ contains
         ! recovering
         vols_out = 0.
         do ivol = 1, nvol
-            do j = 1, nvol
-                vols_out(:,ivol) = vols_out(:,ivol) + probs_inv(ivol,j) * vols(:,j)
+            do jvol = 1, nvol
+                vols_out(:,ivol) = vols_out(:,ivol) + probs_inv(ivol,jvol) * vols(:,jvol)
             enddo
-            ! if( l_verbose ) print *, vols_out(:,ivol)
         enddo
-    end subroutine uni_inv_linear
+    end subroutine uni_delinear
 
 end module simple_opt_filter

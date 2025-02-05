@@ -1,6 +1,6 @@
 program simple_test_invlinear_vols
 include 'simple_lib.f08'
-use simple_opt_filter, only: uni_inv_linear
+use simple_opt_filter, only: uni_delinear
 use simple_pca_svd,    only: pca_svd
 implicit none
 integer, parameter :: NSTATES = 3, NP = 10, LOW_IND = 1, HIGH_IND = 4, NC = 2, MAXPCAITS = 10, NINDS = HIGH_IND - LOW_IND + 1
@@ -21,7 +21,7 @@ do ivol = 1, NSTATES
     enddo
     print *, vols(:,ivol)
 enddo
-call uni_inv_linear(NSTATES, HIGH_IND - LOW_IND + 1, vols(LOW_IND:HIGH_IND,:), truths_inv(LOW_IND:HIGH_IND,:), verbose=.true.)
+call uni_delinear(NSTATES, HIGH_IND - LOW_IND + 1, vols(LOW_IND:HIGH_IND,:), truths_inv(LOW_IND:HIGH_IND,:), verbose=.true.)
 ! PCA
 data_cen = transpose(vols(LOW_IND:HIGH_IND,:))
 avg      = sum(data_cen, dim=2) / real(NSTATES)

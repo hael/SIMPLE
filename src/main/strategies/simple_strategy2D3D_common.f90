@@ -1108,7 +1108,7 @@ contains
     subroutine prepare_polar_references( pftcc, cline, batchsz )
         use simple_polarft_corrcalc,       only:  polarft_corrcalc
         use simple_projector,              only:  projector
-        use simple_opt_filter,             only:  uni_inv_linear
+        use simple_opt_filter,             only:  uni_delinear
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(cmdline),          intent(in)    :: cline !< command line
         integer,                 intent(in)    :: batchsz
@@ -1171,7 +1171,7 @@ contains
                     imgvecs(:,s,ithr) = imgs(ithr)%serialize()
                 enddo
                 ! delinearizing and transfer to pftcc
-                call uni_inv_linear(params_glob%nstates, box*box, imgvecs(:,:,ithr), imgvecs_delin(:,:,ithr))
+                call uni_delinear(params_glob%nstates, box*box, imgvecs(:,:,ithr), imgvecs_delin(:,:,ithr))
                 do s=1,params_glob%nstates
                     iref = (s - 1) * params_glob%nspace + iproj
                     call imgs(ithr)%unserialize(imgvecs_delin(:,s,ithr))
@@ -1187,7 +1187,7 @@ contains
                     imgvecs(:,s,ithr) = imgs(ithr)%serialize()
                 enddo
                 ! delinearizing and transfer to pftcc
-                call uni_inv_linear(params_glob%nstates, box*box, imgvecs(:,:,ithr), imgvecs_delin(:,:,ithr))
+                call uni_delinear(params_glob%nstates, box*box, imgvecs(:,:,ithr), imgvecs_delin(:,:,ithr))
                 do s=1,params_glob%nstates
                     iref = (s - 1) * params_glob%nspace + iproj
                     call imgs(ithr)%unserialize(imgvecs_delin(:,s,ithr))
