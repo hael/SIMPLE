@@ -87,6 +87,7 @@ type :: parameters
     character(len=3)          :: prune='no'
     character(len=3)          :: prob_sh='no'         !< shift information in the prob tab (yes|no){no}
     character(len=3)          :: projrec='no'         !< Whether to reconstruct from summed projection directions (yes|no){no}
+    character(len=3)          :: ptcl_norm ='no'
     character(len=3)          :: randomise='no'       !< whether to randomise particle order
     character(len=3)          :: rank_cavgs='yes'     !< Whether to rank class averages(yes|no)
     character(len=3)          :: refs_delin='no'      !< delinearizing reprojections of different states (yes|no){no}
@@ -667,6 +668,7 @@ contains
         call check_carg('prob_sh',        self%prob_sh)
         call check_carg('projrec',        self%projrec)
         call check_carg('projfile_optics',self%projfile_optics)
+        call check_carg('ptcl_norm',      self%ptcl_norm)
         call check_carg('remap_cls',      self%remap_cls)
         call check_carg('roavg',          self%roavg)
         call check_carg('script',         self%script)

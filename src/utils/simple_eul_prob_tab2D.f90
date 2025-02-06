@@ -34,6 +34,7 @@ type :: eul_prob_tab2D
     procedure          :: fill_table_smpl
     ! ASSIGNMENT FROM TABLE
     procedure          :: normalize_table
+    procedure          :: normalize_ptcl
     procedure, private :: select_top_ptcls
     procedure, private :: prevcls_withdrawal
     procedure          :: assign_greedy
@@ -339,7 +340,7 @@ contains
         class(eul_prob_tab2D), intent(inout) :: self
         real(dp) :: sumdist
         real     :: mindist, maxdist
-        integer :: i
+        integer  :: i
         ! normalize each ptcl for all non-empty classes
         mindist = huge(mindist)
         maxdist = -1.
@@ -371,6 +372,39 @@ contains
             !$omp end parallel workshare
         endif
     end subroutine normalize_table
+
+    subroutine normalize_ptcl( self )
+        class(eul_prob_tab2D), intent(inout) :: self
+        real(dp) :: sumdist
+        real     :: mindist, maxdist
+        integer  :: i
+        ! normalize each non-empty class for all ptcls
+        mindist = huge(mindist)
+        maxdist = -1.
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,sumdist)&
+        !$omp reduction(min:mindist) reduction(max:maxdist)
+        do i = 1, self%ncls
+            sumdist = sum(real(self%loc_tab(i,:)%dist,dp))
+            if( sumdist < DTINY )then
+                self%loc_tab(i,:)%dist = 0.0
+            else
+                self%loc_tab(i,:)%dist = self%loc_tab(i,:)%dist / real(sumdist)
+            endif
+            mindist = min(mindist, minval(self%loc_tab(i,:)%dist))
+            maxdist = max(maxdist, maxval(self%loc_tab(i,:)%dist))
+        enddo
+        !$omp end parallel do
+        ! min/max normalization to obtain values between 0 and 1
+        if( (maxdist - mindist) < TINY )then
+            !$omp parallel workshare proc_bind(close)
+            self%loc_tab(:,:)%dist = 0.
+            !$omp end parallel workshare
+        else
+            !$omp parallel workshare proc_bind(close)
+            self%loc_tab(:,:)%dist = (self%loc_tab(:,:)%dist - mindist) / (maxdist - mindist)
+            !$omp end parallel workshare
+        endif
+    end subroutine normalize_ptcl
 
     ! set state/weights to zero for worst ranking particles per class
     subroutine select_top_ptcls( self, pops )

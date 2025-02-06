@@ -1610,6 +1610,7 @@ contains
             if( params_glob%which_iter == 1 )then
                 call eulprob%assign_greedy(l_maxpop)
             else
+                if( trim(params_glob%ptcl_norm).eq.'yes' ) call eulprob%normalize_ptcl
                 call eulprob%assign_stoch(build_glob%spproj_field, l_maxpop)
             endif
         case('prob_greedy')
