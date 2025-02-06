@@ -145,11 +145,7 @@ contains
                 if( sh < pftcc_glob%kfromto(1) )cycle
                 if( sh > pftcc_glob%kfromto(2) )cycle
                 ! Rotation img2
-                if( l_mirr )then
-                    loc = matmul(real([-h,k]),rmat)
-                else
-                    loc = matmul(real([h,k]),rmat)
-                endif
+                loc = matmul(real([h,k]),rmat)
                 ! bilinear interpolation
                 win    = floor(loc)
                 dist   = loc - real(win)
@@ -173,7 +169,11 @@ contains
                 if( ll < 0 ) fcompll = conjg(fcompll)
                 fcomp2 = fcompl + fcompll
                 ! img1
-                phys   = img1%comp_addr_phys(h,k)
+                if( l_mirr )then
+                    phys = img1%comp_addr_phys(h,-k)
+                else
+                    phys = img1%comp_addr_phys(h,k)
+                endif
                 fcomp1 = p1%cmat(phys(1), phys(2),1)
                 ! rotation by ang
                 call imgcc1%set_cmat_at([phys(1),phys(2),1], fcomp1*conjg(fcomp2))
@@ -217,7 +217,7 @@ contains
                 class(image_ptr), intent(in)  :: p
                 integer,          intent(in)  :: rotind
                 real,             intent(out) :: offset(2), cc
-                real    :: tmp(2), ccinterp
+                real    :: tmp(2), ccinterp, dp
                 integer :: pos(2), i,j
                 pos    = maxloc(p%rmat(c-shlim:c+shlim,c-shlim:c+shlim,1))
                 i      = pos(1)+c-shlim-1
@@ -226,20 +226,23 @@ contains
                 offset = tmp
                 alpha   = p%rmat(i-1,j,1)
                 beta    = p%rmat(i,  j,1)
+                cc      = beta
                 gamma   = p%rmat(i+1,j,1)
                 denom   = alpha + gamma - 2.*beta
-                if( abs(denom) > TINY ) offset(1) = offset(1) + 0.5 * (alpha-gamma) / denom
+                if( abs(denom) > TINY )then
+                    dp        = 0.5 * (alpha-gamma) / denom
+                    offset(1) = offset(1) + dp
+                    cc        = max(cc, beta-0.25*(alpha-gamma)*dp)
+                endif
                 alpha  = p%rmat(i,j-1,1)
                 gamma  = p%rmat(i,j+1,1)
                 denom  = alpha + gamma - 2.*beta
-                if( abs(denom) > TINY ) offset(2) = offset(2) + 0.5 * (alpha-gamma) / denom
-                cc       = real(pftcc_glob%gencorr_for_rot_8(ind1,ind2,real(tmp,dp),   rotind))
-                ccinterp = real(pftcc_glob%gencorr_for_rot_8(ind1,ind2,real(offset,dp),rotind))
-                if( ccinterp > cc )then
-                    cc     = ccinterp
-                else
-                    offset = tmp
+                if( abs(denom) > TINY )then
+                    dp        = 0.5 * (alpha-gamma) / denom
+                    offset(2) = offset(2) + dp
+                    cc        = max(cc, beta-0.25*(alpha-gamma)*dp)
                 endif
+                cc = min(1.,max(-1.,cc))
             end subroutine interpolate_offset_peak
 
     end subroutine calc_phasecorr
