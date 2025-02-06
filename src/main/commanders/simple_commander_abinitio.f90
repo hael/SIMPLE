@@ -352,7 +352,7 @@ contains
         type(parameters)                :: params
         type(sp_project)                :: spproj
         type(image)                     :: noisevol
-        integer :: istage, s, ncls, icls, i, start_stage, nptcls2update, noris, nstates_on_cline, nstates_in_project, split_stage
+        integer :: istage, s, ncls, icls, start_stage, nptcls2update, noris, nstates_on_cline, nstates_in_project, split_stage
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
@@ -607,7 +607,10 @@ contains
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', lpinfo(istage)%lp
             ! At the splitting stage of docked mode: reset the nstates in params
-            if( params%multivol_mode.eq.'docked' .and. istage == split_stage ) params_glob%nstates = nstates_glob
+            if( params%multivol_mode.eq.'docked' .and. istage == split_stage )then
+                params_glob%nstates = nstates_glob
+                update_frac         = min(update_frac * nstates_glob, UPDATE_FRAC_MAX)
+            endif
             ! Preparation of command line for refinement
             call set_cline_refine3D(istage, l_cavgs=.false.)
             ! Need to be here since rec cline depends on refine3D cline
@@ -675,7 +678,6 @@ contains
         ! command lines
         type(cmdline)                      :: cline_split_bal, cline_new_proj, cline_mk_cavgs, cline_abinitio3D
         ! other vars
-        character(len=:),      allocatable :: cmd
         character(len=STDLEN), allocatable :: projnames(:), projfnames(:)
         character(len=LONGSTRLEN)          :: cwd
         type(parameters)                   :: params
@@ -849,12 +851,12 @@ contains
         class(sp_project), intent(inout) :: spproj
         logical,           intent(in)    :: l_cavgs
         real, optional,    intent(in)    :: lpstart, lpstop
-        character(len=:),  allocatable   :: frcs_fname, stk, imgkind, stkpath
+        character(len=:),  allocatable   :: frcs_fname
         real,              allocatable   :: frcs_avg(:)
         integer,           allocatable   :: states(:)
         type(class_frcs) :: clsfrcs
-        real             :: smpd, lpfinal
-        integer          :: filtsz, ncavgs
+        real             :: lpfinal
+        integer          :: filtsz
         ! retrieve FRC info
         call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
         ! work out low-pass limits and downscaling parameters
@@ -903,10 +905,8 @@ contains
         class(cmdline),    intent(inout) :: cline
         type(abinitio3D_cavgs_commander) :: xini3D
         type(cmdline)                    :: cline_ini3D
-        character(len=:), allocatable    :: cavgs_stk
         type(str4arr),    allocatable    :: files_that_stay(:)
         character(len=*), parameter      :: INI3D_DIR='abinitio3D_cavgs/'
-        integer :: ncavgs
         cline_ini3D = cline
         call cline_ini3D%set('nstages', NSTAGES_INI3D)
         if( cline%defined('lpstart_ini3D') )then
@@ -1282,7 +1282,7 @@ contains
         character(len=:), allocatable :: str_state
         character(len=:), allocatable :: fname
         type(image) :: final_vol, reprojs
-        integer     :: state, box_crop, ifoo, ldim(3)
+        integer     :: state, ifoo, ldim(3)
         real        :: smpd
         str_state = int2str_pad(1,2)
         fname = VOL_FBODY//str_state//params_glob%ext
