@@ -108,7 +108,7 @@ contains
         logical,      intent(in)    :: mirror
         if( mirror )then
             call img%ifft
-            call img%mirror('y')
+            call img%mirror('y',fourier=.true.)
         endif
         call img%fft
         call img%shift2Dserial(shift)

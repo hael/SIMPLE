@@ -449,9 +449,9 @@ contains
         if( vals(n) > vals(n-1) ) peakpos(n) = .true.
     end function peakfinder
 
-    !>   reverses an integer array
+    !>   reverses an integer vector
     subroutine reverse_iarr( iarr )
-        integer, intent(inout) :: iarr(:) !< array for modification
+        integer, intent(inout) :: iarr(:) !< vector for modification
         integer                :: i, j, iswap, sz, en
         sz = size(iarr,1)
         if( sz < 2 )then
@@ -471,9 +471,9 @@ contains
         end do
     end subroutine reverse_iarr
 
-    !>   reverses a real array
+    !>   reverses a real vector
     subroutine reverse_rarr( rarr )
-        real, intent(inout) :: rarr(:) !< array for modification
+        real, intent(inout) :: rarr(:) !< vector for modification
         integer             :: i, j, sz, en
         real                :: rswap
         sz = size(rarr,1)
@@ -493,6 +493,31 @@ contains
             rarr(i) = rswap
         end do
     end subroutine reverse_rarr
+
+    !> reverses a real vector preserving the fourier center
+    subroutine reverse_f( rarr )
+        real, intent(inout) :: rarr(:) !< vector for modification
+        integer             :: i, j, sz, st, en
+        real                :: rswap
+        sz = size(rarr,1)
+        if( sz < 2 )then
+            return
+        endif
+        if( mod(sz,2) == 0 )then
+            st = 1
+            en = sz/2+2
+        else
+            st = 0
+            en = (sz+1)/2+1
+        endif
+        j = st
+        do i = sz,en,-1
+            j = j+1
+            rswap   = rarr(j)
+            rarr(j) = rarr(i)
+            rarr(i) = rswap
+        end do
+    end subroutine reverse_f
 
     !>   for selecting kth largest, array is modified
     real function selec(k,n,arr)

@@ -8093,32 +8093,47 @@ contains
 
     !>  \brief  is for mirroring an image
     !!          mirror('x') corresponds to mirror2d
-    subroutine mirror( self, md )
-        class(image), intent(inout) :: self
-        character(len=*), intent(in) :: md
+    subroutine mirror( self, md, fourier )
+        class(image),      intent(inout) :: self
+        character(len=*),  intent(in)    :: md
+        logical, optional, intent(in)    :: fourier
         integer :: i, j
-        logical :: didft
+        logical :: didft, l_fourier
         didft = .false.
         if( self%ft )then
             call self%ifft()
             didft = .true.
         endif
+        l_fourier = .false.
+        if( present(fourier) ) l_fourier = fourier
         if( md == 'x' )then
             do i=1,self%ldim(2)
                 do j=1,self%ldim(3)
-                    call reverse(self%rmat(1:self%ldim(1),i,j))
+                    if( l_fourier )then
+                        call reverse_f(self%rmat(1:self%ldim(1),i,j))
+                    else
+                        call reverse(self%rmat(1:self%ldim(1),i,j))
+                    endif
                 end do
             end do
         else if( md == 'y' )then
             do i=1,self%ldim(1)
                 do j=1,self%ldim(3)
-                    call reverse(self%rmat(i,1:self%ldim(2),j))
+                    if( l_fourier )then
+                        call reverse_f(self%rmat(i,1:self%ldim(2),j))
+                    else
+                        call reverse(self%rmat(i,1:self%ldim(2),j))
+                    endif
                 end do
             end do
         else if( md == 'z' )then
             do i=1,self%ldim(1)
                 do j=1,self%ldim(2)
-                    call reverse(self%rmat(i,j,1:self%ldim(3)))
+                    if( l_fourier )then
+                        call reverse_f(self%rmat(i,j,1:self%ldim(3)))
+                    else
+                        call reverse(self%rmat(i,j,1:self%ldim(3)))
+                    endif
                 end do
             end do
         else
