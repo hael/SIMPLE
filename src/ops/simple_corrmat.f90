@@ -8,6 +8,7 @@ module simple_corrmat
     implicit none
     
     public :: calc_cartesian_corrmat, calc_inplane_invariant_corrmat, calc_inplane_fast
+    public :: calc_inplane_fast_dev
     private
     ! #include "simple_local_flags.inc"
     
@@ -199,6 +200,101 @@ module simple_corrmat
             call pftcc%kill
         end subroutine calc_inplane_invariant_corrmat
 
+        subroutine calc_inplane_fast_dev( imgs, hp, lp, corrmat, R, X, Y, M )
+            use simple_pftcc_shsrch_fm
+            use simple_polarizer,        only: polarizer
+            use simple_polarft_corrcalc, only: polarft_corrcalc
+            class(image),         intent(inout) :: imgs(:)
+            real,                 intent(in)    :: hp, lp
+            real,    allocatable, intent(out)   :: corrmat(:,:), R(:,:), X(:,:), Y(:,:)
+            logical, allocatable, intent(out)   :: M(:,:)
+            class(image),           allocatable :: ccimgs(:,:)
+            type(pftcc_shsrch_fm),  allocatable :: fm_correlators(:)
+            type(polarizer)                     :: polartransform
+            type(polarft_corrcalc)              :: pftcc
+            integer :: n, i, j, ithr, nrots, loc(1), irot, nthr
+            real    :: offset(2), offsetm(2), ang, angm
+            real    :: cc, ccm
+            logical :: lmir
+            n = size(imgs)
+            nthr = params_glob%nthr
+            params_glob%kfromto(1) = max(2, calc_fourier_index(hp, params_glob%box, params_glob%smpd))
+            params_glob%kfromto(2) =        calc_fourier_index(lp, params_glob%box, params_glob%smpd)
+            ! initialize pftcc, polarizer
+            call pftcc%new(n, [1,n], params_glob%kfromto)
+            call polartransform%new([params_glob%box,params_glob%box,1], params_glob%smpd)
+            call polartransform%init_polarizer(pftcc, params_glob%alpha)
+            allocate(corrmat(n,n), source=-1.)
+            ! FOURIER-MELLIN TRANSFORM
+            write(logfhandle,'(A)') '>>> CALCULATING CORRELATION OF MAGNITUDES MATRIX'
+            ! Shift boundaries
+            ! if( .not. cline%defined('trs') ) params%trs = real(params%box)/6.
+            !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
+            do i = 1, n
+                call imgs(i)%fft()
+                call polartransform%polarize(pftcc, imgs(i), i, isptcl=.false., iseven=.true.)
+                call pftcc%cp_even_ref2ptcl(i, i)
+                call pftcc%mirror_pft(pftcc%pfts_refs_even(:,:,i), pftcc%pfts_refs_odd(:,:,i))
+            end do
+            !$omp end parallel do
+            call pftcc%memoize_refs
+            call pftcc%memoize_ptcls
+            ! correlation matrix calculation
+            allocate(fm_correlators(nthr),ccimgs(nthr,2),R(n,n),X(n,n),Y(n,n),M(n,n))
+            R = 0.; X = 0.; Y = 0.; M = .false.
+            do i = 1,nthr
+                call fm_correlators(i)%new(params_glob%trs,1.,opt_angle=.false.)
+                call ccimgs(i,1)%new(params_glob%ldim, params_glob%smpd, wthreads=.false.)
+                call ccimgs(i,2)%new(params_glob%ldim, params_glob%smpd, wthreads=.false.)
+            enddo
+            !$omp parallel do default(shared) private(i,j,cc,ccm,ithr,offset,offsetm,ang,angm,lmir)&
+            !$omp schedule(dynamic) proc_bind(close)
+            do i = 1, n - 1
+                ithr = omp_get_thread_num()+1
+                corrmat(i,i) = 1.
+                do j = i + 1, n
+                    ! reference to particle
+                    call pftcc%set_eo(i,.true.)
+                    call fm_correlators(ithr)%calc_phasecorr(j, i, imgs(j), imgs(i),&
+                        &ccimgs(ithr,1), ccimgs(ithr,2), cc, rotang=ang, shift=offset)
+                    ! mirrored reference to particle
+                    call pftcc%set_eo(i,.false.)
+                    call fm_correlators(ithr)%calc_phasecorr(j, i, imgs(j), imgs(i),&
+                    &ccimgs(ithr,1), ccimgs(ithr,2), ccm, mirror=.true., rotang=angm, shift=offsetm)
+                    ! higher correlation wins
+                    lmir = .false.
+                    if( ccm > cc )then
+                        cc     = ccm
+                        ang    = angm
+                        offset = offsetm
+                        lmir   = .true.
+                    endif
+                    corrmat(i,j) = cc
+                    corrmat(j,i) = cc
+                    R(i,j) = ang
+                    X(i,j) = offset(1)
+                    Y(i,j) = offset(2)
+                    M(i,j) = lmir
+                    R(j,i) = R(i,j)
+                    X(j,i) = X(i,j)
+                    Y(j,i) = Y(i,j)
+                    M(j,i) = M(i,j)
+                enddo
+            enddo
+            !$omp end parallel do
+            corrmat(n,n) = 1.
+            ! write similarity matrix
+            ! tidy
+            call pftcc%kill
+            call polartransform%kill_polarizer
+            call polartransform%kill
+            do i = 1,nthr
+                call fm_correlators(i)%kill
+                call ccimgs(i,1)%kill
+                call ccimgs(i,2)%kill
+            enddo
+        end subroutine calc_inplane_fast_dev
+
         subroutine calc_inplane_fast( imgs, hp, lp, corrmat )
             use simple_pftcc_shsrch_fm
             use simple_polarizer,         only: polarizer
@@ -275,6 +371,7 @@ module simple_corrmat
                 call ccimgs(i,1)%kill
                 call ccimgs(i,2)%kill
             enddo
-        end subroutine 
-    end module simple_corrmat
+        end subroutine
+
+end module simple_corrmat
     
