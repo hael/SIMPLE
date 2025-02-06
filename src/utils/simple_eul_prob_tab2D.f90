@@ -384,14 +384,18 @@ contains
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,sumdist)&
         !$omp reduction(min:mindist) reduction(max:maxdist)
         do i = 1, self%ncls
-            sumdist = sum(real(self%loc_tab(i,:)%dist,dp))
-            if( sumdist < DTINY )then
-                self%loc_tab(i,:)%dist = 0.0
+            if( self%populated(i) )then
+                sumdist = sum(real(self%loc_tab(i,:)%dist,dp))
+                if( sumdist < DTINY )then
+                    self%loc_tab(i,:)%dist = 0.0
+                else
+                    self%loc_tab(i,:)%dist = self%loc_tab(i,:)%dist / real(sumdist)
+                endif
+                mindist = min(mindist, minval(self%loc_tab(i,:)%dist))
+                maxdist = max(maxdist, maxval(self%loc_tab(i,:)%dist))
             else
-                self%loc_tab(i,:)%dist = self%loc_tab(i,:)%dist / real(sumdist)
+                self%loc_tab(i,:)%dist = huge(mindist)
             endif
-            mindist = min(mindist, minval(self%loc_tab(i,:)%dist))
-            maxdist = max(maxdist, maxval(self%loc_tab(i,:)%dist))
         enddo
         !$omp end parallel do
         ! min/max normalization to obtain values between 0 and 1
