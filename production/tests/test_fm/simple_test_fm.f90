@@ -5,37 +5,25 @@ include 'simple_lib.f08'
 use simple_cmdline,          only: cmdline
 use simple_image,            only: image
 use simple_parameters,       only: parameters
-use simple_polarft_corrcalc, only: polarft_corrcalc
-use simple_polarizer,        only: polarizer
-use simple_pftcc_shsrch_fm
 use simple_corrmat
 implicit none
-type(cmdline)          :: cline
-type(cmdline), allocatable :: completed_jobs_clines(:)
-type(parameters)       :: p
-type(image):: img1, img2, img3, img4, imgf2, imgf3, img
+type(cmdline)            :: cline
+type(parameters)         :: p
+type(image)              :: img1, img2, img3, img4
 type(image), allocatable :: imgs(:)
-type(polarft_corrcalc)   :: pftcc
-type(polarizer)          :: pol
-type(pftcc_shsrch_fm)    :: fmt
-character(len=:), allocatable :: fname1, exec
-character(len=LONGSTRLEN)     :: fname
-character(len=STDLEN)         :: old_exec
-real, allocatable :: a(:,:), R(:,:), X(:,:), Y(:,:)
-real, allocatable :: T(:,:)
-logical, allocatable :: YM(:,:)
-real                   :: scale, v, smpd, minmax(2), trs, shift(2), corr, ave, sdev, maxv, minv, dfx,dfy,angast
-real                   :: ang,offset(2),cc,ang2
-integer :: N,M
-integer                :: ldim1(3), ldim2(3), ldim_box(3), nptcls, i,j,nn,ithr, ncls, ncls_rejected, irot, nptcls_glob
+real,        allocatable :: a(:,:), R(:,:), X(:,:), Y(:,:), T(:,:)
+logical,     allocatable :: YM(:,:)
+real    :: rotmat(2,2), sh(2), ang
+integer :: N,M, i,j
+logical :: mirr
 if( command_argument_count() < 1 )then
-    write(logfhandle,'(a)',advance='no') 'simple_test_fast_corrcalc stk=<particles.ext> mskdiam=<mask radius(in pixels)>'
+    write(logfhandle,'(a)',advance='no') 'simple_test_fm stk=<particles.ext> mskdiam=<mask radius(in pixels)>'
     write(logfhandle,'(a)') ' smpd=<sampling distance(in A)> [nthr=<number of threads{1}>] [verbose=<yes|no{no}>]'
     stop
 endif
 
-N=256
-M=14
+N=256 ! image size
+M=14  ! number of images
 
 call cline%set('ctf',   'no')
 call cline%set('objfun','cc')
@@ -87,18 +75,33 @@ enddo
 call calc_inplane_fast_dev( imgs, p%hp, p%lp, A, R, X, Y, YM )
 
 ! write out restored images
+call img1%ifft
 do i = 1,2*M
-    if( YM(1,i) )then
-        Y(1,i) = -Y(1,i) !!!
-        call transform_img(imgs(i),[X(1,i),Y(1,i)], R(1,i), YM(i,1))
-    else
-        call transform_img(imgs(i),[X(1,i),Y(1,i)], R(1,i), YM(i,1))
-    endif
-    print *,i,A(1,i),X(1,i),Y(1,i),R(1,i),YM(1,i)
+    ! imgs -> img1
+    call transform_img(imgs(i),[X(1,i),Y(1,i)], R(1,i), YM(i,1))
     call imgs(i)%mask(120.,'soft',backgr=0.)
     call imgs(i)%write('restored_imgs.mrc',i)
-enddo
 
+    ! img1 -> imgs
+    if( YM(1,i) )then
+        ang = R(1,i)
+        call rotmat2d(ang, rotmat)
+        sh     = matmul([X(1,i),Y(1,i)], transpose(rotmat))
+        sh(1)  = -sh(1)
+    else
+        ang = 360.-R(1,i)
+        call rotmat2d(ang, rotmat)
+        sh = -matmul([X(1,i),Y(1,i)], rotmat)
+    endif
+    mirr = i > M
+    print *,i,'mirror,   truth vs calc: ',  mirr,    '|', YM(1,i)
+    print *,i,'offset,   truth vs calc: ',  T(i,1:2),'|', sh
+    print *,i,'rotation, truth vs calc: ',  T(i,3),  '|', ang
+    call img2%copy_fast(img1)
+    call transform_img(img2, sh, ang, YM(i,1))
+    call img2%mask(120.,'soft',backgr=0.)
+    call img2%write('reverse_restored_imgs.mrc',i)
+enddo
 
 contains
 

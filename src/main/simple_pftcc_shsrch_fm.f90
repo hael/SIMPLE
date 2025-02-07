@@ -90,6 +90,25 @@ contains
     end subroutine minimize
 
     ! Fourier-Mellin transform appproach without scale
+    ! To transform img2 into img1:
+    ! if( mirror )then
+    !     call img2%ifft
+    !     call img2%mirror('y',fourier=.true.)
+    ! endif
+    ! call img2%fft
+    ! call img2%shift2Dserial(shift)
+    ! call img2%ifft
+    ! call img2%rtsq(rotang, 0.,0.)
+    ! To transform img1 into img2, apply same transformation to img1 with updated parameters
+    ! if( mirror )then
+    !     call rotmat2d(rotang, rotmat)
+    !     shift    = matmul(shift, transpose(rotmat))
+    !     shift(1) = -shift(1)
+    ! else
+    !     rotang = 360.-rotang
+    !     call rotmat2d(rotang, rotmat)
+    !     shift = -matmul(shift, rotmat)
+    ! endif
     subroutine calc_phasecorr( self, ind1, ind2, img1, img2, imgcc1, imgcc2, cc, mirror, rotang, shift )
         class(pftcc_shsrch_fm), intent(inout) :: self
         integer,                intent(in)    :: ind1, ind2     ! iref,iptcl indices for pftcc
@@ -102,7 +121,7 @@ contains
         complex  :: fcomp1, fcomp2, fcompl, fcompll
         real(dp) :: var1, var2
         real     :: corrs(self%pftsz),rmat(2,2),dist(2),loc(2),offset1(2),offset2(2),offset(2)
-        real     :: kw, norm, pftcc_ang, cc1,cc2, angstep, alpha,beta,gamma,denom, ang
+        real     :: kw, norm, pftcc_ang, cc1,cc2, ang
         integer  :: logilims(3,2), cyclims(3,2), cyclimsR(2,2), win(2), phys(2)
         integer  :: irot,h,k,l,ll,m,mm,sh,c,shlim
         logical  :: l_mirr
@@ -112,21 +131,6 @@ contains
         call pftcc_glob%gencorrs_mag_cc(ind1, ind2, corrs, kweight=.true.)
         irot      = maxloc(corrs, dim=1) ! one solution in [0;pi[
         pftcc_ang = pftcc_glob%get_rot(irot)
-        ! interpolate rotational peak
-        angstep = pftcc_glob%get_rot(2)
-        if( irot==1 )then
-            alpha = corrs(self%pftsz)
-        else
-            alpha = corrs(irot-1)
-        endif
-        beta = corrs(irot)
-        if( irot==self%pftsz )then
-            gamma = corrs(1)
-        else
-            gamma = corrs(irot+1)
-        endif
-        denom   = alpha + gamma - 2.*beta
-        if( abs(denom) > TINY ) pftcc_ang = pftcc_ang + angstep * 0.5 * (alpha-gamma) / denom
         ! phase correlations of image rotated by irot & irot+pi
         call rotmat2d(pftcc_ang, rmat)
         call img1%get_cmat_ptr(p1%cmat)
@@ -217,7 +221,7 @@ contains
                 class(image_ptr), intent(in)  :: p
                 integer,          intent(in)  :: rotind
                 real,             intent(out) :: offset(2), cc
-                real    :: tmp(2), ccinterp, dp
+                real    :: tmp(2), cci, doffset, alpha,beta,gamma,denom
                 integer :: pos(2), i,j
                 pos    = maxloc(p%rmat(c-shlim:c+shlim,c-shlim:c+shlim,1))
                 i      = pos(1)+c-shlim-1
@@ -226,23 +230,32 @@ contains
                 offset = tmp
                 alpha   = p%rmat(i-1,j,1)
                 beta    = p%rmat(i,  j,1)
-                cc      = beta
                 gamma   = p%rmat(i+1,j,1)
                 denom   = alpha + gamma - 2.*beta
                 if( abs(denom) > TINY )then
-                    dp        = 0.5 * (alpha-gamma) / denom
-                    offset(1) = offset(1) + dp
-                    cc        = max(cc, beta-0.25*(alpha-gamma)*dp)
+                    doffset   = 0.5 * (alpha-gamma) / denom
+                    offset(1) = offset(1) + doffset
                 endif
                 alpha  = p%rmat(i,j-1,1)
                 gamma  = p%rmat(i,j+1,1)
                 denom  = alpha + gamma - 2.*beta
                 if( abs(denom) > TINY )then
-                    dp        = 0.5 * (alpha-gamma) / denom
-                    offset(2) = offset(2) + dp
-                    cc        = max(cc, beta-0.25*(alpha-gamma)*dp)
+                    doffset   = 0.5 * (alpha-gamma) / denom
+                    offset(2) = offset(2) + doffset
                 endif
-                cc = min(1.,max(-1.,cc))
+                if( l_mirr )then
+                    tmp(2)    = -tmp(2)
+                    offset(2) = -offset(2)
+                endif
+                ! on-grid
+                cc  = real(pftcc_glob%gencorr_for_rot_8(ind1,ind2,real(tmp,dp),   rotind))
+                ! off-grid
+                cci = real(pftcc_glob%gencorr_for_rot_8(ind1,ind2,real(offset,dp),rotind))
+                if( cci > cc )then
+                    cc = cci
+                else
+                    offset = tmp
+                endif
             end subroutine interpolate_offset_peak
 
     end subroutine calc_phasecorr
