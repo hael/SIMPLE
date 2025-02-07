@@ -1689,7 +1689,7 @@ contains
             call cline_rec%set('top',   parts(ipart,2))
             frame_start = spproj%os_ptcl3D%get(parts(ipart,1), 'pind')
             frame_end   = spproj%os_ptcl3D%get(parts(ipart,2), 'pind')
-            lifetime    = frame_end - frame_start
+            lifetime    = frame_end - frame_start + 1
             write(funit,'(I6,I6,I6,I6)') ipart, frame_start, frame_end, lifetime
             call cline_rec%set('mkdir', 'no')
             ! rec
