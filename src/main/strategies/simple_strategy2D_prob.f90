@@ -31,11 +31,12 @@ contains
     subroutine srch_prob( self )
         use simple_eul_prob_tab, only: eulprob_corr_switch
         class(strategy2D_prob), intent(inout) :: self
+        real :: w
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! Prep
             call self%s%prep4srch
             ! Assignment
-            self%s%best_class = s2D%probtab%assgn_map(self%s%iptcl_map)%iproj
+            self%s%best_class = s2D%probtab%assgn_map(self%s%iptcl_map)%cls
             self%s%best_corr  = eulprob_corr_switch(s2D%probtab%assgn_map(self%s%iptcl_map)%dist)
             self%s%best_rot   = s2D%probtab%assgn_map(self%s%iptcl_map)%inpl
             self%s%best_shvec = 0.
@@ -45,8 +46,10 @@ contains
                     &                    s2D%probtab%assgn_map(self%s%iptcl_map)%y]
                 endif
             endif
+            w = 0.
+            if( s2D%probtab%assgn_map(self%s%iptcl_map)%incl) w = 1.
             self%s%nrefs_eval = self%s%nrefs
-            call self%s%store_solution(w_in=real(s2D%probtab%assgn_map(self%s%iptcl_map)%istate))
+            call self%s%store_solution(w_in=w)
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif
