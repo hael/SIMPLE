@@ -399,11 +399,11 @@ contains
                         xyz(1:2) = xy_cavg * crop_factor
                         xyz(3)   = 0.
                     else
-                        xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop, iter_center=(params_glob%iter_center .eq. 'yes'))
+                        xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
                         if( arg(xyz(1:2)/crop_factor - xy_cavg) > MAXCENTHRESH2D ) xyz = 0.
                     endif
                 else
-                    xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop, iter_center=(params_glob%iter_center .eq. 'yes'))
+                    xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
                 endif
                 sharg = arg(xyz)
                 if( sharg > CENTHRESH )then
@@ -481,7 +481,7 @@ contains
         logical,          intent(in)  :: map_shift
         real    :: crop_factor
         logical :: has_been_searched
-        do_center   = .true.
+        do_center = .true.
         ! centering
         if( params_glob%center .eq. 'no' .or. params_glob%nstates > 1 .or. &
             .not. params_glob%l_doshift .or. params_glob%pgrp(:1) .ne. 'c' .or. &
@@ -493,7 +493,7 @@ contains
         ! taking care of volume dimensions
         call build_glob%vol%read_and_crop(volfname, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
         ! offset
-        xyz = build_glob%vol%calc_shiftcen(params_glob%cenlp,params_glob%msk_crop, iter_center=(params_glob%iter_center .eq. 'yes'))
+        xyz = build_glob%vol%calc_shiftcen(params_glob%cenlp,params_glob%msk_crop)
         if( params_glob%pgrp .ne. 'c1' ) xyz(1:2) = 0.     ! shifts only along z-axis for C2 and above
         if( arg(xyz) <= CENTHRESH )then
             do_center = .false.
@@ -688,8 +688,8 @@ contains
         class(fplane),   intent(in)    :: fpl
         class(sym),      intent(inout) :: se
         class(ori),      intent(inout) :: o
-        real      :: pw
-        integer   :: s, eo
+        real    :: pw
+        integer :: s, eo
         ! state flag
         s = o%get_state()
         if( s == 0 ) return
@@ -709,10 +709,10 @@ contains
         integer,           intent(in)    :: pinds(nptcls2update)
         type(fplane),      allocatable   :: fpls(:)
         type(ctfparams),   allocatable   :: ctfparms(:)
-        type(ori)        :: orientation
-        real             :: shift(2), sdev_noise
-        integer          :: batchlims(2), iptcl, i, i_batch, ibatch
-        logical          :: l_rec_state
+        type(ori) :: orientation
+        real      :: shift(2), sdev_noise
+        integer   :: batchlims(2), iptcl, i, i_batch, ibatch
+        logical   :: l_rec_state
         l_rec_state = cline%defined('state')
         ! init volumes
         call preprecvols
@@ -954,14 +954,14 @@ contains
     subroutine norm_struct_facts( cline )
         use simple_image,  only: image
         class(cmdline),    intent(inout) :: cline
-        character(len=:), allocatable    :: recname, volname, volname_prev, volname_prev_even
-        character(len=:), allocatable    :: volname_prev_odd, str_state, str_iter, fsc_txt_file
+        character(len=:),  allocatable   :: recname, volname, volname_prev, volname_prev_even
+        character(len=:),  allocatable   :: volname_prev_odd, str_state, str_iter, fsc_txt_file
         character(len=LONGSTRLEN)        :: eonames(2)
-        type(image)           :: vol_prev_even, vol_prev_odd
-        real, allocatable     :: fsc(:)
-        integer               :: s, find4eoavg, ldim(3)
-        real                  :: res05s(params_glob%nstates), res0143s(params_glob%nstates)
-        real                  :: weight_prev, update_frac_trail_rec
+        real,              allocatable   :: fsc(:)
+        type(image) :: vol_prev_even, vol_prev_odd
+        integer     :: s, find4eoavg, ldim(3)
+        real        :: res05s(params_glob%nstates), res0143s(params_glob%nstates)
+        real        :: weight_prev, update_frac_trail_rec
         ! init
         ldim = [params_glob%box_crop,params_glob%box_crop,params_glob%box_crop]
         call build_glob%vol%new(ldim,params_glob%smpd_crop)
