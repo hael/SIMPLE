@@ -971,16 +971,20 @@ contains
     end function file2drarr
 
     !> \brief  for converting a real matrix to file
+    ! Can be imported into python with:
+    ! import numpy as np
+    ! f    = open('somename','rb')
+    ! dims = np.fromfile(f, dtype=np.int32, count=2)
+    ! A    = np.fromfile(f, dtype=np.float32, count=np.prod(dims)).reshape(dims, order='F')
+    ! f.close()
     subroutine rmat2file( mat, fname )
         real,             intent(in) :: mat(:,:)    !< Input matrix
         character(len=*), intent(in) :: fname       !< Output filename
-        integer :: funit,io_stat,nx,ny
-        nx = size(mat,dim=1)
-        ny = size(mat,dim=2)
+        integer :: funit,io_stat
         call fopen(funit, fname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
         call fileiochk("mat2file fopen failed: "//trim(fname),io_stat)
-        write(unit=funit,pos=1) [nx,ny]
-        write(unit=funit,pos=(2*sizeof(nx)+1)) mat
+        write(unit=funit,pos=1) shape(mat)
+        write(unit=funit,pos=(2*sizeof(funit)+1)) mat
         call fclose(funit)
     end subroutine rmat2file
 

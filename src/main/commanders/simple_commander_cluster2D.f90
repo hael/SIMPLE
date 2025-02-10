@@ -1540,15 +1540,14 @@ contains
         use simple_strategy2D3D_common, only: sample_ptcls4update
         class(prob_tab2D_commander_distr), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
-        integer,            allocatable :: pinds(:)
-        character(len=:),   allocatable :: fname
-        type(builder)                   :: build
-        type(parameters)                :: params
-        type(prob_tab2D_commander)      :: xprob_tab2D
-        type(eul_prob_tab2D)            :: eulprob
-        type(cmdline)                   :: cline_prob_tab2D
-        type(qsys_env)                  :: qenv
-        type(chash)                     :: job_descr
+        integer,       allocatable :: pinds(:)
+        type(builder)              :: build
+        type(parameters)           :: params
+        type(prob_tab2D_commander) :: xprob_tab2D
+        type(eul_prob_tab2D)       :: eulprob
+        type(cmdline)              :: cline_prob_tab2D
+        type(qsys_env)             :: qenv
+        type(chash)                :: job_descr
         integer :: nptcls, ipart
         logical :: l_maxpop
         ! After this condition block, only build_glob & params_glob must be used
@@ -1572,7 +1571,7 @@ contains
         endif
         ! Whether to weight based-on the top maxpop particles
         l_maxpop = cline%defined('maxpop') .and. (params_glob%maxpop > 0)
-        ! sampled incremented
+        ! sample incremented
         call sample_ptcls4update([1,params_glob%nptcls], .true., nptcls, pinds)
         ! communicate to project file
         call build_glob%spproj%write_segment_inside(params_glob%oritype, params_glob%projfile)
@@ -1593,32 +1592,31 @@ contains
             call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
         endif
         ! reading scores from all parts
-        do ipart = 1, params_glob%nparts
-            fname = trim(DIST_FBODY)//int2str_pad(ipart,params_glob%numlen)//'.dat'
-            call eulprob%read_table_to_glob(fname)
-        enddo
+        call eulprob%read_table_parts_to_glob
         ! perform assignment
         select case(trim(params_glob%refine))
         case('prob')
             if( params_glob%which_iter == 1 )then
                 call eulprob%assign_greedy(l_maxpop)
-            else
+            else if( params_glob%extr_iter <= params_glob%extr_lim )then
                 call eulprob%normalize_table
                 call eulprob%assign_prob(build_glob%spproj_field, l_maxpop)
+            else
+                if( trim(params_glob%ptcl_norm).eq.'yes' )call eulprob%normalize_ptcl
+                call eulprob%assign_smpl(build_glob%spproj_field, l_maxpop)
             endif
         case('prob_smpl')
-            if( trim(params_glob%ptcl_norm).eq.'yes' ) call eulprob%normalize_ptcl
+            if( trim(params_glob%ptcl_norm).eq.'yes' )call eulprob%normalize_ptcl
             if( params_glob%which_iter == 1 )then
                 call eulprob%assign_greedy(l_maxpop)
             else
-                call eulprob%assign_stoch(build_glob%spproj_field, l_maxpop)
+                call eulprob%assign_smpl(build_glob%spproj_field, l_maxpop)
             endif
         case('prob_greedy')
             call eulprob%assign_greedy(l_maxpop)
         end select
         ! write
-        fname = trim(ASSIGNMENT_FBODY)//'.dat'
-        call eulprob%write_assignment(fname)
+        call eulprob%write_assignment(trim(ASSIGNMENT_FBODY)//'.dat')
         ! cleanup
         call eulprob%kill
         call cline_prob_tab2D%kill
@@ -2449,14 +2447,15 @@ contains
         call cline%set('sh_inv',  'yes')
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('kweight')   ) call cline%set('kweight',   'all')
-        if( .not. cline%defined('mirr')      ) call cline%set('mirr',      'no')
+        if( .not. cline%defined('mirr')      ) call cline%set('mirr',      'yes')
         if( .not. cline%defined('algorithm') ) call cline%set('algorithm', 'affprop')
         if( .not. cline%defined('nsearch')   ) call cline%set('nsearch',   7)
         ! parse parameters
         call params%new(cline)
         l_mirr = trim(params%mirr).eq.'yes'
         select case(trim(params%algorithm))
-        case('affprop','spc') ! supported methods
+        case('affprop','spc')
+            ! supported methods
         case DEFAULT
             THROW_HARD('Unsupported clustering algorithm')
         end select
