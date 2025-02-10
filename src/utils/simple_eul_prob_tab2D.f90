@@ -80,7 +80,6 @@ contains
         integer,               intent(in)    :: pinds(:)
         integer, allocatable :: pops(:)
         integer :: i, iptcl, icls
-        real    :: x
         call self%kill
         call seed_rnd
         self%nptcls = size(pinds)
@@ -92,7 +91,7 @@ contains
             iptcl = pinds(i)
             self%pinds(i) = iptcl
             call self%assgn_map(i)%set(iptcl, 0)
-            call self%loc_tab(:,iptcl)%set(iptcl, (/(icls,icls=1,self%ncls)/))
+            call self%loc_tab(:,i)%set(iptcl,(/(icls,icls=1,self%ncls)/))
         end do
         !$omp end parallel do
         ! Classes (similar to strategy2D_alloc)
