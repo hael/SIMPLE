@@ -413,6 +413,8 @@ contains
         if( params_glob%l_sigma_glob )then
             ngroups = 1
             allocate(group_pspecs(2,ngroups,kfromto(1):kfromto(2)), group_weights(2,ngroups),source=0.d0)
+            !$omp parallel do default(shared) private(iptcl,eo,w)&
+            !$omp schedule(static) proc_bind(close) reduction(+:group_pspecs,group_weights)
             do iptcl = 1,params_glob%nptcls
                 if( build_glob%spproj_field%get_state(iptcl) == 0 ) cycle
                 eo = build_glob%spproj_field%get_eo(iptcl) ! 0/1
@@ -421,6 +423,7 @@ contains
                 group_pspecs(eo+1,1,:) = group_pspecs (eo+1,1,:) + w * real(pspecs(:,iptcl),dp)
                 group_weights(eo+1,1)  = group_weights(eo+1,1)   + w
             enddo
+            !$omp end parallel do
         else
             ngroups = 0
             !$omp parallel do default(shared) private(iptcl,igroup)&

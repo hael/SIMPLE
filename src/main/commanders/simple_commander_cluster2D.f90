@@ -335,6 +335,7 @@ contains
         if( .not. cline%defined('masscen')   ) call cline%set('masscen',    'yes')
         if( .not. cline%defined('sh_first')  ) call cline%set('sh_first',    'no')
         call cline%set('stream', 'no')
+        if( cline%defined('update_frac') ) THROW_HARD('UPDATE_FRAC is deprecated')
         ! set shared-memory flag
         l_shmem = set_shmem_flag( cline )
         ! parse parameters
@@ -428,7 +429,6 @@ contains
         call cline_cluster2D1%set('objfun',     'cc')
         call cline_cluster2D1%set('ml_reg','no')
         if( l_euclid ) call cline_cluster2D1%set('cc_iters', MINITS)
-        call cline_cluster2D1%delete('update_frac')
         ! second stage
         ! down-scaling for fast execution, greedy optimisation
         call cline_cluster2D2%set('prg', 'cluster2D')
@@ -445,7 +445,6 @@ contains
             call cline_cluster2D2%set('objfun', 'cc')
         endif
         ! optional non-uniform filtering
-        if( cline%defined('update_frac') )call cline_cluster2D2%set('update_frac',params%update_frac)
         ! scale references
         if( l_scaling )then
             if( cline%defined('refs') )then
@@ -585,6 +584,7 @@ contains
         if( .not.cline%defined('objfun') ) call cline%set('objfun', 'cc')
         call cline%delete('clip')
         l_cc_iters = cline%defined('cc_iters')
+        if( cline%defined('update_frac') ) THROW_HARD('UPDATE_FRAC is deprecated')
         ! shared memory flag
         l_shmem = set_shmem_flag( cline )
         ! master parameters
@@ -672,26 +672,13 @@ contains
         endif
         call cline_cluster2D_stage1%set('lpstop',     params%lpstart)
         call cline_cluster2D_stage1%set('ml_reg',     'no')
-        if( params%l_update_frac )then
-            call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
-            call cline_cluster2D_stage1%set('maxits', MAXITS_STAGE1_EXTR)
-            if( l_euclid )then
-                if( l_cc_iters )then
-                    params%cc_iters = min(params%cc_iters,MAXITS_STAGE1_EXTR)
-                    call cline_cluster2D_stage1%set('cc_iters', params%cc_iters)
-                else
-                    call cline_cluster2D_stage1%set('cc_iters', MAXITS_STAGE1)
-                endif
-            endif
-        else
-            call cline_cluster2D_stage1%set('maxits', MAXITS_STAGE1)
-            if( l_euclid )then
-                if( l_cc_iters )then
-                    params%cc_iters = min(params%cc_iters,MAXITS_STAGE1)
-                    call cline_cluster2D_stage1%set('cc_iters', params%cc_iters)
-                else
-                    call cline_cluster2D_stage1%set('cc_iters', MAXITS_STAGE1)
-                endif
+        call cline_cluster2D_stage1%set('maxits', MAXITS_STAGE1)
+        if( l_euclid )then
+            if( l_cc_iters )then
+                params%cc_iters = min(params%cc_iters,MAXITS_STAGE1)
+                call cline_cluster2D_stage1%set('cc_iters', params%cc_iters)
+            else
+                call cline_cluster2D_stage1%set('cc_iters', MAXITS_STAGE1)
             endif
         endif
         ! execution
@@ -711,9 +698,6 @@ contains
         call cline_cluster2D_stage2%delete('cc_iters')
         call cline_cluster2D_stage2%set('refs',    cavgs)
         call cline_cluster2D_stage2%set('startit', last_iter_stage1+1)
-        if( params%l_update_frac )then
-            call cline_cluster2D_stage2%set('update_frac', params%update_frac)
-        endif
         if( l_euclid )then
             call cline_cluster2D_stage2%set('objfun',   cline%get_carg('objfun'))
             call cline_cluster2D_stage2%set('cc_iters', 0.)
@@ -1536,8 +1520,8 @@ contains
     end subroutine exec_cavgassemble
 
     subroutine exec_prob_tab2D_distr( self, cline )
-        use simple_eul_prob_tab2D,      only: eul_prob_tab2D
-        use simple_strategy2D3D_common, only: sample_ptcls4update
+        use simple_eul_prob_tab2D,     only: eul_prob_tab2D
+        use simple_strategy2D_matcher, only: sample_ptcls4update2D
         class(prob_tab2D_commander_distr), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         integer,       allocatable :: pinds(:)
@@ -1572,7 +1556,7 @@ contains
         ! Whether to weight based-on the top maxpop particles
         l_maxpop = cline%defined('maxpop') .and. (params_glob%maxpop > 0)
         ! sample incremented
-        call sample_ptcls4update([1,params_glob%nptcls], .true., nptcls, pinds)
+        call sample_ptcls4update2D([1,params_glob%nptcls], .true., nptcls, pinds)
         ! communicate to project file
         call build_glob%spproj%write_segment_inside(params_glob%oritype, params_glob%projfile)
         ! more prep

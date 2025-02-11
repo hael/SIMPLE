@@ -291,7 +291,7 @@ contains
                 if( file_exists(CLASS_SAMPLING_FILE) )then
                     call read_class_samples(clssmp, CLASS_SAMPLING_FILE)
                 else
-                    THROW_HARD('File for class-biased sampling in fractional update: '//CLASS_SAMPLING_FILE//' does not exists!')
+                    THROW_HARD('File for class-biased sampling in fractional update: '//CLASS_SAMPLING_FILE//' does not exist!')
                 endif
                 ! balanced class sampling
                 if( params_glob%l_frac_best )then

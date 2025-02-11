@@ -28,17 +28,18 @@ use simple_progress
 implicit none
 
 public :: cluster2D_exec
-public :: preppftcc4align2D, prep_batch_particles2D, build_batch_particles2D, clean_batch_particles2D
+public :: sample_ptcls4update2D, preppftcc4align2D, prep_batch_particles2D
+public :: build_batch_particles2D, clean_batch_particles2D
 private
 #include "simple_local_flags.inc"
 
-type(polarft_corrcalc)       :: pftcc
-type(euclid_sigma2)          :: eucl_sigma
-type(image),     allocatable :: ptcl_match_imgs(:)
-real(timer_int_kind)         :: rt_init, rt_prep_pftcc, rt_align, rt_cavg, rt_projio, rt_tot
-integer(timer_int_kind)      ::  t_init,  t_prep_pftcc,  t_align,  t_cavg,  t_projio,  t_tot
-character(len=STDLEN)        :: benchfname
-logical                      :: l_stream = .false.
+type(polarft_corrcalc)   :: pftcc
+type(euclid_sigma2)      :: eucl_sigma
+type(image), allocatable :: ptcl_match_imgs(:)
+real(timer_int_kind)     :: rt_init, rt_prep_pftcc, rt_align, rt_cavg, rt_projio, rt_tot
+integer(timer_int_kind)  ::  t_init,  t_prep_pftcc,  t_align,  t_cavg,  t_projio,  t_tot
+character(len=STDLEN)    :: benchfname
+logical                  :: l_stream = .false.
 
 contains
 
@@ -72,17 +73,18 @@ contains
 
         ! SWITCHES
         l_prob         = str_has_substr(params_glob%refine,'prob')
-        l_partial_sums = .false.
         l_snhc         = .false.
         l_greedy       = .false.
         l_greedy_smpl  = .false.
         l_snhc_smpl    = .false.
-        l_update_frac  = .false.
+        l_update_frac  = params_glob%l_update_frac  ! refers to particles sampling & deactivates centering
+        l_partial_sums = l_update_frac              ! to apply fractional momentum to class averages
         l_stream       = trim(params_glob%stream).eq.'yes'
         if( params_glob%extr_iter == 1 )then
             ! greedy start
-            l_greedy = .true.
-            l_greedy_smpl = trim(params_glob%refine).eq.'greedy_smpl'
+            l_greedy       = .true.
+            l_greedy_smpl  = trim(params_glob%refine).eq.'greedy_smpl'
+            l_partial_sums = .false.
         else if( params_glob%extr_iter <= params_glob%extr_lim )then
             ! no fractional update
             select case(trim(params_glob%refine))
@@ -97,8 +99,6 @@ contains
             end select
         else
             ! optional fractional update and shc optimization (=snhc with all classes)
-            l_update_frac  = params_glob%l_update_frac
-            l_partial_sums = params_glob%l_update_frac
             l_greedy       = trim(params_glob%refine).eq.'greedy'
             l_greedy_smpl  = trim(params_glob%refine).eq.'greedy_smpl'
             l_snhc_smpl    = .false. ! defaults to snhc
@@ -113,6 +113,7 @@ contains
             l_update_frac              = .false.
             l_partial_sums             = .false.
             params_glob%l_update_frac  = .false.
+            params_glob%update_frac    = 1.
             if( which_iter > 1 )then
                 if( params_glob%update_frac < 0.99 )then
                     l_partial_sums            = .true.
@@ -120,8 +121,6 @@ contains
                 else
                     params_glob%update_frac = 1.
                 endif
-            else
-                params_glob%update_frac = 1.
             endif
         endif
         ! This is temporary and will need to be revised
@@ -138,25 +137,14 @@ contains
             l_partial_sums = l_update_frac
         endif
 
-        ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
+        ! PARTICLE SAMPLING
         if( allocated(pinds) ) deallocate(pinds)
         if( l_prob )then
             ! generation of random sample and incr of updatecnts delegated to prob_tab2D_distr
             call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
             &nptcls2update, pinds )
         else
-            if( l_update_frac )then
-                if( build_glob%spproj_field%has_been_sampled() )then ! we have a random subset
-                    call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
-                    &nptcls2update, pinds)
-                else                                                 ! we generate a random subset
-                    call build_glob%spproj_field%sample4update_rnd([params_glob%fromp,params_glob%top],&
-                    &params_glob%update_frac, nptcls2update, pinds, .true.) ! sampled incremented
-                endif
-            else                                                     ! we sample all state > 0
-                call build_glob%spproj_field%sample4update_all([params_glob%fromp,params_glob%top],&
-                &nptcls2update, pinds, .true.) ! sampled incremented
-            endif
+            call sample_ptcls4update2D([params_glob%fromp,params_glob%top], l_update_frac, nptcls2update, pinds)
         endif
 
         ! SNHC LOGICS
@@ -171,9 +159,7 @@ contains
         endif
 
         ! READ FOURIER RING CORRELATIONS
-        if( file_exists(params_glob%frcs) )then
-            call build_glob%clsfrcs%read(params_glob%frcs)
-        endif
+        if( file_exists(params_glob%frcs) ) call build_glob%clsfrcs%read(params_glob%frcs)
 
         ! PREP REFERENCES
         call cavger_new(pinds)
@@ -355,8 +341,8 @@ contains
             converged = conv%check_conv2D(cline, build_glob%spproj_field, build_glob%spproj_field%get_n('class'), params_glob%msk)
             ! Update progress file if not stream
             if(.not. l_stream) call progressfile_update(conv%get('progress'))
-            ! finalize classes
-            if( converged .or. which_iter == params_glob%maxits)then
+            ! partial classes written for continuation or because of fractional update
+            if( converged .or. which_iter == params_glob%maxits .or. params_glob%l_update_frac )then
                 call cavger_readwrite_partial_sums('write')
             endif
             call cavger_merge_eos_and_norm
@@ -417,6 +403,21 @@ contains
             endif
         endif
     end subroutine cluster2D_exec
+
+    subroutine sample_ptcls4update2D( pfromto, l_updatefrac, nptcls, pinds )
+        logical,              intent(in)    :: l_updatefrac
+        integer,              intent(in)    :: pfromto(2)
+        integer,              intent(inout) :: nptcls
+        integer, allocatable, intent(inout) :: pinds(:)
+        if( l_updatefrac )then
+            ! fractional sampling
+            call build_glob%spproj_field%sample4update_rnd(pfromto, params_glob%update_frac,&
+                &nptcls, pinds, .true.)
+        else
+            ! we sample all state > 0
+            call build_glob%spproj_field%sample4update_all(pfromto, nptcls, pinds, .true.)
+        endif
+    end subroutine sample_ptcls4update2D
 
     !>  \brief  initializes convenience objects for particles polar alignment
     subroutine prep_batch_particles2D( batchsz_max )
