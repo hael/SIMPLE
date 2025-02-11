@@ -259,11 +259,12 @@ contains
                     sh_first     = trim(params%sh_first)
                     center       = trim(params%center)
                     refs         = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
-                    cc_iters     = imaxits
                     if( params%cc_objfun == OBJFUN_CC )then
                         objfun   = 'cc'
+                        cc_iters = imaxits
                     else
                         objfun   = 'euclid'
+                        cc_iters = 0
                     endif
                     if( params%l_icm )then
                         icm      = 'yes'
