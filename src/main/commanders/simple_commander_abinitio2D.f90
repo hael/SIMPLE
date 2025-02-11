@@ -28,9 +28,18 @@ integer, parameter :: ITS_INCR       = 5
 integer, parameter :: PHASES(2)      = [4, 6]
 integer, parameter :: MINBOXSZ       = 88
 integer, parameter :: EXTR_LIM_LOCAL = 20
+integer, parameter :: MAXPOP_START   = 500
+integer, parameter :: MAXPOP_STOP    = 3000
+
+! convenience type
+type stage_params
+    real    :: lp=0., smpd_crop=0., scale=1., trslim=0.
+    integer :: box_crop = 0, max_cls_pop=0, nptcls=0
+    logical :: l_lpset=.false.
+end type stage_params
 
 ! class variables
-type(lp_crop_inf)  :: lpinfo(NSTAGES)
+type(stage_params) :: stage_parms(NSTAGES)
 
 contains
 
@@ -48,7 +57,7 @@ contains
         type(parameters)                 :: params
         type(sp_project)                 :: spproj
         class(oris),             pointer :: spproj_field
-        integer :: maxits(2), istage, last_iter
+        integer :: maxits(2), istage, last_iter, nptcls_eff
         logical :: l_shmem
         call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
@@ -79,6 +88,14 @@ contains
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
         call spproj%write_segment_inside('projinfo', params%projfile)
+        ! sampling
+        call set_sampling
+        ! summary
+        do istage = 1,NSTAGES
+            write(logfhandle,'(A,I2,A,L1,F6.1,2I8)')'>>> STAGE ', istage,' LPSET LP MAXCLSPOP NPTCLS: ',&
+            &stage_parms(istage)%l_lpset,stage_parms(istage)%lp, stage_parms(istage)%max_cls_pop,&
+            &stage_parms(istage)%nptcls
+        end do
         ! prep particles field
         call spproj_field%set_all2single('w',1.)
         call spproj_field%delete_2Dclustering
@@ -88,8 +105,8 @@ contains
         ! Frequency marching
         do istage = 1, NSTAGES
             write(logfhandle,'(A)')'>>>'
-            if( lpinfo(istage)%l_lpset )then
-                write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', lpinfo(istage)%lp
+            if( stage_parms(istage)%l_lpset )then
+                write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', stage_parms(istage)%lp
             else
                 write(logfhandle,'(A,I3,A)')'>>> STAGE ', istage,' WITH GOLD STANDARD E/O'
             endif
@@ -147,11 +164,10 @@ contains
             if( params%l_autoscale )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
             endif
-            lpinfo(:)%box_crop    = params%box_crop
-            lpinfo(:)%smpd_crop   = params%smpd_crop
-            lpinfo(:)%scale       = scale_factor      ! unused
-            lpinfo(:)%l_autoscale = .false.           ! unused
-            lpinfo(:)%trslim      = min(5.,max(2.0, AHELIX_WIDTH/params%smpd_crop))
+            stage_parms(:)%box_crop  = params%box_crop
+            stage_parms(:)%smpd_crop = params%smpd_crop
+            stage_parms(:)%scale     = scale_factor      ! unused
+            stage_parms(:)%trslim    = min(5.,max(2.0, AHELIX_WIDTH/params%smpd_crop))
         end subroutine set_dims
 
         ! Set resolution limits
@@ -170,19 +186,33 @@ contains
             write(logfhandle,'(A,F5.1)') '>>> DID SET HARD      LOW-PASS LIMIT (IN A) TO: ', params%lpstop
             write(logfhandle,'(A,F5.1)') '>>> DID SET CENTERING LOW-PASS LIMIT (IN A) TO: ', params%cenlp
             ! Stages resolution limits
-            lpinfo(1)%lp      = params%lpstart
-            lpinfo(1)%l_lpset = .true.
+            stage_parms(1)%lp      = params%lpstart
+            stage_parms(1)%l_lpset = .true.
             do istage = 2, NSTAGES-1
-                lpinfo(istage)%lp      = lpinfo(istage-1)%lp - (lpinfo(istage-1)%lp - params%lpstop)/2.0
-                lpinfo(istage)%l_lpset = .true.
+                stage_parms(istage)%lp      = stage_parms(istage-1)%lp - (stage_parms(istage-1)%lp - params%lpstop)/2.0
+                stage_parms(istage)%l_lpset = .true.
             end do
-            lpinfo(NSTAGES-1)%lp    = params%lpstop
-            lpinfo(NSTAGES)%l_lpset = .false.
-            lpinfo(NSTAGES)%lp      = params%lpstop
-            do istage = 1,NSTAGES
-                print *, 'stage lpset lp: ', istage,lpinfo(istage)%l_lpset,lpinfo(istage)%lp
-            end do
+            stage_parms(NSTAGES-1)%lp    = params%lpstop
+            stage_parms(NSTAGES)%l_lpset = .false.
+            stage_parms(NSTAGES)%lp      = params%lpstop
         end subroutine set_lplims
+
+        subroutine set_sampling
+            integer :: i, startpop, stoppop
+            stage_parms(:)%max_cls_pop = 0
+            stage_parms(:)%nptcls      = 0
+            nptcls_eff = spproj%count_state_gt_zero()
+            if( trim(params%autosample).eq.'yes' )then
+                startpop = MAXPOP_START
+                stoppop  = MAXPOP_STOP
+                if( cline%defined('nsample_start') ) startpop = params%nsample_start
+                if( cline%defined('nsample_stop') )  stoppop  = params%nsample_stop
+                do i = 1,NSTAGES
+                    stage_parms(i)%max_cls_pop = startpop + nint(real((i-1)*(stoppop-startpop)) / real(NSTAGES-1))
+                    stage_parms(i)%nptcls      = min(nptcls_eff, startpop*i*params%ncls)
+                enddo
+            endif
+        end subroutine set_sampling
 
         subroutine prep_command_lines( cline )
             use simple_default_clines, only: set_automask2D_defaults
@@ -205,13 +235,13 @@ contains
             integer,          intent(in)  :: istage
             character(len=:), allocatable :: sh_first, refine, center, objfun, refs, icm
             integer :: iphase, iter, imaxits, cc_iters, minits, extr_iter
-            real    :: trs, lambda
+            real    :: trs, lambda, frac
             if( str_has_substr(params%refine, 'prob') )then
                 refine = trim(params%refine)
             else
                 refine = 'snhc_smpl'
             endif
-            ! iteration number bookkeeping
+            ! iteration number book-keeping
             iter = 0
             if( cline_cluster2D%defined('endit') ) iter = cline_cluster2D%get_iarg('endit')
             iter = iter + 1
@@ -255,7 +285,7 @@ contains
                         icm      = 'no'
                     endif
                 case(2)
-                    trs          = lpinfo(istage)%trslim
+                    trs          = stage_parms(istage)%trslim
                     sh_first     = trim(params%sh_first)
                     center       = trim(params%center)
                     refs         = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
@@ -273,7 +303,7 @@ contains
                         icm      = 'no'
                     endif
                 case(3)
-                    trs          = lpinfo(istage)%trslim
+                    trs          = stage_parms(istage)%trslim
                     sh_first     = trim(params%sh_first)
                     center       = trim(params%center)
                     refs         = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
@@ -286,7 +316,7 @@ contains
                         icm      = 'no'
                     endif
                 case(4)
-                    trs          = lpinfo(istage)%trslim
+                    trs          = stage_parms(istage)%trslim
                     sh_first     = trim(params%sh_first)
                     center       = trim(params%center)
                     refs         = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
@@ -298,7 +328,7 @@ contains
                 ! phase constants
                 imaxits   = iter+ITS_INCR-1
                 sh_first  = trim(params%sh_first)
-                trs       = lpinfo(istage)%trslim
+                trs       = stage_parms(istage)%trslim
                 center    = trim(params%center)
                 cc_iters  = 0
                 objfun    = 'euclid'
@@ -317,10 +347,10 @@ contains
             call cline_cluster2D%set('trs',       trs)
             call cline_cluster2D%set('sh_first',  sh_first)
             call cline_cluster2D%set('center',    center)
-            call cline_cluster2D%set('box_crop',  lpinfo(istage)%box_crop)
-            call cline_cluster2D%set('smpd_crop', lpinfo(istage)%smpd_crop)
-            if( lpinfo(istage)%l_lpset )then
-                call cline_cluster2D%set('lp',    lpinfo(istage)%lp)
+            call cline_cluster2D%set('box_crop',  stage_parms(istage)%box_crop)
+            call cline_cluster2D%set('smpd_crop', stage_parms(istage)%smpd_crop)
+            if( stage_parms(istage)%l_lpset )then
+                call cline_cluster2D%set('lp',    stage_parms(istage)%lp)
             else
                 call cline_cluster2D%delete('lp')
             endif
@@ -335,6 +365,14 @@ contains
                 call cline_cluster2D%set('lambda', lambda)
             else
                 call cline_cluster2D%delete('lambda')
+            endif
+            call cline_cluster2D%delete('nsample_max')
+            call cline_cluster2D%delete('nsample_start')
+            call cline_cluster2D%delete('autosample')
+            if( stage_parms(istage)%max_cls_pop > 0 )then
+                frac = real(stage_parms(istage)%nptcls) / real(nptcls_eff)
+                call cline_cluster2D%set('maxpop', stage_parms(istage)%max_cls_pop)
+                call cline_cluster2D%set('update_frac', frac)
             endif
             call cline_cluster2D%delete('endit')
         end subroutine set_cline_cluster2D

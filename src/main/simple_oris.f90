@@ -683,30 +683,30 @@ contains
         end do
     end function get_all_rmats
 
-    subroutine get_pops( self, pops, label, maxn, eo )
+    subroutine get_pops( self, pops, label, maxn, weight )
         class(oris),          intent(in)    :: self
         integer, allocatable, intent(out)   :: pops(:)
         character(len=*),     intent(in)    :: label
-        integer, optional,    intent(in)    :: maxn ! max label, for the case where the last class/state is missing
-        integer, optional,    intent(in)    :: eo
-        integer :: i, myval, n
-        logical :: consider_eo
-        consider_eo = .false.
-        if( present(eo) ) consider_eo = .true.
+        integer, optional,    intent(in)    :: maxn   ! max label, for the case where the last class/state is missing
+        logical, optional,    intent(in)    :: weight ! whether to consider weights
+        integer :: i, val, n
+        logical :: consider_w
+        consider_w = .false.
+        if( present(weight) ) consider_w = weight
         n = self%get_n(label)
-        if( present(maxn) )then
-            n = max(n, maxn)
-        endif
-        if(allocated(pops))deallocate(pops)
+        if( present(maxn) ) n = max(n, maxn)
+        if(allocated(pops)) deallocate(pops)
         allocate(pops(n),source=0)
-        do i=1,self%n
+        !$omp parallel do private(i,val) default(shared) proc_bind(close) reduction(+:pops)
+        do i = 1,self%n
             if( self%o(i)%isstatezero() ) cycle
-            if( consider_eo )then
-                if( self%o(i)%get_eo() /= eo ) cycle
+            if( consider_w )then
+                if( self%o(i)%get('w') < 1.e-6 ) cycle
             endif
-            myval = self%o(i)%get_int(label)
-            if( myval > 0 ) pops(myval) = pops(myval) + 1
+            val = self%o(i)%get_int(label)
+            if( val > 0 ) pops(val) = pops(val) + 1
         end do
+        !$omp end parallel do
     end subroutine get_pops
 
     function get_all_normals(self) result(normals)
@@ -1245,7 +1245,7 @@ contains
 
     subroutine sample4update_class( self, clssmp, fromto, update_frac, nsamples, inds, incr_sampled, frac_best )
         class(oris),          intent(inout) :: self
-        type(class_sample),   intent(inout) :: clssmp(:) ! data structure for balanced samplign
+        type(class_sample),   intent(inout) :: clssmp(:) ! data structure for balanced sampling
         integer,              intent(in)    :: fromto(2)
         real,                 intent(in)    :: update_frac
         integer,              intent(inout) :: nsamples
