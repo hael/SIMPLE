@@ -369,9 +369,7 @@ contains
         if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'yes')
         ! splitting stage
         split_stage = HET_DOCKED_STAGE
-        if( cline%defined('split_stage') )then
-            split_stage = cline%get_iarg('split_stage')
-        endif
+        if( cline%defined('split_stage') ) split_stage = cline%get_iarg('split_stage')
         ! adjust default multivol_mode unless given on command line
         if( cline%defined('nstates') )then
             nstates_on_cline = cline%get_iarg('nstates')
@@ -1102,7 +1100,6 @@ contains
         call cline_refine3D%set('lp',             lpinfo(istage  )%lp)
         if( params_glob%l_lpcont .and. istage > 1 )then
         call cline_refine3D%set('lpprev',         lpinfo(istage-1)%lp)
-        call cline_refine3D%set('endingit',     iter+MAXITS(istage)-1)
         endif
         call cline_refine3D%set('smpd_crop', lpinfo(istage)%smpd_crop)
         call cline_refine3D%set('box_crop',   lpinfo(istage)%box_crop)
