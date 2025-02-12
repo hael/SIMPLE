@@ -83,21 +83,21 @@ contains
         call params%new(cline)
         if( prefit_lattice )then
             ! fit lattice using vol3
-            call nano%new(params%vols(3), params%msk)
+            call nano%new(params%vols(3))
             call nano%identify_lattice_params(a)
             call nano%kill
             ! calc stats
-            call nano%new(params%vols(1), params%msk)
+            call nano%new(params%vols(1))
             call nano%set_atomic_coords(params%pdbfile)
             if( use_subset_coords ) call nano%set_coords4stats(params%pdbfile2)
             call nano%set_img(params%vols(2), 'img_cc')
             call nano%update_ncc()
-            call nano%fillin_atominfo( a )
+            call nano%fillin_atominfo(a)
             call nano%write_csv_files
             call nano%kill
         else
             ! calc stats
-            call nano%new(params%vols(1), params%msk)
+            call nano%new(params%vols(1))
             call nano%set_atomic_coords(params%pdbfile)
             if( use_subset_coords ) call nano%set_coords4stats(params%pdbfile2)
             call nano%set_img(params%vols(2), 'img_cc')
