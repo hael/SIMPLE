@@ -47,7 +47,7 @@ type :: parameters
     character(len=3)          :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
     character(len=3)          :: frc_weight='no'      !< considering particle numbers of classes in computing frc (yes|no){no}
     character(len=3)          :: guinier='no'         !< calculate Guinier plot(yes|no){no}
-    character(len=3)          :: graphene_filt='no'   !< filter out graphene bands in correcation search
+    character(len=3)          :: graphene_filt='no'   !< filter out graphene bands in correlation search
     character(len=3)          :: gridding='no'        !< to test gridding correction
     character(len=3)          :: groupframes='no'     !< Whether to perform weighted frames averaging during motion correction(yes|no){no}
     character(len=3)          :: icm='no'             !< whether to apply ICM filter to reference
@@ -94,9 +94,10 @@ type :: parameters
     character(len=3)          :: refs_delin='no'      !< delinearizing reprojections of different states (yes|no){no}
     character(len=3)          :: reject_cls='no'      !< whether to reject poor classes
     character(len=3)          :: reject_mics='no'     !< whether to reject micrographs based on ctfres/icefrac
-    character(len=3)          :: remove_chunks='yes'  !< whether to remove chunks after completion
-    character(len=3)          :: roavg='no'           !< rotationally average images in stack
     character(len=3)          :: remap_cls='no'
+    character(len=3)          :: remove_chunks='yes'  !< whether to remove chunks after completion (yes|no){yes}
+    character(len=3)          :: restore_cavgs='yes'  !< Whether to restore images to class averages after orientation search (yes|no){yes}
+    character(len=3)          :: roavg='no'           !< rotationally average images in stack
     character(len=3)          :: transp_pca='no'
     character(len=3)          :: script='no'          !< do not execute but generate a script for submission to the queue
     character(len=3)          :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
@@ -589,27 +590,26 @@ contains
         call check_carg('fill_holes',     self%fill_holes)
         call check_carg('filter',         self%filter)
         call check_carg('flipgain',       self%flipgain)
-        call check_carg('groupframes',    self%groupframes)
         call check_carg('ft2img',         self%ft2img)
         call check_carg('frc_weight',     self%frc_weight)
         call check_carg('guinier',        self%guinier)
         call check_carg('graphene_filt',  self%graphene_filt)
         call check_carg('gridding',       self%gridding)
-        call check_carg('linstates_mode', self%linstates_mode)
-        call check_carg('multivol_mode',  self%multivol_mode)
+        call check_carg('groupframes',    self%groupframes)
         call check_carg('icm',            self%icm)
         call check_carg('imgkind',        self%imgkind)
         call check_carg('incrreslim',     self%incrreslim)
         call check_carg('interpfun',      self%interpfun)
         call check_carg('iterstats',      self%iterstats)
         call check_carg('keepvol',        self%keepvol)
-        call check_carg('linstates',      self%linstates)
-        call check_carg('loc_sdev',       self%loc_sdev)
-        call check_carg('lp_cont',        self%lp_cont)
-        call check_carg('lp_auto',        self%lp_auto)
         call check_carg('kweight',        self%kweight)
         call check_carg('kweight_chunk',  self%kweight_chunk)
         call check_carg('kweight_pool',   self%kweight_pool)
+        call check_carg('linstates',      self%linstates)
+        call check_carg('linstates_mode', self%linstates_mode)
+        call check_carg('loc_sdev',       self%loc_sdev)
+        call check_carg('lp_auto',        self%lp_auto)
+        call check_carg('lp_cont',        self%lp_cont)
         call check_carg('makemovie',      self%makemovie)
         call check_carg('masscen',        self%masscen)
         call check_carg('mcpatch',        self%mcpatch)
@@ -622,6 +622,7 @@ contains
         call check_carg('msktype',        self%msktype)
         call check_carg('mcconvention',   self%mcconvention)
         call check_carg('multi_moldiams', self%multi_moldiams)
+        call check_carg('multivol_mode',  self%multivol_mode)
         call check_carg('needs_sigma',    self%needs_sigma)
         call check_carg('neg',            self%neg)
         call check_carg('noise_norm',     self%noise_norm)
@@ -650,14 +651,17 @@ contains
         call check_carg('picker',         self%picker)
         call check_carg('platonic',       self%platonic)
         call check_carg('pre_norm',       self%pre_norm)
-        call check_carg('print_corrs',    self%print_corrs)
         call check_carg('prg',            self%prg)
-        call check_carg('projname',       self%projname)
-        call check_carg('subprojname',    self%subprojname)
+        call check_carg('print_corrs',    self%print_corrs)
+        call check_carg('prob_sh',        self%prob_sh)
         call check_carg('proj_is_class',  self%proj_is_class)
+        call check_carg('projfile_optics',self%projfile_optics)
+        call check_carg('projname',       self%projname)
+        call check_carg('projrec',        self%projrec)
         call check_carg('projstats',      self%projstats)
         call check_carg('protocol',       self%protocol)
         call check_carg('prune',          self%prune)
+        call check_carg('ptcl_norm',      self%ptcl_norm)
         call check_carg('ptclw',          self%ptclw)
         call check_carg('qsys_name',      self%qsys_name)
         call check_carg('qsys_partition2D',self%qsys_partition2D)
@@ -669,11 +673,8 @@ contains
         call check_carg('reject_cls',     self%reject_cls)
         call check_carg('reject_mics',    self%reject_mics)
         call check_carg('remove_chunks',  self%remove_chunks)
-        call check_carg('prob_sh',        self%prob_sh)
-        call check_carg('projrec',        self%projrec)
-        call check_carg('projfile_optics',self%projfile_optics)
-        call check_carg('ptcl_norm',      self%ptcl_norm)
         call check_carg('remap_cls',      self%remap_cls)
+        call check_carg('restore_cavgs',  self%restore_cavgs)
         call check_carg('roavg',          self%roavg)
         call check_carg('script',         self%script)
         call check_carg('shbarrier',      self%shbarrier)
@@ -685,6 +686,7 @@ contains
         call check_carg('srch_oris',      self%srch_oris)
         call check_carg('stats',          self%stats)
         call check_carg('stream',         self%stream)
+        call check_carg('subprojname',    self%subprojname)
         call check_carg('symrnd',         self%symrnd)
         call check_carg('tag',            self%tag)
         call check_carg('taper_edges',    self%taper_edges)

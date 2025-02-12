@@ -125,6 +125,11 @@ contains
             call spproj_field%set_all2single('w',1.)
             call spproj%write_segment_inside(params%oritype, params%projfile)
         endif
+        ! final mapping of all particles
+        if( (trim(params%autosample).eq.'yes').and.(stage_parms(NSTAGES)%nptcls<nptcls_eff) )then
+            call set_final_mapping
+            call execute_cluster2D
+        endif
         ! final class generation & ranking
         if ( trim(params%rank_cavgs).eq.'yes' )then
             last_iter = cline_cluster2D%get_iarg('endit')
@@ -199,14 +204,15 @@ contains
 
         subroutine set_sampling
             integer :: i, startpop, stoppop
-            stage_parms(:)%max_cls_pop = 0
-            stage_parms(:)%nptcls      = 0
             nptcls_eff = spproj%count_state_gt_zero()
+            stage_parms(:)%max_cls_pop = 0
+            stage_parms(:)%nptcls      = nptcls_eff
             if( trim(params%autosample).eq.'yes' )then
                 startpop = MAXPOP_START
                 stoppop  = MAXPOP_STOP
                 if( cline%defined('nsample_start') ) startpop = params%nsample_start
                 if( cline%defined('nsample_stop') )  stoppop  = params%nsample_stop
+                stoppop = max(startpop,stoppop)
                 do i = 1,NSTAGES
                     stage_parms(i)%max_cls_pop = startpop + nint(real((i-1)*(stoppop-startpop)) / real(NSTAGES-1))
                     stage_parms(i)%nptcls      = min(nptcls_eff, startpop*i*params%ncls)
@@ -370,8 +376,8 @@ contains
             call cline_cluster2D%delete('nsample_start')
             call cline_cluster2D%delete('autosample')
             if( stage_parms(istage)%max_cls_pop > 0 )then
-                frac = real(stage_parms(istage)%nptcls) / real(nptcls_eff)
                 call cline_cluster2D%set('maxpop', stage_parms(istage)%max_cls_pop)
+                frac = real(stage_parms(istage)%nptcls) / real(nptcls_eff)
                 call cline_cluster2D%set('update_frac', frac)
             endif
             call cline_cluster2D%delete('endit')
@@ -390,6 +396,38 @@ contains
                 call xcluster2D_distr%execute_safe(cline_cluster2D)
             endif
         end subroutine execute_cluster2D
+
+        subroutine set_final_mapping
+            character(len=:), allocatable :: refs
+            integer :: iter, minits
+            iter      = cline_cluster2D%get_iarg('endit') + 1
+            refs      = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
+            minits    = iter
+            if( params%l_autoscale ) call cline_cluster2D%set('restore_cavgs', 'no')
+            call cline_cluster2D%set('startit',   iter)
+            call cline_cluster2D%set('minits',    minits)
+            call cline_cluster2D%set('maxits',    minits)
+            call cline_cluster2D%set('refine',    'greedy_smpl')
+            call cline_cluster2D%set('objfun',    'euclid')
+            call cline_cluster2D%set('cc_iters',  0)
+            call cline_cluster2D%set('trs',       stage_parms(NSTAGES)%trslim)
+            call cline_cluster2D%set('sh_first',  params%sh_first)
+            call cline_cluster2D%set('center',    'no')
+            call cline_cluster2D%set('box_crop',  stage_parms(NSTAGES)%box_crop)
+            call cline_cluster2D%set('smpd_crop', stage_parms(NSTAGES)%smpd_crop)
+            call cline_cluster2D%set('refs',      refs)
+            call cline_cluster2D%set('extr_iter', params%extr_lim+1)
+            call cline_cluster2D%set('icm',       'no')
+            call cline_cluster2D%delete('lp')
+            call cline_cluster2D%delete('lambda')
+            call cline_cluster2D%delete('nsample_max')
+            call cline_cluster2D%delete('nsample_start')
+            call cline_cluster2D%delete('autosample')
+            call cline_cluster2D%delete('update_frac')
+            call cline_cluster2D%delete('maxpop')
+            call cline_cluster2D%delete('endit')
+            write(logfhandle,'(A,/,A)')'>>>','>>> FINAL MAPPING'
+        end subroutine set_final_mapping
 
         subroutine gen_final_cavgs( iter )
             type(make_cavgs_commander_distr) :: xmake_cavgs_distr
