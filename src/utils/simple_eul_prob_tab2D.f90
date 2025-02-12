@@ -377,28 +377,31 @@ contains
                 inds  = pack((/(j,j=1,self%nptcls)/), mask=self%assgn_map(:)%cls==icls)
                 dists = self%assgn_map(inds(:))%dist
                 call hpsort(dists)
-                t = dists(params_glob%maxpop)           ! threshold within the class
+                t = dists(params_glob%maxpop)               ! threshold within the class
                 where( self%assgn_map(inds(:))%dist > t )
                     self%assgn_map(inds(:))%incl = .false.  ! this will set the restoration weight to ZERO
                 else where
                     self%assgn_map(inds(:))%incl = .true.
                 end where
+                counts(icls) = count(self%assgn_map(inds(:))%incl)
             endif
         enddo
         !$omp end parallel do
     end subroutine select_top_ptcls
 
-    ! Self-subtraction, sets distance to previous class to maximum
+    ! Self-withdrawal, sets distance to previous class to maximum
     subroutine prevcls_withdrawal( self, os )
         class(eul_prob_tab2D), intent(inout) :: self
         class(oris),           intent(in)    :: os
         real    :: a
-        integer :: i,icls
+        integer :: i,icls,iptcl
         if( params_glob%extr_iter <= params_glob%extr_lim )then
             a = huge(a)
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,icls)
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,iptcl,icls)
             do i = 1,self%nptcls
-                icls = os%get_class(self%pinds(i))
+                iptcl = self%pinds(i)
+                if( os%get_updatecnt(iptcl) == 1 ) cycle ! no withdrawal when first searched
+                icls = os%get_class(iptcl)
                 if( icls > 0 ) self%loc_tab(icls,i)%dist = a
             enddo
             !$omp end parallel do
@@ -422,18 +425,17 @@ contains
         if( rank_ptcls ) call self%select_top_ptcls(pops)
     end subroutine assign_greedy
 
-    ! Assign class to all particles stochastically with self-subtraction
+    ! Assign class to all particles stochastically with self-withdrawal
     subroutine assign_smpl( self, os, rank_ptcls )
         class(eul_prob_tab2D), intent(inout) :: self
         class(oris),           intent(in)    :: os
         logical,               intent(in)    :: rank_ptcls
         real    :: pdists(self%neffcls), P, score, neigh_frac
         integer :: pops(self%ncls), vec(self%neffcls), i, icls, ind, rank, ncls_smpl
-        ! self-subtraction
         call self%prevcls_withdrawal(os)
         ! size of stochastic neighborhood (# of classes to draw from)
         neigh_frac = extremal_decay2D(params_glob%extr_iter, params_glob%extr_lim)
-        ncls_smpl = neighfrac2nsmpl(neigh_frac, self%neffcls)
+        ncls_smpl  = neighfrac2nsmpl(neigh_frac, self%neffcls)
         P          = sampling_power(params_glob%extr_iter, params_glob%extr_lim)
         ! select class stochastically
         pops = 0
@@ -490,7 +492,6 @@ contains
         integer :: i,j,icls, cls, ptcl, ncls_smpl, r, iptcl
         real    :: cls_dist(self%ncls), tmp(self%ncls), P, neigh_frac, s
         logical :: ptcl_avail(self%nptcls)
-        ! self-subtraction
         call self%prevcls_withdrawal(os)
         ! column sorting
         sorted_tab = transpose(self%loc_tab(:,:)%dist)
@@ -548,6 +549,7 @@ contains
     end subroutine write_table
 
     ! read the partition records binary files to the global table
+    ! particles indices are assumed in increasing order
     subroutine read_table_parts_to_glob( self )
         class(eul_prob_tab2D), intent(inout) :: self
         character(len=STDLEN) :: fname

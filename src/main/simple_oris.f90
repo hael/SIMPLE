@@ -1240,6 +1240,7 @@ contains
         call rt%shuffle(inds)
         call rt%kill
         inds = inds(1:nsamples)
+        call hpsort(inds) ! indices in increasing order
         call self%incr_sampled_updatecnt(inds, incr_sampled)
     end subroutine sample4update_rnd
 
@@ -1385,7 +1386,7 @@ contains
     end subroutine get_class_sample_stats
 
     subroutine sample_balanced_1( self, clssmp, nptcls, greediness, states )
-        class(oris),        intent(inout) :: self
+        class(oris),        intent(in)    :: self
         type(class_sample), intent(inout) :: clssmp(:)  ! data structure for balanced sampling
         integer,            intent(in)    :: nptcls     ! # particles to sample in total
         integer,            intent(in)    :: greediness ! greediness level (see below)
@@ -1449,7 +1450,7 @@ contains
     end subroutine sample_balanced_1
 
     subroutine sample_balanced_2( self, clssmp, nptcls, frac_best, states )
-        class(oris),        intent(inout) :: self
+        class(oris),        intent(in)    :: self
         type(class_sample), intent(inout) :: clssmp(:)  ! data structure for balanced sampling
         integer,            intent(in)    :: nptcls     ! # particles to sample in total
         real,               intent(in)    :: frac_best  ! fraction of best scoring particles to sample from
@@ -1518,8 +1519,8 @@ contains
     end subroutine sample_balanced_parts
 
     function get_sample_ind( self, incr_sampled ) result(sample_ind)
-        class(oris), intent(inout) :: self
-        logical,     intent(in)    :: incr_sampled
+        class(oris), intent(in) :: self
+        logical,     intent(in) :: incr_sampled
         integer :: i, sample_ind
         sample_ind = 0
         do i = 1, self%n

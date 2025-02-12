@@ -1043,14 +1043,16 @@ contains
                 t_cavgassemble = tic()
             endif
             ! assemble class averages
-            refs      = trim(CAVGS_ITER_FBODY) // trim(str_iter)            // params%ext
-            refs_even = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_even' // params%ext
-            refs_odd  = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_odd'  // params%ext
-            call cline_cavgassemble%set('refs', refs)
-            call cline_cavgassemble%set('nthr', nthr_here)
-            call terminate_stream('SIMPLE_DISTR_CLUSTER2D HARD STOP 2')
-            call xcavgassemble%execute_safe(cline_cavgassemble)
-            if( L_BENCH_GLOB ) rt_cavgassemble = toc(t_cavgassemble)
+            if( trim(params%restore_cavgs).eq.'yes' )then
+                refs      = trim(CAVGS_ITER_FBODY) // trim(str_iter)            // params%ext
+                refs_even = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_even' // params%ext
+                refs_odd  = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_odd'  // params%ext
+                call cline_cavgassemble%set('refs', refs)
+                call cline_cavgassemble%set('nthr', nthr_here)
+                call terminate_stream('SIMPLE_DISTR_CLUSTER2D HARD STOP 2')
+                call xcavgassemble%execute_safe(cline_cavgassemble)
+                if( L_BENCH_GLOB ) rt_cavgassemble = toc(t_cavgassemble)
+            endif
             ! objfun=euclid, part 4: sigma2 consolidation
             if( params%l_needs_sigma )then
                 call cline_calc_sigma%set('which_iter', params%which_iter+1)
@@ -1122,9 +1124,11 @@ contains
             endif
         end do
         ! updates os_out
-        finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//params%ext
-        call build%spproj%add_cavgs2os_out(trim(finalcavgs), build%spproj%get_smpd(), imgkind='cavg')
-        call build%spproj%write_segment_inside('out', params%projfile)
+        if( trim(params%restore_cavgs).eq.'yes' )then
+            finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//params%ext
+            call build%spproj%add_cavgs2os_out(trim(finalcavgs), build%spproj%get_smpd(), imgkind='cavg')
+            call build%spproj%write_segment_inside('out', params%projfile)
+        endif
         call qsys_cleanup
         ! report the last iteration on exit
         call cline%delete( 'startit' )
@@ -1366,9 +1370,11 @@ contains
                     call cline%set('endit', params%startit)
                     call del_file(params%outfile)
                     ! update os_out
-                    finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(params%startit,3)//params%ext
-                    call build%spproj%add_cavgs2os_out(trim(finalcavgs), build%spproj%get_smpd(), imgkind='cavg')
-                    call build%spproj%write_segment_inside('out', params%projfile)
+                    if( trim(params%restore_cavgs).eq.'yes' )then
+                        finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(params%startit,3)//params%ext
+                        call build%spproj%add_cavgs2os_out(trim(finalcavgs), build%spproj%get_smpd(), imgkind='cavg')
+                        call build%spproj%write_segment_inside('out', params%projfile)
+                    endif
                     exit
                 endif
                 ! update iteration counter
@@ -1534,7 +1540,7 @@ contains
         type(chash)                :: job_descr
         integer :: nptcls, ipart
         logical :: l_maxpop
-        ! After this condition block, only build_glob & params_glob must be used
+        ! After this condition block, only build_glob & params_glob must be used!
         if( associated(build_glob) )then
             if( .not.associated(params_glob) )then
                 THROW_HARD('Builder & parameters must be associated for shared memory execution!')
@@ -1555,8 +1561,8 @@ contains
         endif
         ! Whether to weight based-on the top maxpop particles
         l_maxpop = cline%defined('maxpop') .and. (params_glob%maxpop > 0)
-        ! sample incremented
-        call sample_ptcls4update2D([1,params_glob%nptcls], .true., nptcls, pinds)
+        ! sample particles
+        call sample_ptcls4update2D([1,params_glob%nptcls], params_glob%l_update_frac, nptcls, pinds)
         ! communicate to project file
         call build_glob%spproj%write_segment_inside(params_glob%oritype, params_glob%projfile)
         ! more prep
@@ -1586,11 +1592,11 @@ contains
                 call eulprob%normalize_table
                 call eulprob%assign_prob(build_glob%spproj_field, l_maxpop)
             else
-                if( trim(params_glob%ptcl_norm).eq.'yes' )call eulprob%normalize_ptcl
+                if( trim(params_glob%ptcl_norm).eq.'yes' ) call eulprob%normalize_ptcl
                 call eulprob%assign_smpl(build_glob%spproj_field, l_maxpop)
             endif
         case('prob_smpl')
-            if( trim(params_glob%ptcl_norm).eq.'yes' )call eulprob%normalize_ptcl
+            if( trim(params_glob%ptcl_norm).eq.'yes' ) call eulprob%normalize_ptcl
             if( params_glob%which_iter == 1 )then
                 call eulprob%assign_greedy(l_maxpop)
             else
@@ -1630,9 +1636,8 @@ contains
         logical :: l_ctf
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
-        ! The policy here ought to be that nothing is done with regards to sampling other than reproducing
-        ! what was generated in the driver (prob_align, below). Sampling is delegated to prob_align (below)
-        ! and merely reproduced here
+        ! Nothing is done with regards to sampling other than reproducing
+        ! what was generated in the driver (prob_tab2D_distr, above)
         if( build%spproj_field%has_been_sampled() )then
             call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds)
         else

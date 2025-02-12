@@ -129,12 +129,8 @@ contains
             l_greedy       = .false.
             l_greedy_smpl  = .false.
             l_snhc_smpl    = .false.
-            if( params_glob%extr_iter > params_glob%extr_lim )then
-                l_update_frac = params_glob%l_update_frac
-            else
-                l_update_frac = .false.
-            endif
-            l_partial_sums = l_update_frac
+            l_update_frac  = params_glob%l_update_frac
+            l_partial_sums = l_update_frac .and. (params_glob%extr_iter>1)
         endif
 
         ! PARTICLE SAMPLING
@@ -331,44 +327,50 @@ contains
 
         ! WIENER RESTORATION OF CLASS AVERAGES
         if( L_BENCH_GLOB ) t_cavg = tic()
-        call cavger_transf_oridat( build_glob%spproj )
-        call cavger_assemble_sums( l_partial_sums )
         if( l_distr_exec_glob )then
-            ! write results to disk
-            call cavger_readwrite_partial_sums('write')
+            if( trim(params_glob%restore_cavgs).eq.'yes' )then
+                call cavger_transf_oridat( build_glob%spproj )
+                call cavger_assemble_sums( l_partial_sums )
+                ! write results to disk
+                call cavger_readwrite_partial_sums('write')
+            endif
         else
             ! check convergence
             converged = conv%check_conv2D(cline, build_glob%spproj_field, build_glob%spproj_field%get_n('class'), params_glob%msk)
             ! Update progress file if not stream
             if(.not. l_stream) call progressfile_update(conv%get('progress'))
-            ! partial classes written for continuation or because of fractional update
-            if( converged .or. which_iter == params_glob%maxits .or. params_glob%l_update_frac )then
-                call cavger_readwrite_partial_sums('write')
+            if( trim(params_glob%restore_cavgs).eq.'yes' )then
+                call cavger_transf_oridat( build_glob%spproj )
+                call cavger_assemble_sums( l_partial_sums )
+                ! partial classes written for continuation or because of fractional update
+                if( converged .or. which_iter == params_glob%maxits .or. params_glob%l_update_frac )then
+                    call cavger_readwrite_partial_sums('write')
+                endif
+                call cavger_merge_eos_and_norm
+                if( cline%defined('which_iter') )then
+                    params_glob%refs      = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//params_glob%ext
+                    params_glob%refs_even = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//'_even'//params_glob%ext
+                    params_glob%refs_odd  = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//'_odd'//params_glob%ext
+                else
+                    THROW_HARD('which_iter expected to be part of command line in shared-memory execution')
+                endif
+                call cavger_calc_and_write_frcs_and_eoavg(params_glob%frcs, params_glob%which_iter)
+                ! classdoc gen needs to be after calc of FRCs
+                call cavger_gen2Dclassdoc(build_glob%spproj)
+                ! write references
+                call cavger_write(trim(params_glob%refs),      'merged')
+                call cavger_write(trim(params_glob%refs_even), 'even'  )
+                call cavger_write(trim(params_glob%refs_odd),  'odd'   )
+                ! update command line
+                call cline%set('refs', trim(params_glob%refs))
+                ! write project: cls2D and state congruent cls3D
+                call build_glob%spproj%os_cls3D%new(params_glob%ncls, is_ptcl=.false.)
+                states = build_glob%spproj%os_cls2D%get_all('state')
+                call build_glob%spproj%os_cls3D%set_all('state',states)
+                call build_glob%spproj%write_segment_inside('cls2D', params_glob%projfile)
+                call build_glob%spproj%write_segment_inside('cls3D', params_glob%projfile)
+                deallocate(states)
             endif
-            call cavger_merge_eos_and_norm
-            if( cline%defined('which_iter') )then
-                params_glob%refs      = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//params_glob%ext
-                params_glob%refs_even = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//'_even'//params_glob%ext
-                params_glob%refs_odd  = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//'_odd'//params_glob%ext
-            else
-                THROW_HARD('which_iter expected to be part of command line in shared-memory execution')
-            endif
-            call cavger_calc_and_write_frcs_and_eoavg(params_glob%frcs, params_glob%which_iter)
-            ! classdoc gen needs to be after calc of FRCs
-            call cavger_gen2Dclassdoc(build_glob%spproj)
-            ! write references
-            call cavger_write(trim(params_glob%refs),      'merged')
-            call cavger_write(trim(params_glob%refs_even), 'even'  )
-            call cavger_write(trim(params_glob%refs_odd),  'odd'   )
-            ! update command line
-            call cline%set('refs', trim(params_glob%refs))
-            ! write project: cls2D and state congruent cls3D
-            call build_glob%spproj%os_cls3D%new(params_glob%ncls, is_ptcl=.false.)
-            states = build_glob%spproj%os_cls2D%get_all('state')
-            call build_glob%spproj%os_cls3D%set_all('state',states)
-            call build_glob%spproj%write_segment_inside('cls2D', params_glob%projfile)
-            call build_glob%spproj%write_segment_inside('cls3D', params_glob%projfile)
-            deallocate(states)
         endif
         call cavger_kill
         call eucl_sigma%kill
