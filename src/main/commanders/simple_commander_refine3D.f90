@@ -126,7 +126,7 @@ contains
         character(len=LONGSTRLEN) :: volassemble_output
         logical :: err, vol_defined, have_oris, converged, fall_over, l_continue, l_multistates, l_automsk 
         logical :: l_combine_eo, l_griddingset, do_automsk
-        real    :: corr, corr_prev, smpd
+        real    :: corr, corr_prev, smpd, lp_eps
         integer :: ldim(3), i, state, iter, box, nfiles, niters, ifoo, fnr, nthr_here
         601 format(A,1X,F12.3)
         if( .not. cline%defined('nparts') )then
@@ -339,6 +339,7 @@ contains
         niters = 0
         iter   = params%startit - 1
         corr   = -1.
+        lp_eps = (params%lpprev - params%lp) / real(params%endingit - params%startit)
         do
             if( L_BENCH_GLOB )then
                 t_init = tic()
@@ -348,6 +349,22 @@ contains
             iter              = iter + 1
             params%which_iter = iter
             str_iter          = int2str_pad(iter,3)
+            ! lp_cont
+            if( params%l_lpcont )then
+                if( cline%defined('lpprev') .and. cline%defined('endingit') )then
+                    params%lp = params%lpprev - real(params%which_iter - params%startit) * lp_eps
+                    call cline%set(                    'lp', params%lp)
+                    call cline_reconstruct3D_distr%set('lp', params%lp)
+                    call cline_calc_pspec_distr%set(   'lp', params%lp)
+                    call cline_prob_align_distr%set(   'lp', params%lp)
+                    call cline_check_3Dconv%set(       'lp', params%lp)
+                    call cline_postprocess%set(        'lp', params%lp)
+                    call cline_calc_group_sigmas%set(  'lp', params%lp)
+                    call cline%gen_job_descr(job_descr)
+                    call build%spproj_field%set_all2single('lp', params%lp)
+                    call build%spproj%write_segment_inside(params%oritype)
+                endif
+            endif
             write(logfhandle,'(A)')   '>>>'
             write(logfhandle,'(A,I6)')'>>> ITERATION ', iter
             write(logfhandle,'(A)')   '>>>'

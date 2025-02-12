@@ -1099,7 +1099,11 @@ contains
         else
         call cline_refine3D%set('update_frac',            update_frac)
         endif
-        call cline_refine3D%set('lp',               lpinfo(istage)%lp)
+        call cline_refine3D%set('lp',             lpinfo(istage  )%lp)
+        if( params_glob%l_lpcont .and. istage > 1 )then
+        call cline_refine3D%set('lpprev',         lpinfo(istage-1)%lp)
+        call cline_refine3D%set('endingit',     iter+MAXITS(istage)-1)
+        endif
         call cline_refine3D%set('smpd_crop', lpinfo(istage)%smpd_crop)
         call cline_refine3D%set('box_crop',   lpinfo(istage)%box_crop)
         ! iteration number
