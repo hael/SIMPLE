@@ -5229,7 +5229,7 @@ contains
         &'Statistical test for radial dependent symmetry',&                                           ! descr_short
         &'is a program that generates statistics at different radii and across the whold nano map.',& ! descr long
         &'single_exec',&                                                                              ! executable
-        &3, 4, 0, 0, 1, 1, 1, .false.)                                                                ! # entries in each group, requires sp_project
+        &3, 4, 0, 0, 1, 0, 1, .false.)                                                                ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call atoms_stats%set_input('img_ios', 1, 'vol1', 'file', 'Raw volume', 'Raw volume of grey valued pixel intensities', &
@@ -5250,7 +5250,7 @@ contains
         ! filter controls
         call atoms_stats%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
         ! mask controls
-        call atoms_stats%set_input('mask_ctrls', 1, mskdiam)
+        ! <empty>
         ! computer controls
         call atoms_stats%set_input('comp_ctrls', 1, nthr)
     end subroutine new_atoms_stats
