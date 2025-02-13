@@ -3,7 +3,7 @@ include 'simple_lib.f08'
 implicit none
 integer, parameter :: N_CLUSTER = 5, N_POINTS = 50
 real,    parameter :: EPS = 0.2
-integer :: i, j, iter, truth, cur_clusN, prev_clusN, inds(N_POINTS)
+integer :: i, j, iter, truth, cur_clusN, prev_clusN
 real    :: points(N_POINTS), avg_points(N_POINTS), costs(N_POINTS)
 logical :: taken(N_POINTS)
 call seed_rnd
@@ -31,7 +31,7 @@ do iter = 1, 10
             if( taken(j) .or. j == i ) cycle
             costs(j) = abs(points(j) - points(i))
         enddo
-        j = minloc(cost)
+        j = minloc(costs, dim=1)
         ! check if the best cost is within EPS
         if( costs(j) < EPS )then
             taken(j) = .true.
