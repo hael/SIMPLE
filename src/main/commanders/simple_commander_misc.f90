@@ -87,6 +87,7 @@ contains
         use simple_pickseg
         use simple_afm_image
         use simple_corrmat
+        use simple_aff_prop
         class(afm_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(parameters), target :: params
@@ -95,11 +96,13 @@ contains
         type(pickseg), allocatable  :: pick_arr(:)
         character(len=LONGSTRLEN), allocatable  :: file_list(:)
         character(len = 255)    :: directory = '/Users/atifao/Downloads/MRC_T/'
-        character(len = 255)    :: sim_dir = '/Users/atifao/Downloads/small_clus.mrc'
-        integer                 :: i, nptcls, temp_ldim(3), pick_dim(3),j, cropped_dim(3)
-        integer, allocatable    :: ldim_arr(:,:)
-        real, allocatable       :: smpd_arr(:), stack_rmat(:,:,:,:), rot_test(:,:), rand_mat(:,:,:)
-        real        :: hp = 60., lp = 10., new_smpd 
+        character(len = 255)    :: sim_dir = '/Users/atifao/Downloads/mrc_for_clus.mrc'
+        integer                 :: i, nptcls, temp_ldim(3), pick_dim(3),j, cropped_dim(3), test_count
+        integer, allocatable    :: ldim_arr(:,:), medoids(:), labels(:), clus_count(:)
+        real, allocatable       :: smpd_arr(:), stack_rmat(:,:,:,:), R(:,:), X(:,:), Y(:,:), corrmat(:,:)
+        logical, allocatable    :: M(:,:)
+        type(aff_prop)          :: clus
+        real        :: hp = 100., lp = 10., new_smpd, sim_sum
         params_glob => params
         params_glob%pcontrast = 'white'
         params_glob%lp  = 10.
@@ -116,7 +119,6 @@ contains
         call cline%set('smpd',    5.0)
         params_glob%cc_objfun = 0
         params_glob%maxits_sh = 200
-        
         params_glob%shbarrier = 'yes'
         call params%new(cline)
         ! call simple_list_files(trim(directory) // '*.mrc', file_list)
@@ -134,45 +136,52 @@ contains
         !     if(i > 1) exit 
         ! end do
         call find_ldim_nptcls(sim_dir,temp_ldim, nptcls)
-        ! call im_stack%new(temp_ldim, params%smpd)
-        ! call im_stack%read(sim_dir, i)
-        ! allocate(stack_rmat(temp_ldim(1), temp_ldim(2), 1, temp_ldim(3)))
-        ! stack_rmat(:,:,1,:) = im_stack%get_rmat()
-        ! call im_stack%kill()
-        ! new_smpd = 10*params_glob%smpd
-        ! make sure its divisible. 
         cropped_dim = [temp_ldim(1), temp_ldim(2) , 1]
-        
         params_glob%ldim = cropped_dim
         params_glob%box = cropped_dim(1)
-        allocate(pick_vec(temp_ldim(3)))
-        ! allocate(rand_mat(cropped_dim(1), cropped_dim(2), 1))
+        test_count = temp_ldim(3)
+        ! test_count = 20 
+        allocate(pick_vec(test_count))
         do i = 1, temp_ldim(3) 
-            ! call random_number(rand_mat)
             pick_dim = [temp_ldim(1), temp_ldim(2), 1]
             call pick_vec(i)%new(pick_dim, params%smpd, .false.)
             call pick_vec(i)%read(sim_dir, i)
-            call pick_vec(i)%clip_inplace(cropped_dim)
-            ! if(i > 19) exit 
+            call pick_vec(i)%clip_inplace(cropped_dim) 
+            if(i > test_count - 1) exit 
         end do
-        ! allocate(rot_test(temp_ldim(3), temp_ldim(3)))
-        allocate(rot_test(4, 4))
-        test_vec_corr(1) = pick_vec(1)
-        test_vec_corr(2) = pick_vec(1)
-        test_vec_corr(3) = pick_vec(1)
-        test_vec_corr(4) = pick_vec(1)
-
-        ! call test_vec_corr(1)%mirror('x')
-        ! call test_vec_corr(2)%mirror('y')
-        ! call test_vec_corr(1)%rtsq(180.,0.,0.)
-        ! call test_vec_corr(2)%mirror('y')
-        call test_vec_corr(2)%rtsq(90.,20.,20.)
-        call test_vec_corr(1)%vis()
-        call test_vec_corr(2)%vis()
         print *, 'calculating sim matrix...'
-        call calc_inplane_fast(test_vec_corr, hp, lp, rot_test)
-        ! print *, sum(rot_test)
-        print *, rot_test
+        ! add number of threads option to this procedue, and input option in cmdline
+        call calc_inplane_fast_dev(pick_vec, hp, lp, corrmat, R, X, Y, M)
+        ! normalization
+        ! sklearn uses negative squared euclidean distance 
+        corrmat = 2.*(1.-corrmat)
+        where( corrmat < 0. ) corrmat = 0.
+        where( corrmat > 4. ) corrmat = 4.
+        corrmat = -corrmat  
+        ! set pref to median of input similarities or 
+        call clus%new(test_count, corrmat)
+        call clus%propagate(medoids, labels, sim_sum)
+        allocate(clus_count(size(labels)))
+        print *, medoids
+        print *, 'number of clusters:', size(medoids)
+        ! visualize medoids
+        do i = 1, size(medoids)
+            call pick_vec(medoids(i))%ifft
+            call pick_vec(medoids(i))%vis
+        end do 
+        ! visualize specific cluster
+        ! clus_count = 0
+        ! do i = 1, size(labels)
+        !     print *, 'particle:', i, 'label', labels(i)
+        !     do j = 1, maxval(labels)
+        !         if(labels(i) == j) clus_count(j) = clus_count(j) + 1
+        !     end do 
+        !     if(labels(i) ==  maxloc(clus_count, 1)) then 
+        !         call pick_vec(i)%ifft
+        !         call pick_vec(i)%vis
+        !     end if
+        ! end do 
+
         ! call exp_img%new([temp_ldim(3), temp_ldim(3), 1], params_glob%smpd)
         ! do i = 1, temp_ldim(3)
         !     do j = 1, temp_ldim(3)
