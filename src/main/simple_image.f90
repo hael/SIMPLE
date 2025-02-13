@@ -1836,8 +1836,14 @@ contains
 
     function serialize_1( self ) result( vec )
         class(image), intent(in) :: self
-        real, allocatable :: vec(:)
-        vec = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.true.)
+        real,    allocatable :: vec(:)
+        complex, allocatable :: cvec(:)
+        if( self%is_ft() )then
+            cvec = pack(self%cmat(:self%array_shape(1),:self%array_shape(2),:self%array_shape(3)), mask=.true.)
+            vec  = sqrt(cvec * conjg(cvec))
+        else
+            vec = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.true.)
+        endif
     end function serialize_1
 
     function serialize_2( self, l_msk )result( pcavec )
