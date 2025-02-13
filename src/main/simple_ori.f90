@@ -895,7 +895,7 @@ contains
         endif
     end function get_3Dshift
 
-    pure integer function get_state( self )
+    elemental integer function get_state( self )
         class(ori), intent(in) :: self
         if( self%is_ptcl )then
             get_state = nint(self%pparms(I_STATE))
@@ -904,7 +904,7 @@ contains
         endif
     end function get_state
 
-    pure integer function get_class( self )
+    elemental integer function get_class( self )
         class(ori), intent(in) :: self
         if( self%is_ptcl )then
             get_class = nint(self%pparms(I_CLASS))
@@ -913,7 +913,7 @@ contains
         endif
     end function get_class
 
-    pure integer function get_eo( self )
+    elemental integer function get_eo( self )
         class(ori), intent(in) :: self
         if( self%is_ptcl )then
             get_eo = nint(self%pparms(I_EO))
@@ -922,7 +922,7 @@ contains
         endif
     end function get_eo
 
-    pure integer function get_sampled( self )
+    elemental integer function get_sampled( self )
         class(ori), intent(in) :: self
         if( self%is_ptcl )then
             get_sampled = nint(self%pparms(I_SAMPLED))
@@ -931,7 +931,7 @@ contains
         endif
     end function get_sampled
 
-    pure integer function get_updatecnt( self )
+    elemental integer function get_updatecnt( self )
         class(ori), intent(in) :: self
         if( self%is_ptcl )then
             get_updatecnt = nint(self%pparms(I_UPDATECNT))
@@ -940,19 +940,19 @@ contains
         endif
     end function get_updatecnt
 
-    pure integer function get_fromp( self )
+    elemental integer function get_fromp( self )
         class(ori), intent(in) :: self
         ! 'fromp' is not part of pparms
         call self%htab%getter('fromp', get_fromp)
     end function get_fromp
 
-    pure integer function get_top( self )
+    elemental integer function get_top( self )
         class(ori), intent(in) :: self
         ! 'top' is not part of pparms
         call self%htab%getter('top', get_top)
     end function get_top
 
-    pure real function get_dfx( self )
+    elemental real function get_dfx( self )
         class(ori), intent(in) :: self
         if( self%is_ptcl )then
             get_dfx = self%pparms(I_DFX)
@@ -961,7 +961,7 @@ contains
         endif
     end function get_dfx
 
-    pure real function get_dfy( self )
+    elemental real function get_dfy( self )
         class(ori), intent(in) :: self
         if( self%is_ptcl )then
             get_dfy = self%pparms(I_DFY)
@@ -970,7 +970,7 @@ contains
         endif
     end function get_dfy
 
-    pure function isthere( self, key ) result( found )
+    elemental function isthere( self, key ) result( found )
         class(ori),        intent(in) :: self
         character(len=*),  intent(in) :: key
         logical :: hash_found, chash_found, found

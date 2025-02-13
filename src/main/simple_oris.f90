@@ -94,6 +94,7 @@ type :: oris
     procedure, private :: sample_balanced_1, sample_balanced_2
     generic            :: sample_balanced => sample_balanced_1, sample_balanced_2
     procedure          :: sample_balanced_parts
+    procedure          :: balance_ptcls_within_cls
     procedure, private :: get_sample_ind
     procedure, private :: incr_sampled_updatecnt
     procedure          :: is_first_update
@@ -412,16 +413,20 @@ contains
     end function get_static
 
     !>  \brief  is for getting an array of 'key' values
-    function get_all( self, key, fromto ) result( arr )
+    function get_all( self, key, fromto, nonzero ) result( arr )
         class(oris),       intent(in) :: self
         character(len=*),  intent(in) :: key
         integer, optional, intent(in) :: fromto(2)
-        real, allocatable :: arr(:)
+        logical, optional, intent(in) :: nonzero
+        real,    allocatable :: arr(:)
         integer :: ffromto(2)
         ffromto(1) = 1
         ffromto(2) = self%n
         if( present(fromto) ) ffromto = fromto
         allocate( arr(ffromto(1):ffromto(2)), source=self%o(ffromto(1):ffromto(2))%get(key) )
+        if( present(nonzero) )then
+            if( nonzero ) arr = pack(arr, mask=self%o(ffromto(1):ffromto(2))%get_state()>0)
+        endif
     end function get_all
 
     !>  \brief  is for getting an array of 'key' values cast to integer
@@ -1517,6 +1522,32 @@ contains
             end do
         end do
     end subroutine sample_balanced_parts
+
+    subroutine balance_ptcls_within_cls( self, nptcls, pinds, maxpop, nparts )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: nptcls, maxpop, nparts
+        integer,     intent(in)    :: pinds(1:nptcls)
+        real,    allocatable :: cls_scores(:)
+        integer, allocatable :: cls_inds(:)
+        integer :: classes(nptcls), i,icls,pop,n2reject,ncls,mpop
+        if( maxpop < 1 )return
+        classes = self%o(pinds(:))%get_class()
+        ncls    = maxval(classes)
+        mpop    = floor(real(maxpop)/real(nparts))
+        do icls = 1,ncls
+            cls_inds = pack((/(i,i=1,nptcls)/), mask=classes==icls)
+            if( .not.allocated(cls_inds) ) cycle
+            pop = size(cls_inds)
+            if( pop <= mpop )cycle
+            cls_scores = self%o(pinds(cls_inds(:)))%get('corr')
+            call hpsort(cls_scores, cls_inds)
+            n2reject = pop - mpop
+            do i = 1,n2reject
+                call self%o(pinds(cls_inds(i)))%set('w',0.)
+            enddo
+        enddo
+        deallocate(cls_inds,cls_scores)
+    end subroutine balance_ptcls_within_cls
 
     function get_sample_ind( self, incr_sampled ) result(sample_ind)
         class(oris), intent(in) :: self

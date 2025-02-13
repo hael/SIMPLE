@@ -71,6 +71,7 @@ contains
         if( .not. cline%defined('extr_lim')  ) call cline%set('extr_lim',  EXTR_LIM_LOCAL)
         if( .not. cline%defined('rank_cavgs')) call cline%set('rank_cavgs','yes')
         if( .not. cline%defined('sigma_est') ) call cline%set('sigma_est', 'global')
+        if( .not. cline%defined('stats')     ) call cline%set('stats',     'no')
         ! shared memory execution
         l_shmem = set_shmem_flag(cline)
         ! master parameters
@@ -78,6 +79,7 @@ contains
         call cline%set('mkdir', 'no')
         call spproj%ptr2oritype(params%oritype, spproj_field)
         maxits = [params%extr_lim, params%extr_lim+2*ITS_INCR]
+        call cline%delete('stats')
         ! set downscaling
         call set_dims
         ! set resolutions limits
@@ -120,6 +122,8 @@ contains
         call spproj%read_segment('ptcl3D',params%projfile)
         call spproj%os_ptcl3D%transfer_2Dshifts(spproj_field)
         call spproj%write_segment_inside('ptcl3D', params%projfile)
+        ! stats
+        if( trim(params%stats).eq.'yes' ) call output_stats
         ! weights
         if( cline%defined('maxpop') .and. params%maxpop > 0 )then
             call spproj_field%set_all2single('w',1.)
@@ -396,6 +400,25 @@ contains
                 call xcluster2D_distr%execute_safe(cline_cluster2D)
             endif
         end subroutine execute_cluster2D
+
+        subroutine output_stats
+            use simple_histogram, only: histogram
+            type(histogram)               :: hist
+            real,     allocatable :: M(:,:), A(:)
+            character(len=STDLEN) :: string
+            real :: mean,std
+            allocate(M(nptcls_eff,2))
+            M(:,1) = spproj_field%get_all('class', nonzero=.true.)
+            M(:,2) = spproj_field%get_all('corr',  nonzero=.true.)
+            call rmat2file(M, 'class_scores.mat')
+            A = M(:,2)
+            call hist%new(50, A)
+            deallocate(M,A)
+            mean = hist%mean()
+            std  = sqrt(hist%variance(mean=mean))
+            write(string, '(A,2F6.3)')'Score ',mean,std
+            call hist%plot('scores_distribution',string)
+        end subroutine output_stats
 
         subroutine set_final_mapping
             character(len=:), allocatable :: refs

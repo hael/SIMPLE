@@ -981,7 +981,7 @@ contains
                 write(logfhandle,'(A,I8)')                '>>> # MICROGRAPHS PROCESSED & IMPORTED  : ',n_imported
                 if( l_extract ) write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED               : ',nptcls_glob
                 if( l_multipick )then
-                    call histogram_moldiams%plot('moldiams')
+                    call histogram_moldiams%plot('moldiams', 'Diameters')
                     if( l_multipick_init )  call starproj_stream%stream_export_pick_diameters(params%outdir, histogram_moldiams, filename="pick_init.star")
                     if( l_multipick_refine) call starproj_stream%stream_export_pick_diameters(params%outdir, histogram_moldiams)
                     write(logfhandle,'(A,F8.2)') '>>> ESTIMATED MOLECULAR DIAMETER        : ',histogram_moldiams%mean()
