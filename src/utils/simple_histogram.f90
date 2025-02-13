@@ -462,10 +462,11 @@ contains
         self%ntot   = sum(self%counts)
     end subroutine smooth
 
-    subroutine plot( self, fname )
+    subroutine plot( self, fname, abscissa )
         use CPlot2D_wrapper_module
-        class(histogram), intent(in) :: self
-        character(len=*), intent(in) :: fname
+        class(histogram),           intent(in) :: self
+        character(len=*),           intent(in) :: fname
+        character(len=*), optional, intent(in) :: abscissa
         type(str4arr)                :: title
         type(CPlot2D_type)           :: fig
         type(CDataSet_type)          :: dataSet
@@ -489,7 +490,11 @@ contains
         call CDataSet_addpoint(dataSet, self%x(self%nbins)+self%dx, 0.)
         call CPlot2D__AddDataSet(fig, dataset)
         call CDataSet__delete(dataset)
-        title%str = 'X'//C_NULL_CHAR
+        if( present(abscissa) )then
+            title%str = trim(abscissa)//C_NULL_CHAR
+        else
+            title%str = 'X'//C_NULL_CHAR
+        endif
         call CPlot2D__SetXAxisTitle(fig, title%str)
         title%str = 'Counts'//C_NULL_CHAR
         call CPlot2D__SetYAxisTitle(fig, title%str)

@@ -305,6 +305,16 @@ contains
             if( L_BENCH_GLOB ) rt_align = rt_align + toc(t_align)
         enddo ! Batch loop
 
+        ! BALANCING OF NUMBER OF PARTICLES PER CLASS
+        if( l_prob )then
+            ! done before, when assigning class from table
+        else
+            if( l_update_frac .and. params_glob%maxpop>0 )then
+                call build_glob%spproj_field%balance_ptcls_within_cls(nptcls2update, pinds,&
+                    &params_glob%maxpop, params_glob%nparts)
+            endif
+        endif
+
         ! CLEAN-UP
         call clean_strategy2D
         call orientation%kill
