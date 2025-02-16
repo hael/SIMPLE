@@ -1,54 +1,55 @@
 program simple_test_atom_posmatch
 include 'simple_lib.f08'
 implicit none
-real, parameter :: THETA = PI/6
-real    :: u(3), v(3), rot_mat(3,3), u_rec(3), mat_inv(3,3), axis(3), u_rot(3)
-u    = [1., 2., 3.]
-v    = [1., 3., 5.]
-axis = cross(u,v)
-print *, 'original vector: ', u
-call rotation_matrix_2(axis, theta, rot_mat)
-u_rot = matmul(rot_mat, u)
-print *, 'rotated vector: ', u_rot
-call rotation_matrix_1(u_rot, u, mat_inv)
-u_rec = matmul(mat_inv, u_rot/norm(u_rot)) * norm(u)
-print *, 'reconstructed vector: ', u_rec
+integer, parameter :: N1 = 5, N2 = 5, MAX_POS = 10
+real    :: atom1_pos(3,N1), atom2_pos(3,N2), rot_mat(3,3), scale, translation(3), rec_mat(3,3), rec_trans(3), rec_scale, rec_atom2(3,N1)
+integer :: i, j
+call seed_rnd
+do i = 1, N1
+    do j = 1, 3
+        atom1_pos(j,i) = floor(ran3() * real(MAX_POS))
+    enddo
+enddo
+rot_mat(1,:) = [-0.4297,  0.3140, -0.8466]
+rot_mat(2,:) = [-0.7475, -0.6496,  0.1385]
+rot_mat(3,:) = [-0.5065,  0.6924,  0.5139]
+translation  = [0.2, -0.5, 1.]
+scale        = 0.5
+atom2_pos    = scale * matmul(rot_mat, atom1_pos)
+do i = 1, N2
+    atom2_pos(:,i) = atom2_pos(:,i) + translation
+enddo
+call atom_posmatch(atom1_pos, atom2_pos, rec_mat, rec_trans, rec_scale)
+rec_atom2 = rec_scale * matmul(rec_mat, atom1_pos)
+print *, 'atom 1 pos : ',     atom1_pos(:,1)
+print *, 'atom 2 pos : ',     atom2_pos(:,1)
+print *, 'rec scale = ', rec_scale
+print *, 'rec translation = ', rec_trans
+print *, 'rotated atom 2 : ', rec_atom2(:,1) + rec_trans
 
 contains
 
-    function norm(u) result(val)
-        real, intent(in) :: u(3)
-        real :: val
-        val = sqrt(sum(u**2))
-    end function norm
-
-    subroutine rotation_matrix_1( u, v, rot_mat)
-        real, intent(in)    :: u(3), v(3)
-        real, intent(inout) :: rot_mat(3,3)
-        real :: theta, axis(3)
-        ! Calculate the rotation axis
-        axis  = cross(u, v)
-        ! Calculate the rotation angle
-        theta = acos(dot_product(u, v) / norm(u) / norm(v))
-        call rotation_matrix_2(axis, theta, rot_mat)
-    end subroutine rotation_matrix_1
-
-    subroutine rotation_matrix_2( axis, theta, rot_mat)
-        real, intent(in)    :: axis(3)
-        real, intent(in)    :: theta
-        real, intent(inout) :: rot_mat(3,3)
-        real :: u(3)
-        u = axis / norm(axis)
-        ! Generate rotation matrix using Rodrigues' formula
-        rot_mat(1,1) = cos(theta) + u(1)**2 * (1 - cos(theta))
-        rot_mat(1,2) = u(1) * u(2) * (1 - cos(theta)) - u(3) * sin(theta)
-        rot_mat(1,3) = u(1) * u(3) * (1 - cos(theta)) + u(2) * sin(theta)
-        rot_mat(2,1) = u(2) * u(1) * (1 - cos(theta)) + u(3) * sin(theta)
-        rot_mat(2,2) = cos(theta) + u(2)**2 * (1 - cos(theta))
-        rot_mat(2,3) = u(2) * u(3) * (1 - cos(theta)) - u(1) * sin(theta)
-        rot_mat(3,1) = u(3) * u(1) * (1 - cos(theta)) - u(2) * sin(theta)
-        rot_mat(3,2) = u(3) * u(2) * (1 - cos(theta)) + u(1) * sin(theta)
-        rot_mat(3,3) = cos(theta) + u(3)**2 * (1 - cos(theta))
-    end subroutine rotation_matrix_2
-
+    subroutine atom_posmatch( pos1, pos2, ret_mat, ret_trans, ret_scale)
+        real, intent(in)    :: pos1(:,:), pos2(:,:)
+        real, intent(inout) :: ret_mat(3,3)
+        real, intent(inout) :: ret_trans(3)
+        real, intent(inout) :: ret_scale
+        real, allocatable   :: var1(:,:), var2(:,:)
+        real    :: mean1(1,3), mean2(1,3), mat(3,3), eig_vals(3), eig_vecs(3,3)
+        integer :: i, N
+        N          = size(pos1, 2)
+        mean1(1,:) = sum(pos1, dim=2) / real(N)
+        mean2(1,:) = sum(pos2, dim=2) / real(N)
+        allocate(var1(3,N), var2(3,N))
+        do i = 1, N
+            var1(:,i) = pos1(:,i) - mean1(1,:)
+            var2(:,i) = pos2(:,i) - mean2(1,:)
+        enddo
+        mat = matmul(var1, transpose(var2))
+        call svdcmp(mat, eig_vals, eig_vecs)
+        ret_mat   = matmul(eig_vecs, transpose(mat))
+        ret_scale = sqrt(sum(var2**2) / sum(var1**2))
+        mean2     = - ret_scale * matmul(mean1, transpose(ret_mat)) + mean2
+        ret_trans = mean2(1,:)
+    end subroutine atom_posmatch
 end program simple_test_atom_posmatch
