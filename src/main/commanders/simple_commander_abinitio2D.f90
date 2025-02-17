@@ -123,9 +123,9 @@ contains
         call spproj%os_ptcl3D%transfer_2Dshifts(spproj_field)
         call spproj%write_segment_inside('ptcl3D', params%projfile)
         ! stats
-        if( trim(params%stats).eq.'yes' ) call output_stats
+        if( trim(params%stats).eq.'yes' ) call output_stats('premapping')
         ! weights
-        if( cline%defined('maxpop') .and. params%maxpop > 0 )then
+        if( trim(params%autosample).eq.'yes' )then
             call spproj_field%set_all2single('w',1.)
             call spproj%write_segment_inside(params%oritype, params%projfile)
         endif
@@ -133,6 +133,7 @@ contains
         if( (trim(params%autosample).eq.'yes').and.(stage_parms(NSTAGES)%nptcls<nptcls_eff) )then
             call set_final_mapping
             call execute_cluster2D
+            if( trim(params%stats).eq.'yes' ) call output_stats('final')
         endif
         ! final class generation & ranking
         if ( trim(params%rank_cavgs).eq.'yes' )then
@@ -401,23 +402,13 @@ contains
             endif
         end subroutine execute_cluster2D
 
-        subroutine output_stats
-            use simple_histogram, only: histogram
-            type(histogram)               :: hist
-            real,     allocatable :: M(:,:), A(:)
-            character(len=STDLEN) :: string
-            real :: mean,std
+        subroutine output_stats( prefix )
+            character(len=*) :: prefix
+            real, allocatable :: M(:,:)
             allocate(M(nptcls_eff,2))
             M(:,1) = spproj_field%get_all('class', nonzero=.true.)
             M(:,2) = spproj_field%get_all('corr',  nonzero=.true.)
-            call rmat2file(M, 'class_scores.mat')
-            A = M(:,2)
-            call hist%new(50, A)
-            deallocate(M,A)
-            mean = hist%mean()
-            std  = sqrt(hist%variance(mean=mean))
-            write(string, '(A,2F6.3)')'Score ',mean,std
-            call hist%plot('scores_distribution',string)
+            call rmat2file(M, trim(prefix)//'_class_scores.mat')
         end subroutine output_stats
 
         subroutine set_final_mapping
