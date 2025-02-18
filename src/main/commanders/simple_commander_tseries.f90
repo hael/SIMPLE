@@ -41,6 +41,7 @@ public :: ptclsproc_nano_commander
 public :: graphene_subtr_commander
 public :: tseries_swap_stack_commander
 public :: tseries_reconstruct3D_distr
+public :: tseries_core_finder_commander
 public :: tseries_make_projavgs_commander
 private
 #include "simple_local_flags.inc"
@@ -154,6 +155,11 @@ type, extends(commander_base) :: tseries_reconstruct3D_distr
   contains
     procedure :: execute      => exec_tseries_reconstruct3D_distr
 end type tseries_reconstruct3D_distr
+
+type, extends(commander_base) :: tseries_core_finder_commander
+  contains
+    procedure :: execute      => exec_tseries_core_finder
+end type tseries_core_finder_commander
 
 type, extends(commander_base) :: tseries_make_projavgs_commander
   contains
@@ -1625,10 +1631,10 @@ contains
 
     subroutine exec_tseries_reconstruct3D_distr( self, cline )
         use simple_commander_rec, only: volassemble_commander
-        use simple_opt_mask,      only: estimate_spher_mask
+        ! use simple_opt_mask,      only: estimate_spher_mask
         real, parameter :: LP_LIST(4) = [1.5,2.0,2.5,3.0]
         real, parameter :: HP_LIM = 5.0 ! no information at lower res for these kind of data
-        real, parameter :: RAD_LB = 5.0 ! 5.0 A radial boundary for averaging
+        ! real, parameter :: RAD_LB = 5.0 ! 5.0 A radial boundary for averaging
         class(tseries_reconstruct3D_distr), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         character(len=STDLEN), allocatable :: vol_fnames(:)
@@ -1643,10 +1649,9 @@ contains
         type(sp_project)              :: spproj
         type(cmdline)                 :: cline_rec
         type(chash)                   :: job_descr
-        type(image)                   :: vol1, vol2, vol_w, vol_sum, mskvol, mskvol2
-        real                          :: w, sumw
-        integer :: state, ipart, istate, iptcl, nptcls, mskfromto(2), frame_start, frame_end
-        integer :: funit, nparts, i, ind, nlps, ilp, iostat, hp_ind, best_msk, lifetime
+        type(image)                   :: vol1, vol2
+        integer :: state, ipart, istate, iptcl, nptcls, frame_start, frame_end
+        integer :: funit, nparts, i, ind, nlps, ilp, iostat, hp_ind, lifetime
         logical :: fall_over
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('trs')     ) call cline%set('trs',           5.) ! to assure that shifts are being used
@@ -1698,63 +1703,12 @@ contains
             call simple_rename(recname, trim(vol_fnames(ipart)))
         end do
         call fclose(funit)
-        ! Assemble states
-        call vol1%new([params%box,params%box,params%box],params%smpd)
-        call vol2%new([params%box,params%box,params%box],params%smpd)
-        call vol_w%new([params%box,params%box,params%box],params%smpd)
-        call vol_sum%new([params%box,params%box,params%box],params%smpd)
-        mskfromto(1) = int(RAD_LB/params%smpd)
-        mskfromto(2) = int(params%msk)
-        call mskvol%disc([params%box,params%box,params%box], params%smpd, params%msk)
-        write(*,'(I8,A2)', advance='no' ) 0, ', '
-        do istate = 1,nparts
-            if( istate == nparts )then
-                write(*,'(I8)',    advance='yes') istate
-            else
-                write(*,'(I8,A2)', advance='no' ) istate, ', '
-            endif
-        end do
-        do state = 1,nparts
-            call vol1%zero_and_unflag_ft
-            call vol1%read(vol_fnames(state))
-            call vol1%mask(params%msk, 'hard')
-            call vol_sum%copy(vol1)
-            vol_w = 1.
-            write(*,'(I8,A2)', advance='no' ) state, ', '
-            do istate = 1,nparts
-                if( istate == state )then
-                    if( istate == nparts )then
-                        write(*,'(F8.3)',    advance='yes') 2. * real(mskfromto(2)) * params%smpd
-                    else
-                        write(*,'(F8.3,A2)', advance='no' ) 2. * real(mskfromto(2)) * params%smpd, ', '
-                    endif
-                    cycle
-                endif
-                call vol2%zero_and_unflag_ft
-                call vol2%read(vol_fnames(istate))
-                call estimate_spher_mask(vol1, vol2, mskvol, mskfromto, best_msk)
-                if( best_msk > mskfromto(1) )then ! agreement beyond the inputted lower radial limit
-                    call mskvol2%disc([params%box,params%box,params%box], params%smpd, real(best_msk))
-                    call vol2%mul(mskvol2)
-                    call vol_sum%add(vol2)
-                    call vol_w%add(mskvol2)
-                else
-                    best_msk = 0
-                endif
-                if( istate == nparts )then
-                    write(*,'(F8.3)',    advance='yes') 2. * real(best_msk) * params%smpd
-                else
-                    write(*,'(F8.3,A2)', advance='no' ) 2. * real(best_msk) * params%smpd, ', '
-                endif
-            enddo
-            call vol_sum%div(vol_w)
-            call vol_sum%write('radial_average_vol_'// int2str_pad(state,2)//'.mrc')
-        enddo
-
         ! Calculate correlation matrices
         nlps   = size(LP_LIST)
         hp_ind = calc_fourier_index(HP_LIM, params%box, params_glob%smpd)
         allocate(fsc(fdim(params%box)-1),ccs(nlps,nparts,nparts))
+        call vol1%new([params%box,params%box,params%box],params%smpd)
+        call vol2%new([params%box,params%box,params%box],params%smpd)
         ccs = 1.
         do state = 1, nparts - 1
             call vol1%zero_and_unflag_ft
@@ -1799,6 +1753,62 @@ contains
         enddo
         call simple_end('**** SIMPLE_TSERIES_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_tseries_reconstruct3D_distr
+
+    subroutine exec_tseries_core_finder( self, cline )
+        use simple_opt_mask, only: estimate_spher_mask
+        use simple_masker,   only: masker
+        class(tseries_core_finder_commander), intent(inout) :: self
+        class(cmdline),                       intent(inout) :: cline !< command line input
+        real, parameter   :: RAD_LB = 5.0 ! 5.0 A radial boundary for averaging
+        type(parameters)  :: params
+        integer           :: ivol, nvols, ldim(3), ifoo, loc(1), best_msk, mskfromto(2)
+        real, allocatable :: msk_in_pix(:)
+        type(masker)      :: mskvol
+        type(image)       :: vol, vol_ref, mskimg, mskimg2, vol_sum, vol_w
+        character(len=LONGSTRLEN), allocatable :: volnames(:)
+        call params%new(cline)
+        call read_filetable(params%filetab, volnames)
+        nvols = size(volnames)
+        if( params%mkdir.eq.'yes' )then
+            do ivol = 1,nvols
+                if(volnames(ivol)(1:1).ne.'/') volnames(ivol) = '../'//trim(volnames(ivol))
+            enddo
+        endif
+        call find_ldim_nptcls(volnames(1), ldim, ifoo)
+        call vol%new(ldim, params%smpd)
+        allocate(msk_in_pix(nvols), source=0.)
+        do ivol = 1,nvols
+            call vol%read(volnames(ivol))
+            call mskvol%estimate_spher_mask_diam(vol, AMSKLP_NANO, msk_in_pix(ivol))
+            write(logfhandle,*) ivol, 'mask diameter in A: ', 2. * msk_in_pix(ivol) * params%smpd
+            call mskvol%kill
+        end do
+        loc = minloc(msk_in_pix) ! use the smallest NP to drive the radial averaging
+        call vol_ref%new(ldim, params%smpd)
+        call vol_ref%read(volnames(loc(1)))
+        call vol_sum%copy(vol_ref)
+        call vol_w%new(ldim, params%smpd)
+        vol_w = 1.
+        call mskimg%disc(ldim, params%smpd, msk_in_pix(loc(1)))
+        mskfromto(1) = int(RAD_LB/params%smpd)
+        mskfromto(2) = int(msk_in_pix(loc(1)))
+        do ivol = 1,nvols
+            if( ivol == loc(1) ) cycle
+            call vol%zero_and_unflag_ft
+            call vol%read(volnames(ivol))
+            call estimate_spher_mask(vol_ref, vol, mskimg, mskfromto, best_msk)
+            if( best_msk > mskfromto(1) )then ! agreement beyond the inputted lower radial limit
+                call mskimg2%disc(ldim, params%smpd, real(best_msk))
+                call vol%mul(mskimg2)
+                call vol_sum%add(vol)
+                call vol_w%add(mskimg2)
+            else
+                best_msk = 0
+            endif
+        enddo
+        call vol_sum%div(vol_w)
+        call vol_sum%write('radial_average_vol_'// int2str_pad(loc(1),2)//'.mrc')
+    end subroutine exec_tseries_core_finder
 
     subroutine exec_tseries_make_projavgs( self, cline )
         use simple_strategy2D3D_common
