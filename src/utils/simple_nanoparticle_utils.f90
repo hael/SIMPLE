@@ -28,7 +28,7 @@ contains
         logical, optional, intent(in)    :: verbose
         integer, allocatable :: perm(:,:)
         real,    allocatable :: costs(:), atom1_pos(:,:), atom2_pos(:,:)
-        real    :: rec_mat(3,3), rec_trans(3), rec_scale, tmp_atom2(3), cur_cost, inv_mat(3,3)
+        real    :: rec_mat(3,3), rec_trans(3), rec_scale, tmp_atom2(3), cur_cost, inv_mat(3,3), min_cost
         integer :: N1, N2, tmp, i, j, k, a1, a2, counter, errflg, a2_min
         logical :: l_flip, l_verbose
         l_verbose = .false.
@@ -59,13 +59,14 @@ contains
                     call Kabsch_algo(atom1_pos(:,1:3), atom2_pos(:,perm(:,counter)), rec_mat, rec_trans, rec_scale)
                     ! rotate atom1 pos from index 4 using the same rotation matrix and find the corresponding closest atom2 pos
                     do a1 = 4, N1
-                        tmp_atom2      = rec_scale * matmul(rec_mat, atom1_pos(:,a1)) + rec_trans
-                        costs(counter) = huge(rec_scale)
+                        tmp_atom2 = rec_scale * matmul(rec_mat, atom1_pos(:,a1)) + rec_trans
+                        min_cost  = huge(rec_scale)
                         do a2 = 1, N2
                             if( a2 == perm(1,counter) .or. a2 == perm(2,counter) .or. a2 == perm(3,counter) )cycle
                             cur_cost = sum((tmp_atom2 - atom2_pos(:,a2))**2)
-                            if( cur_cost < costs(counter) ) costs(counter) = cur_cost
+                            if( cur_cost < min_cost ) min_cost = cur_cost
                         enddo
+                        costs(counter) = costs(counter) + min_cost
                     enddo
                     counter = counter + 1
                 enddo
@@ -79,13 +80,13 @@ contains
             print *, 'i = ', i, '; CORRECT PERM = ', perm(:,i)
             do a1 = 4, N1
                 tmp_atom2 = rec_scale * matmul(rec_mat, atom1_pos(:,a1)) + rec_trans
-                costs(i)  = huge(rec_scale)
+                min_cost  = huge(rec_scale)
                 a2_min    = 1
                 do a2 = 1, N2
                     if( a2 == perm(1,i) .or. a2 == perm(2,i) .or. a2 == perm(3,i) )cycle
                     cur_cost = sum((tmp_atom2 - atom2_pos(:,a2))**2)
-                    if( cur_cost < costs(i) )then
-                        costs(i) = cur_cost
+                    if( cur_cost < min_cost )then
+                        min_cost = cur_cost
                         a2_min   = a2
                     endif
                 enddo

@@ -73,11 +73,11 @@ do i = 1, N1
     print *, 'atom 1 pos : ', atom1_pos(:,i)
 enddo
 ! reading pdb file
-call read_pdb2matrix( '/home/vanc2/nano_fit/small/small_rot_ATMS.pdb', matrix1 )
-call read_pdb2matrix( '/home/vanc2/nano_fit/small/ground_truth/small_ATMS.pdb', matrix2 )
+call read_pdb2matrix( '/home/vanc2/nano_fit/small_sh/small_rot_sh_ATMS.pdb', matrix1 )
+call read_pdb2matrix( '/home/vanc2/nano_fit/large/large_ATMS.pdb',           matrix2 )
 allocate(matrix_rot(3,size(matrix1,2)))
 call atoms_register(matrix1, matrix2, matrix_rot, verbose=.false.)
-call write_matrix2pdb( 'Pt', matrix_rot, '/home/vanc2/nano_fit/small/ground_truth/small_ATMS_rec.pdb' )
+call write_matrix2pdb( 'Pt', matrix_rot, '/home/vanc2/nano_fit/large/large_rot_sh_ATMS_rec.pdb' )
 
 contains
 
