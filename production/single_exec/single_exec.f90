@@ -44,6 +44,7 @@ type(extract_substk_commander)                :: xextract_substk
 type(extract_subproj_commander)               :: xextract_subproj
 type(autorefine3D_nano_commander)             :: xautorefine3D_nano
 type(tseries_reconstruct3D_distr)             :: xtseries_reconstruct3D
+type(tseries_core_finder_commander)           :: xtseries_core_finder
 type(tseries_swap_stack_commander)            :: xtseries_swap_stack
 
 ! VALIDATION PROGRAMS
@@ -152,6 +153,8 @@ select case(prg)
         endif
     case( 'tseries_reconstruct3D' )
         call xtseries_reconstruct3D%execute(cline)
+    case( 'tseries_core_finder' )
+        call xtseries_core_finder%execute(cline)
     case( 'tseries_swap_stack' ) 
         call xtseries_swap_stack%execute(cline)
 
@@ -196,7 +199,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('80ffd46f')
+call simple_print_git_version('5f86c5d2')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

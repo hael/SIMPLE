@@ -190,6 +190,7 @@ type(simple_program), target :: symaxis_search
 type(simple_program), target :: symmetrize_map
 type(simple_program), target :: symmetry_test
 type(simple_program), target :: tseries_atoms_analysis
+type(simple_program), target :: tseries_core_finder
 type(simple_program), target :: tseries_import
 type(simple_program), target :: tseries_import_particles
 type(simple_program), target :: tseries_make_pickavg
@@ -503,6 +504,7 @@ contains
         call new_symmetrize_map
         call new_symmetry_test
         call new_tseries_atoms_analysis
+        call new_tseries_core_finder
         call new_tseries_import
         call new_tseries_import_particles
         call new_tseries_motion_correct
@@ -639,6 +641,7 @@ contains
         call push2prg_ptr_array(symmetrize_map)
         call push2prg_ptr_array(symmetry_test)
         call push2prg_ptr_array(tseries_atoms_analysis)
+        call push2prg_ptr_array(tseries_core_finder)
         call push2prg_ptr_array(tseries_import)
         call push2prg_ptr_array(tseries_import_particles)
         call push2prg_ptr_array(tseries_make_pickavg)
@@ -905,6 +908,8 @@ contains
                 ptr2prg => symmetry_test
             case('tseries_atoms_analysis')
                 ptr2prg => tseries_atoms_analysis
+            case('tseries_core_finder')
+                ptr2prg => tseries_core_finder
             case('tseries_import')
                 ptr2prg => tseries_import
             case('tseries_import_particles')
@@ -1106,6 +1111,7 @@ contains
         write(logfhandle,'(A)') detect_atoms%name
         write(logfhandle,'(A)') atoms_stats%name
         write(logfhandle,'(A)') tseries_atoms_analysis%name
+        write(logfhandle,'(A)') tseries_core_finder%name
         write(logfhandle,'(A)') tseries_make_projavgs%name
     end subroutine list_single_prgs_in_ui
 
@@ -5287,6 +5293,32 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_tseries_atoms_analysis
+
+    subroutine new_tseries_core_finder
+        ! PROGRAM SPECIFICATION
+        call tseries_core_finder%new(&
+        &'tseries_core_finder',&                                                      ! name
+        &'For doing radial averaging of the core of docked 3D time-segment maps of NPs',& ! descr_short
+        &'is a program that analyses docked time-series density maps',&               ! descr long
+        &'single_exec',&                                                              ! executable
+        &1, 1, 0, 0, 0, 0, 0, .false.)                                                ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call tseries_core_finder%set_input('img_ios', 1, 'filetab', 'file', 'Volumes list',&
+        &'List of volumes to analyze', 'list input e.g. voltab.txt', .true., '')
+        ! parameter input/output
+        call tseries_core_finder%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_tseries_core_finder
 
     subroutine new_tseries_import
         ! PROGRAM SPECIFICATION
