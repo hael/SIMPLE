@@ -1,9 +1,10 @@
 program simple_test_atom_posmatch
 include 'simple_lib.f08'
-use simple_nanoparticle_utils, only: atoms_register, Kabsch_algo
+use simple_nanoparticle_utils, only: atoms_register, Kabsch_algo, read_pdb2matrix, write_matrix2pdb
 implicit none
-integer, parameter   :: N1 = 10, N2 = 5, MAX_POS = 10
+integer, parameter   :: N1 = 20, N2 = 5, MAX_POS = 10
 integer, allocatable :: inds(:), select_inds(:)
+real,    allocatable :: matrix1(:,:), matrix2(:,:), matrix_rot(:,:)
 real    :: atom1_pos(3,N1), atom2_pos(3,N2), rot_mat(3,3), scale, translation(3), atom2_rnd(3,N2)
 real    :: rec_mat(3,3), rec_trans(3), rec_scale, rec_atom2(3,N2), atom1_rot(3,N1), atom2_rot(3,N2)
 integer :: i, j, mapping(N2)
@@ -71,6 +72,12 @@ print *, '------ ATOMS 1 POSITIONS ------'
 do i = 1, N1
     print *, 'atom 1 pos : ', atom1_pos(:,i)
 enddo
+! reading pdb file
+call read_pdb2matrix( '/home/vanc2/nano_fit/small/small_rot_ATMS.pdb', matrix1 )
+call read_pdb2matrix( '/home/vanc2/nano_fit/small/ground_truth/small_ATMS.pdb', matrix2 )
+allocate(matrix_rot(3,size(matrix1,2)))
+call atoms_register(matrix1, matrix2, matrix_rot, verbose=.false.)
+call write_matrix2pdb( 'Pt', matrix_rot, '/home/vanc2/nano_fit/small/ground_truth/small_ATMS_rec.pdb' )
 
 contains
 
