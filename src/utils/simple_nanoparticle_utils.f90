@@ -11,7 +11,7 @@ implicit none
 
 public :: thres_detect_conv_atom_denoised, phasecorr_one_atom, fit_lattice, calc_contact_scores, run_cn_analysis, strain_analysis
 public :: read_pdb2matrix, write_matrix2pdb, find_couples
-public :: remove_atoms, find_atoms_subset, find_rMax
+public :: remove_atoms, find_atoms_subset, find_rMax, atoms_register, Kabsch_algo
 private
 #include "simple_local_flags.inc"
 
@@ -19,6 +19,167 @@ logical, parameter :: DEBUG = .false.
 integer, parameter :: NSTRAIN_COMPS = 7
 
 contains
+
+    ! registering two sets of atom positions and rotate the first set to align the second set
+    subroutine atoms_register( atoms1, atoms2, reg_atom, verbose)
+        real,              intent(in)    :: atoms1(:,:)
+        real,              intent(in)    :: atoms2(:,:)
+        real,              intent(inout) :: reg_atom(:,:)
+        logical, optional, intent(in)    :: verbose
+        integer, allocatable :: perm(:,:)
+        real,    allocatable :: costs(:), atom1_pos(:,:), atom2_pos(:,:)
+        real    :: rec_mat(3,3), rec_trans(3), rec_scale, tmp_atom2(3), cur_cost, inv_mat(3,3)
+        integer :: N1, N2, tmp, i, j, k, a1, a2, counter, errflg, a2_min
+        logical :: l_flip, l_verbose
+        l_verbose = .false.
+        if( present(verbose) ) l_verbose = verbose
+        N1     = size(atoms1, 2)
+        N2     = size(atoms2, 2)
+        l_flip = (N2 < N1)
+        if( N1 < 3 .or. N2 < 3 ) THROW_HARD('need at least 3 atoms in each set!')
+        ! processing assuming N1 > N2 and swap if necessary
+        if( l_flip )then
+            tmp = N1
+            N1  = N2
+            N2  = tmp
+            allocate(atom1_pos(3,N1), source=atoms2)
+            allocate(atom2_pos(3,N2), source=atoms1)
+        else
+            allocate(atom1_pos(3,N1), source=atoms1)
+            allocate(atom2_pos(3,N2), source=atoms2)
+        endif
+        counter = 1
+        allocate(costs(N2*(N2-1)*(N2-2)),perm(3,N2*(N2-1)*(N2-2)))
+        costs = 0.
+        do i = 1, N2
+            do j = 1, N2
+                do k = 1, N2
+                    if( k == j .or. i == j .or. i == k )cycle
+                    perm(:,counter) = [i,j,k]
+                    call Kabsch_algo(atom1_pos(:,1:3), atom2_pos(:,perm(:,counter)), rec_mat, rec_trans, rec_scale)
+                    ! rotate atom1 pos from index 4 using the same rotation matrix and find the corresponding closest atom2 pos
+                    do a1 = 4, N1
+                        tmp_atom2      = rec_scale * matmul(rec_mat, atom1_pos(:,a1)) + rec_trans
+                        costs(counter) = huge(rec_scale)
+                        do a2 = 1, N2
+                            if( a2 == perm(1,counter) .or. a2 == perm(2,counter) .or. a2 == perm(3,counter) )cycle
+                            cur_cost = sum((tmp_atom2 - atom2_pos(:,a2))**2)
+                            if( cur_cost < costs(counter) ) costs(counter) = cur_cost
+                        enddo
+                    enddo
+                    counter = counter + 1
+                enddo
+            enddo
+        enddo
+        ! best permutation
+        i = minloc(costs, dim=1)
+        call Kabsch_algo(atom1_pos(:,1:3), atom2_pos(:,perm(:,i)), rec_mat, rec_trans, rec_scale)
+        ! this part is for debugging
+        if( l_verbose )then
+            print *, 'i = ', i, '; CORRECT PERM = ', perm(:,i)
+            do a1 = 4, N1
+                tmp_atom2 = rec_scale * matmul(rec_mat, atom1_pos(:,a1)) + rec_trans
+                costs(i)  = huge(rec_scale)
+                a2_min    = 1
+                do a2 = 1, N2
+                    if( a2 == perm(1,i) .or. a2 == perm(2,i) .or. a2 == perm(3,i) )cycle
+                    cur_cost = sum((tmp_atom2 - atom2_pos(:,a2))**2)
+                    if( cur_cost < costs(i) )then
+                        costs(i) = cur_cost
+                        a2_min   = a2
+                    endif
+                enddo
+                print *, 'atom 1 pos : ',      atom1_pos(:,a1)
+                print *, 'atom 2 pos : ',      atom2_pos(:,a2_min)
+                print *, 'rec scale = ',       rec_scale
+                print *, 'rec translation = ', rec_trans
+                print *, 'rotated atom 2 : ',  tmp_atom2
+            enddo
+        endif
+        ! rotating all atoms1 to reg_atom
+        if( l_flip )then
+            do a2 = 1, N2
+                call matinv(rec_mat, inv_mat, 3, errflg)
+                reg_atom(:,a2) = matmul(inv_mat, (atom2_pos(:,a2) - rec_trans) / rec_scale)
+            enddo
+        else
+            do a1 = 1, N1
+                reg_atom(:,a1) = rec_scale * matmul(rec_mat, atom1_pos(:,a1)) + rec_trans
+            enddo
+        endif
+    end subroutine atoms_register
+
+    subroutine Kabsch_algo( pos1, pos2, ret_mat, ret_trans, ret_scale, verbose )
+        real,              intent(in)    :: pos1(:,:), pos2(:,:)
+        real,              intent(inout) :: ret_mat(3,3)
+        real,              intent(inout) :: ret_trans(3)
+        real,              intent(inout) :: ret_scale
+        logical, optional, intent(in)    :: verbose
+        real,    allocatable :: var1(:,:), var2(:,:)
+        integer, allocatable :: inds(:)
+        real    :: mean1(1,3), mean2(1,3), mat(3,3), eig_vals(3), eig_vecs(3,3), eye(3,3)
+        integer :: i, N
+        logical :: l_verbose
+        l_verbose  = .false.
+        if( present(verbose) ) l_verbose = verbose
+        N          = size(pos1, 2)
+        mean1(1,:) = sum(pos1, dim=2) / real(N)
+        mean2(1,:) = sum(pos2, dim=2) / real(N)
+        allocate(var1(3,N), var2(3,N))
+        do i = 1, N
+            var1(:,i) = pos1(:,i) - mean1(1,:)
+            var2(:,i) = pos2(:,i) - mean2(1,:)
+        enddo
+        mat = matmul(var1, transpose(var2))
+        if( l_verbose )then
+            print *, 'mat 1 = ', mat(1,:)
+            print *, 'mat 2 = ', mat(2,:)
+            print *, 'mat 3 = ', mat(3,:)
+        endif
+        call svdcmp(mat, eig_vals, eig_vecs)
+        inds = (/(i,i=1,3)/)
+        call hpsort(eig_vals, inds)
+        call reverse(eig_vals)
+        call reverse(inds)
+        eig_vecs = eig_vecs(:,inds)
+        mat      = mat(:,inds)
+        ret_mat  = matmul(eig_vecs, transpose(mat))
+        if( l_verbose )then
+            print *, 'eig vals = ', eig_vals
+            print *, 'eig_vecs 1 = ', eig_vecs(1,:)
+            print *, 'eig_vecs 2 = ', eig_vecs(2,:)
+            print *, 'eig_vecs 3 = ', eig_vecs(3,:)
+            print *, 'mat 1 = ', mat(1,:)
+            print *, 'mat 2 = ', mat(2,:)
+            print *, 'mat 3 = ', mat(3,:)
+            print *, 'det = ', determinant(ret_mat)
+        endif
+        ! reflection special case
+        if( determinant(ret_mat) < 0. )then
+            eye      = 0.
+            eye(1,1) =  1.
+            eye(2,2) =  1.
+            eye(3,3) = -1.
+            ret_mat  = matmul(matmul(eig_vecs, eye), transpose(mat))
+        endif
+        ret_scale = sqrt(sum(var2**2) / sum(var1**2))
+        mean2     = - ret_scale * matmul(mean1, transpose(ret_mat)) + mean2
+        ret_trans = mean2(1,:)
+    
+    contains
+
+        real function determinant(A)
+            real :: A(3,3)
+            determinant = A(1,1)*A(2,2)*A(3,3)  &
+                        - A(1,1)*A(2,3)*A(3,2)  &
+                        - A(1,2)*A(2,1)*A(3,3)  &
+                        + A(1,2)*A(2,3)*A(3,1)  &
+                        + A(1,3)*A(2,1)*A(3,2)  &
+                        - A(1,3)*A(2,2)*A(3,1)
+            return
+        end function determinant
+
+    end subroutine Kabsch_algo
 
     ! FORMULA: phasecorr = ifft(fft(field).*conj(fft(reference)));
     subroutine phasecorr_one_atom( img, element )
@@ -887,9 +1048,7 @@ contains
         real, allocatable, intent(in) :: matrix(:,:)
         character(len=*),  intent(in) :: pdbfile
         real, optional,    intent(in) :: betas(size(matrix, dim=2))
-        character(len=:), allocatable :: ext
-        character(len=4)      :: atom_name
-        character(len=STDLEN) :: fbody
+        character(len=4) :: atom_name
         integer     :: n, i
         type(atoms) :: a
         logical     :: betas_present
@@ -920,9 +1079,7 @@ contains
         character(len=2),  intent(in) :: element
         real, allocatable, intent(in) :: lattice(:,:)
         real, optional,    intent(in) :: betas(size(lattice, dim=2))
-        character(len=:), allocatable :: ext
         character(len=4)              :: atom_name
-        character(len=STDLEN)         :: fbody
         character(len=*), parameter   :: pdbfile='ideal_lattice.pdb'
         integer     :: n, i
         type(atoms) :: a
