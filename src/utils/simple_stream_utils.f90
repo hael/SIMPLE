@@ -337,18 +337,26 @@ contains
         class(stream_chunk),        intent(in) :: self
         character(len=*),           intent(in) :: folder
         character(len=LONGSTRLEN), allocatable :: stks(:)
-        character(len=:),          allocatable :: ext, fbody, fname
+        character(len=:),          allocatable :: ext, fbody, fname, dest
         integer :: i
-        allocate(stks(self%nmics))
-        do i = 1, self%nmics
-            fname   = basename(self%orig_stks(i))
-            ext     = fname2ext(fname)
-            fbody   = get_fbody(fname, ext)
-            stks(i) = trim(folder)//'/'//trim(fbody)//'.star'
-        enddo
-        fname = trim(self%path)//trim(sigma2_star_from_iter(self%it))
-        call split_sigma2_into_groups(fname, stks)
-        deallocate(stks)
+        if( trim(params_glob%sigma_est).eq.'group' )then
+            ! one star file with # of micrograph/stack groups -> # of micrograph groups files
+            allocate(stks(self%nmics))
+            do i = 1, self%nmics
+                fname   = basename(self%orig_stks(i))
+                ext     = fname2ext(fname)
+                fbody   = get_fbody(fname, ext)
+                stks(i) = trim(folder)//'/'//trim(fbody)//'.star'
+            enddo
+            fname = trim(self%path)//trim(sigma2_star_from_iter(self%it))
+            call split_sigma2_into_groups(fname, stks)
+            deallocate(stks)
+        else
+            ! one star file
+            fname = trim(self%path)//trim(sigma2_star_from_iter(self%it))
+            dest  = trim(folder)//'/chunk_'//int2str(self%id)//'.star'
+            call simple_copy_file(fname,dest)
+        endif
     end subroutine split_sigmas_into
 
     ! removes processing folder
