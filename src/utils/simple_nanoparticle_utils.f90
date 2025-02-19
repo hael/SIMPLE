@@ -21,18 +21,16 @@ integer, parameter :: NSTRAIN_COMPS = 7
 contains
 
     ! registering two sets of atom positions and rotate the first set to align the second set
-    subroutine atoms_register( atoms1, atoms2, reg_atom, verbose)
+    subroutine atoms_register( atoms1, atoms2, reg_atom, out_mat, out_trans, out_scale)
         real,              intent(in)    :: atoms1(:,:)
         real,              intent(in)    :: atoms2(:,:)
         real,              intent(inout) :: reg_atom(:,:)
-        logical, optional, intent(in)    :: verbose
+        real,    optional, intent(out)   :: out_mat(3,3), out_trans(3), out_scale
         integer, allocatable :: perm(:,:), inds(:)
         real,    allocatable :: costs(:), atom1_pos(:,:), atom2_pos(:,:)
         real    :: rec_mat(3,3), rec_trans(3), rec_scale, tmp_atom2(3), cur_cost, inv_mat(3,3), min_cost
         integer :: N1, N2, tmp, i, j, k, a1, a2, counter, errflg, a2_min, ref_inds(3)
-        logical :: l_flip, l_verbose
-        l_verbose = .false.
-        if( present(verbose) ) l_verbose = verbose
+        logical :: l_flip
         N1     = size(atoms1, 2)
         N2     = size(atoms2, 2)
         l_flip = (N2 < N1)
@@ -52,7 +50,7 @@ contains
         ! atom 1 reference position indeces
         inds     = rnd_inds(N1)
         ref_inds = inds(1:3)
-        ! optimizing over all permutation of 3-index set of atom 2 positions
+        ! optimizing over all permutations of 3-index set of atom 2 positions
         costs    = huge(rec_scale)
         !$omp parallel do collapse(3) default(shared) private(i,j,k,counter,rec_mat,rec_trans,rec_scale,a1,tmp_atom2,min_cost,a2,cur_cost)&
         !$omp proc_bind(close) schedule(static)
@@ -81,27 +79,6 @@ contains
         ! best permutation
         i = minloc(costs, dim=1)
         call Kabsch_algo(atom1_pos(:,ref_inds), atom2_pos(:,perm(:,i)), rec_mat, rec_trans, rec_scale)
-        ! this part is for debugging
-        if( l_verbose )then
-            print *, 'i = ', i, '; CORRECT PERM = ', perm(:,i)
-            do a1 = 1, N1
-                tmp_atom2 = rec_scale * matmul(rec_mat, atom1_pos(:,a1)) + rec_trans
-                min_cost  = huge(rec_scale)
-                a2_min    = 1
-                do a2 = 1, N2
-                    cur_cost = sum((tmp_atom2 - atom2_pos(:,a2))**2)
-                    if( cur_cost < min_cost )then
-                        min_cost = cur_cost
-                        a2_min   = a2
-                    endif
-                enddo
-                print *, 'atom 1 pos : ',      atom1_pos(:,a1)
-                print *, 'atom 2 pos : ',      atom2_pos(:,a2_min)
-                print *, 'rec scale = ',       rec_scale
-                print *, 'rec translation = ', rec_trans
-                print *, 'rotated atom 2 : ',  tmp_atom2
-            enddo
-        endif
         ! rotating all atoms1 to reg_atom
         if( l_flip )then
             do a2 = 1, N2
@@ -113,21 +90,22 @@ contains
                 reg_atom(:,a1) = rec_scale * matmul(rec_mat, atom1_pos(:,a1)) + rec_trans
             enddo
         endif
+        if( present(out_mat) .and. present(out_trans) .and. present(out_scale) )then
+            out_mat   = rec_mat
+            out_trans = rec_trans
+            out_scale = rec_scale
+        endif
     end subroutine atoms_register
 
-    subroutine Kabsch_algo( pos1, pos2, ret_mat, ret_trans, ret_scale, verbose )
-        real,              intent(in)    :: pos1(:,:), pos2(:,:)
-        real,              intent(inout) :: ret_mat(3,3)
-        real,              intent(inout) :: ret_trans(3)
-        real,              intent(inout) :: ret_scale
-        logical, optional, intent(in)    :: verbose
-        real,    allocatable :: var1(:,:), var2(:,:)
-        integer, allocatable :: inds(:)
+    subroutine Kabsch_algo( pos1, pos2, ret_mat, ret_trans, ret_scale )
+        real,    intent(in)    :: pos1(:,:), pos2(:,:)
+        real,    intent(inout) :: ret_mat(3,3)
+        real,    intent(inout) :: ret_trans(3)
+        real,    intent(inout) :: ret_scale
+        real,    allocatable   :: var1(:,:), var2(:,:)
+        integer, allocatable   :: inds(:)
         real    :: mean1(1,3), mean2(1,3), mat(3,3), eig_vals(3), eig_vecs(3,3), eye(3,3)
         integer :: i, N
-        logical :: l_verbose
-        l_verbose  = .false.
-        if( present(verbose) ) l_verbose = verbose
         N          = size(pos1, 2)
         mean1(1,:) = sum(pos1, dim=2) / real(N)
         mean2(1,:) = sum(pos2, dim=2) / real(N)
@@ -137,11 +115,6 @@ contains
             var2(:,i) = pos2(:,i) - mean2(1,:)
         enddo
         mat = matmul(var1, transpose(var2))
-        if( l_verbose )then
-            print *, 'mat 1 = ', mat(1,:)
-            print *, 'mat 2 = ', mat(2,:)
-            print *, 'mat 3 = ', mat(3,:)
-        endif
         call svdcmp(mat, eig_vals, eig_vecs)
         inds = (/(i,i=1,3)/)
         call hpsort(eig_vals, inds)
@@ -150,19 +123,9 @@ contains
         eig_vecs = eig_vecs(:,inds)
         mat      = mat(:,inds)
         ret_mat  = matmul(eig_vecs, transpose(mat))
-        if( l_verbose )then
-            print *, 'eig vals = ', eig_vals
-            print *, 'eig_vecs 1 = ', eig_vecs(1,:)
-            print *, 'eig_vecs 2 = ', eig_vecs(2,:)
-            print *, 'eig_vecs 3 = ', eig_vecs(3,:)
-            print *, 'mat 1 = ', mat(1,:)
-            print *, 'mat 2 = ', mat(2,:)
-            print *, 'mat 3 = ', mat(3,:)
-            print *, 'det = ', determinant(ret_mat)
-        endif
         ! reflection special case
         if( determinant(ret_mat) < 0. )then
-            eye      = 0.
+            eye      =  0.
             eye(1,1) =  1.
             eye(2,2) =  1.
             eye(3,3) = -1.

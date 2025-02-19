@@ -1,7 +1,11 @@
 program simple_test_atom_posmatch
 include 'simple_lib.f08'
+use simple_cmdline,            only: cmdline
+use simple_parameters,         only: parameters
 use simple_nanoparticle_utils, only: atoms_register, Kabsch_algo, read_pdb2matrix, write_matrix2pdb
 implicit none
+type(parameters)     :: p
+type(cmdline)        :: cline
 integer, parameter   :: N1 = 20, N2 = 5, MAX_POS = 10
 integer, allocatable :: inds(:), select_inds(:)
 real,    allocatable :: matrix1(:,:), matrix2(:,:), matrix_rot(:,:)
@@ -15,11 +19,6 @@ do i = 1, N1
     enddo
     print *, 'atom1 pos ', i, ' = ', atom1_pos(:,i)
 enddo
-! atom1_pos(:,1) = [4., 8., 8.]
-! atom1_pos(:,2) = [8., 4., 4.]
-! atom1_pos(:,3) = [8., 5., 3.]
-! atom1_pos(:,4) = [7., 1., 7.]
-! atom1_pos(:,5) = [6., 6., 6.]
 rot_mat(1,:) = [-0.4297,  0.3140, -0.8466]
 rot_mat(2,:) = [-0.7475, -0.6496,  0.1385]
 rot_mat(3,:) = [-0.5065,  0.6924,  0.5139]
@@ -55,7 +54,7 @@ print *, '------------'
 print *, 'randomized inds = ', inds
 ! generating all permutations of atom2_rnd positions
 print *, '------ ROTATED ATOMS 1 POSITIONS (SOME WILL MATCH ATOMS 2 POSITIONS BELOW) ------'
-call atoms_register(atom1_pos, atom2_rnd, atom1_rot, verbose=.false.)
+call atoms_register(atom1_pos, atom2_rnd, atom1_rot)
 do i = 1, N1
     print *, 'rotated atom 1 pos : ', atom1_rot(:,i)
 enddo
@@ -64,7 +63,7 @@ do i = 1, N2
     print *, 'atom 2 pos : ', atom2_rnd(:,mapping(i))
 enddo
 print *, '------ ROTATED ATOMS 2 POSITIONS (SOME WILL MATCH ATOMS 1 POSITIONS BELOW) ------'
-call atoms_register(atom2_rnd, atom1_pos, atom2_rot, verbose=.false.)
+call atoms_register(atom2_rnd, atom1_pos, atom2_rot)
 do i = 1, N2
     print *, 'rotated atom 2 pos : ', atom2_rot(:,mapping(i))
 enddo
@@ -73,9 +72,23 @@ do i = 1, N1
     print *, 'atom 1 pos : ', atom1_pos(:,i)
 enddo
 ! reading pdb file
-call read_pdb2matrix( '/home/vanc2/nano_fit/small_sh/small_rot_sh_ATMS.pdb', matrix1 )
-call read_pdb2matrix( '/home/vanc2/nano_fit/large/large_ATMS.pdb',           matrix2 )
-allocate(matrix_rot(3,size(matrix1,2)))
-call atoms_register(matrix1, matrix2, matrix_rot, verbose=.false.)
-call write_matrix2pdb( 'Pt', matrix_rot, '/home/vanc2/nano_fit/large/large_rot_sh_ATMS_rec.pdb' )
+if( command_argument_count() < 3 )then
+    write(logfhandle,'(a)') 'Usage: simple_test_opt_lp nthr=yy pdbfile=zz pdbfile2=tt'
+else
+    call cline%parse_oldschool
+    call cline%checkvar('nthr',     1)
+    call cline%checkvar('pdbfile' , 2)
+    call cline%checkvar('pdbfile2', 3)
+    call cline%check
+    call p%new(cline)
+    call read_pdb2matrix( p%pdbfile,  matrix1 )
+    call read_pdb2matrix( p%pdbfile2, matrix2 )
+    allocate(matrix_rot(3,size(matrix1,2)))
+    call atoms_register(matrix1, matrix2, matrix_rot)
+    if( cline%defined('pdbout') )then
+        call write_matrix2pdb( 'Pt', matrix_rot, p%pdbout )
+    else
+        call write_matrix2pdb( 'Pt', matrix_rot, 'ATMS_rec.pdb' )
+    endif
+endif
 end program simple_test_atom_posmatch
