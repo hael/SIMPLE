@@ -26,10 +26,10 @@ contains
         real,              intent(in)    :: atoms2(:,:)
         real,              intent(inout) :: reg_atom(:,:)
         logical, optional, intent(in)    :: verbose
-        integer, allocatable :: perm(:,:)
+        integer, allocatable :: perm(:,:), inds(:)
         real,    allocatable :: costs(:), atom1_pos(:,:), atom2_pos(:,:)
         real    :: rec_mat(3,3), rec_trans(3), rec_scale, tmp_atom2(3), cur_cost, inv_mat(3,3), min_cost
-        integer :: N1, N2, tmp, i, j, k, a1, a2, counter, errflg, a2_min
+        integer :: N1, N2, tmp, i, j, k, a1, a2, counter, errflg, a2_min, ref_inds(3)
         logical :: l_flip, l_verbose
         l_verbose = .false.
         if( present(verbose) ) l_verbose = verbose
@@ -48,42 +48,47 @@ contains
             allocate(atom1_pos(3,N1), source=atoms1)
             allocate(atom2_pos(3,N2), source=atoms2)
         endif
-        counter = 1
-        allocate(costs(N2*(N2-1)*(N2-2)),perm(3,N2*(N2-1)*(N2-2)))
-        costs = 0.
+        allocate(costs(N2**3),perm(3,N2**3))
+        ! atom 1 reference position indeces
+        inds     = rnd_inds(N1)
+        ref_inds = inds(1:3)
+        ! optimizing over all permutation of 3-index set of atom 2 positions
+        costs    = huge(rec_scale)
+        !$omp parallel do collapse(3) default(shared) private(i,j,k,counter,rec_mat,rec_trans,rec_scale,a1,tmp_atom2,min_cost,a2,cur_cost)&
+        !$omp proc_bind(close) schedule(static)
         do i = 1, N2
             do j = 1, N2
                 do k = 1, N2
                     if( k == j .or. i == j .or. i == k )cycle
+                    counter         = (i-1)*N2**2 + (j-1)*N2 + k
                     perm(:,counter) = [i,j,k]
-                    call Kabsch_algo(atom1_pos(:,1:3), atom2_pos(:,perm(:,counter)), rec_mat, rec_trans, rec_scale)
+                    costs(counter)  = 0.
+                    call Kabsch_algo(atom1_pos(:,ref_inds), atom2_pos(:,perm(:,counter)), rec_mat, rec_trans, rec_scale)
                     ! rotate atom1 pos from index 4 using the same rotation matrix and find the corresponding closest atom2 pos
-                    do a1 = 4, N1
+                    do a1 = 1, N1
                         tmp_atom2 = rec_scale * matmul(rec_mat, atom1_pos(:,a1)) + rec_trans
                         min_cost  = huge(rec_scale)
                         do a2 = 1, N2
-                            if( a2 == perm(1,counter) .or. a2 == perm(2,counter) .or. a2 == perm(3,counter) )cycle
                             cur_cost = sum((tmp_atom2 - atom2_pos(:,a2))**2)
                             if( cur_cost < min_cost ) min_cost = cur_cost
                         enddo
                         costs(counter) = costs(counter) + min_cost
                     enddo
-                    counter = counter + 1
                 enddo
             enddo
         enddo
+        !$omp end parallel do
         ! best permutation
         i = minloc(costs, dim=1)
-        call Kabsch_algo(atom1_pos(:,1:3), atom2_pos(:,perm(:,i)), rec_mat, rec_trans, rec_scale)
+        call Kabsch_algo(atom1_pos(:,ref_inds), atom2_pos(:,perm(:,i)), rec_mat, rec_trans, rec_scale)
         ! this part is for debugging
         if( l_verbose )then
             print *, 'i = ', i, '; CORRECT PERM = ', perm(:,i)
-            do a1 = 4, N1
+            do a1 = 1, N1
                 tmp_atom2 = rec_scale * matmul(rec_mat, atom1_pos(:,a1)) + rec_trans
                 min_cost  = huge(rec_scale)
                 a2_min    = 1
                 do a2 = 1, N2
-                    if( a2 == perm(1,i) .or. a2 == perm(2,i) .or. a2 == perm(3,i) )cycle
                     cur_cost = sum((tmp_atom2 - atom2_pos(:,a2))**2)
                     if( cur_cost < min_cost )then
                         min_cost = cur_cost

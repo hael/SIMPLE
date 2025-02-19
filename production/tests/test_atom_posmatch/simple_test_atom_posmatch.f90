@@ -25,7 +25,7 @@ rot_mat(2,:) = [-0.7475, -0.6496,  0.1385]
 rot_mat(3,:) = [-0.5065,  0.6924,  0.5139]
 translation  = [0.2, -0.5, 1.]
 scale        = 0.5
-select_inds  = scramble(N1)
+select_inds  = rnd_inds(N1)
 mapping      = select_inds(1:N2)
 call hpsort(mapping)
 print *, '------------'
@@ -46,7 +46,7 @@ print *, 'ret_mat 1 = ', rec_mat(1,:)
 print *, 'ret_mat 2 = ', rec_mat(2,:)
 print *, 'ret_mat 3 = ', rec_mat(3,:)
 ! randomize atom2_pos
-inds = scramble(N2)
+inds = rnd_inds(N2)
 do i = 1, N2
     atom2_rnd(:,i)   = atom2_pos(:,inds(i))
     mapping(inds(i)) = i
@@ -78,40 +78,4 @@ call read_pdb2matrix( '/home/vanc2/nano_fit/large/large_ATMS.pdb',           mat
 allocate(matrix_rot(3,size(matrix1,2)))
 call atoms_register(matrix1, matrix2, matrix_rot, verbose=.false.)
 call write_matrix2pdb( 'Pt', matrix_rot, '/home/vanc2/nano_fit/large/large_rot_sh_ATMS_rec.pdb' )
-
-contains
-
-    function scramble( number_of_values ) result(array)
-        !@(#) M_random::scramble(3f): return integer array of random values 1 to N.
-        integer,intent(in)    :: number_of_values
-        integer,allocatable   :: array(:)
-        integer               :: i, j, k, m, n
-        integer               :: temp
-        real                  :: u
-        array=[(i,i=1,number_of_values)]
-        ! The intrinsic RANDOM_NUMBER(3f) returns a real number (or an array
-        ! of such) from the uniform distribution over the interval [0,1). (ie.
-        ! it includes 0 but not 1.).
-        !
-        ! To have a discrete uniform distribution on
-        ! the integers {n, n+1, ..., m-1, m} carve the continuous distribution
-        ! up into m+1-n equal sized chunks, mapping each chunk to an integer.
-        !
-        ! One way is:
-        !   call random_number(u)
-        !   j = n + FLOOR((m+1-n)*u)  ! choose one from m-n+1 integers
-        n=1
-        m=number_of_values
-        do k=1,2
-            do i=1,m
-            call random_number(u)
-            j = n + FLOOR((m+1-n)*u)
-            ! switch values
-            temp=array(j)
-            array(j)=array(i)
-            array(i)=temp
-            enddo
-        enddo 
-    end function scramble
-
 end program simple_test_atom_posmatch
