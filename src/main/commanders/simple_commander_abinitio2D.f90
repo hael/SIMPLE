@@ -124,16 +124,19 @@ contains
         call spproj%write_segment_inside('ptcl3D', params%projfile)
         ! stats
         if( trim(params%stats).eq.'yes' ) call output_stats('premapping')
-        ! weights
+        ! weights & final mapping of particles
         if( trim(params%autosample).eq.'yes' )then
             call spproj_field%set_all2single('w',1.)
             call spproj%write_segment_inside(params%oritype, params%projfile)
-        endif
-        ! final mapping of all particles
-        if( (trim(params%autosample).eq.'yes').and.(stage_parms(NSTAGES)%nptcls<nptcls_eff) )then
-            call set_final_mapping
-            call execute_cluster2D
-            if( trim(params%stats).eq.'yes' ) call output_stats('final')
+            ! mapping of all particles
+            if( stage_parms(NSTAGES)%nptcls < nptcls_eff )then
+                call set_final_mapping
+                call execute_cluster2D
+                if( trim(params%stats).eq.'yes' )then
+                    call spproj%read_segment(params%oritype,params%projfile)
+                    call output_stats('final')
+                endif
+            endif
         endif
         ! final class generation & ranking
         if ( trim(params%rank_cavgs).eq.'yes' )then
@@ -144,6 +147,10 @@ contains
         call del_file('start2Drefs'//params%ext)
         call del_file('start2Drefs_even'//params%ext)
         call del_file('start2Drefs_odd'//params%ext)
+        call del_files(DIST_FBODY,      params%nparts,ext='.dat')
+        call del_files(ASSIGNMENT_FBODY,params%nparts,ext='.dat')
+        call del_file(DIST_FBODY      //'.dat')
+        call del_file(ASSIGNMENT_FBODY//'.dat')
         call spproj%kill
         nullify(spproj_field)
         call qsys_cleanup
@@ -377,7 +384,7 @@ contains
             else
                 call cline_cluster2D%delete('lambda')
             endif
-            call cline_cluster2D%delete('nsample_max')
+            call cline_cluster2D%delete('nsample_stop')
             call cline_cluster2D%delete('nsample_start')
             call cline_cluster2D%delete('autosample')
             if( stage_parms(istage)%max_cls_pop > 0 )then
@@ -434,8 +441,8 @@ contains
             call cline_cluster2D%set('icm',       'no')
             call cline_cluster2D%delete('lp')
             call cline_cluster2D%delete('lambda')
-            call cline_cluster2D%delete('nsample_max')
             call cline_cluster2D%delete('nsample_start')
+            call cline_cluster2D%delete('nsample_stop')
             call cline_cluster2D%delete('autosample')
             call cline_cluster2D%delete('update_frac')
             call cline_cluster2D%delete('maxpop')

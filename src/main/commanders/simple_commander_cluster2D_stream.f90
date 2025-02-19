@@ -11,7 +11,7 @@ use simple_class_frcs,         only: class_frcs
 use simple_stack_io,           only: stack_io
 use simple_starproject,        only: starproject
 use simple_starproject_stream, only: starproject_stream
-use simple_euclid_sigma2,      only: consolidate_sigma2_groups, split_sigma2_into_groups, sigma2_star_from_iter
+use simple_euclid_sigma2,      only: sigma2_star_from_iter
 use simple_guistats,           only: guistats
 use simple_stream_utils
 use simple_qsys_funs
@@ -46,6 +46,7 @@ type scaled_dims
     integer :: box=0, boxpd=0
 end type scaled_dims
 
+real,                  parameter :: SMPD_HARD_LIMIT      = 1.5              ! Pixel size hard limit -> max resolution=3Angs
 integer,               parameter :: MINBOXSZ             = 128              ! minimum boxsize for scaling
 integer,               parameter :: CHUNK_MINITS         = 13               ! minimum number of iterations for chunks
 integer,               parameter :: CHUNK_MAXITS         = CHUNK_MINITS + 2 ! maximum number of iterations for chunks
@@ -187,8 +188,14 @@ contains
             call cline_cluster2D_chunk%set('stream',    'no')
             call cline_cluster2D_chunk%set('mskdiam',   params_glob%mskdiam)
             call cline_cluster2D_chunk%set('ncls',      params_glob%ncls_start)
+            call cline_cluster2D_chunk%set('sigma_est', params_glob%sigma_est)
             call cline_cluster2D_chunk%set('kweight',   params_glob%kweight_chunk)
-            if( l_wfilt ) call cline_cluster2D_chunk%set('wiener', 'partial')
+            if( l_wfilt )then
+                call cline_cluster2D_chunk%set('wiener',     'partial')
+            endif
+            if( trim(params_glob%autosample).eq.'yes' )then
+                call cline_cluster2D_chunk%set('autosample', 'yes')
+            endif
             ! EV override
             call get_environment_variable(SIMPLE_STREAM_CHUNK_NTHR, chunk_nthr_env, envlen)
             if(envlen > 0) then
@@ -210,6 +217,7 @@ contains
         call cline_cluster2D_pool%set('trs',       MINSHIFT)
         call cline_cluster2D_pool%set('projfile',  PROJFILE_POOL)
         call cline_cluster2D_pool%set('projname',  trim(get_fbody(trim(PROJFILE_POOL),trim('simple'))))
+        call cline_cluster2D_pool%set('sigma_est', params_glob%sigma_est)
         call cline_cluster2D_pool%set('kweight',   params_glob%kweight_pool)
         if( cline%defined('center') )then
             carg = cline%get_carg('center')
@@ -402,8 +410,8 @@ contains
         prev_dims = pool_dims
         ! Auto-scaling?
         if( trim(params_glob%autoscale) .ne. 'yes' ) return
-        ! Hard limit reached (3 Angs)?
-        if( pool_dims%smpd < 1.5 ) return
+        ! Hard limit reached?
+        if( pool_dims%smpd < SMPD_HARD_LIMIT ) return
         ! Too early?
         if( pool_iter < 10 ) return
         if( ncls_glob < max_ncls ) return
@@ -768,6 +776,7 @@ contains
     ! Performs one classification iteration:
     ! updates to command-line, particles sampling, temporary project & execution
     subroutine classify_pool
+        use simple_euclid_sigma2, only: consolidate_sigma2_groups, average_sigma2_groups
         use simple_ran_tabu
         logical,                   parameter   :: L_BENCH = .false.
         type(ran_tabu)                         :: random_generator
@@ -778,7 +787,7 @@ contains
         character(len=:),          allocatable :: stack_fname, ext, fbody
         character(len=LONGSTRLEN), allocatable :: sigma_fnames(:)
         real                    :: frac_update
-        integer                 :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl
+        integer                 :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl, nptcls_th
         integer                 :: eo, icls, nptcls_sel, istk, nptcls2update, nstks2update, jjptcl
         integer(timer_int_kind) :: t_tot
         if( .not. stream2D_active ) return
@@ -874,7 +883,7 @@ contains
         ! counting number of stacks & particles (old and newer)
         nstks_tot  = pool_proj%os_stk%get_noris()
         allocate(nptcls_per_stk(nstks_tot), min_update_cnts_per_stk(nstks_tot), source=0)
-        nptcls_old = 0
+        nptcls_old = 0 ! Particles updated more than STREAM_SRCHLIM-1
         !$omp parallel do schedule(static) proc_bind(close) private(istk,fromp,top,iptcl)&
         !$omp default(shared) reduction(+:nptcls_old)
         do istk = 1,nstks_tot
@@ -961,32 +970,65 @@ contains
         spproj%os_cls2D = pool_proj%os_cls2D
         ! consolidate sigmas doc
         if( l_update_sigmas )then
-            allocate(sigma_fnames(nstks2update))
-            do istk = 1,nstks2update
-                call spproj%os_stk%getter(istk,'stk',stack_fname)
-                stack_fname = basename(stack_fname)
-                ext         = fname2ext(stack_fname)
-                fbody       = get_fbody(stack_fname, ext)
-                sigma_fnames(istk) = trim(SIGMAS_DIR)//'/'//trim(fbody)//'.star'
-            enddo
-            call consolidate_sigma2_groups(sigma2_star_from_iter(pool_iter), sigma_fnames)
-            deallocate(sigma_fnames)
+            if( trim(params_glob%sigma_est).eq.'group' )then
+                allocate(sigma_fnames(nstks2update))
+                do istk = 1,nstks2update
+                    call spproj%os_stk%getter(istk,'stk',stack_fname)
+                    stack_fname = basename(stack_fname)
+                    ext         = fname2ext(stack_fname)
+                    fbody       = get_fbody(stack_fname, ext)
+                    sigma_fnames(istk) = trim(SIGMAS_DIR)//'/'//trim(fbody)//'.star'
+                enddo
+                call consolidate_sigma2_groups(sigma2_star_from_iter(pool_iter), sigma_fnames)
+                deallocate(sigma_fnames)
+            else
+                if( pool_iter==1 )then
+                    ! sigma_est=global & first iteration
+                    allocate(sigma_fnames(glob_chunk_id))
+                    do i = 1,glob_chunk_id
+                        sigma_fnames(i) = trim(SIGMAS_DIR)//'/chunk_'//int2str(i)//'.star'
+                    enddo
+                    call average_sigma2_groups(sigma2_star_from_iter(pool_iter), sigma_fnames)
+                    deallocate(sigma_fnames)
+                endif
+            endif
             do i = 1,params_glob%nparts_pool
                 call del_file(SIGMA2_FBODY//int2str_pad(i,numlen)//'.dat')
             enddo
         endif
         ! update command line with fractional update parameters
         call cline_cluster2D_pool%delete('update_frac')
-        if( nptcls_sel > MAX_STREAM_NPTCLS )then
-            if( (sum(prev_eo_pops) > 0) .and. (nptcls_old > 0))then
-                frac_update = real(nptcls_old-sum(prev_eo_pops)) / real(nptcls_old)
-                call cline_cluster2D_pool%set('update_frac', frac_update)
-                call cline_cluster2D_pool%set('center',      'no')
-                do icls = 1,ncls_glob
-                    call spproj%os_cls2D%set(icls,'prev_pop_even',prev_eo_pops(icls,1))
-                    call spproj%os_cls2D%set(icls,'prev_pop_odd', prev_eo_pops(icls,2))
-                enddo
+        call cline_cluster2D_pool%delete('maxpop')
+        call cline_cluster2D_pool%delete('nsample')
+        if( trim(params_glob%autosample).eq.'yes' )then
+            ! momentum & limits to # of particles per class
+            nptcls_th = params_glob%nsample*ncls_glob
+            if( nptcls_sel > nptcls_th )then
+                frac_update = real(nptcls_th) / real(nptcls_sel)
+                call cline_cluster2D_pool%set('maxpop',      params_glob%nsample)
+                print *,'frac_update A: ', frac_update ! debug
             endif
+        else
+            ! momentum only
+            if( nptcls_sel > MAX_STREAM_NPTCLS )then
+                if( (sum(prev_eo_pops) > 0) .and. (nptcls_old > 0))then
+                    frac_update = real(nptcls_old-sum(prev_eo_pops)) / real(nptcls_old)
+                    print *,'frac_update B: ', frac_update ! debug
+                endif
+            endif
+        endif
+        if( frac_update < 0.99999 )then
+            call cline_cluster2D_pool%set('update_frac', frac_update)
+            call cline_cluster2D_pool%set('center',      'no')
+            do icls = 1,ncls_glob
+                call spproj%os_cls2D%set(icls,'prev_pop_even',prev_eo_pops(icls,1))
+                call spproj%os_cls2D%set(icls,'prev_pop_odd', prev_eo_pops(icls,2))
+            enddo
+            ! debug, to remove
+            print *,'nptcls_sel        ',nptcls_sel
+            print *,'nptcls_old        ',nptcls_old
+            print *,'sum(prev_eo_pops) ',sum(prev_eo_pops)
+            print *,'params_glob%nsample*ncls_glob ',params_glob%nsample*ncls_glob
         endif
         ! write project
         call spproj%write(trim(POOL_DIR)//trim(PROJFILE_POOL))
@@ -1023,6 +1065,7 @@ contains
     ! Reports alignment info from completed iteration of subset
     ! of particles back to the pool
     subroutine update_pool
+        use simple_euclid_sigma2, only: split_sigma2_into_groups
         type(sp_project)                       :: spproj
         type(oris)                             :: os
         type(class_frcs)                       :: frcs
@@ -1079,17 +1122,22 @@ contains
             call pool_proj%os_cls2D%set_all('pop', real(pops))
             ! updates sigmas
             if( l_update_sigmas )then
-                nstks = spproj%os_stk%get_noris()
-                allocate(sigma_fnames(nstks))
-                do istk = 1,nstks
-                    call spproj%os_stk%getter(istk,'stk',stack_fname)
-                    stack_fname = basename(stack_fname)
-                    ext         = fname2ext(stack_fname)
-                    fbody       = get_fbody(stack_fname, ext)
-                    sigma_fnames(istk) = trim(SIGMAS_DIR)//'/'//trim(fbody)//'.star'
-                enddo
-                call split_sigma2_into_groups(sigma2_star_from_iter(pool_iter+1), sigma_fnames)
-                deallocate(sigma_fnames)
+                if( trim(params_glob%sigma_est).eq.'group' )then
+                    ! propagate sigma2 changes back to the micrograph/stack document
+                    nstks = spproj%os_stk%get_noris()
+                    allocate(sigma_fnames(nstks))
+                    do istk = 1,nstks
+                        call spproj%os_stk%getter(istk,'stk',stack_fname)
+                        stack_fname = basename(stack_fname)
+                        ext         = fname2ext(stack_fname)
+                        fbody       = get_fbody(stack_fname, ext)
+                        sigma_fnames(istk) = trim(SIGMAS_DIR)//'/'//trim(fbody)//'.star'
+                    enddo
+                    call split_sigma2_into_groups(sigma2_star_from_iter(pool_iter+1), sigma_fnames)
+                    deallocate(sigma_fnames)
+                else
+                    ! sigma_est=global, nothing to do
+                endif
             endif
             call frcs%read(trim(POOL_DIR)//trim(FRCS_FILE))
             current_resolution = frcs%estimate_lp_for_align()
@@ -1099,6 +1147,11 @@ contains
             call update_pool_dims
             ! for gui
             call update_pool_for_gui
+            ! some tidying
+            ! call del_files(DIST_FBODY,      params_glob%nparts_pool,ext='.dat')
+            ! call del_files(ASSIGNMENT_FBODY,params_glob%nparts_pool,ext='.dat')
+            ! call del_file(DIST_FBODY      //'.dat')
+            ! call del_file(ASSIGNMENT_FBODY//'.dat')
         endif
         call spproj%kill
     end subroutine update_pool

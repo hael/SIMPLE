@@ -7,7 +7,7 @@ use simple_starfile_wrappers
 implicit none
 
 public :: euclid_sigma2, eucl_sigma2_glob, write_groups_starfile
-public :: split_sigma2_into_groups, consolidate_sigma2_groups
+public :: split_sigma2_into_groups, consolidate_sigma2_groups, average_sigma2_groups
 public :: sigma2_star_from_iter, fill_sigma2_before_nyq, test_unit
 private
 #include "simple_local_flags.inc"
@@ -518,9 +518,9 @@ contains
     subroutine consolidate_sigma2_groups( fname, fnames )
         character(len=*),                        intent(in) :: fname
         character(len=LONGSTRLEN), allocatable,  intent(in) :: fnames(:)
-        type(euclid_sigma2)           :: euclidsigma2
-        real,             allocatable :: sigma2_group(:,:,:)
-        integer                       :: igroup, ngroups, n
+        type(euclid_sigma2) :: euclidsigma2
+        real,   allocatable :: sigma2_group(:,:,:)
+        integer             :: igroup, ngroups, n
         call euclidsigma2%init_from_group_header(fnames(1))
         call euclidsigma2%read_sigma2_groups(1, euclidsigma2%sigma2_groups, n, filename=fnames(1))
         ngroups = size(fnames)
@@ -535,6 +535,35 @@ contains
         call write_groups_starfile(fname, sigma2_group, ngroups)
         deallocate(sigma2_group)
     end subroutine consolidate_sigma2_groups
+
+    subroutine average_sigma2_groups( fname, fnames )
+        character(len=*),                        intent(in) :: fname
+        character(len=LONGSTRLEN), allocatable,  intent(in) :: fnames(:)
+        type(euclid_sigma2) :: euclidsigma2
+        real,   allocatable :: sigma2_group(:,:,:)
+        integer             :: i, ngroups, n, nfiles, j
+        nfiles = size(fnames)
+        j = 0
+        do i = 1,nfiles
+            if( .not.file_exists(fnames(i)) ) cycle
+            j = j + 1
+            call euclidsigma2%init_from_group_header(fnames(i))
+            call euclidsigma2%read_sigma2_groups(1, euclidsigma2%sigma2_groups, n, filename=fnames(i))
+            if( j==1 )then
+                ngroups      = n
+                sigma2_group = euclidsigma2%sigma2_groups(:,:,:)
+            else
+                if( n /= ngroups ) THROW_HARD('Cannot average with inconsistent number of groups!')
+                sigma2_group(:,:,:) = sigma2_group(:,:,:) + euclidsigma2%sigma2_groups(:,:,:)
+            endif
+            call euclidsigma2%kill
+        enddo
+        if( j > 0 )then
+            if( j>1 ) sigma2_group(:,:,:) = sigma2_group(:,:,:) / real(j)
+            call write_groups_starfile(fname, sigma2_group, ngroups)
+            deallocate(sigma2_group)
+        endif
+    end subroutine average_sigma2_groups
 
     function sigma2_star_from_iter( iter )
         integer, intent(in) :: iter
@@ -566,7 +595,7 @@ contains
         integer, parameter :: iter       = 7
         real,    parameter :: scale      = 0.3
         type(euclid_sigma2)           :: euclidsigma2
-        character(len=STDLEN)         :: fname, fname1, fname2
+        character(len=LONGSTRLEN)     :: fname, fname1, fname2
         character(len=LONGSTRLEN), allocatable :: fnames(:)
         real,                      allocatable :: sigma2(:,:,:)
         integer :: igroup, ng
