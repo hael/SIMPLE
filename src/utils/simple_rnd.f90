@@ -8,7 +8,7 @@ use simple_syslib, only: get_process_id
 implicit none
 
 public :: seed_rnd, ran3, ran3arr, randn, multinomal, nmultinomal, greedy_sampling, gasdev, irnd_uni, irnd_uni_pair
-public :: irnd_gasdev, rnd_4dim_sphere_pnt, shcloc, mnorm_smp, r8po_fa
+public :: irnd_gasdev, rnd_4dim_sphere_pnt, shcloc, mnorm_smp, r8po_fa, rnd_inds
 private
 #include "simple_local_flags.inc"
 
@@ -365,6 +365,27 @@ contains
             end do
         endif
     end function shcloc
+
+    !>  \brief  return integer array of random values 1 to num.
+    function rnd_inds( num ) result(array)
+        integer, intent(in)  :: num
+        integer, allocatable :: array(:)
+        integer :: i, j, k, m, n, temp
+        real    :: u
+        array = [(i,i=1,num)]
+        n     = 1
+        m     = num
+        do k=1,2
+            do i=1,m
+            call random_number(u)
+            j        = n + floor((m+1-n)*u)
+            ! switch values
+            temp     = array(j)
+            array(j) = array(i)
+            array(i) = temp
+            enddo
+        enddo
+    end function rnd_inds
 
     !>  \brief  mnorm_smp samples a multivariate normal distribution.
     !!          The multivariate normal distribution for the M dimensional vector X has the form:
