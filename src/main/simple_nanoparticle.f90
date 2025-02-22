@@ -594,17 +594,14 @@ contains
         call simatms%kill
     end subroutine identify_lattice_params
 
-    subroutine identify_atomic_pos( self, a, l_fit_lattice, l_discard, split_fname )
+    subroutine identify_atomic_pos( self, a, l_fit_lattice, split_fname )
         class(nanoparticle),        intent(inout) :: self
         real,                       intent(inout) :: a(3)                ! lattice parameters
         logical,                    intent(in)    :: l_fit_lattice       ! fit lattice or use inputted
-        logical,          optional, intent(in)    :: l_discard           ! discard atoms flag
         character(len=*), optional, intent(in)    :: split_fname
-        logical     :: use_cn_thresh, fixed_cs_thres, ll_discard
+        logical     :: use_cn_thresh, fixed_cs_thres
         type(image) :: simatms, img_cos
         integer     :: n_discard
-        ll_discard = .true.
-        if( present(l_discard) ) ll_discard = l_discard
         ! MODEL BUILDING
         ! Phase correlation approach
         call phasecorr_one_atom(self%img, self%element)
@@ -619,12 +616,10 @@ contains
         if (WRITE_OUTPUT) call simatms%write(trim(self%fbody)//'_SIM_pre_validation.mrc')
         call self%validate_atoms(simatms)
         if ( WRITE_OUTPUT )call self%write_centers('valid_corr_in_bfac_field_pre_discard', 'valid_corr')
-        if( ll_discard )then
-            call self%discard_atoms
-            ! re-calculate valid_corr:s (since they are otherwise lost from the B-factor field due to reallocations of atominfo)
-            call self%simulate_atoms(simatms)
-            call self%validate_atoms(simatms)
-        endif
+        call self%discard_atoms
+        ! re-calculate valid_corr:s (since they are otherwise lost from the B-factor field due to reallocations of atominfo)
+        call self%simulate_atoms(simatms)
+        call self%validate_atoms(simatms)
         ! WRITE OUTPUT
         call self%img_bin%write_bimg(trim(self%fbody)//'_BIN.mrc')
         write(logfhandle,'(A)') 'output, binarized map:            '//trim(self%fbody)//'_BIN.mrc'
@@ -1028,16 +1023,32 @@ contains
     subroutine discard_atoms( self )
         class(nanoparticle), intent(inout) :: self
         integer, allocatable :: imat_bin(:,:,:), imat_cc(:,:,:), cscores(:)
-        real,    allocatable :: centers_A(:,:)
+        real,    allocatable :: centers_A(:,:), cendists(:), cendists_sorted(:)
+        logical, allocatable :: atom_del_mask(:)
         integer              :: cscore_thres
         type(stats_struct)   :: cscore_stats
-        real    :: percen
+        real    :: percen, cendist_thres
         integer :: cc, cn, n_discard, cnt_discard
         write(logfhandle, '(A)') '>>> DISCARDING ATOMS'
         ! calculate contact scores
         centers_A = self%atominfo2centers_A()
         allocate(cscores(self%n_cc), source=0)
         call calc_contact_scores(self%element,centers_A,cscores)
+        ! calculate atomic distances from the center of mass of the nanoparticle
+        self%NPcen = self%masscen()
+        allocate(cendists(self%n_cc), cendists_sorted(self%n_cc), atom_del_mask(self%n_cc))
+        do cc = 1, self%n_cc
+            cendists(cc)        = euclid(self%atominfo(cc)%center(:), self%NPcen) * self%smpd
+            cendists_sorted(cc) = cendists(cc)
+        end do
+        call hpsort(cendists_sorted)
+        ! only subject 15% of the atoms farthest away from the center of mass to deletion
+        cendist_thres = cendists_sorted(nint(0.85 * real(self%n_cc)))
+        where( cendists > cendist_thres )
+            atom_del_mask = .true.
+        elsewhere
+            atom_del_mask = .false.
+        endwhere
         do cn = 1,12
             percen = (real(count(cscores >= cn)) / real(self%n_cc)) * 100.
             write(logfhandle,*) 'percen atoms with contact score > '//int2str(cn)//':', percen
@@ -1079,7 +1090,7 @@ contains
             ! discard
             cnt_discard  = 0
             do cc = 1, self%n_cc
-                if( cscores(cc) < cthresh )then
+                if( cscores(cc) < cthresh .and. atom_del_mask(cc) )then
                     where(imat_cc == cc) imat_bin = 0
                     n_discard   = n_discard   + 1
                     cnt_discard = cnt_discard + 1
@@ -1112,10 +1123,12 @@ contains
             ! discard
             cnt_discard  = 0
             do cc = 1, self%n_cc
-                if( radii(cc) < radius_thres .and. cscores(cc) < cthresh )then
-                    where(imat_cc == cc) imat_bin = 0
-                    n_discard   = n_discard   + 1
-                    cnt_discard = cnt_discard + 1
+                if( atom_del_mask(cc) )then
+                    if( radii(cc) < radius_thres .and. cscores(cc) < cthresh )then
+                        where(imat_cc == cc) imat_bin = 0
+                        n_discard   = n_discard   + 1
+                        cnt_discard = cnt_discard + 1
+                    endif
                 endif
             enddo
             if( cnt_discard > 0 )then
