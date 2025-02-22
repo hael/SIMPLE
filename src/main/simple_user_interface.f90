@@ -2395,7 +2395,7 @@ contains
         ! filter controls
         call detect_atoms%set_input('filt_ctrls', 1, element)
         ! mask controls
-        call detect_atoms%set_input('mask_ctrls', 1, 'discard_atoms', 'binary', 'Discard atoms', 'Discard atoms(yes|no){yes}', '(yes|no){no}', .false., 'yes')
+        ! <empty>
         ! computer controls
         call detect_atoms%set_input('comp_ctrls', 1, nthr)
     end subroutine new_detect_atoms
