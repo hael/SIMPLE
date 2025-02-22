@@ -1080,6 +1080,7 @@ contains
         if( .not. cline%defined('objfun')         ) call cline%set('objfun',         'cc') ! needs to be here to avoid ERROR! file sigma2_it_10.star does not exist; simple_fileio.f90; line:   932
         if( .not. cline%defined('trail_rec')      ) call cline%set('trail_rec',     'yes') 
         if( .not. cline%defined('ufrac_trec')     ) call cline%set('ufrac_trec',      0.5)
+        if( .not. cline%defined('discard_atoms')  ) call cline%set('discard_atoms',  'no')
         call cline%set('mkdir', 'yes') ! because we want to create the directory X_autorefine3D_nano & copy the project file
         call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
         params%mkdir = 'no'            ! to prevent the input vol to be appended with ../
@@ -1108,8 +1109,6 @@ contains
         ! then update cline_detect_atoms accordingly
         call cline_detect_atms%set('prg', 'detect_atoms')
         call cline_detect_atms%set('vol1', RECVOL)               ! this is ALWYAS going to be the input volume to detect_atoms
-        call cline_detect_atms%set('corr_thres', 0.3)            ! mild thresholding during refinement
-        call cline_detect_atms%set('cs_thres',   2.0)            ! mild thresholding during refinement
         iter = 0
         do i = 1, params%maxits
             ! first refinement pass on the initial volume uses the low-pass limit defined by the user
@@ -1145,10 +1144,6 @@ contains
             call del_file(SPLITTED)
             iter = iter + 1
         end do
-        ! put back automatic contact thresholding after refinement
-        call cline_detect_atms%delete('corr_thres')
-        call cline_detect_atms%delete('cs_thres')
-        call cline_detect_atms%delete('use_thres') ! yes is default
         call xdetect_atms%execute_safe(cline_detect_atms)
         call simple_mkdir(FINAL_MAPS)
         call simple_copy_file(RECVOL,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'.mrc')

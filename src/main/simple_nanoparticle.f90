@@ -594,14 +594,17 @@ contains
         call simatms%kill
     end subroutine identify_lattice_params
 
-    subroutine identify_atomic_pos( self, a, l_fit_lattice, split_fname )
+    subroutine identify_atomic_pos( self, a, l_fit_lattice, l_discard, split_fname )
         class(nanoparticle),        intent(inout) :: self
         real,                       intent(inout) :: a(3)                ! lattice parameters
         logical,                    intent(in)    :: l_fit_lattice       ! fit lattice or use inputted
+        logical,          optional, intent(in)    :: l_discard           ! discard atoms flag
         character(len=*), optional, intent(in)    :: split_fname
-        logical     :: use_cn_thresh, fixed_cs_thres
+        logical     :: use_cn_thresh, fixed_cs_thres, ll_discard
         type(image) :: simatms, img_cos
         integer     :: n_discard
+        ll_discard = .true.
+        if( present(l_discard) ) ll_discard = l_discard
         ! MODEL BUILDING
         ! Phase correlation approach
         call phasecorr_one_atom(self%img, self%element)
@@ -616,10 +619,12 @@ contains
         if (WRITE_OUTPUT) call simatms%write(trim(self%fbody)//'_SIM_pre_validation.mrc')
         call self%validate_atoms(simatms)
         if ( WRITE_OUTPUT )call self%write_centers('valid_corr_in_bfac_field_pre_discard', 'valid_corr')
-        call self%discard_atoms
-        ! re-calculate valid_corr:s (since they are otherwise lost from the B-factor field due to reallocations of atominfo)
-        call self%simulate_atoms(simatms)
-        call self%validate_atoms(simatms)
+        if( ll_discard )then
+            call self%discard_atoms
+            ! re-calculate valid_corr:s (since they are otherwise lost from the B-factor field due to reallocations of atominfo)
+            call self%simulate_atoms(simatms)
+            call self%validate_atoms(simatms)
+        endif
         ! WRITE OUTPUT
         call self%img_bin%write_bimg(trim(self%fbody)//'_BIN.mrc')
         write(logfhandle,'(A)') 'output, binarized map:            '//trim(self%fbody)//'_BIN.mrc'
