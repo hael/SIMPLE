@@ -2379,7 +2379,7 @@ contains
         &'Detect atoms in atomic-resolution nanoparticle map',& ! descr_short
         &'is a program for identifying atoms in atomic-resolution nanoparticle maps and generating bin and connected-components map',& ! descr long
         &'single_exec',&                                        ! executable
-        &2, 1, 0, 0, 1, 1, 1, .false.)                          ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 1, 0, 1, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call detect_atoms%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &

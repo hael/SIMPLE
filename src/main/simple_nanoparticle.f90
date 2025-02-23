@@ -584,7 +584,7 @@ contains
         call self%split_atoms()
         ! validation through per-atom correlation with the simulated density
         call self%simulate_atoms(simatms)
-        call self%validate_atoms(simatms)
+        call self%validate_atoms(simatms, l_print=.true.)
         ! discard atoms
         call self%discard_atoms
         ! fit lattice
@@ -614,12 +614,12 @@ contains
         ! validation through per-atom correlation with the simulated density
         call self%simulate_atoms(simatms)
         if (WRITE_OUTPUT) call simatms%write(trim(self%fbody)//'_SIM_pre_validation.mrc')
-        call self%validate_atoms(simatms)
+        call self%validate_atoms(simatms, l_print=.false.)
         if ( WRITE_OUTPUT )call self%write_centers('valid_corr_in_bfac_field_pre_discard', 'valid_corr')
         call self%discard_atoms
         ! re-calculate valid_corr:s (since they are otherwise lost from the B-factor field due to reallocations of atominfo)
         call self%simulate_atoms(simatms)
-        call self%validate_atoms(simatms)
+        call self%validate_atoms(simatms, l_print=.true.)
         ! WRITE OUTPUT
         call self%img_bin%write_bimg(trim(self%fbody)//'_BIN.mrc')
         write(logfhandle,'(A)') 'output, binarized map:            '//trim(self%fbody)//'_BIN.mrc'
@@ -991,9 +991,10 @@ contains
 
     end subroutine split_atoms
 
-    subroutine validate_atoms( self, simatms )
+    subroutine validate_atoms( self, simatms, l_print )
         class(nanoparticle), intent(inout) :: self
         class(image),        intent(in)    :: simatms
+        logical,             intent(in)    :: l_print
         real, allocatable :: centers(:,:)           ! coordinates of the atoms in PIXELS
         real, allocatable :: pixels1(:), pixels2(:) ! pixels extracted around the center
         real    :: maxrad
@@ -1012,12 +1013,14 @@ contains
             self%atominfo(i)%valid_corr = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))
         enddo
         call calc_stats(self%atominfo(:)%valid_corr, corr_stats)
-        write(logfhandle,'(A)') '>>> VALID_CORR (PER-ATOM CORRELATION WITH SIMULATED DENSITY) STATS BELOW'
-        write(logfhandle,'(A,F8.4)') 'Average: ', corr_stats%avg
-        write(logfhandle,'(A,F8.4)') 'Median : ', corr_stats%med
-        write(logfhandle,'(A,F8.4)') 'Sigma  : ', corr_stats%sdev
-        write(logfhandle,'(A,F8.4)') 'Max    : ', corr_stats%maxv
-        write(logfhandle,'(A,F8.4)') 'Min    : ', corr_stats%minv
+        if( l_print )then
+            write(logfhandle,'(A)') '>>> VALID_CORR (PER-ATOM CORRELATION WITH SIMULATED DENSITY) STATS BELOW'
+            write(logfhandle,'(A,F8.4)') 'VALID_CORR Average: ', corr_stats%avg
+            write(logfhandle,'(A,F8.4)') 'VALID_CORR Median : ', corr_stats%med
+            write(logfhandle,'(A,F8.4)') 'VALID_CORR Sigma  : ', corr_stats%sdev
+            write(logfhandle,'(A,F8.4)') 'VALID_CORR Max    : ', corr_stats%maxv
+            write(logfhandle,'(A,F8.4)') 'VALID_CORR Min    : ', corr_stats%minv
+        endif
     end subroutine validate_atoms
 
     subroutine discard_atoms( self )
@@ -1177,7 +1180,7 @@ contains
         allocate(cc_mask(self%n_cc), source=.true.) ! because self%n_cc might change after pack_instance4stats
         ! validation through per-atom correlation with the simulated density
         call self%simulate_atoms(simatms)
-        call self%validate_atoms(simatms)
+        call self%validate_atoms(simatms, l_print=.true.)
         ! calc NPdiam & NPcen
         tmpcens     = self%atominfo2centers()
         self%NPdiam = 0.

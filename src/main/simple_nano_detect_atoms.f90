@@ -762,7 +762,7 @@ use simple_stat
         if (.not. self%wrote_pdb) call self%write_pdb()
         call nano%set_atomic_coords(trim(self%pdb_filename))
         call nano%simulate_atoms(simatms)
-        call nano%validate_atoms(simatms)
+        call nano%validate_atoms(simatms, l_print=.true.)
         if (present(filename)) call nano%write_centers(trim(filename),which='valid_corr')
         call nano%kill
     end subroutine calc_per_atom_corr
