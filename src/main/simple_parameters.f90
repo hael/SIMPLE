@@ -37,7 +37,6 @@ type :: parameters
     character(len=3)          :: crowded='yes'        !< wheter picking is done in crowded micrographs or not (yes|no){yes}
     character(len=3)          :: ctfstats='no'        !< calculate ctf statistics(yes|no){no}
     character(len=3)          :: ctfpatch='yes'       !< whether to perform patched CTF estimation(yes|no){yes}
-    character(len=3)          :: discard_atoms='yes'  !< wheter to discard atoms based on coordination
     character(len=3)          :: doprint='no'
     character(len=3)          :: dynreslim='no'       !< Whether the alignement resolution limit should be dynamic in streaming(yes|no){no}
     character(len=3)          :: envfsc='yes'         !< envelope mask even/odd pairs for FSC calculation(yes|no){yes}
@@ -577,7 +576,6 @@ contains
         call check_carg('ctf',            self%ctf)
         call check_carg('ctfpatch',       self%ctfpatch)
         call check_carg('ctfstats',       self%ctfstats)
-        call check_carg('discard_atoms',  self%discard_atoms)
         call check_carg('detector',       self%detector)
         call check_carg('dfunit',         self%dfunit)
         call check_carg('dir_exec',       self%dir_exec)
