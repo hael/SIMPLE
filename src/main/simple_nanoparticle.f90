@@ -1617,7 +1617,7 @@ contains
                     r = (1.*(/i, j, k/) - center) * self%smpd
                     if( norm_2(r) < fit_rad )then
                         int = rmat(i,j,k)
-                        if( int > 0 )then
+                        if( int > 0 .and. n <= nvoxels )then
                             X(n,2:4)  = r(1:3)**2
                             X(n,5)    = r(1)*r(2)
                             X(n,6)    = r(1)*r(3)
