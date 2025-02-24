@@ -8,15 +8,16 @@ use simple_comlin,     only: comlin_map
 implicit none
 integer,          parameter   :: NPLANES = 50, ORI_IND = 15
 character(len=:), allocatable :: cmd
-type(fplan_map)  :: all_coords
+type(fplan_map),  allocatable :: all_coords(:)
+type(image),      allocatable :: pad_fplanes(:)
 type(fplan_map)  :: coord_map(NPLANES)
 type(parameters) :: p
 type(cmdline)    :: cline
-type(image)      :: noise, ptcl, ptcl_pad, fplanes(NPLANES), pad_fplane, vol
+type(image)      :: noise, ptcl, ptcl_pad, fplanes(NPLANES), vol
 type(oris)       :: spiral
 type(ori)        :: o1, o2
 type(projector)  :: vol_pad
-integer          :: ifoo, rc, i, j, ori_phys(3), target_phys(3), f_ind, lims(3,2)
+integer          :: ifoo, rc, i, j, ori_phys(3), target_phys(3), f_ind, lims(3,2), ithr
 real             :: ave, sdev, maxv, minv, total_costs(NPLANES)
 complex          :: diff
 logical          :: mrc_exists
@@ -78,24 +79,33 @@ call noise%mask(p%msk, 'soft')
 call ptcl_pad%add(noise)
 call ptcl_pad%clip(ptcl)
 call ptcl%write('test_images.mrc', 1)
-call pad_fplane%new([p%boxpd, p%boxpd, 1], p%smpd)
+call ptcl%fft
 lims = vol%loop_lims(2)
-allocate(all_coords%target_find(  (lims(1,2)-lims(1,1)+1)*(lims(2,2)-lims(2,1)+1)),&
-        &all_coords%ori_phys(   3,(lims(1,2)-lims(1,1)+1)*(lims(2,2)-lims(2,1)+1)),&
-        &all_coords%target_phys(3,(lims(1,2)-lims(1,1)+1)*(lims(2,2)-lims(2,1)+1)))
+allocate(pad_fplanes(p%nthr),all_coords(p%nthr))
+do ithr = 1, p%nthr
+    call pad_fplanes(ithr)%new([p%boxpd, p%boxpd, 1], p%smpd)
+    allocate(all_coords(ithr)%target_find(  (lims(1,2)-lims(1,1)+1)*(lims(2,2)-lims(2,1)+1)),&
+            &all_coords(ithr)%ori_phys(   3,(lims(1,2)-lims(1,1)+1)*(lims(2,2)-lims(2,1)+1)),&
+            &all_coords(ithr)%target_phys(3,(lims(1,2)-lims(1,1)+1)*(lims(2,2)-lims(2,1)+1)))
+enddo
+!$omp parallel do default(shared) private(i,ithr,o2)&
+!$omp proc_bind(close) schedule(static)
 do i = 1, spiral%get_noris()
+    ithr = omp_get_thread_num() + 1
     ! common line mapping is independent of fplanes below
-    call comlin_map(lims, i, spiral, coord_map(i), all_coords)
+    call comlin_map(lims, i, spiral, coord_map(i), all_coords(ithr))
     ! fplanes are used for optimization below
     call spiral%get_ori(i, o2)
     call fplanes(i)%new([p%box, p%box, 1], p%smpd)
-    call vol_pad%fproject(o2,pad_fplane)
-    call pad_fplane%ifft
-    call pad_fplane%clip(fplanes(i))
+    call vol_pad%fproject(o2,pad_fplanes(ithr))
+    call pad_fplanes(ithr)%ifft
+    call pad_fplanes(ithr)%clip(fplanes(i))
     call fplanes(i)%fft
 enddo
-call ptcl%fft
+!$omp end parallel do
 total_costs = 0.
+!$omp parallel do default(shared) private(i,j,f_ind,ori_phys,target_phys,diff)&
+!$omp proc_bind(close) schedule(static)
 do i = 1, spiral%get_noris()
     do j = 1, coord_map(i)%n_points
         f_ind          = coord_map(i)%target_find(j)
@@ -107,6 +117,7 @@ do i = 1, spiral%get_noris()
     enddo
     total_costs(i) = sqrt(total_costs(i) / real(coord_map(i)%n_points))
 enddo
+!$omp end parallel do
 print *, 'truth    ptcl ind = ', ORI_IND
 print *, 'searched ptcl ind = ', minloc(total_costs)
 print *, total_costs
