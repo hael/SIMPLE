@@ -1,183 +1,94 @@
-!==Class simple_comlin
-!
-! simple_comlin is the central class for all common lines based alignment methods in _SIMPLE_.
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
-! Redistribution or modification is regulated by the GNU General Public License.
-! *Author:* Hans Elmlund, 2009-06-11.
-! 
-!==Changes are documented below
-!
-!* deugged and incorporated in the _SIMPLE_ library, HE 2009-06-25
-!* re-implemented with new comlin data struct and truly OOD, HE June 14 2012
-!
 module simple_comlin
-use simple_oris,   only: oris
-use simple_math    ! singleton
-use simple_defs    ! singleton
-use simple_image
+include 'simple_lib.f08'
+use simple_parameters, only: params_glob
+use simple_oris,       only: oris
 implicit none
 
-public :: comlin
-private
-
-type comlin
-    private
-    integer                 :: nptcls=0          !< nr of ptcls
-    integer                 :: xdim=0            !< Fourier dim
-    complex, allocatable    :: clines(:,:,:)     !< the interpolated common lines
-    real, allocatable       :: lines(:,:,:)      !< the algebraic common lines
-    logical, allocatable    :: foundline(:)      !< to indicate found line or not
-    class(oris), pointer    :: a=>null()         !< orientations pointer
-    class(image), pointer   :: fpls(:)=>null()   !< Fourier planes pointer
-    logical                 :: existence=.false. !< to indicate object existence
-  contains
-    ! CONSTRUCTOR
-    procedure :: new
-    ! PARTICLE COMMON LINE CORRELATORS
-    
-    ! PRIVATE STUFF
-    procedure, private :: calc_comlin
-    ! procedure, private :: extr_comlin
-    ! DESTRUCTOR
-    procedure :: kill
-end type
-
-interface comlin
-    module procedure constructor
-end interface
+public :: comlin_map
 
 contains
 
-    ! CONSTRUCTORS
-    
-    !>  \brief  is a constructor
-    function constructor( a, fpls ) result( self )
-        use simple_oris,  only: oris
-        class(oris), intent(in), target  :: a       !< orientations
-        class(image), intent(in), target :: fpls(:) !< Fourier planes
-        type(comlin)                     :: self    !< object
-        call self%new( a, fpls ) 
-    end function
+    subroutine comlin_map( lims, e_ind, eall, coord_map, all_coords )
+        integer,         intent(in)    :: lims(3,2)
+        integer,         intent(in)    :: e_ind
+        class(oris),     intent(in)    :: eall
+        type(fplan_map), intent(inout) :: coord_map
+        type(fplan_map), intent(inout) :: all_coords
+        type(ori) :: e, e2
+        integer   :: i, h, k, sqlp, sqarg, xy2(2), cnt, ori_phys(3), phys(3)
+        logical   :: good_coord
+        call eall%get_ori(e_ind, e)
+        sqlp = (maxval(lims(:,2)))**2
+        cnt  = 0
+        do k = lims(2,1),lims(2,2)
+            do h = lims(1,1),lims(1,2)
+                sqarg = dot_product([h,k],[h,k])
+                if( sqarg > sqlp ) cycle
+                if (h .ge. 0) then
+                    ori_phys(1) = h + 1
+                    ori_phys(2) = k + 1 + MERGE(params_glob%box,0,k < 0)
+                    ori_phys(3) = 1
+                else
+                    ori_phys(1) = -h + 1
+                    ori_phys(2) = -k + 1 + MERGE(params_glob%box,0,-k < 0)
+                    ori_phys(3) = 1
+                endif
+                do i = 1, eall%get_noris()
+                    if( i == e_ind ) cycle
+                    call eall%get_ori(i, e2)
+                    call comlin_coord(lims, [h,k], e, e2, xy2, good_coord)
+                    if( good_coord )then
+                        cnt = cnt + 1
+                        all_coords%target_find(cnt) = i
+                        all_coords%ori_phys(:,cnt)  = ori_phys
+                        if (xy2(1) .ge. 0) then
+                            phys(1) = xy2(1) + 1
+                            phys(2) = xy2(2) + 1 + MERGE(params_glob%box,0,xy2(2) < 0)
+                            phys(3) = 1
+                        else
+                            phys(1) = -xy2(1) + 1
+                            phys(2) = -xy2(2) + 1 + MERGE(params_glob%box,0,-xy2(2) < 0)
+                            phys(3) = 1
+                        endif
+                        all_coords%target_phys(:,cnt) = phys
+                        exit
+                    endif
+                enddo
+            enddo
+        enddo
+        allocate(coord_map%target_find(  cnt), source=all_coords%target_find(  1:cnt))
+        allocate(coord_map%ori_phys(   3,cnt), source=all_coords%ori_phys(:,   1:cnt))
+        allocate(coord_map%target_phys(3,cnt), source=all_coords%target_phys(:,1:cnt))
+        coord_map%n_points = cnt
+    end subroutine comlin_map
 
-    !>  \brief  is a constructor
-    subroutine new( self, a, fpls )
-        use simple_oris, only: oris
-        class(comlin), intent(inout)     :: self    !< object
-        class(oris), intent(in), target  :: a       !< orientations
-        class(image), intent(in), target :: fpls(:) !< Fourier planes
-        integer :: alloc_stat, j, ld_here(3), fromk, tok
-        do j=1,self%nptcls
-            if(.not. fpls(j)%square_dims()) stop 'square dims assumed; new; simple_comlin'
-            if(.not. fpls(j)%even_dims())   stop 'even dims assumed; new; simple_comlin'
-        end do
-        self%nptcls = a%get_noris()
-        self%a      => a
-        self%fpls   => fpls
-        ld_here     = fpls(1)%get_ldim()
-        self%xdim   = ld_here(1)/2
-        fromk       = fpls(1)%get_lhp(1)
-        tok         = fpls(1)%get_lfny(1)
-        allocate( self%clines(self%nptcls,fromk:tok,2), self%foundline(self%nptcls),&
-        self%lines(self%nptcls,2,2), stat=alloc_stat )
-        call alloc_err('new; simple_comlin, 1', alloc_stat )
-        self%clines    = cmplx(0.,0.)
-        self%foundline = .false.
-        self%lines     = 0.
-        self%existence = .true.
-    end subroutine
-
-    ! PRIVATE STUFF
-    
-    !>  \brief  calculates the 3D intersection between two planes 
-    !!          defined by their normals and maps the 3D intersection 
-    !!          to the coordinate systems of the respective planes
-    subroutine calc_comlin( self, pind, j )
-        class(comlin), intent(inout) :: self
-        integer, intent(in)          :: pind, j
-        real, dimension(3)           :: comlin, tmp1, tmpb1, norm1, norm2
-        real                         :: scalprod, abscom
-        real                         :: euls1(3), euls2(3) !!!DEBUG
-        if( pind == j )then
-            ! no self common lines
-            self%foundline(j) = .false.
-            return
-        endif
-        norm1    = self%a%get_normal(pind)
-        norm2    = self%a%get_normal(j)
-        scalprod = dot_product(norm1, norm2)
-        if( scalprod > 0.99 ) then
-            ! identical planes have no common line
-            self%foundline(j) = .false.
-            return
-        endif
-        ! find intersection in 3D
-        comlin(1) = norm1(2)*norm2(3)-norm1(3)*norm2(2)
-        comlin(2) = norm1(3)*norm2(1)-norm1(1)*norm2(3)
-        comlin(3) = norm1(1)*norm2(2)-norm1(2)*norm2(1)
-        abscom = sqrt(comlin(1)**2+comlin(2)**2+comlin(3)**2)
-        if( abscom >= 0.0001 ) then
-            ! normalize
-            comlin(1) = comlin(1)/abscom
-            comlin(2) = comlin(2)/abscom
-            comlin(3) = comlin(3)/abscom
+    ! projecting coordinates xy1 of the plane at orientation e1 to the coordinates xy1 of the plane at e2
+    subroutine comlin_coord(lims, xy1, e1, e2, xy2, good_coord)
+        integer,      intent(in)    :: lims(3,2)
+        integer,      intent(in)    :: xy1(2)
+        type(ori),    intent(in)    :: e1
+        type(ori),    intent(in)    :: e2
+        integer,      intent(inout) :: xy2(2)
+        logical,      intent(out)   :: good_coord
+        real    :: e1_rotmat(3,3), e2_rotmat(3,3), e2_inv(3,3), loc1_3D(3)
+        integer :: errflg, xy(3), sqlp
+        sqlp      = (maxval(lims(:,2)))**2
+        e1_rotmat = e1%get_mat()
+        e2_rotmat = e2%get_mat()
+        ! rotating coordinates xy1 of the first plane
+        loc1_3D   = matmul(real([xy1(1),xy1(2),0]), e1_rotmat)
+        ! inversely rotating rotated xy1 to the second plane
+        call matinv(e2_rotmat, e2_inv, 3, errflg)
+        xy  = nint(matmul(loc1_3D, e2_inv))
+        xy2 = xy(1:2)
+        ! checking the inversely rotated coords make sense
+        if( xy(1) >= lims(1,1) .and. xy(1) <= lims(1,2) .and. &
+           &xy(2) >= lims(2,1) .and. xy(2) <= lims(2,2) .and. &
+           &xy(3) == 0         .and. dot_product(xy2,xy2) <= sqlp )then
+            good_coord = .true.
         else
-            ! identical planes have no common line
-            ! this should never happen
-            self%foundline(j) = .false.
-            return
+            good_coord = .false.
         endif
-        ! comlin is the intersection in 3D, map to the
-        ! respective coordinate systems
-        ! first map onto the target
-        tmp1 = matmul( self%a%get_mat(pind), comlin )
-        call projz( tmp1, self%lines(j,:,1) )
-        ! then map onto the reference:
-        tmpb1 = matmul( self%a%get_mat(j), comlin )
-        call projz( tmpb1, self%lines(j,:,2) )
-        self%foundline(j) = .true.
-    end subroutine
-    
-    ! !>  \brief  calculates common line algebra, interpolates the
-    ! !!          complex vectors, and calculates corr precursors
-    ! subroutine extr_comlin( self, pind, j, lims, corr, sumasq, sumbsq )
-    !     class(comlin), intent(inout) :: self
-    !     integer,intent(in)           :: pind,j,lims(2)
-    !     real, intent(out)            :: corr,sumasq,sumbsq
-    !     integer                      :: k
-    !     real                         :: h1,k1,h2,k2,px,py,jx,jy
-    !     call self%calc_comlin(pind, j)
-    !     corr   = 0.
-    !     sumasq = 0.
-    !     sumbsq = 0.
-    !     if( self%foundline(j) )then
-    !         do k=lims(1),lims(2)
-    !             h1 = real(k)*self%lines(j,1,1)
-    !             k1 = real(k)*self%lines(j,2,1)
-    !             h2 = real(k)*self%lines(j,1,2)
-    !             k2 = real(k)*self%lines(j,2,2)
-    !             call self%a%get(pind, x=px, y=py)
-    !             call self%a%get(j,    x=jx, y=jy)
-    !             self%clines(j,k,1) = self%fpls(pind)%get_fcomp([nint(h1),nint(k1),1],[nint(px),nint(py),1])
-    !             self%clines(j,k,2) = self%fpls(j   )%get_fcomp([nint(h2),nint(k2),1],[nint(jx),nint(jy),1])
-    !             corr = corr+real(self%clines(j,k,1))*real(self%clines(j,k,2))+&
-    !             aimag(self%clines(j,k,1))*aimag(self%clines(j,k,2))
-    !             sumasq = sumasq+csqsum(self%clines(j,k,1)) 
-    !             sumbsq = sumbsq+csqsum(self%clines(j,k,2))
-    !         end do
-    !     endif
-    ! end subroutine
-    
-    ! DESTRUCTOR
-    
-    !>  \brief  is a destructor
-    subroutine kill( self )
-        class(comlin), intent(inout) :: self
-        integer :: i
-        if( self%existence )then
-            deallocate(self%clines)     
-            self%a    => null()
-            self%fpls => null()
-        endif
-    end subroutine
-    
+    end subroutine comlin_coord
+
 end module simple_comlin
