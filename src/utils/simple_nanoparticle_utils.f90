@@ -22,14 +22,16 @@ contains
 
     ! registering two sets of atom positions and rotate the first set to align the second set
     subroutine atoms_register( atoms1, atoms2, reg_atom, out_mat, out_trans, out_scale)
+        use simple_parameters, only: params_glob
         real,              intent(in)    :: atoms1(:,:)
         real,              intent(in)    :: atoms2(:,:)
         real,              intent(inout) :: reg_atom(:,:)
         real,    optional, intent(out)   :: out_mat(3,3), out_trans(3), out_scale
         integer, allocatable :: perm(:,:), inds(:)
         real,    allocatable :: costs(:), atom1_pos(:,:), atom2_pos(:,:)
+        logical, allocatable :: taken(:,:)
         real    :: rec_mat(3,3), rec_trans(3), rec_scale, tmp_atom2(3), cur_cost, inv_mat(3,3), min_cost
-        integer :: N1, N2, tmp, i, j, k, a1, a2, counter, errflg, a2_min, ref_inds(3)
+        integer :: N1, N2, tmp, i, j, k, a1, a2, min_a2, counter, errflg, a2_min, ref_inds(3), ithr
         logical :: l_flip
         N1     = size(atoms1, 2)
         N2     = size(atoms2, 2)
@@ -46,31 +48,39 @@ contains
             allocate(atom1_pos(3,N1), source=atoms1)
             allocate(atom2_pos(3,N2), source=atoms2)
         endif
-        allocate(costs(N2**3),perm(3,N2**3))
+        allocate(costs(N2**3),perm(3,N2**3),taken(N2,params_glob%nthr))
+        print *, 'N1 = ', N1, ' ; N2 = ', N2
         ! atom 1 reference position indeces
         inds     = rnd_inds(N1)
         ref_inds = inds(1:3)
         ! optimizing over all permutations of 3-index set of atom 2 positions
         costs    = huge(rec_scale)
-        !$omp parallel do collapse(3) default(shared) private(i,j,k,counter,rec_mat,rec_trans,rec_scale,a1,tmp_atom2,min_cost,a2,cur_cost)&
+        !$omp parallel do collapse(3) default(shared) private(ithr,i,j,k,counter,rec_mat,rec_trans,rec_scale,a1,tmp_atom2,min_cost,a2,min_a2,cur_cost)&
         !$omp proc_bind(close) schedule(static)
         do i = 1, N2
             do j = 1, N2
                 do k = 1, N2
+                    ithr = omp_get_thread_num() + 1
                     if( k == j .or. i == j .or. i == k )cycle
                     counter         = (i-1)*N2**2 + (j-1)*N2 + k
                     perm(:,counter) = [i,j,k]
                     costs(counter)  = 0.
                     call Kabsch_algo(atom1_pos(:,ref_inds), atom2_pos(:,perm(:,counter)), rec_mat, rec_trans, rec_scale)
                     ! rotate atom1 pos from index 4 using the same rotation matrix and find the corresponding closest atom2 pos
+                    taken(:,ithr) = .false.
                     do a1 = 1, N1
                         tmp_atom2 = rec_scale * matmul(rec_mat, atom1_pos(:,a1)) + rec_trans
                         min_cost  = huge(rec_scale)
                         do a2 = 1, N2
+                            if( taken(a2,ithr) ) cycle
                             cur_cost = sum((tmp_atom2 - atom2_pos(:,a2))**2)
-                            if( cur_cost < min_cost ) min_cost = cur_cost
+                            if( cur_cost < min_cost )then
+                                min_cost = cur_cost
+                                min_a2   = a2
+                            endif
                         enddo
-                        costs(counter) = costs(counter) + min_cost
+                        costs(counter)     = costs(counter) + min_cost
+                        taken(min_a2,ithr) = .true.
                     enddo
                 enddo
             enddo
@@ -102,14 +112,12 @@ contains
         real,    intent(inout) :: ret_mat(3,3)
         real,    intent(inout) :: ret_trans(3)
         real,    intent(inout) :: ret_scale
-        real,    allocatable   :: var1(:,:), var2(:,:)
         integer, allocatable   :: inds(:)
-        real    :: mean1(1,3), mean2(1,3), mat(3,3), eig_vals(3), eig_vecs(3,3), eye(3,3)
-        integer :: i, N
-        N          = size(pos1, 2)
+        integer, parameter     :: N = 3     ! hard-coded 3 positions to avoid allocations
+        real    :: mean1(1,N), mean2(1,N), mat(3,3), eig_vals(3), eig_vecs(3,3), eye(3,3), var1(3,N), var2(3,N)
+        integer :: i
         mean1(1,:) = sum(pos1, dim=2) / real(N)
         mean2(1,:) = sum(pos2, dim=2) / real(N)
-        allocate(var1(3,N), var2(3,N))
         do i = 1, N
             var1(:,i) = pos1(:,i) - mean1(1,:)
             var2(:,i) = pos2(:,i) - mean2(1,:)
