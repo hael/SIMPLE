@@ -11,9 +11,11 @@ use simple_eul_prob_tab,      only: eulprob_dist_switch, eulprob_corr_switch
 use simple_decay_funs,        only: extremal_decay2D
 implicit none
 
-public :: eul_prob_tab2D, squared_sampling
+public :: eul_prob_tab2D, squared_sampling, power_sampling, neighfrac2nsmpl
 private
 #include "simple_local_flags.inc"
+
+real, parameter :: EXTR_POW = 2.0
 
 type :: eul_prob_tab2D
     type(ptcl_rec), allocatable :: loc_tab(:,:)   !< 2D search table (ncls x nptcls)
@@ -207,7 +209,8 @@ contains
         neigh_frac = extremal_decay2D(params_glob%extr_iter, params_glob%extr_lim)
         ninpl_smpl = neighfrac2nsmpl(neigh_frac, nrots)
         ncls_smpl  = neighfrac2nsmpl(neigh_frac, self%neffcls)
-        P = sampling_power(params_glob%extr_iter, params_glob%extr_lim)
+        P = EXTR_POW
+        if( params_glob%extr_iter > params_glob%extr_lim ) P = params_glob%power
         ! Fork
         if( params_glob%l_doshift )then
             lims(:,1)      = -params_glob%trs
@@ -436,7 +439,8 @@ contains
         ! size of stochastic neighborhood (# of classes to draw from)
         neigh_frac = extremal_decay2D(params_glob%extr_iter, params_glob%extr_lim)
         ncls_smpl  = neighfrac2nsmpl(neigh_frac, self%neffcls)
-        P          = sampling_power(params_glob%extr_iter, params_glob%extr_lim)
+        P = EXTR_POW
+        if( params_glob%extr_iter > params_glob%extr_lim ) P = params_glob%power
         ! select class stochastically
         pops = 0
         !$omp parallel do default(shared) proc_bind(close) schedule(static)&
@@ -453,7 +457,7 @@ contains
         if( rank_ptcls ) call self%select_top_ptcls(pops)
     end subroutine assign_smpl
 
-    ! Assignment based on basic SHC
+    ! Assignment based on SHC
     subroutine assign_shc( self, os, rank_ptcls )
         class(eul_prob_tab2D), intent(inout) :: self
         class(oris),           intent(in)    :: os
@@ -505,7 +509,8 @@ contains
         !$omp end parallel do
         neigh_frac = extremal_decay2D(params_glob%extr_iter, params_glob%extr_lim)
         ncls_smpl = neighfrac2nsmpl(neigh_frac, self%neffcls)
-        P          = sampling_power(params_glob%extr_iter, params_glob%extr_lim)
+        P = EXTR_POW
+        if( params_glob%extr_iter > params_glob%extr_lim ) P = params_glob%power
         ! first row is the current best reference distribution
         cls_dist_inds = 1
         cls_dist      = sorted_tab(1,:)
@@ -684,19 +689,11 @@ contains
         call power_sampling( 2.0, n, corrs, order, nb, ind, rank, cc)
     end subroutine squared_sampling
 
-    ! PRIVATE FUNCTIONS
-
     pure integer function neighfrac2nsmpl( neighfrac, n )
         real,    intent(in) :: neighfrac
         integer, intent(in) :: n
         neighfrac2nsmpl = nint(real(n)*(neighfrac/3.))
         neighfrac2nsmpl = max(2,min(neighfrac2nsmpl, n))
     end function neighfrac2nsmpl
-
-    pure real function sampling_power( iter, maxiter )
-        integer, intent(in) :: iter, maxiter
-        sampling_power = 2.
-        if( iter > maxiter ) sampling_power = 4.0
-    end function sampling_power
 
 end module simple_eul_prob_tab2D

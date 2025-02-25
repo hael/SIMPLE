@@ -6,7 +6,7 @@ use simple_strategy2D_srch,  only: strategy2D_spec
 use simple_builder,          only: build_glob
 use simple_polarft_corrcalc, only: pftcc_glob
 use simple_parameters,       only: params_glob
-use simple_eul_prob_tab2D,   only: squared_sampling
+use simple_eul_prob_tab2D,   only: power_sampling
 implicit none
 
 public :: strategy2D_snhc_smpl
@@ -58,8 +58,8 @@ contains
                 else
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
                 endif
-                call squared_sampling( self%s%nrots, inpl_corrs, vec_nrots,&
-                                        &s2D%snhc_smpl_ninpl, inpl_ind, order_ind, inpl_corr )
+                call power_sampling( s2D%power, self%s%nrots, inpl_corrs, vec_nrots,&
+                                    &s2D%snhc_smpl_ninpl, inpl_ind, order_ind, inpl_corr )
                 cls_corrs(iref)     = inpl_corr
                 cls_inpl_inds(iref) = inpl_ind
             end do
@@ -92,8 +92,8 @@ contains
                 enddo
             endif
             ! Class selection
-            call squared_sampling( self%s%nrefs, cls_corrs, sorted_cls_inds, s2D%snhc_smpl_ncls,&
-                                    &self%s%best_class, self%s%nrefs_eval, self%s%best_corr )
+            call power_sampling( s2D%power, self%s%nrefs, cls_corrs, sorted_cls_inds, s2D%snhc_smpl_ncls,&
+                                &self%s%best_class, self%s%nrefs_eval, self%s%best_corr )
             ! In-plane angle
             self%s%best_rot = cls_inpl_inds(self%s%best_class)
             ! In-plane search

@@ -1595,12 +1595,16 @@ contains
                 if( trim(params_glob%ptcl_norm).eq.'yes' ) call eulprob%normalize_ptcl
                 call eulprob%assign_smpl(build_glob%spproj_field, l_maxpop)
             endif
-        case('prob_smpl')
+        case('prob_smpl','prob_smpl_shc')
             if( trim(params_glob%ptcl_norm).eq.'yes' ) call eulprob%normalize_ptcl
             if( params_glob%which_iter == 1 )then
                 call eulprob%assign_greedy(l_maxpop)
             else
-                call eulprob%assign_smpl(build_glob%spproj_field, l_maxpop)
+                if( trim(params_glob%refine) == 'prob_smpl' )then
+                    call eulprob%assign_smpl(build_glob%spproj_field, l_maxpop)
+                else
+                    call eulprob%assign_shc(build_glob%spproj_field, l_maxpop)
+                endif
             endif
         case('prob_greedy')
             call eulprob%assign_greedy(l_maxpop)
@@ -1676,7 +1680,7 @@ contains
             call eulprob%fill_table_greedy
         else
             select case(trim(params%refine))
-            case('prob','prob_smpl')
+            case('prob','prob_smpl','prob_smpl_shc')
                 call eulprob%fill_table_smpl
             case('prob_greedy')
                 call eulprob%fill_table_greedy

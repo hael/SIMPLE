@@ -287,10 +287,17 @@ contains
         select case(trim(params_glob%refine))
         case('snhc')
             call cline_cluster2D_chunk%set('refine', 'snhc')
-            call cline_cluster2D_pool%set('refine',  'snhc')
+            call cline_cluster2D_pool%set( 'refine', 'snhc')
         case('snhc_smpl')
             call cline_cluster2D_chunk%set('refine', 'snhc_smpl')
-            call cline_cluster2D_pool%set('refine',  'snhc_smpl')
+            call cline_cluster2D_pool%set( 'refine', 'snhc_smpl')
+        case('snhc_smpl2')
+            call cline_cluster2D_chunk%set('refine', 'snhc_smpl2')
+            call cline_cluster2D_pool%set( 'refine', 'snhc_smpl2')
+            if( master_cline%defined('power') )then
+                call cline_cluster2D_chunk%set('power', params_glob%power)
+                call cline_cluster2D_pool%set( 'power', params_glob%power)
+            endif
         case DEFAULT
             THROW_HARD('UNSUPPORTED REFINE PARAMETER!')
         end select
@@ -1000,6 +1007,7 @@ contains
         call cline_cluster2D_pool%delete('update_frac')
         call cline_cluster2D_pool%delete('maxpop')
         call cline_cluster2D_pool%delete('nsample')
+        frac_update = 1.0
         if( trim(params_glob%autosample).eq.'yes' )then
             ! momentum & limits to # of particles per class
             nptcls_th = params_glob%nsample*ncls_glob
@@ -1025,10 +1033,8 @@ contains
                 call spproj%os_cls2D%set(icls,'prev_pop_odd', prev_eo_pops(icls,2))
             enddo
             ! debug, to remove
-            print *,'nptcls_sel        ',nptcls_sel
-            print *,'nptcls_old        ',nptcls_old
-            print *,'sum(prev_eo_pops) ',sum(prev_eo_pops)
-            print *,'params_glob%nsample*ncls_glob ',params_glob%nsample*ncls_glob
+            print *,'nptcls_sel nptcls_old sum(prev_eo_pops) ',nptcls_sel, nptcls_old, sum(prev_eo_pops)
+            print *,'params_glob%nsample*ncls_glob           ',params_glob%nsample*ncls_glob
         endif
         ! write project
         call spproj%write(trim(POOL_DIR)//trim(PROJFILE_POOL))

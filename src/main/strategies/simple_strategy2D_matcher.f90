@@ -45,13 +45,15 @@ contains
 
     !>  \brief  is the prime2D algorithm
     subroutine cluster2D_exec( cline, which_iter, converged )
-        use simple_convergence, only: convergence
+        use simple_convergence,    only: convergence
         use simple_eul_prob_tab2D, only: eul_prob_tab2D
         use simple_decay_funs,     only: inv_cos_decay, extremal_decay2D
         class(cmdline),          intent(inout) :: cline
         integer,                 intent(in)    :: which_iter
         logical,                 intent(inout) :: converged
+        logical,                     parameter :: DEBUG_here = .true.
         type(strategy2D_per_ptcl), allocatable :: strategy2Dsrch(:)
+        character(len=:),          allocatable :: refine_flag
         real,                      allocatable :: states(:)
         integer,                   allocatable :: pinds(:), batches(:,:)
         type(eul_prob_tab2D),           target :: probtab
@@ -61,8 +63,7 @@ contains
         real    :: frac_srch_space, neigh_frac
         integer :: iptcl, fnr, updatecnt, iptcl_map, nptcls2update
         integer :: batchsz_max, batchsz, nbatches, batch_start, batch_end, iptcl_batch, ibatch
-        logical :: doprint, l_partial_sums, l_update_frac, l_ctf, l_prob
-        logical :: l_snhc, l_greedy, l_np_cls_defined, l_snhc_smpl, l_greedy_smpl
+        logical :: l_partial_sums, l_update_frac, l_ctf, l_prob, l_snhc, l_greedy, l_np_cls_defined
         if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = t_init
@@ -72,63 +73,36 @@ contains
         frac_srch_space = build_glob%spproj_field%get_avg('frac')
 
         ! SWITCHES
-        l_prob         = str_has_substr(params_glob%refine,'prob')
-        l_snhc         = .false.
-        l_greedy       = .false.
-        l_greedy_smpl  = .false.
-        l_snhc_smpl    = .false.
-        l_update_frac  = params_glob%l_update_frac  ! refers to particles sampling & deactivates centering
-        l_partial_sums = l_update_frac              ! to apply fractional momentum to class averages
+        refine_flag    = trim(params_glob%refine)
+        l_snhc         = str_has_substr(refine_flag, 'snhc')
+        l_greedy       = str_has_substr(refine_flag, 'greedy')
+        l_prob         = str_has_substr(refine_flag, 'prob')
         l_stream       = trim(params_glob%stream).eq.'yes'
+        l_update_frac  = params_glob%l_update_frac  ! refers to particles sampling
+        l_partial_sums = l_update_frac              ! to apply fractional momentum to class averages
         if( params_glob%extr_iter == 1 )then
-            ! greedy start
-            l_greedy       = .true.
-            l_greedy_smpl  = trim(params_glob%refine).eq.'greedy_smpl'
+            l_greedy       = .true.     ! greedy start
+            l_snhc         = .false.
             l_partial_sums = .false.
-        else if( params_glob%extr_iter <= params_glob%extr_lim )then
-            ! no fractional update
-            select case(trim(params_glob%refine))
-                case('snhc')
-                    l_snhc      = .true.
-                case('snhc_smpl')
-                    l_snhc_smpl = .true.
-                case('greedy')
-                    l_greedy    = .true.
-                case('greedy_smpl')
-                    l_greedy_smpl = .true.
-            end select
-        else
-            ! optional fractional update and shc optimization (=snhc with all classes)
-            l_greedy       = trim(params_glob%refine).eq.'greedy'
-            l_greedy_smpl  = trim(params_glob%refine).eq.'greedy_smpl'
-            l_snhc_smpl    = .false. ! defaults to snhc
+        else if( params_glob%extr_iter > params_glob%extr_lim )then
+            ! snhc_smpl turns to snhc after extremal phase
+            if( trim(refine_flag)=='snhc_smpl' ) refine_flag = 'snhc'
         endif
         if( l_stream )then
-            select case(trim(params_glob%refine))
-            case('snhc')
-                l_snhc      = .true.
-            case('snhc_smpl')
-                l_snhc_smpl = .true.
-            end select
-            l_update_frac              = .false.
-            l_partial_sums             = .false.
-            params_glob%l_update_frac  = .false.
-            params_glob%update_frac    = 1.
-            if( which_iter > 1 )then
-                if( params_glob%update_frac < 0.99 )then
-                    l_partial_sums            = .true.
-                    params_glob%l_update_frac = .true.
-                else
-                    params_glob%update_frac = 1.
-                endif
+            l_update_frac = .false.
+            if( (which_iter>1) .and. (params_glob%update_frac<0.99) )then
+                params_glob%l_update_frac = .true.
+                l_partial_sums            = .true.
+            else
+                params_glob%update_frac   = 1.
+                params_glob%l_update_frac = .false.
+                l_partial_sums            = .false.
             endif
         endif
-        ! This is temporary and will need to be revised
         if( l_prob )then
+            ! all search decisions are made beforehand in prob_tab2D
             l_snhc         = .false.
             l_greedy       = .false.
-            l_greedy_smpl  = .false.
-            l_snhc_smpl    = .false.
             l_update_frac  = params_glob%l_update_frac
             l_partial_sums = l_update_frac .and. (params_glob%extr_iter>1)
         endif
@@ -148,7 +122,7 @@ contains
         if( params_glob%extr_iter > params_glob%extr_lim )then
             ! done
         else
-            if( l_snhc .or. l_snhc_smpl )then
+            if( l_snhc )then
                 neigh_frac = extremal_decay2D( params_glob%extr_iter, params_glob%extr_lim )
                 if( L_VERBOSE_GLOB ) write(logfhandle,'(A,F8.2)') '>>> STOCHASTIC NEIGHBOURHOOD SIZE(%):', 100.*(1.-neigh_frac)
             endif
@@ -198,6 +172,13 @@ contains
         call prep_strategy2D_glob( neigh_frac )
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> STRATEGY2D OBJECTS ALLOCATED'
 
+        if( DEBUG_here .and. params_glob%part==1 )then
+            write(logfhandle,*)'params%refine refine_flag:          ',trim(params_glob%refine),' ',refine_flag
+            write(logfhandle,*)'l_snhc neigh_frac power:            ', l_snhc, neigh_frac, s2D%power
+            write(logfhandle,*)'l_greedy l_prob l_stream:           ', l_greedy, l_prob, l_stream
+            write(logfhandle,*)'l_update_frac l_partial_sums ufrac: ',l_update_frac, l_partial_sums, params_glob%update_frac
+        endif
+
         ! SETUP WEIGHTS
         call build_glob%spproj_field%set_all2single('w', 1.0)
 
@@ -245,43 +226,50 @@ contains
                     ! online mode, based on history
                     if( updatecnt==1 .or. (.not.build_glob%spproj_field%has_been_searched(iptcl)) )then
                         ! brand new particles
-                        allocate(strategy2D_greedy              :: strategy2Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy2D_greedy                :: strategy2Dsrch(iptcl_batch)%ptr)
                     else
-                        ! other particles
-                        if( l_greedy )then
-                            allocate(strategy2D_greedy          :: strategy2Dsrch(iptcl_batch)%ptr)
-                        else if( l_snhc_smpl )then
-                            allocate(strategy2D_snhc_smpl       :: strategy2Dsrch(iptcl_batch)%ptr)
-                        else
-                            allocate(strategy2D_snhc            :: strategy2Dsrch(iptcl_batch)%ptr)
-                        endif
+                        select case(trim(refine_flag))
+                            case('greedy')
+                                allocate(strategy2D_greedy        :: strategy2Dsrch(iptcl_batch)%ptr)
+                            case('greedy_smpl')
+                                allocate(strategy2D_greedy_smpl   :: strategy2Dsrch(iptcl_batch)%ptr)
+                            case('snhc_smpl','snhc_smpl2')
+                                allocate(strategy2D_snhc_smpl     :: strategy2Dsrch(iptcl_batch)%ptr)
+                            case DEFAULT ! is refine=snhc
+                                allocate(strategy2D_snhc          :: strategy2Dsrch(iptcl_batch)%ptr)
+                        end select
                     endif
                 else
                     ! offline mode, based on iteration
                     if( l_prob )then
-                        allocate(strategy2D_prob                    :: strategy2Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy2D_prob                  :: strategy2Dsrch(iptcl_batch)%ptr)
                     else
-                        if( trim(params_glob%refine).eq.'inpl' )then
-                            allocate(strategy2D_inpl                :: strategy2Dsrch(iptcl_batch)%ptr)
-                        else if( l_greedy .or. l_greedy_smpl .or. (.not.build_glob%spproj_field%has_been_searched(iptcl)&
-                            &.or. updatecnt==1) )then
+                        if( trim(refine_flag).eq.'inpl' )then
+                            allocate(strategy2D_inpl              :: strategy2Dsrch(iptcl_batch)%ptr)
+                        else if( l_greedy .or. (updatecnt==1 .or. (.not.build_glob%spproj_field%has_been_searched(iptcl))) )then
+                            ! first iteration | refine=*greedy*
                             if( trim(params_glob%tseries).eq.'yes' )then
                                 if( l_np_cls_defined )then
-                                    allocate(strategy2D_tseries     :: strategy2Dsrch(iptcl_batch)%ptr)
+                                    allocate(strategy2D_tseries   :: strategy2Dsrch(iptcl_batch)%ptr)
                                 else
-                                    allocate(strategy2D_greedy      :: strategy2Dsrch(iptcl_batch)%ptr)
+                                    allocate(strategy2D_greedy    :: strategy2Dsrch(iptcl_batch)%ptr)
                                 endif
                             else
-                                if( l_greedy_smpl )then
-                                    allocate(strategy2D_greedy_smpl :: strategy2Dsrch(iptcl_batch)%ptr)
-                                else
-                                    allocate(strategy2D_greedy      :: strategy2Dsrch(iptcl_batch)%ptr)
-                                endif
+                                select case(trim(refine_flag))
+                                case('greedy_smpl')
+                                    allocate(strategy2D_snhc_smpl :: strategy2Dsrch(iptcl_batch)%ptr)
+                                case DEFAULT ! is refine=greedy
+                                    allocate(strategy2D_snhc      :: strategy2Dsrch(iptcl_batch)%ptr)
+                                end select
                             endif
-                        else if( l_snhc_smpl )then
-                            allocate(strategy2D_snhc_smpl           :: strategy2Dsrch(iptcl_batch)%ptr)
                         else
-                            allocate(strategy2D_snhc                :: strategy2Dsrch(iptcl_batch)%ptr)
+                            ! iteration>1 & refine/=*greedy*
+                            select case(trim(refine_flag))
+                                case('snhc_smpl','snhc_smpl2')
+                                    allocate(strategy2D_snhc_smpl  :: strategy2Dsrch(iptcl_batch)%ptr)
+                                case DEFAULT ! is refine=snhc
+                                    allocate(strategy2D_snhc       :: strategy2Dsrch(iptcl_batch)%ptr)
+                            end select
                         endif
                     endif
                 endif
@@ -389,10 +377,8 @@ contains
         if( L_BENCH_GLOB ) rt_cavg = toc(t_cavg)
         call qsys_job_finished('simple_strategy2D_matcher :: cluster2D_exec')
         if( L_BENCH_GLOB )then
-            rt_tot  = toc(t_tot)
-            doprint = .true.
-            if( params_glob%part /= 1 ) doprint = .false.
-            if( doprint )then
+            if( params_glob%part == 1 )then
+                rt_tot  = toc(t_tot)
                 benchfname = 'CLUSTER2D_BENCH_ITER'//int2str_pad(which_iter,3)//'.txt'
                 call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
                 write(fnr,'(a)') '*** TIMINGS (s) ***'
