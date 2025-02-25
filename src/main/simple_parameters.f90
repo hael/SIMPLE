@@ -199,6 +199,7 @@ type :: parameters
     character(len=4)          :: ext='.mrc'           !< file extension{.mrc}
     character(len=STDLEN)     :: fbody=''             !< file body
     character(len=STDLEN)     :: filter='no'          !< filter type{no}
+    character(len=STDLEN)     :: flag='dummy'         !< convenience flag for testing purpose
     character(len=STDLEN)     :: flipgain='no'        !< gain reference flipping (no|x|y|xy|yx)
     character(len=STDLEN)     :: linstates_mode='ppca'  !< linearized state mode(forprob|backprob){forprob}
     character(len=STDLEN)     :: multivol_mode='single' !< multivolume abinitio3D mode(single|independent|docked|input_oris_start|input_oris_fixed){single}
@@ -431,7 +432,6 @@ type :: parameters
     real    :: moldiam=140.        !< molecular diameter(in A)
     real    :: moldiam_max=200.    !< upper bound molecular diameter(in A)
     real    :: moldiam_refine=0.   !< upper bound molecular diameter(in A)
-    real    :: moment=0.
     real    :: msk=0.              !< mask radius(in pixels)
     real    :: msk_crop=0.         !< mask radius(in pixels)
     real    :: mskdiam=0.          !< mask diameter(in Angstroms)
@@ -590,6 +590,7 @@ contains
         call check_carg('fbody',          self%fbody)
         call check_carg('fill_holes',     self%fill_holes)
         call check_carg('filter',         self%filter)
+        call check_carg('flag',           self%flag)
         call check_carg('flipgain',       self%flipgain)
         call check_carg('ft2img',         self%ft2img)
         call check_carg('frc_weight',     self%frc_weight)
@@ -924,6 +925,7 @@ contains
         call check_rarg('overlap',        self%overlap)
         call check_rarg('phranlp',        self%phranlp)
         call check_rarg('pool_threshold_factor', self%pool_threshold_factor)
+        call check_rarg('power',          self%power)
         call check_rarg('prob_athres',    self%prob_athres)
         call check_rarg('scale',          self%scale)
         call check_rarg('sherr',          self%sherr)
@@ -1681,7 +1683,7 @@ contains
         ! -- shift defaults
         if( .not. cline%defined('trs') )then
             select case(trim(self%refine))
-                case('snhc','snhc_smpl')
+                case('snhc','snhc_smpl','snhc_smpl2')
                     self%trs = 0.
                 case DEFAULT
                     self%trs = MINSHIFT

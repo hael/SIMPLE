@@ -72,6 +72,8 @@ contains
         if( .not. cline%defined('rank_cavgs')) call cline%set('rank_cavgs','yes')
         if( .not. cline%defined('sigma_est') ) call cline%set('sigma_est', 'global')
         if( .not. cline%defined('stats')     ) call cline%set('stats',     'no')
+        if( .not. cline%defined('refine')    ) call cline%set('refine',    'snhc_smpl')
+        if( .not. cline%defined('power')     ) call cline%set('power',     4.0)
         ! shared memory execution
         l_shmem = set_shmem_flag(cline)
         ! master parameters
@@ -122,8 +124,6 @@ contains
         call spproj%read_segment('ptcl3D',params%projfile)
         call spproj%os_ptcl3D%transfer_2Dshifts(spproj_field)
         call spproj%write_segment_inside('ptcl3D', params%projfile)
-        ! stats
-        if( trim(params%stats).eq.'yes' ) call output_stats('premapping')
         ! weights & final mapping of particles
         if( trim(params%autosample).eq.'yes' )then
             call spproj_field%set_all2single('w',1.)
@@ -136,7 +136,11 @@ contains
                     call spproj%read_segment(params%oritype,params%projfile)
                     call output_stats('final')
                 endif
+            else
+                if( trim(params%stats).eq.'yes' ) call output_stats('final')
             endif
+        else
+            if( trim(params%stats).eq.'yes' ) call output_stats('final')
         endif
         ! final class generation & ranking
         if ( trim(params%rank_cavgs).eq.'yes' )then
@@ -254,11 +258,16 @@ contains
             character(len=:), allocatable :: sh_first, refine, center, objfun, refs, icm
             integer :: iphase, iter, imaxits, cc_iters, minits, extr_iter
             real    :: trs, lambda, frac
-            if( str_has_substr(params%refine, 'prob') )then
+            select case(trim(params%refine))
+            case('snhc','snhc_smpl','snhc_smpl2')
+                ! usual suspects
                 refine = trim(params%refine)
-            else
-                refine = 'snhc_smpl'
-            endif
+            case('prob','prob_smpl','prob_smpl_shc','prob_greedy')
+                ! prob family of algorithm
+                refine = trim(params%refine)
+            case DEFAULT
+                THROW_HARD('Unsupported REFINE argument: '//trim(params%refine))
+            end select
             ! iteration number book-keeping
             iter = 0
             if( cline_cluster2D%defined('endit') ) iter = cline_cluster2D%get_iarg('endit')

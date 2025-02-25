@@ -4,7 +4,7 @@ include 'simple_lib.f08'
 use simple_builder,          only: build_glob
 use simple_parameters,       only: params_glob
 use simple_polarft_corrcalc, only: pftcc_glob
-use simple_eul_prob_tab2D,   only: eul_prob_tab2D
+use simple_eul_prob_tab2D,   only: eul_prob_tab2D, neighfrac2nsmpl
 implicit none
 
 public :: s2D, clean_strategy2D, prep_strategy2D_batch, prep_strategy2D_glob
@@ -13,6 +13,7 @@ private
 
 type strategy2D_alloc
     ! global parameters
+    real                 :: power            = 2.       ! power for the sampling function
     integer              :: snhc_nrefs_bound = 0        ! refine=snhc
     integer              :: snhc_smpl_ncls   = 0        !       =snhc_smpl
     integer              :: snhc_smpl_ninpl  = 0        !       =snhc_smpl
@@ -42,7 +43,7 @@ contains
     !>  prep class & global parameters
     subroutine prep_strategy2D_glob( neigh_frac )
         use simple_eul_prob_tab, only: calc_athres
-        real,    intent(in) :: neigh_frac
+        real,           intent(in) :: neigh_frac
         real    :: overlap, avg_dist_inpl
         logical :: zero_oris, ncls_diff
         ! gather class populations
@@ -75,10 +76,8 @@ contains
         s2D%snhc_nrefs_bound = min(params_glob%ncls, nint(real(params_glob%ncls)*(1.-neigh_frac)))
         s2D%snhc_nrefs_bound = max(2, s2D%snhc_nrefs_bound)
         ! snhc_smpl
-        s2D%snhc_smpl_ncls  = nint(real(params_glob%ncls)*(neigh_frac/3.))
-        s2D%snhc_smpl_ncls  = max(2,min(s2D%snhc_smpl_ncls,params_glob%ncls))
-        s2D%snhc_smpl_ninpl = nint(real(pftcc_glob%get_nrots())*(neigh_frac/3.))
-        s2D%snhc_smpl_ninpl = max(2,min(s2D%snhc_smpl_ninpl,pftcc_glob%get_nrots()))
+        s2D%snhc_smpl_ncls  = neighfrac2nsmpl(neigh_frac, params_glob%ncls)
+        s2D%snhc_smpl_ninpl = neighfrac2nsmpl(neigh_frac, pftcc_glob%get_nrots())
         if( trim(params_glob%refine).eq.'greedy_smpl' )then
             overlap        = build_glob%spproj_field%get_avg('mi_class', state=1)
             avg_dist_inpl  = calc_athres('dist_inpl', state=1)
@@ -86,6 +85,10 @@ contains
             s2D%smpl_ninpl = max(2,nint(avg_dist_inpl*real(pftcc_glob%get_nrots())/180.))
             s2D%smpl_ncls  = nint(real(params_glob%ncls) * (1.-overlap)**2)
             s2D%smpl_ncls  = max(1,min(s2D%smpl_ncls, ceiling(params_glob%prob_athres/180.*real(params_glob%ncls))))
+        endif
+        ! for testing
+        if( (trim(params_glob%refine)=='snhc_smpl2') .and. (params_glob%extr_iter>params_glob%extr_lim) )then
+            s2D%power = params_glob%power   ! used for refine=snhc_smpl post extremal optimization
         endif
     end subroutine prep_strategy2D_glob
 
