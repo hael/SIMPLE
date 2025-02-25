@@ -297,9 +297,16 @@ contains
         if( l_prob )then
             ! done before, when assigning class from table
         else
-            if( l_update_frac .and. params_glob%maxpop>0 )then
-                call build_glob%spproj_field%balance_ptcls_within_cls(nptcls2update, pinds,&
-                    &params_glob%maxpop, params_glob%nparts)
+            if( l_stream )then
+                if( params_glob%l_update_frac .and. params_glob%maxpop>0 )then
+                    call build_glob%spproj_field%balance_ptcls_within_cls(nptcls2update, pinds,&
+                        &params_glob%maxpop, params_glob%nparts)
+                endif
+            else
+                if( l_update_frac .and. params_glob%maxpop>0 )then
+                    call build_glob%spproj_field%balance_ptcls_within_cls(nptcls2update, pinds,&
+                        &params_glob%maxpop, params_glob%nparts)
+                endif
             endif
         endif
 
