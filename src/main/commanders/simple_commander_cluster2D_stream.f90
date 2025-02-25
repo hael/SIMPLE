@@ -55,6 +55,7 @@ integer,               parameter :: CHUNK_EXTR_ITER      = 3                ! st
 integer,               parameter :: FREQ_POOL_REJECTION  = 5                ! pool class rejection performed every FREQ_POOL_REJECTION iteration
 integer,               parameter :: MIN_NPTCLS_REJECTION = 200000           ! Minimum number of particles required to activate rejection
 integer,               parameter :: NPREV_RES            = 5                ! # of previous resolution resolutions to store for resolution update (>=2)
+integer,               parameter :: AUTO_NSAMPLE         = 2000             ! # of particles per cls for auto samling scheme
 character(len=STDLEN), parameter :: USER_PARAMS          = 'stream2D_user_params.txt'
 character(len=STDLEN), parameter :: PROJFILE_POOL        = 'cluster2D.simple'
 character(len=STDLEN), parameter :: POOL_DIR             = ''               ! should be './pool/' for tidyness but difficult with gui
@@ -195,6 +196,7 @@ contains
             endif
             if( trim(params_glob%autosample).eq.'yes' )then
                 call cline_cluster2D_chunk%set('autosample', 'yes')
+                call cline_cluster2D_chunk%set('sigma_est',  'global')
             endif
             ! EV override
             call get_environment_variable(SIMPLE_STREAM_CHUNK_NTHR, chunk_nthr_env, envlen)
@@ -795,7 +797,7 @@ contains
         character(len=LONGSTRLEN), allocatable :: sigma_fnames(:)
         real                    :: frac_update
         integer                 :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl, nptcls_th
-        integer                 :: eo, icls, nptcls_sel, istk, nptcls2update, nstks2update, jjptcl
+        integer                 :: eo, icls, nptcls_sel, istk, nptcls2update, nstks2update, jjptcl, nsample
         integer(timer_int_kind) :: t_tot
         if( .not. stream2D_active ) return
         if( .not.pool_available )   return
@@ -1010,18 +1012,22 @@ contains
         frac_update = 1.0
         if( trim(params_glob%autosample).eq.'yes' )then
             ! momentum & limits to # of particles per class
-            nptcls_th = params_glob%nsample*ncls_glob
+            nsample = AUTO_NSAMPLE
+            if( master_cline%defined('nsample') ) nsample = params_glob%nsample
+            nptcls_th = nsample*ncls_glob
             if( nptcls_sel > nptcls_th )then
                 frac_update = real(nptcls_th) / real(nptcls_sel)
-                call cline_cluster2D_pool%set('maxpop',      params_glob%nsample)
-                print *,'frac_update A: ', frac_update ! debug
+                call cline_cluster2D_pool%set('maxpop',    nsample)
+                call cline_cluster2D_pool%set('sigma_est', 'global')
+                print *,'frac_update A:    ', frac_update       ! debug
+                print *,'nsample*ncls_glob ',nsample*ncls_glob  ! debug
             endif
         else
             ! momentum only
             if( nptcls_sel > MAX_STREAM_NPTCLS )then
                 if( (sum(prev_eo_pops) > 0) .and. (nptcls_old > 0))then
                     frac_update = real(nptcls_old-sum(prev_eo_pops)) / real(nptcls_old)
-                    print *,'frac_update B: ', frac_update ! debug
+                    print *,'frac_update B: ', frac_update      ! debug
                 endif
             endif
         endif
@@ -1034,7 +1040,6 @@ contains
             enddo
             ! debug, to remove
             print *,'nptcls_sel nptcls_old sum(prev_eo_pops) ',nptcls_sel, nptcls_old, sum(prev_eo_pops)
-            print *,'params_glob%nsample*ncls_glob           ',params_glob%nsample*ncls_glob
         endif
         ! write project
         call spproj%write(trim(POOL_DIR)//trim(PROJFILE_POOL))
