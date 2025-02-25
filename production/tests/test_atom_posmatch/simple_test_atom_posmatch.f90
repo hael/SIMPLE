@@ -12,6 +12,16 @@ real,    allocatable :: matrix1(:,:), matrix2(:,:), matrix_rot(:,:)
 real    :: atom1_pos(3,N1), atom2_pos(3,N2), rot_mat(3,3), scale, translation(3), atom2_rnd(3,N2)
 real    :: rec_mat(3,3), rec_trans(3), rec_scale, rec_atom2(3,N2), atom1_rot(3,N1), atom2_rot(3,N2)
 integer :: i, j, mapping(N2)
+if( command_argument_count() < 3 )then
+    write(logfhandle,'(a)') 'Usage: simple_test_atom_posmatch nthr=yy pdbfile=zz pdbfile2=tt'
+    stop
+endif
+call cline%parse_oldschool
+call cline%checkvar('nthr',     1)
+call cline%checkvar('pdbfile' , 2)
+call cline%checkvar('pdbfile2', 3)
+call cline%check
+call p%new(cline)
 call seed_rnd
 do i = 1, N1
     do j = 1, 3
@@ -72,23 +82,13 @@ do i = 1, N1
     print *, 'atom 1 pos : ', atom1_pos(:,i)
 enddo
 ! reading pdb file
-if( command_argument_count() < 3 )then
-    write(logfhandle,'(a)') 'Usage: simple_test_opt_lp nthr=yy pdbfile=zz pdbfile2=tt'
+call read_pdb2matrix( p%pdbfile,  matrix1 )
+call read_pdb2matrix( p%pdbfile2, matrix2 )
+allocate(matrix_rot(3,size(matrix1,2)))
+call atoms_register(matrix1, matrix2, matrix_rot)
+if( cline%defined('pdbout') )then
+    call write_matrix2pdb( 'Pt', matrix_rot, p%pdbout )
 else
-    call cline%parse_oldschool
-    call cline%checkvar('nthr',     1)
-    call cline%checkvar('pdbfile' , 2)
-    call cline%checkvar('pdbfile2', 3)
-    call cline%check
-    call p%new(cline)
-    call read_pdb2matrix( p%pdbfile,  matrix1 )
-    call read_pdb2matrix( p%pdbfile2, matrix2 )
-    allocate(matrix_rot(3,size(matrix1,2)))
-    call atoms_register(matrix1, matrix2, matrix_rot)
-    if( cline%defined('pdbout') )then
-        call write_matrix2pdb( 'Pt', matrix_rot, p%pdbout )
-    else
-        call write_matrix2pdb( 'Pt', matrix_rot, 'ATMS_rec.pdb' )
-    endif
+    call write_matrix2pdb( 'Pt', matrix_rot, 'ATMS_rec.pdb' )
 endif
 end program simple_test_atom_posmatch
