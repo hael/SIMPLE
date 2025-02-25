@@ -34,7 +34,12 @@ enddo
 inds = (/(j,j=1,Natoms)/)
 call hpsort(dists_avg,inds)
 allocate(core_mat(3,NCORE),source=mat(:,inds(1:NCORE)))
-centroid = (maxval(core_mat, dim=2) + minval(core_mat, dim=2)) / 2.
+! finding center of mass of the dists_avg
+centroid = 0.
+do i = 1, NCORE
+    centroid = centroid + core_mat(:,i) * dists_avg(i)
+end do
+centroid = centroid / sum(dists_avg(1:NCORE))
 ! compute the index closest to centroid
 min_dist = huge(min_dist)
 do j = 1, Natoms
