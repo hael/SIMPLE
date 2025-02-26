@@ -242,33 +242,33 @@ contains
                 else
                     ! offline mode, based on iteration
                     if( l_prob )then
-                        allocate(strategy2D_prob                  :: strategy2Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy2D_prob                    :: strategy2Dsrch(iptcl_batch)%ptr)
                     else
                         if( trim(refine_flag).eq.'inpl' )then
-                            allocate(strategy2D_inpl              :: strategy2Dsrch(iptcl_batch)%ptr)
+                            allocate(strategy2D_inpl                :: strategy2Dsrch(iptcl_batch)%ptr)
                         else if( l_greedy .or. (updatecnt==1 .or. (.not.build_glob%spproj_field%has_been_searched(iptcl))) )then
                             ! first iteration | refine=*greedy*
                             if( trim(params_glob%tseries).eq.'yes' )then
                                 if( l_np_cls_defined )then
-                                    allocate(strategy2D_tseries   :: strategy2Dsrch(iptcl_batch)%ptr)
+                                    allocate(strategy2D_tseries     :: strategy2Dsrch(iptcl_batch)%ptr)
                                 else
-                                    allocate(strategy2D_greedy    :: strategy2Dsrch(iptcl_batch)%ptr)
+                                    allocate(strategy2D_greedy      :: strategy2Dsrch(iptcl_batch)%ptr)
                                 endif
                             else
                                 select case(trim(refine_flag))
                                 case('greedy_smpl')
-                                    allocate(strategy2D_snhc_smpl :: strategy2Dsrch(iptcl_batch)%ptr)
+                                    allocate(strategy2D_greedy      :: strategy2Dsrch(iptcl_batch)%ptr)
                                 case DEFAULT ! is refine=greedy
-                                    allocate(strategy2D_snhc      :: strategy2Dsrch(iptcl_batch)%ptr)
+                                    allocate(strategy2D_greedy_smpl :: strategy2Dsrch(iptcl_batch)%ptr)
                                 end select
                             endif
                         else
                             ! iteration>1 & refine/=*greedy*
                             select case(trim(refine_flag))
                                 case('snhc_smpl','snhc_smpl2')
-                                    allocate(strategy2D_snhc_smpl  :: strategy2Dsrch(iptcl_batch)%ptr)
+                                    allocate(strategy2D_snhc_smpl   :: strategy2Dsrch(iptcl_batch)%ptr)
                                 case DEFAULT ! is refine=snhc
-                                    allocate(strategy2D_snhc       :: strategy2Dsrch(iptcl_batch)%ptr)
+                                    allocate(strategy2D_snhc        :: strategy2Dsrch(iptcl_batch)%ptr)
                             end select
                         endif
                     endif
