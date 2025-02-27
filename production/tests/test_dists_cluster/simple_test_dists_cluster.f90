@@ -4,59 +4,144 @@ use simple_cmdline,            only: cmdline
 use simple_parameters,         only: parameters
 use simple_nanoparticle_utils, only: read_pdb2matrix
 implicit none
-real,    allocatable :: dists(:), mat(:,:), dists_cen(:)
-integer, allocatable :: cnts(:)
+character(len=LONGSTRLEN), allocatable :: pdbfnames(:)
+real,    allocatable :: dists(:), mat(:,:), dists_cen(:), vars(:), centers(:), ref_stats(:), cur_mat(:,:), cur_stats(:), probs(:)
+integer, allocatable :: cnts(:), cen_cnts(:)
 type(parameters)     :: p
 type(cmdline)        :: cline
-integer              :: Natoms, i, j, cnt, nclus, sum_cnt
-real                 :: min_dist, eps
+integer              :: Natoms, i, j, cnt, nclus, sum_cnt, cen_cnt, npdbs, ipdb, ithres, stab_cnt
+real                 :: min_dist, eps, dist, d, prob, dist_thres, prev_prob, stab_prob
 ! reading pdb file
-if( command_argument_count() < 2 )then
-    write(logfhandle,'(a)') 'Usage: simple_test_dists_cluster nthr=yy pdbfile=zz'
+if( command_argument_count() < 3 )then
+    write(logfhandle,'(a)') 'Usage: simple_test_dists_cluster nthr=yy pdbfile=zz pdbfiles=tt'
     stop
 endif
 call cline%parse_oldschool
 call cline%checkvar('nthr',     1)
 call cline%checkvar('pdbfile' , 2)
+call cline%checkvar('pdbfiles', 3)
 call cline%check
 call p%new(cline)
-call read_pdb2matrix( p%pdbfile, mat )
-Natoms = size(mat,2)
-allocate(dists(Natoms**2), source=0.)
-cnt      = 0
-min_dist = huge(min_dist)
-do i = 1, Natoms
-    do j = 1, Natoms
-        cnt        = cnt + 1
-        dists(cnt) = sqrt(sum((mat(:,i) - mat(:,j))**2))
-        if( dists(cnt) < min_dist .and. dists(cnt) > TINY ) min_dist = dists(cnt)
+dist_thres = 2.
+do ithres=1,8
+    call read_pdb2matrix( p%pdbfile, mat )
+    Natoms = size(mat,2)
+    if( allocated(dists) )deallocate(dists)
+    allocate(dists(Natoms**2), source=0.)
+    cnt      = 0
+    min_dist = huge(min_dist)
+    do i = 1, Natoms
+        do j = 1, Natoms
+            cnt        = cnt + 1
+            dists(cnt) = sqrt(sum((mat(:,i) - mat(:,j))**2))
+            if( dists(cnt) < min_dist .and. dists(cnt) > TINY ) min_dist = dists(cnt)
+        enddo
     enddo
+    eps = min_dist / 10.
+    call sort_cluster(dists, nclus, dists_cen, cnts, vars)
+    dist_thres = dist_thres + 1.
+    sum_cnt = 0
+    cen_cnt = 0
+    do i = 1, nclus
+        if( dists_cen(i) > dist_thres )cycle
+        sum_cnt = sum_cnt + cnts(i)
+        cen_cnt = cen_cnt + 1
+    enddo
+    if( allocated(centers) )  deallocate(centers)
+    if( allocated(cen_cnts) ) deallocate(cen_cnts)
+    allocate(centers(cen_cnt),source=dists_cen(1:cen_cnt))
+    allocate(cen_cnts(cen_cnt), source=0)
+    do i = 1, cen_cnt
+        if( i < cen_cnt )then
+            eps = (centers(i+1) - centers(i))/2.
+        else
+            eps = (centers(i)   - centers(i-1))/2.
+        endif
+        do j = 1, cnt
+            dist = abs(dists(j) - centers(i))
+            if( dist < eps ) cen_cnts(i) = cen_cnts(i) + 1
+        enddo
+    enddo
+    sum_cnt = sum(cen_cnts)
+    if( allocated(ref_stats) ) deallocate(ref_stats)
+    allocate(ref_stats(cen_cnt))
+    do i = 1, cen_cnt
+        ref_stats(i) = real(cen_cnts(i)) * 100. / real(sum_cnt)
+    enddo
+    ! reading pdbfiles and compute Kolmogorov-Smirnov test
+    call read_filetable(p%pdbfiles, pdbfnames)
+    npdbs = size(pdbfnames)
+    if( allocated(cur_stats) ) deallocate(cur_stats)
+    allocate(cur_stats(cen_cnt))
+    if( allocated(probs) )deallocate(probs)
+    allocate(probs(npdbs))
+    do ipdb = 1, npdbs
+        call read_pdb2matrix( trim(pdbfnames(ipdb)), cur_mat )
+        Natoms = size(cur_mat,2)
+        if( allocated(dists) )deallocate(dists)
+        allocate(dists(Natoms**2), source=0.)
+        cnt      = 0
+        min_dist = huge(min_dist)
+        do i = 1, Natoms
+            do j = 1, Natoms
+                cnt        = cnt + 1
+                dists(cnt) = sqrt(sum((cur_mat(:,i) - cur_mat(:,j))**2))
+                if( dists(cnt) < min_dist .and. dists(cnt) > TINY ) min_dist = dists(cnt)
+            enddo
+        enddo
+        cen_cnts = 0
+        do i = 1, cen_cnt
+            if( i < cen_cnt )then
+                eps = (centers(i+1) - centers(i))/2.
+            else
+                eps = (centers(i)   - centers(i-1))/2.
+            endif
+            do j = 1, cnt
+                dist = abs(dists(j) - centers(i))
+                if( dist < eps ) cen_cnts(i) = cen_cnts(i) + 1
+            enddo
+        enddo
+        sum_cnt   = sum(cen_cnts)
+        cur_stats = 0.
+        do i = 1, cen_cnt
+            cur_stats(i) = real(cen_cnts(i)) * 100. / real(sum_cnt)
+        enddo
+        call kstwo( ref_stats, cen_cnt, cur_stats, cen_cnt, d, prob )
+        probs(ipdb) = prob
+        ! print *, 'd = ', d, ', prob = ', prob
+        ! print *, '----'
+        ! print *, 'ref_stats = ', ref_stats
+        ! print *, 'cur_stats = ', cur_stats
+    enddo
+    ! print *, '----'
+    ! print *, 'probs = ', probs
+    call hpsort(probs)
+    call reverse(probs)
+    prev_prob = 0.
+    stab_cnt  = 0
+    do ipdb = 1, npdbs
+        if( ipdb > 1 .and. abs(prev_prob - probs(ipdb)) > TINY ) exit
+        stab_cnt  = stab_cnt + 1
+        prev_prob = probs(ipdb)
+    enddo
+    print *, 'At thres = ', dist_thres, '; ', stab_cnt, ' out of ', npdbs, ' are stable at prob = ', prev_prob
 enddo
-eps = min_dist / 2.
-call sort_cluster(dists, nclus, dists_cen, cnts)
-sum_cnt = 0
-do i = 1, nclus
-    print *, 'cluster ', i, ' with center = ', dists_cen(i), ' has ', cnts(i), ' points'
-    sum_cnt = sum_cnt + cnts(i)
-enddo
-print *, 'Natoms  = ', Natoms
-print *, 'sum_cnt = ', sum_cnt, ' while Natoms**2 = ', Natoms**2
 
 contains
 
-    subroutine sort_cluster( points_in, cur_clusN, out_points, out_cnts )
+    subroutine sort_cluster( points_in, cur_clusN, out_points, out_cnts, out_vars )
         real,                 intent(in)    :: points_in(:)
         integer,              intent(inout) :: cur_clusN
         real,    allocatable, intent(inout) :: out_points(:)
         integer, allocatable, intent(inout) :: out_cnts(:)
-        real,    allocatable :: points(:), avg_points(:)
+        real,    allocatable, intent(inout) :: out_vars(:)
+        real,    allocatable :: points(:), avg_points(:), vars(:)
         integer, allocatable :: cnts(:)
-        integer :: cur_ind, n_points
+        integer :: cur_ind, n_points, i, j
         real    :: cur_avg
         n_points = size(points_in)
         allocate(points(n_points), source=points_in)
-        allocate(avg_points(n_points))
-        allocate(cnts(n_points))
+        allocate(avg_points(n_points),cnts(n_points),vars(n_points))
         call hpsort(points)
         cur_clusN = 0
         cur_ind   = 1
@@ -67,6 +152,11 @@ contains
                 cur_clusN = cur_clusN + 1
                 avg_points(cur_clusN) = cur_avg/real(i-cur_ind+1)
                 cnts(cur_clusN)       = i-cur_ind+1
+                vars(cur_clusN)       = 0.
+                do j = cur_ind, i
+                    vars(cur_clusN) = vars(cur_clusN) + (points(i) - avg_points(cur_clusN))**2
+                enddo
+                vars(cur_clusN) = vars(cur_clusN)/real(i-cur_ind+1)
                 cur_ind = i + 1
                 cur_avg = 0.
             endif
@@ -75,8 +165,17 @@ contains
         cur_clusN = cur_clusN + 1
         avg_points(cur_clusN) = sum(points(cur_ind:i))/real(i-cur_ind+1)
         cnts(cur_clusN)       = i-cur_ind+1
+        vars(cur_clusN)       = 0.
+        do j = cur_ind, i
+            vars(cur_clusN) = vars(cur_clusN) + (points(i) - avg_points(cur_clusN))**2
+        enddo
+        vars(cur_clusN) = vars(cur_clusN)/real(i-cur_ind+1)
+        if( allocated(out_points) )deallocate(out_points)
+        if( allocated(out_cnts)   )deallocate(out_cnts)
+        if( allocated(out_vars)   )deallocate(out_vars)
         allocate(out_points(1:cur_clusN), source=avg_points(1:cur_clusN))
         allocate(out_cnts(1:cur_clusN),   source=cnts(1:cur_clusN))
+        allocate(out_vars(1:cur_clusN),   source=vars(1:cur_clusN))
     end subroutine sort_cluster
 
     subroutine point_cluster( points_in, cur_clusN, out_points )
