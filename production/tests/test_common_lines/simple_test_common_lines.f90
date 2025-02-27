@@ -59,10 +59,10 @@ call vol%stats('foreground', ave, sdev, maxv, minv)
 call spiral%new(NPLANES, is_ptcl=.false.)
 call spiral%spiral
 call ptcl%new(    [p%box,   p%box,   1],       p%smpd)
+call noise%new(   [p%box,   p%box ,  1],       p%smpd)
 call img%new(     [p%box,   p%box,   1],       p%smpd)
 call vol_pad%new( [p%boxpd, p%boxpd, p%boxpd], p%smpd)
 call ptcl_pad%new([p%boxpd, p%boxpd, 1],       p%smpd)
-call noise%new(   [p%boxpd, p%boxpd, 1],       p%smpd)
 call vol%pad(vol_pad)
 call vol_pad%fft
 call vol_pad%expand_cmat(p%alpha)
@@ -72,8 +72,8 @@ call ptcl_pad%ifft
 ! add noise in a small center region of the vol
 call noise%gauran(0., 0.1 * sdev)
 call noise%mask(p%msk, 'soft')
-call ptcl_pad%add(noise)
 call ptcl_pad%clip(ptcl)
+call ptcl%add(noise)
 call ptcl%write('reproj_com_reprojcom.mrc', 1)
 call ptcl%fft
 lims = vol%loop_lims(2)
@@ -96,6 +96,9 @@ do i = 1, spiral%get_noris()
     call vol_pad%fproject(o2,pad_fplanes(ithr))
     call pad_fplanes(ithr)%ifft
     call pad_fplanes(ithr)%clip(fplanes(i))
+    call noise%gauran(0., 0.1 * sdev)
+    call noise%mask(p%msk, 'soft')
+    call fplanes(i)%add(noise)
     call fplanes(i)%fft
 enddo
 !$omp end parallel do
