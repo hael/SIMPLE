@@ -55,7 +55,7 @@ integer,               parameter :: CHUNK_EXTR_ITER      = 3                ! st
 integer,               parameter :: FREQ_POOL_REJECTION  = 5                ! pool class rejection performed every FREQ_POOL_REJECTION iteration
 integer,               parameter :: MIN_NPTCLS_REJECTION = 200000           ! Minimum number of particles required to activate rejection
 integer,               parameter :: NPREV_RES            = 5                ! # of previous resolution resolutions to store for resolution update (>=2)
-integer,               parameter :: AUTO_NSAMPLE         = 2000             ! # of particles per cls for auto samling scheme
+integer,               parameter :: AUTO_NSAMPLE         = 2500             ! # of particles per cls for auto samling scheme
 character(len=STDLEN), parameter :: USER_PARAMS          = 'stream2D_user_params.txt'
 character(len=STDLEN), parameter :: PROJFILE_POOL        = 'cluster2D.simple'
 character(len=STDLEN), parameter :: POOL_DIR             = ''               ! should be './pool/' for tidyness but difficult with gui
@@ -197,6 +197,7 @@ contains
             if( trim(params_glob%autosample).eq.'yes' )then
                 call cline_cluster2D_chunk%set('autosample', 'yes')
                 call cline_cluster2D_chunk%set('sigma_est',  'global')
+                params_glob%sigma_est = 'global'
             endif
             ! EV override
             call get_environment_variable(SIMPLE_STREAM_CHUNK_NTHR, chunk_nthr_env, envlen)
@@ -287,19 +288,9 @@ contains
         end select
         ! refinement
         select case(trim(params_glob%refine))
-        case('snhc')
-            call cline_cluster2D_chunk%set('refine', 'snhc')
-            call cline_cluster2D_pool%set( 'refine', 'snhc')
-        case('snhc_smpl')
-            call cline_cluster2D_chunk%set('refine', 'snhc_smpl')
-            call cline_cluster2D_pool%set( 'refine', 'snhc_smpl')
-        case('snhc_smpl2')
-            call cline_cluster2D_chunk%set('refine', 'snhc_smpl2')
-            call cline_cluster2D_pool%set( 'refine', 'snhc_smpl2')
-            if( master_cline%defined('power') )then
-                call cline_cluster2D_chunk%set('power', params_glob%power)
-                call cline_cluster2D_pool%set( 'power', params_glob%power)
-            endif
+        case('snhc','snhc_smpl','snhc_smpl2')
+            call cline_cluster2D_chunk%set('refine', params_glob%refine)
+            call cline_cluster2D_pool%set( 'refine', params_glob%refine)
         case DEFAULT
             THROW_HARD('UNSUPPORTED REFINE PARAMETER!')
         end select
@@ -638,7 +629,7 @@ contains
         character(len=:), allocatable :: projfile,projfname, cavgsfname, frcsfname, src, dest
         character(len=:), allocatable :: pool_refs
         logical                       :: l_write_star, l_clspath
-        logical,     parameter        :: DEBUG_HERE      = .true.
+        logical,     parameter        :: DEBUG_HERE      = .false.
         l_write_star = .false.
         l_clspath    = .false.
         if(present(write_star)) l_write_star = write_star
@@ -1014,7 +1005,7 @@ contains
             ! momentum & limits to # of particles per class
             nsample = AUTO_NSAMPLE
             if( master_cline%defined('nsample') ) nsample = params_glob%nsample
-            nptcls_th = nsample*ncls_glob
+            nptcls_th = MAX_STREAM_NPTCLS
             if( nptcls_sel > nptcls_th )then
                 frac_update = real(nptcls_th) / real(nptcls_sel)
                 call cline_cluster2D_pool%set('maxpop',    nsample)

@@ -1584,31 +1584,36 @@ contains
         ! reading scores from all parts
         call eulprob%read_table_parts_to_glob
         ! perform assignment
-        select case(trim(params_glob%refine))
-        case('prob')
-            if( params_glob%which_iter == 1 )then
-                call eulprob%assign_greedy(l_maxpop)
-            else if( params_glob%extr_iter <= params_glob%extr_lim )then
-                call eulprob%normalize_table
-                call eulprob%assign_prob(build_glob%spproj_field, l_maxpop)
-            else
+        if( params_glob%which_iter == 1 )then
+            ! Always greedy assignement with first iteration
+            call eulprob%assign_greedy(l_maxpop)
+        else
+            select case(trim(params_glob%refine))
+            case('prob')
+                if( params_glob%extr_iter <= params_glob%extr_lim )then
+                    call eulprob%normalize_table
+                    call eulprob%assign_prob(build_glob%spproj_field, l_maxpop)
+                else
+                    if( trim(params_glob%ptcl_norm).eq.'yes' ) call eulprob%normalize_ptcl
+                    call eulprob%assign_smpl(build_glob%spproj_field, l_maxpop)
+                endif
+            case('prob_smpl','prob_smpl_shc')
                 if( trim(params_glob%ptcl_norm).eq.'yes' ) call eulprob%normalize_ptcl
-                call eulprob%assign_smpl(build_glob%spproj_field, l_maxpop)
-            endif
-        case('prob_smpl','prob_smpl_shc')
-            if( trim(params_glob%ptcl_norm).eq.'yes' ) call eulprob%normalize_ptcl
-            if( params_glob%which_iter == 1 )then
-                call eulprob%assign_greedy(l_maxpop)
-            else
-                if( trim(params_glob%refine) == 'prob_smpl' )then
+                if( params_glob%extr_iter <= params_glob%extr_lim )then
                     call eulprob%assign_smpl(build_glob%spproj_field, l_maxpop)
                 else
-                    call eulprob%assign_shc(build_glob%spproj_field, l_maxpop)
+                    if( trim(params_glob%refine) == 'prob_smpl' )then
+                        call eulprob%assign_smpl(build_glob%spproj_field, l_maxpop)
+                    else
+                        call eulprob%assign_smpl_shc(build_glob%spproj_field, l_maxpop)
+                    endif
                 endif
-            endif
-        case('prob_greedy')
-            call eulprob%assign_greedy(l_maxpop)
-        end select
+            case('prob_greedy')
+                call eulprob%assign_greedy(l_maxpop)
+            case DEFAULT
+                THROW_HARD('Unsupported REFINE flag: '//trim(params%refine))
+            end select
+        endif
         ! write
         call eulprob%write_assignment(trim(ASSIGNMENT_FBODY)//'.dat')
         ! cleanup
@@ -1684,6 +1689,8 @@ contains
                 call eulprob%fill_table_smpl
             case('prob_greedy')
                 call eulprob%fill_table_greedy
+            case DEFAULT
+                THROW_HARD('Unsupported REFINE flag: '//trim(params%refine))
             end select
         endif
         call pftcc%kill

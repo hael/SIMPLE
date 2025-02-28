@@ -51,7 +51,6 @@ contains
         class(cmdline),          intent(inout) :: cline
         integer,                 intent(in)    :: which_iter
         logical,                 intent(inout) :: converged
-        logical,                     parameter :: DEBUG_here = .true.
         type(strategy2D_per_ptcl), allocatable :: strategy2Dsrch(:)
         character(len=STDLEN),     allocatable :: refine_flag
         real,                      allocatable :: states(:)
@@ -171,13 +170,6 @@ contains
         ! ARRAY ALLOCATION FOR STRATEGY2D after pftcc initialization
         call prep_strategy2D_glob( neigh_frac )
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> STRATEGY2D OBJECTS ALLOCATED'
-
-        if( DEBUG_here .and. params_glob%part==1 )then
-            write(logfhandle,*)'params%refine refine_flag:          ',trim(params_glob%refine),' ',trim(refine_flag)
-            write(logfhandle,*)'l_snhc neigh_frac power:            ', l_snhc, neigh_frac, s2D%power
-            write(logfhandle,*)'l_greedy l_prob l_stream:           ', l_greedy, l_prob, l_stream
-            write(logfhandle,*)'l_update_frac l_partial_sums ufrac: ',l_update_frac, l_partial_sums, params_glob%update_frac
-        endif
 
         ! SETUP WEIGHTS
         call build_glob%spproj_field%set_all2single('w', 1.0)

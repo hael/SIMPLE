@@ -15,8 +15,6 @@ public :: eul_prob_tab2D, squared_sampling, power_sampling, neighfrac2nsmpl
 private
 #include "simple_local_flags.inc"
 
-real, parameter :: EXTR_POW = 2.0
-
 type :: eul_prob_tab2D
     type(ptcl_rec), allocatable :: loc_tab(:,:)   !< 2D search table (ncls x nptcls)
     type(ptcl_rec), allocatable :: assgn_map(:)   !< assignment map  (nptcls)
@@ -41,6 +39,7 @@ type :: eul_prob_tab2D
     procedure          :: assign_greedy
     procedure          :: assign_shc
     procedure          :: assign_smpl
+    procedure          :: assign_smpl_shc
     procedure          :: assign_prob
     ! I/O
     procedure          :: write_table
@@ -209,8 +208,8 @@ contains
         neigh_frac = extremal_decay2D(params_glob%extr_iter, params_glob%extr_lim)
         ninpl_smpl = neighfrac2nsmpl(neigh_frac, nrots)
         ncls_smpl  = neighfrac2nsmpl(neigh_frac, self%neffcls)
-        P = EXTR_POW
-        if( params_glob%extr_iter > params_glob%extr_lim ) P = params_glob%power
+        P = EXTR_POWER
+        if( params_glob%extr_iter > params_glob%extr_lim ) P = POST_EXTR_POWER
         ! Fork
         if( params_glob%l_doshift )then
             lims(:,1)      = -params_glob%trs
@@ -439,8 +438,8 @@ contains
         ! size of stochastic neighborhood (# of classes to draw from)
         neigh_frac = extremal_decay2D(params_glob%extr_iter, params_glob%extr_lim)
         ncls_smpl  = neighfrac2nsmpl(neigh_frac, self%neffcls)
-        P = EXTR_POW
-        if( params_glob%extr_iter > params_glob%extr_lim ) P = params_glob%power
+        P = EXTR_POWER
+        if( params_glob%extr_iter > params_glob%extr_lim ) P = POST_EXTR_POWER
         ! select class stochastically
         pops = 0
         !$omp parallel do default(shared) proc_bind(close) schedule(static)&
@@ -485,6 +484,43 @@ contains
         if( rank_ptcls ) call self%select_top_ptcls(pops)
     end subroutine assign_shc
 
+    ! Assign improving class to all particles stochastically
+    subroutine assign_smpl_shc( self, os, rank_ptcls )
+        class(eul_prob_tab2D), intent(inout) :: self
+        class(oris),           intent(in)    :: os
+        logical,               intent(in)    :: rank_ptcls
+        real    :: pdists(self%neffcls), P, score
+        integer :: pops(self%ncls), vec(self%neffcls), i, icls, ind, rank, ncls_smpl, prev_cls
+        P = EXTR_POWER
+        if( params_glob%extr_iter > params_glob%extr_lim ) P = POST_EXTR_POWER
+        ! select class stochastically
+        pops = 0
+        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+        !$omp private(i,pdists,vec,ind,rank,score,icls,prev_cls) reduction(+:pops)
+        do i = 1,self%nptcls
+            prev_cls = os%get_class(self%pinds(i))
+            if( prev_cls <= 0 )then
+                icls = minloc(self%loc_tab(self%clsinds(:),i)%dist,dim=1)
+            else
+                pdists    = eulprob_corr_switch(self%loc_tab(self%clsinds(:),i)%dist)
+                ncls_smpl = count(pdists >= pdists(prev_cls)) ! # of improving classes
+                if( ncls_smpl == 1 )then
+                    icls = self%indcls(prev_cls)
+                else
+                    ! drawing from improving classes
+                    call power_sampling(P, self%neffcls, pdists, vec, ncls_smpl, icls, rank, score)
+                endif
+            endif
+            icls              = self%clsinds(icls)
+            self%assgn_map(i) = self%loc_tab(icls,i)
+            pops(icls)        = pops(icls) + 1
+        enddo
+        !$omp end parallel do
+        ! toss worst particles
+        if( rank_ptcls ) call self%select_top_ptcls(pops)
+    end subroutine assign_smpl_shc
+
+
     ! Same assignment as 3D (cf eul_prob_tab)
     subroutine assign_prob( self, os, rank_ptcls )
         class(eul_prob_tab2D), intent(inout) :: self
@@ -509,8 +545,8 @@ contains
         !$omp end parallel do
         neigh_frac = extremal_decay2D(params_glob%extr_iter, params_glob%extr_lim)
         ncls_smpl = neighfrac2nsmpl(neigh_frac, self%neffcls)
-        P = EXTR_POW
-        if( params_glob%extr_iter > params_glob%extr_lim ) P = params_glob%power
+        P = EXTR_POWER
+        if( params_glob%extr_iter > params_glob%extr_lim ) P = POST_EXTR_POWER
         ! first row is the current best reference distribution
         cls_dist_inds = 1
         cls_dist      = sorted_tab(1,:)

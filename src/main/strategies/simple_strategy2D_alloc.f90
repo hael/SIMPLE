@@ -13,7 +13,7 @@ private
 
 type strategy2D_alloc
     ! global parameters
-    real                 :: power            = 2.       ! power for the sampling function
+    real                 :: power            = EXTR_POWER ! power for the sampling function
     integer              :: snhc_nrefs_bound = 0        ! refine=snhc
     integer              :: snhc_smpl_ncls   = 0        !       =snhc_smpl
     integer              :: snhc_smpl_ninpl  = 0        !       =snhc_smpl
@@ -87,8 +87,12 @@ contains
             s2D%smpl_ncls  = max(1,min(s2D%smpl_ncls, ceiling(params_glob%prob_athres/180.*real(params_glob%ncls))))
         endif
         ! for testing
-        if( (trim(params_glob%refine)=='snhc_smpl2') .and. (params_glob%extr_iter>params_glob%extr_lim) )then
-            s2D%power = params_glob%power   ! used for refine=snhc_smpl post extremal optimization
+        if( (trim(params_glob%stream)=='yes') )then
+            s2D%power = EXTR_POWER
+        else
+            if( (trim(params_glob%refine)=='snhc_smpl2') .and. (params_glob%extr_iter>params_glob%extr_lim) )then
+                s2D%power = POST_EXTR_POWER
+            endif
         endif
     end subroutine prep_strategy2D_glob
 
