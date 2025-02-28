@@ -73,7 +73,6 @@ contains
         if( .not. cline%defined('sigma_est') ) call cline%set('sigma_est', 'global')
         if( .not. cline%defined('stats')     ) call cline%set('stats',     'no')
         if( .not. cline%defined('refine')    ) call cline%set('refine',    'snhc_smpl')
-        if( .not. cline%defined('power')     ) call cline%set('power',     4.0)
         ! shared memory execution
         l_shmem = set_shmem_flag(cline)
         ! master parameters
@@ -224,16 +223,25 @@ contains
             stage_parms(:)%max_cls_pop = 0
             stage_parms(:)%nptcls      = nptcls_eff
             if( trim(params%autosample).eq.'yes' )then
-                startpop = MAXPOP_START
-                stoppop  = MAXPOP_STOP
-                if( cline%defined('nsample_start') ) startpop = params%nsample_start
-                if( cline%defined('nsample_stop') )  stoppop  = params%nsample_stop
-                stoppop = max(startpop,stoppop)
+                stoppop = 2500
+                if( cline%defined('nsample') ) stoppop = params%nsample
                 do i = 1,NSTAGES
-                    stage_parms(i)%max_cls_pop = startpop + nint(real((i-1)*(stoppop-startpop)) / real(NSTAGES-1))
-                    stage_parms(i)%nptcls      = min(nptcls_eff, startpop*i*params%ncls)
+                    stage_parms(i)%max_cls_pop = stoppop
+                    stage_parms(i)%nptcls      = min(nptcls_eff, stoppop*params%ncls)
                 enddo
             endif
+            ! Does not seem to work with 1M+ particles
+            ! if( trim(params%autosample).eq.'yes' )then
+            !     startpop = MAXPOP_START
+            !     stoppop  = MAXPOP_STOP
+            !     if( cline%defined('nsample_start') ) startpop = params%nsample_start
+            !     if( cline%defined('nsample_stop') )  stoppop  = params%nsample_stop
+            !     stoppop = max(startpop,stoppop)
+            !     do i = 1,NSTAGES
+            !         stage_parms(i)%max_cls_pop = startpop + nint(real((i-1)*(stoppop-startpop)) / real(NSTAGES-1))
+            !         stage_parms(i)%nptcls      = min(nptcls_eff, startpop*i*params%ncls)
+            !     enddo
+            ! endif
         end subroutine set_sampling
 
         subroutine prep_command_lines( cline )
@@ -395,6 +403,7 @@ contains
             endif
             call cline_cluster2D%delete('nsample_stop')
             call cline_cluster2D%delete('nsample_start')
+            call cline_cluster2D%delete('nsample')
             call cline_cluster2D%delete('autosample')
             if( stage_parms(istage)%max_cls_pop > 0 )then
                 call cline_cluster2D%set('maxpop', stage_parms(istage)%max_cls_pop)

@@ -203,6 +203,7 @@ contains
                 call cline_pspec%set('mkdir',    'yes')
                 call cline_pspec%set('nparts',   1)
                 if( params_glob%nparts_chunk > 1 ) call cline_pspec%set('nparts',params_glob%nparts_chunk)
+                if( self%cline%defined('sigma_est') ) call cline_pspec%set('sigma_est', self%cline%get_carg('sigma_est'))
                 clines(1) = cline_pspec
             endif
         endif

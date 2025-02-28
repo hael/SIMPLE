@@ -202,6 +202,8 @@ real, parameter    :: TAU_DEFAULT               = 3.0            !< TAU fudge fa
                                                                  !! tau < 3 leads to excessive low-pass filtering
 real, parameter    :: CENTHRESH                 = 0.5            ! threshold for performing volume/cavg centering in pixels
 real, parameter    :: MAXCENTHRESH2D            = 3.0            ! max threshold for performing cavg centering in pixels
+real, parameter    :: EXTR_POWER                = 2.0            ! Exponent of the sampling function during extremal stochastic phase of 2D classification
+real, parameter    :: POST_EXTR_POWER           = 4.0            ! Exponent of the sampling function after the extremal stochastic phase
 
 ! preprocessing constants
 real, parameter    :: FRACTION_DOSE_TARGET_DEFAULT=1.0           !< EER target fraction dose in e/A2
