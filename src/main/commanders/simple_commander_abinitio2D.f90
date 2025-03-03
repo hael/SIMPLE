@@ -227,7 +227,8 @@ contains
                 if( cline%defined('nsample') ) stoppop = params%nsample
                 do i = 1,NSTAGES
                     stage_parms(i)%max_cls_pop = stoppop
-                    stage_parms(i)%nptcls      = min(nptcls_eff, stoppop*params%ncls)
+                    stage_parms(i)%nptcls      = min(nptcls_eff,max(MAX_STREAM_NPTCLS, 2*stoppop*params%ncls))
+                    ! if( stage_parms(i)%nptcls <= nptcls_eff ) stage_parms(i)%max_cls_pop = 0 ! deactivates
                 enddo
             endif
             ! Does not seem to work with 1M+ particles
@@ -240,6 +241,15 @@ contains
             !     do i = 1,NSTAGES
             !         stage_parms(i)%max_cls_pop = startpop + nint(real((i-1)*(stoppop-startpop)) / real(NSTAGES-1))
             !         stage_parms(i)%nptcls      = min(nptcls_eff, startpop*i*params%ncls)
+            !     enddo
+            ! endif
+            ! Does not seem to work with 1M+ particles either
+            ! if( trim(params%autosample).eq.'yes' )then
+            !     stoppop = 2500
+            !     if( cline%defined('nsample') ) stoppop = params%nsample
+            !     do i = 1,NSTAGES
+            !         stage_parms(i)%max_cls_pop = stoppop
+            !         stage_parms(i)%nptcls      = min(nptcls_eff, stoppop*params%ncls)
             !     enddo
             ! endif
         end subroutine set_sampling
@@ -405,9 +415,14 @@ contains
             call cline_cluster2D%delete('nsample_start')
             call cline_cluster2D%delete('nsample')
             call cline_cluster2D%delete('autosample')
+            call cline_cluster2D%delete('update_frac')
             if( stage_parms(istage)%max_cls_pop > 0 )then
                 call cline_cluster2D%set('maxpop', stage_parms(istage)%max_cls_pop)
-                frac = real(stage_parms(istage)%nptcls) / real(nptcls_eff)
+                if( cline%defined('update_frac') )then
+                    frac = params%update_frac
+                else
+                    frac = real(stage_parms(istage)%nptcls) / real(nptcls_eff)
+                endif
                 call cline_cluster2D%set('update_frac', frac)
             endif
             call cline_cluster2D%delete('endit')

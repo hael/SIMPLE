@@ -791,7 +791,7 @@ contains
         integer                 :: eo, icls, nptcls_sel, istk, nptcls2update, nstks2update, jjptcl, nsample
         integer(timer_int_kind) :: t_tot
         if( .not. stream2D_active ) return
-        if( .not.pool_available )   return
+        if( .not. pool_available )  return
         if( L_BENCH ) t_tot  = tic()
         nptcls_tot           = pool_proj%os_ptcl2D%get_noris()
         nptcls_glob          = nptcls_tot
@@ -1010,15 +1010,14 @@ contains
                 frac_update = real(nptcls_th) / real(nptcls_sel)
                 call cline_cluster2D_pool%set('maxpop',    nsample)
                 call cline_cluster2D_pool%set('sigma_est', 'global')
-                print *,'frac_update A:    ', frac_update       ! debug
-                print *,'nsample*ncls_glob ',nsample*ncls_glob  ! debug
+                print *,'frac_update A, nsample*ncls_glob: ', frac_update, nsample*ncls_glob    ! debug
             endif
         else
             ! momentum only
             if( nptcls_sel > MAX_STREAM_NPTCLS )then
                 if( (sum(prev_eo_pops) > 0) .and. (nptcls_old > 0))then
                     frac_update = real(nptcls_old-sum(prev_eo_pops)) / real(nptcls_old)
-                    print *,'frac_update B: ', frac_update      ! debug
+                    print *,'frac_update B: ', frac_update  ! debug
                 endif
             endif
         endif
@@ -1149,11 +1148,6 @@ contains
             call update_pool_dims
             ! for gui
             call update_pool_for_gui
-            ! some tidying
-            ! call del_files(DIST_FBODY,      params_glob%nparts_pool,ext='.dat')
-            ! call del_files(ASSIGNMENT_FBODY,params_glob%nparts_pool,ext='.dat')
-            ! call del_file(DIST_FBODY      //'.dat')
-            ! call del_file(ASSIGNMENT_FBODY//'.dat')
         endif
         call spproj%kill
     end subroutine update_pool
@@ -2220,7 +2214,7 @@ contains
         if( .not. cline%defined('mkdir')        ) call cline%set('mkdir',       'yes')
         if( .not. cline%defined('center')       ) call cline%set('center',      'yes')
         if( .not. cline%defined('lpthres')      ) call cline%set('lpthres',      30.0)
-        if( .not. cline%defined('ndev')         ) call cline%set('ndev',         1.5)
+        if( .not. cline%defined('ndev')         ) call cline%set('ndev',         CLS_REJECT_STD)
         if( .not. cline%defined('oritype')      ) call cline%set('oritype',      'ptcl2D')
         if( .not. cline%defined('walltime')     ) call cline%set('walltime',     29*60) ! 29 minutes
         if( .not. cline%defined('nparts_chunk') ) call cline%set('nparts_chunk', 1)
