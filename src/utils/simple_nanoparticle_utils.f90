@@ -1228,12 +1228,16 @@ contains
         deallocate(mask2keep)
     end subroutine remove_atoms
 
-    subroutine find_atoms_subset( atms2find, atms, mask_out )
-        real,    intent(in)    :: atms2find(:,:), atms(:,:)
-        logical, intent(inout) :: mask_out(:)
+    subroutine find_atoms_subset( atms2find, atms, mask_out, l_inv )
+        real,              intent(in)    :: atms2find(:,:), atms(:,:)
+        logical,           intent(inout) :: mask_out(:)
+        logical, optional, intent(in)    :: l_inv
         logical, allocatable   :: mask(:)
         integer :: i, location(1), n2find, n
         real    :: d
+        logical :: ll_inv
+        ll_inv = .false.
+        if( present(l_inv) ) ll_inv = l_inv
         n2find = size(atms2find, dim=2)
         n      = size(atms,      dim=2)
         if( n2find         >= n ) THROW_HARD('atoms to find must be subset of atoms')
@@ -1246,6 +1250,9 @@ contains
             mask_out(location(1)) = .true.
         enddo
         deallocate(mask)
+        if( ll_inv )then
+            mask_out = .not. mask_out
+        endif
     end subroutine find_atoms_subset
 
 end module simple_nanoparticle_utils
