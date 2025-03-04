@@ -2439,7 +2439,7 @@ contains
         character(len=8)              :: tmpstr
         real    :: offset(2),minmax(2),smpd,simsum,simmin,simmax,simmed,pref,cc,ccm,dunn,dunnmax
         integer :: ldim(3), n, ncls_sel, i, j, k, icls, filtsz, ind, ithr, funit, io_stat
-        logical :: l_apply_optlp, l_mirr
+        logical :: l_apply_optlp, l_mirr, l_input_stk
         ! defaults
         call cline%set('oritype', 'out')
         call cline%set('ctf',     'no')
@@ -2452,7 +2452,8 @@ contains
         if( .not. cline%defined('nsearch')   ) call cline%set('nsearch',   7)
         ! parse parameters
         call params%new(cline)
-        l_mirr = trim(params%mirr).eq.'yes'
+        l_mirr      = trim(params%mirr).eq.'yes'
+        l_input_stk = cline%defined('stk')
         select case(trim(params%algorithm))
         case('affprop','spc')
             ! supported methods
@@ -2460,90 +2461,134 @@ contains
             THROW_HARD('Unsupported clustering algorithm')
         end select
         ! fetch cavgs stack
-        call spproj%read(params%projfile)
-        call spproj%get_cavgs_stk(cavgsstk, params%ncls, smpd)
-        if( trim(params%mkdir).eq.'no' )then
-            ! to deal with relative path, the project will be updated in place
-            if( .not.file_exists(cavgsstk) )then
-                if( cavgsstk(1:3) == '../' ) cavgsstk = cavgsstk(4:len_trim(cavgsstk))
+        if( l_input_stk )then
+            ! Dimensions
+            call find_ldim_nptcls(params%stk, ldim, params%ncls, smpd=smpd)
+            if( cline%defined('smpd') ) smpd = params%smpd
+            params%smpd = smpd
+            ldim(3)     = 1
+            params%box  = ldim(1)
+            if( cline%defined('mskdiam') )then
+                params%msk = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam/params%smpd)
+            else
+                params%msk = 0.9*real(params%box/2)-COSMSKHALFWIDTH-1.
             endif
-        endif
-        params%stk = trim(cavgsstk)
-        call find_ldim_nptcls(params%stk, ldim, n)
-        ldim(3) = 1
-        if( n /= params%ncls ) THROW_HARD('Inconsistent # classes in project file vs cavgs stack; partition_cavgs')
-        ! threshold based on states/population/resolution
-        states = spproj%os_cls2D%get_all('state')
-        if( spproj%os_cls2D%isthere('pop') )then
-            clspops = spproj%os_cls2D%get_all('pop')
-            where( clspops <  real(MINCLSPOPLIM) ) states = 0.
-        endif
-        if( spproj%os_cls2D%isthere('res') )then
-            if( cline%defined('lpthres') )then
-                clsres  = spproj%os_cls2D%get_all('res')
-                where( clsres  >= params%lpthres ) states = 0.
+            write(logfhandle,'(A)') '>>> PREPARING CLASS AVERAGES'
+            ! read images
+            allocate(cavg_imgs(params%ncls),states(params%ncls))
+            states  = 1.
+            do i = 1,params%ncls
+                call cavg_imgs(i)%new(ldim, params%smpd, wthreads=.false.)
+                call cavg_imgs(i)%read(params%stk, i)
+                minmax = cavg_imgs(i)%minmax()
+                if( is_equal(minmax(1),minmax(2)) ) states(i)  = 0.
+            enddo
+            ncls_sel = count(states>0.5)
+            clsinds  = (/(i,i=1,params%ncls)/)
+            if( ncls_sel < params%ncls )then
+                cavg_imgs(:) = pack(cavg_imgs(:), mask=states > 0.5)
+                tmp          = pack(clsinds(:),   mask=states > 0.5)
+                clsinds      = tmp(:)
+                deallocate(tmp)
             endif
-        endif
-        ! number of classes to partition
-        ncls_sel = count(states>0.5)
-        ! keep track of the original class indices
-        clsinds = pack((/(i,i=1,params%ncls)/), mask=states > 0.5)
-        ! get FRCs
-        call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
-        if( trim(params%mkdir).eq.'no' )then
-            ! to deal with relative path, the project will be updated in place
-            if( .not.file_exists(frcs_fname) )then
-                if( frcs_fname(1:3) == '../' ) frcs_fname = frcs_fname(4:len_trim(frcs_fname))
+            ! Resolution limits
+            l_apply_optlp = .false.
+            if( .not.cline%defined('hp') .and. (.not.cline%defined('smpd')) )then
+                params%hp = real(params%box-1)*params%smpd/2.0
             endif
-        endif
-        ! ensure correct smpd/box in params class
-        params%smpd = smpd
-        params%box  = ldim(1)
-        if( cline%defined('mskdiam') )then
-            params%msk = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
+            write(logfhandle,'(A,F6.1)')'>>> RESOLUTION LIMIT: ',params%lp
+            ! In place of optimal filter
+            !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
+            do i = 1,ncls_sel
+                call cavg_imgs(i)%bp(0.,params%lp)
+            enddo
+            !$omp end parallel do
         else
-            params%msk = 0.9*real(params%box/2)-COSMSKHALFWIDTH-1.
-        endif
-        write(logfhandle,'(A)') '>>> PREPARING CLASS AVERAGES'
-        ! read images
-        allocate(cavg_imgs(ncls_sel))
-        do i = 1, ncls_sel
-            call cavg_imgs(i)%new(ldim, smpd, wthreads=.false.)
-            j = clsinds(i)
-            call cavg_imgs(i)%read(params%stk, j)
-            minmax = cavg_imgs(i)%minmax()
-            if( is_equal(minmax(1),minmax(2)) )then
-                ! empty class
-                clsinds(i) = 0
-                states(j)  = 0
+            call spproj%read(params%projfile)
+            call spproj%get_cavgs_stk(cavgsstk, params%ncls, smpd)
+            if( trim(params%mkdir).eq.'no' )then
+                ! to deal with relative path, the project will be updated in place
+                if( .not.file_exists(cavgsstk) )then
+                    if( cavgsstk(1:3) == '../' ) cavgsstk = cavgsstk(4:len_trim(cavgsstk))
+                endif
             endif
-        enddo
-        if( ncls_sel /= count(clsinds>0) )then
-            ! updating for empty classes
-            cavg_imgs(:) = pack(cavg_imgs(:), mask=clsinds(:)>0)
-            ncls_sel     = count(clsinds>0)
-            tmp          = pack(clsinds(:), mask=clsinds(:)>0)
-            clsinds      = tmp(:)
-            deallocate(tmp)
-        endif
-        ! resolution limits
-        l_apply_optlp = .false.
-        if( file_exists(frcs_fname) )then
-            call clsfrcs%read(frcs_fname)
-            ! whether to filter
-            l_apply_optlp = .true.
-            ! resolution limit
-            if( .not.cline%defined('lp') )then
-                ! FRC=0.5 criterion
-                params%lp = clsfrcs%estimate_lp_for_align(crit0143=.false.)
+            params%stk = trim(cavgsstk)
+            call find_ldim_nptcls(params%stk, ldim, n)
+            if( n /= params%ncls ) THROW_HARD('Inconsistent # classes in project file vs cavgs stack; partition_cavgs')
+            ldim(3) = 1
+            ! threshold based on states/population/resolution
+            states = spproj%os_cls2D%get_all('state')
+            if( spproj%os_cls2D%isthere('pop') )then
+                clspops = spproj%os_cls2D%get_all('pop')
+                where( clspops <  real(MINCLSPOPLIM) ) states = 0.
             endif
-            filtsz = clsfrcs%get_filtsz()
-            allocate(frc(filtsz), filter(filtsz))
-        else
-            THROW_WARN('LP or frcs.bin must be present to determine resolution, default value used')
-            params%lp = LP_DEFAULT
+            if( spproj%os_cls2D%isthere('res') )then
+                if( cline%defined('lpthres') )then
+                    clsres  = spproj%os_cls2D%get_all('res')
+                    where( clsres  >= params%lpthres ) states = 0.
+                endif
+            endif
+            ! number of classes to partition
+            ncls_sel = count(states>0.5)
+            ! keep track of the original class indices
+            clsinds = pack((/(i,i=1,params%ncls)/), mask=states > 0.5)
+            ! get FRCs
+            call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
+            if( trim(params%mkdir).eq.'no' )then
+                ! to deal with relative path, the project will be updated in place
+                if( .not.file_exists(frcs_fname) )then
+                    if( frcs_fname(1:3) == '../' ) frcs_fname = frcs_fname(4:len_trim(frcs_fname))
+                endif
+            endif
+            ! ensure correct smpd/box in params class
+            params%smpd = smpd
+            params%box  = ldim(1)
+            if( cline%defined('mskdiam') )then
+                params%msk = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
+            else
+                params%msk = 0.9*real(params%box/2)-COSMSKHALFWIDTH-1.
+            endif
+            write(logfhandle,'(A)') '>>> PREPARING CLASS AVERAGES'
+            ! read images
+            allocate(cavg_imgs(ncls_sel))
+            do i = 1, ncls_sel
+                call cavg_imgs(i)%new(ldim, smpd, wthreads=.false.)
+                j = clsinds(i)
+                call cavg_imgs(i)%read(params%stk, j)
+                minmax = cavg_imgs(i)%minmax()
+                if( is_equal(minmax(1),minmax(2)) )then
+                    ! empty class
+                    clsinds(i) = 0
+                    states(j)  = 0
+                endif
+            enddo
+            if( ncls_sel /= count(clsinds>0) )then
+                ! updating for empty classes
+                cavg_imgs(:) = pack(cavg_imgs(:), mask=clsinds(:)>0)
+                ncls_sel     = count(clsinds>0)
+                tmp          = pack(clsinds(:), mask=clsinds(:)>0)
+                clsinds      = tmp(:)
+                deallocate(tmp)
+            endif
+            ! resolution limits
+            l_apply_optlp = .false.
+            if( file_exists(frcs_fname) )then
+                call clsfrcs%read(frcs_fname)
+                ! whether to filter
+                l_apply_optlp = .true.
+                ! resolution limit
+                if( .not.cline%defined('lp') )then
+                    ! FRC=0.5 criterion
+                    params%lp = clsfrcs%estimate_lp_for_align(crit0143=.false.)
+                endif
+                filtsz = clsfrcs%get_filtsz()
+                allocate(frc(filtsz), filter(filtsz))
+            else
+                THROW_WARN('LP or frcs.bin must be present to determine resolution, default value used')
+                params%lp = LP_DEFAULT
+            endif
+            write(logfhandle,'(A,F6.1)')'>>> RESOLUTION LIMIT: ',params%lp
         endif
-        write(logfhandle,'(A,F6.1)')'>>> RESOLUTION LIMIT: ',params%lp
         ! prep mask
         call img_msk%new([params%box,params%box,1], params%smpd)
         img_msk = 1.
@@ -2553,8 +2598,8 @@ contains
         ! prep images
         !$omp parallel do default(shared) private(i,j,frc,filter) schedule(static) proc_bind(close)
         do i = 1, ncls_sel
-            j = clsinds(i)
             if( l_apply_optlp )then                                 ! FRC-based filter
+                j = clsinds(i)
                 call clsfrcs%frc_getter(j, frc)
                 if( any(frc > 0.143) )then
                     call fsc2optlp_sub(clsfrcs%get_filtsz(), frc, filter)
@@ -2695,7 +2740,7 @@ contains
                 deallocate(centers, labels,S)
             enddo
             ! update & write project with labelling with smallest preference
-            call update_project(multi_labels(1,:))
+            if( .not. l_input_stk ) call update_project(multi_labels(1,:))
         case('spc')
             dunnmax = -1.
             ind     = 0
@@ -2722,7 +2767,7 @@ contains
                 if( DEBUG )call write_partition('part'//int2str_pad(k,3))
             enddo
             ! update & write project with labelling with highest Dunn index
-            call update_project(multi_labels(ind,:))
+             if( .not. l_input_stk ) call update_project(multi_labels(ind,:))
         end select
         ! write nsearch labellings
         call fopen(funit,LABELS_FNAME, 'replace', 'unknown', iostat=io_stat, form='formatted')

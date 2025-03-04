@@ -227,7 +227,7 @@ contains
                 if( cline%defined('nsample') ) stoppop = params%nsample
                 do i = 1,NSTAGES
                     stage_parms(i)%max_cls_pop = stoppop
-                    stage_parms(i)%nptcls      = min(nptcls_eff,max(MAX_STREAM_NPTCLS, 2*stoppop*params%ncls))
+                    stage_parms(i)%nptcls      = min(nptcls_eff,min(MAX_STREAM_NPTCLS, 2*stoppop*params%ncls))
                     ! if( stage_parms(i)%nptcls <= nptcls_eff ) stage_parms(i)%max_cls_pop = 0 ! deactivates
                 enddo
             endif
@@ -476,6 +476,7 @@ contains
             call cline_cluster2D%delete('lambda')
             call cline_cluster2D%delete('nsample_start')
             call cline_cluster2D%delete('nsample_stop')
+            call cline_cluster2D%delete('nsample')
             call cline_cluster2D%delete('autosample')
             call cline_cluster2D%delete('update_frac')
             call cline_cluster2D%delete('maxpop')
