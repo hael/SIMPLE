@@ -18,6 +18,7 @@ public :: model_validation_commander
 public :: model_validation_eo_commander
 public :: pdb2mrc_commander
 public :: tseries_atoms_analysis_commander
+public :: tseries_core_atoms_analysis_commander
 private
 #include "simple_local_flags.inc"
 
@@ -61,8 +62,13 @@ type, extends(commander_base) :: tseries_atoms_analysis_commander
     procedure :: execute      => exec_tseries_atoms_analysis
 end type tseries_atoms_analysis_commander
 
+type, extends(commander_base) :: tseries_core_atoms_analysis_commander
+  contains
+    procedure :: execute      => exec_tseries_core_atoms_analysis
+end type tseries_core_atoms_analysis_commander
+
 type :: common_atoms
-    integer           :: ind1, ind2, ncommon
+    integer           :: ind1, ind2, ncommon, ndiff
     real, allocatable :: coords1(:,:), coords2(:,:)
     real, allocatable :: common1(:,:), common2(:,:)
     real, allocatable :: different1(:,:), different2(:,:)
@@ -342,5 +348,65 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_ATOMS_ANALYSIS NORMAL STOP ****')
     end subroutine exec_tseries_atoms_analysis
+
+    subroutine exec_tseries_core_atoms_analysis( self, cline )
+        class(tseries_core_atoms_analysis_commander), intent(inout) :: self
+        class(cmdline),                               intent(inout) :: cline !< command line input
+        character(len=LONGSTRLEN), allocatable :: pdbfnames(:), pdbfnames_core(:), pdbfnames_other(:)
+        type(common_atoms),        allocatable :: atms_common(:)
+        character(len=:),          allocatable :: fname1, fname2
+        real, allocatable  :: pdbmat(:,:), dists_all(:)
+        type(parameters)   :: params
+        integer            :: npdbs, i, j, k, ndists, cnt, ipdb, natoms
+        character(len=2)   :: el
+        type(stats_struct) :: dist_stats
+        call params%new(cline)
+        call read_filetable(params%pdbfiles, pdbfnames)
+        npdbs = size(pdbfnames)
+        if( params%mkdir.eq.'yes' )then
+            do ipdb = 1,npdbs
+                if(pdbfnames(ipdb)(1:1).ne.'/') pdbfnames(ipdb) = '../'//trim(pdbfnames(ipdb))
+            enddo
+        endif
+        el = trim(adjustl(params%element))
+        allocate( atms_common(npdbs) )
+        call read_pdb2matrix(trim(pdbfnames(1)), pdbmat)
+        ! all are compared with # 1
+        do i = 1, npdbs
+            atms_common(i)%ind1 = 1 
+            atms_common(i)%ind2 = i
+            allocate(atms_common(i)%coords1(3,size(pdbmat,dim=2)), source=pdbmat)
+        end do
+        deallocate(pdbmat)
+        ! identify common atoms
+        do i = 1, npdbs
+            call read_pdb2matrix(trim(pdbfnames(i)), pdbmat)
+            natoms = size(pdbmat,dim=2)
+            allocate(atms_common(i)%coords2(3,natoms), source=pdbmat)
+            deallocate(pdbmat)
+            ! identify couples
+            call find_couples( atms_common(i)%coords1, atms_common(i)%coords2, el,&
+                &atms_common(i)%common1, atms_common(i)%common2, frac_diam=params%frac_diam)
+            atms_common(i)%ncommon = size(atms_common(i)%common1, dim=2)
+            ! calculate displacements and distances
+            allocate( atms_common(i)%displacements(3,atms_common(i)%ncommon), atms_common(i)%dists(atms_common(i)%ncommon) )
+            do k = 1, atms_common(i)%ncommon
+                atms_common(i)%displacements(:,k) = atms_common(i)%common2(:,k) - atms_common(i)%common1(:,k)
+                atms_common(i)%dists(k) = sqrt(sum((atms_common(i)%displacements(:,k))**2.))
+            end do
+        end do
+        ! identify different atoms
+        do i = 1, npdbs
+            call remove_atoms( atms_common(i)%common1, atms_common(i)%coords1, atms_common(i)%different1 )
+            call remove_atoms( atms_common(i)%common2, atms_common(i)%coords2, atms_common(i)%different2 )
+            ! write PDB file
+            fname1 = 'different_atoms_'//int2str_pad(1,2)//'not_in'//int2str_pad(i,2)//'.pdb'
+            fname2 = 'different_atoms_'//int2str_pad(i,2)//'not_in'//int2str_pad(1,2)//'.pdb'
+            call write_matrix2pdb(el, atms_common(i)%different1, fname1)
+            call write_matrix2pdb(el, atms_common(i)%different2, fname2)
+        end do
+        ! end gracefully
+        call simple_end('**** SIMPLE_TSERIES_ATOMS_ANALYSIS NORMAL STOP ****')
+    end subroutine exec_tseries_core_atoms_analysis
 
 end module simple_commander_atoms
