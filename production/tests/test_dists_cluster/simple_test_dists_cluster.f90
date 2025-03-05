@@ -2,15 +2,18 @@ program simple_test_dists_cluster
 include 'simple_lib.f08'
 use simple_cmdline,            only: cmdline
 use simple_parameters,         only: parameters
-use simple_nanoparticle_utils, only: read_pdb2matrix
+use simple_nanoparticle_utils, only: read_pdb2matrix, write_matrix2pdb
 implicit none
 character(len=LONGSTRLEN), allocatable :: pdbfnames(:)
-real,    allocatable :: dists(:), mat(:,:), dists_cen(:), vars(:), centers(:), ref_stats(:), cur_mat(:,:), cur_stats(:), probs(:)
-integer, allocatable :: cnts(:), cen_cnts(:)
+real,    parameter   :: PROB_THRES = 0.8
+real,    parameter   :: MIN_THRES = 6.    ! automatically figured from the first part of the codes
+real,    allocatable :: dists(:), mat(:,:), dists_cen(:), vars(:), ref_stats(:), cur_mat(:,:), cur_stats(:), probs(:), out_mat(:,:)
+integer, allocatable :: cnts(:)
+logical, allocatable :: atom_msk(:), max_msk(:), thres_msk(:)
 type(parameters)     :: p
 type(cmdline)        :: cline
 integer              :: Natoms, i, j, cnt, nclus, sum_cnt, cen_cnt, npdbs, ipdb, ithres, stab_cnt
-real                 :: min_dist, eps, dist, d, prob, dist_thres, prev_prob, stab_prob
+real                 :: min_dist, eps, dist, d, dist_thres, stab_prob, max_prob, mid(3), cur_mid(3)
 ! reading pdb file
 if( command_argument_count() < 3 )then
     write(logfhandle,'(a)') 'Usage: simple_test_dists_cluster nthr=yy pdbfile=zz pdbfiles=tt'
@@ -30,8 +33,8 @@ do ithres=1,8
     allocate(dists(Natoms**2), source=0.)
     cnt      = 0
     min_dist = huge(min_dist)
-    do i = 1, Natoms
-        do j = 1, Natoms
+    do i = 1, Natoms-1
+        do j = i+1, Natoms
             cnt        = cnt + 1
             dists(cnt) = sqrt(sum((mat(:,i) - mat(:,j))**2))
             if( dists(cnt) < min_dist .and. dists(cnt) > TINY ) min_dist = dists(cnt)
@@ -47,27 +50,20 @@ do ithres=1,8
         sum_cnt = sum_cnt + cnts(i)
         cen_cnt = cen_cnt + 1
     enddo
-    if( allocated(centers) )  deallocate(centers)
-    if( allocated(cen_cnts) ) deallocate(cen_cnts)
-    allocate(centers(cen_cnt),source=dists_cen(1:cen_cnt))
-    allocate(cen_cnts(cen_cnt), source=0)
+    if( allocated(ref_stats) )deallocate(ref_stats)
+    allocate(ref_stats(cen_cnt), source=0.)
     do i = 1, cen_cnt
         if( i < cen_cnt )then
-            eps = (centers(i+1) - centers(i))/2.
+            eps = (dists_cen(i+1) - dists_cen(i))/2.
         else
-            eps = (centers(i)   - centers(i-1))/2.
+            eps = (dists_cen(i)   - dists_cen(i-1))/2.
         endif
         do j = 1, cnt
-            dist = abs(dists(j) - centers(i))
-            if( dist < eps ) cen_cnts(i) = cen_cnts(i) + 1
+            dist = abs(dists(j) - dists_cen(i))
+            if( dist < eps ) ref_stats(i) = ref_stats(i) + 1.
         enddo
     enddo
-    sum_cnt = sum(cen_cnts)
-    if( allocated(ref_stats) ) deallocate(ref_stats)
-    allocate(ref_stats(cen_cnt))
-    do i = 1, cen_cnt
-        ref_stats(i) = real(cen_cnts(i)) * 100. / real(sum_cnt)
-    enddo
+    ref_stats = ref_stats * 100. / sum(ref_stats)
     ! reading pdbfiles and compute Kolmogorov-Smirnov test
     call read_filetable(p%pdbfiles, pdbfnames)
     npdbs = size(pdbfnames)
@@ -77,38 +73,9 @@ do ithres=1,8
     allocate(probs(npdbs))
     do ipdb = 1, npdbs
         call read_pdb2matrix( trim(pdbfnames(ipdb)), cur_mat )
-        Natoms = size(cur_mat,2)
-        if( allocated(dists) )deallocate(dists)
-        allocate(dists(Natoms**2), source=0.)
-        cnt      = 0
-        min_dist = huge(min_dist)
-        do i = 1, Natoms
-            do j = 1, Natoms
-                cnt        = cnt + 1
-                dists(cnt) = sqrt(sum((cur_mat(:,i) - cur_mat(:,j))**2))
-                if( dists(cnt) < min_dist .and. dists(cnt) > TINY ) min_dist = dists(cnt)
-            enddo
-        enddo
-        cen_cnts = 0
-        do i = 1, cen_cnt
-            if( i < cen_cnt )then
-                eps = (centers(i+1) - centers(i))/2.
-            else
-                eps = (centers(i)   - centers(i-1))/2.
-            endif
-            do j = 1, cnt
-                dist = abs(dists(j) - centers(i))
-                if( dist < eps ) cen_cnts(i) = cen_cnts(i) + 1
-            enddo
-        enddo
-        sum_cnt   = sum(cen_cnts)
-        cur_stats = 0.
-        do i = 1, cen_cnt
-            cur_stats(i) = real(cen_cnts(i)) * 100. / real(sum_cnt)
-        enddo
-        call kstwo( ref_stats, cen_cnt, cur_stats, cen_cnt, d, prob )
-        probs(ipdb) = prob
-        ! print *, 'd = ', d, ', prob = ', prob
+        call compute_stats(cur_mat, dists_cen(1:cen_cnt), cur_stats)
+        call kstwo( ref_stats, cen_cnt, cur_stats, cen_cnt, d, probs(ipdb) )
+        ! print *, 'd = ', d, ', prob = ', probs(ipdb)
         ! print *, '----'
         ! print *, 'ref_stats = ', ref_stats
         ! print *, 'cur_stats = ', cur_stats
@@ -117,17 +84,97 @@ do ithres=1,8
     ! print *, 'probs = ', probs
     call hpsort(probs)
     call reverse(probs)
-    prev_prob = 0.
     stab_cnt  = 0
     do ipdb = 1, npdbs
-        if( ipdb > 1 .and. abs(prev_prob - probs(ipdb)) > TINY ) exit
+        ! if( ipdb > 1 .and. abs(prev_prob - probs(ipdb)) > TINY ) exit
+        if( ipdb > 1 .and. probs(ipdb) < PROB_THRES ) exit
         stab_cnt  = stab_cnt + 1
-        prev_prob = probs(ipdb)
     enddo
-    print *, 'At thres = ', dist_thres, '; ', stab_cnt, ' out of ', npdbs, ' are stable at prob = ', prev_prob
+    print *, 'At thres = ', dist_thres, '; ', stab_cnt, ' out of ', npdbs, ' are stable at prob > ', PROB_THRES
+enddo
+! testing finding the core my maximizing the prob computed above for each pdb file
+do ipdb = 1, npdbs
+    call read_pdb2matrix( trim(pdbfnames(ipdb)), cur_mat )
+    Natoms = size(cur_mat,2)
+    if( allocated(atom_msk) )deallocate(atom_msk)
+    if( allocated(max_msk)  )deallocate(max_msk)
+    if( allocated(thres_msk))deallocate(thres_msk)
+    allocate(atom_msk(Natoms),  source=.false.)
+    allocate(max_msk(Natoms),   source=.false.)
+    allocate(thres_msk(Natoms), source=.false.)
+    do i = 1, Natoms
+        ! find the neighborhood
+        atom_msk = .false.
+        do j = 1, Natoms
+            if( sqrt(sum((cur_mat(:,i) - cur_mat(:,j))**2)) < MIN_THRES )atom_msk(j) = .true.
+        enddo
+        ! computing the prob and maximize it
+        call compute_stats(cur_mat, dists_cen(1:cen_cnt), cur_stats, atom_msk)
+        call kstwo( ref_stats, cen_cnt, cur_stats, cen_cnt, d, probs(ipdb) )
+        if( probs(ipdb) > PROB_THRES )thres_msk(i) = .true.
+    enddo
+    mid(1) = (maxval(cur_mat(1,:)) + minval(cur_mat(1,:))) / 2.
+    mid(2) = (maxval(cur_mat(2,:)) + minval(cur_mat(2,:))) / 2.
+    mid(3) = (maxval(cur_mat(3,:)) + minval(cur_mat(3,:))) / 2.
+    max_prob = huge(max_prob)
+    do i = 1, Natoms
+        if( .not. thres_msk(i) )cycle
+        ! find the neighborhood
+        atom_msk = .false.
+        do j = 1, Natoms
+            if( sqrt(sum((cur_mat(:,i) - cur_mat(:,j))**2)) < MIN_THRES )atom_msk(j) = .true.
+        enddo
+        cur_mid(1) = (maxval(cur_mat(1,:),mask=atom_msk) + minval(cur_mat(1,:),mask=atom_msk)) / 2.
+        cur_mid(2) = (maxval(cur_mat(2,:),mask=atom_msk) + minval(cur_mat(2,:),mask=atom_msk)) / 2.
+        cur_mid(3) = (maxval(cur_mat(3,:),mask=atom_msk) + minval(cur_mat(3,:),mask=atom_msk)) / 2.
+        if( sqrt(sum((cur_mid - mid)**2)) < max_prob )then
+            max_prob = sqrt(sum((cur_mid - mid)**2))
+            max_msk  = atom_msk
+        endif
+    enddo
+    print *, 'ipdb = ', ipdb, ' count = ', count(max_msk .eqv. .true.), ' out of ', Natoms
+    if( allocated(out_mat) )deallocate(out_mat)
+    allocate(out_mat(3,count(max_msk .eqv. .true.)))
+    cnt = 0
+    do i = 1, Natoms
+        if( .not. max_msk(i) )cycle
+        cnt            = cnt + 1
+        out_mat(:,cnt) = cur_mat(:,i)
+    enddo
+    call write_matrix2pdb( 'Pt', out_mat, 'ATMS_core_atoms'//int2str(ipdb)//'.pdb' )
 enddo
 
 contains
+
+    ! compute the distribution of the dists around the reference distance points
+    subroutine compute_stats(pos_mat, ref_dists, out_stats, msk)
+        real,    allocatable, intent(in)    :: pos_mat(:,:)
+        real,                 intent(in)    :: ref_dists(:)
+        real,    allocatable, intent(inout) :: out_stats(:)
+        logical, optional,    intent(in)    :: msk(:)
+        integer :: Na, Nr, i, j, k
+        real    :: tmp_eps
+        Na        = size(pos_mat,2)
+        Nr        = size(ref_dists)
+        out_stats = 0.
+        do i = 1, Nr
+            if( i < Nr )then
+                tmp_eps = (ref_dists(i+1) - ref_dists(i))/2.
+            else
+                tmp_eps = (ref_dists(i)   - ref_dists(i-1))/2.
+            endif
+            do j = 1, Na-1
+                do k = j+1, Na
+                    if( present(msk) )then
+                        if( .not.msk(j) .or. .not.msk(k) )cycle
+                    endif
+                    dist = abs(sqrt(sum((pos_mat(:,j) - pos_mat(:,k))**2)) - ref_dists(i))
+                    if( dist < tmp_eps ) out_stats(i) = out_stats(i) + 1.
+                enddo
+            enddo
+        enddo
+        out_stats = out_stats * 100. / sum(out_stats)
+    end subroutine compute_stats
 
     subroutine sort_cluster( points_in, cur_clusN, out_points, out_cnts, out_vars )
         real,                 intent(in)    :: points_in(:)
@@ -224,3 +271,4 @@ contains
     end subroutine point_cluster
 
 end program simple_test_dists_cluster
+    
