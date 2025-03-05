@@ -2412,7 +2412,7 @@ contains
         use simple_polarizer,           only: polarizer
         use simple_class_frcs,          only: class_frcs
         use simple_polarft_corrcalc,    only: polarft_corrcalc
-        use simple_aff_prop,            only: aff_prop
+        use simple_aff_prop,            only: aff_prop, aggregate, silhouette_score
         use simple_spectral_clustering, only: spec_clust
         use simple_pftcc_shsrch_fm,     only: pftcc_shsrch_fm
         class(partition_cavgs_commander), intent(inout) :: self
@@ -2434,10 +2434,10 @@ contains
         character(len=:), allocatable :: cavgsstk, frcs_fname, fmt, header1, header2, header3
         real,             allocatable :: states(:), frc(:), filter(:), clspops(:), clsres(:)
         real,             allocatable :: corrmat(:,:), S(:,:), rotmat(:,:), xoffset(:,:), yoffset(:,:)
-        integer,          allocatable :: centers(:), labels(:), clsinds(:), multi_labels(:,:),tmp(:)
+        integer,          allocatable :: centers(:), labels(:), clsinds(:), multi_labels(:,:),tmp(:), L(:,:)
         logical,          allocatable :: l_msk(:,:,:)
         character(len=8)              :: tmpstr
-        real    :: offset(2),minmax(2),smpd,simsum,simmin,simmax,simmed,pref,cc,ccm,dunn,dunnmax
+        real    :: offset(2),minmax(2),smpd,simsum,simmin,simmax,simmed,pref,cc,ccm,dunn,dunnmax,sc
         integer :: ldim(3), n, ncls_sel, i, j, k, icls, filtsz, ind, ithr, funit, io_stat
         logical :: l_apply_optlp, l_mirr, l_input_stk
         ! defaults
@@ -2455,7 +2455,7 @@ contains
         l_mirr      = trim(params%mirr).eq.'yes'
         l_input_stk = cline%defined('stk')
         select case(trim(params%algorithm))
-        case('affprop','spc')
+        case('affprop','affprop_agg','spc')
             ! supported methods
         case DEFAULT
             THROW_HARD('Unsupported clustering algorithm')
@@ -2690,14 +2690,13 @@ contains
         enddo
         deallocate(ccimgs,fm_correlators)
         ! CLUSTERING
-        allocate(multi_labels(params%ncls,params%nsearch),source=0)
         ! correlation matrix preprocessing
         ! correlation to squared euclidian distance, values within [0.;4.]
         corrmat = 2.*(1.-corrmat)
         where( corrmat < 0. ) corrmat = 0.
         where( corrmat > 4. ) corrmat = 4.
         select case(trim(params%algorithm))
-        case('affprop')
+        case('affprop','affprop_agg')
             ! Affinity Propagation: negative squared euclidian distance as similarity
             ! to circumvent possible correlation sign change. Values within [-4.;0]
             corrmat = -corrmat
@@ -2708,15 +2707,18 @@ contains
         end select
         ! for labellings output
         header1 = '# K     '
+        call fopen(funit,LABELS_FNAME, 'replace', 'unknown', iostat=io_stat, form='formatted')
+        call fileiochk("fopen failed "//trim(LABELS_FNAME),io_stat)
         select case(trim(params%algorithm))
         case('affprop')
+            write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH AFFINITY PROPAGATION'
+            allocate(multi_labels(params%ncls,params%nsearch),source=0)
             header2 = '# PREF  '
             header3 = '# SIM   '
             ! Preference bounds
             call analyze_smat(corrmat, .false., simmin, simmax)
             simmed = median(pack(corrmat,.true.))  ! taken as upper bound
             ! clustering nsearch times with preference in [min,median]
-            write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH AFFINITY PROPAGATION'
             do i = 1,params%nsearch
                 ! preference
                 pref = simmin + (simmed-simmin)*real(i-1)/real(params%nsearch-1)
@@ -2735,13 +2737,50 @@ contains
                 multi_labels(clsinds(:),i) = labels(:)
                 k = maxval(labels)
                 write(*,'(A16,I3,2F9.3)') '>>> K,PREF,SIM: ',k,pref,simsum
-                if( DEBUG ) call write_partition('part'//int2str_pad(i,3))
+                if( DEBUG ) call write_partition('part'//int2str_pad(i,3), labels)
                 ! cleanup
                 deallocate(centers, labels,S)
             enddo
             ! update & write project with labelling with smallest preference
             if( .not. l_input_stk ) call update_project(multi_labels(1,:))
+            write(funit,'(A2,I6,I8)') '# ',params%ncls,params%nsearch
+            write(funit,'(A)') header1
+            write(funit,'(A)') header2
+            write(funit,'(A)') header3
+            fmt = '('//int2str(params%nsearch+1)//'I8)'
+        case('affprop_agg')
+            write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH AGGREGATED AFFINITY PROPAGATION'
+            header2 = '# PREF  '
+            header3 = '# SIM   '
+            ! Cluster with mimal preference
+            call analyze_smat(corrmat, .false., simmin, simmax)
+            S = corrmat ! because corrmat is modified
+            call aprop%new(ncls_sel, S, pref=simmin)
+            call aprop%propagate(centers, labels, simsum)
+            call aprop%kill
+            k = maxval(labels)
+            allocate(multi_labels(params%ncls,k-1),source=0)
+            ! Aggregate
+            S = -corrmat
+            call aggregate(labels, S, L)
+            ! Score & report
+            ind = 0
+            sc  = -2.0
+            do k = 2,k
+                write(tmpstr,'(I8)') k
+                header1 = header1//tmpstr
+                multi_labels(clsinds(:),k-1) = L(:,k)
+                sc = max(sc, silhouette_score(L(:,k), S))
+                if( DEBUG )call write_partition('part'//int2str_pad(k,3), L(:,k))
+            enddo
+            deallocate(L,centers, labels,S)
+            if( .not. l_input_stk ) call update_project(multi_labels(ind,:))
+            write(funit,'(A2,I6,I8)') '# ',params%ncls,params%nsearch
+            write(funit,'(A)') header1
+            write(funit,'(A)') header2
+            fmt = '('//int2str(k)//'I8)'
         case('spc')
+            allocate(multi_labels(params%ncls,params%nsearch),source=0)
             dunnmax = -1.
             ind     = 0
             header2 = '# Dunn  '
@@ -2764,19 +2803,16 @@ contains
                 write(tmpstr,'(F8.3)') dunn
                 header2 = header2//tmpstr
                 multi_labels(clsinds(:),i) = labels(:)
-                if( DEBUG )call write_partition('part'//int2str_pad(k,3))
+                if( DEBUG )call write_partition('part'//int2str_pad(k,3), labels)
             enddo
             ! update & write project with labelling with highest Dunn index
              if( .not. l_input_stk ) call update_project(multi_labels(ind,:))
+             write(funit,'(A2,I6,I8)') '# ',params%ncls,params%nsearch
+             write(funit,'(A)') header1
+             write(funit,'(A)') header2
+             fmt = '('//int2str(params%nsearch+1)//'I8)'
         end select
         ! write nsearch labellings
-        call fopen(funit,LABELS_FNAME, 'replace', 'unknown', iostat=io_stat, form='formatted')
-        call fileiochk("fopen failed "//trim(LABELS_FNAME),io_stat)
-        write(funit,'(A2,I6,I8)') '# ',params%ncls,params%nsearch
-        write(funit,'(A)') header1
-        write(funit,'(A)') header2
-        if( trim(params%algorithm)=='affprop' ) write(funit,'(A)') header3
-        fmt = '('//int2str(params%nsearch+1)//'I8)'
         do i = 1,params%ncls
             write(funit,fmt) i, multi_labels(i,:)
         end do
@@ -2814,8 +2850,9 @@ contains
             end subroutine update_project
 
             ! write the classes for debugging purpose
-            subroutine write_partition( flag )
+            subroutine write_partition( flag, labels )
                 character(len=*), intent(in) :: flag
+                integer,          intent(in) :: labels(:)
                 type(image)                   :: img1,img2
                 character(len=:), allocatable :: classname
                 integer,          allocatable :: cntarr(:)
