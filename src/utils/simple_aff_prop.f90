@@ -4,6 +4,7 @@ include 'simple_lib.f08'
 implicit none
 
 public :: aff_prop, test_aff_prop
+public :: aggregate, silhouette_score
 private
 #include "simple_local_flags.inc"
 
@@ -248,5 +249,79 @@ contains
             self%exists = .false.
         endif
     end subroutine kill
+
+    ! PUBLIC METHODS
+
+    !>  \brief Given labelling into k partitions and corresponding distance matrix iteratively
+    !          combines the pair of clusters with lowest average inter-cluster distance,
+    !          and produces labelling for partitions in [1;k] (1/k is for convenience)
+    subroutine aggregate( labels, distmat, labelsmat )
+        integer,              intent(in)    :: labels(:)
+        real,                 intent(in)    :: distmat(:,:)
+        integer, allocatable, intent(inout) :: labelsmat(:,:)
+        real,    allocatable :: clmat(:,:)
+        integer, allocatable :: iinds(:), jinds(:)
+        real    :: d
+        integer :: pair(2), nc, nl, cl, i,j,k, ni, aggc, oldc
+        nl = size(labels)
+        nc = maxval(labels) ! 1-base numbering assumed
+        allocate(labelsmat(nl,nc), source=0)
+        labelsmat(:,1)  = 1
+        labelsmat(:,nc) = labels
+        do cl = nc-1,2,-1
+            ! average inter-cluster distance
+            allocate(clmat(cl+1,cl+1),source=huge(d))
+            do i = 1,cl
+                iinds = pack((/(k,k=1,nl)/),mask=labelsmat(:,cl+1)==i)
+                ni = size(iinds)
+                do j = i+1, cl+1
+                    jinds = pack((/(k,k=1,nl)/),mask=labelsmat(:,cl+1)==j)
+                    d = 0.
+                    do k = 1,ni
+                        d = d + sum(distmat(iinds(k),jinds(:)))
+                    enddo
+                    clmat(i,j) = d / real(ni*size(jinds))
+                enddo
+            enddo
+            ! select pait of clusters to aggregate
+            pair = minloc(clmat)
+            aggc = minval(pair)
+            oldc = maxval(pair)
+            ! update labelling
+            labelsmat(:,cl) = labelsmat(:,cl+1)
+            where(labelsmat(:,cl) == oldc) labelsmat(:,cl) = aggc
+            where(labelsmat(:,cl) >  oldc) labelsmat(:,cl)  = labelsmat(:,cl)-1
+            deallocate(clmat,iinds,jinds)
+        enddo
+    end subroutine aggregate
+
+    ! Average silhouette score, for instance https://en.wikipedia.org/wiki/Silhouette_(clustering)
+    ! -1 <= SC <= 1, higher SC => better clustering
+    real function silhouette_score( labels, distmat )
+        integer, intent(in)  :: labels(:)
+        real,    intent(in)  :: distmat(:,:)
+        integer, allocatable :: inds(:)
+        real    :: a,b,s
+        integer :: i,j,k, nl, nc, ni
+        nl = size(labels)
+        nc = maxval(labels)
+        s  = 0.
+        do i = 1,nl
+            inds = pack((/(j,j=1,nl)/),mask=labels==labels(i))
+            ni   = size(inds)
+            if( ni == 1 ) cycle
+            a    = sum(distmat(i,inds)) / real(ni-1) ! -1 because i is part of the set, and d(i,i)=0
+            b    = huge(b)
+            do k = 1,nc
+                if( labels(i)==k ) cycle
+                inds = pack((/(j,j=1,nl)/),mask=labels==k)
+                if( .not.allocated(inds) ) cycle
+                if( size(inds)==0 ) cycle
+                b = min(b, sum(distmat(i,inds)) / real(size(inds)))
+            enddo
+            s = s + (b-a) / max(a,b)
+        enddo
+        silhouette_score = s / real(nl)
+    end function silhouette_score
 
 end module simple_aff_prop
