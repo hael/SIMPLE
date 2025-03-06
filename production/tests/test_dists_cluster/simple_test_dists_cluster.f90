@@ -3,6 +3,7 @@ include 'simple_lib.f08'
 use simple_cmdline,            only: cmdline
 use simple_parameters,         only: parameters
 use simple_nanoparticle_utils, only: read_pdb2matrix, write_matrix2pdb
+use simple_atoms
 implicit none
 character(len=LONGSTRLEN), allocatable :: pdbfnames(:)
 real,    parameter   :: PROB_THRES = 0.7
@@ -10,6 +11,7 @@ real,    parameter   :: MIN_THRES = 10.    ! automatically figured from the firs
 real,    allocatable :: dists(:), mat(:,:), dists_cen(:), vars(:), ref_stats(:), cur_mat(:,:), cur_stats(:), probs(:), out_mat(:,:)
 integer, allocatable :: cnts(:)
 logical, allocatable :: atom_msk(:), max_msk(:), thres_msk(:), taken(:,:)
+type(atoms)          :: molecule
 type(parameters)     :: p
 type(cmdline)        :: cline
 integer              :: Natoms, i, j, k, cnt, nclus, sum_cnt, cen_cnt, npdbs, ipdb, ithres, stab_cnt
@@ -125,8 +127,9 @@ do ithres=1,8
     enddo
 enddo
 print *, 'Radius thres ', rad_thres, ' is corresponding to distribution thres ', MIN_THRES
-! testing finding the core my maximizing the prob computed above for each pdb file
+! testing finding the core by maximizing the prob computed above for each pdb file
 do ipdb = 1, npdbs
+    call molecule%new(trim(pdbfnames(ipdb)))
     call read_pdb2matrix( trim(pdbfnames(ipdb)), cur_mat )
     Natoms = size(cur_mat,2)
     if( allocated(atom_msk) )deallocate(atom_msk)
@@ -178,6 +181,7 @@ do ipdb = 1, npdbs
         if( .not. max_msk(i) )cycle
         cnt            = cnt + 1
         out_mat(:,cnt) = cur_mat(:,i)
+        call molecule%set_beta(i, 1.0)
     enddo
     call write_matrix2pdb( 'Pt', out_mat, get_fpath(trim(pdbfnames(ipdb)))//'test_core_ATMS.pdb' )
 enddo

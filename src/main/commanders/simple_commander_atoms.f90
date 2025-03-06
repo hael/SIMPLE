@@ -355,7 +355,8 @@ contains
         character(len=LONGSTRLEN), allocatable :: pdbfnames(:), pdbfnames_common(:), pdbfnames_diff(:)
         type(common_atoms),        allocatable :: atms_common(:)
         character(len=:),          allocatable :: fname1, fname2
-        real, allocatable  :: pdbmat(:,:)
+        real,                      allocatable :: betas(:), pdbmat(:,:)
+        logical,                   allocatable :: mask_core(:)
         type(parameters)   :: params
         integer            :: npdbs, i, j, k, cnt, ipdb, natoms
         character(len=2)   :: el
@@ -371,7 +372,7 @@ contains
         allocate(pdbfnames_common(npdbs), pdbfnames_diff(npdbs))
         do ipdb = 1,npdbs
             pdbfnames_common(ipdb) = add2fbody(basename(pdbfnames(ipdb)), '.pdb', '_core')
-            pdbfnames_diff(ipdb)   = add2fbody(basename(pdbfnames(ipdb)), '.pdb', '_fringe')
+            pdbfnames_diff(ipdb)   = add2fbody(basename(pdbfnames(ipdb)), '.pdb', '_core_b1_fringe_b0')
         end do
         el = trim(adjustl(params%element))
         allocate( atms_common(npdbs) )
@@ -417,9 +418,16 @@ contains
         end do
         ! identify different atoms
         do i = 1, npdbs
-            call remove_atoms( atms_common(i)%common1, atms_common(i)%coords1, atms_common(i)%different1 )
+            call find_atoms_subset( atms_common(i)%common1, atms_common(i)%coords1, mask_core)
+            natoms = size(mask_core)
+            allocate(betas(natoms), source=0.)
+            where( mask_core )
+                betas = 1.
+            elsewhere
+                betas = 0.
+            endwhere
             ! write PDB file
-            call write_matrix2pdb(el, atms_common(i)%different1, pdbfnames_diff(i))
+            call write_matrix2pdb(el, atms_common(i)%coords1, pdbfnames_diff(i), betas)
         end do
         ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_ATOMS_ANALYSIS NORMAL STOP ****')
