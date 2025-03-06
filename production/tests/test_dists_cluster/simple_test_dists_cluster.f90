@@ -5,8 +5,8 @@ use simple_parameters,         only: parameters
 use simple_nanoparticle_utils, only: read_pdb2matrix, write_matrix2pdb
 implicit none
 character(len=LONGSTRLEN), allocatable :: pdbfnames(:)
-real,    parameter   :: PROB_THRES = 0.8
-real,    parameter   :: MIN_THRES = 7.    ! automatically figured from the first part of the codes
+real,    parameter   :: PROB_THRES = 0.7
+real,    parameter   :: MIN_THRES = 10.    ! automatically figured from the first part of the codes
 real,    allocatable :: dists(:), mat(:,:), dists_cen(:), vars(:), ref_stats(:), cur_mat(:,:), cur_stats(:), probs(:), out_mat(:,:)
 integer, allocatable :: cnts(:)
 logical, allocatable :: atom_msk(:), max_msk(:), thres_msk(:), taken(:,:)
@@ -95,10 +95,11 @@ do ithres=1,8
 enddo
 dist_thres = 2.
 l_found    = .false.
-allocate(taken(Natoms,Natoms), source=.false.)
 ! finding the radius corresponding to the current thres
 call read_pdb2matrix( p%pdbfile, mat )
 Natoms = size(mat,2)
+allocate(taken(Natoms,Natoms), source=.false.)
+allocate(atom_msk(Natoms),  source=.false.)
 do ithres=1,8
     if( l_found ) exit
     dist_thres = dist_thres + 1.
@@ -173,7 +174,7 @@ do ipdb = 1, npdbs
         cnt            = cnt + 1
         out_mat(:,cnt) = cur_mat(:,i)
     enddo
-    call write_matrix2pdb( 'Pt', out_mat, 'ATMS_core_atoms'//int2str(ipdb)//'.pdb' )
+    call write_matrix2pdb( 'Pt', out_mat, get_fpath(trim(pdbfnames(ipdb)))//'test_core_ATMS.pdb' )
 enddo
 
 contains
