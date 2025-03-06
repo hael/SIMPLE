@@ -352,7 +352,7 @@ contains
     subroutine exec_tseries_core_atoms_analysis( self, cline )
         class(tseries_core_atoms_analysis_commander), intent(inout) :: self
         class(cmdline),                               intent(inout) :: cline !< command line input
-        character(len=LONGSTRLEN), allocatable :: pdbfnames(:), pdbfnames_common(:), pdbfnames_diff(:)
+        character(len=LONGSTRLEN), allocatable :: pdbfnames(:), pdbfnames_core(:), pdbfnames_bfac(:), pdbfnames_fringe(:)
         type(common_atoms),        allocatable :: atms_common(:)
         character(len=:),          allocatable :: fname1, fname2
         real,                      allocatable :: betas(:), pdbmat(:,:)
@@ -369,10 +369,11 @@ contains
                 if(pdbfnames(ipdb)(1:1).ne.'/') pdbfnames(ipdb) = '../'//trim(pdbfnames(ipdb))
             enddo
         endif
-        allocate(pdbfnames_common(npdbs), pdbfnames_diff(npdbs))
+        allocate(pdbfnames_core(npdbs), pdbfnames_bfac(npdbs), pdbfnames_fringe(npdbs))
         do ipdb = 1,npdbs
-            pdbfnames_common(ipdb) = add2fbody(basename(pdbfnames(ipdb)), '.pdb', '_core')
-            pdbfnames_diff(ipdb)   = add2fbody(basename(pdbfnames(ipdb)), '.pdb', '_core_b1_fringe_b0')
+            pdbfnames_core(ipdb)   = add2fbody(basename(pdbfnames(ipdb)), '.pdb', '_core')
+            pdbfnames_bfac(ipdb)   = add2fbody(basename(pdbfnames(ipdb)), '.pdb', '_core_b1_fringe_b0')
+            pdbfnames_fringe(ipdb) = add2fbody(basename(pdbfnames(ipdb)), '.pdb', '_fringe')
         end do
         el = trim(adjustl(params%element))
         allocate( atms_common(npdbs) )
@@ -399,7 +400,7 @@ contains
                 &atms_common(i)%common2, atms_common(i)%common1, frac_diam=params%frac_diam)
             atms_common(i)%ncommon = size(atms_common(i)%common1, dim=2)
             ! write PDB file
-            call write_matrix2pdb(el, atms_common(i)%common1, pdbfnames_common(i))
+            call write_matrix2pdb(el, atms_common(i)%common1, pdbfnames_core(i))
         end do
         ! calculate displacements and distances
         do i = 1, npdbs
@@ -421,15 +422,17 @@ contains
             natoms = size(atms_common(i)%coords1,dim=2)
             allocate(mask_core(natoms), source=.true.)
             allocate(betas(natoms),     source=0.)
-            call find_atoms_subset( atms_common(i)%common1, atms_common(i)%coords1, mask_core)
+            call find_atoms_subset(atms_common(i)%common1, atms_common(i)%coords1, mask_core)
             where( mask_core )
                 betas = 1.
             elsewhere
                 betas = 0.
             endwhere
             ! write PDB file
-            call write_matrix2pdb(el, atms_common(i)%coords1, pdbfnames_diff(i), betas)
+            call write_matrix2pdb(el, atms_common(i)%coords1, pdbfnames_bfac(i), betas)
             deallocate(mask_core, betas)
+            call remove_atoms(atms_common(i)%common1, atms_common(i)%coords1, atms_common(i)%different1)
+            call write_matrix2pdb(el, atms_common(i)%different1, pdbfnames_fringe(i))
         end do
         ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_ATOMS_ANALYSIS NORMAL STOP ****')
