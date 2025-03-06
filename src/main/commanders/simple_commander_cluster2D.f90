@@ -2412,11 +2412,12 @@ contains
         use simple_polarizer,           only: polarizer
         use simple_class_frcs,          only: class_frcs
         use simple_polarft_corrcalc,    only: polarft_corrcalc
-        use simple_aff_prop,            only: aff_prop, aggregate, silhouette_score
+        use simple_aff_prop,            only: aff_prop
         use simple_spectral_clustering, only: spec_clust
         use simple_pftcc_shsrch_fm,     only: pftcc_shsrch_fm
+        use simple_clustering_utils
         class(partition_cavgs_commander), intent(inout) :: self
-        class(cmdline),                       intent(inout) :: cline
+        class(cmdline),                   intent(inout) :: cline
         character(len=STDLEN),   parameter :: SIMMAT_FNAME = 'simmat.bin'
         character(len=STDLEN),   parameter :: LABELS_FNAME = 'labels.txt'
         real,                    parameter :: LP_DEFAULT   = 6.0 ! Angs
@@ -2437,8 +2438,8 @@ contains
         integer,          allocatable :: centers(:), labels(:), clsinds(:), multi_labels(:,:),tmp(:), L(:,:)
         logical,          allocatable :: l_msk(:,:,:)
         character(len=8)              :: tmpstr
-        real    :: offset(2),minmax(2),smpd,simsum,simmin,simmax,simmed,pref,cc,ccm,dunn,dunnmax,sc
-        integer :: ldim(3), n, ncls_sel, i, j, k, icls, filtsz, ind, ithr, funit, io_stat
+        real    :: offset(2),minmax(2),smpd,simsum,simmin,simmax,simmed,pref,cc,ccm,dunn,dunnmax,sc,scmax,db
+        integer :: ldim(3), n, ncls_sel, i, j, k, nk, icls, filtsz, ind, ithr, funit, io_stat
         logical :: l_apply_optlp, l_mirr, l_input_stk
         ! defaults
         call cline%set('oritype', 'out')
@@ -2750,27 +2751,37 @@ contains
             fmt = '('//int2str(params%nsearch+1)//'I8)'
         case('affprop_agg')
             write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH AGGREGATED AFFINITY PROPAGATION'
-            header2 = '# PREF  '
-            header3 = '# SIM   '
+            header2 = '# SILSC '
+            header3 = '# DBI   '
             ! Cluster with mimal preference
             call analyze_smat(corrmat, .false., simmin, simmax)
             S = corrmat ! because corrmat is modified
             call aprop%new(ncls_sel, S, pref=simmin)
             call aprop%propagate(centers, labels, simsum)
             call aprop%kill
-            k = maxval(labels)
-            allocate(multi_labels(params%ncls,k-1),source=0)
+            nk = maxval(labels)
+            allocate(multi_labels(params%ncls,nk-1),source=0)
             ! Aggregate
-            S = -corrmat
+            S = -corrmat ! now positive
             call aggregate(labels, S, L)
             ! Score & report
-            ind = 0
-            sc  = -2.0
-            do k = 2,k
+            ind   = 0
+            scmax = -2.0
+            do k = 2,nk
                 write(tmpstr,'(I8)') k
                 header1 = header1//tmpstr
                 multi_labels(clsinds(:),k-1) = L(:,k)
-                sc = max(sc, silhouette_score(L(:,k), S))
+                sc = silhouette_score(L(:,k), S)
+                write(tmpstr,'(F8.4)') sc
+                header2 = header2//tmpstr
+                db = dbindex(L(:,k), S)
+                write(tmpstr,'(F8.4)') db
+                header3 = header3//tmpstr
+                if( sc > scmax )then
+                    scmax = sc
+                    ind   = k-1
+                endif
+                write(*,'(A32,I3,2F9.4)') '>>> K,Silhouette,DaviesBouldin: ',k,sc,db
                 if( DEBUG )call write_partition('part'//int2str_pad(k,3), L(:,k))
             enddo
             deallocate(L,centers, labels,S)
@@ -2778,7 +2789,8 @@ contains
             write(funit,'(A2,I6,I8)') '# ',params%ncls,params%nsearch
             write(funit,'(A)') header1
             write(funit,'(A)') header2
-            fmt = '('//int2str(k)//'I8)'
+            write(funit,'(A)') header3
+            fmt = '('//int2str(nk)//'I8)'
         case('spc')
             allocate(multi_labels(params%ncls,params%nsearch),source=0)
             dunnmax = -1.
@@ -2790,7 +2802,7 @@ contains
                 call specclust%new(ncls_sel,k,corrmat,algorithm='cpqr')
                 call specclust%cluster
                 call specclust%get_labels(labels)
-                dunn = specclust%dunnindex()
+                dunn = dunnindex(labels, corrmat)
                 call specclust%kill
                 if( dunn > dunnmax )then
                     dunnmax = dunn

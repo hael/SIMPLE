@@ -40,7 +40,6 @@ type spec_clust
     procedure          :: cluster
     procedure          :: get_labels
     procedure          :: get_centers
-    procedure          :: DunnIndex
     procedure          :: kill
 end type spec_clust
 
@@ -245,37 +244,6 @@ contains
         if( allocated(c) ) deallocate(c)
         allocate(c,source=self%centroids)
     end subroutine get_centers
-
-    real function DunnIndex( self )
-        class(spec_clust), intent(in) :: self
-        real    :: distmat(self%K,self%K), mininter, maxintra
-        integer :: distpops(self%K,self%K)
-        integer :: i,j,li,lj
-        ! intra/inter cluster mean distance
-        distpops = 0
-        distmat  = 0.
-        do i = 1,self%N
-            li = self%labels(i)
-            do j = i+1,self%N
-                lj = self%labels(j)
-                distmat(li,lj)  = distmat(li,lj) + self%S(i,j)
-                distpops(li,lj) = distpops(li,lj) + 1
-            enddo
-        enddo
-        where( distpops > 1 ) distmat = distmat / real(distpops)
-        mininter = huge(mininter)
-        maxintra = -1.
-        do i=1,self%K
-            do j=i,self%K
-                if( i==j )then
-                    maxintra = max(distmat(i,j), maxintra)
-                else
-                    mininter = min(distmat(i,j), mininter)
-                endif
-            enddo
-        enddo
-        DunnIndex = mininter / maxintra
-    end function DunnIndex
 
     ! UNIT TEST
 
