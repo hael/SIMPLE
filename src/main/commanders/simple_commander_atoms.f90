@@ -352,12 +352,12 @@ contains
     subroutine exec_tseries_core_atoms_analysis( self, cline )
         class(tseries_core_atoms_analysis_commander), intent(inout) :: self
         class(cmdline),                               intent(inout) :: cline !< command line input
-        character(len=LONGSTRLEN), allocatable :: pdbfnames(:), pdbfnames_core(:), pdbfnames_other(:)
+        character(len=LONGSTRLEN), allocatable :: pdbfnames(:), pdbfnames_common(:), pdbfnames_diff(:)
         type(common_atoms),        allocatable :: atms_common(:)
         character(len=:),          allocatable :: fname1, fname2
-        real, allocatable  :: pdbmat(:,:), dists_all(:)
+        real, allocatable  :: pdbmat(:,:)
         type(parameters)   :: params
-        integer            :: npdbs, i, j, k, ndists, cnt, ipdb, natoms
+        integer            :: npdbs, i, j, k, cnt, ipdb, natoms
         character(len=2)   :: el
         type(stats_struct) :: dist_stats
         call params%new(cline)
@@ -368,42 +368,58 @@ contains
                 if(pdbfnames(ipdb)(1:1).ne.'/') pdbfnames(ipdb) = '../'//trim(pdbfnames(ipdb))
             enddo
         endif
+        allocate(pdbfnames_common(npdbs), pdbfnames_diff(npdbs))
+        do ipdb = 1,npdbs
+            pdbfnames_common(ipdb) = add2fbody(basename(pdbfnames(ipdb)), '.pdb', '_core')
+            pdbfnames_diff(ipdb)   = add2fbody(basename(pdbfnames(ipdb)), '.pdb', '_fringe')
+        end do
         el = trim(adjustl(params%element))
         allocate( atms_common(npdbs) )
-        call read_pdb2matrix(trim(pdbfnames(1)), pdbmat)
-        ! all are compared with # 1
-        do i = 1, npdbs
-            atms_common(i)%ind1 = 1 
-            atms_common(i)%ind2 = i
-            allocate(atms_common(i)%coords1(3,size(pdbmat,dim=2)), source=pdbmat)
-        end do
-        deallocate(pdbmat)
-        ! identify common atoms
         do i = 1, npdbs
             call read_pdb2matrix(trim(pdbfnames(i)), pdbmat)
-            natoms = size(pdbmat,dim=2)
-            allocate(atms_common(i)%coords2(3,natoms), source=pdbmat)
+            allocate(atms_common(i)%coords1(3,size(pdbmat,dim=2)), source=pdbmat)
+            allocate(atms_common(i)%coords2(3,size(pdbmat,dim=2)), source=pdbmat)
             deallocate(pdbmat)
+        end do
+        do i = 2, npdbs
             ! identify couples
-            call find_couples( atms_common(i)%coords1, atms_common(i)%coords2, el,&
-                &atms_common(i)%common1, atms_common(i)%common2, frac_diam=params%frac_diam)
+            call find_couples( atms_common(i)%coords2, atms_common(i-1)%coords2, el,&
+                &atms_common(i)%common1, atms_common(i-1)%common1, frac_diam=params%frac_diam)
             atms_common(i)%ncommon = size(atms_common(i)%common1, dim=2)
-            ! calculate displacements and distances
-            allocate( atms_common(i)%displacements(3,atms_common(i)%ncommon), atms_common(i)%dists(atms_common(i)%ncommon) )
-            do k = 1, atms_common(i)%ncommon
-                atms_common(i)%displacements(:,k) = atms_common(i)%common2(:,k) - atms_common(i)%common1(:,k)
-                atms_common(i)%dists(k) = sqrt(sum((atms_common(i)%displacements(:,k))**2.))
-            end do
+            deallocate(atms_common(i)%coords2)
+            allocate(atms_common(i)%coords2(3,atms_common(i)%ncommon), source=(atms_common(i)%common1 + atms_common(i-1)%common1)/2.)
+        end do
+        ! write PDB file
+        call write_matrix2pdb(el, atms_common(npdbs)%coords2, 'core.pdb')
+        ! identify common atoms
+        do i = 1, npdbs
+            ! identify couples
+            call find_couples( atms_common(npdbs)%coords2, atms_common(i)%coords1, el,&
+                &atms_common(i)%common2, atms_common(i)%common1, frac_diam=params%frac_diam)
+            atms_common(i)%ncommon = size(atms_common(i)%common1, dim=2)
+            ! write PDB file
+            call write_matrix2pdb(el, atms_common(i)%common1, pdbfnames_common(i))
+        end do
+        ! calculate displacements and distances
+        do i = 1, npdbs
+            if( i == 1 )then
+                allocate(atms_common(i)%dists(atms_common(i)%ncommon), source=0.)
+            else
+                atms_common(i)%dists = dists_btw_common(atms_common(i)%common1, atms_common(i-1)%common1)
+            endif
+            call calc_stats(atms_common(i)%dists, dist_stats)
+            write(logfhandle,'(A)') '>>> DISTANCE STATS, COMMON ATOMS '//basename(pdbfnames(i))
+            write(logfhandle,'(A,F8.4)') 'Average: ', dist_stats%avg
+            write(logfhandle,'(A,F8.4)') 'Median : ', dist_stats%med
+            write(logfhandle,'(A,F8.4)') 'Sigma  : ', dist_stats%sdev
+            write(logfhandle,'(A,F8.4)') 'Max    : ', dist_stats%maxv
+            write(logfhandle,'(A,F8.4)') 'Min    : ', dist_stats%minv
         end do
         ! identify different atoms
         do i = 1, npdbs
             call remove_atoms( atms_common(i)%common1, atms_common(i)%coords1, atms_common(i)%different1 )
-            call remove_atoms( atms_common(i)%common2, atms_common(i)%coords2, atms_common(i)%different2 )
             ! write PDB file
-            fname1 = 'different_atoms_'//int2str_pad(1,2)//'not_in'//int2str_pad(i,2)//'.pdb'
-            fname2 = 'different_atoms_'//int2str_pad(i,2)//'not_in'//int2str_pad(1,2)//'.pdb'
-            call write_matrix2pdb(el, atms_common(i)%different1, fname1)
-            call write_matrix2pdb(el, atms_common(i)%different2, fname2)
+            call write_matrix2pdb(el, atms_common(i)%different1, pdbfnames_diff(i))
         end do
         ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_ATOMS_ANALYSIS NORMAL STOP ****')

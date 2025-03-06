@@ -11,7 +11,7 @@ implicit none
 
 public :: thres_detect_conv_atom_denoised, phasecorr_one_atom, fit_lattice, calc_contact_scores, run_cn_analysis, strain_analysis
 public :: read_pdb2matrix, write_matrix2pdb, find_couples
-public :: remove_atoms, find_atoms_subset, find_rMax, atoms_register, Kabsch_algo
+public :: dists_btw_common, remove_atoms, find_atoms_subset, find_rMax, atoms_register, Kabsch_algo
 private
 #include "simple_local_flags.inc"
 
@@ -1135,7 +1135,7 @@ contains
         if( present(frac_diam) )then
             ffrac_diam = frac_diam
         else
-            ffrac_diam = 0.8
+            ffrac_diam = 0.5
         endif
         d_thres  = ffrac_diam * theo_diam
         if( size(points_P, dim=2) <= size(points_Q, dim=2) )then
@@ -1227,6 +1227,23 @@ contains
         end do
         deallocate(mask2keep)
     end subroutine remove_atoms
+
+    function dists_btw_common( atms_common1, atms_common2 ) result( dists )
+        real, intent(in)     :: atms_common1(:,:), atms_common2(:,:)
+        real,    allocatable :: dists(:)
+        logical, allocatable :: mask(:)
+        integer :: n1, n2, i, loc(1)
+        n1 = size(atms_common1, dim=2)
+        n2 = size(atms_common2, dim=2)
+        if( n1 /= n2 ) THROW_HARD('number of atoms in common distributions must be equal')
+        allocate(dists(n1), source=0.)
+        allocate(mask(n1), source=.true.)
+        do i = 1, n1
+            dists(i)     = pixels_dist(atms_common1(:,i),atms_common2(:,:),'min',mask,loc,keep_zero=.true.)
+            mask(loc(1)) = .false.
+        enddo
+        deallocate(mask)
+    end function dists_btw_common
 
     subroutine find_atoms_subset( atms2find, atms, mask_out, l_inv )
         real,              intent(in)    :: atms2find(:,:), atms(:,:)
