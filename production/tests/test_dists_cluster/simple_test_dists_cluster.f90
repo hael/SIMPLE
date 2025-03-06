@@ -14,7 +14,7 @@ type(parameters)     :: p
 type(cmdline)        :: cline
 integer              :: Natoms, i, j, k, cnt, nclus, sum_cnt, cen_cnt, npdbs, ipdb, ithres, stab_cnt
 logical              :: l_found
-real                 :: min_dist, eps, dist, d, dist_thres, stab_prob, max_prob, mid(3), cur_mid(3)
+real                 :: min_dist, eps, dist, d, dist_thres, rad_thres, stab_prob, max_prob, mid(3), cur_mid(3)
 ! reading pdb file
 if( command_argument_count() < 3 )then
     write(logfhandle,'(a)') 'Usage: simple_test_dists_cluster nthr=yy pdbfile=zz pdbfiles=tt'
@@ -93,8 +93,8 @@ do ithres=1,8
     enddo
     print *, 'At thres = ', dist_thres, '; ', stab_cnt, ' out of ', npdbs, ' are stable at prob > ', PROB_THRES
 enddo
-dist_thres = 2.
-l_found    = .false.
+rad_thres = 2.
+l_found   = .false.
 ! finding the radius corresponding to the current thres
 call read_pdb2matrix( p%pdbfile, mat )
 Natoms = size(mat,2)
@@ -102,13 +102,13 @@ allocate(taken(Natoms,Natoms), source=.false.)
 allocate(atom_msk(Natoms),  source=.false.)
 do ithres=1,8
     if( l_found ) exit
-    dist_thres = dist_thres + 1.
+    rad_thres = rad_thres + 1.
     do i = 1, Natoms
         if( l_found ) exit
         ! find the neighborhood
         atom_msk = .false.
         do j = 1, Natoms
-            if( sqrt(sum((mat(:,i) - mat(:,j))**2)) < dist_thres )atom_msk(j) = .true.
+            if( sqrt(sum((mat(:,i) - mat(:,j))**2)) < rad_thres )atom_msk(j) = .true.
         enddo
         taken = .false.
         do j = 1, Natoms
@@ -124,7 +124,7 @@ do ithres=1,8
         enddo
     enddo
 enddo
-print *, 'Radius thres ', dist_thres, ' is corresponding to distribution thres ', MIN_THRES
+print *, 'Radius thres ', rad_thres, ' is corresponding to distribution thres ', MIN_THRES
 ! testing finding the core my maximizing the prob computed above for each pdb file
 do ipdb = 1, npdbs
     call read_pdb2matrix( trim(pdbfnames(ipdb)), cur_mat )
@@ -139,27 +139,32 @@ do ipdb = 1, npdbs
         ! find the neighborhood
         atom_msk = .false.
         do j = 1, Natoms
-            if( sqrt(sum((cur_mat(:,i) - cur_mat(:,j))**2)) < dist_thres )atom_msk(j) = .true.
+            if( sqrt(sum((cur_mat(:,i) - cur_mat(:,j))**2)) < rad_thres )atom_msk(j) = .true.
         enddo
         ! computing the prob and maximize it
         call compute_stats(cur_mat, dists_cen(1:cen_cnt), cur_stats, atom_msk)
         call kstwo( ref_stats, cen_cnt, cur_stats, cen_cnt, d, probs(ipdb) )
         if( probs(ipdb) > PROB_THRES )thres_msk(i) = .true.
     enddo
-    mid(1) = (maxval(cur_mat(1,:)) + minval(cur_mat(1,:))) / 2.
-    mid(2) = (maxval(cur_mat(2,:)) + minval(cur_mat(2,:))) / 2.
-    mid(3) = (maxval(cur_mat(3,:)) + minval(cur_mat(3,:))) / 2.
+    ! center of mass
+    mid = 0.
+    do i = 1, Natoms
+        mid = mid + cur_mat(:,i)
+    enddo
+    mid      = mid / real(Natoms)
     max_prob = huge(max_prob)
     do i = 1, Natoms
         if( .not. thres_msk(i) )cycle
         ! find the neighborhood
         atom_msk = .false.
+        cur_mid  = 0.
         do j = 1, Natoms
-            if( sqrt(sum((cur_mat(:,i) - cur_mat(:,j))**2)) < dist_thres )atom_msk(j) = .true.
+            if( sqrt(sum((cur_mat(:,i) - cur_mat(:,j))**2)) < rad_thres )then
+                atom_msk(j) = .true.
+                cur_mid     = cur_mid + cur_mat(:,j)
+            endif
         enddo
-        cur_mid(1) = (maxval(cur_mat(1,:),mask=atom_msk) + minval(cur_mat(1,:),mask=atom_msk)) / 2.
-        cur_mid(2) = (maxval(cur_mat(2,:),mask=atom_msk) + minval(cur_mat(2,:),mask=atom_msk)) / 2.
-        cur_mid(3) = (maxval(cur_mat(3,:),mask=atom_msk) + minval(cur_mat(3,:),mask=atom_msk)) / 2.
+        cur_mid = cur_mid / real(Natoms)
         if( sqrt(sum((cur_mid - mid)**2)) < max_prob )then
             max_prob = sqrt(sum((cur_mid - mid)**2))
             max_msk  = atom_msk
