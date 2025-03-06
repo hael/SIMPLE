@@ -6,13 +6,14 @@ use simple_nanoparticle_utils, only: read_pdb2matrix, write_matrix2pdb
 implicit none
 character(len=LONGSTRLEN), allocatable :: pdbfnames(:)
 real,    parameter   :: PROB_THRES = 0.8
-real,    parameter   :: MIN_THRES = 6.    ! automatically figured from the first part of the codes
+real,    parameter   :: MIN_THRES = 7.    ! automatically figured from the first part of the codes
 real,    allocatable :: dists(:), mat(:,:), dists_cen(:), vars(:), ref_stats(:), cur_mat(:,:), cur_stats(:), probs(:), out_mat(:,:)
 integer, allocatable :: cnts(:)
-logical, allocatable :: atom_msk(:), max_msk(:), thres_msk(:)
+logical, allocatable :: atom_msk(:), max_msk(:), thres_msk(:), taken(:,:)
 type(parameters)     :: p
 type(cmdline)        :: cline
-integer              :: Natoms, i, j, cnt, nclus, sum_cnt, cen_cnt, npdbs, ipdb, ithres, stab_cnt
+integer              :: Natoms, i, j, k, cnt, nclus, sum_cnt, cen_cnt, npdbs, ipdb, ithres, stab_cnt
+logical              :: l_found
 real                 :: min_dist, eps, dist, d, dist_thres, stab_prob, max_prob, mid(3), cur_mid(3)
 ! reading pdb file
 if( command_argument_count() < 3 )then
@@ -92,6 +93,37 @@ do ithres=1,8
     enddo
     print *, 'At thres = ', dist_thres, '; ', stab_cnt, ' out of ', npdbs, ' are stable at prob > ', PROB_THRES
 enddo
+dist_thres = 2.
+l_found    = .false.
+allocate(taken(Natoms,Natoms), source=.false.)
+! finding the radius corresponding to the current thres
+call read_pdb2matrix( p%pdbfile, mat )
+Natoms = size(mat,2)
+do ithres=1,8
+    if( l_found ) exit
+    dist_thres = dist_thres + 1.
+    do i = 1, Natoms
+        if( l_found ) exit
+        ! find the neighborhood
+        atom_msk = .false.
+        do j = 1, Natoms
+            if( sqrt(sum((mat(:,i) - mat(:,j))**2)) < dist_thres )atom_msk(j) = .true.
+        enddo
+        taken = .false.
+        do j = 1, Natoms
+            do k = 1, Natoms
+                if( taken(j,k) .or. .not.atom_msk(k) .or. .not.atom_msk(j) )cycle
+                taken(j,k) = .true.
+                taken(k,j) = .true.
+                if( sqrt(sum((mat(:,j) - mat(:,k))**2)) > MIN_THRES )then
+                    l_found = .true.
+                    exit
+                endif
+            enddo
+        enddo
+    enddo
+enddo
+print *, 'Radius thres ', dist_thres, ' is corresponding to distribution thres ', MIN_THRES
 ! testing finding the core my maximizing the prob computed above for each pdb file
 do ipdb = 1, npdbs
     call read_pdb2matrix( trim(pdbfnames(ipdb)), cur_mat )
@@ -106,7 +138,7 @@ do ipdb = 1, npdbs
         ! find the neighborhood
         atom_msk = .false.
         do j = 1, Natoms
-            if( sqrt(sum((cur_mat(:,i) - cur_mat(:,j))**2)) < MIN_THRES )atom_msk(j) = .true.
+            if( sqrt(sum((cur_mat(:,i) - cur_mat(:,j))**2)) < dist_thres )atom_msk(j) = .true.
         enddo
         ! computing the prob and maximize it
         call compute_stats(cur_mat, dists_cen(1:cen_cnt), cur_stats, atom_msk)
@@ -122,7 +154,7 @@ do ipdb = 1, npdbs
         ! find the neighborhood
         atom_msk = .false.
         do j = 1, Natoms
-            if( sqrt(sum((cur_mat(:,i) - cur_mat(:,j))**2)) < MIN_THRES )atom_msk(j) = .true.
+            if( sqrt(sum((cur_mat(:,i) - cur_mat(:,j))**2)) < dist_thres )atom_msk(j) = .true.
         enddo
         cur_mid(1) = (maxval(cur_mat(1,:),mask=atom_msk) + minval(cur_mat(1,:),mask=atom_msk)) / 2.
         cur_mid(2) = (maxval(cur_mat(2,:),mask=atom_msk) + minval(cur_mat(2,:),mask=atom_msk)) / 2.
