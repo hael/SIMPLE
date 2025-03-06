@@ -164,7 +164,7 @@ do ipdb = 1, npdbs
                 cur_mid     = cur_mid + cur_mat(:,j)
             endif
         enddo
-        cur_mid = cur_mid / real(Natoms)
+        cur_mid = cur_mid / real(count(max_msk .eqv. .true.))
         if( sqrt(sum((cur_mid - mid)**2)) < max_prob )then
             max_prob = sqrt(sum((cur_mid - mid)**2))
             max_msk  = atom_msk
