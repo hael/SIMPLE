@@ -418,9 +418,10 @@ contains
         end do
         ! identify different atoms
         do i = 1, npdbs
+            natoms = size(atms_common(i)%coords1,dim=2)
+            allocate(mask_core(natoms), source=.true.)
+            allocate(betas(natoms),     source=0.)
             call find_atoms_subset( atms_common(i)%common1, atms_common(i)%coords1, mask_core)
-            natoms = size(mask_core)
-            allocate(betas(natoms), source=0.)
             where( mask_core )
                 betas = 1.
             elsewhere
@@ -428,6 +429,7 @@ contains
             endwhere
             ! write PDB file
             call write_matrix2pdb(el, atms_common(i)%coords1, pdbfnames_diff(i), betas)
+            deallocate(mask_core, betas)
         end do
         ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_ATOMS_ANALYSIS NORMAL STOP ****')
