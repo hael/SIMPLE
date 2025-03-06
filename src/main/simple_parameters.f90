@@ -397,7 +397,7 @@ type :: parameters
     real    :: fraca=0.1           !< fraction of amplitude contrast used for fitting CTF{0.1}
     real    :: fracdeadhot=0.05    !< fraction of dead or hot pixels{0.01}
     real    :: frac_best=1.0       !< fraction of best particles to sample from per class when balance=yes
-    real    :: frac_diam=0.8       !< fraction of atomic diameter
+    real    :: frac_diam=0.5       !< fraction of atomic diameter
     real    :: fracsrch=0.9        !< fraction of serach space scanned for convergence
     real    :: fraction_dose_target=FRACTION_DOSE_TARGET_DEFAULT !< dose (in e/A2)
     real    :: frac_outliers=0.

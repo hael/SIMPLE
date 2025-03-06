@@ -61,6 +61,7 @@ type(detect_atoms_commander)                  :: xdetect_atoms
 type(conv_atom_denoise_commander)             :: xconv_atom_denoise
 type(atoms_stats_commander)                   :: xatoms_stats
 type(tseries_atoms_analysis_commander)        :: xtseries_atoms_analysis
+type(tseries_core_atoms_analysis_commander)   :: xtseries_core_atoms_analysis
 type(tseries_make_projavgs_commander)         :: xtseries_make_projavgs
 
 ! OTHER DECLARATIONS
@@ -187,6 +188,8 @@ select case(prg)
         call xatoms_stats%execute(cline)
     case( 'tseries_atoms_analysis' )
         call xtseries_atoms_analysis%execute(cline)
+    case( 'tseries_core_atoms_analysis' )
+        call xtseries_core_atoms_analysis%execute(cline)
     case( 'tseries_make_projavgs' )
         call xtseries_make_projavgs%execute(cline)
 
@@ -199,7 +202,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('2f570638')
+call simple_print_git_version('91b17943')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
