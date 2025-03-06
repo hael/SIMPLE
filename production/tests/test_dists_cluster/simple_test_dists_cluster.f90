@@ -178,12 +178,15 @@ do ipdb = 1, npdbs
     allocate(out_mat(3,count(max_msk .eqv. .true.)))
     cnt = 0
     do i = 1, Natoms
+        call molecule%set_beta(i, 0.)
         if( .not. max_msk(i) )cycle
         cnt            = cnt + 1
         out_mat(:,cnt) = cur_mat(:,i)
         call molecule%set_beta(i, 1.0)
     enddo
+    call molecule%writepdb(get_fpath(trim(pdbfnames(ipdb)))//'NP_wcore_ATMS.pdb')
     call write_matrix2pdb( 'Pt', out_mat, get_fpath(trim(pdbfnames(ipdb)))//'test_core_ATMS.pdb' )
+    call molecule%kill()
 enddo
 
 contains
