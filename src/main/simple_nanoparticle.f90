@@ -837,7 +837,7 @@ contains
         integer, parameter   :: RANK_THRESH = 4
         integer :: icc, cnt, cnt_split
         integer :: rank, m(1)
-        real    :: new_centers(3,2*self%n_cc) ! will pack it afterwards if it has too many elements
+        real    :: new_centers(3,3*self%n_cc) ! will pack it afterwards if it has too many elements
         real    :: pc, radius
         write(logfhandle, '(A)') '>>> SPLITTING CONNECTED ATOMS'
         call self%img%get_rmat_ptr(rmat_pc) ! rmat_pc contains the phase correlation
