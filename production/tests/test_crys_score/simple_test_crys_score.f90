@@ -79,9 +79,9 @@ contains
                 eps_l = (ref_dists(i)   - ref_dists(i-1))/2.
             elseif( i == 1 )then
                 eps_g = (ref_dists(i+1) - ref_dists(i))/2.
-                eps_l =  ref_dists(i)
+                eps_l =  huge(eps_l)
             elseif( i == Nr )then
-                eps_g =  ref_dists(i)
+                eps_g =  huge(eps_g)
                 eps_l = (ref_dists(i)   - ref_dists(i-1))/2.
             endif
             do j = 1, Na-1
@@ -90,8 +90,8 @@ contains
                         if( .not.msk(j) .or. .not.msk(k) )cycle
                     endif
                     dist = sqrt(sum((pos_mat(:,j) - pos_mat(:,k))**2))
-                    if( (dist < ref_dists(i) .and. abs(dist - ref_dists(i)) < eps_l ) .or. &
-                        (dist > ref_dists(i) .and. abs(dist - ref_dists(i)) < eps_g ) )then
+                    if( (dist <= ref_dists(i) .and. abs(dist - ref_dists(i)) < eps_l ) .or. &
+                        (dist >= ref_dists(i) .and. abs(dist - ref_dists(i)) < eps_g ) )then
                         out_stats(i) = out_stats(i) + 1.
                     endif
                 enddo
