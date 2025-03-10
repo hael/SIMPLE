@@ -670,10 +670,11 @@ contains
         t_tot           =  tic()
         max_corr        = -1.
         call thres_detect_conv_atom_denoised(self%img, NBIN_THRESH, ts)
-        low      = 1
-        high     = NBIN_THRESH
-        max_corr = t2c(ts(1))
-        ind_opt  = 1
+        low        = 1
+        high       = NBIN_THRESH
+        ind_opt    = 1
+        thresh_opt = ts(ind_opt)
+        max_corr   = t2c(thresh_opt)
         do while( low <= high ) 
             mid  = (low + high) / 2
             corr = t2c(ts(mid))
