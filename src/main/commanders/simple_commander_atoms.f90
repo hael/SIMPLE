@@ -260,11 +260,12 @@ contains
         class(tseries_atoms_rmsd_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline !< command line input
         character(len=LONGSTRLEN), allocatable :: pdbfnames(:)
-        real, allocatable  :: pdbmat1(:,:), pdbmat2(:,:)
-        type(parameters)   :: params
-        integer            :: npdbs, i, j, ipdb
-        character(len=2)   :: el
-        type(stats_struct) :: dist_stats
+        real,               allocatable :: pdbmat1(:,:), pdbmat2(:,:), dists(:)
+        integer,            allocatable :: inds(:), pairs(:,:)
+        type(stats_struct), allocatable :: dist_stats(:)
+        type(parameters) :: params
+        integer          :: npdbs, i, ii, j, ind, ipdb, npairs, cnt
+        character(len=2) :: el
         call cline%set('mkdir', 'no')
         call params%new(cline)
         call read_filetable(params%pdbfiles, pdbfnames)
@@ -274,22 +275,38 @@ contains
                 if(pdbfnames(ipdb)(1:1).ne.'/') pdbfnames(ipdb) = '../'//trim(pdbfnames(ipdb))
             enddo
         endif
-        el = trim(adjustl(params%element))
+        el     = trim(adjustl(params%element))
+        npairs = (npdbs * (npdbs - 1))/2
+        allocate(dists(npairs), source=0.)
+        allocate(inds(npairs),  pairs(npairs,2), source=0 )
+        allocate(dist_stats(npairs))
         ! identify common atoms across pairs
+        cnt = 0
         do i = 1, npdbs - 1
             do j = i + 1, npdbs
+                cnt = cnt + 1
                 call read_pdb2matrix(trim(pdbfnames(i)), pdbmat1)
                 call read_pdb2matrix(trim(pdbfnames(j)), pdbmat2)
-                dist_stats = atm_rmsd_stats(pdbmat1, pdbmat2)
-                write(logfhandle,'(A)') '>>> DISTANCE STATS FOR COMMON ATOMS '//int2str(i)//' & '//int2str(j)
-                write(logfhandle,'(A,F8.4)') 'Average: ', dist_stats%avg
-                write(logfhandle,'(A,F8.4)') 'Median : ', dist_stats%med
-                write(logfhandle,'(A,F8.4)') 'Sigma  : ', dist_stats%sdev
-                write(logfhandle,'(A,F8.4)') 'Max    : ', dist_stats%maxv
-                write(logfhandle,'(A,F8.4)') 'Min    : ', dist_stats%minv
+                dist_stats(cnt) = atm_rmsd_stats(pdbmat1, pdbmat2)
+                dists(cnt)      = dist_stats(cnt)%med
+                inds(cnt)       = cnt
+                pairs(cnt,:)    = [i,j]      
                 deallocate(pdbmat1, pdbmat2)
             end do
         end do
+        call hpsort(dists, inds)
+        do ii = 1, npairs
+            ind = inds(i)
+            i   = pairs(ind,1)
+            j   = pairs(ind,2)
+            write(logfhandle,'(A)') '>>> DISTANCE STATS FOR COMMON ATOMS '//int2str(i)//' & '//int2str(j)
+            write(logfhandle,'(A,F8.4)') 'Average: ', dist_stats(ind)%avg
+            write(logfhandle,'(A,F8.4)') 'Median : ', dist_stats(ind)%med
+            write(logfhandle,'(A,F8.4)') 'Sigma  : ', dist_stats(ind)%sdev
+            write(logfhandle,'(A,F8.4)') 'Max    : ', dist_stats(ind)%maxv
+            write(logfhandle,'(A,F8.4)') 'Min    : ', dist_stats(ind)%minv
+        end do
+        deallocate(dist_stats, dists, inds, pairs)
         ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_ATOMS_RMSD NORMAL STOP ****')
     end subroutine exec_tseries_atoms_rmsd
