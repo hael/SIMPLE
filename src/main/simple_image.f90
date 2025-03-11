@@ -2861,7 +2861,7 @@ contains
                         xyz  = xyz  + self%rmat(i,j,k) * [ci, cj, ck]
                         spix = spix + self%rmat(i,j,k) 
                     end if
-                    ck   = ck + 1.
+                    ck = ck + 1.
                 end do
                 cj = cj + 1.
             end do
@@ -6255,7 +6255,7 @@ contains
         class(image), intent(inout) :: self
         real :: minv
         minv = minval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
-        self%rmat = self%rmat + abs(minv)
+        if( minv < 0. )self%rmat = self%rmat + abs(minv)
     end subroutine remove_neg
 
     !>  \brief  is for making a random image (0,1)
@@ -8275,7 +8275,7 @@ contains
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: angstep
         class(image),      intent(inout) :: avg
-        integer, optional, intent(in) :: ang_stop
+        integer, optional, intent(in)    :: ang_stop
         real    :: avgs_rmat(nthr_glob,self%ldim(1),self%ldim(2),1)
         real    :: rotated(nthr_glob,self%ldim(1),self%ldim(2),1)
         integer :: irot, ithr, aang_stop
