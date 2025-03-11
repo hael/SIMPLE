@@ -6,12 +6,14 @@ use simple_nanoparticle_utils, only: read_pdb2matrix, write_matrix2pdb
 use simple_atoms
 implicit none
 character(len=LONGSTRLEN), allocatable :: pdbfnames(:), cmd, corenames(:)
-real,    allocatable :: dists(:), mat(:,:), dists_cen(:), vars(:), ref_stats(:), cur_mat(:,:), cur_stats(:)
-integer, allocatable :: cnts(:)
-type(parameters)     :: p
-type(cmdline)        :: cline
-integer              :: npdbs, ipdb, icore, ncores, Natoms, cnt, i, j, nclus
-real                 :: min_dist, dist, prob, d
+real,                      allocatable :: dists(:), mat(:,:), dists_cen(:), vars(:), ref_stats(:), cur_mat(:,:), cur_stats(:)
+integer,                   allocatable :: cnts(:)
+logical,                   allocatable :: l_dists(:)
+character(len=LONGSTRLEN) :: t_name
+type(parameters)          :: p
+type(cmdline)             :: cline
+integer                   :: npdbs, ipdb, icore, ncores, Natoms, cnt, i, j, nclus
+real                      :: min_dist, dist, prob, d
 ! reading pdb file
 if( command_argument_count() < 2 )then
     write(logfhandle,'(a)') 'Usage: simple_test_crys_score nthr=yy pdbfiles=tt'
@@ -28,17 +30,21 @@ do ipdb = 1, npdbs
     ! generating stats for the reference lattice
     call read_pdb2matrix( trim(pdbfnames(ipdb)) // 'startvol_ATMS.pdb', mat )
     Natoms = size(mat,2)
-    if( allocated(dists) )deallocate(dists)
-    allocate(dists(Natoms**2), source=0.)
+    if( allocated(dists)   )deallocate(dists)
+    if( allocated(l_dists) )deallocate(l_dists)
+    allocate(  dists(Natoms**2), source=0.)
+    allocate(l_dists(Natoms**2), source=.false.)
     cnt      = 0
     min_dist = huge(min_dist)
     do i = 1, Natoms-1
         do j = i+1, Natoms
-            cnt        = cnt + 1
-            dists(cnt) = sqrt(sum((mat(:,i) - mat(:,j))**2))
+            cnt          = cnt + 1
+            dists(cnt)   = sqrt(sum((mat(:,i) - mat(:,j))**2))
+            l_dists(cnt) = .true.
             if( dists(cnt) < min_dist .and. dists(cnt) > TINY ) min_dist = dists(cnt)
         enddo
     enddo
+    dists = pack(dists, mask=l_dists)
     call sort_cluster(dists, nclus, dists_cen, cnts, vars, delta=min_dist / 10.)
     call hpsort(dists_cen)
     if( allocated(ref_stats) )deallocate(ref_stats)
@@ -46,13 +52,14 @@ do ipdb = 1, npdbs
     allocate(ref_stats(nclus), cur_stats(nclus), source=0.)
     call compute_stats(mat, dists_cen(1:nclus), ref_stats)
     ! generating stats for the core
-    print *, trim(pdbfnames(ipdb)) // 'segvols/1_tseries_core_atoms_analysis/'
-    cmd = 'ls '// trim(pdbfnames(ipdb)) // 'segvols/1_tseries_core_atoms_analysis/*_core.pdb | xargs -n 1 basename > output_'//int2str(ipdb)//'.log'
+    t_name = trim(pdbfnames(ipdb)) // 'segvols/1_tseries_core_atoms_analysis/'
+    print *, trim(t_name)
+    cmd = 'ls '// trim(t_name) // '*_core.pdb | xargs -n 1 basename > output_'//int2str(ipdb)//'.log'
     call execute_command_line(cmd)
     call read_filetable('output_'//int2str(ipdb)//'.log', corenames)
     ncores = size(corenames)
     do icore = 1, ncores
-        call read_pdb2matrix( trim(pdbfnames(ipdb)) // 'segvols/1_tseries_core_atoms_analysis/' // trim(corenames(icore)), cur_mat )
+        call read_pdb2matrix( trim(t_name) // trim(corenames(icore)), cur_mat )
         call compute_stats(cur_mat, dists_cen(1:nclus), cur_stats)
         call kstwo( ref_stats, nclus, cur_stats, nclus, d, prob )
         print *, trim(corenames(icore)), prob

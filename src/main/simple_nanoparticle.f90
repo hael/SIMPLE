@@ -572,7 +572,6 @@ contains
         real,                intent(inout) :: a(3) ! lattice parameters
         real, allocatable :: centers_A(:,:)        ! coordinates of the atoms in ANGSTROMS
         type(image)       :: simatms
-        integer           :: n_discard
         ! MODEL BUILDING
         ! Phase correlation approach
         call phasecorr_one_atom(self%img, self%element)
@@ -599,9 +598,7 @@ contains
         real,                       intent(inout) :: a(3)                ! lattice parameters
         logical,                    intent(in)    :: l_fit_lattice       ! fit lattice or use inputted
         character(len=*), optional, intent(in)    :: split_fname
-        logical     :: use_cn_thresh, fixed_cs_thres
         type(image) :: simatms, img_cos
-        integer     :: n_discard
         ! MODEL BUILDING
         ! Phase correlation approach
         call phasecorr_one_atom(self%img, self%element)
@@ -654,9 +651,8 @@ contains
         real,    allocatable :: rmat(:,:,:)
         logical, parameter   :: L_BENCH = .false.
         real    :: ts(NBIN_THRESH)
-        integer :: i, fnr, ind_opt, low, high, mid
-        real    :: otsu_thresh, corr, step_refine, max_corr, thresh, thresh_opt, lbt, rbt
-        logical                 :: found_better
+        integer :: fnr, low, high, mid
+        real    :: corr, max_corr, thresh_opt
         real(timer_int_kind)    :: rt_find_ccs, rt_find_centers, rt_gen_sim, rt_real_corr, rt_tot
         integer(timer_int_kind) ::  t_find_ccs,  t_find_centers,  t_gen_sim,  t_real_corr,  t_tot
         write(logfhandle,'(A)') '>>> BINARIZATION'
@@ -668,12 +664,10 @@ contains
         rt_gen_sim      =  0.
         rt_real_corr    =  0.
         t_tot           =  tic()
-        max_corr        = -1.
         call thres_detect_conv_atom_denoised(self%img, NBIN_THRESH, ts)
         low        = 1
         high       = NBIN_THRESH
-        ind_opt    = 1
-        thresh_opt = ts(ind_opt)
+        thresh_opt = ts(1)
         max_corr   = t2c(thresh_opt)
         do while( low <= high ) 
             mid  = (low + high) / 2
@@ -682,7 +676,6 @@ contains
             if( corr > max_corr )then
                 max_corr   = corr
                 thresh_opt = ts(mid)
-                ind_opt    = mid
                 low        = mid + 1
             else
                 high       = mid - 1
@@ -747,10 +740,10 @@ contains
             rt_find_centers = rt_find_centers + toc(t_find_centers)
             ! Generate a simulated distribution based on those center
             t_gen_sim = tic()
-            call self%write_centers('centers_'//trim(int2str(i))//'_iteration', coords)
-            call atom%new          ('centers_'//trim(int2str(i))//'_iteration.pdb')
+            call self%write_centers('centers_iteration', coords)
+            call atom%new('centers_iteration.pdb')
             call atom%convolve(simulated_distrib, cutoff = 8.*self%smpd)
-            call del_file('centers_'//trim(int2str(i))//'_iteration.pdb')
+            call del_file('centers_iteration.pdb')
             call atom%kill
             rt_gen_sim = rt_gen_sim + toc(t_gen_sim)
             ! correlate volumes
