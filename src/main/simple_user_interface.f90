@@ -189,7 +189,7 @@ type(simple_program), target :: stackops
 type(simple_program), target :: symaxis_search
 type(simple_program), target :: symmetrize_map
 type(simple_program), target :: symmetry_test
-type(simple_program), target :: tseries_atoms_analysis
+type(simple_program), target :: tseries_atoms_rmsd
 type(simple_program), target :: tseries_core_atoms_analysis
 type(simple_program), target :: tseries_core_finder
 type(simple_program), target :: tseries_import
@@ -504,7 +504,7 @@ contains
         call new_symaxis_search
         call new_symmetrize_map
         call new_symmetry_test
-        call new_tseries_atoms_analysis
+        call new_tseries_atoms_rmsd
         call new_tseries_core_atoms_analysis
         call new_tseries_core_finder
         call new_tseries_import
@@ -642,7 +642,7 @@ contains
         call push2prg_ptr_array(symaxis_search)
         call push2prg_ptr_array(symmetrize_map)
         call push2prg_ptr_array(symmetry_test)
-        call push2prg_ptr_array(tseries_atoms_analysis)
+        call push2prg_ptr_array(tseries_atoms_rmsd)
         call push2prg_ptr_array(tseries_core_atoms_analysis)
         call push2prg_ptr_array(tseries_core_finder)
         call push2prg_ptr_array(tseries_import)
@@ -909,8 +909,8 @@ contains
                 ptr2prg => symmetrize_map
             case('symmetry_test')
                 ptr2prg => symmetry_test
-            case('tseries_atoms_analysis')
-                ptr2prg => tseries_atoms_analysis
+            case('tseries_atoms_rmsd')
+                ptr2prg => tseries_atoms_rmsd
             case('tseries_core_atoms_analysis')
                 ptr2prg => tseries_core_atoms_analysis
             case('tseries_core_finder')
@@ -1115,7 +1115,7 @@ contains
         write(logfhandle,'(A)') conv_atom_denoise%name
         write(logfhandle,'(A)') detect_atoms%name
         write(logfhandle,'(A)') atoms_stats%name
-        write(logfhandle,'(A)') tseries_atoms_analysis%name
+        write(logfhandle,'(A)') tseries_atoms_rmsd%name
         write(logfhandle,'(A)') tseries_core_atoms_analysis%name
         write(logfhandle,'(A)') tseries_core_finder%name
         write(logfhandle,'(A)') tseries_make_projavgs%name
@@ -5273,10 +5273,10 @@ contains
         call atoms_stats%set_input('comp_ctrls', 1, nthr)
     end subroutine new_atoms_stats
 
-    subroutine new_tseries_atoms_analysis
+    subroutine new_tseries_atoms_rmsd
         ! PROGRAM SPECIFICATION
-        call tseries_atoms_analysis%new(&
-        &'tseries_atoms_analysis',&                                                   ! name
+        call tseries_atoms_rmsd%new(&
+        &'tseries_atoms_rmsd',&                                                   ! name
         &'Analysis of results obtianed with tseries_reconstruct3D and detect_atoms',& ! descr_short
         &'is a program that analysis atomic time-series coordinates',&                ! descr long
         &'single_exec',&                                                              ! executable
@@ -5285,20 +5285,20 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call tseries_atoms_analysis%set_input('parm_ios', 1, smpd)
-        call tseries_atoms_analysis%set_input('parm_ios', 2, 'pdbfiles',  'file', 'txt', 'List of PDB format coords files',  'List of input coords files in PDB format', .true., '')
-        call tseries_atoms_analysis%set_input('parm_ios', 3, 'frac_diam', 'num',  'Fraction of atomic diameter', 'Fraction of atomic diameter used for thresholding{0.5}', '{0.5}', .false., 0.5)
+        call tseries_atoms_rmsd%set_input('parm_ios', 1, smpd)
+        call tseries_atoms_rmsd%set_input('parm_ios', 2, 'pdbfiles',  'file', 'txt', 'List of PDB format coords files',  'List of input coords files in PDB format', .true., '')
+        call tseries_atoms_rmsd%set_input('parm_ios', 3, 'frac_diam', 'num',  'Fraction of atomic diameter', 'Fraction of atomic diameter used for thresholding{0.5}', '{0.5}', .false., 0.5)
         ! alternative inputs
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
-        call tseries_atoms_analysis%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
+        call tseries_atoms_rmsd%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
         ! mask controls
         ! <empty>
         ! computer controls
         ! <empty>
-    end subroutine new_tseries_atoms_analysis
+    end subroutine new_tseries_atoms_rmsd
 
     subroutine new_tseries_core_atoms_analysis
         ! PROGRAM SPECIFICATION
