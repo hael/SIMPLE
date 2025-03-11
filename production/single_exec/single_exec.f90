@@ -60,7 +60,7 @@ type(ptclsproc_nano_commander)                :: xptclsproc
 type(detect_atoms_commander)                  :: xdetect_atoms
 type(conv_atom_denoise_commander)             :: xconv_atom_denoise
 type(atoms_stats_commander)                   :: xatoms_stats
-type(tseries_atoms_analysis_commander)        :: xtseries_atoms_analysis
+type(tseries_atoms_rmsd_commander)            :: xtseries_atoms_rmsd
 type(tseries_core_atoms_analysis_commander)   :: xtseries_core_atoms_analysis
 type(tseries_make_projavgs_commander)         :: xtseries_make_projavgs
 
@@ -186,8 +186,8 @@ select case(prg)
     case( 'atoms_stats' )
         call cline%set('mkdir', 'yes')
         call xatoms_stats%execute(cline)
-    case( 'tseries_atoms_analysis' )
-        call xtseries_atoms_analysis%execute(cline)
+    case( 'tseries_atoms_rmsd' )
+        call xtseries_atoms_rmsd%execute(cline)
     case( 'tseries_core_atoms_analysis' )
         call xtseries_core_atoms_analysis%execute(cline)
     case( 'tseries_make_projavgs' )
@@ -202,7 +202,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('d10acf82')
+call simple_print_git_version('d0f1a281')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

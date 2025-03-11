@@ -17,7 +17,7 @@ public :: map_validation_commander
 public :: model_validation_commander
 public :: model_validation_eo_commander
 public :: pdb2mrc_commander
-public :: tseries_atoms_analysis_commander
+public :: tseries_atoms_rmsd_commander
 public :: tseries_core_atoms_analysis_commander
 private
 #include "simple_local_flags.inc"
@@ -57,10 +57,10 @@ type, extends(commander_base) :: pdb2mrc_commander
     procedure :: execute      => exec_pdb2mrc
 end type pdb2mrc_commander
 
-type, extends(commander_base) :: tseries_atoms_analysis_commander
+type, extends(commander_base) :: tseries_atoms_rmsd_commander
   contains
-    procedure :: execute      => exec_tseries_atoms_analysis
-end type tseries_atoms_analysis_commander
+    procedure :: execute      => exec_tseries_atoms_rmsd
+end type tseries_atoms_rmsd_commander
 
 type, extends(commander_base) :: tseries_core_atoms_analysis_commander
   contains
@@ -256,17 +256,16 @@ contains
         call simple_end('**** SIMPLE_PDB2MRC NORMAL STOP ****')
     end subroutine exec_pdb2mrc
 
-    subroutine exec_tseries_atoms_analysis( self, cline )
-        class(tseries_atoms_analysis_commander), intent(inout) :: self
-        class(cmdline),                          intent(inout) :: cline !< command line input
+    subroutine exec_tseries_atoms_rmsd( self, cline )
+        class(tseries_atoms_rmsd_commander), intent(inout) :: self
+        class(cmdline),                      intent(inout) :: cline !< command line input
         character(len=LONGSTRLEN), allocatable :: pdbfnames(:)
-        type(common_atoms),        allocatable :: atms_common(:,:)
-        character(len=:),          allocatable :: fname1, fname2
-        real, allocatable  :: pdbmat(:,:), dists_all(:)
+        real, allocatable  :: pdbmat1(:,:), pdbmat2(:,:)
         type(parameters)   :: params
-        integer            :: npdbs, i, j, k, ndists, cnt, ipdb
+        integer            :: npdbs, i, j, ipdb
         character(len=2)   :: el
         type(stats_struct) :: dist_stats
+        call cline%set('mkdir', 'no')
         call params%new(cline)
         call read_filetable(params%pdbfiles, pdbfnames)
         npdbs = size(pdbfnames)
@@ -275,79 +274,25 @@ contains
                 if(pdbfnames(ipdb)(1:1).ne.'/') pdbfnames(ipdb) = '../'//trim(pdbfnames(ipdb))
             enddo
         endif
-        allocate( atms_common(npdbs,npdbs) )
         el = trim(adjustl(params%element))
         ! identify common atoms across pairs
         do i = 1, npdbs - 1
             do j = i + 1, npdbs
-                atms_common(i,j)%ind1 = i
-                atms_common(i,j)%ind2 = j
-                call read_pdb2matrix(trim(pdbfnames(i)), pdbmat)
-                allocate(atms_common(i,j)%coords1(3,size(pdbmat,dim=2)), source=pdbmat)
-                deallocate(pdbmat)
-                call read_pdb2matrix(trim(pdbfnames(j)), pdbmat)
-                allocate(atms_common(i,j)%coords2(3,size(pdbmat,dim=2)), source=pdbmat)
-                deallocate(pdbmat)
-                ! identify couples
-                call find_couples( atms_common(i,j)%coords1, atms_common(i,j)%coords2, el,&
-                                  &atms_common(i,j)%common1, atms_common(i,j)%common2, frac_diam=params%frac_diam)
-                atms_common(i,j)%ncommon = size(atms_common(i,j)%common1, dim=2)
-                ! calculate displacements and distances
-                allocate( atms_common(i,j)%displacements(3,atms_common(i,j)%ncommon), atms_common(i,j)%dists(atms_common(i,j)%ncommon) )
-                do k = 1, atms_common(i,j)%ncommon
-                    atms_common(i,j)%displacements(:,k) = atms_common(i,j)%common2(:,k) - atms_common(i,j)%common1(:,k)
-                    atms_common(i,j)%dists(k) = sqrt(sum((atms_common(i,j)%displacements(:,k))**2.))
-                end do
-                ! write PDB files
-                if( j == i + 1 )then
-                    fname1 = 'common_atoms_'//int2str_pad(i,2)//'in'//int2str_pad(j,2)//'.pdb'
-                    fname2 = 'common_atoms_'//int2str_pad(j,2)//'in'//int2str_pad(i,2)//'.pdb'
-                    call write_matrix2pdb(el, atms_common(i,j)%common1, fname1)
-                    call write_matrix2pdb(el, atms_common(i,j)%common2, fname2)
-                endif
-            end do
-        end do
-        ! calculate distance statistics
-        ndists = 0
-        do i = 1, npdbs - 1
-            do j = i + 1, npdbs
-                ndists = ndists + atms_common(i,j)%ncommon
-            end do
-        end do
-        allocate( dists_all(ndists), source=0. )
-        cnt = 0
-        do i = 1, npdbs - 1
-            do j = i + 1, npdbs
-                do k = 1, atms_common(i,j)%ncommon
-                    cnt = cnt + 1
-                    dists_all(cnt) = atms_common(i,j)%dists(k)
-                end do
-            end do
-        end do
-        call calc_stats(dists_all, dist_stats)
-        write(logfhandle,'(A)') '>>> DISTANCE STATS FOR COMMON ATOMS BELOW'
-        write(logfhandle,'(A,F8.4)') 'Average: ', dist_stats%avg
-        write(logfhandle,'(A,F8.4)') 'Median : ', dist_stats%med
-        write(logfhandle,'(A,F8.4)') 'Sigma  : ', dist_stats%sdev
-        write(logfhandle,'(A,F8.4)') 'Max    : ', dist_stats%maxv
-        write(logfhandle,'(A,F8.4)') 'Min    : ', dist_stats%minv
-        ! identify different atoms across pairs
-        do i = 1, npdbs - 1
-            do j = i + 1, npdbs
-                call remove_atoms( atms_common(i,j)%common1, atms_common(i,j)%coords1, atms_common(i,j)%different1 )
-                call remove_atoms( atms_common(i,j)%common2, atms_common(i,j)%coords2, atms_common(i,j)%different2 )
-                ! write PDB files
-                if( j == i + 1 )then
-                    fname1 = 'different_atoms_'//int2str_pad(i,2)//'not_in'//int2str_pad(j,2)//'.pdb'
-                    fname2 = 'different_atoms_'//int2str_pad(j,2)//'not_in'//int2str_pad(i,2)//'.pdb'
-                    call write_matrix2pdb(el, atms_common(i,j)%different1, fname1)
-                    call write_matrix2pdb(el, atms_common(i,j)%different2, fname2)
-                endif
+                call read_pdb2matrix(trim(pdbfnames(i)), pdbmat1)
+                call read_pdb2matrix(trim(pdbfnames(j)), pdbmat2)
+                dist_stats = atm_rmsd_stats(pdbmat1, pdbmat2)
+                write(logfhandle,'(A)') '>>> DISTANCE STATS FOR COMMON ATOMS '//int2str(i)//' & '//int2str(j)
+                write(logfhandle,'(A,F8.4)') 'Average: ', dist_stats%avg
+                write(logfhandle,'(A,F8.4)') 'Median : ', dist_stats%med
+                write(logfhandle,'(A,F8.4)') 'Sigma  : ', dist_stats%sdev
+                write(logfhandle,'(A,F8.4)') 'Max    : ', dist_stats%maxv
+                write(logfhandle,'(A,F8.4)') 'Min    : ', dist_stats%minv
+                deallocate(pdbmat1, pdbmat2)
             end do
         end do
         ! end gracefully
-        call simple_end('**** SIMPLE_TSERIES_ATOMS_ANALYSIS NORMAL STOP ****')
-    end subroutine exec_tseries_atoms_analysis
+        call simple_end('**** SIMPLE_TSERIES_ATOMS_RMSD NORMAL STOP ****')
+    end subroutine exec_tseries_atoms_rmsd
 
     subroutine exec_tseries_core_atoms_analysis( self, cline )
         class(tseries_core_atoms_analysis_commander), intent(inout) :: self

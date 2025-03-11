@@ -11,7 +11,7 @@ implicit none
 
 public :: thres_detect_conv_atom_denoised, phasecorr_one_atom, fit_lattice, calc_contact_scores, run_cn_analysis, strain_analysis
 public :: read_pdb2matrix, write_matrix2pdb, find_couples
-public :: dists_btw_common, remove_atoms, find_atoms_subset, find_rMax, atoms_register, Kabsch_algo
+public :: dists_btw_common, remove_atoms, find_atoms_subset, find_rMax, atoms_register, Kabsch_algo, atm_rmsd_stats
 private
 #include "simple_local_flags.inc"
 
@@ -1244,6 +1244,34 @@ contains
         enddo
         deallocate(mask)
     end function dists_btw_common
+
+    function atm_rmsd_stats( atms1, atms2 ) result( dist_stats )
+        real, intent(in)     :: atms1(:,:), atms2(:,:)
+        real,    allocatable :: dists(:)
+        logical, allocatable :: mask(:)
+        type(stats_struct)   :: dist_stats
+        integer :: n1, n2, i, loc(1)
+        n1 = size(atms1, dim=2)
+        n2 = size(atms2, dim=2)
+        if( n1 <= n2 )then ! let #1 lead
+            allocate(dists(n1), source=0.)
+            allocate(mask(n2),  source=.true.)
+            do i = 1, n1
+                dists(i)     = pixels_dist(atms1(:,i),atms2(:,:),'min',mask,loc,keep_zero=.true.)
+                mask(loc(1)) = .false.
+            enddo
+            deallocate(mask)
+        else              ! let #2 lead
+            allocate(dists(n2), source=0.)
+            allocate(mask(n1),  source=.true.)
+            do i = 1, n2
+                dists(i)     = pixels_dist(atms2(:,i),atms1(:,:),'min',mask,loc,keep_zero=.true.)
+                mask(loc(1)) = .false.
+            enddo
+            deallocate(mask)
+        endif
+        call calc_stats(dists, dist_stats)
+    end function atm_rmsd_stats
 
     subroutine find_atoms_subset( atms2find, atms, mask_out, l_inv )
         real,              intent(in)    :: atms2find(:,:), atms(:,:)
