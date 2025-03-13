@@ -7,7 +7,7 @@ use simple_projector,  only: projector
 use simple_oris
 use simple_ori
 implicit none
-integer,          parameter   :: ORI_IND = 15, NPLANES = 100
+integer,          parameter   :: ORI_IND = 15, NPLANES = 100, MAX_R = 45, CENTER_RAD = 40
 character(len=:), allocatable :: cmd
 real,             allocatable :: pspec(:)
 type(parameters) :: p
@@ -16,8 +16,8 @@ type(image)      :: vol, noise, ptcl, ptcl_pad, roavg
 type(projector)  :: vol_pad
 type(oris)       :: spiral
 type(ori)        :: o1
-integer          :: rc, ifoo
-real             :: ave, sdev, maxv, minv, ori_masscen(3), sh(2)
+integer          :: rc, ifoo, iind
+real             :: ave, sdev, maxv, minv, masscen(3), sh(2)
 logical          :: mrc_exists
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)') 'ERROR! Usage: simple_test_ptcl_center smpd=xx nthr=yy vol1=volume.mrc mskdiam=zz'
@@ -68,25 +68,29 @@ call spiral%get_ori(ORI_IND, o1)
 call vol_pad%fproject(o1,ptcl_pad)
 call ptcl_pad%ifft
 ! add noise in a small center region of the vol
-call noise%gauran(0., 0.1 * sdev)
+call noise%gauran(0., 0.01 * sdev)
 call ptcl%zero_and_unflag_ft
 call ptcl_pad%clip(ptcl)
 call ptcl%add(noise)
-! call ptcl%remove_neg
-call ptcl%write('noisy_ptcl.mrc', 1)
+iind = 1
+call ptcl%write('noisy_ptcl.mrc', iind)
 allocate(pspec(ptcl%get_nyq()),source=0.)
-call ptcl%masscen(ori_masscen)
-print *, 'masscen (original) = ', ori_masscen
+call ptcl%masscen(masscen)
+print *, 'masscen (original) = ', masscen
+call ptcl%remove_neg
+call test_center(ptcl)
 call ptcl%fft
 call ptcl%power_spectrum(pspec)
 print *, 'power spectrum = ', pspec(1:5)
-call ptcl%shift2Dserial(ori_masscen(1:2))
+call ptcl%shift2Dserial(masscen(1:2))
 call ptcl%ifft
-call ptcl%write('noisy_ptcl.mrc', 2)
-call ptcl%masscen(ori_masscen)
-print *, 'masscen (after ori shifted) = ', ori_masscen
+iind = iind + 1
+call ptcl%write('noisy_ptcl.mrc', iind)
+call ptcl%masscen(masscen)
+print *, 'masscen (after ori shifted) = ', masscen
 call ptcl%roavg(10, roavg)
-call roavg%write('noisy_ptcl.mrc', 3)
+iind = iind + 1
+call roavg%write('noisy_ptcl.mrc', iind)
 call roavg%fft
 call roavg%power_spectrum(pspec)
 print *, '(roavg) power spectrum = ', sum(pspec)
@@ -94,16 +98,64 @@ sh = [10., -15.]
 call ptcl%fft
 call ptcl%shift2Dserial(sh)
 call ptcl%ifft
-call ptcl%write('noisy_ptcl.mrc', 4)
-call ptcl%masscen(ori_masscen)
+iind = iind + 1
+call ptcl%write('noisy_ptcl.mrc', iind)
+call ptcl%masscen(masscen)
 call ptcl%fft
 call ptcl%power_spectrum(pspec)
-print *, 'masscen (after fixed shifted) = ', ori_masscen
+print *, 'masscen (after fixed shifted) = ', masscen
 print *, 'power spectrum = ', pspec(1:5)
 call ptcl%ifft
+call ptcl%remove_neg
+call test_center(ptcl)
 call ptcl%roavg(10, roavg)
-call roavg%write('noisy_ptcl.mrc', 5)
+iind = iind + 1
+call roavg%write('noisy_ptcl.mrc', iind)
 call roavg%fft
 call roavg%power_spectrum(pspec)
 print *, '(roavg) power spectrum = ', sum(pspec)
+
+contains
+
+    subroutine test_center( img )
+        type(image), intent(in) :: img
+        type(image)   :: win_img, win_avg
+        real, pointer :: rmat_ptr(:,:,:)
+        integer       :: origin, center(2), i, ic, jc, cnt, cens(2,(CENTER_RAD+1)**2), img_ind
+        real(dp)      :: up(MAX_R, (CENTER_RAD+1)**2), max_E, lip((CENTER_RAD+1)**2), zp(MAX_R, (CENTER_RAD+1)**2)
+        logical       :: outside
+        origin  = p%box/2
+        cnt     = 0
+        img_ind = 0
+        call win_img%new([MAX_R*2, MAX_R*2, 1], 1.)
+        print *, origin-CENTER_RAD/2, origin+CENTER_RAD/2
+        do ic = origin-CENTER_RAD/2, origin+CENTER_RAD/2
+            do jc = origin-CENTER_RAD/2, origin+CENTER_RAD/2
+                cnt         = cnt + 1
+                center      = [ic, jc]
+                cens(:,cnt) = center
+                call img%window_center(center, MAX_R, win_img, outside)
+                if( outside ) print *, 'Window outside the image boundary'
+                call win_img%roavg(10, win_avg)
+                call win_avg%get_rmat_ptr(rmat_ptr)
+                do i = 1, MAX_R
+                    zp(i,cnt) = sum(rmat_ptr(MAX_R+1:MAX_R+i, MAX_R+1, 1))
+                enddo
+                do i = 1, MAX_R
+                    up(i,cnt) = sum(zp(1:i,cnt))
+                enddo
+                call win_avg%kill
+                if( cnt == 1 .or. cnt == 21 )then
+                    img_ind = img_ind + 1
+                    call win_img%write('window_imgs.mrc', img_ind)
+                endif
+            enddo
+        enddo
+        max_E = maxval(up(MAX_R,:))
+        do i = 1, cnt
+            lip(i) = sum(dabs(up(:,i)/max_E - 1._dp))
+        enddo
+        print *, 'center = ', cens(:,minloc(lip))
+    end subroutine test_center
+
 end program simple_test_ptcl_center

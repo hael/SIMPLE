@@ -53,6 +53,7 @@ contains
     procedure          :: scale_pspec4viz
     procedure          :: window
     procedure          :: window_slim
+    procedure          :: window_center
     procedure          :: add_window
     procedure          :: win2arr
     procedure          :: win2arr_rad
@@ -961,6 +962,24 @@ contains
             endif
         endif
     end subroutine window_slim
+
+    subroutine window_center( self_in, center, rad, self_out, outside )
+        class(image), intent(in)    :: self_in
+        integer,      intent(in)    :: center(:), rad
+        class(image), intent(inout) :: self_out
+        logical,      intent(out)   :: outside
+        integer :: coord(3), box
+        box = rad*2
+        if( self_in%is_3d() )then
+            coord = center - rad
+            if( any(coord < 1) )      THROW_HARD('Error! window is out of the image')
+            call window_slim(self_in, coord, box, self_out, outside)
+        else
+            coord(1:2) = center - rad
+            if( any(coord(1:2) < 1) ) THROW_HARD('Error! window is out of the image')
+            call window_slim(self_in, coord(1:2), box, self_out, outside)
+        endif
+    end subroutine window_center
 
     ! for re-generation of micrograph after convolutional PPCA
     subroutine add_window( self, imgwin, coord, offset )
@@ -8276,12 +8295,12 @@ contains
         integer,           intent(in)    :: angstep
         class(image),      intent(inout) :: avg
         integer, optional, intent(in)    :: ang_stop
-        real    :: avgs_rmat(nthr_glob,self%ldim(1),self%ldim(2),1)
+        real(dp):: avgs_rmat(nthr_glob,self%ldim(1),self%ldim(2),1)
         real    :: rotated(nthr_glob,self%ldim(1),self%ldim(2),1)
         integer :: irot, ithr, aang_stop
         aang_stop = 359
         if( present(ang_stop) ) aang_stop = ang_stop
-        avgs_rmat = 0.
+        avgs_rmat = 0._dp
         rotated   = 0.
         !$omp parallel do schedule(static) default(shared) private(irot,ithr) proc_bind(close)
         do irot = 0 + angstep,aang_stop,angstep
@@ -8289,16 +8308,14 @@ contains
             ithr = omp_get_thread_num() + 1
             ! rotate & sum
             call self%rtsq_serial(real(irot), 0., 0., rotated(ithr,:,:,:))
-            avgs_rmat(ithr,:,:,:) = avgs_rmat(ithr,:,:,:) + rotated(ithr,:,:,:)
+            avgs_rmat(ithr,:,:,:) = avgs_rmat(ithr,:,:,:) + real(rotated(ithr,:,:,:), dp)
         end do
         !$omp end parallel do
         ! add in the zero rotation
         avgs_rmat(1,:,:,:) = avgs_rmat(1,:,:,:) + self%rmat(:self%ldim(1),:self%ldim(2),:)
-        ! set output image object
+        ! normalize and set output image object
         call avg%new(self%ldim, self%smpd)
-        call avg%set_rmat(sum(avgs_rmat, dim=1),.false.)
-        ! normalise
-        call avg%div(real(360/angstep))
+        call avg%set_rmat(real(sum(avgs_rmat, dim=1)/real(360/angstep,dp)),.false.)
     end subroutine roavg
 
     !> \brief rtsq  rotation of image by quadratic interpolation (from spider)
