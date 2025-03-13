@@ -232,7 +232,7 @@ contains
                                 allocate(strategy2D_greedy        :: strategy2Dsrch(iptcl_batch)%ptr)
                             case('greedy_smpl')
                                 allocate(strategy2D_greedy_smpl   :: strategy2Dsrch(iptcl_batch)%ptr)
-                            case('snhc_smpl','snhc_smpl2')
+                            case('snhc_smpl')
                                 allocate(strategy2D_snhc_smpl     :: strategy2Dsrch(iptcl_batch)%ptr)
                             case DEFAULT ! is refine=snhc
                                 allocate(strategy2D_snhc          :: strategy2Dsrch(iptcl_batch)%ptr)
@@ -264,7 +264,7 @@ contains
                         else
                             ! iteration>1 & refine/=*greedy*
                             select case(trim(refine_flag))
-                                case('snhc_smpl','snhc_smpl2')
+                                case('snhc_smpl')
                                     allocate(strategy2D_snhc_smpl   :: strategy2Dsrch(iptcl_batch)%ptr)
                                 case DEFAULT ! is refine=snhc
                                     allocate(strategy2D_snhc        :: strategy2Dsrch(iptcl_batch)%ptr)
