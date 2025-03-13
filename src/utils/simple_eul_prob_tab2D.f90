@@ -520,7 +520,6 @@ contains
         if( rank_ptcls ) call self%select_top_ptcls(pops)
     end subroutine assign_smpl_shc
 
-
     ! Same assignment as 3D (cf eul_prob_tab)
     subroutine assign_prob( self, os, rank_ptcls )
         class(eul_prob_tab2D), intent(inout) :: self

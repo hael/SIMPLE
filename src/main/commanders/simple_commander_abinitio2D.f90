@@ -282,7 +282,7 @@ contains
             integer :: iphase, iter, imaxits, cc_iters, minits, extr_iter
             real    :: trs, lambda, frac
             select case(trim(params%refine))
-            case('snhc','snhc_smpl','snhc_smpl2')
+            case('snhc','snhc_smpl')
                 ! usual suspects
                 refine = trim(params%refine)
             case('prob','prob_smpl','prob_smpl_shc','prob_greedy')

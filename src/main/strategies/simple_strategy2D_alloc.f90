@@ -90,7 +90,7 @@ contains
         if( (trim(params_glob%stream)=='yes') )then
             s2D%power = EXTR_POWER
         else
-            if( (trim(params_glob%refine)=='snhc_smpl2') .and. (params_glob%extr_iter>params_glob%extr_lim) )then
+            if( (trim(params_glob%refine)=='snhc_smpl') .and. (params_glob%extr_iter>params_glob%extr_lim) )then
                 s2D%power = POST_EXTR_POWER
             endif
         endif

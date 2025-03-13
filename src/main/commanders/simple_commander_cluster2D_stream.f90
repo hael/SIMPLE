@@ -288,7 +288,7 @@ contains
         end select
         ! refinement
         select case(trim(params_glob%refine))
-        case('snhc','snhc_smpl','snhc_smpl2')
+        case('snhc','snhc_smpl')
             call cline_cluster2D_chunk%set('refine', params_glob%refine)
             call cline_cluster2D_pool%set( 'refine', params_glob%refine)
         case DEFAULT
