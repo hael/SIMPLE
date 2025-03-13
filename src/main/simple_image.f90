@@ -8312,7 +8312,7 @@ contains
         end do
         !$omp end parallel do
         ! add in the zero rotation
-        avgs_rmat(1,:,:,:) = avgs_rmat(1,:,:,:) + self%rmat(:self%ldim(1),:self%ldim(2),:)
+        avgs_rmat(1,:,:,:) = avgs_rmat(1,:,:,:) + real(self%rmat(:self%ldim(1),:self%ldim(2),:), dp)
         ! normalize and set output image object
         call avg%new(self%ldim, self%smpd)
         call avg%set_rmat(real(sum(avgs_rmat, dim=1)/real(360/angstep,dp)),.false.)
