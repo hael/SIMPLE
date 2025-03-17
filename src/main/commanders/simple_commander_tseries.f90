@@ -649,7 +649,11 @@ contains
         cline_copy = cline
         ! centering
         call cline%delete('nptcls_per_cls')
-        call cline%set('center', 'yes')
+        if( cline%defined('center') .and. trim(params%center).eq.'yes' )then
+            call cline%set('center', 'yes')
+        else
+            call cline%set('center', 'no')
+        endif
         call xcenter2D%execute(cline)
         ! prep for diameter estimation
         call spproj%read(trim(params%projfile))
@@ -700,6 +704,7 @@ contains
         character(len=LONGSTRLEN)        :: finalcavgs
         integer :: last_iter_stage2, nptcls
         call cline%set('dir_exec', 'center2D_nano')
+        if( .not. cline%defined('center') ) call cline%set('center', 'no')
         ! master parameters
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
