@@ -237,6 +237,7 @@ contains
                 enddo
             endif
             ! Does not seem to work with 1M+ particles
+            ! probably because update_frac was set automatically and too low
             ! if( trim(params%autosample).eq.'yes' )then
             !     startpop = MAXPOP_START
             !     stoppop  = MAXPOP_STOP
@@ -246,15 +247,6 @@ contains
             !     do i = 1,NSTAGES
             !         stage_parms(i)%max_cls_pop = startpop + nint(real((i-1)*(stoppop-startpop)) / real(NSTAGES-1))
             !         stage_parms(i)%nptcls      = min(nptcls_eff, startpop*i*params%ncls)
-            !     enddo
-            ! endif
-            ! Does not seem to work with 1M+ particles either
-            ! if( trim(params%autosample).eq.'yes' )then
-            !     stoppop = 2500
-            !     if( cline%defined('nsample') ) stoppop = params%nsample
-            !     do i = 1,NSTAGES
-            !         stage_parms(i)%max_cls_pop = stoppop
-            !         stage_parms(i)%nptcls      = min(nptcls_eff, stoppop*params%ncls)
             !     enddo
             ! endif
         end subroutine set_sampling
