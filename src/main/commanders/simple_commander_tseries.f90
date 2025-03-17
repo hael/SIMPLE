@@ -39,6 +39,7 @@ public :: cavgsproc_nano_commander
 public :: cavgseoproc_nano_commander
 public :: ptclsproc_nano_commander
 public :: graphene_subtr_commander
+public :: denoise_trajectory_commander
 public :: tseries_swap_stack_commander
 public :: tseries_reconstruct3D_distr
 public :: tseries_core_finder_commander
@@ -145,6 +146,11 @@ type, extends(commander_base) :: graphene_subtr_commander
   contains
     procedure :: execute      => exec_graphene_subtr
 end type graphene_subtr_commander
+
+type, extends(commander_base) :: denoise_trajectory_commander
+  contains
+    procedure :: execute      => exec_denoise_trajectory
+end type denoise_trajectory_commander
 
 type, extends(commander_base) :: tseries_swap_stack_commander
   contains
@@ -1585,6 +1591,16 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_GRAPHENE_SUBTR NORMAL STOP ****')
     end subroutine exec_graphene_subtr
+
+    subroutine exec_denoise_trajectory( self, cline )
+        use simple_commander_imgproc, only: ppca_denoise_commander
+        class(denoise_trajectory_commander), intent(inout) :: self
+        class(cmdline),                      intent(inout) :: cline
+        type(ppca_denoise_commander) :: xkpca_den
+        if( .not. cline%defined('neigs')    ) call cline%set('neigs', 500)
+        if( .not. cline%defined('pca_mode') ) call cline%set('pca_mode', 'kpca')
+        call xkpca_den%execute(cline)
+    end subroutine exec_denoise_trajectory
 
     subroutine exec_tseries_swap_stack( self, cline )
         use simple_commander_project

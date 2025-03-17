@@ -109,6 +109,7 @@ type(simple_program), target :: ctf_estimate
 type(simple_program), target :: ctfops
 type(simple_program), target :: ctf_phaseflip
 type(simple_program), target :: denoise_cavgs
+type(simple_program), target :: denoise_trajectory
 type(simple_program), target :: detect_atoms
 type(simple_program), target :: dock_volpair
 type(simple_program), target :: estimate_lpstages
@@ -425,6 +426,7 @@ contains
         call new_ctf_phaseflip
         call new_pdb2mrc
         call new_denoise_cavgs
+        call new_denoise_trajectory
         call new_detect_atoms
         call new_dock_volpair
         call new_estimate_lpstages
@@ -565,6 +567,7 @@ contains
         call push2prg_ptr_array(ctf_phaseflip)
         call push2prg_ptr_array(pdb2mrc)
         call push2prg_ptr_array(denoise_cavgs)
+        call push2prg_ptr_array(denoise_trajectory)
         call push2prg_ptr_array(detect_atoms)
         call push2prg_ptr_array(dock_volpair)
         call push2prg_ptr_array(extract)
@@ -750,6 +753,8 @@ contains
                 ptr2prg => pdb2mrc
             case('denoise_cavgs')
                 ptr2prg => denoise_cavgs
+            case('denoise_trajectory')
+                ptr2prg => denoise_trajectory
             case('detect_atoms')
                 ptr2prg => detect_atoms
             case('dock_volpair')
@@ -1086,6 +1091,7 @@ contains
         write(logfhandle,'(A)') tseries_motion_correct%name
         write(logfhandle,'(A)') tseries_track_particles%name
         write(logfhandle,'(A)') graphene_subtr%name
+        write(logfhandle,'(A)') denoise_trajectory%name
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') format_str('PARTICLE 3D RECONSTRUCTION PROGRAMS:', C_UNDERLINED)
         write(logfhandle,'(A)') analysis2D_nano%name
@@ -2377,6 +2383,32 @@ contains
         ! computer controls
         call denoise_cavgs%set_input('comp_ctrls', 1, nthr)
     end subroutine new_denoise_cavgs
+
+    subroutine new_denoise_trajectory
+        ! PROGRAM SPECIFICATION
+        call denoise_trajectory%new(&
+        &'denoise_trajectory',&                        ! name
+        &'kPCA-based denoising',&                     ! descr_short
+        &'is a program for kPCA-based denoising of an image stack',&  ! descr_long
+        &'single_exec',&                              ! executable
+        &2, 1, 0, 0, 1, 0, 1, .false.)                ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call denoise_trajectory%set_input('img_ios', 1, 'stk',  'file', 'Stack to denoise',  'Stack of images to denoise', 'e.g. stk.mrcs', .true., '')
+        call denoise_trajectory%set_input('img_ios', 2, outstk)
+        ! parameter input/output
+        call denoise_trajectory%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call denoise_trajectory%set_input('filt_ctrls', 1, 'neigs', 'num', 'Number of eigencomponents, corresponding to the number of classes in the stack', 'Number of eigencomponents, corresponding to the number of classes in the stack', '# eigenvecs', .false., 500.0)
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call denoise_trajectory%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_denoise_trajectory
 
     subroutine new_detect_atoms
         ! PROGRAM SPECIFICATION
@@ -3894,7 +3926,7 @@ contains
     subroutine new_ppca_denoise
         ! PROGRAM SPECIFICATION
         call ppca_denoise%new(&
-        &'ppca_denoise',&                             ! name
+        &'ppca-based denoising',&                             ! name
         &'Filter stack/volume',&                      ! descr_short
         &'is a program for ppca-based denoising of an image stack',&  ! descr_long
         &'simple_exec',&                              ! executable
