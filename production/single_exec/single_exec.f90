@@ -30,6 +30,7 @@ type(tseries_make_pickavg_commander)          :: xtseries_make_pickavg
 type(tseries_motion_correct_commander_distr)  :: xmcorr
 type(tseries_track_particles_commander_distr) :: xtrack
 type(graphene_subtr_commander)                :: xgraphene_subtr
+type(denoise_trajectory_commander)            :: xden_traj
 
 ! PARTICLE 3D RECONSTRUCTION PROGRAMS
 type(analysis2D_nano_commander)               :: xanalysis2D_nano
@@ -122,6 +123,9 @@ select case(prg)
     case( 'graphene_subtr' )
         call cline%set('mkdir', 'no')
         call xgraphene_subtr%execute( cline )
+    case( 'denoise_trajectory' )
+        call cline%set('mkdir', 'no')
+        call xden_traj%execute( cline )
 
     ! PARTICLE 3D RECONSTRUCTION PROGRAMS
     case( 'analysis2D_nano' )
@@ -202,7 +206,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('666e83dd')
+call simple_print_git_version('59d00b0c')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
