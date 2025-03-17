@@ -1636,7 +1636,8 @@ contains
         integer,               allocatable :: parts(:,:)
         character(len=:),      allocatable :: recname
         character(len=LONGSTRLEN)     :: fname
-        character(len=STDLEN)         :: volassemble_output, str_state
+        character(len=STDLEN)         :: volassemble_output, str_state, recname_even, res_fname
+        character(len=STDLEN)         :: recname_odd, vol_fname_even, vol_fname_odd
         type(reconstruct3D_commander) :: xrec3D_shmem
         type(volassemble_commander)   :: xvolassemble
         type(parameters)              :: params
@@ -1674,13 +1675,18 @@ contains
         endif
         parts = split_nobjs_even(nptcls, nparts)
         allocate(vol_fnames(nparts), rad_cc(params%box/2), rad_dists(params%box/2))
-        recname = trim(VOL_FBODY)//int2str_pad(1,2)//trim(params%ext)
-        fname = 'lifetimes.csv'
+        recname      = trim(VOL_FBODY)//int2str_pad(1,2)//trim(params%ext)
+        recname_even = trim(VOL_FBODY)//int2str_pad(1,2)//'_even'//trim(params%ext)
+        recname_odd  = trim(VOL_FBODY)//int2str_pad(1,2)//'_odd'//trim(params%ext)
+        fname        = 'lifetimes.csv'
         call fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=iostat)
         write(funit,*) 'PARTITION, ', 'FRAME_START, ', 'FRAME_END, ', 'LIFETIME'
         do ipart = 1,nparts
             str_state         = int2str_pad(ipart,2)
             vol_fnames(ipart) = 'partvol'//trim(str_state)//trim(params%ext)
+            vol_fname_even    = 'partvol'//trim(str_state)//'_even'//trim(params%ext)
+            vol_fname_odd     = 'partvol'//trim(str_state)//'_odd'//trim(params%ext)
+            res_fname         = 'RESOLUTION_STATE'//trim(str_state)
             ! prep 3D rec command line
             cline_rec = cline
             call cline_rec%delete('nparts') ! shared-memory implementation
@@ -1693,10 +1699,18 @@ contains
             call cline_rec%set('mkdir', 'no')
             ! rec
             call xrec3D_shmem%execute(cline_rec)
-            ! rename volume
-            call simple_rename(recname, trim(vol_fnames(ipart)))
+            ! rename volumes and resolution files
+            call simple_rename(recname,               trim(vol_fnames(ipart)))
+            call simple_rename(recname_even,          trim(vol_fname_even))
+            call simple_rename(recname_odd,           trim(vol_fname_odd))
+            if( ipart == 1 )then
+                call simple_rename('RESOLUTION_STATE01',  'RESOLUTION_FILE_FIRST')
+            else
+                call simple_rename('RESOLUTION_STATE01',  trim(res_fname))
+            endif
         end do
         call fclose(funit)
+        call simple_rename('RESOLUTION_FILE_FIRST', 'RESOLUTION_STATE01')
         ! Calculate correlation matrices
         nlps   = size(LP_LIST)
         hp_ind = calc_fourier_index(HP_LIM, params%box, params_glob%smpd)
