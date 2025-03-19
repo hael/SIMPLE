@@ -1793,7 +1793,7 @@ contains
         integer           :: ivol, nvols, ldim(3), ifoo, loc(1), best_msk, mskfromto(2)
         real, allocatable :: msk_in_pix(:)
         type(masker)      :: mskvol
-        type(image)       :: vol, vol_ref, mskimg, mskimg2, vol_sum, vol_w
+        type(image)       :: vol, vol_ref, mskimg, mskimg2, mskimg2inv, vol_sum, vol_sum2, vol_w
         character(len=LONGSTRLEN), allocatable :: volnames(:)
         call params%new(cline)
         call read_filetable(params%filetab, volnames)
@@ -1837,6 +1837,23 @@ contains
         enddo
         call vol_sum%div(vol_w)
         call vol_sum%write('radial_average_vol_'// int2str_pad(loc(1),2)//'.mrc')
+        ! now do the reverse
+        call vol_sum2%new(ldim, params%smpd)
+        do ivol = 1,nvols
+            vol_ref = vol_sum
+            call vol%zero_and_unflag_ft
+            call vol%read(volnames(ivol))
+            call estimate_spher_mask(vol_ref, vol, mskimg, mskfromto, best_msk)
+            call mskimg2%disc(ldim, params%smpd, real(best_msk))
+            call mskimg2inv%copy(mskimg2)
+            call mskimg2inv%bin_inv
+            call vol_ref%mul(mskimg2)
+            call vol%mul(mskimg2inv)
+            call vol_sum2%zero_and_unflag_ft
+            call vol_sum2%add(vol)
+            call vol_sum2%add(vol_ref)
+            call vol_sum2%write('core_inserted_vol_'// int2str_pad(ivol,2)//'.mrc')
+        end do
     end subroutine exec_tseries_core_finder
 
     subroutine exec_tseries_make_projavgs( self, cline )
