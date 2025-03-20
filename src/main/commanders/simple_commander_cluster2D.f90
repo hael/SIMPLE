@@ -2239,7 +2239,7 @@ contains
         character(len=:), allocatable :: label, fname, fname_denoised, fname_cavgs, fname_cavgs_denoised, fname_oris, fname_ori_ptcls
         integer,          allocatable :: cls_inds(:), pinds(:), cls_pops(:), ori_map(:)
         real,             allocatable :: avg(:), avg_pix(:), pcavecs(:,:), tmpvec(:)
-        real    :: std, shift(2), loc(2), dist(2), e3, kw, mat(2,2), mat_inv(2,2)
+        real    :: shift(2), loc(2), dist(2), e3, kw, mat(2,2), mat_inv(2,2)
         complex :: fcompl, fcompll
         integer :: npix, i, j, ncls, nptcls, cnt1, cnt2, neigs, h, k, win_corner(2),&
                   &l, ll, m, mm, phys(2), logi_lims(3,2), cyc_lims(3,2), cyc_limsR(2,2), errflg
@@ -2381,11 +2381,6 @@ contains
             if( trim(params%projstats).eq.'yes' )then
                 call cavg%unserialize(avg_pix)
                 call cavg%write('cavgs_unserialized.mrcs', i)
-                !$omp parallel do private(j,std) default(shared) proc_bind(close) schedule(static)
-                do j = 1,nptcls
-                    std = sqrt(sum((pcavecs(:,j)-avg_pix)**2) / real(npix))
-                enddo
-                !$omp end parallel do
             endif
             ! output
             call cavg%zero_and_unflag_ft
