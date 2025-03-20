@@ -69,6 +69,7 @@ type :: parameters
     character(len=3)          :: ml_reg_pool='no'     !< apply ML regularization to class averages or volume in pool
     character(len=3)          :: needs_sigma='no'     !<
     character(len=3)          :: neg='no'             !< invert contrast of images(yes|no){no}
+    character(len=3)          :: neigs_per='no'       !< using neigs as percentage of the total dimension(yes|no){no}
     character(len=3)          :: noise_norm ='no'
     character(len=3)          :: norm='no'            !< do statistical normalisation avg
     character(len=3)          :: nonuniform='no'      !< nonuniform filtering(yes|no){no}
@@ -627,6 +628,7 @@ contains
         call check_carg('multivol_mode',  self%multivol_mode)
         call check_carg('needs_sigma',    self%needs_sigma)
         call check_carg('neg',            self%neg)
+        call check_carg('neigs_per',      self%neigs_per)
         call check_carg('noise_norm',     self%noise_norm)
         call check_carg('norm',           self%norm)
         call check_carg('nonuniform',     self%nonuniform)
