@@ -10,7 +10,7 @@ use simple_qsys_env,           only: qsys_env
 use simple_starproject_stream, only: starproject_stream
 use simple_guistats,           only: guistats
 use simple_moviewatcher,       only: moviewatcher
-use simple_stream_utils,       only: projrecord
+use simple_stream_utils
 use simple_commander_cluster2D_stream
 use simple_qsys_funs
 use simple_commander_preprocess
@@ -23,6 +23,7 @@ public :: commander_stream_gen_picking_refs
 public :: commander_stream_pick_extract
 public :: commander_stream_assign_optics
 public :: commander_stream_cluster2D
+public :: commander_stream_abinitio3D
 
 private
 #include "simple_local_flags.inc"
@@ -52,14 +53,19 @@ type, extends(commander_base) :: commander_stream_cluster2D
     procedure :: execute => exec_stream_cluster2D
 end type commander_stream_cluster2D
 
+type, extends(commander_base) :: commander_stream_abinitio3D
+  contains
+    procedure :: execute => exec_stream_abinitio3D
+end type commander_stream_abinitio3D
+
 ! module constants
 character(len=STDLEN), parameter :: DIR_STREAM           = trim(PATH_HERE)//'spprojs/'           ! location for projects to be processed
 character(len=STDLEN), parameter :: DIR_STREAM_COMPLETED = trim(PATH_HERE)//'spprojs_completed/' ! location for projects processed
-character(len=STDLEN), parameter :: USER_PARAMS     = 'stream_user_params.txt'                   
-integer,               parameter :: NMOVS_SET       = 5                                          ! number of movies processed at once (>1)
-integer,               parameter :: LONGTIME        = 60                                         ! time lag after which a movie/project is processed
-integer,               parameter :: WAITTIME        = 10                                         ! movie folder watched every WAITTIME seconds
-integer,               parameter :: SHORTWAIT       = 2                                          ! movie folder watched every SHORTTIME seconds in shmem
+character(len=STDLEN), parameter :: USER_PARAMS          = 'stream_user_params.txt'
+integer,               parameter :: NMOVS_SET = 5                                                ! number of movies processed at once (>1)
+integer,               parameter :: LONGTIME  = 60                                               ! time lag after which a movie/project is processed
+integer,               parameter :: WAITTIME  = 10                                               ! movie folder watched every WAITTIME seconds
+integer,               parameter :: SHORTWAIT = 2                                                ! movie folder watched every SHORTTIME seconds in shmem
 
 contains
 
@@ -229,9 +235,9 @@ contains
         call cline_exec%set('fromp',1)
         call cline_exec%set('top',  NMOVS_SET)
         do
-            if( file_exists(trim(TERM_STREAM)) )then
+            if( file_exists(TERM_STREAM) )then
                 ! termination
-                write(logfhandle,'(A)')'>>> TERMINATING PREPROCESS STREAM'
+                write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
                 exit
             endif
             iter = iter + 1
@@ -813,7 +819,7 @@ contains
                     call gui_stats%set('particles', 'total_extracted_particles', nptcls_glob, primary=.true.)
                     if(spproj_glob%os_mic%isthere('intg') .and. spproj_glob%os_mic%isthere('boxfile')) then
                         latest_boxfile = trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'boxfile'))
-                        if(file_exists(trim(latest_boxfile))) call gui_stats%set('latest', '', trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'intg')), thumbnail=.true., boxfile=trim(latest_boxfile))
+                        if(file_exists(latest_boxfile)) call gui_stats%set('latest', '', trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'intg')), thumbnail=.true., boxfile=trim(latest_boxfile))
                     end if
                 endif
             endif
@@ -862,9 +868,9 @@ contains
         l_once                = .true.
         pause_import          = .false.
         do
-            if( file_exists(trim(TERM_STREAM)) )then
+            if( file_exists(TERM_STREAM) )then
                 ! termination
-                write(logfhandle,'(A)')'>>> TERMINATING STREAM PICK_EXTRACT'
+                write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
                 exit
             endif
             iter = iter + 1
@@ -998,7 +1004,7 @@ contains
                 if(.not. l_multipick) call gui_stats%set('particles', 'total_extracted_particles', int2commastr(nptcls_glob), primary=.true.)
                 if(spproj_glob%os_mic%isthere('intg') .and. spproj_glob%os_mic%isthere('boxfile')) then
                     latest_boxfile = trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'boxfile'))
-                    if(file_exists(trim(latest_boxfile))) call gui_stats%set('latest', '', trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'intg')), thumbnail=.true., boxfile=trim(latest_boxfile))
+                    if(file_exists(latest_boxfile)) call gui_stats%set('latest', '', trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'intg')), thumbnail=.true., boxfile=trim(latest_boxfile))
                 end if
                 ! update progress monitor
                 call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
@@ -1172,7 +1178,7 @@ contains
                     fname = filepath(odir, completed_jobs_clines(iproj)%get_carg('projfile'))
                     call tmpproj%read_segment('projinfo', fname)
                     if(l_multipick_refine .and. tmpproj%projinfo%isthere("init") .and. tmpproj%projinfo%get(1, "init") .eq. 1.0) then
-                        if(file_exists(trim(fname))) call del_file(trim(fname))
+                        if(file_exists(fname)) call del_file(trim(fname))
                         call spprojs(iproj)%os_mic%new(0, .false.)
                     else
                         call spprojs(iproj)%read_segment('mic', fname)
@@ -1597,9 +1603,9 @@ contains
         l_haschanged          = .false.
         l_once                = .true.
         do
-            if( file_exists(trim(TERM_STREAM)) .or. file_exists(STREAM_REJECT_CLS))then
+            if( file_exists(TERM_STREAM) .or. file_exists(STREAM_REJECT_CLS))then
                 ! termination
-                write(logfhandle,'(A)')'>>> TERMINATING STREAM GEN_PICKING_REFERENCES'
+                write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
                 exit
             endif
             iter = iter + 1
@@ -2024,9 +2030,9 @@ contains
         ! Infinite loop
         nimported = 0
         do
-            if( file_exists(trim(TERM_STREAM)) )then
+            if( file_exists(TERM_STREAM) )then
                 ! termination
-                write(logfhandle,'(A)')'>>> TERMINATING STREAM ASSIGN OPTICS'
+                write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
                 exit
             endif
             ! detection of new projects
@@ -2201,9 +2207,9 @@ contains
         ! Joe: nparts is not an input, also see project_buff below
         call gui_stats%set('compute',   'compute_in_use',      int2str(0) // '/' // int2str(params%nparts), primary=.true.)
         do
-            if( file_exists(trim(TERM_STREAM)) )then
+            if( file_exists(TERM_STREAM) )then
                 ! termination
-                write(logfhandle,'(A)')'>>> TERMINATING PREPROCESS STREAM'
+                write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
                 exit
             endif
             iter = iter + 1
@@ -2292,6 +2298,8 @@ contains
                     call classify_pool
                 endif
                 call classify_new_chunks(projrecords)
+                ! Optionally generates snapshot project for abinitio3D
+                call generate_snapshot_for_abinitio
             endif
             call sleep(WAITTIME)
             ! guistats
@@ -2408,6 +2416,96 @@ contains
             end subroutine update_records_with_project
 
     end subroutine exec_stream_cluster2D
+
+    subroutine exec_stream_abinitio3D( self, cline )
+        use simple_commander_abinitio3D_stream
+        class(commander_stream_abinitio3D), intent(inout) :: self
+        class(cmdline),                     intent(inout) :: cline
+        type(parameters)                       :: params
+        type(sp_project)                       :: spproj_glob
+        type(moviewatcher)                     :: project_buff
+        character(len=LONGSTRLEN), allocatable :: projects(:)
+        integer                                :: nprojects, iter, i
+        integer                                :: ncompleted
+        call cline%set('oritype',      'mic')
+        call cline%set('mkdir',        'yes')
+        call cline%set('objfun',    'euclid')   ! use noise normalized Euclidean distances from the start
+        call cline%set('sigma_est', 'global')   ! obviously
+        call cline%set('bfac',            0.)   ! because initial models should not be sharpened
+        if( .not. cline%defined('overlap')     ) call cline%set('overlap',        0.95)
+        if( .not. cline%defined('prob_athres') ) call cline%set('prob_athres',     10.)
+        if( .not. cline%defined('center')      ) call cline%set('center',         'no')
+        if( .not. cline%defined('pgrp')        ) call cline%set('pgrp',           'c1')
+        if( .not. cline%defined('pgrp_start')  ) call cline%set('pgrp_start',     'c1')
+        if( .not. cline%defined('ptclw')       ) call cline%set('ptclw',          'no')
+        if( .not. cline%defined('projrec')     ) call cline%set('projrec',       'yes')
+        if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'yes')
+        if( .not. cline%defined('walltime')    ) call cline%set('walltime',      29*60) ! 29 minutes
+        if( .not. cline%defined('nptcls')      ) call cline%set('nptcls',       100000)  ! is default for now, will be updated
+        ! write cmdline for GUI
+        call cline%writeline(".cline")
+        ! sanity check for restart
+        if( cline%defined('dir_exec') )then
+            if( .not.file_exists(cline%get_carg('dir_exec')) )then
+                THROW_HARD('Previous directory does not exists: '//trim(cline%get_carg('dir_exec')))
+            endif
+        endif
+        ! master parameters
+        call cline%set('numlen', 5)
+        call cline%set('stream','yes')
+        call params%new(cline)
+        call cline%set('mkdir', 'no')
+        ! restart
+        if( cline%defined('dir_exec') )then
+            call cline%delete('dir_exec')
+            ! TODO CLEANUP HERE
+        endif
+        ! initialise progress monitor
+        call progressfile_init()
+        ! master project file
+        call spproj_glob%read( params%projfile )
+        call spproj_glob%update_projinfo(cline)
+        if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream_cluster2D must start from an empty project (eg from root project folder)')
+        ! movie watcher init
+        project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_SNAPSHOT), spproj=.true.)
+        ! Ask 2D process for snapshot
+        call request_snapshot(params%nptcls)
+        ! Infinite loop
+        do
+            iter = iter + 1 ! necessary?
+            ! termination
+            if( file_exists(TERM_STREAM) )then
+                write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
+                exit
+            endif
+            ! pause
+            do while( file_exists(PAUSE_STREAM) )
+                call sleep(WAITTIME)
+            enddo
+            ! detection of new projects
+            call project_buff%watch(nprojects, projects, max_nmovies=10)
+            if( nprojects > 0 ) call project_buff%add2history(projects)
+            ! submit all detected projects
+            if( nprojects > 0 )then
+                do i = 1,nprojects
+                    call submit_one_process(cline, projects(i))
+                enddo
+            endif
+            ! current runs complete?
+            call check_processes(ncompleted)
+            if( ncompleted > 0 )then
+                ! one job completed = one job submitted
+                do i = 1,ncompleted
+                    call request_snapshot(params%nptcls)
+                enddo
+                ! TODO: Perform some analysis
+            endif
+            ! global wait
+            call sleep(WAITTIME)
+        end do
+        ! end gracefully
+        call simple_end('**** SIMPLE_STREAM_ABINITIO3D NORMAL STOP ****')
+    end subroutine exec_stream_abinitio3D
 
     ! PRIVATE UTILITIES
 

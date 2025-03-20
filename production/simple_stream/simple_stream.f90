@@ -15,6 +15,7 @@ type(commander_stream_pick_extract)         :: xpick_extract
 type(commander_stream_gen_picking_refs)     :: xgen_picking_refs
 type(commander_stream_assign_optics)        :: xassign_optics
 type(commander_stream_cluster2D)            :: xcluster2D_stream
+type(commander_stream_abinitio3D)           :: xabinitio3D_stream
 
 ! OTHER DECLARATIONS
 character(len=STDLEN)                       :: xarg, prg, entire_line
@@ -53,6 +54,8 @@ select case(trim(prg))
         call xassign_optics%execute(cline)
     case( 'cluster2D_stream' )
         call xcluster2D_stream%execute(cline)
+    case( 'abinitio3D_stream' )
+        call xabinitio3D_stream%execute(cline)
     case DEFAULT
         THROW_HARD('prg='//trim(prg)//' is unsupported')
 end select
@@ -61,7 +64,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('86124caa')
+call simple_print_git_version('17420d99')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

@@ -91,6 +91,8 @@ contains
     procedure          :: ptr2oritype
     procedure          :: is_virgin_field
     procedure          :: get_mic2stk_inds
+    ! setters
+    procedure          :: copy
     ! modifiers
     procedure          :: split_stk
     procedure          :: write_substk
@@ -2570,6 +2572,24 @@ contains
             endif
         enddo
     end subroutine get_mic2stk_inds
+
+    ! setters
+
+    subroutine copy( self_out, self_in)
+        class(sp_project), target, intent(inout) :: self_out
+        class(sp_project), target, intent(in)    :: self_in
+        call self_out%os_mic%copy(self_in%os_mic)
+        call self_out%os_stk%copy(self_in%os_stk)
+        call self_out%os_ptcl2D%copy(self_in%os_ptcl2D)
+        call self_out%os_cls2D%copy(self_in%os_cls2D)
+        call self_out%os_ptcl3D%copy(self_in%os_ptcl3D)
+        call self_out%os_cls3D%copy(self_in%os_cls3D)
+        call self_out%os_out%copy(self_in%os_out)
+        call self_out%os_optics%copy(self_in%os_optics)
+        call self_out%projinfo%copy(self_in%projinfo)
+        call self_out%jobproc%copy(self_in%jobproc)
+        call self_out%compenv%copy(self_in%compenv)
+    end subroutine copy
 
     ! modifiers
 

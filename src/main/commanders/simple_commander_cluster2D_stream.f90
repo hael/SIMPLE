@@ -1,4 +1,4 @@
-! concrete commander: dev cluster2D_stream for streaming 2D alignment and clustering of single-particle images
+! concrete commander: cluster2D_stream for streaming 2D alignment and clustering of single-particle images
 module simple_commander_cluster2D_stream
 include 'simple_lib.f08'
 use simple_cmdline,            only: cmdline
@@ -28,6 +28,8 @@ public :: is_pool_available, get_pool_iter
 ! Chunks
 public :: update_chunks, classify_new_chunks, import_chunks_into_pool
 public :: flush_remaining_particles, all_chunks_available
+! Abinitio3D
+public :: generate_snapshot_for_abinitio
 ! Utilities
 public :: cleanup_root_folder
 ! Cluster2D subsets
@@ -89,8 +91,9 @@ real                             :: conv_score=0., conv_mi_class=0., conv_frac=0
 real                             :: resolutions(NPREV_RES)=999., current_resolution=999.  ! Resolution book-keeping
 integer                          :: nptcls_glob=0, nptcls_rejected_glob=0, ncls_rejected_glob=0
 integer                          :: ncls_glob                         ! global number of classes
-integer                          :: iterswitch2euclid = 0             ! only used by gen_picking_refs
-logical                          :: stream2D_active   = .false.       ! initiation flag
+integer                          :: nabinitioprojs_glob = 0           ! global number snapshots generated for abinitio3D
+integer                          :: iterswitch2euclid   = 0           ! only used by gen_picking_refs
+logical                          :: stream2D_active     = .false.     ! initiation flag
 ! GUI-related
 type(starproject)                :: starproj
 type(starproject_stream)         :: starproj_stream
@@ -139,6 +142,7 @@ contains
         pool_iter      = 0
         call simple_mkdir(POOL_DIR)
         call simple_mkdir(trim(POOL_DIR)//trim(STDERROUT_DIR))
+        call simple_mkdir(DIR_SNAPSHOT)
         if( l_update_sigmas ) call simple_mkdir(SIGMAS_DIR)
         call simple_touch(trim(POOL_DIR)//trim(CLUSTER2D_FINISHED))
         call pool_proj%kill
@@ -613,6 +617,7 @@ contains
         endif
         ! cleanup
         call simple_rmdir(SIGMAS_DIR)
+        call simple_rmdir(DIR_SNAPSHOT)
         call del_file(trim(POOL_DIR)//trim(PROJFILE_POOL))
         call del_file(projfile4gui)
         if( .not.debug_here )then
@@ -2011,54 +2016,61 @@ contains
         endif
     end function all_chunks_available
 
-    ! CHECKPOINTING (IN PROGRESS)
+    ! ABINITIO3D
 
-    subroutine write_checkpoint
-        character(len=:), allocatable :: dest, tmpl
-        if( pool_iter < 1 )return
-        call simple_mkdir(CHECKPOINT_DIR)
-        call cline_cluster2D_pool%writeline(trim(CHECKPOINT_DIR)//'pool.cline')
-        call cline_cluster2D_chunk%writeline(trim(CHECKPOINT_DIR)//'chunk.cline')
-        call pool_proj%write(fname=trim(CHECKPOINT_DIR)//'mics.simple',  isegment=MIC_SEG)
-        call pool_proj%write(fname=trim(CHECKPOINT_DIR)//'stks.simple',  isegment=STK_SEG)
-        call pool_proj%write(fname=trim(CHECKPOINT_DIR)//'ptcls.simple', isegment=PTCL2D_SEG)
-        call pool_proj%write(fname=trim(CHECKPOINT_DIR)//'cls.simple',   isegment=CLS2D_SEG)
-        call simple_copy_file(refs_glob, trim(CHECKPOINT_DIR)//refs_glob)
-        tmpl = get_fbody(refs_glob, params_glob%ext, separator=.false.)
-        dest = add2fbody(tmpl,params_glob%ext,'_even')
-        call simple_copy_file(dest, trim(CHECKPOINT_DIR)//dest)
-        if( l_wfilt )then
-            dest = add2fbody(dest,params_glob%ext,trim(WFILT_SUFFIX))
-            call simple_copy_file(dest, trim(CHECKPOINT_DIR)//dest)
+    ! writes down a requested number of particles from current pool
+    ! to process in abinitio3D
+    subroutine generate_snapshot_for_abinitio()
+        type(oris)                    :: os
+        type(sp_project)              :: project
+        integer,          allocatable :: pinds(:)
+        character(len=:), allocatable :: filename
+        integer, allocatable :: states(:)
+        integer :: nrequested,n,nl
+        if( .not.stream2D_active ) return
+        if( .not.file_exists(SNAPSHOT_REQUEST) )return
+        nl = nlines(SNAPSHOT_REQUEST)
+        if( nl /= 1)then
+            THROW_WARN('Invalid format in: '//trim(SNAPSHOT_REQUEST))
+            return
         endif
-        dest = add2fbody(tmpl,params_glob%ext,'_odd')
-        call simple_copy_file(dest, trim(CHECKPOINT_DIR)//dest)
-        if( l_wfilt )then
-            dest = add2fbody(dest,params_glob%ext,trim(WFILT_SUFFIX))
-            call simple_copy_file(dest, trim(CHECKPOINT_DIR)//dest)
+        call os%new(1, is_ptcl=.false.)
+        call os%read(SNAPSHOT_REQUEST)
+        if( os%isthere(1,'nptcls') )then
+            nrequested = os%get_int(1,'nptcls')
+            if( nrequested <= (nptcls_glob-nptcls_rejected_glob) )then
+                ! delete file only if request fulfilled
+                call del_file(SNAPSHOT_REQUEST)
+                ! selection of particles to be used
+                n = pool_proj%os_ptcl2D%get_noris()
+                call pool_proj%os_ptcl2D%select_particles_set(nrequested, pinds)
+                allocate(states(n),source=0)
+                states(pinds(:)) = 1
+                ! reject unwanted particles
+                call project%copy(pool_proj)
+                call project%os_mic%kill ! not necessary
+                call project%os_ptcl2D%set_all('state',states)
+                project%os_ptcl3D = project%os_ptcl2D
+                deallocate(states)
+                ! prune
+                call project%prune_particles
+                ! write
+                nabinitioprojs_glob = nabinitioprojs_glob + 1
+                filename = trim(DIR_SNAPSHOT)//'snap_'//&
+                    &int2str_pad(nabinitioprojs_glob,params_glob%numlen)//trim(METADATA_EXT)
+                call project%write(filename)
+                call project%kill
+                ! copy frcs (to change??)
+                filename = trim(DIR_SNAPSHOT)//'snap_'//&
+                    &int2str_pad(nabinitioprojs_glob,params_glob%numlen)//'_'//trim(FRCS_FILE)
+                call simple_copy_file(FRCS_FILE, filename)
+                write(logfhandle,'(A,I8,A)')'>>> GENERATED SNAPSHOT FOR ABINITIO3D WITH ',nrequested,' PTCLS'
+            else
+                ! insufficient number of particles, do not remove request
+            endif
         endif
-        call simple_copy_file(FRCS_FILE, trim(CHECKPOINT_DIR)//FRCS_FILE)
-        call simple_copy_file(STATS_FILE, trim(CHECKPOINT_DIR)//STATS_FILE)
-    end subroutine write_checkpoint
-
-    subroutine read_checkpoint( found )
-        logical, intent(out) :: found
-        type(oris) :: os
-        integer    :: iter
-        found = .false.
-        if( .not.dir_exists(CHECKPOINT_DIR) ) return
-        if( .not.file_exists(trim(CHECKPOINT_DIR)//'mics.simple') ) return
-        if( .not.file_exists(trim(CHECKPOINT_DIR)//'stks.simple') ) return
-        if( .not.file_exists(trim(CHECKPOINT_DIR)//'ptcls.simple')) return
-        if( .not.file_exists(trim(CHECKPOINT_DIR)//'cls.simple')  ) return
-        if( .not.file_exists(trim(CHECKPOINT_DIR)//FRCS_FILE)     ) return
-        if( .not.file_exists(trim(CHECKPOINT_DIR)//STATS_FILE)    ) return
-        found = .true.
-        call os%new(1,is_ptcl=.false.)
-        call os%read(trim(CHECKPOINT_DIR)//STATS_FILE)
-        iter = os%get_int(1,'ITERATION')
         call os%kill
-    end subroutine read_checkpoint
+    end subroutine generate_snapshot_for_abinitio
 
     ! UTILITIES
 
@@ -2070,6 +2082,7 @@ contains
         integer :: i
         call qsys_cleanup(nparts=params_glob%nparts_pool)
         call simple_rmdir(SIGMAS_DIR)
+        call simple_rmdir(DIR_SNAPSHOT)
         call del_file(USER_PARAMS)
         call del_file(PROJFILE_POOL)
         call del_file(DISTR_EXEC_FNAME)
