@@ -2326,10 +2326,11 @@ contains
             endif
             nptcls = size(imgs)
             if( trim(params%neigs_per).eq.'yes' )then
-                neigs = max(2, nint(real(params%neigs * nptcls) / 100.))
                 if( neigs >= 99 )then
                     THROW_WARN('neigs is greater than 99% the number of particles within this class. All eigens are used now!')
                     neigs = nptcls - 1
+                else
+                    neigs = max(2, nint(real(params%neigs * nptcls) / 100.))
                 endif
             else
                 neigs = params%neigs
