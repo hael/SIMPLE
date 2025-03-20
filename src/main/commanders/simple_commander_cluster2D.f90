@@ -1538,7 +1538,7 @@ contains
         type(cmdline)              :: cline_prob_tab2D
         type(qsys_env)             :: qenv
         type(chash)                :: job_descr
-        integer :: nptcls, ipart
+        integer :: nptcls
         logical :: l_maxpop
         ! After this condition block, only build_glob & params_glob must be used!
         if( associated(build_glob) )then
@@ -2233,15 +2233,17 @@ contains
         type(parameters)              :: params
         type(builder)                 :: build
         type(image),      allocatable :: imgs(:), imgs_ori(:)
-        type(image)                   :: cavg
+        type(image)                   :: cavg, img, timg
         type(oris)                    :: os
         type(sp_project), target      :: spproj
-        character(len=:), allocatable :: label, fname, fname_denoised, fname_cavgs, fname_cavgs_denoised, fname_oris
-        integer,          allocatable :: cls_inds(:), pinds(:), cls_pops(:)
+        character(len=:), allocatable :: label, fname, fname_denoised, fname_cavgs, fname_cavgs_denoised, fname_oris, fname_ori_ptcls
+        integer,          allocatable :: cls_inds(:), pinds(:), cls_pops(:), ori_map(:)
         real,             allocatable :: avg(:), avg_pix(:), pcavecs(:,:), tmpvec(:)
-        real             :: std
-        integer          :: npix, i, j, ncls, nptcls, cnt1, cnt2, neigs
-        logical          :: l_phflip, l_transp_pca, l_pre_norm ! pixel-wise learning
+        real    :: std, shift(2), loc(2), dist(2), e3, kw, mat(2,2), mat_inv(2,2)
+        complex :: fcompl, fcompll
+        integer :: npix, i, j, ncls, nptcls, cnt1, cnt2, neigs, h, k, win_corner(2),&
+                  &l, ll, m, mm, phys(2), logi_lims(3,2), cyc_lims(3,2), cyc_limsR(2,2), errflg
+        logical :: l_phflip, l_transp_pca, l_pre_norm ! pixel-wise learning
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('neigs')   ) call cline%set('neigs',    4)
@@ -2271,7 +2273,7 @@ contains
         end select
         cls_inds = build%spproj_field%get_label_inds(label)
         if( cline%defined('class') .and. cline%defined('ncls') )then
-            THROW_HARD('EITHER class OR cls CAN BE DEFINED')
+            THROW_HARD('EITHER class OR ncls CAN BE DEFINED')
         endif
         if( cline%defined('class') )then
             cls_inds = pack(cls_inds, mask=(cls_inds == params%class))
@@ -2293,12 +2295,14 @@ contains
         cls_inds = pack(cls_inds, mask=cls_pops > 2)
         nptcls   = sum(cls_pops,  mask=cls_pops > 2)
         ncls     = size(cls_inds)
+        allocate(ori_map(nptcls))
         call os%new(nptcls, is_ptcl=.true.)
         fname                = 'ptcls.mrcs'
         fname_denoised       = 'ptcls_denoised.mrcs'
         fname_cavgs          = 'cavgs.mrcs'
         fname_cavgs_denoised = 'cavgs_denoised.mrcs'
         fname_oris           = 'oris_denoised.txt'
+        fname_ori_ptcls      = 'ptcls_ori_order.mrcs'
         cnt1 = 0
         cnt2 = 0
         ! pca allocation
@@ -2382,6 +2386,7 @@ contains
                     call imgs_ori(j)%unserialize(pcavecs(:,j))
                     call os%transfer_ori(cnt2, build%spproj_field, pinds(j))
                     call imgs_ori(j)%write(fname_denoised, cnt2)
+                    ori_map(pinds(j)) = cnt2
                 end do
                 call transform_ptcls(spproj, params%oritype, cls_inds(i), imgs, pinds, phflip=l_phflip, cavg=cavg, imgs_ori=imgs_ori, just_transf=.true.)
             else
@@ -2391,12 +2396,74 @@ contains
                     call cavg%add(imgs(j))
                     call os%transfer_ori(cnt2, build%spproj_field, pinds(j))
                     call imgs(j)%write(fname_denoised, cnt2)
+                    ori_map(pinds(j)) = cnt2
                     call imgs(j)%kill
                 end do
                 call cavg%div(real(nptcls))
             endif
             call cavg%write(fname_cavgs_denoised, i)
         end do
+        if( trim(params%pca_ori_stk) .eq. 'yes' )then
+            call  img%new([params_glob%boxpd,params_glob%boxpd,1],params_glob%smpd, wthreads=.false.)
+            call timg%new([params_glob%boxpd,params_glob%boxpd,1],params_glob%smpd, wthreads=.false.)
+            logi_lims      = img%loop_lims(2)
+            cyc_lims       = img%loop_lims(3)
+            cyc_limsR(:,1) = cyc_lims(1,:)
+            cyc_limsR(:,2) = cyc_lims(2,:)
+            do i = 1, cnt2
+                call cavg%zero_and_unflag_ft
+                call cavg%read(fname_denoised, ori_map(i))
+                shift = build%spproj_field%get_2Dshift(i)
+                e3    = build%spproj_field%e3get(i)
+                call  img%zero_and_flag_ft
+                call timg%zero_and_flag_ft
+                call cavg%pad_fft(img)
+                ! particle rotation
+                call rotmat2d(-e3, mat)
+                call matinv(mat, mat_inv, 2, errflg)
+                !$omp parallel do collapse(2) private(h,k,loc,win_corner,dist,l,ll,m,mm,phys,kw,fcompl,fcompll) default(shared) proc_bind(close) schedule(static)
+                do h = logi_lims(1,1),logi_lims(1,2)
+                    do k = logi_lims(2,1),logi_lims(2,2)
+                        ! Rotation
+                        loc        = matmul(real([h,k]),mat_inv)
+                        win_corner = floor(loc) ! bottom left corner
+                        dist       = loc - real(win_corner)
+                        ! Bi-linear interpolation
+                        l      = cyci_1d(cyc_limsR(:,1), win_corner(1))
+                        ll     = cyci_1d(cyc_limsR(:,1), win_corner(1)+1)
+                        m      = cyci_1d(cyc_limsR(:,2), win_corner(2))
+                        mm     = cyci_1d(cyc_limsR(:,2), win_corner(2)+1)
+                        ! l, bottom left corner
+                        phys   = img%comp_addr_phys(l,m)
+                        kw     = (1.-dist(1))*(1.-dist(2))   ! interpolation kernel weight
+                        fcompl = kw * img%get_cmat_at(phys(1), phys(2),1)
+                        ! l, bottom right corner
+                        phys   = img%comp_addr_phys(l,mm)
+                        kw     = (1.-dist(1))*dist(2)
+                        fcompl = fcompl + kw * img%get_cmat_at(phys(1), phys(2),1)
+                        if( l < 0 ) fcompl = conjg(fcompl) ! conjugation when required!
+                        ! ll, upper left corner
+                        phys    = img%comp_addr_phys(ll,m)
+                        kw      = dist(1)*(1.-dist(2))
+                        fcompll = kw * img%get_cmat_at(phys(1), phys(2),1)
+                        ! ll, upper right corner
+                        phys    = img%comp_addr_phys(ll,mm)
+                        kw      = dist(1)*dist(2)
+                        fcompll = fcompll + kw * img%get_cmat_at(phys(1), phys(2),1)
+                        if( ll < 0 ) fcompll = conjg(fcompll) ! conjugation when required!
+                        ! update with interpolated values
+                        phys = img%comp_addr_phys(h,k)
+                        call timg%set_cmat_at(phys(1),phys(2),1, fcompl + fcompll)
+                    end do
+                end do
+                !$omp end parallel do
+                ! shift
+                call timg%shift2Dserial(shift)
+                call timg%ifft
+                call timg%clip(cavg)
+                call cavg%write(fname_ori_ptcls, i)
+            enddo
+        endif
         call os%zero_inpl
         call os%write(fname_oris)
         if( trim(params%projstats).eq.'yes' ) call build%spproj_field%write('ptcl_field.txt')
