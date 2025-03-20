@@ -14,7 +14,7 @@ implicit none
 
 public :: stream_chunk, DIR_CHUNK
 public :: projrecord, projrecords2proj, class_rejection
-
+public :: procrecord, append_procrecord
 private
 #include "simple_local_flags.inc"
 
@@ -32,6 +32,14 @@ type projrecord
     integer                       :: nptcls_sel = 0         ! # of particles (state=1)
     logical                       :: included   = .false.   ! whether record has been imported
 end type projrecord
+
+! Convenience type to hold information about processes
+type procrecord
+    character(len=:), allocatable :: folder                 ! location
+    character(len=:), allocatable :: projfile               ! filename
+    logical                       :: complete = .false.     ! process is complete
+    logical                       :: included = .false.     ! has been post-processed
+end type procrecord
 
 ! Type to handle a single chunk
 type stream_chunk
@@ -543,7 +551,7 @@ contains
         self%available  = .false.
     end subroutine kill
 
-    ! Utilities to handle the type projecord
+    ! Public Utility to handle the type projrecord
 
     !> convert a list of projects into one project
     !  previous mic/stk/ptcl2D,ptcl3D are wipped, other fields untouched
@@ -610,6 +618,24 @@ contains
         call tmpproj%kill
         if( has_ptcl ) spproj%os_ptcl3D = spproj%os_ptcl2D
     end subroutine projrecords2proj
+
+    ! Public utility to handle the type procrecord
+
+    subroutine append_procrecord( records, folder, projfile )
+        type(procrecord), allocatable, intent(inout) :: records(:)
+        character(len=*),               intent(in)    :: folder, projfile
+        type(procrecord) :: record
+        record%folder   = trim(folder)
+        record%projfile = trim(projfile)
+        record%complete = .false.
+        record%included = .false.
+        if( allocated(records) )then
+            records = [records(:), record]
+        else
+            allocate(records(1), source=[record])
+        endif
+        deallocate(record%folder,record%projfile)
+    end subroutine append_procrecord
 
     ! Public utility
 

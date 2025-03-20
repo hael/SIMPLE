@@ -229,7 +229,7 @@ contains
         real,    parameter :: SMPD_TARGET_MIN  = 2.0
         logical, parameter :: L_VERBOSE        = .true. 
         integer :: findlims(2), istage, box_trial
-        real    :: frclims(2), frc_stepsz, lp_max, lp_min, lp_stepsz, rbox_stepsz
+        real    :: frclims(2), frc_stepsz, rbox_stepsz
         ! (1) calculate FRC values at the inputted boundaries
         findlims(1) = calc_fourier_index(lpstart_lb, box, smpd)
         findlims(2) = calc_fourier_index(lpfinal,    box, smpd)

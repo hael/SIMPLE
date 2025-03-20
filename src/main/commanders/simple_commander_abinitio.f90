@@ -72,7 +72,7 @@ integer,          parameter :: LPAUTO_STAGE          = NSTAGES - 1       ! canno
 integer,          parameter :: RECALC_STARTREC_STAGE = LPAUTO_STAGE      ! re-estimate starting volume for optimal LP and AUTOMSK
 integer,          parameter :: AUTOMSK_STAGE         = LPAUTO_STAGE      ! swith on automasking when lpauto is switched on
 integer,          parameter :: HET_DOCKED_STAGE      = NSTAGES           ! stage at which state splitting is done when multivol_mode==docked
-
+integer,          parameter :: STREAM_ANALYSIS_STAGE = 5                 ! when streaming on some analysis will be performed
 ! class variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
 logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false., l_update_frac_dyn=.false.
@@ -353,6 +353,7 @@ contains
         type(sp_project)                :: spproj
         type(image)                     :: noisevol
         integer :: istage, s, ncls, icls, start_stage, nptcls2update, noris, nstates_on_cline, nstates_in_project, split_stage
+        logical :: l_stream
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
@@ -378,6 +379,9 @@ contains
             endif
         endif
         ! make master parameters
+        l_stream = .false.
+        if(cline%defined('stream')) l_stream = trim(cline%get_carg('stream')).eq.'yes'
+        call cline%delete('stream')
         call params%new(cline)
         call cline%set('mkdir', 'no')
         nstates_glob = params%nstates
@@ -626,6 +630,10 @@ contains
             if( istage == SYMSRCH_STAGE )then
                 call symmetrize(istage, spproj, params%projfile, xreconstruct3D_distr)
             endif
+            ! Streaming specifics
+            if( l_stream )then
+                if( istage == STREAM_ANALYSIS_STAGE ) call stream_analysis
+            endif
         enddo
         ! for visualization
         call gen_ortho_reprojs4viz
@@ -636,6 +644,7 @@ contains
         ! cleanup
         call spproj%kill
         call qsys_cleanup
+        if( l_stream ) call simple_touch(ABINITIO3D_FINISHED)
         call simple_end('**** SIMPLE_ABINITIO3D NORMAL STOP ****')
     end subroutine exec_abinitio3D
 
@@ -1338,5 +1347,9 @@ contains
             if( file_exists(vol_pproc_mirr) ) call simple_rename(vol_pproc_mirr, add2fbody(vol_final,params_glob%ext,PPROC_SUFFIX//MIRR_SUFFIX))
         enddo
     end subroutine postprocess_final_rec
+
+    subroutine stream_analysis
+        ! TODO
+    end subroutine stream_analysis
 
 end module simple_commander_abinitio

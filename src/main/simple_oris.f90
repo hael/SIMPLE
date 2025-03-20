@@ -83,6 +83,7 @@ type :: oris
     procedure          :: get_nodd
     procedure          :: print_
     procedure          :: print_matrices
+    procedure          :: select_particles_set
     procedure          :: sample4rec
     procedure          :: sample4update_all
     procedure          :: sample4update_rnd
@@ -112,7 +113,8 @@ type :: oris
     ! SETTERS
     procedure, private :: append_1, append_2
     generic            :: append => append_1, append_2
-    procedure          :: copy
+    procedure, private :: copy_1, copy_2
+    generic            :: copy => copy_1, copy_2
     procedure          :: reject
     procedure, private :: delete_entry_1, delete_entry_2
     generic            :: delete_entry => delete_entry_1, delete_entry_2
@@ -139,8 +141,8 @@ type :: oris
     procedure          :: set_dfx, set_dfy
     procedure          :: set_ori
     procedure          :: transfer_ori
-    procedure, private :: set_all_1, set_all_2
-    generic            :: set_all => set_all_1, set_all_2
+    procedure, private :: set_all_1, set_all_2, set_all_3
+    generic            :: set_all => set_all_1, set_all_2, set_all_3
     procedure, private :: set_all2single_1, set_all2single_2, set_all2single_3
     generic            :: set_all2single => set_all2single_1, set_all2single_2, set_all2single_3
     procedure          :: set_projs
@@ -1169,6 +1171,27 @@ contains
         end do
     end subroutine print_matrices
 
+    subroutine select_particles_set( self, nptcls, inds )
+        class(oris),          intent(in)    :: self
+        integer,              intent(in)    :: nptcls
+        integer, allocatable, intent(inout) :: inds(:)
+        type(ran_tabu) :: rt
+        integer        :: i,n
+        if( allocated(inds) ) deallocate(inds)
+        inds = (/(i,i=1,self%n)/)
+        inds = pack(inds, mask=self%get_all('state') > 0.5)
+        n    = size(inds)
+        if( n < nptcls )then
+            ! if less than desired particles select all
+        else
+            rt = ran_tabu(n)
+            call rt%shuffle(inds)
+            call rt%kill
+            inds = inds(1:nptcls)
+            call hpsort(inds) !!
+        endif
+    end subroutine select_particles_set
+
     subroutine sample4rec( self, fromto, nsamples, inds )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
@@ -1727,7 +1750,7 @@ contains
         endif
     end subroutine append_2
 
-    subroutine copy( self_out, self_in, is_ptcl )
+    subroutine copy_1( self_out, self_in, is_ptcl )
         class(oris),       intent(inout) :: self_out
         class(oris),       intent(in)    :: self_in
         logical,           intent(in)    :: is_ptcl
@@ -1736,7 +1759,23 @@ contains
         do i=1,self_in%n
             self_out%o(i) = self_in%o(i)
         end do
-    end subroutine copy
+    end subroutine copy_1
+
+    subroutine copy_2( self_out, self_in)
+        class(oris),       intent(inout) :: self_out
+        class(oris),       intent(in)    :: self_in
+        logical :: is_ptcl
+        integer :: i
+        if(self_in%get_noris() == 0) then
+            call self_out%kill()
+        else
+            is_ptcl = self_in%is_particle()
+            call self_out%new(self_in%n, is_ptcl)
+            do i=1,self_in%n
+                self_out%o(i) = self_in%o(i)
+            end do
+        end if
+    end subroutine copy_2
 
     subroutine reject( self, i )
         class(oris), intent(inout) :: self
@@ -1947,6 +1986,16 @@ contains
             call self%o(i)%set(which, vals(i))
         enddo
     end subroutine set_all_2
+
+    subroutine set_all_3( self, which, vals )
+        class(oris),      intent(inout) :: self
+        character(len=*), intent(in)    :: which
+        integer,          intent(in)    :: vals(self%n)
+        integer :: i
+        do i=1,self%n
+            call self%o(i)%set(which, vals(i))
+        enddo
+    end subroutine set_all_3
 
     subroutine set_all2single_1( self, which, val )
         class(oris),      intent(inout) :: self
