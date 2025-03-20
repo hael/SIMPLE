@@ -13,9 +13,7 @@ implicit none
 public :: cavger_new, cavger_transf_oridat, cavger_gen2Dclassdoc, cavger_assemble_sums,&
 cavger_merge_eos_and_norm, cavger_calc_and_write_frcs_and_eoavg, cavger_write, cavger_read,&
 cavger_readwrite_partial_sums, cavger_assemble_sums_from_parts, cavger_kill, cavgs_even, cavgs_odd, cavgs_merged,&
-cavger_read_euclid_sigma2
-! public utilities
-public transform_ptcls
+cavger_read_euclid_sigma2, transform_ptcls
 private
 #include "simple_local_flags.inc"
 

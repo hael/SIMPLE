@@ -78,6 +78,7 @@ type :: parameters
     character(len=3)          :: partition='no'
     character(len=3)          :: pca_fft='no'         !< fft image before pca(yes|no){no}
     character(len=3)          :: pca_img_ori='no'     !< original (no rotation/shifting within classes) ptcl stack to pca(yes|no){no}
+    character(len=3)          :: pca_ori_stk='no'     !< output denoised particle stack in the original order and shifted/rotated back(yes|no){no}
     character(len=3)          :: phaseplate='no'      !< images obtained with Volta phaseplate(yes|no){no}
     character(len=3)          :: phrand='no'          !< phase randomize(yes|no){no}
     character(len=3)          :: pick_roi='no'
@@ -646,6 +647,7 @@ contains
         call check_carg('pgrp_start',     self%pgrp_start)
         call check_carg('pca_fft',        self%pca_fft)
         call check_carg('pca_img_ori',    self%pca_img_ori)
+        call check_carg('pca_ori_stk',    self%pca_ori_stk)
         call check_carg('phaseplate',     self%phaseplate)
         call check_carg('phrand',         self%phrand)
         call check_carg('phshiftunit',    self%phshiftunit)
