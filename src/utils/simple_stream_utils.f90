@@ -35,10 +35,13 @@ end type projrecord
 
 ! Convenience type to hold information about processes
 type procrecord
+    character(len=:), allocatable :: id                     ! unique ID
     character(len=:), allocatable :: folder                 ! location
     character(len=:), allocatable :: projfile               ! filename
-    logical                       :: complete = .false.     ! process is complete
-    logical                       :: included = .false.     ! has been post-processed
+    character(len=:), allocatable :: volume                 ! volume filename
+    logical                       :: submitted = .false.    ! process has been submitted (running)
+    logical                       :: complete  = .false.    ! is complete
+    logical                       :: included  = .false.    ! has been post-processed/analyzed
 end type procrecord
 
 ! Type to handle a single chunk
@@ -621,20 +624,23 @@ contains
 
     ! Public utility to handle the type procrecord
 
-    subroutine append_procrecord( records, folder, projfile )
+    subroutine append_procrecord( records, id, folder, projfile )
         type(procrecord), allocatable, intent(inout) :: records(:)
-        character(len=*),               intent(in)    :: folder, projfile
+        character(len=*),              intent(in)    :: id, folder, projfile
         type(procrecord) :: record
-        record%folder   = trim(folder)
-        record%projfile = trim(projfile)
-        record%complete = .false.
-        record%included = .false.
+        record%id        = trim(id)
+        record%folder    = trim(folder)
+        record%projfile  = trim(projfile)
+        record%volume    = ''
+        record%submitted = .false.
+        record%complete  = .false.
+        record%included  = .false.
         if( allocated(records) )then
             records = [records(:), record]
         else
             allocate(records(1), source=[record])
         endif
-        deallocate(record%folder,record%projfile)
+        deallocate(record%id,record%folder,record%projfile)
     end subroutine append_procrecord
 
     ! Public utility

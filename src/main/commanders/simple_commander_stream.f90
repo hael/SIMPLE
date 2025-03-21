@@ -2429,9 +2429,10 @@ contains
         integer                                :: ncompleted
         call cline%set('oritype',      'mic')
         call cline%set('mkdir',        'yes')
-        call cline%set('objfun',    'euclid')   ! use noise normalized Euclidean distances from the start
-        call cline%set('sigma_est', 'global')   ! obviously
-        call cline%set('bfac',            0.)   ! because initial models should not be sharpened
+        call cline%set('objfun',    'euclid')
+        call cline%set('sigma_est', 'global')
+        call cline%set('bfac',            0.)
+        if( .not. cline%defined('maxjobs')     ) call cline%set('maxjobs',           3)
         if( .not. cline%defined('overlap')     ) call cline%set('overlap',        0.95)
         if( .not. cline%defined('prob_athres') ) call cline%set('prob_athres',     10.)
         if( .not. cline%defined('center')      ) call cline%set('center',         'no')
@@ -2440,8 +2441,8 @@ contains
         if( .not. cline%defined('ptclw')       ) call cline%set('ptclw',          'no')
         if( .not. cline%defined('projrec')     ) call cline%set('projrec',       'yes')
         if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'yes')
-        if( .not. cline%defined('walltime')    ) call cline%set('walltime',      29*60) ! 29 minutes
-        if( .not. cline%defined('nptcls')      ) call cline%set('nptcls',       100000)  ! is default for now, will be updated
+        if( .not. cline%defined('walltime')    ) call cline%set('walltime',      29*60) ! 29 minutes, needs to change
+        if( .not. cline%defined('nptcls')      ) call cline%set('nptcls',       100000) ! is default for now, will be updated
         ! write cmdline for GUI
         call cline%writeline(".cline")
         ! sanity check for restart
@@ -2469,38 +2470,39 @@ contains
         ! movie watcher init
         project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_SNAPSHOT), spproj=.true.)
         ! Ask 2D process for snapshot
-        call request_snapshot(params%nptcls)
+        call request_snapshot( params%nptcls )
         ! Infinite loop
         do
-            iter = iter + 1 ! necessary?
-            ! termination
+            iter = iter + 1
+            ! Termination
             if( file_exists(TERM_STREAM) )then
                 write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
                 exit
             endif
-            ! pause
+            ! Pause
             do while( file_exists(PAUSE_STREAM) )
                 call sleep(WAITTIME)
             enddo
-            ! detection of new projects
-            call project_buff%watch(nprojects, projects, max_nmovies=10)
-            if( nprojects > 0 ) call project_buff%add2history(projects)
-            ! submit all detected projects
+            ! New snapshots management
+            call project_buff%watch(nprojects, projects)
             if( nprojects > 0 )then
-                do i = 1,nprojects
-                    call submit_one_process(cline, projects(i))
-                enddo
+                call project_buff%add2history( projects )
+                call add_projects2jobslist( projects )
             endif
-            ! current runs complete?
-            call check_processes(ncompleted)
+            ! TODO: Update user inputted parameters here
+            ! Submit to queue
+            call submit_jobs( cline )
+            ! Current runs complete?
+            call check_processes( ncompleted )
             if( ncompleted > 0 )then
                 ! one job completed = one job submitted
                 do i = 1,ncompleted
-                    call request_snapshot(params%nptcls)
+                    call request_snapshot( params%nptcls )
                 enddo
-                ! TODO: Perform some analysis
             endif
-            ! global wait
+            ! Volumes & parameters analysis
+            call analysis
+            ! Global wait
             call sleep(WAITTIME)
         end do
         ! end gracefully
