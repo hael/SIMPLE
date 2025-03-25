@@ -180,6 +180,7 @@ type(simple_program), target :: reproject
 type(simple_program), target :: scale
 type(simple_program), target :: scale_project
 type(simple_program), target :: select_
+type(simple_program), target :: sharpvol
 type(simple_program), target :: simulate_atoms
 type(simple_program), target :: simulate_movie
 type(simple_program), target :: simulate_noise
@@ -497,6 +498,7 @@ contains
         call new_scale
         call new_scale_project
         call new_select_
+        call new_sharpvol
         call new_simulate_atoms
         call new_simulate_movie
         call new_simulate_noise
@@ -637,6 +639,7 @@ contains
         call push2prg_ptr_array(scale)
         call push2prg_ptr_array(scale_project)
         call push2prg_ptr_array(select_)
+        call push2prg_ptr_array(sharpvol)
         call push2prg_ptr_array(simulate_atoms)
         call push2prg_ptr_array(simulate_movie)
         call push2prg_ptr_array(simulate_noise)
@@ -792,7 +795,6 @@ contains
                 ptr2prg => info_image
             case('info_stktab')
                 ptr2prg => info_stktab
-            
             case('import_boxes')
                 ptr2prg => import_boxes
             case('import_cavgs')
@@ -897,6 +899,8 @@ contains
                 ptr2prg => scale_project
             case('select')
                 ptr2prg => select_
+            case('sharpvol')
+                ptr2prg => sharpvol
             case('simulate_atoms')
                 ptr2prg => simulate_atoms
             case('simulate_movie')
@@ -1050,6 +1054,7 @@ contains
         write(logfhandle,'(A)') selection%name
         write(logfhandle,'(A)') reproject%name
         write(logfhandle,'(A)') select_%name
+        write(logfhandle,'(A)') sharpvol%name
         write(logfhandle,'(A)') simulate_movie%name
         write(logfhandle,'(A)') simulate_noise%name
         write(logfhandle,'(A)') simulate_particles%name
@@ -4036,11 +4041,11 @@ contains
     subroutine new_ppca_volvar
         ! PROGRAM SPECIFICATION
         call ppca_volvar%new(&
-        &'ppca_volvar',&                              ! name
-        &'Volume variabilit analysis using ppca',&    ! descr_short
+        &'ppca_volvar',&                                     ! name
+        &'Volume variability analysis using ppca',&          ! descr_short
         &'is a program for ppca-based volume variability',&  ! descr_long
-        &'simple_exec',&                              ! executable
-        &1, 1, 0, 0, 1, 1, 1, .false.)                ! # entries in each group, requires sp_project
+        &'simple_exec',&                                     ! executable
+        &1, 1, 0, 0, 1, 1, 1, .false.)                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call ppca_volvar%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume for creating 2D central sections', 'input volume e.g. vol.mrc', .true., 'vol1.mrc')
@@ -4886,6 +4891,37 @@ contains
         ! computer controls
         call select_%set_input('comp_ctrls', 1, nthr)
     end subroutine new_select_
+
+    subroutine new_sharpvol
+        ! PROGRAM SPECIFICATION
+        call sharpvol%new(&
+        &'sharpvol',&                                         ! name
+        &'Sharpening volume',&                                ! descr_short
+        &'is a program for sharpening raw volumes',&          ! descr_long
+        &'all',&                                              ! executable
+        &2, 2, 0, 0, 2, 0, 1, .false.)                        ! # entries in each group, requires sp_project
+        ! TEMPLATE
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call sharpvol%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume to project', 'input volume e.g. vol.mrc', .false., '')
+        sharpvol%img_ios(1)%required = .true.
+        call sharpvol%set_input('img_ios', 2, 'pdbfile', 'file', 'PDB', 'Input coordinates file in PDB format', 'Input coordinates file', .false., '')
+        sharpvol%img_ios(2)%required = .true.
+        ! parameter input/output
+        call sharpvol%set_input('parm_ios', 1, smpd)
+        call sharpvol%set_input('parm_ios', 2, box)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call sharpvol%set_input('filt_ctrls', 1, 'fsc',     'file', 'FSC file', 'FSC file', 'e.g. fsc_state01.bin file', .false., '')
+        call sharpvol%set_input('filt_ctrls', 2, bfac)
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call sharpvol%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_sharpvol
 
     subroutine new_preproc
         ! PROGRAM SPECIFICATION

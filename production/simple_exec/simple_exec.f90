@@ -149,7 +149,8 @@ type(model_validation_commander)            :: xmodel_validation
 type(model_validation_eo_commander)         :: xmodel_validation_eo
 type(projops_commander)                     :: xprojops
 type(prune_project_commander_distr)         :: xprune_project
-type(pdb2mrc_commander)                     :: xpdb2mrc     
+type(pdb2mrc_commander)                     :: xpdb2mrc   
+type(sharpvol_commander)                    :: xsharpvol  
 
 ! SYSTEM INTERACTION PROGRAMS
 type(mkdir_commander)                       :: xmkdir
@@ -412,16 +413,19 @@ select case(trim(prg))
         call xmodel_validation_eo%execute(cline)
 
     ! MISCELLANEOUS WORKFLOWS
-    case( 'scale_project' )
-        call xscale_project%execute( cline )
+    case( 'afm' )
+        call xafm%execute( cline )
+    case( 'pdb2mrc' )
+        call xpdb2mrc%execute( cline )
     case( 'projops' )
         call xprojops%execute( cline )   
     case( 'prune_project' )
         call xprune_project%execute( cline )
-    case( 'pdb2mrc' )
-        call xpdb2mrc%execute( cline )
-    case( 'afm' )
-        call xafm%execute( cline )
+    case( 'scale_project' )
+        call xscale_project%execute( cline )
+    case( 'sharpvol' )
+        call xsharpvol%execute( cline )
+
 
     ! SYSTEM INTERACTION PROGRAMS
     case( 'mkdir' )
@@ -438,7 +442,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('17420d99')
+call simple_print_git_version('b4fa2abe')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
