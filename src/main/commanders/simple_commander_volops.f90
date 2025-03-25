@@ -14,16 +14,17 @@ use simple_dock_vols,      only: dock_vols
 implicit none
 
 public :: centervol_commander
-public :: postprocess_commander
-public :: reproject_commander
-public :: volanalyze_commander
-public :: volops_commander
-public :: noisevol_commander
 public :: dock_volpair_commander
+public :: noisevol_commander
+public :: postprocess_commander
+public :: ppca_volvar_commander
+public :: reproject_commander
+public :: sharpvol_commander
 public :: symaxis_search_commander
 public :: symmetrize_map_commander
 public :: symmetry_test_commander
-public :: ppca_volvar_commander
+public :: volanalyze_commander
+public :: volops_commander
 
 private
 #include "simple_local_flags.inc"
@@ -33,35 +34,35 @@ type, extends(commander_base) :: centervol_commander
     procedure :: execute      => exec_centervol
 end type centervol_commander
 
-type, extends(commander_base) :: postprocess_commander
- contains
-   procedure :: execute      => exec_postprocess
-end type postprocess_commander
-
-type, extends(commander_base) :: reproject_commander
- contains
-   procedure :: execute      => exec_reproject
-end type reproject_commander
-
-type, extends(commander_base) :: volanalyze_commander
+type, extends(commander_base) :: dock_volpair_commander
   contains
-    procedure :: execute      => exec_volanalyze
-end type volanalyze_commander
-
-type, extends(commander_base) :: volops_commander
-  contains
-    procedure :: execute      => exec_volops
-end type volops_commander
+    procedure :: execute      => exec_dock_volpair
+end type dock_volpair_commander
 
 type, extends(commander_base) :: noisevol_commander
   contains
     procedure :: execute      => exec_noisevol
 end type noisevol_commander
 
-type, extends(commander_base) :: dock_volpair_commander
+type, extends(commander_base) :: postprocess_commander
+ contains
+   procedure :: execute      => exec_postprocess
+end type postprocess_commander
+
+type, extends(commander_base) :: ppca_volvar_commander
   contains
-    procedure :: execute      => exec_dock_volpair
-end type dock_volpair_commander
+    procedure :: execute      => exec_ppca_volvar
+end type ppca_volvar_commander
+
+type, extends(commander_base) :: reproject_commander
+ contains
+   procedure :: execute      => exec_reproject
+end type reproject_commander
+
+type, extends(commander_base) :: sharpvol_commander
+  contains
+    procedure :: execute      => exec_sharpvol
+end type sharpvol_commander
 
 type, extends(commander_base) :: symaxis_search_commander
   contains
@@ -78,10 +79,15 @@ type, extends(commander_base) :: symmetry_test_commander
     procedure :: execute      => exec_symmetry_test
 end type symmetry_test_commander
 
-type, extends(commander_base) :: ppca_volvar_commander
+type, extends(commander_base) :: volanalyze_commander
   contains
-    procedure :: execute      => exec_ppca_volvar
-end type ppca_volvar_commander
+    procedure :: execute      => exec_volanalyze
+end type volanalyze_commander
+
+type, extends(commander_base) :: volops_commander
+  contains
+    procedure :: execute      => exec_volops
+end type volops_commander
 
 contains
 
@@ -163,43 +169,28 @@ contains
         call simple_end('**** SIMPLE_CENTER NORMAL STOP ****')
     end subroutine exec_centervol
 
-    ! Sharpening protocol for raw volumes
-    subroutine exec_volsharp( self, cline )
-        use simple_sp_project, only: sp_project
+    ! Sharpening protocol for raw volumes using even and odd pair
+    subroutine exec_sharpvol( self, cline )
+        !use simple_sp_project, only: sp_project
         use simple_atoms,      only: atoms
-        class(postprocess_commander), intent(inout) :: self
-        class(cmdline),               intent(inout) :: cline
-        character(len=:), allocatable :: fname_vol, fname_fsc, fname_msk, fname_mirr
-        character(len=:), allocatable :: fname_even, fname_odd, fname_pproc, fname_lp
+        class(sharpvol_commander), intent(inout) :: self
+        class(cmdline),            intent(inout) :: cline
         real,             allocatable :: fsc(:), optlp(:), res(:)
-        type(parameters) :: params
-        type(image)      :: vol_bfac, vol_no_bfac, vol_even, vol_odd
-        type(atoms)      :: pdb
-        type(masker)     :: mskvol, sphere, msker
-        type(sp_project) :: spproj
-        character(len=STDLEN)      :: pdbout_fname
+        character(len=:), allocatable :: fname_vol, fname_even, fname_odd, fname_pproc, fname_lp, fname_mirr
+        type(parameters)      :: params
+        type(image)           :: vol_bfac, vol_no_bfac, vol_even, vol_odd
+        type(atoms)           :: pdb
+        type(masker)          :: mskvol, sphere, msker
+        character(len=STDLEN) :: pdbout_fname
         real    :: fsc0143, fsc05, smpd, lplim
         integer :: state, box, fsc_box, ldim(3)
         logical :: has_fsc
         ! set defaults
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        call cline%set('oritype', 'out')
         ! parse commad-line
         call params%new(cline)
-        ! read project segment
-        call spproj%read_segment(params%oritype, params%projfile)
-        ! state
-        if( cline%defined('state') )then
-            state = params%state
-        else
-            state = 1
-        endif
         ! check volume, get correct smpd & box
-        if( cline%defined('imgkind') )then
-            call spproj%get_vol(params%imgkind, state, fname_vol, smpd, box)
-        else
-            call spproj%get_vol('vol', state, fname_vol, smpd, box)
-        endif
+        fname_vol=params%fname
         if( .not.file_exists(fname_vol) )then
             THROW_HARD('volume: '//trim(fname_vol)//' does not exist')
         endif
@@ -210,8 +201,8 @@ contains
         fname_mirr  = basename(add2fbody(trim(fname_pproc), params%ext, MIRR_SUFFIX))
         fname_lp    = basename(add2fbody(trim(fname_vol),   params%ext, LP_SUFFIX))
         ! read volume(s)
-        ldim = [box,box,box]
-        call vol_bfac%new(ldim, smpd)
+        ldim = [params%box,params%box,params%box]
+        call vol_bfac%new(ldim, params%smpd)
         call vol_bfac%read(fname_vol)
         ! generate pdb mask from pdb
         call pdb%new(params%pdbfile)
@@ -228,14 +219,12 @@ contains
             if( .not.file_exists(params%fsc) ) THROW_HARD('FSC file: '//trim(params%fsc)//' not found')
             has_fsc = .true.
         else
-            call spproj%get_fsc(state, fname_fsc, fsc_box)
-            params%fsc = trim(fname_fsc)
             if( file_exists(params%fsc) )then
                 has_fsc = .true.
             else
                 THROW_WARN('FSC file: '//trim(params%fsc)//' not found')
                 has_fsc = .false.
-                if( .not. cline%defined('lp') ) THROW_HARD('no method for low-pass filtering defined; give fsc|lp on command line; exec_postprocess')
+                if( .not. cline%defined('lp') ) THROW_HARD('no method for low-pass filtering defined; give fsc|lp on command line; exec_sharpvol')
             endif 
         endif
         if( has_fsc )then
@@ -289,11 +278,10 @@ contains
             call vol_bfac%write(fname_mirr)
         endif
         ! destruct
-        call spproj%kill
         call vol_bfac%kill
         call vol_no_bfac%kill
-        call simple_end('**** SIMPLE_SHARP NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_volsharp
+        call simple_end('**** SIMPLE_SHARPVOL NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_sharpvol
 
     subroutine exec_postprocess( self, cline )
         use simple_sp_project, only: sp_project
