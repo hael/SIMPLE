@@ -2236,7 +2236,7 @@ contains
         type(image)                   :: cavg, img, timg
         type(oris)                    :: os
         type(sp_project), target      :: spproj
-        character(len=:), allocatable :: label, fname, fname_denoised, fname_cavgs, fname_cavgs_denoised, fname_oris, fname_ori_ptcls
+        character(len=:), allocatable :: label, fname, fname_denoised, fname_cavgs, fname_cavgs_denoised, fname_oris, fname_denoised_ori, fname_ori
         integer,          allocatable :: cls_inds(:), pinds(:), cls_pops(:), ori_map(:)
         real,             allocatable :: avg(:), avg_pix(:), pcavecs(:,:), tmpvec(:)
         real    :: shift(2), loc(2), dist(2), e3, kw, mat(2,2), mat_inv(2,2)
@@ -2302,7 +2302,8 @@ contains
         fname_cavgs          = 'cavgs.mrcs'
         fname_cavgs_denoised = 'cavgs_denoised.mrcs'
         fname_oris           = 'oris_denoised.txt'
-        fname_ori_ptcls      = 'ptcls_ori_order.mrcs'
+        fname_ori            = 'ptcls_ori_order.mrcs'
+        fname_denoised_ori   = 'ptcls_denoised_ori_order.mrcs'
         cnt1 = 0
         cnt2 = 0
         ! pca allocation
@@ -2415,57 +2416,67 @@ contains
             cyc_limsR(:,1) = cyc_lims(1,:)
             cyc_limsR(:,2) = cyc_lims(2,:)
             do i = 1, cnt2
-                call cavg%zero_and_unflag_ft
-                call cavg%read(fname_denoised, ori_map(i))
                 shift = build%spproj_field%get_2Dshift(i)
                 e3    = build%spproj_field%e3get(i)
-                call  img%zero_and_flag_ft
-                call timg%zero_and_flag_ft
-                call cavg%pad_fft(img)
-                ! particle rotation
-                call rotmat2d(-e3, mat)
-                call matinv(mat, mat_inv, 2, errflg)
-                !$omp parallel do collapse(2) private(h,k,loc,win_corner,dist,l,ll,m,mm,phys,kw,fcompl,fcompll) default(shared) proc_bind(close) schedule(static)
-                do h = logi_lims(1,1),logi_lims(1,2)
-                    do k = logi_lims(2,1),logi_lims(2,2)
-                        ! Rotation
-                        loc        = matmul(real([h,k]),mat_inv)
-                        win_corner = floor(loc) ! bottom left corner
-                        dist       = loc - real(win_corner)
-                        ! Bi-linear interpolation
-                        l      = cyci_1d(cyc_limsR(:,1), win_corner(1))
-                        ll     = cyci_1d(cyc_limsR(:,1), win_corner(1)+1)
-                        m      = cyci_1d(cyc_limsR(:,2), win_corner(2))
-                        mm     = cyci_1d(cyc_limsR(:,2), win_corner(2)+1)
-                        ! l, bottom left corner
-                        phys   = img%comp_addr_phys(l,m)
-                        kw     = (1.-dist(1))*(1.-dist(2))   ! interpolation kernel weight
-                        fcompl = kw * img%get_cmat_at(phys(1), phys(2),1)
-                        ! l, bottom right corner
-                        phys   = img%comp_addr_phys(l,mm)
-                        kw     = (1.-dist(1))*dist(2)
-                        fcompl = fcompl + kw * img%get_cmat_at(phys(1), phys(2),1)
-                        if( l < 0 ) fcompl = conjg(fcompl) ! conjugation when required!
-                        ! ll, upper left corner
-                        phys    = img%comp_addr_phys(ll,m)
-                        kw      = dist(1)*(1.-dist(2))
-                        fcompll = kw * img%get_cmat_at(phys(1), phys(2),1)
-                        ! ll, upper right corner
-                        phys    = img%comp_addr_phys(ll,mm)
-                        kw      = dist(1)*dist(2)
-                        fcompll = fcompll + kw * img%get_cmat_at(phys(1), phys(2),1)
-                        if( ll < 0 ) fcompll = conjg(fcompll) ! conjugation when required!
-                        ! update with interpolated values
-                        phys = img%comp_addr_phys(h,k)
-                        call timg%set_cmat_at(phys(1),phys(2),1, fcompl + fcompll)
+                do j = 1, 2
+                    call  img%zero_and_flag_ft
+                    call timg%zero_and_flag_ft
+                    call cavg%zero_and_unflag_ft
+                    if( j == 1 )then
+                        call cavg%read(fname_denoised, ori_map(i))
+                    else
+                        call cavg%read(fname,          ori_map(i))
+                    endif
+                    call cavg%pad_fft(img)
+                    ! particle rotation
+                    call rotmat2d(-e3, mat)
+                    call matinv(mat, mat_inv, 2, errflg)
+                    !$omp parallel do collapse(2) private(h,k,loc,win_corner,dist,l,ll,m,mm,phys,kw,fcompl,fcompll) default(shared) proc_bind(close) schedule(static)
+                    do h = logi_lims(1,1),logi_lims(1,2)
+                        do k = logi_lims(2,1),logi_lims(2,2)
+                            ! Rotation
+                            loc        = matmul(real([h,k]),mat_inv)
+                            win_corner = floor(loc) ! bottom left corner
+                            dist       = loc - real(win_corner)
+                            ! Bi-linear interpolation
+                            l      = cyci_1d(cyc_limsR(:,1), win_corner(1))
+                            ll     = cyci_1d(cyc_limsR(:,1), win_corner(1)+1)
+                            m      = cyci_1d(cyc_limsR(:,2), win_corner(2))
+                            mm     = cyci_1d(cyc_limsR(:,2), win_corner(2)+1)
+                            ! l, bottom left corner
+                            phys   = img%comp_addr_phys(l,m)
+                            kw     = (1.-dist(1))*(1.-dist(2))   ! interpolation kernel weight
+                            fcompl = kw * img%get_cmat_at(phys(1), phys(2),1)
+                            ! l, bottom right corner
+                            phys   = img%comp_addr_phys(l,mm)
+                            kw     = (1.-dist(1))*dist(2)
+                            fcompl = fcompl + kw * img%get_cmat_at(phys(1), phys(2),1)
+                            if( l < 0 ) fcompl = conjg(fcompl) ! conjugation when required!
+                            ! ll, upper left corner
+                            phys    = img%comp_addr_phys(ll,m)
+                            kw      = dist(1)*(1.-dist(2))
+                            fcompll = kw * img%get_cmat_at(phys(1), phys(2),1)
+                            ! ll, upper right corner
+                            phys    = img%comp_addr_phys(ll,mm)
+                            kw      = dist(1)*dist(2)
+                            fcompll = fcompll + kw * img%get_cmat_at(phys(1), phys(2),1)
+                            if( ll < 0 ) fcompll = conjg(fcompll) ! conjugation when required!
+                            ! update with interpolated values
+                            phys = img%comp_addr_phys(h,k)
+                            call timg%set_cmat_at(phys(1),phys(2),1, fcompl + fcompll)
+                        end do
                     end do
-                end do
-                !$omp end parallel do
-                ! shift
-                call timg%shift2Dserial(shift)
-                call timg%ifft
-                call timg%clip(cavg)
-                call cavg%write(fname_ori_ptcls, i)
+                    !$omp end parallel do
+                    ! shift
+                    call timg%shift2Dserial(shift)
+                    call timg%ifft
+                    call timg%clip(cavg)
+                    if( j == 1 )then
+                        call cavg%write(fname_denoised_ori, i)
+                    else
+                        call cavg%write(fname_ori, i)
+                    endif
+                enddo
             enddo
         endif
         call os%zero_inpl
