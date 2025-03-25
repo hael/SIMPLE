@@ -2295,7 +2295,7 @@ contains
         cls_inds = pack(cls_inds, mask=cls_pops > 2)
         nptcls   = sum(cls_pops,  mask=cls_pops > 2)
         ncls     = size(cls_inds)
-        allocate(ori_map(nptcls))
+        if( trim(params%pca_ori_stk) .eq. 'yes' ) allocate(ori_map(nptcls))
         call os%new(nptcls, is_ptcl=.true.)
         fname                = 'ptcls.mrcs'
         fname_denoised       = 'ptcls_denoised.mrcs'
@@ -2391,7 +2391,7 @@ contains
                     call imgs_ori(j)%unserialize(pcavecs(:,j))
                     call os%transfer_ori(cnt2, build%spproj_field, pinds(j))
                     call imgs_ori(j)%write(fname_denoised, cnt2)
-                    ori_map(pinds(j)) = cnt2
+                    if( trim(params%pca_ori_stk) .eq. 'yes' ) ori_map(pinds(j)) = cnt2
                 end do
                 call transform_ptcls(spproj, params%oritype, cls_inds(i), imgs, pinds, phflip=l_phflip, cavg=cavg, imgs_ori=imgs_ori, just_transf=.true.)
             else
@@ -2401,7 +2401,7 @@ contains
                     call cavg%add(imgs(j))
                     call os%transfer_ori(cnt2, build%spproj_field, pinds(j))
                     call imgs(j)%write(fname_denoised, cnt2)
-                    ori_map(pinds(j)) = cnt2
+                    if( trim(params%pca_ori_stk) .eq. 'yes' ) ori_map(pinds(j)) = cnt2
                     call imgs(j)%kill
                 end do
                 call cavg%div(real(nptcls))
