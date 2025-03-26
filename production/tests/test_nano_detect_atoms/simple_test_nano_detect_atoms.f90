@@ -31,7 +31,7 @@ params_glob            => params
 params_glob%element    = element
 params_glob%smpd       = smpd
 call nano%new(filename_exp,msk=(mskdiam / smpd)/2)
-call nano%identify_atomic_pos(a, l_fit_lattice=.true.)
+call nano%identify_atomic_pos(a, l_fit_lattice=.true., l_atom_thres=.true.)
 call nano%simulate_atoms(simatms)
 call simatms%write('simatms_henry.mrc')
 call nano%get_img_raw(raw_img)
