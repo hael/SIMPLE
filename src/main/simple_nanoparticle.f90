@@ -593,10 +593,11 @@ contains
         call simatms%kill
     end subroutine identify_lattice_params
 
-    subroutine identify_atomic_pos( self, a, l_fit_lattice, split_fname )
+    subroutine identify_atomic_pos( self, a, l_fit_lattice, l_atom_thres, split_fname )
         class(nanoparticle),        intent(inout) :: self
         real,                       intent(inout) :: a(3)                ! lattice parameters
         logical,                    intent(in)    :: l_fit_lattice       ! fit lattice or use inputted
+        logical,                    intent(in)    :: l_atom_thres        ! do atomic thresholding or not
         character(len=*), optional, intent(in)    :: split_fname
         type(image) :: simatms, img_cos
         ! MODEL BUILDING
@@ -613,7 +614,7 @@ contains
         if (WRITE_OUTPUT) call simatms%write(trim(self%fbody)//'_SIM_pre_validation.mrc')
         call self%validate_atoms(simatms, l_print=.false.)
         if ( WRITE_OUTPUT )call self%write_centers('valid_corr_in_bfac_field_pre_discard', 'valid_corr')
-        call self%discard_atoms
+        if( l_atom_thres ) call self%discard_atoms
         ! re-calculate valid_corr:s (since they are otherwise lost from the B-factor field due to reallocations of atominfo)
         call self%simulate_atoms(simatms)
         call self%validate_atoms(simatms, l_print=.true.)

@@ -20,6 +20,7 @@ type :: parameters
     character(len=3)          :: acf='no'             !< calculate autocorrelation function(yes|no){no}
     character(len=3)          :: append='no'          !< append selection (yes|no){no}
     character(len=3)          :: async='no'           !< asynchronous (yes|no){no}
+    character(len=3)          :: atom_thres='yes'     !< do atomic thresholding or not (yes|no){yes}
     character(len=3)          :: autoscale='no'       !< automatic down-scaling(yes|no){yes}
     character(len=3)          :: autosample='no'      !< automatic particles sampling scheme(yes|no){no}
     character(len=3)          :: avg='no'             !< calculate average (yes|no){no}
@@ -555,6 +556,7 @@ contains
         call check_carg('angastunit',     self%angastunit)
         call check_carg('append',         self%append)
         call check_carg('async',          self%async)
+        call check_carg('atom_thres',     self%atom_thres)
         call check_carg('automsk',        self%automsk)
         call check_carg('automatic',      self%automatic)
         call check_carg('autoscale',      self%autoscale)

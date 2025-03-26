@@ -147,13 +147,13 @@ contains
             call nano%kill
             call nano%new(params%vols(1))
             ! execute
-            call nano%identify_atomic_pos(a, l_fit_lattice=.false.)
+            call nano%identify_atomic_pos(a, l_fit_lattice=.false., l_atom_thres=trim(params%atom_thres).eq.'yes')
             ! kill
             call nano%kill
         else
             call nano%new(params%vols(1))
             ! execute
-            call nano%identify_atomic_pos(a, l_fit_lattice=.true.)
+            call nano%identify_atomic_pos(a, l_fit_lattice=.true., l_atom_thres=trim(params%atom_thres).eq.'yes')
             ! kill
             call nano%kill
         endif
