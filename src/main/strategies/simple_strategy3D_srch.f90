@@ -22,7 +22,7 @@ type strategy3D_srch
     character(len=:), allocatable :: refine                !< 3D refinement flag
     type(pftcc_shsrch_grad) :: grad_shsrch_obj             !< origin shift search object, L-BFGS with gradient
     type(pftcc_shsrch_grad) :: grad_shsrch_first_obj       !< origin shift search object, L-BFGS with gradient, used for initial shift search on previous ref
-    type(ori)               :: o_prev                      !< previous orientation, used in continuous search
+    type(ori)               :: o_prev                      !< previous orientation
     type(oris)              :: opeaks                      !< peak orientations to consider for refinement
     integer                 :: iptcl           = 0         !< global particle index
     integer                 :: iptcl_map       = 0         !< map particle index
@@ -106,21 +106,20 @@ contains
 
     subroutine prep4srch( self )
         class(strategy3D_srch), intent(inout) :: self
-        type(ori) :: o_prev
         real      :: corrs(self%nrots), corr
         integer   :: ipeak, tmp_inds(self%nrefs_sub), iref_sub, prev_proj_sub
         ! previous parameters
-        call build_glob%spproj_field%get_ori(self%iptcl, o_prev)           ! previous ori
-        self%prev_state = o_prev%get_state()                               ! state index
-        self%class      = o_prev%get_class()                               ! 2D class index
-        self%prev_roind = pftcc_glob%get_roind(360.-o_prev%e3get())        ! in-plane angle index
-        self%prev_shvec = o_prev%get_2Dshift()                             ! shift vector
-        self%prev_proj  = build_glob%eulspace%find_closest_proj(o_prev)    ! previous projection direction
-        self%prev_ref   = (self%prev_state-1)*self%nprojs + self%prev_proj ! previous reference
+        call build_glob%spproj_field%get_ori(self%iptcl, self%o_prev)        ! previous ori
+        self%prev_state = self%o_prev%get_state()                            ! state index
+        self%class      = self%o_prev%get_class()                            ! 2D class index
+        self%prev_roind = pftcc_glob%get_roind(360.-self%o_prev%e3get())     ! in-plane angle index
+        self%prev_shvec = self%o_prev%get_2Dshift()                          ! shift vector
+        self%prev_proj  = build_glob%eulspace%find_closest_proj(self%o_prev) ! previous projection direction
+        self%prev_ref   = (self%prev_state-1)*self%nprojs + self%prev_proj   ! previous reference
         call build_glob%spproj_field%set(self%iptcl, 'proj', real(self%prev_proj))
-        ! copy o_prev to opeaks to transfer paticle-dependent parameters
+        ! copy self%o_prev to opeaks to transfer paticle-dependent parameters
         do ipeak = 1, self%npeaks
-            call self%opeaks%set_ori(ipeak, o_prev)
+            call self%opeaks%set_ori(ipeak, self%o_prev)
         end do
         ! init threaded search arrays
         call prep_strategy3D_thread(self%ithr)
@@ -154,7 +153,6 @@ contains
         call pftcc_glob%gencorrs(self%prev_ref, self%iptcl, corrs)
         corr = max(0.,maxval(corrs))
         self%prev_corr = corr
-        call o_prev%kill
     end subroutine prep4srch
 
     subroutine inpl_srch_first( self )

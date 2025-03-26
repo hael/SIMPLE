@@ -448,6 +448,7 @@ type :: parameters
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
     real    :: pool_threshold_factor=POOL_THRESHOLD_FACTOR  !< stream pool class rejection adjustment
     real    :: prob_athres=10.     !< angle threshold for prob distribution samplings
+    real    :: res_target = 3.     !< resolution target in A
     real    :: scale=1.            !< image scale factor{1}
     real    :: sherr=0.            !< shift error(in pixels){2}
     real    :: sigma=1.0           !< for gaussian function generation {1.}
@@ -933,6 +934,7 @@ contains
         call check_rarg('phranlp',        self%phranlp)
         call check_rarg('pool_threshold_factor', self%pool_threshold_factor)
         call check_rarg('prob_athres',    self%prob_athres)
+        call check_rarg('res_target',     self%res_target)
         call check_rarg('scale',          self%scale)
         call check_rarg('sherr',          self%sherr)
         call check_rarg('smpd',           self%smpd)

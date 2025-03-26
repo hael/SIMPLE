@@ -72,7 +72,7 @@ type(abinitio3D_parts_commander)            :: xabinitio3D_parts
 
 ! REFINE3D WORKFLOWS
 type(calc_pspec_commander_distr)            :: xcalc_pspec_distr
-type(refine3D_commander_distr)              :: xrefine3D_distr
+type(refine3D_distr_commander)              :: xrefine3D_distr
 type(reconstruct3D_commander_distr)         :: xreconstruct3D
 
 ! OTHER SINGLE-PARTICLE WORKFLOW PROGRAMS
@@ -442,7 +442,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('b4fa2abe')
+call simple_print_git_version('1abdceb2')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
