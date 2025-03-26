@@ -80,78 +80,113 @@ end type
 
 contains
 
-    subroutine gaupick_multi( pcontrast, smpd_shrink, moldiams, boxfile_multi, offset, ndev, moldiam_opt )
+    subroutine gaupick_multi( pcontrast, smpd_shrink, moldiams, boxfile_multi, offset, ndev, moldiam_opt, append)
         character(len=*),  intent(in)  :: pcontrast
         real,              intent(in)  :: smpd_shrink, moldiams(:)
         character(len=*),  intent(in)  :: boxfile_multi
         integer, optional, intent(in)  :: offset
         real,    optional, intent(in)  :: ndev
         real,    optional, intent(out) :: moldiam_opt
-        type(pickgau),    allocatable :: pickers(:)
-        character(len=:), allocatable :: kind
-        integer,          allocatable :: picker_map(:,:)
-        real,             allocatable :: smds_corr(:)
+        character(len=:), allocatable  :: kind
+        logical, optional, intent(in)  :: append
+        type(pickgau), allocatable     :: pickers(:)
+        integer,       allocatable     :: picker_map(:,:)
+        real,          allocatable     :: smds_corr(:)
         type(pickgau) :: picker_merged
         integer :: ntot_pickers, npickers, i, ipick, jpick, ioff, joff, loc
         real    :: moldiam_max, dist_threshold, m
-        logical :: l_merge
+        logical :: l_merge, l_append, l_ring
+        l_ring   = .false.
+        l_append = .false.
+        if(present(append)) l_append = append
+        if(params_glob%ring == "yes") l_ring = .true.
         npickers     = size(moldiams)
         moldiam_max  = maxval(moldiams)
-        select case(trim(params_glob%pickkind))
-        case('ring')
-            ! Picking of 1 gaussian & 1 ring per diameter
-            ntot_pickers = 2*npickers
-            kind = 'ring'
-        case('disc')
-            ! 1 gaussian, 1 disc top view, 6 side views
-            ntot_pickers = 8*npickers
-            kind = 'disc'
-        case DEFAULT
-            ! 1 gaussian per diameter
-            ntot_pickers = npickers
+        if(params_glob%interactive == "yes") then
             kind = 'gau'
-        end select
+            if(l_ring) then
+                ntot_pickers = 2*npickers
+            else
+                ntot_pickers = npickers
+            end if 
+        else
+            select case(trim(params_glob%pickkind))
+            case('ring')
+                ! Picking of 1 gaussian & 1 ring per diameter
+                ntot_pickers = 2*npickers
+                kind = 'ring'
+            case('disc')
+                ! 1 gaussian, 1 disc top view, 6 side views
+                ntot_pickers = 8*npickers
+                kind = 'disc'
+            case DEFAULT
+                ! 1 gaussian per diameter
+                ntot_pickers = npickers
+                kind = 'gau'
+            end select
+        end if
         allocate(pickers(ntot_pickers), smds_corr(ntot_pickers))
         ! multi-gaussian picking
         do ipick = 1,npickers
             m = moldiams(ipick)
             ! gaussian
-            call pickers(ipick)%new_gaupicker(pcontrast, smpd_shrink, m, m, offset=offset, ndev=ndev)
-            dist_threshold = (pickers(ipick)%maxdiam/3.) / pickers(ipick)%smpd_shrink
-            call pickers(ipick)%gaupick(dist_thres=dist_threshold)
-            smds_corr(ipick) = pickers(ipick)%smd_corr
-            call pickers(ipick)%mic_shrink%kill
-            ! additions
-            select case(trim(params_glob%pickkind))
-            case('ring')
-                ! additional picking of a ring of the same diameter
-                jpick = ipick + npickers
-                call pickers(jpick)%new_gaupicker(pcontrast, smpd_shrink, m, m, offset=offset, ndev=ndev, kind='ring')
-                call pickers(jpick)%gaupick(dist_thres=dist_threshold)
-                smds_corr(jpick) = pickers(jpick)%smd_corr
-                call pickers(jpick)%mic_shrink%kill
-            case('disc')
-                ! top view of the same diameter
-                jpick = ipick + npickers
-                call pickers(jpick)%new_gaupicker(pcontrast, smpd_shrink, m, m, offset=offset, ndev=ndev, kind='disc')
-                call pickers(jpick)%gaupick(dist_thres=dist_threshold)
-                smds_corr(jpick) = pickers(jpick)%smd_corr
-                call pickers(jpick)%mic_shrink%kill
-                ! multiple side views
-                do i = 1,6
-                    jpick = jpick + npickers
-                    kind  = 'disc'//int2str((i-1)*30)
-                    call pickers(jpick)%new_gaupicker(pcontrast, smpd_shrink, m, m, offset=offset, ndev=ndev, kind=kind)
+            if(params_glob%interactive == "yes") then
+                if(m .ne. 0.0) then ! skip gaussian pick if moldiam = 0
+                    call pickers(ipick)%new_gaupicker(pcontrast, smpd_shrink, m, m, offset=offset, ndev=ndev)
+                    dist_threshold = (pickers(ipick)%maxdiam/3.) / pickers(ipick)%smpd_shrink
+                    call pickers(ipick)%gaupick(dist_thres=dist_threshold)
+                    smds_corr(ipick) = pickers(ipick)%smd_corr
+                    call pickers(ipick)%mic_shrink%kill
+                end if
+                if(l_ring) then
+                    ! additional picking of a ring 
+                    if(size(moldiams) .eq. 1 .and. params_glob%moldiam_ring .gt. 0.0) m = params_glob%moldiam_ring
+                    jpick = ipick + npickers
+                    call pickers(jpick)%new_gaupicker(pcontrast, smpd_shrink, m, m, offset=offset, ndev=ndev, kind='ring')
+                    dist_threshold = (pickers(jpick)%maxdiam/3.) / pickers(jpick)%smpd_shrink
                     call pickers(jpick)%gaupick(dist_thres=dist_threshold)
                     smds_corr(jpick) = pickers(jpick)%smd_corr
                     call pickers(jpick)%mic_shrink%kill
-                enddo
-            case DEFAULT
-                ! already performed
-            end select
+                end if
+            else
+                ! gaussian
+                call pickers(ipick)%new_gaupicker(pcontrast, smpd_shrink, m, m, offset=offset, ndev=ndev)
+                dist_threshold = (pickers(ipick)%maxdiam/3.) / pickers(ipick)%smpd_shrink
+                call pickers(ipick)%gaupick(dist_thres=dist_threshold)
+                smds_corr(ipick) = pickers(ipick)%smd_corr
+                call pickers(ipick)%mic_shrink%kill
+                ! additions
+                select case(trim(params_glob%pickkind))
+                case('ring')
+                    ! additional picking of a ring of the same diameter
+                    jpick = ipick + npickers
+                    call pickers(jpick)%new_gaupicker(pcontrast, smpd_shrink, m, m, offset=offset, ndev=ndev, kind='ring')
+                    call pickers(jpick)%gaupick(dist_thres=dist_threshold)
+                    smds_corr(jpick) = pickers(jpick)%smd_corr
+                    call pickers(jpick)%mic_shrink%kill
+                case('disc')
+                    ! top view of the same diameter
+                    jpick = ipick + npickers
+                    call pickers(jpick)%new_gaupicker(pcontrast, smpd_shrink, m, m, offset=offset, ndev=ndev, kind='disc')
+                    call pickers(jpick)%gaupick(dist_thres=dist_threshold)
+                    smds_corr(jpick) = pickers(jpick)%smd_corr
+                    call pickers(jpick)%mic_shrink%kill
+                    ! multiple side views
+                    do i = 1,6
+                        jpick = jpick + npickers
+                        kind  = 'disc'//int2str((i-1)*30)
+                        call pickers(jpick)%new_gaupicker(pcontrast, smpd_shrink, m, m, offset=offset, ndev=ndev, kind=kind)
+                        call pickers(jpick)%gaupick(dist_thres=dist_threshold)
+                        smds_corr(jpick) = pickers(jpick)%smd_corr
+                        call pickers(jpick)%mic_shrink%kill
+                    enddo
+                case DEFAULT
+                    ! already performed
+                end select
+            end if
         end do
         ! ouputs coordinates & metadata
-        call report_multipick( ntot_pickers, pickers, boxfile_multi)
+        call report_multipick( ntot_pickers, pickers, boxfile_multi, l_append)
         ! return molecular diameter based on maximizing standard mean distance between peak- and
         ! non-peak distributions of corr
         loc = maxloc(smds_corr(1:npickers), dim=1)
@@ -1530,16 +1565,43 @@ contains
     ! Private module utilities
     !
 
-    subroutine report_multipick( npick, picker, fname )
-        integer,          intent(in) :: npick
-        class(pickgau),   intent(in) :: picker(npick)
-        character(len=*), intent(in) :: fname
+    subroutine report_multipick( npick, picker, fname, append )
+        integer,                   intent(in)  :: npick
+        class(pickgau),            intent(in)  :: picker(npick)
+        character(len=*),          intent(in)  :: fname
+        logical,                   intent(in)  :: append
+        type(nrtxtfile)                        :: existing_boxfile
         integer, allocatable :: pos(:,:)
-        real,    allocatable :: scores(:), loc_sdevs(:)
+        real,    allocatable :: scores(:), loc_sdevs(:), moldiams(:)
+        real,    allocatable :: existing_boxdata(:,:)
         real    :: moldiam, src
-        integer :: i,j, funit, iostat, npos, box, box_raw
+        integer :: i,j, funit, iostat, npos, box, box_raw, nboxes, i_append
+        ! read existing boxes and prune repicked moldiams
+        i_append = 0
+        if(append .and. npick .gt. 0) then
+            allocate(moldiams(npick))
+            do i=1, npick
+                moldiams(i) = picker(i)%get_moldiam()
+            end do
+            if(file_exists(trim(adjustl(fname)))) then
+                call existing_boxfile%new(trim(adjustl(fname)), 1)
+                nboxes = existing_boxfile%get_ndatalines()
+                allocate(existing_boxdata(existing_boxfile%get_nrecs_per_line(), nboxes))
+                do i=1, nboxes
+                    call existing_boxfile%readNextDataLine(existing_boxdata(:,i_append + 1))
+                    if(.not. ANY(moldiams == existing_boxdata(4, i_append + 1))) i_append = i_append + 1
+                end do
+                call existing_boxfile%kill
+            end if
+            deallocate(moldiams)
+        end if
         call fopen(funit, status='REPLACE', action='WRITE', file=trim(adjustl(fname)), iostat=iostat)
         call fileiochk('simple_pickgau; report_multipick ', iostat)
+        if(i_append > 0 .and. allocated(existing_boxdata)) then
+            do i = 1, i_append
+                write(funit,'(I7,I7,I7,F8.1,F8.3,F4.1)') int(existing_boxdata(1, i)), int(existing_boxdata(2, i)), int(existing_boxdata(3, i)), existing_boxdata(4, i), existing_boxdata(5, i), existing_boxdata(6, i)
+            end do
+        end if
         do i = 1,npick
             npos = picker(i)%get_nboxes()
             if( npos == 0 ) cycle
@@ -1563,11 +1625,12 @@ contains
                 !   I7: box size
                 ! F8.1: diameter
                 ! F8.3: correlation to reference
-                ! F3.1: gaussian(1)/ring(2) picking
+                ! F4.1: gaussian(1)/ring(2) picking
                 write(funit,'(3I7,F8.1,F8.3,F4.1)') pos(j,1:2),box,moldiam,scores(j),src
             enddo
         enddo
         call fclose(funit)
+        if(allocated(existing_boxdata)) deallocate(existing_boxdata)
     end subroutine report_multipick
 
 end module simple_pickgau

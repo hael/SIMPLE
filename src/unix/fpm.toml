@@ -1,0 +1,123 @@
+name = "fortran-unix"
+version = "0.1.0"
+license = "ISC"
+author = "Philipp Engel"
+maintainer = "@interkosmos"
+copyright = "Copyright (c) 2022, Philipp Engel"
+description = "Fortran 2018 ISO C binding interfaces to SysV/POSIX"
+keywords = [ "posix", "sysv", "system", "unix", "linux", "freebsd" ]
+
+[library]
+source-dir = "src"
+
+[install]
+library = true
+
+[[example]]
+name = "dirent"
+source-dir = "examples/dirent"
+main = "dirent.f90"
+
+[[example]]
+name = "fifo"
+source-dir = "examples/fifo"
+main = "fifo.f90"
+
+[[example]]
+name = "fork"
+source-dir = "examples/fork"
+main = "fork.f90"
+
+[[example]]
+name = "irc"
+source-dir = "examples/irc"
+main = "irc.f90"
+
+[[example]]
+name = "key"
+source-dir = "examples/key"
+main = "key.f90"
+
+[[example]]
+name = "mqueue"
+source-dir = "examples/mqueue"
+main = "mqueue.f90"
+link = "rt"
+
+[[example]]
+name = "msg"
+source-dir = "examples/msg"
+main = "msg.f90"
+
+[[example]]
+name = "mutex"
+source-dir = "examples/mutex"
+main = "mutex.f90"
+link = "pthread"
+
+[[example]]
+name = "os"
+source-dir = "examples/os"
+main = "os.F90"
+
+[[example]]
+name = "pid"
+source-dir = "examples/pid"
+main = "pid.f90"
+
+[[example]]
+name = "pipe"
+source-dir = "examples/pipe"
+main = "pipe.f90"
+
+[[example]]
+name = "pthread"
+source-dir = "examples/pthread"
+main = "pthread.f90"
+link = "pthread"
+
+[[example]]
+name = "regex"
+source-dir = "examples/regex"
+main = "regex.f90"
+
+[[example]]
+name = "semaphore"
+source-dir = "examples/semaphore"
+main = "semaphore.f90"
+link = "pthread"
+
+[[example]]
+name = "serial"
+source-dir = "examples/serial"
+main = "serial.f90"
+
+[[example]]
+name = "signal"
+source-dir = "examples/signal"
+main = "signal.f90"
+
+[[example]]
+name = "socket"
+source-dir = "examples/socket"
+main = "socket.f90"
+
+[[example]]
+name = "stat"
+source-dir = "examples/stat"
+main = "stat.f90"
+
+[[example]]
+name = "time"
+source-dir = "examples/time"
+main = "time.f90"
+
+[[example]]
+name = "uname"
+source-dir = "examples/uname"
+main = "uname.f90"
+
+[[example]]
+name = "uptime"
+source-dir = "examples/uptime"
+main = "uptime.f90"

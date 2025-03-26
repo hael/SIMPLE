@@ -292,6 +292,8 @@ type(simple_input_param) :: nchunks
 type(simple_input_param) :: ncls
 type(simple_input_param) :: ncls_start
 type(simple_input_param) :: neg
+type(simple_input_param) :: niceprocid
+type(simple_input_param) :: niceserver
 type(simple_input_param) :: nparts
 type(simple_input_param) :: nparts_chunk
 type(simple_input_param) :: nparts_pool

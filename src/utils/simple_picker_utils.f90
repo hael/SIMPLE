@@ -19,7 +19,7 @@ logical, parameter :: L_DEBUG      = .false.
 
 contains
 
-    subroutine exec_gaupick( micname, boxfile_out, smpd, nptcls, pickrefs, dir_out, moldiam_opt )
+    subroutine exec_gaupick( micname, boxfile_out, smpd, nptcls, pickrefs, dir_out, moldiam_opt, append)
         use simple_strings, only: str2real, parsestr
         character(len=*),           intent(in)    :: micname
         character(len=LONGSTRLEN),  intent(out)   :: boxfile_out
@@ -28,13 +28,16 @@ contains
         class(image),     optional, intent(inout) :: pickrefs(:)
         character(len=*), optional, intent(in)    :: dir_out
         real,             optional, intent(out)   :: moldiam_opt
+        logical,          optional, intent(in)    :: append
         type(pickgau)             :: gaup, gaup_refine
         real,         allocatable :: moldiams(:)
         character(len=LONGSTRLEN) :: boxfile
         character(len=4), allocatable :: moldiams_str(:)
         real    :: maxdiam, mmoldiam_opt
         integer :: box, istr, num_entries, idiam, num_moldiams
-        logical :: l_roi, l_backgr_subtr
+        logical :: l_roi, l_backgr_subtr, l_append
+        l_append = .false.
+        if(present(append)) l_append = append
         boxfile = basename(fname_new_ext(trim(micname),'box'))
         if( present(dir_out) ) boxfile = trim(dir_out)//'/'//trim(boxfile)
         l_roi          = trim(params_glob%pick_roi).eq.'yes'
@@ -42,7 +45,15 @@ contains
         call read_mic_raw(micname, smpd, subtr_backgr=l_backgr_subtr)
         if( params_glob%nmoldiams > 1 )then
             moldiams = equispaced_vals(params_glob%moldiam, params_glob%moldiam_max, params_glob%nmoldiams)
-            call gaupick_multi(params_glob%pcontrast, SMPD_SHRINK1, moldiams, boxfile, offset=OFFSET, moldiam_opt=mmoldiam_opt)
+            call gaupick_multi(params_glob%pcontrast, SMPD_SHRINK1, moldiams, boxfile, offset=OFFSET, moldiam_opt=mmoldiam_opt, append=l_append)
+            if( present(moldiam_opt) ) moldiam_opt = mmoldiam_opt
+            deallocate(moldiams)
+            nptcls      = 1 ! arbitrary, needs be > 0
+            boxfile_out = trim(boxfile)
+        else if( params_glob%nmoldiams .eq. 1 .and. params_glob%interactive .eq. 'yes' ) then ! for stream non-interactive initial picking
+            allocate(moldiams(1))
+            moldiams(1) = params_glob%moldiam
+            call gaupick_multi(params_glob%pcontrast, SMPD_SHRINK1, moldiams, boxfile, offset=OFFSET, moldiam_opt=mmoldiam_opt, append=l_append)
             if( present(moldiam_opt) ) moldiam_opt = mmoldiam_opt
             deallocate(moldiams)
             nptcls      = 1 ! arbitrary, needs be > 0

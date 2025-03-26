@@ -1,5 +1,7 @@
 module simple_sp_project
 include 'simple_lib.f08'
+use json_kinds
+use json_module
 implicit none
 
 public :: sp_project, oritype2segment
@@ -68,6 +70,8 @@ contains
     procedure          :: get_vol
     procedure          :: get_fsc
     procedure          :: get_frcs
+    procedure          :: get_all_vols
+    procedure          :: get_all_fscs
     procedure          :: get_imginfo_from_osout
     procedure          :: get_imgdims_from_osout
     ! getters
@@ -93,6 +97,7 @@ contains
     procedure          :: get_mic2stk_inds
     ! setters
     procedure          :: copy
+    procedure          :: set_cavgs_thumb
     ! modifiers
     procedure          :: split_stk
     procedure          :: write_substk
@@ -112,7 +117,9 @@ contains
     ! I/O
     ! printers
     procedure          :: print_info
+    procedure          :: print_info_json
     procedure          :: print_segment
+    procedure          :: print_segment_json
     ! readers
     procedure          :: read
     procedure          :: read_mic_stk_ptcl2D_segments
@@ -1676,12 +1683,12 @@ contains
         call self%os_out%set(ind, 'box',     box)
     end subroutine add_fsc2os_out
 
-    subroutine add_vol2os_out( self, vol, smpd, state, which_imgkind, box )
+    subroutine add_vol2os_out( self, vol, smpd, state, which_imgkind, box, pop )
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: vol, which_imgkind
         real,              intent(in)    :: smpd
         integer,           intent(in)    :: state
-        integer, optional, intent(in)    :: box
+        integer, optional, intent(in)    :: box, pop
         character(len=:), allocatable :: imgkind
         character(len=LONGSTRLEN)     :: abspath
         integer                       :: n_os_out, ind, i, ldim(3), ifoo
@@ -1751,6 +1758,7 @@ contains
         call self%os_out%set(ind, 'smpd',    smpd)
         call self%os_out%set(ind, 'imgkind', which_imgkind)
         call self%os_out%set(ind, 'state',   state)
+        if(present(pop)) call self%os_out%set(ind, 'pop', pop)
     end subroutine add_vol2os_out
 
     subroutine add_entry2os_out( self, which_imgkind, ind )
@@ -1784,7 +1792,7 @@ contains
         endif
     end subroutine add_entry2os_out
 
-    subroutine get_cavgs_stk( self, stkname, ncls, smpd, imgkind, fail, stkpath)
+    subroutine get_cavgs_stk( self, stkname, ncls, smpd, imgkind, fail, stkpath, out_ind)
         class(sp_project),                       intent(inout) :: self
         character(len=:), allocatable,           intent(inout) :: stkname
         integer,                                 intent(out)   :: ncls
@@ -1792,6 +1800,7 @@ contains
         character(len=:), allocatable, optional, intent(inout) :: stkpath
         character(len=*), optional,              intent(in)    :: imgkind
         logical,          optional,              intent(in)    :: fail
+        integer,          optional,              intent(inout) :: out_ind
         character(len=:), allocatable                          :: ikind, iimgkind
         integer :: n_os_out, ind, i, cnt
         logical :: fail_here
@@ -1844,6 +1853,7 @@ contains
             if( allocated(stkpath) ) deallocate(stkpath)
             if(self%os_out%isthere(ind, 'stkpath')) stkpath = trim(self%os_out%get_static(ind,'stkpath'))
         endif
+        if(present(out_ind)) out_ind = ind
     end subroutine get_cavgs_stk
 
     subroutine get_vol( self, imgkind, state, vol_fname, smpd, box)
@@ -1908,6 +1918,54 @@ contains
         smpd = self%os_out%get(ind,  'smpd')
         box  = self%os_out%get_int(ind, 'box')
     end subroutine get_vol
+
+    subroutine get_all_vols( self, orisout )
+        class(sp_project), intent(inout) :: self
+        type(oris),        intent(inout) :: orisout
+        character(len=:),  allocatable   :: imgkind_here
+        integer                          :: i, nvols
+        nvols = 0
+        call orisout%new(0, .false.)
+        do i=1, self%os_out%get_noris()
+            if( self%os_out%isthere(i, 'imgkind') ) then
+                call self%os_out%getter(i, 'imgkind', imgkind_here)
+                if(trim(imgkind_here) .eq. 'vol') then
+                    nvols = nvols + 1
+                    if(nvols .eq. 1) then
+                        call orisout%new(1, .false.)
+                    else
+                        call orisout%reallocate(nvols)
+                    end if
+                    call orisout%transfer_ori(nvols, self%os_out, i)
+                endif
+            endif
+        enddo
+        if(allocated(imgkind_here)) deallocate(imgkind_here)
+    end subroutine get_all_vols
+
+    subroutine get_all_fscs( self, orisout )
+        class(sp_project), intent(inout) :: self
+        type(oris),        intent(inout) :: orisout
+        character(len=:),  allocatable   :: imgkind_here
+        integer                          :: i, nvols
+        nvols = 0
+        call orisout%new(0, .false.)
+        do i=1, self%os_out%get_noris()
+            if( self%os_out%isthere(i, 'imgkind') ) then
+                call self%os_out%getter(i, 'imgkind', imgkind_here)
+                if(trim(imgkind_here) .eq. 'fsc') then
+                    nvols = nvols + 1
+                    if(nvols .eq. 1) then
+                        call orisout%new(1, .false.)
+                    else
+                        call orisout%reallocate(nvols)
+                    end if
+                    call orisout%transfer_ori(nvols, self%os_out, i)
+                endif
+            endif
+        enddo
+        if(allocated(imgkind_here)) deallocate(imgkind_here)
+    end subroutine get_all_fscs
 
     subroutine get_fsc( self, state, fsc_fname, box )
         class(sp_project),             intent(inout) :: self
@@ -3376,6 +3434,66 @@ contains
         endif
     end subroutine print_info
 
+    subroutine print_info_json( self, fname ) ! left in case its needed !!
+        class(sp_project),           intent(inout) :: self
+        character(len=*),           intent(in)     :: fname
+        character(len=:),           allocatable    :: projfile, record
+        character(len=XLONGSTRLEN), allocatable    :: keys(:)
+        type(binoris_seginfo),      allocatable    :: hinfo(:)
+        type(json_core)                      :: json
+        type(json_value),      pointer       :: json_root, json_seg, json_real_keys, json_char_keys
+        type(ori)                            :: seg_ori
+        logical                              :: is_ptcl = .false.
+        integer,               allocatable   :: seginds(:)
+        integer :: i, j
+        if( fname2format(fname) .ne. 'O' )then
+            THROW_HARD('file format of: '//trim(fname)//' not supported; sp_project :: print_info_json')
+        endif
+        projfile = trim(fname)
+        call json%initialize(no_whitespace=.true.)
+        call json%create_object(json_root,'')
+        if( file_exists(projfile) )then
+            call self%bos%open(projfile)
+            call self%bos%get_segments_info(seginds, hinfo)
+            if( allocated(hinfo) )then
+                do i = 1,size(hinfo)
+                    if(hinfo(i)%n_records .gt. 0) then
+                        ! initialise json
+                        call json%create_object(json_seg, segment2oritype(seginds(i)))
+                        call json%add(json_seg, 'n', int(hinfo(i)%n_records))
+                        call json%add(json_seg, 'info',segment2info(seginds(i), hinfo(i)%n_records))
+                        call json%create_array(json_real_keys, 'numeric_keys')
+                        call json%create_array(json_char_keys, 'character_keys')
+                        ! read 1st record and convert to ori
+                        if(seginds(i) == PTCL2D_SEG .or. seginds(i) == PTCL3D_SEG) is_ptcl = .true.
+                        call self%bos%read_record(seginds(i), hinfo(i)%first_data_byte, record)
+                        call seg_ori%str2ori(record, is_ptcl)
+                        ! get keys and test if real or character
+                        keys = seg_ori%get_keys()
+                        do j = 1, size(keys)
+                            if(seg_ori%ischar(trim(keys(j)))) then
+                                call json%add(json_char_keys, '', trim(keys(j)))
+                            else
+                                call json%add(json_real_keys, '', trim(keys(j)))
+                            end if
+                        end do
+                        ! add to json
+                        call json%add(json_seg, json_real_keys)
+                        call json%add(json_seg, json_char_keys)
+                        call json%add(json_root, json_seg)
+                        ! clean up
+                        is_ptcl = .false.
+                        if(allocated(keys)) deallocate(keys)
+                    end if
+                end do
+            endif
+            call self%bos%close
+        else
+            THROW_HARD('projfile: '//trim(projfile)//' nonexistent; print_info_json')
+        endif
+        call json%print(json_root, logfhandle)
+    end subroutine print_info_json
+
     ! readers
 
     subroutine read( self, fname, wthreads )
@@ -3884,6 +4002,374 @@ contains
                 THROW_HARD('unsupported oritype flag; print_segment')
         end select
     end subroutine print_segment
+
+    subroutine print_segment_json( self, oritype, projfile, fromto, sort_key, sort_asc, hist )
+        class(sp_project),           intent(inout) :: self
+        character(len=*),            intent(in)    :: oritype, projfile
+        character(len=*),  optional, intent(in)    :: sort_key, sort_asc, hist
+        integer,           optional, intent(in)    :: fromto(2)
+        type(json_core)                            :: json
+        type(json_value),  pointer                 :: json_root, json_data, json_hist, json_ori
+        type(oris)                                 :: vol_oris, fsc_oris
+        character(len=:),  allocatable             :: stkname
+        character(len=STDLEN)                      :: stkjpeg
+        integer,           allocatable             :: indices(:), pinds(:)
+        integer                                    :: ffromto(2), iori, noris, ncls, isprite
+        logical,           allocatable             :: l_mask(:)
+        logical                                    :: fromto_present, sort, sort_ascending
+        real                                       :: smpd
+        fromto_present = present(fromto)
+        if( fromto_present ) ffromto = fromto
+        sort = .false.
+        if( present(sort_key) ) then
+            if(sort_key .ne. '' .and. sort_key .ne. 'n') sort = .true.
+        end if
+        sort_ascending = .true.
+        if( present(sort_asc) ) then
+            if(sort_asc .eq. "no") sort_ascending = .false.
+        end if
+        call json%initialize(no_whitespace=.true.)
+        call json%create_object(json_root,'')
+        call json%create_array(json_data, 'data')
+        select case(trim(oritype))
+            case('mic')
+                noris = self%os_mic%get_noris()
+                if( noris > 0 )then
+                    call calculate_indices(self%os_mic)
+                    do iori=1, size(indices)
+                        call self%os_mic%ori2json(indices(iori), json_ori)
+                        call json%add(json_data, json_ori)
+                    end do
+                    call json%add(json_root, json_data)
+                    if(present(hist)) call calculate_histogram(self%os_mic)
+                    deallocate(indices)
+                else
+                    write(logfhandle,*) 'No mic-type oris available to print; sp_project :: print_segment_json'
+                endif
+            case('stk')
+                noris = self%os_stk%get_noris()
+                if( noris > 0 )then
+                    call calculate_indices(self%os_stk)
+                    do iori=1, size(indices)
+                        call self%os_stk%ori2json(indices(iori), json_ori)
+                        call json%add(json_data, json_ori)
+                    end do
+                    call json%add(json_root, json_data)
+                    if(present(hist)) call calculate_histogram(self%os_stk)
+                    deallocate(indices)
+                else
+                    write(logfhandle,*) 'No stk-type oris available to print; sp_project :: print_segment_json'
+                endif
+            case('ptcl2D')
+                noris = self%os_ptcl2D%get_noris()
+                if( noris > 0 )then
+                    call calculate_indices(self%os_ptcl2D)
+                    do iori=1, size(indices)
+                        call self%os_ptcl2D%ori2json(indices(iori), json_ori)
+                        call json%add(json_data, json_ori)
+                    end do
+                    call json%add(json_root, json_data)
+                    if(present(hist)) call calculate_histogram(self%os_ptcl2D)
+                    deallocate(indices)
+                else
+                    write(logfhandle,*) 'No ptcl2D-type oris available to print; sp_project :: print_segment_json'
+                endif
+            case('cls2D')
+                noris = self%os_cls2D%get_noris()
+                if( noris > 0 )then
+                    if(.not. self%os_cls2D%isthere(1, "thumb")) then
+                        ! create thumb
+                        call self%read_segment('out', projfile)
+                        call self%set_cavgs_thumb(trim(projfile))
+                        call self%write_segment_inside('cls2D', fname=trim(projfile))
+                    end if
+                    call calculate_indices(self%os_cls2D)
+                    do iori=1, size(indices)
+                        if(self%os_cls2D%get_state(indices(iori)) .gt. 0) then
+                            call self%os_cls2D%ori2json(indices(iori), json_ori)
+                            call json%add(json_data, json_ori)
+                        end if
+                    end do
+                    call json%add(json_root, json_data)
+                    if(present(hist)) call calculate_histogram(self%os_cls2D)
+                    deallocate(indices)
+                else
+                    write(logfhandle,*) 'No cls2D-type oris available to print; sp_project :: print_segment_json'
+                endif
+            case('cls3D')
+                noris = self%os_cls3D%get_noris()
+                if( noris > 0 )then
+                    call calculate_indices(self%os_cls3D)
+                    do iori=1, size(indices)
+                        call self%os_cls3D%ori2json(indices(iori), json_ori)
+                        call json%add(json_data, json_ori)
+                    end do
+                    call json%add(json_root, json_data)
+                    if(present(hist)) call calculate_histogram(self%os_cls3D)
+                    deallocate(indices)
+                else
+                    write(logfhandle,*) 'No cls3D-type oris available to print; sp_project :: print_segment_json'
+                endif
+            case('ptcl3D')
+                noris = self%os_ptcl3D%get_noris()
+                if( noris > 0 )then
+                    call calculate_indices(self%os_ptcl3D)
+                    do iori=1, size(indices)
+                        call self%os_ptcl3D%ori2json(indices(iori), json_ori)
+                        call json%add(json_data, json_ori)
+                    end do
+                    call json%add(json_root, json_data)
+                    if(present(hist)) call calculate_histogram(self%os_ptcl3D)
+                    deallocate(indices)
+                else
+                    write(logfhandle,*) 'No ptcl3D-type oris available to print; sp_project :: print_segment_json'
+                endif
+            case('out')
+                noris = self%os_out%get_noris()
+                if( noris > 0 )then
+                    call calculate_indices(self%os_out)
+                    do iori=1, size(indices)
+                        call self%os_out%ori2json(indices(iori), json_ori)
+                        call json%add(json_data, json_ori)
+                    end do
+                    call json%add(json_root, json_data)
+                    if(present(hist)) call calculate_histogram(self%os_out)
+                    deallocate(indices)
+                else
+                    write(logfhandle,*) 'No out-type oris available to print; sp_project :: print_segment_json'
+                endif
+            case('optics')
+                noris = self%os_optics%get_noris()
+                if( noris > 0 )then
+                    call calculate_indices(self%os_optics)
+                    do iori=1, size(indices)
+                        call self%os_optics%ori2json(indices(iori), json_ori)
+                        call json%add(json_data, json_ori)
+                    end do
+                    call json%add(json_root, json_data)
+                    if(present(hist)) call calculate_histogram(self%os_optics)
+                    deallocate(indices)
+                else
+                    write(logfhandle,*) 'No optics-type oris available to print; sp_project :: print_segment_json'
+                endif
+            case('projinfo')
+                noris = self%projinfo%get_noris()
+                if( noris > 0 )then
+                    call calculate_indices(self%projinfo)
+                    do iori=1, size(indices)
+                        call self%projinfo%ori2json(indices(iori), json_ori)
+                        call json%add(json_data, json_ori)
+                    end do
+                    call json%add(json_root, json_data)
+                    if(present(hist)) call calculate_histogram(self%projinfo)
+                    deallocate(indices)
+                else
+                    write(logfhandle,*) 'No projinfo-type oris available to print; sp_project :: print_segment_json'
+                endif
+            case('jobproc')
+                noris = self%jobproc%get_noris()
+                if( noris > 0 )then
+                    call calculate_indices(self%jobproc)
+                    do iori=1, size(indices)
+                        call self%jobproc%ori2json(indices(iori), json_ori)
+                        call json%add(json_data, json_ori)
+                    end do
+                    call json%add(json_root, json_data)
+                    if(present(hist)) call calculate_histogram(self%jobproc)
+                    deallocate(indices)
+                else
+                    write(logfhandle,*) 'No jobproc-type oris available to print; sp_project :: print_segment_json'
+                endif
+            case('compenv')
+                noris = self%compenv%get_noris()
+                if( noris > 0 )then
+                    call calculate_indices(self%compenv)
+                    do iori=1, size(indices)
+                        call self%compenv%ori2json(indices(iori), json_ori)
+                        call json%add(json_root, json_ori)
+                    end do
+                    call json%add(json_root, json_data)
+                    if(present(hist)) call calculate_histogram(self%compenv)
+                    deallocate(indices)
+                else
+                    write(logfhandle,*) 'No compenv-type oris available to print; sp_project :: print_segment_json'
+                endif
+            case('vol')
+                call self%get_all_vols( vol_oris )
+                call self%get_all_fscs( fsc_oris )
+                noris = vol_oris%get_noris() 
+                if( noris > 0 ) then
+                    do iori=1, noris
+                        call vol_oris%ori2json(iori, json_ori)
+                        call add_fsc(iori)
+                        call json%add(json_data, json_ori)
+                    end do
+                    call json%add(json_root, json_data)
+                    if(present(hist)) call calculate_histogram(self%jobproc)
+                else
+                    write(logfhandle,*) 'No volumes available to print; sp_project :: print_segment_json'
+                endif
+
+            case DEFAULT
+                THROW_HARD('unsupported oritype flag; print_segment_json')
+        end select
+        call json%print(json_root, logfhandle)
+        write(logfhandle, *)
+
+        contains
+
+            subroutine calculate_histogram( seg_oris )
+                use, intrinsic :: iso_c_binding 
+                include 'simple_lib.f08'
+                use simple_histogram
+                type(oris),        intent(in)  :: seg_oris
+                type(histogram)                :: histgrm
+                type(json_value),  pointer     :: datasets, dataset, data, labels
+                real,              allocatable :: rvec(:)
+                integer                        :: n_bins, i
+                n_bins = 20
+                if(hist .eq. 'yes') then
+                    if((.not. sort_key .eq. '') .and. (.not. sort_key .eq. 'n')) then
+                        call json%create_object(json_hist,'histogram')
+                        call json%add(json_hist, 'type', "plot_bar")
+                        call json%create_array(datasets, "datasets")
+                        call json%create_array(data,     "data")
+                        call json%create_array(labels,   "labels")
+                        call json%create_object(dataset, "dataset")
+                        rvec = seg_oris%get_all(sort_key)
+                        call histgrm%new(n_bins, rvec)
+                        do i=1, n_bins
+                            call json%add(data,   '', dble(histgrm%get(i)))
+                            call json%add(labels, '', dble(histgrm%get_x(i)))
+                        end do
+                        call json%add(dataset, 'backgroundColor', "rgba(30, 144, 255, 0.5)")
+                        call json%add(dataset, data)
+                        call json%add(datasets, dataset)
+                        call json%add(json_hist, datasets)
+                        call json%add(json_hist, labels)
+                        call json%add(json_root, json_hist)
+                        call histgrm%kill()
+                    end if
+                end if
+            end subroutine calculate_histogram
+
+            subroutine calculate_indices( seg_oris )
+                type(oris), intent(in)  :: seg_oris
+                integer,    allocatable :: order(:)
+                integer                 :: i
+                if( .not. fromto_present ) ffromto = [1,noris]
+                if( .not. sort_ascending)  ffromto = [noris - ffromto(2) + 1, noris - ffromto(1) + 1]
+                allocate(indices(ffromto(2) - ffromto(1) + 1))
+                if(sort) then
+                    order = sort_oris(seg_oris)
+                    indices(:) = order(ffromto(1):ffromto(2))
+                    deallocate(order)
+                else
+                    do i=1, size(indices)
+                        indices(i) = ffromto(1) + i - 1
+                    end do
+                end if
+                if(.not. sort_ascending) call reverse(indices)
+            end subroutine calculate_indices
+
+            subroutine add_fsc( iori_l )
+                integer,          intent(in)  :: iori_l
+                type(json_value), pointer     :: fsc_json, datasets, dataset, data, labels
+                character(len=:), allocatable :: fscfile
+                real,             allocatable :: fsc(:), res(:)
+                real                          :: smpd_l, box_l, fsc05, fsc0143
+                integer                       :: ifsc
+                logical                       :: fsc05_crossed, fsc0143_crossed
+                if(.not. vol_oris%get_noris() .eq. fsc_oris%get_noris()) return
+                if(.not. vol_oris%isthere(iori_l, "smpd")) return
+                if(.not. fsc_oris%isthere(iori_l, "fsc")) return
+                if(.not. fsc_oris%isthere(iori_l, "box")) return
+                call fsc_oris%getter(iori_l, "fsc", fscfile)
+                smpd_l = vol_oris%get(iori_l, "smpd")
+                box_l  = fsc_oris%get(iori_l, "box")
+                if(.not. file_exists(fscfile)) THROW_HARD('fsc file doesnt exist; print_segment_json')
+                fsc = file2rarr(fscfile)
+                res = get_resarr(int(box_l), smpd_l)
+                call json%create_object(fsc_json, 'fsc')
+                call json%add(fsc_json, 'type', "plot_bar")
+                call json%create_array(datasets, "datasets")
+                call json%create_array(data,     "data")
+                call json%create_array(labels,   "labels")
+                call json%create_object(dataset, "dataset")
+                fsc05_crossed   = .false.
+                fsc0143_crossed = .false.
+                do ifsc=1, size(fsc)
+                    if(.not. fsc05_crossed) then
+                        if(fsc(ifsc) .gt. 0.5) then
+                            fsc05 = res(ifsc)
+                        else
+                            fsc05_crossed = .true.
+                        end if
+                    end if
+                    if(.not. fsc0143_crossed) then
+                        if(fsc(ifsc) .gt. 0.143) then
+                            fsc0143 = res(ifsc)
+                        else
+                            fsc0143_crossed = .true.
+                        end if
+                    end if
+                    call json%add(data,   '', dble(fsc(ifsc)))
+                    call json%add(labels, '', dble(res(ifsc)))
+                end do
+                call json%add(dataset, 'borderColor', "rgba(30, 144, 255, 0.5)")
+                call json%add(dataset, 'pointStyle', .false.)
+                call json%add(dataset, 'cubicInterpolationMode', 'monotone')
+                call json%add(dataset, 'tension', dble(0.4))
+                call json%add(dataset, data)
+                call json%add(datasets, dataset)
+                call json%add(fsc_json, datasets)
+                call json%add(fsc_json, labels)
+                call json%add(json_ori, fsc_json)
+                call json%add(json_ori, 'fsc05',   dble(fsc05))
+                call json%add(json_ori, 'fsc0143', dble(fsc0143))
+                if(allocated(fscfile)) deallocate(fscfile)
+            end subroutine add_fsc
+
+            function sort_oris( seg_oris ) result (arr)
+                type(oris), intent(in)  :: seg_oris
+                integer,    allocatable :: arr(:)
+                real,       allocatable :: sort_vals(:)
+                if(.not. seg_oris%isthere(sort_key)) THROW_HARD('invalid sort key; print_segment_json')
+                if(seg_oris%ischar(1, sort_key))     THROW_HARD('sort values are characters; print_segment_json')
+                sort_vals = seg_oris%get_all(sort_key)
+                allocate(arr(size(sort_vals)))
+                do iori=1,size(sort_vals)
+                    arr(iori) = iori
+                end do
+                call hpsort(sort_vals, arr)
+                deallocate(sort_vals)
+            end function sort_oris
+
+    end subroutine print_segment_json
+
+    subroutine set_cavgs_thumb( self, projfile )
+        use simple_imgproc
+        class(sp_project),  intent(inout) :: self
+        character(len=*),   intent(in)    :: projfile
+        character(len=:),   allocatable   :: stkname
+        integer,            allocatable   :: clsinds(:)
+        logical,            allocatable   :: clsmsk(:)
+        integer                           :: ncls, n_thumbnails, out_ind, iori, ithumb
+        real                              :: smpd, thumbnail_scale
+        call self%get_cavgs_stk(stkname, ncls, smpd, out_ind=out_ind)
+        call self%os_cls2D%mask_from_state( 1, clsmsk, clsinds )
+        call mrc2jpeg_tiled(trim(stkname), stemname(projfile) //"/thumb2D.jpeg", scale=thumbnail_scale, ntiles=n_thumbnails, msk=clsmsk)
+        ithumb = 1
+        do iori=1, self%os_cls2D%get_noris()
+            call self%os_cls2D%set(iori, "thumb",    stemname(projfile) //"/thumb2D.jpeg")
+            call self%os_cls2D%set(iori, "thumbn",   count(clsmsk))
+            call self%os_cls2D%set(iori, "thumbdim", JPEG_DIM)
+            if(clsmsk(iori)) then
+                call self%os_cls2D%set(iori, "thumbidx", ithumb)
+                ithumb = ithumb + 1
+            end if
+        end do
+    end subroutine set_cavgs_thumb
 
     subroutine segwriter( self, isegment, fromto )
         class(sp_project), intent(inout) :: self

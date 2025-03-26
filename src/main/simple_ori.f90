@@ -1,5 +1,7 @@
 ! an orientation
 module simple_ori
+use json_kinds
+use json_module
 use simple_defs
 use simple_defs_ori
 use simple_hash
@@ -87,6 +89,7 @@ type :: ori
     procedure          :: has_been_searched
     procedure          :: pparms2str
     procedure          :: pparms_strlen
+    procedure          :: ori2json
     procedure          :: ori2str
     procedure          :: ori2prec
     procedure          :: prec2ori
@@ -1091,6 +1094,52 @@ contains
             endif
         endif
     end function ori2str
+
+    subroutine ori2json( self, json_ori )
+        class(ori),                 intent(in)    :: self
+        type(json_value), pointer,  intent(inout) :: json_ori
+        type(json_core)                           :: json
+        character(len=XLONGSTRLEN), allocatable   :: keys(:)
+        type(str4arr),              allocatable   :: hkeys(:)
+        integer :: sz_chash, sz_hash, i, j
+        sz_chash = self%chtab%size_of()
+        if( self%is_ptcl )then
+            sz_hash = 0
+            do i = 1,N_PTCL_ORIPARAMS
+                if( oriparam_isthere(i, self%pparms(i)) ) sz_hash = sz_hash + 1
+            enddo
+            allocate(keys(sz_chash + sz_hash))
+            do i = 1,sz_chash
+                keys(i) = trim(adjustl(self%chtab%get_key(i)))
+            end do
+            j = 0
+            do i = 1,N_PTCL_ORIPARAMS
+                if( oriparam_isthere(i, self%pparms(i)) )then
+                    j = j+1
+                    keys(sz_chash+j) = trim(adjustl(get_oriparam_flag(i)))
+                endif
+            enddo
+        else
+            sz_hash  = self%htab%size_of()
+            allocate(keys(sz_chash + sz_hash))
+            hkeys = self%htab%get_keys()
+            do i = 1,sz_chash
+                keys(i) = trim(adjustl(self%chtab%get_key(i)))
+            end do
+            do i = 1, sz_hash
+                keys(i + sz_chash) = trim(adjustl(hkeys(i)%str))
+            end do
+            if(allocated(hkeys)) deallocate(hkeys)
+        endif
+        call json%create_object(json_ori, '')
+        do j = 1, size(keys)
+            if(self%ischar(trim(keys(j)))) then
+                call json%add(json_ori, trim(keys(j)), trim(self%get_static(trim(keys(j))))) 
+            else
+                call json%add(json_ori, trim(keys(j)), dble(self%get(trim(keys(j))))) 
+            end if
+        end do
+    end subroutine ori2json
 
     pure subroutine ori2prec( self, prec )
         class(ori), intent(in)    :: self

@@ -34,8 +34,11 @@ contains
         character(len=LONGSTRLEN), intent(out)   :: boxfile
         integer,                   intent(out)   :: nptcls_out
         real, optional,            intent(out)   :: moldiam_opt
+        logical                                  :: l_append
+        l_append = .false.
         if( .not. file_exists(moviename_intg) ) write(logfhandle,*) 'inputted micrograph does not exist: ', trim(adjustl(moviename_intg))
         write(logfhandle,'(a,1x,a)') '>>> PICKING MICROGRAPH:', trim(adjustl(moviename_intg))
+        if(params_glob%append == 'yes') l_append = .true.
         select case(trim(params_glob%picker))
             case('old')
                 if( .not. cline%defined('pickrefs') ) THROW_HARD('Old picker requires pickrefs (2D picking references) input')
@@ -55,7 +58,7 @@ contains
                     call exec_gaupick(moviename_intg, boxfile, smpd, nptcls_out, self%pickrefs, dir_out=dir_out)
                 else if( cline%defined('moldiam') .or. cline%defined('multi_moldiams')  )then
                     ! at least moldiam is required
-                    call exec_gaupick(moviename_intg, boxfile, smpd, nptcls_out, moldiam_opt=moldiam_opt, dir_out=dir_out)
+                    call exec_gaupick(moviename_intg, boxfile, smpd, nptcls_out, moldiam_opt=moldiam_opt, dir_out=dir_out, append=l_append)
                 else
                     THROW_HARD('New picker requires 2D references (pickrefs) or moldiam')
                 endif
