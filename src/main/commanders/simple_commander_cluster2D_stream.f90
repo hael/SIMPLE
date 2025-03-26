@@ -16,7 +16,11 @@ use simple_guistats,           only: guistats
 use simple_stream_utils
 use simple_qsys_funs
 use simple_commander_cluster2D
+use simple_imgproc
+use simple_nice
 use FoX_dom
+use json_kinds
+use json_module
 implicit none
 
 public :: init_cluster2D_stream, update_user_params2D, terminate_stream2D
@@ -24,14 +28,20 @@ public :: init_cluster2D_stream, update_user_params2D, terminate_stream2D
 public :: import_records_into_pool, classify_pool, update_pool_status, update_pool
 public :: reject_from_pool, reject_from_pool_user, write_pool_cls_selected_user
 public :: generate_pool_stats, read_pool_xml_beamtilts, assign_pool_optics
-public :: is_pool_available, get_pool_iter
+public :: is_pool_available, get_pool_iter, get_pool_assigned, get_pool_rejected
+public :: get_pool_n_classes, get_pool_n_classes_rejected, get_pool_iter_time, get_pool_cavgs_jpeg
+public :: get_pool_res, get_pool_cavgs_pop, get_pool_cavgs_res, get_pool_cavgs_mask, get_pool_cavgs_jpeg_ntiles
+public :: write_pool_cls_selected_nice, generate_pool_jpeg, get_pool_cavgs_jpeg_scale, get_nchunks
+public :: get_pool_rejected_jpeg, get_pool_rejected_jpeg_ntiles, get_pool_rejected_jpeg_scale, get_pool_rejected_thumbnail_id
+public :: get_chunk_rejected_jpeg, get_chunk_rejected_jpeg_ntiles, get_chunk_rejected_jpeg_scale, get_chunk_rejected_thumbnail_id
+public :: get_last_snapshot, get_last_snapshot_id, get_rejection_params, get_lpthres, get_snapshot_json
 ! Chunks
 public :: update_chunks, classify_new_chunks, import_chunks_into_pool
 public :: flush_remaining_particles, all_chunks_available
 ! Abinitio3D
 public :: generate_snapshot_for_abinitio
 ! Utilities
-public :: cleanup_root_folder
+public :: cleanup_root_folder, write_project_stream2D, test_repick, write_repick_refs
 ! Cluster2D subsets
 public :: cluster2D_commander_subsets
 
@@ -71,6 +81,7 @@ integer(timer_int_kind)          :: t
 
 ! Pool related
 type(sp_project)                 :: pool_proj                         ! master project
+type(sp_project),    allocatable :: pool_proj_history(:)              ! 5 iterations of project history
 type(qsys_env)                   :: qenv_pool
 type(cmdline)                    :: cline_cluster2D_pool              ! master pool classification command line
 type(scaled_dims)                :: pool_dims                         ! crop dimensions used for pool
@@ -93,14 +104,24 @@ integer                          :: nptcls_glob=0, nptcls_rejected_glob=0, ncls_
 integer                          :: ncls_glob                         ! global number of classes
 integer                          :: nabinitioprojs_glob = 0           ! global number snapshots generated for abinitio3D
 integer                          :: iterswitch2euclid   = 0           ! only used by gen_picking_refs
-logical                          :: stream2D_active     = .false.     ! initiation flag
+integer                          :: snapshot_jobid = 0                ! nice job id for snapshot
+integer                          :: snapshot_complete_jobid = 0       ! nice job id for completed snapshot
+integer                          :: repick_iteration = 0              ! iteration to select classes from for re-picking
+integer                          :: snapshot_iteration = 0            ! iteration to select particles from during snapshot
+integer,             allocatable :: snapshot_selection(:)             ! selection for generating snapshots
+integer,             allocatable :: prune_selection(:)                ! selection for pruning classes on the fly
+integer,             allocatable :: repick_selection(:)               ! selection for selecting classes for re-picking
+logical                          :: stream2D_active   = .false.       ! initiation flag
+type(json_value),   pointer      :: snapshot_json 
 ! GUI-related
 type(starproject)                :: starproj
 type(starproject_stream)         :: starproj_stream
 character(len=:),    allocatable :: projfile4gui                      ! Joe: is this output still used?
+character(len=:),    allocatable :: current_jpeg, pool_rejected_jpeg, chunk_rejected_jpeg
+character(16)                    :: last_iteration_time = "", last_snapshot = ""
 ! other
-real     :: lpstart, lpstop, lpcen
-integer  :: max_ncls, nptcls_per_chunk, nmics_last, numlen
+real     :: smpd, scale_factor, lpstart, lpstop, lpcen, current_jpeg_scale, pool_rejected_jpeg_scale=0.0, chunk_rejected_jpeg_scale=0.0
+integer  :: box, boxpd, max_ncls, nptcls_per_chunk, nmics_last, numlen, current_jpeg_ntiles, pool_rejected_thumbnail_id, pool_rejected_jpeg_ntiles=0, chunk_rejected_thumbnail_id, chunk_rejected_jpeg_ntiles=0
 logical  :: l_wfilt                     ! flags partial wiener restoration
 logical  :: l_scaling                   ! flags downscaling
 logical  :: l_update_sigmas = .false.   ! flags objective function (cc/euclid)
@@ -119,6 +140,7 @@ contains
         integer :: ichunk, envlen, nthr2D
         logical :: refgen
         call seed_rnd
+        nullify(snapshot_json)
         ! general parameters
         master_cline => cline
         call mskdiam2lplimits(params_glob%mskdiam, lpstart, lpstop, lpcen)
@@ -520,12 +542,17 @@ contains
     end subroutine update_pool_dims
 
     !> Updates current parameters with user input
-    subroutine update_user_params2D( cline_here, updated )
+    subroutine update_user_params2D( cline_here, updated, update_arguments)
         type(cmdline), intent(inout) :: cline_here
         logical,       intent(out)   :: updated
+        type(json_value), pointer, optional, intent(inout) :: update_arguments
+        character(kind=CK,len=:), allocatable :: snapshot
         type(oris)            :: os
+        type(json_core)       :: json
         character(len=STDLEN) :: val
         real                  :: lpthres, ndev
+        integer               :: lpthres_int
+        logical               :: found
         updated = .false.
         call os%new(1, is_ptcl=.false.)
         if( file_exists(USER_PARAMS) )then
@@ -581,6 +608,65 @@ contains
             ! remove once processed
             call del_file(USER_PARAMS)
         endif
+        ! nice
+        if(present(update_arguments)) then
+            if(associated(update_arguments)) then
+                ! snapshot
+                if(snapshot_jobid .eq. 0) then
+                    call json%get(update_arguments, 'snapshot', snapshot, found)
+                    if(found) then
+                        if(allocated(snapshot_selection)) deallocate(snapshot_selection)
+                        allocate(snapshot_selection(0))
+                        params_glob%snapshot = trim(snapshot)
+                        params_glob%updated  = 'yes'
+                        write(logfhandle,'(A,A)')'>>> SNAPSHOT REQUESTED: ', snapshot
+                    end if
+                    ! snapshot selection
+                    call json%get(update_arguments, 'snapshot_selection', snapshot_selection, found)
+                    if(found) then
+                        write(logfhandle,'(A,A)')'>>> SNAPSHOT SELECTION RECEIVED'
+                    end if
+                    ! snapshot iteration
+                    call json%get(update_arguments, 'snapshot_iteration', snapshot_iteration, found)
+                    if(found) then
+                        write(logfhandle,'(A,A)')'>>> SNAPSHOT ITERATION RECEIVED'
+                    end if
+                    ! snapshot job id
+                    call json%get(update_arguments, 'snapshot_jobid', snapshot_jobid, found)
+                    if(found) then
+                        write(logfhandle,'(A,A)')'>>> SNAPSHOT JOB ID RECEIVED'
+                    end if
+                end if
+                ! prune selection
+                call json%get(update_arguments, 'prune_selection', prune_selection, found)
+                if(found) then
+                    write(logfhandle,'(A,A)')'>>> PRUNE SELECTION RECEIVED'
+                end if
+                ! repick selection
+                call json%get(update_arguments, 'repick_selection', repick_selection, found)
+                if(found) then
+                    write(logfhandle,'(A,A)')'>>> REPICK SELECTION RECEIVED'
+                end if
+                ! repick iteration
+                call json%get(update_arguments, 'repick_iteration', repick_iteration, found)
+                if(found) then
+                    write(logfhandle,'(A,A)')'>>> REPICK ITERATION RECEIVED'
+                end if
+                ! lpthres
+                call json%get(update_arguments, 'lpthres', lpthres_int, found)
+                if(found) then
+                    write(logfhandle,'(A,A)')'>>> LPTHRES UPDATE RECEIVED'
+                    if( real(lpthres_int) < 3.0*chunk_dims%smpd )then
+                        write(logfhandle,'(A,F8.2)')'>>> REJECTION lpthres TOO LOW: ', lpthres_int
+                    else
+                        params_glob%lpthres = real(lpthres_int)
+                        write(logfhandle,'(A,F8.2)')'>>> REJECTION lpthres UPDATED TO: ',params_glob%lpthres
+                        updated = .true.
+                    endif 
+                end if
+                call json%destroy(update_arguments)
+            end if
+        end if
         call os%kill
     end subroutine update_user_params2D
 
@@ -626,17 +712,22 @@ contains
     end subroutine terminate_stream2D
 
     !> produces consolidated project
-    subroutine write_project_stream2D( write_star, clspath)
-        logical, optional, intent(in) :: write_star
-        logical, optional, intent(in) :: clspath
-        type(class_frcs)              :: frcs
-        type(oris)                    :: os_backup
-        character(len=:), allocatable :: projfile,projfname, cavgsfname, frcsfname, src, dest
-        character(len=:), allocatable :: pool_refs
-        logical                       :: l_write_star, l_clspath
-        logical,     parameter        :: DEBUG_HERE      = .false.
+    subroutine write_project_stream2D( write_star, clspath, snapshot_projfile)
+        logical,           optional, intent(in) :: write_star
+        logical,           optional, intent(in) :: clspath
+        character(len=*),  optional, intent(in) :: snapshot_projfile
+        type(class_frcs)               :: frcs
+        type(oris)                     :: os_backup
+        type(sp_project)               :: snapshot_proj
+        type(simple_nice_communicator) :: snapshot_comm
+        type(json_core)                :: json
+        character(len=:),  allocatable :: projfile, projfname, cavgsfname, frcsfname, src, dest
+        character(len=:),  allocatable :: pool_refs
+        logical                        :: l_write_star, l_clspath, l_snapshot, snapshot_proj_found = .false.
+        logical,     parameter         :: DEBUG_HERE      = .false.
         l_write_star = .false.
         l_clspath    = .false.
+        l_snapshot   = .false.
         if(present(write_star)) l_write_star = write_star
         if(present(clspath))    l_clspath    = clspath
         ! file naming
@@ -648,51 +739,84 @@ contains
         call pool_proj%projinfo%set(1,'projfile', projfile)
         cavgsfname = trim(cavgsfname)//trim(params_glob%ext)
         frcsfname  = trim(frcsfname)//trim(BIN_EXT)
-        write(logfhandle,'(A,A,A,A)')'>>> WRITING PROJECT ',trim(projfile), ' AT: ',cast_time_char(simple_gettime())
         pool_refs = trim(POOL_DIR)//trim(refs_glob)
-        if( l_scaling )then
-            os_backup = pool_proj%os_cls2D
-            ! rescale classes
-            if( l_wfilt )then
-                src  = add2fbody(pool_refs, params_glob%ext,trim(WFILT_SUFFIX))
-                dest = add2fbody(cavgsfname,params_glob%ext,trim(WFILT_SUFFIX))
-                call rescale_cavgs(src, dest)
-                src  = add2fbody(pool_refs, params_glob%ext,trim(WFILT_SUFFIX)//'_even')
-                dest = add2fbody(cavgsfname,params_glob%ext,trim(WFILT_SUFFIX)//'_even')
-                call rescale_cavgs(src, dest)
-                src  = add2fbody(pool_refs, params_glob%ext,trim(WFILT_SUFFIX)//'_odd')
-                dest = add2fbody(cavgsfname,params_glob%ext,trim(WFILT_SUFFIX)//'_odd')
-                call rescale_cavgs(src, dest)
-            endif
-            call rescale_cavgs(pool_refs, cavgsfname)
-            src  = add2fbody(pool_refs, params_glob%ext,'_even')
-            dest = add2fbody(cavgsfname,params_glob%ext,'_even')
-            call rescale_cavgs(src, dest)
-            src  = add2fbody(pool_refs, params_glob%ext,'_odd')
-            dest = add2fbody(cavgsfname,params_glob%ext,'_odd')
-            call rescale_cavgs(src, dest)
-            call pool_proj%os_out%kill
-            call pool_proj%add_cavgs2os_out(cavgsfname, params_glob%smpd, 'cavg', clspath=l_clspath)
-            if( l_wfilt )then
-                src = add2fbody(cavgsfname,params_glob%ext,trim(WFILT_SUFFIX))
-                call pool_proj%add_cavgs2os_out(src, params_glob%smpd, 'cavg'//trim(WFILT_SUFFIX), clspath=l_clspath)
-            endif
-            pool_proj%os_cls2D = os_backup
-            call os_backup%kill
-            ! rescale frcs
-            call frcs%read(trim(POOL_DIR)//trim(FRCS_FILE))
-            call frcs%pad(params_glob%smpd, params_glob%box)
-            call frcs%write(frcsfname)
-            call frcs%kill
-            call pool_proj%add_frcs2os_out(frcsfname, 'frc2D')
+        if(present(snapshot_projfile)) then
+            if(snapshot_iteration .gt. 0) then
+                l_snapshot = .true.
+            end if
+        end if
+        if(l_snapshot) then
+            write(logfhandle, '(A,I4,A,A,A,I0,A)') ">>> WRITING SNAPSHOT FROM ITERATION ", snapshot_iteration, trim(snapshot_projfile), ' AT: ',cast_time_char(simple_gettime()), snapshot_jobid, params_glob%niceserver
+            call json%destroy(snapshot_json)
+            nullify(snapshot_json)
+            call snapshot_comm%init(snapshot_jobid, "")
+            if(snapshot_iteration .eq. pool_iter) then
+                call snapshot_proj%copy(pool_proj)
+                snapshot_proj_found = .true.
+            else
+                call snapshot_proj%copy(pool_proj_history(snapshot_iteration))
+                snapshot_proj_found = .true.
+            end if
+            if(snapshot_proj_found) then
+                call apply_snapshot_selection(snapshot_proj)
+                call snapshot_proj%write(snapshot_projfile)
+                call set_snapshot_time()
+                call snapshot_comm%terminate(export_project=snapshot_proj)
+            else
+                write(logfhandle, '(A)') ">>> FAILED TO WRITE SNAPSHOT"
+                call snapshot_comm%terminate(failed=.true.)
+            end if
+            call snapshot_comm%get_stat_json(snapshot_json)
+            snapshot_complete_jobid = snapshot_jobid
+            snapshot_jobid = 0
+            snapshot_iteration = 0
         else
-            call pool_proj%os_out%kill
-            call pool_proj%add_cavgs2os_out(cavgsfname, params_glob%smpd, 'cavg', clspath=l_clspath)
-            if( l_wfilt )then
-                src = add2fbody(cavgsfname,params_glob%ext,trim(WFILT_SUFFIX))
-                call pool_proj%add_cavgs2os_out(src, params_glob%smpd, 'cavg'//trim(WFILT_SUFFIX))
+            write(logfhandle,'(A,A,A,A)')'>>> WRITING PROJECT ',trim(projfile), ' AT: ',cast_time_char(simple_gettime())
+            if( l_scaling )then
+                os_backup = pool_proj%os_cls2D
+                ! rescale classes
+                if( l_wfilt )then
+                    src  = add2fbody(pool_refs, params_glob%ext,trim(WFILT_SUFFIX))
+                    dest = add2fbody(cavgsfname,params_glob%ext,trim(WFILT_SUFFIX))
+                    call rescale_cavgs(src, dest)
+                    src  = add2fbody(pool_refs, params_glob%ext,trim(WFILT_SUFFIX)//'_even')
+                    dest = add2fbody(cavgsfname,params_glob%ext,trim(WFILT_SUFFIX)//'_even')
+                    call rescale_cavgs(src, dest)
+                    src  = add2fbody(pool_refs, params_glob%ext,trim(WFILT_SUFFIX)//'_odd')
+                    dest = add2fbody(cavgsfname,params_glob%ext,trim(WFILT_SUFFIX)//'_odd')
+                    call rescale_cavgs(src, dest)
+                endif
+                call rescale_cavgs(pool_refs, cavgsfname)
+                src  = add2fbody(pool_refs, params_glob%ext,'_even')
+                dest = add2fbody(cavgsfname,params_glob%ext,'_even')
+                call rescale_cavgs(src, dest)
+                src  = add2fbody(pool_refs, params_glob%ext,'_odd')
+                dest = add2fbody(cavgsfname,params_glob%ext,'_odd')
+                call rescale_cavgs(src, dest)
+                call pool_proj%os_out%kill
+                call pool_proj%add_cavgs2os_out(cavgsfname, params_glob%smpd, 'cavg', clspath=l_clspath)
+                if( l_wfilt )then
+                    src = add2fbody(cavgsfname,params_glob%ext,trim(WFILT_SUFFIX))
+                    call pool_proj%add_cavgs2os_out(src, params_glob%smpd, 'cavg'//trim(WFILT_SUFFIX), clspath=l_clspath)
+                endif
+                pool_proj%os_cls2D = os_backup
+                call os_backup%kill
+                ! rescale frcs
+                call frcs%read(trim(POOL_DIR)//trim(FRCS_FILE))
+                call frcs%pad(params_glob%smpd, params_glob%box)
+                call frcs%write(frcsfname)
+                call frcs%kill
+                call pool_proj%add_frcs2os_out(frcsfname, 'frc2D')
+            else
+                call pool_proj%os_out%kill
+                call pool_proj%add_cavgs2os_out(cavgsfname, params_glob%smpd, 'cavg', clspath=l_clspath)
+                if( l_wfilt )then
+                    src = add2fbody(cavgsfname,params_glob%ext,trim(WFILT_SUFFIX))
+                    call pool_proj%add_cavgs2os_out(src, params_glob%smpd, 'cavg'//trim(WFILT_SUFFIX))
+                endif
+                call pool_proj%add_frcs2os_out(frcsfname, 'frc2D')
             endif
-            call pool_proj%add_frcs2os_out(frcsfname, 'frc2D')
+            call pool_proj%write(projfile)
         endif
         ! 3d field
         pool_proj%os_ptcl3D = pool_proj%os_ptcl2D
@@ -708,9 +832,24 @@ contains
             call starproj_stream%stream_export_particles_2D(pool_proj, params_glob%outdir, optics_set=.true.)
             if( DEBUG_HERE ) print *,'ptcl_export  : ', toc(t); call flush(6)
         end if
-        call pool_proj%write(projfile)
         call pool_proj%os_ptcl3D%kill
         call pool_proj%os_cls2D%delete_entry('stk')
+
+        contains
+            
+        subroutine set_snapshot_time()
+            character(8)  :: date
+            character(10) :: time
+            character(5)  :: zone
+            integer,dimension(8) :: values
+            ! using keyword arguments
+            call date_and_time(date,time,zone,values)
+            call date_and_time(DATE=date,ZONE=zone)
+            call date_and_time(TIME=time)
+            call date_and_time(VALUES=values)
+            write(last_snapshot, '(I4,A,I2.2,A,I2.2,A,I2.2,A,I2.2)') values(1), '/', values(2), '/', values(3), '_', values(5), ':', values(6)
+        end subroutine set_snapshot_time
+
     end subroutine write_project_stream2D
 
     ! POOL
@@ -785,15 +924,15 @@ contains
         use simple_ran_tabu
         logical,                   parameter   :: L_BENCH = .false.
         type(ran_tabu)                         :: random_generator
-        type(sp_project)                       :: spproj
+        type(sp_project)                       :: spproj, spproj_history
         type(cmdline),             allocatable :: clines(:)
         integer,                   allocatable :: min_update_cnts_per_stk(:), nptcls_per_stk(:), stk_order(:)
         integer,                   allocatable :: prev_eo_pops(:,:), prev_eo_pops_thread(:,:)
-        character(len=:),          allocatable :: stack_fname, ext, fbody
+        character(len=:),          allocatable :: stack_fname, ext, fbody, stkname, stkpath
         character(len=LONGSTRLEN), allocatable :: sigma_fnames(:)
-        real                    :: frac_update
+        real                    :: frac_update, smpd
         integer                 :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl, nptcls_th
-        integer                 :: eo, icls, nptcls_sel, istk, nptcls2update, nstks2update, jjptcl, nsample
+        integer                 :: eo, icls, nptcls_sel, istk, nptcls2update, nstks2update, jjptcl, nsample, ncls
         integer(timer_int_kind) :: t_tot
         if( .not. stream2D_active ) return
         if( .not. pool_available )  return
@@ -802,6 +941,18 @@ contains
         nptcls_glob          = nptcls_tot
         nptcls_rejected_glob = 0
         if( nptcls_tot == 0 ) return
+        ! save pool project to history
+        if(pool_iter .gt. 0) then
+            call spproj_history%copy(pool_proj)
+            call simple_copy_file(trim(POOL_DIR)//trim(FRCS_FILE), trim(POOL_DIR)//swap_suffix(FRCS_FILE, "_iter"//int2str_pad(pool_iter, 3)//".bin", ".bin"))
+            call spproj_history%get_cavgs_stk(stkname, ncls, smpd) 
+            call spproj_history%os_out%kill
+            call spproj_history%add_cavgs2os_out(stkname, smpd, 'cavg')
+            call spproj_history%add_frcs2os_out(trim(POOL_DIR)//swap_suffix(FRCS_FILE, "_iter"//int2str_pad(pool_iter, 3)//".bin", ".bin"), 'frc2D')
+            if(.not. allocated(pool_proj_history)) allocate(pool_proj_history(0))
+            pool_proj_history = [pool_proj_history(:), spproj_history]
+            if(pool_iter .gt. 5) call pool_proj_history(pool_iter - 5)%kill()
+        end if
         pool_iter = pool_iter + 1 ! Global iteration counter update
         call cline_cluster2D_pool%set('refs',    refs_glob)
         call cline_cluster2D_pool%set('ncls',    ncls_glob)
@@ -1214,6 +1365,10 @@ contains
                         ncls_rejected_glob = ncls_rejected_glob + 1
                         call img%read(trim(POOL_DIR)//trim(refs_glob),icls)
                         call img%write(trim(POOL_DIR)//trim(CLS_POOL_REJECTED),ncls_rejected_glob)
+                        !call img%write(trim(POOL_DIR)//'cls_rejected_pool.mrc',ncls_rejected_glob)
+                        call mrc2jpeg_tiled(trim(POOL_DIR)//'cls_rejected_pool.mrc', trim(POOL_DIR)//'cls_rejected_pool.jpeg', scale=pool_rejected_jpeg_scale, ntiles=pool_rejected_jpeg_ntiles)
+                        pool_rejected_jpeg = trim(cwd_glob) // '/' // trim(POOL_DIR) // 'cls_rejected_pool.jpeg'
+                        pool_rejected_thumbnail_id = ncls_rejected_glob
                         img = 0.
                         call img%write(trim(POOL_DIR)//trim(refs_glob),icls)
                         if( l_wfilt )then
@@ -1257,22 +1412,34 @@ contains
         if( .not. stream2D_active ) return
         if( .not.pool_available )   return
         if( pool_proj%os_cls2D%get_noris() == 0 ) return
-        if( .not.file_exists(STREAM_REJECT_CLS) ) return
-        nl = nlines(STREAM_REJECT_CLS)
-        if( nl == 0 ) return
-        call cls2reject%new(nl,is_ptcl=.false.)
-        call cls2reject%read(STREAM_REJECT_CLS)
-        call del_file(STREAM_REJECT_CLS)
-        if( cls2reject%get_noris() == 0 ) return
-        allocate(cls_mask(ncls_glob), source=.false.)
-        do i = 1,cls2reject%get_noris()
-            icls = cls2reject%get_class(i)
-            if( icls == 0 ) cycle
-            if( icls > ncls_glob ) cycle
-            if( pool_proj%os_cls2D%get_int(icls,'pop') == 0 ) cycle
-            cls_mask(icls) = .true.
-        enddo
-        call cls2reject%kill
+        if(file_exists(STREAM_REJECT_CLS) ) then
+            nl = nlines(STREAM_REJECT_CLS)
+            if( nl == 0 ) return
+            call cls2reject%new(nl,is_ptcl=.false.)
+            call cls2reject%read(STREAM_REJECT_CLS)
+            call del_file(STREAM_REJECT_CLS)
+            if( cls2reject%get_noris() == 0 ) return
+            allocate(cls_mask(ncls_glob), source=.false.)
+            do i = 1,cls2reject%get_noris()
+                icls = cls2reject%get_class(i)
+                if( icls == 0 ) cycle
+                if( icls > ncls_glob ) cycle
+                if( pool_proj%os_cls2D%get_int(icls,'pop') == 0 ) cycle
+                cls_mask(icls) = .true.
+            enddo
+            call cls2reject%kill
+        else if(allocated(prune_selection)) then
+            allocate(cls_mask(ncls_glob), source=.true.)
+            do i = 1, size(prune_selection)
+                icls = prune_selection(i)
+                if( icls == 0 ) cycle
+                if( icls > ncls_glob ) cycle
+                cls_mask(icls) = .false.
+            enddo
+            deallocate(prune_selection)
+        else
+            return
+        end if
         if( count(cls_mask) == 0 ) return
         call img%new([pool_dims%box,pool_dims%box,1], pool_dims%smpd)
         img = 0.
@@ -1313,6 +1480,52 @@ contains
         ! write stream2d.star with ptcl numbers post rejection 
         call starproj%export_cls2D(pool_proj, pool_iter)
     end subroutine reject_from_pool_user
+
+    subroutine apply_snapshot_selection(snapshot_projfile)
+        type(sp_project),     intent(inout) :: snapshot_projfile
+        logical, allocatable :: cls_mask(:)
+        integer              :: nptcls_rejected, ncls_rejected, iptcl
+        integer              :: icls, jcls, i
+        if( snapshot_projfile%os_cls2D%get_noris() == 0 ) return
+        if(allocated(snapshot_selection)) then
+            allocate(cls_mask(ncls_glob), source=.false.)
+            do i = 1, size(snapshot_selection)
+                icls = snapshot_selection(i)
+                if( icls == 0 ) cycle
+                if( icls > ncls_glob ) cycle
+                cls_mask(icls) = .true.
+            enddo
+            deallocate(snapshot_selection)
+        else
+            allocate(cls_mask(ncls_glob), source=.true.)
+        endif
+        if( count(cls_mask) == 0 ) return
+        ncls_rejected   = 0
+        do icls = 1,ncls_glob
+            if(cls_mask(icls) ) cycle
+            nptcls_rejected = 0
+            !$omp parallel do private(iptcl,jcls) reduction(+:nptcls_rejected) proc_bind(close)
+            do iptcl = 1,snapshot_projfile%os_ptcl2D%get_noris()
+                if( snapshot_projfile%os_ptcl2D%get_state(iptcl) == 0 )cycle
+                jcls = snapshot_projfile%os_ptcl2D%get_class(iptcl)
+                if( jcls == icls )then
+                    call snapshot_projfile%os_ptcl2D%reject(iptcl)
+                    call snapshot_projfile%os_ptcl2D%delete_2Dclustering(iptcl)
+                    nptcls_rejected = nptcls_rejected + 1
+                endif
+            enddo
+            !$omp end parallel do
+            if( nptcls_rejected > 0 )then
+                ncls_rejected = ncls_rejected + 1
+                call snapshot_projfile%os_cls2D%set_state(icls,0)
+                call snapshot_projfile%os_cls2D%set(icls,'pop',0.)
+                call snapshot_projfile%os_cls2D%set(icls,'corr',-1.)
+                call snapshot_projfile%os_cls2D%set(icls,'prev_pop_even',0.)
+                call snapshot_projfile%os_cls2D%set(icls,'prev_pop_odd', 0.)
+                write(logfhandle,'(A,I6,A,I4)')'>>> USER REJECTED FROM SNAPSHOT: ',nptcls_rejected,' PARTICLE(S) IN CLASS ',icls
+            endif
+        enddo
+    end subroutine apply_snapshot_selection
 
     ! GUI class selection/reporting, only used in gen_picking_refs
     subroutine write_pool_cls_selected_user
@@ -1373,6 +1586,95 @@ contains
         if(allocated(cls_mask)) deallocate(cls_mask)
     end subroutine write_pool_cls_selected_user
 
+   ! GUI class selection/reporting from nice, only used in gen_picking_refs 
+    subroutine write_pool_cls_selected_nice(final_selection)
+        integer, allocatable, intent(in) :: final_selection(:)
+        type(image)                      :: img
+        type(stack_io)                   :: stkio_r, stkio_w
+        integer :: icls, isel
+        if(allocated(final_selection)) then
+            write(logfhandle,'(A,I6,A)')'>>> USER SELECTED FROM POOL: ',size(final_selection),' clusters'
+            if(size(final_selection) == 0) return
+            write(logfhandle,'(A,A)')'>>> WRITING SELECTED CLUSTERS TO: ', trim(POOL_DIR) // STREAM_SELECTED_REFS//STK_EXT, trim(refs_glob)
+            call img%new([params_glob%box,params_glob%box,1], params_glob%smpd)
+            call stkio_r%open(trim(refs_glob), params_glob%smpd, 'read', bufsz=ncls_glob)
+            call stkio_r%read_whole
+            call stkio_w%open(STREAM_SELECTED_REFS//STK_EXT, params_glob%smpd, 'write', box=params_glob%box, bufsz=size(final_selection))
+            call pool_proj%os_cls2D%set_all2single('state', 0.0)
+            isel = 1
+            do icls=1, size(final_selection)
+                call pool_proj%os_cls2D%set(final_selection(icls), 'state', 1.0)
+                call stkio_r%get_image(final_selection(icls), img)
+                call stkio_w%write(isel, img)
+                isel = isel + 1
+            end do
+            call stkio_r%close
+            call stkio_w%close
+            ! write jpeg
+            call generate_pool_jpeg(STREAM_SELECTED_REFS//JPG_EXT)
+            call img%kill
+        end if
+    end subroutine write_pool_cls_selected_nice
+
+    ! write jpeg of refs_glob    
+    subroutine generate_pool_jpeg(filename)
+        character(len=*), optional, intent(in) :: filename
+        character(len=STDLEN)                  :: jpeg_path
+        type(image)                            :: img, img_pad, img_jpeg
+        type(stack_io)                         :: stkio_r
+        character(len=LONGSTRLEN)              :: cwd
+        integer                                :: ldim_stk(3)
+        integer                                :: ncls_here, xtiles, ytiles, icls, ix, iy, ntiles
+        call simple_getcwd(cwd)
+        if(present(filename)) then
+            jpeg_path = trim(filename)
+        else
+            jpeg_path = fname_new_ext(refs_glob, "jpeg") ! temporarily jpeg so compatible with old pool_stats. 
+        end if
+        if(.not. file_exists(trim(refs_glob))) return
+        if(file_exists(trim(jpeg_path)))       return
+        call find_ldim_nptcls(trim(refs_glob), ldim_stk, ncls_here)
+        if(ncls_here .ne. pool_proj%os_cls2D%get_noris()) THROW_HARD('ncls and n_noris mismatch')
+        xtiles = floor(sqrt(real(ncls_glob)))
+        ytiles = ceiling(real(ncls_glob) / real(xtiles))
+        call img%new([ldim_stk(1), ldim_stk(1), 1], smpd)
+        call img_pad%new([JPEG_DIM, JPEG_DIM, 1], smpd)
+        call img_jpeg%new([xtiles * JPEG_DIM, ytiles * JPEG_DIM, 1], smpd)
+        call stkio_r%open(trim(refs_glob), smpd, 'read', bufsz=ncls_here)
+        call stkio_r%read_whole
+        ix = 1
+        iy = 1
+        ntiles = 0
+        do icls=1, ncls_here
+            if(pool_proj%os_cls2D%get(icls,'state') == 0.0) cycle
+            if(pool_proj%os_cls2D%get(icls,'pop')   == 0.0) cycle
+            call img%zero_and_unflag_ft
+            call stkio_r%get_image(icls, img)
+            call img%fft
+            if(ldim_stk(1) > JPEG_DIM) then
+                call img%clip(img_pad)
+            else
+                call img%pad(img_pad, backgr=0., antialiasing=.false.)
+            end if
+            call img_pad%ifft
+            call img_jpeg%tile(img_pad, ix, iy)
+            ntiles = ntiles + 1
+            ix = ix + 1
+            if(ix > xtiles) then
+                ix = 1
+                iy = iy + 1
+            end if
+        enddo
+        call stkio_r%close()
+        call img_jpeg%write_jpg(trim(jpeg_path))
+        current_jpeg = trim(adjustl(cwd)) // '/' // trim(jpeg_path)
+        current_jpeg_ntiles = ntiles
+        current_jpeg_scale = real(JPEG_DIM) / real(params_glob%box)
+        call img%kill()
+        call img_pad%kill()
+        call img_jpeg%kill()
+    end subroutine generate_pool_jpeg
+
     ! Reports stats to GUI
     subroutine generate_pool_stats
         type(guistats)            :: pool_stats
@@ -1402,9 +1704,30 @@ contains
             if(iter_loc > 0) call pool_stats%set_now('2D', 'iteration_time')
             call pool_stats%generate_2D_thumbnail('2D', 'top_classes', pool_proj%os_cls2D, iter_loc)
             call pool_stats%generate_2D_jpeg('latest', '', pool_proj%os_cls2D, iter_loc, pool_dims%smpd)
+            !call pool_stats%generate_2D_jpeg('latest', '', pool_proj%os_cls2D, iter_loc, smpd)
+            ! nice
+            call set_iteration_time() ! called in wrong place
+            ! current_jpeg = trim(adjustl(cwd)) // '/' // trim(CAVGS_ITER_FBODY) // int2str_pad(iter_loc, 3) // '.jpg'
+            call generate_pool_jpeg()
         endif
         call pool_stats%write(POOLSTATS_FILE)
         call pool_stats%kill
+ 
+        contains
+
+        subroutine set_iteration_time()
+            character(8)  :: date
+            character(10) :: time
+            character(5)  :: zone
+            integer,dimension(8) :: values
+            ! using keyword arguments
+            call date_and_time(date,time,zone,values)
+            call date_and_time(DATE=date,ZONE=zone)
+            call date_and_time(TIME=time)
+            call date_and_time(VALUES=values)
+            write(last_iteration_time, '(I4,A,I2.2,A,I2.2,A,I2.2,A,I2.2)') values(1), '/', values(2), '/', values(3), '_', values(5), ':', values(6)
+        end subroutine set_iteration_time
+
     end subroutine generate_pool_stats
 
     !> Sets xml beamtilts in pool
@@ -1488,6 +1811,145 @@ contains
         get_pool_iter = pool_iter
     end function get_pool_iter
 
+    ! returns number currently assigned particles
+    integer function get_pool_assigned()
+        get_pool_assigned = nptcls_glob - nptcls_rejected_glob
+    end function get_pool_assigned
+
+    ! returns number currently rejected particles
+    integer function get_pool_rejected()
+        get_pool_rejected = nptcls_rejected_glob
+    end function get_pool_rejected
+
+    ! returns number classes
+    integer function get_pool_n_classes()
+        get_pool_n_classes = ncls_glob
+    end function get_pool_n_classes
+
+    ! returns number classes rejected
+    integer function get_pool_n_classes_rejected()
+        get_pool_n_classes_rejected = ncls_rejected_glob
+    end function get_pool_n_classes_rejected
+
+    ! returns current pool resolution
+    real function get_pool_res()
+        get_pool_res = current_resolution
+    end function get_pool_res
+
+    ! returns iteration time
+    character(16) function get_pool_iter_time()
+        get_pool_iter_time = last_iteration_time
+    end function get_pool_iter_time
+
+    character(16) function get_last_snapshot()
+        get_last_snapshot = last_snapshot
+    end function get_last_snapshot
+
+    character(len=LONGSTRLEN) function get_pool_cavgs_jpeg()
+        get_pool_cavgs_jpeg = current_jpeg
+    end function get_pool_cavgs_jpeg
+
+    character(len=LONGSTRLEN) function get_pool_rejected_jpeg()
+        get_pool_rejected_jpeg = pool_rejected_jpeg
+    end function get_pool_rejected_jpeg
+
+    character(len=LONGSTRLEN) function get_chunk_rejected_jpeg()
+        get_chunk_rejected_jpeg = chunk_rejected_jpeg
+    end function get_chunk_rejected_jpeg
+
+    integer function get_pool_cavgs_jpeg_ntiles()
+        get_pool_cavgs_jpeg_ntiles = current_jpeg_ntiles
+    end function get_pool_cavgs_jpeg_ntiles
+
+    integer function get_pool_rejected_jpeg_ntiles()
+        get_pool_rejected_jpeg_ntiles = pool_rejected_jpeg_ntiles
+    end function get_pool_rejected_jpeg_ntiles
+
+    integer function get_chunk_rejected_jpeg_ntiles()
+        get_chunk_rejected_jpeg_ntiles = chunk_rejected_jpeg_ntiles
+    end function get_chunk_rejected_jpeg_ntiles
+
+    integer function get_nchunks()
+        if(allocated(chunks)) then
+            get_nchunks = size(chunks)
+        else
+            get_nchunks = 0
+        end if
+    end function get_nchunks
+
+    integer function get_pool_rejected_thumbnail_id()
+        get_pool_rejected_thumbnail_id = pool_rejected_thumbnail_id
+    end function get_pool_rejected_thumbnail_id
+
+    integer function get_chunk_rejected_thumbnail_id()
+        get_chunk_rejected_thumbnail_id = chunk_rejected_thumbnail_id
+    end function get_chunk_rejected_thumbnail_id
+ 
+    integer function get_last_snapshot_id()
+        get_last_snapshot_id = snapshot_complete_jobid
+    end function get_last_snapshot_id
+
+    real function get_pool_cavgs_jpeg_scale()
+        get_pool_cavgs_jpeg_scale = current_jpeg_scale
+    end function get_pool_cavgs_jpeg_scale
+
+    real function get_pool_rejected_jpeg_scale()
+        get_pool_rejected_jpeg_scale = pool_rejected_jpeg_scale
+    end function get_pool_rejected_jpeg_scale
+
+    real function get_chunk_rejected_jpeg_scale()
+        get_chunk_rejected_jpeg_scale = chunk_rejected_jpeg_scale
+    end function get_chunk_rejected_jpeg_scale
+
+    real function get_lpthres()
+        get_lpthres = params_glob%lpthres
+    end function get_lpthres
+
+    function get_pool_cavgs_res() result( arr )
+        real, allocatable :: arr(:)
+        arr = pool_proj%os_cls2D%get_all("res")
+    end function get_pool_cavgs_res
+
+    function get_pool_cavgs_pop() result( arr )
+        real, allocatable :: arr(:)
+        arr = pool_proj%os_cls2D%get_all("pop")
+    end function get_pool_cavgs_pop
+
+    function get_pool_cavgs_mask() result( arr )
+        real, allocatable :: arr(:)
+        arr = pool_proj%os_cls2D%get_all("state")
+    end function get_pool_cavgs_mask
+
+    logical function test_repick()
+        test_repick = allocated(repick_selection)
+    end function test_repick
+
+    function get_rejection_params() result(arr)
+        real :: arr(3)
+        if(trim(params_glob%reject_cls) .eq. "yes") then
+            arr(1) = 1
+        else if(trim(params_glob%reject_cls) .eq. "no") then
+            arr(1) = 2
+        else if(trim(params_glob%reject_cls) .eq. "old") then
+            arr(1) = 3
+        else
+            arr(1) = 0
+        end if
+        arr(2) = params_glob%lpthres
+        arr(3) = params_glob%ndev
+    end function get_rejection_params
+
+    subroutine get_snapshot_json(snapshot_json_cp)
+        type(json_value),   pointer,  intent(inout) :: snapshot_json_cp
+        type(json_core)                             :: json
+        nullify(snapshot_json_cp)
+        if(associated(snapshot_json)) then
+            call json%clone(snapshot_json, snapshot_json_cp)
+            call json%destroy(snapshot_json)
+            nullify(snapshot_json)
+        end if
+    end subroutine get_snapshot_json
+
     ! CHUNKS RELATED
 
     ! Initiates classification of all available chunks
@@ -1561,6 +2023,10 @@ contains
                     ! rejection
                     if( trim(params_glob%reject_cls).ne.'no' )then
                         call chunks(ichunk)%reject(params_glob%lpthres, params_glob%ndev)
+                        !call chunks(ichunk)%reject(params_glob%lpthres, params_glob%ndev, box)
+                        call mrc2jpeg_tiled('cls_rejected_chunks.mrc', 'cls_rejected_chunks.jpeg', scale=chunk_rejected_jpeg_scale, ntiles=chunk_rejected_jpeg_ntiles)
+                        chunk_rejected_jpeg = trim(cwd_glob) // '/' // 'cls_rejected_chunks.jpeg'
+                        chunk_rejected_thumbnail_id = chunk_rejected_jpeg_ntiles
                     endif
                 endif
             else
@@ -2170,8 +2636,8 @@ contains
     ! Removes some unnecessary files
     subroutine tidy_2Dstream_iter
         character(len=:), allocatable :: prefix
-        if( pool_iter > 3 )then
-            prefix = trim(POOL_DIR)//trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter-3,3))
+        if( pool_iter > 5 )then
+            prefix = trim(POOL_DIR)//trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter-5,3))
             call del_file(prefix//trim(JPG_EXT))
             call del_file(prefix//'_even'//trim(params_glob%ext))
             call del_file(prefix//'_odd'//trim(params_glob%ext))
@@ -2181,9 +2647,9 @@ contains
                 call del_file(prefix//trim(WFILT_SUFFIX)//'_odd'//trim(params_glob%ext))
                 call del_file(prefix//trim(WFILT_SUFFIX)//trim(params_glob%ext))
             endif
-            call del_file(trim(POOL_DIR)//trim(CLS2D_STARFBODY)//'_iter'//int2str_pad(pool_iter-3,3)//'.star')
+            call del_file(trim(POOL_DIR)//trim(CLS2D_STARFBODY)//'_iter'//int2str_pad(pool_iter-5,3)//'.star')
             call del_file(trim(prefix) // '.jpg')
-            if( l_update_sigmas ) call del_file(trim(POOL_DIR)//trim(sigma2_star_from_iter(pool_iter-3)))
+            if( l_update_sigmas ) call del_file(trim(POOL_DIR)//trim(sigma2_star_from_iter(pool_iter-5)))
         endif
     end subroutine tidy_2Dstream_iter
 
@@ -2632,5 +3098,32 @@ contains
         end subroutine generate_chunk_projects
 
     end subroutine exec_cluster2D_subsets
+
+    ! Handles user inputted class rejection
+    subroutine write_repick_refs(refsout)
+        type(image)              :: img
+        character(*), intent(in) :: refsout
+        character(len=STDLEN)    :: refsin
+        integer                  :: icls, i
+        if( .not. stream2D_active ) return
+        if( pool_proj%os_cls2D%get_noris() == 0 ) return
+        if(repick_iteration .lt. 1) return
+        refsin = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(repick_iteration,3))//trim(params_glob%ext)
+        if(.not. file_exists(trim(POOL_DIR)//trim(refsin))) return
+        if(file_exists(trim(refsout)) ) call del_file(trim(refsout))
+        call img%new([pool_dims%box,pool_dims%box,1], pool_dims%smpd)
+        img = 0.
+        if(allocated(repick_selection)) then
+            do i = 1, size(repick_selection)
+                icls = repick_selection(i)
+                if( icls <= 0 ) cycle
+                if( icls > ncls_glob ) cycle
+                call img%read(trim(POOL_DIR)//trim(refsin),icls)
+                call img%write(trim(refsout),i)
+            end do
+        end if    
+        call update_stack_nimgs(trim(refsout), size(repick_selection))
+        call img%kill
+    end subroutine write_repick_refs
 
 end module simple_commander_cluster2D_stream

@@ -2,6 +2,8 @@
 module simple_oris
 !$ use omp_lib
 !$ use omp_lib_kinds
+use json_kinds
+use json_module
 use simple_srch_sort_loc
 use simple_fileio
 use simple_stat
@@ -107,6 +109,7 @@ type :: oris
     procedure          :: any_state_zero
     procedure          :: count_state_gt_zero
     procedure          :: ori2str
+    procedure          :: ori2json
     procedure          :: ori2prec
     procedure          :: prec2ori
     procedure          :: get_ctfvars
@@ -1692,6 +1695,15 @@ contains
         character(len=:), allocatable :: str
         str = self%o(i)%ori2str()
     end function ori2str
+
+    subroutine ori2json( self, i, json_ori)
+        class(oris),                  intent(in)    :: self
+        integer,                      intent(in)    :: i
+        type(json_value), pointer,    intent(inout) :: json_ori
+        type(json_core)                             :: json
+        call self%o(i)%ori2json(json_ori)
+        call json%add(json_ori, 'n', i) 
+    end subroutine ori2json
 
     subroutine ori2prec( self, i, prec )
         class(oris), intent(in)    :: self

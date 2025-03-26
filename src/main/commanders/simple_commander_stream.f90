@@ -15,7 +15,9 @@ use simple_commander_cluster2D_stream
 use simple_qsys_funs
 use simple_commander_preprocess
 use simple_progress
+use simple_imgproc
 use simple_timer
+use simple_nice
 implicit none
 
 public :: commander_stream_preprocess
@@ -74,6 +76,7 @@ contains
         class(commander_stream_preprocess), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters)                       :: params
+        type(simple_nice_communicator)         :: nice_communicator
         type(guistats)                         :: gui_stats
         integer,                   parameter   :: INACTIVE_TIME   = 900  ! inactive time trigger for writing project file
         logical,                   parameter   :: DEBUG_HERE      = .false.
@@ -87,7 +90,7 @@ contains
         character(len=:),          allocatable :: output_dir, output_dir_ctf_estimate, output_dir_motion_correct
         character(len=STDLEN)                  :: preproc_nthr_env, preproc_part_env
         integer                                :: movies_set_counter, import_counter
-        integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection, nsets, i,j
+        integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection, nsets, i, j, i_thumb, i_max
         integer                                :: cnt, n_imported, n_added, n_failed_jobs, n_fail_iter, nmic_star, iset, envlen
         logical                                :: l_movies_left, l_haschanged
         real                                   :: avg_tmp, preproc_nthr, stat_dfx_threshold, stat_dfy_threshold
@@ -116,6 +119,7 @@ contains
         if( .not. cline%defined('dfmin')            ) call cline%set('dfmin',           DFMIN_DEFAULT)
         if( .not. cline%defined('dfmax')            ) call cline%set('dfmax',           DFMAX_DEFAULT)
         if( .not. cline%defined('ctfpatch')         ) call cline%set('ctfpatch',        'yes')
+        if( .not. cline%defined('ctfresthreshold') )  call cline%set('ctfresthreshold',  CTFRES_THRESHOLD_STREAM)
         ! ev overrides
         call get_environment_variable(SIMPLE_STREAM_PREPROC_NTHR, preproc_nthr_env, envlen)
         if(envlen > 0) then
@@ -138,6 +142,9 @@ contains
         params%ncunits    = params%nparts
         call cline%set('mkdir', 'no')
         call cline%set('prg',   'preprocess')
+        ! nice communicator init
+        call nice_communicator%init(params%niceprocid, params%niceserver)
+        call nice_communicator%cycle()
         ! master project file
         call spproj_glob%read( params%projfile )
         call spproj_glob%update_projinfo(cline)
@@ -153,16 +160,26 @@ contains
         call gui_stats%set('micrographs', 'micrographs',          int2str(0), primary=.true.)
         call gui_stats%set('micrographs', 'micrographs_rejected', int2str(0), primary=.true.)
         call gui_stats%set('compute',     'compute_in_use',       int2str(0) // '/' // int2str(params%nparts), primary=.true.)
+        ! nice
+        call nice_communicator%update_micrographs(movies_imported=0, movies_processed=0, micrographs=0, micrographs_rejected=0, compute_in_use=0)
+        call nice_communicator%cycle()
         ! restart
         movies_set_counter = 0  ! global number of movies set
         import_counter     = 0  ! global import id
         nmic_star          = 0
+        
         if( cline%defined('dir_exec') )then
             call del_file(TERM_STREAM)
             call cline%delete('dir_exec')
+            ! nice stats
+            nice_communicator%stat_root%stage = "importing previously processed data"
+            call nice_communicator%cycle()
             call import_previous_projects
             nmic_star = spproj_glob%os_mic%get_noris()
             call write_mic_star_and_field(write_field=.true.)
+            ! nice stats
+            call nice_communicator%update_micrographs(movies_imported=spproj_glob%os_mic%get_noris(), movies_processed=spproj_glob%os_mic%get_noris(),&
+                micrographs=spproj_glob%os_mic%get_noris())
             ! guistats
             call gui_stats%set('movies',      'movies_imported',      int2commastr(nmic_star),              primary=.true.)
             call gui_stats%set('movies',      'movies_processed',     int2commastr(nmic_star) // ' (100%)', primary=.true.)
@@ -175,6 +192,12 @@ contains
                 else
                     call gui_stats%set('micrographs', 'avg_ctf_resolution', avg_tmp, primary=.true., alert=.false., notify=.true., notifytext='tick')
                 end if
+                call nice_communicator%update_micrographs(avg_ctf_resolution=avg_tmp)
+                call nice_communicator%view_micrographs%ctf_res_histogram%zero()
+                do i = 1, spproj_glob%os_mic%get_noris()
+                    call nice_communicator%view_micrographs%ctf_res_histogram%update(spproj_glob%os_mic%get(i, 'ctfres'))
+                enddo
+                nice_communicator%view_micrographs%cutoff_ctf_res = params%ctfresthreshold
             end if
             if(spproj_glob%os_mic%isthere("icefrac")) then
                 avg_tmp = spproj_glob%os_mic%get_avg("icefrac")
@@ -184,6 +207,12 @@ contains
                 else
                     call gui_stats%set('micrographs', 'avg_ice_score', avg_tmp, primary=.true., alert=.false., notify=.true., notifytext='tick')
                 end if
+                call nice_communicator%update_micrographs(avg_ice_score=avg_tmp)
+                call nice_communicator%view_micrographs%ice_score_histogram%zero()
+                do i = 1, spproj_glob%os_mic%get_noris()
+                    call nice_communicator%view_micrographs%ice_score_histogram%update(spproj_glob%os_mic%get(i, 'icefrac'))                   
+                enddo
+                nice_communicator%view_micrographs%cutoff_ice_score = params%icefracthreshold
             end if
             if(spproj_glob%os_mic%isthere("astig")) then
                 avg_tmp = spproj_glob%os_mic%get_avg("astig")
@@ -193,10 +222,17 @@ contains
                 else
                     call gui_stats%set('micrographs', 'avg_astigmatism', avg_tmp, primary=.true., alert=.false., notify=.true., notifytext='tick')
                 end if
+                call nice_communicator%update_micrographs(avg_astigmatism=avg_tmp)
+                call nice_communicator%view_micrographs%astig_histogram%zero()
+                do i = 1, spproj_glob%os_mic%get_noris()
+                    call nice_communicator%view_micrographs%astig_histogram%update(spproj_glob%os_mic%get(i, 'astig') * 100)
+                enddo
+                nice_communicator%view_micrographs%cutoff_astigmatism = params%astigthreshold
             end if
             if(spproj_glob%os_mic%isthere('thumb')) then
                 call gui_stats%set('latest', '', trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(),'thumb'))), thumbnail=.true.)
             end if
+            call nice_communicator%cycle()
         endif
         ! output directories
         call simple_mkdir(trim(PATH_HERE)//trim(DIR_STREAM_COMPLETED))
@@ -235,12 +271,26 @@ contains
         call cline_exec%set('fromp',1)
         call cline_exec%set('top',  NMOVS_SET)
         do
-            if( file_exists(TERM_STREAM) )then
+            if( file_exists(trim(TERM_STREAM)) .or. nice_communicator%exit )then
                 ! termination
                 write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
                 exit
             endif
+            if( nice_communicator%stop )then
+                ! termination
+                write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
+                call spproj_glob%kill
+                call qsys_cleanup
+                call nice_communicator%terminate(stop=.true.)
+                call simple_end('**** SIMPLE_STREAM_PREPROC USER STOP ****')
+                call EXIT(0)
+            endif
             iter = iter + 1
+            ! nice stats
+            nice_communicator%stat_root%stage = "finding and processing new movies"
+            nice_communicator%view_micrographs%cutoff_ctf_res = params%ctfresthreshold
+            nice_communicator%view_micrographs%cutoff_ice_score = params%icefracthreshold
+            nice_communicator%view_micrographs%cutoff_astigmatism = params%astigthreshold
             ! detection of new movies
             call movie_buff%watch( nmovies, movies, max_nmovies=params%nparts*NMOVS_SET )
             ! append movies to processing stack
@@ -261,6 +311,8 @@ contains
                 enddo
                 write(logfhandle,'(A,I4,A,A)')'>>> ',cnt,' NEW MOVIES ADDED; ', cast_time_char(simple_gettime())
                 l_movies_left = cnt .ne. nmovies
+                ! nice stats
+                call nice_communicator%update_micrographs(movies_imported=movie_buff%n_history, last_movie_imported=.true.)
                 ! guistats
                 call gui_stats%set('movies', 'movies_imported', int2commastr(movie_buff%n_history), primary=.true.)
                 call gui_stats%set_now('movies', 'last_movie_imported')
@@ -300,10 +352,13 @@ contains
                 write(logfhandle,'(A,I8)')                         '>>> # MOVIES PROCESSED & IMPORTED       : ',n_imported
                 write(logfhandle,'(A,I3,A2,I3)')                   '>>> # OF COMPUTING UNITS IN USE/TOTAL   : ',qenv%get_navail_computing_units(),'/ ',params%nparts
                 if( n_failed_jobs > 0 ) write(logfhandle,'(A,I8)') '>>> # DESELECTED MICROGRAPHS/FAILED JOBS: ',n_failed_jobs
+                ! nice stats
+                call nice_communicator%update_micrographs(movies_processed=n_imported, micrographs=n_imported)
                 ! guistats
                 call gui_stats%set('movies',      'movies_processed', int2commastr(n_imported) // ' (' // int2str(ceiling(100.0 * real(n_imported) / real(movie_buff%n_history))) // '%)', primary=.true.)
                 call gui_stats%set('micrographs', 'micrographs',      int2commastr(n_imported), primary=.true.)
                 if( n_failed_jobs > 0 ) call gui_stats%set('micrographs', 'micrographs_rejected', n_failed_jobs, primary=.true.)
+                if( n_failed_jobs > 0 ) call nice_communicator%update_micrographs(micrographs_rejected=n_failed_jobs)
                 if(spproj_glob%os_mic%isthere("ctfres")) then
                     avg_tmp = spproj_glob%os_mic%get_avg("ctfres")
                     if(spproj_glob%os_mic%get_noris() > 50 .and. avg_tmp > 7.0) then
@@ -312,6 +367,11 @@ contains
                     else
                         call gui_stats%set('micrographs', 'avg_ctf_resolution', avg_tmp, primary=.true., alert=.false., notify=.true., notifytext='tick')
                     end if
+                    call nice_communicator%update_micrographs(avg_ctf_resolution=avg_tmp)
+                    call nice_communicator%view_micrographs%ctf_res_histogram%zero()
+                    do i = 1, spproj_glob%os_mic%get_noris()
+                        call nice_communicator%view_micrographs%ctf_res_histogram%update(spproj_glob%os_mic%get(i, 'ctfres'))
+                    enddo
                 end if
                 if(spproj_glob%os_mic%isthere("icefrac")) then
                     avg_tmp = spproj_glob%os_mic%get_avg("icefrac")
@@ -321,6 +381,11 @@ contains
                     else
                         call gui_stats%set('micrographs', 'avg_ice_score', avg_tmp, primary=.true., alert=.false., notify=.true., notifytext='tick')
                     end if
+                    call nice_communicator%update_micrographs(avg_ice_score=avg_tmp)
+                    call nice_communicator%view_micrographs%ice_score_histogram%zero()
+                    do i = 1, spproj_glob%os_mic%get_noris()
+                        call nice_communicator%view_micrographs%ice_score_histogram%update(spproj_glob%os_mic%get(i, 'icefrac'))
+                    enddo
                 end if
                 if(spproj_glob%os_mic%isthere("astig")) then
                     avg_tmp = spproj_glob%os_mic%get_avg("astig")
@@ -330,9 +395,29 @@ contains
                     else
                         call gui_stats%set('micrographs', 'avg_astigmatism', avg_tmp, primary=.true., alert=.false., notify=.true., notifytext='tick')
                     end if
+                    call nice_communicator%update_micrographs(avg_astigmatism=avg_tmp)
+                    call nice_communicator%view_micrographs%astig_histogram%zero()
+                    do i = 1, spproj_glob%os_mic%get_noris()
+                        call nice_communicator%view_micrographs%astig_histogram%update(spproj_glob%os_mic%get(i, 'astig') * 100)
+                    enddo
                 end if
                 if(spproj_glob%os_mic%isthere('thumb')) then
                     call gui_stats%set('latest', '', trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(),'thumb'))), thumbnail=.true.)
+                    call nice_communicator%update_micrographs(thumbnail=trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(),'thumb'))),&
+                        thumbnail_id=spproj_glob%os_mic%get_noris(), thumbnail_static_id=1)
+                    i_max = 10
+                    if(spproj_glob%os_mic%get_noris() < 10) i_max = spproj_glob%os_mic%get_noris()
+                    do i_thumb=0, i_max - 1
+                        if(i_thumb == 0) then
+                            call nice_communicator%update_micrographs(carousel=.true., clear_carousel=.true., thumbnail=trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris() - i_thumb, 'thumb'))),&
+                            thumbnail_id=spproj_glob%os_mic%get_noris() - i_thumb, thumbnail_static_id=i_thumb + 2)  
+                        else
+                            call nice_communicator%update_micrographs(carousel=.true., thumbnail=trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris() - i_thumb, 'thumb'))),&
+                            thumbnail_id=spproj_glob%os_mic%get_noris() - i_thumb, thumbnail_static_id=i_thumb + 2)
+                        end if
+                    end do
+                    call nice_communicator%update_micrographs(carousel=.false., thumbnail=trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'thumb'))),&
+                            thumbnail_id=spproj_glob%os_mic%get_noris(), thumbnail_static_id=i_max + 10)
                 end if
                 ! update progress monitor
                 call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
@@ -349,10 +434,10 @@ contains
                 endif
                 ! always write micrographs snapshot if less than 1000 mics, else every 100
                 if( n_imported < 1000 .and. l_haschanged )then
-                    call update_user_params(cline)
+                    call update_user_params(cline, nice_communicator%update_arguments)
                     call write_mic_star_and_field
                 else if( n_imported > nmic_star + 100 .and. l_haschanged )then
-                    call update_user_params(cline)
+                    call update_user_params(cline, nice_communicator%update_arguments)
                     call write_mic_star_and_field
                     nmic_star = n_imported
                 endif
@@ -361,7 +446,7 @@ contains
                 if( .not.l_movies_left )then
                     if( (simple_gettime()-last_injection > INACTIVE_TIME) .and. l_haschanged )then
                         ! write project when inactive...
-                        call update_user_params(cline)
+                        call update_user_params(cline, nice_communicator%update_arguments)
                         call write_mic_star_and_field
                         l_haschanged = .false.
                     else
@@ -372,8 +457,12 @@ contains
             endif
             ! guistats
             call gui_stats%write_json
+            ! nice stats
+            call nice_communicator%cycle()
         end do
         ! termination
+        nice_communicator%stat_root%stage = "terminating"
+        call nice_communicator%cycle()
         call update_user_params(cline)
         call write_mic_star_and_field(write_field=.true., copy_optics=.true.)
         ! final stats
@@ -385,6 +474,7 @@ contains
         call spproj_glob%kill
         call qsys_cleanup
         ! end gracefully
+        call nice_communicator%terminate()
         call simple_end('**** SIMPLE_STREAM_PREPROC NORMAL STOP ****')
         contains
 
@@ -665,33 +755,41 @@ contains
 
     subroutine exec_stream_pick_extract( self, cline )
         use simple_histogram,    only: histogram
+        use simple_image
         class(commander_stream_pick_extract), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(make_pickrefs_commander)          :: xmake_pickrefs
         type(parameters)                       :: params
+        type(simple_nice_communicator)         :: nice_communicator
         type(guistats)                         :: gui_stats
         integer,                   parameter   :: INACTIVE_TIME   = 900  ! inactive time triggers writing of project file
         logical,                   parameter   :: DEBUG_HERE      = .true.
+        logical,                   allocatable :: jobs_done(:), jobs_submitted(:)
         class(cmdline),            allocatable :: completed_jobs_clines(:), failed_jobs_clines(:)
-        type(projrecord),          allocatable :: projrecords(:)
-        type(qsys_env)                         :: qenv
+        type(projrecord),          allocatable :: projrecords(:), projrecords_main(:)
+        type(qsys_env),            pointer     :: qenv
+        type(qsys_env),            target      :: qenv_main, qenv_interactive
         type(cmdline)                          :: cline_make_pickrefs, cline_pick_extract
         type(moviewatcher)                     :: project_buff
-        type(sp_project)                       :: spproj_glob, stream_spproj
+        type(sp_project)                       :: spproj_glob, stream_spproj, spproj_tmp, interactive_spproj
         type(starproject_stream)               :: starproj_stream
         type(histogram)                        :: histogram_moldiams
+        type(image)                            :: mic_thumb
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=:),          allocatable :: odir, odir_extract, odir_picker, odir_completed
-        character(len=:),          allocatable :: odir_picker_init, odir_picker_init_completed
+        character(len=:),          allocatable :: odir_interactive, odir_interactive_picker, odir_interactive_completed
         character(len=LONGSTRLEN)              :: cwd_job, latest_boxfile
         character(len=STDLEN)                  :: pick_nthr_env, pick_part_env
         real,                      allocatable :: moldiams(:)
-        real                                   :: pick_nthr
-        integer                                :: nmics_sel, nmics_rej, nmics_rejected_glob, pick_extract_set_counter
-        integer                                :: nmics, nprojects, stacksz, prev_stacksz, iter, last_injection, iproj, envlen
-        integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, nmic_star
+        real                                   :: pick_nthr, jpg_scale, moldiam_interactive, nmoldiams_interactive, moldiam_max_interactive
+        real                                   :: pickrefs_thumbnail_scale, rnd
+        integer                                :: nmics_sel, nmics_rej, nmics_rejected_glob, pick_extract_set_counter, i_max, i_thumb, i
+        integer                                :: nmics, nprojects, stacksz, prev_stacksz, iter, last_injection, iproj, envlen, imic
+        integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, nmic_star, thumbid_offset
+        integer                                :: n_pickrefs
+        integer                                :: ldim_mic(3)
         logical                                :: l_templates_provided, l_projects_left, l_haschanged, l_multipick, l_extract, l_once
-        logical                                :: l_multipick_init, l_multipick_refine, pause_import
+        logical                                :: pause_import, l_interactive, interactive_waiting
         integer(timer_int_kind) :: t0
         real(timer_int_kind)    :: rt_write
         call cline%set('oritype', 'mic')
@@ -717,8 +815,6 @@ contains
             read(pick_nthr_env,*) pick_nthr
             call cline%set('nthr', pick_nthr)
         end if
-        ! write cmdline for GUI
-        call cline%writeline(".cline")
         ! sanity check for restart
         if( cline%defined('dir_exec') )then
             if( .not.file_exists(cline%get_carg('dir_exec')) )then
@@ -733,29 +829,47 @@ contains
         params%ncunits    = params%nparts
         call simple_getcwd(cwd_job)
         call cline%set('mkdir', 'no')
+        ! write cmdline for GUI
+        call cline%writeline(".cline")
+        ! nice communicator init
+        call nice_communicator%init(params%niceprocid, params%niceserver)
+        call nice_communicator%cycle()
         ! picking
-        l_multipick = cline%defined('nmoldiams')
-        l_multipick_init   = .false.
-        l_multipick_refine = .false.
+        l_multipick   = cline%defined('nmoldiams')
+        l_interactive = params%interactive == 'yes'
         if( l_multipick )then
+            interactive_waiting  = .false.
             l_extract            = .false.
             l_templates_provided = .false.
-            l_multipick_refine   = .false.
-            l_multipick_init     = cline%defined('ninit')
             write(logfhandle,'(A)')'>>> PERFORMING MULTI-DIAMETER PICKING'
             moldiams = equispaced_vals(params%moldiam, params%moldiam_max, params%nmoldiams)
             call histogram_moldiams%new(moldiams)
             deallocate(moldiams)
+            ! nice
+            if(.not. allocated(nice_communicator%view_pick%active_search_diameters)) allocate(nice_communicator%view_pick%active_search_diameters(0))
+            do i=1, histogram_moldiams%get_nbins()
+                nice_communicator%view_pick%active_search_diameters = [nice_communicator%view_pick%active_search_diameters, int(histogram_moldiams%get_x(i))]
+            end do
             ! remove existing files (restart)
-            if(file_exists("micrographs.star")) call del_file("micrographs.star")
+            if(file_exists("micrographs.star"))      call del_file("micrographs.star")
             if(file_exists("micrographs_init.star")) call del_file("micrographs_init.star")
-            if(file_exists("pick.star")) call del_file("pick.star")
-            if(file_exists("pick_init.star")) call del_file("pick_init.star")
+            if(file_exists("pick.star"))             call del_file("pick.star")
+            if(file_exists("pick_init.star"))        call del_file("pick_init.star")
         else
             l_extract            = .true.
             l_templates_provided = cline%defined('pickrefs')
             if( l_templates_provided )then
-                if( .not.file_exists(params%pickrefs) ) THROW_HARD('Could not find: '//trim(params%pickrefs))
+                if( .not.file_exists(params%pickrefs) ) then
+                    if(params%clear .eq. "yes") then
+                        write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 5 MINUTES FOR '//trim(params%pickrefs)
+                        do i=1, 30
+                            if(file_exists(trim(params%pickrefs))) exit
+                            call sleep(10)
+                        end do
+                    else
+                        THROW_HARD('Could not find: '//trim(params%pickrefs))
+                    end if
+                end if
                 write(logfhandle,'(A)')'>>> PERFORMING REFERENCE-BASED PICKING'
                 if( cline%defined('moldiam') )then
                     call cline%delete('moldiam')
@@ -777,34 +891,43 @@ contains
         call gui_stats%set('micrographs', 'micrographs_imported', int2str(0), primary=.true.)
         call gui_stats%set('micrographs', 'micrographs_rejected', int2str(0), primary=.true.)
         call gui_stats%set('micrographs', 'micrographs_picked',   int2str(0), primary=.true.)
-        if( l_multipick_init ) then
+        if( l_multipick ) then
             call gui_stats%set('current_search', 'type', 'initial global search')
             call gui_stats%set('current_search', 'range', int2str(floor(params%moldiam)) // 'Å - ' // int2str(floor(params%moldiam_max)) // 'Å')
             call gui_stats%set('current_search', 'status', 'running')
         endif
         call gui_stats%set('compute', 'compute_in_use', int2str(0) // '/' // int2str(params%nparts), primary=.true.)
+        ! nice
+        call nice_communicator%update_pick(micrographs_imported=0, micrographs_picked=0, micrographs_rejected=0)
+        call nice_communicator%cycle()
         ! directories structure & restart
         odir                       = trim(DIR_STREAM)
         odir_completed             = trim(DIR_STREAM_COMPLETED)
         odir_picker                = trim(PATH_HERE)//trim(DIR_PICKER)
-        odir_picker_init           = trim(odir_picker)//'init/'
-        odir_picker_init_completed = trim(odir_completed)//'init/'
+        odir_interactive           = 'interactive/'//trim(DIR_STREAM)
+        odir_interactive_picker    = 'interactive/'//trim(DIR_PICKER)
+        odir_interactive_completed = 'interactive/'//trim(DIR_STREAM_COMPLETED)
         odir_extract               = trim(PATH_HERE)//trim(DIR_EXTRACT)
         pick_extract_set_counter = 0    ! global counter of projects to be processed
         nptcls_glob              = 0    ! global number of particles
         nmics_rejected_glob      = 0    ! global number of micrographs rejected
         nmic_star                = 0
+        thumbid_offset           = 0
         if( cline%defined('dir_exec') )then
             call del_file(TERM_STREAM)
             call cline%delete('dir_exec')
             call simple_rmdir(odir)
-            if( l_multipick )then
+            ! nice stats
+            nice_communicator%stat_root%stage = "importing previously processed data"
+            call nice_communicator%cycle()
+            if( l_multipick .or. params%clear .eq. "yes")then
                 ! removes directory structure
                 call simple_rmdir(odir_completed)
                 call simple_rmdir(odir_picker)
-                call simple_rmdir(odir_picker_init)
-                call simple_rmdir(odir_picker_init_completed)
                 call simple_rmdir(odir_extract)
+                call simple_rmdir(odir_interactive)
+                call simple_rmdir(odir_interactive_picker)
+                call simple_rmdir(odir_interactive_completed)
             else
                 ! import previous run and updates stats for gui
                 call import_previous_mics( projrecords )
@@ -821,6 +944,9 @@ contains
                         latest_boxfile = trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'boxfile'))
                         if(file_exists(latest_boxfile)) call gui_stats%set('latest', '', trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'intg')), thumbnail=.true., boxfile=trim(latest_boxfile))
                     end if
+                    ! nice
+                    call nice_communicator%update_pick(micrographs_imported=spproj_glob%os_mic%get_noris(), micrographs_picked=spproj_glob%os_mic%get_noris())
+                    call nice_communicator%cycle()
                 endif
             endif
         endif
@@ -829,9 +955,10 @@ contains
         call simple_mkdir(trim(odir)//trim(STDERROUT_DIR))
         call simple_mkdir(odir_completed)
         call simple_mkdir(odir_picker)
-        if( l_multipick_init ) then
-            call simple_mkdir(odir_picker_init)
-            call simple_mkdir(odir_picker_init_completed)
+        if( l_multipick ) then
+            call simple_mkdir(odir_interactive)
+            call simple_mkdir(odir_interactive_picker)
+            call simple_mkdir(odir_interactive_completed)
         endif
         if( l_extract ) call simple_mkdir(odir_extract)
         ! initialise progress monitor
@@ -839,15 +966,27 @@ contains
         ! setup the environment for distributed execution
         call get_environment_variable(SIMPLE_STREAM_PICK_PARTITION, pick_part_env, envlen)
         if(envlen > 0) then
-            call qenv%new(1,stream=.true.,qsys_partition=trim(pick_part_env))
+          !  call qenv%new(1,stream=.true.,qsys_partition=trim(pick_part_env))
+            call qenv_main%new(1,stream=.true.,qsys_partition=trim(pick_part_env))
+            call qenv_interactive%new(1,stream=.true.,qsys_partition=trim(pick_part_env))
         else
-            call qenv%new(1,stream=.true.)
+            !call qenv%new(1,stream=.true.)
+            call qenv_main%new(1,stream=.true.)
+            call qenv_interactive%new(1,stream=.true.)
         end if
+        if(l_interactive) then
+            qenv => qenv_interactive
+        else
+            qenv => qenv_main
+        endif
         ! command line for execution
         cline_pick_extract = cline
         call cline_pick_extract%set('prg','pick_extract')
-        if( l_multipick_init ) then
-            call cline_pick_extract%set('dir', filepath(PATH_PARENT,odir_picker_init))
+        if( l_multipick .and. l_interactive ) then
+            odir           = odir_interactive
+            odir_completed = odir_interactive_completed
+            odir_picker    = odir_interactive_picker
+            call cline_pick_extract%set('dir', PATH_PARENT)
         else
             call cline_pick_extract%set('dir', PATH_PARENT)
         endif
@@ -868,48 +1007,248 @@ contains
         l_once                = .true.
         pause_import          = .false.
         do
-            if( file_exists(TERM_STREAM) )then
+            if( file_exists(trim(TERM_STREAM)) .or. nice_communicator%exit) then
                 ! termination
                 write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
                 exit
             endif
+            if( nice_communicator%stop )then
+                ! termination
+                write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
+                call spproj_glob%kill
+                call qsys_cleanup
+                call nice_communicator%terminate(stop=.true.)
+                call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
+                call EXIT(0)
+            endif
             iter = iter + 1
-            ! switch to diameter refinement
-            if( l_multipick_refine .and. params%updated .eq. 'yes' .and. params%moldiam_refine .gt. 0.0) then
-                write(logfhandle,'(A,I3)') '>>> REFINING MOLECULAR DIAMETER        : ', int(params%moldiam_refine)
-                odir_picker = filepath(trim(PATH_HERE), trim(DIR_PICKER))
-                call simple_mkdir(odir_picker, errmsg="commander_stream :: exec_stream_pick_extract;  ")
-                params%updated     = 'no'
-                params%moldiam     = params%moldiam_refine - 50.0
-                params%moldiam_max = params%moldiam_refine + 50.0
-                params%nmoldiams   = 11.0
-                call cline_pick_extract%set('moldiam',     params%moldiam)
-                call cline_pick_extract%set('moldiam_max', params%moldiam_max)
-                call cline_pick_extract%set('nmoldiams',   params%nmoldiams)
-                call cline_pick_extract%set('dir','../')
-                ! undo already processed micrographs
-                call spproj_glob%os_mic%kill()
-                call project_buff%clear_history()
-                if(allocated(projrecords)) deallocate(projrecords)
-                ! reset histogram
-                moldiams = equispaced_vals(params%moldiam, params%moldiam_max, params%nmoldiams)
-                call histogram_moldiams%kill
-                call histogram_moldiams%new(moldiams)
-                deallocate(moldiams)
-                call gui_stats%set('current_search', 'type', 'refinement')
-                call gui_stats%set('current_search', 'range', int2str(floor(params%moldiam)) // 'Å - ' // int2str(floor(params%moldiam_max)) // 'Å')
-                call gui_stats%set('current_search', 'estimated_diameter', '')
-                call gui_stats%set('current_search', 'status', 'running')
-                call gui_stats%set('latest', '', '')
-                call gui_stats%write_json
-                pause_import = .false.
-            endif
-            ! pause import after ninit mics for global search
-            if(l_multipick_init .and. .not. pause_import .and. n_added >= params%ninit) then
-                write(logfhandle,'(A,A,A)') '>>> NEW MICROGRAPH IMPORT PAUSED AFTER ', int2str(params%ninit), ' MICROGRAPHS WHILE INITIAL SEARCH IS PERFORMED';
-                call gui_stats%set('micrographs', 'micrographs_imported', int2str(project_buff%n_history * NMOVS_SET) // "(paused)", primary=.true.)
-                pause_import = .true.
-            endif
+            ! go back to interactive multipick
+            if(l_multipick .and. .not. l_interactive .and. params%interactive == 'yes') then
+                call qenv%qscripts%clear_stack()
+                call qenv%qscripts%get_jobs_status(jobs_done, jobs_submitted)
+                if(count(jobs_done) < params%nparts) then
+                    if(.not. pause_import) write(logfhandle, *) ">>>  WAITING FOR ALL PARTS TO COMPLETE"
+                    pause_import = .true.
+                    ! nice stats
+                    nice_communicator%stat_root%stage = "waiting for running parts to complete"
+                    nice_communicator%stat_root%user_input = .false.
+                    call nice_communicator%cycle()
+                else
+                    write(logfhandle, *) ">>>  RE-ENTERING INTERACTIVE MODE"
+                    if(allocated(projrecords)) then
+                        do iproj=1, size(projrecords)
+                            if(file_exists(trim(projrecords(iproj)%projname))) then
+                                call simple_rename(trim(projrecords(iproj)%projname), filepath(odir, basename(trim(projrecords(iproj)%projname))))
+                                ! update for execution
+                                call spproj_tmp%read(filepath(odir, basename(trim(projrecords(iproj)%projname))))
+                                do imic=1, spproj_tmp%os_mic%get_noris()
+                                    if(file_exists(trim(spproj_tmp%os_mic%get_static(imic, 'boxfile')))) call del_file(trim(spproj_tmp%os_mic%get_static(imic, 'boxfile')))
+                                end do
+                              
+                                call spproj_tmp%kill
+                            end if
+                        end do
+                    end if
+                    odir           = odir_interactive
+                    odir_completed = odir_interactive_completed
+                    odir_picker    = odir_interactive_picker
+                    l_interactive  = .true.
+                    params%updated        = 'no'
+                    params%moldiam_refine = 0.0
+                !    params%moldiam        = moldiam_interactive
+                !    params%nmoldiams      = nmoldiams_interactive
+                    pause_import   = .true.
+                    interactive_waiting = .true.
+                    if(allocated(projrecords_main)) deallocate(projrecords_main)
+                    allocate(projrecords_main(size(projrecords)))
+                    projrecords_main(:) = projrecords(:)
+                    if(allocated(projrecords)) deallocate(projrecords)
+                    call spproj_glob%os_mic%kill()
+                    call spproj_glob%os_mic%copy(interactive_spproj%os_mic, is_ptcl=.false.)
+                    call import_previous_mics( projrecords )
+                    if( allocated(projrecords) )then
+                        nptcls_glob = sum(projrecords(:)%nptcls)
+                        nmic_star   = spproj_glob%os_mic%get_noris()
+                    endif
+                    qenv => qenv_interactive
+                    n_imported = 0
+                    n_failed_jobs = size(projrecords) - n_imported
+                    thumbid_offset = 100
+                    if(spproj_glob%os_mic%isthere('intg') .and. spproj_glob%os_mic%isthere('xdim') .and. spproj_glob%os_mic%isthere('ydim') \
+                    .and. spproj_glob%os_mic%isthere('smpd') .and. spproj_glob%os_mic%isthere('boxfile')) then
+                        i_max = 20
+                        if(spproj_glob%os_mic%get_noris() < i_max) i_max = spproj_glob%os_mic%get_noris()
+                        do i_thumb=0, i_max - 1
+                            ! Generate jpegs 
+                            i = spproj_glob%os_mic%get_noris() - i_thumb
+                            ldim_mic(1) = int(spproj_glob%os_mic%get(i, 'xdim'))
+                            ldim_mic(2) = int(spproj_glob%os_mic%get(i, 'ydim'))
+                            ldim_mic(3) = 1
+                            call mic_thumb%new(ldim_mic, spproj_glob%os_mic%get(i, 'smpd'))
+                            call mic_thumb%read(trim(spproj_glob%os_mic%get_static(i, 'intg')))
+                            ! resize
+                            jpg_scale = 1000.0 / ldim_mic(2)
+                            call mic_thumb%fft
+                            call mic_thumb%clip_inplace([2 * (nint(0.5 * jpg_scale * ldim_mic(1))), 2 * (nint(0.5 * jpg_scale * ldim_mic(2))), 1]) ! ensures new img has even dims
+                            call mic_thumb%ifft
+                            call mic_thumb%write_jpg(trim(cwd_job) // '/' // int2str(i_thumb) // THUMBNAIL_SUFFIX // JPG_EXT)
+                            call mic_thumb%kill
+                            if(i_thumb == 0) then
+                                call nice_communicator%update_pick(carousel=.true., clear_carousel=.true., thumbnail=trim(cwd_job) // '/' // int2str(i_thumb) // THUMBNAIL_SUFFIX // JPG_EXT,&
+                                thumbnail_id=i + thumbid_offset, thumbnail_static_id=i_thumb + 1, boxfile=trim(spproj_glob%os_mic%get_static(i, 'boxfile')), scale=jpg_scale)  
+                            else
+                                call nice_communicator%update_pick(carousel=.true., thumbnail=trim(cwd_job) // '/' // int2str(i_thumb) // THUMBNAIL_SUFFIX // JPG_EXT,&
+                                thumbnail_id=i + thumbid_offset, thumbnail_static_id=i_thumb + 1, boxfile=trim(spproj_glob%os_mic%get_static(i, 'boxfile')), scale=jpg_scale)
+                            end if
+                        end do
+                    end if
+
+                end if
+            end if
+            if(l_interactive .and. l_multipick) then
+                ! pause import if more that ninit mics imported
+                if(n_added >= params%ninit .and. .not. pause_import ) then
+                    write(logfhandle,'(A,A,A)') '>>> NEW MICROGRAPH IMPORT PAUSED AFTER ', int2str(params%ninit), ' MICROGRAPHS WHILE INITIAL PICKING IS PERFORMED';
+                    call gui_stats%set('micrographs', 'micrographs_imported', int2str(project_buff%n_history * NMOVS_SET) // "(paused)", primary=.true.)
+                    nice_communicator%stat_root%stage = "initial search on " // int2str(project_buff%n_history * NMOVS_SET) // " micrographs"
+                    pause_import = .true.
+                end if
+                ! restart pick if moldiam_refine updated in append mode
+                if(interactive_waiting .and. params%updated .eq. 'yes' .and. (params%moldiam_refine .gt. 0.0 .or. params%moldiam_refine .lt. 0.0 )) then
+                    if(params%moldiam_refine .gt. 0.0 ) then
+                        write(logfhandle,'(A,I3)') '>>> REFINING MOLECULAR DIAMETER        : ', int(params%moldiam_refine)
+                    else if (params%moldiam_refine .eq. -1.0 ) then
+                        write(logfhandle,'(A)') '>>> INCREASING SEARCH RANGE'
+                    else if (params%moldiam_refine .eq. -2.0 ) then
+                        write(logfhandle,'(A)') '>>> DECREASING SEARCH RANGE'
+                    end if
+                    ! nice stats
+                    nice_communicator%stat_root%stage = "refining pick diameter"
+                    nice_communicator%stat_root%user_input = .false.
+                    call nice_communicator%cycle()
+                    ! update params
+                    if(params%moldiam_refine .eq. -2.0) then
+                        !decrease search range
+                        params%moldiam_max = minval(nice_communicator%view_pick%complete_search_diameters)
+                        params%moldiam     = 20
+                        params%nmoldiams   = 8
+                    else if(params%moldiam_refine .eq. -1.0) then
+                        !increase search range
+                        params%moldiam     = maxval(nice_communicator%view_pick%complete_search_diameters)
+                        params%moldiam_max = params%moldiam + 200
+                        params%nmoldiams   = 4
+                    else
+                        params%moldiam     = params%moldiam_refine - 50.0
+                        params%moldiam_max = params%moldiam_refine + 50.0
+                        params%nmoldiams   = 11.0
+                    end if
+                    !reset
+                    params%updated        = 'no'
+                    params%moldiam_refine = 0.0
+                    ! update cline for picker
+                    call cline_pick_extract%set('moldiam',     params%moldiam)
+                    call cline_pick_extract%set('moldiam_max', params%moldiam_max)
+                    call cline_pick_extract%set('nmoldiams',   params%nmoldiams)
+                    !call cline_pick_extract%set('dir','../')
+                    call cline_pick_extract%set('append','yes')
+                    ! undo already processed micrographs
+                    call spproj_glob%os_mic%kill()
+                    if(allocated(projrecords)) then
+                        do iproj=1, size(projrecords)
+                            if(file_exists(trim(projrecords(iproj)%projname))) then
+                                call simple_rename(trim(projrecords(iproj)%projname), filepath(odir, basename(trim(projrecords(iproj)%projname))))
+                                ! update for execution
+                                call spproj_tmp%read(filepath(odir, basename(trim(projrecords(iproj)%projname))))
+                                call cline_pick_extract%set('projname', trim(spproj_tmp%projinfo%get_static(1, 'projname')))
+                                call cline_pick_extract%set('projfile', basename(trim(projrecords(iproj)%projname)))
+                                call cline_pick_extract%set('fromp',    1)
+                                call cline_pick_extract%set('top',      spproj_tmp%os_mic%get_noris())
+                                call spproj_tmp%kill
+                                call qenv%qscripts%add_to_streaming(cline_pick_extract)
+                                call qenv%qscripts%schedule_streaming( qenv%qdescr, path=odir )
+                            end if
+                        end do
+                        deallocate(projrecords)
+                    end if
+                    n_imported = 0
+                    ! reset histogram
+                    moldiams = equispaced_vals(params%moldiam, params%moldiam_max, params%nmoldiams)
+                    call histogram_moldiams%kill
+                    call histogram_moldiams%new(moldiams)
+                    deallocate(moldiams)
+                    ! nice
+                    if(allocated(nice_communicator%view_pick%active_search_diameters)) deallocate(nice_communicator%view_pick%active_search_diameters)
+                    if(allocated(nice_communicator%view_pick%refined_search_diameters)) deallocate(nice_communicator%view_pick%refined_search_diameters)
+                    allocate(nice_communicator%view_pick%active_search_diameters(0))
+                    do i=1, histogram_moldiams%get_nbins()
+                        nice_communicator%view_pick%active_search_diameters = [nice_communicator%view_pick%active_search_diameters, int(histogram_moldiams%get_x(i))]
+                    end do
+                    ! keep import paused
+                    pause_import = .true.
+                    interactive_waiting = .false.
+                    thumbid_offset = 100
+                end if
+                ! exit interactive mode
+                if(params%updated .eq. 'yes' .and. params%interactive == 'no') then
+                    ! undo already processed micrographs
+                    write(logfhandle, '(A)') ">>> EXITING INTERACTIVE MODE"
+                    write(logfhandle, '(A)') ">>> PICKING USING :"
+                    call interactive_spproj%os_mic%copy(spproj_glob%os_mic, is_ptcl=.false.)
+                    call spproj_glob%os_mic%kill()
+                    call project_buff%clear_history()
+                    qenv => qenv_main
+                    !reset
+                    params%updated        = 'no'
+                    n_imported = 0
+                    ! reset paths
+                    odir            = trim(DIR_STREAM)
+                    odir_completed  = trim(DIR_STREAM_COMPLETED)
+                    odir_picker     = trim(PATH_HERE)//trim(DIR_PICKER)
+                    l_interactive = .false.
+                    pause_import  = .false.
+                    interactive_waiting = .false.
+                    params%nmoldiams = 1.0
+                    if(params%moldiam .gt. 0.0)then
+                        write(logfhandle, '(A,F12.2)') "        GAUSSIAN DIAMETER : ", params%moldiam
+                        call cline_pick_extract%set('moldiam',    params%moldiam)
+                    else
+                        call cline_pick_extract%set('moldiam',    0.0)
+                    end if
+                    if(params%ring == 'yes')then
+                        write(logfhandle, '(A,F12.2)') "        RING DIAMETER : ", params%moldiam_ring
+                        call cline_pick_extract%set('moldiam_ring',    params%moldiam_ring)
+                    else
+                        call cline_pick_extract%delete('moldiam_ring')
+                    end if
+                    call cline_pick_extract%set('nmoldiams',  params%nmoldiams)
+                    call cline_pick_extract%set('ring',       params%ring)
+                    call cline_pick_extract%delete('moldiam_max')
+                    nice_communicator%stat_root%stage = "picking with user selected parameters"
+                    nice_communicator%stat_root%user_input = .false.
+                    call nice_communicator%update_pick(gaussian_diameter=int(params%moldiam_refine))
+                    if(allocated(projrecords)) deallocate(projrecords)
+                    if(allocated(projrecords_main)) then
+                        allocate(projrecords(size(projrecords_main)))
+                        projrecords(:) = projrecords_main(:)
+                    end if
+                    call qenv%qscripts%clear_stack()
+                    if(allocated(projrecords)) then
+                        do iproj=1, size(projrecords)
+                            if(file_exists(trim(projrecords(iproj)%projname))) then
+                                call simple_rename(trim(projrecords(iproj)%projname), filepath(odir, basename(trim(projrecords(iproj)%projname))))
+                                ! update for execution
+                                call spproj_tmp%read(filepath(odir, basename(trim(projrecords(iproj)%projname))))
+                                do imic=1, spproj_tmp%os_mic%get_noris()
+                                    if(file_exists(trim(spproj_tmp%os_mic%get_static(imic, 'boxfile')))) call del_file(trim(spproj_tmp%os_mic%get_static(imic, 'boxfile')))
+                                end do
+                                call spproj_tmp%kill
+                            end if
+                        end do
+                        deallocate(projrecords)
+                    end if
+                    thumbid_offset = 0
+                end if
+            end if
             ! detection of new projects
             call project_buff%watch( nprojects, projects, max_nmovies=params%nparts )
             ! append projects to processing stack
@@ -921,13 +1260,22 @@ contains
                     if( l_once )then
                         ! prepares picking references here as we did not have pixel size before
                         if( l_templates_provided )then
+                            ! nice stats
+                            nice_communicator%stat_root%stage = "preparing picking references"
+                            call nice_communicator%cycle()
                             cline_make_pickrefs = cline
                             call cline_make_pickrefs%set('prg',   'make_pickrefs')
                             call cline_make_pickrefs%set('stream','no')
                             call cline_make_pickrefs%set('smpd',  params%smpd) ! is the required output sampling distance
                             call xmake_pickrefs%execute_safe(cline_make_pickrefs)
                             call cline_pick_extract%set('pickrefs', '../'//trim(PICKREFS_FBODY)//trim(params%ext))
+                            ! nice
+                            call mrc2jpeg_tiled(trim(PICKREFS_FBODY)//trim(params%ext), trim(PICKREFS_FBODY)//".jpeg", scale=pickrefs_thumbnail_scale, ntiles=n_pickrefs)
+                            call random_number(rnd)
+                            call nice_communicator%update_pick(pickrefs_thumbnail=trim(cwd_job)//'/'//trim(PICKREFS_FBODY)//".jpeg", pickrefs_thumbnail_id=floor(100000 * rnd), pickrefs_thumbnail_static_id=1000, pickrefs_thumbnail_n_tiles=n_pickrefs, pickrefs_thumbnail_scale=pickrefs_thumbnail_scale)
                             write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
+                            nice_communicator%stat_root%stage = "picking references prepared"
+                            call nice_communicator%cycle()
                             call qsys_cleanup
                         endif
                         l_once = .false.
@@ -950,6 +1298,9 @@ contains
                 ! guistats
                 call gui_stats%set('micrographs', 'micrographs_imported', int2commastr(project_buff%n_history * NMOVS_SET), primary=.true.)
                 call gui_stats%set_now('micrographs', 'last_micrograph_imported')
+                ! nice
+                call nice_communicator%update_pick(micrographs_imported=project_buff%n_history * NMOVS_SET, last_micrograph_imported=.true.)
+                call nice_communicator%cycle()
             else
                 l_projects_left = .false.
             endif
@@ -988,23 +1339,59 @@ contains
                 if( l_extract ) write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED               : ',nptcls_glob
                 if( l_multipick )then
                     call histogram_moldiams%plot('moldiams', 'Diameters')
-                    if( l_multipick_init )  call starproj_stream%stream_export_pick_diameters(params%outdir, histogram_moldiams, filename="pick_init.star")
-                    if( l_multipick_refine) call starproj_stream%stream_export_pick_diameters(params%outdir, histogram_moldiams)
+                    if( l_multipick .and. l_interactive)       call starproj_stream%stream_export_pick_diameters(params%outdir, histogram_moldiams, filename="pick_init.star")
+                    if( l_multipick .and. .not. l_interactive) call starproj_stream%stream_export_pick_diameters(params%outdir, histogram_moldiams)
                     write(logfhandle,'(A,F8.2)') '>>> ESTIMATED MOLECULAR DIAMETER        : ',histogram_moldiams%mean()
                     call gui_stats%set('current_search', 'estimated_diameter', int2str(floor(histogram_moldiams%mean())) // 'Å')
+                    call nice_communicator%update_pick(suggested_diameter=floor(histogram_moldiams%mean()))
                 endif
                 write(logfhandle,'(A,I3,A2,I3)') '>>> # OF COMPUTING UNITS IN USE/TOTAL   : ',qenv%get_navail_computing_units(),'/ ',params%nparts
                 if( n_failed_jobs > 0 ) write(logfhandle,'(A,I8)') '>>> # DESELECTED MICROGRAPHS/FAILED JOBS: ',n_failed_jobs
                 ! guistats
                 call gui_stats%set('micrographs', 'micrographs_picked', int2commastr(n_imported) // ' (' // int2str(ceiling(100.0 * real(n_imported) / real(project_buff%n_history * NMOVS_SET))) // '%)', primary=.true.)
                 call gui_stats%set('micrographs', 'micrographs_rejected', int2commastr(n_failed_jobs + nmics_rejected_glob) // ' (' // int2str(floor(100.0 * real(n_failed_jobs + nmics_rejected_glob) / real(project_buff%n_history * NMOVS_SET))) // '%)', primary=.true.)
+                ! nice
+                call nice_communicator%update_pick(micrographs_picked=n_imported, micrographs_rejected=n_failed_jobs + nmics_rejected_glob)
                 if(spproj_glob%os_mic%isthere("nptcls") .and. .not. l_multipick) then
                     call gui_stats%set('micrographs', 'avg_number_picks', ceiling(spproj_glob%os_mic%get_avg("nptcls")), primary=.true.)
                 end if
-                if(.not. l_multipick) call gui_stats%set('particles', 'total_extracted_particles', int2commastr(nptcls_glob), primary=.true.)
+                if(.not. l_multipick) then
+                    ! nice stats
+                    nice_communicator%stat_root%stage = "finding and picking micrographs"
+                    call gui_stats%set('particles', 'total_extracted_particles', int2commastr(nptcls_glob), primary=.true.)
+                end if
                 if(spproj_glob%os_mic%isthere('intg') .and. spproj_glob%os_mic%isthere('boxfile')) then
                     latest_boxfile = trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'boxfile'))
                     if(file_exists(latest_boxfile)) call gui_stats%set('latest', '', trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'intg')), thumbnail=.true., boxfile=trim(latest_boxfile))
+                end if
+                !nice
+                if(spproj_glob%os_mic%isthere('intg') .and. spproj_glob%os_mic%isthere('xdim') .and. spproj_glob%os_mic%isthere('ydim') \
+                    .and. spproj_glob%os_mic%isthere('smpd') .and. spproj_glob%os_mic%isthere('boxfile')) then
+                    i_max = 20
+                    if(spproj_glob%os_mic%get_noris() < i_max) i_max = spproj_glob%os_mic%get_noris()
+                    do i_thumb=0, i_max - 1
+                        ! Generate jpegs 
+                        i = spproj_glob%os_mic%get_noris() - i_thumb
+                        ldim_mic(1) = int(spproj_glob%os_mic%get(i, 'xdim'))
+                        ldim_mic(2) = int(spproj_glob%os_mic%get(i, 'ydim'))
+                        ldim_mic(3) = 1
+                        call mic_thumb%new(ldim_mic, spproj_glob%os_mic%get(i, 'smpd'))
+                        call mic_thumb%read(trim(spproj_glob%os_mic%get_static(i, 'intg')))
+                        ! resize
+                        jpg_scale = 1000.0 / ldim_mic(2)
+                        call mic_thumb%fft
+                        call mic_thumb%clip_inplace([2 * (nint(0.5 * jpg_scale * ldim_mic(1))), 2 * (nint(0.5 * jpg_scale * ldim_mic(2))), 1]) ! ensures new img has even dims
+                        call mic_thumb%ifft
+                        call mic_thumb%write_jpg(trim(cwd_job) // '/' // int2str(i_thumb) // THUMBNAIL_SUFFIX // JPG_EXT)
+                        call mic_thumb%kill
+                        if(i_thumb == 0) then
+                            call nice_communicator%update_pick(carousel=.true., clear_carousel=.true., thumbnail=trim(cwd_job) // '/' // int2str(i_thumb) // THUMBNAIL_SUFFIX // JPG_EXT,&
+                            thumbnail_id=i + thumbid_offset, thumbnail_static_id=i_thumb + 1, boxfile=trim(spproj_glob%os_mic%get_static(i, 'boxfile')), scale=jpg_scale)  
+                        else
+                            call nice_communicator%update_pick(carousel=.true., thumbnail=trim(cwd_job) // '/' // int2str(i_thumb) // THUMBNAIL_SUFFIX // JPG_EXT,&
+                            thumbnail_id=i + thumbid_offset, thumbnail_static_id=i_thumb + 1, boxfile=trim(spproj_glob%os_mic%get_static(i, 'boxfile')), scale=jpg_scale)
+                        end if
+                    end do
                 end if
                 ! update progress monitor
                 call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
@@ -1032,19 +1419,40 @@ contains
                     endif
                 endif
             endif
-            if(l_multipick_init .and. pause_import .and. n_imported + n_failed_jobs >= params%ninit) then
-                write(logfhandle,'(A)')'>>> WAITING FOR USER INPUT REFINEMENT DIAMETER'
+           ! if(l_multipick .and. l_interactive .and. pause_import .and. n_imported + n_failed_jobs >= params%ninit) then
+           if(l_multipick .and. l_interactive .and. pause_import .and. spproj_glob%os_mic%get_noris() >= params%ninit) then
+                if(.not. interactive_waiting) write(logfhandle,'(A)')'>>> WAITING FOR USER INPUT'
+                nice_communicator%stat_root%user_input = .true.
                 call gui_stats%set('current_search', 'status', 'waiting for refinement diameter')
-                l_multipick_init   = .false.
-                l_multipick_refine = .true.
+                ! nice stats
+                nice_communicator%stat_root%stage = "waiting for user input"
+                call nice_communicator%cycle()
+                nice_communicator%stat_root%user_input = .true.
+                ! nice
+                if(allocated(nice_communicator%view_pick%active_search_diameters)) then
+                    if(.not. allocated(nice_communicator%view_pick%complete_search_diameters)) allocate(nice_communicator%view_pick%complete_search_diameters(0))
+                    nice_communicator%view_pick%complete_search_diameters = [nice_communicator%view_pick%complete_search_diameters, nice_communicator%view_pick%active_search_diameters]
+                    if(allocated(nice_communicator%view_pick%refined_search_diameters)) deallocate(nice_communicator%view_pick%refined_search_diameters)
+                    allocate(nice_communicator%view_pick%refined_search_diameters(size(nice_communicator%view_pick%active_search_diameters)))
+                    nice_communicator%view_pick%refined_search_diameters(:) = nice_communicator%view_pick%active_search_diameters(:)
+                    deallocate(nice_communicator%view_pick%active_search_diameters)
+                end if
+                interactive_waiting = .true.
             endif
-            call update_user_params(cline)
+            call update_user_params(cline, nice_communicator%update_arguments)
             ! guistats
             call gui_stats%write_json
-            call sleep(WAITTIME)
+            if(interactive_waiting) then
+                call sleep(1)
+            else
+                call sleep(WAITTIME)
+            end if
+            call nice_communicator%cycle()
         end do
         ! termination
         call write_project
+        nice_communicator%stat_root%stage = "terminating"
+        call nice_communicator%cycle()
         call update_user_params(cline)
         call starproj_stream%copy_micrographs_optics(spproj_glob, write=.true., verbose=DEBUG_HERE)
         call write_micrographs_starfile(optics_set=.true.)
@@ -1061,6 +1469,7 @@ contains
         call spproj_glob%kill
         call qsys_cleanup
         ! end gracefully
+        call nice_communicator%terminate()
         call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT NORMAL STOP ****')
         contains
 
@@ -1074,7 +1483,7 @@ contains
                 if( present(optics_set) ) l_optics_set = optics_set
                 if (spproj_glob%os_mic%get_noris() > 0) then
                     if( DEBUG_HERE ) ms0 = tic()
-                    if(l_multipick_init) then
+                    if(l_multipick .and. l_interactive) then
                         call starproj_stream%stream_export_micrographs(spproj_glob, params%outdir, optics_set=l_optics_set, filename="micrographs_init.star")
                     else
                         call starproj_stream%stream_export_micrographs(spproj_glob, params%outdir, optics_set=l_optics_set)
@@ -1177,14 +1586,8 @@ contains
                 do iproj = 1,n_spprojs
                     fname = filepath(odir, completed_jobs_clines(iproj)%get_carg('projfile'))
                     call tmpproj%read_segment('projinfo', fname)
-                    if(l_multipick_refine .and. tmpproj%projinfo%isthere("init") .and. tmpproj%projinfo%get(1, "init") .eq. 1.0) then
-                        if(file_exists(fname)) call del_file(trim(fname))
-                        call spprojs(iproj)%os_mic%new(0, .false.)
-                    else
-                        call spprojs(iproj)%read_segment('mic', fname)
-                       ! call spprojs(iproj)%read_segment('projinfo', fname)
-                        nmics = nmics + spprojs(iproj)%os_mic%get_noris()
-                    endif
+                    call spprojs(iproj)%read_segment('mic', fname)
+                    nmics = nmics + spprojs(iproj)%os_mic%get_noris()
                 enddo
                 if( nmics == 0 )then
                     ! nothing to import
@@ -1210,11 +1613,7 @@ contains
                         if( spprojs(iproj)%os_mic%get_noris() == 0 ) cycle
                         ! move project to appropriate directory
                         fname = filepath(odir, completed_jobs_clines(iproj)%get_carg('projfile'))
-                        if(tmpproj%projinfo%isthere("init") .and. tmpproj%projinfo%get(1, "init") .eq. 1.0) then
-                            new_fname = filepath(odir_picker_init_completed, completed_jobs_clines(iproj)%get_carg('projfile'))
-                        else
-                            new_fname = filepath(odir_completed, completed_jobs_clines(iproj)%get_carg('projfile'))
-                        endif    
+                        new_fname = filepath(odir_completed, completed_jobs_clines(iproj)%get_carg('projfile'))
                         call simple_rename(fname, new_fname)
                         abs_fname = simple_abspath(new_fname, errmsg='stream pick_extract :: update_projects_list 1')
                         ! records & project
@@ -1302,7 +1701,7 @@ contains
                 call spproj_here%projinfo%set(1,'projname', trim(projname))
                 call spproj_here%projinfo%set(1,'projfile', trim(projfile))
                 call spproj_here%projinfo%set(1,'cwd',      trim(path))
-                if(l_multipick_init) call spproj_here%projinfo%set(1,'init', 1.0)
+                if(l_multipick .and. l_interactive) call spproj_here%projinfo%set(1,'init', 1.0)
                 ! from current global project
                 spproj_here%compenv = spproj_glob%compenv
                 spproj_here%jobproc = spproj_glob%jobproc
@@ -1428,6 +1827,7 @@ contains
         integer,                   parameter   :: MAXPOP_DEFAULT  = 200000 ! # of particles after wich picking is stopped
         logical,                   parameter   :: DEBUG_HERE      = .FALSE.
         type(parameters)                       :: params
+        type(simple_nice_communicator)         :: nice_communicator
         type(guistats)                         :: gui_stats
         class(cmdline),            allocatable :: completed_jobs_clines(:), failed_jobs_clines(:)
         type(projrecord),          allocatable :: projrecords(:)
@@ -1436,6 +1836,7 @@ contains
         type(moviewatcher)                     :: project_buff
         type(sp_project)                       :: spproj_glob
         type(starproject_stream)               :: starproj_stream
+        type(json_core)                        :: json
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=:),          allocatable :: output_dir, output_dir_extract, output_dir_picker
         character(len=LONGSTRLEN)              :: cwd_job
@@ -1445,7 +1846,8 @@ contains
         integer                                :: nmics_sel, nmics_rej, nmics_rejected_glob
         integer                                :: nmics, nprojects, stacksz, prev_stacksz, iter, iproj, envlen
         integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, nmic_star
-        logical                                :: l_haschanged, l_once, l_pick_extract
+        integer,                   allocatable :: final_selection(:)
+        logical                                :: l_haschanged, l_once, l_pick_extract, l_user, json_found
         call cline%set('oritype',      'mic')
         call cline%set('mkdir',        'yes')
         call cline%set('picker',       'new')
@@ -1479,8 +1881,6 @@ contains
             call cline%set('nthr', refgen_nthr)
             call cline%set('nthr2D', refgen_nthr)
         end if
-        ! write cmdline for GUI
-        call cline%writeline(".cline")
         ! sanity check for restart
         if( cline%defined('dir_exec') )then
             if( .not.file_exists(cline%get_carg('dir_exec')) )then
@@ -1496,6 +1896,8 @@ contains
         call simple_getcwd(cwd_job)
         call cline%set('mkdir', 'no')
         call cline%delete('maxpop')
+         ! write cmdline for GUI
+        call cline%writeline(".cline")
         if( params%nptcls_per_cls*params%ncls > params%maxpop )then
             THROW_HARD('Incorrect inputs: MAXPOP < NPTCLS_PER_CLS x NCLS')
         endif
@@ -1511,6 +1913,9 @@ contains
                 THROW_HARD('Invalid DIR_TARGET 2')
             endif
         endif
+        ! nice communicator init
+        call nice_communicator%init(params%niceprocid, params%niceserver)
+        call nice_communicator%cycle()
         ! master project file
         call spproj_glob%read( params%projfile )
         call spproj_glob%update_projinfo(cline)
@@ -1531,6 +1936,9 @@ contains
         call gui_stats%set('particles', 'particles_extracted',         0,            primary=.true.)
         call gui_stats%set('2D',        'iteration',                   0,            primary=.true.)
         call gui_stats%set('compute',   'compute_in_use',      int2str(0) // '/' // int2str(params%nparts), primary=.true.)
+        ! nice
+        call nice_communicator%update_cls2D(particles_extracted=0)
+        call nice_communicator%cycle()
         ! directories
         output_dir         = trim(PATH_HERE)//trim(DIR_STREAM)
         output_dir_picker  = filepath(trim(PATH_HERE), trim(DIR_PICKER))
@@ -1541,6 +1949,8 @@ contains
         nmics_rejected_glob = 0     ! global number of micrographs rejected
         nmic_star           = 0
         if( cline%defined('dir_exec') )then
+            nice_communicator%stat_root%stage = "erasing previous run data"
+            call nice_communicator%cycle()
             ! no restart here, the folder is wiped
             call cline%delete('dir_exec')
             call cleanup_root_folder(all=.true.)
@@ -1602,11 +2012,21 @@ contains
         n_added               = 0   ! global number of micrographs added to processing stack
         l_haschanged          = .false.
         l_once                = .true.
+        l_user                = .false.
         do
-            if( file_exists(TERM_STREAM) .or. file_exists(STREAM_REJECT_CLS))then
+            if( file_exists(trim(TERM_STREAM)) .or. file_exists(STREAM_REJECT_CLS) .or. nice_communicator%exit)then
                 ! termination
                 write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
                 exit
+            endif
+            if( nice_communicator%stop )then
+                ! termination
+                write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
+                call spproj_glob%kill
+                call qsys_cleanup
+                call nice_communicator%terminate(stop=.true.)
+                call simple_end('**** SIMPLE_STREAM GEN_PICKING_REFERENCES USER STOP ****')
+                call EXIT(0)
             endif
             iter = iter + 1
             ! detection of new projects
@@ -1642,6 +2062,7 @@ contains
                 endif
                 ! guistats
                 call gui_stats%set_now('particles', 'last_particles_imported')
+                call nice_communicator%update_cls2D(last_particles_imported=.true.)
             endif
             ! submit jobs
             call qenv%qscripts%schedule_streaming( qenv%qdescr, path=output_dir )
@@ -1680,6 +2101,7 @@ contains
                 if( n_failed_jobs > 0 ) write(logfhandle,'(A,I8)') '>>> # DESELECTED MICROGRAPHS/FAILED JOBS: ',n_failed_jobs
                 ! guistats
                 call gui_stats%set('particles', 'particles_extracted', int2commastr(nptcls_glob), primary=.true.)
+                call nice_communicator%update_cls2D(particles_extracted=nptcls_glob)
                 ! update progress monitor
                 call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
                 ! write project for gui, micrographs field only
@@ -1693,6 +2115,8 @@ contains
                     call starproj_stream%stream_export_micrographs(spproj_glob, params%outdir)
                     nmic_star = n_imported
                 endif
+                ! nice
+
             endif
             ! 2D section
             if( l_once .and. (nptcls_glob > params%nptcls_per_cls*params%ncls) )then
@@ -1709,6 +2133,25 @@ contains
             else
                 call sleep(SHORTWAIT)
             endif
+            ! nice
+            if(l_once) then
+                nice_communicator%stat_root%stage = "importing and extracting >" // int2str(params%nptcls_per_cls*params%ncls) // " particles"
+            else 
+                call nice_communicator%update_cls2D(iteration=get_pool_iter()-1, number_classes=get_pool_n_classes(), number_classes_rejected=get_pool_n_classes_rejected(),&
+                number_particles_assigned=get_pool_assigned(), number_particles_rejected=get_pool_rejected(), maximum_resolution=get_pool_res(), &
+                thumbnail=trim(get_pool_cavgs_jpeg()), thumbnail_id=get_pool_iter(), thumbnail_static_id=1, last_iteration=get_pool_iter_time(), thumbnail_n_tiles=get_pool_cavgs_jpeg_ntiles(), scale=get_pool_cavgs_jpeg_scale())
+                call nice_communicator%update_cls2D(stats_mask=get_pool_cavgs_mask(), stats_resolution=get_pool_cavgs_res(), stats_population=get_pool_cavgs_pop())
+                if(get_pool_iter() > 10) then
+                    nice_communicator%stat_root%stage = "iterating whilst waiting for user input"
+                   ! if(.not. l_user) then
+                        nice_communicator%stat_root%user_input = .true.
+                   !     l_user = .true.
+                  ! end if
+                else
+                    nice_communicator%stat_root%stage = "performing 10 initial 2D iterations"
+                end if
+            end if
+            call nice_communicator%cycle()
             ! guistats
             if(file_exists(POOLSTATS_FILE)) then
                 call gui_stats%merge(POOLSTATS_FILE)
@@ -1716,12 +2159,21 @@ contains
             call gui_stats%write_json
         end do
         ! termination
+        nice_communicator%stat_root%stage = "terminating"
+        call nice_communicator%cycle()
         if( l_once )then
             ! nothing to write
         else
             call terminate_stream2D(projrecords)
         endif
         if(file_exists(STREAM_REJECT_CLS)) call write_pool_cls_selected_user
+        if(associated(nice_communicator%update_arguments)) then
+            call json%get(nice_communicator%update_arguments, 'final_selection', final_selection, json_found)
+            call write_pool_cls_selected_nice(final_selection)
+            call nice_communicator%update_cls2D(thumbnail=trim(get_pool_cavgs_jpeg()), thumbnail_id=get_pool_iter(), thumbnail_static_id=1, thumbnail_n_tiles=get_pool_cavgs_jpeg_ntiles())
+            call nice_communicator%cycle()
+            if(allocated(final_selection)) deallocate(final_selection)
+        end if
         call gui_stats%delete('latest', '')
         call gui_stats%set('selected references', '', trim(cwd_glob) // '/' // STREAM_SELECTED_REFS // trim(JPG_EXT), thumbnail = .true., smpd = params%smpd, box = real(params%box))
         !call write_project
@@ -1738,7 +2190,9 @@ contains
         call spproj_glob%kill
         call qsys_cleanup
         ! end gracefully
+        call nice_communicator%terminate()
         call simple_end('**** SIMPLE_STREAM_GENERATE_PICKING_REFERENCES NORMAL STOP ****')
+
         contains
 
             ! updates global project, returns records of processed micrographs
@@ -1898,7 +2352,9 @@ contains
                             selected_moldiam = maxval(entries(4,:))
                         endif
                         allocate(mask(nl),source=.false.)
-                        if(params%box == 0) then
+                        if(params%moldiam == 0.0) then
+                            mask = .true.
+                        else if(params%box == 0) then
                             mask = abs(entries(4,:)-selected_moldiam) < 0.001
                         else
                             mask = abs(entries(3,:)-params%box) < 0.001
@@ -1993,14 +2449,15 @@ contains
 
     subroutine exec_stream_assign_optics( self, cline )
         class(commander_stream_assign_optics), intent(inout) :: self
-        class(cmdline),                       intent(inout) :: cline
+        class(cmdline),                        intent(inout) :: cline
         type(parameters)                       :: params
+        type(simple_nice_communicator)         :: nice_communicator
         type(guistats)                         :: gui_stats
         type(moviewatcher)                     :: project_buff
         type(sp_project)                       :: spproj, spproj_part
         type(starproject_stream)               :: starproj_stream
         character(len=LONGSTRLEN), allocatable :: projects(:)
-        integer                                :: nprojects, iproj, iori, new_oris, nimported
+        integer                                :: nprojects, iproj, iori, new_oris, nimported, i
         call cline%set('mkdir', 'yes')
         if( .not. cline%defined('dir_target') ) THROW_HARD('DIR_TARGET must be defined!')
         if( .not. cline%defined('outdir')     ) call cline%set('outdir', '')
@@ -2015,6 +2472,9 @@ contains
         endif
         ! master parameters
         call params%new(cline)
+        ! nice communicator init
+        call nice_communicator%init(params%niceprocid, params%niceserver)
+        call nice_communicator%cycle()
         ! master project file
         call spproj%read( params%projfile )
         call spproj%update_projinfo(cline)
@@ -2027,14 +2487,28 @@ contains
         call gui_stats%init(.true.)
         call gui_stats%set('micrographs', 'micrographs_imported',  int2str(0), primary=.true.)
         call gui_stats%set('groups',      'optics_group_assigned', int2str(0), primary=.true.)
+        ! nice
+        call nice_communicator%update_optics(micrographs=0, assigned=0)
+        call nice_communicator%cycle()
         ! Infinite loop
         nimported = 0
         do
-            if( file_exists(TERM_STREAM) )then
+            if( file_exists(trim(TERM_STREAM)) .or. nice_communicator%exit) then
                 ! termination
                 write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
                 exit
             endif
+            if( nice_communicator%stop )then
+                ! termination
+                write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
+                call spproj%kill
+                call qsys_cleanup
+                call nice_communicator%terminate(stop=.true.)
+                call simple_end('**** SIMPLE_STREAM_PREPROC USER STOP ****')
+                call EXIT(0)
+            endif
+            ! nice stats
+            nice_communicator%stat_root%stage = "finding and processing new exposures"
             ! detection of new projects
             call project_buff%watch( nprojects, projects, max_nmovies=50 )
             ! append projects to processing stack
@@ -2062,6 +2536,16 @@ contains
                 ! guistats
                 call gui_stats%set('micrographs', 'micrographs_imported', int2str(0), primary=.true.)
                 call gui_stats%set('groups', 'optics_group_assigned', spproj%os_optics%get_noris(), primary=.true.)
+                call nice_communicator%update_optics(micrographs=spproj%os_mic%get_noris(), assigned=spproj%os_optics%get_noris(), last_micrograph_imported=.true.)
+                ! nice 
+                if(allocated(nice_communicator%view_optics%opc)) deallocate(nice_communicator%view_optics%opc)
+                allocate(nice_communicator%view_optics%opc(spproj%os_mic%get_noris(), 3))
+                do i = 1, spproj%os_mic%get_noris()
+                    write(logfhandle, *) spproj%os_mic%get(i, 'ogid'), spproj%os_mic%get(i, 'opcx'), spproj%os_mic%get(i, 'opcy')
+                    nice_communicator%view_optics%opc(i, 1) = spproj%os_mic%get(i, 'ogid')
+                    nice_communicator%view_optics%opc(i, 2) = spproj%os_mic%get(i, 'opcx')
+                    nice_communicator%view_optics%opc(i, 3) = spproj%os_mic%get(i, 'opcy')
+                enddo
             else
                 call sleep(WAITTIME) ! may want to increase as 3s default
             endif
@@ -2073,10 +2557,12 @@ contains
                 params%updated = 'no'
             end if
             call gui_stats%write_json
+            call nice_communicator%cycle()
         end do
         if(allocated(projects)) deallocate(projects)
         call gui_stats%write_json
         call gui_stats%kill
+        call nice_communicator%terminate()
         ! cleanup
         call spproj%write
         call spproj%kill
@@ -2093,18 +2579,24 @@ contains
         integer(kind=dp),          parameter   :: FLUSH_TIMELIMIT = 900 ! time (secs) after which leftover particles join the pool IF the classification is paused
         type(projrecord),          allocatable :: projrecords(:)
         type(parameters)                       :: params
+        type(simple_nice_communicator)         :: nice_communicator
         type(guistats)                         :: gui_stats
         type(oris)                             :: moldiamori
         type(moviewatcher)                     :: project_buff
         type(sp_project)                       :: spproj_glob
+        type(json_core)                        :: json
+        type(json_value),          pointer     :: snapshot_json
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=LONGSTRLEN)              :: cwd_job
         integer(kind=dp)                       :: pool_time_last_chunk, time_last_import
         integer                                :: nmics_rejected_glob, nchunks_imported_glob, nchunks_imported, nprojects, iter
-        integer                                :: n_imported, n_imported_prev, n_added, nptcls_glob, n_failed_jobs, ncls_in
-        integer                                :: pool_iter_last_chunk, pool_iter_max_chunk_imported
+        integer                                :: n_imported, n_imported_prev, n_added, nptcls_glob, n_failed_jobs, ncls_in, pool_iter
+        integer                                :: pool_iter_last_chunk, pool_iter_max_chunk_imported, i
+        integer,                   allocatable :: snapshot_selection(:)
         logical                                :: l_nchunks_maxed, l_pause, l_params_updated
+        real,                      allocatable :: res_hist(:)
         real                                   :: nptcls_pool, moldiam
+        nullify(snapshot_json)
         call cline%set('oritype',      'mic')
         call cline%set('mkdir',        'yes')
         call cline%set('autoscale',    'yes')
@@ -2152,6 +2644,9 @@ contains
             params%maxnchunks = huge(params%maxnchunks)
         endif
         call cline%delete('maxnchunks')
+        ! nice communicator init
+        call nice_communicator%init(params%niceprocid, params%niceserver)
+        call nice_communicator%cycle()
         ! restart
         if( cline%defined('dir_exec') )then
             call cline%delete('dir_exec')
@@ -2160,6 +2655,14 @@ contains
         endif
          ! mskdiam
         if( .not. cline%defined('mskdiam') ) then
+            ! nice communicator status
+            nice_communicator%stat_root%stage = "waiting for mask diameter"
+            call nice_communicator%cycle()
+            write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 5 MINUTES FOR '//trim(STREAM_MOLDIAM)
+            do i=1, 30
+                if(file_exists(trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM))) exit
+                call sleep(10)
+            end do
             if( .not. file_exists(trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM))) THROW_HARD('either mskdiam must be given or '// trim(STREAM_MOLDIAM) // ' exists in target_dir')
             ! read mskdiam from file
             call moldiamori%new(1, .false.)
@@ -2206,11 +2709,25 @@ contains
         call gui_stats%set('2D',        'iteration',                   0,            primary=.true.)
         ! Joe: nparts is not an input, also see project_buff below
         call gui_stats%set('compute',   'compute_in_use',      int2str(0) // '/' // int2str(params%nparts), primary=.true.)
+        ! nice
+        nice_communicator%stat_root%stage = "importing particles"
+        call nice_communicator%update_cls2D(particles_imported=0)
+        call nice_communicator%cycle()
         do
-            if( file_exists(TERM_STREAM) )then
+            if( file_exists(trim(TERM_STREAM)) .or. nice_communicator%exit)then
                 ! termination
                 write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
                 exit
+            endif
+            if( nice_communicator%stop .or. test_repick() ) then
+                if(test_repick()) call write_repick_refs("../repick_refs.mrc")
+                ! termination
+                write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
+                call spproj_glob%kill
+                call qsys_cleanup
+                call nice_communicator%terminate(stop=.true.)
+                call simple_end('**** SIMPLE_STREAM_CLUSTER2D USER STOP ****')
+                call EXIT(0)
             endif
             iter = iter + 1
             ! detection of new projects
@@ -2232,6 +2749,7 @@ contains
                 ! guistats
                 call gui_stats%set('particles', 'particles_imported', int2commastr(nptcls_glob), primary=.true.)
                 call gui_stats%set_now('particles', 'last_particles_imported')
+                call nice_communicator%update_cls2D(particles_imported=nptcls_glob, last_particles_imported=.true.)
                 ! update progress monitor
                 call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
                 time_last_import = time8()
@@ -2243,16 +2761,16 @@ contains
                 endif
             endif
             ! 2D classification section
-            call update_user_params2D(cline, l_params_updated)
+            call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
             if( l_params_updated ) l_pause = .false.
             call update_chunks
             if( l_pause )then
-                call update_user_params2D(cline, l_params_updated)
+                call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
                 if( l_params_updated ) l_pause = .false.    ! resuming classification
             else
                 call update_pool_status
                 call update_pool
-                call update_user_params2D(cline, l_params_updated)
+                call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
                 call reject_from_pool
             endif
             call reject_from_pool_user
@@ -2295,7 +2813,9 @@ contains
                 if( l_pause )then
                     call generate_pool_stats
                 else
+                    pool_iter = get_pool_iter()
                     call classify_pool
+                    if(get_pool_iter() > pool_iter) nice_communicator%stat_root%user_input = .true.
                 endif
                 call classify_new_chunks(projrecords)
                 ! Optionally generates snapshot project for abinitio3D
@@ -2309,8 +2829,59 @@ contains
                 if(nptcls_pool > 0.0) call gui_stats%set('particles', 'particles_processed', int2commastr(floor(nptcls_pool)) // ' (' // int2str(ceiling(100.0 * real(nptcls_pool) / real(nptcls_glob))) // '%)')
             end if
             call gui_stats%write_json
+            ! nice
+            if(l_pause) then
+                nice_communicator%stat_root%stage = "paused pool classification"
+                nice_communicator%stat_root%user_input = .true.
+            else if(get_nchunks() > 0) then
+                if(get_pool_iter() < 1) then
+                    nice_communicator%stat_root%stage = "classifying initial chunks"
+                    nice_communicator%stat_root%user_input = .false.
+                else
+                    nice_communicator%stat_root%stage = "classifying pool and new chunks"
+                    nice_communicator%stat_root%user_input = .true.
+                end if
+            end if
+            call nice_communicator%update_cls2D(iteration=get_pool_iter()-1 , number_classes=get_pool_n_classes(), number_classes_rejected=get_pool_n_classes_rejected(),&
+            number_particles_assigned=get_pool_assigned(), number_particles_rejected=get_pool_rejected(), maximum_resolution=get_pool_res(), &
+            thumbnail=trim(get_pool_cavgs_jpeg()), thumbnail_id=get_pool_iter(), thumbnail_static_id=1, last_iteration=get_pool_iter_time(), thumbnail_n_tiles=get_pool_cavgs_jpeg_ntiles())
+            if(get_pool_rejected_jpeg_ntiles() .gt. 0) then
+                call nice_communicator%update_cls2D(pool_rejected_thumbnail=trim(get_pool_rejected_jpeg()), pool_rejected_thumbnail_id=get_pool_rejected_thumbnail_id(), pool_rejected_thumbnail_static_id=2, &
+                pool_rejected_thumbnail_n_tiles=get_pool_rejected_jpeg_ntiles(), pool_rejected_scale=get_pool_rejected_jpeg_scale())
+            end if
+            if(get_chunk_rejected_jpeg_ntiles() .gt. 0) then
+                call nice_communicator%update_cls2D(chunk_rejected_thumbnail=trim(get_chunk_rejected_jpeg()), chunk_rejected_thumbnail_id=get_chunk_rejected_thumbnail_id(), chunk_rejected_thumbnail_static_id=2, &
+                chunk_rejected_thumbnail_n_tiles=get_chunk_rejected_jpeg_ntiles(), chunk_rejected_scale=get_chunk_rejected_jpeg_scale())
+            end if
+            call nice_communicator%update_cls2D(stats_mask=get_pool_cavgs_mask(), stats_resolution=get_pool_cavgs_res(), stats_population=get_pool_cavgs_pop(), rejection_params=get_rejection_params())
+            call nice_communicator%update_cls2D(snapshot_id=get_last_snapshot_id(), snapshot_time=get_last_snapshot())
+            call nice_communicator%view_cls2D%res_histogram%zero()
+            res_hist = get_pool_cavgs_res()
+            do i = 1, size(res_hist)
+                call nice_communicator%view_cls2D%res_histogram%update(res_hist(i))
+            enddo
+            if(allocated(res_hist)) deallocate(res_hist)
+            nice_communicator%view_cls2D%cutoff_res = get_lpthres()
+            ! project snapshot
+            if(get_pool_iter() .gt. 0 .and. trim(params%snapshot) .ne. "") then
+                call nice_communicator%update_cls2D(snapshot_json_clear=.true.)
+                call write_project_stream2D(snapshot_projfile=trim(params%snapshot))
+                params%snapshot = ""
+                params%updated = "no"
+                if(associated(snapshot_json)) then
+                    call json%destroy(snapshot_json)
+                    nullify(snapshot_json)
+                end if
+                call get_snapshot_json(snapshot_json)
+                call nice_communicator%update_cls2D(snapshot_id=get_last_snapshot_id(), snapshot_time=get_last_snapshot(), snapshot_json=snapshot_json)
+            else
+                call nice_communicator%update_cls2D(snapshot_id=get_last_snapshot_id(), snapshot_time=get_last_snapshot())
+            end if
+            call nice_communicator%cycle()
         end do
         ! termination
+        nice_communicator%stat_root%stage = "terminating"
+        call nice_communicator%cycle()
         call terminate_stream2D( projrecords )
         call update_user_params(cline) ! Joe: bit late for this?
         ! final stats
@@ -2323,6 +2894,7 @@ contains
         call spproj_glob%kill
         call qsys_cleanup
         ! end gracefully
+        call nice_communicator%terminate()
         call simple_end('**** SIMPLE_STREAM_CLUSTER2D NORMAL STOP ****')
         contains
 
@@ -2512,12 +3084,18 @@ contains
     ! PRIVATE UTILITIES
 
     !> updates current parameters with user input
-    subroutine update_user_params( cline_here )
+    subroutine update_user_params( cline_here, update_arguments )
         use simple_parameters, only: params_glob
-        type(cmdline), intent(inout) :: cline_here
+        type(cmdline),                       intent(inout) :: cline_here
+        type(json_value), pointer, optional, intent(inout) :: update_arguments
         type(oris) :: os
+        type(json_core) :: json
+        character(kind=CK,len=:), allocatable :: interactive, ring
         real       :: tilt_thres, beamtilt, astigthreshold, ctfresthreshold, icefracthreshold
+        real(kind=dp) :: icefracthreshold_dp
         real       :: moldiam_refine
+        integer    :: moldiam_refine_int, astigthreshold_int, ctfresthreshold_int, moldiam_int, moldiam_ring_int
+        logical    :: found
         call os%new(1, is_ptcl=.false.)
         if( file_exists(USER_PARAMS) )then
             call os%read(USER_PARAMS)
@@ -2614,6 +3192,98 @@ contains
             call del_file(USER_PARAMS)
         endif
         call os%kill
+        ! nice
+        if(present(update_arguments)) then
+            if(associated(update_arguments)) then
+                ! moldiam_refine
+                call json%get(update_arguments, 'moldiam_refine', moldiam_refine_int, found)
+                if(found) then
+                    if( abs(real(moldiam_refine_int)-params_glob%moldiam_refine) > 0.001) then
+                        if(moldiam_refine_int < 10 .and. moldiam_refine_int > 0)then
+                            write(logfhandle,'(A,F8.2)')'>>> MULTIPICK REFINE DIAMETER TOO LOW: ' , real(moldiam_refine_int)
+                        else if(moldiam_refine_int > 1000) then
+                            write(logfhandle,'(A,F8.2)')'>>> MULTIPICK REFINE DIAMETER TOO HIGH: ', real(moldiam_refine_int)
+                        else
+                            params_glob%moldiam_refine = real(moldiam_refine_int)
+                            params_glob%updated        = 'yes'
+                            write(logfhandle,'(A,F8.2)')'>>> MULTIPICK REFINE DIAMETER UPDATED TO: ', real(moldiam_refine_int)
+                        end if
+                    end if
+                end if
+                ! moldiam
+                call json%get(update_arguments, 'moldiam', moldiam_int, found)
+                if(found) then
+                    if( abs(real(moldiam_int)-params_glob%moldiam) > 0.001) then
+                        if(moldiam_int < 20 .and. moldiam_int > 0)then
+                            write(logfhandle,'(A,F8.2)')'>>> MOLECULAR DIAMETER TOO LOW: ' , real(moldiam_int)
+                        else if(moldiam_int > 1000) then
+                            write(logfhandle,'(A,F8.2)')'>>> MOLECULAR DIAMETER TOO HIGH: ', real(moldiam_int)
+                        else
+                            params_glob%moldiam = real(moldiam_int)
+                            params_glob%updated        = 'yes'
+                            write(logfhandle,'(A,F8.2)')'>>> MOLECULAR DIAMETER UPDATED TO: ', real(moldiam_int)
+                        end if
+                    end if
+                end if
+                ! moldiam_ring
+                call json%get(update_arguments, 'moldiam_ring', moldiam_ring_int, found)
+                if(found) then
+                    if( abs(real(moldiam_ring_int)-params_glob%moldiam_ring) > 0.001) then
+                        if(moldiam_ring_int < 20 .and. moldiam_ring_int > 0)then
+                            write(logfhandle,'(A,F8.2)')'>>> MOLECULAR RING DIAMETER TOO LOW: ' , real(moldiam_ring_int)
+                        else if(moldiam_ring_int > 1000) then
+                            write(logfhandle,'(A,F8.2)')'>>> MOLECULAR RING DIAMETER TOO HIGH: ', real(moldiam_ring_int)
+                        else
+                            params_glob%moldiam_ring = real(moldiam_ring_int)
+                            params_glob%updated      = 'yes'
+                            write(logfhandle,'(A,F8.2)')'>>> MOLECULAR RING DIAMETER UPDATED TO: ', real(moldiam_ring_int)
+                        end if
+                    end if
+                end if
+                ! interactive
+                call json%get(update_arguments, 'interactive', interactive, found)
+                if(found) then
+                    params_glob%interactive = trim(interactive)
+                    params_glob%updated        = 'yes'
+                    write(logfhandle,'(A,A)')'>>> INTERACTIVE UPDATED TO: ', trim(interactive)
+                end if
+                ! ring
+                call json%get(update_arguments, 'ring', ring, found)
+                if(found) then
+                    params_glob%ring = trim(ring)
+                    params_glob%updated        = 'yes'
+                    write(logfhandle,'(A,A)')'>>> RING UPDATED TO: ', trim(ring)
+                end if
+                ! astigthreshold
+                call json%get(update_arguments, 'astigthreshold', astigthreshold_int, found)
+                if(found) then
+                    if( abs(real(astigthreshold_int)-params_glob%astigthreshold) > 0.001) then
+                        params_glob%astigthreshold = real(astigthreshold_int)
+                        params_glob%updated        = 'yes'
+                        write(logfhandle,'(A,F8.2)')'>>> ASTIGMATISM THRESHOLD UPDATED TO: ', real(astigthreshold_int)
+                    end if
+                end if
+                ! ctfresthreshold
+                call json%get(update_arguments, 'ctfresthreshold', ctfresthreshold_int, found)
+                if(found) then
+                    if( abs(real(ctfresthreshold_int)-params_glob%ctfresthreshold) > 0.001) then
+                        params_glob%ctfresthreshold = real(ctfresthreshold_int)
+                        params_glob%updated        = 'yes'
+                        write(logfhandle,'(A,F8.2)')'>>> CTF RESOLUTION THRESHOLD UPDATED TO: ', real(ctfresthreshold_int)
+                    end if
+                end if
+                ! icefracthreshold
+                call json%get(update_arguments, 'icefracthreshold', icefracthreshold_dp, found)
+                if(found) then
+                    if( abs(icefracthreshold_dp-params_glob%icefracthreshold) > 0.001) then
+                        params_glob%icefracthreshold = icefracthreshold_dp
+                        params_glob%updated        = 'yes'
+                        write(logfhandle,'(A,F8.2)')'>>> ICE FRACTION THRESHOLD UPDATED TO: ', icefracthreshold_dp
+                    end if
+                end if
+            end if
+            call json%destroy(update_arguments)
+        end if
     end subroutine update_user_params
 
 end module simple_commander_stream

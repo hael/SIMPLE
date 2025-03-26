@@ -20,6 +20,7 @@ use simple_commander_euclid
 use simple_euclid_sigma2
 use simple_qsys_funs
 use simple_decay_funs
+use simple_nice
 implicit none
 
 public :: abinitio3D_cavgs_commander, abinitio3D_commander, multivol_assign_commander, abinitio3D_parts_commander
@@ -352,6 +353,7 @@ contains
         type(parameters)                :: params
         type(sp_project)                :: spproj
         type(image)                     :: noisevol
+        type(simple_nice_communicator)  :: nice_communicator
         integer :: istage, s, ncls, icls, start_stage, nptcls2update, noris, nstates_on_cline, nstates_in_project, split_stage
         logical :: l_stream
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
@@ -397,6 +399,9 @@ contains
             params%nstates = 1
             call cline%delete('nstates')
         endif
+        ! nice communicator init
+        call nice_communicator%init(params%niceprocid, params%niceserver)
+        call nice_communicator%cycle()
         ! read project
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
@@ -406,6 +411,9 @@ contains
         l_ini3D     = .false.
         if( trim(params%cavg_ini).eq.'yes' )then
             if( str_has_substr(params%multivol_mode,'input_oris') ) THROW_HARD('Ini3D on cavgs not allowed for multivol_mode=input_oris*')
+            ! nice
+            nice_communicator%stat_root%stage = "initialising 3D volume from class averages"
+            call nice_communicator%cycle()
             call ini3D_from_cavgs(cline)
             ! re-read the project file to update info in spproj
             call spproj%read(params%projfile)
@@ -418,6 +426,9 @@ contains
                 params%pgrp_start = params%pgrp
             endif
         endif
+        ! nice
+        nice_communicator%stat_root%stage = "preparing workflow"
+        call nice_communicator%cycle()
         ! initialization on class averages done outside this workflow (externally)?
         if( trim(params%cavg_ini_ext).eq.'yes' )then 
             ! check that ptcl3D field is not virgin
@@ -605,7 +616,23 @@ contains
         if( start_stage < NSTAGES )then
             maxits_dyn = sum(MAXITS(start_stage:NSTAGES - 1)) ! the last stage is omitted in this estimate since the sampling method changes
         endif
+        ! nice
+        nice_communicator%stat_root%stage = "starting workflow"
+        call nice_communicator%cycle()
         do istage = start_stage, NSTAGES
+            ! nice
+             if( nice_communicator%stop )then
+                ! termination
+                write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
+                call spproj%kill
+                call qsys_cleanup
+                call nice_communicator%terminate(stop=.true.)
+                call simple_end('**** SIMPLE_ABINITIO3D USER STOP ****')
+                call EXIT(0)
+            endif
+            nice_communicator%stat_root%stage = "running workflow"
+            call nice_communicator%update_ini3D(stage=istage, number_states=nstates_glob, lp=lpinfo(istage)%lp) 
+            call nice_communicator%cycle()
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', lpinfo(istage)%lp
             ! At the splitting stage of docked mode: reset the nstates in params
@@ -634,6 +661,9 @@ contains
             if( l_stream )then
                 if( istage == STREAM_ANALYSIS_STAGE ) call stream_analysis
             endif
+            ! nice
+            call nice_communicator%update_ini3D(last_stage_completed=.true.) 
+            call nice_communicator%cycle()
         enddo
         ! for visualization
         call gen_ortho_reprojs4viz
@@ -641,7 +671,11 @@ contains
         call calc_final_rec(spproj, params%projfile, xreconstruct3D_distr)
         ! postprocess final 3D reconstruction
         call postprocess_final_rec
+        ! termination
+        nice_communicator%stat_root%stage = "terminating"
+        call nice_communicator%cycle()
         ! cleanup
+        call nice_communicator%terminate(export_project=spproj)
         call spproj%kill
         call qsys_cleanup
         if( l_stream ) call simple_touch(ABINITIO3D_FINISHED)
@@ -1313,17 +1347,23 @@ contains
         character(len=*),      intent(in)    :: projfile
         class(commander_base), intent(inout) :: xreconstruct3D
         character(len=:),      allocatable   :: str_state, vol_name
-        integer :: state
+        logical,               allocatable   :: state_mask(:)
+        integer,               allocatable   :: state_inds(:)
+        integer :: state, pop
         write(logfhandle,'(A)') '>>>'
         write(logfhandle,'(A)') '>>> RECONSTRUCTION AT ORIGINAL SAMPLING'
         write(logfhandle,'(A)') '>>>'
         call xreconstruct3D%execute_safe(cline_reconstruct3D)
         call spproj%read_segment('out', projfile)
+        call spproj%read_segment('ptcl3D', projfile)
         do state = 1, params_glob%nstates
             str_state = int2str_pad(state,2)
             vol_name  = VOL_FBODY//str_state//params_glob%ext
-            call spproj%add_vol2os_out(vol_name, params_glob%smpd, state, 'vol')
+            call spproj%os_ptcl3D%mask_from_state(state, state_mask, state_inds)
+            call spproj%add_vol2os_out(vol_name, params_glob%smpd, state, 'vol', pop=count(state_mask))
             call spproj%add_fsc2os_out(FSC_FBODY//str_state//BIN_EXT, state, params_glob%box)
+            if(allocated(state_mask)) deallocate(state_mask)
+            if(allocated(state_inds)) deallocate(state_inds)
         enddo
         call spproj%write_segment_inside('out', projfile)
     end subroutine calc_final_rec

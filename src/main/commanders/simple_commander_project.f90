@@ -10,7 +10,9 @@ use simple_parameters,     only: parameters, params_glob
 use simple_sp_project,     only: sp_project
 use simple_stack_io,       only: stack_io
 use simple_qsys_env,       only: qsys_env
+use simple_nice
 use simple_qsys_funs
+
 implicit none
 
 public :: new_project_commander
@@ -178,7 +180,11 @@ contains
         type(sp_project) :: spproj
         call cline%set('mkdir', 'no')
         call params%new(cline, silent=.true.)
-        call spproj%print_info(params%projfile)
+        if(trim(params%json) .eq. 'yes') then
+            call spproj%print_info_json(params%projfile) 
+        else
+            call spproj%print_info(params%projfile)
+        endif
         call spproj%kill
     end subroutine exec_print_project_info
 
@@ -267,9 +273,26 @@ contains
         class(cmdline),                       intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
+        integer          :: fromto(2)
+        logical          :: vol = .false.
+        if(cline%defined("oritype") .and. cline%get_carg('oritype') .eq. 'vol') then
+            vol = .true.
+            call cline%set("oritype", 'out')
+        end if
         call params%new(cline, silent=.true.)
         call spproj%read_segment(params%oritype, params%projfile)
-        call spproj%print_segment(params%oritype)
+        if(trim(params%json) .eq. 'yes') then
+            if(vol) params%oritype = "vol"
+            if(params%fromp .lt. params%top) then
+                fromto(1) = params%fromp
+                fromto(2) = params%top
+                call spproj%print_segment_json(params%oritype, params%projfile, fromto=fromto, sort_key=params%sort, sort_asc=params%sort_asc, hist=params%hist)
+            else
+                call spproj%print_segment_json(params%oritype, params%projfile, sort_key=params%sort, sort_asc=params%sort_asc, hist=params%hist)
+            end if
+        else
+            call spproj%print_segment(params%oritype)
+        endif
         call spproj%kill
     end subroutine exec_print_project_field
 
@@ -792,6 +815,7 @@ contains
         class(selection_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(parameters)                :: params
+        type(simple_nice_communicator)  :: nice_communicator
         type(ran_tabu)                  :: rt
         type(sp_project)                :: spproj, spproj_part
         integer,            allocatable :: states(:), ptcls_in_state(:), ptcls_rnd(:), tmpinds(:), clsinds(:), states_map(:)
@@ -800,7 +824,7 @@ contains
         character(len=:),   allocatable :: projfname
         integer(kind=kind(ENUM_ORISEG)) :: iseg
         integer                         :: n_lines,fnr,noris,i,nstks,noris_in_state,ncls,icls
-        integer                         :: state,nstates,nptcls,ipart
+        integer                         :: state,nstates,nptcls,ipart,n_thumbnails
         logical                         :: l_ctfres, l_icefrac, l_append
         class(oris), pointer :: pos => NULL()
         l_append = .false.
@@ -809,6 +833,9 @@ contains
         if( .not. cline%defined('append')     ) call cline%set('append',   'no')
         if( .not. cline%defined('greediness') ) call cline%set('greediness', 2.)
         call params%new(cline, silent=.true.)
+        ! nice communicator init
+        call nice_communicator%init(params%niceprocid, params%niceserver)
+        call nice_communicator%cycle()
         if(params%append .eq. 'yes') l_append = .true.
         iseg = oritype2segment(trim(params%oritype))
         if(.not. iseg .eq. CLS2D_SEG .and. cline%defined('balance'))     THROW_HARD("balance can only be used with oritype=cls2D")
@@ -985,6 +1012,9 @@ contains
                         ! map states to ptcl2D/3D & cls3D segments
                         call spproj%map2ptcls_state(append=l_append)
                     endif
+                    if(params%write_cavgs .eq. 'yes') then
+                        call spproj%set_cavgs_thumb(trim(params%projfile))
+                    end if
                 case(CLS3D_SEG)
                     if(spproj%os_cls3D%get_noris() == spproj%os_cls2D%get_noris())then
                         call spproj%os_cls2D%set_all('state', real(states))
@@ -1005,6 +1035,7 @@ contains
         endif
         ! final full write
         call spproj%write(params%projfile)
+        call nice_communicator%terminate(export_project=spproj)
         call simple_end('**** SELECTION NORMAL STOP ****')
     end subroutine exec_selection
 

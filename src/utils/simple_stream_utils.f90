@@ -10,6 +10,7 @@ use simple_image,          only: image
 use simple_qsys_funs
 use simple_commander_cluster2D
 use simple_timer
+use simple_imgproc
 implicit none
 
 public :: stream_chunk, DIR_CHUNK

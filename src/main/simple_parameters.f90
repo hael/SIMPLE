@@ -33,6 +33,7 @@ type :: parameters
     character(len=3)          :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
     character(len=3)          :: center_pdb='no'      !< move PDB atomic center to the center of the box(yes|no){no}
     character(len=3)          :: classtats='no'       !< calculate class population statistics(yes|no){no}
+    character(len=3)          :: clear='no'           !< clear exising processing upon start (stream) 
     character(len=3)          :: combine_eo='no'      !< Whether combined e/o volumes have been used for alignment(yes|no){no}
     character(len=3)          :: continue='no'        !< continue previous refinement(yes|no){no}
     character(len=3)          :: crowded='yes'        !< wheter picking is done in crowded micrographs or not (yes|no){yes}
@@ -51,9 +52,12 @@ type :: parameters
     character(len=3)          :: graphene_filt='no'   !< filter out graphene bands in correlation search
     character(len=3)          :: gridding='no'        !< to test gridding correction
     character(len=3)          :: groupframes='no'     !< Whether to perform weighted frames averaging during motion correction(yes|no){no}
+    character(len=3)          :: hist='no'            !< whether to print histogram
     character(len=3)          :: icm='no'             !< whether to apply ICM filter to reference
     character(len=3)          :: incrreslim='yes'     !< Whether to add ten shells to the FSC resolution limit
+    character(len=3)          :: interactive='no'     !< Whether job is interactive
     character(len=3)          :: iterstats='no'       !< Whether to keep track alignment stats throughout iterations
+    character(len=3)          :: json='no'            !< Print in json format (mainly for nice)
     character(len=3)          :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
     character(len=3)          :: linstates='no'       !< linearizing states in alignment (yes|no){no}
     character(len=3)          :: loc_sdev='no'        !< Whether to calculate local standard deviations(yes|no){no}
@@ -101,12 +105,14 @@ type :: parameters
     character(len=3)          :: remap_cls='no'
     character(len=3)          :: remove_chunks='yes'  !< whether to remove chunks after completion (yes|no){yes}
     character(len=3)          :: restore_cavgs='yes'  !< Whether to restore images to class averages after orientation search (yes|no){yes}
+    character(len=3)          :: ring='no'            !< whether to use ring in interactive stream pick
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
     character(len=3)          :: transp_pca='no'
     character(len=3)          :: script='no'          !< do not execute but generate a script for submission to the queue
     character(len=3)          :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
     character(len=3)          :: sh_first='no'        !< shifting before orientation search(yes|no){no}
     character(len=3)          :: sh_inv='no'          !< whether to use shift invariant metric for projection direction assignment(yes|no){no}
+    character(len=3)          :: sort_asc='yes'       !< sort oris ascending
     character(len=3)          :: srch_oris='yes'      !< whether to search orientations in multivolume assignment(yes|no){yes} 
     character(len=3)          :: stream='no'          !< stream (real time) execution mode(yes|no){no}
     character(len=3)          :: symrnd='no'          !< randomize over symmetry operations(yes|no){no}
@@ -118,6 +124,7 @@ type :: parameters
     character(len=3)          :: updated='no'         !< whether parameters has been updated
     character(len=3)          :: use_thres='yes'      !< Use contact-based thresholding(yes|no){yes}
     character(len=3)          :: vis='no'             !< visualise(yes|no)
+    character(len=3)          :: write_cavgs='no'     !< write out cavgs
     character(len=3)          :: zero='no'            !< zeroing(yes|no){no}
     ! files & directories strings in ascending alphabetical order
     character(len=LONGSTRLEN) :: boxfile=''           !< file with EMAN particle coordinates(.txt)
@@ -147,6 +154,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: mskfile=''           !< maskfile.ext
     character(len=LONGSTRLEN) :: msklist=''           !< table (text file) of mask volume files(.txt)
     character(len=LONGSTRLEN) :: mskvols(MAXS)=''
+    character(len=LONGSTRLEN) :: niceserver=''        !< address and port of nice server for comms
     character(len=LONGSTRLEN) :: oritab=''            !< table  of orientations(.txt|.simple)
     character(len=LONGSTRLEN) :: oritab2=''           !< 2nd table of orientations(.txt|.simple)
     character(len=LONGSTRLEN) :: outdir=''            !< manually set output directory name
@@ -166,6 +174,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: refs=''              !< initial2Dreferences.ext
     character(len=LONGSTRLEN) :: refs_even=''
     character(len=LONGSTRLEN) :: refs_odd=''
+    character(len=LONGSTRLEN) :: snapshot=''          !< path to write snapshot project file to
     character(len=LONGSTRLEN) :: star_datadir=''      !< STAR-generated data directory
     character(len=LONGSTRLEN) :: starfile=''          !< STAR-formatted EM file (proj.star)
     character(len=LONGSTRLEN) :: star_mic=''          !< STAR-formatted EM file (micrographs.star)
@@ -237,6 +246,7 @@ type :: parameters
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh){shc}
     character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
+    character(len=STDLEN)     :: sort=''              !< key to sort oris on
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN)     :: split_mode='even'
     character(len=STDLEN)     :: stats='no'           !< provide statistics(yes|no|print){no}
@@ -302,6 +312,7 @@ type :: parameters
     integer :: newbox=0            !< new box for scaling (by Fourier padding/clipping)
     integer :: nframes=0           !< # frames{30}
     integer :: ngrow=0             !< # of white pixel layers to grow in binary image
+    integer :: niceprocid=0        !< # id of process in nice database
     integer :: ninit=3             !< # number of micrographs to use during diameter estimation global search
     integer :: nmics=0             !< # micrographs
     integer :: nmoldiams=1         !< # moldiams
@@ -436,6 +447,8 @@ type :: parameters
     real    :: moldiam=140.        !< molecular diameter(in A)
     real    :: moldiam_max=200.    !< upper bound molecular diameter(in A)
     real    :: moldiam_refine=0.   !< upper bound molecular diameter(in A)
+    real    :: moldiam_ring=0.     !< ring picker diameter(in A)
+    real    :: moment=0.
     real    :: msk=0.              !< mask radius(in pixels)
     real    :: msk_crop=0.         !< mask radius(in pixels)
     real    :: mskdiam=0.          !< mask diameter(in Angstroms)
@@ -573,6 +586,7 @@ contains
         call check_carg('center',         self%center)
         call check_carg('center_pdb',     self%center_pdb)
         call check_carg('classtats',      self%classtats)
+        call check_carg('clear',          self%clear)
         call check_carg('cls_init',       self%cls_init)
         call check_carg('cn_type',        self%cn_type)
         call check_carg('combine_eo',     self%combine_eo)
@@ -603,11 +617,14 @@ contains
         call check_carg('graphene_filt',  self%graphene_filt)
         call check_carg('gridding',       self%gridding)
         call check_carg('groupframes',    self%groupframes)
+        call check_carg('hist',           self%hist)
         call check_carg('icm',            self%icm)
         call check_carg('imgkind',        self%imgkind)
         call check_carg('incrreslim',     self%incrreslim)
+        call check_carg('interactive',    self%interactive)
         call check_carg('interpfun',      self%interpfun)
         call check_carg('iterstats',      self%iterstats)
+        call check_carg('json',           self%json)
         call check_carg('keepvol',        self%keepvol)
         call check_carg('kweight',        self%kweight)
         call check_carg('kweight_chunk',  self%kweight_chunk)
@@ -633,6 +650,7 @@ contains
         call check_carg('needs_sigma',    self%needs_sigma)
         call check_carg('neg',            self%neg)
         call check_carg('neigs_per',      self%neigs_per)
+        call check_carg('niceserver',     self%niceserver)
         call check_carg('noise_norm',     self%noise_norm)
         call check_carg('norm',           self%norm)
         call check_carg('nonuniform',     self%nonuniform)
@@ -685,12 +703,16 @@ contains
         call check_carg('remove_chunks',  self%remove_chunks)
         call check_carg('remap_cls',      self%remap_cls)
         call check_carg('restore_cavgs',  self%restore_cavgs)
+        call check_carg('ring',           self%ring)
         call check_carg('roavg',          self%roavg)
         call check_carg('script',         self%script)
         call check_carg('shbarrier',      self%shbarrier)
         call check_carg('sh_first',       self%sh_first)
         call check_carg('sh_inv',         self%sh_inv)
         call check_carg('sigma_est',      self%sigma_est)
+        call check_carg('snapshot',       self%snapshot)
+        call check_carg('sort',           self%sort)
+        call check_carg('sort_asc',       self%sort_asc)
         call check_carg('speckind',       self%speckind)
         call check_carg('split_mode',     self%split_mode)
         call check_carg('srch_oris',      self%srch_oris)
@@ -710,6 +732,7 @@ contains
         call check_carg('wcrit',          self%wcrit)
         call check_carg('wfun',           self%wfun)
         call check_carg('wiener',         self%wiener)
+        call check_carg('write_cavgs',    self%write_cavgs)
         call check_carg('zero',           self%zero)
         ! File args
         call check_file('boxfile',        self%boxfile,      'T')
@@ -806,6 +829,7 @@ contains
         call check_iarg('newbox',         self%newbox)
         call check_iarg('nframes',        self%nframes)
         call check_iarg('ngrow',          self%ngrow)
+        call check_iarg('niceprocid',     self%niceprocid)
         call check_iarg('ninit',          self%ninit)
         call check_iarg('nmoldiams',      self%nmoldiams)
         call check_iarg('nsearch',        self%nsearch)
@@ -923,6 +947,7 @@ contains
         call check_rarg('moldiam',        self%moldiam)
         call check_rarg('moldiam_max',    self%moldiam_max)
         call check_rarg('moldiam_refine', self%moldiam_refine)
+        call check_rarg('moldiam_ring',   self%moldiam_ring)
         call check_rarg('msk',            self%msk)
         call check_rarg('msk_crop',       self%msk_crop)
         call check_rarg('mskdiam',        self%mskdiam)

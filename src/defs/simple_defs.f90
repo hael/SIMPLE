@@ -19,6 +19,7 @@ integer,  parameter :: SPC          = kind((1.0,1.0))
 integer,  parameter :: DPC          = kind((1.0d0,1.0d0))
 integer,  parameter :: LGT          = kind(.true.)
 integer,  parameter :: LINE_MAX_LEN = 8192
+integer,  parameter :: JPEG_DIM     = 100                 ! dimension of jpeg thumbnails
 real(sp), parameter :: PI           = acos(-1.)
 real(dp), parameter :: DPI          = acos(-1.d0)
 real(sp), parameter :: PIO2         = acos(-1.)/2.

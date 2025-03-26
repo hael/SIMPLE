@@ -116,7 +116,12 @@ contains
         minmax(1) = minval(rvec)
         minmax(2) = maxval(rvec)
         diff      = minmax(2) - minmax(1)
-        if( diff < TINY ) THROW_HARD('Invalid bounds!')
+        !if( diff < TINY ) THROW_HARD('Invalid bounds!')
+        if( diff < TINY ) then
+            minmax(1) = minmax(1) * 0.9
+            minmax(2) = minmax(2) * 1.1
+            diff      = minmax(2) - minmax(1)
+        end if
         self%xrange = diff
         self%dx     = self%xrange / real(self%nbins)
         self%x(1)   = minmax(1)

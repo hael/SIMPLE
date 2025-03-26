@@ -368,7 +368,11 @@ contains
     function get_keys( self ) result( keys )
         class(hash), intent(in)    :: self
         type(str4arr), allocatable :: keys(:)
-        allocate(keys(self%hash_index), source=self%keys(:self%hash_index))
+        if(self%hash_index .gt. 0) then
+            allocate(keys(self%hash_index), source=self%keys(:self%hash_index))
+        else
+            allocate(keys(0))
+        end if
     end function get_keys
 
     !>  \brief  convert hash to string
