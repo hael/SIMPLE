@@ -376,6 +376,7 @@ contains
         use simple_ori,                 only: ori
         class(ctf_phaseflip_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
+        type(image), allocatable :: imgs(:)
         type(stack_io)   :: stkio_w
         type(ctf)        :: tfun
         type(parameters) :: params
@@ -386,21 +387,47 @@ contains
         if( .not. cline%defined('outstk') ) call cline%set('outstk', 'phaseflipped'//trim(STK_EXT))
         call build%init_params_and_build_general_tbox(cline,params)
         call build%spproj%update_projinfo(cline)
-        nptcls = build%spproj%get_nptcls()
-        ldim   = build%img%get_ldim()
-        call stkio_w%open(params%outstk, params%smpd, 'write', box=ldim(1))
-        do iptcl = 1, nptcls
-            call read_imgbatch(iptcl, build%img)
-            call build%spproj_field%get_ori(iptcl, o)
-            tfun = ctf(params%smpd, o%get('kv'), o%get('cs'), o%get('fraca'))
-            if( o%isthere('dfy') )then ! astigmatic CTF
-                call tfun%apply(build%img, o%get_dfx(), 'flip', dfy=o%get_dfy(), angast=o%get('angast'))
-            else ! non-astigmatic CTF
-                call tfun%apply(build%img, o%get_dfx(), 'flip')
-            endif
-            call stkio_w%write(iptcl, build%img)
-        end do
-        call stkio_w%close
+        if( cline%defined('stk') )then
+            call find_ldim_nptcls(trim(params%stk), ldim, nptcls)
+            allocate(imgs(nptcls))
+            do iptcl = 1, nptcls
+                call imgs(iptcl)%new([ldim(1),ldim(2),1],params%smpd)
+                call imgs(iptcl)%read(trim(params%stk), iptcl)
+            enddo
+            print *, 'FINISHED READING...'
+            !$omp parallel do private(iptcl,o,tfun) default(shared) proc_bind(close) schedule(static)
+            do iptcl = 1, nptcls
+                call build%spproj_field%get_ori(iptcl, o)
+                tfun = ctf(params%smpd, o%get('kv'), o%get('cs'), o%get('fraca'))
+                if( o%isthere('dfy') )then ! astigmatic CTF
+                    call tfun%apply(imgs(iptcl), o%get_dfx(), 'flip', dfy=o%get_dfy(), angast=o%get('angast'))
+                else ! non-astigmatic CTF
+                    call tfun%apply(imgs(iptcl), o%get_dfx(), 'flip')
+                endif
+            end do
+            !$omp end parallel do
+            print *, 'START WRITING...'
+            do iptcl = 1, nptcls
+                call imgs(iptcl)%write(trim(params%outstk), iptcl)
+                call imgs(iptcl)%kill
+            enddo
+        else
+            nptcls = build%spproj%get_nptcls()
+            ldim   = build%img%get_ldim()
+            call stkio_w%open(params%outstk, params%smpd, 'write', box=ldim(1))
+            do iptcl = 1, nptcls
+                call read_imgbatch(iptcl, build%img)
+                call build%spproj_field%get_ori(iptcl, o)
+                tfun = ctf(params%smpd, o%get('kv'), o%get('cs'), o%get('fraca'))
+                if( o%isthere('dfy') )then ! astigmatic CTF
+                    call tfun%apply(build%img, o%get_dfx(), 'flip', dfy=o%get_dfy(), angast=o%get('angast'))
+                else ! non-astigmatic CTF
+                    call tfun%apply(build%img, o%get_dfx(), 'flip')
+                endif
+                call stkio_w%write(iptcl, build%img)
+            end do
+            call stkio_w%close
+        endif
         ! cleanup
         call build%kill_general_tbox
         ! end gracefully
