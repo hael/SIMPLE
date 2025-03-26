@@ -2997,8 +2997,8 @@ contains
         type(sp_project)                       :: spproj_glob
         type(moviewatcher)                     :: project_buff
         character(len=LONGSTRLEN), allocatable :: projects(:)
-        integer                                :: nprojects, iter, i
-        integer                                :: ncompleted
+        integer :: nprojects, iter, i, ncompleted
+        logical :: l_params_updated
         call cline%set('oritype',      'mic')
         call cline%set('mkdir',        'yes')
         call cline%set('objfun',    'euclid')
@@ -3028,10 +3028,13 @@ contains
         call cline%set('stream','yes')
         call params%new(cline)
         call cline%set('mkdir', 'no')
+        call cline%delete('maxjobs')
+        call cline%delete('nptcls')
+        call cline%delete('numlen')
         ! restart
         if( cline%defined('dir_exec') )then
             call cline%delete('dir_exec')
-            ! TODO CLEANUP HERE
+            call restart_cleanup
         endif
         ! initialise progress monitor
         call progressfile_init()
@@ -3055,13 +3058,14 @@ contains
             do while( file_exists(PAUSE_STREAM) )
                 call sleep(WAITTIME)
             enddo
+            ! Parameters update
+            call update_user_params3D(l_params_updated)
             ! New snapshots management
-            call project_buff%watch(nprojects, projects)
+            call project_buff%watch(nprojects, projects, chrono=.true.)
             if( nprojects > 0 )then
                 call project_buff%add2history( projects )
                 call add_projects2jobslist( projects )
             endif
-            ! TODO: Update user inputted parameters here
             ! Submit to queue
             call submit_jobs( cline )
             ! Current runs complete?
@@ -3073,7 +3077,7 @@ contains
                 enddo
             endif
             ! Volumes & parameters analysis
-            call analysis
+            call analysis( spproj_glob )
             ! Global wait
             call sleep(WAITTIME)
         end do

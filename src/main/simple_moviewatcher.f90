@@ -146,11 +146,12 @@ contains
     ! DOERS
 
     !>  \brief  is the watching procedure
-    subroutine watch( self, n_movies, movies, max_nmovies )
+    subroutine watch( self, n_movies, movies, max_nmovies, chrono )
         class(moviewatcher),           intent(inout) :: self
         integer,                       intent(out)   :: n_movies
         character(len=*), allocatable, intent(out)   :: movies(:)
         integer,          optional,    intent(in)    :: max_nmovies
+        logical,          optional,    intent(in)    :: chrono
         character(len=LONGSTRLEN), allocatable :: farray(:)
         integer,                   allocatable :: fileinfo(:)
         logical,                   allocatable :: is_new_movie(:)
@@ -170,7 +171,7 @@ contains
         fail_cnt = 0
         ! get file list
         ! call self%check4dirs ! Only necessary for multiple directories!
-        call self%watchdirs(farray)
+        call self%watchdirs(farray, chrono)
         if( .not.allocated(farray) )return ! nothing to report
         n_lsfiles = size(farray)
         ! identifies closed & untouched files
@@ -339,9 +340,10 @@ contains
     end subroutine add2watchdirs
 
     !>  \brief  is for watching directories
-    subroutine watchdirs( self, farray )
+    subroutine watchdirs( self, farray, chrono )
         class(moviewatcher),                    intent(inout) :: self
         character(len=LONGSTRLEN), allocatable, intent(inout) :: farray(:)
+        logical,                   optional,    intent(in)    :: chrono
         character(len=LONGSTRLEN), allocatable :: tmp_farr(:), tmp_farr2(:)
         character(len=LONGSTRLEN)              :: dir
         integer :: idir,ndirs,n_newfiles,nfiles
@@ -355,7 +357,7 @@ contains
                 dir = trim(self%watch_dirs(idir))
             endif
             if(allocated(tmp_farr)) deallocate(tmp_farr)
-            call simple_list_files_regexp(dir, self%regexp, tmp_farr)
+            call simple_list_files_regexp(dir, self%regexp, tmp_farr, chronological=chrono)
             if( .not.allocated(tmp_farr) ) cycle
             if( allocated(farray) )then
                 n_newfiles = size(tmp_farr)

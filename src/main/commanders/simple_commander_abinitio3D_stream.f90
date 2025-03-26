@@ -4,20 +4,22 @@ use simple_cmdline,            only: cmdline
 use simple_parameters,         only: params_glob
 use simple_sp_project,         only: sp_project
 use simple_qsys_env,           only: qsys_env
-use simple_guistats,           only: guistats
 use simple_oris,               only: oris
 use simple_stream_utils
-use simple_qsys_funs
 implicit none
 
 public :: request_snapshot, add_projects2jobslist, submit_jobs, check_processes
-public :: analysis, get_nrecs_submitted
+public :: analysis, update_user_params3D, restart_cleanup, get_nrecs_submitted
 
 private
 #include "simple_local_flags.inc"
 
-type(procrecord), allocatable :: procrecs(:)         ! records of all jobs
-integer(kind=dp)              :: time_last_submission
+character(len=STDLEN), parameter :: USER_PARAMS = 'stream3D_user_params.txt'
+character(len=STDLEN), parameter :: EXECDIR     = 'run_'
+
+type(procrecord),    allocatable :: procrecs(:)             ! records of all jobs
+integer                          :: nvols_glob = 0          ! Total number of volumes generated (runs completed)
+integer(kind=dp)                 :: time_last_submission
 
 contains
 
@@ -35,11 +37,18 @@ contains
 
     ! Append each project file to the processing queue, no submission performed
     subroutine add_projects2jobslist( projects )
+        use simple_procimgstk, only: scale_imgfile
+        use simple_class_frcs
         character(len=LONGSTRLEN), allocatable, intent(in) :: projects(:)
-        type(sp_project)              :: spproj
-        character(len=:), allocatable :: projname, projfile, direxec, id, string, path, frc
-        character(len=LONGSTRLEN)     :: project_fname
-        integer :: i, jobid
+        character(len=LONGSTRLEN), allocatable :: files(:)
+        character(len=:),          allocatable :: projname, projfile, direxec, id, string
+        character(len=:),          allocatable :: path, frc, cavgs, tmpl, tmp1, tmp2
+        type(sp_project)          :: spproj
+        type(class_frcs)          :: frcs
+        character(len=LONGSTRLEN) :: project_fname
+        real    :: smpd, smpd_sc
+        integer :: i,j,n, jobid, box
+        logical :: found
         if( .not.allocated(projects) )return
         do i = 1,size(projects)
             project_fname = trim(projects(i))
@@ -50,7 +59,7 @@ contains
             ! prep record & folder
             jobid    = get_nrecs() + 1
             id       = int2str_pad(jobid, params_glob%numlen)
-            direxec  = 'run_'//id//'/'              ! relative path
+            direxec  = trim(EXECDIR)//id//'/'       ! relative path
             projname = 'abinitio_'  //id
             projfile = projname//trim(METADATA_EXT)
             call simple_mkdir(direxec)
@@ -62,26 +71,65 @@ contains
             call spproj%projinfo%set(1, 'projfile', projfile)
             call spproj%projinfo%set(1, 'cwd',      direxec)
             call spproj%os_ptcl3D%delete_2Dclustering
-            ! copy frcs
-            path   = trim(stemname(project_fname))
-            string = trim(basename_safe(project_fname))
-            string = trim(get_fbody(string, METADATA_EXT, separator=.false.))
-            string = trim(path)//trim(string)//'_'//trim(FRCS_FILE)
-            if( .not.file_exists(string) )then
-                THROW_WARN('Cannot find '//string//'. Skipping')
+            ! fetch frcs & classes
+            path = trim(stemname(project_fname))
+            tmpl = trim(basename_safe(project_fname))
+            tmpl = trim(get_fbody(tmpl, METADATA_EXT, separator=.false.))
+            smpd = spproj%get_smpd()
+            box  = spproj%get_box()
+            call spproj%get_cavgs_stk(tmp1, n, smpd_sc)
+            ! call find_ldim_nptcls(string, ldim_sc, n, smpd=smpd_sc)
+            ! classes, pad to original dimensions as images were scaled during alignment
+            found  = .false.
+            string = trim(tmpl)//'_'//trim(CAVGS_ITER_FBODY)
+            call simple_list_files_regexp(path, '\.mrc$|\.mrcs$', files)
+            if( allocated(files) )then
+                do j = 1,size(files)
+                    if( str_has_substr(files(j), string) )then
+                        if( str_has_substr(files(j),'_even') .or.&
+                            &str_has_substr(files(j),'_odd') )cycle
+                        string = trim(files(j))
+                        found = .true.
+                        exit
+                    endif
+                enddo
+                deallocate(files)
+            endif
+            if( .not.found )then
+                THROW_WARN('Cannot find classes at: '//string//'. Skipping')
+                call spproj%kill
                 return
             endif
-            frc = direxec//trim(FRCS_FILE)
-            call simple_copy_file(string, frc)
-            call spproj%add_frcs2os_out(frc, 'frc2D') ! need to pad??
+            j     = index(string,CAVGS_ITER_FBODY)
+            cavgs = trim(direxec)//string(j:len_trim(string))
+            call scale_imgfile(string, cavgs, smpd_sc, [box,box,1], smpd)
+            call spproj%add_cavgs2os_out(cavgs, smpd, 'cavg')
+            tmp1 = add2fbody(string, params_glob%ext, '_even')
+            tmp2 = add2fbody(cavgs,  params_glob%ext, '_even')
+            call scale_imgfile(tmp1, tmp2, smpd_sc, [box,box,1], smpd)
+            tmp1 = add2fbody(string, params_glob%ext, '_odd')
+            tmp2 = add2fbody(cavgs,  params_glob%ext, '_odd')
+            call scale_imgfile(tmp1, tmp2, smpd_sc, [box,box,1], smpd)
+            ! frcs, pad to original dimensions as images were scaled during alignment
+            string = trim(path)//trim(tmpl)//'_'//trim(FRCS_FILE)
+            if( .not.file_exists(string) )then
+                THROW_WARN('Cannot find '//string//'. Skipping')
+                call spproj%kill
+                return
+            endif
+            frc  = direxec//trim(FRCS_FILE)
+            call frcs%read(string)
+            call frcs%pad(smpd, box)
+            call frcs%write(frc)
+            call spproj%add_frcs2os_out(frc, 'frc2D')
             ! write project
             call spproj%write(direxec//projfile)
             ! new record
             call append_procrecord(procrecs, id, direxec, projfile)
             ! tidy
             call spproj%kill
+            call frcs%kill
             write(logfhandle,'(A,A)')'>>> ADDED ONE JOB: ',procrecs(get_nrecs())%folder
-            ! cleanup after copy?
         enddo
     end subroutine add_projects2jobslist
 
@@ -158,7 +206,8 @@ contains
         enddo
     end subroutine check_processes
 
-    subroutine analysis()
+    subroutine analysis( master_spproj )
+        class(sp_project), intent(inout) :: master_spproj
         type(procrecord), allocatable :: prevrecs(:)    ! already analyzed
         type(procrecord), allocatable :: newrecs(:)     ! to analyze
         type(procrecord), allocatable :: cohort(:)      ! all
@@ -190,12 +239,66 @@ contains
             ! book-keeping
             j = j + 1
             newrecs(j) = procrecs(i)
+            ! add to global project as state=nvols_glob
+            nvols_glob = nvols_glob+1
+            call master_spproj%add_vol2os_out(procrecs(i)%volume, smpd, nvols_glob, 'vol', box )
         enddo
         ! Cohort analysis
         cohort  = pack(procrecs, mask=procrecs(:)%included)
         ncohort = size(cohort)
         ! TODO
+        ! write global project
+        call master_spproj%write_segment_inside('out',params_glob%projfile)
+        ! cleanup
+        call kill_procrecords(prevrecs)
+        call kill_procrecords(newrecs)
+        call kill_procrecords(cohort)
     end subroutine analysis
+
+    !> Updates current parameters with user input
+    subroutine update_user_params3D( updated )
+        logical, intent(out)  :: updated
+        type(oris)            :: os
+        ! character(len=STDLEN) :: val
+        integer               :: nptcls
+        updated = .false.
+        call os%new(1, is_ptcl=.false.)
+        if( file_exists(USER_PARAMS) )then
+            call os%read(USER_PARAMS)
+            if( os%isthere(1,'nptcls') )then
+                nptcls = os%get_int(1,'nptcls')
+                if( nptcls > 0 )then
+                    params_glob%nptcls = nptcls
+                    write(logfhandle,'(A,I8)')'>>> # OF PTCLS / SNAPSHOT UPDATED TO:',params_glob%nptcls
+                    updated = .true.
+                endif
+            endif
+            call del_file(USER_PARAMS)
+        endif
+        call os%kill
+    end subroutine update_user_params3D
+
+    subroutine restart_cleanup
+        character(len=LONGSTRLEN), allocatable :: files(:)
+        character(len=STDLEN),     allocatable :: folders(:)
+        integer :: i
+        call del_file(USER_PARAMS)
+        call del_file(TERM_STREAM)
+        call simple_list_files_regexp('.', '\.mrc$|\.mrcs$|\.txt$|\.star$|\.eps$|\.jpeg$|\.jpg$|\.dat$|\.bin$', files)
+        if( allocated(files) )then
+            do i = 1,size(files)
+                call del_file(files(i))
+            enddo
+            deallocate(files)
+        endif
+        folders = simple_list_dirs('.')
+        if( allocated(folders) )then
+            do i = 1,size(folders)
+                if( str_has_substr(folders(i),trim(EXECDIR)) ) call simple_rmdir(folders(i))
+            enddo
+            deallocate(folders)
+        endif
+    end subroutine restart_cleanup
 
     ! number completed jobs
     integer function get_nrecs_completed()
