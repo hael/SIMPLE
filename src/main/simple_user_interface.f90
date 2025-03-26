@@ -3103,7 +3103,7 @@ contains
         &'3D ab initio online model generation & analysis from particles',&         ! descr_short
         &'3D ab initio online model generation & analysis from particles',&         ! descr_long
         &'simple_stream',&                                                          ! executable
-        &0, 1, 0, 8, 6, 1, 3, .true.,&                                              ! # entries in each group, requires sp_project
+        &0, 1, 0, 9, 6, 1, 3, .true.,&                                              ! # entries in each group, requires sp_project
         &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute"  )    ! GUI
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -3123,6 +3123,10 @@ contains
         call abinitio3D_stream%set_input('srch_ctrls',  6, 'nsample_start', 'num', 'Dynamic particle sampling lower bound', 'Dynamic particle sampling lower bound', 'min # particles to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
         call abinitio3D_stream%set_input('srch_ctrls',  7, 'nsample_stop',  'num', 'Dynamic particle sampling upper bound', 'Dynamic particle sampling upper bound', 'max # particles to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
         call abinitio3D_stream%set_input('srch_ctrls',  8, update_frac, gui_submenu="search", gui_advanced=.true.)
+        call abinitio3D_stream%set_input('srch_ctrls',  9, nptcls)
+        abinitio3D_stream%srch_ctrls(9)%descr_long        = 'Default number of particles in a snapshot{100000}'
+        abinitio3D_stream%srch_ctrls(9)%descr_placeholder = 'Number of particles in a snapshot{100000}'
+        abinitio3D_stream%srch_ctrls(9)%rval_default      = 100000.0
         ! filter controls
         call abinitio3D_stream%set_input('filt_ctrls', 1, hp, gui_submenu="filter")
         call abinitio3D_stream%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &

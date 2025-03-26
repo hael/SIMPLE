@@ -20,16 +20,16 @@ type, extends(commander_base) :: abinitio2D_commander
     procedure :: execute => exec_abinitio2D
 end type abinitio2D_commander
 
-! module constants
+! Dimensions
 real,    parameter :: SMPD_TARGET    = 2.67
-real,    parameter :: ICM_LAMBDA     = 1.0
+integer, parameter :: MINBOXSZ       = 88
+! Stages
 integer, parameter :: NSTAGES        = 6
 integer, parameter :: ITS_INCR       = 5
 integer, parameter :: PHASES(2)      = [4, 6]
-integer, parameter :: MINBOXSZ       = 88
+! Stages variables
+real,    parameter :: ICM_LAMBDA     = 1.0
 integer, parameter :: EXTR_LIM_LOCAL = 20
-integer, parameter :: MAXPOP_START   = 500
-integer, parameter :: MAXPOP_STOP    = 3000
 
 ! convenience type
 type stage_params
@@ -218,37 +218,26 @@ contains
         end subroutine set_lplims
 
         subroutine set_sampling
-            integer :: i, startpop, stoppop
+            integer :: i, maxpop
             nptcls_eff = spproj%count_state_gt_zero()
             stage_parms(:)%max_cls_pop = 0
             stage_parms(:)%nptcls      = nptcls_eff
             if( trim(params%autosample).eq.'yes' )then
-                stoppop = 2500
-                if( cline%defined('nsample') ) stoppop = params%nsample
+                maxpop = MAXPOP_CLS
+                if( cline%defined('nsample') ) maxpop = params%nsample
                 do i = 1,NSTAGES
-                    stage_parms(i)%max_cls_pop = stoppop
-                    if( cline%defined('nsample_stop') )then
-                        stage_parms(i)%nptcls = min(nptcls_eff,min(params%nsample_stop, 2*stoppop*params%ncls))
-                    else
-                        stage_parms(i)%nptcls = min(nptcls_eff, 2*stoppop*params%ncls)
+                    stage_parms(i)%max_cls_pop = maxpop
+                    stage_parms(i)%nptcls      = min(nptcls_eff, 2*maxpop*params%ncls)
+                    if( (params%stage > 0) .and. (params%stage < NSTAGES))then
+                        if( i<=params%stage ) stage_parms(i)%nptcls = min(nptcls_eff, maxpop*params%ncls)
                     endif
-
-                    ! if( stage_parms(i)%nptcls <= nptcls_eff ) stage_parms(i)%max_cls_pop = 0 ! deactivates
+                    if( cline%defined('nsample_stop') )then
+                        stage_parms(i)%nptcls = min(params%nsample_stop, stage_parms(i)%nptcls)
+                    else
+                        stage_parms(i)%nptcls = min(MAXPOP_PTCLS, stage_parms(i)%nptcls)
+                    endif
                 enddo
             endif
-            ! Does not seem to work with 1M+ particles
-            ! probably because update_frac was set automatically and too low
-            ! if( trim(params%autosample).eq.'yes' )then
-            !     startpop = MAXPOP_START
-            !     stoppop  = MAXPOP_STOP
-            !     if( cline%defined('nsample_start') ) startpop = params%nsample_start
-            !     if( cline%defined('nsample_stop') )  stoppop  = params%nsample_stop
-            !     stoppop = max(startpop,stoppop)
-            !     do i = 1,NSTAGES
-            !         stage_parms(i)%max_cls_pop = startpop + nint(real((i-1)*(stoppop-startpop)) / real(NSTAGES-1))
-            !         stage_parms(i)%nptcls      = min(nptcls_eff, startpop*i*params%ncls)
-            !     enddo
-            ! endif
         end subroutine set_sampling
 
         subroutine prep_command_lines( cline )
@@ -293,7 +282,8 @@ contains
                 iphase = 1
             else if( istage <= PHASES(2) )then
                 iphase = 2
-            else 
+            else
+                iphase = 0
                 THROW_HARD('Invalid istage index')
             endif
             ! phase control parameters
@@ -419,7 +409,7 @@ contains
                 if( cline%defined('update_frac') )then
                     frac = params%update_frac
                 else
-                    frac = real(stage_parms(istage)%nptcls) / real(nptcls_eff)
+                    frac = MAXPOP_UFRAC
                 endif
                 call cline_cluster2D%set('update_frac', frac)
             endif

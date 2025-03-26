@@ -15,7 +15,7 @@ implicit none
 
 public :: stream_chunk, DIR_CHUNK
 public :: projrecord, projrecords2proj, class_rejection
-public :: procrecord, append_procrecord
+public :: procrecord, append_procrecord, kill_procrecords
 private
 #include "simple_local_flags.inc"
 
@@ -641,8 +641,21 @@ contains
         else
             allocate(records(1), source=[record])
         endif
-        deallocate(record%id,record%folder,record%projfile)
+        call kill_procrecord(record)
     end subroutine append_procrecord
+
+    elemental subroutine kill_procrecord( rec )
+        type(procrecord), intent(inout) :: rec
+        if( allocated(rec%id) ) deallocate(rec%id,rec%folder,rec%projfile,rec%volume)
+    end subroutine kill_procrecord
+
+    subroutine kill_procrecords( recs )
+        type(procrecord), allocatable, intent(inout) :: recs(:)
+        if( allocated(recs) )then
+            call kill_procrecord(recs(:))
+            deallocate(recs)
+        endif
+    end subroutine kill_procrecords
 
     ! Public utility
 

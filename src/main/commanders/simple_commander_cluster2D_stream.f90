@@ -67,7 +67,6 @@ integer,               parameter :: CHUNK_EXTR_ITER      = 3                ! st
 integer,               parameter :: FREQ_POOL_REJECTION  = 5                ! pool class rejection performed every FREQ_POOL_REJECTION iteration
 integer,               parameter :: MIN_NPTCLS_REJECTION = 200000           ! Minimum number of particles required to activate rejection
 integer,               parameter :: NPREV_RES            = 5                ! # of previous resolution resolutions to store for resolution update (>=2)
-integer,               parameter :: AUTO_NSAMPLE         = 2500             ! # of particles per cls for auto samling scheme
 character(len=STDLEN), parameter :: USER_PARAMS          = 'stream2D_user_params.txt'
 character(len=STDLEN), parameter :: PROJFILE_POOL        = 'cluster2D.simple'
 character(len=STDLEN), parameter :: POOL_DIR             = ''               ! should be './pool/' for tidyness but difficult with gui
@@ -1159,21 +1158,21 @@ contains
         frac_update = 1.0
         if( trim(params_glob%autosample).eq.'yes' )then
             ! momentum & limits to # of particles per class
-            nsample = AUTO_NSAMPLE
+            nsample = MAXPOP_CLS
             if( master_cline%defined('nsample') ) nsample = params_glob%nsample
             nptcls_th = MAX_STREAM_NPTCLS
             if( nptcls_sel > nptcls_th )then
                 frac_update = real(nptcls_th) / real(nptcls_sel)
                 call cline_cluster2D_pool%set('maxpop',    nsample)
                 call cline_cluster2D_pool%set('sigma_est', 'global')
-                print *,'frac_update A, nsample*ncls_glob: ', frac_update, nsample*ncls_glob    ! debug
             endif
+            ! user override
+            if( master_cline%defined('frac_update') ) frac_update = params_glob%update_frac
         else
             ! momentum only
             if( nptcls_sel > MAX_STREAM_NPTCLS )then
                 if( (sum(prev_eo_pops) > 0) .and. (nptcls_old > 0))then
                     frac_update = real(nptcls_old-sum(prev_eo_pops)) / real(nptcls_old)
-                    print *,'frac_update B: ', frac_update  ! debug
                 endif
             endif
         endif
@@ -1184,8 +1183,6 @@ contains
                 call spproj%os_cls2D%set(icls,'prev_pop_even',prev_eo_pops(icls,1))
                 call spproj%os_cls2D%set(icls,'prev_pop_odd', prev_eo_pops(icls,2))
             enddo
-            ! debug, to remove
-            print *,'nptcls_sel nptcls_old sum(prev_eo_pops) ',nptcls_sel, nptcls_old, sum(prev_eo_pops)
         endif
         ! write project
         call spproj%write(trim(POOL_DIR)//trim(PROJFILE_POOL))
@@ -2066,13 +2063,15 @@ contains
     ! Transfer chunk into pool (alignment parameters, references)
     subroutine import_chunks_into_pool( nchunks_imported )
         integer, intent(out) :: nchunks_imported
+        logical,   parameter :: SELECT_CLS_UNIFORM = .true.
         type(class_frcs)              :: frcs_glob, frcs_chunk, frcs_prev
         character(len=:), allocatable :: cavgs_chunk, dir_chunk, stk
-        integer,          allocatable :: cls_pop(:), cls_chunk_pop(:), pinds(:), states(:)
+        real,             allocatable :: cls_chunk_res(:), tmp(:)
+        integer,          allocatable :: cls_pop(:), cls_chunk_pop(:), pinds(:), states(:), clsinds(:)
         real    :: smpd_here
         integer :: ichunk, nchunks2import, nptcls2import, nmics2import, nptcls, imic, iproj
         integer :: ncls_tmp, fromp_prev, fromp, ii, jptcl, i, poolind, n_remap, pop, nptcls_sel
-        integer :: nmics_imported, nptcls_imported, iptcl, ind, ncls_here, icls, p
+        integer :: nmics_imported, nptcls_imported, iptcl, ind, ncls_here, icls, p, n_nonempty
         logical :: l_maxed
         nchunks_imported = 0
         if( .not. stream2D_active )            return
@@ -2162,16 +2161,30 @@ contains
                         if( all(cls_pop==0) ) THROW_HARD('Empty os_cls2D!')
                         ! remapping
                         cls_chunk_pop = nint(converged_chunks(ichunk)%spproj%os_cls2D%get_all('pop'))
+                        cls_chunk_res = converged_chunks(ichunk)%spproj%os_cls2D%get_all('res')
                         call frcs_glob%new(ncls_glob, pool_dims%box, pool_dims%smpd, nstates=1)
                         call frcs_glob%read(trim(POOL_DIR)//trim(FRCS_FILE))
                         do icls=1,ncls_glob
-                            if( cls_pop(icls)>0 ) cycle          ! class already filled
-                            if( all(cls_chunk_pop == 0 ) ) exit  ! no more chunk class available
-                            ind = irnd_uni(params_glob%ncls_start)    ! selects chunk class stochastically
-                            do while( cls_chunk_pop(ind) == 0 )
+                            if( cls_pop(icls)>0 ) cycle             ! class already filled
+                            if( all(cls_chunk_pop == 0 ) ) exit     ! no more chunk class available
+                            where(cls_chunk_pop == 0) cls_chunk_res = huge(smpd_here)
+                            if( SELECT_CLS_UNIFORM )then
+                                ! selects chunk class stochastically
                                 ind = irnd_uni(params_glob%ncls_start)
-                            enddo
-                            cls_chunk_pop(ind) = 0             ! excludes from being picked again
+                                do while( cls_chunk_pop(ind) == 0 )
+                                    ind = irnd_uni(params_glob%ncls_start)
+                                enddo
+                            else
+                                ! selects chunk class stochastically promoting higher resolution
+                                n_nonempty = count(cls_chunk_pop > 0)
+                                clsinds    = (/(i,i=1,size(cls_chunk_res))/)
+                                tmp        = cls_chunk_res
+                                call hpsort(tmp, clsinds)
+                                ! skewed towards high resolution:
+                                ind = max(1,min(n_nonempty,ceiling(real(n_nonempty)*ran3()**2)))
+                                ind = clsinds(ind)
+                            endif
+                            cls_chunk_pop(ind) = 0  ! excludes from being picked again
                             n_remap = n_remap+1
                             ! class average
                             call transfer_cavg(cavgs_chunk, dir_chunk, ind, refs_glob, icls)
@@ -2490,10 +2503,11 @@ contains
         type(oris)                    :: os
         type(sp_project)              :: project
         integer,          allocatable :: pinds(:)
-        character(len=:), allocatable :: filename
+        character(len=:), allocatable :: filename, tag, tmp1,tmp2
         integer, allocatable :: states(:)
         integer :: nrequested,n,nl
-        if( .not.stream2D_active ) return
+        if( .not.stream2D_active )return
+        if( pool_iter < 2 )       return
         if( .not.file_exists(SNAPSHOT_REQUEST) )return
         nl = nlines(SNAPSHOT_REQUEST)
         if( nl /= 1)then
@@ -2518,18 +2532,25 @@ contains
                 call project%os_ptcl2D%set_all('state',states)
                 project%os_ptcl3D = project%os_ptcl2D
                 deallocate(states)
-                ! prune
                 call project%prune_particles
                 ! write
                 nabinitioprojs_glob = nabinitioprojs_glob + 1
-                filename = trim(DIR_SNAPSHOT)//'snap_'//&
-                    &int2str_pad(nabinitioprojs_glob,params_glob%numlen)//trim(METADATA_EXT)
+                tag      = trim(int2str_pad(nabinitioprojs_glob,params_glob%numlen))
+                filename = trim(DIR_SNAPSHOT)//'snap_'//tag//trim(METADATA_EXT)
                 call project%write(filename)
                 call project%kill
-                ! copy frcs (to change??)
-                filename = trim(DIR_SNAPSHOT)//'snap_'//&
-                    &int2str_pad(nabinitioprojs_glob,params_glob%numlen)//'_'//trim(FRCS_FILE)
+                ! copy frcs, will have to be padded to original dimensions
+                filename = trim(DIR_SNAPSHOT)//'snap_'//tag//'_'//trim(FRCS_FILE)
                 call simple_copy_file(FRCS_FILE, filename)
+                ! copy classes, will have to be padded to original dimensions
+                filename = trim(DIR_SNAPSHOT)//'snap_'//tag//'_'//trim(refs_glob)
+                call simple_copy_file(refs_glob, filename)
+                tmp1 = add2fbody(refs_glob, params_glob%ext, '_even')
+                tmp2 = add2fbody(filename,  params_glob%ext, '_even')
+                call simple_copy_file(tmp1, tmp2)
+                tmp1 = add2fbody(refs_glob, params_glob%ext, '_odd')
+                tmp2 = add2fbody(filename,  params_glob%ext, '_odd')
+                call simple_copy_file(tmp1, tmp2)
                 write(logfhandle,'(A,I8,A)')'>>> GENERATED SNAPSHOT FOR ABINITIO3D WITH ',nrequested,' PTCLS'
             else
                 ! insufficient number of particles, do not remove request

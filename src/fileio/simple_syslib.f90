@@ -627,19 +627,27 @@ contains
         endif
     end subroutine simple_list_files
 
-    subroutine simple_list_files_regexp( dir, regexp, list )
+    subroutine simple_list_files_regexp( dir, regexp, list, chronological)
         use simple_strings, only: int2str
         character(len=*),                       intent(in)    :: dir
         character(len=*),                       intent(in)    :: regexp
         character(len=LONGSTRLEN), allocatable, intent(inout) :: list(:)
+        logical,                   optional,    intent(in)    :: chronological
         character(len=LONGSTRLEN) :: cmd
         character(len=LONGSTRLEN) :: tmpfile
         character(len=1) :: junk
         integer :: sz, funit, ios, i, nlines
+        logical :: l_chrono
         if( len_trim(adjustl(regexp)) == 0) return
+        l_chrono = .false.
+        if( present(chronological) ) l_chrono = chronological
         tmpfile = '__simple_filelist_'//int2str(part_glob)//'__'
         ! builds command
-        cmd = 'ls -1f '//adjustl(trim(dir))//' | grep -E '''//adjustl(trim(regexp))//''' > '//trim(tmpfile)
+        if( l_chrono )then
+            cmd = 'ls -1f -rt '//adjustl(trim(dir))//' | grep -E '''//adjustl(trim(regexp))//''' > '//trim(tmpfile)
+        else
+            cmd = 'ls -1f '//adjustl(trim(dir))//' | grep -E '''//adjustl(trim(regexp))//''' > '//trim(tmpfile)
+        endif
         call exec_cmdline( cmd, suppress_errors=.true.)
         inquire(file=trim(tmpfile), size=sz)
         if( allocated(list) ) deallocate(list)

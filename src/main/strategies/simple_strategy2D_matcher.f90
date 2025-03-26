@@ -40,7 +40,6 @@ real(timer_int_kind)     :: rt_init, rt_prep_pftcc, rt_align, rt_cavg, rt_projio
 integer(timer_int_kind)  ::  t_init,  t_prep_pftcc,  t_align,  t_cavg,  t_projio,  t_tot
 character(len=STDLEN)    :: benchfname
 logical                  :: l_stream   = .false.
-logical                  :: DEBUG_HERE = .false.
 
 contains
 
@@ -171,14 +170,6 @@ contains
         ! ARRAY ALLOCATION FOR STRATEGY2D after pftcc initialization
         call prep_strategy2D_glob( neigh_frac )
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> STRATEGY2D OBJECTS ALLOCATED'
-
-        if( (params_glob%part==1) .and. DEBUG_HERE )then
-            write(logfhandle,*)'params%refine refine_flag:          ',trim(params_glob%refine),' ',trim(refine_flag)
-            write(logfhandle,*)'l_snhc neigh_frac power:            ', l_snhc, neigh_frac, s2D%power
-            write(logfhandle,*)'l_greedy l_prob l_stream:           ', l_greedy, l_prob, l_stream
-            write(logfhandle,*)'l_update_frac l_partial_sums ufrac: ',l_update_frac, l_partial_sums, params_glob%update_frac
-            write(logfhandle,*)'maxpop:                             ',params_glob%maxpop
-        endif
 
         ! SETUP WEIGHTS
         call build_glob%spproj_field%set_all2single('w', 1.0)
