@@ -379,9 +379,9 @@ contains
         type(image), allocatable :: imgs(:)
         type(stack_io)   :: stkio_w
         type(ctf)        :: tfun
+        type(ctfparams)  :: ctfparms
         type(parameters) :: params
         type(builder)    :: build
-        type(ori)        :: o
         integer          :: nptcls, ldim(3), iptcl
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('outstk') ) call cline%set('outstk', 'phaseflipped'//trim(STK_EXT))
@@ -395,15 +395,13 @@ contains
                 call imgs(iptcl)%read(trim(params%stk), iptcl)
             enddo
             print *, 'FINISHED READING...'
-            !$omp parallel do private(iptcl,o,tfun) default(shared) proc_bind(close) schedule(static)
+            !$omp parallel do private(iptcl,ctfparms,tfun) default(shared) proc_bind(close) schedule(static)
             do iptcl = 1, nptcls
-                call build%spproj_field%get_ori(iptcl, o)
-                tfun = ctf(params%smpd, o%get('kv'), o%get('cs'), o%get('fraca'))
-                if( o%isthere('dfy') )then ! astigmatic CTF
-                    call tfun%apply(imgs(iptcl), o%get_dfx(), 'flip', dfy=o%get_dfy(), angast=o%get('angast'))
-                else ! non-astigmatic CTF
-                    call tfun%apply(imgs(iptcl), o%get_dfx(), 'flip')
-                endif
+                call imgs(iptcl)%fft
+                ctfparms = build%spproj%get_ctfparams(params%oritype, iptcl)
+                tfun     = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
+                call tfun%apply_serial(imgs(iptcl), 'flip', ctfparms)
+                call imgs(iptcl)%ifft
             end do
             !$omp end parallel do
             print *, 'START WRITING...'
@@ -417,13 +415,11 @@ contains
             call stkio_w%open(params%outstk, params%smpd, 'write', box=ldim(1))
             do iptcl = 1, nptcls
                 call read_imgbatch(iptcl, build%img)
-                call build%spproj_field%get_ori(iptcl, o)
-                tfun = ctf(params%smpd, o%get('kv'), o%get('cs'), o%get('fraca'))
-                if( o%isthere('dfy') )then ! astigmatic CTF
-                    call tfun%apply(build%img, o%get_dfx(), 'flip', dfy=o%get_dfy(), angast=o%get('angast'))
-                else ! non-astigmatic CTF
-                    call tfun%apply(build%img, o%get_dfx(), 'flip')
-                endif
+                call build%img%fft
+                ctfparms = build%spproj%get_ctfparams(params%oritype, iptcl)
+                tfun     = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
+                call tfun%apply_serial(imgs(iptcl), 'flip', ctfparms)
+                call build%img%ifft
                 call stkio_w%write(iptcl, build%img)
             end do
             call stkio_w%close
