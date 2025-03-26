@@ -9,7 +9,7 @@ use simple_qsys_env,           only: qsys_env
 use simple_commander_base,     only: commander_base
 use simple_commander_volops,   only: reproject_commander, symaxis_search_commander, postprocess_commander, symmetrize_map_commander
 use simple_commander_rec,      only: reconstruct3D_commander, reconstruct3D_commander_distr
-use simple_commander_refine3D, only: refine3D_commander, refine3D_commander_distr
+use simple_commander_refine3D, only: refine3D_commander, refine3D_distr_commander
 use simple_procimgstk,         only: shift_imgfile
 use simple_image,              only: image
 use simple_builder,            only: builder
@@ -342,7 +342,7 @@ contains
         class(abinitio3D_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         ! commanders
-        type(refine3D_commander_distr)         :: xrefine3D
+        type(refine3D_distr_commander)         :: xrefine3D
         type(reconstruct3D_commander_distr)    :: xreconstruct3D_distr
         ! other
         character(len=:),   allocatable :: vol_name

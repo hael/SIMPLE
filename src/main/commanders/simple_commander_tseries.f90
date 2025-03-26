@@ -929,11 +929,11 @@ contains
     end subroutine exec_tseries_ctf_estimate
 
     subroutine exec_refine3D_nano( self, cline )
-        use simple_commander_refine3D, only: refine3D_commander_distr
+        use simple_commander_refine3D, only: refine3D_distr_commander
         class(refine3D_nano_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! commander
-        type(refine3D_commander_distr) :: xrefine3D_distr
+        type(refine3D_distr_commander) :: xrefine3D_distr
         ! static parameters
         call cline%set('prg',           'refine3D')
         call cline%set('dir_exec', 'refine3D_nano')

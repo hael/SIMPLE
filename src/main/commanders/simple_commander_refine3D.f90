@@ -19,7 +19,8 @@ use simple_qsys_funs
 implicit none
 
 public :: nspace_commander
-public :: refine3D_commander_distr
+public :: refine3D_auto_commander
+public :: refine3D_distr_commander
 public :: refine3D_commander
 public :: estimate_first_sigmas_commander
 public :: check_3Dconv_commander
@@ -33,10 +34,15 @@ type, extends(commander_base) :: nspace_commander
    procedure :: execute      => exec_nspace
 end type nspace_commander
 
-type, extends(commander_base) :: refine3D_commander_distr
+type, extends(commander_base) :: refine3D_auto_commander
+  contains
+    procedure :: execute      => exec_refine3D_auto
+end type refine3D_auto_commander
+
+type, extends(commander_base) :: refine3D_distr_commander
   contains
     procedure :: execute      => exec_refine3D_distr
-end type refine3D_commander_distr
+end type refine3D_distr_commander
 
 type, extends(commander_base) :: refine3D_commander
   contains
@@ -82,11 +88,60 @@ contains
         call simple_end('**** SIMPLE_NSPACE NORMAL STOP ****')
     end subroutine exec_nspace
 
+    subroutine exec_refine3D_auto( self, cline )
+        class(refine3D_auto_commander), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
+        ! hard defaults
+        call cline%set('balance',        'no') ! 4 now, needs testing
+        call cline%set('trail_rec',     'yes')
+        call cline%set('refine', 'neigh_smpl')
+        call cline%set('icm',           'yes')
+        call cline%set('ml_reg',         'no')
+        call cline%set('automsk',       'yes')
+        call cline%set('sh_first',      'yes')
+        call cline%set('overlap',        0.99)
+        call cline%set('nstates',           1)
+        call cline%set('objfun',     'euclid')
+        call cline%set('envfsc',        'yes')
+        call cline%set('lplim_crit',    0.143)
+        ! required inputs
+        if( .not. cline%defined('update_frac') ) THROW_HARD('UPDATE_FRAC (<1 fraction of particles to update per iteration) input required!')
+        ! do stochastic sampling for now
+        if( .not. cline%defined('pgrp')        ) THROW_HARD('PGRP (point-group) input required!')
+        if( .not. cline%defined('res_target')  ) THROW_HARD('RES_TARGET (target resolution in A) input required!')
+        if( .not. cline%defined('amsklp')      ) THROW_HARD('AMSKLP (automask low-pass limit in A) input required!')
+        if( .not. cline%defined('nthr')        ) THROW_HARD('NTHR (# shared-memory CPU threads) input required!')
+        if( .not. cline%defined('nparts')      ) THROW_HARD('NPARTS (# distributed partitions) input required!')
+        if( .not. cline%defined('mskdiam')     ) THROW_HARD('MSKDIAM (mask diameter in A) input required!') ! 4 now, shold be estimated automatically
+        if( .not. cline%defined('mskfile')     ) THROW_HARD('MSKFILE (initial envelop mask) input required!')
+        ! overridable defaults
+        if( .not. cline%defined('eo')         ) call cline%set('eo',           'yes') ! 4 now, needs testing
+        if( .not. cline%defined('lp_auto')    ) call cline%set('lp_auto',       'no') ! 4 now, needs testing
+        if( .not. cline%defined('center')     ) call cline%set('center',        'no') ! 4 now, needs testing
+        if( .not. cline%defined('lambda')     ) call cline%set('lambda',         1.0) ! 4 now, needs testing
+        if( .not. cline%defined('sigma_est')  ) call cline%set('sigma_est', 'global') ! 4 now, needs testing
+        if( .not. cline%defined('combine_eo') ) call cline%set('combine_eo',    'no') ! 4 now, needs testing
+        if( .not. cline%defined('maxits')     ) call cline%set('maxits',          75) ! 4 now, needs testing
+
+
+        ! check so that all states are 1 and fall over otherwise
+
+        ! set shift limits automatically, as in ab initio
+
+        ! set downscaling based on target resolution, smpd_crop & box_crop
+
+        ! reconstruct at full sampling in the end
+
+        !**************TESTS2DO
+        !should test lp_auto in the start (need to set lpstart/lpstop)
+        !should test 40k projection directions and see how that performs (params class needs modification)
+    end subroutine exec_refine3D_auto
+
     subroutine exec_refine3D_distr( self, cline )
         use simple_commander_rec,    only: reconstruct3D_commander_distr, volassemble_commander
         use simple_fsc,              only: plot_fsc
         use simple_commander_euclid, only: calc_group_sigmas_commander
-        class(refine3D_commander_distr), intent(inout) :: self
+        class(refine3D_distr_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         ! commanders
         type(reconstruct3D_commander_distr)   :: xreconstruct3D_distr
