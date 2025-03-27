@@ -10,6 +10,7 @@ use simple_commander_base,     only: commander_base
 use simple_commander_volops,   only: reproject_commander, symaxis_search_commander, postprocess_commander, symmetrize_map_commander
 use simple_commander_rec,      only: reconstruct3D_commander, reconstruct3D_commander_distr
 use simple_commander_refine3D, only: refine3D_commander, refine3D_distr_commander
+use simple_commander_mask,     only: automask_commander
 use simple_procimgstk,         only: shift_imgfile
 use simple_image,              only: image
 use simple_builder,            only: builder
@@ -1255,8 +1256,9 @@ contains
         character(len=*),      intent(in)    :: projfile
         class(commander_base), intent(inout) :: xreconstruct3D
         integer,               intent(in)    :: istage
+        type(automask_commander)       :: xautomask
         character(len=:),  allocatable :: str_state, vol, str, vol_even, vol_odd
-        type(cmdline) :: cline_startrec
+        type(cmdline) :: cline_startrec, cline_automask
         integer       :: state
         cline_startrec = cline_refine3D
         call cline_startrec%set('prg',         'reconstruct3D')
@@ -1271,13 +1273,9 @@ contains
         call cline_startrec%delete('endit')
         call cline_startrec%delete('needs_sigma')
         call cline_startrec%delete('sigma_est')
-        if( istage >= AUTOMSK_STAGE .and. l_automsk )then
-            call cline_startrec%delete('mskfile') ! automask generated
-            call cline_startrec%set('automsk', 'yes')
-        else
-            call cline_startrec%delete('automsk') ! no automask generated
-            call cline_startrec%delete('mskfile') ! no masked FSC
-        endif
+        call cline_startrec%delete('automsk') ! no automask generated
+        call cline_startrec%delete('mskfile') ! no masked FSC
+        ! endif
         call xreconstruct3D%execute_safe(cline_startrec)
         do state = 1,params_glob%nstates
             ! rename volumes and update cline
@@ -1300,7 +1298,17 @@ contains
             call      simple_rename( trim(vol_odd), trim(str) )
         enddo
         if( istage >= AUTOMSK_STAGE .and. l_automsk )then
-            if( .not. file_exists(MSKVOL_FILE) ) THROW_HARD('File: '//MSKVOL_FILE//' does not exist!')
+            str_state = int2str_pad(1,2)
+            vol_even  = trim(STARTVOL_FBODY)//trim(str_state)//'_even'//params_glob%ext
+            vol_odd   = trim(STARTVOL_FBODY)//trim(str_state)//'_odd'//params_glob%ext
+            call cline_automask%set('vol1', trim(vol_odd))
+            call cline_automask%set('vol2', trim(vol_even))
+            call cline_automask%set('smpd', lpinfo(istage)%smpd_crop)
+            call cline_automask%set('amsklp', params_glob%amsklp)
+            call cline_automask%set('automsk', 'yes')
+            call cline_automask%set('mkdir',    'no')
+            call cline_automask%set('nthr', params_glob%nthr)
+            call xautomask%execute_safe(cline_automask)
             params_glob%mskfile = MSKVOL_FILE
             call cline_refine3D%set('mskfile', MSKVOL_FILE)
         endif
