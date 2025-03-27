@@ -2678,6 +2678,11 @@ contains
         if( .not.cline%defined('lpthres') )then
             call mskdiam2streamresthreshold(params%mskdiam, params%lpthres)
             call cline%set('lpthres', params%lpthres)
+            call set_lpthres_type("auto")
+        else if(params%lpthres .gt. LOWRES_REJECT_THRESHOLD) then
+            call set_lpthres_type("off")
+        else
+            call set_lpthres_type("manual")
         endif
         ! Number of particles per class
         if(params%nptcls_per_cls == 0) write(logfhandle,'(A)')   '>>> # PARTICLES PER CLASS WILL BE AUTO DETERMINED AFTER 100 IMPORTED MICROGRAPHS'
@@ -2862,6 +2867,7 @@ contains
             enddo
             if(allocated(res_hist)) deallocate(res_hist)
             nice_communicator%view_cls2D%cutoff_res = get_lpthres()
+            nice_communicator%view_cls2D%cutoff_type = get_lpthres_type()
             ! project snapshot
             if(get_pool_iter() .gt. 0 .and. trim(params%snapshot) .ne. "") then
                 call nice_communicator%update_cls2D(snapshot_json_clear=.true.)

@@ -135,6 +135,7 @@ module simple_nice
         character(16) :: last_particles_imported = ""
         character(16) :: last_iteration          = ""
         character(16) :: snapshot_time           = ""
+        character(6)  :: cutoff_type             = ""
         type(nice_stat_thumb_image) :: thumbnail
         type(nice_stat_thumb_image) :: pool_rejected_thumbnail
         type(nice_stat_thumb_image) :: chunk_rejected_thumbnail
@@ -709,7 +710,7 @@ module simple_nice
                     res_plot%data(i)   = this%view_cls2D%res_histogram%get(i)
                 end do
                 if(this%view_cls2D%cutoff_res .gt. 0.0) then
-                    call this%plot_object(res_hist, res_plot, name="class_resolution", value=trim(int2str(int(this%view_cls2D%cutoff_res))) // 'Å')
+                    call this%plot_object(res_hist, res_plot, name="class_resolution", value=trim(int2str(int(this%view_cls2D%cutoff_res))) // 'Å', extra_1=trim(this%view_cls2D%cutoff_type))
                 else
                     call this%plot_object(res_hist, res_plot, name="class_resolution")
                 end if
@@ -1521,11 +1522,11 @@ module simple_nice
         call this%stat_json%add(ptr, labels)
     end subroutine doughnut_plot_object
 
-    subroutine bar_plot_object(this, ptr, plot, name, value)
+    subroutine bar_plot_object(this, ptr, plot, name, value, extra_1)
         class(simple_nice_communicator), intent(inout) :: this
         type(json_value), pointer,       intent(inout) :: ptr
         type(nice_plot_bar),             intent(in)    :: plot
-        character(*),     optional,      intent(in)    :: name, value
+        character(*),     optional,      intent(in)    :: name, value, extra_1
         type(json_value),                pointer       :: data, labels, datasets, dataset
         integer                                        :: i
         if(present(name)) then
@@ -1548,6 +1549,7 @@ module simple_nice
         call this%stat_json%add(ptr, datasets)
         call this%stat_json%add(ptr, labels)
         if(present(value)) call this%stat_json%add(ptr, "value", value)
+        if(present(extra_1)) call this%stat_json%add(ptr, "extra_1", extra_1)
     end subroutine bar_plot_object
 
     function calculate_checksum(this, str)
