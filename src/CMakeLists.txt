@@ -1,7 +1,7 @@
 # Source for the SIMPLE library.
 
 if(APPLE)
-  add_definitions("-D__FreeBSD") # needed for unix library
+  add_definitions("-D__FreeBSD__") # needed for unix library
 else()
   add_definitions("-D__linux__") # needed for unix library
 endif()
