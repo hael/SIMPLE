@@ -214,7 +214,7 @@ contains
         type(sp_project)              :: spproj
         character(len=:), allocatable :: projfile
         real    :: smpd
-        integer :: i, j, n_new, n_prev, ncohort, box
+        integer :: i, j, n_new, n_prev, ncohort, box, nptcls
         n_new = get_nrecs2postprocess()
         if( n_new == 0 ) return
         n_prev = get_nrecs_completed() - n_new
@@ -232,6 +232,7 @@ contains
             ! unfiltered volume
             call spproj%read_segment('out', projfile)
             call spproj%get_vol('vol', 1, procrecs(i)%volume, smpd, box)
+            nptcls = spproj%os_ptcl3D%get_noris(consider_state=.true.)
             call spproj%kill
             ! volume analysis here
             ! will not go through this loop again
@@ -241,7 +242,7 @@ contains
             newrecs(j) = procrecs(i)
             ! add to global project as state=nvols_glob
             nvols_glob = nvols_glob+1
-            call master_spproj%add_vol2os_out(procrecs(i)%volume, smpd, nvols_glob, 'vol', box )
+            call master_spproj%add_vol2os_out(procrecs(i)%volume, smpd, nvols_glob, 'vol', box, pop=nptcls)
         enddo
         ! Cohort analysis
         cohort  = pack(procrecs, mask=procrecs(:)%included)
