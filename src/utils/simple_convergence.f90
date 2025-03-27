@@ -270,8 +270,12 @@ contains
         write(logfhandle,609) '>>> ICM REGULARIZATION IS OFF'
         endif
         if( params_glob%l_update_frac )then
+        if( cline%defined('ufrac_trec') )then
+        write(logfhandle,607) '>>> TRAILING REC UPDATE FRACTION:     ', params_glob%ufrac_trec
+        else
         trail_rec_ufrac = real(count(mask)) / real(count(updatecnts > 0.5 .and. states > 0.5))
         write(logfhandle,607) '>>> TRAILING REC UPDATE FRACTION:     ', trail_rec_ufrac
+        endif
         endif
         ! dynamic shift search range update
         if( self%frac_srch%avg >= FRAC_SH_LIM )then
