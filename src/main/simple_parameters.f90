@@ -1364,7 +1364,6 @@ contains
             self%update_frac   = 1.0
             self%l_update_frac = .false.
             if( trim(self%trail_rec).eq.'yes' )then
-                ! if( .not. cline%defined('ufrac_trec') ) THROW_HARD('Need ufrac_trec to be set when frac=1 and trail_rec=yes')
                 self%l_trail_rec = .true.
             else
                 self%l_trail_rec = .false.

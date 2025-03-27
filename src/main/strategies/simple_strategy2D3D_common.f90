@@ -210,12 +210,7 @@ contains
                 end do
                 loc = minloc(mapres) ! best resolved
                 if( params_glob%nstates == 1 )then
-                    ! get median updatecnt
-                    if( build_glob%spproj_field%median('updatecnt') > 1.0 )then ! more than half have been updated
-                        lp_ind = get_find_at_corr(build_glob%fsc(1,:), params_glob%lplim_crit, incrreslim=params_glob%l_incrreslim)
-                    else
-                        lp_ind = get_find_at_corr(build_glob%fsc(1,:), 0.5, incrreslim=params_glob%l_incrreslim) ! more conservative limit @ start
-                    endif
+                    lp_ind = get_find_at_corr(build_glob%fsc(1,:), params_glob%lplim_crit, incrreslim=params_glob%l_incrreslim)
                 else
                     lp_ind = get_find_at_corr(build_glob%fsc(loc(1),:), params_glob%lplim_crit)
                 endif

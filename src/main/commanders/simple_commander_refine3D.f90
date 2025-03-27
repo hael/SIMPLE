@@ -105,18 +105,18 @@ contains
         type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
         type(refine3D_distr_commander)      :: xrefine3D_distr
         ! hard defaults
-        call cline%set('balance',        'no') ! 4 now, needs testing
-        call cline%set('trail_rec',     'yes')
-        call cline%set('refine', 'neigh_smpl')
-        call cline%set('icm',           'yes')
-        call cline%set('ml_reg',         'no')
-        call cline%set('automsk',       'yes')
-        call cline%set('sh_first',      'yes')
-        call cline%set('overlap',        0.99)
-        call cline%set('nstates',           1)
-        call cline%set('objfun',     'euclid')
-        call cline%set('envfsc',        'yes')
-        call cline%set('lplim_crit',    0.143)
+        call cline%set('balance',     'no') ! 4 now, needs testing
+        call cline%set('trail_rec',  'yes')
+        call cline%set('refine',   'neigh')
+        call cline%set('icm',        'yes')
+        call cline%set('ml_reg',      'no')
+        call cline%set('automsk',    'yes')
+        call cline%set('sh_first',   'yes')
+        call cline%set('overlap',     0.99)
+        call cline%set('nstates',        1)
+        call cline%set('objfun',  'euclid')
+        call cline%set('envfsc',     'yes')
+        call cline%set('lplim_crit', 0.143)
         ! overridable defaults
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',        'yes')
         if( .not. cline%defined('update_frac') ) call cline%set('update_frac',    0.1) ! 4 now, needs testing
@@ -160,8 +160,9 @@ contains
         str_state = int2str_pad(1,2)
         call cline%set('vol1', VOL_FBODY//str_state//params_glob%ext)
         params%mskfile = MSKVOL_FILE
-        call cline%set('mskfile', MSKVOL_FILE)
-        call cline%set('prg', 'refine3D')
+        call cline%set('mskfile',           MSKVOL_FILE)
+        call cline%set('prg',                'refine3D')
+        call cline%set('ufrac_trec', params%update_frac)
         call xrefine3D_distr%execute(cline)
 
         !**************TESTS2DO

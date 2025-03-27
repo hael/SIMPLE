@@ -17,7 +17,6 @@ use simple_strategy3D_shc_smpl,     only: strategy3D_shc_smpl
 use simple_strategy3D_greedy,       only: strategy3D_greedy
 use simple_strategy3D_greedy_smpl,  only: strategy3D_greedy_smpl
 use simple_strategy3D_greedy_sub,   only: strategy3D_greedy_sub
-use simple_strategy3D_smpl_sub,     only: strategy3D_smpl_sub
 use simple_strategy3D_prob,         only: strategy3D_prob
 use simple_strategy3D,              only: strategy3D
 use simple_strategy3D_srch,         only: strategy3D_spec
@@ -175,8 +174,6 @@ contains
                         cnt_all(ithr) = cnt_all(ithr) + 1
                     case('neigh')
                         allocate(strategy3D_greedy_sub           :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('neigh_smpl')
-                        allocate(strategy3D_smpl_sub             :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('greedy')
                         allocate(strategy3D_greedy               :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('prob','prob_state')

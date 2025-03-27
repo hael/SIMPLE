@@ -69,6 +69,8 @@ contains
                 call self%s%opeaks%get_ori(ipeak, o)
                 call build_glob%pgrpsyms%nearest_proj_neighbors(build_glob%eulspace, o, params_glob%athres, lnns)
             end do
+            ! include the previous best ori in the multi-neighborhood search
+            call build_glob%pgrpsyms%nearest_proj_neighbors(build_glob%eulspace, self%s%o_prev, params_glob%athres, lnns)
             ! count the number of nearest neighbors
             self%s%nnn = count(lnns)
             ! search
