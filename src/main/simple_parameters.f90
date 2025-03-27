@@ -117,6 +117,7 @@ type :: parameters
     character(len=3)          :: stream='no'          !< stream (real time) execution mode(yes|no){no}
     character(len=3)          :: symrnd='no'          !< randomize over symmetry operations(yes|no){no}
     character(len=3)          :: taper_edges='no'     !< self-explanatory
+    character(len=3)          :: test_mode='no'       !< self-explanatory
     character(len=3)          :: tophat='no'          !< tophat filter(yes|no){no}
     character(len=3)          :: trail_rec='no'       !< trailing (weighted average) reconstruction when update_frac=yes 
     character(len=3)          :: trsstats='no'        !< provide origin shift statistics(yes|no){no}
@@ -723,6 +724,7 @@ contains
         call check_carg('symrnd',         self%symrnd)
         call check_carg('tag',            self%tag)
         call check_carg('taper_edges',    self%taper_edges)
+        call check_carg('test_mode',      self%test_mode)
         call check_carg('tophat',         self%tophat)
         call check_carg('trail_rec',      self%trail_rec)
         call check_carg('transp_pca',     self%transp_pca)
