@@ -4690,6 +4690,7 @@ contains
         ! search controls
         call refine3D_auto%set_input('srch_ctrls', 1, maxits, gui_submenu="search")
         call refine3D_auto%set_input('srch_ctrls', 2, update_frac, gui_submenu="search")
+        refine3D_auto%srch_ctrls(2)%required = .true.
         call refine3D_auto%set_input('srch_ctrls', 3, pgrp, gui_submenu="search", gui_advanced=.false.)
         call refine3D_auto%set_input('srch_ctrls', 4, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false.,&
         &'no', gui_submenu="search")
@@ -4703,7 +4704,6 @@ contains
         call refine3D_auto%set_input('mask_ctrls', 1, mskdiam, gui_submenu="mask", gui_advanced=.false.)
         ! computer controls
         call refine3D_auto%set_input('comp_ctrls', 1, nparts, gui_submenu="compute", gui_advanced=.false.)
-        refine3D_auto%comp_ctrls(1)%required = .false.
         call refine3D_auto%set_input('comp_ctrls', 2, nthr, gui_submenu="compute", gui_advanced=.false.)
     end subroutine new_refine3D_auto
 

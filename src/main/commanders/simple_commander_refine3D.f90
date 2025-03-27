@@ -92,7 +92,7 @@ contains
         use simple_commander_rec, only: reconstruct3D_commander_distr
         class(refine3D_auto_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(cmdline)      :: cline_reconstruct3D_distr, cline_automask
+        type(cmdline)      :: cline_reconstruct3D_distr
         real,    parameter :: LP2SMPD_TARGET   = 1./3.
         real,    parameter :: SMPD_TARGET_MIN  = 1.3
         logical, parameter :: DEBUG            = .true.
@@ -103,7 +103,7 @@ contains
         character(len=:), allocatable :: str_state, vol_even, vol_odd
         ! commanders
         type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
-        type(automask_commander)            :: xautomask 
+        type(refine3D_distr_commander)      :: xrefine3D_distr
         ! hard defaults
         call cline%set('balance',        'no') ! 4 now, needs testing
         call cline%set('trail_rec',     'yes')
@@ -120,7 +120,6 @@ contains
         ! overridable defaults
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',        'yes')
         if( .not. cline%defined('update_frac') ) call cline%set('update_frac',    0.1) ! 4 now, needs testing
-        if( .not. cline%defined('eo')          ) call cline%set('eo',           'yes') ! 4 now, needs testing
         if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'no') ! 4 now, needs testing
         if( .not. cline%defined('center')      ) call cline%set('center',        'no') ! 4 now, needs testing
         if( .not. cline%defined('lambda')      ) call cline%set('lambda',         1.0) ! 4 now, needs testing
@@ -128,6 +127,7 @@ contains
         if( .not. cline%defined('combine_eo')  ) call cline%set('combine_eo',    'no') ! 4 now, needs testing
         if( .not. cline%defined('maxits')      ) call cline%set('maxits',          75) ! 4 now, needs testing
         call params%new(cline)
+        call cline%set('mkdir', 'no') ! to avoid nested directory structure
         smpd_target = max(SMPD_TARGET_MIN, params%res_target * LP2SMPD_TARGET)
         call autoscale(params%box, params%smpd, smpd_target, box_crop, smpd_crop, scale)
         trslim      = min(8.,max(2.0, AHELIX_WIDTH / smpd_crop))
@@ -135,8 +135,9 @@ contains
         if( DEBUG )then
             print *, 'smpd_target: ', smpd_target
             print *, 'box:         ', params%box
-            print *, 'smpd:        ', params%smpd
             print *, 'box_crop:    ', box_crop
+            print *, 'smpd:        ', params%smpd
+            print *, 'smpd_crop:    ', params%smpd
             print *, 'scale:       ', scale
             print *, 'trslim:      ', trslim
             print *, 'l_autoscale: ', l_autoscale
@@ -155,39 +156,13 @@ contains
         call cline_reconstruct3D_distr%delete('needs_sigma')
         call cline_reconstruct3D_distr%delete('sigma_est')
         call cline_reconstruct3D_distr%set('objfun', 'cc') ! ugly, but this is how it works in parameters
-        call cline_reconstruct3D_distr%set('mkdir', 'no')
         call xreconstruct3D_distr%execute_safe(cline_reconstruct3D_distr)
         str_state = int2str_pad(1,2)
         call cline%set('vol1', VOL_FBODY//str_state//params_glob%ext)
-        ! generate an envelope mask
-        vol_even  = VOL_FBODY//str_state//'_even'//params_glob%ext
-        vol_odd   = VOL_FBODY//str_state//'_odd'//params_glob%ext
-        call cline_automask%set('vol1',            trim(vol_odd))
-        call cline_automask%set('vol2',           trim(vol_even))
-        call cline_automask%set('smpd',                smpd_crop)
-        call cline_automask%set('amsklp',          params%amsklp)
-        call cline_automask%set('automsk',                 'yes')
-        call cline_automask%set('mkdir',                    'no')
-        call cline_automask%set('nthr',              params%nthr)
-        call xautomask%execute_safe(cline_automask)
         params%mskfile = MSKVOL_FILE
         call cline%set('mskfile', MSKVOL_FILE)
-
-
-
-        
-
-
-
-
-
-
-
-
-
-        
-
-        
+        call cline%set('prg', 'refine3D')
+        call xrefine3D_distr%execute(cline)
 
         !**************TESTS2DO
         ! check so that all states are 1 and fall over otherwise
