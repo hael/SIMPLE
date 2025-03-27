@@ -34,7 +34,7 @@ public :: get_pool_res, get_pool_cavgs_pop, get_pool_cavgs_res, get_pool_cavgs_m
 public :: write_pool_cls_selected_nice, generate_pool_jpeg, get_pool_cavgs_jpeg_scale, get_nchunks
 public :: get_pool_rejected_jpeg, get_pool_rejected_jpeg_ntiles, get_pool_rejected_jpeg_scale, get_pool_rejected_thumbnail_id
 public :: get_chunk_rejected_jpeg, get_chunk_rejected_jpeg_ntiles, get_chunk_rejected_jpeg_scale, get_chunk_rejected_thumbnail_id
-public :: get_last_snapshot, get_last_snapshot_id, get_rejection_params, get_lpthres, get_snapshot_json
+public :: get_last_snapshot, get_last_snapshot_id, get_rejection_params, get_lpthres, get_snapshot_json, get_lpthres_type, set_lpthres_type
 ! Chunks
 public :: update_chunks, classify_new_chunks, import_chunks_into_pool
 public :: flush_remaining_particles, all_chunks_available
@@ -118,6 +118,7 @@ type(starproject_stream)         :: starproj_stream
 character(len=:),    allocatable :: projfile4gui                      ! Joe: is this output still used?
 character(len=:),    allocatable :: current_jpeg, pool_rejected_jpeg, chunk_rejected_jpeg
 character(16)                    :: last_iteration_time = "", last_snapshot = ""
+character(6)                     :: lpthres_type = ""
 ! other
 real     :: smpd, scale_factor, lpstart, lpstop, lpcen, current_jpeg_scale, pool_rejected_jpeg_scale=0.0, chunk_rejected_jpeg_scale=0.0
 integer  :: box, boxpd, max_ncls, nptcls_per_chunk, nmics_last, numlen, current_jpeg_ntiles, pool_rejected_thumbnail_id, pool_rejected_jpeg_ntiles=0, chunk_rejected_thumbnail_id, chunk_rejected_jpeg_ntiles=0
@@ -655,9 +656,18 @@ contains
                 call json%get(update_arguments, 'lpthres', lpthres_int, found)
                 if(found) then
                     write(logfhandle,'(A,A)')'>>> LPTHRES UPDATE RECEIVED'
-                    if( real(lpthres_int) < 3.0*chunk_dims%smpd )then
-                        write(logfhandle,'(A,F8.2)')'>>> REJECTION lpthres TOO LOW: ', lpthres_int
+                    if( real(lpthres_int) < 1.0)then
+                        lpthres_type = "auto"
+                        call mskdiam2streamresthreshold(params_glob%mskdiam, params_glob%lpthres)
+                        write(logfhandle,'(A,F8.2)')'>>> REJECTION lpthres SET TO AUTO: ', params_glob%lpthres
+                        updated = .true.
+                    else if( real(lpthres_int) .gt. LOWRES_REJECT_THRESHOLD)then
+                        lpthres_type = "off"
+                        params_glob%lpthres = real(lpthres_int)
+                        write(logfhandle,'(A,F8.2)')'>>> REJECTION lpthres SET TO OFF: ', params_glob%lpthres
+                        updated = .true.
                     else
+                        lpthres_type = "manual"
                         params_glob%lpthres = real(lpthres_int)
                         write(logfhandle,'(A,F8.2)')'>>> REJECTION lpthres UPDATED TO: ',params_glob%lpthres
                         updated = .true.
@@ -1916,6 +1926,15 @@ contains
         real, allocatable :: arr(:)
         arr = pool_proj%os_cls2D%get_all("state")
     end function get_pool_cavgs_mask
+
+    character(6) function get_lpthres_type()
+        get_lpthres_type = lpthres_type
+    end function get_lpthres_type
+
+    subroutine set_lpthres_type(type)
+        character(len=*), intent(in) :: type
+        lpthres_type = type
+    end subroutine set_lpthres_type
 
     logical function test_repick()
         test_repick = allocated(repick_selection)
