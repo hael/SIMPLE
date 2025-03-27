@@ -172,6 +172,7 @@ type(simple_program), target :: atoms_stats
 type(simple_program), target :: reconstruct3D
 type(simple_program), target :: reextract
 type(simple_program), target :: refine3D
+type(simple_program), target :: refine3D_auto
 type(simple_program), target :: refine3D_nano
 type(simple_program), target :: fractionate_movies
 type(simple_program), target :: replace_project_field
@@ -494,6 +495,7 @@ contains
         call new_reconstruct3D
         call new_reextract
         call new_refine3D
+        call new_refine3D_auto
         call new_refine3D_nano
         call new_replace_project_field
         call new_selection
@@ -635,6 +637,7 @@ contains
         call push2prg_ptr_array(reconstruct3D)
         call push2prg_ptr_array(reextract)
         call push2prg_ptr_array(refine3D)
+        call push2prg_ptr_array(refine3D_auto)
         call push2prg_ptr_array(refine3D_nano)
         call push2prg_ptr_array(replace_project_field)
         call push2prg_ptr_array(selection)
@@ -887,6 +890,8 @@ contains
                 ptr2prg => reextract
             case('refine3D')
                 ptr2prg => refine3D
+            case('refine3D_auto')
+                ptr2prg => refine3D_auto
             case('refine3D_nano')
                 ptr2prg => refine3D_nano
             case('fractionate_movies')
@@ -1050,7 +1055,7 @@ contains
         write(logfhandle,'(A)') reconstruct3D%name
         write(logfhandle,'(A)') reextract%name
         write(logfhandle,'(A)') refine3D%name
-        write(logfhandle,'(A)') refine3D_nano%name
+        write(logfhandle,'(A)') refine3D_auto%name
         write(logfhandle,'(A)') fractionate_movies%name
         write(logfhandle,'(A)') replace_project_field%name
         write(logfhandle,'(A)') selection%name
@@ -4665,6 +4670,42 @@ contains
         refine3D%comp_ctrls(1)%required = .false.
         call refine3D%set_input('comp_ctrls', 2, nthr, gui_submenu="compute", gui_advanced=.false.)
     end subroutine new_refine3D
+
+    subroutine new_refine3D_auto
+        ! PROGRAM SPECIFICATION
+        call refine3D_auto%new(&
+        &'refine3D_auto',&                                                                          ! name
+        &'automated single-state 3D refinement',&                                                   ! descr_short
+        &'is an automated workflow for single-state 3D refinement based on probabilistic projection matching',& ! descr_long
+        &'simple_exec',&                                                                            ! executable
+        &0, 0, 0, 4, 3, 1, 2, .true.,&                                                              ! # entries in each group, requires sp_project
+        &gui_advanced=.false., gui_submenu_list = "search,filter,mask,compute")                     ! GUI
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call refine3D_auto%set_input('srch_ctrls', 1, maxits, gui_submenu="search")
+        call refine3D_auto%set_input('srch_ctrls', 2, update_frac, gui_submenu="search")
+        call refine3D_auto%set_input('srch_ctrls', 3, pgrp, gui_submenu="search", gui_advanced=.false.)
+        call refine3D_auto%set_input('srch_ctrls', 4, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false.,&
+        &'no', gui_submenu="search")
+        ! filter controls
+        call refine3D_auto%set_input('filt_ctrls', 1, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
+        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 12., gui_submenu="filter")
+        call refine3D_auto%set_input('filt_ctrls', 2, combine_eo, gui_submenu="filter")
+        call refine3D_auto%set_input('filt_ctrls', 3, 'res_target', 'num', 'Resolution target (in A)',&
+        & 'Resolutiuon target in Angstroms', 'Resolution target in Angstroms', .false., 3., gui_submenu="filter")
+        ! mask controls
+        call refine3D_auto%set_input('mask_ctrls', 1, mskdiam, gui_submenu="mask", gui_advanced=.false.)
+        ! computer controls
+        call refine3D_auto%set_input('comp_ctrls', 1, nparts, gui_submenu="compute", gui_advanced=.false.)
+        refine3D_auto%comp_ctrls(1)%required = .false.
+        call refine3D_auto%set_input('comp_ctrls', 2, nthr, gui_submenu="compute", gui_advanced=.false.)
+    end subroutine new_refine3D_auto
 
     subroutine new_refine3D_nano
         ! PROGRAM SPECIFICATION

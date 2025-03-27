@@ -89,8 +89,21 @@ contains
     end subroutine exec_nspace
 
     subroutine exec_refine3D_auto( self, cline )
+        use simple_commander_rec, only: reconstruct3D_commander_distr
         class(refine3D_auto_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
+        type(cmdline)      :: cline_reconstruct3D_distr, cline_automask
+        real,    parameter :: LP2SMPD_TARGET   = 1./3.
+        real,    parameter :: SMPD_TARGET_MIN  = 1.3
+        logical, parameter :: DEBUG            = .true.
+        real               :: smpd_target, smpd_crop, scale, trslim
+        integer            :: box_crop
+        logical            :: l_autoscale
+        type(parameters)   :: params
+        character(len=:), allocatable :: str_state, vol_even, vol_odd
+        ! commanders
+        type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
+        type(automask_commander)            :: xautomask 
         ! hard defaults
         call cline%set('balance',        'no') ! 4 now, needs testing
         call cline%set('trail_rec',     'yes')
@@ -104,35 +117,82 @@ contains
         call cline%set('objfun',     'euclid')
         call cline%set('envfsc',        'yes')
         call cline%set('lplim_crit',    0.143)
-        ! required inputs
-        if( .not. cline%defined('update_frac') ) THROW_HARD('UPDATE_FRAC (<1 fraction of particles to update per iteration) input required!')
-        ! do stochastic sampling for now
-        if( .not. cline%defined('pgrp')        ) THROW_HARD('PGRP (point-group) input required!')
-        if( .not. cline%defined('res_target')  ) THROW_HARD('RES_TARGET (target resolution in A) input required!')
-        if( .not. cline%defined('amsklp')      ) THROW_HARD('AMSKLP (automask low-pass limit in A) input required!')
-        if( .not. cline%defined('nthr')        ) THROW_HARD('NTHR (# shared-memory CPU threads) input required!')
-        if( .not. cline%defined('nparts')      ) THROW_HARD('NPARTS (# distributed partitions) input required!')
-        if( .not. cline%defined('mskdiam')     ) THROW_HARD('MSKDIAM (mask diameter in A) input required!') ! 4 now, shold be estimated automatically
-        if( .not. cline%defined('mskfile')     ) THROW_HARD('MSKFILE (initial envelop mask) input required!')
         ! overridable defaults
-        if( .not. cline%defined('eo')         ) call cline%set('eo',           'yes') ! 4 now, needs testing
-        if( .not. cline%defined('lp_auto')    ) call cline%set('lp_auto',       'no') ! 4 now, needs testing
-        if( .not. cline%defined('center')     ) call cline%set('center',        'no') ! 4 now, needs testing
-        if( .not. cline%defined('lambda')     ) call cline%set('lambda',         1.0) ! 4 now, needs testing
-        if( .not. cline%defined('sigma_est')  ) call cline%set('sigma_est', 'global') ! 4 now, needs testing
-        if( .not. cline%defined('combine_eo') ) call cline%set('combine_eo',    'no') ! 4 now, needs testing
-        if( .not. cline%defined('maxits')     ) call cline%set('maxits',          75) ! 4 now, needs testing
+        if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',        'yes')
+        if( .not. cline%defined('update_frac') ) call cline%set('update_frac',    0.1) ! 4 now, needs testing
+        if( .not. cline%defined('eo')          ) call cline%set('eo',           'yes') ! 4 now, needs testing
+        if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'no') ! 4 now, needs testing
+        if( .not. cline%defined('center')      ) call cline%set('center',        'no') ! 4 now, needs testing
+        if( .not. cline%defined('lambda')      ) call cline%set('lambda',         1.0) ! 4 now, needs testing
+        if( .not. cline%defined('sigma_est')   ) call cline%set('sigma_est', 'global') ! 4 now, needs testing
+        if( .not. cline%defined('combine_eo')  ) call cline%set('combine_eo',    'no') ! 4 now, needs testing
+        if( .not. cline%defined('maxits')      ) call cline%set('maxits',          75) ! 4 now, needs testing
+        call params%new(cline)
+        smpd_target = max(SMPD_TARGET_MIN, params%res_target * LP2SMPD_TARGET)
+        call autoscale(params%box, params%smpd, smpd_target, box_crop, smpd_crop, scale)
+        trslim      = min(8.,max(2.0, AHELIX_WIDTH / smpd_crop))
+        l_autoscale = box_crop < params%box
+        if( DEBUG )then
+            print *, 'smpd_target: ', smpd_target
+            print *, 'box:         ', params%box
+            print *, 'smpd:        ', params%smpd
+            print *, 'box_crop:    ', box_crop
+            print *, 'scale:       ', scale
+            print *, 'trslim:      ', trslim
+            print *, 'l_autoscale: ', l_autoscale
+        endif
+        call cline%set('trs', trslim)
+        if( l_autoscale )then
+            call cline%set('box_crop',  box_crop)
+            call cline%set('smpd_crop', smpd_crop)
+        endif
+        ! generate an initial 3D reconstruction
+        cline_reconstruct3D_distr = cline
+        call cline_reconstruct3D_distr%set('prg', 'reconstruct3D') ! required for distributed call
+        call cline_reconstruct3D_distr%set('gridding','yes')
+        call cline_reconstruct3D_distr%delete('trail_rec')
+        call cline_reconstruct3D_distr%delete('objfun')
+        call cline_reconstruct3D_distr%delete('needs_sigma')
+        call cline_reconstruct3D_distr%delete('sigma_est')
+        call cline_reconstruct3D_distr%set('objfun', 'cc') ! ugly, but this is how it works in parameters
+        call cline_reconstruct3D_distr%set('mkdir', 'no')
+        call xreconstruct3D_distr%execute_safe(cline_reconstruct3D_distr)
+        str_state = int2str_pad(1,2)
+        call cline%set('vol1', VOL_FBODY//str_state//params_glob%ext)
+        ! generate an envelope mask
+        vol_even  = VOL_FBODY//str_state//'_even'//params_glob%ext
+        vol_odd   = VOL_FBODY//str_state//'_odd'//params_glob%ext
+        call cline_automask%set('vol1',            trim(vol_odd))
+        call cline_automask%set('vol2',           trim(vol_even))
+        call cline_automask%set('smpd',                smpd_crop)
+        call cline_automask%set('amsklp',          params%amsklp)
+        call cline_automask%set('automsk',                 'yes')
+        call cline_automask%set('mkdir',                    'no')
+        call cline_automask%set('nthr',              params%nthr)
+        call xautomask%execute_safe(cline_automask)
+        params%mskfile = MSKVOL_FILE
+        call cline%set('mskfile', MSKVOL_FILE)
 
 
-        ! check so that all states are 1 and fall over otherwise
 
-        ! set shift limits automatically, as in ab initio
+        
 
-        ! set downscaling based on target resolution, smpd_crop & box_crop
 
-        ! reconstruct at full sampling in the end
+
+
+
+
+
+
+
+        
+
+        
 
         !**************TESTS2DO
+        ! check so that all states are 1 and fall over otherwise
+        ! do the refinement
+        ! reconstruct at full sampling in the end
         !should test lp_auto in the start (need to set lpstart/lpstop)
         !should test 40k projection directions and see how that performs (params class needs modification)
     end subroutine exec_refine3D_auto
