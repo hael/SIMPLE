@@ -617,7 +617,7 @@ contains
             else
                 call build_glob%vol%ICM3D_eo(build_glob%vol_odd, params_glob%lambda)
             endif
-            if( params_glob%l_lpset )then ! no independent volume registration, so average eo pairs
+            if( params_glob%l_lpset .or. trim(params_glob%combine_eo).eq.'yes' )then ! no independent volume registration, so average eo pairs
                 call build_glob%vol%add(build_glob%vol_odd)
                 call build_glob%vol%mul(0.5)
                 call build_glob%vol_odd%copy(build_glob%vol)
