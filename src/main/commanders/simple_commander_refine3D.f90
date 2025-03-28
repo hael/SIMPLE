@@ -10,7 +10,7 @@ use simple_qsys_env,         only: qsys_env
 use simple_cluster_seed,     only: gen_labelling
 use simple_commander_volops, only: postprocess_commander
 use simple_commander_mask,   only: automask_commander
-use simple_decay_funs,       only: inv_cos_decay
+use simple_decay_funs,       only: inv_cos_decay, cos_decay
 use simple_image,            only: image
 use simple_masker,           only: masker
 use simple_exec_helpers,     only: set_master_num_threads
@@ -117,15 +117,16 @@ contains
         call cline%set('objfun',  'euclid')
         call cline%set('envfsc',     'yes')
         call cline%set('lplim_crit', 0.143)
+        call cline%set('lam_anneal', 'yes')
+        call cline%set('keepvol',    'yes') ! 4 now
         ! overridable defaults
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',        'yes')
         if( .not. cline%defined('update_frac') ) call cline%set('update_frac',    0.1) ! 4 now, needs testing
         if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'no') ! 4 now, needs testing
         if( .not. cline%defined('center')      ) call cline%set('center',        'no') ! 4 now, needs testing
-        if( .not. cline%defined('lambda')      ) call cline%set('lambda',         1.0) ! 4 now, needs testing
         if( .not. cline%defined('sigma_est')   ) call cline%set('sigma_est', 'global') ! 4 now, needs testing
         if( .not. cline%defined('combine_eo')  ) call cline%set('combine_eo',    'no') ! 4 now, needs testing
-        if( .not. cline%defined('maxits')      ) call cline%set('maxits',          75) ! 4 now, needs testing
+        if( .not. cline%defined('maxits')      ) call cline%set('maxits',          50) ! 4 now, needs testing
         call params%new(cline)
         call cline%set('mkdir', 'no') ! to avoid nested directory structure
         smpd_target = max(SMPD_TARGET_MIN, params%res_target * LP2SMPD_TARGET)
@@ -462,9 +463,11 @@ contains
             write(logfhandle,'(A,I6)')'>>> ITERATION ', iter
             write(logfhandle,'(A)')   '>>>'
             if( params%l_noise_reg )then
-                ! set annealing parameter
                 params%eps = inv_cos_decay(iter, params%maxits_glob, params%eps_bounds)
                 write(logfhandle,601) '>>> SNR, WHITE NOISE REGULARIZATION           ', params%eps
+            endif
+            if( params%l_lam_anneal )then
+                params%lambda = cos_decay(iter, params%maxits_glob, params%lam_bounds)
             endif
             if( trim(params%objfun).eq.'euclid' )then
                 call cline_calc_group_sigmas%set('which_iter', iter)
@@ -746,9 +749,11 @@ contains
                 write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
                 write(logfhandle,'(A)')   '>>>'
                 if( params%l_noise_reg )then
-                    ! set annealing parameter
                     params%eps = inv_cos_decay(params%which_iter, params%maxits_glob, params%eps_bounds)
                     write(logfhandle,601) '>>> SNR, WHITE NOISE REGULARIZATION           ', params%eps
+                endif
+                if( params%l_lam_anneal )then
+                    params%lambda = cos_decay(params%which_iter, params%maxits_glob, params%lam_bounds)
                 endif
                 if( l_sigma )then
                     call cline_calc_group_sigmas%set('which_iter', params%which_iter)
