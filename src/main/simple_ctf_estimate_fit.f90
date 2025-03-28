@@ -1372,7 +1372,7 @@ contains
         end_find   = nint(end_freq   * real(self%box))
         ctf_max    = maxloc(self%roavg_spec1d(start_find:end_find),DIM=1) + start_find - 1
         ! find index of pspec max amplitude at ideal ice peak location += 10 frequencies
-        call get_find_at_crit(size(res), res, ICE_BAND1, ice_max)
+        ice_max    = get_find_at_res(res, ICE_BAND1)
         start_find = max(1,          ice_max - 10)
         end_find   = min(self%box/2, ice_max + 10)
         ice_max    = maxloc(self%roavg_spec1d(start_find:end_find),DIM=1) + start_find - 1

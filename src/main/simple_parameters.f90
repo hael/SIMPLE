@@ -54,7 +54,7 @@ type :: parameters
     character(len=3)          :: groupframes='no'     !< Whether to perform weighted frames averaging during motion correction(yes|no){no}
     character(len=3)          :: hist='no'            !< whether to print histogram
     character(len=3)          :: icm='no'             !< whether to apply ICM filter to reference
-    character(len=3)          :: incrreslim='yes'     !< Whether to add ten shells to the FSC resolution limit
+    character(len=3)          :: incrreslim='no'      !< Whether to add ten shells to the FSC resolution limit
     character(len=3)          :: interactive='no'     !< Whether job is interactive
     character(len=3)          :: iterstats='no'       !< Whether to keep track alignment stats throughout iterations
     character(len=3)          :: json='no'            !< Print in json format (mainly for nice)
@@ -513,7 +513,7 @@ type :: parameters
     logical :: l_kweight_shift= .true.
     logical :: l_kweight_rot  = .false.
     logical :: l_icm          = .false.
-    logical :: l_incrreslim   = .true.
+    logical :: l_incrreslim   = .false.
     logical :: l_lam_anneal   = .false.
     logical :: l_linstates    = .false.
     logical :: l_lpauto       = .false.
@@ -1607,7 +1607,6 @@ contains
         select case(self%cc_objfun)
             case(OBJFUN_EUCLID)
                 self%l_needs_sigma = .true.
-                self%l_incrreslim  = .true.
             case(OBJFUN_CC)
                 self%l_needs_sigma = (trim(self%needs_sigma).eq.'yes')
         end select

@@ -681,7 +681,7 @@ contains
         phshift    = 0.
         start_freq = sqrt(self%SpaFreqSqAtNthZero(1, phshift, deg2rad(ctfparms%angast)))
         end_freq   = sqrt(self%SpaFreqSqAtNthZero(2, phshift, deg2rad(ctfparms%angast)))
-        call get_find_at_crit(size(res), res, ICE_BAND1, ice_maxind)
+        ice_maxind = get_find_at_res(res, ICE_BAND1)
         start_find = max(1,     ice_maxind - 3)
         end_find   = min(box/2, ice_maxind + 3)
         hmax     = -1

@@ -129,16 +129,24 @@ contains
         if( .not. cline%defined('maxits')      ) call cline%set('maxits',          50) ! 4 now, needs testing
         call params%new(cline)
         call cline%set('mkdir', 'no') ! to avoid nested directory structure
-        smpd_target = max(SMPD_TARGET_MIN, params%res_target * LP2SMPD_TARGET)
-        call autoscale(params%box, params%smpd, smpd_target, box_crop, smpd_crop, scale)
-        trslim      = min(8.,max(2.0, AHELIX_WIDTH / smpd_crop))
-        l_autoscale = box_crop < params%box
+        if( params%box <= 256 )then
+            smpd_target = params%smpd
+            smpd_crop   = params%smpd
+            box_crop    = params%box
+            scale       = 1.0
+            l_autoscale = .false.
+        else
+            smpd_target = max(SMPD_TARGET_MIN, params%res_target * LP2SMPD_TARGET)
+            call autoscale(params%box, params%smpd, smpd_target, box_crop, smpd_crop, scale)
+            l_autoscale = box_crop < params%box
+        endif
+        trslim = min(8.,max(2.0, AHELIX_WIDTH / smpd_crop))
         if( DEBUG )then
             print *, 'smpd_target: ', smpd_target
             print *, 'box:         ', params%box
             print *, 'box_crop:    ', box_crop
             print *, 'smpd:        ', params%smpd
-            print *, 'smpd_crop:    ', params%smpd
+            print *, 'smpd_crop:   ', smpd_crop
             print *, 'scale:       ', scale
             print *, 'trslim:      ', trslim
             print *, 'l_autoscale: ', l_autoscale
@@ -885,7 +893,7 @@ contains
             params%fsc = 'fsc_state'//int2str_pad(istate,2)//'.bin'
             if( file_exists(params%fsc) )then
                 build%fsc(istate,:) = file2rarr(params%fsc)
-                maplp(istate) = calc_lowpass_lim(get_find_at_corr(build%fsc(istate,:),params%lplim_crit), params_glob%box_crop, params_glob%smpd_crop)
+                maplp(istate) = calc_lowpass_lim(get_find_at_crit(build%fsc(istate,:),params%lplim_crit), params_glob%box_crop, params_glob%smpd_crop)
                 maplp(istate) = max(maplp(istate), 2.*params%smpd_crop)
             else
                 THROW_HARD('tried to check the fsc file: '//trim(params%fsc)//' but it does not exist!')

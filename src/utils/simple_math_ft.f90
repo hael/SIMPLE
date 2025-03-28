@@ -138,61 +138,42 @@ contains
         endif
     end function fdim
 
-    pure subroutine get_find_at_crit( n, corrs, crit, find )
-        integer, intent(in)  :: n
-        real,    intent(in)  :: corrs(n), crit
-        integer, intent(out) :: find
-        find = 1
-        do while( find <= n )
-            if( corrs(find) >= crit )then
-                find = find + 1
+    function get_find_at_res( res, crit_res ) result( find )
+        real,    intent(in) :: res(:), crit_res
+        integer :: n, h, find
+        n = size(res)
+        do h=3,n-1
+            if( res(h) >= crit_res )then
                 cycle
             else
+                find = h - 1
                 exit
             endif
         end do
-    end subroutine get_find_at_crit
+    end function get_find_at_res
 
-    !>   returns the Fourier index of the resolution limit at corr
-    integer function get_find_at_corr( fsc, corr, incrreslim )
-        real,    intent(in)           :: fsc(:), corr
+    function get_find_at_crit( corrs, crit_corr, incrreslim ) result( find )
+        real,    intent(in) :: corrs(:), crit_corr
         logical, intent(in), optional :: incrreslim
-        integer :: n, h
-        n = size(fsc)
-        if( n < 3 )then
-            call simple_exception('nonconforming size of fsc array; get_find_at_corr', __FILENAME__ , __LINE__)
-        endif
-        get_find_at_corr = n-1
-        if( present(incrreslim) )then
-            if( incrreslim )then
-                do h = n-1,3,-1
-                    if( fsc(h) > corr )then
-                        get_find_at_corr = h
-                        exit
-                    endif
-                enddo
-                get_find_at_corr = min(get_find_at_corr+10,n-1)
+        integer :: n, h, find
+        logical :: iincrreslim
+        iincrreslim = .false.
+        if( present(incrreslim) ) iincrreslim = incrreslim
+        n = size(corrs)
+        do h=3,n-1
+            if( corrs(h) >= crit_corr )then
+                cycle
             else
-                do h=3,n-1
-                    if( fsc(h) >= corr )then
-                        cycle
-                    else
-                        get_find_at_corr = h - 1
-                        exit
-                    endif
-                end do
+                find = h - 1
+                exit
             endif
+        end do
+        if( iincrreslim )then
+            find = min(find+10,n-1)
         else
-            do h=3,n-1
-                if( fsc(h) >= corr )then
-                    cycle
-                else
-                    get_find_at_corr = h - 1
-                    exit
-                endif
-            end do
+            find = min(find,n-1)
         endif
-    end function get_find_at_corr
+    end function get_find_at_crit
 
     !>  \brief get array of resolution steps
     function get_resarr( box, smpd ) result( res )
