@@ -66,7 +66,7 @@ contains
                 if( .not. cline%defined('lp') )then
                     THROW_HARD('Segmentation-based picker requires lp (low-pass limit) for filtering')
                 endif
-                call exec_segpick(moviename_intg, boxfile, nptcls_out, dir_out=dir_out)
+                call exec_segpick(moviename_intg, boxfile, nptcls_out, dir_out=dir_out, moldiam=params_glob%moldiam)
         end select
     end subroutine iterate
 

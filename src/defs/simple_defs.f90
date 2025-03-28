@@ -220,7 +220,7 @@ real, parameter    :: CTFRES_THRESHOLD          = 50.0           !< Ctfres rejec
 real, parameter    :: ICEFRAC_THRESHOLD         = 1.0            !< Icefrac rejection threshold
 real, parameter    :: ASTIG_THRESHOLD           = 10.0           !< Astigmatism rejection threshold
 real, parameter    :: PICK_LP_DEFAULT           = 20.            !< Picking resolution limit
-real, parameter    :: BOX_EXP_FACTOR_DEFAULT    = 1.2            !< Multilication factor to increase the image size as determined bu muti-diameter picking
+real, parameter    :: BOX_EXP_FACTOR_DEFAULT    = 1.2            !< Multiplication factor to increase the image size as determined by muti-diameter picking
 
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND           = 5              !< # iteration bound lplim stage 1 (PRIME2D)
