@@ -59,6 +59,7 @@ type :: parameters
     character(len=3)          :: iterstats='no'       !< Whether to keep track alignment stats throughout iterations
     character(len=3)          :: json='no'            !< Print in json format (mainly for nice)
     character(len=3)          :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
+    character(len=3)          :: lam_anneal='no'      !< anneal lambda parameter
     character(len=3)          :: linstates='no'       !< linearizing states in alignment (yes|no){no}
     character(len=3)          :: loc_sdev='no'        !< Whether to calculate local standard deviations(yes|no){no}
     character(len=3)          :: lp_auto='no'         !< automatically estimate lp(yes|no){no}
@@ -427,6 +428,7 @@ type :: parameters
     real    :: icefracthreshold=ICEFRAC_THRESHOLD !< ice fraction threshold{1.0}
     real    :: kv=300.             !< acceleration voltage(in kV){300.}
     real    :: lambda=1.0
+    real    :: lam_bounds(2) = [0.05,1.0]
     real    :: lp=20.              !< low-pass limit(in A)
     real    :: lp2D=20.            !< low-pass limit(in A)
     real    :: lp_backgr=20.       !< low-pass for solvent blurring (in A)
@@ -512,6 +514,7 @@ type :: parameters
     logical :: l_kweight_rot  = .false.
     logical :: l_icm          = .false.
     logical :: l_incrreslim   = .true.
+    logical :: l_lam_anneal   = .false.
     logical :: l_linstates    = .false.
     logical :: l_lpauto       = .false.
     logical :: l_lpcont       = .false.
@@ -631,6 +634,7 @@ contains
         call check_carg('kweight',        self%kweight)
         call check_carg('kweight_chunk',  self%kweight_chunk)
         call check_carg('kweight_pool',   self%kweight_pool)
+        call check_carg('lam_anneal',     self%lam_anneal)
         call check_carg('linstates',      self%linstates)
         call check_carg('linstates_mode', self%linstates_mode)
         call check_carg('loc_sdev',       self%loc_sdev)
@@ -1674,6 +1678,7 @@ contains
             self%eps_bounds(1) = self%eps_bounds(2) / 2.
             self%eps           = self%eps_bounds(1)
         endif
+        self%l_lam_anneal = trim(self%lam_anneal).eq.'yes'
         ! ML regularization
         self%l_ml_reg = trim(self%ml_reg).eq.'yes'
         if( self%l_ml_reg )then
