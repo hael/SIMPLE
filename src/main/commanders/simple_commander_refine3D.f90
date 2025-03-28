@@ -109,7 +109,7 @@ contains
         call cline%set('trail_rec',  'yes')
         call cline%set('refine',   'neigh')
         call cline%set('icm',        'yes')
-        call cline%set('ml_reg',      'no')
+        
         call cline%set('automsk',    'yes')
         call cline%set('sh_first',   'yes')
         call cline%set('overlap',     0.99)
@@ -121,11 +121,12 @@ contains
         call cline%set('keepvol',    'yes') ! 4 now
         ! overridable defaults
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',        'yes')
-        if( .not. cline%defined('update_frac') ) call cline%set('update_frac',    0.1) ! 4 now, needs testing
+        if( .not. cline%defined('update_frac') ) call cline%set('update_frac',    0.1) ! 4 now, needs testing/different logic (nsample?)
         if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'no') ! 4 now, needs testing
-        if( .not. cline%defined('center')      ) call cline%set('center',        'no') ! 4 now, needs testing
-        if( .not. cline%defined('sigma_est')   ) call cline%set('sigma_est', 'global') ! 4 now, needs testing
-        if( .not. cline%defined('combine_eo')  ) call cline%set('combine_eo',    'no') ! 4 now, needs testing
+        if( .not. cline%defined('center')      ) call cline%set('center',        'no') ! 4 now, probably fine
+        if( .not. cline%defined('sigma_est')   ) call cline%set('sigma_est', 'global') ! 4 now, probably fine
+        if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',        'no') ! 4 now, needs testing
+        if( .not. cline%defined('combine_eo')  ) call cline%set('combine_eo',   'yes') ! 4 now, needs testing of new logic
         if( .not. cline%defined('maxits')      ) call cline%set('maxits',          50) ! 4 now, needs testing
         call params%new(cline)
         call cline%set('mkdir', 'no') ! to avoid nested directory structure
@@ -172,6 +173,7 @@ contains
         call cline%set('mskfile',           MSKVOL_FILE)
         call cline%set('prg',                'refine3D')
         call cline%set('ufrac_trec', params%update_frac)
+        params_glob => null() ! let the refine3D_commander (below) take charge of this one
         call xrefine3D_distr%execute(cline)
 
         !**************TESTS2DO
@@ -259,7 +261,7 @@ contains
         if( .not. l_multistates .and. params%nstates >  1 ) THROW_HARD('nstates > 1 but refine mode is single')
         ! final iteration with combined e/o
         l_combine_eo = .false.
-        if( cline%defined('combine_eo') )then
+        if( trim(params%combine_eo).eq.'yes' )then
             l_combine_eo = .true.
             call cline%set('combine_eo','no')
             params%combine_eo = 'no'
@@ -550,9 +552,9 @@ contains
                             vol = 'vol'//trim(int2str(state))
                             call job_descr%set( vol, vol_iter )
                             call cline%set(vol, vol_iter)
-                            if( params%keepvol.eq.'yes' )then
-                                call simple_copy_file(vol_iter,trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter,3)//params%ext)
-                            endif
+                            ! if( params%keepvol.eq.'yes' )then
+                            !     call simple_copy_file(vol_iter,trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter,3)//params%ext)
+                            ! endif
                         endif
                     enddo
                     ! volume mask, one for all states
@@ -607,7 +609,7 @@ contains
                         call simple_copy_file(volpproc, vol_iter)
                         vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter,3)//LP_SUFFIX//params%ext
                         call simple_copy_file(vollp, vol_iter)
-                        if( iter > 1 )then
+                        if( iter > 1 .and. params%keepvol.eq.'no' )then
                             vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter-1,3)//PPROC_SUFFIX//params%ext
                             call del_file(vol_iter)
                             vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter-1,3)//LP_SUFFIX//params%ext
@@ -646,8 +648,8 @@ contains
                 call cline_volassemble%set('update_frac', 1.0)
                 write(logfhandle,'(A)')'>>>'
                 write(logfhandle,'(A)')'>>> PERFORMING FINAL ITERATION WITH COMBINED EVEN/ODD VOLUMES & RESOLUTION LIMIT BEYOND FSC=0.143'
-                call simple_copy_file(trim(VOL_FBODY)//trim(str_state)//params%ext, trim(VOL_FBODY)//trim(str_state)//'_even'//params%ext)
-                call simple_copy_file(trim(VOL_FBODY)//trim(str_state)//params%ext, trim(VOL_FBODY)//trim(str_state)//'_odd'//params%ext)
+                ! call simple_copy_file(trim(VOL_FBODY)//trim(str_state)//params%ext, trim(VOL_FBODY)//trim(str_state)//'_even'//params%ext)
+                ! call simple_copy_file(trim(VOL_FBODY)//trim(str_state)//params%ext, trim(VOL_FBODY)//trim(str_state)//'_odd'//params%ext)
             endif
             if( converged )then
                 if(trim(params%oritype).eq.'cls3D') call build%spproj%map2ptcls

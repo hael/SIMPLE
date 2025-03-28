@@ -638,8 +638,8 @@ contains
         real(dp), allocatable :: rsum(:)
         real              :: fudge, cc, scale, pad_factor, invtau2
         integer           :: h, k, m, sh, phys(3), sz, reslim_ind
-        logical           :: l_combined
-        l_combined = trim(params_glob%combine_eo).eq.'yes'
+        ! logical           :: l_combined
+        ! l_combined = trim(params_glob%combine_eo).eq.'yes'
         sz = size(fsc)
         allocate(ssnr(0:sz), rsum(0:sz), cnt(0:sz), tau2(0:sz), sig2(0:sz))
         rsum = 0.d0
@@ -653,10 +653,10 @@ contains
         ! SSNR
         do k = 1,sz
             cc = max(0.001,fsc(k))
-            if( l_combined )then
+            ! if( l_combined )then
                 ! update to filtering scheme since e/o were identical during alignment
-                cc = sqrt(2.*cc / (cc+1.))
-            endif
+                ! cc = sqrt(2.*cc / (cc+1.))
+            ! endif
             cc      = min(0.999,cc)
             ssnr(k) = fudge * cc / (1.-cc)
         enddo
