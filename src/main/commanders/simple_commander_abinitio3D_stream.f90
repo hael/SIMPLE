@@ -316,7 +316,9 @@ contains
     ! number of jobs currently submitted
     integer function get_nrecs_submitted()
         get_nrecs_submitted = 0
-        if( allocated(procrecs) ) get_nrecs_submitted = count(procrecs%submitted)
+        if( allocated(procrecs) )then
+            get_nrecs_submitted = count(procrecs%submitted) - count(procrecs%complete)
+        endif
     end function get_nrecs_submitted
 
     ! number of jobs to post-process/analyze
