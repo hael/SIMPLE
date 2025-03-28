@@ -131,7 +131,11 @@ contains
         type(pickseg) :: picker
         boxfile = basename(fname_new_ext(trim(micname),'box'))
         if( present(dir_out) ) boxfile = trim(dir_out)//'/'//trim(boxfile)
-        call picker%pick(micname, moldiam=moldiam)
+        if( present(moldiam) )then
+            call picker%pick(micname, moldiam=moldiam)
+        else
+            call picker%pick(micname)
+        endif
         call picker%report_boxfile(boxfile, nptcls)
         if( nptcls == 0 )then
             boxfile_out = ''

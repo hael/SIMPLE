@@ -57,7 +57,7 @@ contains
         real,    optional, intent(in) :: moldiam
         logical, optional, intent(in) :: is_AFM 
         logical :: l_moldiam
-        is_AFM_l = .false. 
+        is_AFM_l = .false.; l_moldiam= .false.
         if( present(moldiam) ) l_moldiam = .true.
         if( present(is_AFM)  ) is_AFM_l  = is_AFM 
         ! set micrograph info
