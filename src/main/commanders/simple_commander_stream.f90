@@ -3076,17 +3076,14 @@ contains
             call submit_jobs( cline )
             ! Current runs complete?
             call check_processes( ncompleted )
-            if( ncompleted > 0 )then
-                ! one job completed = one job submitted
-                do i = 1,ncompleted
-                    call request_snapshot( params%nptcls )
-                enddo
-            endif
+            if( ncompleted > 0 ) call request_snapshot( params%nptcls )
             ! Volumes & parameters analysis
             call analysis( spproj_glob )
             ! Global wait
             call sleep(WAITTIME)
         end do
+        ! Cleanup
+        ! TODO
         ! end gracefully
         call simple_end('**** SIMPLE_STREAM_ABINITIO3D NORMAL STOP ****')
     end subroutine exec_stream_abinitio3D
