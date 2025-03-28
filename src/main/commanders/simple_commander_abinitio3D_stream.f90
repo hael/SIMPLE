@@ -164,6 +164,8 @@ contains
         call cline_abinitio3D%set('mkdir',   'no')
         call cline_abinitio3D%set('stream',  'yes')
         call cline_abinitio3D%delete('dir_target')
+        if(cline_abinitio3D%defined('niceserver')) call cline_abinitio3D%delete('niceserver')
+        if(cline_abinitio3D%defined('niceprocid')) call cline_abinitio3D%delete('niceprocid')
         call cline_abinitio3D%delete('walltime') !! TODO
         call cline_abinitio3D%gen_job_descr(job_descr)
         ! submit

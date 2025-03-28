@@ -2541,7 +2541,6 @@ contains
                 if(allocated(nice_communicator%view_optics%opc)) deallocate(nice_communicator%view_optics%opc)
                 allocate(nice_communicator%view_optics%opc(spproj%os_mic%get_noris(), 3))
                 do i = 1, spproj%os_mic%get_noris()
-                    write(logfhandle, *) spproj%os_mic%get(i, 'ogid'), spproj%os_mic%get(i, 'shiftx'), spproj%os_mic%get(i, 'shifty')
                     nice_communicator%view_optics%opc(i, 1) = spproj%os_mic%get(i, 'ogid')
                     nice_communicator%view_optics%opc(i, 2) = spproj%os_mic%get(i, 'shiftx')
                     nice_communicator%view_optics%opc(i, 3) = spproj%os_mic%get(i, 'shifty')
@@ -2669,6 +2668,8 @@ contains
             call moldiamori%read( trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM) )
             if( .not. moldiamori%isthere(1, "moldiam") ) THROW_HARD( 'moldiam missing from ' // trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM) )
             moldiam = moldiamori%get(1, "moldiam")
+            ! write acopy for stream 3d
+            call moldiamori%write(1, trim(STREAM_MOLDIAM))
             call moldiamori%kill
             params%mskdiam = moldiam * 1.2
             call cline%set('mskdiam', params%mskdiam)
@@ -3002,9 +3003,12 @@ contains
         type(parameters)                       :: params
         type(sp_project)                       :: spproj_glob
         type(moviewatcher)                     :: project_buff
+        type(oris)                             :: moldiamori
+        type(simple_nice_communicator)         :: nice_communicator
         character(len=LONGSTRLEN), allocatable :: projects(:)
         integer :: nprojects, iter, i, ncompleted
         logical :: l_params_updated
+        real    :: moldiam
         call cline%set('oritype',      'mic')
         call cline%set('mkdir',        'yes')
         call cline%set('objfun',    'euclid')
@@ -3037,6 +3041,9 @@ contains
         call cline%delete('maxjobs')
         call cline%delete('nptcls')
         call cline%delete('numlen')
+        ! nice communicator init
+        call nice_communicator%init(params%niceprocid, params%niceserver)
+        call nice_communicator%cycle()
         ! restart
         if( cline%defined('dir_exec') )then
             call cline%delete('dir_exec')
@@ -3048,10 +3055,34 @@ contains
         call spproj_glob%read( params%projfile )
         call spproj_glob%update_projinfo(cline)
         if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream_cluster2D must start from an empty project (eg from root project folder)')
+        ! get mskdiam from 2D
+        if( params%mskdiam .eq. 0.0 ) then
+            ! nice communicator status
+            nice_communicator%stat_root%stage = "waiting for mask diameter"
+            call nice_communicator%cycle()
+            write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 5 MINUTES FOR '// trim(STREAM_MOLDIAM)
+            do i=1, 30
+                if(file_exists(trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM))) exit
+                call sleep(10)
+            end do
+            if( .not. file_exists(trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM))) THROW_HARD('either mskdiam must be given or '// trim(STREAM_MOLDIAM) // ' exists in target_dir')
+            ! read mskdiam from file
+            call moldiamori%new(1, .false.)
+            call moldiamori%read( trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM) )
+            if( .not. moldiamori%isthere(1, "moldiam") ) THROW_HARD( 'moldiam missing from ' // trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM) )
+            moldiam = moldiamori%get(1, "moldiam")
+            call moldiamori%kill
+            params%mskdiam = moldiam * 1.2
+            call cline%set('mskdiam', params%mskdiam)
+            write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER SET TO', params%mskdiam
+        endif
+        nice_communicator%stat_root%stage = "waiting for > "// int2str(params%nptcls) // " particles"
+        call nice_communicator%cycle()
         ! movie watcher init
         project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_SNAPSHOT), spproj=.true.)
         ! Ask 2D process for snapshot
         call request_snapshot( params%nptcls )
+        iter = 0
         ! Infinite loop
         do
             iter = iter + 1
@@ -3059,6 +3090,15 @@ contains
             if( file_exists(TERM_STREAM) )then
                 write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
                 exit
+            endif
+            if( nice_communicator%stop ) then
+                ! termination
+                write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
+                call spproj_glob%kill
+                call qsys_cleanup
+                call nice_communicator%terminate(stop=.true.)
+                call simple_end('**** SIMPLE_STREAM_ABINITIO3D USER STOP ****')
+                call EXIT(0)
             endif
             ! Pause
             do while( file_exists(PAUSE_STREAM) )
@@ -3069,6 +3109,7 @@ contains
             ! New snapshots management
             call project_buff%watch(nprojects, projects, chrono=.true.)
             if( nprojects > 0 )then
+                nice_communicator%stat_root%stage = "running"
                 call project_buff%add2history( projects )
                 call add_projects2jobslist( projects )
             endif
@@ -3076,15 +3117,21 @@ contains
             call submit_jobs( cline )
             ! Current runs complete?
             call check_processes( ncompleted )
-            if( ncompleted > 0 ) call request_snapshot( params%nptcls )
+            if( ncompleted > 0 )then
+                call request_snapshot( params%nptcls )
+                call nice_communicator%update_ini3D(stage=iter, number_states=params%nstates, last_stage_completed=.true.)
+            endif
             ! Volumes & parameters analysis
             call analysis( spproj_glob )
+            !nice
+            call nice_communicator%cycle()
             ! Global wait
             call sleep(WAITTIME)
         end do
-        ! Cleanup
-        ! TODO
         ! end gracefully
+        nice_communicator%stat_root%stage = "terminating"
+        call nice_communicator%cycle()
+        call nice_communicator%terminate()
         call simple_end('**** SIMPLE_STREAM_ABINITIO3D NORMAL STOP ****')
     end subroutine exec_stream_abinitio3D
 

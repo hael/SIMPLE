@@ -1064,7 +1064,6 @@ module simple_nice
                         call this%text_data_object(lp, "low_pass_limit", this%view_ini3D%lp, dp=1)
                         call this%stat_json%add(vols_section, lp)
                     end if
-                    
                     call this%stat_json%add(ini3D, vols_section)
                 end if
                 ! interactive plot
