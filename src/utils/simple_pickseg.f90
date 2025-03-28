@@ -92,15 +92,15 @@ contains
         call self%mic_shrink%bp(0., params_glob%lp)
         call self%mic_shrink%ifft
         call mic_raw%ifft
-        if( L_WRITE ) call self%mic_shrink%write('mic_shrink_lp.mrc')
+        if( L_WRITE ) call self%mic_shrink%write(fbody//'_lp.mrc')
         ! TV denoising
         call tvf%new()
         call tvf%apply_filter(self%mic_shrink, LAMBDA)
         call tvf%kill
-        if( L_WRITE ) call self%mic_shrink%write('mic_shrink_lp_tv.mrc')
+        if( L_WRITE ) call self%mic_shrink%write(fbody//'_lp_tv.mrc')
         call otsu_img(self%mic_shrink, otsu_t, tight=.true.)
         call self%mic_shrink%set_imat
-        if( L_WRITE ) call self%mic_shrink%write_bimg('mic_shrink_lp_tv_bin.mrc')
+        if( L_WRITE ) call self%mic_shrink%write_bimg(fbody//'_lp_tv_bin.mrc')
         if(is_AFM_l) then
             call self%mic_shrink%erode 
             call self%mic_shrink%dilate
@@ -108,10 +108,10 @@ contains
             call self%mic_shrink%erode
             call self%mic_shrink%erode
         end if 
-        if( L_WRITE ) call self%mic_shrink%write_bimg('mic_shrink_lp_tv_bin_erode.mrc')
+        if( L_WRITE ) call self%mic_shrink%write_bimg(fbody//'_lp_tv_bin_erode.mrc')
         ! identify connected components
         call self%mic_shrink%find_ccs(self%img_cc)
-        if( L_WRITE ) call self%img_cc%write_bimg('mic_shrink_lp_tv_bin_erode_cc.mrc')
+        if( L_WRITE ) call self%img_cc%write_bimg(fbody//'_lp_tv_bin_erode_cc.mrc')
         call self%img_cc%get_nccs(self%nboxes)
         ! eliminate connected components that are too large or too small
         sz = self%img_cc%size_ccs()
