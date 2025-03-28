@@ -768,6 +768,7 @@ contains
             end if
             if(snapshot_proj_found) then
                 call apply_snapshot_selection(snapshot_proj)
+                call snapshot_proj%set_cavgs_thumb(snapshot_projfile)
                 call snapshot_proj%write(snapshot_projfile)
                 call set_snapshot_time()
                 call snapshot_comm%terminate(export_project=snapshot_proj)

@@ -2541,10 +2541,10 @@ contains
                 if(allocated(nice_communicator%view_optics%opc)) deallocate(nice_communicator%view_optics%opc)
                 allocate(nice_communicator%view_optics%opc(spproj%os_mic%get_noris(), 3))
                 do i = 1, spproj%os_mic%get_noris()
-                    write(logfhandle, *) spproj%os_mic%get(i, 'ogid'), spproj%os_mic%get(i, 'opcx'), spproj%os_mic%get(i, 'opcy')
+                    write(logfhandle, *) spproj%os_mic%get(i, 'ogid'), spproj%os_mic%get(i, 'shiftx'), spproj%os_mic%get(i, 'shifty')
                     nice_communicator%view_optics%opc(i, 1) = spproj%os_mic%get(i, 'ogid')
-                    nice_communicator%view_optics%opc(i, 2) = spproj%os_mic%get(i, 'opcx')
-                    nice_communicator%view_optics%opc(i, 3) = spproj%os_mic%get(i, 'opcy')
+                    nice_communicator%view_optics%opc(i, 2) = spproj%os_mic%get(i, 'shiftx')
+                    nice_communicator%view_optics%opc(i, 3) = spproj%os_mic%get(i, 'shifty')
                 enddo
             else
                 call sleep(WAITTIME) ! may want to increase as 3s default
