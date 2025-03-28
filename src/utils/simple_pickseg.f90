@@ -18,7 +18,7 @@ private
 real,    parameter :: SHRINK   = 1.
 real,    parameter :: LAMBDA   = 3.
 logical, parameter :: L_WRITE  = .true.
-logical, parameter :: L_DEBUG  = .false.
+logical, parameter :: L_DEBUG  = .true.
 
 ! class variables
 integer                       :: ldim_raw(3)
@@ -43,7 +43,7 @@ end type pickseg
 
 contains
 
-    subroutine pick( self, micname, is_AFM )
+    subroutine pick( self, micname, is_AFM, moldiam )
         class(pickseg), intent(inout) :: self
         character(len=*), intent(in)  :: micname !< micrograph file name
         real,             allocatable :: diams(:)
@@ -52,11 +52,14 @@ contains
         type(tvfilter) :: tvf
         type(image)    :: img_win
         real    :: px(3), otsu_t
-        integer :: i, boxcoord(2), sz_max, sz_min, nframes
+        integer :: i, boxcoord(2), sz_max, sz_min, nframes, box, half_box
         logical :: outside, is_AFM_l
+        real,    optional, intent(in) :: moldiam
         logical, optional, intent(in) :: is_AFM 
+        logical :: l_moldiam
         is_AFM_l = .false. 
-        if( present(is_AFM) ) is_AFM_l = is_AFM 
+        if( present(moldiam) ) l_moldiam = .true.
+        if( present(is_AFM)  ) is_AFM_l  = is_AFM 
         ! set micrograph info
         call find_ldim_nptcls(micname, ldim_raw, nframes, smpd_raw)
         if( ldim_raw(3) /= 1 .or. nframes /= 1 ) THROW_HARD('Only for 2D images')
@@ -95,7 +98,7 @@ contains
         call tvf%apply_filter(self%mic_shrink, LAMBDA)
         call tvf%kill
         if( L_WRITE ) call self%mic_shrink%write('mic_shrink_lp_tv.mrc')
-        call otsu_img(self%mic_shrink, otsu_t)
+        call otsu_img(self%mic_shrink, otsu_t, tight=.true.)
         call self%mic_shrink%set_imat
         if( L_WRITE ) call self%mic_shrink%write_bimg('mic_shrink_lp_tv_bin.mrc')
         if(is_AFM_l) then
@@ -112,7 +115,6 @@ contains
         call self%img_cc%get_nccs(self%nboxes)
         ! eliminate connected components that are too large or too small
         sz = self%img_cc%size_ccs()
-       
         call calc_stats(real(sz), self%sz_stats)
         if( L_DEBUG )then
             print *, 'nboxes before elimination: ', self%nboxes
@@ -124,10 +126,17 @@ contains
         endif
         sz_min = nint(self%sz_stats%avg - params_glob%ndev * self%sz_stats%sdev)
         sz_max = nint(self%sz_stats%avg + params_glob%ndev * self%sz_stats%sdev)
+        ! optimal molecular diameter is inputted
+        if( l_moldiam )then
+            box      = (nint(moldiam) / smpd_raw)
+            half_box = box/2
+            sz_min   = box - half_box 
+            sz_max   = box + half_box 
+            write(logfhandle,'("selecting cc [",f8.2,",",f8.2,"] Angstroms range" )') sz_min*smpd_raw, sz_max*smpd_raw
+        endif
         call self%img_cc%elim_ccs([sz_min,sz_max])
         call self%img_cc%get_nccs(self%nboxes)
         sz = self%img_cc%size_ccs()
-        
         call calc_stats(real(sz), self%sz_stats)
         if( L_DEBUG )then
             print *, 'nboxes after  elimination: ', self%nboxes
