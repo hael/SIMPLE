@@ -563,7 +563,7 @@ module simple_nice
                     status_plot%colours(1) = "rgba(30, 144, 255, 0.5)"
                     status_plot%colours(2) = "rgba(211, 211, 211, 0.5)"
                     status_plot%data(1) = this%view_micrographs%movies_processed
-                    status_plot%data(2) = this%view_micrographs%movies_imported
+                    status_plot%data(2) = this%view_micrographs%movies_imported - this%view_micrographs%movies_processed 
                     call this%plot_object(movies_doughnut, status_plot)
                     call this%stat_json%add(movies_section,          movies_doughnut)
                     call this%stat_json%add(micrographs,             movies_section)
@@ -954,7 +954,7 @@ module simple_nice
                     status_plot%colours(3) = "rgba(211, 211, 211, 0.5)"
                     status_plot%data(1) = this%view_cls2D%number_particles_assigned
                     status_plot%data(2) = this%view_cls2D%number_particles_rejected
-                    status_plot%data(3) = this%view_cls2D%particles_extracted - (this%view_cls2D%number_particles_assigned + this%view_cls2D%number_particles_rejected)
+                    status_plot%data(3) = this%view_cls2D%particles_imported - (this%view_cls2D%number_particles_assigned + this%view_cls2D%number_particles_rejected)
                     call this%plot_object(assignment_doughnut, status_plot)
                     call this%stat_json%add(particles_section, assignment_doughnut)
                     call this%stat_json%add(cls2D, particles_section)
