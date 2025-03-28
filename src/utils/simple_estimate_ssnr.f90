@@ -297,7 +297,7 @@ contains
                 lpinfo(stage)%l_lpset  = .false.
                 if( all(frcs_avg > thres) ) return
                 if( any(frcs_avg > thres) )then           
-                    find = get_find_at_corr(frcs_avg, thres)
+                    find = get_find_at_crit(frcs_avg, thres)
                     lpinfo(stage)%lp = max(lpfinal,calc_lowpass_lim(find, box, smpd))
                     lpinfo(stage)%l_lpset = .true.
                 endif

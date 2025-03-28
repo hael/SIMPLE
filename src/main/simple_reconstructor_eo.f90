@@ -591,7 +591,7 @@ contains
         self%res_fsc0143 = max(self%res_fsc0143,self%fny)
         ! Fourier index for eo averaging
         find4eoavg = max(K4EOAVGLB,  calc_fourier_index(FREQ4EOAVG3D,self%box,self%smpd))
-        find4eoavg = min(find4eoavg, get_find_at_corr(self%fsc, FSC4EOAVG3D))
+        find4eoavg = min(find4eoavg, get_find_at_crit(self%fsc, FSC4EOAVG3D))
         deallocate(res)
         call even%kill
         call odd%kill

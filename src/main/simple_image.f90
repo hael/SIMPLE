@@ -5287,9 +5287,9 @@ contains
         if( .not.self%is_ft() ) THROW_HARD('Image input must be in the Fourier domain!; calc_ice_score')
         lims = self%loop_lims(2)
         res  = get_resarr(self%ldim(1), self%smpd)
-        call get_find_at_crit(size(res), res, ICE_BAND1,  ice_maxind)
-        call get_find_at_crit(size(res), res, START_FREQ, start_find)
-        call get_find_at_crit(size(res), res, END_FREQ,   end_find)
+        ice_maxind = get_find_at_res(res, ICE_BAND1)
+        start_find = get_find_at_res(res, START_FREQ)
+        end_find   = get_find_at_res(res, END_FREQ)
         call self%power_spectrum(powspec)
         nbands = end_find-start_find+1
         tmp = powspec(start_find:end_find)

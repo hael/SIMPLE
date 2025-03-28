@@ -210,9 +210,9 @@ contains
                 end do
                 loc = minloc(mapres) ! best resolved
                 if( params_glob%nstates == 1 )then
-                    lp_ind = get_find_at_corr(build_glob%fsc(1,:), params_glob%lplim_crit, incrreslim=params_glob%l_incrreslim)
+                    lp_ind = get_find_at_crit(build_glob%fsc(1,:), params_glob%lplim_crit, incrreslim=params_glob%l_incrreslim)
                 else
-                    lp_ind = get_find_at_corr(build_glob%fsc(loc(1),:), params_glob%lplim_crit)
+                    lp_ind = get_find_at_crit(build_glob%fsc(loc(1),:), params_glob%lplim_crit)
                 endif
                 ! interpolation limit is NOT Nyqvist in correlation search
                 params_glob%kfromto(2) = calc_fourier_index(resarr(lp_ind), params_glob%box, params_glob%smpd)
@@ -230,7 +230,7 @@ contains
             ! re-set the low-pass limit
             params_glob%lp = calc_lowpass_lim(params_glob%kfromto(2), params_glob%box, params_glob%smpd)
         endif
-        ! update low-pas limit in project
+        ! update low-pass limit in project
         call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
     end subroutine set_bp_range
 
