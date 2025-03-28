@@ -468,6 +468,7 @@ contains
             endif
             if( params%l_lam_anneal )then
                 params%lambda = cos_decay(iter, params%maxits_glob, params%lam_bounds)
+                write(logfhandle,601) '>>> LAMBDA, MAP CONNECTIVITY ANNEALING        ', params%lambda
             endif
             if( trim(params%objfun).eq.'euclid' )then
                 call cline_calc_group_sigmas%set('which_iter', iter)
@@ -754,6 +755,7 @@ contains
                 endif
                 if( params%l_lam_anneal )then
                     params%lambda = cos_decay(params%which_iter, params%maxits_glob, params%lam_bounds)
+                    write(logfhandle,601) '>>> LAMBDA, MAP CONNECTIVITY ANNEALING        ', params%lambda
                 endif
                 if( l_sigma )then
                     call cline_calc_group_sigmas%set('which_iter', params%which_iter)
