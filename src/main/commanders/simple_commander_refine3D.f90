@@ -118,6 +118,7 @@ contains
         call cline%set('lplim_crit', 0.143)
         call cline%set('lam_anneal', 'yes')
         call cline%set('keepvol',    'yes') ! 4 now
+        call cline%set('incrreslim', 'yes') ! works better on streptav
         ! overridable defaults
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',        'yes')
         if( .not. cline%defined('center')      ) call cline%set('center',        'no') ! 4 now, probably fine
