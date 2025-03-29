@@ -13,7 +13,6 @@ type strategy3D_alloc
     ! global parameters
     real,           allocatable :: smpl_refs_athres(:)      !< refine=smpl; angular threshold of projections directions
     real,           allocatable :: smpl_inpl_athres(:)      !< refine=smpl; angular threshold of in-plane rotations
-    ! integer,        allocatable :: proj_space_nnmat(:,:)  !< 3 nearest neighbours per reference + self
     ! per-ptcl/ref allocation
     integer,        allocatable :: proj_space_state(:)      !< states
     integer,        allocatable :: proj_space_proj(:)       !< projection directions (1 state assumed)
@@ -51,7 +50,7 @@ contains
         allocate(master_proj_space_euls(3,nrefs), s3D%proj_space_euls(3,nrefs,nthr_glob),&
             &s3D%proj_space_shift(2,nrefs,nthr_glob), s3D%proj_space_state(nrefs),&
             &s3D%proj_space_corrs(nrefs,nthr_glob),&
-            &s3D%proj_space_inplinds(nrefs,nthr_glob),& ! s3D%proj_space_nnmat(4,params_glob%nspace)
+            &s3D%proj_space_inplinds(nrefs,nthr_glob),&
             &s3D%proj_space_proj(nrefs),s3D%proj_space_w(nrefs,nthr_glob))
         ! states existence
         if( .not.build_glob%spproj%is_virgin_field(params_glob%oritype) )then
@@ -93,17 +92,14 @@ contains
                 s3D%inpl_order       = 1
                 s3D%srch_order_sub   = 0
         end select
-        ! precalculate nearest neighbour matrix
-        ! call build_glob%eulspace%nearest_proj_neighbors(4, s3D%proj_space_nnmat) ! 4 because self is included
-        if( str_has_substr(params_glob%refine,'smpl') )then
-            if( allocated(s3D%smpl_refs_athres) ) deallocate(s3D%smpl_refs_athres)
-            if( allocated(s3D%smpl_inpl_athres) ) deallocate(s3D%smpl_inpl_athres)
-            allocate(s3D%smpl_refs_athres(params_glob%nstates), s3D%smpl_inpl_athres(params_glob%nstates))
-            do istate = 1, params_glob%nstates
-                s3D%smpl_refs_athres(istate) = calc_athres('dist',      state=istate)
-                s3D%smpl_inpl_athres(istate) = calc_athres('dist_inpl', state=istate)
-            enddo
-        endif
+        ! calculate peak thresholds for probabilistic searches
+        if( allocated(s3D%smpl_refs_athres) ) deallocate(s3D%smpl_refs_athres)
+        if( allocated(s3D%smpl_inpl_athres) ) deallocate(s3D%smpl_inpl_athres)
+        allocate(s3D%smpl_refs_athres(params_glob%nstates), s3D%smpl_inpl_athres(params_glob%nstates))
+        do istate = 1, params_glob%nstates
+            s3D%smpl_refs_athres(istate) = calc_athres('dist',      state=istate)
+            s3D%smpl_inpl_athres(istate) = calc_athres('dist_inpl', state=istate)
+        enddo
     end subroutine prep_strategy3D
 
     ! init thread specific search arrays
@@ -135,7 +131,6 @@ contains
         if( allocated(s3D%proj_space_corrs)    ) deallocate(s3D%proj_space_corrs)
         if( allocated(s3D%proj_space_inplinds) ) deallocate(s3D%proj_space_inplinds)
         if( allocated(s3D%proj_space_w)        ) deallocate(s3D%proj_space_w)
-        ! if( allocated(s3D%proj_space_nnmat)    ) deallocate(s3D%proj_space_nnmat)
         if( allocated(s3D%rts) )then
             do ithr=1,nthr_glob
                 call s3D%rts(ithr)%kill
