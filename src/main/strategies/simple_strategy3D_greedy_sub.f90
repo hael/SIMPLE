@@ -34,10 +34,11 @@ contains
     end subroutine new_greedy_sub
 
     subroutine srch_greedy_sub( self, ithr )
+        use simple_eul_prob_tab, only: angle_sampling, eulprob_dist_switch
         class(strategy3D_greedy_sub), intent(inout) :: self
         integer,                      intent(in)    :: ithr
-        integer   :: iref, isample, loc(1), iproj, ipeak
-        real      :: inpl_corrs(self%s%nrots)
+        integer   :: iref, isample, loc(1), iproj, ipeak, inds(self%s%nrots)
+        real      :: inpl_corrs(self%s%nrots), sorted_corrs(self%s%nrots)
         logical   :: lnns(params_glob%nspace)
         type(ori) :: o
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
@@ -84,7 +85,11 @@ contains
                     else
                         call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
                     endif
-                    loc = maxloc(inpl_corrs)
+                    if( params_glob%l_prob_inpl )then
+                        loc = angle_sampling(eulprob_dist_switch(inpl_corrs), sorted_corrs, inds, s3D%smpl_inpl_athres(s3D%proj_space_state(iref)))
+                    else
+                        loc = maxloc(inpl_corrs)
+                    endif
                     call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
                 endif
             end do

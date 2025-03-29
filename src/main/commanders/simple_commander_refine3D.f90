@@ -109,7 +109,6 @@ contains
         call cline%set('trail_rec',  'yes')
         call cline%set('refine',   'neigh')
         call cline%set('icm',        'yes')
-        
         call cline%set('automsk',    'yes')
         call cline%set('sh_first',   'yes')
         call cline%set('overlap',     0.99)
@@ -121,12 +120,14 @@ contains
         call cline%set('keepvol',    'yes') ! 4 now
         ! overridable defaults
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',        'yes')
-        if( .not. cline%defined('update_frac') ) call cline%set('update_frac',    0.1) ! 4 now, needs testing/different logic (nsample?)
-        if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'no') ! 4 now, needs testing
         if( .not. cline%defined('center')      ) call cline%set('center',        'no') ! 4 now, probably fine
         if( .not. cline%defined('sigma_est')   ) call cline%set('sigma_est', 'global') ! 4 now, probably fine
-        if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',        'no') ! 4 now, needs testing
         if( .not. cline%defined('combine_eo')  ) call cline%set('combine_eo',   'yes') ! 4 now, needs testing of new logic
+        if( .not. cline%defined('prob_inpl')   ) call cline%set('prob_inpl',     'no') ! 4 now, needs testing
+        if( .not. cline%defined('update_frac') ) call cline%set('update_frac',    0.1) ! 4 now, needs testing/different logic (nsample?)
+        if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'no') ! 4 now, needs testing
+        if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',        'no') ! 4 now, needs testing
+        
         if( .not. cline%defined('maxits')      ) call cline%set('maxits',          50) ! 4 now, needs testing
         call params%new(cline)
         call cline%set('mkdir', 'no') ! to avoid nested directory structure
@@ -177,11 +178,11 @@ contains
         call xrefine3D_distr%execute(cline)
 
         !**************TESTS2DO
-        ! check so that all states are 1 and fall over otherwise
-        ! do the refinement
+        ! chewck so that we have a starting 3D alignment
+        ! check so that all states are 0 or 1 and fall over otherwise
         ! reconstruct at full sampling in the end
-        !should test lp_auto in the start (need to set lpstart/lpstop)
-        !should test 40k projection directions and see how that performs (params class needs modification)
+        ! should test 40k projection directions and see how that performs (params class needs modification)
+        ! should test probabilistic in-plane assignemnt
     end subroutine exec_refine3D_auto
 
     subroutine exec_refine3D_distr( self, cline )
