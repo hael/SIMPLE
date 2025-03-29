@@ -118,7 +118,7 @@ contains
         call cline%set('lplim_crit', 0.143)
         call cline%set('lam_anneal', 'yes')
         call cline%set('keepvol',    'yes') ! 4 now
-        call cline%set('incrreslim',  'no') ! if anything it makes it slightly worse, but no real difference
+        call cline%set('incrreslim',  'no') ! if anything 'yes' makes it slightly worse, but no real difference
         ! overridable defaults
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',        'yes')
         if( .not. cline%defined('center')      ) call cline%set('center',        'no') ! 4 now, probably fine
@@ -127,10 +127,10 @@ contains
         if( .not. cline%defined('prob_inpl')   ) call cline%set('prob_inpl',    'yes') ! no difference, so prefer 'yes'
         if( .not. cline%defined('update_frac') ) call cline%set('update_frac',    0.1) ! 4 now, needs testing/different logic (nsample?)
         if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'no') ! 4 now, needs testing
-        if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',        'no') ! 4 now, needs testing
-        
+        if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',       'yes') ! better map
         if( .not. cline%defined('maxits')      ) call cline%set('maxits',          50) ! 4 now, needs testing
         call params%new(cline)
+        call cline%set('maxits_glob', params%maxits) ! needed for correct lambda annealing
         call cline%set('mkdir', 'no') ! to avoid nested directory structure
         if( params%box <= 256 )then
             smpd_target = params%smpd
