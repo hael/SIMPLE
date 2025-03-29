@@ -1344,9 +1344,10 @@ contains
         character(len=:), allocatable :: stk, tmp_dir, stkpart, stkkind
         character(len=:), allocatable :: dest_stkpart
         character(len=LONGSTRLEN) :: stk_relpath, cwd
+        real    :: smpd
         integer :: parts(nparts,2), ind_in_stk, iptcl, cnt, istk, box, n_os_stk
         integer :: nptcls, nptcls_part, numlen
-        real    :: smpd
+        logical :: l_set_ind_in_stk
         if( nparts < 2 )return
         ! check that stk field is not empty
         n_os_stk = self%os_stk%get_noris()
@@ -1400,6 +1401,7 @@ contains
         else
            call simple_mkdir(trim(STKPARTSDIR),errmsg="sp_project::split_stk")
         endif
+        l_set_ind_in_stk = self%os_ptcl2D%isthere('indstk')
         do istk = 1,nparts
             ! file stuff
             stkpart = filepath(trim(tmp_dir),'stack_part'//int2str_pad(istk,numlen)//EXT)
@@ -1419,9 +1421,15 @@ contains
             call self%os_stk%set(istk, 'fromp',   parts(istk,1))
             call self%os_stk%set(istk, 'top',     parts(istk,2))
             call self%os_stk%set(istk, 'stkkind', 'split')
+            ind_in_stk = 0
             do iptcl=parts(istk,1),parts(istk,2)
                 call self%os_ptcl2D%set(iptcl,'stkind', istk)
                 call self%os_ptcl3D%set(iptcl,'stkind', istk)
+                if( l_set_ind_in_stk )then
+                    ind_in_stk = ind_in_stk + 1
+                    call self%os_ptcl2D%set(iptcl,'indstk', ind_in_stk)
+                    call self%os_ptcl3D%set(iptcl,'indstk', ind_in_stk)
+                endif
             enddo
             deallocate(stkpart, dest_stkpart)
         enddo
