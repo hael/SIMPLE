@@ -118,13 +118,13 @@ contains
         call cline%set('lplim_crit', 0.143)
         call cline%set('lam_anneal', 'yes')
         call cline%set('keepvol',    'yes') ! 4 now
-        call cline%set('incrreslim', 'yes') ! works better on streptav
+        call cline%set('incrreslim',  'no') ! if anything it makes it slightly worse, but no real difference
         ! overridable defaults
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',        'yes')
         if( .not. cline%defined('center')      ) call cline%set('center',        'no') ! 4 now, probably fine
         if( .not. cline%defined('sigma_est')   ) call cline%set('sigma_est', 'global') ! 4 now, probably fine
-        if( .not. cline%defined('combine_eo')  ) call cline%set('combine_eo',   'yes') ! 4 now, needs testing of new logic
-        if( .not. cline%defined('prob_inpl')   ) call cline%set('prob_inpl',     'no') ! 4 now, needs testing
+        if( .not. cline%defined('combine_eo')  ) call cline%set('combine_eo',   'no')  ! 4 now, to allow more rapid testing
+        if( .not. cline%defined('prob_inpl')   ) call cline%set('prob_inpl',    'yes') ! no difference, so prefer 'yes'
         if( .not. cline%defined('update_frac') ) call cline%set('update_frac',    0.1) ! 4 now, needs testing/different logic (nsample?)
         if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'no') ! 4 now, needs testing
         if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',        'no') ! 4 now, needs testing
@@ -649,9 +649,7 @@ contains
                 call cline_volassemble%set('combine_eo', 'yes')
                 call cline_volassemble%set('update_frac', 1.0)
                 write(logfhandle,'(A)')'>>>'
-                write(logfhandle,'(A)')'>>> PERFORMING FINAL ITERATION WITH COMBINED EVEN/ODD VOLUMES & RESOLUTION LIMIT BEYOND FSC=0.143'
-                ! call simple_copy_file(trim(VOL_FBODY)//trim(str_state)//params%ext, trim(VOL_FBODY)//trim(str_state)//'_even'//params%ext)
-                ! call simple_copy_file(trim(VOL_FBODY)//trim(str_state)//params%ext, trim(VOL_FBODY)//trim(str_state)//'_odd'//params%ext)
+                write(logfhandle,'(A)')'>>> PERFORMING FINAL ITERATION WITH COMBINED EVEN/ODD VOLUMES'
             endif
             if( converged )then
                 if(trim(params%oritype).eq.'cls3D') call build%spproj%map2ptcls
