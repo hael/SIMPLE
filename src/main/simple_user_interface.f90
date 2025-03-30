@@ -3108,7 +3108,7 @@ contains
         &'3D ab initio online model generation & analysis from particles',&         ! descr_short
         &'3D ab initio online model generation & analysis from particles',&         ! descr_long
         &'simple_stream',&                                                          ! executable
-        &0, 1, 0, 9, 6, 1, 3, .true.,&                                              ! # entries in each group, requires sp_project
+        &0, 1, 0, 9, 6, 1, 4, .true.,&                                              ! # entries in each group, requires sp_project
         &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute"  )    ! GUI
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -3132,6 +3132,7 @@ contains
         abinitio3D_stream%srch_ctrls(9)%descr_long        = 'Default number of particles in a snapshot{100000}'
         abinitio3D_stream%srch_ctrls(9)%descr_placeholder = 'Number of particles in a snapshot{100000}'
         abinitio3D_stream%srch_ctrls(9)%rval_default      = 100000.0
+        abinitio3D_stream%srch_ctrls(9)%required          = .false.
         ! filter controls
         call abinitio3D_stream%set_input('filt_ctrls', 1, hp, gui_submenu="filter")
         call abinitio3D_stream%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
@@ -3152,8 +3153,9 @@ contains
         abinitio3D_stream%comp_ctrls(1)%required = .false.
         call abinitio3D_stream%set_input('comp_ctrls', 2, nthr,       gui_submenu="compute", gui_advanced=.false.)
         call abinitio3D_stream%set_input('comp_ctrls', 3, 'nthr_ini3D', 'num', 'Number of threads for ini3D phase, give 0 if unsure', 'Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of &
-        &logical threads in a socket.', '# shared-memory CPU threads', .true., 0., gui_submenu="compute", gui_advanced=.false.)
-        abinitio3D_stream%comp_ctrls(3)%required = .false.
+        &logical threads in a socket.', '# shared-memory CPU threads', .false., 0., gui_submenu="compute", gui_advanced=.false.)
+        call abinitio3D_stream%set_input('comp_ctrls', 4, 'maxnruns', 'num', 'Maximum number of concurrent runs',&
+        &'Maximum number of concurrent and independent runs{1}', 'Max # of concurrent runs{1}', .false., 1., gui_submenu="compute", gui_advanced=.false.)
     end subroutine new_abinitio3D_stream
 
     subroutine new_import_boxes
