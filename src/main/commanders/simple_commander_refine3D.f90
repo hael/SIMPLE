@@ -105,11 +105,11 @@ contains
         type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
         type(refine3D_distr_commander)      :: xrefine3D_distr
         ! hard defaults
-        call cline%set('balance',     'no') ! 4 now, needs testing
-        call cline%set('trail_rec',  'yes')
-        call cline%set('refine',   'neigh')
-        call cline%set('icm',        'yes')
-        call cline%set('automsk',    'yes')
+        call cline%set('balance',     'no') ! 4 now, needs a balancing approach based on:
+        call cline%set('trail_rec',  'yes') !    (1) making sure that all state=1 particles have orientations and score fun values assigned  
+        call cline%set('refine',   'neigh') !    (2) doing a class assignment based on abinitio 3D into 500 projection groups
+        call cline%set('icm',        'yes') !    (3) applying a balancing appraoch where 50% of the particles are selected from the highest ranking
+        call cline%set('automsk',    'yes') !        particles within a class and the rest from the remainder
         call cline%set('sh_first',   'yes')
         call cline%set('overlap',     0.99)
         call cline%set('nstates',        1)
@@ -118,17 +118,17 @@ contains
         call cline%set('lplim_crit', 0.143)
         call cline%set('lam_anneal', 'yes')
         call cline%set('keepvol',    'yes') ! 4 now
-        call cline%set('incrreslim',  'no') ! if anything 'yes' makes it slightly worse, but no real difference
+        call cline%set('incrreslim',  'no') ! if anything 'yes' makes it slightly worse, but no real difference right now
         ! overridable defaults
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',        'yes')
         if( .not. cline%defined('center')      ) call cline%set('center',        'no') ! 4 now, probably fine
         if( .not. cline%defined('sigma_est')   ) call cline%set('sigma_est', 'global') ! 4 now, probably fine
-        if( .not. cline%defined('combine_eo')  ) call cline%set('combine_eo',   'no')  ! 4 now, to allow more rapid testing
-        if( .not. cline%defined('prob_inpl')   ) call cline%set('prob_inpl',    'yes') ! no difference, so prefer 'yes'
+        if( .not. cline%defined('combine_eo')  ) call cline%set('combine_eo',    'no') ! 4 now, to allow more rapid testing
+        if( .not. cline%defined('prob_inpl')   ) call cline%set('prob_inpl',    'yes') ! no difference at this stage, so prefer 'yes'
         if( .not. cline%defined('update_frac') ) call cline%set('update_frac',    0.1) ! 4 now, needs testing/different logic (nsample?)
         if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'no') ! 4 now, needs testing
-        if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',       'yes') ! better map
-        if( .not. cline%defined('maxits')      ) call cline%set('maxits',          50) ! 4 now, needs testing
+        if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',       'yes') ! better map with ml_reg='yes'
+        if( .not. cline%defined('maxits')      ) call cline%set('maxits',         100) ! 10 passes over the particles with update_frac=0.1, which is sensible
         call params%new(cline)
         call cline%set('maxits_glob', params%maxits) ! needed for correct lambda annealing
         call cline%set('mkdir', 'no') ! to avoid nested directory structure
