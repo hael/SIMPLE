@@ -303,7 +303,7 @@ type :: parameters
     integer :: maxits_sh=60        !< maximum # iterations of shifting lbfgsb
     integer :: maxnchunks=0
     integer :: maxpop=0            !< max population of an optics group
-    integer :: maxjobs=0
+    integer :: maxnruns=0
     integer :: minits=0            !< minimum # iterations
     integer :: mrcmode=2
     integer :: nchunks=0
@@ -827,7 +827,7 @@ contains
         call check_iarg('maxits_sh',      self%maxits_sh)
         call check_iarg('maxnchunks',     self%maxnchunks)
         call check_iarg('maxpop',         self%maxpop)
-        call check_iarg('maxjobs',         self%maxjobs)
+        call check_iarg('maxnruns',       self%maxnruns)
         call check_iarg('minits',         self%minits)
         call check_iarg('mrcmode',        self%mrcmode)
         call check_iarg('nchunks',        self%nchunks)

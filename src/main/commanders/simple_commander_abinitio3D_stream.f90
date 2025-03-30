@@ -138,11 +138,11 @@ contains
         type(cmdline),     intent(in) :: cline
         integer :: i, nsubmitted
         nsubmitted = get_nrecs_submitted()
-        if( nsubmitted >= params_glob%maxjobs ) return ! all resources used
+        if( nsubmitted >= params_glob%maxnruns ) return ! all resources used
         if( nsubmitted == get_nrecs() )         return ! all jobs submitted
         do i = 1,get_nrecs()
             if( procrecs(i)%submitted ) cycle
-            if( get_nrecs_submitted() >= params_glob%maxjobs ) exit
+            if( get_nrecs_submitted() >= params_glob%maxnruns ) exit
             call submit_one_process(cline, procrecs(i))
         enddo
     end subroutine submit_jobs

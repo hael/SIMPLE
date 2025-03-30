@@ -3014,7 +3014,7 @@ contains
         call cline%set('objfun',    'euclid')
         call cline%set('sigma_est', 'global')
         call cline%set('bfac',            0.)
-        if( .not. cline%defined('maxjobs')     ) call cline%set('maxjobs',           3)
+        if( .not. cline%defined('maxnruns')    ) call cline%set('maxnruns',          1)
         if( .not. cline%defined('overlap')     ) call cline%set('overlap',        0.95)
         if( .not. cline%defined('prob_athres') ) call cline%set('prob_athres',     10.)
         if( .not. cline%defined('center')      ) call cline%set('center',         'no')
@@ -3038,7 +3038,7 @@ contains
         call cline%set('stream','yes')
         call params%new(cline)
         call cline%set('mkdir', 'no')
-        call cline%delete('maxjobs')
+        call cline%delete('maxnruns')
         call cline%delete('nptcls')
         call cline%delete('numlen')
         ! nice communicator init
