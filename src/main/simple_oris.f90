@@ -177,6 +177,7 @@ type :: oris
     procedure          :: str2ori
     procedure          :: str2ori_ctfparams_state_eo
     procedure          :: set_ctfvars
+    procedure          :: gen_balanced_partitions
     ! I/O
     procedure          :: read
     procedure          :: read_ctfparams_state_eo
@@ -1600,8 +1601,8 @@ contains
             do i = 1,n2reject
                 call self%o(pinds(cls_inds(i)))%set('w',0.)
             enddo
+            deallocate(cls_inds,cls_scores)
         enddo
-        deallocate(cls_inds,cls_scores)
     end subroutine balance_ptcls_within_cls
 
     function get_sample_ind( self, incr_sampled ) result(sample_ind)
@@ -2542,6 +2543,41 @@ contains
         type(ctfparams), intent(in)    :: ctfvars
         call self%o(i)%set_ctfvars(ctfvars)
     end subroutine set_ctfvars
+
+    subroutine gen_balanced_partitions( self, nparts, parts, err )
+        class(oris),          intent(in)    :: self
+        integer,              intent(in)    :: nparts
+        integer, allocatable, intent(inout) :: parts(:,:)
+        logical,              intent(out)   :: err
+        real, allocatable :: rstates(:)
+        integer :: nobjs_per_part, i, ipart, m
+        err = .false.
+        if( allocated(parts) ) deallocate(parts)
+        if( .not.self%isthere('state') )then
+            ! requires state field to operate )
+            err = .true.
+            return
+        endif
+        allocate(parts(nparts,2),source=0)
+        nobjs_per_part = ceiling(real(self%n)/real(nparts))
+        rstates    = self%get_all('state')
+        parts(1,1) = 1
+        ipart      = 1
+        m          = 0
+        do i = 1,self%n
+            if( rstates(i) < 0.5 )cycle
+            m = m+1
+            if( m == nobjs_per_part )then
+                m = 0
+                parts(ipart,2) = i
+                if( ipart < nparts ) parts(ipart+1,1) = i+1
+                ipart = ipart + 1
+                if( ipart == nparts )exit
+            endif
+        enddo
+        parts(nparts,2) = self%n
+        deallocate(rstates)
+    end subroutine gen_balanced_partitions
 
     ! I/O
 
