@@ -11,7 +11,7 @@ use simple_commander_euclid
 use simple_qsys_funs
 implicit none
 
-public :: abinitio2D_commander
+public :: abinitio2D_commander, autosample2D
 private
 #include "simple_local_flags.inc"
 
@@ -218,23 +218,19 @@ contains
         end subroutine set_lplims
 
         subroutine set_sampling
-            integer :: i, maxpop
+            integer :: i
             nptcls_eff = spproj%count_state_gt_zero()
             stage_parms(:)%max_cls_pop = 0
             stage_parms(:)%nptcls      = nptcls_eff
             if( trim(params%autosample).eq.'yes' )then
-                maxpop = MAXPOP_CLS
-                if( cline%defined('nsample') ) maxpop = params%nsample
                 do i = 1,NSTAGES
-                    stage_parms(i)%max_cls_pop = maxpop
-                    stage_parms(i)%nptcls      = min(nptcls_eff, 2*maxpop*params%ncls)
+                    call autosample2D(cline, nptcls_eff, params%ncls,&
+                    &stage_parms(i)%max_cls_pop, stage_parms(i)%nptcls)
                     if( (params%stage > 0) .and. (params%stage < NSTAGES))then
-                        if( i<=params%stage ) stage_parms(i)%nptcls = min(nptcls_eff, maxpop*params%ncls)
-                    endif
-                    if( cline%defined('nsample_stop') )then
-                        stage_parms(i)%nptcls = min(params%nsample_stop, stage_parms(i)%nptcls)
-                    else
-                        stage_parms(i)%nptcls = min(MAXPOP_PTCLS, stage_parms(i)%nptcls)
+                        if( i<=params%stage )then
+                            call autosample2D(cline, nptcls_eff, params%ncls,&
+                            &stage_parms(i)%max_cls_pop, stage_parms(i)%nptcls, popfac=0.5)
+                        endif
                     endif
                 enddo
             endif
@@ -261,7 +257,7 @@ contains
             integer,          intent(in)  :: istage
             character(len=:), allocatable :: sh_first, refine, center, objfun, refs, icm
             integer :: iphase, iter, imaxits, cc_iters, minits, extr_iter
-            real    :: trs, lambda, frac
+            real    :: trs, lambda
             select case(trim(params%refine))
             case('snhc','snhc_smpl')
                 ! usual suspects
@@ -399,19 +395,15 @@ contains
                 call cline_cluster2D%delete('lambda')
             endif
             call cline_cluster2D%delete('maxpop')
-            call cline_cluster2D%delete('nsample_stop')
-            call cline_cluster2D%delete('nsample_start')
+            call cline_cluster2D%delete('nsample_max')
             call cline_cluster2D%delete('nsample')
             call cline_cluster2D%delete('autosample')
             call cline_cluster2D%delete('update_frac')
             if( stage_parms(istage)%max_cls_pop > 0 )then
                 call cline_cluster2D%set('maxpop', stage_parms(istage)%max_cls_pop)
                 if( cline%defined('update_frac') )then
-                    frac = params%update_frac
-                else
-                    frac = MAXPOP_UFRAC
+                    call cline_cluster2D%set('update_frac', params%update_frac)
                 endif
-                call cline_cluster2D%set('update_frac', frac)
             endif
             call cline_cluster2D%delete('endit')
         end subroutine set_cline_cluster2D
@@ -462,8 +454,7 @@ contains
             call cline_cluster2D%set('icm',       'no')
             call cline_cluster2D%delete('lp')
             call cline_cluster2D%delete('lambda')
-            call cline_cluster2D%delete('nsample_start')
-            call cline_cluster2D%delete('nsample_stop')
+            call cline_cluster2D%delete('nsample_max')
             call cline_cluster2D%delete('nsample')
             call cline_cluster2D%delete('autosample')
             call cline_cluster2D%delete('update_frac')
@@ -521,5 +512,30 @@ contains
         end subroutine mskdiam2lplimits_here
 
     end subroutine exec_abinitio2D
+
+    subroutine autosample2D( cline, nptcls, ncls, max_pop, max_nptcls, popfac )
+        use simple_parameters, only: params_glob
+        class(cmdline), intent(in)  :: cline
+        integer,        intent(in)  :: nptcls, ncls
+        integer,        intent(out) :: max_pop, max_nptcls
+        real, optional, intent(in)  :: popfac ! testing purpose
+        max_pop    = 0
+        max_nptcls = nptcls
+        if( trim(params_glob%autosample).ne.'yes' ) return
+        ! Class population limit
+        max_pop = MAXPOP_CLS
+        if( cline%defined('nsample') ) max_pop = params_glob%nsample
+        ! Total population limit
+        max_nptcls = min(nptcls, 2*max_pop*ncls)
+        if( cline%defined('nsample_max') )then
+            max_nptcls = min(params_glob%nsample_max, max_nptcls)
+        else
+            if( present(popfac) )then
+                max_nptcls = min(nint(popfac*real(MAXPOP_PTCLS)), nptcls)
+            else
+                max_nptcls = min(MAXPOP_PTCLS, nptcls)
+            endif
+        endif
+    end subroutine autosample2D
 
 end module simple_commander_abinitio2D
