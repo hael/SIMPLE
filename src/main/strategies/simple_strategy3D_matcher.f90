@@ -18,6 +18,7 @@ use simple_strategy3D_greedy,       only: strategy3D_greedy
 use simple_strategy3D_greedy_smpl,  only: strategy3D_greedy_smpl
 use simple_strategy3D_greedy_sub,   only: strategy3D_greedy_sub
 use simple_strategy3D_prob,         only: strategy3D_prob
+use simple_strategy3D_eval,         only: strategy3D_eval
 use simple_strategy3D,              only: strategy3D
 use simple_strategy3D_srch,         only: strategy3D_spec
 use simple_convergence,             only: convergence
@@ -145,10 +146,11 @@ contains
             if( L_BENCH_GLOB ) t_align = tic()
             !$omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map,ithr,orientation)&
             !$omp schedule(static) proc_bind(close)
-            do iptcl_batch = 1,batchsz                     ! particle batch index
-                iptcl_map  = batch_start + iptcl_batch - 1 ! masked global index (cumulative)
-                iptcl      = pinds(iptcl_map)              ! global index
-                ithr       = omp_get_thread_num() + 1
+            do iptcl_batch    = 1,batchsz                     ! particle batch index
+                iptcl_map     = batch_start + iptcl_batch - 1 ! masked global index (cumulative)
+                iptcl         = pinds(iptcl_map)              ! global index
+                ithr          = omp_get_thread_num() + 1
+                cnt_all(ithr) = cnt_all(ithr) + 1
                 ! switch for per-particle polymorphic strategy3D construction
                 select case(trim(params_glob%refine))
                     case('shc')
@@ -163,7 +165,6 @@ contains
                                 allocate(strategy3D_shc          :: strategy3Dsrch(iptcl_batch)%ptr)
                             endif
                         endif
-                        cnt_all(ithr) = cnt_all(ithr) + 1
                     case('shc_smpl')
                         if( build_glob%spproj_field%is_first_update(which_iter, iptcl) )then
                             allocate(strategy3D_greedy_smpl      :: strategy3Dsrch(iptcl_batch)%ptr)
@@ -171,7 +172,15 @@ contains
                         else
                             allocate(strategy3D_shc_smpl         :: strategy3Dsrch(iptcl_batch)%ptr)
                         endif
-                        cnt_all(ithr) = cnt_all(ithr) + 1
+                    case('eval')
+                        allocate(strategy3D_eval                 :: strategy3Dsrch(iptcl_batch)%ptr)
+                    case('neigh_fillin')
+                        if( build_glob%spproj_field%is_first_update(2, iptcl) )then ! iter=2 in order to force truth when updatecnt==1 
+                            allocate(strategy3D_greedy_sub       :: strategy3Dsrch(iptcl_batch)%ptr)
+                            cnt_greedy(ithr) = cnt_greedy(ithr) + 1
+                        else
+                            allocate(strategy3D_eval             :: strategy3Dsrch(iptcl_batch)%ptr)
+                        endif
                     case('neigh')
                         allocate(strategy3D_greedy_sub           :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('greedy')
@@ -257,7 +266,7 @@ contains
 
         ! VOLUMETRIC 3D RECONSTRUCTION
         select case(trim(params_glob%refine))
-            case('eval','sigma')
+            case('eval','sigma', 'neigh_fillin')
                 ! no reconstruction
             case DEFAULT
                 if( L_BENCH_GLOB ) t_rec = tic()

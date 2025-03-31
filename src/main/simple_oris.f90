@@ -94,6 +94,7 @@ type :: oris
     procedure          :: sample4update_updated
     procedure          :: get_update_frac
     procedure          :: get_class_sample_stats
+    procedure          :: get_proj_sample_stats
     procedure, private :: sample_balanced_1, sample_balanced_2
     generic            :: sample_balanced => sample_balanced_1, sample_balanced_2
     procedure          :: sample_balanced_parts
@@ -1275,7 +1276,7 @@ contains
         call self%incr_sampled_updatecnt(inds, incr_sampled)
     end subroutine sample4update_rnd
 
-    subroutine sample4update_class( self, clssmp, fromto, update_frac, nsamples, inds, incr_sampled, frac_best )
+    subroutine sample4update_class( self, clssmp, fromto, update_frac, nsamples, inds, incr_sampled, frac_best, greediness)
         class(oris),          intent(inout) :: self
         type(class_sample),   intent(inout) :: clssmp(:) ! data structure for balanced sampling
         integer,              intent(in)    :: fromto(2)
@@ -1283,8 +1284,9 @@ contains
         integer,              intent(inout) :: nsamples
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(in)    :: incr_sampled
-        real, optional,       intent(in)    :: frac_best
-        integer, parameter   :: GREEDINESS = 2
+        real,    optional,    intent(in)    :: frac_best
+        integer, optional,    intent(in)    :: greediness
+        integer, parameter   :: GREEDINESS_DEFAULT = 2 ! completely greedy selection
         integer, allocatable :: states(:)
         real,    allocatable :: rstates(:)
         integer :: i, cnt, nptcls, nsamples_class, states_bal(self%n)
@@ -1295,8 +1297,10 @@ contains
         ! class-biased selection
         if( present(frac_best) )then
             call self%sample_balanced(clssmp, nsamples_class, frac_best,  states_bal) ! stochastic sampling from frac_best fraction
+        else if( present(greediness) )then
+            call self%sample_balanced(clssmp, nsamples_class, greediness, states_bal)
         else
-            call self%sample_balanced(clssmp, nsamples_class, GREEDINESS, states_bal) ! completely greedy selection
+            call self%sample_balanced(clssmp, nsamples_class, GREEDINESS_DEFAULT, states_bal) ! completely greedy selection
         endif
         ! now, we deal with the partition
         nptcls = fromto(2) - fromto(1) + 1
@@ -1415,6 +1419,31 @@ contains
             endif
         end do
     end subroutine get_class_sample_stats
+
+    ! for balanced sampling in refine3D_auto, after abinitio3D
+    ! use the abinitio3D alignment to create a class assignment
+    ! use the re-projection correlations for ranking
+    ! while leaving the original instance untouched
+    subroutine get_proj_sample_stats( self, eulspace, clssmp )
+        class(oris),                     intent(inout) :: self
+        class(oris),                     intent(in)    :: eulspace
+        type(class_sample), allocatable, intent(inout) :: clssmp(:)  ! data structure for balanced samplign
+        integer, allocatable :: tmpinds(:), clsinds(:), clspops(:)
+        integer              :: ncls, icls
+        type(oris)           :: self_copy
+        ncls = eulspace%get_noris()
+        call self_copy%copy(self)
+        call self_copy%set_projs(eulspace)
+        call self_copy%proj2class
+        allocate(clspops(ncls))
+        do icls=1,ncls
+            clspops(icls) = self_copy%get_pop(icls, 'class')
+        end do
+        tmpinds = (/(icls,icls=1,ncls)/)
+        clsinds = pack(tmpinds, mask= clspops > 0)
+        call self_copy%get_class_sample_stats(clsinds, clssmp)
+        call self_copy%kill
+    end subroutine get_proj_sample_stats
 
     subroutine sample_balanced_1( self, clssmp, nptcls, greediness, states )
         class(oris),        intent(in)    :: self
@@ -1763,9 +1792,9 @@ contains
     end subroutine append_2
 
     subroutine copy_1( self_out, self_in, is_ptcl )
-        class(oris),       intent(inout) :: self_out
-        class(oris),       intent(in)    :: self_in
-        logical,           intent(in)    :: is_ptcl
+        class(oris), intent(inout) :: self_out
+        class(oris), intent(in)    :: self_in
+        logical,     intent(in)    :: is_ptcl
         integer :: i
         call self_out%new(self_in%n, is_ptcl)
         do i=1,self_in%n
@@ -1774,8 +1803,8 @@ contains
     end subroutine copy_1
 
     subroutine copy_2( self_out, self_in)
-        class(oris),       intent(inout) :: self_out
-        class(oris),       intent(in)    :: self_in
+        class(oris), intent(inout) :: self_out
+        class(oris), intent(in)    :: self_in
         logical :: is_ptcl
         integer :: i
         if(self_in%get_noris() == 0) then

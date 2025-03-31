@@ -20,7 +20,6 @@ use simple_strategy2D_greedy_smpl, only: strategy2D_greedy_smpl
 use simple_strategy2D_tseries,     only: strategy2D_tseries
 use simple_strategy2D_snhc,        only: strategy2D_snhc
 use simple_strategy2D_snhc_smpl,   only: strategy2D_snhc_smpl
-use simple_strategy2D_eval,        only: strategy2D_eval
 use simple_strategy2D_prob,        only: strategy2D_prob
 use simple_euclid_sigma2,          only: euclid_sigma2
 use simple_classaverager
