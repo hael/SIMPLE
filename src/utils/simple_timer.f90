@@ -26,6 +26,7 @@ module simple_timer
 #endif
 use simple_defs
 use simple_error
+use simple_is_check_assert
 implicit none
 
 private
@@ -378,7 +379,7 @@ end function cast_time_char
          iloop = 0
          if (.not. (INDEX(profile_labels(ival), trim(adjustl(token))) == 0)) then
             do iloop = 1, num_profile_loops
-               if (profile_matrix(iloop, ival) .eq. 0) then
+               if ( is_zero(profile_matrix(iloop, ival)) ) then
                   tmp_tstamp = tic()
                   profile_matrix(iloop, ival) = tdiff(tmp_tstamp, profile_last_timerstamp(ival))
                   profile_last_timerstamp(ival) = tmp_tstamp
@@ -407,19 +408,18 @@ end function cast_time_char
 
 !< Profile report
    subroutine timer_profile_report(COMMENT, totaltime)
-      character(len=*), intent(in) :: COMMENT
-      real(timer_int_kind), intent(in):: totaltime
-      real(timer_int_kind)            :: total_avg
-      real(timer_int_kind), allocatable:: avgtime_token(:)
+      character(len=*),      intent(in) :: COMMENT
+      real(timer_int_kind),  intent(in) :: totaltime
+      real(timer_int_kind)              :: total_avg
+      real(timer_int_kind), allocatable :: avgtime_token(:)
       integer :: ival
-!    if (.not.present(COMMENT)) COMMENT="PROFILE"
 
       if (allocated(profile_matrix)) then
          total_avg = totaltime/REAL(num_profile_loops, timer_int_kind)
          allocate (avgtime_token(num_profile_vars))
          do ival = 1, num_profile_vars
             avgtime_token(ival) = SUM(profile_matrix(:, ival), &
-                                      MASK=(profile_matrix(:, ival) /= 0.), DIM=1)/REAL(num_profile_loops, timer_int_kind)
+                                      MASK=.not.is_zero(profile_matrix(:, ival)), DIM=1)/REAL(num_profile_loops, timer_int_kind)
          end do
 
          write (*, '(A,A,A)') "** PROFILE REPORT : ", trim(adjustl(COMMENT))
@@ -432,11 +432,11 @@ end function cast_time_char
                avgtime_token(ival), avgtime_token(ival)/total_avg, '%'
             if (num_profile_loops .gt. 1) then
                write (*, '(A,1ES20.6,A,1i10)') "**** Longest run(sec) ", &
-                  MAXVAL(profile_matrix(:, ival), MASK=(profile_matrix(:, ival) /= 0.), DIM=1), &
-                  '    at ', MAXLOC(profile_matrix(:, ival), MASK=(profile_matrix(:, ival) /= 0.), DIM=1)
+                  MAXVAL(profile_matrix(:, ival), MASK=.not.is_zero(profile_matrix(:, ival)), DIM=1), &
+                  '    at ', MAXLOC(profile_matrix(:, ival), MASK=.not.is_zero(profile_matrix(:, ival)), DIM=1)
                write (*, '(A,1ES20.6,A,1i10)') "**** Shortest run(sec) ", &
-                  &REAL(MINVAL(profile_matrix(:, ival), MASK=(profile_matrix(:, ival) /= 0.0_dp), DIM=1),dp), &
-                  &'   at ', INT(MINLOC(profile_matrix(:, ival), MASK=(profile_matrix(:, ival) /= 0.), DIM=1),sp)
+                  &REAL(MINVAL(profile_matrix(:, ival), MASK=.not.is_zero(profile_matrix(:, ival)), DIM=1),dp), &
+                  &'   at ', INT(MINLOC(profile_matrix(:, ival), MASK=.not.is_zero(profile_matrix(:, ival)), DIM=1),sp)
             end if
          end do
          write (*, '(A,1d20.6)') "** Total time (sec):", totaltime
@@ -445,7 +445,7 @@ end function cast_time_char
          write (*, '(A,A,A)') "******* END ", trim(COMMENT), " REPORT **************"
          deallocate (profile_matrix,avgtime_token)
       end if
-! unset labels
+      ! unset labels
       profile_labels = ""
       profile_last_timerstamp = INT(0, timer_int_kind)
    end subroutine timer_profile_report

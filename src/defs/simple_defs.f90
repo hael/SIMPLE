@@ -205,7 +205,6 @@ real, parameter    :: CENTHRESH                 = 0.5            ! threshold for
 real, parameter    :: MAXCENTHRESH2D            = 3.0            ! max threshold for performing cavg centering in pixels
 real, parameter    :: EXTR_POWER                = 2.0            ! Exponent of the sampling function during extremal stochastic phase of 2D classification
 real, parameter    :: POST_EXTR_POWER           = 4.0            ! Exponent of the sampling function after the extremal stochastic phase
-real,    parameter :: MAXPOP_UFRAC              = 0.9
 integer, parameter :: MAXPOP_CLS                = 5000
 integer, parameter :: MAXPOP_PTCLS              = 1200000
 

@@ -75,6 +75,7 @@ character(len=STDLEN), parameter :: DISTR_EXEC_FNAME     = './distr_cluster2D_po
 character(len=STDLEN), parameter :: LOGFILE              = 'simple_log_cluster2D_pool'
 character(len=STDLEN), parameter :: CHECKPOINT_DIR       = 'checkpoint/'
 character(len=STDLEN), parameter :: CLS_POOL_REJECTED    = 'cls_rejected_pool.mrc'
+character(len=STDLEN), parameter :: CLS_POOL_REJECTED_THUMB = 'cls_rejected_pool.jpeg'
 logical,               parameter :: DEBUG_HERE           = .false.
 integer(timer_int_kind)          :: t
 
@@ -1373,9 +1374,9 @@ contains
                         ncls_rejected_glob = ncls_rejected_glob + 1
                         call img%read(trim(POOL_DIR)//trim(refs_glob),icls)
                         call img%write(trim(POOL_DIR)//trim(CLS_POOL_REJECTED),ncls_rejected_glob)
-                        !call img%write(trim(POOL_DIR)//'cls_rejected_pool.mrc',ncls_rejected_glob)
-                        call mrc2jpeg_tiled(trim(POOL_DIR)//'cls_rejected_pool.mrc', trim(POOL_DIR)//'cls_rejected_pool.jpeg', scale=pool_rejected_jpeg_scale, ntiles=pool_rejected_jpeg_ntiles)
-                        pool_rejected_jpeg = trim(cwd_glob) // '/' // trim(POOL_DIR) // 'cls_rejected_pool.jpeg'
+                        call mrc2jpeg_tiled(trim(POOL_DIR)//trim(CLS_POOL_REJECTED),trim(POOL_DIR)//trim(CLS_POOL_REJECTED_THUMB),&
+                        &scale=pool_rejected_jpeg_scale, ntiles=pool_rejected_jpeg_ntiles)
+                        pool_rejected_jpeg = trim(cwd_glob)//'/'//trim(POOL_DIR)//trim(CLS_POOL_REJECTED_THUMB)
                         pool_rejected_thumbnail_id = ncls_rejected_glob
                         img = 0.
                         call img%write(trim(POOL_DIR)//trim(refs_glob),icls)
