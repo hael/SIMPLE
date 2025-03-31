@@ -4948,7 +4948,7 @@ contains
         &'Sharpening volume',&                                ! descr_short
         &'is a program for sharpening raw volumes',&          ! descr_long
         &'all',&                                              ! executable
-        &2, 2, 0, 0, 2, 0, 1, .false.)                        ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 2, 0, 1, .false.)                        ! # entries in each group, requires sp_project
         ! TEMPLATE
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -4958,7 +4958,6 @@ contains
         sharpvol%img_ios(2)%required = .true.
         ! parameter input/output
         call sharpvol%set_input('parm_ios', 1, smpd)
-        call sharpvol%set_input('parm_ios', 2, box)
         ! alternative inputs
         ! <empty>
         ! search controls
