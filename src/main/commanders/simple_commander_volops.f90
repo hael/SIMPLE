@@ -183,7 +183,7 @@ contains
         type(masker)          :: mskvol, sphere, msker
         character(len=STDLEN) :: pdbout_fname
         real    :: fsc0143, fsc05, smpd, lplim
-        integer :: state, box, fsc_box, ldim(3)
+        integer :: state, box, fsc_box, ldim(3), ifoo
         logical :: has_fsc
         ! set defaults
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -201,7 +201,7 @@ contains
         fname_mirr  = basename(add2fbody(trim(fname_pproc), params%ext, MIRR_SUFFIX))
         fname_lp    = basename(add2fbody(trim(fname_vol),   params%ext, LP_SUFFIX))
         ! read volume(s)
-        ldim = [params%box,params%box,params%box]
+        call find_ldim_nptcls(fname_vol, ldim, ifoo)
         call vol_bfac%new(ldim, params%smpd)
         call vol_bfac%read(fname_vol)
         ! generate pdb mask from pdb
