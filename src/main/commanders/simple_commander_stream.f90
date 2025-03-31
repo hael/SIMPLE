@@ -786,7 +786,7 @@ contains
         integer                                :: nmics_sel, nmics_rej, nmics_rejected_glob, pick_extract_set_counter, i_max, i_thumb, i
         integer                                :: nmics, nprojects, stacksz, prev_stacksz, iter, last_injection, iproj, envlen, imic
         integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, nmic_star, thumbid_offset
-        integer                                :: n_pickrefs
+        integer                                :: n_pickrefs, thumbcount
         integer                                :: ldim_mic(3)
         logical                                :: l_templates_provided, l_projects_left, l_haschanged, l_multipick, l_extract, l_once
         logical                                :: pause_import, l_interactive, interactive_waiting
@@ -913,6 +913,7 @@ contains
         nmics_rejected_glob      = 0    ! global number of micrographs rejected
         nmic_star                = 0
         thumbid_offset           = 0
+        thumbcount               = 0
         if( cline%defined('dir_exec') )then
             call del_file(TERM_STREAM)
             call cline%delete('dir_exec')
@@ -1369,29 +1370,31 @@ contains
                     .and. spproj_glob%os_mic%isthere('smpd') .and. spproj_glob%os_mic%isthere('boxfile')) then
                     i_max = 20
                     if(spproj_glob%os_mic%get_noris() < i_max) i_max = spproj_glob%os_mic%get_noris()
-                    do i_thumb=0, i_max - 1
-                        ! Generate jpegs 
-                        i = spproj_glob%os_mic%get_noris() - i_thumb
-                        ldim_mic(1) = int(spproj_glob%os_mic%get(i, 'xdim'))
-                        ldim_mic(2) = int(spproj_glob%os_mic%get(i, 'ydim'))
-                        ldim_mic(3) = 1
-                        call mic_thumb%new(ldim_mic, spproj_glob%os_mic%get(i, 'smpd'))
-                        call mic_thumb%read(trim(spproj_glob%os_mic%get_static(i, 'intg')))
-                        ! resize
-                        jpg_scale = 1000.0 / ldim_mic(2)
-                        call mic_thumb%fft
-                        call mic_thumb%clip_inplace([2 * (nint(0.5 * jpg_scale * ldim_mic(1))), 2 * (nint(0.5 * jpg_scale * ldim_mic(2))), 1]) ! ensures new img has even dims
-                        call mic_thumb%ifft
-                        call mic_thumb%write_jpg(trim(cwd_job) // '/' // int2str(i_thumb) // THUMBNAIL_SUFFIX // JPG_EXT)
-                        call mic_thumb%kill
-                        if(i_thumb == 0) then
-                            call nice_communicator%update_pick(carousel=.true., clear_carousel=.true., thumbnail=trim(cwd_job) // '/' // int2str(i_thumb) // THUMBNAIL_SUFFIX // JPG_EXT,&
-                            thumbnail_id=i + thumbid_offset, thumbnail_static_id=i_thumb + 1, boxfile=trim(spproj_glob%os_mic%get_static(i, 'boxfile')), scale=jpg_scale)  
-                        else
-                            call nice_communicator%update_pick(carousel=.true., thumbnail=trim(cwd_job) // '/' // int2str(i_thumb) // THUMBNAIL_SUFFIX // JPG_EXT,&
-                            thumbnail_id=i + thumbid_offset, thumbnail_static_id=i_thumb + 1, boxfile=trim(spproj_glob%os_mic%get_static(i, 'boxfile')), scale=jpg_scale)
-                        end if
-                    end do
+                    if(i_max >= thumbcount + i_max) then
+                        do i_thumb=0, i_max - 1
+                            ! Generate jpegs 
+                            i = spproj_glob%os_mic%get_noris() - i_thumb
+                            ldim_mic(1) = int(spproj_glob%os_mic%get(i, 'xdim'))
+                            ldim_mic(2) = int(spproj_glob%os_mic%get(i, 'ydim'))
+                            ldim_mic(3) = 1
+                            call mic_thumb%new(ldim_mic, spproj_glob%os_mic%get(i, 'smpd'))
+                            call mic_thumb%read(trim(spproj_glob%os_mic%get_static(i, 'intg')))
+                            ! resize
+                            jpg_scale = 1000.0 / ldim_mic(2)
+                            call mic_thumb%fft
+                            call mic_thumb%clip_inplace([2 * (nint(0.5 * jpg_scale * ldim_mic(1))), 2 * (nint(0.5 * jpg_scale * ldim_mic(2))), 1]) ! ensures new img has even dims
+                            call mic_thumb%ifft
+                            call mic_thumb%write_jpg(trim(cwd_job) // '/' // int2str(i_thumb) // THUMBNAIL_SUFFIX // JPG_EXT)
+                            call mic_thumb%kill
+                            if(i_thumb == 0) then
+                                call nice_communicator%update_pick(carousel=.true., clear_carousel=.true., thumbnail=trim(cwd_job) // '/' // int2str(i_thumb) // THUMBNAIL_SUFFIX // JPG_EXT,&
+                                thumbnail_id=i + thumbid_offset, thumbnail_static_id=i_thumb + 1, boxfile=trim(spproj_glob%os_mic%get_static(i, 'boxfile')), scale=jpg_scale)  
+                            else
+                                call nice_communicator%update_pick(carousel=.true., thumbnail=trim(cwd_job) // '/' // int2str(i_thumb) // THUMBNAIL_SUFFIX // JPG_EXT,&
+                                thumbnail_id=i + thumbid_offset, thumbnail_static_id=i_thumb + 1, boxfile=trim(spproj_glob%os_mic%get_static(i, 'boxfile')), scale=jpg_scale)
+                            end if
+                        end do
+                    end if
                 end if
                 ! update progress monitor
                 call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
@@ -2852,11 +2855,11 @@ contains
             number_particles_assigned=get_pool_assigned(), number_particles_rejected=get_pool_rejected(), maximum_resolution=get_pool_res(), &
             thumbnail=trim(get_pool_cavgs_jpeg()), thumbnail_id=get_pool_iter(), thumbnail_static_id=1, last_iteration=get_pool_iter_time(), thumbnail_n_tiles=get_pool_cavgs_jpeg_ntiles())
             if(get_pool_rejected_jpeg_ntiles() .gt. 0) then
-                call nice_communicator%update_cls2D(pool_rejected_thumbnail=trim(get_pool_rejected_jpeg()), pool_rejected_thumbnail_id=get_pool_rejected_thumbnail_id(), pool_rejected_thumbnail_static_id=2, &
+                call nice_communicator%update_cls2D(pool_rejected_thumbnail=trim(get_pool_rejected_jpeg()), pool_rejected_thumbnail_id=1000 + get_pool_rejected_thumbnail_id(), pool_rejected_thumbnail_static_id=2, &
                 pool_rejected_thumbnail_n_tiles=get_pool_rejected_jpeg_ntiles(), pool_rejected_scale=get_pool_rejected_jpeg_scale())
             end if
             if(get_chunk_rejected_jpeg_ntiles() .gt. 0) then
-                call nice_communicator%update_cls2D(chunk_rejected_thumbnail=trim(get_chunk_rejected_jpeg()), chunk_rejected_thumbnail_id=get_chunk_rejected_thumbnail_id(), chunk_rejected_thumbnail_static_id=2, &
+                call nice_communicator%update_cls2D(chunk_rejected_thumbnail=trim(get_chunk_rejected_jpeg()), chunk_rejected_thumbnail_id=2000 + get_chunk_rejected_thumbnail_id(), chunk_rejected_thumbnail_static_id=3, &
                 chunk_rejected_thumbnail_n_tiles=get_chunk_rejected_jpeg_ntiles(), chunk_rejected_scale=get_chunk_rejected_jpeg_scale())
             end if
             call nice_communicator%update_cls2D(stats_mask=get_pool_cavgs_mask(), stats_resolution=get_pool_cavgs_res(), stats_population=get_pool_cavgs_pop(), rejection_params=get_rejection_params())
