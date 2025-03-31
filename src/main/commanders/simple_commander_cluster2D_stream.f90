@@ -1179,7 +1179,7 @@ contains
                 call cline_cluster2D_pool%set('sigma_est', 'global')
             endif
             ! user override
-            if( master_cline%defined('frac_update') ) frac_update = params_glob%update_frac
+            if( master_cline%defined('update_frac') ) frac_update = params_glob%update_frac
         else
             ! momentum only
             if( nptcls_sel > MAX_STREAM_NPTCLS )then
