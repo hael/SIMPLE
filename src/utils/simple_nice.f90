@@ -1117,8 +1117,9 @@ module simple_nice
         if(present(avg_astigmatism))      this%view_micrographs%avg_astigmatism      = avg_astigmatism
         if(present(last_movie_imported) .and. last_movie_imported)  this%view_micrographs%last_movie_imported  = datestr()
         if(present(thumbnail) .and. present(thumbnail_id) .and. present(thumbnail_static_id)) then
+            call seed_rnd()
             call random_number(rnd)
-            uid = floor(100000 * rnd)
+            uid = floor(1000000 * rnd)
             if(present(carousel)) then
                 if(carousel) then
                     if(.not. allocated(this%view_micrographs%thumbnail_carousel))      allocate(this%view_micrographs%thumbnail_carousel(0))
@@ -1189,8 +1190,9 @@ module simple_nice
             if(last_micrograph_imported)  this%view_pick%last_micrograph_imported  = datestr()
         end if
         if(present(thumbnail) .and. present(thumbnail_id) .and. present(thumbnail_static_id)) then
+            call seed_rnd()
             call random_number(rnd)
-            uid = floor(100000 * rnd)
+            uid = floor(1000000 * rnd)
             if(present(carousel)) then
                 if(carousel) then
                     if(.not. allocated(this%view_pick%thumbnail_carousel))      allocate(this%view_pick%thumbnail_carousel(0))
@@ -1230,8 +1232,9 @@ module simple_nice
         end if
         if(present(pickrefs_thumbnail) .and. present(pickrefs_thumbnail_id) .and. present(pickrefs_thumbnail_static_id) .and. present(pickrefs_thumbnail_n_tiles)) then
             if(pickrefs_thumbnail_id .ne. this%view_pick%pickrefs_thumbnail%id) then
+                call seed_rnd()
                 call random_number(rnd)
-                uid = floor(100000 * rnd)
+                uid = floor(1000000 * rnd)
                 this%view_pick%pickrefs_thumbnail%path      = pickrefs_thumbnail
                 this%view_pick%pickrefs_thumbnail%id        = pickrefs_thumbnail_id
                 this%view_pick%pickrefs_thumbnail%static_id = pickrefs_thumbnail_static_id
@@ -1289,8 +1292,9 @@ module simple_nice
         end if
         if(present(thumbnail) .and. present(thumbnail_id) .and. present(thumbnail_static_id) .and. present(thumbnail_n_tiles)) then
             if(thumbnail_id .ne. this%view_cls2D%thumbnail%id) then
+                call seed_rnd()
                 call random_number(rnd)
-                uid = floor(100000 * rnd)
+                uid = floor(1000000 * rnd)
                 this%view_cls2D%thumbnail%path      = thumbnail
                 this%view_cls2D%thumbnail%id        = thumbnail_id
                 this%view_cls2D%thumbnail%static_id = thumbnail_static_id
@@ -1305,8 +1309,9 @@ module simple_nice
         end if
         if(present(pool_rejected_thumbnail) .and. present(pool_rejected_thumbnail_id) .and. present(pool_rejected_thumbnail_static_id) .and. present(pool_rejected_thumbnail_n_tiles)) then
             if(pool_rejected_thumbnail_id .ne. this%view_cls2D%pool_rejected_thumbnail%id) then
+                call seed_rnd()
                 call random_number(rnd)
-                uid = floor(100000 * rnd)
+                uid = floor(1000000 * rnd)
                 this%view_cls2D%pool_rejected_thumbnail%path      = pool_rejected_thumbnail
                 this%view_cls2D%pool_rejected_thumbnail%id        = pool_rejected_thumbnail_id
                 this%view_cls2D%pool_rejected_thumbnail%static_id = pool_rejected_thumbnail_static_id
@@ -1321,8 +1326,9 @@ module simple_nice
         end if
         if(present(chunk_rejected_thumbnail) .and. present(chunk_rejected_thumbnail_id) .and. present(chunk_rejected_thumbnail_static_id) .and. present(chunk_rejected_thumbnail_n_tiles)) then
             if(chunk_rejected_thumbnail_id .ne. this%view_cls2D%chunk_rejected_thumbnail%id) then
+                call seed_rnd()
                 call random_number(rnd)
-                uid = floor(100000 * rnd)
+                uid = floor(1000000 * rnd)
                 this%view_cls2D%chunk_rejected_thumbnail%path      = chunk_rejected_thumbnail
                 this%view_cls2D%chunk_rejected_thumbnail%id        = chunk_rejected_thumbnail_id
                 this%view_cls2D%chunk_rejected_thumbnail%static_id = chunk_rejected_thumbnail_static_id
