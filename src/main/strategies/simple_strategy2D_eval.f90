@@ -9,8 +9,6 @@ implicit none
 public :: strategy2D_eval
 private
 
-logical, parameter :: DEBUG   = .false.
-
 type, extends(strategy2D) :: strategy2D_eval
   contains
     procedure :: new  => new_eval
@@ -36,7 +34,6 @@ contains
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif
-        if( DEBUG ) write(logfhandle,*) '>>> strategy2D_srch::FINISHED EVALUATION'
     end subroutine srch_eval
 
     subroutine kill_eval( self )

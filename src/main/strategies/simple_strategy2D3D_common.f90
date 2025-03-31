@@ -291,7 +291,10 @@ contains
                 ! balanced class sampling
                 if( params_glob%l_frac_best )then
                     call build_glob%spproj_field%sample4update_class(clssmp, pfromto, params_glob%update_frac,&
-                    nptcls2update, pinds, l_incr_sampl, params_glob%frac_best)
+                    nptcls2update, pinds, l_incr_sampl, frac_best=params_glob%frac_best)
+                else if( params_glob%l_greediness )then
+                    call build_glob%spproj_field%sample4update_class(clssmp, pfromto, params_glob%update_frac,&
+                    nptcls2update, pinds, l_incr_sampl, greediness=params_glob%greediness)
                 else
                     call build_glob%spproj_field%sample4update_class(clssmp, pfromto, params_glob%update_frac,&
                     nptcls2update, pinds, l_incr_sampl)

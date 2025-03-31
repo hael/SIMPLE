@@ -367,7 +367,6 @@ type :: parameters
     integer :: tofny=0
     integer :: top=1
     integer :: tof=0               !< end index
-    integer :: updatecnt_ini=0     !< update count initialization value
     integer :: vol_dim=0           !< input simulated pdb2mrc volume dimensions
     integer :: walltime=WALLTIME_DEFAULT  !< Walltime in seconds for workload management
     integer :: which_iter=0        !< iteration nr
@@ -507,6 +506,7 @@ type :: parameters
     logical :: l_envfsc       = .false.
     logical :: l_filemsk      = .false.
     logical :: l_focusmsk     = .false.
+    logical :: l_greediness   = .false.
     logical :: l_frac_best    = .false.
     logical :: l_update_frac  = .false.
     logical :: l_graphene     = .false.
@@ -885,7 +885,6 @@ contains
         call check_iarg('stepsz',         self%stepsz)
         call check_iarg('top',            self%top)
         call check_iarg('tof',            self%tof)
-        call check_iarg('updatecnt_ini',  self%updatecnt_ini)
         call check_iarg('vol_dim',        self%vol_dim)
         call check_iarg('which_iter',     self%which_iter)
         call check_iarg('smooth_ext',     self%smooth_ext)
@@ -1378,6 +1377,8 @@ contains
         endif
         ! set frac_best flag
         self%l_frac_best = self%frac_best <= 0.99
+        ! set greediness flag
+        self%l_greediness = cline%defined('greediness')
         if( .not. cline%defined('ncunits') )then
             ! we assume that the number of computing units is equal to the number of partitions
             self%ncunits = self%nparts

@@ -1552,12 +1552,7 @@ contains
             call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         endif
         if( params_glob%startit == 1 )then
-            if( cline%defined('updatecnt_ini') )then
-                call build_glob%spproj_field%set_nonzero_updatecnt(params_glob%updatecnt_ini)
-                call build_glob%spproj_field%clean_entry('sampled')
-            else
-                call build_glob%spproj_field%clean_entry('updatecnt', 'sampled')
-            endif
+            call build_glob%spproj_field%clean_entry('updatecnt', 'sampled')
         endif
         ! Whether to weight based-on the top maxpop particles
         l_maxpop = cline%defined('maxpop') .and. (params_glob%maxpop > 0)

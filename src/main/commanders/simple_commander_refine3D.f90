@@ -90,27 +90,33 @@ contains
 
     subroutine exec_refine3D_auto( self, cline )
         use simple_commander_rec, only: reconstruct3D_commander_distr
+        use simple_sp_project,    only: sp_project
         class(refine3D_auto_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(cmdline)      :: cline_reconstruct3D_distr
+        type(cmdline)      :: cline_reconstruct3D_distr, cline_fillin
         real,    parameter :: LP2SMPD_TARGET   = 1./3.
         real,    parameter :: SMPD_TARGET_MIN  = 1.3
         logical, parameter :: DEBUG            = .true.
         integer, parameter :: MINBOX           = 256
-        real               :: smpd_target, smpd_crop, scale, trslim
-        integer            :: box_crop
-        logical            :: l_autoscale
-        type(parameters)   :: params
-        character(len=:), allocatable :: str_state, vol_even, vol_odd
+        integer, parameter :: NPDIRS4BAL       = 500
+        type(class_sample), allocatable :: clssmp(:)
+        character(len=:),   allocatable :: str_state, vol_even, vol_odd
+        real             :: smpd_target, smpd_crop, scale, trslim
+        integer          :: box_crop
+        logical          :: l_autoscale
+        type(parameters) :: params
+        type(sp_project) :: spproj
+        type(sym)        :: pgrpsyms
+        type(oris)       :: eulspace
         ! commanders
         type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
         type(refine3D_distr_commander)      :: xrefine3D_distr
         ! hard defaults
-        call cline%set('balance',     'no') ! 4 now, needs a balancing approach based on:
-        call cline%set('trail_rec',  'yes') !    (1) making sure that all state=1 particles have orientations and score fun values assigned  
-        call cline%set('refine',   'neigh') !    (2) doing a class assignment based on abinitio 3D into 500 projection groups
-        call cline%set('icm',        'yes') !    (3) applying a balancing appraoch where 50% of the particles are selected from the highest ranking
-        call cline%set('automsk',    'yes') !        particles within a class and the rest from the remainder
+        call cline%delete('balance')        ! taken care of below
+        call cline%set('trail_rec',  'yes') 
+        call cline%set('refine',   'neigh')
+        call cline%set('icm',        'yes') 
+        call cline%set('automsk',    'yes') 
         call cline%set('sh_first',   'yes')
         call cline%set('overlap',     0.99)
         call cline%set('nstates',        1)
@@ -176,15 +182,44 @@ contains
         call cline%set('mskfile',           MSKVOL_FILE)
         call cline%set('prg',                'refine3D')
         call cline%set('ufrac_trec', params%update_frac)
+        ! fillin refinement step (for updatng scores and filling in missing orientations)
+        cline_fillin = cline
+        call cline_fillin%delete('update_frac')
+        call cline_fillin%delete('trail_rec')
+        call cline_fillin%delete('ufrac_trec')
+        call cline_fillin%delete('lam_anneal')
+        call cline_fillin%delete('keepvol')
+        call cline_fillin%delete('combine_eo')
+        call cline_fillin%delete('incrreslim')
+        call cline_fillin%set('refine', 'neigh_fillin')
+        call cline_fillin%set('sh_first', 'no')
+        call cline_fillin%set('maxits', 1)
+        params_glob => null() ! let the refine3D_commander (below) take charge of this one
+        call xrefine3D_distr%execute(cline_fillin)
+        ! read project
+        call spproj%read(params%projfile)
+        call spproj%update_projinfo(cline)
+        call spproj%write_segment_inside('projinfo', params%projfile)
+        ! make even projection direction distribution for balanced sampling
+        call pgrpsyms%new(trim(params%pgrp))
+        call eulspace%new(NPDIRS4BAL, is_ptcl=.false.)
+        call pgrpsyms%build_refspiral(eulspace)
+        ! create data structure for balanced sampling
+        call spproj%os_ptcl3D%get_proj_sample_stats(eulspace, clssmp)
+        call write_class_samples(clssmp, CLASS_SAMPLING_FILE)
+
+
+
+        call cline%set('balance', 'yes')
+        call cline%set('greediness',  1) ! half sampled from the top ranking and the rest from the remains
         params_glob => null() ! let the refine3D_commander (below) take charge of this one
         call xrefine3D_distr%execute(cline)
 
         !**************TESTS2DO
-        ! chewck so that we have a starting 3D alignment
+        ! check so that we have a starting 3D alignment
         ! check so that all states are 0 or 1 and fall over otherwise
         ! reconstruct at full sampling in the end
         ! should test 40k projection directions and see how that performs (params class needs modification)
-        ! should test probabilistic in-plane assignemnt
     end subroutine exec_refine3D_auto
 
     subroutine exec_refine3D_distr( self, cline )
@@ -555,9 +590,6 @@ contains
                             vol = 'vol'//trim(int2str(state))
                             call job_descr%set( vol, vol_iter )
                             call cline%set(vol, vol_iter)
-                            ! if( params%keepvol.eq.'yes' )then
-                            !     call simple_copy_file(vol_iter,trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter,3)//params%ext)
-                            ! endif
                         endif
                     enddo
                     ! volume mask, one for all states
@@ -700,15 +732,10 @@ contains
         select case(trim(params%refine))
             case('prob', 'prob_state')
                 ! random sampling and updatecnt dealt with in prob_align
+            case('neigh_fillin')
+                call build%spproj_field%clean_entry('sampled')
             case DEFAULT
-                if( startit == 1 )then
-                    if( cline%defined('updatecnt_ini') )then
-                        call build%spproj_field%set_nonzero_updatecnt(params%updatecnt_ini)
-                        call build%spproj_field%clean_entry('sampled')
-                    else
-                        call build%spproj_field%clean_entry('updatecnt', 'sampled')
-                    endif
-                endif
+                call build%spproj_field%clean_entry('updatecnt', 'sampled')
         end select
         if( params%l_distr_exec )then
             if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
@@ -1013,12 +1040,7 @@ contains
             call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         endif
         if( params_glob%startit == 1 )then
-            if( cline%defined('updatecnt_ini') )then
-                call build%spproj_field%set_nonzero_updatecnt(params%updatecnt_ini)
-                call build%spproj_field%clean_entry('sampled')
-            else
-                call build%spproj_field%clean_entry('updatecnt', 'sampled')
-            endif
+            call build%spproj_field%clean_entry('updatecnt', 'sampled')
         endif
         ! sampled incremented
         call sample_ptcls4update([1,params_glob%nptcls], .true., nptcls, pinds)
