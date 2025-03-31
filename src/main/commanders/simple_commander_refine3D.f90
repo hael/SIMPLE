@@ -96,6 +96,7 @@ contains
         real,    parameter :: LP2SMPD_TARGET   = 1./3.
         real,    parameter :: SMPD_TARGET_MIN  = 1.3
         logical, parameter :: DEBUG            = .true.
+        integer, parameter :: MINBOX           = 256
         real               :: smpd_target, smpd_crop, scale, trslim
         integer            :: box_crop
         logical            :: l_autoscale
@@ -132,7 +133,7 @@ contains
         call params%new(cline)
         call cline%set('maxits_glob', params%maxits) ! needed for correct lambda annealing
         call cline%set('mkdir', 'no') ! to avoid nested directory structure
-        if( params%box <= 256 )then
+        if( params%box <= MINBOX )then
             smpd_target = params%smpd
             smpd_crop   = params%smpd
             box_crop    = params%box
@@ -140,7 +141,7 @@ contains
             l_autoscale = .false.
         else
             smpd_target = max(SMPD_TARGET_MIN, params%res_target * LP2SMPD_TARGET)
-            call autoscale(params%box, params%smpd, smpd_target, box_crop, smpd_crop, scale)
+            call autoscale(params%box, params%smpd, smpd_target, box_crop, smpd_crop, scale, minbox=MINBOX)
             l_autoscale = box_crop < params%box
         endif
         trslim = min(8.,max(2.0, AHELIX_WIDTH / smpd_crop))
