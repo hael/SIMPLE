@@ -150,34 +150,36 @@ contains
         deallocate(pvec_sorted,inds)
     end function multinomal
 
-    function nmultinomal( pvec, nsmpl ) result( which )
+    !>  \brief  run multinomal ntimes
+    function nmultinomal( pvec, ntimes ) result( which )
         use simple_math, only: hpsort
         real,     intent(in) :: pvec(:) !< probabilities
-        integer,  intent(in) :: nsmpl
+        integer,  intent(in) :: ntimes
         real,    allocatable :: pvec_sorted(:)
         integer, allocatable :: inds(:)
-        logical, allocatable :: l_sampled(:)
-        integer :: i, j, n, which(nsmpl), cnt
-        real    :: bound, vals(nsmpl)
+        integer :: i, j, n, which(ntimes), cnt
+        real    :: bound, vals(ntimes)
         n = size(pvec)
-        allocate(l_sampled(n),   source=.false.)
         allocate(pvec_sorted(n), source=pvec)
         inds = (/(i,i=1,n)/)
         call hpsort(pvec_sorted, inds)
-        cnt = 1
-        do
-            do j=n,1,-1
-                bound = sum(pvec_sorted(j:n))
-                if( ran3() >= bound )then
-                    if( l_sampled(inds(j)) ) cycle 
-                    which(cnt)         = inds(j)
-                    l_sampled(inds(j)) =.true.
-                    cnt                = cnt + 1
-                    if( cnt > nsmpl ) exit
-                endif
+        do i = 1, ntimes
+            vals(i) = ran3()
+        enddo
+        call hpsort(vals)
+        cnt   = 1
+        which = inds(1)
+        bound = 0.
+        do j=n,1,-1
+            bound = bound + pvec_sorted(j)
+            do 
+                if( vals(cnt) > bound )exit
+                which(cnt) = inds(j)
+                cnt        = cnt + 1
+                if( cnt > ntimes ) exit
             enddo
-            if( cnt > nsmpl ) exit
-        end do
+        enddo
+        deallocate(pvec_sorted,inds)
     end function nmultinomal
 
     ! using the multinomal sampling idea to be more greedy towards the best probabilistic candidates
