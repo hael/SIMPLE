@@ -1369,11 +1369,15 @@ contains
                 if(spproj_glob%os_mic%isthere('intg') .and. spproj_glob%os_mic%isthere('xdim') .and. spproj_glob%os_mic%isthere('ydim') \
                     .and. spproj_glob%os_mic%isthere('smpd') .and. spproj_glob%os_mic%isthere('boxfile')) then
                     i_max = 20
-                    if(spproj_glob%os_mic%get_noris() < i_max) i_max = spproj_glob%os_mic%get_noris()
-                    if(i_max >= thumbcount + i_max) then
+                    if(spproj_glob%os_mic%get_noris() < i_max) then
+                        i_max = spproj_glob%os_mic%get_noris()
+                        thumbcount = 0
+                    end if
+                    if(spproj_glob%os_mic%get_noris() >= thumbcount + i_max) then
                         do i_thumb=0, i_max - 1
                             ! Generate jpegs 
                             i = spproj_glob%os_mic%get_noris() - i_thumb
+                            if(trim(spproj_glob%os_mic%get_static(i, 'boxfile')) .eq. "") cycle
                             ldim_mic(1) = int(spproj_glob%os_mic%get(i, 'xdim'))
                             ldim_mic(2) = int(spproj_glob%os_mic%get(i, 'ydim'))
                             ldim_mic(3) = 1
@@ -1394,6 +1398,7 @@ contains
                                 thumbnail_id=i + thumbid_offset, thumbnail_static_id=i_thumb + 1, boxfile=trim(spproj_glob%os_mic%get_static(i, 'boxfile')), scale=jpg_scale)
                             end if
                         end do
+                        thumbcount = thumbcount + i_max
                     end if
                 end if
                 ! update progress monitor
@@ -2671,6 +2676,7 @@ contains
             call moldiamori%read( trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM) )
             if( .not. moldiamori%isthere(1, "moldiam") ) THROW_HARD( 'moldiam missing from ' // trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM) )
             moldiam = moldiamori%get(1, "moldiam")
+           
             ! write acopy for stream 3d
             call moldiamori%write(1, trim(STREAM_MOLDIAM))
             call moldiamori%kill
@@ -2759,6 +2765,7 @@ contains
                 call gui_stats%set('particles', 'particles_imported', int2commastr(nptcls_glob), primary=.true.)
                 call gui_stats%set_now('particles', 'last_particles_imported')
                 call nice_communicator%update_cls2D(particles_imported=nptcls_glob, last_particles_imported=.true.)
+
                 ! update progress monitor
                 call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
                 time_last_import = time8()
@@ -2770,6 +2777,8 @@ contains
                 endif
             endif
             ! 2D classification section
+            nice_communicator%view_cls2D%mskdiam  = params%mskdiam
+            nice_communicator%view_cls2D%boxsizea = get_boxa()
             call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
             if( l_params_updated ) l_pause = .false.
             call update_chunks

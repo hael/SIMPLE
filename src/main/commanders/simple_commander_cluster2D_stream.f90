@@ -31,7 +31,7 @@ public :: generate_pool_stats, read_pool_xml_beamtilts, assign_pool_optics
 public :: is_pool_available, get_pool_iter, get_pool_assigned, get_pool_rejected
 public :: get_pool_n_classes, get_pool_n_classes_rejected, get_pool_iter_time, get_pool_cavgs_jpeg
 public :: get_pool_res, get_pool_cavgs_pop, get_pool_cavgs_res, get_pool_cavgs_mask, get_pool_cavgs_jpeg_ntiles
-public :: write_pool_cls_selected_nice, generate_pool_jpeg, get_pool_cavgs_jpeg_scale, get_nchunks
+public :: write_pool_cls_selected_nice, generate_pool_jpeg, get_pool_cavgs_jpeg_scale, get_nchunks, get_boxa
 public :: get_pool_rejected_jpeg, get_pool_rejected_jpeg_ntiles, get_pool_rejected_jpeg_scale, get_pool_rejected_thumbnail_id
 public :: get_chunk_rejected_jpeg, get_chunk_rejected_jpeg_ntiles, get_chunk_rejected_jpeg_scale, get_chunk_rejected_thumbnail_id
 public :: get_last_snapshot, get_last_snapshot_id, get_rejection_params, get_lpthres, get_snapshot_json, get_lpthres_type, set_lpthres_type
@@ -552,7 +552,7 @@ contains
         type(json_core)       :: json
         character(len=STDLEN) :: val
         real                  :: lpthres, ndev
-        integer               :: lpthres_int
+        integer               :: lpthres_int, mskdiam_int
         logical               :: found
         updated = .false.
         call os%new(1, is_ptcl=.false.)
@@ -671,6 +671,18 @@ contains
                         lpthres_type = "manual"
                         params_glob%lpthres = real(lpthres_int)
                         write(logfhandle,'(A,F8.2)')'>>> REJECTION lpthres UPDATED TO: ',params_glob%lpthres
+                        updated = .true.
+                    endif 
+                end if
+                ! mskdiam
+                call json%get(update_arguments, 'mskdiam', mskdiam_int, found)
+                if(found) then
+                    write(logfhandle,'(A,A)')'>>> MASK DIAMETER UPDATE RECEIVED'
+                    if( real(mskdiam_int) .gt. 49.0)then
+                        params_glob%mskdiam = real(mskdiam_int)
+                        call cline_cluster2D_chunk%set('mskdiam',   params_glob%mskdiam)
+                        call cline_cluster2D_pool%set('mskdiam',   params_glob%mskdiam)
+                        write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER UPDATED TO: ', params_glob%mskdiam
                         updated = .true.
                     endif 
                 end if
@@ -1893,7 +1905,15 @@ contains
     integer function get_chunk_rejected_thumbnail_id()
         get_chunk_rejected_thumbnail_id = chunk_rejected_thumbnail_id
     end function get_chunk_rejected_thumbnail_id
- 
+
+    integer function get_boxa()
+        if(pool_proj%os_stk%get_noris() .gt. 0) then
+            get_boxa = ceiling(real(pool_proj%get_box()) * pool_proj%get_smpd())
+        else
+            get_boxa = 0
+        end if
+    end function get_boxa
+
     integer function get_last_snapshot_id()
         get_last_snapshot_id = snapshot_complete_jobid
     end function get_last_snapshot_id
