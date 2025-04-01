@@ -156,30 +156,28 @@ contains
         integer,  intent(in) :: nsmpl
         real,    allocatable :: pvec_sorted(:)
         integer, allocatable :: inds(:)
+        logical, allocatable :: l_sampled(:)
         integer :: i, j, n, which(nsmpl), cnt
         real    :: bound, vals(nsmpl)
         n = size(pvec)
+        allocate(l_sampled(n), source=.false.)
         allocate(pvec_sorted(n), source=pvec)
         inds = (/(i,i=1,n)/)
         call hpsort(pvec_sorted, inds)
-        do i = 1, nsmpl
-            vals(i) = ran3()
-        enddo
-        call hpsort(vals)
         cnt = 1
-        do j=n,1,-1
-            bound = sum(pvec_sorted(j:n))
-            if( vals(cnt) <= bound )then
-                which(cnt) = inds(j)
-                cnt        = cnt + 1
-                if( cnt > nsmpl ) exit
-            endif
-        enddo
-        ! extreme case
-        do j = cnt, nsmpl
-            which(j) = which(j-1) + 1
-        enddo
-        deallocate(pvec_sorted,inds)
+        do
+            do j=n,1,-1
+                bound = sum(pvec_sorted(j:n))
+                if( ran3() >= bound )then
+                    if( l_sampled(inds(j)) ) cycle 
+                    which(cnt)         = inds(j)
+                    l_sampled(inds(j)) =.true.
+                    cnt                = cnt + 1
+                    if( cnt > nsmpl ) exit
+                endif
+            enddo
+            if( cnt > nsmpl ) exit
+        end do
     end function nmultinomal
 
     ! using the multinomal sampling idea to be more greedy towards the best probabilistic candidates
