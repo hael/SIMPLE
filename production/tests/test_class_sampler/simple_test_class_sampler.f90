@@ -16,13 +16,6 @@ l_sampled = .false.
 do i = 1, NSAMPLES
     l_sampled(sample(i)) = .true.
 end do
-
-! call hpsort(probs, inds)
-! call reverse(inds)
-! l_sampled = .false.
-! do i = 1, NSAMPLES
-!     l_sampled(inds(i)) = .true.
-! end do
 print *, '#       SAMPLES:      ', count(l_sampled)
 print *, 'AVG     SAMPLE SCORE: ', sum(scores, mask=l_sampled) / count(l_sampled)
 print *, 'AVG NON-SAMPLE SCORE: ', sum(scores, mask=.not. l_sampled) / count(.not. l_sampled)

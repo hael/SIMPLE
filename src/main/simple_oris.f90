@@ -1452,7 +1452,7 @@ contains
         integer,            intent(in)    :: nptcls     ! # particles to sample in total
         integer,            intent(in)    :: greediness ! greediness level (see below)
         integer,            intent(inout) :: states(self%n)
-        integer,            allocatable   :: pinds_left(:)
+        integer,            allocatable   :: pinds_left(:), sample(:)
         type(ran_tabu) :: rt
         integer        :: i, j, cnt, nleft
         ! calculate sampling size for each class
@@ -1475,28 +1475,20 @@ contains
                     deallocate(pinds_left)
                 end do
             case(1)
-                do i = 1, size(clssmp) 
-                    ! sample first half as the best ones
-                    nleft = clssmp(i)%pop - clssmp(i)%nsample/2
-                    allocate(pinds_left(nleft), source=0)
-                    cnt = 0
-                    do j = 1, clssmp(i)%pop      
-                        if( j <= clssmp(i)%nsample/2 )then
+                ! probabilistic selection based on objective function value
+                do i = 1, size(clssmp)
+                    if( clssmp(i)%nsample == clssmp(i)%pop )then
+                        ! take everything
+                        do j = 1, clssmp(i)%nsample
                             states(clssmp(i)%pinds(j)) = 1
-                        else
-                            cnt = cnt + 1
-                            pinds_left(cnt) = clssmp(i)%pinds(j)
-                        endif
-                    end do
-                    ! sample second half randomly from what is left
-                    rt = ran_tabu(nleft)
-                    call rt%shuffle(pinds_left)
-                    call rt%kill
-                    nleft = clssmp(i)%nsample - clssmp(i)%nsample/2
-                    do j = 1, nleft
-                        states(pinds_left(j)) = 1
-                    end do
-                    deallocate(pinds_left)
+                        end do
+                    else
+                        if( allocated(sample) ) deallocate(sample)
+                        sample = nmultinomal(clssmp(i)%ccs(:)/sum(clssmp(i)%ccs(:)), clssmp(i)%nsample) 
+                        do j = 1, clssmp(i)%nsample
+                            states(clssmp(i)%pinds(sample(j))) = 1
+                        end do
+                    endif
                 enddo
             case(2)
                 ! completely greedy selection based on objective function value
