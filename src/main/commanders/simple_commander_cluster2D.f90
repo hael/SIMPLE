@@ -1551,9 +1551,7 @@ contains
             call cline%set('oritype', 'ptcl2D')
             call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         endif
-        if( params_glob%startit == 1 )then
-            call build_glob%spproj_field%clean_entry('updatecnt', 'sampled')
-        endif
+        if( params_glob%startit == 1 ) call build_glob%spproj_field%clean_entry('updatecnt', 'sampled')
         ! Whether to weight based-on the top maxpop particles
         l_maxpop = cline%defined('maxpop') .and. (params_glob%maxpop > 0)
         ! sample particles

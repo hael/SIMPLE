@@ -193,13 +193,13 @@ contains
         integer :: ntimes, which(nsamples), np, i
         np        = size(pvec)
         ntimes    = min(100 * np, NTIMES_MAX)
-        allocate(smpl_inds(ntimes),inds(ntimes),counts(ntimes))
+        allocate(smpl_inds(ntimes),inds(np),counts(np))
         smpl_inds = nmultinomal(pvec, ntimes)
         counts    = 0.
-        do i = 1, NTIMES
+        do i = 1, ntimes
             counts(smpl_inds(i)) = counts(smpl_inds(i)) + 1.
         enddo
-        inds = (/(i,i=1,NTIMES)/)
+        inds = (/(i,i=1,np)/)
         call hpsort(counts, inds)
         call reverse(inds)
         which = inds(1:nsamples)

@@ -210,8 +210,8 @@ contains
         call spproj%os_ptcl3D%get_proj_sample_stats(eulspace, clssmp)
         call write_class_samples(clssmp, CLASS_SAMPLING_FILE)
         ! two-phase 3D refinement
-        call prep4refine3D(1)
-        call xrefine3D_distr%execute(cline)
+        ! call prep4refine3D(1)
+        ! call xrefine3D_distr%execute(cline)
         call prep4refine3D(2)
         call xrefine3D_distr%execute(cline)
 
@@ -770,7 +770,7 @@ contains
             case('neigh_fillin')
                 call build%spproj_field%clean_entry('sampled')
             case DEFAULT
-                call build%spproj_field%clean_entry('updatecnt', 'sampled')
+                if( startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
         end select
         if( params%l_distr_exec )then
             if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
@@ -1074,9 +1074,7 @@ contains
             call cline%set('stream', 'no')
             call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         endif
-        if( params_glob%startit == 1 )then
-            call build%spproj_field%clean_entry('updatecnt', 'sampled')
-        endif
+        if( params_glob%startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
         ! sampled incremented
         call sample_ptcls4update([1,params_glob%nptcls], .true., nptcls, pinds)
         ! communicate to project file
