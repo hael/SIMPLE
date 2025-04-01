@@ -160,7 +160,7 @@ contains
         integer :: i, j, n, which(nsmpl), cnt
         real    :: bound, vals(nsmpl)
         n = size(pvec)
-        allocate(l_sampled(n), source=.false.)
+        allocate(l_sampled(n),   source=.false.)
         allocate(pvec_sorted(n), source=pvec)
         inds = (/(i,i=1,n)/)
         call hpsort(pvec_sorted, inds)

@@ -240,7 +240,7 @@ contains
                 call cline%set('balance',  'yes')
                 ! phase-dependent parameters
                 ! greediness 0: completely random class-biased sampling
-                !            1: half sampled from the top ranking and the rest from the remainding ones
+                !            1: probabilistic selection based on objective function value
                 !            2: completely greedy class-biased sampling
                 select case(phase)
                     case(1)
@@ -250,7 +250,7 @@ contains
                     case(2)
                         call cline%set('lp_auto',   'no')
                         call cline%set('maxits', MAXITS2)
-                        call cline%set('greediness',   0)
+                        call cline%set('greediness',   1)
                         call cline%set('continue', 'yes')
                 end select
             end subroutine prep4refine3D
