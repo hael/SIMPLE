@@ -1,9 +1,9 @@
 program simple_test_class_sampler
 include 'simple_lib.f08'
 implicit none
-integer, parameter :: NSCORES = 200, NSAMPLES = 75
-real    :: scores(NSCORES), score, probs(NSCORES)
-integer :: i, inds(NSCORES), sample(NSAMPLES)
+integer, parameter :: NSCORES = 200, NSAMPLES = 75, NTIMES = 1000
+real    :: scores(NSCORES), score, probs(NSCORES), counts(NSCORES)
+integer :: i, inds(NSCORES), sample(NSAMPLES), smpl_inds(NTIMES)
 logical :: l_sampled(NSCORES)
 score = 0.9
 do i = 1, NSCORES
@@ -11,10 +11,16 @@ do i = 1, NSCORES
     inds(i)   = i
 end do
 probs     = scores / sum(scores)
-sample    = nmultinomal(probs, NSAMPLES)
+smpl_inds = nmultinomal(probs, NTIMES)
+counts    = 0.
+do i = 1, NTIMES
+    counts(smpl_inds(i)) = counts(smpl_inds(i)) + 1.
+enddo
+call hpsort(counts, inds)
+call reverse(inds)
 l_sampled = .false.
 do i = 1, NSAMPLES
-    l_sampled(sample(i)) = .true.
+    l_sampled(inds(i)) = .true.
 end do
 print *, '#       SAMPLES:      ', count(l_sampled)
 print *, 'AVG     SAMPLE SCORE: ', sum(scores, mask=l_sampled) / count(l_sampled)
