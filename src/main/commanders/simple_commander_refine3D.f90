@@ -124,7 +124,7 @@ contains
         call cline%set('envfsc',     'yes')
         call cline%set('lplim_crit', 0.143)
         call cline%set('lam_anneal', 'yes')
-        call cline%set('keepvol',    'yes') ! 4 now
+        call cline%set('keepvol',     'no')
         call cline%set('incrreslim',  'no') ! if anything 'yes' makes it slightly worse, but no real difference right now
         ! overridable defaults
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',        'yes')
@@ -133,9 +133,12 @@ contains
         if( .not. cline%defined('combine_eo')  ) call cline%set('combine_eo',    'no') ! 4 now, to allow more rapid testing
         if( .not. cline%defined('prob_inpl')   ) call cline%set('prob_inpl',    'yes') ! no difference at this stage, so prefer 'yes'
         if( .not. cline%defined('update_frac') ) call cline%set('update_frac',    0.1) ! 4 now, needs testing/different logic (nsample?)
-        if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'no') ! 4 now, needs testing
+        if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'no') ! this works and should be considered
         if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',       'yes') ! better map with ml_reg='yes'
-        if( .not. cline%defined('maxits')      ) call cline%set('maxits',         100) ! 10 passes over the particles with update_frac=0.1, which is sensible
+        if( .not. cline%defined('maxits')      ) call cline%set('maxits',         100) ! 10 passes over the particles with update_frac=0.1, which is reasonable
+        if( .not. cline%defined('greediness')  ) call cline%set('greediness',       1) ! 0: completely random class-biased sampling
+                                                                                       ! 1: half sampled from the top ranking and the rest from the remainding ones
+                                                                                       ! 2: completely greedy class-biased sampling
         call params%new(cline)
         call cline%set('maxits_glob', params%maxits) ! needed for correct lambda annealing
         call cline%set('mkdir', 'no') ! to avoid nested directory structure
@@ -191,6 +194,7 @@ contains
         call cline_fillin%delete('keepvol')
         call cline_fillin%delete('combine_eo')
         call cline_fillin%delete('incrreslim')
+        call cline_fillin%delete('greediness')
         call cline_fillin%set('refine', 'neigh_fillin')
         call cline_fillin%set('sh_first', 'no')
         call cline_fillin%set('maxits', 1)
@@ -207,11 +211,7 @@ contains
         ! create data structure for balanced sampling
         call spproj%os_ptcl3D%get_proj_sample_stats(eulspace, clssmp)
         call write_class_samples(clssmp, CLASS_SAMPLING_FILE)
-
-
-
         call cline%set('balance', 'yes')
-        call cline%set('greediness',  1) ! half sampled from the top ranking and the rest from the remains
         params_glob => null() ! let the refine3D_commander (below) take charge of this one
         call xrefine3D_distr%execute(cline)
 
