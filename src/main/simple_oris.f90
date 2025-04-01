@@ -1484,7 +1484,7 @@ contains
                         end do
                     else
                         if( allocated(sample) ) deallocate(sample)
-                        sample = nmultinomal(clssmp(i)%ccs(:)/sum(clssmp(i)%ccs(:)), clssmp(i)%nsample) 
+                        sample = nmultinomal_sampling(clssmp(i)%ccs(:)/sum(clssmp(i)%ccs(:)), clssmp(i)%nsample) 
                         do j = 1, clssmp(i)%nsample
                             states(clssmp(i)%pinds(sample(j))) = 1
                         end do
