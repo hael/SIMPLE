@@ -129,8 +129,10 @@ module simple_nice
         integer :: number_particles_assigned = -1
         integer :: number_particles_rejected = -1
         integer :: snapshot_id               = -1
+        integer :: boxsizea                  = -1
         real    :: maximum_resolution        = 0.0
         real    :: cutoff_res                = 0.0
+        real    :: mskdiam                   = 0.0
         real    :: rejection_params(3)       = 0.0
         character(16) :: last_particles_imported = ""
         character(16) :: last_iteration          = ""
@@ -923,7 +925,7 @@ module simple_nice
                 type(json_value), pointer :: particles_extracted, particles_imported, last_particles_imported, number_particles_assigned, number_particles_rejected
                 type(json_value), pointer :: iteration, number_classes, number_classes_rejected, assignment_doughnut, last_iteration_time, interactive_plot
                 type(json_value), pointer :: latest_classes_image, maximum_resolution, chunk_rejected_classes_image, chunk_rejected_grid_section, snapshot_json
-                type(json_value), pointer :: pool_rejected_grid_section, pool_rejected_classes_image, last_snapshot, last_snapshot_id, rejection, lpthres, ndev
+                type(json_value), pointer :: pool_rejected_grid_section, pool_rejected_classes_image, last_snapshot, last_snapshot_id, rejection, lpthres, ndev, mskdiam, boxsizea
                 type(nice_plot_doughnut)  :: status_plot
                 integer                   :: i
                 call this%stat_json%create_object(cls2D, 'cls2D')
@@ -990,6 +992,14 @@ module simple_nice
                         call this%stat_json%add(cls2D_section, lpthres)
                         call this%text_data_object(ndev, "ndev", this%view_cls2D%rejection_params(3), dp=1)
                         call this%stat_json%add(cls2D_section, ndev)
+                    end if
+                    if(this%view_cls2D%mskdiam .gt. 0.0) then
+                        call this%text_data_object(mskdiam, "mskdiam", round2even(this%view_cls2D%mskdiam))
+                        call this%stat_json%add(cls2D_section, mskdiam)
+                    end if
+                    if(this%view_cls2D%boxsizea .gt. 0) then
+                        call this%text_data_object(boxsizea, "boxsizea", this%view_cls2D%boxsizea)
+                        call this%stat_json%add(cls2D_section, boxsizea)
                     end if
                     call this%stat_json%add(cls2D, cls2D_section)
                 end if

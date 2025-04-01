@@ -2419,7 +2419,7 @@ contains
         end do
         ! write diam_max to file
         call moldiamori%new(1, .false.)
-        call moldiamori%set(1, "moldiam", diam_max)
+        call moldiamori%set(1, "moldiam", real(round2even(diam_max)))
         call moldiamori%write(1, trim(STREAM_MOLDIAM))
         call moldiamori%kill
         ! expand in in-plane rotation, clip and write to file
