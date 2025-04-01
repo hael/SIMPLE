@@ -8,7 +8,7 @@ use simple_syslib, only: get_process_id
 implicit none
 
 public :: seed_rnd, ran3, ran3arr, randn, multinomal, nmultinomal, greedy_sampling, gasdev, irnd_uni, irnd_uni_pair
-public :: irnd_gasdev, rnd_4dim_sphere_pnt, shcloc, mnorm_smp, r8po_fa, rnd_inds
+public :: irnd_gasdev, rnd_4dim_sphere_pnt, shcloc, mnorm_smp, r8po_fa, rnd_inds, nmultinomal_sampling
 private
 #include "simple_local_flags.inc"
 
@@ -181,6 +181,29 @@ contains
         enddo
         deallocate(pvec_sorted,inds)
     end function nmultinomal
+
+    !>  \brief  get n samples from multinomal sampling
+    function nmultinomal_sampling( pvec, nsamples ) result( which )
+        use simple_math, only: hpsort
+        real,    intent(in)  :: pvec(:) !< probabilities
+        integer, intent(in)  :: nsamples
+        integer, allocatable :: smpl_inds(:), inds(:)
+        real,    allocatable :: counts(:)
+        integer, parameter   :: NTIMES_MAX = 100000
+        integer :: ntimes, which(nsamples), np, i
+        np        = size(pvec)
+        ntimes    = min(100 * np, NTIMES_MAX)
+        allocate(smpl_inds(ntimes),inds(ntimes),counts(ntimes))
+        smpl_inds = nmultinomal(pvec, ntimes)
+        counts    = 0.
+        do i = 1, NTIMES
+            counts(smpl_inds(i)) = counts(smpl_inds(i)) + 1.
+        enddo
+        inds = (/(i,i=1,NTIMES)/)
+        call hpsort(counts, inds)
+        call reverse(inds)
+        which = inds(1:nsamples)
+    end function nmultinomal_sampling
 
     ! using the multinomal sampling idea to be more greedy towards the best probabilistic candidates
     function greedy_sampling_1( pvec, nsmpl_ub, nsmpl_lb ) result( which )
