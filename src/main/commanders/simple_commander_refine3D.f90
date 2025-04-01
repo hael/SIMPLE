@@ -99,6 +99,8 @@ contains
         logical, parameter :: DEBUG            = .true.
         integer, parameter :: MINBOX           = 256
         integer, parameter :: NPDIRS4BAL       = 500
+        integer, parameter :: MAXITS1          = 10 ! with greediness=2 & lp_auto=yes to start off
+        integer, parameter :: MAXITS2          = 50 ! with greediness=0 & lp_auto=no
         type(class_sample), allocatable :: clssmp(:)
         character(len=:),   allocatable :: str_state, vol_even, vol_odd
         real             :: smpd_target, smpd_crop, scale, trslim
@@ -113,6 +115,7 @@ contains
         type(refine3D_distr_commander)      :: xrefine3D_distr
         ! hard defaults
         call cline%delete('balance')        ! taken care of below
+        call cline%delete('greediness')     ! taken care of below
         call cline%set('trail_rec',  'yes') 
         call cline%set('refine',   'neigh')
         call cline%set('icm',        'yes') 
@@ -133,14 +136,9 @@ contains
         if( .not. cline%defined('combine_eo')  ) call cline%set('combine_eo',    'no') ! 4 now, to allow more rapid testing
         if( .not. cline%defined('prob_inpl')   ) call cline%set('prob_inpl',    'yes') ! no difference at this stage, so prefer 'yes'
         if( .not. cline%defined('update_frac') ) call cline%set('update_frac',    0.1) ! 4 now, needs testing/different logic (nsample?)
-        if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'no') ! this works and should be considered
         if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',       'yes') ! better map with ml_reg='yes'
-        if( .not. cline%defined('maxits')      ) call cline%set('maxits',         100) ! 10 passes over the particles with update_frac=0.1, which is reasonable
-        if( .not. cline%defined('greediness')  ) call cline%set('greediness',       1) ! 0: completely random class-biased sampling
-                                                                                       ! 1: half sampled from the top ranking and the rest from the remainding ones
-                                                                                       ! 2: completely greedy class-biased sampling
         call params%new(cline)
-        call cline%set('maxits_glob', params%maxits) ! needed for correct lambda annealing
+        call cline%set('maxits_glob', MAXITS1 + MAXITS2) ! needed for correct lambda annealing
         call cline%set('mkdir', 'no') ! to avoid nested directory structure
         if( params%box <= MINBOX )then
             smpd_target = params%smpd
@@ -211,8 +209,10 @@ contains
         ! create data structure for balanced sampling
         call spproj%os_ptcl3D%get_proj_sample_stats(eulspace, clssmp)
         call write_class_samples(clssmp, CLASS_SAMPLING_FILE)
-        call cline%set('balance', 'yes')
-        params_glob => null() ! let the refine3D_commander (below) take charge of this one
+        ! two-phase 3D refinement
+        call prep4refine3D(1)
+        call xrefine3D_distr%execute(cline)
+        call prep4refine3D(2)
         call xrefine3D_distr%execute(cline)
 
         !**************TESTS2DO
@@ -220,6 +220,41 @@ contains
         ! check so that all states are 0 or 1 and fall over otherwise
         ! reconstruct at full sampling in the end
         ! should test 40k projection directions and see how that performs (params class needs modification)
+
+      contains
+            
+            subroutine prep4refine3D( phase )
+                integer, intent(in) :: phase
+                integer :: iter
+                params_glob => null() ! let the refine3D_commander take charge of this one
+                ! iteration number bookkeeping
+                iter = 0
+                if( cline%defined('endit') )then
+                    iter = cline%get_iarg('endit')
+                endif
+                call cline%delete('endit')
+                iter = iter + 1
+                call cline%set('startit',     iter)
+                call cline%set('which_iter',  iter)
+                ! balancing
+                call cline%set('balance',  'yes')
+                ! phase-dependent parameters
+                ! greediness 0: completely random class-biased sampling
+                !            1: half sampled from the top ranking and the rest from the remainding ones
+                !            2: completely greedy class-biased sampling
+                select case(phase)
+                    case(1)
+                        call cline%set('lp_auto',  'yes')
+                        call cline%set('maxits', MAXITS1)
+                        call cline%set('greediness',   2)
+                    case(2)
+                        call cline%set('lp_auto',   'no')
+                        call cline%set('maxits', MAXITS2)
+                        call cline%set('greediness',   0)
+                        call cline%set('continue', 'yes')
+                end select
+            end subroutine prep4refine3D
+
     end subroutine exec_refine3D_auto
 
     subroutine exec_refine3D_distr( self, cline )
