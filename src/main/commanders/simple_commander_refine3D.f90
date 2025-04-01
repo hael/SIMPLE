@@ -99,8 +99,6 @@ contains
         logical, parameter :: DEBUG            = .true.
         integer, parameter :: MINBOX           = 256
         integer, parameter :: NPDIRS4BAL       = 500
-        integer, parameter :: MAXITS1          = 10 ! with greediness=2 & lp_auto=yes to start off
-        integer, parameter :: MAXITS2          = 50 ! with greediness=0 & lp_auto=no
         type(class_sample), allocatable :: clssmp(:)
         character(len=:),   allocatable :: str_state, vol_even, vol_odd
         real             :: smpd_target, smpd_crop, scale, trslim
@@ -114,20 +112,20 @@ contains
         type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
         type(refine3D_distr_commander)      :: xrefine3D_distr
         ! hard defaults
-        call cline%delete('balance')        ! taken care of below
-        call cline%delete('greediness')     ! taken care of below
-        call cline%set('trail_rec',  'yes') 
-        call cline%set('refine',   'neigh')
-        call cline%set('icm',        'yes') 
-        call cline%set('automsk',    'yes') 
-        call cline%set('sh_first',   'yes')
-        call cline%set('overlap',     0.99)
-        call cline%set('nstates',        1)
-        call cline%set('objfun',  'euclid')
-        call cline%set('envfsc',     'yes')
-        call cline%set('lplim_crit', 0.143)
-        call cline%set('lam_anneal', 'yes')
-        call cline%set('keepvol',     'no')
+        call cline%set('balance',   'yes')  ! balanced particle sampling based on available 3D solution
+        call cline%set('greediness',     1) ! probabilistic within-class selection based on objective function value
+        call cline%set('trail_rec',  'yes') ! trailing average 3D reconstruction
+        call cline%set('refine',   'neigh') ! greedy multi-neighborhood 3D refinement 
+        call cline%set('icm',        'yes') ! ICM regularization to maximize map connectivity
+        call cline%set('automsk',    'yes') ! envelope masking for background flattening
+        call cline%set('sh_first',   'yes') ! estimate shifts before rotational search
+        call cline%set('overlap',     0.99) ! convergence if overlap > 99%
+        call cline%set('nstates',        1) ! only single-state refinement is supported
+        call cline%set('objfun',  'euclid') ! the objective function is noise-normalized Euclidean distance
+        call cline%set('envfsc',     'yes') ! we use the envelope mask when calculating an FSC plot
+        call cline%set('lplim_crit', 0.143) ! we use the 0.143 criterion for low-pass limitation
+        call cline%set('lam_anneal', 'yes') ! we conduct deterministic annealing of the lambda regularization parameter
+        call cline%set('keepvol',     'no') ! we do not keep volumes for each iteration
         call cline%set('incrreslim',  'no') ! if anything 'yes' makes it slightly worse, but no real difference right now
         ! overridable defaults
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',        'yes')
@@ -137,8 +135,10 @@ contains
         if( .not. cline%defined('prob_inpl')   ) call cline%set('prob_inpl',    'yes') ! no difference at this stage, so prefer 'yes'
         if( .not. cline%defined('update_frac') ) call cline%set('update_frac',    0.1) ! 4 now, needs testing/different logic (nsample?)
         if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',       'yes') ! better map with ml_reg='yes'
+        if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'no') ! works, should be considered if the defaults are not satisfactory
+        if( .not. cline%defined('maxits')      ) call cline%set('maxits',          50) ! ~5 passes over particles, which should be sufficient
         call params%new(cline)
-        call cline%set('maxits_glob', MAXITS1 + MAXITS2) ! needed for correct lambda annealing
+        call cline%set('maxits_glob', params%maxits) ! needed for correct lambda annealing
         call cline%set('mkdir', 'no') ! to avoid nested directory structure
         if( params%box <= MINBOX )then
             smpd_target = params%smpd
@@ -185,6 +185,8 @@ contains
         call cline%set('ufrac_trec', params%update_frac)
         ! fillin refinement step (for updatng scores and filling in missing orientations)
         cline_fillin = cline
+        call cline_fillin%delete('balance')
+        call cline_fillin%delete('greediness')
         call cline_fillin%delete('update_frac')
         call cline_fillin%delete('trail_rec')
         call cline_fillin%delete('ufrac_trec')
@@ -192,7 +194,6 @@ contains
         call cline_fillin%delete('keepvol')
         call cline_fillin%delete('combine_eo')
         call cline_fillin%delete('incrreslim')
-        call cline_fillin%delete('greediness')
         call cline_fillin%set('refine', 'neigh_fillin')
         call cline_fillin%set('sh_first', 'no')
         call cline_fillin%set('maxits', 1)
@@ -209,10 +210,8 @@ contains
         ! create data structure for balanced sampling
         call spproj%os_ptcl3D%get_proj_sample_stats(eulspace, clssmp)
         call write_class_samples(clssmp, CLASS_SAMPLING_FILE)
-        ! two-phase 3D refinement
-        ! call prep4refine3D(1)
-        ! call xrefine3D_distr%execute(cline)
-        call prep4refine3D(2)
+        ! 3D refinement
+        params_glob => null() ! let the refine3D_commander take charge of this one
         call xrefine3D_distr%execute(cline)
 
         !**************TESTS2DO
@@ -220,41 +219,7 @@ contains
         ! check so that all states are 0 or 1 and fall over otherwise
         ! reconstruct at full sampling in the end
         ! should test 40k projection directions and see how that performs (params class needs modification)
-
-      contains
-            
-            subroutine prep4refine3D( phase )
-                integer, intent(in) :: phase
-                integer :: iter
-                params_glob => null() ! let the refine3D_commander take charge of this one
-                ! iteration number bookkeeping
-                iter = 0
-                if( cline%defined('endit') )then
-                    iter = cline%get_iarg('endit')
-                endif
-                call cline%delete('endit')
-                iter = iter + 1
-                call cline%set('startit',     iter)
-                call cline%set('which_iter',  iter)
-                ! balancing
-                call cline%set('balance',  'yes')
-                ! phase-dependent parameters
-                ! greediness 0: completely random class-biased sampling
-                !            1: probabilistic selection based on objective function value
-                !            2: completely greedy class-biased sampling
-                select case(phase)
-                    case(1)
-                        call cline%set('lp_auto',  'yes')
-                        call cline%set('maxits', MAXITS1)
-                        call cline%set('greediness',   2)
-                    case(2)
-                        call cline%set('lp_auto',   'no')
-                        call cline%set('maxits', MAXITS2)
-                        call cline%set('greediness',   1)
-                        call cline%set('continue', 'yes')
-                end select
-            end subroutine prep4refine3D
-
+        
     end subroutine exec_refine3D_auto
 
     subroutine exec_refine3D_distr( self, cline )
