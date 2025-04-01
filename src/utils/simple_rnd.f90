@@ -151,16 +151,19 @@ contains
     end function multinomal
 
     !>  \brief  run multinomal ntimes
-    function nmultinomal( pvec, ntimes ) result( which )
+    function nmultinomal( pvec, ntimes, nsamples ) result( which )
         use simple_math, only: hpsort
-        real,     intent(in) :: pvec(:) !< probabilities
-        integer,  intent(in) :: ntimes
+        real,              intent(in) :: pvec(:) !< probabilities
+        integer,           intent(in) :: ntimes
+        integer, optional, intent(in) :: nsamples
         real,    allocatable :: pvec_sorted(:)
         integer, allocatable :: inds(:)
+        logical, allocatable :: l_sampled(:)
         integer :: i, j, n, which(ntimes), cnt
         real    :: bound, vals(ntimes)
         n = size(pvec)
         allocate(pvec_sorted(n), source=pvec)
+        allocate(l_sampled(n),   source=.false.)
         inds = (/(i,i=1,n)/)
         call hpsort(pvec_sorted, inds)
         do i = 1, ntimes
@@ -170,16 +173,28 @@ contains
         cnt   = 1
         which = inds(1)
         bound = 0.
-        do j=n,1,-1
-            bound = bound + pvec_sorted(j)
-            do 
-                if( vals(cnt) > bound )exit
-                which(cnt) = inds(j)
-                cnt        = cnt + 1
-                if( cnt > ntimes ) exit
+        if( present(nsamples) )then
+            do j=n,1,-1
+                bound = bound + pvec_sorted(j)
+                do 
+                    if( vals(cnt) > bound )exit
+                    which(cnt)         = inds(j)
+                    l_sampled(inds(j)) = .true.
+                    cnt                = cnt + 1
+                    if( count(l_sampled) == nsamples .or. cnt > ntimes ) exit
+                enddo
             enddo
-        enddo
-        deallocate(pvec_sorted,inds)
+        else
+            do j=n,1,-1
+                bound = bound + pvec_sorted(j)
+                do 
+                    if( vals(cnt) > bound )exit
+                    which(cnt)         = inds(j)
+                    cnt                = cnt + 1
+                    if( cnt > ntimes ) exit
+                enddo
+            enddo
+        endif
     end function nmultinomal
 
     !>  \brief  get n samples from multinomal sampling
@@ -194,7 +209,7 @@ contains
         np        = size(pvec)
         ntimes    = min(100 * np, NTIMES_MAX)
         allocate(smpl_inds(ntimes),inds(np),counts(np))
-        smpl_inds = nmultinomal(pvec, ntimes)
+        smpl_inds = nmultinomal(pvec, ntimes, nsamples)
         counts    = 0.
         do i = 1, ntimes
             counts(smpl_inds(i)) = counts(smpl_inds(i)) + 1.
