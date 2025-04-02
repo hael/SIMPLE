@@ -744,9 +744,11 @@ contains
         type(simple_nice_communicator) :: snapshot_comm
         type(json_core)                :: json
         character(len=:),  allocatable :: projfile, projfname, cavgsfname, frcsfname, src, dest
-        character(len=:),  allocatable :: pool_refs
+        character(len=:),  allocatable :: pool_refs, l_stkname, l_frcsname
         logical                        :: l_write_star, l_clspath, l_snapshot, snapshot_proj_found = .false.
         logical,     parameter         :: DEBUG_HERE      = .false.
+        real                           :: l_smpd
+        integer                        :: l_ncls
         l_write_star = .false.
         l_clspath    = .false.
         l_snapshot   = .false.
@@ -781,7 +783,17 @@ contains
             end if
             if(snapshot_proj_found) then
                 call apply_snapshot_selection(snapshot_proj)
+                call snapshot_proj%get_cavgs_stk(l_stkname, l_ncls, l_smpd) 
+                call snapshot_proj%get_frcs(l_frcsname,'frc2D')
+                call simple_copy_file(trim(l_stkname), stemname(snapshot_projfile) // "/cavgs" // STK_EXT)
+                call simple_copy_file(trim(add2fbody(l_stkname, params_glob%ext,'_even')), stemname(snapshot_projfile) // "/cavgs_even" // STK_EXT)
+                call simple_copy_file(trim(add2fbody(l_stkname, params_glob%ext,'_odd')),  stemname(snapshot_projfile) // "/cavgs_odd"  // STK_EXT)
+                call simple_copy_file(trim(l_frcsname), stemname(snapshot_projfile) // '/' // FRCS_FILE)
+                call snapshot_proj%os_out%kill
+                call snapshot_proj%add_cavgs2os_out(stemname(snapshot_projfile) // "/cavgs" // STK_EXT, l_smpd, 'cavg')
+                call snapshot_proj%add_frcs2os_out(stemname(snapshot_projfile) // '/' // FRCS_FILE, 'frc2D')
                 call snapshot_proj%set_cavgs_thumb(snapshot_projfile)
+                snapshot_proj%os_ptcl3D = snapshot_proj%os_ptcl2D
                 call snapshot_proj%write(snapshot_projfile)
                 call set_snapshot_time()
                 call snapshot_comm%terminate(export_project=snapshot_proj)
