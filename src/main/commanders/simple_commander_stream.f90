@@ -2622,6 +2622,7 @@ contains
         if( .not. cline%defined('remove_chunks')) call cline%set('remove_chunks','yes')
         if( .not. cline%defined('refine')       ) call cline%set('refine',       'snhc_smpl')
         if( .not. cline%defined('dynreslim')    ) call cline%set('dynreslim',    'no')
+        if( .not. cline%defined('cavg_ini')     ) call cline%set('cavg_ini',     'no')
         ! write cmdline for GUI
         call cline%writeline(".cline")
         ! sanity check for restart
@@ -3013,6 +3014,7 @@ contains
         class(commander_stream_abinitio3D), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters)                       :: params
+        type(cmdline)                          :: cline4exec
         type(sp_project)                       :: spproj_glob
         type(moviewatcher)                     :: project_buff
         type(oris)                             :: moldiamori
@@ -3090,6 +3092,16 @@ contains
         endif
         nice_communicator%stat_root%stage = "waiting for > "// int2str(params%nptcls) // " particles"
         call nice_communicator%cycle()
+        ! preps command line used for execution of abinitio3D
+        cline4exec = cline
+        call cline4exec%set('prg',    'abinitio3D')
+        call cline4exec%set('mkdir',  'no')
+        call cline4exec%set('stream', 'yes')
+        call cline4exec%delete('projname')
+        call cline4exec%delete('dir_target')
+        call cline4exec%delete('niceserver')
+        call cline4exec%delete('niceprocid')
+        call cline4exec%delete('walltime') !! TODO
         ! movie watcher init
         project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_SNAPSHOT), spproj=.true.)
         ! Ask 2D process for snapshot
@@ -3117,7 +3129,7 @@ contains
                 call sleep(WAITTIME)
             enddo
             ! Parameters update
-            call update_user_params3D(l_params_updated)
+            call update_user_params3D(cline4exec, l_params_updated)
             ! New snapshots management
             call project_buff%watch(nprojects, projects, chrono=.true.)
             if( nprojects > 0 )then
@@ -3126,7 +3138,7 @@ contains
                 call add_projects2jobslist( projects )
             endif
             ! Submit to queue
-            call submit_jobs( cline )
+            call submit_jobs( cline4exec )
             ! Current runs complete?
             call check_processes( ncompleted )
             if( ncompleted > 0 )then
