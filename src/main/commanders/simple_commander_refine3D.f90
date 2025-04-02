@@ -112,7 +112,7 @@ contains
         type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
         type(refine3D_distr_commander)      :: xrefine3D_distr
         ! hard defaults
-        call cline%set('balance',        'yes') ! balanced particle sampling based on available 3D solution
+        call cline%set('balance',         'no') ! balanced particle sampling based on available 3D solution
         call cline%set('greedy_sampling', 'no') ! stochastic within-class selection without consideration to objective function value
         call cline%set('trail_rec',      'yes') ! trailing average 3D reconstruction
         call cline%set('refine',       'neigh') ! greedy multi-neighborhood 3D refinement 
@@ -184,32 +184,32 @@ contains
         call cline%set('prg',                'refine3D')
         call cline%set('ufrac_trec', params%update_frac)
         ! fillin refinement step (for updatng scores and filling in missing orientations)
-        cline_fillin = cline
-        call cline_fillin%delete('balance')
-        call cline_fillin%delete('greedy_sampling')
-        call cline_fillin%delete('update_frac')
-        call cline_fillin%delete('trail_rec')
-        call cline_fillin%delete('ufrac_trec')
-        call cline_fillin%delete('lam_anneal')
-        call cline_fillin%delete('keepvol')
-        call cline_fillin%delete('combine_eo')
-        call cline_fillin%delete('incrreslim')
-        call cline_fillin%set('refine', 'neigh_fillin')
-        call cline_fillin%set('sh_first', 'no')
-        call cline_fillin%set('maxits', 1)
-        params_glob => null() ! let the refine3D_commander (below) take charge of this one
-        call xrefine3D_distr%execute(cline_fillin)
-        ! read project
-        call spproj%read(params%projfile)
-        call spproj%update_projinfo(cline)
-        call spproj%write_segment_inside('projinfo', params%projfile)
-        ! make even projection direction distribution for balanced sampling
-        call pgrpsyms%new(trim(params%pgrp))
-        call eulspace%new(NPDIRS4BAL, is_ptcl=.false.)
-        call pgrpsyms%build_refspiral(eulspace)
-        ! create data structure for balanced sampling
-        call spproj%os_ptcl3D%get_proj_sample_stats(eulspace, clssmp)
-        call write_class_samples(clssmp, CLASS_SAMPLING_FILE)
+        ! cline_fillin = cline
+        ! call cline_fillin%delete('balance')
+        ! call cline_fillin%delete('greedy_sampling')
+        ! call cline_fillin%delete('update_frac')
+        ! call cline_fillin%delete('trail_rec')
+        ! call cline_fillin%delete('ufrac_trec')
+        ! call cline_fillin%delete('lam_anneal')
+        ! call cline_fillin%delete('keepvol')
+        ! call cline_fillin%delete('combine_eo')
+        ! call cline_fillin%delete('incrreslim')
+        ! call cline_fillin%set('refine', 'neigh_fillin')
+        ! call cline_fillin%set('sh_first', 'no')
+        ! call cline_fillin%set('maxits', 1)
+        ! params_glob => null() ! let the refine3D_commander (below) take charge of this one
+        ! call xrefine3D_distr%execute(cline_fillin)
+        ! ! read project
+        ! call spproj%read(params%projfile)
+        ! call spproj%update_projinfo(cline)
+        ! call spproj%write_segment_inside('projinfo', params%projfile)
+        ! ! make even projection direction distribution for balanced sampling
+        ! call pgrpsyms%new(trim(params%pgrp))
+        ! call eulspace%new(NPDIRS4BAL, is_ptcl=.false.)
+        ! call pgrpsyms%build_refspiral(eulspace)
+        ! ! create data structure for balanced sampling
+        ! call spproj%os_ptcl3D%get_proj_sample_stats(eulspace, clssmp)
+        ! call write_class_samples(clssmp, CLASS_SAMPLING_FILE)
         ! 3D refinement
         params_glob => null() ! let the refine3D_commander take charge of this one
         call xrefine3D_distr%execute(cline)
