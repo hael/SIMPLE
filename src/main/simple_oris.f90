@@ -1277,17 +1277,15 @@ contains
         call self%incr_sampled_updatecnt(inds, incr_sampled)
     end subroutine sample4update_rnd
 
-    subroutine sample4update_class( self, clssmp, fromto, update_frac, nsamples, inds, incr_sampled, frac_best, greediness)
+    subroutine sample4update_class( self, clssmp, fromto, update_frac, nsamples, inds, incr_sampled, l_greedy, frac_best)
         class(oris),          intent(inout) :: self
         type(class_sample),   intent(inout) :: clssmp(:) ! data structure for balanced sampling
         integer,              intent(in)    :: fromto(2)
         real,                 intent(in)    :: update_frac
         integer,              intent(inout) :: nsamples
         integer, allocatable, intent(inout) :: inds(:)
-        logical,              intent(in)    :: incr_sampled
+        logical,              intent(in)    :: incr_sampled, l_greedy
         real,    optional,    intent(in)    :: frac_best
-        integer, optional,    intent(in)    :: greediness
-        integer, parameter   :: GREEDINESS_DEFAULT = 2 ! completely greedy selection
         integer, allocatable :: states(:)
         real,    allocatable :: rstates(:)
         integer :: i, cnt, nptcls, nsamples_class, states_bal(self%n)
@@ -1298,10 +1296,8 @@ contains
         ! class-biased selection
         if( present(frac_best) )then
             call self%sample_balanced(clssmp, nsamples_class, frac_best,  states_bal) ! stochastic sampling from frac_best fraction
-        else if( present(greediness) )then
-            call self%sample_balanced(clssmp, nsamples_class, greediness, states_bal)
         else
-            call self%sample_balanced(clssmp, nsamples_class, GREEDINESS_DEFAULT, states_bal) ! completely greedy selection
+            call self%sample_balanced(clssmp, nsamples_class, l_greedy, states_bal)
         endif
         ! now, we deal with the partition
         nptcls = fromto(2) - fromto(1) + 1
@@ -1446,11 +1442,11 @@ contains
         call self_copy%kill
     end subroutine get_proj_sample_stats
 
-    subroutine sample_balanced_1( self, clssmp, nptcls, greediness, states )
+    subroutine sample_balanced_1( self, clssmp, nptcls, l_greedy, states )
         class(oris),        intent(in)    :: self
         type(class_sample), intent(inout) :: clssmp(:)  ! data structure for balanced sampling
         integer,            intent(in)    :: nptcls     ! # particles to sample in total
-        integer,            intent(in)    :: greediness ! greediness level (see below)
+        logical,            intent(in)    :: l_greedy   ! greedy or stochastic sampling
         integer,            intent(inout) :: states(self%n)
         integer,            allocatable   :: pinds_left(:), sample(:)
         type(ran_tabu) :: rt
@@ -1461,45 +1457,26 @@ contains
             where( clssmp(:)%nsample < clssmp(:)%pop ) clssmp(:)%nsample = clssmp(:)%nsample + 1
         end do
         states = 0
-        select case(greediness)
-            case(0)
-                ! completely random selection (only class assignment matters)
-                do i = 1, size(clssmp)
-                    allocate(pinds_left(clssmp(i)%pop), source=clssmp(i)%pinds)
-                    rt = ran_tabu(clssmp(i)%pop)
-                    call rt%shuffle(pinds_left)
-                    call rt%kill
-                    do j = 1, clssmp(i)%nsample
-                        states(pinds_left(j)) = 1
-                    end do
-                    deallocate(pinds_left)
+        if( l_greedy )then
+            ! completely greedy selection based on objective function value
+            do i = 1, size(clssmp)
+                do j = 1, clssmp(i)%nsample
+                    states(clssmp(i)%pinds(j)) = 1
                 end do
-            case(1)
-                ! probabilistic selection based on objective function value
-                do i = 1, size(clssmp)
-                    if( clssmp(i)%nsample == clssmp(i)%pop )then
-                        ! take everything
-                        do j = 1, clssmp(i)%nsample
-                            states(clssmp(i)%pinds(j)) = 1
-                        end do
-                    else
-                        if( allocated(sample) ) deallocate(sample)
-                        sample = nmultinomal_sampling(clssmp(i)%ccs(:)/sum(clssmp(i)%ccs(:)), clssmp(i)%nsample) 
-                        do j = 1, clssmp(i)%nsample
-                            states(clssmp(i)%pinds(sample(j))) = 1
-                        end do
-                    endif
-                enddo
-            case(2)
-                ! completely greedy selection based on objective function value
-                do i = 1, size(clssmp)
-                    do j = 1, clssmp(i)%nsample
-                        states(clssmp(i)%pinds(j)) = 1
-                    end do
+            end do
+        else
+            ! completely random selection (only class assignment matters)
+            do i = 1, size(clssmp)
+                allocate(pinds_left(clssmp(i)%pop), source=clssmp(i)%pinds)
+                rt = ran_tabu(clssmp(i)%pop)
+                call rt%shuffle(pinds_left)
+                call rt%kill
+                do j = 1, clssmp(i)%nsample
+                    states(pinds_left(j)) = 1
                 end do
-            case DEFAULT
-                THROW_HARD('only greediness 0-2 is allowed')
-        end select
+                deallocate(pinds_left)
+            end do
+        endif
     end subroutine sample_balanced_1
 
     subroutine sample_balanced_2( self, clssmp, nptcls, frac_best, states )

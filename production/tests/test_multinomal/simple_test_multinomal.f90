@@ -26,7 +26,4 @@ pvec = cnts / sum(cnts)
 
 print *, pvec
 
-print *, 'testing nmultinomal'
-print *, nmultinomal( pvec, 3 )
-
 end program simple_test_multinomal

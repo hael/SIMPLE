@@ -7,8 +7,8 @@ use simple_error,  only: simple_exception
 use simple_syslib, only: get_process_id
 implicit none
 
-public :: seed_rnd, ran3, ran3arr, randn, multinomal, nmultinomal, greedy_sampling, gasdev, irnd_uni, irnd_uni_pair
-public :: irnd_gasdev, rnd_4dim_sphere_pnt, shcloc, mnorm_smp, r8po_fa, rnd_inds, nmultinomal_sampling
+public :: seed_rnd, ran3, ran3arr, randn, multinomal, greedy_sampling, gasdev, irnd_uni, irnd_uni_pair
+public :: irnd_gasdev, rnd_4dim_sphere_pnt, shcloc, mnorm_smp, r8po_fa, rnd_inds
 private
 #include "simple_local_flags.inc"
 
@@ -149,76 +149,6 @@ contains
         which = inds(max(which,1))
         deallocate(pvec_sorted,inds)
     end function multinomal
-
-    !>  \brief  run multinomal ntimes
-    function nmultinomal( pvec, ntimes, nsamples ) result( which )
-        use simple_math, only: hpsort
-        real,              intent(in) :: pvec(:) !< probabilities
-        integer,           intent(in) :: ntimes
-        integer, optional, intent(in) :: nsamples
-        real,    allocatable :: pvec_sorted(:)
-        integer, allocatable :: inds(:)
-        logical, allocatable :: l_sampled(:)
-        integer :: i, j, n, which(ntimes), cnt
-        real    :: bound, vals(ntimes)
-        n = size(pvec)
-        allocate(pvec_sorted(n), source=pvec)
-        allocate(l_sampled(n),   source=.false.)
-        inds = (/(i,i=1,n)/)
-        call hpsort(pvec_sorted, inds)
-        do i = 1, ntimes
-            vals(i) = ran3()
-        enddo
-        call hpsort(vals)
-        cnt   = 1
-        which = inds(1)
-        bound = 0.
-        if( present(nsamples) )then
-            do j=n,1,-1
-                bound = bound + pvec_sorted(j)
-                do 
-                    if( vals(cnt) > bound )exit
-                    which(cnt)         = inds(j)
-                    l_sampled(inds(j)) = .true.
-                    cnt                = cnt + 1
-                    if( count(l_sampled) == nsamples .or. cnt > ntimes ) exit
-                enddo
-            enddo
-        else
-            do j=n,1,-1
-                bound = bound + pvec_sorted(j)
-                do 
-                    if( vals(cnt) > bound )exit
-                    which(cnt)         = inds(j)
-                    cnt                = cnt + 1
-                    if( cnt > ntimes ) exit
-                enddo
-            enddo
-        endif
-    end function nmultinomal
-
-    !>  \brief  get n samples from multinomal sampling
-    function nmultinomal_sampling( pvec, nsamples ) result( which )
-        use simple_math, only: hpsort
-        real,    intent(in)  :: pvec(:) !< probabilities
-        integer, intent(in)  :: nsamples
-        integer, allocatable :: smpl_inds(:), inds(:)
-        real,    allocatable :: counts(:)
-        integer, parameter   :: NTIMES_MAX = 100000
-        integer :: ntimes, which(nsamples), np, i
-        np        = size(pvec)
-        ntimes    = min(100 * np, NTIMES_MAX)
-        allocate(smpl_inds(ntimes),inds(np),counts(np))
-        smpl_inds = nmultinomal(pvec, ntimes, nsamples)
-        counts    = 0.
-        do i = 1, ntimes
-            counts(smpl_inds(i)) = counts(smpl_inds(i)) + 1.
-        enddo
-        inds = (/(i,i=1,np)/)
-        call hpsort(counts, inds)
-        call reverse(inds)
-        which = inds(1:nsamples)
-    end function nmultinomal_sampling
 
     ! using the multinomal sampling idea to be more greedy towards the best probabilistic candidates
     function greedy_sampling_1( pvec, nsmpl_ub, nsmpl_lb ) result( which )

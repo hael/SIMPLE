@@ -29,15 +29,4 @@ call hpsort(arr, indxarr)
 do i=1,NSEL
     print *, i, arr_copy(indxarr(i)), arr_copy(loc(i))
 end do
-print *, 'testing max nmultinomal'
-call rt%shuffle(arr)
-arr_tmp = arr / sum(arr)
-loc = nmultinomal(arr_tmp, NSEL)
-arr_copy = arr
-indxarr = (/(i,i=1,NNRS)/)
-call hpsort(arr, indxarr)
-call reverse(indxarr)
-do i=1,NSEL
-    print *, i, arr_copy(indxarr(i)), arr_copy(loc(i))
-end do
 end program simple_test_maxnloc

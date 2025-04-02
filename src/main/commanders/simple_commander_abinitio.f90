@@ -603,7 +603,7 @@ contains
             endif
             ! create an initial balanced greedy sampling
             noris = spproj%os_ptcl3D%get_noris()
-            call spproj%os_ptcl3D%sample4update_class(clssmp, [1,noris], update_frac, nptcls2update, pinds, .true.)
+            call spproj%os_ptcl3D%sample4update_class(clssmp, [1,noris], update_frac, nptcls2update, pinds, .true., .true.)
             call spproj%os_ptcl3D%set_updatecnt(1, pinds) ! set all sampled updatecnts to 1 & the rest to zero
             deallocate(pinds)                             ! these are not needed
             call deallocate_class_samples(clssmp)         ! done with this one
