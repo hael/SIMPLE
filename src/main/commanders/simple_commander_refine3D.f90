@@ -98,7 +98,7 @@ contains
         real,    parameter :: SMPD_TARGET_MIN  = 1.3
         logical, parameter :: DEBUG            = .true.
         integer, parameter :: MINBOX           = 256
-        integer, parameter :: NPDIRS4BAL       = 500
+        integer, parameter :: NPDIRS4BAL       = 300
         type(class_sample), allocatable :: clssmp(:)
         character(len=:),   allocatable :: str_state, vol_even, vol_odd
         real             :: smpd_target, smpd_crop, scale, trslim
@@ -112,21 +112,21 @@ contains
         type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
         type(refine3D_distr_commander)      :: xrefine3D_distr
         ! hard defaults
-        call cline%set('balance',   'yes')  ! balanced particle sampling based on available 3D solution
-        call cline%set('greediness',     1) ! probabilistic within-class selection based on objective function value
-        call cline%set('trail_rec',  'yes') ! trailing average 3D reconstruction
-        call cline%set('refine',   'neigh') ! greedy multi-neighborhood 3D refinement 
-        call cline%set('icm',        'yes') ! ICM regularization to maximize map connectivity
-        call cline%set('automsk',    'yes') ! envelope masking for background flattening
-        call cline%set('sh_first',   'yes') ! estimate shifts before rotational search
-        call cline%set('overlap',     0.99) ! convergence if overlap > 99%
-        call cline%set('nstates',        1) ! only single-state refinement is supported
-        call cline%set('objfun',  'euclid') ! the objective function is noise-normalized Euclidean distance
-        call cline%set('envfsc',     'yes') ! we use the envelope mask when calculating an FSC plot
-        call cline%set('lplim_crit', 0.143) ! we use the 0.143 criterion for low-pass limitation
-        call cline%set('lam_anneal', 'yes') ! we conduct deterministic annealing of the lambda regularization parameter
-        call cline%set('keepvol',     'no') ! we do not keep volumes for each iteration
-        call cline%set('incrreslim',  'no') ! if anything 'yes' makes it slightly worse, but no real difference right now
+        call cline%set('balance',        'yes') ! balanced particle sampling based on available 3D solution
+        call cline%set('greedy_sampling', 'no') ! stochastic within-class selection without consideration to objective function value
+        call cline%set('trail_rec',      'yes') ! trailing average 3D reconstruction
+        call cline%set('refine',       'neigh') ! greedy multi-neighborhood 3D refinement 
+        call cline%set('icm',            'yes') ! ICM regularization to maximize map connectivity
+        call cline%set('automsk',        'yes') ! envelope masking for background flattening
+        call cline%set('sh_first',       'yes') ! estimate shifts before rotational search
+        call cline%set('overlap',         0.99) ! convergence if overlap > 99%
+        call cline%set('nstates',            1) ! only single-state refinement is supported
+        call cline%set('objfun',      'euclid') ! the objective function is noise-normalized Euclidean distance
+        call cline%set('envfsc',         'yes') ! we use the envelope mask when calculating an FSC plot
+        call cline%set('lplim_crit',     0.143) ! we use the 0.143 criterion for low-pass limitation
+        call cline%set('lam_anneal',     'yes') ! we conduct deterministic annealing of the lambda regularization parameter
+        call cline%set('keepvol',         'no') ! we do not keep volumes for each iteration
+        call cline%set('incrreslim',      'no') ! if anything 'yes' makes it slightly worse, but no real difference right now
         ! overridable defaults
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',        'yes')
         if( .not. cline%defined('center')      ) call cline%set('center',        'no') ! 4 now, probably fine
@@ -186,7 +186,7 @@ contains
         ! fillin refinement step (for updatng scores and filling in missing orientations)
         cline_fillin = cline
         call cline_fillin%delete('balance')
-        call cline_fillin%delete('greediness')
+        call cline_fillin%delete('greedy_sampling')
         call cline_fillin%delete('update_frac')
         call cline_fillin%delete('trail_rec')
         call cline_fillin%delete('ufrac_trec')

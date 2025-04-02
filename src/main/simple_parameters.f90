@@ -50,6 +50,7 @@ type :: parameters
     character(len=3)          :: frc_weight='no'      !< considering particle numbers of classes in computing frc (yes|no){no}
     character(len=3)          :: guinier='no'         !< calculate Guinier plot(yes|no){no}
     character(len=3)          :: graphene_filt='no'   !< filter out graphene bands in correlation search
+    character(len=3)          :: greedy_sampling='yes' !< greedy class sampling or not (referring to objective function)
     character(len=3)          :: gridding='no'        !< to test gridding correction
     character(len=3)          :: groupframes='no'     !< Whether to perform weighted frames averaging during motion correction(yes|no){no}
     character(len=3)          :: hist='no'            !< whether to print histogram
@@ -289,7 +290,6 @@ type :: parameters
     integer :: fromp=1             !< start ptcl index
     integer :: fromf=1             !< frame start index
     integer :: grow=0              !< # binary layers to grow(in pixels)
-    integer :: greediness=0        !< greediness level in balanced selection (0-2)
     integer :: hpind_fsc           !< high-pass Fourier index for FSC
     integer :: icm_stage=0
     integer :: iptcl=1
@@ -506,7 +506,7 @@ type :: parameters
     logical :: l_envfsc       = .false.
     logical :: l_filemsk      = .false.
     logical :: l_focusmsk     = .false.
-    logical :: l_greediness   = .false.
+    logical :: l_greedy_sampling = .true.
     logical :: l_frac_best    = .false.
     logical :: l_update_frac  = .false.
     logical :: l_graphene     = .false.
@@ -622,6 +622,7 @@ contains
         call check_carg('frc_weight',     self%frc_weight)
         call check_carg('guinier',        self%guinier)
         call check_carg('graphene_filt',  self%graphene_filt)
+        call check_carg('greedy_sampling',self%greedy_sampling)
         call check_carg('gridding',       self%gridding)
         call check_carg('groupframes',    self%groupframes)
         call check_carg('hist',           self%hist)
@@ -817,7 +818,6 @@ contains
         call check_iarg('fromp',          self%fromp)
         call check_iarg('fromf',          self%fromf)
         call check_iarg('grow',           self%grow)
-        call check_iarg('greediness',     self%greediness)
         call check_iarg('icm_stage',      self%icm_stage)
         call check_iarg('iptcl',          self%iptcl)
         call check_iarg('job_memory_per_task2D', self%job_memory_per_task2D)
@@ -1377,8 +1377,8 @@ contains
         endif
         ! set frac_best flag
         self%l_frac_best = self%frac_best <= 0.99
-        ! set greediness flag
-        self%l_greediness = cline%defined('greediness')
+        ! set greedy sampling flag
+        self%l_greedy_sampling = trim(self%greedy_sampling).eq.'yes'
         if( .not. cline%defined('ncunits') )then
             ! we assume that the number of computing units is equal to the number of partitions
             self%ncunits = self%nparts

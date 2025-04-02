@@ -828,10 +828,10 @@ contains
         logical                         :: l_ctfres, l_icefrac, l_append
         class(oris), pointer :: pos => NULL()
         l_append = .false.
-        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',   'yes')
-        if( .not. cline%defined('prune')      ) call cline%set('prune',    'no')
-        if( .not. cline%defined('append')     ) call cline%set('append',   'no')
-        if( .not. cline%defined('greediness') ) call cline%set('greediness', 2.)
+        if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',           'yes')
+        if( .not. cline%defined('prune')           ) call cline%set('prune',            'no')
+        if( .not. cline%defined('append')          ) call cline%set('append',           'no')
+        if( .not. cline%defined('greedy_sampling') ) call cline%set('greedy_sampling', 'yes')
         call params%new(cline, silent=.true.)
         ! nice communicator init
         call nice_communicator%init(params%niceprocid, params%niceserver)
@@ -982,7 +982,7 @@ contains
                     call spproj_part%kill
                 end do
             else
-                call spproj%os_ptcl2D%sample_balanced(clssmp, params%nptcls, params%greediness, states)
+                call spproj%os_ptcl2D%sample_balanced(clssmp, params%nptcls, params%l_greedy_sampling, states)
                 call spproj%os_ptcl2D%set_all('state', real(states))
                 call spproj%os_ptcl3D%set_all('state', real(states))
                 if( trim(params%prune).eq.'yes' ) call spproj%prune_particles

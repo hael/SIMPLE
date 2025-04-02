@@ -26,7 +26,6 @@ call test_image(.false.)
 call test_ftiter
 ! LOCAL TESTFUNCTIONS
 call test_multinomal
-call test_nmultinomal
 call test_testfuns
 call test_euler_shift
 call simple_test_fit_line
@@ -61,39 +60,6 @@ contains
         prob = prob/1000.
         write(logfhandle,*) 'this should be 0.1:', prob
         write(logfhandle,'(a)') 'SIMPLE_RND: MULTINOMAL TEST COMPLETED WITHOUT TERMINAL BUGS ;-)'
-    end subroutine
-
-    subroutine test_nmultinomal
-        integer :: i, irnd
-        real    :: pvec(10), prob(2)
-        integer :: samplings(1000)
-        call seed_rnd
-        pvec(1) = 0.6
-        pvec(2) = 0.3
-        do i=3,10
-            pvec(i) = 0.1/8.
-        end do
-        write(logfhandle,*) 'this should be one:', sum(pvec)
-        samplings = nmultinomal(pvec, 1000)
-        prob=0.
-        do i=1,1000
-            if( samplings(i) == 1 ) prob(1) = prob(1)+1.
-            if( samplings(i) == 2 ) prob(2) = prob(2)+1.
-        end do
-        prob = prob/1000.
-        write(logfhandle,*) 'this should be 0.6:', prob(1)
-        write(logfhandle,*) 'this should be 0.3:', prob(2)
-        pvec = 0.1
-        write(logfhandle,*) 'this should be one:', sum(pvec)
-        samplings = nmultinomal(pvec, 1000)
-        prob=0.
-        do i=1,1000
-            if( samplings(i) == 1 ) prob(1) = prob(1)+1.
-            if( samplings(i) == 2 ) prob(2) = prob(2)+1.
-        end do
-        prob = prob/1000.
-        write(logfhandle,*) 'this should be 0.1:', prob
-        write(logfhandle,'(a)') 'SIMPLE_RND: NMULTINOMAL TEST COMPLETED WITHOUT TERMINAL BUGS ;-)'
     end subroutine
 
     subroutine test_testfuns
