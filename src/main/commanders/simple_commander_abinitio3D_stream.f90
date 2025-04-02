@@ -159,14 +159,6 @@ contains
         ! updates command line
         cline_abinitio3D = cline
         call cline_abinitio3D%set('projfile', record%projfile)
-        call cline_abinitio3D%set('prg',     'abinitio3D')
-        call cline_abinitio3D%set('oritype', 'ptcl3D')
-        call cline_abinitio3D%set('mkdir',   'no')
-        call cline_abinitio3D%set('stream',  'yes')
-        call cline_abinitio3D%delete('dir_target')
-        if(cline_abinitio3D%defined('niceserver')) call cline_abinitio3D%delete('niceserver')
-        if(cline_abinitio3D%defined('niceprocid')) call cline_abinitio3D%delete('niceprocid')
-        call cline_abinitio3D%delete('walltime') !! TODO
         call cline_abinitio3D%gen_job_descr(job_descr)
         ! submit
         distrexec = 'execscript_'//record%id
@@ -259,11 +251,15 @@ contains
     end subroutine analysis
 
     !> Updates current parameters with user input
-    subroutine update_user_params3D( updated )
-        logical, intent(out)  :: updated
-        type(oris)            :: os
-        ! character(len=STDLEN) :: val
-        integer               :: nptcls
+    !  Parameters can be either global ones used by master process (params_glob updated)
+    !  AND/OR can be for abinitio3D, in which case cline must be updated!
+    subroutine update_user_params3D( cline, updated )
+        use simple_sym, only: is_valid_pointgroup
+        class(cmdline), intent(inout) :: cline
+        logical,        intent(out)   :: updated
+        type(oris)                    :: os
+        character(len=:), allocatable :: string
+        integer :: nptcls
         updated = .false.
         call os%new(1, is_ptcl=.false.)
         if( file_exists(USER_PARAMS) )then
@@ -272,8 +268,32 @@ contains
                 nptcls = os%get_int(1,'nptcls')
                 if( nptcls > 0 )then
                     params_glob%nptcls = nptcls
-                    write(logfhandle,'(A,I8)')'>>> # OF PTCLS / SNAPSHOT UPDATED TO:',params_glob%nptcls
+                    write(logfhandle,'(A,I8)')'>>> # OF PTCLS / SNAPSHOT UPDATED TO: ',params_glob%nptcls
                     updated = .true.
+                else
+                    THROW_WARN('Invalid NPTCLS!')
+                endif
+            endif
+            if( os%isthere(1,'pgrp') )then
+                call os%getter(1,'pgrp', string)
+                if( is_valid_pointgroup(string) )then
+                    params_glob%pgrp = trim(string)
+                    call cline%set('pgrp', params_glob%pgrp) ! command-line updated
+                    write(logfhandle,'(A,A)')'>>> PGRP UPDATED TO: ', trim(params_glob%pgrp)
+                    updated = .true.
+                else
+                    THROW_WARN('Invalid PGRP!')
+                endif
+            endif
+            if( os%isthere(1,'pgrp_start') )then
+                call os%getter(1,'pgrp_start', string)
+                if( is_valid_pointgroup(string) )then
+                    params_glob%pgrp_start = trim(string)
+                    call cline%set('pgrp_start', params_glob%pgrp_start) ! command-line updated
+                    write(logfhandle,'(A,A)')'>>> PGRP_START UPDATED TO: ', trim(params_glob%pgrp_start)
+                    updated = .true.
+                else
+                    THROW_WARN('Invalid PGRP_START!')
                 endif
             endif
             call del_file(USER_PARAMS)

@@ -5,9 +5,10 @@ use simple_ori
 use simple_oris
 use simple_math
 use simple_rnd
+use simple_strings
 implicit none
 
-public :: sym, sym_tester
+public :: sym, is_valid_pointgroup, sym_tester
 private
 #include "simple_local_flags.inc"
 
@@ -1953,6 +1954,30 @@ contains
             euls(3) = 0.d0
         endif
     end function matextract
+
+    logical function is_valid_pointgroup( pgrp )
+        character(len=*), intent(in) :: pgrp
+        integer :: l,s,i
+        is_valid_pointgroup = .false.
+        l = len_trim(pgrp)
+        select case(uppercase(pgrp(1:1)))
+        case('C')
+            if( l < 2 )return
+            read(pgrp(2:l),*,iostat=s) i
+            if ( s /= 0 )return
+            if( i < 1 )return
+        case('D')
+            if( l < 2 )return
+            read(pgrp(2:l),*,iostat=s) i
+            if ( s /= 0 )return
+            if( i < 2 )return
+        case('T','O','I')
+            if( l /= 1 )return
+        case DEFAULT
+            return
+        end select
+        is_valid_pointgroup = .true.
+    end function is_valid_pointgroup
 
     subroutine sym_tester(pgrp)
         character(len=*), intent(in) :: pgrp
