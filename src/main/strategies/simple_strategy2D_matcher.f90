@@ -38,7 +38,6 @@ type(image), allocatable :: ptcl_match_imgs(:)
 real(timer_int_kind)     :: rt_init, rt_prep_pftcc, rt_align, rt_cavg, rt_projio, rt_tot
 integer(timer_int_kind)  ::  t_init,  t_prep_pftcc,  t_align,  t_cavg,  t_projio,  t_tot
 character(len=STDLEN)    :: benchfname
-logical                  :: l_stream   = .false.
 
 contains
 
@@ -59,9 +58,10 @@ contains
         type(convergence)     :: conv
         type(strategy2D_spec) :: strategy2Dspec
         real    :: frac_srch_space, neigh_frac
-        integer :: iptcl, fnr, updatecnt, iptcl_map, nptcls2update
-        integer :: batchsz_max, batchsz, nbatches, batch_start, batch_end, iptcl_batch, ibatch
-        logical :: l_partial_sums, l_update_frac, l_ctf, l_prob, l_snhc, l_greedy, l_np_cls_defined
+        integer :: iptcl, fnr, updatecnt, iptcl_map, iptcl_batch, ibatch, nptcls2update
+        integer :: batchsz_max, batchsz, nbatches, batch_start, batch_end
+        logical :: l_partial_sums, l_update_frac, l_ctf, l_prob, l_snhc
+        logical :: l_stream, l_greedy, l_np_cls_defined
         if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = t_init
@@ -164,7 +164,7 @@ contains
             rt_init = toc(t_init)
             t_prep_pftcc = tic()
         endif
-        call preppftcc4align2D( pftcc, batchsz_max, which_iter )
+        call preppftcc4align2D( pftcc, batchsz_max, which_iter, l_stream )
 
         ! ARRAY ALLOCATION FOR STRATEGY2D after pftcc initialization
         call prep_strategy2D_glob( neigh_frac )
@@ -467,10 +467,11 @@ contains
     end subroutine build_batch_particles2D
 
     !>  \brief  prepares the polarft corrcalc object for search and imports the references
-    subroutine preppftcc4align2D( pftcc, batchsz_max, which_iter )
+    subroutine preppftcc4align2D( pftcc, batchsz_max, which_iter, l_stream )
         use simple_strategy2D3D_common, only: prep2dref
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: batchsz_max, which_iter
+        logical,                 intent(in)    :: l_stream
         type(image),      allocatable :: match_imgs(:)
         character(len=:), allocatable :: fname
         real      :: xyz(3)

@@ -104,6 +104,7 @@ integer                          :: nptcls_glob=0, nptcls_rejected_glob=0, ncls_
 integer                          :: ncls_glob                         ! global number of classes
 integer                          :: nabinitioprojs_glob = 0           ! global number snapshots generated for abinitio3D
 integer                          :: iterswitch2euclid   = 0           ! only used by gen_picking_refs
+integer                          :: lim_ufrac_nptcls    = MAX_STREAM_NPTCLS ! # of ptcls beyond which fractional updates will be used
 integer                          :: snapshot_jobid = 0                ! nice job id for snapshot
 integer                          :: snapshot_complete_jobid = 0       ! nice job id for completed snapshot
 integer                          :: repick_iteration = 0              ! iteration to select classes from for re-picking
@@ -163,7 +164,7 @@ contains
         refs_glob      = 'start_cavgs'//params_glob%ext
         pool_available = .true.
         pool_iter      = 0
-        call simple_mkdir(POOL_DIR)
+        call simple_mkdir(POOL_DIR, verbose=.false.)
         call simple_mkdir(trim(POOL_DIR)//trim(STDERROUT_DIR))
         call simple_mkdir(DIR_SNAPSHOT)
         if( l_update_sigmas ) call simple_mkdir(SIGMAS_DIR)
@@ -267,6 +268,9 @@ contains
         if( l_update_sigmas ) call cline_cluster2D_pool%set('cc_iters', 0)
         ! when the classification is started without chunks (no chunk pre-classification)
         if( l_no_chunks ) l_update_sigmas = .false.
+        ! set # of ptcls beyond which fractional updates will be used
+        lim_ufrac_nptcls = MAX_STREAM_NPTCLS
+        if( master_cline%defined('nsample_max') ) lim_ufrac_nptcls = params_glob%nsample_max
         ! EV override
         refgen = .false.
         if( present(reference_generation) ) refgen = reference_generation
@@ -315,7 +319,7 @@ contains
         end select
         ! refinement
         select case(trim(params_glob%refine))
-        case('snhc','snhc_smpl')
+        case('snhc','snhc_smpl','prob_smpl')
             call cline_cluster2D_chunk%set('refine', params_glob%refine)
             call cline_cluster2D_pool%set( 'refine', params_glob%refine)
         case DEFAULT
@@ -1107,7 +1111,7 @@ contains
             nptcls_sel    = 0 ! # of ptcls excluding state=0 within selected stacks
             do i = 1,nstks_tot
                 istk = stk_order(i)
-                if( (min_update_cnts_per_stk(istk) > STREAM_SRCHLIM) .and. (nptcls_sel > MAX_STREAM_NPTCLS) ) cycle
+                if( (min_update_cnts_per_stk(istk) > STREAM_SRCHLIM) .and. (nptcls_sel > lim_ufrac_nptcls) ) cycle
                 nptcls_sel    = nptcls_sel + nptcls_per_stk(istk)
                 nptcls2update = nptcls2update + pool_proj%os_stk%get_int(istk, 'nptcls')
                 pool_stacks_mask(istk) = .true.
@@ -1173,8 +1177,8 @@ contains
                 call consolidate_sigma2_groups(sigma2_star_from_iter(pool_iter), sigma_fnames)
                 deallocate(sigma_fnames)
             else
+                ! sigma_est=global & first iteration
                 if( pool_iter==1 )then
-                    ! sigma_est=global & first iteration
                     allocate(sigma_fnames(glob_chunk_id))
                     do i = 1,glob_chunk_id
                         sigma_fnames(i) = trim(SIGMAS_DIR)//'/chunk_'//int2str(i)//'.star'
@@ -1196,23 +1200,23 @@ contains
             ! momentum & limits to # of particles per class
             nsample = MAXPOP_CLS
             if( master_cline%defined('nsample') ) nsample = params_glob%nsample
-            nptcls_th = MAX_STREAM_NPTCLS
+            nptcls_th = lim_ufrac_nptcls
             if( nptcls_sel > nptcls_th )then
                 frac_update = real(nptcls_th) / real(nptcls_sel)
                 call cline_cluster2D_pool%set('maxpop',    nsample)
                 call cline_cluster2D_pool%set('sigma_est', 'global')
             endif
-            ! user override
-            if( master_cline%defined('update_frac') ) frac_update = params_glob%update_frac
         else
             ! momentum only
-            if( nptcls_sel > MAX_STREAM_NPTCLS )then
+            if( nptcls_sel > lim_ufrac_nptcls )then
                 if( (sum(prev_eo_pops) > 0) .and. (nptcls_old > 0))then
                     frac_update = real(nptcls_old-sum(prev_eo_pops)) / real(nptcls_old)
                 endif
             endif
         endif
+        ! user override
         if( frac_update < 0.99999 )then
+            if( master_cline%defined('update_frac') ) frac_update = params_glob%update_frac
             call cline_cluster2D_pool%set('update_frac', frac_update)
             call cline_cluster2D_pool%set('center',      'no')
             do icls = 1,ncls_glob

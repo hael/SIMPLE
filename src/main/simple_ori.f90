@@ -1015,7 +1015,7 @@ contains
     end function isstate
 
     !>  \brief  check wether the orientation has any typical search parameter
-    logical function has_been_searched( self )
+    pure logical function has_been_searched( self )
         class(ori), intent(in) :: self
         has_been_searched = .true.
         if (.not. is_zero(self%e1get())      ) return

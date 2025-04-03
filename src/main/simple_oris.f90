@@ -1661,8 +1661,8 @@ contains
 
     !>  \brief  check wether the orientation has any typical search parameter
     logical function has_been_searched( self, i )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: i
+        class(oris), intent(in) :: self
+        integer,     intent(in) :: i
         has_been_searched = self%o(i)%has_been_searched()
     end function has_been_searched
 
