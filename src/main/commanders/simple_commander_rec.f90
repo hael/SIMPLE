@@ -315,7 +315,13 @@ contains
             if( L_BENCH_GLOB ) rt_eoavg = rt_eoavg + toc(t_eoavg)
             deallocate(recname, volname)
         end do
+        ! destruct
+        call build%kill_general_tbox
+        call build%eorecvol%kill_exp
+        call build%kill_rec_eo_tbox
         call eorecvol_read%kill
+        call vol_prev_even%kill
+        call vol_prev_odd%kill
         ! end gracefully
         call simple_end('**** SIMPLE_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)

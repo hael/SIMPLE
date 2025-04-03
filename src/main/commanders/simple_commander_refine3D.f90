@@ -635,7 +635,7 @@ contains
                                 params%l_filemsk = .true.
                                 call cline%set('mskfile', MSKVOL_FILE)
                                 call job_descr%set('mskfile', MSKVOL_FILE)
-                                call mskvol%kill
+                                call mskvol%kill_bimg
                                 call vol_e%kill
                                 call vol_o%kill
                             endif
