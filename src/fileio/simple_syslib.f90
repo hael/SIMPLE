@@ -448,35 +448,36 @@ contains
         deallocate(targetdir)
     end subroutine simple_chdir
 
-    !> \brief  Make directory -- fail when ignore is false
-    !! return optional status 0=success
-    subroutine simple_mkdir( dir, ignore, status, errmsg)
-        character(len=*), intent(in)               :: dir
-        logical,          intent(in), optional     :: ignore
-        integer,          intent(out), optional    :: status
-        character(len=*), intent(in), optional     :: errmsg
+    !> \brief  Make directory
+    subroutine simple_mkdir( dir, errmsg, verbose)
+        character(len=*),           intent(in) :: dir
+        character(len=*), optional, intent(in) :: errmsg
+        logical,          optional, intent(in) :: verbose
+        logical, parameter :: ignore_here = .false.
         character(kind=c_char, len=:), allocatable :: path
         character(len=STDLEN) :: tmpdir
         integer :: io_status, lenstr
-        logical :: ignore_here
+        logical :: l_verbose
+        l_verbose = .true.
+        if( present(verbose) ) l_verbose = verbose
         ! check input arg
         tmpdir = trim(adjustl(dir))
         lenstr = len_trim(tmpdir)
-        if(lenstr==0) then
-            write(logfhandle,*)"syslib:: simple_mkdir arg empty "//trim(tmpdir)
-        else if(lenstr<=2 .and. (tmpdir(1:1)=='/' .or. tmpdir(1:1)=='.'))then
+        if( lenstr==0 ) then
+            if( verbose )write(logfhandle,*)"syslib:: simple_mkdir arg empty "//trim(tmpdir)
+            return
+        else if( (lenstr<=2) .and. (tmpdir(1:1)=='/' .or. tmpdir(1:1)=='.') )then
             ! ignore '/' '.' './' '..'
-            write(logfhandle,*)"syslib:: simple_mkdir arg special char: "//trim(tmpdir)
+            if( verbose )write(logfhandle,*)"syslib:: simple_mkdir arg special char: "//trim(tmpdir)
         endif
-        ignore_here = .false.
-        io_status=0
+        io_status = 0
         if(.not. dir_exists(trim(adjustl(tmpdir)))) then
             ! prepare path for C function
             allocate(path, source=trim(tmpdir)//c_null_char)
             io_status = makedir(trim(adjustl(path)), len_trim(tmpdir))
             if(.not. dir_exists(trim(adjustl(path)))) then
                 if(present(errmsg))write (*,*) "ERROR>> ", trim(errmsg)
-                write(logfhandle,*)" syslib:: simple_mkdir failed to create "//trim(path)
+                if( verbose )write(logfhandle,*)" syslib:: simple_mkdir failed to create "//trim(path)
                 if(.not. ignore_here)then
                     if(io_status /= 0) call simple_error_check(io_status, &
                         "syslib:: simple_mkdir failed to create "//trim(path))
@@ -484,7 +485,6 @@ contains
             endif
             deallocate(path)
         end if
-        if(present(status)) status = io_status
     end subroutine simple_mkdir
 
     !> \brief  Remove directory

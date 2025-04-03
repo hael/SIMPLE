@@ -31,6 +31,7 @@ type :: eul_prob_tab2D
     ! TABLE FILLING
     procedure          :: fill_table_greedy
     procedure          :: fill_table_smpl
+    procedure          :: fill_table_smpl_stream
     ! ASSIGNMENT FROM TABLE
     procedure          :: normalize_table
     procedure          :: normalize_ptcl
@@ -39,7 +40,7 @@ type :: eul_prob_tab2D
     procedure          :: assign_greedy
     procedure          :: assign_shc
     procedure          :: assign_smpl
-    procedure          :: assign_smpl_shc
+    procedure          :: assign_smpl_stream
     procedure          :: assign_prob
     ! I/O
     procedure          :: write_table
@@ -116,6 +117,7 @@ contains
             endif
         endif
         if( all(pops == 0) ) THROW_HARD('All class pops cannot be zero!')
+        ! non-empty classses
         self%populated = pops > 0
         self%neffcls   = count(self%populated)
         allocate(self%clsinds(self%neffcls),self%indcls(self%ncls),source=0)
@@ -204,12 +206,13 @@ contains
         integer :: vec(pftcc_glob%get_nrots())
         integer :: nrots, i, j, iptcl, ithr, irot, icls, jrot, rank, ninpl_smpl, ncls_smpl
         nrots = pftcc_glob%get_nrots()
+        ! power of sampling distribution
+        P = EXTR_POWER
+        if( params_glob%extr_iter > params_glob%extr_lim ) P = POST_EXTR_POWER
         ! size of stochastic neighborhood (# of in-plane angles to draw from)
         neigh_frac = extremal_decay2D(params_glob%extr_iter, params_glob%extr_lim)
         ninpl_smpl = neighfrac2nsmpl(neigh_frac, nrots)
         ncls_smpl  = neighfrac2nsmpl(neigh_frac, self%neffcls)
-        P = EXTR_POWER
-        if( params_glob%extr_iter > params_glob%extr_lim ) P = POST_EXTR_POWER
         ! Fork
         if( params_glob%l_doshift )then
             lims(:,1)      = -params_glob%trs
@@ -277,6 +280,108 @@ contains
             !$omp end parallel do
         endif
     end subroutine fill_table_smpl
+
+    ! Fill the probability table choosing an in-plane angle stochastically
+    ! after shift search against a per-particle subset of top ranking classes
+    ! New particles are searched in a greedy fashion
+    subroutine fill_table_smpl_stream( self, os )
+        class(eul_prob_tab2D), intent(inout) :: self
+        class(oris),           intent(in)    :: os
+        type(pftcc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)
+        real,       allocatable :: sorted_scores(:)
+        integer,    allocatable :: sorted_inds(:)
+        real    :: scores(pftcc_glob%get_nrots()),lims(2,2),lims_init(2,2),cxy(3),P,score
+        integer :: vec(pftcc_glob%get_nrots())
+        integer :: nrots, i, j, iptcl, ithr, irot, icls, jrot, rank, ninpl_smpl, ncls_smpl
+        logical :: greedy
+        nrots = pftcc_glob%get_nrots()
+        ! power of sampling distribution
+        P = EXTR_POWER
+        ! size of stochastic neighborhood (# of in-plane angles to draw from)
+        ninpl_smpl = neighfrac2nsmpl(0., nrots)
+        ncls_smpl  = neighfrac2nsmpl(0., self%neffcls)
+        ! Fork
+        if( params_glob%l_doshift )then
+            lims(:,1)      = -params_glob%trs
+            lims(:,2)      =  params_glob%trs
+            lims_init(:,1) = -SHC_INPL_TRSHWDTH
+            lims_init(:,2) =  SHC_INPL_TRSHWDTH
+            do ithr = 1,nthr_glob
+                call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init,&
+                    &shbarrier=params_glob%shbarrier, maxits=params_glob%maxits_sh,&
+                    &opt_angle=.true., coarse_init=.false.)
+            end do
+            allocate(sorted_scores(self%neffcls),sorted_inds(self%neffcls))
+            !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+            !$omp private(i,iptcl,ithr,icls,j,irot,jrot,score,scores,sorted_scores,sorted_inds,vec,cxy,rank,greedy)
+            do i = 1,self%nptcls
+                iptcl  = self%pinds(i)
+                ithr   = omp_get_thread_num() + 1
+                greedy = (os%get_updatecnt(iptcl)==1) .or. (.not.os%has_been_searched(iptcl))
+                ! exhaustive evaluation without shifts
+                do j = 1,self%neffcls
+                    icls  = self%clsinds(j)
+                    call pftcc_glob%gencorrs(icls, iptcl, scores)
+                    if( greedy )then
+                        ! greedy in-plane
+                        irot  = maxloc(scores,dim=1)
+                        score = scores(irot)
+                    else
+                        ! stochastic in-plane
+                        call power_sampling(P, nrots, scores, vec, ninpl_smpl, irot, rank, score)
+                    endif
+                    self%loc_tab(icls,i)%dist   = eulprob_dist_switch(score)
+                    self%loc_tab(icls,i)%inpl   = irot
+                    self%loc_tab(icls,i)%x      = 0.
+                    self%loc_tab(icls,i)%y      = 0.
+                    self%loc_tab(icls,i)%has_sh = .true.
+                enddo
+                ! subset
+                sorted_scores = self%loc_tab(self%clsinds(:),i)%dist
+                sorted_inds   = (/(j,j=1,self%neffcls)/)
+                call hpsort(sorted_scores, sorted_inds)
+                ! shift search of top-ranking subset
+                do j = 1,ncls_smpl
+                    icls = self%clsinds(sorted_inds(j))
+                    call grad_shsrch_obj(ithr)%set_indices(icls, iptcl)
+                    irot = self%loc_tab(icls,i)%inpl
+                    jrot = irot
+                    cxy  = grad_shsrch_obj(ithr)%minimize(irot=irot)
+                    if( irot == 0 )then
+                        irot = jrot
+                        cxy  = [real(pftcc_glob%gencorr_for_rot_8(icls, iptcl, irot)), 0.,0.]
+                    endif
+                    self%loc_tab(icls,i)%dist = eulprob_dist_switch(cxy(1))
+                    self%loc_tab(icls,i)%inpl = irot
+                    self%loc_tab(icls,i)%x    = cxy(2)
+                    self%loc_tab(icls,i)%y    = cxy(3)
+                enddo
+            enddo
+            !$omp end parallel do
+            deallocate(sorted_scores,sorted_inds)
+        else
+            !$omp parallel do default(shared) private(i,j,iptcl,icls,irot,scores,vec,rank,score,greedy)&
+            !$omp proc_bind(close) schedule(static)
+            do i = 1, self%nptcls
+                iptcl  = self%pinds(i)
+                greedy = (os%get_updatecnt(iptcl)==1).or.(.not.os%has_been_searched(iptcl))
+                do j = 1, self%neffcls
+                    icls  = self%clsinds(j)
+                    call pftcc_glob%gencorrs(icls, iptcl, scores)
+                    if( greedy )then
+                        ! new particle
+                        irot  = maxloc(scores,dim=1)
+                        score = scores(irot)
+                    else
+                        call power_sampling(P, nrots, scores, vec, ninpl_smpl, irot, rank, score)
+                    endif
+                    self%loc_tab(icls,i)%dist = eulprob_dist_switch(score)
+                    self%loc_tab(icls,i)%inpl = irot
+                enddo
+            enddo
+            !$omp end parallel do
+        endif
+    end subroutine fill_table_smpl_stream
 
     ! Normalization of loc_tab of each class such that prob of each ptcl is in [0,1]
     subroutine normalize_table( self )
@@ -456,6 +561,42 @@ contains
         if( rank_ptcls ) call self%select_top_ptcls(pops)
     end subroutine assign_smpl
 
+    ! Assign class to old particles stochastically without self-withdrawal
+    ! New particles are assigned greedily
+    subroutine assign_smpl_stream( self, os, rank_ptcls )
+        class(eul_prob_tab2D), intent(inout) :: self
+        class(oris),           intent(in)    :: os
+        logical,               intent(in)    :: rank_ptcls
+        real    :: pdists(self%neffcls), P, score, neigh_frac
+        integer :: pops(self%ncls), vec(self%neffcls)
+        integer :: iptcl, i, icls, ind, rank, ncls_smpl
+        logical :: greedy
+        ! power of sampling distribution
+        P = EXTR_POWER
+        ! size of stochastic neighborhood (# of classes to draw from)
+        ncls_smpl = neighfrac2nsmpl(0., self%neffcls)
+        pops = 0
+        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+        !$omp private(i,pdists,vec,ind,rank,score,icls,iptcl,greedy) reduction(+:pops)
+        do i = 1,self%nptcls
+            iptcl  = self%pinds(i)
+            greedy = (os%get_updatecnt(iptcl)==1).or.(.not.os%has_been_searched(iptcl))
+            if( greedy )then
+                pdists = self%loc_tab(self%clsinds(:),i)%dist
+                ind    = minloc(pdists,dim=1)                                   ! greedy sampling
+            else
+                pdists = eulprob_corr_switch(self%loc_tab(self%clsinds(:),i)%dist)             ! distances to score
+                call power_sampling(P, self%neffcls, pdists, vec, ncls_smpl, ind, rank, score) ! stochastic sampling
+            endif
+            icls              = self%clsinds(ind)                               ! class ID
+            self%assgn_map(i) = self%loc_tab(icls,i)                            ! updates assignement
+            pops(icls)        = pops(icls) + 1                                  ! updates population
+        enddo
+        !$omp end parallel do
+        ! ignore worst particles
+        if( rank_ptcls ) call self%select_top_ptcls(pops)
+    end subroutine assign_smpl_stream
+
     ! Assignment based on SHC
     subroutine assign_shc( self, os, rank_ptcls )
         class(eul_prob_tab2D), intent(inout) :: self
@@ -483,42 +624,6 @@ contains
         ! toss worst particles
         if( rank_ptcls ) call self%select_top_ptcls(pops)
     end subroutine assign_shc
-
-    ! Assign improving class to all particles stochastically
-    subroutine assign_smpl_shc( self, os, rank_ptcls )
-        class(eul_prob_tab2D), intent(inout) :: self
-        class(oris),           intent(in)    :: os
-        logical,               intent(in)    :: rank_ptcls
-        real    :: pdists(self%neffcls), P, score
-        integer :: pops(self%ncls), vec(self%neffcls), i, icls, ind, rank, ncls_smpl, prev_cls
-        P = EXTR_POWER
-        if( params_glob%extr_iter > params_glob%extr_lim ) P = POST_EXTR_POWER
-        ! select class stochastically
-        pops = 0
-        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-        !$omp private(i,pdists,vec,ind,rank,score,icls,prev_cls) reduction(+:pops)
-        do i = 1,self%nptcls
-            prev_cls = os%get_class(self%pinds(i))
-            if( prev_cls <= 0 )then
-                icls = minloc(self%loc_tab(self%clsinds(:),i)%dist,dim=1)
-            else
-                pdists    = eulprob_corr_switch(self%loc_tab(self%clsinds(:),i)%dist)
-                ncls_smpl = count(pdists >= pdists(prev_cls)) ! # of improving classes
-                if( ncls_smpl == 1 )then
-                    icls = self%indcls(prev_cls)
-                else
-                    ! drawing from improving classes
-                    call power_sampling(P, self%neffcls, pdists, vec, ncls_smpl, icls, rank, score)
-                endif
-            endif
-            icls              = self%clsinds(icls)
-            self%assgn_map(i) = self%loc_tab(icls,i)
-            pops(icls)        = pops(icls) + 1
-        enddo
-        !$omp end parallel do
-        ! toss worst particles
-        if( rank_ptcls ) call self%select_top_ptcls(pops)
-    end subroutine assign_smpl_shc
 
     ! Same assignment as 3D (cf eul_prob_tab)
     subroutine assign_prob( self, os, rank_ptcls )

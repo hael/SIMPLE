@@ -1539,17 +1539,20 @@ contains
         type(qsys_env)             :: qenv
         type(chash)                :: job_descr
         integer :: nptcls
-        logical :: l_maxpop
+        logical :: l_maxpop, l_stream
         ! After this condition block, only build_glob & params_glob must be used!
         if( associated(build_glob) )then
             if( .not.associated(params_glob) )then
                 THROW_HARD('Builder & parameters must be associated for shared memory execution!')
             endif
         else
+            l_stream = .false.
+            if(cline%defined('stream')) l_stream = trim(cline%get_carg('stream'))=='yes'
             call cline%set('mkdir',   'no')
             call cline%set('stream',  'no')
             call cline%set('oritype', 'ptcl2D')
             call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+            if( l_stream ) call cline%set('stream', 'yes')
         endif
         if( params_glob%startit == 1 ) call build_glob%spproj_field%clean_entry('updatecnt', 'sampled')
         ! Whether to weight based-on the top maxpop particles
@@ -1577,35 +1580,37 @@ contains
         ! reading scores from all parts
         call eulprob%read_table_parts_to_glob
         ! perform assignment
-        if( params_glob%which_iter == 1 )then
-            ! Always greedy assignement with first iteration
-            call eulprob%assign_greedy(l_maxpop)
-        else
+        if( l_stream )then
             select case(trim(params_glob%refine))
-            case('prob')
-                if( params_glob%extr_iter <= params_glob%extr_lim )then
-                    call eulprob%normalize_table
-                    call eulprob%assign_prob(build_glob%spproj_field, l_maxpop)
-                else
-                    if( trim(params_glob%ptcl_norm).eq.'yes' ) call eulprob%normalize_ptcl
-                    call eulprob%assign_smpl(build_glob%spproj_field, l_maxpop)
-                endif
-            case('prob_smpl','prob_smpl_shc')
+            case('prob_smpl')
                 if( trim(params_glob%ptcl_norm).eq.'yes' ) call eulprob%normalize_ptcl
-                if( params_glob%extr_iter <= params_glob%extr_lim )then
-                    call eulprob%assign_smpl(build_glob%spproj_field, l_maxpop)
-                else
-                    if( trim(params_glob%refine) == 'prob_smpl' )then
-                        call eulprob%assign_smpl(build_glob%spproj_field, l_maxpop)
-                    else
-                        call eulprob%assign_smpl_shc(build_glob%spproj_field, l_maxpop)
-                    endif
-                endif
-            case('prob_greedy')
-                call eulprob%assign_greedy(l_maxpop)
+                call eulprob%assign_smpl(build_glob%spproj_field, l_maxpop)
             case DEFAULT
                 THROW_HARD('Unsupported REFINE flag: '//trim(params%refine))
             end select
+        else
+            if( params_glob%which_iter == 1 )then
+                ! Always greedy assignement with first iteration
+                call eulprob%assign_greedy(l_maxpop)
+            else
+                select case(trim(params_glob%refine))
+                case('prob')
+                    if( params_glob%extr_iter <= params_glob%extr_lim )then
+                        call eulprob%normalize_table
+                        call eulprob%assign_prob(build_glob%spproj_field, l_maxpop)
+                    else
+                        if( trim(params_glob%ptcl_norm).eq.'yes' ) call eulprob%normalize_ptcl
+                        call eulprob%assign_smpl(build_glob%spproj_field, l_maxpop)
+                    endif
+                case('prob_smpl')
+                    if( trim(params_glob%ptcl_norm).eq.'yes' ) call eulprob%normalize_ptcl
+                    call eulprob%assign_smpl(build_glob%spproj_field, l_maxpop)
+                case('prob_greedy')
+                    call eulprob%assign_greedy(l_maxpop)
+                case DEFAULT
+                    THROW_HARD('Unsupported REFINE flag: '//trim(params%refine))
+                end select
+            endif
         endif
         ! write
         call eulprob%write_assignment(trim(ASSIGNMENT_FBODY)//'.dat')
@@ -1635,8 +1640,11 @@ contains
         type(eul_prob_tab2D)          :: eulprob
         real    :: frac_srch_space
         integer :: nptcls
-        logical :: l_ctf
+        logical :: l_ctf, l_stream
+        l_stream = .false.
+        if(cline%defined('stream')) l_stream = trim(cline%get_carg('stream'))=='yes'
         call cline%set('mkdir', 'no')
+        call cline%set('stream',  'no')
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
         ! Nothing is done with regards to sampling other than reproducing
         ! what was generated in the driver (prob_tab2D_distr, above)
@@ -1663,7 +1671,7 @@ contains
             call cavger_read(params%refs, 'odd')
         endif
         ! init scorer & prep references
-        call preppftcc4align2D(pftcc, nptcls, params%which_iter)
+        call preppftcc4align2D(pftcc, nptcls, params%which_iter, l_stream)
         call cavger_kill
         ! prep particles
         l_ctf = build%spproj%get_ctfflag('ptcl2D',iptcl=params%fromp).ne.'no'
@@ -1673,18 +1681,27 @@ contains
         call eulprob%new(pinds)
         fname = trim(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
         ! Fill probability table
-        if( params%which_iter == 1 )then
-            ! always greedy in-plane in first iteration
-            call eulprob%fill_table_greedy
-        else
+        if( l_stream )then
             select case(trim(params%refine))
-            case('prob','prob_smpl','prob_smpl_shc')
-                call eulprob%fill_table_smpl
-            case('prob_greedy')
-                call eulprob%fill_table_greedy
+            case('prob_smpl')
+                call eulprob%fill_table_smpl_stream(build%spproj_field)
             case DEFAULT
                 THROW_HARD('Unsupported REFINE flag: '//trim(params%refine))
             end select
+        else
+            if( params%which_iter == 1 )then
+                ! always greedy in-plane in first iteration
+                call eulprob%fill_table_greedy
+            else
+                select case(trim(params%refine))
+                case('prob','prob_smpl')
+                    call eulprob%fill_table_smpl
+                case('prob_greedy')
+                    call eulprob%fill_table_greedy
+                case DEFAULT
+                    THROW_HARD('Unsupported REFINE flag: '//trim(params%refine))
+                end select
+            endif
         endif
         call pftcc%kill
         if(associated(eucl_sigma2_glob)) call eucl_sigma2_glob%kill

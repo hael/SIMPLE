@@ -120,13 +120,8 @@ contains
         else
             self%simple_exec_bin = filepath(trim(self%qdescr%get('simple_path')),'bin','simple_private_exec', nonalloc=.true.)
         endif
-        if( present(numlen) )then
-            call self%qscripts%new(self%simple_exec_bin, self%myqsys, self%parts,&
+        call self%qscripts%new(self%simple_exec_bin, self%myqsys, self%parts,&
             &[1, self%nparts], params_glob%ncunits, sstream, numlen)
-        else
-            call self%qscripts%new(self%simple_exec_bin, self%myqsys, self%parts,&
-            &[1, self%nparts], params_glob%ncunits, sstream)
-        endif
         if(present(qsys_nthr)) then
             call self%qdescr%set('job_cpus_per_task', int2str(qsys_nthr))         ! overrides env file and params_glob
         else
