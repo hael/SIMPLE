@@ -2242,13 +2242,13 @@ contains
         class(pca),       pointer     :: pca_ptr  => null()
         type(parameters)              :: params
         type(builder)                 :: build
-        type(image),      allocatable :: imgs(:), imgs_ori(:)
+        type(image),      allocatable :: imgs(:), imgs_ori(:), imgctfs(:)
         type(image)                   :: cavg, img, timg
         type(oris)                    :: os
         type(sp_project), target      :: spproj
         character(len=:), allocatable :: label, fname, fname_denoised, fname_cavgs, fname_cavgs_denoised, fname_oris, fname_denoised_ori, fname_ori
         integer,          allocatable :: cls_inds(:), pinds(:), cls_pops(:), ori_map(:)
-        real,             allocatable :: avg(:), avg_pix(:), pcavecs(:,:), tmpvec(:)
+        real,             allocatable :: avg(:), avg_pix(:), pcavecs(:,:), tmpvec(:), ctf_pcavecs(:,:)
         real    :: shift(2), loc(2), dist(2), e3, kw, mat(2,2), mat_inv(2,2)
         complex :: fcompl, fcompll
         integer :: npix, i, j, ncls, nptcls, cnt1, cnt2, neigs, h, k, win_corner(2),&
@@ -2333,7 +2333,7 @@ contains
                     call imgs(j)%copy_fast(imgs_ori(j))
                 enddo
             else
-                call transform_ptcls(spproj, params%oritype, cls_inds(i), imgs, pinds, phflip=l_phflip, cavg=cavg)
+                call transform_ptcls(spproj, params%oritype, cls_inds(i), imgs, pinds, phflip=l_phflip, cavg=cavg, imgctfs=imgctfs)
             endif
             nptcls = size(imgs)
             if( trim(params%neigs_per).eq.'yes' )then
@@ -2364,7 +2364,7 @@ contains
             if( trim(params%projstats).eq.'yes' )then
                 call make_pcavecs(imgs, npix, avg, pcavecs, transp=l_transp_pca, avg_pix=avg_pix)
             else
-                call make_pcavecs(imgs, npix, avg, pcavecs, transp=l_transp_pca)
+                call make_pcavecs(imgs, npix, avg, pcavecs, transp=l_transp_pca, imgctfs=imgctfs, ctf_pcavecs=ctf_pcavecs)
             endif
             if( allocated(tmpvec) ) deallocate(tmpvec)
             if( l_transp_pca )then
@@ -2380,7 +2380,7 @@ contains
                 pcavecs = transpose(pcavecs)
             else
                 call pca_ptr%new(nptcls, npix, neigs)
-                call pca_ptr%master(pcavecs, MAXPCAITS)
+                call pca_ptr%master(pcavecs, MAXPCAITS, ker_pcavecs=ctf_pcavecs)
                 allocate(tmpvec(npix))
                 !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
                 do j = 1, nptcls
