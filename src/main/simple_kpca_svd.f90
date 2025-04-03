@@ -87,11 +87,12 @@ contains
 
     ! CALCULATORS
 
-    subroutine master_kpca( self, pcavecs, maxpcaits )
+    subroutine master_kpca( self, pcavecs, maxpcaits, ker_pcavecs )
         use simple_parameters, only: params_glob
         class(kpca_svd),   intent(inout) :: self
         real,              intent(in)    :: pcavecs(self%D,self%N)
         integer, optional, intent(in)    :: maxpcaits
+        real,    optional, intent(in)    :: ker_pcavecs(self%D,self%N)
         integer, parameter :: MAX_ITS = 500
         real,    parameter :: TOL     = 0.0001
         logical, parameter :: DEBUG   = .false.
@@ -106,7 +107,11 @@ contains
             case('rbf')
                 call self%rbf_kernel(   pcavecs, ker)
             case('cosine')
-                call self%cosine_kernel(pcavecs, ker)
+                if( present(ker_pcavecs) )then
+                    call self%cosine_kernel(pcavecs, ker, ker_pcavecs)
+                else
+                    call self%cosine_kernel(pcavecs, ker)
+                endif
         end select
         ! compute the sorted principle components of the kernel above
         if( DEBUG ) call system_clock(start_time, rate)
@@ -218,28 +223,45 @@ contains
         ker = ker - ones_ker - transpose(ones_ker) + matmul(ones_ker, ones)
     end subroutine kernel_center
 
-    subroutine cosine_kernel( self, mat, ker )
+    subroutine cosine_kernel( self, mat, ker, ker_mat )
         class(kpca_svd), intent(inout) :: self
         real,            intent(in)    :: mat(self%D,self%N)
         real,            intent(out)   :: ker(self%N,self%N)
+        real, optional,  intent(in)    :: ker_mat(self%D,self%N)
         integer  :: i, j
         real(dp) :: denom
         real     :: norm_mat(self%D,self%N)
-        ! squared cosine similarity between pairs of rows
-        norm_mat = mat
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,denom)
-        do i = 1,self%N
-            denom = dsqrt(sum(real(mat(:,i),dp)**2))
-            if( denom > DTINY ) norm_mat(:,i) = mat(:,i) / real(denom)
-        enddo
-        !$omp end parallel do
-        !$omp parallel do collapse(2) default(shared) proc_bind(close) schedule(static) private(i,j)
-        do j = 1,self%N
+        ! if( present(ker_mat) )then
+        !     !$omp parallel do collapse(2) default(shared) proc_bind(close) schedule(static) private(i,j,denom)
+        !     do j = 1,self%N
+        !         do i = 1,self%N
+        !             norm_mat(:,i) = mat(:,i) * ker_mat(:,j)
+        !             norm_mat(:,j) = mat(:,j) * ker_mat(:,i)
+        !             denom = dsqrt(sum(real(norm_mat(:,i),dp)**2))
+        !             if( denom > DTINY ) norm_mat(:,i) = norm_mat(:,i) / real(denom)
+        !             denom = dsqrt(sum(real(norm_mat(:,j),dp)**2))
+        !             if( denom > DTINY ) norm_mat(:,j) = norm_mat(:,j) / real(denom)
+        !             ker(i,j) = sum(norm_mat(:,i) * norm_mat(:,j))
+        !         enddo
+        !     enddo
+        !     !$omp end parallel do
+        ! else
+            ! squared cosine similarity between pairs of rows
+            norm_mat = mat
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,denom)
             do i = 1,self%N
-                ker(i,j) = sum(norm_mat(:,i) * norm_mat(:,j))
+                denom = dsqrt(sum(real(mat(:,i),dp)**2))
+                if( denom > DTINY ) norm_mat(:,i) = mat(:,i) / real(denom)
             enddo
-        enddo
-        !$omp end parallel do
+            !$omp end parallel do
+            !$omp parallel do collapse(2) default(shared) proc_bind(close) schedule(static) private(i,j)
+            do j = 1,self%N
+                do i = 1,self%N
+                    ker(i,j) = sum(norm_mat(:,i) * norm_mat(:,j))
+                enddo
+            enddo
+            !$omp end parallel do
+        ! endif
         call self%kernel_center(ker)
     end subroutine cosine_kernel
 

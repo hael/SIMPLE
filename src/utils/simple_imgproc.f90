@@ -13,7 +13,7 @@ private
 
 contains
 
-    subroutine make_pcavecs( imgs, D, avg, pcavecs, l_mask, transp, avg_pix, do_fft )
+    subroutine make_pcavecs( imgs, D, avg, pcavecs, l_mask, transp, avg_pix, do_fft, imgctfs, ctf_pcavecs )
         class(image),                intent(inout) :: imgs(:)       !< images to serialize
         integer,                     intent(out)   :: D             !< vector dimension
         real, allocatable,           intent(inout) :: avg(:)        !< average of pcavecs
@@ -22,14 +22,18 @@ contains
         logical,           optional, intent(in)    :: transp        !< pixel-wise learning
         real, allocatable, optional, intent(inout) :: avg_pix(:)    !< pixel average
         logical,           optional, intent(in)    :: do_fft
+        class(image),      optional, intent(inout) :: imgctfs(:)
+        real, allocatable, optional, intent(inout) :: ctf_pcavecs(:,:)
         logical, allocatable :: ll_mask(:,:,:)
-        logical              :: ttransp, l_fft
+        logical              :: ttransp, l_fft, l_ctf_pcavecs
         integer              :: n, i, ldim(3), ldim_mask(3)
-        n       = size(imgs)
-        l_fft   = .false.
-        ttransp = .false.
-        if( present(transp) ) ttransp = transp
-        if( present(do_fft) ) l_fft = do_fft
+        n             = size(imgs)
+        l_fft         = .false.
+        ttransp       = .false.
+        l_ctf_pcavecs = .false.
+        if( present(transp)      ) ttransp = transp
+        if( present(do_fft)      ) l_fft = do_fft
+        if( present(ctf_pcavecs) ) l_ctf_pcavecs = .true.
         if( l_fft )then
             do i = 1, n
                 call imgs(i)%fft
@@ -68,6 +72,7 @@ contains
             end do
         else
             avg = sum(pcavecs, dim=2) / real(n)
+            avg = 0.
             if( present(avg_pix) ) avg_pix = avg
             do i = 1, n
                 pcavecs(:,i) = pcavecs(:,i) - avg
@@ -77,6 +82,13 @@ contains
             do i = 1, n
                 call imgs(i)%ifft
             enddo
+        endif
+        if( l_ctf_pcavecs )then
+            if( allocated(ctf_pcavecs) ) deallocate(ctf_pcavecs)
+            allocate(ctf_pcavecs(D,n), source=0.)
+            do i = 1, n
+                ctf_pcavecs(:,i) = imgctfs(i)%serialize(ll_mask)
+            end do
         endif
     end subroutine make_pcavecs
 
@@ -108,16 +120,15 @@ contains
 
     ! write tiled jpeg of mrc file
     subroutine mrc2jpeg_tiled(mrcfile, outfile, scale, ntiles, msk)
-        character(len=*),          intent(in)  :: mrcfile, outfile
-        real,            optional, intent(out) :: scale
-        integer,         optional, intent(out) :: ntiles
-        logical,      optional, allocatable, intent(in)  :: msk(:)
-        character(len=STDLEN)                  :: jpeg_path
-        type(image)                            :: img, img_pad, img_jpeg
-        type(stack_io)                         :: stkio_r
-        integer                                :: ldim_stk(3)
-        integer                                :: ncls_here, xtiles, ytiles, icls, ix, iy, l_ntiles
-        real                                   :: smpd
+        character(len=*),               intent(in)  :: mrcfile, outfile
+        real,    optional,              intent(out) :: scale
+        integer, optional,              intent(out) :: ntiles
+        logical, optional, allocatable, intent(in)  :: msk(:)
+        type(image)    :: img, img_pad, img_jpeg
+        type(stack_io) :: stkio_r
+        integer        :: ldim_stk(3)
+        integer        :: ncls_here, xtiles, ytiles, icls, ix, iy, l_ntiles
+        real           :: smpd
         smpd = 1.0
         if(.not. file_exists(trim(mrcfile))) return
         call find_ldim_nptcls(trim(mrcfile), ldim_stk, ncls_here)
