@@ -2829,6 +2829,7 @@ contains
             end do
             deallocate(os_strings)
         endif
+        if( allocated(parts) ) deallocate(parts)
         nullify(os)
         ! no need to update header (taken care of in binoris object)
         call self%bos%close

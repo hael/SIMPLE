@@ -201,7 +201,7 @@ contains
         class(convergence), intent(inout) :: self
         class(cmdline),     intent(inout) :: cline
         real,               intent(in)    :: msk
-        real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), states(:), scores(:), sampled(:), selected(:)
+        real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), states(:), scores(:), sampled(:)
         logical, allocatable :: mask(:)
         real    :: min_state_mi_joint, overlap_lim, fracsrch_lim, trail_rec_ufrac
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
@@ -375,6 +375,8 @@ contains
         call self%append_stats
         call self%plot_projdirs(mask)
         ! destruct
+        if( allocated(state_mi_joint) ) deallocate(state_mi_joint)
+        if( allocated(statepops)      ) deallocate(statepops)
         deallocate(mask, updatecnts, states, scores, sampled)
         call self%ostats%kill
     end function check_conv3D
