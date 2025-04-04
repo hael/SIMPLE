@@ -1025,7 +1025,6 @@ contains
                 call fftwf_free(self%cvec1(i)%p)
                 call fftwf_free(self%cvec2(i)%p)
                 call fftw_free( self%drvec(i)%p)
-                call fftw_free( self%rvec1(i)%p)
             enddo
             deallocate(self%ft_ref_even,self%ft_ref_odd,self%ft_ref2_even,self%ft_ref2_odd,&
             &self%rvec1,self%cvec1,self%cvec2,self%drvec)
