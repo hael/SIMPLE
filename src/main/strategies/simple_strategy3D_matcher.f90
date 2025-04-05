@@ -95,7 +95,7 @@ contains
             &nptcls2update, pinds )
         else
             ! sampled incremented
-            if( params_glob%l_fillin .and. ran3() < FILLIN_FREQ )then
+            if( params_glob%l_fillin .and. mod(which_iter,5) == 0 )then
                 call sample_ptcls4fillin([params_glob%fromp,params_glob%top], .true., nptcls2update, pinds)
             else
                 call sample_ptcls4update([params_glob%fromp,params_glob%top], .true., nptcls2update, pinds)

@@ -1012,7 +1012,7 @@ contains
         endif
         if( params_glob%startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
         ! sampled incremented
-        if( params_glob%l_fillin .and. ran3() < FILLIN_FREQ )then
+        if( params_glob%l_fillin .and. mod(params_glob%startit,5) == 0 )then
             call sample_ptcls4fillin([1,params_glob%nptcls], .true., nptcls, pinds)
         else
             call sample_ptcls4update([1,params_glob%nptcls], .true., nptcls, pinds)
