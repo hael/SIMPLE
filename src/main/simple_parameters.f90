@@ -46,6 +46,7 @@ type :: parameters
     character(len=3)          :: extract='yes'        !< whether to extract particles after picking (streaming only)
     character(len=3)          :: extractfrommov='no'  !< whether to extract particles from the movie(yes|no){no}
     character(len=3)          :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
+    character(len=3)          :: fillin='no'          !< fillin particle sampling
     character(len=3)          :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
     character(len=3)          :: frc_weight='no'      !< considering particle numbers of classes in computing frc (yes|no){no}
     character(len=3)          :: guinier='no'         !< calculate Guinier plot(yes|no){no}
@@ -506,7 +507,8 @@ type :: parameters
     logical :: l_envfsc       = .false.
     logical :: l_filemsk      = .false.
     logical :: l_focusmsk     = .false.
-    logical :: l_greedy_sampling = .true.
+    logical :: l_fillin       = .false.
+    logical :: l_greedy_smpl  = .true.
     logical :: l_frac_best    = .false.
     logical :: l_update_frac  = .false.
     logical :: l_graphene     = .false.
@@ -615,6 +617,7 @@ contains
         call check_carg('startype',       self%startype)
         call check_carg('fbody',          self%fbody)
         call check_carg('fill_holes',     self%fill_holes)
+        call check_carg('fillin',         self%fillin)
         call check_carg('filter',         self%filter)
         call check_carg('flag',           self%flag)
         call check_carg('flipgain',       self%flipgain)
@@ -1378,7 +1381,9 @@ contains
         ! set frac_best flag
         self%l_frac_best = self%frac_best <= 0.99
         ! set greedy sampling flag
-        self%l_greedy_sampling = trim(self%greedy_sampling).eq.'yes'
+        self%l_greedy_smpl = trim(self%greedy_sampling).eq.'yes'
+        ! set fillin sampling flag
+        self%l_fillin = trim(self%fillin).eq. 'yes'
         if( .not. cline%defined('ncunits') )then
             ! we assume that the number of computing units is equal to the number of partitions
             self%ncunits = self%nparts

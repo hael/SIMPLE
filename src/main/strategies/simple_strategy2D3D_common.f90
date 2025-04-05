@@ -12,7 +12,7 @@ use simple_discrete_stack_io, only: dstack_io
 implicit none
 
 public :: prepimgbatch, killimgbatch, read_imgbatch, discrete_read_imgbatch
-public :: set_bp_range, set_bp_range2D, sample_ptcls4update, prepimg4align, prep2Dref
+public :: set_bp_range, set_bp_range2D, sample_ptcls4update, sample_ptcls4fillin, prepimg4align, prep2Dref
 public :: build_batch_particles, prepare_refs_sigmas_ptcls, calc_3Drec, calc_projdir3Drec
 private
 #include "simple_local_flags.inc"
@@ -291,10 +291,10 @@ contains
                 ! balanced class sampling
                 if( params_glob%l_frac_best )then
                     call build_glob%spproj_field%sample4update_class(clssmp, pfromto, params_glob%update_frac,&
-                    nptcls2update, pinds, l_incr_sampl, params_glob%l_greedy_sampling, frac_best=params_glob%frac_best)
+                    nptcls2update, pinds, l_incr_sampl, params_glob%l_greedy_smpl, frac_best=params_glob%frac_best)
                 else
                     call build_glob%spproj_field%sample4update_class(clssmp, pfromto, params_glob%update_frac,&
-                    nptcls2update, pinds, l_incr_sampl, params_glob%l_greedy_sampling)
+                    nptcls2update, pinds, l_incr_sampl, params_glob%l_greedy_smpl)
                 endif
                 call deallocate_class_samples(clssmp)
             else
@@ -306,6 +306,14 @@ contains
             call build_glob%spproj_field%sample4update_all(pfromto, nptcls2update, pinds, l_incr_sampl)
         endif
     end subroutine sample_ptcls4update
+
+    subroutine sample_ptcls4fillin( pfromto, l_incr_sampl, nptcls2update, pinds )
+        integer,              intent(in)    :: pfromto(2)
+        logical,              intent(in)    :: l_incr_sampl
+        integer,              intent(inout) :: nptcls2update
+        integer, allocatable, intent(inout) :: pinds(:)
+        call build_glob%spproj_field%sample4update_fillin(pfromto, nptcls2update, pinds, l_incr_sampl)
+    end subroutine sample_ptcls4fillin
 
     !>  \brief  prepares one particle image for alignment
     !!          serial routine
