@@ -276,10 +276,10 @@ contains
         trail_rec_ufrac = real(count(mask)) / real(count(updatecnts > 0.5 .and. states > 0.5))
         write(logfhandle,607) '>>> TRAILING REC UPDATE FRACTION:     ', trail_rec_ufrac
         endif
-        if( params_glob%l_fillin )then
-        write(logfhandle,609) '>>> FILLIN PARTICLE SAMPLING IS ON'
+        if( params_glob%l_fillin .and. mod(params_glob%which_iter,5) == 0 )then
+        write(logfhandle,609) '>>> FILLIN PARTICLE SAMPLING WAS ON'
         else
-        write(logfhandle,609) '>>> FILLIN PARTICLE SAMPLING IS OFF'
+        write(logfhandle,609) '>>> FILLIN PARTICLE SAMPLING WAS OFF'
         endif
         endif
         ! dynamic shift search range update
