@@ -1367,7 +1367,7 @@ contains
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(in)    :: incr_sampled
         integer, allocatable :: updatecnts(:), states(:)
-        integer :: i, cnt, nptcls
+        integer :: i, cnt, nptcls, minucnt
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
         allocate(inds(nptcls), states(nptcls), updatecnts(nptcls), source=0)
@@ -1380,9 +1380,9 @@ contains
         end do
         updatecnts = pack(updatecnts, mask=states > 0)
         inds       = pack(inds,       mask=states > 0)
-        if( .not. any(updatecnts > 0) ) THROW_HARD('no orientations to fillin')
-        nsamples   = count(updatecnts == 0)
-        inds       = pack(inds, mask=updatecnts == 0)
+        minucnt    = minval(updatecnts)
+        nsamples   = count(updatecnts == minucnt)
+        inds       = pack(inds, mask=updatecnts == minucnt)
         call self%incr_sampled_updatecnt(inds, incr_sampled)
     end subroutine sample4update_fillin
 
