@@ -95,7 +95,11 @@ contains
             &nptcls2update, pinds )
         else
             ! sampled incremented
-            call sample_ptcls4update([params_glob%fromp,params_glob%top], .true., nptcls2update, pinds)
+            if( params_glob%l_fillin .and. ran3() < FILLIN_FREQ )then
+                call sample_ptcls4fillin([params_glob%fromp,params_glob%top], .true., nptcls2update, pinds)
+            else
+                call sample_ptcls4update([params_glob%fromp,params_glob%top], .true., nptcls2update, pinds)
+            endif
         endif
 
         ! PREP BATCH ALIGNMENT
@@ -174,13 +178,6 @@ contains
                         endif
                     case('eval')
                         allocate(strategy3D_eval                 :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('neigh_fillin')
-                        if( build_glob%spproj_field%is_first_update(2, iptcl) )then ! iter=2 in order to force truth when updatecnt==1 
-                            allocate(strategy3D_greedy_sub       :: strategy3Dsrch(iptcl_batch)%ptr)
-                            cnt_greedy(ithr) = cnt_greedy(ithr) + 1
-                        else
-                            allocate(strategy3D_eval             :: strategy3Dsrch(iptcl_batch)%ptr)
-                        endif
                     case('neigh')
                         allocate(strategy3D_greedy_sub           :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('greedy')
@@ -266,7 +263,7 @@ contains
 
         ! VOLUMETRIC 3D RECONSTRUCTION
         select case(trim(params_glob%refine))
-            case('eval','sigma', 'neigh_fillin')
+            case('eval','sigma')
                 ! no reconstruction
             case DEFAULT
                 if( L_BENCH_GLOB ) t_rec = tic()

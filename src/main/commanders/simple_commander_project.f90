@@ -982,7 +982,7 @@ contains
                     call spproj_part%kill
                 end do
             else
-                call spproj%os_ptcl2D%sample_balanced(clssmp, params%nptcls, params%l_greedy_sampling, states)
+                call spproj%os_ptcl2D%sample_balanced(clssmp, params%nptcls, params%l_greedy_smpl, states)
                 call spproj%os_ptcl2D%set_all('state', real(states))
                 call spproj%os_ptcl3D%set_all('state', real(states))
                 if( trim(params%prune).eq.'yes' ) call spproj%prune_particles
