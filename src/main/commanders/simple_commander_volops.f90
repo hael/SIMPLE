@@ -178,9 +178,9 @@ contains
         real,             allocatable :: fsc(:), optlp(:), res(:)
         character(len=:), allocatable :: fname_vol, fname_even, fname_odd, fname_pproc, fname_lp, fname_mirr
         type(parameters)      :: params
-        type(image)           :: vol_bfac, vol_no_bfac, vol_even, vol_odd
+        type(image)           :: vol_bfac, vol_no_bfac
         type(atoms)           :: pdb
-        type(masker)          :: mskvol, sphere, msker
+        type(masker)          :: msker
         character(len=STDLEN) :: pdbout_fname
         real    :: fsc0143, fsc05, smpd, lplim
         integer :: state, box, fsc_box, ldim(3), ifoo
@@ -291,8 +291,7 @@ contains
         character(len=:), allocatable :: fname_even, fname_odd, fname_pproc, fname_lp
         real,             allocatable :: fsc(:), optlp(:), res(:)
         type(parameters) :: params
-        type(image)      :: vol_bfac, vol_no_bfac, vol_even, vol_odd
-        type(masker)     :: mskvol, sphere
+        type(image)      :: vol_bfac, vol_no_bfac
         type(sp_project) :: spproj
         real    :: fsc0143, fsc05, smpd, lplim
         integer :: state, box, fsc_box, ldim(3)

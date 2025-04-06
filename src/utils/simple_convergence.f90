@@ -201,7 +201,7 @@ contains
         class(convergence), intent(inout) :: self
         class(cmdline),     intent(inout) :: cline
         real,               intent(in)    :: msk
-        real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), states(:), scores(:), sampled(:), selected(:)
+        real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), states(:), scores(:), sampled(:)
         logical, allocatable :: mask(:)
         real    :: min_state_mi_joint, overlap_lim, fracsrch_lim, trail_rec_ufrac
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
@@ -275,6 +275,11 @@ contains
         else
         trail_rec_ufrac = real(count(mask)) / real(count(updatecnts > 0.5 .and. states > 0.5))
         write(logfhandle,607) '>>> TRAILING REC UPDATE FRACTION:     ', trail_rec_ufrac
+        endif
+        if( params_glob%l_fillin .and. mod(params_glob%which_iter,5) == 0 )then
+        write(logfhandle,609) '>>> FILLIN PARTICLE SAMPLING WAS ON'
+        else
+        write(logfhandle,609) '>>> FILLIN PARTICLE SAMPLING WAS OFF'
         endif
         endif
         ! dynamic shift search range update
@@ -375,6 +380,8 @@ contains
         call self%append_stats
         call self%plot_projdirs(mask)
         ! destruct
+        if( allocated(state_mi_joint) ) deallocate(state_mi_joint)
+        if( allocated(statepops)      ) deallocate(statepops)
         deallocate(mask, updatecnts, states, scores, sampled)
         call self%ostats%kill
     end function check_conv3D

@@ -40,8 +40,7 @@ contains
         class(masker),  intent(inout) :: self
         class(image),   intent(inout) :: vol_even, vol_odd, vol_masked
         logical,        intent(in)    :: l_tight
-        real, optional, intent(in)    :: pix_thres 
-        type(image) :: vol_filt
+        real, optional, intent(in)    :: pix_thres
         ! prepare volume for masking
         call vol_masked%copy(vol_even)
         call vol_masked%add(vol_odd)
@@ -123,7 +122,6 @@ contains
         logical,        intent(in)    :: l_tight
         real, optional, intent(in)    :: pix_thres
         real,    allocatable :: ccsizes(:)
-        integer, allocatable :: imat_cc(:,:,:)
         type(binimage)       :: ccimage
         integer              :: loc(1), imax, sz, nccs
         ! binarize volume
@@ -150,6 +148,7 @@ contains
         if( L_WRITE .and. params_glob%part == 1 ) call self%write('largest_cc.mrc')
         ! destruct
         call ccimage%kill_bimg
+        if( allocated(ccsizes) ) deallocate(ccsizes)
     end subroutine automask3D_binarize
 
     subroutine mask_from_pdb( self,  pdb, vol_inout, os, pdbout )
