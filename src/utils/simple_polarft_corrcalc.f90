@@ -1032,6 +1032,7 @@ contains
             call fftwf_destroy_plan(self%plan_bwd1)
             call fftwf_destroy_plan(self%plan_mem_r2c)
         endif
+        if( allocated(self%ft_refs2_even) ) deallocate(self%ft_refs2_even,self%ft_refs2_odd)
     end subroutine kill_memoized_refs
 
     subroutine allocate_ptcls_memoization( self )
@@ -2953,6 +2954,9 @@ contains
             end do
             if( allocated(self%ctfmats)        ) deallocate(self%ctfmats)
             if( allocated(self%npix_per_shell) ) deallocate(self%npix_per_shell)
+            if( allocated(self%has_cache)      ) deallocate(self%has_cache)
+            if( allocated(self%do_cache)       ) deallocate(self%do_cache)
+            if( allocated(self%cached_vals)    ) deallocate(self%cached_vals)
             deallocate(self%sqsums_ptcls, self%ksqsums_ptcls, self%wsqsums_ptcls, self%angtab, self%argtransf,self%pfts_ptcls,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
                 &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone, self%norm_refs_even, self%norm_refs_odd)

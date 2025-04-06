@@ -110,6 +110,7 @@ contains
         call cline_calc_pspec%kill
         call cline_calc_pspec_assemble%kill
         call qenv%kill
+        call job_descr%kill
         call qsys_cleanup
         call simple_touch(CALCPSPEC_FINISHED)
         call simple_end('**** SIMPLE_DISTR_CALC_PSPEC NORMAL STOP ****')
@@ -196,6 +197,8 @@ contains
         binfname = 'init_pspec_part'//trim(int2str(params%part))//'.dat'
         call binfile%new(binfname,params%fromp,params%top,kfromto)
         call binfile%write(sigma2)
+        ! destruct
+        call build%kill_general_tbox
         call binfile%kill
         call killimgbatch
         call sum_img%kill

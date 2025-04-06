@@ -183,33 +183,6 @@ contains
         call cline%set('mskfile',           MSKVOL_FILE)
         call cline%set('prg',                'refine3D')
         call cline%set('ufrac_trec', params%update_frac)
-        ! fillin refinement step (for updatng scores and filling in missing orientations)
-        ! cline_fillin = cline
-        ! call cline_fillin%delete('balance')
-        ! call cline_fillin%delete('greedy_sampling')
-        ! call cline_fillin%delete('update_frac')
-        ! call cline_fillin%delete('trail_rec')
-        ! call cline_fillin%delete('ufrac_trec')
-        ! call cline_fillin%delete('lam_anneal')
-        ! call cline_fillin%delete('keepvol')
-        ! call cline_fillin%delete('combine_eo')
-        ! call cline_fillin%delete('incrreslim')
-        ! call cline_fillin%set('refine', 'neigh_fillin')
-        ! call cline_fillin%set('sh_first', 'no')
-        ! call cline_fillin%set('maxits', 1)
-        ! params_glob => null() ! let the refine3D_commander (below) take charge of this one
-        ! call xrefine3D_distr%execute(cline_fillin)
-        ! ! read project
-        ! call spproj%read(params%projfile)
-        ! call spproj%update_projinfo(cline)
-        ! call spproj%write_segment_inside('projinfo', params%projfile)
-        ! ! make even projection direction distribution for balanced sampling
-        ! call pgrpsyms%new(trim(params%pgrp))
-        ! call eulspace%new(NPDIRS4BAL, is_ptcl=.false.)
-        ! call pgrpsyms%build_refspiral(eulspace)
-        ! ! create data structure for balanced sampling
-        ! call spproj%os_ptcl3D%get_proj_sample_stats(eulspace, clssmp)
-        ! call write_class_samples(clssmp, CLASS_SAMPLING_FILE)
         ! 3D refinement
         params_glob => null() ! let the refine3D_commander take charge of this one
         call xrefine3D_distr%execute(cline)
@@ -635,7 +608,7 @@ contains
                                 params%l_filemsk = .true.
                                 call cline%set('mskfile', MSKVOL_FILE)
                                 call job_descr%set('mskfile', MSKVOL_FILE)
-                                call mskvol%kill
+                                call mskvol%kill_bimg
                                 call vol_e%kill
                                 call vol_o%kill
                             endif
@@ -732,8 +705,6 @@ contains
         select case(trim(params%refine))
             case('prob', 'prob_state')
                 ! random sampling and updatecnt dealt with in prob_align
-            case('neigh_fillin')
-                call build%spproj_field%clean_entry('sampled')
             case DEFAULT
                 if( startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
         end select
@@ -1017,7 +988,7 @@ contains
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_eul_prob_tab,        only: eul_prob_tab
-        use simple_strategy2D3D_common, only: sample_ptcls4update
+        use simple_strategy2D3D_common, only: sample_ptcls4fillin, sample_ptcls4update
         class(prob_align_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         integer,            allocatable :: pinds(:)
@@ -1041,7 +1012,11 @@ contains
         endif
         if( params_glob%startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
         ! sampled incremented
-        call sample_ptcls4update([1,params_glob%nptcls], .true., nptcls, pinds)
+        if( params_glob%l_fillin .and. mod(params_glob%startit,5) == 0 )then
+            call sample_ptcls4fillin([1,params_glob%nptcls], .true., nptcls, pinds)
+        else
+            call sample_ptcls4update([1,params_glob%nptcls], .true., nptcls, pinds)
+        endif
         ! communicate to project file
         call build_glob%spproj%write_segment_inside(params_glob%oritype)        
         ! more prep

@@ -988,7 +988,7 @@ contains
     subroutine set_cline_refine3D( istage, l_cavgs )
         integer,          intent(in)  :: istage
         logical,          intent(in)  :: l_cavgs
-        character(len=:), allocatable :: sh_first, prob_sh, ml_reg
+        character(len=:), allocatable :: sh_first, prob_sh, ml_reg, fillin
         character(len=:), allocatable :: refine, icm, trail_rec, pgrp, balance, lp_auto, automsk
         integer :: iphase, iter, inspace, imaxits, nsample_dyn
         real    :: trs, snr_noise_reg, frac_best, overlap, fracsrch, lpstart, lpstop
@@ -1000,6 +1000,7 @@ contains
         iter = iter + 1
         ! dynamic update frac
         if( istage == NSTAGES )then
+            fillin = 'yes'
             if( l_nsample_stop_given )then
                 update_frac_dyn = real(nsample_minmax(2)) / real(nptcls_eff)
             else if( l_nsample_given )then
@@ -1011,6 +1012,7 @@ contains
                 update_frac_dyn = real(nsample_dyn * params_glob%nstates) / real(nptcls_eff)
             endif
         else
+            fillin = 'no'
             update_frac_dyn = calc_update_frac_dyn(nptcls_eff, params_glob%nstates, nsample_minmax, iter, maxits_dyn)
         endif
         update_frac_dyn = min(UPDATE_FRAC_MAX, update_frac_dyn) ! to ensure fractional update is always on
@@ -1143,8 +1145,10 @@ contains
         ! class global control parameters
         if( l_update_frac_dyn .or. istage == NSTAGES )then
         call cline_refine3D%set('update_frac',        update_frac_dyn)
+        call cline_refine3D%set('fillin',             fillin)
         else
         call cline_refine3D%set('update_frac',            update_frac)
+        call cline_refine3D%delete('fillin')
         endif
         call cline_refine3D%set('lp',             lpinfo(istage  )%lp)
         if( params_glob%l_lpcont .and. istage > 1 )then
