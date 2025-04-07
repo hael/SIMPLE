@@ -1018,7 +1018,7 @@ contains
             call sample_ptcls4update([1,params_glob%nptcls], .true., nptcls, pinds)
         endif
         ! communicate to project file
-        call build_glob%spproj%write_segment_inside(params_glob%oritype)        
+        call build_glob%spproj%write_segment_inside(params_glob%oritype)
         ! more prep
         call eulprob_obj_glob%new(pinds)
         ! generating all corrs on all parts

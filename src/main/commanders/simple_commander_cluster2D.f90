@@ -26,6 +26,7 @@ public :: cleanup2D_commander_hlev
 public :: cluster2D_autoscale_commander
 public :: cluster2D_commander_distr
 public :: cluster2D_commander
+public :: cluster2D_polar_commander
 public :: prob_tab2D_commander
 public :: prob_tab2D_commander_distr
 public :: make_cavgs_commander_distr
@@ -59,6 +60,11 @@ type, extends(commander_base) :: cluster2D_commander
   contains
     procedure :: execute      => exec_cluster2D
 end type cluster2D_commander
+
+type, extends(commander_base) :: cluster2D_polar_commander
+  contains
+    procedure :: execute      => exec_cluster2D_polar
+end type cluster2D_polar_commander
 
 type, extends(commander_base) :: prob_tab2D_commander
   contains
@@ -2979,6 +2985,42 @@ contains
             end subroutine write_partition
 
     end subroutine exec_partition_cavgs
+
+    subroutine exec_cluster2D_polar( self, cline )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
+        use simple_strategy2D3D_common
+        use simple_polarft_corrcalc, only: polarft_corrcalc
+        use simple_euclid_sigma2,    only: euclid_sigma2
+        class(cluster2D_polar_commander), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
+        integer,          allocatable :: pinds(:)
+        type(image),      allocatable :: tmp_imgs(:)
+        character(len=:), allocatable :: fname
+        type(polarft_corrcalc)        :: pftcc
+        type(builder)                 :: build
+        type(parameters)              :: params
+        type(euclid_sigma2)           :: eucl_sigma
+        integer :: nptcls
+        call cline%set('mkdir',  'no')
+        call cline%set('stream', 'no')
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
+        call build%spproj_field%clean_entry('updatecnt', 'sampled')
+        call set_bp_range( cline )
+        call sample_ptcls4update([1,params_glob%nptcls], .true., nptcls, pinds)
+        ! communicate to project file
+        call build_glob%spproj%write_segment_inside(params_glob%oritype)
+        ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, POLARIZER, PTCLS
+        call prepare_refs_sigmas_ptcls( pftcc, cline, eucl_sigma, tmp_imgs, nptcls )
+        ! Build polar particle images
+        call build_batch_particles(pftcc, nptcls, pinds, tmp_imgs)
+
+        call killimgbatch
+        call pftcc%kill
+        call build%kill_general_tbox
+        call qsys_job_finished('simple_commander_cluster2D :: exec_cluster2D_polar')
+        call simple_end('**** SIMPLE_CLUSTER2D_POLAR NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_cluster2D_polar
 
     ! UTILITIES
 

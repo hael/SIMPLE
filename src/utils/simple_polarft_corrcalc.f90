@@ -65,7 +65,7 @@ type :: polarft_corrcalc
     real(sp),            allocatable :: polar(:,:)                  !< table of polar coordinates (in Cartesian coordinates)
     real(sp),            allocatable :: ctfmats(:,:,:)              !< expand set of CTF matrices (for efficient parallel exec)
     real(dp),            allocatable :: argtransf_shellone(:)       !< one dimensional argument transfer constants (shell k=1) for shifting the references
-    complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
+    complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (pftsz,nk,nrefs), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
     complex(sp),         allocatable :: norm_refs_even(:,:,:)       !< -"-, normalized even
     complex(sp),         allocatable :: norm_refs_odd(:,:,:)        !< -"-, normalized odd
@@ -147,6 +147,7 @@ type :: polarft_corrcalc
     procedure, private :: kill_memoized_ptcls, kill_memoized_refs
     procedure, private :: allocate_ptcls_memoization, allocate_refs_memoization
     ! CALCULATORS
+    procedure          :: polar_cavg
     procedure          :: create_polar_absctfmats, calc_polar_ctf
     procedure          :: gen_shmat
     procedure, private :: gen_shmat_8
@@ -1090,6 +1091,34 @@ contains
     end subroutine allocate_refs_memoization
 
     ! CALCULATORS
+
+    subroutine polar_cavg( self )
+        use simple_image
+        class(polarft_corrcalc),   intent(inout) :: self
+        complex, allocatable :: cmat(:,:)
+        type(image) :: img
+        integer     :: box, i, k
+        real        :: ctf2(self%pftsz,self%kfromto(1):self%kfromto(2))
+        self%pfts_refs_even(:,:,1) = 0.
+        ctf2 = 0.
+        do i = 1,self%nptcls
+            do k = self%kfromto(1),self%kfromto(2)
+                if( self%with_ctf )then
+                    self%pfts_refs_even(:,k,1) = self%pfts_refs_even(:,k,1) + self%pfts_ptcls(:,k,i) * self%ctfmats(:,k,i)
+                    ctf2(:,k)                  = ctf2(:,k)                  +                          self%ctfmats(:,k,i)**2
+                else
+                    self%pfts_refs_even(:,k,1) = self%pfts_refs_even(:,k,1) + self%pfts_ptcls(:,k,i)
+                endif
+            enddo
+        enddo
+        if( self%with_ctf ) self%pfts_refs_even(:,:,1) = self%pfts_refs_even(:,:,1) / ctf2
+        call self%polar2cartesian(1,.true.,cmat,box)
+        call img%new([box,box,1],1.0)
+        call img%set_cmat(cmat)
+        call img%shift_phorig()
+        call img%ifft
+        call img%write('polar_cavg.mrc')
+    end subroutine polar_cavg
 
     subroutine create_polar_absctfmats( self, spproj, oritype, pfromto )
         use simple_ctf,        only: ctf
