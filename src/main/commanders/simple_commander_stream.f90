@@ -2588,7 +2588,7 @@ contains
         type(parameters)                       :: params
         type(simple_nice_communicator)         :: nice_communicator
         type(guistats)                         :: gui_stats
-        type(oris)                             :: moldiamori
+        type(oris)                             :: moldiamori, chunksizeori
         type(moviewatcher)                     :: project_buff
         type(sp_project)                       :: spproj_glob
         type(json_core)                        :: json
@@ -2661,7 +2661,9 @@ contains
             call del_file(micspproj_fname)
             call cleanup_root_folder
         endif
-         ! mskdiam
+        ! needed for stream3d
+        call simple_mkdir(DIR_SNAPSHOT)
+        ! mskdiam
         if( .not. cline%defined('mskdiam') ) then
             ! nice communicator status
             nice_communicator%stat_root%stage = "waiting for mask diameter"
@@ -2992,6 +2994,11 @@ contains
                         params%box  = nint(spprojs(first)%os_stk%get(1,'box'))
                         call init_cluster2D_stream(cline, spproj_glob, micspproj_fname)
                         call cline%delete('ncls')
+                        ! write out for stream3d to pick up
+                        call chunksizeori%new(1, .false.)
+                        call chunksizeori%set(1, 'nptcls_per_cls', params%nptcls_per_cls)
+                        call chunksizeori%write(1, trim(STREAM_CHUNKSIZE))
+                        call chunksizeori%kill
                     end if
                 else if( n_old == 0 )then
                     params%smpd = spprojs(first)%os_mic%get(1,'smpd')
@@ -3017,13 +3024,13 @@ contains
         type(cmdline)                          :: cline4exec
         type(sp_project)                       :: spproj_glob
         type(moviewatcher)                     :: project_buff
-        type(oris)                             :: moldiamori
+        type(oris)                             :: moldiamori, chunksizeori, vol_oris, fsc_oris
         type(simple_nice_communicator)         :: nice_communicator
         character(len=LONGSTRLEN), allocatable :: projects(:)
         integer :: nprojects, iter, i, ncompleted
         logical :: l_params_updated
-        real    :: moldiam
-        call cline%set('oritype',      'mic')
+        real    :: moldiam, nptcls_per_cls
+        call cline%set('oritype',      'ptcl3D')
         call cline%set('mkdir',        'yes')
         call cline%set('objfun',    'euclid')
         call cline%set('sigma_est', 'global')
@@ -3072,12 +3079,12 @@ contains
         ! get mskdiam from 2D
         if( params%mskdiam .eq. 0.0 ) then
             ! nice communicator status
-            nice_communicator%stat_root%stage = "waiting for mask diameter"
+            nice_communicator%stat_root%stage = "waiting for initial mask diameter"
             call nice_communicator%cycle()
-            write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 5 MINUTES FOR '// trim(STREAM_MOLDIAM)
+            write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 10 MINUTES FOR '// trim(STREAM_MOLDIAM)
             do i=1, 30
                 if(file_exists(trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM))) exit
-                call sleep(10)
+                call sleep(20)
             end do
             if( .not. file_exists(trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM))) THROW_HARD('either mskdiam must be given or '// trim(STREAM_MOLDIAM) // ' exists in target_dir')
             ! read mskdiam from file
@@ -3089,6 +3096,26 @@ contains
             params%mskdiam = moldiam * 1.2
             call cline%set('mskdiam', params%mskdiam)
             write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER SET TO', params%mskdiam
+        endif
+        ! get nptcls from 2D
+        if( params%nptcls .eq. 0) then
+            ! nice communicator status
+            nice_communicator%stat_root%stage = "waiting for chunk size"
+            call nice_communicator%cycle()
+            write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 10 MINUTES FOR '// trim(STREAM_CHUNKSIZE)
+            do i=1, 30
+                if(file_exists(trim(params%dir_target)//'/'//trim(STREAM_CHUNKSIZE))) exit
+                call sleep(20)
+            end do
+            if( .not. file_exists(trim(params%dir_target)//'/'//trim(STREAM_CHUNKSIZE))) THROW_HARD('either nptcls must be given or '// trim(STREAM_CHUNKSIZE) // ' exists in target_dir')
+            ! read nptcls from file
+            call chunksizeori%new(1, .false.)
+            call chunksizeori%read( trim(params%dir_target)//'/'//trim(STREAM_CHUNKSIZE) )
+            if( .not. chunksizeori%isthere(1, "nptcls_per_cls") ) THROW_HARD( 'nptcls_per_cls missing from ' // trim(params%dir_target)//'/'//trim(STREAM_CHUNKSIZE) )
+            nptcls_per_cls = chunksizeori%get(1, "nptcls_per_cls")
+            call chunksizeori%kill
+            params%nptcls = int(nptcls_per_cls)
+            write(logfhandle,'(A,I8)')'>>> NPTCLS SET TO', params%nptcls
         endif
         nice_communicator%stat_root%stage = "waiting for > "// int2str(params%nptcls) // " particles"
         call nice_communicator%cycle()
@@ -3143,11 +3170,16 @@ contains
             call check_processes( ncompleted )
             if( ncompleted > 0 )then
                 call request_snapshot( params%nptcls )
-                call nice_communicator%update_ini3D(stage=iter, number_states=params%nstates, last_stage_completed=.true.)
             endif
             ! Volumes & parameters analysis
             call analysis( spproj_glob )
-            !nice
+            ! nice
+            if( ncompleted > 0 )then
+                call nice_communicator%update_ini3D(stage=iter, number_states=params%nstates, last_stage_completed=.true.)
+                call spproj_glob%get_all_vols( vol_oris )
+                call spproj_glob%get_all_fscs( fsc_oris )
+                call nice_communicator%update_ini3D(vol_oris=vol_oris, fsc_oris=fsc_oris)
+            end if
             call nice_communicator%cycle()
             ! Global wait
             call sleep(WAITTIME)
