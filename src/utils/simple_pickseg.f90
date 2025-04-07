@@ -44,15 +44,15 @@ end type pickseg
 contains
 
     subroutine pick( self, micname, is_AFM, moldiam )
-        class(pickseg), intent(inout) :: self
-        character(len=*), intent(in)  :: micname !< micrograph file name
+        class(pickseg),   intent(inout) :: self
+        character(len=*), intent(in)    :: micname !< micrograph file name
         real,             allocatable :: diams(:)
         integer,          allocatable :: sz(:)
         character(len=:), allocatable :: ext
         type(tvfilter) :: tvf
         type(image)    :: img_win
         real    :: px(3), otsu_t
-        integer :: i, boxcoord(2), sz_max, sz_min, nframes, box, half_box
+        integer :: i, boxcoord(2), sz_max, sz_min, nframes, box
         logical :: outside, is_AFM_l
         real,    optional, intent(in) :: moldiam
         logical, optional, intent(in) :: is_AFM 
@@ -79,14 +79,14 @@ contains
         call self%mic_shrink%new_bimg(self%ldim, self%smpd_shrink)
         call self%mic_shrink%set_ft(.true.)
         call mic_raw%clip(self%mic_shrink)
-        select case(trim(params_glob%pcontrast))
+        select case( trim(params_glob%pcontrast) )
             case('black')
                 ! flip contrast (assuming black particle contrast on input)
                 call self%mic_shrink%mul(-1.)
             case('white')
                 ! nothing to do
             case DEFAULT
-                THROW_HARD('uknown pcontrast parameter, use (black|white)')
+                THROW_HARD('unknown pcontrast parameter, use (black|white)')
         end select
         ! low-pass filter micrograph
         call self%mic_shrink%bp(0., params_glob%lp)
@@ -101,13 +101,13 @@ contains
         call otsu_img(self%mic_shrink, otsu_t, tight=.true.)
         call self%mic_shrink%set_imat
         if( L_WRITE ) call self%mic_shrink%write_bimg(fbody//'_lp_tv_bin.mrc')
-        if(is_AFM_l) then
+        if( is_AFM_l )then
             call self%mic_shrink%erode 
             call self%mic_shrink%dilate
         else 
             call self%mic_shrink%erode
             call self%mic_shrink%erode
-        end if 
+        endif 
         if( L_WRITE ) call self%mic_shrink%write_bimg(fbody//'_lp_tv_bin_erode.mrc')
         ! identify connected components
         call self%mic_shrink%find_ccs(self%img_cc)
@@ -128,18 +128,17 @@ contains
         sz_max = nint(self%sz_stats%avg + params_glob%ndev * self%sz_stats%sdev)
         ! optimal molecular diameter is inputted
         if( l_moldiam )then
-            box      = (nint(moldiam) / smpd_raw)
-            half_box = box/2
-            sz_min   = box - half_box 
-            sz_max   = box + half_box 
-            write(logfhandle,'("selecting cc [",f8.2,",",f8.2,"] Angstroms range" )') sz_min*smpd_raw, sz_max*smpd_raw
+            box      = nint(PI*(moldiam/2.)**2 / smpd_raw**2)
+            sz_min   = box / 4
+            sz_max   = box * 4
+            !write(logfhandle,'("selecting cc [",i0," : ",i0,"]" )') sz_min, sz_max
         endif
         call self%img_cc%elim_ccs([sz_min,sz_max])
         call self%img_cc%get_nccs(self%nboxes)
         sz = self%img_cc%size_ccs()
         call calc_stats(real(sz), self%sz_stats)
         if( L_DEBUG )then
-            print *, 'nboxes after  elimination: ', self%nboxes
+            print *, 'nboxes after elimination: ', self%nboxes
             print *, 'avg size: ', self%sz_stats%avg
             print *, 'med size: ', self%sz_stats%med
             print *, 'sde size: ', self%sz_stats%sdev
@@ -147,20 +146,21 @@ contains
             print *, 'max size: ', self%sz_stats%maxv
         endif
         allocate(diams(self%nboxes), source=0.)
-        call calc_stats(diams, self%diam_stats)
+        !call calc_stats(diams, self%diam_stats)
         do i = 1, self%nboxes
             call self%img_cc%diameter_cc(i, diams(i))
-        end do
+        enddo
         call calc_stats(diams, self%diam_stats)
-        if( L_DEBUG)then 
+        if( L_DEBUG )then 
+            print *, 'CC diameter (in Angs) stadistics'
             print *, 'avg diam: ', self%diam_stats%avg
             print *, 'med diam: ', self%diam_stats%med
             print *, 'sde diam: ', self%diam_stats%sdev
             print *, 'min diam: ', self%diam_stats%minv
             print *, 'max diam: ', self%diam_stats%maxv
-        end if 
+        endif 
         self%box_raw = find_magic_box(2 * nint(self%diam_stats%med/smpd_raw))
-        if(is_AFM_l) self%box_raw = nint(3.0*find_magic_box(2 * nint(self%diam_stats%med/smpd_raw)))
+        if( is_AFM_l ) self%box_raw = nint(3.0*find_magic_box(2 * nint(self%diam_stats%med/smpd_raw)))
         call img_win%new([self%box_raw,self%box_raw,1], smpd_raw)
         if( allocated(self%masscens) ) deallocate(self%masscens)
         allocate(self%masscens(self%nboxes,2), source=0.)
@@ -170,9 +170,10 @@ contains
             if( L_DEBUG )then
                 boxcoord = nint((real(SHRINK)*self%masscens(i,:2))-real(self%box_raw)/2.)
                 call mic_raw%window_slim(boxcoord, self%box_raw, img_win, outside)
-                call img_win%write('extracted.mrc', i)
+                call img_win%write(fbody//'_extracted.mrc', i)
             endif
-        end do
+        enddo
+
         contains
 
             function center_mass_cc( i_cc ) result( px )
@@ -202,11 +203,11 @@ contains
         if( present(box) )then
             do ibox = 1,self%nboxes
                 pos(ibox,:) = nint((real(SHRINK)*self%masscens(ibox,:2))-real(box)/2.)
-            end do
+            enddo
         else
             do ibox = 1,self%nboxes
                 pos(ibox,:) = nint((real(SHRINK)*self%masscens(ibox,:2))-real(self%box_raw)/2.)
-            end do
+            enddo
         endif
     end subroutine get_positions
 
@@ -231,7 +232,7 @@ contains
         call fileiochk('simple_pickgau; write_boxfile ', iostat)
         do ibox = 1,size(pos,dim=1)
             write(funit,'(I7,I7,I7,I7,I7)') pos(ibox,1), pos(ibox,2), self%box_raw, self%box_raw, -3
-        end do
+        enddo
         call fclose(funit)
     end subroutine report_boxfile
 
