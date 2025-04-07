@@ -1178,77 +1178,164 @@ contains
         use simple_fsc, only: plot_fsc
         class(gen_pspecs_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        type(parameters)  :: params
-        type(image)       :: img, img_pspec
-        type(stack_io)    :: stkio_r, stkio_w
-        real, allocatable :: spec(:), resarr(:), dynranges(:), tmp(:), spec_good(:), spec_bad(:)
-        real, parameter   :: EMPTY_THRES = 1e-6
+        type spec_inf
+            type(image)       :: img
+            real, allocatable :: spec(:)
+            real              :: dynrange  = 0.
+            real              :: dist2good = 0.
+            real              :: dist2bad  = 0.
+            integer           :: cls       = 0  ! 0: empty, 1: good, 2: bad
+        end type spec_inf
+        type(parameters)              :: params
+        real,             allocatable :: resarr(:), tmp(:), spec_good(:), spec_bad(:), dists_good(:), dists_bad(:)
+        integer,          allocatable :: inds_good(:), inds_bad(:) 
+        real,             parameter   :: EMPTY_THRES = 1e-6
+        integer,          parameter   :: MAXITS      = 5
+        type(spec_inf),   allocatable :: spec_inf_arr(:)
+        character(len=:), allocatable :: fname, ext, fname_good, fname_bad, fname_ranked
         real    :: dynrange_t
-        integer :: i, hp_ind, lp_ind, cnt_good, cnt_bad, spec_sz, cnt_empty
-        if( .not. cline%defined('lp_backgr') ) call cline%set('lp_backgr', 7.)
+        integer :: i, kfromto(2), nchanges, specsz, iter, cnt_good, cnt_bad, cnt_ranked
+        if( .not. cline%defined('hp') ) call cline%set('hp', 20.)
+        if( .not. cline%defined('lp') ) call cline%set('lp',  6.)
         call params%new(cline)
-        call img%new([params%box,params%box,1], params%smpd)
-        call img_pspec%new([params%box,params%box,1], params%smpd)
-        resarr = get_resarr(params%box, params%smpd)
-        hp_ind = calc_fourier_index(20.,params%box,params%smpd)
-        lp_ind = calc_fourier_index(6., params%box,params%smpd)
-        allocate(dynranges(params%nptcls), source=0.)
+        ! filenames
+        fname        = basename(trim(params%stk))
+        ext          = '.'//fname2ext(fname)
+        fname_good   = add2fbody(fname, ext, '_good')
+        fname_bad    = add2fbody(fname, ext, '_bad')
+        fname_ranked = add2fbody(fname, ext, '_ranked')
+        ! resolution-related
+        resarr     = get_resarr(params%box, params%smpd)
+        kfromto(1) = calc_fourier_index(20.,params%box,params%smpd)
+        kfromto(2) = calc_fourier_index(6., params%box,params%smpd)
+        ! the data structure
+        allocate(spec_inf_arr(params%nptcls) )
         do i=1,params%nptcls
-            call progress(i,params%nptcls)
-            call img%read(params%stk, i)
-            call img%norm
-            call img%mask(params%msk, 'soft')
-            call img%spectrum('sqrt', spec)
-            dynranges(i) = maxval(spec(hp_ind:lp_ind)) - minval(spec(hp_ind:lp_ind))
+            ! read, normalize & mask
+            call spec_inf_arr(i)%img%new([params%box,params%box,1], params%smpd)
+            call spec_inf_arr(i)%img%read(params%stk, i)
+            call spec_inf_arr(i)%img%norm
+            call spec_inf_arr(i)%img%mask(params%msk, 'soft')
+            ! calculate sqrt spectrum
+            call spec_inf_arr(i)%img%spectrum('sqrt', spec_inf_arr(i)%spec)
+            ! calculate dynamic range in given resolution interval
+            spec_inf_arr(i)%dynrange = maxval(spec_inf_arr(i)%spec(kfromto(1):kfromto(2))) - minval(spec_inf_arr(i)%spec(kfromto(1):kfromto(2)))
+            ! read back original image
+            call spec_inf_arr(i)%img%read(params%stk, i)
         end do
-        tmp = pack(dynranges, mask=dynranges > EMPTY_THRES)
+        ! extract dynamic ranges of non-empty images
+        tmp = pack(spec_inf_arr(:)%dynrange, mask=spec_inf_arr(:)%dynrange > EMPTY_THRES)
+        ! make initial grouping based on binary dynamic range clustering
         call otsu(size(tmp), tmp, dynrange_t)
-        cnt_good = 0
-        cnt_bad  = 0
-        spec_sz  = size(spec)
-        allocate(spec_good(spec_sz), spec_bad(spec_sz), source=0.)
         do i=1,params%nptcls
-            call img%read(params%stk, i)
-            call img%norm
-            call img%mask(params%msk, 'soft')
-            call img%spectrum('sqrt', spec)
-            if( dynranges(i) >= dynrange_t )then
-                cnt_good  = cnt_good  + 1
-                spec_good = spec_good + spec
-            else if( dynranges(i) > EMPTY_THRES )then
-                cnt_bad   = cnt_bad   + 1
-                spec_bad  = spec_bad + spec
+            if( spec_inf_arr(i)%dynrange <= EMPTY_THRES )then
+                spec_inf_arr(i)%cls = 0 ! empty
+            else if( spec_inf_arr(i)%dynrange >= dynrange_t )then
+                spec_inf_arr(i)%cls = 1 ! good
+            else
+                spec_inf_arr(i)%cls = 2 ! bad
             endif
         enddo
-        spec_good = spec_good / real(cnt_good)
-        spec_bad  = spec_bad  / real(cnt_bad)
+        ! calculate good/bad average spectra
+        specsz = size(spec_inf_arr(1)%spec)
+        allocate(spec_good(specsz), spec_bad(specsz), source=0.)
+        do i=1,params%nptcls
+            select case(spec_inf_arr(i)%cls)
+                case(1) ! good
+                    spec_good = spec_good + spec_inf_arr(i)%spec
+                case(2) ! bad
+                    spec_bad  = spec_bad  + spec_inf_arr(i)%spec
+            end select
+        enddo
+        spec_good = spec_good / real(count(spec_inf_arr(:)%cls == 1))
+        spec_bad  = spec_bad  / real(count(spec_inf_arr(:)%cls == 2))
+        ! k-means binary clustering
+        iter = 0
+        do
+            nchanges = 0
+            ! assign clusters
+            do i=1,params%nptcls
+                if( spec_inf_arr(i)%cls > 0 )then
+                    spec_inf_arr(i)%dist2good = euclid(spec_inf_arr(i)%spec(kfromto(1):kfromto(2)),spec_good(kfromto(1):kfromto(2)))
+                    spec_inf_arr(i)%dist2bad  = euclid(spec_inf_arr(i)%spec(kfromto(1):kfromto(2)),spec_bad(kfromto(1):kfromto(2)))
+                    if( spec_inf_arr(i)%dist2good <= spec_inf_arr(i)%dist2bad )then
+                        if( spec_inf_arr(i)%cls == 2 ) nchanges = nchanges + 1
+                        spec_inf_arr(i)%cls = 1
+                    else
+                        if( spec_inf_arr(i)%cls == 1 ) nchanges = nchanges + 1
+                        spec_inf_arr(i)%cls = 2
+                    endif
+                endif
+            end do
+            ! update averages
+            spec_good = 0.
+            spec_bad  = 0.
+            do i=1,params%nptcls
+                select case(spec_inf_arr(i)%cls)
+                    case(1) ! good
+                        spec_good = spec_good + spec_inf_arr(i)%spec
+                    case(2) ! bad
+                        spec_bad  = spec_bad  + spec_inf_arr(i)%spec
+                end select
+            enddo
+            spec_good = spec_good / real(count(spec_inf_arr(:)%cls == 1))
+            spec_bad  = spec_bad  / real(count(spec_inf_arr(:)%cls == 2))
+            iter      = iter + 1
+            if( nchanges == 0 .or. iter == MAXITS) exit
+        end do
         call plot_fsc(size(spec_good), spec_good, resarr, params%smpd, 'powspec_good')
         call plot_fsc(size(spec_bad),  spec_bad,  resarr, params%smpd, 'powspec_bad')
-        cnt_good  = 0
-        cnt_bad   = 0
-        cnt_empty = 0
+        ! count good/bad
+        cnt_good = 0
+        cnt_bad  = 0
         do i=1,params%nptcls
-            call img%read(params%stk, i)
-            call img%norm
-            call img%mask(params%msk, 'soft')
-            call img%spectrum('sqrt', spec)
-            call img%read(params%stk, i)
-            if( dynranges(i) <= EMPTY_THRES )then
-                cnt_empty = cnt_empty + 1
-                call img%write('cavgs_empty.mrc', cnt_empty)
-            else
-                if( euclid(spec(hp_ind:lp_ind),spec_good(hp_ind:lp_ind)) < euclid(spec(hp_ind:lp_ind),spec_bad(hp_ind:lp_ind)) )then
+            select case(spec_inf_arr(i)%cls)
+                case(1) ! good
                     cnt_good = cnt_good + 1
-                    call img%write('cavgs_good.mrc', cnt_good)
-                else
-                     cnt_bad = cnt_bad + 1
-                    call img%write('cavgs_bad.mrc', cnt_bad)
-                endif
-            endif
-        end do
-        call img%kill
-        call img_pspec%kill
+                case(2) ! bad
+                    cnt_bad = cnt_bad + 1
+            end select
+        enddo
+        ! rank & write
+        allocate(dists_good(cnt_good), dists_bad(cnt_bad), source=0.)
+        allocate(inds_good(cnt_good),  inds_bad(cnt_bad),  source=0)
+        cnt_good = 0
+        cnt_bad  = 0
+        do i=1,params%nptcls
+            select case(spec_inf_arr(i)%cls)
+                case(1) ! good
+                    cnt_good             = cnt_good + 1
+                    dists_good(cnt_good) = spec_inf_arr(i)%dist2good
+                    inds_good(cnt_good)  = i
+                case(2) ! bad
+                    cnt_bad              = cnt_bad + 1
+                    dists_bad(cnt_bad)   = spec_inf_arr(i)%dist2good
+                    inds_bad(cnt_bad)    = i
+            end select
+        enddo
+        call hpsort(dists_good, inds_good)
+        call hpsort(dists_bad,  inds_bad)
+        cnt_ranked = 0
+        do i=1,cnt_good
+            cnt_ranked = cnt_ranked + 1
+            call spec_inf_arr(inds_good(i))%img%write(fname_ranked, cnt_ranked)
+            call spec_inf_arr(inds_good(i))%img%write(fname_good, i)
+        enddo
+        do i=1,cnt_bad
+            cnt_ranked = cnt_ranked + 1
+            call spec_inf_arr(inds_bad(i))%img%write(fname_ranked, cnt_ranked)
+            call spec_inf_arr(inds_bad(i))%img%write(fname_bad , i)
+        enddo
         ! end gracefully
+        if( allocated(resarr)    ) deallocate(resarr)
+        if( allocated(tmp)       ) deallocate(tmp)
+        if( allocated(spec_good) ) deallocate(spec_good)
+        if( allocated(spec_bad)  ) deallocate(spec_bad)
+        if( allocated(resarr)    ) deallocate(resarr)
+        do i=1,params%nptcls
+            call spec_inf_arr(i)%img%kill
+            deallocate(spec_inf_arr(i)%spec)
+        enddo
         call simple_end('**** SIMPLE_GEN_PSPECS NORMAL STOP ****')
     end subroutine exec_gen_pspecs
 
