@@ -153,6 +153,8 @@ module simple_nice
         integer       :: number_states = -1
         real          :: lp            = 0.0
         character(16) :: last_stage_completed = ""
+        type(oris)    :: vol_oris
+        type(oris)    :: fsc_oris
     end type nice_view_ini3D
 
     type, private :: nice_view_vols
@@ -194,6 +196,7 @@ module simple_nice
             procedure, private :: doughnut_plot_object
             procedure, private :: bar_plot_object
             generic            :: plot_object => doughnut_plot_object, bar_plot_object
+            procedure, private :: fsc_object
             procedure, private :: image_thumbnail_object
             procedure, private :: calculate_checksum
             procedure, public  :: update_micrographs
@@ -1055,7 +1058,10 @@ module simple_nice
 
             subroutine add_view_ini3D()
                 type(json_value), pointer :: ini3D
-                type(json_value), pointer :: vols_section, stage, interactive_plot, number_states, last_stage_completed, lp
+                type(json_value), pointer :: vols_section, stage, interactive_plot, number_states, last_stage_completed, lp, vols, vol_json, fsc_json
+                real                      :: fsc05, fsc0143
+                integer                   :: noris, iori
+                nullify(fsc_json)
                 call this%stat_json%create_object(ini3D, 'ini3D')
                 ! vols
                 if(this%view_ini3D%stage > -1) then
@@ -1073,6 +1079,20 @@ module simple_nice
                     if(this%view_ini3D%lp > 0.0) then
                         call this%text_data_object(lp, "low_pass_limit", this%view_ini3D%lp, dp=1)
                         call this%stat_json%add(vols_section, lp)
+                    end if
+                    noris = this%view_ini3D%vol_oris%get_noris() 
+                    if( noris > 0 ) then
+                        call this%stat_json%create_array(vols, 'vols')
+                        do iori=1, noris
+                            call this%view_ini3D%vol_oris%ori2json(iori, vol_json)
+                            call this%fsc_object(iori, fsc_json,  this%view_ini3D%vol_oris,  this%view_ini3D%fsc_oris, fsc05, fsc0143 )
+                            if(fsc05 .gt. 0.0) call this%stat_json%add(vol_json, 'fsc05',    dble(fsc05))
+                            if(fsc05 .gt. 0.0) call this%stat_json%add(vol_json, 'fsc0143',  dble(fsc0143))
+                            if(associated(fsc_json)) call this%stat_json%add(vol_json, fsc_json)
+                            call this%stat_json%add(vols, vol_json)
+                        end do
+               !        if(present(hist)) call calculate_histogram(self%jobproc)
+                        call this%stat_json%add(vols_section, vols)
                     end if
                     call this%stat_json%add(ini3D, vols_section)
                 end if
@@ -1103,7 +1123,67 @@ module simple_nice
                 call this%stat_json%add(views, vols)
             end subroutine add_view_vols
 
+
     end subroutine generate_stat_json
+
+    subroutine fsc_object( this, iori_l, fsc_json, vol_oris, fsc_oris, fsc05, fsc0143)
+        class(simple_nice_communicator), intent(inout) :: this
+        integer,                         intent(in)    :: iori_l
+        type(json_value), pointer,       intent(inout) :: fsc_json
+        type(oris),                      intent(in)    :: vol_oris, fsc_oris
+        real,                            intent(out)   :: fsc05, fsc0143
+        type(json_value), pointer     :: datasets, dataset, data, labels !fsc_json
+        character(len=:), allocatable :: fscfile
+        real,             allocatable :: fsc(:), res(:)
+        real                          :: smpd_l, box_l
+        integer                       :: ifsc
+        logical                       :: fsc05_crossed, fsc0143_crossed
+        if(.not. vol_oris%get_noris() .eq. fsc_oris%get_noris()) return
+        if(.not. vol_oris%isthere(iori_l, "smpd")) return
+        if(.not. fsc_oris%isthere(iori_l, "fsc")) return
+        if(.not. fsc_oris%isthere(iori_l, "box")) return
+        call fsc_oris%getter(iori_l, "fsc", fscfile)
+        smpd_l = vol_oris%get(iori_l, "smpd")
+        box_l  = fsc_oris%get(iori_l, "box")
+        if(.not. file_exists(fscfile)) return
+        fsc = file2rarr(fscfile)
+        res = get_resarr(int(box_l), smpd_l)
+        call this%stat_json%create_object(fsc_json, 'fsc')
+        call this%stat_json%add(fsc_json, 'type', "plot_bar")
+        call this%stat_json%create_array(datasets, "datasets")
+        call this%stat_json%create_array(data,     "data")
+        call this%stat_json%create_array(labels,   "labels")
+        call this%stat_json%create_object(dataset, "dataset")
+        fsc05_crossed   = .false.
+        fsc0143_crossed = .false.
+        do ifsc=1, size(fsc)
+            if(.not. fsc05_crossed) then
+                if(fsc(ifsc) .gt. 0.5) then
+                    fsc05 = res(ifsc)
+                else
+                    fsc05_crossed = .true.
+                end if
+            end if
+            if(.not. fsc0143_crossed) then
+                if(fsc(ifsc) .gt. 0.143) then
+                    fsc0143 = res(ifsc)
+                else
+                    fsc0143_crossed = .true.
+                end if
+            end if
+            call this%stat_json%add(data,   '', dble(fsc(ifsc)))
+            call this%stat_json%add(labels, '', dble(res(ifsc)))
+        end do
+        call this%stat_json%add(dataset, 'borderColor', "rgba(30, 144, 255, 0.5)")
+        call this%stat_json%add(dataset, 'pointStyle', .false.)
+        call this%stat_json%add(dataset, 'cubicInterpolationMode', 'monotone')
+        call this%stat_json%add(dataset, 'tension', dble(0.4))
+        call this%stat_json%add(dataset, data)
+        call this%stat_json%add(datasets, dataset)
+        call this%stat_json%add(fsc_json, datasets)
+        call this%stat_json%add(fsc_json, labels)
+        if(allocated(fscfile)) deallocate(fscfile)
+    end subroutine fsc_object
 
     subroutine update_micrographs(this, movies_imported, movies_processed, last_movie_imported, micrographs, micrographs_rejected, compute_in_use,&
         avg_ctf_resolution, avg_ice_score, avg_astigmatism, thumbnail, thumbnail_id, thumbnail_static_id, carousel, clear_carousel)
@@ -1403,12 +1483,13 @@ module simple_nice
         end if
     end subroutine update_cls2D
 
-    subroutine update_ini3D(this, stage, number_states, last_stage_completed, lp)
+    subroutine update_ini3D(this, stage, number_states, last_stage_completed, lp, vol_oris, fsc_oris)
         class(simple_nice_communicator),           intent(inout) :: this
+        type(oris),                      optional, intent(in)    :: vol_oris, fsc_oris
         integer,                         optional, intent(in)    :: stage, number_states
         logical,                         optional, intent(in)    :: last_stage_completed
         real,                            optional, intent(in)    :: lp
-        integer :: uid, i
+        integer :: uid, i, noris
         real    :: rnd
         logical :: new
         this%view_ini3D%active = .true.
@@ -1417,6 +1498,14 @@ module simple_nice
         if(present(lp))            this%view_ini3D%lp            = lp
         if(present(last_stage_completed)) then
             if(last_stage_completed) this%view_ini3D%last_stage_completed = datestr()
+        end if
+        if(present(vol_oris)) then
+            call this%view_ini3D%vol_oris%kill()
+            this%view_ini3D%vol_oris = vol_oris
+        end if
+        if(present(fsc_oris)) then
+            call this%view_ini3D%fsc_oris%kill()
+            this%view_ini3D%fsc_oris = fsc_oris
         end if
     end subroutine update_ini3D
 

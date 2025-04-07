@@ -4218,7 +4218,6 @@ contains
                 else
                     write(logfhandle,*) 'No volumes available to print; sp_project :: print_segment_json'
                 endif
-
             case DEFAULT
                 THROW_HARD('unsupported oritype flag; print_segment_json')
         end select
