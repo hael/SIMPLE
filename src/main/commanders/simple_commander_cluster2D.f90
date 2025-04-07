@@ -552,7 +552,6 @@ contains
     end subroutine exec_cleanup2D
 
     subroutine exec_cluster2D_autoscale( self, cline )
-        use simple_commander_imgproc, only: pspec_int_rank_commander
         class(cluster2D_autoscale_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         ! constants
@@ -560,23 +559,22 @@ contains
         integer, parameter :: MAXITS_STAGE1_EXTR = 15
         integer, parameter :: MINBOX             = 88
         ! commanders
-        type(make_cavgs_commander_distr)    :: xmake_cavgs_distr
-        type(make_cavgs_commander)          :: xmake_cavgs
-        type(cluster2D_commander_distr)     :: xcluster2D_distr
-        type(cluster2D_commander)           :: xcluster2D
-        type(pspec_int_rank_commander)      :: xpspec_rank
-        type(rank_cavgs_commander)          :: xrank_cavgs
-        type(calc_pspec_commander_distr)    :: xcalc_pspec_distr
-        type(scale_commander)               :: xscale
+        type(make_cavgs_commander_distr) :: xmake_cavgs_distr
+        type(make_cavgs_commander)       :: xmake_cavgs
+        type(cluster2D_commander_distr)  :: xcluster2D_distr
+        type(cluster2D_commander)        :: xcluster2D
+        type(rank_cavgs_commander)       :: xrank_cavgs
+        type(calc_pspec_commander_distr) :: xcalc_pspec_distr
+        type(scale_commander)            :: xscale
         ! command lines
         type(cmdline) :: cline_cluster2D_stage1, cline_cluster2D_stage2
         type(cmdline) :: cline_scalerefs, cline_calc_pspec_distr
-        type(cmdline) :: cline_make_cavgs, cline_rank_cavgs, cline_pspec_rank
+        type(cmdline) :: cline_make_cavgs, cline_rank_cavgs
         ! other variables
-        class(parameters), pointer    :: params_ptr => null()
-        type(parameters)              :: params
-        type(sp_project)              :: spproj
-        character(len=LONGSTRLEN)     :: finalcavgs, finalcavgs_ranked, cavgs, refs_sc
+        class(parameters), pointer :: params_ptr => null()
+        type(parameters)           :: params
+        type(sp_project)           :: spproj
+        character(len=LONGSTRLEN)  :: finalcavgs, finalcavgs_ranked, cavgs, refs_sc
         real     :: scale, trs_stage2, smpd_target
         integer  :: last_iter_stage1, last_iter_stage2
         logical  :: l_scaling, l_shmem, l_euclid, l_cc_iters
@@ -751,24 +749,12 @@ contains
         call spproj%write_segment_inside('ptcl3D', params%projfile)
         ! clean
         call spproj%kill()
-        ! ranking
-        if( trim(params%tseries).eq.'yes' )then
-            ! rank based on maximum of power spectrum
-            call cline_pspec_rank%set('mkdir',   'no')
-            call cline_pspec_rank%set('moldiam', params%moldiam)
-            call cline_pspec_rank%set('nthr',    params%nthr)
-            call cline_pspec_rank%set('smpd',    params%smpd)
-            call cline_pspec_rank%set('stk',     finalcavgs)
-            if( cline%defined('lp_backgr') ) call cline_pspec_rank%set('lp_backgr', params%lp_backgr)
-            call xpspec_rank%execute_safe(cline_pspec_rank)
-        else
-            ! rank based on gold-standard resolution estimates
-            finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//'_ranked'//params%ext
-            call cline_rank_cavgs%set('projfile', params%projfile)
-            call cline_rank_cavgs%set('stk',      finalcavgs)
-            call cline_rank_cavgs%set('outstk',   finalcavgs_ranked)
-            call xrank_cavgs%execute_safe( cline_rank_cavgs )
-        endif
+        ! rank based on gold-standard resolution estimates
+        finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//'_ranked'//params%ext
+        call cline_rank_cavgs%set('projfile', params%projfile)
+        call cline_rank_cavgs%set('stk',      finalcavgs)
+        call cline_rank_cavgs%set('outstk',   finalcavgs_ranked)
+        call xrank_cavgs%execute_safe( cline_rank_cavgs )
         ! cleanup
         call del_file('start2Drefs'//params%ext)
         call del_file('start2Drefs_even'//params%ext)

@@ -21,9 +21,8 @@ program simple_test_socket_io
    contains
 
       subroutine socket_server() bind(c)
-         type(simple_socket)           :: socket
-         character(len=:), allocatable :: ans_str
-         integer                       :: fd
+         type(simple_socket) :: socket
+         integer             :: fd
          write(*,*) "Starting socket server thread"
          call socket%open()
          call socket%bind_any()
