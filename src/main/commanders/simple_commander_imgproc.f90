@@ -21,7 +21,7 @@ public :: normalize_commander
 public :: scale_commander
 public :: stack_commander
 public :: stackops_commander
-public :: pspec_int_rank_commander
+public :: gen_pspecs_commander
 public :: estimate_diam_commander
 private
 #include "simple_local_flags.inc"
@@ -81,10 +81,10 @@ type, extends(commander_base) :: stackops_commander
     procedure :: execute      => exec_stackops
 end type stackops_commander
 
-type, extends(commander_base) :: pspec_int_rank_commander
+type, extends(commander_base) :: gen_pspecs_commander
   contains
-    procedure :: execute      => exec_pspec_int_rank
-end type pspec_int_rank_commander
+    procedure :: execute      => exec_gen_pspecs
+end type gen_pspecs_commander
 
 type, extends(commander_base) :: estimate_diam_commander
   contains
@@ -1174,68 +1174,83 @@ contains
         call simple_end('**** SIMPLE_STACKOPS NORMAL STOP ****')
     end subroutine exec_stackops
 
-    subroutine exec_pspec_int_rank( self, cline )
-        use simple_segmentation, only: otsu_robust_fast
-        class(pspec_int_rank_commander), intent(inout) :: self
-        class(cmdline),                  intent(inout) :: cline
-        ! varables
-        type(parameters) :: params
-        type(image)      :: img, img_pspec, graphene_mask
-        type(stack_io)   :: stkio_r, stkio_w1, stkio_w2, stkio_w3
-        character(len=:), allocatable :: ranked_fname, good_fname, bad_fname
-        real,             allocatable :: peakvals(:)
-        integer,          allocatable :: order(:)
-        integer :: i, funit
-        real    :: ave, sdev, minv, mskrad
+    subroutine exec_gen_pspecs( self, cline )
+        use simple_fsc, only: plot_fsc
+        class(gen_pspecs_commander), intent(inout) :: self
+        class(cmdline),              intent(inout) :: cline
+        type(parameters)  :: params
+        type(image)       :: img, img_pspec
+        type(stack_io)    :: stkio_r, stkio_w
+        real, allocatable :: spec(:), resarr(:), dynranges(:), tmp(:), spec_good(:), spec_bad(:)
+        real, parameter   :: EMPTY_THRES = 1e-6
+        real    :: dynrange_t
+        integer :: i, hp_ind, lp_ind, cnt_good, cnt_bad, spec_sz, cnt_empty
         if( .not. cline%defined('lp_backgr') ) call cline%set('lp_backgr', 7.)
         call params%new(cline)
-        mskrad = params%moldiam / params%smpd / 2.
-        ranked_fname = add2fbody(trim(params%stk), '.'//fname2ext(trim(params%stk)), '_ranked')
-        good_fname   = add2fbody(trim(params%stk), '.'//fname2ext(trim(params%stk)), '_high_quality')
-        bad_fname    = add2fbody(trim(params%stk), '.'//fname2ext(trim(params%stk)), '_low_quality')
-        call graphene_mask%pspec_graphene_mask([params%box,params%box,1], params%smpd)
-        call graphene_mask%write('graphene_mask.mrc')
         call img%new([params%box,params%box,1], params%smpd)
         call img_pspec%new([params%box,params%box,1], params%smpd)
-        allocate(peakvals(params%nptcls), order(params%nptcls))
-        call fopen(funit, file='power_spectrum_stats.txt', status='replace')
-        call stkio_r%open(trim(params%stk),                  params%smpd, 'read')
-        call stkio_w1%open('pspecs.mrc',                     params%smpd, 'write', box=params%box)
-        call stkio_w2%open('pspecs_graphene_msk.mrc',        params%smpd, 'write', box=params%box)
-        call stkio_w3%open('pspecs_graphene_msk_nlmean.mrc', params%smpd, 'write', box=params%box)
+        resarr = get_resarr(params%box, params%smpd)
+        hp_ind = calc_fourier_index(20.,params%box,params%smpd)
+        lp_ind = calc_fourier_index(6., params%box,params%smpd)
+        allocate(dynranges(params%nptcls), source=0.)
         do i=1,params%nptcls
             call progress(i,params%nptcls)
-            call stkio_r%read(i, img)
+            call img%read(params%stk, i)
             call img%norm
-            call img%mask(mskrad, 'soft')
-            call img%img2spec('sqrt', params%lp_backgr, img_pspec)
-            call stkio_w1%write(i, img_pspec)
-            call img_pspec%mul(graphene_mask)
-            call stkio_w2%write(i, img_pspec)
-            call img_pspec%nlmean2D
-            call stkio_w3%write(i, img_pspec)
-            call img_pspec%stats(ave, sdev, peakvals(i), minv)
-            write(funit, '(A,1X,F7.3,1X,F7.3,1X,F7.3,1X,F7.3)') 'AVE/SDEV/MAXV/MINV: ', ave, sdev, peakvals(i), minv
+            call img%mask(params%msk, 'soft')
+            call img%spectrum('sqrt', spec)
+            dynranges(i) = maxval(spec(hp_ind:lp_ind)) - minval(spec(hp_ind:lp_ind))
         end do
-        call stkio_r%close
-        call stkio_w1%close
-        call stkio_w2%close
-        call stkio_w3%close
-        call fclose(funit)
-        ! write ranked cavgs
-        order = (/(i,i=1,params%nptcls)/)
-        call hpsort(peakvals, order)
-        call reverse(order) ! largest first
+        tmp = pack(dynranges, mask=dynranges > EMPTY_THRES)
+        call otsu(size(tmp), tmp, dynrange_t)
+        cnt_good = 0
+        cnt_bad  = 0
+        spec_sz  = size(spec)
+        allocate(spec_good(spec_sz), spec_bad(spec_sz), source=0.)
         do i=1,params%nptcls
-            call img%read(params%stk, order(i))
-            call img%write(ranked_fname, i)
+            call img%read(params%stk, i)
+            call img%norm
+            call img%mask(params%msk, 'soft')
+            call img%spectrum('sqrt', spec)
+            if( dynranges(i) >= dynrange_t )then
+                cnt_good  = cnt_good  + 1
+                spec_good = spec_good + spec
+            else if( dynranges(i) > EMPTY_THRES )then
+                cnt_bad   = cnt_bad   + 1
+                spec_bad  = spec_bad + spec
+            endif
+        enddo
+        spec_good = spec_good / real(cnt_good)
+        spec_bad  = spec_bad  / real(cnt_bad)
+        call plot_fsc(size(spec_good), spec_good, resarr, params%smpd, 'powspec_good')
+        call plot_fsc(size(spec_bad),  spec_bad,  resarr, params%smpd, 'powspec_bad')
+        cnt_good  = 0
+        cnt_bad   = 0
+        cnt_empty = 0
+        do i=1,params%nptcls
+            call img%read(params%stk, i)
+            call img%norm
+            call img%mask(params%msk, 'soft')
+            call img%spectrum('sqrt', spec)
+            call img%read(params%stk, i)
+            if( dynranges(i) <= EMPTY_THRES )then
+                cnt_empty = cnt_empty + 1
+                call img%write('cavgs_empty.mrc', cnt_empty)
+            else
+                if( euclid(spec(hp_ind:lp_ind),spec_good(hp_ind:lp_ind)) < euclid(spec(hp_ind:lp_ind),spec_bad(hp_ind:lp_ind)) )then
+                    cnt_good = cnt_good + 1
+                    call img%write('cavgs_good.mrc', cnt_good)
+                else
+                     cnt_bad = cnt_bad + 1
+                    call img%write('cavgs_bad.mrc', cnt_bad)
+                endif
+            endif
         end do
         call img%kill
         call img_pspec%kill
-        call graphene_mask%kill
         ! end gracefully
-        call simple_end('**** SIMPLE_PSPEC_INT_RANK NORMAL STOP ****')
-    end subroutine exec_pspec_int_rank
+        call simple_end('**** SIMPLE_GEN_PSPECS NORMAL STOP ****')
+    end subroutine exec_gen_pspecs
 
     subroutine exec_estimate_diam( self, cline )
         use simple_segmentation

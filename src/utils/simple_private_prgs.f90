@@ -734,13 +734,13 @@ contains
         call private_prgs(22)%push_opt_key('neg')
         call private_prgs(22)%push_opt_key('filter')
 
-        ! PSPEC_INT_RANK
-        call private_prgs(23)%set_name('pspec_int_rank')
+        ! GEN PSPECS
+        call private_prgs(23)%set_name('gen_pspecs')
         ! required keys
         call private_prgs(23)%push_req_key('nthr')
         call private_prgs(23)%push_req_key('stk')
         call private_prgs(23)%push_req_key('smpd')
-        call private_prgs(23)%push_req_key('moldiam')
+        call private_prgs(23)%push_req_key('mskdiam')
         ! optional keys
         call private_prgs(23)%push_opt_key('lp_backgr')
 

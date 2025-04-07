@@ -5,7 +5,7 @@ use simple_user_interface,       only: make_user_interface, list_single_prgs_in_
 use simple_cmdline,              only: cmdline, cmdline_err
 use simple_commander_sim,        only: simulate_atoms_commander
 use simple_commander_preprocess, only: map_cavgs_selection_commander
-use simple_commander_imgproc,    only: estimate_diam_commander, pspec_int_rank_commander
+use simple_commander_imgproc,    only: estimate_diam_commander, gen_pspecs_commander
 use simple_exec_helpers
 use simple_commander_project
 use simple_commander_cluster2D
