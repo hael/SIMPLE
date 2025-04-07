@@ -949,8 +949,12 @@ contains
         type(cmdline)                    :: cline_ini3D
         type(str4arr),    allocatable    :: files_that_stay(:)
         character(len=*), parameter      :: INI3D_DIR='abinitio3D_cavgs/'
+        real,             parameter      :: LPSTART_INI3D = 20.
+        real,             parameter      :: LPSTOP_INI3D  = 6.
         cline_ini3D = cline
         call cline_ini3D%set('nstages', NSTAGES_INI3D)
+        if( .not. cline_ini3D%defined('lpstart_ini3D') ) call cline_ini3D%set('lpstart_ini3D', LPSTART_INI3D)
+        if( .not. cline_ini3D%defined('lpstop_ini3D')  ) call cline_ini3D%set('lpstop_ini3D',  LPSTOP_INI3D)
         if( cline%defined('lpstart_ini3D') )then
             call cline_ini3D%set('lpstart', params_glob%lpstart_ini3D)
             call cline_ini3D%delete('lpstart_ini3D')
