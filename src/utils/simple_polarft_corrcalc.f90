@@ -1092,13 +1092,13 @@ contains
 
     ! CALCULATORS
 
-    subroutine polar_cavg( self )
+    subroutine polar_cavg( self, img )
         use simple_image
-        class(polarft_corrcalc),   intent(inout) :: self
+        class(polarft_corrcalc), intent(inout) :: self
+        type(image),             intent(inout) :: img
         complex, allocatable :: cmat(:,:)
-        type(image) :: img
-        integer     :: box, i, k
-        real        :: ctf2(self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer :: box, i, k
+        real    :: ctf2(self%pftsz,self%kfromto(1):self%kfromto(2))
         self%pfts_refs_even(:,:,1) = 0.
         ctf2 = 0.
         do i = 1,self%nptcls
@@ -1117,7 +1117,6 @@ contains
         call img%set_cmat(cmat)
         call img%shift_phorig()
         call img%ifft
-        call img%write('polar_cavg.mrc')
     end subroutine polar_cavg
 
     subroutine create_polar_absctfmats( self, spproj, oritype, pfromto )

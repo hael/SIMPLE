@@ -28,13 +28,14 @@ type(image), allocatable      :: match_imgs(:), ptcl_match_imgs(:)
 ! character(len=:), allocatable :: cmd
 logical                :: be_verbose=.false.
 real,    parameter     :: SHMAG = 3.0
-real,    parameter     :: SNR   = 0.1
+real,    parameter     :: SNR   = 0.01
 real,    parameter     :: BFAC  = 10.
 integer, parameter     :: SH_ITERS = 5, N_SH = 5, N_PTCLS = N_SH**2
 integer, allocatable   :: pinds(:)
 type(ctfparams)        :: ctfparms
 type(euclid_sigma2)    :: eucl
-real, allocatable      :: sigma2_group(:,:,:), truth_sh(:,:)
+type(image)            :: polar_img
+real, allocatable      :: sigma2_group(:,:,:), truth_sh(:,:), rec_sh(:,:)
 real                   :: cxy(3), lims(2,2), lims_init(2,2), rnd_shifts(2,N_SH), sh, shifts_cnt(N_SH), shifts_dist(N_SH),&
                          &min_truth, correct_cnt, truth_cnt(N_SH)
 integer                :: xsh, ysh, xbest, ybest, i, irot, ne, no, iptcl, nptcls2update, ithr, iter
@@ -93,6 +94,7 @@ do i = 1, N_SH
     rnd_shifts(2,i) = sh
 enddo
 allocate(truth_sh(p%fromp:p%top,2))
+allocate(rec_sh(p%fromp:p%top,2))
 do iptcl = p%fromp,p%top
     call os%set(iptcl,'state',1.)
     call os%set(iptcl,'w',    1.)
@@ -142,7 +144,88 @@ do iptcl = 1,p%nptcls
 end do
 !$omp end parallel do
 call pftcc%create_polar_absctfmats(b%spproj, 'ptcl2D')
-call pftcc%polar_cavg
+
+! prep for shift search
+lims(:,1)       = -p%trs
+lims(:,2)       =  p%trs
+lims_init(:,1)  = -SHC_INPL_TRSHWDTH
+lims_init(:,2)  =  SHC_INPL_TRSHWDTH
+call grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=p%maxits_sh, opt_angle=.true., coarse_init=.false.)
+
+! initial sigma2
+allocate( sigma2_group(2,1,1:fdim(p%box)-1), source=0. )
+shifts_cnt = 0.
+min_truth  = 0.
+rec_sh     = 0.
+do iter = 1, SH_ITERS
+    call pftcc%polar_cavg(polar_img)
+    call polar_img%write('polar_cavg.mrc', iter)
+    call polar_img%kill
+    ne = 0
+    no = 0
+    do iptcl = p%fromp,p%top
+        call b%spproj_field%get_ori(iptcl, o)
+        call eucl%calc_sigma2(pftcc, iptcl, o, 'class')
+        if( o%get_eo() == 0 )then
+            ne = ne+1
+            sigma2_group(1,1,:) = sigma2_group(1,1,:) + eucl%sigma2_part(:,iptcl)
+        else
+            no = no+1
+            sigma2_group(2,1,:) = sigma2_group(2,1,:) + eucl%sigma2_part(:,iptcl)
+        endif
+    enddo
+    sigma2_group(1,:,:) = sigma2_group(1,:,:) / real(ne)
+    sigma2_group(2,:,:) = sigma2_group(2,:,:) / real(no)
+    call write_groups_starfile(sigma2_star_from_iter(iter-1), sigma2_group, 1)
+    call eucl%read_groups(b%spproj_field)
+    do iptcl = p%fromp,p%top
+        call pftcc%memoize_sqsum_ptcl(iptcl)
+    enddo
+    call pftcc%memoize_ptcls
+
+    ! shift search
+    do iptcl = p%fromp,p%top
+        call grad_shsrch_obj%set_indices(1, iptcl)
+        irot = 1 ! zero angle
+        cxy  = grad_shsrch_obj%minimize(irot=irot)
+        call b%spproj_field%set_shift(iptcl, cxy(2:3)) !!
+        call pftcc%shift_ptcl(iptcl, -cxy(2:3)) !!
+        rec_sh(iptcl,:) = rec_sh(iptcl,:) + cxy(2:3)
+        ! correct shifts statistics
+        if( iter == SH_ITERS )then
+            do i = 1, N_SH
+                shifts_dist(i) = euclid(rec_sh(iptcl,:), rnd_shifts(:,i))
+            enddo
+            min_truth                         = min_truth + minval(shifts_dist)
+            shifts_cnt(minloc(shifts_dist,1)) = shifts_cnt(minloc(shifts_dist,1)) + 1.
+        endif
+    enddo
+enddo
+
+print *, 'SHIFT COUNTS with total/total_min_dist = ', sum(shifts_cnt), min_truth
+do i = 1, N_SH
+    print *, shifts_cnt(i)
+enddo
+
+
+truth_cnt = 0.
+min_truth = 0.
+do iptcl = p%fromp,p%top
+    do i = 1, N_SH
+        shifts_dist(i) = euclid(truth_sh(iptcl,:), rnd_shifts(:,i))
+    enddo
+    min_truth                        = min_truth + minval(shifts_dist)
+    truth_cnt(minloc(shifts_dist,1)) = truth_cnt(minloc(shifts_dist,1)) + 1.
+enddo
+
+correct_cnt = 0
+print *, 'TRUTH SHIFT COUNTS with total/total_min_dist = ', sum(truth_cnt), min_truth
+do i = 1, N_SH
+    print *, truth_cnt(i)
+    correct_cnt = correct_cnt + min(truth_cnt(i), shifts_cnt(i))
+enddo
+
+print *, 'correct shifts cnt / total = ', correct_cnt, ' / ', sum(truth_cnt)
 
 contains
 
