@@ -3,7 +3,6 @@ program simple_test_socket_io
    use simple_socket_comm
    use simple_strings
    use unix, only : c_pthread_t, c_pthread_create 
-
    implicit none
 
    type(c_pthread_t)   :: server_thread
@@ -21,22 +20,21 @@ program simple_test_socket_io
 
    contains
 
-   subroutine socket_server() bind(c)
-      type(simple_socket)                    :: socket
-      character(len=:), allocatable          :: ans_str
-      integer                                :: fd
-      write(*,*) "Starting socket server thread"
-      call socket%open()
-      call socket%bind_any()
-      call socket%listen()
-      write(*,*) "Socket server listening"
-      do
-         call socket%accept(fd)
-         call socket%read(fd)
-         call socket%close(fd)
-      end do
-      call socket%close
-   end subroutine socket_server
-
+      subroutine socket_server() bind(c)
+         type(simple_socket)           :: socket
+         character(len=:), allocatable :: ans_str
+         integer                       :: fd
+         write(*,*) "Starting socket server thread"
+         call socket%open()
+         call socket%bind_any()
+         call socket%listen()
+         write(*,*) "Socket server listening"
+         do
+            call socket%accept(fd)
+            call socket%read(fd)
+            call socket%close(fd)
+         end do
+         call socket%close
+      end subroutine socket_server
 
 end program simple_test_socket_io
