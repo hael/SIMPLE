@@ -62,6 +62,13 @@ type(cluster2D_autoscale_commander)         :: xcluster2D_hlev
 type(cluster2D_commander_subsets)           :: xcluster2D_subsets
 type(cleanup2D_commander_hlev)              :: xcleanup2D_distr
 type(cluster2D_polar_commander)             :: xcluster2D_polar
+type(map_cavgs_selection_commander)         :: xmap_cavgs_selection
+type(map_cavgs_states_commander)            :: xmap_cavgs_states
+type(cluster_cavgs_commander)               :: xcluster_cavgs
+type(partition_cavgs_commander)             :: xpartition_cavgs
+type(score_ptcls_commander)                 :: xscore_ptcls
+type(write_classes_commander)               :: xwrite_classes
+type(autoselect_cavgs_commander)            :: xautoselect_cavgs
 
 ! AB INITIO 3D RECONSTRUCTION WORKFLOW
 type(estimate_lpstages_commander)           :: xestimate_lpstages
@@ -78,12 +85,6 @@ type(refine3D_auto_commander)               :: xrefine3D_auto
 type(reconstruct3D_commander_distr)         :: xreconstruct3D
 
 ! OTHER SINGLE-PARTICLE WORKFLOW PROGRAMS
-type(map_cavgs_selection_commander)         :: xmap_cavgs_selection
-type(map_cavgs_states_commander)            :: xmap_cavgs_states
-type(cluster_cavgs_commander)               :: xcluster_cavgs
-type(partition_cavgs_commander)             :: xpartition_cavgs
-type(score_ptcls_commander)                 :: xscore_ptcls
-type(write_classes_commander)               :: xwrite_classes
 type(symaxis_search_commander)              :: xsymsrch
 type(symmetry_test_commander)               :: xsymtst
 type(symmetrize_map_commander)              :: xsymmetrize_map
@@ -251,6 +252,20 @@ select case(trim(prg))
         call xcluster2D_subsets%execute(cline)
     case( 'cluster2D_polar' )
         call xcluster2D_polar%execute(cline)
+    case( 'map_cavgs_selection' )
+        call xmap_cavgs_selection%execute(cline)
+    case( 'map_cavgs_states' )
+        call xmap_cavgs_states%execute(cline)
+    case( 'cluster_cavgs' )
+        call xcluster_cavgs%execute(cline)
+    case( 'partition_cavgs' )
+        call xpartition_cavgs%execute(cline)
+    case( 'score_ptcls' )
+        call xscore_ptcls%execute(cline)
+    case( 'write_classes' )
+        call xwrite_classes%execute(cline)
+    case('autoselect_cavgs')
+        call xautoselect_cavgs%execute(cline)
 
     ! AB INITIO 3D RECONSTRUCTION WORKFLOW
     case('estimate_lpstages')
@@ -293,18 +308,6 @@ select case(trim(prg))
         call xreconstruct3D%execute( cline )
 
     ! OTHER SINGLE-PARTICLE WORKFLOW PROGRAMS
-    case( 'map_cavgs_selection' )
-        call xmap_cavgs_selection%execute(cline)
-    case( 'map_cavgs_states' )
-        call xmap_cavgs_states%execute(cline)
-    case( 'cluster_cavgs' )
-        call xcluster_cavgs%execute(cline)
-    case( 'partition_cavgs' )
-        call xpartition_cavgs%execute(cline)
-    case( 'score_ptcls' )
-        call xscore_ptcls%execute(cline)
-    case( 'write_classes' )
-        call xwrite_classes%execute(cline)
     case( 'symaxis_search' )
         call xsymsrch%execute( cline )
     case( 'symmetry_test' )
@@ -452,7 +455,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('819ab0e5')
+call simple_print_git_version('32a986f6')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

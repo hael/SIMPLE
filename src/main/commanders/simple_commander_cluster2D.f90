@@ -1791,9 +1791,9 @@ contains
         real,             parameter   :: EMPTY_THRES = 1e-6
         integer,          parameter   :: MAXITS      = 5
         type(spec_inf),   allocatable :: spec_inf_arr(:)
-        character(len=:), allocatable :: fname, ext, fname_good, fname_bad, fname_ranked
+        character(len=:), allocatable :: fname, ext, fname_good, fname_bad, fname_ranked, stk, stkpath
         real    :: dynrange_t, frac
-        integer :: i, j, kfromto(2), nchanges, specsz, iter, cnt_good, cnt_bad, cnt_ranked, ldim(3), ncls, nptcls, s
+        integer :: i, j, kfromto(2), nchanges, specsz, iter, cnt_good, cnt_bad, cnt_ranked, ldim(3), ncls, nptcls, s, nptcls_from_pinds
         call cline%set('oritype', 'cls2D')
         if( .not. cline%defined('hp')      ) call cline%set('hp',       20.)
         if( .not. cline%defined('lp')      ) call cline%set('lp',        6.)
@@ -1802,54 +1802,86 @@ contains
         if( .not. cline%defined('prune')   ) call cline%set('prune',  'yes')
         call params%new(cline)
         call spproj%read(params%projfile)
-        call find_ldim_nptcls(params%stk, ldim, ncls)
-        params%ncls = ncls
-        if( spproj%os_cls2D%get_noris() == params%ncls )then
-            ! filenames
-            fname        = basename(trim(params%stk))
-            ext          = '.'//fname2ext(fname)
-            fname_good   = add2fbody(fname, ext, '_good')
-            fname_bad    = add2fbody(fname, ext, '_bad')
-            fname_ranked = add2fbody(fname, ext, '_ranked')
-            ! resolution-related
-            resarr     = get_resarr(params%box, params%smpd)
-            kfromto(1) = calc_fourier_index(20.,params%box,params%smpd)
-            kfromto(2) = calc_fourier_index(6., params%box,params%smpd)
-            ! the data structure
-            allocate(spec_inf_arr(params%ncls) )
+        ! retrieve cavgs stack info
+        call spproj%get_cavgs_stk(stk, params%ncls, params%smpd, imgkind='cavg', stkpath=stkpath)
+        if(.not. file_exists(stk)) stk = trim(stkpath) // '/' // trim(stk)
+        if(.not. file_exists(stk)) THROW_HARD('cavgs stk does not exist; autoselect_cavgs')
+        ! set filenames
+        fname        = basename(trim(stk))
+        ext          = '.'//fname2ext(fname)
+        fname_good   = add2fbody(fname, ext, '_good')
+        fname_bad    = add2fbody(fname, ext, '_bad')
+        fname_ranked = add2fbody(fname, ext, '_ranked')
+        ! resolution-related
+        resarr     = get_resarr(params%box, params%smpd)
+        kfromto(1) = calc_fourier_index(20.,params%box,params%smpd)
+        kfromto(2) = calc_fourier_index(6., params%box,params%smpd)
+        ! the data structure
+        allocate(spec_inf_arr(params%ncls) )
+        do i=1,params%ncls
+            ! set class index
+            spec_inf_arr(i)%class = i
+            ! set class population
+            spec_inf_arr(i)%pop   = spproj%os_cls2D%get_int(spec_inf_arr(i)%class, 'pop')
+            ! read, normalize & mask
+            call spec_inf_arr(i)%img%new([params%box,params%box,1], params%smpd)
+            call spec_inf_arr(i)%img%read(stk, i)
+            call spec_inf_arr(i)%img%norm
+            call spec_inf_arr(i)%img%mask(params%msk, 'soft')
+            ! calculate sqrt spectrum
+            call spec_inf_arr(i)%img%spectrum('sqrt', spec_inf_arr(i)%spec)
+            ! calculate dynamic range in given resolution interval
+            spec_inf_arr(i)%dynrange = maxval(spec_inf_arr(i)%spec(kfromto(1):kfromto(2))) - minval(spec_inf_arr(i)%spec(kfromto(1):kfromto(2)))
+            ! read back original image
+            call spec_inf_arr(i)%img%read(stk, i)
+        end do
+        ! extract dynamic ranges of non-empty images
+        tmp = pack(spec_inf_arr(:)%dynrange, mask=spec_inf_arr(:)%dynrange > EMPTY_THRES)
+        ! make initial grouping based on binary dynamic range clustering
+        call otsu(size(tmp), tmp, dynrange_t)
+        do i=1,params%ncls
+            if( spec_inf_arr(i)%dynrange <= EMPTY_THRES )then
+                spec_inf_arr(i)%speccls = 0 ! empty
+            else if( spec_inf_arr(i)%dynrange >= dynrange_t )then
+                spec_inf_arr(i)%speccls = 1 ! good
+            else
+                spec_inf_arr(i)%speccls = 2 ! bad
+            endif
+        enddo
+        ! calculate good/bad average spectra
+        specsz = size(spec_inf_arr(1)%spec)
+        allocate(spec_good(specsz), spec_bad(specsz), source=0.)
+        do i=1,params%ncls
+            select case(spec_inf_arr(i)%speccls)
+                case(1) ! good
+                    spec_good = spec_good + spec_inf_arr(i)%spec
+                case(2) ! bad
+                    spec_bad  = spec_bad  + spec_inf_arr(i)%spec
+            end select
+        enddo
+        spec_good = spec_good / real(count(spec_inf_arr(:)%speccls == 1))
+        spec_bad  = spec_bad  / real(count(spec_inf_arr(:)%speccls == 2))
+        ! k-means binary clustering
+        iter = 0
+        do
+            nchanges = 0
+            ! assign clusters
             do i=1,params%ncls
-                ! set class index
-                spec_inf_arr(i)%class = i
-                ! set class population
-                spec_inf_arr(i)%pop   = spproj%os_cls2D%get_int(spec_inf_arr(i)%class, 'pop')
-                ! read, normalize & mask
-                call spec_inf_arr(i)%img%new([params%box,params%box,1], params%smpd)
-                call spec_inf_arr(i)%img%read(params%stk, i)
-                call spec_inf_arr(i)%img%norm
-                call spec_inf_arr(i)%img%mask(params%msk, 'soft')
-                ! calculate sqrt spectrum
-                call spec_inf_arr(i)%img%spectrum('sqrt', spec_inf_arr(i)%spec)
-                ! calculate dynamic range in given resolution interval
-                spec_inf_arr(i)%dynrange = maxval(spec_inf_arr(i)%spec(kfromto(1):kfromto(2))) - minval(spec_inf_arr(i)%spec(kfromto(1):kfromto(2)))
-                ! read back original image
-                call spec_inf_arr(i)%img%read(params%stk, i)
-            end do
-            ! extract dynamic ranges of non-empty images
-            tmp = pack(spec_inf_arr(:)%dynrange, mask=spec_inf_arr(:)%dynrange > EMPTY_THRES)
-            ! make initial grouping based on binary dynamic range clustering
-            call otsu(size(tmp), tmp, dynrange_t)
-            do i=1,params%ncls
-                if( spec_inf_arr(i)%dynrange <= EMPTY_THRES )then
-                    spec_inf_arr(i)%speccls = 0 ! empty
-                else if( spec_inf_arr(i)%dynrange >= dynrange_t )then
-                    spec_inf_arr(i)%speccls = 1 ! good
-                else
-                    spec_inf_arr(i)%speccls = 2 ! bad
+                if( spec_inf_arr(i)%speccls > 0 )then
+                    spec_inf_arr(i)%dist2good = euclid(spec_inf_arr(i)%spec(kfromto(1):kfromto(2)),spec_good(kfromto(1):kfromto(2)))
+                    spec_inf_arr(i)%dist2bad  = euclid(spec_inf_arr(i)%spec(kfromto(1):kfromto(2)),spec_bad(kfromto(1):kfromto(2)))
+                    if( spec_inf_arr(i)%dist2good <= spec_inf_arr(i)%dist2bad )then
+                        if( spec_inf_arr(i)%speccls == 2 ) nchanges = nchanges + 1
+                        spec_inf_arr(i)%speccls = 1
+                    else
+                        if( spec_inf_arr(i)%speccls == 1 ) nchanges = nchanges + 1
+                        spec_inf_arr(i)%speccls = 2
+                    endif
                 endif
-            enddo
-            ! calculate good/bad average spectra
-            specsz = size(spec_inf_arr(1)%spec)
-            allocate(spec_good(specsz), spec_bad(specsz), source=0.)
+            end do
+            ! update averages
+            spec_good = 0.
+            spec_bad  = 0.
             do i=1,params%ncls
                 select case(spec_inf_arr(i)%speccls)
                     case(1) ! good
@@ -1860,131 +1892,105 @@ contains
             enddo
             spec_good = spec_good / real(count(spec_inf_arr(:)%speccls == 1))
             spec_bad  = spec_bad  / real(count(spec_inf_arr(:)%speccls == 2))
-            ! k-means binary clustering
-            iter = 0
-            do
-                nchanges = 0
-                ! assign clusters
-                do i=1,params%ncls
-                    if( spec_inf_arr(i)%speccls > 0 )then
-                        spec_inf_arr(i)%dist2good = euclid(spec_inf_arr(i)%spec(kfromto(1):kfromto(2)),spec_good(kfromto(1):kfromto(2)))
-                        spec_inf_arr(i)%dist2bad  = euclid(spec_inf_arr(i)%spec(kfromto(1):kfromto(2)),spec_bad(kfromto(1):kfromto(2)))
-                        if( spec_inf_arr(i)%dist2good <= spec_inf_arr(i)%dist2bad )then
-                            if( spec_inf_arr(i)%speccls == 2 ) nchanges = nchanges + 1
-                            spec_inf_arr(i)%speccls = 1
-                        else
-                            if( spec_inf_arr(i)%speccls == 1 ) nchanges = nchanges + 1
-                            spec_inf_arr(i)%speccls = 2
-                        endif
-                    endif
-                end do
-                ! update averages
-                spec_good = 0.
-                spec_bad  = 0.
-                do i=1,params%ncls
-                    select case(spec_inf_arr(i)%speccls)
-                        case(1) ! good
-                            spec_good = spec_good + spec_inf_arr(i)%spec
-                        case(2) ! bad
-                            spec_bad  = spec_bad  + spec_inf_arr(i)%spec
-                    end select
-                enddo
-                spec_good = spec_good / real(count(spec_inf_arr(:)%speccls == 1))
-                spec_bad  = spec_bad  / real(count(spec_inf_arr(:)%speccls == 2))
-                iter      = iter + 1
-                if( nchanges == 0 .or. iter == MAXITS) exit
-            end do
-            call plot_fsc(size(spec_good), spec_good, resarr, params%smpd, 'powspec_good')
-            call plot_fsc(size(spec_bad),  spec_bad,  resarr, params%smpd, 'powspec_bad')
-            ! count good/bad
-            cnt_good = 0
-            cnt_bad  = 0
-            do i=1,params%ncls
-                select case(spec_inf_arr(i)%speccls)
-                    case(1) ! good
-                        cnt_good = cnt_good + 1
-                    case(2) ! bad
-                        cnt_bad = cnt_bad + 1
-                end select
-            enddo
-            ! rank & write
-            allocate(dists_good(cnt_good), dists_bad(cnt_bad), source=0.)
-            allocate(inds_good(cnt_good),  inds_bad(cnt_bad),  source=0)
-            cnt_good = 0
-            cnt_bad  = 0
-            do i=1,params%ncls
-                select case(spec_inf_arr(i)%speccls)
-                    case(1) ! good
-                        cnt_good             = cnt_good + 1
-                        dists_good(cnt_good) = spec_inf_arr(i)%dist2good
-                        inds_good(cnt_good)  = i
-                    case(2) ! bad
-                        cnt_bad              = cnt_bad + 1
-                        dists_bad(cnt_bad)   = spec_inf_arr(i)%dist2good
-                        inds_bad(cnt_bad)    = i
-                end select
-            enddo
-            call hpsort(dists_good, inds_good)
-            call hpsort(dists_bad,  inds_bad)
-            cnt_ranked = 0
-            do i=1,cnt_good
-                cnt_ranked = cnt_ranked + 1
-                call spec_inf_arr(inds_good(i))%img%write(fname_ranked, cnt_ranked)
-                call spec_inf_arr(inds_good(i))%img%write(fname_good, i)
-                spec_inf_arr(inds_good(i))%rank = cnt_ranked
-            enddo
-            do i=1,cnt_bad
-                cnt_ranked = cnt_ranked + 1
-                call spec_inf_arr(inds_bad(i))%img%write(fname_ranked, cnt_ranked)
-                call spec_inf_arr(inds_bad(i))%img%write(fname_bad , i)
-                spec_inf_arr(inds_bad(i))%rank = cnt_ranked
-            enddo
-            ! check population
-            nptcls = sum(spec_inf_arr(:)%pop, mask=spec_inf_arr(:)%pop > 0)
-            frac   = (real(sum(spec_inf_arr(:)%pop, mask=spec_inf_arr(:)%rank <= cnt_good))/real(nptcls))
-            if( frac < params%frac_min )then
-                do
+            iter      = iter + 1
+            if( nchanges == 0 .or. iter == MAXITS) exit
+        end do
+        call plot_fsc(size(spec_good), spec_good, resarr, params%smpd, 'powspec_good')
+        call plot_fsc(size(spec_bad),  spec_bad,  resarr, params%smpd, 'powspec_bad')
+        ! count good/bad
+        cnt_good = 0
+        cnt_bad  = 0
+        do i=1,params%ncls
+            select case(spec_inf_arr(i)%speccls)
+                case(1) ! good
                     cnt_good = cnt_good + 1
-                    frac     = (real(sum(spec_inf_arr(:)%pop, mask=spec_inf_arr(:)%rank <= cnt_good))/real(nptcls))
-                    if( frac >= params%frac_min ) exit
-                end do
-            endif
-            print *, 'Percentage of particles selected: ', frac * 100.
-            ! map selection to self%os_ptcl2D & os_ptcl3D
-            if( spproj%os_ptcl2D%get_noris() > 0 .and. spproj%os_ptcl3D%get_noris() > 0)then
-                do i=1,params%ncls
-                    call spproj%os_ptcl2D%get_pinds(i, 'class', pinds)
-                    if( allocated(pinds) )then
-                        if( spec_inf_arr(i)%rank <= cnt_good )then
-                            s = 1
-                        else
-                            s = 0
-                        endif
-                        do j=1,size(pinds)
-                            call spproj%os_ptcl2D%set(pinds(j), 'state', s)
-                            call spproj%os_ptcl3D%set(pinds(j), 'state', s)
-                        end do
-                        deallocate(pinds)
-                    endif
-                end do
-            endif
-            ! optional pruning
-            if( trim(params%prune).eq.'yes') call spproj%prune_particles
-            ! this needs to be a full write as many segments are updated
-            call spproj%write
-            ! end gracefully
-            if( allocated(resarr)    ) deallocate(resarr)
-            if( allocated(tmp)       ) deallocate(tmp)
-            if( allocated(spec_good) ) deallocate(spec_good)
-            if( allocated(spec_bad)  ) deallocate(spec_bad)
-            if( allocated(resarr)    ) deallocate(resarr)
-            do i=1,params%ncls
-                call spec_inf_arr(i)%img%kill
-                deallocate(spec_inf_arr(i)%spec)
-            enddo
-        else
-            ! nothing to do
+                case(2) ! bad
+                    cnt_bad = cnt_bad + 1
+            end select
+        enddo
+        ! rank & write
+        allocate(dists_good(cnt_good), dists_bad(cnt_bad), source=0.)
+        allocate(inds_good(cnt_good),  inds_bad(cnt_bad),  source=0)
+        cnt_good = 0
+        cnt_bad  = 0
+        do i=1,params%ncls
+            select case(spec_inf_arr(i)%speccls)
+                case(1) ! good
+                    cnt_good             = cnt_good + 1
+                    dists_good(cnt_good) = spec_inf_arr(i)%dist2good
+                    inds_good(cnt_good)  = i
+                case(2) ! bad
+                    cnt_bad              = cnt_bad + 1
+                    dists_bad(cnt_bad)   = spec_inf_arr(i)%dist2good
+                    inds_bad(cnt_bad)    = i
+            end select
+        enddo
+        call hpsort(dists_good, inds_good)
+        call hpsort(dists_bad,  inds_bad)
+        cnt_ranked = 0
+        do i=1,cnt_good
+            cnt_ranked = cnt_ranked + 1
+            call spec_inf_arr(inds_good(i))%img%write(fname_ranked, cnt_ranked)
+            call spec_inf_arr(inds_good(i))%img%write(fname_good, i)
+            spec_inf_arr(inds_good(i))%rank = cnt_ranked
+        enddo
+        do i=1,cnt_bad
+            cnt_ranked = cnt_ranked + 1
+            call spec_inf_arr(inds_bad(i))%img%write(fname_ranked, cnt_ranked)
+            call spec_inf_arr(inds_bad(i))%img%write(fname_bad , i)
+            spec_inf_arr(inds_bad(i))%rank = cnt_ranked
+        enddo
+        ! check population
+        nptcls = sum(spec_inf_arr(:)%pop, mask=spec_inf_arr(:)%pop > 0)
+        frac   = (real(sum(spec_inf_arr(:)%pop, mask=spec_inf_arr(:)%rank <= cnt_good))/real(nptcls))
+        if( frac < params%frac_min )then
+            do
+                cnt_good = cnt_good + 1
+                frac     = (real(sum(spec_inf_arr(:)%pop, mask=spec_inf_arr(:)%rank <= cnt_good))/real(nptcls))
+                if( frac >= params%frac_min ) exit
+            end do
         endif
+        write(logfhandle,*) 'Percentage of particles selected: ', frac * 100.
+        ! map selection to self%os_ptcl2D & os_ptcl3D
+
+        print *, 'spproj%os_ptcl2D%get_noris() ', spproj%os_ptcl2D%get_noris()
+        print *, 'spproj%os_ptcl3D%get_noris() ', spproj%os_ptcl3D%get_noris()
+
+        nptcls_from_pinds = 0
+        if( spproj%os_ptcl2D%get_noris() > 0 .and. spproj%os_ptcl3D%get_noris() > 0)then
+            do i=1,params%ncls
+                call spproj%os_ptcl2D%get_pinds(i, 'class', pinds)
+                if( allocated(pinds) )then
+                    if( spec_inf_arr(i)%rank <= cnt_good )then
+                        s = 1
+                    else
+                        s = 0
+                    endif
+                    nptcls_from_pinds = nptcls_from_pinds + size(pinds)
+                    do j=1,size(pinds)
+                        call spproj%os_ptcl2D%set(pinds(j), 'state', s)
+                        call spproj%os_ptcl3D%set(pinds(j), 'state', s)
+                    end do
+                    deallocate(pinds)
+                endif
+            end do
+        endif
+
+        print *, 'nptcls_from_pinds ', nptcls_from_pinds
+        ! optional pruning
+        if( trim(params%prune).eq.'yes') call spproj%prune_particles
+        ! this needs to be a full write as many segments are updated
+        call spproj%write(params%projfile)
+        ! end gracefully
+        if( allocated(resarr)    ) deallocate(resarr)
+        if( allocated(tmp)       ) deallocate(tmp)
+        if( allocated(spec_good) ) deallocate(spec_good)
+        if( allocated(spec_bad)  ) deallocate(spec_bad)
+        if( allocated(resarr)    ) deallocate(resarr)
+        do i=1,params%ncls
+            call spec_inf_arr(i)%img%kill
+            deallocate(spec_inf_arr(i)%spec)
+        enddo
         call spproj%kill
         call simple_end('**** SIMPLE_AUTOSELECT_CAVGS NORMAL STOP ****')
     end subroutine exec_autoselect_cavgs

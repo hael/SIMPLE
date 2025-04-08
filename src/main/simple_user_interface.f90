@@ -78,6 +78,7 @@ type(simple_program), target :: abinitio3D_cavgs
 type(simple_program), target :: abinitio3D
 type(simple_program), target :: abinitio3D_parts
 type(simple_program), target :: abinitio3D_stream
+type(simple_program), target :: autoselect_cavgs
 type(simple_program), target :: afm
 type(simple_program), target :: analysis2D_nano
 type(simple_program), target :: assign_optics_groups
@@ -400,6 +401,7 @@ contains
         call new_abinitio3D
         call new_abinitio3D_parts
         call new_abinitio3D_stream
+        call new_autoselect_cavgs
         call new_afm
         call new_analysis2D_nano
         call new_assign_optics
@@ -546,6 +548,7 @@ contains
         call push2prg_ptr_array(abinitio3D)
         call push2prg_ptr_array(abinitio3D_parts)
         call push2prg_ptr_array(abinitio3D_stream)
+        call push2prg_ptr_array(autoselect_cavgs)
         call push2prg_ptr_array(afm)
         call push2prg_ptr_array(analysis2D_nano)
         call push2prg_ptr_array(assign_optics_groups)
@@ -703,6 +706,8 @@ contains
                 ptr2prg => abinitio3D_parts
             case('abinitio3D_stream')
                 ptr2prg => abinitio3D_stream
+            case('autoselect_cavgs')
+                ptr2prg => autoselect_cavgs
             case('afm')
                 ptr2prg => afm
             case('analysis2D_nano')
@@ -985,6 +990,7 @@ contains
         write(logfhandle,'(A)') abinitio3D_cavgs%name
         write(logfhandle,'(A)') abinitio3D%name
         write(logfhandle,'(A)') abinitio3D_parts%name
+        write(logfhandle,'(A)') autoselect_cavgs%name
         write(logfhandle,'(A)') afm%name
         write(logfhandle,'(A)') assign_optics_groups%name
         write(logfhandle,'(A)') automask%name
@@ -3143,12 +3149,12 @@ contains
     subroutine new_abinitio3D_stream
         ! PROGRAM SPECIFICATION
         call abinitio3D_stream%new(&
-        &'abinitio3D_stream',&                                                      ! name
-        &'3D ab initio online model generation & analysis from particles',&         ! descr_short
-        &'3D ab initio online model generation & analysis from particles',&         ! descr_long
-        &'simple_stream',&                                                          ! executable
-        &0, 1, 0, 9, 6, 1, 4, .true.,&                                              ! # entries in each group, requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute"  )    ! GUI
+        &'abinitio3D_stream',&                                                   ! name
+        &'3D ab initio online model generation & analysis from particles',&      ! descr_short
+        &'3D ab initio online model generation & analysis from particles',&      ! descr_long
+        &'simple_stream',&                                                       ! executable
+        &0, 1, 0, 9, 6, 1, 4, .true.,&                                           ! # entries in each group, requires sp_project
+        &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute"  ) ! GUI
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -3196,6 +3202,33 @@ contains
         call abinitio3D_stream%set_input('comp_ctrls', 4, 'maxnruns', 'num', 'Maximum number of concurrent runs',&
         &'Maximum number of concurrent and independent runs{1}', 'Max # of concurrent runs{1}', .false., 1., gui_submenu="compute", gui_advanced=.false.)
     end subroutine new_abinitio3D_stream
+
+    subroutine new_autoselect_cavgs
+        ! PROGRAM SPECIFICATION
+        call autoselect_cavgs%new(&
+        &'autoselect_cavgs',&                                                                   ! name
+        &'Automatically selectes class averages based on signal stats and reports to project',& ! descr_short
+        &'is a program for automated class average selection reported to the SIMPLE project',&  ! descr_long
+        &'simple_exec',&                                                                        ! executable
+        &0, 2, 0, 0, 2, 0, 0, .true.)                                                           ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call autoselect_cavgs%set_input('parm_ios', 1, prune)
+        call autoselect_cavgs%set_input('parm_ios', 2, 'frac_min', 'num', 'Minimum fracion (0-1) of particles retained', 'min fraction ', '{0.7}', .false., 0.7)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call autoselect_cavgs%set_input('filt_ctrls', 1, hp)
+        call autoselect_cavgs%set_input('filt_ctrls', 2, lp)
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_autoselect_cavgs
 
     subroutine new_import_boxes
         ! PROGRAM SPECIFICATION
