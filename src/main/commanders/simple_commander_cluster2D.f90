@@ -1786,7 +1786,6 @@ contains
         end type spec_inf
         type(parameters)              :: params
         type(sp_project)              :: spproj
-        type(stack_io)                :: stkio_r, stkio_w
         real,             allocatable :: resarr(:), tmp(:), spec_good(:), spec_bad(:), dists_good(:), dists_bad(:)
         integer,          allocatable :: inds_good(:), inds_bad(:), pinds(:)
         real,             parameter   :: EMPTY_THRES = 1e-6
@@ -3217,18 +3216,22 @@ contains
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_strategy2D3D_common
-        use simple_polarft_corrcalc, only: polarft_corrcalc
-        use simple_euclid_sigma2,    only: euclid_sigma2
+        use simple_polarft_corrcalc,    only: polarft_corrcalc
+        use simple_euclid_sigma2,       only: euclid_sigma2
+        use simple_eul_prob_tab,        only: eul_prob_tab
+        use simple_ori
         class(cluster2D_polar_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         integer,          allocatable :: pinds(:)
-        type(image),      allocatable :: tmp_imgs(:)
-        character(len=:), allocatable :: fname
+        real,             allocatable :: sigma2_noise(:,:)
+        type(image),      allocatable :: tmp_imgs(:), ref_imgs(:)
         type(polarft_corrcalc)        :: pftcc
         type(builder)                 :: build
         type(parameters)              :: params
-        type(euclid_sigma2)           :: eucl_sigma
-        integer :: nptcls, ithr
+        type(eul_prob_tab)            :: eulprob_obj_glob
+        type(ori)                     :: orientation
+        integer :: nptcls, ithr, iref, iptcl, irot
+        real    :: euls(3)
         call cline%set('mkdir',  'yes')
         call cline%set('stream', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
@@ -3239,6 +3242,12 @@ contains
         call build_glob%spproj%write_segment_inside(params_glob%oritype)
         ! Preparing pftcc
         call pftcc%new(params_glob%nspace * params_glob%nstates, [1,nptcls], params_glob%kfromto)
+        print *, 'lp      = ', params_glob%lp
+        print *, 'nptcls  = ', nptcls
+        print *, 'oritype = ', trim(params_glob%oritype)
+        print *, 'noris   = ', build_glob%spproj_field%get_noris()
+        print *, 'nspace  = ', params_glob%nspace
+        print *, 'kfromto = ', params_glob%kfromto
         ! Preparing particles
         call prepimgbatch(nptcls)
         call build%img_crop_polarizer%init_polarizer(pftcc, params%alpha)
@@ -3253,7 +3262,40 @@ contains
         ! Build polar particle images
         call build_batch_particles(pftcc, nptcls, pinds, tmp_imgs)
         ! randomize oris
-        call build_glob%spproj_field%rnd_oris
+        if( trim(params_glob%continue) .eq. 'no' ) call build_glob%spproj_field%rnd_oris
+        call eulprob_obj_glob%new(pinds)
+        allocate(ref_imgs(params_glob%nspace))
+        ! update refs
+        call pftcc%gen_polar_refs(build_glob%eulspace, build_glob%spproj_field, ref_imgs)
+        call pftcc%memoize_refs
+        do iref = 1, params_glob%nspace
+            call ref_imgs(iref)%write('polar_cavgs1.mrc', iref)
+            call ref_imgs(iref)%kill
+        enddo
+        ! update sigmas
+        allocate( sigma2_noise(params_glob%kfromto(1):params_glob%kfromto(2), 1:nptcls), source=1.0 )
+        call pftcc%assign_sigma2_noise(sigma2_noise)
+        do iptcl = 1, nptcls
+            call build_glob%spproj_field%get_ori(iptcl, orientation)
+            iref = build_glob%eulspace%find_closest_proj(orientation)
+            call pftcc%update_sigma(iref, iptcl, [0.,0.], pftcc%get_roind(360. - orientation%e3get()))
+        enddo
+        call eulprob_obj_glob%fill_tab(pftcc)
+        call eulprob_obj_glob%ref_assign
+        do iptcl = 1, nptcls
+            iref    = eulprob_obj_glob%assgn_map(iptcl)%iproj
+            euls    = build_glob%eulspace%get_euler(iref)
+            irot    = eulprob_obj_glob%assgn_map(iptcl)%inpl
+            euls(3) = pftcc%get_rot(irot)
+            call build_glob%spproj_field%set_euler(iptcl, euls)
+        enddo
+        ! update refs
+        call pftcc%gen_polar_refs(build_glob%eulspace, build_glob%spproj_field, ref_imgs)
+        call pftcc%memoize_refs
+        do iref = 1, params_glob%nspace
+            call ref_imgs(iref)%write('polar_cavgs2.mrc', iref)
+            call ref_imgs(iref)%kill
+        enddo
         ! cleaning up
         call killimgbatch
         call pftcc%kill
