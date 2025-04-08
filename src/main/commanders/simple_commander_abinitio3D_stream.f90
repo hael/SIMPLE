@@ -8,20 +8,38 @@ use simple_oris,               only: oris
 use simple_stream_utils
 implicit none
 
-public :: request_snapshot, add_projects2jobslist, submit_jobs, check_processes
+public :: init_abinitio3D, request_snapshot, add_projects2jobslist, submit_jobs
 public :: analysis, update_user_params3D, restart_cleanup, get_nrecs_submitted
+public :: check_processes
 
 private
 #include "simple_local_flags.inc"
 
-character(len=STDLEN), parameter :: USER_PARAMS = 'stream3D_user_params.txt'
-character(len=STDLEN), parameter :: EXECDIR     = 'run_'
+character(len=STDLEN), parameter :: USER_PARAMS  = 'stream3D_user_params.txt'
+character(len=STDLEN), parameter :: EXECDIR      = 'run_'
+character(len=STDLEN), parameter :: DIR_ALGNVOLS = 'alignedvolumes/'
 
 type(procrecord),    allocatable :: procrecs(:)             ! records of all jobs
+real,                allocatable :: algnvols_corrmat(:,:)   ! Volumes alignment correlation matrix
 integer                          :: nvols_glob = 0          ! Total number of volumes generated (runs completed)
 integer(kind=dp)                 :: time_last_submission
 
 contains
+
+    subroutine init_abinitio3D
+        call cleanup_abinitio3D
+        ! For volumes alignment & analysis
+        call simple_mkdir(DIR_ALGNVOLS)
+        params_glob%gridding  = 'yes'
+        params_glob%interpfun = 'kb'
+    end subroutine init_abinitio3D
+
+    subroutine cleanup_abinitio3D
+        nvols_glob = 0
+        time_last_submission = 0
+        call kill_procrecords(procrecs)
+        if(allocated(algnvols_corrmat))deallocate(algnvols_corrmat)
+    end subroutine cleanup_abinitio3D
 
     ! request snapshot generation to 2D process
     ! nptcls: # of particles that will be used in next run of abinitio3D
@@ -151,24 +169,21 @@ contains
     subroutine submit_one_process( cline, record )
         type(cmdline),     intent(in)    :: cline
         class(procrecord), intent(inout) :: record
-        type(chash)                   :: job_descr
-        type(qsys_env)                :: qenv
-        type(cmdline)                 :: cline_abinitio3D
-        character(len=:), allocatable :: distrexec, log
-        character(len=XLONGSTRLEN)    :: cwd, cwd_old
+        type(chash)                :: job_descr
+        type(qsys_env)             :: qenv
+        type(cmdline)              :: cline_abinitio3D
+        character(len=XLONGSTRLEN) :: cwd, cwd_old
         ! updates command line
         cline_abinitio3D = cline
         call cline_abinitio3D%set('projfile', record%projfile)
         call cline_abinitio3D%gen_job_descr(job_descr)
         ! submit
-        distrexec = 'execscript_'//record%id
-        log       = 'execlog_'   //record%id
         cwd_old = trim(cwd_glob)
         call chdir(record%folder)
         call simple_getcwd(cwd)
         cwd_glob = trim(cwd)
         call qenv%new(params_glob%nparts, exec_bin='simple_exec')
-        call qenv%exec_simple_prg_in_queue_async(cline_abinitio3D, distrexec, log)
+        call qenv%exec_simple_prg_in_queue_async(cline_abinitio3D, 'execscript', 'execlog')
         call chdir(cwd_old)
         cwd_glob = trim(cwd_old)
         time_last_submission = time8()
@@ -201,14 +216,17 @@ contains
     end subroutine check_processes
 
     subroutine analysis( master_spproj )
+        use simple_projector_hlev, only: rotvol
+        use simple_image,          only: image
         class(sp_project), intent(inout) :: master_spproj
-        type(procrecord), allocatable :: prevrecs(:)    ! already analyzed
-        type(procrecord), allocatable :: newrecs(:)     ! to analyze
-        type(procrecord), allocatable :: cohort(:)      ! all
-        type(sp_project)              :: spproj
-        character(len=:), allocatable :: projfile, fsc_fname
-        real    :: smpd
-        integer :: i, j, n_new, n_prev, ncohort, box, nptcls, fsc_box
+        type(procrecord),    allocatable :: prevrecs(:)    ! already analyzed
+        type(procrecord),    allocatable :: newrecs(:)     ! to analyze
+        character(len=:),    allocatable :: projfile, projections, fsc_fname
+        type(sp_project) :: spproj
+        type(ori)        :: o
+        type(image)      :: vol, rvol, reprojs
+        real    :: R(3,3), smpd
+        integer :: i, j, n_new, n_prev, box, nptcls, fsc_box ! Joe: box & fsc_box are the same?
         n_new = get_nrecs2postprocess()
         if( n_new == 0 ) return
         n_prev = get_nrecs_completed() - n_new
@@ -219,38 +237,115 @@ contains
         do i = 1,size(procrecs)
             if( .not.procrecs(i)%complete ) cycle   ! not finished or submitted
             if(      procrecs(i)%included ) cycle   ! previously done
+            j        = j + 1
             projfile = procrecs(i)%folder//procrecs(i)%projfile
             ! parameters
             call spproj%read_segment('ptcl3D', projfile)
-            ! parameters analysis here?
             ! unfiltered volume
             call spproj%read_segment('out', projfile)
+            ! should use postprocessed volume?
             call spproj%get_vol('vol', 1, procrecs(i)%volume, smpd, box)
             call spproj%get_fsc( 1, fsc_fname, fsc_box )
             nptcls = spproj%os_ptcl3D%get_noris(consider_state=.true.)
             call spproj%kill
-            ! volume analysis here
+            ! Individual inertia tensor alignment
+            call vol%new([box,box,box], smpd)
+            call vol%read(procrecs(i)%volume)
+            procrecs(i)%alnvolume = trim(DIR_ALGNVOLS)//'alnvol_'//trim(procrecs(i)%id)//trim(params_glob%ext)
+            if( trim(uppercase(params_glob%pgrp)).eq.'C1' )then
+                ! align volume inertia tensor principal axes to reference axes
+                call vol%calc_principal_axes_rotmat(params_glob%mskdiam, R)
+                call o%ori_from_rotmat(R, .false.)
+                rvol = rotvol(vol, o, [0.,0.,0.])
+                call rvol%write(procrecs(i)%alnvolume)
+                call rvol%generate_orthogonal_reprojs(reprojs)
+            else
+                call vol%generate_orthogonal_reprojs(reprojs)
+            endif
+            call reprojs%write_jpg(trim(DIR_ALGNVOLS)//'alnvol_reprojs_'//trim(procrecs(i)%id)//'.jpg')
+            call reprojs%kill
+            call rvol%kill
+            call o%kill
+            ! updates all-to-all correlation matrix
+            if( (get_nrecs_included()==0) .and. (j==1) )then
+                ! first time, nothing to do
+            else
+                call vol%mirror('x')
+                call vol%write('mirr.mrc')
+                call dock_new_volume(i)
+                call del_file('mirr.mrc')
+            endif
+            call vol%kill
             ! will not go through this loop again
             procrecs(i)%included = .true.
             ! book-keeping
-            j = j + 1
             newrecs(j) = procrecs(i)
             ! add to global project as state=nvols_glob
             nvols_glob = nvols_glob+1
-            call master_spproj%add_vol2os_out(procrecs(i)%volume, smpd, nvols_glob, 'vol', box, pop=nptcls)
+            call master_spproj%add_vol2os_out(procrecs(i)%alnvolume, smpd, nvols_glob, 'vol', box, pop=nptcls)
             call master_spproj%add_fsc2os_out(fsc_fname, nvols_glob, fsc_box)
+            ! TODO align classes to volumes!
         enddo
-        ! Cohort analysis
-        cohort  = pack(procrecs, mask=procrecs(:)%included)
-        ncohort = size(cohort)
-        ! TODO
         ! write global project
         call master_spproj%write_segment_inside('out',params_glob%projfile)
         ! cleanup
         call kill_procrecords(prevrecs)
         call kill_procrecords(newrecs)
-        call kill_procrecords(cohort)
     end subroutine analysis
+
+    ! docks volume to all the previous ones
+    subroutine dock_new_volume( indnew )
+        use simple_dock_vols, only: dock_vols
+        integer,          intent(in)  :: indnew
+        type(dock_vols)               :: dvols
+        real,             allocatable :: tmp(:,:)
+        character(len=:), allocatable :: newvol
+        integer,          allocatable :: inds(:)
+        real    :: eul(3), eul_mirr(3), shift(3), shift_mirr(3), cc, cc_mirr
+        integer :: i, ii, n, ncompl, nincl, l
+        if( .not.allocated(procrecs) )return
+        nincl  = get_nrecs_included()
+        ncompl = get_nrecs_completed()
+        if( nincl < 1 )  return
+        if( ncompl < 1 ) return
+        l      = nincl + 1
+        n      = size(procrecs)
+        inds   = pack((/(i,i=1,n)/), mask=procrecs(:)%complete)
+        newvol = trim(procrecs(indnew)%volume)
+        write(logfhandle,'(A,A)') '>>> DOCKING VOLUME: ',newvol
+        if( allocated(algnvols_corrmat) )then
+            allocate(tmp(l,l),source=0.)
+            tmp(:nincl,:nincl)    = algnvols_corrmat(:,:)
+            deallocate(algnvols_corrmat)
+            call move_alloc(tmp, algnvols_corrmat)
+            algnvols_corrmat(l,l) = 1.0
+        else
+            allocate(algnvols_corrmat(2,2),source=0.)
+            algnvols_corrmat(1,1) = 1.0
+            algnvols_corrmat(2,2) = 1.0
+        endif
+        do i = 1,nincl
+            ii = inds(i)
+            if( ii == indnew ) exit
+            call dvols%new(newvol, procrecs(ii)%volume, params_glob%smpd, 150., 10.0, params_glob%mskdiam)
+            call dvols%srch
+            call dvols%get_dock_info(eul, shift, cc)
+            call dvols%kill
+            call dvols%new('mirr.mrc', procrecs(ii)%volume, params_glob%smpd, 150., 10.0, params_glob%mskdiam)
+            call dvols%srch
+            call dvols%get_dock_info(eul_mirr, shift_mirr, cc_mirr)
+            call dvols%kill
+            if( cc_mirr > cc )then
+                cc    = cc_mirr
+                shift = shift_mirr
+                eul   = eul_mirr
+            endif
+            algnvols_corrmat(l,i) = max(cc,cc_mirr)
+            algnvols_corrmat(i,l) = algnvols_corrmat(l,i)
+        end do
+    end subroutine dock_new_volume
+
+    ! Book-keeping
 
     !> Updates current parameters with user input
     !  Parameters can be either global ones used by master process (params_glob updated)
@@ -324,6 +419,12 @@ contains
             deallocate(folders)
         endif
     end subroutine restart_cleanup
+
+    ! Total number of jobs that have been analyzed
+    integer function get_nrecs_included()
+    get_nrecs_included = 0
+        if( allocated(procrecs) ) get_nrecs_included = count(procrecs%included)
+    end function get_nrecs_included
 
     ! number completed jobs
     integer function get_nrecs_completed()

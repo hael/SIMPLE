@@ -51,7 +51,8 @@ end type abinitio3D_parts_commander
 ! class constants
 character(len=*), parameter :: REC_FBODY             = 'rec_final_state'
 character(len=*), parameter :: STR_STATE_GLOB        = '01'
-real,             parameter :: LPSTOP_BOUNDS(2)      = [4.5,6.0]
+! real,             parameter :: LPSTOP_BOUNDS(2)      = [4.5,6.0]
+real,             parameter :: LPSTOP_BOUNDS(2)      = [6.5,8.0]
 real,             parameter :: LPSTART_BOUNDS(2)     = [10.,20.]
 real,             parameter :: CENLP_DEFAULT         = 30.
 real,             parameter :: LPSYMSRCH_LB          = 12.
@@ -61,9 +62,11 @@ integer,          parameter :: NSTAGES               = 8
 integer,          parameter :: NSTAGES_INI3D         = 4 ! # of ini3D stages used for initialization
 integer,          parameter :: NSTAGES_INI3D_MAX     = 7
 integer,          parameter :: PHASES(3)             = [2,6,8]
-integer,          parameter :: MAXITS(8)             = [20,20,17,17,17,17,15,30]
+! integer,          parameter :: MAXITS(8)             = [20,20,17,17,17,17,15,30]
+integer,          parameter :: MAXITS(8)             = [2,2,1,1,1,1,1,1]
 integer,          parameter :: MAXITS_GLOB           = SUM(MAXITS(1:7))  ! the last 30 iterations are not included in this estimate since the sampling method changes
-integer,          parameter :: NSPACE(3)             = [500,1000,2500]
+! integer,          parameter :: NSPACE(3)             = [500,1000,2500]
+integer,          parameter :: NSPACE(3)             = [300,300,300]
 integer,          parameter :: SYMSRCH_STAGE         = 3
 integer,          parameter :: PROBREFINE_STAGE      = 5
 integer,          parameter :: ICM_STAGE             = PROBREFINE_STAGE  ! we switch from ML regularization when prob is switched on
@@ -979,12 +982,14 @@ contains
         params_glob%pgrp_start = params_glob%pgrp
         ! stash away files
         ! identfy files that stay
-        allocate(files_that_stay(5))
+        allocate(files_that_stay(7))
         files_that_stay(1)%str = basename(trim(params_glob%projfile))
         files_that_stay(2)%str = 'cavgs'
         files_that_stay(3)%str = 'nice'
         files_that_stay(4)%str = 'frcs'
         files_that_stay(5)%str = 'ABINITIO3D'
+        files_that_stay(6)%str = 'execscript' ! only with streaming
+        files_that_stay(7)%str = 'execlog'    ! only with streaming
         ! make the move
         call move_files_in_cwd(INI3D_DIR, files_that_stay)
     end subroutine ini3D_from_cavgs

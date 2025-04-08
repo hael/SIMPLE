@@ -16,7 +16,7 @@ interface locate
 end interface
 
 interface reverse
-    module procedure reverse_iarr, reverse_rarr
+    module procedure reverse_iarr, reverse_rarr, reverse_drarr
 end interface
 
 contains
@@ -493,6 +493,31 @@ contains
             rarr(i) = rswap
         end do
     end subroutine reverse_rarr
+
+    !> reverses a double precision real vector
+    subroutine reverse_drarr( drarr )
+        real(kind=dp), intent(inout) :: drarr(:) !< vector for modification
+        integer                      :: i, j, sz, st, en
+        real(kind=dp)                :: rswap
+        sz = size(drarr,1)
+        if( sz < 2 )then
+            return
+        endif
+        if( mod(sz,2) == 0 )then
+            st = 1
+            en = sz/2+2
+        else
+            st = 0
+            en = (sz+1)/2+1
+        endif
+        j = st
+        do i = sz,en,-1
+            j = j+1
+            rswap   = drarr(j)
+            drarr(j) = drarr(i)
+            drarr(i) = rswap
+        end do
+    end subroutine reverse_drarr
 
     !> reverses a real vector preserving the fourier center
     subroutine reverse_f( rarr )
