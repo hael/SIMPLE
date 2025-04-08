@@ -145,7 +145,7 @@ type :: polarft_corrcalc
     procedure, private :: setup_npix_per_shell
     procedure          :: memoize_ptcls, memoize_refs
     procedure, private :: kill_memoized_ptcls, kill_memoized_refs
-    procedure, private :: allocate_ptcls_memoization, allocate_refs_memoization
+    procedure          :: allocate_ptcls_memoization, allocate_refs_memoization
     ! CALCULATORS
     procedure          :: polar_cavg
     procedure          :: create_polar_absctfmats, calc_polar_ctf

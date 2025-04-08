@@ -61,6 +61,7 @@ type(abinitio2D_commander)                  :: xabinitio2D
 type(cluster2D_autoscale_commander)         :: xcluster2D_hlev
 type(cluster2D_commander_subsets)           :: xcluster2D_subsets
 type(cleanup2D_commander_hlev)              :: xcleanup2D_distr
+type(cluster2D_polar_commander)             :: xcluster2D_polar
 
 ! AB INITIO 3D RECONSTRUCTION WORKFLOW
 type(estimate_lpstages_commander)           :: xestimate_lpstages
@@ -248,6 +249,8 @@ select case(trim(prg))
         call xcluster2D_hlev%execute(cline)
     case( 'cluster2D_subsets' )
         call xcluster2D_subsets%execute(cline)
+    case( 'cluster2D_polar' )
+        call xcluster2D_polar%execute(cline)
 
     ! AB INITIO 3D RECONSTRUCTION WORKFLOW
     case('estimate_lpstages')
