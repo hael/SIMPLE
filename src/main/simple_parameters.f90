@@ -416,6 +416,7 @@ type :: parameters
     real    :: fraca=0.1           !< fraction of amplitude contrast used for fitting CTF{0.1}
     real    :: fracdeadhot=0.05    !< fraction of dead or hot pixels{0.01}
     real    :: frac_best=1.0       !< fraction of best particles to sample from per class when balance=yes
+    real    :: frac_min=0.7        !< minimum fraction of particles to select in autoselect_cavgs
     real    :: frac_diam=0.5       !< fraction of atomic diameter
     real    :: fracsrch=0.9        !< fraction of serach space scanned for convergence
     real    :: fraction_dose_target=FRACTION_DOSE_TARGET_DEFAULT !< dose (in e/A2)
@@ -930,6 +931,7 @@ contains
         call check_rarg('fraca',          self%fraca)
         call check_rarg('fracdeadhot',    self%fracdeadhot)
         call check_rarg('frac_best',      self%frac_best)
+        call check_rarg('frac_min',       self%frac_min)
         call check_rarg('frac_diam',      self%frac_diam)
         call check_rarg('fracsrch',       self%fracsrch)
         call check_rarg('fraction_dose_target',self%fraction_dose_target)

@@ -5,7 +5,7 @@ use simple_user_interface,       only: make_user_interface, list_single_prgs_in_
 use simple_cmdline,              only: cmdline, cmdline_err
 use simple_commander_sim,        only: simulate_atoms_commander
 use simple_commander_preprocess, only: map_cavgs_selection_commander
-use simple_commander_imgproc,    only: estimate_diam_commander, gen_pspecs_commander
+use simple_commander_imgproc,    only: estimate_diam_commander
 use simple_exec_helpers
 use simple_commander_project
 use simple_commander_cluster2D
@@ -206,7 +206,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('45992ba4')
+call simple_print_git_version('819ab0e5')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

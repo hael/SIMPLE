@@ -733,16 +733,13 @@ contains
         call private_prgs(22)%push_opt_key('cenlp')
         call private_prgs(22)%push_opt_key('neg')
         call private_prgs(22)%push_opt_key('filter')
-
-        ! GEN PSPECS
-        call private_prgs(23)%set_name('gen_pspecs')
+        
+        ! AUTOSELECT CAVGS
+        call private_prgs(23)%set_name('autoselect_cavgs')
         ! required keys
-        call private_prgs(23)%push_req_key('nthr')
+        call private_prgs(23)%push_req_key('projfile')
         call private_prgs(23)%push_req_key('stk')
-        call private_prgs(23)%push_req_key('smpd')
         call private_prgs(23)%push_req_key('mskdiam')
-        ! optional keys
-        call private_prgs(23)%push_opt_key('lp_backgr')
 
         ! CALC_GROUP_SIGMAS, for asssembling sigmas for refine3D
         call private_prgs(24)%set_name('calc_group_sigmas')
