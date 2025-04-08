@@ -40,6 +40,7 @@ type procrecord
     character(len=:), allocatable :: folder                 ! location
     character(len=:), allocatable :: projfile               ! filename
     character(len=:), allocatable :: volume                 ! volume filename
+    character(len=:), allocatable :: alnvolume              ! aligned volume filename
     logical                       :: submitted = .false.    ! process has been submitted (running)
     logical                       :: complete  = .false.    ! is complete
     logical                       :: included  = .false.    ! has been post-processed/analyzed
@@ -633,6 +634,7 @@ contains
         record%folder    = trim(folder)
         record%projfile  = trim(projfile)
         record%volume    = ''
+        record%alnvolume = ''
         record%submitted = .false.
         record%complete  = .false.
         record%included  = .false.
@@ -646,7 +648,7 @@ contains
 
     elemental subroutine kill_procrecord( rec )
         type(procrecord), intent(inout) :: rec
-        if( allocated(rec%id) ) deallocate(rec%id,rec%folder,rec%projfile,rec%volume)
+        if( allocated(rec%id) ) deallocate(rec%id,rec%folder,rec%projfile,rec%volume,rec%alnvolume)
     end subroutine kill_procrecord
 
     subroutine kill_procrecords( recs )

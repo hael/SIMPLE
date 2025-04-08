@@ -44,6 +44,7 @@ contains
     generic            :: disc => disc_1, disc_2
     procedure          :: ring, soft_ring
     procedure          :: disc_sideview
+    procedure          :: cylinder
     procedure          :: copy
     procedure          :: copy_fast
     procedure          :: img2spec
@@ -262,6 +263,7 @@ contains
     generic            :: oshift => oshift_1, oshift_2
     procedure, private :: gen_argtransf_comp
     procedure          :: radial_cc
+    procedure          :: calc_principal_axes_rotmat
     ! MODIFIERS
     procedure          :: lp_background
     procedure          :: combine_fgbg_filt
@@ -549,7 +551,7 @@ contains
         if( present(npix) ) npix = count(lmsk)
     end subroutine disc_2
 
-    !>  \brief disc constructs a binary ring and returns the number of 1:s
+    !>  \brief ring constructs a binary ring and returns the number of 1:s
     subroutine ring( self, ldim, smpd, outer_radius, inner_radius, npix )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: ldim(3)
@@ -641,6 +643,27 @@ contains
         enddo
         self%rmat = self%rmat / maxval(self%rmat(1:self%ldim(1),c(2),1))
     end subroutine disc_sideview
+
+    !>  \brief constructs a binary cylinder along the z-axis
+    subroutine cylinder( self, ldim, smpd, height, radius )
+        class(image),      intent(inout) :: self
+        integer,           intent(in)    :: ldim(3)
+        real,              intent(in)    :: smpd, height, radius
+        real    :: rsq,radiussq
+        integer :: icenter(3),i,j,k
+        call self%new(ldim, smpd)
+        icenter  = nint(real(self%ldim/2.))+1
+        radiussq = radius**2
+        do k = 1,self%ldim(3)
+            if( real(abs(k-icenter(3))) > height/2. ) cycle
+            do j = 1,self%ldim(2)
+            do i = 1,self%ldim(1)
+                rsq = (i-icenter(1))**2 + (j-icenter(2))**2
+                if( rsq < radiussq ) self%rmat(i,j,k) = 1
+            enddo
+            enddo
+        enddo
+    end subroutine cylinder
 
     subroutine copy( self, self_in )
         class(image), intent(inout) :: self
@@ -3088,6 +3111,51 @@ contains
         call stkimg%norm4viz(brightness=80.0, maxmin=.true.)
         self%rmat(x_start:x_end, y_start:y_end, 1) = stkimg%rmat(:stkimg_ldim(1), :stkimg_ldim(2), 1)
     end subroutine tile
+
+    ! Calculates the rotation matrix that aligns the inertia tensor of object to xyz cartesian axes
+    subroutine calc_principal_axes_rotmat( self, radius, R )
+        class(image), intent(in)  :: self
+        real,         intent(in)  :: radius
+        real,         intent(out) :: R(3,3)
+        real(dp) :: coord(3), ixx, iyy, izz, ixz, ixy, iyz, m
+        real(dp) :: inertia(3,3), eigvals(3), eigvecs(3,3)
+        real     :: radiussq
+        integer  :: icenter(3),i,j,k
+        if( self%is_ft() )      THROW_HARD('Real space only; calc_principal_axes_rotmat')
+        if( .not.self%is_3d() ) THROW_HARD('Volumes only; calc_principal_axes_rotmat')
+        icenter  = nint(real(self%ldim)/2.)+1
+        radiussq = radius**2
+        ! Inertia Tensor
+        ixx = 0.d0; iyy = 0.d0; izz = 0.d0
+        ixy = 0.d0; ixz = 0.d0; iyz = 0.d0
+        do k =1,self%ldim(3)
+        do j =1,self%ldim(2)
+        do i =1,self%ldim(1)
+            if( (real(sum(([i,j,k]-icenter)**2)) < radiussq) .and. (self%rmat(i,j,k)>0.0) )then
+                coord = real([i,j,k]-icenter, dp)
+                m     = real(self%rmat(i,j,k), dp)
+                ixx   = ixx + m * (coord(2)**2 + coord(3)**2)
+                iyy   = iyy + m * (coord(1)**2 + coord(3)**2)
+                izz   = izz + m * (coord(1)**2 + coord(2)**2)
+                ixy   = ixy + m * coord(1) * coord(2)
+                ixz   = ixz + m * coord(1) * coord(3)
+                iyz   = iyz + m * coord(2) * coord(3)
+            endif
+        enddo
+        enddo
+        enddo
+        inertia(1,:) = [ ixx, -ixy, -ixz]
+        inertia(2,:) = [-ixy,  iyy, -iyz]
+        inertia(3,:) = [-ixz, -iyz,  izz]
+        ! Spectral analysis
+        call svdcmp(inertia, eigvals, eigvecs)
+        call eigsrt(eigvals, eigvecs, 3, 3)
+        ! double checking
+        ! identity = matmul(eigvecs, transpose(eigvecs))
+        ! inertia  = matmul(eigvecs, matmul(eye(3)*eigvals, transpose(eigvecs)))
+        ! Reverse rotation matrix
+        R = real(transpose(eigvecs))
+    end subroutine calc_principal_axes_rotmat
 
     ! generate the 3 orthogonal reprojections from a volume into a single image
     subroutine generate_orthogonal_reprojs( self, reprojs)

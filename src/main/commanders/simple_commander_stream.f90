@@ -781,8 +781,7 @@ contains
         character(len=LONGSTRLEN)              :: cwd_job, latest_boxfile
         character(len=STDLEN)                  :: pick_nthr_env, pick_part_env
         real,                      allocatable :: moldiams(:)
-        real                                   :: pick_nthr, jpg_scale, moldiam_interactive, nmoldiams_interactive, moldiam_max_interactive
-        real                                   :: pickrefs_thumbnail_scale, rnd
+        real                                   :: pick_nthr, jpg_scale, pickrefs_thumbnail_scale, rnd
         integer                                :: nmics_sel, nmics_rej, nmics_rejected_glob, pick_extract_set_counter, i_max, i_thumb, i
         integer                                :: nmics, nprojects, stacksz, prev_stacksz, iter, last_injection, iproj, envlen, imic
         integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, nmic_star, thumbid_offset
@@ -3027,9 +3026,9 @@ contains
         type(oris)                             :: moldiamori, chunksizeori, vol_oris, fsc_oris
         type(simple_nice_communicator)         :: nice_communicator
         character(len=LONGSTRLEN), allocatable :: projects(:)
+        character(len=:),          allocatable :: moldiam_fname, chunksize_fname
         integer :: nprojects, iter, i, ncompleted
         logical :: l_params_updated
-        real    :: moldiam, nptcls_per_cls
         call cline%set('oritype',      'ptcl3D')
         call cline%set('mkdir',        'yes')
         call cline%set('objfun',    'euclid')
@@ -3070,6 +3069,8 @@ contains
             call cline%delete('dir_exec')
             call restart_cleanup
         endif
+        ! some initialization
+        call init_abinitio3D
         ! initialise progress monitor
         call progressfile_init()
         ! master project file
@@ -3082,18 +3083,18 @@ contains
             nice_communicator%stat_root%stage = "waiting for initial mask diameter"
             call nice_communicator%cycle()
             write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 10 MINUTES FOR '// trim(STREAM_MOLDIAM)
+            moldiam_fname = trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM)
             do i=1, 30
-                if(file_exists(trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM))) exit
+                if(file_exists(moldiam_fname)) exit
                 call sleep(20)
             end do
-            if( .not. file_exists(trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM))) THROW_HARD('either mskdiam must be given or '// trim(STREAM_MOLDIAM) // ' exists in target_dir')
+            if( .not. file_exists(moldiam_fname)) THROW_HARD('either mskdiam must be given or '// trim(STREAM_MOLDIAM) // ' exists in target_dir')
             ! read mskdiam from file
             call moldiamori%new(1, .false.)
-            call moldiamori%read( trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM) )
-            if( .not. moldiamori%isthere(1, "moldiam") ) THROW_HARD( 'moldiam missing from ' // trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM) )
-            moldiam = moldiamori%get(1, "moldiam")
+            call moldiamori%read(moldiam_fname)
+            if( .not. moldiamori%isthere(1, "moldiam") ) THROW_HARD('moldiam missing from '//trim(moldiam_fname))
+            params%mskdiam = 1.2 * moldiamori%get(1, "moldiam")
             call moldiamori%kill
-            params%mskdiam = moldiam * 1.2
             call cline%set('mskdiam', params%mskdiam)
             write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER SET TO', params%mskdiam
         endif
@@ -3103,18 +3104,18 @@ contains
             nice_communicator%stat_root%stage = "waiting for chunk size"
             call nice_communicator%cycle()
             write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 10 MINUTES FOR '// trim(STREAM_CHUNKSIZE)
+            chunksize_fname = trim(params%dir_target)//'/'//trim(STREAM_CHUNKSIZE)
             do i=1, 30
-                if(file_exists(trim(params%dir_target)//'/'//trim(STREAM_CHUNKSIZE))) exit
+                if(file_exists(chunksize_fname)) exit
                 call sleep(20)
             end do
-            if( .not. file_exists(trim(params%dir_target)//'/'//trim(STREAM_CHUNKSIZE))) THROW_HARD('either nptcls must be given or '// trim(STREAM_CHUNKSIZE) // ' exists in target_dir')
+            if( .not. file_exists(chunksize_fname)) THROW_HARD('either nptcls must be given or '//trim(STREAM_CHUNKSIZE)//' exists in target_dir')
             ! read nptcls from file
             call chunksizeori%new(1, .false.)
-            call chunksizeori%read( trim(params%dir_target)//'/'//trim(STREAM_CHUNKSIZE) )
-            if( .not. chunksizeori%isthere(1, "nptcls_per_cls") ) THROW_HARD( 'nptcls_per_cls missing from ' // trim(params%dir_target)//'/'//trim(STREAM_CHUNKSIZE) )
-            nptcls_per_cls = chunksizeori%get(1, "nptcls_per_cls")
+            call chunksizeori%read(chunksize_fname)
+            if( .not. chunksizeori%isthere(1, "nptcls_per_cls") )THROW_HARD('nptcls_per_cls missing from '//trim(chunksize_fname))
+            params%nptcls = chunksizeori%get_int(1, "nptcls_per_cls")
             call chunksizeori%kill
-            params%nptcls = int(nptcls_per_cls)
             write(logfhandle,'(A,I8)')'>>> NPTCLS SET TO', params%nptcls
         endif
         nice_communicator%stat_root%stage = "waiting for > "// int2str(params%nptcls) // " particles"
@@ -3160,12 +3161,12 @@ contains
             ! New snapshots management
             call project_buff%watch(nprojects, projects, chrono=.true.)
             if( nprojects > 0 )then
-                nice_communicator%stat_root%stage = "running"
+                nice_communicator%stat_root%stage = "running" ! Joe: not running, just packaged, cf below
                 call project_buff%add2history( projects )
                 call add_projects2jobslist( projects )
             endif
             ! Submit to queue
-            call submit_jobs( cline4exec )
+            call submit_jobs( cline4exec ) ! Joe: this where jobs can be considered 'running' when appropriate
             ! Current runs complete?
             call check_processes( ncompleted )
             if( ncompleted > 0 )then
