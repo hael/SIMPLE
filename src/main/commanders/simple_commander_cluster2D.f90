@@ -3228,8 +3228,8 @@ contains
         type(builder)                 :: build
         type(parameters)              :: params
         type(euclid_sigma2)           :: eucl_sigma
-        integer :: nptcls
-        call cline%set('mkdir',  'no')
+        integer :: nptcls, ithr
+        call cline%set('mkdir',  'yes')
         call cline%set('stream', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         call build%spproj_field%clean_entry('updatecnt', 'sampled')
@@ -3237,11 +3237,24 @@ contains
         call sample_ptcls4update([1,params_glob%nptcls], .true., nptcls, pinds)
         ! communicate to project file
         call build_glob%spproj%write_segment_inside(params_glob%oritype)
-        ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, POLARIZER, PTCLS
-        call prepare_refs_sigmas_ptcls( pftcc, cline, eucl_sigma, tmp_imgs, nptcls )
+        ! Preparing pftcc
+        call pftcc%new(params_glob%nspace * params_glob%nstates, [1,nptcls], params_glob%kfromto)
+        ! Preparing particles
+        call prepimgbatch(nptcls)
+        call build%img_crop_polarizer%init_polarizer(pftcc, params%alpha)
+        allocate(tmp_imgs(nthr_glob))
+        !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
+        do ithr = 1,nthr_glob
+            call tmp_imgs(ithr)%new([params_glob%box_crop,params_glob%box_crop,1], params_glob%smpd_crop, wthreads=.false.)
+        enddo
+        !$omp end parallel do
+        ! allocate refs stuffs in pftcc before memoize_ptcls in build_batch_particles
+        call pftcc%allocate_refs_memoization
         ! Build polar particle images
         call build_batch_particles(pftcc, nptcls, pinds, tmp_imgs)
-
+        ! randomize oris
+        call build_glob%spproj_field%rnd_oris
+        ! cleaning up
         call killimgbatch
         call pftcc%kill
         call build%kill_general_tbox
