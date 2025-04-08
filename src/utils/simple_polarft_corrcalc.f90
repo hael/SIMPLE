@@ -147,7 +147,7 @@ type :: polarft_corrcalc
     procedure, private :: kill_memoized_ptcls, kill_memoized_refs
     procedure          :: allocate_ptcls_memoization, allocate_refs_memoization
     ! CALCULATORS
-    procedure          :: polar_cavg
+    procedure          :: polar_cavg, gen_polar_refs
     procedure          :: create_polar_absctfmats, calc_polar_ctf
     procedure          :: gen_shmat
     procedure, private :: gen_shmat_8
@@ -1118,6 +1118,49 @@ contains
         call img%shift_phorig()
         call img%ifft
     end subroutine polar_cavg
+
+    subroutine gen_polar_refs( self, ref_space, ptcl_space, cavgs )
+        use simple_image
+        use simple_oris
+        use simple_ori
+        class(polarft_corrcalc), intent(inout) :: self
+        type(oris),              intent(in)    :: ref_space
+        type(oris),              intent(in)    :: ptcl_space
+        type(image),             intent(inout) :: cavgs(self%nrefs)
+        complex,     allocatable :: cmat(:,:)
+        complex(sp), pointer     :: pft_ptcl(:,:)
+        real(sp),    pointer     :: rctf(:,:)
+        type(ori) :: orientation
+        integer :: box, i, k, iref, irot, ithr
+        real    :: ctf2(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs)
+        self%pfts_refs_even = 0.
+        ctf2     = 0.
+        ithr     = omp_get_thread_num() + 1
+        pft_ptcl => self%heap_vars(ithr)%pft_ref
+        rctf     => self%heap_vars(ithr)%pft_r
+        do i = 1,self%nptcls
+            call ptcl_space%get_ori(i, orientation)
+            iref = ref_space%find_closest_proj(orientation)
+            irot = self%get_roind(orientation%e3get())
+            call self%rotate_ptcl(self%pfts_ptcls(:,:,i), irot, pft_ptcl)
+            if( self%with_ctf )then
+                call self%rotate_ctf(i, irot, rctf)
+                self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + pft_ptcl * rctf
+                ctf2(:,:,iref)                = ctf2(:,:,iref)                +            rctf**2
+            else
+                self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + pft_ptcl
+            endif
+        enddo
+        if( self%with_ctf ) self%pfts_refs_even = self%pfts_refs_even / ctf2
+        do iref = 1, self%nrefs
+            call self%polar2cartesian(iref,.true.,cmat,box)
+            call cavgs(iref)%new([box,box,1],1.0)
+            call cavgs(iref)%set_cmat(cmat)
+            call cavgs(iref)%shift_phorig()
+            call cavgs(iref)%ifft
+        enddo
+        self%pfts_refs_odd = self%pfts_refs_even
+    end subroutine gen_polar_refs
 
     subroutine create_polar_absctfmats( self, spproj, oritype, pfromto )
         use simple_ctf,        only: ctf
