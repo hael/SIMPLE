@@ -191,6 +191,7 @@ type(simple_program), target :: simulate_particles
 type(simple_program), target :: simulate_subtomogram
 type(simple_program), target :: split_
 type(simple_program), target :: stack
+type(simple_program), target :: split_stack
 type(simple_program), target :: stackops
 type(simple_program), target :: symaxis_search
 type(simple_program), target :: symmetrize_map
@@ -514,6 +515,7 @@ contains
         call new_simulate_subtomogram
         call new_split_
         call new_stack
+        call new_split_stack
         call new_stackops
         call new_symaxis_search
         call new_symmetrize_map
@@ -658,6 +660,7 @@ contains
         call push2prg_ptr_array(simulate_subtomogram)
         call push2prg_ptr_array(split_)
         call push2prg_ptr_array(stack)
+        call push2prg_ptr_array(split_stack)
         call push2prg_ptr_array(stackops)
         call push2prg_ptr_array(symaxis_search)
         call push2prg_ptr_array(symmetrize_map)
@@ -932,6 +935,8 @@ contains
                 ptr2prg => split_
             case('stack')
                 ptr2prg => stack
+            case('split_stack')
+                ptr2prg => split_stack
             case('stackops')
                 ptr2prg => stackops
             case('symaxis_search')
@@ -1081,6 +1086,7 @@ contains
         write(logfhandle,'(A)') scale_project%name
         write(logfhandle,'(A)') split_%name
         write(logfhandle,'(A)') stack%name
+        write(logfhandle,'(A)') split_stack%name
         write(logfhandle,'(A)') stackops%name
         write(logfhandle,'(A)') symaxis_search%name
         write(logfhandle,'(A)') symmetrize_map%name
@@ -5326,6 +5332,31 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_stack
+
+    subroutine new_split_stack
+        ! PROGRAM SPECIFICATION
+        call split_stack%new(&
+        &'split_stack',&                                              ! name
+        &'split stack in project',&                                   ! descr_short
+        &'is a program for splitting a stack into nparts substacks',& ! descr_long
+        &'simple_exec',&                                              ! executable
+        &0, 1, 0, 0, 0, 0, 0, .true.)                                 ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call split_stack%set_input('parm_ios', 1, 'nparts', 'num', 'Number of parts balanced splitting of the stack', '# parts', '# parts', .true., 1.0)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_split_stack
 
     subroutine new_stackops
         ! PROGRAM SPECIFICATION

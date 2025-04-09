@@ -33,6 +33,7 @@ public :: projops_commander
 public :: prune_project_commander_distr
 public :: prune_project_commander
 public :: merge_projects_commander
+public :: split_stack_commander
 private
 #include "simple_local_flags.inc"
 
@@ -125,6 +126,11 @@ type, extends(commander_base) :: merge_projects_commander
   contains
     procedure :: execute      => exec_merge_projects
 end type merge_projects_commander
+
+type, extends(commander_base) :: split_stack_commander
+  contains
+    procedure :: execute      => exec_split_stack
+end type split_stack_commander
 
 contains
 
@@ -1629,5 +1635,23 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MERGE_PROJECTS NORMAL STOP ****')
     end subroutine exec_merge_projects
+
+    subroutine exec_split_stack( self, cline )
+        class(split_stack_commander), intent(inout) :: self
+        class(cmdline),             intent(inout) :: cline
+        type(parameters) :: params
+        type(sp_project) :: spproj
+        call cline%set("oritype", 'stk')
+        call params%new(cline, silent=.true.)
+        call spproj%read(params%projfile)
+        if( cline%defined('dir') )then
+            call spproj%split_stk(params%nparts, params%dir)
+        else
+            call spproj%split_stk(params%nparts)
+        endif
+        call spproj%write(params%projfile)
+        call spproj%kill
+        call simple_end('**** split_stack NORMAL STOP ****')
+    end subroutine exec_split_stack
 
 end module simple_commander_project
