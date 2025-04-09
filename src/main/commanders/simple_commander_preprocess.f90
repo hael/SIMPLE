@@ -845,7 +845,7 @@ contains
             states(loc(1)) = 1
         end do
         ! communicate selection to project
-        call build%spproj%map_cavgs_selection(states, trim(params%imgkind)=='cavg3D')
+        call build%spproj%map_cavgs_selection(states)
         ! optional pruning
         if( trim(params%prune).eq.'yes') call build%spproj%prune_particles
         ! this needs to be a full write as many segments are updated
