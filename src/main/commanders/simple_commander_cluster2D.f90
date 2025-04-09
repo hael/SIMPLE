@@ -1787,7 +1787,7 @@ contains
         type(parameters)              :: params
         type(sp_project)              :: spproj
         real,             allocatable :: resarr(:), tmp(:), spec_good(:), spec_bad(:), dists_good(:), dists_bad(:)
-        integer,          allocatable :: inds_good(:), inds_bad(:), pinds(:)
+        integer,          allocatable :: inds_good(:), inds_bad(:), pinds(:), states(:)
         real,             parameter   :: EMPTY_THRES = 1e-6
         integer,          parameter   :: MAXITS      = 5
         type(spec_inf),   allocatable :: spec_inf_arr(:)
@@ -1952,26 +1952,14 @@ contains
             end do
         endif
         write(logfhandle,*) 'Percentage of particles selected: ', frac * 100.
-        ! map selection to self%os_ptcl2D & os_ptcl3D
-        nptcls_from_pinds = 0
-        if( spproj%os_ptcl2D%get_noris() > 0 .and. spproj%os_ptcl3D%get_noris() > 0)then
-            do i=1,params%ncls
-                call spproj%os_ptcl2D%get_pinds(i, 'class', pinds)
-                if( allocated(pinds) )then
-                    if( spec_inf_arr(i)%rank <= cnt_good )then
-                        s = 1
-                    else
-                        s = 0
-                    endif
-                    nptcls_from_pinds = nptcls_from_pinds + size(pinds)
-                    do j=1,size(pinds)
-                        call spproj%os_ptcl2D%set(pinds(j), 'state', s)
-                        call spproj%os_ptcl3D%set(pinds(j), 'state', s)
-                    end do
-                    deallocate(pinds)
-                endif
-            end do
-        endif
+        ! map selection
+        allocate(states(params%ncls))
+        where(spec_inf_arr(:)%rank <= cnt_good)
+            states = 1
+        elsewhere
+            states = 0
+        endwhere
+        call spproj%map_cavgs_selection(states)
         ! optional pruning
         if( trim(params%prune).eq.'yes') call spproj%prune_particles
         ! this needs to be a full write as many segments are updated
