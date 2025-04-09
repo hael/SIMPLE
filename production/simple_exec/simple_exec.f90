@@ -9,6 +9,7 @@ use simple_commander_starproject
 use simple_commander_checks
 use simple_commander_distr
 use simple_commander_imgproc
+use simple_commander_pspec
 use simple_commander_mask
 use simple_commander_misc
 use simple_commander_oris
@@ -52,6 +53,7 @@ type(extract_commander_distr)               :: xextract_distr
 type(reextract_commander_distr)             :: xreextract_distr
 type(motion_correct_commander_distr)        :: xmotion_correct_distr
 type(gen_pspecs_and_thumbs_commander_distr) :: xgen_pspecs_and_thumbs
+type(analyze_pspecs_commander)              :: xpow_anal
 type(ctf_estimate_commander_distr)          :: xctf_estimate_distr
 type(pick_commander_distr)                  :: xpick_distr
 
@@ -235,6 +237,8 @@ select case(trim(prg))
         call xmotion_correct_distr%execute(cline)
     case( 'gen_pspecs_and_thumbs' )
         call xgen_pspecs_and_thumbs%execute(cline)
+    case( 'analyze_pspecs' )
+        call xpow_anal%execute(cline)
     case( 'ctf_estimate' )
         call xctf_estimate_distr%execute(cline)
     case( 'pick' )
@@ -458,7 +462,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('25c392c9')
+call simple_print_git_version('32e0e018')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

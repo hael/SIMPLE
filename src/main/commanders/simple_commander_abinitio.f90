@@ -13,7 +13,6 @@ use simple_commander_refine3D, only: refine3D_commander, refine3D_distr_commande
 use simple_commander_mask,     only: automask_commander
 use simple_procimgstk,         only: shift_imgfile
 use simple_image,              only: image
-use simple_builder,            only: builder
 use simple_class_frcs,         only: class_frcs
 use simple_convergence,        only: convergence
 use simple_cluster_seed,       only: gen_labelling
