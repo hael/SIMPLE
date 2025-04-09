@@ -1831,7 +1831,8 @@ contains
             ! calculate sqrt spectrum
             call spec_inf_arr(i)%img%spectrum('sqrt', spec_inf_arr(i)%spec)
             ! calculate dynamic range in given resolution interval
-            spec_inf_arr(i)%dynrange = maxval(spec_inf_arr(i)%spec(kfromto(1):kfromto(2))) - minval(spec_inf_arr(i)%spec(kfromto(1):kfromto(2)))
+            ! spec_inf_arr(i)%dynrange = maxval(spec_inf_arr(i)%spec(kfromto(1):kfromto(2))) - minval(spec_inf_arr(i)%spec(kfromto(1):kfromto(2)))
+            spec_inf_arr(i)%dynrange = spec_inf_arr(i)%spec(kfromto(1)) - spec_inf_arr(i)%spec(kfromto(2))
             ! read back original image
             call spec_inf_arr(i)%img%read(stk, i)
         end do
@@ -1952,10 +1953,6 @@ contains
         endif
         write(logfhandle,*) 'Percentage of particles selected: ', frac * 100.
         ! map selection to self%os_ptcl2D & os_ptcl3D
-
-        print *, 'spproj%os_ptcl2D%get_noris() ', spproj%os_ptcl2D%get_noris()
-        print *, 'spproj%os_ptcl3D%get_noris() ', spproj%os_ptcl3D%get_noris()
-
         nptcls_from_pinds = 0
         if( spproj%os_ptcl2D%get_noris() > 0 .and. spproj%os_ptcl3D%get_noris() > 0)then
             do i=1,params%ncls
@@ -1975,8 +1972,6 @@ contains
                 endif
             end do
         endif
-
-        print *, 'nptcls_from_pinds ', nptcls_from_pinds
         ! optional pruning
         if( trim(params%prune).eq.'yes') call spproj%prune_particles
         ! this needs to be a full write as many segments are updated
