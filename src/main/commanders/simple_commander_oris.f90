@@ -13,6 +13,7 @@ public :: check_states_commander
 public :: make_oris_commander
 public :: orisops_commander
 public :: oristats_commander
+public :: oriconsensus_commander
 public :: rotmats2oris_commander
 public :: vizoris_commander
 private
@@ -32,6 +33,11 @@ type, extends(commander_base) :: oristats_commander
   contains
     procedure :: execute      => exec_oristats
 end type oristats_commander
+
+type, extends(commander_base) :: oriconsensus_commander
+  contains
+    procedure :: execute      => exec_oriconsensus
+end type oriconsensus_commander
 
 type, extends(commander_base) :: rotmats2oris_commander
   contains
@@ -350,6 +356,70 @@ contains
         call o_single%kill
         call simple_end('**** SIMPLE_ORISTATS NORMAL STOP ****')
     end subroutine exec_oristats
+
+    subroutine exec_oriconsensus( self, cline )
+        class(oriconsensus_commander), intent(inout) :: self
+        class(cmdline),                intent(inout) :: cline
+        type(sp_project),          allocatable :: spprojs(:)
+        character(len=LONGSTRLEN), allocatable :: projfnames(:)
+        integer,                   allocatable :: states(:,:), states_consensus(:)
+        type(parameters) :: params
+        integer          :: nprojs, iproj, noris1, noris2, ngood, nbad, iori
+        real             :: overlap
+        if( .not. cline%defined('oritab') ) THROW_HARD('Need list of project files (oritab) to analyze!')
+        call params%new(cline)
+        call read_filetable(params%oritab, projfnames)
+        nprojs = size(projfnames)
+        allocate(spprojs(nprojs))
+        do iproj = 1, nprojs
+            call spprojs(iproj)%read(projfnames(iproj))
+            if( iproj == 1 )then
+                noris1 = spprojs(iproj)%os_ptcl2D%get_noris()
+            else
+                noris2 = spprojs(iproj)%os_ptcl2D%get_noris()
+                if( noris1 /= noris2 ) THROW_HARD('Nonconforming # entries in ptcl2D field!')
+            endif
+        end do
+
+        print *, 'read project files'
+
+        allocate(states(nprojs,noris1), states_consensus(noris1), source=0)
+
+        !$omp parallel do default(shared) collapse(2) private(iproj,iori) proc_bind(close)
+        do iproj = 1, nprojs
+            do iori = 1, noris1
+                states(iproj,iori) = spprojs(iproj)%os_ptcl2D%get_state(iori)
+            end do
+        end do
+        !$omp end parallel do
+        
+        print *, 'extracted states'
+
+        !$omp parallel do default(shared) private(iori,ngood,nbad) proc_bind(close)
+        do iori = 1, noris1
+            ngood = count(states(:,iori) >  0)
+            nbad  = count(states(:,iori) == 0)
+            if( ngood > nbad )then
+                states_consensus(iori) = 1
+            else
+                states_consensus(iori) = 0
+            endif
+        end do
+        !$omp end parallel do
+
+        print *, 'calculated consensus'
+        
+        do iproj = 1, nprojs
+            ngood = count(states(iproj,:) >  0)
+            print *, iproj, ' ngood ', ngood
+            overlap = real(count(states(iproj,:) == states_consensus)) / real(noris1)
+            print *, iproj, ' consensus overlap ', overlap
+
+        end do
+        print *, ' consensus ngood ',  count(states_consensus > 0)
+
+        call simple_end('**** SIMPLE_ORICONSENSUS NORMAL STOP ****')
+    end subroutine exec_oriconsensus
 
     !> convert rotation matrix to orientation oris class
     subroutine exec_rotmats2oris( self, cline )

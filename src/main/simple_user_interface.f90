@@ -153,6 +153,7 @@ type(simple_program), target :: noisevol
 type(simple_program), target :: normalize_
 type(simple_program), target :: orisops
 type(simple_program), target :: oristats
+type(simple_program), target :: oriconsensus
 type(simple_program), target :: pdb2mrc
 type(simple_program), target :: pick
 type(simple_program), target :: pick_extract
@@ -479,6 +480,7 @@ contains
         call new_normalize
         call new_orisops
         call new_oristats
+        call new_oriconsensus
         call new_pick
         call new_pick_extract
         call new_postprocess
@@ -624,6 +626,7 @@ contains
         call push2prg_ptr_array(normalize_)
         call push2prg_ptr_array(orisops)
         call push2prg_ptr_array(oristats)
+        call push2prg_ptr_array(oriconsensus)
         call push2prg_ptr_array(pick)
         call push2prg_ptr_array(pick_extract)
         call push2prg_ptr_array(postprocess)
@@ -861,6 +864,8 @@ contains
                 ptr2prg => orisops
             case('oristats')
                 ptr2prg => oristats
+            case('oriconsensus')
+                ptr2prg => oriconsensus
             case('pick')
                 ptr2prg => pick
             case('pick_extract')
@@ -1053,6 +1058,7 @@ contains
         write(logfhandle,'(A)') normalize_%name
         write(logfhandle,'(A)') orisops%name
         write(logfhandle,'(A)') oristats%name
+        write(logfhandle,'(A)') oriconsensus%name
         write(logfhandle,'(A)') pdb2mrc%name
         write(logfhandle,'(A)') pick%name
         write(logfhandle,'(A)') postprocess%name
@@ -4580,6 +4586,31 @@ contains
         ! computer controls
         call oristats%set_input('comp_ctrls', 1, nthr)
     end subroutine new_oristats
+
+    subroutine new_oriconsensus
+        ! PROGRAM SPECIFICATION
+        call oriconsensus%new(&
+        &'oriconsensus',&                                   ! name
+        &'Statistical consensus analyses of orientations',& ! descr_short
+        &'is a program for analyzing SIMPLE orientation/parameter files',&
+        &'simple_exec',&                                    ! executable
+        &0, 1, 0, 0, 0, 0, 0, .false.)                      ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call oriconsensus%set_input('parm_ios', 1, 'oritab', 'file', 'List of project files', 'List of project files', 'e.g. filetab.txt', .true., '')
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_oriconsensus
 
     subroutine new_projops
         ! PROGRAM SPECIFICATION
