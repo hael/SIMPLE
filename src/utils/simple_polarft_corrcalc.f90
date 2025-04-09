@@ -111,7 +111,6 @@ type :: polarft_corrcalc
     procedure          :: set_eo
     procedure          :: set_eos
     procedure          :: assign_sigma2_noise
-    procedure          :: update_sigma
     ! GETTERS
     procedure          :: get_nrots
     procedure          :: get_pdim
@@ -2972,10 +2971,10 @@ contains
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
         integer,                 intent(in)    :: irot
-        real(sp),                intent(out)   :: sigma_contrib(self%kfromto(1):self%kfromto(2))
+        real(sp),      optional, intent(out)   :: sigma_contrib(self%kfromto(1):self%kfromto(2))
         complex(dp), pointer :: pft_ref_8(:,:), shmat_8(:,:), pft_ref_tmp_8(:,:)
         integer :: i,ithr
-        i    =  self%pinds(iptcl)
+        i    = self%pinds(iptcl)
         ithr = omp_get_thread_num() + 1
         pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
@@ -2996,17 +2995,12 @@ contains
         ! difference
         pft_ref_tmp_8 = pft_ref_tmp_8 - self%pfts_ptcls(:,:,i)
         ! sigma2
-        sigma_contrib = real(sum(real(pft_ref_tmp_8 * conjg(pft_ref_tmp_8),dp), dim=1) / (2.d0*real(self%pftsz,dp)))
+        if( present(sigma_contrib) )then
+            sigma_contrib = real(sum(real(pft_ref_tmp_8 * conjg(pft_ref_tmp_8),dp), dim=1) / (2.d0*real(self%pftsz,dp)))
+        else
+            self%sigma2_noise(self%kfromto(1):self%kfromto(2), iptcl) = real(sum(real(pft_ref_tmp_8 * conjg(pft_ref_tmp_8),dp), dim=1) / (2.d0*real(self%pftsz,dp)))
+        endif
     end subroutine gencorr_sigma_contrib
-
-    !< updating sigma for this particle/reference pair
-    subroutine update_sigma( self, iref, iptcl, shvec, irot)
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref, iptcl
-        real(sp),                intent(in)    :: shvec(2)
-        integer,                 intent(in)    :: irot
-        call self%gencorr_sigma_contrib( iref, iptcl, shvec, irot, self%sigma2_noise(self%kfromto(1):self%kfromto(2), iptcl))
-    end subroutine update_sigma
 
     ! DESTRUCTOR
 
