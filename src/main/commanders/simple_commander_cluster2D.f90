@@ -3219,18 +3219,19 @@ contains
         type(parameters)              :: params
         type(eul_prob_tab)            :: eulprob_obj
         type(ori)                     :: orientation
-        integer :: nptcls, ithr, iref, iptcl, irot
+        integer :: nptcls, ithr, iref, iptcl, irot, iter, pfromto(2)
         real    :: euls(3)
         call cline%set('mkdir',  'yes')
         call cline%set('stream', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         call build%spproj_field%clean_entry('updatecnt', 'sampled')
         call set_bp_range( cline )
-        call sample_ptcls4update([1,params_glob%nptcls], .true., nptcls, pinds)
+        pfromto = [1, params_glob%nptcls]
+        call sample_ptcls4update(pfromto, .true., nptcls, pinds)
         ! communicate to project file
         call build_glob%spproj%write_segment_inside(params_glob%oritype)
         ! Preparing pftcc
-        call pftcc%new(params_glob%nspace * params_glob%nstates, [1,nptcls], params_glob%kfromto)
+        call pftcc%new(params_glob%nspace * params_glob%nstates, pfromto, params_glob%kfromto)
         print *, 'lp      = ', params_glob%lp
         print *, 'nptcls  = ', nptcls
         print *, 'oritype = ', trim(params_glob%oritype)
@@ -3249,7 +3250,7 @@ contains
         ! allocate refs stuffs in pftcc before memoize_ptcls in build_batch_particles
         call pftcc%allocate_refs_memoization
         ! assign sigmas here so memoize_sqsum_ptcl will have l_sigma
-        allocate( sigma2_noise(params_glob%kfromto(1):params_glob%kfromto(2), 1:nptcls), source=1.0 )
+        allocate( sigma2_noise(params_glob%kfromto(1):params_glob%kfromto(2), nptcls), source=1.0 )
         call pftcc%assign_sigma2_noise(sigma2_noise)
         ! Build polar particle images
         call build_batch_particles(pftcc, nptcls, pinds, tmp_imgs)
@@ -3257,35 +3258,36 @@ contains
         if( trim(params_glob%continue) .eq. 'no' ) call build_glob%spproj_field%rnd_oris
         call eulprob_obj%new(pinds)
         allocate(ref_imgs(params_glob%nspace))
-        ! update refs
-        call pftcc%gen_polar_refs(build_glob%eulspace, build_glob%spproj_field, ref_imgs)
-        call pftcc%memoize_refs
-        do iref = 1, params_glob%nspace
-            call ref_imgs(iref)%write('polar_cavgs1.mrc', iref)
-            call ref_imgs(iref)%kill
-        enddo
-        ! update sigmas and memoize_sqsum_ptcl with updated sigmas
-        do iptcl = 1, nptcls
-            call build_glob%spproj_field%get_ori(iptcl, orientation)
-            iref = build_glob%eulspace%find_closest_proj(orientation)
-            call pftcc%gencorr_sigma_contrib(iref, iptcl, [0.,0.], pftcc%get_roind(orientation%e3get()))
-            call pftcc%memoize_sqsum_ptcl(iptcl)
-        enddo
-        call eulprob_obj%fill_tab(pftcc)
-        call eulprob_obj%ref_assign
-        do iptcl = 1, nptcls
-            iref    = eulprob_obj%assgn_map(iptcl)%iproj
-            euls    = build_glob%eulspace%get_euler(iref)
-            irot    = eulprob_obj%assgn_map(iptcl)%inpl
-            euls(3) = 360. - pftcc%get_rot(irot)
-            call build_glob%spproj_field%set_euler(iptcl, euls)
-        enddo
-        ! update refs
-        call pftcc%gen_polar_refs(build_glob%eulspace, build_glob%spproj_field, ref_imgs)
-        call pftcc%memoize_refs
-        do iref = 1, params_glob%nspace
-            call ref_imgs(iref)%write('polar_cavgs2.mrc', iref)
-            call ref_imgs(iref)%kill
+        do iter = 1, params_glob%maxits
+            print *, 'ITER = ', iter
+            ! update refs
+            call pftcc%gen_polar_refs(build_glob%eulspace, build_glob%spproj_field)
+            call pftcc%memoize_refs
+            call pftcc%prefs_to_cartesian(ref_imgs)
+            do iref = 1, params_glob%nspace
+                call ref_imgs(iref)%write('polar_cavgs'//int2str(iter)//'.mrc', iref)
+                call ref_imgs(iref)%kill
+            enddo
+            ! update sigmas and memoize_sqsum_ptcl with updated sigmas
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,orientation,iref)
+            do iptcl = pfromto(1),pfromto(2)
+                call build_glob%spproj_field%get_ori(pinds(iptcl), orientation)
+                iref = build_glob%eulspace%find_closest_proj(orientation)
+                call pftcc%gencorr_sigma_contrib(iref, iptcl, [0.,0.], pftcc%get_roind(orientation%e3get()))
+                call pftcc%memoize_sqsum_ptcl(iptcl)
+            enddo
+            !$omp end parallel do
+            ! prob alignment
+            call eulprob_obj%fill_tab(pftcc)
+            call eulprob_obj%ref_assign
+            ! update spproj with the new alignment
+            do iptcl = pfromto(1), pfromto(2)
+                iref    = eulprob_obj%assgn_map(pinds(iptcl))%iproj
+                euls    = build_glob%eulspace%get_euler(iref)
+                irot    = eulprob_obj%assgn_map(pinds(iptcl))%inpl
+                euls(3) = 360. - pftcc%get_rot(irot)
+                call build_glob%spproj_field%set_euler(iptcl, euls)
+            enddo
         enddo
         ! cleaning up
         call killimgbatch

@@ -134,6 +134,7 @@ type :: polarft_corrcalc
     procedure          :: print
     procedure          :: vis_ptcl
     procedure          :: vis_ref
+    procedure          :: prefs_to_cartesian
     procedure, private :: polar2cartesian_1, polar2cartesian_2
     generic            :: polar2cartesian => polar2cartesian_1, polar2cartesian_2
     ! MODIFIERS
@@ -726,6 +727,51 @@ contains
         cmat(1,c) = (0.0,0.0)
     end subroutine polar2cartesian_2
 
+    subroutine prefs_to_cartesian( self, cavgs, box_in )
+        use simple_image
+        class(polarft_corrcalc), intent(in)    :: self
+        type(image),             intent(inout) :: cavgs(self%nrefs)
+        integer, optional,       intent(out)   :: box_in
+        integer, allocatable :: norm(:,:)
+        complex, allocatable :: cmat(:,:)
+        complex :: comp
+        integer :: k,c,irot,physh,physk,box,iref
+        box = 2*self%kfromto(2)
+        if( present(box_in) ) box = box_in
+        c   = box/2+1
+        allocate(cmat(box/2+1,box),source=cmplx(0.0,0.0))
+        allocate(norm(box/2+1,box),source=0)
+        do iref = 1, self%nrefs
+            cmat = cmplx(0.0,0.0)
+            norm = 0
+            do irot=1,self%pftsz
+                do k=self%kfromto(1),self%kfromto(2)
+                    ! Nearest-neighbour interpolation
+                    physh = nint(self%polar(irot,k)) + 1
+                    physk = nint(self%polar(irot+self%nrots,k)) + c
+                    if( physk > box ) cycle
+                    comp              = self%pfts_refs_even(irot,k,iref)
+                    cmat(physh,physk) = cmat(physh,physk) + comp
+                    norm(physh,physk) = norm(physh,physk) + 1
+                end do
+            end do
+            ! normalization
+            where(norm>0)
+                cmat = cmat / real(norm)
+            end where
+            ! irot = self%pftsz+1, eg. angle=180.
+            do k = 1,box/2-1
+                cmat(1,k+c) = conjg(cmat(1,c-k))
+            enddo
+            ! arbitrary magnitude
+            cmat(1,c) = (0.0,0.0)
+            call cavgs(iref)%new([box,box,1],1.0)
+            call cavgs(iref)%set_cmat(cmat)
+            call cavgs(iref)%shift_phorig()
+            call cavgs(iref)%ifft
+        enddo
+    end subroutine prefs_to_cartesian
+
     subroutine print( self )
         class(polarft_corrcalc), intent(in) :: self
         write(logfhandle,*) "total n particles in partition         (self%nptcls): ", self%nptcls
@@ -1125,7 +1171,7 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         type(oris),              intent(in)    :: ref_space
         type(oris),              intent(in)    :: ptcl_space
-        type(image),             intent(inout) :: cavgs(self%nrefs)
+        type(image), optional,   intent(inout) :: cavgs(self%nrefs)
         complex,     allocatable :: cmat(:,:)
         complex(sp), pointer     :: pft_ptcl(:,:)
         real(sp),    pointer     :: rctf(:,:)
@@ -1151,14 +1197,18 @@ contains
             endif
         enddo
         if( self%with_ctf ) self%pfts_refs_even = self%pfts_refs_even / ctf2
-        do iref = 1, self%nrefs
-            call self%polar2cartesian(iref,.true.,cmat,box)
-            call cavgs(iref)%new([box,box,1],1.0)
-            call cavgs(iref)%set_cmat(cmat)
-            call cavgs(iref)%shift_phorig()
-            call cavgs(iref)%ifft
-        enddo
         self%pfts_refs_odd = self%pfts_refs_even
+        if( present(cavgs) )then
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref)
+            do iref = 1, self%nrefs
+                call self%polar2cartesian(iref,.true.,cmat,box)
+                call cavgs(iref)%new([box,box,1],1.0)
+                call cavgs(iref)%set_cmat(cmat)
+                call cavgs(iref)%shift_phorig()
+                call cavgs(iref)%ifft
+            enddo
+            !$omp end parallel do
+        endif
     end subroutine gen_polar_refs
 
     subroutine create_polar_absctfmats( self, spproj, oritype, pfromto )
