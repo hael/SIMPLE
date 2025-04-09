@@ -3217,7 +3217,7 @@ contains
         type(polarft_corrcalc)        :: pftcc
         type(builder)                 :: build
         type(parameters)              :: params
-        type(eul_prob_tab)            :: eulprob_obj_glob
+        type(eul_prob_tab)            :: eulprob_obj
         type(ori)                     :: orientation
         integer :: nptcls, ithr, iref, iptcl, irot
         real    :: euls(3)
@@ -3248,11 +3248,14 @@ contains
         !$omp end parallel do
         ! allocate refs stuffs in pftcc before memoize_ptcls in build_batch_particles
         call pftcc%allocate_refs_memoization
+        ! assign sigmas here so memoize_sqsum_ptcl will have l_sigma
+        allocate( sigma2_noise(params_glob%kfromto(1):params_glob%kfromto(2), 1:nptcls), source=1.0 )
+        call pftcc%assign_sigma2_noise(sigma2_noise)
         ! Build polar particle images
         call build_batch_particles(pftcc, nptcls, pinds, tmp_imgs)
         ! randomize oris
         if( trim(params_glob%continue) .eq. 'no' ) call build_glob%spproj_field%rnd_oris
-        call eulprob_obj_glob%new(pinds)
+        call eulprob_obj%new(pinds)
         allocate(ref_imgs(params_glob%nspace))
         ! update refs
         call pftcc%gen_polar_refs(build_glob%eulspace, build_glob%spproj_field, ref_imgs)
@@ -3261,21 +3264,20 @@ contains
             call ref_imgs(iref)%write('polar_cavgs1.mrc', iref)
             call ref_imgs(iref)%kill
         enddo
-        ! update sigmas
-        allocate( sigma2_noise(params_glob%kfromto(1):params_glob%kfromto(2), 1:nptcls), source=1.0 )
-        call pftcc%assign_sigma2_noise(sigma2_noise)
+        ! update sigmas and memoize_sqsum_ptcl with updated sigmas
         do iptcl = 1, nptcls
             call build_glob%spproj_field%get_ori(iptcl, orientation)
             iref = build_glob%eulspace%find_closest_proj(orientation)
-            call pftcc%update_sigma(iref, iptcl, [0.,0.], pftcc%get_roind(360. - orientation%e3get()))
+            call pftcc%gencorr_sigma_contrib(iref, iptcl, [0.,0.], pftcc%get_roind(orientation%e3get()))
+            call pftcc%memoize_sqsum_ptcl(iptcl)
         enddo
-        call eulprob_obj_glob%fill_tab(pftcc)
-        call eulprob_obj_glob%ref_assign
+        call eulprob_obj%fill_tab(pftcc)
+        call eulprob_obj%ref_assign
         do iptcl = 1, nptcls
-            iref    = eulprob_obj_glob%assgn_map(iptcl)%iproj
+            iref    = eulprob_obj%assgn_map(iptcl)%iproj
             euls    = build_glob%eulspace%get_euler(iref)
-            irot    = eulprob_obj_glob%assgn_map(iptcl)%inpl
-            euls(3) = pftcc%get_rot(irot)
+            irot    = eulprob_obj%assgn_map(iptcl)%inpl
+            euls(3) = 360. - pftcc%get_rot(irot)
             call build_glob%spproj_field%set_euler(iptcl, euls)
         enddo
         ! update refs
@@ -3287,6 +3289,7 @@ contains
         enddo
         ! cleaning up
         call killimgbatch
+        call eulprob_obj%kill
         call pftcc%kill
         call build%kill_general_tbox
         call qsys_job_finished('simple_commander_cluster2D :: exec_cluster2D_polar')
