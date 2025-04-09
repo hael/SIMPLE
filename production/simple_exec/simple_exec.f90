@@ -129,6 +129,7 @@ type(check_states_commander)                :: xcheck_states
 type(make_oris_commander)                   :: xmake_oris
 type(orisops_commander)                     :: xorisops
 type(oristats_commander)                    :: xoristats
+type(oriconsensus_commander)                :: xoriconsensus
 type(vizoris_commander)                     :: xvizoris
 
 ! PRINT INFO PROGRAMS
@@ -392,6 +393,8 @@ select case(trim(prg))
         call xorisops%execute(cline)
     case( 'oristats' )
         call xoristats%execute(cline)
+    case( 'oriconsensus' )
+        call xoriconsensus%execute(cline)
     case( 'vizoris' )
         call xvizoris%execute(cline)
 
@@ -455,7 +458,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('d2fda11a')
+call simple_print_git_version('25c392c9')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
