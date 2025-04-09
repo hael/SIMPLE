@@ -260,6 +260,7 @@ contains
                 call rvol%write(procrecs(i)%alnvolume)
                 call rvol%generate_orthogonal_reprojs(reprojs)
             else
+                call vol%write(procrecs(i)%alnvolume)
                 call vol%generate_orthogonal_reprojs(reprojs)
             endif
             call reprojs%write_jpg(trim(DIR_ALGNVOLS)//'alnvol_reprojs_'//trim(procrecs(i)%id)//'.jpg')
