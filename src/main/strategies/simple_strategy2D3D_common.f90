@@ -105,7 +105,7 @@ contains
 
     subroutine read_imgbatch_3( iptcl, img )
         integer,          intent(in)    :: iptcl
-        type(image),      intent(inout) :: img
+        class(image),      intent(inout) :: img
         character(len=:), allocatable   :: stkname
         integer :: ind_in_stk
         call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, iptcl, stkname, ind_in_stk)

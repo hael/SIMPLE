@@ -78,6 +78,7 @@ type(simple_program), target :: abinitio3D_cavgs
 type(simple_program), target :: abinitio3D
 type(simple_program), target :: abinitio3D_parts
 type(simple_program), target :: abinitio3D_stream
+type(simple_program), target :: analyze_pspecs
 type(simple_program), target :: autoselect_cavgs
 type(simple_program), target :: afm
 type(simple_program), target :: analysis2D_nano
@@ -403,6 +404,7 @@ contains
         call new_abinitio3D
         call new_abinitio3D_parts
         call new_abinitio3D_stream
+        call new_analyze_pspecs
         call new_autoselect_cavgs
         call new_afm
         call new_analysis2D_nano
@@ -552,6 +554,7 @@ contains
         call push2prg_ptr_array(abinitio3D)
         call push2prg_ptr_array(abinitio3D_parts)
         call push2prg_ptr_array(abinitio3D_stream)
+        call push2prg_ptr_array(analyze_pspecs)
         call push2prg_ptr_array(autoselect_cavgs)
         call push2prg_ptr_array(afm)
         call push2prg_ptr_array(analysis2D_nano)
@@ -712,6 +715,8 @@ contains
                 ptr2prg => abinitio3D_parts
             case('abinitio3D_stream')
                 ptr2prg => abinitio3D_stream
+             case('analyze_pspecs')
+                ptr2prg => analyze_pspecs
             case('autoselect_cavgs')
                 ptr2prg => autoselect_cavgs
             case('afm')
@@ -1000,6 +1005,7 @@ contains
         write(logfhandle,'(A)') abinitio3D_cavgs%name
         write(logfhandle,'(A)') abinitio3D%name
         write(logfhandle,'(A)') abinitio3D_parts%name
+        write(logfhandle,'(A)') analyze_pspecs%name
         write(logfhandle,'(A)') autoselect_cavgs%name
         write(logfhandle,'(A)') afm%name
         write(logfhandle,'(A)') assign_optics_groups%name
@@ -3215,6 +3221,32 @@ contains
         &'Maximum number of concurrent and independent runs{1}', 'Max # of concurrent runs{1}', .false., 1., gui_submenu="compute", gui_advanced=.false.)
     end subroutine new_abinitio3D_stream
 
+    subroutine new_analyze_pspecs
+        ! PROGRAM SPECIFICATION
+        call analyze_pspecs%new(&
+        &'analyze_pspecs',&
+        &'',&
+        &'',&
+        &'simple_exec',&
+        &0, 0, 0, 0, 2, 1, 0, .true.)                                                     
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call analyze_pspecs%set_input('filt_ctrls', 1, hp)
+        call analyze_pspecs%set_input('filt_ctrls', 2, lp)
+        ! mask controls
+        call analyze_pspecs%set_input('mask_ctrls', 1, mskdiam)
+        ! computer controls
+        ! <empty>
+    end subroutine new_analyze_pspecs
+
     subroutine new_autoselect_cavgs
         ! PROGRAM SPECIFICATION
         call autoselect_cavgs%new(&
@@ -3222,7 +3254,7 @@ contains
         &'Automatically selectes class averages based on signal stats and reports to project',& ! descr_short
         &'is a program for automated class average selection reported to the SIMPLE project',&  ! descr_long
         &'simple_exec',&                                                                        ! executable
-        &0, 2, 0, 0, 2, 0, 0, .true.)                                                           ! # entries in each group, requires sp_project
+        &0, 2, 0, 0, 2, 1, 0, .true.)                                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -3237,7 +3269,7 @@ contains
         call autoselect_cavgs%set_input('filt_ctrls', 1, hp)
         call autoselect_cavgs%set_input('filt_ctrls', 2, lp)
         ! mask controls
-        ! <empty>
+        call autoselect_cavgs%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
         ! <empty>
     end subroutine new_autoselect_cavgs
