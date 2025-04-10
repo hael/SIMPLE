@@ -3260,6 +3260,10 @@ contains
             do iptcl = pfromto(1), pfromto(2)
                 call build_glob%spproj_field%set_shift(iptcl, [0.,0.])
             enddo
+        else
+            do iptcl = pfromto(1), pfromto(2)
+                call pftcc%shift_ptcl(iptcl, build_glob%spproj_field%get_2Dshift(iptcl))
+            enddo
         endif
         call eulprob_obj%new(pinds)
         allocate(ref_imgs(params_glob%nspace))
@@ -3274,12 +3278,11 @@ contains
                 call ref_imgs(iref)%kill
             enddo
             ! update sigmas and memoize_sqsum_ptcl with updated sigmas
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,orientation,iref,sh)
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,orientation,iref)
             do iptcl = pfromto(1),pfromto(2)
                 call build_glob%spproj_field%get_ori(pinds(iptcl), orientation)
                 iref = build_glob%eulspace%find_closest_proj(orientation)
-                sh   = build_glob%spproj_field%get_2Dshift(iptcl)
-                call pftcc%gencorr_sigma_contrib(iref, iptcl, sh, pftcc%get_roind(360. - orientation%e3get()))
+                call pftcc%gencorr_sigma_contrib(iref, iptcl, [0.,0.], pftcc%get_roind(360. - orientation%e3get()))
                 call pftcc%memoize_sqsum_ptcl(iptcl)
             enddo
             !$omp end parallel do
@@ -3292,9 +3295,10 @@ contains
                 euls    = build_glob%eulspace%get_euler(iref)
                 irot    = eulprob_obj%assgn_map(pinds(iptcl))%inpl
                 euls(3) = 360. - pftcc%get_rot(irot)
-                sh      = build_glob%spproj_field%get_2Dshift(iptcl) + [eulprob_obj%assgn_map(pinds(iptcl))%x, eulprob_obj%assgn_map(pinds(iptcl))%y]
+                sh      = [eulprob_obj%assgn_map(pinds(iptcl))%x, eulprob_obj%assgn_map(pinds(iptcl))%y]
+                call pftcc%shift_ptcl(iptcl, sh)
                 call build_glob%spproj_field%set_euler(iptcl, euls)
-                call build_glob%spproj_field%set_shift(iptcl, sh)
+                call build_glob%spproj_field%set_shift(iptcl, build_glob%spproj_field%get_2Dshift(iptcl) + sh)
             enddo
         enddo
         call build%spproj%write_segment_inside(params%oritype, params%projfile)
