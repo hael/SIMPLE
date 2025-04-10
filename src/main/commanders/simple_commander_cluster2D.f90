@@ -3220,7 +3220,7 @@ contains
         type(eul_prob_tab)            :: eulprob_obj
         type(ori)                     :: orientation
         integer :: nptcls, ithr, iref, iptcl, irot, iter, pfromto(2)
-        real    :: euls(3)
+        real    :: euls(3), sh(2)
         call cline%set('mkdir',  'yes')
         call cline%set('stream', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
@@ -3273,7 +3273,8 @@ contains
             do iptcl = pfromto(1),pfromto(2)
                 call build_glob%spproj_field%get_ori(pinds(iptcl), orientation)
                 iref = build_glob%eulspace%find_closest_proj(orientation)
-                call pftcc%gencorr_sigma_contrib(iref, iptcl, [0.,0.], pftcc%get_roind(orientation%e3get()))
+                sh   = build_glob%spproj_field%get_2Dshift(iptcl)
+                call pftcc%gencorr_sigma_contrib(iref, iptcl, sh, pftcc%get_roind(360. - orientation%e3get()))
                 call pftcc%memoize_sqsum_ptcl(iptcl)
             enddo
             !$omp end parallel do
@@ -3286,9 +3287,12 @@ contains
                 euls    = build_glob%eulspace%get_euler(iref)
                 irot    = eulprob_obj%assgn_map(pinds(iptcl))%inpl
                 euls(3) = 360. - pftcc%get_rot(irot)
+                sh      = build_glob%spproj_field%get_2Dshift(iptcl) + [eulprob_obj%assgn_map(pinds(iptcl))%x, eulprob_obj%assgn_map(pinds(iptcl))%y]
                 call build_glob%spproj_field%set_euler(iptcl, euls)
+                call build_glob%spproj_field%set_shift(iptcl, sh)
             enddo
         enddo
+        call build%spproj%write_segment_inside(params%oritype, params%projfile)
         ! cleaning up
         call killimgbatch
         call eulprob_obj%kill
