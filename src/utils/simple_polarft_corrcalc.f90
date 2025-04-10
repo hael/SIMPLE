@@ -887,24 +887,41 @@ contains
     end subroutine rotate_ptcl
 
     ! Particle rotation of the CTF or any real matrix
-    subroutine rotate_ctf( self, iptcl, irot, ctf_rot)
+    subroutine rotate_ctf( self, iptcl, irot, ctf_rot, ctf)
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl, irot
         real(sp),                intent(out)   :: ctf_rot(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(sp), optional,      intent(in)    :: ctf(    1:self%pftsz,self%kfromto(1):self%kfromto(2))
         integer :: i, mid
-        i = self%pinds(iptcl)
-        if( irot == 1 )then
-            ctf_rot = self%ctfmats(:,:,i)
-        elseif( irot >= 2 .and. irot <= self%pftsz )then
-            mid = self%pftsz - irot + 1
-            ctf_rot(   1:irot-1,    :) = self%ctfmats(mid+1:self%pftsz,:,i)
-            ctf_rot(irot:self%pftsz,:) = self%ctfmats(    1:mid,       :,i)
-        elseif( irot == self%pftsz + 1 )then
-            ctf_rot = self%ctfmats(:,:,i)
+        if( present(ctf) )then
+            if( irot == 1 )then
+                ctf_rot = ctf
+            elseif( irot >= 2 .and. irot <= self%pftsz )then
+                mid = self%pftsz - irot + 1
+                ctf_rot(   1:irot-1,    :) = ctf(mid+1:self%pftsz,:)
+                ctf_rot(irot:self%pftsz,:) = ctf(    1:mid,       :)
+            elseif( irot == self%pftsz + 1 )then
+                ctf_rot = ctf
+            else
+                mid = self%nrots - irot + 1
+                ctf_rot(irot-self%pftsz:self%pftsz,       :) = ctf(    1:mid,       :)
+                ctf_rot(              1:irot-self%pftsz-1,:) = ctf(mid+1:self%pftsz,:)
+            endif
         else
-            mid = self%nrots - irot + 1
-            ctf_rot(irot-self%pftsz:self%pftsz,       :) = self%ctfmats(    1:mid,       :,i)
-            ctf_rot(              1:irot-self%pftsz-1,:) = self%ctfmats(mid+1:self%pftsz,:,i)
+            i = self%pinds(iptcl)
+            if( irot == 1 )then
+                ctf_rot = self%ctfmats(:,:,i)
+            elseif( irot >= 2 .and. irot <= self%pftsz )then
+                mid = self%pftsz - irot + 1
+                ctf_rot(   1:irot-1,    :) = self%ctfmats(mid+1:self%pftsz,:,i)
+                ctf_rot(irot:self%pftsz,:) = self%ctfmats(    1:mid,       :,i)
+            elseif( irot == self%pftsz + 1 )then
+                ctf_rot = self%ctfmats(:,:,i)
+            else
+                mid = self%nrots - irot + 1
+                ctf_rot(irot-self%pftsz:self%pftsz,       :) = self%ctfmats(    1:mid,       :,i)
+                ctf_rot(              1:irot-self%pftsz-1,:) = self%ctfmats(mid+1:self%pftsz,:,i)
+            endif
         endif
     end subroutine rotate_ctf
 
@@ -1175,26 +1192,27 @@ contains
         complex,     allocatable :: cmat(:,:)
         complex(sp), pointer     :: pft_ptcl(:,:), shmat(:,:)
         real(sp),    pointer     :: rctf(:,:)
-        type(ori)  :: orientation
-        integer    :: box, i, k, iref, irot, ithr
-        real       :: ctf2(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs), sh(2)
+        type(ori) :: orientation
+        integer   :: box, i, k, iref, irot, ithr, iptcl
+        real      :: ctf2(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs), sh(2)
         self%pfts_refs_even = 0.
         ctf2     = 0.
         ithr     = omp_get_thread_num() + 1
         shmat    => self%heap_vars(ithr)%shmat
         pft_ptcl => self%heap_vars(ithr)%pft_ref
         rctf     => self%heap_vars(ithr)%pft_r
-        do i = 1,self%nptcls
-            call ptcl_space%get_ori(i, orientation)
+        do iptcl = self%pfromto(1), self%pfromto(2)
+            call ptcl_space%get_ori(iptcl, orientation)
+            i    = self%pinds(iptcl)
             iref = ref_space%find_closest_proj(orientation)
             irot = self%get_roind(orientation%e3get())
-            sh   = ptcl_space%get_2Dshift(i)
+            sh   = -ptcl_space%get_2Dshift(iptcl)
             call self%gen_shmat(ithr, sh, shmat)
             call self%rotate_ptcl(self%pfts_ptcls(:,:,i) * shmat, irot, pft_ptcl)
             if( self%with_ctf )then
-                call self%rotate_ctf(i, irot, rctf)
-                self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + pft_ptcl * rctf
-                ctf2(:,:,iref)                = ctf2(:,:,iref)                +            rctf**2
+                call self%rotate_ctf(iptcl, irot, rctf)
+                self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + pft_ptcl * cmplx(rctf)
+                ctf2(:,:,iref)                = ctf2(:,:,iref)                + rctf**2
             else
                 self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + pft_ptcl
             endif
@@ -1202,7 +1220,6 @@ contains
         if( self%with_ctf ) self%pfts_refs_even = self%pfts_refs_even / ctf2
         self%pfts_refs_odd = self%pfts_refs_even
         if( present(cavgs) )then
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref)
             do iref = 1, self%nrefs
                 call self%polar2cartesian(iref,.true.,cmat,box)
                 call cavgs(iref)%new([box,box,1],1.0)
@@ -1210,7 +1227,6 @@ contains
                 call cavgs(iref)%shift_phorig()
                 call cavgs(iref)%ifft
             enddo
-            !$omp end parallel do
         endif
     end subroutine gen_polar_refs
 

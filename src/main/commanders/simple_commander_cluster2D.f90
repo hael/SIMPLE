@@ -3255,7 +3255,12 @@ contains
         ! Build polar particle images
         call build_batch_particles(pftcc, nptcls, pinds, tmp_imgs)
         ! randomize oris
-        if( trim(params_glob%continue) .eq. 'no' ) call build_glob%spproj_field%rnd_oris
+        if( trim(params_glob%continue) .eq. 'no' )then
+            call build_glob%spproj_field%rnd_oris
+            do iptcl = pfromto(1), pfromto(2)
+                call build_glob%spproj_field%set_shift(iptcl, [0.,0.])
+            enddo
+        endif
         call eulprob_obj%new(pinds)
         allocate(ref_imgs(params_glob%nspace))
         do iter = 1, params_glob%maxits
@@ -3269,7 +3274,7 @@ contains
                 call ref_imgs(iref)%kill
             enddo
             ! update sigmas and memoize_sqsum_ptcl with updated sigmas
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,orientation,iref)
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,orientation,iref,sh)
             do iptcl = pfromto(1),pfromto(2)
                 call build_glob%spproj_field%get_ori(pinds(iptcl), orientation)
                 iref = build_glob%eulspace%find_closest_proj(orientation)
