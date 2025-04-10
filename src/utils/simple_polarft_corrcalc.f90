@@ -1190,15 +1190,14 @@ contains
         type(oris),              intent(in)    :: ptcl_space
         type(image), optional,   intent(inout) :: cavgs(self%nrefs)
         complex,     allocatable :: cmat(:,:)
-        complex(sp), pointer     :: pft_ptcl(:,:), shmat(:,:)
+        complex(sp), pointer     :: pft_ptcl(:,:)
         real(sp),    pointer     :: rctf(:,:)
         type(ori) :: orientation
         integer   :: box, i, k, iref, irot, ithr, iptcl
         real      :: ctf2(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs), sh(2)
-        self%pfts_refs_even = 0.
+        self%pfts_refs_even = complex(0., 0.)
         ctf2     = 0.
         ithr     = omp_get_thread_num() + 1
-        shmat    => self%heap_vars(ithr)%shmat
         pft_ptcl => self%heap_vars(ithr)%pft_ref
         rctf     => self%heap_vars(ithr)%pft_r
         do iptcl = self%pfromto(1), self%pfromto(2)
@@ -1206,9 +1205,7 @@ contains
             i    = self%pinds(iptcl)
             iref = ref_space%find_closest_proj(orientation)
             irot = self%get_roind(orientation%e3get())
-            sh   = -ptcl_space%get_2Dshift(iptcl)
-            call self%gen_shmat(ithr, sh, shmat)
-            call self%rotate_ptcl(self%pfts_ptcls(:,:,i) * shmat, irot, pft_ptcl)
+            call self%rotate_ptcl(self%pfts_ptcls(:,:,i), irot, pft_ptcl)
             if( self%with_ctf )then
                 call self%rotate_ctf(iptcl, irot, rctf)
                 self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + pft_ptcl * cmplx(rctf)
