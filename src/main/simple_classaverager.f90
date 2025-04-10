@@ -1522,7 +1522,7 @@ contains
 
     ! PUBLIC UTILITIES
 
-    subroutine transform_ptcls( spproj, oritype, icls, timgs, pinds, phflip, cavg, imgs_ori, just_transf, imgctfs)
+    subroutine transform_ptcls( spproj, oritype, icls, timgs, pinds, phflip, cavg, imgs_ori, just_transf)
         use simple_sp_project,          only: sp_project
         use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimgbatch
         class(sp_project),                  intent(inout) :: spproj
@@ -1534,7 +1534,6 @@ contains
         type(image), optional,              intent(inout) :: cavg
         type(image), optional, allocatable, intent(inout) :: imgs_ori(:)
         logical,     optional,              intent(in)    :: just_transf
-        type(image), optional, allocatable, intent(inout) :: imgctfs(:)
         class(oris),  pointer :: pos
         type(image)           :: img(nthr_glob), timg(nthr_glob)
         type(ctfparams)       :: ctfparms
@@ -1544,10 +1543,9 @@ contains
         real    :: mat(2,2), shift(2), loc(2), dist(2), e3, kw
         integer :: logi_lims(3,2),cyc_lims(3,2),cyc_limsR(2,2),phys(2),win_corner(2)
         integer :: i,iptcl, l,ll,m,mm, pop, h,k, ithr
-        logical :: l_phflip, l_imgs, l_just_transf, l_imgctfs
+        logical :: l_phflip, l_imgs, l_just_transf
         l_imgs        = .false.
         l_just_transf = .false.
-        l_imgctfs     = .false.
         if( present(imgs_ori) )then
             if( present(just_transf) )then
                 l_imgs        = .false.
@@ -1556,20 +1554,11 @@ contains
                 l_imgs        = .true.
             endif
         endif
-        if( present(imgctfs) ) l_imgctfs = .true.
         if( allocated(timgs) )then
             do i = 1,size(timgs)
                 call timgs(i)%kill
             enddo
             deallocate(timgs)
-        endif
-        if( l_imgctfs )then
-            if( allocated(imgctfs) )then
-                do i = 1,size(imgctfs)
-                    call imgctfs(i)%kill
-                enddo
-                deallocate(imgctfs)
-            endif
         endif
         if( l_imgs )then
             if( allocated(imgs_ori) )then
@@ -1613,12 +1602,6 @@ contains
         do i = 1,size(timgs)
             call timgs(i)%new([params_glob%box,params_glob%box,1],params_glob%smpd, wthreads=.false.)
         enddo
-        if( l_imgctfs )then
-            allocate(imgctfs(pop))
-            do i = 1,size(imgctfs)
-                call imgctfs(i)%new([params_glob%box,params_glob%box,1],params_glob%smpd, wthreads=.false.)
-            enddo
-        endif
         if( l_imgs )then
             allocate(imgs_ori(pop))
             do i = 1,size(imgs_ori)
@@ -1657,17 +1640,10 @@ contains
                 call img(ithr)%fft
             endif
             ! optional phase-flipping
-            if( l_phflip .or. l_imgctfs )then
+            if( l_phflip )then
                 ctfparms = spproj%get_ctfparams(oritype, iptcl)
                 tfun     = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
-                if( l_phflip  )call tfun%apply_serial(img(ithr), 'flip', ctfparms)
-                if( l_imgctfs )then
-                    timg(ithr) = 1.
-                    call tfun%apply_serial(timg(ithr), 'ctf', ctfparms)
-                    call timg(ithr)%ifft
-                    call timg(ithr)%clip(imgctfs(i))
-                    call timg(ithr)%zero_and_flag_ft
-                endif
+                call tfun%apply_serial(img(ithr), 'flip', ctfparms)
             endif
             ! shift
             call img(ithr)%shift2Dserial(-shift)

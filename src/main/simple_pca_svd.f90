@@ -81,11 +81,10 @@ contains
 
     ! CALCULATORS
 
-    subroutine master_svd( self, pcavecs, maxpcaits, ker_pcavecs )
+    subroutine master_svd( self, pcavecs, maxpcaits )
         class(pca_svd),    intent(inout) :: self
         real,              intent(in)    :: pcavecs(self%D,self%N)
         integer, optional, intent(in)    :: maxpcaits ! redundant for the svd approach
-        real,    optional, intent(in)    :: ker_pcavecs(self%D,self%N)
         if( self%D >= self%N )then
             call self%master_ori(pcavecs)
         else

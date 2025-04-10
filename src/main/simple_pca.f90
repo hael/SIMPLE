@@ -40,12 +40,11 @@ abstract interface
         real,       intent(inout) :: dat(self%D)
     end subroutine generic_generate
 
-    subroutine generic_master( self, pcavecs, maxpcaits, ker_pcavecs )
+    subroutine generic_master( self, pcavecs, maxpcaits )
         import :: pca
         class(pca),        intent(inout) :: self
         real,              intent(in)    :: pcavecs(self%D,self%N)
         integer, optional, intent(in)    :: maxpcaits
-        real,    optional, intent(in)    :: ker_pcavecs(self%D,self%N)
     end subroutine generic_master
 
     subroutine generic_kill( self )

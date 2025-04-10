@@ -87,11 +87,10 @@ contains
 
     ! CALCULATORS
 
-    subroutine master_inmem( self, pcavecs, maxpcaits, ker_pcavecs )
+    subroutine master_inmem( self, pcavecs, maxpcaits )
         class(ppca_inmem), intent(inout) :: self
         real,              intent(in)    :: pcavecs(self%D,self%N)
         integer, optional, intent(in)    :: maxpcaits
-        real,    optional, intent(in)    :: ker_pcavecs(self%D,self%N)
         integer :: k, err
         real    :: p, p_prev
         p = 0.
