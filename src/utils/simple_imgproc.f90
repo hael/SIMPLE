@@ -13,7 +13,7 @@ private
 
 contains
 
-    subroutine make_pcavecs( imgs, D, avg, pcavecs, l_mask, transp, avg_pix, do_fft, imgctfs, ctf_pcavecs )
+    subroutine make_pcavecs( imgs, D, avg, pcavecs, l_mask, transp, avg_pix, do_fft )
         class(image),                intent(inout) :: imgs(:)       !< images to serialize
         integer,                     intent(out)   :: D             !< vector dimension
         real, allocatable,           intent(inout) :: avg(:)        !< average of pcavecs
@@ -22,18 +22,14 @@ contains
         logical,           optional, intent(in)    :: transp        !< pixel-wise learning
         real, allocatable, optional, intent(inout) :: avg_pix(:)    !< pixel average
         logical,           optional, intent(in)    :: do_fft
-        class(image),      optional, intent(inout) :: imgctfs(:)
-        real, allocatable, optional, intent(inout) :: ctf_pcavecs(:,:)
         logical, allocatable :: ll_mask(:,:,:)
-        logical              :: ttransp, l_fft, l_ctf_pcavecs
+        logical              :: ttransp, l_fft
         integer              :: n, i, ldim(3), ldim_mask(3)
-        n             = size(imgs)
-        l_fft         = .false.
-        ttransp       = .false.
-        l_ctf_pcavecs = .false.
-        if( present(transp)      ) ttransp = transp
-        if( present(do_fft)      ) l_fft = do_fft
-        if( present(ctf_pcavecs) ) l_ctf_pcavecs = .true.
+        n       = size(imgs)
+        l_fft   = .false.
+        ttransp = .false.
+        if( present(transp) ) ttransp = transp
+        if( present(do_fft) ) l_fft = do_fft
         if( l_fft )then
             do i = 1, n
                 call imgs(i)%fft
@@ -72,7 +68,6 @@ contains
             end do
         else
             avg = sum(pcavecs, dim=2) / real(n)
-            avg = 0.
             if( present(avg_pix) ) avg_pix = avg
             do i = 1, n
                 pcavecs(:,i) = pcavecs(:,i) - avg
@@ -83,15 +78,7 @@ contains
                 call imgs(i)%ifft
             enddo
         endif
-        if( l_ctf_pcavecs )then
-            if( allocated(ctf_pcavecs) ) deallocate(ctf_pcavecs)
-            allocate(ctf_pcavecs(D,n), source=0.)
-            do i = 1, n
-                ctf_pcavecs(:,i) = imgctfs(i)%serialize(ll_mask)
-            end do
-        endif
     end subroutine make_pcavecs
-
 
     subroutine make_pcavol( vol, D, avg, pcavec )
         class(image),      intent(in)    :: vol           !< vol to serialize
