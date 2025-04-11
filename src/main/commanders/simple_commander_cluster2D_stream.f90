@@ -967,7 +967,7 @@ contains
         type(cmdline),             allocatable :: clines(:)
         integer,                   allocatable :: min_update_cnts_per_stk(:), nptcls_per_stk(:), stk_order(:)
         integer,                   allocatable :: prev_eo_pops(:,:), prev_eo_pops_thread(:,:)
-        character(len=:),          allocatable :: stack_fname, ext, fbody, stkname, stkpath
+        character(len=:),          allocatable :: stack_fname, ext, fbody, stkname
         character(len=LONGSTRLEN), allocatable :: sigma_fnames(:)
         real                    :: frac_update, smpd
         integer                 :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl, nptcls_th
@@ -2792,22 +2792,28 @@ contains
             THROW_WARN('Not enough particles to classify more than one subset')
             THROW_HARD('Review parameters or use cleanup2D/cluster2D instead')
         endif
-        ! General Initialization
+        ! General streaming initialization
         call init_cluster2D_stream( cline, spproj_glob, 'dummy.simple', reference_generation=.false.)
+        ! Updates folllowing streaming init
         numlen = params%numlen
         call del_file(trim(POOL_DIR)//trim(CLUSTER2D_FINISHED))
-        ! chunks re-init with updated command-line
-        call cline_cluster2D_chunk%delete('minits')
-        call cline_cluster2D_chunk%delete('maxits')
-        call cline_cluster2D_chunk%delete('extr_iter')
-        call cline_cluster2D_chunk%delete('extr_lim')
-        call cline_cluster2D_chunk%delete('cc_iters')
-        call cline_cluster2D_chunk%set('center',     params%center)
+        call cline_cluster2D_chunk%set('center', params%center)
         select case(trim(uppercase(params%algorithm)))
         case('CLUSTER2D')
             call cline_cluster2D_chunk%set('rank_cavgs', 'no')
             l_makecavgs = (trim(params%rank_cavgs).eq.'yes').and.l_scaling
+            call cline_cluster2D_chunk%set('minits',    MAX_EXTRLIM2D)
+            call cline_cluster2D_chunk%set('maxits',    MAX_EXTRLIM2D+5)
+            call cline_cluster2D_chunk%set('extr_iter', 1)
+            call cline_cluster2D_chunk%set('extr_lim',  MAX_EXTRLIM2D)
+            call cline_cluster2D_chunk%set('startit',   1)
+            if( l_update_sigmas ) call cline_cluster2D_chunk%set('cc_iters', 10)
         case('ABINITIO2D')
+            call cline_cluster2D_chunk%delete('minits')
+            call cline_cluster2D_chunk%delete('maxits')
+            call cline_cluster2D_chunk%delete('extr_iter')
+            call cline_cluster2D_chunk%delete('extr_lim')
+            call cline_cluster2D_chunk%delete('cc_iters')
             call cline_cluster2D_chunk%set('rank_cavgs', params%rank_cavgs)
             l_makecavgs = .false.
         case DEFAULT

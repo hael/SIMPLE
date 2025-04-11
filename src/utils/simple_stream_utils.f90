@@ -403,7 +403,6 @@ contains
         call cline_make_cavgs%set('prg',        'make_cavgs')
         call cline_make_cavgs%set('mkdir',      'no')
         call cline_make_cavgs%set('refs',       finalcavgs)
-        call cline_make_cavgs%set('which_iter', 0)
         call cline_make_cavgs%set('ncls',       self%cline%get_iarg('ncls'))
         call cline_make_cavgs%set('mskdiam',    params_glob%mskdiam)
         call cline_make_cavgs%set('async',      'yes')
