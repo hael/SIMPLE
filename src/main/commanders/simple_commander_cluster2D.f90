@@ -1801,7 +1801,7 @@ contains
         if( .not. cline%defined('lp')      ) call cline%set('lp',        6.)
         if( .not. cline%defined('frac_min')) call cline%set('frac_min', 0.7)
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',  'yes')
-        if( .not. cline%defined('prune')   ) call cline%set('prune',  'yes')
+        if( .not. cline%defined('prune')   ) call cline%set('prune',  'no')
         call params%new(cline)
         call spproj%read(params%projfile)
         ! retrieve cavgs stack info
@@ -1833,7 +1833,6 @@ contains
             ! calculate sqrt spectrum
             call spec_inf_arr(i)%img%spectrum('sqrt', spec_inf_arr(i)%spec)
             ! calculate dynamic range in given resolution interval
-            ! spec_inf_arr(i)%dynrange = maxval(spec_inf_arr(i)%spec(kfromto(1):kfromto(2))) - minval(spec_inf_arr(i)%spec(kfromto(1):kfromto(2)))
             spec_inf_arr(i)%dynrange = spec_inf_arr(i)%spec(kfromto(1)) - spec_inf_arr(i)%spec(kfromto(2))
             ! read back original image
             call spec_inf_arr(i)%img%read(stk, i)
