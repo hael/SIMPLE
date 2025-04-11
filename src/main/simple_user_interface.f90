@@ -3223,7 +3223,7 @@ contains
         &'',&
         &'',&
         &'simple_exec',&
-        &0, 0, 0, 0, 2, 1, 0, .true.)                                                     
+        &0, 0, 0, 0, 2, 1, 1, .true.)                                                     
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -3239,7 +3239,7 @@ contains
         ! mask controls
         call analyze_pspecs%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
-        ! <empty>
+        call analyze_pspecs%set_input('comp_ctrls', 1, nthr)
     end subroutine new_analyze_pspecs
 
     subroutine new_autoselect_cavgs
