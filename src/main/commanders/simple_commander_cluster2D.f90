@@ -172,6 +172,7 @@ contains
         call cline%set('mkdir', 'no')
         if( l_shmem  )then
             call xmk_cavgs_shmem%execute_safe(cline)
+            if(trim(params_glob%async).eq.'yes') call simple_touch(MAKECAVGS_FINISHED)
             return
         endif
         ! setup the environment for distributed execution
@@ -192,6 +193,7 @@ contains
         ! end
         call qsys_cleanup
         call simple_end('**** SIMPLE_DISTR_MAKE_CAVGS NORMAL STOP ****', print_simple=.false.)
+        if(trim(params_glob%async).eq.'yes') call simple_touch(MAKECAVGS_FINISHED)
     end subroutine exec_make_cavgs_distr
 
     subroutine exec_make_cavgs( self, cline )

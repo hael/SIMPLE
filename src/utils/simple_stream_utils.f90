@@ -70,6 +70,7 @@ type stream_chunk
     procedure          :: classify
     procedure          :: read
     procedure          :: split_sigmas_into
+    procedure, private :: gen_final_cavgs
     procedure          :: remove_folder
     procedure          :: display_iter
     procedure          :: reject
@@ -184,16 +185,21 @@ contains
     end subroutine generate
 
     ! Initiates classification
-    subroutine classify( self, calc_pspec )
+    subroutine classify( self, calc_pspec, makecavgs )
         class(stream_chunk), intent(inout) :: self
         logical,             intent(in)    :: calc_pspec
-        type(cmdline), allocatable :: clines(:)
+        logical,   optional, intent(in)    :: makecavgs
+        character(len=STDLEN), allocatable :: bins(:)
+        type(cmdline),         allocatable :: clines(:)
         type(cmdline)              :: cline_pspec
         character(len=XLONGSTRLEN) :: cwd
         integer                    :: nptcls_sel, nclines
+        logical                    :: l_makecavgs
         call debug_print('in chunk%classify '//int2str(self%id))
         if( .not.self%available ) return
         if( self%nptcls == 0 ) return
+        l_makecavgs = .false.
+        if( present(makecavgs) )l_makecavgs = makecavgs
         call simple_mkdir(self%path)
         call chdir(self%path)
         call simple_getcwd(cwd)
@@ -226,8 +232,19 @@ contains
         call self%spproj%write()
         ! 2D classification
         clines(nclines) = self%cline
-        ! submission
-        call self%qenv%exec_simple_prgs_in_queue_async(clines, './distr_chunk2D', 'simple_log_chunk2d')
+        if( l_makecavgs )then
+            ! optional postprocessing
+            call self%gen_final_cavgs( clines )
+            ! submission
+            nclines = nclines+1
+            allocate(bins(nclines))
+            bins(1:nclines-1) = trim(self%qenv%get_exec_bin())
+            bins(nclines)     = 'simple_exec'
+            call self%qenv%exec_simple_prgs_in_queue_async(clines, './distr_chunk2D', 'simple_log_chunk2d', exec_bins=bins(:))
+        else
+            ! submission
+            call self%qenv%exec_simple_prgs_in_queue_async(clines, './distr_chunk2D', 'simple_log_chunk2d')
+        endif
         call chdir('..')
         call simple_getcwd(cwd_glob)
         ! cleanup
@@ -372,6 +389,37 @@ contains
             call simple_copy_file(fname,dest)
         endif
     end subroutine split_sigmas_into
+
+    ! classes generation at original sampling
+    subroutine gen_final_cavgs( self, clines )
+        class(stream_chunk),         intent(in)    :: self
+        type(cmdline),  allocatable, intent(inout) :: clines(:)
+        type(cmdline),    allocatable :: tmp(:)
+        type(cmdline)                 :: cline_make_cavgs
+        character(len=:), allocatable :: finalcavgs
+        integer :: n
+        if( .not.allocated(clines) ) THROW_HARD('Fatal error gen_final_cavgs')
+        finalcavgs = 'final_cavgs.mrc'
+        call cline_make_cavgs%set('prg',        'make_cavgs')
+        call cline_make_cavgs%set('mkdir',      'no')
+        call cline_make_cavgs%set('refs',       finalcavgs)
+        call cline_make_cavgs%set('which_iter', 0)
+        call cline_make_cavgs%set('ncls',       self%cline%get_iarg('ncls'))
+        call cline_make_cavgs%set('mskdiam',    params_glob%mskdiam)
+        call cline_make_cavgs%set('async',      'yes')
+        call cline_make_cavgs%set('nthr',       params_glob%nthr2D)
+        if( self%cline%defined('nparts') )then
+            call cline_make_cavgs%set('nparts', self%cline%get_iarg('nparts'))
+        else
+            call cline_make_cavgs%set('nparts', 1)
+        endif
+        n = size(clines)
+        allocate(tmp(1:n),source=clines(1:n))
+        call clines(:)%kill; deallocate(clines); allocate(clines(n+1))
+        clines(1:n) = tmp(1:n)
+        clines(n+1) = cline_make_cavgs
+        call tmp(:)%kill; call cline_make_cavgs%kill; deallocate(tmp)
+    end subroutine gen_final_cavgs
 
     ! removes processing folder
     subroutine remove_folder( self )
