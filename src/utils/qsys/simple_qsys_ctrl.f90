@@ -423,15 +423,17 @@ contains
     end subroutine generate_script_2
 
         !>  \brief  public script generator for single jobs
-    subroutine generate_script_4( self, jobs_descr, q_descr, exec_bin, script_name, outfile )
-        class(qsys_ctrl),           intent(in) :: self
-        type(chash),  allocatable,  intent(in) :: jobs_descr(:)
-        class(chash),               intent(in) :: q_descr
-        character(len=*),           intent(in) :: exec_bin, script_name, outfile
+    subroutine generate_script_4( self, jobs_descr, q_descr, exec_bin, script_name, outfile, exec_bins )
+        class(qsys_ctrl),               intent(in) :: self
+        type(chash),  allocatable,       intent(in) :: jobs_descr(:)
+        class(chash),                    intent(in) :: q_descr
+        character(len=*),                intent(in) :: exec_bin, script_name, outfile
+        character(len=STDLEN), optional, intent(in) :: exec_bins(:)
+        character(len=:), allocatable :: execution_binary
         character(len=512) :: io_msg
         integer :: ios, funit, i, njobs
         call fopen(funit, file=script_name, iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
-        call fileiochk('simple_qsys_ctrl :: generate_script_2; Error when opening file: '//&
+        call fileiochk('simple_qsys_ctrl :: generate_script_4; Error when opening file: '//&
             &trim(script_name)//' ; '//trim(io_msg),ios )
         ! need to specify shell
         write(funit,'(a)') '#!/bin/bash'
@@ -445,15 +447,30 @@ contains
         write(funit,'(a)') ''
         ! compose the command line
         njobs = size(jobs_descr)
+        if( present(exec_bins) )then
+            if( size(exec_bins) /= njobs )then
+                THROW_HARD('# of jobs must be the same as number of executables!')
+            endif
+        endif
         if( njobs > 1 )then
             do i = 1,njobs-1
-                write(funit,'(a)',advance='no') trim(exec_bin)//' '//trim(jobs_descr(i)%chash2str())
-                write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//SIMPLE_SUBPROC_OUT
+                if( present(exec_bins) )then
+                    execution_binary = trim(exec_bins(i))
+                else
+                    execution_binary = trim(exec_bin)
+                endif
+                write(funit,'(a)',advance='no') trim(execution_binary)//' '//trim(jobs_descr(i)%chash2str())
+                write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//trim(outfile)
                 write(funit,'(a)') ''
             enddo
         endif
-        write(funit,'(a)',advance='no') trim(exec_bin)//' '//trim(jobs_descr(njobs)%chash2str())
-        write(funit,'(a)') ' > '//trim(outfile)//' '//STDERR2STDOUT
+        if( present(exec_bins) )then
+            execution_binary = trim(exec_bins(njobs))
+        else
+            execution_binary = trim(exec_bin)
+        endif
+        write(funit,'(a)',advance='no') trim(execution_binary)//' '//trim(jobs_descr(njobs)%chash2str())
+        write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//trim(outfile)
         ! exit shell when done
         write(funit,'(a)') ''
         write(funit,'(a)') 'exit'

@@ -2119,7 +2119,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &0, 0, 0, 10, 5, 1, 5, .true.,&                                                           ! # entries in each group, requires sp_project
+        &0, 0, 0, 8, 4, 1, 4, .true.,&                                                            ! # entries in each group, requires sp_project
         &gui_advanced=.false., gui_submenu_list = "cluster 2D,compute")                           ! GUI           
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2138,15 +2138,13 @@ contains
         &'(yes|no){yes}', .false., 'yes', gui_submenu="cluster 2D")
         call cluster2D_subsets%set_input('srch_ctrls', 4, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
             &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="cluster 2D")
-        call cluster2D_subsets%set_input('srch_ctrls', 5, 'ncls', 'num', 'Maximum number of 2D clusters',&
-        &'Maximum number of 2D class averages for the pooled particles subsets', 'Maximum # 2D clusters', .true., 200., gui_submenu="cluster 2D",&
-        &gui_advanced=.false.)
-        call cluster2D_subsets%set_input('srch_ctrls', 6, lpthres, gui_submenu="cluster 2D", gui_online=.true.)
-        call cluster2D_subsets%set_input('srch_ctrls', 7, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}',&
+        call cluster2D_subsets%set_input('srch_ctrls', 5, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}',&
              &'(no|greedy){no}', .false., 'no', gui_submenu="cluster 2D")
-        call cluster2D_subsets%set_input('srch_ctrls', 8, objfun, gui_submenu="cluster 2D")
-        call cluster2D_subsets%set_input('srch_ctrls', 9, cls_init, gui_submenu="cluster2D")
-        call cluster2D_subsets%set_input('srch_ctrls', 10, remove_chunks, gui_submenu="cluster2D")
+        call cluster2D_subsets%set_input('srch_ctrls', 6, objfun, gui_submenu="cluster 2D")
+        call cluster2D_subsets%set_input('srch_ctrls', 7, cls_init, gui_submenu="cluster2D")
+        call cluster2D_subsets%set_input('srch_ctrls', 8, 'algorithm', 'binary', 'Classification algorithm',&
+        &'Algorithm for 2D classification(cluster2D|abinitio2D){cluster2D}', '(cluster2D|abinitio2D){cluster2D}',&
+        &.false., 'cluster2D', gui_submenu="cluster 2D")
         ! filter controls
         call cluster2D_subsets%set_input('filt_ctrls', 1, hp, gui_submenu="cluster 2D")
         call cluster2D_subsets%set_input('filt_ctrls', 2, 'cenlp',      'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
@@ -2156,16 +2154,13 @@ contains
         &'low-pass limit in Angstroms', .false., 15., gui_submenu="cluster 2D")
         call cluster2D_subsets%set_input('filt_ctrls', 4, 'lpstop',     'num', 'Resolution limit', 'Resolution limit', 'Resolution limit &
         &in Angstroms', .false., 2.0*MAX_SMPD, gui_submenu="cluster 2D")
-        call cluster2D_subsets%set_input('filt_ctrls', 5,  reject_cls, gui_submenu="cluster 2D", gui_online=.true.)
         ! mask controls
         call cluster2D_subsets%set_input('mask_ctrls', 1, mskdiam, gui_submenu="cluster 2D", gui_advanced=.false.)
         ! computer controls
         call cluster2D_subsets%set_input('comp_ctrls', 1, nchunks, gui_submenu="compute", gui_advanced=.false.)
         call cluster2D_subsets%set_input('comp_ctrls', 2, nparts_chunk, gui_submenu="compute", gui_advanced=.false.)
-        call cluster2D_subsets%set_input('comp_ctrls', 3, nparts_pool, gui_submenu="compute", gui_advanced=.false.)
-        cluster2D_subsets%comp_ctrls(3)%required = .true.
-        call cluster2D_subsets%set_input('comp_ctrls', 4, nthr, gui_submenu="compute", gui_advanced=.false.)
-        call cluster2D_subsets%set_input('comp_ctrls', 5, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and &
+        call cluster2D_subsets%set_input('comp_ctrls', 3, nthr, gui_submenu="compute", gui_advanced=.false.)
+        call cluster2D_subsets%set_input('comp_ctrls', 4, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and &
         &management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
     end subroutine new_cluster2D_subsets
 

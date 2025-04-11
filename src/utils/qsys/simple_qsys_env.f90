@@ -219,11 +219,12 @@ contains
     end subroutine exec_simple_prg_in_queue_async
 
     !>  To submit a list of jobs asynchronously
-    subroutine exec_simple_prgs_in_queue_async( self, clines, script_name, outfile )
+    subroutine exec_simple_prgs_in_queue_async( self, clines, script_name, outfile, exec_bins )
         use simple_cmdline, only: cmdline
-        class(qsys_env),            intent(inout) :: self
-        type(cmdline), allocatable, intent(in)    :: clines(:)
-        character(len=*),           intent(in)    :: script_name, outfile
+        class(qsys_env),                 intent(inout) :: self
+        type(cmdline),      allocatable, intent(in)    :: clines(:)
+        character(len=*),                intent(in)    :: script_name, outfile
+        character(len=STDLEN), optional, intent(in)    :: exec_bins(:)
         type(chash), allocatable :: jobs_descr(:)
         integer :: i, njobs
         njobs = size(clines)
@@ -231,7 +232,7 @@ contains
         do i = 1,njobs
             call clines(i)%gen_job_descr(jobs_descr(i))
         enddo
-        call self%qscripts%generate_script(jobs_descr, self%qdescr, self%simple_exec_bin, script_name, outfile)
+        call self%qscripts%generate_script(jobs_descr, self%qdescr, self%simple_exec_bin, script_name, outfile, exec_bins=exec_bins)
         call wait_for_closure(script_name)
         call self%qscripts%submit_script(script_name)
         do i = 1,njobs

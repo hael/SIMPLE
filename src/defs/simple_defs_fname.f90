@@ -33,6 +33,7 @@ character(len=*), parameter :: DEFAULT_FILE_FORMAT  = 'M'
 ! CLUSTER2D
 character(len=*), parameter :: CLUSTER2D_ITER_FBODY = 'cluster2Ddoc_'
 character(len=*), parameter :: CAVGS_ITER_FBODY     = 'cavgs_iter'
+character(len=*), parameter :: MAKECAVGS_FINISHED   = 'MAKECAVGS_FINISHED'
 character(len=*), parameter :: CLUSTER2D_FINISHED   = 'CLUSTER2D_FINISHED'
 character(len=*), parameter :: ABINITIO2D_FINISHED  = 'ABINITIO2D_FINISHED'
 character(len=*), parameter :: WFILT_SUFFIX         = '_wfilt'
