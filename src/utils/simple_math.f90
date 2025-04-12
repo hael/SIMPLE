@@ -360,6 +360,112 @@ contains
         t     = ts(2)
     end subroutine detect_peak_thres_2
 
+    ! hierarchical clustering
+
+    ! distance threshold based hierarchical medoid clustering
+    ! Source https://www.mathworks.com/help/stats/hierarchical-clustering.html#bq_679x-10
+    subroutine hac_med_thres( distmat, distthres, labels, medoids, pops )
+        real,                 intent(in)    :: distmat(:,:) ! distance matrix
+        real,                 intent(in)    :: distthres    ! distance threshold for class merging
+        integer, allocatable, intent(inout) :: labels(:)    ! cluster labels
+        integer, allocatable, intent(inout) :: medoids(:)   ! cluster medoids
+        integer, allocatable, intent(inout) :: pops(:)      ! cluster populations
+        logical, allocatable :: available(:), outliers(:)
+        integer :: N, i, j, icls, jcls, cnt, ncls, sz_dim1, sz_dim2, loc(1)
+        real    :: d
+        sz_dim1 = size(distmat, dim=1)
+        sz_dim2 = size(distmat, dim=2)
+        if( sz_dim1 /= sz_dim2 )then
+            call simple_exception('Requires square distance matrix!', 'simple_math.f90', __LINE__,l_stop=.true.)
+        endif
+        N = sz_dim1 ! number of data points
+        ! generate binary clusters
+        if( allocated(labels) ) deallocate(labels)
+        allocate(available(N), source=.true. )
+        allocate(outliers(N),  source=.false.)
+        allocate(labels(N),    source=0)
+        ncls = 0
+        do i = 1, N
+            if( available(i) )then
+                ncls         = ncls + 1
+                available(i) = .false.
+                loc          = minloc(distmat(i,:), available)
+                d            = distmat(i,loc(1))
+                labels(i)    = ncls
+                if( d <= distthres )then
+                    labels(loc(1))    = labels(i)
+                    available(loc(1)) = .false.
+                else
+                    outliers(loc(1))  = .true.
+                endif
+            endif
+        enddo
+        call find_medoids
+        ! merge clusters
+        do icls = 1, ncls-1
+            do jcls = i+1, ncls
+                if( medoids(icls) > 0 .and. medoids(jcls) > 0 )then
+                    if( distmat(medoids(icls),medoids(jcls)) <= distthres )then
+                        where(labels == jcls) labels = icls
+                    endif
+                endif
+            end do
+        end do
+        ! reorder labels
+        cnt = 0
+        do icls = 1, ncls
+           if( any(labels== icls) )then 
+              cnt = cnt + 1
+              where(labels == icls) labels = cnt
+            endif
+        enddo
+        call find_medoids
+        ! report
+        do icls = 1, ncls
+            write(logfhandle, *) 'Class ', icls, ' Population ', pops(icls), ' Medoid ', medoids(icls)
+        enddo
+
+    contains
+
+        subroutine find_medoids
+            real    :: dists(N)
+            integer :: icls, i, j, loc(1), cnt
+            if( allocated(medoids) ) deallocate(medoids)
+            if( allocated(pops)    ) deallocate(pops)
+            ncls = maxval(labels)
+            allocate(medoids(ncls), pops(ncls), source=0)
+            do icls = 1, ncls
+                pops(icls) = count(labels == icls)
+                if( pops(icls) == 0 ) cycle
+                if( pops(icls) == 1 )then
+                    do i = 1, N
+                        if( labels(i) == icls )then
+                            medoids(icls) = i
+                            exit
+                        endif
+                    enddo
+                else
+                    do i = 1, N
+                        dists(i) = 0.
+                        cnt      = 0
+                        do j = 1, N
+                            if( i /= j )then
+                                if( labels(i) == icls .and. labels(j) == icls )then
+                                    dists(i) = dists(i) + distmat(i,j)
+                                    cnt = cnt + 1  
+                                endif
+                            endif
+                        enddo
+                        dists(i) = dists(i) / real(cnt)
+                    end do
+                    loc = minloc(dists)
+                    medoids(icls) = loc(1)
+                endif
+            enddo
+        end subroutine find_medoids
+
+    end subroutine hac_med_thres
+
     ! Source https://www.mathworks.com/help/stats/hierarchical-clustering.html#bq_679x-10
     subroutine hac_1d( vec, thresh, labels, centroids, populations )
         real,    intent(in)  :: vec(:)       ! input vector
