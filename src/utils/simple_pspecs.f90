@@ -16,11 +16,12 @@ type pspecs
     real,    allocatable :: pspec_good(:)         ! 'good' average power spectrum
     real,    allocatable :: pspec_bad(:)          ! 'bad'  average power spectrum
     real,    allocatable :: resarr(:)             ! resolution values in A
-    real,    allocatable :: dynranges(:)          ! dynamic spectral ranges
+    real,    allocatable :: dynranges(:)          ! dynamic ranges of power spectra
     real,    allocatable :: dists2good(:)         ! distance to good pspeccs
-    real,    allocatable :: dists2bad(:)          ! distance to bad pspecs
+    real,    allocatable :: dists2bad(:)          ! distance to bad  pspecs
     real,    allocatable :: distmat(:,:)          ! Euclidean distance matrix
     integer, allocatable :: ranks(:)              ! quality ranking
+    integer, allocatable :: order(:)              ! quality order
     integer, allocatable :: clsinds_spec(:)       ! 0: empty, 1: good, 2: bad
     integer, allocatable :: clsinds(:)            ! 2D class assignment
     integer, allocatable :: clspops(:)            ! class populations 
@@ -33,20 +34,33 @@ type pspecs
     integer              :: sz          = 0       ! size of spectrum 
     integer              :: nspecs      = 0       ! # of spectra
     integer              :: medoid_good = 0       ! index of medoid of good class
-    integer              :: medoid_bad  = 0       ! index of medoid of bad class
+    integer              :: medoid_bad  = 0       ! index of medoid of bad  class
+    integer              :: ngood       = 0       ! # good power spectra
+    integer              :: nbad        = 0       ! # bad power spectra
     logical              :: exists      = .false. ! existence flag
 contains
-    procedure            :: new
-    procedure            :: set_class_pspec
-    procedure            :: kmeans_bincls_pspecs
-    procedure            :: kmedoids_bincls_pspecs
-    procedure            :: plot_good_bad
-    procedure            :: rank_pspecs
+    
+    procedure, private   :: new_1, new_2
+    generic              :: new => new_1, new_2
+    procedure, private   :: set_class_pspec_1, set_class_pspec_2
+    generic              :: set_class_pspec => set_class_pspec_1, set_class_pspec_2
+    procedure            :: kmeans_bincls_pspecs_and_rank
+    procedure            :: kmedoids_bincls_pspecs_and_rank
+    procedure            :: plot_good_bad_avg
+    procedure            :: plot_good_bad_medoid
+    procedure            :: plot_all
+    procedure            :: plot_all_ranked
+    procedure            :: calc_frac_good
+    procedure            :: get_ngood
+    procedure            :: set_ngood
+    procedure            :: get_good_bad_state_arr
+    procedure            :: get_ordered_clsind
     procedure, private   :: bincls_dynrange
     procedure, private   :: calc_good_bad_pspec_avgs
     procedure, private   :: find_good_bad_pspec_medoids
     procedure, private   :: kmeans_iter
     procedure, private   :: kmedoids_iter
+    procedure, private   :: rank_pspecs
     procedure, private   :: find_closest
     procedure, private   :: lookup_distance
     procedure, private   :: calc_distmat
@@ -63,7 +77,7 @@ integer, parameter :: MAXITS      = 10
 contains
 
     ! should be parallelized outside of here
-    subroutine new( self, nspecs, img_template, hp, lp )
+    subroutine new_1( self, nspecs, img_template, hp, lp )
         class(pspecs), intent(inout) :: self
         integer,       intent(in)    :: nspecs
         class(image),  intent(in)    :: img_template 
@@ -71,12 +85,22 @@ contains
         real, allocatable :: resarr(:)
         integer           :: ldim(3)
         call self%kill
+        ldim = img_template%get_ldim()
+        call self%new_2(nspecs, ldim(1), img_template%get_smpd(), hp, lp )
+    end subroutine new_1
+
+    subroutine new_2( self, nspecs, box, smpd, hp, lp )
+        class(pspecs), intent(inout) :: self
+        integer,       intent(in)    :: nspecs
+        integer,       intent(in)    :: box
+        real,          intent(in)    :: smpd, hp, lp
+        real, allocatable :: resarr(:)
+        call self%kill
         self%nspecs     = nspecs
         self%hp         = hp
         self%lp         = lp
-        ldim            = img_template%get_ldim()
-        self%box        = ldim(1)
-        self%smpd       = img_template%get_smpd()
+        self%box        = box
+        self%smpd       = smpd
         resarr          = get_resarr(self%box, self%smpd)
         self%kfromto(1) = calc_fourier_index(self%hp, self%box, self%smpd)
         self%kfromto(2) = calc_fourier_index(self%lp, self%box, self%smpd)
@@ -84,14 +108,14 @@ contains
         allocate(self%resarr(self%sz), source=resarr(self%kfromto(1):self%kfromto(2)))
         allocate(self%pspecs(self%nspecs,self%sz), self%dynranges(self%nspecs),&
         &self%dists2good(self%nspecs), self%dists2bad(self%nspecs), source=0.)
-        allocate(self%ranks(self%nspecs), self%clsinds_spec(self%nspecs),&
+        allocate(self%ranks(self%nspecs), self%order(self%nspecs), self%clsinds_spec(self%nspecs),&
         self%clsinds(self%nspecs), self%clspops(self%nspecs), source=0)
         deallocate(resarr)
         self%exists     = .true.
-    end subroutine new
+    end subroutine new_2
 
     ! should be parallelized outside of here
-    subroutine set_class_pspec( self, ispec, class, pop, img, msk )
+    subroutine set_class_pspec_1( self, ispec, class, pop, img, msk )
         class(pspecs), intent(inout) :: self
         integer,       intent(in)    :: ispec, class, pop
         class(image),  intent(inout) :: img
@@ -108,85 +132,130 @@ contains
         deallocate(spec)
         self%clsinds(ispec) = class
         self%clspops(ispec) = pop
-    end subroutine set_class_pspec
+    end subroutine set_class_pspec_1
+
+    subroutine set_class_pspec_2( self, ispec, class, pop, spec )
+        class(pspecs), intent(inout) :: self
+        integer,       intent(in)    :: ispec, class, pop
+        real,          intent(in)    :: spec(:)
+        if( ispec < 1 .or. ispec > self%nspecs ) THROW_HARD('ispec index out of range')
+        if( pop == 0 )                           THROW_HARD('Empty classes not allowed')
+        self%pspecs(ispec,:)  = spec(self%kfromto(1):self%kfromto(2))
+        self%dynranges(ispec) = self%pspecs(ispec,1) - self%pspecs(ispec,self%sz)
+        if( self%dynranges(ispec) <= EMPTY_THRES ) THROW_HARD('Empty spectra not allowed')
+        self%clsinds(ispec) = class
+        self%clspops(ispec) = pop
+    end subroutine set_class_pspec_2
 
     ! binary k-means clustering of power spectra
-    subroutine kmeans_bincls_pspecs( self )
+    subroutine kmeans_bincls_pspecs_and_rank( self )
         class(pspecs), intent(inout) :: self
         integer :: iter
         logical :: l_converged
         call self%bincls_dynrange
         call self%calc_good_bad_pspec_avgs
-        call self%plot_good_bad('pspec_good_dynrange', 'pspec_bad_dynrange')
+        call self%plot_good_bad_avg('pspec_good_dynrange', 'pspec_bad_dynrange')
         iter = 0
         l_converged = .false.
         do
             call self%kmeans_iter(iter, l_converged)
             if( l_converged ) exit
         end do
-        call self%plot_good_bad('pspec_good_kmeans', 'pspec_bad_kmeans')
-    end subroutine kmeans_bincls_pspecs
+        call self%plot_good_bad_avg('pspec_good_kmeans', 'pspec_bad_kmeans')
+        call self%rank_pspecs
+    end subroutine kmeans_bincls_pspecs_and_rank
 
     ! binary k-medoids clustering of power spectra
-    subroutine kmedoids_bincls_pspecs( self )
+    subroutine kmedoids_bincls_pspecs_and_rank( self )
         class(pspecs), intent(inout) :: self
         integer :: iter
         logical :: l_converged
         call self%bincls_dynrange
         call self%calc_distmat
         call self%find_good_bad_pspec_medoids
-        call self%plot_good_bad('pspec_good_dynrange', 'pspec_bad_dynrange')
+        call self%plot_good_bad_medoid('pspec_good_dynrange', 'pspec_bad_dynrange')
         iter = 0
         l_converged = .false.
         do
             call self%kmedoids_iter(iter, l_converged)
             if( l_converged ) exit
         end do
-        call self%plot_good_bad('pspec_good_kmedoids', 'pspec_bad_kmedoids')
-    end subroutine kmedoids_bincls_pspecs
+        call self%plot_good_bad_medoid('pspec_good_kmedoids', 'pspec_bad_kmedoids')
+        call self%rank_pspecs
+    end subroutine kmedoids_bincls_pspecs_and_rank
 
-    subroutine plot_good_bad( self, fbody_good, fbody_bad )
+    subroutine plot_good_bad_avg( self, fbody_good, fbody_bad )
         class(pspecs),    intent(in) :: self
         character(len=*), intent(in) :: fbody_good, fbody_bad
         call plot_fsc(self%sz, self%pspec_good, self%resarr, self%smpd, fbody_good)
         call plot_fsc(self%sz, self%pspec_bad,  self%resarr, self%smpd, fbody_bad)
-    end subroutine plot_good_bad
+    end subroutine plot_good_bad_avg
 
-    subroutine rank_pspecs( self )
-        class(pspecs), intent(inout) :: self
-        real,    allocatable :: dists_good(:), dists_bad(:)
-        integer, allocatable :: inds_good(:), inds_bad(:)
-        integer :: ngood, nbad, ispec, rank
-        ngood = count(self%clsinds_spec == CLASS_GOOD)
-        nbad  = count(self%clsinds_spec == CLASS_BAD)
-        allocate(dists_good(ngood), dists_bad(nbad), source=0.)
-        allocate(inds_good(ngood),  inds_bad(nbad),  source=0)
-        ngood = 0
-        nbad  = 0
+    subroutine plot_good_bad_medoid( self, fbody_good, fbody_bad )
+        class(pspecs),    intent(in) :: self
+        character(len=*), intent(in) :: fbody_good, fbody_bad
+        call plot_fsc(self%sz, self%pspecs(self%medoid_good,:), self%resarr, self%smpd, fbody_good)
+        call plot_fsc(self%sz, self%pspecs(self%medoid_bad,:),  self%resarr, self%smpd, fbody_bad)
+    end subroutine plot_good_bad_medoid
+
+    subroutine plot_all( self )
+        class(pspecs),     intent(in) :: self
+        character(len=:), allocatable :: fbody
+        integer :: ispec
         do ispec = 1, self%nspecs
-            select case(self%clsinds_spec(ispec))
-                case(CLASS_GOOD)
-                    ngood             = ngood + 1
-                    dists_good(ngood) = self%dists2good(ispec)
-                    inds_good(ngood)  = ispec
-                case(CLASS_BAD)
-                    nbad              = nbad + 1
-                    dists_bad(nbad)   = self%dists2good(ispec)
-                    inds_bad(nbad)    = ispec
-            end select
-        enddo
-        call hpsort(dists_good, inds_good)
-        call hpsort(dists_bad,  inds_bad)
-        rank = 0
-        do ispec = 1, ngood
-            rank = rank + 1
-            self%ranks(inds_good(ispec)) = rank
-        enddo
-        do ispec = 1, nbad
-            rank = rank + 1
-            self%ranks(inds_bad(ispec)) = rank
-        enddo
-    end subroutine rank_pspecs
+            fbody = 'power_spectrum'//int2str_pad(ispec,3)
+            call plot_fsc(self%sz, self%pspecs(ispec,:), self%resarr, self%smpd, fbody)
+        end do
+    end subroutine plot_all
+
+    subroutine plot_all_ranked( self )
+        class(pspecs),     intent(in) :: self
+        character(len=:), allocatable :: fbody
+        integer :: ispec
+        do ispec = 1, self%nspecs
+            fbody = 'power_spectrum_rank'//int2str_pad(self%ranks(ispec),3)
+            call plot_fsc(self%sz, self%pspecs(self%order(ispec),:), self%resarr, self%smpd, fbody)
+        end do
+    end subroutine plot_all_ranked
+
+    function calc_frac_good( self, ngood, nptcls ) result( frac_good )
+        class(pspecs), intent(in) :: self
+        integer,       intent(in) :: ngood, nptcls
+        real :: frac_good
+        frac_good = (real(sum(self%clspops, mask=self%ranks <= ngood))/real(nptcls))
+    end function calc_frac_good
+
+    function get_ngood( self ) result( ngood )
+        class(pspecs), intent(in) :: self
+        integer :: ngood
+        ngood = self%ngood
+    end function get_ngood
+
+    subroutine set_ngood( self, ngood )
+        class(pspecs), intent(inout) :: self
+        integer,       intent(in)    :: ngood
+        self%ngood = ngood
+        self%nbad  = self%nspecs - ngood
+    end subroutine set_ngood
+
+    function get_good_bad_state_arr( self, ncls ) result( states )
+        class(pspecs), intent(in) :: self
+        integer,       intent(in) :: ncls
+        integer, allocatable :: states(:)
+        integer :: ispec
+        allocate(states(ncls), source=0)
+        do ispec = 1, self%nspecs
+            if( self%ranks(ispec) <= self%ngood ) states(self%clsinds(ispec)) = 1
+        end do
+    end function get_good_bad_state_arr
+
+    function get_ordered_clsind( self, ispec ) result( clsind )
+        class(pspecs), intent(in) :: self
+        integer,       intent(in) :: ispec
+        integer :: clsind
+        if( ispec < 1 .or. ispec > self%nspecs ) THROW_HARD('ispec index out of range')
+        clsind = self%clsinds(self%order(ispec))
+    end function get_ordered_clsind
 
     ! make initial grouping based on binary dynamic range clustering
     subroutine bincls_dynrange( self )
@@ -207,7 +276,7 @@ contains
         real, allocatable :: pspec_good(:), pspec_bad(:)
         integer :: ispec, ngood, nbad
         allocate(pspec_good(self%sz), pspec_bad(self%sz), source=0.)
-        !$omp parallel do default(shared) private(ispec) proc_bind(close) reduction(+:pspec_good,pspec_bad)
+        !$omp parallel do default(shared) private(ispec) proc_bind(close) reduction(+:pspec_good,pspec_bad) schedule(static)
         do ispec = 1, self%nspecs
             select case(self%clsinds_spec(ispec))
                 case(CLASS_GOOD)
@@ -235,9 +304,10 @@ contains
         class(pspecs), intent(inout) :: self
         real    :: dists_good(self%nspecs), dists_bad(self%nspecs)
         integer :: i, j, loc(1)
+        dists_good = 0.
+        dists_bad  = 0.
+        !$omp parallel do default(shared) private(i,j) proc_bind(close) schedule(static)
         do i = 1, self%nspecs
-            dists_good(i) = 0.0
-            dists_bad(i)  = 0.0
             do j = 1, self%nspecs
                 if( i /= j )then
                     if(      self%clsinds_spec(i) == CLASS_GOOD .and. self%clsinds_spec(j) == CLASS_GOOD )then
@@ -248,6 +318,7 @@ contains
                 endif
             end do
         end do
+        !$omp end parallel do
         loc = minloc(dists_good)
         self%medoid_good = loc(1)
         loc = minloc(dists_bad)
@@ -310,6 +381,7 @@ contains
         end do
         !$omp end parallel do
         ! update medoids
+        call self%calc_distmat
         call self%find_good_bad_pspec_medoids
         ! update iteration counter
         iter = iter + 1
@@ -317,6 +389,44 @@ contains
         l_converged = .false.
         if( nchanges == 0 .or. iter == MAXITS) l_converged = .true.
     end subroutine kmedoids_iter
+
+    subroutine rank_pspecs( self )
+        class(pspecs), intent(inout) :: self
+        real,    allocatable :: dists_good(:), dists_bad(:)
+        integer, allocatable :: inds_good(:), inds_bad(:)
+        integer :: ispec, rank
+        self%ngood = count(self%clsinds_spec == CLASS_GOOD)
+        self%nbad  = count(self%clsinds_spec == CLASS_BAD)
+        allocate(dists_good(self%ngood), dists_bad(self%nbad), source=0.)
+        allocate(inds_good(self%ngood),  inds_bad(self%nbad),  source=0)
+        self%ngood = 0
+        self%nbad  = 0
+        do ispec = 1, self%nspecs
+            select case(self%clsinds_spec(ispec))
+                case(CLASS_GOOD)
+                    self%ngood             = self%ngood + 1
+                    dists_good(self%ngood) = self%dists2good(ispec)
+                    inds_good(self%ngood)  = ispec
+                case(CLASS_BAD)
+                    self%nbad              = self%nbad + 1
+                    dists_bad(self%nbad)   = self%dists2good(ispec)
+                    inds_bad(self%nbad)    = ispec
+            end select
+        enddo
+        call hpsort(dists_good, inds_good)
+        call hpsort(dists_bad,  inds_bad)
+        rank = 0
+        do ispec = 1, self%ngood
+            rank = rank + 1
+            self%ranks(inds_good(ispec)) = rank
+            self%order(rank)             = inds_good(ispec)
+        enddo
+        do ispec = 1, self%nbad
+            rank = rank + 1
+            self%ranks(inds_bad(ispec)) = rank
+            self%order(rank)            = inds_bad(ispec)
+        enddo
+    end subroutine rank_pspecs
 
     function find_closest( self, ispec ) result( closest )
         class(pspecs), intent(inout) :: self
@@ -391,6 +501,7 @@ contains
             if( allocated(self%dists2good)   ) deallocate(self%dists2good)
             if( allocated(self%dists2bad)    ) deallocate(self%dists2bad)
             if( allocated(self%ranks)        ) deallocate(self%ranks)
+            if( allocated(self%order)        ) deallocate(self%order)
             if( allocated(self%clsinds_spec) ) deallocate(self%clsinds_spec)
             if( allocated(self%clsinds)      ) deallocate(self%clsinds)
             if( allocated(self%clspops)      ) deallocate(self%clspops)

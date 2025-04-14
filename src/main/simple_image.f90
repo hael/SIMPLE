@@ -132,6 +132,7 @@ contains
     procedure          :: same_smpd
     generic            :: operator(.eqsmpd.) => same_smpd
     procedure          :: is_ft
+    procedure          :: is_empty
     ! ARITHMETICS
     procedure, private :: assign
     procedure, private :: assign_r2img
@@ -2181,6 +2182,14 @@ contains
         logical :: is
         is = self%ft
     end function is_ft
+
+    function is_empty( self ) result( is )
+        class(image), intent(in) :: self
+        real    :: minmax(2)
+        logical :: is
+        minmax = self%minmax()
+        is = .not.is_equal(minmax(2)-minmax(1),0.) ! empty image
+    end function is_empty
 
     ! ARITHMETICS
 
