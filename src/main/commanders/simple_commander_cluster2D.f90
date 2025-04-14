@@ -3367,6 +3367,8 @@ contains
             do iptcl = pfromto(1), pfromto(2)
                 call pftcc%shift_ptcl(iptcl, build_glob%spproj_field%get_2Dshift(iptcl))
             enddo
+            ! re-memoizing ptcls due to shifted ptcls
+            call pftcc%memoize_ptcls
         endif
         call eulprob_obj%new(pinds)
         allocate(ref_imgs(params_glob%nspace))
@@ -3375,6 +3377,7 @@ contains
             ! update refs
             call pftcc%gen_polar_refs(build_glob%eulspace, build_glob%spproj_field)
             call pftcc%memoize_refs
+            ! for visualization of polar cavgs
             call pftcc%prefs_to_cartesian(ref_imgs)
             do iref = 1, params_glob%nspace
                 call ref_imgs(iref)%write('polar_cavgs'//int2str(iter)//'.mrc', iref)
@@ -3392,17 +3395,20 @@ contains
             ! prob alignment
             call eulprob_obj%fill_tab(pftcc)
             call eulprob_obj%ref_assign
-            ! update spproj with the new alignment
             do iptcl = pfromto(1), pfromto(2)
                 iref    = eulprob_obj%assgn_map(pinds(iptcl))%iproj
                 euls    = build_glob%eulspace%get_euler(iref)
                 irot    = eulprob_obj%assgn_map(pinds(iptcl))%inpl
                 euls(3) = 360. - pftcc%get_rot(irot)
                 sh      = [eulprob_obj%assgn_map(pinds(iptcl))%x, eulprob_obj%assgn_map(pinds(iptcl))%y]
+                ! shifting the polar ptcls to the new position
                 call pftcc%shift_ptcl(iptcl, sh)
+                ! update spproj with the new alignment
                 call build_glob%spproj_field%set_euler(iptcl, euls)
                 call build_glob%spproj_field%set_shift(iptcl, build_glob%spproj_field%get_2Dshift(iptcl) + sh)
             enddo
+            ! re-memoizing ptcls due to shifted ptcls
+            call pftcc%memoize_ptcls
         enddo
         call build%spproj%write_segment_inside(params%oritype, params%projfile)
         ! cleaning up
