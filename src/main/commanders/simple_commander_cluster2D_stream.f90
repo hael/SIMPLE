@@ -2761,14 +2761,12 @@ contains
         call cline%set('ml_reg_pool',  'no')
         call cline%set('nthr2D',       cline%get_iarg('nthr'))
         call cline%set('remove_chunks','no')
+        call cline%set('numlen',       5)
         if( .not. cline%defined('mkdir')        ) call cline%set('mkdir',       'yes')
         if( .not. cline%defined('center')       ) call cline%set('center',      'yes')
-        if( .not. cline%defined('lpthres')      ) call cline%set('lpthres',      30.0)
-        if( .not. cline%defined('ndev')         ) call cline%set('ndev',         CLS_REJECT_STD)
         if( .not. cline%defined('walltime')     ) call cline%set('walltime',     29*60) ! 29 minutes
         if( .not. cline%defined('nparts_chunk') ) call cline%set('nparts_chunk', 1)
         if( .not. cline%defined('nchunks')      ) call cline%set('nchunks',      2)
-        if( .not. cline%defined('numlen')       ) call cline%set('numlen',       5)
         if( .not. cline%defined('objfun')       ) call cline%set('objfun',       'euclid')
         if( .not. cline%defined('sigma_est')    ) call cline%set('sigma_est',    'global')
         if( .not. cline%defined('reject_cls')   ) call cline%set('reject_cls',   'no')
@@ -2808,6 +2806,10 @@ contains
             call cline_cluster2D_chunk%set('extr_lim',  MAX_EXTRLIM2D)
             call cline_cluster2D_chunk%set('startit',   1)
             if( l_update_sigmas ) call cline_cluster2D_chunk%set('cc_iters', 10)
+            if( cline%defined('nsample') .or. cline%defined('nsample_max') .or.&
+                &trim(params%autosample).eq.'yes' )then
+                THROW_HARD('AUTOSAMPLE is only supported with ALGORITHM=ABINITIO2D')
+            endif
         case('ABINITIO2D')
             call cline_cluster2D_chunk%delete('minits')
             call cline_cluster2D_chunk%delete('maxits')
@@ -2874,6 +2876,7 @@ contains
         ! cleanup
         call simple_rmdir(STDERROUT_DIR)
         call simple_rmdir(DIR_PROJS)
+        call simple_rmdir(DIR_SNAPSHOT)
         call del_file(trim(POOL_DIR)//trim(PROJFILE_POOL))
         call simple_rmdir(SIGMAS_DIR)
         call qsys_cleanup
@@ -2990,7 +2993,7 @@ contains
             write(logfhandle,'(A,I8)')'>>> # OF STACKS   : ', nstks
             write(logfhandle,'(A,I8)')'>>> # OF PARTICLES: ', nptcls_tot
             write(logfhandle,'(A,I8)')'>>> # OF CHUNKS   : ', ntot_chunks
-            ! chunks map
+            ! chunks map, leftovers are abandoned
             allocate(chunks_map(ntot_chunks,2),source=0)
             cnt    = 0
             ichunk = 1
@@ -3004,7 +3007,6 @@ contains
                     cnt = 0
                 endif
             enddo
-            chunks_map(ntot_chunks,2) = nstks ! border effect
             write(logfhandle,'(A)')'>>> CHUNKS MAP: '
             spproj%compenv = spproj_glob%compenv
             spproj%jobproc = spproj_glob%jobproc

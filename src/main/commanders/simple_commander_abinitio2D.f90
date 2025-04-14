@@ -363,7 +363,7 @@ contains
                 extr_iter = params%extr_lim+1
                 refs      = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
                 icm       = 'no'
-                minits    = iter
+                minits    = iter+1
             end select
             ! command line update
             call cline_cluster2D%set('startit',   iter)
@@ -476,6 +476,8 @@ contains
                 cline_make_cavgs = cline ! ncls is transferred here
                 call cline_make_cavgs%delete('autoscale')
                 call cline_make_cavgs%delete('balance')
+                call cline_make_cavgs%delete('smpd_crop')
+                call cline_make_cavgs%delete('box_crop')
                 call cline_make_cavgs%set('prg',        'make_cavgs')
                 call cline_make_cavgs%set('refs',       finalcavgs)
                 call cline_make_cavgs%set('which_iter', iter)
