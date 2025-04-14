@@ -1181,14 +1181,13 @@ contains
         call img%ifft
     end subroutine polar_cavg
 
-    subroutine gen_polar_refs( self, ref_space, ptcl_space, cavgs )
+    subroutine gen_polar_refs( self, ref_space, ptcl_space )
         use simple_image
         use simple_oris
         use simple_ori
         class(polarft_corrcalc), intent(inout) :: self
         type(oris),              intent(in)    :: ref_space
         type(oris),              intent(in)    :: ptcl_space
-        type(image), optional,   intent(inout) :: cavgs(self%nrefs)
         complex,     allocatable :: cmat(:,:)
         complex(sp), pointer     :: pft_ptcl(:,:)
         real(sp),    pointer     :: rctf(:,:)
@@ -1216,15 +1215,6 @@ contains
         enddo
         if( self%with_ctf ) self%pfts_refs_even = self%pfts_refs_even / ctf2
         self%pfts_refs_odd = self%pfts_refs_even
-        if( present(cavgs) )then
-            do iref = 1, self%nrefs
-                call self%polar2cartesian(iref,.true.,cmat,box)
-                call cavgs(iref)%new([box,box,1],1.0)
-                call cavgs(iref)%set_cmat(cmat)
-                call cavgs(iref)%shift_phorig()
-                call cavgs(iref)%ifft
-            enddo
-        endif
     end subroutine gen_polar_refs
 
     subroutine create_polar_absctfmats( self, spproj, oritype, pfromto )
