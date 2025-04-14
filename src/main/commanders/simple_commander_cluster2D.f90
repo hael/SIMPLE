@@ -1906,6 +1906,7 @@ contains
         call cline%set('oritype', 'cls2D')
         call cline%set('ctf',     'no')
         call cline%set('objfun',  'cc')
+        if( .not. cline%defined('mirr')    ) call cline%set('mirr',    'yes')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
         if( .not. cline%defined('trs')     ) call cline%set('trs',       10.)
         if( .not. cline%defined('kweight') ) call cline%set('kweight', 'all')
@@ -2041,10 +2042,10 @@ contains
                 call fm_correlators(ithr)%calc_phasecorr(j, i, cavg_imgs(j), cavg_imgs(i),&
                     &ccimgs(ithr,1), ccimgs(ithr,2), cc)
                 ! correlation of mirrored reference to particle
-                ! call pftcc%set_eo(i,.false.)
-                ! call fm_correlators(ithr)%calc_phasecorr(j, i, cavg_imgs(j), cavg_imgs(i),&
-                !     &ccimgs(ithr,1), ccimgs(ithr,2), ccm, mirror=.true.)
-                ! cc = max(cc,ccm)
+                call pftcc%set_eo(i,.false.)
+                call fm_correlators(ithr)%calc_phasecorr(j, i, cavg_imgs(j), cavg_imgs(i),&
+                    &ccimgs(ithr,1), ccimgs(ithr,2), ccm, mirror=.true.)
+                cc = max(cc,ccm)
                 corrmat(i,j) = cc
                 corrmat(j,i) = cc
             enddo
