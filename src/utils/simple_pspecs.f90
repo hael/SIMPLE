@@ -4,6 +4,7 @@ include 'simple_lib.f08'
 !$ use omp_lib_kinds
 use simple_image, only: image
 use simple_fsc,   only: plot_fsc
+use simple_oris,  only: oris
 implicit none
 
 public :: pspecs
@@ -17,6 +18,7 @@ type pspecs
     real,    allocatable :: pspec_bad(:)          ! 'bad'  average power spectrum
     real,    allocatable :: resarr(:)             ! resolution values in A
     real,    allocatable :: dynranges(:)          ! dynamic ranges of power spectra
+    real,    allocatable :: sumpows(:)            ! sum of power
     real,    allocatable :: dists2good(:)         ! distance to good pspeccs
     real,    allocatable :: dists2bad(:)          ! distance to bad  pspecs
     real,    allocatable :: distmat(:,:)          ! Euclidean distance matrix
@@ -33,29 +35,33 @@ type pspecs
     integer              :: kfromto(2)            ! Fourier index range
     integer              :: sz          = 0       ! size of spectrum 
     integer              :: nspecs      = 0       ! # of spectra
+    integer              :: ncls        = 0       ! # classes
     integer              :: medoid_good = 0       ! index of medoid of good class
     integer              :: medoid_bad  = 0       ! index of medoid of bad  class
     integer              :: ngood       = 0       ! # good power spectra
     integer              :: nbad        = 0       ! # bad power spectra
     logical              :: exists      = .false. ! existence flag
 contains
-    
-    procedure, private   :: new_1, new_2
-    generic              :: new => new_1, new_2
-    procedure, private   :: set_class_pspec_1, set_class_pspec_2
-    generic              :: set_class_pspec => set_class_pspec_1, set_class_pspec_2
-    procedure            :: kmeans_bincls_pspecs_and_rank
-    procedure            :: kmedoids_bincls_pspecs_and_rank
-    procedure            :: plot_good_bad_avg
-    procedure            :: plot_good_bad_medoid
-    procedure            :: plot_all
-    procedure            :: plot_all_ranked
-    procedure            :: calc_frac_good
+    ! constructor
+    procedure            :: new
+    ! getters & setters
+    procedure            :: get_nspecs
+    procedure            :: get_frac_good
     procedure            :: get_ngood
     procedure            :: set_ngood
     procedure            :: get_good_bad_state_arr
     procedure            :: get_ordered_clsind
-    procedure, private   :: bincls_dynrange
+    ! plotting
+    procedure            :: plot_all
+    procedure            :: plot_good_bad_avg
+    procedure            :: plot_good_bad_medoid
+    procedure            :: plot_all_ranked
+    ! clustering 
+    procedure            :: otsu_bincls_dynrange
+    procedure            :: kmeans_bincls_pspecs_and_rank
+    procedure            :: kmedoids_bincls_pspecs_and_rank
+    procedure            :: hybrid_bincls_pspecs_and_rank
+    ! calculators
     procedure, private   :: calc_good_bad_pspec_avgs
     procedure, private   :: find_good_bad_pspec_medoids
     procedure, private   :: kmeans_iter
@@ -65,124 +71,134 @@ contains
     procedure, private   :: lookup_distance
     procedure, private   :: calc_distmat
     procedure, private   :: calc_avg_pspec
+    ! destructor
     procedure            :: kill
 end type pspecs
 
-integer, parameter :: CLASS_EMPTY = 0
-integer, parameter :: CLASS_GOOD  = 1
-integer, parameter :: CLASS_BAD   = 2
-real,    parameter :: EMPTY_THRES = 1e-6
-integer, parameter :: MAXITS      = 10
+integer, parameter :: CLASS_GOOD     = 1
+integer, parameter :: CLASS_BAD      = 2
+real,    parameter :: DYNRANGE_THRES = 1e-6
+integer, parameter :: MAXITS         = 10
+integer, parameter :: MINPOP         = 20
 
 contains
 
-    ! should be parallelized outside of here
-    subroutine new_1( self, nspecs, img_template, hp, lp )
-        class(pspecs), intent(inout) :: self
-        integer,       intent(in)    :: nspecs
-        class(image),  intent(in)    :: img_template 
-        real,          intent(in)    :: hp, lp
-        real, allocatable :: resarr(:)
-        integer           :: ldim(3)
-        call self%kill
-        ldim = img_template%get_ldim()
-        call self%new_2(nspecs, ldim(1), img_template%get_smpd(), hp, lp )
-    end subroutine new_1
+    ! constructor
 
-    subroutine new_2( self, nspecs, box, smpd, hp, lp )
+    subroutine new( self, ncls, imgs, os_cls2D, msk, hp, lp )
         class(pspecs), intent(inout) :: self
-        integer,       intent(in)    :: nspecs
-        integer,       intent(in)    :: box
-        real,          intent(in)    :: smpd, hp, lp
-        real, allocatable :: resarr(:)
+        integer,       intent(in)    :: ncls
+        class(image),  intent(inout) :: imgs(ncls)
+        class(oris),   intent(in)    :: os_cls2D
+        real,          intent(in)    :: msk, hp, lp
+        real, allocatable :: pspec(:), resarr(:)
+        integer :: specinds(ncls)
+        logical :: l_valid_spectra(ncls)
+        integer :: ldim(3), icls, ispec
+        real    :: dynrange
         call self%kill
-        self%nspecs     = nspecs
+        self%ncls       = ncls
+        ldim            = imgs(1)%get_ldim()
+        self%box        = ldim(1)
+        self%smpd       = imgs(1)%get_smpd()
         self%hp         = hp
         self%lp         = lp
-        self%box        = box
-        self%smpd       = smpd
         resarr          = get_resarr(self%box, self%smpd)
         self%kfromto(1) = calc_fourier_index(self%hp, self%box, self%smpd)
         self%kfromto(2) = calc_fourier_index(self%lp, self%box, self%smpd)
         self%sz         = self%kfromto(2) - self%kfromto(1) + 1
+        ! count valid spectra
+        l_valid_spectra = .false.
+        !$omp parallel do default(shared) private(icls, pspec, dynrange) proc_bind(close) schedule(static)
+        do icls = 1, ncls
+            call imgs(icls)%norm
+            call imgs(icls)%mask(msk, 'soft')
+            call imgs(icls)%spectrum('sqrt', pspec)
+            dynrange = pspec(self%kfromto(1)) - pspec(self%kfromto(2))
+            if( dynrange > DYNRANGE_THRES .and. os_cls2D%get_int(icls, 'pop') >= MINPOP  ) l_valid_spectra(icls) = .true.
+        enddo
+        !$omp end parallel do
+        self%nspecs = count(l_valid_spectra)
+        ! allocate arrays
         allocate(self%resarr(self%sz), source=resarr(self%kfromto(1):self%kfromto(2)))
-        allocate(self%pspecs(self%nspecs,self%sz), self%dynranges(self%nspecs),&
+        allocate(self%pspecs(self%nspecs,self%sz), self%dynranges(self%nspecs), self%sumpows(self%nspecs),&
         &self%dists2good(self%nspecs), self%dists2bad(self%nspecs), source=0.)
         allocate(self%ranks(self%nspecs), self%order(self%nspecs), self%clsinds_spec(self%nspecs),&
         self%clsinds(self%nspecs), self%clspops(self%nspecs), source=0)
+        ! set spectrum indices
+        ispec = 0
+        do icls = 1, ncls
+            if( l_valid_spectra(icls) )then
+                ispec = ispec + 1
+                specinds(icls) = ispec
+            endif
+        end do
+        ! fill-up the instance
+        !$omp parallel do default(shared) private(icls, pspec) proc_bind(close) schedule(static)
+        do icls = 1, ncls
+            if( l_valid_spectra(icls) )then
+                call imgs(icls)%spectrum('sqrt', pspec)
+                self%pspecs(specinds(icls),:)  = pspec(self%kfromto(1):self%kfromto(2))
+                self%dynranges(specinds(icls)) = self%pspecs(specinds(icls),1) - self%pspecs(specinds(icls),self%sz)
+                self%sumpows(specinds(icls))   = sum(self%pspecs(specinds(icls),:))
+                self%clspops(specinds(icls))   = os_cls2D%get_int(icls, 'pop')
+                self%clsinds(specinds(icls))   = icls
+                deallocate(pspec)
+            endif
+        end do
+        !$omp end parallel do
         deallocate(resarr)
-        self%exists     = .true.
-    end subroutine new_2
+        self%exists = .true.
+    end subroutine new
 
-    ! should be parallelized outside of here
-    subroutine set_class_pspec_1( self, ispec, class, pop, img, msk )
-        class(pspecs), intent(inout) :: self
-        integer,       intent(in)    :: ispec, class, pop
-        class(image),  intent(inout) :: img
-        real,          intent(in)    :: msk
-        real, allocatable :: spec(:)
-        if( ispec < 1 .or. ispec > self%nspecs ) THROW_HARD('ispec index out of range')
-        if( pop == 0 )                           THROW_HARD('Empty classes not allowed')
-        call img%norm
-        call img%mask(msk, 'soft')
-        call img%spectrum('sqrt', spec)
-        self%pspecs(ispec,:)  = spec(self%kfromto(1):self%kfromto(2))
-        self%dynranges(ispec) = self%pspecs(ispec,1) - self%pspecs(ispec,self%sz)
-        if( self%dynranges(ispec) <= EMPTY_THRES ) THROW_HARD('Empty spectra not allowed')
-        deallocate(spec)
-        self%clsinds(ispec) = class
-        self%clspops(ispec) = pop
-    end subroutine set_class_pspec_1
+    ! getters & setters
 
-    subroutine set_class_pspec_2( self, ispec, class, pop, spec )
-        class(pspecs), intent(inout) :: self
-        integer,       intent(in)    :: ispec, class, pop
-        real,          intent(in)    :: spec(:)
-        if( ispec < 1 .or. ispec > self%nspecs ) THROW_HARD('ispec index out of range')
-        if( pop == 0 )                           THROW_HARD('Empty classes not allowed')
-        self%pspecs(ispec,:)  = spec(self%kfromto(1):self%kfromto(2))
-        self%dynranges(ispec) = self%pspecs(ispec,1) - self%pspecs(ispec,self%sz)
-        if( self%dynranges(ispec) <= EMPTY_THRES ) THROW_HARD('Empty spectra not allowed')
-        self%clsinds(ispec) = class
-        self%clspops(ispec) = pop
-    end subroutine set_class_pspec_2
+    function get_nspecs( self ) result( nspecs )
+        class(pspecs), intent(in) :: self
+        integer :: nspecs
+        nspecs = self%nspecs
+    end function get_nspecs
 
-    ! binary k-means clustering of power spectra
-    subroutine kmeans_bincls_pspecs_and_rank( self )
+    function get_frac_good( self, ngood, nptcls ) result( frac_good )
+        class(pspecs), intent(in) :: self
+        integer,       intent(in) :: ngood, nptcls
+        real :: frac_good
+        frac_good = (real(sum(self%clspops, mask=self%ranks <= ngood))/real(nptcls))
+    end function get_frac_good
+
+    function get_ngood( self ) result( ngood )
+        class(pspecs), intent(in) :: self
+        integer :: ngood
+        ngood = self%ngood
+    end function get_ngood
+
+    subroutine set_ngood( self, ngood )
         class(pspecs), intent(inout) :: self
-        integer :: iter
-        logical :: l_converged
-        call self%bincls_dynrange
-        call self%calc_good_bad_pspec_avgs
-        call self%plot_good_bad_avg('pspec_good_dynrange', 'pspec_bad_dynrange')
-        iter = 0
-        l_converged = .false.
-        do
-            call self%kmeans_iter(iter, l_converged)
-            if( l_converged ) exit
+        integer,       intent(in)    :: ngood
+        self%ngood = ngood
+        self%nbad  = self%nspecs - ngood
+    end subroutine set_ngood
+
+    function get_good_bad_state_arr( self, ncls ) result( states )
+        class(pspecs), intent(in) :: self
+        integer,       intent(in) :: ncls
+        integer, allocatable :: states(:)
+        integer :: ispec
+        allocate(states(ncls), source=0)
+        do ispec = 1, self%nspecs
+            if( self%ranks(ispec) <= self%ngood ) states(self%clsinds(ispec)) = 1
         end do
-        call self%plot_good_bad_avg('pspec_good_kmeans', 'pspec_bad_kmeans')
-        call self%rank_pspecs
-    end subroutine kmeans_bincls_pspecs_and_rank
+    end function get_good_bad_state_arr
 
-    ! binary k-medoids clustering of power spectra
-    subroutine kmedoids_bincls_pspecs_and_rank( self )
-        class(pspecs), intent(inout) :: self
-        integer :: iter
-        logical :: l_converged
-        call self%bincls_dynrange
-        call self%calc_distmat
-        call self%find_good_bad_pspec_medoids
-        call self%plot_good_bad_medoid('pspec_good_dynrange', 'pspec_bad_dynrange')
-        iter = 0
-        l_converged = .false.
-        do
-            call self%kmedoids_iter(iter, l_converged)
-            if( l_converged ) exit
-        end do
-        call self%plot_good_bad_medoid('pspec_good_kmedoids', 'pspec_bad_kmedoids')
-        call self%rank_pspecs
-    end subroutine kmedoids_bincls_pspecs_and_rank
+    function get_ordered_clsind( self, ispec ) result( clsind )
+        class(pspecs), intent(in) :: self
+        integer,       intent(in) :: ispec
+        integer :: clsind
+        if( ispec < 1 .or. ispec > self%nspecs ) THROW_HARD('ispec index out of range')
+        clsind = self%clsinds(self%order(ispec))
+    end function get_ordered_clsind
+
+    ! plotting
 
     subroutine plot_good_bad_avg( self, fbody_good, fbody_bad )
         class(pspecs),    intent(in) :: self
@@ -218,50 +234,15 @@ contains
         end do
     end subroutine plot_all_ranked
 
-    function calc_frac_good( self, ngood, nptcls ) result( frac_good )
-        class(pspecs), intent(in) :: self
-        integer,       intent(in) :: ngood, nptcls
-        real :: frac_good
-        frac_good = (real(sum(self%clspops, mask=self%ranks <= ngood))/real(nptcls))
-    end function calc_frac_good
-
-    function get_ngood( self ) result( ngood )
-        class(pspecs), intent(in) :: self
-        integer :: ngood
-        ngood = self%ngood
-    end function get_ngood
-
-    subroutine set_ngood( self, ngood )
-        class(pspecs), intent(inout) :: self
-        integer,       intent(in)    :: ngood
-        self%ngood = ngood
-        self%nbad  = self%nspecs - ngood
-    end subroutine set_ngood
-
-    function get_good_bad_state_arr( self, ncls ) result( states )
-        class(pspecs), intent(in) :: self
-        integer,       intent(in) :: ncls
-        integer, allocatable :: states(:)
-        integer :: ispec
-        allocate(states(ncls), source=0)
-        do ispec = 1, self%nspecs
-            if( self%ranks(ispec) <= self%ngood ) states(self%clsinds(ispec)) = 1
-        end do
-    end function get_good_bad_state_arr
-
-    function get_ordered_clsind( self, ispec ) result( clsind )
-        class(pspecs), intent(in) :: self
-        integer,       intent(in) :: ispec
-        integer :: clsind
-        if( ispec < 1 .or. ispec > self%nspecs ) THROW_HARD('ispec index out of range')
-        clsind = self%clsinds(self%order(ispec))
-    end function get_ordered_clsind
+    ! clustering
 
     ! make initial grouping based on binary dynamic range clustering
-    subroutine bincls_dynrange( self )
+    subroutine otsu_bincls_dynrange( self )
         class(pspecs), intent(inout) :: self
-        integer :: ispec
-        call otsu(self%nspecs, self%dynranges, self%dynrange_t)
+        real, allocatable :: tmp(:)
+        integer :: ispec, rank
+        tmp = pack(self%dynranges, self%dynranges > DYNRANGE_THRES)
+        call otsu(size(tmp), tmp, self%dynrange_t)
         do ispec = 1, self%nspecs
             if( self%dynranges(ispec) >= self%dynrange_t )then
                 self%clsinds_spec(ispec) = CLASS_GOOD
@@ -269,7 +250,74 @@ contains
                 self%clsinds_spec(ispec) = CLASS_BAD
             endif
         enddo
-    end subroutine bincls_dynrange
+        deallocate(tmp)
+    end subroutine otsu_bincls_dynrange
+
+    subroutine hybrid_bincls_pspecs_and_rank( self )
+        class(pspecs), intent(inout) :: self
+        integer :: iter
+        logical :: l_converged
+        call self%otsu_bincls_dynrange
+        call self%calc_good_bad_pspec_avgs
+        call self%plot_good_bad_avg('pspec_good_dynrange', 'pspec_bad_dynrange')
+        iter = 0
+        l_converged = .false.
+        do
+            call self%kmeans_iter(iter, l_converged)
+            if( l_converged ) exit
+        end do
+        call self%plot_good_bad_avg('pspec_good_kmeans', 'pspec_bad_kmeans')
+        call self%calc_distmat
+        call self%find_good_bad_pspec_medoids
+        call self%plot_good_bad_medoid('pspec_good_kmedoids_start', 'pspec_bad_kmedoids_start')
+        iter = 0
+        l_converged = .false.
+        do
+            call self%kmedoids_iter(iter, l_converged)
+            if( l_converged ) exit
+        end do
+        call self%plot_good_bad_medoid('pspec_good_kmedoids_end', 'pspec_bad_kmedoids_end')
+        call self%rank_pspecs
+    end subroutine hybrid_bincls_pspecs_and_rank
+
+    ! binary k-means clustering of power spectra
+    subroutine kmeans_bincls_pspecs_and_rank( self )
+        class(pspecs), intent(inout) :: self
+        integer :: iter
+        logical :: l_converged
+        call self%otsu_bincls_dynrange
+        call self%calc_good_bad_pspec_avgs
+        call self%plot_good_bad_avg('pspec_good_dynrange', 'pspec_bad_dynrange')
+        iter = 0
+        l_converged = .false.
+        do
+            call self%kmeans_iter(iter, l_converged)
+            if( l_converged ) exit
+        end do
+        call self%plot_good_bad_avg('pspec_good_kmeans', 'pspec_bad_kmeans')
+        call self%rank_pspecs
+    end subroutine kmeans_bincls_pspecs_and_rank
+
+    ! binary k-medoids clustering of power spectra
+    subroutine kmedoids_bincls_pspecs_and_rank( self )
+        class(pspecs), intent(inout) :: self
+        integer :: iter
+        logical :: l_converged
+        call self%otsu_bincls_dynrange
+        call self%calc_distmat
+        call self%find_good_bad_pspec_medoids
+        call self%plot_good_bad_medoid('pspec_good_dynrange', 'pspec_bad_dynrange')
+        iter = 0
+        l_converged = .false.
+        do
+            call self%kmedoids_iter(iter, l_converged)
+            if( l_converged ) exit
+        end do
+        call self%plot_good_bad_medoid('pspec_good_kmedoids', 'pspec_bad_kmedoids')
+        call self%rank_pspecs
+    end subroutine kmedoids_bincls_pspecs_and_rank
+
+    ! calculators
 
     subroutine calc_good_bad_pspec_avgs( self )
         class(pspecs), intent(inout) :: self
@@ -304,10 +352,10 @@ contains
         class(pspecs), intent(inout) :: self
         real    :: dists_good(self%nspecs), dists_bad(self%nspecs)
         integer :: i, j, loc(1)
-        dists_good = 0.
-        dists_bad  = 0.
         !$omp parallel do default(shared) private(i,j) proc_bind(close) schedule(static)
         do i = 1, self%nspecs
+            dists_good(i) = 0.
+            dists_bad(i)  = 0.
             do j = 1, self%nspecs
                 if( i /= j )then
                     if(      self%clsinds_spec(i) == CLASS_GOOD .and. self%clsinds_spec(j) == CLASS_GOOD )then
@@ -369,7 +417,7 @@ contains
             select case(self%clsinds_spec(ispec))
                 case(CLASS_GOOD,CLASS_BAD)
                     self%dists2good(ispec) = euclid(self%pspecs(self%medoid_good,:),self%pspecs(ispec,:))
-                    self%dists2bad(ispec)  = euclid(self%pspecs(self%medoid_good,:), self%pspecs(ispec,:))
+                    self%dists2bad(ispec)  = euclid(self%pspecs(self%medoid_bad,:), self%pspecs(ispec,:))
                     if( self%dists2good(ispec) <= self%dists2bad(ispec) )then ! is good
                         if( self%clsinds_spec(ispec) == CLASS_BAD ) nchanges = nchanges + 1
                         self%clsinds_spec(ispec) = CLASS_GOOD
@@ -492,12 +540,15 @@ contains
         pspec_avg = pspec_avg / real(cnt)
     end function calc_avg_pspec
 
+    ! destructor
+
     subroutine kill( self )
         class(pspecs), intent(inout) :: self
         if( self%exists )then
             if( allocated(self%pspecs)       ) deallocate(self%pspecs)
             if( allocated(self%resarr)       ) deallocate(self%resarr)
             if( allocated(self%dynranges)    ) deallocate(self%dynranges)
+            if( allocated(self%sumpows)      ) deallocate(self%sumpows)
             if( allocated(self%dists2good)   ) deallocate(self%dists2good)
             if( allocated(self%dists2bad)    ) deallocate(self%dists2bad)
             if( allocated(self%ranks)        ) deallocate(self%ranks)

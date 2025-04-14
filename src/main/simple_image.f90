@@ -2188,7 +2188,7 @@ contains
         real    :: minmax(2)
         logical :: is
         minmax = self%minmax()
-        is = .not.is_equal(minmax(2)-minmax(1),0.) ! empty image
+        is     = is_equal(minmax(2)-minmax(1),0.) ! empty image
     end function is_empty
 
     ! ARITHMETICS

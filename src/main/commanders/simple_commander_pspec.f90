@@ -42,7 +42,7 @@ contains
         call build%spproj%write_segment_inside('projinfo')
         ! create object for power spectra
         nptcls = build%spproj%get_nptcls()
-        call pows%new(nptcls, build%img, params%hp, params%lp )
+        ! call pows%new(nptcls, build%img, params%hp, params%lp )
         ! prep batch alignment
         batchsz     = params%nthr * BATCHTHRSZ
         nbatches    = ceiling(real(nptcls)/real(batchsz))
