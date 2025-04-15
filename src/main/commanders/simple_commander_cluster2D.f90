@@ -3156,21 +3156,13 @@ contains
         ! randomize oris
         if( trim(params_glob%continue) .eq. 'no' )then
             call build_glob%spproj_field%rnd_oris
-            do iptcl = pfromto(1), pfromto(2)
-                call build_glob%spproj_field%set_shift(iptcl, [0.,0.])
-            enddo
-        else
-            do iptcl = pfromto(1), pfromto(2)
-                call pftcc%shift_ptcl(iptcl, build_glob%spproj_field%get_2Dshift(iptcl))
-            enddo
-            ! re-memoizing ptcls due to shifted ptcls
-            call pftcc%memoize_ptcls
+            call build_glob%spproj_field%zero_shifts
         endif
         call eulprob_obj%new(pinds)
         allocate(ref_imgs(params_glob%nspace))
         do iter = 1, params_glob%maxits
             print *, 'ITER = ', iter
-            ! update refs
+            ! update polar refs using current alignment params
             call pftcc%gen_polar_refs(build_glob%eulspace, build_glob%spproj_field)
             call pftcc%memoize_refs
             ! for visualization of polar cavgs
@@ -3180,31 +3172,30 @@ contains
                 call ref_imgs(iref)%kill
             enddo
             ! update sigmas and memoize_sqsum_ptcl with updated sigmas
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,orientation,iref)
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,orientation,iref,sh)
             do iptcl = pfromto(1),pfromto(2)
                 call build_glob%spproj_field%get_ori(pinds(iptcl), orientation)
                 iref = build_glob%eulspace%find_closest_proj(orientation)
-                call pftcc%gencorr_sigma_contrib(iref, iptcl, [0.,0.], pftcc%get_roind(360. - orientation%e3get()))
+                sh   = build_glob%spproj_field%get_2Dshift(iptcl)
+                ! computing sigmas by shifting/rotating refs to the particle frames
+                call pftcc%gencorr_sigma_contrib(iref, iptcl, sh, pftcc%get_roind(360. - orientation%e3get()))
+                ! memoize_sqsum_ptcl with updated sigmas
                 call pftcc%memoize_sqsum_ptcl(iptcl)
             enddo
             !$omp end parallel do
             ! prob alignment
             call eulprob_obj%fill_tab(pftcc)
             call eulprob_obj%ref_assign
+            ! update spproj with the new alignment
             do iptcl = pfromto(1), pfromto(2)
                 iref    = eulprob_obj%assgn_map(pinds(iptcl))%iproj
                 euls    = build_glob%eulspace%get_euler(iref)
                 irot    = eulprob_obj%assgn_map(pinds(iptcl))%inpl
                 euls(3) = 360. - pftcc%get_rot(irot)
                 sh      = [eulprob_obj%assgn_map(pinds(iptcl))%x, eulprob_obj%assgn_map(pinds(iptcl))%y]
-                ! shifting the polar ptcls to the new position
-                call pftcc%shift_ptcl(iptcl, sh)
-                ! update spproj with the new alignment
                 call build_glob%spproj_field%set_euler(iptcl, euls)
-                call build_glob%spproj_field%set_shift(iptcl, build_glob%spproj_field%get_2Dshift(iptcl) + sh)
+                call build_glob%spproj_field%set_shift(iptcl, sh)
             enddo
-            ! re-memoizing ptcls due to shifted ptcls
-            call pftcc%memoize_ptcls
         enddo
         call build%spproj%write_segment_inside(params%oritype, params%projfile)
         ! cleaning up
