@@ -1858,7 +1858,7 @@ contains
             endif
         end do
         ! map selection to project
-        states = pows%get_good_bad_state_arr(params%ncls)
+        states = pows%get_good_bad_state_arr()
         call spproj%map_cavgs_selection(states)
         ! optional pruning
         if( trim(params%prune).eq.'yes') call spproj%prune_particles
