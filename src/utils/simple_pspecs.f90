@@ -58,13 +58,17 @@ contains
     procedure            :: otsu_bincls_dynrange
     procedure            :: kmeans_bincls_pspecs_and_rank
     procedure            :: kmedoids_bincls_pspecs_and_rank
+    procedure            :: greedy_bincls_pspecs_and_rank
     procedure            :: hybrid_bincls_pspecs_and_rank
     ! calculators
     procedure            :: smoothen_spectra
     procedure, private   :: calc_good_bad_pspec_avgs
     procedure, private   :: find_good_bad_pspec_medoids
     procedure, private   :: kcluster_iter
+    procedure, private   :: greedy_min_iter
     procedure, private   :: rank_pspecs
+    procedure, private   :: clsind_spec_of_closest
+    procedure, private   :: find_closest
     procedure, private   :: lookup_distance
     procedure, private   :: calc_distmat
     ! destructor
@@ -256,9 +260,21 @@ contains
         class(pspecs), intent(inout) :: self
         integer :: iter
         logical :: l_converged
+        write(logfhandle,'(A)') 'HYBRID GREEDY/K-MEANS CLUSTERING OF POWERSPECTRA'
+        ! start with k-medoids, as it seems better at finding a solid bad group
         call self%otsu_bincls_dynrange
+        call self%calc_distmat
         call self%calc_good_bad_pspec_avgs
         call self%plot_good_bad('pspec_good_dynrange', 'pspec_bad_dynrange')
+        iter = 0
+        l_converged = .false.
+        do
+            call self%greedy_min_iter(iter, l_converged)
+            if( l_converged ) exit
+        end do
+        call self%calc_good_bad_pspec_avgs
+        call self%plot_good_bad('pspec_good_greedy', 'pspec_bad_greedy')
+        ! refine using k-means
         iter = 0
         l_converged = .false.
         do
@@ -266,16 +282,7 @@ contains
             if( l_converged ) exit
         end do
         call self%plot_good_bad('pspec_good_kmeans', 'pspec_bad_kmeans')
-        call self%calc_distmat
-        call self%find_good_bad_pspec_medoids
-        call self%plot_good_bad('pspec_good_kmedoids_start', 'pspec_bad_kmedoids_start')
-        iter = 0
-        l_converged = .false.
-        do
-            call self%kcluster_iter(iter, l_converged, l_medoid=.false.)
-            if( l_converged ) exit
-        end do
-        call self%plot_good_bad('pspec_good_kmedoids_end', 'pspec_bad_kmedoids_end')
+        ! rank using means
         call self%rank_pspecs
     end subroutine hybrid_bincls_pspecs_and_rank
 
@@ -284,6 +291,7 @@ contains
         class(pspecs), intent(inout) :: self
         integer :: iter
         logical :: l_converged
+        write(logfhandle,'(A)') 'K-MEANS CLUSTERING OF POWERSPECTRA'
         call self%otsu_bincls_dynrange
         call self%calc_good_bad_pspec_avgs
         call self%plot_good_bad('pspec_good_dynrange', 'pspec_bad_dynrange')
@@ -315,6 +323,25 @@ contains
         call self%plot_good_bad('pspec_good_kmedoids', 'pspec_bad_kmedoids')
         call self%rank_pspecs
     end subroutine kmedoids_bincls_pspecs_and_rank
+
+    subroutine greedy_bincls_pspecs_and_rank( self )
+        class(pspecs), intent(inout) :: self
+        integer :: iter
+        logical :: l_converged
+        call self%otsu_bincls_dynrange
+        call self%calc_distmat
+        call self%find_good_bad_pspec_medoids
+        call self%plot_good_bad('pspec_good_dynrange', 'pspec_bad_dynrange')
+        iter = 0
+        l_converged = .false.
+        do
+            call self%greedy_min_iter(iter, l_converged)
+            if( l_converged ) exit
+        end do
+        call self%find_good_bad_pspec_medoids
+        call self%plot_good_bad('pspec_good_kmedoids', 'pspec_bad_kmedoids')
+        call self%rank_pspecs
+    end subroutine greedy_bincls_pspecs_and_rank
 
     ! calculators
 
@@ -394,18 +421,15 @@ contains
         ! assign clusters
         !$omp parallel do default(shared) private(ispec) proc_bind(close)
         do ispec = 1,self%nspecs
-            select case(self%clsinds_spec(ispec))
-                case(CLASS_GOOD,CLASS_BAD)
-                    self%dists2good(ispec) = euclid(self%pspec_good,self%pspecs(ispec,:))
-                    self%dists2bad(ispec)  = euclid(self%pspec_bad, self%pspecs(ispec,:))
-                    if( self%dists2good(ispec) <= self%dists2bad(ispec) )then ! is good
-                        if( self%clsinds_spec(ispec) == CLASS_BAD ) nchanges = nchanges + 1
-                        self%clsinds_spec(ispec) = CLASS_GOOD
-                    else                                                      ! is bad
-                        if( self%clsinds_spec(ispec) == CLASS_GOOD ) nchanges = nchanges + 1
-                        self%clsinds_spec(ispec) = CLASS_BAD
-                    endif
-            end select
+            self%dists2good(ispec) = euclid(self%pspec_good,self%pspecs(ispec,:))
+            self%dists2bad(ispec)  = euclid(self%pspec_bad, self%pspecs(ispec,:))
+            if( self%dists2good(ispec) <= self%dists2bad(ispec) )then ! is good
+                if( self%clsinds_spec(ispec) == CLASS_BAD ) nchanges = nchanges + 1
+                self%clsinds_spec(ispec) = CLASS_GOOD
+            else                                                      ! is bad
+                if( self%clsinds_spec(ispec) == CLASS_GOOD ) nchanges = nchanges + 1
+                self%clsinds_spec(ispec) = CLASS_BAD
+            endif
         end do
         !$omp end parallel do
         if( l_medoid )then
@@ -419,6 +443,31 @@ contains
         l_converged = .false.
         if( nchanges == 0 .or. iter == MAXITS) l_converged = .true.
     end subroutine kcluster_iter
+
+    subroutine greedy_min_iter( self, iter, l_converged )
+        class(pspecs), intent(inout) :: self
+        integer,       intent(inout) :: iter
+        logical,       intent(inout) :: l_converged
+        integer :: nchanges, ispec
+        nchanges = 0
+        ! assign clusters
+        !$omp parallel do default(shared) private(ispec) proc_bind(close)
+        do ispec = 1,self%nspecs
+            if( self%clsind_spec_of_closest(ispec) == CLASS_GOOD )then ! is good
+                if( self%clsinds_spec(ispec) == CLASS_BAD ) nchanges = nchanges + 1
+                self%clsinds_spec(ispec) = CLASS_GOOD
+            else                                             ! is bad
+                if( self%clsinds_spec(ispec) == CLASS_GOOD ) nchanges = nchanges + 1
+                self%clsinds_spec(ispec) = CLASS_BAD
+            endif
+        end do
+        !$omp end parallel do
+        ! update iteration counter
+        iter = iter + 1
+        ! set l_converged flag
+        l_converged = .false.
+        if( nchanges == 0 .or. iter == MAXITS) l_converged = .true.
+    end subroutine greedy_min_iter
 
     subroutine rank_pspecs( self )
         class(pspecs), intent(inout) :: self
@@ -457,6 +506,30 @@ contains
             self%order(rank)            = inds_bad(ispec)
         enddo
     end subroutine rank_pspecs
+
+    function clsind_spec_of_closest( self, ispec ) result( clsind )
+        class(pspecs), intent(inout) :: self
+        integer,       intent(in)    :: ispec
+        integer :: closest, clsind
+        closest = self%find_closest(ispec)
+        clsind  = self%clsinds_spec(closest)
+    end function clsind_spec_of_closest
+
+    function find_closest( self, ispec ) result( closest )
+        class(pspecs), intent(inout) :: self
+        integer,       intent(in)    :: ispec
+        real    :: x, dists(self%nspecs)
+        integer :: loc(1), closest, i
+        do i = 1, self%nspecs
+            if( i == ispec )then
+                dists(i) = huge(x)
+            else
+                dists(i) = self%lookup_distance(i, ispec)
+            endif
+        end do
+        loc     = minloc(dists)
+        closest = loc(1)
+    end function find_closest
 
     function lookup_distance( self, i, j ) result( d )
         class(pspecs), intent(inout) :: self
