@@ -225,6 +225,7 @@ type(simple_input_param) :: angerr
 type(simple_input_param) :: astigthreshold
 type(simple_input_param) :: astigtol
 type(simple_input_param) :: automsk
+type(simple_input_param) :: autosample
 type(simple_input_param) :: bfac
 type(simple_input_param) :: backgr_subtr
 type(simple_input_param) :: box
@@ -1376,7 +1377,8 @@ contains
         call set_param(flipgain,       'flipgain',     'multi',  'Flip the gain reference', 'Flip the gain reference along the provided axis(no|x|y|xy|yx){no}', '(no|x|y|xy|yx){no}', .false., 'no')
         call set_param(center_pdb,     'center_pdb',   'binary', 'Whether to move the PDB atomic center to the center of the box', 'Whether to move the PDB atomic center to the center of the box (yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(outside,        'outside',      'binary', 'Extract outside stage boundaries', 'Extract boxes outside the micrograph boundaries(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(vol_dim,        'vol_dim',         'num', 'Simulated volume dimensions', 'Dimensions of the simulated volume in voxels', '# dimensions of the simulated volume', .false., 0.)
+        call set_param(vol_dim,        'vol_dim',      'num',    'Simulated volume dimensions', 'Dimensions of the simulated volume in voxels', '# dimensions of the simulated volume', .false., 0.)
+        call set_param(autosample,     'autosample',   'binary', 'Automated particles sampling scheme', 'Use automated sampling scheme to select particles subsets(yes|no){no}' , '(yes|no){no}', .false., 'no')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -2119,7 +2121,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &0, 0, 0, 8, 4, 1, 4, .true.,&                                                            ! # entries in each group, requires sp_project
+        &0, 0, 0,11, 2, 1, 4, .true.,&                                                            ! # entries in each group, requires sp_project
         &gui_advanced=.false., gui_submenu_list = "cluster 2D,compute")                           ! GUI           
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2138,22 +2140,23 @@ contains
         &'(yes|no){yes}', .false., 'yes', gui_submenu="cluster 2D")
         call cluster2D_subsets%set_input('srch_ctrls', 4, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
             &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="cluster 2D")
-        call cluster2D_subsets%set_input('srch_ctrls', 5, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}',&
-             &'(no|greedy){no}', .false., 'no', gui_submenu="cluster 2D")
+        call cluster2D_subsets%set_input('srch_ctrls', 5, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(snhc|snhc_smpl|prob|prob_smpl){snhc_smpl}',&
+             &'(snhc|snhc_smpl|prob|prob_smpl){snhc_smpl}', .false., 'no', gui_submenu="cluster 2D")
         call cluster2D_subsets%set_input('srch_ctrls', 6, objfun, gui_submenu="cluster 2D")
         call cluster2D_subsets%set_input('srch_ctrls', 7, cls_init, gui_submenu="cluster2D")
         call cluster2D_subsets%set_input('srch_ctrls', 8, 'algorithm', 'binary', 'Classification algorithm',&
         &'Algorithm for 2D classification(cluster2D|abinitio2D){cluster2D}', '(cluster2D|abinitio2D){cluster2D}',&
         &.false., 'cluster2D', gui_submenu="cluster 2D")
+        call cluster2D_subsets%set_input('srch_ctrls',  9, 'nsample', 'num', 'Maximum # of particles restored per class', 'Maximum # of particles restored per class with autosampling scheme',&
+        &'max # of particles per class', .false., real(MAXPOP_CLS), gui_submenu="search", gui_advanced=.true.)
+        call cluster2D_subsets%set_input('srch_ctrls', 10, 'nsample_max', 'num', 'Maximum # of particles sampled', 'Maximum # of particles sampled with autosampling scheme',&
+        &'max # particles to sample', .false., real(MAXPOP_PTCLS), gui_submenu="search", gui_advanced=.true.)
+        call cluster2D_subsets%set_input('srch_ctrls', 11, autosample, gui_submenu="search")
         ! filter controls
         call cluster2D_subsets%set_input('filt_ctrls', 1, hp, gui_submenu="cluster 2D")
         call cluster2D_subsets%set_input('filt_ctrls', 2, 'cenlp',      'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30., gui_submenu="cluster 2D")
-        call cluster2D_subsets%set_input('filt_ctrls', 3, 'lp',         'num', 'Static low-pass limit', 'Static low-pass limit', &
-        &'low-pass limit in Angstroms', .false., 15., gui_submenu="cluster 2D")
-        call cluster2D_subsets%set_input('filt_ctrls', 4, 'lpstop',     'num', 'Resolution limit', 'Resolution limit', 'Resolution limit &
-        &in Angstroms', .false., 2.0*MAX_SMPD, gui_submenu="cluster 2D")
         ! mask controls
         call cluster2D_subsets%set_input('mask_ctrls', 1, mskdiam, gui_submenu="cluster 2D", gui_advanced=.false.)
         ! computer controls
@@ -3008,8 +3011,7 @@ contains
         &'(snhc_smpl|prob|prob_smpl){snhc_smpl}', .false., 'snhc_smpl', gui_submenu="search")
         call abinitio2D%set_input('srch_ctrls', 5, sigma_est, gui_submenu="search")
         call abinitio2D%set_input('srch_ctrls', 6, cls_init, gui_submenu="search")
-        call abinitio2D%set_input('srch_ctrls', 7, 'autosample', 'binary', 'Automated particles sampling scheme', 'Use automated sampling scheme &
-        &to select particles subsets and mometum-based class avreages restoration(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="search")
+        call abinitio2D%set_input('srch_ctrls', 7, autosample, gui_submenu="search")
         call abinitio2D%set_input('srch_ctrls', 8, 'nsample_start', 'num', 'Starting # of particles per class to sample',&
         &'Starting # of particles per class to sample', 'min # particles per class to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
         call abinitio2D%set_input('srch_ctrls', 9, 'nsample_stop',  'num', 'Maximum # of particles per class to sample',&

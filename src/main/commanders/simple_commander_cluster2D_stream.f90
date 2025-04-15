@@ -319,7 +319,10 @@ contains
         end select
         ! refinement
         select case(trim(params_glob%refine))
-        case('snhc','snhc_smpl','prob_smpl')
+        case('snhc','snhc_smpl','prob','prob_smpl')
+            if( (.not.l_abinitio2D) .and. str_has_substr(params_glob%refine,'prob') )then
+                THROW_HARD('REFINE=PROBXX only compatible with algorithm=abinitio2D')
+            endif
             call cline_cluster2D_chunk%set('refine', params_glob%refine)
             call cline_cluster2D_pool%set( 'refine', params_glob%refine)
         case DEFAULT
@@ -2821,6 +2824,7 @@ contains
         case DEFAULT
             THROW_HARD('Unsupported algorithm')
         end select
+        ! re-init with updated command-lines
         do ichunk = 1,params_glob%nchunks
             call chunks(ichunk)%kill
             call chunks(ichunk)%init(ichunk, cline_cluster2D_chunk, spproj_glob)
