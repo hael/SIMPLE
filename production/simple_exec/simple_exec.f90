@@ -66,6 +66,7 @@ type(cleanup2D_commander_hlev)              :: xcleanup2D_distr
 type(cluster2D_polar_commander)             :: xcluster2D_polar
 type(map_cavgs_selection_commander)         :: xmap_cavgs_selection
 type(map_cavgs_states_commander)            :: xmap_cavgs_states
+type(sample_classes_commander)              :: xsample_classes
 type(cluster_cavgs_commander)               :: xcluster_cavgs
 type(partition_cavgs_commander)             :: xpartition_cavgs
 type(score_ptcls_commander)                 :: xscore_ptcls
@@ -261,6 +262,8 @@ select case(trim(prg))
         call xmap_cavgs_selection%execute(cline)
     case( 'map_cavgs_states' )
         call xmap_cavgs_states%execute(cline)
+    case('sample_classes')
+        call xsample_classes%execute(cline)
     case( 'cluster_cavgs' )
         call xcluster_cavgs%execute(cline)
     case( 'partition_cavgs' )
@@ -462,7 +465,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('350d0212')
+call simple_print_git_version('fd0aa154')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

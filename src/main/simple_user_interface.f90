@@ -180,6 +180,7 @@ type(simple_program), target :: refine3D_auto
 type(simple_program), target :: refine3D_nano
 type(simple_program), target :: fractionate_movies
 type(simple_program), target :: replace_project_field
+type(simple_program), target :: sample_classes
 type(simple_program), target :: selection
 type(simple_program), target :: reproject
 type(simple_program), target :: scale
@@ -508,6 +509,7 @@ contains
         call new_refine3D_auto
         call new_refine3D_nano
         call new_replace_project_field
+        call new_sample_classes
         call new_selection
         call new_scale
         call new_scale_project
@@ -655,6 +657,7 @@ contains
         call push2prg_ptr_array(refine3D_auto)
         call push2prg_ptr_array(refine3D_nano)
         call push2prg_ptr_array(replace_project_field)
+        call push2prg_ptr_array(sample_classes)
         call push2prg_ptr_array(selection)
         call push2prg_ptr_array(scale)
         call push2prg_ptr_array(scale_project)
@@ -922,6 +925,8 @@ contains
                 ptr2prg => fractionate_movies
             case('replace_project_field')
                 ptr2prg => replace_project_field
+            case('sample_classes')
+                ptr2prg => sample_classes
             case('selection')
                 ptr2prg => selection
             case('scale')
@@ -1087,6 +1092,7 @@ contains
         write(logfhandle,'(A)') refine3D_auto%name
         write(logfhandle,'(A)') fractionate_movies%name
         write(logfhandle,'(A)') replace_project_field%name
+        write(logfhandle,'(A)') sample_classes%name
         write(logfhandle,'(A)') selection%name
         write(logfhandle,'(A)') reproject%name
         write(logfhandle,'(A)') select_%name
@@ -4947,6 +4953,38 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_replace_project_field
+
+    subroutine new_sample_classes
+        ! PROGRAM SPECIFICATION
+        call sample_classes%new(&
+        &'sample_classes',&                                                                 ! name
+        &'Probabilistic sampling of particles based on class statistics',&                  ! descr_short
+        &'is a program for probabilistic sampling of particles based on class statistics',& ! descr_long
+        &'simple_exec',&                                                                    ! executable
+        &0, 7, 0, 0, 0, 0, 1, .true.)                                                       ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call sample_classes%set_input('parm_ios', 1, prune)
+        call sample_classes%set_input('parm_ios', 2, 'nptcls_per_part', 'num',    'Number of ptcls per part to select when balancing', '# ptcls per part after balancing', '{100000}', .false., 0.0)
+        call sample_classes%set_input('parm_ios', 3, 'greedy_sampling', 'binary', 'Greedy balanced selection', 'Greedy balanced selection(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call sample_classes%set_input('parm_ios', 4, 'nparts',          'num',    'Number of partitions in balancing', '# balanced parts', '# balanced parts', .false., 1.)
+        call sample_classes%set_input('parm_ios', 5, nsample)
+        
+        call sample_classes%set_input('parm_ios', 6, 'frac_best',       'num',    'Fraction of best particles to sample from', 'Fraction of best particles to sample from(0-1)', '{0.5}', .false., 0.5)
+        call sample_classes%set_input('parm_ios', 7, 'frac_worst',      'num',    'Fraction of worst particles to sample from', 'Fraction of worst particles to sample from(0-1)', '{0.5}', .false., 0.5)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call sample_classes%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_sample_classes
 
     subroutine new_selection
         ! PROGRAM SPECIFICATION

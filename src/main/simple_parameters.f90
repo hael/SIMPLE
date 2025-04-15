@@ -103,6 +103,7 @@ type :: parameters
     character(len=3)          :: ptcl_norm ='no'
     character(len=3)          :: randomise='no'       !< whether to randomise particle order
     character(len=3)          :: rank_cavgs='yes'     !< Whether to rank class averages(yes|no)
+    character(len=3)          :: ranked_parts='yes'   !< generate ranked rather than balanced partitions in class sampling
     character(len=3)          :: refs_delin='no'      !< delinearizing reprojections of different states (yes|no){no}
     character(len=3)          :: reject_cls='no'      !< whether to reject poor classes
     character(len=3)          :: reject_mics='no'     !< whether to reject micrographs based on ctfres/icefrac
@@ -416,6 +417,7 @@ type :: parameters
     real    :: fraca=0.1           !< fraction of amplitude contrast used for fitting CTF{0.1}
     real    :: fracdeadhot=0.05    !< fraction of dead or hot pixels{0.01}
     real    :: frac_best=1.0       !< fraction of best particles to sample from per class when balance=yes
+    real    :: frac_worst=1.0      !< fraction of worst particles to sample from per class when balance=yes
     real    :: frac_min=0.7        !< minimum fraction of particles to select in autoselect_cavgs
     real    :: frac_diam=0.5       !< fraction of atomic diameter
     real    :: fracsrch=0.9        !< fraction of serach space scanned for convergence
@@ -511,6 +513,7 @@ type :: parameters
     logical :: l_fillin       = .false.
     logical :: l_greedy_smpl  = .true.
     logical :: l_frac_best    = .false.
+    logical :: l_frac_worst   = .false.
     logical :: l_update_frac  = .false.
     logical :: l_graphene     = .false.
     logical :: l_kweight      = .false.
@@ -709,6 +712,7 @@ contains
         call check_carg('qsys_partition2D',self%qsys_partition2D)
         call check_carg('randomise',      self%randomise)
         call check_carg('rank_cavgs',     self%rank_cavgs)
+        call check_carg('ranked_parts',   self%ranked_parts)
         call check_carg('real_filter',    self%real_filter)
         call check_carg('refine',         self%refine)
         call check_carg('refs_delin',     self%refs_delin)
@@ -931,6 +935,7 @@ contains
         call check_rarg('fraca',          self%fraca)
         call check_rarg('fracdeadhot',    self%fracdeadhot)
         call check_rarg('frac_best',      self%frac_best)
+        call check_rarg('frac_worst',     self%frac_worst)
         call check_rarg('frac_min',       self%frac_min)
         call check_rarg('frac_diam',      self%frac_diam)
         call check_rarg('fracsrch',       self%fracsrch)
@@ -1381,7 +1386,9 @@ contains
             endif
         endif
         ! set frac_best flag
-        self%l_frac_best = self%frac_best <= 0.99
+        self%l_frac_best  = self%frac_best  <= 0.99
+        ! set frac_worst flag
+        self%l_frac_worst = self%frac_worst <= 0.99
         ! set greedy sampling flag
         self%l_greedy_smpl = trim(self%greedy_sampling).eq.'yes'
         ! set fillin sampling flag

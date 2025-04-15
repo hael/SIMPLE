@@ -98,6 +98,7 @@ type :: oris
     procedure          :: get_proj_sample_stats
     procedure, private :: sample_balanced_1, sample_balanced_2
     generic            :: sample_balanced => sample_balanced_1, sample_balanced_2
+    procedure          :: sample_balanced_inv
     procedure          :: sample_balanced_parts
     procedure          :: balance_ptcls_within_cls
     procedure, private :: get_sample_ind
@@ -1541,6 +1542,44 @@ contains
             endif
         end do
     end subroutine sample_balanced_2
+
+    subroutine sample_balanced_inv( self, clssmp, nptcls, frac_worst, states )
+        class(oris),        intent(in)    :: self
+        type(class_sample), intent(inout) :: clssmp(:)  ! data structure for balanced sampling
+        integer,            intent(in)    :: nptcls     ! # particles to sample in total
+        real,               intent(in)    :: frac_worst ! fraction of worst scoring particles to sample from
+        integer,            intent(inout) :: states(self%n)
+        integer,            allocatable   :: pinds_rev(:), pinds2sample(:)
+        type(ran_tabu) :: rt
+        integer        :: i, j, nworst
+        ! calculate sampling size for each class
+        clssmp(:)%nsample = 0
+        do while( sum(clssmp(:)%nsample) < nptcls )
+            where( clssmp(:)%nsample < clssmp(:)%pop ) clssmp(:)%nsample = clssmp(:)%nsample + 1
+        end do
+        states = 0    
+        do i = 1, size(clssmp)
+            nworst = max(clssmp(i)%nsample, nint(frac_worst * real(clssmp(i)%pop)))
+            if( nworst == clssmp(i)%nsample )then
+                ! completely deterministic selection based on objective function value
+                do j = clssmp(i)%nsample,1,-1
+                    states(clssmp(i)%pinds(j)) = 1
+                end do
+            else
+                ! random selection from the frac_worst scoring ones
+                allocate(pinds_rev(clssmp(i)%pop), source=clssmp(i)%pinds)
+                call reverse(pinds_rev)
+                allocate(pinds2sample(nworst), source=pinds_rev(:nworst))
+                rt = ran_tabu(nworst)
+                call rt%shuffle(pinds2sample)
+                call rt%kill
+                do j = 1, clssmp(i)%nsample
+                    states(pinds2sample(j)) = 1
+                end do
+                deallocate(pinds_rev, pinds2sample)
+            endif
+        end do
+    end subroutine sample_balanced_inv
 
     subroutine sample_balanced_parts( self, clssmp, nparts, states, nptcls_per_part )
         class(oris),        intent(inout) :: self
