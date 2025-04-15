@@ -822,6 +822,14 @@ contains
         call simple_end('**** EXPORT_CAVGS NORMAL STOP ****')
     end subroutine exec_export_cavgs
 
+    ! prune
+    ! greedy_sampling
+    ! nptcls
+    ! partition
+    ! nptcls_per_part
+    ! frac_best
+    ! frac_worst
+
     subroutine exec_sample_classes( self, cline )
         class(sample_classes_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
@@ -838,12 +846,11 @@ contains
         if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',           'yes')
         if( .not. cline%defined('prune')           ) call cline%set('prune',            'no')
         if( .not. cline%defined('greedy_sampling') ) call cline%set('greedy_sampling', 'yes')
+        if( .not. cline%defined('ranked_parts')    ) call cline%set('ranked_parts',    'yes')
         call params%new(cline, silent=.true.)
         ! read project (almost all or largest segments are updated)
         call spproj%read(params%projfile)
         call spproj%update_projinfo( cline )
-        ! update nptcls
-        if(.not. cline%defined('nptcls')) params%nptcls = spproj%get_nptcls()
         ! check number of oris in field
         noris   = spproj%get_n_insegment(params%oritype)
         ncls    = spproj%os_cls2D%get_noris()
@@ -858,10 +865,18 @@ contains
             call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
         endif
         if( cline%defined('nparts') )then
-            if( cline%defined('nptcls_per_part') )then
-                call spproj%os_ptcl2D%sample_balanced_parts(clssmp, params%nparts, states, params%nptcls_per_part)
+            if( trim(params%ranked_parts).eq.'yes' )then
+                if( cline%defined('nptcls_per_part') )then
+                    call spproj%os_ptcl2D%sample_balanced_parts(clssmp, params%nparts, states, params%nptcls_per_part)
+                else
+                    call spproj%os_ptcl2D%sample_balanced_parts(clssmp, params%nparts, states)
+                endif
             else
-                call spproj%os_ptcl2D%sample_balanced_parts(clssmp, params%nparts, states)
+                if( cline%defined('nptcls_per_part') )then
+                    call spproj%os_ptcl2D%sample_balanced_parts(clssmp, params%nparts, states, params%nptcls_per_part)
+                else
+                    call spproj%os_ptcl2D%sample_balanced_parts(clssmp, params%nparts, states)
+                endif
             endif
             do ipart = 1, params%nparts
                 ! count # particles in part
@@ -889,7 +904,14 @@ contains
                 call spproj_part%kill
             end do
         else
-            call spproj%os_ptcl2D%sample_balanced(clssmp, params%nptcls, params%l_greedy_smpl, states)
+            if( .not. cline%defined('nsample') ) THROW_HARD('Need NSAMPLE at the command line for this mode of sampling')
+            if( cline%defined('frac_best') )then
+                call spproj%os_ptcl2D%sample_balanced(    clssmp, params%nsample, params%frac_best,     states)
+            else if( cline%defined('frac_worst') )then
+                call spproj%os_ptcl2D%sample_balanced_inv(clssmp, params%nsample, params%frac_worst,    states)
+            else
+                call spproj%os_ptcl2D%sample_balanced(    clssmp, params%nsample, params%l_greedy_smpl, states)
+            endif
             call spproj%os_ptcl2D%set_all('state', real(states))
             call spproj%os_ptcl3D%set_all('state', real(states))
             if( trim(params%prune).eq.'yes' ) call spproj%prune_particles
@@ -908,9 +930,7 @@ contains
         type(simple_nice_communicator)  :: nice_communicator
         type(ran_tabu)                  :: rt
         type(sp_project)                :: spproj
-        integer,            allocatable :: states(:), ptcls_in_state(:), ptcls_rnd(:)!, tmpinds(:), clsinds(:), states_map(:)
-        ! real,               allocatable :: rstates(:)
-        ! type(class_sample), allocatable :: clssmp(:), clssmp_read(:)
+        integer,            allocatable :: states(:), ptcls_in_state(:), ptcls_rnd(:)
         character(len=:),   allocatable :: projfname
         integer(kind=kind(ENUM_ORISEG)) :: iseg
         integer                         :: n_lines,fnr,noris,i,nstks,noris_in_state,ncls,icls
@@ -1209,7 +1229,7 @@ contains
             if(spproj%os_ptcl2D%get_noris() .lt. 1) THROW_HARD('No particle information present in project file')
             write(logfhandle,'(A)')'>>> RANDOMISING PARTICLE ORDER'
             randmap = generate_randomisation_map(spproj%os_ptcl2D%get_noris(), 5)
-            write(logfhandle,'(A)')'>>> REMAPPING PARTICLES'
+            write(logfhandle,'(A)')'>>> REMAPING PARTICLES'
             oris_backup = spproj%os_ptcl2D
             call spproj%os_ptcl2D%new(oris_backup%get_noris(), .true.)
             do i=1, spproj%os_ptcl2D%get_noris()

@@ -62,6 +62,7 @@ contains
     procedure            :: hybrid_bincls_pspecs_and_rank
     ! calculators
     procedure            :: smoothen_spectra
+    procedure            :: median_good_clspop
     procedure, private   :: calc_good_bad_pspec_avgs
     procedure, private   :: find_good_bad_pspec_medoids
     procedure, private   :: kcluster_iter
@@ -354,6 +355,14 @@ contains
         enddo
         !$omp end parallel do
     end subroutine smoothen_spectra
+
+    function median_good_clspop( self ) result( med )
+        class(pspecs), intent(in) :: self
+        real, allocatable :: clspops_good(:)
+        real :: med
+        clspops_good = real(pack(self%clspops, mask=self%clsinds_spec == CLASS_GOOD))
+        med = median(clspops_good)
+    end function median_good_clspop
 
     subroutine calc_good_bad_pspec_avgs( self )
         class(pspecs), intent(inout) :: self

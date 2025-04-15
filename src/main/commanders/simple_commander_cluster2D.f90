@@ -1782,7 +1782,7 @@ contains
         integer,          allocatable :: states(:)
         character(len=:), allocatable :: fname, fname_good, fname_bad, fname_ranked, ext, stk, stkpath
         integer :: icls, ispec, nspecs, nptcls, clsind, cnt_ranked, cnt_good, cnt_bad, ngood
-        real    :: frac
+        real    :: frac, pop_opt
         call cline%set('oritype', 'cls2D')
         if( .not. cline%defined('hp')       ) call cline%set('hp',            20.)
         if( .not. cline%defined('lp')       ) call cline%set('lp',             6.)
@@ -1825,6 +1825,9 @@ contains
             case DEFAULT
                 THROW_HARD('unsupported algorithm')
         end select
+        ! report optimal number of particles per class
+        pop_opt = pows%median_good_clspop()
+        write(logfhandle,*) 'Optimal # particles per class: ', pop_opt
         ! adjust good/bad boundary, if needed
         ngood = pows%get_ngood()
         frac  = pows%get_frac_good(ngood, nptcls)
