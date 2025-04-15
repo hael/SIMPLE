@@ -1786,7 +1786,7 @@ contains
         call cline%set('oritype', 'cls2D')
         if( .not. cline%defined('hp')       ) call cline%set('hp',            20.)
         if( .not. cline%defined('lp')       ) call cline%set('lp',             6.)
-        if( .not. cline%defined('frac_min') ) call cline%set('frac_min',      0.7)
+        if( .not. cline%defined('frac_min') ) call cline%set('frac_min',      0.6)
         if( .not. cline%defined('mkdir')    ) call cline%set('mkdir',       'yes')
         if( .not. cline%defined('prune')    ) call cline%set('prune',        'no')
         if( .not. cline%defined('algorithm')) call cline%set('algorithm', 'kmean')
@@ -1818,6 +1818,8 @@ contains
                 call pows%kmeans_bincls_pspecs_and_rank
             case('kmed')
                 call pows%kmedoids_bincls_pspecs_and_rank
+            case('greedy')
+                call pows%greedy_bincls_pspecs_and_rank
             case('hybrid')
                 call pows%hybrid_bincls_pspecs_and_rank
             case DEFAULT

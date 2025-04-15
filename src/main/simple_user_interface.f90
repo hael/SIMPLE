@@ -3251,7 +3251,7 @@ contains
         &'Automatically selectes class averages based on signal stats and reports to project',& ! descr_short
         &'is a program for automated class average selection reported to the SIMPLE project',&  ! descr_long
         &'simple_exec',&                                                                        ! executable
-        &0, 2, 0, 0, 2, 1, 0, .true.)                                                           ! # entries in each group, requires sp_project
+        &0, 2, 0, 1, 2, 1, 0, .true.)                                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -3261,7 +3261,7 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        ! <empty>
+        call autoselect_cavgs%set_input('srch_ctrls', 1, 'algorithm', 'multi', 'Clustering algorithm', 'Clustering algorithm(kmean|kmed|hybrid|greedy){kmean}','(kmean|kmed|hybrid|greedy){kmean}', .false., 'kmean')
         ! filter controls
         call autoselect_cavgs%set_input('filt_ctrls', 1, hp)
         call autoselect_cavgs%set_input('filt_ctrls', 2, lp)
