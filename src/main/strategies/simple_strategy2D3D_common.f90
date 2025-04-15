@@ -993,8 +993,8 @@ contains
                     int2str_pad(params_glob%part,params_glob%numlen))
             else
                 ! global volume name update
-                allocate(recname, source=VOL_FBODY//int2str_pad(s,2))
-                allocate(volname, source=recname//params_glob%ext)
+                recname = trim(VOL_FBODY)//int2str_pad(s,2)
+                volname = recname//params_glob%ext
                 if( params_glob%l_filemsk .and. params_glob%l_envfsc )then
                     call build_glob%eorecvols(s)%set_automsk(.true.)
                 endif
