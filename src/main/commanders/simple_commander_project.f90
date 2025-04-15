@@ -26,6 +26,7 @@ public :: import_boxes_commander
 public :: import_particles_commander
 public :: import_cavgs_commander
 public :: export_cavgs_commander
+public :: sample_classes_commander
 public :: selection_commander
 public :: replace_project_field_commander
 public :: scale_project_commander_distr
@@ -91,6 +92,11 @@ type, extends(commander_base) :: export_cavgs_commander
   contains
     procedure :: execute      => exec_export_cavgs
 end type export_cavgs_commander
+
+type, extends(commander_base) :: sample_classes_commander
+  contains
+    procedure :: execute      => exec_sample_classes
+end type sample_classes_commander
 
 type, extends(commander_base) :: selection_commander
   contains
@@ -816,6 +822,84 @@ contains
         call simple_end('**** EXPORT_CAVGS NORMAL STOP ****')
     end subroutine exec_export_cavgs
 
+    subroutine exec_sample_classes( self, cline )
+        class(sample_classes_commander), intent(inout) :: self
+        class(cmdline),                  intent(inout) :: cline
+        type(parameters)                :: params
+        type(sp_project)                :: spproj, spproj_part
+        integer,            allocatable :: states(:), tmpinds(:), clsinds(:), states_map(:)
+        real,               allocatable :: rstates(:)
+        type(class_sample), allocatable :: clssmp(:), clssmp_read(:)
+        character(len=:),   allocatable :: projfname
+        integer(kind=kind(ENUM_ORISEG)) :: iseg
+        integer                         :: noris,i,noris_in_state,ncls,icls
+        integer                         :: state,nstates,nptcls,ipart
+        call cline%set('oritype', 'cls2D')
+        if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',           'yes')
+        if( .not. cline%defined('prune')           ) call cline%set('prune',            'no')
+        if( .not. cline%defined('greedy_sampling') ) call cline%set('greedy_sampling', 'yes')
+        call params%new(cline, silent=.true.)
+        ! read project (almost all or largest segments are updated)
+        call spproj%read(params%projfile)
+        call spproj%update_projinfo( cline )
+        ! update nptcls
+        if(.not. cline%defined('nptcls')) params%nptcls = spproj%get_nptcls()
+        ! check number of oris in field
+        noris   = spproj%get_n_insegment(params%oritype)
+        ncls    = spproj%os_cls2D%get_noris()
+        nptcls  = spproj%os_ptcl2D%get_noris()
+        tmpinds = (/(icls,icls=1,ncls)/)
+        rstates = spproj%os_cls2D%get_all('state')
+        clsinds = pack(tmpinds, mask=rstates > 0.5)
+        allocate(states(nptcls), states_map(nptcls), source=0)
+        if( trim(params%partition).eq.'yes' )then
+            call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp, label='cluster')
+        else
+            call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
+        endif
+        if( cline%defined('nparts') )then
+            if( cline%defined('nptcls_per_part') )then
+                call spproj%os_ptcl2D%sample_balanced_parts(clssmp, params%nparts, states, params%nptcls_per_part)
+            else
+                call spproj%os_ptcl2D%sample_balanced_parts(clssmp, params%nparts, states)
+            endif
+            do ipart = 1, params%nparts
+                ! count # particles in part
+                write(logfhandle,*) '# particles in part '//int2str(ipart)//': ', count(states == ipart)
+                ! copy project
+                projfname = BALPROJPARTFBODY//int2str(ipart)//'.simple'
+                call simple_copy_file(trim(params%projfile), projfname)
+                call spproj_part%read(projfname)
+                ! create state mapping
+                where(states == ipart)
+                    states_map = 1
+                elsewhere
+                    states_map = 0
+                endwhere
+                ! communicate state mapping to copied project
+                call spproj_part%os_ptcl2D%set_all('state', real(states_map))
+                call spproj_part%os_ptcl3D%set_all('state', real(states_map))
+                ! prune
+                call spproj_part%prune_particles
+                ! map ptcl states to classes
+                call spproj_part%map_ptcls_state_to_cls
+                ! write project
+                call spproj_part%write(projfname)
+                ! destruct
+                call spproj_part%kill
+            end do
+        else
+            call spproj%os_ptcl2D%sample_balanced(clssmp, params%nptcls, params%l_greedy_smpl, states)
+            call spproj%os_ptcl2D%set_all('state', real(states))
+            call spproj%os_ptcl3D%set_all('state', real(states))
+            if( trim(params%prune).eq.'yes' ) call spproj%prune_particles
+            call spproj%map_ptcls_state_to_cls
+        endif
+        ! final full write
+        call spproj%write(params%projfile)
+        call simple_end('**** SAMPLE_CLASSES NORMAL STOP ****')
+    end subroutine exec_sample_classes
+
     subroutine exec_selection( self, cline )
         use simple_sp_project, only: oritype2segment
         class(selection_commander), intent(inout) :: self
@@ -823,10 +907,10 @@ contains
         type(parameters)                :: params
         type(simple_nice_communicator)  :: nice_communicator
         type(ran_tabu)                  :: rt
-        type(sp_project)                :: spproj, spproj_part
-        integer,            allocatable :: states(:), ptcls_in_state(:), ptcls_rnd(:), tmpinds(:), clsinds(:), states_map(:)
-        real,               allocatable :: rstates(:)
-        type(class_sample), allocatable :: clssmp(:), clssmp_read(:)
+        type(sp_project)                :: spproj
+        integer,            allocatable :: states(:), ptcls_in_state(:), ptcls_rnd(:)!, tmpinds(:), clsinds(:), states_map(:)
+        ! real,               allocatable :: rstates(:)
+        ! type(class_sample), allocatable :: clssmp(:), clssmp_read(:)
         character(len=:),   allocatable :: projfname
         integer(kind=kind(ENUM_ORISEG)) :: iseg
         integer                         :: n_lines,fnr,noris,i,nstks,noris_in_state,ncls,icls
@@ -834,18 +918,15 @@ contains
         logical                         :: l_ctfres, l_icefrac, l_append
         class(oris), pointer :: pos => NULL()
         l_append = .false.
-        if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',           'yes')
-        if( .not. cline%defined('prune')           ) call cline%set('prune',            'no')
-        if( .not. cline%defined('append')          ) call cline%set('append',           'no')
-        if( .not. cline%defined('greedy_sampling') ) call cline%set('greedy_sampling', 'yes')
+        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('prune')  ) call cline%set('prune',  'no')
+        if( .not. cline%defined('append') ) call cline%set('append', 'no')
         call params%new(cline, silent=.true.)
         ! nice communicator init
         call nice_communicator%init(params%niceprocid, params%niceserver)
         call nice_communicator%cycle()
         if(params%append .eq. 'yes') l_append = .true.
         iseg = oritype2segment(trim(params%oritype))
-        if(.not. iseg .eq. CLS2D_SEG .and. cline%defined('balance'))     THROW_HARD("balance can only be used with oritype=cls2D")
-        if(cline%defined('nptcls') .and. .not. cline%defined('balance')) THROW_HARD("nptcls can only be used with balance")
         ! read project (almost all or largest segments are updated)
         call spproj%read(params%projfile)
         call spproj%update_projinfo( cline )
@@ -944,101 +1025,49 @@ contains
             endif
             call fclose(fnr)
         endif
-        if( params%balance .eq. 'yes') then
-            ncls    = spproj%os_cls2D%get_noris()
-            nptcls  = spproj%os_ptcl2D%get_noris()
-            tmpinds = (/(icls,icls=1,ncls)/)
-            rstates = spproj%os_cls2D%get_all('state')
-            clsinds = pack(tmpinds, mask=rstates > 0.5)
-            allocate(states(nptcls), states_map(nptcls), source=0)
-            if( trim(params%partition).eq.'yes' )then
-                call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp, label='cluster')
-            else
-                call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
-            endif
-            if( cline%defined('nparts') )then
-                if( cline%defined('nptcls_per_part') )then
-                    call spproj%os_ptcl2D%sample_balanced_parts(clssmp, params%nparts, states, params%nptcls_per_part)
-                else
-                    call spproj%os_ptcl2D%sample_balanced_parts(clssmp, params%nparts, states)
+        ! updates relevant segments
+        select case(iseg)
+            case(MIC_SEG)
+                call spproj%report_state2mic(states)
+                nstks = spproj%os_stk%get_noris()
+                if( nstks > 0 )then
+                    call spproj%report_state2stk(states)
                 endif
-                do ipart = 1, params%nparts
-                    ! count # particles in part
-                    write(logfhandle,*) '# particles in part '//int2str(ipart)//': ', count(states == ipart)
-                    ! copy project
-                    projfname = BALPROJPARTFBODY//int2str(ipart)//'.simple'
-                    call simple_copy_file(trim(params%projfile), projfname)
-                    call spproj_part%read(projfname)
-                    ! create state mapping
-                    where(states == ipart)
-                        states_map = 1
-                    elsewhere
-                        states_map = 0
-                    endwhere
-                    ! communicate state mapping to copied project
-                    call spproj_part%os_ptcl2D%set_all('state', real(states_map))
-                    call spproj_part%os_ptcl3D%set_all('state', real(states_map))
-                    ! prune
-                    call spproj_part%prune_particles
-                    ! map ptcl states to classes
-                    call spproj_part%map_ptcls_state_to_cls
-                    ! write project
-                    call spproj_part%write(projfname)
-                    ! destruct
-                    call spproj_part%kill
-                end do
-            else
-                call spproj%os_ptcl2D%sample_balanced(clssmp, params%nptcls, params%l_greedy_smpl, states)
+            case(STK_SEG)
+                call spproj%report_state2stk(states)
+            case(CLS2D_SEG)
+                if( trim(params%partition).eq.'yes' )then
+                    ! states are partitions of classes
+                    call spproj%os_cls2D%set_all('cluster', real(states))
+                    where( states /= 0 ) states = 1
+                    call spproj%os_cls2D%set_all('state', real(states))
+                    ! map partitions to ptcl2D/3D
+                    call spproj%map_cls2D_flag_to_ptcls('cluster')
+                else
+                    call spproj%os_cls2D%set_all('state', real(states))
+                    ! map states to ptcl2D/3D & cls3D segments
+                    call spproj%map2ptcls_state(append=l_append)
+                endif
+                if(params%write_cavgs .eq. 'yes') then
+                    call spproj%set_cavgs_thumb(trim(params%projfile))
+                end if
+            case(CLS3D_SEG)
+                if(spproj%os_cls3D%get_noris() == spproj%os_cls2D%get_noris())then
+                    call spproj%os_cls2D%set_all('state', real(states))
+                    ! map states to ptcl2D/3D & cls3D segments
+                    call spproj%map2ptcls_state(append=l_append)
+                else
+                    ! class averages
+                    call spproj%os_cls3D%set_all('state', real(states))
+                endif
+            case(PTCL2D_SEG,PTCL3D_SEG)
                 call spproj%os_ptcl2D%set_all('state', real(states))
                 call spproj%os_ptcl3D%set_all('state', real(states))
                 if( trim(params%prune).eq.'yes' ) call spproj%prune_particles
                 call spproj%map_ptcls_state_to_cls
-            endif
-        else
-            ! updates relevant segments
-            select case(iseg)
-                case(MIC_SEG)
-                    call spproj%report_state2mic(states)
-                    nstks = spproj%os_stk%get_noris()
-                    if( nstks > 0 )then
-                        call spproj%report_state2stk(states)
-                    endif
-                case(STK_SEG)
-                    call spproj%report_state2stk(states)
-                case(CLS2D_SEG)
-                    if( trim(params%partition).eq.'yes' )then
-                        ! states are partitions of classes
-                        call spproj%os_cls2D%set_all('cluster', real(states))
-                        where( states /= 0 ) states = 1
-                        call spproj%os_cls2D%set_all('state', real(states))
-                        ! map partitions to ptcl2D/3D
-                        call spproj%map_cls2D_flag_to_ptcls('cluster')
-                    else
-                        call spproj%os_cls2D%set_all('state', real(states))
-                        ! map states to ptcl2D/3D & cls3D segments
-                        call spproj%map2ptcls_state(append=l_append)
-                    endif
-                    if(params%write_cavgs .eq. 'yes') then
-                        call spproj%set_cavgs_thumb(trim(params%projfile))
-                    end if
-                case(CLS3D_SEG)
-                    if(spproj%os_cls3D%get_noris() == spproj%os_cls2D%get_noris())then
-                        call spproj%os_cls2D%set_all('state', real(states))
-                        ! map states to ptcl2D/3D & cls3D segments
-                        call spproj%map2ptcls_state(append=l_append)
-                    else
-                        ! class averages
-                        call spproj%os_cls3D%set_all('state', real(states))
-                    endif
-                case(PTCL2D_SEG,PTCL3D_SEG)
-                    call spproj%os_ptcl2D%set_all('state', real(states))
-                    call spproj%os_ptcl3D%set_all('state', real(states))
-                    if( trim(params%prune).eq.'yes' ) call spproj%prune_particles
-                    call spproj%map_ptcls_state_to_cls
-                case DEFAULT
-                    THROW_HARD('Cannot report selection to segment '//trim(params%oritype)//'; exec_selection')
-            end select        
-        endif
+            case DEFAULT
+                THROW_HARD('Cannot report selection to segment '//trim(params%oritype)//'; exec_selection')
+        end select        
         ! final full write
         call spproj%write(params%projfile)
         call nice_communicator%terminate(export_project=spproj)
