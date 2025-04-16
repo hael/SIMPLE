@@ -398,7 +398,7 @@ contains
         endif
         ! make master parameters
         l_stream = .false.
-        if(cline%defined('stream')) l_stream = trim(cline%get_carg('stream')).eq.'yes'
+        if( cline%defined('stream') ) l_stream = trim(cline%get_carg('stream')).eq.'yes'
         call cline%delete('stream')
         call params%new(cline)
         call cline%set('mkdir', 'no')

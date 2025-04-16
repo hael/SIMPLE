@@ -822,14 +822,6 @@ contains
         call simple_end('**** EXPORT_CAVGS NORMAL STOP ****')
     end subroutine exec_export_cavgs
 
-    ! prune
-    ! greedy_sampling
-    ! nptcls
-    ! partition
-    ! nptcls_per_part
-    ! frac_best
-    ! frac_worst
-
     subroutine exec_sample_classes( self, cline )
         class(sample_classes_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
@@ -837,8 +829,8 @@ contains
         type(sp_project)                :: spproj, spproj_part
         integer,            allocatable :: states(:), tmpinds(:), clsinds(:), states_map(:)
         real,               allocatable :: rstates(:)
-        type(class_sample), allocatable :: clssmp(:), clssmp_read(:)
-        character(len=:),   allocatable :: projfname
+        type(class_sample), allocatable :: clssmp(:)
+        character(len=:),   allocatable :: projfname, fbody
         integer(kind=kind(ENUM_ORISEG)) :: iseg
         integer                         :: noris,i,noris_in_state,ncls,icls
         integer                         :: state,nstates,nptcls,ipart
@@ -867,22 +859,24 @@ contains
         if( cline%defined('nparts') )then
             if( trim(params%ranked_parts).eq.'yes' )then
                 if( cline%defined('nptcls_per_part') )then
-                    call spproj%os_ptcl2D%sample_balanced_parts(clssmp, params%nparts, states, params%nptcls_per_part)
+                    call spproj%os_ptcl2D%sample_ranked_parts(clssmp, params%nparts, states, params%nptcls_per_part)
                 else
-                    call spproj%os_ptcl2D%sample_balanced_parts(clssmp, params%nparts, states)
+                    call spproj%os_ptcl2D%sample_ranked_parts(clssmp, params%nparts, states)
                 endif
+                fbody = RANKPROJPARTFBODY
             else
                 if( cline%defined('nptcls_per_part') )then
                     call spproj%os_ptcl2D%sample_balanced_parts(clssmp, params%nparts, states, params%nptcls_per_part)
                 else
                     call spproj%os_ptcl2D%sample_balanced_parts(clssmp, params%nparts, states)
                 endif
+                fbody = BALPROJPARTFBODY
             endif
             do ipart = 1, params%nparts
                 ! count # particles in part
                 write(logfhandle,*) '# particles in part '//int2str(ipart)//': ', count(states == ipart)
                 ! copy project
-                projfname = BALPROJPARTFBODY//int2str(ipart)//'.simple'
+                projfname = fbody//int2str(ipart)//'.simple'
                 call simple_copy_file(trim(params%projfile), projfname)
                 call spproj_part%read(projfname)
                 ! create state mapping

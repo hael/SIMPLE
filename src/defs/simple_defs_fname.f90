@@ -63,6 +63,7 @@ character(len=*), parameter :: ITERSTATS_FILE       = 'simple_iter_stats'//trim(
 ! SAMPLING
 character(len=*), parameter :: CLASS_SAMPLING_FILE  = 'clssmp.bin'
 character(len=*), parameter :: BALPROJPARTFBODY     = 'balanced_xvalid_group'
+character(len=*), parameter :: RANKPROJPARTFBODY    = 'rank_group'
 ! PREPROCESSING
 character(len=*), parameter :: PICKREFS_FBODY       = 'pickrefs'
 character(len=*), parameter :: EXTRACT_STK_FBODY    = 'ptcls_from_'
