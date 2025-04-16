@@ -2875,6 +2875,12 @@ contains
                 write(logfhandle,'(A)')'>>> ALL CHUNKS HAVE CONVERGED'
                 exit
             endif
+            if( cline%defined('maxnchunks') )then
+                if( tot_nchunks_imported >= params%maxnchunks )then
+                    write(logfhandle,'(A)')'>>> ENOUGH CHUNKS HAVE CONVERGED'
+                    exit
+                endif
+            endif
             call sleep(WAITTIME)
         end do
         ! cleanup
