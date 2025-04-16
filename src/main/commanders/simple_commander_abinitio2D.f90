@@ -553,7 +553,7 @@ contains
         type(parameters)                 :: params
         type(sp_project)                 :: spproj, work_proj
         integer, allocatable             :: states_autosel(:), tmpinds(:), states_cavgs(:), clsinds(:)
-        integer, allocatable             :: pinds(:), states_prank(:), pinds_bad_ptcls(:), pinds_good_ptcls(:)
+        integer, allocatable             :: pinds(:), states_prank(:), pinds_bad_ptcls(:), pinds_good_ptcls(:), states_autosel_inv(:)
         type(class_sample),  allocatable :: clssmp(:)
         character(len=*),      parameter :: work_projfile = 'abinitio_cleanup2D_tmpproj.simple'
         type(cmdline)                    :: cline_autosel_cavgs
