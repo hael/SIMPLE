@@ -1216,7 +1216,10 @@ contains
                 self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + pft_ptcl
             endif
         enddo
-        if( self%with_ctf ) self%pfts_refs_even = self%pfts_refs_even / ctf2
+        if( self%with_ctf )then
+            where( abs(ctf2) > TINY ) self%pfts_refs_even = self%pfts_refs_even / ctf2
+            where( abs(ctf2) < TINY ) self%pfts_refs_even = 0.
+        endif
         self%pfts_refs_odd = self%pfts_refs_even
     end subroutine gen_polar_refs
 
