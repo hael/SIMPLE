@@ -3114,7 +3114,7 @@ contains
         class(cmdline),                   intent(inout) :: cline
         integer,          allocatable :: pinds(:)
         real,             allocatable :: sigma2_noise(:,:)
-        type(image),      allocatable :: tmp_imgs(:), ref_imgs(:)
+        type(image),      allocatable :: tmp_imgs(:), refs_even(:), refs_odd(:)
         type(polarft_corrcalc)        :: pftcc
         type(builder)                 :: build
         type(parameters)              :: params
@@ -3156,6 +3156,8 @@ contains
         allocate( sigma2_noise(params_glob%kfromto(1):params_glob%kfromto(2), nptcls), source=1.0 )
         call pftcc%assign_sigma2_noise(sigma2_noise)
         ! Build polar particle images
+        call build_glob%spproj_field%partition_eo
+        call build_glob%spproj_field%set_all2single('state', 1.)
         call build_batch_particles(pftcc, nptcls, pinds, tmp_imgs)
         ! randomize oris
         if( trim(params_glob%continue) .eq. 'no' )then
@@ -3163,14 +3165,12 @@ contains
             call build_glob%spproj_field%zero_shifts
         endif
         call eulprob_obj%new(pinds)
-        allocate(ref_imgs(params_glob%nspace))
+        allocate(refs_even(params_glob%nspace),refs_odd(params_glob%nspace))
         call tmp_oris%copy(build_glob%spproj_field)
         print *, 'CARTESIAN ALIGNMENT IN PROGRESS'
         params%ncls = params%nspace
         params%frcs = trim(FRCS_FILE)
         call build_glob%clsfrcs%new(params%ncls, params%box_crop, params%smpd_crop, params%nstates)
-        call build_glob%spproj_field%partition_eo
-        call build_glob%spproj_field%set_all2single('state', 1.)
         do iter = 1, params_glob%maxits
             print *, 'ITER = ', iter
             ! cartesian cavgs
@@ -3235,10 +3235,13 @@ contains
             call pftcc%gen_polar_refs(build_glob%eulspace, build_glob%spproj_field)
             call pftcc%memoize_refs
             ! for visualization of polar cavgs
-            call pftcc%prefs_to_cartesian(ref_imgs)
+            call pftcc%prefs_to_cartesian(refs_even, is_even=.true.)
+            call pftcc%prefs_to_cartesian(refs_odd,  is_even=.false.)
             do iref = 1, params_glob%nspace
-                call ref_imgs(iref)%write('polar_cavgs'//int2str(iter)//'.mrc', iref)
-                call ref_imgs(iref)%kill
+                call refs_even(iref)%write('even_polar_cavgs'//int2str(iter)//'.mrc', iref)
+                call refs_even(iref)%kill
+                call refs_odd(iref)%write('odd_polar_cavgs'//int2str(iter)//'.mrc', iref)
+                call refs_odd(iref)%kill
             enddo
             ! update sigmas and memoize_sqsum_ptcl with updated sigmas
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,orientation,iref,sh)

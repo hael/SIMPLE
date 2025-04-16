@@ -727,15 +727,19 @@ contains
         cmat(1,c) = (0.0,0.0)
     end subroutine polar2cartesian_2
 
-    subroutine prefs_to_cartesian( self, cavgs, box_in )
+    subroutine prefs_to_cartesian( self, cavgs, box_in, is_even )
         use simple_image
         class(polarft_corrcalc), intent(in)    :: self
         type(image),             intent(inout) :: cavgs(self%nrefs)
         integer, optional,       intent(out)   :: box_in
+        logical, optional,       intent(in)    :: is_even
         integer, allocatable :: norm(:,:)
         complex, allocatable :: cmat(:,:)
         complex :: comp
         integer :: k,c,irot,physh,physk,box,iref
+        logical :: l_even
+        l_even = .true.
+        if( present(is_even) ) l_even = is_even
         box = 2*self%kfromto(2)
         if( present(box_in) ) box = box_in
         c   = box/2+1
@@ -750,7 +754,11 @@ contains
                     physh = nint(self%polar(irot,k)) + 1
                     physk = nint(self%polar(irot+self%nrots,k)) + c
                     if( physk > box ) cycle
-                    comp              = self%pfts_refs_even(irot,k,iref)
+                    if( l_even )then
+                        comp          = self%pfts_refs_even(irot,k,iref)
+                    else
+                        comp          = self%pfts_refs_odd( irot,k,iref)
+                    endif
                     cmat(physh,physk) = cmat(physh,physk) + comp
                     norm(physh,physk) = norm(physh,physk) + 1
                 end do
@@ -1188,18 +1196,21 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         type(oris),              intent(in)    :: ref_space
         type(oris),              intent(in)    :: ptcl_space
-        complex,     allocatable :: cmat(:,:)
-        complex(sp), pointer     :: pft_ptcl(:,:), shmat(:,:)
-        real(sp),    pointer     :: rctf(:,:)
+        complex(sp), pointer :: pft_ptcl(:,:), shmat(:,:)
+        real(sp),    pointer :: rctf(:,:)
         type(ori) :: orientation
-        integer   :: box, i, k, iref, irot, ithr, iptcl
-        real      :: ctf2(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs), sh(2)
+        integer   :: i, k, iref, irot, ithr, iptcl
+        real(dp)  :: numer, denom1, denom2
+        real      :: ctf2_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs), sh(2),&
+                    &ctf2_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs), frc(self%kfromto(1):self%kfromto(2))
         self%pfts_refs_even = complex(0., 0.)
-        ctf2     = 0.
-        ithr     = omp_get_thread_num() + 1
-        shmat    => self%heap_vars(ithr)%shmat
-        pft_ptcl => self%heap_vars(ithr)%pft_ref
-        rctf     => self%heap_vars(ithr)%pft_r
+        self%pfts_refs_odd  = complex(0., 0.)
+        ctf2_even = 0.
+        ctf2_odd  = 0.
+        ithr      = omp_get_thread_num() + 1
+        shmat     => self%heap_vars(ithr)%shmat
+        pft_ptcl  => self%heap_vars(ithr)%pft_ref
+        rctf      => self%heap_vars(ithr)%pft_r
         do iptcl = self%pfromto(1), self%pfromto(2)
             call ptcl_space%get_ori(iptcl, orientation)
             i    = self%pinds(iptcl)
@@ -1210,17 +1221,39 @@ contains
             call self%rotate_ptcl(self%pfts_ptcls(:,:,i) * shmat, irot, pft_ptcl)
             if( self%with_ctf )then
                 call self%rotate_ctf(iptcl, irot, rctf)
-                self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + pft_ptcl * cmplx(rctf)
-                ctf2(:,:,iref)                = ctf2(:,:,iref)                + rctf**2
+                if( self%iseven(i) )then
+                    self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + pft_ptcl * cmplx(rctf)
+                    ctf2_even(:,:,iref)           = ctf2_even(:,:,iref)           + rctf**2
+                else
+                    self%pfts_refs_odd(:,:,iref)  = self%pfts_refs_odd(:,:,iref)  + pft_ptcl * cmplx(rctf)
+                    ctf2_odd(:,:,iref)            = ctf2_odd(:,:,iref)            + rctf**2
+                endif
             else
-                self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + pft_ptcl
+                if( self%iseven(i) )then
+                    self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + pft_ptcl
+                else
+                    self%pfts_refs_odd(:,:,iref)  = self%pfts_refs_odd(:,:,iref)  + pft_ptcl
+                endif
             endif
         enddo
         if( self%with_ctf )then
-            where( abs(ctf2) > TINY ) self%pfts_refs_even = self%pfts_refs_even / ctf2
-            where( abs(ctf2) < TINY ) self%pfts_refs_even = 0.
+            where( abs(ctf2_even) > TINY ) self%pfts_refs_even = self%pfts_refs_even / ctf2_even
+            where( abs(ctf2_even) < TINY ) self%pfts_refs_even = 0.
+            where( abs(ctf2_odd)  > TINY ) self%pfts_refs_odd  = self%pfts_refs_odd  / ctf2_odd
+            where( abs(ctf2_odd)  < TINY ) self%pfts_refs_odd  = 0.
         endif
-        self%pfts_refs_odd = self%pfts_refs_even
+        ! FRC filtering
+        ! do iref = 1, self%nrefs
+        !     do k = self%kfromto(1), self%kfromto(2)
+        !         numer  = sum(real(self%pfts_refs_even(:,k,iref) * conjg(self%pfts_refs_odd(:,k,iref)), kind=dp))
+        !         denom1 = sum( csq(self%pfts_refs_even(:,k,iref)))
+        !         denom2 = sum( csq(self%pfts_refs_odd( :,k,iref)))
+        !         frc(k) = real(numer / sqrt(denom1*denom2))
+        !         self%pfts_refs_even(:,k,iref) = self%pfts_refs_even(:,k,iref) * frc(k)
+        !         self%pfts_refs_odd( :,k,iref) = self%pfts_refs_odd( :,k,iref) * frc(k)
+        !         if( iref == 1 .and. k == self%kfromto(1) + 2 )print *, 'FRC = ', frc(k)
+        !     enddo
+        ! enddo
     end subroutine gen_polar_refs
 
     subroutine create_polar_absctfmats( self, spproj, oritype, pfromto )
