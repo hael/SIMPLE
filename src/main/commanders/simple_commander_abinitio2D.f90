@@ -552,12 +552,12 @@ contains
         ! others
         type(parameters)                 :: params
         type(sp_project)                 :: spproj, work_proj
-        integer, allocatable             :: states_autosel(:), tmpinds(:), states_cavgs(:), clsinds(:)
-        integer, allocatable             :: pinds(:), states_prank(:), pinds_bad_ptcls(:), pinds_good_ptcls(:), states_autosel_inv(:)
+        integer, allocatable             :: states_autosel(:), states_autosel_inv(:), tmpinds(:), states_cavgs(:), clsinds(:)
+        integer, allocatable             :: pinds(:), states_prank(:), pinds_bad_ptcls(:), pinds_good_ptcls(:), 
         type(class_sample),  allocatable :: clssmp(:)
         character(len=*),      parameter :: work_projfile = 'abinitio_cleanup2D_tmpproj.simple'
         type(cmdline)                    :: cline_autosel_cavgs
-        integer :: s, ncls, nptcls, icls
+        integer :: nptcls
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         ! master parameters
         call params%new(cline)
@@ -568,33 +568,18 @@ contains
         call spproj%read(params%projfile)
         ! make work project
         call simple_copy_file(params%projfile, work_projfile)
-        ! make automatic selection
+        ! make automatic class selection
         call cline_autosel_cavgs%set('mskdiam',  params%mskdiam)
         call cline_autosel_cavgs%set('projfile', work_projfile)
         call cline_autosel_cavgs%set('prune',    'no')
         call xautoselect_cavgs%execute_safe(cline_autosel_cavgs)
         call work_proj%read(work_projfile)
-        states_autosel = work_proj%os_ptcl2D%get_all_asint('state')
-
-        print *, 'count(states_autosel.eq.0): ', count(states_autosel.eq.0)
-        print *, 'count(states_autosel.eq.1): ', count(states_autosel.eq.1)
-
-        pinds          = work_proj%os_ptcl2D%get_all_asint('pind')
-        ! create class sampling data structure
-        ncls           = work_proj%os_cls2D%get_noris()
-        nptcls         = work_proj%os_ptcl2D%get_noris()
-        tmpinds        = (/(icls,icls=1,ncls)/)
-        states_cavgs   = work_proj%os_cls2D%get_all_asint('state')
-        clsinds        = pack(tmpinds, mask=states_cavgs > 0)
-
-        print *, 'ncls:          ', ncls
-        print *, 'size(clsinds): ', size(clsinds)
-
+        clsinds = work_proj%get_selected_clsinds()
         call work_proj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
-        ! divide into two parts
-        allocate(states_prank(nptcls), states_autosel_inv(nptcls), source=0)
+        ! divide into two parts by splitting good classes into top/bottom ranked particles
+        nptcls  = work_proj%get_nptcls()
+        allocate(states_prank(nptcls), states_autosel(nptcls), states_autosel_inv(nptcls), source=0)
         call work_proj%os_ptcl2D%sample_ranked_parts(clssmp, 2, states_prank)
-
         where( states_prank.eq.1 )
             states_autosel     = 1
             states_autosel_inv = 0
@@ -602,19 +587,7 @@ contains
             states_autosel     = 0
             states_autosel_inv = 0
         endwhere
-        
-
-        ! pinds_good_ptcls = pack(pinds, mask=states_prank.eq.1)
-        ! pinds_bad_ptcls  = pack(pinds, mask=states_prank.eq.0.or.states_prank.eq.2)
-
-        print *, 'nptcls:                    ', nptcls
-        print *, 'size(pinds_good_ptcls):    ', size(pinds_good_ptcls)
-        print *, 'size(pinds_bad_ptcls):     ', size(pinds_bad_ptcls)
-        print *, 'count(states_autosel == 0) ', count(states_autosel == 0)
-        print *, 'count(states_autosel == 1) ', count(states_autosel == 1)
-
-
-        deallocate(tmpinds, states_cavgs, clsinds)
+        deallocate(clsinds)
         call simple_end('**** SIMPLE_ABINITIO_CLEANUP2D NORMAL STOP ****')
     end subroutine exec_abinitio_cleanup2D
 

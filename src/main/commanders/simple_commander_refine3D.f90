@@ -136,7 +136,7 @@ contains
         if( .not. cline%defined('update_frac') ) call cline%set('update_frac',    0.1) ! 4 now, needs testing/different logic (nsample?)
         if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',       'yes') ! better map with ml_reg='yes'
         if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'no') ! works, should be considered if the defaults are not satisfactory
-        if( .not. cline%defined('maxits')      ) call cline%set('maxits',          50) ! ~5 passes over particles, which should be sufficient
+        if( .not. cline%defined('maxits')      ) call cline%set('maxits',          20) ! ~2 passes over particles, sufficient ?
         call params%new(cline)
         call cline%set('maxits_glob', params%maxits) ! needed for correct lambda annealing
         call cline%set('mkdir', 'no') ! to avoid nested directory structure

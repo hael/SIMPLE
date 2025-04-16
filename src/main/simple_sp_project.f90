@@ -96,6 +96,7 @@ contains
     procedure          :: ptr2oritype
     procedure          :: is_virgin_field
     procedure          :: get_mic2stk_inds
+    procedure          :: get_selected_clsinds
     ! setters
     procedure          :: copy
     procedure          :: set_cavgs_thumb
@@ -2642,6 +2643,23 @@ contains
             endif
         enddo
     end subroutine get_mic2stk_inds
+
+    function get_selected_clsinds( self ) result( clsinds )
+        class(sp_project),    intent(inout) :: self
+        integer, allocatable :: tmpinds(:), states_cavgs(:), clsinds(:)
+        integer :: ncls, icls
+        ncls         = self%os_cls2D%get_noris()
+        if( ncls == 0 ) THROW_HARD('no entries in cls2D field of project')
+        tmpinds      = (/(icls,icls=1,ncls)/)
+        states_cavgs = self%os_cls2D%get_all_asint('state')
+        if( any(states_cavgs == 0 ) )then
+            clsinds = pack(tmpinds, mask=states_cavgs > 0)
+        else
+            THROW_WARN('no deletions in cls2D field, returning contiguous array of class indices')
+            clsinds = tmpinds
+        endif
+        deallocate(tmpinds, states_cavgs)
+    end function get_selected_clsinds
 
     ! setters
 
