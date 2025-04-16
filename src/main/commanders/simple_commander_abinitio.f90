@@ -294,19 +294,35 @@ contains
 
             subroutine rndstart( cline )
                 class(cmdline), intent(inout) :: cline
+                character(len=:), allocatable :: src, dest, state
+                integer :: s
                 call work_proj%os_ptcl3D%rnd_oris
                 call work_proj%os_ptcl3D%zero_shifts
+                if( params%nstates > 1 )then
+                    call gen_labelling(work_proj%os_ptcl3D, params%nstates, 'uniform')
+                endif
                 call work_proj%write_segment_inside('ptcl3D', work_projfile)
                 call cline%set('mkdir', 'no') ! to avoid nested dirs
                 call cline%set('objfun', 'cc')
                 call xreconstruct3D%execute_safe(cline)
                 call cline%set('objfun', trim(params%objfun))
-                call simple_copy_file('recvol_state01_even.mrc', 'startvol_even_unfil.mrc')
-                call simple_copy_file('recvol_state01_odd.mrc',  'startvol_odd_unfil.mrc')
-                call simple_rename(   'recvol_state01_even.mrc', 'startvol_even.mrc')
-                call simple_rename(   'recvol_state01_odd.mrc',  'startvol_odd.mrc')
-                call simple_rename(   'recvol_state01.mrc',      'startvol.mrc')
-                call cline%set('vol1', 'startvol.mrc')
+                do s = 1,params%nstates
+                    state = int2str_pad(s,2)
+                    src   = trim(VOL_FBODY)//state//'.mrc'
+                    dest  = trim(STARTVOL_FBODY)//state//'.mrc'
+                    call simple_rename(src, dest)
+                    call cline%set('vol'//trim(int2str(s)), dest)
+                    src   = trim(VOL_FBODY)//state//'_even.mrc'
+                    dest  = trim(STARTVOL_FBODY)//state//'_even_unfil.mrc'
+                    call simple_copy_file(src, dest)
+                    dest  = trim(STARTVOL_FBODY)//state//'_even.mrc'
+                    call simple_rename(src, dest)
+                    src   = trim(VOL_FBODY)//state//'_odd.mrc'
+                    dest  = trim(STARTVOL_FBODY)//state//'_odd_unfil.mrc'
+                    call simple_copy_file(src, dest)
+                    dest  = trim(STARTVOL_FBODY)//state//'_odd.mrc'
+                    call simple_rename(src, dest)
+                enddo
             end subroutine rndstart
     
             subroutine conv_eo( os )
@@ -818,6 +834,7 @@ contains
     subroutine prep_class_command_lines( cline, projfile )
         class(cmdline),   intent(in) :: cline
         character(len=*), intent(in) :: projfile
+        integer :: s
         cline_refine3D      = cline
         cline_symmap        = cline
         cline_reconstruct3D = cline
@@ -854,14 +871,17 @@ contains
         call cline_postprocess%set('mkdir',                          'no')
         call cline_postprocess%set('imgkind',                       'vol')
         call cline_postprocess%delete('lp')   ! to obtain optimal filtration
-        ! re-project volume
+        ! re-project volume, only with cavgs
         call cline_reproject%set('prg',                       'reproject')
-        call cline_reproject%set('vol1', REC_FBODY//STR_STATE_GLOB//PPROC_SUFFIX//params_glob%ext)
         call cline_reproject%set('pgrp',           trim(params_glob%pgrp))
         call cline_reproject%set('outstk',     'reprojs'//params_glob%ext)
         call cline_reproject%set('smpd',                 params_glob%smpd)
         call cline_reproject%set('box',                   params_glob%box)
         call cline_reproject%set('oritab',               'final_oris.txt')
+        call cline_reproject%set('nstates',           params_glob%nstates)
+        do s = 1,params_glob%nstates
+            call cline_reproject%set('vol'//int2str(s), REC_FBODY//int2str_pad(s,2)//PPROC_SUFFIX//params_glob%ext)
+        enddo
         call cline_reproject%delete('projfile')
     end subroutine prep_class_command_lines
 
@@ -1409,6 +1429,35 @@ contains
             if( file_exists(vol_pproc_mirr) ) call simple_rename(vol_pproc_mirr, add2fbody(vol_final,params_glob%ext,PPROC_SUFFIX//MIRR_SUFFIX))
         enddo
     end subroutine postprocess_final_rec
+
+    ! create noise starting volume(s)
+    subroutine generate_random_volumes( box, smpd, cline )
+        integer,        intent(in)    :: box
+        real,           intent(in)    :: smpd
+        type(cmdline),  intent(inout) :: cline
+        character(len=:), allocatable :: vol_name
+        type(image) :: noisevol
+        integer     :: s
+        call noisevol%new([box,box,box], smpd)
+        do s = 1, params_glob%nstates
+            call noisevol%ran()
+            vol_name = 'startvol_state'//int2str_pad(s,2)//'.mrc'
+            call cline%set('vol'//int2str(s), vol_name)
+            params_glob%vols(s) = vol_name
+            call noisevol%write(vol_name)
+            call noisevol%ran()
+            vol_name = 'startvol_state'//int2str_pad(s,2)//'_even.mrc'
+            call noisevol%write(vol_name)
+            vol_name = 'startvol_state'//int2str_pad(s,2)//'_even_unfil.mrc'
+            call noisevol%write(vol_name)
+            call noisevol%ran()
+            vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd.mrc'
+            call noisevol%write(vol_name)
+            vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd_unfil.mrc'
+            call noisevol%write(vol_name)
+        end do
+        call noisevol%kill
+    end subroutine generate_random_volumes
 
     subroutine stream_analysis
         ! TODO
