@@ -2351,7 +2351,8 @@ contains
         type(image)                   :: cavg, img, timg
         type(oris)                    :: os
         type(sp_project), target      :: spproj
-        character(len=:), allocatable :: label, fname, fname_denoised, fname_cavgs, fname_cavgs_denoised, fname_oris, fname_denoised_ori, fname_ori
+        character(len=:), allocatable :: label, fname, fname_denoised, fname_cavgs, fname_cavgs_denoised
+        character(len=:), allocatable :: fname_oris, fname_denoised_ori, fname_ori
         integer,          allocatable :: cls_inds(:), pinds(:), cls_pops(:), ori_map(:)
         real,             allocatable :: avg(:), avg_pix(:), pcavecs(:,:), tmpvec(:)
         real    :: shift(2), loc(2), dist(2), e3, kw, mat(2,2), mat_inv(2,2)

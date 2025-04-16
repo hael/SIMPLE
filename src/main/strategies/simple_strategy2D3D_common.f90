@@ -298,7 +298,7 @@ contains
                 endif
                 call deallocate_class_samples(clssmp)
             else
-                call build_glob%spproj_field%sample4update_rnd(pfromto, params_glob%update_frac,&
+                call build_glob%spproj_field%sample4update_cnt(pfromto, params_glob%update_frac,&
                     nptcls2update, pinds, l_incr_sampl)
             endif
         else

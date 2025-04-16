@@ -517,9 +517,7 @@ contains
                 clsinds = pack(clsinds, mask=clsinds>0)
                 call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp, label='cluster')
             else
-                ncls    = spproj%os_cls2D%get_noris()
-                tmpinds = (/(icls,icls=1,ncls)/)
-                clsinds = pack(tmpinds, mask=rstates > 0.5)
+                clsinds = spproj%get_selected_clsinds()
                 call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
             endif
             call write_class_samples(clssmp, CLASS_SAMPLING_FILE)

@@ -4890,6 +4890,7 @@ contains
         ! <empty>
         ! search controls
         call refine3D_auto%set_input('srch_ctrls', 1, maxits, gui_submenu="search")
+        refine3D_auto%srch_ctrls(1)%required = .true.
         call refine3D_auto%set_input('srch_ctrls', 2, update_frac, gui_submenu="search")
         refine3D_auto%srch_ctrls(2)%required = .true.
         call refine3D_auto%set_input('srch_ctrls', 3, pgrp, gui_submenu="search", gui_advanced=.false.)

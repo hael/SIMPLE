@@ -89,6 +89,7 @@ type :: oris
     procedure          :: sample4rec
     procedure          :: sample4update_all
     procedure          :: sample4update_rnd
+    procedure          :: sample4update_cnt
     procedure          :: sample4update_class
     procedure          :: sample4update_reprod
     procedure          :: sample4update_updated
@@ -1270,7 +1271,7 @@ contains
             inds(cnt)   = i
             if( states(cnt) > 0 ) nptcls = nptcls + 1
         end do
-        inds     = pack(inds,  mask=states > 0)
+        inds     = pack(inds,       mask=states > 0)
         nsamples = min(nptcls, nint(update_frac * real(nptcls)))
         rt       = ran_tabu(nptcls)
         call rt%shuffle(inds)
@@ -1279,6 +1280,54 @@ contains
         call hpsort(inds) ! indices in increasing order
         call self%incr_sampled_updatecnt(inds, incr_sampled)
     end subroutine sample4update_rnd
+
+    subroutine sample4update_cnt( self, fromto, update_frac, nsamples, inds, incr_sampled )
+        class(oris),          intent(inout) :: self
+        integer,              intent(in)    :: fromto(2)
+        real,                 intent(in)    :: update_frac
+        integer,              intent(inout) :: nsamples
+        integer, allocatable, intent(inout) :: inds(:)
+        logical,              intent(in)    :: incr_sampled
+        type(ran_tabu)       :: rt
+        integer, allocatable :: states(:), updatecnts(:)
+        integer              :: i, cnt, nptcls, ucnt, ucnt_min, ucnt_max, ucnt_lim
+        nptcls = fromto(2) - fromto(1) + 1
+        if( allocated(inds) ) deallocate(inds)
+        allocate(states(nptcls), updatecnts(nptcls), inds(nptcls), source=0)
+        cnt    = 0
+        nptcls = 0
+        do i = fromto(1), fromto(2)
+            cnt             = cnt + 1
+            states(cnt)     = self%o(i)%get_state()
+            updatecnts(cnt) = self%o(i)%get_int('updatecnt')
+            inds(cnt)       = i
+            if( states(cnt) > 0 ) nptcls = nptcls + 1
+        end do
+        inds        = pack(inds,       mask=states > 0)
+        updatecnts  = pack(updatecnts, mask=states > 0)
+        ucnt_min    = minval(updatecnts)
+        ucnt_max    = maxval(updatecnts)
+        nsamples    = min(nptcls, nint(update_frac * real(nptcls)))
+        ucnt_lim    = 0
+        if( ucnt_max > ucnt_min )then
+            do ucnt = ucnt_min,ucnt_max
+                if( count(updatecnts < ucnt) >= nsamples )then
+                    ucnt_lim = ucnt
+                    exit
+                endif
+            end do
+        endif
+        if( ucnt_lim > 0 )then
+            inds   = pack(inds, mask=updatecnts < ucnt)
+            nptcls = size(inds)
+        endif
+        rt = ran_tabu(nptcls)
+        call rt%shuffle(inds)
+        call rt%kill
+        inds = inds(1:nsamples)
+        call hpsort(inds) ! indices in increasing order
+        call self%incr_sampled_updatecnt(inds, incr_sampled)
+    end subroutine sample4update_cnt
 
     subroutine sample4update_class( self, clssmp, fromto, update_frac, nsamples, inds, incr_sampled, l_greedy, frac_best)
         class(oris),          intent(inout) :: self
