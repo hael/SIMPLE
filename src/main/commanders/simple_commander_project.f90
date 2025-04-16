@@ -486,8 +486,6 @@ contains
             THROW_HARD('project file: '//trim(params%projfile)//' does not exist! exec_import_boxes')
         endif
         call spproj%read(params%projfile)
-        call spproj%update_projinfo(cline)
-        call spproj%write_segment_inside('projinfo')
         ! get boxfiles into os_mic
         call read_filetable(params%boxtab, boxfnames)
         nboxf   = size(boxfnames)
@@ -725,7 +723,6 @@ contains
 
         ! PROJECT FILE MANAGEMENT
         call spproj%read(params%projfile)
-        call spproj%update_projinfo(cline)
 
         ! UPDATE FIELDS
         ! add stack if present
@@ -842,7 +839,6 @@ contains
         call params%new(cline, silent=.true.)
         ! read project (almost all or largest segments are updated)
         call spproj%read(params%projfile)
-        call spproj%update_projinfo( cline )
         ! check number of oris in field
         noris   = spproj%get_n_insegment(params%oritype)
         ncls    = spproj%os_cls2D%get_noris()
@@ -943,7 +939,6 @@ contains
         iseg = oritype2segment(trim(params%oritype))
         ! read project (almost all or largest segments are updated)
         call spproj%read(params%projfile)
-        call spproj%update_projinfo( cline )
         ! update nptcls
         if(.not. cline%defined('nptcls')) params%nptcls = spproj%get_nptcls()
         ! check number of oris in field
@@ -1614,7 +1609,6 @@ contains
         nprojs = 2 ! only 2 at a time for now
         allocate(spprojs(nprojs),boxes(nprojs),smpds(nprojs),nmics(nprojs))
         call spprojs(1)%read(params%projfile)
-        call spprojs(1)%update_projinfo( cline )
         call spprojs(2)%read(params%projfile_target)
         ! all projects have particles?
         l_has_ptcls = spprojs(1)%os_ptcl2D%get_noris() > 0

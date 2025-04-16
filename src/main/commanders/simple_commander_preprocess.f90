@@ -227,8 +227,6 @@ contains
         call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
         ! merge docs
         call spproj%read(params%projfile)
-        call spproj%update_projinfo(cline)
-        call spproj%write_segment_inside('projinfo')
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
         call spproj%kill
         ! cleanup
@@ -499,8 +497,6 @@ contains
         call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
         ! merge docs
         call spproj%read(params%projfile)
-        call spproj%update_projinfo(cline)
-        call spproj%write_segment_inside('projinfo')
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
         call spproj%kill
         ! clean
@@ -611,8 +607,6 @@ contains
         call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
         ! merge docs
         call spproj%read(params%projfile)
-        call spproj%update_projinfo(cline)
-        call spproj%segwriter_inside(PROJINFO_SEG)
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
         call spproj%kill
         ! clean
@@ -709,8 +703,6 @@ contains
         call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
         ! merge docs
         call spproj%read(params%projfile)
-        call spproj%update_projinfo(cline)
-        call spproj%write_segment_inside('projinfo')
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
         ! cleanup
         call spproj%kill
@@ -815,7 +807,6 @@ contains
         if( .not.cline%defined('prune')   ) call cline%set('prune',   'no')
         if( .not.cline%defined('imgkind') ) call cline%set('imgkind', 'cavg')
         call build%init_params_and_build_spproj(cline,params)
-        call build%spproj%update_projinfo(cline)
         ! find number of selected cavgs
         call find_ldim_nptcls(params%stk2, lfoo, nsel)
         if( cline%defined('ares') ) nsel = int(params%ares)
@@ -870,7 +861,6 @@ contains
         call cline%set('dir_exec', 'state_mapping')
         call cline%set('mkdir',    'yes')
         call build%init_params_and_build_spproj(cline,params)
-        call build%spproj%update_projinfo(cline)
         call read_filetable(params%stktab, stkfnames)
         ! find number of original cavgs
         if( .not. cline%defined('stk' ) )then
@@ -1004,8 +994,6 @@ contains
         call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
         ! merge docs
         call spproj%read(params%projfile)
-        call spproj%update_projinfo(cline)
-        call spproj%write_segment_inside('projinfo')
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
         if( cline%defined('nmoldiams') )then
             n            = spproj%os_mic%get_noris()
@@ -1129,7 +1117,6 @@ contains
         call cline%set('mkdir', 'no')
         ! read in integrated movies
         call spproj%read(params%projfile)
-        call spproj%update_projinfo(cline)
         if( spproj%get_nintgs() == 0 ) THROW_HARD('No integrated micrograph to process!')
         nmics_tot = spproj%os_mic%get_noris()
         if( nmics_tot < params%nparts ) params%nparts = nmics_tot
@@ -1714,7 +1701,6 @@ contains
         call cline%set('mkdir', 'no')
         ! read in integrated movies
         call spproj%read( params%projfile )
-        call spproj%update_projinfo( cline )
         if( spproj%get_nintgs() == 0 ) THROW_HARD('No integrated micrograph to process!')
         if( spproj%get_nstks() == 0 ) THROW_HARD('This project file does not contain stacks!')
         nmics_tot = spproj%os_mic%get_noris()

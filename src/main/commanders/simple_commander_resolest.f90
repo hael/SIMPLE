@@ -527,7 +527,6 @@ contains
         call cline%set('mkdir',    'yes')
         call cline%set('oritype',  'ptcl2D')
         call build%init_params_and_build_general_tbox(cline,params)
-        call build%spproj%update_projinfo(cline)
         ! reading all from the class 'class'
         call build%spproj%os_ptcl2D%get_pinds(params%class, 'class', pinds)
         nptcls     = build%spproj%get_nptcls()
@@ -686,7 +685,6 @@ contains
         ! trs should be 0.1*box?
         call cline%delete('nparts')
         call build%init_params_and_build_general_tbox(cline, params)
-        call build%spproj%update_projinfo(cline)
         ! some init
         params%which_iter = 1
         call build%spproj%os_ptcl2D%set_all2single('w', 1.0)

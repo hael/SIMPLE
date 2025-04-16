@@ -503,8 +503,6 @@ contains
         call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
         ! merge docs
         call spproj%read(params%projfile)
-        call spproj%update_projinfo(cline)
-        call spproj%write_segment_inside('projinfo')
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
         call starproj%export_mics(cline, spproj)
         ! cleanup

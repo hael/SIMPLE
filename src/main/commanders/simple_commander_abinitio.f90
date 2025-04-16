@@ -134,8 +134,6 @@ contains
         call set_symmetry_class_vars
         ! read project
         call spproj%read(params%projfile)
-        call spproj%update_projinfo(cline)
-        call spproj%write_segment_inside('projinfo', params%projfile)
         ! set low-pass limits and downscaling info from FRCs
         if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
             call set_lplims_from_frcs(spproj, l_cavgs=.true., lpstart=params%lpstart, lpstop=params%lpstop)
@@ -420,8 +418,6 @@ contains
         call nice_communicator%cycle()
         ! read project
         call spproj%read(params%projfile)
-        call spproj%update_projinfo(cline)
-        call spproj%write_segment_inside('projinfo', params%projfile)
         ! provide initialization of 3D alignment using class averages?
         start_stage = 1
         l_ini3D     = .false.

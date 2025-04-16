@@ -147,7 +147,6 @@ contains
         call nice_communicator%cycle()
         ! master project file
         call spproj_glob%read( params%projfile )
-        call spproj_glob%update_projinfo(cline)
         if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('PREPROCESS_STREAM must start from an empty project (eg from root project folder)')
         ! gain reference
         call flip_gain(cline, params%gainref, params%flipgain)
@@ -881,7 +880,6 @@ contains
         endif
         ! master project file
         call spproj_glob%read( params%projfile )
-        call spproj_glob%update_projinfo(cline)
         if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream_cluster2D must start from an empty project (eg from root project folder)')
         ! movie watcher init
         project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true.)
@@ -1925,7 +1923,6 @@ contains
         call nice_communicator%cycle()
         ! master project file
         call spproj_glob%read( params%projfile )
-        call spproj_glob%update_projinfo(cline)
         ! force local if nparts < 2
         if(params%nparts < 2) then
             call spproj_glob%compenv%set(1, 'qsys_name', 'local')
@@ -2484,7 +2481,6 @@ contains
         call nice_communicator%cycle()
         ! master project file
         call spproj%read( params%projfile )
-        call spproj%update_projinfo(cline)
         if( spproj%os_mic%get_noris() /= 0 ) call spproj%os_mic%new(0, .false.)
         ! movie watcher init
         project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true.)
@@ -2702,7 +2698,6 @@ contains
         call progressfile_init()
         ! master project file
         call spproj_glob%read( params%projfile )
-        call spproj_glob%update_projinfo(cline)
         if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream_cluster2D must start from an empty project (eg from root project folder)')
         ! movie watcher init
         project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true.)
