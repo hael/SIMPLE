@@ -408,7 +408,8 @@ contains
         type(parameters)         :: params
         type(builder)            :: build
         type(image), allocatable :: imgs(:)
-        integer                  :: i
+        integer,     allocatable :: states(:), tmp(:)
+        integer                  :: i, s
         logical                  :: do_zero
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
         if( .not. cline%defined('wfun')   ) call cline%set('wfun',   'kb')
@@ -430,22 +431,46 @@ contains
             call build%build_general_tbox(params, cline)
             call build%pgrpsyms%build_refspiral(build%spproj_field)
         endif
-        ! fix volumes and stacks
-        call build%vol%read(params%vols(1))
-        ! masking
-        if(cline%defined('mskdiam')) call build%vol%mask(params%msk, 'soft',backgr=0.)
         ! generate projections
-        imgs     = reproject(build%vol, build%spproj_field)
         if( file_exists(params%outstk) ) call del_file(params%outstk)
-        do_zero  = build%spproj_field%isthere('state')
-        do i=1,params%nspace
-            if( params%neg .eq. 'yes' ) call imgs(i)%neg()
-            if( do_zero )then
-                if( build%spproj_field%get_state(i) < 1 ) call imgs(i)%zero
+        states = nint(build%spproj_field%get_all('state'))
+        tmp    = states
+        do s = 1,params%nstates
+            if( cline%defined('state') )then
+                if( s /= params%state ) cycle
             endif
-            call imgs(i)%write(params%outstk,i)
-        end do
+            if( .not.cline%defined('vol'//int2str(s)) )then
+                THROW_HARD('Volume for state '//int2str(s)//' is not defined!')
+            endif
+            if( any(states==s) )then
+                ! read and mask
+                call build%vol%read(params%vols(s))
+                if(cline%defined('mskdiam')) call build%vol%mask(params%msk, 'soft',backgr=0.)
+                ! project
+                where( states == s )
+                    tmp = 1
+                elsewhere
+                    tmp = 0
+                end where
+                call build%spproj_field%set_all('state', tmp)
+                imgs = reproject(build%vol, build%spproj_field)
+                ! write
+                do i = 1,params%nspace
+                    if( states(i) /= s ) cycle
+                    if( params%neg .eq. 'yes' ) call imgs(i)%neg()
+                    call imgs(i)%write(params%outstk,i)
+                enddo
+            endif
+        enddo
+        call build%spproj_field%set_all('state', states) ! restore
         call build%spproj_field%write('reproject_oris'//trim(TXT_EXT), [1,params%nptcls])
+        if( cline%defined('state') ) where( states /= params%state ) states = 0
+        ! zero state=0
+        call imgs(1)%zero
+        do i = 1,params%nspace
+            if( states(i) == 0 ) call imgs(1)%write(params%outstk,i)
+        enddo
+        call update_stack_nimgs(params%outstk, params%nspace)
         call simple_end('**** SIMPLE_REPROJECT NORMAL STOP ****')
     end subroutine exec_reproject
 
