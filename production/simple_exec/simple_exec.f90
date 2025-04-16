@@ -60,6 +60,7 @@ type(pick_commander_distr)                  :: xpick_distr
 ! CLUSTER2D WORKFLOWS
 type(make_cavgs_commander_distr)            :: xmake_cavgs_distr
 type(abinitio2D_commander)                  :: xabinitio2D
+type(abinitio_cleanup2D_commander)          :: xabinitio_cleanup2D
 type(cluster2D_autoscale_commander)         :: xcluster2D_hlev
 type(cluster2D_commander_subsets)           :: xcluster2D_subsets
 type(cleanup2D_commander_hlev)              :: xcleanup2D_distr
@@ -250,6 +251,8 @@ select case(trim(prg))
         call xmake_cavgs_distr%execute(cline)
     case( 'abinitio2D' )
         call xabinitio2D%execute(cline)
+    case( 'abinitio_cleanup2D' )
+        call xabinitio_cleanup2D%execute(cline)
     case( 'cleanup2D' )
         call xcleanup2D_distr%execute(cline)
     case( 'cluster2D' )
@@ -465,7 +468,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('fd0aa154')
+call simple_print_git_version('4607b519')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

@@ -100,6 +100,7 @@ type :: oris
     generic            :: sample_balanced => sample_balanced_1, sample_balanced_2
     procedure          :: sample_balanced_inv
     procedure          :: sample_balanced_parts
+    procedure          :: sample_ranked_parts
     procedure          :: balance_ptcls_within_cls
     procedure, private :: get_sample_ind
     procedure, private :: incr_sampled_updatecnt
@@ -1613,6 +1614,46 @@ contains
             end do
         end do
     end subroutine sample_balanced_parts
+
+    subroutine sample_ranked_parts( self, clssmp, nparts, states, nptcls_per_part )
+        use simple_map_reduce, only: split_nobjs_even
+        class(oris),        intent(inout) :: self
+        type(class_sample), intent(inout) :: clssmp(:) ! data structure for balanced sampling
+        integer,            intent(in)    :: nparts
+        integer,            intent(inout) :: states(self%n)
+        integer, optional,  intent(in)    :: nptcls_per_part
+        integer, allocatable :: parts(:,:)
+        integer :: nptcls, i, j, k, nptcls_eff, ipart
+        ! calculate total # particles to sample
+        nptcls_eff = self%count_state_gt_zero() 
+        if( present(nptcls_per_part) )then
+            nptcls = min(nptcls_eff, nparts * nptcls_per_part)
+        else
+            nptcls = nptcls_eff
+        endif
+        ! calculate sampling size for each class
+        clssmp(:)%nsample = 0
+        do while( sum(clssmp(:)%nsample) < nptcls )
+            where( clssmp(:)%nsample < clssmp(:)%pop ) clssmp(:)%nsample = clssmp(:)%nsample + 1
+        end do
+        ! create nparts balanced partitions of ranked particles, state=1 is rank 1, state=2 is rank 2, etc.
+        states = 0
+        do i = 1, size(clssmp)
+            if( clssmp(i)%nsample <= nparts )then
+                do j = 1, clssmp(i)%nsample
+                    states(clssmp(i)%pinds(j)) = j
+                end do
+            else
+                parts = split_nobjs_even(clssmp(i)%nsample, nparts)
+                do ipart = 1, nparts
+                    do j = parts(ipart,1), parts(ipart,2)
+                        states(clssmp(i)%pinds(j)) = ipart
+                    end do
+                end do
+                deallocate(parts)
+            endif
+        enddo
+    end subroutine sample_ranked_parts
 
     subroutine balance_ptcls_within_cls( self, nptcls, pinds, maxpop, nparts )
         class(oris), intent(inout) :: self

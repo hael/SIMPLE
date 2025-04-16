@@ -74,6 +74,7 @@ end type simple_program
 ! instances of this class - special
 
 type(simple_program), target :: abinitio2D
+type(simple_program), target :: abinitio_cleanup2D
 type(simple_program), target :: abinitio3D_cavgs
 type(simple_program), target :: abinitio3D
 type(simple_program), target :: abinitio3D_parts
@@ -402,6 +403,7 @@ contains
         call set_common_params
         call set_prg_ptr_array
         call new_abinitio2D
+        call new_abinitio_cleanup2D
         call new_abinitio3D_cavgs
         call new_abinitio3D
         call new_abinitio3D_parts
@@ -553,6 +555,7 @@ contains
     subroutine set_prg_ptr_array
         n_prg_ptrs = 0        
         call push2prg_ptr_array(abinitio2D)
+        call push2prg_ptr_array(abinitio_cleanup2D)
         call push2prg_ptr_array(abinitio3D_cavgs)
         call push2prg_ptr_array(abinitio3D)
         call push2prg_ptr_array(abinitio3D_parts)
@@ -711,6 +714,8 @@ contains
         select case(trim(which_program))
             case('abinitio2D')
                 ptr2prg => abinitio2D
+            case('abinitio_cleanup2D')
+                ptr2prg => abinitio_cleanup2D
             case('abinitio3D_cavgs')
                 ptr2prg => abinitio3D_cavgs
             case('abinitio3D')
@@ -1008,6 +1013,7 @@ contains
 
     subroutine list_simple_prgs_in_ui
         write(logfhandle,'(A)') abinitio2D%name
+        write(logfhandle,'(A)') abinitio_cleanup2D%name
         write(logfhandle,'(A)') abinitio3D_cavgs%name
         write(logfhandle,'(A)') abinitio3D%name
         write(logfhandle,'(A)') abinitio3D_parts%name
@@ -3039,6 +3045,55 @@ contains
         abinitio2D%comp_ctrls(1)%required = .false.
         call abinitio2D%set_input('comp_ctrls', 2, nthr, gui_submenu="compute", gui_advanced=.false.)
     end subroutine new_abinitio2D
+
+    subroutine new_abinitio_cleanup2D
+        ! PROGRAM SPECIFICATION
+        call abinitio_cleanup2D%new(&
+        &'abinitio_cleanup2D',&                                                                ! name
+        &'ab initio 2D analysis from particles',&                                      ! descr_short
+        &'is a distributed workflow for generating 2D class averages from particles',& ! descr_long                                                           ! descr_long
+        &'simple_exec',&                                                               ! executable
+        &0, 0, 0, 9, 5, 1, 2, .true.,&                                                 ! # entries in each group, requires sp_project
+        &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute"  )       ! GUI
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call abinitio_cleanup2D%set_input('srch_ctrls', 1, ncls, gui_submenu="search", gui_advanced=.false.)
+        call abinitio_cleanup2D%set_input('srch_ctrls', 2, 'center', 'binary', 'Center class averages', 'Center class averages by their &
+        &center of gravity and map shifts back to the particles(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
+        call abinitio_cleanup2D%set_input('srch_ctrls', 3, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
+        &for accelerated computation(yes|no){yes}','(yes|no){yes}', .false., 'yes', gui_submenu="model")
+        call abinitio_cleanup2D%set_input('srch_ctrls', 4, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc_smpl|prob|prob_smpl){snhc_smpl}',&
+        &'(snhc_smpl|prob|prob_smpl){snhc_smpl}', .false., 'snhc_smpl', gui_submenu="search")
+        call abinitio_cleanup2D%set_input('srch_ctrls', 5, sigma_est, gui_submenu="search")
+        call abinitio_cleanup2D%set_input('srch_ctrls', 6, cls_init, gui_submenu="search")
+        call abinitio_cleanup2D%set_input('srch_ctrls', 7, autosample, gui_submenu="search")
+        call abinitio_cleanup2D%set_input('srch_ctrls', 8, 'nsample_start', 'num', 'Starting # of particles per class to sample',&
+        &'Starting # of particles per class to sample', 'min # particles per class to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
+        call abinitio_cleanup2D%set_input('srch_ctrls', 9, 'nsample_stop',  'num', 'Maximum # of particles per class to sample',&
+        &'Dynamic particle sampling upper bound to sample', 'max # particles per class to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
+        ! filter controls
+        call abinitio_cleanup2D%set_input('filt_ctrls', 1, hp, gui_submenu="filter")
+        call abinitio_cleanup2D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
+        &Angstroms{30}', .false., 30., gui_submenu="filter")
+        call abinitio_cleanup2D%set_input('filt_ctrls', 3, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit for the first stage of ab-initio model generation',&
+            &'low-pass limit in Angstroms', .false., 30., gui_submenu="filter")
+        call abinitio_cleanup2D%set_input('filt_ctrls', 4, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
+            &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 6., gui_submenu="filter")
+        call abinitio_cleanup2D%set_input('filt_ctrls', 5, lp, gui_submenu="filter")
+        ! mask controls
+        call abinitio_cleanup2D%set_input('mask_ctrls', 1, mskdiam, gui_submenu="mask", gui_advanced=.false.)
+        ! computer controls
+        call abinitio_cleanup2D%set_input('comp_ctrls', 1, nparts, gui_submenu="compute", gui_advanced=.false.)
+        abinitio_cleanup2D%comp_ctrls(1)%required = .false.
+        call abinitio_cleanup2D%set_input('comp_ctrls', 2, nthr, gui_submenu="compute", gui_advanced=.false.)
+    end subroutine new_abinitio_cleanup2D
 
     subroutine new_abinitio3D_cavgs
         ! PROGRAM SPECIFICATION
