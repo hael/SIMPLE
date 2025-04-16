@@ -228,7 +228,6 @@ contains
         endif
         call self%cline%set('projfile', self%projfile_out)
         call self%cline%set('projname', trim(PROJNAME_CHUNK))
-        call self%spproj%update_projinfo(self%cline)
         call self%spproj%write()
         ! 2D classification
         clines(nclines) = self%cline

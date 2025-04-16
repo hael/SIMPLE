@@ -35,7 +35,8 @@ contains
     ! field constructors
     procedure          :: new_seg_with_ptr
     ! field updaters
-    procedure          :: update_projinfo
+    generic            :: update_projinfo => update_projinfo_1, update_projinfo_2
+    procedure, private :: update_projinfo_1, update_projinfo_2
     procedure          :: update_compenv
     procedure          :: append_project
     procedure          :: append_job_descr2jobproc
@@ -181,7 +182,7 @@ contains
 
     ! field updaters
 
-    subroutine update_projinfo( self, cline )
+    subroutine update_projinfo_1( self, cline )
         use simple_cmdline, only: cmdline
         class(sp_project), intent(inout) :: self
         class(cmdline),    intent(in)    :: cline
@@ -221,7 +222,32 @@ contains
         ! it is assumed that the project is created in the root "project directory", i.e. stash cwd
         call simple_getcwd(cwd)
         call self%projinfo%set(1, 'cwd', trim(cwd))
-    end subroutine update_projinfo
+    end subroutine update_projinfo_1
+
+    subroutine update_projinfo_2( self, projfile )
+        use simple_cmdline, only: cmdline
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: projfile
+        character(len=:), allocatable    :: projname
+        character(len=STDLEN) :: cwd
+        if( self%projinfo%get_noris() == 1 )then
+            ! no need to construct field
+        else
+            call self%projinfo%new(1, is_ptcl=.false.)
+        endif
+        ! projfile & projname
+        select case(fname2format(projfile))
+            case('O')
+                call self%projinfo%set(1, 'projfile', trim(projfile) )
+            case DEFAULT
+                THROW_HARD('unsupported format of projfile: '//trim(projfile)//'; update_projinfo_2')
+        end select
+        projname = get_fbody(projfile, 'simple')
+        call self%projinfo%set(1, 'projname', trim(projname))
+        ! it is assumed that the project is created in the root "project directory", i.e. stash cwd
+        call simple_getcwd(cwd)
+        call self%projinfo%set(1, 'cwd', trim(cwd))
+    end subroutine update_projinfo_2
 
     subroutine update_compenv( self, cline )
         use simple_cmdline, only: cmdline
@@ -3501,6 +3527,8 @@ contains
             call self%segreader(isegment, wthreads=wthreads)
         end do
         call self%bos%close
+        call self%update_projinfo(fname)
+        call self%write_segment_inside('projinfo', fname)
     end subroutine read
 
     subroutine read_non_data_segments( self, fname )

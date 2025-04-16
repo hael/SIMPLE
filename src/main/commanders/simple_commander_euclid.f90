@@ -72,8 +72,6 @@ contains
         ! init
         call params%new(cline)
         call spproj%read(params%projfile)
-        call spproj%update_projinfo(cline)
-        call spproj%write_segment_inside('projinfo')
         ! sanity check
         fall_over = .false.
         select case(trim(params%oritype))

@@ -202,7 +202,6 @@ contains
         ctfvars%fraca = params%fraca
         ! import the individual frames
         call spproj%read(params%projfile)
-        call spproj%update_projinfo(cline)
         call spproj%add_movies(filenames, ctfvars, singleframe=.true.)
         call spproj%write
         ! end gracefully
@@ -224,7 +223,6 @@ contains
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         call spproj%read(params%projfile)
-        call spproj%update_projinfo(cline)
         ! # of particles
         call find_ldim_nptcls(params%stk, lfoo, params%nptcls)
         call os%new(params%nptcls, is_ptcl=.true.)
@@ -301,7 +299,6 @@ contains
         call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
         ! merge docs
         call spproj%read(params%projfile)
-        call spproj%update_projinfo(cline)
         call spproj%merge_algndocs(nframes, params%nparts, 'mic', ALGN_FBODY)
         call spproj%kill
         ! clean
@@ -711,7 +708,6 @@ contains
         call cline%set('mkdir', 'no')
         ! read project file
         call spproj%read(params%projfile)
-        call spproj%update_projinfo(cline)
         orig_projfile = trim(params%projfile)
         ! sanity checks
         nptcls = spproj%get_nptcls()
@@ -969,7 +965,6 @@ contains
         call params%new(cline)
         ! read the project file
         call spproj%read(params%projfile)
-        call spproj%update_projinfo(cline)
         call spproj%write_segment_inside('projinfo')
         call spproj%write_substk([params%fromp,params%top], params%outstk)
         ! end gracefully
@@ -995,7 +990,6 @@ contains
         call params%new(cline)
         ! read the project file
         call spproj%read(params%projfile)
-        call spproj%update_projinfo(cline)
         call spproj%write_segment_inside('projinfo')
         ! create substack
         if( .not. cline%defined('outstk') )then
@@ -1097,7 +1091,6 @@ contains
         call cline%set('mkdir', 'no')  ! because we do not want a nested directory structure in the execution directory
         ! read the project file
         call spproj%read(params%projfile)
-        call spproj%update_projinfo(cline)
         call spproj%write_segment_inside('projinfo')
         ! sanity checks
         rstates = spproj%os_ptcl2D%get_all('state')
@@ -1277,9 +1270,6 @@ contains
         ! read the project file
         call spproj%read(params%projfile)
         call build%init_params_and_build_general_tbox(cline, params)
-        call build%spproj%update_projinfo(cline)
-        call spproj%update_projinfo(cline)
-        call spproj%write_segment_inside('projinfo')
         ! retrieve number of cavgs stack
         call spproj%get_cavgs_stk(cavgs_stk, ncavgs, smpd, fail=.false.)
         !sz_cls2D = spproj%os_cls2D%get_noris()
@@ -1336,8 +1326,6 @@ contains
         call cline%set('mkdir', 'no')  ! because we do not want a nested directory structure in the execution directory
         ! read the project file
         call spproj%read(params%projfile)
-        call spproj%update_projinfo(cline)
-        call spproj%write_segment_inside('projinfo')
         ! retrieve even and odd cavgs stack
         call spproj%get_cavgs_stk(cavgs_stk, ncavgs, smpd, fail=.false.)
         cavgs_stk_even = add2fbody(cavgs_stk,'.mrc','_even')
@@ -1409,8 +1397,6 @@ contains
         call cline%set('mkdir', 'no')  ! because we do not want a nested directory structure in the execution directory
         ! read the project file
         call spproj%read(params%projfile)
-        call spproj%update_projinfo(cline)
-        call spproj%write_segment_inside('projinfo')
         ! retrieve cavgs stack
         call spproj%get_cavgs_stk(cavgs_stk, ncavgs, smpd, fail=.false.)
         if( ncavgs /= 0 )then

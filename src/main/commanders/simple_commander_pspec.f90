@@ -38,7 +38,6 @@ contains
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',  'yes')
         ! build and params
         call build%init_params_and_build_general_tbox(cline, params)
-        call build%spproj%update_projinfo(cline)
         call build%spproj%write_segment_inside('projinfo')
         ! create object for power spectra
         nptcls = build%spproj%get_nptcls()

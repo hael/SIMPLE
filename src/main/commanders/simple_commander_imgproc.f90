@@ -380,7 +380,6 @@ contains
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('outstk') ) call cline%set('outstk', 'phaseflipped'//trim(STK_EXT))
         call build%init_params_and_build_general_tbox(cline,params)
-        call build%spproj%update_projinfo(cline)
         if( cline%defined('stk') )then
             call find_ldim_nptcls(trim(params%stk), ldim, nptcls)
             allocate(imgs(nptcls))

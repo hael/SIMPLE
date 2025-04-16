@@ -256,8 +256,6 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! init
         call build%init_params_and_build_spproj(cline, params)
-        call build%spproj%update_projinfo(cline)
-        call build%spproj%write_segment_inside('projinfo')
         ! sanity check
         fall_over = .false.
         select case(trim(params%oritype))
@@ -857,8 +855,6 @@ contains
             call build%kill_strategy3D_tbox
         else
             call build%init_params_and_build_spproj(cline_first_sigmas, params)
-            call build%spproj%update_projinfo(cline_first_sigmas)
-            call build%spproj%write_segment_inside('projinfo')
             ! setup the environment for distributed execution
             call qenv%new(params%nparts)
             ! prepare job description

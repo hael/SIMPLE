@@ -94,8 +94,6 @@ contains
         call prep_command_lines(cline)
         ! read project
         call spproj%read(params%projfile)
-        call spproj%update_projinfo(cline)
-        call spproj%write_segment_inside('projinfo', params%projfile)
         ! sampling
         call set_sampling
         ! summary
@@ -568,8 +566,6 @@ contains
         call xabinitio2D%execute_safe(cline)
         ! read project
         call spproj%read(params%projfile)
-        call spproj%update_projinfo(cline)
-        call spproj%write_segment_inside('projinfo', params%projfile)
         ! make work project
         call simple_copy_file(params%projfile, work_projfile)
         ! make automatic selection
@@ -596,18 +592,20 @@ contains
 
         call work_proj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
         ! divide into two parts
-        allocate(states_prank(nptcls), source=0)
+        allocate(states_prank(nptcls), states_autosel_inv(nptcls), source=0)
         call work_proj%os_ptcl2D%sample_ranked_parts(clssmp, 2, states_prank)
 
         where( states_prank.eq.1 )
-            states_autosel = 1
+            states_autosel     = 1
+            states_autosel_inv = 0
         else where
-            states_autosel = 0
+            states_autosel     = 0
+            states_autosel_inv = 0
         endwhere
         
 
-        pinds_good_ptcls = pack(pinds, mask=states_prank.eq.1)
-        pinds_bad_ptcls  = pack(pinds, mask=states_prank.eq.0.or.states_prank.eq.2)
+        ! pinds_good_ptcls = pack(pinds, mask=states_prank.eq.1)
+        ! pinds_bad_ptcls  = pack(pinds, mask=states_prank.eq.0.or.states_prank.eq.2)
 
         print *, 'nptcls:                    ', nptcls
         print *, 'size(pinds_good_ptcls):    ', size(pinds_good_ptcls)
