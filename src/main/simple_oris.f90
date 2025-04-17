@@ -48,6 +48,7 @@ type :: oris
     procedure, private :: getter_1, getter_2, getter_3
     generic            :: getter => getter_1, getter_2, getter_3
     procedure          :: get_all, get_all_asint
+    procedure          :: gen_ptcl_mask
     procedure          :: get_all_sampled
     procedure          :: get_all_rmats
     procedure          :: get_mat
@@ -431,14 +432,50 @@ contains
         logical, optional, intent(in) :: nonzero
         real,    allocatable :: arr(:)
         integer :: ffromto(2)
+        logical :: nnonzero
         ffromto(1) = 1
         ffromto(2) = self%n
         if( present(fromto) ) ffromto = fromto
+        nnonzero = .false.
+        if( present(nonzero) ) nnonzero = nonzero
         allocate( arr(ffromto(1):ffromto(2)), source=self%o(ffromto(1):ffromto(2))%get(key) )
-        if( present(nonzero) )then
-            if( nonzero ) arr = pack(arr, mask=self%o(ffromto(1):ffromto(2))%get_state()>0)
+        if( nnonzero )then
+            arr = pack(arr, mask=self%o(ffromto(1):ffromto(2))%get_state()>0)
         endif
     end function get_all
+
+    function gen_ptcl_mask( self, key, ival, fromto, nonzero ) result( mask )
+        class(oris),       intent(in) :: self
+        character(len=*),  intent(in) :: key
+        integer,           intent(in) :: ival
+        integer, optional, intent(in) :: fromto(2)
+        logical, optional, intent(in) :: nonzero
+        logical, allocatable :: mask(:)
+        integer, allocatable :: ivals(:), states(:)
+        integer :: ffromto(2)
+        logical :: nnonzero
+        ffromto(1) = 1
+        ffromto(2) = self%n
+        if( present(fromto) ) ffromto = fromto
+        nnonzero = .false.
+        if( present(nonzero) ) nnonzero = nonzero
+        allocate(mask(ffromto(1):ffromto(2)))
+        allocate(ivals(ffromto(1):ffromto(2)), source=self%o(ffromto(1):ffromto(2))%get_int(key))
+        if( nnonzero )then
+            allocate(states(ffromto(1):ffromto(2)), source=self%o(ffromto(1):ffromto(2))%get_state())
+            where(states > 0 .and. ivals == ival )
+                mask = .true.
+            elsewhere
+                mask = .false.
+            endwhere
+        else
+            where(ivals == ival )
+                mask = .true.
+            elsewhere
+                mask = .false.
+            endwhere
+        endif
+    end function gen_ptcl_mask
 
     !>  \brief  is for getting an array of 'key' values cast to integer
     function get_all_asint( self, key, fromto ) result( iarr )
@@ -2990,10 +3027,12 @@ contains
         character(len=*), intent(in)    :: which
         real,             intent(out)   :: ave, sdev, var
         logical,          intent(out)   :: err
-        real, allocatable :: vals(:), states(:)
-        states = self%get_all('state')
-        vals   = self%get_all(which)
-        call moment(vals, ave, sdev, var, err, states > 0.5)
+        real,    allocatable :: vals(:)
+        integer, allocatable :: states(:)
+        states        = self%get_all_asint('state')
+        vals          = self%get_all(which)
+        vals          = pack(vals, mask=states > 0)
+        call moment(vals, ave, sdev, var, err)
         deallocate(vals, states)
     end subroutine stats_1
 
@@ -3001,27 +3040,23 @@ contains
     subroutine stats_2( self, which, statvars, mask, nozero )
         class(oris),        intent(inout) :: self
         character(len=*),   intent(in)    :: which
-        type(stats_struct), intent(out)   :: statvars
+        type(stats_struct), intent(inout) :: statvars
         logical,            intent(in)    :: mask(self%n)
         logical, optional,  intent(in)    :: nozero
-        real, allocatable :: vals(:)
+        real,    allocatable :: vals(:)
+        integer, allocatable :: states(:)
         logical :: err, nnozero
         real    :: var
-        if( present(nozero) )then
-            nnozero = nozero
-        else
-            nnozero = .false.
-        endif
-        vals = self%get_all(which)
-        if( nnozero )then
-            call moment(vals, statvars%avg, statvars%sdev, var, err, mask .and. vals(:) > TINY)
-            statvars%minv = minval(vals, mask=mask .and. vals(:) > TINY)
-            statvars%maxv = maxval(vals, mask=mask .and. vals(:) > TINY)
-        else
-            call moment(vals, statvars%avg, statvars%sdev, var, err, mask)
-            statvars%minv = minval(vals, mask=mask)
-            statvars%maxv = maxval(vals, mask=mask)
-        endif
+        nnozero = .false.
+        if( present(nozero) ) nnozero = nozero
+        vals          = self%get_all(which)
+        states        = self%get_all_asint('state')
+        vals          = pack(vals, states > 0 .and. mask)
+        if( nnozero ) vals = pack(vals, mask=vals(:) > TINY)
+        call moment(vals, statvars%avg, statvars%sdev, var, err)
+        statvars%minv = minval(vals)
+        statvars%maxv = maxval(vals)
+        statvars%med  = median_nocopy(vals)
         deallocate(vals)
     end subroutine stats_2
 

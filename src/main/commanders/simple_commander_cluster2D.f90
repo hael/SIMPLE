@@ -1801,7 +1801,7 @@ contains
             call imgs(icls)%read(stk, icls)
         end do
         ! create pspecs object
-        call pows%new(params%ncls, imgs, spproj%os_cls2D, params%msk, params%hp, params%lp)
+        call pows%new(params%ncls, imgs, spproj%os_ptcl2D, spproj%os_cls2D, params%msk, params%hp, params%lp)
         ! read back original images
         do icls = 1, params%ncls
             call imgs(icls)%read(stk, icls)
