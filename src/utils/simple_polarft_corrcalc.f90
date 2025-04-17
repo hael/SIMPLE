@@ -1202,7 +1202,7 @@ contains
         integer   :: i, k, iref, irot, ithr, iptcl
         real(dp)  :: numer, denom1, denom2
         real      :: ctf2_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs), sh(2),&
-                    &ctf2_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs), frc(self%kfromto(1):self%kfromto(2))
+                    &ctf2_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs), frc(self%kfromto(1):self%kfromto(2),self%nrefs)
         self%pfts_refs_even = complex(0., 0.)
         self%pfts_refs_odd  = complex(0., 0.)
         ctf2_even = 0.
@@ -1242,18 +1242,45 @@ contains
             where( abs(ctf2_odd)  > TINY ) self%pfts_refs_odd  = self%pfts_refs_odd  / ctf2_odd
             where( abs(ctf2_odd)  < TINY ) self%pfts_refs_odd  = 0.
         endif
+        ! FRC filter generation
+        do iref = 1, self%nrefs
+            do k = self%kfromto(1), self%kfromto(2)
+                numer  = sum(real(self%pfts_refs_even(:,k,iref) * conjg(self%pfts_refs_odd(:,k,iref)), kind=dp))
+                denom1 = sum( csq(self%pfts_refs_even(:,k,iref)))
+                denom2 = sum( csq(self%pfts_refs_odd( :,k,iref)))
+                frc(k,iref) = real(numer / sqrt(denom1*denom2))
+            enddo
+        enddo
+        ! merging even and odd
+        self%pfts_refs_even = complex(0., 0.)
+        ctf2_even           = 0.
+        do iptcl = self%pfromto(1), self%pfromto(2)
+            call ptcl_space%get_ori(iptcl, orientation)
+            i    = self%pinds(iptcl)
+            iref = ref_space%find_closest_proj(orientation)
+            irot = self%get_roind(orientation%e3get())
+            sh   = -ptcl_space%get_2Dshift(iptcl)
+            call self%gen_shmat(ithr, sh, shmat)
+            call self%rotate_ptcl(self%pfts_ptcls(:,:,i) * shmat, irot, pft_ptcl)
+            if( self%with_ctf )then
+                call self%rotate_ctf(iptcl, irot, rctf)
+                self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + pft_ptcl * cmplx(rctf)
+                ctf2_even(:,:,iref)           = ctf2_even(:,:,iref)           + rctf**2
+            else
+                self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + pft_ptcl
+            endif
+        enddo
+        if( self%with_ctf )then
+            where( abs(ctf2_even) > TINY ) self%pfts_refs_even = self%pfts_refs_even / ctf2_even
+            where( abs(ctf2_even) < TINY ) self%pfts_refs_even = 0.
+        endif
         ! FRC filtering
-        ! do iref = 1, self%nrefs
-        !     do k = self%kfromto(1), self%kfromto(2)
-        !         numer  = sum(real(self%pfts_refs_even(:,k,iref) * conjg(self%pfts_refs_odd(:,k,iref)), kind=dp))
-        !         denom1 = sum( csq(self%pfts_refs_even(:,k,iref)))
-        !         denom2 = sum( csq(self%pfts_refs_odd( :,k,iref)))
-        !         frc(k) = real(numer / sqrt(denom1*denom2))
-        !         self%pfts_refs_even(:,k,iref) = self%pfts_refs_even(:,k,iref) * frc(k)
-        !         self%pfts_refs_odd( :,k,iref) = self%pfts_refs_odd( :,k,iref) * frc(k)
-        !         if( iref == 1 .and. k == self%kfromto(1) + 2 )print *, 'FRC = ', frc(k)
-        !     enddo
-        ! enddo
+        do iref = 1, self%nrefs
+            do k = self%kfromto(1), self%kfromto(2)
+                self%pfts_refs_even(:,k,iref) = self%pfts_refs_even(:,k,iref) * frc(k,iref)
+            enddo
+        enddo
+        self%pfts_refs_odd = self%pfts_refs_even
     end subroutine gen_polar_refs
 
     subroutine create_polar_absctfmats( self, spproj, oritype, pfromto )
