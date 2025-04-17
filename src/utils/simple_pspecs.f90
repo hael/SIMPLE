@@ -147,7 +147,7 @@ contains
                 self%dynranges(specinds(icls)) = self%pspecs(specinds(icls),1) - self%pspecs(specinds(icls),self%sz)
                 self%clspops(specinds(icls))   = os_cls2D%get_int(icls, 'pop')
                 mask = os_ptcl2D%gen_ptcl_mask('class', icls)
-                call os_ptcl2D%stats('corr', clsstats, mask)
+                ! call os_ptcl2D%stats('corr', clsstats, mask)
                 deallocate(mask, pspec)
             endif
         end do
