@@ -13,33 +13,34 @@ private
 
 type pspecs
     private  
-    real,    allocatable :: pspecs(:,:)           ! matrix of power spectra
-    real,    allocatable :: pspec_good(:)         ! 'good' average power spectrum
-    real,    allocatable :: pspec_bad(:)          ! 'bad'  average power spectrum
-    real,    allocatable :: resarr(:)             ! resolution values in A
-    real,    allocatable :: dynranges(:)          ! dynamic ranges of power spectra
-    real,    allocatable :: dists2good(:)         ! distance to good pspeccs
-    real,    allocatable :: dists2bad(:)          ! distance to bad  pspecs
-    real,    allocatable :: distmat(:,:)          ! Euclidean distance matrix
-    integer, allocatable :: ranks(:)              ! quality ranking
-    integer, allocatable :: order(:)              ! quality order
-    integer, allocatable :: clsinds_spec(:)       ! 0: empty, 1: good, 2: bad
-    integer, allocatable :: clsinds(:)            ! 2D class assignment
-    integer, allocatable :: clspops(:)            ! class populations 
-    real                 :: smpd                  ! sampling distance
-    real                 :: hp                    ! high-pass limit
-    real                 :: lp                    ! low-pass limit
-    real                 :: dynrange_t  = 0.      ! dynamic range threshold
-    integer              :: box         = 0       ! box size
-    integer              :: kfromto(2)            ! Fourier index range
-    integer              :: sz          = 0       ! size of spectrum 
-    integer              :: nspecs      = 0       ! # of spectra
-    integer              :: ncls        = 0       ! # classes
-    integer              :: medoid_good = 0       ! index of medoid of good class
-    integer              :: medoid_bad  = 0       ! index of medoid of bad  class
-    integer              :: ngood       = 0       ! # good power spectra
-    integer              :: nbad        = 0       ! # bad power spectra
-    logical              :: exists      = .false. ! existence flag
+    real,               allocatable :: pspecs(:,:)       ! matrix of power spectra
+    real,               allocatable :: pspec_good(:)     ! 'good' average power spectrum
+    real,               allocatable :: pspec_bad(:)      ! 'bad'  average power spectrum
+    real,               allocatable :: resarr(:)         ! resolution values in A
+    real,               allocatable :: dynranges(:)      ! dynamic ranges of power spectra
+    real,               allocatable :: dists2good(:)     ! distance to good pspeccs
+    real,               allocatable :: dists2bad(:)      ! distance to bad  pspecs
+    real,               allocatable :: distmat(:,:)      ! Euclidean distance matrix
+    integer,            allocatable :: ranks(:)          ! quality ranking
+    integer,            allocatable :: order(:)          ! quality order
+    integer,            allocatable :: clsinds_spec(:)   ! 0: empty, 1: good, 2: bad
+    integer,            allocatable :: clsinds(:)        ! 2D class assignment
+    integer,            allocatable :: clspops(:)        ! class populations
+    type(stats_struct), allocatable :: clsscore_stats(:) ! class score statistics
+    real                 :: smpd                         ! sampling distance
+    real                 :: hp                           ! high-pass limit
+    real                 :: lp                           ! low-pass limit
+    real                 :: dynrange_t  = 0.             ! dynamic range threshold
+    integer              :: box         = 0              ! box size
+    integer              :: kfromto(2)                   ! Fourier index range
+    integer              :: sz          = 0              ! size of spectrum 
+    integer              :: nspecs      = 0              ! # of spectra
+    integer              :: ncls        = 0              ! # classes
+    integer              :: medoid_good = 0              ! index of medoid of good class
+    integer              :: medoid_bad  = 0              ! index of medoid of bad  class
+    integer              :: ngood       = 0              ! # good power spectra
+    integer              :: nbad        = 0              ! # bad power spectra
+    logical              :: exists      = .false.        ! existence flag
 contains
     ! constructor
     procedure            :: new
@@ -86,13 +87,15 @@ contains
 
     ! constructor
 
-    subroutine new( self, ncls, imgs, os_cls2D, msk, hp, lp )
+    subroutine new( self, ncls, imgs, os_ptcl2D, os_cls2D, msk, hp, lp )
         class(pspecs), intent(inout) :: self
         integer,       intent(in)    :: ncls
         class(image),  intent(inout) :: imgs(ncls)
+        class(oris),   intent(inout) :: os_ptcl2D
         class(oris),   intent(in)    :: os_cls2D
         real,          intent(in)    :: msk, hp, lp
-        real, allocatable :: pspec(:), resarr(:)
+        real,    allocatable :: pspec(:), resarr(:)
+        logical, allocatable :: mask(:)
         integer :: specinds(ncls)
         logical :: l_valid_spectra(ncls)
         integer :: ldim(3), icls, ispec
@@ -135,15 +138,17 @@ contains
             endif
         end do
         ! fill-up the instance
-        !$omp parallel do default(shared) private(icls, pspec) proc_bind(close) schedule(static)
+        !$omp parallel do default(shared) private(icls,pspec,mask) proc_bind(close) schedule(static)
         do icls = 1, ncls
             if( l_valid_spectra(icls) )then
+                self%clsinds(specinds(icls))   = icls
                 call imgs(icls)%spectrum('sqrt', pspec)
                 self%pspecs(specinds(icls),:)  = pspec(self%kfromto(1):self%kfromto(2))
                 self%dynranges(specinds(icls)) = self%pspecs(specinds(icls),1) - self%pspecs(specinds(icls),self%sz)
                 self%clspops(specinds(icls))   = os_cls2D%get_int(icls, 'pop')
-                self%clsinds(specinds(icls))   = icls
-                deallocate(pspec)
+                mask = os_ptcl2D%gen_ptcl_mask('class', icls)
+                call os_ptcl2D%stats('corr', clsstats, mask)
+                deallocate(mask, pspec)
             endif
         end do
         !$omp end parallel do

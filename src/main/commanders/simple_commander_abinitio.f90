@@ -516,12 +516,13 @@ contains
                 enddo
                 clsinds = pack(clsinds, mask=clsinds>0)
                 call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp, label='cluster')
+                deallocate(tmpinds)
             else
                 clsinds = spproj%get_selected_clsinds()
                 call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
             endif
             call write_class_samples(clssmp, CLASS_SAMPLING_FILE)
-            deallocate(rstates, tmpinds, clsinds)
+            deallocate(rstates, clsinds)
             if( spproj%os_ptcl3D%has_been_sampled() )then
                 ! the ptcl3D field should be clean of sampling at this stage
                 call spproj%os_ptcl3D%clean_entry('sampled')
