@@ -45,6 +45,7 @@ type :: reconstructor_eo
     ! GETTERS
     procedure          :: get_kbwin
     procedure          :: get_res
+    procedure          :: get_rhoexp_ptr
     ! I/O
     ! writers
     procedure          :: write_eos
@@ -56,7 +57,7 @@ type :: reconstructor_eo
     procedure, private :: read_even
     procedure, private :: read_odd
     ! INTERPOLATION
-    procedure          :: grid_plane
+    procedure          :: grid_plane, test_grid_plane
     procedure          :: compress_exp
     procedure          :: expand_exp
     procedure          :: sum_eos    !< for merging even and odd into sum
@@ -192,6 +193,18 @@ contains
         res_fsc0143 = self%res_fsc0143
         res_fsc05   = self%res_fsc05
     end subroutine get_res
+
+    subroutine get_rhoexp_ptr( self, string, rho_ptr )
+        class(reconstructor_eo), target, intent(in)  :: self
+        character(len=*),                intent(in)  :: string
+        real(kind=c_float), pointer,     intent(out) :: rho_ptr(:,:,:)
+        select case(trim(string))
+        case('even')
+            call self%even%get_rhoexp_ptr(rho_ptr)
+        case('odd')
+            call self%odd%get_rhoexp_ptr(rho_ptr)
+        end select
+    end subroutine get_rhoexp_ptr
 
     ! I/O
 
@@ -423,6 +436,25 @@ contains
         end select
     end subroutine grid_plane
 
+    !> \brief  for testing gridding a Fourier plane
+    subroutine test_grid_plane( self, se, o, fpl, eo, pwght, chunksz )
+        use simple_fplane, only: fplane
+        class(reconstructor_eo), intent(inout) :: self
+        class(sym),              intent(inout) :: se
+        class(ori),              intent(inout) :: o
+        class(fplane),           intent(in)    :: fpl
+        integer,                 intent(in)    :: eo, chunksz
+        real,                    intent(in)    :: pwght
+        select case(eo)
+            case(-1,0)
+                call self%even%test_insert_plane(se, o, fpl, pwght, chunksz)
+            case(1)
+                call self%odd%test_insert_plane(se, o, fpl, pwght, chunksz)
+            case DEFAULT
+                THROW_HARD('unsupported eo flag; test_grid_plane')
+        end select
+    end subroutine test_grid_plane
+
     !> \brief  for summing the even odd pairs, resulting sum in self%even
     subroutine sum_eos( self )
         class(reconstructor_eo), intent(inout) :: self !< instance
@@ -463,7 +495,6 @@ contains
         type(image)           :: even, odd
         complex,  allocatable :: cmat(:,:,:)
         real,     allocatable :: res(:)
-        integer               :: k
         logical               :: l_have_fsc
         res = get_resarr(self%box, self%smpd)
         if( allocated(self%fsc) ) deallocate(self%fsc)

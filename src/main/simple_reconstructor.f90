@@ -42,7 +42,7 @@ type, extends(image) :: reconstructor
     procedure          :: set_sh_lim
     ! GETTERS
     procedure          :: get_kbwin
-    procedure          :: get_rho_ptr
+    procedure          :: get_rho_ptr, get_rhoexp_ptr
     ! I/O
     procedure          :: write_rho, write_rho_as_mrc, write_absfc_as_mrc
     procedure          :: read_rho
@@ -51,6 +51,7 @@ type, extends(image) :: reconstructor
     procedure          :: sampl_dens_correct
     procedure          :: compress_exp
     procedure          :: expand_exp
+    procedure          :: test_insert_plane
     ! SUMMATION
     procedure          :: sum_reduce
     procedure          :: add_invtausq2rho
@@ -201,6 +202,12 @@ contains
         rho_ptr => self%rho
     end subroutine get_rho_ptr
 
+    subroutine get_rhoexp_ptr( self, rho_ptr )
+        class(reconstructor), target, intent(in)  :: self
+        real(kind=c_float), pointer,  intent(out) :: rho_ptr(:,:,:)
+        rho_ptr => self%rho_exp
+    end subroutine get_rhoexp_ptr
+
     ! I/O
     !>Write reconstructed image
     subroutine write_rho( self, kernam )
@@ -246,10 +253,12 @@ contains
         real      :: vec(3), loc(3), odists(3), dists(3), ctfval
         real      :: w000, w001, w010, w011, w100, w101, w110, w111
         integer   :: win(2,3), floc(3), cloc(3), fpllims(3,2)
-        integer   :: i, h, k, nsym, isym, iwinsz, sh, fplnyq
+        integer   :: i, h, k, nsym, isym, iwinsz, sh, fplnyq, chunksz
         if( pwght < TINY )return
         ! window size
         iwinsz = ceiling(self%winsz - 0.5)
+        ! openmp parallel static schedule chunk size, this eradicates race conditions
+        chunksz = self%wdim + 1
         ! setup rotation matrices
         nsym = se%get_nsym()
         rotmats(1,:,:) = o%get_mat()
@@ -273,7 +282,7 @@ contains
             !$omp parallel default(shared) proc_bind(close)&
             !$omp private(h,k,sh,comp,ctfval,vec,loc,dists,odists,floc,cloc,w000,w001,w010,w011,w100,w101,w110,w111)
             do isym=1,nsym
-                !$omp do collapse(2) schedule(static)
+                !$omp do schedule(static,chunksz)
                 do h = fpllims(1,1),fpllims(1,2)
                     do k = fpllims(2,1),fpllims(2,2)
                         sh = nint(sqrt(real(h*h + k*k)))
@@ -326,7 +335,7 @@ contains
             !$omp parallel default(shared) private(i,h,k,sh,comp,ctfval,w,win,loc,dists)&
             !$omp proc_bind(close)
             do isym=1,nsym
-                !$omp do collapse(2) schedule(static)
+                !$omp do schedule(static,chunksz)
                 do h = fpllims(1,1),fpllims(1,2)
                     do k = fpllims(2,1),fpllims(2,2)
                         sh = nint(sqrt(real(h*h + k*k)))
@@ -364,6 +373,134 @@ contains
         endif
         call o_sym%kill
     end subroutine insert_plane
+
+    !> does not insert Fourier plane, it performs all the appropriate calculations
+    !    and instead only counts the number of times the rho_exp matrix is updated
+    subroutine test_insert_plane( self, se, o, fpl, pwght, chunksz )
+        use simple_fplane, only: fplane
+        class(reconstructor), intent(inout) :: self
+        class(sym),           intent(inout) :: se
+        class(ori),           intent(inout) :: o
+        class(fplane),        intent(in)    :: fpl
+        real,                 intent(in)    :: pwght
+        integer,              intent(in)    :: chunksz
+        type(ori) :: o_sym
+        logical   :: thread_usage(nthr_glob)
+        complex   :: comp
+        real      :: rotmats(se%get_nsym(),3,3), w(self%wdim,self%wdim,self%wdim)
+        real      :: vec(3), loc(3), odists(3), dists(3), ctfval
+        real      :: w000, w001, w010, w011, w100, w101, w110, w111
+        integer   :: win(2,3), floc(3), cloc(3), fpllims(3,2)
+        integer   :: i, h, k, nsym, isym, iwinsz, sh, fplnyq
+        if( pwght < TINY )return
+        thread_usage = .false.
+        ! window size
+        iwinsz = ceiling(self%winsz - 0.5)
+        ! setup rotation matrices
+        nsym = se%get_nsym()
+        rotmats(1,:,:) = o%get_mat()
+        if( nsym > 1 )then
+            do isym=2,nsym
+                call se%apply(o, isym, o_sym)
+                rotmats(isym,:,:) = o_sym%get_mat()
+            end do
+        endif
+        if( fpl%padded )then
+            ! the input slice has the size of the padded volume
+            fpllims = fpl%frlims_croppd
+            fplnyq  = fpl%nyq_croppd
+        else
+            ! the input slice is not padded
+            fpllims = fpl%frlims_crop
+            fplnyq  = fpl%nyq_crop
+            rotmats = self%alpha * rotmats ! scale & rotation
+        endif
+        if( self%linear_interp )then
+            !$omp parallel default(shared) proc_bind(close)&
+            !$omp private(h,k,sh,comp,ctfval,vec,loc,dists,odists,floc,cloc,w000,w001,w010,w011,w100,w101,w110,w111)
+            do isym=1,nsym
+                !$omp do schedule(static,chunksz)
+                do h = fpllims(1,1),fpllims(1,2)
+                    do k = fpllims(2,1),fpllims(2,2)
+                        sh = nint(sqrt(real(h*h + k*k)))
+                        if( sh > fplnyq ) cycle
+                        vec  = real([h,k,0])
+                        ! non-uniform sampling location
+                        loc = matmul(vec, rotmats(isym,:,:))
+                        ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
+                        floc = floor(loc)
+                        cloc = floc + 1
+                        if( cloc(1) < self%lims(1,1) )cycle
+                        ! Fourier component x particle weight x shift & CTF
+                        comp   = pwght * fpl%cmplx_plane(h,k)
+                        ctfval = pwght * fpl%ctfsq_plane(h,k)
+                        ! interpolation Fcs
+                        dists  = loc - real(floc)
+                        odists = 1.0 - dists
+                        w000 = product(odists)
+                        w001 = odists(1) * odists(2) *  dists(3)
+                        w010 = odists(1) *  dists(2) * odists(3)
+                        w011 = odists(1) *  dists(2) *  dists(3)
+                        w100 =  dists(1) * odists(2) * odists(3)
+                        w101 =  dists(1) * odists(2) *  dists(3)
+                        w110 =  dists(1) *  dists(2) * odists(3)
+                        w111 = product(dists)
+                        ! interpolation ctf^2
+                        self%rho_exp(floc(1), floc(2), floc(3))  = self%rho_exp(floc(1), floc(2), floc(3))  + 1.0
+                        self%rho_exp(floc(1), floc(2), cloc(3))  = self%rho_exp(floc(1), floc(2), cloc(3))  + 1.0
+                        self%rho_exp(floc(1), cloc(2), floc(3))  = self%rho_exp(floc(1), cloc(2), floc(3))  + 1.0
+                        self%rho_exp(floc(1), cloc(2), cloc(3))  = self%rho_exp(floc(1), cloc(2), cloc(3))  + 1.0
+                        self%rho_exp(cloc(1), floc(2), floc(3))  = self%rho_exp(cloc(1), floc(2), floc(3))  + 1.0
+                        self%rho_exp(cloc(1), floc(2), cloc(3))  = self%rho_exp(cloc(1), floc(2), cloc(3))  + 1.0
+                        self%rho_exp(cloc(1), cloc(2), floc(3))  = self%rho_exp(cloc(1), cloc(2), floc(3))  + 1.0
+                        self%rho_exp(cloc(1), cloc(2), cloc(3))  = self%rho_exp(cloc(1), cloc(2), cloc(3))  + 1.0
+                    end do
+                end do
+                !$omp end do
+            end do
+            !$omp end parallel
+        else
+            ! KB interpolation
+            !$omp parallel default(shared) private(i,h,k,sh,comp,ctfval,w,win,loc,dists)&
+            !$omp proc_bind(close)
+            do isym=1,nsym
+                !$omp do schedule(static,chunksz)
+                do h = fpllims(1,1),fpllims(1,2)
+                    ! thread_usage(omp_get_thread_num()+1) = .true.
+                    do k = fpllims(2,1),fpllims(2,2)
+                        sh = nint(sqrt(real(h*h + k*k)))
+                        if( sh > fplnyq ) cycle
+                        ! non-uniform sampling location
+                        loc = matmul(real([h,k,0]), rotmats(isym,:,:))
+                        ! window
+                        win(1,:) = nint(loc)
+                        win(2,:) = win(1,:) + iwinsz
+                        win(1,:) = win(1,:) - iwinsz
+                        ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
+                        if( win(2,1) < self%lims(1,1) )cycle
+                        ! Fourier component & CTF
+                        comp   = pwght * fpl%cmplx_plane(h,k)
+                        ctfval = pwght * fpl%ctfsq_plane(h,k)
+                        ! (weighted) kernel
+                        w = 1.
+                        do i=1,self%wdim
+                            dists    = real(win(1,:) + i - 1) - loc
+                            w(i,:,:) = w(i,:,:) * self%kbwin%apod(dists(1))
+                            w(:,i,:) = w(:,i,:) * self%kbwin%apod(dists(2))
+                            w(:,:,i) = w(:,:,i) * self%kbwin%apod(dists(3))
+                        enddo
+                        w = w / sum(w)
+                        self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
+                            &self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + 1.0
+                    end do
+                end do
+                !$omp end do
+            end do
+            !$omp end parallel
+        endif
+        call o_sym%kill
+        ! print *,count(thread_usage) ! number of individualthreads actually used
+    end subroutine test_insert_plane
 
     !>  is for uneven distribution of orientations correction
     !>  from Pipe & Menon 1999
