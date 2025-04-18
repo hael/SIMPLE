@@ -176,25 +176,25 @@ contains
         class(sharpvol_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         real,             allocatable :: fsc(:), optlp(:), res(:)
-        character(len=:), allocatable :: fname_vol, fname_even, fname_odd, fname_pproc, fname_lp, fname_mirr
+        character(len=:), allocatable :: fname_vol, fname_even, fname_odd, fname_pdb, fname_pproc, fname_lp, fname_mirr
         type(parameters)      :: params
-        type(image)           :: vol_bfac, vol_no_bfac
+        type(image)           :: vol_bfac, vol_no_bfac, vol_pdb, cos_img
         type(atoms)           :: pdb
         type(masker)          :: msker
         character(len=STDLEN) :: pdbout_fname
         real    :: fsc0143, fsc05, smpd, lplim
         integer :: state, box, fsc_box, ldim(3), ifoo
-        logical :: has_fsc
+        logical :: has_fsc, is_center
         ! set defaults
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         ! parse commad-line
         call params%new(cline)
         ! check volume, get correct smpd & box
-        fname_vol=params%fname
+        fname_vol = params%vols(1)
         if( .not.file_exists(fname_vol) )then
             THROW_HARD('volume: '//trim(fname_vol)//' does not exist')
         endif
         ! generate file names
+        fname_pdb   = add2fbody(trim(fname_vol), params%ext, '_pdb')
         fname_even  = add2fbody(trim(fname_vol), params%ext, '_even')
         fname_odd   = add2fbody(trim(fname_vol), params%ext, '_odd' )
         fname_pproc = basename(add2fbody(trim(fname_vol),   params%ext, PPROC_SUFFIX))
@@ -206,12 +206,19 @@ contains
         call vol_bfac%read(fname_vol)
         ! generate pdb mask from pdb
         call pdb%new(params%pdbfile)
-        pdbout_fname = trim(get_fbody(params%pdbfile, 'pdb')) // '_centered.pdb'
-        if( params%center.eq.'yes' )then
-            call msker%mask_from_pdb( pdb, vol_bfac, pdbout=pdbout_fname)
-        else
-            call msker%mask_from_pdb( pdb, vol_bfac)
+        if( pdb%check_center() .or. params%center_pdb .eq. 'yes' )then
+            pdbout_fname = trim(get_fbody(params%pdbfile, 'pdb')) // '_centered.pdb'
+            call pdb%pdb2mrc( params%pdbfile, fname_pdb, params%smpd, center_pdb=.true., pdb_out=pdbout_fname, vol_dim=ldim )
+        else 
+            call pdb%pdb2mrc( params%pdbfile, fname_pdb, params%smpd, vol_dim=ldim )
         endif
+        call vol_pdb%new(ldim, params%smpd)
+        call vol_pdb%read(fname_pdb)
+        call vol_pdb%bp(0., 20.)
+        !call pdb_vol%otsu 
+        !call vol_bfac%cos_edge(params_glob%edge, cos_img)
+        ! multiply with mask
+        !call vol_bfac%mul(cos_img)
         ! filtered function & apply Bfactor
         ! check fsc filter & determine resolution
         has_fsc = .false.        
@@ -279,6 +286,7 @@ contains
         endif
         ! destruct
         call vol_bfac%kill
+        call vol_pdb%kill
         call vol_no_bfac%kill
         call simple_end('**** SIMPLE_SHARPVOL NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_sharpvol
