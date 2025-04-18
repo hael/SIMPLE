@@ -253,12 +253,13 @@ contains
         real      :: vec(3), loc(3), odists(3), dists(3), ctfval
         real      :: w000, w001, w010, w011, w100, w101, w110, w111
         integer   :: win(2,3), floc(3), cloc(3), fpllims(3,2)
-        integer   :: i, h, k, nsym, isym, iwinsz, sh, fplnyq, chunksz
+        integer   :: i, h, k, l, nsym, isym, iwinsz, sh, fplnyq, stride
         if( pwght < TINY )return
         ! window size
         iwinsz = ceiling(self%winsz - 0.5)
-        ! openmp parallel static schedule chunk size, this eradicates race conditions
-        chunksz = self%wdim + 1
+        ! sride along h dimension for interpolation: all threads are at least
+        ! wdim pixels away from each other to avoid race conditions
+        stride = self%wdim
         ! setup rotation matrices
         nsym = se%get_nsym()
         rotmats(1,:,:) = o%get_mat()
@@ -280,94 +281,98 @@ contains
         endif
         if( self%linear_interp )then
             !$omp parallel default(shared) proc_bind(close)&
-            !$omp private(h,k,sh,comp,ctfval,vec,loc,dists,odists,floc,cloc,w000,w001,w010,w011,w100,w101,w110,w111)
+            !$omp private(h,k,l,sh,comp,ctfval,vec,loc,dists,odists,floc,cloc,w000,w001,w010,w011,w100,w101,w110,w111)
             do isym=1,nsym
-                !$omp do schedule(static,chunksz)
-                do h = fpllims(1,1),fpllims(1,2)
-                    do k = fpllims(2,1),fpllims(2,2)
-                        sh = nint(sqrt(real(h*h + k*k)))
-                        if( sh > fplnyq ) cycle
-                        vec  = real([h,k,0])
-                        ! non-uniform sampling location
-                        loc = matmul(vec, rotmats(isym,:,:))
-                        ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
-                        floc = floor(loc)
-                        cloc = floc + 1
-                        if( cloc(1) < self%lims(1,1) )cycle
-                        ! Fourier component x particle weight x shift & CTF
-                        comp   = pwght * fpl%cmplx_plane(h,k)
-                        ctfval = pwght * fpl%ctfsq_plane(h,k)
-                        ! interpolation Fcs
-                        dists  = loc - real(floc)
-                        odists = 1.0 - dists
-                        w000 = product(odists)
-                        w001 = odists(1) * odists(2) *  dists(3)
-                        w010 = odists(1) *  dists(2) * odists(3)
-                        w011 = odists(1) *  dists(2) *  dists(3)
-                        w100 =  dists(1) * odists(2) * odists(3)
-                        w101 =  dists(1) * odists(2) *  dists(3)
-                        w110 =  dists(1) *  dists(2) * odists(3)
-                        w111 = product(dists)
-                        self%cmat_exp(floc(1), floc(2), floc(3)) = self%cmat_exp(floc(1), floc(2), floc(3)) + w000 * comp
-                        self%cmat_exp(floc(1), floc(2), cloc(3)) = self%cmat_exp(floc(1), floc(2), cloc(3)) + w001 * comp
-                        self%cmat_exp(floc(1), cloc(2), floc(3)) = self%cmat_exp(floc(1), cloc(2), floc(3)) + w010 * comp
-                        self%cmat_exp(floc(1), cloc(2), cloc(3)) = self%cmat_exp(floc(1), cloc(2), cloc(3)) + w011 * comp
-                        self%cmat_exp(cloc(1), floc(2), floc(3)) = self%cmat_exp(cloc(1), floc(2), floc(3)) + w100 * comp
-                        self%cmat_exp(cloc(1), floc(2), cloc(3)) = self%cmat_exp(cloc(1), floc(2), cloc(3)) + w101 * comp
-                        self%cmat_exp(cloc(1), cloc(2), floc(3)) = self%cmat_exp(cloc(1), cloc(2), floc(3)) + w110 * comp
-                        self%cmat_exp(cloc(1), cloc(2), cloc(3)) = self%cmat_exp(cloc(1), cloc(2), cloc(3)) + w111 * comp
-                        ! interpolation ctf^2
-                        self%rho_exp(floc(1), floc(2), floc(3))  = self%rho_exp(floc(1), floc(2), floc(3))  + w000 * ctfval
-                        self%rho_exp(floc(1), floc(2), cloc(3))  = self%rho_exp(floc(1), floc(2), cloc(3))  + w001 * ctfval
-                        self%rho_exp(floc(1), cloc(2), floc(3))  = self%rho_exp(floc(1), cloc(2), floc(3))  + w010 * ctfval
-                        self%rho_exp(floc(1), cloc(2), cloc(3))  = self%rho_exp(floc(1), cloc(2), cloc(3))  + w011 * ctfval
-                        self%rho_exp(cloc(1), floc(2), floc(3))  = self%rho_exp(cloc(1), floc(2), floc(3))  + w100 * ctfval
-                        self%rho_exp(cloc(1), floc(2), cloc(3))  = self%rho_exp(cloc(1), floc(2), cloc(3))  + w101 * ctfval
-                        self%rho_exp(cloc(1), cloc(2), floc(3))  = self%rho_exp(cloc(1), cloc(2), floc(3))  + w110 * ctfval
-                        self%rho_exp(cloc(1), cloc(2), cloc(3))  = self%rho_exp(cloc(1), cloc(2), cloc(3))  + w111 * ctfval
+                do l = 0,stride-1
+                    !$omp do schedule(static)
+                    do h = fpllims(1,1)+l,fpllims(1,2),stride
+                        do k = fpllims(2,1),fpllims(2,2)
+                            sh = nint(sqrt(real(h*h + k*k)))
+                            if( sh > fplnyq ) cycle
+                            vec  = real([h,k,0])
+                            ! non-uniform sampling location
+                            loc = matmul(vec, rotmats(isym,:,:))
+                            ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
+                            floc = floor(loc)
+                            cloc = floc + 1
+                            if( cloc(1) < self%lims(1,1) )cycle
+                            ! Fourier component x particle weight x shift & CTF
+                            comp   = pwght * fpl%cmplx_plane(h,k)
+                            ctfval = pwght * fpl%ctfsq_plane(h,k)
+                            ! interpolation Fcs
+                            dists  = loc - real(floc)
+                            odists = 1.0 - dists
+                            w000 = product(odists)
+                            w001 = odists(1) * odists(2) *  dists(3)
+                            w010 = odists(1) *  dists(2) * odists(3)
+                            w011 = odists(1) *  dists(2) *  dists(3)
+                            w100 =  dists(1) * odists(2) * odists(3)
+                            w101 =  dists(1) * odists(2) *  dists(3)
+                            w110 =  dists(1) *  dists(2) * odists(3)
+                            w111 = product(dists)
+                            self%cmat_exp(floc(1), floc(2), floc(3)) = self%cmat_exp(floc(1), floc(2), floc(3)) + w000 * comp
+                            self%cmat_exp(floc(1), floc(2), cloc(3)) = self%cmat_exp(floc(1), floc(2), cloc(3)) + w001 * comp
+                            self%cmat_exp(floc(1), cloc(2), floc(3)) = self%cmat_exp(floc(1), cloc(2), floc(3)) + w010 * comp
+                            self%cmat_exp(floc(1), cloc(2), cloc(3)) = self%cmat_exp(floc(1), cloc(2), cloc(3)) + w011 * comp
+                            self%cmat_exp(cloc(1), floc(2), floc(3)) = self%cmat_exp(cloc(1), floc(2), floc(3)) + w100 * comp
+                            self%cmat_exp(cloc(1), floc(2), cloc(3)) = self%cmat_exp(cloc(1), floc(2), cloc(3)) + w101 * comp
+                            self%cmat_exp(cloc(1), cloc(2), floc(3)) = self%cmat_exp(cloc(1), cloc(2), floc(3)) + w110 * comp
+                            self%cmat_exp(cloc(1), cloc(2), cloc(3)) = self%cmat_exp(cloc(1), cloc(2), cloc(3)) + w111 * comp
+                            ! interpolation ctf^2
+                            self%rho_exp(floc(1), floc(2), floc(3))  = self%rho_exp(floc(1), floc(2), floc(3))  + w000 * ctfval
+                            self%rho_exp(floc(1), floc(2), cloc(3))  = self%rho_exp(floc(1), floc(2), cloc(3))  + w001 * ctfval
+                            self%rho_exp(floc(1), cloc(2), floc(3))  = self%rho_exp(floc(1), cloc(2), floc(3))  + w010 * ctfval
+                            self%rho_exp(floc(1), cloc(2), cloc(3))  = self%rho_exp(floc(1), cloc(2), cloc(3))  + w011 * ctfval
+                            self%rho_exp(cloc(1), floc(2), floc(3))  = self%rho_exp(cloc(1), floc(2), floc(3))  + w100 * ctfval
+                            self%rho_exp(cloc(1), floc(2), cloc(3))  = self%rho_exp(cloc(1), floc(2), cloc(3))  + w101 * ctfval
+                            self%rho_exp(cloc(1), cloc(2), floc(3))  = self%rho_exp(cloc(1), cloc(2), floc(3))  + w110 * ctfval
+                            self%rho_exp(cloc(1), cloc(2), cloc(3))  = self%rho_exp(cloc(1), cloc(2), cloc(3))  + w111 * ctfval
+                        end do
                     end do
+                    !$omp end do
                 end do
-                !$omp end do
             end do
             !$omp end parallel
         else
             ! KB interpolation
-            !$omp parallel default(shared) private(i,h,k,sh,comp,ctfval,w,win,loc,dists)&
+            !$omp parallel default(shared) private(i,h,k,l,sh,comp,ctfval,w,win,loc,dists)&
             !$omp proc_bind(close)
             do isym=1,nsym
-                !$omp do schedule(static,chunksz)
-                do h = fpllims(1,1),fpllims(1,2)
-                    do k = fpllims(2,1),fpllims(2,2)
-                        sh = nint(sqrt(real(h*h + k*k)))
-                        if( sh > fplnyq ) cycle
-                        ! non-uniform sampling location
-                        loc = matmul(real([h,k,0]), rotmats(isym,:,:))
-                        ! window
-                        win(1,:) = nint(loc)
-                        win(2,:) = win(1,:) + iwinsz
-                        win(1,:) = win(1,:) - iwinsz
-                        ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
-                        if( win(2,1) < self%lims(1,1) )cycle
-                        ! Fourier component & CTF
-                        comp   = pwght * fpl%cmplx_plane(h,k)
-                        ctfval = pwght * fpl%ctfsq_plane(h,k)
-                        ! (weighted) kernel
-                        w = 1.
-                        do i=1,self%wdim
-                            dists    = real(win(1,:) + i - 1) - loc
-                            w(i,:,:) = w(i,:,:) * self%kbwin%apod(dists(1))
-                            w(:,i,:) = w(:,i,:) * self%kbwin%apod(dists(2))
-                            w(:,:,i) = w(:,:,i) * self%kbwin%apod(dists(3))
-                        enddo
-                        w = w / sum(w)
-                        ! expanded matrices update
-                        self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
-                            &self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + comp*w
-                        self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
-                            &self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + ctfval*w
+                do l = 0,stride-1
+                    !$omp do schedule(static)
+                    do h = fpllims(1,1)+l,fpllims(1,2),stride
+                        do k = fpllims(2,1),fpllims(2,2)
+                            sh = nint(sqrt(real(h*h + k*k)))
+                            if( sh > fplnyq ) cycle
+                            ! non-uniform sampling location
+                            loc = matmul(real([h,k,0]), rotmats(isym,:,:))
+                            ! window
+                            win(1,:) = nint(loc)
+                            win(2,:) = win(1,:) + iwinsz
+                            win(1,:) = win(1,:) - iwinsz
+                            ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
+                            if( win(2,1) < self%lims(1,1) )cycle
+                            ! Fourier component & CTF
+                            comp   = pwght * fpl%cmplx_plane(h,k)
+                            ctfval = pwght * fpl%ctfsq_plane(h,k)
+                            ! (weighted) kernel
+                            w = 1.
+                            do i=1,self%wdim
+                                dists    = real(win(1,:) + i - 1) - loc
+                                w(i,:,:) = w(i,:,:) * self%kbwin%apod(dists(1))
+                                w(:,i,:) = w(:,i,:) * self%kbwin%apod(dists(2))
+                                w(:,:,i) = w(:,:,i) * self%kbwin%apod(dists(3))
+                            enddo
+                            w = w / sum(w)
+                            ! expanded matrices update
+                            self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
+                                &self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + comp*w
+                            self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
+                                &self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + ctfval*w
+                        end do
                     end do
-                end do
-                !$omp end do
+                    !$omp end do
+                enddo
             end do
             !$omp end parallel
         endif
@@ -376,14 +381,14 @@ contains
 
     !> does not insert Fourier plane, it performs all the appropriate calculations
     !    and instead only counts the number of times the rho_exp matrix is updated
-    subroutine test_insert_plane( self, se, o, fpl, pwght, chunksz )
+    subroutine test_insert_plane( self, se, o, fpl, pwght, stride )
         use simple_fplane, only: fplane
         class(reconstructor), intent(inout) :: self
         class(sym),           intent(inout) :: se
         class(ori),           intent(inout) :: o
         class(fplane),        intent(in)    :: fpl
         real,                 intent(in)    :: pwght
-        integer,              intent(in)    :: chunksz
+        integer,              intent(in)    :: stride
         type(ori) :: o_sym
         logical   :: thread_usage(nthr_glob)
         complex   :: comp
@@ -391,7 +396,7 @@ contains
         real      :: vec(3), loc(3), odists(3), dists(3), ctfval
         real      :: w000, w001, w010, w011, w100, w101, w110, w111
         integer   :: win(2,3), floc(3), cloc(3), fpllims(3,2)
-        integer   :: i, h, k, nsym, isym, iwinsz, sh, fplnyq
+        integer   :: i, h, k, l, nsym, isym, iwinsz, sh, fplnyq
         if( pwght < TINY )return
         thread_usage = .false.
         ! window size
@@ -417,84 +422,88 @@ contains
         endif
         if( self%linear_interp )then
             !$omp parallel default(shared) proc_bind(close)&
-            !$omp private(h,k,sh,comp,ctfval,vec,loc,dists,odists,floc,cloc,w000,w001,w010,w011,w100,w101,w110,w111)
+            !$omp private(h,k,l,sh,comp,ctfval,vec,loc,dists,odists,floc,cloc,w000,w001,w010,w011,w100,w101,w110,w111)
             do isym=1,nsym
-                !$omp do schedule(static,chunksz)
-                do h = fpllims(1,1),fpllims(1,2)
-                    do k = fpllims(2,1),fpllims(2,2)
-                        sh = nint(sqrt(real(h*h + k*k)))
-                        if( sh > fplnyq ) cycle
-                        vec  = real([h,k,0])
-                        ! non-uniform sampling location
-                        loc = matmul(vec, rotmats(isym,:,:))
-                        ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
-                        floc = floor(loc)
-                        cloc = floc + 1
-                        if( cloc(1) < self%lims(1,1) )cycle
-                        ! Fourier component x particle weight x shift & CTF
-                        comp   = pwght * fpl%cmplx_plane(h,k)
-                        ctfval = pwght * fpl%ctfsq_plane(h,k)
-                        ! interpolation Fcs
-                        dists  = loc - real(floc)
-                        odists = 1.0 - dists
-                        w000 = product(odists)
-                        w001 = odists(1) * odists(2) *  dists(3)
-                        w010 = odists(1) *  dists(2) * odists(3)
-                        w011 = odists(1) *  dists(2) *  dists(3)
-                        w100 =  dists(1) * odists(2) * odists(3)
-                        w101 =  dists(1) * odists(2) *  dists(3)
-                        w110 =  dists(1) *  dists(2) * odists(3)
-                        w111 = product(dists)
-                        ! interpolation ctf^2
-                        self%rho_exp(floc(1), floc(2), floc(3))  = self%rho_exp(floc(1), floc(2), floc(3))  + 1.0
-                        self%rho_exp(floc(1), floc(2), cloc(3))  = self%rho_exp(floc(1), floc(2), cloc(3))  + 1.0
-                        self%rho_exp(floc(1), cloc(2), floc(3))  = self%rho_exp(floc(1), cloc(2), floc(3))  + 1.0
-                        self%rho_exp(floc(1), cloc(2), cloc(3))  = self%rho_exp(floc(1), cloc(2), cloc(3))  + 1.0
-                        self%rho_exp(cloc(1), floc(2), floc(3))  = self%rho_exp(cloc(1), floc(2), floc(3))  + 1.0
-                        self%rho_exp(cloc(1), floc(2), cloc(3))  = self%rho_exp(cloc(1), floc(2), cloc(3))  + 1.0
-                        self%rho_exp(cloc(1), cloc(2), floc(3))  = self%rho_exp(cloc(1), cloc(2), floc(3))  + 1.0
-                        self%rho_exp(cloc(1), cloc(2), cloc(3))  = self%rho_exp(cloc(1), cloc(2), cloc(3))  + 1.0
+                do l = 0,stride-1
+                    !$omp do schedule(static)
+                    do h = fpllims(1,1)+l,fpllims(1,2),stride
+                        do k = fpllims(2,1),fpllims(2,2)
+                            sh = nint(sqrt(real(h*h + k*k)))
+                            if( sh > fplnyq ) cycle
+                            vec  = real([h,k,0])
+                            ! non-uniform sampling location
+                            loc = matmul(vec, rotmats(isym,:,:))
+                            ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
+                            floc = floor(loc)
+                            cloc = floc + 1
+                            if( cloc(1) < self%lims(1,1) )cycle
+                            ! Fourier component x particle weight x shift & CTF
+                            comp   = pwght * fpl%cmplx_plane(h,k)
+                            ctfval = pwght * fpl%ctfsq_plane(h,k)
+                            ! interpolation Fcs
+                            dists  = loc - real(floc)
+                            odists = 1.0 - dists
+                            w000 = product(odists)
+                            w001 = odists(1) * odists(2) *  dists(3)
+                            w010 = odists(1) *  dists(2) * odists(3)
+                            w011 = odists(1) *  dists(2) *  dists(3)
+                            w100 =  dists(1) * odists(2) * odists(3)
+                            w101 =  dists(1) * odists(2) *  dists(3)
+                            w110 =  dists(1) *  dists(2) * odists(3)
+                            w111 = product(dists)
+                            ! interpolation ctf^2
+                            self%rho_exp(floc(1), floc(2), floc(3))  = self%rho_exp(floc(1), floc(2), floc(3))  + 1.0
+                            self%rho_exp(floc(1), floc(2), cloc(3))  = self%rho_exp(floc(1), floc(2), cloc(3))  + 1.0
+                            self%rho_exp(floc(1), cloc(2), floc(3))  = self%rho_exp(floc(1), cloc(2), floc(3))  + 1.0
+                            self%rho_exp(floc(1), cloc(2), cloc(3))  = self%rho_exp(floc(1), cloc(2), cloc(3))  + 1.0
+                            self%rho_exp(cloc(1), floc(2), floc(3))  = self%rho_exp(cloc(1), floc(2), floc(3))  + 1.0
+                            self%rho_exp(cloc(1), floc(2), cloc(3))  = self%rho_exp(cloc(1), floc(2), cloc(3))  + 1.0
+                            self%rho_exp(cloc(1), cloc(2), floc(3))  = self%rho_exp(cloc(1), cloc(2), floc(3))  + 1.0
+                            self%rho_exp(cloc(1), cloc(2), cloc(3))  = self%rho_exp(cloc(1), cloc(2), cloc(3))  + 1.0
+                        end do
                     end do
+                    !$omp end do
                 end do
-                !$omp end do
             end do
             !$omp end parallel
         else
             ! KB interpolation
-            !$omp parallel default(shared) private(i,h,k,sh,comp,ctfval,w,win,loc,dists)&
+            !$omp parallel default(shared) private(i,h,k,l,sh,comp,ctfval,w,win,loc,dists)&
             !$omp proc_bind(close)
             do isym=1,nsym
-                !$omp do schedule(static,chunksz)
-                do h = fpllims(1,1),fpllims(1,2)
-                    ! thread_usage(omp_get_thread_num()+1) = .true.
-                    do k = fpllims(2,1),fpllims(2,2)
-                        sh = nint(sqrt(real(h*h + k*k)))
-                        if( sh > fplnyq ) cycle
-                        ! non-uniform sampling location
-                        loc = matmul(real([h,k,0]), rotmats(isym,:,:))
-                        ! window
-                        win(1,:) = nint(loc)
-                        win(2,:) = win(1,:) + iwinsz
-                        win(1,:) = win(1,:) - iwinsz
-                        ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
-                        if( win(2,1) < self%lims(1,1) )cycle
-                        ! Fourier component & CTF
-                        comp   = pwght * fpl%cmplx_plane(h,k)
-                        ctfval = pwght * fpl%ctfsq_plane(h,k)
-                        ! (weighted) kernel
-                        w = 1.
-                        do i=1,self%wdim
-                            dists    = real(win(1,:) + i - 1) - loc
-                            w(i,:,:) = w(i,:,:) * self%kbwin%apod(dists(1))
-                            w(:,i,:) = w(:,i,:) * self%kbwin%apod(dists(2))
-                            w(:,:,i) = w(:,:,i) * self%kbwin%apod(dists(3))
-                        enddo
-                        w = w / sum(w)
-                        self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
-                            &self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + 1.0
+                do l = 0,stride-1
+                    !$omp do schedule(static)
+                    do h = fpllims(1,1)+l,fpllims(1,2),stride
+                        ! thread_usage(omp_get_thread_num()+1) = .true.
+                        do k = fpllims(2,1),fpllims(2,2)
+                            sh = nint(sqrt(real(h*h + k*k)))
+                            if( sh > fplnyq ) cycle
+                            ! non-uniform sampling location
+                            loc = matmul(real([h,k,0]), rotmats(isym,:,:))
+                            ! window
+                            win(1,:) = nint(loc)
+                            win(2,:) = win(1,:) + iwinsz
+                            win(1,:) = win(1,:) - iwinsz
+                            ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
+                            if( win(2,1) < self%lims(1,1) )cycle
+                            ! Fourier component & CTF
+                            comp   = pwght * fpl%cmplx_plane(h,k)
+                            ctfval = pwght * fpl%ctfsq_plane(h,k)
+                            ! (weighted) kernel
+                            w = 1.
+                            do i=1,self%wdim
+                                dists    = real(win(1,:) + i - 1) - loc
+                                w(i,:,:) = w(i,:,:) * self%kbwin%apod(dists(1))
+                                w(:,i,:) = w(:,i,:) * self%kbwin%apod(dists(2))
+                                w(:,:,i) = w(:,:,i) * self%kbwin%apod(dists(3))
+                            enddo
+                            w = w / sum(w)
+                            self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
+                                &self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + 1.0
+                        end do
                     end do
-                end do
-                !$omp end do
+                    !$omp end do
+                enddo
             end do
             !$omp end parallel
         endif
@@ -508,7 +517,6 @@ contains
         use simple_gridding, only: mul_w_instr
         class(reconstructor),    intent(inout) :: self
         logical, optional,       intent(in)    :: do_gridcorr
-        complex(kind=c_float_complex), pointer :: pcmat(:,:,:)    =>null()
         complex(kind=c_float_complex), pointer :: cmatW(:,:,:)    =>null()
         complex(kind=c_float_complex), pointer :: cmatWprev(:,:,:)=>null()
         complex,    parameter :: one   = cmplx(1.,0.)
@@ -518,9 +526,7 @@ contains
         type(kbinterpol)      :: kbwin
         type(image)           :: W_img, Wprev_img
         real,     allocatable :: antialw(:)
-        real(dp), allocatable :: rho_average(:)
-        integer,  allocatable :: counts(:)
-        real    :: winsz, val_prev, val, invrho, rsh_sq, rho
+        real    :: winsz, val_prev, val, invrho, rsh_sq
         integer :: h,k,m, phys(3), iter, sh, cmat_shape(3), i,j,l
         logical :: l_gridcorr, l_lastiter
         ! kernel
@@ -639,7 +645,6 @@ contains
 
     subroutine compress_exp( self )
         class(reconstructor), intent(inout) :: self
-        real    :: rho
         integer :: phys(3), h, k, m
         if(.not. allocated(self%cmat_exp) .or. .not.allocated(self%rho_exp))then
             THROW_HARD('expanded complex or rho matrices do not exist; compress_exp')

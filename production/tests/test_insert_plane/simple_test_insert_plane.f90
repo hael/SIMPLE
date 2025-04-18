@@ -19,7 +19,7 @@ type(fplane), allocatable :: fpls(:)
 real,         allocatable :: rhoexp_singlethread(:,:,:), rhoexp_multithread(:,:,:)
 real,         pointer     :: ptr(:,:,:)
 real                      :: error
-integer                   :: i,j, nvoxels, nerrors, chunksize
+integer                   :: i,j, nvoxels, nerrors, stride
 integer, parameter :: BOX      = 64
 integer, parameter :: NREPEATS = 50
 
@@ -35,11 +35,10 @@ call cline%set('objfun',  'cc')
 call cline%set('ctf',     'no')
 call cline%set('pgrp',    'c1')
 call cline%set('oritype', 'ptcl3D')
-call cline%set('box',      BOX)
-call cline%set('box_crop', BOX)
 call cline%set('smpd',     1.0)
 call cline%set('smpd_crop',1.0)
-call cline%set('nptcls',   1)
+if( .not.cline%defined('box')    )call cline%set('box',    BOX)
+if( .not.cline%defined('nptcls') )call cline%set('nptcls', 10)
 call b%init_params_and_build_strategy3D_tbox(cline, p)
 
 ! dummy inits
@@ -64,7 +63,7 @@ do i = 1,p%nptcls
 enddo
 
 call o%new_ori(.true.)
-do chunksize = 1,BOX/4
+do stride = 1,16
 
     error   = 0.0
     nerrors = 0
@@ -88,7 +87,7 @@ do chunksize = 1,BOX/4
         call b%eorecvols(1)%reset_all
         do i = 1,p%nptcls
             call b%spproj%os_ptcl3D%get_ori(i, o)
-            call b%eorecvols(1)%test_grid_plane(b%pgrpsyms, o, fpls(i), 0, 1.0, chunksize)
+            call b%eorecvols(1)%test_grid_plane(b%pgrpsyms, o, fpls(i), 0, 1.0, stride)
         enddo
         call b%eorecvols(1)%get_rhoexp_ptr('even',ptr)
         rhoexp_multithread = ptr(:,:,:)
@@ -99,7 +98,7 @@ do chunksize = 1,BOX/4
         deallocate(rhoexp_singlethread,rhoexp_multithread)
     enddo
     error = 100.0*error/real(p%nptcls)/real(NREPEATS)
-    print *,'box chunksize %error ',BOX, chunksize, error
+    print *,'box stride %error ',p%box, stride, error
 enddo
 
 end program simple_test_insert_plane
