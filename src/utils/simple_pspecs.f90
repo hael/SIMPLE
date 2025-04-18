@@ -129,6 +129,7 @@ contains
         &self%dists2good(self%nspecs), self%dists2bad(self%nspecs), source=0.)
         allocate(self%ranks(self%nspecs), self%order(self%nspecs), self%clsinds_spec(self%nspecs),&
         self%clsinds(self%nspecs), self%clspops(self%nspecs), source=0)
+        allocate(self%clsscore_stats(self%ncls))
         ! set spectrum indices
         ispec = 0
         do icls = 1, ncls
@@ -580,16 +581,17 @@ contains
     subroutine kill( self )
         class(pspecs), intent(inout) :: self
         if( self%exists )then
-            if( allocated(self%pspecs)       ) deallocate(self%pspecs)
-            if( allocated(self%resarr)       ) deallocate(self%resarr)
-            if( allocated(self%dynranges)    ) deallocate(self%dynranges)
-            if( allocated(self%dists2good)   ) deallocate(self%dists2good)
-            if( allocated(self%dists2bad)    ) deallocate(self%dists2bad)
-            if( allocated(self%ranks)        ) deallocate(self%ranks)
-            if( allocated(self%order)        ) deallocate(self%order)
-            if( allocated(self%clsinds_spec) ) deallocate(self%clsinds_spec)
-            if( allocated(self%clsinds)      ) deallocate(self%clsinds)
-            if( allocated(self%clspops)      ) deallocate(self%clspops)
+            if( allocated(self%pspecs)         ) deallocate(self%pspecs)
+            if( allocated(self%resarr)         ) deallocate(self%resarr)
+            if( allocated(self%dynranges)      ) deallocate(self%dynranges)
+            if( allocated(self%dists2good)     ) deallocate(self%dists2good)
+            if( allocated(self%dists2bad)      ) deallocate(self%dists2bad)
+            if( allocated(self%ranks)          ) deallocate(self%ranks)
+            if( allocated(self%order)          ) deallocate(self%order)
+            if( allocated(self%clsinds_spec)   ) deallocate(self%clsinds_spec)
+            if( allocated(self%clsinds)        ) deallocate(self%clsinds)
+            if( allocated(self%clspops)        ) deallocate(self%clspops)
+            if( allocated(self%clsscore_stats) ) deallocate(self%clsscore_stats)
             self%exists = .false.
         endif
     end subroutine kill
