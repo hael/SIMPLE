@@ -116,6 +116,7 @@ contains
         call cline%set('balance',         'no') ! balanced particle sampling based on available 3D solution
         call cline%set('greedy_sampling', 'no') ! stochastic within-class selection without consideration to objective function value
         call cline%set('trail_rec',      'yes') ! trailing average 3D reconstruction
+        call cline%set('gridding','no')         ! should not be on when trail_rec is on
         call cline%set('refine',       'neigh') ! greedy multi-neighborhood 3D refinement 
         call cline%set('icm',            'yes') ! ICM regularization to maximize map connectivity
         call cline%set('automsk',        'yes') ! envelope masking for background flattening
@@ -126,7 +127,6 @@ contains
         call cline%set('envfsc',         'yes') ! we use the envelope mask when calculating an FSC plot
         call cline%set('lplim_crit',     0.143) ! we use the 0.143 criterion for low-pass limitation
         call cline%set('lam_anneal',     'yes') ! we conduct deterministic annealing of the lambda regularization parameter
-        call cline%set('keepvol',         'no') ! we do not keep volumes for each iteration
         call cline%set('incrreslim',      'no') ! if anything 'yes' makes it slightly worse, but no real difference right now
         ! overridable defaults
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',        'yes')
@@ -138,6 +138,7 @@ contains
         if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',       'yes') ! better map with ml_reg='yes'
         if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'no') ! works, should be considered if the defaults are not satisfactory
         if( .not. cline%defined('maxits')      ) call cline%set('maxits',          20) ! ~2 passes over particles, sufficient ?
+        if( .not. cline%defined('keepvol')     ) call cline%set('keepvol',       'no') ! we do not keep volumes for each iteration by deafult
         call params%new(cline)
         call cline%set('maxits_glob', params%maxits) ! needed for correct lambda annealing
         call cline%set('mkdir', 'no') ! to avoid nested directory structure
@@ -174,7 +175,6 @@ contains
         ! generate an initial 3D reconstruction
         cline_reconstruct3D_distr = cline
         call cline_reconstruct3D_distr%set('prg', 'reconstruct3D') ! required for distributed call
-        call cline_reconstruct3D_distr%set('gridding','yes')
         call cline_reconstruct3D_distr%delete('trail_rec')
         call cline_reconstruct3D_distr%delete('objfun')
         call cline_reconstruct3D_distr%delete('needs_sigma')
