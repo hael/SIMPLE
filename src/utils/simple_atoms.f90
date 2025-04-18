@@ -71,6 +71,7 @@ type :: atoms
     procedure          :: copy
     procedure          :: extract_atom
     ! CHECKER
+    procedure          :: check_center
     procedure          :: element_exists
     ! GETTERS/SETTERS
     procedure          :: does_exist
@@ -289,7 +290,18 @@ contains
 
     ! CHECKERS
 
-    logical function element_exists( self, element)
+    !>brief check if PDB coordinates need to be centered with respect to the volume - mostly PDBs for X-ray exps.
+    logical function check_center( self )
+        class(atoms),  intent(inout) :: self
+        if( any(self%xyz(:,:) < 0.) )then
+            check_center = .true.
+            THROW_WARN('PDB atomic center off of the center volume; check_center')
+        else
+            check_center = .false.
+        endif
+    end function check_center
+
+    logical function element_exists( self, element )
         class(atoms),     intent(inout) :: self
         character(len=*), intent(in)    :: element
         select case(len_trim(element))
@@ -299,14 +311,14 @@ contains
             element_exists = exists(element(1:2))
         case(3)
             element_exists = exists(element(1:1)//' ').and.exists(element(2:3))
-            if(.not.element_exists) element_exists = exists(element(2:3)).and.exists(element(3:3)//' ')
+            if( .not.element_exists ) element_exists = exists(element(2:3)).and.exists(element(3:3)//' ')
         case(4)
             element_exists = exists(element(1:2)).and.exists(element(3:4))
         case DEFAULT
             element_exists = .false.
             THROW_WARN('Non complying format; atoms%element_exists : '//trim(element))
         end select
-        if( .not.element_exists) THROW_WARN('Unknown element: '//trim(element))
+        if( .not.element_exists ) THROW_WARN('Unknown element: '//trim(element))
         contains
 
             logical function exists(el)
@@ -1239,17 +1251,17 @@ contains
         real                      :: mol_dim(3), center(3), qrt_box(3), max_dist, dist
         integer                   :: ldim(3), i_atom, j_atom
         logical                   :: use_center = .false.
-        if(present(pdb_out))then
+        if( present(pdb_out) )then
             pdbfile_centered = trim(pdb_out)
         else
             pdbfile_centered = trim(get_fbody(pdb_file,'pdb'))//'_centered.pdb'
         endif
-        if(present(center_pdb))then
+        if( present(center_pdb) )then
             if( center_pdb ) use_center = .true.
         endif
         if( any(self%xyz(:,:) < 0.) )then
-            write(logfhandle,'(A)') 'Warning: PDB atomic center moved to the center of the box'
-            use_center = .true. ! it needs to be centered because the PDB coordinates does not come from cryoEM
+            THROW_WARN('PDB atomic center moved to the center of the box; pdb2mrc')
+            use_center = .true. ! it needs to be centered because PDB coordinates do not come from cryoEM
         endif
         write(logfhandle,'(A,f8.3,A)') 'Sampling distance: ',smpd,' Angstrom'
         call self%new(pdb_file)
@@ -1266,7 +1278,7 @@ contains
         endif
         if( present(vol_dim) )then
             ldim        = round2even( (mol_dim)/smpd )
-            if( any(vol_dim < ldim) ) THROW_HARD('ERROR! Inputted MRC volume dimensions smaller than the molecule dimensions ; pdb2mrc')
+            if( any(vol_dim < ldim) ) THROW_HARD('Inputted MRC volume dimensions smaller than the molecule dimensions ; pdb2mrc')
             ldim        = vol_dim
         else
             max_dist = 0.
@@ -1313,7 +1325,7 @@ contains
         logical     :: outside
         logical, allocatable :: mask_byres(:)
         smpd = vol1%get_smpd()
-        if(present(filename))then
+        if( present(filename) )then
              open(unit=46,file=trim(filename//".csv"))
         !     !  open(unit=45,file=trim("atomic_centers.xyz"))
         !     !  write(45,*) self%n
@@ -1338,7 +1350,7 @@ contains
             cc = vol_at1%real_corr(vol_at2)
             call self%set_atom_corr(i_atom, cc)
             call self%set_beta(i_atom, cc)
-            if(present(filename))then
+            if( present(filename) )then
                 write(46,'(a,1x,4(a,f10.6))') self%element(i_atom),",",self%xyz(i_atom,1),",",self%xyz(i_atom,2),",",self%xyz(i_atom,3),",",self%atom_corr(i_atom)
                 !write(45,'(a,1x,f10.6,1x,f10.6,1x,f10.6)') trim(adjustl(self%element(i_atom))), self%xyz(i_atom,1), self%xyz(i_atom,2), self%xyz(i_atom,3)
             endif
@@ -1346,7 +1358,7 @@ contains
             call vol_at2%kill
             call atom%kill
         enddo
-        if(present(filename))then
+        if( present(filename) )then
             write(46,'(a,/,a)') 'CC Score by Residue [-1 1]',' Res    CC Res Score'
             do i_res = 1, self%get_nres()
                 allocate(mask_byres(self%n),source=.false.)
