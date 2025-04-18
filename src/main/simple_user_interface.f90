@@ -76,6 +76,7 @@ end type simple_program
 type(simple_program), target :: abinitio2D
 type(simple_program), target :: abinitio_cleanup2D
 type(simple_program), target :: abinitio3D_cavgs
+type(simple_program), target :: abinitio3D_cavgs_fast
 type(simple_program), target :: abinitio3D
 type(simple_program), target :: abinitio3D_parts
 type(simple_program), target :: abinitio3D_stream
@@ -405,6 +406,7 @@ contains
         call new_abinitio2D
         call new_abinitio_cleanup2D
         call new_abinitio3D_cavgs
+        call new_abinitio3D_cavgs_fast
         call new_abinitio3D
         call new_abinitio3D_parts
         call new_abinitio3D_stream
@@ -557,6 +559,7 @@ contains
         call push2prg_ptr_array(abinitio2D)
         call push2prg_ptr_array(abinitio_cleanup2D)
         call push2prg_ptr_array(abinitio3D_cavgs)
+        call push2prg_ptr_array(abinitio3D_cavgs_fast)
         call push2prg_ptr_array(abinitio3D)
         call push2prg_ptr_array(abinitio3D_parts)
         call push2prg_ptr_array(abinitio3D_stream)
@@ -718,6 +721,8 @@ contains
                 ptr2prg => abinitio_cleanup2D
             case('abinitio3D_cavgs')
                 ptr2prg => abinitio3D_cavgs
+            case('abinitio3D_cavgs_fast')
+                ptr2prg => abinitio3D_cavgs_fast
             case('abinitio3D')
                 ptr2prg => abinitio3D
             case('abinitio3D_parts')
@@ -1015,6 +1020,7 @@ contains
         write(logfhandle,'(A)') abinitio2D%name
         write(logfhandle,'(A)') abinitio_cleanup2D%name
         write(logfhandle,'(A)') abinitio3D_cavgs%name
+        write(logfhandle,'(A)') abinitio3D_cavgs_fast%name
         write(logfhandle,'(A)') abinitio3D%name
         write(logfhandle,'(A)') abinitio3D_parts%name
         write(logfhandle,'(A)') analyze_pspecs%name
@@ -3130,15 +3136,51 @@ contains
         call abinitio3D_cavgs%set_input('comp_ctrls', 1, nthr, gui_submenu="compute", gui_advanced=.false.)
     end subroutine new_abinitio3D_cavgs
 
+    subroutine new_abinitio3D_cavgs_fast
+        ! PROGRAM SPECIFICATION
+        call abinitio3D_cavgs_fast%new(&
+        &'abinitio3D_cavgs_fast',&                                                                    ! name
+        &'Rapid 3D ab initio model(s) generation from class averages',&                               ! descr_short
+        &'is a distributed workflow for generating crude ab initio 3D model(s) from class averages',& ! descr_long
+        &'simple_exec',&                                                                              ! executable
+        &0, 0, 0, 4, 4, 1, 1, .true., gui_advanced=.false.)                                           ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call abinitio3D_cavgs_fast%set_input('srch_ctrls', 1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
+        &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call abinitio3D_cavgs_fast%set_input('srch_ctrls', 2, pgrp)
+        call abinitio3D_cavgs_fast%set_input('srch_ctrls', 3, pgrp_start)
+        call abinitio3D_cavgs_fast%set_input('srch_ctrls', 4, nstates, gui_submenu="search", gui_advanced=.false.)
+        ! filter controls
+        call abinitio3D_cavgs_fast%set_input('filt_ctrls', 1, hp, gui_submenu="filter")
+        call abinitio3D_cavgs_fast%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
+        &Angstroms{30}', .false., 30., gui_submenu="filter")
+        call abinitio3D_cavgs_fast%set_input('filt_ctrls', 3, 'lpstart',  'num', 'Starting low-pass limit', 'Starting low-pass limit',&
+            &'low-pass limit for the initial stage in Angstroms', .false., 20., gui_submenu="filter")
+        call abinitio3D_cavgs_fast%set_input('filt_ctrls', 4, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
+            &'low-pass limit for the final stage in Angstroms', .false., 8., gui_submenu="filter")
+        ! mask controls
+        call abinitio3D_cavgs_fast%set_input('mask_ctrls', 1, mskdiam, gui_submenu="mask", gui_advanced=.false.)
+        ! computer controls
+        call abinitio3D_cavgs_fast%set_input('comp_ctrls', 1, nthr, gui_submenu="compute", gui_advanced=.false.)
+    end subroutine new_abinitio3D_cavgs_fast
+
     subroutine new_abinitio3D
         ! PROGRAM SPECIFICATION
         call abinitio3D%new(&
         &'abinitio3D',&                                                                    ! name
         &'3D ab initio model generation from particles',&                                  ! descr_short
-        &'is a distributed workflow for generating an ab initio 3D model from particles',& ! descr_long                                                         ! descr_long
+        &'is a distributed workflow for generating an ab initio 3D model from particles',& ! descr_long
         &'simple_exec',&                                                                   ! executable
-        &0, 0, 0, 10, 6, 1, 3, .true.,&                                                     ! # entries in each group, requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute"  )           ! GUI                                                      
+        &0, 0, 0, 10, 6, 1, 3, .true.,&                                                    ! # entries in each group, requires sp_project
+        &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute"  )           ! GUI
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
