@@ -437,19 +437,19 @@ contains
     end subroutine grid_plane
 
     !> \brief  for testing gridding a Fourier plane
-    subroutine test_grid_plane( self, se, o, fpl, eo, pwght, chunksz )
+    subroutine test_grid_plane( self, se, o, fpl, eo, pwght, stride )
         use simple_fplane, only: fplane
         class(reconstructor_eo), intent(inout) :: self
         class(sym),              intent(inout) :: se
         class(ori),              intent(inout) :: o
         class(fplane),           intent(in)    :: fpl
-        integer,                 intent(in)    :: eo, chunksz
+        integer,                 intent(in)    :: eo, stride
         real,                    intent(in)    :: pwght
         select case(eo)
             case(-1,0)
-                call self%even%test_insert_plane(se, o, fpl, pwght, chunksz)
+                call self%even%test_insert_plane(se, o, fpl, pwght, stride)
             case(1)
-                call self%odd%test_insert_plane(se, o, fpl, pwght, chunksz)
+                call self%odd%test_insert_plane(se, o, fpl, pwght, stride)
             case DEFAULT
                 THROW_HARD('unsupported eo flag; test_grid_plane')
         end select
