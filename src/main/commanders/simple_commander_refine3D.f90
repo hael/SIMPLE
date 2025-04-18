@@ -179,12 +179,9 @@ contains
         call cline_reconstruct3D_distr%delete('objfun')
         call cline_reconstruct3D_distr%delete('needs_sigma')
         call cline_reconstruct3D_distr%delete('sigma_est')
+        call cline_reconstruct3D_distr%delete('update_frac')
         call cline_reconstruct3D_distr%set('objfun', 'cc') ! ugly, but this is how it works in parameters
-        call cline_reconstruct3D_distr%printline
         call xreconstruct3D_distr%execute_safe(cline_reconstruct3D_distr)
-
-        stop
-        
         ! 3D refinement, phase1
         str_state = int2str_pad(1,2)
         call cline%set('vol1', VOL_FBODY//str_state//params_glob%ext)
@@ -211,11 +208,13 @@ contains
         params%mskfile = MSKVOL_FILE
         call cline%set('mskfile',           MSKVOL_FILE)
         call cline%set('maxits',          maxits_phase1)
-        call cline%set('lp_auto',                  'no')
+        call cline%set('lp_auto',  trim(params%lp_auto))
         call cline%set('startit',                  iter)
         call cline%set('which_iter',               iter)
         call xrefine3D_distr%execute_safe(cline)
-
+        ! re-reconstruct from all particle images
+        call xreconstruct3D_distr%execute_safe(cline_reconstruct3D_distr)
+        call simple_copy_file(VOL_FBODY//str_state//params_glob%ext, 'recvol_phase2'//params_glob%ext)
 
         !**************TESTS2DO
         ! check so that we have a starting 3D alignment
