@@ -23,7 +23,8 @@ use simple_decay_funs
 use simple_nice
 implicit none
 
-public :: abinitio3D_cavgs_commander, abinitio3D_commander, multivol_assign_commander, abinitio3D_parts_commander
+public :: abinitio3D_cavgs_commander, abinitio3D_cavgs_fast_commander, abinitio3D_commander
+public :: multivol_assign_commander, abinitio3D_parts_commander
 private
 #include "simple_local_flags.inc"
 
@@ -31,6 +32,11 @@ type, extends(commander_base) :: abinitio3D_cavgs_commander
     contains
     procedure :: execute => exec_abinitio3D_cavgs
 end type abinitio3D_cavgs_commander
+
+type, extends(commander_base) :: abinitio3D_cavgs_fast_commander
+    contains
+    procedure :: execute => exec_abinitio3D_cavgs_fast
+end type abinitio3D_cavgs_fast_commander
 
 type, extends(commander_base) :: abinitio3D_commander
     contains
@@ -351,6 +357,32 @@ contains
             end subroutine conv_eo
 
     end subroutine exec_abinitio3D_cavgs
+
+    !> for crude generation of an initial 3D model from class averages
+    subroutine exec_abinitio3D_cavgs_fast( self, cline )
+        class(abinitio3D_cavgs_fast_commander), intent(inout) :: self
+        class(cmdline),                         intent(inout) :: cline
+        type(abinitio3D_cavgs_commander) :: xabinitio3D_cavgs
+        real :: mskdiam, lpstart, lpstop
+        ! resolution limits: lpstart in [12;20], lpstop in [7.;8.]
+        mskdiam = cline%get_rarg('mskdiam')
+        lpstart = max(min(mskdiam/10., 20.), 12.)
+        lpstop  = min(max(mskdiam/25.,  7.),  8.)
+        if( cline%defined('lpstart') ) lpstart = cline%get_rarg('lpstart')
+        if( cline%defined('lpstop')  ) lpstop  = cline%get_rarg('lpstop')
+        if( lpstop > lpstart ) lpstop = lpstart
+        call cline%set('lpstart', lpstart)
+        call cline%set('lpstop',  lpstop)
+        ! multi-states
+        if( cline%defined('nstates') )then
+            if( cline%get_iarg('nstates') > 1 )then
+                call cline%set('multivol_mode', 'independent')
+            endif
+        endif
+        ! execution
+        call exec_abinitio3D_cavgs(xabinitio3D_cavgs, cline)
+        call simple_end('**** SIMPLE_ABINITIO3D_CAVGS NORMAL STOP ****')
+    end subroutine exec_abinitio3D_cavgs_fast
 
     !> for generation of an initial 3d model from particles
     subroutine exec_abinitio3D( self, cline )

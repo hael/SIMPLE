@@ -78,6 +78,7 @@ type(autoselect_cavgs_commander)            :: xautoselect_cavgs
 type(estimate_lpstages_commander)           :: xestimate_lpstages
 type(noisevol_commander)                    :: xnoisevol
 type(abinitio3D_cavgs_commander)            :: xabinitio3D_cavgs
+type(abinitio3D_cavgs_fast_commander)       :: xabinitio3D_cavgs_fast
 type(abinitio3D_commander)                  :: xabinitio3D
 type(multivol_assign_commander)             :: xmultivol_assign
 type(abinitio3D_parts_commander)            :: xabinitio3D_parts
@@ -289,6 +290,12 @@ select case(trim(prg))
         else
             call xabinitio3D_cavgs%execute(cline)
         endif
+    case( 'abinitio3D_cavgs_fast' )
+        if( cline%defined('nrestarts') )then
+            call restarted_exec(cline, 'abinitio3D_cavgs_fast', 'simple_exec')
+        else
+            call xabinitio3D_cavgs_fast%execute(cline)
+        endif
     case( 'abinitio3D' )
         if( cline%defined('nrestarts') )then
             call restarted_exec(cline, 'abinitio3D', 'simple_exec')
@@ -468,7 +475,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('c0b2dcd0')
+call simple_print_git_version('86546301')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
