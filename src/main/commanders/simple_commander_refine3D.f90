@@ -102,7 +102,7 @@ contains
         type(class_sample), allocatable :: clssmp(:)
         character(len=:),   allocatable :: str_state, vol_even, vol_odd
         real             :: smpd_target, smpd_crop, scale, trslim
-        integer          :: box_crop
+        integer          :: box_crop, maxits_phase1, maxits_phase2, iter
         logical          :: l_autoscale
         type(parameters) :: params
         type(sp_project) :: spproj
@@ -111,6 +111,7 @@ contains
         ! commanders
         type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
         type(refine3D_distr_commander)      :: xrefine3D_distr
+
         ! hard defaults
         call cline%set('balance',         'no') ! balanced particle sampling based on available 3D solution
         call cline%set('greedy_sampling', 'no') ! stochastic within-class selection without consideration to objective function value
@@ -140,6 +141,9 @@ contains
         call params%new(cline)
         call cline%set('maxits_glob', params%maxits) ! needed for correct lambda annealing
         call cline%set('mkdir', 'no') ! to avoid nested directory structure
+        if( mod(params%maxits,2) /= 0) THROW_HARD('Maximum number of iterations (MAXITS) need to be divisible with 2')
+        maxits_phase1 = params%maxits / 2
+        maxits_phase2 = maxits_phase1
         if( params%box <= MINBOX )then
             smpd_target = params%smpd
             smpd_crop   = params%smpd
@@ -176,16 +180,42 @@ contains
         call cline_reconstruct3D_distr%delete('needs_sigma')
         call cline_reconstruct3D_distr%delete('sigma_est')
         call cline_reconstruct3D_distr%set('objfun', 'cc') ! ugly, but this is how it works in parameters
+        call cline_reconstruct3D_distr%printline
         call xreconstruct3D_distr%execute_safe(cline_reconstruct3D_distr)
+
+        stop
+        
+        ! 3D refinement, phase1
         str_state = int2str_pad(1,2)
         call cline%set('vol1', VOL_FBODY//str_state//params_glob%ext)
         params%mskfile = MSKVOL_FILE
         call cline%set('mskfile',           MSKVOL_FILE)
         call cline%set('prg',                'refine3D')
         call cline%set('ufrac_trec', params%update_frac)
-        ! 3D refinement
-        params_glob => null() ! let the refine3D_commander take charge of this one
-        call xrefine3D_distr%execute(cline)
+        call cline%set('maxits',          maxits_phase1)
+        call cline%set('lp_auto',                 'yes')
+        call xrefine3D_distr%execute_safe(cline)
+        ! iteration number bookkeeping
+        iter = 0
+        if( cline%defined('endit') )then
+            iter = cline%get_iarg('endit')
+            call cline%delete('endit')
+        endif
+        iter = iter + 1
+        ! re-reconstruct from all particle images
+        call cline_reconstruct3D_distr%set('mskfile', MSKVOL_FILE)
+        call xreconstruct3D_distr%execute_safe(cline_reconstruct3D_distr)
+        ! 3D refinement, phase2
+        call simple_copy_file(VOL_FBODY//str_state//params_glob%ext, 'recvol_phase1'//params_glob%ext)
+        call cline%set('vol1', VOL_FBODY//str_state//params_glob%ext)
+        params%mskfile = MSKVOL_FILE
+        call cline%set('mskfile',           MSKVOL_FILE)
+        call cline%set('maxits',          maxits_phase1)
+        call cline%set('lp_auto',                  'no')
+        call cline%set('startit',                  iter)
+        call cline%set('which_iter',               iter)
+        call xrefine3D_distr%execute_safe(cline)
+
 
         !**************TESTS2DO
         ! check so that we have a starting 3D alignment
