@@ -3235,7 +3235,7 @@ contains
                     enddo
                 endif
                 call pftcc%memoize_refs
-                ! update sigmas and memoize_sqsum_ptcl with updated sigmas
+                ! update sigmas
                 !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,orientation,iref,sh)
                 do iptcl = pfromto(1),pfromto(2)
                     call build_glob%spproj_field%get_ori(pinds(iptcl), orientation)
@@ -3243,10 +3243,10 @@ contains
                     sh   = build_glob%spproj_field%get_2Dshift(iptcl)
                     ! computing sigmas by shifting/rotating refs to the particle frames
                     call pftcc%gencorr_sigma_contrib(iref, iptcl, sh, pftcc%get_roind(360. - orientation%e3get()))
-                    ! memoize_sqsum_ptcl with updated sigmas
-                    call pftcc%memoize_sqsum_ptcl(iptcl)
                 enddo
                 !$omp end parallel do
+                ! need to re-normalize particles with masks
+                call build_batch_particles(pftcc, nptcls, pinds, tmp_imgs)
                 ! prob alignment
                 call eulprob_obj%fill_tab(pftcc)
                 call eulprob_obj%ref_assign
@@ -3256,7 +3256,7 @@ contains
                     euls    = build_glob%eulspace%get_euler(iref)
                     irot    = eulprob_obj%assgn_map(pinds(iptcl))%inpl
                     euls(3) = 360. - pftcc%get_rot(irot)
-                    sh      = [eulprob_obj%assgn_map(pinds(iptcl))%x, eulprob_obj%assgn_map(pinds(iptcl))%y]
+                    sh      = build_glob%spproj_field%get_2Dshift(iptcl) + [eulprob_obj%assgn_map(pinds(iptcl))%x, eulprob_obj%assgn_map(pinds(iptcl))%y]
                     call build_glob%spproj_field%set_euler(iptcl, euls)
                     call build_glob%spproj_field%set_shift(iptcl, sh)
                 enddo

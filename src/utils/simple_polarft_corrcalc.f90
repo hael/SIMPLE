@@ -1196,19 +1196,18 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         type(oris),              intent(in)    :: ref_space
         type(oris),              intent(in)    :: ptcl_space
-        complex(sp), pointer :: pft_ptcl(:,:), shmat(:,:)
+        complex(sp), pointer :: pft_ptcl(:,:)
         real(sp),    pointer :: rctf(:,:)
         type(ori) :: orientation
         integer   :: i, k, iref, irot, ithr, iptcl
         real(dp)  :: numer, denom1, denom2
-        real      :: ctf2_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs), sh(2),&
+        real      :: ctf2_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs), &
                     &ctf2_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs), frc(self%kfromto(1):self%kfromto(2),self%nrefs)
         self%pfts_refs_even = complex(0., 0.)
         self%pfts_refs_odd  = complex(0., 0.)
         ctf2_even = 0.
         ctf2_odd  = 0.
         ithr      = omp_get_thread_num() + 1
-        shmat     => self%heap_vars(ithr)%shmat
         pft_ptcl  => self%heap_vars(ithr)%pft_ref
         rctf      => self%heap_vars(ithr)%pft_r
         do iptcl = self%pfromto(1), self%pfromto(2)
@@ -1216,9 +1215,7 @@ contains
             i    = self%pinds(iptcl)
             iref = ref_space%find_closest_proj(orientation)
             irot = self%get_roind(orientation%e3get())
-            sh   = -ptcl_space%get_2Dshift(iptcl)
-            call self%gen_shmat(ithr, sh, shmat)
-            call self%rotate_ptcl(self%pfts_ptcls(:,:,i) * shmat, irot, pft_ptcl)
+            call self%rotate_ptcl(self%pfts_ptcls(:,:,i), irot, pft_ptcl)
             if( self%with_ctf )then
                 call self%rotate_ctf(iptcl, irot, rctf)
                 if( self%iseven(i) )then
@@ -1263,9 +1260,7 @@ contains
             i    = self%pinds(iptcl)
             iref = ref_space%find_closest_proj(orientation)
             irot = self%get_roind(orientation%e3get())
-            sh   = -ptcl_space%get_2Dshift(iptcl)
-            call self%gen_shmat(ithr, sh, shmat)
-            call self%rotate_ptcl(self%pfts_ptcls(:,:,i) * shmat, irot, pft_ptcl)
+            call self%rotate_ptcl(self%pfts_ptcls(:,:,i), irot, pft_ptcl)
             if( self%with_ctf )then
                 call self%rotate_ctf(iptcl, irot, rctf)
                 self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + pft_ptcl * cmplx(rctf)
