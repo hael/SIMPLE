@@ -3110,13 +3110,12 @@ contains
         class(cmdline),                   intent(inout) :: cline
         integer,          allocatable :: pinds(:)
         real,             allocatable :: sigma2_noise(:,:)
-        type(image),      allocatable :: tmp_imgs(:), refs_even(:), refs_odd(:)
+        type(image),      allocatable :: tmp_imgs(:), refs(:)
         type(polarft_corrcalc)        :: pftcc
         type(builder)                 :: build
         type(parameters)              :: params
         type(eul_prob_tab)            :: eulprob_obj
         type(ori)                     :: orientation
-        type(oris)                    :: tmp_oris
         type(image)                   :: match_img
         integer :: nptcls, ithr, iref, iptcl, irot, iter, pfromto(2)
         real    :: euls(3), sh(2)
@@ -3161,84 +3160,60 @@ contains
             call build_glob%spproj_field%zero_shifts
         endif
         call eulprob_obj%new(pinds)
-        allocate(refs_even(params_glob%nspace),refs_odd(params_glob%nspace))
-        call tmp_oris%copy(build_glob%spproj_field)
-        print *, 'CARTESIAN ALIGNMENT IN PROGRESS'
+        allocate(refs(params_glob%nspace))
+        if( trim(params_glob%coord) .eq. 'cart' )then
+            print *, 'CARTESIAN ALIGNMENT IN PROGRESS'
+        elseif( trim(params_glob%coord) .eq. 'polar' )then
+            print *, 'POLAR ALIGNMENT IN PROGRESS'
+        else
+            THROW_HARD('unrecognized coordinate system!')
+        endif
         params%ncls = params%nspace
         params%frcs = trim(FRCS_FILE)
         call build_glob%clsfrcs%new(params%ncls, params%box_crop, params%smpd_crop, params%nstates)
         do iter = 1, params_glob%maxits
             print *, 'ITER = ', iter
-            ! cartesian cavgs
-            call build_glob%spproj_field%set_projs(build_glob%eulspace)
-            call build_glob%spproj_field%proj2class
-            params%which_iter = iter
-            call cavger_kill()
-            call cavger_new
-            call cavger_transf_oridat( build_glob%spproj )
-            call cavger_assemble_sums( .false. )
-            call cavger_merge_eos_and_norm
-            call cavger_calc_and_write_frcs_and_eoavg(params%frcs, params%which_iter)
-            params%refs      = trim(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//params%ext
-            params%refs_even = trim(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//'_even'//params%ext
-            params%refs_odd  = trim(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//'_odd'//params%ext
-            call cavger_write(trim(params%refs),      'merged')
-            call cavger_write(trim(params%refs_even), 'even'  )
-            call cavger_write(trim(params%refs_odd),  'odd'   )
-            call build_glob%clsfrcs%read(FRCS_FILE)
-            call cavger_read(trim(params%refs_even), 'even' )
-            call cavger_read(trim(params%refs_odd),  'odd' )
-            call build_glob%img_crop_polarizer%init_polarizer(pftcc, params%alpha)
-            call match_img%new([params%box_crop, params%box_crop, 1], params%smpd_crop, wthreads=.false.)
-            do iref = 1, params%ncls
-                call prep2Dref(cavgs_even(iref), match_img, iref, iseven=.true., center=.false.)
-                call build_glob%img_crop_polarizer%polarize(pftcc, match_img, iref, isptcl=.false., iseven=.true.)
-                call prep2Dref(cavgs_odd(iref), match_img, iref, iseven=.false., center=.false.)
-                call build_glob%img_crop_polarizer%polarize(pftcc, match_img, iref, isptcl=.false., iseven=.false.)
-            enddo
+            if( trim(params_glob%coord) .eq. 'cart' )then
+                ! cartesian cavgs
+                call build_glob%spproj_field%set_projs(build_glob%eulspace)
+                call build_glob%spproj_field%proj2class
+                params%which_iter = iter
+                call cavger_kill()
+                call cavger_new
+                call cavger_transf_oridat( build_glob%spproj )
+                call cavger_assemble_sums( .false. )
+                call cavger_merge_eos_and_norm
+                call cavger_calc_and_write_frcs_and_eoavg(params%frcs, params%which_iter)
+                params%refs      = trim(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//params%ext
+                params%refs_even = trim(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//'_even'//params%ext
+                params%refs_odd  = trim(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//'_odd'//params%ext
+                call cavger_write(trim(params%refs),      'merged')
+                call cavger_write(trim(params%refs_even), 'even'  )
+                call cavger_write(trim(params%refs_odd),  'odd'   )
+                call build_glob%clsfrcs%read(FRCS_FILE)
+                call cavger_read(trim(params%refs_even), 'even' )
+                call cavger_read(trim(params%refs_odd),  'odd' )
+                call build_glob%img_crop_polarizer%init_polarizer(pftcc, params%alpha)
+                call match_img%new([params%box_crop, params%box_crop, 1], params%smpd_crop, wthreads=.false.)
+                do iref = 1, params%ncls
+                    call prep2Dref(cavgs_even(iref), match_img, iref, iseven=.true., center=.false.)
+                    call build_glob%img_crop_polarizer%polarize(pftcc, match_img, iref, isptcl=.false., iseven=.true.)
+                    call prep2Dref(cavgs_odd(iref), match_img, iref, iseven=.false., center=.false.)
+                    call build_glob%img_crop_polarizer%polarize(pftcc, match_img, iref, isptcl=.false., iseven=.false.)
+                enddo
+            elseif( trim(params_glob%coord) .eq. 'polar' )then
+                ! update polar refs using current alignment params
+                call pftcc%gen_polar_refs(build_glob%eulspace, build_glob%spproj_field)
+                ! for visualization of polar cavgs
+                call pftcc%prefs_to_cartesian(refs)
+                do iref = 1, params_glob%nspace
+                    call refs(iref)%write('polar_cavgs'//int2str(iter)//'.mrc', iref)
+                    call refs(iref)%kill
+                enddo
+            else
+                THROW_HARD('unrecognized coordinate system!')
+            endif
             call pftcc%memoize_refs
-            ! update sigmas and memoize_sqsum_ptcl with updated sigmas
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,orientation,iref,sh)
-            do iptcl = pfromto(1),pfromto(2)
-                call build_glob%spproj_field%get_ori(pinds(iptcl), orientation)
-                iref = build_glob%eulspace%find_closest_proj(orientation)
-                sh   = build_glob%spproj_field%get_2Dshift(iptcl)
-                ! computing sigmas by shifting/rotating refs to the particle frames
-                call pftcc%gencorr_sigma_contrib(iref, iptcl, sh, pftcc%get_roind(360. - orientation%e3get()))
-                ! memoize_sqsum_ptcl with updated sigmas
-                call pftcc%memoize_sqsum_ptcl(iptcl)
-            enddo
-            !$omp end parallel do
-            ! prob alignment
-            call eulprob_obj%fill_tab(pftcc)
-            call eulprob_obj%ref_assign
-            ! update spproj with the new alignment
-            do iptcl = pfromto(1), pfromto(2)
-                iref    = eulprob_obj%assgn_map(pinds(iptcl))%iproj
-                euls    = build_glob%eulspace%get_euler(iref)
-                irot    = eulprob_obj%assgn_map(pinds(iptcl))%inpl
-                euls(3) = 360. - pftcc%get_rot(irot)
-                sh      = [eulprob_obj%assgn_map(pinds(iptcl))%x, eulprob_obj%assgn_map(pinds(iptcl))%y]
-                call build_glob%spproj_field%set_euler(iptcl, euls)
-                call build_glob%spproj_field%set_shift(iptcl, sh)
-            enddo
-        enddo
-        call build_glob%spproj_field%copy(tmp_oris)
-        print *, 'POLAR ALIGNMENT IN PROGRESS'
-        do iter = 1, params_glob%maxits
-            print *, 'ITER = ', iter
-            ! update polar refs using current alignment params
-            call pftcc%gen_polar_refs(build_glob%eulspace, build_glob%spproj_field)
-            call pftcc%memoize_refs
-            ! for visualization of polar cavgs
-            call pftcc%prefs_to_cartesian(refs_even, is_even=.true.)
-            call pftcc%prefs_to_cartesian(refs_odd,  is_even=.false.)
-            do iref = 1, params_glob%nspace
-                call refs_even(iref)%write('even_polar_cavgs'//int2str(iter)//'.mrc', iref)
-                call refs_even(iref)%kill
-                call refs_odd(iref)%write('odd_polar_cavgs'//int2str(iter)//'.mrc', iref)
-                call refs_odd(iref)%kill
-            enddo
             ! update sigmas and memoize_sqsum_ptcl with updated sigmas
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,orientation,iref,sh)
             do iptcl = pfromto(1),pfromto(2)
