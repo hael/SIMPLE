@@ -163,7 +163,7 @@ contains
         real        :: centre(3), shift(3), pdb_center(3), minmax(2), radius, smpd
         integer     :: i
         logical     :: was_ft
-        if( vol_inout%is_2d() )THROW_HARD('intended for volumes only; mask_from_pdb')
+        if( vol_inout%is_2d() ) THROW_HARD('intended for volumes only; mask_from_pdb')
         was_ft = vol_inout%is_ft()
         smpd   = vol_inout%get_smpd()
         call self%new(vol_inout%get_ldim(), smpd)
@@ -177,10 +177,10 @@ contains
         else
             radius = real(params_glob%binwidth) * smpd
         endif
-        if( params_glob%center.eq.'yes' )then
+        if( params_glob%center .eq. 'yes' )then
             ! shift volume & oris
             call vol_inout%shift(shift)
-            if(present(os)) call os%map3dshift22d(-shift)
+            if( present(os) ) call os%map3dshift22d(-shift)
             shift       = - shift * smpd
             shifted_pdb = pdb
             call shifted_pdb%translate(shift)
@@ -199,9 +199,9 @@ contains
         call distimg%mul(self) ! for suggested focusmsk
         call self%cos_edge(params_glob%edge,cos_img)
         ! multiply with mask
-        call vol_inout%ifft()
+        !call vol_inout%ifft()
         call vol_inout%mul(cos_img)
-        if(was_ft) call vol_inout%fft()
+        if( was_ft ) call vol_inout%fft()
         ! focusmsk
         minmax = distimg%minmax()
         write(logfhandle,'(A,I4)') '>>> SUGGESTED FOCUSMSK: ', ceiling(minmax(2))+params_glob%edge

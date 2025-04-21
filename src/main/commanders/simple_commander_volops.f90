@@ -172,19 +172,23 @@ contains
     ! Sharpening protocol for raw volumes using even and odd pair
     subroutine exec_sharpvol( self, cline )
         !use simple_sp_project, only: sp_project
-        use simple_atoms,      only: atoms
+        use simple_atoms,        only: atoms
+        use simple_segmentation, only: otsu_img
+        use simple_binimage,     only: binimage
         class(sharpvol_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         real,             allocatable :: fsc(:), optlp(:), res(:)
         character(len=:), allocatable :: fname_vol, fname_even, fname_odd, fname_pdb, fname_pproc, fname_lp, fname_mirr
         type(parameters)      :: params
         type(image)           :: vol_bfac, vol_no_bfac, vol_pdb, cos_img
+        type(binimage)        :: vol_pdbin
         type(atoms)           :: pdb
         type(masker)          :: msker
         character(len=STDLEN) :: pdbout_fname
         real    :: fsc0143, fsc05, smpd, lplim
         integer :: state, box, fsc_box, ldim(3), ifoo
         logical :: has_fsc, is_center
+        integer, parameter :: EDGE=6
         ! set defaults
         ! parse commad-line
         call params%new(cline)
@@ -200,6 +204,12 @@ contains
         fname_pproc = basename(add2fbody(trim(fname_vol),   params%ext, PPROC_SUFFIX))
         fname_mirr  = basename(add2fbody(trim(fname_pproc), params%ext, MIRR_SUFFIX))
         fname_lp    = basename(add2fbody(trim(fname_vol),   params%ext, LP_SUFFIX))
+        if( .not.file_exists(fname_even) )then
+            THROW_HARD('volume: '//trim(fname_even)//' does not exist')
+        endif
+        if( .not.file_exists(fname_odd) )then
+            THROW_HARD('volume: '//trim(fname_odd)//' does not exist')
+        endif
         ! read volume(s)
         call find_ldim_nptcls(fname_vol, ldim, ifoo)
         call vol_bfac%new(ldim, params%smpd)
@@ -215,10 +225,10 @@ contains
         call vol_pdb%new(ldim, params%smpd)
         call vol_pdb%read(fname_pdb)
         call vol_pdb%bp(0., 20.)
-        !call pdb_vol%otsu 
-        !call vol_bfac%cos_edge(params_glob%edge, cos_img)
-        ! multiply with mask
-        !call vol_bfac%mul(cos_img)
+        call vol_pdb%ifft()
+        call otsu_img(vol_pdb)
+        call vol_pdbin%transfer2bimg(vol_pdb)
+        call vol_pdbin%cos_edge(EDGE)
         ! filtered function & apply Bfactor
         ! check fsc filter & determine resolution
         has_fsc = .false.        
