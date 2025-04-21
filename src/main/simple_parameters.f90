@@ -205,7 +205,7 @@ type :: parameters
     character(len=STDLEN)     :: bin_cls='yes'        !< binary clustering applied(yes|no){yes}
     character(len=STDLEN)     :: boxtype='eman'
     character(len=STDLEN)     :: cls_init='ptcl'      !< Scheme to generate initial references for 2D classification(ptcl|randcls|rand)
-    character(len=STDLEN)     :: coord='cart'         !< Coordinate system for cluster2D(cart|polar){cart}
+    character(len=STDLEN)     :: coord='cart'         !< Coordinate system for cluster2D(cart|polar|both){cart}
     character(len=STDLEN)     :: cn_type='cn_std'     !< generalised coordination number (cn_gen) or stardard (cn_std)
     character(len=STDLEN)     :: ctf='no'             !< ctf flag(yes|no|flip)
     character(len=STDLEN)     :: detector='bin'       !< detector for edge detection (sobel|bin|otsu)
