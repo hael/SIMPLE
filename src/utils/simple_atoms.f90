@@ -290,7 +290,7 @@ contains
 
     ! CHECKERS
 
-    !>brief check if PDB coordinates need to be centered with respect to the volume - mostly PDBs for X-ray exps.
+    !>brief check if PDB coordinates are off centered with respect to the volume - mostly PDBs for X-ray exps.
     logical function check_center( self )
         class(atoms),  intent(inout) :: self
         if( any(self%xyz(:,:) < 0.) )then
@@ -1259,10 +1259,7 @@ contains
         if( present(center_pdb) )then
             if( center_pdb ) use_center = .true.
         endif
-        if( any(self%xyz(:,:) < 0.) )then
-            THROW_WARN('PDB atomic center moved to the center of the box; pdb2mrc')
-            use_center = .true. ! it needs to be centered because PDB coordinates do not come from cryoEM
-        endif
+        if( self%check_center() ) use_center = .true. ! it needs to be centered because PDB coordinates do not come from cryoEM
         write(logfhandle,'(A,f8.3,A)') 'Sampling distance: ',smpd,' Angstrom'
         call self%new(pdb_file)
         ! dimensions of the molecule
@@ -1311,6 +1308,7 @@ contains
         center      = self%get_geom_center()
         half_box(:) = smpd*(real(ldim(:)/2.))
         call self%translate(-center+half_box)
+        THROW_WARN('PDB atomic center moved to the center of the box; center_pdbcoord')
     end subroutine center_pdbcoord
 
     subroutine map_validation( self, vol1, vol2, filename )
