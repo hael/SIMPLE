@@ -199,21 +199,20 @@ type :: parameters
     character(len=LONGSTRLEN) :: xmlloc=''
     ! other character variables in ascending alphabetical order
     character(len=STDLEN)     :: algorithm=''         !< algorithm to be used
-    character(len=STDLEN)     :: bin_cls='yes'        !< binary clustering applied(yes|no){yes}
-    character(len=STDLEN)     :: cls_init='ptcl'      !< Scheme to generate initial references for 2D classification(ptcl|randcls|rand)
-    character(len=STDLEN)     :: cn_type='cn_std'     !< generalised coordination number (cn_gen) or stardard (cn_std)
     character(len=STDLEN)     :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
     character(len=4)          :: automatic='no'       !< automatic thres for edge detect (yes|no){no}
     character(len=5)          :: automsk='no'         !< automatic envelope masking (yes|tight|no){no}
+    character(len=STDLEN)     :: bin_cls='yes'        !< binary clustering applied(yes|no){yes}
     character(len=STDLEN)     :: boxtype='eman'
-    character(len=STDLEN)     :: wcrit = 'no'         !< correlation weighting scheme (softmax|zscore|sum|cen|exp|no){sum}
+    character(len=STDLEN)     :: cls_init='ptcl'      !< Scheme to generate initial references for 2D classification(ptcl|randcls|rand)
+    character(len=STDLEN)     :: coord='cart'         !< Coordinate system for cluster2D(cart|polar){cart}
+    character(len=STDLEN)     :: cn_type='cn_std'     !< generalised coordination number (cn_gen) or stardard (cn_std)
     character(len=STDLEN)     :: ctf='no'             !< ctf flag(yes|no|flip)
     character(len=STDLEN)     :: detector='bin'       !< detector for edge detection (sobel|bin|otsu)
     character(len=STDLEN)     :: dfunit='microns'     !< defocus unit (A|microns){microns}
     character(len=STDLEN)     :: dir_exec=''          !< name of execution directory
-    character(len=STDLEN)     :: executable=''        !< name of executable
-    character(len=STDLEN)     :: startype=''          !< export type for STAR format (micrograph|select|extract|class2d|initmodel|refine3d|post){all}
     character(len=4)          :: element ='    '      !< atom kind
+    character(len=STDLEN)     :: executable=''        !< name of executable
     character(len=4)          :: ext='.mrc'           !< file extension{.mrc}
     character(len=STDLEN)     :: fbody=''             !< file body
     character(len=STDLEN)     :: filter='no'          !< filter type{no}
@@ -255,10 +254,12 @@ type :: parameters
     character(len=STDLEN)     :: sort=''              !< key to sort oris on
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN)     :: split_mode='even'
+    character(len=STDLEN)     :: startype=''          !< export type for STAR format (micrograph|select|extract|class2d|initmodel|refine3d|post){all}
     character(len=STDLEN)     :: stats='no'           !< provide statistics(yes|no|print){no}
     character(len=STDLEN)     :: tag=''               !< just a tag
     character(len=STDLEN)     :: vol_even=''          !< even reference volume
     character(len=STDLEN)     :: vol_odd=''           !< odd  reference volume
+    character(len=STDLEN)     :: wcrit = 'no'         !< correlation weighting scheme (softmax|zscore|sum|cen|exp|no){sum}
     character(len=STDLEN)     :: wfun='kb'
     character(len=STDLEN)     :: wiener='full'        !< Wiener restoration (full|partial|partial_aln){full}
     character(len=:), allocatable  :: last_prev_dir   !< last previous execution directory
@@ -604,6 +605,7 @@ contains
         call check_carg('cn_type',        self%cn_type)
         call check_carg('combine_eo',     self%combine_eo)
         call check_carg('continue',       self%continue)
+        call check_carg('coord',          self%coord)
         call check_carg('crowded',        self%crowded)
         call check_carg('ctf',            self%ctf)
         call check_carg('ctfpatch',       self%ctfpatch)

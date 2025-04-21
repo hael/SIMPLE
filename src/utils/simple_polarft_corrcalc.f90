@@ -1248,7 +1248,11 @@ contains
                 numer  = sum(real(self%pfts_refs_even(:,k,iref) * conjg(self%pfts_refs_odd(:,k,iref)), kind=dp))
                 denom1 = sum( csq(self%pfts_refs_even(:,k,iref)))
                 denom2 = sum( csq(self%pfts_refs_odd( :,k,iref)))
-                frc(k,iref) = real(numer / sqrt(denom1*denom2))
+                if( sqrt(denom1*denom2) < TINY )then
+                    frc(k,iref) = 1.
+                else
+                    frc(k,iref) = real(numer / sqrt(denom1*denom2))
+                endif
             enddo
         enddo
         ! merging even and odd
