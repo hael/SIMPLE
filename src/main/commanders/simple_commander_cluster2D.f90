@@ -1814,10 +1814,6 @@ contains
                 call pows%kmeans_bincls_pspecs_and_rank
             case('kmed')
                 call pows%kmedoids_bincls_pspecs_and_rank
-            case('greedy')
-                call pows%greedy_bincls_pspecs_and_rank
-            case('hybrid')
-                call pows%hybrid_bincls_pspecs_and_rank
             case DEFAULT
                 THROW_HARD('unsupported algorithm')
         end select
