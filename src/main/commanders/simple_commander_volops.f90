@@ -169,7 +169,7 @@ contains
         call simple_end('**** SIMPLE_CENTER NORMAL STOP ****')
     end subroutine exec_centervol
 
-    ! Sharpening protocol for raw volumes using even and odd pair
+    ! Sharpening protocol for raw volumes using even/odd volume pairs
     subroutine exec_sharpvol( self, cline )
         !use simple_sp_project, only: sp_project
         use simple_atoms,        only: atoms
@@ -214,7 +214,7 @@ contains
         call find_ldim_nptcls(fname_vol, ldim, ifoo)
         call vol_bfac%new(ldim, params%smpd)
         call vol_bfac%read(fname_vol)
-        ! generate pdb mask from pdb
+        ! generate & apply pdb mask from pdb
         call pdb%new(params%pdbfile)
         if( pdb%check_center() .or. params%center_pdb .eq. 'yes' )then
             pdbout_fname = trim(get_fbody(params%pdbfile, 'pdb')) // '_centered.pdb'
@@ -225,10 +225,12 @@ contains
         call vol_pdb%new(ldim, params%smpd)
         call vol_pdb%read(fname_pdb)
         call vol_pdb%bp(0., 20.)
-        call vol_pdb%ifft()
         call otsu_img(vol_pdb)
         call vol_pdbin%transfer2bimg(vol_pdb)
-        call vol_pdbin%cos_edge(EDGE)
+        call vol_pdbin%grow_bins(1)
+        call vol_bfac%mul(vol_pdbin)
+        call vol_pdbin%cos_edge(EDGE, cos_img)
+        call vol_bfac%mul(cos_img)
         ! filtered function & apply Bfactor
         ! check fsc filter & determine resolution
         has_fsc = .false.        
@@ -295,8 +297,10 @@ contains
             call vol_bfac%write(fname_mirr)
         endif
         ! destruct
+        call pdb%kill
         call vol_bfac%kill
         call vol_pdb%kill
+        call vol_pdbin%kill
         call vol_no_bfac%kill
         call simple_end('**** SIMPLE_SHARPVOL NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_sharpvol
