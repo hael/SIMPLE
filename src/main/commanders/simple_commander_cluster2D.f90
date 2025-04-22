@@ -3164,11 +3164,21 @@ contains
         ! Build polar particle images
         call build_glob%spproj_field%partition_eo
         call build_glob%spproj_field%set_all2single('state', 1.)
-        call build_batch_particles(pftcc, nptcls, pinds, tmp_imgs)
+        if( trim(params_glob%polar) .eq. 'yes' )then
+            call build_all_particles(pftcc, nptcls, pinds, tmp_imgs)
+        else
+            call build_batch_particles(pftcc, nptcls, pinds, tmp_imgs)
+        endif
         ! randomize oris
         if( trim(params_glob%continue) .eq. 'no' )then
             call build_glob%spproj_field%rnd_oris
             call build_glob%spproj_field%zero_shifts
+        elseif( trim(params_glob%polar) .eq. 'yes' )then
+            do iptcl = pfromto(1), pfromto(2)
+                call pftcc%shift_ptcl(iptcl, -build_glob%spproj_field%get_2Dshift(iptcl))
+            enddo
+            ! re-memoizing ptcls due to shifted ptcls
+            call pftcc%memoize_ptcls
         endif
         call eulprob_obj%new(pinds)
         allocate(refs(params_glob%nspace))
@@ -3246,17 +3256,30 @@ contains
                 endif
                 call pftcc%memoize_refs
                 ! update sigmas
-                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,orientation,iref,sh)
-                do iptcl = pfromto(1),pfromto(2)
-                    call build_glob%spproj_field%get_ori(pinds(iptcl), orientation)
-                    iref = build_glob%eulspace%find_closest_proj(orientation)
-                    sh   = build_glob%spproj_field%get_2Dshift(iptcl)
-                    ! computing sigmas by shifting/rotating refs to the particle frames
-                    call pftcc%gencorr_sigma_contrib(iref, iptcl, sh, pftcc%get_roind(360. - orientation%e3get()))
-                enddo
-                !$omp end parallel do
+                if( trim(params_glob%polar) .eq. 'no' )then
+                    !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,orientation,iref,sh)
+                    do iptcl = pfromto(1),pfromto(2)
+                        call build_glob%spproj_field%get_ori(pinds(iptcl), orientation)
+                        iref = build_glob%eulspace%find_closest_proj(orientation)
+                        sh   = build_glob%spproj_field%get_2Dshift(iptcl)
+                        ! computing sigmas by shifting/rotating refs to the particle frames
+                        call pftcc%gencorr_sigma_contrib(iref, iptcl, sh, pftcc%get_roind(360. - orientation%e3get()))
+                    enddo
+                    !$omp end parallel do
+                else
+                    !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,orientation,iref)
+                    do iptcl = pfromto(1),pfromto(2)
+                        call build_glob%spproj_field%get_ori(pinds(iptcl), orientation)
+                        iref = build_glob%eulspace%find_closest_proj(orientation)
+                        ! computing sigmas by shifting/rotating refs to the particle frames
+                        call pftcc%gencorr_sigma_contrib(iref, iptcl, [0.,0.], pftcc%get_roind(360. - orientation%e3get()))
+                        ! memoize_sqsum_ptcl with updated sigmas
+                        call pftcc%memoize_sqsum_ptcl(iptcl)
+                    enddo
+                    !$omp end parallel do
+                endif
                 ! need to re-normalize particles with masks
-                call build_batch_particles(pftcc, nptcls, pinds, tmp_imgs)
+                if( trim(params_glob%polar) .eq. 'no' ) call build_batch_particles(pftcc, nptcls, pinds, tmp_imgs)
                 ! prob alignment
                 call eulprob_obj%fill_tab(pftcc)
                 call eulprob_obj%ref_assign
@@ -3266,7 +3289,11 @@ contains
                     euls    = build_glob%eulspace%get_euler(iref)
                     irot    = eulprob_obj%assgn_map(pinds(iptcl))%inpl
                     euls(3) = 360. - pftcc%get_rot(irot)
-                    sh      = build_glob%spproj_field%get_2Dshift(iptcl) + [eulprob_obj%assgn_map(pinds(iptcl))%x, eulprob_obj%assgn_map(pinds(iptcl))%y]
+                    ! shifting the polar ptcls to the new position
+                    sh      = [eulprob_obj%assgn_map(pinds(iptcl))%x, eulprob_obj%assgn_map(pinds(iptcl))%y]
+                    if( trim(params_glob%polar) .eq. 'yes' ) call pftcc%shift_ptcl(iptcl, -sh)
+                    ! continuous shift update
+                    sh      = build_glob%spproj_field%get_2Dshift(iptcl) + sh
                     call build_glob%spproj_field%set_euler(iptcl, euls)
                     call build_glob%spproj_field%set_shift(iptcl, sh)
                 enddo

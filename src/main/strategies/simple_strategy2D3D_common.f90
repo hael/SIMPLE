@@ -11,7 +11,7 @@ use simple_stack_io,          only: stack_io
 use simple_discrete_stack_io, only: dstack_io
 implicit none
 
-public :: prepimgbatch, killimgbatch, read_imgbatch, discrete_read_imgbatch
+public :: prepimgbatch, killimgbatch, read_imgbatch, discrete_read_imgbatch, build_all_particles
 public :: set_bp_range, set_bp_range2D, sample_ptcls4update, sample_ptcls4fillin, prepimg4align, prep2Dref
 public :: build_batch_particles, prepare_refs_sigmas_ptcls, calc_3Drec, calc_projdir3Drec
 private
@@ -1263,5 +1263,69 @@ contains
         ! Memoize particles FFT parameters
         call pftcc%memoize_ptcls
     end subroutine build_batch_particles
+
+    subroutine build_all_particles( pftcc, nptcls_here, pinds_here, tmp_imgs )
+        use simple_polarft_corrcalc,       only:  polarft_corrcalc
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        integer,                 intent(in)    :: nptcls_here
+        integer,                 intent(in)    :: pinds_here(nptcls_here)
+        type(image),             intent(inout) :: tmp_imgs(params_glob%nthr)
+        integer :: iptcl_batch, iptcl, ithr
+        call discrete_read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here])
+        ! reassign particles indices & associated variables
+        call pftcc%reallocate_ptcls(nptcls_here, pinds_here)
+        !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
+        do iptcl_batch = 1,nptcls_here
+            ithr  = omp_get_thread_num() + 1
+            iptcl = pinds_here(iptcl_batch)
+            ! prep
+            call prepall(iptcl, build_glob%imgbatch(iptcl_batch), tmp_imgs(ithr))
+            ! transfer to polar coordinates
+            call build_glob%img_crop_polarizer%polarize(pftcc, tmp_imgs(ithr), iptcl, .true., .true., mask=build_glob%l_resmsk)
+            ! e/o flags
+            call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
+        end do
+        !$omp end parallel do
+        call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
+        ! Memoize particles FFT parameters
+        call pftcc%memoize_ptcls
+
+      contains
+
+        subroutine prepall( iptcl, img, img_out )
+            use simple_ctf, only: ctf
+            integer,      intent(in)    :: iptcl
+            class(image), intent(inout) :: img
+            class(image), intent(inout) :: img_out
+            type(ctf)       :: tfun
+            type(ctfparams) :: ctfparms
+            real            :: sdev_noise, crop_factor
+            crop_factor = real(params_glob%box_crop) / real(params_glob%box)
+            ! Normalise
+            call img%norm_noise(build_glob%lmsk, sdev_noise)
+            ! Fourier cropping
+            call img%fft()
+            call img%clip(img_out)
+            ! Phase-flipping
+            ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
+            select case(ctfparms%ctfflag)
+                case(CTFFLAG_NO, CTFFLAG_FLIP)
+                    ! nothing to do
+                case(CTFFLAG_YES)
+                    ctfparms%smpd = ctfparms%smpd / crop_factor != smpd_crop
+                    tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
+                    call tfun%apply_serial(img_out, 'flip', ctfparms)
+                case DEFAULT
+                    THROW_HARD('unsupported CTF flag: '//int2str(ctfparms%ctfflag)//' prepimg4align')
+            end select
+            ! Back to real space
+            call img_out%ifft
+            ! gridding prep
+            if( params_glob%gridding.eq.'yes' ) call build_glob%img_crop_polarizer%div_by_instrfun(img_out)
+            ! return to Fourier space
+            call img_out%fft()
+        end subroutine prepall
+
+    end subroutine build_all_particles
     
 end module simple_strategy2D3D_common
