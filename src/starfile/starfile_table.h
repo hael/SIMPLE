@@ -268,7 +268,7 @@ public:
     long int read(const FileName &filename, const std::string &name = "", std::vector<EMDLabel> *labelsVector = NULL, std::string grep_pattern = "", bool do_only_count = false);
 
     // Write a StarFileTable in STAR format
-    void write(std::ostream& out = std::cout) const;
+    void write(std::ostream& out = std::cout, bool ignoreheader = false, bool tableend = true) const;
 
     // Write a StarFileTable to memory in STAR format
     std::string write_mem(bool ignoreheader) const;
@@ -280,7 +280,7 @@ public:
     void open_ofile(const std::string& fname, int mode);
 
     // Write to output file
-    void write_ofile();
+    void write_ofile(bool ignoreheader = false, bool tableend = true);
 
     // Write to memory
     std::string write_omem(bool ignoreheader);
@@ -416,7 +416,7 @@ extern "C"
   void StarFileTable__getValue_string(StarFileTable* This, int EMDL_id, void** str, long object_id, int* alen, bool* result);
   void StarFileTable__clear(StarFileTable* This);
   void StarFileTable__open_ofile(StarFileTable* This, char* fname, int mode);
-  void StarFileTable__write_ofile(StarFileTable* This);
+  void StarFileTable__write_ofile(StarFileTable* This, bool ignoreheader=false, bool tableend=true);
   void StarFileTable__write_omem(StarFileTable* This, void** str, long unsigned int* partlength, bool ignoreheader);
   void StarFileTable__close_ofile(StarFileTable* This);
   void StarFileTable__read(StarFileTable* This, char* fname, char* name);
@@ -430,6 +430,7 @@ extern "C"
   long StarFileTable__nextObject(StarFileTable* This);
   void StarFileTable__getnames_cnt(StarFileTable* This, char* fname, int* count);
   void StarFileTable__getnames_nr(StarFileTable* This, int nr, void** str, int* alen);
+  void StarFileTable__append(StarFileTable* This, StarFileTable* mdt);
   void dealloc_str(void* str);
 }
 

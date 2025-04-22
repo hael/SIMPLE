@@ -1035,31 +1035,35 @@ long int StarFileTable::read(const FileName &filename, const std::string &name, 
     return -1;  // added by Simon to suppress compiler warning
 }
 
-void StarFileTable::write(std::ostream& out) const
+void StarFileTable::write(std::ostream& out, bool ignoreheader, bool tableend) const
 {
     // Only write tables that have something in them
     if (isEmpty())
 	return;
 
-    out << "\n";
-    out << "data_" << getName() <<"\n";
-    if (containsComment())
-	out << "# "<< comment << "\n";
-    out << "\n";
+	if(!ignoreheader){
+	    out << "\n";
+	    out << "data_" << getName() <<"\n";
+	    if (containsComment())
+		out << "# "<< comment << "\n";
+	    out << "\n";
+	}
 
     if (!isList)
     {
-	// Write loop header structure
-	out << "loop_ \n";
-	for (long i = 0; i < activeLabels.size(); i++)
-	{
-	    EMDLabel l = activeLabels[i];
+    	if(!ignoreheader){
+			// Write loop header structure
+			out << "loop_ \n";
+			for (long i = 0; i < activeLabels.size(); i++)
+			{
+			    EMDLabel l = activeLabels[i];
 
-	    if (l != EMDL_COMMENT && l != EMDL_SORTED_IDX) // EMDL_SORTED_IDX is only for internal use, never write it out!
-	    {
-		out << "_" << EMDL::label2Str(l) << " #" << i+1 << " \n";
-	    }
-	}
+			    if (l != EMDL_COMMENT && l != EMDL_SORTED_IDX) // EMDL_SORTED_IDX is only for internal use, never write it out!
+			    {
+				out << "_" << EMDL::label2Str(l) << " #" << i+1 << " \n";
+			    }
+			}
+		}
 
 	// Write actual data block
 	for (long int idx = 0; idx < objects.size(); idx++)
@@ -1088,8 +1092,10 @@ void StarFileTable::write(std::ostream& out) const
 	    }
 	    out << "\n";
 	}
-	// Finish table with a white-line
-	out << " \n";
+	if(tableend){
+		// Finish table with a white-line
+		out << " \n";
+	}
 
     }
     else
@@ -1132,9 +1138,10 @@ void StarFileTable::write(std::ostream& out) const
 	{
 	    out << "# " << entryComment << "\n";
 	}
-
-	// End a data block with a white line
-	out << " \n";
+	if(tableend){
+		// End a data block with a white line
+		out << " \n";
+	}
     }
 
 }
@@ -1686,9 +1693,9 @@ void StarFileTable::open_ofile(const std::string& fname, int mode)
   }
 }
 
-void StarFileTable::write_ofile()
+void StarFileTable::write_ofile(bool ignoreheader, bool tableend)
 {
-  write(output_stream);
+  write(output_stream, ignoreheader, tableend);
 }
 
 std::string StarFileTable::write_omem(bool ignoreheader)
@@ -1832,9 +1839,9 @@ void StarFileTable__open_ofile(StarFileTable* This, char* fname, int mode)
   This->open_ofile(fname, mode);
 }
 
-void StarFileTable__write_ofile(StarFileTable* This)
+void StarFileTable__write_ofile(StarFileTable* This, bool ignoreheader, bool tableend)
 {
-  This->write_ofile();
+  This->write_ofile(ignoreheader, tableend);
 }
 
 void StarFileTable__write_omem(StarFileTable* This, void** str, long unsigned int* partlength, bool ignoreheader)
@@ -1914,6 +1921,11 @@ void StarFileTable__getnames_nr(StarFileTable* This, int nr, void** str, int* al
   c_str = strdup(value.c_str());  // need to make a persevering copy here because "value" will be destroyed once it goes out of scope
   *str = (void*)c_str;            // the caller has to free it manually
   *alen = strlen(c_str);
+}
+
+void StarFileTable__append(StarFileTable* This, StarFileTable* mdt)
+{
+  This->append(*mdt);
 }
 
 void dealloc_str(void* str)

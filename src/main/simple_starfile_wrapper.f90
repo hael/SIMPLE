@@ -141,9 +141,10 @@ interface
         integer(C_int),    value, intent(in) :: mode
     end subroutine C_starfile_table__open_ofile
 
-    subroutine C_starfile_table__write_ofile(this) bind(C,name="StarFileTable__write_ofile")
+    subroutine C_starfile_table__write_ofile(this, ignoreheader, tableend) bind(C,name="StarFileTable__write_ofile")
         import
-        type(C_ptr), value :: this
+        type(C_ptr),     value              :: this
+        logical(C_bool), value, intent(in)  :: ignoreheader, tableend
     end subroutine C_starfile_table__write_ofile
 
     subroutine C_starfile_table__write_omem(this, str, partlength, ignoreheader) bind(C,name="StarFileTable__write_omem")
@@ -230,6 +231,12 @@ interface
         type(C_ptr),    intent(out) :: str
         integer(C_int), intent(out) :: alen
     end subroutine C_starfile_table__getnames_nr
+
+    subroutine C_starfile_table__append(this, mdt) bind(C, name="StarFileTable__append")
+        import
+        type(C_ptr), value       :: this
+        type(C_ptr), value       :: mdt
+    end subroutine C_starfile_table__append
 
 end interface
 
@@ -443,9 +450,15 @@ contains
         call C_starfile_table__open_ofile(this%object, fname2, mode)
     end subroutine starfile_table__open_ofile
 
-    subroutine starfile_table__write_ofile(this)
+    subroutine starfile_table__write_ofile(this, ignoreheader, tableend)
         type(starfile_table_type), intent(inout) :: this
-        call C_starfile_table__write_ofile(this%object)
+        logical, optional,         intent(in)    :: ignoreheader, tableend
+        logical(C_bool)                          :: l_ignoreheader, l_tableend
+        l_ignoreheader = .false.
+        l_tableend     = .true.
+        if(present(ignoreheader)) l_ignoreheader = ignoreheader
+        if(present(tableend))     l_tableend     = tableend
+        call C_starfile_table__write_ofile(this%object, l_ignoreheader, l_tableend)
     end subroutine starfile_table__write_ofile
 
     subroutine starfile_table__write_omem(this, str, length, ignoreheader)
@@ -477,6 +490,12 @@ contains
         type(starfile_table_type), intent(inout) :: this
         call C_starfile_table__close_ofile(this%object)
     end subroutine starfile_table__close_ofile
+
+    subroutine starfile_table__append(this, mdt)
+        type(starfile_table_type), intent(inout) :: this
+        type(starfile_table_type), intent(in)    :: mdt
+        call C_starfile_table__append(this%object, mdt%object)
+    end subroutine starfile_table__append
 
     subroutine starfile_table__read(this, fname, name)
         type(starfile_table_type),  intent(inout) :: this

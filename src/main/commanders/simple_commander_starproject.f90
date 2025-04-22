@@ -200,13 +200,13 @@ contains
             call spproj%write(basename(params%projfile))
         end if
         if (spproj%os_mic%get_noris() > 0) then
-            call starproj%export_mics(cline, spproj)
+            call starproj%export_mics(spproj)
         end if
         if (spproj%os_cls2D%get_noris() > 0) then
             call starproj%export_cls2D(spproj)
         end if
         if (spproj%os_ptcl2D%get_noris() > 0) then
-            call starproj%export_ptcls2D(cline, spproj)
+            call starproj%export_ptcls2D(spproj)
         end if
         call spproj%kill
         call starproj%kill

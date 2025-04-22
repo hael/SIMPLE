@@ -3109,7 +3109,7 @@ contains
             call chunksizeori%new(1, .false.)
             call chunksizeori%read(chunksize_fname)
             if( .not. chunksizeori%isthere(1, "nptcls_per_cls") )THROW_HARD('nptcls_per_cls missing from '//trim(chunksize_fname))
-            params%nptcls = chunksizeori%get_int(1, "nptcls_per_cls")
+            params%nptcls = chunksizeori%get_int(1, "nptcls_per_cls") * 100
             call chunksizeori%kill
             write(logfhandle,'(A,I8)')'>>> NPTCLS SET TO', params%nptcls
         endif

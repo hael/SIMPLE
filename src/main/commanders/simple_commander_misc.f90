@@ -504,7 +504,7 @@ contains
         ! merge docs
         call spproj%read(params%projfile)
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
-        call starproj%export_mics(cline, spproj)
+        call starproj%export_mics(spproj)
         ! cleanup
         call qsys_cleanup
         call spproj%kill

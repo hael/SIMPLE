@@ -646,14 +646,14 @@ contains
 
     ! export
 
-    subroutine export_mics(self, cline, spproj)
+    subroutine export_mics(self, spproj)
         class(starproject), intent(inout) :: self
-        class(cmdline),     intent(inout) :: cline
+    !   class(cmdline),     intent(inout) :: cline
         class(sp_project),  intent(inout) :: spproj
         integer                           :: i
         if( L_VERBOSE_GLOB ) VERBOSE_OUTPUT = .true.
         self%starfile%filename = "micrographs.star"
-        self%starfile%rootdir = cline%get_carg("import_dir")
+    !    self%starfile%rootdir = cline%get_carg("import_dir")
         if( VERBOSE_OUTPUT )then
             write(logfhandle,*) ''
             write(logfhandle,*) char(9), 'exporting micrographs to ' // trim(adjustl(self%starfile%filename))
@@ -861,9 +861,8 @@ contains
         call fclose(fhandle)
     end subroutine export_stream2D
 
-    subroutine export_ptcls2D(self, cline, spproj)
+    subroutine export_ptcls2D(self, spproj)
         class(starproject), intent(inout) :: self
-        class(cmdline),     intent(inout) :: cline
         class(sp_project),  intent(inout) :: spproj
         if( L_VERBOSE_GLOB ) VERBOSE_OUTPUT = .true.
         self%starfile%filename = "particles2D.star"
