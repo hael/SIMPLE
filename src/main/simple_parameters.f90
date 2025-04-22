@@ -312,6 +312,7 @@ type :: parameters
     integer :: nchunks=0
     integer :: ncunits=0           !< # computing units, can be < nparts{nparts}
     integer :: ncls=500            !< # clusters
+    integer :: ncls_spec=2         !< # spectral clusters
     integer :: ncls_start=10       !< minimum # clusters for 2D streaming
     integer :: ndiscrete=0         !< # discrete orientations
     integer :: neigs=0             !< # of eigenvectors 
@@ -842,6 +843,7 @@ contains
         call check_iarg('mrcmode',        self%mrcmode)
         call check_iarg('nchunks',        self%nchunks)
         call check_iarg('ncls',           self%ncls)
+        call check_iarg('ncls_spec',      self%ncls_spec)
         call check_iarg('ncls_start',     self%ncls_start)
         call check_iarg('ncunits',        self%ncunits)
         call check_iarg('ndiscrete',      self%ndiscrete)

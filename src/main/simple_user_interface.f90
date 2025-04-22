@@ -4187,7 +4187,7 @@ contains
         &'Post-processing of volume',&                                        ! descr_short
         &'is a program for map post-processing. Use program volops to estimate the B-factor with the Guinier plot',& ! descr_long
         &'simple_exec',&                                                      ! executable
-        &0, 1, 0, 0, 5, 4, 1, .true.)                                         ! # entries in each group, requires sp_project
+        &0, 1, 0, 0, 3, 1, 1, .true.)                                         ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -4201,15 +4201,8 @@ contains
         call postprocess%set_input('filt_ctrls', 1, 'lp', 'num', 'Low-pass limit for map filtering', 'Low-pass limit for map filtering', 'low-pass limit in Angstroms', .false., 20.)
         call postprocess%set_input('filt_ctrls', 2, bfac)
         call postprocess%set_input('filt_ctrls', 3, mirr)
-        call postprocess%set_input('filt_ctrls', 4, lp_backgr)
-        call postprocess%set_input('filt_ctrls', 5, nonuniform)
         ! mask controls
         call postprocess%set_input('mask_ctrls', 1, mskdiam)
-        call postprocess%set_input('mask_ctrls', 2, mskfile)
-        call postprocess%set_input('mask_ctrls', 3, 'binwidth', 'num', 'Envelope binary layers width',&
-        &'Binary layers grown for molecular envelope in pixels{1}', 'Molecular envelope binary layers width in pixels{1}', .false., 1.)
-        call postprocess%set_input('mask_ctrls', 4, 'thres', 'num', 'Volume threshold',&
-        &'Volume threshold for enevloppe mask generation', 'Volume threshold', .false., 0.)
         ! computer controls
         call postprocess%set_input('comp_ctrls', 1, nthr)
     end subroutine new_postprocess

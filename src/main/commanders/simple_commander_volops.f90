@@ -368,6 +368,7 @@ contains
             fsc   = file2rarr(params%fsc)
             optlp = fsc2optlp(fsc)
             call get_resolution(fsc, res, fsc05, fsc0143)
+            where( fsc < 0.05 ) optlp = 0.
             where( res < TINY ) optlp = 0.
             lplim = fsc0143
         else
@@ -393,8 +394,8 @@ contains
             call vol_bfac%apply_filter(optlp)
             call vol_no_bfac%apply_filter(optlp)
             ! final low-pass filtering for smoothness
-            call vol_bfac%bp(0., fsc0143)
-            call vol_no_bfac%bp(0., fsc0143)
+            ! call vol_bfac%bp(0., fsc0143)
+            ! call vol_no_bfac%bp(0., fsc0143)
         else
             call vol_bfac%bp(0., lplim)
             call vol_no_bfac%bp(0., lplim)

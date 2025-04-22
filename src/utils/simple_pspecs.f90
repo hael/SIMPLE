@@ -67,6 +67,7 @@ contains
     ! clustering 
     procedure            :: otsu_bincls_dynrange
     procedure            :: dynrange_cen_init
+    procedure            :: kmeans_cls_pspecs_and_rank
     procedure            :: kmeans_bincls_pspecs_and_rank
     procedure            :: kmedoids_bincls_pspecs_and_rank
     ! calculators
@@ -322,16 +323,16 @@ contains
         logical :: l_converged
         write(logfhandle,'(A)') 'K-MEANS CLUSTERING OF POWERSPECTRA'
         call self%dynrange_cen_init
-        call self%calc_good_bad_pspec_avgs
-        call self%plot_good_bad('pspec_good_dynrange', 'pspec_bad_dynrange')
+        call self%calc_pspec_cls_avgs
+        call self%plot_cens('pspec')
         iter = 0
         l_converged = .false.
         do
-            call self%kbincluster_iter(iter, l_converged, l_medoid=.false.)
+            call self%kcluster_iter(iter, l_converged, l_medoid=.false.)
             if( l_converged ) exit
         end do
-        call self%plot_good_bad('pspec_good_kmeans', 'pspec_bad_kmeans')
-        call self%rank_pspecs
+        call self%score_spectral_cls
+        call self%find_good_bad_spectral_cls
     end subroutine kmeans_cls_pspecs_and_rank
 
     ! binary k-means clustering of power spectra
