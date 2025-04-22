@@ -88,11 +88,13 @@ contains
     procedure            :: kill
 end type pspecs
 
-integer, parameter :: CLASS_GOOD     = 1
-integer, parameter :: CLASS_BAD      = 2
-real,    parameter :: DYNRANGE_THRES = 1e-6
-integer, parameter :: MAXITS         = 10
-integer, parameter :: MINPOP         = 20
+integer, parameter :: CLASS_GOOD      = 1
+integer, parameter :: CLASS_BAD       = 2
+real,    parameter :: DYNRANGE_THRES  = 1e-6
+real,    parameter :: FRAC_BEST_PTCLS = 0.25
+integer, parameter :: MAXITS          = 10
+integer, parameter :: MINPOP          = 20
+
 
 contains
 
@@ -106,12 +108,20 @@ contains
         class(oris),       intent(in)    :: os_cls2D
         real,              intent(in)    :: msk, hp, lp
         integer, optional, intent(in)    :: ncls_spec
-        real,    allocatable :: pspec(:), resarr(:)
+        real,    allocatable :: pspec(:), resarr(:), tmp(:)
         logical, allocatable :: mask(:)
         integer :: specinds(ncls)
         logical :: l_valid_spectra(ncls)
         integer :: ldim(3), icls, ispec
         real    :: dynrange
+
+        ! call os_ptcl2D%write('foo.txt')
+        ! stop
+
+        ! tmp = os_ptcl2D%get_all('class')
+        ! print *, tmp
+        ! stop
+
         call self%kill
         self%ncls_spec  = 2 ! binary clustering by default
         if( present(ncls_spec) ) self%ncls_spec = ncls_spec
@@ -154,7 +164,7 @@ contains
             endif
         end do
         ! fill-up the instance
-        !$omp parallel do default(shared) private(icls,pspec,mask) proc_bind(close) schedule(static)
+        !omp parallel do default(shared) private(icls,pspec,mask) proc_bind(close) schedule(static)
         do icls = 1, ncls
             if( l_valid_spectra(icls) )then
                 self%clsinds(specinds(icls))   = icls
@@ -162,12 +172,12 @@ contains
                 self%pspecs(specinds(icls),:)  = pspec(self%kfromto(1):self%kfromto(2))
                 self%dynranges(specinds(icls)) = self%pspecs(specinds(icls),1) - self%pspecs(specinds(icls),self%sz)
                 self%clspops(specinds(icls))   = os_cls2D%get_int(icls, 'pop')
-                mask = os_ptcl2D%gen_ptcl_mask('class', icls)
+                mask = os_ptcl2D%gen_ptcl_mask('class', icls, FRAC_BEST_PTCLS)
                 call os_ptcl2D%stats('corr', self%clsscore_stats(icls), mask)
                 deallocate(mask, pspec)
             endif
         end do
-        !$omp end parallel do
+        !omp end parallel do
         deallocate(resarr)
         self%exists = .true.
     end subroutine new
@@ -245,7 +255,7 @@ contains
         integer :: icen
         do icen = 1, self%ncls_spec
             ffbody = trim(fbody)//'_cen'//int2str_pad(icen,2)
-            call plot_fsc(self%sz, self%pspec_good, self%resarr, self%smpd, ffbody)
+            call plot_fsc(self%sz, self%pspecs_cen(icen,:), self%resarr, self%smpd, ffbody)
         enddo
     end subroutine plot_cens
 
@@ -303,18 +313,18 @@ contains
     ! make initial grouping based on dynamic range ranking
     subroutine dynrange_cen_init( self )
         class(pspecs), intent(inout) :: self
-        real, allocatable :: tmp(:), transl_tab(:)
+        real, allocatable :: tmp(:)
         integer           :: ispec
         real              :: dist
-        tmp = pack(self%dynranges, mask=.true.)
-        where( tmp <= DYNRANGE_THRES ) tmp = -1.
+        real              :: transl_tab(self%ncls_spec)
+        tmp = pack(self%dynranges, mask=self%dynranges > DYNRANGE_THRES)
         call quantize_vec_serial(tmp, self%ncls_spec, transl_tab)
         ! assign clusters
         do ispec = 1, self%nspecs
-            call find(transl_tab, self%ncls_spec, tmp(ispec), self%clsinds_spec(ispec), dist)
+            call find(transl_tab, self%ncls_spec, self%dynranges(ispec), self%clsinds_spec(ispec), dist)
         end do
         deallocate(tmp)
-    end subroutine dynrange_cen_init
+    end subroutine dynrange_cen_init 
 
     ! k-means clustering of power spectra
     subroutine kmeans_cls_pspecs_and_rank( self )
@@ -333,6 +343,8 @@ contains
         end do
         call self%score_spectral_cls
         call self%find_good_bad_spectral_cls
+        call self%calc_good_bad_pspec_avgs
+        call self%rank_pspecs
     end subroutine kmeans_cls_pspecs_and_rank
 
     ! binary k-means clustering of power spectra
@@ -665,14 +677,20 @@ contains
 
     subroutine find_good_bad_spectral_cls( self )
         class(pspecs), intent(inout) :: self
-        real, allocatable :: tmp(:)
+        real,    allocatable :: tmp(:)
+        integer :: good_bad_assign(self%nspecs) 
         integer :: icls_spec
         tmp = pack(self%cls_spec_scores, self%cls_spec_scores > TINY)
         call otsu(size(tmp), tmp, self%cls_spec_score_t)
+        good_bad_assign = CLASS_BAD
         do icls_spec = 1, self%ncls_spec
             print *, 'icls_spec: ', icls_spec, ' self%cls_spec_scores(icls_spec): ', self%cls_spec_scores(icls_spec),&
-            &'Good: ', self%cls_spec_scores(icls_spec) >= self%cls_spec_score_t
+            &' POP: ', self%clspops_spec(icls_spec), 'Good: ', self%cls_spec_scores(icls_spec) >= self%cls_spec_score_t
+            if( self%cls_spec_scores(icls_spec) >= self%cls_spec_score_t )then
+                where( self%clsinds_spec == icls_spec ) good_bad_assign = CLASS_GOOD
+            endif
         end do
+        self%clsinds_spec = good_bad_assign
         deallocate(tmp)
     end subroutine find_good_bad_spectral_cls
 

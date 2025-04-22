@@ -444,26 +444,27 @@ contains
         endif
     end function get_all
 
-    function gen_ptcl_mask( self, key, ival, fromto, nonzero ) result( mask )
+    function gen_ptcl_mask( self, key, ival, frac_best ) result( mask )
         class(oris),       intent(in) :: self
         character(len=*),  intent(in) :: key
         integer,           intent(in) :: ival
-        integer, optional, intent(in) :: fromto(2)
-        logical, optional, intent(in) :: nonzero
+        real,    optional, intent(in) :: frac_best
         logical, allocatable :: mask(:)
-        integer, allocatable :: ivals(:), states(:)
-        integer :: ffromto(2)
-        logical :: nnonzero
-        ffromto(1) = 1
-        ffromto(2) = self%n
-        if( present(fromto) ) ffromto = fromto
-        nnonzero = .false.
-        if( present(nonzero) ) nnonzero = nonzero
-        allocate(mask(ffromto(1):ffromto(2)))
-        allocate(ivals(ffromto(1):ffromto(2)), source=self%o(ffromto(1):ffromto(2))%get_int(key))
-        if( nnonzero )then
-            allocate(states(ffromto(1):ffromto(2)), source=self%o(ffromto(1):ffromto(2))%get_state())
-            where(states > 0 .and. ivals == ival )
+        integer, allocatable :: ivals(:)
+        real,    allocatable :: corrs(:), tmp(:)
+        real    :: corr_t
+        integer :: ncorrs, nsample
+        allocate(mask(self%n))
+        allocate(ivals(self%n), source=self%o(1:self%n)%get_int(key))
+        if( present(frac_best) )then
+            allocate(corrs(self%n), source=self%o(self%n)%get('corr'))
+            tmp     = pack(corrs, mask=ivals == ival)
+            ncorrs  = size(tmp)
+            nsample = ceiling(frac_best * real(ncorrs))
+            call hpsort(tmp)
+            corr_t  = tmp(ncorrs - nsample)
+            deallocate(tmp)
+            where(ivals == ival .and. corrs >= corr_t )
                 mask = .true.
             elsewhere
                 mask = .false.
