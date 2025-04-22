@@ -9,7 +9,7 @@ public :: fileiochk, fopen, fclose, wait_for_closure, nlines, filelength, funit_
 public :: add2fbody, rm_from_fbody, swap_suffix, get_fbody, fname_new_ext, fname2ext, fname2iter, basename, stemname
 public :: get_fpath, make_dirnames, make_filenames, filepath, del_files, move_files_in_cwd, fname2format, read_filetable
 public :: write_filetable, write_singlelineoftext, read_exit_code, arr2file, arr2txtfile, file2rarr, file2drarr, rmat2file
-public :: file2rmat, simple_copy_file, make_relativepath, basename_safe
+public :: file2rmat, simple_copy_file, make_relativepath, basename_safe, get_relative_path
 private
 #include "simple_local_flags.inc"
 
@@ -1114,5 +1114,20 @@ contains
             newfname = trim(fname_here)
         endif
     end subroutine make_relativepath
+
+    function get_relative_path ( path, root, trimlength ) result ( newpath )
+        character(len=*),           intent(in)    :: path, root
+        integer,          optional, intent(inout) :: trimlength
+        integer                                   :: l_trimlength = 0
+        character(len=XLONGSTRLEN)                :: newpath
+        if(present(trimlength)) l_trimlength = trimlength 
+        if(l_trimlength .eq. 0) l_trimlength = index(path, root)
+        if(l_trimlength .gt. 0) then
+            newpath = path(l_trimlength:)
+        else
+            newpath = path
+        end if
+        if(present(trimlength)) trimlength = l_trimlength
+    end function get_relative_path
 
 end module simple_fileio

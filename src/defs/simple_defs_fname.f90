@@ -16,6 +16,7 @@ character(len=*), parameter :: BIN_EXT              = '.bin'
 character(len=*), parameter :: METADATA_EXT         = '.simple'
 character(len=*), parameter :: JPG_EXT              = '.jpg'
 character(len=*), parameter :: STK_EXT              = '.mrcs'
+character(len=*), parameter :: STAR_EXT             = '.star'
 ! SUFFIXES
 character(len=*), parameter :: SCALE_SUFFIX         = '_sc'
 character(len=*), parameter :: THUMBNAIL_SUFFIX     = '_thumb'
@@ -97,6 +98,9 @@ character(len=*), parameter :: DIR_SNAPSHOT         = './snapshots/'
 character(len=*), parameter :: SNAPSHOT_REQUEST     = 'SNAPSHOT'
 character(len=*), parameter :: GUISTATS_FILE        = '.guistats'
 character(len=*), parameter :: POOLSTATS_FILE       = '.poolstats'
+! STARFILES
+character(len=*), parameter :: MICS_STAR_BODY       = 'micrographs'
+character(len=*), parameter :: PTCL2D_STAR_BODY     = 'particles2D'
 ! MISCELLANEOUS
 character(len=3), parameter :: NIL                  = 'nil'
 character(len=*), parameter :: STDERR2STDOUT        = '2>&1'

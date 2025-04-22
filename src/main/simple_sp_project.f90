@@ -1,5 +1,6 @@
 module simple_sp_project
 include 'simple_lib.f08'
+use simple_starfile
 use json_kinds
 use json_module
 implicit none
@@ -136,6 +137,9 @@ contains
     procedure          :: write_segment_inside
     procedure          :: write_non_data_segments
     procedure          :: write_segment2txt
+    procedure          :: write_star_segments
+    procedure          :: write_mics_star
+    procedure          :: write_ptcl2D_star
     procedure, private :: segwriter
     procedure          :: segwriter_inside
     ! destructor
@@ -4402,6 +4406,59 @@ contains
             end if
         end do
     end subroutine set_cavgs_thumb
+
+    subroutine write_star_segments( self )
+        class(sp_project),  intent(inout) :: self
+        ! type(starproject)                 :: starproj
+        ! write(logfhandle,'(A)')'>>> WRITING STAR FILES'
+        ! if (self%os_optics%get_noris() == 0) then
+        !     write(logfhandle,'(A,A)') char(9), 'NO OPTICS GROUPS SET: EXPORTING SINGLE OPTICS GROUP. YOU MAY WISH TO RUN ASSIGN_OPTICS_GROUPS PRIOR TO DOWNSTREAM PROCESSING'
+        ! end if
+        ! if (self%os_mic%get_noris() > 0) then
+        !     call starproj%export_mics(spproj)
+        ! end if
+        ! if (self%os_cls2D%get_noris() > 0) then
+        !     call starproj%export_cls2D(spproj)
+        ! end if
+        ! if (self%os_ptcl2D%get_noris() > 0) then
+        !     call starproj%export_ptcls2D(spproj)
+        ! end if
+        ! call starproj%kill
+    end subroutine write_star_segments
+
+    subroutine write_mics_star( self, fname )
+        class(sp_project),             intent(inout) :: self
+        character(len=*),   optional,  intent(in)    :: fname
+        type(starfile)                               :: star
+        character(len=:), allocatable                :: l_fname
+        if( self%os_mic%get_noris() == 0 ) return
+        if(present(fname)) then 
+            l_fname = fname
+        else
+            l_fname = MICS_STAR_BODY // STAR_EXT
+        end if
+        call star%init(l_fname, verbose=.true.)
+        call star%write_optics_table(self%os_optics)
+        call star%write_mics_table(self%os_mic)
+        call star%complete()
+    end subroutine write_mics_star
+
+    subroutine write_ptcl2D_star( self, fname )
+        class(sp_project),             intent(inout) :: self
+        character(len=*),   optional,  intent(in)    :: fname
+        type(starfile)                               :: star
+        character(len=:), allocatable                :: l_fname
+        if( self%os_mic%get_noris() == 0 ) return
+        if(present(fname)) then 
+            l_fname = fname
+        else
+            l_fname = PTCL2D_STAR_BODY // STAR_EXT
+        end if
+        call star%init(l_fname, verbose=.true.)
+        call star%write_optics_table(self%os_optics)
+        call star%write_ptcl2D_table(self%os_ptcl2D, self%os_stk, mics_oris=self%os_mic)
+        call star%complete()
+    end subroutine write_ptcl2D_star
 
     subroutine segwriter( self, isegment, fromto )
         class(sp_project), intent(inout) :: self
