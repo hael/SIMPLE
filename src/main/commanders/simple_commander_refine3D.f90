@@ -93,30 +93,27 @@ contains
         use simple_sp_project,    only: sp_project
         class(refine3D_auto_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(cmdline)      :: cline_reconstruct3D_distr, cline_fillin
+        type(cmdline)               :: cline_reconstruct3D_distr, cline_fillin
+        type(postprocess_commander) :: xpostprocess
+        type(parameters)            :: params
+        type(sp_project)            :: spproj
         real,    parameter :: LP2SMPD_TARGET   = 1./3.
         real,    parameter :: SMPD_TARGET_MIN  = 1.3
         logical, parameter :: DEBUG            = .true.
         integer, parameter :: MINBOX           = 256
         integer, parameter :: NPDIRS4BAL       = 300
         type(class_sample), allocatable :: clssmp(:)
-        character(len=:),   allocatable :: str_state, vol_even, vol_odd
+        character(len=:),   allocatable :: str_state
         real             :: smpd_target, smpd_crop, scale, trslim
         integer          :: box_crop, maxits_phase1, maxits_phase2, iter
         logical          :: l_autoscale
-        type(parameters) :: params
-        type(sp_project) :: spproj
-        type(sym)        :: pgrpsyms
-        type(oris)       :: eulspace
         ! commanders
         type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
         type(refine3D_distr_commander)      :: xrefine3D_distr
-
         ! hard defaults
         call cline%set('balance',         'no') ! balanced particle sampling based on available 3D solution
         call cline%set('greedy_sampling', 'no') ! stochastic within-class selection without consideration to objective function value
         call cline%set('trail_rec',      'yes') ! trailing average 3D reconstruction
-        call cline%set('gridding','no')         ! should not be on when trail_rec is on
         call cline%set('refine',       'neigh') ! greedy multi-neighborhood 3D refinement 
         call cline%set('icm',            'yes') ! ICM regularization to maximize map connectivity
         call cline%set('automsk',        'yes') ! envelope masking for background flattening
@@ -203,7 +200,6 @@ contains
         call cline_reconstruct3D_distr%set('mskfile', MSKVOL_FILE)
         call xreconstruct3D_distr%execute_safe(cline_reconstruct3D_distr)
         ! 3D refinement, phase2
-        call simple_copy_file(VOL_FBODY//str_state//params_glob%ext, 'recvol_phase1'//params_glob%ext)
         call cline%set('vol1', VOL_FBODY//str_state//params_glob%ext)
         params%mskfile = MSKVOL_FILE
         call cline%set('mskfile',           MSKVOL_FILE)
@@ -214,12 +210,13 @@ contains
         call xrefine3D_distr%execute_safe(cline)
         ! re-reconstruct from all particle images
         call xreconstruct3D_distr%execute_safe(cline_reconstruct3D_distr)
-        call simple_copy_file(VOL_FBODY//str_state//params_glob%ext, 'recvol_phase2'//params_glob%ext)
+        ! postprocess
+        call cline%set('mkdir', 'yes')
+        call xpostprocess%execute_safe(cline)
 
         !**************TESTS2DO
         ! check so that we have a starting 3D alignment
         ! check so that all states are 0 or 1 and fall over otherwise
-        ! reconstruct at full sampling in the end
         ! should test 40k projection directions and see how that performs (params class needs modification)
         
     end subroutine exec_refine3D_auto
