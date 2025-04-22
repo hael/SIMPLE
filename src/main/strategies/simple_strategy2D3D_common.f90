@@ -1299,10 +1299,8 @@ contains
             class(image), intent(inout) :: img_out
             type(ctf)       :: tfun
             type(ctfparams) :: ctfparms
-            real            :: sdev_noise, crop_factor
+            real            :: crop_factor
             crop_factor = real(params_glob%box_crop) / real(params_glob%box)
-            ! Normalise
-            call img%norm_noise(build_glob%lmsk, sdev_noise)
             ! Fourier cropping
             call img%fft()
             call img%clip(img_out)
