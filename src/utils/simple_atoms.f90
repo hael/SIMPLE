@@ -1306,7 +1306,7 @@ contains
         real, intent(in)    :: smpd
         real                :: center(3), half_box(3)
         center      = self%get_geom_center()
-        half_box(:) = smpd*(real(ldim(:)/2.))
+        half_box(:) = real(ldim-1)/2. * smpd
         call self%translate(-center+half_box)
         THROW_WARN('PDB atomic center moved to the center of the box; center_pdbcoord')
     end subroutine center_pdbcoord
