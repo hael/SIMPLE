@@ -1715,25 +1715,31 @@ contains
     subroutine exec_rank_cavgs( self, cline )
         class(rank_cavgs_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
+        type(sp_project), target  :: spproj
+        class(oris),      pointer :: os_ptr => null()
         type(parameters)     :: params
-        type(sp_project)     :: spproj
         type(oris)           :: clsdoc_ranked
         type(stack_io)       :: stkio_r, stkio_w
         type(image)          :: img
         integer, allocatable :: order(:)
         real,    allocatable :: res(:)
         integer              :: ldim(3), ncls, icls
-        call cline%set('oritype', 'cls2D')
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'cls2D')
         call params%new(cline)
         call spproj%read_segment(params%oritype, params%projfile)
         call find_ldim_nptcls(params%stk, ldim, ncls)
+        if( trim(params%oritype) .eq. 'cls2D' )then
+            os_ptr => spproj%os_cls2D
+        else
+            os_ptr => spproj%os_cls3D
+        endif
         params%ncls = ncls
-        if( spproj%os_cls2D%get_noris() == params%ncls )then
+        if( os_ptr%get_noris() == params%ncls )then
             ! all we need to do is fetch from classdoc in projfile &
             ! order according to resolution
             call img%new([params%box,params%box,1], params%smpd)
             call clsdoc_ranked%new(params%ncls, is_ptcl=.false.)
-            res = spproj%os_cls2D%get_all('res')
+            res = os_ptr%get_all('res')
             allocate(order(params%ncls))
             order = (/(icls,icls=1,params%ncls)/)
             call hpsort(res, order)
@@ -1743,13 +1749,13 @@ contains
             do icls=1,params%ncls
                 call clsdoc_ranked%set(icls, 'class',     order(icls))
                 call clsdoc_ranked%set(icls, 'rank',      icls)
-                call clsdoc_ranked%set(icls, 'pop',       spproj%os_cls2D%get(order(icls),  'pop'))
-                call clsdoc_ranked%set(icls, 'res',       spproj%os_cls2D%get(order(icls),  'res'))
-                call clsdoc_ranked%set(icls, 'corr',      spproj%os_cls2D%get(order(icls), 'corr'))
-                call clsdoc_ranked%set(icls, 'w',         spproj%os_cls2D%get(order(icls),    'w'))
+                call clsdoc_ranked%set(icls, 'pop',       os_ptr%get(order(icls),  'pop'))
+                call clsdoc_ranked%set(icls, 'res',       os_ptr%get(order(icls),  'res'))
+                call clsdoc_ranked%set(icls, 'corr',      os_ptr%get(order(icls), 'corr'))
+                call clsdoc_ranked%set(icls, 'w',         os_ptr%get(order(icls),    'w'))
                 write(logfhandle,'(a,1x,i5,1x,a,1x,i5,1x,a,i5,1x,a,1x,f6.2)') 'CLASS:', order(icls),&
-                    &'RANK:', icls ,'POP:', nint(spproj%os_cls2D%get(order(icls), 'pop')),&
-                    &'RES:', spproj%os_cls2D%get(order(icls), 'res')
+                    &'RANK:', icls ,'POP:', nint(os_ptr%get(order(icls), 'pop')),&
+                    &'RES:', os_ptr%get(order(icls), 'res')
                 call flush(logfhandle)
                 call stkio_r%get_image(order(icls), img)
                 call stkio_w%write(icls, img)
@@ -3144,6 +3150,9 @@ contains
         type(ori)                     :: orientation
         type(oris)                    :: tmp_oris
         type(image)                   :: match_img
+        type(rank_cavgs_commander)    :: xrank_cavgs
+        type(cmdline)                 :: cline_rank_cavgs
+        character(len=STDLEN)         :: refs_ranked, stk
         integer :: nptcls, ithr, iref, iptcl, irot, iter, pfromto(2)
         real    :: euls(3), sh(2)
         call cline%set('mkdir',  'yes')
@@ -3218,12 +3227,25 @@ contains
             THROW_HARD('unrecognized coordinate system!')
         endif
         call build%spproj%write_segment_inside(params%oritype, params%projfile)
+        call build%spproj%write_segment_inside('cls3D',        params%projfile)
+        params_glob%refs = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%maxits,3)//params_glob%ext
+        ! converting polar to cartesian for visualization
         if( trim(params_glob%coord) .eq. 'polar' .or. trim(params_glob%coord) .eq. 'both' )then
-            call cline%set('refs',  'cartesian_cavgs.mrc')
+            call cline%set('refs',  trim(params_glob%refs))
             call cline%set('mkdir', 'no')
             call xmk_cavgs_shmem%execute_safe(cline)
         endif
-        call build_glob%clsfrcs%print_res(params%frcs, sorted=.true.)
+        ! ranking cavgs and output resolution if needed
+        if( trim(params%rank_cavgs) .eq. 'yes' )then
+            refs_ranked = 'ranked_'//trim(params_glob%refs)
+            stk         = trim(params_glob%refs)
+            call cline_rank_cavgs%set('oritype',  'cls3D')
+            call cline_rank_cavgs%set('projfile', params_glob%projfile)
+            call cline_rank_cavgs%set('stk',      stk)
+            call cline_rank_cavgs%set('outstk',   trim(refs_ranked))
+            call xrank_cavgs%execute_safe(cline_rank_cavgs)
+            call cline_rank_cavgs%kill
+        endif
         ! cleaning up
         call killimgbatch
         call eulprob_obj%kill
@@ -3249,6 +3271,8 @@ contains
                     call cavger_assemble_sums( .false. )
                     call cavger_merge_eos_and_norm
                     call cavger_calc_and_write_frcs_and_eoavg(params%frcs, params%which_iter)
+                    ! classdoc gen needs to be after calc of FRCs
+                    call cavger_gen2Dclassdoc(build_glob%spproj)
                     params%refs      = trim(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//params%ext
                     params%refs_even = trim(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//'_even'//params%ext
                     params%refs_odd  = trim(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//'_odd'//params%ext
