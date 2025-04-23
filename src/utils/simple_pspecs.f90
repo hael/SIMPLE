@@ -347,11 +347,13 @@ contains
     subroutine kmedoids_cls_pspecs_and_rank( self, states ) 
         class(pspecs),        intent(inout) :: self
         integer, allocatable, intent(inout) :: states(:)
-        integer :: iter
+        integer :: iter, ispec
         logical :: l_converged
         write(logfhandle,'(A)') 'K-MEDOIDS CLUSTERING OF POWERSPECTRA'
         call self%dynrange_cen_init
+        call self%calc_distmat
         call self%find_pspec_cls_medoids
+        call self%plot_cens('pspec_ini')
         iter = 0
         l_converged = .false.
         do
@@ -482,30 +484,19 @@ contains
         !$omp parallel do default(shared) private(icls_spec,i,j,loc,dists) proc_bind(close) schedule(static)
         do icls_spec = 1, self%ncls_spec
             self%clspops_spec(icls_spec) = count(self%clsinds_spec == icls_spec)
-            if( self%clspops_spec(icls_spec) == 0 ) cycle
-            if( self%clspops_spec(icls_spec) == 1 )then
-                do i = 1, self%nspecs
-                    if( self%clsinds_spec(i) == icls_spec )then
-                        self%medoids(icls_spec) = i
-                        exit
+            if( count(self%clsinds_spec == icls_spec) == 0 ) cycle
+            do i = 1, self%nspecs
+                dists(i) = 0.
+                do j = 1, self%nspecs
+                    if( self%clsinds_spec(i) == icls_spec .and. self%clsinds_spec(j) == icls_spec )then
+                        dists(i) = dists(i) + self%lookup_distance(i, j)
                     endif
-                enddo
-            else
-                do i = 1, self%nspecs
-                    dists(i) = 0.
-                    do j = 1, self%nspecs
-                        if( i /= j )then
-                            if( self%clsinds_spec(i) == icls_spec .and. self%clsinds_spec(j) == icls_spec )then
-                                dists(i) = dists(i) + self%lookup_distance(i, j)
-                            endif
-                        endif
-                    end do
                 end do
-                ! identify medoid
-                loc = minloc(dists)
-                self%medoids(icls_spec) = loc(1)
-                self%pspecs_cen(icls_spec,:) = self%pspecs(self%medoids(icls_spec),:)
-            endif
+            end do
+            ! identify medoid
+            loc = minloc(dists, mask=self%clsinds_spec == icls_spec)
+            self%medoids(icls_spec) = loc(1)
+            self%pspecs_cen(icls_spec,:) = self%pspecs(self%medoids(icls_spec),:)
         end do
         !$omp end parallel do
     end subroutine find_pspec_cls_medoids
@@ -519,12 +510,10 @@ contains
             dists_good(i) = 0.
             dists_bad(i)  = 0.
             do j = 1, self%nspecs
-                if( i /= j )then
-                    if(      self%clsinds_spec(i) == CLASS_GOOD .and. self%clsinds_spec(j) == CLASS_GOOD )then
-                        dists_good(i) = dists_good(i) + self%lookup_distance(i, j)
-                    else if( self%clsinds_spec(i) == CLASS_BAD  .and. self%clsinds_spec(j) == CLASS_BAD  )then
-                        dists_bad(i)  = dists_bad(i)  + self%lookup_distance(i, j)
-                    endif
+                if(      self%clsinds_spec(i) == CLASS_GOOD .and. self%clsinds_spec(j) == CLASS_GOOD )then
+                    dists_good(i) = dists_good(i) + self%lookup_distance(i, j)
+                else if( self%clsinds_spec(i) == CLASS_BAD  .and. self%clsinds_spec(j) == CLASS_BAD  )then
+                    dists_bad(i)  = dists_bad(i)  + self%lookup_distance(i, j)
                 endif
             end do
         end do

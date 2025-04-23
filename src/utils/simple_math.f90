@@ -429,7 +429,7 @@ contains
 
         subroutine find_medoids
             real    :: dists(N)
-            integer :: icls, i, j, loc(1), cnt
+            integer :: icls, i, j, loc(1)
             if( allocated(medoids) ) deallocate(medoids)
             if( allocated(pops)    ) deallocate(pops)
             ncls = maxval(labels)
@@ -446,19 +446,14 @@ contains
                     enddo
                 else
                     do i = 1, N
-                        dists(i) = 0.
-                        cnt      = 0
+                        dists(i) = 0.                        
                         do j = 1, N
-                            if( i /= j )then
-                                if( labels(i) == icls .and. labels(j) == icls )then
-                                    dists(i) = dists(i) + distmat(i,j)
-                                    cnt = cnt + 1  
-                                endif
+                            if( labels(i) == icls .and. labels(j) == icls )then
+                                dists(i) = dists(i) + distmat(i,j) 
                             endif
                         enddo
-                        dists(i) = dists(i) / real(cnt)
                     end do
-                    loc = minloc(dists)
+                    loc = minloc(dists, mask=labels == icls)
                     medoids(icls) = loc(1)
                 endif
             enddo
