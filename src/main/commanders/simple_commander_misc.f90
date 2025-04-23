@@ -88,21 +88,27 @@ contains
         use simple_afm_image
         use simple_corrmat
         use simple_aff_prop
+        use simple_srch_sort_loc
         class(afm_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(parameters), target :: params
-        type(image), allocatable    :: img_arr(:), pick_vec(:), pick_vec_ds(:)
-        type(image) :: im_stack, sim_test(2), exp_img, test_vec_corr(4)           
-        type(pickseg), allocatable  :: pick_arr(:)
+        type(image), allocatable      :: img_arr(:), pick_vec(:), pick_vec_ds(:), height_trace(:), height_retrace(:), ordered_pick_vec(:)
+        type(AFM_image), allocatable  :: stack_afm(:)   
+        type(pickseg), allocatable   :: trace_picks(:)
+        type(pickseg)   :: pick_test 
+        type(image) :: im_stack, sim_test(2), exp_img, test_vec_corr(4), subtract, trace_test, retrace_test
+        type(image), allocatable ::  trace_pick_vec(:), retrace_pick_vec(:)
         character(len=LONGSTRLEN), allocatable  :: file_list(:)
-        character(len = 255)    :: directory = '/Users/atifao/Downloads/MRC_T/'
+        character(len = 255)    :: directory = '/Users/atifao/Downloads/IBW_orig/'
+        character(len = 255)    :: test_file = '/Users/atifao/Downloads/MRC_T/17.mrc'
         character(len = 255)    :: sim_dir = '/Users/atifao/Downloads/mrc_for_clus.mrc'
-        integer                 :: i, nptcls, temp_ldim(3), pick_dim(3),j, cropped_dim(3), test_count
-        integer, allocatable    :: ldim_arr(:,:), medoids(:), labels(:), clus_count(:)
-        real, allocatable       :: smpd_arr(:), stack_rmat(:,:,:,:), R(:,:), X(:,:), Y(:,:), corrmat(:,:)
-        logical, allocatable    :: M(:,:)
+        integer                 :: i, nptcls, temp_ldim(3), pick_dim(3),j, cropped_dim(3), test_count, clip_len, orig_dim(3), n_picks
+        integer, allocatable    :: ldim_arr(:,:), medoids(:), labels(:), clus_count(:), retrace_centers(:,:), labels_ind(:)
+        real, allocatable       :: smpd_arr(:), stack_rmat(:,:,:,:), R(:,:), X(:,:), Y(:,:), corrmat(:,:), var_mat(:,:), labels_real(:)
+        logical, allocatable    :: M(:,:), corrmat_mask(:,:)
         type(aff_prop)          :: clus
-        real        :: hp = 100., lp = 10., new_smpd, sim_sum
+        real        :: hp = 100., lp = 10., new_smpd, sim_sum, var_test, ang, x_sh, y_sh
+        logical     :: mirr
         params_glob => params
         params_glob%pcontrast = 'white'
         params_glob%lp  = 10.
@@ -114,14 +120,50 @@ contains
         call cline%set('mkdir', 'no')
         call cline%set('lambda', 0.)
         call cline%set('trs',     50.0)
-        ! set this to cropped dim/2 
         call cline%set('box',     150)
         call cline%set('smpd',    5.0)
         params_glob%cc_objfun = 0
         params_glob%maxits_sh = 200
         params_glob%shbarrier = 'yes'
         call params%new(cline)
-        ! call simple_list_files(trim(directory) // '*.mrc', file_list)
+        ! print *, '>>> READING IBW FILE'
+        ! call simple_list_files(trim(directory) // '*.ibw', file_list)
+        ! allocate(stack_afm(size(file_list)))
+        ! allocate(height_trace(size(file_list)))
+        ! allocate(height_retrace(size(file_list)))
+        ! allocate(trace_picks(size(file_list)))
+        ! n_picks = 0
+        ! do i = 1, size(file_list)
+        !     call read_ibw(stack_afm(i), file_list(i))
+        !     call get_AFM(stack_afm(i), 'HeightTrace', height_trace(i))
+        !     call get_AFM(stack_afm(i), 'HeightRetrace', height_retrace(i))
+        !     if(file_list(i) == trim(directory) // 'Cob_450007.ibw' .or. file_list(i) == trim(directory) // 'Cob_450010.ibw') then 
+        !         call height_trace(i)%clip_inplace([1024, 900, 1])
+        !         call height_retrace(i)%clip_inplace([1024, 900, 1])
+        !     end if
+        !     call height_trace(i)%norm_minmax()
+        !     call height_retrace(i)%norm_minmax()
+        !     call height_trace(i)%write(int2str(i)//'trace.mrc')
+        !     call trace_picks(i)%pick(int2str(i)//'trace.mrc',.true.)
+        !     ! remap coordinates...
+        !     n_picks = n_picks + trace_picks(i)%get_nboxes()
+        !     if(i > 0) exit
+        ! end do 
+        ! allocate(trace_pick_vec(n_picks))
+        ! allocate(retrace_pick_vec(n_picks))
+        ! print *, '>>> GETTING CORRESPONDING PICKS'
+        ! do i = 1, size(file_list)
+        !     call mask_incl_retrace(trace_picks(i), height_trace(i), height_retrace(i), trace_pick_vec, retrace_pick_vec)
+        !     if(i > 0) exit 
+        ! end do 
+        ! call find_ldim_nptcls(test_file, temp_ldim, nptcls)
+        ! call trace_test%new(temp_ldim, params%smpd)
+        ! call trace_test%read(test_file)
+        ! call retrace_test%copy(trace_test)
+        ! call trace_test%write('trace.mrc')
+        ! call pick_test%pick('trace.mrc', .true.)
+        ! call pick_search(pick_test, trace_test, retrace_test, retrace_centers)
+        ! print *, '>>> MASKING PICKS'
         ! allocate(ldim_arr(size(file_list),3))
         ! allocate(smpd_arr(size(file_list)))
         ! allocate(img_arr(size(file_list)))
@@ -140,8 +182,9 @@ contains
         params_glob%ldim = cropped_dim
         params_glob%box = cropped_dim(1)
         test_count = temp_ldim(3)
-        ! test_count = 20 
+        ! test_count   = 100
         allocate(pick_vec(test_count))
+        allocate(ordered_pick_vec(test_count))
         do i = 1, temp_ldim(3) 
             pick_dim = [temp_ldim(1), temp_ldim(2), 1]
             call pick_vec(i)%new(pick_dim, params%smpd, .false.)
@@ -149,46 +192,83 @@ contains
             call pick_vec(i)%clip_inplace(cropped_dim) 
             if(i > test_count - 1) exit 
         end do
-        print *, 'calculating sim matrix...'
+        allocate(var_mat(test_count, test_count), source = 0.)
         ! add number of threads option to this procedue, and input option in cmdline
         call calc_inplane_fast_dev(pick_vec, hp, lp, corrmat, R, X, Y, M)
+        ! print *, '>>> CALCULATING PER-PIXEL VARIANCE SQUARED'
+        ! do i = 1, size(pick_vec)
+        !     call pick_vec(i)%ifft()
+        !     do j = 1, size(pick_vec)
+        !         if(i == j .or. j > i) cycle 
+        !         ang = - R(i,j)
+        !         x_sh = X(i,j)
+        !         y_sh = Y(i,j)
+        !         mirr = M(i,j)
+        !         if(mirr) call pick_vec(j)%mirror('y')
+        !         call pick_vec(j)%ifft()
+        !         call pick_vec(j)%rtsq(ang, x_sh, y_sh)
+        !         var_mat(i,j) = per_pix_var(pick_vec(i), pick_vec(j))
+        !         call pick_vec(j)%rtsq(-ang, -x_sh, -y_sh)
+        !         var_mat(j,i) = var_mat(i,j)
+        !     end do 
+        ! end do 
+        ! where(var_mat > 1.) 
+        !     var_mat = var_mat / maxval(var_mat)
+        !     var_mat = 1 - var_mat
+        ! end where
+        ! print *, '>>> CLUSTERING WITH AFFINITY PROPAGATION'
         ! normalization
         ! sklearn uses negative squared euclidean distance 
         corrmat = 2.*(1.-corrmat)
         where( corrmat < 0. ) corrmat = 0.
         where( corrmat > 4. ) corrmat = 4.
-        corrmat = -corrmat  
-        ! set pref to median of input similarities or 
-        call clus%new(test_count, corrmat)
+        corrmat = -corrmat
+        ! initial clustering 
+        allocate(corrmat_mask(test_count,test_count), source = .true.)
+        allocate(labels_ind(test_count))
+        do i = 1, test_count
+            labels_ind(i) = i
+        end do
+
+        allocate(labels_real(test_count))
+        call clus%new(test_count, corrmat, pref = median(pack(corrmat, corrmat_mask) / 1.5))
         call clus%propagate(medoids, labels, sim_sum)
-        allocate(clus_count(size(labels)))
-        print *, medoids
-        print *, 'number of clusters:', size(medoids)
+        labels_real = real(labels)
+        call hpsort_1(labels_real, labels_ind)
+        ! now do some hierarchical stuff with a good starting state. 
+        ! allocate(clus_count(size(labels)))
+        ! print *, medoids
+        ! print *, 'number of clusters:', size(medoids)
         ! visualize medoids
-        do i = 1, size(medoids)
-            call pick_vec(medoids(i))%ifft
-            call pick_vec(medoids(i))%vis
+
+        ! rotate to center 
+
+
+
+        do i = 1, test_count
+            call ordered_pick_vec(i)%copy(pick_vec(labels_ind(i)))
+            call ordered_pick_vec(i)%ifft()
+            call ordered_pick_vec(i)%write('ordered_picks.mrc', i)
         end do 
         ! visualize specific cluster
         ! clus_count = 0
         ! do i = 1, size(labels)
-        !     print *, 'particle:', i, 'label', labels(i)
-        !     do j = 1, maxval(labels)
-        !         if(labels(i) == j) clus_count(j) = clus_count(j) + 1
-        !     end do 
-        !     if(labels(i) ==  maxloc(clus_count, 1)) then 
+        !     ! do j = 1, maxval(labels)
+        !     !     if(labels(i) == j) clus_count(j) = clus_count(j) + 1
+        !     ! end do 
+        !     if(labels(i) ==  17) then 
+        !         print *, 'particle:', i, 'label', labels(i)
         !         call pick_vec(i)%ifft
         !         call pick_vec(i)%vis
         !     end if
-        ! end do 
-
+        ! end do
         ! call exp_img%new([temp_ldim(3), temp_ldim(3), 1], params_glob%smpd)
         ! do i = 1, temp_ldim(3)
         !     do j = 1, temp_ldim(3)
-        !         call exp_img%set_rmat_at(i,j,1,rot_test(i,j))
+        !         call exp_img%set_rmat_at(i,j,1,var_mat(i,j))
         !     end do 
         ! end do
-        ! call exp_img%write('corr_mat_exp.mrc')
+        ! call exp_img%write('var_mat.mrc')
     end subroutine exec_afm
 
     !> centers base on centre of mass

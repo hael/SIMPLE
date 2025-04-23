@@ -64,19 +64,21 @@ program AFM_File_IO
     do file_iter = 1, size(file_list)
         call read_ibw(stack_stack(file_iter), file_list(file_iter))
         call align_avg(stack_stack(file_iter), stack_avg(file_iter))
+        call stack_avg(file_iter)%img_array(1)%vis()
         if(file_list(file_iter) == trim(directory) // 'Cob_450007.ibw' .or. file_list(file_iter) == trim(directory) // 'Cob_450010.ibw') then 
             do clip_len = 1, size(stack_avg(file_iter)%img_array)
                 call stack_avg(file_iter)%img_array(clip_len)%clip_inplace([1024, 900, 1])
             end do
         end if
+        call stack_avg(file_iter)%img_array(1)%vis()
         stack_avg(file_iter)%stack_string = get_fbody(basename(trim(file_list(file_iter))), 'ibw')
         call pick_valid(stack_avg(file_iter), stack_avg(file_iter)%stack_string, pick_array(file_iter))
         call zero_padding(stack_avg(file_iter))
         call hough_lines(stack_avg(file_iter)%img_array(9), [PI/2 - PI/180, PI/2 + PI/180], mask_array(:, :, :, file_iter))
         call mask42D(stack_avg(file_iter)%img_array(9), pick_array(file_iter), bin_cc_array(file_iter), mask_array(:, :, :, file_iter), pick_mat(file_iter, :))
-        if(file_iter > 1) exit
+        if(file_iter > 0) exit 
     end do
-    
+    print *, 'picking worked'
     params_glob%smpd = pick_mat(1,1)%get_smpd()
     allocate(log_mat(size(file_list), 500), source = .false.) 
     allocate(max_box(size(file_list)))
@@ -232,4 +234,4 @@ program AFM_File_IO
     ! should remove small particles... 
     call cpu_time(finish)
     print *, finish - start 
-    end program AFM_File_IO
+end program AFM_File_IO
