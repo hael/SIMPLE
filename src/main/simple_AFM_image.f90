@@ -19,6 +19,8 @@ use simple_corrmat
 use simple_cmdline,        only: cmdline
 use simple_parameters
 use simple_ftiter
+use simple_srch_sort_loc
+use simple_gauss2Dfit
 
 implicit none 
 #include "simple_local_flags.inc"
@@ -537,59 +539,203 @@ contains
         end do 
 
     end subroutine 
-    subroutine pre_proc( pick_vec )
-        type(image), intent(inout)  :: pick_vec(:)
-        logical, allocatable     :: log_mat(:,:)
-        real, allocatable        :: corr_mat(:,:), hann_w(:)
-        integer, allocatable     ::  max_box(:)
-        integer                     :: pick_dims(2), row, col, ldim(3), ncls_ini, icls
-        integer                     :: h, k, l, lims(3,2), phys(3)
-        type(parameters)            :: params
-        real                        :: smpd, w
-        real                        :: hp = 10., lp = 1., ave, sdev, maxv, minv
-        type(image)                 :: noise 
-        type(ftiter)                :: ft_iter
-        ! pick_dims = shape(pick_mat)
-        ! allocate(log_mat(pick_dims(1),pick_dims(2)), source = .false.)
-        ! allocate(max_box(pick_dims(1)))
-        ! do row = 1, pick_dims(1)
-        !     max_box(row) = maxval(pick_mat(row,2)%get_ldim())
-        ! end do 
-        ! ldim = [maxval(max_box),maxval(max_box),1]
-        ! ncls_ini = 0
-        ! do row = 1, pick_dims(1)
-        !     do col = 1, pick_dims(2)
-        !         if(sum(pick_mat(row,col)%get_ldim()) > 3) then
-        !             call pick_mat(row,col)%pad_inplace(ldim)
-        !             log_mat(row,col) = .true.
-        !             ncls_ini = ncls_ini + 1
-        !         end if 
-        !     end do 
-        ! end do 
-        ! pick_vec = pack(pick_mat, log_mat .eqv. .true.)
-        ! params%box = ldim(1)
-        ldim = pick_vec(1)%get_ldim()
-        call ft_iter%new(ldim, pick_vec(1)%get_smpd())
-        lims = ft_iter%loop_lims(1)
-        do icls = 1, size(pick_vec)
-            ! call pick_vec(icls)%add_gauran(5.)
-            call pick_vec(icls)%fft()
-            hann_w = pick_vec(icls)%hannw()
-            !$omp parallel do collapse(3) schedule(static) default(shared)&
-            !$omp private(h,k,l,w,phys) proc_bind(close)
-            do h=lims(1,1),lims(1,2)
-                do k=lims(2,1),lims(2,2)
-                    do l=lims(3,1),lims(3,2)
-                        w = hann_w(max(1,abs(h)))*hann_w(max(1,abs(k)))*hann_w(max(1,abs(l)))
-                        phys = ft_iter%comp_addr_phys(h,k,l)
-                        call pick_vec(icls)%mul_cmat_at(phys,w)
-                    end do
+
+    function per_pix_var( img1, img2 ) result(var)
+        type(image), intent(in) :: img1, img2
+        real :: var 
+        real, allocatable   :: rmat1(:,:,:), rmat2(:,:, :)
+        integer             :: ldim(3), i,j
+        ldim = img1%get_ldim()
+        allocate(rmat1(ldim(1), ldim(2), ldim(3)), rmat2(ldim(1), ldim(2), ldim(3)), source = 0.)
+        rmat1 = img1%get_rmat()
+        rmat2 = img2%get_rmat()
+        rmat1 = abs(rmat1 - rmat2)
+        var = norm2(rmat1)
+    end function
+    ! searches for pick from one micrograph in another similar micrograph
+    subroutine pick_search( trace_picks, trace, retrace, retrace_centers )
+        type(image), intent(inout)     :: trace, retrace
+        type(pickseg), intent(in)   :: trace_picks  
+        integer, intent(out) :: retrace_centers(:,:)
+        integer, allocatable :: coords(:,:)
+        type(image) :: trace_slim, retrace_slim, trace_shrink, retrace_shrink
+        integer     :: search_iter, neighbor_iter, box_iter, center(3), nsiz, neighbor(3,8), dim(3), dim_shrink(3)
+        logical     :: outside
+        real        :: neighbor_corr(8), coord_corr(3,8), max_corr(20), smpd, smpd_shrink, shrink = 1.
+        call trace_picks%get_positions(coords)
+        dim = trace%get_ldim()
+        smpd = trace%get_smpd()
+        dim_shrink(1) = round2even(real(dim(1))/shrink)
+        dim_shrink(2) = round2even(real(dim(2))/shrink)
+        dim_shrink(3) = 1
+        smpd_shrink = smpd * shrink
+        call trace%fft()
+        call trace%clip_inplace(dim_shrink)
+        call trace%ifft()
+        call trace%fft()
+        call trace%clip_inplace(dim_shrink)
+        call trace%ifft()
+        call trace_slim%new([trace_picks%box_raw, trace_picks%box_raw, 1], smpd_shrink)
+        call retrace_slim%new([trace_picks%box_raw, trace_picks%box_raw, 1], smpd_shrink)
+        do box_iter = 1, trace_picks%get_nboxes() 
+            center  = [coords(box_iter, 1), coords(box_iter, 2), 1]
+            print *, 'trace center', center
+            if(center(1) < 0) center(1) = center(1) + dim_shrink(1)/4
+            if(center(2) < 0) center(2) = center(2) + dim_shrink(2)/4
+            call trace%window_slim([center(1), center(2)], trace_picks%box_raw, trace_slim, outside)
+            do search_iter = 2, 10
+                call neigh_8_1(trace%get_ldim(), center, neighbor, nsiz)
+                do neighbor_iter = 1, nsiz
+                    call retrace%window_slim([neighbor(1, neighbor_iter), neighbor(2, neighbor_iter)], trace_picks%box_raw, retrace_slim, outside)
+                    coord_corr(:, neighbor_iter) = [real(neighbor(1, neighbor_iter)), real(neighbor(2, neighbor_iter)), trace_slim%real_corr(retrace_slim)]
+                    neighbor_corr(neighbor_iter) = retrace_slim%real_corr(trace_slim)
+                enddo 
+                center = [ int(coord_corr(1, maxloc(neighbor_corr))), int(coord_corr(2, maxloc(neighbor_corr))), 1 ] 
+                max_corr(search_iter) = maxval(neighbor_corr)
+                if( search_iter > 2 .and. max_corr(search_iter - 1) < max_corr(search_iter) )then 
+                    retrace_centers(:, box_iter) = [center(1), center(2)]
+                    exit
+                elseif( search_iter > 8) then 
+                    retrace_centers(:, box_iter) = [coords(box_iter, 1), coords(box_iter, 2), 1]
+                    exit 
+                endif 
+            enddo
+            print *, 'center found:', retrace_centers(:,box_iter)
+        end do  
+    end subroutine
+
+    subroutine mask_incl_retrace( trace_pick, trace, retrace, trace_vec, retrace_vec ) 
+        type(pickseg), intent(inout)    :: trace_pick
+        type(image),   intent(inout)    :: trace, retrace
+        type(image),   intent(inout)  :: trace_vec(:), retrace_vec(:) 
+        integer, allocatable :: coords(:,:)
+        integer         :: ldim(3), windim(3), box_iter
+        real            :: smpd
+        type(binimage)  :: retrace_binimage
+        call trace_pick%get_positions(coords)
+        ldim = trace_pick%ldim
+        smpd = trace_pick%smpd_shrink
+        windim = trace_pick%ldim_box
+        call retrace%mul(real(product(ldim)))
+        call retrace%fft()
+        call retrace_binimage%new_bimg(ldim, smpd)
+        call retrace_binimage%set_ft(.true.)
+        call retrace%clip(retrace_binimage)
+        call retrace_binimage%bp(0., params_glob%lp)
+        call retrace%ifft()
+        call retrace_binimage%ifft()
+        call otsu_img(retrace_binimage)
+        call trace%pad_inplace([2*ldim(1), 2*ldim(2), 1])
+        call retrace_binimage%pad_inplace([2*ldim(1), 2*ldim(2), 1])
+        call retrace_binimage%erode()
+        call retrace_binimage%erode()
+        call retrace_binimage%dilate()
+        call retrace_binimage%vis()
+        ! pad images for negative box pos.
+
+        ! take trace positions as center of retrace boxes.
+        ! mask in the same way
+        ! need to apply same procedures to generate mic_shrink_lp_tv_bin_erode_cc.mrc
+        ! band pass 
+        ! probably get rid of TV denoising 
+        ! otsu 
+        ! erode, erode, dilate
+        ! find ccs labels the connected components on the processed micrograph.
+        ! mask other particles. 
+    end subroutine
+
+    subroutine gau_fit( im_in,im_out,ncls )
+        type(image), intent(in)     :: im_in 
+        type(image), intent(inout)    :: im_out
+        type(image), allocatable    :: clus_stk(:), gau2D_stk(:)
+        type(image) :: gau2D_sum
+        integer, intent(in)         :: ncls ! number of gaussians
+        real, allocatable       :: rmat(:,:,:), euc_dist(:,:), rmat_labl(:,:,:)
+        integer, allocatable    :: labels(:), centers(:), nonzero_px(:), x(:), y(:), npnts(:), temp_vec(:)
+        logical, allocatable    :: mask(:)
+        real    :: smpd, rand, cen_gauss(2), cov_gauss(2,2), corr
+        integer :: ldim(3), i, j, ndat, maxits = 20, iter, k, l, counts
+        ldim = im_in%get_ldim()
+        ldim = [ldim(1),ldim(2),1]
+        allocate(rmat(ldim(1),ldim(2),1))
+        rmat = im_in%get_rmat()
+        ndat = count(rmat(:,:,1) > 0.1)
+        allocate(x(ndat),y(ndat), source = 0)
+        ndat = 0 
+        do i = 1, ldim(1)
+            do j = 1, ldim(2)
+                if(rmat(i,j,1) > 0.1) then 
+                    ndat = ndat + 1
+                    x(ndat) = i 
+                    y(ndat) = j
+                end if 
+            end do 
+        end do 
+        ! 2D kmeans 
+        allocate(euc_dist(ndat,ncls), source = 0.)
+        allocate(labels(ndat), centers(ncls), source = 0)
+        allocate(mask(ndat), source = .false.)
+        allocate(npnts(ncls))
+        ! rand init
+        do i = 1, ncls
+            call random_number(rand)
+            centers(i) = nint(ndat * rand)
+        end do
+        do i = 1, ncls - 1
+            npnts(i) = floor(real(ndat/ncls))
+        end do 
+        npnts(ncls) = npnts(ncls) + mod(ndat,ncls)
+        do iter = 1, maxits
+            do i = 1, ncls 
+                do j = 1, ndat 
+                    euc_dist(j,i) = sqrt(real((x(j) - x(centers(i)))**2 + (y(j) - y(centers(i))))**2)
                 end do
+            end do 
+            do i = 1, ncls 
+                temp_vec = 0 
+                allocate(temp_vec(npnts(i)))
+                temp_vec = minnloc(euc_dist(:,1),npnts(i))
+                do j = 1, npnts(i)
+                    labels(temp_vec(j)) = i
+                end do 
+                deallocate(temp_vec)
+            end do 
+            ! calc new center
+            do i = 1, ncls
+                mask = .false.
+                mask = labels == i
+                centers(i) = nint(real(sum(labels, 1, mask) / npnts(i)))
+            end do 
+        end do 
+        ! map labels back to image
+        counts = 0
+        do i = 1, ldim(1)
+            do j = 1, ldim(2)
+                if(rmat(i,j,1) > 0.1) then 
+                    rmat(i,j,1) = labels(counts)
+                    counts = counts + 1
+                else
+                    rmat(i,j,1) = 0. 
+                end if
+            end do 
+        end do  
+        allocate(clus_stk(ncls))
+        allocate(gau2D_stk(ncls))
+        allocate(rmat_labl(ldim(1), ldim(2), 1), source = 0.)
+        call gau2D_sum%new(ldim, smpd)
+        do l = 1, ncls
+            rmat_labl = rmat
+            do i = 1, ldim(1)
+                do j = 1, ldim(2)
+                    if( nint(rmat_labl(i,j,1)) /= l) rmat_labl(i,j,1) = 0.
+                end do 
             end do
-            !$omp end parallel do
-            deallocate(hann_w)
-            call pick_vec(icls)%ifft()
-            ! need a soft mask 
+            call clus_stk(l)%new(ldim, smpd)
+            call clus_stk(l)%set_rmat(rmat_labl, .false.)
+            call gauss2Dfit(clus_stk(l), cen_gauss, cov_gauss, corr, gau2D_stk(l))
+            gau2D_stk(l) = gau2D_stk(l)*l
+            call gau2D_sum%add(gau2D_stk(l))
         end do 
     end subroutine 
+
 end module simple_afm_image 
