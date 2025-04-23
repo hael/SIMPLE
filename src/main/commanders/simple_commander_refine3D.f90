@@ -211,6 +211,7 @@ contains
         ! re-reconstruct from all particle images
         call xreconstruct3D_distr%execute_safe(cline_reconstruct3D_distr)
         ! postprocess
+        call cline%set('prg', 'postprocess')
         call cline%set('mkdir', 'yes')
         call xpostprocess%execute_safe(cline)
 

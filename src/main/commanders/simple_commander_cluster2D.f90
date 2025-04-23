@@ -1775,7 +1775,7 @@ contains
         type(sp_project)              :: spproj
         type(pspecs)                  :: pows
         type(image),      allocatable :: imgs(:)
-        integer,          allocatable :: states(:)
+        integer,          allocatable :: states(:), cnts(:)
         character(len=:), allocatable :: fname, fname_good, fname_bad, fname_ranked, ext, stk, stkpath
         integer :: icls, ispec, nspecs, nptcls, clsind, cnt_ranked, cnt_good, cnt_bad, ngood
         real    :: frac, pop_opt
@@ -1808,7 +1808,14 @@ contains
                 call imgs(icls)%read(stk, icls)
             end do
             nspecs = pows%get_nspecs()
-            call pows%kmeans_cls_pspecs_and_rank
+            call pows%kmeans_cls_pspecs_and_rank(states)
+            allocate(cnts(params%ncls_spec), source=0)
+            do icls = 1, params%ncls
+                if( states(icls) == 0 ) cycle
+                fname = 'rank'//int2str(states(icls))//'_cavgs'//params%ext
+                cnts(states(icls)) = cnts(states(icls)) + 1
+                call imgs(icls)%write(fname, cnts(states(icls)))
+            enddo
         else
             ! create pspecs object
             call pows%new(params%ncls, imgs, spproj%os_ptcl2D, spproj%os_cls2D, params%msk, params%hp, params%lp)
@@ -1826,55 +1833,55 @@ contains
                 case DEFAULT
                     THROW_HARD('unsupported algorithm')
             end select
-        endif
-        ! report optimal number of particles per class
-        pop_opt = pows%median_good_clspop()
-        write(logfhandle,*) 'Optimal # particles per class: ', pop_opt
-        ! adjust good/bad boundary, if needed
-        ngood = pows%get_ngood()
-        frac  = pows%get_frac_good(ngood, nptcls)
-        if( frac < params%frac_min )then
-            do
-                ngood = ngood + 1
-                frac  = pows%get_frac_good(ngood, nptcls)
-                if( frac >= params%frac_min ) exit
-            end do
-        endif
-        call pows%set_ngood(ngood)
-        write(logfhandle,*) 'Percentage of particles selected: ', frac * 100.
-        ! set filenames
-        fname        = basename(trim(stk))
-        ext          = '.'//fname2ext(fname)
-        fname_good   = add2fbody(fname, ext, '_good')
-        fname_bad    = add2fbody(fname, ext, '_bad')
-        fname_ranked = add2fbody(fname, ext, '_ranked')
-        ! write class average stacks
-        cnt_ranked = 0
-        cnt_good   = 0
-        cnt_bad    = 0
-        do ispec = 1, nspecs
-            cnt_ranked = cnt_ranked + 1
-            clsind     = pows%get_ordered_clsind(ispec)
-            call imgs(clsind)%write(fname_ranked, cnt_ranked)
-            if( cnt_ranked <= ngood )then
-                cnt_good = cnt_good + 1
-                call imgs(clsind)%write(fname_good, cnt_good)
-            else
-                cnt_bad = cnt_bad   + 1
-                call imgs(clsind)%write(fname_bad,  cnt_bad)
+            ! report optimal number of particles per class
+            pop_opt = pows%median_good_clspop()
+            write(logfhandle,*) 'Optimal # particles per class: ', pop_opt
+            ! adjust good/bad boundary, if needed
+            ngood = pows%get_ngood()
+            frac  = pows%get_frac_good(ngood, nptcls)
+            if( frac < params%frac_min )then
+                do
+                    ngood = ngood + 1
+                    frac  = pows%get_frac_good(ngood, nptcls)
+                    if( frac >= params%frac_min ) exit
+                end do
             endif
-        end do
-        ! map selection to project
-        states = pows%get_good_bad_state_arr()
-        call spproj%map_cavgs_selection(states)
-        ! optional pruning
-        if( trim(params%prune).eq.'yes') call spproj%prune_particles
-        ! this needs to be a full write as many segments are updated
-        call spproj%write(params%projfile)
-        ! end gracefully
-        do icls = 1, params%ncls
-            call imgs(icls)%kill
-        enddo
+            call pows%set_ngood(ngood)
+            write(logfhandle,*) 'Percentage of particles selected: ', frac * 100.
+            ! set filenames
+            fname        = basename(trim(stk))
+            ext          = '.'//fname2ext(fname)
+            fname_good   = add2fbody(fname, ext, '_good')
+            fname_bad    = add2fbody(fname, ext, '_bad')
+            fname_ranked = add2fbody(fname, ext, '_ranked')
+            ! write class average stacks
+            cnt_ranked = 0
+            cnt_good   = 0
+            cnt_bad    = 0
+            do ispec = 1, nspecs
+                cnt_ranked = cnt_ranked + 1
+                clsind     = pows%get_ordered_clsind(ispec)
+                call imgs(clsind)%write(fname_ranked, cnt_ranked)
+                if( cnt_ranked <= ngood )then
+                    cnt_good = cnt_good + 1
+                    call imgs(clsind)%write(fname_good, cnt_good)
+                else
+                    cnt_bad = cnt_bad   + 1
+                    call imgs(clsind)%write(fname_bad,  cnt_bad)
+                endif
+            end do
+            ! map selection to project
+            states = pows%get_good_bad_state_arr()
+            call spproj%map_cavgs_selection(states)
+            ! optional pruning
+            if( trim(params%prune).eq.'yes') call spproj%prune_particles
+            ! this needs to be a full write as many segments are updated
+            call spproj%write(params%projfile)
+            ! end gracefully
+            do icls = 1, params%ncls
+                call imgs(icls)%kill
+            enddo
+        endif
         deallocate(states, imgs)
         call spproj%kill
         call pows%kill
