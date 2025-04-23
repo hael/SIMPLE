@@ -43,7 +43,6 @@ contains
     procedure          :: read
     procedure          :: write
     procedure          :: print_frcs
-    procedure          :: print_res
     ! destructor
     procedure          :: kill
 end type class_frcs
@@ -397,37 +396,6 @@ contains
             write(logfhandle,*) ''
         end do
     end subroutine print_frcs
-
-    subroutine print_res( self, fname, state, sorted )
-        class(class_frcs), intent(inout) :: self
-        character(len=*),  intent(in)    :: fname
-        integer, optional, intent(in)    :: state
-        logical, optional, intent(in)    :: sorted
-        integer, allocatable :: inds(:)
-        logical :: l_sort
-        integer :: sstate, icls
-        real    :: res_frc05, res_frc0143, cls_res(self%ncls)
-        l_sort = .false.
-        sstate = 1
-        if( present(state)  ) sstate = state
-        if( present(sorted) ) l_sort = sorted
-        call self%read(fname)
-        do icls=1,self%ncls
-            call self%estimate_res( icls, res_frc05, res_frc0143, sstate )
-            cls_res(icls) = res_frc0143
-        end do
-        if( l_sort )then
-            inds = (/(icls,icls=1,self%ncls)/)
-            call hpsort(cls_res, inds)
-            do icls=1,self%ncls
-                write(logfhandle,'(a,1x,i5,1x,a,1x,i4,1x,a,1x,f6.2)') 'CLASS:', inds(icls), 'RANK:', icls, 'RES:', cls_res(icls)
-            end do
-        else
-            do icls=1,self%ncls
-                write(logfhandle,'(a,1x,i5,1x,a,1x,f6.2)') 'CLASS:', icls, 'RES:', cls_res(icls)
-            end do
-        endif
-    end subroutine print_res
 
     ! destructor
 
