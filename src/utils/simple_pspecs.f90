@@ -68,6 +68,7 @@ contains
     procedure            :: otsu_bincls_dynrange
     procedure            :: dynrange_cen_init
     procedure            :: kmeans_cls_pspecs_and_rank
+    procedure            :: kmedoids_cls_pspecs_and_rank
     procedure            :: kmeans_bincls_pspecs_and_rank
     procedure            :: kmedoids_bincls_pspecs_and_rank
     ! calculators
@@ -342,6 +343,29 @@ contains
         states = self%get_clsind_spec_state_arr()
     end subroutine kmeans_cls_pspecs_and_rank
 
+    ! k-medoids clustering of power spectra
+    subroutine kmedoids_cls_pspecs_and_rank( self, states ) 
+        class(pspecs),        intent(inout) :: self
+        integer, allocatable, intent(inout) :: states(:)
+        integer :: iter
+        logical :: l_converged
+        write(logfhandle,'(A)') 'K-MEDOIDS CLUSTERING OF POWERSPECTRA'
+        call self%dynrange_cen_init
+        call self%find_pspec_cls_medoids
+        iter = 0
+        l_converged = .false.
+        do
+            call self%kcluster_iter(iter, l_converged, l_medoid=.true.)
+            if( l_converged ) exit
+        end do
+        call self%score_spectral_cls
+        call self%rank_spectral_cls
+        call self%find_pspec_cls_medoids
+        call self%plot_cens('pspec')
+        if( allocated(states) ) deallocate(states)
+        states = self%get_clsind_spec_state_arr()
+    end subroutine kmedoids_cls_pspecs_and_rank
+
     ! binary k-means clustering of power spectra
     subroutine kmeans_bincls_pspecs_and_rank( self )
         class(pspecs), intent(inout) :: self
@@ -366,6 +390,7 @@ contains
         class(pspecs), intent(inout) :: self
         integer :: iter
         logical :: l_converged
+        write(logfhandle,'(A)') 'K-MEDOIDS CLUSTERING OF POWERSPECTRA'
         call self%otsu_bincls_dynrange
         call self%calc_distmat
         call self%find_good_bad_pspec_medoids

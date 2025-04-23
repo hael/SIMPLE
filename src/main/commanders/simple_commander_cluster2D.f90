@@ -1808,7 +1808,15 @@ contains
                 call imgs(icls)%read(stk, icls)
             end do
             nspecs = pows%get_nspecs()
-            call pows%kmeans_cls_pspecs_and_rank(states)
+            ! clustering
+            select case(trim(params%algorithm))
+                case('kmean')
+                    call pows%kmeans_cls_pspecs_and_rank(states)
+                case('kmed')
+                    call pows%kmedoids_cls_pspecs_and_rank(states)
+                case DEFAULT
+                    THROW_HARD('unsupported algorithm')
+            end select
             allocate(cnts(params%ncls_spec), source=0)
             do icls = 1, params%ncls
                 if( states(icls) == 0 ) cycle
@@ -1824,7 +1832,7 @@ contains
                 call imgs(icls)%read(stk, icls)
             end do
             nspecs = pows%get_nspecs()
-            ! k-means binary clustering
+            ! binary clustering
             select case(trim(params%algorithm))
                 case('kmean')
                     call pows%kmeans_bincls_pspecs_and_rank
