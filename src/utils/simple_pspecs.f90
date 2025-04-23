@@ -83,18 +83,18 @@ contains
     procedure, private   :: lookup_distance
     procedure, private   :: calc_distmat
     procedure, private   :: score_spectral_cls
+    procedure, private   :: rank_spectral_cls
     procedure, private   :: find_good_bad_spectral_cls
     ! destructor
     procedure            :: kill
 end type pspecs
 
-integer, parameter :: CLASS_GOOD      = 1
-integer, parameter :: CLASS_BAD       = 2
-real,    parameter :: DYNRANGE_THRES  = 1e-6
-real,    parameter :: FRAC_BEST_PTCLS = 0.25
-integer, parameter :: MAXITS          = 10
-integer, parameter :: MINPOP          = 20
-
+integer, parameter       :: CLASS_GOOD      = 1
+integer, parameter       :: CLASS_BAD       = 2
+real,    parameter       :: DYNRANGE_THRES  = 1e-6
+real,    parameter       :: FRAC_BEST_PTCLS = 0.25
+integer, parameter       :: MAXITS          = 10
+integer, parameter       :: MINPOP          = 20
 
 contains
 
@@ -114,14 +114,6 @@ contains
         logical :: l_valid_spectra(ncls)
         integer :: ldim(3), icls, ispec
         real    :: dynrange
-
-        ! call os_ptcl2D%write('foo.txt')
-        ! stop
-
-        ! tmp = os_ptcl2D%get_all('class')
-        ! print *, tmp
-        ! stop
-
         call self%kill
         self%ncls_spec  = 2 ! binary clustering by default
         if( present(ncls_spec) ) self%ncls_spec = ncls_spec
@@ -220,15 +212,16 @@ contains
         end do
     end function get_good_bad_state_arr
 
-    function get_clsind_spec_state_arr( self, icls_spec ) result( states )
+    function get_clsind_spec_state_arr( self ) result( states )
         class(pspecs), intent(in) :: self
-        integer,       intent(in) :: icls_spec
         integer, allocatable :: states(:)
-        integer :: ispec
+        integer :: icls_spec, ispec
         allocate(states(self%ncls), source=0)
-        do ispec = 1, self%nspecs
-            if( self%clsinds_spec(ispec) == icls_spec ) states(self%clsinds(ispec)) = 1
-        end do
+        do icls_spec = 1, self%ncls_spec
+            do ispec = 1, self%nspecs
+                if( self%clsinds_spec(ispec) == icls_spec ) states(self%clsinds(ispec)) = icls_spec
+            end do
+        enddo
     end function get_clsind_spec_state_arr
 
     function get_ordered_clsind( self, ispec ) result( clsind )
@@ -327,14 +320,14 @@ contains
     end subroutine dynrange_cen_init 
 
     ! k-means clustering of power spectra
-    subroutine kmeans_cls_pspecs_and_rank( self )
-        class(pspecs), intent(inout) :: self
+    subroutine kmeans_cls_pspecs_and_rank( self, states ) 
+        class(pspecs),        intent(inout) :: self
+        integer, allocatable, intent(inout) :: states(:)
         integer :: iter
         logical :: l_converged
         write(logfhandle,'(A)') 'K-MEANS CLUSTERING OF POWERSPECTRA'
         call self%dynrange_cen_init
         call self%calc_pspec_cls_avgs
-        call self%plot_cens('pspec')
         iter = 0
         l_converged = .false.
         do
@@ -342,9 +335,11 @@ contains
             if( l_converged ) exit
         end do
         call self%score_spectral_cls
-        call self%find_good_bad_spectral_cls
-        call self%calc_good_bad_pspec_avgs
-        call self%rank_pspecs
+        call self%rank_spectral_cls
+        call self%calc_pspec_cls_avgs
+        call self%plot_cens('pspec')
+        if( allocated(states) ) deallocate(states)
+        states = self%get_clsind_spec_state_arr()
     end subroutine kmeans_cls_pspecs_and_rank
 
     ! binary k-means clustering of power spectra
@@ -674,6 +669,24 @@ contains
             endif
         end do
     end subroutine score_spectral_cls
+
+    subroutine rank_spectral_cls( self )
+        class(pspecs), intent(inout) :: self
+        real, allocatable :: tmp(:)
+        integer :: rank_assign(self%nspecs) 
+        integer :: i, rank, icls_spec, order(self%ncls_spec)
+        tmp   = self%cls_spec_scores
+        order = (/(i,i=1,self%ncls_spec)/)
+        call hpsort(tmp, order)
+        call reverse(order) ! best first
+        do rank = 1, self%ncls_spec
+             where( self%clsinds_spec == order(rank) ) rank_assign = rank
+             print *, 'rank: ', rank, ' score: ', self%cls_spec_scores(order(rank)),&
+            &' POP: ', self%clspops_spec(order(rank))
+        enddo
+        self%clsinds_spec = rank_assign
+        deallocate(tmp)  
+    end subroutine rank_spectral_cls
 
     subroutine find_good_bad_spectral_cls( self )
         class(pspecs), intent(inout) :: self
