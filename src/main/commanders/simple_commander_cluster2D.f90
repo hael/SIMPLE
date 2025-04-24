@@ -763,6 +763,7 @@ contains
         finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//'_ranked'//params%ext
         call cline_rank_cavgs%set('projfile', params%projfile)
         call cline_rank_cavgs%set('stk',      finalcavgs)
+        call cline_rank_cavgs%set('flag',     'res') ! rank by cavgs resolution
         call cline_rank_cavgs%set('outstk',   finalcavgs_ranked)
         call xrank_cavgs%execute_safe( cline_rank_cavgs )
         ! cleanup
