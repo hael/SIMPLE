@@ -498,6 +498,7 @@ contains
             ! rank based on gold-standard resolution estimates
             finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//'_ranked'//params%ext
             call cline_rank_cavgs%set('projfile', params%projfile)
+            call cline_rank_cavgs%set('flag',     'res')
             call cline_rank_cavgs%set('stk',      finalcavgs)
             call cline_rank_cavgs%set('outstk',   finalcavgs_ranked)
             call xrank_cavgs%execute( cline_rank_cavgs )
