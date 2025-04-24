@@ -153,6 +153,7 @@ type(simulate_subtomogram_commander)        :: xsimulate_subtomogram
 ! MISCELLANEOUS WORKFLOWS
 type(afm_commander)                         :: xafm
 type(scale_project_commander_distr)         :: xscale_project
+type(map2model_fsc_commander)               :: xmap2model_fsc
 type(map_validation_commander)              :: xmap_validation
 type(model_validation_commander)            :: xmodel_validation
 type(model_validation_eo_commander)         :: xmodel_validation_eo
@@ -438,6 +439,8 @@ select case(trim(prg))
         call xsimulate_subtomogram%execute(cline)
 
     ! VALIDATION PROGRAMS
+    case( 'map2model_fsc' )
+        call xmap2model_fsc%execute(cline)
     case( 'map_validation' )
         call xmap_validation%execute(cline)
     case( 'model_validation' )
@@ -475,7 +478,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('b01fe23f')
+call simple_print_git_version('6050c559')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
