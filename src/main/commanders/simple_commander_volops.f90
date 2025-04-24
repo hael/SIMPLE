@@ -433,7 +433,6 @@ contains
         type(image), allocatable :: imgs(:)
         integer,     allocatable :: states(:), tmp(:)
         integer                  :: i, s
-        logical                  :: do_zero
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
         if( .not. cline%defined('wfun')   ) call cline%set('wfun',   'kb')
         if( .not. cline%defined('winsz')  ) call cline%set('winsz',   1.5)
@@ -453,6 +452,7 @@ contains
             call build%build_spproj(params, cline)
             call build%build_general_tbox(params, cline)
             call build%pgrpsyms%build_refspiral(build%spproj_field)
+            call build%spproj_field%set_all2single('state',1)
         endif
         ! generate projections
         if( file_exists(params%outstk) ) call del_file(params%outstk)
