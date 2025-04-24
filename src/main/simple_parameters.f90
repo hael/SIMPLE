@@ -118,6 +118,7 @@ type :: parameters
     character(len=3)          :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
     character(len=3)          :: sh_first='no'        !< shifting before orientation search(yes|no){no}
     character(len=3)          :: sh_inv='no'          !< whether to use shift invariant metric for projection direction assignment(yes|no){no}
+    character(len=3)          :: shmem_writecls='yes' !<
     character(len=3)          :: sort_asc='yes'       !< sort oris ascending
     character(len=3)          :: srch_oris='yes'      !< whether to search orientations in multivolume assignment(yes|no){yes} 
     character(len=3)          :: stream='no'          !< stream (real time) execution mode(yes|no){no}
@@ -347,6 +348,7 @@ type :: parameters
     integer :: nsearch=40          !< # search grid points{40}
     integer :: nspace=2500         !< # projection directions
     integer :: nspace_sub=500      !< # projection directions in subspace
+    integer :: nspace_max=1500     !< Maximum # of projection directions
     integer :: nstages=8           !< # low-pass limit stages
     integer :: nstates=1           !< # states to reconstruct
     integer :: nsym=1
@@ -732,6 +734,7 @@ contains
         call check_carg('shbarrier',      self%shbarrier)
         call check_carg('sh_first',       self%sh_first)
         call check_carg('sh_inv',         self%sh_inv)
+        call check_carg('shmem_writecls', self%shmem_writecls)
         call check_carg('sigma_est',      self%sigma_est)
         call check_carg('snapshot',       self%snapshot)
         call check_carg('sort',           self%sort)
@@ -867,6 +870,7 @@ contains
         call check_iarg('nsample_stop',   self%nsample_stop)
         call check_iarg('nspace',         self%nspace)
         call check_iarg('nspace_sub',     self%nspace_sub)
+        call check_iarg('nspace_max',     self%nspace_max)
         call check_iarg('nstages',        self%nstages)
         call check_iarg('nstates',        self%nstates)
         call check_iarg('class',          self%class)
@@ -1034,6 +1038,7 @@ contains
             part_glob = 1
         endif
         l_distr_exec_glob = self%l_distr_exec
+        if( l_distr_exec_glob ) self%shmem_writecls = 'yes'
         ! get pointer to program user interface
         call get_prg_ptr(self%prg, self%ptr2prg)
         ! look for the last previous execution directory and get next directory number
