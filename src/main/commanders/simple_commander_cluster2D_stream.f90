@@ -2667,7 +2667,8 @@ contains
         else
             stk = trim(POOL_DIR)//trim(refs_glob)
         endif
-        call cline_rank_cavgs%set('stk', stk)
+        call cline_rank_cavgs%set('stk',      stk)
+        call cline_rank_cavgs%set('flag',     'res')
         call cline_rank_cavgs%set('outstk',   trim(refs_ranked))
         call xrank_cavgs%execute_safe(cline_rank_cavgs)
         call cline_rank_cavgs%kill
@@ -2932,6 +2933,7 @@ contains
                         cavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(chunks(ichunk)%it,3)//'_ranked'//trim(params%ext)
                         call cline_rank_cavgs%set('projfile', chunks(ichunk)%projfile_out)
                         call cline_rank_cavgs%set('stk',      cavgs)
+                        call cline_rank_cavgs%set('flag',     'res')
                         call cline_rank_cavgs%set('outstk',   cavgs_ranked)
                         call simple_rename('final_cavgs'//trim(params%ext), cavgs)
                         call spproj%read_segment('out', chunks(ichunk)%projfile_out)
