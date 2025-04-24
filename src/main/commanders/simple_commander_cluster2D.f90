@@ -532,7 +532,6 @@ contains
         ! ranking
         finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//'_ranked'//params%ext
         call cline_rank_cavgs%set('projfile', params%projfile)
-        call cline_rank_cavgs%set('flag',     'res')
         call cline_rank_cavgs%set('stk',      finalcavgs)
         call cline_rank_cavgs%set('outstk',   finalcavgs_ranked)
         call xrank_cavgs%execute_safe(cline_rank_cavgs)
@@ -764,7 +763,6 @@ contains
         finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//'_ranked'//params%ext
         call cline_rank_cavgs%set('projfile', params%projfile)
         call cline_rank_cavgs%set('stk',      finalcavgs)
-        call cline_rank_cavgs%set('flag',     'res') ! rank by cavgs resolution
         call cline_rank_cavgs%set('outstk',   finalcavgs_ranked)
         call xrank_cavgs%execute_safe( cline_rank_cavgs )
         ! cleanup
@@ -1727,6 +1725,7 @@ contains
         real,    allocatable :: vals(:)
         integer              :: ldim(3), ncls, icls
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'cls2D')
+        if( .not. cline%defined('flag') )    call cline%set('flag',    'res')
         call params%new(cline)
         call spproj%read_segment(params%oritype, params%projfile)
         call find_ldim_nptcls(params%stk, ldim, ncls)
@@ -3263,7 +3262,6 @@ contains
             stk         = trim(params_glob%refs)
             call cline_rank_cavgs%set('oritype',  'cls3D')
             call cline_rank_cavgs%set('projfile', params_glob%projfile)
-            call cline_rank_cavgs%set('flag',     'res')
             call cline_rank_cavgs%set('stk',      stk)
             call cline_rank_cavgs%set('outstk',   trim(refs_ranked))
             call xrank_cavgs%execute_safe(cline_rank_cavgs)
