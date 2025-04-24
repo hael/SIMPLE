@@ -3699,13 +3699,15 @@ contains
         &'Map to model FSC',&                              ! descr_short
         &'is a program to compute the FSC between a map and PDB atomic model',& ! descr long
         &'all',&                                           ! executable
-        &2, 1, 0, 0, 1, 1, 1, .false.)                     ! # entries in each group, requires sp_project
+        &2, 2, 0, 0, 1, 1, 1, .false.)                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call map2model_fsc%set_input('img_ios', 1, 'vol1', 'file', 'Experimental volume',  'Experimental volume',  'vol.mrc file', .true., '')
         call map2model_fsc%set_input('img_ios', 2, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'molecule.pdb')
         ! parameter input/output
         call map2model_fsc%set_input('parm_ios', 1, smpd)
+        call map2model_fsc%set_input('parm_ios', 2, vol_dim)
+        map2model_fsc%parm_ios(2)%required = .true.
         ! alternative inputs
         ! <empty>
         ! search controls
