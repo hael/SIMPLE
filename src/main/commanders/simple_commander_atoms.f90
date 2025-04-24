@@ -13,6 +13,7 @@ implicit none
 public :: atoms_stats_commander
 public :: conv_atom_denoise_commander
 public :: detect_atoms_commander
+public :: map2model_fsc_commander
 public :: map_validation_commander
 public :: model_validation_commander
 public :: model_validation_eo_commander
@@ -36,6 +37,11 @@ type, extends(commander_base) :: detect_atoms_commander
   contains
     procedure :: execute      => exec_detect_atoms
 end type detect_atoms_commander
+
+type, extends(commander_base) :: map2model_fsc_commander
+  contains
+    procedure :: execute      => exec_map2model_fsc
+end type map2model_fsc_commander
 
 type, extends(commander_base) :: map_validation_commander
   contains
@@ -161,6 +167,33 @@ contains
         call simple_end('**** SIMPLE_DETECT_ATOMS NORMAL STOP ****')
     end subroutine exec_detect_atoms
 
+    subroutine exec_map2model_fsc( self, cline )
+        use simple_commander_resolest, only: fsc_commander
+        class(map2model_fsc_commander), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
+        type(pdb2mrc_commander) :: xpdb2mrc
+        type(fsc_commander)     :: xfsc
+        type(cmdline)           :: cline_pdb2mrc, cline_fsc
+        type(parameters)        :: params
+        ! parse parameters
+        call params%new(cline)
+        call cline_pdb2mrc%set('prg', 'pdb2mrc')
+        call cline_pdb2mrc%set('pdbfile', params%pdbfile)
+        call cline_pdb2mrc%set('smpd', params%smpd)
+        params%outvol = trim(get_fbody(params%pdbfile,'pdb'))//'_sim.mrc'
+        call cline_pdb2mrc%set('outvol', params%outvol)
+        call xpdb2mrc%execute(cline_pdb2mrc)
+        call cline_fsc%set('prg', 'fsc')
+        call cline_fsc%set('smpd', params%smpd)
+        call cline_fsc%set('vol1', params%vols(1))
+        call cline_fsc%set('vol2', params%outvol)
+        call cline_fsc%set('mskdiam', params%mskdiam)
+        call cline_fsc%set('nthr', params%nthr)
+        call xfsc%execute(cline_fsc)
+        ! end gracefully
+        call simple_end('**** SIMPLE_MAP2MODEL_FSC NORMAL STOP ****')
+    end subroutine exec_map2model_fsc
+   
     subroutine exec_map_validation( self, cline )
         class(map_validation_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
@@ -236,7 +269,7 @@ contains
         if( .not.cline%defined('pdbout') )then
             params%pdbout = trim(get_fbody(params%pdbfile,'pdb'))//'_centered.pdb'
         endif
-        if( .not.cline%defined('outvol') ) params%outvol = swap_suffix(params%pdbfile,'mrc','pdb')
+        if( .not.cline%defined('outvol') ) params%outvol = trim(get_fbody(params%pdbfile,'pdb'))//'_sim.mrc'
         if( cline%defined('vol_dim') ) vol_dims(:) = params%vol_dim
         if( cline%defined('vol_dim') )then  
             if( params%center_pdb .eq. 'yes' )then

@@ -140,6 +140,7 @@ type(simple_program), target :: info_stktab
 type(simple_program), target :: make_cavgs
 type(simple_program), target :: make_oris
 type(simple_program), target :: make_pickrefs
+type(simple_program), target :: map2model_fsc
 type(simple_program), target :: map_cavgs_selection
 type(simple_program), target :: map_cavgs_states
 type(simple_program), target :: mask
@@ -478,6 +479,7 @@ contains
         call new_merge_projects
         call new_mkdir_
         call new_motion_correct
+        call new_map2model_fsc
         call new_map_validation
         call new_model_validation
         call new_model_validation_eo
@@ -622,6 +624,7 @@ contains
         call push2prg_ptr_array(make_cavgs)
         call push2prg_ptr_array(make_oris)
         call push2prg_ptr_array(make_pickrefs)
+        call push2prg_ptr_array(map2model_fsc)
         call push2prg_ptr_array(map_cavgs_selection)
         call push2prg_ptr_array(map_cavgs_states)
         call push2prg_ptr_array(mask)
@@ -855,6 +858,10 @@ contains
                 ptr2prg => map_cavgs_selection
             case('map_cavgs_states')
                 ptr2prg => map_cavgs_states
+            case('map2model_fsc')
+                ptr2prg => map2model_fsc
+            case('map_validation')
+                ptr2prg => map_validation
             case('mask')
                 ptr2prg => mask
             case('merge_projects')
@@ -863,8 +870,6 @@ contains
                 ptr2prg => mkdir_
             case('motion_correct')
                 ptr2prg => motion_correct
-            case('map_validation')
-                ptr2prg => map_validation
             case('model_validation')
                 ptr2prg => model_validation
             case('model_validation_eo')
@@ -1068,11 +1073,12 @@ contains
         write(logfhandle,'(A)') make_pickrefs%name
         write(logfhandle,'(A)') map_cavgs_selection%name
         write(logfhandle,'(A)') map_cavgs_states%name
+        write(logfhandle,'(A)') map_validation%name
+        write(logfhandle,'(A)') map2model_fsc%name
         write(logfhandle,'(A)') mask%name
         write(logfhandle,'(A)') merge_projects%name
         write(logfhandle,'(A)') mkdir_%name
         write(logfhandle,'(A)') motion_correct%name
-        write(logfhandle,'(A)') map_validation%name
         write(logfhandle,'(A)') model_validation%name
         write(logfhandle,'(A)') model_validation_eo%name
         write(logfhandle,'(A)') multivol_assign%name
@@ -3685,6 +3691,33 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_map_cavgs_states
+
+    subroutine new_map2model_fsc
+        ! PROGRAM SPECIFICATION
+        call map2model_fsc%new(&
+        &'map2model_fsc', &                                ! name
+        &'Map to model FSC',&                              ! descr_short
+        &'is a program to compute the FSC between a map and PDB atomic model',& ! descr long
+        &'all',&                                           ! executable
+        &2, 1, 0, 0, 1, 1, 1, .false.)                     ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call map2model_fsc%set_input('img_ios', 1, 'vol1', 'file', 'Experimental volume',  'Experimental volume',  'vol.mrc file', .true., '')
+        call map2model_fsc%set_input('img_ios', 2, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'molecule.pdb')
+        ! parameter input/output
+        call map2model_fsc%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call map2model_fsc%set_input('filt_ctrls', 1, 'fsc', 'file', 'FSC file', 'FSC file', 'e.g. fsc_state01.bin file', .false., '')
+        map2model_fsc%filt_ctrls(1)%required = .false.
+        ! mask controls
+        call map2model_fsc%set_input('mask_ctrls', 1, mskdiam)
+        ! computer controls
+        call map2model_fsc%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_map2model_fsc
 
     subroutine new_mask
         ! PROGRAM SPECIFICATION
