@@ -52,12 +52,14 @@ type(tseries_swap_stack_commander)            :: xtseries_swap_stack
 type(vizoris_commander)                       :: xvizoris
 type(cavgsproc_nano_commander)                :: xcavgsproc
 type(cavgseoproc_nano_commander)              :: xcavgseoproc
+type(map2model_fsc_commander)                 :: xmap2model_fsc
 type(map_validation_commander)                :: xmap_validation
 type(model_validation_commander)              :: xmodel_validation
 type(model_validation_eo_commander)           :: xmodel_validation_eo
 type(ptclsproc_nano_commander)                :: xptclsproc
 
 ! MODEL BUILDING/ANALYSIS PROGRAMS
+type(pdb2mrc_commander)                       :: xpdb2mrc
 type(detect_atoms_commander)                  :: xdetect_atoms
 type(conv_atom_denoise_commander)             :: xconv_atom_denoise
 type(atoms_stats_commander)                   :: xatoms_stats
@@ -170,6 +172,8 @@ select case(prg)
         call xcavgsproc%execute(cline)
     case( 'cavgseoproc_nano' )
         call xcavgseoproc%execute(cline)
+    case( 'map2model_fsc' )
+        call xmap2model_fsc%execute(cline)
     case( 'map_validation' )
         call xmap_validation%execute(cline)
     case( 'model_validation' )
@@ -182,6 +186,7 @@ select case(prg)
     ! MODEL BUILDING/ANALYSIS PROGRAMS
     case( 'pdb2mrc' )
         call cline%set('mkdir', 'no')
+        call xpdb2mrc%execute(cline)
     case( 'conv_atom_denoise')
         call xconv_atom_denoise%execute(cline)
     case( 'detect_atoms' )
@@ -206,7 +211,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('b01fe23f')
+call simple_print_git_version('6050c559')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
