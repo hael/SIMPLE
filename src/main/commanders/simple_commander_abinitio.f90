@@ -93,6 +93,7 @@ contains
 
     !> for generation of an initial 3D model from class averages
     subroutine exec_abinitio3D_cavgs( self, cline )
+        use simple_estimate_ssnr, only: lpstages_fast
         class(abinitio3D_cavgs_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         character(len=*),      parameter :: work_projfile = 'abinitio3D_cavgs_tmpproj.simple'
@@ -141,14 +142,26 @@ contains
         ! read project
         call spproj%read(params%projfile)
         ! set low-pass limits and downscaling info from FRCs
-        if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
-            call set_lplims_from_frcs(spproj, l_cavgs=.true., lpstart=params%lpstart, lpstop=params%lpstop)
-        else if( cline%defined('lpstart') )then
-            call set_lplims_from_frcs(spproj, l_cavgs=.true., lpstart=params%lpstart)
-        else if( cline%defined('lpstop') )then
-            call set_lplims_from_frcs(spproj, l_cavgs=.true., lpstop=params%lpstop)
+        if( cline%defined('lpstart_ini3D').or.cline%defined('lpstop_ini3D') )then
+            ! overrides resolution limits scheme based on frcs
+            if( cline%defined('lpstart_ini3D').and.cline%defined('lpstop_ini3D') )then
+                allocate(lpinfo(nstages_ini3D))
+                call lpstages_fast(params%box, nstages_ini3D, params%smpd, params%lpstart_ini3D, params%lpstop_ini3D, lpinfo)
+            else
+                THROW_HARD('Both lpstart_ini3D & lpstop_ini3D must be inputted')
+            endif
+            call cline%delete('lpstart_ini3D')
+            call cline%delete('lpstop_ini3D')
         else
-            call set_lplims_from_frcs(spproj, l_cavgs=.true.)
+            if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
+                call set_lplims_from_frcs(spproj, l_cavgs=.true., lpstart=params%lpstart, lpstop=params%lpstop)
+            else if( cline%defined('lpstart') )then
+                call set_lplims_from_frcs(spproj, l_cavgs=.true., lpstart=params%lpstart)
+            else if( cline%defined('lpstop') )then
+                call set_lplims_from_frcs(spproj, l_cavgs=.true., lpstop=params%lpstop)
+            else
+                call set_lplims_from_frcs(spproj, l_cavgs=.true.)
+            endif
         endif
         ! whether to use classes generated from 2D or 3D
         select case(trim(params%imgkind))
@@ -242,7 +255,11 @@ contains
         call spproj%map2ptcls
         if( nstages_ini3D == NSTAGES_INI3D_MAX )then ! produce validation info
             ! check even odd convergence
-            call conv_eo(work_proj%os_ptcl3D)
+            if( params%nstates == 1 )then
+                call conv_eo(work_proj%os_ptcl3D)
+            else
+                call conv_eo_states(work_proj%os_ptcl3D)
+            endif
             ! for visualization
             call gen_ortho_reprojs4viz
             ! calculate 3D reconstruction at original sampling
@@ -283,6 +300,10 @@ contains
         endif
         ! write results (this needs to be a full write as multiple segments are updated)
         call spproj%write()
+        ! rank classes based on agreement to volume (after writing)
+        if( nstages_ini3D == NSTAGES_INI3D_MAX )then
+            if( trim(params%rank_cavgs).eq.'yes' ) call rank_cavgs
+        endif
         ! end gracefully
         call img%kill
         call spproj%kill
@@ -293,7 +314,6 @@ contains
         call del_file(work_projfile)
         call simple_rmdir(STKPARTSDIR)
         call simple_end('**** SIMPLE_ABINITIO3D_CAVGS NORMAL STOP ****')
-
         contains
 
             subroutine rndstart( cline )
@@ -330,7 +350,7 @@ contains
             end subroutine rndstart
     
             subroutine conv_eo( os )
-                class(oris), intent(inout) :: os
+                class(oris), intent(in) :: os
                 type(sym) :: se
                 type(ori) :: o_odd, o_even
                 real      :: avg_euldist, euldist
@@ -356,6 +376,35 @@ contains
                 write(logfhandle,'(A,F6.1)')'>>> EVEN/ODD AVERAGE ANGULAR DISTANCE: ', avg_euldist
             end subroutine conv_eo
 
+            subroutine conv_eo_states( os )
+                class(oris), intent(in) :: os
+                real      :: score
+                integer   :: icls, nsame_state, se, so
+                nsame_state = 0
+                do icls = 1,os%get_noris()/2
+                    se = os%get_state(icls)
+                    so = os%get_state(icls+ncavgs)
+                    if( se == so ) nsame_state = nsame_state + 1
+                enddo
+                score = 100.0 * real(nsame_state) / real(ncavgs)
+                write(logfhandle,'(A)')'>>>'
+                write(logfhandle,'(A,F6.1,A1)')'>>> EVEN/ODD STATES OVERLAP: ', score,'%'
+            end subroutine conv_eo_states
+
+            subroutine rank_cavgs
+                use simple_commander_cluster2D, only: rank_cavgs_commander
+                type(rank_cavgs_commander) :: xrank_cavgs
+                type(cmdline)              :: cline_rank_cavgs
+                call cline_rank_cavgs%set('prg',      'rank_cavgs')
+                call cline_rank_cavgs%set('projfile', params%projfile)
+                call cline_rank_cavgs%set('flag',     'corr') ! rank by cavg vs. reproj agreement
+                call cline_rank_cavgs%set('oritype',  'cls3D')
+                call cline_rank_cavgs%set('stk',      orig_stk)
+                call cline_rank_cavgs%set('outstk',   basename(add2fbody(stk, ext, '_sorted')))
+                call xrank_cavgs%execute_safe(cline_rank_cavgs)
+                call cline_rank_cavgs%kill
+            end subroutine rank_cavgs
+
     end subroutine exec_abinitio3D_cavgs
 
     !> for crude generation of an initial 3D model from class averages
@@ -364,21 +413,26 @@ contains
         class(cmdline),                         intent(inout) :: cline
         type(abinitio3D_cavgs_commander) :: xabinitio3D_cavgs
         real :: mskdiam, lpstart, lpstop
-        ! resolution limits: lpstart in [12;20], lpstop in [7.;8.]
+        ! resolution limits: lpstart in [12;20], lpstop in [6.;8.]
         mskdiam = cline%get_rarg('mskdiam')
         lpstart = max(min(mskdiam/10., 20.), 12.)
-        lpstop  = min(max(mskdiam/25.,  7.),  8.)
+        lpstop  = min(max(mskdiam/30.,  6.),  8.)
         if( cline%defined('lpstart') ) lpstart = cline%get_rarg('lpstart')
         if( cline%defined('lpstop')  ) lpstop  = cline%get_rarg('lpstop')
         if( lpstop > lpstart ) lpstop = lpstart
-        call cline%set('lpstart', lpstart)
-        call cline%set('lpstop',  lpstop)
-        ! multi-states
+        ! command-line updates
         if( cline%defined('nstates') )then
             if( cline%get_iarg('nstates') > 1 )then
                 call cline%set('multivol_mode', 'independent')
             endif
         endif
+        call cline%set('lp_auto',       'no')
+        call cline%set('lpstart_ini3D', lpstart)
+        call cline%set('lpstop_ini3D',  lpstop)
+        call cline%set('lp_auto',       'no')
+        call cline%set('nspace_max',    1500)
+        call cline%set('nstages',       NSTAGES_INI3D_MAX)
+        call cline%set('rank_cavgs',    'yes')
         ! execution
         call exec_abinitio3D_cavgs(xabinitio3D_cavgs, cline)
         call simple_end('**** SIMPLE_ABINITIO3D_CAVGS NORMAL STOP ****')
@@ -400,7 +454,7 @@ contains
         type(sp_project)                :: spproj
         type(image)                     :: noisevol
         type(simple_nice_communicator)  :: nice_communicator
-        integer :: istage, s, ncls, icls, start_stage, nptcls2update, noris, nstates_on_cline, nstates_in_project, split_stage
+        integer :: istage, s, icls, start_stage, nptcls2update, noris, nstates_on_cline, nstates_in_project, split_stage
         logical :: l_stream
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
@@ -1192,6 +1246,10 @@ contains
             if( cline_refine3D%defined('icm') )    icm    = trim(params_glob%icm)
             if( cline_refine3D%defined('ml_reg') ) ml_reg = trim(params_glob%ml_reg)
         endif
+        ! projection directions
+        if( cline_refine3D%defined('nspace_max') )then
+            inspace = min(inspace, params_glob%nspace_max)
+        endif
         ! command line update
         call cline_refine3D%set('prg',                     'refine3D')
         ! class global control parameters
@@ -1418,7 +1476,7 @@ contains
         character(len=:),      allocatable   :: str_state, vol_name
         logical,               allocatable   :: state_mask(:)
         integer,               allocatable   :: state_inds(:)
-        integer :: state, pop
+        integer :: state
         write(logfhandle,'(A)') '>>>'
         write(logfhandle,'(A)') '>>> RECONSTRUCTION AT ORIGINAL SAMPLING'
         write(logfhandle,'(A)') '>>>'

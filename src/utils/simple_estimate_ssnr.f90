@@ -13,7 +13,8 @@ implicit none
 
 public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp
 public :: lowpass_from_klim, mskdiam2lplimits, mskdiam2streamresthreshold
-public :: calc_dose_weights, get_resolution, get_resolution_at_fsc, lpstages
+public :: calc_dose_weights, get_resolution, get_resolution_at_fsc
+public :: lpstages, lpstages_fast
 private
 #include "simple_local_flags.inc"
 
@@ -325,5 +326,32 @@ contains
             end subroutine print_scaleinfo
 
     end subroutine lpstages
+
+    subroutine lpstages_fast( box, nstages, smpd, lpstart, lpstop, lpinfo )
+        use simple_magic_boxes
+        integer,           intent(in)  :: box, nstages
+        real,              intent(in)  :: smpd, lpstart, lpstop
+        type(lp_crop_inf), intent(out) :: lpinfo(nstages)
+        real,    parameter :: LP2SMPD_TARGET   = 0.4
+        real,    parameter :: SMPD_TARGET_MIN  = 2.5
+        integer :: i
+        lpinfo(:)%l_lpset = .true.
+        do i = 1,nstages
+            lpinfo(i)%lp = lpstart - real(i-1)*(lpstart-lpstop)/real(nstages-1)
+            call calc_scaleinfo(i)
+            print *, 'lpset lp box_crop smpd_crop trslim ',lpinfo(i)%l_lpset,lpinfo(i)%lp,lpinfo(i)%box_crop, lpinfo(i)%smpd_crop, lpinfo(i)%trslim
+        enddo
+        contains
+
+            subroutine calc_scaleinfo( istage )
+                integer, intent(in) :: istage
+                real :: smpd_target
+                smpd_target                = max(SMPD_TARGET_MIN, (lpinfo(istage)%lp * LP2SMPD_TARGET))
+                call autoscale(box, smpd, smpd_target, lpinfo(istage)%box_crop, lpinfo(istage)%smpd_crop, lpinfo(istage)%scale, minbox=64)
+                lpinfo(istage)%trslim      = min(8.,max(2.0, AHELIX_WIDTH / lpinfo(istage)%smpd_crop))
+                lpinfo(istage)%l_autoscale = lpinfo(istage)%box_crop < box
+            end subroutine calc_scaleinfo
+
+    end subroutine lpstages_fast
 
 end module simple_estimate_ssnr

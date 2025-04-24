@@ -1722,7 +1722,7 @@ contains
         type(stack_io)       :: stkio_r, stkio_w
         type(image)          :: img
         integer, allocatable :: order(:)
-        real,    allocatable :: res(:)
+        real,    allocatable :: vals(:)
         integer              :: ldim(3), ncls, icls
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'cls2D')
         call params%new(cline)
@@ -1739,23 +1739,42 @@ contains
             ! order according to resolution
             call img%new([params%box,params%box,1], params%smpd)
             call clsdoc_ranked%new(params%ncls, is_ptcl=.false.)
-            res = os_ptr%get_all('res')
+            select case(trim(params%flag))
+            case('res','corr','pop')
+                ! supported
+            case DEFAULT
+                THROW_HARD('Unsupported cavg flag: '//trim(params%flag))
+            end select
+            vals = os_ptr%get_all(params%flag)
             allocate(order(params%ncls))
             order = (/(icls,icls=1,params%ncls)/)
-            call hpsort(res, order)
+            call hpsort(vals, order)
+            select case(trim(params%flag))
+            case('corr')
+                call reverse(order)
+            case DEFAULT
+            ! done
+            end select
             call stkio_r%open(params%stk, params%smpd, 'read', bufsz=params%ncls)
             call stkio_r%read_whole ! because need asynchronous access
             call stkio_w%open(params%outstk, params%smpd, 'write', box=ldim(1), bufsz=params%ncls)
             do icls=1,params%ncls
-                call clsdoc_ranked%set(icls, 'class',     order(icls))
-                call clsdoc_ranked%set(icls, 'rank',      icls)
-                call clsdoc_ranked%set(icls, 'pop',       os_ptr%get(order(icls),  'pop'))
-                call clsdoc_ranked%set(icls, 'res',       os_ptr%get(order(icls),  'res'))
-                call clsdoc_ranked%set(icls, 'corr',      os_ptr%get(order(icls), 'corr'))
-                call clsdoc_ranked%set(icls, 'w',         os_ptr%get(order(icls),    'w'))
-                write(logfhandle,'(a,1x,i5,1x,a,1x,i5,1x,a,i5,1x,a,1x,f6.2)') 'CLASS:', order(icls),&
-                    &'RANK:', icls ,'POP:', nint(os_ptr%get(order(icls), 'pop')),&
+                call clsdoc_ranked%set(icls, 'class',    order(icls))
+                call clsdoc_ranked%set(icls, 'rank',     icls)
+                select case(trim(params%flag))
+                case('corr')
+                    call clsdoc_ranked%set(icls, 'corr', os_ptr%get(order(icls), 'corr'))
+                    write(logfhandle,'(a,1x,i5,1x,a,1x,i5,1x,a,1x,f6.2)') 'CLASS:', order(icls),&
+                    &'RANK:', icls ,'CORR:', os_ptr%get(order(icls), 'corr')
+                case DEFAULT
+                    call clsdoc_ranked%set(icls, 'pop',  os_ptr%get(order(icls),  'pop'))
+                    call clsdoc_ranked%set(icls, 'res',  os_ptr%get(order(icls),  'res'))
+                    call clsdoc_ranked%set(icls, 'corr', os_ptr%get(order(icls), 'corr'))
+                    call clsdoc_ranked%set(icls, 'w',    os_ptr%get(order(icls),    'w'))
+                    write(logfhandle,'(a,1x,i5,1x,a,1x,i5,1x,a,i5,1x,a,1x,f6.2)') 'CLASS:', order(icls),&
+                    &'RANK:', icls ,'POP:', os_ptr%get_int(order(icls), 'pop'),&
                     &'RES:', os_ptr%get(order(icls), 'res')
+                end select
                 call flush(logfhandle)
                 call stkio_r%get_image(order(icls), img)
                 call stkio_w%write(icls, img)
@@ -1770,6 +1789,7 @@ contains
         call clsdoc_ranked%kill
         call img%kill
         call spproj%kill
+        nullify(os_ptr)
         call simple_end('**** SIMPLE_RANK_CAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_rank_cavgs
 
