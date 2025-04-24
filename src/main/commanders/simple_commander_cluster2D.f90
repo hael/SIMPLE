@@ -1838,19 +1838,14 @@ contains
             ! clustering
             select case(trim(params%algorithm))
                 case('kmean')
-                    call pows%kmeans_cls_pspecs_and_rank(states)
+                    call pows%kmeans_cls_pspecs_and_rank
                 case('kmed')
-                    call pows%kmedoids_cls_pspecs_and_rank(states)
+                    call pows%kmedoids_cls_pspecs_and_rank
                 case DEFAULT
                     THROW_HARD('unsupported algorithm')
             end select
-            allocate(cnts(params%ncls_spec), source=0)
-            do icls = 1, params%ncls
-                if( states(icls) == 0 ) cycle
-                fname = 'rank'//int2str(states(icls))//'_cavgs'//params%ext
-                cnts(states(icls)) = cnts(states(icls)) + 1
-                call imgs(icls)%write(fname, cnts(states(icls)))
-            enddo
+            call write_ranked_cavgs('score')
+            call write_ranked_cavgs('res')
         else
             ! create pspecs object
             call pows%new(params%ncls, imgs, spproj%os_ptcl2D, spproj%os_cls2D, params%msk, params%hp, params%lp)
@@ -1916,11 +1911,29 @@ contains
             do icls = 1, params%ncls
                 call imgs(icls)%kill
             enddo
+            deallocate(states)
         endif
-        deallocate(states, imgs)
+        deallocate(imgs)
         call spproj%kill
         call pows%kill
         call simple_end('**** SIMPLE_AUTOSELECT_CAVGS NORMAL STOP ****')
+
+        contains
+
+            subroutine write_ranked_cavgs( which )
+                character(len=*), intent(in) :: which
+                integer, allocatable :: states(:)
+                states = pows%get_ranked_state_arr(which)
+                allocate(cnts(params%ncls_spec), source=0)
+                do icls = 1, params%ncls
+                    if( states(icls) == 0 ) cycle
+                    fname = 'rank'//int2str(states(icls))//'_'//trim(which)//'_cavgs'//params%ext
+                    cnts(states(icls)) = cnts(states(icls)) + 1
+                    call imgs(icls)%write(fname, cnts(states(icls)))
+                end do
+                deallocate(states, cnts)
+            end subroutine write_ranked_cavgs
+
     end subroutine exec_autoselect_cavgs
 
     subroutine exec_cluster_cavgs( self, cline )
