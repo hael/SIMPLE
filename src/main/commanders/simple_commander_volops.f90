@@ -185,7 +185,7 @@ contains
         type(atoms)           :: pdb
         type(masker)          :: msker
         character(len=STDLEN) :: pdbout_fname
-        real    :: fsc0143, fsc05, smpd, lplim
+        real    :: fsc0143, fsc05, smpd, lplim, lp_min=0., lp_max=20.
         integer :: state, box, fsc_box, ldim(3), ifoo
         logical :: has_fsc, is_center
         integer, parameter :: EDGE=6
@@ -224,7 +224,7 @@ contains
         endif
         call vol_pdb%new(ldim, params%smpd)
         call vol_pdb%read(fname_pdb)
-        call vol_pdb%bp(0., 20.)
+        call vol_pdb%bp(lp_min, lp_max)
         call otsu_img(vol_pdb)
         call vol_pdbin%transfer2bimg(vol_pdb)
         call vol_pdbin%grow_bins(1)
