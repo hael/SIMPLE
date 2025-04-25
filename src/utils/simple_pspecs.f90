@@ -87,7 +87,6 @@ contains
     procedure, private   :: calc_distmat
     procedure, private   :: calc_cls_spec_stats
     procedure, private   :: rank_spectral_classes
-    procedure, private   :: rank_spectral_classes_test
     procedure            :: get_ranked_state_arr
     ! destructor
     procedure            :: kill
@@ -112,7 +111,7 @@ contains
         class(oris),       intent(in)    :: os_cls2D
         real,              intent(in)    :: msk, hp, lp
         integer, optional, intent(in)    :: ncls_spec
-        real,    allocatable :: pspec(:), resarr(:), tmp(:)
+        real,    allocatable :: pspec(:), resarr(:)
         logical, allocatable :: mask(:)
         integer :: specinds(ncls)
         logical :: l_valid_spectra(ncls)
@@ -667,7 +666,6 @@ contains
 
     subroutine calc_cls_spec_stats( self )
         class(pspecs), intent(inout) :: self
-        ! real, allocatable :: tmp(:)
         real    :: scores(self%nspecs), res(self%nspecs)
         integer :: icls_spec, cnt, ispec
         do icls_spec = 1, self%ncls_spec
@@ -687,7 +685,6 @@ contains
             write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%med
             write(logfhandle,'(a,1x,f8.2)') 'AVERAGE SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%avg
             write(logfhandle,'(a,1x,f8.2)') 'SDEV    SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%sdev
-            ! tmp = pack(res(:cnt), mask=res(:cnt) > SMALL)
             call calc_stats(res(:cnt), self%cls_spec_clsres_stats(icls_spec))
             write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES:   ', self%cls_spec_clsres_stats(icls_spec)%minv
             write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES:   ', self%cls_spec_clsres_stats(icls_spec)%maxv
@@ -697,41 +694,9 @@ contains
         end do
     end subroutine calc_cls_spec_stats
 
-    subroutine rank_spectral_classes( self, which, rank_assign )
-        class(pspecs),    intent(inout) :: self
-        character(len=*), intent(in)    :: which
-        integer,          intent(out)   :: rank_assign(self%nspecs)
-        real, allocatable :: tmp(:)
-        integer :: rank, order(self%ncls_spec), ispec
-        order = (/(ispec,ispec=1,self%ncls_spec)/)
-        select case(which)
-            case('score')
-                tmp = self%cls_spec_clsscore_stats(:)%med
-                call hpsort(tmp, order)
-                call reverse(order) ! highest first
-            case('res')
-                tmp = self%cls_spec_clsres_stats(:)%med
-                call hpsort(tmp, order)
-            case DEFAULT
-                THROW_HARD('Unsupported which flag')
-        end select
-        rank_assign = 0
-        do rank = 1, self%ncls_spec
-            do ispec = 1, self%nspecs
-                if( self%clsinds_spec(ispec) == order(rank) ) rank_assign(ispec) = rank
-            end do
-            print *, 'rank: ', rank,&
-            &' median class score: ', self%cls_spec_clsscore_stats(order(rank))%med,&
-            &' median class res:   ', self%cls_spec_clsres_stats(order(rank))%med,&
-            &' POP: ', self%clspops_spec(order(rank))
-        enddo
-        deallocate(tmp)  
-    end subroutine rank_spectral_classes
-
-    subroutine rank_spectral_classes_test( self, rank_assign )
-        class(pspecs),    intent(inout) :: self
-        integer,          intent(out)   :: rank_assign(self%nspecs)
-        real, allocatable :: tmp(:)
+    subroutine rank_spectral_classes( self, rank_assign )
+        class(pspecs), intent(inout) :: self
+        integer,       intent(out)   :: rank_assign(self%nspecs)
         integer :: rank, order(self%ncls_spec), ispec
         order = (/(ispec,ispec=1,self%ncls_spec)/)
         call hpsort(order, ispec_lt_jspec)
@@ -774,18 +739,13 @@ contains
                 endif
             end function ispec_lt_jspec
 
-    end subroutine rank_spectral_classes_test
+    end subroutine rank_spectral_classes
 
-    function get_ranked_state_arr( self, which ) result( states )
-        class(pspecs),              intent(inout) :: self
-        character(len=*), optional, intent(in)    :: which
+    function get_ranked_state_arr( self ) result( states )
+        class(pspecs), intent(inout) :: self
         integer, allocatable :: states(:)
         integer :: rank_assign(self%nspecs)
-        if( present(which) )then
-            call self%rank_spectral_classes(which, rank_assign)
-        else
-            call self%rank_spectral_classes_test(rank_assign)
-        endif
+        call self%rank_spectral_classes(rank_assign)
         states = self%get_clsind_spec_state_arr(rank_assign)
     end function get_ranked_state_arr
 
