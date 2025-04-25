@@ -751,18 +751,23 @@ contains
 
             function ispec_lt_jspec( ispec, jspec ) result( l_worse )
                 integer, intent(in) :: ispec, jspec
+                real, parameter :: ABS_SCORE_DIFF_THRES = 0.1
                 logical :: l_score_worse, l_res_worse, l_worse
+                real    :: abs_score_diff
                 l_score_worse = .false.
                 if( self%cls_spec_clsscore_stats(ispec)%med < self%cls_spec_clsscore_stats(jspec)%med )then
-                    l_score_worse = .true.
+                    l_score_worse  = .true.
+                    abs_score_diff = 0.
+                else
+                    abs_score_diff = abs(self%cls_spec_clsscore_stats(ispec)%med - self%cls_spec_clsscore_stats(jspec)%med)
                 endif
                 l_res_worse = .false.
-                if( self%cls_spec_clsres_stats(ispec)%med >= self%cls_spec_clsres_stats(jspec)%med )then
+                if( self%cls_spec_clsres_stats(ispec)%med > self%cls_spec_clsres_stats(jspec)%med )then
                     l_res_worse = .true.
                 endif
                 if( l_score_worse .and. l_res_worse )then
                     l_worse = .true.
-                else if( l_res_worse )then ! worse resolutiuon trumps score
+                else if( abs_score_diff <= ABS_SCORE_DIFF_THRES .and. l_res_worse )then ! worse resolution trumps similar scores
                     l_worse = .true.
                 else
                     l_worse = .false.

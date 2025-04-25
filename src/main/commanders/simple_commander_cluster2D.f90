@@ -1721,7 +1721,7 @@ contains
         type(stack_io)       :: stkio_r, stkio_w
         type(image)          :: img
         integer, allocatable :: order(:)
-        real,    allocatable :: vals(:)
+        real,    allocatable :: vals(:), rstates(:)
         logical, allocatable :: mask(:)
         integer              :: ldim(3), ncls, icls, i, rank
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'cls2D')
@@ -1746,15 +1746,16 @@ contains
             case DEFAULT
                 THROW_HARD('Unsupported cavg flag: '//trim(params%flag))
             end select
-            vals  = os_ptr%get_all(params%flag)
-            order = (/(icls,icls=1,params%ncls)/)
-            mask  = os_ptr%get_all('state') > 0.5
+            vals    = os_ptr%get_all(params%flag)
+            order   = (/(icls,icls=1,params%ncls)/)
+            rstates = os_ptr%get_all('state')
+            mask    = rstates > 0.5
             call hpsort(vals, order)
             select case(trim(params%flag))
-            case('corr')
-                call reverse(order)
-            case DEFAULT
-                ! done
+                case('corr')
+                    call reverse(order)
+                case DEFAULT
+                    ! done
             end select
             call stkio_r%open(params%stk, params%smpd, 'read', bufsz=params%ncls)
             call stkio_r%read_whole ! because need asynchronous access
@@ -1809,7 +1810,7 @@ contains
         type(image),      allocatable :: imgs(:)
         integer,          allocatable :: states(:), cnts(:)
         character(len=:), allocatable :: fname, fname_good, fname_bad, fname_ranked, ext, stk, stkpath
-        integer :: icls, ispec, nspecs, nptcls, clsind, cnt_ranked, cnt_good, cnt_bad, ngood
+        integer :: icls, ispec, nspecs, nptcls, clsind, cnt_ranked, cnt_good, cnt_bad, ngood, ncls_spec
         real    :: frac, pop_opt
         call cline%set('oritype', 'cls2D')
         if( .not. cline%defined('hp')       ) call cline%set('hp',            20.)
@@ -1817,7 +1818,18 @@ contains
         if( .not. cline%defined('frac_min') ) call cline%set('frac_min',      0.6)
         if( .not. cline%defined('mkdir')    ) call cline%set('mkdir',       'yes')
         if( .not. cline%defined('prune')    ) call cline%set('prune',        'no')
-        if( .not. cline%defined('algorithm')) call cline%set('algorithm', 'kmean')
+        ! decide which clustering algorithm to use
+        if( cline%defined('ncls_spec') )then
+            ncls_spec = cline%get_iarg('ncls_spec')
+            if( ncls_spec > 2 )then
+                if( .not. cline%defined('algorithm')) call cline%set('algorithm', 'kmed')
+            else
+                if( .not. cline%defined('algorithm')) call cline%set('algorithm', 'kmean')
+            endif
+        else
+            if( .not. cline%defined('algorithm')) call cline%set('algorithm', 'kmean')
+        endif
+        ! parameters & project
         call params%new(cline)
         call spproj%read(params%projfile)
         ! retrieve cavgs stack info
