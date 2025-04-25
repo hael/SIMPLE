@@ -86,8 +86,8 @@ contains
     procedure, private   :: rank_pspecs
     procedure, private   :: lookup_distance
     procedure, private   :: calc_distmat
-    procedure, private   :: rank_spectral_classes
     procedure, private   :: calc_cls_spec_stats
+    procedure, private   :: rank_spectral_classes
     ! destructor
     procedure            :: kill
 end type pspecs
@@ -338,8 +338,9 @@ contains
             call self%kcluster_iter(iter, l_converged, l_medoid=.false.)
             if( l_converged ) exit
         end do
+        call self%calc_cls_spec_stats(l_print=.false.)
         call self%rank_spectral_classes
-        call self%calc_cls_spec_stats
+        call self%calc_cls_spec_stats(l_print=.true.)
         if( allocated(states) ) deallocate(states)
         states = self%get_clsind_spec_state_arr()
     end subroutine kmeans_cls_pspecs_and_rank
@@ -361,8 +362,9 @@ contains
             call self%kcluster_iter(iter, l_converged, l_medoid=.true.)
             if( l_converged ) exit
         end do
+        call self%calc_cls_spec_stats(l_print=.false.)
         call self%rank_spectral_classes
-        call self%calc_cls_spec_stats
+        call self%calc_cls_spec_stats(l_print=.true.)
         if( allocated(states) ) deallocate(states)
         states = self%get_clsind_spec_state_arr()
     end subroutine kmedoids_cls_pspecs_and_rank
@@ -663,6 +665,37 @@ contains
         !$omp end parallel do
     end subroutine calc_distmat
 
+    subroutine calc_cls_spec_stats( self, l_print )
+        class(pspecs), intent(inout) :: self
+        logical,       intent(in)    :: l_print
+        real    :: scores(self%nspecs), res(self%nspecs)
+        integer :: icls_spec, cnt, ispec
+        do icls_spec = 1, self%ncls_spec
+            if( self%clspops_spec(icls_spec) == 0 ) cycle 
+            if( l_print) write(logfhandle,'(A)') 'STATSTICS FOR SPECTRAL CLASS '//int2str(icls_spec)
+            cnt = 0
+            do ispec = 1,self%nspecs
+                if( self%clsinds_spec(ispec) == icls_spec )then
+                    cnt         = cnt + 1
+                    scores(cnt) = self%clsscore_stats(ispec)%avg
+                    res(cnt)    = self%clsres(ispec)
+                endif
+            end do
+            call calc_stats(scores(:cnt), self%cls_spec_clsscore_stats(icls_spec))
+            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MINIMUM SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%minv
+            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%maxv
+            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%med
+            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'AVERAGE SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%avg
+            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'SDEV    SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%sdev
+            call calc_stats(res(:cnt), self%cls_spec_clsres_stats(icls_spec))
+            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES:   ', self%cls_spec_clsres_stats(icls_spec)%minv
+            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES:   ', self%cls_spec_clsres_stats(icls_spec)%maxv
+            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES:   ', self%cls_spec_clsres_stats(icls_spec)%med
+            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES:   ', self%cls_spec_clsres_stats(icls_spec)%avg
+            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES:   ', self%cls_spec_clsres_stats(icls_spec)%sdev
+        end do
+    end subroutine calc_cls_spec_stats
+
     subroutine rank_spectral_classes( self )
         class(pspecs), intent(inout) :: self
         integer :: rank, order(self%ncls_spec), ispec, rank_assign(self%nspecs), icls_spec
@@ -711,36 +744,6 @@ contains
             end function ispec_lt_jspec
 
     end subroutine rank_spectral_classes
-
-    subroutine calc_cls_spec_stats( self )
-        class(pspecs), intent(inout) :: self
-        real    :: scores(self%nspecs), res(self%nspecs)
-        integer :: icls_spec, cnt, ispec
-        do icls_spec = 1, self%ncls_spec
-            if( self%clspops_spec(icls_spec) == 0 ) cycle 
-            write(logfhandle,'(A)') 'STATSTICS FOR SPECTRAL CLASS '//int2str(icls_spec)
-            cnt = 0
-            do ispec = 1,self%nspecs
-                if( self%clsinds_spec(ispec) == icls_spec )then
-                    cnt         = cnt + 1
-                    scores(cnt) = self%clsscore_stats(ispec)%avg
-                    res(cnt)    = self%clsres(ispec)
-                endif
-            end do
-            call calc_stats(scores(:cnt), self%cls_spec_clsscore_stats(icls_spec))
-            write(logfhandle,'(a,1x,f8.2)') 'MINIMUM SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%minv
-            write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%maxv
-            write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%med
-            write(logfhandle,'(a,1x,f8.2)') 'AVERAGE SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%avg
-            write(logfhandle,'(a,1x,f8.2)') 'SDEV    SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%sdev
-            call calc_stats(res(:cnt), self%cls_spec_clsres_stats(icls_spec))
-            write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES:   ', self%cls_spec_clsres_stats(icls_spec)%minv
-            write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES:   ', self%cls_spec_clsres_stats(icls_spec)%maxv
-            write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES:   ', self%cls_spec_clsres_stats(icls_spec)%med
-            write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES:   ', self%cls_spec_clsres_stats(icls_spec)%avg
-            write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES:   ', self%cls_spec_clsres_stats(icls_spec)%sdev
-        end do
-    end subroutine calc_cls_spec_stats
 
     ! destructor
 
