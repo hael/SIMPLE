@@ -245,11 +245,27 @@ contains
     end subroutine exec_model_validation
 
     subroutine exec_model_validation_eo( self, cline )
+        use simple_commander_volops, only: sharpvol_commander
         class(model_validation_eo_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
+        type(sharpvol_commander) :: xsharpvol
+        type(cmdline)    :: cline_sharpvol1, cline_sharpvol2
         type(parameters) :: params
         type(atoms)      :: molecule
         call params%new(cline)
+        ! sharpening even/odd volume pairs prior to comparison
+        call cline_sharpvol1%set('vol1', params%vols(2))
+        call cline_sharpvol1%set('pdbfile', params%pdbfile)
+        call cline_sharpvol1%set('smpd', params%pdbfile)
+        call cline_sharpvol1%set('nthr', params%nthr)
+        call xsharpvol%execute(cline_sharpvol1)
+        call cline_sharpvol2%set('vol1', params%vols(3))
+        call cline_sharpvol2%set('pdbfile', params%pdbfile)
+        call cline_sharpvol2%set('smpd', params%pdbfile)
+        call cline_sharpvol2%set('nthr', params%nthr)
+        call xsharpvol%execute(cline_sharpvol2)
+        params%vols(2) =  basename(add2fbody(trim(params%vols(2)),   params%ext, PPROC_SUFFIX))
+        params%vols(3) =  basename(add2fbody(trim(params%vols(3)),   params%ext, PPROC_SUFFIX))
         call molecule%new(params%pdbfile)
         if( .not.cline%defined('vol2') ) params%vols(2) = trim(get_fbody(params%vols(1),'mrc'))//'_even.mrc'
         if( .not.cline%defined('vol3') ) params%vols(3) = trim(get_fbody(params%vols(1),'mrc'))//'_odd.mrc'

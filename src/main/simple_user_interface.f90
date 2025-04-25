@@ -3875,11 +3875,11 @@ contains
     subroutine new_model_validation_eo
         ! PROGRAM SPECIFICATION
         call model_validation_eo%new(&
-        &'model_validation_eo', &                          ! name
-        &'Validation of atomic model',&                    ! descr_short
-        &'is a program to validate the PDB atomic model given a 3D experimental even/odd density map in MRC',& ! descr long
-        &'all',&                                           ! executable
-        &4, 2, 0, 0, 0, 0, 0, .false.)                     ! # entries in each group, requires sp_project
+        &'model_validation_eo', &                            ! name
+        &'Validation of atomic model using even/odd pair',&  ! descr_short
+        &'is a program to validate the PDB atomic model given a 3D experimental even/odd density map pair in MRC',& ! descr long
+        &'all',&                                             ! executable
+        &4, 2, 0, 0, 0, 0, 0, .false.)                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call model_validation_eo%set_input('img_ios', 1, 'vol1', 'file', 'Experimental volume',  'Experimental volume',  'vol.mrc file', .true., '')
