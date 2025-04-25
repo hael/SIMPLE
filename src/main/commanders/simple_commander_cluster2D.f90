@@ -1813,22 +1813,11 @@ contains
         integer :: icls, ispec, nspecs, nptcls, clsind, cnt_ranked, cnt_good, cnt_bad, ngood, ncls_spec
         real    :: frac, pop_opt
         call cline%set('oritype', 'cls2D')
-        if( .not. cline%defined('hp')       ) call cline%set('hp',            20.)
-        if( .not. cline%defined('lp')       ) call cline%set('lp',             6.)
-        if( .not. cline%defined('frac_min') ) call cline%set('frac_min',      0.6)
-        if( .not. cline%defined('mkdir')    ) call cline%set('mkdir',       'yes')
-        if( .not. cline%defined('prune')    ) call cline%set('prune',        'no')
-        ! decide which clustering algorithm to use
-        if( cline%defined('ncls_spec') )then
-            ncls_spec = cline%get_iarg('ncls_spec')
-            if( ncls_spec > 2 )then
-                if( .not. cline%defined('algorithm')) call cline%set('algorithm', 'kmed')
-            else
-                if( .not. cline%defined('algorithm')) call cline%set('algorithm', 'kmean')
-            endif
-        else
-            if( .not. cline%defined('algorithm')) call cline%set('algorithm', 'kmean')
-        endif
+        if( .not. cline%defined('hp')       ) call cline%set('hp',       20.)
+        if( .not. cline%defined('lp')       ) call cline%set('lp',        6.)
+        if( .not. cline%defined('frac_min') ) call cline%set('frac_min', 0.6)
+        if( .not. cline%defined('mkdir')    ) call cline%set('mkdir',  'yes')
+        if( .not. cline%defined('prune')    ) call cline%set('prune',   'no')
         ! parameters & project
         call params%new(cline)
         call spproj%read(params%projfile)
@@ -1853,15 +1842,7 @@ contains
             end do
             nspecs = pows%get_nspecs()
             ! clustering
-            select case(trim(params%algorithm))
-                case('kmean')
-                    call pows%kmeans_cls_pspecs_and_rank
-                case('kmed')
-                    call pows%kmedoids_cls_pspecs_and_rank
-                case DEFAULT
-                    THROW_HARD('unsupported algorithm')
-            end select
-            states = pows%get_ranked_state_arr()
+            call pows%kmeans_cls_pspecs_and_rank(states)
             allocate(cnts(params%ncls_spec), source=0)
             do icls = 1, params%ncls
                 if( states(icls) == 0 ) cycle
@@ -1879,14 +1860,7 @@ contains
             end do
             nspecs = pows%get_nspecs()
             ! binary clustering
-            select case(trim(params%algorithm))
-                case('kmean')
-                    call pows%kmeans_bincls_pspecs_and_rank
-                case('kmed')
-                    call pows%kmedoids_bincls_pspecs_and_rank
-                case DEFAULT
-                    THROW_HARD('unsupported algorithm')
-            end select
+            call pows%kmeans_bincls_pspecs_and_rank
             ! report optimal number of particles per class
             pop_opt = pows%median_good_clspop()
             write(logfhandle,*) 'Optimal # particles per class: ', pop_opt

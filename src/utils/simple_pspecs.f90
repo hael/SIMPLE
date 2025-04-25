@@ -13,43 +13,44 @@ private
 
 type pspecs
     private  
-    real,               allocatable :: pspecs(:,:)          ! matrix of power spectra
-    real,               allocatable :: pspecs_cen(:,:)      ! power spectrum "centers," obtained either through averaging or medoid analysis
-    real,               allocatable :: pspec_good(:)        ! 'good' average power spectrum
-    real,               allocatable :: pspec_bad(:)         ! 'bad'  average power spectrum
-    real,               allocatable :: resarr(:)            ! resolution values in A
-    real,               allocatable :: dynranges(:)         ! dynamic ranges of power spectra
-    real,               allocatable :: dists2cens(:,:)      ! distances to center pspecs 
-    real,               allocatable :: dists2good(:)        ! distances to good pspecs
-    real,               allocatable :: dists2bad(:)         ! distances to bad  pspecs
-    real,               allocatable :: distmat(:,:)         ! Euclidean distance matrix
-    real,               allocatable :: clsres(:)            ! 2D class resolutions
-    integer,            allocatable :: ranks(:)             ! quality ranking
-    integer,            allocatable :: order(:)             ! quality order
-    integer,            allocatable :: clsinds_spec(:)      ! spectral class assignments, if binray: 1 is good, 2 is bad
-    integer,            allocatable :: clsinds(:)           ! 2D class assignments
-    integer,            allocatable :: clspops(:)           ! class populations
-    integer,            allocatable :: clspops_spec(:)      ! spectral class populations
-    integer,            allocatable :: medoids(:)           ! medoid indices for spectral cluster centers
-    type(stats_struct), allocatable :: clsscore_stats(:)    ! 2D class score stats
+    real,               allocatable :: pspecs(:,:)                ! matrix of power spectra
+    real,               allocatable :: pspecs_cen(:,:)            ! power spectrum "centers," obtained either through averaging or medoid analysis
+    real,               allocatable :: pspec_good(:)              ! 'good' average power spectrum
+    real,               allocatable :: pspec_bad(:)               ! 'bad'  average power spectrum
+    real,               allocatable :: resarr(:)                  ! resolution values in A
+    real,               allocatable :: dynranges(:)               ! dynamic ranges of power spectra
+    real,               allocatable :: dists2cens(:,:)            ! distances to center pspecs 
+    real,               allocatable :: dists2good(:)              ! distances to good pspecs
+    real,               allocatable :: dists2bad(:)               ! distances to bad  pspecs
+    real,               allocatable :: distmat(:,:)               ! Euclidean distance matrix
+    real,               allocatable :: clsres(:)                  ! 2D class resolutions
+    integer,            allocatable :: ranks(:)                   ! quality ranking
+    integer,            allocatable :: order(:)                   ! quality order
+    integer,            allocatable :: clsinds_spec(:)            ! spectral class assignments, if binray: 1 is good, 2 is bad
+    integer,            allocatable :: clsinds(:)                 ! 2D class assignments
+    integer,            allocatable :: clspops(:)                 ! class populations
+    integer,            allocatable :: clspops_spec(:)            ! spectral class populations
+    integer,            allocatable :: ptclpops_spec(:)           ! spectral particle population
+    integer,            allocatable :: medoids(:)                 ! medoid indices for spectral cluster centers
+    type(stats_struct), allocatable :: clsscore_stats(:)          ! 2D class score stats
     type(stats_struct), allocatable :: cls_spec_clsscore_stats(:) ! spectral class 2D class score stats
     type(stats_struct), allocatable :: cls_spec_clsres_stats(:)   ! spectral class 2D class resolution stats
-    real                 :: smpd                            ! sampling distance
-    real                 :: hp                              ! high-pass limit
-    real                 :: lp                              ! low-pass limit
-    real                 :: dynrange_t       = 0.           ! dynamic range threshold
-    real                 :: cls_spec_score_t = 0.           ! spectral class score
-    integer              :: box              = 0            ! box size
-    integer              :: kfromto(2)                      ! Fourier index range
-    integer              :: sz               = 0            ! size of spectrum 
-    integer              :: nspecs           = 0            ! # of spectra
-    integer              :: ncls             = 0            ! # 2D classes
-    integer              :: ncls_spec        = 0            ! # spectral clusters
-    integer              :: medoid_good      = 0            ! index of medoid of good class
-    integer              :: medoid_bad       = 0            ! index of medoid of bad  class
-    integer              :: ngood            = 0            ! # good power spectra
-    integer              :: nbad             = 0            ! # bad power spectra
-    logical              :: exists           = .false.      ! existence flag
+    real                 :: smpd                                  ! sampling distance
+    real                 :: hp                                    ! high-pass limit
+    real                 :: lp                                    ! low-pass limit
+    real                 :: dynrange_t       = 0.                 ! dynamic range threshold
+    real                 :: cls_spec_score_t = 0.                 ! spectral class score
+    integer              :: box              = 0                  ! box size
+    integer              :: kfromto(2)                            ! Fourier index range
+    integer              :: sz               = 0                  ! size of spectrum 
+    integer              :: nspecs           = 0                  ! # of spectra
+    integer              :: ncls             = 0                  ! # 2D classes
+    integer              :: ncls_spec        = 0                  ! # spectral clusters
+    integer              :: medoid_good      = 0                  ! index of medoid of good class
+    integer              :: medoid_bad       = 0                  ! index of medoid of bad  class
+    integer              :: ngood            = 0                  ! # good power spectra
+    integer              :: nbad             = 0                  ! # bad power spectra
+    logical              :: exists           = .false.            ! existence flag
 contains
     ! constructor
     procedure            :: new
@@ -85,9 +86,8 @@ contains
     procedure, private   :: rank_pspecs
     procedure, private   :: lookup_distance
     procedure, private   :: calc_distmat
-    procedure, private   :: calc_cls_spec_stats
     procedure, private   :: rank_spectral_classes
-    procedure            :: get_ranked_state_arr
+    procedure, private   :: calc_cls_spec_stats
     ! destructor
     procedure            :: kill
 end type pspecs
@@ -148,7 +148,7 @@ contains
         &self%dists2cens(self%nspecs,self%ncls_spec), self%dists2good(self%nspecs), self%dists2bad(self%nspecs),&
         &self%clsres(self%nspecs), source=0.)
         allocate(self%ranks(self%nspecs), self%order(self%nspecs), self%clsinds_spec(self%nspecs), self%clsinds(self%nspecs),&
-        self%clspops(self%nspecs), self%clspops_spec(self%ncls_spec), self%medoids(self%ncls_spec), source=0)
+        self%clspops(self%nspecs), self%clspops_spec(self%ncls_spec), self%ptclpops_spec(self%ncls_spec), self%medoids(self%ncls_spec), source=0)
         allocate(self%clsscore_stats(self%nspecs), self%cls_spec_clsscore_stats(self%ncls_spec), self%cls_spec_clsres_stats(self%ncls_spec))
         ! set spectrum indices
         ispec = 0
@@ -216,25 +216,16 @@ contains
         end do
     end function get_good_bad_state_arr
 
-    function get_clsind_spec_state_arr( self, rank_assign ) result( states )
-        class(pspecs),     intent(in) :: self
-        integer, optional, intent(in) :: rank_assign(self%nspecs)
+    function get_clsind_spec_state_arr( self ) result( states )
+        class(pspecs), intent(in) :: self
         integer, allocatable :: states(:)
         integer :: icls_spec, ispec
         allocate(states(self%ncls), source=0)
-        if( present(rank_assign) )then
-            do icls_spec = 1, self%ncls_spec
-                do ispec = 1, self%nspecs
-                    if( rank_assign(ispec) == icls_spec ) states(self%clsinds(ispec)) = icls_spec
-                end do
-            enddo
-        else
-            do icls_spec = 1, self%ncls_spec
-                do ispec = 1, self%nspecs
-                    if( self%clsinds_spec(ispec) == icls_spec ) states(self%clsinds(ispec)) = icls_spec
-                end do
-            enddo
-        endif
+        do icls_spec = 1, self%ncls_spec
+            do ispec = 1, self%nspecs
+                if( self%clsinds_spec(ispec) == icls_spec ) states(self%clsinds(ispec)) = icls_spec
+            end do
+        enddo
     end function get_clsind_spec_state_arr
 
     function get_ordered_clsind( self, ispec ) result( clsind )
@@ -333,8 +324,9 @@ contains
     end subroutine dynrange_cen_init 
 
     ! k-means clustering of power spectra
-    subroutine kmeans_cls_pspecs_and_rank( self ) 
-        class(pspecs), intent(inout) :: self
+    subroutine kmeans_cls_pspecs_and_rank( self, states ) 
+        class(pspecs),        intent(inout) :: self
+        integer, allocatable, intent(inout) :: states(:)
         integer :: iter
         logical :: l_converged
         write(logfhandle,'(A)') 'K-MEANS CLUSTERING OF POWERSPECTRA'
@@ -346,12 +338,16 @@ contains
             call self%kcluster_iter(iter, l_converged, l_medoid=.false.)
             if( l_converged ) exit
         end do
+        call self%rank_spectral_classes
         call self%calc_cls_spec_stats
+        if( allocated(states) ) deallocate(states)
+        states = self%get_clsind_spec_state_arr()
     end subroutine kmeans_cls_pspecs_and_rank
 
     ! k-medoids clustering of power spectra
-    subroutine kmedoids_cls_pspecs_and_rank( self )
-        class(pspecs), intent(inout) :: self
+    subroutine kmedoids_cls_pspecs_and_rank( self, states )
+        class(pspecs),        intent(inout) :: self
+        integer, allocatable, intent(inout) :: states(:)
         integer :: iter, ispec
         logical :: l_converged
         write(logfhandle,'(A)') 'K-MEDOIDS CLUSTERING OF POWERSPECTRA'
@@ -365,7 +361,10 @@ contains
             call self%kcluster_iter(iter, l_converged, l_medoid=.true.)
             if( l_converged ) exit
         end do
+        call self%rank_spectral_classes
         call self%calc_cls_spec_stats
+        if( allocated(states) ) deallocate(states)
+        states = self%get_clsind_spec_state_arr()
     end subroutine kmedoids_cls_pspecs_and_rank
 
     ! binary k-means clustering of power spectra
@@ -664,40 +663,9 @@ contains
         !$omp end parallel do
     end subroutine calc_distmat
 
-    subroutine calc_cls_spec_stats( self )
+    subroutine rank_spectral_classes( self )
         class(pspecs), intent(inout) :: self
-        real    :: scores(self%nspecs), res(self%nspecs)
-        integer :: icls_spec, cnt, ispec
-        do icls_spec = 1, self%ncls_spec
-            if( self%clspops_spec(icls_spec) == 0 ) cycle 
-            write(logfhandle,'(A)') 'STATSTICS FOR SPECTRAL CLASS '//int2str(icls_spec)
-            cnt = 0
-            do ispec = 1,self%nspecs
-                if( self%clsinds_spec(ispec) == icls_spec )then
-                    cnt            = cnt + 1
-                    scores(cnt)    = self%clsscore_stats(ispec)%avg
-                    res(cnt)       = self%clsres(ispec)
-                endif
-            end do
-            call calc_stats(scores(:cnt), self%cls_spec_clsscore_stats(icls_spec))
-            write(logfhandle,'(a,1x,f8.2)') 'MINIMUM SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%minv
-            write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%maxv
-            write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%med
-            write(logfhandle,'(a,1x,f8.2)') 'AVERAGE SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%avg
-            write(logfhandle,'(a,1x,f8.2)') 'SDEV    SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%sdev
-            call calc_stats(res(:cnt), self%cls_spec_clsres_stats(icls_spec))
-            write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES:   ', self%cls_spec_clsres_stats(icls_spec)%minv
-            write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES:   ', self%cls_spec_clsres_stats(icls_spec)%maxv
-            write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES:   ', self%cls_spec_clsres_stats(icls_spec)%med
-            write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES:   ', self%cls_spec_clsres_stats(icls_spec)%avg
-            write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES:   ', self%cls_spec_clsres_stats(icls_spec)%sdev
-        end do
-    end subroutine calc_cls_spec_stats
-
-    subroutine rank_spectral_classes( self, rank_assign )
-        class(pspecs), intent(inout) :: self
-        integer,       intent(out)   :: rank_assign(self%nspecs)
-        integer :: rank, order(self%ncls_spec), ispec
+        integer :: rank, order(self%ncls_spec), ispec, rank_assign(self%nspecs), icls_spec
         order = (/(ispec,ispec=1,self%ncls_spec)/)
         call hpsort(order, ispec_lt_jspec)
         call reverse(order)
@@ -706,17 +674,20 @@ contains
             do ispec = 1, self%nspecs
                 if( self%clsinds_spec(ispec) == order(rank) ) rank_assign(ispec) = rank
             end do
-            print *, 'rank: ', rank,&
-            &' median class score: ', self%cls_spec_clsscore_stats(order(rank))%med,&
-            &' median class res:   ', self%cls_spec_clsres_stats(order(rank))%med,&
-            &' POP: ', self%clspops_spec(order(rank))
         enddo
+        self%clsinds_spec = rank_assign
+        ! update spectral class populations
+        do icls_spec = 1, self%ncls_spec
+            self%clspops_spec(icls_spec)  = count(self%clsinds_spec == icls_spec)
+            self%ptclpops_spec(icls_spec) = sum(self%clspops, mask=self%clsinds_spec == icls_spec)
+        enddo
+        
 
         contains
 
             function ispec_lt_jspec( ispec, jspec ) result( l_worse )
                 integer, intent(in) :: ispec, jspec
-                real, parameter :: ABS_SCORE_DIFF_THRES = 0.1
+                real, parameter :: ABS_SCORE_DIFF_THRES = 0.05
                 logical :: l_score_worse, l_res_worse, l_worse
                 real    :: abs_score_diff
                 l_score_worse = .false.
@@ -741,13 +712,35 @@ contains
 
     end subroutine rank_spectral_classes
 
-    function get_ranked_state_arr( self ) result( states )
+    subroutine calc_cls_spec_stats( self )
         class(pspecs), intent(inout) :: self
-        integer, allocatable :: states(:)
-        integer :: rank_assign(self%nspecs)
-        call self%rank_spectral_classes(rank_assign)
-        states = self%get_clsind_spec_state_arr(rank_assign)
-    end function get_ranked_state_arr
+        real    :: scores(self%nspecs), res(self%nspecs)
+        integer :: icls_spec, cnt, ispec
+        do icls_spec = 1, self%ncls_spec
+            if( self%clspops_spec(icls_spec) == 0 ) cycle 
+            write(logfhandle,'(A)') 'STATSTICS FOR SPECTRAL CLASS '//int2str(icls_spec)
+            cnt = 0
+            do ispec = 1,self%nspecs
+                if( self%clsinds_spec(ispec) == icls_spec )then
+                    cnt         = cnt + 1
+                    scores(cnt) = self%clsscore_stats(ispec)%avg
+                    res(cnt)    = self%clsres(ispec)
+                endif
+            end do
+            call calc_stats(scores(:cnt), self%cls_spec_clsscore_stats(icls_spec))
+            write(logfhandle,'(a,1x,f8.2)') 'MINIMUM SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%minv
+            write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%maxv
+            write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%med
+            write(logfhandle,'(a,1x,f8.2)') 'AVERAGE SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%avg
+            write(logfhandle,'(a,1x,f8.2)') 'SDEV    SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%sdev
+            call calc_stats(res(:cnt), self%cls_spec_clsres_stats(icls_spec))
+            write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES:   ', self%cls_spec_clsres_stats(icls_spec)%minv
+            write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES:   ', self%cls_spec_clsres_stats(icls_spec)%maxv
+            write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES:   ', self%cls_spec_clsres_stats(icls_spec)%med
+            write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES:   ', self%cls_spec_clsres_stats(icls_spec)%avg
+            write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES:   ', self%cls_spec_clsres_stats(icls_spec)%sdev
+        end do
+    end subroutine calc_cls_spec_stats
 
     ! destructor
 
@@ -768,6 +761,7 @@ contains
             if( allocated(self%clspops)                 ) deallocate(self%clspops)
             if( allocated(self%clsres)                  ) deallocate(self%clsres)
             if( allocated(self%clspops_spec)            ) deallocate(self%clspops_spec)
+            if( allocated(self%ptclpops_spec)           ) deallocate(self%ptclpops_spec)
             if( allocated(self%medoids)                 ) deallocate(self%medoids)
             if( allocated(self%clsscore_stats)          ) deallocate(self%clsscore_stats)
             if( allocated(self%cls_spec_clsscore_stats) ) deallocate(self%cls_spec_clsscore_stats)
