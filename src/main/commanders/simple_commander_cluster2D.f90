@@ -1849,8 +1849,9 @@ contains
                 case DEFAULT
                     THROW_HARD('unsupported algorithm')
             end select
-            call write_ranked_cavgs('score')
-            call write_ranked_cavgs('res')
+            ! call write_ranked_cavgs('score')
+            ! call write_ranked_cavgs('res')
+            call write_ranked_cavgs
         else
             ! create pspecs object
             call pows%new(params%ncls, imgs, spproj%os_ptcl2D, spproj%os_cls2D, params%msk, params%hp, params%lp)
@@ -1926,17 +1927,29 @@ contains
         contains
 
             subroutine write_ranked_cavgs( which )
-                character(len=*), intent(in) :: which
+                character(len=*), optional, intent(in) :: which
                 integer, allocatable :: states(:)
-                states = pows%get_ranked_state_arr(which)
-                allocate(cnts(params%ncls_spec), source=0)
-                do icls = 1, params%ncls
-                    if( states(icls) == 0 ) cycle
-                    fname = 'rank'//int2str(states(icls))//'_'//trim(which)//'_cavgs'//params%ext
-                    cnts(states(icls)) = cnts(states(icls)) + 1
-                    call imgs(icls)%write(fname, cnts(states(icls)))
-                end do
-                deallocate(states, cnts)
+                if( present(which) )then
+                    states = pows%get_ranked_state_arr(which)
+                    allocate(cnts(params%ncls_spec), source=0)
+                    do icls = 1, params%ncls
+                        if( states(icls) == 0 ) cycle
+                        fname = 'rank'//int2str(states(icls))//'_'//trim(which)//'_cavgs'//params%ext
+                        cnts(states(icls)) = cnts(states(icls)) + 1
+                        call imgs(icls)%write(fname, cnts(states(icls)))
+                    end do
+                    deallocate(states, cnts)
+                else
+                    states = pows%get_ranked_state_arr()
+                    allocate(cnts(params%ncls_spec), source=0)
+                    do icls = 1, params%ncls
+                        if( states(icls) == 0 ) cycle
+                        fname = 'rank'//int2str(states(icls))//'_cavgs'//params%ext
+                        cnts(states(icls)) = cnts(states(icls)) + 1
+                        call imgs(icls)%write(fname, cnts(states(icls)))
+                    end do
+                    deallocate(states, cnts)
+                endif
             end subroutine write_ranked_cavgs
 
     end subroutine exec_autoselect_cavgs
