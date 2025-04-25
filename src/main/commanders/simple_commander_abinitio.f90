@@ -1140,6 +1140,11 @@ contains
         if( trim(params_glob%multivol_mode).eq.'input_oris_fixed' )then ! only state sorting, no 3D ori refinement
             refine = 'prob_state'
         endif
+        if( l_cavgs .and. params_glob%nstates>1 )then
+            ! TODO: prob multistate does not deal with empty states
+            refine  = 'shc_smpl'
+            prob_sh = 'no'
+        endif
         ! ICM regularization
         icm = 'no'
         if( istage >= ICM_STAGE ) icm = 'yes'
