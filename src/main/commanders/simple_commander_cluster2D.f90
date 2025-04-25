@@ -1137,7 +1137,6 @@ contains
 
     subroutine exec_cluster2D( self, cline )
         use simple_strategy2D_matcher, only: cluster2D_exec
-        use simple_classaverager
         class(cluster2D_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(make_cavgs_commander)        :: xmake_cavgs
@@ -1723,7 +1722,8 @@ contains
         type(image)          :: img
         integer, allocatable :: order(:)
         real,    allocatable :: vals(:)
-        integer              :: ldim(3), ncls, icls
+        logical, allocatable :: mask(:)
+        integer              :: ldim(3), ncls, icls, i, rank
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'cls2D')
         if( .not. cline%defined('flag') )    call cline%set('flag',    'res')
         call params%new(cline)
@@ -1746,38 +1746,43 @@ contains
             case DEFAULT
                 THROW_HARD('Unsupported cavg flag: '//trim(params%flag))
             end select
-            vals = os_ptr%get_all(params%flag)
-            allocate(order(params%ncls))
+            vals  = os_ptr%get_all(params%flag)
             order = (/(icls,icls=1,params%ncls)/)
+            mask  = os_ptr%get_all('state') > 0.5
             call hpsort(vals, order)
             select case(trim(params%flag))
             case('corr')
                 call reverse(order)
             case DEFAULT
-            ! done
+                ! done
             end select
             call stkio_r%open(params%stk, params%smpd, 'read', bufsz=params%ncls)
             call stkio_r%read_whole ! because need asynchronous access
             call stkio_w%open(params%outstk, params%smpd, 'write', box=ldim(1), bufsz=params%ncls)
+            rank = 0
             do icls=1,params%ncls
-                call clsdoc_ranked%set(icls, 'class',    order(icls))
-                call clsdoc_ranked%set(icls, 'rank',     icls)
-                select case(trim(params%flag))
-                case('corr')
-                    call clsdoc_ranked%set(icls, 'corr', os_ptr%get(order(icls), 'corr'))
-                    write(logfhandle,'(a,1x,i5,1x,a,1x,i5,1x,a,1x,f6.2)') 'CLASS:', order(icls),&
-                    &'RANK:', icls ,'CORR:', os_ptr%get(order(icls), 'corr')
-                case DEFAULT
-                    call clsdoc_ranked%set(icls, 'pop',  os_ptr%get(order(icls),  'pop'))
-                    call clsdoc_ranked%set(icls, 'res',  os_ptr%get(order(icls),  'res'))
-                    call clsdoc_ranked%set(icls, 'corr', os_ptr%get(order(icls), 'corr'))
-                    call clsdoc_ranked%set(icls, 'w',    os_ptr%get(order(icls),    'w'))
-                    write(logfhandle,'(a,1x,i5,1x,a,1x,i5,1x,a,i5,1x,a,1x,f6.2)') 'CLASS:', order(icls),&
-                    &'RANK:', icls ,'POP:', os_ptr%get_int(order(icls), 'pop'),&
-                    &'RES:', os_ptr%get(order(icls), 'res')
-                end select
-                call flush(logfhandle)
-                call stkio_r%get_image(order(icls), img)
+                i = order(icls)
+                if( mask(i) )then
+                    rank = rank + 1
+                    call clsdoc_ranked%set(rank, 'class',    i)
+                    call clsdoc_ranked%set(rank, 'rank',     rank)
+                    select case(trim(params%flag))
+                    case('corr')
+                        call clsdoc_ranked%set(rank, 'corr', os_ptr%get(i, 'corr'))
+                        write(logfhandle,'(a,1x,i5,1x,a,1x,i5,1x,a,1x,f6.2)') 'CLASS:', i,&
+                        &'RANK:', rank ,'CORR:', os_ptr%get(i, 'corr')
+                    case DEFAULT
+                        call clsdoc_ranked%set(rank, 'pop',  os_ptr%get(i,  'pop'))
+                        call clsdoc_ranked%set(rank, 'res',  os_ptr%get(i,  'res'))
+                        call clsdoc_ranked%set(rank, 'corr', os_ptr%get(i, 'corr'))
+                        call clsdoc_ranked%set(rank, 'w',    os_ptr%get(i,    'w'))
+                        write(logfhandle,'(a,1x,i5,1x,a,1x,i5,1x,a,i5,1x,a,1x,f6.2)') 'CLASS:', i,&
+                        &'RANK:', rank ,'POP:', os_ptr%get_int(i, 'pop'),&
+                        &'RES:', os_ptr%get(i, 'res')
+                    end select
+                    call flush(logfhandle)
+                endif
+                call stkio_r%get_image(i, img)
                 call stkio_w%write(icls, img)
             end do
             call stkio_r%close
