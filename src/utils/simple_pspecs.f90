@@ -11,12 +11,6 @@ public :: pspecs
 private
 #include "simple_local_flags.inc"
 
-! type for encapsualting statistics of spectral classes
-type cls_spec_stats
-    
-end type cls_spec_stats
-
-
 type pspecs
     private  
     real,               allocatable :: pspecs(:,:)          ! matrix of power spectra
@@ -93,6 +87,7 @@ contains
     procedure, private   :: calc_distmat
     procedure, private   :: calc_cls_spec_stats
     procedure, private   :: rank_spectral_classes
+    procedure, private   :: rank_spectral_classes_test
     procedure            :: get_ranked_state_arr
     ! destructor
     procedure            :: kill
@@ -339,9 +334,8 @@ contains
     end subroutine dynrange_cen_init 
 
     ! k-means clustering of power spectra
-    subroutine kmeans_cls_pspecs_and_rank( self )!, states ) 
-        class(pspecs),        intent(inout) :: self
-        ! integer, allocatable, intent(inout) :: states(:)
+    subroutine kmeans_cls_pspecs_and_rank( self ) 
+        class(pspecs), intent(inout) :: self
         integer :: iter
         logical :: l_converged
         write(logfhandle,'(A)') 'K-MEANS CLUSTERING OF POWERSPECTRA'
@@ -357,9 +351,8 @@ contains
     end subroutine kmeans_cls_pspecs_and_rank
 
     ! k-medoids clustering of power spectra
-    subroutine kmedoids_cls_pspecs_and_rank( self )!, states ) 
-        class(pspecs),        intent(inout) :: self
-        ! integer, allocatable, intent(inout) :: states(:)
+    subroutine kmedoids_cls_pspecs_and_rank( self )
+        class(pspecs), intent(inout) :: self
         integer :: iter, ispec
         logical :: l_converged
         write(logfhandle,'(A)') 'K-MEDOIDS CLUSTERING OF POWERSPECTRA'
@@ -709,7 +702,7 @@ contains
         character(len=*), intent(in)    :: which
         integer,          intent(out)   :: rank_assign(self%nspecs)
         real, allocatable :: tmp(:)
-        integer :: rank, icls_spec, order(self%ncls_spec), ispec
+        integer :: rank, order(self%ncls_spec), ispec
         order = (/(ispec,ispec=1,self%ncls_spec)/)
         select case(which)
             case('score')
@@ -735,12 +728,59 @@ contains
         deallocate(tmp)  
     end subroutine rank_spectral_classes
 
-    function get_ranked_state_arr( self, which ) result( states )
+    subroutine rank_spectral_classes_test( self, rank_assign )
         class(pspecs),    intent(inout) :: self
-        character(len=*), intent(in)    :: which
+        integer,          intent(out)   :: rank_assign(self%nspecs)
+        real, allocatable :: tmp(:)
+        integer :: rank, order(self%ncls_spec), ispec
+        order = (/(ispec,ispec=1,self%ncls_spec)/)
+        call hpsort(order, ispec_lt_jspec)
+        call reverse(order)
+        rank_assign = 0
+        do rank = 1, self%ncls_spec
+            do ispec = 1, self%nspecs
+                if( self%clsinds_spec(ispec) == order(rank) ) rank_assign(ispec) = rank
+            end do
+            print *, 'rank: ', rank,&
+            &' median class score: ', self%cls_spec_clsscore_stats(order(rank))%med,&
+            &' median class res:   ', self%cls_spec_clsres_stats(order(rank))%med,&
+            &' POP: ', self%clspops_spec(order(rank))
+        enddo
+
+        contains
+
+            function ispec_lt_jspec( ispec, jspec ) result( l_worse )
+                integer, intent(in) :: ispec, jspec
+                logical :: l_score_worse, l_res_worse, l_worse
+                l_score_worse = .false.
+                if( self%cls_spec_clsscore_stats(ispec)%med < self%cls_spec_clsscore_stats(jspec)%med )then
+                    l_score_worse = .true.
+                endif
+                l_res_worse = .false.
+                if( self%cls_spec_clsres_stats(ispec)%med >= self%cls_spec_clsres_stats(jspec)%med )then
+                    l_res_worse = .true.
+                endif
+                if( l_score_worse .and. l_res_worse )then
+                    l_worse = .true.
+                else if( l_res_worse )then ! worse resolutiuon trumps score
+                    l_worse = .true.
+                else
+                    l_worse = .false.
+                endif
+            end function ispec_lt_jspec
+
+    end subroutine rank_spectral_classes_test
+
+    function get_ranked_state_arr( self, which ) result( states )
+        class(pspecs),              intent(inout) :: self
+        character(len=*), optional, intent(in)    :: which
         integer, allocatable :: states(:)
         integer :: rank_assign(self%nspecs)
-        call self%rank_spectral_classes(which, rank_assign)
+        if( present(which) )then
+            call self%rank_spectral_classes(which, rank_assign)
+        else
+            call self%rank_spectral_classes_test(rank_assign)
+        endif
         states = self%get_clsind_spec_state_arr(rank_assign)
     end function get_ranked_state_arr
 
