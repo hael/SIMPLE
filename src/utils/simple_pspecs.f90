@@ -643,22 +643,22 @@ contains
                 endif
             end do
             call calc_stats(scores(:cnt), self%cls_spec_clsscore_stats(icls_spec))
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MINIMUM SCORE:    ', self%cls_spec_clsscore_stats(icls_spec)%minv
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM SCORE:    ', self%cls_spec_clsscore_stats(icls_spec)%maxv
+            ! if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MINIMUM SCORE:    ', self%cls_spec_clsscore_stats(icls_spec)%minv
+            ! if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM SCORE:    ', self%cls_spec_clsscore_stats(icls_spec)%maxv
             if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  SCORE:    ', self%cls_spec_clsscore_stats(icls_spec)%med
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'AVERAGE SCORE:    ', self%cls_spec_clsscore_stats(icls_spec)%avg
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'SDEV    SCORE:    ', self%cls_spec_clsscore_stats(icls_spec)%sdev
+            ! if( l_print) write(logfhandle,'(a,1x,f8.2)') 'AVERAGE SCORE:    ', self%cls_spec_clsscore_stats(icls_spec)%avg
+            ! if( l_print) write(logfhandle,'(a,1x,f8.2)') 'SDEV    SCORE:    ', self%cls_spec_clsscore_stats(icls_spec)%sdev
             call calc_stats(res(:cnt), self%cls_spec_clsres_stats(icls_spec))
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES:      ', self%cls_spec_clsres_stats(icls_spec)%minv
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES:      ', self%cls_spec_clsres_stats(icls_spec)%maxv
+            ! if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES:      ', self%cls_spec_clsres_stats(icls_spec)%minv
+            ! if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES:      ', self%cls_spec_clsres_stats(icls_spec)%maxv
             if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES:      ', self%cls_spec_clsres_stats(icls_spec)%med
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES:      ', self%cls_spec_clsres_stats(icls_spec)%avg
+            ! if( l_print) write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES:      ', self%cls_spec_clsres_stats(icls_spec)%avg
             if( l_print) write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES:      ', self%cls_spec_clsres_stats(icls_spec)%sdev
             call calc_stats(loc_sdevs(:cnt), self%cls_spec_locsdev_stats(icls_spec))
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MINIMUM LOC SDEV: ', self%cls_spec_locsdev_stats(icls_spec)%minv
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM LOC SDEV: ', self%cls_spec_locsdev_stats(icls_spec)%maxv
+            ! if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MINIMUM LOC SDEV: ', self%cls_spec_locsdev_stats(icls_spec)%minv
+            ! if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM LOC SDEV: ', self%cls_spec_locsdev_stats(icls_spec)%maxv
             if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  LOC SDEV: ', self%cls_spec_locsdev_stats(icls_spec)%med
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'AVERAGE LOC SDEV: ', self%cls_spec_locsdev_stats(icls_spec)%avg
+            ! if( l_print) write(logfhandle,'(a,1x,f8.2)') 'AVERAGE LOC SDEV: ', self%cls_spec_locsdev_stats(icls_spec)%avg
             if( l_print) write(logfhandle,'(a,1x,f8.2)') 'SDEV    LOC SDEV: ', self%cls_spec_locsdev_stats(icls_spec)%sdev
         end do
     end subroutine calc_cls_spec_stats
