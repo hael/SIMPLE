@@ -1843,12 +1843,17 @@ contains
         ! clustering
         call pows%kmeans_cls_pspecs_and_rank(states)
         if( params%ncls_spec > 2 )then
-            allocate(cnts(params%ncls_spec), source=0)
+            allocate(cnts(0:params%ncls_spec), source=0)
             do icls = 1, params%ncls
-                if( states(icls) == 0 ) cycle
-                fname = 'rank'//int2str(states(icls))//'_cavgs'//params%ext
-                cnts(states(icls)) = cnts(states(icls)) + 1
-                call imgs(icls)%write(fname, cnts(states(icls)))
+                if( states(icls) == 0 )then
+                    fname = 'junk_cavgs'//params%ext
+                    cnts(states(icls)) = cnts(states(icls)) + 1
+                    call imgs(icls)%write(fname, cnts(states(icls)))
+                else
+                    fname = 'rank'//int2str(states(icls))//'_cavgs'//params%ext
+                    cnts(states(icls)) = cnts(states(icls)) + 1
+                    call imgs(icls)%write(fname, cnts(states(icls)))
+                endif
             end do
             deallocate(states, cnts)
         else
