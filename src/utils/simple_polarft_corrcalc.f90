@@ -67,8 +67,7 @@ type :: polarft_corrcalc
     real(dp),            allocatable :: argtransf_shellone(:)       !< one dimensional argument transfer constants (shell k=1) for shifting the references
     complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (pftsz,nk,nrefs), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
-    complex(sp),         allocatable :: norm_refs_even(:,:,:)       !< -"-, normalized even
-    complex(sp),         allocatable :: norm_refs_odd(:,:,:)        !< -"-, normalized odd
+    complex(sp),         allocatable :: pfts_refs_merg(:,:,:)       !< -"-, merged
     complex(sp),         allocatable :: pfts_drefs_even(:,:,:,:)    !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp),         allocatable :: pfts_drefs_odd(:,:,:,:)     !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp),         allocatable :: pfts_ptcls(:,:,:)           !< 3D complex matrix of particle sections
@@ -286,8 +285,7 @@ contains
         ! allocate others
         allocate(self%pfts_refs_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%pfts_refs_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                &self%norm_refs_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                &self%norm_refs_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                &self%pfts_refs_merg(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%pfts_drefs_even(self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                 &self%pfts_drefs_odd (self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                 &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
@@ -311,8 +309,7 @@ contains
         end do
         self%pfts_refs_even = zero
         self%pfts_refs_odd  = zero
-        self%norm_refs_even = zero
-        self%norm_refs_odd  = zero
+        self%pfts_refs_merg = zero
         self%pfts_ptcls     = zero
         self%sqsums_ptcls   = 0.d0
         self%ksqsums_ptcls  = 0.d0
@@ -1201,12 +1198,15 @@ contains
         type(ori) :: orientation
         integer   :: i, k, iref, irot, ithr, iptcl
         real(dp)  :: numer, denom1, denom2
-        real      :: ctf2_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs), &
-                    &ctf2_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs), frc(self%kfromto(1):self%kfromto(2),self%nrefs)
+        real      :: ctf2_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                    &ctf2_merg(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                    &ctf2_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs)
         self%pfts_refs_even = complex(0., 0.)
         self%pfts_refs_odd  = complex(0., 0.)
+        self%pfts_refs_merg = complex(0., 0.)
         ctf2_even = 0.
         ctf2_odd  = 0.
+        ctf2_merg = 0.
         ithr      = omp_get_thread_num() + 1
         pft_ptcl  => self%heap_vars(ithr)%pft_ref
         rctf      => self%heap_vars(ithr)%pft_r
@@ -1218,6 +1218,8 @@ contains
             call self%rotate_ptcl(self%pfts_ptcls(:,:,i), irot, pft_ptcl)
             if( self%with_ctf )then
                 call self%rotate_ctf(iptcl, irot, rctf)
+                self%pfts_refs_merg(:,:,iref) = self%pfts_refs_merg(:,:,iref) + pft_ptcl * cmplx(rctf)
+                ctf2_merg(:,:,iref)           = ctf2_merg(:,:,iref)           + rctf**2
                 if( self%iseven(i) )then
                     self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + pft_ptcl * cmplx(rctf)
                     ctf2_even(:,:,iref)           = ctf2_even(:,:,iref)           + rctf**2
@@ -1226,6 +1228,7 @@ contains
                     ctf2_odd(:,:,iref)            = ctf2_odd(:,:,iref)            + rctf**2
                 endif
             else
+                self%pfts_refs_merg(:,:,iref) = self%pfts_refs_merg(:,:,iref) + pft_ptcl
                 if( self%iseven(i) )then
                     self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + pft_ptcl
                 else
@@ -1238,48 +1241,22 @@ contains
             where( abs(ctf2_even) < TINY ) self%pfts_refs_even = 0.
             where( abs(ctf2_odd)  > TINY ) self%pfts_refs_odd  = self%pfts_refs_odd  / ctf2_odd
             where( abs(ctf2_odd)  < TINY ) self%pfts_refs_odd  = 0.
+            where( abs(ctf2_merg) > TINY ) self%pfts_refs_merg = self%pfts_refs_merg  / ctf2_merg
+            where( abs(ctf2_merg) < TINY ) self%pfts_refs_merg = 0.
         endif
-        ! FRC filter generation
+        ! FRC filtering
         do iref = 1, self%nrefs
             do k = self%kfromto(1), self%kfromto(2)
                 numer  = sum(real(self%pfts_refs_even(:,k,iref) * conjg(self%pfts_refs_odd(:,k,iref)), kind=dp))
                 denom1 = sum( csq(self%pfts_refs_even(:,k,iref)))
                 denom2 = sum( csq(self%pfts_refs_odd( :,k,iref)))
-                if( sqrt(denom1*denom2) < TINY )then
-                    frc(k,iref) = 1.
-                else
-                    frc(k,iref) = real(numer / sqrt(denom1*denom2))
+                if( sqrt(denom1*denom2) > TINY )then
+                    self%pfts_refs_merg(:,k,iref) = self%pfts_refs_merg(:,k,iref) * real(numer / sqrt(denom1*denom2))
                 endif
             enddo
         enddo
-        ! merging even and odd
-        self%pfts_refs_even = complex(0., 0.)
-        ctf2_even           = 0.
-        do iptcl = self%pfromto(1), self%pfromto(2)
-            call ptcl_space%get_ori(iptcl, orientation)
-            i    = self%pinds(iptcl)
-            iref = ref_space%find_closest_proj(orientation)
-            irot = self%get_roind(orientation%e3get())
-            call self%rotate_ptcl(self%pfts_ptcls(:,:,i), irot, pft_ptcl)
-            if( self%with_ctf )then
-                call self%rotate_ctf(iptcl, irot, rctf)
-                self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + pft_ptcl * cmplx(rctf)
-                ctf2_even(:,:,iref)           = ctf2_even(:,:,iref)           + rctf**2
-            else
-                self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + pft_ptcl
-            endif
-        enddo
-        if( self%with_ctf )then
-            where( abs(ctf2_even) > TINY ) self%pfts_refs_even = self%pfts_refs_even / ctf2_even
-            where( abs(ctf2_even) < TINY ) self%pfts_refs_even = 0.
-        endif
-        ! FRC filtering
-        do iref = 1, self%nrefs
-            do k = self%kfromto(1), self%kfromto(2)
-                self%pfts_refs_even(:,k,iref) = self%pfts_refs_even(:,k,iref) * frc(k,iref)
-            enddo
-        enddo
-        self%pfts_refs_odd = self%pfts_refs_even
+        self%pfts_refs_even = self%pfts_refs_merg
+        self%pfts_refs_odd  = self%pfts_refs_merg
     end subroutine gen_polar_refs
 
     subroutine create_polar_absctfmats( self, spproj, oritype, pfromto )
@@ -3145,7 +3122,7 @@ contains
             if( allocated(self%cached_vals)    ) deallocate(self%cached_vals)
             deallocate(self%sqsums_ptcls, self%ksqsums_ptcls, self%wsqsums_ptcls, self%angtab, self%argtransf,self%pfts_ptcls,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
-                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone, self%norm_refs_even, self%norm_refs_odd)
+                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone, self%pfts_refs_merg)
             call self%kill_memoized_ptcls
             call self%kill_memoized_refs
             nullify(self%sigma2_noise, pftcc_glob)
