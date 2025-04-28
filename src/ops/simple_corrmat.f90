@@ -216,9 +216,9 @@ module simple_corrmat
             integer :: n, i, j, ithr, nrots, loc(1), irot, ldim(3), box, kfromto(2)
             real    :: offset(2), offsetm(2), ang, angm, trs, smpd, cc, ccm
             logical :: lmir
-            n = size(imgs)
+            n    = size(imgs)
             ldim = imgs(1)%get_ldim()
-            box = ldim(1)
+            box  = ldim(1)
             smpd = imgs(1)%get_smpd()
             kfromto(1) = max(2, calc_fourier_index(hp, box, smpd))
             kfromto(2) =        calc_fourier_index(lp, box, smpd)
@@ -229,14 +229,14 @@ module simple_corrmat
             allocate(corrmat(n,n), source=-1.)
             ! FOURIER-MELLIN TRANSFORM
             trs = real(box)/6.
-            !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
+            !!$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
             do i = 1, n
                 call imgs(i)%fft()
                 call polartransform%polarize(pftcc, imgs(i), i, isptcl=.false., iseven=.true.)
                 call pftcc%cp_even_ref2ptcl(i, i)
                 call pftcc%mirror_pft(pftcc%pfts_refs_even(:,:,i), pftcc%pfts_refs_odd(:,:,i))
             end do
-            !$omp end parallel do
+            !!$omp end parallel do
             call pftcc%memoize_refs
             call pftcc%memoize_ptcls
             ! correlation matrix calculation
@@ -246,8 +246,8 @@ module simple_corrmat
                 call ccimgs(i,1)%new(ldim, smpd, wthreads=.false.)
                 call ccimgs(i,2)%new(ldim, smpd, wthreads=.false.)
             enddo
-            !$omp parallel do default(shared) private(i,j,cc,ccm,ithr,offset,offsetm,ang,angm,lmir)&
-            !$omp schedule(dynamic) proc_bind(close)
+            !!$omp parallel do default(shared) private(i,j,cc,ccm,ithr,offset,offsetm,ang,angm,lmir)&
+            !!$omp schedule(dynamic) proc_bind(close)
             do i = 1, n - 1
                 ithr = omp_get_thread_num()+1
                 corrmat(i,i) = 1.
@@ -272,7 +272,7 @@ module simple_corrmat
                     corrmat(j,i) = cc
                 enddo
             enddo
-            !$omp end parallel do
+            !!$omp end parallel do
             corrmat(n,n) = 1.
             ! write similarity matrix
             ! tidy
