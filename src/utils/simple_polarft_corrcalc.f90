@@ -147,6 +147,7 @@ type :: polarft_corrcalc
     procedure          :: allocate_ptcls_memoization, allocate_refs_memoization
     ! CALCULATORS
     procedure          :: polar_cavg, gen_polar_refs
+    procedure, private :: frp_eo_map
     procedure          :: create_polar_absctfmats, calc_polar_ctf
     procedure          :: gen_shmat
     procedure, private :: gen_shmat_8
@@ -1196,7 +1197,7 @@ contains
         complex(sp), pointer :: pft_ptcl(:,:)
         real(sp),    pointer :: rctf(:,:)
         type(ori) :: orientation
-        integer   :: i, k, iref, irot, ithr, iptcl
+        integer   :: i, k, iref, irot, ithr, iptcl, mapping(self%nrefs)
         real(dp)  :: numer, denom1, denom2
         real      :: ctf2_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                     &ctf2_merg(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
@@ -1241,15 +1242,48 @@ contains
             where( abs(ctf2_even) < TINY ) self%pfts_refs_even = 0.
             where( abs(ctf2_odd)  > TINY ) self%pfts_refs_odd  = self%pfts_refs_odd  / ctf2_odd
             where( abs(ctf2_odd)  < TINY ) self%pfts_refs_odd  = 0.
-            where( abs(ctf2_merg) > TINY ) self%pfts_refs_merg = self%pfts_refs_merg  / ctf2_merg
+            where( abs(ctf2_merg) > TINY ) self%pfts_refs_merg = self%pfts_refs_merg / ctf2_merg
+            where( abs(ctf2_merg) < TINY ) self%pfts_refs_merg = 0.
+        endif
+        call self%frp_eo_map(mapping)
+        ! merging even and odd
+        self%pfts_refs_merg = complex(0., 0.)
+        ctf2_merg           = 0.
+        do iptcl = self%pfromto(1), self%pfromto(2)
+            call ptcl_space%get_ori(iptcl, orientation)
+            i    = self%pinds(iptcl)
+            iref = ref_space%find_closest_proj(orientation)
+            irot = self%get_roind(orientation%e3get())
+            call self%rotate_ptcl(self%pfts_ptcls(:,:,i), irot, pft_ptcl)
+            if( self%iseven(i) )then
+                if( self%with_ctf )then
+                    call self%rotate_ctf(iptcl, irot, rctf)
+                    self%pfts_refs_merg(:,:,iref) = self%pfts_refs_merg(:,:,iref) + pft_ptcl * cmplx(rctf)
+                    ctf2_merg(:,:,iref)           = ctf2_merg(:,:,iref)           + rctf**2
+                else
+                    self%pfts_refs_merg(:,:,iref) = self%pfts_refs_merg(:,:,iref) + pft_ptcl
+                endif
+            else
+                iref = mapping(iref)
+                if( self%with_ctf )then
+                    call self%rotate_ctf(iptcl, irot, rctf)
+                    self%pfts_refs_merg(:,:,iref) = self%pfts_refs_merg(:,:,iref) + pft_ptcl * cmplx(rctf)
+                    ctf2_merg(:,:,iref)           = ctf2_merg(:,:,iref)           + rctf**2
+                else
+                    self%pfts_refs_merg(:,:,iref) = self%pfts_refs_merg(:,:,iref) + pft_ptcl
+                endif
+            endif
+        enddo
+        if( self%with_ctf )then
+            where( abs(ctf2_merg) > TINY ) self%pfts_refs_merg = self%pfts_refs_merg / ctf2_merg
             where( abs(ctf2_merg) < TINY ) self%pfts_refs_merg = 0.
         endif
         ! FRC filtering
         do iref = 1, self%nrefs
             do k = self%kfromto(1), self%kfromto(2)
-                numer  = sum(real(self%pfts_refs_even(:,k,iref) * conjg(self%pfts_refs_odd(:,k,iref)), kind=dp))
+                numer  = sum(real(self%pfts_refs_even(:,k,iref) * conjg(self%pfts_refs_odd(:,k,mapping(iref))), kind=dp))
                 denom1 = sum( csq(self%pfts_refs_even(:,k,iref)))
-                denom2 = sum( csq(self%pfts_refs_odd( :,k,iref)))
+                denom2 = sum( csq(self%pfts_refs_odd( :,k,mapping(iref))))
                 if( sqrt(denom1*denom2) > TINY )then
                     self%pfts_refs_merg(:,k,iref) = self%pfts_refs_merg(:,k,iref) * real(numer / sqrt(denom1*denom2))
                 endif
@@ -1258,6 +1292,65 @@ contains
         self%pfts_refs_even = self%pfts_refs_merg
         self%pfts_refs_odd  = self%pfts_refs_merg
     end subroutine gen_polar_refs
+
+    ! Fourier ring power even -> odd mapping
+    subroutine frp_eo_map( self, mapping )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(inout) :: mapping(self%nrefs)
+        real(dp) :: numer, denom1, denom2
+        integer  :: ieven, iodd, k, inds(self%nrefs, self%nrefs), odd_dist_inds(self%nrefs), assigned_odd, assigned_even
+        real     :: frps(self%nrefs, self%nrefs), sum_odd, sorted_frps(self%nrefs, self%nrefs), odd_dist(self%nrefs)
+        logical  :: even_avail(self%nrefs)
+        frps = 0.
+        do ieven = 1, self%nrefs
+            do iodd = ieven+1, self%nrefs
+                do k = self%kfromto(1), self%kfromto(2)
+                    numer  = sum(real(self%pfts_refs_even(:,k,ieven) * conjg(self%pfts_refs_odd(:,k,iodd)), kind=dp))
+                    denom1 = sum( csq(self%pfts_refs_even(:,k,ieven)))
+                    denom2 = sum( csq(self%pfts_refs_odd( :,k,iodd)))
+                    if( sqrt(denom1*denom2) > TINY )then
+                        frps(ieven, iodd) = frps(ieven, iodd) + real(numer / sqrt(denom1*denom2))
+                    endif
+                enddo
+                frps(iodd, ieven) = frps(ieven, iodd)
+            enddo
+        enddo
+        ! normalization
+        do ieven = 1, self%nrefs
+            sum_odd = sum(frps(ieven,:))
+            if( sum_odd > TINY )then
+                frps(ieven,:) = frps(ieven,:) / sum_odd
+            else
+                frps(ieven,:) = 1. / real(self%nrefs)
+            endif
+        enddo
+        ! probabilistic assignment like in eul_prob_tab
+        sorted_frps = frps
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ieven,iodd)
+        do iodd = 1, self%nrefs
+            inds(:,iodd) = (/(ieven,ieven=1,self%nrefs)/)
+            call hpsort(sorted_frps(:,iodd), inds(:,iodd))
+            call reverse(sorted_frps(:,iodd))
+            call reverse(inds(:,iodd))
+        enddo
+        !$omp end parallel do
+        even_avail    = .true.
+        odd_dist_inds = 1
+        odd_dist      = sorted_frps(1,:)
+        do while( any(even_avail) )
+            assigned_odd  = maxloc(odd_dist, dim=1)
+            assigned_even = inds(odd_dist_inds(assigned_odd), assigned_odd)
+            even_avail(assigned_even) = .false.
+            mapping(assigned_even)    = assigned_odd
+            ! update the odd_dist and odd_dist_inds
+            do iodd = 1, self%nrefs
+                do while( odd_dist_inds(iodd) < self%nrefs .and. .not.(even_avail(inds(odd_dist_inds(iodd), iodd))) )
+                    odd_dist_inds(iodd) = odd_dist_inds(iodd) + 1
+                    odd_dist(iodd)      = sorted_frps(odd_dist_inds(iodd), iodd)
+                enddo
+            enddo
+        enddo
+    end subroutine frp_eo_map
 
     subroutine create_polar_absctfmats( self, spproj, oritype, pfromto )
         use simple_ctf,        only: ctf
