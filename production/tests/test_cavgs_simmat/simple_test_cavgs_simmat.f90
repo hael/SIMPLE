@@ -24,6 +24,7 @@ include 'simple_lib.f08'
         call cavgs(i)%read(dir1, i)
     end do 
     allocate(imgs4sim(10))
+    
     ! Apoferritin View 1 monomer 
     call imgs4sim(1)%copy(cavgs(69))
     call imgs4sim(2)%copy(cavgs(68))
