@@ -1204,10 +1204,8 @@ contains
                     &ctf2_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs)
         self%pfts_refs_even = complex(0., 0.)
         self%pfts_refs_odd  = complex(0., 0.)
-        self%pfts_refs_merg = complex(0., 0.)
         ctf2_even = 0.
         ctf2_odd  = 0.
-        ctf2_merg = 0.
         ithr      = omp_get_thread_num() + 1
         pft_ptcl  => self%heap_vars(ithr)%pft_ref
         rctf      => self%heap_vars(ithr)%pft_r
@@ -1219,8 +1217,6 @@ contains
             call self%rotate_ptcl(self%pfts_ptcls(:,:,i), irot, pft_ptcl)
             if( self%with_ctf )then
                 call self%rotate_ctf(iptcl, irot, rctf)
-                self%pfts_refs_merg(:,:,iref) = self%pfts_refs_merg(:,:,iref) + pft_ptcl * cmplx(rctf)
-                ctf2_merg(:,:,iref)           = ctf2_merg(:,:,iref)           + rctf**2
                 if( self%iseven(i) )then
                     self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + pft_ptcl * cmplx(rctf)
                     ctf2_even(:,:,iref)           = ctf2_even(:,:,iref)           + rctf**2
@@ -1242,8 +1238,6 @@ contains
             where( abs(ctf2_even) < TINY ) self%pfts_refs_even = 0.
             where( abs(ctf2_odd)  > TINY ) self%pfts_refs_odd  = self%pfts_refs_odd  / ctf2_odd
             where( abs(ctf2_odd)  < TINY ) self%pfts_refs_odd  = 0.
-            where( abs(ctf2_merg) > TINY ) self%pfts_refs_merg = self%pfts_refs_merg / ctf2_merg
-            where( abs(ctf2_merg) < TINY ) self%pfts_refs_merg = 0.
         endif
         call self%frp_eo_map(mapping)
         ! merging even and odd
@@ -1299,10 +1293,10 @@ contains
         integer,                 intent(inout) :: mapping(self%nrefs)
         real(dp) :: numer, denom1, denom2
         integer  :: ieven, iodd, k, inds(self%nrefs, self%nrefs), odd_dist_inds(self%nrefs), assigned_odd, assigned_even
-        real     :: frps(self%nrefs, self%nrefs), sum_odd, sorted_frps(self%nrefs, self%nrefs), odd_dist(self%nrefs)
+        real     :: frps(self%nrefs, self%nrefs), sum_odd, odd_dist(self%nrefs)
         logical  :: even_avail(self%nrefs)
         frps = 0.
-        do ieven = 1, self%nrefs
+        do ieven = 1, self%nrefs-1
             do iodd = ieven+1, self%nrefs
                 do k = self%kfromto(1), self%kfromto(2)
                     numer  = sum(real(self%pfts_refs_even(:,k,ieven) * conjg(self%pfts_refs_odd(:,k,iodd)), kind=dp))
@@ -1324,19 +1318,18 @@ contains
                 frps(ieven,:) = 1. / real(self%nrefs)
             endif
         enddo
-        ! probabilistic assignment like in eul_prob_tab
-        sorted_frps = frps
+        ! probabilistic mapping like in eul_prob_tab
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ieven,iodd)
         do iodd = 1, self%nrefs
             inds(:,iodd) = (/(ieven,ieven=1,self%nrefs)/)
-            call hpsort(sorted_frps(:,iodd), inds(:,iodd))
-            call reverse(sorted_frps(:,iodd))
+            call hpsort(frps(:,iodd), inds(:,iodd))
+            call reverse(frps(:,iodd))
             call reverse(inds(:,iodd))
         enddo
         !$omp end parallel do
         even_avail    = .true.
         odd_dist_inds = 1
-        odd_dist      = sorted_frps(1,:)
+        odd_dist      = frps(1,:)
         do while( any(even_avail) )
             assigned_odd  = maxloc(odd_dist, dim=1)
             assigned_even = inds(odd_dist_inds(assigned_odd), assigned_odd)
@@ -1346,7 +1339,7 @@ contains
             do iodd = 1, self%nrefs
                 do while( odd_dist_inds(iodd) < self%nrefs .and. .not.(even_avail(inds(odd_dist_inds(iodd), iodd))) )
                     odd_dist_inds(iodd) = odd_dist_inds(iodd) + 1
-                    odd_dist(iodd)      = sorted_frps(odd_dist_inds(iodd), iodd)
+                    odd_dist(iodd)      = frps(odd_dist_inds(iodd), iodd)
                 enddo
             enddo
         enddo
