@@ -191,6 +191,7 @@ contains
     procedure          :: one_at_edge
     procedure          :: bin2logical
     procedure          :: logical2bin
+    procedure          :: density_outside
     procedure          :: collage
     procedure          :: tile
     procedure          :: generate_orthogonal_reprojs
@@ -3069,6 +3070,27 @@ contains
         self%rmat = 0.
         where(mask) self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 1.
     end subroutine logical2bin
+
+    function density_outside( self, msk ) result( dens_outside )
+        class(image), intent(in) :: self
+        real,         intent(in) :: msk
+        integer :: i, j
+        logical :: dens_outside
+        real :: centre(3), cendists(self%ldim(1),self%ldim(2))
+        ! calculate distances from the center
+        centre = real(self%ldim)/2.+1.
+        cendists = 0.
+        do i=1,self%ldim(1)
+            cendists(i,:) = cendists(i,:) + (real(i)-centre(1))**2.
+        enddo
+        do i=1,self%ldim(2)
+            cendists(:,i) = cendists(:,i) + (real(i)-centre(2))**2.
+        enddo
+        cendists     = sqrt(cendists)
+        ! check for foreground pixels outside mask
+        dens_outside = .false.
+        if( any(cendists > msk .and. self%rmat(:self%ldim(1),:self%ldim(2),1) > 0.5) ) dens_outside = .true.
+    end function density_outside
 
     ! performs left/right collage of input images, un-modified on output
     subroutine collage( self1, self2, img_out )

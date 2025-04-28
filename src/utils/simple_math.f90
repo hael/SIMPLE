@@ -266,7 +266,6 @@ contains
                 do j = i+1,nquanta
                     if( hist(j) > TINY )exit
                 enddo
-                ind = j
                 delta = (transl_tab(ind)-transl_tab(i-1))/real(ind-i+1)
                 do j = i,ind-1
                     transl_tab(j) = transl_tab(j-1) + delta

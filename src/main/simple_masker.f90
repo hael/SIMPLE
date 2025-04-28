@@ -9,7 +9,7 @@ use simple_parameters, only: params_glob
 use simple_segmentation
 implicit none
 
-public :: masker, automask2D
+public :: masker, automask2D, density_outside_mask
 private
 #include "simple_local_flags.inc"
 
@@ -102,7 +102,7 @@ contains
         class(masker), intent(inout) :: self
         class(image),  intent(inout) :: vol_even, vol_odd, vol_filt
         real,    parameter :: LAM = 100.
-        if( vol_even%is_2d() )THROW_HARD('automask3D_filter is intended for volumes only; automask3D')
+        if( vol_even%is_2d() )THROW_HARD('automask3D_filter is intended for volumes only')
         self%amsklp = params_glob%amsklp
         ! ICM filter
         call vol_even%ICM3D_eo(vol_odd, LAM)
@@ -266,6 +266,43 @@ contains
         !$omp end parallel do
         deallocate(rmat)
     end subroutine env_rproject
+
+    function density_outside_mask( img, lp, msk ) result( l_outside )
+        use simple_segmentation
+        use simple_binimage, only: binimage
+        class(image), intent(inout) :: img
+        real,         intent(in)    :: lp, msk
+        type(binimage)    :: img_bin, cc_img
+        real, allocatable :: ccsizes(:)
+        logical :: l_outside
+        integer :: loc, ldim(3), npix
+        real    :: smpd, xyz(3)
+        ldim = img%get_ldim()
+        smpd = img%get_smpd()
+        call img_bin%new_bimg(ldim, smpd, wthreads=.false.)
+        call img_bin%copy(img)
+        call cc_img%new_bimg( ldim, smpd, wthreads=.false.)
+        call img_bin%zero_edgeavg
+        ! low-pass filter
+        call img_bin%bp(0., lp)
+        ! binarize with Otsu
+        call otsu_img(img_bin)
+        call img_bin%set_imat
+        ! find the largest connected component
+        call img_bin%find_ccs(cc_img)
+        ccsizes = cc_img%size_ccs()
+        loc     = maxloc(ccsizes,dim=1)
+        ! turn it into a binary image for mask creation
+        call cc_img%cc2bin(loc)
+        if( cc_img%density_outside(msk) )then
+            l_outside = .true.
+        else
+            l_outside = .false.
+        endif
+        call img_bin%kill_bimg
+        call cc_img%kill_bimg
+        if( allocated(ccsizes) ) deallocate(ccsizes)
+    end function density_outside_mask
 
     subroutine automask2D( imgs, ngrow, winsz, edge, diams, shifts, write2disk )
         use simple_segmentation
