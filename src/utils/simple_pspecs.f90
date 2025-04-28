@@ -24,6 +24,7 @@ type pspecs
     real,               allocatable :: dists2bad(:)               ! distances to bad  pspecs
     real,               allocatable :: distmat(:,:)               ! Euclidean distance matrix
     real,               allocatable :: clsres(:)                  ! 2D class resolutions
+    real,               allocatable :: loc_sdevs(:)               ! average local standard deviations
     integer,            allocatable :: ranks(:)                   ! quality ranking
     integer,            allocatable :: order(:)                   ! quality order
     integer,            allocatable :: clsinds_spec(:)            ! spectral class assignments, if binray: 1 is good, 2 is bad
@@ -35,9 +36,10 @@ type pspecs
     type(stats_struct), allocatable :: clsscore_stats(:)          ! 2D class score stats
     type(stats_struct), allocatable :: cls_spec_clsscore_stats(:) ! spectral class 2D class score stats
     type(stats_struct), allocatable :: cls_spec_clsres_stats(:)   ! spectral class 2D class resolution stats
-    real                 :: smpd                                  ! sampling distance
-    real                 :: hp                                    ! high-pass limit
-    real                 :: lp                                    ! low-pass limit
+    type(stats_struct), allocatable :: cls_spec_locsdev_stats(:)  ! spectral class 2D class resolution stats
+    real                 :: smpd             = 0.                 ! sampling distance
+    real                 :: hp               = 0.                 ! high-pass limit
+    real                 :: lp               = 0.                 ! low-pass limit
     real                 :: dynrange_t       = 0.                 ! dynamic range threshold
     real                 :: cls_spec_score_t = 0.                 ! spectral class score
     integer              :: box              = 0                  ! box size
@@ -50,6 +52,7 @@ type pspecs
     integer              :: medoid_bad       = 0                  ! index of medoid of bad  class
     integer              :: ngood            = 0                  ! # good power spectra
     integer              :: nbad             = 0                  ! # bad power spectra
+    integer              :: loc_sdev_winsz   = 0                  ! window size (in pixels) for calculation of local standard deviation
     logical              :: exists           = .false.            ! existence flag
 contains
     ! constructor
@@ -86,12 +89,13 @@ contains
     procedure            :: kill
 end type pspecs
 
-integer, parameter       :: CLASS_GOOD      = 1
-integer, parameter       :: CLASS_BAD       = 2
-real,    parameter       :: DYNRANGE_THRES  = 1e-6
-real,    parameter       :: FRAC_BEST_PTCLS = 0.25
-integer, parameter       :: MAXITS          = 10
-integer, parameter       :: MINPOP          = 20
+integer, parameter       :: CLASS_GOOD       = 1
+integer, parameter       :: CLASS_BAD        = 2
+real,    parameter       :: DYNRANGE_THRES   = 1e-6
+real,    parameter       :: FRAC_BEST_PTCLS  = 0.25
+real,    parameter       :: LOC_SDEV_WINSZ_A = 6.0
+integer, parameter       :: MAXITS           = 10
+integer, parameter       :: MINPOP           = 20
 
 contains
 
@@ -112,18 +116,19 @@ contains
         integer :: ldim(3), icls, ispec
         real    :: dynrange
         call self%kill
-        self%ncls_spec  = 2 ! binary clustering by default
+        self%ncls_spec      = 2 ! binary clustering by default
         if( present(ncls_spec) ) self%ncls_spec = ncls_spec
-        self%ncls       = ncls
-        ldim            = imgs(1)%get_ldim()
-        self%box        = ldim(1)
-        self%smpd       = imgs(1)%get_smpd()
-        self%hp         = hp
-        self%lp         = lp
-        resarr          = get_resarr(self%box, self%smpd)
-        self%kfromto(1) = calc_fourier_index(self%hp, self%box, self%smpd)
-        self%kfromto(2) = calc_fourier_index(self%lp, self%box, self%smpd)
-        self%sz         = self%kfromto(2) - self%kfromto(1) + 1
+        self%ncls           = ncls
+        ldim                = imgs(1)%get_ldim()
+        self%box            = ldim(1)
+        self%smpd           = imgs(1)%get_smpd()
+        self%loc_sdev_winsz = ceiling(LOC_SDEV_WINSZ_A / self%smpd)
+        self%hp             = hp
+        self%lp             = lp
+        resarr              = get_resarr(self%box, self%smpd)
+        self%kfromto(1)     = calc_fourier_index(self%hp, self%box, self%smpd)
+        self%kfromto(2)     = calc_fourier_index(self%lp, self%box, self%smpd)
+        self%sz             = self%kfromto(2) - self%kfromto(1) + 1
         ! count valid spectra
         l_valid_spectra = .false.
         !$omp parallel do default(shared) private(icls, pspec, dynrange) proc_bind(close) schedule(static)
@@ -140,10 +145,11 @@ contains
         allocate(self%resarr(self%sz), source=resarr(self%kfromto(1):self%kfromto(2)))
         allocate(self%pspecs(self%nspecs,self%sz), self%pspecs_cen(self%ncls_spec,self%sz), self%dynranges(self%nspecs),&
         &self%dists2cens(self%nspecs,self%ncls_spec), self%dists2good(self%nspecs), self%dists2bad(self%nspecs),&
-        &self%clsres(self%nspecs), source=0.)
+        &self%clsres(self%nspecs), self%loc_sdevs(self%nspecs), source=0.)
         allocate(self%ranks(self%nspecs), self%order(self%nspecs), self%clsinds_spec(self%nspecs), self%clsinds(self%nspecs),&
         self%clspops(self%nspecs), self%clspops_spec(self%ncls_spec), self%ptclpops_spec(self%ncls_spec), self%medoids(self%ncls_spec), source=0)
-        allocate(self%clsscore_stats(self%nspecs), self%cls_spec_clsscore_stats(self%ncls_spec), self%cls_spec_clsres_stats(self%ncls_spec))
+        allocate(self%clsscore_stats(self%nspecs), self%cls_spec_clsscore_stats(self%ncls_spec),&
+        &self%cls_spec_clsres_stats(self%ncls_spec), self%cls_spec_locsdev_stats(self%ncls_spec))
         ! set spectrum indices
         ispec = 0
         do icls = 1, ncls
@@ -156,13 +162,22 @@ contains
         !$omp parallel do default(shared) private(icls,pspec,mask) proc_bind(close) schedule(static)
         do icls = 1, ncls
             if( l_valid_spectra(icls) )then
-                self%clsinds(specinds(icls))   = icls
+                ! 2D class index
+                self%clsinds(specinds(icls))      = icls
+                ! average local standard deviation
+                self%loc_sdevs(specinds(icls)) = imgs(icls)%avg_loc_sdev(self%loc_sdev_winsz)
+                ! power spectrum
                 call imgs(icls)%spectrum('sqrt', pspec)
-                self%pspecs(specinds(icls),:)  = pspec(self%kfromto(1):self%kfromto(2))
-                self%dynranges(specinds(icls)) = self%pspecs(specinds(icls),1) - self%pspecs(specinds(icls),self%sz)
-                self%clspops(specinds(icls))   = os_cls2D%get_int(icls, 'pop')
-                self%clsres(specinds(icls))    = os_cls2D%get_int(icls, 'res')
+                self%pspecs(specinds(icls),:)     = pspec(self%kfromto(1):self%kfromto(2))
+                ! spectral dynamic range
+                self%dynranges(specinds(icls))    = self%pspecs(specinds(icls),1) - self%pspecs(specinds(icls),self%sz)
+                ! 2D class population
+                self%clspops(specinds(icls))      = os_cls2D%get_int(icls, 'pop')
+                ! 2D class resolution
+                self%clsres(specinds(icls))       = os_cls2D%get_int(icls, 'res')
+                ! mask inlcuding the FRAC_BEST_PTCLS fraction of top ranking particles in 2D class
                 mask = os_ptcl2D%gen_ptcl_mask('class', icls, FRAC_BEST_PTCLS)
+                ! score stats for the fraction of selected particles within the class
                 call os_ptcl2D%stats('corr', self%clsscore_stats(specinds(icls)), mask)
                 deallocate(mask, pspec)
             endif
@@ -613,7 +628,7 @@ contains
     subroutine calc_cls_spec_stats( self, l_print )
         class(pspecs), intent(inout) :: self
         logical,       intent(in)    :: l_print
-        real    :: scores(self%nspecs), res(self%nspecs)
+        real    :: scores(self%nspecs), res(self%nspecs), loc_sdevs(self%nspecs)
         integer :: icls_spec, cnt, ispec
         do icls_spec = 1, self%ncls_spec
             if( self%clspops_spec(icls_spec) == 0 ) cycle 
@@ -621,23 +636,30 @@ contains
             cnt = 0
             do ispec = 1,self%nspecs
                 if( self%clsinds_spec(ispec) == icls_spec )then
-                    cnt         = cnt + 1
-                    scores(cnt) = self%clsscore_stats(ispec)%avg
-                    res(cnt)    = self%clsres(ispec)
+                    cnt            = cnt + 1
+                    scores(cnt)    = self%clsscore_stats(ispec)%med
+                    res(cnt)       = self%clsres(ispec)
+                    loc_sdevs(cnt) = self%loc_sdevs(ispec)
                 endif
             end do
             call calc_stats(scores(:cnt), self%cls_spec_clsscore_stats(icls_spec))
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MINIMUM SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%minv
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%maxv
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%med
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'AVERAGE SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%avg
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'SDEV    SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%sdev
+            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MINIMUM SCORE:    ', self%cls_spec_clsscore_stats(icls_spec)%minv
+            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM SCORE:    ', self%cls_spec_clsscore_stats(icls_spec)%maxv
+            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  SCORE:    ', self%cls_spec_clsscore_stats(icls_spec)%med
+            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'AVERAGE SCORE:    ', self%cls_spec_clsscore_stats(icls_spec)%avg
+            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'SDEV    SCORE:    ', self%cls_spec_clsscore_stats(icls_spec)%sdev
             call calc_stats(res(:cnt), self%cls_spec_clsres_stats(icls_spec))
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES:   ', self%cls_spec_clsres_stats(icls_spec)%minv
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES:   ', self%cls_spec_clsres_stats(icls_spec)%maxv
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES:   ', self%cls_spec_clsres_stats(icls_spec)%med
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES:   ', self%cls_spec_clsres_stats(icls_spec)%avg
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES:   ', self%cls_spec_clsres_stats(icls_spec)%sdev
+            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES:      ', self%cls_spec_clsres_stats(icls_spec)%minv
+            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES:      ', self%cls_spec_clsres_stats(icls_spec)%maxv
+            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES:      ', self%cls_spec_clsres_stats(icls_spec)%med
+            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES:      ', self%cls_spec_clsres_stats(icls_spec)%avg
+            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES:      ', self%cls_spec_clsres_stats(icls_spec)%sdev
+            call calc_stats(loc_sdevs(:cnt), self%cls_spec_locsdev_stats(icls_spec))
+            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MINIMUM LOC SDEV: ', self%cls_spec_locsdev_stats(icls_spec)%minv
+            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM LOC SDEV: ', self%cls_spec_locsdev_stats(icls_spec)%maxv
+            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  LOC SDEV: ', self%cls_spec_locsdev_stats(icls_spec)%med
+            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'AVERAGE LOC SDEV: ', self%cls_spec_locsdev_stats(icls_spec)%avg
+            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'SDEV    LOC SDEV: ', self%cls_spec_locsdev_stats(icls_spec)%sdev
         end do
     end subroutine calc_cls_spec_stats
 
@@ -660,7 +682,6 @@ contains
             self%ptclpops_spec(icls_spec) = sum(self%clspops, mask=self%clsinds_spec == icls_spec)
         enddo
         
-
         contains
 
             function ispec_lt_jspec( ispec, jspec ) result( l_worse )
@@ -708,12 +729,14 @@ contains
             if( allocated(self%clsinds)                 ) deallocate(self%clsinds)
             if( allocated(self%clspops)                 ) deallocate(self%clspops)
             if( allocated(self%clsres)                  ) deallocate(self%clsres)
+            if( allocated(self%loc_sdevs)               ) deallocate(self%loc_sdevs)
             if( allocated(self%clspops_spec)            ) deallocate(self%clspops_spec)
             if( allocated(self%ptclpops_spec)           ) deallocate(self%ptclpops_spec)
             if( allocated(self%medoids)                 ) deallocate(self%medoids)
             if( allocated(self%clsscore_stats)          ) deallocate(self%clsscore_stats)
             if( allocated(self%cls_spec_clsscore_stats) ) deallocate(self%cls_spec_clsscore_stats)
             if( allocated(self%cls_spec_clsres_stats)   ) deallocate(self%cls_spec_clsres_stats)
+            if( allocated(self%cls_spec_locsdev_stats)  ) deallocate(self%cls_spec_locsdev_stats)
             self%exists = .false.
         endif
     end subroutine kill
