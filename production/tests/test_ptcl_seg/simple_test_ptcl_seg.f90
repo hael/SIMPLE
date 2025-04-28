@@ -88,8 +88,8 @@ include 'simple_lib.f08'
     do i = 871,877
         call defm_stack(i)%new(ldim,smpd)
         call defm_stack(i)%read(stk_directory, i=i)
-        call defm_stack(i)%vis()
     end do 
+    call gau_fit( ini_conf,3 )
     ! call defm_model%new([50,50])
     ! params_glob => params
     ! params_glob%lpstart = 1.

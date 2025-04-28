@@ -644,9 +644,8 @@ contains
         ! mask other particles. 
     end subroutine
 
-    subroutine gau_fit( im_in,im_out,ncls )
+    subroutine gau_fit( im_in, ncls )
         type(image), intent(in)     :: im_in 
-        type(image), intent(inout)    :: im_out
         type(image), allocatable    :: clus_stk(:), gau2D_stk(:)
         type(image) :: gau2D_sum
         integer, intent(in)         :: ncls ! number of gaussians
@@ -654,7 +653,8 @@ contains
         integer, allocatable    :: labels(:), centers(:), nonzero_px(:), x(:), y(:), npnts(:), temp_vec(:)
         logical, allocatable    :: mask(:)
         real    :: smpd, rand, cen_gauss(2), cov_gauss(2,2), corr
-        integer :: ldim(3), i, j, ndat, maxits = 20, iter, k, l, counts
+        integer :: ldim(3), i, j, ndat, maxits = 100, iter, k, l, counts, sum 
+        call im_in%vis()
         ldim = im_in%get_ldim()
         ldim = [ldim(1),ldim(2),1]
         allocate(rmat(ldim(1),ldim(2),1))
@@ -684,7 +684,7 @@ contains
         do i = 1, ncls - 1
             npnts(i) = floor(real(ndat/ncls))
         end do 
-        npnts(ncls) = npnts(ncls) + mod(ndat,ncls)
+        npnts(ncls) = npnts(ncls - 1) + mod(ndat,ncls)
         do iter = 1, maxits
             do i = 1, ncls 
                 do j = 1, ndat 
@@ -692,9 +692,8 @@ contains
                 end do
             end do 
             do i = 1, ncls 
-                temp_vec = 0 
                 allocate(temp_vec(npnts(i)))
-                temp_vec = minnloc(euc_dist(:,1),npnts(i))
+                temp_vec = minnloc(euc_dist(:,i),npnts(i))
                 do j = 1, npnts(i)
                     labels(temp_vec(j)) = i
                 end do 
@@ -702,9 +701,12 @@ contains
             end do 
             ! calc new center
             do i = 1, ncls
-                mask = .false.
-                mask = labels == i
-                centers(i) = nint(real(sum(labels, 1, mask) / npnts(i)))
+                sum = 0
+                ! need sum of indices
+                do j = 1, ndat 
+                    if(labels(j) == i ) sum = sum + j
+                end do 
+                centers(i) = nint(real(sum / npnts(i)))
             end do 
         end do 
         ! map labels back to image
@@ -733,9 +735,11 @@ contains
             call clus_stk(l)%new(ldim, smpd)
             call clus_stk(l)%set_rmat(rmat_labl, .false.)
             call gauss2Dfit(clus_stk(l), cen_gauss, cov_gauss, corr, gau2D_stk(l))
+            call otsu_img(gau2D_stk(l))
             gau2D_stk(l) = gau2D_stk(l)*l
             call gau2D_sum%add(gau2D_stk(l))
         end do 
+        call gau2D_sum%vis()
     end subroutine 
 
 end module simple_afm_image 
