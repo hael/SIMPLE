@@ -2087,7 +2087,7 @@ contains
                 cc = max(cc,ccm)
                 corrmat(i,j) = cc
                 corrmat(j,i) = cc
-            enddo
+            enddo 
         enddo
         !$omp end parallel do
         corrmat(ncls_sel,ncls_sel) = 1.

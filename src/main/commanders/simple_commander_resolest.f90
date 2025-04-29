@@ -18,7 +18,6 @@ public :: uniform_filter2D_commander
 public :: uniform_filter3D_commander
 public :: icm3D_commander
 public :: icm2D_commander
-public :: denoise_cavgs_commander
 public :: score_ptcls_commander
 public :: estimate_lpstages_commander
 private
@@ -53,11 +52,6 @@ type, extends(commander_base) :: icm2D_commander
   contains
     procedure :: execute      => exec_icm2D
 end type icm2D_commander
-
-type, extends(commander_base) :: denoise_cavgs_commander
-  contains
-    procedure :: execute      => exec_denoise_cavgs
-end type denoise_cavgs_commander
 
 type, extends(commander_base) :: score_ptcls_commander
   contains
@@ -352,152 +346,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_ICM2D NORMAL STOP ****')
     end subroutine exec_icm2D
-
-    subroutine exec_denoise_cavgs( self, cline )
-        use simple_corrmat, only: calc_inplane_invariant_corrmat
-        class(denoise_cavgs_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
-        character(len=:), allocatable :: file_tag
-        type(image),      allocatable :: odd(:), even(:), avg(:)
-        logical,          allocatable :: mask(:), mask_bincls(:)
-        real,             allocatable :: fsc(:), filt(:), corrmat(:,:), res(:), corrs(:)
-        real,             allocatable :: resolutions(:), resolutions_w(:), tmp(:)
-        integer,          allocatable :: pinds(:), rank(:)
-        real,    parameter :: HP_SCORE = 60.
-        integer, parameter :: NN = 5
-        type(image)        :: empty
-        type(parameters)   :: params
-        real               :: minmax(2), msk, res_frc0143, lp_score
-        integer            :: iptcl, filtsz, n_nonempty, i, i_medoid, cnt_good, cnt_bad
-        ! init
-        call cline%set('ctf',    'no')
-        call cline%set('objfun', 'cc')
-        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
-        if( .not. cline%defined('lambda') ) call cline%set('lambda',  0.1)
-        if( .not. cline%defined('trs')    ) call cline%set('trs',     5.0)
-        call params%new(cline)
-        call find_ldim_nptcls(params%stk, params%ldim, params%nptcls)
-        params%box     = params%ldim(1)
-        params%ldim(3) = 1 ! because we operate on stacks
-        msk            = real(params%box / 2) - COSMSKHALFWIDTH - 1.
-        filtsz         = fdim(params%box) - 1
-        res            = get_resarr(params%box, params%smpd)
-        file_tag       = 'cavgs_denoised'
-        ! allocate
-        allocate(odd(params%nptcls), even(params%nptcls), mask(params%nptcls), pinds(params%nptcls))
-        do iptcl = 1, params%nptcls
-            ! construct & read
-            call odd (iptcl)%new( params%ldim, params%smpd, .false.)
-            call odd (iptcl)%read(params%stk,  iptcl)
-            call even(iptcl)%new( params%ldim, params%smpd, .false.)
-            call even(iptcl)%read(params%stk2, iptcl)
-            minmax       = even(iptcl)%minmax()
-            mask(iptcl)  = .not.is_equal(minmax(2)-minmax(1),0.) ! empty image
-            if( .not. mask(iptcl) )then
-                call odd (iptcl)%kill
-                call even(iptcl)%kill
-            endif
-            pinds(iptcl) = iptcl
-        enddo
-        n_nonempty = count(mask)
-        pinds      = pack(pinds, mask=mask)
-        even       = pack(even,  mask=mask)
-        odd        = pack(odd,   mask=mask)
-        ! filter
-        allocate(fsc(filtsz), filt(filtsz), corrs(n_nonempty), resolutions(n_nonempty), tmp(n_nonempty), resolutions_w(n_nonempty), source=0.)
-        !$omp parallel do schedule(static) default(shared) private(i,fsc,filt,res_frc0143) proc_bind(close)
-        do i = 1, n_nonempty
-            ! zero mean of outer pixels
-            call odd (i)%zero_edgeavg
-            call even(i)%zero_edgeavg
-            ! spherical mask
-            call odd (i)%mask(msk, 'soft', backgr=0.)
-            call even(i)%mask(msk, 'soft', backgr=0.)
-            ! fwd FFT
-            call odd (i)%fft
-            call even(i)%fft
-            ! FSC
-            call even(i)%fsc(odd(i), fsc)
-            call get_resolution(fsc, res, resolutions(i), res_frc0143)
-            ! calculate a filter to be applied to the individual e/o pairs
-            where( fsc > 0. )
-                filt = 2. * fsc / (fsc + 1.)   ! gold standard
-                ! filt = fsc                     ! e/o merged
-            else where
-                filt = 0.
-            end where
-            where( filt  > 0.99999 ) filt = 0.99999
-            ! apply filter
-            call even(i)%apply_filter_serial(filt)
-            call odd (i)%apply_filter_serial(filt)
-            ! bwd FFT
-            call odd (i)%ifft
-            call even(i)%ifft
-            ! ICM
-            call even(i)%ICM2D_eo(odd(i), params%lambda)
-        end do
-        !$omp end parallel do
-        ! write output
-        do i = 1, n_nonempty
-            iptcl = pinds(i)
-            call even(i)%write(trim(file_tag)//'_even.mrc', iptcl)
-            call odd (i)%write(trim(file_tag)//'_odd.mrc',  iptcl)
-            call even(i)%add(odd(i))
-            call even(i)%mul(0.5)
-            call even(i)%write(trim(file_tag)//'_avg.mrc', iptcl)
-        end do
-        ! make sure the last image is written
-        if( pinds(n_nonempty) /= params%nptcls )then
-            call empty%new(params%ldim, params%smpd, .false.)
-            call empty%write(trim(file_tag)//'_even.mrc', params%nptcls)
-            call empty%write(trim(file_tag)//'_odd.mrc',  params%nptcls)
-        endif
-        ! rank according to resolution
-        allocate(rank(n_nonempty), source=(/(i,i=1,n_nonempty)/))
-        tmp = resolutions
-        call hpsort(tmp, rank)
-        ! write ranked
-        do i = 1, n_nonempty
-            call even(rank(i))%write(trim(file_tag)//'_ranked.mrc', i)
-        end do
-        ! calculate in-plane invariant similarity matrix
-        lp_score = minval(resolutions)
-        call calc_inplane_invariant_corrmat(even, HP_SCORE, lp_score, corrmat)
-        ! estimate resolution as weighted average of five nearest neighbors
-        do i = 1, n_nonempty
-            corrs = corrmat(i,:)
-            tmp   = resolutions
-            call hpsort(corrs, tmp)
-            call reverse(corrs)
-            call reverse(tmp)
-            ! resolutions_w(i) = sum(tmp(1:NN) * corrs(1:NN)) / sum(corrs(1:NN))
-            resolutions_w(i) = sum(tmp(1:NN)) / real(NN)
-        end do
-
-        ! rank according to weigted resolution
-        rank = (/(i,i=1,n_nonempty)/)
-        tmp  = resolutions_w
-        call hpsort(tmp, rank)
-        ! write ranked
-        do i = 1, n_nonempty
-            call even(rank(i))%write(trim(file_tag)//'_reranked.mrc', i)
-
-            print *, resolutions_w(rank(i))
-
-        end do
-
-
-        ! call medoid_ranking_from_smat(corrmat, i_medoid, rank)
-
-        
-        ! destruct
-        do i = 1, n_nonempty
-            call odd (i)%kill()
-            call even(i)%kill()
-        end do
-        ! end gracefully
-        call simple_end('**** SIMPLE_DENOISE_CAVGS NORMAL STOP ****')
-    end subroutine exec_denoise_cavgs
 
     subroutine exec_score_ptcls( self, cline )
         use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimgbatch, prepimg4align, killimgbatch
