@@ -27,6 +27,7 @@ implicit none
 
 logical  :: L_DEBUG = .false.
 type :: AFM_image
+    private
     type(image),           allocatable :: img_array(:)
     character(len=STDLEN), allocatable :: img_names(:)
     character(len=STDLEN)              :: stack_string
@@ -169,7 +170,7 @@ contains
         call trace_p%pick(trim(outname)//'trace.mrc',.true.)
         call HeightRetrace%write(trim(outname)//'retrace.mrc')
         call retrace_p%pick(trim(outname)//'retrace.mrc',.true.)
-        ldim_box = [avg_p%box_raw, avg_p%box_raw, 1]
+        ldim_box = [avg_p%get_boxsize(), avg_p%get_boxsize(), 1]
         smpd_box =  AvgHeight%get_smpd()
         call avg_slim%new(ldim_box, smpd_box )
         call trace_slim%new(ldim_box, smpd_box)
@@ -184,9 +185,9 @@ contains
         allocate(corr_final_t(avg_p%get_nboxes()))
         do box_iter = 1, avg_p%get_nboxes() 
             coord_test = pickpos(box_iter, :)
-            call AvgHeight%window_slim(coord_test, avg_p%box_raw, avg_slim, outs)
-            call HeightTrace%window_slim(coord_test, avg_p%box_raw, trace_slim, outs)
-            call HeightRetrace%window_slim(coord_test, avg_p%box_raw, retrace_slim, outs)
+            call AvgHeight%window_slim(coord_test, avg_p%get_boxsize(), avg_slim, outs)
+            call HeightTrace%window_slim(coord_test, avg_p%get_boxsize(), trace_slim, outs)
+            call HeightRetrace%window_slim(coord_test, avg_p%get_boxsize(), retrace_slim, outs)
             corr_r      =  avg_slim%real_corr(retrace_slim)
             corr_t      = avg_slim%real_corr(trace_slim)
             center      = [coord_test(1), coord_test(2), 1]
@@ -212,11 +213,11 @@ contains
             print *, sum(corr_final_t) /  box_count, sum(corr_final_r) / box_count
             print *, val_center_t, val_center_r
             do box_iter = 73, 75
-                    call AvgHeight%window_slim(pickpos(box_iter, :), avg_p%box_raw, avg_slim, outs)
+                    call AvgHeight%window_slim(pickpos(box_iter, :), avg_p%get_boxsize(), avg_slim, outs)
                     call avg_slim%vis()
-                    call HeightTrace%window_slim(val_center_t(:2, box_iter), avg_p%box_raw, trace_slim, outs)
+                    call HeightTrace%window_slim(val_center_t(:2, box_iter), avg_p%get_boxsize(), trace_slim, outs)
                     call trace_slim%vis()
-                    call HeightRetrace%window_slim(val_center_r(:2, box_iter), avg_p%box_raw, retrace_slim, outs)
+                    call HeightRetrace%window_slim(val_center_r(:2, box_iter), avg_p%get_boxsize(), retrace_slim, outs)
                     call retrace_slim%vis()
             enddo
         endif 
@@ -230,7 +231,7 @@ contains
                 do search_iter = 2, 20
                     call neigh_8_1(AvgHeight%get_ldim(), center, neighbor, nsiz)
                     do neighbor_iter = 1, nsiz
-                        call im_iter%window_slim([neighbor(1, neighbor_iter), neighbor(2, neighbor_iter)], avg_p%box_raw, trace_slim, outs)
+                        call im_iter%window_slim([neighbor(1, neighbor_iter), neighbor(2, neighbor_iter)], avg_p%get_boxsize(), trace_slim, outs)
                         coord_corr(:, neighbor_iter) = [real(neighbor(1, neighbor_iter)), real(neighbor(2, neighbor_iter)), avg_slim%real_corr(trace_slim)]
                         neighbor_corr(neighbor_iter) = avg_slim%real_corr(trace_slim)
                     enddo 
@@ -443,27 +444,28 @@ contains
     end subroutine hough_lines 
 
     subroutine mask42D( img_in, AFM_pick, bin_cc, hough_mask, pick_vec )
-        type(pickseg), intent(in)       :: AFM_pick
-        type(image), intent(inout)      :: img_in 
-        type(binimage), intent(inout)   :: bin_cc 
-        real,      intent(in)           :: hough_mask(:,:,:)
-        type(image), intent(inout)         :: pick_vec(:)
+        type(pickseg),  intent(in)    :: AFM_pick
+        type(image),    intent(inout) :: img_in 
+        type(binimage), intent(inout) :: bin_cc 
+        real,           intent(in)    :: hough_mask(:,:,:)
+        type(image),    intent(inout) :: pick_vec(:)
         integer, allocatable    :: pos(:, :) 
         real,    allocatable    :: im_in_rmat(:,:,:), im_win_rmat(:,:,:), bin_win_rmat(:,:,:), area(:,:)
         type(image)    :: img_win, bin_win, lin_win, lines
         type(binimage) :: bin_erode 
         real           :: smpd,new_cen(3), msk_rad = 50.
-        integer        :: ldim(3), i, windim(3), j, num_parts, counts, pad = 150
+        integer        :: ldim(3), ldim_pick(3), i, windim(3), j, num_parts, counts, pad = 150
         logical        :: outside
-        ldim = img_in%get_ldim()
-        smpd = img_in%get_smpd()
-        windim = [AFM_pick%box_raw,AFM_pick%box_raw,1]
-        call bin_cc%new(AFM_pick%ldim, AFM_pick%smpd_shrink)
+        ldim   = img_in%get_ldim()
+        smpd   = img_in%get_smpd()
+        windim = [AFM_pick%get_boxsize(), AFM_pick%get_boxsize(), 1]
+        call bin_cc%new(AFM_pick%get_ldim(), AFM_pick%get_smpd_shrink())
         call bin_cc%read('mic_shrink_lp_tv_bin_erode_cc.mrc')
-        call lines%new(ldim,smpd)
-        call lines%set_rmat(hough_mask,.false.)
-        if( AFM_pick%ldim(1) /= AFM_pick%ldim(2) )then 
-            call bin_cc%pad_inplace([maxval(AFM_pick%ldim), maxval(AFM_pick%ldim), 1])
+        call lines%new(ldim, smpd)
+        call lines%set_rmat(hough_mask, .false.)
+        ldim_pick = AFM_pick%get_ldim()
+        if( ldim_pick(1) /= ldim_pick(2) )then 
+            call bin_cc%pad_inplace( [maxval(AFM_pick%get_ldim()), maxval(AFM_pick%get_ldim()), 1])
         endif
         call bin_cc%pad_inplace([ldim(1) + pad, ldim(2) + pad, 1])
         call img_in%pad_inplace([ldim(1) + pad, ldim(2) + pad, 1])
@@ -473,11 +475,11 @@ contains
             im_in_rmat = 0.
         end where 
         call img_in%set_rmat(im_in_rmat,.false.)
-        allocate(pos(AFM_pick%nboxes, 2))
-        call img_win%new(windim,AFM_pick%smpd_shrink)
-        call bin_win%new(windim,AFM_pick%smpd_shrink)
-        call lin_win%new(windim,AFM_pick%smpd_shrink)
-        call bin_erode%new(windim,AFM_pick%smpd_shrink)
+        allocate(pos(AFM_pick%get_nboxes(), 2))
+        call img_win%new(windim,AFM_pick%get_smpd_shrink())
+        call bin_win%new(windim,AFM_pick%get_smpd_shrink())
+        call lin_win%new(windim,AFM_pick%get_smpd_shrink())
+        call bin_erode%new(windim,AFM_pick%get_smpd_shrink())
         allocate(im_win_rmat(windim(1),windim(2),windim(3)))
         allocate(bin_win_rmat(windim(1),windim(2),windim(3)))
         allocate(area(AFM_pick%get_nboxes(),AFM_pick%get_nboxes()))
@@ -486,7 +488,7 @@ contains
         ! pad = 2*windim(1)
         area(:,:) = 0.
         counts = 0
-        do i = 1, AFM_pick%nboxes
+        do i = 1, AFM_pick%get_nboxes()
             call AFM_pick%get_positions(pos, i)
             outside = .false. 
             if(minval(pos(i,:)) < 0.) outside = .true. 
@@ -499,8 +501,8 @@ contains
             else if(pos(i,2) < 0) then  
                 pos(i,2) = pos(i,2) + pad 
             end if 
-            call bin_cc%window_slim(pos(i,:), AFM_pick%box_raw, bin_win, outside)
-            do j = 1, AFM_pick%nboxes
+            call bin_cc%window_slim(pos(i,:), AFM_pick%get_boxsize(), bin_win, outside)
+            do j = 1, AFM_pick%get_nboxes()
                 if(count(nint(bin_win%get_rmat()) == j) > 300 .and. area(i,j) /= 1.) then 
                     area(i,j) = count(nint(bin_win%get_rmat()) == j)
                 end if
@@ -514,19 +516,19 @@ contains
             call bin_win%set_rmat(bin_win_rmat,.false.)
             call bin_win%masscen(new_cen)
             pos(i,:) = pos(i,:) + nint(new_cen)
-            call bin_cc%window_slim(pos(i,:), AFM_pick%box_raw, bin_win, outside)
+            call bin_cc%window_slim(pos(i,:), AFM_pick%get_boxsize(), bin_win, outside)
             bin_win_rmat = bin_win%get_rmat()
             where(nint(bin_win%get_rmat()) /= maxloc(area(i,:),1))
                 bin_win_rmat = 0.
             end where 
             call bin_win%set_rmat(bin_win_rmat,.false.)
-            call img_in%window_slim(pos(i,:), AFM_pick%box_raw, img_win, outside)
+            call img_in%window_slim(pos(i,:), AFM_pick%get_boxsize(), img_win, outside)
             im_win_rmat = img_win%get_rmat()
             where(bin_win%get_rmat() < 1.)
                 im_win_rmat = 0.
             end where
             call img_win%set_rmat(im_win_rmat, .false.)
-            call lines%window_slim(pos(i,:), AFM_pick%box_raw, lin_win, outside)
+            call lines%window_slim(pos(i,:), AFM_pick%get_boxsize(), lin_win, outside)
             ! throw some hough lines away. can adjust parameters.
             if(lin_win%mean() > 0.01 .and. lin_win%real_corr(img_win) > 0.) then   
                 cycle
@@ -563,8 +565,9 @@ contains
         logical     :: outside
         real        :: neighbor_corr(8), coord_corr(3,8), max_corr(20), smpd, smpd_shrink, shrink = 1.
         call trace_picks%get_positions(coords)
-        dim = trace%get_ldim()
+        dim  = trace%get_ldim()
         smpd = trace%get_smpd()
+
         dim_shrink(1) = round2even(real(dim(1))/shrink)
         dim_shrink(2) = round2even(real(dim(2))/shrink)
         dim_shrink(3) = 1
@@ -575,18 +578,18 @@ contains
         call trace%fft()
         call trace%clip_inplace(dim_shrink)
         call trace%ifft()
-        call trace_slim%new([trace_picks%box_raw, trace_picks%box_raw, 1], smpd_shrink)
-        call retrace_slim%new([trace_picks%box_raw, trace_picks%box_raw, 1], smpd_shrink)
+        call trace_slim%new([trace_picks%get_boxsize(), trace_picks%get_boxsize(), 1], smpd_shrink)
+        call retrace_slim%new([trace_picks%get_boxsize(), trace_picks%get_boxsize(), 1], smpd_shrink)
         do box_iter = 1, trace_picks%get_nboxes() 
             center  = [coords(box_iter, 1), coords(box_iter, 2), 1]
             print *, 'trace center', center
             if(center(1) < 0) center(1) = center(1) + dim_shrink(1)/4
             if(center(2) < 0) center(2) = center(2) + dim_shrink(2)/4
-            call trace%window_slim([center(1), center(2)], trace_picks%box_raw, trace_slim, outside)
+            call trace%window_slim([center(1), center(2)], trace_picks%get_boxsize(), trace_slim, outside)
             do search_iter = 2, 10
                 call neigh_8_1(trace%get_ldim(), center, neighbor, nsiz)
                 do neighbor_iter = 1, nsiz
-                    call retrace%window_slim([neighbor(1, neighbor_iter), neighbor(2, neighbor_iter)], trace_picks%box_raw, retrace_slim, outside)
+                    call retrace%window_slim([neighbor(1, neighbor_iter), neighbor(2, neighbor_iter)], trace_picks%get_boxsize(), retrace_slim, outside)
                     coord_corr(:, neighbor_iter) = [real(neighbor(1, neighbor_iter)), real(neighbor(2, neighbor_iter)), trace_slim%real_corr(retrace_slim)]
                     neighbor_corr(neighbor_iter) = retrace_slim%real_corr(trace_slim)
                 enddo 
@@ -613,9 +616,9 @@ contains
         real            :: smpd
         type(binimage)  :: retrace_binimage
         call trace_pick%get_positions(coords)
-        ldim = trace_pick%ldim
-        smpd = trace_pick%smpd_shrink
-        windim = trace_pick%ldim_box
+        ldim = trace_pick%get_ldim()
+        smpd = trace_pick%get_smpd_shrink()
+        windim = trace_pick%get_ldim()
         call retrace%mul(real(product(ldim)))
         call retrace%fft()
         call retrace_binimage%new_bimg(ldim, smpd)
