@@ -183,7 +183,7 @@ contains
         sdev = 0.
         var  = 0.
         if( n < 2 )then
-            THROW_WARN('ERROR: n must be at least 2')
+            THROW_WARN('ERROR: n must be at least 2; moment_1')
             return
         endif
         ! calc average
@@ -228,7 +228,7 @@ contains
         sdev = 0.
         var  = 0.
         if( n < 2 )then
-            THROW_WARN('ERROR: n must be at least 2')
+            THROW_WARN('ERROR: n must be at least 2; moment_2')
             return
         endif
         ! calc average
@@ -240,8 +240,8 @@ contains
         !$omp reduction(+:ep_dp,var_dp) proc_bind(close) collapse(2)
         do i=1,nx
             do j=1,ny
-                dev = data(i,j)-ave
-                ep_dp = ep_dp+real(dev,dp)
+                dev    = data(i,j)-ave
+                ep_dp  = ep_dp+real(dev,dp)
                 var_dp = var_dp+real(dev*dev,dp)
             end do
         end do
@@ -251,8 +251,8 @@ contains
         if( var > 0. ) sdev = sqrt(var)
         if( abs(var) < TINY )then
             if( var < 0. )then
-                err  = .true.
-                ave  = 0.
+                err = .true.
+                ave = 0.
             endif
             var  = 0.
             sdev = 0.
@@ -276,7 +276,7 @@ contains
         sdev = 0.
         var  = 0.
         if( n < 2 )then
-            THROW_WARN('ERROR: n must be at least 2')
+            THROW_WARN('ERROR: n must be at least 2; moment_3')
             return
         endif
         ave = sum(real(data,dp))/real(n,dp)
@@ -366,14 +366,14 @@ contains
         real(dp) :: ep_dp, var_dp
         err  = .false.
         sz   = size(data)
-        if( sz /= size(mask) ) THROW_HARD('mask does not conform with data; moment_4')
+        if( sz /= size(mask) ) THROW_HARD('mask does not conform with data; moment_serial')
         n    = count(mask)
         nr   = real(n)
         ave  = 0.
         sdev = 0.
         var  = 0.
         if( n < 2 )then
-            THROW_WARN('ERROR: n must be at least 2')
+            THROW_WARN('ERROR: n must be at least 2; moment_serial')
             return
         endif
         ! calc average
@@ -384,7 +384,7 @@ contains
         do i=1,sz
             if( mask(i) )then
                 dev = data(i) - ave
-                ep_dp  = ep_dp + real(dev,dp)
+                ep_dp  =  ep_dp + real(dev,dp)
                 var_dp = var_dp + real(dev*dev,dp)
             endif
         end do
@@ -408,7 +408,7 @@ contains
         skewness_1 = 0.
         n  = size(data)
         if( n < 3 )then
-            THROW_WARN('ERROR: n must be at least 2')
+            THROW_WARN('ERROR: n must be at least 2; skewness_1')
         else
             mu = sum(real(data,dp)) / real(n,dp)
             k2 = sum((real(data,dp)-mu)**2) / real(n,dp)
@@ -428,11 +428,11 @@ contains
         skewness_2 = 0.
         n  = size(data)
         if( n < 3 )then
-            THROW_WARN('ERROR: n must be at least 2')
+            THROW_WARN('ERROR: n must be at least 2; skewness_2')
             return
         endif
         if( present(mask) )then
-            if( size(mask) /= n ) THROW_HARD('ERROR: Incompatibe dimensions')
+            if( size(mask) /= n ) THROW_HARD('ERROR: Incompatibe dimensions; skewness_2')
             n  = count(mask)
             mu = sum(real(data,dp), mask=mask) / real(n,dp)
             k3 = sum((real(data,dp)-mu)**3, mask=mask) / real(n,dp)
@@ -455,7 +455,7 @@ contains
         kurtosis_1 = 0.
         n  = size(data)
         if( n < 4 )then
-            THROW_WARN('ERROR: n must be at least 2')
+            THROW_WARN('ERROR: n must be at least 2; kurtosis_1')
             return
         endif
         mu = sum(real(data,dp)) / real(n,dp)
@@ -480,11 +480,11 @@ contains
         kurtosis_2 = 0.
         n  = size(data)
         if( n < 4 )then
-            THROW_WARN('ERROR: n must be at least 2')
+            THROW_WARN('ERROR: n must be at least 2; kurtosis_2')
             return
         endif
         if( present(mask) )then
-            if( size(mask) /= n ) THROW_HARD('ERROR: Incompatibe dimensions')
+            if( size(mask) /= n ) THROW_HARD('ERROR: Incompatibe dimensions; kurtosis_2')
             n   = count(mask)
             mu  = sum(real(data,dp), mask=mask) / real(n,dp)
             k4b = sum((real(data,dp)-mu)**4, mask=mask)
@@ -511,7 +511,7 @@ contains
         real    :: r,ax,ay,sxx,syy,sxy,xt,yt
         integer :: j, n
         n = size(x)
-        if( size(y) /= n ) THROW_HARD('arrays not equal size in pearsn_1')
+        if( size(y) /= n ) THROW_HARD('arrays not equal size in pearsn_1; pearsn_1')
         ax  = sum(x)/real(n)
         ay  = sum(y)/real(n)
         sxx = 0.

@@ -246,12 +246,13 @@ module simple_corrmat
                 call ccimgs(i,1)%new(ldim, smpd, wthreads=.false.)
                 call ccimgs(i,2)%new(ldim, smpd, wthreads=.false.)
             enddo
-            !!$omp parallel do default(shared) private(i,j,cc,ccm,ithr,offset,offsetm,ang,angm,lmir)&
-            !!$omp schedule(dynamic) proc_bind(close)
+
+            !$omp parallel do default(shared) private(i,j,cc,ccm,ithr,offset,offsetm,ang,angm,lmir)&
+            !$omp schedule(dynamic) proc_bind(close)
             do i = 1, n - 1
                 ithr = omp_get_thread_num()+1
                 corrmat(i,i) = 1.
-                do j = i + 1, n
+                do j = i, n
                     ! reference to particle
                     call pftcc%set_eo(i,.true.)
                     call fm_correlators(ithr)%calc_phasecorr(j, i, imgs(j), imgs(i),&
@@ -272,7 +273,7 @@ module simple_corrmat
                     corrmat(j,i) = cc
                 enddo
             enddo
-            !!$omp end parallel do
+            !$omp end parallel do
             corrmat(n,n) = 1.
             ! write similarity matrix
             ! tidy

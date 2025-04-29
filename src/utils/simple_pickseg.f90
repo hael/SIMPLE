@@ -28,16 +28,20 @@ character(len=:), allocatable :: fbody
 
 ! instance
 type pickseg
+    private
     real               :: smpd_shrink = 0.
-    integer            :: ldim(3), ldim_box(3), nboxes = 0, box_raw = 0
+    integer            :: ldim(3), nboxes = 0, box_raw = 0
     real, allocatable  :: masscens(:,:)
     type(binimage)     :: mic_shrink, img_cc
     type(stats_struct) :: sz_stats, diam_stats
     logical            :: exists = .false.
 contains
     procedure :: pick
-    procedure :: get_positions
+    procedure :: get_boxsize
+    procedure :: get_ldim
     procedure :: get_nboxes
+    procedure :: get_positions
+    procedure :: get_smpd_shrink
     procedure :: report_boxfile
 end type pickseg
 
@@ -62,7 +66,7 @@ contains
         if( present(is_AFM)  ) is_AFM_l  = is_AFM 
         ! set micrograph info
         call find_ldim_nptcls(micname, ldim_raw, nframes, smpd_raw)
-        if( ldim_raw(3) /= 1 .or. nframes /= 1 ) THROW_HARD('Only for 2D images')
+        if( ldim_raw(3) /= 1 .or. nframes /= 1 ) THROW_HARD('Only for 2D images; pick')
         ! read micrograph
         call mic_raw%new(ldim_raw, smpd_raw)
         call mic_raw%read(micname)
@@ -194,6 +198,32 @@ contains
             ! let's center the mass based on the area of particles within the box for crowded micrographs. weight center of mass with area of ccs within box.  
     end subroutine pick
 
+    ! getters/setters
+
+    pure function get_boxsize( self ) result( boxsize )
+        class(pickseg), intent(in) :: self
+        integer :: boxsize
+        boxsize = self%box_raw
+    end function get_boxsize
+
+    pure function get_ldim( self ) result( ldim )
+        class(pickseg), intent(in) :: self
+        integer :: ldim(3)
+        ldim = self%ldim
+    end function get_ldim
+
+    pure function get_nboxes( self ) result( nboxes )
+        class(pickseg), intent(in) :: self
+        integer :: nboxes
+        nboxes = self%nboxes
+    end function get_nboxes
+
+    pure function get_smpd_shrink( self ) result( smpd_shrink )
+        class(pickseg), intent(in) :: self
+        real :: smpd_shrink
+        smpd_shrink = self%smpd_shrink
+    end function get_smpd_shrink
+
     subroutine get_positions( self, pos, box )
         class(pickseg),       intent(in)    :: self
         integer, allocatable, intent(inout) :: pos(:,:)
@@ -211,12 +241,6 @@ contains
             enddo
         endif
     end subroutine get_positions
-
-    pure function get_nboxes( self ) result( nboxes )
-        class(pickseg), intent(in) :: self
-        integer :: nboxes
-        nboxes = self%nboxes
-    end function get_nboxes
 
     ! for writing boxes with arbitrary box size
     subroutine report_boxfile( self, fname, nptcls, box )
