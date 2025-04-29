@@ -233,7 +233,7 @@ contains
                 kind    = nint(sqrt(real(h**2+k**2)))
                 tan_inv = atan(real(k), real(h)) * 2 + PI
                 irot    = nint(tan_inv * real(pdim(1)) / TWOPI) + 1
-                if( kind < pdim(2) .or. kind > pdim(3) .or. irot < 1 .or. irot > pftcc%pftsz ) cycle
+                if( kind < pdim(2) .or. kind > pdim(3) .or. irot < 1 .or. irot > pdim(1) ) cycle
                 pft(irot,kind) = img%get_fcomp2D(h,k)
             enddo
         enddo

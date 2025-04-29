@@ -106,7 +106,6 @@ type(mask_commander)                        :: xmask
 type(automask2D_commander)                  :: xautomask2D
 type(fsc_commander)                         :: xfsc
 type(nununiform_filter3D_commander)         :: xnununiform_filter3D
-type(cavg_filter2D_commander)               :: xcavg_filter2D
 type(centervol_commander)                   :: xcenter
 type(reproject_commander)                   :: xreproject
 type(volanalyze_commander)                  :: xvolanalyze
@@ -357,8 +356,6 @@ select case(trim(prg))
         call xfsc%execute(cline)
     case( 'nununiform_filter3D' )
         call xnununiform_filter3D%execute(cline)
-    case( 'cavg_filter2D' )
-        call xcavg_filter2D%execute(cline)
     case( 'center' )
         call xcenter%execute(cline)
     case( 'reproject' )
@@ -478,7 +475,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('1b6831a1')
+call simple_print_git_version('7610e992')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

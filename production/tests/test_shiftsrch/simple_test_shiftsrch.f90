@@ -111,7 +111,7 @@ call img_copy%polarize(pftcc, b%img, 9, isptcl=.true.,  iseven=.true., mask=b%l_
 call pftcc%shift_ptcl(9, [0.,0.,0.]) ! no shift
 call img_copy%ifft()
 call img_copy%write('shifted.mrc', 1)
-pftcc%with_ctf = .false.
+call pftcc%set_with_ctf(.false.)
 call b%img%ifft
 call b%img%read(p%stk, 5)
 call b%img%norm

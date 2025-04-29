@@ -19,7 +19,6 @@ public :: uniform_filter3D_commander
 public :: icm3D_commander
 public :: icm2D_commander
 public :: denoise_cavgs_commander
-public :: cavg_filter2D_commander
 public :: score_ptcls_commander
 public :: estimate_lpstages_commander
 private
@@ -59,11 +58,6 @@ type, extends(commander_base) :: denoise_cavgs_commander
   contains
     procedure :: execute      => exec_denoise_cavgs
 end type denoise_cavgs_commander
-
-type, extends(commander_base) :: cavg_filter2D_commander
-  contains
-    procedure :: execute      => exec_cavg_filter2D
-end type cavg_filter2D_commander
 
 type, extends(commander_base) :: score_ptcls_commander
   contains
@@ -504,150 +498,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_DENOISE_CAVGS NORMAL STOP ****')
     end subroutine exec_denoise_cavgs
-
-    subroutine exec_cavg_filter2D( self, cline )
-        use simple_strategy2D3D_common, only: read_imgbatch, prepimgbatch, prepimg4align
-        use simple_polarft_corrcalc,    only: polarft_corrcalc
-        use simple_eul_prob_tab,        only: eul_prob_tab
-        class(cavg_filter2D_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
-        complex,          allocatable :: cmat(:,:), cls_avg(:,:), ptcl_rot(:,:), ctf_rot(:,:)
-        integer,          allocatable :: pinds(:)
-        character(len=:), allocatable :: cavgsstk
-        real,             allocatable :: denom(:,:)
-        type(polarft_corrcalc)        :: pftcc
-        type(builder)                 :: build
-        type(parameters)              :: params
-        type(image)                   :: img_cavg, calc_cavg, ptcl_match, img_cavg_pd
-        integer  :: nptcls, iptcl, nptcls_cls
-        logical  :: l_ctf
-        integer  :: ncls, j, box, loc
-        real     :: smpd
-        call cline%set('dir_exec', 'cavg_filter2D')
-        call cline%set('mkdir',    'yes')
-        call cline%set('oritype',  'ptcl2D')
-        call build%init_params_and_build_general_tbox(cline,params)
-        ! reading all from the class 'class'
-        call build%spproj%os_ptcl2D%get_pinds(params%class, 'class', pinds)
-        nptcls     = build%spproj%get_nptcls()
-        nptcls_cls = size(pinds)
-        call pftcc%new(nptcls_cls, [1,nptcls_cls], params%kfromto)
-        call pftcc%reallocate_ptcls(nptcls_cls, pinds)
-        call build%img_crop_polarizer%init_polarizer(pftcc, params%alpha)
-        call ptcl_match%new([params%box_crop, params%box_crop, 1], params%smpd_crop)
-        call prepimgbatch(nptcls)
-        call read_imgbatch([1, nptcls])
-        ! getting the ctfs
-        l_ctf = build%spproj%get_ctfflag('ptcl2D',iptcl=pinds(1)).ne.'no'
-        ! make CTFs
-        if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, 'ptcl2D')
-        ! computing the class average (mimicking reg's cavg) and comparing to the cluster2D_cavg
-        allocate(ctf_rot(pftcc%pftsz, pftcc%kfromto(1):pftcc%kfromto(2)),&
-               &ptcl_rot(pftcc%pftsz, pftcc%kfromto(1):pftcc%kfromto(2)),&
-                &cls_avg(pftcc%pftsz, pftcc%kfromto(1):pftcc%kfromto(2)),&
-                  &denom(pftcc%pftsz, pftcc%kfromto(1):pftcc%kfromto(2)))
-        cls_avg = 0.
-        denom   = 0.
-        do j = 1, nptcls_cls
-            iptcl = pinds(j)
-            ! prep
-            call prepimg4align(iptcl, build%imgbatch(iptcl), ptcl_match)
-            ! transfer to polar coordinates
-            call build%img_crop_polarizer%polarize(pftcc, ptcl_match, iptcl, .true., .true., mask=build%l_resmsk)
-            ! e/o flags
-            call pftcc%set_eo(iptcl, .true. )
-            ! accumulating the cls_avg
-            loc = pftcc%get_roind(build%spproj_field%e3get(iptcl))
-            if( loc > pftcc%nrots ) loc = loc - pftcc%nrots
-            call pftcc%rotate_ptcl(      pftcc%pfts_ptcls(:,:,j), loc, ptcl_rot)
-            call pftcc%rotate_ptcl(cmplx(pftcc%ctfmats(:,:,j)),   loc, ctf_rot)
-            cls_avg = cls_avg + ptcl_rot*ctf_rot
-            denom   = denom   +          ctf_rot**2
-            ! writing the raw stack
-            call pftcc%polar2cartesian(pftcc%pfts_ptcls(:,:,j), cmat, box)
-            call calc_cavg%new([box,box,1], params%smpd*real(params%box)/real(box))
-            call calc_cavg%zero_and_flag_ft
-            call calc_cavg%set_cmat(cmat)
-            call calc_cavg%shift_phorig()
-            call calc_cavg%ifft
-            call calc_cavg%write('ptcls_stk.mrc', j)
-            ! writing the ctf stack
-            call pftcc%polar2cartesian(cmplx(pftcc%ctfmats(:,:,j)), cmat, box)
-            call calc_cavg%new([box,box,1], params%smpd*real(params%box)/real(box))
-            call calc_cavg%zero_and_flag_ft
-            call calc_cavg%set_cmat(cmat)
-            call calc_cavg%shift_phorig()
-            call calc_cavg%ifft
-            call calc_cavg%write('ctfs_stk.mrc', j)
-            ! writing the aligned ptcls stack
-            call pftcc%polar2cartesian(ptcl_rot, cmat, box)
-            call calc_cavg%new([box,box,1], params%smpd*real(params%box)/real(box))
-            call calc_cavg%zero_and_flag_ft
-            call calc_cavg%set_cmat(cmat)
-            call calc_cavg%shift_phorig()
-            call calc_cavg%ifft
-            call calc_cavg%write('aligned_ptcls_stk.mrc', j)
-            ! writing the aligned ctf stack
-            call pftcc%polar2cartesian(ctf_rot, cmat, box)
-            call calc_cavg%new([box,box,1], params%smpd*real(params%box)/real(box))
-            call calc_cavg%zero_and_flag_ft
-            call calc_cavg%set_cmat(cmat)
-            call calc_cavg%shift_phorig()
-            call calc_cavg%ifft
-            call calc_cavg%write('aligned_ctfs_stk.mrc', j)
-        enddo
-        ! polar class average
-        call pftcc%polar2cartesian(cls_avg / denom, cmat, box)
-        call calc_cavg%new([box,box,1], params%smpd*real(params%box)/real(box))
-        call calc_cavg%zero_and_flag_ft
-        call calc_cavg%set_cmat(cmat)
-        call calc_cavg%shift_phorig()
-        call calc_cavg%ifft
-        call calc_cavg%write('polar_cavg.mrc')
-        ! writing the cluster2D_cavg of the current class
-        call build%spproj%get_cavgs_stk(cavgsstk, ncls, smpd)
-        call img_cavg%new([params%box,params%box,1], params%smpd)
-        call img_cavg%read(cavgsstk, params%class)
-        call img_cavg%write('cluster2D_cavg.mrc')
-        ! taking in the corresponding denoised stk
-        cls_avg = 0.
-        denom   = 0.
-        call img_cavg%new([box,box,1], params%smpd*real(params%box)/real(box))
-        call img_cavg_pd%new([params%box,params%box,1], params%smpd)
-        if( cline%defined('stk2') )then
-            print *, nptcls_cls, box
-            do j = 1, nptcls_cls
-                iptcl = pinds(j)
-                call img_cavg%read(trim(params%stk2), j)
-                call img_cavg%fft
-                call img_cavg_pd%zero_and_flag_ft
-                call img_cavg%pad(img_cavg_pd)
-                ! transfer to polar coordinates
-                call build%img_crop_polarizer%polarize(pftcc, img_cavg_pd, iptcl, .true., .true.)
-                ! e/o flags
-                call pftcc%set_eo(iptcl, .true. )
-                ! accumulating the cls_avg
-                loc = pftcc%get_roind(build%spproj_field%e3get(iptcl))
-                if( loc > pftcc%nrots ) loc = loc - pftcc%nrots
-                call pftcc%rotate_ptcl(cmplx(pftcc%ctfmats(:,:,j)), loc, ctf_rot)
-                cls_avg = cls_avg + ctf_rot * pftcc%pfts_ptcls(:,:,j)
-                denom   = denom   + ctf_rot**2
-            enddo
-            ! polar class average
-            call pftcc%polar2cartesian(cls_avg / denom, cmat, box)
-            call calc_cavg%new([box,box,1], params%smpd*real(params%box)/real(box))
-            call calc_cavg%zero_and_flag_ft
-            call calc_cavg%set_cmat(cmat)
-            call calc_cavg%shift_phorig()
-            call calc_cavg%ifft
-            call calc_cavg%write('polar_cavg_kPCA.mrc')
-        endif
-        call img_cavg_pd%kill
-        call img_cavg%kill
-        call calc_cavg%kill
-        ! end gracefully
-        call simple_end('**** SIMPLE_CAVG_FILTER2D NORMAL STOP ****')
-    end subroutine exec_cavg_filter2D
 
     subroutine exec_score_ptcls( self, cline )
         use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimgbatch, prepimg4align, killimgbatch

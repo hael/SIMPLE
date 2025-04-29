@@ -81,10 +81,10 @@ contains
                 srch_order_allocated = .false.
             case DEFAULT
                 allocate(s3D%srch_order(nrefs,nthr_glob), s3D%srch_order_sub(nrefs_sub,nthr_glob),&
-                &s3D%rts(nthr_glob),s3D%rts_inpl(nthr_glob), s3D%rts_sub(nthr_glob), s3D%inpl_order(pftcc_glob%nrots,nthr_glob))
+                &s3D%rts(nthr_glob),s3D%rts_inpl(nthr_glob), s3D%rts_sub(nthr_glob), s3D%inpl_order(pftcc_glob%get_nrots(),nthr_glob))
                 do ithr=1,nthr_glob
                     s3D%rts(ithr)      = ran_tabu(nrefs)
-                    s3D%rts_inpl(ithr) = ran_tabu(pftcc_glob%nrots)
+                    s3D%rts_inpl(ithr) = ran_tabu(pftcc_glob%get_nrots())
                     s3D%rts_sub(ithr)  = ran_tabu(nrefs_sub)
                 end do
                 srch_order_allocated = .true.

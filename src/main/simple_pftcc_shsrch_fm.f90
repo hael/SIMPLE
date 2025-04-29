@@ -123,7 +123,7 @@ contains
         real     :: corrs(self%pftsz),rmat(2,2),dist(2),loc(2),offset1(2),offset2(2),offset(2)
         real     :: kw, norm, pftcc_ang, cc1,cc2, ang
         integer  :: logilims(3,2), cyclims(3,2), cyclimsR(2,2), win(2), phys(2)
-        integer  :: irot,h,k,l,ll,m,mm,sh,c,shlim
+        integer  :: irot,h,k,l,ll,m,mm,sh,c,shlim, kfromto(2)
         logical  :: l_mirr
         l_mirr = .false.
         if( present(mirror) ) l_mirr = mirror
@@ -143,11 +143,12 @@ contains
         imgcc2 = cmplx(0.,0.)
         var1   = 0.d0
         var2   = 0.d0
+        kfromto = pftcc_glob%get_kfromto()
         do h = logilims(1,1),logilims(1,2)
             do k = logilims(2,1),logilims(2,2)
                 sh = nint(hyp(h,k))
-                if( sh < pftcc_glob%kfromto(1) )cycle
-                if( sh > pftcc_glob%kfromto(2) )cycle
+                if( sh < kfromto(1) )cycle
+                if( sh > kfromto(2) )cycle
                 ! Rotation img2
                 loc = matmul(real([h,k]),rmat)
                 ! bilinear interpolation

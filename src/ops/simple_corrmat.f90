@@ -234,7 +234,7 @@ module simple_corrmat
                 call imgs(i)%fft()
                 call polartransform%polarize(pftcc, imgs(i), i, isptcl=.false., iseven=.true.)
                 call pftcc%cp_even_ref2ptcl(i, i)
-                call pftcc%mirror_pft(pftcc%pfts_refs_even(:,:,i), pftcc%pfts_refs_odd(:,:,i))
+                call pftcc%mirror_ref_pft(i)
             end do
             !!$omp end parallel do
             call pftcc%memoize_refs
@@ -320,7 +320,7 @@ module simple_corrmat
                 call imgs(i)%fft()
                 call polartransform%polarize(pftcc, imgs(i), i, isptcl=.false., iseven=.true.)
                 call pftcc%cp_even_ref2ptcl(i, i)
-                call pftcc%mirror_pft(pftcc%pfts_refs_even(:,:,i), pftcc%pfts_refs_odd(:,:,i))
+                call pftcc%mirror_ref_pft(i)
             end do
             !$omp end parallel do
             call pftcc%memoize_refs
