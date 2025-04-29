@@ -16,7 +16,6 @@ type pspecs
     private  
     real,               allocatable :: pspecs(:,:)                ! matrix of power spectra
     real,               allocatable :: pspecs_cen(:,:)            ! power spectrum centers (averages)
-    real,               allocatable :: pspec_junk(:)              ! 'junk' average power spectrum
     real,               allocatable :: pspec_good(:)              ! 'good' average power spectrum
     real,               allocatable :: pspec_bad(:)               ! 'bad'  average power spectrum
     real,               allocatable :: resarr(:)                  ! resolution values in A
@@ -24,16 +23,14 @@ type pspecs
     real,               allocatable :: dists2cens(:,:)            ! distances to center pspecs 
     real,               allocatable :: dists2good(:)              ! distances to good pspecs
     real,               allocatable :: dists2bad(:)               ! distances to bad  pspecs
-    real,               allocatable :: distmat(:,:)               ! Euclidean distance matrix
     real,               allocatable :: clsres(:)                  ! 2D class resolutions
     integer,            allocatable :: ranks(:)                   ! quality ranking
     integer,            allocatable :: order(:)                   ! quality order
-    integer,            allocatable :: clsinds_spec(:)            ! spectral class assignments, if binray: 1 is good, 2 is bad
     integer,            allocatable :: clsinds(:)                 ! 2D class assignments
+    integer,            allocatable :: clsinds_spec(:)            ! spectral class assignments, if binray: 1 is good, 2 is bad
     integer,            allocatable :: clspops(:)                 ! class populations
     integer,            allocatable :: clspops_spec(:)            ! spectral class populations
     integer,            allocatable :: ptclpops_spec(:)           ! spectral particle population
-    logical,            allocatable :: l_junk_spec(:)             ! junk spectrum assignment
     type(stats_struct), allocatable :: clsscore_stats(:)          ! 2D class score stats
     type(stats_struct), allocatable :: cls_spec_clsscore_stats(:) ! spectral class 2D class score stats
     type(stats_struct), allocatable :: cls_spec_clsres_stats(:)   ! spectral class 2D class resolution stats
@@ -43,9 +40,8 @@ type pspecs
     real                 :: dynrange_t       = 0.                 ! dynamic range threshold
     real                 :: cls_spec_score_t = 0.                 ! spectral class score
     integer              :: box              = 0                  ! box size
-    integer              :: kfromto(2)                            ! Fourier index range
+    integer              :: kfromto(2)       = [0,0]              ! Fourier index range
     integer              :: sz               = 0                  ! size of spectrum 
-    integer              :: njunk            = 0                  ! # of junk spectra
     integer              :: nspecs           = 0                  ! # of spectra
     integer              :: ncls             = 0                  ! # 2D classes
     integer              :: ncls_spec        = 0                  ! # spectral clusters
@@ -103,10 +99,10 @@ contains
         class(oris),       intent(in)    :: os_cls2D
         real,              intent(in)    :: msk, hp, lp
         integer, optional, intent(in)    :: ncls_spec
-        real,    allocatable :: pspec(:), pspec_junk(:), resarr(:)
+        real,    allocatable :: pspec(:), resarr(:)
         logical, allocatable :: mask(:)
         integer :: specinds(ncls)
-        logical :: l_valid_spectra(ncls), l_junk_class(ncls)
+        logical :: l_valid_spectra(ncls), l_junk_class
         integer :: ldim(3), icls, ispec
         real    :: dynrange
         call self%kill
@@ -122,32 +118,20 @@ contains
         self%kfromto(1) = calc_fourier_index(self%hp, self%box, self%smpd)
         self%kfromto(2) = calc_fourier_index(self%lp, self%box, self%smpd)
         self%sz         = self%kfromto(2) - self%kfromto(1) + 1
-        ! count valid spectra
+        ! flag valid spectra
         l_valid_spectra = .false.
-        ! count junk classes
-        l_junk_class    = .false.
-        ! create junk power spectrum
-        allocate(pspec_junk(self%sz), source=0.)
-        !$omp parallel do default(shared) private(icls,pspec,dynrange) reduction(+:pspec_junk) proc_bind(close) schedule(static)
+        !$omp parallel do default(shared) private(icls,pspec,dynrange,l_junk_class) proc_bind(close) schedule(static)
         do icls = 1, ncls
             call imgs(icls)%norm
-            if( density_outside_mask(imgs(icls), hp, msk) ) l_junk_class(icls) = .true.
+            if( density_outside_mask(imgs(icls), hp, msk) ) l_junk_class = .true.
             call imgs(icls)%mask(msk, 'soft')
             call imgs(icls)%spectrum('sqrt', pspec)
             dynrange = pspec(self%kfromto(1)) - pspec(self%kfromto(2))
-            if( dynrange > DYNRANGE_THRES .and. l_junk_class(icls) )then
-                pspec_junk = pspec_junk + pspec(self%kfromto(1):self%kfromto(2))
-            endif
             if( dynrange > DYNRANGE_THRES .and. os_cls2D%get_int(icls, 'pop') >= MINPOP  )then
-                if( .not. l_junk_class(icls) ) l_valid_spectra(icls) = .true.
+                if( .not. l_junk_class ) l_valid_spectra(icls) = .true.
             endif
         enddo
         !$omp end parallel do
-        self%njunk = count(l_junk_class)
-        if( self%njunk > 0 )then
-            allocate(self%pspec_junk(self%sz), source=pspec_junk/real(self%njunk))
-            deallocate(pspec_junk)
-        endif
         self%nspecs = count(l_valid_spectra)
         ! allocate arrays
         allocate(self%resarr(self%sz), source=resarr(self%kfromto(1):self%kfromto(2)))
@@ -156,7 +140,6 @@ contains
         &self%clsres(self%nspecs), source=0.)
         allocate(self%ranks(self%nspecs), self%order(self%nspecs), self%clsinds_spec(self%nspecs), self%clsinds(self%nspecs),&
         self%clspops(self%nspecs), self%clspops_spec(self%ncls_spec), self%ptclpops_spec(self%ncls_spec), source=0)
-        allocate(self%l_junk_spec(self%nspecs), source=.false.)
         allocate(self%clsscore_stats(self%nspecs), self%cls_spec_clsscore_stats(self%ncls_spec),&
         &self%cls_spec_clsres_stats(self%ncls_spec))
         ! set spectrum indices
@@ -172,16 +155,16 @@ contains
         do icls = 1, ncls
             if( l_valid_spectra(icls) )then
                 ! 2D class index
-                self%clsinds(specinds(icls))      = icls
+                self%clsinds(specinds(icls))   = icls
                 ! power spectrum
                 call imgs(icls)%spectrum('sqrt', pspec)
-                self%pspecs(specinds(icls),:)     = pspec(self%kfromto(1):self%kfromto(2))
+                self%pspecs(specinds(icls),:)  = pspec(self%kfromto(1):self%kfromto(2))
                 ! spectral dynamic range
-                self%dynranges(specinds(icls))    = self%pspecs(specinds(icls),1) - self%pspecs(specinds(icls),self%sz)
+                self%dynranges(specinds(icls)) = self%pspecs(specinds(icls),1) - self%pspecs(specinds(icls),self%sz)
                 ! 2D class population
-                self%clspops(specinds(icls))      = os_cls2D%get_int(icls, 'pop')
+                self%clspops(specinds(icls))   = os_cls2D%get_int(icls, 'pop')
                 ! 2D class resolution
-                self%clsres(specinds(icls))       = os_cls2D%get_int(icls, 'res')
+                self%clsres(specinds(icls))    = os_cls2D%get_int(icls, 'res')
                 ! mask inlcuding the FRAC_BEST_PTCLS fraction of top ranking particles in 2D class
                 mask = os_ptcl2D%gen_ptcl_mask('class', icls, FRAC_BEST_PTCLS)
                 ! score stats for the fraction of selected particles within the class
@@ -346,7 +329,6 @@ contains
         iter = 0
         l_converged = .false.
         do
-            print *, 'njunk: ', count(self%l_junk_spec)
             call self%kcluster_iter(iter, l_converged)
             if( l_converged ) exit
         end do
@@ -454,7 +436,6 @@ contains
             call self%calc_dists2cens
             ! assign clusters
             loc = minloc(self%dists2cens, dim=2)
-            where(self%l_junk_spec) loc = 0
             nchanges = count(self%clsinds_spec /= loc)
             self%clsinds_spec = loc
         endif
@@ -470,20 +451,11 @@ contains
     subroutine calc_dists2cens( self )
         class(pspecs), intent(inout) :: self
         integer :: ispec, icls_spec
-        real    :: dist2junk
-        !$omp parallel do default(shared) private(ispec,icls_spec,dist2junk) proc_bind(close)
+        !$omp parallel do default(shared) private(ispec,icls_spec) proc_bind(close)
         do ispec = 1, self%nspecs
             do icls_spec = 1, self%ncls_spec
                 self%dists2cens(ispec,icls_spec) = euclid(self%pspecs(ispec,:), self%pspecs_cen(icls_spec,:))
             end do
-            if( self%njunk > 0 )then
-                dist2junk = euclid(self%pspecs(ispec,:), self%pspec_junk)
-                if( dist2junk <= minval(self%dists2cens(ispec,:)) )then
-                    self%l_junk_spec(ispec) = .true.
-                else
-                    self%l_junk_spec(ispec) = .false.
-                endif
-            endif
         end do
         !$omp end parallel do 
     end subroutine calc_dists2cens
@@ -613,7 +585,6 @@ contains
         if( self%exists )then
             if( allocated(self%pspecs)                  ) deallocate(self%pspecs)
             if( allocated(self%pspecs_cen)              ) deallocate(self%pspecs_cen)
-            if( allocated(self%pspec_junk)              ) deallocate(self%pspec_junk)
             if( allocated(self%pspec_good)              ) deallocate(self%pspec_good)
             if( allocated(self%pspec_bad)               ) deallocate(self%pspec_bad)
             if( allocated(self%resarr)                  ) deallocate(self%resarr)
@@ -628,8 +599,7 @@ contains
             if( allocated(self%clspops)                 ) deallocate(self%clspops)
             if( allocated(self%clsres)                  ) deallocate(self%clsres)
             if( allocated(self%clspops_spec)            ) deallocate(self%clspops_spec)
-            if( allocated(self%ptclpops_spec)           ) deallocate(self%ptclpops_spec)
-            if( allocated(self%l_junk_spec)             ) deallocate(self%l_junk_spec)  
+            if( allocated(self%ptclpops_spec)           ) deallocate(self%ptclpops_spec)  
             if( allocated(self%clsscore_stats)          ) deallocate(self%clsscore_stats)
             if( allocated(self%cls_spec_clsscore_stats) ) deallocate(self%cls_spec_clsscore_stats)
             if( allocated(self%cls_spec_clsres_stats)   ) deallocate(self%cls_spec_clsres_stats)
