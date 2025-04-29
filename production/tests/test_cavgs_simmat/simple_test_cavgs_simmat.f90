@@ -4,7 +4,7 @@ include 'simple_lib.f08'
     use simple_corrmat
     use simple_parameters
     use simple_cmdline
-    character(len = 255)    :: dir1 = '/Users/atifao/test_frac_min=0.2ncls_spec=5_2025-04-23_12:37:01/rank2_cavgs.mrc'
+    character(len = 255)    :: dir1 = 'rank2_cavgs.mrc'
     integer     :: ldim(3), n_cavgs, i, N, nthr
     real        :: smpd = 2., hp = 60., lp = 10.
     real, allocatable           :: corrmat(:,:), R(:,:), X(:,:), Y(:,:)
@@ -45,7 +45,7 @@ include 'simple_lib.f08'
     call cline%set('box', N)
     call params%new(cline)
 
-    nthr = 11
+    nthr = omp_get_max_threads()
     call calc_inplane_fm( imgs4sim, hp, lp, nthr, corrmat )
 
     print *, corrmat
