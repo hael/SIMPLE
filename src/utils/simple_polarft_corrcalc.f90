@@ -1236,7 +1236,11 @@ contains
             where( abs(ctf2_odd)  > TINY ) self%pfts_refs_odd  = self%pfts_refs_odd  / ctf2_odd
             where( abs(ctf2_odd)  < TINY ) self%pfts_refs_odd  = 0.
         endif
-        call self%frp_eo_map(mapping)
+        if( trim(params_glob%test_mode).eq.'yes' )then
+            call self%frp_eo_map(mapping)
+        else
+            mapping = (/(i,i=1,self%nrefs)/)
+        endif
         ! merging even and odd
         self%pfts_refs_merg = complex(0., 0.)
         ctf2_merg           = 0.
@@ -1246,23 +1250,13 @@ contains
             iref = ref_space%find_closest_proj(orientation)
             irot = self%get_roind(orientation%e3get())
             call self%rotate_pft(self%pfts_ptcls(:,:,i), irot, pft_ptcl)
-            if( self%iseven(i) )then
-                if( self%with_ctf )then
-                    call self%rotate_pft(self%ctfmats(:,:,i), irot, rctf)
-                    self%pfts_refs_merg(:,:,iref) = self%pfts_refs_merg(:,:,iref) + pft_ptcl * cmplx(rctf)
-                    ctf2_merg(:,:,iref)           = ctf2_merg(:,:,iref)           + rctf**2
-                else
-                    self%pfts_refs_merg(:,:,iref) = self%pfts_refs_merg(:,:,iref) + pft_ptcl
-                endif
+            if( trim(params_glob%test_mode).eq.'yes' .and. (.not. self%iseven(i)) ) iref = mapping(iref)
+            if( self%with_ctf )then
+                call self%rotate_pft(self%ctfmats(:,:,i), irot, rctf)
+                self%pfts_refs_merg(:,:,iref) = self%pfts_refs_merg(:,:,iref) + pft_ptcl * cmplx(rctf)
+                ctf2_merg(:,:,iref)           = ctf2_merg(:,:,iref)           + rctf**2
             else
-                iref = mapping(iref)
-                if( self%with_ctf )then
-                    call self%rotate_pft(self%ctfmats(:,:,i), irot, rctf)
-                    self%pfts_refs_merg(:,:,iref) = self%pfts_refs_merg(:,:,iref) + pft_ptcl * cmplx(rctf)
-                    ctf2_merg(:,:,iref)           = ctf2_merg(:,:,iref)           + rctf**2
-                else
-                    self%pfts_refs_merg(:,:,iref) = self%pfts_refs_merg(:,:,iref) + pft_ptcl
-                endif
+                self%pfts_refs_merg(:,:,iref) = self%pfts_refs_merg(:,:,iref) + pft_ptcl
             endif
         enddo
         if( self%with_ctf )then
@@ -1275,8 +1269,8 @@ contains
                 numer  = sum(real(self%pfts_refs_even(:,k,iref) * conjg(self%pfts_refs_odd(:,k,mapping(iref))), kind=dp))
                 denom1 = sum( csq(self%pfts_refs_even(:,k,iref)))
                 denom2 = sum( csq(self%pfts_refs_odd( :,k,mapping(iref))))
-                if( sqrt(denom1*denom2) > TINY )then
-                    self%pfts_refs_merg(:,k,iref) = self%pfts_refs_merg(:,k,iref) * real(numer / sqrt(denom1*denom2))
+                if( dsqrt(denom1*denom2) > DTINY )then
+                    self%pfts_refs_merg(:,k,iref) = self%pfts_refs_merg(:,k,iref) * real(numer / dsqrt(denom1*denom2))
                 endif
             enddo
         enddo
@@ -1293,19 +1287,21 @@ contains
         real     :: frps(self%nrefs, self%nrefs), sum_odd, odd_dist(self%nrefs)
         logical  :: even_avail(self%nrefs)
         frps = 0.
-        do ieven = 1, self%nrefs-1
-            do iodd = ieven+1, self%nrefs
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ieven,iodd,k,numer,denom1,denom2)
+        do ieven = 1, self%nrefs
+            do iodd = ieven, self%nrefs
                 do k = self%kfromto(1), self%kfromto(2)
                     numer  = sum(real(self%pfts_refs_even(:,k,ieven) * conjg(self%pfts_refs_odd(:,k,iodd)), kind=dp))
                     denom1 = sum( csq(self%pfts_refs_even(:,k,ieven)))
                     denom2 = sum( csq(self%pfts_refs_odd( :,k,iodd)))
-                    if( sqrt(denom1*denom2) > TINY )then
-                        frps(ieven, iodd) = frps(ieven, iodd) + real(numer / sqrt(denom1*denom2))
+                    if( dsqrt(denom1*denom2) > DTINY )then
+                        frps(ieven, iodd) = frps(ieven, iodd) + real(numer / dsqrt(denom1*denom2))
                     endif
                 enddo
                 frps(iodd, ieven) = frps(ieven, iodd)
             enddo
         enddo
+        !$omp end parallel do
         ! normalization
         do ieven = 1, self%nrefs
             sum_odd = sum(frps(ieven,:))
