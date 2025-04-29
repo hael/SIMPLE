@@ -194,7 +194,7 @@ contains
         end do
         allocate(var_mat(test_count, test_count), source = 0.)
         ! add number of threads option to this procedue, and input option in cmdline
-        call calc_inplane_fast_dev(pick_vec, hp, lp, corrmat, R, X, Y, M)
+        ! call calc_inplane_fast_dev(pick_vec, hp, lp, corrmat, R, X, Y, M)
         ! print *, '>>> CALCULATING PER-PIXEL VARIANCE SQUARED'
         ! do i = 1, size(pick_vec)
         !     call pick_vec(i)%ifft()
