@@ -43,7 +43,7 @@ type heap_vars
 end type heap_vars
 
 type :: polarft_corrcalc
-    ! private
+    private
     integer                          :: nptcls     = 1              !< the total number of particles in partition (logically indexded [fromp,top])
     integer                          :: nrefs      = 1              !< the number of references (logically indexded [1,nrefs])
     integer                          :: nrots      = 0              !< number of in-plane rotations for one pft (determined by radius of molecule)
@@ -109,10 +109,12 @@ type :: polarft_corrcalc
     procedure          :: swap_ptclsevenodd
     procedure          :: set_eo
     procedure          :: set_eos
+    procedure          :: set_with_ctf
     procedure          :: assign_sigma2_noise
     ! GETTERS
     procedure          :: get_nrots
     procedure          :: get_pdim
+    procedure          :: get_kfromto
     procedure          :: get_pftsz
     procedure          :: get_rot
     procedure          :: get_roind
@@ -138,7 +140,7 @@ type :: polarft_corrcalc
     generic            :: polar2cartesian => polar2cartesian_1, polar2cartesian_2
     ! MODIFIERS
     procedure          :: shift_ptcl
-    procedure          :: mirror_pft
+    procedure          :: mirror_ref_pft
     ! MEMOIZER
     procedure          :: memoize_sqsum_ptcl
     procedure, private :: setup_npix_per_shell
@@ -182,7 +184,8 @@ type :: polarft_corrcalc
     procedure, private :: calc_frc, linear_ft_refs
     generic            :: linear_ft_ref2s => linear_ft_ref2s_1, linear_ft_ref2s_2
     procedure, private :: linear_ft_ref2s_1, linear_ft_ref2s_2
-    procedure          :: rotate_ref, rotate_ptcl, rotate_ctf
+    procedure, private :: rotate_pft_1, rotate_pft_2, rotate_pft_3
+    generic            :: rotate_pft => rotate_pft_1, rotate_pft_2, rotate_pft_3
     ! DESTRUCTOR
     procedure          :: kill
 end type polarft_corrcalc
@@ -470,6 +473,12 @@ contains
         endif
     end subroutine set_eos
 
+    subroutine set_with_ctf( self, l_wctf )
+        class(polarft_corrcalc), intent(inout) :: self
+        logical,                 intent(in)    :: l_wctf
+        self%with_ctf = l_wctf
+    end subroutine set_with_ctf
+
     subroutine assign_sigma2_noise( self, sigma2_noise )
         class(polarft_corrcalc),      intent(inout) :: self
         real,    allocatable, target, intent(inout) :: sigma2_noise(:,:)
@@ -491,6 +500,12 @@ contains
         integer :: pdim(3)
         pdim = [self%pftsz,self%kfromto(1),self%kfromto(2)]
     end function get_pdim
+
+    pure function get_kfromto( self ) result( kfromto )
+        class(polarft_corrcalc), intent(in) :: self
+        integer :: kfromto(2)
+        kfromto = [self%kfromto(1),self%kfromto(2)]
+    end function get_kfromto
 
     ! !>  \brief  for getting the dimension of the reference polar FT
     pure integer function get_pftsz( self )
@@ -803,11 +818,13 @@ contains
     end subroutine shift_ptcl
 
     ! mirror pft about h (mirror about y of cartesian image)
-    subroutine mirror_pft( self, pft, pftmirr )
-        class(polarft_corrcalc), intent(in)  :: self
-        complex(sp),             intent(in)  :: pft(1:self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(sp),             intent(out) :: pftmirr(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+    subroutine mirror_ref_pft( self, iref )
+        class(polarft_corrcalc), target, intent(in) :: self
+        integer,                         intent(in) :: iref
         integer  :: i,j
+        complex(sp), pointer :: pft(:,:) => null(), pftmirr(:,:) => null()
+        pft     => self%pfts_refs_even(:,:,iref)
+        pftmirr => self%pfts_refs_odd(:,:,iref)
         pftmirr(1,:) = conjg(pft(1,:))
         if( is_even(self%pftsz) )then
             do i = 2,self%pftsz/2
@@ -824,7 +841,7 @@ contains
                 pftmirr(j,:) = pft(i,:)
             enddo
         endif
-    end subroutine mirror_pft
+    end subroutine mirror_ref_pft
 
     ! MEMOIZERS
 
@@ -848,88 +865,68 @@ contains
         enddo
     end subroutine memoize_sqsum_ptcl
 
-    ! Reverse rotation of the reference
-    subroutine rotate_ref( self, ref, irot, ref_rot)
-        class(polarft_corrcalc), intent(inout) :: self
-        complex(dp),             intent(in)    :: ref(1:self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer,                 intent(in)    :: irot
-        complex(dp),             intent(out)   :: ref_rot(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+    subroutine rotate_pft_1( self, pft, irot, pft_rot )
+        class(polarft_corrcalc), intent(in) :: self
+        complex(dp), intent(in)  :: pft(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer,     intent(in)  :: irot
+        complex(dp), intent(out) :: pft_rot(1:self%pftsz,self%kfromto(1):self%kfromto(2))
         integer :: mid
         if( irot == 1 )then
-            ref_rot = ref
+            pft_rot = pft
         elseif( irot >= 2 .and. irot <= self%pftsz )then
             mid = self%pftsz - irot + 1
-            ref_rot(   1:irot-1,    :) = conjg(ref(mid+1:self%pftsz,:))
-            ref_rot(irot:self%pftsz,:) =       ref(    1:mid,       :)
+            pft_rot(   1:irot-1,    :) = conjg(pft(mid+1:self%pftsz,:))
+            pft_rot(irot:self%pftsz,:) =       pft(    1:mid,       :)
         elseif( irot == self%pftsz + 1 )then
-            ref_rot = conjg(ref)
+            pft_rot = conjg(pft)
         else
             mid = self%nrots - irot + 1
-            ref_rot(irot-self%pftsz:self%pftsz,       :) = conjg(ref(    1:mid,       :))
-            ref_rot(              1:irot-self%pftsz-1,:) =       ref(mid+1:self%pftsz,:)
+            pft_rot(irot-self%pftsz:self%pftsz       ,:) = conjg(pft(1    :mid,       :))
+            pft_rot(1              :irot-self%pftsz-1,:) =       pft(mid+1:self%pftsz,:)
         endif
-    end subroutine rotate_ref
+    end subroutine rotate_pft_1
 
-    ! Particle rotation
-    subroutine rotate_ptcl( self, ptcl, irot, ptcl_rot)
-        class(polarft_corrcalc), intent(inout) :: self
-        complex(sp),             intent(in)    :: ptcl(1:self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer,                 intent(in)    :: irot
-        complex(sp),             intent(out)   :: ptcl_rot(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+    subroutine rotate_pft_2( self, pft, irot, pft_rot )
+        class(polarft_corrcalc), intent(in) :: self
+        complex(sp), intent(in)  :: pft(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer,     intent(in)  :: irot
+        complex(sp), intent(out) :: pft_rot(1:self%pftsz,self%kfromto(1):self%kfromto(2))
         integer :: mid
         if( irot == 1 )then
-            ptcl_rot = ptcl
+            pft_rot = pft
         elseif( irot >= 2 .and. irot <= self%pftsz )then
             mid = self%pftsz - irot + 1
-            ptcl_rot(   1:irot-1,    :) = conjg(ptcl(mid+1:self%pftsz,:))
-            ptcl_rot(irot:self%pftsz,:) =       ptcl(    1:mid,       :)
+            pft_rot(   1:irot-1,    :) = conjg(pft(mid+1:self%pftsz,:))
+            pft_rot(irot:self%pftsz,:) =       pft(    1:mid,       :)
         elseif( irot == self%pftsz + 1 )then
-            ptcl_rot = conjg(ptcl)
+            pft_rot = conjg(pft)
         else
             mid = self%nrots - irot + 1
-            ptcl_rot(irot-self%pftsz:self%pftsz,       :) = conjg(ptcl(    1:mid,       :))
-            ptcl_rot(              1:irot-self%pftsz-1,:) =       ptcl(mid+1:self%pftsz,:)
+            pft_rot(irot-self%pftsz:self%pftsz       ,:) = conjg(pft(1    :mid,       :))
+            pft_rot(1              :irot-self%pftsz-1,:) =       pft(mid+1:self%pftsz,:)
         endif
-    end subroutine rotate_ptcl
+    end subroutine rotate_pft_2
 
-    ! Particle rotation of the CTF or any real matrix
-    subroutine rotate_ctf( self, iptcl, irot, ctf_rot, ctf)
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iptcl, irot
-        real(sp),                intent(out)   :: ctf_rot(1:self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp), optional,      intent(in)    :: ctf(    1:self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer :: i, mid
-        if( present(ctf) )then
-            if( irot == 1 )then
-                ctf_rot = ctf
-            elseif( irot >= 2 .and. irot <= self%pftsz )then
-                mid = self%pftsz - irot + 1
-                ctf_rot(   1:irot-1,    :) = ctf(mid+1:self%pftsz,:)
-                ctf_rot(irot:self%pftsz,:) = ctf(    1:mid,       :)
-            elseif( irot == self%pftsz + 1 )then
-                ctf_rot = ctf
-            else
-                mid = self%nrots - irot + 1
-                ctf_rot(irot-self%pftsz:self%pftsz,       :) = ctf(    1:mid,       :)
-                ctf_rot(              1:irot-self%pftsz-1,:) = ctf(mid+1:self%pftsz,:)
-            endif
+    subroutine rotate_pft_3( self, pft, irot, pft_rot )
+        class(polarft_corrcalc), intent(in) :: self
+        real(sp), intent(in)  :: pft(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer,  intent(in)  :: irot
+        real(sp), intent(out) :: pft_rot(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer :: mid
+        if( irot == 1 )then
+            pft_rot = pft
+        elseif( irot >= 2 .and. irot <= self%pftsz )then
+            mid = self%pftsz - irot + 1
+            pft_rot(   1:irot-1,    :) = pft(mid+1:self%pftsz,:)
+            pft_rot(irot:self%pftsz,:) = pft(    1:mid,       :)
+        elseif( irot == self%pftsz + 1 )then
+            pft_rot = pft
         else
-            i = self%pinds(iptcl)
-            if( irot == 1 )then
-                ctf_rot = self%ctfmats(:,:,i)
-            elseif( irot >= 2 .and. irot <= self%pftsz )then
-                mid = self%pftsz - irot + 1
-                ctf_rot(   1:irot-1,    :) = self%ctfmats(mid+1:self%pftsz,:,i)
-                ctf_rot(irot:self%pftsz,:) = self%ctfmats(    1:mid,       :,i)
-            elseif( irot == self%pftsz + 1 )then
-                ctf_rot = self%ctfmats(:,:,i)
-            else
-                mid = self%nrots - irot + 1
-                ctf_rot(irot-self%pftsz:self%pftsz,       :) = self%ctfmats(    1:mid,       :,i)
-                ctf_rot(              1:irot-self%pftsz-1,:) = self%ctfmats(mid+1:self%pftsz,:,i)
-            endif
+            mid = self%nrots - irot + 1
+            pft_rot(irot-self%pftsz:self%pftsz       ,:) = pft(1    :mid,       :)
+            pft_rot(1              :irot-self%pftsz-1,:) = pft(mid+1:self%pftsz,:)
         endif
-    end subroutine rotate_ctf
+    end subroutine rotate_pft_3
 
     subroutine calc_polar_ctf( self, iptcl, smpd, kv, cs, fraca, dfx, dfy, angast )
         use simple_ctf,        only: ctf
@@ -944,7 +941,7 @@ contains
         if( .not.allocated(self%ctfmats) )then
             allocate(self%ctfmats(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls), source=1.)
         endif
-        ! if(.not. self%with_ctf ) return
+        if(.not. self%with_ctf ) return
         inv_ldim = 1./real(self%ldim)
         !$omp parallel do default(shared) private(irot,k,hinv,kinv) schedule(static) proc_bind(close)
         do irot=1,self%pftsz
@@ -1214,9 +1211,9 @@ contains
             i    = self%pinds(iptcl)
             iref = ref_space%find_closest_proj(orientation)
             irot = self%get_roind(orientation%e3get())
-            call self%rotate_ptcl(self%pfts_ptcls(:,:,i), irot, pft_ptcl)
+            call self%rotate_pft(self%pfts_ptcls(:,:,i), irot, pft_ptcl)
             if( self%with_ctf )then
-                call self%rotate_ctf(iptcl, irot, rctf)
+                call self%rotate_pft(self%ctfmats(:,:,i), irot, rctf)
                 if( self%iseven(i) )then
                     self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + pft_ptcl * cmplx(rctf)
                     ctf2_even(:,:,iref)           = ctf2_even(:,:,iref)           + rctf**2
@@ -1248,10 +1245,10 @@ contains
             i    = self%pinds(iptcl)
             iref = ref_space%find_closest_proj(orientation)
             irot = self%get_roind(orientation%e3get())
-            call self%rotate_ptcl(self%pfts_ptcls(:,:,i), irot, pft_ptcl)
+            call self%rotate_pft(self%pfts_ptcls(:,:,i), irot, pft_ptcl)
             if( self%iseven(i) )then
                 if( self%with_ctf )then
-                    call self%rotate_ctf(iptcl, irot, rctf)
+                    call self%rotate_pft(self%ctfmats(:,:,i), irot, rctf)
                     self%pfts_refs_merg(:,:,iref) = self%pfts_refs_merg(:,:,iref) + pft_ptcl * cmplx(rctf)
                     ctf2_merg(:,:,iref)           = ctf2_merg(:,:,iref)           + rctf**2
                 else
@@ -1260,7 +1257,7 @@ contains
             else
                 iref = mapping(iref)
                 if( self%with_ctf )then
-                    call self%rotate_ctf(iptcl, irot, rctf)
+                    call self%rotate_pft(self%ctfmats(:,:,i), irot, rctf)
                     self%pfts_refs_merg(:,:,iref) = self%pfts_refs_merg(:,:,iref) + pft_ptcl * cmplx(rctf)
                     ctf2_merg(:,:,iref)           = ctf2_merg(:,:,iref)           + rctf**2
                 else
@@ -1486,7 +1483,7 @@ contains
         endif
         call self%gen_shmat_8(ithr, real(shvec,dp),shmat)
         pft_ref = pft_ref * shmat
-        call self%rotate_ref(pft_ref, irot, pft_rot_ref)
+        call self%rotate_pft(pft_ref, irot, pft_rot_ref)
         if( self%with_ctf ) pft_rot_ref = pft_rot_ref * self%ctfmats(:,:,i)
         select case(params_glob%cc_objfun)
         case(OBJFUN_CC)
@@ -1544,7 +1541,7 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        call self%rotate_ref(pft_ref, irot, pft_rot_ref)
+        call self%rotate_pft(pft_ref, irot, pft_rot_ref)
         if( self%with_ctf ) pft_rot_ref = pft_rot_ref * self%ctfmats(:,:,i)
         select case(params_glob%cc_objfun)
         case(OBJFUN_CC)
@@ -1700,7 +1697,7 @@ contains
         endif
         call self%gen_shmat_8(ithr, real(shvec,dp), shmat)
         pft_ref = pft_ref * shmat
-        call self%rotate_ref(pft_ref, irot, pft_rot_ref)
+        call self%rotate_pft(pft_ref, irot, pft_rot_ref)
         if( self%with_ctf ) pft_rot_ref = pft_rot_ref * real(self%ctfmats(:,:,i),dp)
         do k = self%kfromto(1),self%kfromto(2)
             num       = real(sum(pft_rot_ref(:,k)       * conjg(self%pfts_ptcls(:,k,i))),dp)
@@ -2382,10 +2379,10 @@ contains
         ! Rotate particle
         prot = self%nrots-irot+2
         if( prot > self%nrots ) prot = prot-self%nrots
-        call self%rotate_ptcl(self%pfts_ptcls(:,:,i), prot, pft_ptcl(:,:))
+        call self%rotate_pft(self%pfts_ptcls(:,:,i), prot, pft_ptcl(:,:))
         if( self%with_ctf )then
             ! Reference CTF modulation
-            call self%rotate_ctf(iptcl, prot, rctf)
+            call self%rotate_pft(self%ctfmats(:,:,i), prot, rctf)
             pft_ref_8 = pft_ref_8 * real(rctf,dp)
         endif
         select case(params_glob%cc_objfun)
@@ -2465,7 +2462,7 @@ contains
                 pft_ref_8 = self%pfts_refs_odd(:,:,iref)
             endif
             ! rotation
-            call self%rotate_ref(pft_ref_8, irot, pft_ref_tmp_8)
+            call self%rotate_pft(pft_ref_8, irot, pft_ref_tmp_8)
             ! ctf
             if( self%with_ctf ) pft_ref_tmp_8 = pft_ref_tmp_8 * self%ctfmats(:,:,i)
             gencorr_for_rot_8_1 = 0.d0
@@ -2512,7 +2509,7 @@ contains
             call self%gen_shmat_8(ithr, shvec, shmat_8)
             pft_ref_8 = pft_ref_8 * shmat_8
             ! rotation
-            call self%rotate_ref(pft_ref_8, irot, pft_ref_tmp_8)
+            call self%rotate_pft(pft_ref_8, irot, pft_ref_tmp_8)
             ! ctf
             if( self%with_ctf ) pft_ref_tmp_8 = pft_ref_tmp_8 * self%ctfmats(:,:,i)
             gencorr_for_rot_8_2 = 0.d0
@@ -2541,7 +2538,7 @@ contains
         call self%linear_ft_refs(iptcl, irefs, prefs, pft_ref, pft_ref_or_ft_ref=.true.)
         pft_ref_8 = dcmplx(pft_ref)
         ! rotation
-        call self%rotate_ref(pft_ref_8, irot, pft_ref_tmp_8)
+        call self%rotate_pft(pft_ref_8, irot, pft_ref_tmp_8)
         ! ctf
         if( self%with_ctf ) pft_ref_tmp_8 = pft_ref_tmp_8 * self%ctfmats(:,:,i)
         gencorr_for_rot_8_3 = 0.d0
@@ -2575,7 +2572,7 @@ contains
         call self%gen_shmat_8(ithr, shvec, shmat_8)
         pft_ref_8 = pft_ref_8 * shmat_8
         ! rotation
-        call self%rotate_ref(pft_ref_8, irot, pft_ref_tmp_8)
+        call self%rotate_pft(pft_ref_8, irot, pft_ref_tmp_8)
         ! ctf
         if( self%with_ctf ) pft_ref_tmp_8 = pft_ref_tmp_8 * self%ctfmats(:,:,i)
         gencorr_for_rot_8_4 = 0.d0
@@ -2710,31 +2707,31 @@ contains
         if( self%with_ctf )then
             if( params_glob%l_kweight_shift )then
                 sqsum_ptcl = self%ksqsums_ptcls(i)
-                call self%rotate_ref(pft_ref, irot, pft_ref_tmp)
+                call self%rotate_pft(pft_ref, irot, pft_ref_tmp)
                 do k = self%kfromto(1),self%kfromto(2)
                     sqsum_ref = sqsum_ref + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i)*self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
                     f         = f         + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i)                     * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
                 enddo
-                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
+                call self%rotate_pft(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
                 do k = self%kfromto(1),self%kfromto(2)
                     grad(1) = grad(1) + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
                 enddo
-                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
+                call self%rotate_pft(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
                 do k = self%kfromto(1),self%kfromto(2)
                     grad(2) = grad(2) + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
                 end do
             else
                 sqsum_ptcl = self%sqsums_ptcls(i)
-                call self%rotate_ref(pft_ref, irot, pft_ref_tmp)
+                call self%rotate_pft(pft_ref, irot, pft_ref_tmp)
                 do k = self%kfromto(1),self%kfromto(2)
                     sqsum_ref = sqsum_ref + sum(real(self%ctfmats(:,k,i)*self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
                     f         = f         + sum(real(self%ctfmats(:,k,i)                     * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
                 enddo
-                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
+                call self%rotate_pft(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
                 do k = self%kfromto(1),self%kfromto(2)
                     grad(1) = grad(1) + sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
                 enddo
-                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
+                call self%rotate_pft(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
                 do k = self%kfromto(1),self%kfromto(2)
                     grad(2) = grad(2) + sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
                 end do
@@ -2742,31 +2739,31 @@ contains
         else
             if( params_glob%l_kweight_shift )then
                 sqsum_ptcl = self%ksqsums_ptcls(i)
-                call self%rotate_ref(pft_ref, irot, pft_ref_tmp)
+                call self%rotate_pft(pft_ref, irot, pft_ref_tmp)
                 do k = self%kfromto(1),self%kfromto(2)
                     sqsum_ref = sqsum_ref + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
                     f         = f         + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
                 enddo
-                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
+                call self%rotate_pft(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
                 do k = self%kfromto(1),self%kfromto(2)
                     grad(1) = grad(1) + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
                 enddo
-                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
+                call self%rotate_pft(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
                 do k = self%kfromto(1),self%kfromto(2)
                     grad(2) = grad(2) + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
                 end do
             else
                 sqsum_ptcl = self%sqsums_ptcls(i)
-                call self%rotate_ref(pft_ref, irot, pft_ref_tmp)
+                call self%rotate_pft(pft_ref, irot, pft_ref_tmp)
                 do k = self%kfromto(1),self%kfromto(2)
                     sqsum_ref = sqsum_ref + sum(real(pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
                     f         = f         + sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
                 enddo
-                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
+                call self%rotate_pft(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
                 do k = self%kfromto(1),self%kfromto(2)
                     grad(1) = grad(1) + sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
                 enddo
-                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
+                call self%rotate_pft(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
                 do k = self%kfromto(1),self%kfromto(2)
                     grad(2) = grad(2) + sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
                 end do
@@ -2791,17 +2788,17 @@ contains
         grad     = 0.d0
         denom    = self%wsqsums_ptcls(i)
         pft_diff => self%heap_vars(ithr)%shmat_8
-        call self%rotate_ref(pft_ref, irot, pft_ref_tmp)
+        call self%rotate_pft(pft_ref, irot, pft_ref_tmp)
         if( self%with_ctf ) pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:,i)
         pft_diff = pft_ref_tmp - self%pfts_ptcls(:,:,i) ! Ref(shift + rotation + CTF) - Ptcl
-        call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
+        call self%rotate_pft(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
         if( self%with_ctf ) pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:,i)
         do k = self%kfromto(1),self%kfromto(2)
             w       = real(k,dp) / real(self%sigma2_noise(k,iptcl))
             f       = f + w * sum(real(pft_diff(:,k)*conjg(pft_diff(:,k)),dp))
             grad(1) = grad(1) + w * real(sum(pft_ref_tmp(:,k) * conjg(pft_diff(:,k))),dp)
         end do
-        call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
+        call self%rotate_pft(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
         if( self%with_ctf ) pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:,i)
         do k = self%kfromto(1),self%kfromto(2)
             w      = real(k,dp) / real(self%sigma2_noise(k,iptcl))
@@ -2896,29 +2893,29 @@ contains
         if( self%with_ctf )then
             if( params_glob%l_kweight_shift )then
                 sqsum_ptcl = self%ksqsums_ptcls(i)
-                call self%rotate_ref(pft_ref, irot, pft_ref_tmp)
+                call self%rotate_pft(pft_ref, irot, pft_ref_tmp)
                 do k = self%kfromto(1),self%kfromto(2)
                     sqsum_ref = sqsum_ref + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i)*self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
                 enddo
-                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
+                call self%rotate_pft(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
                 do k = self%kfromto(1),self%kfromto(2)
                     grad(1) = grad(1) + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
                 enddo
-                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
+                call self%rotate_pft(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
                 do k = self%kfromto(1),self%kfromto(2)
                     grad(2) = grad(2) + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
                 end do
             else
                 sqsum_ptcl = self%sqsums_ptcls(i)
-                call self%rotate_ref(pft_ref, irot, pft_ref_tmp)
+                call self%rotate_pft(pft_ref, irot, pft_ref_tmp)
                 do k = self%kfromto(1),self%kfromto(2)
                     sqsum_ref = sqsum_ref + sum(real(self%ctfmats(:,k,i)*self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
                 enddo
-                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
+                call self%rotate_pft(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
                 do k = self%kfromto(1),self%kfromto(2)
                     grad(1) = grad(1) + sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
                 enddo
-                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
+                call self%rotate_pft(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
                 do k = self%kfromto(1),self%kfromto(2)
                     grad(2) = grad(2) + sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
                 end do
@@ -2926,29 +2923,29 @@ contains
         else
             if( params_glob%l_kweight_shift )then
                 sqsum_ptcl = self%ksqsums_ptcls(i)
-                call self%rotate_ref(pft_ref, irot, pft_ref_tmp)
+                call self%rotate_pft(pft_ref, irot, pft_ref_tmp)
                 do k = self%kfromto(1),self%kfromto(2)
                     sqsum_ref = sqsum_ref + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
                 enddo
-                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
+                call self%rotate_pft(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
                 do k = self%kfromto(1),self%kfromto(2)
                     grad(1) = grad(1) + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
                 enddo
-                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
+                call self%rotate_pft(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
                 do k = self%kfromto(1),self%kfromto(2)
                     grad(2) = grad(2) + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
                 end do
             else
                 sqsum_ptcl = self%sqsums_ptcls(i)
-                call self%rotate_ref(pft_ref, irot, pft_ref_tmp)
+                call self%rotate_pft(pft_ref, irot, pft_ref_tmp)
                 do k = self%kfromto(1),self%kfromto(2)
                     sqsum_ref = sqsum_ref + sum(real(pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
                 enddo
-                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
+                call self%rotate_pft(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
                 do k = self%kfromto(1),self%kfromto(2)
                     grad(1) = grad(1) + sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
                 enddo
-                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
+                call self%rotate_pft(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
                 do k = self%kfromto(1),self%kfromto(2)
                     grad(2) = grad(2) + sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
                 end do
@@ -2979,7 +2976,7 @@ contains
         call self%gen_shmat_8(ithr, shvec, shmat_8)
         pft_ref_8 = pft_ref_8 * shmat_8
         ! rotation
-        call self%rotate_ref(pft_ref_8, irot, pft_ref_tmp_8)
+        call self%rotate_pft(pft_ref_8, irot, pft_ref_tmp_8)
         ! ctf
         if( self%with_ctf ) pft_ref_tmp_8 = pft_ref_tmp_8 * self%ctfmats(:,:,i)
         ! correlation
@@ -3022,10 +3019,10 @@ contains
             pft_dref_8(:,:,j) = pft_dref_8(:,:,j) * shmat_8
         end do
         ! rotation
-        call self%rotate_ref(pft_ref_8, irot, pft_ref_tmp_8)
+        call self%rotate_pft(pft_ref_8, irot, pft_ref_tmp_8)
         pft_ref_8 = pft_ref_tmp_8
         do j = 1,3
-            call self%rotate_ref(pft_dref_8(:,:,j), irot, pft_ref_tmp_8)
+            call self%rotate_pft(pft_dref_8(:,:,j), irot, pft_ref_tmp_8)
             pft_dref_8(:,:,j) = pft_ref_tmp_8
         end do
         ! ctf
@@ -3084,10 +3081,10 @@ contains
             pft_dref_8(:,:,j) = pft_dref_8(:,:,j) * shmat_8
         end do
         ! rotation
-        call self%rotate_ref(pft_ref_8, irot, pft_ref_tmp_8)
+        call self%rotate_pft(pft_ref_8, irot, pft_ref_tmp_8)
         pft_ref_8 = pft_ref_tmp_8
         do j = 1,3
-            call self%rotate_ref(pft_dref_8(:,:,j), irot, pft_ref_tmp_8)
+            call self%rotate_pft(pft_dref_8(:,:,j), irot, pft_ref_tmp_8)
             pft_dref_8(:,:,j) = pft_ref_tmp_8
         end do
         ! ctf
@@ -3173,7 +3170,7 @@ contains
         call self%gen_shmat_8(ithr, real(shvec,dp), shmat_8)
         pft_ref_8 = pft_ref_8 * shmat_8
         ! rotation
-        call self%rotate_ref(pft_ref_8, irot, pft_ref_tmp_8)
+        call self%rotate_pft(pft_ref_8, irot, pft_ref_tmp_8)
         ! ctf
         if( self%with_ctf ) pft_ref_tmp_8 = pft_ref_tmp_8 * real(self%ctfmats(:,:,i),dp)
         ! difference

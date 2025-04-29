@@ -161,10 +161,10 @@ contains
         integer,                 allocatable   :: locn(:,:)
         type(pftcc_shsrch_grad) :: grad_shsrch_obj(nthr_glob) !< origin shift search object, L-BFGS with gradient
         type(ori)               :: o_prev
-        integer :: i, j, iproj, iptcl, n, projs_ns, ithr, irot, inds_sorted(pftcc%nrots,nthr_glob), istate, iref_start, iref
+        integer :: i, j, iproj, iptcl, n, projs_ns, ithr, irot, inds_sorted(pftcc%get_nrots(),nthr_glob), istate, iref_start, iref
         logical :: l_doshift
         real    :: rotmat(2,2), lims(2,2), lims_init(2,2), cxy(3), cxy_prob(3), rot_xy(2), inpl_athres(self%nstates)
-        real    :: dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob), dists_refs(self%nrefs,nthr_glob)
+        real    :: dists_inpl(pftcc%get_nrots(),nthr_glob), dists_inpl_sorted(pftcc%get_nrots(),nthr_glob), dists_refs(self%nrefs,nthr_glob)
         call seed_rnd
         projs_ns = 0
         do istate = 1, self%nstates

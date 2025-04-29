@@ -2059,7 +2059,7 @@ contains
             ! particles & even refs are the same, odd refs are even mirrored
             call polartransform%polarize(pftcc, cavg_imgs(icls), icls, isptcl=.false., iseven=.true.)
             call pftcc%cp_even_ref2ptcl(icls,icls)
-            call pftcc%mirror_pft(pftcc%pfts_refs_even(:,:,icls), pftcc%pfts_refs_odd(:,:,icls))            
+            call pftcc%mirror_ref_pft(icls)            
         end do
         !$omp end parallel do
         call pftcc%memoize_refs
@@ -2874,7 +2874,7 @@ contains
             ! particles & even refs are the same, odd refs are even mirrored
             call polartransform%polarize(pftcc, cavg_imgs(icls), icls, isptcl=.false., iseven=.true.)
             call pftcc%cp_even_ref2ptcl(icls,icls)
-            if( l_mirr ) call pftcc%mirror_pft(pftcc%pfts_refs_even(:,:,icls), pftcc%pfts_refs_odd(:,:,icls))
+            if( l_mirr ) call pftcc%mirror_ref_pft(icls)
         end do
         !$omp end parallel do
         call pftcc%memoize_refs

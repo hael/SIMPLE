@@ -94,7 +94,6 @@ type(simple_program), target :: extract_subproj
 type(simple_program), target :: autorefine3D_nano
 type(simple_program), target :: binarize
 type(simple_program), target :: calc_pspec
-type(simple_program), target :: cavg_filter2D
 type(simple_program), target :: cavgsproc_nano
 type(simple_program), target :: cavgseoproc_nano
 type(simple_program), target :: ptclsproc_nano
@@ -425,7 +424,6 @@ contains
         call new_autorefine3D_nano
         call new_binarize
         call new_calc_pspec
-        call new_cavg_filter2D
         call new_cavgsproc_nano
         call new_cavgseoproc_nano
         call new_ptclsproc_nano
@@ -578,7 +576,6 @@ contains
         call push2prg_ptr_array(autorefine3D_nano)
         call push2prg_ptr_array(binarize)
         call push2prg_ptr_array(calc_pspec)
-        call push2prg_ptr_array(cavg_filter2D)
         call push2prg_ptr_array(cavgsproc_nano)
         call push2prg_ptr_array(cavgseoproc_nano)
         call push2prg_ptr_array(ptclsproc_nano)
@@ -760,8 +757,6 @@ contains
                 ptr2prg => binarize
             case('calc_pspec')
                 ptr2prg => calc_pspec
-            case('cavg_filter2D')
-                ptr2prg => cavg_filter2D
             case('cavgsproc_nano')
                 ptr2prg => cavgsproc_nano
             case('cavgseoproc_nano')
@@ -1037,7 +1032,6 @@ contains
         write(logfhandle,'(A)') auto_spher_mask%name
         write(logfhandle,'(A)') binarize%name
         write(logfhandle,'(A)') calc_pspec%name
-        write(logfhandle,'(A)') cavg_filter2D%name
         write(logfhandle,'(A)') center%name
         write(logfhandle,'(A)') check_states%name
         write(logfhandle,'(A)') cleanup2D%name
@@ -1773,32 +1767,6 @@ contains
         call calc_pspec%set_input('comp_ctrls', 1, nparts)
         call calc_pspec%set_input('comp_ctrls', 2, nthr)
     end subroutine new_calc_pspec
-
-    subroutine new_cavg_filter2D
-        ! PROGRAM SPECIFICATION
-        call cavg_filter2D%new(&
-        &'cavg_filter2D',&                                                  ! name
-        &'Different filter/data reduction of particles in cavgs',&          ! descr_short
-        &'is a program for different filter/data reduction of particles in cavgs',& ! descr_long
-        &'simple_exec',&                                                    ! executable
-        &0, 2, 0, 0, 1, 0, 1, .false.)                                      ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call cavg_filter2D%set_input('parm_ios', 1, smpd)
-        call cavg_filter2D%set_input('parm_ios', 2,  'class', 'num', 'Class index', 'Index of class to extract', 'give class index', .true., 1.)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        call cavg_filter2D%set_input('filt_ctrls', 1, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .true., 3.)
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call cavg_filter2D%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_cavg_filter2D
 
     subroutine new_cavgsproc_nano
         ! PROGRAM SPECIFICATION
