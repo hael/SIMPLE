@@ -123,7 +123,7 @@ contains
         !$omp parallel do default(shared) private(icls,pspec,dynrange,l_junk_class) proc_bind(close) schedule(static)
         do icls = 1, ncls
             call imgs(icls)%norm
-            if( density_outside_mask(imgs(icls), hp, msk) ) l_junk_class = .true.
+            l_junk_class = density_outside_mask(imgs(icls), hp, msk)
             call imgs(icls)%mask(msk, 'soft')
             call imgs(icls)%spectrum('sqrt', pspec)
             dynrange = pspec(self%kfromto(1)) - pspec(self%kfromto(2))
