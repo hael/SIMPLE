@@ -13,18 +13,13 @@ private
 #include "simple_local_flags.inc"
 
 type pspecs
-    private  
+    private
+    real,               allocatable :: resarr(:)                  ! resolution values in A
     real,               allocatable :: pspecs(:,:)                ! matrix of power spectra
     real,               allocatable :: pspecs_cen(:,:)            ! power spectrum centers (averages)
-    real,               allocatable :: pspec_good(:)              ! 'good' average power spectrum
-    real,               allocatable :: pspec_bad(:)               ! 'bad'  average power spectrum
-    real,               allocatable :: resarr(:)                  ! resolution values in A
-    real,               allocatable :: dynranges(:)               ! dynamic ranges of power spectra
+    real,               allocatable :: distmat(:,:)               ! distance matrix
     real,               allocatable :: dists2cens(:,:)            ! distances to center pspecs 
-    real,               allocatable :: dists2good(:)              ! distances to good pspecs
-    real,               allocatable :: dists2bad(:)               ! distances to bad  pspecs
     real,               allocatable :: clsres(:)                  ! 2D class resolutions
-    integer,            allocatable :: ranks(:)                   ! quality ranking
     integer,            allocatable :: order(:)                   ! quality order
     integer,            allocatable :: clsinds(:)                 ! 2D class assignments
     integer,            allocatable :: clsinds_spec(:)            ! spectral class assignments, if binray: 1 is good, 2 is bad
@@ -37,44 +32,32 @@ type pspecs
     real                 :: smpd             = 0.                 ! sampling distance
     real                 :: hp               = 0.                 ! high-pass limit
     real                 :: lp               = 0.                 ! low-pass limit
-    real                 :: dynrange_t       = 0.                 ! dynamic range threshold
-    real                 :: cls_spec_score_t = 0.                 ! spectral class score
     integer              :: box              = 0                  ! box size
     integer              :: kfromto(2)       = [0,0]              ! Fourier index range
     integer              :: sz               = 0                  ! size of spectrum 
     integer              :: nspecs           = 0                  ! # of spectra
     integer              :: ncls             = 0                  ! # 2D classes
     integer              :: ncls_spec        = 0                  ! # spectral clusters
-    integer              :: ngood            = 0                  ! # good power spectra
-    integer              :: nbad             = 0                  ! # bad power spectra
     logical              :: exists           = .false.            ! existence flag
 contains
     ! constructor
     procedure            :: new
     ! getters & setters
     procedure            :: get_nspecs
-    procedure            :: get_frac_good
-    procedure            :: get_ngood
-    procedure            :: set_ngood
-    procedure            :: get_good_bad_state_arr
     procedure            :: get_clsind_spec_state_arr
-    procedure            :: get_ordered_clsind
     ! plotting
     procedure            :: plot_all
-    procedure            :: plot_good_bad
     procedure            :: plot_cens
-    procedure            :: plot_all_ranked
-    ! clustering 
-    procedure            :: dynrange_cen_init
-    procedure            :: kmeans_cls_pspecs_and_rank
+    ! clustering
+    procedure, private   :: calc_distmat
+    procedure, private   :: medoid_cen_init
+    procedure            :: kmeans_cls_pspecs
     ! calculators
-    procedure            :: median_good_clspop
     procedure, private   :: calc_pspec_cls_avgs
     procedure, private   :: kcluster_iter
     procedure, private   :: calc_dists2cens
-    procedure, private   :: rank_pspecs
+    procedure, private   :: cls_spec_avg_dist
     procedure, private   :: calc_cls_spec_stats
-    procedure, private   :: rank_spectral_classes
     ! destructor
     procedure            :: kill
 end type pspecs
@@ -98,7 +81,7 @@ contains
         class(oris),       intent(inout) :: os_ptcl2D
         class(oris),       intent(in)    :: os_cls2D
         real,              intent(in)    :: msk, hp, lp
-        integer, optional, intent(in)    :: ncls_spec
+        integer,           intent(in)    :: ncls_spec
         real,    allocatable :: pspec(:), resarr(:)
         logical, allocatable :: mask(:)
         integer :: specinds(ncls)
@@ -106,14 +89,13 @@ contains
         integer :: ldim(3), icls, ispec
         real    :: dynrange
         call self%kill
-        self%ncls_spec  = 2 ! binary clustering by default
-        if( present(ncls_spec) ) self%ncls_spec = ncls_spec
         self%ncls       = ncls
         ldim            = imgs(1)%get_ldim()
         self%box        = ldim(1)
         self%smpd       = imgs(1)%get_smpd()
         self%hp         = hp
         self%lp         = lp
+        self%ncls_spec  = ncls_spec
         resarr          = get_resarr(self%box, self%smpd)
         self%kfromto(1) = calc_fourier_index(self%hp, self%box, self%smpd)
         self%kfromto(2) = calc_fourier_index(self%lp, self%box, self%smpd)
@@ -135,10 +117,10 @@ contains
         self%nspecs = count(l_valid_spectra)
         ! allocate arrays
         allocate(self%resarr(self%sz), source=resarr(self%kfromto(1):self%kfromto(2)))
-        allocate(self%pspecs(self%nspecs,self%sz), self%pspecs_cen(self%ncls_spec,self%sz), self%dynranges(self%nspecs),&
-        &self%dists2cens(self%nspecs,self%ncls_spec), self%dists2good(self%nspecs), self%dists2bad(self%nspecs),&
-        &self%clsres(self%nspecs), source=0.)
-        allocate(self%ranks(self%nspecs), self%order(self%nspecs), self%clsinds_spec(self%nspecs), self%clsinds(self%nspecs),&
+        allocate(self%pspecs(self%nspecs,self%sz), self%pspecs_cen(self%ncls_spec,self%sz),&
+        &self%distmat(self%nspecs,self%nspecs),&
+        &self%dists2cens(self%nspecs,self%ncls_spec), self%clsres(self%nspecs), source=0.)
+        allocate(self%order(self%nspecs), self%clsinds_spec(self%nspecs), self%clsinds(self%nspecs),&
         self%clspops(self%nspecs), self%clspops_spec(self%ncls_spec), self%ptclpops_spec(self%ncls_spec), source=0)
         allocate(self%clsscore_stats(self%nspecs), self%cls_spec_clsscore_stats(self%ncls_spec),&
         &self%cls_spec_clsres_stats(self%ncls_spec))
@@ -159,8 +141,6 @@ contains
                 ! power spectrum
                 call imgs(icls)%spectrum('sqrt', pspec)
                 self%pspecs(specinds(icls),:)  = pspec(self%kfromto(1):self%kfromto(2))
-                ! spectral dynamic range
-                self%dynranges(specinds(icls)) = self%pspecs(specinds(icls),1) - self%pspecs(specinds(icls),self%sz)
                 ! 2D class population
                 self%clspops(specinds(icls))   = os_cls2D%get_int(icls, 'pop')
                 ! 2D class resolution
@@ -185,36 +165,6 @@ contains
         nspecs = self%nspecs
     end function get_nspecs
 
-    function get_frac_good( self, ngood, nptcls ) result( frac_good )
-        class(pspecs), intent(in) :: self
-        integer,       intent(in) :: ngood, nptcls
-        real :: frac_good
-        frac_good = (real(sum(self%clspops, mask=self%ranks <= ngood))/real(nptcls))
-    end function get_frac_good
-
-    function get_ngood( self ) result( ngood )
-        class(pspecs), intent(in) :: self
-        integer :: ngood
-        ngood = self%ngood
-    end function get_ngood
-
-    subroutine set_ngood( self, ngood )
-        class(pspecs), intent(inout) :: self
-        integer,       intent(in)    :: ngood
-        self%ngood = ngood
-        self%nbad  = self%nspecs - ngood
-    end subroutine set_ngood
-
-    function get_good_bad_state_arr( self ) result( states )
-        class(pspecs), intent(in) :: self
-        integer, allocatable :: states(:)
-        integer :: ispec
-        allocate(states(self%ncls), source=0)
-        do ispec = 1, self%nspecs
-            if( self%ranks(ispec) <= self%ngood ) states(self%clsinds(ispec)) = 1
-        end do
-    end function get_good_bad_state_arr
-
     function get_clsind_spec_state_arr( self ) result( states )
         class(pspecs), intent(in) :: self
         integer, allocatable :: states(:)
@@ -227,22 +177,7 @@ contains
         enddo
     end function get_clsind_spec_state_arr
 
-    function get_ordered_clsind( self, ispec ) result( clsind )
-        class(pspecs), intent(in) :: self
-        integer,       intent(in) :: ispec
-        integer :: clsind
-        if( ispec < 1 .or. ispec > self%nspecs ) THROW_HARD('ispec index out of range')
-        clsind = self%clsinds(self%order(ispec))
-    end function get_ordered_clsind
-
     ! plotting
-
-    subroutine plot_good_bad( self, fbody_good, fbody_bad )
-        class(pspecs),    intent(in) :: self
-        character(len=*), intent(in) :: fbody_good, fbody_bad
-        call plot_fsc(self%sz, self%pspec_good, self%resarr, self%smpd, fbody_good)
-        call plot_fsc(self%sz, self%pspec_bad,  self%resarr, self%smpd, fbody_bad)
-    end subroutine plot_good_bad
 
     subroutine plot_cens( self, fbody )
         class(pspecs),    intent(in)  :: self
@@ -271,144 +206,100 @@ contains
         end do
     end subroutine plot_all
 
-    subroutine plot_all_ranked( self, fbody )
-        class(pspecs),               intent(in) :: self
-        character(len=*),  optional, intent(in) :: fbody
-        character(len=:), allocatable :: ffbody, fffbody
-        integer :: ispec
-        if( present(fbody) )then
-            allocate(ffbody, source=trim(fbody))
-        else
-            allocate(ffbody, source='power_spectrum')
-        endif
-        do ispec = 1, self%nspecs
-            fffbody = ffbody//'_rank'//int2str_pad(self%ranks(ispec),3)
-            call plot_fsc(self%sz, self%pspecs(self%order(ispec),:), self%resarr, self%smpd, fffbody)
-        end do
-    end subroutine plot_all_ranked
-
     ! clustering
 
-    ! make initial grouping based on dynamic range ranking
-    subroutine dynrange_cen_init( self )
+    subroutine calc_distmat( self )
         class(pspecs), intent(inout) :: self
-        real, allocatable :: tmp(:)
-        integer           :: ispec
-        real              :: dist
-        real              :: transl_tab(self%ncls_spec)
-        tmp = pack(self%dynranges, mask=self%dynranges > DYNRANGE_THRES)
-        if( self%ncls_spec == 2 )then
-            call otsu(size(tmp), tmp, self%dynrange_t)
-            do ispec = 1, self%nspecs
-                if( self%dynranges(ispec) >= self%dynrange_t )then
-                    self%clsinds_spec(ispec) = CLASS_GOOD
-                else
-                    self%clsinds_spec(ispec) = CLASS_BAD
-                endif
-            enddo
-        else
-            call quantize_vec_serial(tmp, self%ncls_spec, transl_tab)
-            ! assign clusters
-            do ispec = 1, self%nspecs
-                call find(transl_tab, self%ncls_spec, self%dynranges(ispec), self%clsinds_spec(ispec), dist)
+        integer :: i, j
+        self%distmat = 0.
+        !$omp parallel do default(shared) private(i,j) proc_bind(close) schedule(dynamic)
+        do i = 1, self%nspecs - 1
+            do j = i + 1, self%nspecs
+                self%distmat(i,j) = euclid(self%pspecs(i,:),self%pspecs(j,:))
+                self%distmat(j,i) = self%distmat(i,j)
             end do
-        endif
-        deallocate(tmp)
-    end subroutine dynrange_cen_init 
+        end do
+        !$omp end parallel do
+    end subroutine calc_distmat
+
+    ! make initial grouping based on dynamic range ranking
+    subroutine medoid_cen_init( self )
+        class(pspecs), intent(inout) :: self
+        integer, allocatable :: parts(:,:)
+        real    :: medoid_dists(self%nspecs)
+        integer :: ispec, i_medoid, icls_spec
+        ! calculate distance matrix
+        call self%calc_distmat
+        ! identify medoid
+        call medoid_from_dmat(self%distmat, i_medoid)
+        ! order spectra according to similarity to medoid
+        !$omp parallel do default(shared) private(ispec) proc_bind(close)
+        do ispec = 1, self%nspecs
+            medoid_dists(ispec) = euclid(self%pspecs(ispec,:), self%pspecs(i_medoid,:))
+        end do
+        !$omp end parallel do
+        self%order = (/(ispec,ispec=1,self%nspecs)/)
+        call hpsort(medoid_dists, self%order)
+        parts = split_nobjs_even(self%nspecs, self%ncls_spec)
+        ! assign classes based on similarity to medoid
+        do icls_spec = 1, self%ncls_spec
+            do ispec = parts(icls_spec,1), parts(icls_spec,2)
+                self%clsinds_spec(self%order(ispec)) = icls_spec
+            end do
+        end do
+        deallocate(parts)
+    end subroutine medoid_cen_init
 
     ! k-means clustering of power spectra
-    subroutine kmeans_cls_pspecs_and_rank( self, states ) 
+    subroutine kmeans_cls_pspecs( self, states ) 
         class(pspecs),        intent(inout) :: self
         integer, allocatable, intent(inout) :: states(:)
         integer :: iter
         logical :: l_converged
         write(logfhandle,'(A)') 'K-MEANS CLUSTERING OF POWERSPECTRA'
-        call self%dynrange_cen_init
+        call self%medoid_cen_init
         call self%calc_pspec_cls_avgs
-        if( self%ncls_spec == 2 ) call self%plot_good_bad('pspec_good_dynrange', 'pspec_bad_dynrange')
         iter = 0
         l_converged = .false.
         do
             call self%kcluster_iter(iter, l_converged)
             if( l_converged ) exit
         end do
-        if( self%ncls_spec == 2 )then
-            call self%plot_good_bad('pspec_good_kmeans', 'pspec_bad_kmeans')
-            call self%rank_pspecs
-        else
-            call self%calc_cls_spec_stats(l_print=.false.)
-            call self%rank_spectral_classes
-            call self%calc_cls_spec_stats(l_print=.true.)
-        endif
+        call self%calc_cls_spec_stats(l_print=.true.)
         if( allocated(states) ) deallocate(states)
         states = self%get_clsind_spec_state_arr()
-    end subroutine kmeans_cls_pspecs_and_rank
+    end subroutine kmeans_cls_pspecs
 
     ! calculators
 
-    function median_good_clspop( self ) result( med )
-        class(pspecs), intent(in) :: self
-        real, allocatable :: clspops_good(:)
-        real :: med
-        clspops_good = real(pack(self%clspops, mask=self%clsinds_spec == CLASS_GOOD))
-        med = median(clspops_good)
-    end function median_good_clspop
-
     subroutine calc_pspec_cls_avgs( self )
         class(pspecs), intent(inout) :: self
-        real, allocatable :: pspec_good(:), pspec_bad(:)
         integer :: icls_spec, ispec
-        if( self%ncls_spec == 2 )then
-            allocate(pspec_good(self%sz), pspec_bad(self%sz), source=0.)
-            !$omp parallel do default(shared) private(ispec) proc_bind(close) reduction(+:pspec_good,pspec_bad) schedule(static)
+        ! accumulate class sums and populations
+        !$omp parallel default(shared) private(icls_spec,ispec) proc_bind(close)
+        !$omp do schedule(static)
+        do icls_spec = 1, self%ncls_spec
+            self%pspecs_cen(icls_spec,:) = 0.
+            self%clspops_spec(icls_spec) = 0
             do ispec = 1, self%nspecs
-                select case(self%clsinds_spec(ispec))
-                    case(CLASS_GOOD)
-                        pspec_good = pspec_good + self%pspecs(ispec,:)
-                    case(CLASS_BAD)
-                        pspec_bad  = pspec_bad  + self%pspecs(ispec,:)
-                end select
-            enddo
-            !$omp end parallel do
-            self%ngood = count(self%clsinds_spec == CLASS_GOOD)
-            self%nbad  = count(self%clsinds_spec == CLASS_BAD)
-            if( allocated(self%pspec_good) )then
-                self%pspec_good = pspec_good / real(self%ngood)
-            else
-                allocate(self%pspec_good(self%sz), source=pspec_good / real(self%ngood))
-            endif
-            if( allocated(self%pspec_bad)  )then
-                self%pspec_bad  = pspec_bad  / real(self%nbad)
-            else
-                allocate(self%pspec_bad(self%sz),  source=pspec_bad  / real(self%nbad))
-            endif
-        else
-            ! accumulate class sums and populations
-            !$omp parallel default(shared) private(icls_spec,ispec) proc_bind(close)
-            !$omp do schedule(static)
-            do icls_spec = 1, self%ncls_spec
-                self%pspecs_cen(icls_spec,:) = 0.
-                self%clspops_spec(icls_spec) = 0
-                do ispec = 1, self%nspecs
-                    if( self%clsinds_spec(ispec) == icls_spec )then
-                        self%pspecs_cen(icls_spec,:) = self%pspecs_cen(icls_spec,:) + self%pspecs(ispec,:)
-                        self%clspops_spec(icls_spec) = self%clspops_spec(icls_spec) + 1
-                    endif
-                end do
-            end do
-            !$omp end do
-            ! calculate class averages
-            !$omp do schedule(static)
-            do icls_spec = 1, self%ncls_spec
-                if( self%clspops_spec(icls_spec) > 0 )then
-                    self%pspecs_cen(icls_spec,:) = self%pspecs_cen(icls_spec,:) / real(self%clspops_spec(icls_spec))
-                else
-                    self%pspecs_cen(icls_spec,:) = 0.
+                if( self%clsinds_spec(ispec) == icls_spec )then
+                    self%pspecs_cen(icls_spec,:) = self%pspecs_cen(icls_spec,:) + self%pspecs(ispec,:)
+                    self%clspops_spec(icls_spec) = self%clspops_spec(icls_spec) + 1
                 endif
-            enddo
-            !$omp end do
-            !$omp end parallel 
-        endif
+            end do
+        end do
+        !$omp end do
+        ! calculate class averages
+        !$omp do schedule(static)
+        do icls_spec = 1, self%ncls_spec
+            if( self%clspops_spec(icls_spec) > 0 )then
+                self%pspecs_cen(icls_spec,:) = self%pspecs_cen(icls_spec,:) / real(self%clspops_spec(icls_spec))
+            else
+                self%pspecs_cen(icls_spec,:) = 0.
+            endif
+        enddo
+        !$omp end do
+        !$omp end parallel 
     end subroutine calc_pspec_cls_avgs
 
     subroutine kcluster_iter( self, iter, l_converged )
@@ -416,33 +307,23 @@ contains
         integer,       intent(inout) :: iter
         logical,       intent(inout) :: l_converged
         integer :: nchanges, ispec, loc(self%nspecs)
-        if( self%ncls_spec == 2 )then
-            nchanges = 0
-            ! assign clusters
-            !$omp parallel do default(shared) private(ispec) proc_bind(close)
-            do ispec = 1,self%nspecs
-                self%dists2good(ispec) = euclid(self%pspec_good,self%pspecs(ispec,:))
-                self%dists2bad(ispec)  = euclid(self%pspec_bad, self%pspecs(ispec,:))
-                if( self%dists2good(ispec) <= self%dists2bad(ispec) )then ! is good
-                    if( self%clsinds_spec(ispec) == CLASS_BAD ) nchanges = nchanges + 1
-                    self%clsinds_spec(ispec) = CLASS_GOOD
-                else                                                      ! is bad
-                    if( self%clsinds_spec(ispec) == CLASS_GOOD ) nchanges = nchanges + 1
-                    self%clsinds_spec(ispec) = CLASS_BAD
-                endif
-            end do
-        else
-            ! calculate distances
-            call self%calc_dists2cens
-            ! assign clusters
-            loc = minloc(self%dists2cens, dim=2)
-            nchanges = count(self%clsinds_spec /= loc)
-            self%clsinds_spec = loc
-        endif
+        real    :: dist
+        ! calculate distances
+        call self%calc_dists2cens
+        ! assign clusters
+        loc = minloc(self%dists2cens, dim=2)
+        nchanges = count(self%clsinds_spec /= loc)
+        self%clsinds_spec = loc
         ! find cluster centers
         call self%calc_pspec_cls_avgs
         ! update iteration counter
         iter = iter + 1
+        ! report joint distance
+        dist = 0.
+        do ispec = 1, self%nspecs
+            dist = dist + self%dists2cens(ispec,self%clsinds_spec(ispec))
+        end do
+        write(logfhandle,'(a,1x,f8.2)') 'ITER: '//int2str(iter)//' DIST: ', dist
         ! set l_converged flag
         l_converged = .false.
         if( nchanges == 0 .or. iter == MAXITS) l_converged = .true.
@@ -460,44 +341,21 @@ contains
         !$omp end parallel do 
     end subroutine calc_dists2cens
 
-    subroutine rank_pspecs( self )
+    function cls_spec_avg_dist( self, icls_spec ) result( dist )
         class(pspecs), intent(inout) :: self
-        real,    allocatable :: dists_good(:), dists_bad(:)
-        integer, allocatable :: inds_good(:), inds_bad(:)
-        integer :: ispec, rank
-        self%ngood = count(self%clsinds_spec == CLASS_GOOD)
-        self%nbad  = count(self%clsinds_spec == CLASS_BAD)
-        allocate(dists_good(self%ngood), dists_bad(self%nbad), source=0.)
-        allocate(inds_good(self%ngood),  inds_bad(self%nbad),  source=0)
-        self%ngood = 0
-        self%nbad  = 0
+        integer,       intent(in)    :: icls_spec
+        real    :: dist
+        integer :: ispec, cnt
+        dist = 0.
+        cnt  = 0
         do ispec = 1, self%nspecs
-            select case(self%clsinds_spec(ispec))
-                case(CLASS_GOOD)
-                    self%ngood             = self%ngood + 1
-                    dists_good(self%ngood) = self%dists2good(ispec)
-                    inds_good(self%ngood)  = ispec
-                case(CLASS_BAD)
-                    self%nbad              = self%nbad + 1
-                    dists_bad(self%nbad)   = self%dists2good(ispec)
-                    inds_bad(self%nbad)    = ispec
-            end select
-        enddo
-        call hpsort(dists_good, inds_good)
-        call hpsort(dists_bad,  inds_bad)
-        rank = 0
-        do ispec = 1, self%ngood
-            rank = rank + 1
-            self%ranks(inds_good(ispec)) = rank
-            self%order(rank)             = inds_good(ispec)
-        enddo
-        do ispec = 1, self%nbad
-            rank = rank + 1
-            self%ranks(inds_bad(ispec)) = rank
-            self%order(rank)            = inds_bad(ispec)
-        enddo
-        self%clsinds_spec = self%ranks
-    end subroutine rank_pspecs
+            if( self%clsinds_spec(ispec) == icls_spec )then
+                dist = dist + self%dists2cens(ispec,self%clsinds_spec(ispec))
+                cnt  = cnt + 1
+            endif
+        end do
+        dist = dist / real(cnt)
+    end function cls_spec_avg_dist
 
     subroutine calc_cls_spec_stats( self, l_print )
         class(pspecs), intent(inout) :: self
@@ -516,83 +374,31 @@ contains
                 endif
             end do
             call calc_stats(scores(:cnt), self%cls_spec_clsscore_stats(icls_spec))
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MINIMUM SCORE:    ', self%cls_spec_clsscore_stats(icls_spec)%minv
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM SCORE:    ', self%cls_spec_clsscore_stats(icls_spec)%maxv
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  SCORE:    ', self%cls_spec_clsscore_stats(icls_spec)%med
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'AVERAGE SCORE:    ', self%cls_spec_clsscore_stats(icls_spec)%avg
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'SDEV    SCORE:    ', self%cls_spec_clsscore_stats(icls_spec)%sdev
+            ! if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MINIMUM SCORE:    ', self%cls_spec_clsscore_stats(icls_spec)%minv
+            ! if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM SCORE:    ', self%cls_spec_clsscore_stats(icls_spec)%maxv
+            ! if( l_print) write(logfhandle,'(a,1x,f8.2)') 'AVERAGE SCORE:    ', self%cls_spec_clsscore_stats(icls_spec)%avg
+            ! if( l_print) write(logfhandle,'(a,1x,f8.2)') 'SDEV    SCORE:    ', self%cls_spec_clsscore_stats(icls_spec)%sdev
             call calc_stats(res(:cnt), self%cls_spec_clsres_stats(icls_spec))
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES:      ', self%cls_spec_clsres_stats(icls_spec)%minv
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES:      ', self%cls_spec_clsres_stats(icls_spec)%maxv
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES:      ', self%cls_spec_clsres_stats(icls_spec)%med
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES:      ', self%cls_spec_clsres_stats(icls_spec)%avg
-            if( l_print) write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES:      ', self%cls_spec_clsres_stats(icls_spec)%sdev
+            ! if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES:      ', self%cls_spec_clsres_stats(icls_spec)%minv
+            ! if( l_print) write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES:      ', self%cls_spec_clsres_stats(icls_spec)%maxv
+            ! if( l_print) write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES:      ', self%cls_spec_clsres_stats(icls_spec)%avg
+            ! if( l_print) write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES:      ', self%cls_spec_clsres_stats(icls_spec)%sdev
+            if( l_print) write(logfhandle,'(a,1x,f10.6)') 'SPEC CLS DIST: ', self%cls_spec_avg_dist(icls_spec)
+            if( l_print) write(logfhandle,'(a,1x,f10.2)') 'MEDIAN  SCORE: ', self%cls_spec_clsscore_stats(icls_spec)%med
+            if( l_print) write(logfhandle,'(a,1x,f10.2)') 'MEDIAN    RES: ', self%cls_spec_clsres_stats(icls_spec)%med
         end do
     end subroutine calc_cls_spec_stats
-
-    subroutine rank_spectral_classes( self )
-        class(pspecs), intent(inout) :: self
-        integer :: rank, order(self%ncls_spec), ispec, rank_assign(self%nspecs), icls_spec
-        order = (/(ispec,ispec=1,self%ncls_spec)/)
-        call hpsort(order, ispec_lt_jspec)
-        call reverse(order)
-        rank_assign = 0
-        do rank = 1, self%ncls_spec
-            do ispec = 1, self%nspecs
-                if( self%clsinds_spec(ispec) == order(rank) ) rank_assign(ispec) = rank
-            end do
-        enddo
-        self%clsinds_spec = rank_assign
-        ! update spectral class populations
-        do icls_spec = 1, self%ncls_spec
-            self%clspops_spec(icls_spec)  = count(self%clsinds_spec == icls_spec)
-            self%ptclpops_spec(icls_spec) = sum(self%clspops, mask=self%clsinds_spec == icls_spec)
-        enddo
-        
-        contains
-
-            function ispec_lt_jspec( ispec, jspec ) result( l_worse )
-                integer, intent(in) :: ispec, jspec
-                real, parameter :: ABS_SCORE_DIFF_THRES = 0.05
-                logical :: l_score_worse, l_res_worse, l_worse
-                real    :: abs_score_diff
-                l_score_worse = .false.
-                if( self%cls_spec_clsscore_stats(ispec)%med < self%cls_spec_clsscore_stats(jspec)%med )then
-                    l_score_worse  = .true.
-                    abs_score_diff = 0.
-                else
-                    abs_score_diff = abs(self%cls_spec_clsscore_stats(ispec)%med - self%cls_spec_clsscore_stats(jspec)%med)
-                endif
-                l_res_worse = .false.
-                if( self%cls_spec_clsres_stats(ispec)%med > self%cls_spec_clsres_stats(jspec)%med )then
-                    l_res_worse = .true.
-                endif
-                if( l_score_worse .and. l_res_worse )then
-                    l_worse = .true.
-                else if( abs_score_diff <= ABS_SCORE_DIFF_THRES .and. l_res_worse )then ! worse resolution trumps similar scores
-                    l_worse = .true.
-                else
-                    l_worse = .false.
-                endif
-            end function ispec_lt_jspec
-
-    end subroutine rank_spectral_classes
 
     ! destructor
 
     subroutine kill( self )
         class(pspecs), intent(inout) :: self
         if( self%exists )then
+            if( allocated(self%resarr)                  ) deallocate(self%resarr)
             if( allocated(self%pspecs)                  ) deallocate(self%pspecs)
             if( allocated(self%pspecs_cen)              ) deallocate(self%pspecs_cen)
-            if( allocated(self%pspec_good)              ) deallocate(self%pspec_good)
-            if( allocated(self%pspec_bad)               ) deallocate(self%pspec_bad)
-            if( allocated(self%resarr)                  ) deallocate(self%resarr)
-            if( allocated(self%dynranges)               ) deallocate(self%dynranges)
+            if( allocated(self%distmat)                 ) deallocate(self%distmat)
             if( allocated(self%dists2cens)              ) deallocate(self%dists2cens)
-            if( allocated(self%dists2good)              ) deallocate(self%dists2good)
-            if( allocated(self%dists2bad)               ) deallocate(self%dists2bad)
-            if( allocated(self%ranks)                   ) deallocate(self%ranks)
             if( allocated(self%order)                   ) deallocate(self%order)
             if( allocated(self%clsinds_spec)            ) deallocate(self%clsinds_spec)
             if( allocated(self%clsinds)                 ) deallocate(self%clsinds)
