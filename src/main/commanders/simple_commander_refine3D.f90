@@ -1029,7 +1029,7 @@ contains
             call cline%set('stream', 'no')
             call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         endif
-        if( params_glob%startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
+        if( params_glob%startit == 1 ) call build_glob%spproj_field%clean_entry('updatecnt', 'sampled')
         ! sampled incremented
         if( params_glob%l_fillin .and. mod(params_glob%startit,5) == 0 )then
             call sample_ptcls4fillin([1,params_glob%nptcls], .true., nptcls, pinds)
