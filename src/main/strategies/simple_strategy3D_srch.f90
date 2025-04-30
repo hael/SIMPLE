@@ -42,7 +42,6 @@ type strategy3D_srch
     integer                 :: ntrs_eval       = 0         !< # shifts evaluated
     integer                 :: prev_roind      = 0         !< previous in-plane rotation index
     integer                 :: prev_state      = 0         !< previous state index
-    integer                 :: class           = 0         !< 2D class index
     integer                 :: prev_ref        = 0         !< previous reference index
     integer                 :: prev_proj       = 0         !< previous projection direction index
     real                    :: athres          = 10.       !< angular treshold (refine=neighc) for neighborhood continuous Cartesian search
@@ -111,7 +110,6 @@ contains
         ! previous parameters
         call build_glob%spproj_field%get_ori(self%iptcl, self%o_prev)        ! previous ori
         self%prev_state = self%o_prev%get_state()                            ! state index
-        self%class      = self%o_prev%get_class()                            ! 2D class index
         self%prev_roind = pftcc_glob%get_roind(360.-self%o_prev%e3get())     ! in-plane angle index
         self%prev_shvec = self%o_prev%get_2Dshift()                          ! shift vector
         self%prev_proj  = build_glob%eulspace%find_closest_proj(self%o_prev) ! previous projection direction

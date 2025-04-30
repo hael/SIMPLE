@@ -567,7 +567,7 @@ contains
         class(eul_prob_tab2D), intent(inout) :: self
         class(oris),           intent(in)    :: os
         logical,               intent(in)    :: rank_ptcls
-        real    :: pdists(self%neffcls), P, score, neigh_frac
+        real    :: pdists(self%neffcls), P, score
         integer :: pops(self%ncls), vec(self%neffcls)
         integer :: iptcl, i, icls, ind, rank, ncls_smpl
         logical :: greedy
