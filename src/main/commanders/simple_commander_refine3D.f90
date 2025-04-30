@@ -809,6 +809,7 @@ contains
                     call build%spproj%write_segment_inside(params%oritype)
                     call del_file(params%outfile)
                     do state = 1, params%nstates
+                        if( build_glob%spproj_field%get_pop(state, 'state') == 0 ) cycle
                         str_state = int2str_pad(state,2)
                         fsc_file  = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
                         call build%spproj%add_fsc2os_out(fsc_file, state, params%box_crop)
