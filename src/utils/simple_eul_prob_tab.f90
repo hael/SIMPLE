@@ -93,15 +93,15 @@ contains
             self%assgn_map(i)%y      = 0.
             self%assgn_map(i)%has_sh = .false.
             do si = 1,self%nstates
-                istate                          = self%rinds(si)
-                self%state_tab(istate,i)%pind   = iptcl
-                self%state_tab(istate,i)%istate = istate
-                self%state_tab(istate,i)%iproj  = 0
-                self%state_tab(istate,i)%inpl   = 0
-                self%state_tab(istate,i)%dist   = huge(x)
-                self%state_tab(istate,i)%x      = 0.
-                self%state_tab(istate,i)%y      = 0.
-                self%state_tab(istate,i)%has_sh = .false.
+                istate                      = self%sinds(si)
+                self%state_tab(si,i)%pind   = iptcl
+                self%state_tab(si,i)%istate = istate
+                self%state_tab(si,i)%iproj  = 0
+                self%state_tab(si,i)%inpl   = 0
+                self%state_tab(si,i)%dist   = huge(x)
+                self%state_tab(si,i)%x      = 0.
+                self%state_tab(si,i)%y      = 0.
+                self%state_tab(si,i)%has_sh = .false.
                 do iproj = 1,params_glob%nspace
                     iref = (si-1)*params_glob%nspace + iproj
                     self%loc_tab(iref,i)%pind   = iptcl
@@ -227,14 +227,13 @@ contains
                 ! (2) search projection directions using those shifts for all references
                 call pftcc%reset_cache
                 do si = 1, self%nstates
-                    istate     = self%sinds(si)
-                    iref_start = (istate-1)*params_glob%nspace
-                    ir_start   = (si    -1)*params_glob%nspace
+                    istate   = self%sinds(si)
+                    ir_start = (si-1)*params_glob%nspace
                     do iproj = 1, params_glob%nspace
-                        iref = self%rinds(ir_start + iproj)
-                        call pftcc%gencorrs(iref_start + iproj, iptcl, cxy(2:3), dists_inpl(:,ithr))
+                        iref = ir_start + iproj
+                        call pftcc%gencorrs(self%rinds(iref), iptcl, cxy(2:3), dists_inpl(:,ithr))
                         dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
-                        irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(istate))
+                        irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(si))
                         ! rotate the shift vector to the frame of reference
                         call rotmat2d(pftcc%get_rot(irot), rotmat)
                         rot_xy = matmul(cxy(2:3), rotmat)
@@ -286,14 +285,13 @@ contains
                     iptcl = self%pinds(i)
                     ithr  = omp_get_thread_num() + 1
                     do si = 1, self%nstates
-                        istate     = self%sinds(si)
-                        iref_start = (istate-1)*params_glob%nspace
-                        ir_start   = (si    -1)*params_glob%nspace
+                        istate   = self%sinds(si)
+                        ir_start = (si-1)*params_glob%nspace
                         do iproj = 1, params_glob%nspace
                             iref = ir_start + iproj
-                            call pftcc%gencorrs(iref_start + iproj, iptcl, dists_inpl(:,ithr))
+                            call pftcc%gencorrs(self%rinds(iref), iptcl, dists_inpl(:,ithr))
                             dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
-                            irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(istate))
+                            irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(si))
                             self%loc_tab(iref,i)%dist = dists_inpl(irot,ithr)
                             self%loc_tab(iref,i)%inpl = irot
                             dists_refs(  iref,ithr)   = dists_inpl(irot,ithr)
@@ -318,20 +316,19 @@ contains
                 !$omp end parallel do
             else
                 ! fill the table
-                !$omp parallel do default(shared) private(i,si,iptcl,ithr,iproj,iref,irot,istate,iref_start,ir_start) proc_bind(close) schedule(static)
+                !$omp parallel do default(shared) private(i,si,iptcl,ithr,iproj,iref,irot,istate,ir_start) proc_bind(close) schedule(static)
                 do i = 1, self%nptcls
                     call pftcc%reset_cache
                     iptcl = self%pinds(i)
                     ithr  = omp_get_thread_num() + 1
                     do si = 1, self%nstates
-                        istate     = self%sinds(si)
-                        iref_start = (istate-1)*params_glob%nspace
-                        ir_start   = (si    -1)*params_glob%nspace
+                        istate   = self%sinds(si)
+                        ir_start = (si-1)*params_glob%nspace
                         do iproj = 1, params_glob%nspace
                             iref = ir_start + iproj
-                            call pftcc%gencorrs(iref_start + iproj, iptcl, dists_inpl(:,ithr))
+                            call pftcc%gencorrs(self%rinds(iref), iptcl, dists_inpl(:,ithr))
                             dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
-                            irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(istate))
+                            irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(si))
                             self%loc_tab(iref,i)%dist = dists_inpl(irot,ithr)
                             self%loc_tab(iref,i)%inpl = irot
                         enddo

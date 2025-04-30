@@ -183,11 +183,10 @@ contains
         type(image)           :: vol_bfac, vol_no_bfac, vol_pdb, cos_img
         type(binimage)        :: vol_pdbin
         type(atoms)           :: pdb
-        type(masker)          :: msker
         character(len=STDLEN) :: pdbout_fname
-        real    :: fsc0143, fsc05, smpd, lplim, lp_min=0., lp_max=20.
-        integer :: state, box, fsc_box, ldim(3), ifoo
-        logical :: has_fsc, is_center
+        real    :: fsc0143, fsc05, lplim, lp_min=0., lp_max=20.
+        integer :: ldim(3), ifoo
+        logical :: has_fsc
         integer, parameter :: EDGE=6
         ! set defaults
         ! parse commad-line
@@ -309,7 +308,7 @@ contains
         use simple_sp_project, only: sp_project
         class(postprocess_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        character(len=:), allocatable :: fname_vol, fname_fsc, fname_msk, fname_mirr
+        character(len=:), allocatable :: fname_vol, fname_fsc, fname_mirr
         character(len=:), allocatable :: fname_even, fname_odd, fname_pproc, fname_lp
         real,             allocatable :: fsc(:), optlp(:), res(:)
         type(parameters) :: params
@@ -605,7 +604,6 @@ contains
         class(cmdline),                intent(inout) :: cline
         type(dock_vols)  :: dvols
         type(parameters) :: params
-        integer          :: i
         character(:), allocatable :: fn_vol_docked
         if( .not. cline%defined('gridding') ) call cline%set('gridding', 'yes')
         call params%new(cline)
@@ -847,7 +845,7 @@ contains
         type(parameters)  :: params
         type(builder)     :: build
         type(image)       :: vol
-        integer           :: npix, iptcl, j
+        integer           :: npix
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
         if( .not. cline%defined('outstk') ) call cline%set('outstk', 'ppca_volvar_out'//trim(STK_EXT))
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)

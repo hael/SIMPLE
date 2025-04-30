@@ -253,51 +253,51 @@ contains
         call spproj%os_cls3D%set_all2single('stkind', 1)
         ! map the orientation parameters obtained for the clusters back to the particles
         call spproj%map2ptcls
-        if( nstages_ini3D == NSTAGES_INI3D_MAX )then ! produce validation info
-            ! check even odd convergence
-            if( params%nstates == 1 )then
-                call conv_eo(work_proj%os_ptcl3D)
-            else
-                call conv_eo_states(work_proj%os_ptcl3D)
-            endif
-            ! for visualization
-            call gen_ortho_reprojs4viz
-            ! calculate 3D reconstruction at original sampling
-            call calc_final_rec(work_proj, work_projfile, xreconstruct3D)
-            ! postprocess final 3D reconstruction
-            call postprocess_final_rec
-            ! add rec_final to os_out, one state assumed
-            final_vol = trim(REC_FBODY)//STR_STATE_GLOB//params%ext
-            call spproj%add_vol2os_out(final_vol, params%smpd, 1, 'vol_cavg')
-            ! reprojections
-            call spproj%os_cls3D%write('final_oris.txt')
-            write(logfhandle,'(A)') '>>>'
-            write(logfhandle,'(A)') '>>> RE-PROJECTION OF THE FINAL VOLUME'
-            write(logfhandle,'(A)') '>>>'
-            call xreproject%execute_safe(cline_reproject)
-            ! write alternated stack
-            call img%new([params%box,params%box,1], params%smpd)
-            call stkio_r%open(orig_stk,            params%smpd, 'read',                                 bufsz=500)
-            call stkio_r2%open('reprojs.mrc',      params%smpd, 'read',                                 bufsz=500)
-            call stkio_w%open('cavgs_reprojs.mrc', params%smpd, 'write', box=params%box, is_ft=.false., bufsz=500)
-            cnt = -1
-            do icls=1,ncavgs
-                cnt = cnt + 2
-                call stkio_r%read(icls, img)
-                call img%norm
-                call stkio_w%write(cnt, img)
-                call stkio_r2%read(icls, img)
-                call img%norm
-                call stkio_w%write(cnt + 1, img)
-            enddo
-            call stkio_r%close
-            call stkio_r2%close
-            call stkio_w%close
-            ! produce shifted stack
-            call shift_imgfile(orig_stk, shifted_stk, spproj%os_cls3D, params%smpd)
-            ! add shifted stack to project
-            call spproj%add_cavgs2os_out(simple_abspath(shifted_stk), params%smpd, 'cavg_shifted')
-        endif
+        ! if( nstages_ini3D == NSTAGES_INI3D_MAX )then ! produce validation info
+        !     ! check even odd convergence
+        !     if( params%nstates == 1 )then
+        !         call conv_eo(work_proj%os_ptcl3D)
+        !     else
+        !         call conv_eo_states(work_proj%os_ptcl3D)
+        !     endif
+        !     ! for visualization
+        !     call gen_ortho_reprojs4viz
+        !     ! calculate 3D reconstruction at original sampling
+        !     call calc_final_rec(work_proj, work_projfile, xreconstruct3D)
+        !     ! postprocess final 3D reconstruction
+        !     call postprocess_final_rec
+        !     ! add rec_final to os_out, one state assumed
+        !     final_vol = trim(REC_FBODY)//STR_STATE_GLOB//params%ext
+        !     call spproj%add_vol2os_out(final_vol, params%smpd, 1, 'vol_cavg')
+        !     ! reprojections
+        !     call spproj%os_cls3D%write('final_oris.txt')
+        !     write(logfhandle,'(A)') '>>>'
+        !     write(logfhandle,'(A)') '>>> RE-PROJECTION OF THE FINAL VOLUME'
+        !     write(logfhandle,'(A)') '>>>'
+        !     call xreproject%execute_safe(cline_reproject)
+        !     ! write alternated stack
+        !     call img%new([params%box,params%box,1], params%smpd)
+        !     call stkio_r%open(orig_stk,            params%smpd, 'read',                                 bufsz=500)
+        !     call stkio_r2%open('reprojs.mrc',      params%smpd, 'read',                                 bufsz=500)
+        !     call stkio_w%open('cavgs_reprojs.mrc', params%smpd, 'write', box=params%box, is_ft=.false., bufsz=500)
+        !     cnt = -1
+        !     do icls=1,ncavgs
+        !         cnt = cnt + 2
+        !         call stkio_r%read(icls, img)
+        !         call img%norm
+        !         call stkio_w%write(cnt, img)
+        !         call stkio_r2%read(icls, img)
+        !         call img%norm
+        !         call stkio_w%write(cnt + 1, img)
+        !     enddo
+        !     call stkio_r%close
+        !     call stkio_r2%close
+        !     call stkio_w%close
+        !     ! produce shifted stack
+        !     call shift_imgfile(orig_stk, shifted_stk, spproj%os_cls3D, params%smpd)
+        !     ! add shifted stack to project
+        !     call spproj%add_cavgs2os_out(simple_abspath(shifted_stk), params%smpd, 'cavg_shifted')
+        ! endif
         ! write results (this needs to be a full write as multiple segments are updated)
         call spproj%write()
         ! rank classes based on agreement to volume (after writing)
@@ -1140,11 +1140,7 @@ contains
         if( trim(params_glob%multivol_mode).eq.'input_oris_fixed' )then ! only state sorting, no 3D ori refinement
             refine = 'prob_state'
         endif
-        if( l_cavgs .and. params_glob%nstates>1 )then
-            ! TODO: prob multistate does not deal with empty states
-            refine  = 'shc_smpl'
-            prob_sh = 'no'
-        endif
+        if( l_cavgs .and. params_glob%nstates>1 ) prob_sh = 'no'
         ! ICM regularization
         icm = 'no'
         if( istage >= ICM_STAGE ) icm = 'yes'
@@ -1460,12 +1456,17 @@ contains
         type(image) :: final_vol, reprojs
         integer     :: state, ifoo, ldim(3)
         real        :: smpd
-        str_state = int2str_pad(1,2)
+        do state = 1, params_glob%nstates
+            str_state = int2str_pad(state,2)
+            if( .not. file_exists(VOL_FBODY//str_state//params_glob%ext) )cycle     ! empty-state case
+            exit
+        enddo
         fname = VOL_FBODY//str_state//params_glob%ext
         call find_ldim_nptcls(fname, ldim, ifoo, smpd)
         call final_vol%new(ldim, smpd)
         do state = 1, params_glob%nstates
             str_state = int2str_pad(state,2)
+            if( .not. file_exists(VOL_FBODY//str_state//params_glob%ext) )cycle     ! empty-state case
             call final_vol%read(VOL_FBODY//str_state//params_glob%ext)
             call final_vol%generate_orthogonal_reprojs(reprojs)
             call reprojs%write_jpg('orthogonal_reprojs_state'//str_state//'.jpg')
@@ -1491,6 +1492,7 @@ contains
         do state = 1, params_glob%nstates
             str_state = int2str_pad(state,2)
             vol_name  = VOL_FBODY//str_state//params_glob%ext
+            if( .not. file_exists(vol_name) )cycle                  ! empty-state case
             call spproj%os_ptcl3D%mask_from_state(state, state_mask, state_inds)
             call spproj%add_vol2os_out(vol_name, params_glob%smpd, state, 'vol', pop=count(state_mask))
             call spproj%add_fsc2os_out(FSC_FBODY//str_state//BIN_EXT, state, params_glob%box)
@@ -1505,12 +1507,11 @@ contains
         character(len=:), allocatable :: str_state, vol_name, vol_pproc, vol_pproc_mirr, vol_final
         integer :: state
         do state = 1, params_glob%nstates
+            str_state      = int2str_pad(state,2)
+            vol_name       = VOL_FBODY//str_state//params_glob%ext  ! reconstruction from particles stored in project
+            if( .not. file_exists(vol_name) )cycle                  ! empty-state case
             call cline_postprocess%set('state', state)
             call xpostprocess%execute_safe(cline_postprocess)
-        enddo
-        do state = 1, params_glob%nstates
-            str_state      = int2str_pad(state,2)
-            vol_name       = VOL_FBODY//str_state//params_glob%ext ! reconstruction from particles stored in project
             vol_pproc      = add2fbody(vol_name,params_glob%ext,PPROC_SUFFIX)
             vol_pproc_mirr = add2fbody(vol_name,params_glob%ext,PPROC_SUFFIX//MIRR_SUFFIX)
             vol_final      = REC_FBODY//str_state//params_glob%ext
