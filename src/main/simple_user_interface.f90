@@ -3296,18 +3296,16 @@ contains
         &'Automatically selectes class averages based on signal stats and reports to project',& ! descr_short
         &'is a program for automated class average selection reported to the SIMPLE project',&  ! descr_long
         &'simple_exec',&                                                                        ! executable
-        &0, 2, 0, 2, 2, 1, 0, .true.)                                                           ! # entries in each group, requires sp_project
+        &0, 1, 0, 1, 2, 1, 0, .true.)                                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call autoselect_cavgs%set_input('parm_ios', 1, prune)
-        call autoselect_cavgs%set_input('parm_ios', 2, 'frac_min', 'num', 'Minimum fracion (0-1) of particles retained', 'min fraction ', '{0.7}', .false., 0.7)
         ! alternative inputs
         ! <empty>
         ! search controls
-        call autoselect_cavgs%set_input('srch_ctrls', 1, 'algorithm', 'multi', 'Clustering algorithm', 'Clustering algorithm(kmean|kmed|hybrid|greedy){kmean}','(kmean|kmed|hybrid|greedy){kmean}', .false., 'kmean')
-        call autoselect_cavgs%set_input('srch_ctrls', 2, 'ncls_spec', 'num', '# spectral clusters', '# spectral clusters(2-5)', '(2-5)', .false., 2.)
+        call autoselect_cavgs%set_input('srch_ctrls', 1, 'ncls_spec', 'num', '# spectral clusters', '# spectral clusters(2-5)', '(1-5)', .false., 1.)
         ! filter controls
         call autoselect_cavgs%set_input('filt_ctrls', 1, hp)
         call autoselect_cavgs%set_input('filt_ctrls', 2, lp)
