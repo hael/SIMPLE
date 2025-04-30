@@ -59,16 +59,15 @@ contains
         !<---- hybrid or combined search strategies can then be implemented as extensions of the
         !      relevant strategy3D base class
         type(strategy3D_spec), allocatable :: strategy3Dspecs(:)
-        real,                  allocatable :: resarr(:)
         integer,               allocatable :: batches(:,:), cnt_greedy(:), cnt_all(:)
         type(class_sample),    allocatable :: clssmp(:) 
         type(convergence) :: conv
         type(ori)         :: orientation
-        real    :: extr_thresh, extr_score_thresh, anneal_ratio, frac_greedy
+        real    :: frac_greedy
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz
         integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map
-        integer :: ibatch, iextr_lim, lpind_anneal, lpind_start
-        logical :: doprint, do_extr
+        integer :: ibatch
+        logical :: doprint
         if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = t_init

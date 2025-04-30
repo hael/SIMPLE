@@ -93,16 +93,14 @@ contains
         use simple_sp_project,    only: sp_project
         class(refine3D_auto_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(cmdline)               :: cline_reconstruct3D_distr, cline_fillin
+        type(cmdline)               :: cline_reconstruct3D_distr
         type(postprocess_commander) :: xpostprocess
         type(parameters)            :: params
-        type(sp_project)            :: spproj
         real,    parameter :: LP2SMPD_TARGET   = 1./3.
         real,    parameter :: SMPD_TARGET_MIN  = 1.3
         logical, parameter :: DEBUG            = .true.
         integer, parameter :: MINBOX           = 256
         integer, parameter :: NPDIRS4BAL       = 300
-        type(class_sample), allocatable :: clssmp(:)
         character(len=:),   allocatable :: str_state
         real             :: smpd_target, smpd_crop, scale, trslim
         integer          :: box_crop, maxits_phase1, maxits_phase2, iter
@@ -248,8 +246,7 @@ contains
         type(cmdline) :: cline_postprocess
         type(cmdline) :: cline_tmp
         integer(timer_int_kind) :: t_init,   t_scheduled,  t_merge_algndocs,  t_volassemble,  t_tot
-        real(timer_int_kind)    :: rt_init, rt_scheduled, rt_merge_algndocs, rt_volassemble, rt_tot
-        character(len=STDLEN)   :: benchfname
+        real(timer_int_kind)    :: rt_init, rt_scheduled, rt_merge_algndocs, rt_volassemble
         ! other variables
         type(parameters) :: params
         type(builder)    :: build
@@ -263,11 +260,10 @@ contains
         real,                      allocatable :: res(:), fsc(:)
         character(len=LONGSTRLEN) :: vol, vol_iter, str, str_iter, fsc_templ
         character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc, vollp
-        character(len=LONGSTRLEN) :: volassemble_output
-        logical :: err, vol_defined, have_oris, converged, fall_over, l_continue, l_multistates, l_automsk 
+        logical :: err, vol_defined, have_oris, converged, fall_over, l_multistates, l_automsk
         logical :: l_combine_eo, l_griddingset, do_automsk
-        real    :: corr, corr_prev, smpd, lp_eps
-        integer :: ldim(3), i, state, iter, box, nfiles, niters, ifoo, fnr, nthr_here
+        real    :: corr, smpd, lp_eps
+        integer :: i, state, iter, box, nfiles, niters, nthr_here
         601 format(A,1X,F12.3)
         if( .not. cline%defined('nparts') )then
             call xrefine3D_shmem%execute(cline)
@@ -719,7 +715,7 @@ contains
         type(builder)                         :: build
         type(cmdline)                         :: cline_calc_group_sigmas, cline_prob_align
         type(cmdline)                         :: cline_calc_pspec, cline_first_sigmas
-        character(len=STDLEN)                 :: str_state, fsc_file, vol, vol_iter, iter_str
+        character(len=STDLEN)                 :: str_state, fsc_file, vol, vol_iter
         integer                               :: startit, i, state
         real                                  :: corr
         logical                               :: converged, l_sigma

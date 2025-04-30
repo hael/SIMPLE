@@ -96,7 +96,7 @@ contains
                 end do
             end do
         end do
-        !$omp end parallel do 
+        !$omp end parallel do
     end subroutine new_1
 
     subroutine new_2( self, os )
@@ -390,7 +390,7 @@ contains
     subroutine ref_normalize( self )
         class(eul_prob_tab), intent(inout) :: self
         real    :: sum_dist_all, min_dist, max_dist
-        integer :: i
+        integer :: i, iref
         ! normalize so prob of each ptcl is between [0,1] for all projs
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,sum_dist_all)
         do i = 1, self%nptcls
@@ -407,8 +407,16 @@ contains
         min_dist = minval(self%loc_tab(:,:)%dist)
         max_dist = maxval(self%loc_tab(:,:)%dist)
         !$omp end parallel workshare
+        ! special case of numerical unstability of dist values
         if( (max_dist - min_dist) < TINY )then
-            self%loc_tab(:,:)%dist = 0.
+            ! randomize dist so the assignment is stochastic
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,i)
+            do iref = 1, self%nrefs
+                do i = 1, self%nptcls
+                    self%loc_tab(iref,i)%dist = ran3()
+                enddo
+            enddo
+            !$omp end parallel do
         else
             self%loc_tab(:,:)%dist = (self%loc_tab(:,:)%dist - min_dist) / (max_dist - min_dist)
         endif
@@ -460,7 +468,7 @@ contains
     subroutine state_normalize( self )
         class(eul_prob_tab), intent(inout) :: self
         real    :: sum_dist_all, min_dist, max_dist
-        integer :: i
+        integer :: i, istate
         ! normalize so prob of each ptcl is between [0,1] for all states
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,sum_dist_all)
         do i = 1, self%nptcls
@@ -482,8 +490,16 @@ contains
             min_dist = min(min_dist, minval(self%state_tab(:,i)%dist, dim=1))
         enddo
         !$omp end parallel do
+        ! special case of numerical unstability of dist values
         if( (max_dist - min_dist) < TINY )then
-            self%state_tab%dist = 0.
+            ! randomize dist so the assignment is stochastic
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(istate,i)
+            do istate = 1, self%nstates
+                do i = 1, self%nptcls
+                    self%loc_tab(istate,i)%dist = ran3()
+                enddo
+            enddo
+            !$omp end parallel do
         else
             self%state_tab%dist = (self%state_tab%dist - min_dist) / (max_dist - min_dist)
         endif

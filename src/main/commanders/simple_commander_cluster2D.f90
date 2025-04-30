@@ -1810,7 +1810,7 @@ contains
         type(image),      allocatable :: imgs(:)
         integer,          allocatable :: states(:), cnts(:)
         character(len=:), allocatable :: fname, fname_good, fname_bad, fname_ranked, ext, stk, stkpath
-        integer :: icls, ispec, nspecs, nptcls, clsind, cnt_ranked, cnt_good, cnt_bad, ngood, ncls_spec
+        integer :: icls, ispec, nspecs, nptcls, clsind, cnt_ranked, cnt_good, cnt_bad, ngood
         real    :: frac, pop_opt
         call cline%set('oritype', 'cls2D')
         if( .not. cline%defined('hp')       ) call cline%set('hp',       20.)
