@@ -795,7 +795,9 @@ contains
                     cline_prob_align = cline
                     call cline_prob_align%set('prg',       'prob_align')
                     call cline_prob_align%set('which_iter', params%which_iter)
-                    call cline_prob_align%set('vol1',       params%vols(1))
+                    do state = 1, params%nstates
+                        call cline%set('vol'//int2str(state), params%vols(state))
+                    enddo
                     call xprob_align%execute( cline_prob_align )
                 endif
                 ! in strategy3D_matcher:
