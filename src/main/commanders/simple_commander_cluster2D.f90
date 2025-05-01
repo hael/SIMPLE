@@ -3303,7 +3303,8 @@ contains
                     enddo
                 elseif( trim(coord_type) .eq. 'polar' )then
                     ! update polar refs using current alignment params
-                    call pftcc%gen_polar_refs(build_glob%eulspace, build_glob%spproj_field, (trim(params%cls_init).eq.'rand') .and. iter==1)
+                    call pftcc%gen_polar_refs(build_glob%eulspace, build_glob%spproj_field,&
+                                             &ran=(trim(params%cls_init).eq.'rand') .and. iter==1)
                     ! for visualization of polar cavgs
                     call pftcc%prefs_to_cartesian(refs)
                     do iref = 1, params_glob%nspace
@@ -3313,27 +3314,31 @@ contains
                 endif
                 call pftcc%memoize_refs
                 ! update sigmas
-                if( trim(params_glob%polar_prep) .eq. 'no' )then
-                    !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,orientation,iref,sh)
-                    do iptcl = pfromto(1),pfromto(2)
-                        call build_glob%spproj_field%get_ori(pinds(iptcl), orientation)
-                        iref = build_glob%eulspace%find_closest_proj(orientation)
-                        sh   = build_glob%spproj_field%get_2Dshift(iptcl)
-                        ! computing sigmas by shifting/rotating refs to the particle frames
-                        call pftcc%gencorr_sigma_contrib(iref, iptcl, sh, pftcc%get_roind(360. - orientation%e3get()))
-                    enddo
-                    !$omp end parallel do
+                if( (trim(params%cls_init).eq.'rand') .and. iter==1 )then
+                    ! sigmas is 1.
                 else
-                    !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,orientation,iref)
-                    do iptcl = pfromto(1),pfromto(2)
-                        call build_glob%spproj_field%get_ori(pinds(iptcl), orientation)
-                        iref = build_glob%eulspace%find_closest_proj(orientation)
-                        ! computing sigmas with shifted ptcls
-                        call pftcc%gencorr_sigma_contrib(iref, iptcl, [0.,0.], pftcc%get_roind(360. - orientation%e3get()))
-                        ! memoize_sqsum_ptcl with updated sigmas
-                        call pftcc%memoize_sqsum_ptcl(iptcl)
-                    enddo
-                    !$omp end parallel do
+                    if( trim(params_glob%polar_prep) .eq. 'no' )then
+                        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,orientation,iref,sh)
+                        do iptcl = pfromto(1),pfromto(2)
+                            call build_glob%spproj_field%get_ori(pinds(iptcl), orientation)
+                            iref = build_glob%eulspace%find_closest_proj(orientation)
+                            sh   = build_glob%spproj_field%get_2Dshift(iptcl)
+                            ! computing sigmas by shifting/rotating refs to the particle frames
+                            call pftcc%gencorr_sigma_contrib(iref, iptcl, sh, pftcc%get_roind(360. - orientation%e3get()))
+                        enddo
+                        !$omp end parallel do
+                    else
+                        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,orientation,iref)
+                        do iptcl = pfromto(1),pfromto(2)
+                            call build_glob%spproj_field%get_ori(pinds(iptcl), orientation)
+                            iref = build_glob%eulspace%find_closest_proj(orientation)
+                            ! computing sigmas with shifted ptcls
+                            call pftcc%gencorr_sigma_contrib(iref, iptcl, [0.,0.], pftcc%get_roind(360. - orientation%e3get()))
+                            ! memoize_sqsum_ptcl with updated sigmas
+                            call pftcc%memoize_sqsum_ptcl(iptcl)
+                        enddo
+                        !$omp end parallel do
+                    endif
                 endif
                 ! need to re-normalize particles with masks
                 if( trim(params_glob%polar_prep) .eq. 'no' ) call build_batch_particles(pftcc, nptcls, pinds, tmp_imgs)
