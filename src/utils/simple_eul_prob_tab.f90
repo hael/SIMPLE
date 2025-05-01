@@ -228,7 +228,6 @@ contains
                 ! (2) search projection directions using those shifts for all references
                 call pftcc%reset_cache
                 do si = 1, self%nstates
-                    istate   = self%sinds(si)
                     ri_start = (si-1)*params_glob%nspace
                     do iproj = 1, params_glob%nspace
                         ri = ri_start + iproj
@@ -280,13 +279,12 @@ contains
                         &maxits=params_glob%maxits_sh, opt_angle=.true.)
                 end do
                 ! fill the table
-                !$omp parallel do default(shared) private(i,si,ri,j,iptcl,ithr,istate,iref_start,ri_start,iproj,irot,cxy) proc_bind(close) schedule(static)
+                !$omp parallel do default(shared) private(i,si,ri,j,iptcl,ithr,ri_start,iproj,irot,cxy) proc_bind(close) schedule(static)
                 do i = 1, self%nptcls
                     call pftcc%reset_cache
                     iptcl = self%pinds(i)
                     ithr  = omp_get_thread_num() + 1
                     do si = 1, self%nstates
-                        istate   = self%sinds(si)
                         ri_start = (si-1)*params_glob%nspace
                         do iproj = 1, params_glob%nspace
                             ri = ri_start + iproj
@@ -317,13 +315,12 @@ contains
                 !$omp end parallel do
             else
                 ! fill the table
-                !$omp parallel do default(shared) private(i,si,ri,iptcl,ithr,iproj,irot,istate,ri_start) proc_bind(close) schedule(static)
+                !$omp parallel do default(shared) private(i,si,ri,iptcl,ithr,iproj,irot,ri_start) proc_bind(close) schedule(static)
                 do i = 1, self%nptcls
                     call pftcc%reset_cache
                     iptcl = self%pinds(i)
                     ithr  = omp_get_thread_num() + 1
                     do si = 1, self%nstates
-                        istate   = self%sinds(si)
                         ri_start = (si-1)*params_glob%nspace
                         do iproj = 1, params_glob%nspace
                             ri = ri_start + iproj
