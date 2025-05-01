@@ -1208,6 +1208,7 @@ contains
                 do k = self%kfromto(1), self%kfromto(2)
                     do irot = 1, self%pftsz
                         self%pfts_refs_even(irot,k,iref) = complex(ran3(), ran3())
+                        self%pfts_refs_odd( irot,k,iref) = complex(ran3(), ran3())
                     enddo
                 enddo
             enddo
