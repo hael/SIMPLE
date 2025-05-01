@@ -1184,21 +1184,35 @@ contains
         call img%ifft
     end subroutine polar_cavg
 
-    subroutine gen_polar_refs( self, ref_space, ptcl_space )
+    subroutine gen_polar_refs( self, ref_space, ptcl_space, ran )
         use simple_image
         use simple_oris
         use simple_ori
         class(polarft_corrcalc), intent(inout) :: self
         type(oris),              intent(in)    :: ref_space
         type(oris),              intent(in)    :: ptcl_space
+        logical,    optional,    intent(in)    :: ran
         complex(sp), pointer :: pft_ptcl(:,:)
         real(sp),    pointer :: rctf(:,:)
         type(ori) :: orientation
         integer   :: i, k, iref, irot, ithr, iptcl, mapping(self%nrefs)
+        logical   :: l_ran
         real(dp)  :: numer, denom1, denom2
         real      :: ctf2_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                     &ctf2_merg(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                     &ctf2_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs)
+        l_ran = .false.
+        if( present(ran) ) l_ran = ran
+        if( l_ran )then
+            do iref = 1, self%nrefs
+                do k = self%kfromto(1), self%kfromto(2)
+                    do irot = 1, self%pftsz
+                        self%pfts_refs_even(irot,k,iref) = complex(ran3(), ran3())
+                    enddo
+                enddo
+            enddo
+            return
+        endif
         self%pfts_refs_even = complex(0., 0.)
         self%pfts_refs_odd  = complex(0., 0.)
         ctf2_even = 0.

@@ -3303,7 +3303,7 @@ contains
                     enddo
                 elseif( trim(coord_type) .eq. 'polar' )then
                     ! update polar refs using current alignment params
-                    call pftcc%gen_polar_refs(build_glob%eulspace, build_glob%spproj_field)
+                    call pftcc%gen_polar_refs(build_glob%eulspace, build_glob%spproj_field, (trim(params%cls_init).eq.'rand') .and. iter==1)
                     ! for visualization of polar cavgs
                     call pftcc%prefs_to_cartesian(refs)
                     do iref = 1, params_glob%nspace
