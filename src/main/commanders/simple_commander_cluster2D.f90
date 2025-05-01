@@ -1808,16 +1808,15 @@ contains
         type(sp_project)              :: spproj
         type(pspecs)                  :: pows
         type(image),      allocatable :: imgs(:)
-        integer,          allocatable :: states(:), cnts(:)
-        character(len=:), allocatable :: fname, fname_good, fname_bad, fname_ranked, ext, stk, stkpath
-        integer :: icls, ispec, nspecs, nptcls, clsind, cnt_ranked, cnt_good, cnt_bad, ngood
-        real    :: frac, pop_opt
+        integer,          allocatable :: states(:)
+        character(len=:), allocatable :: stk, stkpath
+        integer :: icls, ispec, nspecs, nptcls
         call cline%set('oritype', 'cls2D')
         if( .not. cline%defined('hp')        ) call cline%set('hp',       20.)
         if( .not. cline%defined('lp')        ) call cline%set('lp',        6.)
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',  'yes')
         if( .not. cline%defined('prune')     ) call cline%set('prune',   'no')
-        if( .not. cline%defined('ncls_spec') ) call cline%set('ncls_spec',  3)
+        if( .not. cline%defined('ncls_spec') ) call cline%set('ncls_spec',  5)
         ! parameters & project
         call params%new(cline)
         call spproj%read(params%projfile)
@@ -1834,7 +1833,7 @@ contains
             call imgs(icls)%read(stk, icls)
         end do
         ! create pspecs object
-        call pows%new(params%ncls, imgs, spproj%os_ptcl2D, spproj%os_cls2D, params%msk, params%hp, params%lp, params%ncls_spec)
+        call pows%new(params%ncls, imgs, spproj%os_cls2D, params%msk, params%hp, params%lp, params%ncls_spec)
         ! read back original images
         do icls = 1, params%ncls
             call imgs(icls)%read(stk, icls)
@@ -1842,34 +1841,76 @@ contains
         nspecs = pows%get_nspecs()
         ! clustering
         call pows%kmeans_cls_pspecs(states)
-        allocate(cnts(0:params%ncls_spec), source=0)
-        do icls = 1, params%ncls
-            if( states(icls) == 0 )then
-                fname = 'junk_cavgs'//params%ext
-                cnts(states(icls)) = cnts(states(icls)) + 1
-                call imgs(icls)%write(fname, cnts(states(icls)))
-            else
-                fname = 'spectral_cluster'//int2str(states(icls))//'_cavgs'//params%ext
-                cnts(states(icls)) = cnts(states(icls)) + 1
-                call imgs(icls)%write(fname, cnts(states(icls)))
-            endif
-        end do
-
-        ! ! map selection to project
-        ! call spproj%map_cavgs_selection(states)
-        ! ! optional pruning
-        ! if( trim(params%prune).eq.'yes') call spproj%prune_particles
-        ! ! this needs to be a full write as many segments are updated
-        ! call spproj%write(params%projfile)
-
+        call write_junk_cavgs
+        call write_cavgs('spectral_cluster')
+        ! ranking of spectral clusters
+        call pows%rank_cls_spec(states)
+        call write_cavgs('rank')
+        ! selection of spectral clusters
+        call pows%select_cls_spec(states)
+        call write_selected_cavgs
+        ! map selection to project
+        call spproj%map_cavgs_selection(states)
+        ! optional pruning
+        if( trim(params%prune).eq.'yes') call spproj%prune_particles
+        ! this needs to be a full write as many segments are updated
+        call spproj%write(params%projfile)
         ! end gracefully
         do icls = 1, params%ncls
             call imgs(icls)%kill
         enddo
-        deallocate(states,cnts,imgs)
+        deallocate(states,imgs)
         call spproj%kill
         call pows%kill
         call simple_end('**** SIMPLE_AUTOSELECT_CAVGS NORMAL STOP ****')
+
+        contains
+
+            subroutine write_cavgs( fbody )
+                character(len=*),  intent(in) :: fbody
+                character(len=:), allocatable :: fname
+                integer,          allocatable :: cnts(:)
+                integer :: icls
+                allocate(cnts(params%ncls_spec), source=0)
+                do icls = 1, params%ncls
+                    if( states(icls) > 0 )then
+                        fname = fbody//int2str(states(icls))//'_cavgs'//params%ext
+                        cnts(states(icls)) = cnts(states(icls)) + 1
+                        call imgs(icls)%write(fname, cnts(states(icls)))
+                    endif
+                end do
+            end subroutine write_cavgs
+
+            subroutine write_junk_cavgs
+                character(len=:), allocatable :: fname
+                integer :: icls, cnt
+                cnt = 0
+                do icls = 1, params%ncls
+                    if( states(icls) == 0 )then
+                        fname = 'junk_cavgs'//params%ext
+                        cnt = cnt + 1
+                        call imgs(icls)%write(fname, cnt)
+                    endif
+                end do
+            end subroutine write_junk_cavgs
+
+            subroutine write_selected_cavgs
+                character(len=:), allocatable :: fname
+                integer :: icls, cnt(0:1)
+                cnt = 0
+                do icls = 1, params%ncls
+                    if( states(icls) == 0 )then
+                        fname = 'unselected_cavgs'//params%ext
+                        cnt(0) = cnt(0) + 1
+                        call imgs(icls)%write(fname, cnt(0))
+                    else
+                        fname  = 'selected_cavgs'//params%ext
+                        cnt(1) = cnt(1) + 1
+                        call imgs(icls)%write(fname, cnt(1))
+                    endif
+                end do
+            end subroutine write_selected_cavgs
+
     end subroutine exec_autoselect_cavgs
 
     subroutine exec_cluster_cavgs( self, cline )
