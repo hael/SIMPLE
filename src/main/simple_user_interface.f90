@@ -3305,7 +3305,7 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call autoselect_cavgs%set_input('srch_ctrls', 1, 'ncls_spec', 'num', '# spectral clusters', '# spectral clusters(2-5)', '(1-5)', .false., 1.)
+        call autoselect_cavgs%set_input('srch_ctrls', 1, 'ncls_spec', 'num', '# spectral clusters', '# spectral clusters(3-10)', '(3-10)', .false., 5.)
         ! filter controls
         call autoselect_cavgs%set_input('filt_ctrls', 1, hp)
         call autoselect_cavgs%set_input('filt_ctrls', 2, lp)
