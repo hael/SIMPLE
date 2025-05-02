@@ -417,7 +417,7 @@ contains
             if( istage == 1 )then
                 call xcalc_pspec_distr%execute_safe(cline_calc_pspec)
             endif
-            ! Classification
+            ! clustering
             if( l_shmem )then
                 call xcluster2D%execute_safe(cline_cluster2D)
             else

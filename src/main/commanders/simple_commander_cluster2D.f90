@@ -2098,7 +2098,7 @@ contains
         enddo
         deallocate(fm_correlators,ccimgs)
         if( trim(params%bin_cls).eq.'yes' )then
-            write(logfhandle,'(A)') '>>> GOOD/BAD CLASSIFICATION AND RANKING OF CLASS AVERAGES'
+            write(logfhandle,'(A)') '>>> GOOD/BAD ASSIGNMENT & RANKING OF CLASS AVERAGES'
             nsel = ceiling(0.1 * real(ncls_sel))
             allocate(mask_top_ranking(ncls_sel),corrs_top_ranking(ncls_sel),nloc(nsel))
             ! average the nsel best correlations (excluding self) to create a scoring function for garbage removal

@@ -203,7 +203,7 @@ real, parameter    :: TAU_DEFAULT               = 3.0            !< TAU fudge fa
                                                                  !! tau < 3 leads to excessive low-pass filtering
 real, parameter    :: CENTHRESH                 = 0.5            ! threshold for performing volume/cavg centering in pixels
 real, parameter    :: MAXCENTHRESH2D            = 3.0            ! max threshold for performing cavg centering in pixels
-real, parameter    :: EXTR_POWER                = 2.0            ! Exponent of the sampling function during extremal stochastic phase of 2D classification
+real, parameter    :: EXTR_POWER                = 2.0            ! Exponent of the sampling function during extremal stochastic phase of 2D analysis
 real, parameter    :: POST_EXTR_POWER           = 4.0            ! Exponent of the sampling function after the extremal stochastic phase
 integer, parameter :: MAXPOP_CLS                = 5000
 integer, parameter :: MAXPOP_PTCLS              = 1200000
@@ -250,9 +250,9 @@ real,    parameter :: ABS_VAR_THRESHOLD         = 1.5            !< class reject
 real,    parameter :: TVD_THRESHOLD             = 0.55           !< class rejection: Total Variation Distance of image distributions
 real,    parameter :: MINMAX_THRESHOLD          = 2.0            !< class rejection: image min & max threshold (absolute value)
 real,    parameter :: POOL_THRESHOLD_FACTOR     = 1.25           !< class rejection: pool class rejection adjustment
-real,    parameter :: FRAC_SKIP_REJECTION       = 0.7            !< classification: When the number of classes to reject is too high rejection is skipped
-integer, parameter :: STREAM_SRCHLIM            = 5              !< classification: maximum # of systematic iterations for streaming 2D pool
-integer, parameter :: MAX_STREAM_NPTCLS         = 500000         !< classification: cap for adjusting update_frac in 2D streaming
+real,    parameter :: FRAC_SKIP_REJECTION       = 0.7            !< 2D analysis: When the number of classes to reject is too high rejection is skipped
+integer, parameter :: STREAM_SRCHLIM            = 5              !< 2D analysis: maximum # of systematic iterations for streaming 2D pool
+integer, parameter :: MAX_STREAM_NPTCLS         = 500000         !< 2D analysis: cap for adjusting update_frac in 2D streaming
 
 ! nanoparticles
 real,    parameter :: AMSKLP_NANO               = 5.

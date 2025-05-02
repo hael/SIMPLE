@@ -39,7 +39,7 @@ contains
         call del_files('algndoc_cavgs_',       np, ext=trim(METADATA_EXT))
         call del_files(JOB_FINISHED_FBODY,     np)
         call del_files('distr_simple_script_', np)
-        ! optionally deletes 2D classification temporary files
+        ! optionally deletes 2D analysis temporary files
         if( .not.l_keep2D )then
             call del_files('cavgs_even_part',     np, ext=params_glob%ext)
             call del_files('cavgs_odd_part',      np, ext=params_glob%ext)

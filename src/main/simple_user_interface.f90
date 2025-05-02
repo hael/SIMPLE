@@ -1260,11 +1260,11 @@ contains
         call set_param(mskdiam,       'mskdiam',       'num',    'Mask diameter', 'Mask diameter (in A) for application of a soft-edged circular mask to remove background noise', 'mask diameter in A', .true., 0.)
         call set_param(ncls,          'ncls',          'num',    'Number of 2D clusters', 'Number of groups to sort the particles &
         &into prior to averaging to create 2D class averages with improved SNR', '# 2D clusters', .true., 200.)
-        call set_param(ncls_start,    'ncls_start',    'num',    'Number of 2D clusters per subset of particles', 'Number of class averages used in the independent 2D classification of each subset of particles', '# 2D clusters / subset', .true., 50.)
+        call set_param(ncls_start,    'ncls_start',    'num',    'Number of 2D clusters per subset of particles', 'Number of class averages used in the independent 2D analysis of each subset of particles', '# 2D clusters / subset', .true., 50.)
         call set_param(nparts,        'nparts',        'num',    'Number of computing nodes', 'Number of partitions for distributed memory execution. One part typically corresponds to one CPU socket in the distributed &
         &system. On a single-socket machine there may be speed benefits to dividing the jobs into a few (2-4) partitions, depending on memory capacity', 'divide job into # parts', .true., 1.0)
-        call set_param(nparts_chunk,  'nparts_chunk',  'num',    'Number of computing nodes per subset', 'Number of computing nodes allocated to 2D classification of each particles subset (chunk){1}', '# of nodes per subset{1}', .false., 1.0)
-        call set_param(nparts_pool,   'nparts_pool',   'num',    'Number of computing nodes for the pooled subsets', 'Number of computing nodes allocated to 2D classification of the pooled particles subsets', '# of nodes for the pooled subsets', .false., 2.0)
+        call set_param(nparts_chunk,  'nparts_chunk',  'num',    'Number of computing nodes per subset', 'Number of computing nodes allocated to 2D analysis of each particles subset (chunk){1}', '# of nodes per subset{1}', .false., 1.0)
+        call set_param(nparts_pool,   'nparts_pool',   'num',    'Number of computing nodes for the pooled subsets', 'Number of computing nodes allocated to 2D analysis of the pooled particles subsets', '# of nodes for the pooled subsets', .false., 2.0)
         call set_param(nthr,          'nthr',          'num',    'Number of threads per computing node, give 0 if unsure', 'Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of &
         &logical threads in a socket.', '# shared-memory CPU threads', .true., 0.)
         call set_param(nonuniform,    'nonuniform',    'binary', 'Nonuniform filter', 'Apply nonuniform filter(yes|no){no}', '(yes|no){no}', .false., 'no')
@@ -1306,7 +1306,7 @@ contains
         call set_param(box_extract,    'box_extract',  'num',    'Extracted particle image size', 'Extracted particle image size(in pixels)', 'Extracted particle image size', .false., 0.)
         call set_param(nchunks,        'nchunks',      'num',    'Number of subsets to classify simultaneously', 'Maximum number of particles subsets (chunks) to classify simultaneously', '# of substsets', .true., 2.)
         call set_param(nptcls,         'nptcls',       'num',    'Number of particles', 'Number of particle images', '# particles', .true., 0.)
-        call set_param(nptcls_per_cls, 'nptcls_per_cls','num',   'Number of particles per cluster', 'Initial number of particles per cluster{35}', '# initial particles per cluster{35}', .false., 35.)
+        call set_param(nptcls_per_cls, 'nptcls_per_cls','num',   'Number of particles per cluster', 'Initial number of particles per cluster{35}', '# initial particles per cluster{35}', .false., 500.)
         call set_param(outstk,         'outstk',       'file',   'Output stack name', 'Output images stack name', 'e.g. outstk.mrc', .false., '')
         call set_param(pcontrast,      'pcontrast',    'multi',  'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false., 'black')
         call set_param(clip,           'clip',         'num',    'Clipped box size', 'Target box size for clipping in pixels', 'in pixels', .false., 0.)
@@ -1376,11 +1376,11 @@ contains
         call set_param(ml_reg_pool,    'ml_reg_pool',  'binary', 'Pool ML regularization', 'Pool Regularization (ML-style) based on the signal power(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(sigma_est,      'sigma_est',    'multi',  'Sigma estimation method', 'Sigma estimation method(group|global){group}', '(group|global){group}', .false., 'group')
         call set_param(combine_eo,     'combine_eo',   'binary', 'Whether e/o references are combined for final alignment(yes|no){no}', 'whether e/o references are combined for final alignment(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(maxnchunks,     'maxnchunks',   'num',    'Number of subsets after which 2D classification ends', 'After this number of subsets has been classified all processing will stop(0=no end){0}','{0}',.false., 0.0)
+        call set_param(maxnchunks,     'maxnchunks',   'num',    'Number of subsets after which 2D analysis ends', 'After this number of subsets has been classified all processing will stop(0=no end){0}','{0}',.false., 0.0)
         call set_param(picker,         'picker',       'multi',  'Which picker to use', 'Which picker to use(old|new|seg){new}', '(old|new|seg){new}', .false., 'new')
         call set_param(pick_roi,       'pick_roi',     'binary', 'Artefactual regions exclusion(new picker only)', 'Whether to exclude regions of disinterest(carbon, thick ice, new picker only){yes|no}', '{yes|no}', .false., 'no')
         call set_param(remove_chunks,  'remove_chunks','binary', 'Whether to remove subsets', 'Whether to remove subsets after completion(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call set_param(cls_init,       'cls_init',     'multi',  'Scheme for initial class generation', 'Initiate 2D classification from raw images|random classes|noise images(ptcl|randcls|rand){ptcl}', '(ptcl|randcls|rand){ptcl}', .false., 'ptcl')
+        call set_param(cls_init,       'cls_init',     'multi',  'Scheme for initial class generation', 'Initiate 2D analysis from raw images|random classes|noise images(ptcl|randcls|rand){ptcl}', '(ptcl|randcls|rand){ptcl}', .false., 'ptcl')
         call set_param(kweight,        'kweight',      'multi',  'Correlation weighing scheme', 'Correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
         call set_param(kweight_chunk,  'kweight_chunk','multi',  'Subset correlation weighing scheme', 'Subset correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
         call set_param(kweight_pool,   'kweight_pool', 'multi',  'Pool Correlation weighing scheme', 'Pool correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
@@ -2162,8 +2162,8 @@ contains
              &'(snhc|snhc_smpl|prob|prob_smpl){snhc_smpl}', .false., 'no', gui_submenu="cluster 2D")
         call cluster2D_subsets%set_input('srch_ctrls', 6, objfun, gui_submenu="cluster 2D")
         call cluster2D_subsets%set_input('srch_ctrls', 7, cls_init, gui_submenu="cluster2D")
-        call cluster2D_subsets%set_input('srch_ctrls', 8, 'algorithm', 'binary', 'Classification algorithm',&
-        &'Algorithm for 2D classification(cluster2D|abinitio2D){cluster2D}', '(cluster2D|abinitio2D){cluster2D}',&
+        call cluster2D_subsets%set_input('srch_ctrls', 8, 'algorithm', 'binary', '2D analysis algorithm',&
+        &'Algorithm for 2D analysis(cluster2D|abinitio2D){cluster2D}', '(cluster2D|abinitio2D){cluster2D}',&
         &.false., 'cluster2D', gui_submenu="cluster 2D")
         call cluster2D_subsets%set_input('srch_ctrls',  9, 'nsample', 'num', 'Maximum # of particles restored per class', 'Maximum # of particles restored per class with autosampling scheme',&
         &'max # of particles per class', .false., real(MAXPOP_CLS), gui_submenu="search", gui_advanced=.true.)
@@ -2188,20 +2188,20 @@ contains
     subroutine new_cluster2D_stream
         ! PROGRAM SPECIFICATION
         call cluster2D_stream%new(&
-        &'cluster2D_stream', &                                                         ! name
-        &'2D Classification in streaming mode',&                                       ! descr_short
-        &'is a distributed workflow that executes 2D classification'//&                ! descr_long
+        &'cluster2D_stream', &                                                   ! name
+        &'2D analysis in streaming mode',&                                       ! descr_short
+        &'is a distributed workflow that executes 2D analysis'//&                ! descr_long
         &' in streaming mode as the microscope collects the data',&
-        &'simple_stream',&                                                             ! executable
-        &0, 2, 0, 9, 3, 1, 5, .true.,&                                                 ! # entries in each group, requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "data,cluster 2D,compute")           ! GUI                 
+        &'simple_stream',&                                                       ! executable
+        &0, 2, 0, 9, 3, 1, 5, .true.,&                                           ! # entries in each group, requires sp_project
+        &gui_advanced=.false., gui_submenu_list = "data,cluster 2D,compute")     ! GUI                 
         ! image input/output
         ! <empty>
         ! parameter input/output
         call cluster2D_stream%set_input('parm_ios', 1, 'dir_target', 'file', 'Target directory',&
         &'Directory where the pick_extract application is running', 'e.g. 2_pick_extract', .true., '', gui_submenu="data", gui_advanced=.false.)
         call cluster2D_stream%set_input('parm_ios', 2, 'dir_exec', 'file', 'Previous run directory',&
-        &'Directory where previous 2D classification took place', 'e.g. 3_cluster2D_stream', .false., '', gui_submenu="data")
+        &'Directory where previous 2D analysis took place', 'e.g. 3_cluster2D_stream', .false., '', gui_submenu="data")
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2226,7 +2226,7 @@ contains
         call cluster2D_stream%set_input('filt_ctrls', 1, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30., gui_submenu="cluster 2D")
-        call cluster2D_stream%set_input('filt_ctrls', 2, 'lp', 'num', 'Static low-pass limit for 2D classification', 'Static low-pass limit for 2D classification',&
+        call cluster2D_stream%set_input('filt_ctrls', 2, 'lp', 'num', 'Static low-pass limit for 2D analysis', 'Static low-pass limit for 2D analysis',&
         &'low-pass limit in Angstroms', .false., 15., gui_submenu="cluster 2D")
         call cluster2D_stream%set_input('filt_ctrls', 3, 'reject_cls', 'multi', 'Whether to reject class averages',&
         &'Whether to automatically reject 2D clusters and associated particles(yes|old|no){yes}', '(yes|old|no){yes}', .false., 'yes', gui_submenu="cluster 2D",&
@@ -2294,7 +2294,7 @@ contains
         ! image input/output
         call cluster_cavgs%set_input('img_ios', 1, stk)
         ! parameter input/output
-        call cluster_cavgs%set_input('parm_ios', 1, 'bin_cls', 'multi', 'Perform good/bad classification based on common lines',&
+        call cluster_cavgs%set_input('parm_ios', 1, 'bin_cls', 'multi', 'Perform good/bad assignment based on common lines',&
         &'Classes with lower common line correlation to the rest are rejected by Otsu(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call cluster_cavgs%set_input('parm_ios', 2,  'ncls', 'num', 'Number of highest populated AP clusters', 'Number of highest populated AP clusters to map the AP solution onto', '# classes', .false., 0.)
         ! alternative inputs
@@ -2836,7 +2836,7 @@ contains
         gen_picking_refs%mask_ctrls(1)%required = .false.
         ! computer controls
         call gen_picking_refs%set_input('comp_ctrls', 1, nthr, gui_submenu="compute", gui_advanced=.false.)
-        call gen_picking_refs%set_input('comp_ctrls', 2, 'nthr2D', 'num', 'Number of threads/node for 2D classification', 'Number of threads per node allocated to 2D classification',&
+        call gen_picking_refs%set_input('comp_ctrls', 2, 'nthr2D', 'num', 'Number of threads/node for 2D analysis', 'Number of threads per node allocated to 2D analysis',&
         &'# of threads for per node', .true., 1., gui_submenu="compute")
         call gen_picking_refs%set_input('comp_ctrls', 3, nparts, gui_submenu="compute", gui_advanced=.false.)
         call gen_picking_refs%set_input('comp_ctrls', 4, nparts_pool, gui_submenu="compute", gui_advanced=.false.)
