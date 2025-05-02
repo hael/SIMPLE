@@ -57,9 +57,9 @@ type stream_chunk
     integer                                :: it                    ! # of iterations performed
     integer                                :: nmics                 ! # of micrographs
     integer                                :: nptcls                ! # number of particles
-    logical                                :: toclassify = .true.   ! whether to perform classification or only calculate sigmas2
-    logical                                :: converged  = .false.  ! whether classification is over
-    logical                                :: available  = .true.   ! has been initialized but no classification peformed
+    logical                                :: toanalyze2D = .true.  ! whether to perform 2D analysis or only calculate sigmas2
+    logical                                :: converged  = .false.  ! whether 2D analysis is over
+    logical                                :: available  = .true.   ! has been initialized but no 2D analysis peformed
   contains
     procedure          :: init
     procedure          :: copy
@@ -67,7 +67,7 @@ type stream_chunk
     generic            :: assignment(=) => assign
     procedure          :: generate
     procedure          :: calc_sigma2
-    procedure          :: classify
+    procedure          :: analyze2D
     procedure          :: read
     procedure          :: split_sigmas_into
     procedure, private :: gen_final_cavgs
@@ -135,7 +135,7 @@ contains
         call self%spproj%projinfo%delete_entry('projname')
         call self%spproj%projinfo%delete_entry('projfile')
         if( allocated(self%orig_stks) ) deallocate(self%orig_stks)
-        self%toclassify = .true.
+        self%toanalyze2D = .true.
         self%converged  = .false.
         self%available  = .true.
         call debug_print('end chunk%init '//int2str(id))
@@ -155,7 +155,7 @@ contains
         dest%it           = src%it
         dest%nmics        = src%nmics
         dest%nptcls       = src%nptcls
-        dest%toclassify   = src%toclassify
+        dest%toanalyze2D   = src%toanalyze2D
         dest%converged    = src%converged
         dest%available    = src%available
     end subroutine copy
@@ -184,8 +184,8 @@ contains
         call debug_print('end chunk%generate_2 '//int2str(self%id))
     end subroutine generate
 
-    ! Initiates classification
-    subroutine classify( self, calc_pspec, makecavgs )
+    ! Initiates 2D analysis
+    subroutine analyze2D( self, calc_pspec, makecavgs )
         class(stream_chunk), intent(inout) :: self
         logical,             intent(in)    :: calc_pspec
         logical,   optional, intent(in)    :: makecavgs
@@ -195,7 +195,7 @@ contains
         character(len=XLONGSTRLEN) :: cwd
         integer                    :: nptcls_sel, nclines
         logical                    :: l_makecavgs
-        call debug_print('in chunk%classify '//int2str(self%id))
+        call debug_print('in chunk%analyze2D '//int2str(self%id))
         if( .not.self%available ) return
         if( self%nptcls == 0 ) return
         l_makecavgs = .false.
@@ -230,7 +230,7 @@ contains
         call self%cline%set('projname', trim(PROJNAME_CHUNK))
         call self%spproj%update_projinfo(self%cline)
         call self%spproj%write()
-        ! 2D classification
+        ! 2D analysis
         clines(nclines) = self%cline
         if( l_makecavgs )then
             ! optional postprocessing
@@ -256,14 +256,14 @@ contains
         ! chunk is now busy
         self%available = .false.
         self%converged = .false.
-        write(logfhandle,'(A,I6,A,I6,A)')'>>> CHUNK ',self%id,' INITIATED CLASSIFICATION WITH ',nptcls_sel,' PARTICLES'
-        call debug_print('end chunk%classify')
-    end subroutine classify
+        write(logfhandle,'(A,I6,A,I6,A)')'>>> CHUNK ',self%id,' INITIATED 2D ANALYSIS WITH ',nptcls_sel,' PARTICLES'
+        call debug_print('end chunk%analyze2D')
+    end subroutine analyze2D
 
     ! To calculate noise power estimates only
-    subroutine calc_sigma2( self, cline_classify, need_sigma )
+    subroutine calc_sigma2( self, cline_analyze2D, need_sigma )
         class(stream_chunk), intent(inout) :: self
-        class(cmdline),      intent(in)    :: cline_classify
+        class(cmdline),      intent(in)    :: cline_analyze2D
         logical,             intent(in)    :: need_sigma
         type(cmdline)                 :: cline_pspec
         character(len=XLONGSTRLEN)    :: cwd
@@ -281,7 +281,7 @@ contains
         nptcls_sel = self%spproj%os_ptcl2D%get_noris(consider_state=.true.)
         call cline_pspec%set('prg',      'calc_pspec_distr')
         call cline_pspec%set('oritype',  'ptcl2D')
-        call cline_pspec%set('nthr',     cline_classify%get_iarg('nthr'))
+        call cline_pspec%set('nthr',     cline_analyze2D%get_iarg('nthr'))
         call cline_pspec%set('mkdir',    'yes')
         call cline_pspec%set('nparts',   1)
         if( params_glob%nparts_chunk > 1 ) call cline_pspec%set('nparts',params_glob%nparts_chunk)
@@ -290,7 +290,7 @@ contains
         call self%spproj%update_projinfo(cline_pspec)
         call self%spproj%write()
         self%available  = .false.
-        self%toclassify = .false. ! not to be classified
+        self%toanalyze2D = .false. ! not to be classified
         self%it         = 1
         if( need_sigma )then
             ! making sure the executable is *always* simple_private_exec
@@ -324,7 +324,7 @@ contains
         projfile = trim(self%path)//trim(self%projfile_out)
         call self%spproj%read(projfile)
         ! classes, to account for nparts /= nparts_chunk
-        if( self%toclassify )then
+        if( self%toanalyze2D )then
             call img%new([box,box,1],1.0)
             call avg%new([box,box,1],1.0)
             call average_into(trim(self%path)//'cavgs_even_part')
@@ -476,11 +476,11 @@ contains
         call debug_print('end chunk%display_iter '//int2str(self%id))
     end subroutine display_iter
 
-    ! Whether classification is complete
+    ! Whether 2D analysis is complete
     logical function has_converged( self )
         class(stream_chunk), intent(inout) :: self
         if( .not.self%converged )then
-            if( self%toclassify )then
+            if( self%toanalyze2D )then
                 if( str_has_substr(self%cline%get_carg('prg'), 'abinitio') )then
                     self%converged = file_exists(trim(self%path)//trim(ABINITIO2D_FINISHED))
                 else
@@ -493,7 +493,7 @@ contains
         has_converged  = self%converged
     end function has_converged
 
-    ! Handles automated classification
+    ! Handles automated 2D analysis
     subroutine reject( self, res_thresh, ndev)
         class(stream_chunk), intent(inout) :: self
         real,                intent(in)    :: res_thresh, ndev
@@ -598,7 +598,7 @@ contains
         self%path      = ''
         self%projfile_out = ''
         if( allocated(self%orig_stks) ) deallocate(self%orig_stks)
-        self%toclassify = .true.
+        self%toanalyze2D = .true.
         self%converged  = .false.
         self%available  = .false.
     end subroutine kill

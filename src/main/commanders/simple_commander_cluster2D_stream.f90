@@ -25,7 +25,7 @@ implicit none
 
 public :: init_cluster2D_stream, update_user_params2D, terminate_stream2D
 ! Pool
-public :: import_records_into_pool, classify_pool, update_pool_status, update_pool
+public :: import_records_into_pool, analyze2D_pool, update_pool_status, update_pool
 public :: reject_from_pool, reject_from_pool_user, write_pool_cls_selected_user
 public :: generate_pool_stats, read_pool_xml_beamtilts, assign_pool_optics
 public :: is_pool_available, get_pool_iter, get_pool_assigned, get_pool_rejected
@@ -36,7 +36,7 @@ public :: get_pool_rejected_jpeg, get_pool_rejected_jpeg_ntiles, get_pool_reject
 public :: get_chunk_rejected_jpeg, get_chunk_rejected_jpeg_ntiles, get_chunk_rejected_jpeg_scale, get_chunk_rejected_thumbnail_id
 public :: get_last_snapshot, get_last_snapshot_id, get_rejection_params, get_lpthres, get_snapshot_json, get_lpthres_type, set_lpthres_type
 ! Chunks
-public :: update_chunks, classify_new_chunks, import_chunks_into_pool
+public :: update_chunks, analyze2D_new_chunks, import_chunks_into_pool
 public :: flush_remaining_particles, all_chunks_available
 ! Abinitio3D
 public :: generate_snapshot_for_abinitio
@@ -88,15 +88,15 @@ integer(timer_int_kind)          :: t
 type(sp_project)                 :: pool_proj                         ! master project
 type(sp_project),    allocatable :: pool_proj_history(:)              ! 5 iterations of project history
 type(qsys_env)                   :: qenv_pool
-type(cmdline)                    :: cline_cluster2D_pool              ! master pool classification command line
+type(cmdline)                    :: cline_cluster2D_pool              ! master pool 2D analysis command line
 type(scaled_dims)                :: pool_dims                         ! crop dimensions used for pool
-logical,             allocatable :: pool_stacks_mask(:)               ! subset of stacks undergoing classification
+logical,             allocatable :: pool_stacks_mask(:)               ! subset of stacks undergoing 2D analysis
 integer                          :: pool_iter                         ! Iteration counter
 logical                          :: pool_available
 logical                          :: l_no_chunks                       ! for not using chunks (cf gen_picking_refs)
 ! Chunk related
 type(stream_chunk),  allocatable :: chunks(:), converged_chunks(:)
-type(cmdline)                    :: cline_cluster2D_chunk             ! master chunk classification command line
+type(cmdline)                    :: cline_cluster2D_chunk             ! master chunk 2D analysis command line
 type(scaled_dims)                :: chunk_dims                        ! crop dimensions used for chunks
 integer                          :: glob_chunk_id                     ! ID book-keeping
 ! Book-keeping
@@ -271,7 +271,7 @@ contains
         call cline_cluster2D_pool%set('stream',    'yes')
         call cline_cluster2D_pool%set('nparts',    params_glob%nparts_pool)
         if( l_update_sigmas ) call cline_cluster2D_pool%set('cc_iters', 0)
-        ! when the classification is started without chunks (no chunk pre-classification)
+        ! when the 2D analysis is started without chunks (no chunk pre-analysis)
         if( l_no_chunks ) l_update_sigmas = .false.
         ! set # of ptcls beyond which fractional updates will be used
         lim_ufrac_nptcls = MAX_STREAM_NPTCLS
@@ -712,7 +712,7 @@ contains
             call chunks(ichunk)%terminate
         enddo
         if( pool_iter == 0 )then
-            ! no pool classification performed, all available info is written down
+            ! no pool 2D analysis performed, all available info is written down
             if( allocated(records) )then
                 call projrecords2proj(records, pool_proj)
                 call starproj_stream%copy_micrographs_optics(pool_proj, verbose=DEBUG_HERE)
@@ -964,9 +964,9 @@ contains
         call spproj%kill
     end subroutine import_records_into_pool
 
-    ! Performs one classification iteration:
+    ! Performs one iteration:
     ! updates to command-line, particles sampling, temporary project & execution
-    subroutine classify_pool
+    subroutine analyze2D_pool
         use simple_euclid_sigma2, only: consolidate_sigma2_groups, average_sigma2_groups
         use simple_ran_tabu
         logical,                   parameter   :: L_BENCH = .false.
@@ -1249,9 +1249,9 @@ contains
         pool_available = .false.
         write(logfhandle,'(A,I6,A,I8,A3,I8,A)')'>>> POOL         INITIATED ITERATION ',pool_iter,' WITH ',nptcls_sel,&
         &' / ', sum(nptcls_per_stk),' PARTICLES'
-        if( L_BENCH ) print *,'timer classify_pool tot : ',toc(t_tot)
+        if( L_BENCH ) print *,'timer analyze2D_pool tot : ',toc(t_tot)
         call tidy_2Dstream_iter
-    end subroutine classify_pool
+    end subroutine analyze2D_pool
 
     ! Flags pool availibility & updates the global name of references
     subroutine update_pool_status
@@ -2014,8 +2014,8 @@ contains
 
     ! CHUNKS RELATED
 
-    ! Initiates classification of all available chunks
-    subroutine classify_new_chunks( micproj_records, makecavgs )
+    ! Initiates analysis of all available chunks
+    subroutine analyze2D_new_chunks( micproj_records, makecavgs )
         type(projrecord),  intent(inout) :: micproj_records(:)
         logical, optional, intent(in)    :: makecavgs
         integer :: ichunk, n_avail_chunks, n_spprojs_in, iproj, nptcls, n2fill
@@ -2063,11 +2063,11 @@ contains
                 call chunks(ichunk)%generate(micproj_records(first2import:last2import))
                 micproj_records(first2import:last2import)%included = .true.
                 ! execution
-                call chunks(ichunk)%classify(l_update_sigmas, makecavgs)
+                call chunks(ichunk)%analyze2D(l_update_sigmas, makecavgs)
                 first2import = last2import + 1 ! to avoid cycling through all projects
             endif
         enddo
-    end subroutine classify_new_chunks
+    end subroutine analyze2D_new_chunks
 
     ! Deals with chunk completion, rejection, reset
     subroutine update_chunks
@@ -2078,7 +2078,7 @@ contains
         do ichunk = 1,params_glob%nchunks
             if( chunks(ichunk)%available ) cycle
             chunk_complete = .false.
-            if( chunks(ichunk)%toclassify )then
+            if( chunks(ichunk)%toanalyze2D )then
                 ! chunk meant to be classified
                 if( chunks(ichunk)%has_converged() )then
                     chunk_complete = .true.
@@ -2092,7 +2092,7 @@ contains
                     endif
                 endif
             else
-                ! placeholder chunk (no classification performed, sigma2 only)
+                ! placeholder chunk (no analysis performed, sigma2 only)
                 if( chunks(ichunk)%has_converged() ) chunk_complete = .true.
             endif
             if( chunk_complete )then
@@ -2203,8 +2203,8 @@ contains
             ! display
             write(logfhandle,'(A,I6,A,I6,A)')'>>> TRANSFERRED ',nptcls_sel,' PARTICLES FROM CHUNK ',converged_chunks(ichunk)%id,' TO POOL'
             call flush(logfhandle)
-            if( converged_chunks(ichunk)%toclassify )then
-                ! this chunk underwent 2D classification, particles & classes are mapped
+            if( converged_chunks(ichunk)%toanalyze2D )then
+                ! this chunk underwent 2D analysis, particles & classes are mapped
                 ! transfer classes
                 l_maxed   = ncls_glob >= max_ncls ! max # of classes reached
                 ncls_here = ncls_glob
@@ -2385,7 +2385,7 @@ contains
                     ncls_glob = ncls_here
                 endif
             else
-                ! this chunk did not undergo 2D classification,
+                ! this chunk did not undergo 2D analysis
                 ! particles are mapped to non-empty classes
                 cls_pop = nint(pool_proj%os_cls2D%get_all('pop'))
                 states  = nint(converged_chunks(ichunk)%spproj%os_ptcl2D%get_all('state'))
@@ -2537,7 +2537,7 @@ contains
             endif
         enddo
         if( (nptcls==0) .or. (nptcls >= nptcls_per_chunk) )then
-            ! zero or enough particles to build one chunk in classify_new_chunks
+            ! zero or enough particles to build one chunk in analyze2D_new_chunks
             return
         endif
         ! One chunk is generated with all unclassified particles
@@ -2748,7 +2748,7 @@ contains
     end subroutine debug_print
 
     !
-    ! cluster2D_subsets, only splits into chunks & classify them
+    ! cluster2D_subsets, only splits into chunks & analyze2D them
     !
     subroutine exec_cluster2D_subsets( self, cline )
         class(cluster2D_commander_subsets), intent(inout) :: self
@@ -2757,6 +2757,7 @@ contains
         integer,               parameter :: WAITTIME    = 5
         type(consolidate_chunks_cavgs_commander) :: xconsolidate
         type(projrecord), allocatable :: micproj_records(:)
+        character(len=:), allocatable :: alg
         type(parameters)              :: params
         type(sp_project)              :: spproj_glob
         type(cmdline)                 :: cline_consolidate
@@ -2785,6 +2786,21 @@ contains
         if( .not. cline%defined('refine')       ) call cline%set('refine',       'snhc_smpl')
         ! parse
         call params%new(cline)
+        ! exception handling
+        alg = trim(uppercase(params%algorithm))
+        select case(alg)
+            case('CLUSTER2D')
+                if( cline%defined('nsample') .or. cline%defined('nsample_max') .or.&
+                    &trim(params%autosample).eq.'yes' )then
+                    THROW_HARD('AUTOSAMPLE is only supported with ALGORITHM=ABINITIO2D')
+                endif
+
+                if( trim(params%cls_init).eq.'rand') THROW_HARD('cls_init=rand not supported with ALGORITHM=ABINITIO2D')
+            case('ABINITIO2D')
+                ! nothing to do
+            case DEFAULT
+                THROW_HARD('Unsupported algorithm')
+        end select
         ! read strictly required fields
         call spproj_glob%read_non_data_segments(params%projfile)
         call spproj_glob%read_segment('mic',   params%projfile)
@@ -2797,7 +2813,7 @@ contains
             THROW_HARD('No particles found in project file: '//trim(params%projfile)//'; exec_cluster2d_subsets')
         endif
         if ( nptcls < 2*nptcls_per_chunk )then
-            THROW_WARN('Not enough particles to classify more than one subset')
+            THROW_WARN('Not enough particles to analyze2D more than one subset')
             THROW_HARD('Review parameters or use cleanup2D/cluster2D instead')
         endif
         ! General streaming initialization
@@ -2806,30 +2822,24 @@ contains
         numlen = params%numlen
         call del_file(trim(POOL_DIR)//trim(CLUSTER2D_FINISHED))
         call cline_cluster2D_chunk%set('center', params%center)
-        select case(trim(uppercase(params%algorithm)))
-        case('CLUSTER2D')
-            call cline_cluster2D_chunk%set('rank_cavgs', 'no')
-            l_makecavgs = (trim(params%rank_cavgs).eq.'yes').and.l_scaling
-            call cline_cluster2D_chunk%set('minits',    MAX_EXTRLIM2D)
-            call cline_cluster2D_chunk%set('maxits',    MAX_EXTRLIM2D+5)
-            call cline_cluster2D_chunk%set('extr_iter', 1)
-            call cline_cluster2D_chunk%set('extr_lim',  MAX_EXTRLIM2D)
-            call cline_cluster2D_chunk%set('startit',   1)
-            if( l_update_sigmas ) call cline_cluster2D_chunk%set('cc_iters', 10)
-            if( cline%defined('nsample') .or. cline%defined('nsample_max') .or.&
-                &trim(params%autosample).eq.'yes' )then
-                THROW_HARD('AUTOSAMPLE is only supported with ALGORITHM=ABINITIO2D')
-            endif
-        case('ABINITIO2D')
-            call cline_cluster2D_chunk%delete('minits')
-            call cline_cluster2D_chunk%delete('maxits')
-            call cline_cluster2D_chunk%delete('extr_iter')
-            call cline_cluster2D_chunk%delete('extr_lim')
-            call cline_cluster2D_chunk%delete('cc_iters')
-            call cline_cluster2D_chunk%set('rank_cavgs', params%rank_cavgs)
-            l_makecavgs = .false.
-        case DEFAULT
-            THROW_HARD('Unsupported algorithm')
+        select case(alg)
+            case('CLUSTER2D')
+                call cline_cluster2D_chunk%set('rank_cavgs', 'no')
+                l_makecavgs = (trim(params%rank_cavgs).eq.'yes').and.l_scaling
+                call cline_cluster2D_chunk%set('minits',    MAX_EXTRLIM2D)
+                call cline_cluster2D_chunk%set('maxits',    MAX_EXTRLIM2D+5)
+                call cline_cluster2D_chunk%set('extr_iter', 1)
+                call cline_cluster2D_chunk%set('extr_lim',  MAX_EXTRLIM2D)
+                call cline_cluster2D_chunk%set('startit',   1)
+                if( l_update_sigmas ) call cline_cluster2D_chunk%set('cc_iters', 10)
+            case('ABINITIO2D')
+                call cline_cluster2D_chunk%delete('minits')
+                call cline_cluster2D_chunk%delete('maxits')
+                call cline_cluster2D_chunk%delete('extr_iter')
+                call cline_cluster2D_chunk%delete('extr_lim')
+                call cline_cluster2D_chunk%delete('cc_iters')
+                call cline_cluster2D_chunk%set('rank_cavgs', params%rank_cavgs)
+                l_makecavgs = .false.
         end select
         ! re-init with updated command-lines
         do ichunk = 1,params_glob%nchunks
@@ -2859,7 +2869,7 @@ contains
                     if( all_chunks_submitted ) exit
                     if( chunks(ic)%available )then
                         ichunk = ichunk + 1
-                        call classify_new_chunks(micproj_records, l_makecavgs)
+                        call analyze2D_new_chunks(micproj_records, l_makecavgs)
                         if( ichunk == ntot_chunks )then
                             all_chunks_submitted = .true.
                             deallocate(micproj_records)
@@ -2921,7 +2931,7 @@ contains
                 chunk_complete = .false.
                 converged      = .false.
                 cavgs_made     = .false.
-                if( chunks(ichunk)%toclassify )then
+                if( chunks(ichunk)%toanalyze2D )then
                     converged = chunks(ichunk)%has_converged()
                     if( converged )then
                         if( l_makecavgs )then

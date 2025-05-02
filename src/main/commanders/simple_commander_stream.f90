@@ -1873,7 +1873,7 @@ contains
         if( .not. cline%defined('backgr_subtr')    ) call cline%set('backgr_subtr',     'no')
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',        'black')
         if( .not. cline%defined('extractfrommov')  ) call cline%set('extractfrommov',   'no')
-        ! 2D classification
+        ! 2D analysis
         if( .not. cline%defined('ncls')            ) call cline%set('ncls',           30)
         if( .not. cline%defined('nptcls_per_cls')  ) call cline%set('nptcls_per_cls', 500)
         if( .not. cline%defined('ml_reg')          ) call cline%set('ml_reg',         'no')
@@ -2131,7 +2131,7 @@ contains
             call update_pool_status
             call update_pool
             call import_records_into_pool( projrecords )
-            call classify_pool
+            call analyze2D_pool
             if(  params%nparts > 1 ) then
                 call sleep(WAITTIME)
             else
@@ -2576,9 +2576,9 @@ contains
         class(commander_stream_cluster2D), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         character(len=STDLEN),     parameter   :: micspproj_fname = './streamdata.simple'
-        integer,                   parameter   :: PAUSE_NITERS    = 5   ! # of iterations after which classification is paused
-        integer,                   parameter   :: PAUSE_TIMELIMIT = 600 ! time (secs) after which classification is paused
-        integer(kind=dp),          parameter   :: FLUSH_TIMELIMIT = 900 ! time (secs) after which leftover particles join the pool IF the classification is paused
+        integer,                   parameter   :: PAUSE_NITERS    = 5   ! # of iterations after which 2D analysis is paused
+        integer,                   parameter   :: PAUSE_TIMELIMIT = 600 ! time (secs) after which 2D analysis is paused
+        integer(kind=dp),          parameter   :: FLUSH_TIMELIMIT = 900 ! time (secs) after which leftover particles join the pool IF the 2D analysis is paused
         type(projrecord),          allocatable :: projrecords(:)
         type(parameters)                       :: params
         type(simple_nice_communicator)         :: nice_communicator
@@ -2711,10 +2711,10 @@ contains
         iter                  = 0       ! global number of infinite loop iterations
         n_failed_jobs         = 0
         l_nchunks_maxed       = .false. ! Whether a minimum number of chunks as been met
-        l_pause               = .false. ! whether pool classification is skipped
-        pool_iter_last_chunk  = -1                          ! used for pausing classification
-        pool_time_last_chunk  = huge(pool_time_last_chunk)  ! used for pausing classification
-        time_last_import      = huge(time_last_import)      ! used for flushing unclassified particles
+        l_pause               = .false. ! whether pool 2D analysis is skipped
+        pool_iter_last_chunk  = -1                          ! used for pausing 2D analysis
+        pool_time_last_chunk  = huge(pool_time_last_chunk)  ! used for pausing 2D analysis
+        time_last_import      = huge(time_last_import)      ! used for flushing unprocessed particles
         ! guistats init
         call gui_stats%init(.true.)
         call gui_stats%set('particles', 'particles_imported',          0,            primary=.true.)
@@ -2773,7 +2773,7 @@ contains
                     n_imported_prev = n_imported
                 endif
             endif
-            ! 2D classification section
+            ! 2D analysis section
             nice_communicator%view_cls2D%mskdiam  = params%mskdiam
             nice_communicator%view_cls2D%boxsizea = get_boxa()
             call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
@@ -2781,7 +2781,7 @@ contains
             call update_chunks
             if( l_pause )then
                 call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
-                if( l_params_updated ) l_pause = .false.    ! resuming classification
+                if( l_params_updated ) l_pause = .false.    ! resuming 2D analysis
             else
                 call update_pool_status
                 call update_pool
@@ -2792,14 +2792,14 @@ contains
             if( l_nchunks_maxed )then
                 ! # of chunks is above desired number
                 if( is_pool_available() .and. (get_pool_iter()>=pool_iter_max_chunk_imported+10) ) exit
-                call classify_pool
+                call analyze2D_pool
             else
                 call import_chunks_into_pool( nchunks_imported )
                 if( nchunks_imported > 0 )then
                     nchunks_imported_glob = nchunks_imported_glob + nchunks_imported
                     pool_iter_last_chunk  = get_pool_iter()
                     pool_time_last_chunk  = time8()
-                    l_pause = .false.   ! resuming classification
+                    l_pause = .false.   ! resuming 2D analysis
                 endif
                 if( nchunks_imported_glob >= params%maxnchunks )then
                     if( .not.l_nchunks_maxed ) pool_iter_max_chunk_imported = get_pool_iter()
@@ -2817,22 +2817,22 @@ contains
                     if( pool_iter_last_chunk > 0 )then
                         if( (get_pool_iter() >= pool_iter_last_chunk+PAUSE_NITERS) .or.&
                             &(time8()-pool_time_last_chunk > PAUSE_TIMELIMIT) )then
-                            ! pause pool classification & rejection in absence of new chunks, resumes
-                            ! when new chunks are added or classification parameters have been updated
+                            ! pause pool 2D analysis & rejection in absence of new chunks, resumes
+                            ! when new chunks are added or 2D analysis parameters have been updated
                             l_pause = is_pool_available()
-                            if( l_pause ) write(logfhandle,'(A)')'>>> PAUSING CLASSIFICATION'
+                            if( l_pause ) write(logfhandle,'(A)')'>>> PAUSING 2D ANALYSIS'
                         endif
                     endif
                 endif
-                ! Classifications
+                ! 2D analyses
                 if( l_pause )then
                     call generate_pool_stats
                 else
                     pool_iter = get_pool_iter()
-                    call classify_pool
+                    call analyze2D_pool
                     if(get_pool_iter() > pool_iter) nice_communicator%stat_root%user_input = .true.
                 endif
-                call classify_new_chunks(projrecords)
+                call analyze2D_new_chunks(projrecords)
                 ! Optionally generates snapshot project for abinitio3D
                 call generate_snapshot_for_abinitio
             endif
@@ -2846,7 +2846,7 @@ contains
             call gui_stats%write_json
             ! nice
             if(l_pause) then
-                nice_communicator%stat_root%stage = "paused pool classification"
+                nice_communicator%stat_root%stage = "paused pool 2D analysis"
                 nice_communicator%stat_root%user_input = .true.
             else if(get_nchunks() > 0) then
                 if(get_pool_iter() < 1) then
