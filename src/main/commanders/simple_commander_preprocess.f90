@@ -141,7 +141,7 @@ contains
         if( .not. cline%defined('oritype')         ) call cline%set('oritype',        'mic')
         if( .not. cline%defined('stream')          ) call cline%set('stream',          'no')
         if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',          'yes')
-        ! mnotion correction
+        ! motion correction
         if( .not. cline%defined('trs')             ) call cline%set('trs',              20.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',           8.)
         if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            5.)
@@ -457,7 +457,7 @@ contains
         call piter%kill
         call o_mov%kill
         ! end gracefully
-        call qsys_job_finished(  'simple_commander_preprocess :: exec_preprocess' )
+        call qsys_job_finished( 'simple_commander_preprocess :: exec_preprocess' )
         call simple_end('**** SIMPLE_PREPROCESS NORMAL STOP ****')
     end subroutine exec_preprocess
 
