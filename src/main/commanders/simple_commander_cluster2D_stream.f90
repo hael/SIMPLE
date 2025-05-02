@@ -43,7 +43,7 @@ public :: generate_snapshot_for_abinitio
 ! Utilities
 public :: cleanup_root_folder, write_project_stream2D, test_repick, write_repick_refs
 ! Cluster2D subsets
-public :: cluster2D_commander_subsets
+public :: cluster2D_commander_subsets, consolidate_chunks_cavgs_commander
 
 private
 #include "simple_local_flags.inc"
@@ -52,6 +52,11 @@ type, extends(commander_base) :: cluster2D_commander_subsets
   contains
     procedure :: execute      => exec_cluster2D_subsets
 end type cluster2D_commander_subsets
+
+type, extends(commander_base) :: consolidate_chunks_cavgs_commander
+  contains
+    procedure :: execute      => exec_consolidate_chunks_cavgs
+end type consolidate_chunks_cavgs_commander
 
 type scaled_dims
     real    :: smpd=0., msk=0.
@@ -2750,9 +2755,11 @@ contains
         class(cmdline),                     intent(inout) :: cline
         character(len=STDLEN), parameter :: DIR_PROJS   = trim(PATH_HERE)//'spprojs/'
         integer,               parameter :: WAITTIME    = 5
+        type(consolidate_chunks_cavgs_commander) :: xconsolidate
         type(projrecord), allocatable :: micproj_records(:)
         type(parameters)              :: params
         type(sp_project)              :: spproj_glob
+        type(cmdline)                 :: cline_consolidate
         integer :: ichunk, nstks, nptcls, nptcls_tot, ntot_chunks, ic, tot_nchunks_imported, nsplit
         logical :: all_chunks_submitted, all_chunks_imported, l_makecavgs
         call cline%set('oritype',      'ptcl2D')
@@ -2883,6 +2890,12 @@ contains
             endif
             call sleep(WAITTIME)
         end do
+        ! consolidate
+        call cline_consolidate%set('prg',        'consolidate_chunks_cavgs')
+        call cline_consolidate%set('dir_target', './')
+        call cline_consolidate%set('projfile',   params%projfile)
+        call cline_consolidate%set('mkdir',      'no')
+        call xconsolidate%execute_safe(cline_consolidate)
         ! cleanup
         call simple_rmdir(STDERROUT_DIR)
         call simple_rmdir(DIR_PROJS)
@@ -3081,6 +3094,93 @@ contains
         end subroutine generate_chunk_projects
 
     end subroutine exec_cluster2D_subsets
+
+    subroutine exec_consolidate_chunks_cavgs( self, cline )
+        class(consolidate_chunks_cavgs_commander), intent(inout) :: self
+        class(cmdline),                            intent(inout) :: cline
+        type(parameters)                   :: params
+        type(sp_project)                   :: tmpproj, spproj
+        type(image)                        :: img
+        type(oris)                         :: cls2D
+        character(len=STDLEN), allocatable :: folders(:)
+        character(len=:),      allocatable :: projname, stkname, evenname, oddname
+        real,                  allocatable :: states(:)
+        real    :: smpd
+        integer :: ldim(3), i, ichunk, icls, ncls, nchunks, n
+        if( .not.cline%defined('mkdir')        ) call cline%set('mkdir',        'yes')
+        ! if( .not.cline%defined('oritype')      ) call cline%set('oritype',      'ptcl2D')
+        call params%new(cline)
+        call cline%set('mkdir','no')
+        call spproj%read(params%projfile)
+        call spproj%os_ptcl2D%kill
+        call spproj%os_ptcl3D%kill
+        call spproj%os_cls2D%kill
+        call spproj%os_cls3D%kill
+        call spproj%os_out%kill
+        call spproj%update_projinfo(cline)
+        ! consolidate classes
+        folders = simple_list_dirs(params%dir_target)
+        n       = size(folders)
+        if( n == 0 ) THROW_HARD('Could not find chunks in current folder! 1')
+        nchunks = 0
+        do i = 1,n
+            projname = trim(params%dir_target)//'/'//trim(folders(i))//'/chunk.simple'
+            if( file_exists(projname) )nchunks = nchunks+1
+        enddo
+        if( nchunks == 0 ) THROW_HARD('Could not find chunks in current folder! 2')
+        icls = 0
+        do ichunk = 1,n
+            projname = trim(params%dir_target)//'/'//trim(folders(ichunk))//'/chunk.simple'
+            if( file_exists(projname) )then
+                call tmpproj%read_segment('out',  projname)
+                call tmpproj%read_segment('cls2D',  projname)
+                call tmpproj%get_cavgs_stk(stkname, ncls, smpd, imgkind='cavg')
+                call find_ldim_nptcls(stkname, ldim, ncls)
+                ldim(3) = 1
+                call img%new(ldim, smpd)
+                evenname = add2fbody(stkname, params%ext, '_even')
+                oddname  = add2fbody(stkname, params%ext, '_odd')
+                do i = 1,ncls
+                    if( tmpproj%os_cls2D%get_state(i) == 0 ) cycle
+                    icls = icls+1
+                    call img%read(stkname,i)
+                    call img%write('cavgs.mrc',icls)
+                    call img%read(evenname,i)
+                    call img%write('cavgs_even.mrc',icls)
+                    call img%read(oddname,i)
+                    call img%write('cavgs_odd.mrc',icls)
+                enddo
+            endif
+        enddo
+        call tmpproj%kill
+        call img%kill
+        ncls = icls
+        ! consolidate cls2D field
+        call cls2D%new(ncls,.false.)
+        icls = 0
+        do ichunk = 1,n
+            projname = trim(params%dir_target)//'/'//trim(folders(ichunk))//'/chunk.simple'
+            if( file_exists(projname) )then
+                call tmpproj%read_segment('cls2D',  projname)
+                do i = 1,tmpproj%os_cls2D%get_noris()
+                    if( tmpproj%os_cls2D%get_state(i) == 0 ) cycle
+                    icls = icls+1
+                    call cls2D%transfer_ori(icls, tmpproj%os_cls2D, i)
+                    call cls2D%set(icls,'class',icls)
+                enddo
+            endif
+        enddo
+        call tmpproj%kill
+        ! add and write to project
+        call spproj%add_cavgs2os_out('cavgs.mrc', smpd, imgkind='cavg')
+        spproj%os_cls2D = cls2D
+        states = spproj%os_cls2D%get_all('state')
+        call spproj%os_cls3D%set_all('state', states)
+        call spproj%write(params%projfile)
+        call spproj%kill
+        call cls2D%kill
+        call simple_end('**** SIMPLE_CONSOLIDATE_CHUNKS_CAVGS NORMAL STOP ****')
+    end subroutine exec_consolidate_chunks_cavgs
 
     ! Handles user inputted class rejection
     subroutine write_repick_refs(refsout)
