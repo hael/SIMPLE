@@ -657,7 +657,7 @@ contains
     !> provides re-scaling and clipping routines for MRC or SPIDER stacks and volumes
     subroutine exec_scale( self, cline )
         use simple_procimgstk, only: scale_and_clip_imgfile, scale_imgfile, pad_imgfile, clip_imgfile
-        use simple_qsys_funs, only: qsys_job_finished
+        use simple_qsys_funs,  only: qsys_job_finished
         class(scale_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(parameters) :: params
@@ -827,7 +827,7 @@ contains
         call build%kill_general_tbox
         ! end gracefully
         call simple_end('**** SIMPLE_SCALE NORMAL STOP ****', print_simple=.false.)
-        call qsys_job_finished(  'simple_commander_imgproc :: exec_scale' )
+        call qsys_job_finished( 'simple_commander_imgproc :: exec_scale' )
     end subroutine exec_scale
 
    !>  for stacking individual images or multiple stacks into one
