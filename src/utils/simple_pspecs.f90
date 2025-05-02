@@ -339,7 +339,7 @@ contains
         integer :: icls_spec, cnt, ispec
         do icls_spec = 1, self%ncls_spec
             if( self%clspops_spec(icls_spec) == 0 ) cycle 
-            if( l_print) write(logfhandle,'(A)') 'STATSTICS FOR SPECTRAL CLASS '//int2str(icls_spec)
+            if( l_print) write(logfhandle,'(A)') 'RESOLUTION STATSTICS FOR SPECTRAL CLASS '//int2str(icls_spec)
             cnt = 0
             do ispec = 1,self%nspecs
                 if( self%clsinds_spec(ispec) == icls_spec )then
@@ -379,8 +379,10 @@ contains
     subroutine select_cls_spec( self, states )
         class(pspecs),        intent(inout) :: self
         integer, allocatable, intent(inout) :: states(:)
+        real,    allocatable :: res_good(:), res_bad(:)
         integer :: good_bad_assign(self%nspecs), icls_spec, ispec, nptcls, nptcls_good
         real    :: best_res, worst_res, dist2best, dist2worst, frac_good
+        type(stats_struct) :: res_stats
         ! assign good/bad 2D classes based on closesness to best and worst median resolution of spectral groups
         best_res  = minval(self%cls_spec_clsres_stats(:)%med)
         worst_res = maxval(self%cls_spec_clsres_stats(:)%med)
@@ -396,6 +398,23 @@ contains
         nptcls_good = sum(self%clspops, mask=good_bad_assign == 1 )
         frac_good   = real(nptcls_good) / real(nptcls)
         write(logfhandle,'(a,1x,f8.2)') '% PARTICLES CLASSIFIED AS GOOD: ', frac_good * 100.
+        ! calculate resolution statistics for good/bad classes
+        res_good    = pack(self%clsres, mask=good_bad_assign == 1)
+        res_bad     = pack(self%clsres, mask=good_bad_assign == 0)
+        call calc_stats(res_good, res_stats)
+        write(logfhandle,'(A)') 'RESOLUTION STATSTICS FOR GOOD PARTITION'
+        write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_stats%minv
+        write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_stats%maxv
+        write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_stats%avg
+        write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_stats%med
+        write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', res_stats%sdev
+        call calc_stats(res_bad, res_stats)
+        write(logfhandle,'(A)') 'RESOLUTION STATSTICS FOR BAD  PARTITION'
+        write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_stats%minv
+        write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_stats%maxv
+        write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_stats%avg
+        write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_stats%med
+        write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', res_stats%sdev
         ! translate good/bad assignment to state array output
         if( allocated(states) ) deallocate(states)
         allocate(states(self%ncls), source=0)
