@@ -1107,6 +1107,7 @@ contains
         ! dynamic update frac
         if( istage == NSTAGES )then
             fillin = 'yes'
+            if( params_glob%nstates > 1 ) fillin = trim(params_glob%fillin)     ! fillin does not work with multistate, default no
             if( l_nsample_stop_given )then
                 update_frac_dyn = real(nsample_minmax(2)) / real(nptcls_eff)
             else if( l_nsample_given )then
