@@ -1810,7 +1810,7 @@ contains
         type(image),      allocatable :: imgs(:)
         integer,          allocatable :: states(:)
         character(len=:), allocatable :: stk, stkpath
-        integer :: icls, ispec, nspecs, nptcls
+        integer :: icls, nspecs, nptcls
         call cline%set('oritype', 'cls2D')
         if( .not. cline%defined('hp')        ) call cline%set('hp',       20.)
         if( .not. cline%defined('lp')        ) call cline%set('lp',        6.)
@@ -3155,15 +3155,16 @@ contains
         type(rank_cavgs_commander)    :: xrank_cavgs
         type(cmdline)                 :: cline_rank_cavgs
         character(len=STDLEN)         :: refs_ranked, stk
-        integer :: nptcls, ithr, iref, iptcl, irot, iter, pfromto(2)
+        integer :: nptcls, ithr, iref, iptcl, irot, iter, pfromto(2), kprev
         real    :: euls(3), sh(2)
         call cline%set('mkdir',  'yes')
         call cline%set('stream', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         call build%spproj_field%clean_entry('updatecnt', 'sampled')
-        call set_bp_range( cline )
+        call set_bp_range2D( cline, which_iter=1, frac_srch_space=1. )
         pfromto = [1, params_glob%nptcls]
         call sample_ptcls4update(pfromto, .true., nptcls, pinds)
+        if( cline%defined('lpprev') ) kprev = calc_fourier_index(params%lpprev, params_glob%box_crop, params_glob%smpd_crop)
         ! communicate to project file
         call build_glob%spproj%write_segment_inside(params_glob%oritype)
         ! Preparing pftcc
@@ -3199,7 +3200,9 @@ contains
         ! randomize oris
         if( trim(params_glob%continue) .eq. 'no' )then
             call build_glob%spproj_field%rnd_oris
+            call build_glob%spproj_field%set_projs(build_glob%eulspace)
             call build_glob%spproj_field%zero_shifts
+            call build%spproj%write_segment_inside(params%oritype, params%projfile)
         elseif( trim(params_glob%polar_prep) .eq. 'yes' )then
             do iptcl = pfromto(1), pfromto(2)
                 call pftcc%shift_ptcl(iptcl, -build_glob%spproj_field%get_2Dshift(iptcl))
@@ -3207,7 +3210,6 @@ contains
             ! re-memoizing ptcls due to shifted ptcls
             call pftcc%memoize_ptcls
         endif
-        call eulprob_obj%new(pinds)
         allocate(refs(params_glob%nspace))
         params%ncls = params%nspace
         params%frcs = trim(FRCS_FILE)
@@ -3250,7 +3252,6 @@ contains
         endif
         ! cleaning up
         call killimgbatch
-        call eulprob_obj%kill
         call pftcc%kill
         call build%kill_general_tbox
         call qsys_job_finished('simple_commander_cluster2D :: exec_cluster2D_polar')
@@ -3294,8 +3295,12 @@ contains
                     enddo
                 elseif( trim(coord_type) .eq. 'polar' )then
                     ! update polar refs using current alignment params
-                    call pftcc%gen_polar_refs(build_glob%eulspace, build_glob%spproj_field,&
-                                             &ran=(trim(params%cls_init).eq.'rand') .and. iter==1)
+                    if( cline%defined('lpprev') .and. iter==1 )then
+                        call pftcc%gen_polar_refs(build_glob%eulspace, build_glob%spproj_field, kprev=kprev)
+                    else
+                        call pftcc%gen_polar_refs(build_glob%eulspace, build_glob%spproj_field,&
+                                                &ran=(trim(params%cls_init).eq.'rand') .and. iter==1)
+                    endif
                     ! for visualization of polar cavgs
                     call pftcc%prefs_to_cartesian(refs)
                     do iref = 1, params_glob%nspace
@@ -3334,6 +3339,7 @@ contains
                 ! need to re-normalize particles with masks
                 if( trim(params_glob%polar_prep) .eq. 'no' ) call build_batch_particles(pftcc, nptcls, pinds, tmp_imgs)
                 ! prob alignment
+                call eulprob_obj%new(pinds)
                 call eulprob_obj%fill_tab(pftcc)
                 call eulprob_obj%ref_assign
                 ! update spproj with the new alignment
@@ -3352,6 +3358,7 @@ contains
                 enddo
                 ! re-memoizing ptcls due to shifted ptcls
                 if( trim(params_glob%polar_prep) .eq. 'yes' ) call pftcc%memoize_ptcls
+                call eulprob_obj%kill
             enddo
         end subroutine exec_alignment
 
