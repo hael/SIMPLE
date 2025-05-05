@@ -128,12 +128,12 @@ contains
         endif
     end subroutine calc_cartesian_corrmat_2
 
-    subroutine calc_inpl_invariant_fm( imgs, hp, lp, corrmat )
+    subroutine calc_inpl_invariant_fm( imgs, hp, lp, trs, corrmat )
         use simple_pftcc_shsrch_fm
         use simple_polarizer,        only: polarizer
         use simple_polarft_corrcalc, only: polarft_corrcalc
         class(image),          intent(inout) :: imgs(:)
-        real,                  intent(in)    :: hp, lp
+        real,                  intent(in)    :: hp, lp, trs
         real,    allocatable,  intent(out)   :: corrmat(:,:)
         type(image),           allocatable   :: ccimgs(:,:)
         type(pftcc_shsrch_fm), allocatable   :: fm_correlators(:)
@@ -141,12 +141,12 @@ contains
         type(polarft_corrcalc) :: pftcc
         real, parameter :: TRS_STEPSZ = 1.0
         integer :: n, i, j, ithr, nrots, loc(1), irot, ldim(3), box, kfromto(2)
-        real    :: offset(2), offsetm(2), ang, angm, trs, smpd, cc, ccm
+        real    :: offset(2), offsetm(2), ang, angm, smpd, cc, ccm
         logical :: lmir
-        n    = size(imgs)
-        ldim = imgs(1)%get_ldim()
-        box  = ldim(1)
-        smpd = imgs(1)%get_smpd()
+        n          = size(imgs)
+        ldim       = imgs(1)%get_ldim()
+        box        = ldim(1)
+        smpd       = imgs(1)%get_smpd()
         kfromto(1) = max(2, calc_fourier_index(hp, box, smpd))
         kfromto(2) =        calc_fourier_index(lp, box, smpd)
         ! initialize pftcc, polarizer
@@ -155,7 +155,6 @@ contains
         call polartransform%init_polarizer(pftcc, KBALPHA)
         allocate(corrmat(n,n), source=-1.)
         ! FOURIER-MELLIN TRANSFORM
-        trs = real(box)/6.
         !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i = 1, n
             call imgs(i)%fft()
