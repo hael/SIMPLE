@@ -16,10 +16,12 @@ type kmedoids
     logical              :: exists = .false.
   contains
     procedure            :: new
-    procedure            :: assign_cls_labels
+    procedure            :: set_labels
     procedure            :: init
     procedure            :: cluster
     procedure            :: find_medoids
+    procedure            :: assign_labels
+    procedure            :: merge
     procedure            :: kill
 end type kmedoids
 
@@ -37,11 +39,11 @@ contains
         self%exists   = .true.
     end subroutine new
 
-    subroutine set_cls_labels( self, cls_labels )
+    subroutine set_labels( self, cls_labels )
         class(kmedoids), intent(inout) :: self
         integer,         intent(in)    :: cls_labels(self%ncls)
         self%cls_labels = cls_labels
-    end subroutine set_cls_labels
+    end subroutine set_labels
 
     ! initialize throuhg distance to medoid analysis
     subroutine init( self )
@@ -59,13 +61,13 @@ contains
         order = (/(i,i=1,self%n)/)
         call hpsort(medoid_dists, order)
         parts = split_nobjs_even(self%n, self%ncls)
-        ! assign classes based on similarity to medoid
+        ! assign clusters based on similarity to medoid
         do icls = 1, self%ncls
             do i = parts(icls,1), parts(icls,2)
                 self%cls_labels(order(i)) = icls
             end do
         end do
-        ! set class populations
+        ! set cluster populations
         do icls = 1, self%ncls
             self%cls_pops(icls) = count(self%cls_labels == icls) 
         end do
@@ -81,7 +83,7 @@ contains
         iter = 0
         do
             call self%find_medoids
-            call self%assign_cls_labels(nchanges)
+            call self%assign_labels(nchanges)
             if( nchanges == 0 .or. iter == MAXITS) exit
         end do
     end subroutine cluster
@@ -118,7 +120,7 @@ contains
         !$omp end parallel do
     end subroutine find_medoids
 
-    subroutine assign_cls_labels( self, nchanges )
+    subroutine assign_labels( self, nchanges )
         class(kmedoids), intent(inout) :: self
         integer,         intent(out)   :: nchanges
         integer :: i, icls, loc(self%n)
@@ -138,7 +140,65 @@ contains
         loc = minloc(dists2meds, dim=2)
         nchanges = count(self%cls_labels /= loc)
         self%cls_labels = loc
-    end subroutine assign_cls_labels
+    end subroutine assign_labels
+
+    subroutine merge( self, ncls_new )
+        class(kmedoids), intent(inout) :: self
+        integer,         intent(in)    :: ncls_new
+        real,    allocatable :: dists_btw_meds(:,:)
+        logical, allocatable :: med_pair_mask(:,:)
+        integer              :: loc(2)
+        if( ncls_new >= self%ncls ) THROW_HARD('New # clusters (ncls_new) must be less than old # clusters')
+        do
+            call calc_med_dists
+            loc = minloc(dists_btw_meds, mask=med_pair_mask)
+            call merge_clusters(self%i_medoids(loc(1)), self%i_medoids(loc(2)))
+            if( self%ncls == ncls_new ) exit
+        end do
+        if( allocated(dists_btw_meds) ) deallocate(dists_btw_meds)
+        if( allocated(med_pair_mask)  ) deallocate(med_pair_mask)
+
+    contains
+
+        subroutine calc_med_dists
+            integer :: imed, jmed
+            ! extract distances between medoids
+            if( allocated(dists_btw_meds) ) deallocate(dists_btw_meds)
+            allocate(dists_btw_meds(self%ncls,self%ncls), source=0.)
+            if( allocated(med_pair_mask)  ) deallocate(med_pair_mask)
+            allocate(med_pair_mask(self%ncls,self%ncls),  source=.false.)
+            do imed = 1, self%ncls - 1
+                do jmed = imed + 1, self%ncls
+                    dists_btw_meds(imed,jmed) = self%ptr_dmat(imed,jmed)
+                    dists_btw_meds(jmed,imed) = dists_btw_meds(imed,jmed)
+                    med_pair_mask(imed,jmed)  = .true.
+                end do
+            end do
+        end subroutine calc_med_dists
+
+        subroutine merge_clusters( i_cls, j_cls )
+            integer, intent(in) :: i_cls, j_cls
+            integer :: new_cls_labels(self%n), cnt, icls
+            where(self%cls_labels == j_cls) self%cls_labels = i_cls
+            ! reorder labels
+            cnt            = 0
+            new_cls_labels = 0
+            do icls = 1, self%ncls
+                if( any(self%cls_labels == icls) )then 
+                    cnt = cnt + 1
+                    where(self%cls_labels == icls) new_cls_labels = cnt
+                endif
+            enddo
+            self%cls_labels = new_cls_labels
+            ! update # clusters
+            self%ncls = maxval(self%cls_labels)
+            ! update medoids
+            deallocate(self%i_medoids, self%cls_pops)
+            allocate(self%i_medoids(self%ncls), self%cls_pops(self%ncls), source=0)
+            call self%find_medoids
+        end subroutine merge_clusters
+
+    end subroutine merge
 
     subroutine kill( self )
         class(kmedoids), intent(inout) :: self
