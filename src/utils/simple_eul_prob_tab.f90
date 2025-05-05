@@ -67,7 +67,7 @@ contains
         self%state_exists = build_glob%spproj_field%states_exist(params_glob%nstates)
         proj_exists       = build_glob%spproj_field%projs_exist( params_glob%nstates,params_glob%nspace)
         self%nstates      = count(self%state_exists .eqv. .true.)
-        self%nrefs        = count(self%proj_exists  .eqv. .true.)
+        self%nrefs        = count(proj_exists       .eqv. .true.)
         allocate(self%ssinds(self%nstates),self%rinds(self%nrefs),self%sinds(self%nrefs))
         si = 0
         ri = 0
