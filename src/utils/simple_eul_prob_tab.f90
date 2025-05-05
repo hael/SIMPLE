@@ -60,7 +60,7 @@ contains
         integer,             intent(in)    :: pinds(:)
         logical,             allocatable   :: proj_exists(:,:)
         logical,             allocatable   :: state_exists(:)
-        integer :: i, iproj, iptcl, istate, iref, si, ri
+        integer :: i, iproj, iptcl, istate, si, ri
         real    :: x
         call self%kill
         self%nptcls  = size(pinds)

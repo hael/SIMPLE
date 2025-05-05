@@ -1184,7 +1184,7 @@ contains
         call img%ifft
     end subroutine polar_cavg
 
-    subroutine gen_polar_refs( self, ref_space, ptcl_space, ran )
+    subroutine gen_polar_refs( self, ref_space, ptcl_space, ran, kprev )
         use simple_image
         use simple_oris
         use simple_ori
@@ -1192,6 +1192,7 @@ contains
         type(oris),              intent(in)    :: ref_space
         type(oris),              intent(in)    :: ptcl_space
         logical,    optional,    intent(in)    :: ran
+        integer,    optional,    intent(in)    :: kprev
         complex(sp), pointer :: pft_ptcl(:,:)
         real(sp),    pointer :: rctf(:,:)
         type(ori) :: orientation
@@ -1291,6 +1292,17 @@ contains
         enddo
         self%pfts_refs_even = self%pfts_refs_merg
         self%pfts_refs_odd  = self%pfts_refs_merg
+        ! randomize matching k from prev k
+        if( present(kprev) )then
+            do iref = 1, self%nrefs
+                do k = kprev, self%kfromto(2)
+                    do irot = 1, self%pftsz
+                        self%pfts_refs_even(irot,k,iref) = complex(ran3(), ran3())
+                        self%pfts_refs_odd( irot,k,iref) = complex(ran3(), ran3())
+                    enddo
+                enddo
+            enddo
+        endif
     end subroutine gen_polar_refs
 
     ! Fourier ring power even -> odd mapping
