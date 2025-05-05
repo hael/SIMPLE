@@ -1930,7 +1930,7 @@ contains
         type(aff_prop)                :: aprop
         type(image),      allocatable :: cavg_imgs(:), ccimgs(:,:)
         type(polarizer)               :: polartransform
-        character(len=:), allocatable :: cavgsstk, cavgsstk_shifted, classname, frcs_fname
+        character(len=:), allocatable :: cavgsstk, classname, frcs_fname
         real,             allocatable :: states(:), frc(:), filter(:), clspops(:), clsres(:)
         real,             allocatable :: corrs(:), corrmat(:,:), corrs_top_ranking(:)
         logical,          allocatable :: l_msk(:,:,:), mask_top_ranking(:), mask_otsu(:), mask_icls(:)
@@ -1940,7 +1940,7 @@ contains
         integer :: ldim(3), loc(1), ncls, n, ncls_sel, i, j, icls, cnt, filtsz, pop1, pop2, nsel
         integer :: ithr, ncls_aff_prop, icen, jcen
         real    :: smpd, simsum, cmin, cmax, pref, corr_icls, cc,ccm
-        logical :: l_apply_optlp, use_shifted
+        logical :: l_apply_optlp
         ! defaults
         call cline%set('oritype', 'cls2D')
         call cline%set('ctf',     'no')
@@ -1955,7 +1955,6 @@ contains
         l_apply_optlp = .false.
         if( cline%defined('stk') )then
             cavgsstk      = trim(params%stk)
-            use_shifted   = .false.
             l_apply_optlp = .false.
             call find_ldim_nptcls(cavgsstk, ldim, ncls, smpd=smpd)
             write(logfhandle,'(A,I3)') '# classes in stack ', ncls
@@ -1964,9 +1963,6 @@ contains
             filtsz = fdim(params%box)-1
         else
             call spproj%read_segment(params%oritype, params%projfile)
-            call spproj%get_cavgs_stk(cavgsstk_shifted, ncls, smpd, imgkind='cavg_shifted', fail=.false.)
-            use_shifted = .true.
-            if( cavgsstk_shifted .eq. NIL ) use_shifted = .false.
             call spproj%get_cavgs_stk(cavgsstk, ncls, smpd)
             call find_ldim_nptcls(cavgsstk, ldim, n)
             write(logfhandle,'(A,I3)') '# classes in stack ', n
@@ -2011,12 +2007,7 @@ contains
         ! read images
         do i = 1, ncls_sel
             call cavg_imgs(i)%new(ldim, smpd, wthreads=.false.)
-            j = clsinds(i)
-            if( use_shifted )then
-                call cavg_imgs(i)%read(cavgsstk_shifted, j)
-            else
-                call cavg_imgs(i)%read(cavgsstk, j)
-            endif
+            call cavg_imgs(i)%read(cavgsstk, clsinds(i))
         enddo
         !$omp parallel do default(shared) private(i,j,frc,filter) schedule(static) proc_bind(close)
         do i = 1, ncls_sel
