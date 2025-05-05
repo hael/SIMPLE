@@ -26,7 +26,6 @@ type :: eul_prob_tab
     integer,        allocatable :: sinds(:)        !< non-empty state indices of each ref
     integer,        allocatable :: rinds(:)        !< non-empty ref indices
     logical,        allocatable :: state_exists(:) !< state existence
-    logical,        allocatable :: proj_exists(:,:)!< proj existence, for each existing state
     integer                     :: nptcls          !< size of pinds array
     integer                     :: nstates         !< states number
     integer                     :: nrefs           !< reference number
@@ -60,12 +59,13 @@ contains
     subroutine new_1( self, pinds )
         class(eul_prob_tab), intent(inout) :: self
         integer,             intent(in)    :: pinds(:)
+        logical,             allocatable   :: proj_exists(:,:)
         integer :: i, iproj, iptcl, istate, iref, si, ri
         real    :: x
         call self%kill
         self%nptcls       = size(pinds)
         self%state_exists = build_glob%spproj_field%states_exist(params_glob%nstates)
-        self%proj_exists  = build_glob%spproj_field%projs_exist( params_glob%nstates,params_glob%nspace)
+        proj_exists       = build_glob%spproj_field%projs_exist( params_glob%nstates,params_glob%nspace)
         self%nstates      = count(self%state_exists .eqv. .true.)
         self%nrefs        = count(self%proj_exists  .eqv. .true.)
         allocate(self%ssinds(self%nstates),self%rinds(self%nrefs),self%sinds(self%nrefs))
@@ -76,7 +76,7 @@ contains
             si              = si + 1
             self%ssinds(si) = istate
             do iproj = 1,params_glob%nspace
-                if( .not. self%proj_exists(iproj,istate) )cycle
+                if( .not. proj_exists(iproj,istate) )cycle
                 ri             = ri + 1
                 iref           = (istate-1)*params_glob%nspace + iproj
                 self%rinds(ri) = iref
@@ -97,7 +97,7 @@ contains
             self%assgn_map(i)%y      = 0.
             self%assgn_map(i)%has_sh = .false.
             do si = 1,self%nstates
-                istate                      = self%sinds(si)
+                istate                      = self%ssinds(si)
                 self%state_tab(si,i)%pind   = iptcl
                 self%state_tab(si,i)%istate = istate
                 self%state_tab(si,i)%iproj  = 0
@@ -108,7 +108,7 @@ contains
                 self%state_tab(si,i)%has_sh = .false.
                 ri = 0
                 do iproj = 1,params_glob%nspace
-                    if( .not. self%proj_exists(iproj,istate) )cycle
+                    if( .not. proj_exists(iproj,istate) )cycle
                     ri = ri + 1
                     self%loc_tab(ri,i)%pind   = iptcl
                     self%loc_tab(ri,i)%istate = istate
@@ -194,7 +194,7 @@ contains
         call seed_rnd
         projs_ns = 0
         do si = 1, self%nstates
-            istate = self%sinds(si)
+            istate = self%ssinds(si)
             call calc_num2sample(params_glob%nspace, 'dist', n, state=istate)
             projs_ns            = max(projs_ns, n)
             inpl_athres(istate) = calc_athres('dist_inpl', state=istate)
@@ -711,7 +711,6 @@ contains
         if( allocated(self%sinds)       ) deallocate(self%sinds)
         if( allocated(self%rinds)       ) deallocate(self%rinds)
         if( allocated(self%state_exists)) deallocate(self%state_exists)
-        if( allocated(self%proj_exists) ) deallocate(self%proj_exists)
     end subroutine kill
 
     ! PUBLIC UTILITITES
