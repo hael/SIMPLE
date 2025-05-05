@@ -69,13 +69,15 @@ type :: oris
     procedure          :: is_particle
     procedure          :: max_ori_strlen_trim
     procedure          :: get_n
-    procedure          :: get_pop
+    procedure, private :: get_pop_1, get_pop_2
+    generic            :: get_pop => get_pop_1, get_pop_2
     procedure          :: get_pops
     procedure          :: get_pinds
     procedure          :: gen_mask
     procedure          :: mask_from_state
     procedure, private :: get_all_normals
     procedure          :: states_exist
+    procedure          :: projs_exist
     procedure          :: get_arr
     procedure, private :: calc_sum
     procedure          :: get_sum
@@ -696,11 +698,11 @@ contains
     end function get_n
 
     !>  \brief  is for checking label population
-    function get_pop( self, ind, label, eo ) result( pop )
-        class(oris),       intent(in)    :: self
-        integer,           intent(in)    :: ind
-        character(len=*),  intent(in)    :: label
-        integer, optional, intent(in)    :: eo
+    function get_pop_1( self, ind, label, eo ) result( pop )
+        class(oris),       intent(in) :: self
+        integer,           intent(in) :: ind
+        character(len=*),  intent(in) :: label
+        integer, optional, intent(in) :: eo
         integer :: pop, i
         logical :: consider_eo
         consider_eo = .false.
@@ -722,7 +724,50 @@ contains
             end do
             !$omp end parallel do
         endif
-    end function get_pop
+    end function get_pop_1
+
+    function get_pop_2( self, inds, labels, eo ) result( pop )
+        class(oris),       intent(in) :: self
+        integer,           intent(in) :: inds(:)
+        character(len=*),  intent(in) :: labels(:)
+        integer, optional, intent(in) :: eo
+        integer :: pop, i, j, n
+        logical :: consider_eo, l_okay
+        consider_eo = .false.
+        if( present(eo) ) consider_eo = .true.
+        n   = size(inds)
+        pop = 0
+        if( consider_eo )then
+            !$omp parallel do private(i,j,l_okay) default(shared) proc_bind(close) reduction(+:pop)
+            do i=1,self%n
+                if( self%o(i)%isstatezero()  ) cycle
+                if( self%o(i)%get_eo() /= eo ) cycle
+                l_okay = .true.
+                do j=1,n
+                    if( self%o(i)%get_int(labels(j)) /= inds(j) )then
+                        l_okay = .false.
+                        exit
+                    endif
+                enddo
+                if( l_okay )  pop = pop + 1
+            end do
+            !$omp end parallel do
+        else
+            !$omp parallel do private(i,j,l_okay) default(shared) proc_bind(close) reduction(+:pop)
+            do i=1,self%n
+                if( self%o(i)%isstatezero() ) cycle
+                l_okay = .true.
+                do j=1,n
+                    if( self%o(i)%get_int(labels(j)) /= inds(j) )then
+                        l_okay = .false.
+                        exit
+                    endif
+                enddo
+                if( l_okay )  pop = pop + 1
+            end do
+            !$omp end parallel do
+        endif
+    end function get_pop_2
 
     !>  \brief  is for getting all rotation matrices
     function get_all_rmats( self ) result( mat )
@@ -774,15 +819,29 @@ contains
     end function get_all_normals
 
     !>  \brief  returns a logical array of state existence
-    function states_exist(self, nstates) result(exists)
+    function states_exist(self, nstates) result(state_exists)
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: nstates
         integer :: i
-        logical :: exists(nstates)
+        logical :: state_exists(nstates)
         do i=1,nstates
-            exists(i) = (self%get_pop(i, 'state') > 0)
+            state_exists(i) = (self%get_pop(i, 'state') > 0)
         end do
     end function states_exist
+
+    !>  \brief  returns a logical array of state existence
+    function projs_exist(self, nstates, nprojs) result(proj_exists)
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: nstates
+        integer,     intent(in)    :: nprojs
+        integer :: i, j
+        logical :: proj_exists(nprojs,nstates)
+        do i=1,nstates
+            do j=1,nprojs
+                proj_exists(j,i) = (self%get_pop([i,j], ['state', 'proj ']) > 0)
+            enddo
+        end do
+    end function projs_exist
 
     !>  \brief  compresses the aggregated object according to input mask
     subroutine compress( self, mask )
