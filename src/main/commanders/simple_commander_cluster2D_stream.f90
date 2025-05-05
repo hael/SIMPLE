@@ -1691,8 +1691,8 @@ contains
         iy = 1
         ntiles = 0
         do icls=1, ncls_here
-            if(pool_proj%os_cls2D%get(icls,'state') == 0.0) cycle
-            if(pool_proj%os_cls2D%get(icls,'pop')   == 0.0) cycle
+            if(pool_proj%os_cls2D%get(icls,'state') < 0.5) cycle
+            if(pool_proj%os_cls2D%get(icls,'pop')   < 0.5) cycle
             call img%zero_and_unflag_ft
             call stkio_r%get_image(icls, img)
             call img%fft
@@ -2857,6 +2857,7 @@ contains
         endif
         ! projects packaging
         call generate_chunk_projects
+        if( cline%defined('maxnchunks') ) params%maxnchunks = min(params%maxnchunks, ntot_chunks)
         ! Main loop
         ichunk = 0                ! # of chunks that have been submitted
         tot_nchunks_imported = 0  ! Total # of chunks that are completed and imported into pool
@@ -3108,87 +3109,135 @@ contains
     subroutine exec_consolidate_chunks_cavgs( self, cline )
         class(consolidate_chunks_cavgs_commander), intent(inout) :: self
         class(cmdline),                            intent(inout) :: cline
-        type(parameters)                   :: params
-        type(sp_project)                   :: tmpproj, spproj
-        type(image)                        :: img
-        type(oris)                         :: cls2D
-        character(len=STDLEN), allocatable :: folders(:)
-        character(len=:),      allocatable :: projname, stkname, evenname, oddname
-        real,                  allocatable :: states(:)
+        type(parameters)                        :: params
+        type(sp_project),           allocatable :: chunks(:)
+        type(sp_project)                        :: spproj
+        type(image)                             :: img
+        type(oris)                              :: cls2D
+        character(len=STDLEN),      allocatable :: folders(:)
+        character(len=XLONGSTRLEN), allocatable :: projfiles(:)
+        real,                       allocatable :: states(:)
+        integer,                    allocatable :: clsmap(:)
+        character(len=:),           allocatable :: projname, stkname, evenname, oddname
         real    :: smpd
-        integer :: ldim(3), i, ichunk, icls, ncls, nchunks, n
-        if( .not.cline%defined('mkdir')        ) call cline%set('mkdir',        'yes')
-        ! if( .not.cline%defined('oritype')      ) call cline%set('oritype',      'ptcl2D')
+        integer :: ldim(3), i, ichunk, icls, ncls, nchunks, n, nallmics, nallstks, nallptcls, imic, istk
+        integer :: fromp, fromp_glob, top, top_glob, j, iptcl_glob, nstks, nmics, nptcls
+        if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         call cline%set('mkdir','no')
         call spproj%read(params%projfile)
+        call spproj%os_mic%kill
+        call spproj%os_stk%kill
         call spproj%os_ptcl2D%kill
         call spproj%os_ptcl3D%kill
         call spproj%os_cls2D%kill
         call spproj%os_cls3D%kill
         call spproj%os_out%kill
-        call spproj%update_projinfo(cline)
         ! consolidate classes
         folders = simple_list_dirs(params%dir_target)
         n       = size(folders)
         if( n == 0 ) THROW_HARD('Could not find chunks in current folder! 1')
         nchunks = 0
+        allocate(projfiles(n))
         do i = 1,n
             projname = trim(params%dir_target)//'/'//trim(folders(i))//'/chunk.simple'
-            if( file_exists(projname) )nchunks = nchunks+1
+            if( file_exists(projname) )then
+                nchunks      = nchunks+1
+                projfiles(i) = trim(projname)
+            else
+                projfiles(i) = trim(NIL)
+            endif
         enddo
         if( nchunks == 0 ) THROW_HARD('Could not find chunks in current folder! 2')
-        icls = 0
-        do ichunk = 1,n
-            projname = trim(params%dir_target)//'/'//trim(folders(ichunk))//'/chunk.simple'
-            if( file_exists(projname) )then
-                call tmpproj%read_segment('out',  projname)
-                call tmpproj%read_segment('cls2D',  projname)
-                call tmpproj%get_cavgs_stk(stkname, ncls, smpd, imgkind='cavg')
-                call find_ldim_nptcls(stkname, ldim, ncls)
-                ldim(3) = 1
-                call img%new(ldim, smpd)
-                evenname = add2fbody(stkname, params%ext, '_even')
-                oddname  = add2fbody(stkname, params%ext, '_odd')
-                do i = 1,ncls
-                    if( tmpproj%os_cls2D%get_state(i) == 0 ) cycle
-                    icls = icls+1
-                    call img%read(stkname,i)
-                    call img%write('cavgs.mrc',icls)
-                    call img%read(evenname,i)
-                    call img%write('cavgs_even.mrc',icls)
-                    call img%read(oddname,i)
-                    call img%write('cavgs_odd.mrc',icls)
-                enddo
-            endif
+        projfiles = pack(projfiles, mask=projfiles/=trim(NIL))
+        allocate(chunks(nchunks))
+        nallptcls = 0
+        nallstks  = 0
+        nallmics  = 0
+        icls      = 0
+        do ichunk = 1,nchunks
+            projname = trim(projfiles(ichunk))
+            call chunks(ichunk)%read_data_info(projname, nmics, nstks, nptcls)
+            nallmics  = nallmics  + nmics
+            nallstks  = nallstks  + nstks
+            nallptcls = nallptcls + nptcls
+            call chunks(ichunk)%read_segment('out',  projname)
+            call chunks(ichunk)%read_segment('cls2D',  projname)
+            call chunks(ichunk)%get_cavgs_stk(stkname, ncls, smpd, imgkind='cavg')
+            call find_ldim_nptcls(stkname, ldim, ncls)
+            ldim(3) = 1
+            call img%new(ldim, smpd)
+            evenname = add2fbody(stkname, params%ext, '_even')
+            oddname  = add2fbody(stkname, params%ext, '_odd')
+            do i = 1,ncls
+                if( chunks(ichunk)%os_cls2D%get_state(i) == 0 ) cycle
+                icls = icls+1
+                call img%read(stkname,i)
+                call img%write('cavgs.mrc',icls)
+                call img%read(evenname,i)
+                call img%write('cavgs_even.mrc',icls)
+                call img%read(oddname,i)
+                call img%write('cavgs_odd.mrc',icls)
+            enddo
         enddo
-        call tmpproj%kill
         call img%kill
         ncls = icls
-        ! consolidate cls2D field
+        ! particles, stacks & classes metadata
         call cls2D%new(ncls,.false.)
-        icls = 0
-        do ichunk = 1,n
-            projname = trim(params%dir_target)//'/'//trim(folders(ichunk))//'/chunk.simple'
-            if( file_exists(projname) )then
-                call tmpproj%read_segment('cls2D',  projname)
-                do i = 1,tmpproj%os_cls2D%get_noris()
-                    if( tmpproj%os_cls2D%get_state(i) == 0 ) cycle
-                    icls = icls+1
-                    call cls2D%transfer_ori(icls, tmpproj%os_cls2D, i)
-                    call cls2D%set(icls,'class',icls)
+        call spproj%os_ptcl2D%new(nallptcls,.true.)
+        call spproj%os_stk%new(nallstks,.false.)
+        icls       = 0
+        istk       = 0
+        iptcl_glob = 0
+        fromp_glob = 1
+        do ichunk = 1,nchunks
+            projname = trim(projfiles(ichunk))
+            call chunks(ichunk)%read_segment('stk', projname)
+            call chunks(ichunk)%read_segment('ptcl2D',projname)
+            ! classes info
+            ncls = chunks(ichunk)%os_cls2D%get_noris()
+            allocate(clsmap(ncls),source=0)
+            do i = 1,ncls
+                if( chunks(ichunk)%os_cls2D%get_state(i) == 0 ) cycle
+                icls      = icls+1
+                clsmap(i) = icls
+                call cls2D%transfer_ori(icls, chunks(ichunk)%os_cls2D, i)
+                call cls2D%set(icls,'class',    icls)
+                call cls2D%set(icls,'origclass',i)
+                call cls2D%set(icls,'chunk',    ichunk)
+            enddo
+            ! particles and stacks
+            nstks  = chunks(ichunk)%os_stk%get_noris()
+            do i = 1,nstks
+                istk  = istk + 1
+                fromp = chunks(ichunk)%os_stk%get_fromp(i)
+                top   = chunks(ichunk)%os_stk%get_top(i)
+                do j = fromp,top
+                    iptcl_glob = iptcl_glob + 1
+                    call chunks(ichunk)%os_ptcl2D%set(j, 'class', clsmap(chunks(ichunk)%os_ptcl2D%get_class(j)))
+                    call chunks(ichunk)%os_ptcl2D%set_stkind(j, istk)
+                    call spproj%os_ptcl2D%transfer_ori(iptcl_glob, chunks(ichunk)%os_ptcl2D, j)
                 enddo
-            endif
+                top_glob = fromp_glob + top - fromp
+                call chunks(ichunk)%os_stk%set(i,'fromp',fromp_glob)
+                call chunks(ichunk)%os_stk%set(i,'top',  top_glob)
+                fromp_glob = top_glob+1
+                call spproj%os_stk%transfer_ori(istk, chunks(ichunk)%os_stk, i)
+            enddo
+            deallocate(clsmap)
+            call chunks(ichunk)%kill
         enddo
-        call tmpproj%kill
-        ! add and write to project
+        ! add classes and write project
         call spproj%add_cavgs2os_out('cavgs.mrc', smpd, imgkind='cavg')
         spproj%os_cls2D = cls2D
         states = spproj%os_cls2D%get_all('state')
         call spproj%os_cls3D%set_all('state', states)
+        spproj%os_ptcl3D = spproj%os_ptcl2D
+        call spproj%os_ptcl3D%delete_2Dclustering
         call spproj%write(params%projfile)
         call spproj%kill
         call cls2D%kill
+        deallocate(chunks)
         call simple_end('**** SIMPLE_CONSOLIDATE_CHUNKS_CAVGS NORMAL STOP ****')
     end subroutine exec_consolidate_chunks_cavgs
 
