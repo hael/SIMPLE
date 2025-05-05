@@ -213,7 +213,7 @@ contains
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
                 ! (1) identify shifts using the previously assigned best reference
-                call build_glob%spproj_field%get_ori(iptcl, o_prev)            ! previous ori
+                call build_glob%spproj_field%get_ori(iptcl, o_prev)        ! previous ori
                 istate = o_prev%get_state()
                 irot       = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
                 iproj      = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
@@ -574,7 +574,7 @@ contains
         class(eul_prob_tab), intent(in) :: self
         character(len=*),    intent(in) :: binfname
         integer :: funit, addr, io_stat, file_header(2)
-        file_header(1) = params_glob%nspace
+        file_header(1) = self%nrefs
         file_header(2) = self%nptcls
         call fopen(funit,trim(binfname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
         write(unit=funit,pos=1) file_header
@@ -588,7 +588,7 @@ contains
         class(eul_prob_tab), intent(inout) :: self
         character(len=*),    intent(in)    :: binfname
         type(ptcl_ref),      allocatable   :: mat_loc(:,:)
-        integer :: funit, addr, io_stat, file_header(2), nptcls_loc, nprojs_loc, i_loc, i_glob
+        integer :: funit, addr, io_stat, file_header(2), nptcls_loc, nrefs_loc, i_loc, i_glob
         if( file_exists(trim(binfname)) )then
             call fopen(funit,trim(binfname),access='STREAM',action='READ',status='OLD', iostat=io_stat)
             call fileiochk('simple_eul_prob_tab; read_tab_to_glob; file: '//trim(binfname), io_stat)
@@ -597,10 +597,10 @@ contains
         endif
         ! reading header and the nprojs/nptcls in this partition file
         read(unit=funit,pos=1) file_header
-        nprojs_loc = file_header(1)
+        nrefs_loc  = file_header(1)
         nptcls_loc = file_header(2)
-        if( nprojs_loc .ne. params_glob%nspace ) THROW_HARD( 'npsace should be the same as nprojs in this partition file!' )
-        allocate(mat_loc(nprojs_loc*self%nstates, nptcls_loc))
+        if( nrefs_loc .ne. self%nrefs ) THROW_HARD( 'nrefs should be the same as nrefs in this partition file!' )
+        allocate(mat_loc(nrefs_loc, nptcls_loc))
         ! read partition information
         addr = sizeof(file_header) + 1
         read(unit=funit,pos=addr) mat_loc
