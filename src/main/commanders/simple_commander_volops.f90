@@ -461,9 +461,7 @@ contains
             if( cline%defined('state') )then
                 if( s /= params%state ) cycle
             endif
-            if( .not.cline%defined('vol'//int2str(s)) )then
-                THROW_HARD('Volume for state '//int2str(s)//' is not defined!')
-            endif
+            if( .not.cline%defined('vol'//int2str(s)) ) cycle
             if( any(states==s) )then
                 ! read and mask
                 call build%vol%read(params%vols(s))

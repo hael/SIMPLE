@@ -68,6 +68,8 @@ contains
     procedure          :: add_frcs2os_out
     procedure          :: add_vol2os_out
     procedure          :: add_entry2os_out
+    procedure          :: remove_entry_from_osout
+    procedure          :: isthere_in_osout
     procedure          :: get_cavgs_stk
     procedure          :: get_vol
     procedure          :: get_fsc
@@ -1808,6 +1810,58 @@ contains
             endif
         endif
     end subroutine add_entry2os_out
+
+    subroutine remove_entry_from_osout( self, which_imgkind, state )
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: which_imgkind
+        integer,           intent(in)    :: state
+        character(len=:), allocatable :: imgkind
+        integer :: n_os_out, i, ind
+        n_os_out = self%os_out%get_noris()
+        if( n_os_out == 0 ) return
+        ind = 0
+        do i = 1,n_os_out
+            if( self%os_out%isthere(i,'imgkind') )then
+                imgkind = trim(self%os_out%get_static(i,'imgkind'))
+                if(trim(imgkind).eq.trim(which_imgkind))then
+                    if( self%os_out%isthere(i, 'state') )then
+                        if( self%os_out%get_state(i) == state )then
+                            ind = i
+                            exit
+                        endif
+                    endif
+                endif
+            endif
+        enddo
+        if( ind == 0 ) return ! entry not found
+        call self%os_out%delete(ind)
+    end subroutine remove_entry_from_osout
+
+    logical function isthere_in_osout( self, which_imgkind, state )
+        class(sp_project), intent(in) :: self
+        character(len=*),  intent(in) :: which_imgkind
+        integer,           intent(in) :: state
+        character(len=:), allocatable :: imgkind
+        integer :: n_os_out, i, ind
+        isthere_in_osout = .false.
+        n_os_out = self%os_out%get_noris()
+        if( n_os_out == 0 ) return
+        ind = 0
+        do i = 1,n_os_out
+            if( self%os_out%isthere(i,'imgkind') )then
+                imgkind = trim(self%os_out%get_static(i,'imgkind'))
+                if(trim(imgkind).eq.trim(which_imgkind))then
+                    if( self%os_out%isthere(i, 'state') )then
+                        if( self%os_out%get_state(i) == state )then
+                            ind = i
+                            exit
+                        endif
+                    endif
+                endif
+            endif
+        enddo
+        if( ind > 0 ) isthere_in_osout = .true.
+    end function isthere_in_osout
 
     subroutine get_cavgs_stk( self, stkname, ncls, smpd, imgkind, fail, stkpath, out_ind)
         class(sp_project),                       intent(inout) :: self
