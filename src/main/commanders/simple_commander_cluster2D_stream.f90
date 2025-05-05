@@ -3149,6 +3149,7 @@ contains
             endif
         enddo
         if( nchunks == 0 ) THROW_HARD('Could not find chunks in current folder! 2')
+        folders   = pack(folders,   mask=projfiles/=trim(NIL))
         projfiles = pack(projfiles, mask=projfiles/=trim(NIL))
         allocate(chunks(nchunks))
         nallptcls = 0
@@ -3204,7 +3205,7 @@ contains
                 call cls2D%transfer_ori(icls, chunks(ichunk)%os_cls2D, i)
                 call cls2D%set(icls,'class',    icls)
                 call cls2D%set(icls,'origclass',i)
-                call cls2D%set(icls,'chunk',    ichunk)
+                call cls2D%set(icls,'chunk',    folders(ichunk))
             enddo
             ! particles and stacks
             nstks  = chunks(ichunk)%os_stk%get_noris()
