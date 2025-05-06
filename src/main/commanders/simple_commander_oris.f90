@@ -255,12 +255,12 @@ contains
                 write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RESOLUTION :', resmed
                 write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RESOLUTION :', resave
                 write(logfhandle,'(a,1x,f8.2)') 'SDEV OF RESOLUTION :', ressdev
-                nr  = sum(pack(pops, mask=res < 10.))
-                res = pack(res, mask=res < 10.)
+                nr  = sum(pack(pops, mask=(res < 10. .and. pops > 0.1)))
+                res = pack(res, mask=(res < 10. .and. pops > 0.1))
                 write(logfhandle,'(a)') ''
                 write(logfhandle,'(a)') 'CLASS RESOLUTION STATS FOR CLASSES BETTER THAN 10 A'
-                resmin = minval(res, mask=pops > 0.1)
-                resmax = maxval(res, mask=pops > 0.1)
+                resmin = minval(res)
+                resmax = maxval(res)
                 resmed = median(res)
                 call moment(res, resave, ressdev, resvar, err)
                 write(logfhandle,'(a,1x,f8.2)') '% PARTICLES        :', (nr / nr_tot) * 100. 
