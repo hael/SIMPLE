@@ -1296,10 +1296,8 @@ contains
         if( present(kprev) )then
             do iref = 1, self%nrefs
                 do k = kprev, self%kfromto(2)
-                    do irot = 1, self%pftsz
-                        self%pfts_refs_even(irot,k,iref) = complex(ran3(), ran3())
-                        self%pfts_refs_odd( irot,k,iref) = complex(ran3(), ran3())
-                    enddo
+                    self%pfts_refs_even(:,k,iref) = 0.
+                    self%pfts_refs_odd( :,k,iref) = 0.
                 enddo
             enddo
         endif

@@ -55,23 +55,27 @@ contains
 
     ! CONSTRUCTORS
 
-    subroutine new_1( self, pinds )
+    subroutine new_1( self, pinds, empty_okay )
         class(eul_prob_tab), intent(inout) :: self
         integer,             intent(in)    :: pinds(:)
+        logical, optional,   intent(in)    :: empty_okay
         logical,             allocatable   :: proj_exists(:,:)
         logical,             allocatable   :: state_exists(:)
         integer :: i, iproj, iptcl, istate, si, ri
         real    :: x
+        logical :: l_empty
+        l_empty = (trim(params_glob%empty3Dcavgs) .eq. 'yes')
+        if( present(empty_okay) ) l_empty = empty_okay
         call self%kill
         self%nptcls  = size(pinds)
         state_exists = build_glob%spproj_field%states_exist(params_glob%nstates)
         self%nstates = count(state_exists .eqv. .true.)
-        if( trim(params_glob%empty3Dcavgs) .eq. 'yes' )then
+        if( l_empty )then
             allocate(proj_exists(params_glob%nspace,params_glob%nstates), source=.true.)
         else
-            proj_exists = build_glob%spproj_field%projs_exist( params_glob%nstates,params_glob%nspace)
+            proj_exists = build_glob%spproj_field%projs_exist(params_glob%nstates,params_glob%nspace)
         endif
-        self%nrefs = count(proj_exists  .eqv. .true.)
+        self%nrefs = count(proj_exists .eqv. .true.)
         allocate(self%ssinds(self%nstates),self%jinds(self%nrefs),self%sinds(self%nrefs))
         si = 0
         ri = 0
