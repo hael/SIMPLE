@@ -41,6 +41,7 @@ type :: parameters
     character(len=3)          :: ctfpatch='yes'       !< whether to perform patched CTF estimation(yes|no){yes}
     character(len=3)          :: doprint='no'
     character(len=3)          :: dynreslim='no'       !< Whether the alignement resolution limit should be dynamic in streaming(yes|no){no}
+    character(len=3)          :: empty3Dcavgs='yes'   !< whether 3D empty cavgs are okay(yes|no){yes}
     character(len=3)          :: envfsc='yes'         !< envelope mask even/odd pairs for FSC calculation(yes|no){yes}
     character(len=3)          :: even='no'            !< even orientation distribution(yes|no){no}
     character(len=3)          :: extract='yes'        !< whether to extract particles after picking (streaming only)
@@ -620,6 +621,7 @@ contains
         call check_carg('doprint',        self%doprint)
         call check_carg('dynreslim',      self%dynreslim)
         call check_carg('element',        self%element)
+        call check_carg('empty3Dcavgs',   self%empty3Dcavgs)
         call check_carg('envfsc',         self%envfsc)
         call check_carg('even',           self%even)
         call check_carg('extract',        self%extract)
