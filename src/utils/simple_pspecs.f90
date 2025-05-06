@@ -14,75 +14,72 @@ private
 
 type pspecs
     private
-    real,               allocatable :: resarr(:)                  ! resolution values in A
-    real,               allocatable :: pspecs(:,:)                ! matrix of power spectra
-    real,               allocatable :: pspecs_cen(:,:)            ! power spectrum centers (averages)
-    real,               allocatable :: distmat(:,:)               ! distance matrix
-    real,               allocatable :: dists2cens(:,:)            ! distances to center pspecs 
-    real,               allocatable :: clsres(:)                  ! 2D class resolutions
-    integer,            allocatable :: order(:)                   ! quality order
-    integer,            allocatable :: clsinds(:)                 ! 2D class assignments
-    integer,            allocatable :: clsinds_spec(:)            ! spectral class assignments, if binray: 1 is good, 2 is bad
-    integer,            allocatable :: clspops(:)                 ! class populations
-    integer,            allocatable :: clspops_spec(:)            ! spectral class populations
-    type(stats_struct), allocatable :: cls_spec_clsres_stats(:)   ! spectral class 2D class resolution stats
-    real                 :: smpd             = 0.                 ! sampling distance
-    real                 :: hp               = 0.                 ! high-pass limit
-    real                 :: lp               = 0.                 ! low-pass limit
-    integer              :: box              = 0                  ! box size
-    integer              :: kfromto(2)       = [0,0]              ! Fourier index range
-    integer              :: sz               = 0                  ! size of spectrum 
-    integer              :: nspecs           = 0                  ! # of spectra
-    integer              :: ncls             = 0                  ! # 2D classes
-    integer              :: ncls_spec        = 0                  ! # spectral clusters
-    logical              :: exists           = .false.            ! existence flag
+    real,               allocatable :: resarr(:)                ! resolution values in A
+    real,               allocatable :: pspecs(:,:)              ! matrix of power spectra
+    real,               allocatable :: pspecs_cen(:,:)          ! power spectrum centers (averages)
+    real,               allocatable :: distmat(:,:)             ! distance matrix
+    real,               allocatable :: dists2cens(:,:)          ! distances to center pspecs 
+    real,               allocatable :: clsres(:)                ! 2D class resolutions
+    integer,            allocatable :: order(:)                 ! quality order
+    integer,            allocatable :: clsinds(:)               ! 2D class assignments
+    integer,            allocatable :: clsinds_spec(:)          ! spectral class assignments, if binray: 1 is good, 2 is bad
+    integer,            allocatable :: clspops(:)               ! class populations
+    integer,            allocatable :: clspops_spec(:)          ! spectral class populations
+    type(stats_struct), allocatable :: cls_spec_clsres_stats(:) ! spectral class 2D class resolution stats
+    real               :: smpd       = 0.                       ! sampling distance
+    real               :: hp         = 0.                       ! high-pass limit
+    real               :: lp         = 0.                       ! low-pass limit
+    integer            :: box        = 0                        ! box size
+    integer            :: kfromto(2) = [0,0]                    ! Fourier index range
+    integer            :: sz         = 0                        ! size of spectrum 
+    integer            :: nspecs     = 0                        ! # of spectra
+    integer            :: ncls       = 0                        ! # 2D classes
+    integer            :: ncls_spec  = 0                        ! # spectral clusters
+    logical            :: exists     = .false.                  ! existence flag
 contains
     ! constructor
-    procedure            :: new
+    procedure          :: new
     ! getters & setters
-    procedure            :: get_nspecs
-    procedure            :: get_clsind_spec_state_arr
+    procedure          :: get_nspecs
+    procedure          :: get_clsind_spec_state_arr
     ! plotting
-    procedure            :: plot_all
-    procedure            :: plot_cens
+    procedure          :: plot_all
+    procedure          :: plot_cens
     ! clustering
-    procedure, private   :: calc_distmat
-    procedure, private   :: medoid_cen_init
-    procedure            :: kmeans_cls_pspecs
+    procedure, private :: calc_distmat
+    procedure, private :: medoid_cen_init
+    procedure          :: kmeans_cls_pspecs
     ! calculators
-    procedure, private   :: calc_pspec_cls_avgs
-    procedure, private   :: kcluster_iter
-    procedure, private   :: calc_dists2cens
-    procedure, private   :: calc_cls_spec_stats
-    procedure            :: rank_cls_spec
-    procedure            :: select_cls_spec
+    procedure, private :: calc_pspec_cls_avgs
+    procedure, private :: kcluster_iter
+    procedure, private :: calc_dists2cens
+    procedure, private :: calc_cls_spec_stats
+    procedure          :: rank_cls_spec
+    procedure          :: select_cls_spec
     ! destructor
-    procedure            :: kill
+    procedure          :: kill
 end type pspecs
 
-integer, parameter       :: CLASS_JUNK       = 0
-integer, parameter       :: CLASS_GOOD       = 1
-integer, parameter       :: CLASS_BAD        = 2
-real,    parameter       :: DYNRANGE_THRES   = 1e-6
-real,    parameter       :: FRAC_BEST_PTCLS  = 0.25
-integer, parameter       :: MAXITS           = 10
-integer, parameter       :: MINPOP           = 20
+integer, parameter :: MAXITS = 10
 
 contains
 
     ! constructor
 
     subroutine new( self, ncls, imgs, os_cls2D, msk, hp, lp, ncls_spec )
+        use simple_strategy2D_utils, only: flag_non_junk_cavgs
         class(pspecs),     intent(inout) :: self
         integer,           intent(in)    :: ncls
         class(image),      intent(inout) :: imgs(ncls)
         class(oris),       intent(in)    :: os_cls2D
         real,              intent(in)    :: msk, hp, lp
         integer,           intent(in)    :: ncls_spec
-        real,    allocatable :: pspec(:), resarr(:)
+        type(image), allocatable :: cavg_threads(:) 
+        real,        allocatable :: pspec(:), resarr(:)
+        logical,     allocatable :: l_valid_spectra(:)
         integer :: specinds(ncls)
-        logical :: l_valid_spectra(ncls), l_junk_class
-        integer :: ldim(3), icls, ispec
+        logical :: l_junk_class
+        integer :: ldim(3), icls, ispec, ithr
         real    :: dynrange
         call self%kill
         self%ncls       = ncls
@@ -96,21 +93,8 @@ contains
         self%kfromto(1) = calc_fourier_index(self%hp, self%box, self%smpd)
         self%kfromto(2) = calc_fourier_index(self%lp, self%box, self%smpd)
         self%sz         = self%kfromto(2) - self%kfromto(1) + 1
-        ! flag valid spectra
-        l_valid_spectra = .false.
-        !$omp parallel do default(shared) private(icls,pspec,dynrange,l_junk_class) proc_bind(close) schedule(static)
-        do icls = 1, ncls
-            call imgs(icls)%norm
-            l_junk_class = density_outside_mask(imgs(icls), hp, msk)
-            call imgs(icls)%mask(msk, 'soft')
-            call imgs(icls)%spectrum('sqrt', pspec)
-            dynrange = pspec(self%kfromto(1)) - pspec(self%kfromto(2))
-            if( dynrange > DYNRANGE_THRES .and. os_cls2D%get_int(icls, 'pop') >= MINPOP  )then
-                if( .not. l_junk_class ) l_valid_spectra(icls) = .true.
-            endif
-        enddo
-        !$omp end parallel do
-        self%nspecs = count(l_valid_spectra)
+        call flag_non_junk_cavgs(imgs, os_cls2D, hp, msk, l_valid_spectra)
+        self%nspecs     = count(l_valid_spectra)
         ! allocate arrays
         allocate(self%resarr(self%sz), source=resarr(self%kfromto(1):self%kfromto(2)))
         allocate(self%pspecs(self%nspecs,self%sz), self%pspecs_cen(self%ncls_spec,self%sz),&
@@ -128,13 +112,21 @@ contains
             endif
         end do
         ! fill-up the instance
-        !$omp parallel do default(shared) private(icls,pspec) proc_bind(close) schedule(static)
+        allocate(cavg_threads(nthr_glob))
+        do ithr = 1, nthr_glob
+            call cavg_threads(ithr)%new(ldim, self%smpd)
+        end do
+        !$omp parallel do default(shared) private(icls,ithr,pspec) proc_bind(close) schedule(static)
         do icls = 1, ncls
             if( l_valid_spectra(icls) )then
+                ithr = omp_get_thread_num() + 1
                 ! 2D class index
                 self%clsinds(specinds(icls))   = icls
                 ! power spectrum
-                call imgs(icls)%spectrum('sqrt', pspec)
+                call cavg_threads(ithr)%copy(imgs(icls))
+                call cavg_threads(ithr)%norm
+                call cavg_threads(ithr)%mask(msk, 'soft')
+                call cavg_threads(ithr)%spectrum('sqrt', pspec)
                 self%pspecs(specinds(icls),:)  = pspec(self%kfromto(1):self%kfromto(2))
                 ! 2D class population
                 self%clspops(specinds(icls))   = os_cls2D%get_int(icls, 'pop')
@@ -144,7 +136,10 @@ contains
             endif
         end do
         !$omp end parallel do
-        deallocate(resarr)
+        do ithr = 1, nthr_glob
+            call cavg_threads(ithr)%kill
+        end do
+        deallocate(cavg_threads, resarr)
         self%exists = .true.
     end subroutine new
 
