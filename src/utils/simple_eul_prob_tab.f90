@@ -65,9 +65,13 @@ contains
         call self%kill
         self%nptcls  = size(pinds)
         state_exists = build_glob%spproj_field%states_exist(params_glob%nstates)
-        proj_exists  = build_glob%spproj_field%projs_exist( params_glob%nstates,params_glob%nspace)
         self%nstates = count(state_exists .eqv. .true.)
-        self%nrefs   = count(proj_exists  .eqv. .true.)
+        if( trim(params_glob%empty3Dcavgs) .eq. 'yes' )then
+            allocate(proj_exists(params_glob%nspace,params_glob%nstates), source=.true.)
+        else
+            proj_exists = build_glob%spproj_field%projs_exist( params_glob%nstates,params_glob%nspace)
+        endif
+        self%nrefs = count(proj_exists  .eqv. .true.)
         allocate(self%ssinds(self%nstates),self%jinds(self%nrefs),self%sinds(self%nrefs))
         si = 0
         ri = 0
