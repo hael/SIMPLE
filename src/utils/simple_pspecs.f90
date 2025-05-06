@@ -66,23 +66,22 @@ contains
 
     ! constructor
 
-    subroutine new( self, ncls, imgs, os_cls2D, msk, hp, lp, ncls_spec )
+    subroutine new( self, imgs, os_cls2D, msk, hp, lp, ncls_spec )
         use simple_strategy2D_utils, only: flag_non_junk_cavgs
         class(pspecs),     intent(inout) :: self
-        integer,           intent(in)    :: ncls
-        class(image),      intent(inout) :: imgs(ncls)
+        class(image),      intent(inout) :: imgs(:)
         class(oris),       intent(in)    :: os_cls2D
         real,              intent(in)    :: msk, hp, lp
         integer,           intent(in)    :: ncls_spec
         type(image), allocatable :: cavg_threads(:) 
         real,        allocatable :: pspec(:), resarr(:)
         logical,     allocatable :: l_valid_spectra(:)
-        integer :: specinds(ncls)
+        integer :: specinds(size(imgs))
         logical :: l_junk_class
         integer :: ldim(3), icls, ispec, ithr
         real    :: dynrange
         call self%kill
-        self%ncls       = ncls
+        self%ncls       = size(imgs)
         ldim            = imgs(1)%get_ldim()
         self%box        = ldim(1)
         self%smpd       = imgs(1)%get_smpd()
@@ -93,7 +92,7 @@ contains
         self%kfromto(1) = calc_fourier_index(self%hp, self%box, self%smpd)
         self%kfromto(2) = calc_fourier_index(self%lp, self%box, self%smpd)
         self%sz         = self%kfromto(2) - self%kfromto(1) + 1
-        call flag_non_junk_cavgs(imgs, os_cls2D, hp, msk, l_valid_spectra)
+        call flag_non_junk_cavgs(imgs, hp, msk, l_valid_spectra, os_cls2D)
         self%nspecs     = count(l_valid_spectra)
         ! allocate arrays
         allocate(self%resarr(self%sz), source=resarr(self%kfromto(1):self%kfromto(2)))
@@ -105,7 +104,7 @@ contains
         allocate(self%cls_spec_clsres_stats(self%ncls_spec))
         ! set spectrum indices
         ispec = 0
-        do icls = 1, ncls
+        do icls = 1, self%ncls
             if( l_valid_spectra(icls) )then
                 ispec = ispec + 1
                 specinds(icls) = ispec
@@ -117,7 +116,7 @@ contains
             call cavg_threads(ithr)%new(ldim, self%smpd)
         end do
         !$omp parallel do default(shared) private(icls,ithr,pspec) proc_bind(close) schedule(static)
-        do icls = 1, ncls
+        do icls = 1, self%ncls
             if( l_valid_spectra(icls) )then
                 ithr = omp_get_thread_num() + 1
                 ! 2D class index

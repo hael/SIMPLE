@@ -10,8 +10,8 @@ use simple_is_check_assert
 implicit none
 
 public :: avg_sdev, moment, moment_serial, pearsn, spear, normalize, normalize_sigm, normalize_minmax, std_mean_diff
-public :: corrs2weights, corr2distweight, analyze_smat, medoid_from_smat, medoid_ranking_from_smat, cluster_smat_bin, medoid_from_dmat
-public :: z_scores, pearsn_serial_8, kstwo
+public :: corrs2weights, corr2distweight, analyze_smat, calc_ap_pref, medoid_from_smat, medoid_ranking_from_smat, cluster_smat_bin 
+public :: medoid_from_dmat, z_scores, pearsn_serial_8, kstwo
 public :: rank_sum_weights, rank_inverse_weights, rank_centroid_weights, rank_exponent_weights
 public :: conv2rank_weights, calc_stats, pearsn_serial, norm_corr, norm_corr_8, skewness, kurtosis
 public :: median, median_nocopy, mad, mad_gau, robust_scaling, robust_z_scores, robust_normalization, robust_sigma_thres
@@ -959,6 +959,37 @@ contains
         end do
     end subroutine analyze_smat
 
+    function calc_ap_pref( smat, mode ) result( pref )
+        real,             intent(inout) :: smat(:,:)
+        character(len=*), intent(in)    :: mode
+        logical, allocatable :: smask(:,:)
+        real,    allocatable :: tmp(:)
+        real    :: pref
+        integer :: i, j, n
+        n = size(smat,1)
+        if( n /= size(smat,2) ) THROW_HARD('symmetric similarity matrix assumed')
+        allocate(smask(n,n), source=.false.)
+        do i = 1, n - 1
+            do j = i + 1, n
+                smask(i,j) = .true.
+            end do
+        end do
+        tmp = pack(smat, mask=smask)
+        select case(trim(mode))
+            case('minval')
+                pref = minval(tmp)
+            case('maxval')
+                pref = maxval(tmp)
+            case('median')
+                pref = median_nocopy(tmp)
+            case('min_minus_med')
+                pref = minval(tmp) - median_nocopy(tmp)
+            case DEFAULT
+                THROW_HARD('unsupported mode')
+        end select
+        deallocate(smask,tmp)
+    end function calc_ap_pref
+
     subroutine medoid_from_smat( smat, i_medoid )!, sdev )
         real,    intent(in)  :: smat(:,:)
         integer, intent(out) :: i_medoid
@@ -966,7 +997,7 @@ contains
         real, allocatable :: sims(:)
         integer :: loc(1), i, j, n
         n = size(smat,1)
-        if( n /= size(smat,2) ) THROW_HARD('symmetric similarity matrix assumed; stat :: medoid_from_smat')
+        if( n /= size(smat,2) ) THROW_HARD('symmetric similarity matrix assumed')
         allocate(sims(n))
         do i=1,n
             sims(i) = 0.0
