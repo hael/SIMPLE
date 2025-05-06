@@ -14,6 +14,7 @@ use simple_stack_io,          only: stack_io
 use simple_starproject,       only: starproject
 use simple_commander_imgproc, only: scale_commander
 use simple_exec_helpers,      only: set_shmem_flag, set_master_num_threads
+use simple_strategy2D_utils
 use simple_euclid_sigma2
 use simple_commander_euclid
 use simple_qsys_funs
@@ -1820,35 +1821,22 @@ contains
         ! parameters & project
         call params%new(cline)
         call spproj%read(params%projfile)
-        ! retrieve cavgs stack info
-        call spproj%get_cavgs_stk(stk, params%ncls, params%smpd, imgkind='cavg', stkpath=stkpath)
-        if(.not. file_exists(stk)) stk = trim(stkpath) // '/' // trim(stk)
-        if(.not. file_exists(stk)) THROW_HARD('cavgs stk does not exist; autoselect_cavgs')
-        ! read images and check number of spectra to analyze
-        allocate(imgs(params%ncls))
-        nptcls = 0
-        do icls = 1, params%ncls
-            nptcls = nptcls + spproj%os_cls2D%get_int(icls, 'pop')
-            call imgs(icls)%new([params%box,params%box,1], params%smpd)
-            call imgs(icls)%read(stk, icls)
-        end do
+        ! read cavgs into image array
+        imgs = read_cavgs_into_imgarr(spproj)
+        params%ncls = size(imgs)
         ! create pspecs object
-        call pows%new(params%ncls, imgs, spproj%os_cls2D, params%msk, params%hp, params%lp, params%ncls_spec)
-        ! read back original images
-        do icls = 1, params%ncls
-            call imgs(icls)%read(stk, icls)
-        end do
+        call pows%new(imgs, spproj%os_cls2D, params%msk, params%hp, params%lp, params%ncls_spec)
         nspecs = pows%get_nspecs()
         ! clustering
         call pows%kmeans_cls_pspecs(states)
-        call write_junk_cavgs
-        call write_cavgs('spectral_cluster')
+        call write_junk_cavgs(params%ncls, imgs, states, params%ext)
+        call write_cavgs(params%ncls, imgs, states, 'spectral_cluster', params%ext)
         ! ranking of spectral clusters
         call pows%rank_cls_spec(states)
-        call write_cavgs('rank')
+        call write_cavgs(params%ncls, imgs, states, 'rank', params%ext)
         ! selection of spectral clusters
         call pows%select_cls_spec(states)
-        call write_selected_cavgs
+        call write_selected_cavgs(params%ncls, imgs, states, params%ext)
         ! map selection to project
         call spproj%map_cavgs_selection(states)
         ! optional pruning
@@ -1863,88 +1851,34 @@ contains
         call spproj%kill
         call pows%kill
         call simple_end('**** SIMPLE_AUTOSELECT_CAVGS NORMAL STOP ****')
-
-        contains
-
-            subroutine write_cavgs( fbody )
-                character(len=*),  intent(in) :: fbody
-                character(len=:), allocatable :: fname
-                integer,          allocatable :: cnts(:)
-                integer :: icls
-                allocate(cnts(params%ncls_spec), source=0)
-                do icls = 1, params%ncls
-                    if( states(icls) > 0 )then
-                        fname = fbody//int2str(states(icls))//'_cavgs'//params%ext
-                        cnts(states(icls)) = cnts(states(icls)) + 1
-                        call imgs(icls)%write(fname, cnts(states(icls)))
-                    endif
-                end do
-            end subroutine write_cavgs
-
-            subroutine write_junk_cavgs
-                character(len=:), allocatable :: fname
-                integer :: icls, cnt
-                cnt = 0
-                do icls = 1, params%ncls
-                    if( states(icls) == 0 )then
-                        fname = 'junk_cavgs'//params%ext
-                        cnt = cnt + 1
-                        call imgs(icls)%write(fname, cnt)
-                    endif
-                end do
-            end subroutine write_junk_cavgs
-
-            subroutine write_selected_cavgs
-                character(len=:), allocatable :: fname
-                integer :: icls, cnt(0:1)
-                cnt = 0
-                do icls = 1, params%ncls
-                    if( states(icls) == 0 )then
-                        fname = 'unselected_cavgs'//params%ext
-                        cnt(0) = cnt(0) + 1
-                        call imgs(icls)%write(fname, cnt(0))
-                    else
-                        fname  = 'selected_cavgs'//params%ext
-                        cnt(1) = cnt(1) + 1
-                        call imgs(icls)%write(fname, cnt(1))
-                    endif
-                end do
-            end subroutine write_selected_cavgs
-
     end subroutine exec_autoselect_cavgs
 
     subroutine exec_cluster_cavgs( self, cline )
-        use simple_polarizer,        only: polarizer
         use simple_class_frcs,       only: class_frcs
-        use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_aff_prop,         only: aff_prop
-        use simple_pftcc_shsrch_fm
+        use simple_corrmat,          only: calc_inpl_invariant_fm
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(pftcc_shsrch_fm), allocatable :: fm_correlators(:)
-        type(parameters)              :: params
-        type(sp_project)              :: spproj
-        type(class_frcs)              :: clsfrcs
-        type(image)                   :: img_msk
-        type(polarft_corrcalc)        :: pftcc
-        type(aff_prop)                :: aprop
-        type(image),      allocatable :: cavg_imgs(:), ccimgs(:,:)
-        type(polarizer)               :: polartransform
-        character(len=:), allocatable :: cavgsstk, classname, frcs_fname
-        real,             allocatable :: states(:), frc(:), filter(:), clspops(:), clsres(:)
-        real,             allocatable :: corrs(:), corrmat(:,:), corrs_top_ranking(:)
-        logical,          allocatable :: l_msk(:,:,:), mask_top_ranking(:), mask_otsu(:), mask_icls(:)
-        integer,          allocatable :: order(:), nloc(:), centers(:), labels(:), cntarr(:), clsinds(:), pops(:)
-        integer,          allocatable :: labels_mapped(:), classmapping(:)
+        real,             parameter   :: LP_BIN = 20.
         logical,          parameter   :: DEBUG = .true.
-        integer :: ldim(3), loc(1), ncls, n, ncls_sel, i, j, icls, cnt, filtsz, pop1, pop2, nsel
-        integer :: ithr, ncls_aff_prop, icen, jcen
-        real    :: smpd, simsum, cmin, cmax, pref, corr_icls, cc,ccm
+        type(image),      allocatable :: cavg_imgs(:) 
+        character(len=:), allocatable :: frcs_fname
+        real,             allocatable :: frc(:), filter(:), corrmat(:,:)
+        logical,          allocatable :: l_msk(:,:,:), l_non_junk(:)
+        integer,          allocatable :: centers(:), labels(:), clsinds(:)
+        type(parameters) :: params
+        type(sp_project) :: spproj
+        type(class_frcs) :: clsfrcs
+        type(image)      :: img_msk
+        type(aff_prop)   :: aprop
+        integer :: ldim(3),  ncls, n, ncls_sel, icls, cnt, filtsz, ncls_aff_prop, i, j
+        real    :: smpd, simsum, cmin, cmax, pref
         logical :: l_apply_optlp
         ! defaults
         call cline%set('oritype', 'cls2D')
         call cline%set('ctf',     'no')
         call cline%set('objfun',  'cc')
+        call cline%set('sh_inv',  'yes') ! shift invariant search
         if( .not. cline%defined('mirr')    ) call cline%set('mirr',    'yes')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
         if( .not. cline%defined('trs')     ) call cline%set('trs',       10.)
@@ -1952,63 +1886,61 @@ contains
         ! master parameters
         call params%new(cline)
         ! get class average stack
+        if( cline%defined('stk') )then
+            cavg_imgs = read_cavgs_into_imgarr(params%stk)
+        else
+            call spproj%read(params%projfile)
+            cavg_imgs = read_cavgs_into_imgarr(spproj)
+        endif
+        ncls          = size(cavg_imgs)
+        smpd          = cavg_imgs(1)%get_smpd()
+        ldim          = cavg_imgs(1)%get_ldim()
+        ! ensure correct smpd/box in params class
+        params%smpd   = smpd
+        params%box    = ldim(1)
+        params%msk    = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
+        filtsz        = fdim(params%box)-1
         l_apply_optlp = .false.
         if( cline%defined('stk') )then
-            cavgsstk      = trim(params%stk)
-            l_apply_optlp = .false.
-            call find_ldim_nptcls(cavgsstk, ldim, ncls, smpd=smpd)
-            write(logfhandle,'(A,I3)') '# classes in stack ', ncls
-            ldim(3) = 1
-            allocate(states(ncls),source=1.)
-            filtsz = fdim(params%box)-1
-        else
-            call spproj%read_segment(params%oritype, params%projfile)
-            call spproj%get_cavgs_stk(cavgsstk, ncls, smpd)
-            call find_ldim_nptcls(cavgsstk, ldim, n)
-            write(logfhandle,'(A,I3)') '# classes in stack ', n
-            ldim(3) = 1
-            if( n /= ncls ) THROW_HARD('Inconsistent # classes in project file vs cavgs stack; exec_cluster_cavgs')
-            ! threshold based on states/population/resolution
-            states = spproj%os_cls2D%get_all('state')
-            if( .not. DEBUG )then
-                clspops = spproj%os_cls2D%get_all('pop')
-                clsres  = spproj%os_cls2D%get_all('res')
-                where( clsres  >= params%lpthres     ) states = 0.
-                where( clspops <  real(MINCLSPOPLIM) ) states = 0.
-            endif
+            call flag_non_junk_cavgs(cavg_imgs, LP_BIN, params%msk, l_non_junk)
+        else    
             ! get FRCs
             call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
             if( file_exists(frcs_fname) )then
                 call clsfrcs%read(frcs_fname)
                 l_apply_optlp = .true.
+                filtsz = clsfrcs%get_filtsz()
             endif
-            filtsz = clsfrcs%get_filtsz()
+            call flag_non_junk_cavgs(cavg_imgs, LP_BIN, params%msk, l_non_junk, spproj%os_cls2D)
         endif
-        ! ensure correct smpd/box in params class
-        params%smpd = smpd
-        params%box  = ldim(1)
-        params%msk  = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
-        ! find out how many selected class averages initially
-        ncls_sel = count(states > 0.5)
-        write(logfhandle,'(A,I3)') '# classes left after standard rejection ', ncls_sel
+        if( DEBUG )then
+            cnt = 0
+            do i = 1, ncls
+                if( .not. l_non_junk(i) )then
+                    cnt = cnt + 1
+                    call cavg_imgs(i)%write('cavgs_junk.mrc', cnt)
+                endif
+            enddo
+        endif
+        ! re-create cavg_imgs
+        ncls_sel  = count(l_non_junk)
+        write(logfhandle,'(A,I3)') '# classes left after junk rejection ', ncls_sel
+        do icls = 1, ncls
+            call cavg_imgs(icls)%kill
+        end do
+        deallocate(cavg_imgs)
+        cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
         ! keep track of the original class indices
-        clsinds = pack((/(i,i=1,ncls)/), mask=states > 0.5)
+        clsinds = pack((/(i,i=1,ncls)/), mask=l_non_junk)
         ! create the stuff needed in the loop
-        allocate(cavg_imgs(ncls_sel), frc(filtsz), filter(filtsz))
+        allocate(frc(filtsz), filter(filtsz), source=0.)
         ! prep mask
         call img_msk%new([params%box,params%box,1], params%smpd)
         img_msk = 1.
         call img_msk%mask(params%msk, 'hard')
         l_msk = img_msk%bin2logical()
         call img_msk%kill
-        ! polarizer
-        call polartransform%new([params%box,params%box,1], params%smpd)
         write(logfhandle,'(A)') '>>> PREPARING CLASS AVERAGES'
-        ! read images
-        do i = 1, ncls_sel
-            call cavg_imgs(i)%new(ldim, smpd, wthreads=.false.)
-            call cavg_imgs(i)%read(cavgsstk, clsinds(i))
-        enddo
         !$omp parallel do default(shared) private(i,j,frc,filter) schedule(static) proc_bind(close)
         do i = 1, ncls_sel
             j = clsinds(i)
@@ -2034,237 +1966,26 @@ contains
                 call cavg_imgs(i)%write('cavgs_prepped.mrc', i)
             enddo
         endif
-        ! resolution limits
-        params%kfromto(1) = max(2, calc_fourier_index(params%hp, params%box, params%smpd))
-        params%kfromto(2) =        calc_fourier_index(params%lp, params%box, params%smpd)
-        ! Fourier-Mellin transform
-        write(logfhandle,'(A)') '>>> CALCULATING CORRELATION OF MAGNITUDES MATRIX'
-        allocate(corrmat(ncls_sel,ncls_sel), source=-1.)
-        ! polarizer, pftcc
-        params%sh_inv = 'yes'
-        call pftcc%new(ncls_sel, [1,ncls_sel], params%kfromto)
-        call polartransform%init_polarizer(pftcc, params%alpha)
-        !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
+        call calc_inpl_invariant_fm(cavg_imgs, params%hp, params%lp, params%trs, corrmat)
+        write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH AFFINITY PROPAGATION'
+        ! calculate a preference that generates a small number of clusters
+        pref = calc_ap_pref(corrmat, 'min_minus_med')
+        call aprop%new(ncls_sel, corrmat, pref=pref)
+        call aprop%propagate(centers, labels, simsum)
+        call aprop%kill
+        ncls_aff_prop = size(centers)
+        write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION (AP): ', ncls_aff_prop
+        ! re-create cavg_imgs
         do icls = 1, ncls_sel
-            call cavg_imgs(icls)%fft()
-            ! particles & even refs are the same, odd refs are even mirrored
-            call polartransform%polarize(pftcc, cavg_imgs(icls), icls, isptcl=.false., iseven=.true.)
-            call pftcc%cp_even_ref2ptcl(icls,icls)
-            call pftcc%mirror_ref_pft(icls)            
+            call cavg_imgs(icls)%kill
         end do
-        !$omp end parallel do
-        call pftcc%memoize_refs
-        call pftcc%memoize_ptcls
-        allocate(fm_correlators(nthr_glob),ccimgs(nthr_glob,2))
-        do i = 1,nthr_glob
-            call fm_correlators(i)%new(params%trs,1.,opt_angle=.false.)
-            call ccimgs(i,1)%new(ldim, smpd, wthreads=.false.)
-            call ccimgs(i,2)%new(ldim, smpd, wthreads=.false.)
-        enddo
-        !$omp parallel do default(shared) private(i,j,cc,ccm,ithr)&
-        !$omp schedule(dynamic) proc_bind(close)
-        do i = 1, ncls_sel - 1
-            ithr = omp_get_thread_num()+1
-            corrmat(i,i) = 1.
-            do j = i, ncls_sel
-                ! correlation of reference to particle
-                call pftcc%set_eo(i,.true.)
-                call fm_correlators(ithr)%calc_phasecorr(j, i, cavg_imgs(j), cavg_imgs(i),&
-                    &ccimgs(ithr,1), ccimgs(ithr,2), cc)
-                ! correlation of mirrored reference to particle
-                call pftcc%set_eo(i,.false.)
-                call fm_correlators(ithr)%calc_phasecorr(j, i, cavg_imgs(j), cavg_imgs(i),&
-                    &ccimgs(ithr,1), ccimgs(ithr,2), ccm, mirror=.true.)
-                cc = max(cc,ccm)
-                corrmat(i,j) = cc
-                corrmat(j,i) = cc
-            enddo 
-        enddo
-        !$omp end parallel do
-        corrmat(ncls_sel,ncls_sel) = 1.
-        do i = 1,nthr_glob
-            call fm_correlators(i)%kill
-            call ccimgs(i,1)%kill
-            call ccimgs(i,2)%kill
-        enddo
-        deallocate(fm_correlators,ccimgs)
-        if( trim(params%bin_cls).eq.'yes' )then
-            write(logfhandle,'(A)') '>>> GOOD/BAD ASSIGNMENT & RANKING OF CLASS AVERAGES'
-            nsel = ceiling(0.1 * real(ncls_sel))
-            allocate(mask_top_ranking(ncls_sel),corrs_top_ranking(ncls_sel),nloc(nsel))
-            ! average the nsel best correlations (excluding self) to create a scoring function for garbage removal
-            do i = 1, ncls_sel
-                mask_top_ranking    = .true.
-                mask_top_ranking(i) = .false. ! to remove the diagonal element
-                corrs = pack(corrmat(i,:), mask_top_ranking)
-                nloc  = maxnloc(corrs, nsel)
-                corrs_top_ranking(i) = sum(corrs(nloc(1:nsel))) / real(nsel)
-            end do
-            ! use Otsu's algorithm to remove the junk
-            allocate(mask_otsu(ncls_sel))
-            call otsu(ncls_sel, corrs_top_ranking, mask_otsu)
-            pop1 = count(      mask_otsu)
-            pop2 = count(.not. mask_otsu)
-            write(logfhandle,*) 'average corr cluster 1: ', sum(corrs_top_ranking, mask=      mask_otsu) / real(pop1), ' pop ', pop1
-            write(logfhandle,*) 'average corr cluster 2: ', sum(corrs_top_ranking, mask=.not. mask_otsu) / real(pop2), ' pop ', pop2
-            pop1 = 0
-            pop2 = 0
-            do i = 1, ncls_sel
-                call cavg_imgs(i)%ifft()
-                if( mask_otsu(i) )then
-                    pop1 = pop1 + 1
-                    call cavg_imgs(i)%write('good.mrc', pop1)
-                else
-                    pop2 = pop2 + 1
-                    call cavg_imgs(i)%write('bad.mrc',  pop2)
-                endif
-            end do
-            ! rank
-            order = (/(i,i=1,ncls_sel)/)
-            call hpsort(corrs_top_ranking, order)
-            do i = 1, ncls_sel
-                call cavg_imgs(order(i))%write('ranked.mrc', i)
-            end do
-        else
-            write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH AFFINITY PROPAGATION'
-            ! calculate a preference that generates a small number of clusters
-            call analyze_smat(corrmat, .false., cmin, cmax)
-            pref = cmin - (cmax - cmin)
-            call aprop%new(ncls_sel, corrmat, pref=pref)
-            call aprop%propagate(centers, labels, simsum)
-            call aprop%kill
-            ncls_aff_prop = size(centers)
-            write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION (AP): ', ncls_aff_prop
-            allocate(cntarr(ncls_aff_prop), source=0)
-            if( cline%defined('ncls') )then
-                write(logfhandle,'(A,I3)') '>>> RE-MAPPING THE HIGHEST POPULATED AP CLUSTERS TO INPUT NCLS: ', params%ncls
-                ! identify params%ncls highest populated clusters
-                if( allocated(mask_icls) ) deallocate(mask_icls)
-                allocate( mask_icls(ncls_sel), pops(ncls_aff_prop) )
-                do icls = 1, ncls_aff_prop
-                    ! mask out the cluster
-                    where( labels == icls )
-                        mask_icls = .true.
-                    elsewhere
-                        mask_icls = .false.
-                    end where
-                    pops(icls) = count(mask_icls)
-                end do
-                if( allocated(nloc) ) deallocate(nloc)
-                allocate(nloc(params%ncls), source=0)
-                nloc = maxnloc(real(pops), params%ncls)
-                ! remap the AP clusters
-                if( allocated(corrs) ) deallocate(corrs)
-                allocate(corrs(params%ncls), classmapping(ncls_aff_prop))
-                ! put back the diagonal elements of the corrmat
-                do i = 1, ncls_sel
-                    corrmat(i,i) = 1.
-                end do
-                ! make a per cluster mapping
-                do icls = 1, ncls_aff_prop
-                    do i = 1,params%ncls
-                        corrs(i) = corrmat(nloc(i),icls)
-                    end do
-                    loc = maxloc(corrs)
-                    classmapping(icls) = nloc(loc(1))
-                    write(logfhandle,*) 'mapped cluster ', icls, ' to ', classmapping(icls)
-                end do
-                ! do the mapping
-                allocate(labels_mapped(ncls_sel), source = 0)
-                do i = 1, ncls_sel
-                    do icls = 1, ncls_aff_prop
-                        if( labels(i) == icls ) labels_mapped(i) = classmapping(icls)
-                    end do
-                end do
-                if( any(labels_mapped == 0) ) THROW_HARD('class mapping did not work, class=0 not allowed')
-                ! re-map agaian
-                cnt = 0
-                do i = 1, ncls_aff_prop
-                    if( any(labels_mapped == i) )then
-                        cnt = cnt + 1
-                        where( labels_mapped == classmapping(i) ) labels = cnt
-                    endif
-                end do
-                deallocate(labels_mapped)
-                ! update # AP clusters
-                ncls_aff_prop = params%ncls
-            endif
-            ! put back the original (unprocessed) images
-            cnt = 0
-            do i = 1 , ncls
-                if( states(i) > 0.5 )then
-                    cnt = cnt + 1
-                else
-                    cycle
-                endif
-                call cavg_imgs(cnt)%read(cavgsstk, i)
-            end do
-            if( DEBUG )then
-                ! put back the original (unprocessed) images
-                cnt = 0
-                do i = 1 , ncls
-                    if( states(i) > 0.5 )then
-                        cnt = cnt + 1
-                    else
-                        cycle
-                    endif
-                    call cavg_imgs(cnt)%read(cavgsstk, i)
-                end do
-                ! write the classes
-                cntarr = 0
-                do icls = 1, ncls_aff_prop
-                    do i=1,ncls_sel
-                        if( labels(i) == icls )then
-                            classname = 'class'//int2str_pad(icls,3)//trim(STK_EXT)
-                            cntarr(labels(i)) = cntarr(labels(i)) + 1
-                            call cavg_imgs(i)%ifft
-                            call cavg_imgs(i)%write(classname, cntarr(labels(i)))
-                        endif
-                    end do
-                end do
-            endif
-            ! calculate average correlation of the AP clusters
-            if( allocated(mask_icls) ) deallocate(mask_icls)
-            allocate( mask_icls(ncls_sel) )
-            do icls = 1, ncls_aff_prop
-                ! mask out the cluster
-                where( labels == icls )
-                    mask_icls = .true.
-                elsewhere
-                    mask_icls = .false.
-                end where
-                ! calculate the average correlation of the cluster
-                if( count(mask_icls) == 1 )then
-                    corr_icls = 1.
-                else
-                    corr_icls = 0.
-                    cnt       = 0
-                    do i = 1, ncls_sel - 1
-                        do j = i + 1, ncls_sel
-                            if( mask_icls(i) .and. mask_icls(j) )then
-                                corr_icls = corr_icls + corrmat(i,j)
-                                cnt       = cnt + 1
-                            endif
-                        end do
-                    end do
-                    corr_icls = corr_icls / real(cnt)
-                endif
-                write(logfhandle,*) 'average corr AP cluster '//int2str_pad(icls,3)//': ', corr_icls, ' pop ', count(mask_icls)
-            end do
-            ! print the correlations between the cluster centers
-            write(logfhandle,'(A)') '>>> CORRELATIONS BETWEEN CLUSTER CENTERS'
-            do i = 1,ncls_aff_prop - 1
-                icen = centers(i)
-                do j = i + 1,ncls_aff_prop
-                    jcen = centers(j)
-                    write(logfhandle,*) 'corr btw cluster  '//int2str_pad(i,3)//' & '//int2str_pad(j,3)//': ', corrmat(icen,jcen)
-                end do
-            end do
-        endif
+        deallocate(cavg_imgs)
+        cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
+        ! write clusters
+        call write_cavgs(ncls_sel, cavg_imgs, labels, 'ap_cluster', params%ext)
         ! destruct
         call spproj%kill
         call clsfrcs%kill
-        call pftcc%kill
         call aprop%kill
         do icls=1,ncls_sel
             call cavg_imgs(icls)%kill
