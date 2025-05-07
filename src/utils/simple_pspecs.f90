@@ -49,7 +49,7 @@ contains
     procedure          :: plot_cens
     ! clustering
     procedure, private :: calc_distmat
-    procedure, private :: medoid_cen_init
+    procedure, private :: medoid_cls_init
     procedure          :: aprop_cls_pspecs
     procedure          :: kmeans_cls_pspecs
     ! calculators
@@ -226,7 +226,7 @@ contains
     end subroutine calc_distmat
 
     ! make initial grouping based on dynamic range ranking
-    subroutine medoid_cen_init( self )
+    subroutine medoid_cls_init( self )
         class(pspecs), intent(inout) :: self
         integer, allocatable :: parts(:,:)
         real    :: medoid_dists(self%nspecs)
@@ -251,7 +251,7 @@ contains
             end do
         end do
         deallocate(parts)
-    end subroutine medoid_cen_init
+    end subroutine medoid_cls_init
 
     ! affinity propagation clustering of powerspectra
     subroutine aprop_cls_pspecs( self, states )
@@ -274,6 +274,7 @@ contains
         ncls_aff_prop = size(centers)
         write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION (AP): ', ncls_aff_prop
         call self%update_ncls_spec(ncls_aff_prop)
+        self%clsinds_spec = labels
         call self%calc_pspec_cls_avgs
         call self%calc_cls_spec_stats(l_print=.true.)
         if( allocated(states) ) deallocate(states)
@@ -287,7 +288,7 @@ contains
         integer :: iter
         logical :: l_converged
         write(logfhandle,'(A)') 'K-MEANS CLUSTERING OF POWERSPECTRA'
-        call self%medoid_cen_init
+        call self%medoid_cls_init
         call self%calc_pspec_cls_avgs
         iter = 0
         l_converged = .false.
