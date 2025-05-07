@@ -1839,7 +1839,6 @@ contains
             case DEFAULT
                 THROW_HARD('unsupported algorithm')
         end select
-        call pows%kmeans_cls_pspecs(states)
         call write_junk_cavgs(params%ncls, imgs, states, params%ext)
         call write_cavgs(params%ncls, imgs, states, 'spectral_cluster', params%ext)
         ! ranking of spectral clusters
