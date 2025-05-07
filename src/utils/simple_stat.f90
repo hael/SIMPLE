@@ -10,7 +10,7 @@ use simple_is_check_assert
 implicit none
 
 public :: avg_sdev, moment, moment_serial, pearsn, spear, normalize, normalize_sigm, normalize_minmax, std_mean_diff
-public :: corrs2weights, corr2distweight, analyze_smat, dmat2smat, smat2dmat, calc_ap_pref, medoid_from_smat
+public :: corrs2weights, corr2distweight, analyze_smat, dmat2smat, smat2dmat, merge_smats, calc_ap_pref, medoid_from_smat
 public :: medoid_ranking_from_smat, cluster_smat_bin, medoid_from_dmat, z_scores, pearsn_serial_8, kstwo
 public :: rank_sum_weights, rank_inverse_weights, rank_centroid_weights, rank_exponent_weights
 public :: conv2rank_weights, calc_stats, pearsn_serial, norm_corr, norm_corr_8, skewness, kurtosis
@@ -999,6 +999,24 @@ contains
             dmat = -log(dmat)
         endwhere
     end function smat2dmat
+
+    function merge_smats( smat1, smat2 ) result( smat )
+        real, intent(in)  :: smat1(:,:), smat2(:,:)
+        real, allocatable :: smat(:,:), tmpmat(:,:)
+        integer :: sz1_1, sz1_2, sz2_1, sz2_2, n
+        sz1_1 = size(smat1,1)
+        sz1_2 = size(smat1,2)
+        sz2_1 = size(smat2,1)
+        sz2_2 = size(smat2,2)
+        if( sz1_1 /= sz2_1 .or. sz1_2 /= sz2_2 ) THROW_HARD('identical similarity matrices assumed')
+        if( sz1_1 /= sz1_2 .or. sz2_1 /= sz2_2 ) THROW_HARD('symmetric similarity matrices assumed')
+        n = sz1_1
+        allocate(smat(n,n),   source=smat1)
+        allocate(tmpmat(n,n), source=smat2)
+        call normalize_minmax(smat)
+        call normalize_minmax(tmpmat)
+        smat = 0.5 * (smat + tmpmat)
+    end function merge_smats
 
     function calc_ap_pref( smat, mode ) result( pref )
         real,             intent(inout) :: smat(:,:)

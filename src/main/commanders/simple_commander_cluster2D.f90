@@ -14,6 +14,7 @@ use simple_stack_io,          only: stack_io
 use simple_starproject,       only: starproject
 use simple_commander_imgproc, only: scale_commander
 use simple_exec_helpers,      only: set_shmem_flag, set_master_num_threads
+use simple_pspecs,            only: pspecs
 use simple_strategy2D_utils
 use simple_euclid_sigma2
 use simple_commander_euclid
@@ -1802,7 +1803,6 @@ contains
     end subroutine exec_rank_cavgs
 
     subroutine exec_autoselect_cavgs( self, cline )
-        use simple_pspecs, only: pspecs
         class(autoselect_cavgs_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(parameters)              :: params
@@ -1834,8 +1834,8 @@ contains
                 call pows%kmeans_cls_pspecs(states)
             case('aprop')
                 call pows%aprop_cls_pspecs(states)
-            case('hybrid')
-                THROW_HARD('not yet implemented')
+            case('kmed')
+                call pows%kmedoid_cls_pspecs(states)
             case DEFAULT
                 THROW_HARD('unsupported algorithm')
         end select
@@ -1869,11 +1869,11 @@ contains
         use simple_corrmat,          only: calc_inpl_invariant_fm
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        real,             parameter   :: LP_BIN = 20.
+        real,             parameter   :: LP_BIN = 20., HP_SPEC = 20., LP_SPEC = 6.
         logical,          parameter   :: DEBUG = .true.
         type(image),      allocatable :: cavg_imgs(:) 
         character(len=:), allocatable :: frcs_fname
-        real,             allocatable :: frc(:), filter(:), corrmat(:,:)
+        real,             allocatable :: frc(:), filter(:), corrmat(:,:), smat(:,:), dmat(:,:), smat_joint(:,:)
         logical,          allocatable :: l_msk(:,:,:), l_non_junk(:)
         integer,          allocatable :: centers(:), labels(:), clsinds(:)
         type(parameters) :: params
@@ -1881,6 +1881,7 @@ contains
         type(class_frcs) :: clsfrcs
         type(image)      :: img_msk
         type(aff_prop)   :: aprop
+        type(pspecs)     :: pows
         integer :: ldim(3),  ncls, n, ncls_sel, icls, cnt, filtsz, ncls_aff_prop, i, j
         real    :: smpd, simsum, cmin, cmax, pref
         logical :: l_apply_optlp
@@ -1976,11 +1977,19 @@ contains
                 call cavg_imgs(i)%write('cavgs_prepped.mrc', i)
             enddo
         endif
+        ! pairwise correlation through Fourier-Mellin + shift search
         call calc_inpl_invariant_fm(cavg_imgs, params%hp, params%lp, params%trs, corrmat)
+        ! create pspecs object
+        call pows%new(cavg_imgs, spproj%os_cls2D, params%msk, HP_SPEC, LP_SPEC, params%ncls_spec, l_exclude_junk=.false.)
+        ! create a joint similarity matrix for clustering based on spectral profile and in-plane invariant correlation
+        call pows%calc_distmat
+        dmat = pows%get_distmat()
+        smat = dmat2smat(dmat)
+        smat_joint = merge_smats(smat,corrmat)
         write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH AFFINITY PROPAGATION'
         ! calculate a preference that generates a small number of clusters
-        pref = calc_ap_pref(corrmat, 'min_minus_max')
-        call aprop%new(ncls_sel, corrmat, pref=pref)
+        pref = calc_ap_pref(smat_joint, 'min_minus_max')
+        call aprop%new(ncls_sel, smat_joint, pref=pref)
         call aprop%propagate(centers, labels, simsum)
         call aprop%kill
         ncls_aff_prop = size(centers)
@@ -1997,10 +2006,11 @@ contains
         call spproj%kill
         call clsfrcs%kill
         call aprop%kill
+        call pows%kill
         do icls=1,ncls_sel
             call cavg_imgs(icls)%kill
         end do
-        deallocate(cavg_imgs)
+        deallocate(cavg_imgs, dmat, smat, smat_joint)
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER_CAVGS NORMAL STOP ****')
     end subroutine exec_cluster_cavgs
