@@ -1001,7 +1001,7 @@ contains
         character(len=*), intent(in)    :: mode
         logical, allocatable :: smask(:,:)
         real,    allocatable :: tmp(:)
-        real    :: pref
+        real    :: pref, tmp_min, tmp_max
         integer :: i, j, n
         n = size(smat,1)
         if( n /= size(smat,2) ) THROW_HARD('symmetric similarity matrix assumed')
@@ -1011,16 +1011,22 @@ contains
                 smask(i,j) = .true.
             end do
         end do
-        tmp = pack(smat, mask=smask)
+        tmp     = pack(smat, mask=smask)
+        tmp_min = minval(tmp)
+        tmp_max = maxval(tmp)
         select case(trim(mode))
             case('minval')
-                pref = minval(tmp)
+                pref = tmp_min
             case('maxval')
-                pref = maxval(tmp)
+                pref = tmp_max
             case('median')
                 pref = median_nocopy(tmp)
             case('min_minus_med')
-                pref = minval(tmp) - median_nocopy(tmp)
+                pref = tmp_min - median_nocopy(tmp)
+            case('min_minus_diff')
+                pref = tmp_min - (tmp_max - tmp_min)
+            case('min_minus_max')
+                pref = tmp_min - tmp_max
             case DEFAULT
                 THROW_HARD('unsupported mode')
         end select

@@ -1934,7 +1934,7 @@ contains
         endif
         ! re-create cavg_imgs
         ncls_sel  = count(l_non_junk)
-        write(logfhandle,'(A,I3)') '# classes left after junk rejection ', ncls_sel
+        write(logfhandle,'(A,I5)') '# classes left after junk rejection ', ncls_sel
         do icls = 1, ncls
             call cavg_imgs(icls)%kill
         end do
@@ -1979,7 +1979,7 @@ contains
         call calc_inpl_invariant_fm(cavg_imgs, params%hp, params%lp, params%trs, corrmat)
         write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH AFFINITY PROPAGATION'
         ! calculate a preference that generates a small number of clusters
-        pref = calc_ap_pref(corrmat, 'min_minus_med')
+        pref = calc_ap_pref(corrmat, 'min_minus_max')
         call aprop%new(ncls_sel, corrmat, pref=pref)
         call aprop%propagate(centers, labels, simsum)
         call aprop%kill
