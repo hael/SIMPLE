@@ -378,14 +378,8 @@ contains
         real,              intent(in)    :: smpd
         logical, optional, intent(in)    :: wthreads
         integer(kind=c_int) :: rc
-        integer             :: i, max_ldim
+        integer             :: i
         logical             :: do_allocate
-        ! checking the ldim for overflow issue
-        max_ldim = int(real(huge(i))**(1./3.))
-        if( ldim(3) == 1 ) max_ldim = int(sqrt(real(huge(i))))
-        if( any(ldim >= max_ldim) )then
-            THROW_HARD('image/vol dimension ldim max = '// int2str(maxval(ldim)) //' is larger than the dimension limit ' // int2str(max_ldim) //' and causes overflowing. Try to increase smpd value')
-        endif
         ! we need to be clever about allocation (because it is costly)
         if( self%existence )then
             if( any(self%ldim /= ldim) )then
