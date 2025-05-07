@@ -2,10 +2,11 @@ module simple_pspecs
 include 'simple_lib.f08'
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_image,  only: image
-use simple_fsc,    only: plot_fsc
-use simple_oris,   only: oris
-use simple_masker, only: density_outside_mask
+use simple_image,    only: image
+use simple_fsc,      only: plot_fsc
+use simple_oris,     only: oris
+use simple_masker,   only: density_outside_mask
+use simple_aff_prop, only: aff_prop
 implicit none
 
 public :: pspecs
@@ -39,6 +40,7 @@ type pspecs
 contains
     ! constructor
     procedure          :: new
+    procedure          :: update_ncls_spec
     ! getters & setters
     procedure          :: get_nspecs
     procedure          :: get_clsind_spec_state_arr
@@ -48,6 +50,7 @@ contains
     ! clustering
     procedure, private :: calc_distmat
     procedure, private :: medoid_cen_init
+    procedure          :: aprop_cls_pspecs
     procedure          :: kmeans_cls_pspecs
     ! calculators
     procedure, private :: calc_pspec_cls_avgs
@@ -126,11 +129,11 @@ contains
                 call cavg_threads(ithr)%norm
                 call cavg_threads(ithr)%mask(msk, 'soft')
                 call cavg_threads(ithr)%spectrum('sqrt', pspec)
-                self%pspecs(specinds(icls),:)  = pspec(self%kfromto(1):self%kfromto(2))
+                self%pspecs(specinds(icls),:) = pspec(self%kfromto(1):self%kfromto(2))
                 ! 2D class population
-                self%clspops(specinds(icls))   = os_cls2D%get_int(icls, 'pop')
+                self%clspops(specinds(icls))  = os_cls2D%get_int(icls, 'pop')
                 ! 2D class resolution
-                self%clsres(specinds(icls))    = os_cls2D%get_int(icls, 'res')
+                self%clsres(specinds(icls))   = os_cls2D%get_int(icls, 'res')
                 deallocate(pspec)
             endif
         end do
@@ -141,6 +144,21 @@ contains
         deallocate(cavg_threads, resarr)
         self%exists = .true.
     end subroutine new
+
+    subroutine update_ncls_spec( self, ncls_spec )
+        class(pspecs),     intent(inout) :: self
+        integer,           intent(in)    :: ncls_spec
+        self%ncls_spec  = ncls_spec
+        ! deallocate arrays
+        if( allocated(self%pspecs_cen)            ) deallocate(self%pspecs_cen)
+        if( allocated(self%dists2cens)            ) deallocate(self%dists2cens)
+        if( allocated(self%clspops_spec)          ) deallocate(self%clspops_spec)
+        if( allocated(self%cls_spec_clsres_stats) ) deallocate(self%cls_spec_clsres_stats)
+        ! allocate arrays
+        allocate(self%pspecs_cen(self%ncls_spec,self%sz), self%dists2cens(self%nspecs,self%ncls_spec), source=0.)
+        allocate(self%clspops_spec(self%ncls_spec), source=0)
+        allocate(self%cls_spec_clsres_stats(self%ncls_spec))
+    end subroutine update_ncls_spec
 
     ! getters & setters
 
@@ -234,6 +252,33 @@ contains
         end do
         deallocate(parts)
     end subroutine medoid_cen_init
+
+    ! affinity propagation clustering of powerspectra
+    subroutine aprop_cls_pspecs( self, states )
+        class(pspecs),        intent(inout) :: self
+        integer, allocatable, intent(inout) :: states(:)
+        real ,   allocatable :: smat(:,:)
+        integer, allocatable :: centers(:), labels(:)
+        type(aff_prop) :: aprop
+        real    :: pref, simsum
+        integer :: ncls_aff_prop
+        ! calculate distance matrix
+        call self%calc_distmat
+        ! convert to similarity matrix
+        smat = dmat2smat(self%distmat)
+        ! calculate a preference that generates a small number of clusters
+        pref = calc_ap_pref(smat, 'min_minus_med')
+        call aprop%new(self%nspecs, smat, pref=pref)
+        call aprop%propagate(centers, labels, simsum)
+        call aprop%kill
+        ncls_aff_prop = size(centers)
+        write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION (AP): ', ncls_aff_prop
+        call self%update_ncls_spec(ncls_aff_prop)
+        call self%calc_pspec_cls_avgs
+        call self%calc_cls_spec_stats(l_print=.true.)
+        if( allocated(states) ) deallocate(states)
+        states = self%get_clsind_spec_state_arr()
+    end subroutine aprop_cls_pspecs
 
     ! k-means clustering of power spectra
     subroutine kmeans_cls_pspecs( self, states ) 

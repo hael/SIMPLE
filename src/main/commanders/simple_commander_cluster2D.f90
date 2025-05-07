@@ -1813,11 +1813,12 @@ contains
         character(len=:), allocatable :: stk, stkpath
         integer :: icls, nspecs, nptcls
         call cline%set('oritype', 'cls2D')
-        if( .not. cline%defined('hp')        ) call cline%set('hp',       20.)
-        if( .not. cline%defined('lp')        ) call cline%set('lp',        6.)
-        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',  'yes')
-        if( .not. cline%defined('prune')     ) call cline%set('prune',   'no')
-        if( .not. cline%defined('ncls_spec') ) call cline%set('ncls_spec',  5)
+        if( .not. cline%defined('hp')        ) call cline%set('hp',             20.)
+        if( .not. cline%defined('lp')        ) call cline%set('lp',              6.)
+        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',        'yes')
+        if( .not. cline%defined('prune')     ) call cline%set('prune',         'no')
+        if( .not. cline%defined('ncls_spec') ) call cline%set('ncls_spec',        5)
+        if( .not. cline%defined('algorithm') ) call cline%set('algorithm',  'kmean')
         ! parameters & project
         call params%new(cline)
         call spproj%read(params%projfile)
@@ -1828,6 +1829,16 @@ contains
         call pows%new(imgs, spproj%os_cls2D, params%msk, params%hp, params%lp, params%ncls_spec)
         nspecs = pows%get_nspecs()
         ! clustering
+        select case(trim(params%algorithm))
+            case('kmean')
+                call pows%kmeans_cls_pspecs(states)
+            case('aprop')
+                call pows%aprop_cls_pspecs(states)
+            case('hybrid')
+                THROW_HARD('not yet implemented')
+            case DEFAULT
+                THROW_HARD('unsupported algorithm')
+        end select
         call pows%kmeans_cls_pspecs(states)
         call write_junk_cavgs(params%ncls, imgs, states, params%ext)
         call write_cavgs(params%ncls, imgs, states, 'spectral_cluster', params%ext)

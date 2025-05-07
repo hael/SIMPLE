@@ -10,8 +10,8 @@ use simple_is_check_assert
 implicit none
 
 public :: avg_sdev, moment, moment_serial, pearsn, spear, normalize, normalize_sigm, normalize_minmax, std_mean_diff
-public :: corrs2weights, corr2distweight, analyze_smat, calc_ap_pref, medoid_from_smat, medoid_ranking_from_smat, cluster_smat_bin 
-public :: medoid_from_dmat, z_scores, pearsn_serial_8, kstwo
+public :: corrs2weights, corr2distweight, analyze_smat, dmat2smat, smat2dmat, calc_ap_pref, medoid_from_smat
+public :: medoid_ranking_from_smat, cluster_smat_bin, medoid_from_dmat, z_scores, pearsn_serial_8, kstwo
 public :: rank_sum_weights, rank_inverse_weights, rank_centroid_weights, rank_exponent_weights
 public :: conv2rank_weights, calc_stats, pearsn_serial, norm_corr, norm_corr_8, skewness, kurtosis
 public :: median, median_nocopy, mad, mad_gau, robust_scaling, robust_z_scores, robust_normalization, robust_sigma_thres
@@ -54,6 +54,12 @@ interface normalize
     module procedure normalize_3
     module procedure normalize_4
 end interface
+
+interface normalize_minmax
+    module procedure normalize_minmax_1
+    module procedure normalize_minmax_2
+end interface
+
 
 interface normalize_sigm
     module procedure normalize_sigm_1
@@ -747,14 +753,23 @@ contains
         endif
     end subroutine normalize_sigm_3
 
-    subroutine normalize_minmax( arr )
+    subroutine normalize_minmax_1( arr )
         real, intent(inout) :: arr(:)
         real                :: smin, smax, delta
         smin  = minval(arr)
         smax  = maxval(arr)
         delta = smax - smin
         arr   = (arr - smin)/delta
-    end subroutine normalize_minmax
+    end subroutine normalize_minmax_1
+
+    subroutine normalize_minmax_2( arr )
+        real, intent(inout) :: arr(:,:)
+        real                :: smin, smax, delta
+        smin  = minval(arr)
+        smax  = maxval(arr)
+        delta = smax - smin
+        arr   = (arr - smin)/delta
+    end subroutine normalize_minmax_2
 
     ! a value below 0.1 is considered a “small” difference
     pure real function std_mean_diff( avg1, avg2, sig1, sig2 )
@@ -958,6 +973,28 @@ contains
             end do
         end do
     end subroutine analyze_smat
+
+    function dmat2smat( dmat ) result( smat )
+        real, intent(in)  :: dmat(:,:)
+        real, allocatable :: smat(:,:)
+        integer :: n
+        n = size(dmat,1)
+        if( n /= size(dmat,2) ) THROW_HARD('symmetric distance matrix assumed')
+        allocate(smat(n,n), source=dmat)
+        call normalize_minmax(smat)
+        smat = exp(-smat)
+    end function dmat2smat
+
+    function smat2dmat( smat ) result( dmat )
+        real, intent(in)  :: smat(:,:)
+        real, allocatable :: dmat(:,:)
+        integer :: n
+        n = size(smat,1)
+        if( n /= size(smat,2) ) THROW_HARD('symmetric similarity matrix assumed')
+        allocate(dmat(n,n), source=smat)
+        call normalize_minmax(dmat)
+        dmat = 1. - dmat
+    end function smat2dmat
 
     function calc_ap_pref( smat, mode ) result( pref )
         real,             intent(inout) :: smat(:,:)
