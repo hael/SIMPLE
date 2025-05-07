@@ -8,7 +8,7 @@ interface find
 end interface
 
 interface hpsort
-    module procedure hpsort_1, hpsort_2, hpsort_3, hpsort_4, hpsort_5
+    module procedure hpsort_1, hpsort_2, hpsort_3, hpsort_4, hpsort_5, hpsort_6
 end interface
 
 interface locate
@@ -277,7 +277,54 @@ contains
             end do
         end do
     end subroutine hpsort_5
-    
+
+    ! heapsort from numerical recipes (largest last)
+    subroutine hpsort_6( arr, iarr )
+        integer, intent(inout) :: arr(:), iarr(:)
+        integer :: i, ir, j, l, ia, n, ra
+        n = size(arr)
+        if( n /= size(iarr) )&
+        &call simple_exception('nonconforming array sizes; hpsort_6', __FILENAME__ , __LINE__)
+        if( n < 2 ) return
+        l  = n/2+1
+        ir = n
+        do
+            if(l > 1)then
+                l  = l-1
+                ra = arr(l)
+                ia = iarr(l)
+            else
+                ra = arr(ir)
+                ia = iarr(ir)
+                arr(ir)  = arr(1)
+                iarr(ir) = iarr(1)
+                ir = ir-1
+                if(ir == 1)then
+                    arr(1)  = ra
+                    iarr(1) = ia
+                    return
+                endif
+            endif
+            i = l
+            j = l+l
+            do while(j <= ir)
+                if(j < ir) then
+                    if(arr(j) < arr(j+1)) j = j+1
+                endif
+                if(ra < arr(j))then
+                    arr(i)  = arr(j)
+                    iarr(i) = iarr(j)
+                    i = j
+                    j = j+j
+                else
+                    j = ir+1
+                endif
+                arr(i)  = ra
+                iarr(i) = ia
+            end do
+        end do
+    end subroutine hpsort_6
+
     !>   given an array arr(1:n), and given value x, locate returns a value j such that x is
     !!         between arr(j) and arr(j+1). arr(1:n) must be monotonic, either increasing or decreasing.
     !!         j=0 or j=n is returned to indicate that x is out of range, from numerical recepies
