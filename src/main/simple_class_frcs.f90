@@ -30,6 +30,7 @@ contains
     ! setters/getters
     procedure          :: get_ncls
     procedure          :: get_filtsz
+    procedure          :: get_box
     procedure          :: set_frc
     procedure          :: get_frc
     procedure          :: frc_getter
@@ -141,6 +142,11 @@ contains
         class(class_frcs), intent(in) :: self
         get_filtsz = self%filtsz
     end function get_filtsz
+
+    pure integer function get_box( self )
+        class(class_frcs), intent(in) :: self
+        get_box = self%box4frc_calc
+    end function get_box
 
     subroutine set_frc( self, cls, frc, state )
         class(class_frcs), intent(inout) :: self

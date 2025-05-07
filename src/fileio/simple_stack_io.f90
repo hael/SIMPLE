@@ -1,3 +1,4 @@
+! This type is for single-threaded buffered contiguous reading/writing of image stacks and volumes
 module simple_stack_io
 include 'simple_lib.f08'
 use simple_image,   only: image

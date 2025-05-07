@@ -1,4 +1,4 @@
-! This type is designed for single-threaded discontinuous reads of 2D images
+! This type is for single-threaded non-contiguous reading of image stacks
 module simple_discrete_stack_io
 !$ use omp_lib
 !$ use omp_lib_kinds

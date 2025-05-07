@@ -32,6 +32,7 @@ type :: parameters
     character(len=3)          :: cavg_ini_ext='no'    !< use class averages for (external) initialization(yes|no){no}
     character(len=3)          :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
     character(len=3)          :: center_pdb='no'      !< move PDB atomic center to the center of the box(yes|no){no}
+    character(len=3)          :: chunk='no'           !< indicates whether we are within a chunk(yes|no){no}
     character(len=3)          :: classtats='no'       !< calculate class population statistics(yes|no){no}
     character(len=3)          :: clear='no'           !< clear exising processing upon start (stream) 
     character(len=3)          :: combine_eo='no'      !< Whether combined e/o volumes have been used for alignment(yes|no){no}
@@ -119,7 +120,6 @@ type :: parameters
     character(len=3)          :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
     character(len=3)          :: sh_first='no'        !< shifting before orientation search(yes|no){no}
     character(len=3)          :: sh_inv='no'          !< whether to use shift invariant metric for projection direction assignment(yes|no){no}
-    character(len=3)          :: shmem_writecls='yes' !<
     character(len=3)          :: sort_asc='yes'       !< sort oris ascending
     character(len=3)          :: srch_oris='yes'      !< whether to search orientations in multivolume assignment(yes|no){yes} 
     character(len=3)          :: stream='no'          !< stream (real time) execution mode(yes|no){no}
@@ -604,6 +604,7 @@ contains
         call check_carg('cavg_ini_ext',   self%cavg_ini_ext)
         call check_carg('center',         self%center)
         call check_carg('center_pdb',     self%center_pdb)
+        call check_carg('chunk',          self%chunk)
         call check_carg('classtats',      self%classtats)
         call check_carg('clear',          self%clear)
         call check_carg('cls_init',       self%cls_init)
@@ -736,7 +737,6 @@ contains
         call check_carg('shbarrier',      self%shbarrier)
         call check_carg('sh_first',       self%sh_first)
         call check_carg('sh_inv',         self%sh_inv)
-        call check_carg('shmem_writecls', self%shmem_writecls)
         call check_carg('sigma_est',      self%sigma_est)
         call check_carg('snapshot',       self%snapshot)
         call check_carg('sort',           self%sort)
@@ -1040,7 +1040,6 @@ contains
             part_glob = 1
         endif
         l_distr_exec_glob = self%l_distr_exec
-        if( l_distr_exec_glob ) self%shmem_writecls = 'yes'
         ! get pointer to program user interface
         call get_prg_ptr(self%prg, self%ptr2prg)
         ! look for the last previous execution directory and get next directory number

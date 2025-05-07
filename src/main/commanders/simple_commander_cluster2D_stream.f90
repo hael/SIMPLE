@@ -224,6 +224,7 @@ contains
             call cline_cluster2D_chunk%set('sigma_est', params_glob%sigma_est)
             call cline_cluster2D_chunk%set('kweight',   params_glob%kweight_chunk)
             call cline_cluster2D_chunk%set('rank_cavgs','no')
+            call cline_cluster2D_chunk%set('chunk',     'yes')
             if( l_wfilt )then
                 call cline_cluster2D_chunk%set('wiener',     'partial')
             endif
@@ -3109,19 +3110,21 @@ contains
     subroutine exec_consolidate_chunks_cavgs( self, cline )
         class(consolidate_chunks_cavgs_commander), intent(inout) :: self
         class(cmdline),                            intent(inout) :: cline
-        type(parameters)                        :: params
         type(sp_project),           allocatable :: chunks(:)
+        type(parameters)                        :: params
         type(sp_project)                        :: spproj
+        type(class_frcs)                        :: frcs, frcs_chunk
         type(image)                             :: img
         type(oris)                              :: cls2D
         character(len=STDLEN),      allocatable :: folders(:)
         character(len=XLONGSTRLEN), allocatable :: projfiles(:)
         real,                       allocatable :: states(:)
         integer,                    allocatable :: clsmap(:)
-        character(len=:),           allocatable :: projname, stkname, evenname, oddname
+        character(len=:),           allocatable :: projname, stkname, evenname, oddname, frc_fname
         real    :: smpd
-        integer :: ldim(3), i, ichunk, icls, ncls, nchunks, n, nallmics, nallstks, nallptcls, imic, istk
-        integer :: fromp, fromp_glob, top, top_glob, j, iptcl_glob, nstks, nmics, nptcls
+        integer :: ldim(3), i, ichunk, icls, ncls, nchunks, n, nallmics, nallstks, nallptcls
+        integer :: fromp, fromp_glob, top, top_glob, j, iptcl_glob, nstks, nmics, nptcls, istk
+        integer :: ncls_tot, box4frc
         if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         call cline%set('mkdir','no')
@@ -3140,8 +3143,9 @@ contains
         nchunks = 0
         allocate(projfiles(n))
         do i = 1,n
-            projname = trim(params%dir_target)//'/'//trim(folders(i))//'/chunk.simple'
-            if( file_exists(projname) )then
+            projname  = trim(params%dir_target)//'/'//trim(folders(i))//'/chunk.simple'
+            frc_fname = trim(params%dir_target)//'/'//trim(folders(i))//'/'//trim(FRCS_FILE)
+            if( file_exists(projname) .and. file_exists(frc_fname))then
                 nchunks      = nchunks+1
                 projfiles(i) = trim(projname)
             else
@@ -3182,9 +3186,9 @@ contains
             enddo
         enddo
         call img%kill
-        ncls = icls
-        ! particles, stacks & classes metadata
-        call cls2D%new(ncls,.false.)
+        ncls_tot = icls
+        ! particles, stacks and classes frcs & metadata
+        call cls2D%new(ncls_tot,.false.)
         call spproj%os_ptcl2D%new(nallptcls,.true.)
         call spproj%os_stk%new(nallstks,.false.)
         icls       = 0
@@ -3195,8 +3199,14 @@ contains
             projname = trim(projfiles(ichunk))
             call chunks(ichunk)%read_segment('stk', projname)
             call chunks(ichunk)%read_segment('ptcl2D',projname)
-            ! classes info
-            ncls = chunks(ichunk)%os_cls2D%get_noris()
+            ! classes frcs & info
+            frc_fname = trim(params%dir_target)//'/'//trim(folders(ichunk))//'/'//trim(FRCS_FILE)
+            ncls      = chunks(ichunk)%os_cls2D%get_noris()
+            call frcs_chunk%read(frc_fname)
+            if( ichunk==1 )then
+                box4frc = frcs_chunk%get_box()
+                call frcs%new(ncls_tot, box4frc, smpd)
+            endif
             allocate(clsmap(ncls),source=0)
             do i = 1,ncls
                 if( chunks(ichunk)%os_cls2D%get_state(i) == 0 ) cycle
@@ -3206,6 +3216,7 @@ contains
                 call cls2D%set(icls,'class',    icls)
                 call cls2D%set(icls,'origclass',i)
                 call cls2D%set(icls,'chunk',    folders(ichunk))
+                call frcs%set_frc(icls, frcs_chunk%get_frc(i, box4frc))
             enddo
             ! particles and stacks
             nstks  = chunks(ichunk)%os_stk%get_noris()
@@ -3229,6 +3240,8 @@ contains
             call chunks(ichunk)%kill
         enddo
         ! add classes and write project
+        call frcs%write(FRCS_FILE)
+        call spproj%add_frcs2os_out(FRCS_FILE, 'frc2D')
         call spproj%add_cavgs2os_out('cavgs.mrc', smpd, imgkind='cavg')
         spproj%os_cls2D = cls2D
         states = spproj%os_cls2D%get_all('state')
