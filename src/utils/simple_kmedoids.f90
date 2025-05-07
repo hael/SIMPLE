@@ -10,6 +10,7 @@ private
 type kmedoids
     private
     real, pointer        :: ptr_dmat(:,:) => null()
+    real, allocatable    :: dists2meds(:,:)
     integer              :: n=0, ncls=0
     integer              :: i_medoid_glob = 0
     integer, allocatable :: i_medoids(:), cls_labels(:), cls_pops(:)
@@ -17,6 +18,7 @@ type kmedoids
   contains
     procedure            :: new
     procedure            :: set_labels
+    procedure            :: get_labels
     procedure            :: init
     procedure            :: cluster
     procedure            :: find_medoids
@@ -36,14 +38,21 @@ contains
         self%ptr_dmat => dmat
         self%ncls     =  ncls
         allocate(self%i_medoids(self%ncls),self%cls_labels(self%n), self%cls_pops(self%ncls), source=0)
+        allocate(self%dists2meds(self%n,self%ncls), source=0.)
         self%exists   = .true.
     end subroutine new
 
     subroutine set_labels( self, cls_labels )
         class(kmedoids), intent(inout) :: self
-        integer,         intent(in)    :: cls_labels(self%ncls)
+        integer,         intent(in)    :: cls_labels(self%n)
         self%cls_labels = cls_labels
     end subroutine set_labels
+
+    subroutine get_labels( self, cls_labels )
+        class(kmedoids), intent(inout) :: self
+        integer,         intent(out)   :: cls_labels(self%n)
+        cls_labels = self%cls_labels
+    end subroutine get_labels
 
     ! initialize throuhg distance to medoid analysis
     subroutine init( self )
@@ -77,13 +86,23 @@ contains
     subroutine cluster( self )
         class(kmedoids), intent(inout) :: self
         integer, parameter :: MAXITS = 10
-        integer :: iter, nchanges
+        integer :: iter, nchanges, i
+        real    :: dist
         if( all(self%cls_labels == 0) ) THROW_HARD('Cluster labels must be initialized somehow')
         write(logfhandle,'(A)') 'K-MEDOIDS CLUSTERING OF DISTANCE MATRIX'
         iter = 0
         do
             call self%find_medoids
             call self%assign_labels(nchanges)
+            ! update iteration counter
+            iter = iter + 1
+            ! report joint distance
+            dist = 0.
+            do i = 1, self%n
+                dist = dist + self%dists2meds(i,self%cls_labels(i))
+            end do
+            write(logfhandle,'(a,1x,f8.2)') 'ITER: '//int2str(iter)//' DIST: ', dist
+            ! set l_converged flag
             if( nchanges == 0 .or. iter == MAXITS) exit
         end do
     end subroutine cluster
@@ -124,20 +143,20 @@ contains
         class(kmedoids), intent(inout) :: self
         integer,         intent(out)   :: nchanges
         integer :: i, icls, loc(self%n)
-        real :: x, dists2meds(self%n,self%ncls), rhuge
+        real :: x, rhuge
         ! extract distances to medoids
         rhuge = huge(x)
         do i = 1, self%n
             do icls = 1, self%ncls
                 if( self%i_medoids(icls) == 0 )then
-                    dists2meds(i,icls) = rhuge
+                    self%dists2meds(i,icls) = rhuge
                 else
-                    dists2meds(i,icls) = self%ptr_dmat(i,self%i_medoids(icls))
+                    self%dists2meds(i,icls) = self%ptr_dmat(i,self%i_medoids(icls))
                 endif
             end do
         end do
         ! assign clusters
-        loc = minloc(dists2meds, dim=2)
+        loc = minloc(self%dists2meds, dim=2)
         nchanges = count(self%cls_labels /= loc)
         self%cls_labels = loc
     end subroutine assign_labels
@@ -206,7 +225,7 @@ contains
             self%ptr_dmat => null()
             self%n    = 0
             self%ncls = 0
-            deallocate(self%i_medoids, self%cls_labels, self%cls_pops)
+            deallocate(self%i_medoids, self%cls_labels, self%cls_pops, self%dists2meds)
         endif
     end subroutine kill
 

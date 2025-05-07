@@ -7,6 +7,7 @@ use simple_fsc,      only: plot_fsc
 use simple_oris,     only: oris
 use simple_masker,   only: density_outside_mask
 use simple_aff_prop, only: aff_prop
+use simple_kmedoids, only: kmedoids
 implicit none
 
 public :: pspecs
@@ -44,12 +45,14 @@ contains
     ! getters & setters
     procedure          :: get_nspecs
     procedure          :: get_clsind_spec_state_arr
+    procedure          :: get_distmat
     ! plotting
     procedure          :: plot_all
     procedure          :: plot_cens
     ! clustering
-    procedure, private :: calc_distmat
+    procedure          :: calc_distmat
     procedure, private :: medoid_cls_init
+    procedure          :: kmedoid_cls_pspecs
     procedure          :: aprop_cls_pspecs
     procedure          :: kmeans_cls_pspecs
     ! calculators
@@ -187,6 +190,12 @@ contains
         enddo
     end function get_clsind_spec_state_arr
 
+    function get_distmat( self ) result( distmat )
+        class(pspecs), intent(in) :: self
+        real, allocatable :: distmat(:,:)
+        allocate(distmat(self%nspecs,self%nspecs), source=self%distmat)
+    end function get_distmat
+
     ! plotting
 
     subroutine plot_cens( self, fbody )
@@ -259,6 +268,23 @@ contains
         end do
         deallocate(parts)
     end subroutine medoid_cls_init
+
+    ! k-medoids clustering of powerspectra
+    subroutine kmedoid_cls_pspecs( self, states )
+        class(pspecs),        intent(inout) :: self
+        integer, allocatable, intent(inout) :: states(:)
+        type(kmedoids) :: kmed
+        call self%calc_distmat
+        call kmed%new(self%nspecs, self%distmat, self%ncls_spec)
+        call kmed%init
+        call kmed%cluster
+        call kmed%get_labels(self%clsinds_spec)
+        call kmed%kill
+        call self%calc_pspec_cls_avgs
+        call self%calc_cls_spec_stats(l_print=.true.)
+        if( allocated(states) ) deallocate(states)
+        states = self%get_clsind_spec_state_arr()
+    end subroutine kmedoid_cls_pspecs
 
     ! affinity propagation clustering of powerspectra
     subroutine aprop_cls_pspecs( self, states )
