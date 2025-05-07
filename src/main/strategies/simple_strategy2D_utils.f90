@@ -146,12 +146,14 @@ contains
         character(len=*), intent(in)    :: fbody, ext
         character(len=:), allocatable   :: fname
         integer,          allocatable   :: cnts(:)
-        integer :: i, maxlab
+        integer :: i, maxlab, pad_len
         maxlab = maxval(labels)
         allocate(cnts(maxlab), source=0)
+        pad_len = 2 
+        if( maxlab > 99 ) pad_len = 3
         do i = 1, n
             if( labels(i) > 0 )then
-                fname = trim(fbody)//int2str(labels(i))//'_cavgs'//trim(ext)
+                fname = trim(fbody)//int2str_pad(labels(i),pad_len)//'_cavgs'//trim(ext)
                 cnts(labels(i)) = cnts(labels(i)) + 1
                 call imgs(i)%write(fname, cnts(labels(i)))
             endif

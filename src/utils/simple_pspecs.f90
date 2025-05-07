@@ -69,21 +69,24 @@ contains
 
     ! constructor
 
-    subroutine new( self, imgs, os_cls2D, msk, hp, lp, ncls_spec )
+    subroutine new( self, imgs, os_cls2D, msk, hp, lp, ncls_spec, l_exclude_junk )
         use simple_strategy2D_utils, only: flag_non_junk_cavgs
         class(pspecs),     intent(inout) :: self
         class(image),      intent(inout) :: imgs(:)
         class(oris),       intent(in)    :: os_cls2D
         real,              intent(in)    :: msk, hp, lp
         integer,           intent(in)    :: ncls_spec
+        logical, optional, intent(in)    :: l_exclude_junk
         type(image), allocatable :: cavg_threads(:) 
         real,        allocatable :: pspec(:), resarr(:)
         logical,     allocatable :: l_valid_spectra(:)
         integer :: specinds(size(imgs))
-        logical :: l_junk_class
+        logical :: l_junk_class, ll_exclude_junk
         integer :: ldim(3), icls, ispec, ithr
         real    :: dynrange
         call self%kill
+        ll_exclude_junk = .true.
+        if( present(l_exclude_junk) ) ll_exclude_junk = l_exclude_junk
         self%ncls       = size(imgs)
         ldim            = imgs(1)%get_ldim()
         self%box        = ldim(1)
@@ -95,7 +98,11 @@ contains
         self%kfromto(1) = calc_fourier_index(self%hp, self%box, self%smpd)
         self%kfromto(2) = calc_fourier_index(self%lp, self%box, self%smpd)
         self%sz         = self%kfromto(2) - self%kfromto(1) + 1
-        call flag_non_junk_cavgs(imgs, hp, msk, l_valid_spectra, os_cls2D)
+        if( ll_exclude_junk )then
+            call flag_non_junk_cavgs(imgs, hp, msk, l_valid_spectra, os_cls2D)
+        else
+            allocate(l_valid_spectra(self%ncls), source=.true.)
+        endif
         self%nspecs     = count(l_valid_spectra)
         ! allocate arrays
         allocate(self%resarr(self%sz), source=resarr(self%kfromto(1):self%kfromto(2)))
