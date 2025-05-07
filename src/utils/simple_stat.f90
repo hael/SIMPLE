@@ -993,7 +993,11 @@ contains
         if( n /= size(smat,2) ) THROW_HARD('symmetric similarity matrix assumed')
         allocate(dmat(n,n), source=smat)
         call normalize_minmax(dmat)
-        dmat = 1. - dmat
+        where( dmat < TINY )
+            dmat = 1.
+        elsewhere
+            dmat = -log(dmat)
+        endwhere
     end function smat2dmat
 
     function calc_ap_pref( smat, mode ) result( pref )
