@@ -29,7 +29,8 @@ contains
         if(.not. file_exists(cavgsstk)) cavgsstk = trim(stkpath) // '/' // trim(cavgsstk)
         if(.not. file_exists(cavgsstk)) THROW_HARD('cavgs stk does not exist')
         call stkio_r%open(trim(cavgsstk), smpd, 'read', bufsz=ncls)
-        ldim_read = stkio_r%get_ldim()
+        ldim_read    = stkio_r%get_ldim()
+        ldim_read(3) = 1
         if( present(mask) )then
             if( size(mask) /= ncls ) THROW_HARD('Nonconforming mask size')
             ncls_sel = count(mask)
