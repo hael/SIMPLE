@@ -1993,6 +1993,7 @@ contains
             enddo
         endif
         ! pairwise correlation through Fourier-Mellin + shift search
+        write(logfhandle,'(A)') '>>> PAIRWISE CORRELATIONS THROUGH FOURIER-MELLIN & SHIFT SEARCH'
         call calc_inpl_invariant_fm(cavg_imgs, params%hp, params%lp, params%trs, corrmat)
         ! create pspecs object
         call pows%new(cavg_imgs, spproj%os_cls2D, params%msk, HP_SPEC, LP_SPEC, params%ncls_spec, l_exclude_junk=.false.)
@@ -2020,6 +2021,7 @@ contains
             write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION (AP): ', ncls_aff_prop
             call kmed%new(labels, dmat_joint)
             if( ncls_aff_prop > NCLS_MAX )then
+                write(logfhandle,'(A)') '>>> MERGING CLUSTERS WITH K-MEDOIDS'
                 call kmed%merge(NCLS_MAX)
                 call kmed%get_labels(labels)
             endif
