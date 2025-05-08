@@ -19,6 +19,7 @@ type kmedoids
     procedure, private   :: new_1, new_2
     generic              :: new => new_1, new_2
     procedure            :: get_labels
+    procedure            :: get_medoids
     procedure            :: init
     procedure            :: cluster
     procedure            :: find_medoids
@@ -57,6 +58,12 @@ contains
         integer,         intent(out)   :: cls_labels(self%n)
         cls_labels = self%cls_labels
     end subroutine get_labels
+
+    subroutine get_medoids( self, i_medoids )
+        class(kmedoids), intent(inout) :: self
+        integer,         intent(out)   :: i_medoids(self%ncls)
+        i_medoids = self%i_medoids
+    end subroutine get_medoids
 
     ! initialize through distance to medoid analysis
     subroutine init( self )
@@ -176,66 +183,37 @@ contains
     subroutine merge( self, ncls_new )
         class(kmedoids), intent(inout) :: self
         integer,         intent(in)    :: ncls_new
-        real,    allocatable :: dists_btw_meds(:,:)
-        logical, allocatable :: med_pair_mask(:,:)
-        integer              :: loc(2)
+        real           :: dists_btw_meds(self%ncls,self%ncls)
+        integer        :: new_i_medoid_inds(ncls_new), new_i_medoids(ncls_new), imed, jmed, nchanges
+        type(kmedoids) :: kmed_meds
         if( ncls_new >= self%ncls ) THROW_HARD('New # clusters (ncls_new) must be less than old # clusters')
-        do
-            call calc_med_dists
-            loc = minloc(dists_btw_meds, mask=med_pair_mask)
-            call merge_clusters(self%i_medoids(loc(1)), self%i_medoids(loc(2)))
-            if( self%ncls == ncls_new ) exit
+        if( all(self%i_medoids == 0) ) call self%find_medoids
+        ! calculate distances between medoids
+        dists_btw_meds = 0.
+        do imed = 1, self%ncls - 1
+            do jmed = imed + 1, self%ncls
+                dists_btw_meds(imed,jmed) = self%ptr_dmat(self%i_medoids(imed),self%i_medoids(jmed))
+                dists_btw_meds(jmed,imed) = dists_btw_meds(imed,jmed)
+            end do
         end do
-        if( allocated(dists_btw_meds) ) deallocate(dists_btw_meds)
-        if( allocated(med_pair_mask)  ) deallocate(med_pair_mask)
-
-    contains
-
-        subroutine calc_med_dists
-            integer :: imed, jmed
-            ! extract distances between medoids
-            if( allocated(dists_btw_meds) ) deallocate(dists_btw_meds)
-            allocate(dists_btw_meds(self%ncls,self%ncls), source=0.)
-            if( allocated(med_pair_mask)  ) deallocate(med_pair_mask)
-            allocate(med_pair_mask(self%ncls,self%ncls),  source=.false.)
-            do imed = 1, self%ncls - 1
-                do jmed = imed + 1, self%ncls
-                    dists_btw_meds(imed,jmed) = self%ptr_dmat(imed,jmed)
-                    dists_btw_meds(jmed,imed) = dists_btw_meds(imed,jmed)
-                    med_pair_mask(imed,jmed)  = .true.
-                end do
-            end do
-        end subroutine calc_med_dists
-
-        subroutine merge_clusters( i_cls, j_cls )
-            integer, intent(in) :: i_cls, j_cls
-            integer :: new_cls_labels(self%n), cnt, icls, new_cls_medoids(self%ncls)
-            where(self%cls_labels == j_cls) self%cls_labels = i_cls
-            call self%find_medoid(i_cls)
-            ! reorder labels
-            cnt            = 0
-            new_cls_labels = 0
-            do icls = 1, self%ncls
-                if( any(self%cls_labels == icls) )then
-                    cnt = cnt + 1
-                    new_cls_medoids(cnt) = self%i_medoids(icls)
-                    where(self%cls_labels == icls) new_cls_labels = cnt
-                endif
-            enddo
-            self%cls_labels = new_cls_labels
-            ! update # clusters
-            self%ncls = maxval(self%cls_labels)
-            ! update arrays
-            deallocate(self%i_medoids, self%cls_pops, self%dists2meds)
-            allocate(self%i_medoids(self%ncls), source=new_cls_medoids(:self%ncls))
-            allocate(self%cls_pops(self%ncls), source=0)
-            allocate(self%dists2meds(self%n,self%ncls), source=0.)
-            ! re-calculate class pops
-            do icls = 1, self%ncls
-                self%cls_pops(icls) = count(self%cls_labels == icls)
-            end do
-        end subroutine merge_clusters
-
+        ! cluster the medoids
+        call kmed_meds%new(self%ncls, dists_btw_meds, ncls_new)
+        call kmed_meds%init
+        call kmed_meds%cluster
+        call kmed_meds%get_medoids(new_i_medoid_inds)
+        call kmed_meds%kill
+        ! fish out the new medoids
+        do imed = 1, ncls_new
+            new_i_medoids(imed) = self%i_medoids(new_i_medoid_inds(imed))
+        end do
+        ! update arrays
+        self%ncls = ncls_new
+        deallocate(self%i_medoids, self%cls_pops, self%dists2meds)
+        allocate(self%i_medoids(self%ncls), source=new_i_medoids)
+        allocate(self%cls_pops(self%ncls), source=0)
+        allocate(self%dists2meds(self%n,self%ncls), source=0.)
+        ! re-assign clusters
+        call self%assign_labels(nchanges)
     end subroutine merge
 
     subroutine kill( self )

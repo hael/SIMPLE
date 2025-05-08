@@ -28,7 +28,7 @@ contains
         call spproj%get_cavgs_stk(cavgsstk, ncls, smpd, imgkind='cavg', stkpath=stkpath)
         if(.not. file_exists(cavgsstk)) cavgsstk = trim(stkpath) // '/' // trim(cavgsstk)
         if(.not. file_exists(cavgsstk)) THROW_HARD('cavgs stk does not exist')
-        call stkio_r%open(trim(cavgsstk), smpd, 'read', bufsz=ncls)
+        call stkio_r%open(trim(cavgsstk), smpd, 'read', bufsz=min(1024,ncls))
         ldim_read    = stkio_r%get_ldim()
         ldim_read(3) = 1
         if( present(mask) )then
@@ -63,7 +63,7 @@ contains
         if(.not. file_exists(cavgsstk)) THROW_HARD('cavgs stk does not exist')
         call find_ldim_nptcls(cavgsstk, ldim_read, ncls, smpd)
         ldim_read(3) = 1
-        call stkio_r%open(trim(cavgsstk), smpd, 'read', bufsz=ncls)
+        call stkio_r%open(trim(cavgsstk), smpd, 'read', bufsz=min(1024,ncls))
         if( present(mask) )then
             if( size(mask) /= ncls ) THROW_HARD('Nonconforming mask size')
             ncls_sel = count(mask)
