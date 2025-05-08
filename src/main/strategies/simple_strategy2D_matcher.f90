@@ -61,7 +61,7 @@ contains
         integer :: iptcl, fnr, updatecnt, iptcl_map, iptcl_batch, ibatch, nptcls2update
         integer :: batchsz_max, batchsz, nbatches, batch_start, batch_end
         logical :: l_partial_sums, l_update_frac, l_ctf, l_prob, l_snhc
-        logical :: l_stream, l_greedy, l_np_cls_defined
+        logical :: l_stream, l_greedy, l_np_cls_defined, l_alloc_read_cavgs
         if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = t_init
@@ -130,24 +130,19 @@ contains
         if( file_exists(params_glob%frcs) ) call build_glob%clsfrcs%read(params_glob%frcs)
 
         ! PREP REFERENCES
-        call cavger_new(pinds)
         if( build_glob%spproj_field%get_nevenodd() == 0 )then
             if( l_distr_exec_glob ) THROW_HARD('no eo partitioning available; cluster2D_exec')
             call build_glob%spproj_field%partition_eo
             call build_glob%spproj%write_segment_inside(params_glob%oritype)
         endif
-        if( .not. cline%defined('refs') )         THROW_HARD('need refs to be part of command line for cluster2D execution')
-        if( .not. file_exists(params_glob%refs) ) THROW_HARD('input references (refs) does not exist in cwd')
-        call cavger_read(params_glob%refs, 'merged')
-        if( file_exists(params_glob%refs_even) )then
-            call cavger_read(params_glob%refs_even, 'even')
-        else
-            call cavger_read(params_glob%refs, 'even')
+        l_alloc_read_cavgs = .true.
+        if( .not.l_distr_exec_glob )then
+            l_alloc_read_cavgs = which_iter==1
         endif
-        if( file_exists(params_glob%refs_odd) )then
-            call cavger_read(params_glob%refs_odd, 'odd')
-        else
-            call cavger_read(params_glob%refs, 'odd')
+        call cavger_new(pinds, alloccavgs=l_alloc_read_cavgs)
+        if( l_alloc_read_cavgs )then
+            if( .not. cline%defined('refs') ) THROW_HARD('need refs to be part of command line for cluster2D execution')
+            call cavger_read_all
         endif
 
         ! SET FOURIER INDEX RANGE
@@ -248,9 +243,9 @@ contains
                             else
                                 select case(trim(refine_flag))
                                 case('greedy_smpl')
-                                    allocate(strategy2D_greedy      :: strategy2Dsrch(iptcl_batch)%ptr)
-                                case DEFAULT ! is refine=greedy
                                     allocate(strategy2D_greedy_smpl :: strategy2Dsrch(iptcl_batch)%ptr)
+                                case DEFAULT ! is refine=greedy
+                                    allocate(strategy2D_greedy      :: strategy2Dsrch(iptcl_batch)%ptr)
                                 end select
                             endif
                         else
@@ -327,21 +322,19 @@ contains
             if( trim(params_glob%restore_cavgs).eq.'yes' )then
                 call cavger_transf_oridat( build_glob%spproj )
                 call cavger_assemble_sums( l_partial_sums )
-                ! write results to disk
                 call cavger_readwrite_partial_sums('write')
             endif
+            call cavger_kill
         else
             ! check convergence
             converged = conv%check_conv2D(cline, build_glob%spproj_field, build_glob%spproj_field%get_n('class'), params_glob%msk)
+            converged = converged .and. (params_glob%which_iter >= params_glob%minits)
+            converged = converged .or.  (params_glob%which_iter >= params_glob%maxits)
             ! Update progress file if not stream
             if(.not. l_stream) call progressfile_update(conv%get('progress'))
             if( trim(params_glob%restore_cavgs).eq.'yes' )then
                 call cavger_transf_oridat( build_glob%spproj )
                 call cavger_assemble_sums( l_partial_sums )
-                ! partial classes written for continuation or because of fractional update
-                if( converged .or. which_iter == params_glob%maxits .or. params_glob%l_update_frac )then
-                    call cavger_readwrite_partial_sums('write')
-                endif
                 call cavger_merge_eos_and_norm
                 if( cline%defined('which_iter') )then
                     params_glob%refs      = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//params_glob%ext
@@ -353,12 +346,15 @@ contains
                 call cavger_calc_and_write_frcs_and_eoavg(params_glob%frcs, params_glob%which_iter)
                 ! classdoc gen needs to be after calc of FRCs
                 call cavger_gen2Dclassdoc(build_glob%spproj)
-                ! write references
-                call cavger_write(trim(params_glob%refs),      'merged')
-                call cavger_write(trim(params_glob%refs_even), 'even'  )
-                call cavger_write(trim(params_glob%refs_odd),  'odd'   )
-                ! update command line
+                ! update command line & write references
+                call cavger_write(params_glob%refs,'merged')
                 call cline%set('refs', trim(params_glob%refs))
+                if( l_stream )then
+                    call cavger_write(params_glob%refs_even,'even')
+                    call cavger_write(params_glob%refs_odd, 'odd')
+                    call cavger_readwrite_partial_sums('write')
+                endif
+                call cavger_kill(dealloccavgs=.false.)
                 ! write project: cls2D and state congruent cls3D
                 call build_glob%spproj%os_cls3D%new(params_glob%ncls, is_ptcl=.false.)
                 states = build_glob%spproj%os_cls2D%get_all('state')
@@ -368,7 +364,6 @@ contains
                 deallocate(states)
             endif
         endif
-        call cavger_kill
         call eucl_sigma%kill
         ! necessary for shared mem implementation, which otherwise bugs out when the bp-range changes
         call pftcc%kill
@@ -472,7 +467,7 @@ contains
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: batchsz_max, which_iter
         logical,                 intent(in)    :: l_stream
-        type(image),      allocatable :: match_imgs(:)
+        type(image),      allocatable :: match_imgs(:), tmp_imgs(:)
         character(len=:), allocatable :: fname
         real      :: xyz(3)
         integer   :: icls, pop, pop_even, pop_odd
@@ -494,7 +489,7 @@ contains
         endif
         ! prepare the polarizer images
         call build_glob%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
-        allocate(match_imgs(params_glob%ncls))
+        allocate(match_imgs(params_glob%ncls),tmp_imgs(params_glob%ncls))
         call cavgs_merged(1)%construct_thread_safe_tmp_imgs(nthr_glob)
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read references and transform into polar coordinates
@@ -512,17 +507,21 @@ contains
             if( pop > 0 )then
                 ! prepare the references
                 call match_imgs(icls)%new([params_glob%box_crop, params_glob%box_crop, 1], params_glob%smpd_crop, wthreads=.false.)
+                call tmp_imgs(icls)%new([params_glob%box_crop, params_glob%box_crop, 1], params_glob%smpd_crop, wthreads=.false.)
                 ! here we are determining the shifts and map them back to classes
                 do_center = (has_been_searched .and. (pop > MINCLSPOPLIM) .and. (which_iter > 2)&
                     &.and. .not.params_glob%l_update_frac)
-                call prep2Dref(cavgs_merged(icls), match_imgs(icls), icls, iseven=.false., center=do_center, xyz_out=xyz)
+                call tmp_imgs(icls)%copy_fast(cavgs_merged(icls))
+                call prep2Dref(tmp_imgs(icls), match_imgs(icls), icls, iseven=.false., center=do_center, xyz_out=xyz)
                 if( .not.params_glob%l_lpset )then
                     if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
                         ! here we are passing in the shifts and do NOT map them back to classes
-                        call prep2Dref(cavgs_even(icls), match_imgs(icls), icls, iseven=.true., center=do_center, xyz_in=xyz)
+                        call tmp_imgs(icls)%copy_fast(cavgs_even(icls))
+                        call prep2Dref(tmp_imgs(icls), match_imgs(icls), icls, iseven=.true., center=do_center, xyz_in=xyz)
                         call build_glob%img_crop_polarizer%polarize(pftcc, match_imgs(icls), icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
                         ! here we are passing in the shifts and do NOT map them back to classes
-                        call prep2Dref(cavgs_odd(icls), match_imgs(icls), icls, iseven=.false., center=do_center, xyz_in=xyz)
+                        call tmp_imgs(icls)%copy_fast(cavgs_odd(icls))
+                        call prep2Dref(tmp_imgs(icls), match_imgs(icls), icls, iseven=.false., center=do_center, xyz_in=xyz)
                         call build_glob%img_crop_polarizer%polarize(pftcc, match_imgs(icls), icls, isptcl=.false., iseven=.false., mask=build_glob%l_resmsk)  ! 2 polar coords
                     else
                         ! put the merged class average in both even and odd positions
@@ -530,17 +529,19 @@ contains
                         call pftcc%cp_even2odd_ref(icls)
                     endif
                 else
+                    call tmp_imgs(icls)%copy_fast(cavgs_merged(icls))
                     call prep2Dref(cavgs_merged(icls), match_imgs(icls), icls, iseven=.false., center=do_center, xyz_in=xyz)
                     call build_glob%img_crop_polarizer%polarize(pftcc, match_imgs(icls), icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
                     call pftcc%cp_even2odd_ref(icls)
                 endif
                 call match_imgs(icls)%kill
+                call tmp_imgs(icls)%kill
             endif
         end do
         !$omp end parallel do
         call pftcc%memoize_refs
         ! CLEANUP
-        deallocate(match_imgs)
+        deallocate(match_imgs,tmp_imgs)
         call cavgs_merged(1)%kill_thread_safe_tmp_imgs
     end subroutine preppftcc4align2D
 

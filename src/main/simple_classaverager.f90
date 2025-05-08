@@ -11,7 +11,7 @@ use simple_euclid_sigma2
 implicit none
 
 public :: cavger_new, cavger_transf_oridat, cavger_gen2Dclassdoc, cavger_assemble_sums,&
-cavger_merge_eos_and_norm, cavger_calc_and_write_frcs_and_eoavg, cavger_write, cavger_read,&
+cavger_merge_eos_and_norm, cavger_calc_and_write_frcs_and_eoavg, cavger_write, cavger_read, cavger_read_all,&
 cavger_readwrite_partial_sums, cavger_assemble_sums_from_parts, cavger_kill, cavgs_even, cavgs_odd, cavgs_merged,&
 cavger_read_euclid_sigma2, transform_ptcls
 private
@@ -55,9 +55,9 @@ type(image),         allocatable :: ctfsqsums_even_wfilt(:)  !< CTF**2 sums for 
 type(image),         allocatable :: ctfsqsums_odd_wfilt(:)   !< -"-
 type(image),         allocatable :: ctfsqsums_merged(:)      !< -"-
 type(image),         allocatable :: ctfsqsums_merged_wfilt(:)!< -"-
-type(image),         allocatable :: cavgs_even_bak(:)            !< class averages
-type(image),         allocatable :: cavgs_odd_bak(:)             !< -"-
-type(image),         allocatable :: cavgs_even_wfilt_bak(:)      !< class averages wiener filtered
+type(image),         allocatable :: cavgs_even_part(:)           !< partial class averages
+type(image),         allocatable :: cavgs_odd_part(:)            !< -"-
+type(image),         allocatable :: cavgs_even_wfilt_bak(:)      !< partial class averages wiener filtered
 type(image),         allocatable :: cavgs_odd_wfilt_bak(:)       !< -"-
 type(image),         allocatable :: ctfsqsums_even_bak(:)        !< CTF**2 sums for Wiener normalisation
 type(image),         allocatable :: ctfsqsums_odd_bak(:)         !< -"-
@@ -66,10 +66,10 @@ type(image),         allocatable :: ctfsqsums_odd_wfilt_bak(:)   !< -"-
 type(euclid_sigma2)              :: eucl_sigma
 integer,             allocatable :: prev_eo_pops(:,:)
 logical,             allocatable :: pptcl_mask(:)
-logical                          :: l_stream      = .false.  !< flag for cluster2D_stream
-logical                          :: phaseplate    = .false.  !< Volta phaseplate images or not
-logical                          :: l_ml_reg      = .false.
-logical                          :: exists        = .false.  !< to flag instance existence
+logical                          :: l_stream           = .false.  !< flag for cluster2D_stream
+logical                          :: phaseplate         = .false.  !< Volta phaseplate images or not
+logical                          :: l_ml_reg           = .false.  !< Maximum-Likelihood regularization
+logical                          :: l_alloc_read_cavgs = .true.   !< whether to allocate sums and read partial sums
 
 integer(timer_int_kind) :: t_class_loop,t_batch_loop, t_gridding, t_init, t_tot
 real(timer_int_kind)    :: rt_class_loop,rt_batch_loop, rt_gridding, rt_init, rt_tot
@@ -77,17 +77,16 @@ character(len=STDLEN)   :: benchfname
 
 contains
 
-    subroutine cavger_new( pinds )
+    subroutine cavger_new( pinds, alloccavgs )
         integer, optional, intent(in) :: pinds(:)
-        integer :: icls, i
-        ! destruct possibly pre-existing instance
-        call cavger_kill
+        logical, optional, intent(in) :: alloccavgs
+        l_alloc_read_cavgs = .true.
+        if( present(alloccavgs) ) l_alloc_read_cavgs = alloccavgs
+        call cavger_kill(dealloccavgs=l_alloc_read_cavgs)
         allocate(pptcl_mask(params_glob%fromp:params_glob%top), source=.true.)
         if( present(pinds) )then
-            pptcl_mask = .false.
-            do i = 1, size(pinds)
-                pptcl_mask(pinds(i)) = .true.
-            enddo
+            pptcl_mask           = .false.
+            pptcl_mask(pinds(:)) = .true.
         endif
         ncls          = params_glob%ncls
         ! work out range and partsz
@@ -115,34 +114,9 @@ contains
         ! ML-regularization
         l_ml_reg      = params_glob%l_ml_reg
         ! build arrays
-        allocate(precs(partsz), cavgs_even(ncls), cavgs_odd(ncls),&
-        &cavgs_merged(ncls), ctfsqsums_even(ncls),&
-        &ctfsqsums_odd(ncls), ctfsqsums_merged(ncls), prev_eo_pops(ncls,2))
+        allocate(precs(partsz), prev_eo_pops(ncls,2))
         prev_eo_pops = 0
-        if( l_stream )then
-            allocate(cavgs_even_wfilt(ncls), cavgs_odd_wfilt(ncls), ctfsqsums_merged_wfilt(ncls),&
-            &ctfsqsums_even_wfilt(ncls), ctfsqsums_odd_wfilt(ncls), cavgs_merged_wfilt(ncls))
-        endif
-        !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
-        do icls=1,ncls
-            call cavgs_even(icls)%new(ldim_croppd,params_glob%smpd_crop,wthreads=.false.)
-            call cavgs_odd(icls)%new(ldim_croppd,params_glob%smpd_crop,wthreads=.false.)
-            call cavgs_merged(icls)%new(ldim_croppd,params_glob%smpd_crop,wthreads=.false.)
-            call ctfsqsums_even(icls)%new(ldim_croppd,params_glob%smpd_crop,wthreads=.false.)
-            call ctfsqsums_odd(icls)%new(ldim_croppd,params_glob%smpd_crop,wthreads=.false.)
-            call ctfsqsums_merged(icls)%new(ldim_croppd,params_glob%smpd_crop,wthreads=.false.)
-            if( l_stream )then
-                call cavgs_merged_wfilt(icls)%new(ldim_croppd,params_glob%smpd_crop,wthreads=.false.)
-                call cavgs_even_wfilt(icls)%new(ldim_croppd,params_glob%smpd_crop,wthreads=.false.)
-                call cavgs_odd_wfilt(icls)%new(ldim_croppd,params_glob%smpd_crop,wthreads=.false.)
-                call ctfsqsums_even_wfilt(icls)%new(ldim_croppd,params_glob%smpd_crop,wthreads=.false.)
-                call ctfsqsums_odd_wfilt(icls)%new(ldim_croppd,params_glob%smpd_crop,wthreads=.false.)
-                call ctfsqsums_merged_wfilt(icls)%new(ldim_croppd,params_glob%smpd_crop,wthreads=.false.)
-            endif
-        end do
-        !$omp end parallel do
-        ! flag existence
-        exists = .true.
+        call alloc_cavgs_sums
     end subroutine cavger_new
 
     ! setters/getters
@@ -284,14 +258,47 @@ contains
         call score_classes(cls_field)
     end subroutine cavger_gen2Dclassdoc
 
-    !>  \brief  is for initialization of the sums
+    !>  \brief  is for allocation of the sums array to size used for reading
+    subroutine alloc_cavgs_sums
+        integer :: icls
+        if( l_alloc_read_cavgs )then
+            allocate(cavgs_even_part(ncls),cavgs_odd_part(ncls))
+            if( l_stream ) allocate(cavgs_even_wfilt_bak(ncls),cavgs_odd_wfilt_bak(ncls))
+            allocate(cavgs_even(ncls), cavgs_odd(ncls), cavgs_merged(ncls),&
+            &ctfsqsums_even(ncls),ctfsqsums_odd(ncls), ctfsqsums_merged(ncls))
+            if( l_stream )then
+                allocate(cavgs_even_wfilt(ncls), cavgs_odd_wfilt(ncls), ctfsqsums_merged_wfilt(ncls),&
+                &ctfsqsums_even_wfilt(ncls), ctfsqsums_odd_wfilt(ncls), cavgs_merged_wfilt(ncls))
+            endif
+            !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
+            do icls=1,ncls
+                call cavgs_even(icls)%new(  ldim_croppd, smpd_crop,wthreads=.false.)
+                call cavgs_odd(icls)%new(   ldim_croppd, smpd_crop,wthreads=.false.)
+                call cavgs_merged(icls)%new(ldim_croppd, smpd_crop,wthreads=.false.)
+                call ctfsqsums_even(icls)%new(  ldim_croppd, smpd_crop,wthreads=.false.)
+                call ctfsqsums_odd(icls)%new(   ldim_croppd, smpd_crop,wthreads=.false.)
+                call ctfsqsums_merged(icls)%new(ldim_croppd, smpd_crop,wthreads=.false.)
+                if( l_stream )then
+                    call cavgs_merged_wfilt(icls)%new(ldim_croppd, smpd_crop,wthreads=.false.)
+                    call cavgs_even_wfilt(icls)%new(  ldim_croppd, smpd_crop,wthreads=.false.)
+                    call cavgs_odd_wfilt(icls)%new(   ldim_croppd, smpd_crop,wthreads=.false.)
+                    call ctfsqsums_even_wfilt(icls)%new(  ldim_croppd, smpd_crop,wthreads=.false.)
+                    call ctfsqsums_odd_wfilt(icls)%new(   ldim_croppd, smpd_crop,wthreads=.false.)
+                    call ctfsqsums_merged_wfilt(icls)%new(ldim_croppd, smpd_crop,wthreads=.false.)
+                endif
+            end do
+            !$omp end parallel do
+        endif
+    end subroutine alloc_cavgs_sums
+
+    !>  \brief  is for initialization of the sums to size used in restoration
     subroutine init_cavgs_sums
         integer :: icls
         !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
         do icls=1,ncls
-            call cavgs_even(icls)%new(ldim_croppd,smpd_crop,wthreads=.false.)
-            call cavgs_odd(icls)%new(ldim_croppd,smpd_crop,wthreads=.false.)
-            call cavgs_merged(icls)%new(ldim_croppd,smpd_crop,wthreads=.false.)
+            call cavgs_even(icls)%new(    ldim_croppd, smpd_crop,wthreads=.false.)
+            call cavgs_odd(icls)%new(     ldim_croppd, smpd_crop,wthreads=.false.)
+            call cavgs_merged(icls)%new(  ldim_croppd, smpd_crop,wthreads=.false.)
             call cavgs_even(icls)%zero_and_flag_ft
             call cavgs_odd(icls)%zero_and_flag_ft
             call cavgs_merged(icls)%zero_and_flag_ft
@@ -357,10 +364,18 @@ contains
         integer :: ibatch, nbatches, istart, iend, ithr, nptcls_in_batch, first_pind, last_pind
         if( .not. params_glob%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
         ! init cavgs
-        call init_cavgs_sums
-        if( do_frac_update )then
-            call cavger_readwrite_partial_sums('read')
-            call cavger_apply_weights( 1. - params_glob%update_frac )
+        if( l_alloc_read_cavgs )then
+            call init_cavgs_sums
+            if( do_frac_update )then
+                call cavger_readwrite_partial_sums('read')
+                call cavger_apply_weights(1.0-params_glob%update_frac)
+            endif
+        else
+            if( do_frac_update )then
+                call cavger_apply_weights(1.0-params_glob%update_frac)
+            else
+                call init_cavgs_sums
+            endif
         endif
         kbwin  = kbinterpol(KBWINSZ, params_glob%alpha)
         wdim   = kbwin%get_wdim()
@@ -385,15 +400,13 @@ contains
         crop_scale = real(ldim_croppd(1)) / real(ldim_pd(1))
         ! Objects allocations
         allocate(read_imgs(READBUFFSZ), cgrid_imgs(READBUFFSZ), cgrid_imgs_crop(READBUFFSZ))
-        !$omp parallel default(shared) proc_bind(close) private(i)
-        !$omp do schedule(static)
+        !$omp parallel do schedule(static) default(shared) proc_bind(close) private(i)
         do i = 1,READBUFFSZ
             call read_imgs(i)%new(ldim, params_glob%smpd, wthreads=.false.)
             call cgrid_imgs(i)%new(ldim_pd, params_glob%smpd, wthreads=.false.)
             call cgrid_imgs_crop(i)%new(ldim_croppd, params_glob%smpd_crop, wthreads=.false.)
         enddo
-        !$omp end do
-        !$omp end parallel
+        !$omp end parallel do
         logi_lims_crop = cgrid_imgs_crop(1)%loop_lims(2)
         cyc_lims_crop  = cgrid_imgs_crop(1)%loop_lims(3)
         nyq_crop       = cgrid_imgs_crop(1)%get_lfny(1)
@@ -656,6 +669,17 @@ contains
                 endif
             enddo ! end read batches loop
         enddo
+        ! copy to part objects
+        !$omp parallel do schedule(static) default(shared) proc_bind(close) private(icls)
+        do icls = 1,ncls
+            call cavgs_even_part(icls)%copy(cavgs_even(icls))
+            call cavgs_odd_part(icls)%copy(cavgs_odd(icls))
+            if( l_stream )then
+                call cavgs_even_wfilt_bak(icls)%copy(cavgs_even_wfilt(icls))
+                call cavgs_odd_wfilt_bak(icls)%copy(cavgs_odd_wfilt(icls))
+            endif
+        enddo
+        !$omp end parallel do
         ! Cleanup
         call dstkio_r%kill
         do i = 1,READBUFFSZ
@@ -673,12 +697,8 @@ contains
         call cavger_prep_gridding_correction(gridcorrection_img)
         if( l_ml_reg )then
             ! Fourier components & CTF2 need to be stashed
-            allocate(cavgs_even_bak(ncls),cavgs_odd_bak(ncls),&
-            &ctfsqsums_even_bak(ncls),ctfsqsums_odd_bak(ncls))
-            if( l_stream )then
-                allocate(cavgs_even_wfilt_bak(ncls),cavgs_odd_wfilt_bak(ncls),&
-                &ctfsqsums_even_wfilt_bak(ncls),ctfsqsums_odd_wfilt_bak(ncls))
-            endif
+            allocate(ctfsqsums_even_bak(ncls),ctfsqsums_odd_bak(ncls))
+            if( l_stream ) allocate(ctfsqsums_even_wfilt_bak(ncls),ctfsqsums_odd_wfilt_bak(ncls))
         endif
         !$omp parallel do default(shared) private(icls,eo_pop,pop) schedule(static) proc_bind(close)
         do icls=1,ncls
@@ -689,11 +709,15 @@ contains
                 call cavgs_even(icls)%zero_and_unflag_ft
                 call cavgs_odd(icls)%zero_and_unflag_ft
                 call ctfsqsums_merged(icls)%zero_and_flag_ft
+                call cavgs_even_part(icls)%zero_and_flag_ft
+                call cavgs_odd_part(icls)%zero_and_flag_ft
                 if( l_stream )then
                     call cavgs_merged_wfilt(icls)%zero_and_unflag_ft
                     call cavgs_even_wfilt(icls)%zero_and_unflag_ft
                     call cavgs_odd_wfilt(icls)%zero_and_unflag_ft
                     call ctfsqsums_merged_wfilt(icls)%zero_and_flag_ft
+                    call cavgs_even_wfilt_bak(icls)%zero_and_flag_ft
+                    call cavgs_odd_wfilt_bak(icls)%zero_and_flag_ft
                 endif
             else
                 call cavgs_merged(icls)%zero_and_flag_ft
@@ -711,13 +735,9 @@ contains
                     call ctfsqsums_merged_wfilt(icls)%add(ctfsqsums_odd_wfilt(icls))
                 endif
                 if( l_ml_reg )then
-                    call cavgs_even_bak(icls)%copy(cavgs_even(icls))
-                    call cavgs_odd_bak(icls)%copy(cavgs_odd(icls))
                     call ctfsqsums_even_bak(icls)%copy(ctfsqsums_even(icls))
                     call ctfsqsums_odd_bak(icls)%copy(ctfsqsums_odd(icls))
                     if( l_stream )then
-                        call cavgs_even_wfilt_bak(icls)%copy(cavgs_even_wfilt(icls))
-                        call cavgs_odd_wfilt_bak(icls)%copy(cavgs_odd_wfilt(icls))
                         call ctfsqsums_even_wfilt_bak(icls)%copy(ctfsqsums_even_wfilt(icls))
                         call ctfsqsums_odd_wfilt_bak(icls)%copy(ctfsqsums_odd_wfilt(icls))
                     endif
@@ -804,8 +824,8 @@ contains
                         if( eo_pop(2) < 3 ) call ctfsqsums_odd_wfilt(icls)%add(1.)
                     endif
                     ! re-generate sums
-                    call cavgs_even(icls)%copy(cavgs_even_bak(icls))
-                    call cavgs_odd(icls)%copy(cavgs_odd_bak(icls))
+                    call cavgs_even(icls)%copy(cavgs_even_part(icls))
+                    call cavgs_odd(icls)%copy(cavgs_odd_part(icls))
                     call cavgs_merged(icls)%copy(cavgs_even(icls))
                     call cavgs_merged(icls)%add(cavgs_odd(icls))
                     call ctfsqsums_merged(icls)%copy(ctfsqsums_even(icls))
@@ -1050,26 +1070,27 @@ contains
     !>  \brief  writes class averages to disk
     subroutine cavger_write( fname, which )
         character(len=*),  intent(in) :: fname, which
-        character(len=:), allocatable :: fname_wfilt
+        character(len=:), allocatable :: fname_wfilt, fname_here
         integer :: icls
-        fname_wfilt = add2fbody(fname, params_glob%ext, trim(WFILT_SUFFIX))
+        fname_here  = trim(fname)
+        fname_wfilt = add2fbody(fname_here, params_glob%ext, trim(WFILT_SUFFIX))
         select case(which)
             case('even')
-                if( l_stream ) fname_wfilt = add2fbody(fname, '_even'//trim(params_glob%ext), trim(WFILT_SUFFIX))
+                if( l_stream ) fname_wfilt = add2fbody(fname_here, '_even'//trim(params_glob%ext), trim(WFILT_SUFFIX))
                 do icls=1,ncls
-                    call cavgs_even(icls)%write(fname, icls)
+                    call cavgs_even(icls)%write(fname_here, icls)
                     if( l_stream ) call cavgs_even_wfilt(icls)%write(fname_wfilt, icls)
                 end do
             case('odd')
-                if( l_stream ) fname_wfilt = add2fbody(fname, '_odd'//trim(params_glob%ext), trim(WFILT_SUFFIX))
+                if( l_stream ) fname_wfilt = add2fbody(fname_here, '_odd'//trim(params_glob%ext), trim(WFILT_SUFFIX))
                 do icls=1,ncls
-                    call cavgs_odd(icls)%write(fname, icls)
+                    call cavgs_odd(icls)%write(fname_here, icls)
                     if( l_stream ) call cavgs_odd_wfilt(icls)%write(fname_wfilt, icls)
                 end do
             case('merged')
-                if( l_stream ) fname_wfilt = add2fbody(fname, params_glob%ext, trim(WFILT_SUFFIX))
+                if( l_stream ) fname_wfilt = add2fbody(fname_here, params_glob%ext, trim(WFILT_SUFFIX))
                 do icls=1,ncls
-                    call cavgs_merged(icls)%write(fname, icls)
+                    call cavgs_merged(icls)%write(fname_here, icls)
                     if( l_stream ) call cavgs_merged_wfilt(icls)%write(fname_wfilt, icls)
                 end do
             case DEFAULT
@@ -1121,6 +1142,21 @@ contains
 
     end subroutine cavger_write
 
+    subroutine cavger_read_all()
+        if( .not. file_exists(params_glob%refs) ) THROW_HARD('references (REFS) does not exist in cwd')
+        call cavger_read(params_glob%refs, 'merged')
+        if( file_exists(params_glob%refs_even) )then
+            call cavger_read(params_glob%refs_even, 'even')
+        else
+            call cavger_read(params_glob%refs, 'even')
+        endif
+        if( file_exists(params_glob%refs_odd) )then
+            call cavger_read(params_glob%refs_odd, 'odd')
+        else
+            call cavger_read(params_glob%refs, 'odd')
+        endif
+    end subroutine cavger_read_all
+
     !>  \brief  reads class averages from disk
     subroutine cavger_read( fname, which )
         character(len=*),  intent(in) :: fname, which
@@ -1138,7 +1174,7 @@ contains
             THROW_HARD('unsupported which flag')
         end select
         ! read
-        call stkio_r%open(trim(fname), smpd_crop, 'read', bufsz=ncls)
+        call stkio_r%open(fname, smpd_crop, 'read', bufsz=ncls)
         ldim_read = stkio_r%get_ldim()
         do icls = 1,ncls
             call cavgs(icls)%new(ldim_read,smpd_crop,wthreads=.false.)
@@ -1218,15 +1254,15 @@ contains
                 call stkio(3)%close
                 call stkio(4)%close
             case('write')
-                is_ft = cavgs_even(1)%is_ft()
-                ldim_here  = cavgs_even(1)%get_ldim()
+                is_ft = cavgs_even_part(1)%is_ft()
+                ldim_here  = cavgs_even_part(1)%get_ldim()
                 call stkio(1)%open(cae, smpd_crop, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
                 call stkio(2)%open(cao, smpd_crop, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
                 call stkio(3)%open(cte, smpd_crop, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
                 call stkio(4)%open(cto, smpd_crop, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
                 do icls=1,ncls
-                    call stkio(1)%write(icls, cavgs_even(icls))
-                    call stkio(2)%write(icls, cavgs_odd(icls))
+                    call stkio(1)%write(icls, cavgs_even_part(icls))
+                    call stkio(2)%write(icls, cavgs_odd_part(icls))
                     call stkio(3)%write(icls, ctfsqsums_even(icls))
                     call stkio(4)%write(icls, ctfsqsums_odd(icls))
                 end do
@@ -1236,8 +1272,8 @@ contains
                     call stkio(3)%open(ctewf, smpd_crop, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
                     call stkio(4)%open(ctowf, smpd_crop, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
                     do icls=1,ncls
-                        call stkio(1)%write(icls, cavgs_even_wfilt(icls))
-                        call stkio(2)%write(icls, cavgs_odd_wfilt(icls))
+                        call stkio(1)%write(icls, cavgs_even_wfilt_bak(icls))
+                        call stkio(2)%write(icls, cavgs_odd_wfilt_bak(icls))
                         call stkio(3)%write(icls, ctfsqsums_even_wfilt(icls))
                         call stkio(4)%write(icls, ctfsqsums_odd_wfilt(icls))
                     end do
@@ -1474,9 +1510,19 @@ contains
     ! destructor
 
     !>  \brief  is a destructor
-    subroutine cavger_kill
+    subroutine cavger_kill( dealloccavgs )
+        logical, optional, intent(in) :: dealloccavgs
+        if( present(dealloccavgs) )then
+            if( dealloccavgs ) call dealloc_cavgs_sums
+        else
+            call dealloc_cavgs_sums
+        endif
+        if( allocated(pptcl_mask) ) deallocate(pptcl_mask, prev_eo_pops,precs)
+    end subroutine cavger_kill
+
+    subroutine dealloc_cavgs_sums
         integer :: icls
-        if( exists )then
+        if( allocated(cavgs_merged) )then
             do icls=1,ncls
                 call cavgs_even(icls)%kill
                 call cavgs_odd(icls)%kill
@@ -1493,32 +1539,40 @@ contains
                     call ctfsqsums_merged_wfilt(icls)%kill
                 endif
             end do
-            deallocate( cavgs_even, cavgs_odd, cavgs_merged, ctfsqsums_even,&
-            &ctfsqsums_odd, ctfsqsums_merged, pptcl_mask, prev_eo_pops)
-            if( allocated(cavgs_even_bak) )then
-                do icls=1,ncls
-                    call cavgs_even_bak(icls)%kill
-                    call cavgs_odd_bak(icls)%kill
-                    call ctfsqsums_even_bak(icls)%kill
-                    call ctfsqsums_odd_bak(icls)%kill
-                    if( l_stream )then
-                        call cavgs_even_wfilt_bak(icls)%kill
-                        call cavgs_odd_wfilt_bak(icls)%kill
-                        call ctfsqsums_even_wfilt_bak(icls)%kill
-                        call ctfsqsums_odd_wfilt_bak(icls)%kill
-                    endif
-                enddo
-                deallocate(cavgs_even_bak,cavgs_odd_bak, ctfsqsums_even_bak,ctfsqsums_odd_bak)
-                if( l_stream ) deallocate(cavgs_even_wfilt_bak,cavgs_odd_wfilt_bak,ctfsqsums_even_wfilt_bak,ctfsqsums_odd_wfilt_bak)
-            endif
-            deallocate(precs)
-            istart = 0
-            iend   = 0
-            partsz = 0
-            ncls   = 0
-            exists = .false.
+            deallocate(cavgs_even, cavgs_odd, cavgs_merged,&
+            &ctfsqsums_even,ctfsqsums_odd, ctfsqsums_merged)
         endif
-    end subroutine cavger_kill
+        if( allocated(cavgs_even_part) )then
+            do icls=1,ncls
+                call cavgs_even_part(icls)%kill
+                call cavgs_odd_part(icls)%kill
+            enddo
+            deallocate(cavgs_even_part,cavgs_odd_part)
+        endif
+        if( allocated(cavgs_even_wfilt_bak) )then
+            do icls=1,ncls
+                call cavgs_even_wfilt_bak(icls)%kill
+                call cavgs_odd_wfilt_bak(icls)%kill
+            enddo
+            deallocate(cavgs_even_wfilt_bak,cavgs_odd_wfilt_bak)
+        endif
+        if( allocated(ctfsqsums_even_bak) )then
+            do icls=1,ncls
+                call ctfsqsums_even_bak(icls)%kill
+                call ctfsqsums_odd_bak(icls)%kill
+                if( l_stream )then
+                    call ctfsqsums_even_wfilt_bak(icls)%kill
+                    call ctfsqsums_odd_wfilt_bak(icls)%kill
+                endif
+            enddo
+            deallocate(ctfsqsums_even_bak,ctfsqsums_odd_bak)
+            if( l_stream ) deallocate(ctfsqsums_even_wfilt_bak,ctfsqsums_odd_wfilt_bak)
+        endif
+        istart = 0
+        iend   = 0
+        partsz = 0
+        ncls   = 0
+    end subroutine dealloc_cavgs_sums
 
     ! PUBLIC UTILITIES
 

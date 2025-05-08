@@ -97,7 +97,7 @@ type stats_struct
     real :: avg  = 0.
     real :: med  = 0.
     real :: sdev = 0.
-    real :: maxv = 0
+    real :: maxv = 0.
     real :: minv = 0.
 end type stats_struct
 
