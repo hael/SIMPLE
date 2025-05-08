@@ -22,6 +22,7 @@ type kmedoids
     procedure            :: init
     procedure            :: cluster
     procedure            :: find_medoids
+    procedure, private   :: find_medoid
     procedure            :: assign_labels
     procedure            :: merge
     procedure            :: kill
@@ -114,33 +115,41 @@ contains
         class(kmedoids), intent(inout) :: self
         real    :: dists(self%n)
         integer :: icls, i, j, loc(1)
-        !$omp parallel do default(shared) private(icls,i,j,dists,loc) proc_bind(close)
+        !$omp parallel do default(shared) private(icls) proc_bind(close)
         do icls = 1, self%ncls
-            self%cls_pops(icls) = count(self%cls_labels == icls)
-            if( self%cls_pops(icls) == 0 )then
-                self%i_medoids(icls) = 0
-            else if( self%cls_pops(icls) == 1 )then
-                do i = 1, self%n
-                    if( self%cls_labels(i) == icls )then
-                        self%i_medoids(icls) = i
-                        exit
-                    endif
-                enddo
-            else
-                do i = 1, self%n
-                    dists(i) = 0.                        
-                    do j = 1, self%n
-                        if( self%cls_labels(i) == icls .and. self%cls_labels(j) == icls )then
-                            dists(i) = dists(i) + self%ptr_dmat(i,j) 
-                        endif
-                    enddo
-                end do
-                loc = minloc(dists, mask=self%cls_labels == icls)
-                self%i_medoids(icls) = loc(1)
-            endif
+            call self%find_medoid(icls)
         enddo
         !$omp end parallel do
     end subroutine find_medoids
+
+    subroutine find_medoid( self, icls )
+        class(kmedoids), intent(inout) :: self
+        integer,         intent(in)    :: icls
+        real    :: dists(self%n)
+        integer :: i, j, loc(1)
+        self%cls_pops(icls) = count(self%cls_labels == icls)
+        if( self%cls_pops(icls) == 0 )then
+            self%i_medoids(icls) = 0
+        else if( self%cls_pops(icls) == 1 )then
+            do i = 1, self%n
+                if( self%cls_labels(i) == icls )then
+                    self%i_medoids(icls) = i
+                    exit
+                endif
+            enddo
+        else
+            do i = 1, self%n
+                dists(i) = 0.                        
+                do j = 1, self%n
+                    if( self%cls_labels(i) == icls .and. self%cls_labels(j) == icls )then
+                        dists(i) = dists(i) + self%ptr_dmat(i,j) 
+                    endif
+                enddo
+            end do
+            loc = minloc(dists, mask=self%cls_labels == icls)
+            self%i_medoids(icls) = loc(1)
+        endif
+    end subroutine find_medoid
 
     subroutine assign_labels( self, nchanges )
         class(kmedoids), intent(inout) :: self
@@ -200,25 +209,31 @@ contains
 
         subroutine merge_clusters( i_cls, j_cls )
             integer, intent(in) :: i_cls, j_cls
-            integer :: new_cls_labels(self%n), cnt, icls
+            integer :: new_cls_labels(self%n), cnt, icls, new_cls_medoids(self%ncls)
             where(self%cls_labels == j_cls) self%cls_labels = i_cls
+            call self%find_medoid(i_cls)
             ! reorder labels
             cnt            = 0
             new_cls_labels = 0
             do icls = 1, self%ncls
-                if( any(self%cls_labels == icls) )then 
+                if( any(self%cls_labels == icls) )then
                     cnt = cnt + 1
+                    new_cls_medoids(cnt) = self%i_medoids(icls)
                     where(self%cls_labels == icls) new_cls_labels = cnt
                 endif
             enddo
             self%cls_labels = new_cls_labels
             ! update # clusters
             self%ncls = maxval(self%cls_labels)
-            ! update medoids
+            ! update arrays
             deallocate(self%i_medoids, self%cls_pops, self%dists2meds)
-            allocate(self%i_medoids(self%ncls), self%cls_pops(self%ncls), source=0)
+            allocate(self%i_medoids(self%ncls), source=new_cls_medoids(:self%ncls))
+            allocate(self%cls_pops(self%ncls), source=0)
             allocate(self%dists2meds(self%n,self%ncls), source=0.)
-            call self%find_medoids
+            ! re-calculate class pops
+            do icls = 1, self%ncls
+                self%cls_pops(icls) = count(self%cls_labels == icls)
+            end do
         end subroutine merge_clusters
 
     end subroutine merge
