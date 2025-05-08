@@ -1998,23 +1998,31 @@ contains
         call pows%new(cavg_imgs, spproj%os_cls2D, params%msk, HP_SPEC, LP_SPEC, params%ncls_spec, l_exclude_junk=.false.)
         ! create a joint similarity matrix for clustering based on spectral profile and in-plane invariant correlation
         call pows%calc_distmat
-        dmat = pows%get_distmat()
-        smat = dmat2smat(dmat)
+        dmat       = pows%get_distmat()
+        smat       = dmat2smat(dmat)
         smat_joint = merge_smats(smat,corrmat)
-        write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH AFFINITY PROPAGATION'
-        ! calculate a preference that generates a small number of clusters
-        pref = calc_ap_pref(smat_joint, 'min_minus_max')
-        call aprop%new(ncls_sel, smat_joint, pref=pref)
-        call aprop%propagate(centers, labels, simsum)
-        call aprop%kill
-        ncls_aff_prop = size(centers)
-        write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION (AP): ', ncls_aff_prop
         dmat_joint = smat2dmat(smat_joint)
-        call kmed%new(labels, dmat_joint)
-        if( ncls_aff_prop > NCLS_MAX )then
-            call kmed%merge(NCLS_MAX)
+        if( cline%defined('ncls') )then
+            write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH K-MEDOIDS'
+            call kmed%new(ncls_sel, dmat_joint, params%ncls)
+            call kmed%init
             call kmed%cluster
+            allocate(labels(ncls_sel), source=0)
             call kmed%get_labels(labels)
+        else
+            write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH AFFINITY PROPAGATION'
+            ! calculate a preference that generates a small number of clusters
+            pref = calc_ap_pref(smat_joint, 'min_minus_max')
+            call aprop%new(ncls_sel, smat_joint, pref=pref)
+            call aprop%propagate(centers, labels, simsum)
+            call aprop%kill
+            ncls_aff_prop = size(centers)
+            write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION (AP): ', ncls_aff_prop
+            call kmed%new(labels, dmat_joint)
+            if( ncls_aff_prop > NCLS_MAX )then
+                call kmed%merge(NCLS_MAX)
+                call kmed%get_labels(labels)
+            endif
         endif
         ! re-create cavg_imgs
         do icls = 1, ncls_sel
