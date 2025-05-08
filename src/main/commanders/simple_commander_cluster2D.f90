@@ -16,6 +16,7 @@ use simple_commander_imgproc, only: scale_commander
 use simple_exec_helpers,      only: set_shmem_flag, set_master_num_threads
 use simple_pspecs,            only: pspecs
 use simple_strategy2D_utils
+use simple_classaverager
 use simple_euclid_sigma2
 use simple_commander_euclid
 use simple_qsys_funs
@@ -199,7 +200,6 @@ contains
     end subroutine exec_make_cavgs_distr
 
     subroutine exec_make_cavgs( self, cline )
-        use simple_classaverager
         class(make_cavgs_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(parameters) :: params
@@ -693,11 +693,7 @@ contains
         endif
         ! execution
         if( l_shmem )then
-            params_ptr  => params_glob
-            params_glob => null()
-            call xcluster2D%execute(cline_cluster2D_stage1)
-            params_glob => params_ptr
-            params_ptr  => null()
+            call xcluster2D%execute_safe(cline_cluster2D_stage1)
         else
             call xcluster2D_distr%execute(cline_cluster2D_stage1)
         endif
@@ -721,11 +717,7 @@ contains
         endif
         ! execution
         if( l_shmem )then
-            params_ptr  => params_glob
-            params_glob => null()
-            call xcluster2D%execute(cline_cluster2D_stage2)
-            params_glob => params_ptr
-            params_ptr  => null()
+            call xcluster2D%execute_safe(cline_cluster2D_stage2)
         else
             call xcluster2D_distr%execute(cline_cluster2D_stage2)
         endif
@@ -743,13 +735,18 @@ contains
             call cline_make_cavgs%delete('wiener') ! to ensure that full Wiener restoration is done for the final cavgs
             call cline_make_cavgs%set('which_iter', last_iter_stage2) ! to ensure masks are generated and used
             if( l_shmem )then
-                params_ptr  => params_glob
-                params_glob => null()
-                call xmake_cavgs%execute(cline_make_cavgs)
-                params_glob => params_ptr
-                params_ptr  => null()
+                call xmake_cavgs%execute_safe(cline_make_cavgs)
             else
                 call xmake_cavgs_distr%execute(cline_make_cavgs)
+            endif
+        else
+            if( l_shmem )then
+                ! Write e/o at the very end
+                params%refs_even = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//'_even'//params%ext
+                params%refs_odd  = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//'_odd'//params%ext
+                call cavger_write(params%refs_even,'even')
+                call cavger_write(params%refs_odd, 'odd')
+                call cavger_kill
             endif
         endif
         ! adding cavgs & FRCs to project
@@ -1360,8 +1357,7 @@ contains
                 ! write cavgs starfile for iteration
                 call starproj%export_cls2D(build%spproj, params%which_iter)
                 ! exit condition
-                converged = converged .and. (params%which_iter >= params%minits)
-                if( converged .or. params%which_iter >= params%maxits )then
+                if( converged )then
                     ! report the last iteration on exit
                     call cline%delete( 'startit' )
                     call cline%set('endit', params%startit)
@@ -1371,6 +1367,20 @@ contains
                         finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(params%startit,3)//params%ext
                         call build%spproj%add_cavgs2os_out(trim(finalcavgs), build%spproj%get_smpd(), imgkind='cavg')
                         call build%spproj%write_segment_inside('out', params%projfile)
+                        if( trim(params%chunk).eq.'yes' )then
+                            call cavger_write(params%refs_even,'even')
+                            call cavger_write(params%refs_odd, 'odd')
+                            call cavger_readwrite_partial_sums('write')
+                            call cavger_kill
+                        else
+                            if( trim(params%tseries).eq.'yes' )then
+                                call cavger_write(params%refs_even,'even')
+                                call cavger_write(params%refs_odd, 'odd')
+                                call cavger_kill
+                            else
+                                call cavger_kill(dealloccavgs=.false.)
+                            endif
+                        endif
                     endif
                     exit
                 endif
@@ -1432,7 +1442,6 @@ contains
     end subroutine exec_cluster2D
 
     subroutine exec_cavgassemble( self, cline )
-        use simple_classaverager
         class(cavgassemble_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(parameters)  :: params
@@ -1542,6 +1551,8 @@ contains
             if( .not.associated(params_glob) )then
                 THROW_HARD('Builder & parameters must be associated for shared memory execution!')
             endif
+            l_stream = .false.
+            if(cline%defined('stream')) l_stream = trim(cline%get_carg('stream'))=='yes'
         else
             l_stream = .false.
             if(cline%defined('stream')) l_stream = trim(cline%get_carg('stream'))=='yes'
@@ -1622,7 +1633,6 @@ contains
     end subroutine exec_prob_tab2D_distr
 
     subroutine exec_prob_tab2D( self, cline )
-        use simple_classaverager
         use simple_strategy2D_matcher
         use simple_strategy2D3D_common, only: set_bp_range2D
         use simple_polarft_corrcalc,    only: polarft_corrcalc
@@ -1637,11 +1647,11 @@ contains
         type(eul_prob_tab2D)          :: eulprob
         real    :: frac_srch_space
         integer :: nptcls
-        logical :: l_ctf, l_stream
+        logical :: l_ctf, l_stream, l_alloc_read_cavgs
         l_stream = .false.
         if(cline%defined('stream')) l_stream = trim(cline%get_carg('stream'))=='yes'
         call cline%set('mkdir', 'no')
-        call cline%set('stream',  'no')
+        call cline%set('stream','no')
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
         ! Nothing is done with regards to sampling other than reproducing
         ! what was generated in the driver (prob_tab2D_distr, above)
@@ -1655,21 +1665,23 @@ contains
         if( file_exists(params_glob%frcs) ) call build%clsfrcs%read(params_glob%frcs)
         call set_bp_range2D( cline, params%which_iter, frac_srch_space )
         ! Read references
-        call cavger_new(pinds)
-        call cavger_read(params%refs, 'merged')
-        if( file_exists(params%refs_even) )then
-            call cavger_read(params%refs_even, 'even')
-        else
-            call cavger_read(params%refs, 'even')
+        l_alloc_read_cavgs = .true.
+        if( .not.l_distr_exec_glob )then
+            l_alloc_read_cavgs = params%which_iter==1
         endif
-        if( file_exists(params%refs_odd) )then
-            call cavger_read(params%refs_odd, 'odd')
+        if( l_alloc_read_cavgs )then
+            if( .not. cline%defined('refs') )then
+                THROW_HARD('need refs to be part of command line for cluster2D execution')
+            endif
+            call cavger_new(pinds, alloccavgs=.true.)
+            call cavger_read_all
         else
-            call cavger_read(params%refs, 'odd')
+            call cavger_new(pinds, alloccavgs=.false.)
         endif
         ! init scorer & prep references
         call preppftcc4align2D(pftcc, nptcls, params%which_iter, l_stream)
-        call cavger_kill
+        ! minor cleanup
+        call cavger_kill(dealloccavgs=l_distr_exec_glob)
         ! prep particles
         l_ctf = build%spproj%get_ctfflag('ptcl2D',iptcl=params%fromp).ne.'no'
         call prep_batch_particles2D(nptcls)
@@ -2106,7 +2118,6 @@ contains
     subroutine exec_ppca_denoise_classes( self, cline )
         use simple_imgproc,       only: make_pcavecs
         use simple_image,         only: image
-        use simple_classaverager, only: transform_ptcls
         use simple_pca,           only: pca
         use simple_pca_svd,       only: pca_svd
         use simple_kpca_svd,      only: kpca_svd
@@ -2879,7 +2890,6 @@ contains
         use simple_eul_prob_tab,        only: eul_prob_tab
         use simple_ori
         use simple_oris
-        use simple_classaverager
         class(cluster2D_polar_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         integer,          allocatable :: pinds(:)

@@ -48,8 +48,8 @@ type(stage_params) :: stage_parms(NSTAGES)
 
 contains
 
-    !> for generation of an initial 3d model from particles
     subroutine exec_abinitio2D( self, cline )
+        use simple_classaverager, only: cavger_kill, cavger_write, cavger_readwrite_partial_sums
         class(abinitio2D_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         ! commanders
@@ -145,9 +145,22 @@ contains
             if( trim(params%stats).eq.'yes' ) call output_stats('final')
         endif
         ! final class generation & ranking
+        last_iter = cline_cluster2D%get_iarg('endit')
         if ( trim(params%rank_cavgs).eq.'yes' )then
-            last_iter = cline_cluster2D%get_iarg('endit')
             call gen_final_cavgs(last_iter)
+        else
+            if( l_shmem )then
+                ! making sure e/o are written
+                params%refs      = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//params%ext
+                params%refs_even = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//'_even'//params%ext
+                params%refs_odd  = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//'_odd'//params%ext
+                call cavger_write(params%refs,     'merged')
+                call cavger_write(params%refs_even,'even')
+                call cavger_write(params%refs_odd, 'odd')
+                ! required for remapping
+                if( trim(params%chunk).eq.'yes') call cavger_readwrite_partial_sums('write')
+                call cavger_kill
+            endif
         endif
         ! cleanup
         call del_file('start2Drefs'//params%ext)
@@ -191,6 +204,7 @@ contains
             stage_parms(:)%smpd_crop = params%smpd_crop
             stage_parms(:)%scale     = scale_factor      ! unused
             stage_parms(:)%trslim    = min(5.,max(2.0, AHELIX_WIDTH/params%smpd_crop))
+            if( cline%defined('trs') ) stage_parms(2:)%trslim = params%trs
         end subroutine set_dims
 
         ! Set resolution limits
@@ -253,6 +267,7 @@ contains
             call cline_cluster2D%set('ml_reg',    'no')
             call cline_cluster2D%set('kweight',   'default')
             call cline_cluster2D%set('cenlp',     params%cenlp)
+            call cline_cluster2D%set('chunk',     'no')
             call set_automask2D_defaults( cline_cluster2D )
         end subroutine prep_command_lines
 
@@ -510,10 +525,6 @@ contains
             lpstart = min(max(mskdiam/12., 15.), 20.)
             lpstop  = min(max(mskdiam/22.,  6.),  8.)
             lpcen   = min(max(mskdiam/6.,  20.), 30.)
-            ! was:
-            ! lpstart = max(min(mskdiam/12., 15.),  8.)
-            ! lpstop  = min(max(mskdiam/22.,  5.),  8.)
-            ! lpcen   = min(max(mskdiam/6.,  20.), 30.)
         end subroutine mskdiam2lplimits_here
 
     end subroutine exec_abinitio2D
