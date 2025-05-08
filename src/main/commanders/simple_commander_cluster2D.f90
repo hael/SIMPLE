@@ -1876,16 +1876,18 @@ contains
     end subroutine exec_autoselect_cavgs
 
     subroutine exec_cluster_cavgs( self, cline )
-        use simple_class_frcs,       only: class_frcs
-        use simple_aff_prop,         only: aff_prop
-        use simple_corrmat,          only: calc_inpl_invariant_fm
+        use simple_class_frcs, only: class_frcs
+        use simple_aff_prop,   only: aff_prop
+        use simple_kmedoids,   only: kmedoids
+        use simple_corrmat,    only: calc_inpl_invariant_fm
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        real,             parameter   :: LP_BIN = 20., HP_SPEC = 20., LP_SPEC = 6.
-        logical,          parameter   :: DEBUG = .true.
+        real,             parameter   :: LP_BIN   = 20., HP_SPEC = 20., LP_SPEC = 6.
+        integer,          parameter   :: NCLS_MAX = 20
+        logical,          parameter   :: DEBUG    = .true.
         type(image),      allocatable :: cavg_imgs(:) 
         character(len=:), allocatable :: frcs_fname
-        real,             allocatable :: frc(:), filter(:), corrmat(:,:), smat(:,:), dmat(:,:), smat_joint(:,:)
+        real,             allocatable :: frc(:), filter(:), corrmat(:,:), smat(:,:), dmat(:,:), smat_joint(:,:), dmat_joint(:,:)
         logical,          allocatable :: l_msk(:,:,:), l_non_junk(:)
         integer,          allocatable :: centers(:), labels(:), clsinds(:)
         type(parameters) :: params
@@ -1893,15 +1895,16 @@ contains
         type(class_frcs) :: clsfrcs
         type(image)      :: img_msk
         type(aff_prop)   :: aprop
+        type(kmedoids)   :: kmed
         type(pspecs)     :: pows
         integer :: ldim(3),  ncls, n, ncls_sel, icls, cnt, filtsz, ncls_aff_prop, i, j
         real    :: smpd, simsum, cmin, cmax, pref
         logical :: l_apply_optlp
         ! defaults
         call cline%set('oritype', 'cls2D')
-        call cline%set('ctf',     'no')
-        call cline%set('objfun',  'cc')
-        call cline%set('sh_inv',  'yes') ! shift invariant search
+        call cline%set('ctf',        'no')
+        call cline%set('objfun',     'cc')
+        call cline%set('sh_inv',    'yes') ! shift invariant search
         if( .not. cline%defined('mirr')    ) call cline%set('mirr',    'yes')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
         if( .not. cline%defined('trs')     ) call cline%set('trs',       10.)
@@ -2006,6 +2009,13 @@ contains
         call aprop%kill
         ncls_aff_prop = size(centers)
         write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION (AP): ', ncls_aff_prop
+        dmat_joint = smat2dmat(smat_joint)
+        call kmed%new(labels, dmat_joint)
+        if( ncls_aff_prop > NCLS_MAX )then
+            call kmed%merge(NCLS_MAX)
+            call kmed%cluster
+            call kmed%get_labels(labels)
+        endif
         ! re-create cavg_imgs
         do icls = 1, ncls_sel
             call cavg_imgs(icls)%kill
@@ -2013,16 +2023,17 @@ contains
         deallocate(cavg_imgs)
         cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
         ! write clusters
-        call write_cavgs(ncls_sel, cavg_imgs, labels, 'ap_cluster', params%ext)
+        call write_cavgs(ncls_sel, cavg_imgs, labels, 'cluster', params%ext)
         ! destruct
         call spproj%kill
         call clsfrcs%kill
         call aprop%kill
         call pows%kill
+        call kmed%kill
         do icls=1,ncls_sel
             call cavg_imgs(icls)%kill
         end do
-        deallocate(cavg_imgs, dmat, smat, smat_joint)
+        deallocate(cavg_imgs, dmat, smat, smat_joint, dmat_joint)
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER_CAVGS NORMAL STOP ****')
     end subroutine exec_cluster_cavgs
