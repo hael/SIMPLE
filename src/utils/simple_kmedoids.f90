@@ -9,15 +9,15 @@ private
 
 type kmedoids
     private
-    real, pointer        :: ptr_dmat(:,:) => null()
-    real, allocatable    :: dists2meds(:,:)
+    real,    pointer     :: ptr_dmat(:,:) => null()
+    real,    allocatable :: dists2meds(:,:)
     integer              :: n=0, ncls=0
-    integer              :: i_medoid_glob = 0
+    integer              :: i_medoid_glob=0
     integer, allocatable :: i_medoids(:), cls_labels(:), cls_pops(:)
     logical              :: exists = .false.
   contains
-    procedure            :: new
-    procedure            :: set_labels
+    procedure, private   :: new_1, new_2
+    generic              :: new => new_1, new_2
     procedure            :: get_labels
     procedure            :: init
     procedure            :: cluster
@@ -29,7 +29,7 @@ end type kmedoids
 
 contains
 
-    subroutine new( self, n, dmat, ncls )
+    subroutine new_1( self, n, dmat, ncls )
         class(kmedoids), intent(inout) :: self
         integer,         intent(in)    :: n, ncls
         real, target,    intent(in)    :: dmat(n,n)
@@ -37,16 +37,19 @@ contains
         self%n        =  n
         self%ptr_dmat => dmat
         self%ncls     =  ncls
-        allocate(self%i_medoids(self%ncls),self%cls_labels(self%n), self%cls_pops(self%ncls), source=0)
+        allocate(self%i_medoids(self%ncls), self%cls_labels(self%n), self%cls_pops(self%ncls), source=0)
         allocate(self%dists2meds(self%n,self%ncls), source=0.)
         self%exists   = .true.
-    end subroutine new
+    end subroutine new_1
 
-    subroutine set_labels( self, cls_labels )
+    subroutine new_2( self, cls_labels, dmat )
         class(kmedoids), intent(inout) :: self
-        integer,         intent(in)    :: cls_labels(self%n)
+        integer,         intent(in)    :: cls_labels(:)
+        real, target,    intent(in)    :: dmat(size(cls_labels),size(cls_labels))
+        call self%new_1(size(cls_labels), dmat, maxval(cls_labels))
         self%cls_labels = cls_labels
-    end subroutine set_labels
+        call self%find_medoids
+    end subroutine new_2
 
     subroutine get_labels( self, cls_labels )
         class(kmedoids), intent(inout) :: self
@@ -54,7 +57,7 @@ contains
         cls_labels = self%cls_labels
     end subroutine get_labels
 
-    ! initialize throuhg distance to medoid analysis
+    ! initialize through distance to medoid analysis
     subroutine init( self )
         class(kmedoids), intent(inout) :: self
         integer, allocatable :: parts(:,:)
@@ -212,8 +215,9 @@ contains
             ! update # clusters
             self%ncls = maxval(self%cls_labels)
             ! update medoids
-            deallocate(self%i_medoids, self%cls_pops)
+            deallocate(self%i_medoids, self%cls_pops, self%dists2meds)
             allocate(self%i_medoids(self%ncls), self%cls_pops(self%ncls), source=0)
+            allocate(self%dists2meds(self%n,self%ncls), source=0.)
             call self%find_medoids
         end subroutine merge_clusters
 
