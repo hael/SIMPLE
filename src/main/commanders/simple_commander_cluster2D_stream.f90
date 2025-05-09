@@ -3226,7 +3226,9 @@ contains
                 top   = chunks(ichunk)%os_stk%get_top(i)
                 do j = fromp,top
                     iptcl_glob = iptcl_glob + 1
-                    call chunks(ichunk)%os_ptcl2D%set(j, 'class', clsmap(chunks(ichunk)%os_ptcl2D%get_class(j)))
+                    if( chunks(ichunk)%os_ptcl2D%get_state(j) > 0 )then
+                        call chunks(ichunk)%os_ptcl2D%set(j, 'class', clsmap(chunks(ichunk)%os_ptcl2D%get_class(j)))
+                    endif
                     call chunks(ichunk)%os_ptcl2D%set_stkind(j, istk)
                     call spproj%os_ptcl2D%transfer_ori(iptcl_glob, chunks(ichunk)%os_ptcl2D, j)
                 enddo
@@ -3249,10 +3251,87 @@ contains
         spproj%os_ptcl3D = spproj%os_ptcl2D
         call spproj%os_ptcl3D%delete_2Dclustering
         call spproj%write(params%projfile)
+        ! splitting whole project into chunk subsets
+        if( cline%defined('nchunksperset') ) call split_project
+        ! cleanup
         call spproj%kill
         call cls2D%kill
+        call frcs%kill
         deallocate(chunks)
         call simple_end('**** SIMPLE_CONSOLIDATE_CHUNKS_CAVGS NORMAL STOP ****')
+      contains
+
+        subroutine split_project
+            type(class_frcs)              :: frcs_set
+            type(sp_project)              :: setproj
+            character(len=:), allocatable :: projfile, chunk
+            integer :: istates(ncls_tot), iset, nsets, n, iptcl
+            nsets = floor(real(nchunks)/real(params%nchunksperset))
+            if( nsets < 1 )return
+            ! set loop
+            do iset = 1,nsets
+                ! select classes
+                istates = 0
+                do ichunk = (iset-1)*params%nchunksperset+1,min(nchunks,iset*params%nchunksperset)
+                    chunk = 'chunk_'//trim(int2str(ichunk))
+                    do icls = 1,ncls_tot
+                        if( istates(icls) == 1 ) cycle
+                        if( trim(spproj%os_cls2D%get_static(icls,'chunk')).eq.trim(chunk) )then
+                            istates(icls) = 1
+                        endif
+                    enddo
+                enddo
+                ! select corresponding particles
+                call setproj%copy(spproj)
+                call setproj%map_cavgs_selection(istates)
+                call setproj%prune_particles
+                projfile = 'set_'//int2str_pad(iset,3)//METADATA_EXT
+                call setproj%update_projinfo(projfile)
+                ! copy classes and frcs
+                call frcs_set%new(count(istates==1), box4frc, smpd)
+                call img%new(ldim, smpd)
+                stkname   = 'cavgs_set'//int2str_pad(iset,3)//params%ext
+                evenname  = 'cavgs_set'//int2str_pad(iset,3)//'_even'//params%ext
+                oddname   = 'cavgs_set'//int2str_pad(iset,3)//'_odd'//params%ext
+                frc_fname = 'frcs_set'//int2str_pad(iset,3)//BIN_EXT
+                i = 0
+                do icls = 1,ncls_tot
+                    if( istates(icls)==0 ) cycle
+                    i = i+1
+                    call img%read('cavgs.mrc',icls)
+                    call img%write(stkname, i)
+                    call img%read('cavgs_even.mrc',icls)
+                    call img%write(evenname, i)
+                    call img%read('cavgs_odd.mrc',icls)
+                    call img%write(oddname, i)
+                    call frcs_set%set_frc(i, frcs%get_frc(icls, box4frc))
+                enddo
+                ! add to project
+                call frcs_set%write(frc_fname)
+                call setproj%add_frcs2os_out(frc_fname, 'frc2D')
+                call setproj%add_cavgs2os_out(stkname, smpd, imgkind='cavg')
+                ! update class indices
+                n = setproj%os_ptcl2D%get_noris()
+                i = 0
+                do icls = 1,ncls_tot
+                    if( istates(icls)==0 ) cycle
+                    i = i+1
+                    call setproj%os_cls2D%transfer_ori(i, spproj%os_cls2D, icls)
+                    call setproj%os_cls2D%set(i,'class',i)
+                    do iptcl = 1,n
+                        if( setproj%os_ptcl2D%get_class(iptcl)==icls )then
+                            call setproj%os_ptcl2D%set_class(iptcl, i)
+                        endif
+                    enddo
+                enddo
+                call setproj%write
+                write(*,'(A,I4,A,I8,A,I3,A)')'>>> GENERATED SET',iset,' WITH',n,' PARTICLES & ',i,' CLASSES'
+            enddo
+            call img%kill
+            call frcs_set%kill
+            call setproj%kill
+        end subroutine split_project
+
     end subroutine exec_consolidate_chunks_cavgs
 
     ! Handles user inputted class rejection

@@ -313,6 +313,7 @@ type :: parameters
     integer :: minits=0            !< minimum # iterations
     integer :: mrcmode=2
     integer :: nchunks=0
+    integer :: nchunksperset=0
     integer :: ncunits=0           !< # computing units, can be < nparts{nparts}
     integer :: ncls=500            !< # clusters
     integer :: ncls_spec=2         !< # spectral clusters
@@ -849,6 +850,7 @@ contains
         call check_iarg('minits',         self%minits)
         call check_iarg('mrcmode',        self%mrcmode)
         call check_iarg('nchunks',        self%nchunks)
+        call check_iarg('nchunksperset',  self%nchunksperset)
         call check_iarg('ncls',           self%ncls)
         call check_iarg('ncls_spec',      self%ncls_spec)
         call check_iarg('ncls_start',     self%ncls_start)

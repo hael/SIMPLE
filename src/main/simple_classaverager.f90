@@ -1013,7 +1013,8 @@ contains
         type(image)          :: tmpimg
         type(histogram)      :: hists(ncls), hist_avg
         logical, allocatable :: lmsk(:,:,:), cls_mask(:)
-        real    :: minmax(2),mean,tvd,overall_min,overall_max,mskrad,std
+        real    :: minmax(2), mean, tvd, overall_min, overall_max, std
+        real    :: innerrad, mskrad
         integer :: icls,n
         cls_mask = nint(os%get_all('pop')) > 0
         n        = count(cls_mask)
@@ -1026,7 +1027,7 @@ contains
         !$omp do reduction(min:overall_min) reduction(max:overall_max)
         do icls = 1,ncls
             if( cls_mask(icls) )then
-                call cavgs_merged(icls)%stats(mean, std, minmax(2), minmax(1), tmpimg )
+                call cavgs_merged(icls)%stats(mean, std, minmax(2), minmax(1), tmpimg)
                 overall_min = min(minmax(1),overall_min)
                 overall_max = max(minmax(2),overall_max)
                 call os%set(icls, 'min',  minmax(1))
@@ -1061,6 +1062,16 @@ contains
         enddo
         !$omp end do
         !$omp end parallel
+        innerrad = params_glob%msk_crop
+        call tmpimg%ring(ldim_crop, smpd_crop, min(innerrad+COSMSKHALFWIDTH, mskrad), innerrad)
+        !$omp parallel do private(icls,minmax,mean,std,tvd) proc_bind(close) default(shared)
+        do icls = 1,ncls
+            if( cls_mask(icls) )then
+                call cavgs_merged(icls)%stats(mean, std, minmax(2), minmax(1), tmpimg)
+                call os%set(icls, 'mskvar', std*std)
+            endif
+        enddo
+        !$omp end parallel do
         call hist_avg%kill
         call tmpimg%kill
     end subroutine score_classes

@@ -1767,6 +1767,7 @@ contains
             call hpsort(vals, order)
             select case(trim(params%flag))
                 case('corr')
+                    where( rstates < 0.5 ) vals = -1.0
                     call reverse(order)
                 case DEFAULT
                     ! done
