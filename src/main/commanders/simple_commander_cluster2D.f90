@@ -2111,12 +2111,19 @@ contains
         
         function ci_better_than_cj( ci, cj ) result( val )
             integer, intent(in) :: ci, cj
+            real    :: res_diff
             logical :: val
-            val = .true.
-            if( clust_res(ci) > clust_res(cj) )then            ! (1) classes with larger resolution estimates are worse
-                val = .false.                             
-            else if( clust_scores(ci) < clust_scores(cj) )then ! (2) classes with smaller FM correlations are worse 
-                val = .false.
+            val = .false.
+            ! (1) classes with smaller resolution estimates are better
+            if( clust_res(ci) < clust_res(cj) )then 
+                val = .true.
+                return                          
+            endif
+            ! (2) classes with similar resolution estimates and larger scores are better
+            res_diff = abs(clust_res(ci) - clust_res(cj))
+            if( res_diff <= 1.0 .and. clust_scores(ci) > clust_scores(cj) )then
+                val = .true.
+                return
             endif
         end function ci_better_than_cj
  
