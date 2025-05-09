@@ -1881,6 +1881,7 @@ contains
         use simple_aff_prop,   only: aff_prop
         use simple_kmedoids,   only: kmedoids
         use simple_corrmat,    only: calc_inpl_invariant_fm
+        use simple_fsc,        only: plot_fsc
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         real,             parameter   :: LP_BIN     = 20., HP_SPEC = 20., LP_SPEC = 6.
@@ -1888,9 +1889,9 @@ contains
         logical,          parameter   :: DEBUG      = .true., L_CLUSTER_ON_FRC = .true.
         type(image),      allocatable :: cavg_imgs(:) 
         character(len=:), allocatable :: frcs_fname
-        real,             allocatable :: frc(:), frc_i(:), frc_j(:), filter(:)
-        real,             allocatable :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:), dmat_frc(:,:)
-        real,             allocatable :: smat_frc(:,:), smat_spec(:,:), smat_joint(:,:), dmat_joint(:,:)
+        real,             allocatable :: frcs(:,:), filter(:), resarr(:), clust_frcs(:,:), clust_frcs_ranked(:,:)
+        real,             allocatable :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:)
+        real,             allocatable :: smat_spec(:,:), smat_joint(:,:), dmat_joint(:,:)
         real,             allocatable :: clust_scores(:), cavg_res(:), clust_res(:), clust_res_ranked(:)
         logical,          allocatable :: l_msk(:,:,:), l_non_junk(:)
         integer,          allocatable :: centers(:), labels(:), clsinds(:), i_medoids(:)
@@ -1904,7 +1905,7 @@ contains
         type(pspecs)     :: pows
         integer :: ldim(3),  ncls, n, ncls_sel, icls, cnt, rank
         integer :: filtsz, nclust_aff_prop, i, j, ii, jj, nclust, iclust
-        real    :: smpd, simsum, cmin, cmax, pref
+        real    :: smpd, simsum, cmin, cmax, pref, fsc_res, rfoo
         logical :: l_apply_optlp
         ! defaults
         call cline%set('oritype', 'cls2D')
@@ -1925,6 +1926,7 @@ contains
         ncls        = size(cavg_imgs)
         smpd        = cavg_imgs(1)%get_smpd()
         ldim        = cavg_imgs(1)%get_ldim()
+        resarr      = get_resarr(ldim(1), smpd)
         ! ensure correct smpd/box in params class
         params%smpd = smpd
         params%box  = ldim(1)
@@ -1960,7 +1962,7 @@ contains
         ! keep track of the original class indices
         clsinds = pack((/(i,i=1,ncls)/), mask=l_non_junk)
         ! create the stuff needed in the loop
-        allocate(frc(filtsz), filter(filtsz), source=0.)
+        allocate(frcs(ncls_sel,filtsz), filter(filtsz), source=0.)
         ! prep mask
         call img_msk%new([params%box,params%box,1], params%smpd)
         img_msk = 1.
@@ -1968,13 +1970,13 @@ contains
         l_msk = img_msk%bin2logical()
         call img_msk%kill
         write(logfhandle,'(A)') '>>> PREPARING CLASS AVERAGES'
-        !$omp parallel do default(shared) private(i,j,frc,filter) schedule(static) proc_bind(close)
+        !$omp parallel do default(shared) private(i,j,filter) schedule(static) proc_bind(close)
         do i = 1, ncls_sel
             j = clsinds(i)
             ! FRC-based filter 
-            call clsfrcs%frc_getter(j, frc)
-            if( any(frc > 0.143) )then
-                call fsc2optlp_sub(clsfrcs%get_filtsz(), frc, filter)
+            call clsfrcs%frc_getter(j, frcs(i,:))
+            if( any(frcs(i,:) > 0.143) )then
+                call fsc2optlp_sub(clsfrcs%get_filtsz(), frcs(i,:), filter)
                 where( filter > TINY ) filter = sqrt(filter) ! because the filter is applied to the average not the even or odd
                 call cavg_imgs(i)%fft()
                 call cavg_imgs(i)%apply_filter_serial(filter)
@@ -1991,21 +1993,6 @@ contains
                 call cavg_imgs(i)%write('cavgs_prepped.mrc', i)
             enddo
         endif
-        ! calculate FRC distance matrix
-        allocate(dmat_frc(ncls_sel,ncls_sel), frc_i(filtsz), frc_j(filtsz), source=0.)
-        !$omp parallel do default(shared) private(i,ii,j,jj,frc_i,frc_j) proc_bind(close) schedule(dynamic)
-        do i = 1, ncls_sel - 1
-            ii = clsinds(i)
-            call clsfrcs%frc_getter(ii, frc_i)
-            do j = i + 1, ncls_sel
-                jj = clsinds(j)
-                call clsfrcs%frc_getter(jj, frc_j)
-                dmat_frc(i,j) = euclid(frc_i,frc_j)
-                dmat_frc(j,i) = dmat_frc(i,j)
-            end do
-        end do
-        ! convert to similarity matrix
-        smat_frc = dmat2smat(dmat_frc)
         ! pairwise correlation through Fourier-Mellin + shift search
         write(logfhandle,'(A)') '>>> PAIRWISE CORRELATIONS THROUGH FOURIER-MELLIN & SHIFT SEARCH'
         call calc_inpl_invariant_fm(cavg_imgs, params%hp, params%lp, params%trs, corrmat)
@@ -2013,14 +2000,9 @@ contains
         call pows%new(cavg_imgs, spproj%os_cls2D, params%msk, HP_SPEC, LP_SPEC, params%ncls_spec, l_exclude_junk=.false.)
         ! create a joint similarity matrix for clustering based on spectral profile and in-plane invariant correlation
         call pows%calc_distmat
-        dmat_pow       = pows%get_distmat()
-        smat_pow       = dmat2smat(dmat_pow)
-        if( L_CLUSTER_ON_FRC )then
-            smat_spec = merge_smats(smat_pow,smat_frc)
-        else
-            smat_spec = smat_pow
-        endif
-        smat_joint = merge_smats(smat_spec,corrmat)
+        dmat_pow   = pows%get_distmat()
+        smat_pow   = dmat2smat(dmat_pow)
+        smat_joint = merge_smats(smat_pow,corrmat)
         dmat_joint = smat2dmat(smat_joint)
         if( cline%defined('ncls') )then
             write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH K-MEDOIDS'
@@ -2055,37 +2037,40 @@ contains
                 call kmed%get_medoids(i_medoids)
             endif
         endif
-
-        ! score clusters based on average correlation to medoids
-        allocate(clust_scores(nclust), clust_res(nclust), clust_res_ranked(nclust), source=0.)
+        ! score clusters based on average correlation to medoid
+        allocate(clust_scores(nclust), clust_res(nclust), clust_res_ranked(nclust), clust_frcs(nclust,filtsz), source=0.)
         do iclust = 1, nclust
             clust_scores(iclust) = 0.
             clust_res(iclust)    = 0.
+            clust_frcs(iclust,:) = 0.   
             cnt = 0
             do icls = 1, ncls_sel 
                 if( labels(icls) == iclust )then
                     clust_scores(iclust) = clust_scores(iclust) + corrmat(icls,i_medoids(iclust))
                     clust_res(iclust)    = clust_res(iclust) + cavg_res(icls)
+                    clust_frcs(iclust,:) = clust_frcs(iclust,:) + frcs(icls,:)
                     cnt = cnt + 1
                 endif
             enddo
             clust_scores(iclust) = clust_scores(iclust) / real(cnt)
             clust_res(iclust)    = clust_res(iclust)    / real(cnt)
+            clust_frcs(iclust,:) = clust_frcs(iclust,:) / real(cnt)
         enddo
         ! rank clusters based on their score
-        allocate(clust_order(nclust), rank_assign(ncls_sel), i_medoids_ranked(nclust), source=0)
+        allocate(clust_order(nclust), rank_assign(ncls_sel), i_medoids_ranked(nclust), clust_frcs_ranked(nclust,filtsz))
         clust_order = (/(iclust,iclust=1,nclust)/)
         call hpsort(clust_order, ci_better_than_cj)
         ! create ranked medoids and labels
         do rank = 1, nclust
-            i_medoids_ranked(rank) = i_medoids(clust_order(rank))
-            clust_res_ranked(rank) = clust_res(clust_order(rank))
+            i_medoids_ranked(rank)    = i_medoids(clust_order(rank))
+            clust_res_ranked(rank)    = clust_res(clust_order(rank))
+            clust_frcs_ranked(rank,:) = clust_frcs(clust_order(rank),:)
             do icls = 1, ncls_sel
                 if( labels(icls) == clust_order(rank) ) rank_assign(icls) = rank
             end do
         end do
         labels = rank_assign
-        ! report cluster scores
+        ! report cluster scores & FRCs
         do iclust = 1, nclust
             clust_scores(iclust) = 0.
             cnt = 0
@@ -2096,8 +2081,10 @@ contains
                 endif
             enddo
             clust_scores(iclust) = clust_scores(iclust) / real(cnt)
-            write(logfhandle,'(A,f7.3,A,f5.1)') 'rank'//int2str_pad(iclust,2)//'cavgs.mrc, score: ', clust_scores(iclust), ' res: ', clust_res_ranked(iclust)
-        enddo
+            call get_resolution(clust_frcs_ranked(iclust,:), resarr, rfoo, fsc_res)
+            write(logfhandle,'(A,f7.3,A,f5.1,A,f5.1)') 'rank'//int2str_pad(iclust,2)//'cavgs.mrc, score: ', clust_scores(iclust), ' res: ', clust_res_ranked(iclust), ' fsc_avg_res: ', fsc_res 
+            call plot_fsc(filtsz, clust_frcs_ranked(iclust,:), resarr, smpd, 'frc_avg_cluster'//int2str_pad(iclust,2))
+        end do
         ! re-create cavg_imgs
         do icls = 1, ncls_sel
             call cavg_imgs(icls)%kill
@@ -2116,7 +2103,7 @@ contains
             call cavg_imgs(icls)%kill
         end do
         ! deallocate anything not specifically allocated above
-        deallocate(cavg_imgs, corrmat, dmat_pow, smat_pow, smat_frc, smat_spec, smat_joint, dmat_joint, l_msk, l_non_junk, centers, labels, clsinds, i_medoids)
+        deallocate(cavg_imgs, corrmat, dmat_pow, smat_pow, smat_joint, dmat_joint, l_msk, l_non_junk, centers, labels, clsinds, i_medoids)
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER_CAVGS NORMAL STOP ****')
 
