@@ -1888,8 +1888,8 @@ contains
         logical,          parameter   :: DEBUG      = .true.
         type(image),      allocatable :: cavg_imgs(:) 
         character(len=:), allocatable :: frcs_fname
-        real,             allocatable :: frc(:), filter(:), corrmat(:,:), smat(:,:), dmat(:,:)
-        real,             allocatable :: smat_joint(:,:), dmat_joint(:,:), clust_scores(:)
+        real,             allocatable :: frc(:), filter(:), corrmat(:,:), smat(:,:), dmat(:,:), smat_joint(:,:), dmat_joint(:,:)
+        real,             allocatable :: clust_scores(:), cavg_res(:), clust_res(:), clust_res_ranked(:)
         logical,          allocatable :: l_msk(:,:,:), l_non_junk(:)
         integer,          allocatable :: centers(:), labels(:), clsinds(:), i_medoids(:)
         integer,          allocatable :: clust_order(:), rank_assign(:), i_medoids_ranked(:)
@@ -1917,12 +1917,9 @@ contains
         ! master parameters
         call params%new(cline)
         ! get class average stack
-        if( cline%defined('stk') )then
-            cavg_imgs = read_cavgs_into_imgarr(params%stk)
-        else
-            call spproj%read(params%projfile)
-            cavg_imgs = read_cavgs_into_imgarr(spproj)
-        endif
+        call spproj%read(params%projfile)
+        cavg_imgs     = read_cavgs_into_imgarr(spproj)
+        cavg_res      = spproj%os_cls2D%get_all('res')
         ncls          = size(cavg_imgs)
         smpd          = cavg_imgs(1)%get_smpd()
         ldim          = cavg_imgs(1)%get_ldim()
@@ -1931,19 +1928,15 @@ contains
         params%box    = ldim(1)
         params%msk    = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
         filtsz        = fdim(params%box)-1
-        l_apply_optlp = .false.
-        if( cline%defined('stk') )then
-            call flag_non_junk_cavgs(cavg_imgs, LP_BIN, params%msk, l_non_junk)
-        else    
-            ! get FRCs
-            call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
-            if( file_exists(frcs_fname) )then
-                call clsfrcs%read(frcs_fname)
-                l_apply_optlp = .true.
-                filtsz = clsfrcs%get_filtsz()
-            endif
-            call flag_non_junk_cavgs(cavg_imgs, LP_BIN, params%msk, l_non_junk, spproj%os_cls2D)
+        l_apply_optlp = .false.  
+        ! get FRCs
+        call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
+        if( file_exists(frcs_fname) )then
+            call clsfrcs%read(frcs_fname)
+            l_apply_optlp = .true.
+            filtsz = clsfrcs%get_filtsz()
         endif
+        call flag_non_junk_cavgs(cavg_imgs, LP_BIN, params%msk, l_non_junk, spproj%os_cls2D)
         if( DEBUG )then
             cnt = 0
             do i = 1, ncls
@@ -1953,7 +1946,7 @@ contains
                 endif
             enddo
         endif
-        ! re-create cavg_imgs
+        ! re-create cavg_imgs & cavg_res
         ncls_sel  = count(l_non_junk)
         write(logfhandle,'(A,I5)') '# classes left after junk rejection ', ncls_sel
         do icls = 1, ncls
@@ -1961,6 +1954,7 @@ contains
         end do
         deallocate(cavg_imgs)
         cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
+        cavg_res  = pack(cavg_res, mask=l_non_junk)
         ! keep track of the original class indices
         clsinds = pack((/(i,i=1,ncls)/), mask=l_non_junk)
         ! create the stuff needed in the loop
@@ -2043,17 +2037,20 @@ contains
         endif
 
         ! score clusters based on average correlation to medoids
-        allocate(clust_scores(nclust), source=0.)
+        allocate(clust_scores(nclust), clust_res(nclust), clust_res_ranked(nclust), source=0.)
         do iclust = 1, nclust
             clust_scores(iclust) = 0.
+            clust_res(iclust)    = 0.
             cnt = 0
             do icls = 1, ncls_sel 
                 if( labels(icls) == iclust )then
                     clust_scores(iclust) = clust_scores(iclust) + corrmat(icls,i_medoids(iclust))
+                    clust_res(iclust)    = clust_res(iclust) + cavg_res(icls)
                     cnt = cnt + 1
                 endif
             enddo
             clust_scores(iclust) = clust_scores(iclust) / real(cnt)
+            clust_res(iclust)    = clust_res(iclust)    / real(cnt)
         enddo
         ! rank clusters based on their score
         allocate(clust_order(nclust), rank_assign(ncls_sel), i_medoids_ranked(nclust), source=0)
@@ -2064,6 +2061,7 @@ contains
         ! create ranked medoids and labels
         do rank = 1, nclust
             i_medoids_ranked(rank) = i_medoids(clust_order(rank))
+            clust_res_ranked(rank) = clust_res(clust_order(rank))
             do icls = 1, ncls_sel
                 if( labels(icls) == clust_order(rank) ) rank_assign(icls) = rank
             end do
@@ -2080,7 +2078,7 @@ contains
                 endif
             enddo
             clust_scores(iclust) = clust_scores(iclust) / real(cnt)
-            write(logfhandle,'(A,f7.3)') 'rank'//int2str_pad(iclust,2)//'cavgs.mrc, score: ', clust_scores(iclust)
+            write(logfhandle,'(A,f7.3,A,f5.1)') 'rank'//int2str_pad(iclust,2)//'cavgs.mrc, score: ', clust_scores(iclust), ' res: ', clust_res_ranked(iclust)
         enddo
         ! re-create cavg_imgs
         do icls = 1, ncls_sel
