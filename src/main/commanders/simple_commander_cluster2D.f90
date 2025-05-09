@@ -1885,10 +1885,12 @@ contains
         class(cmdline),                 intent(inout) :: cline
         real,             parameter   :: LP_BIN     = 20., HP_SPEC = 20., LP_SPEC = 6.
         integer,          parameter   :: NCLUST_MAX = 20
-        logical,          parameter   :: DEBUG      = .true.
+        logical,          parameter   :: DEBUG      = .true., L_CLUSTER_ON_FRC = .true.
         type(image),      allocatable :: cavg_imgs(:) 
         character(len=:), allocatable :: frcs_fname
-        real,             allocatable :: frc(:), filter(:), corrmat(:,:), smat(:,:), dmat(:,:), smat_joint(:,:), dmat_joint(:,:)
+        real,             allocatable :: frc(:), frc_i(:), frc_j(:), filter(:)
+        real,             allocatable :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:), dmat_frc(:,:)
+        real,             allocatable :: smat_frc(:,:), smat_spec(:,:), smat_joint(:,:), dmat_joint(:,:)
         real,             allocatable :: clust_scores(:), cavg_res(:), clust_res(:), clust_res_ranked(:)
         logical,          allocatable :: l_msk(:,:,:), l_non_junk(:)
         integer,          allocatable :: centers(:), labels(:), clsinds(:), i_medoids(:)
@@ -1901,7 +1903,7 @@ contains
         type(kmedoids)   :: kmed
         type(pspecs)     :: pows
         integer :: ldim(3),  ncls, n, ncls_sel, icls, cnt, rank
-        integer :: filtsz, nclust_aff_prop, i, j, nclust, iclust
+        integer :: filtsz, nclust_aff_prop, i, j, ii, jj, nclust, iclust
         real    :: smpd, simsum, cmin, cmax, pref
         logical :: l_apply_optlp
         ! defaults
@@ -1918,23 +1920,23 @@ contains
         call params%new(cline)
         ! get class average stack
         call spproj%read(params%projfile)
-        cavg_imgs     = read_cavgs_into_imgarr(spproj)
-        cavg_res      = spproj%os_cls2D%get_all('res')
-        ncls          = size(cavg_imgs)
-        smpd          = cavg_imgs(1)%get_smpd()
-        ldim          = cavg_imgs(1)%get_ldim()
+        cavg_imgs   = read_cavgs_into_imgarr(spproj)
+        cavg_res    = spproj%os_cls2D%get_all('res')
+        ncls        = size(cavg_imgs)
+        smpd        = cavg_imgs(1)%get_smpd()
+        ldim        = cavg_imgs(1)%get_ldim()
         ! ensure correct smpd/box in params class
-        params%smpd   = smpd
-        params%box    = ldim(1)
-        params%msk    = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
-        filtsz        = fdim(params%box)-1
-        l_apply_optlp = .false.  
+        params%smpd = smpd
+        params%box  = ldim(1)
+        params%msk  = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
+        filtsz      = fdim(params%box)-1  
         ! get FRCs
         call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
         if( file_exists(frcs_fname) )then
             call clsfrcs%read(frcs_fname)
-            l_apply_optlp = .true.
             filtsz = clsfrcs%get_filtsz()
+        else
+            THROW_HARD('FRC file: '//trim(frcs_fname)//' does not exist!')
         endif
         call flag_non_junk_cavgs(cavg_imgs, LP_BIN, params%msk, l_non_junk, spproj%os_cls2D)
         if( DEBUG )then
@@ -1969,16 +1971,14 @@ contains
         !$omp parallel do default(shared) private(i,j,frc,filter) schedule(static) proc_bind(close)
         do i = 1, ncls_sel
             j = clsinds(i)
-            ! FRC-based filter
-            if( l_apply_optlp )then
-                call clsfrcs%frc_getter(j, frc)
-                if( any(frc > 0.143) )then
-                    call fsc2optlp_sub(clsfrcs%get_filtsz(), frc, filter)
-                    where( filter > TINY ) filter = sqrt(filter) ! because the filter is applied to the average not the even or odd
-                    call cavg_imgs(i)%fft()
-                    call cavg_imgs(i)%apply_filter_serial(filter)
-                    call cavg_imgs(i)%ifft()
-                endif
+            ! FRC-based filter 
+            call clsfrcs%frc_getter(j, frc)
+            if( any(frc > 0.143) )then
+                call fsc2optlp_sub(clsfrcs%get_filtsz(), frc, filter)
+                where( filter > TINY ) filter = sqrt(filter) ! because the filter is applied to the average not the even or odd
+                call cavg_imgs(i)%fft()
+                call cavg_imgs(i)%apply_filter_serial(filter)
+                call cavg_imgs(i)%ifft()
             endif
             ! normalization
             call cavg_imgs(i)%norm_within(l_msk)
@@ -1986,11 +1986,26 @@ contains
             call cavg_imgs(i)%mask(params%msk, 'soft', backgr=0.)
         end do
         !$omp end parallel do
-        if( DEBUG )then
+         if( DEBUG )then
             do i = 1, ncls_sel
                 call cavg_imgs(i)%write('cavgs_prepped.mrc', i)
             enddo
         endif
+        ! calculate FRC distance matrix
+        allocate(dmat_frc(ncls_sel,ncls_sel), frc_i(filtsz), frc_j(filtsz), source=0.)
+        !$omp parallel do default(shared) private(i,ii,j,jj,frc_i,frc_j) proc_bind(close) schedule(dynamic)
+        do i = 1, ncls_sel - 1
+            ii = clsinds(i)
+            call clsfrcs%frc_getter(ii, frc_i)
+            do j = i + 1, ncls_sel
+                jj = clsinds(j)
+                call clsfrcs%frc_getter(jj, frc_j)
+                dmat_frc(i,j) = euclid(frc_i,frc_j)
+                dmat_frc(j,i) = dmat_frc(i,j)
+            end do
+        end do
+        ! convert to similarity matrix
+        smat_frc = dmat2smat(dmat_frc)
         ! pairwise correlation through Fourier-Mellin + shift search
         write(logfhandle,'(A)') '>>> PAIRWISE CORRELATIONS THROUGH FOURIER-MELLIN & SHIFT SEARCH'
         call calc_inpl_invariant_fm(cavg_imgs, params%hp, params%lp, params%trs, corrmat)
@@ -1998,9 +2013,14 @@ contains
         call pows%new(cavg_imgs, spproj%os_cls2D, params%msk, HP_SPEC, LP_SPEC, params%ncls_spec, l_exclude_junk=.false.)
         ! create a joint similarity matrix for clustering based on spectral profile and in-plane invariant correlation
         call pows%calc_distmat
-        dmat       = pows%get_distmat()
-        smat       = dmat2smat(dmat)
-        smat_joint = merge_smats(smat,corrmat)
+        dmat_pow       = pows%get_distmat()
+        smat_pow       = dmat2smat(dmat_pow)
+        if( L_CLUSTER_ON_FRC )then
+            smat_spec = merge_smats(smat_pow,smat_frc)
+        else
+            smat_spec = smat_pow
+        endif
+        smat_joint = merge_smats(smat_spec,corrmat)
         dmat_joint = smat2dmat(smat_joint)
         if( cline%defined('ncls') )then
             write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH K-MEDOIDS'
@@ -2097,7 +2117,8 @@ contains
         do icls=1,ncls_sel
             call cavg_imgs(icls)%kill
         end do
-        deallocate(cavg_imgs, dmat, smat, smat_joint, dmat_joint)
+        ! deallocate anything not specifically allocated above
+        deallocate(cavg_imgs, corrmat, dmat_pow, smat_pow, smat_frc, smat_spec, smat_joint, dmat_joint, l_msk, l_non_junk, centers, labels, clsinds, i_medoids)
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER_CAVGS NORMAL STOP ****')
     end subroutine exec_cluster_cavgs
