@@ -248,10 +248,25 @@ contains
         params_glob%nptcls = ncavgs
         call spproj%os_cls3D%new(ncavgs, is_ptcl=.false.)
         do icls=1,ncavgs
-            call spproj%os_cls3D%transfer_ori(icls, work_proj%os_ptcl3D, icls)
+            if( work_proj%os_ptcl3D%get_state(icls) == 0 )then
+                call spproj%os_cls3D%set_state(icls, 0)
+            else
+                ! e/o orientation with best score is selected
+                if( work_proj%os_ptcl3D%get(icls, 'corr') > work_proj%os_ptcl3D%get(ncavgs+icls, 'corr') )then
+                    cnt = icls
+                else
+                    cnt = ncavgs+icls
+                endif
+                ! alignement parameters
+                call spproj%os_cls3D%set(icls, 'corr', work_proj%os_ptcl3D%get(cnt, 'corr'))
+                call spproj%os_cls3D%set(icls, 'proj', work_proj%os_ptcl3D%get(cnt, 'proj'))
+                call spproj%os_cls3D%set(icls, 'w',    work_proj%os_ptcl3D%get(cnt, 'w'))
+                call spproj%os_cls3D%set_euler(icls, work_proj%os_ptcl3D%get_euler(cnt))
+                call spproj%os_cls3D%set_shift(icls, work_proj%os_ptcl3D%get_2Dshift(cnt))
+                call spproj%os_cls3D%set_state(icls, work_proj%os_ptcl3D%get_state(cnt))
+            endif
         enddo
-        ! revert splitting
-        call spproj%os_cls3D%set_all2single('stkind', 1)
+        call spproj%os_cls3D%set_all2single('stkind', 1)    ! revert splitting
         ! map the orientation parameters obtained for the clusters back to the particles
         call spproj%map2ptcls
         if( nstages_ini3D == NSTAGES_INI3D_MAX )then ! produce validation info
