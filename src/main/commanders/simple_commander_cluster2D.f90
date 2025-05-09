@@ -1883,14 +1883,16 @@ contains
         use simple_corrmat,    only: calc_inpl_invariant_fm
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        real,             parameter   :: LP_BIN   = 20., HP_SPEC = 20., LP_SPEC = 6.
-        integer,          parameter   :: NCLS_MAX = 20
-        logical,          parameter   :: DEBUG    = .true.
+        real,             parameter   :: LP_BIN     = 20., HP_SPEC = 20., LP_SPEC = 6.
+        integer,          parameter   :: NCLUST_MAX = 20
+        logical,          parameter   :: DEBUG      = .true.
         type(image),      allocatable :: cavg_imgs(:) 
         character(len=:), allocatable :: frcs_fname
-        real,             allocatable :: frc(:), filter(:), corrmat(:,:), smat(:,:), dmat(:,:), smat_joint(:,:), dmat_joint(:,:)
+        real,             allocatable :: frc(:), filter(:), corrmat(:,:), smat(:,:), dmat(:,:)
+        real,             allocatable :: smat_joint(:,:), dmat_joint(:,:), clust_scores(:)
         logical,          allocatable :: l_msk(:,:,:), l_non_junk(:)
-        integer,          allocatable :: centers(:), labels(:), clsinds(:)
+        integer,          allocatable :: centers(:), labels(:), clsinds(:), i_medoids(:)
+        integer,          allocatable :: clust_order(:), rank_assign(:), i_medoids_ranked(:)
         type(parameters) :: params
         type(sp_project) :: spproj
         type(class_frcs) :: clsfrcs
@@ -1898,7 +1900,8 @@ contains
         type(aff_prop)   :: aprop
         type(kmedoids)   :: kmed
         type(pspecs)     :: pows
-        integer :: ldim(3),  ncls, n, ncls_sel, icls, cnt, filtsz, ncls_aff_prop, i, j
+        integer :: ldim(3),  ncls, n, ncls_sel, icls, cnt, rank
+        integer :: filtsz, nclust_aff_prop, i, j, nclust, iclust
         real    :: smpd, simsum, cmin, cmax, pref
         logical :: l_apply_optlp
         ! defaults
@@ -1910,6 +1913,7 @@ contains
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
         if( .not. cline%defined('trs')     ) call cline%set('trs',       10.)
         if( .not. cline%defined('kweight') ) call cline%set('kweight', 'all')
+        if( .not. cline%defined('lp')      ) call cline%set('lp',         6.)
         ! master parameters
         call params%new(cline)
         ! get class average stack
@@ -2006,11 +2010,13 @@ contains
         dmat_joint = smat2dmat(smat_joint)
         if( cline%defined('ncls') )then
             write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH K-MEDOIDS'
-            call kmed%new(ncls_sel, dmat_joint, params%ncls)
+            nclust = params%ncls
+            call kmed%new(ncls_sel, dmat_joint, nclust)
             call kmed%init
             call kmed%cluster
-            allocate(labels(ncls_sel), source=0)
+            allocate(labels(ncls_sel), i_medoids(nclust), source=0)
             call kmed%get_labels(labels)
+            call kmed%get_medoids(i_medoids)
         else
             write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH AFFINITY PROPAGATION'
             ! calculate a preference that generates a small number of clusters
@@ -2018,15 +2024,64 @@ contains
             call aprop%new(ncls_sel, smat_joint, pref=pref)
             call aprop%propagate(centers, labels, simsum)
             call aprop%kill
-            ncls_aff_prop = size(centers)
-            write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION (AP): ', ncls_aff_prop
-            call kmed%new(labels, dmat_joint)
-            if( ncls_aff_prop > NCLS_MAX )then
+            nclust_aff_prop = size(centers)
+            write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION (AP): ', nclust_aff_prop
+            call kmed%new(labels, dmat_joint)        
+            if( nclust_aff_prop > NCLUST_MAX )then
                 write(logfhandle,'(A)') '>>> MERGING CLUSTERS WITH K-MEDOIDS'
-                call kmed%merge(NCLS_MAX)
+                call kmed%merge(NCLUST_MAX)
                 call kmed%get_labels(labels)
+                nclust = NCLUST_MAX
+                allocate(i_medoids(nclust), source=0)
+                call kmed%get_medoids(i_medoids)
+            else
+                call kmed%find_medoids
+                nclust = nclust_aff_prop
+                allocate(i_medoids(nclust), source=0)
+                call kmed%get_medoids(i_medoids)
             endif
         endif
+
+        ! score clusters based on average correlation to medoids
+        allocate(clust_scores(nclust), source=0.)
+        do iclust = 1, nclust
+            clust_scores(iclust) = 0.
+            cnt = 0
+            do icls = 1, ncls_sel 
+                if( labels(icls) == iclust )then
+                    clust_scores(iclust) = clust_scores(iclust) + corrmat(icls,i_medoids(iclust))
+                    cnt = cnt + 1
+                endif
+            enddo
+            clust_scores(iclust) = clust_scores(iclust) / real(cnt)
+        enddo
+        ! rank clusters based on their score
+        allocate(clust_order(nclust), rank_assign(ncls_sel), i_medoids_ranked(nclust), source=0)
+        clust_order = (/(iclust,iclust=1,nclust)/)
+        call hpsort(clust_scores, clust_order)
+        call reverse(clust_order)  ! best first
+        call reverse(clust_scores) ! best first
+        ! create ranked medoids and labels
+        do rank = 1, nclust
+            i_medoids_ranked(rank) = i_medoids(clust_order(rank))
+            do icls = 1, ncls_sel
+                if( labels(icls) == clust_order(rank) ) rank_assign(icls) = rank
+            end do
+        end do
+        labels = rank_assign
+        ! report cluster scores
+        do iclust = 1, nclust
+            clust_scores(iclust) = 0.
+            cnt = 0
+            do icls = 1, ncls_sel 
+                if( labels(icls) == iclust )then
+                    clust_scores(iclust) = clust_scores(iclust) + corrmat(icls,i_medoids_ranked(iclust))
+                    cnt = cnt + 1
+                endif
+            enddo
+            clust_scores(iclust) = clust_scores(iclust) / real(cnt)
+            write(logfhandle,'(A,f7.3)') 'rank'//int2str_pad(iclust,2)//'cavgs.mrc, score: ', clust_scores(iclust)
+        enddo
         ! re-create cavg_imgs
         do icls = 1, ncls_sel
             call cavg_imgs(icls)%kill
@@ -2034,7 +2089,7 @@ contains
         deallocate(cavg_imgs)
         cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
         ! write clusters
-        call write_cavgs(ncls_sel, cavg_imgs, labels, 'cluster', params%ext)
+        call write_cavgs(ncls_sel, cavg_imgs, labels, 'rank', params%ext)
         ! destruct
         call spproj%kill
         call clsfrcs%kill
