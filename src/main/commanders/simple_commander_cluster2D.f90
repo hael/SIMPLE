@@ -2075,9 +2075,7 @@ contains
         ! rank clusters based on their score
         allocate(clust_order(nclust), rank_assign(ncls_sel), i_medoids_ranked(nclust), source=0)
         clust_order = (/(iclust,iclust=1,nclust)/)
-        call hpsort(clust_scores, clust_order)
-        call reverse(clust_order)  ! best first
-        call reverse(clust_scores) ! best first
+        call hpsort(clust_order, ci_better_than_cj)
         ! create ranked medoids and labels
         do rank = 1, nclust
             i_medoids_ranked(rank) = i_medoids(clust_order(rank))
@@ -2121,6 +2119,20 @@ contains
         deallocate(cavg_imgs, corrmat, dmat_pow, smat_pow, smat_frc, smat_spec, smat_joint, dmat_joint, l_msk, l_non_junk, centers, labels, clsinds, i_medoids)
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER_CAVGS NORMAL STOP ****')
+
+    contains
+        
+        function ci_better_than_cj( ci, cj ) result( val )
+            integer, intent(in) :: ci, cj
+            logical :: val
+            val = .true.
+            if( clust_res(ci) > clust_res(cj) )then            ! (1) classes with larger resolution estimates are worse
+                val = .false.                             
+            else if( clust_scores(ci) < clust_scores(cj) )then ! (2) classes with smaller FM correlations are worse 
+                val = .false.
+            endif
+        end function ci_better_than_cj
+ 
     end subroutine exec_cluster_cavgs
 
     subroutine exec_write_classes( self, cline )
