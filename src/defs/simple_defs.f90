@@ -101,6 +101,11 @@ type stats_struct
     real :: minv = 0.
 end type stats_struct
 
+type inpl_struct
+    real    :: e3 = 0., x = 0., y = 0., corr = 0.
+    logical :: l_mirr = .false.
+end type inpl_struct
+
 ! type for particle reference relation in eul_prob_tab
 type ptcl_ref
     integer :: pind = 0, iproj = 0, inpl = 0, istate=0
