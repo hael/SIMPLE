@@ -215,9 +215,9 @@ contains
             if( w < SMALL ) cycle
             icls = ptcl_field%get_class(iptcl)
             if( icls<1 .or. icls>params_glob%ncls )cycle
-            pops(icls)       = pops(icls)      + 1
-            corrs(icls)      = corrs(icls)     + ptcl_field%get(iptcl,'corr')
-            ws(icls)         = ws(icls)        + real(w,dp)
+            pops(icls)  = pops(icls)  + 1
+            corrs(icls) = corrs(icls) + ptcl_field%get(iptcl,'corr')
+            ws(icls)    = ws(icls)    + real(w,dp)
         enddo
         !$omp end parallel do
         if( l_stream  .and. cls_field%get_noris()==ncls .and. params_glob%update_frac<.99 )then
@@ -228,17 +228,17 @@ contains
                 prev_eo_pops(icls,2) = cls_field%get_int(i,'prev_pop_odd')
                 pop = sum(prev_eo_pops(icls,:))
                 if( pop == 0 ) cycle
-                corrs(icls)      = corrs(icls)      + real(pop) * cls_field%get(i,'corr')
-                ws(icls)         = ws(icls)         + real(pop) * cls_field%get(i,'w')
-                pops(icls)       = pops(icls) + pop
+                corrs(icls) = corrs(icls) + real(pop) * cls_field%get(i,'corr')
+                ws(icls)    = ws(icls)    + real(pop) * cls_field%get(i,'w')
+                pops(icls)  = pops(icls)  +      pop
             enddo
         endif
         where(pops>1)
-            corrs      = corrs / real(pops)
-            ws         = ws / real(pops)
+            corrs = corrs / real(pops)
+            ws    = ws / real(pops)
         elsewhere
-            corrs      = -1.
-            ws         = 0.
+            corrs = -1.
+            ws    = 0.
         end where
         call cls_field%new(params_glob%ncls, is_ptcl=.false.)
         do icls=1,params_glob%ncls

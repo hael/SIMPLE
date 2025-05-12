@@ -25,6 +25,8 @@ type :: eul_prob_tab
     integer,        allocatable :: ssinds(:)       !< non-empty state indices
     integer,        allocatable :: sinds(:)        !< non-empty state indices of each ref
     integer,        allocatable :: jinds(:)        !< non-empty proj  indices of each ref
+    logical,        allocatable :: proj_exists(:,:)
+    logical,        allocatable :: state_exists(:)
     integer                     :: nptcls          !< size of pinds array
     integer                     :: nstates         !< states number
     integer                     :: nrefs           !< reference number
@@ -59,32 +61,30 @@ contains
         class(eul_prob_tab), intent(inout) :: self
         integer,             intent(in)    :: pinds(:)
         logical, optional,   intent(in)    :: empty_okay
-        logical,             allocatable   :: proj_exists(:,:)
-        logical,             allocatable   :: state_exists(:)
         integer :: i, iproj, iptcl, istate, si, ri
         real    :: x
         logical :: l_empty
         l_empty = (trim(params_glob%empty3Dcavgs) .eq. 'yes')
         if( present(empty_okay) ) l_empty = empty_okay
         call self%kill
-        self%nptcls  = size(pinds)
-        state_exists = build_glob%spproj_field%states_exist(params_glob%nstates)
-        self%nstates = count(state_exists .eqv. .true.)
+        self%nptcls       = size(pinds)
+        self%state_exists = build_glob%spproj_field%states_exist(params_glob%nstates)
+        self%nstates      = count(self%state_exists .eqv. .true.)
         if( l_empty )then
-            allocate(proj_exists(params_glob%nspace,params_glob%nstates), source=.true.)
+            allocate(self%proj_exists(params_glob%nspace,params_glob%nstates), source=.true.)
         else
-            proj_exists = build_glob%spproj_field%projs_exist(params_glob%nstates,params_glob%nspace)
+            self%proj_exists = build_glob%spproj_field%projs_exist(params_glob%nstates,params_glob%nspace)
         endif
-        self%nrefs = count(proj_exists .eqv. .true.)
+        self%nrefs = count(self%proj_exists .eqv. .true.)
         allocate(self%ssinds(self%nstates),self%jinds(self%nrefs),self%sinds(self%nrefs))
         si = 0
         ri = 0
         do istate = 1, params_glob%nstates
-            if( .not. state_exists(istate) )cycle
+            if( .not. self%state_exists(istate) )cycle
             si              = si + 1
             self%ssinds(si) = istate
             do iproj = 1,params_glob%nspace
-                if( .not. proj_exists(iproj,istate) )cycle
+                if( .not. self%proj_exists(iproj,istate) )cycle
                 ri             = ri + 1
                 self%jinds(ri) = iproj
                 self%sinds(ri) = istate
@@ -222,14 +222,18 @@ contains
                 ithr  = omp_get_thread_num() + 1
                 ! (1) identify shifts using the previously assigned best reference
                 call build_glob%spproj_field%get_ori(iptcl, o_prev)        ! previous ori
-                istate = o_prev%get_state()
+                istate     = o_prev%get_state()
                 irot       = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
                 iproj      = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
-                iref_start = (istate-1)*params_glob%nspace
-                ! BFGS over shifts
-                call grad_shsrch_obj(ithr)%set_indices(iref_start + iproj, iptcl)
-                cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
-                if( irot == 0 ) cxy(2:3) = 0.
+                if( self%state_exists(istate) .and. self%proj_exists(istate,iproj) )then
+                    iref_start = (istate-1)*params_glob%nspace
+                    ! BFGS over shifts
+                    call grad_shsrch_obj(ithr)%set_indices(iref_start + iproj, iptcl)
+                    cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
+                    if( irot == 0 ) cxy(2:3) = 0.
+                else
+                    cxy(2:3) = 0.
+                endif
                 ! (2) search projection directions using those shifts for all references
                 call pftcc%reset_cache
                 do ri = 1, self%nrefs
@@ -709,13 +713,15 @@ contains
 
     subroutine kill( self )
         class(eul_prob_tab), intent(inout) :: self
-        if( allocated(self%loc_tab)   ) deallocate(self%loc_tab)
-        if( allocated(self%state_tab) ) deallocate(self%state_tab)
-        if( allocated(self%assgn_map) ) deallocate(self%assgn_map)
-        if( allocated(self%pinds)     ) deallocate(self%pinds)
-        if( allocated(self%ssinds)    ) deallocate(self%ssinds)
-        if( allocated(self%sinds)     ) deallocate(self%sinds)
-        if( allocated(self%jinds)     ) deallocate(self%jinds)
+        if( allocated(self%loc_tab)      ) deallocate(self%loc_tab)
+        if( allocated(self%state_tab)    ) deallocate(self%state_tab)
+        if( allocated(self%assgn_map)    ) deallocate(self%assgn_map)
+        if( allocated(self%pinds)        ) deallocate(self%pinds)
+        if( allocated(self%ssinds)       ) deallocate(self%ssinds)
+        if( allocated(self%sinds)        ) deallocate(self%sinds)
+        if( allocated(self%jinds)        ) deallocate(self%jinds)
+        if( allocated(self%state_exists) ) deallocate(self%state_exists)
+        if( allocated(self%proj_exists)  ) deallocate(self%proj_exists)
     end subroutine kill
 
     ! PUBLIC UTILITITES

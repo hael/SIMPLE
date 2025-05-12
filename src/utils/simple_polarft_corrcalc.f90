@@ -759,6 +759,17 @@ contains
         allocate(cmat(box/2+1,box),source=cmplx(0.0,0.0))
         allocate(norm(box/2+1,box),source=0)
         do iref = 1, self%nrefs
+            if( l_even )then
+                if( all(self%pfts_refs_even == cmplx(0.0,0.0)) )then
+                    call cavgs(iref)%new([box,box,1],1.0)
+                    call cavgs(iref)%zero
+                endif
+            else
+                if( all(self%pfts_refs_odd == cmplx(0.0,0.0)) )then
+                    call cavgs(iref)%new([box,box,1],1.0)
+                    call cavgs(iref)%zero
+                endif
+            endif
             cmat = cmplx(0.0,0.0)
             norm = 0
             do irot=1,self%pftsz
