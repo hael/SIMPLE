@@ -61,6 +61,7 @@ contains
         class(eul_prob_tab), intent(inout) :: self
         integer,             intent(in)    :: pinds(:)
         logical, optional,   intent(in)    :: empty_okay
+        integer, parameter :: MIN_POP = 5   ! ignoring cavgs with less than 5 particles
         integer :: i, iproj, iptcl, istate, si, ri
         real    :: x
         logical :: l_empty
@@ -68,12 +69,12 @@ contains
         if( present(empty_okay) ) l_empty = empty_okay
         call self%kill
         self%nptcls       = size(pinds)
-        self%state_exists = build_glob%spproj_field%states_exist(params_glob%nstates)
+        self%state_exists = build_glob%spproj_field%states_exist(params_glob%nstates, thres=MIN_POP)
         self%nstates      = count(self%state_exists .eqv. .true.)
         if( l_empty )then
             allocate(self%proj_exists(params_glob%nspace,params_glob%nstates), source=.true.)
         else
-            self%proj_exists = build_glob%spproj_field%projs_exist(params_glob%nstates,params_glob%nspace)
+            self%proj_exists = build_glob%spproj_field%projs_exist(params_glob%nstates,params_glob%nspace, thres=MIN_POP)
         endif
         self%nrefs = count(self%proj_exists .eqv. .true.)
         allocate(self%ssinds(self%nstates),self%jinds(self%nrefs),self%sinds(self%nrefs))
@@ -244,7 +245,7 @@ contains
                     irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(istate))
                     ! rotate the shift vector to the frame of reference
                     call rotmat2d(pftcc%get_rot(irot), rotmat)
-                    rot_xy = matmul(cxy(2:3), rotmat)
+                    rot_xy                    = matmul(cxy(2:3), rotmat)
                     self%loc_tab(ri,i)%dist   = dists_inpl(irot,ithr)
                     dists_refs(  ri,ithr)     = dists_inpl(irot,ithr)
                     self%loc_tab(ri,i)%inpl   = irot
@@ -333,8 +334,8 @@ contains
                         istate = self%sinds(ri)
                         iproj  = self%jinds(ri)
                         call pftcc%gencorrs((istate-1)*params_glob%nspace + iproj, iptcl, dists_inpl(:,ithr))
-                        dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
-                        irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(istate))
+                        dists_inpl(:,ithr)      = eulprob_dist_switch(dists_inpl(:,ithr))
+                        irot                    = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(istate))
                         self%loc_tab(ri,i)%dist = dists_inpl(irot,ithr)
                         self%loc_tab(ri,i)%inpl = irot
                     enddo
@@ -443,6 +444,7 @@ contains
         !$omp end parallel workshare
         ! special case of numerical unstability of dist values
         if( (max_dist - min_dist) < TINY )then
+            THROW_WARN('WARNING: numerical unstability in eul_prob_tab')
             ! randomize dist so the assignment is stochastic
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,i)
             do iref = 1, self%nrefs
