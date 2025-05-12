@@ -3081,7 +3081,7 @@ contains
         endif
         call build%spproj%write_segment_inside(params%oritype, params%projfile)
         call build%spproj%write_segment_inside('cls3D',        params%projfile)
-        params_glob%refs = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%maxits,3)//params_glob%ext
+        params_glob%refs = trim(CAVGS_ITER_FBODY)//'_polar'//params_glob%ext
         ! converting polar to cartesian for visualization
         if( trim(params_glob%coord) .eq. 'polar' .or. trim(params_glob%coord) .eq. 'both' )then
             call cline%set('refs',  trim(params_glob%refs))
@@ -3119,9 +3119,9 @@ contains
                     ! re-memoizing ptcls due to shifted ptcls
                     call pftcc%memoize_ptcls
                 endif
+                call build_glob%spproj_field%set_projs(build_glob%eulspace)
                 if( trim(coord_type) .eq. 'cart' )then
                     ! cartesian cavgs
-                    call build_glob%spproj_field%set_projs(build_glob%eulspace)
                     call build_glob%spproj_field%proj2class
                     params%which_iter = iter
                     call cavger_kill()

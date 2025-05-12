@@ -380,10 +380,10 @@ contains
         real    :: frc(img_out%get_filtsz()), filter(img_out%get_filtsz())
         real    :: xy_cavg(2), xyz(3), sharg, crop_factor
         logical :: do_center
-        filtsz = img_in%get_filtsz()
+        filtsz      = img_in%get_filtsz()
         crop_factor = real(params_glob%box_crop) / real(params_glob%box)
         ! centering only performed if params_glob%center.eq.'yes'
-        do_center = (params_glob%center .eq. 'yes')
+        do_center   = (params_glob%center .eq. 'yes')
         if( present(center) ) do_center = do_center .and. center
         if( do_center )then
             if( present(xyz_in) )then

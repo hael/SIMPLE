@@ -80,6 +80,7 @@ contains
     subroutine new( self, pinds )
         class(eul_prob_tab2D), intent(inout) :: self
         integer,               intent(in)    :: pinds(:)
+        integer, parameter   :: MIN_POP = 2   ! ignoring classes with one particle
         integer, allocatable :: pops(:)
         integer :: i, iptcl, icls
         call self%kill
@@ -110,7 +111,7 @@ contains
                     allocate(pops(self%ncls), source=MINCLSPOPLIM+1)
                 else
                     pops = nint(build_glob%spproj%os_cls2D%get_all('pop'))
-                    where( pops < 2 ) pops = 0 ! ignoring classes with one particle
+                    where( pops < MIN_POP ) pops = 0 ! ignoring classes with one particle
                 endif
             else
                 allocate(pops(self%ncls), source=MINCLSPOPLIM+1)

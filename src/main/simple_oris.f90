@@ -819,26 +819,32 @@ contains
     end function get_all_normals
 
     !>  \brief  returns a logical array of state existence
-    function states_exist(self, nstates) result(state_exists)
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: nstates
-        integer :: i
+    function states_exist(self, nstates, thres) result(state_exists)
+        class(oris),       intent(inout) :: self
+        integer,           intent(in)    :: nstates
+        integer, optional, intent(in)    :: thres
+        integer :: i, min_pop
         logical :: state_exists(nstates)
+        min_pop = 0
+        if( present(thres) ) min_pop = thres
         do i=1,nstates
-            state_exists(i) = (self%get_pop(i, 'state') > 0)
+            state_exists(i) = (self%get_pop(i, 'state') > min_pop)
         end do
     end function states_exist
 
     !>  \brief  returns a logical array of state existence
-    function projs_exist(self, nstates, nprojs) result(proj_exists)
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: nstates
-        integer,     intent(in)    :: nprojs
-        integer :: i, j
+    function projs_exist(self, nstates, nprojs, thres) result(proj_exists)
+        class(oris),       intent(inout) :: self
+        integer,           intent(in)    :: nstates
+        integer,           intent(in)    :: nprojs
+        integer, optional, intent(in)    :: thres
+        integer :: i, j, min_pop
         logical :: proj_exists(nprojs,nstates)
+        min_pop = 0
+        if( present(thres) ) min_pop = thres
         do i=1,nstates
             do j=1,nprojs
-                proj_exists(j,i) = (self%get_pop([i,j], ['state', 'proj ']) > 0)
+                proj_exists(j,i) = (self%get_pop([i,j], ['state', 'proj ']) > min_pop)
             enddo
         end do
     end function projs_exist

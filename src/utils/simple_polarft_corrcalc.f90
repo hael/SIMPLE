@@ -1212,7 +1212,7 @@ contains
         real(dp)  :: numer, denom1, denom2
         real      :: ctf2_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                     &ctf2_merg(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                    &ctf2_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs)
+                    &ctf2_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs), frc(self%kfromto(1):self%kfromto(2))
         l_ran = .false.
         if( present(ran) ) l_ran = ran
         if( l_ran )then
@@ -1249,7 +1249,6 @@ contains
                     ctf2_odd(:,:,iref)            = ctf2_odd(:,:,iref)            + rctf**2
                 endif
             else
-                self%pfts_refs_merg(:,:,iref) = self%pfts_refs_merg(:,:,iref) + pft_ptcl
                 if( self%iseven(i) )then
                     self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + pft_ptcl
                 else
@@ -1292,14 +1291,18 @@ contains
         endif
         ! FRC filtering
         do iref = 1, self%nrefs
+            frc = 0.
             do k = self%kfromto(1), self%kfromto(2)
                 numer  = sum(real(self%pfts_refs_even(:,k,iref) * conjg(self%pfts_refs_odd(:,k,mapping(iref))), kind=dp))
                 denom1 = sum( csq(self%pfts_refs_even(:,k,iref)))
                 denom2 = sum( csq(self%pfts_refs_odd( :,k,mapping(iref))))
-                if( dsqrt(denom1*denom2) > DTINY )then
-                    self%pfts_refs_merg(:,k,iref) = self%pfts_refs_merg(:,k,iref) * real(numer / dsqrt(denom1*denom2))
-                endif
+                if( dsqrt(denom1*denom2) > DTINY ) frc(k) = real(numer / dsqrt(denom1*denom2))
             enddo
+            if( any(frc > 0.143) )then
+                do k = self%kfromto(1), self%kfromto(2)
+                    self%pfts_refs_merg(:,k,iref) = self%pfts_refs_merg(:,k,iref) * frc(k)
+                enddo
+            endif
         enddo
         self%pfts_refs_even = self%pfts_refs_merg
         self%pfts_refs_odd  = self%pfts_refs_merg
