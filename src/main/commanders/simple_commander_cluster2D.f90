@@ -1890,10 +1890,10 @@ contains
         type(image),       allocatable :: cavg_imgs(:), cluster_imgs(:), cluster_imgs_aligned(:)
         type(inpl_struct), allocatable :: algninfo(:)
         character(len=:),  allocatable :: frcs_fname
-        real,              allocatable :: frcs(:,:), filter(:), resarr(:), clust_frcs(:,:), clust_frcs_ranked(:,:)
+        real,              allocatable :: frcs(:,:), filter(:), resarr(:), clust_frcs(:,:), clust_frcs_ranked(:,:), frc(:)
         real,              allocatable :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:)
         real,              allocatable :: smat_spec(:,:), smat_joint(:,:), dmat_joint(:,:)
-        real,              allocatable :: clust_scores(:), cavg_res(:), clust_res(:), clust_res_ranked(:)
+        real,              allocatable :: clust_scores(:), cavg_res(:), clust_res(:), clust_res_ranked(:), resvals(:)
         logical,           allocatable :: l_msk(:,:,:), l_non_junk(:)
         integer,           allocatable :: centers(:), labels(:), clsinds(:), i_medoids(:)
         integer,           allocatable :: clust_order(:), rank_assign(:), i_medoids_ranked(:)
@@ -2040,15 +2040,37 @@ contains
         endif
         ! align the clusters to their medoids
         write(logfhandle,'(A)') '>>> ALIGNING THE CLUSTERS OF CLASS AVERAGES TO THEIR MEDOIDS'
+        allocate(clust_frcs(nclust,filtsz), frc(filtsz), clust_res(nclust), source=0.)
         do iclust = 1, nclust
-            pop                  = count(labels == iclust)
-            cluster_imgs         = pack_imgarr(cavg_imgs, mask=labels == iclust)
-            algninfo             = align_imgs2ref(pop, params%hp, params%lp, params%trs, cavg_imgs(i_medoids(iclust)), cluster_imgs)
+            pop = count(labels == iclust)
+            cluster_imgs = pack_imgarr(cavg_imgs, mask=labels == iclust)
+            algninfo = align_imgs2ref(pop, params%hp, params%lp, params%trs, cavg_imgs(i_medoids(iclust)), cluster_imgs)
             cluster_imgs_aligned = rtsq_imgs(pop, algninfo, cluster_imgs)
             call write_cavgs(cluster_imgs_aligned, 'cluster'//int2str_pad(iclust,2)//'_cavgs.mrcs')
+            ! calculate average FRC to medoid within cluster
+            cnt = 0
+            call cavg_imgs(i_medoids(iclust))%fft
+            allocate(resvals(pop), source=0.)
+            do i = 1, pop
+                call cluster_imgs_aligned(i)%fft
+                call cavg_imgs(i_medoids(iclust))%fsc(cluster_imgs_aligned(i), frc)
+                if( .not. all(frc > 0.5) )then ! excluding the medoid
+                    cnt = cnt + 1
+                    call get_resolution(frc, resarr, rfoo, resvals(cnt))
+                    clust_frcs(iclust,:) = clust_frcs(iclust,:) + frc
+                endif
+                call cluster_imgs_aligned(i)%ifft
+            end do
+            call cavg_imgs(i_medoids(iclust))%ifft
+            if( cnt > 0 ) clust_frcs(iclust,:) = clust_frcs(iclust,:) / real(cnt)
+            call plot_fsc(filtsz, clust_frcs(iclust,:), resarr, smpd, 'frc_avg_cluster'//int2str_pad(iclust,2))
+            ! report resolution as the average of the best agrreing 25% within a cluster
+            clust_res(iclust) = avg_frac_smallest(resvals(:cnt), 0.25)
+            print *, 'cluster '//int2str(iclust)//', resolution: ', clust_res(iclust)
+            ! destruct
             call dealloc_imgarr(cluster_imgs)
             call dealloc_imgarr(cluster_imgs_aligned)
-            deallocate(algninfo)
+            deallocate(algninfo, resvals)
         end do
 
         ! ! score clusters based on average correlation to medoid
