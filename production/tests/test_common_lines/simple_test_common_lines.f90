@@ -148,7 +148,7 @@ enddo
 minval = huge(ave)
 do i = 1, spiral%get_noris()
     do k = 1, spiral%get_noris()
-        if( k == i .or. .not.found(i,k) .or. cnts(i,k) < p%kfromto(2)-p%kfromto(1) )cycle
+        if( k == i .or. .not.found(i,k) )cycle
         if( pair_costs(i,k)/real(cnts(i,k)) < minval )then
             minval = pair_costs(i,k)/real(cnts(i,k))
             min_i  = i
