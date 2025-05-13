@@ -1884,18 +1884,19 @@ contains
         use simple_fsc,        only: plot_fsc
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        real,             parameter   :: LP_BIN     = 20., HP_SPEC = 20., LP_SPEC = 6.
-        integer,          parameter   :: NCLUST_MAX = 20
-        logical,          parameter   :: DEBUG      = .true., L_CLUSTER_ON_FRC = .true.
-        type(image),      allocatable :: cavg_imgs(:), cluster_imgs(:), cluster_imgs_aligned(:)
-        character(len=:), allocatable :: frcs_fname
-        real,             allocatable :: frcs(:,:), filter(:), resarr(:), clust_frcs(:,:), clust_frcs_ranked(:,:)
-        real,             allocatable :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:)
-        real,             allocatable :: smat_spec(:,:), smat_joint(:,:), dmat_joint(:,:)
-        real,             allocatable :: clust_scores(:), cavg_res(:), clust_res(:), clust_res_ranked(:)
-        logical,          allocatable :: l_msk(:,:,:), l_non_junk(:)
-        integer,          allocatable :: centers(:), labels(:), clsinds(:), i_medoids(:)
-        integer,          allocatable :: clust_order(:), rank_assign(:), i_medoids_ranked(:)
+        real,              parameter   :: LP_BIN     = 20., HP_SPEC = 20., LP_SPEC = 6.
+        integer,           parameter   :: NCLUST_MAX = 20
+        logical,           parameter   :: DEBUG      = .true., L_CLUSTER_ON_FRC = .true.
+        type(image),       allocatable :: cavg_imgs(:), cluster_imgs(:), cluster_imgs_aligned(:)
+        type(inpl_struct), allocatable :: algninfo(:)
+        character(len=:),  allocatable :: frcs_fname
+        real,              allocatable :: frcs(:,:), filter(:), resarr(:), clust_frcs(:,:), clust_frcs_ranked(:,:)
+        real,              allocatable :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:)
+        real,              allocatable :: smat_spec(:,:), smat_joint(:,:), dmat_joint(:,:)
+        real,              allocatable :: clust_scores(:), cavg_res(:), clust_res(:), clust_res_ranked(:)
+        logical,           allocatable :: l_msk(:,:,:), l_non_junk(:)
+        integer,           allocatable :: centers(:), labels(:), clsinds(:), i_medoids(:)
+        integer,           allocatable :: clust_order(:), rank_assign(:), i_medoids_ranked(:)
         type(parameters) :: params
         type(sp_project) :: spproj
         type(class_frcs) :: clsfrcs
@@ -2040,12 +2041,14 @@ contains
         ! align the clusters to their medoids
         write(logfhandle,'(A)') '>>> ALIGNING THE CLUSTERS OF CLASS AVERAGES TO THEIR MEDOIDS'
         do iclust = 1, nclust
-            pop = count(labels == iclust)
-            cluster_imgs = pack_imgarr(cavg_imgs, mask=labels == iclust)
-            call align_imgs2ref(pop, params%hp, params%lp, params%trs, cluster_imgs, cavg_imgs(i_medoids(iclust)), cluster_imgs_aligned)
+            pop                  = count(labels == iclust)
+            cluster_imgs         = pack_imgarr(cavg_imgs, mask=labels == iclust)
+            algninfo             = align_imgs2ref(pop, params%hp, params%lp, params%trs, cavg_imgs(i_medoids(iclust)), cluster_imgs)
+            cluster_imgs_aligned = rtsq_imgs(pop, algninfo, cluster_imgs)
             call write_cavgs(cluster_imgs_aligned, 'cluster'//int2str_pad(iclust,2)//'_cavgs.mrcs')
             call dealloc_imgarr(cluster_imgs)
             call dealloc_imgarr(cluster_imgs_aligned)
+            deallocate(algninfo)
         end do
 
         ! ! score clusters based on average correlation to medoid
@@ -2104,7 +2107,7 @@ contains
         ! cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
         ! ! write clusters
         ! call write_cavgs(ncls_sel, cavg_imgs, labels, 'rank', params%ext)
-        
+
         ! destruct
         call spproj%kill
         call clsfrcs%kill
