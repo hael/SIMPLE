@@ -258,42 +258,6 @@ contains
         end do
     end subroutine write_selected_cavgs
 
-    function rtsq_imgs( n, algninfo, imgs ) result( imgs_aligned )
-        integer,            intent(in)    :: n
-        type(inpl_struct),  intent(in)    :: algninfo(n)
-        class(image),       intent(inout) :: imgs(n)
-        type(image),        allocatable   :: imgs_aligned(:)
-        real(kind=c_float), allocatable   :: rmat_rot(:,:,:)
-        type(image),        allocatable   :: imgs_heap(:) 
-        integer :: ldim(3), i, ithr
-        real    :: smpd
-        ldim = imgs(1)%get_ldim()
-        smpd = imgs(1)%get_smpd()
-        call alloc_imgarr(n,         ldim, smpd, imgs_aligned)
-        call alloc_imgarr(nthr_glob, ldim, smpd, imgs_heap)
-        allocate(rmat_rot(ldim(1),ldim(2),1), source=0.)
-        !$omp parallel do default(shared) private(i,ithr,rmat_rot) schedule(static) proc_bind(close)
-        do i = 1, n
-            if( algninfo(i)%l_mirr )then
-                ithr = omp_get_thread_num() + 1
-                call imgs_heap(ithr)%copy(imgs(i))
-                call imgs_heap(ithr)%mirror('x')
-                call imgs_heap(ithr)%fft
-                call imgs_heap(ithr)%shift2Dserial([-algninfo(i)%x,-algninfo(i)%y])
-                call imgs_heap(ithr)%ifft
-                call imgs_heap(ithr)%rtsq_serial(algninfo(i)%e3, 0., 0., rmat_rot)
-            else
-                call imgs(i)%fft
-                call imgs(i)%shift2Dserial([-algninfo(i)%x,-algninfo(i)%y])
-                call imgs(i)%ifft
-                call imgs(i)%rtsq_serial(algninfo(i)%e3, 0., 0., rmat_rot)
-            endif
-            call imgs_aligned(i)%set_rmat(rmat_rot, .false.)
-        end do
-        !$omp end parallel do 
-        call dealloc_imgarr(imgs_heap)
-    end function rtsq_imgs
-
     function align_imgs2ref( n, hp, lp, trs, img_ref, imgs ) result( algninfo )
         use simple_polarizer,         only: polarizer
         use simple_polarft_corrcalc,  only: polarft_corrcalc
@@ -403,5 +367,41 @@ contains
         call pftcc%kill
         call polartransform%kill
     end function align_imgs2ref
+
+    function rtsq_imgs( n, algninfo, imgs ) result( imgs_aligned )
+        integer,            intent(in)    :: n
+        type(inpl_struct),  intent(in)    :: algninfo(n)
+        class(image),       intent(inout) :: imgs(n)
+        type(image),        allocatable   :: imgs_aligned(:)
+        real(kind=c_float), allocatable   :: rmat_rot(:,:,:)
+        type(image),        allocatable   :: imgs_heap(:) 
+        integer :: ldim(3), i, ithr
+        real    :: smpd
+        ldim = imgs(1)%get_ldim()
+        smpd = imgs(1)%get_smpd()
+        call alloc_imgarr(n,         ldim, smpd, imgs_aligned)
+        call alloc_imgarr(nthr_glob, ldim, smpd, imgs_heap)
+        allocate(rmat_rot(ldim(1),ldim(2),1), source=0.)
+        !$omp parallel do default(shared) private(i,ithr,rmat_rot) schedule(static) proc_bind(close)
+        do i = 1, n
+            if( algninfo(i)%l_mirr )then
+                ithr = omp_get_thread_num() + 1
+                call imgs_heap(ithr)%copy(imgs(i))
+                call imgs_heap(ithr)%mirror('x')
+                call imgs_heap(ithr)%fft
+                call imgs_heap(ithr)%shift2Dserial([-algninfo(i)%x,-algninfo(i)%y])
+                call imgs_heap(ithr)%ifft
+                call imgs_heap(ithr)%rtsq_serial(algninfo(i)%e3, 0., 0., rmat_rot)
+            else
+                call imgs(i)%fft
+                call imgs(i)%shift2Dserial([-algninfo(i)%x,-algninfo(i)%y])
+                call imgs(i)%ifft
+                call imgs(i)%rtsq_serial(algninfo(i)%e3, 0., 0., rmat_rot)
+            endif
+            call imgs_aligned(i)%set_rmat(rmat_rot, .false.)
+        end do
+        !$omp end parallel do 
+        call dealloc_imgarr(imgs_heap)
+    end function rtsq_imgs
 
 end module simple_strategy2D_utils
