@@ -130,13 +130,9 @@ type fplan_map
     integer, allocatable :: target_find(:)
     integer, allocatable :: ori_phys(:,:)
     integer, allocatable :: target_phys(:,:)
+    integer, allocatable :: ori_four(:,:)
+    integer, allocatable :: target_four(:,:)
 end type fplan_map
-
-type polar_fmap
-    integer :: target_find
-    integer :: ori_inds(2)
-    integer :: target_inds(2)
-end type polar_fmap
 
 ! oritype enumeration
 enum, bind(c)
