@@ -1887,7 +1887,7 @@ contains
         real,             parameter   :: LP_BIN     = 20., HP_SPEC = 20., LP_SPEC = 6.
         integer,          parameter   :: NCLUST_MAX = 20
         logical,          parameter   :: DEBUG      = .true., L_CLUSTER_ON_FRC = .true.
-        type(image),      allocatable :: cavg_imgs(:) 
+        type(image),      allocatable :: cavg_imgs(:), cluster_imgs(:), cluster_imgs_aligned(:)
         character(len=:), allocatable :: frcs_fname
         real,             allocatable :: frcs(:,:), filter(:), resarr(:), clust_frcs(:,:), clust_frcs_ranked(:,:)
         real,             allocatable :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:)
@@ -1903,7 +1903,7 @@ contains
         type(aff_prop)   :: aprop
         type(kmedoids)   :: kmed
         type(pspecs)     :: pows
-        integer :: ldim(3),  ncls, n, ncls_sel, icls, cnt, rank
+        integer :: ldim(3),  ncls, ncls_sel, icls, cnt, rank, pop
         integer :: filtsz, nclust_aff_prop, i, j, ii, jj, nclust, iclust
         real    :: smpd, simsum, cmin, cmax, pref, fsc_res, rfoo
         logical :: l_apply_optlp
@@ -2037,62 +2037,74 @@ contains
                 call kmed%get_medoids(i_medoids)
             endif
         endif
-        ! score clusters based on average correlation to medoid
-        allocate(clust_scores(nclust), clust_res(nclust), clust_res_ranked(nclust), clust_frcs(nclust,filtsz), source=0.)
+        ! align the clusters to their medoids
+        write(logfhandle,'(A)') '>>> ALIGNING THE CLUSTERS OF CLASS AVERAGES TO THEIR MEDOIDS'
         do iclust = 1, nclust
-            clust_scores(iclust) = 0.
-            clust_res(iclust)    = 0.
-            clust_frcs(iclust,:) = 0.   
-            cnt = 0
-            do icls = 1, ncls_sel 
-                if( labels(icls) == iclust )then
-                    clust_scores(iclust) = clust_scores(iclust) + corrmat(icls,i_medoids(iclust))
-                    clust_res(iclust)    = clust_res(iclust) + cavg_res(icls)
-                    clust_frcs(iclust,:) = clust_frcs(iclust,:) + frcs(icls,:)
-                    cnt = cnt + 1
-                endif
-            enddo
-            clust_scores(iclust) = clust_scores(iclust) / real(cnt)
-            clust_res(iclust)    = clust_res(iclust)    / real(cnt)
-            clust_frcs(iclust,:) = clust_frcs(iclust,:) / real(cnt)
-        enddo
-        ! rank clusters based on their score
-        allocate(clust_order(nclust), rank_assign(ncls_sel), i_medoids_ranked(nclust), clust_frcs_ranked(nclust,filtsz))
-        clust_order = (/(iclust,iclust=1,nclust)/)
-        call hpsort(clust_order, ci_better_than_cj)
-        ! create ranked medoids and labels
-        do rank = 1, nclust
-            i_medoids_ranked(rank)    = i_medoids(clust_order(rank))
-            clust_res_ranked(rank)    = clust_res(clust_order(rank))
-            clust_frcs_ranked(rank,:) = clust_frcs(clust_order(rank),:)
-            do icls = 1, ncls_sel
-                if( labels(icls) == clust_order(rank) ) rank_assign(icls) = rank
-            end do
+            pop = count(labels == iclust)
+            cluster_imgs = pack_imgarr(cavg_imgs, mask=labels == iclust)
+            call align_imgs2ref(pop, params%hp, params%lp, params%trs, cluster_imgs, cavg_imgs(i_medoids(iclust)), cluster_imgs_aligned)
+            call write_cavgs(cluster_imgs_aligned, 'cluster'//int2str_pad(iclust,2)//'_cavgs.mrcs')
+            call dealloc_imgarr(cluster_imgs)
+            call dealloc_imgarr(cluster_imgs_aligned)
         end do
-        labels = rank_assign
-        ! report cluster scores & FRCs
-        do iclust = 1, nclust
-            clust_scores(iclust) = 0.
-            cnt = 0
-            do icls = 1, ncls_sel 
-                if( labels(icls) == iclust )then
-                    clust_scores(iclust) = clust_scores(iclust) + corrmat(icls,i_medoids_ranked(iclust))
-                    cnt = cnt + 1
-                endif
-            enddo
-            clust_scores(iclust) = clust_scores(iclust) / real(cnt)
-            call get_resolution(clust_frcs_ranked(iclust,:), resarr, rfoo, fsc_res)
-            write(logfhandle,'(A,f7.3,A,f5.1,A,f5.1)') 'rank'//int2str_pad(iclust,2)//'cavgs.mrc, score: ', clust_scores(iclust), ' res: ', clust_res_ranked(iclust), ' fsc_avg_res: ', fsc_res 
-            call plot_fsc(filtsz, clust_frcs_ranked(iclust,:), resarr, smpd, 'frc_avg_cluster'//int2str_pad(iclust,2))
-        end do
-        ! re-create cavg_imgs
-        do icls = 1, ncls_sel
-            call cavg_imgs(icls)%kill
-        end do
-        deallocate(cavg_imgs)
-        cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
-        ! write clusters
-        call write_cavgs(ncls_sel, cavg_imgs, labels, 'rank', params%ext)
+
+        ! ! score clusters based on average correlation to medoid
+        ! allocate(clust_scores(nclust), clust_res(nclust), clust_res_ranked(nclust), clust_frcs(nclust,filtsz), source=0.)
+        ! do iclust = 1, nclust
+        !     clust_scores(iclust) = 0.
+        !     clust_res(iclust)    = 0.
+        !     clust_frcs(iclust,:) = 0.   
+        !     cnt = 0
+        !     do icls = 1, ncls_sel 
+        !         if( labels(icls) == iclust )then
+        !             clust_scores(iclust) = clust_scores(iclust) + corrmat(icls,i_medoids(iclust))
+        !             clust_res(iclust)    = clust_res(iclust) + cavg_res(icls)
+        !             clust_frcs(iclust,:) = clust_frcs(iclust,:) + frcs(icls,:)
+        !             cnt = cnt + 1
+        !         endif
+        !     enddo
+        !     clust_scores(iclust) = clust_scores(iclust) / real(cnt)
+        !     clust_res(iclust)    = clust_res(iclust)    / real(cnt)
+        !     clust_frcs(iclust,:) = clust_frcs(iclust,:) / real(cnt)
+        ! enddo
+        ! ! rank clusters based on their score
+        ! allocate(clust_order(nclust), rank_assign(ncls_sel), i_medoids_ranked(nclust), clust_frcs_ranked(nclust,filtsz))
+        ! clust_order = (/(iclust,iclust=1,nclust)/)
+        ! call hpsort(clust_order, ci_better_than_cj)
+        ! ! create ranked medoids and labels
+        ! do rank = 1, nclust
+        !     i_medoids_ranked(rank)    = i_medoids(clust_order(rank))
+        !     clust_res_ranked(rank)    = clust_res(clust_order(rank))
+        !     clust_frcs_ranked(rank,:) = clust_frcs(clust_order(rank),:)
+        !     do icls = 1, ncls_sel
+        !         if( labels(icls) == clust_order(rank) ) rank_assign(icls) = rank
+        !     end do
+        ! end do
+        ! labels = rank_assign
+        ! ! report cluster scores & FRCs
+        ! do iclust = 1, nclust
+        !     clust_scores(iclust) = 0.
+        !     cnt = 0
+        !     do icls = 1, ncls_sel 
+        !         if( labels(icls) == iclust )then
+        !             clust_scores(iclust) = clust_scores(iclust) + corrmat(icls,i_medoids_ranked(iclust))
+        !             cnt = cnt + 1
+        !         endif
+        !     enddo
+        !     clust_scores(iclust) = clust_scores(iclust) / real(cnt)
+        !     call get_resolution(clust_frcs_ranked(iclust,:), resarr, rfoo, fsc_res)
+        !     write(logfhandle,'(A,f7.3,A,f5.1,A,f5.1)') 'rank'//int2str_pad(iclust,2)//'cavgs.mrc, score: ', clust_scores(iclust), ' res: ', clust_res_ranked(iclust), ' fsc_avg_res: ', fsc_res 
+        !     call plot_fsc(filtsz, clust_frcs_ranked(iclust,:), resarr, smpd, 'frc_avg_cluster'//int2str_pad(iclust,2))
+        ! end do
+        ! ! re-create cavg_imgs
+        ! do icls = 1, ncls_sel
+        !     call cavg_imgs(icls)%kill
+        ! end do
+        ! deallocate(cavg_imgs)
+        ! cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
+        ! ! write clusters
+        ! call write_cavgs(ncls_sel, cavg_imgs, labels, 'rank', params%ext)
+        
         ! destruct
         call spproj%kill
         call clsfrcs%kill
