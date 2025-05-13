@@ -226,7 +226,7 @@ contains
                 istate     = o_prev%get_state()
                 irot       = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
                 iproj      = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
-                if( self%state_exists(istate) .and. self%proj_exists(istate,iproj) )then
+                if( self%state_exists(istate) .and. self%proj_exists(iproj,istate) )then
                     iref_start = (istate-1)*params_glob%nspace
                     ! BFGS over shifts
                     call grad_shsrch_obj(ithr)%set_indices(iref_start + iproj, iptcl)
