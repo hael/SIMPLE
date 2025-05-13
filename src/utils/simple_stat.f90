@@ -9,7 +9,7 @@ use simple_srch_sort_loc
 use simple_is_check_assert
 implicit none
 
-public :: avg_sdev, moment, moment_serial, pearsn, spear, normalize, normalize_sigm, normalize_minmax, std_mean_diff
+public :: avg_sdev, avg_frac_smallest, moment, moment_serial, pearsn, spear, normalize, normalize_sigm, normalize_minmax, std_mean_diff
 public :: corrs2weights, corr2distweight, analyze_smat, dmat2smat, smat2dmat, merge_smats, calc_ap_pref, medoid_from_smat
 public :: medoid_ranking_from_smat, cluster_smat_bin, medoid_from_dmat, z_scores, pearsn_serial_8, kstwo
 public :: rank_sum_weights, rank_inverse_weights, rank_centroid_weights, rank_exponent_weights
@@ -174,6 +174,20 @@ contains
             sdev = sqrt(sum((vec - avg)**2.d0) / (rn - 1.d0))
         endif
     end subroutine avg_sdev_4
+
+    function avg_frac_smallest( vec, frac ) result( avg )
+        real,  intent(in) :: vec(:)
+        real,  intent(in) :: frac
+        real, allocatable :: tmp(:)
+        integer :: n, n_frac
+        real    :: avg
+        n = size(vec)
+        allocate(tmp(n), source=vec)
+        n_frac = ceiling(real(n) * frac)
+        call hpsort(tmp)
+        avg = sum(tmp(:n_frac)) / real(n_frac)
+        deallocate(tmp)
+    end function avg_frac_smallest
 
     subroutine moment_1( data, ave, sdev, var, err )
         real,    intent(out) :: ave, sdev, var
