@@ -1862,7 +1862,7 @@ contains
     logical function is_first_update( self, iter, iptcl )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: iter, iptcl
-        is_first_update = (self%o(iptcl)%get_int('updatecnt') == 1) .and. (iter == 1)
+        is_first_update = (self%o(iptcl)%get_int('updatecnt') == 1) .and. (iter > 1)
     end function is_first_update
 
     subroutine set_nonzero_updatecnt( self, updatecnt  )
