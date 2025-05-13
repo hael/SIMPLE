@@ -3093,12 +3093,14 @@ contains
         endif
         call build%spproj%write_segment_inside(params%oritype, params%projfile)
         call build%spproj%write_segment_inside('cls3D',        params%projfile)
-        params_glob%refs = trim(CAVGS_ITER_FBODY)//'_polar'//params_glob%ext
         ! converting polar to cartesian for visualization
         if( trim(params_glob%coord) .eq. 'polar' .or. trim(params_glob%coord) .eq. 'both' )then
+            params_glob%refs = trim(CAVGS_ITER_FBODY)//'_polar'//params_glob%ext
             call cline%set('refs',  trim(params_glob%refs))
             call cline%set('mkdir', 'no')
             call xmk_cavgs_shmem%execute_safe(cline)
+        else
+            params_glob%refs = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%maxits,3)//params_glob%ext
         endif
         ! ranking cavgs and output resolution if needed
         if( trim(params%rank_cavgs) .eq. 'yes' )then
