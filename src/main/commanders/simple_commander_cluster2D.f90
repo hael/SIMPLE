@@ -2046,7 +2046,6 @@ contains
             cluster_imgs = pack_imgarr(cavg_imgs, mask=labels == iclust)
             algninfo = align_imgs2ref(pop, params%hp, params%lp, params%trs, cavg_imgs(i_medoids(iclust)), cluster_imgs)
             cluster_imgs_aligned = rtsq_imgs(pop, algninfo, cluster_imgs)
-            call write_cavgs(cluster_imgs_aligned, 'cluster'//int2str_pad(iclust,2)//'_cavgs.mrcs')
             ! calculate average FRC to medoid within cluster
             cnt = 0
             call cavg_imgs(i_medoids(iclust))%fft
@@ -2063,73 +2062,51 @@ contains
             end do
             call cavg_imgs(i_medoids(iclust))%ifft
             if( cnt > 0 ) clust_frcs(iclust,:) = clust_frcs(iclust,:) / real(cnt)
-            call plot_fsc(filtsz, clust_frcs(iclust,:), resarr, smpd, 'frc_avg_cluster'//int2str_pad(iclust,2))
             ! report resolution as the average of the best agrreing 25% within a cluster
             clust_res(iclust) = avg_frac_smallest(resvals(:cnt), 0.25)
-            print *, 'cluster '//int2str(iclust)//', resolution: ', clust_res(iclust)
             ! destruct
             call dealloc_imgarr(cluster_imgs)
             call dealloc_imgarr(cluster_imgs_aligned)
             deallocate(algninfo, resvals)
         end do
-
-        ! ! score clusters based on average correlation to medoid
-        ! allocate(clust_scores(nclust), clust_res(nclust), clust_res_ranked(nclust), clust_frcs(nclust,filtsz), source=0.)
-        ! do iclust = 1, nclust
-        !     clust_scores(iclust) = 0.
-        !     clust_res(iclust)    = 0.
-        !     clust_frcs(iclust,:) = 0.   
-        !     cnt = 0
-        !     do icls = 1, ncls_sel 
-        !         if( labels(icls) == iclust )then
-        !             clust_scores(iclust) = clust_scores(iclust) + corrmat(icls,i_medoids(iclust))
-        !             clust_res(iclust)    = clust_res(iclust) + cavg_res(icls)
-        !             clust_frcs(iclust,:) = clust_frcs(iclust,:) + frcs(icls,:)
-        !             cnt = cnt + 1
-        !         endif
-        !     enddo
-        !     clust_scores(iclust) = clust_scores(iclust) / real(cnt)
-        !     clust_res(iclust)    = clust_res(iclust)    / real(cnt)
-        !     clust_frcs(iclust,:) = clust_frcs(iclust,:) / real(cnt)
-        ! enddo
-        ! ! rank clusters based on their score
-        ! allocate(clust_order(nclust), rank_assign(ncls_sel), i_medoids_ranked(nclust), clust_frcs_ranked(nclust,filtsz))
-        ! clust_order = (/(iclust,iclust=1,nclust)/)
-        ! call hpsort(clust_order, ci_better_than_cj)
-        ! ! create ranked medoids and labels
-        ! do rank = 1, nclust
-        !     i_medoids_ranked(rank)    = i_medoids(clust_order(rank))
-        !     clust_res_ranked(rank)    = clust_res(clust_order(rank))
-        !     clust_frcs_ranked(rank,:) = clust_frcs(clust_order(rank),:)
-        !     do icls = 1, ncls_sel
-        !         if( labels(icls) == clust_order(rank) ) rank_assign(icls) = rank
-        !     end do
-        ! end do
-        ! labels = rank_assign
-        ! ! report cluster scores & FRCs
-        ! do iclust = 1, nclust
-        !     clust_scores(iclust) = 0.
-        !     cnt = 0
-        !     do icls = 1, ncls_sel 
-        !         if( labels(icls) == iclust )then
-        !             clust_scores(iclust) = clust_scores(iclust) + corrmat(icls,i_medoids_ranked(iclust))
-        !             cnt = cnt + 1
-        !         endif
-        !     enddo
-        !     clust_scores(iclust) = clust_scores(iclust) / real(cnt)
-        !     call get_resolution(clust_frcs_ranked(iclust,:), resarr, rfoo, fsc_res)
-        !     write(logfhandle,'(A,f7.3,A,f5.1,A,f5.1)') 'rank'//int2str_pad(iclust,2)//'cavgs.mrc, score: ', clust_scores(iclust), ' res: ', clust_res_ranked(iclust), ' fsc_avg_res: ', fsc_res 
-        !     call plot_fsc(filtsz, clust_frcs_ranked(iclust,:), resarr, smpd, 'frc_avg_cluster'//int2str_pad(iclust,2))
-        ! end do
-        ! ! re-create cavg_imgs
-        ! do icls = 1, ncls_sel
-        !     call cavg_imgs(icls)%kill
-        ! end do
-        ! deallocate(cavg_imgs)
-        ! cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
-        ! ! write clusters
-        ! call write_cavgs(ncls_sel, cavg_imgs, labels, 'rank', params%ext)
-
+        ! rank clusters based on their resolution
+        allocate(clust_order(nclust), rank_assign(ncls_sel), i_medoids_ranked(nclust), clust_frcs_ranked(nclust,filtsz),&
+        &clust_res_ranked(nclust), clust_scores(nclust))
+        clust_order = (/(iclust,iclust=1,nclust)/)
+        call hpsort(clust_order, ci_better_than_cj)
+        ! create ranked medoids and labels
+        do rank = 1, nclust
+            i_medoids_ranked(rank)    = i_medoids(clust_order(rank))
+            clust_res_ranked(rank)    = clust_res(clust_order(rank))
+            clust_frcs_ranked(rank,:) = clust_frcs(clust_order(rank),:)
+            do icls = 1, ncls_sel
+                if( labels(icls) == clust_order(rank) ) rank_assign(icls) = rank
+            end do
+        end do
+        labels = rank_assign
+        ! report cluster scores & FRCs
+        do iclust = 1, nclust
+            clust_scores(iclust) = 0.
+            cnt = 0
+            do icls = 1, ncls_sel 
+                if( labels(icls) == iclust )then
+                    clust_scores(iclust) = clust_scores(iclust) + corrmat(icls,i_medoids_ranked(iclust))
+                    cnt = cnt + 1
+                endif
+            enddo
+            clust_scores(iclust) = clust_scores(iclust) / real(cnt)
+            call get_resolution(clust_frcs_ranked(iclust,:), resarr, rfoo, fsc_res)
+            write(logfhandle,'(A,f7.3,A,f5.1,A,f5.1)') 'rank'//int2str_pad(iclust,2)//'cavgs.mrc, score: ', clust_scores(iclust), ' res: ', clust_res_ranked(iclust), ' fsc_avg_res: ', fsc_res 
+            call plot_fsc(filtsz, clust_frcs_ranked(iclust,:), resarr, smpd, 'frc_avg_cluster'//int2str_pad(iclust,2))
+        end do
+        ! re-create cavg_imgs
+        do icls = 1, ncls_sel
+            call cavg_imgs(icls)%kill
+        end do
+        deallocate(cavg_imgs)
+        cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
+        ! write clusters
+        call write_cavgs(ncls_sel, cavg_imgs, labels, 'rank', params%ext)
         ! destruct
         call spproj%kill
         call clsfrcs%kill
@@ -2148,20 +2125,10 @@ contains
         
         function ci_better_than_cj( ci, cj ) result( val )
             integer, intent(in) :: ci, cj
-            real    :: res_diff
             logical :: val
+            ! classes with smaller resolution estimates are better
             val = .false.
-            ! (1) classes with smaller resolution estimates are better
-            if( clust_res(ci) < clust_res(cj) )then 
-                val = .true.
-                return                          
-            endif
-            ! (2) classes with similar resolution estimates and larger scores are better
-            res_diff = abs(clust_res(ci) - clust_res(cj))
-            if( res_diff <= 1.0 .and. clust_scores(ci) > clust_scores(cj) )then
-                val = .true.
-                return
-            endif
+            if( clust_res(ci) < clust_res(cj) ) val = .true.
         end function ci_better_than_cj
  
     end subroutine exec_cluster_cavgs
