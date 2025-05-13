@@ -51,7 +51,6 @@ contains
                             phys(3) = 1
                         endif
                         all_coords%target_phys(:,cnt) = phys
-                        exit
                     endif
                 enddo
             enddo
