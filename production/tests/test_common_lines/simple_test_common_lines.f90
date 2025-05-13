@@ -6,7 +6,7 @@ use simple_image,      only: image
 use simple_projector,  only: projector
 use simple_comlin,     only: comlin_map
 implicit none
-integer,          parameter   :: NPLANES = 25, ORI_IND1 = 5, ORI_IND2 = 23
+integer,          parameter   :: NPLANES = 50, ORI_IND1 = 15, ORI_IND2 = 43
 character(len=:), allocatable :: cmd
 type(fplan_map),  allocatable :: all_coords(:)
 type(image),      allocatable :: pad_fplanes(:)
@@ -82,7 +82,9 @@ do ithr = 1, p%nthr
     call pad_fplanes(ithr)%new([p%boxpd, p%boxpd, 1], p%smpd)
     allocate(all_coords(ithr)%target_find(  (lims(1,2)-lims(1,1)+1)*(lims(2,2)-lims(2,1)+1)),&
             &all_coords(ithr)%ori_phys(   3,(lims(1,2)-lims(1,1)+1)*(lims(2,2)-lims(2,1)+1)),&
-            &all_coords(ithr)%target_phys(3,(lims(1,2)-lims(1,1)+1)*(lims(2,2)-lims(2,1)+1)))
+            &all_coords(ithr)%ori_four(   3,(lims(1,2)-lims(1,1)+1)*(lims(2,2)-lims(2,1)+1)),&
+            &all_coords(ithr)%target_phys(3,(lims(1,2)-lims(1,1)+1)*(lims(2,2)-lims(2,1)+1)),&
+            &all_coords(ithr)%target_four(3,(lims(1,2)-lims(1,1)+1)*(lims(2,2)-lims(2,1)+1)))
 enddo
 !$omp parallel do default(shared) private(i,ithr,o2)&
 !$omp proc_bind(close) schedule(static)
@@ -134,7 +136,7 @@ do i = 1, spiral%get_noris()
             if( f_ind /= k ) cycle
             ori_phys        = coord_map(i)%ori_phys(:,j)
             target_phys     = coord_map(i)%target_phys(:,j)
-            if( .not.(check_kfromto(ori_phys(1:2)) .and. check_kfromto(target_phys(1:2))) ) cycle
+            if( .not.(check_kfromto(coord_map(i)%ori_four(1:2,j)) .and. check_kfromto(coord_map(i)%target_four(1:2,j))) ) cycle
             diff            = fplanes(ORI_IND1)%get_cmat_at(ori_phys) - fplanes(ORI_IND2)%get_cmat_at(target_phys)
             pair_costs(i,k) = pair_costs(i,k) + real(diff * conjg(diff))
             cnts(i,k)       = cnts(i,k) + 1
@@ -171,6 +173,7 @@ do j = 1, coord_map(i)%n_points
     f_ind       = coord_map(i)%target_find(j)
     ori_phys    = coord_map(i)%ori_phys(:,j)
     target_phys = coord_map(i)%target_phys(:,j)
+    if( .not.(check_kfromto(coord_map(i)%ori_four(1:2,j)) .and. check_kfromto(coord_map(i)%target_four(1:2,j))) ) cycle
     val         = img%get_cmat_at(ori_phys)
     call img%set_cmat_at(ori_phys, val + fplanes(f_ind)%get_cmat_at(target_phys))
 enddo
@@ -183,6 +186,7 @@ do j = 1, coord_map(i)%n_points
     f_ind       = coord_map(i)%target_find(j)
     ori_phys    = coord_map(i)%ori_phys(:,j)
     target_phys = coord_map(i)%target_phys(:,j)
+    if( .not.(check_kfromto(coord_map(i)%ori_four(1:2,j)) .and. check_kfromto(coord_map(i)%target_four(1:2,j))) ) cycle
     val         = img%get_cmat_at(ori_phys)
     call img%set_cmat_at(ori_phys, val + fplanes(f_ind)%get_cmat_at(target_phys))
 enddo
@@ -191,11 +195,11 @@ call img%write('reproj_com_reprojcom.mrc', 3)
 
 contains
 
-    function check_kfromto(phys) result(okay)
-        integer, intent(in) :: phys(2)
+    function check_kfromto(addr) result(okay)
+        integer, intent(in) :: addr(2)
         logical :: okay
         integer :: sh
-        sh   = nint(hyp(phys(1),phys(2)))
+        sh   = nint(hyp(addr(1),addr(2)))
         okay = .false.
         if( sh >= p%kfromto(1) .and. sh <= p%kfromto(2) ) okay = .true.
     end function check_kfromto
