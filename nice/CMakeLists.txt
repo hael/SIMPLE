@@ -4,7 +4,7 @@ if(${NICE})
 
 	ExternalProject_Add(
         nice
-        URL ${CMAKE_CURRENT_SOURCE_DIR}/nice_pkg_22afd2c.tar.gz
+        URL ${CMAKE_CURRENT_SOURCE_DIR}/nice_pkg_97a417a.tar.gz
         CMAKE_ARGS -DINSTALL_PREFIX=${CMAKE_BINARY_DIR}/nice
         INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_BINARY_DIR}/nice/nice-prefix/src/nice-build/lib ${CMAKE_BINARY_DIR}/nice/lib && ${CMAKE_COMMAND} -E copy_directory ${CMAKE_BINARY_DIR}/nice/nice-prefix/src/nice-build/var ${CMAKE_BINARY_DIR}/nice/var && ${CMAKE_COMMAND} -E copy_directory ${CMAKE_BINARY_DIR}/nice/nice-prefix/src/nice-build/etc ${CMAKE_BINARY_DIR}/nice/etc && ${CMAKE_COMMAND} -E copy_directory ${CMAKE_BINARY_DIR}/nice/nice-prefix/src/nice-build/bin ${CMAKE_BINARY_DIR}/nice/bin && ${CMAKE_COMMAND} -E copy_directory ${CMAKE_BINARY_DIR}/nice/nice-prefix/src/nice-build/share ${CMAKE_BINARY_DIR}/nice/share && make install 
     )
