@@ -10,8 +10,8 @@ use simple_is_check_assert
 implicit none
 
 public :: avg_sdev, avg_frac_smallest, moment, moment_serial, pearsn, spear, normalize, normalize_sigm, normalize_minmax, std_mean_diff
-public :: corrs2weights, corr2distweight, analyze_smat, dmat2smat, smat2dmat, merge_smats, calc_ap_pref, medoid_from_smat
-public :: medoid_ranking_from_smat, cluster_smat_bin, medoid_from_dmat, z_scores, pearsn_serial_8, kstwo
+public :: corrs2weights, corr2distweight, analyze_smat, dmat2smat, smat2dmat, merge_smats, estimate_bimodality_of_cluster, calc_ap_pref
+public :: medoid_from_smat, medoid_ranking_from_smat, cluster_smat_bin, medoid_from_dmat, z_scores, pearsn_serial_8, kstwo
 public :: rank_sum_weights, rank_inverse_weights, rank_centroid_weights, rank_exponent_weights
 public :: conv2rank_weights, calc_stats, pearsn_serial, norm_corr, norm_corr_8, skewness, kurtosis
 public :: median, median_nocopy, mad, mad_gau, robust_scaling, robust_z_scores, robust_normalization, robust_sigma_thres
@@ -86,14 +86,21 @@ contains
         endif
         avg  = 0.
         sdev = 0.
-        if( n < 2 ) return
-        rn   = real(n)
-        if( present_mask )then
-            avg  = sum(vec, mask=mask) / rn
-            sdev = sqrt(sum((vec - avg)**2., mask=mask) / (rn - 1.))
+        if( n == 0 )then
+            return
+        else if( n == 1 )then
+            avg  = sum(vec, mask=mask)
+            sdev = 0.
+            return
         else
-            avg  = sum(vec) / rn
-            sdev = sqrt(sum((vec - avg)**2.) / (rn - 1.))
+            rn = real(n)
+            if( present_mask )then
+                avg  = sum(vec, mask=mask) / rn
+                sdev = sqrt(sum((vec - avg)**2., mask=mask) / (rn - 1.))
+            else
+                avg  = sum(vec) / rn
+                sdev = sqrt(sum((vec - avg)**2.) / (rn - 1.))
+            endif
         endif
     end subroutine avg_sdev_1
 
@@ -112,14 +119,21 @@ contains
         endif
         avg  = 0.
         sdev = 0.
-        if( n < 2 ) return
-        rn   = real(n)
-        if( present_mask )then
-            avg  = sum(vec, mask=mask) / rn
-            sdev = sqrt(sum((vec - avg)**2., mask=mask) / (rn - 1.))
+        if( n == 0 )then
+            return
+        else if( n == 1 )then
+            avg  = sum(vec, mask=mask)
+            sdev = 0.
+            return
         else
-            avg  = sum(vec) / rn
-            sdev = sqrt(sum((vec - avg)**2.) / (rn - 1.))
+            rn   = real(n)
+            if( present_mask )then
+                avg  = sum(vec, mask=mask) / rn
+                sdev = sqrt(sum((vec - avg)**2., mask=mask) / (rn - 1.))
+            else
+                avg  = sum(vec) / rn
+                sdev = sqrt(sum((vec - avg)**2.) / (rn - 1.))
+            endif
         endif
     end subroutine avg_sdev_2
 
@@ -138,14 +152,21 @@ contains
         endif
         avg  = 0.
         sdev = 0.
-        if( n < 2 ) return
-        rn   = real(n)
-        if( present_mask )then
-            avg  = sum(vec, mask=mask) / rn
-            sdev = sqrt(sum((vec - avg)**2., mask=mask) / (rn - 1.))
+        if( n == 0 )then
+            return
+        else if( n == 1 )then
+            avg  = sum(vec, mask=mask)
+            sdev = 0.
+            return
         else
-            avg  = sum(vec) / rn
-            sdev = sqrt(sum((vec - avg)**2.) / (rn - 1.))
+            rn   = real(n)
+            if( present_mask )then
+                avg  = sum(vec, mask=mask) / rn
+                sdev = sqrt(sum((vec - avg)**2., mask=mask) / (rn - 1.))
+            else
+                avg  = sum(vec) / rn
+                sdev = sqrt(sum((vec - avg)**2.) / (rn - 1.))
+            endif
         endif
     end subroutine avg_sdev_3
 
@@ -164,14 +185,21 @@ contains
         endif
         avg  = 0.d0
         sdev = 0.d0
-        if( n < 2 ) return
-        rn   = real(n,dp)
-        if( present_mask )then
-            avg  = sum(vec, mask=mask) / rn
-            sdev = sqrt(sum((vec - avg)**2.d0, mask=mask) / (rn-1.d0))
+        if( n == 0 )then
+            return
+        else if( n == 1 )then
+            avg  = sum(vec, mask=mask)
+            sdev = 0.
+            return
         else
-            avg  = sum(vec) / rn
-            sdev = sqrt(sum((vec - avg)**2.d0) / (rn - 1.d0))
+            rn   = real(n,dp)
+            if( present_mask )then
+                avg  = sum(vec, mask=mask) / rn
+                sdev = sqrt(sum((vec - avg)**2.d0, mask=mask) / (rn-1.d0))
+            else
+                avg  = sum(vec) / rn
+                sdev = sqrt(sum((vec - avg)**2.d0) / (rn - 1.d0))
+            endif
         endif
     end subroutine avg_sdev_4
 
@@ -1031,6 +1059,35 @@ contains
         call normalize_minmax(tmpmat)
         smat = 0.5 * (smat + tmpmat)
     end function merge_smats
+
+    function estimate_bimodality_of_cluster( n, smat, labels, icls ) result( bim )
+        integer, intent(in)  :: n, labels(n), icls
+        real,    intent(in)  :: smat(n,n)
+        integer, allocatable :: inds(:), inds_cls(:)
+        real,    allocatable :: smat_vals(:)
+        real    :: bim, s_t, avg1, avg2, sdev1, sdev2
+        integer :: pop, cnt, i, j, npairs
+        inds     = (/(i,i=1,n)/)
+        pop      = count(labels == icls)
+        if( pop < 2 )then
+            bim = 0.
+            return
+        endif
+        inds_cls = pack(inds, mask=labels == icls)
+        npairs   = (pop*(pop-1))/2
+        allocate(smat_vals(npairs), source=0.)
+        cnt = 0
+        do i = 1, pop - 1
+            do j = i + 1, pop
+                cnt = cnt + 1
+                smat_vals(cnt) = smat(i,j)
+            end do
+        end do
+        call otsu(npairs, smat_vals, s_t)
+        call avg_sdev(smat_vals, avg1, sdev1, mask=smat_vals >= s_t)
+        call avg_sdev(smat_vals, avg2, sdev2, mask=smat_vals <  s_t)
+        bim = std_mean_diff( avg1, avg2, sdev1, sdev2 )
+    end function estimate_bimodality_of_cluster
 
     function calc_ap_pref( smat, mode ) result( pref )
         real,             intent(inout) :: smat(:,:)

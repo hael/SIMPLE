@@ -1896,7 +1896,7 @@ contains
         real,              allocatable :: frcs(:,:), filter(:), resarr(:), frc(:)
         real,              allocatable :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:)
         real,              allocatable :: smat_spec(:,:), smat_joint(:,:), dmat_joint(:,:), res_bad(:), res_good(:)
-        real,              allocatable :: clust_scores(:), clust_res(:), clust_res_ranked(:), resvals(:)
+        real,              allocatable :: clust_scores(:), clust_res(:), clust_res_ranked(:), resvals(:), clust_bims(:)
         logical,           allocatable :: l_msk(:,:,:), l_non_junk(:)
         integer,           allocatable :: centers(:), labels(:), clsinds(:), i_medoids(:), good_bad_assign(:)
         integer,           allocatable :: clust_order(:), rank_assign(:), i_medoids_ranked(:)
@@ -2074,7 +2074,7 @@ contains
         end do
         ! rank clusters based on their resolution
         allocate(clust_order(nclust), rank_assign(ncls_sel), i_medoids_ranked(nclust),&
-        clust_res_ranked(nclust), clust_scores(nclust), clust_algninfo_ranked(nclust))
+        clust_res_ranked(nclust), clust_scores(nclust), clust_algninfo_ranked(nclust), clust_bims(nclust))
         clust_order = (/(iclust,iclust=1,nclust)/)
         call hpsort(clust_order, ci_better_than_cj)
         ! create ranked medoids and labels
@@ -2118,8 +2118,9 @@ contains
                 endif
             enddo
             clust_scores(iclust) = clust_scores(iclust) / real(cnt)
-            write(logfhandle,'(A,f7.3,A,f5.1)') 'rank'//int2str_pad(iclust,2)//'cavgs.mrc, score: ',&
-            &clust_scores(iclust), ' res: ', clust_res(iclust)
+            clust_bims(iclust)   = estimate_bimodality_of_cluster(ncls_sel, corrmat, labels, iclust)
+            write(logfhandle,'(A,f7.3,A,f5.1,A,f5.1)') 'rank'//int2str_pad(iclust,2)//'cavgs.mrc, score: ',&
+            &clust_scores(iclust), ' res: ', clust_res(iclust), ' bim: ', clust_bims(iclust)
         end do
         ! assign good/bad 2D classes based on closesness to best and worst median resolution of spectral groups
         best_res  = minval(clust_res)
