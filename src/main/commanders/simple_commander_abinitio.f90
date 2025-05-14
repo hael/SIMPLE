@@ -123,6 +123,7 @@ contains
         if( .not. cline%defined('cenlp')       ) call cline%set('cenlp', CENLP_DEFAULT)
         if( .not. cline%defined('imgkind')     ) call cline%set('imgkind',   'cavg')
         if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',    'yes')
+        if( .not. cline%defined('noise_norm')  ) call cline%set('noise_norm',  'no')
         ! make master parameters
         call params%new(cline)
         call cline%set('mkdir',       'no')   ! to avoid nested directory structure

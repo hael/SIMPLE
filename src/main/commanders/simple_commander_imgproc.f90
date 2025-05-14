@@ -618,7 +618,8 @@ contains
         class(cmdline),             intent(inout) :: cline
         type(parameters)  :: params
         type(builder)     :: build
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',      'yes')
+        if( .not. cline%defined('noise_norm') ) call cline%set('noise_norm', 'no')
         if( cline%defined('stk')  .and. cline%defined('vol1') )THROW_HARD('Cannot operate on images AND volume at once')
         if( cline%defined('stk') )then
             ! 2D

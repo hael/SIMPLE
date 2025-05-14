@@ -248,7 +248,6 @@ contains
     procedure          :: euclid_dist_two_imgs
     procedure          :: phase_corr
     procedure          :: fcorr_shift, fcorr_shift3D
-    procedure          :: norm_within
     procedure          :: prenorm4real_corr_1, prenorm4real_corr_2, prenorm4real_corr_3
     generic            :: prenorm4real_corr => prenorm4real_corr_1, prenorm4real_corr_2, prenorm4real_corr_3
     procedure, private :: real_corr_prenorm_1, real_corr_prenorm_2, real_corr_prenorm_3
@@ -318,6 +317,7 @@ contains
     procedure, private :: norm4viz
     procedure          :: norm_ext
     procedure          :: norm_noise
+    procedure          :: norm_within
     procedure          :: quantize_fwd
     procedure          :: quantize_bwd
     procedure          :: zero_edgeavg
@@ -5947,19 +5947,6 @@ contains
         endif
     end subroutine prenorm4real_corr_3
 
-    !> \brief standardize image within logical mask
-    subroutine norm_within( self, mask )
-        class(image), intent(inout) :: self
-        logical,      intent(in)    :: mask(self%ldim(1),self%ldim(2),self%ldim(3))
-        real :: npix, ax, sxx
-        npix = real(count(mask))
-        ax   = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask) / npix
-        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - ax
-        sxx  = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))*self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask)
-        sxx  = sxx/real(npix)
-        if( sxx > TINY ) self%rmat = self%rmat / sqrt(sxx)
-    end subroutine norm_within
-
     real function skew( self, mask )
         class(image),      intent(in)  :: self
         logical, optional, intent(in)  :: mask(self%ldim(1),self%ldim(2))
@@ -8282,9 +8269,10 @@ contains
         if( sdev     > 0.   ) self%rmat = self%rmat / sdev
     end subroutine norm_ext
 
+    !> \brief normalize whole image to standardize image background (outside of logical mask)
     subroutine norm_noise( self, lmsk, sdev_noise )
         class(image), intent(inout) :: self
-        logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
+        logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3)) ! foreground must be true
         real,         intent(inout) :: sdev_noise
         integer :: npix
         real    :: ave, var, ep
@@ -8300,6 +8288,19 @@ contains
             if( var > 0. ) self%rmat = self%rmat / sdev_noise
         endif
     end subroutine norm_noise
+
+    !> \brief normalize whole image to standardize image foreground (within logical mask)
+    subroutine norm_within( self, mask )
+        class(image),      intent(inout) :: self
+        logical,           intent(in)    :: mask(self%ldim(1),self%ldim(2),self%ldim(3))    ! foreground must be true
+        real :: npix, ax, sxx
+        npix = real(count(mask))
+        ax   = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask) / npix
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - ax
+        sxx  = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))*self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask)
+        sxx  = sxx/real(npix)
+        if( sxx > TINY ) self%rmat = self%rmat / sqrt(sxx)
+    end subroutine norm_within
 
     subroutine quantize_fwd( self, nquanta, transl_tab, l_msk )
         class(image),      intent(inout) :: self
