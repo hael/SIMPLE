@@ -1887,7 +1887,7 @@ contains
             type(inpl_struct), allocatable :: params(:)
         end type clust_inpl
         real,              parameter   :: LP_BIN = 20., HP_SPEC = 20., LP_SPEC = 6., FRAC_BEST_CAVGS=0.25
-        integer,           parameter   :: NCLS_DEFAULT = 20
+        integer,           parameter   :: NCLS_DEFAULT = 20, NCLS_SMALL_DEFAULT = 5
         logical,           parameter   :: DEBUG = .true.
         type(image),       allocatable :: cavg_imgs(:), cluster_imgs(:), cluster_imgs_aligned(:)
         type(clust_inpl),  allocatable :: clust_algninfo(:), clust_algninfo_ranked(:)
@@ -2009,7 +2009,11 @@ contains
         smat_joint = merge_smats(smat_pow,corrmat)
         dmat_joint = smat2dmat(smat_joint)
         write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH K-MEDOIDS'
-        nclust = params%ncls
+        if( ncls_sel < 100 )then
+            nclust = NCLS_SMALL_DEFAULT
+        else 
+            nclust = params%ncls
+        endif
         call kmed%new(ncls_sel, dmat_joint, nclust)
         call kmed%init
         call kmed%cluster
