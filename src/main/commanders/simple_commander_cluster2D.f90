@@ -2098,23 +2098,13 @@ contains
             &clust_scores(iclust), ' res: ', clust_res(iclust)
         end do
         ! assign good/bad 2D classes
-        if( nclust < 10 )then
-            best_res  = minval(clust_res)
-            worst_res = maxval(clust_res)
-            do rank = 1, nclust
-                dist2best  = abs(clust_res(rank) - best_res)
-                dist2worst = abs(clust_res(rank) - worst_res)
-                if( dist2best < dist2worst ) rank_bound = rank
-            end do
-        else
-            best_res  = minval(clust_res)
-            worst_res = maxval(clust_res(:nclust/2))
-            do rank = 1, nclust/2
-                dist2best  = abs(clust_res(rank) - best_res)
-                dist2worst = abs(clust_res(rank) - worst_res)
-                if( dist2best < dist2worst ) rank_bound = rank
-            end do
-        endif
+        best_res  = minval(clust_res)
+        worst_res = maxval(clust_res)
+        do rank = 1, nclust
+            dist2best  = abs(clust_res(rank) - best_res)
+            dist2worst = abs(clust_res(rank) - worst_res)
+            if( dist2best < dist2worst ) rank_bound = rank
+        end do
         if( clust_res(3) <= 12.0 ) rank_bound = max(3,rank_bound)
             
         print *, 'rank_bound: ', rank_bound
