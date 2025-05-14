@@ -10,8 +10,8 @@ use simple_is_check_assert
 implicit none
 
 public :: avg_sdev, avg_frac_smallest, moment, moment_serial, pearsn, spear, normalize, normalize_sigm, normalize_minmax, std_mean_diff
-public :: corrs2weights, corr2distweight, analyze_smat, dmat2smat, smat2dmat, merge_smats, estimate_bimodality_of_cluster, calc_ap_pref
-public :: medoid_from_smat, medoid_ranking_from_smat, cluster_smat_bin, medoid_from_dmat, z_scores, pearsn_serial_8, kstwo
+public :: corrs2weights, corr2distweight, analyze_smat, dmat2smat, smat2dmat, merge_smats, merge_dmats, estimate_bimodality_of_cluster
+public :: calc_ap_pref, medoid_from_smat, medoid_ranking_from_smat, cluster_smat_bin, medoid_from_dmat, z_scores, pearsn_serial_8, kstwo
 public :: rank_sum_weights, rank_inverse_weights, rank_centroid_weights, rank_exponent_weights
 public :: conv2rank_weights, calc_stats, pearsn_serial, norm_corr, norm_corr_8, skewness, kurtosis
 public :: median, median_nocopy, mad, mad_gau, robust_scaling, robust_z_scores, robust_normalization, robust_sigma_thres
@@ -1059,6 +1059,24 @@ contains
         call normalize_minmax(tmpmat)
         smat = 0.5 * (smat + tmpmat)
     end function merge_smats
+
+    function merge_dmats( dmat1, dmat2 ) result( dmat )
+        real, intent(in)  :: dmat1(:,:), dmat2(:,:)
+        real, allocatable :: dmat(:,:), tmpmat(:,:)
+        integer :: sz1_1, sz1_2, sz2_1, sz2_2, n
+        sz1_1 = size(dmat1,1)
+        sz1_2 = size(dmat1,2)
+        sz2_1 = size(dmat2,1)
+        sz2_2 = size(dmat2,2)
+        if( sz1_1 /= sz2_1 .or. sz1_2 /= sz2_2 ) THROW_HARD('identical similarity matrices assumed')
+        if( sz1_1 /= sz1_2 .or. sz2_1 /= sz2_2 ) THROW_HARD('symmetric similarity matrices assumed')
+        n = sz1_1
+        allocate(dmat(n,n),   source=dmat1)
+        allocate(tmpmat(n,n), source=dmat2)
+        call normalize_minmax(dmat)
+        call normalize_minmax(tmpmat)
+        dmat = 0.5 * (dmat + tmpmat)
+    end function merge_dmats
 
     function estimate_bimodality_of_cluster( n, smat, labels, icls ) result( bim )
         integer, intent(in)  :: n, labels(n), icls

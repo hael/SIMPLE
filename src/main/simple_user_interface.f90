@@ -2282,21 +2282,17 @@ contains
     subroutine new_cluster_cavgs
         ! PROGRAM SPECIFICATION
         call cluster_cavgs%new(&
-        &'cluster_cavgs',&                                                         ! name
-        &'Analysis of class averages with affinity propagation',&                  ! descr_short
-        &'is a program for analyzing class averages with affinity propagation, &
-        &in order to get a better understanding of the view distribution. The balance flag is used &
-        &to apply a balancing constraint (on the class population). Adjust balance until you are &
-        &satisfied with the shape of the histogram',&                              ! descr_long
-        &'simple_exec',&                                                           ! executable
-        &1, 2, 0, 0, 3, 1, 1, .false.)                                              ! # entries in each group, requires sp_project
+        &'cluster_cavgs',&                                            ! name
+        &'Analysis of class averages with k-medoids',&                ! descr_short
+        &'is a program for analyzing class averages with k-medoids',& ! descr_long
+        &'simple_exec',&                                              ! executable
+        &0, 2, 0, 0, 2, 1, 1, .true.)                                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call cluster_cavgs%set_input('img_ios', 1, stk)
+        ! <empty>
         ! parameter input/output
-        call cluster_cavgs%set_input('parm_ios', 1, 'bin_cls', 'multi', 'Perform good/bad assignment based on common lines',&
-        &'Classes with lower common line correlation to the rest are rejected by Otsu(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call cluster_cavgs%set_input('parm_ios', 2,  'ncls', 'num', 'Number of highest populated AP clusters', 'Number of highest populated AP clusters to map the AP solution onto', '# classes', .false., 0.)
+        call cluster_cavgs%set_input('parm_ios', 1,  'ncls', 'num', 'Number of clusters', 'Number of clusters', '# clusters', .false., 0.)
+        call cluster_cavgs%set_input('parm_ios', 2, prune)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2304,8 +2300,6 @@ contains
         ! filter controls
         call cluster_cavgs%set_input('filt_ctrls', 1, hp)
         call cluster_cavgs%set_input('filt_ctrls', 2, lp)
-        cluster_cavgs%filt_ctrls(2)%required = .true.
-        call cluster_cavgs%set_input('filt_ctrls', 3, lpthres)
         ! mask controls
         call cluster_cavgs%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls

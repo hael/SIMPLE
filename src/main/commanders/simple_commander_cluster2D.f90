@@ -1878,7 +1878,6 @@ contains
 
     subroutine exec_cluster_cavgs( self, cline )
         use simple_class_frcs, only: class_frcs
-        use simple_aff_prop,   only: aff_prop
         use simple_kmedoids,   only: kmedoids
         use simple_corrmat,    only: calc_inpl_invariant_fm
         use simple_fsc,        only: plot_fsc
@@ -1887,25 +1886,24 @@ contains
         type clust_inpl
             type(inpl_struct), allocatable :: params(:)
         end type clust_inpl
-        real,              parameter   :: LP_BIN     = 20., HP_SPEC = 20., LP_SPEC = 6., FRAC_BEST_CAVGS=0.25
-        integer,           parameter   :: NCLUST_MAX = 20
-        logical,           parameter   :: DEBUG      = .true.
+        real,              parameter   :: LP_BIN = 20., HP_SPEC = 20., LP_SPEC = 6., FRAC_BEST_CAVGS=0.25
+        integer,           parameter   :: NCLS_DEFAULT = 20
+        logical,           parameter   :: DEBUG = .true.
         type(image),       allocatable :: cavg_imgs(:), cluster_imgs(:), cluster_imgs_aligned(:)
         type(clust_inpl),  allocatable :: clust_algninfo(:), clust_algninfo_ranked(:)
         character(len=:),  allocatable :: frcs_fname
         real,              allocatable :: frcs(:,:), filter(:), resarr(:), frc(:)
         real,              allocatable :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:)
-        real,              allocatable :: smat_spec(:,:), smat_joint(:,:), dmat_joint(:,:), res_bad(:), res_good(:)
-        real,              allocatable :: clust_scores(:), clust_res(:), clust_res_ranked(:), resvals(:), clust_bims(:)
+        real,              allocatable :: smat_joint(:,:), dmat_joint(:,:), res_bad(:), res_good(:)
+        real,              allocatable :: clust_scores(:), clust_res(:), clust_res_ranked(:), resvals(:)
         logical,           allocatable :: l_msk(:,:,:), l_non_junk(:)
-        integer,           allocatable :: centers(:), labels(:), clsinds(:), i_medoids(:), good_bad_assign(:)
+        integer,           allocatable :: labels(:), clsinds(:), i_medoids(:), good_bad_assign(:)
         integer,           allocatable :: clust_order(:), rank_assign(:), i_medoids_ranked(:)
-        integer,           allocatable :: clspops(:), clust_nptcls(:)
+        integer,           allocatable :: clspops(:), clust_nptcls(:), states(:)
         type(parameters)   :: params
         type(sp_project)   :: spproj
         type(class_frcs)   :: clsfrcs
         type(image)        :: img_msk
-        type(aff_prop)     :: aprop
         type(kmedoids)     :: kmed
         type(pspecs)       :: pows
         type(stats_struct) :: res_stats
@@ -1919,11 +1917,12 @@ contains
         call cline%set('ctf',        'no')
         call cline%set('objfun',     'cc')
         call cline%set('sh_inv',    'yes') ! shift invariant search
-        if( .not. cline%defined('mirr')    ) call cline%set('mirr',    'yes')
-        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
-        if( .not. cline%defined('trs')     ) call cline%set('trs',       10.)
-        if( .not. cline%defined('kweight') ) call cline%set('kweight', 'all')
-        if( .not. cline%defined('lp')      ) call cline%set('lp',         6.)
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',       'yes')
+        if( .not. cline%defined('trs')     ) call cline%set('trs',           10.)
+        if( .not. cline%defined('kweight') ) call cline%set('kweight',     'all')
+        if( .not. cline%defined('lp')      ) call cline%set('lp',             6.)
+        if( .not. cline%defined('ncls')    ) call cline%set('ncls', NCLS_DEFAULT)
+        if( .not. cline%defined('prune')   ) call cline%set('prune',         'no')
         ! master parameters
         call params%new(cline)
         ! get class average stack
@@ -2009,40 +2008,14 @@ contains
         smat_pow   = dmat2smat(dmat_pow)
         smat_joint = merge_smats(smat_pow,corrmat)
         dmat_joint = smat2dmat(smat_joint)
-        if( cline%defined('ncls') )then
-            write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH K-MEDOIDS'
-            nclust = params%ncls
-            call kmed%new(ncls_sel, dmat_joint, nclust)
-            call kmed%init
-            call kmed%cluster
-            allocate(labels(ncls_sel), i_medoids(nclust), source=0)
-            call kmed%get_labels(labels)
-            call kmed%get_medoids(i_medoids)
-        else
-            write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH AFFINITY PROPAGATION'
-            ! calculate a preference that generates a small number of clusters
-            pref = calc_ap_pref(smat_joint, 'min_minus_max')
-            call aprop%new(ncls_sel, smat_joint, pref=pref)
-            call aprop%propagate(centers, labels, simsum)
-            call aprop%kill
-            nclust_aff_prop = size(centers)
-            write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION (AP): ', nclust_aff_prop
-            call kmed%new(labels, dmat_joint)        
-            if( nclust_aff_prop > NCLUST_MAX )then
-                write(logfhandle,'(A)') '>>> MERGING CLUSTERS WITH K-MEDOIDS'
-                call kmed%merge(NCLUST_MAX)
-                call kmed%get_labels(labels)
-                nclust = NCLUST_MAX
-                allocate(i_medoids(nclust), source=0)
-                call kmed%get_medoids(i_medoids)
-            else
-                call kmed%find_medoids
-                nclust = nclust_aff_prop
-                allocate(i_medoids(nclust), source=0)
-                call kmed%get_medoids(i_medoids)
-            endif
-        endif
-        ! align the clusters to their medoids
+        write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH K-MEDOIDS'
+        nclust = params%ncls
+        call kmed%new(ncls_sel, dmat_joint, nclust)
+        call kmed%init
+        call kmed%cluster
+        allocate(labels(ncls_sel), i_medoids(nclust), source=0)
+        call kmed%get_labels(labels)
+        call kmed%get_medoids(i_medoids)
         write(logfhandle,'(A)') '>>> ALIGNING THE CLUSTERS OF CLASS AVERAGES TO THEIR MEDOIDS'
         allocate(frc(filtsz), clust_res(nclust), clust_algninfo(nclust), clust_nptcls(nclust))
         do iclust = 1, nclust
@@ -2074,7 +2047,7 @@ contains
         end do
         ! rank clusters based on their resolution
         allocate(clust_order(nclust), rank_assign(ncls_sel), i_medoids_ranked(nclust),&
-        clust_res_ranked(nclust), clust_scores(nclust), clust_algninfo_ranked(nclust), clust_bims(nclust))
+        clust_res_ranked(nclust), clust_scores(nclust), clust_algninfo_ranked(nclust))
         clust_order = (/(iclust,iclust=1,nclust)/)
         call hpsort(clust_order, ci_better_than_cj)
         ! create ranked medoids and labels
@@ -2118,9 +2091,8 @@ contains
                 endif
             enddo
             clust_scores(iclust) = clust_scores(iclust) / real(cnt)
-            clust_bims(iclust)   = estimate_bimodality_of_cluster(ncls_sel, corrmat, labels, iclust)
-            write(logfhandle,'(A,f7.3,A,f5.1,A,f5.1)') 'rank'//int2str_pad(iclust,2)//'cavgs.mrc, score: ',&
-            &clust_scores(iclust), ' res: ', clust_res(iclust), ' bim: ', clust_bims(iclust)
+            write(logfhandle,'(A,f7.3,A,f5.1)') 'rank'//int2str_pad(iclust,2)//'cavgs.mrc, score: ',&
+            &clust_scores(iclust), ' res: ', clust_res(iclust)
         end do
         ! assign good/bad 2D classes based on closesness to best and worst median resolution of spectral groups
         best_res  = minval(clust_res)
@@ -2131,7 +2103,7 @@ contains
             dist2worst = abs(clust_res(rank) - worst_res)
             if( dist2best < dist2worst )then
                 good_bad_assign(rank) = 1
-                rank_bound            = rank
+                rank_bound = rank
             else
                 good_bad_assign(rank) = 0
             endif
@@ -2175,17 +2147,27 @@ contains
         endif
         ! write selection
         call write_selected_cavgs(ncls_sel, cavg_imgs, labels, params%ext, rank_bound)
+        ! translate to state array
+        allocate(states(ncls), source=0)
+        do icls = 1, ncls_sel
+            if( labels(icls) <= rank_bound ) states(clsinds(icls)) = 1
+        end do
+        ! map selection to project
+        call spproj%map_cavgs_selection(states)
+        ! optional pruning
+        if( trim(params%prune).eq.'yes') call spproj%prune_particles
+        ! this needs to be a full write as many segments are updated
+        call spproj%write(params%projfile)
         ! destruct
         call spproj%kill
         call clsfrcs%kill
-        call aprop%kill
         call pows%kill
         call kmed%kill
         do icls=1,ncls_sel
             call cavg_imgs(icls)%kill
         end do
         ! deallocate anything not specifically allocated above
-        deallocate(cavg_imgs, corrmat, dmat_pow, smat_pow, smat_joint, dmat_joint, l_msk, l_non_junk, centers, labels, clsinds, i_medoids)
+        deallocate(cavg_imgs, corrmat, dmat_pow, smat_pow, smat_joint, dmat_joint, l_msk, l_non_junk, labels, clsinds, i_medoids)
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER_CAVGS NORMAL STOP ****')
 
