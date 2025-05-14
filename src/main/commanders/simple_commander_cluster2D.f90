@@ -1899,7 +1899,7 @@ contains
         real,              allocatable :: clust_scores(:), clust_res(:), clust_res_ranked(:), resvals(:)
         logical,           allocatable :: l_msk(:,:,:), l_non_junk(:)
         integer,           allocatable :: centers(:), labels(:), clsinds(:), i_medoids(:), good_bad_assign(:)
-        integer,           allocatable :: good_bad_labels(:), clust_order(:), rank_assign(:), i_medoids_ranked(:)
+        integer,           allocatable :: clust_order(:), rank_assign(:), i_medoids_ranked(:)
         integer,           allocatable :: clspops(:), clust_nptcls(:)
         type(parameters)   :: params
         type(sp_project)   :: spproj
@@ -1910,7 +1910,7 @@ contains
         type(pspecs)       :: pows
         type(stats_struct) :: res_stats
         integer :: ldim(3),  ncls, ncls_sel, icls, cnt, rank, pop, nptcls, nptcls_good
-        integer :: filtsz, nclust_aff_prop, i, j, ii, jj, nclust, iclust
+        integer :: filtsz, nclust_aff_prop, i, j, ii, jj, nclust, iclust, rank_bound
         real    :: smpd, simsum, cmin, cmax, pref, fsc_res, rfoo, best_res
         real    :: worst_res, dist2best, dist2worst, frac_good
         logical :: l_apply_optlp
@@ -2124,14 +2124,15 @@ contains
         ! assign good/bad 2D classes based on closesness to best and worst median resolution of spectral groups
         best_res  = minval(clust_res)
         worst_res = maxval(clust_res)
-        allocate(good_bad_assign(nclust), good_bad_labels(ncls_sel), source=0)
-        do iclust = 1, nclust
-            dist2best  = abs(clust_res(iclust) - best_res)
-            dist2worst = abs(clust_res(iclust) - worst_res)
+        allocate(good_bad_assign(nclust), source=0)
+        do rank = 1, nclust
+            dist2best  = abs(clust_res(rank) - best_res)
+            dist2worst = abs(clust_res(rank) - worst_res)
             if( dist2best < dist2worst )then
-                good_bad_assign(iclust) = 1
+                good_bad_assign(rank) = 1
+                rank_bound            = rank
             else
-                good_bad_assign(iclust) = 0
+                good_bad_assign(rank) = 0
             endif
         end do
         nptcls      = sum(clust_nptcls)
@@ -2141,34 +2142,38 @@ contains
         ! calculate resolution statistics for good/bad classes
         res_good    = pack(clust_res, mask=good_bad_assign == 1)
         res_bad     = pack(clust_res, mask=good_bad_assign == 0)
-        call calc_stats(res_good, res_stats)
         write(logfhandle,'(A)') 'RESOLUTION STATSTICS FOR GOOD PARTITION'
-        write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_stats%minv
-        write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_stats%maxv
-        write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_stats%avg
-        write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_stats%med
-        write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', res_stats%sdev
-        call calc_stats(res_bad, res_stats)
+        if( size(res_good) > 1 )then
+            call calc_stats(res_good, res_stats)
+            write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_stats%minv
+            write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_stats%maxv
+            write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_stats%avg
+            write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_stats%med
+            write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', res_stats%sdev
+        else
+            write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_good(1)
+            write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_good(1)
+            write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_good(1)
+            write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_good(1)
+            write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', 0.
+        endif
         write(logfhandle,'(A)') 'RESOLUTION STATSTICS FOR BAD  PARTITION'
-        write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_stats%minv
-        write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_stats%maxv
-        write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_stats%avg
-        write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_stats%med
-        write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', res_stats%sdev
-
-
-        ! make good/bad labels at the class average level
-        do iclust = 1, nclust
-            where(labels == iclust) good_bad_labels = good_bad_assign(iclust)
-        end do
-        ! re-create cavg_imgs
-        call dealloc_imgarr(cavg_imgs)
-        cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
+        if( size(res_bad) > 1 )then
+            call calc_stats(res_bad, res_stats)
+            write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_stats%minv
+            write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_stats%maxv
+            write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_stats%avg
+            write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_stats%med
+            write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', res_stats%sdev
+        else
+            write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_bad(1)
+            write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_bad(1)
+            write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_bad(1)
+            write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_bad(1)
+            write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', 0.
+        endif
         ! write selection
-        call write_selected_cavgs(ncls_sel, cavg_imgs, good_bad_labels, params%ext)
-
-
-
+        call write_selected_cavgs(ncls_sel, cavg_imgs, labels, params%ext, rank_bound)
         ! destruct
         call spproj%kill
         call clsfrcs%kill
