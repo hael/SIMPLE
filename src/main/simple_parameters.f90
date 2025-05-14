@@ -80,7 +80,7 @@ type :: parameters
     character(len=3)          :: needs_sigma='no'     !<
     character(len=3)          :: neg='no'             !< invert contrast of images(yes|no){no}
     character(len=3)          :: neigs_per='no'       !< using neigs as percentage of the total dimension(yes|no){no}
-    character(len=3)          :: noise_norm ='no'
+    character(len=3)          :: noise_norm ='yes'    !< image normalization based on background/foreground standardization(yes|no){yes}
     character(len=3)          :: norm='no'            !< do statistical normalisation avg
     character(len=3)          :: nonuniform='no'      !< nonuniform filtering(yes|no){no}
     character(len=3)          :: omit_neg='no'        !< omit negative pixels(yes|no){no}
@@ -535,6 +535,7 @@ type :: parameters
     logical :: l_lpset        = .false.
     logical :: l_ml_reg       = .true.
     logical :: l_noise_reg    = .false.
+    logical :: l_noise_norm   = .true.
     logical :: l_needs_sigma  = .false.
     logical :: l_neigh        = .false.
     logical :: l_phaseplate   = .false.
@@ -1497,6 +1498,8 @@ contains
             if( .not.file_exists(trim(self%mskfile)) ) THROW_HARD('Inputted mask file '//trim(self%mskfile)//' does not exist')
             self%l_filemsk = .true.  ! indicate file is inputted
         endif
+        ! image normalization
+        self%l_noise_norm = trim(self%noise_norm).eq.'yes'
         ! set lpset flag
         self%l_lpset  = cline%defined('lp')
         ! set envfsc flag

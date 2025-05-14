@@ -162,7 +162,11 @@ contains
             do imatch = 1,nbatch
                 iptcl = pinds(batchlims(1)+imatch-1)
                 ! normalize
-                call build%imgbatch(imatch)%norm_noise(build%lmsk, sdev_noise)
+                if( params%l_noise_norm )then
+                    call build%imgbatch(imatch)%norm_noise(build%lmsk, sdev_noise)
+                else
+                    call build%imgbatch(imatch)%norm_within(build%lmsk)
+                endif
                 !  mask
                 if( params%l_focusmsk )then
                     call build%imgbatch(imatch)%mask(params%focusmsk, 'softavg')

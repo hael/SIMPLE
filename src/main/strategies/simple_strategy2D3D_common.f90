@@ -326,7 +326,11 @@ contains
         type(ctfparams) :: ctfparms
         real            :: x, y, sdev_noise, crop_factor
         ! Normalise
-        call img%norm_noise(build_glob%lmsk, sdev_noise)
+        if( params_glob%l_noise_norm )then
+            call img%norm_noise(build_glob%lmsk, sdev_noise)
+        else
+            call img%norm_within(build_glob%lmsk)
+        endif
         ! Fourier cropping
         call img%fft()
         call img%clip(img_out)
@@ -631,9 +635,21 @@ contains
                 call build_glob%vol_odd%copy(build_glob%vol)
             endif
         else if( params_glob%l_lpset )then
-            ! the average volume occupies both even and odd
+            ! read average volume that will occupy both even and odd
             call build_glob%vol%read_and_crop(vol_avg, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
             call build_glob%vol_odd%copy(build_glob%vol)
+            ! mask again, BP filter performed below
+            if( params_glob%l_filemsk )then
+                ! envelope masking
+                call build_glob%vol%zero_env_background(build_glob%mskvol)
+                call build_glob%vol_odd%zero_env_background(build_glob%mskvol)
+                call build_glob%vol%mul(build_glob%mskvol)
+                call build_glob%vol_odd%mul(build_glob%mskvol)
+            else
+                ! circular masking
+                call build_glob%vol%mask(params_glob%msk_crop, 'soft', backgr=0.0)
+                call build_glob%vol_odd%mask(params_glob%msk_crop, 'soft', backgr=0.0)
+            endif
         endif
         call build_glob%vol%fft
         call build_glob%vol_odd%fft
@@ -732,7 +748,11 @@ contains
                 iptcl  = pinds(i)
                 ibatch = i - batchlims(1) + 1
                 if( .not.fpls(ibatch)%does_exist() ) call fpls(ibatch)%new(build_glob%imgbatch(1))
-                call build_glob%imgbatch(ibatch)%norm_noise(build_glob%lmsk, sdev_noise)
+                if( params_glob%l_noise_norm )then
+                    call build_glob%imgbatch(ibatch)%norm_noise(build_glob%lmsk, sdev_noise)
+                else
+                    call build_glob%imgbatch(ibatch)%norm_within(build_glob%lmsk)
+                endif
                 call build_glob%imgbatch(ibatch)%fft
                 ctfparms(ibatch) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
                 shift = build_glob%spproj_field%get_2Dshift(iptcl)
@@ -859,7 +879,11 @@ contains
                     ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
                     shift    = build_glob%spproj_field%get_2Dshift(iptcl)
                     e3       = build_glob%spproj_field%e3get(iptcl)
-                    call build_glob%imgbatch(ibatch)%norm_noise(build_glob%lmsk, sdev_noise)
+                    if( params_glob%l_noise_norm )then
+                        call build_glob%imgbatch(ibatch)%norm_noise(build_glob%lmsk, sdev_noise)
+                    else
+                        call build_glob%imgbatch(ibatch)%norm_within(build_glob%lmsk)
+                    endif
                     call build_glob%imgbatch(ibatch)%div(instrimg)
                     call build_glob%imgbatch(ibatch)%fft
                     call fpls(ibatch)%gen_planes_pad(build_glob%imgbatch(ibatch), ctfparms, shift, e3, iptcl, BILINEAR)
