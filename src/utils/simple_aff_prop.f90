@@ -55,13 +55,13 @@ contains
         ppref = self%Smin
         if( present(pref) ) ppref = pref
         ! remove degeneracies
-        ! forall(i=1:N) self%S(i,i) = ppref
-        ! diff = (self%Smax - self%Smin) * self%ftol
-        ! do i=1,self%N
-        !     do j=1,self%N
-        !         self%S(i,j) = self%S(i,j) + ran3() * diff
-        !     end do
-        ! end do
+        forall(i=1:N) self%S(i,i) = ppref
+        diff = (self%Smax - self%Smin) * self%ftol
+        do i=1,self%N
+            do j=1,self%N
+                self%S(i,j) = self%S(i,j) + ran3() * diff
+            end do
+        end do
         ! allocate
         allocate( self%A(N,N), self%R(N,N), self%Aold(N,N), self%Rp(N,N),&
         self%Rold(N,N), self%AS(N,N), self%Y(N), self%Y2(N), self%tmp(N),&
