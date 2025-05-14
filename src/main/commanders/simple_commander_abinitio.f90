@@ -1118,7 +1118,7 @@ contains
         character(len=:), allocatable :: sh_first, prob_sh, ml_reg, fillin
         character(len=:), allocatable :: refine, icm, trail_rec, pgrp, balance, lp_auto, automsk
         integer :: iphase, iter, inspace, imaxits, nsample_dyn
-        real    :: trs, snr_noise_reg, frac_best, overlap, fracsrch, lpstart, lpstop
+        real    :: trs, frac_best, overlap, fracsrch, lpstart, lpstop, snr_noise_reg
         ! iteration number bookkeeping
         iter = 0
         if( cline_refine3D%defined('endit') )then
