@@ -637,24 +637,20 @@ contains
         else if( params_glob%l_lpset )then
             ! read average volume that will occupy both even and odd
             call build_glob%vol%read_and_crop(vol_avg, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
-            call build_glob%vol_odd%copy(build_glob%vol)
             ! noise regularization
             if( params_glob%l_noise_reg )then
                 call build_glob%vol%add_gauran(params_glob%eps)
-                call build_glob%vol_odd%add_gauran(params_glob%eps)
             endif
             ! mask again, BP filter performed below
             if( params_glob%l_filemsk )then
                 ! envelope masking
                 call build_glob%vol%zero_env_background(build_glob%mskvol)
-                call build_glob%vol_odd%zero_env_background(build_glob%mskvol)
                 call build_glob%vol%mul(build_glob%mskvol)
-                call build_glob%vol_odd%mul(build_glob%mskvol)
             else
                 ! circular masking
                 call build_glob%vol%mask(params_glob%msk_crop, 'soft', backgr=0.0)
-                call build_glob%vol_odd%mask(params_glob%msk_crop, 'soft', backgr=0.0)
             endif
+            call build_glob%vol_odd%copy(build_glob%vol)
         endif
         call build_glob%vol%fft
         call build_glob%vol_odd%fft
