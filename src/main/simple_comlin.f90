@@ -75,6 +75,7 @@ contains
         logical,      intent(out)   :: good_coord
         real    :: e1_rotmat(3,3), e2_rotmat(3,3), e2_inv(3,3), loc1_3D(3), loc2_3D(3), e1_inv(3,3)
         integer :: errflg, xy(3), sqlp
+        good_coord = .false.
         if( all(xy1 == 0) )return
         sqlp      = (maxval(lims(:,2)))**2
         e1_rotmat = e1%get_mat()
@@ -83,40 +84,28 @@ contains
         loc1_3D   = matmul(real([xy1(1),xy1(2),0]), e1_rotmat)
         ! inversely rotating rotated xy1 to the second plane
         call matinv(e2_rotmat, e2_inv, 3, errflg)
-        if( errflg < 0 )then
-            good_coord = .false.
-            return
-        endif
+        if( errflg < 0 ) return
         xy  = nint(matmul(loc1_3D, e2_inv))
         xy2 = xy(1:2)
-        if( all(xy2 == 0) )then
-            good_coord = .false.
-            return
-        endif
+        if( all(xy2 == 0) ) return
         ! checking the inversely rotated coords make sense
         if( xy(1) >= lims(1,1) .and. xy(1) <= lims(1,2) .and. &
            &xy(2) >= lims(2,1) .and. xy(2) <= lims(2,2) .and. &
            &xy(3) == 0         .and. dot_product(xy2,xy2) <= sqlp )then
             ! double check after this
         else
-            good_coord = .false.
             return
         endif
         ! reverse checking
         loc2_3D = matmul(real([xy2(1),xy2(2),0]), e2_rotmat)
         call matinv(e1_rotmat, e1_inv, 3, errflg)
-        if( errflg < 0 )then
-            good_coord = .false.
-            return
-        endif
+        if( errflg < 0 ) return
         xy = nint(matmul(loc2_3D, e1_inv))
         ! checking the inversely rotated coords make sense
         if( xy(1) >= lims(1,1) .and. xy(1) <= lims(1,2) .and. &
            &xy(2) >= lims(2,1) .and. xy(2) <= lims(2,2) .and. &
-           &xy(3) == 0         .and. dot_product(xy(1:2),xy(1:2)) <= sqlp )then
+           &xy(3) == 0         .and. dot_product(xy(1:2),xy(1:2)) <= sqlp .and. all(xy(1:2) == xy1) )then
             good_coord = .true.
-        else
-            good_coord = .false.
         endif
     end subroutine comlin_coord
 
