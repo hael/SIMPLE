@@ -2115,7 +2115,7 @@ contains
         ! calculate resolution statistics for good/bad classes
         res_good    = pack(clust_res, mask=good_bad_assign == 1)
         res_bad     = pack(clust_res, mask=good_bad_assign == 0)
-        write(logfhandle,'(A)') 'RESOLUTION STATSTICS FOR GOOD PARTITION'
+        write(logfhandle,'(A)') 'RESOLUTION STATS FOR GOOD PARTITION'
         if( size(res_good) > 1 )then
             call calc_stats(res_good, res_stats)
             write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_stats%minv
@@ -2130,7 +2130,7 @@ contains
             write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_good(1)
             write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', 0.
         endif
-        write(logfhandle,'(A)') 'RESOLUTION STATSTICS FOR BAD  PARTITION'
+        write(logfhandle,'(A)') 'RESOLUTION STATS FOR BAD  PARTITION'
         if( size(res_bad) > 1 )then
             call calc_stats(res_bad, res_stats)
             write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_stats%minv
