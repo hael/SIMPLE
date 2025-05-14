@@ -1909,7 +1909,7 @@ contains
         type(stats_struct) :: res_stats
         integer :: ldim(3),  ncls, ncls_sel, icls, cnt, rank, pop, nptcls, nptcls_good
         integer :: filtsz, nclust_aff_prop, i, j, ii, jj, nclust, iclust, rank_bound
-        real    :: smpd, simsum, cmin, cmax, pref, fsc_res, rfoo, frac_good, cres_t
+        real    :: smpd, simsum, cmin, cmax, pref, fsc_res, rfoo, frac_good, best_res, worst_res, dist2best, dist2worst
         logical :: l_apply_optlp
         ! defaults
         call cline%set('oritype', 'cls2D')
@@ -1921,7 +1921,7 @@ contains
         if( .not. cline%defined('kweight') ) call cline%set('kweight',     'all')
         if( .not. cline%defined('lp')      ) call cline%set('lp',             6.)
         if( .not. cline%defined('ncls')    ) call cline%set('ncls', NCLS_DEFAULT)
-        if( .not. cline%defined('prune')   ) call cline%set('prune',         'no')
+        if( .not. cline%defined('prune')   ) call cline%set('prune',        'no')
         ! master parameters
         call params%new(cline)
         ! get class average stack
@@ -2097,22 +2097,30 @@ contains
             write(logfhandle,'(A,f7.3,A,f5.1)') 'cluster_ranked'//int2str_pad(iclust,2)//'.mrc, score: ',&
             &clust_scores(iclust), ' res: ', clust_res(iclust)
         end do
-        ! assign good/bad 2D classes with Otsu
-        call otsu(nclust, clust_res, cres_t)
+        ! assign good/bad 2D classes
+        if( nclust < 10 )then
+            best_res  = minval(clust_res)
+            worst_res = maxval(clust_res)
+            do rank = 1, nclust
+                dist2best  = abs(clust_res(rank) - best_res)
+                dist2worst = abs(clust_res(rank) - worst_res)
+                if( dist2best < dist2worst ) rank_bound = rank
+            end do
+        else
+            best_res  = minval(clust_res)
+            worst_res = maxval(clust_res(:nclust/2))
+            do rank = 1, nclust/2
+                dist2best  = abs(clust_res(rank) - best_res)
+                dist2worst = abs(clust_res(rank) - worst_res)
+                if( dist2best < dist2worst ) rank_bound = rank
+            end do
+        endif
+        if( clust_res(3) <= 12.0 ) rank_bound = max(3,rank_bound)
+            
+        print *, 'rank_bound: ', rank_bound
+
         allocate(good_bad_assign(nclust), source=0)
-        where(clust_res < cres_t)
-            good_bad_assign = 1
-        elsewhere
-            good_bad_assign = 0
-        endwhere
-        ! identify rank bound for downstream selection
-        do rank = 1, nclust
-            if( good_bad_assign(rank) == 1 )then
-                rank_bound = rank
-            else
-                exit
-            endif
-        end do
+        good_bad_assign(:rank_bound) = 1
         ! check number of particles selected
         nptcls      = sum(clust_nptcls)
         nptcls_good = sum(clust_nptcls, mask=good_bad_assign == 1 )
