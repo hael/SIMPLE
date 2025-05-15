@@ -6,7 +6,7 @@ use simple_image,      only: image
 use simple_projector,  only: projector
 use simple_comlin,     only: comlin_map
 implicit none
-integer,          parameter   :: NPLANES = 20, ORI_IND1 = 1, ORI_IND2 = 3, NTHETAS = 18
+integer,          parameter   :: NPLANES = 20, ORI_IND1 = 3, ORI_IND2 = 15, NTHETAS = 18
 character(len=:), allocatable :: cmd
 type(fplan_map),  allocatable :: all_coords(:)
 type(image),      allocatable :: pad_fplanes(:)
@@ -129,22 +129,66 @@ pair_costs = 0.
 cnts       = 0
 found      = .false.
 ! rotating first fplane
-theta      = 40.
+itheta     = 2
+thetas     = real((/(i,i=0,360/20-1)/)) * 20.
+theta      = thetas(itheta)
 call rot_fplane%new([p%box, p%box, 1], p%smpd)
 call rotate_img(theta, fplanes(ORI_IND1), rot_fplane)
 call fplanes(ORI_IND1)%ifft
-call fplanes(ORI_IND1)%write('rot_fplane.mrc', 1)
+call fplanes(ORI_IND1)%write('ori_fplane.mrc', 1)
 call fplanes(ORI_IND1)%fft
 call rot_fplane%ifft
-call rot_fplane%write('rot_fplane.mrc', 2)
+call rot_fplane%write('rot_fplane.mrc', 1)
 call rot_fplane%fft
+! cost function check
+i = ORI_IND1
+k = ORI_IND2
+itheta = 1
+minval = 0.
+do j = 1, coord_map(i)%n_points
+    f_ind    = coord_map(i)%tar_find(j)
+    if( f_ind /= k .or. f_ind == i ) cycle
+    ori_four = coord_map(i)%ori_four(:,j)
+    tar_four = coord_map(i)%tar_four(:,j)
+    if( .not.(check_kfromto(ori_four) .and. check_kfromto(tar_four)) ) cycle
+    tar_phys = coord_map(i)%tar_phys(:,j)
+    call rotmat2d(-thetas(itheta), mat)
+    ori_phys(1:2) = nint(matmul(real(ori_four),mat))
+    if( .not.(check_kfromto(ori_phys(1:2))) ) cycle
+    ori_phys(1:2) = fplanes(ORI_IND1)%comp_addr_phys(ori_phys(1),ori_phys(2))
+    ori_phys(3)   = 1
+    diff          = fplanes(ORI_IND1)%get_cmat_at(ori_phys) - fplanes(ORI_IND2)%get_cmat_at(tar_phys)
+    minval        = minval + real(diff * conjg(diff))
+enddo
+print *, 'cost without rotation  = ', minval
+! rotate ORI_IND1
 call fplanes(ORI_IND1)%copy_fast(rot_fplane)
-shifts = [0., 0., 0.]
-call fplanes(ORI_IND1)%shift(shifts)
-call fplanes(ORI_IND1)%ifft
-call fplanes(ORI_IND1)%write('rot_fplane.mrc', 3)
-call fplanes(ORI_IND1)%fft
-thetas = real((/(i,i=0,360/20-1)/)) * 20.
+! shifts = [0., 0., 0.]
+! call fplanes(ORI_IND1)%shift(shifts)
+! call fplanes(ORI_IND1)%ifft
+! call fplanes(ORI_IND1)%write('rot_fplane.mrc', 3)
+! call fplanes(ORI_IND1)%fft
+! cost function check after rotation
+i = ORI_IND1
+k = ORI_IND2
+minval = 0.
+itheta = 2
+do j = 1, coord_map(i)%n_points
+    f_ind    = coord_map(i)%tar_find(j)
+    if( f_ind /= k .or. f_ind == i ) cycle
+    ori_four = coord_map(i)%ori_four(:,j)
+    tar_four = coord_map(i)%tar_four(:,j)
+    if( .not.(check_kfromto(ori_four) .and. check_kfromto(tar_four)) ) cycle
+    tar_phys = coord_map(i)%tar_phys(:,j)
+    call rotmat2d(thetas(itheta), mat)
+    ori_phys(1:2) = nint(matmul(real(ori_four),mat))
+    if( .not.(check_kfromto(ori_phys(1:2))) ) cycle
+    ori_phys(1:2) = fplanes(ORI_IND1)%comp_addr_phys(ori_phys(1),ori_phys(2))
+    ori_phys(3)   = 1
+    diff          = fplanes(ORI_IND1)%get_cmat_at(ori_phys) - fplanes(ORI_IND2)%get_cmat_at(tar_phys)
+    minval        = minval + real(diff * conjg(diff))
+enddo
+print *, 'cost with rotation     = ', minval
 !$omp parallel do collapse(2) default(shared) private(i,j,k,f_ind,ori_phys,tar_phys,diff,itheta,ori_four,tar_four,mat)&
 !$omp proc_bind(close) schedule(static)
 do i = 1, spiral%get_noris()
@@ -161,17 +205,18 @@ do i = 1, spiral%get_noris()
             ori_four = coord_map(i)%ori_four(:,j)
             tar_four = coord_map(i)%tar_four(:,j)
             if( .not.(check_kfromto(ori_four) .and. check_kfromto(tar_four)) ) cycle
-            ori_phys = coord_map(i)%tar_phys(:,j)
+            ori_phys = coord_map(i)%ori_phys(:,j)
             do itheta = 1, size(thetas)
                 call rotmat2d(-thetas(itheta), mat)
                 tar_phys(1:2)         = nint(matmul(real(tar_four),mat))
-                tar_phys(3)           = 0
                 if( .not.(check_kfromto(tar_phys(1:2))) ) cycle
-                tar_phys              = fplanes(ORI_IND1)%comp_addr_phys(tar_phys)
+                tar_phys(1:2)         = fplanes(ORI_IND2)%comp_addr_phys(tar_phys(1),tar_phys(2))
+                tar_phys(3)           = 1
                 diff                  = fplanes(ORI_IND1)%get_cmat_at(ori_phys) - fplanes(ORI_IND2)%get_cmat_at(tar_phys)
                 all_costs(itheta,i,k) = all_costs(itheta,i,k) + real(diff * conjg(diff))
             enddo
         enddo
+        ! if( i == ORI_IND1 .and. k == ORI_IND2 ) print *, all_costs(:,i,k)
         itheta            = minloc(all_costs(:,i,k), dim=1)
         found_thetas(i,k) = thetas(itheta)
         do j = 1, coord_map(i)%n_points
@@ -181,11 +226,11 @@ do i = 1, spiral%get_noris()
             tar_four = coord_map(i)%tar_four(:,j)
             if( .not.(check_kfromto(ori_four) .and. check_kfromto(tar_four)) ) cycle
             ori_phys = coord_map(i)%ori_phys(:,j)
-            call rotmat2d(-thetas(itheta), mat)
+            call rotmat2d(thetas(itheta), mat)
             tar_phys(1:2)   = nint(matmul(real(tar_four),mat))
-            tar_phys(3)     = 0
             if( .not.(check_kfromto(tar_phys(1:2))) ) cycle
-            tar_phys        = fplanes(ORI_IND1)%comp_addr_phys(tar_phys)
+            tar_phys(1:2)   = fplanes(ORI_IND2)%comp_addr_phys(tar_phys(1),tar_phys(2))
+            tar_phys(3)     = 1
             diff            = fplanes(ORI_IND1)%get_cmat_at(ori_phys) - fplanes(ORI_IND2)%get_cmat_at(tar_phys)
             pair_costs(i,k) = pair_costs(i,k) + real(diff * conjg(diff))
             cnts(i,k)       = cnts(i,k) + 1
