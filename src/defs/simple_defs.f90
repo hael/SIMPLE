@@ -127,11 +127,11 @@ end type class_sample
 
 type fplan_map
     integer              :: n_points
-    integer, allocatable :: target_find(:)
+    integer, allocatable :: tar_find(:)
     integer, allocatable :: ori_phys(:,:)
-    integer, allocatable :: target_phys(:,:)
+    integer, allocatable :: tar_phys(:,:)
     integer, allocatable :: ori_four(:,:)
-    integer, allocatable :: target_four(:,:)
+    integer, allocatable :: tar_four(:,:)
 end type fplan_map
 
 ! oritype enumeration

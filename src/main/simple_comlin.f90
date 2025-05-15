@@ -39,9 +39,9 @@ contains
                     call comlin_coord(lims, [h,k], e, e2, xy2, good_coord)
                     if( good_coord )then
                         cnt = cnt + 1
-                        all_coords%target_find(cnt) = i
-                        all_coords%ori_phys(:,cnt)  = ori_phys
-                        all_coords%ori_four(:,cnt)  = [h,k]
+                        all_coords%tar_find(  cnt) = i
+                        all_coords%ori_phys(:,cnt) = ori_phys
+                        all_coords%ori_four(:,cnt) = [h,k]
                         if (xy2(1) .ge. 0) then
                             phys(1) = xy2(1) + 1
                             phys(2) = xy2(2) + 1 + MERGE(params_glob%box,0,xy2(2) < 0)
@@ -51,17 +51,17 @@ contains
                             phys(2) = -xy2(2) + 1 + MERGE(params_glob%box,0,-xy2(2) < 0)
                             phys(3) = 1
                         endif
-                        all_coords%target_phys(:,cnt) = phys
-                        all_coords%target_four(:,cnt) = xy2
+                        all_coords%tar_phys(:,cnt) = phys
+                        all_coords%tar_four(:,cnt) = xy2
                     endif
                 enddo
             enddo
         enddo
-        allocate(coord_map%target_find(  cnt), source=all_coords%target_find(  1:cnt))
-        allocate(coord_map%ori_phys(   3,cnt), source=all_coords%ori_phys(:,   1:cnt))
-        allocate(coord_map%ori_four(   3,cnt), source=all_coords%ori_four(:,   1:cnt))
-        allocate(coord_map%target_phys(3,cnt), source=all_coords%target_phys(:,1:cnt))
-        allocate(coord_map%target_four(3,cnt), source=all_coords%target_four(:,1:cnt))
+        allocate(coord_map%tar_find(  cnt), source=all_coords%tar_find(  1:cnt))
+        allocate(coord_map%ori_phys(3,cnt), source=all_coords%ori_phys(:,1:cnt))
+        allocate(coord_map%ori_four(3,cnt), source=all_coords%ori_four(:,1:cnt))
+        allocate(coord_map%tar_phys(3,cnt), source=all_coords%tar_phys(:,1:cnt))
+        allocate(coord_map%tar_four(3,cnt), source=all_coords%tar_four(:,1:cnt))
         coord_map%n_points = cnt
     end subroutine comlin_map
 
