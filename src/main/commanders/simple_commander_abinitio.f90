@@ -497,7 +497,7 @@ contains
                     deallocate(cavg_imgs)
                     call spproj%map_cavgs_selection(states)
                     call spproj%write(params%projfile)
-                    write(logfhandle,'(A,I5)') '>>> # classes left after junk rejection ', j
+                    write(logfhandle,'(A,I5)') '>>> # classes left after junk rejection ', count(l_non_junk)
                 endif
                 call spproj%kill
             endif
