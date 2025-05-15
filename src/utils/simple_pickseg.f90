@@ -79,7 +79,7 @@ contains
         self%ldim(3)     = 1
         self%smpd_shrink = smpd_raw * SHRINK
         call mic_raw%mul(real(product(ldim_raw))) ! to prevent numerical underflow when performing FFT
-        call mic_raw%fft
+        call mic_raw%fft()
         call self%mic_shrink%new_bimg(self%ldim, self%smpd_shrink)
         call self%mic_shrink%set_ft(.true.)
         call mic_raw%clip(self%mic_shrink)
@@ -178,6 +178,10 @@ contains
                 call img_win%write(fbody//'_extracted.mrc', i)
             endif
         enddo
+        call mic_raw%kill()
+        call img_win%kill()
+        call self%mic_shrink%kill()
+        call self%img_cc%kill()
 
         contains
 
@@ -187,12 +191,12 @@ contains
                 integer, allocatable :: pos(:,:)
                 integer, allocatable :: imat_cc(:,:,:)
                 imat_cc = int(self%img_cc%get_rmat())
-                where(imat_cc .ne. i_cc) imat_cc = 0
+                where( imat_cc .ne. i_cc ) imat_cc = 0
                 call get_pixel_pos(imat_cc,pos)
                 px(1) = sum(pos(1,:))/real(size(pos,dim = 2))
                 px(2) = sum(pos(2,:))/real(size(pos,dim = 2))
                 px(3) = 1.
-                if(allocated(imat_cc)) deallocate(imat_cc)
+                if( allocated(imat_cc) ) deallocate(imat_cc)
             end function center_mass_cc
 
             ! let's center the mass based on the area of particles within the box for crowded micrographs. weight center of mass with area of ccs within box.  
@@ -250,7 +254,7 @@ contains
         integer, optional, intent(in) :: box
         integer, allocatable :: pos(:,:)
         integer :: funit, ibox, iostat
-        nptcls  = self%nboxes
+        nptcls = self%nboxes
         if( nptcls == 0 ) return
         call self%get_positions(pos, box)
         call fopen(funit, status='REPLACE', action='WRITE', file=trim(adjustl(fname)), iostat=iostat)
