@@ -6533,8 +6533,8 @@ contains
         integer,      optional, intent(in)    :: padded_dim
         type(kbinterpol)  :: kbwin
         real, allocatable :: w(:)
-        real    :: iarg, arg
-        integer :: center(3), i,j,k, dim
+        real    :: arg
+        integer :: center(3), i,j,k, dim, iarg
         if( any(self%ldim==0) .or. self%is_ft() .or. .not.self%square_dims() )then
             THROW_HARD('Erroneous image in div_w_instrfun')
         endif
