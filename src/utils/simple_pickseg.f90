@@ -180,8 +180,9 @@ contains
         enddo
         call mic_raw%kill()
         call img_win%kill()
-        call self%mic_shrink%kill()
-        call self%img_cc%kill()
+        call self%mic_shrink%kill_bimg()
+        call self%img_cc%kill_bimg()
+        if( allocated(sz) ) deallocate(sz)
 
         contains
 
