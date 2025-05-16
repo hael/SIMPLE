@@ -1175,7 +1175,7 @@ contains
         ! dynamic update frac
         if( istage == NSTAGES )then
             fillin = 'yes'
-            if( params_glob%nstates > 1 ) fillin = trim(params_glob%fillin)     ! fillin does not work with multistate, default no
+            if( params_glob%nstates > 1 ) fillin = 'no' ! fill-in doesn't work with multi-state
             if( l_nsample_stop_given )then
                 update_frac_dyn = real(nsample_minmax(2)) / real(nptcls_eff)
             else if( l_nsample_given )then
@@ -1302,7 +1302,8 @@ contains
                 sh_first      = 'yes'
                 ml_reg        = 'yes'
                 if( params_glob%nstates > 1 )then
-                frac_best     = 0.98 ! max out balanced sampling
+                ! turn off balancing
+                balance       = 'no'
                 else
                 frac_best     = 0.85 ! means sampling is done from top-ranking 85% particles in class
                 endif
