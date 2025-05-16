@@ -226,8 +226,16 @@ contains
         if( params_glob%l_needs_sigma ) call eucl_sigma%write_sigma2
 
         ! CALCULATE PARTICLE WEIGHTS
-        if( .not.(trim(params_glob%ptclw).eq.'yes') )then
-            call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
+        if( trim(params_glob%ptclw).eq.'yes' )then
+            ! not supported
+        else
+            if( trim(params_glob%cavgw).eq.'yes' )then
+                ! class averages
+                call build_glob%spproj_field%calc_cavg_soft_weights(params_glob%frac)
+            else
+                ! particles
+                call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
+            endif
         endif
 
         ! CLEAN

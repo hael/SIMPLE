@@ -30,6 +30,7 @@ type :: parameters
     character(len=3)          :: bin='no'             !< binarize image(yes|no){no}
     character(len=3)          :: cavg_ini='no'        !< use class averages for initialization(yes|no){no}
     character(len=3)          :: cavg_ini_ext='no'    !< use class averages for (external) initialization(yes|no){no}
+    character(len=3)          :: cavgw='no'           !< use class averages weights during 3D ab initio(yes|no){no}
     character(len=3)          :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
     character(len=3)          :: center_pdb='no'      !< move PDB atomic center to the center of the box(yes|no){no}
     character(len=3)          :: chunk='no'           !< indicates whether we are within a chunk(yes|no){no}
@@ -604,6 +605,7 @@ contains
         call check_carg('boxtype',        self%boxtype)
         call check_carg('cavg_ini',       self%cavg_ini)
         call check_carg('cavg_ini_ext',   self%cavg_ini_ext)
+        call check_carg('cavgw',          self%cavgw)
         call check_carg('center',         self%center)
         call check_carg('center_pdb',     self%center_pdb)
         call check_carg('chunk',          self%chunk)

@@ -8296,7 +8296,7 @@ contains
         real :: npix, ax, sxx
         npix = real(count(mask))
         ax   = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask) / npix
-        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - ax
+        self%rmat = self%rmat - ax
         sxx  = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))*self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask)
         sxx  = sxx/real(npix)
         if( sxx > TINY ) self%rmat = self%rmat / sqrt(sxx)

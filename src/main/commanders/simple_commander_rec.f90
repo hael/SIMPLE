@@ -82,8 +82,18 @@ contains
         if( trim(params%oritype).eq.'ptcl3D' ) call build%spproj%split_stk(params%nparts, dir=PATH_PARENT)
         ! eo partitioning
         if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
-        ! particle weights
-        if( .not.(trim(params%ptclw).eq.'yes') ) call build%spproj_field%calc_hard_weights(params%frac)
+        ! weights
+        if( trim(params%ptclw).eq.'yes' )then
+            ! not implemented
+        else
+            if( trim(params%cavgw).eq.'yes' )then
+                ! class averages
+                call build%spproj_field%calc_cavg_soft_weights(params%frac)
+            else
+                ! particles
+                call build%spproj_field%calc_hard_weights(params%frac)
+            endif
+        endif
         ! to update eo flags and weights
         call build%spproj%write_segment_inside(params%oritype)
         ! setup the environment for distributed execution
@@ -134,8 +144,18 @@ contains
         if( .not. cline%defined('nparts') )then ! shared-memory implementation
             ! eo partitioning
             if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
-            ! particle weights
-            if( .not.(trim(params%ptclw).eq.'yes') ) call build%spproj_field%calc_hard_weights(params%frac)
+            ! weights
+            if( trim(params%ptclw).eq.'yes' )then
+                ! not implemented
+            else
+                if( trim(params%cavgw).eq.'yes' )then
+                    ! class averages
+                    call build%spproj_field%calc_cavg_soft_weights(params%frac)
+                else
+                    ! particles
+                    call build%spproj_field%calc_hard_weights(params%frac)
+                endif
+            endif
             ! to update eo flags and weights
             call build%spproj%write_segment_inside(params%oritype)
         endif
