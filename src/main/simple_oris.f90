@@ -215,7 +215,7 @@ type :: oris
     procedure          :: order
     procedure          :: order_cls
     procedure          :: calc_hard_weights
-    procedure          :: calc_soft_weights
+    procedure          :: calc_soft_weights, calc_cavg_soft_weights
     procedure          :: calc_hard_weights2D
     procedure          :: calc_soft_weights2D
     procedure          :: find_best_classes
@@ -446,6 +446,19 @@ contains
         endif
     end function get_all
 
+    !>  \brief  is for getting an array of 'key' values cast to integer
+    function get_all_asint( self, key, fromto ) result( iarr )
+        class(oris),       intent(in) :: self
+        character(len=*),  intent(in) :: key
+        integer, optional, intent(in) :: fromto(2)
+        integer, allocatable :: iarr(:)
+        integer :: ffromto(2)
+        ffromto(1) = 1
+        ffromto(2) = self%n
+        if( present(fromto) ) ffromto = fromto
+        allocate(iarr(ffromto(1):ffromto(2)), source=nint(self%o(ffromto(1):ffromto(2))%get(key)))
+    end function get_all_asint
+
     function gen_ptcl_mask( self, key, ival, frac_best ) result( mask )
         class(oris),       intent(in) :: self
         character(len=*),  intent(in) :: key
@@ -479,19 +492,6 @@ contains
             endwhere
         endif
     end function gen_ptcl_mask
-
-    !>  \brief  is for getting an array of 'key' values cast to integer
-    function get_all_asint( self, key, fromto ) result( iarr )
-        class(oris),       intent(in) :: self
-        character(len=*),  intent(in) :: key
-        integer, optional, intent(in) :: fromto(2)
-        integer, allocatable :: iarr(:)
-        integer :: ffromto(2)
-        ffromto(1) = 1
-        ffromto(2) = self%n
-        if( present(fromto) ) ffromto = fromto
-        allocate(iarr(ffromto(1):ffromto(2)), source=nint(self%o(ffromto(1):ffromto(2))%get(key)))
-    end function get_all_asint
 
     !>  \brief  is for getting an array of 'key' values
     function get_all_sampled( self, key, state, lowerbound ) result( arr )
@@ -3376,20 +3376,20 @@ contains
         integer :: i, lim, state, nstates
         if( self%isthere('corr') )then
             scores = self%get_all('score')
-            mins       = minval(scores, mask=scores > TINY)
+            mins   = minval(scores, mask=scores > TINY)
             if( mins >= 0.8 )then
                 call self%set_all2single('w', 1.0)
                 return
             endif
-            if( self%isthere('states') )then
-                states = self%get_all('states')
+            if( self%isthere('state') )then
+                states = self%get_all('state')
             else
                 allocate(states(self%n), source=1.0)
             endif
             nstates = nint(maxval(states))
             if( nstates == 1 )then
                 weights = z_scores(scores, mask=scores > TINY .and. states > 0.5)
-                minw    = minval(weights,      mask=scores > TINY .and. states > 0.5)
+                minw    = minval(weights,  mask=scores > TINY .and. states > 0.5)
                 where( scores > TINY .and. states > 0.5 )
                     weights = weights + abs(minw)
                 elsewhere
@@ -3402,7 +3402,7 @@ contains
                 allocate(weights_glob(self%n), source=0.)
                 do state=1,nstates
                     weights = z_scores(scores, mask=scores > TINY .and. states_int == state)
-                    minw    = minval(weights,      mask=scores > TINY .and. states_int == state)
+                    minw    = minval(weights,  mask=scores > TINY .and. states_int == state)
                     where( scores > TINY .and. states_int == state ) weights_glob = weights + abs(minw)
                     deallocate(weights)
                 end do
@@ -3423,6 +3423,83 @@ contains
             call self%set_all2single('w', 1.0)
         endif
     end subroutine calc_soft_weights
+
+    !>  \brief  calculates soft weights based on score
+    subroutine calc_cavg_soft_weights( self, frac )
+        class(oris), intent(inout) :: self
+        real,        intent(in)    :: frac
+        real,    allocatable :: scores(:)
+        integer, allocatable :: order(:), states(:)
+        integer :: i, lim, state, nstates, nnonzero
+        if( .not.self%isthere('corr') )then
+            call self%set_all2single('w', 1.0)
+            return
+        endif
+        scores = self%get_all('corr')
+        if( self%isthere('state') )then
+            states = self%get_all_asint('state')
+            nstates = maxval(states)
+        else
+            allocate(states(self%n), source=1)
+            nstates = 1
+        endif
+        ! Weighing
+        if( minval(scores, mask=(scores>TINY).and.states>0) >= 0.85 )then
+            call self%set_all2single('w', 1.0)
+            return
+        endif
+        do state = 1,nstates
+            call calc_weights( state )
+        enddo
+        ! Thresholding a faction of particles
+        if( frac < 0.999 )then
+            order    = pack((/(i,i=1,self%n)/), mask=states > 0)
+            nnonzero = size(order)
+            lim      = nint((1.-frac)*real(nnonzero))
+            scores   = scores(order(:))
+            call hpsort(scores, order)
+            do i = 1,lim,1
+                call self%o(order(i))%set('w', 0.)
+            end do
+        endif
+      contains
+
+        subroutine calc_weights( s )
+            integer,  intent(in) :: s
+            real,    parameter   :: LOWER_BOUND_THRESHOLD = -4.0
+            real,    allocatable :: weights(:), tmp(:)
+            integer, allocatable :: inds(:), inds2(:)
+            real    :: minw
+            integer :: i, n
+            n = count(states==s)
+            if( n == 0 )then
+                return  ! empty state
+            else if( n < 5 )then
+                ! not populated enough for weights to be calculated
+                inds = pack((/(i,i=1,self%n)/), mask=states==s)
+                allocate(weights(n),source=1.0)
+            else
+                inds    = pack((/(i,i=1,self%n)/), mask=states==s)
+                weights = scores(inds(:))
+                inds2 = pack((/(i,i=1,n)/), mask=weights > TINY)
+                tmp   = weights(inds2)
+                where(weights <= TINY) weights = 0.
+                ! robust IQR-based normalization
+                call robust_scaling(tmp)
+                minw = max(LOWER_BOUND_THRESHOLD,minval(tmp))
+               ! scale such that minimum=0 and 1 remains 1
+                tmp = (tmp - minw) / (1.0 - minw)
+                ! Values superior to 1 are set to 1
+                do i = 1,size(inds2)
+                    weights(inds2(i)) = min(1.0,max(0.0,tmp(i)))
+                enddo
+            endif
+            do i = 1,n
+                call self%o(inds(i))%set('w', weights(i))
+            enddo
+        end subroutine calc_weights
+
+    end subroutine calc_cavg_soft_weights
 
     !>  \brief  calculates hard weights based on ptcl ranking
     subroutine calc_hard_weights2D( self, frac, ncls )
@@ -3467,8 +3544,8 @@ contains
         if( self%isthere('score') )then
             scores = self%get_all('score')
             classes    = nint(self%get_all('class'))
-            if( self%isthere('states') )then
-                states = self%get_all('states')
+            if( self%isthere('state') )then
+                states = self%get_all('state')
             else
                 allocate(states(self%n), source=1.0)
             endif

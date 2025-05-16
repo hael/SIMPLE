@@ -88,6 +88,9 @@ contains
             self%fts(1)    = (mode == 3) .or. (mode == 4)
             self%l_open(1) = .true.
         else
+            write(logfhandle,*) 'ldim ',ldim
+            write(logfhandle,*) 'box ',self%box
+            write(logfhandle,*) 'stkname ',trim(stkname)
             THROW_HARD('Incompatible dimensions!')
         endif
     end subroutine open_1

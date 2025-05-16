@@ -80,6 +80,7 @@ integer,          parameter :: RECALC_STARTREC_STAGE = LPAUTO_STAGE      ! re-es
 integer,          parameter :: AUTOMSK_STAGE         = LPAUTO_STAGE      ! swith on automasking when lpauto is switched on
 integer,          parameter :: HET_DOCKED_STAGE      = NSTAGES           ! stage at which state splitting is done when multivol_mode==docked
 integer,          parameter :: STREAM_ANALYSIS_STAGE = 5                 ! when streaming on some analysis will be performed
+integer,          parameter :: CAVGWEIGHTS_STAGE     = 3                 ! when to activate optional cavg weighing in abinitio3D_cavgs/cavgs_fast
 ! class variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
 logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false., l_update_frac_dyn=.false.
@@ -124,6 +125,7 @@ contains
         if( .not. cline%defined('imgkind')     ) call cline%set('imgkind',   'cavg')
         if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',    'yes')
         if( .not. cline%defined('noise_norm')  ) call cline%set('noise_norm',  'no')
+        if( .not. cline%defined('cavgw')       ) call cline%set('cavgw',       'no')
         ! make master parameters
         call params%new(cline)
         call cline%set('mkdir',       'no')   ! to avoid nested directory structure
@@ -465,7 +467,7 @@ contains
         call prune_junk_classes
         call cline%delete('prune')
         ! execution
-        call exec_abinitio3D_cavgs(xabinitio3D_cavgs, cline)
+        call xabinitio3D_cavgs%execute_safe( cline )
         ! end
         call simple_end('**** SIMPLE_ABINITIO3D_CAVGS_FAST NORMAL STOP ****')
       contains
@@ -1160,7 +1162,7 @@ contains
     subroutine set_cline_refine3D( istage, l_cavgs )
         integer,          intent(in)  :: istage
         logical,          intent(in)  :: l_cavgs
-        character(len=:), allocatable :: sh_first, prob_sh, ml_reg, fillin
+        character(len=:), allocatable :: sh_first, prob_sh, ml_reg, fillin, cavgw
         character(len=:), allocatable :: refine, icm, trail_rec, pgrp, balance, lp_auto, automsk
         integer :: iphase, iter, inspace, imaxits, nsample_dyn
         real    :: trs, frac_best, overlap, fracsrch, lpstart, lpstop, snr_noise_reg
@@ -1248,6 +1250,13 @@ contains
         if( .not. l_cavgs )then
             if( istage >= AUTOMSK_STAGE .and. l_automsk )then
                 automsk = 'yes'
+            endif
+        endif
+        ! cavgs weights, not supported for particles
+        cavgw = 'no'
+        if( l_cavgs )then
+            if( (trim(params_glob%cavgw).eq.'yes') .and. (istage>=CAVGWEIGHTS_STAGE))then
+                cavgw = 'yes'
             endif
         endif
         ! phase logics
@@ -1350,6 +1359,9 @@ contains
         call cline_refine3D%delete('lpstop')
         endif
         call cline_refine3D%set('automsk',                    automsk)
+        if( l_cavgs )then
+        call cline_refine3D%set('cavgw',                        cavgw)
+        endif
         ! phase control parameters
         call cline_refine3D%set('nspace',                     inspace)
         call cline_refine3D%set('maxits',                     imaxits)
