@@ -986,7 +986,6 @@ contains
     subroutine prep_class_command_lines( cline, projfile )
         class(cmdline),   intent(in) :: cline
         character(len=*), intent(in) :: projfile
-        integer :: s
         cline_refine3D      = cline
         cline_symmap        = cline
         cline_reconstruct3D = cline
@@ -1534,7 +1533,7 @@ contains
         character(len=:), allocatable :: str_state
         character(len=:), allocatable :: fname
         type(image) :: final_vol, reprojs
-        integer     :: state, ifoo, ldim(3), i
+        integer     :: state, ifoo, ldim(3)
         real        :: smpd
         do state = 1, params_glob%nstates
             if( .not.spproj%isthere_in_osout('vol', state) )cycle   ! empty-state case
@@ -1564,7 +1563,7 @@ contains
         character(len=*),      intent(in)    :: projfile
         class(commander_base), intent(inout) :: xreconstruct3D
         character(len=:),      allocatable   :: str_state, vol_name
-        integer :: i, state, pop
+        integer :: state, pop
         write(logfhandle,'(A)') '>>>'
         write(logfhandle,'(A)') '>>> RECONSTRUCTION AT ORIGINAL SAMPLING'
         write(logfhandle,'(A)') '>>>'

@@ -2089,6 +2089,7 @@ contains
             cnt = 0
             do icls = 1, ncls_sel 
                 if( labels(icls) == iclust )then
+                    call spproj%os_cls2D%set(clsinds(icls),'cluster',iclust) ! project update
                     clust_scores(iclust) = clust_scores(iclust) + corrmat(icls,i_medoids(iclust))
                     cnt = cnt + 1
                 endif

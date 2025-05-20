@@ -1629,9 +1629,9 @@ contains
         integer,            intent(in)    :: nptcls     ! # particles to sample in total
         logical,            intent(in)    :: l_greedy   ! greedy or stochastic sampling
         integer,            intent(inout) :: states(self%n)
-        integer,            allocatable   :: pinds_left(:), sample(:)
+        integer,            allocatable   :: pinds_left(:)
         type(ran_tabu) :: rt
-        integer        :: i, j, cnt, nleft
+        integer        :: i, j
         ! calculate sampling size for each class
         clssmp(:)%nsample = 0
         do while( sum(clssmp(:)%nsample) < nptcls )
@@ -3375,7 +3375,7 @@ contains
         real    :: minw, mins
         integer :: i, lim, state, nstates
         if( self%isthere('corr') )then
-            scores = self%get_all('score')
+            scores = self%get_all('corr')
             mins   = minval(scores, mask=scores > TINY)
             if( mins >= 0.8 )then
                 call self%set_all2single('w', 1.0)
@@ -3541,8 +3541,8 @@ contains
         integer, allocatable :: classes(:)
         integer :: icls, pop, ncls
         real    :: minw
-        if( self%isthere('score') )then
-            scores = self%get_all('score')
+        if( self%isthere('corr') )then
+            scores = self%get_all('corr')
             classes    = nint(self%get_all('class'))
             if( self%isthere('state') )then
                 states = self%get_all('state')

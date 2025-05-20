@@ -549,7 +549,7 @@ contains
         select case(which)
             case('iter')
                 get = real(self%iteration)
-            case('score','corr')
+            case('corr')
                 get = self%score%avg
             case('dist')
                 get = self%dist%avg

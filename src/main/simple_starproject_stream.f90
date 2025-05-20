@@ -335,7 +335,6 @@ contains
             ! doubles
             if(spproj%os_cls2D%isthere(i, 'res'  )) call starfile_table__setValue_double(self%starfile, EMDL_MLMODEL_ESTIM_RESOL_REF, real(spproj%os_cls2D%get(i, 'res'),   dp))
             if(spproj%os_cls2D%isthere(i, 'pop'  )) call starfile_table__setValue_double(self%starfile, EMDL_MLMODEL_PDF_CLASS,       real(spproj%os_cls2D%get(i, 'pop') ,  dp))
-            if(spproj%os_cls2D%isthere(i, 'score')) call starfile_table__setValue_double(self%starfile, SMPL_CLS_SCORE,               real(spproj%os_cls2D%get(i, 'score'), dp))
             ! strings
             if(spproj%os_cls2D%isthere(i, 'stkind') .and. spproj%os_cls2D%isthere(i, 'stk')) then
                 stkind  = floor(spproj%os_cls2D%get(i, 'stkind'))
