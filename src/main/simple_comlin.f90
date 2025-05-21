@@ -59,9 +59,9 @@ contains
         enddo
         allocate(coord_map%tar_find(  cnt), source=all_coords%tar_find(  1:cnt))
         allocate(coord_map%ori_phys(3,cnt), source=all_coords%ori_phys(:,1:cnt))
-        allocate(coord_map%ori_four(3,cnt), source=all_coords%ori_four(:,1:cnt))
+        allocate(coord_map%ori_four(2,cnt), source=all_coords%ori_four(:,1:cnt))
         allocate(coord_map%tar_phys(3,cnt), source=all_coords%tar_phys(:,1:cnt))
-        allocate(coord_map%tar_four(3,cnt), source=all_coords%tar_four(:,1:cnt))
+        allocate(coord_map%tar_four(2,cnt), source=all_coords%tar_four(:,1:cnt))
         coord_map%n_points = cnt
     end subroutine comlin_map
 
