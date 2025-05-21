@@ -459,12 +459,12 @@ contains
                     cnt = cnt + 1
                     centers(:,cnt) = self%atominfo(i)%center(:)
                 endif
-            end do
+            enddo
         else
             allocate(centers(3,sz), source=0.)
             do i = 1, sz
                 centers(:,i) = self%atominfo(i)%center(:)
-            end do
+            enddo
         endif
     end function atominfo2centers
 
@@ -486,12 +486,12 @@ contains
                     cnt = cnt + 1
                     centers_A(:,cnt) = (self%atominfo(i)%center(:) - 1.) * self%smpd
                 endif
-            end do
+            enddo
         else
             allocate(centers_A(3,sz), source=0.)
             do i = 1, sz
                 centers_A(:,i) = (self%atominfo(i)%center(:) - 1.) * self%smpd
-            end do
+            enddo
         endif
     end function atominfo2centers_A
 
@@ -509,7 +509,7 @@ contains
         d_before = huge(d_before)
         do i = 1, self%n_cc
             d = euclid(m,self%atominfo(i)%center(:))
-            if(d < d_before) then
+            if( d < d_before )then
                 vec(:)   = m(:) - self%atominfo(i)%center(:)
                 d_before = d
             endif
@@ -542,19 +542,19 @@ contains
         real              :: maxrad
         type(image)       :: simatms
         integer           :: icoord, ncoord
-        if (.not. allocated(self%atominfo)) THROW_HARD('must set coordinates for nanoparticle before calling per_atom_valid_corr_from_pdb')
+        if( .not. allocated(self%atominfo) ) THROW_HARD('must set coordinates for nanoparticle before calling per_atom_valid_corr_from_pdb')
         call read_pdb2matrix(pdb_file, coords)
         ncoord = size(coords,dim=2)
         do icoord = 1, ncoord 
             coords(:,icoord) = (coords(:,icoord) / self%smpd) + 1 ! convert to pixels
-        end do
+        enddo
         call self%simulate_atoms(simatms)
         maxrad = (self%theoretical_radius * 1.5) / self%smpd
-        if (present(output_file)) then
+        if( present(output_file) )then
             call find_corr_by_coords(coords, maxrad, self%img_raw, simatms, self%smpd, corrs, filename=trim(output_file))
         else
             call find_corr_by_coords(coords, maxrad, self%img_raw, simatms, self%smpd, corrs)
-        end if
+        endif
         deallocate(coords, corrs)
     end subroutine per_atom_valid_corr_from_pdb
 
@@ -573,11 +573,11 @@ contains
         real, allocatable :: centers_A(:,:)        ! coordinates of the atoms in ANGSTROMS
         type(image)       :: simatms
         ! MODEL BUILDING
-        ! Phase correlation approach
+        ! phase correlation approach
         call phasecorr_one_atom(self%img, self%element)
-        ! Nanoparticle binarization
+        ! nanoparticle binarization
         call self%binarize_and_find_centers()
-         ! discard small connected components
+        ! discard small connected components
         call self%discard_small_ccs
         ! atom splitting by correlation map validation
         call self%split_atoms()
@@ -611,9 +611,9 @@ contains
         call self%split_atoms(split_fname)
         ! validation through per-atom correlation with the simulated density
         call self%simulate_atoms(simatms)
-        if (WRITE_OUTPUT) call simatms%write(trim(self%fbody)//'_SIM_pre_validation.mrc')
+        if( WRITE_OUTPUT ) call simatms%write(trim(self%fbody)//'_SIM_pre_validation.mrc')
         call self%validate_atoms(simatms, l_print=.false.)
-        if ( WRITE_OUTPUT )call self%write_centers('valid_corr_in_bfac_field_pre_discard', 'valid_corr')
+        if( WRITE_OUTPUT ) call self%write_centers('valid_corr_in_bfac_field_pre_discard', 'valid_corr')
         if( l_atom_thres ) call self%discard_atoms
         ! re-calculate valid_corr:s (since they are otherwise lost from the B-factor field due to reallocations of atominfo)
         call self%simulate_atoms(simatms)
@@ -681,7 +681,7 @@ contains
             else
                 high       = mid - 1
             endif
-        end do
+        enddo
         rt_tot = toc(t_tot)
         if( L_BENCH )then
             call fopen(fnr, FILE='BINARIZE_AND_FIND_CENTERS_BENCH.txt', STATUS='REPLACE', action='WRITE')
@@ -1192,7 +1192,7 @@ contains
         ! extract atominfo
         allocate(mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), source = .false.)
         call self%img_raw%get_rmat_ptr(rmat_raw)
-        if (present(imat)) then
+        if( present(imat) )then
             imat_cc = imat
             call self%img_cc%new_bimg(self%ldim, self%smpd)
             call self%img_cc%set_imat(imat_cc)
@@ -1208,14 +1208,14 @@ contains
             self%atominfo(cc)%cc_ind = cc
             ! number of voxels in connected component
             where( imat_cc == cc ) mask = .true.
-            self%atominfo(cc)%size = count(mask)
+            self%atominfo(cc)%size    = count(mask)
             ! distance from the centre of mass of the nanoparticle
             self%atominfo(cc)%cendist = euclid(self%atominfo(cc)%center(:), self%NPcen) * self%smpd
             ! atom diameter
             call self%calc_longest_atm_dist(cc, self%atominfo(cc)%diam, imat=imat)
             self%atominfo(cc)%diam = 2.*self%atominfo(cc)%diam ! radius --> diameter in A
             ! whether atom is neighbors with an atom of CN > 12
-            if (maxval(self%atominfo(:)%cn_std) > 12) then
+            if( maxval(self%atominfo(:)%cn_std) > 12 )then
                 call self%check_neighbors_cn(cc, a)
             endif
             ! maximum grey level intensity across the connected component
@@ -1224,9 +1224,9 @@ contains
             self%atominfo(cc)%avg_int = sum(rmat_raw(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), mask)
             self%atominfo(cc)%avg_int = self%atominfo(cc)%avg_int / real(count(mask))
             ! bond length of nearest neighbour...
-            self%atominfo(cc)%bondl = pixels_dist(self%atominfo(cc)%center(:), tmpcens, 'min', mask=cc_mask) ! Use all the atoms
-            self%atominfo(cc)%bondl = self%atominfo(cc)%bondl * self%smpd ! convert to A
-            ! Atomic displacement
+            self%atominfo(cc)%bondl   = pixels_dist(self%atominfo(cc)%center(:), tmpcens, 'min', mask=cc_mask) ! Use all the atoms
+            self%atominfo(cc)%bondl   = self%atominfo(cc)%bondl * self%smpd ! convert to A
+            ! atomic displacement
             call self%calc_isotropic_disp(cc, a, rmat_raw, fit_isotropic)
             call self%calc_anisotropic_disp(cc, a, rmat_raw, fit_anisotropic)
             ! set strain values
@@ -1301,10 +1301,10 @@ contains
                 integer, intent(in)  :: cn ! calculate stats for given std cn
                 integer :: n
                 logical :: cn_mask(self%n_cc), size_mask(self%n_cc), adp_mask(self%n_cc)
-                ! Generate masks
+                ! generate masks
                 cn_mask   = self%atominfo(:)%cn_std == cn
                 size_mask = self%atominfo(:)%size >= NVOX_THRESH .and. cn_mask
-                adp_mask = (.not. self%atominfo(:)%tossADP) .and. cn_mask
+                adp_mask  = (.not. self%atominfo(:)%tossADP) .and. cn_mask
                 n         = count(cn_mask)
                 if( n == 0 ) return
                 ! -- # atoms
@@ -1376,7 +1376,7 @@ contains
                 do cc = 1, self%n_cc
                     if( self%atominfo(cc)%size > max_size )then
                         cc_largest = cc
-                        max_size = self%atominfo(cc)%size
+                        max_size   = self%atominfo(cc)%size
                     endif
                 enddo
                 center(:) = self%atominfo(cc_largest)%center(:)
@@ -1387,7 +1387,7 @@ contains
                 602 format(F10.6)
                 do i = 1, self%ldim(1)
                     do j = 1, self%ldim(2)
-                        if ( imat_cc(i, j, center(3)) == cc_largest ) then
+                        if( imat_cc(i, j, center(3)) == cc_largest )then
                             write(funit,601,advance='no') real(i-center(1)),    CSV_DELIM ! X
                             write(funit,601,advance='no') real(j-center(2)),    CSV_DELIM ! Y
                             write(funit,602) rmat_raw(i,j,center(3))                      ! Intensity
@@ -1420,39 +1420,39 @@ contains
         integer, allocatable :: imat_cc(:,:,:)
         logical, allocatable :: mask_dist(:) ! for min and max dist calculation
         integer :: location(1)               ! location of vxls of the atom farthest from its center
-        if (present(imat)) then
+        if( present(imat) )then
             imat_cc = imat
         else
             call self%img_cc%get_imat(imat_cc)
         endif
-        where(imat_cc.eq.label)
-           imat_cc = 1
+        where( imat_cc .eq. label )
+            imat_cc = 1
         elsewhere
-           imat_cc = 0
+            imat_cc = 0
         endwhere
         call get_pixel_pos( imat_cc, pos ) ! pxls positions of the shell
         allocate(mask_dist(size(pos, dim=2)), source = .true.)
         if( size(pos,2) == 1 ) then ! if the connected component has size 1 (just 1 vxl)
-           longest_dist  = self%smpd
-           return
+            longest_dist  = self%smpd
+            return
         else
-           longest_dist  = pixels_dist(self%atominfo(label)%center(:), real(pos),'max', mask_dist, location) * self%smpd
+            longest_dist  = pixels_dist(self%atominfo(label)%center(:), real(pos),'max', mask_dist, location) * self%smpd
         endif
         deallocate(imat_cc, pos, mask_dist)
     end subroutine calc_longest_atm_dist
 
     ! For a given cc in an NP with lattice params a, finds the number
     ! of neighboring atoms with CN > 12.
-    subroutine check_neighbors_cn(self, cc, a)
+    subroutine check_neighbors_cn( self, cc, a )
         class(nanoparticle), intent(inout) :: self
-        integer,          intent(in)    :: cc
-        real,             intent(in)    :: a(3)
+        integer,             intent(in)    :: cc
+        real,                intent(in)    :: a(3)
         character(len=2) :: el_ucase
         character(len=8) :: crystal_system
         real             :: a0, foo, d
         integer          :: i
         a0 = sum(a)/real(size(a)) ! alrithmetic mean of fitted lattice parameters
-        ! Identify nearest neighbors
+        ! identify nearest neighbors
         el_ucase = uppercase(trim(adjustl(self%element)))
         call get_lattice_params(el_ucase, crystal_system, foo)
         select case(trim(adjustl(crystal_system)))
@@ -1477,15 +1477,15 @@ contains
     ! about the cc center. The best fit solution is output into the 3D map fit, and
     ! the correlation between fit and rmat is stored in atominfo.
     subroutine calc_isotropic_disp( self, cc, a, rmat, fit )
-        class(nanoparticle), intent(inout)  :: self
-        class(image), intent(inout)         :: fit
-        integer, intent(in)                 :: cc
-        real, intent(in)                    :: a(3) ! Lattice params
-        real, pointer, intent(in)           :: rmat(:,:,:)
-        real        :: output_rad, fit_rad, center(3), maxrad, r, var, amp, int, max_int_out
-        real        :: XTWX(2,2), XTWX_inv(2,2), XTWY(2,1), B(2,1)
-        integer     :: ilo, ihi, jlo, jhi, klo, khi, i, j, k, errflg
-        logical     :: fit_mask(self%ldim(1),self%ldim(2),self%ldim(3))
+        class(nanoparticle), intent(inout) :: self
+        class(image), intent(inout)        :: fit
+        integer, intent(in)                :: cc
+        real, intent(in)                   :: a(3) ! lattice params
+        real, pointer, intent(in)          :: rmat(:,:,:)
+        real    :: output_rad, fit_rad, center(3), maxrad, r, var, amp, int, max_int_out
+        real    :: XTWX(2,2), XTWX_inv(2,2), XTWY(2,1), B(2,1)
+        integer :: ilo, ihi, jlo, jhi, klo, khi, i, j, k, errflg
+        logical :: fit_mask(self%ldim(1),self%ldim(2),self%ldim(3))
 
         output_rad = (sum(a)/3)/(2.*sqrt(2.))/self%smpd  ! 1/2 FCC nearest neighbor dist
         fit_rad    = 0.75 * output_rad ! 0.75 prevents fitting tails of other atoms
@@ -1527,7 +1527,7 @@ contains
         XTWX(2,1) = XTWX(1,2)
         call matinv(XTWX, XTWX_inv, 2, errflg)
         B   = matmul(XTWX_inv, XTWY)
-        amp = exp(B(1,1)) ! Best fit peak
+        amp = exp(B(1,1))   ! Best fit peak
         var = -0.5 / B(2,1) ! Best fit variance
 
         ! Sample fit for goodness of fit and visualization
@@ -1560,11 +1560,11 @@ contains
     ! along the 3 principal axes and the angular orientation of the major axis are also
     ! calculated.
     subroutine calc_anisotropic_disp( self, cc, a, rmat, fit )
-        class(nanoparticle), intent(inout)  :: self
-        class(image),        intent(inout)  :: fit
-        integer,             intent(in)     :: cc
-        real,                intent(in)     :: a(3) ! Lattice params
-        real, pointer,       intent(in)     :: rmat(:,:,:)
+        class(nanoparticle), intent(inout) :: self
+        class(image),        intent(inout) :: fit
+        integer,             intent(in)    :: cc
+        real,                intent(in)    :: a(3) ! Lattice params
+        real, pointer,       intent(in)    :: rmat(:,:,:)
         real(kind=8), allocatable :: X(:,:), XTW(:,:), Y(:,:)
         real(kind=8) :: XTWX(7,7), XTWX_inv(7,7), XTWY(7,1), B(7,1), cov(3,3), cov_inv(3,3)
         real(kind=8) :: eigenvals(3), eigenvecs(3,3)
@@ -1670,14 +1670,14 @@ contains
         ! Any negative eigenvalue or large eigenvalue implies intensity 
         ! distribution can't be approximated as a multivariate Gaussian
         if( any(eigenvals <= 0._dp) .or. any(eigenvals > (1.25*fit_rad)**2) )then
-            self%atominfo(cc)%tossADP     = .true.
-            self%atominfo(cc)%u_evals     = 0.
-            self%atominfo(cc)%anisocorr   = 0.
-            self%atominfo(cc)%azimuth     = 0.
-            self%atominfo(cc)%polar       = 0.
-            self%atominfo(cc)%doi         = 1. 
-            self%atominfo(cc)%doi_min     = 0.
-            self%atominfo(cc)%aniso       = 0.
+            self%atominfo(cc)%tossADP   = .true.
+            self%atominfo(cc)%u_evals   = 0.
+            self%atominfo(cc)%anisocorr = 0.
+            self%atominfo(cc)%azimuth   = 0.
+            self%atominfo(cc)%polar     = 0.
+            self%atominfo(cc)%doi       = 1. 
+            self%atominfo(cc)%doi_min   = 0.
+            self%atominfo(cc)%aniso     = 0.
             return
         endif
         self%atominfo(cc)%u_evals(:3) = eigenvals(:3)
@@ -1819,19 +1819,19 @@ contains
             call centers_pdb%set_coord(cc,(self%atominfo(cc)%center(:)-1.)*self%smpd)
             select case(which)
                 case('cn_gen')
-                    call centers_pdb%set_beta(cc,self%atominfo(cc)%cn_gen)      ! use generalised coordination number
+                    call centers_pdb%set_beta(cc,self%atominfo(cc)%cn_gen)       ! use generalised coordination number
                 case('cn_std')
-                    call centers_pdb%set_beta(cc,real(self%atominfo(cc)%cn_std))! use standard coordination number
+                    call centers_pdb%set_beta(cc,real(self%atominfo(cc)%cn_std)) ! use standard coordination number
                 case('max_int')
-                    call centers_pdb%set_beta(cc,self%atominfo(cc)%max_int)     ! use z-score of maximum intensity
+                    call centers_pdb%set_beta(cc,self%atominfo(cc)%max_int)      ! use z-score of maximum intensity
                 case('doi')
-                    call centers_pdb%set_beta(cc,self%atominfo(cc)%doi)     ! use isotropic b-factor
+                    call centers_pdb%set_beta(cc,self%atominfo(cc)%doi)          ! use isotropic b-factor
                 case('doi_min')
-                    call centers_pdb%set_beta(cc,self%atominfo(cc)%doi_min)     ! use isotropic b-factor
+                    call centers_pdb%set_beta(cc,self%atominfo(cc)%doi_min)      ! use isotropic b-factor
                 case('u_iso')
-                    call centers_pdb%set_beta(cc,self%atominfo(cc)%u_iso)     ! use isotropic b-factor
+                    call centers_pdb%set_beta(cc,self%atominfo(cc)%u_iso)        ! use isotropic b-factor
                 case DEFAULT
-                    call centers_pdb%set_beta(cc,self%atominfo(cc)%valid_corr)  ! use per-atom validation correlation
+                    call centers_pdb%set_beta(cc,self%atominfo(cc)%valid_corr)   ! use per-atom validation correlation
             end select
             call centers_pdb%set_resnum(cc,cc)
         enddo
@@ -2041,11 +2041,11 @@ contains
         write(funit,601,advance='no') self%doi_min_stats%avg,        CSV_DELIM ! AVG_DOI_MIN          (49)
         write(funit,601,advance='no') self%doi_min_stats%med,        CSV_DELIM ! MED_DOI_MIN          (50)
         write(funit,601,advance='no') self%doi_min_stats%sdev,       CSV_DELIM ! SDEV_DOI_MIN         (51)
-        ! -- Isotropic displacement fit correlation
+        ! -- isotropic displacement fit correlation
         write(funit,601,advance='no') self%isocorr_stats%avg,        CSV_DELIM ! AVG_ISO_CORR         (52)
         write(funit,601,advance='no') self%isocorr_stats%med,        CSV_DELIM ! MED_ISO_CORR         (53)
         write(funit,601,advance='no') self%isocorr_stats%sdev,       CSV_DELIM ! SDEV_ISO_CORR        (54)
-        ! -- Anisotropic displacement fit correlation
+        ! -- anisotropic displacement fit correlation
         write(funit,601,advance='no') self%anisocorr_stats%avg,      CSV_DELIM ! AVG_ANISO_CORR       (55)
         write(funit,601,advance='no') self%anisocorr_stats%med,      CSV_DELIM ! MED_ANISO_CORR       (56)
         write(funit,601,advance='no') self%anisocorr_stats%sdev,     CSV_DELIM ! SDEV_ANISO_CORR      (57)
@@ -2112,11 +2112,11 @@ contains
         write(funit,601,advance='no') self%u_min_stats_cns(cn)%avg,          CSV_DELIM ! AVG_U_MIN
         write(funit,601,advance='no') self%u_min_stats_cns(cn)%med,          CSV_DELIM ! MED_U_MIN
         write(funit,601,advance='no') self%u_min_stats_cns(cn)%sdev,         CSV_DELIM ! SDEV_U_MIN
-        ! -- Azimuthal angle of major eigenvector
+        ! -- azimuthal angle of major eigenvector
         write(funit,601,advance='no') self%azimuth_stats_cns(cn)%avg,        CSV_DELIM ! AVG_AZIMUTH
         write(funit,601,advance='no') self%azimuth_stats_cns(cn)%med,        CSV_DELIM ! MED_AZIMUTH
         write(funit,601,advance='no') self%azimuth_stats_cns(cn)%sdev,       CSV_DELIM ! SDEV_AZIMUTH
-        ! -- Polar angle of major eigenvector
+        ! -- polar angle of major eigenvector
         write(funit,601,advance='no') self%polar_stats_cns(cn)%avg,          CSV_DELIM ! AVG_POLAR
         write(funit,601,advance='no') self%polar_stats_cns(cn)%med,          CSV_DELIM ! MED_POLAR
         write(funit,601,advance='no') self%polar_stats_cns(cn)%sdev,         CSV_DELIM ! SDEV_POLAR
