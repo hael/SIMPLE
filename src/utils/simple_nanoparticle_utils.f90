@@ -281,12 +281,11 @@ contains
         real         :: dist, dist_temp, avgNNRR, avgD, subK, k
         real         :: rMaxsq, rMax, rMin, angleUV, angleUW, angleVW
         real         :: u0(3), v0(3), w0(3), u(3), v(3), w(3), uN(3), vN(3), wN(3), xyzbeta(4,3)
-        integer      :: natoms, iatom, centerAtom,i
+        integer      :: natoms, iatom, centerAtom, i
         logical      :: areNearest(size(model,dim=2))
         ! sanity check
-        if( size(model,dim=1) /=3 ) then
-            write(logfhandle,*) 'Nonconforming input coordinates! fit_lattice'
-            stop
+        if( size(model,dim=1) /=3 )then
+            THROW_HARD('Nonconforming input coordinates; fit_lattice')
         endif
         natoms     = size  (model,dim=2)
         cMin       = minval(model,dim=2)
@@ -300,8 +299,8 @@ contains
             if( dist < dist_temp )then
                 if( DEBUG ) write(logfhandle,*) 'iatom ', iatom
                 if( DEBUG ) write(logfhandle,*) 'dist ', dist
-                centerAtom  = iatom
-                dist_temp = dist
+                centerAtom = iatom
+                dist_temp  = dist
             endif
         enddo
         if( DEBUG ) write(logfhandle,*) 'dist_temp ', dist_temp
@@ -315,7 +314,7 @@ contains
         avgNNRR    = 0.
         if( DEBUG ) write(logfhandle,*) 'Determination of avgNNRR'
         ! Find average nearest neighbor distance to center atom
-        do iatom = 1 ,natoms
+        do iatom = 1,natoms
             dist = euclid(model(:,iatom),centerAtomCoords)
             if( dist <= rMax .and. dist > rMin )then ! > rMin not to count the atom itself
                 if( DEBUG ) write(logfhandle,*) 'iatom ', iatom
@@ -359,7 +358,7 @@ contains
             A_matrix(iatom,3) = nint(x2(2))
             A_matrix(iatom,4) = nint(x2(3))
         enddo
-        ! Refine lattice
+        ! refine lattice
         do i = 1, size(p0,1) ! 3
             call qr(A_matrix,p0(i,:),x2_ref)
             xyzbeta(:,i) = x2_ref
@@ -393,7 +392,52 @@ contains
         a(2) = 2. * norm2(v)
         a(3) = 2. * norm2(w)
 
+        call nnbdl_lat()
+
         contains
+
+            ! Computes nearest neighbor bond length along the <111> <110> <100> lattice directions of the crystal
+            subroutine nnbdl_lat()
+                real    :: bondl, cendist, dvect(3), angle, dist, d111(3), d100(3), d110(3), d(3), dl(3), a, latensor(3,3)
+                integer :: natoms, iatom, jatom, ios, funit
+                real, parameter    :: threshold=10.
+                logical            :: ifound
+                character(len=256) :: io_msg
+                character(len=3), parameter :: ldir(3)       = ["100", "110", "111"]
+                character(len=*), parameter :: NNBDL_FILE(3) = ['nnbondl_100.csv','nnbondl_110.csv','nnbondl_111.csv']
+                character(len=*), parameter :: NNBDL_HEAD    = 'ATOM'//CSV_DELIM//'CENDIST'//CSV_DELIM//'NN_BONDL'//CSV_DELIM//'ANGLE'
+                natoms = size(model, dim=2)
+                ! compute <111> <100> <110> lattice direction vectors
+                d100 = uN; d110 = uN + vN; d111 = uN + vN + wN
+                latensor(1,:) = d100/norm2(d100)
+                latensor(2,:) = d110/norm2(d110)
+                latensor(3,:) = d111/norm2(d111)
+                do i=1,3
+                    call fopen(funit, file=NNBDL_FILE(i), iostat=ios, status='replace', iomsg=io_msg)
+                    call fileiochk("simple_nanoparticle_utils :: nnl_lat; ERROR when opening file "//NNBDL_FILE(i)//'; '//trim(io_msg),ios)
+                    ! write header
+                    write(funit,'(a)') NNBDL_HEAD
+                    do iatom = 1, natoms
+                        bondl    = huge(bondl)
+                        cendist  = euclid(model(:,iatom),model(:,centerAtom))
+                        ifound   = .false.
+                        do jatom = iatom+1, natoms
+                            ! compute distance vector, distance and angle with respect to lattice direction vector
+                            dvect(:) = model(:,jatom)-model(:,iatom)
+                            d        = dvect/norm2(dvect)
+                            angle    = acos( dot_product(latensor(i,:), d) ) * 180. / PI
+                            dist     = euclid(model(:,iatom),model(:,jatom))
+                            if( dist <= bondl .and. angle < threshold )then 
+                                bondl = dist
+                                a     = angle
+                                ifound=.true.
+                            endif
+                        enddo
+                        if(ifound) write(funit,'(i6,a2,2(f8.4,a2),f8.4)') iatom, CSV_DELIM, cendist, CSV_DELIM, bondl, CSV_DELIM, a
+                    enddo
+                    call fclose(funit)
+                enddo
+            end subroutine nnbdl_lat
 
             ! QR is a function with a simple interface which
             ! solves a linear system A*x = b in the least squares sense.
@@ -1093,7 +1137,7 @@ contains
         logical     :: betas_present
         betas_present = present(betas)
         ! check that the file extension is .pdb
-        if(fname2ext(pdbfile) .ne. 'pdb') THROW_HARD('Wrong extension input file! Should be pdb')
+        if( fname2ext(pdbfile) .ne. 'pdb' ) THROW_HARD('Wrong extension input file! Should be pdb')
         atom_name = trim(adjustl(element))//'  '
         n = size(lattice, dim=1)
         call a%new(n)
