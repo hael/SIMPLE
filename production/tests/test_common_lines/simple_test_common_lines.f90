@@ -19,9 +19,10 @@ type(oris)       :: spiral
 type(ori)        :: o1, o2
 type(projector)  :: vol_pad
 integer          :: ifoo, rc, i, j, k, ori_phys(3), tar_phys(3), f_ind, lims(3,2), ithr, cnts(NPLANES,NPLANES),&
-                   &min_i, min_k, itheta, ori_four(2), tar_four(2), errflg, rot_four(2), cnt
+                   &min_i, min_k, itheta, ori_four(2), tar_four(2), errflg, rot_four(2), itheta1, itheta2, jtheta, theta_ori, theta_tar
 real             :: ave, sdev, maxv, minv, total_costs(NPLANES), all_costs(NTHETAS,NPLANES,NPLANES), minval, &
-                   &shifts(3), rval, theta, pair_costs(NPLANES,NPLANES), found_thetas(NPLANES,NPLANES), mat(2,2), mat_inv(2,2)
+                   &shifts(3), rval, theta, pair_costs(NPLANES,NPLANES), found_thetas(NPLANES,NPLANES), mat(2,2), mat_inv(2,2),&
+                   &theta1, theta2, the_costs(NTHETAS,NTHETAS)
 complex          :: diff, val, val1, val2
 logical          :: mrc_exists, found(NPLANES,NPLANES)
 
@@ -129,23 +130,23 @@ pair_costs = 0.
 cnts       = 0
 found      = .false.
 ! rotating first fplane
+itheta1    = 5
 itheta     = 5
 thetas     = real((/(i,i=0,360/20-1)/)) * 20.
-theta      = thetas(itheta)
+theta1     = thetas(itheta1)
 call rot_fplane%new([p%box, p%box, 1], p%smpd)
-call rotate_img(theta, fplanes(ORI_IND1), rot_fplane)
+call rotate_img(theta1, fplanes(ORI_IND1), rot_fplane)
 call fplanes(ORI_IND1)%ifft
-call fplanes(ORI_IND1)%write('ori_fplane.mrc', 1)
+call fplanes(ORI_IND1)%write('ori_fplane1.mrc', 1)
 call fplanes(ORI_IND1)%fft
 call rot_fplane%ifft
-call rot_fplane%write('rot_fplane.mrc', 1)
+call rot_fplane%write('rot_fplane1.mrc', 1)
 call rot_fplane%fft
 ! cost function check
 i = ORI_IND1
 k = ORI_IND2
 itheta = 1
 minval = 0.
-cnt    = 0
 do j = 1, coord_map(i)%n_points
     f_ind    = coord_map(i)%tar_find(j)
     if( f_ind /= k .or. f_ind == i ) cycle
@@ -164,23 +165,14 @@ do j = 1, coord_map(i)%n_points
     if( tar_four(1) < 0 ) val2 = conjg(val2)
     diff          = val1   - val2
     minval        = minval + real(diff * conjg(diff))
-    cnt           = cnt    + 1
 enddo
 print *, 'cost without rotation  = ', minval
-print *, 'cnt                    = ', cnt
 ! rotate ORI_IND1
 call fplanes(ORI_IND1)%copy_fast(rot_fplane)
-! shifts = [0., 0., 0.]
-! call fplanes(ORI_IND1)%shift(shifts)
-! call fplanes(ORI_IND1)%ifft
-! call fplanes(ORI_IND1)%write('rot_fplane.mrc', 3)
-! call fplanes(ORI_IND1)%fft
 ! cost function check after rotation
 i      = ORI_IND1
 k      = ORI_IND2
 minval = 0.
-itheta = 5
-cnt    = 0
 all_costs(:,i,k) = 0.
 do j = 1, coord_map(i)%n_points
     f_ind    = coord_map(i)%tar_find(j)
@@ -205,13 +197,75 @@ do j = 1, coord_map(i)%n_points
 enddo
 itheta = minloc(all_costs(:,i,k), dim=1)
 print *, 'cost with rotation     = ', all_costs(itheta,i,k)
-print *, 'cost with rotation 5   = ', all_costs(5,i,k)
-print *, 'theta                  = ', thetas(itheta)
+print *, 'truth theta1           = ', thetas(itheta1)
+print *, 'found theta1           = ', thetas(itheta)
+! both rotated fplanes
+itheta2 = 13
+theta2  = thetas(itheta2)
+call rot_fplane%kill
+call rot_fplane%new([p%box, p%box, 1], p%smpd)
+call rotate_img(theta2, fplanes(ORI_IND2), rot_fplane)
+call fplanes(ORI_IND2)%ifft
+call fplanes(ORI_IND2)%write('ori_fplane2.mrc', 1)
+call fplanes(ORI_IND2)%fft
+call rot_fplane%ifft
+call rot_fplane%write('rot_fplane2.mrc', 1)
+call rot_fplane%fft
+call fplanes(ORI_IND2)%copy_fast(rot_fplane)
+! cost function check after rotation
+i         = ORI_IND1
+k         = ORI_IND2
+the_costs = 0.
+do j = 1, coord_map(i)%n_points
+    f_ind    = coord_map(i)%tar_find(j)
+    if( f_ind /= k .or. f_ind == i ) cycle
+    ori_four = coord_map(i)%ori_four(:,j)
+    tar_four = coord_map(i)%tar_four(:,j)
+    if( .not.(check_kfromto(ori_four) .and. check_kfromto(tar_four)) ) cycle
+    do itheta = 1, size(thetas)
+        call rotmat2d(thetas(itheta), mat)
+        rot_four = nint(matmul(real(ori_four),mat))
+        if( .not.(check_kfromto(rot_four)) ) cycle
+        ori_phys(1:2)         = fplanes(ORI_IND1)%comp_addr_phys(rot_four(1),rot_four(2))
+        ori_phys(3)           = 1
+        val1                  = fplanes(ORI_IND1)%get_cmat_at(ori_phys)
+        if( ori_four(1) < 0 ) val1 = conjg(val1)
+        do jtheta = 1, size(thetas)
+            call rotmat2d(thetas(jtheta), mat)
+            rot_four = nint(matmul(real(tar_four),mat))
+            if( .not.(check_kfromto(rot_four)) ) cycle
+            tar_phys(1:2) = fplanes(ORI_IND2)%comp_addr_phys(rot_four(1),rot_four(2))
+            tar_phys(3)   = 1
+            val2          = fplanes(ORI_IND2)%get_cmat_at(tar_phys)
+            if( tar_four(1) < 0 ) val2 = conjg(val2)
+            diff                     = val1 - val2
+            the_costs(itheta,jtheta) = the_costs(itheta,jtheta) + real(diff * conjg(diff))
+        enddo
+    enddo
+enddo
+minval    = huge(ave)
+theta_ori = 1
+theta_tar = 1
+do itheta = 1, size(thetas)
+    do jtheta = 1, size(thetas)
+        if( the_costs(itheta,jtheta) < minval )then
+            theta_ori = itheta
+            theta_tar = jtheta
+            minval    = the_costs(itheta,jtheta)
+        endif
+    enddo
+enddo
+print *, 'cost of both rotations = ', minval
+print *, 'truth theta1           = ', thetas(itheta1)
+print *, 'truth theta2           = ', thetas(itheta2)
+print *, 'found theta1           = ', thetas(theta_ori)
+print *, 'found theta2           = ', thetas(theta_tar)
+! over all projection directions
 !$omp parallel do collapse(2) default(shared) private(i,j,k,f_ind,ori_phys,tar_phys,diff,itheta,ori_four,tar_four,mat,rot_four,val1,val2)&
 !$omp proc_bind(close) schedule(static)
 do i = 1, spiral%get_noris()
     do k = 1, spiral%get_noris()
-        if( k == i .or. coord_map(i)%n_points > 40*p%box)then
+        if( k == i )then
             pair_costs(i,k) = huge(ave)
             cnts(i,k)       = 1
             cycle
@@ -267,7 +321,7 @@ enddo
 minval = huge(ave)
 do i = 1, spiral%get_noris()
     do k = 1, spiral%get_noris()
-        if( k == i .or. .not.found(i,k) .or. .not.found(k,i) )cycle
+        if( k == i .or. .not.found(i,k) .or. .not.found(k,i) .or. cnts(i,k) > p%box )cycle
         rval = min(sqrt(pair_costs(i,k))/real(cnts(i,k)), sqrt(pair_costs(k,i))/real(cnts(k,i)))
         if( rval < minval )then
             minval = rval
