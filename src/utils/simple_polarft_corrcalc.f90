@@ -149,7 +149,6 @@ type :: polarft_corrcalc
     procedure          :: allocate_ptcls_memoization, allocate_refs_memoization
     ! CALCULATORS
     procedure          :: polar_cavg, gen_polar_refs
-    procedure, private :: frp_eo_map
     procedure          :: create_polar_absctfmats, calc_polar_ctf
     procedure          :: gen_shmat
     procedure, private :: gen_shmat_8
@@ -1195,7 +1194,7 @@ contains
         call img%ifft
     end subroutine polar_cavg
 
-    subroutine gen_polar_refs( self, ref_space, ptcl_space, ran, kprev )
+    subroutine gen_polar_refs( self, ref_space, ptcl_space, ran )
         use simple_image
         use simple_oris
         use simple_ori
@@ -1286,9 +1285,9 @@ contains
         do iref = 1, self%nrefs
             frc = 0.
             do k = self%kfromto(1), self%kfromto(2)
-                numer  = sum(real(self%pfts_refs_even(:,k,iref) * conjg(self%pfts_refs_odd(:,k,mapping(iref))), kind=dp))
+                numer  = sum(real(self%pfts_refs_even(:,k,iref) * conjg(self%pfts_refs_odd(:,k,iref)), kind=dp))
                 denom1 = sum( csq(self%pfts_refs_even(:,k,iref)))
-                denom2 = sum( csq(self%pfts_refs_odd( :,k,mapping(iref))))
+                denom2 = sum( csq(self%pfts_refs_odd( :,k,iref)))
                 if( dsqrt(denom1*denom2) > DTINY ) frc(k) = real(numer / dsqrt(denom1*denom2))
             enddo
             if( any(frc > 0.143) )then
@@ -1300,66 +1299,6 @@ contains
         self%pfts_refs_even = self%pfts_refs_merg
         self%pfts_refs_odd  = self%pfts_refs_merg
     end subroutine gen_polar_refs
-
-    ! Fourier ring power even -> odd mapping
-    subroutine frp_eo_map( self, mapping )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(inout) :: mapping(self%nrefs)
-        real(dp) :: numer, denom1, denom2
-        integer  :: ieven, iodd, k, inds(self%nrefs, self%nrefs), odd_dist_inds(self%nrefs), assigned_odd, assigned_even
-        real     :: frps(self%nrefs, self%nrefs), sum_odd, odd_dist(self%nrefs)
-        logical  :: even_avail(self%nrefs)
-        frps = 0.
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ieven,iodd,k,numer,denom1,denom2)
-        do ieven = 1, self%nrefs
-            do iodd = ieven, self%nrefs
-                do k = self%kfromto(1), self%kfromto(2)
-                    numer  = sum(real(self%pfts_refs_even(:,k,ieven) * conjg(self%pfts_refs_odd(:,k,iodd)), kind=dp))
-                    denom1 = sum( csq(self%pfts_refs_even(:,k,ieven)))
-                    denom2 = sum( csq(self%pfts_refs_odd( :,k,iodd)))
-                    if( dsqrt(denom1*denom2) > DTINY )then
-                        frps(ieven, iodd) = frps(ieven, iodd) + real(numer / dsqrt(denom1*denom2))
-                    endif
-                enddo
-                frps(iodd, ieven) = frps(ieven, iodd)
-            enddo
-        enddo
-        !$omp end parallel do
-        ! normalization
-        do ieven = 1, self%nrefs
-            sum_odd = sum(frps(ieven,:))
-            if( sum_odd > TINY )then
-                frps(ieven,:) = frps(ieven,:) / sum_odd
-            else
-                frps(ieven,:) = 1. / real(self%nrefs)
-            endif
-        enddo
-        ! probabilistic mapping like in eul_prob_tab
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ieven,iodd)
-        do iodd = 1, self%nrefs
-            inds(:,iodd) = (/(ieven,ieven=1,self%nrefs)/)
-            call hpsort(frps(:,iodd), inds(:,iodd))
-            call reverse(frps(:,iodd))
-            call reverse(inds(:,iodd))
-        enddo
-        !$omp end parallel do
-        even_avail    = .true.
-        odd_dist_inds = 1
-        odd_dist      = frps(1,:)
-        do while( any(even_avail) )
-            assigned_odd  = maxloc(odd_dist, dim=1)
-            assigned_even = inds(odd_dist_inds(assigned_odd), assigned_odd)
-            even_avail(assigned_even) = .false.
-            mapping(assigned_even)    = assigned_odd
-            ! update the odd_dist and odd_dist_inds
-            do iodd = 1, self%nrefs
-                do while( odd_dist_inds(iodd) < self%nrefs .and. .not.(even_avail(inds(odd_dist_inds(iodd), iodd))) )
-                    odd_dist_inds(iodd) = odd_dist_inds(iodd) + 1
-                    odd_dist(iodd)      = frps(odd_dist_inds(iodd), iodd)
-                enddo
-            enddo
-        enddo
-    end subroutine frp_eo_map
 
     subroutine create_polar_absctfmats( self, spproj, oritype, pfromto )
         use simple_ctf,        only: ctf
