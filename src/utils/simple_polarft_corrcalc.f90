@@ -1203,11 +1203,10 @@ contains
         type(oris),              intent(in)    :: ref_space
         type(oris),              intent(in)    :: ptcl_space
         logical,    optional,    intent(in)    :: ran
-        integer,    optional,    intent(in)    :: kprev
         complex(sp), pointer :: pft_ptcl(:,:)
         real(sp),    pointer :: rctf(:,:)
         type(ori) :: orientation
-        integer   :: i, k, iref, irot, ithr, iptcl, mapping(self%nrefs)
+        integer   :: i, k, iref, irot, ithr, iptcl
         logical   :: l_ran
         real(dp)  :: numer, denom1, denom2
         real      :: ctf2_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
@@ -1262,11 +1261,6 @@ contains
             where( abs(ctf2_odd)  > TINY ) self%pfts_refs_odd  = self%pfts_refs_odd  / ctf2_odd
             where( abs(ctf2_odd)  < TINY ) self%pfts_refs_odd  = 0.
         endif
-        if( trim(params_glob%test_mode).eq.'yes' )then
-            call self%frp_eo_map(mapping)
-        else
-            mapping = (/(i,i=1,self%nrefs)/)
-        endif
         ! merging even and odd
         self%pfts_refs_merg = complex(0., 0.)
         ctf2_merg           = 0.
@@ -1276,7 +1270,6 @@ contains
             iref = ref_space%find_closest_proj(orientation)
             irot = self%get_roind(orientation%e3get())
             call self%rotate_pft(self%pfts_ptcls(:,:,i), irot, pft_ptcl)
-            if( trim(params_glob%test_mode).eq.'yes' .and. (.not. self%iseven(i)) ) iref = mapping(iref)
             if( self%with_ctf )then
                 call self%rotate_pft(self%ctfmats(:,:,i), irot, rctf)
                 self%pfts_refs_merg(:,:,iref) = self%pfts_refs_merg(:,:,iref) + pft_ptcl * cmplx(rctf)
@@ -1306,15 +1299,6 @@ contains
         enddo
         self%pfts_refs_even = self%pfts_refs_merg
         self%pfts_refs_odd  = self%pfts_refs_merg
-        ! randomize matching k from prev k
-        if( present(kprev) )then
-            do iref = 1, self%nrefs
-                do k = kprev, self%kfromto(2)
-                    self%pfts_refs_even(:,k,iref) = 0.
-                    self%pfts_refs_odd( :,k,iref) = 0.
-                enddo
-            enddo
-        endif
     end subroutine gen_polar_refs
 
     ! Fourier ring power even -> odd mapping
