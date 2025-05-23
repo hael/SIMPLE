@@ -21,7 +21,7 @@ logical                :: be_verbose=.false.
 real,    parameter     :: SHMAG=1.0
 integer, parameter     :: N_PTCLS = 9
 real,    allocatable   :: corrs(:), norm_const(:, :)
-real                   :: corrmax, corr, cxy(3), lims(2,2), maxval, curval
+real                   :: corrmax, corr, cxy(3), lims(2,2), maxval, curval, shvec(2)
 integer                :: xsh, ysh, xbest, ybest, i, irot, rc, line_irot, cur_irot, nrots
 real, allocatable      :: sigma2_noise(:,:)      !< the sigmas for alignment & reconstruction (from groups)
 logical                :: mrc_exists
@@ -124,13 +124,16 @@ call grad_shsrch_obj%set_indices(1, 5)
 irot = 1
 cxy  = grad_shsrch_obj%minimize(irot)
 print *, cxy(1), cxy(2:3)
+! shifting ref
+shvec = [1., -1.]
+call pftcc%shift_ref(1, shvec)
 ! inplane irot searching
 line_irot = 5
 nrots     = pftcc%get_nrots()
 maxval    = 0.
 cur_irot  = 1
 do i = 1, nrots
-    curval = pftcc%gencorr_euclid_line_for_rot(line_irot, 1, 1, i)
+    curval = pftcc%gencorr_euclid_line_for_rot(line_irot, 1, 1, i, shvec)
     if( curval > maxval )then
         maxval   = curval
         cur_irot = i
@@ -139,6 +142,6 @@ enddo
 print *, 'nrots         = ', nrots
 print *, 'truth    irot = ', line_irot
 print *, 'searched irot = ', cur_irot
-print *, 'truth    val  = ', pftcc%gencorr_euclid_line_for_rot(line_irot, 1, 1, line_irot)
+print *, 'truth    val  = ', pftcc%gencorr_euclid_line_for_rot(line_irot, 1, 1, line_irot, shvec)
 print *, 'searched val  = ', maxval
 end program simple_test_line_shiftsrch

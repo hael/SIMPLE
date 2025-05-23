@@ -140,6 +140,7 @@ type :: polarft_corrcalc
     generic            :: polar2cartesian => polar2cartesian_1, polar2cartesian_2
     ! MODIFIERS
     procedure          :: shift_ptcl
+    procedure          :: shift_ref
     procedure          :: mirror_ref_pft
     ! MEMOIZER
     procedure          :: memoize_sqsum_ptcl
@@ -827,6 +828,19 @@ contains
         call self%gen_shmat(ithr, shvec, shmat)
         self%pfts_ptcls(:,:,i) = self%pfts_ptcls(:,:,i) * shmat
     end subroutine shift_ptcl
+
+    subroutine shift_ref( self, iref, shvec)
+        class(polarft_corrcalc),  intent(inout) :: self
+        integer,                  intent(in)    :: iref
+        real(sp),                 intent(in)    :: shvec(2)
+        complex(sp), pointer :: shmat(:,:)
+        integer  :: ithr
+        ithr = omp_get_thread_num() + 1
+        shmat => self%heap_vars(ithr)%shmat
+        call self%gen_shmat(ithr, shvec, shmat)
+        self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) * shmat
+        self%pfts_refs_odd( :,:,iref) = self%pfts_refs_odd( :,:,iref) * shmat
+    end subroutine shift_ref
 
     ! mirror pft about h (mirror about y of cartesian image)
     subroutine mirror_ref_pft( self, iref )
@@ -2581,37 +2595,45 @@ contains
         gencorr_euclid_for_rot_8 = dexp( -gencorr_euclid_for_rot_8 / self%wsqsums_ptcls(i) )
     end function gencorr_euclid_for_rot_8
 
-    real function gencorr_euclid_line_for_rot( self, line_rot, iref, iptcl, irot )
+    real function gencorr_euclid_line_for_rot( self, line_rot, iref, iptcl, irot, shvec )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: line_rot  ! fixed line inplane rotation index
         integer,                 intent(in)    :: iref
         integer,                 intent(in)    :: iptcl
         integer,                 intent(in)    :: irot
+        real,    optional,       intent(in)    :: shvec(2)
         complex(dp), pointer :: pft_ref_8(:,:), pft_ref_tmp_8(:,:)
+        complex,     pointer :: pft_ptcl(:,:), shmat(:,:)
         complex :: ctmp
         integer :: ithr, i, k
-        real    :: sumsq, sumsqk, tmp
+        real    :: sumsq, sumsqk, tmp, sh(2)
+        sh   = 0.
         i    =  self%pinds(iptcl)
         ithr = omp_get_thread_num() + 1
         pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
+        pft_ptcl      => self%heap_vars(ithr)%pft_ref
+        shmat         => self%heap_vars(ithr)%shmat
+        if( present(shvec) ) sh = shvec
         if( self%iseven(i) )then
             pft_ref_8 = self%pfts_refs_even(:,:,iref)
         else
             pft_ref_8 = self%pfts_refs_odd(:,:,iref)
         endif
-        ! rotation
-        call self%rotate_pft(pft_ref_8, irot, pft_ref_tmp_8)
         ! ctf
-        if( self%with_ctf ) pft_ref_tmp_8 = pft_ref_tmp_8 * self%ctfmats(:,:,i)
+        if( self%with_ctf ) pft_ref_8 = pft_ref_8 * self%ctfmats(:,:,i)
+        ! shifting
+        call self%gen_shmat(ithr, sh, shmat)
+        pft_ptcl = self%pfts_ptcls(:,:,i) * shmat
+        ! searching
         gencorr_euclid_line_for_rot = 0.
         sumsq                       = 0.
         sumsqk                      = 0.
         do k = self%kfromto(1),self%kfromto(2)
-            tmp                         = real(self%pfts_ptcls(irot,k,i)*conjg(self%pfts_ptcls(irot,k,i)))
+            tmp                         = real(pft_ptcl(irot,k)*conjg(pft_ptcl(irot,k)))
             sumsq                       = sumsq  + tmp
             sumsqk                      = sumsqk + tmp * real(k)
-            ctmp                        = pft_ref_8(line_rot,k) - self%pfts_ptcls(irot,k,i)
+            ctmp                        = pft_ref_8(line_rot,k) - pft_ptcl(irot,k)
             gencorr_euclid_line_for_rot = gencorr_euclid_line_for_rot + real(k) * real(ctmp * conjg(ctmp))
         end do
         gencorr_euclid_line_for_rot = exp( -gencorr_euclid_line_for_rot / sumsqk )
