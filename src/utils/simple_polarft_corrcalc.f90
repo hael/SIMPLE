@@ -174,6 +174,7 @@ type :: polarft_corrcalc
     procedure          :: gencorr_cc_grad_only_for_rot_8
     procedure          :: gencorr_euclid_for_rot_8
     procedure          :: gencorr_euclid_grad_for_rot_8
+    procedure          :: gencorr_euclid_line_for_rot
     procedure          :: gencorr_cont_grad_cc_for_rot_8
     procedure          :: gencorr_cont_cc_for_rot_8
     procedure          :: gencorr_cont_shift_grad_cc_for_rot_8
@@ -2579,6 +2580,42 @@ contains
         end do
         gencorr_euclid_for_rot_8 = dexp( -gencorr_euclid_for_rot_8 / self%wsqsums_ptcls(i) )
     end function gencorr_euclid_for_rot_8
+
+    real function gencorr_euclid_line_for_rot( self, line_rot, iref, iptcl, irot )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: line_rot  ! fixed line inplane rotation index
+        integer,                 intent(in)    :: iref
+        integer,                 intent(in)    :: iptcl
+        integer,                 intent(in)    :: irot
+        complex(dp), pointer :: pft_ref_8(:,:), pft_ref_tmp_8(:,:)
+        complex :: ctmp
+        integer :: ithr, i, k
+        real    :: sumsq, sumsqk, tmp
+        i    =  self%pinds(iptcl)
+        ithr = omp_get_thread_num() + 1
+        pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
+        pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
+        if( self%iseven(i) )then
+            pft_ref_8 = self%pfts_refs_even(:,:,iref)
+        else
+            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
+        endif
+        ! rotation
+        call self%rotate_pft(pft_ref_8, irot, pft_ref_tmp_8)
+        ! ctf
+        if( self%with_ctf ) pft_ref_tmp_8 = pft_ref_tmp_8 * self%ctfmats(:,:,i)
+        gencorr_euclid_line_for_rot = 0.
+        sumsq                       = 0.
+        sumsqk                      = 0.
+        do k = self%kfromto(1),self%kfromto(2)
+            tmp                         = real(self%pfts_ptcls(irot,k,i)*conjg(self%pfts_ptcls(irot,k,i)))
+            sumsq                       = sumsq  + tmp
+            sumsqk                      = sumsqk + tmp * real(k)
+            ctmp                        = pft_ref_8(line_rot,k) - self%pfts_ptcls(irot,k,i)
+            gencorr_euclid_line_for_rot = gencorr_euclid_line_for_rot + real(k) * real(ctmp * conjg(ctmp))
+        end do
+        gencorr_euclid_line_for_rot = exp( -gencorr_euclid_line_for_rot / sumsqk )
+    end function gencorr_euclid_line_for_rot
 
     subroutine gencorr_grad_for_rot_8_1( self, iref, iptcl, shvec, irot, f, grad, onestate )
         class(polarft_corrcalc), intent(inout) :: self
