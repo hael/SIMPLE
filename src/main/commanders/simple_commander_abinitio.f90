@@ -1302,7 +1302,7 @@ contains
                 ml_reg        = 'yes'
                 if( params_glob%nstates > 1 )then
                 ! turn off balancing
-                balance       = 'no'
+                frac_best     = 0.98 ! max out balanced sampling
                 else
                 frac_best     = 0.85 ! means sampling is done from top-ranking 85% particles in class
                 endif
