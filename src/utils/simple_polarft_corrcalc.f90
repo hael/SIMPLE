@@ -145,6 +145,7 @@ type :: polarft_corrcalc
     procedure          :: shift_ptcl
     procedure          :: shift_ref
     procedure          :: mirror_ref_pft
+    procedure          :: filter_gaussian_ref
     ! MEMOIZER
     procedure          :: memoize_sqsum_ptcl
     procedure, private :: setup_npix_per_shell
@@ -874,6 +875,27 @@ contains
             enddo
         endif
     end subroutine mirror_ref_pft
+
+    subroutine filter_gaussian_ref( self, iref, even, freq, smpd )
+        class(polarft_corrcalc), target, intent(in) :: self
+        integer,                 intent(in) :: iref
+        logical,                 intent(in) :: even
+        real,                    intent(in) :: freq, smpd
+        complex(sp), pointer :: pft(:,:)
+        real     :: fwhm, halfinvsigsq
+        integer  :: k
+        if( even )then
+            pft => self%pfts_refs_even(:,:,iref)
+        else
+            pft => self%pfts_refs_odd(:,:,iref)
+        endif
+        fwhm = freq / smpd / real(self%ldim(1))
+        halfinvsigsq = 0.5 * (PI * 2.0 * fwhm / 2.35482)**2
+        do k = 1,self%kfromto(2)-self%kfromto(1)+1
+            pft(:,k) = pft(:,k) * exp(-real((k+1)**2) * halfinvsigsq)
+        enddo
+        nullify(pft)
+    end subroutine filter_gaussian_ref
 
     ! MEMOIZERS
 
@@ -2703,7 +2725,7 @@ contains
             ctmp      = pft_ptcl(1,k) - pft_ref_8(1,k)
             graddp(2) = graddp(2) + real(k,dp) * real(pft_tmp(1,k) * conjg(ctmp),dp)
         end do
-        sumsqk = dsqrt(sumsqk)
+        ! sumsqk = dsqrt(sumsqk)
         f      = dexp(-fdp / sumsqk)
         grad   = - fdp * 2._dp * graddp / sumsqk
     end subroutine gencorr_euclid_line_grad_for_rot
