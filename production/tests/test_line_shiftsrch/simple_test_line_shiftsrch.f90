@@ -8,6 +8,9 @@ use simple_parameters,        only: parameters, params_glob
 use simple_polarizer,         only: polarizer
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
 use simple_commander_volops,  only: reproject_commander
+use simple_optimizer,         only: optimizer
+use simple_opt_factory,       only: opt_factory
+use simple_opt_spec,          only: opt_spec
 implicit none
 type(cmdline)                 :: cline, cline_projection
 type(builder)                 :: b
@@ -21,10 +24,17 @@ logical                :: be_verbose=.false.
 real,    parameter     :: SHMAG=1.0
 integer, parameter     :: N_PTCLS = 9
 real,    allocatable   :: corrs(:), norm_const(:, :)
-real                   :: corrmax, corr, cxy(3), lims(2,2), maxval, curval, shvec(2)
-integer                :: xsh, ysh, xbest, ybest, i, irot, rc, line_irot, cur_irot, nrots
+real                   :: corrmax, corr, cxy(3), lims(2,2), shvec(2), cur_sh(2), grad(2)
+real(dp)               :: curval, maxval
+integer                :: xsh, ysh, xbest, ybest, i, j, irot, rc, line_irot, cur_irot, nrots, prev_irot
 real, allocatable      :: sigma2_noise(:,:)      !< the sigmas for alignment & reconstruction (from groups)
 logical                :: mrc_exists
+class(optimizer), pointer   :: opt_ptr=>null()      ! the generic optimizer object
+integer,          parameter :: NDIM=2, NRESTARTS=1
+type(opt_factory) :: ofac                           ! the optimization factory object
+type(opt_spec)    :: spec                           ! the optimizer specification object
+character(len=8)  :: str_opts                       ! string descriptors for the NOPTS optimizers
+real              :: lowest_cost
 if( command_argument_count() < 3 )then
     write(logfhandle,'(a)',advance='no') 'ERROR! Usage: simple_test_shiftsrch stk=<particles.ext> mskdiam=<mask radius(in pixels)>'
     write(logfhandle,'(a)') ' smpd=<sampling distance(in A)> [nthr=<number of threads{1}>] [verbose=<yes|no{no}>]'
@@ -67,8 +77,6 @@ if( cline%defined('verbose') )then
     endif
 endif
 call p%new(cline)
-p%kfromto(1) = 2
-p%kfromto(2) = 40
 allocate( sigma2_noise(p%kfromto(1):p%kfromto(2), 1:N_PTCLS), source=1. )
 call b%build_general_tbox(p, cline)
 call pftcc%new(N_PTCLS, [1,N_PTCLS], p%kfromto)
@@ -126,15 +134,15 @@ cxy  = grad_shsrch_obj%minimize(irot)
 print *, cxy(1), cxy(2:3)
 ! shifting ref
 shvec = [1., -1.]
-call pftcc%shift_ref(1, shvec)
+call pftcc%shift_ref(9, shvec)
 ! inplane irot searching
-line_irot = 5
+line_irot = 25
 nrots     = pftcc%get_nrots()
-maxval    = 0.
+maxval    = 0._dp
 cur_irot  = 1
 do i = 1, nrots
-    curval = pftcc%gencorr_euclid_line_for_rot(line_irot, 1, 1, i, shvec)
-    if( curval > maxval )then
+    curval = pftcc%gencorr_euclid_line_for_rot(line_irot, 9, 9, i, real(shvec, dp))
+    if( curval >= maxval )then
         maxval   = curval
         cur_irot = i
     endif
@@ -142,6 +150,74 @@ enddo
 print *, 'nrots         = ', nrots
 print *, 'truth    irot = ', line_irot
 print *, 'searched irot = ', cur_irot
-print *, 'truth    val  = ', pftcc%gencorr_euclid_line_for_rot(line_irot, 1, 1, line_irot, shvec)
+print *, 'truth    val  = ', pftcc%gencorr_euclid_line_for_rot(line_irot, 9, 9, line_irot, real(shvec, dp))
 print *, 'searched val  = ', maxval
+! shift searching
+cur_sh    = [0.5, -0.5]
+str_opts  = 'lbfgsb'
+lims(1,1) = -5.
+lims(1,2) =  5.
+lims(2,1) = -5.
+lims(2,2) =  5.
+call spec%specify(str_opts, NDIM, limits=lims, nrestarts=NRESTARTS, factr  = 1.0d+5, pgtol = 1.0d-7)
+call spec%set_costfun_8(costfct)                                    ! set pointer to costfun
+call spec%set_gcostfun_8(gradfct)                                   ! set pointer to gradient of costfun
+call spec%set_fdfcostfun_8(costgradfct)
+call ofac%new(spec, opt_ptr)                                        ! generate optimizer object with the factory
+prev_irot = 1
+do j = 1, 10
+    maxval    = 0._dp
+    cur_irot  = 1
+    do i = 1, nrots
+        curval = pftcc%gencorr_euclid_line_for_rot(line_irot, 9, 9, i, real(cur_sh, dp))
+        if( curval >= maxval )then
+            maxval   = curval
+            cur_irot = i
+        endif
+    enddo
+    spec%x(1) = cur_sh(1)
+    spec%x(2) = cur_sh(2)
+    spec%x_8  = real(spec%x, dp)
+    call opt_ptr%minimize(spec, opt_ptr, lowest_cost)                   ! minimize the test function
+    cur_sh = real(spec%x_8(1:2))
+    if( cur_irot == prev_irot )exit
+    prev_irot = cur_irot
+    print *, 'iter = ', j, '; cost/shifts: ', lowest_cost, spec%x_8
+enddo
+print *, 'found irot   = ', cur_irot
+print *, 'found shifts = ', cur_sh
+print *, 'val at this irot/shift = ', pftcc%gencorr_euclid_line_for_rot(line_irot, 9, 9, cur_irot, real(cur_sh, dp))
+call opt_ptr%kill
+deallocate(opt_ptr)
+
+contains
+
+    function costfct( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self
+        integer,  intent(in)    :: d
+        real(dp), intent(in)    :: x(d)
+        real(dp)                :: r
+        r = - pftcc%gencorr_euclid_line_for_rot(line_irot, 9, 9, cur_irot, x)
+    end function
+
+    subroutine gradfct( fun_self, x, grad, d )
+        class(*), intent(inout) :: fun_self
+        integer,  intent(in)    :: d
+        real(dp), intent(inout) :: x(d)
+        real(dp), intent(out)   :: grad(d)
+        call pftcc%gencorr_euclid_line_grad_for_rot(line_irot, 9, 9, cur_irot, curval, grad, x)
+        grad = -grad
+    end subroutine
+
+    subroutine costgradfct( fun_self, x, f, grad, d )
+        class(*), intent(inout) :: fun_self
+        integer,  intent(in)    :: d
+        real(dp), intent(out)   :: f
+        real(dp), intent(inout) :: x(d)
+        real(dp), intent(out)   :: grad(d)
+        call pftcc%gencorr_euclid_line_grad_for_rot(line_irot, 9, 9, cur_irot, f, grad, x)
+        f    = -f
+        grad = -grad
+    end subroutine
+
 end program simple_test_line_shiftsrch
