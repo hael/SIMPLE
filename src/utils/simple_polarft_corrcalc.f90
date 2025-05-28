@@ -127,13 +127,17 @@ type :: polarft_corrcalc
     procedure          :: exists
     procedure          :: ptcl_iseven
     procedure          :: get_nptcls
-    procedure          :: assign_pinds
+    procedure          :: get_pinds
     procedure          :: get_npix
-    procedure          :: get_work_pft_ptr
+    procedure          :: get_work_pft_ptr, get_work_rpft_ptr
+    procedure          :: get_ptcls_ptr
+    procedure          :: get_ctfmats_ptr
+    procedure          :: get_refs_ptr
     procedure          :: get_linstates_irefs
     procedure          :: get_linstates_prefs
     procedure          :: set_cache
     procedure          :: reset_cache
+    procedure          :: is_with_ctf
     ! PRINTERS/VISUALISERS
     procedure          :: print
     procedure          :: vis_ptcl
@@ -595,11 +599,11 @@ contains
         get_nptcls = self%nptcls
     end function get_nptcls
 
-    subroutine assign_pinds( self, pinds )
+    subroutine get_pinds( self, pinds )
         class(polarft_corrcalc), intent(inout) :: self
         integer, allocatable,    intent(out)   :: pinds(:)
         pinds = self%pinds
-    end subroutine assign_pinds
+    end subroutine get_pinds
 
     integer function get_npix( self )
         class(polarft_corrcalc), intent(in) :: self
@@ -614,6 +618,34 @@ contains
         ithr = omp_get_thread_num()+1
         ptr => self%heap_vars(ithr)%pft_ref_tmp
     end subroutine get_work_pft_ptr
+
+    ! returns pointer to temporary pft-sized real matrix (eg CTF) according to current thread
+    subroutine get_work_rpft_ptr( self, ptr )
+        class(polarft_corrcalc), intent(in) :: self
+        real(sp),      pointer, intent(out) :: ptr(:,:)
+        integer :: ithr
+        ithr = omp_get_thread_num()+1
+        ptr => self%heap_vars(ithr)%pft_r
+    end subroutine get_work_rpft_ptr
+
+    subroutine get_ptcls_ptr( self, ptr )
+        class(polarft_corrcalc), target, intent(in)  :: self
+        complex(sp),            pointer, intent(out) :: ptr(:,:,:)
+        ptr => self%pfts_ptcls
+    end subroutine get_ptcls_ptr
+
+    subroutine get_ctfmats_ptr( self, ptr )
+        class(polarft_corrcalc), target, intent(in)  :: self
+        real(sp),               pointer, intent(out) :: ptr(:,:,:)
+        ptr => self%ctfmats
+    end subroutine get_ctfmats_ptr
+
+    subroutine get_refs_ptr( self, ptre, ptro )
+        class(polarft_corrcalc), target, intent(in)  :: self
+        complex(sp),            pointer, intent(out) :: ptre(:,:,:), ptro(:,:,:)
+        ptre => self%pfts_refs_even
+        ptro => self%pfts_refs_odd
+    end subroutine get_refs_ptr
 
     ! return irefs for all states of the same reprojection direction
     subroutine get_linstates_irefs( self, iref, irefs )
@@ -1731,6 +1763,11 @@ contains
         self%has_cache(:,  ithr) = .false.
         self%cached_vals(:,ithr) = 0.
     end subroutine reset_cache
+
+    pure logical function is_with_ctf( self )
+        class(polarft_corrcalc), intent(in) :: self
+        is_with_ctf = self%with_ctf
+    end function is_with_ctf
 
     subroutine linear_ft_refs( self, iptcl, irefs, prefs, ft_ref, pft_ref_or_ft_ref )
         class(polarft_corrcalc), intent(inout) :: self

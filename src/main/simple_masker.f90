@@ -9,7 +9,7 @@ use simple_parameters, only: params_glob
 use simple_segmentation
 implicit none
 
-public :: masker, automask2D, density_outside_mask
+public :: masker, automask2D, density_inoutside_mask
 private
 #include "simple_local_flags.inc"
 
@@ -267,14 +267,14 @@ contains
         deallocate(rmat)
     end subroutine env_rproject
 
-    function density_outside_mask( img, lp, msk ) result( l_outside )
+    subroutine density_inoutside_mask( img, lp, msk, nin, nout, nmsk )
         use simple_segmentation
         use simple_binimage, only: binimage
         class(image), intent(inout) :: img
         real,         intent(in)    :: lp, msk
+        integer,      intent(out)   :: nin, nout, nmsk
         type(binimage)    :: img_bin, cc_img
         real, allocatable :: ccsizes(:)
-        logical :: l_outside
         integer :: loc, ldim(3), npix
         real    :: smpd, xyz(3)
         ldim = img%get_ldim()
@@ -294,15 +294,11 @@ contains
         loc     = maxloc(ccsizes,dim=1)
         ! turn it into a binary image for mask creation
         call cc_img%cc2bin(loc)
-        if( cc_img%density_outside(msk) )then
-            l_outside = .true.
-        else
-            l_outside = .false.
-        endif
+        call cc_img%density_inoutside(msk, nin, nout, nmsk)
         call img_bin%kill_bimg
         call cc_img%kill_bimg
         if( allocated(ccsizes) ) deallocate(ccsizes)
-    end function density_outside_mask
+    end subroutine density_inoutside_mask
 
     subroutine automask2D( imgs, ngrow, winsz, edge, diams, shifts, write2disk )
         use simple_segmentation

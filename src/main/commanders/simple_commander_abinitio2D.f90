@@ -62,7 +62,7 @@ contains
         type(parameters)                 :: params
         type(sp_project)                 :: spproj
         class(oris),             pointer :: spproj_field
-        integer :: maxits(2), istage, last_iter, nptcls_eff
+        integer :: maxits, istage, last_iter, nptcls_eff
         logical :: l_shmem
         call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
@@ -84,7 +84,7 @@ contains
         call params%new(cline)
         call cline%set('mkdir', 'no')
         call spproj%ptr2oritype(params%oritype, spproj_field)
-        maxits = [params%extr_lim, params%extr_lim+2*ITS_INCR]
+        maxits = params%extr_lim
         call cline%delete('stats')
         ! set downscaling
         call set_dims
@@ -306,7 +306,7 @@ contains
                 ! phase constants
                 extr_iter = 0
                 ! phase variables
-                imaxits   = nint(real(istage)*real(maxits(1))/real(PHASES(1)))
+                imaxits   = nint(real(istage)*real(maxits)/real(PHASES(1)))
                 minits    = imaxits
                 select case(istage)
                 case(1)

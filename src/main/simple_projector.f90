@@ -12,8 +12,6 @@ public :: projector
 private
 #include "simple_local_flags.inc"
 
-complex, parameter :: CMPLX_ZERO = cmplx(0.,0.)
-
 type, extends(image) :: projector
     private
     procedure(interp_fcomp_fun),     pointer, public :: interp_fcomp     !< pointer to interpolation function
