@@ -62,7 +62,7 @@ contains
                   self%pinds(params_glob%fromp:params_glob%top) )
         if( associated(pftcc_glob) )then
             call pftcc_glob%assign_sigma2_noise(self%sigma2_noise)
-            call pftcc_glob%assign_pinds(self%pinds)
+            call pftcc_glob%get_pinds(self%pinds)
         endif
         self%binfname     =  trim(binfname)
         self%fromp        =  params_glob%fromp
@@ -165,7 +165,7 @@ contains
         class(euclid_sigma2), intent(inout) :: self
         class(oris),          intent(inout) :: os
         integer                             :: iptcl, igroup, ngroups, eo
-        if( associated(pftcc_glob) ) call pftcc_glob%assign_pinds(self%pinds)
+        if( associated(pftcc_glob) ) call pftcc_glob%get_pinds(self%pinds)
         call self%read_sigma2_groups( params_glob%which_iter, self%sigma2_groups, ngroups )
         if( params_glob%l_sigma_glob )then
             if( ngroups /= 1 ) THROW_HARD('ngroups must be 1 when global sigma is estimated (params_glob%l_sigma_glob == .true.)')

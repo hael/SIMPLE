@@ -11,8 +11,6 @@ public :: polarizer
 private
 #include "simple_local_flags.inc"
 
-complex, parameter :: CMPLX_ZERO = cmplx(0.,0.)
-
 type, extends(image) :: polarizer
     private
     type(image)           :: instrfun_img          !< weights to divide with in real-space

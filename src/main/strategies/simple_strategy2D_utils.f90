@@ -1,7 +1,7 @@
 module simple_strategy2D_utils
 include 'simple_lib.f08'
 use simple_image,      only: image
-use simple_masker,     only: density_outside_mask
+use simple_masker,     only: density_inoutside_mask
 use simple_stack_io,   only: stack_io
 use simple_sp_project, only: sp_project
 implicit none
@@ -140,15 +140,16 @@ contains
         real,                  intent(in)    :: lp_bin, msk
         logical, allocatable,  intent(inout) :: l_non_junk(:)
         class(oris), optional, intent(in)    :: os_cls2D
-        real,        parameter   :: DYNRANGE_THRES = 1e-6
-        real,        parameter   :: HP_SPEC        = 20.
-        real,        parameter   :: LP_SPEC        = 6.
-        integer,     parameter   :: MINPOP         = 20
+        real,        parameter   :: DYNRANGE_THRES  = 1e-6
+        real,        parameter   :: HP_SPEC         = 20.
+        real,        parameter   :: LP_SPEC         = 6.
+        real,        parameter   :: RATIO_THRESHOLD = 0.6
+        integer,     parameter   :: MINPOP          = 20
         type(image), allocatable :: cavg_threads(:)
         real,        allocatable :: pspec(:)
-        integer :: ncls, icls, ldim(3), kfromto(2), ithr
+        integer :: ncls, icls, ldim(3), kfromto(2), ithr, nin, nout, nmsk
         real    :: dynrange, smpd
-        logical :: l_dens_outside, l_os2D_present
+        logical :: l_dens_inoutside, l_os2D_present
         ncls = size(cavgs)
         l_os2D_present = present(os_cls2D)
         if( l_os2D_present )then
@@ -164,21 +165,25 @@ contains
         do ithr = 1, nthr_glob
             call cavg_threads(ithr)%new(ldim, smpd)
         end do
-        !$omp parallel do default(shared) private(icls,ithr,pspec,dynrange,l_dens_outside) proc_bind(close) schedule(static)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+        !$omp private(icls,ithr,pspec,dynrange,l_dens_inoutside,nin,nout,nmsk)
         do icls = 1, ncls
             ithr = omp_get_thread_num() + 1
             call cavg_threads(ithr)%copy(cavgs(icls))
+            call cavg_threads(ithr)%div_below(0., 10.) ! reduce influence of negative values
             call cavg_threads(ithr)%norm
-            l_dens_outside = density_outside_mask(cavg_threads(ithr), lp_bin, msk)
+            call density_inoutside_mask(cavg_threads(ithr), lp_bin, msk, nin, nout, nmsk)
+            l_dens_inoutside = (nout > 0) .or.&                           ! object oustide of mask
+                              &(real(nin)/real(nmsk) > RATIO_THRESHOLD)   ! or object too big inside mask
             call cavg_threads(ithr)%mask(msk, 'soft')
             call cavg_threads(ithr)%spectrum('sqrt', pspec)
             dynrange = pspec(kfromto(1)) - pspec(kfromto(2))
             if( l_os2D_present )then
                 if( dynrange > DYNRANGE_THRES .and. os_cls2D%get_int(icls, 'pop') >= MINPOP )then
-                    if( .not. l_dens_outside ) l_non_junk(icls) = .true.
+                    if( .not. l_dens_inoutside ) l_non_junk(icls) = .true.
                 endif
             else
-                if( dynrange > DYNRANGE_THRES .and. .not. l_dens_outside ) l_non_junk(icls) = .true.
+                if( dynrange > DYNRANGE_THRES .and. .not. l_dens_inoutside ) l_non_junk(icls) = .true.
             endif
         enddo
         !$omp end parallel do

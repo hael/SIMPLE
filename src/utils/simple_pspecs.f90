@@ -5,7 +5,6 @@ include 'simple_lib.f08'
 use simple_image,    only: image
 use simple_fsc,      only: plot_fsc
 use simple_oris,     only: oris
-use simple_masker,   only: density_outside_mask
 use simple_aff_prop, only: aff_prop
 use simple_kmedoids, only: kmedoids
 implicit none

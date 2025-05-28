@@ -3043,8 +3043,6 @@ contains
     end subroutine exec_partition_cavgs
 
     subroutine exec_cluster2D_polar( self, cline )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         use simple_strategy2D3D_common
         use simple_polarft_corrcalc,    only: polarft_corrcalc
         use simple_euclid_sigma2,       only: euclid_sigma2
@@ -3069,7 +3067,7 @@ contains
         character(len=STDLEN)         :: refs_ranked, stk
         integer :: nptcls, ithr, iref, iptcl, irot, iter, pfromto(2), kprev
         real    :: euls(3), sh(2)
-        call cline%set('mkdir',  'yes')
+        if( .not.cline%defined('mkdir') ) call cline%set('mkdir',  'yes')
         call cline%set('stream', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         call build%spproj_field%clean_entry('updatecnt', 'sampled')
