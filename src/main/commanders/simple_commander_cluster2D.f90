@@ -1895,11 +1895,11 @@ contains
         real,              allocatable :: frcs(:,:), filter(:), resarr(:), frc(:)
         real,              allocatable :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:)
         real,              allocatable :: smat_joint(:,:), dmat_joint(:,:), res_bad(:), res_good(:)
-        real,              allocatable :: clust_scores(:), clust_res(:), clust_res_ranked(:), resvals(:)
+        real,              allocatable :: clust_scores(:), clust_res(:), clust_res_ranked(:), resvals(:), clust_res_dists(:,:)
         logical,           allocatable :: l_msk(:,:,:), l_non_junk(:)
         integer,           allocatable :: labels(:), clsinds(:), i_medoids(:), good_bad_assign(:)
         integer,           allocatable :: clust_order(:), rank_assign(:), i_medoids_ranked(:)
-        integer,           allocatable :: clspops(:), clust_nptcls(:), states(:)
+        integer,           allocatable :: clspops(:), clust_pops(:), clust_nptcls(:), states(:)
         type(parameters)   :: params
         type(sp_project)   :: spproj
         type(class_frcs)   :: clsfrcs
@@ -1907,9 +1907,9 @@ contains
         type(kmedoids)     :: kmed
         type(pspecs)       :: pows
         type(stats_struct) :: res_stats
-        integer :: ldim(3),  ncls, ncls_sel, icls, cnt, rank, pop, nptcls, nptcls_good
+        integer :: ldim(3),  ncls, ncls_sel, icls, cnt, rank, nptcls, nptcls_good
         integer :: filtsz, nclust_aff_prop, i, j, ii, jj, nclust, iclust, rank_bound
-        real    :: smpd, simsum, cmin, cmax, pref, fsc_res, rfoo, frac_good, best_res, worst_res, dist2best, dist2worst
+        real    :: smpd, simsum, cmin, cmax, pref, fsc_res, rfoo, frac_good, best_res, worst_res, dist2best, dist2worst, dist_min, dist
         logical :: l_apply_optlp
         ! defaults
         call cline%set('oritype', 'cls2D')
@@ -2020,18 +2020,18 @@ contains
         call kmed%get_labels(labels)
         call kmed%get_medoids(i_medoids)
         write(logfhandle,'(A)') '>>> ALIGNING THE CLUSTERS OF CLASS AVERAGES TO THEIR MEDOIDS'
-        allocate(frc(filtsz), clust_res(nclust), clust_algninfo(nclust), clust_nptcls(nclust))
+        allocate(frc(filtsz), clust_res(nclust), clust_algninfo(nclust), clust_nptcls(nclust), clust_pops(nclust))
         do iclust = 1, nclust
-            pop = count(labels == iclust)
+            clust_pops(iclust)   = count(labels == iclust)
             clust_nptcls(iclust) = sum(clspops, mask=labels == iclust)
             cluster_imgs = pack_imgarr(cavg_imgs, mask=labels == iclust)
-            clust_algninfo(iclust)%params = align_imgs2ref(pop, params%hp, params%lp, params%trs, cavg_imgs(i_medoids(iclust)), cluster_imgs)
-            cluster_imgs_aligned = rtsq_imgs(pop, clust_algninfo(iclust)%params, cluster_imgs)
+            clust_algninfo(iclust)%params = align_imgs2ref(clust_pops(iclust), params%hp, params%lp, params%trs, cavg_imgs(i_medoids(iclust)), cluster_imgs)
+            cluster_imgs_aligned = rtsq_imgs(clust_pops(iclust), clust_algninfo(iclust)%params, cluster_imgs)
             ! estimate resolution
             cnt = 0
             call cavg_imgs(i_medoids(iclust))%fft
-            allocate(resvals(pop), source=0.)
-            do i = 1, pop
+            allocate(resvals(clust_pops(iclust)), source=0.)
+            do i = 1, clust_pops(iclust)
                 call cluster_imgs_aligned(i)%fft
                 call cavg_imgs(i_medoids(iclust))%fsc(cluster_imgs_aligned(i), frc)
                 if( .not. all(frc > 0.5) )then ! excluding the medoid
@@ -2048,6 +2048,9 @@ contains
             call dealloc_imgarr(cluster_imgs_aligned)
             deallocate(resvals)
         end do
+        best_res  = minval(clust_res)
+        worst_res = maxval(clust_res)
+        where( clust_pops < 2 ) clust_res = worst_res ! nothing else makes sense
         ! rank clusters based on their resolution
         allocate(clust_order(nclust), rank_assign(ncls_sel), i_medoids_ranked(nclust),&
         clust_res_ranked(nclust), clust_scores(nclust), clust_algninfo_ranked(nclust))
@@ -2076,13 +2079,32 @@ contains
         cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
         ! interpolate
         do iclust = 1, nclust
-            pop = count(labels == iclust)
+            clust_pops(iclust) = count(labels == iclust)
             cluster_imgs = pack_imgarr(cavg_imgs, mask=labels == iclust)
-            cluster_imgs_aligned = rtsq_imgs(pop, clust_algninfo(iclust)%params, cluster_imgs)
+            cluster_imgs_aligned = rtsq_imgs(clust_pops(iclust), clust_algninfo(iclust)%params, cluster_imgs)
             call write_cavgs(cluster_imgs_aligned, 'cluster_ranked'//int2str_pad(iclust,2)//trim(params%ext))
             call dealloc_imgarr(cluster_imgs)
             call dealloc_imgarr(cluster_imgs_aligned)
         end do
+        ! find and optimal rank boundary
+        allocate(clust_res_dists(nclust,nclust), source=0.)
+        do i = 1, nclust - 1
+            do j = i + 1, nclust
+                clust_res_dists(i,j) = abs(clust_res(i) - clust_res(j))
+                clust_res_dists(j,i) = clust_res_dists(i,j)
+            end do
+        end do
+        dist_min = sum(clust_res_dists(:1,:1)) + sum(clust_res_dists(2:,2:))
+        do rank = 2, nclust
+            dist = sum(clust_res_dists(:rank, :rank)) + sum(clust_res_dists(rank + 1:, rank + 1:))
+            if( dist < dist_min )then
+                dist_min = dist
+                rank_bound = rank 
+            endif
+        end do
+        ! make good/bad assignment
+        allocate(good_bad_assign(nclust), source=0)
+        good_bad_assign(:rank_bound) = 1
         ! report cluster scores & resolution
         do iclust = 1, nclust
             clust_scores(iclust) = 0.
@@ -2095,23 +2117,9 @@ contains
                 endif
             enddo
             clust_scores(iclust) = clust_scores(iclust) / real(cnt)
-            write(logfhandle,'(A,f7.3,A,f5.1)') 'cluster_ranked'//int2str_pad(iclust,2)//'.mrc, score: ',&
-            &clust_scores(iclust), ' res: ', clust_res(iclust)
+            write(logfhandle,'(A,f7.3,A,f5.1,A,I3))') 'cluster_ranked'//int2str_pad(iclust,2)//'.mrc, score: ',&
+            &clust_scores(iclust), ' res: ', clust_res(iclust), ' good_bad_assign ', good_bad_assign(iclust)
         end do
-        ! assign good/bad 2D classes
-        best_res  = minval(clust_res)
-        worst_res = maxval(clust_res)
-        do rank = 1, nclust
-            dist2best  = abs(clust_res(rank) - best_res)
-            dist2worst = abs(clust_res(rank) - worst_res)
-            if( dist2best < dist2worst ) rank_bound = rank
-        end do
-        if( clust_res(3) <= 12.0 ) rank_bound = max(3,rank_bound)
-            
-        print *, 'rank_bound: ', rank_bound
-
-        allocate(good_bad_assign(nclust), source=0)
-        good_bad_assign(:rank_bound) = 1
         ! check number of particles selected
         nptcls      = sum(clust_nptcls)
         nptcls_good = sum(clust_nptcls, mask=good_bad_assign == 1 )

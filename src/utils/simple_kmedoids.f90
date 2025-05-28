@@ -220,9 +220,10 @@ contains
         class(kmedoids), intent(inout) :: self
         if( self%exists )then
             self%ptr_dmat => null()
-            self%n    = 0
-            self%ncls = 0
+            self%n        =  0
+            self%ncls     =  0
             deallocate(self%i_medoids, self%cls_labels, self%cls_pops, self%dists2meds)
+            self%exists   =  .false.
         endif
     end subroutine kill
 
