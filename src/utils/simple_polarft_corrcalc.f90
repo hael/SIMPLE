@@ -2671,7 +2671,7 @@ contains
         complex(dp), pointer :: pft_ref_8(:,:), pft_ref_tmp_8(:,:), pft_ptcl(:,:), pft_ptcl_tmp(:,:), shmat(:,:)
         complex(dp) :: ctmp
         integer     :: ithr, i, k
-        real(dp)    :: sumsq, sumsqk, tmp, sh(2), fdp
+        real(dp)    :: sumsqk, sh(2), fdp
         sh   = 0._dp
         i    =  self%pinds(iptcl)
         ithr = omp_get_thread_num() + 1
@@ -2694,14 +2694,11 @@ contains
         call self%rotate_pft(pft_ptcl_tmp, irot, pft_ptcl)
         ! searching
         fdp    = 0._dp
-        sumsq  = 0._dp
         sumsqk = 0._dp
         do k = self%kfromto(1),self%kfromto(2)
-            tmp    = real(pft_ref_8(1,k)*conjg(pft_ref_8(1,k)), dp)
-            sumsq  = sumsq  + tmp
-            sumsqk = sumsqk + tmp * real(k,dp)
             ctmp   = pft_ptcl(1,k) - pft_ref_8(1,k)
-            fdp    = fdp + real(k,dp) * real(ctmp * conjg(ctmp), dp)
+            sumsqk = sumsqk + real(k,dp) * real(pft_ref_8(1,k) * conjg(pft_ref_8(1,k)), dp)
+            fdp    = fdp    + real(k,dp) * real(ctmp           * conjg(ctmp), dp)
         end do
         gencorr_euclid_line_for_rot = dexp(- fdp / sumsqk)
     end function gencorr_euclid_line_for_rot
@@ -2717,7 +2714,7 @@ contains
         complex(dp), pointer :: pft_ref_8(:,:), pft_ref_tmp_8(:,:), pft_tmp(:,:), pft_ptcl(:,:), pft_ptcl_tmp(:,:), shmat(:,:)
         complex(dp) :: ctmp
         integer     :: ithr, i, k
-        real(dp)    :: sumsq, sumsqk, tmp, sh(2), graddp(2), fdp
+        real(dp)    :: sumsqk, sh(2), graddp(2), fdp
         sh   = 0._dp
         i    = self%pinds(iptcl)
         ithr = omp_get_thread_num() + 1
@@ -2742,18 +2739,15 @@ contains
         ! searching
         fdp    = 0._dp
         graddp = 0._dp
-        sumsq  = 0._dp
         sumsqk = 0._dp
         ! first grad
         pft_tmp = dcmplx(0.,0.)
         call self%rotate_pft(pft_ptcl_tmp * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_tmp)
         do k = self%kfromto(1),self%kfromto(2)
-            tmp       = real(pft_ref_8(1,k)*conjg(pft_ref_8(1,k)), dp)
-            sumsq     = sumsq  + tmp
-            sumsqk    = sumsqk + tmp * real(k,dp)
             ctmp      = pft_ptcl(1,k) - pft_ref_8(1,k)
-            fdp       = fdp       + real(k,dp) * real(ctmp         * conjg(ctmp),dp)
-            graddp(1) = graddp(1) + real(k,dp) * real(pft_tmp(1,k) * conjg(ctmp),dp)
+            sumsqk    = sumsqk    + real(k,dp) * real(pft_ref_8(1,k)* conjg(pft_ref_8(1,k)), dp)
+            fdp       = fdp       + real(k,dp) * real(ctmp          * conjg(ctmp),dp)
+            graddp(1) = graddp(1) + real(k,dp) * real(pft_tmp(1,k)  * conjg(ctmp),dp)
         end do
         ! second grad
         pft_tmp = dcmplx(0.,0.)
@@ -2762,9 +2756,8 @@ contains
             ctmp      = pft_ptcl(1,k) - pft_ref_8(1,k)
             graddp(2) = graddp(2) + real(k,dp) * real(pft_tmp(1,k) * conjg(ctmp),dp)
         end do
-        ! sumsqk = dsqrt(sumsqk)
-        f      = dexp(-fdp / sumsqk)
-        grad   = - fdp * 2._dp * graddp / sumsqk
+        f    = dexp(-fdp / sumsqk)
+        grad = - f * 2._dp * graddp / sumsqk
     end subroutine gencorr_euclid_line_grad_for_rot
 
     subroutine gencorr_grad_for_rot_8_1( self, iref, iptcl, shvec, irot, f, grad, onestate )
