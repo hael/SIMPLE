@@ -46,20 +46,20 @@ if( command_argument_count() < 3 )then
         cmd = 'curl -s -o 1JYX.pdb https://files.rcsb.org/download/1JYX.pdb'
         call execute_command_line(cmd, exitstat=rc)
         write(*, *) 'Converting .pdb to .mrc...'
-        cmd = 'e2pdb2mrc.py 1JYX.pdb 1JYX.mrc'
+        cmd = 'e2pdb2mrc.py --apix 2.0 --box 200 1JYX.pdb 1JYX.mrc'
         call execute_command_line(cmd, exitstat=rc)
         cmd = 'rm 1JYX.pdb'
         call execute_command_line(cmd, exitstat=rc)
         write(*, *) 'Projecting 1JYX.mrc...'
         call cline_projection%set('vol1'      , '1JYX.mrc')
-        call cline_projection%set('smpd'      , 1.)
+        call cline_projection%set('smpd'      , 2.)
         call cline_projection%set('pgrp'      , 'c1')
         call cline_projection%set('mskdiam'   , 180.)
         call cline_projection%set('nspace'    , 6.)
         call cline_projection%set('nthr'      , 16.)
         call xreproject%execute(cline_projection)
         call cline%set('stk'    , 'reprojs.mrcs')
-        call cline%set('smpd'   , 1.)
+        call cline%set('smpd'   , 2.)
         call cline%set('nthr'   , 16.)
         call cline%set('stk'    , 'reprojs.mrcs')
         call cline%set('mskdiam', 180.)
@@ -159,7 +159,7 @@ lims(1,1) = -5.
 lims(1,2) =  5.
 lims(2,1) = -5.
 lims(2,2) =  5.
-call spec%specify(str_opts, NDIM, limits=lims, nrestarts=NRESTARTS, factr  = 1.0d+5, pgtol = 1.0d-7)
+call spec%specify(str_opts, NDIM, limits=lims, nrestarts=NRESTARTS, factr  = 1.0d+5, pgtol = 1.0d-10)
 call spec%set_costfun_8(costfct)                                    ! set pointer to costfun
 call spec%set_gcostfun_8(gradfct)                                   ! set pointer to gradient of costfun
 call spec%set_fdfcostfun_8(costgradfct)
@@ -180,13 +180,19 @@ do j = 1, 10
     spec%x_8  = real(spec%x, dp)
     call opt_ptr%minimize(spec, opt_ptr, lowest_cost)                   ! minimize the test function
     cur_sh = real(spec%x_8(1:2))
-    if( cur_irot == prev_irot )exit
+    ! if( cur_irot == prev_irot )exit
     prev_irot = cur_irot
     print *, 'iter = ', j, '; cost/shifts: ', lowest_cost, spec%x_8
 enddo
 print *, 'found irot   = ', cur_irot
 print *, 'found shifts = ', cur_sh
 print *, 'val at this irot/shift = ', pftcc%gencorr_euclid_line_for_rot(line_irot, 9, 9, cur_irot, real(cur_sh, dp))
+
+
+print *, pftcc%gencorr_euclid_line_for_rot(line_irot, 9, 9, line_irot, real(shvec, dp))
+print *, pftcc%gencorr_euclid_line_for_rot(line_irot, 9, 9, line_irot, real(cur_sh, dp))
+
+
 call opt_ptr%kill
 deallocate(opt_ptr)
 
@@ -218,6 +224,7 @@ contains
         call pftcc%gencorr_euclid_line_grad_for_rot(line_irot, 9, 9, cur_irot, f, grad, x)
         f    = -f
         grad = -grad
+        print *,x,f,grad
     end subroutine
 
 end program simple_test_line_shiftsrch

@@ -6588,6 +6588,21 @@ contains
                 enddo
             enddo
             !$omp end parallel do
+        case('nn')
+            ! Nearest-neighbour interpolation
+            !$omp parallel do collapse(3) private(i,j,k,iarg,arg) default(shared) proc_bind(close) schedule(static)
+            do i = 1,self%ldim(1)
+                do j = 1,self%ldim(2)
+                    do k = 1,self%ldim(3)
+                        iarg = sum(([i,j,k]-center)**2)
+                        if( iarg == 0 )cycle
+                        arg = PI * sqrt(real(iarg)) / real(dim)
+                        arg = sin(arg) / arg ! normalized sinc
+                        self%rmat(i,j,k) = self%rmat(i,j,k) / arg
+                    enddo
+                enddo
+            enddo
+            !$omp end parallel do
         case DEFAULT
             THROW_HARD('Unsupported interpolation method')
         end select

@@ -244,7 +244,7 @@ contains
             THROW_HARD ('only even logical dims supported; new')
         endif
         ! set constants
-        self%nptcls = self%pfromto(2) - self%pfromto(1) + 1 !< the total number of particles in partition
+        self%nptcls = self%pfromto(2) - self%pfromto(1) + 1   !< the total number of particles in partition
         self%nrefs  = nrefs                                   !< the number of references (logically indexded [1,nrefs])
         self%pftsz  = magic_pftsz(nint(params_glob%msk_crop)) !< size of reference (number of vectors used for matching,determined by radius of molecule)
         self%nrots  = 2 * self%pftsz                          !< number of in-plane rotations for one pft  (pftsz*2)
@@ -555,7 +555,7 @@ contains
 
     !>  \brief returns polar coordinate for rotation rot
     !!         and Fourier index k
-    function get_coord( self, rot, k ) result( xy )
+    pure function get_coord( self, rot, k ) result( xy )
         class(polarft_corrcalc), intent(in) :: self
         integer,                 intent(in) :: rot, k
         real(sp) :: xy(2)

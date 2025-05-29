@@ -240,6 +240,7 @@ type :: oris
     procedure, private :: diststat_1, diststat_2
     generic            :: diststat => diststat_1, diststat_2
     procedure          :: overlap
+    procedure          :: overlap2D3D
     ! DESTRUCTORS
     procedure          :: kill_chash
     procedure          :: kill
@@ -4108,6 +4109,97 @@ contains
         real, parameter :: old_max = 2.*sqrt(2.)
         geodesic_scaled_dist = geodesic_distance(rmat1,rmat2)*(pi/old_max)
     end function geodesic_scaled_dist
+
+    subroutine overlap2D3D( self2D, self3D, mode, score )
+        class(oris),      intent(inout) :: self2D, self3D
+        character(len=*), intent(in)    :: mode
+        real,             intent(out)   :: score
+        type(oris)           :: projdirs
+        real,    allocatable :: scores(:), rtmp(:)
+        integer, allocatable :: cls(:), projs(:), states(:), pinds(:)
+        integer, allocatable :: projpops(:), tmp(:), projinds(:)
+        logical, allocatable :: mask(:)
+        real    :: distance
+        integer :: icls,ncls,nprojs,pop,i,np,p,nonzerop,proj,imax
+        if( self2D%n /= self3D%n )then
+            THROW_HARD('Inconsistent sizes!')
+        endif
+        if( .not.self2D%isthere('class') )then
+            THROW_HARD('CLASS assignment required!')
+        endif
+        if( .not.self3D%isthere('proj') )then
+            THROW_HARD('PROJection directions required!')
+        endif
+        select case(mode)
+        case('mean','median','max')
+            ! supported
+        case DEFAULT
+            THROW_HARD('Unsupported mode in overlap2D3D: '//trim(mode))
+        end select
+        states = self3D%get_all_asint('state')
+        mask   = states > 0
+        deallocate(states)
+        projs  = self3D%get_all_asint('proj')
+        cls    = self2D%get_all_asint('class')
+        ncls   = maxval(cls)
+        nprojs = maxval(projs)
+        ! gather unique projections directions
+        call projdirs%new(nprojs,.true.)
+        allocate(projpops(nprojs),source=0)
+        allocate(scores(nprojs),source=0.0)
+        do i = 1,self3D%n
+            if( .not.mask(i) ) cycle
+            p = projs(i)
+            if( projpops(p) == 0 )then 
+                call projdirs%set_euler(p, self3D%get_euler(i))
+                call projdirs%e3set(p, 0.0)
+                call projdirs%set_state(p, 1)
+                projpops(p) = projpops(p) + 1
+            endif
+        enddo
+        do icls = 1,ncls
+            ! particles from class icls
+            pinds = pack((/(i,i=1,self2D%n)/),mask=((cls==icls).and.mask))
+            if( .not.allocated(pinds) ) cycle
+            pop = size(pinds)
+            if( pop==0 )then
+                deallocate(pinds)
+                cycle
+            endif
+            ! projection directions populations from class
+            projpops = 0
+            do i = 1,pop
+                proj = projs(pinds(i))
+                projpops(proj) = projpops(proj) + 1
+            enddo
+            projinds = pack((/(i,i=1,nprojs)/),mask=projpops>0)
+            np = size(projinds)
+            if( np == 1 )then
+                deallocate(pinds,projinds)
+                cycle
+            endif
+            tmp  = projpops(projinds(:))
+            call hpsort(tmp,projinds)
+            ! max populated projection direction
+            imax = projinds(np)
+            ! distance from maximally populated to others
+            allocate(rtmp(np-1))
+            do i = 1,np-1
+                p = projinds(i)
+                rtmp(i) = rad2deg(projdirs%euldist(imax,p))
+            enddo
+            select case(mode)
+            case('mean')
+                scores(icls) = sum(real(tmp(:np-1))*rtmp) / real(sum(tmp(:np-1)))
+            case('median')
+                
+            case('max')
+                scores(icls) = maxval(rtmp)
+            end select
+            scores(icls) = rad2deg(scores(icls))
+            deallocate(pinds,projinds,tmp,rtmp)
+        enddo
+    end subroutine overlap2D3D
 
     ! UNIT TEST
 
