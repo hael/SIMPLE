@@ -196,7 +196,7 @@ type :: polarft_corrcalc
     procedure, private :: linear_ft_ref2s_1, linear_ft_ref2s_2
     procedure, private :: rotate_pft_1, rotate_pft_2, rotate_pft_3
     generic            :: rotate_pft => rotate_pft_1, rotate_pft_2, rotate_pft_3
-    procedure          :: rotate_iptcl
+    procedure          :: rotate_iptcl, rotate_iref
     procedure          :: bestline_sim
     ! DESTRUCTOR
     procedure          :: kill
@@ -1018,9 +1018,9 @@ contains
 
     subroutine rotate_iptcl( self, iptcl, irot, sh )
         class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in) :: iptcl
-        integer,                 intent(in) :: irot
-        real,                    intent(in) :: sh(2)
+        integer,                 intent(in)    :: iptcl
+        integer,                 intent(in)    :: irot
+        real,                    intent(in)    :: sh(2)
         complex(dp), pointer :: pft_ptcl(:,:), pft_ptcl_tmp(:,:), shmat(:,:)
         integer :: ithr, i
         i    =  self%pinds(iptcl)
@@ -1030,10 +1030,34 @@ contains
         shmat         => self%heap_vars(ithr)%shmat_8
         ! shifting
         call self%gen_shmat_8(ithr, real(sh,dp), shmat)
-        pft_ptcl_tmp = dcmplx(self%pfts_ptcls(:,:,i)) * shmat
-        call self%rotate_pft(pft_ptcl_tmp, irot, pft_ptcl)
+        call self%rotate_pft(dcmplx(self%pfts_ptcls(:,:,i)), irot, pft_ptcl)
+        pft_ptcl               = pft_ptcl * shmat
         self%pfts_ptcls(:,:,i) = pft_ptcl
     end subroutine rotate_iptcl
+
+    subroutine rotate_iref( self, iref, irot, sh )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref
+        integer,                 intent(in)    :: irot
+        real,                    intent(in)    :: sh(2)
+        complex(dp), pointer :: pft_ref(:,:), pft_ref_tmp_8(:,:), shmat(:,:)
+        integer :: ithr
+        ithr = omp_get_thread_num() + 1
+        pft_ref       => self%heap_vars(ithr)%pft_ref_8
+        pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
+        shmat         => self%heap_vars(ithr)%shmat_8
+        ! even
+        pft_ref_tmp_8 = dcmplx(self%pfts_refs_even(:,:,iref))
+        call self%gen_shmat_8(ithr, real(sh,dp), shmat)
+        call self%rotate_pft(pft_ref_tmp_8, irot, pft_ref)
+        pft_ref                       = pft_ref * shmat
+        self%pfts_refs_even(:,:,iref) = pft_ref
+        ! odd
+        pft_ref_tmp_8                 = dcmplx(self%pfts_refs_odd(:,:,iref))
+        call self%rotate_pft(pft_ref_tmp_8, irot, pft_ref)
+        pft_ref                       = pft_ref * shmat
+        self%pfts_refs_odd( :,:,iref) = pft_ref
+    end subroutine rotate_iref
 
     subroutine calc_polar_ctf( self, iptcl, smpd, kv, cs, fraca, dfx, dfy, angast )
         use simple_ctf,        only: ctf
