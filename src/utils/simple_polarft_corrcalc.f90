@@ -196,6 +196,8 @@ type :: polarft_corrcalc
     procedure, private :: linear_ft_ref2s_1, linear_ft_ref2s_2
     procedure, private :: rotate_pft_1, rotate_pft_2, rotate_pft_3
     generic            :: rotate_pft => rotate_pft_1, rotate_pft_2, rotate_pft_3
+    procedure          :: rotate_iptcl
+    procedure          :: bestline_sim
     ! DESTRUCTOR
     procedure          :: kill
 end type polarft_corrcalc
@@ -1013,6 +1015,25 @@ contains
             pft_rot(1              :irot-self%pftsz-1,:) = pft(mid+1:self%pftsz,:)
         endif
     end subroutine rotate_pft_3
+
+    subroutine rotate_iptcl( self, iptcl, irot, sh )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in) :: iptcl
+        integer,                 intent(in) :: irot
+        real,                    intent(in) :: sh(2)
+        complex(dp), pointer :: pft_ptcl(:,:), pft_ptcl_tmp(:,:), shmat(:,:)
+        integer :: ithr, i
+        i    =  self%pinds(iptcl)
+        ithr = omp_get_thread_num() + 1
+        pft_ptcl      => self%heap_vars(ithr)%pft_ptcl_8
+        pft_ptcl_tmp  => self%heap_vars(ithr)%pft_ptcl_tmp_8
+        shmat         => self%heap_vars(ithr)%shmat_8
+        ! shifting
+        call self%gen_shmat_8(ithr, real(sh,dp), shmat)
+        pft_ptcl_tmp = dcmplx(self%pfts_ptcls(:,:,i)) * shmat
+        call self%rotate_pft(pft_ptcl_tmp, irot, pft_ptcl)
+        self%pfts_ptcls(:,:,i) = pft_ptcl
+    end subroutine rotate_iptcl
 
     subroutine calc_polar_ctf( self, iptcl, smpd, kv, cs, fraca, dfx, dfy, angast )
         use simple_ctf,        only: ctf
@@ -2660,6 +2681,22 @@ contains
         end do
         gencorr_euclid_for_rot_8 = dexp( -gencorr_euclid_for_rot_8 / self%wsqsums_ptcls(i) )
     end function gencorr_euclid_for_rot_8
+
+    real function bestline_sim( self, iref, iptcl )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref
+        integer,                 intent(in)    :: iptcl
+        integer :: irot, jrot
+        real    :: cur_sim
+        bestline_sim = 0.
+        do irot = 1, self%nrots
+            do jrot = 1, self%nrots
+                if( jrot == irot )cycle
+                cur_sim = real(self%gencorr_euclid_line_for_rot(irot, iref, iptcl, jrot))
+                if( cur_sim > bestline_sim ) bestline_sim = cur_sim
+            enddo
+        enddo
+    end function bestline_sim
 
     real(dp) function gencorr_euclid_line_for_rot( self, line_rot, iref, iptcl, irot, shvec )
         class(polarft_corrcalc), intent(inout) :: self
