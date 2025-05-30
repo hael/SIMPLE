@@ -158,7 +158,7 @@ contains
         if( present(state) ) sstate = state
         call self%raise_exception( cls, sstate, 'ERROR, out of bounds in set_frc')
         if( size(frc) /= self%filtsz )then
-            THROW_HARD('size of input frc not conforming; set_frc')
+            THROW_HARD('size of input frc not conforming; set_frc:'//int2str(size(frc))//' vs. '//int2str(self%filtsz))
         else
             self%frcs(sstate,cls,:) = frc
         endif

@@ -183,7 +183,7 @@ contains
     end subroutine cavger_read_euclid_sigma2
 
     !>  \brief prepares a 2D class document with class index, resolution,
-    !!         poulation, average correlation and weight
+    !!         population, average correlation and weight
     subroutine cavger_gen2Dclassdoc( spproj )
         use simple_sp_project, only: sp_project
         class(sp_project), target, intent(inout) :: spproj
@@ -216,7 +216,7 @@ contains
             icls = ptcl_field%get_class(iptcl)
             if( icls<1 .or. icls>params_glob%ncls )cycle
             pops(icls)  = pops(icls)  + 1
-            corrs(icls) = corrs(icls) + ptcl_field%get(iptcl,'corr')
+            corrs(icls) = corrs(icls) + real(ptcl_field%get(iptcl,'corr'),dp)
             ws(icls)    = ws(icls)    + real(w,dp)
         enddo
         !$omp end parallel do
