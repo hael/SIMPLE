@@ -129,7 +129,7 @@ contains
         if( present(mirror) ) l_mirr = mirror
         ! evaluate best orientation from rotational correlation of image magnitudes
         call pftcc_glob%gencorrs_mag_cc(ind1, ind2, corrs, kweight=.true.)
-        irot      = maxloc(corrs, dim=1) ! one solution in [0;pi[
+        irot      = maxloc(corrs, dim=1) ! one solution in [0;pi]
         pftcc_ang = pftcc_glob%get_rot(irot)
         ! phase correlations of image rotated by irot & irot+pi
         call rotmat2d(pftcc_ang, rmat)
@@ -194,7 +194,7 @@ contains
         call imgcc1%ifft
         call imgcc2%ifft
         ! normalization
-        norm = real(2.d0*sqrt(var1*var2))
+        norm = real(2.d0*dsqrt(var1*var2))
         call imgcc1%div(norm)
         call imgcc2%div(norm)
         ! offsets, interpolation & re-evaluation in polar space
@@ -229,10 +229,10 @@ contains
                 j      = pos(2)+c-shlim-1
                 tmp    = real(pos-shlim-1)
                 offset = tmp
-                alpha   = p%rmat(i-1,j,1)
-                beta    = p%rmat(i,  j,1)
-                gamma   = p%rmat(i+1,j,1)
-                denom   = alpha + gamma - 2.*beta
+                alpha  = p%rmat(i-1,j,1)
+                beta   = p%rmat(i,  j,1)
+                gamma  = p%rmat(i+1,j,1)
+                denom  = alpha + gamma - 2.*beta
                 if( abs(denom) > TINY )then
                     doffset   = 0.5 * (alpha-gamma) / denom
                     offset(1) = offset(1) + doffset

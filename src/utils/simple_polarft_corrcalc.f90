@@ -2688,17 +2688,80 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref
         integer,                 intent(in)    :: iptcl
-        integer :: irot, jrot
-        real    :: cur_sim
+        complex(dp), pointer :: pft_ref_8(:,:), pft_ref_tmp_8(:,:), pft_ptcl(:,:), pft_ptcl_tmp(:,:), shmat(:,:)
+        complex(dp) :: ctmp
+        integer     :: irot, jrot, i, ithr, k
+        real(dp)    :: sumsqk, fdp
+        real        :: cur_sim
+        i    =  self%pinds(iptcl)
+        ithr = omp_get_thread_num() + 1
+        pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
+        pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
+        pft_ptcl      => self%heap_vars(ithr)%pft_ptcl_8
+        pft_ptcl_tmp  => self%heap_vars(ithr)%pft_ptcl_tmp_8
+        if( self%iseven(i) )then
+            pft_ref_tmp_8 = dcmplx(self%pfts_refs_even(:,:,iref))
+        else
+            pft_ref_tmp_8 = dcmplx(self%pfts_refs_odd(:,:,iref))
+        endif
         bestline_sim = 0.
+        pft_ptcl_tmp = dcmplx(self%pfts_ptcls(:,:,i))
         do irot = 1, self%nrots
+            call self%rotate_pft(pft_ref_tmp_8, irot, pft_ref_8)
             do jrot = 1, self%nrots
-                if( jrot == irot )cycle
-                cur_sim = real(self%gencorr_euclid_line_for_rot(irot, iref, iptcl, jrot))
+                call self%rotate_pft(pft_ptcl_tmp, jrot, pft_ptcl)
+                fdp    = 0._dp
+                sumsqk = 0._dp
+                do k = self%kfromto(1),self%kfromto(2)
+                    ctmp   = pft_ptcl(1,k) - pft_ref_8(1,k)
+                    sumsqk = sumsqk + real(k,dp) * real(pft_ref_8(1,k) * conjg(pft_ref_8(1,k)), dp)
+                    fdp    = fdp    + real(k,dp) * real(ctmp           * conjg(ctmp), dp)
+                end do
+                cur_sim = dexp(- fdp / sumsqk)
                 if( cur_sim > bestline_sim ) bestline_sim = cur_sim
             enddo
         enddo
     end function bestline_sim
+
+    real function bestline_sim_fm( self, iref, iptcl )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref
+        integer,                 intent(in)    :: iptcl
+        complex, pointer :: pft_ref(:,:), pft_ref_tmp(:,:), pft_ptcl(:,:)
+        complex :: cc1, cc2
+        integer :: irot, jrot, i, ithr
+        real    :: cur_sim, var1, var2, norm
+        i    =  self%pinds(iptcl)
+        ithr = omp_get_thread_num() + 1
+        pft_ref      => self%heap_vars(ithr)%pft_ref
+        pft_ref_tmp  => self%heap_vars(ithr)%pft_ref_tmp
+        pft_ptcl     => self%heap_vars(ithr)%pft_tmp
+        if( self%iseven(i) )then
+            pft_ref_tmp = self%pfts_refs_even(:,:,iref)
+        else
+            pft_ref_tmp = self%pfts_refs_odd(:,:,iref)
+        endif
+        bestline_sim_fm = 0.
+        do irot = 1, self%nrots
+            call self%rotate_pft(pft_ref_tmp, irot, pft_ref)
+            do jrot = 1, self%nrots
+                call self%rotate_pft(self%pfts_ptcls(:,:,i), jrot, pft_ptcl)
+                cc1  = sum(pft_ref( 1,:) * conjg(pft_ptcl(1,:)))
+                cc2  = sum(pft_ref( 1,:) *       pft_ptcl(1,:))
+                var1 = sum(pft_ref( 1,:) * conjg(pft_ref( 1,:)))
+                var2 = sum(pft_ptcl(1,:) * conjg(pft_ptcl(1,:)))
+                norm = real(2. * sqrt(var1*var2))
+                cc1  = cc1/norm
+                cc2  = cc2/norm
+                if( real(cc1*conjg(cc1)) > real(cc2*conjg(cc2)) )then
+                    cur_sim = real(cc1*conjg(cc1))
+                else
+                    cur_sim = real(cc2*conjg(cc2))
+                endif
+                if( cur_sim > bestline_sim_fm ) bestline_sim_fm = cur_sim
+            enddo
+        enddo
+    end function bestline_sim_fm
 
     real(dp) function gencorr_euclid_line_for_rot( self, line_rot, iref, iptcl, irot, shvec )
         class(polarft_corrcalc), intent(inout) :: self
