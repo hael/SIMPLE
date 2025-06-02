@@ -1898,7 +1898,7 @@ contains
     subroutine exec_cluster_cavgs( self, cline )
         use simple_class_frcs, only: class_frcs
         use simple_kmedoids,   only: kmedoids
-        use simple_corrmat,    only: calc_inpl_invariant_fm
+        use simple_corrmat,    only: calc_inpl_invariant_fm, calc_comlin_simmat
         use simple_fsc,        only: plot_fsc
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
@@ -1912,8 +1912,8 @@ contains
         type(clust_inpl),  allocatable :: clust_algninfo(:), clust_algninfo_ranked(:)
         character(len=:),  allocatable :: frcs_fname
         real,              allocatable :: frcs(:,:), filter(:), resarr(:), frc(:)
-        real,              allocatable :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:)
-        real,              allocatable :: smat_joint(:,:), dmat_joint(:,:), res_bad(:), res_good(:)
+        real,              allocatable :: corrmat(:,:), corrmat_comlin(:,:), dmat_pow(:,:), smat_pow(:,:)
+        real,              allocatable :: smat_joint(:,:), dmat_joint(:,:), res_bad(:), res_good(:), dmat_comlin(:,:)
         real,              allocatable :: clust_scores(:), clust_res(:), clust_res_ranked(:), resvals(:), clust_res_dists(:,:)
         logical,           allocatable :: l_msk(:,:,:), l_non_junk(:)
         integer,           allocatable :: labels(:), clsinds(:), i_medoids(:), good_bad_assign(:)
@@ -2018,14 +2018,18 @@ contains
         ! pairwise correlation through Fourier-Mellin + shift search
         write(logfhandle,'(A)') '>>> PAIRWISE CORRELATIONS THROUGH FOURIER-MELLIN & SHIFT SEARCH'
         call calc_inpl_invariant_fm(cavg_imgs, params%hp, params%lp, params%trs, corrmat)
+         ! pairwise correlation through common lines
+        ! write(logfhandle,'(A)') '>>> PAIRWISE CORRELATIONS THROUGH COMMON LINES'
+        ! call calc_comlin_simmat(cavg_imgs, params%hp, params%lp, corrmat_comlin)
         ! create pspecs object
         call pows%new(cavg_imgs, spproj%os_cls2D, params%msk, HP_SPEC, LP_SPEC, params%ncls_spec, l_exclude_junk=.false.)
         ! create a joint similarity matrix for clustering based on spectral profile and in-plane invariant correlation
         call pows%calc_distmat
-        dmat_pow   = pows%get_distmat()
-        smat_pow   = dmat2smat(dmat_pow)
-        smat_joint = merge_smats(smat_pow,corrmat)
-        dmat_joint = smat2dmat(smat_joint)
+        dmat_pow    = pows%get_distmat()
+        smat_pow    = dmat2smat(dmat_pow)
+        smat_joint  = merge_smats(smat_pow,corrmat)
+        dmat_joint  = smat2dmat(smat_joint)
+        dmat_comlin = smat2dmat(corrmat_comlin)
         write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH K-MEDOIDS'
         if( ncls_sel < 100 )then
             nclust = NCLS_SMALL_DEFAULT
