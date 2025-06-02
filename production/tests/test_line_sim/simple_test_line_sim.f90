@@ -168,5 +168,5 @@ call img%set_cmat(cmat)
 call img%shift_phorig()
 call img%ifft
 call img%write('rotated_ref.mrc',1)
-print *, 'line sim = ', pftcc%bestline_sim(1, 1)
+print *, 'line sim = ', pftcc%bestline_sim(9, 9)
 end program simple_test_line_sim
