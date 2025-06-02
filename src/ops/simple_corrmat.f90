@@ -164,7 +164,7 @@ contains
         !$omp schedule(dynamic) proc_bind(close)
         do i = 1, n - 1
             corrmat(i,i) = 1.
-            do j = i, n
+            do j = i + 1, n
                 ! reference to particle
                 call pftcc%set_eo(i,.true.)
                 cc  = pftcc%bestline_sim(j, i)
@@ -234,7 +234,7 @@ contains
         do i = 1, n - 1
             ithr = omp_get_thread_num()+1
             corrmat(i,i) = 1.
-            do j = i, n
+            do j = i + 1, n
                 ! reference to particle
                 call pftcc%set_eo(i,.true.)
                 call fm_correlators(ithr)%calc_phasecorr(j, i, imgs(j), imgs(i),&
