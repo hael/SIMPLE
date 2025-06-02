@@ -205,7 +205,6 @@ contains
         class(cmdline),              intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
-        integer, allocatable :: pinds(:)
         integer :: ncls_here, icls
         logical :: l_shmem
         if( (cline%defined('ncls')).and. cline%defined('nspace') )then
@@ -264,59 +263,50 @@ contains
         else
             if( params%part .eq. 1 ) call build%spproj%write_segment_inside(params%oritype, params%projfile)
         endif
-        if( trim(params%polar).eq.'yes' )then
-            ! Testing only!
-            if( l_shmem )then
-                call build%spproj_field%sample4update_all([params%fromp,params%top], params%nptcls, pinds, .false.)
-                call polar_cavger_restore_classes(pinds)
-                deallocate(pinds)
-            endif
+        ! create class averager
+        call cavger_new
+        ! transfer ori data to object
+        call cavger_transf_oridat(build%spproj)
+        call cavger_read_euclid_sigma2
+        ! standard cavg assembly
+        call cavger_assemble_sums( .false. )
+        if( l_shmem )then
+            call cavger_merge_eos_and_norm
+            call cavger_calc_and_write_frcs_and_eoavg(params%frcs, params%which_iter)
+            ! classdoc gen needs to be after calc of FRCs
+            call cavger_gen2Dclassdoc(build%spproj)
+            ! write references
+            call cavger_write(trim(params%refs),      'merged')
+            call cavger_write(trim(params%refs_even), 'even'  )
+            call cavger_write(trim(params%refs_odd),  'odd'   )
+            select case(trim(params%oritype))
+                case('ptcl2D')
+                    call build%spproj%write_segment_inside('cls2D', params%projfile)
+                    call build%spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
+                    call build%spproj%add_cavgs2os_out(trim(params%refs), build%spproj%get_smpd(), imgkind='cavg')
+                    call build%spproj%write_segment_inside('out', params%projfile)
+                case('ptcl3D')
+                    do icls = 1,params%nspace
+                        call build%spproj%os_cls3D%set_euler(icls, build%eulspace%get_euler(icls))
+                    enddo
+                    if( cline%defined('outfile') )then
+                        call build%spproj%os_cls3D%write(params%outfile)
+                    else
+                        call build%spproj%os_cls3D%write('cls3D_oris.txt')
+                    endif
+                    call build%spproj%write_segment_inside('cls3D', params%projfile)
+                    call build%spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc3D')
+                    call build%spproj%add_cavgs2os_out(trim(params%refs), build%spproj%get_smpd(), imgkind='cavg3D')
+                    call build%spproj%write_segment_inside('out', params%projfile)
+                case DEFAULT
+                    THROW_HARD('Unsupported ORITYPE: '//trim(params%oritype))
+            end select
         else
-            ! create class averager
-            call cavger_new
-            ! transfer ori data to object
-            call cavger_transf_oridat(build%spproj)
-            call cavger_read_euclid_sigma2
-            ! standard cavg assembly
-            call cavger_assemble_sums( .false. )
-            if( l_shmem )then
-                call cavger_merge_eos_and_norm
-                call cavger_calc_and_write_frcs_and_eoavg(params%frcs, params%which_iter)
-                ! classdoc gen needs to be after calc of FRCs
-                call cavger_gen2Dclassdoc(build%spproj)
-                ! write references
-                call cavger_write(trim(params%refs),      'merged')
-                call cavger_write(trim(params%refs_even), 'even'  )
-                call cavger_write(trim(params%refs_odd),  'odd'   )
-                select case(trim(params%oritype))
-                    case('ptcl2D')
-                        call build%spproj%write_segment_inside('cls2D', params%projfile)
-                        call build%spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
-                        call build%spproj%add_cavgs2os_out(trim(params%refs), build%spproj%get_smpd(), imgkind='cavg')
-                        call build%spproj%write_segment_inside('out', params%projfile)
-                    case('ptcl3D')
-                        do icls = 1,params%nspace
-                            call build%spproj%os_cls3D%set_euler(icls, build%eulspace%get_euler(icls))
-                        enddo
-                        if( cline%defined('outfile') )then
-                            call build%spproj%os_cls3D%write(params%outfile)
-                        else
-                            call build%spproj%os_cls3D%write('cls3D_oris.txt')
-                        endif
-                        call build%spproj%write_segment_inside('cls3D', params%projfile)
-                        call build%spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc3D')
-                        call build%spproj%add_cavgs2os_out(trim(params%refs), build%spproj%get_smpd(), imgkind='cavg3D')
-                        call build%spproj%write_segment_inside('out', params%projfile)
-                    case DEFAULT
-                        THROW_HARD('Unsupported ORITYPE: '//trim(params%oritype))
-                end select
-            else
-                ! write partial sums
-                call cavger_readwrite_partial_sums('write')
-                call qsys_job_finished('simple_commander_cluster2D :: exec_make_cavgs')
-            endif
-            call cavger_kill
+            ! write partial sums
+            call cavger_readwrite_partial_sums('write')
+            call qsys_job_finished('simple_commander_cluster2D :: exec_make_cavgs')
         endif
+        call cavger_kill
         ! end gracefully
         call build%kill_strategy2D_tbox
         call build%kill_general_tbox
@@ -740,6 +730,7 @@ contains
             cline_make_cavgs = cline ! ncls is transferred here
             call cline_make_cavgs%delete('autoscale')
             call cline_make_cavgs%delete('balance')
+            call cline_make_cavgs%delete('polar')
             call cline_make_cavgs%set('prg',      'make_cavgs')
             call cline_make_cavgs%set('nparts',   params%nparts)
             call cline_make_cavgs%set('refs',     finalcavgs)
@@ -1453,14 +1444,18 @@ contains
     end subroutine exec_cluster2D
 
     subroutine exec_cavgassemble( self, cline )
+        use simple_polarft_corrcalc, only: polarft_corrcalc
+        use simple_polarops
         class(cavgassemble_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        type(parameters)  :: params
-        type(builder)     :: build
-        type(starproject) :: starproj
+        type(parameters)       :: params
+        type(builder)          :: build
+        type(starproject)      :: starproj
+        type(polarft_corrcalc) :: pftcc
         real, allocatable :: states(:)
         logical           :: l_stream
         integer           :: iterstr_start, iterstr_end, iter, io_stat, icls
+        integer           :: pftsz, kfromto(2), ncls
         if( .not.cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         l_stream = .false.
         if( cline%defined('stream') )then
@@ -1468,12 +1463,7 @@ contains
             call cline%set('stream','no')
         endif
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
-        if( l_stream )then
-            params_glob%stream = 'yes'
-        endif
-        call cavger_new
-        call cavger_transf_oridat( build%spproj )
-        call cavger_assemble_sums_from_parts()
+        if( l_stream ) params_glob%stream = 'yes'
         if( cline%defined('which_iter') )then
             params%refs      = trim(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//params%ext
             params%refs_even = trim(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//'_even'//params%ext
@@ -1483,10 +1473,34 @@ contains
             params%refs_even = 'start2Drefs_even'//params%ext
             params%refs_odd  = 'start2Drefs_odd'//params%ext
         endif
-        call terminate_stream('SIMPLE_CAVGASSEMBLE HARD STOP 1')
-        call cavger_calc_and_write_frcs_and_eoavg(params%frcs, params%which_iter)
-        ! classdoc gen needs to be after calc of FRCs
-        call cavger_gen2Dclassdoc(build%spproj) ! populates the cls2D field in project
+        if( trim(params%polar).eq.'yes' )then
+            call polar_cavger_dims_from_header('cavgs_even_part1'//BIN_EXT, pftsz, kfromto, ncls)
+            call pftcc%new(1, [1,1], kfromto)
+            call polar_cavger_new(pftcc)
+            call polar_cavger_calc_pops(build%spproj)
+            call polar_cavger_assemble_sums_from_parts
+            call terminate_stream('SIMPLE_CAVGASSEMBLE HARD STOP 1')
+            call polar_cavger_calc_and_write_frcs_and_eoavg(params%frcs)
+            call polar_cavger_writeall(get_fbody(params%refs,params_glob%ext,separator=.false.))
+            call polar_cavger_write_cartrefs(pftcc, get_fbody(params%refs,params_glob%ext,separator=.false.), 'merged')
+            call pftcc%kill
+            call polar_cavger_gen2Dclassdoc(build_glob%spproj)
+            call polar_cavger_kill
+        else
+            call cavger_new
+            call cavger_transf_oridat( build%spproj )
+            call cavger_assemble_sums_from_parts()
+            call terminate_stream('SIMPLE_CAVGASSEMBLE HARD STOP 1')
+            call cavger_calc_and_write_frcs_and_eoavg(params%frcs, params%which_iter)
+            ! classdoc gen needs to be after calc of FRCs
+            call cavger_gen2Dclassdoc(build%spproj) ! populates the cls2D field in project
+            ! write references
+            call terminate_stream('SIMPLE_CAVGASSEMBLE HARD STOP 2')
+            call cavger_write(trim(params%refs),      'merged')
+            call cavger_write(trim(params%refs_even), 'even'  )
+            call cavger_write(trim(params%refs_odd),  'odd'   )
+            call cavger_kill
+        endif
         ! get iteration from which_iter else from refs filename and write cavgs starfile
         if( cline%defined('which_iter') ) then
             call starproj%export_cls2D(build%spproj, params%which_iter)
@@ -1496,12 +1510,6 @@ contains
             call str2int(params%refs(iterstr_start:iterstr_end), io_stat, iter)
             call starproj%export_cls2D(build%spproj, iter)
         end if
-        ! write references
-        call terminate_stream('SIMPLE_CAVGASSEMBLE HARD STOP 2')
-        call cavger_write(trim(params%refs),      'merged')
-        call cavger_write(trim(params%refs_even), 'even'  )
-        call cavger_write(trim(params%refs_odd),  'odd'   )
-        call cavger_kill()
         ! updates project
         select case(trim(params%oritype))
             case('ptcl2D')

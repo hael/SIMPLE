@@ -149,7 +149,6 @@ type :: polarft_corrcalc
     procedure          :: shift_ptcl
     procedure          :: shift_ref
     procedure          :: mirror_ref_pft
-    procedure          :: filter_gaussian_ref
     ! MEMOIZER
     procedure          :: memoize_sqsum_ptcl
     procedure, private :: setup_npix_per_shell
@@ -909,27 +908,6 @@ contains
             enddo
         endif
     end subroutine mirror_ref_pft
-
-    subroutine filter_gaussian_ref( self, iref, even, freq, smpd )
-        class(polarft_corrcalc), target, intent(in) :: self
-        integer,                 intent(in) :: iref
-        logical,                 intent(in) :: even
-        real,                    intent(in) :: freq, smpd
-        complex(sp), pointer :: pft(:,:)
-        real     :: fwhm, halfinvsigsq
-        integer  :: k
-        if( even )then
-            pft => self%pfts_refs_even(:,:,iref)
-        else
-            pft => self%pfts_refs_odd(:,:,iref)
-        endif
-        fwhm = freq / smpd / real(self%ldim(1))
-        halfinvsigsq = 0.5 * (PI * 2.0 * fwhm / 2.35482)**2
-        do k = 1,self%kfromto(2)-self%kfromto(1)+1
-            pft(:,k) = pft(:,k) * exp(-real((k+1)**2) * halfinvsigsq)
-        enddo
-        nullify(pft)
-    end subroutine filter_gaussian_ref
 
     ! MEMOIZERS
 
