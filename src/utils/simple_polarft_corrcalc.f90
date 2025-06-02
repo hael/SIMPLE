@@ -197,6 +197,7 @@ type :: polarft_corrcalc
     generic            :: rotate_pft => rotate_pft_1, rotate_pft_2, rotate_pft_3
     procedure          :: rotate_iptcl, rotate_iref
     procedure          :: bestline_sim
+    procedure, private :: get_pft_irot
     ! DESTRUCTOR
     procedure          :: kill
 end type polarft_corrcalc
@@ -930,6 +931,25 @@ contains
             if( l_sigma ) self%wsqsums_ptcls(i) = self%wsqsums_ptcls(i) + sumsqk / real(self%sigma2_noise(ik,iptcl),dp)
         enddo
     end subroutine memoize_sqsum_ptcl
+
+    subroutine get_pft_irot( self, pft, irot, pft_rot )
+        class(polarft_corrcalc), intent(in) :: self
+        complex(dp), intent(in)  :: pft(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer,     intent(in)  :: irot
+        complex(dp), intent(out) :: pft_rot(self%kfromto(1):self%kfromto(2))
+        integer :: mid
+        if( irot == 1 )then
+            pft_rot = pft(1,:)
+        elseif( irot >= 2 .and. irot <= self%pftsz )then
+            mid     = self%pftsz - irot + 1
+            pft_rot = conjg(pft(mid+1,:))
+        elseif( irot == self%pftsz + 1 )then
+            pft_rot = conjg(pft(1,:))
+        else
+            mid     = self%nrots - irot + 1
+            pft_rot = pft(mid+1,:)
+        endif
+    end subroutine get_pft_irot
 
     subroutine rotate_pft_1( self, pft, irot, pft_rot )
         class(polarft_corrcalc), intent(in) :: self
@@ -2688,36 +2708,33 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref
         integer,                 intent(in)    :: iptcl
-        complex(dp), pointer :: pft_ref_8(:,:), pft_ref_tmp_8(:,:), pft_ptcl(:,:), pft_ptcl_tmp(:,:), shmat(:,:)
-        complex(dp) :: ctmp
+        complex(dp), pointer :: pft_ref(:,:), pft_ptcl(:,:)
+        complex(dp) :: ctmp, ref_line(self%kfromto(1):self%kfromto(2)), ptcl_line(self%kfromto(1):self%kfromto(2))
         integer     :: irot, jrot, i, ithr, k
-        real(dp)    :: sumsqk, fdp
+        real(dp)    :: sumsqk, fdp, rkinds(self%kfromto(1):self%kfromto(2))
         real        :: cur_sim
         i    =  self%pinds(iptcl)
         ithr = omp_get_thread_num() + 1
-        pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
-        pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
-        pft_ptcl      => self%heap_vars(ithr)%pft_ptcl_8
-        pft_ptcl_tmp  => self%heap_vars(ithr)%pft_ptcl_tmp_8
+        pft_ref  => self%heap_vars(ithr)%pft_ref_8
+        pft_ptcl => self%heap_vars(ithr)%pft_ptcl_8
         if( self%iseven(i) )then
-            pft_ref_tmp_8 = dcmplx(self%pfts_refs_even(:,:,iref))
+            pft_ref = dcmplx(self%pfts_refs_even(:,:,iref))
         else
-            pft_ref_tmp_8 = dcmplx(self%pfts_refs_odd(:,:,iref))
+            pft_ref = dcmplx(self%pfts_refs_odd(:,:,iref))
         endif
+        do k = self%kfromto(1),self%kfromto(2)
+            rkinds(k) = real(k,dp)
+        end do
         bestline_sim = 0.
-        pft_ptcl_tmp = dcmplx(self%pfts_ptcls(:,:,i))
+        pft_ptcl     = dcmplx(self%pfts_ptcls(:,:,i))
         do irot = 1, self%nrots
-            call self%rotate_pft(pft_ref_tmp_8, irot, pft_ref_8)
+            call self%get_pft_irot(pft_ref, irot, ref_line)
+            sumsqk = sum(rkinds * real(ref_line * conjg(ref_line)))
             do jrot = 1, self%nrots
-                call self%rotate_pft(pft_ptcl_tmp, jrot, pft_ptcl)
-                fdp    = 0._dp
-                sumsqk = 0._dp
-                do k = self%kfromto(1),self%kfromto(2)
-                    ctmp   = pft_ptcl(1,k) - pft_ref_8(1,k)
-                    sumsqk = sumsqk + real(k,dp) * real(pft_ref_8(1,k) * conjg(pft_ref_8(1,k)), dp)
-                    fdp    = fdp    + real(k,dp) * real(ctmp           * conjg(ctmp), dp)
-                end do
-                cur_sim = dexp(- fdp / sumsqk)
+                call self%get_pft_irot(pft_ptcl, jrot, ptcl_line)
+                ptcl_line = ptcl_line - ref_line
+                fdp       = sum(rkinds * ptcl_line * conjg(ptcl_line))
+                cur_sim   = dexp(- fdp / sumsqk)
                 if( cur_sim > bestline_sim ) bestline_sim = cur_sim
             enddo
         enddo
