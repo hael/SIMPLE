@@ -67,6 +67,11 @@ interface normalize_sigm
     module procedure normalize_sigm_3
 end interface
 
+interface merge_dmats
+    module procedure merge_dmats_1
+    module procedure merge_dmats_2
+end interface
+
 real, parameter :: NNET_CONST = exp(1.)-1.
 
 contains
@@ -1060,7 +1065,7 @@ contains
         smat = 0.5 * (smat + tmpmat)
     end function merge_smats
 
-    function merge_dmats( dmat1, dmat2 ) result( dmat )
+    function merge_dmats_1( dmat1, dmat2 ) result( dmat )
         real, intent(in)  :: dmat1(:,:), dmat2(:,:)
         real, allocatable :: dmat(:,:), tmpmat(:,:)
         integer :: sz1_1, sz1_2, sz2_1, sz2_2, n
@@ -1076,7 +1081,30 @@ contains
         call normalize_minmax(dmat)
         call normalize_minmax(tmpmat)
         dmat = 0.5 * (dmat + tmpmat)
-    end function merge_dmats
+    end function merge_dmats_1
+
+    function merge_dmats_2( dmat1, dmat2, dmat3 ) result( dmat )
+        real, intent(in)  :: dmat1(:,:), dmat2(:,:), dmat3(:,:)
+        real, allocatable :: dmat(:,:), tmpmat1(:,:), tmpmat2(:,:)
+        integer :: sz1_1, sz1_2, sz2_1, sz2_2, sz3_1, sz3_2, n
+        sz1_1 = size(dmat1,1)
+        sz1_2 = size(dmat1,2)
+        sz2_1 = size(dmat2,1)
+        sz2_2 = size(dmat2,2)
+        sz3_1 = size(dmat3,1)
+        sz3_2 = size(dmat3,2)
+        if( sz1_1 /= sz2_1 .or. sz1_2 /= sz2_2 ) THROW_HARD('identical similarity matrices assumed')
+        if( sz1_1 /= sz3_1 .or. sz1_2 /= sz3_2 ) THROW_HARD('identical similarity matrices assumed')
+        if( sz1_1 /= sz1_2 .or. sz2_1 /= sz2_2 ) THROW_HARD('symmetric similarity matrices assumed')
+        n = sz1_1
+        allocate(dmat(n,n),    source=dmat1)
+        allocate(tmpmat1(n,n), source=dmat2)
+        allocate(tmpmat2(n,n), source=dmat3)
+        call normalize_minmax(dmat)
+        call normalize_minmax(tmpmat1)
+        call normalize_minmax(tmpmat2)
+        dmat = (dmat + tmpmat1 + tmpmat2) / 3.
+    end function merge_dmats_2
 
     function estimate_bimodality_of_cluster( n, smat, labels, icls ) result( bim )
         integer, intent(in)  :: n, labels(n), icls
