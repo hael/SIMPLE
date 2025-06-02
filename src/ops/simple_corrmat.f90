@@ -6,7 +6,7 @@ include 'simple_lib.f08'
 use simple_image, only: image
 implicit none
 
-public :: calc_cartesian_corrmat, calc_inpl_invariant_fm
+public :: calc_cartesian_corrmat, calc_comlin_simmat, calc_inpl_invariant_fm
 private
 
 interface calc_cartesian_corrmat
@@ -128,21 +128,16 @@ contains
         endif
     end subroutine calc_cartesian_corrmat_2
 
-    subroutine calc_inpl_invariant_fm( imgs, hp, lp, trs, corrmat )
-        use simple_pftcc_shsrch_fm
+    subroutine calc_comlin_simmat( imgs, hp, lp, corrmat )
         use simple_polarizer,        only: polarizer
         use simple_polarft_corrcalc, only: polarft_corrcalc
-        class(image),          intent(inout) :: imgs(:)
-        real,                  intent(in)    :: hp, lp, trs
-        real,    allocatable,  intent(out)   :: corrmat(:,:)
-        type(image),           allocatable   :: ccimgs(:,:)
-        type(pftcc_shsrch_fm), allocatable   :: fm_correlators(:)
+         class(image),     intent(inout) :: imgs(:)
+        real,              intent(in)    :: hp, lp
+        real, allocatable, intent(inout) :: corrmat(:,:)
         type(polarizer)        :: polartransform
         type(polarft_corrcalc) :: pftcc
-        real, parameter :: TRS_STEPSZ = 1.0
-        integer :: n, i, j, ithr, nrots, loc(1), irot, ldim(3), box, kfromto(2)
-        real    :: offset(2), offsetm(2), ang, angm, smpd, cc, ccm
-        logical :: lmir
+        integer :: n, i, j, nrots, loc(1), irot, ldim(3), box, kfromto(2)
+        real    :: smpd, cc, ccm
         n          = size(imgs)
         ldim       = imgs(1)%get_ldim()
         box        = ldim(1)
@@ -153,8 +148,70 @@ contains
         call pftcc%new(n, [1,n], kfromto)
         call polartransform%new([box,box,1], smpd)
         call polartransform%init_polarizer(pftcc, KBALPHA)
+        if( allocated(corrmat) ) deallocate(corrmat)
         allocate(corrmat(n,n), source=-1.)
-        ! FOURIER-MELLIN TRANSFORM
+        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
+        do i = 1, n
+            call imgs(i)%fft()
+            call polartransform%polarize(pftcc, imgs(i), i, isptcl=.false., iseven=.true.)
+            call pftcc%cp_even_ref2ptcl(i, i)
+            call pftcc%mirror_ref_pft(i) ! controlled by even/odd flag (see below)
+        end do
+        !$omp end parallel do
+        call pftcc%memoize_refs
+        call pftcc%memoize_ptcls
+        !$omp parallel do default(shared) private(i,j,cc,ccm)&
+        !$omp schedule(dynamic) proc_bind(close)
+        do i = 1, n - 1
+            corrmat(i,i) = 1.
+            do j = i, n
+                ! reference to particle
+                call pftcc%set_eo(i,.true.)
+                cc  = pftcc%bestline_sim(j, i)
+                ! mirrored reference to particle
+                call pftcc%set_eo(i,.false.) ! switch mirror
+                ccm = pftcc%bestline_sim(j, i)
+                if( ccm > cc )then
+                    cc = ccm
+                endif
+                corrmat(i,j) = cc
+                corrmat(j,i) = cc
+            enddo
+        enddo
+        !$omp end parallel do
+        corrmat(n,n) = 1. ! leftover
+        ! tidy
+        call pftcc%kill
+        call polartransform%kill_polarizer
+        call polartransform%kill
+    end subroutine calc_comlin_simmat
+
+    subroutine calc_inpl_invariant_fm( imgs, hp, lp, trs, corrmat )
+        use simple_pftcc_shsrch_fm
+        use simple_polarizer,        only: polarizer
+        use simple_polarft_corrcalc, only: polarft_corrcalc
+        class(image),          intent(inout) :: imgs(:)
+        real,                  intent(in)    :: hp, lp, trs
+        real,    allocatable,  intent(inout) :: corrmat(:,:)
+        type(image),           allocatable   :: ccimgs(:,:)
+        type(pftcc_shsrch_fm), allocatable   :: fm_correlators(:)
+        type(polarizer)        :: polartransform
+        type(polarft_corrcalc) :: pftcc
+        real, parameter :: TRS_STEPSZ = 1.0
+        integer :: n, i, j, ithr, nrots, loc(1), irot, ldim(3), box, kfromto(2)
+        real    :: offset(2), offsetm(2), ang, angm, smpd, cc, ccm
+        n          = size(imgs)
+        ldim       = imgs(1)%get_ldim()
+        box        = ldim(1)
+        smpd       = imgs(1)%get_smpd()
+        kfromto(1) = max(2, calc_fourier_index(hp, box, smpd))
+        kfromto(2) =        calc_fourier_index(lp, box, smpd)
+        ! initialize pftcc, polarizer
+        call pftcc%new(n, [1,n], kfromto)
+        call polartransform%new([box,box,1], smpd)
+        call polartransform%init_polarizer(pftcc, KBALPHA)
+        if( allocated(corrmat) ) deallocate(corrmat)
+        allocate(corrmat(n,n), source=-1.)
         !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i = 1, n
             call imgs(i)%fft()
@@ -172,7 +229,7 @@ contains
             call ccimgs(i,1)%new(ldim, smpd, wthreads=.false.)
             call ccimgs(i,2)%new(ldim, smpd, wthreads=.false.)
         enddo
-        !$omp parallel do default(shared) private(i,j,cc,ccm,ithr,offset,offsetm,ang,angm,lmir)&
+        !$omp parallel do default(shared) private(i,j,cc,ccm,ithr,offset,offsetm,ang,angm)&
         !$omp schedule(dynamic) proc_bind(close)
         do i = 1, n - 1
             ithr = omp_get_thread_num()+1
