@@ -25,7 +25,7 @@ character(len=:), allocatable :: cmd
 type(image)                   :: ref_img, ptcl_img, img1, img2, img1_copy, img2_copy, img
 logical                :: be_verbose=.false.
 real,    parameter     :: SHMAG=1.0
-integer, parameter     :: N_PTCLS = 9
+integer, parameter     :: N_PTCLS = 10
 real,    allocatable   :: corrs(:), norm_const(:, :)
 complex, allocatable   :: cmat(:,:)
 real                   :: corrmax, corr, cxy(3), lims(2,2), shvec(2), cur_sh(2), grad(2)
@@ -120,6 +120,13 @@ call pftcc%shift_ptcl(8, [SHMAG,-SHMAG,0.]) ! left + up
 call img_copy%polarize(pftcc, b%img, 9, isptcl=.false., iseven=.true., mask=b%l_resmsk)
 call img_copy%polarize(pftcc, b%img, 9, isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
 call pftcc%shift_ptcl(9, [0.,0.,0.]) ! no shift
+call b%img%read(p%stk, 2)
+call b%img%norm
+call b%img%fft
+call b%img%clip_inplace([p%box_crop,p%box_crop,1])
+call img_copy%polarize(pftcc, b%img, 10, isptcl=.false., iseven=.true., mask=b%l_resmsk)
+call img_copy%polarize(pftcc, b%img, 10, isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
+call pftcc%shift_ptcl(10, [0.,0.,0.]) ! no shift
 call pftcc%set_with_ctf(.false.)
 call pftcc%memoize_refs
 do i = 1, N_PTCLS
@@ -154,7 +161,7 @@ call ptcl_img%write('ref_ptcl.mrc',2)
 !
 call pftcc%memoize_sqsum_ptcl(1)
 call pftcc%memoize_ptcls
-call grad_shsrch_obj%set_indices(9, 9)
+call grad_shsrch_obj%set_indices(9, 10)
 irot = 1
 cxy  = 0.
 cxy  = grad_shsrch_obj%minimize(irot)
@@ -168,5 +175,11 @@ call img%set_cmat(cmat)
 call img%shift_phorig()
 call img%ifft
 call img%write('rotated_ref.mrc',1)
-print *, 'line sim = ', pftcc%bestline_sim(9, 9)
+print *, 'line sim = ', pftcc%bestline_sim(9, 10)
+call pftcc%polar2cartesian(10,.false.,cmat,box)
+call img%new([box,box,1],1.0)
+call img%set_cmat(cmat)
+call img%shift_phorig()
+call img%ifft
+call img%write('rotated_ref.mrc',2)
 end program simple_test_line_sim
