@@ -2709,7 +2709,7 @@ contains
         integer,                 intent(in)    :: iref
         integer,                 intent(in)    :: iptcl
         complex(dp), pointer :: pft_ref(:,:), pft_ptcl(:,:)
-        complex(dp) :: ctmp, ref_line(self%kfromto(1):self%kfromto(2)), ptcl_line(self%kfromto(1):self%kfromto(2))
+        complex(dp) :: ctmp, ref_line(self%kfromto(1):self%kfromto(2)), line_diff(self%kfromto(1):self%kfromto(2))
         integer     :: irot, jrot, i, ithr, k
         real(dp)    :: sumsqk, fdp, rkinds(self%kfromto(1):self%kfromto(2))
         real        :: cur_sim
@@ -2729,12 +2729,12 @@ contains
         pft_ptcl     = dcmplx(self%pfts_ptcls(:,:,i))
         do irot = 1, self%nrots
             call self%get_pft_irot(pft_ref, irot, ref_line)
-            sumsqk = sum(rkinds * real(ref_line * conjg(ref_line)))
+            sumsqk = sum(rkinds * real(ref_line * conjg(ref_line), dp))
             do jrot = 1, self%nrots
-                call self%get_pft_irot(pft_ptcl, jrot, ptcl_line)
-                ptcl_line = ptcl_line - ref_line
-                fdp       = sum(rkinds * ptcl_line * conjg(ptcl_line))
-                cur_sim   = dexp(- fdp / sumsqk)
+                call self%get_pft_irot(pft_ptcl, jrot, line_diff)
+                line_diff = line_diff - ref_line
+                fdp       = sum(rkinds * real(line_diff * conjg(line_diff), dp))
+                cur_sim   = real(dexp(- fdp / sumsqk))
                 if( cur_sim > bestline_sim ) bestline_sim = cur_sim
             enddo
         enddo
