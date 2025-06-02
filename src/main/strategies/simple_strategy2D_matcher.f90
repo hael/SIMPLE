@@ -23,6 +23,7 @@ use simple_strategy2D_snhc_smpl,   only: strategy2D_snhc_smpl
 use simple_strategy2D_prob,        only: strategy2D_prob
 use simple_euclid_sigma2,          only: euclid_sigma2
 use simple_classaverager
+use simple_polarops
 use simple_progress
 implicit none
 
@@ -51,7 +52,7 @@ contains
         logical,                 intent(inout) :: converged
         type(strategy2D_per_ptcl), allocatable :: strategy2Dsrch(:)
         character(len=STDLEN),     allocatable :: refine_flag
-        real,                      allocatable :: states(:)
+        real,                      allocatable :: states(:), incr_shifts(:,:)
         integer,                   allocatable :: pinds(:), batches(:,:)
         type(eul_prob_tab2D),           target :: probtab
         type(ori)             :: orientation
@@ -60,7 +61,7 @@ contains
         real    :: frac_srch_space, neigh_frac
         integer :: iptcl, fnr, updatecnt, iptcl_map, iptcl_batch, ibatch, nptcls2update
         integer :: batchsz_max, batchsz, nbatches, batch_start, batch_end
-        logical :: l_partial_sums, l_update_frac, l_ctf, l_prob, l_snhc
+        logical :: l_partial_sums, l_update_frac, l_ctf, l_prob, l_snhc, l_polar
         logical :: l_stream, l_greedy, l_np_cls_defined, l_alloc_read_cavgs
         if( L_BENCH_GLOB )then
             t_init = tic()
@@ -104,6 +105,7 @@ contains
             l_update_frac  = params_glob%l_update_frac
             l_partial_sums = l_update_frac .and. (params_glob%extr_iter>1)
         endif
+        l_polar = trim(params_glob%polar).eq.'yes'
 
         ! PARTICLE SAMPLING
         if( allocated(pinds) ) deallocate(pinds)
@@ -135,14 +137,19 @@ contains
             call build_glob%spproj_field%partition_eo
             call build_glob%spproj%write_segment_inside(params_glob%oritype)
         endif
-        l_alloc_read_cavgs = .true.
-        if( .not.l_distr_exec_glob )then
-            l_alloc_read_cavgs = which_iter==1
-        endif
-        call cavger_new(pinds, alloccavgs=l_alloc_read_cavgs)
-        if( l_alloc_read_cavgs )then
-            if( .not. cline%defined('refs') ) THROW_HARD('need refs to be part of command line for cluster2D execution')
-            call cavger_read_all
+        if( l_polar .and. which_iter>1 )then
+            ! references are read in prep_polar_pftcc4align2D below
+            ! On first iteration the references are taken from the input images
+        else
+            l_alloc_read_cavgs = .true.
+            if( .not.l_distr_exec_glob )then
+                l_alloc_read_cavgs = which_iter==1
+            endif
+            call cavger_new(pinds, alloccavgs=l_alloc_read_cavgs)
+            if( l_alloc_read_cavgs )then
+                if( .not. cline%defined('refs') ) THROW_HARD('need refs to be part of command line for cluster2D execution')
+                call cavger_read_all
+            endif
         endif
 
         ! SET FOURIER INDEX RANGE
@@ -153,13 +160,25 @@ contains
         nbatches    = ceiling(real(nptcls2update)/real(batchsz_max))
         batches     = split_nobjs_even(nptcls2update, nbatches)
         batchsz_max = maxval(batches(:,2)-batches(:,1)+1)
+        allocate(incr_shifts(2,batchsz_max),source=0.)
 
         ! GENERATE REFERENCES
         if( L_BENCH_GLOB )then
             rt_init = toc(t_init)
             t_prep_pftcc = tic()
         endif
-        call preppftcc4align2D( pftcc, batchsz_max, which_iter, l_stream )
+        if( l_polar .and. which_iter>1)then
+            ! Polar references, on first iteration the references are taken from the input images
+            call prep_polar_pftcc4align2D( pftcc, batchsz_max, which_iter, l_stream )
+        else
+            ! Cartesian references
+            call preppftcc4align2D( pftcc, batchsz_max, which_iter, l_stream )
+        endif
+        if( l_polar )then
+            ! for restoration
+            if( which_iter == 1 ) call polar_cavger_new(pftcc)
+            call polar_cavger_zero_pft_refs
+        endif
 
         ! ARRAY ALLOCATION FOR STRATEGY2D after pftcc initialization
         call prep_strategy2D_glob( neigh_frac )
@@ -266,10 +285,12 @@ contains
                 strategy2Dspec%stoch_bound = neigh_frac
                 call strategy2Dsrch(iptcl_batch)%ptr%new(strategy2Dspec)
                 call strategy2Dsrch(iptcl_batch)%ptr%srch
+                ! keep track of incremental shift
+                incr_shifts(:,iptcl_batch) = strategy2Dsrch(iptcl_batch)%ptr%s%best_shvec
                 ! calculate sigma2 for ML-based refinement
                 if ( params_glob%l_needs_sigma ) then
                     call build_glob%spproj_field%get_ori(iptcl, orientation)
-                    call orientation%set_shift(strategy2Dsrch(iptcl_batch)%ptr%s%best_shvec) ! incremental shift
+                    call orientation%set_shift(incr_shifts(:,iptcl_batch)) ! incremental shift
                     call eucl_sigma%calc_sigma2(pftcc, iptcl, orientation, 'class')
                 end if
                 ! cleanup
@@ -277,6 +298,11 @@ contains
             enddo ! Particles threaded loop
             !$omp end parallel do
             if( L_BENCH_GLOB ) rt_align = rt_align + toc(t_align)
+            ! restore polar cavgs
+            if( l_polar )then
+                call polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end),&
+                    &build_glob%spproj, pftcc, incr_shifts(:,1:batchsz))
+            endif
         enddo ! Batch loop
 
         ! BALANCING OF NUMBER OF PARTICLES PER CLASS
@@ -320,11 +346,21 @@ contains
         if( L_BENCH_GLOB ) t_cavg = tic()
         if( l_distr_exec_glob )then
             if( trim(params_glob%restore_cavgs).eq.'yes' )then
-                call cavger_transf_oridat( build_glob%spproj )
-                call cavger_assemble_sums( l_partial_sums )
-                call cavger_readwrite_partial_sums('write')
+                if( l_polar )then
+                    call polar_cavger_readwrite_partial_sums('write')
+                    if( params_glob%part==1 )then
+                        call polar_cavger_merge_eos_and_norm
+                        call polar_cavger_calc_and_write_frcs_and_eoavg('polar_'//FRCS_FILE)
+                        call polar_cavger_write_cartrefs(pftcc, 'polar_test', 'merged')
+                    endif
+                else
+                    call cavger_transf_oridat( build_glob%spproj )
+                    call cavger_assemble_sums( l_partial_sums )
+                    call cavger_readwrite_partial_sums('write')
+                endif
             endif
             call cavger_kill
+            call polar_cavger_kill
         else
             ! check convergence
             converged = conv%check_conv2D(cline, build_glob%spproj_field, build_glob%spproj_field%get_n('class'), params_glob%msk)
@@ -333,9 +369,6 @@ contains
             ! Update progress file if not stream
             if(.not. l_stream) call progressfile_update(conv%get('progress'))
             if( trim(params_glob%restore_cavgs).eq.'yes' )then
-                call cavger_transf_oridat( build_glob%spproj )
-                call cavger_assemble_sums( l_partial_sums )
-                call cavger_merge_eos_and_norm
                 if( cline%defined('which_iter') )then
                     params_glob%refs      = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//params_glob%ext
                     params_glob%refs_even = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//'_even'//params_glob%ext
@@ -343,18 +376,34 @@ contains
                 else
                     THROW_HARD('which_iter expected to be part of command line in shared-memory execution')
                 endif
-                call cavger_calc_and_write_frcs_and_eoavg(params_glob%frcs, params_glob%which_iter)
-                ! classdoc gen needs to be after calc of FRCs
-                call cavger_gen2Dclassdoc(build_glob%spproj)
-                ! update command line & write references
-                call cavger_write(params_glob%refs,'merged')
-                call cline%set('refs', trim(params_glob%refs))
-                if( l_stream )then
-                    call cavger_write(params_glob%refs_even,'even')
-                    call cavger_write(params_glob%refs_odd, 'odd')
-                    call cavger_readwrite_partial_sums('write')
+                if( l_polar )then
+                    if( which_iter == 1) call cavger_kill
+                    ! polar restoration
+                    call polar_cavger_merge_eos_and_norm
+                    call polar_cavger_calc_and_write_frcs_and_eoavg(FRCS_FILE)
+                    call polar_cavger_writeall(get_fbody(params_glob%refs,params_glob%ext,separator=.false.))
+                    call polar_cavger_write_cartrefs(pftcc, get_fbody(params_glob%refs,params_glob%ext,separator=.false.), 'merged')
+                    call polar_cavger_gen2Dclassdoc(build_glob%spproj)
+                    call polar_cavger_kill
+                else
+                    ! cartesian restoration
+                    call cavger_transf_oridat( build_glob%spproj )
+                    call cavger_assemble_sums( l_partial_sums )
+                    call cavger_merge_eos_and_norm
+                    call cavger_calc_and_write_frcs_and_eoavg(params_glob%frcs, params_glob%which_iter)
+                    ! classdoc gen needs to be after calc of FRCs
+                    call cavger_gen2Dclassdoc(build_glob%spproj)
+                    ! write references
+                    call cavger_write(params_glob%refs,'merged')
+                    if( l_stream )then
+                        call cavger_write(params_glob%refs_even,'even')
+                        call cavger_write(params_glob%refs_odd, 'odd')
+                        call cavger_readwrite_partial_sums('write')
+                    endif
+                    call cavger_kill(dealloccavgs=.false.)
                 endif
-                call cavger_kill(dealloccavgs=.false.)
+                ! update command line
+                call cline%set('refs', trim(params_glob%refs))
                 ! write project: cls2D and state congruent cls3D
                 call build_glob%spproj%os_cls3D%new(params_glob%ncls, is_ptcl=.false.)
                 states = build_glob%spproj%os_cls2D%get_all('state')
@@ -444,6 +493,9 @@ contains
         call discrete_read_imgbatch( nptcls_here, pinds, [1,nptcls_here])
         ! reassign particles indices & associated variables
         call pftcc%reallocate_ptcls(nptcls_here, pinds)
+        if( .not.build_glob%img_crop_polarizer%polarizer_initialized() )then
+            call build_glob%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
+        endif
         !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr)&
         !$omp schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
@@ -544,5 +596,95 @@ contains
         deallocate(match_imgs,tmp_imgs)
         call cavgs_merged(1)%kill_thread_safe_tmp_imgs
     end subroutine preppftcc4align2D
+
+    !>  \brief  prepares the polarft corrcalc object for search and imports polar references
+    subroutine prep_polar_pftcc4align2D( pftcc, batchsz_max, which_iter, l_stream )
+        use simple_strategy2D3D_common, only: prep2dref
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        integer,                 intent(in)    :: batchsz_max, which_iter
+        logical,                 intent(in)    :: l_stream
+        character(len=:), allocatable :: fname
+        integer   :: icls, pop, pop_even, pop_odd
+        logical   :: has_been_searched
+        has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
+        call pftcc%new(params_glob%ncls, [1,batchsz_max], params_glob%kfromto)
+        ! sigma2
+        if( params_glob%l_needs_sigma )then
+            fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
+            call eucl_sigma%new(fname, params_glob%box)
+            if( l_stream )then
+                call eucl_sigma%read_groups(build_glob%spproj_field)
+                call eucl_sigma%allocate_ptcls
+            else
+                call eucl_sigma%read_part(  build_glob%spproj_field)
+                if( params_glob%cc_objfun == OBJFUN_EUCLID ) call eucl_sigma%read_groups(build_glob%spproj_field)
+            endif
+        endif
+        ! Read polar references
+        call polar_cavger_new(pftcc)
+        call polar_cavger_read_all(params_glob%refs)
+        ! PREPARATION OF REFERENCES IN PFTCC
+        !$omp parallel do default(shared) private(icls,pop,pop_even,pop_odd) schedule(static) proc_bind(close)
+        do icls=1,params_glob%ncls
+            pop      = 1
+            pop_even = 0
+            pop_odd  = 0
+            if( has_been_searched )then
+                pop      = build_glob%spproj_field%get_pop(icls, 'class'      )
+                pop_even = build_glob%spproj_field%get_pop(icls, 'class', eo=0)
+                pop_odd  = build_glob%spproj_field%get_pop(icls, 'class', eo=1)
+            endif
+            if( pop > 0 )then
+                ! prepare the references
+                call polar_prep2Dref( icls )
+                if( .not.params_glob%l_lpset )then
+                    if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
+                        ! transfer e/o refs to pftcc
+                        call polar_cavger_set_ref_pftcc(icls, 'even', pftcc)
+                        call polar_cavger_set_ref_pftcc(icls, 'odd',  pftcc)
+                    else
+                        ! put the merged class average in both even and odd positions
+                        call polar_cavger_set_ref_pftcc(icls, 'merged', pftcc)
+                        call pftcc%cp_even2odd_ref(icls)
+                    endif
+                else
+                    ! put the merged class average in both even and odd positions
+                    call polar_cavger_set_ref_pftcc(icls, 'merged', pftcc)
+                    call pftcc%cp_even2odd_ref(icls)
+                endif
+            endif
+        end do
+        !$omp end parallel do
+        call pftcc%memoize_refs
+    end subroutine prep_polar_pftcc4align2D
+
+    !>  \brief  prepares one polar cluster centre image for alignment
+    subroutine polar_prep2Dref( icls )
+        integer, intent(in) :: icls
+        real, allocatable   :: frc(:), filter(:)
+        integer :: filtsz
+        logical :: l_gaufilter
+        l_gaufilter = params_glob%l_lpset .and. (trim(params_glob%gauref).eq.'yes')
+        if( params_glob%l_ml_reg )then
+            ! no filtering, not supported yet
+        else
+            if( l_gaufilter )then
+                ! Gaussian filter only applied when lp is set and performed below
+                ! FRC filtering turned off
+            else
+                ! FRC-based filtering
+                filtsz = build_glob%clsfrcs%get_filtsz()
+                allocate(frc(filtsz),filter(filtsz),source=0.)
+                call build_glob%clsfrcs%frc_getter(icls, frc)
+                if( any(frc > 0.143) )then
+                    call fsc2optlp_sub(filtsz, frc, filter, merged=params_glob%l_lpset)
+                    call polar_cavger_filterrefs(icls, filter)
+                endif
+                deallocate(frc,filter)
+            endif
+        endif
+        ! Gaussian filter
+        if( l_gaufilter ) call polar_cavger_gaurefs(icls, params_glob%gaufreq)
+    end subroutine polar_prep2Dref
 
 end module simple_strategy2D_matcher

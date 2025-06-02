@@ -52,6 +52,7 @@ type :: parameters
     character(len=3)          :: fillin='no'          !< fillin particle sampling
     character(len=3)          :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
     character(len=3)          :: frc_weight='no'      !< considering particle numbers of classes in computing frc (yes|no){no}
+    character(len=3)          :: gauref='no'          !< Whether to apply a gaussian filter to the polar reference(yes|no){no}
     character(len=3)          :: guinier='no'         !< calculate Guinier plot(yes|no){no}
     character(len=3)          :: graphene_filt='no'   !< filter out graphene bands in correlation search
     character(len=3)          :: greedy_sampling='yes' !< greedy class sampling or not (referring to objective function)
@@ -434,6 +435,7 @@ type :: parameters
     real    :: frac_outliers=0.
     real    :: fraczero=0.
     real    :: ftol=1e-6
+    real    :: gaufreq=-1.0         ! Full width at half maximum frequency for the gaussian filter
     real    :: motion_correctftol = 1e-6   !< tolerance (gradient) for motion_correct
     real    :: motion_correctgtol = 1e-6   !< tolerance (function value) for motion_correct
     real    :: hp=100.             !< high-pass limit(in A)
@@ -642,6 +644,7 @@ contains
         call check_carg('flipgain',       self%flipgain)
         call check_carg('ft2img',         self%ft2img)
         call check_carg('frc_weight',     self%frc_weight)
+        call check_carg('gauref',         self%gauref)
         call check_carg('guinier',        self%guinier)
         call check_carg('graphene_filt',  self%graphene_filt)
         call check_carg('greedy_sampling',self%greedy_sampling)
@@ -963,6 +966,7 @@ contains
         call check_rarg('frac_outliers',  self%frac_outliers)
         call check_rarg('fraczero',       self%fraczero)
         call check_rarg('ftol',           self%ftol)
+        call check_rarg('gaufreq',        self%gaufreq)
         call check_rarg('hp',             self%hp)
         call check_rarg('hp_ctf_estimate',self%hp_ctf_estimate)
         call check_rarg('icefracthreshold',self%icefracthreshold)
