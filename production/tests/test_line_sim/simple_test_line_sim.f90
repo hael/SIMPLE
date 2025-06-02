@@ -7,11 +7,11 @@ use simple_image,             only: image
 use simple_parameters,        only: parameters, params_glob
 use simple_polarizer,         only: polarizer
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
+use simple_pftcc_shsrch_fm,   only: pftcc_shsrch_fm
 use simple_commander_volops,  only: reproject_commander
 use simple_optimizer,         only: optimizer
 use simple_opt_factory,       only: opt_factory
 use simple_opt_spec,          only: opt_spec
-! use simple_clustering_utils,  only: line_sim
 use simple_image
 implicit none
 type(cmdline)                 :: cline, cline_projection
@@ -20,6 +20,7 @@ type(parameters)              :: p
 type(polarft_corrcalc)        :: pftcc
 type(polarizer)               :: img_copy, polar_img
 type(pftcc_shsrch_grad)       :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
+type(pftcc_shsrch_fm)         :: fm_correlator
 type(reproject_commander)     :: xreproject
 character(len=:), allocatable :: cmd
 type(image)                   :: ref_img, ptcl_img, img1, img2, img1_copy, img2_copy, img
@@ -37,8 +38,9 @@ class(optimizer), pointer   :: opt_ptr=>null()      ! the generic optimizer obje
 integer,          parameter :: NDIM=2, NRESTARTS=1
 type(opt_factory) :: ofac                           ! the optimization factory object
 type(opt_spec)    :: spec                           ! the optimizer specification object
+type(image)       :: ccimgs(2)
 character(len=8)  :: str_opts                       ! string descriptors for the NOPTS optimizers
-real              :: lowest_cost
+real              :: lowest_cost, ang, offset(2), cc
 integer           :: box
 if( command_argument_count() < 3 )then
     write(logfhandle,'(a)',advance='no') 'ERROR! Usage: simple_test_line_sim stk=<particles.ext> mskdiam=<mask radius(in pixels)>'
@@ -168,18 +170,39 @@ cxy  = grad_shsrch_obj%minimize(irot)
 print *, 'irot = ', irot
 print *, 'sh   = ', cxy(2:3)
 if( irot == 0 ) cxy(2:3) = 0.
-call pftcc%rotate_iref(9, irot, cxy(2:3))
+print *, 'best line sim (full inplane/shift) = ', pftcc%bestline_sim(9, irot, cxy(2:3), 10)
+! debugging, i.e.
 call pftcc%polar2cartesian(9,.true.,cmat,box)
-call img%new([box,box,1],1.0)
-call img%set_cmat(cmat)
-call img%shift_phorig()
-call img%ifft
-call img%write('rotated_ref.mrc',1)
-print *, 'line sim = ', pftcc%bestline_sim(9, 10)
+call ref_img%new([box,box,1],1.0)
+call ref_img%set_cmat(cmat)
+call ref_img%shift_phorig()
+call ref_img%ifft
+call ref_img%write('rotated_ref.mrc',1)
 call pftcc%polar2cartesian(10,.false.,cmat,box)
-call img%new([box,box,1],1.0)
-call img%set_cmat(cmat)
-call img%shift_phorig()
-call img%ifft
-call img%write('rotated_ref.mrc',2)
+call ptcl_img%new([box,box,1],1.0)
+call ptcl_img%set_cmat(cmat)
+call ptcl_img%shift_phorig()
+call ptcl_img%ifft
+call ptcl_img%write('rotated_ref.mrc',2)
+! using fm correlator for offsets inplane rotation before using bestline_sim
+call fm_correlator%new(p%trs,1.,opt_angle=.false.)
+call ref_img%kill
+call ref_img%new([p%box_crop,p%box_crop,1],p%smpd_crop)
+call ref_img%read(p%stk, 1)
+call ref_img%norm
+call ref_img%fft
+call ref_img%clip_inplace([p%box_crop,p%box_crop,1])
+call ptcl_img%kill
+call ptcl_img%new([p%box_crop,p%box_crop,1],p%smpd_crop)
+call ptcl_img%read(p%stk, 2)
+call ptcl_img%norm
+call ptcl_img%fft
+call ptcl_img%clip_inplace([p%box_crop,p%box_crop,1])
+call ccimgs(1)%new( ref_img%get_ldim(), p%smpd_crop, wthreads=.false.)
+call ccimgs(2)%new(ptcl_img%get_ldim(), p%smpd_crop, wthreads=.false.)
+call fm_correlator%calc_phasecorr(9, 10, ref_img, ptcl_img, ccimgs(1), ccimgs(2), cc, rotang=ang, shift=offset)
+irot = pftcc%get_roind(ang)
+print *, 'fm irot   = ', irot
+print *, 'fm offset = ', offset
+print *, 'best line sim (fm inplane/offset)  = ', pftcc%bestline_sim(9, irot, offset, 10)
 end program simple_test_line_sim
