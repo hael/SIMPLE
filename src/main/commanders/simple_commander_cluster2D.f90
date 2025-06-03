@@ -1915,7 +1915,7 @@ contains
         character(len=:),  allocatable :: frcs_fname
         real,              allocatable :: frcs(:,:), filter(:), resarr(:), frc(:), mm(:,:)
         real,              allocatable :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:), dmat_tvd(:,:), smat_tvd(:,:), dmat_joint(:,:)
-        real,              allocatable :: smat_joint(:,:), dmat(:,:), res_bad(:), res_good(:), clust_entropy(:), dmat_jsd(:,:), smat_jsd(:,:)
+        real,              allocatable :: smat_joint(:,:), dmat(:,:), res_bad(:), res_good(:), clust_jsd(:), dmat_jsd(:,:), smat_jsd(:,:)
         real,              allocatable :: dmat_hd(:,:), dmat_hist(:,:), dmat_fm(:,:)
         real,              allocatable :: clust_scores(:), clust_res(:), clust_res_ranked(:), resvals(:), clust_res_dists(:,:)
         logical,           allocatable :: l_msk(:,:,:), l_non_junk(:)
@@ -1933,7 +1933,7 @@ contains
         integer :: filtsz, nclust_aff_prop, i, j, ii, jj, nclust, iclust, rank_bound
         real    :: smpd, simsum, cmin, cmax, pref, fsc_res, rfoo, frac_good, best_res
         real    :: worst_res, dist2best, dist2worst, dist_min, dist, oa_min, oa_max
-        logical :: l_apply_optlp
+        logical :: l_apply_optlp, l_calc_jsd
         ! defaults
         call cline%set('oritype', 'cls2D')
         call cline%set('ctf',        'no')
@@ -2072,9 +2072,6 @@ contains
                         dmat       = smat2dmat(smat_joint)
                 end select
             case('jsd','jsdfm','powjsdfm') ! clustering involving Jensen-Shannon Divergence, symmetrized K-L Divergence
-
-            !!!!!!!!!!!!!!! BEAUTIFUL CLUSTERING ON ITS OWN, TEST TO RANK CLUSTERS BASED ON THIS ONE
-
                 allocate(dmat_jsd(ncls_sel,ncls_sel), source=0.)
                 do i = 1, ncls_sel - 1
                     do j = i + 1, ncls_sel
@@ -2171,7 +2168,7 @@ contains
                 where( clust_pops < 2 ) clust_res = worst_res ! nothing else makes sense
                 ! rank clusters based on their resolution
                 allocate(clust_order(nclust), rank_assign(ncls_sel), i_medoids_ranked(nclust),&
-                clust_res_ranked(nclust), clust_scores(nclust), clust_entropy(nclust), clust_algninfo_ranked(nclust))
+                clust_res_ranked(nclust), clust_scores(nclust), clust_jsd(nclust), clust_algninfo_ranked(nclust))
                 clust_order = (/(iclust,iclust=1,nclust)/)
                 call hpsort(clust_order, ci_better_than_cj)
                 ! create ranked medoids and labels
@@ -2223,23 +2220,24 @@ contains
                 ! make good/bad assignment
                 allocate(good_bad_assign(nclust), source=0)
                 good_bad_assign(:rank_bound) = 1
+                l_calc_jsd = allocated(dmat_jsd)
                 ! report cluster scores & resolution
                 do iclust = 1, nclust
-                    clust_scores(iclust)  = 0.
-                    clust_entropy(iclust) = 0.
+                    clust_scores(iclust) = 0.
+                    clust_jsd(iclust)    = 0.
                     cnt = 0
                     do icls = 1, ncls_sel 
                         if( labels(icls) == iclust )then
                             call spproj%os_cls2D%set(clsinds(icls),'cluster',iclust) ! project update
-                            clust_scores(iclust)  = clust_scores(iclust)  + corrmat(icls,i_medoids(iclust))
-                            clust_entropy(iclust) = clust_entropy(iclust) + hists(icls)%entropy()
+                            clust_scores(iclust)               = clust_scores(iclust)  + corrmat(icls,i_medoids(iclust))
+                            if( l_calc_jsd ) clust_jsd(iclust) = clust_jsd(iclust)     + dmat_jsd(icls,i_medoids(iclust))
                             cnt = cnt + 1
                         endif
                     enddo
-                    clust_scores(iclust)  = clust_scores(iclust)  / real(cnt)
-                    clust_entropy(iclust) = clust_entropy(iclust) / real(cnt)
+                    clust_scores(iclust) = clust_scores(iclust) / real(cnt)
+                    clust_jsd(iclust)    = (clust_jsd(iclust)    / real(cnt)) * 100. 
                     write(logfhandle,'(A,f7.3,A,f5.1,A,f5.1,A,I3))') 'cluster_ranked'//int2str_pad(iclust,2)//'.mrc, score: ',&
-                    &clust_scores(iclust), ' res: ', clust_res(iclust), ' entropy: ', clust_entropy(iclust), ' good_bad_assign: ', good_bad_assign(iclust)
+                    &clust_scores(iclust), ' res: ', clust_res(iclust), ' Jensen-Shannon Divergence (%): ', clust_jsd(iclust), ' good_bad_assign: ', good_bad_assign(iclust)
                 end do
                 ! check number of particles selected
                 nptcls      = sum(clust_nptcls)
