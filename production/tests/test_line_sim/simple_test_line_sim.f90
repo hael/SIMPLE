@@ -212,4 +212,5 @@ print *, 'best line sim fm                          = ', pftcc%bestline_sim_fm(9
 print *, 'best line sim fm (full fm inplane/offset) = ', pftcc%bestline_sim_fm(9, 10, irot, offset)
 print *, 'best line sim mag                         = ', pftcc%bestline_sim_mag(9, 10)
 print *, 'best line sim mag(full fm inplane/offset) = ', pftcc%bestline_sim_mag(9, 10, irot, offset)
+print *, 'best line sim aggressive mag              = ', pftcc%bestline_sim_aggmag(9, 10)
 end program simple_test_line_sim

@@ -200,7 +200,7 @@ type :: polarft_corrcalc
     generic            :: rotate_iref => rotate_iref_1, rotate_iref_2
     procedure, private :: bestline_sim_1, bestline_sim_2, bestline_sim_3
     generic            :: bestline_sim => bestline_sim_1, bestline_sim_2, bestline_sim_3
-    procedure          :: bestline_sim_fm, bestline_sim_mag
+    procedure          :: bestline_sim_fm, bestline_sim_mag, bestline_sim_aggmag
     procedure, private :: get_pft_irot
     ! DESTRUCTOR
     procedure          :: kill
@@ -2889,6 +2889,52 @@ contains
             enddo
         enddo
     end function bestline_sim_mag
+
+    real function bestline_sim_aggmag( self, iref, iptcl, ref_rot, sh )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref
+        integer,                 intent(in)    :: iptcl
+        integer,     optional,   intent(in)    :: ref_rot
+        real,        optional,   intent(in)    :: sh(2)
+        complex(dp), pointer :: pft_ref(:,:), pft_ptcl(:,:), pft_ref_tmp(:,:)
+        complex(dp) :: ref_line(self%kfromto(1):self%kfromto(2)), line_diff(self%kfromto(1):self%kfromto(2))
+        real(dp)    :: rkinds(self%kfromto(1):self%kfromto(2)), sumsqk, rref_line(self%kfromto(1):self%kfromto(2)), rline_diff(self%kfromto(1):self%kfromto(2))
+        integer     :: irot, jrot, i, ithr, k
+        real        :: cur_sim
+        i    =  self%pinds(iptcl)
+        ithr = omp_get_thread_num() + 1
+        pft_ref     => self%heap_vars(ithr)%pft_ref_8
+        pft_ref_tmp => self%heap_vars(ithr)%pft_ref_tmp_8
+        pft_ptcl    => self%heap_vars(ithr)%pft_ptcl_8
+        if( self%iseven(i) )then
+            pft_ref_tmp = self%pfts_refs_even(:,:,iref)
+        else
+            pft_ref_tmp = self%pfts_refs_odd(:,:,iref)
+        endif
+        if( present(ref_rot) .and. present(sh) )then
+            call self%rotate_iref_2( pft_ref_tmp, ref_rot, sh, pft_ref )
+        else
+            pft_ref = pft_ref_tmp
+        endif
+        do k = self%kfromto(1),self%kfromto(2)
+            rkinds(k) = real(k,dp)
+        end do
+        bestline_sim_aggmag = 0.
+        pft_ptcl            = dcmplx(self%pfts_ptcls(:,:,i))
+        do irot = 1, self%nrots
+            call self%get_pft_irot(pft_ref, irot, ref_line)
+            rref_line = real(ref_line * conjg(ref_line), dp)
+            sumsqk    = sum(rkinds * rref_line**2)
+            do jrot = 1, self%nrots
+                call self%get_pft_irot(pft_ptcl, jrot, line_diff)
+                rline_diff = real(line_diff * conjg(line_diff), dp)
+                rline_diff = abs(rline_diff - rref_line)
+                cur_sim    = sum(rkinds * rline_diff)
+                cur_sim    = real(dexp(- cur_sim / dsqrt(sumsqk)))
+                if( cur_sim > bestline_sim_aggmag ) bestline_sim_aggmag = cur_sim
+            enddo
+        enddo
+    end function bestline_sim_aggmag
 
     real(dp) function gencorr_euclid_line_for_rot( self, line_rot, iref, iptcl, irot, shvec )
         class(polarft_corrcalc), intent(inout) :: self
