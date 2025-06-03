@@ -2033,7 +2033,7 @@ contains
         ! create pspecs object
         call pows%new(cavg_imgs, spproj%os_cls2D, params%msk, HP_SPEC, LP_SPEC, params%ncls_spec, l_exclude_junk=.false.)
         ! create a joint similarity matrix for clustering based on spectral profile and in-plane invariant correlation
-        call pows%calc_distmat
+        call pows%calc_distmat(is_l1=trim(params%dist_type).eq.'l1')
         dmat_pow = pows%get_distmat()
         smat_pow = dmat2smat(dmat_pow)
         ! calculate inpl_invariant_fm corrmat

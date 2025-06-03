@@ -226,18 +226,33 @@ contains
 
     ! clustering
 
-    subroutine calc_distmat( self )
-        class(pspecs), intent(inout) :: self
+    subroutine calc_distmat( self, is_l1 )
+        class(pspecs),     intent(inout) :: self
+        logical, optional, intent(in)    :: is_l1
+        logical :: ll1
         integer :: i, j
+        ll1          = .false.
         self%distmat = 0.
-        !$omp parallel do default(shared) private(i,j) proc_bind(close) schedule(dynamic)
-        do i = 1, self%nspecs - 1
-            do j = i + 1, self%nspecs
-                self%distmat(i,j) = euclid(self%pspecs(i,:),self%pspecs(j,:))
-                self%distmat(j,i) = self%distmat(i,j)
+        if( present(is_l1) ) ll1 = is_l1
+        if( ll1 )then
+            !$omp parallel do default(shared) private(i,j) proc_bind(close) schedule(dynamic)
+            do i = 1, self%nspecs - 1
+                do j = i + 1, self%nspecs
+                    self%distmat(i,j) = l1dist(self%pspecs(i,:),self%pspecs(j,:))
+                    self%distmat(j,i) = self%distmat(i,j)
+                end do
             end do
-        end do
-        !$omp end parallel do
+            !$omp end parallel do
+        else
+            !$omp parallel do default(shared) private(i,j) proc_bind(close) schedule(dynamic)
+            do i = 1, self%nspecs - 1
+                do j = i + 1, self%nspecs
+                    self%distmat(i,j) = euclid(self%pspecs(i,:),self%pspecs(j,:))
+                    self%distmat(j,i) = self%distmat(i,j)
+                end do
+            end do
+            !$omp end parallel do
+        endif
     end subroutine calc_distmat
 
     ! make initial grouping based on dynamic range ranking
