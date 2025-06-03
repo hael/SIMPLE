@@ -261,7 +261,7 @@ contains
 
     end subroutine calc_phasecorr
 
-    ! exhaustive coarse grid search fllowed by peak interpolation
+    ! exhaustive coarse grid search flowed by peak interpolation
     subroutine exhaustive_search( self, iref, iptcl, irot, score, offset )
         class(pftcc_shsrch_fm), intent(inout) :: self
         integer,                intent(in)    :: iref, iptcl

@@ -200,6 +200,7 @@ type :: polarft_corrcalc
     generic            :: rotate_iref => rotate_iref_1, rotate_iref_2
     procedure, private :: bestline_sim_1, bestline_sim_2, bestline_sim_3
     generic            :: bestline_sim => bestline_sim_1, bestline_sim_2, bestline_sim_3
+    procedure          :: bestline_sim_fm
     procedure, private :: get_pft_irot
     ! DESTRUCTOR
     procedure          :: kill
@@ -2793,34 +2794,43 @@ contains
         enddo
     end function bestline_sim_3
 
-    real function bestline_sim_fm( self, iref, iptcl )
+    real function bestline_sim_fm( self, iref, iptcl, ref_rot, sh )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref
         integer,                 intent(in)    :: iptcl
-        complex, pointer :: pft_ref(:,:), pft_ref_tmp(:,:), pft_ptcl(:,:)
-        complex :: cc1, cc2
-        integer :: irot, jrot, i, ithr
-        real    :: cur_sim, var1, var2, norm
+        integer,     optional,   intent(in)    :: ref_rot
+        real,        optional,   intent(in)    :: sh(2)
+        complex(dp), pointer :: pft_ref(:,:), pft_ptcl(:,:), pft_ref_tmp(:,:)
+        complex(dp) :: ref_line(self%kfromto(1):self%kfromto(2)), ptcl_line(self%kfromto(1):self%kfromto(2))
+        complex(dp) :: cc1, cc2
+        integer     :: irot, jrot, i, ithr
+        real(dp)    :: var1, var2, norm
+        real        :: cur_sim
         i    =  self%pinds(iptcl)
         ithr = omp_get_thread_num() + 1
-        pft_ref      => self%heap_vars(ithr)%pft_ref
-        pft_ref_tmp  => self%heap_vars(ithr)%pft_ref_tmp
-        pft_ptcl     => self%heap_vars(ithr)%pft_tmp
+        pft_ref     => self%heap_vars(ithr)%pft_ref_8
+        pft_ref_tmp => self%heap_vars(ithr)%pft_ref_tmp_8
+        pft_ptcl    => self%heap_vars(ithr)%pft_ptcl_8
         if( self%iseven(i) )then
             pft_ref_tmp = self%pfts_refs_even(:,:,iref)
         else
             pft_ref_tmp = self%pfts_refs_odd(:,:,iref)
         endif
+        if( present(ref_rot) .and. present(sh) )then
+            call self%rotate_iref_2( pft_ref_tmp, ref_rot, sh, pft_ref )
+        else
+            pft_ref = pft_ref_tmp
+        endif
         bestline_sim_fm = 0.
         do irot = 1, self%nrots
-            call self%rotate_pft(pft_ref_tmp, irot, pft_ref)
+            call self%get_pft_irot(pft_ref, irot, ref_line)
             do jrot = 1, self%nrots
-                call self%rotate_pft(self%pfts_ptcls(:,:,i), jrot, pft_ptcl)
-                cc1  = sum(pft_ref( 1,:) * conjg(pft_ptcl(1,:)))
-                cc2  = sum(pft_ref( 1,:) *       pft_ptcl(1,:))
-                var1 = sum(pft_ref( 1,:) * conjg(pft_ref( 1,:)))
-                var2 = sum(pft_ptcl(1,:) * conjg(pft_ptcl(1,:)))
-                norm = real(2. * sqrt(var1*var2))
+                call self%get_pft_irot(pft_ptcl, jrot, ptcl_line)
+                cc1  = sum( ref_line * conjg(ptcl_line))
+                cc2  = sum( ref_line *       ptcl_line)
+                var1 = sum( ref_line * conjg( ref_line))
+                var2 = sum(ptcl_line * conjg(ptcl_line))
+                norm = real(dsqrt(var1*var2), dp)
                 cc1  = cc1/norm
                 cc2  = cc2/norm
                 if( real(cc1*conjg(cc1)) > real(cc2*conjg(cc2)) )then
