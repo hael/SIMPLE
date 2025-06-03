@@ -170,7 +170,7 @@ cxy  = grad_shsrch_obj%minimize(irot)
 print *, 'irot = ', irot
 print *, 'sh   = ', cxy(2:3)
 if( irot == 0 ) cxy(2:3) = 0.
-print *, 'best line sim (full inplane/shift) = ', pftcc%bestline_sim(9, irot, cxy(2:3), 10)
+print *, 'best line sim    (full    inplane/shift ) = ', pftcc%bestline_sim(9, irot, cxy(2:3), 10)
 ! debugging, i.e.
 call pftcc%polar2cartesian(9,.true.,cmat,box)
 call ref_img%new([box,box,1],1.0)
@@ -204,5 +204,7 @@ call fm_correlator%calc_phasecorr(9, 10, ref_img, ptcl_img, ccimgs(1), ccimgs(2)
 irot = pftcc%get_roind(ang)
 print *, 'fm irot   = ', irot
 print *, 'fm offset = ', offset
-print *, 'best line sim (fm inplane/offset)  = ', pftcc%bestline_sim(9, irot, offset, 10)
+print *, 'best line sim    (full fm inplane/offset) = ', pftcc%bestline_sim(9, irot, offset, 10)
+print *, 'best line sim fm                          = ', pftcc%bestline_sim_fm(9, 10)
+print *, 'best line sim fm (full fm inplane/offset) = ', pftcc%bestline_sim_fm(9, 10, irot, offset)
 end program simple_test_line_sim
