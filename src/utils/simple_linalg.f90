@@ -1459,7 +1459,7 @@ contains
     pure function l1dist_dp( vec1, vec2 ) result( dist )
         real(dp), intent(in) :: vec1(:), vec2(:)
         real(dp)             :: dist
-        dist = sum(abs(vec1-vec2)**2)
+        dist = sum(abs(vec1-vec2))
     end function l1dist_dp
 
     !>   normalize mean of both vectors to 0 before computing distance between vectors
