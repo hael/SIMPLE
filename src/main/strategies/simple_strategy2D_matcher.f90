@@ -661,30 +661,39 @@ contains
     !>  \brief  prepares one polar cluster centre image for alignment
     subroutine polar_prep2Dref( icls )
         integer, intent(in) :: icls
-        real, allocatable   :: frc(:), filter(:)
-        integer :: filtsz
-        logical :: l_gaufilter
-        l_gaufilter = params_glob%l_lpset .and. (trim(params_glob%gauref).eq.'yes')
+        real, allocatable   :: frc(:), filter(:), gaufilter(:)
+        real    :: cref
+        integer :: filtsz, k
         if( params_glob%l_ml_reg )then
             ! no filtering, not supported yet
         else
-            if( l_gaufilter )then
-                ! Gaussian filter only applied when lp is set and performed below
-                ! FRC filtering turned off
+            ! FRC-based filter
+            filtsz = build_glob%clsfrcs%get_filtsz()
+            allocate(frc(filtsz),filter(filtsz),source=0.)
+            call build_glob%clsfrcs%frc_getter(icls, frc)
+            if( any(frc > 0.143) )then
+                call fsc2optlp_sub(filtsz, frc, filter, merged=params_glob%l_lpset)
             else
-                ! FRC-based filtering
-                filtsz = build_glob%clsfrcs%get_filtsz()
-                allocate(frc(filtsz),filter(filtsz),source=0.)
-                call build_glob%clsfrcs%frc_getter(icls, frc)
-                if( any(frc > 0.143) )then
-                    call fsc2optlp_sub(filtsz, frc, filter, merged=params_glob%l_lpset)
-                    call polar_cavger_filterrefs(icls, filter)
-                endif
-                deallocate(frc,filter)
+                filter = 1.0
             endif
+            ! gaussian filter
+            if(trim(params_glob%gauref).eq.'yes')then
+                call gaussian_filter(params_glob%gaufreq, params_glob%smpd, params_glob%box, gaufilter)
+                do k = 1,filtsz
+                    filter(k) = min(filter(k), gaufilter(k))
+                enddo
+                deallocate(gaufilter)
+            endif
+            ! ! threshold below frc=0.143
+            ! do k = 1,filtsz
+            !     if( frc(k) < 0.143 )then
+            !         filter(k:) = 0.0
+            !         exit
+            !     endif
+            ! enddo
+            call polar_cavger_filterrefs(icls, filter)
+            deallocate(frc,filter)
         endif
-        ! Gaussian filter
-        if( l_gaufilter ) call polar_cavger_gaurefs(icls, params_glob%gaufreq)
     end subroutine polar_prep2Dref
 
 end module simple_strategy2D_matcher
