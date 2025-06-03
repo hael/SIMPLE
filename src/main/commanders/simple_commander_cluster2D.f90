@@ -1939,12 +1939,12 @@ contains
         call cline%set('ctf',        'no')
         call cline%set('objfun',     'cc')
         call cline%set('sh_inv',    'yes') ! shift invariant search
-        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',        'yes')
-        if( .not. cline%defined('trs')        ) call cline%set('trs',            10.)
-        if( .not. cline%defined('kweight')    ) call cline%set('kweight',      'all')
-        if( .not. cline%defined('lp')         ) call cline%set('lp',              6.)
-        if( .not. cline%defined('prune')      ) call cline%set('prune',         'no')
-        if( .not. cline%defined('clust_crit') ) call cline%set('clust_crit', 'powfm')
+        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',         'yes')
+        if( .not. cline%defined('trs')        ) call cline%set('trs',             10.)
+        if( .not. cline%defined('kweight')    ) call cline%set('kweight',       'all')
+        if( .not. cline%defined('lp')         ) call cline%set('lp',               6.)
+        if( .not. cline%defined('prune')      ) call cline%set('prune',          'no')
+        if( .not. cline%defined('clust_crit') ) call cline%set('clust_crit', 'hybrid')
         ! master parameters
         call params%new(cline)
         ! get class average stack
@@ -2112,10 +2112,10 @@ contains
                     end do
                 end do
                 !$omp end parallel do
-                dmat_hist = merge_dmats(dmat_tvd, dmat_jsd, dmat_hd)
+                dmat_hist = merge_dmats(dmat_tvd, dmat_jsd, dmat_hd) ! the different histogram distances are given equal weight
                 call normalize_minmax(dmat_pow)
                 dmat_fm   = smat2dmat(corrmat)
-                dmat      = (dmat_hist + dmat_pow + dmat_fm)/3.
+                dmat      = (dmat_hist + dmat_pow + dmat_fm) / 3.
             case DEFAULT
                 THROW_HARD('Unsupported clustering criterion: '//trim(params%clust_crit))
         end select
@@ -2204,7 +2204,7 @@ contains
                     call dealloc_imgarr(cluster_imgs)
                     call dealloc_imgarr(cluster_imgs_aligned)
                 end do
-                ! find and optimal rank boundary
+                ! find optimal rank boundary
                 allocate(clust_res_dists(nclust,nclust), source=0.)
                 do i = 1, nclust - 1
                     do j = i + 1, nclust
