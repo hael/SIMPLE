@@ -196,7 +196,6 @@ contains
                 ctf2_even(:,:,icls) = 0.d0
                 ctf2_odd(:,:,icls)  = 0.d0
             else
-                ! w*CTF**2 density correction
                 if(pop > 1)then
                     numerator   = pfts_even(:,:,icls) + pfts_odd(:,:,icls)
                     denominator = ctf2_even(:,:,icls) + ctf2_odd(:,:,icls)
@@ -223,7 +222,7 @@ contains
         allocate(frc(filtsz),source=0.)
         !$omp parallel do default(shared) private(icls,frc,find,pop,eo_pop) schedule(static) proc_bind(close)
         do icls = 1,ncls
-            eo_pop = prev_eo_pops(icls,:) + eo_pops(icls,:) ! eo_pops has to be calculated differently
+            eo_pop = prev_eo_pops(icls,:) + eo_pops(icls,:)
             pop    = sum(eo_pop)
             if( pop == 0 )then
                 frc = 0.
@@ -233,7 +232,8 @@ contains
                 call calc_frc(pfts_even(:,:,icls), pfts_odd(:,:,icls), filtsz, frc)
                 call build_glob%clsfrcs%set_frc(icls, frc, 1)
                 ! average low-resolution info between eo pairs to keep things in register
-                find = build_glob%clsfrcs%estimate_find_for_eoavg(icls, 1)
+                find = min(kfromto(2), build_glob%clsfrcs%estimate_find_for_eoavg(icls, 1))
+                ! find = min(build_glob%clsfrcs%estimate_find_for_eoavg(icls, 1, frc4eoavg=0.9), kfromto(2))
                 if( find >= kfromto(1) )then
                     pfts_even(:,kfromto(1):find,icls) = pfts_refs(:,kfromto(1):find,icls)
                     pfts_odd(:,kfromto(1):find,icls)  = pfts_refs(:,kfromto(1):find,icls)
@@ -668,13 +668,15 @@ contains
         complex(dp), intent(in)    :: pft1(pftsz,kfromto(1):kfromto(2)), pft2(pftsz,kfromto(1):kfromto(2))
         integer,     intent(in)    :: n
         real(sp),    intent(inout) :: frc(1:n)
-        real(dp) :: denom
+        real(dp) :: var1, var2, denom
         integer  :: k
         frc(1:kfromto(1)-1) = 0.999
         do k = kfromto(1), kfromto(2)
-            denom = sum(csq_fast(pft1(:,k))) * sum(csq_fast(pft2(:,k)))
-            if( denom > DTINY )then
-                frc(k) = real(sum(pft1(:,k)*conjg(pft2(:,k))) / sqrt(denom), sp)
+            var1  = sum(csq_fast(pft1(:,k)))
+            var2  = sum(csq_fast(pft2(:,k)))
+            if( (var1>DTINY) .and. (var2>DTINY) )then
+                denom  = sqrt(var1) * sqrt(var2)
+                frc(k) = real(sum(pft1(:,k)*conjg(pft2(:,k))) / denom, sp)
             else
                 frc(k) = 0.0
             endif

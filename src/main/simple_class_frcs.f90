@@ -278,13 +278,17 @@ contains
         call self%bound_res(self%frcs(sstate,cls,:), res_frc05, res_frc0143)
     end subroutine estimate_res
 
-    function estimate_find_for_eoavg( self, cls, state ) result( find )
+    function estimate_find_for_eoavg( self, cls, state, frc4eoavg ) result( find )
         class(class_frcs), intent(in)  :: self
         integer,           intent(in)  :: cls
         integer, optional, intent(in)  :: state
+        real,    optional, intent(in)  :: frc4eoavg
+        real    :: frcval
         integer :: sstate, find
         sstate = 1
         if( present(state) ) sstate = state
+        frcval = FSC4EOAVG2D
+        if( present(frc4eoavg) ) frcval = frc4eoavg
         call self%raise_exception( cls, sstate, 'ERROR, out of bounds in estimate_find_for_eoavg')
         find = max(K4EOAVGLB,get_find_at_crit(self%frcs(sstate,cls,:), FSC4EOAVG2D))
     end function estimate_find_for_eoavg

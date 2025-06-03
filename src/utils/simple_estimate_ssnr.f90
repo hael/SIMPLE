@@ -12,7 +12,8 @@ use simple_fileio
 implicit none
 
 public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp
-public :: lowpass_from_klim, mskdiam2lplimits, mskdiam2streamresthreshold
+public :: lowpass_from_klim, gaussian_filter
+public :: mskdiam2lplimits, mskdiam2streamresthreshold
 public :: calc_dose_weights, get_resolution, get_resolution_at_fsc
 public :: lpstages, lpstages_fast
 private
@@ -108,6 +109,22 @@ contains
             endif
         end do
     end subroutine lowpass_from_klim
+
+    subroutine gaussian_filter( freq, smpd, box, filter )
+        real,                 intent(in) :: freq, smpd
+        integer,              intent(in) :: box
+        real, allocatable, intent(inout) :: filter(:)
+        real    :: A
+        integer :: k, filtsz
+        filtsz = fdim(box)-1
+        if( allocated(filter) ) deallocate(filter)
+        allocate(filter(filtsz),source=0.)
+        A = freq / smpd / real(box)
+        A = 0.5 * (PI * 2.0 * A / 2.35482)**2
+        do k = 1,filtsz
+            filter(k) = real(exp(-real(k**2) * A))
+        enddo
+    end subroutine gaussian_filter
 
     subroutine mskdiam2lplimits( mskdiam, lpstart,lpstop, lpcen )
         real, intent(in)    :: mskdiam
