@@ -171,6 +171,8 @@ print *, 'irot = ', irot
 print *, 'sh   = ', cxy(2:3)
 if( irot == 0 ) cxy(2:3) = 0.
 print *, 'best line sim    (full    inplane/shift ) = ', pftcc%bestline_sim(9, irot, cxy(2:3), 10)
+print *, 'best line sim fm (full    inplane/offset) = ', pftcc%bestline_sim_fm(9, 10, irot, cxy(2:3))
+print *, 'best line sim mag(full    inplane/offset) = ', pftcc%bestline_sim_mag(9, 10, irot, cxy(2:3))
 ! debugging, i.e.
 call pftcc%polar2cartesian(9,.true.,cmat,box)
 call ref_img%new([box,box,1],1.0)
@@ -201,10 +203,13 @@ call ptcl_img%clip_inplace([p%box_crop,p%box_crop,1])
 call ccimgs(1)%new( ref_img%get_ldim(), p%smpd_crop, wthreads=.false.)
 call ccimgs(2)%new(ptcl_img%get_ldim(), p%smpd_crop, wthreads=.false.)
 call fm_correlator%calc_phasecorr(9, 10, ref_img, ptcl_img, ccimgs(1), ccimgs(2), cc, rotang=ang, shift=offset)
+print *, 'cc = ', cc
 irot = pftcc%get_roind(ang)
 print *, 'fm irot   = ', irot
 print *, 'fm offset = ', offset
 print *, 'best line sim    (full fm inplane/offset) = ', pftcc%bestline_sim(9, irot, offset, 10)
 print *, 'best line sim fm                          = ', pftcc%bestline_sim_fm(9, 10)
 print *, 'best line sim fm (full fm inplane/offset) = ', pftcc%bestline_sim_fm(9, 10, irot, offset)
+print *, 'best line sim mag                         = ', pftcc%bestline_sim_mag(9, 10)
+print *, 'best line sim mag(full fm inplane/offset) = ', pftcc%bestline_sim_mag(9, 10, irot, offset)
 end program simple_test_line_sim
