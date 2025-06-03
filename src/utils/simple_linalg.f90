@@ -52,6 +52,10 @@ interface euclid
     module procedure euclid_sp, euclid_dp
 end interface euclid
 
+interface l1dist
+    module procedure l1dist_sp, l1dist_dp
+end interface l1dist
+
 ! trigonometry
 
 interface hyp
@@ -1444,6 +1448,19 @@ contains
         real(dp)             :: dist
         dist = dsqrt(sum((vec1-vec2)**2))
     end function euclid_dp
+
+    !>   calculates the l1 distance between two vectors of dimension _n_
+    pure function l1dist_sp( vec1, vec2 ) result( dist )
+        real, intent(in) :: vec1(:), vec2(:)
+        real             :: dist
+        dist = sum(abs(vec1-vec2))
+    end function l1dist_sp
+
+    pure function l1dist_dp( vec1, vec2 ) result( dist )
+        real(dp), intent(in) :: vec1(:), vec2(:)
+        real(dp)             :: dist
+        dist = sum(abs(vec1-vec2)**2)
+    end function l1dist_dp
 
     !>   normalize mean of both vectors to 0 before computing distance between vectors
     function same_energy_euclid(vec1, vec2) result(dist)

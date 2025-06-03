@@ -218,6 +218,7 @@ type :: parameters
     character(len=STDLEN)     :: detector='bin'       !< detector for edge detection (sobel|bin|otsu)
     character(len=STDLEN)     :: dfunit='microns'     !< defocus unit (A|microns){microns}
     character(len=STDLEN)     :: dir_exec=''          !< name of execution directory
+    character(len=2)          :: dist_type='l2'       !< distance type (l1, l2){l2}
     character(len=4)          :: element ='    '      !< atom kind
     character(len=STDLEN)     :: executable=''        !< name of executable
     character(len=4)          :: ext='.mrc'           !< file extension{.mrc}
@@ -629,6 +630,7 @@ contains
         call check_carg('detector',       self%detector)
         call check_carg('dfunit',         self%dfunit)
         call check_carg('dir_exec',       self%dir_exec)
+        call check_carg('dist_type',      self%dist_type)
         call check_carg('doprint',        self%doprint)
         call check_carg('dynreslim',      self%dynreslim)
         call check_carg('element',        self%element)

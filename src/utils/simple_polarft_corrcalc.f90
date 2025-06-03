@@ -168,7 +168,7 @@ type :: polarft_corrcalc
     procedure, private :: gencorrs_euclid_1,         gencorrs_euclid_2
     procedure, private :: gencorrs_shifted_euclid_1, gencorrs_shifted_euclid_2
     generic            :: gencorrs_euclid         => gencorrs_euclid_1, gencorrs_euclid_2
-    generic            :: gencorrs_shifted_euclid =>gencorrs_shifted_euclid_1, gencorrs_shifted_euclid_2
+    generic            :: gencorrs_shifted_euclid => gencorrs_shifted_euclid_1, gencorrs_shifted_euclid_2
     procedure, private :: gencorrs_1, gencorrs_2, gencorrs_3, gencorrs_4
     generic            :: gencorrs => gencorrs_1, gencorrs_2, gencorrs_3, gencorrs_4
     procedure, private :: gencorr_for_rot_8_1, gencorr_for_rot_8_2, gencorr_for_rot_8_3, gencorr_for_rot_8_4
@@ -618,8 +618,8 @@ contains
 
     ! returns pointer to temporary pft according to current thread
     subroutine get_work_pft_ptr( self, ptr )
-        class(polarft_corrcalc), intent(in) :: self
-        complex(sp),   pointer, intent(out) :: ptr(:,:)
+        class(polarft_corrcalc), intent(in)  :: self
+        complex(sp),   pointer,  intent(out) :: ptr(:,:)
         integer :: ithr
         ithr = omp_get_thread_num()+1
         ptr => self%heap_vars(ithr)%pft_ref_tmp
@@ -627,8 +627,8 @@ contains
 
     ! returns pointer to temporary pft-sized real matrix (eg CTF) according to current thread
     subroutine get_work_rpft_ptr( self, ptr )
-        class(polarft_corrcalc), intent(in) :: self
-        real(sp),      pointer, intent(out) :: ptr(:,:)
+        class(polarft_corrcalc), intent(in)  :: self
+        real(sp),      pointer,  intent(out) :: ptr(:,:)
         integer :: ithr
         ithr = omp_get_thread_num()+1
         ptr => self%heap_vars(ithr)%pft_r
@@ -867,7 +867,7 @@ contains
         integer,                  intent(in)    :: iptcl
         real(sp),                 intent(in)    :: shvec(2)
         complex(sp), pointer :: shmat(:,:)
-        integer  :: ithr, i
+        integer :: ithr, i
         ithr  = omp_get_thread_num() + 1
         i     = self%pinds(iptcl)
         shmat => self%heap_vars(ithr)%shmat
@@ -880,7 +880,7 @@ contains
         integer,                  intent(in)    :: iref
         real(sp),                 intent(in)    :: shvec(2)
         complex(dp), pointer :: shmat(:,:)
-        integer  :: ithr
+        integer :: ithr
         ithr = omp_get_thread_num() + 1
         shmat => self%heap_vars(ithr)%shmat_8
         call self%gen_shmat_8(ithr, real(shvec,dp), shmat)
@@ -892,7 +892,7 @@ contains
     subroutine mirror_ref_pft( self, iref )
         class(polarft_corrcalc), target, intent(in) :: self
         integer,                         intent(in) :: iref
-        integer  :: i,j
+        integer :: i,j
         complex(sp), pointer :: pft(:,:) => null(), pftmirr(:,:) => null()
         pft     => self%pfts_refs_even(:,:,iref)
         pftmirr => self%pfts_refs_odd(:,:,iref)
