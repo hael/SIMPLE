@@ -1898,7 +1898,7 @@ contains
     subroutine exec_cluster_cavgs( self, cline )
         use simple_class_frcs, only: class_frcs
         use simple_kmedoids,   only: kmedoids
-        use simple_corrmat,    only: calc_inpl_invariant_fm, calc_comlin_simmat
+        use simple_corrmat,    only: calc_inpl_invariant_fm
         use simple_fsc,        only: plot_fsc
         use simple_histogram,  only: histogram
         class(cluster_cavgs_commander), intent(inout) :: self
@@ -1916,9 +1916,9 @@ contains
         real,              allocatable :: frcs(:,:), filter(:), resarr(:), frc(:), mm(:,:)
         real,              allocatable :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:), dmat_tvd(:,:), smat_tvd(:,:), dmat_joint(:,:)
         real,              allocatable :: smat_joint(:,:), dmat(:,:), res_bad(:), res_good(:), clust_jsd(:), dmat_jsd(:,:), smat_jsd(:,:)
-        real,              allocatable :: dmat_hd(:,:), dmat_hist(:,:), dmat_fm(:,:), corrmat_comlin(:,:), dmat_comlin(:,:)
+        real,              allocatable :: dmat_hd(:,:), dmat_hist(:,:), dmat_fm(:,:)
         real,              allocatable :: clust_scores(:), clust_res(:), clust_res_ranked(:), resvals(:)
-        logical,           allocatable :: l_msk(:,:,:), l_non_junk(:), mask_comlin(:)
+        logical,           allocatable :: l_msk(:,:,:), l_non_junk(:)
         integer,           allocatable :: labels(:), clsinds(:), i_medoids(:), good_bad_assign(:)
         integer,           allocatable :: clust_order(:), rank_assign(:), i_medoids_ranked(:)
         integer,           allocatable :: clspops(:), clust_pops(:), clust_nptcls(:), states(:)
@@ -1932,7 +1932,7 @@ contains
         integer :: ldim(3),  ncls, ncls_sel, icls, cnt, rank, nptcls, nptcls_good, loc(1)
         integer :: filtsz, nclust_aff_prop, i, j, ii, jj, nclust, iclust, rank_bound
         real    :: smpd, simsum, cmin, cmax, pref, fsc_res, rfoo, frac_good, best_res, worst_res
-        real    :: oa_min, oa_max, corr_comlin, corr_comlin_best
+        real    :: oa_min, oa_max
         logical :: l_apply_optlp, l_calc_jsd
         ! defaults
         call cline%set('oritype', 'cls2D')
@@ -1945,6 +1945,7 @@ contains
         if( .not. cline%defined('lp')         ) call cline%set('lp',               6.)
         if( .not. cline%defined('prune')      ) call cline%set('prune',          'no')
         if( .not. cline%defined('clust_crit') ) call cline%set('clust_crit', 'hybrid')
+        if( .not. cline%defined('res_cutoff') ) call cline%set('res_cutoff',       8.)
         ! master parameters
         call params%new(cline)
         ! get class average stack
@@ -2040,9 +2041,6 @@ contains
         ! pairwise correlation through Fourier-Mellin + shift search
         write(logfhandle,'(A)') '>>> PAIRWISE CORRELATIONS THROUGH FOURIER-MELLIN & SHIFT SEARCH'
         call calc_inpl_invariant_fm(cavg_imgs, params%hp, params%lp, params%trs, corrmat)
-        write(logfhandle,'(A)') '>>> PAIRWISE SHIFT-INVARIANT COMMON LINE CORRELATIONS'
-        call calc_comlin_simmat(cavg_imgs, params%hp, params%lp, corrmat_comlin)
-        dmat_comlin = smat2dmat(corrmat_comlin)
         ! set appropriate distance matrix for the clustering criterion given
         select case(trim(params%clust_crit))
             case('pow')
@@ -2204,16 +2202,10 @@ contains
                     call dealloc_imgarr(cluster_imgs)
                     call dealloc_imgarr(cluster_imgs_aligned)
                 end do
-                ! find optimal rank boundary using common lines
-                rank_bound       = 2
-                corr_comlin      = comlin_rank_bound_score(rank_bound)
-                corr_comlin_best = corr_comlin
-                do rank = 3, nclust
-                    corr_comlin = comlin_rank_bound_score(rank)
-                    if( corr_comlin > corr_comlin_best )then
-                        corr_comlin_best = corr_comlin
-                        rank_bound       = rank
-                    endif
+                ! rank boundary based on resolution cutoff
+                rank_bound = 2
+                do iclust = 3, nclust
+                    if( clust_res(iclust) <= params%res_cutoff ) rank_bound = iclust
                 end do
                 ! make good/bad assignment
                 allocate(good_bad_assign(nclust), source=0)
@@ -2227,8 +2219,8 @@ contains
                     do icls = 1, ncls_sel 
                         if( labels(icls) == iclust )then
                             call spproj%os_cls2D%set(clsinds(icls),'cluster',iclust) ! project update
-                            clust_scores(iclust)               = clust_scores(iclust)  + corrmat(icls,i_medoids(iclust))
-                            if( l_calc_jsd ) clust_jsd(iclust) = clust_jsd(iclust)     + dmat_jsd(icls,i_medoids(iclust))
+                            clust_scores(iclust)               = clust_scores(iclust) + corrmat(icls,i_medoids(iclust))
+                            if( l_calc_jsd ) clust_jsd(iclust) = clust_jsd(iclust)    + dmat_jsd(icls,i_medoids(iclust))
                             cnt = cnt + 1
                         endif
                     enddo
@@ -2320,34 +2312,6 @@ contains
             val = .false.
             if( clust_res(ci) < clust_res(cj) ) val = .true.
         end function ci_better_than_cj
-
-        function comlin_rank_bound_score( rank_bound ) result( corr )
-            integer, intent(in) :: rank_bound
-            integer, allocatable :: inds(:), inds_good(:), inds_bad(:)
-            integer :: i, ngood, nbad, cnt
-            real    :: corr
-            inds = (/(i,i=1,ncls_sel)/)
-            inds_good = pack(inds, mask=labels <= rank_bound)
-            inds_bad  = pack(inds, mask=labels >  rank_bound)
-            ngood     = size(inds_good)
-            nbad      = size(inds_bad)
-            corr = 0.
-            cnt  = 0
-            do i = 1, ngood - 1
-                do j = i + 1, ngood
-                    corr = corr + corrmat_comlin(inds_good(i),inds_good(j))
-                    cnt  = cnt  + 1 
-                end do
-            end do
-            do i = 1, nbad - 1
-                do j = i + 1, nbad
-                    corr = corr + corrmat_comlin(inds_bad(i),inds_bad(j))
-                    cnt  = cnt  + 1 
-                end do
-            end do
-            corr = corr / real(cnt)
-            deallocate(inds, inds_good, inds_bad)
-        end function comlin_rank_bound_score
  
     end subroutine exec_cluster_cavgs
 
