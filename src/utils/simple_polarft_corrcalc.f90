@@ -36,11 +36,9 @@ type heap_vars
     complex(dp), pointer :: pft_ref_8(:,:)     => null()
     complex(dp), pointer :: pft_ref_tmp_8(:,:) => null()
     complex(dp), pointer :: pft_ptcl_8(:,:)    => null()
-    complex(dp), pointer :: pft_ptcl_tmp_8(:,:)=> null()
     complex(dp), pointer :: pft_dref_8(:,:,:)  => null()
     complex(dp), pointer :: shvec(:)           => null()
     complex(dp), pointer :: shmat_8(:,:)       => null()
-    complex(dp), pointer :: pft_tmp_8(:,:)     => null()
     real(dp),    pointer :: pft_r1_8(:,:)      => null()
     real(sp),    pointer :: pft_r(:,:)         => null()
 end type heap_vars
@@ -182,8 +180,6 @@ type :: polarft_corrcalc
     procedure          :: gencorr_cc_grad_only_for_rot_8
     procedure          :: gencorr_euclid_for_rot_8
     procedure          :: gencorr_euclid_grad_for_rot_8
-    procedure          :: gencorr_euclid_line_for_rot
-    procedure          :: gencorr_euclid_line_grad_for_rot
     procedure          :: gencorr_cont_grad_cc_for_rot_8
     procedure          :: gencorr_cont_cc_for_rot_8
     procedure          :: gencorr_cont_shift_grad_cc_for_rot_8
@@ -322,9 +318,7 @@ contains
                     &self%heap_vars(ithr)%kcorrs(self%nrots),&
                     &self%heap_vars(ithr)%pft_ref_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%pft_ref_tmp_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
-                    &self%heap_vars(ithr)%pft_tmp_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%pft_ptcl_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
-                    &self%heap_vars(ithr)%pft_ptcl_tmp_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%pft_dref_8(self%pftsz,self%kfromto(1):self%kfromto(2),3),&
                     &self%heap_vars(ithr)%shmat_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%pft_r1_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
@@ -1027,8 +1021,8 @@ contains
         integer :: ithr, i
         i    =  self%pinds(iptcl)
         ithr = omp_get_thread_num() + 1
-        pft_ptcl      => self%heap_vars(ithr)%pft_ptcl_8
-        pft_ptcl_tmp  => self%heap_vars(ithr)%pft_ptcl_tmp_8
+        pft_ptcl      => self%heap_vars(ithr)%pft_ref_8
+        pft_ptcl_tmp  => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat         => self%heap_vars(ithr)%shmat_8
         ! shifting
         call self%gen_shmat_8(ithr, real(sh,dp), shmat)
@@ -2773,7 +2767,7 @@ contains
         integer     :: irot, jrot, i, ithr, k
         real(dp)    :: sumsqk, rkinds(self%kfromto(1):self%kfromto(2))
         real        :: cur_sim
-        i        =  self%pinds(iptcl)
+        i        = self%pinds(iptcl)
         ithr     = omp_get_thread_num() + 1
         pft_ptcl => self%heap_vars(ithr)%pft_ptcl_8
         do k = self%kfromto(1),self%kfromto(2)
@@ -2855,7 +2849,7 @@ contains
         real(dp)    :: rkinds(self%kfromto(1):self%kfromto(2)), sumsqk, rref_line(self%kfromto(1):self%kfromto(2)), rline_diff(self%kfromto(1):self%kfromto(2))
         integer     :: irot, jrot, i, ithr, k
         real        :: cur_sim
-        i    =  self%pinds(iptcl)
+        i    = self%pinds(iptcl)
         ithr = omp_get_thread_num() + 1
         pft_ref     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp => self%heap_vars(ithr)%pft_ref_tmp_8
@@ -2901,7 +2895,7 @@ contains
         real(dp)    :: rkinds(self%kfromto(1):self%kfromto(2)), sumsqk, rref_line(self%kfromto(1):self%kfromto(2)), rline_diff(self%kfromto(1):self%kfromto(2))
         integer     :: irot, jrot, i, ithr, k
         real        :: cur_sim
-        i    =  self%pinds(iptcl)
+        i    = self%pinds(iptcl)
         ithr = omp_get_thread_num() + 1
         pft_ref     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp => self%heap_vars(ithr)%pft_ref_tmp_8
@@ -2935,105 +2929,6 @@ contains
             enddo
         enddo
     end function bestline_sim_aggmag
-
-    real(dp) function gencorr_euclid_line_for_rot( self, line_rot, iref, iptcl, irot, shvec )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: line_rot  ! fixed line inplane rotation index
-        integer,                 intent(in)    :: iref
-        integer,                 intent(in)    :: iptcl
-        integer,                 intent(in)    :: irot
-        real(dp),    optional,   intent(in)    :: shvec(2)
-        complex(dp), pointer :: pft_ref_8(:,:), pft_ref_tmp_8(:,:), pft_ptcl(:,:), pft_ptcl_tmp(:,:), shmat(:,:)
-        complex(dp) :: ctmp
-        integer     :: ithr, i, k
-        real(dp)    :: sumsqk, sh(2), fdp
-        sh   = 0._dp
-        i    =  self%pinds(iptcl)
-        ithr = omp_get_thread_num() + 1
-        pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
-        pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
-        pft_ptcl      => self%heap_vars(ithr)%pft_ptcl_8
-        pft_ptcl_tmp  => self%heap_vars(ithr)%pft_ptcl_tmp_8
-        shmat         => self%heap_vars(ithr)%shmat_8
-        if( present(shvec) ) sh = real(shvec, dp)
-        if( self%iseven(i) )then
-            pft_ref_tmp_8 = dcmplx(self%pfts_refs_even(:,:,iref))
-        else
-            pft_ref_tmp_8 = dcmplx(self%pfts_refs_odd(:,:,iref))
-        endif
-        ! rotating
-        call self%rotate_pft(pft_ref_tmp_8, line_rot, pft_ref_8)
-        ! shifting
-        call self%gen_shmat_8(ithr, sh, shmat)
-        pft_ptcl_tmp = dcmplx(self%pfts_ptcls(:,:,i)) * shmat
-        call self%rotate_pft(pft_ptcl_tmp, irot, pft_ptcl)
-        ! searching
-        fdp    = 0._dp
-        sumsqk = 0._dp
-        do k = self%kfromto(1),self%kfromto(2)
-            ctmp   = pft_ptcl(1,k) - pft_ref_8(1,k)
-            sumsqk = sumsqk + real(k,dp) * real(pft_ref_8(1,k) * conjg(pft_ref_8(1,k)), dp)
-            fdp    = fdp    + real(k,dp) * real(ctmp           * conjg(ctmp), dp)
-        end do
-        gencorr_euclid_line_for_rot = dexp(- fdp / sumsqk)
-    end function gencorr_euclid_line_for_rot
-
-    subroutine gencorr_euclid_line_grad_for_rot( self, line_rot, iref, iptcl, irot, f, grad, shvec )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: line_rot  ! fixed line inplane rotation index
-        integer,                 intent(in)    :: iref
-        integer,                 intent(in)    :: iptcl
-        integer,                 intent(in)    :: irot
-        real(dp),                intent(inout) :: f, grad(2)
-        real(dp),    optional,   intent(in)    :: shvec(2)
-        complex(dp), pointer :: pft_ref_8(:,:), pft_ref_tmp_8(:,:), pft_tmp(:,:), pft_ptcl(:,:), pft_ptcl_tmp(:,:), shmat(:,:)
-        complex(dp) :: ctmp
-        integer     :: ithr, i, k
-        real(dp)    :: sumsqk, sh(2), graddp(2), fdp
-        sh   = 0._dp
-        i    = self%pinds(iptcl)
-        ithr = omp_get_thread_num() + 1
-        pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
-        pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
-        pft_ptcl      => self%heap_vars(ithr)%pft_ptcl_8
-        pft_ptcl_tmp  => self%heap_vars(ithr)%pft_ptcl_tmp_8
-        pft_tmp       => self%heap_vars(ithr)%pft_tmp_8
-        shmat         => self%heap_vars(ithr)%shmat_8
-        if( present(shvec) ) sh = real(shvec, dp)
-        if( self%iseven(i) )then
-            pft_ref_tmp_8 = dcmplx(self%pfts_refs_even(:,:,iref))
-        else
-            pft_ref_tmp_8 = dcmplx(self%pfts_refs_odd(:,:,iref))
-        endif
-        ! rotating
-        call self%rotate_pft(pft_ref_tmp_8, line_rot, pft_ref_8)
-        ! shifting
-        call self%gen_shmat_8(ithr, sh, shmat)
-        pft_ptcl_tmp = dcmplx(self%pfts_ptcls(:,:,i)) * shmat
-        call self%rotate_pft(pft_ptcl_tmp, irot, pft_ptcl)
-        ! searching
-        fdp    = 0._dp
-        graddp = 0._dp
-        sumsqk = 0._dp
-        ! first grad
-        pft_tmp = dcmplx(0.,0.)
-        call self%rotate_pft(pft_ptcl_tmp * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_tmp)
-        do k = self%kfromto(1),self%kfromto(2)
-            ctmp      = pft_ptcl(1,k) - pft_ref_8(1,k)
-            sumsqk    = sumsqk    + real(k,dp) * real(pft_ref_8(1,k)* conjg(pft_ref_8(1,k)), dp)
-            fdp       = fdp       + real(k,dp) * real(ctmp          * conjg(ctmp),dp)
-            graddp(1) = graddp(1) + real(k,dp) * real(pft_tmp(1,k)  * conjg(ctmp),dp)
-        end do
-        ! second grad
-        pft_tmp = dcmplx(0.,0.)
-        call self%rotate_pft(pft_ptcl_tmp * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_tmp)
-        do k = self%kfromto(1),self%kfromto(2)
-            ctmp      = pft_ptcl(1,k) - pft_ref_8(1,k)
-            graddp(2) = graddp(2) + real(k,dp) * real(pft_tmp(1,k) * conjg(ctmp),dp)
-        end do
-        f    = dexp(-fdp / sumsqk)
-        grad = - f * 2._dp * graddp / sumsqk
-    end subroutine gencorr_euclid_line_grad_for_rot
 
     subroutine gencorr_grad_for_rot_8_1( self, iref, iptcl, shvec, irot, f, grad, onestate )
         class(polarft_corrcalc), intent(inout) :: self
@@ -3608,7 +3503,7 @@ contains
                     &self%heap_vars(ithr)%shmat,self%heap_vars(ithr)%kcorrs,&
                     &self%heap_vars(ithr)%pft_tmp,self%heap_vars(ithr)%pft_tmp2,&
                     &self%heap_vars(ithr)%pft_ref_8,self%heap_vars(ithr)%pft_ref_tmp_8,&
-                    &self%heap_vars(ithr)%pft_tmp_8,self%heap_vars(ithr)%pft_ptcl_8,self%heap_vars(ithr)%pft_ptcl_tmp_8,&
+                    &self%heap_vars(ithr)%pft_ptcl_8,&
                     &self%heap_vars(ithr)%pft_dref_8,self%heap_vars(ithr)%pft_r,&
                     &self%heap_vars(ithr)%shmat_8,self%heap_vars(ithr)%pft_r1_8)
             end do
