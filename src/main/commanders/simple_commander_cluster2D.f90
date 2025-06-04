@@ -1917,7 +1917,7 @@ contains
         real,              allocatable :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:), dmat_tvd(:,:), smat_tvd(:,:), dmat_joint(:,:)
         real,              allocatable :: smat_joint(:,:), dmat(:,:), res_bad(:), res_good(:), clust_jsd(:), dmat_jsd(:,:), smat_jsd(:,:)
         real,              allocatable :: dmat_hd(:,:), dmat_hist(:,:), dmat_fm(:,:), corrmat_comlin(:,:), dmat_comlin(:,:)
-        real,              allocatable :: clust_scores(:), clust_res(:), clust_res_ranked(:), resvals(:), clust_res_dists(:,:)
+        real,              allocatable :: clust_scores(:), clust_res(:), clust_res_ranked(:), resvals(:)
         logical,           allocatable :: l_msk(:,:,:), l_non_junk(:), mask_comlin(:)
         integer,           allocatable :: labels(:), clsinds(:), i_medoids(:), good_bad_assign(:)
         integer,           allocatable :: clust_order(:), rank_assign(:), i_medoids_ranked(:)
@@ -1931,8 +1931,8 @@ contains
         type(stats_struct) :: res_stats
         integer :: ldim(3),  ncls, ncls_sel, icls, cnt, rank, nptcls, nptcls_good, loc(1)
         integer :: filtsz, nclust_aff_prop, i, j, ii, jj, nclust, iclust, rank_bound
-        real    :: smpd, simsum, cmin, cmax, pref, fsc_res, rfoo, frac_good, best_res
-        real    :: worst_res, dist2best, dist2worst, dist_min, dist, oa_min, oa_max, norm
+        real    :: smpd, simsum, cmin, cmax, pref, fsc_res, rfoo, frac_good, best_res, worst_res
+        real    :: oa_min, oa_max, corr_comlin, corr_comlin_best
         logical :: l_apply_optlp, l_calc_jsd
         ! defaults
         call cline%set('oritype', 'cls2D')
@@ -2204,26 +2204,15 @@ contains
                     call dealloc_imgarr(cluster_imgs)
                     call dealloc_imgarr(cluster_imgs_aligned)
                 end do
-
-                ! calculate common line correlation to top ranking cluster
-                do rank = 2, nclust
-                    print *, 'rank_bound: ', rank, ' comlin score: ', comlin_rank_bound_score(rank)
-                end do
-
-                ! find optimal rank boundary
-                allocate(clust_res_dists(nclust,nclust), source=0.)
-                do i = 1, nclust - 1
-                    do j = i + 1, nclust
-                        clust_res_dists(i,j) = abs(clust_res(i) - clust_res(j))
-                        clust_res_dists(j,i) = clust_res_dists(i,j)
-                    end do
-                end do
-                dist_min = sum(clust_res_dists(:1,:1)) + sum(clust_res_dists(2:,2:))
-                do rank = 2, nclust
-                    dist = sum(clust_res_dists(:rank, :rank)) + sum(clust_res_dists(rank + 1:, rank + 1:))
-                    if( dist < dist_min )then
-                        dist_min = dist
-                        rank_bound = rank 
+                ! find optimal rank boundary using common lines
+                rank_bound       = 2
+                corr_comlin      = comlin_rank_bound_score(rank_bound)
+                corr_comlin_best = corr_comlin
+                do rank = 3, nclust
+                    corr_comlin = comlin_rank_bound_score(rank)
+                    if( corr_comlin > corr_comlin_best )then
+                        corr_comlin_best = corr_comlin
+                        rank_bound       = rank
                     endif
                 end do
                 ! make good/bad assignment
@@ -2357,6 +2346,7 @@ contains
                 end do
             end do
             corr = corr / real(cnt)
+            deallocate(inds, inds_good, inds_bad)
         end function comlin_rank_bound_score
  
     end subroutine exec_cluster_cavgs
