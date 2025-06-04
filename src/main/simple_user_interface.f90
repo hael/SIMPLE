@@ -2286,7 +2286,7 @@ contains
         &'Analysis of class averages with k-medoids',&                ! descr_short
         &'is a program for analyzing class averages with k-medoids',& ! descr_long
         &'simple_exec',&                                              ! executable
-        &0, 2, 0, 0, 2, 1, 1, .true.)                                 ! # entries in each group, requires sp_project
+        &0, 2, 0, 0, 3, 1, 1, .true.)                                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2300,6 +2300,7 @@ contains
         ! filter controls
         call cluster_cavgs%set_input('filt_ctrls', 1, hp)
         call cluster_cavgs%set_input('filt_ctrls', 2, lp)
+        call cluster_cavgs%set_input('filt_ctrls', 3, 'res_cutoff', 'num', 'Resolution cutoff', 'Resolution cutoff', 'resolution cutoff in Angstroms', .false., 8.)
         ! mask controls
         call cluster_cavgs%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls

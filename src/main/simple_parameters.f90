@@ -483,7 +483,7 @@ type :: parameters
     real    :: pool_threshold_factor=POOL_THRESHOLD_FACTOR  !< stream pool class rejection adjustment
     real    :: prob_athres=10.     !< angle threshold for prob distribution samplings
     real    :: res_target = 3.     !< resolution target in A
-    real    :: res_cutoff = 6.     !< resolution cutoff
+    real    :: res_cutoff = 8.     !< resolution cutoff
     real    :: scale=1.            !< image scale factor{1}
     real    :: sherr=0.            !< shift error(in pixels){2}
     real    :: sigma=1.0           !< for gaussian function generation {1.}
