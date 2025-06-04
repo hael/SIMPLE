@@ -167,10 +167,10 @@ contains
             do j = i + 1, n
                 ! reference to particle
                 call pftcc%set_eo(i,.true.)
-                cc  = pftcc%bestline_sim(j, i)
+                cc  = pftcc%bestline_sim_aggmag(j, i)
                 ! mirrored reference to particle
                 call pftcc%set_eo(i,.false.) ! switch mirror
-                ccm = pftcc%bestline_sim_mag(j, i)
+                ccm = pftcc%bestline_sim_aggmag(j, i)
                 if( ccm > cc )then
                     cc = ccm
                 endif
