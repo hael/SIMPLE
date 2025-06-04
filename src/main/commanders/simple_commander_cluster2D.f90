@@ -1915,7 +1915,7 @@ contains
         character(len=:),  allocatable :: frcs_fname
         real,              allocatable :: frcs(:,:), filter(:), resarr(:), frc(:), mm(:,:)
         real,              allocatable :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:), dmat_tvd(:,:), smat_tvd(:,:), dmat_joint(:,:)
-        real,              allocatable :: smat_joint(:,:), dmat(:,:), res_bad(:), res_good(:), clust_jsd(:), dmat_jsd(:,:), smat_jsd(:,:)
+        real,              allocatable :: smat_joint(:,:), dmat(:,:), res_bad(:), res_good(:), dmat_jsd(:,:), smat_jsd(:,:)
         real,              allocatable :: dmat_hd(:,:), dmat_hist(:,:), dmat_fm(:,:)
         real,              allocatable :: clust_scores(:), clust_res(:), clust_res_ranked(:), resvals(:)
         logical,           allocatable :: l_msk(:,:,:), l_non_junk(:)
@@ -1930,10 +1930,10 @@ contains
         type(pspecs)       :: pows
         type(stats_struct) :: res_stats
         integer :: ldim(3),  ncls, ncls_sel, icls, cnt, rank, nptcls, nptcls_good, loc(1)
-        integer :: filtsz, nclust_aff_prop, i, j, ii, jj, nclust, iclust, rank_bound
+        integer :: filtsz, nclust_aff_prop, i, j, ii, jj, nclust, iclust, rank_bound, dist_pow, dist_pow_best
         real    :: smpd, simsum, cmin, cmax, pref, fsc_res, rfoo, frac_good, best_res, worst_res
         real    :: oa_min, oa_max
-        logical :: l_apply_optlp, l_calc_jsd
+        logical :: l_apply_optlp
         ! defaults
         call cline%set('oritype', 'cls2D')
         call cline%set('ctf',        'no')
@@ -1945,7 +1945,6 @@ contains
         if( .not. cline%defined('lp')         ) call cline%set('lp',               6.)
         if( .not. cline%defined('prune')      ) call cline%set('prune',          'no')
         if( .not. cline%defined('clust_crit') ) call cline%set('clust_crit', 'hybrid')
-        if( .not. cline%defined('res_cutoff') ) call cline%set('res_cutoff',       8.)
         ! master parameters
         call params%new(cline)
         ! get class average stack
@@ -2169,7 +2168,7 @@ contains
                 where( clust_pops < 2 ) clust_res = worst_res ! nothing else makes sense
                 ! rank clusters based on their resolution
                 allocate(clust_order(nclust), rank_assign(ncls_sel), i_medoids_ranked(nclust),&
-                clust_res_ranked(nclust), clust_scores(nclust), clust_jsd(nclust), clust_algninfo_ranked(nclust))
+                clust_res_ranked(nclust), clust_scores(nclust), clust_algninfo_ranked(nclust))
                 clust_order = (/(iclust,iclust=1,nclust)/)
                 call hpsort(clust_order, ci_better_than_cj)
                 ! create ranked medoids and labels
@@ -2202,32 +2201,43 @@ contains
                     call dealloc_imgarr(cluster_imgs)
                     call dealloc_imgarr(cluster_imgs_aligned)
                 end do
-                ! rank boundary based on resolution cutoff
-                rank_bound = 2
-                do iclust = 3, nclust
-                    if( clust_res(iclust) <= params%res_cutoff ) rank_bound = iclust
-                end do
+                if( cline%defined('res_cutoff') )then
+                    ! rank boundary based on resolution cutoff
+                    rank_bound = 2
+                    do iclust = 3, nclust
+                        if( clust_res(iclust) <= params%res_cutoff ) rank_bound = iclust
+                    end do
+                else
+                    ! find optimal rank boundary through binary clustering of the ranked clusters
+                    ! using dmat_pow to select on signal
+                    rank_bound    = 2
+                    dist_pow      = pow_rank_bound_cost(rank_bound)
+                    dist_pow_best = dist_pow
+                    do rank = 3, nclust
+                        dist_pow = pow_rank_bound_cost(rank)
+                        if( dist_pow <= dist_pow_best )then
+                            dist_pow_best = dist_pow
+                            rank_bound    = rank
+                        endif
+                    end do
+                endif
                 ! make good/bad assignment
                 allocate(good_bad_assign(nclust), source=0)
                 good_bad_assign(:rank_bound) = 1
-                l_calc_jsd = allocated(dmat_jsd)
                 ! report cluster scores & resolution
                 do iclust = 1, nclust
                     clust_scores(iclust) = 0.
-                    clust_jsd(iclust)    = 0.
                     cnt = 0
                     do icls = 1, ncls_sel 
                         if( labels(icls) == iclust )then
                             call spproj%os_cls2D%set(clsinds(icls),'cluster',iclust) ! project update
-                            clust_scores(iclust)               = clust_scores(iclust) + corrmat(icls,i_medoids(iclust))
-                            if( l_calc_jsd ) clust_jsd(iclust) = clust_jsd(iclust)    + dmat_jsd(icls,i_medoids(iclust))
+                            clust_scores(iclust) = clust_scores(iclust) + corrmat(icls,i_medoids(iclust))
                             cnt = cnt + 1
                         endif
                     enddo
                     clust_scores(iclust) = clust_scores(iclust) / real(cnt)
-                    clust_jsd(iclust)    = (clust_jsd(iclust)    / real(cnt)) * 100. 
-                    write(logfhandle,'(A,f7.3,A,f5.1,A,f5.1,A,I3))') 'cluster_ranked'//int2str_pad(iclust,2)//'.mrc, score: ',&
-                    &clust_scores(iclust), ' res: ', clust_res(iclust), ' Jensen-Shannon Divergence (%): ', clust_jsd(iclust), ' good_bad_assign: ', good_bad_assign(iclust)
+                    write(logfhandle,'(A,f7.3,A,f5.1,A,I3)') 'cluster_ranked'//int2str_pad(iclust,2)//'.mrc, score: ',&
+                    &clust_scores(iclust), ' res: ', clust_res(iclust), ' good_bad_assign: ', good_bad_assign(iclust)
                 end do
                 ! check number of particles selected
                 nptcls      = sum(clust_nptcls)
@@ -2312,6 +2322,34 @@ contains
             val = .false.
             if( clust_res(ci) < clust_res(cj) ) val = .true.
         end function ci_better_than_cj
+
+        function pow_rank_bound_cost( rank_bound ) result( dist )
+            integer, intent(in) :: rank_bound
+            integer, allocatable :: inds(:), inds_good(:), inds_bad(:)
+            integer :: i, j, ngood, nbad, cnt
+            real    :: dist
+            inds      = (/(i,i=1,ncls_sel)/)
+            inds_good = pack(inds, mask=labels <= rank_bound)
+            inds_bad  = pack(inds, mask=labels >  rank_bound)
+            ngood     = size(inds_good)
+            nbad      = size(inds_bad)
+            dist      = 0.
+            cnt       = 0
+            do i = 1, ngood - 1
+                do j = i + 1, ngood
+                    dist = dist + dmat_pow(inds_good(i),inds_good(j))
+                    cnt  = cnt  + 1 
+                end do
+            end do
+            do i = 1, nbad - 1
+                do j = i + 1, nbad
+                    dist = dist + dmat_pow(inds_bad(i),inds_bad(j))
+                    cnt  = cnt  + 1 
+                end do
+            end do
+            dist = dist / real(cnt)
+            deallocate(inds, inds_good, inds_bad)
+        end function pow_rank_bound_cost
  
     end subroutine exec_cluster_cavgs
 
