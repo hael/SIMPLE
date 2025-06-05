@@ -1916,7 +1916,7 @@ contains
         real,              allocatable :: frcs(:,:), filter(:), resarr(:), frc(:), mm(:,:)
         real,              allocatable :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:), dmat_tvd(:,:), smat_tvd(:,:), dmat_joint(:,:)
         real,              allocatable :: smat_joint(:,:), dmat(:,:), res_bad(:), res_good(:), dmat_jsd(:,:), smat_jsd(:,:)
-        real,              allocatable :: dmat_hd(:,:), dmat_hist(:,:), dmat_fm(:,:)
+        real,              allocatable :: dmat_hd(:,:), dmat_hist(:,:), dmat_fm(:,:), clust_euclid(:), clust_euclid_ranked(:)
         real,              allocatable :: clust_scores(:), clust_res(:), clust_res_ranked(:), resvals(:)
         logical,           allocatable :: l_msk(:,:,:), l_non_junk(:)
         integer,           allocatable :: labels(:), clsinds(:), i_medoids(:), good_bad_assign(:)
@@ -2121,7 +2121,7 @@ contains
         select case(trim(params%clust_crit))
             case('powfm','fm','tvdfm','powtvdfm','jsdfm','powjsdfm','hybrid')
                 write(logfhandle,'(A)') '>>> ALIGNING THE CLUSTERS OF CLASS AVERAGES TO THEIR MEDOIDS'
-                allocate(frc(filtsz), clust_res(nclust), clust_algninfo(nclust), clust_nptcls(nclust), clust_pops(nclust))
+                allocate(frc(filtsz), clust_res(nclust), clust_euclid(nclust), clust_algninfo(nclust), clust_nptcls(nclust), clust_pops(nclust))
                 do iclust = 1, nclust
                     clust_pops(iclust)   = count(labels == iclust)
                     clust_nptcls(iclust) = sum(clspops, mask=labels == iclust)
@@ -2142,6 +2142,12 @@ contains
                         call cluster_imgs_aligned(i)%ifft
                     end do
                     call cavg_imgs(i_medoids(iclust))%ifft
+                    ! calculate Euclidean distances
+                    clust_euclid(iclust) = 0.
+                    do i = 1, clust_pops(iclust)
+                        clust_euclid(iclust) = clust_euclid(iclust) + cavg_imgs(i_medoids(iclust))%sqeuclid(cluster_imgs_aligned(i), l_msk)
+                    end do
+                    clust_euclid(iclust) = clust_euclid(iclust) / real(clust_pops(iclust))
                     ! report resolution as the average of the best agreeing 25% within a cluster
                     clust_res(iclust) = avg_frac_smallest(resvals(:cnt), FRAC_BEST_CAVGS)
                     ! destruct
@@ -2154,13 +2160,14 @@ contains
                 where( clust_pops < 2 ) clust_res = worst_res ! nothing else makes sense
                 ! rank clusters based on their resolution
                 allocate(clust_order(nclust), rank_assign(ncls_sel), i_medoids_ranked(nclust),&
-                clust_res_ranked(nclust), clust_scores(nclust), clust_algninfo_ranked(nclust))
+                clust_res_ranked(nclust), clust_euclid_ranked(nclust), clust_scores(nclust), clust_algninfo_ranked(nclust))
                 clust_order = (/(iclust,iclust=1,nclust)/)
                 call hpsort(clust_order, ci_better_than_cj)
                 ! create ranked medoids and labels
                 do rank = 1, nclust
                     i_medoids_ranked(rank)      = i_medoids(clust_order(rank))
                     clust_res_ranked(rank)      = clust_res(clust_order(rank))
+                    clust_euclid_ranked(rank)   = clust_euclid(clust_order(rank))
                     clust_algninfo_ranked(rank) = clust_algninfo(clust_order(rank))
                     do icls = 1, ncls_sel
                         if( labels(icls) == clust_order(rank) ) rank_assign(icls) = rank
@@ -2168,12 +2175,19 @@ contains
                 end do
                 i_medoids      = i_medoids_ranked
                 clust_res      = clust_res_ranked
+                clust_euclid   = clust_euclid_ranked
                 clust_algninfo = clust_algninfo_ranked 
                 labels         = rank_assign
                 do iclust = 1, nclust
                     deallocate(clust_algninfo_ranked(iclust)%params)
                 end do
-                deallocate(i_medoids_ranked, clust_res_ranked, rank_assign, clust_algninfo_ranked)
+                deallocate(i_medoids_ranked, clust_res_ranked, clust_euclid_ranked, rank_assign, clust_algninfo_ranked)
+                ! covert clust_euclid into homogeneity score
+                ! normalize to [0,1]
+                call normalize_minmax(clust_euclid)
+                ! invert and turn into %
+                clust_euclid = -100. * (clust_euclid - 1.)
+                where( clust_euclid < SMALL) clust_euclid = 0.
                 write(logfhandle,'(A)') '>>> ROTATING & SHIFTING UNMASKED, UNFILTERED CLASS AVERAGES'
                 ! re-create cavg_imgs
                 call dealloc_imgarr(cavg_imgs)
@@ -2227,8 +2241,8 @@ contains
                         endif
                     enddo
                     clust_scores(iclust) = clust_scores(iclust) / real(cnt)
-                    write(logfhandle,'(A,f7.3,A,f5.1,A,I3)') 'cluster_ranked'//int2str_pad(iclust,2)//'.mrc, score: ',&
-                    &clust_scores(iclust), ' res: ', clust_res(iclust), ' good_bad_assign: ', good_bad_assign(iclust)
+                    write(logfhandle,'(A,f7.3,A,f5.1,A,f5.1,A,I3)') 'cluster_ranked'//int2str_pad(iclust,2)//'.mrc, score ',&
+                    &clust_scores(iclust), ' res ', clust_res(iclust), ' homogeneity(%) ', clust_euclid(iclust), ' good_bad_assign ', good_bad_assign(iclust)
                 end do
                 ! check number of particles selected
                 nptcls      = sum(clust_nptcls)
