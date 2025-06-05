@@ -1930,9 +1930,9 @@ contains
         type(pspecs)       :: pows
         type(stats_struct) :: res_stats
         integer :: ldim(3),  ncls, ncls_sel, icls, cnt, rank, nptcls, nptcls_good, loc(1)
-        integer :: filtsz, nclust_aff_prop, i, j, ii, jj, nclust, iclust, rank_bound, dist_pow, dist_pow_best
+        integer :: filtsz, nclust_aff_prop, i, j, ii, jj, nclust, iclust, rank_bound 
         real    :: smpd, simsum, cmin, cmax, pref, fsc_res, rfoo, frac_good, best_res, worst_res
-        real    :: oa_min, oa_max
+        real    :: oa_min, oa_max, dist_pow, dist_pow_best
         logical :: l_apply_optlp
         ! defaults
         call cline%set('oritype', 'cls2D')
@@ -2213,8 +2213,14 @@ contains
                     rank_bound    = 2
                     dist_pow      = pow_rank_bound_cost(rank_bound)
                     dist_pow_best = dist_pow
+                    
+                    print *, 'rank: ', 2, ' dist_pow: ', dist_pow
+
                     do rank = 3, nclust
                         dist_pow = pow_rank_bound_cost(rank)
+
+                        print *, 'rank: ', rank, ' dist_pow: ', dist_pow
+
                         if( dist_pow <= dist_pow_best )then
                             dist_pow_best = dist_pow
                             rank_bound    = rank
