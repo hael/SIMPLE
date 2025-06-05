@@ -1932,7 +1932,7 @@ contains
         integer :: ldim(3),  ncls, ncls_sel, icls, cnt, rank, nptcls, nptcls_good, loc(1)
         integer :: filtsz, nclust_aff_prop, i, j, ii, jj, nclust, iclust, rank_bound 
         real    :: smpd, simsum, cmin, cmax, pref, fsc_res, rfoo, frac_good, best_res, worst_res
-        real    :: oa_min, oa_max, dist_pow, dist_pow_best
+        real    :: oa_min, oa_max, dist_rank, dist_rank_best
         logical :: l_apply_optlp
         ! defaults
         call cline%set('oritype', 'cls2D')
@@ -2040,6 +2040,22 @@ contains
         ! pairwise correlation through Fourier-Mellin + shift search
         write(logfhandle,'(A)') '>>> PAIRWISE CORRELATIONS THROUGH FOURIER-MELLIN & SHIFT SEARCH'
         call calc_inpl_invariant_fm(cavg_imgs, params%hp, params%lp, params%trs, corrmat)
+        ! calculate histogram-based distance matrices
+        allocate(dmat_tvd(ncls_sel,ncls_sel), dmat_jsd(ncls_sel,ncls_sel), dmat_hd(ncls_sel,ncls_sel), source=0.)
+        !$omp parallel do default(shared) private(i,j)&
+        !$omp schedule(dynamic) proc_bind(close)
+        do i = 1, ncls_sel - 1
+            do j = i + 1, ncls_sel
+                dmat_tvd(i,j) = hists(i)%TVD(hists(j))
+                dmat_tvd(j,i) = dmat_tvd(i,j)
+                dmat_jsd(i,j) = hists(i)%JSD(hists(j))
+                dmat_jsd(j,i) = dmat_jsd(i,j)
+                dmat_hd(i,j)  = hists(i)%HD(hists(j))
+                dmat_hd(j,i)  = dmat_hd(i,j)
+            end do
+        end do
+        !$omp end parallel do
+        dmat_hist = merge_dmats(dmat_tvd, dmat_jsd, dmat_hd) ! the different histogram distances are given equal weight
         ! set appropriate distance matrix for the clustering criterion given
         select case(trim(params%clust_crit))
             case('pow')
@@ -2050,13 +2066,6 @@ contains
             case('fm')
                 dmat       = smat2dmat(corrmat)
             case('tvd','tvdfm','powtvdfm') ! clustering involving total variation histogram distance
-                allocate(dmat_tvd(ncls_sel,ncls_sel), source=0.)
-                do i = 1, ncls_sel - 1
-                    do j = i + 1, ncls_sel
-                        dmat_tvd(i,j) = hists(i)%TVD(hists(j))
-                        dmat_tvd(j,i) = dmat_tvd(i,j)
-                    end do
-                end do
                 select case(trim(params%clust_crit))
                     case('tvd')
                         dmat       = dmat_tvd
@@ -2072,13 +2081,6 @@ contains
                         dmat       = smat2dmat(smat_joint)
                 end select
             case('jsd','jsdfm','powjsdfm') ! clustering involving Jensen-Shannon Divergence, symmetrized K-L Divergence
-                allocate(dmat_jsd(ncls_sel,ncls_sel), source=0.)
-                do i = 1, ncls_sel - 1
-                    do j = i + 1, ncls_sel
-                        dmat_jsd(i,j) = hists(i)%JSD(hists(j))
-                        dmat_jsd(j,i) = dmat_jsd(i,j)
-                    end do
-                end do
                 select case(trim(params%clust_crit))
                     case('jsd')
                         dmat       = dmat_jsd
@@ -2094,22 +2096,6 @@ contains
                         dmat       = smat2dmat(smat_joint)
                 end select
             case('hybrid')
-                ! calculate a joint histogram-based distance matrix
-                allocate(dmat_tvd(ncls_sel,ncls_sel), dmat_jsd(ncls_sel,ncls_sel), dmat_hd(ncls_sel,ncls_sel), source=0.)
-                !$omp parallel do default(shared) private(i,j)&
-                !$omp schedule(dynamic) proc_bind(close)
-                do i = 1, ncls_sel - 1
-                    do j = i + 1, ncls_sel
-                        dmat_tvd(i,j) = hists(i)%TVD(hists(j))
-                        dmat_tvd(j,i) = dmat_tvd(i,j)
-                        dmat_jsd(i,j) = hists(i)%JSD(hists(j))
-                        dmat_jsd(j,i) = dmat_jsd(i,j)
-                        dmat_hd(i,j)  = hists(i)%HD(hists(j))
-                        dmat_hd(j,i)  = dmat_hd(i,j)
-                    end do
-                end do
-                !$omp end parallel do
-                dmat_hist = merge_dmats(dmat_tvd, dmat_jsd, dmat_hd) ! the different histogram distances are given equal weight
                 call normalize_minmax(dmat_pow)
                 dmat_fm   = smat2dmat(corrmat)
                 dmat      = (dmat_hist + dmat_pow + dmat_fm) / 3.
@@ -2209,21 +2195,20 @@ contains
                     end do
                 else
                     ! find optimal rank boundary through binary clustering of the ranked clusters
-                    ! using dmat_pow to select on signal
-                    rank_bound    = 2
-                    dist_pow      = pow_rank_bound_cost(rank_bound)
-                    dist_pow_best = dist_pow
+                    rank_bound     = 2
+                    dist_rank      = rank_bound_cost(rank_bound)
+                    dist_rank_best = dist_rank
                     
-                    print *, 'rank: ', 2, ' dist_pow: ', dist_pow
+                    print *, 'rank: ', 2, ' dist_rank: ', dist_rank
 
                     do rank = 3, nclust
-                        dist_pow = pow_rank_bound_cost(rank)
+                        dist_rank = rank_bound_cost(rank)
 
-                        print *, 'rank: ', rank, ' dist_pow: ', dist_pow
+                        print *, 'rank: ', rank, ' dist_rank: ', dist_rank
 
-                        if( dist_pow <= dist_pow_best )then
-                            dist_pow_best = dist_pow
-                            rank_bound    = rank
+                        if( dist_rank <= dist_rank_best )then
+                            dist_rank_best = dist_rank
+                            rank_bound     = rank
                         endif
                     end do
                 endif
@@ -2329,7 +2314,7 @@ contains
             if( clust_res(ci) < clust_res(cj) ) val = .true.
         end function ci_better_than_cj
 
-        function pow_rank_bound_cost( rank_bound ) result( dist )
+        function rank_bound_cost( rank_bound ) result( dist )
             integer, intent(in) :: rank_bound
             integer, allocatable :: inds(:), inds_good(:), inds_bad(:)
             integer :: i, j, ngood, nbad, cnt
@@ -2343,19 +2328,19 @@ contains
             cnt       = 0
             do i = 1, ngood - 1
                 do j = i + 1, ngood
-                    dist = dist + dmat_pow(inds_good(i),inds_good(j))
-                    cnt  = cnt  + 1 
+                    dist = dist + dmat_pow(inds_good(i),inds_good(j)) + dmat_hist(inds_good(i),inds_good(j))
+                    cnt  = cnt  + 2 
                 end do
             end do
             do i = 1, nbad - 1
                 do j = i + 1, nbad
-                    dist = dist + dmat_pow(inds_bad(i),inds_bad(j))
-                    cnt  = cnt  + 1 
+                    dist = dist + dmat_pow(inds_bad(i),inds_bad(j)) + dmat_hist(inds_bad(i),inds_bad(j))
+                    cnt  = cnt  + 2
                 end do
             end do
             dist = dist / real(cnt)
             deallocate(inds, inds_good, inds_bad)
-        end function pow_rank_bound_cost
+        end function rank_bound_cost
  
     end subroutine exec_cluster_cavgs
 
