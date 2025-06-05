@@ -103,6 +103,7 @@ contains
     ! setters
     procedure          :: copy
     procedure          :: set_cavgs_thumb
+    procedure          :: create_ptcl2D_thumb
     ! modifiers
     procedure          :: split_stk
     procedure          :: write_substk
@@ -3523,18 +3524,19 @@ contains
         endif
     end subroutine print_info
 
-    subroutine print_info_json( self, fname ) ! left in case its needed !!
-        class(sp_project),           intent(inout) :: self
+    subroutine print_info_json( self, fname )
+        class(sp_project),          intent(inout)  :: self
         character(len=*),           intent(in)     :: fname
         character(len=:),           allocatable    :: projfile, record
         character(len=XLONGSTRLEN), allocatable    :: keys(:)
         type(binoris_seginfo),      allocatable    :: hinfo(:)
+        type(oris)                                 :: vol_oris
         type(json_core)                      :: json
         type(json_value),      pointer       :: json_root, json_seg, json_real_keys, json_char_keys
         type(ori)                            :: seg_ori
         logical                              :: is_ptcl = .false.
         integer,               allocatable   :: seginds(:)
-        integer :: i, j
+        integer :: i, j, noris
         if( fname2format(fname) .ne. 'O' )then
             THROW_HARD('file format of: '//trim(fname)//' not supported; sp_project :: print_info_json')
         endif
@@ -3565,11 +3567,23 @@ contains
                             else
                                 call json%add(json_real_keys, '', trim(keys(j)))
                             end if
-                        end do
+                        end do 
                         ! add to json
                         call json%add(json_seg, json_real_keys)
                         call json%add(json_seg, json_char_keys)
                         call json%add(json_root, json_seg)
+                        ! add vols section
+                        if(seginds(i) == OUT_SEG) then
+                            call self%os_out%new(int(hinfo(i)%n_records), is_ptcl=.false.)
+                            call self%bos%read_segment(OUT_SEG, self%os_out)
+                            call self%get_all_vols( vol_oris )
+                            noris = vol_oris%get_noris()
+                            if( noris > 0 ) then
+                                call json%create_object(json_seg, 'vols')
+                                call json%add(json_seg, 'n', noris)
+                                call json%add(json_root, json_seg)
+                            end if
+                        end if
                         ! clean up
                         is_ptcl = .false.
                         if(allocated(keys)) deallocate(keys)
@@ -4108,6 +4122,7 @@ contains
         integer                                    :: ffromto(2), iori, noris, ncls, isprite
         logical,           allocatable             :: l_mask(:)
         logical                                    :: fromto_present, sort, sort_ascending
+        real,              allocatable             :: projections(:,:)
         real                                       :: smpd
         fromto_present = present(fromto)
         if( fromto_present ) ffromto = fromto
@@ -4154,6 +4169,8 @@ contains
             case('ptcl2D')
                 noris = self%os_ptcl2D%get_noris()
                 if( noris > 0 )then
+                    call self%read_segment('stk', projfile)
+                    call self%create_ptcl2D_thumb(trim(projfile))
                     call calculate_indices(self%os_ptcl2D)
                     do iori=1, size(indices)
                         call self%os_ptcl2D%ori2json(indices(iori), json_ori)
@@ -4239,6 +4256,8 @@ contains
                     end do
                     call json%add(json_root, json_data)
                     if(present(hist)) call calculate_histogram(self%os_optics)
+                    call self%read_segment('mic', projfile)
+                    call calculate_optics_plot()
                     deallocate(indices)
                 else
                     write(logfhandle,*) 'No optics-type oris available to print; sp_project :: print_segment_json'
@@ -4290,13 +4309,17 @@ contains
                 call self%get_all_fscs( fsc_oris )
                 noris = vol_oris%get_noris() 
                 if( noris > 0 ) then
+                    call self%read_segment('ptcl3D', projfile)
+                    if(self%os_ptcl3D%get_noris() .gt. 0) call get_projections(noris)
                     do iori=1, noris
                         call vol_oris%ori2json(iori, json_ori)
                         call add_fsc(iori)
+                        if(self%os_ptcl3D%get_noris() .gt. 0) call add_oriplot(iori)
                         call json%add(json_data, json_ori)
                     end do
                     call json%add(json_root, json_data)
                     if(present(hist)) call calculate_histogram(self%jobproc)
+                    if(allocated(projections))       deallocate(projections)
                 else
                     write(logfhandle,*) 'No volumes available to print; sp_project :: print_segment_json'
                 endif
@@ -4343,6 +4366,36 @@ contains
                 end if
             end subroutine calculate_histogram
 
+            subroutine calculate_optics_plot()
+                type(json_value),  pointer :: optics_plot, datasets, dataset, data, xy
+                integer                    :: i, j
+                if(self%os_optics%get_noris() .eq. 0)   return
+                if(self%os_mic%get_noris()    .eq. 0)   return
+                if(.not. self%os_mic%isthere('ogid'))   return
+                if(.not. self%os_mic%isthere('shiftx')) return
+                if(.not. self%os_mic%isthere('shifty')) return
+                call json%create_object(optics_plot, 'assignments')
+                call json%add(optics_plot, 'type', 'plot_scatter')
+                call json%create_array(datasets, 'datasets')
+                do i = 1, self%os_optics%get_noris()
+                    call json%create_object(dataset, 'dataset')
+                    call json%create_array(data, 'data')
+                    call json%add(dataset, 'label', 'optics group ' // int2str(i))
+                    do j = 1, self%os_mic%get_noris()
+                        if(self%os_mic%get(j, 'ogid') == i) then
+                            call json%create_object(xy, 'xy')
+                            call json%add(xy, 'x', dble(self%os_mic%get(j, 'shiftx')))
+                            call json%add(xy, 'y', dble(self%os_mic%get(j, 'shifty')))
+                            call json%add(data, xy)
+                        end if
+                    end do
+                    call json%add(dataset,  data)
+                    call json%add(datasets, dataset)
+                end do
+                call json%add(optics_plot, datasets)
+                call json%add(json_root,   optics_plot)
+            end subroutine calculate_optics_plot
+
             subroutine calculate_indices( seg_oris )
                 type(oris), intent(in)  :: seg_oris
                 integer,    allocatable :: order(:)
@@ -4368,7 +4421,7 @@ contains
                 character(len=:), allocatable :: fscfile
                 real,             allocatable :: fsc(:), res(:)
                 real                          :: smpd_l, box_l, fsc05, fsc0143
-                integer                       :: ifsc
+                integer                       :: ifsc, fsc05_crossed_bin, fsc0143_crossed_bin
                 logical                       :: fsc05_crossed, fsc0143_crossed
                 if(.not. vol_oris%get_noris() .eq. fsc_oris%get_noris()) return
                 if(.not. vol_oris%isthere(iori_l, "smpd")) return
@@ -4394,6 +4447,7 @@ contains
                             fsc05 = res(ifsc)
                         else
                             fsc05_crossed = .true.
+                            fsc05_crossed_bin = ifsc
                         end if
                     end if
                     if(.not. fsc0143_crossed) then
@@ -4401,6 +4455,7 @@ contains
                             fsc0143 = res(ifsc)
                         else
                             fsc0143_crossed = .true.
+                            fsc0143_crossed_bin = ifsc
                         end if
                     end if
                     call json%add(data,   '', dble(fsc(ifsc)))
@@ -4417,8 +4472,63 @@ contains
                 call json%add(json_ori, fsc_json)
                 call json%add(json_ori, 'fsc05',   dble(fsc05))
                 call json%add(json_ori, 'fsc0143', dble(fsc0143))
+                call json%add(json_ori, 'fsc05bin',   fsc05_crossed_bin)
+                call json%add(json_ori, 'fsc0143bin', fsc0143_crossed_bin)
                 if(allocated(fscfile)) deallocate(fscfile)
             end subroutine add_fsc
+
+            subroutine add_oriplot( iori_l )
+                integer, intent(in)       :: iori_l
+                type(json_value), pointer :: oriplot_json, datasets, dataset, data, xy
+                integer, allocatable      :: projection_counts(:,:)
+                integer                   :: iptcl, state, proj, iproj, idataset, max(2)
+                if(.not. self%os_ptcl3D%isthere("state")) return
+                allocate(projection_counts(size(projections, 1), 2))
+                projection_counts = 0
+                do iptcl=1, self%os_ptcl3D%get_noris()
+                    state = self%os_ptcl3D%get_int(iptcl, "state")
+                    proj  = self%os_ptcl3D%get_int(iptcl, "proj")
+                    if(state .ne. iori_l) cycle
+                    projection_counts(proj, 1) = projection_counts(proj, 1) + 1
+                end do
+                max = maxval(projection_counts, 1)
+                do iproj = 1, size(projection_counts, 1)
+                    if(projection_counts(iproj, 1) .gt. ceiling(max(1)/10.0)) then
+                        projection_counts(iproj, 2) = 1
+                    else if (projection_counts(iproj, 1) .gt. ceiling(max(1)/100.0)) then
+                        projection_counts(iproj, 2) = 2
+                    else if (projection_counts(iproj, 1) .gt. ceiling(max(1)/1000.0)) then
+                        projection_counts(iproj, 2) = 3
+                    else
+                        projection_counts(iproj, 2) = 4
+                    end if
+                end do
+                call json%create_object(oriplot_json, 'orientations')
+                call json%add(oriplot_json, 'type', "plot_scatter")
+                call json%create_array(datasets, 'datasets')
+                do idataset = 1, 4
+                    call json%create_object(dataset, 'dataset')
+                    call json%create_array(data, 'data')
+                    call json%add(dataset, 'label', 'logfold population ' // int2str(idataset))
+                    if(idataset .eq. 1) call json%add(dataset, 'backgroundColor', "rgb(255, 99,  71 )")
+                    if(idataset .eq. 2) call json%add(dataset, 'backgroundColor', "rgb(255, 215, 0  )")
+                    if(idataset .eq. 3) call json%add(dataset, 'backgroundColor', "rgb(60,  179, 113)")
+                    if(idataset .eq. 4) call json%add(dataset, 'backgroundColor', "rgb(30,  144, 255)")
+                    do iproj = 1, size(projection_counts, 1)
+                        if(projection_counts(iproj, 2) .ne. idataset) cycle
+                        if(projection_counts(iproj, 1) .eq. 0) cycle
+                        call json%create_object(xy, 'xy')
+                        call json%add(xy, 'x', dble(projections(iproj, 2)))
+                        call json%add(xy, 'y', dble(projections(iproj, 3)))
+                        call json%add(data, xy)
+                    end do
+                    call json%add(dataset,      data)
+                    call json%add(datasets,     dataset)
+                end do
+                call json%add(oriplot_json, datasets)
+                call json%add(json_ori,     oriplot_json)
+                if(allocated(projection_counts)) deallocate(projection_counts)
+            end subroutine add_oriplot
 
             function sort_oris( seg_oris ) result (arr)
                 type(oris), intent(in)  :: seg_oris
@@ -4434,6 +4544,37 @@ contains
                 call hpsort(sort_vals, arr)
                 deallocate(sort_vals)
             end function sort_oris
+
+
+            subroutine get_projections(noris_l)
+                integer, intent(in) :: noris_l
+                real                :: minproj, maxproj, e1, e2
+                integer             :: iproj, iptcl, istate, proj, state
+                if(.not. self%os_ptcl3D%isthere("state")) return
+                if(.not. self%os_ptcl3D%isthere("proj"))  return
+                if(.not. self%os_ptcl3D%isthere("e1"))    return
+                if(.not. self%os_ptcl3D%isthere("e2"))    return
+                call self%os_ptcl3D%minmax("proj", minproj, maxproj)
+                allocate(projections(int(maxproj), 3))
+                do iproj=1, int(maxproj)
+                    projections(iproj, 1) = 0.0 !active
+                    projections(iproj, 2) = 0.0 !e1
+                    projections(iproj, 3) = 0.0 !e2
+                end do
+                do iptcl=1, self%os_ptcl3D%get_noris()
+                    state = self%os_ptcl3D%get_int(iptcl, "state")
+                    proj  = self%os_ptcl3D%get_int(iptcl, "proj")
+                    if(state .eq. 0) cycle
+                    if(proj  .eq. 0) cycle
+                    if(projections(proj, 1) .eq. 0.0) then
+                        e1 = self%os_ptcl3D%get(iptcl, "e1")
+                        e2 = self%os_ptcl3D%get(iptcl, "e2")
+                        projections(proj, 1) = 1.0
+                        projections(proj, 2) = e1
+                        projections(proj, 3) = e2
+                    end if
+                end do
+            end subroutine get_projections
 
     end subroutine print_segment_json
 
@@ -4460,6 +4601,53 @@ contains
             end if
         end do
     end subroutine set_cavgs_thumb
+
+    subroutine create_ptcl2D_thumb( self, projfile )
+        use simple_image
+        use simple_imgproc
+        use simple_stack_io
+        class(sp_project),  intent(inout) :: self
+        character(len=*),   intent(in)    :: projfile
+        character(len=:),   allocatable   :: thumbfile, tmpfile, stkname
+        integer,            allocatable   :: arr(:)
+        real,               allocatable   :: sort_vals(:)
+        type(image)                       :: stkimg
+        type(stack_io)                    :: stkio_w
+        integer                           :: iori, ithumb, delta, idx, ldim_stk(3), nptcls
+        real                              :: smpd
+        logical                           :: first = .true.
+        thumbfile = stemname(projfile) // "/thumbptcl2D.jpeg"
+        if(file_exists(thumbfile)) return
+        tmpfile = stemname(projfile) // "/thumbptcl2D.mrcs"
+        if(file_exists(tmpfile)) call del_file(tmpfile)
+        sort_vals = self%os_ptcl2D%get_all('dfx')
+        allocate(arr(size(sort_vals)))
+        do iori=1,size(sort_vals)
+            arr(iori) = iori
+        end do
+        call hpsort(sort_vals, arr)
+        delta = (real(size(sort_vals)) / 24.0)
+        do ithumb=1, 25
+            call self%get_stkname_and_ind('ptcl2D', 1 + (ithumb - 1) * delta, stkname, idx)
+            call find_ldim_nptcls(trim(stkname), ldim_stk, nptcls, smpd)
+            call stkimg%new([ldim_stk(1), ldim_stk(1), 1], smpd)
+            if(first) then
+                call stkio_w%open(tmpfile, smpd, 'write', box=ldim_stk(1))
+                first = .false.
+            end if
+            call stkimg%read(trim(stkname), idx)
+            call stkio_w%write(ithumb, stkimg)
+            call stkimg%kill()
+        end do
+        call stkio_w%close()
+        call mrc2jpeg_tiled(tmpfile, thumbfile)
+        call del_file(tmpfile)
+        if(allocated(sort_vals)) deallocate(sort_vals)
+        if(allocated(arr))       deallocate(arr)
+        if(allocated(thumbfile)) deallocate(thumbfile)
+        if(allocated(tmpfile))   deallocate(tmpfile)
+        if(allocated(stkname))   deallocate(stkname)
+    end subroutine create_ptcl2D_thumb
 
     subroutine write_star_segments( self )
         class(sp_project),  intent(inout) :: self

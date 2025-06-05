@@ -1224,6 +1224,8 @@ contains
                     self%spproj_iseg = PTCL3D_SEG
                 case('out')
                     self%spproj_iseg = OUT_SEG
+                case('optics')
+                    self%spproj_iseg = OPTICS_SEG       
                 case('projinfo')
                     self%spproj_iseg = PROJINFO_SEG
                 case('jobproc')
