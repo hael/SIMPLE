@@ -372,11 +372,10 @@ contains
     end subroutine prepimg4align
 
     !>  \brief  prepares one cluster centre image for alignment
-    subroutine prep2Dref( img_in, img_out, icls, iseven, center, xyz_in, xyz_out )
+    subroutine prep2Dref( img_in, img_out, icls, center, xyz_in, xyz_out )
         class(image),      intent(inout) :: img_in
         class(image),      intent(inout) :: img_out
         integer,           intent(in)    :: icls
-        logical,           intent(in)    :: iseven
         logical, optional, intent(in)    :: center
         real,    optional, intent(in)    :: xyz_in(3)
         real,    optional, intent(out)   :: xyz_out(3)

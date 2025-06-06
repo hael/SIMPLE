@@ -3373,9 +3373,9 @@ contains
                     call build_glob%img_crop_polarizer%init_polarizer(pftcc, params%alpha)
                     call match_img%new([params%box_crop, params%box_crop, 1], params%smpd_crop, wthreads=.false.)
                     do iref = 1, params%ncls
-                        call prep2Dref(cavgs_even(iref), match_img, iref, iseven=.true., center=.false.)
+                        call prep2Dref(cavgs_even(iref), match_img, iref, center=.false.)
                         call build_glob%img_crop_polarizer%polarize(pftcc, match_img, iref, isptcl=.false., iseven=.true.)
-                        call prep2Dref(cavgs_odd(iref), match_img, iref, iseven=.false., center=.false.)
+                        call prep2Dref(cavgs_odd(iref), match_img, iref, center=.false.)
                         call build_glob%img_crop_polarizer%polarize(pftcc, match_img, iref, isptcl=.false., iseven=.false.)
                     enddo
                 elseif( trim(coord_type) .eq. 'polar' )then
