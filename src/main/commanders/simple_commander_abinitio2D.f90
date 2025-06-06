@@ -289,6 +289,7 @@ contains
             case DEFAULT
                 THROW_HARD('Unsupported REFINE argument: '//trim(params%refine))
             end select
+            ! gaussian filtering only when polar=yes, when polar=no use icm instead
             l_gauref = (trim(params%gauref).eq.'yes').and.(trim(params%polar).eq.'yes')
             ! iteration number book-keeping
             iter = 0

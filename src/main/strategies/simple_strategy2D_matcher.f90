@@ -603,12 +603,14 @@ contains
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: batchsz_max, which_iter
         logical,                 intent(in)    :: l_stream
+        type(image),      allocatable :: tmp_imgs(:)
         character(len=:), allocatable :: fname
+        real      :: xyz(3)
         integer   :: icls, pop, pop_even, pop_odd
-        logical   :: has_been_searched
-        has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
+        logical   :: has_been_searched, do_center, l_center
+        ! PFTCC instantiation
         call pftcc%new(params_glob%ncls, [1,batchsz_max], params_glob%kfromto)
-        ! sigma2
+        ! Sigma2
         if( params_glob%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
             call eucl_sigma%new(fname, params_glob%box)
@@ -617,15 +619,28 @@ contains
                 call eucl_sigma%allocate_ptcls
             else
                 call eucl_sigma%read_part(  build_glob%spproj_field)
-                if( params_glob%cc_objfun == OBJFUN_EUCLID ) call eucl_sigma%read_groups(build_glob%spproj_field)
+                if( params_glob%cc_objfun == OBJFUN_EUCLID )then
+                    call eucl_sigma%read_groups(build_glob%spproj_field)
+                endif
             endif
         endif
         ! Read polar references
         call polar_cavger_new(pftcc)
         call polar_cavger_read_all(params_glob%refs)
+        has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
+        ! Centering-related objects
+        do_center = (params_glob%center .eq. 'yes') .and. has_been_searched&
+             &.and. (which_iter > 2) .and. (.not.params_glob%l_update_frac)
+        if( do_center )then
+            allocate(tmp_imgs(params_glob%ncls))
+            call polar_cavger_refs2cartesian(pftcc, tmp_imgs, 'merged')
+            call tmp_imgs(1)%construct_thread_safe_tmp_imgs(nthr_glob)
+        endif
         ! PREPARATION OF REFERENCES IN PFTCC
-        !$omp parallel do default(shared) private(icls,pop,pop_even,pop_odd) schedule(static) proc_bind(close)
+        !$omp parallel do default(shared) private(icls,pop,pop_even,pop_odd,xyz,l_center)&
+        !$omp schedule(static) proc_bind(close)
         do icls=1,params_glob%ncls
+            ! populations
             pop      = 1
             pop_even = 0
             pop_odd  = 0
@@ -635,8 +650,15 @@ contains
                 pop_odd  = build_glob%spproj_field%get_pop(icls, 'class', eo=1)
             endif
             if( pop > 0 )then
-                ! prepare the references
-                call polar_prep2Dref( icls )
+                ! centering
+                l_center = do_center .and. (pop > MINCLSPOPLIM)
+                if( l_center )then
+                    call polar_prep2Dref( icls, cavg=tmp_imgs(icls), center=.true., xyz=xyz )
+                else
+                    call polar_prep2Dref( icls )
+                    xyz = 0.0
+                endif
+                ! transfer to pftcc
                 if( .not.params_glob%l_lpset )then
                     if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
                         ! transfer e/o refs to pftcc
@@ -652,48 +674,21 @@ contains
                     call polar_cavger_set_ref_pftcc(icls, 'merged', pftcc)
                     call pftcc%cp_even2odd_ref(icls)
                 endif
+                ! centering within the pftcc
+                if( l_center .and. (arg(xyz) > CENTHRESH) )then
+                    call build_glob%spproj_field%add_shift2class(icls, -xyz(1:2))
+                    call pftcc%shift_ref(icls, xyz(1:2))
+                endif
             endif
+            if( do_center ) call tmp_imgs(icls)%kill
         end do
         !$omp end parallel do
         call pftcc%memoize_refs
-    end subroutine prep_polar_pftcc4align2D
-
-    !>  \brief  prepares one polar cluster centre image for alignment
-    subroutine polar_prep2Dref( icls )
-        integer, intent(in) :: icls
-        real, allocatable   :: frc(:), filter(:), gaufilter(:)
-        real    :: cref
-        integer :: filtsz, k
-        if( params_glob%l_ml_reg )then
-            ! no filtering, not supported yet
-        else
-            ! FRC-based filter
-            filtsz = build_glob%clsfrcs%get_filtsz()
-            allocate(frc(filtsz),filter(filtsz),source=0.)
-            call build_glob%clsfrcs%frc_getter(icls, frc)
-            if( any(frc > 0.143) )then
-                call fsc2optlp_sub(filtsz, frc, filter, merged=params_glob%l_lpset)
-            else
-                filter = 1.0
-            endif
-            ! gaussian filter
-            if(trim(params_glob%gauref).eq.'yes')then
-                call gaussian_filter(params_glob%gaufreq, params_glob%smpd, params_glob%box, gaufilter)
-                do k = 1,filtsz
-                    filter(k) = min(filter(k), gaufilter(k))
-                enddo
-                deallocate(gaufilter)
-            endif
-            ! ! threshold below frc=0.143
-            ! do k = 1,filtsz
-            !     if( frc(k) < 0.143 )then
-            !         filter(k:) = 0.0
-            !         exit
-            !     endif
-            ! enddo
-            call polar_cavger_filterrefs(icls, filter)
-            deallocate(frc,filter)
+        ! cleanup
+        if( do_center )then
+            call tmp_imgs(1)%kill_thread_safe_tmp_imgs
+            deallocate(tmp_imgs)
         endif
-    end subroutine polar_prep2Dref
+    end subroutine prep_polar_pftcc4align2D
 
 end module simple_strategy2D_matcher
