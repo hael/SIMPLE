@@ -313,9 +313,9 @@ contains
         call cavger_read(trim(p%refs_even), 'odd' )
         call b%img_crop_polarizer%init_polarizer(pftcc, p%alpha)
         call match_imgs(1)%new([p%box_crop, p%box_crop, 1], p%smpd_crop, wthreads=.false.)
-        call prep2Dref(cavgs_even(1), match_imgs(1), 1, iseven=.true., center=.false.)
+        call prep2Dref(cavgs_even(1), match_imgs(1), 1, center=.false.)
         call b%img_crop_polarizer%polarize(pftcc, match_imgs(1), 1, isptcl=.false., iseven=.true.)
-        call prep2Dref(cavgs_odd(1), match_imgs(1), 1, iseven=.false., center=.false.)
+        call prep2Dref(cavgs_odd(1), match_imgs(1), 1, center=.false.)
         call b%img_crop_polarizer%polarize(pftcc, match_imgs(1), 1, isptcl=.false., iseven=.false.)
         call pftcc%memoize_refs
     end subroutine restore_read_polarize_cavgs
