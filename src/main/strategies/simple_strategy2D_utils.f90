@@ -6,7 +6,7 @@ use simple_stack_io,   only: stack_io
 use simple_sp_project, only: sp_project
 implicit none
 
-public :: read_cavgs_into_imgarr, flag_non_junk_cavgs, align_imgs2ref, rtsq_imgs
+public :: read_cavgs_into_imgarr, flag_non_junk_cavgs, align_imgs2ref, rtsq_imgs, prep_cavgs4clustering
 public :: pack_imgarr, alloc_imgarr, dealloc_imgarr, write_cavgs, write_junk_cavgs, write_selected_cavgs
 private
 #include "simple_local_flags.inc"
@@ -92,6 +92,98 @@ contains
         call stkio_r%close
     end function read_cavgs_into_imgarr_2
 
+    subroutine prep_cavgs4clustering( spproj, cavg_imgs, mskdiam, clspops, clsinds, l_non_junk, mm )
+        use simple_class_frcs, only: class_frcs
+        class(sp_project),        intent(inout) :: spproj
+        type(image), allocatable, intent(inout) :: cavg_imgs(:)
+        real,                     intent(in)    :: mskdiam
+        integer,     allocatable, intent(inout) :: clspops(:), clsinds(:)
+        logical,     allocatable, intent(inout) :: l_non_junk(:)
+        real,        allocatable, intent(inout) :: mm(:,:)
+        real,              parameter  :: LP_BIN = 20.
+        logical,           parameter  :: DEBUG = .true.
+        character(len=:), allocatable :: frcs_fname
+        real,             allocatable :: frcs(:,:), filter(:)
+        logical,          allocatable :: l_msk(:,:,:)
+        type(image)                   :: img_msk
+        type(class_frcs)              :: clsfrcs
+        integer                       :: ncls, ldim(3), box, filtsz, ncls_sel, cnt, i, j
+        real                          :: smpd, mskrad
+        call dealloc_imgarr(cavg_imgs)
+        ncls      = spproj%os_cls2D%get_noris()
+        cavg_imgs = read_cavgs_into_imgarr(spproj)
+        if( allocated(clspops) ) deallocate(clspops)
+        clspops   = spproj%os_cls2D%get_all_asint ('pop') 
+        smpd      = cavg_imgs(1)%get_smpd()
+        ldim      = cavg_imgs(1)%get_ldim()
+        box       = ldim(1)
+        mskrad    = min(real(box/2) - COSMSKHALFWIDTH - 1., 0.5 * mskdiam/smpd)
+        filtsz    = fdim(box) - 1
+        ! get FRCs
+        call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
+        if( file_exists(frcs_fname) )then
+            call clsfrcs%read(frcs_fname)
+            filtsz = clsfrcs%get_filtsz()
+        else
+            THROW_HARD('FRC file: '//trim(frcs_fname)//' does not exist!')
+        endif
+        if( allocated(l_non_junk) ) deallocate(l_non_junk)
+        call flag_non_junk_cavgs(cavg_imgs, LP_BIN, mskrad, l_non_junk, spproj%os_cls2D)
+        if( DEBUG )then
+            cnt = 0
+            do i = 1, ncls
+                if( .not. l_non_junk(i) )then
+                    cnt = cnt + 1
+                    call cavg_imgs(i)%write('cavgs_junk.mrc', cnt)
+                endif
+            enddo
+        endif
+        ! re-create cavg_imgs
+        ncls_sel = count(l_non_junk)
+        write(logfhandle,'(A,I5)') '# classes left after junk rejection ', ncls_sel
+        call dealloc_imgarr(cavg_imgs)
+        cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
+        ! keep track of the original class indices
+        if( allocated(clsinds) ) deallocate(clsinds)
+        clsinds = pack((/(i,i=1,ncls)/), mask=l_non_junk)
+        ! update class populations
+        clspops = pack(clspops, mask=l_non_junk)
+        ! create the stuff needed in the loop
+        allocate(frcs(ncls_sel,filtsz), filter(filtsz), mm(ncls_sel,2), source=0.)
+        ! prep mask
+        call img_msk%new([box,box,1], smpd)
+        img_msk = 1.
+        call img_msk%mask(mskrad, 'hard')
+        l_msk = img_msk%bin2logical()
+        call img_msk%kill
+        write(logfhandle,'(A)') '>>> PREPARING CLASS AVERAGES'
+        !$omp parallel do default(shared) private(i,j,filter) schedule(static) proc_bind(close)
+        do i = 1, ncls_sel
+            j = clsinds(i)
+            ! FRC-based filter 
+            call clsfrcs%frc_getter(j, frcs(i,:))
+            if( any(frcs(i,:) > 0.143) )then
+                call fsc2optlp_sub(clsfrcs%get_filtsz(), frcs(i,:), filter)
+                where( filter > TINY ) filter = sqrt(filter) ! because the filter is applied to the average not the even or odd
+                call cavg_imgs(i)%fft()
+                call cavg_imgs(i)%apply_filter_serial(filter)
+                call cavg_imgs(i)%ifft()
+            endif
+            ! normalization
+            call cavg_imgs(i)%norm_within(l_msk)
+            ! mask
+            call cavg_imgs(i)%mask(mskrad, 'soft', backgr=0.)
+            ! stash minmax
+            mm(i,:) = cavg_imgs(i)%minmax(mskrad)
+        end do
+        !$omp end parallel do
+        if( DEBUG )then
+            do i = 1, ncls_sel
+                call cavg_imgs(i)%write('cavgs_prepped.mrc', i)
+            enddo
+        endif
+    end subroutine prep_cavgs4clustering
+
     function pack_imgarr( imgs, mask ) result( imgs_packed )
         class(image), intent(in) :: imgs(:)
         logical,      intent(in) :: mask(:)
@@ -147,6 +239,7 @@ contains
         integer,     parameter   :: MINPOP          = 20
         type(image), allocatable :: cavg_threads(:)
         real,        allocatable :: pspec(:)
+        integer,     allocatable :: states(:)
         integer :: ncls, icls, ldim(3), kfromto(2), ithr, nin, nout, nmsk
         real    :: dynrange, smpd
         logical :: l_dens_inoutside, l_os2D_present
@@ -154,6 +247,9 @@ contains
         l_os2D_present = present(os_cls2D)
         if( l_os2D_present )then
             if( os_cls2D%get_noris() /= ncls ) THROW_HARD('# cavgs /= # entries in os_cls2D')
+            states = os_cls2D%get_all_asint('state')
+        else
+            allocate(states(ncls), source=1)
         endif
         ldim = cavgs(1)%get_ldim()
         smpd = cavgs(1)%get_smpd()
@@ -178,12 +274,17 @@ contains
             call cavg_threads(ithr)%mask(msk, 'soft')
             call cavg_threads(ithr)%spectrum('sqrt', pspec)
             dynrange = pspec(kfromto(1)) - pspec(kfromto(2))
-            if( l_os2D_present )then
-                if( dynrange > DYNRANGE_THRES .and. os_cls2D%get_int(icls, 'pop') >= MINPOP )then
-                    if( .not. l_dens_inoutside ) l_non_junk(icls) = .true.
+            l_non_junk(icls) = .false. ! exclusion by default
+            if( states(icls) == 0 )then
+                ! do nothing
+            else    
+                if( l_os2D_present )then
+                    if( dynrange > DYNRANGE_THRES .and. os_cls2D%get_int(icls, 'pop') >= MINPOP )then
+                        if( .not. l_dens_inoutside ) l_non_junk(icls) = .true.
+                    endif
+                else
+                    if( dynrange > DYNRANGE_THRES .and. .not. l_dens_inoutside ) l_non_junk(icls) = .true.
                 endif
-            else
-                if( dynrange > DYNRANGE_THRES .and. .not. l_dens_inoutside ) l_non_junk(icls) = .true.
             endif
         enddo
         !$omp end parallel do
