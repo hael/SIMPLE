@@ -19,10 +19,6 @@ type, extends(image) :: projector
     type(kbinterpol)      :: kbwin                   !< window function object
     integer               :: ldim_exp(3,2) = 0       !< expanded FT matrix limits
     complex, allocatable  :: cmat_exp(:,:,:)         !< expanded FT matrix
-    real,    allocatable  :: polweights_mat(:,:,:)   !< polar weights matrix for the image to polar transformer
-    integer, allocatable  :: polcyc1_mat(:,:,:)      !< image cyclic adresses for the image to polar transformer
-    integer, allocatable  :: polcyc2_mat(:,:,:)      !< image cyclic adresses for the image to polar transformer
-    logical, allocatable  :: is_in_mask(:,:,:)       !< neighbour matrix for the shape mask projector
     integer               :: wdim      = 0           !< dimension of K-B window
     integer               :: iwinsz    = 0           !< integer half-window size
     logical               :: expanded_exists=.false. !< indicates FT matrix existence
