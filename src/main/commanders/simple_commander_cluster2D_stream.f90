@@ -2808,10 +2808,17 @@ contains
                 THROW_HARD('Unsupported algorithm')
         end select
         ! read strictly required fields
-        call spproj_glob%read_non_data_segments(params%projfile)
-        call spproj_glob%read_segment('mic',   params%projfile)
-        call spproj_glob%read_segment('stk',   params%projfile)
-        call spproj_glob%read_segment('ptcl2D',params%projfile)
+        if( cline%defined('dfmin') )then
+            call spproj_glob%read(params%projfile)
+            call threshold_with_defocus
+            call spproj_glob%write(params%projfile)
+            call spproj_glob%os_ptcl3D%kill
+        else
+            call spproj_glob%read_non_data_segments(params%projfile)
+            call spproj_glob%read_segment('mic',   params%projfile)
+            call spproj_glob%read_segment('stk',   params%projfile)
+            call spproj_glob%read_segment('ptcl2D',params%projfile)
+        endif
         ! sanity checks
         nstks  = spproj_glob%os_stk%get_noris()
         nptcls = spproj_glob%get_nptcls()
@@ -2923,6 +2930,31 @@ contains
         ! graceful end
         call simple_end('**** SIMPLE_CLUSTER2D_SUBSETS NORMAL STOP ****')
     contains
+
+        subroutine threshold_with_defocus
+            real,    allocatable :: df(:)
+            integer, allocatable :: states(:)
+            logical, allocatable :: mask(:)
+            integer :: n,nprev
+            if( .not.cline%defined('dfmin') ) return
+            df     = spproj_glob%os_ptcl2D%get_all('dfx')
+            df(:)  = df(:) + spproj_glob%os_ptcl2D%get_all('dfy')
+            df(:)  = df(:) / 2.0
+            states = spproj_glob%os_ptcl2D%get_all_asint('state')
+            nprev  = count(states>0)
+            mask   = (states>0) .and. (df>params_glob%dfmin)
+            if( count(mask) < params%ncls_start )then
+                write(logfhandle,'(A)')'>>> INSUFFICIENT # OF PARTICLES FOR DEFOCUS THRESHOLDING'
+                return
+            endif
+            where( .not.mask ) states = 0
+            call spproj_glob%os_ptcl2D%set_all('state', states)
+            call spproj_glob%os_ptcl3D%set_all('state', states)
+            call spproj_glob%prune_particles
+            states = spproj_glob%os_ptcl2D%get_all_asint('state')
+            n = count(states>0)
+            write(logfhandle,'(A,I8)')'>>> PARTICLES PRUNED BASED ON DEFOCUS:',nprev-n
+        end subroutine threshold_with_defocus
 
         subroutine check_completed_chunks
             type(sp_project)                :: spproj
