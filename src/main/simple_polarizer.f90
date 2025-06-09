@@ -62,9 +62,9 @@ contains
             THROW_HARD('Unsupported interpolation function: '//trim(params_glob%interpfun))
         end select
         self%wlen = self%wdim**2
-        allocate( self%polcyc1_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wdim),&
-                  &self%polcyc2_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wdim),&
-                  &self%polweights_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wlen),&
+        allocate( self%polcyc1_mat(    1:self%wdim, 1:self%pdim(1), self%pdim(2):self%pdim(3)),&
+                  &self%polcyc2_mat(   1:self%wdim, 1:self%pdim(1), self%pdim(2):self%pdim(3)),&
+                  &self%polweights_mat(1:self%wlen, 1:self%pdim(1), self%pdim(2):self%pdim(3)),&
                   &w(1:self%wdim,1:self%wdim))
         ! instrument function
         normalize_weights = trim(params_glob%interpfun) == 'kb'
@@ -90,11 +90,11 @@ contains
                         w(l,:) = w(l,:) * kbwin%apod( real(win(1,1)+l-1)-loc(1) )
                         w(:,l) = w(:,l) * kbwin%apod( real(win(2,1)+l-1)-loc(2) )
                         ! cyclic addresses
-                        self%polcyc1_mat(i, k, cnt) = cyci_1d(lims(:,1), win(1,1)+l-1)
-                        self%polcyc2_mat(i, k, cnt) = cyci_1d(lims(:,2), win(2,1)+l-1)
+                        self%polcyc1_mat(cnt, i, k) = cyci_1d(lims(:,1), win(1,1)+l-1)
+                        self%polcyc2_mat(cnt, i, k) = cyci_1d(lims(:,2), win(2,1)+l-1)
                     end do
-                    self%polweights_mat(i,k,:) = reshape(w,(/self%wlen/))
-                    if( normalize_weights ) self%polweights_mat(i,k,:) = self%polweights_mat(i,k,:) / sum(w)
+                    self%polweights_mat(:,i,k) = reshape(w,(/self%wlen/))
+                    if( normalize_weights ) self%polweights_mat(:,i,k) = self%polweights_mat(:,i,k) / sum(w)
                 enddo
             enddo
             !$omp end parallel do
@@ -108,16 +108,16 @@ contains
                     d1  = loc(1) - real(f1)
                     f2  = int(floor(loc(2)))
                     d2  = loc(2) - real(f2)
-                    self%polcyc1_mat(i, k,  1)  = cyci_1d(lims(:,1), f1)
-                    self%polcyc1_mat(i, k,  2)  = cyci_1d(lims(:,1), f1+1)
-                    self%polcyc2_mat(i, k,  1)  = cyci_1d(lims(:,2), f2)
-                    self%polcyc2_mat(i, k,  2)  = cyci_1d(lims(:,2), f2+1)
+                    self%polcyc1_mat(1, i, k) = cyci_1d(lims(:,1), f1)
+                    self%polcyc1_mat(2, i, k) = cyci_1d(lims(:,1), f1+1)
+                    self%polcyc2_mat(1, i, k) = cyci_1d(lims(:,2), f2)
+                    self%polcyc2_mat(2, i, k) = cyci_1d(lims(:,2), f2+1)
                     w      = 1.
                     w(1,:) = w(1,:) * (1.0-d1)
                     w(:,1) = w(:,1) * (1.0-d2)
                     w(2,:) = w(2,:) * d1
                     w(:,2) = w(:,2) * d2
-                    self%polweights_mat(i,k,:) = reshape(w,(/self%wlen/))
+                    self%polweights_mat(:,i,k) = reshape(w,(/self%wlen/))
                 enddo
             enddo
             !$omp end parallel do
@@ -134,9 +134,9 @@ contains
         self%pdim = self_in%pdim
         self%wdim = self_in%wdim
         self%wlen = self_in%wlen
-        allocate( self%polcyc1_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wdim),    source=self_in%polcyc1_mat )
-        allocate( self%polcyc2_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wdim),    source=self_in%polcyc2_mat )
-        allocate( self%polweights_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wlen), source=self_in%polweights_mat )
+        allocate( self%polcyc1_mat(   1:self%wdim, 1:self%pdim(1), self%pdim(2):self%pdim(3)), source=self_in%polcyc1_mat )
+        allocate( self%polcyc2_mat(   1:self%wdim, 1:self%pdim(1), self%pdim(2):self%pdim(3)), source=self_in%polcyc2_mat )
+        allocate( self%polweights_mat(1:self%wlen, 1:self%pdim(1), self%pdim(2):self%pdim(3)), source=self_in%polweights_mat )
         if( self_in%instrfun_img%exists() ) call self%instrfun_img%copy(self_in%instrfun_img)
     end subroutine copy_polarizer
 
@@ -176,20 +176,22 @@ contains
         logical,                 intent(in)    :: iseven  !< is even (or odd)
         logical, optional,       intent(in)    :: mask(:) !< interpolation mask, all .false. set to CMPLX_ZERO
         complex, pointer :: pft(:,:)
-        complex :: fcomps(1:self%wdim,1:self%wdim)
-        integer :: i, k, l, m, addr_l
+        complex :: fcomps(self%wlen)
+        integer :: i, k, l, m, addr_m, ind
         ! get temporary pft matrix
         call pftcc%get_work_pft_ptr(pft)
         ! interpolate
-        do i=1,self%pdim(1)
-            do k=self%pdim(2),self%pdim(3)
-                do l=1,self%wdim
-                    addr_l = self%polcyc1_mat(i,k,l)
-                    do m=1,self%wdim
-                        fcomps(l,m) = img%get_fcomp2D(addr_l,self%polcyc2_mat(i,k,m))
+        do k=self%pdim(2),self%pdim(3)
+            do i=1,self%pdim(1)
+                ind = 0
+                do m=1,self%wdim
+                    addr_m = self%polcyc2_mat(m,i,k)
+                    do l=1,self%wdim
+                        ind         = ind + 1
+                        fcomps(ind) = img%get_fcomp2D(self%polcyc1_mat(l,i,k),addr_m)
                     enddo
                 enddo
-                pft(i,k) = dot_product(self%polweights_mat(i,k,:), reshape(fcomps,(/self%wlen/)))
+                pft(i,k) = dot_product(self%polweights_mat(:,i,k), fcomps)
             end do
         end do
         if( present(mask) )then

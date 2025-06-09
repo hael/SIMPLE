@@ -42,6 +42,7 @@ type(image)       :: ccimgs(2)
 character(len=8)  :: str_opts                       ! string descriptors for the NOPTS optimizers
 real              :: lowest_cost, ang, offset(2), cc
 integer           :: box
+integer(timer_int_kind) :: tpolarize
 if( command_argument_count() < 3 )then
     write(logfhandle,'(a)',advance='no') 'ERROR! Usage: simple_test_line_sim stk=<particles.ext> mskdiam=<mask radius(in pixels)>'
     write(logfhandle,'(a)') ' smpd=<sampling distance(in A)> [nthr=<number of threads{1}>] [verbose=<yes|no{no}>]'
@@ -95,40 +96,45 @@ call b%img%read(p%stk, 1)
 call b%img%norm
 call b%img%fft
 call b%img%clip_inplace([p%box_crop,p%box_crop,1])
-call img_copy%polarize(pftcc, b%img, 1, isptcl=.false., iseven=.true., mask=b%l_resmsk)
-call img_copy%polarize(pftcc, b%img, 1, isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
-call pftcc%shift_ptcl(1, [SHMAG,0.,0.]) ! left
-call img_copy%polarize(pftcc, b%img, 2, isptcl=.false., iseven=.true., mask=b%l_resmsk)
-call img_copy%polarize(pftcc, b%img, 2, isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
-call pftcc%shift_ptcl(2, [0.,SHMAG,0.]) ! down
-call img_copy%polarize(pftcc, b%img, 3, isptcl=.false., iseven=.true., mask=b%l_resmsk)
-call img_copy%polarize(pftcc, b%img, 3, isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
-call pftcc%shift_ptcl(3, [-SHMAG,0.,0.]) ! right
-call img_copy%polarize(pftcc, b%img, 4, isptcl=.false., iseven=.true., mask=b%l_resmsk)
-call img_copy%polarize(pftcc, b%img, 4, isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
-call pftcc%shift_ptcl(4, [0.,SHMAG,0.]) ! up
-call img_copy%polarize(pftcc, b%img, 5, isptcl=.false., iseven=.true., mask=b%l_resmsk)
-call img_copy%polarize(pftcc, b%img, 5, isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
-call pftcc%shift_ptcl(5, [SHMAG,SHMAG,0.]) ! left + down
-call img_copy%polarize(pftcc, b%img, 6, isptcl=.false., iseven=.true., mask=b%l_resmsk)
-call img_copy%polarize(pftcc, b%img, 6, isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
-call pftcc%shift_ptcl(6, [-SHMAG,-SHMAG,0.]) ! right + up
-call img_copy%polarize(pftcc, b%img, 7, isptcl=.false., iseven=.true., mask=b%l_resmsk)
-call img_copy%polarize(pftcc, b%img, 7, isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
-call pftcc%shift_ptcl(7, [-SHMAG,SHMAG,0.]) ! right + down
-call img_copy%polarize(pftcc, b%img, 8, isptcl=.false., iseven=.true., mask=b%l_resmsk)
-call img_copy%polarize(pftcc, b%img, 8, isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
-call pftcc%shift_ptcl(8, [SHMAG,-SHMAG,0.]) ! left + up
-call img_copy%polarize(pftcc, b%img, 9, isptcl=.false., iseven=.true., mask=b%l_resmsk)
-call img_copy%polarize(pftcc, b%img, 9, isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
-call pftcc%shift_ptcl(9, [0.,0.,0.]) ! no shift
+! polarizing
+tpolarize = tic()
+call img_copy%polarize(pftcc, b%img, 1,  isptcl=.false., iseven=.true., mask=b%l_resmsk)
+call img_copy%polarize(pftcc, b%img, 1,  isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
+call img_copy%polarize(pftcc, b%img, 2,  isptcl=.false., iseven=.true., mask=b%l_resmsk)
+call img_copy%polarize(pftcc, b%img, 2,  isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
+call img_copy%polarize(pftcc, b%img, 3,  isptcl=.false., iseven=.true., mask=b%l_resmsk)
+call img_copy%polarize(pftcc, b%img, 3,  isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
+call img_copy%polarize(pftcc, b%img, 4,  isptcl=.false., iseven=.true., mask=b%l_resmsk)
+call img_copy%polarize(pftcc, b%img, 4,  isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
+call img_copy%polarize(pftcc, b%img, 5,  isptcl=.false., iseven=.true., mask=b%l_resmsk)
+call img_copy%polarize(pftcc, b%img, 5,  isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
+call img_copy%polarize(pftcc, b%img, 6,  isptcl=.false., iseven=.true., mask=b%l_resmsk)
+call img_copy%polarize(pftcc, b%img, 6,  isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
+call img_copy%polarize(pftcc, b%img, 7,  isptcl=.false., iseven=.true., mask=b%l_resmsk)
+call img_copy%polarize(pftcc, b%img, 7,  isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
+call img_copy%polarize(pftcc, b%img, 8,  isptcl=.false., iseven=.true., mask=b%l_resmsk)
+call img_copy%polarize(pftcc, b%img, 8,  isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
+call img_copy%polarize(pftcc, b%img, 9,  isptcl=.false., iseven=.true., mask=b%l_resmsk)
+call img_copy%polarize(pftcc, b%img, 9,  isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
+call img_copy%polarize(pftcc, b%img, 10, isptcl=.false., iseven=.true., mask=b%l_resmsk)
+call img_copy%polarize(pftcc, b%img, 10, isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
+print *, 'time of polarize: ', toc(tpolarize)
+! shifting
+call pftcc%shift_ptcl(1,  [ SHMAG, 0.   ,0.]) ! left
+call pftcc%shift_ptcl(2,  [ 0.   , SHMAG,0.]) ! down
+call pftcc%shift_ptcl(3,  [-SHMAG, 0.   ,0.]) ! right
+call pftcc%shift_ptcl(4,  [ 0.   , SHMAG,0.]) ! up
+call pftcc%shift_ptcl(5,  [ SHMAG, SHMAG,0.]) ! left + down
+call pftcc%shift_ptcl(6,  [-SHMAG,-SHMAG,0.]) ! right + up
+call pftcc%shift_ptcl(7,  [-SHMAG, SHMAG,0.]) ! right + down
+call pftcc%shift_ptcl(8,  [ SHMAG,-SHMAG,0.]) ! left + up
+call pftcc%shift_ptcl(9,  [ 0.   , 0.   ,0.]) ! no shift
+call pftcc%shift_ptcl(10, [ 0.   , 0.   ,0.]) ! no shift
+!
 call b%img%read(p%stk, 2)
 call b%img%norm
 call b%img%fft
 call b%img%clip_inplace([p%box_crop,p%box_crop,1])
-call img_copy%polarize(pftcc, b%img, 10, isptcl=.false., iseven=.true., mask=b%l_resmsk)
-call img_copy%polarize(pftcc, b%img, 10, isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
-call pftcc%shift_ptcl(10, [0.,0.,0.]) ! no shift
 call pftcc%set_with_ctf(.false.)
 call pftcc%memoize_refs
 do i = 1, N_PTCLS
