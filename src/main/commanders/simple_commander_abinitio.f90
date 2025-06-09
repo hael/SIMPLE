@@ -99,20 +99,20 @@ contains
         class(cmdline),                    intent(inout) :: cline
         character(len=*),      parameter :: work_projfile = 'abinitio3D_cavgs_tmpproj.simple'
         ! shared-mem commanders
-        type(refine3D_commander)         :: xrefine3D
-        type(reconstruct3D_commander)    :: xreconstruct3D
-        type(reproject_commander)        :: xreproject
+        type(refine3D_commander)      :: xrefine3D
+        type(reconstruct3D_commander) :: xreconstruct3D
+        type(reproject_commander)     :: xreproject
         ! other
-        character(len=:),    allocatable :: stk, stkpath, orig_stk, shifted_stk, stk_even, stk_odd, ext
-        integer,             allocatable :: states(:)
-        type(ori)                        :: o, o_even, o_odd
-        type(parameters)                 :: params
-        type(ctfparams)                  :: ctfvars
-        type(sp_project)                 :: spproj, work_proj
-        type(image)                      :: img
-        type(stack_io)                   :: stkio_r, stkio_r2, stkio_w
-        character(len=STDLEN)            :: final_vol
-        integer                          :: icls, ncavgs, cnt, even_ind, odd_ind, istage, nstages_ini3D, s
+        character(len=:), allocatable :: stk, stkpath, orig_stk, shifted_stk, stk_even, stk_odd, ext
+        integer,          allocatable :: states(:)
+        type(ori)                     :: o, o_even, o_odd
+        type(parameters)              :: params
+        type(ctfparams)               :: ctfvars
+        type(sp_project)              :: spproj, work_proj
+        type(image)                   :: img
+        type(stack_io)                :: stkio_r, stkio_r2, stkio_w
+        character(len=STDLEN)         :: final_vol
+        integer                       :: icls, ncavgs, cnt, even_ind, odd_ind, istage, nstages_ini3D, s
         if( cline%defined('nparts') ) THROW_HARD('abinitio3D_cavgs does not support distributed execution, remove nparts from command line')
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('oritype',      'out') ! because cavgs are part of out segment
@@ -260,7 +260,7 @@ contains
                 else
                     cnt = ncavgs+icls
                 endif
-                ! alignement parameters
+                ! alignment parameters
                 call spproj%os_cls3D%set(icls, 'corr', work_proj%os_ptcl3D%get(cnt, 'corr'))
                 call spproj%os_cls3D%set(icls, 'proj', work_proj%os_ptcl3D%get(cnt, 'proj'))
                 call spproj%os_cls3D%set(icls, 'w',    work_proj%os_ptcl3D%get(cnt, 'w'))

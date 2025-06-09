@@ -1906,14 +1906,13 @@ contains
         type clust_inpl
             type(inpl_struct), allocatable :: params(:)
         end type clust_inpl
-        real,              parameter   :: LP_BIN = 20., HP_SPEC = 20., LP_SPEC = 6., FRAC_BEST_CAVGS=0.25
+        real,              parameter   :: HP_SPEC = 20., LP_SPEC = 6., FRAC_BEST_CAVGS=0.25
         integer,           parameter   :: NCLS_DEFAULT = 20, NCLS_SMALL_DEFAULT = 5, NHISTBINS = 128
         logical,           parameter   :: DEBUG = .true.
         type(image),       allocatable :: cavg_imgs(:), cluster_imgs(:), cluster_imgs_aligned(:)
         type(clust_inpl),  allocatable :: clust_algninfo(:), clust_algninfo_ranked(:)
         type(histogram),   allocatable :: hists(:)
-        character(len=:),  allocatable :: frcs_fname
-        real,              allocatable :: frcs(:,:), filter(:), resarr(:), frc(:), mm(:,:)
+        real,              allocatable :: resarr(:), frc(:), mm(:,:)
         real,              allocatable :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:), dmat_tvd(:,:), smat_tvd(:,:), dmat_joint(:,:)
         real,              allocatable :: smat_joint(:,:), dmat(:,:), res_bad(:), res_good(:), dmat_jsd(:,:), smat_jsd(:,:)
         real,              allocatable :: dmat_hd(:,:), dmat_hist(:,:), dmat_fm(:,:), clust_euclid(:), clust_euclid_ranked(:)
@@ -1924,7 +1923,6 @@ contains
         integer,           allocatable :: clspops(:), clust_pops(:), clust_nptcls(:), states(:)
         type(parameters)   :: params
         type(sp_project)   :: spproj
-        type(class_frcs)   :: clsfrcs
         type(image)        :: img_msk
         type(kmedoids)     :: kmed
         type(pspecs)       :: pows
@@ -1947,11 +1945,12 @@ contains
         if( .not. cline%defined('clust_crit') ) call cline%set('clust_crit', 'hybrid')
         ! master parameters
         call params%new(cline)
-        ! get class average stack
+        ! read project file
         call spproj%read(params%projfile)
-        cavg_imgs   = read_cavgs_into_imgarr(spproj)
-        clspops     = spproj%os_cls2D%get_all_asint ('pop')
-        ncls        = size(cavg_imgs)
+        ncls        = spproj%os_cls2D%get_noris()
+        ! prep class average stack
+        call prep_cavgs4clustering(spproj, cavg_imgs, params%mskdiam, clspops, clsinds, l_non_junk, mm )
+        ncls_sel    = size(cavg_imgs)
         smpd        = cavg_imgs(1)%get_smpd()
         ldim        = cavg_imgs(1)%get_ldim()
         resarr      = get_resarr(ldim(1), smpd)
@@ -1959,68 +1958,7 @@ contains
         params%smpd = smpd
         params%box  = ldim(1)
         params%msk  = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
-        filtsz      = fdim(params%box)-1  
-        ! get FRCs
-        call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
-        if( file_exists(frcs_fname) )then
-            call clsfrcs%read(frcs_fname)
-            filtsz = clsfrcs%get_filtsz()
-        else
-            THROW_HARD('FRC file: '//trim(frcs_fname)//' does not exist!')
-        endif
-        call flag_non_junk_cavgs(cavg_imgs, LP_BIN, params%msk, l_non_junk, spproj%os_cls2D)
-        if( DEBUG )then
-            cnt = 0
-            do i = 1, ncls
-                if( .not. l_non_junk(i) )then
-                    cnt = cnt + 1
-                    call cavg_imgs(i)%write('cavgs_junk.mrc', cnt)
-                endif
-            enddo
-        endif
-        ! re-create cavg_imgs
-        ncls_sel  = count(l_non_junk)
-        write(logfhandle,'(A,I5)') '# classes left after junk rejection ', ncls_sel
-        call dealloc_imgarr(cavg_imgs)
-        cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
-        ! keep track of the original class indices
-        clsinds = pack((/(i,i=1,ncls)/), mask=l_non_junk)
-        ! update class populations
-        clspops = pack(clspops, mask=l_non_junk)
-        ! create the stuff needed in the loop
-        allocate(frcs(ncls_sel,filtsz), filter(filtsz), mm(ncls_sel,2), source=0.)
-        ! prep mask
-        call img_msk%new([params%box,params%box,1], params%smpd)
-        img_msk = 1.
-        call img_msk%mask(params%msk, 'hard')
-        l_msk = img_msk%bin2logical()
-        call img_msk%kill
-        write(logfhandle,'(A)') '>>> PREPARING CLASS AVERAGES'
-        !$omp parallel do default(shared) private(i,j,filter) schedule(static) proc_bind(close)
-        do i = 1, ncls_sel
-            j = clsinds(i)
-            ! FRC-based filter 
-            call clsfrcs%frc_getter(j, frcs(i,:))
-            if( any(frcs(i,:) > 0.143) )then
-                call fsc2optlp_sub(clsfrcs%get_filtsz(), frcs(i,:), filter)
-                where( filter > TINY ) filter = sqrt(filter) ! because the filter is applied to the average not the even or odd
-                call cavg_imgs(i)%fft()
-                call cavg_imgs(i)%apply_filter_serial(filter)
-                call cavg_imgs(i)%ifft()
-            endif
-            ! normalization
-            call cavg_imgs(i)%norm_within(l_msk)
-            ! mask
-            call cavg_imgs(i)%mask(params%msk, 'soft', backgr=0.)
-            ! stash minmax
-            mm(i,:) = cavg_imgs(i)%minmax(params%msk)
-        end do
-        !$omp end parallel do
-        if( DEBUG )then
-            do i = 1, ncls_sel
-                call cavg_imgs(i)%write('cavgs_prepped.mrc', i)
-            enddo
-        endif
+        filtsz      = fdim(params%box)-1 
         ! calculate overall minmax
         oa_min = minval(mm(:,1))
         oa_max = maxval(mm(:,2))
@@ -2118,6 +2056,12 @@ contains
         allocate(labels(ncls_sel), i_medoids(nclust), source=0)
         call kmed%get_labels(labels)
         call kmed%get_medoids(i_medoids)
+        ! prep mask
+        call img_msk%new([params%box,params%box,1], smpd)
+        img_msk = 1.
+        call img_msk%mask(params%msk, 'hard')
+        l_msk = img_msk%bin2logical()
+        call img_msk%kill
         select case(trim(params%clust_crit))
             case('powfm','fm','tvdfm','powtvdfm','jsdfm','powjsdfm','hybrid')
                 write(logfhandle,'(A)') '>>> ALIGNING THE CLUSTERS OF CLASS AVERAGES TO THEIR MEDOIDS'
@@ -2303,7 +2247,6 @@ contains
         end select
         ! destruct
         call spproj%kill
-        call clsfrcs%kill
         call pows%kill
         call kmed%kill
         do icls=1,ncls_sel
