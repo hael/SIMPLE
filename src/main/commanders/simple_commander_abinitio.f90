@@ -1337,9 +1337,6 @@ contains
         call cline_refine3D%delete('fillin')
         endif
         call cline_refine3D%set('lp',             lpinfo(istage  )%lp)
-        if( params_glob%l_lpcont .and. istage > 1 )then
-        call cline_refine3D%set('lpprev',         lpinfo(istage-1)%lp)
-        endif
         call cline_refine3D%set('smpd_crop', lpinfo(istage)%smpd_crop)
         call cline_refine3D%set('box_crop',   lpinfo(istage)%box_crop)
         ! iteration number

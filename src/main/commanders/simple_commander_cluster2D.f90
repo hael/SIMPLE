@@ -3132,7 +3132,7 @@ contains
         type(rank_cavgs_commander)    :: xrank_cavgs
         type(cmdline)                 :: cline_rank_cavgs
         character(len=STDLEN)         :: refs_ranked, stk
-        integer :: nptcls, ithr, iref, iptcl, irot, iter, pfromto(2), kprev
+        integer :: nptcls, ithr, iref, iptcl, irot, iter, pfromto(2)
         real    :: euls(3), sh(2)
         if( .not.cline%defined('mkdir') ) call cline%set('mkdir',  'yes')
         call cline%set('stream', 'no')
@@ -3141,7 +3141,6 @@ contains
         call set_bp_range2D( cline, which_iter=1, frac_srch_space=1. )
         pfromto = [1, params_glob%nptcls]
         call sample_ptcls4update(pfromto, .true., nptcls, pinds)
-        if( cline%defined('lpprev') ) kprev = calc_fourier_index(params%lpprev, params_glob%box_crop, params_glob%smpd_crop)
         ! communicate to project file
         call build_glob%spproj%write_segment_inside(params_glob%oritype)
         ! Preparing pftcc
