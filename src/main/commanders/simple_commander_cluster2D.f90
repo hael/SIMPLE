@@ -1903,24 +1903,22 @@ contains
         use simple_histogram,  only: histogram
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type clust_inpl
-            type(inpl_struct), allocatable :: params(:)
-        end type clust_inpl
-        real,              parameter   :: HP_SPEC = 20., LP_SPEC = 6., FRAC_BEST_CAVGS=0.25
-        integer,           parameter   :: NCLS_DEFAULT = 20, NCLS_SMALL_DEFAULT = 5, NHISTBINS = 128
-        logical,           parameter   :: DEBUG = .true.
-        type(image),       allocatable :: cavg_imgs(:), cluster_imgs(:), cluster_imgs_aligned(:)
-        type(clust_inpl),  allocatable :: clust_algninfo(:), clust_algninfo_ranked(:)
-        type(histogram),   allocatable :: hists(:)
-        real,              allocatable :: resarr(:), frc(:), mm(:,:)
-        real,              allocatable :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:), dmat_tvd(:,:), smat_tvd(:,:), dmat_joint(:,:)
-        real,              allocatable :: smat_joint(:,:), dmat(:,:), res_bad(:), res_good(:), dmat_jsd(:,:), smat_jsd(:,:)
-        real,              allocatable :: dmat_hd(:,:), dmat_hist(:,:), dmat_fm(:,:), clust_euclid(:), clust_euclid_ranked(:)
-        real,              allocatable :: clust_scores(:), clust_res(:), clust_res_ranked(:), resvals(:)
-        logical,           allocatable :: l_msk(:,:,:), l_non_junk(:)
-        integer,           allocatable :: labels(:), clsinds(:), i_medoids(:), good_bad_assign(:)
-        integer,           allocatable :: clust_order(:), rank_assign(:), i_medoids_ranked(:)
-        integer,           allocatable :: clspops(:), clust_pops(:), clust_nptcls(:), states(:)
+        real,             parameter   :: HP_SPEC = 20., LP_SPEC = 6., FRAC_BEST_CAVGS=0.25
+        integer,          parameter   :: NCLS_DEFAULT = 20, NCLS_SMALL_DEFAULT = 5, NHISTBINS = 128
+        logical,          parameter   :: DEBUG = .true.
+        type(image),      allocatable :: cavg_imgs(:), cluster_imgs(:), cluster_imgs_aligned(:)
+        type(clust_inpl), allocatable :: clust_algninfo(:), clust_algninfo_ranked(:)
+        type(histogram),  allocatable :: hists(:)
+        real,             allocatable :: resarr(:), frc(:), mm(:,:)
+        real,             allocatable :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:), dmat_tvd(:,:), smat_tvd(:,:), dmat_joint(:,:)
+        real,             allocatable :: smat_joint(:,:), dmat(:,:), res_bad(:), res_good(:), dmat_jsd(:,:), smat_jsd(:,:)
+        real,             allocatable :: dmat_hd(:,:), dmat_hist(:,:), dmat_fm(:,:)
+        real,             allocatable :: resvals(:)
+        logical,          allocatable :: l_msk(:,:,:), l_non_junk(:)
+        integer,          allocatable :: labels(:), clsinds(:), i_medoids(:)
+        integer,          allocatable :: clust_order(:), rank_assign(:), i_medoids_ranked(:)
+        integer,          allocatable :: clspops(:), states(:)
+        type(clust_info), allocatable :: clust_info_arr(:), clust_info_arr_ranked(:)
         type(parameters)   :: params
         type(sp_project)   :: spproj
         type(image)        :: img_msk
@@ -1960,8 +1958,8 @@ contains
         params%msk  = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
         filtsz      = fdim(params%box)-1 
         ! calculate overall minmax
-        oa_min = minval(mm(:,1))
-        oa_max = maxval(mm(:,2))
+        oa_min      = minval(mm(:,1))
+        oa_max     = maxval(mm(:,2))
         ! generate histograms
         allocate(hists(ncls_sel))
         do i = 1, ncls_sel
@@ -2056,6 +2054,8 @@ contains
         allocate(labels(ncls_sel), i_medoids(nclust), source=0)
         call kmed%get_labels(labels)
         call kmed%get_medoids(i_medoids)
+        
+
         ! prep mask
         call img_msk%new([params%box,params%box,1], smpd)
         img_msk = 1.
@@ -2064,92 +2064,45 @@ contains
         call img_msk%kill
         select case(trim(params%clust_crit))
             case('powfm','fm','tvdfm','powtvdfm','jsdfm','powjsdfm','hybrid')
-                write(logfhandle,'(A)') '>>> ALIGNING THE CLUSTERS OF CLASS AVERAGES TO THEIR MEDOIDS'
-                allocate(frc(filtsz), clust_res(nclust), clust_euclid(nclust), clust_algninfo(nclust), clust_nptcls(nclust), clust_pops(nclust))
+                ! align clusters to medoids and gather information
+                clust_info_arr = align_clusters2medoids( labels, i_medoids, cavg_imgs, params%hp, params%lp, params%trs, l_msk )
+                ! set particle populations
                 do iclust = 1, nclust
-                    clust_pops(iclust)   = count(labels == iclust)
-                    clust_nptcls(iclust) = sum(clspops, mask=labels == iclust)
-                    cluster_imgs = pack_imgarr(cavg_imgs, mask=labels == iclust)
-                    clust_algninfo(iclust)%params = align_imgs2ref(clust_pops(iclust), params%hp, params%lp, params%trs, cavg_imgs(i_medoids(iclust)), cluster_imgs)
-                    cluster_imgs_aligned = rtsq_imgs(clust_pops(iclust), clust_algninfo(iclust)%params, cluster_imgs)
-                    ! estimate resolution
-                    cnt = 0
-                    call cavg_imgs(i_medoids(iclust))%fft
-                    allocate(resvals(clust_pops(iclust)), source=0.)
-                    do i = 1, clust_pops(iclust)
-                        call cluster_imgs_aligned(i)%fft
-                        call cavg_imgs(i_medoids(iclust))%fsc(cluster_imgs_aligned(i), frc)
-                        if( .not. all(frc > 0.5) )then ! excluding the medoid
-                            cnt = cnt + 1
-                            call get_resolution(frc, resarr, rfoo, resvals(cnt))
-                        endif
-                        call cluster_imgs_aligned(i)%ifft
-                    end do
-                    call cavg_imgs(i_medoids(iclust))%ifft
-                    ! calculate Euclidean distances
-                    clust_euclid(iclust) = 0.
-                    do i = 1, clust_pops(iclust)
-                        clust_euclid(iclust) = clust_euclid(iclust) + cavg_imgs(i_medoids(iclust))%sqeuclid(cluster_imgs_aligned(i), l_msk)
-                    end do
-                    clust_euclid(iclust) = clust_euclid(iclust) / real(clust_pops(iclust))
-                    ! report resolution as the average of the best agreeing 25% within a cluster
-                    clust_res(iclust) = avg_frac_smallest(resvals(:cnt), FRAC_BEST_CAVGS)
-                    ! destruct
-                    call dealloc_imgarr(cluster_imgs)
-                    call dealloc_imgarr(cluster_imgs_aligned)
-                    deallocate(resvals)
+                    clust_info_arr(iclust)%nptcls = sum(clspops, mask=labels == iclust)
                 end do
-                best_res  = minval(clust_res)
-                worst_res = maxval(clust_res)
-                where( clust_pops < 2 ) clust_res = worst_res ! nothing else makes sense
                 ! rank clusters based on their resolution
-                allocate(clust_order(nclust), rank_assign(ncls_sel), i_medoids_ranked(nclust),&
-                clust_res_ranked(nclust), clust_euclid_ranked(nclust), clust_scores(nclust), clust_algninfo_ranked(nclust))
+                allocate(clust_order(nclust), rank_assign(ncls_sel), i_medoids_ranked(nclust), clust_info_arr_ranked(nclust))
                 clust_order = (/(iclust,iclust=1,nclust)/)
                 call hpsort(clust_order, ci_better_than_cj)
                 ! create ranked medoids and labels
                 do rank = 1, nclust
                     i_medoids_ranked(rank)      = i_medoids(clust_order(rank))
-                    clust_res_ranked(rank)      = clust_res(clust_order(rank))
-                    clust_euclid_ranked(rank)   = clust_euclid(clust_order(rank))
-                    clust_algninfo_ranked(rank) = clust_algninfo(clust_order(rank))
+                    clust_info_arr_ranked(rank) = clust_info_arr(clust_order(rank))
                     do icls = 1, ncls_sel
                         if( labels(icls) == clust_order(rank) ) rank_assign(icls) = rank
                     end do
                 end do
                 i_medoids      = i_medoids_ranked
-                clust_res      = clust_res_ranked
-                clust_euclid   = clust_euclid_ranked
-                clust_algninfo = clust_algninfo_ranked 
+                clust_info_arr = clust_info_arr_ranked
                 labels         = rank_assign
-                do iclust = 1, nclust
-                    deallocate(clust_algninfo_ranked(iclust)%params)
-                end do
-                deallocate(i_medoids_ranked, clust_res_ranked, clust_euclid_ranked, rank_assign, clust_algninfo_ranked)
+                deallocate(i_medoids_ranked, rank_assign)
                 ! covert clust_euclid into homogeneity score
                 ! normalize to [0,1]
-                call normalize_minmax(clust_euclid)
+                clust_info_arr(:)%homogeneity = clust_info_arr(:)%euclid
+                call normalize_minmax(clust_info_arr(:)%homogeneity)
                 ! invert and turn into %
-                clust_euclid = -100. * (clust_euclid - 1.)
-                where( clust_euclid < SMALL) clust_euclid = 0.
+                clust_info_arr(:)%homogeneity= -100. * (clust_info_arr(:)%homogeneity - 1.)
+                where( clust_info_arr(:)%homogeneity < SMALL) clust_info_arr(:)%homogeneity = 0.
                 write(logfhandle,'(A)') '>>> ROTATING & SHIFTING UNMASKED, UNFILTERED CLASS AVERAGES'
                 ! re-create cavg_imgs
                 call dealloc_imgarr(cavg_imgs)
                 cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
-                ! interpolate
-                do iclust = 1, nclust
-                    clust_pops(iclust) = count(labels == iclust)
-                    cluster_imgs = pack_imgarr(cavg_imgs, mask=labels == iclust)
-                    cluster_imgs_aligned = rtsq_imgs(clust_pops(iclust), clust_algninfo(iclust)%params, cluster_imgs)
-                    call write_cavgs(cluster_imgs_aligned, 'cluster_ranked'//int2str_pad(iclust,2)//trim(params%ext))
-                    call dealloc_imgarr(cluster_imgs)
-                    call dealloc_imgarr(cluster_imgs_aligned)
-                end do
+                call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_ranked', trim(params%ext))
                 if( cline%defined('res_cutoff') )then
                     ! rank boundary based on resolution cutoff
                     rank_bound = 2
                     do iclust = 3, nclust
-                        if( clust_res(iclust) <= params%res_cutoff ) rank_bound = iclust
+                        if( clust_info_arr(iclust)%res <= params%res_cutoff ) rank_bound = iclust
                     end do
                 else
                     ! find optimal rank boundary through binary clustering of the ranked clusters
@@ -2171,31 +2124,32 @@ contains
                     end do
                 endif
                 ! make good/bad assignment
-                allocate(good_bad_assign(nclust), source=0)
-                good_bad_assign(:rank_bound) = 1
+                clust_info_arr(:)%good_bad           = 0
+                clust_info_arr(:rank_bound)%good_bad = 1
                 ! report cluster scores & resolution
                 do iclust = 1, nclust
-                    clust_scores(iclust) = 0.
+                    clust_info_arr(iclust)%score = 0.
                     cnt = 0
                     do icls = 1, ncls_sel 
                         if( labels(icls) == iclust )then
                             call spproj%os_cls2D%set(clsinds(icls),'cluster',iclust) ! project update
-                            clust_scores(iclust) = clust_scores(iclust) + corrmat(icls,i_medoids(iclust))
+                            clust_info_arr(iclust)%score = clust_info_arr(iclust)%score + corrmat(icls,i_medoids(iclust))
                             cnt = cnt + 1
                         endif
                     enddo
-                    clust_scores(iclust) = clust_scores(iclust) / real(cnt)
+                    clust_info_arr(iclust)%score = clust_info_arr(iclust)%score / real(cnt)
                     write(logfhandle,'(A,f7.3,A,f5.1,A,f5.1,A,I3)') 'cluster_ranked'//int2str_pad(iclust,2)//'.mrc, score ',&
-                    &clust_scores(iclust), ' res ', clust_res(iclust), ' homogeneity(%) ', clust_euclid(iclust), ' good_bad_assign ', good_bad_assign(iclust)
+                    &clust_info_arr(iclust)%score, ' res ', clust_info_arr(iclust)%res, ' homogeneity(%) ', clust_info_arr(iclust)%homogeneity,&
+                    &' good_bad_assign ', clust_info_arr(iclust)%good_bad
                 end do
                 ! check number of particles selected
-                nptcls      = sum(clust_nptcls)
-                nptcls_good = sum(clust_nptcls, mask=good_bad_assign == 1)
+                nptcls      = sum(clust_info_arr(:)%nptcls)
+                nptcls_good = sum(clust_info_arr(:)%nptcls, mask=clust_info_arr(:)%good_bad == 1)
                 frac_good   = real(nptcls_good) / real(nptcls)
                 write(logfhandle,'(a,1x,f8.2)') '% PARTICLES CLASSIFIED AS GOOD: ', frac_good * 100.
                 ! calculate resolution statistics for good/bad classes
-                res_good    = pack(clust_res, mask=good_bad_assign == 1)
-                res_bad     = pack(clust_res, mask=good_bad_assign == 0)
+                res_good    = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad == 1)
+                res_bad     = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad == 0)
                 write(logfhandle,'(A)') 'RESOLUTION STATS FOR GOOD PARTITION'
                 if( size(res_good) > 1 )then
                     call calc_stats(res_good, res_stats)
@@ -2268,7 +2222,7 @@ contains
             logical :: val
             ! classes with smaller resolution estimates are better
             val = .false.
-            if( clust_res(ci) < clust_res(cj) ) val = .true.
+            if( clust_info_arr(ci)%res < clust_info_arr(cj)%res ) val = .true.
         end function ci_better_than_cj
 
         function rank_bound_cost( rank_bound ) result( dist )
