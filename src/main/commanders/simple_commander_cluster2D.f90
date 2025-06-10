@@ -29,7 +29,7 @@ public :: cleanup2D_commander_hlev
 public :: cluster2D_autoscale_commander
 public :: cluster2D_commander_distr
 public :: cluster2D_commander
-public :: cluster2D_polar_commander
+public :: hybrid_refine_commander
 public :: prob_tab2D_commander
 public :: prob_tab2D_commander_distr
 public :: make_cavgs_commander_distr
@@ -65,10 +65,10 @@ type, extends(commander_base) :: cluster2D_commander
     procedure :: execute      => exec_cluster2D
 end type cluster2D_commander
 
-type, extends(commander_base) :: cluster2D_polar_commander
+type, extends(commander_base) :: hybrid_refine_commander
   contains
-    procedure :: execute      => exec_cluster2D_polar
-end type cluster2D_polar_commander
+    procedure :: execute      => exec_hybrid_refine
+end type hybrid_refine_commander
 
 type, extends(commander_base) :: prob_tab2D_commander
   contains
@@ -3155,15 +3155,15 @@ contains
 
     end subroutine exec_partition_cavgs
 
-    subroutine exec_cluster2D_polar( self, cline )
+    subroutine exec_hybrid_refine( self, cline )
         use simple_strategy2D3D_common
         use simple_polarft_corrcalc,    only: polarft_corrcalc
         use simple_euclid_sigma2,       only: euclid_sigma2
         use simple_eul_prob_tab,        only: eul_prob_tab
         use simple_ori
         use simple_oris
-        class(cluster2D_polar_commander), intent(inout) :: self
-        class(cmdline),                   intent(inout) :: cline
+        class(hybrid_refine_commander), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
         integer,          allocatable :: pinds(:)
         real,             allocatable :: sigma2_noise(:,:)
         type(image),      allocatable :: tmp_imgs(:), refs(:)
@@ -3275,8 +3275,8 @@ contains
         call killimgbatch
         call pftcc%kill
         call build%kill_general_tbox
-        call qsys_job_finished('simple_commander_cluster2D :: exec_cluster2D_polar')
-        call simple_end('**** SIMPLE_CLUSTER2D_POLAR NORMAL STOP ****', print_simple=.false.)
+        call qsys_job_finished('simple_commander_cluster2D :: exec_hybrid_refine')
+        call simple_end('**** SIMPLE_HYBRID_REFINE NORMAL STOP ****', print_simple=.false.)
 
       contains
 
@@ -3376,7 +3376,7 @@ contains
             enddo
         end subroutine exec_alignment
 
-    end subroutine exec_cluster2D_polar
+    end subroutine exec_hybrid_refine
 
     ! UTILITIES
 
