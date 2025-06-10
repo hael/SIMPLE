@@ -8,6 +8,7 @@ implicit none
 
 public :: read_cavgs_into_imgarr, flag_non_junk_cavgs, align_imgs2ref, rtsq_imgs, prep_cavgs4clustering
 public :: pack_imgarr, alloc_imgarr, dealloc_imgarr, write_cavgs, write_junk_cavgs, write_selected_cavgs
+public :: align_clusters2medoids, write_aligned_cavgs
 private
 #include "simple_local_flags.inc"
 
@@ -379,8 +380,82 @@ contains
                 endif
             end do
         endif
-        
     end subroutine write_selected_cavgs
+
+    function align_clusters2medoids( labels, i_medoids, cavg_imgs, hp, lp, trs, l_msk ) result( clust_info_arr )
+        integer,          intent(in)    :: labels(:), i_medoids(:)
+        class(image),     intent(inout) :: cavg_imgs(:)
+        real,             intent(in)    :: hp, lp, trs
+        logical,          intent(in)    :: l_msk(:,:,:)
+        type(clust_info), allocatable   :: clust_info_arr(:)
+        real,             allocatable   :: frc(:)
+        type(image),      allocatable   :: cluster_imgs(:), cluster_imgs_aligned(:)
+        real,             allocatable   :: resvals(:), resarr(:)
+        real,             parameter     :: FRAC_BEST_CAVGS=0.25
+        integer :: cnt, i, filtsz, ldim(3), iclust, nclust
+        real    :: smpd, rfoo, best_res, worst_res
+        write(logfhandle,'(A)') '>>> ALIGNING THE CLUSTERS OF CLASS AVERAGES TO THEIR MEDOIDS'
+        filtsz = cavg_imgs(1)%get_filtsz()
+        smpd   = cavg_imgs(1)%get_smpd()
+        ldim   = cavg_imgs(1)%get_ldim()
+        resarr = get_resarr(ldim(1), smpd)
+        nclust = maxval(labels)
+        allocate(frc(filtsz), clust_info_arr(nclust))
+        nclust = maxval(labels)
+        do iclust = 1, nclust
+            clust_info_arr(iclust)%pop             = count(labels == iclust)
+            cluster_imgs                           = pack_imgarr(cavg_imgs, mask=labels == iclust)
+            clust_info_arr(iclust)%algninfo%params = align_imgs2ref(clust_info_arr(iclust)%pop, hp, lp, trs, cavg_imgs(i_medoids(iclust)), cluster_imgs)
+            cluster_imgs_aligned                   = rtsq_imgs(clust_info_arr(iclust)%pop, clust_info_arr(iclust)%algninfo%params, cluster_imgs)
+            ! estimate resolution
+            cnt = 0
+            call cavg_imgs(i_medoids(iclust))%fft
+            allocate(resvals(clust_info_arr(iclust)%pop), source=0.)
+            do i = 1, clust_info_arr(iclust)%pop
+                call cluster_imgs_aligned(i)%fft
+                call cavg_imgs(i_medoids(iclust))%fsc(cluster_imgs_aligned(i), frc)
+                if( .not. all(frc > 0.5) )then ! excluding the medoid
+                    cnt = cnt + 1
+                    call get_resolution(frc, resarr, rfoo, resvals(cnt))
+                endif
+                call cluster_imgs_aligned(i)%ifft
+            end do
+            call cavg_imgs(i_medoids(iclust))%ifft
+            ! calculate Euclidean distances
+            clust_info_arr(iclust)%euclid = 0.
+            do i = 1, clust_info_arr(iclust)%pop
+                clust_info_arr(iclust)%euclid = clust_info_arr(iclust)%euclid + cavg_imgs(i_medoids(iclust))%sqeuclid(cluster_imgs_aligned(i), l_msk)
+            end do
+            clust_info_arr(iclust)%euclid = clust_info_arr(iclust)%euclid / real(clust_info_arr(iclust)%pop)
+            ! report resolution as the average of the best agreeing 25% within a cluster
+            clust_info_arr(iclust)%res = avg_frac_smallest(resvals(:cnt), FRAC_BEST_CAVGS)
+            ! destruct
+            call dealloc_imgarr(cluster_imgs)
+            call dealloc_imgarr(cluster_imgs_aligned)
+            deallocate(resvals)
+        end do
+        best_res  = minval(clust_info_arr(:)%res)
+        worst_res = maxval(clust_info_arr(:)%res)
+        where( clust_info_arr(:)%res < 2 ) clust_info_arr(:)%res = worst_res ! nothing else makes sense
+    end function align_clusters2medoids
+
+    subroutine write_aligned_cavgs( labels, cavg_imgs, clust_info_arr, fbody, ext )
+        integer,          intent(in)    :: labels(:)
+        class(image),     intent(inout) :: cavg_imgs(:)
+        type(clust_info), intent(in)    :: clust_info_arr(:)
+        character(len=*), intent(in)    :: fbody, ext
+        type(image), allocatable :: cluster_imgs(:), cluster_imgs_aligned(:)
+        integer :: iclust, nclust
+        write(logfhandle,'(A)') '>>> ROTATING & SHIFTING CLASS AVERAGES'
+        nclust = size(clust_info_arr)
+        do iclust = 1, nclust
+            cluster_imgs         = pack_imgarr(cavg_imgs, mask=labels == iclust)
+            cluster_imgs_aligned = rtsq_imgs(clust_info_arr(iclust)%pop, clust_info_arr(iclust)%algninfo%params, cluster_imgs)              
+            call write_cavgs(cluster_imgs_aligned, trim(fbody)//int2str_pad(iclust,2)//trim(ext))
+            call dealloc_imgarr(cluster_imgs)
+            call dealloc_imgarr(cluster_imgs_aligned)
+        end do
+    end subroutine write_aligned_cavgs
 
     function align_imgs2ref( n, hp, lp, trs, img_ref, imgs ) result( algninfo )
         use simple_polarizer,         only: polarizer

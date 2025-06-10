@@ -670,5 +670,17 @@ contains
         vec_unique = pack(sorted, mask)
     end subroutine unique
 
+    function scores2order( scores ) result( order )
+        real,     intent(in) :: scores(:)
+        integer, allocatable :: order(:)
+        real,    allocatable :: tmp(:)
+        integer :: i, n
+        n = size(scores)
+        allocate(tmp(n),   source=scores)
+        allocate(order(n), source=(/(i,i=1,n)/))
+        call hpsort(tmp, order)
+        call reverse(order)
+    end function scores2order
+
 end module simple_srch_sort_loc
     
