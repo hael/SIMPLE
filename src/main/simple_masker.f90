@@ -267,12 +267,13 @@ contains
         deallocate(rmat)
     end subroutine env_rproject
 
-    subroutine density_inoutside_mask( img, lp, msk, nin, nout, nmsk )
+    subroutine density_inoutside_mask( img, lp, msk, nin, nout, nmsk, cccen )
         use simple_segmentation
         use simple_binimage, only: binimage
         class(image), intent(inout) :: img
         real,         intent(in)    :: lp, msk
         integer,      intent(out)   :: nin, nout, nmsk
+        real,         intent(out)   :: cccen(2)
         type(binimage)    :: img_bin, cc_img
         real, allocatable :: ccsizes(:)
         integer :: loc, ldim(3), npix
@@ -294,6 +295,7 @@ contains
         loc     = maxloc(ccsizes,dim=1)
         ! turn it into a binary image for mask creation
         call cc_img%cc2bin(loc)
+        call cc_img%masscen_cc(loc, cccen)
         call cc_img%density_inoutside(msk, nin, nout, nmsk)
         call img_bin%kill_bimg
         call cc_img%kill_bimg

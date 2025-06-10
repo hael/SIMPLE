@@ -235,13 +235,14 @@ contains
         real,        parameter   :: DYNRANGE_THRES  = 1e-6
         real,        parameter   :: HP_SPEC         = 20.
         real,        parameter   :: LP_SPEC         = 6.
-        real,        parameter   :: RATIO_THRESHOLD = 0.6
+        real,        parameter   :: RATIO_THRESHOLD = 0.55
+        real,        parameter   :: CENMSKFACTOR    = 5.0
         integer,     parameter   :: MINPOP          = 20
         type(image), allocatable :: cavg_threads(:)
         real,        allocatable :: pspec(:)
         integer,     allocatable :: states(:)
         integer :: ncls, icls, ldim(3), kfromto(2), ithr, nin, nout, nmsk
-        real    :: dynrange, smpd
+        real    :: cen(2),dynrange, smpd
         logical :: l_dens_inoutside, l_os2D_present
         ncls = size(cavgs)
         l_os2D_present = present(os_cls2D)
@@ -257,21 +258,18 @@ contains
         allocate(l_non_junk(ncls), source=.false.)
         kfromto(1) = calc_fourier_index(HP_SPEC, ldim(1), smpd)
         kfromto(2) = calc_fourier_index(LP_SPEC, ldim(1), smpd)
-        allocate(cavg_threads(nthr_glob))
-        do ithr = 1, nthr_glob
-            call cavg_threads(ithr)%new(ldim, smpd)
-        end do
+        call alloc_imgarr(nthr_glob, ldim, smpd, cavg_threads)
         !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-        !$omp private(icls,ithr,pspec,dynrange,l_dens_inoutside,nin,nout,nmsk)
+        !$omp private(icls,ithr,pspec,dynrange,l_dens_inoutside,nin,nout,nmsk,cen)
         do icls = 1, ncls
             ithr = omp_get_thread_num() + 1
             call cavg_threads(ithr)%copy(cavgs(icls))
             call cavg_threads(ithr)%div_below(0., 10.) ! reduce influence of negative values
             call cavg_threads(ithr)%norm
-            call density_inoutside_mask(cavg_threads(ithr), lp_bin, msk, nin, nout, nmsk)
+            call density_inoutside_mask(cavg_threads(ithr), lp_bin, msk, nin, nout, nmsk, cen)
             l_dens_inoutside = (nout > 0) .or.&                           ! object oustide of mask
                               &(real(nin)/real(nmsk) > RATIO_THRESHOLD)   ! or object too big inside mask
-            call cavg_threads(ithr)%mask(msk, 'soft')
+            call cavg_threads(ithr)%mask(msk, 'soft', backgr=0.)
             call cavg_threads(ithr)%spectrum('sqrt', pspec)
             dynrange = pspec(kfromto(1)) - pspec(kfromto(2))
             l_non_junk(icls) = .false. ! exclusion by default
@@ -286,12 +284,16 @@ contains
                     if( dynrange > DYNRANGE_THRES .and. .not. l_dens_inoutside ) l_non_junk(icls) = .true.
                 endif
             endif
+            ! center of identified connected-component
+            if( .not.l_non_junk(icls) )then
+                if( arg(cen) > real(floor(msk/CENMSKFACTOR)) )then
+                    ! center too far from image center
+                    l_non_junk(icls) = .false.
+                endif
+            endif
         enddo
         !$omp end parallel do
-        do ithr = 1, nthr_glob
-            call cavg_threads(ithr)%kill
-        end do
-        deallocate(cavg_threads)
+        call dealloc_imgarr(cavg_threads)
     end subroutine flag_non_junk_cavgs
 
     subroutine write_cavgs_1( n, imgs, labels, fbody, ext )
@@ -406,10 +408,7 @@ contains
         kfromto(1) = max(2, calc_fourier_index(hp, box, smpd))
         kfromto(2) =        calc_fourier_index(lp, box, smpd)
         ! create mirrored versions of the images
-        allocate(imgs_mirr(n))
-        do i = 1, n
-            call imgs_mirr(i)%new(ldim, smpd, wthreads=.false.)
-        end do
+        call alloc_imgarr(n, ldim, smpd, imgs_mirr)
         !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i = 1, n
             call imgs_mirr(i)%copy(imgs(i))
@@ -525,5 +524,104 @@ contains
         !$omp end parallel do 
         call dealloc_imgarr(imgs_heap)
     end function rtsq_imgs
+
+    subroutine flag_overfitted_class( cavgs, mask, msk, scores )
+        class(image), allocatable, intent(in)    :: cavgs(:)
+        logical,      allocatable, intent(in)    :: mask(:)
+        real,                      intent(in)    :: msk
+        real,         allocatable, intent(inout) :: scores(:)
+        real,        parameter   :: HP1         = 120.
+        real,        parameter   :: HP2         = 50.
+        real,        parameter   :: LP1         = 4.
+        real,        parameter   :: LP2         = 8.
+        type(image), allocatable :: tmp_imgs(:)
+        real,        allocatable :: logpspecs(:,:), pspec(:), freqs(:), g(:)
+        integer :: ncls, icls,ind,i,ldim(3), ithr, fsz, khp1,khp2,klp1,klp2
+        integer :: kfirst,kend,ithrcls
+        real    :: A, smpd
+
+        ncls = size(tmp_imgs)
+        if( size(mask) /= ncls ) THROW_HARD('Incompatible CAVGS/MASK size!')
+        do i = 1,ncls
+            if( mask(i) )then
+                ldim = cavgs(i)%get_ldim()
+                smpd = cavgs(i)%get_smpd()
+                ind  = i
+                exit
+            endif
+        enddo
+        fsz = fdim(ldim(1))-1
+        allocate(pspec(fsz), logpspecs(fsz,ncls), source=0.0)
+        A   = real(product(ldim)) ! so values will be positive after log()
+        call alloc_imgarr(nthr_glob, ldim, smpd, tmp_imgs)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+        !$omp private(icls,ithr,pspec)
+        do icls = 1, ncls
+            ithr = omp_get_thread_num() + 1
+            call tmp_imgs(ithr)%copy(cavgs(icls))
+            call tmp_imgs(ithr)%div_below(0., 10.)
+            call tmp_imgs(ithr)%norm
+            call tmp_imgs(ithr)%mask(msk, 'soft')
+            call tmp_imgs(ithr)%mul(A)
+            call tmp_imgs(ithr)%fft
+            call tmp_imgs(ithr)%power_spectrum(pspec)
+            logpspecs(:,icls) = log(pspec)
+        enddo
+        !$omp end parallel do
+        call dealloc_imgarr(tmp_imgs)
+        ! resolution range
+        khp1  = calc_fourier_index(HP1, ldim(1), smpd)
+        khp2  = calc_fourier_index(HP2, ldim(1), smpd)
+        klp1  = calc_fourier_index(LP1, ldim(1), smpd)
+        klp2  = calc_fourier_index(LP2, ldim(1), smpd)
+        freqs = get_resarr(ldim(1), smpd)
+        g     = 1. / freqs
+        do icls = 1,ncls
+            if( .not.mask(icls) ) cycle
+            ! optimize here
+        enddo
+        contains
+
+            real(dp) function f( self, vec, D )
+                class(*), intent(inout) :: self
+                integer,  intent(in)    :: D
+                real(dp), intent(in)    :: vec(D)
+                real(dp) :: dk, ek
+                integer :: k
+                f = 0.d0
+                do k = kfirst,kend
+                    dk = g(k) / vec(3) + 1.d0
+                    ek = (logpspecs(k,ithrcls)-vec(1)-vec(2)*dk**(-2))
+                    f  = f + ek**2
+                enddo
+            end function f
+
+            subroutine fgrad( self, vec, D, f, gr )
+                class(*), intent(inout) :: self
+                integer,  intent(in)    :: D
+                real(dp), intent(in)    :: vec(D)
+                real(dp), intent(inout) :: f, gr
+                real(dp) :: dk, ek
+                integer  :: k
+                f  = 0.d0
+                gr = 0.d0
+                do k = kfirst,kend
+                    dk = g(k) / vec(3) + 1.d0
+                    ek = (logpspecs(k,ithrcls)-vec(1)-vec(2)*dk**(-2))
+                    f  = f + ek**2
+                    gr = vec(2)/3.d0 * dk**(-3) * ek
+                enddo
+            end subroutine fgrad
+
+            subroutine grad( self, vec, D, gr )
+                class(*), intent(inout) :: self
+                integer,  intent(in)    :: D
+                real(dp), intent(in)    :: vec(D)
+                real(dp), intent(inout) :: gr
+                real(dp) :: f
+                call fgrad(self, vec, D, f, gr)
+            end subroutine grad
+
+    end subroutine flag_overfitted_class
 
 end module simple_strategy2D_utils
