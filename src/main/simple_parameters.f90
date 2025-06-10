@@ -69,7 +69,6 @@ type :: parameters
     character(len=3)          :: linstates='no'       !< linearizing states in alignment (yes|no){no}
     character(len=3)          :: loc_sdev='no'        !< Whether to calculate local standard deviations(yes|no){no}
     character(len=3)          :: lp_auto='no'         !< automatically estimate lp(yes|no){no}
-    character(len=3)          :: lp_cont='no'         !< continuous lp(yes|no){no}
     character(len=3)          :: makemovie='no'
     character(len=3)          :: masscen='yes'        !< center to center of gravity(yes|no){yes}
     character(len=3)          :: mcpatch='yes'        !< whether to perform patch-based alignment during motion correction
@@ -455,7 +454,6 @@ type :: parameters
     real    :: lp_pick=PICK_LP_DEFAULT !< low-pass limit 4 picker(in A)
     real    :: lplim_crit=0.143    !< corr criterion low-pass limit assignment(0.143-0.5){0.143}
     real    :: lplims2D(3)
-    real    :: lpprev=20.          !< next low-pass limit in frequency marching(in A)
     real    :: lpstart=0.          !< start low-pass limit(in A){15}
     real    :: lpstop=8.0          !< stop low-pass limit(in A){8}
     real    :: lpstart_ini3D=0.    !< start low-pass limit(in A){15}
@@ -538,7 +536,6 @@ type :: parameters
     logical :: l_lam_anneal   = .false.
     logical :: l_linstates    = .false.
     logical :: l_lpauto       = .false.
-    logical :: l_lpcont       = .false.
     logical :: l_lpset        = .false.
     logical :: l_ml_reg       = .true.
     logical :: l_noise_reg    = .false.
@@ -671,7 +668,6 @@ contains
         call check_carg('linstates_mode', self%linstates_mode)
         call check_carg('loc_sdev',       self%loc_sdev)
         call check_carg('lp_auto',        self%lp_auto)
-        call check_carg('lp_cont',        self%lp_cont)
         call check_carg('makemovie',      self%makemovie)
         call check_carg('masscen',        self%masscen)
         call check_carg('mcpatch',        self%mcpatch)
@@ -984,7 +980,6 @@ contains
         call check_rarg('lpstart_nonuni', self%lpstart_nonuni)
         call check_rarg('lp_pick',        self%lp_pick)
         call check_rarg('lplim_crit',     self%lplim_crit)
-        call check_rarg('lpprev',         self%lpprev)
         call check_rarg('lpstart',        self%lpstart)
         call check_rarg('lpstop',         self%lpstop)
         call check_rarg('lpstart_ini3D',  self%lpstart_ini3D)
@@ -1465,7 +1460,6 @@ contains
             self%lpstop = self%fny                                 ! deafult lpstop
         endif
         if( self%fny > 0. ) self%tofny = nint(self%dstep/self%fny) ! Nyqvist Fourier index
-        if( .not. cline%defined('lpprev') ) self%lpprev = self%lp
         self%lpstart = max(self%lpstart, self%fny)
         self%lpstop  = max(self%lpstop,  self%fny)
         ! set 2D low-pass limits and smpd_targets 4 scaling
@@ -1705,8 +1699,6 @@ contains
             case DEFAULT
                 THROW_HARD('INVALID KWEIGHT_POOL ARGUMENT')
         end select
-        ! continuous lp marching
-        self%l_lpcont = trim(self%lp_cont).ne.'no'
         ! automatically estimated lp
         self%l_lpauto = trim(self%lp_auto).ne.'no'
         select case(trim(self%lp_auto))

@@ -262,7 +262,7 @@ contains
         character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc, vollp
         logical :: err, vol_defined, have_oris, converged, fall_over, l_multistates, l_automsk
         logical :: l_combine_eo, l_griddingset, do_automsk
-        real    :: corr, smpd, lp_eps
+        real    :: corr, smpd
         integer :: i, state, iter, box, nfiles, niters, nthr_here
         601 format(A,1X,F12.3)
         if( .not. cline%defined('nparts') )then
@@ -473,10 +473,6 @@ contains
         niters = 0
         iter   = params%startit - 1
         corr   = -1.
-        if( params%l_lpcont .and. cline%defined('lpprev') )then
-            lp_eps         = (params%lpprev - params%lp) / real(params%maxits)
-            params_glob%lp = params%lpprev
-        endif
         do
             if( L_BENCH_GLOB )then
                 t_init = tic()
@@ -486,21 +482,6 @@ contains
             iter              = iter + 1
             params%which_iter = iter
             str_iter          = int2str_pad(iter,3)
-            ! lp_cont
-            if( params%l_lpcont .and. cline%defined('lpprev') )then
-                params_glob%lp = params_glob%lp - lp_eps
-                call cline%set(                    'lp',          params_glob%lp)
-                call cline_reconstruct3D_distr%set('lp',          params_glob%lp)
-                call cline_calc_pspec_distr%set(   'lp',          params_glob%lp)
-                call cline_prob_align_distr%set(   'lp',          params_glob%lp)
-                call cline_check_3Dconv%set(       'lp',          params_glob%lp)
-                call cline_postprocess%set(        'lp',          params_glob%lp)
-                call cline_calc_group_sigmas%set(  'lp',          params_glob%lp)
-                call job_descr%set(                'lp', real2str(params_glob%lp))
-                call build%spproj_field%set_all2single('lp',      params_glob%lp)
-                call build%spproj%write_segment_inside(params%oritype)
-                print *, 'lp cont = ', params_glob%lp
-            endif
             write(logfhandle,'(A)')   '>>>'
             write(logfhandle,'(A,I6)')'>>> ITERATION ', iter
             write(logfhandle,'(A)')   '>>>'
