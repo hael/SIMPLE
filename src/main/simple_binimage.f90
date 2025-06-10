@@ -456,28 +456,29 @@ contains
         deallocate(msk, pos, imat_cc)
     end subroutine diameter_cc
 
-    !>  Returns the center of a CC in pixel coordinates
+    !>  Returns the center of a CC in pixel coordinates with respect to image center
     subroutine masscen_cc( self, label, xy )
         class(binimage), intent(inout) :: self
         integer,         intent(in)    :: label
         real,            intent(out)   :: xy(2)
-        integer :: i,j,n,pxy(2)
+        integer :: cen(2),i,j,n,pxy(2)
         xy = 0.
         n = count(self%bimat(:,:,1) == label)
         if( n == 0 ) return ! absent
+        cen = self%bldim(1:2)/2+1
         pxy = 0
         do j=1,self%bldim(2)
             do i=1,self%bldim(1)
                 if( self%bimat(i,j,1) == label ) pxy = pxy+[i,j]
             enddo
         enddo
-        xy = real(pxy) / real(n)
+        xy = real(pxy) / real(n) ! average position
+        xy = xy - real(cen)      ! with respect to image center
     end subroutine masscen_cc
 
     subroutine diameter_bin( self, diam )
         class(binimage), intent(inout) :: self
         real,            intent(out)   :: diam
-        integer :: i, ii, j, jj, k, kk, maxdistsq, distsq
         if( .not. self%bimat_is_set ) call self%set_imat
         call self%diameter_cc(1, diam)
     end subroutine diameter_bin

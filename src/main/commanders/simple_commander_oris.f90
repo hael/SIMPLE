@@ -188,9 +188,9 @@ contains
         real                 :: mind2, maxd2, avgd2, sdevd2, vard2
         real                 :: popmin, popmax, popmed, popave, popsdev, popvar, frac_populated
         real                 :: resmin, resmax, resmed, resave, ressdev, resvar, nr, nr_tot
-        integer              :: nprojs, iptcl, icls, j, noris, ncls
-        real,    allocatable :: clustszs(:), pops(:), res(:)
-        integer, allocatable :: clustering(:), tmp(:)
+        integer              :: nprojs, iptcl, icls, j, noris, ncls, pop
+        real,    allocatable :: clustszs(:), pops(:), res(:), df(:), vals(:)
+        integer, allocatable :: clustering(:), tmp(:), states(:), cls(:)
         logical, allocatable :: ptcl_mask(:)
         integer, parameter   :: hlen=50, NSPACE_REDUCED = 600
         logical              :: err
@@ -225,6 +225,21 @@ contains
                 write(logfhandle,'(a,1x,f8.2)') 'STANDARD DEVIATION OF DF             :', (sdevd+sdevd2)/2.
                 write(logfhandle,'(a,1x,f8.2)') 'MINIMUM DF                           :', (mind+mind2)/2.
                 write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM DF                           :', (maxd+maxd2)/2.
+                if( trim(params%oritype) .eq. 'ptcl2D' )then
+                    states = build%spproj_field%get_all_asint('state')
+                    cls    = build%spproj_field%get_all_asint('class')
+                    ncls   = maxval(cls)
+                    df     = (build%spproj_field%get_all('dfx') + build%spproj_field%get_all('dfy')) / 2.0
+                    do icls = 1,ncls
+                        vals = pack(df, mask=(cls==icls).and.(states>0))
+                        if( .not.allocated(vals) ) cycle
+                        pop = size(vals)
+                        if( pop == 0 ) cycle
+                        avgd  = sum(vals) / real(pop)
+                        sdevd = sqrt(sum(vals) / real(pop))
+                        write(logfhandle,'(a,1x,I4,2f8.2)')'CLASS, AVERAGE DEFOCUS & STANDARD DEV:', icls, avgd, sdevd
+                    enddo
+                endif
             endif
             if( params%classtats .eq. 'yes' )then
                 noris  = build%spproj_field%get_noris()

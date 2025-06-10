@@ -86,7 +86,7 @@ contains
             s2D%smpl_ncls  = nint(real(params_glob%ncls) * (1.-overlap)**2)
             s2D%smpl_ncls  = max(1,min(s2D%smpl_ncls, ceiling(params_glob%prob_athres/180.*real(params_glob%ncls))))
         endif
-        ! for testing
+        ! Sampling function power parameter
         if( (trim(params_glob%stream)=='yes') )then
             s2D%power = EXTR_POWER
         else

@@ -344,7 +344,7 @@ contains
         type(binimage)       :: img, tmp, tmpcc
         real,    pointer     :: rmat(:,:,:), rmat_cc(:,:,:)
         integer, allocatable :: sz(:)
-        real                 :: shift(3), thresh(3), cen_cc(2), img_cen(2), dist_cc, threshold
+        real                 :: shift(3), thresh(3), cen_cc(2), dist_cc, threshold
         integer              :: loc, ldim
         ldim = params_glob%box
         call img%transfer2bimg(reference)
@@ -365,13 +365,12 @@ contains
         call tmp%real_space_filter(3,'median')
         ! identify biggest reasonable connected component
         threshold = min(15., real(ldim)/10.)
-        img_cen   = real(ldim/2+1)
         call tmp%set_imat
         call tmp%find_ccs(tmpcc)
         sz  = tmpcc%size_ccs()
         loc = maxloc(sz,dim=1)
         call tmpcc%masscen_cc(loc,cen_cc)
-        dist_cc = sqrt(sum((img_cen-cen_cc)**2.))
+        dist_cc = sqrt(sum(cen_cc**2))
         if( dist_cc > threshold )then
             ! if CC identified is too off centered (artefact)
             ! we fall back on the second or do nothing
@@ -382,7 +381,7 @@ contains
                 sz(loc) = 0
                 loc = maxloc(sz,dim=1)
                 call tmpcc%masscen_cc(loc,cen_cc)
-                dist_cc = sqrt(sum((img_cen-cen_cc)**2.))
+                dist_cc = sqrt(sum(cen_cc**2))
                 if( dist_cc > threshold )then
                     shift = 0.
                     return
