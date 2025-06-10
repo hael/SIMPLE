@@ -107,7 +107,7 @@ type(simple_program), target :: cluster2D
 type(simple_program), target :: cluster2D_nano
 type(simple_program), target :: cluster2D_subsets
 type(simple_program), target :: cluster2D_stream
-type(simple_program), target :: cluster2D_polar
+type(simple_program), target :: hybrid_refine
 type(simple_program), target :: cluster_cavgs
 type(simple_program), target :: comparemc
 type(simple_program), target :: convert
@@ -437,7 +437,7 @@ contains
         call new_cluster2D_nano
         call new_cluster2D_subsets
         call new_cluster2D_stream
-        call new_cluster2D_polar
+        call new_hybrid_refine
         call new_cluster_cavgs
         call new_comparemc
         call new_convert
@@ -589,7 +589,7 @@ contains
         call push2prg_ptr_array(cluster2D_nano)
         call push2prg_ptr_array(cluster2D_subsets)
         call push2prg_ptr_array(cluster2D_stream)
-        call push2prg_ptr_array(cluster2D_polar)
+        call push2prg_ptr_array(hybrid_refine)
         call push2prg_ptr_array(cluster_cavgs)
         call push2prg_ptr_array(comparemc)
         call push2prg_ptr_array(convert)
@@ -783,8 +783,8 @@ contains
                 ptr2prg => cluster2D_subsets
             case('cluster2D_stream')
                 ptr2prg => cluster2D_stream
-            case('cluster2D_polar')
-                ptr2prg => cluster2D_polar
+            case('hybrid_refine')
+                ptr2prg => hybrid_refine
             case('cluster_cavgs')
                 ptr2prg => cluster_cavgs
             case('comparemc')
@@ -2245,10 +2245,10 @@ contains
         &'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
     end subroutine new_cluster2D_stream
 
-    subroutine new_cluster2D_polar
+    subroutine new_hybrid_refine
         ! PROGRAM SPECIFICATION
-        call cluster2D_polar%new(&
-        &'cluster2D_polar',&                                                                          ! name
+        call hybrid_refine%new(&
+        &'hybrid_refine',&                                                                            ! name
         &'2D refinement in polar coordinates',&                                                       ! descr_short
         &'is a shared-memory workflow for 2D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_exec',&                                                                              ! executable
@@ -2261,23 +2261,23 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call cluster2D_polar%set_input('srch_ctrls', 1, nspace, gui_submenu="search")
-        call cluster2D_polar%set_input('srch_ctrls', 2, trs, gui_submenu="search")
-        call cluster2D_polar%set_input('srch_ctrls', 3, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
+        call hybrid_refine%set_input('srch_ctrls', 1, nspace, gui_submenu="search")
+        call hybrid_refine%set_input('srch_ctrls', 2, trs, gui_submenu="search")
+        call hybrid_refine%set_input('srch_ctrls', 3, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
         &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="search")
-        call cluster2D_polar%set_input('srch_ctrls', 4, maxits, gui_submenu="search")
-        call cluster2D_polar%set_input('srch_ctrls', 5, nstates, gui_submenu="search")
-        call cluster2D_polar%set_input('srch_ctrls', 6, objfun, gui_submenu="search")
-        call cluster2D_polar%set_input('srch_ctrls', 7, 'refine', 'multi', 'Refinement mode', 'Refinement mode(shc_smpl|neigh|prob|prob_state){shc}', '(snhc|shc|neigh|shc_neigh){shc}',&
+        call hybrid_refine%set_input('srch_ctrls', 4, maxits, gui_submenu="search")
+        call hybrid_refine%set_input('srch_ctrls', 5, nstates, gui_submenu="search")
+        call hybrid_refine%set_input('srch_ctrls', 6, objfun, gui_submenu="search")
+        call hybrid_refine%set_input('srch_ctrls', 7, 'refine', 'multi', 'Refinement mode', 'Refinement mode(shc_smpl|neigh|prob|prob_state){shc}', '(snhc|shc|neigh|shc_neigh){shc}',&
         &.false., 'shc', gui_submenu="search")
-        call cluster2D_polar%set_input('srch_ctrls', 8, sigma_est, gui_submenu="search")
+        call hybrid_refine%set_input('srch_ctrls', 8, sigma_est, gui_submenu="search")
         ! filter controls
-        call cluster2D_polar%set_input('filt_ctrls', 1, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 20., gui_submenu="filter")
+        call hybrid_refine%set_input('filt_ctrls', 1, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 20., gui_submenu="filter")
         ! mask controls
-        call cluster2D_polar%set_input('mask_ctrls', 1, mskdiam, gui_submenu="mask", gui_advanced=.false.)
+        call hybrid_refine%set_input('mask_ctrls', 1, mskdiam, gui_submenu="mask", gui_advanced=.false.)
         ! computer controls
-        call cluster2D_polar%set_input('comp_ctrls', 1, nthr, gui_submenu="compute", gui_advanced=.false.)
-    end subroutine new_cluster2D_polar
+        call hybrid_refine%set_input('comp_ctrls', 1, nthr, gui_submenu="compute", gui_advanced=.false.)
+    end subroutine new_hybrid_refine
 
     subroutine new_cluster_cavgs
         ! PROGRAM SPECIFICATION

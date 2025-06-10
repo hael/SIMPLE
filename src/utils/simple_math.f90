@@ -965,6 +965,16 @@ contains
         c(3) = a(1) * b(2) - a(2) * b(1)
     end function cross
 
+    !>   rotating u by an angle theta around vector v, using Rodrigues rotation formula
+    function rotate_vec( u, v, theta ) result(u_rot)
+        real, intent(in) :: u(3), v(3), theta
+        real :: u_rot(3), v_norm(3), cosval, sinval
+        cosval = cos(theta)
+        sinval = sin(theta)
+        v_norm = v / sqrt(sum(v**2))
+        u_rot  = u * cosval + cross(v_norm, u) * sinval + v_norm * sum(v_norm * u) * (1.-cosval)
+    end function rotate_vec
+
     !>   given two points on the sphere, find N sample points on the great circle formed by two points
     function great_circle_samples( p1, p2, N ) result( points )
         real,    intent(in) :: p1(3), p2(3)

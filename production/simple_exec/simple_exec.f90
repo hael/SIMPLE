@@ -64,7 +64,7 @@ type(abinitio_cleanup2D_commander)          :: xabinitio_cleanup2D
 type(cluster2D_autoscale_commander)         :: xcluster2D_hlev
 type(cluster2D_commander_subsets)           :: xcluster2D_subsets
 type(cleanup2D_commander_hlev)              :: xcleanup2D_distr
-type(cluster2D_polar_commander)             :: xcluster2D_polar
+type(hybrid_refine_commander)               :: xhybrid_refine
 type(map_cavgs_selection_commander)         :: xmap_cavgs_selection
 type(map_cavgs_states_commander)            :: xmap_cavgs_states
 type(sample_classes_commander)              :: xsample_classes
@@ -260,8 +260,8 @@ select case(trim(prg))
         call xcluster2D_hlev%execute(cline)
     case( 'cluster2D_subsets' )
         call xcluster2D_subsets%execute(cline)
-    case( 'cluster2D_polar' )
-        call xcluster2D_polar%execute(cline)
+    case( 'hybrid_refine' )
+        call xhybrid_refine%execute(cline)
     case( 'map_cavgs_selection' )
         call xmap_cavgs_selection%execute(cline)
     case( 'map_cavgs_states' )
