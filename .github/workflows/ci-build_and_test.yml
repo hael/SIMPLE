@@ -42,10 +42,11 @@ jobs:
              
       - name: Tests Install SIMPLE debug mode
         run: |
-             mkdir -p build
-             cd build
-             cmake .. -DGUI=off -DCMAKE_BUILD_TYPE=debug -DUSE_LIBTIFF=off
-             make -j install
+             ./compile_debug.sh
+             #mkdir -p build
+             #cd build
+             #cmake .. -DGUI=off -DCMAKE_BUILD_TYPE=debug -DUSE_LIBTIFF=off
+             #make -j install
              export SIMPLE_EMAIL="my.name@uni.edu"
              export SIMPLE_QSYS="local"
              export SIMPLE_PATH=$GITHUB_WORKSPACE/build
@@ -54,10 +55,11 @@ jobs:
 
       - name: Install SIMPLE
         run: |
-             mkdir -p build
-             cd build
-             cmake -DGUI=OFF ..
-             make -j install
+             ./compile_clean.sh
+             #mkdir -p build
+             #cd build
+             #cmake -DGUI=OFF ..
+             #make -j install
              export SIMPLE_EMAIL="my.name@uni.edu"
              export SIMPLE_QSYS="local"
              export SIMPLE_PATH=$GITHUB_WORKSPACE/build
