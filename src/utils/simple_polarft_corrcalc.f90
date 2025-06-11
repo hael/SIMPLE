@@ -708,7 +708,7 @@ contains
     ! PRINTERS/VISUALISERS
 
     subroutine vis_ptcl( self, iptcl )
-        use gnufor2
+        use gnufor2, only: gnufor_image
         class(polarft_corrcalc), intent(in) :: self
         integer,                 intent(in) :: iptcl
         call gnufor_image( real(self%pfts_ptcls(:,:,self%pinds(iptcl))), palette='gray')
@@ -716,7 +716,7 @@ contains
     end subroutine vis_ptcl
 
     subroutine vis_ref( self, iref, iseven )
-        use gnufor2
+        use gnufor2, only: gnufor_image
         class(polarft_corrcalc), intent(in) :: self
         integer,                 intent(in) :: iref
         logical,                 intent(in) :: iseven
@@ -749,7 +749,7 @@ contains
         complex,    allocatable, intent(inout) :: cmat(:,:)
         integer,                 intent(out)   :: box
         integer,    optional,    intent(in)    :: box_in
-        integer, allocatable :: norm(:,:)
+        integer,    allocatable :: norm(:,:)
         complex :: comp
         integer :: k,c,irot,physh,physk
         if( allocated(cmat) ) deallocate(cmat)
@@ -857,9 +857,9 @@ contains
     ! MODIFIERS
 
     subroutine shift_ptcl( self, iptcl, shvec)
-        class(polarft_corrcalc),  intent(inout) :: self
-        integer,                  intent(in)    :: iptcl
-        real(sp),                 intent(in)    :: shvec(2)
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iptcl
+        real(sp),                intent(in)    :: shvec(2)
         complex(sp), pointer :: shmat(:,:)
         integer :: ithr, i
         ithr  = omp_get_thread_num() + 1
@@ -870,9 +870,9 @@ contains
     end subroutine shift_ptcl
 
     subroutine shift_ref( self, iref, shvec)
-        class(polarft_corrcalc),  intent(inout) :: self
-        integer,                  intent(in)    :: iref
-        real(sp),                 intent(in)    :: shvec(2)
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref
+        real(sp),                intent(in)    :: shvec(2)
         complex(dp), pointer :: shmat(:,:)
         integer :: ithr
         ithr = omp_get_thread_num() + 1
@@ -931,10 +931,10 @@ contains
     end subroutine memoize_sqsum_ptcl
 
     subroutine get_pft_irot( self, pft, irot, pft_rot )
-        class(polarft_corrcalc), intent(in) :: self
-        complex(dp), intent(in)  :: pft(1:self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer,     intent(in)  :: irot
-        complex(dp), intent(out) :: pft_rot(self%kfromto(1):self%kfromto(2))
+        class(polarft_corrcalc), intent(in)  :: self
+        complex(dp),             intent(in)  :: pft(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer,                 intent(in)  :: irot
+        complex(dp),             intent(out) :: pft_rot(self%kfromto(1):self%kfromto(2))
         integer :: mid
         if( irot == 1 )then
             pft_rot = pft(1,:)
@@ -950,10 +950,10 @@ contains
     end subroutine get_pft_irot
 
     subroutine rotate_pft_1( self, pft, irot, pft_rot )
-        class(polarft_corrcalc), intent(in) :: self
-        complex(dp), intent(in)  :: pft(1:self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer,     intent(in)  :: irot
-        complex(dp), intent(out) :: pft_rot(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+        class(polarft_corrcalc), intent(in)  :: self
+        complex(dp),             intent(in)  :: pft(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer,                 intent(in)  :: irot
+        complex(dp),             intent(out) :: pft_rot(1:self%pftsz,self%kfromto(1):self%kfromto(2))
         integer :: mid
         if( irot == 1 )then
             pft_rot = pft
@@ -971,10 +971,10 @@ contains
     end subroutine rotate_pft_1
 
     subroutine rotate_pft_2( self, pft, irot, pft_rot )
-        class(polarft_corrcalc), intent(in) :: self
-        complex(sp), intent(in)  :: pft(1:self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer,     intent(in)  :: irot
-        complex(sp), intent(out) :: pft_rot(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+        class(polarft_corrcalc), intent(in)  :: self
+        complex(sp),             intent(in)  :: pft(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer,                 intent(in)  :: irot
+        complex(sp),             intent(out) :: pft_rot(1:self%pftsz,self%kfromto(1):self%kfromto(2))
         integer :: mid
         if( irot == 1 )then
             pft_rot = pft
@@ -992,10 +992,10 @@ contains
     end subroutine rotate_pft_2
 
     subroutine rotate_pft_3( self, pft, irot, pft_rot )
-        class(polarft_corrcalc), intent(in) :: self
-        real(sp), intent(in)  :: pft(1:self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer,  intent(in)  :: irot
-        real(sp), intent(out) :: pft_rot(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+        class(polarft_corrcalc), intent(in)  :: self
+        real(sp),                intent(in)  :: pft(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer,                 intent(in)  :: irot
+        real(sp),                intent(out) :: pft_rot(1:self%pftsz,self%kfromto(1):self%kfromto(2))
         integer :: mid
         if( irot == 1 )then
             pft_rot = pft
@@ -1071,15 +1071,15 @@ contains
     end subroutine rotate_iref_2
 
     subroutine calc_polar_ctf( self, iptcl, smpd, kv, cs, fraca, dfx, dfy, angast )
-        use simple_ctf,        only: ctf
-        class(polarft_corrcalc),   intent(inout) :: self
-        integer,                   intent(in)    :: iptcl
-        real,                      intent(in)    :: smpd, kv, cs, fraca, dfx, dfy, angast
-        type(ctf)       :: tfun
-        real(sp)        :: spaFreqSq_mat(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp)        :: ang_mat(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp)        :: inv_ldim(3),hinv,kinv
-        integer         :: i,irot,k
+        use simple_ctf, only: ctf
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iptcl
+        real,                    intent(in)    :: smpd, kv, cs, fraca, dfx, dfy, angast
+        type(ctf) :: tfun
+        real(sp)  :: spaFreqSq_mat(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(sp)  :: ang_mat(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(sp)  :: inv_ldim(3),hinv,kinv
+        integer   :: i,irot,k
         if( .not.allocated(self%ctfmats) )then
             allocate(self%ctfmats(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls), source=1.)
         endif
