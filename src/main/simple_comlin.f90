@@ -4,7 +4,7 @@ use simple_parameters, only: params_glob
 use simple_oris,       only: oris
 implicit none
 
-public :: comlin_map
+public :: comlin_map, polar_comlin_map
 
 contains
 
@@ -64,6 +64,48 @@ contains
         allocate(coord_map%tar_four(2,cnt), source=all_coords%tar_four(:,1:cnt))
         coord_map%n_points = cnt
     end subroutine comlin_map
+
+    subroutine polar_comlin_map( lims, e_ind, eall, pftcc, polar_map, all_coords )
+        use simple_polarft_corrcalc, only: polarft_corrcalc
+        integer,                 intent(in)    :: lims(3,2)
+        integer,                 intent(in)    :: e_ind
+        class(oris),             intent(in)    :: eall
+        class(polarft_corrcalc), intent(in)    :: pftcc
+        type(polar_fmap),        intent(inout) :: polar_map
+        type(polar_fmap),        intent(inout) :: all_coords
+        type(ori) :: e, e2
+        integer   :: i, hk(2), sqlp, sqarg, xy2(2), cnt, irot, kpolar, target_irot, target_kpolar, pdim(3)
+        logical   :: good_coord
+        call eall%get_ori(e_ind, e)
+        pdim = pftcc%get_pdim()
+        sqlp = (maxval(lims(:,2)))**2
+        cnt  = 0
+        do irot = 1,pdim(1)
+            do kpolar = pdim(2),pdim(3)
+                hk    = pftcc%get_coord(irot,kpolar)
+                sqarg = dot_product([hk(1),hk(2)],[hk(1),hk(2)])
+                if( sqarg > sqlp ) cycle
+                do i = 1, eall%get_noris()
+                    if( i == e_ind ) cycle
+                    call eall%get_ori(i, e2)
+                    call comlin_coord(lims, hk, e, e2, xy2, good_coord)
+                    if( good_coord )then
+                        target_kpolar = nint(sqrt(real(xy2(1)**2+xy2(2)**2)))
+                        target_irot   = nint(atan(real(xy2(2)), real(xy2(1))) * real(pdim(1)) / twopi )
+                        if( target_kpolar < pdim(2) .or. target_kpolar > pdim(3) .or. target_irot < 1 .or. target_irot > pdim(1) ) cycle
+                        cnt = cnt + 1
+                        all_coords%tar_find(  cnt) = i
+                        all_coords%ori_inds(:,cnt) = [irot,        kpolar]
+                        all_coords%tar_inds(:,cnt) = [target_irot, target_kpolar]
+                        exit
+                    endif
+                enddo
+            enddo
+        enddo
+        allocate(polar_map%tar_find(  cnt), source=all_coords%tar_find(  1:cnt))
+        allocate(polar_map%ori_inds(2,cnt), source=all_coords%ori_inds(:,1:cnt))
+        allocate(polar_map%tar_inds(2,cnt), source=all_coords%tar_inds(:,1:cnt))
+    end subroutine polar_comlin_map
 
     ! projecting coordinates xy1 of the plane at orientation e1 to the coordinates xy1 of the plane at e2
     subroutine comlin_coord(lims, xy1, e1, e2, xy2, good_coord)
