@@ -154,6 +154,13 @@ type fplan_map
     integer, allocatable :: tar_four(:,:)
 end type fplan_map
 
+type polar_fmap
+    integer              :: n_points
+    integer, allocatable :: tar_find(:)
+    integer, allocatable :: ori_inds(:,:)
+    integer, allocatable :: tar_inds(:,:)
+end type polar_fmap
+
 ! oritype enumeration
 enum, bind(c)
     enumerator :: ENUM_ORISEG  = 0
