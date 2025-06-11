@@ -19,6 +19,10 @@ interface reverse
     module procedure reverse_iarr, reverse_rarr, reverse_drarr
 end interface
 
+interface reorder
+    module procedure reorder_1, reorder_2
+end interface
+
 contains
 
     !>   for finding closest element in an ordered list
@@ -681,6 +685,49 @@ contains
         call hpsort(tmp, order)
         call reverse(order)
     end function scores2order
+
+    function dists2order( dists ) result( order )
+        real,     intent(in) :: dists(:)
+        integer, allocatable :: order(:)
+        real,    allocatable :: tmp(:)
+        integer :: i, n
+        n = size(dists)
+        allocate(tmp(n),   source=dists)
+        allocate(order(n), source=(/(i,i=1,n)/))
+        call hpsort(tmp, order)
+    end function dists2order
+
+    subroutine reorder_1( arr, order )
+        real,    intent(inout) :: arr(:)
+        integer, intent(in)    :: order(:)
+        real, allocatable :: tmp(:)
+        integer :: sz, i
+        sz = size(arr)
+        if( size(order) /= sz )&
+        &call simple_exception('Nonconforming array sizes', __FILENAME__ , __LINE__)
+        allocate(tmp(sz))        
+        do i = 1, sz
+            tmp(i) = arr(order(i))
+        end do
+        arr = tmp
+        deallocate(tmp)
+    end subroutine reorder_1
+
+    subroutine reorder_2( arr, order )
+        integer, intent(inout) :: arr(:)
+        integer, intent(in)    :: order(:)
+        integer, allocatable :: tmp(:)
+        integer :: sz, i
+        sz = size(arr)
+        if( size(order) /= sz )&
+        &call simple_exception('Nonconforming array sizes', __FILENAME__ , __LINE__)
+        allocate(tmp(sz))        
+        do i = 1, sz
+            tmp(i) = arr(order(i))
+        end do
+        arr = tmp
+        deallocate(tmp)
+    end subroutine reorder_2
 
 end module simple_srch_sort_loc
     

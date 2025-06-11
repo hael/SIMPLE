@@ -120,9 +120,10 @@ end type clust_inpl
     real             :: res         = 0.
     real             :: score       = 0.
     real             :: euclid      = 0.
-    real             :: dist_spec   = 0.
-    real             :: dist_hist   = 0.
     real             :: homogeneity = 0.
+    real             :: resscore    = 0.
+    real             :: specscore   = 0.
+    real             :: histscore   = 0.
 end type clust_info
 
 ! type for particle reference relation in eul_prob_tab

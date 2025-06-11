@@ -1916,20 +1916,20 @@ contains
         real,             allocatable :: resvals(:)
         logical,          allocatable :: l_msk(:,:,:), l_non_junk(:)
         integer,          allocatable :: labels(:), clsinds(:), i_medoids(:)
-        integer,          allocatable :: clust_order(:), rank_assign(:), i_medoids_ranked(:)
+        integer,          allocatable :: clust_order(:)
         integer,          allocatable :: clspops(:), states(:)
-        type(clust_info), allocatable :: clust_info_arr(:), clust_info_arr_ranked(:)
+        type(clust_info), allocatable :: clust_info_arr(:)
         type(parameters)   :: params
         type(sp_project)   :: spproj
         type(image)        :: img_msk
         type(kmedoids)     :: kmed
         type(pspecs)       :: pows
         type(stats_struct) :: res_stats
-        integer :: ldim(3),  ncls, ncls_sel, icls, cnt, rank, nptcls, nptcls_good, loc(1)
-        integer :: filtsz, nclust_aff_prop, i, j, ii, jj, nclust, iclust, rank_bound 
-        real    :: smpd, simsum, cmin, cmax, pref, fsc_res, rfoo, frac_good, best_res, worst_res
-        real    :: oa_min, oa_max, dist_rank, dist_rank_best
-        logical :: l_apply_optlp
+        integer            :: ldim(3),  ncls, ncls_sel, icls, cnt, rank, nptcls, nptcls_good, loc(1)
+        integer            :: filtsz, nclust_aff_prop, i, j, ii, jj, nclust, iclust, rank_bound 
+        real               :: smpd, simsum, cmin, cmax, pref, fsc_res, rfoo, frac_good, best_res, worst_res
+        real               :: oa_min, oa_max, dist_rank, dist_rank_best
+        logical            :: l_apply_optlp
         ! defaults
         call cline%set('oritype', 'cls2D')
         call cline%set('ctf',        'no')
@@ -1959,7 +1959,7 @@ contains
         filtsz      = fdim(params%box)-1 
         ! calculate overall minmax
         oa_min      = minval(mm(:,1))
-        oa_max     = maxval(mm(:,2))
+        oa_max      = maxval(mm(:,2))
         ! generate histograms
         allocate(hists(ncls_sel))
         do i = 1, ncls_sel
@@ -2054,8 +2054,6 @@ contains
         allocate(labels(ncls_sel), i_medoids(nclust), source=0)
         call kmed%get_labels(labels)
         call kmed%get_medoids(i_medoids)
-        
-
         ! prep mask
         call img_msk%new([params%box,params%box,1], smpd)
         img_msk = 1.
@@ -2070,29 +2068,12 @@ contains
                 do iclust = 1, nclust
                     clust_info_arr(iclust)%nptcls = sum(clspops, mask=labels == iclust)
                 end do
+                call calc_scores
                 ! rank clusters based on their resolution
-                allocate(clust_order(nclust), rank_assign(ncls_sel), i_medoids_ranked(nclust), clust_info_arr_ranked(nclust))
+                allocate(clust_order(nclust))
                 clust_order = (/(iclust,iclust=1,nclust)/)
                 call hpsort(clust_order, ci_better_than_cj)
-                ! create ranked medoids and labels
-                do rank = 1, nclust
-                    i_medoids_ranked(rank)      = i_medoids(clust_order(rank))
-                    clust_info_arr_ranked(rank) = clust_info_arr(clust_order(rank))
-                    do icls = 1, ncls_sel
-                        if( labels(icls) == clust_order(rank) ) rank_assign(icls) = rank
-                    end do
-                end do
-                i_medoids      = i_medoids_ranked
-                clust_info_arr = clust_info_arr_ranked
-                labels         = rank_assign
-                deallocate(i_medoids_ranked, rank_assign)
-                ! covert clust_euclid into homogeneity score
-                ! normalize to [0,1]
-                clust_info_arr(:)%homogeneity = clust_info_arr(:)%euclid
-                call normalize_minmax(clust_info_arr(:)%homogeneity)
-                ! invert and turn into %
-                clust_info_arr(:)%homogeneity= -100. * (clust_info_arr(:)%homogeneity - 1.)
-                where( clust_info_arr(:)%homogeneity < SMALL) clust_info_arr(:)%homogeneity = 0.
+                call rank_clusters(nclust, clust_order)
                 write(logfhandle,'(A)') '>>> ROTATING & SHIFTING UNMASKED, UNFILTERED CLASS AVERAGES'
                 ! re-create cavg_imgs
                 call dealloc_imgarr(cavg_imgs)
@@ -2216,7 +2197,59 @@ contains
         call simple_end('**** SIMPLE_CLUSTER_CAVGS NORMAL STOP ****')
 
     contains
-        
+
+        subroutine calc_scores
+            ! HOMOGENEITY SCORE
+            clust_info_arr(:)%homogeneity = clust_info_arr(:)%euclid
+            call normalize_minmax(clust_info_arr(:)%homogeneity)
+            ! invert and turn into %
+            clust_info_arr(:)%homogeneity = -100. * (clust_info_arr(:)%homogeneity - 1.)
+            where( clust_info_arr(:)%homogeneity < SMALL) clust_info_arr(:)%homogeneity = 0.
+            ! RESOLUTION SCORE
+            clust_info_arr(:)%resscore = clust_info_arr(:)%res
+            call normalize_minmax(clust_info_arr(:)%resscore)
+            ! invert and turn into %
+            clust_info_arr(:)%resscore = -100. * (clust_info_arr(:)%resscore - 1.)
+            where( clust_info_arr(:)%resscore < SMALL) clust_info_arr(:)%resscore = 0.
+            ! SPECTRAL PROFILE & HISTOGRAM SCORE
+            do iclust = 1, nclust
+                clust_info_arr(iclust)%specscore = 0.
+                clust_info_arr(iclust)%histscore = 0.
+                cnt = 0
+                do icls = 1, ncls_sel 
+                    if( labels(icls) == iclust )then
+                        clust_info_arr(iclust)%specscore = clust_info_arr(iclust)%specscore + smat_pow(icls,i_medoids(iclust))
+                        clust_info_arr(iclust)%histscore = clust_info_arr(iclust)%histscore + dmat_hist(icls,i_medoids(iclust))
+                        cnt = cnt + 1
+                    endif
+                enddo
+                clust_info_arr(iclust)%specscore = clust_info_arr(iclust)%specscore / real(cnt)
+                clust_info_arr(iclust)%histscore = clust_info_arr(iclust)%histscore / real(cnt)
+            end do
+            call normalize_minmax(clust_info_arr(:)%specscore)
+            clust_info_arr(:)%specscore =  100. * clust_info_arr(:)%specscore
+            call normalize_minmax(clust_info_arr(:)%histscore)
+            clust_info_arr(:)%histscore = -100. * (clust_info_arr(:)%histscore - 1.)
+            where( clust_info_arr(:)%histscore < SMALL) clust_info_arr(:)%histscore = 0.
+        end subroutine calc_scores
+
+        subroutine rank_clusters( nclust, order )
+            integer, intent(in) :: nclust, order(nclust)
+            integer             :: i_medoids_ranked(nclust), rank_assign(ncls_sel)
+            type(clust_info)    :: clust_info_arr_ranked(nclust)
+            integer             :: rank, icls
+            do rank = 1, nclust
+                i_medoids_ranked(rank) = i_medoids(order(rank))
+                clust_info_arr_ranked(rank) = clust_info_arr(order(rank))
+                do icls = 1, ncls_sel
+                    if( labels(icls) == order(rank) ) rank_assign(icls) = rank
+                end do
+            end do
+            i_medoids      = i_medoids_ranked
+            clust_info_arr = clust_info_arr_ranked
+            labels         = rank_assign
+        end subroutine rank_clusters
+            
         function ci_better_than_cj( ci, cj ) result( val )
             integer, intent(in) :: ci, cj
             logical :: val
