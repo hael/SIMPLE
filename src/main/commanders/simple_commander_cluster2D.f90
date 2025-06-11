@@ -1915,10 +1915,10 @@ contains
         real,             allocatable :: dmat_hd(:,:), dmat_hist(:,:), dmat_fm(:,:)
         real,             allocatable :: resvals(:)
         logical,          allocatable :: l_msk(:,:,:), l_non_junk(:)
-        integer,          allocatable :: labels(:), clsinds(:), i_medoids(:)
+        integer,          allocatable :: labels(:), clsinds(:), i_medoids(:), labels_copy(:), i_medoids_copy(:)
         integer,          allocatable :: clust_order(:)
         integer,          allocatable :: clspops(:), states(:)
-        type(clust_info), allocatable :: clust_info_arr(:)
+        type(clust_info), allocatable :: clust_info_arr(:), clust_info_arr_copy(:)
         type(parameters)   :: params
         type(sp_project)   :: spproj
         type(image)        :: img_msk
@@ -2068,17 +2068,29 @@ contains
                 do iclust = 1, nclust
                     clust_info_arr(iclust)%nptcls = sum(clspops, mask=labels == iclust)
                 end do
+                ! calculate scores
                 call calc_scores
-                ! rank clusters based on their resolution
-                allocate(clust_order(nclust))
-                clust_order = (/(iclust,iclust=1,nclust)/)
-                call hpsort(clust_order, ci_better_than_cj)
-                call rank_clusters(nclust, clust_order)
                 write(logfhandle,'(A)') '>>> ROTATING & SHIFTING UNMASKED, UNFILTERED CLASS AVERAGES'
                 ! re-create cavg_imgs
                 call dealloc_imgarr(cavg_imgs)
                 cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
-                call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_ranked', trim(params%ext))
+                ! rank clusters based on their homogeneity
+                call copy_clustering
+                clust_order = scores2order(clust_info_arr(:)%homogeneity)
+                call rank_clusters(nclust, clust_order)
+                call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_ranked_homo', trim(params%ext))
+                call put_back_clustering_copy
+                ! rank clusters based on their histogram score
+                call copy_clustering
+                clust_order = scores2order(clust_info_arr(:)%histscore)
+                call rank_clusters(nclust, clust_order)
+                call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_ranked_hist', trim(params%ext))
+                call put_back_clustering_copy
+                ! rank clusters based on their resolution score
+                call copy_clustering
+                clust_order = scores2order(clust_info_arr(:)%resscore)
+                call rank_clusters(nclust, clust_order)
+                call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_ranked_res', trim(params%ext))
                 if( cline%defined('res_cutoff') )then
                     ! rank boundary based on resolution cutoff
                     rank_bound = 2
@@ -2211,27 +2223,34 @@ contains
             ! invert and turn into %
             clust_info_arr(:)%resscore = -100. * (clust_info_arr(:)%resscore - 1.)
             where( clust_info_arr(:)%resscore < SMALL) clust_info_arr(:)%resscore = 0.
-            ! SPECTRAL PROFILE & HISTOGRAM SCORE
+            ! HISTOGRAM SCORE
             do iclust = 1, nclust
-                clust_info_arr(iclust)%specscore = 0.
                 clust_info_arr(iclust)%histscore = 0.
                 cnt = 0
                 do icls = 1, ncls_sel 
                     if( labels(icls) == iclust )then
-                        clust_info_arr(iclust)%specscore = clust_info_arr(iclust)%specscore + smat_pow(icls,i_medoids(iclust))
                         clust_info_arr(iclust)%histscore = clust_info_arr(iclust)%histscore + dmat_hist(icls,i_medoids(iclust))
                         cnt = cnt + 1
                     endif
                 enddo
-                clust_info_arr(iclust)%specscore = clust_info_arr(iclust)%specscore / real(cnt)
                 clust_info_arr(iclust)%histscore = clust_info_arr(iclust)%histscore / real(cnt)
             end do
-            call normalize_minmax(clust_info_arr(:)%specscore)
-            clust_info_arr(:)%specscore =  100. * clust_info_arr(:)%specscore
             call normalize_minmax(clust_info_arr(:)%histscore)
             clust_info_arr(:)%histscore = -100. * (clust_info_arr(:)%histscore - 1.)
             where( clust_info_arr(:)%histscore < SMALL) clust_info_arr(:)%histscore = 0.
         end subroutine calc_scores
+
+        subroutine copy_clustering
+            clust_info_arr_copy = clust_info_arr
+            labels_copy         = labels
+            i_medoids_copy      = i_medoids
+        end subroutine copy_clustering
+
+        subroutine put_back_clustering_copy
+            clust_info_arr = clust_info_arr_copy 
+            labels         = labels_copy
+            i_medoids      = i_medoids_copy 
+        end subroutine put_back_clustering_copy
 
         subroutine rank_clusters( nclust, order )
             integer, intent(in) :: nclust, order(nclust)
