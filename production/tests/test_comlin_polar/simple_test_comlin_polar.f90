@@ -1,30 +1,34 @@
 program simple_test_comlin_polar
 include 'simple_lib.f08'
-use simple_cmdline,    only: cmdline
-use simple_parameters, only: parameters
-use simple_image,      only: image
-use simple_projector,  only: projector
-use simple_comlin,     only: comlin_map
+use simple_cmdline,          only: cmdline
+use simple_parameters,       only: parameters
+use simple_image,            only: image
+use simple_projector,        only: projector
+use simple_comlin,           only: comlin_map, polar_comlin_map
+use simple_polarft_corrcalc, only: polarft_corrcalc
+use simple_polarizer,        only: polarizer
 implicit none
-integer,          parameter   :: NPLANES = 20, ORI_IND1 = 3, ORI_IND2 = 15, NTHETAS = 18
+integer,          parameter   :: NPLANES = 20, ORI_IND1 = 10, ORI_IND2 = 15, NTHETAS = 18
 character(len=:), allocatable :: cmd
 type(fplan_map),  allocatable :: all_coords(:)
+type(polar_fmap), allocatable :: polar_coords(:)
 type(image),      allocatable :: pad_fplanes(:)
 real,             allocatable :: thetas(:)
-type(fplan_map)  :: coord_map(NPLANES)
-type(parameters) :: p
-type(cmdline)    :: cline
-type(image)      :: noise, ptcl, ptcl_pad, fplanes(NPLANES), vol, img, rot_fplane
-type(oris)       :: spiral
-type(ori)        :: o1, o2
-type(projector)  :: vol_pad
-integer          :: ifoo, rc, i, j, k, ori_phys(3), tar_phys(3), f_ind, lims(3,2), ithr, cnts(NPLANES,NPLANES),&
-                   &min_i, min_k, itheta, ori_four(2), tar_four(2), errflg, rot_four(2), itheta1, itheta2, jtheta, theta_ori, theta_tar
-real             :: ave, sdev, maxv, minv, total_costs(NPLANES), all_costs(NTHETAS,NPLANES,NPLANES), minval, &
-                   &shifts(3), rval, theta, pair_costs(NPLANES,NPLANES), found_thetas(NPLANES,NPLANES), mat(2,2), mat_inv(2,2),&
-                   &theta1, theta2, the_costs(NTHETAS,NTHETAS)
-complex          :: diff, val, val1, val2
-logical          :: mrc_exists, found(NPLANES,NPLANES)
+complex,          allocatable :: cmat(:,:)
+type(fplan_map)               :: coord_map(NPLANES)
+type(polar_fmap)              :: polar_map(NPLANES)
+type(parameters)              :: p
+type(polarft_corrcalc)        :: pftcc
+type(polarizer)               :: img_polarizer
+type(cmdline)                 :: cline
+type(image)                   :: noise, ptcl, ptcl_pad, fplanes(NPLANES), vol, img, fplane_polar
+type(oris)                    :: spiral
+type(ori)                     :: o1, o2
+type(projector)               :: vol_pad
+integer :: ifoo, rc, i, j, ori_phys(3), tar_phys(3), f_ind, lims(3,2), ithr, box, pdim(3), ndim
+real    :: ave, sdev, maxv, minv
+complex :: val
+logical :: mrc_exists
 
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)') 'ERROR! Usage: simple_test_comlin_polar smpd=xx nthr=yy vol1=volume.mrc mskdiam=zz'
@@ -81,14 +85,15 @@ call ptcl%add(noise)
 call ptcl%write('reproj_com_reprojcom.mrc', 1)
 call ptcl%fft
 lims = vol%loop_lims(3)
+ndim = (lims(1,2)-lims(1,1)+1)*(lims(2,2)-lims(2,1)+1)
 allocate(pad_fplanes(p%nthr),all_coords(p%nthr))
 do ithr = 1, p%nthr
     call pad_fplanes(ithr)%new([p%boxpd, p%boxpd, 1], p%smpd)
-    allocate(all_coords(ithr)%tar_find(  (lims(1,2)-lims(1,1)+1)*(lims(2,2)-lims(2,1)+1)),&
-            &all_coords(ithr)%ori_phys(3,(lims(1,2)-lims(1,1)+1)*(lims(2,2)-lims(2,1)+1)),&
-            &all_coords(ithr)%ori_four(2,(lims(1,2)-lims(1,1)+1)*(lims(2,2)-lims(2,1)+1)),&
-            &all_coords(ithr)%tar_phys(3,(lims(1,2)-lims(1,1)+1)*(lims(2,2)-lims(2,1)+1)),&
-            &all_coords(ithr)%tar_four(2,(lims(1,2)-lims(1,1)+1)*(lims(2,2)-lims(2,1)+1)))
+    allocate(all_coords(ithr)%tar_find(  ndim),&
+            &all_coords(ithr)%ori_phys(3,ndim),&
+            &all_coords(ithr)%ori_four(2,ndim),&
+            &all_coords(ithr)%tar_phys(3,ndim),&
+            &all_coords(ithr)%tar_four(2,ndim))
 enddo
 !$omp parallel do default(shared) private(i,ithr,o2)&
 !$omp proc_bind(close) schedule(static)
@@ -96,6 +101,7 @@ do i = 1, spiral%get_noris()
     ithr = omp_get_thread_num() + 1
     ! common line mapping is independent of fplanes below
     call comlin_map(lims, i, spiral, coord_map(i), all_coords(ithr))
+    print *, 'i = ', i, '; cart npoints = ', coord_map(i)%n_points
     ! fplanes are used for optimization below
     call spiral%get_ori(i, o2)
     call fplanes(i)%new([p%box, p%box, 1], p%smpd)
@@ -134,6 +140,38 @@ do j = 1, coord_map(i)%n_points
 enddo
 call img%ifft
 call img%write('reproj_com_reprojcom.mrc', 3)
+! polar stuffs
+call img_polarizer%new([p%box,p%box,1],p%smpd, wthreads=.false.)
+call pftcc%new(NPLANES, [1,NPLANES], p%kfromto)
+call img_polarizer%init_polarizer(pftcc, p%alpha)
+call fplane_polar%new([p%box,p%box,1],1.0)
+do i = 1, spiral%get_noris()
+    call img_polarizer%polarize(pftcc, fplanes(i), i, isptcl=.false., iseven=.true.)
+    call pftcc%polar2cartesian(i, .true., cmat, box, box_in=p%box)
+    call fplane_polar%fft
+    call fplane_polar%set_cmat(cmat)
+    call fplane_polar%shift_phorig()
+    call fplane_polar%ifft
+    call fplane_polar%write('fplanes_polar.mrc', i)
+enddo
+pdim = pftcc%get_pdim()
+print *, 'pdim = ', pdim
+ndim = pdim(1) * 2 * (pdim(3) - pdim(2))
+allocate(polar_coords(p%nthr))
+do ithr = 1, p%nthr
+    allocate(polar_coords(ithr)%tar_find(  ndim),&
+            &polar_coords(ithr)%ori_inds(2,ndim),&
+            &polar_coords(ithr)%tar_inds(2,ndim))
+enddo
+!$omp parallel do default(shared) private(i,ithr)&
+!$omp proc_bind(close) schedule(static)
+do i = 1, spiral%get_noris()
+    ithr = omp_get_thread_num() + 1
+    ! common line mapping is independent of fplanes below
+    call polar_comlin_map(lims, i, spiral, pftcc, polar_map(i), polar_coords(ithr))
+    print *, 'i = ', i, '; npoints = ', polar_map(i)%n_points
+enddo
+!$omp end parallel do
 
 contains
 
