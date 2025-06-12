@@ -8,7 +8,7 @@ use simple_comlin,           only: comlin_map, polar_comlin_map
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_polarizer,        only: polarizer
 implicit none
-integer,          parameter   :: NPLANES = 20, ORI_IND1 = 10, ORI_IND2 = 15, NTHETAS = 18
+integer,          parameter   :: NPLANES = 20, ORI_IND1 = 10, ORI_IND2 = 1, NTHETAS = 18
 character(len=:), allocatable :: cmd
 type(fplan_map),  allocatable :: all_coords(:)
 type(polar_fmap), allocatable :: polar_coords(:)
@@ -67,7 +67,7 @@ call vol%new(p%ldim, p%smpd)
 call vol%read(p%vols(1))
 call vol%stats('foreground', ave, sdev, maxv, minv)
 call spiral%new(NPLANES, is_ptcl=.false.)
-call spiral%spiral
+call spiral%spiral(no_ends=.true.)
 call ptcl%new(    [p%box,   p%box,   1],       p%smpd)
 call noise%new(   [p%box,   p%box ,  1],       p%smpd)
 call img%new(     [p%box,   p%box,   1],       p%smpd)
@@ -231,6 +231,7 @@ call matinv(e1_rotmat, e1_inv, 3, errflg)
 line_xyz      = matmul(line_xyz, e1_inv)
 print *, 'line_xyz  1 = ', line_xyz
 call pftcc%get_polar_coord(line_xyz(1:2), irot_real, k_real)
+if( line_xyz(1) < 0. ) irot_real = irot_real + pftcc%get_pftsz()
 print *, 'irot_real 1 = ', irot_real
 !
 line_xyz(1:2) = [1., -(a1-a2)/(b1-b2)]
@@ -240,6 +241,7 @@ call matinv(e1_rotmat, e1_inv, 3, errflg)
 line_xyz      = matmul(line_xyz, e1_inv)
 print *, 'line_xyz  2 = ', line_xyz
 call pftcc%get_polar_coord(line_xyz(1:2), irot_real, k_real)
+if( line_xyz(1) < 0. ) irot_real = irot_real + pftcc%get_pftsz()
 print *, 'irot_real 2 = ', irot_real
 
 contains
