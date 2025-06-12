@@ -219,7 +219,6 @@ contains
         logical, optional,       intent(in)    :: mask(:) !< interpolation mask, all .false. set to CMPLX_ZERO
         complex, pointer :: pft(:,:)
         integer :: h, k, sqlp, sqarg, kind, irot, lims(3,2), pdim(3)
-        real    :: tan_inv
         pdim = pftcc%get_pdim()
         lims = img%loop_lims(3)
         sqlp = (maxval(lims(:,2)))**2
@@ -230,9 +229,7 @@ contains
             do h = lims(1,1),lims(1,2)
                 sqarg = dot_product([h,k],[h,k])
                 if( sqarg > sqlp ) cycle
-                kind    = nint(sqrt(real(h**2+k**2)))
-                tan_inv = atan(real(k), real(h)) * 2 + PI
-                irot    = nint(tan_inv * real(pdim(1)) / TWOPI) + 1
+                call pftcc%get_polar_coord(real([h,k]), irot, kind)
                 if( kind < pdim(2) .or. kind > pdim(3) .or. irot < 1 .or. irot > pdim(1) ) cycle
                 pft(irot,kind) = img%get_fcomp2D(h,k)
             enddo

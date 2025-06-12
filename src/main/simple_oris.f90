@@ -3147,14 +3147,14 @@ contains
 
     !>  \brief  is for generating evenly distributed projection directions
     subroutine spiral_1( self )
-        class(oris),    intent(inout) :: self
+        class(oris), intent(inout) :: self
         real    :: h, theta, psi
         integer :: k
         if( self%n == 1 )then
             call self%o(1)%set_euler([0.,0.,0.])
         else if( self%n > 1 )then
             do k=1,self%n
-                h = -1.+((2.*(real(k)-1.))/(real(self%n)-1.))
+                h     = -1.+((2.*(real(k)-1.))/(real(self%n)-1.))
                 theta = acos(h)
                 if( k == 1 .or. k == self%n )then
                     psi = 0.

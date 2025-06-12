@@ -120,6 +120,8 @@ type :: polarft_corrcalc
     procedure          :: get_rot
     procedure          :: get_roind
     procedure          :: get_coord
+    procedure, private :: get_polar_coord_1, get_polar_coord_2
+    generic            :: get_polar_coord => get_polar_coord_1, get_polar_coord_2
     procedure          :: get_ref_pft
     procedure          :: get_nrefs
     procedure          :: exists
@@ -562,6 +564,26 @@ contains
         xy(1) = self%polar(rot,k)
         xy(2) = self%polar(self%nrots+rot,k)
     end function get_coord
+
+    subroutine get_polar_coord_1( self, xy, rot, k )
+        class(polarft_corrcalc), intent(in)  :: self
+        real,                    intent(in)  :: xy(2)
+        real,                    intent(out) :: rot, k
+        real :: tan_inv
+        k       = sqrt(sum(xy**2))
+        tan_inv = atan(xy(2), xy(1)) * 2 + PI
+        rot     = 1. + tan_inv * real(self%pftsz) / TWOPI
+    end subroutine get_polar_coord_1
+
+    subroutine get_polar_coord_2( self, xy, rot, k )
+        class(polarft_corrcalc), intent(in)  :: self
+        real,                    intent(in)  :: xy(2)
+        integer,                 intent(out) :: rot, k
+        real :: tan_inv, r_real, k_real
+        call self%get_polar_coord_1(xy, r_real, k_real)
+        k   = nint(k_real)
+        rot = nint(r_real)
+    end subroutine get_polar_coord_2
 
     !>  \brief  returns polar Fourier transform of reference iref
     function get_ref_pft( self, iref, iseven ) result( pft )

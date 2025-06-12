@@ -25,8 +25,10 @@ type(image)                   :: noise, ptcl, ptcl_pad, fplanes(NPLANES), vol, i
 type(oris)                    :: spiral
 type(ori)                     :: o1, o2
 type(projector)               :: vol_pad
-integer :: ifoo, rc, i, j, ori_phys(3), tar_phys(3), f_ind, lims(3,2), ithr, box, pdim(3), ndim, ori_pcoord(2), tar_pcoord(2)
-real    :: ave, sdev, maxv, minv
+integer :: ifoo, rc, i, j, ori_phys(3), tar_phys(3), f_ind, lims(3,2), ithr, box, pdim(3), ndim, ori_pcoord(2), tar_pcoord(2),&
+          &irot, kind, errflg
+real    :: ave, sdev, maxv, minv, hk(2), e1_rotmat(3,3), loc1_3D(3), loc2_3D(3), denom, a1, a2, b1, b2, line_xyz(3),&
+          &irot_real, e1_inv(3,3), k_real
 complex :: val
 logical :: mrc_exists
 
@@ -191,6 +193,54 @@ call fplane_polar%set_cmat(cmat)
 call fplane_polar%shift_phorig()
 call fplane_polar%ifft
 call fplane_polar%write('polar_comlin.mrc', 1)
+! Testing polar line generation
+e1_rotmat = o1%get_mat()
+irot      = 5
+kind      = p%kfromto(1) + 2
+hk        = pftcc%get_coord(irot,kind)
+loc1_3D   = matmul([hk(1), hk(2), 0.], e1_rotmat)
+irot      = 16
+kind      = p%kfromto(1) + 7
+hk        = pftcc%get_coord(irot,kind)
+loc2_3D   = matmul([hk(1), hk(2), 0.], e1_rotmat)
+denom     = (loc1_3D(1) * loc2_3D(2) - loc1_3D(2) * loc2_3D(1))
+a1        = (loc1_3D(3) * loc2_3D(2) - loc1_3D(2) * loc2_3D(3)) / denom
+b1        = (loc1_3D(1) * loc2_3D(3) - loc1_3D(3) * loc2_3D(1)) / denom
+print *, 'a1 = ', a1
+print *, 'b1 = ', b1
+call spiral%get_ori(ORI_IND2, o2)
+e1_rotmat = o2%get_mat()
+irot      = 5
+kind      = p%kfromto(1) + 2
+hk        = pftcc%get_coord(irot,kind)
+loc1_3D   = matmul([hk(1), hk(2), 0.], e1_rotmat)
+irot      = 16
+kind      = p%kfromto(1) + 7
+hk        = pftcc%get_coord(irot,kind)
+loc2_3D   = matmul([hk(1), hk(2), 0.], e1_rotmat)
+denom     = (loc1_3D(1) * loc2_3D(2) - loc1_3D(2) * loc2_3D(1))
+a2        = (loc1_3D(3) * loc2_3D(2) - loc1_3D(2) * loc2_3D(3)) / denom
+b2        = (loc1_3D(1) * loc2_3D(3) - loc1_3D(3) * loc2_3D(1)) / denom
+print *, 'a2 = ', a2
+print *, 'b2 = ', b2
+!
+line_xyz(1:2) = [1., -(a1-a2)/(b1-b2)]
+line_xyz(3)   = a1*line_xyz(1) + b1*line_xyz(2)
+e1_rotmat     = o1%get_mat()
+call matinv(e1_rotmat, e1_inv, 3, errflg)
+line_xyz      = matmul(line_xyz, e1_inv)
+print *, 'line_xyz  1 = ', line_xyz
+call pftcc%get_polar_coord(line_xyz(1:2), irot_real, k_real)
+print *, 'irot_real 1 = ', irot_real
+!
+line_xyz(1:2) = [1., -(a1-a2)/(b1-b2)]
+line_xyz(3)   = a2*line_xyz(1) + b2*line_xyz(2)
+e1_rotmat     = o2%get_mat()
+call matinv(e1_rotmat, e1_inv, 3, errflg)
+line_xyz      = matmul(line_xyz, e1_inv)
+print *, 'line_xyz  2 = ', line_xyz
+call pftcc%get_polar_coord(line_xyz(1:2), irot_real, k_real)
+print *, 'irot_real 2 = ', irot_real
 
 contains
 

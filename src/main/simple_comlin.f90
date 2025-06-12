@@ -75,7 +75,7 @@ contains
         type(polar_fmap),        intent(inout) :: all_coords
         type(ori) :: e, e2
         integer   :: i, cnt, irot, kpolar, target_irot, target_kpolar, pdim(3), ixy2(2)
-        real      :: hk(2), sqlp, sqarg, tan_inv
+        real      :: hk(2), sqlp, sqarg
         logical   :: good_coord
         call eall%get_ori(e_ind, e)
         pdim = pftcc%get_pdim()
@@ -91,9 +91,7 @@ contains
                     call eall%get_ori(i, e2)
                     call comlin_coord(lims, nint(hk), e, e2, ixy2, good_coord)
                     if( good_coord )then
-                        target_kpolar = nint(sqrt(real(ixy2(1)**2+ixy2(2)**2)))
-                        tan_inv       = atan(real(ixy2(2)), real(ixy2(1))) * 2 + PI
-                        target_irot   = nint(tan_inv * real(pdim(1)) / TWOPI) + 1
+                        call pftcc%get_polar_coord(real(ixy2), target_irot, target_kpolar)
                         if( target_kpolar < pdim(2) .or. target_kpolar > pdim(3) .or. target_irot < 1 .or. target_irot > pdim(1) ) cycle
                         cnt = cnt + 1
                         if( ixy2(1) < 0 )then
