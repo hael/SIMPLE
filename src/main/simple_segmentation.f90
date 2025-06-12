@@ -7,7 +7,7 @@ use simple_binimage, only: binimage
 use simple_neighs
 implicit none
 
-public :: sobel, automatic_thresh_sobel, canny, otsu_img, otsu_robust_fast, sauvola
+public :: sobel, automatic_thresh_sobel, canny, hough_line, otsu_img, otsu_robust_fast, sauvola
 private
 #include "simple_local_flags.inc"
 
@@ -16,7 +16,7 @@ logical, parameter :: DOPRINT = .false.
 contains
 
     ! classic Sobel edge detection routine
-    subroutine sobel(img_in,thresh)
+    subroutine sobel( img_in, thresh )
         class(image), intent(inout) :: img_in    ! image input and output
         real,         intent(in)    :: thresh(1) ! threshold for Sobel algorithm
         real,  allocatable :: grad(:,:,:), rmat(:,:,:)
@@ -30,11 +30,11 @@ contains
     end subroutine sobel
 
     ! This soubroutine performs sobel edge detection with an automatic iterative
-    ! threshold selection in order to obtian a threshold which leads to
+    ! threshold selection in order to obtain a threshold which leads to
     ! a ratio between foreground and background pixels in the binary image
     ! close to 'goal'. This particular number is selected because it is what needed
     ! for Chiara's particle picking routine.
-    subroutine automatic_thresh_sobel(img, goal, thresh)
+    subroutine automatic_thresh_sobel( img, goal, thresh )
         class(image), intent(inout)    :: img
         real, optional,  intent(in)    :: goal
         real, optional,  intent(inout) :: thresh(1) !to keep track of the selected threshold
@@ -114,7 +114,7 @@ contains
     !        the algorithm it is fixed to its default value (= 0.33)
     !        as suggested in the source.
     ! If it doesn't work as you would like you can also check "Auto Canny" in GIT directory.
-    subroutine canny(img_in,img_out,thresh,lp)
+    subroutine canny( img_in, img_out, thresh, lp )
         class(image),           intent(inout) :: img_in
         class(image), optional, intent(inout) :: img_out
         real,         optional, intent(in)    :: thresh(2)
@@ -127,10 +127,10 @@ contains
         debug = .false.
         ldim  = img_in%get_ldim()
         smpd  = img_in%get_smpd()
-        if(present(img_out)) then
+        if( present(img_out) )then
             call img_out%copy(img_in)
             if(present(thresh)) then
-                call canny_edge(img_out,thresh)
+                call canny_edge(img_out, thresh)
                 return
             endif
             sigma = 0.33
@@ -143,39 +143,39 @@ contains
             tthresh(1) = max(minval(grad), (1.-sigma)*m) !lower
             tthresh(2) = min(maxval(grad), (1.+sigma)*m) !upper
             if(DOPRINT) write(logfhandle,*) 'Selected thresholds: ', tthresh
-            if (present(lp) ) then
-                call canny_edge(img_out,tthresh,lp)
+            if( present(lp) ) then
+                call canny_edge(img_out, tthresh, lp)
             else
-                call canny_edge(img_out,tthresh)
+                call canny_edge(img_out, tthresh)
             endif
         else
-          if( present(thresh) ) then
-              call canny_edge(img_in,thresh)
-              return
-          endif
-          sigma = 0.33
-          allocate(grad(ldim(1),ldim(2),ldim(3)), source=0.)
-          call img_in%calc_gradient(grad)
-          allocate(vector(size(grad)), source=0.)
-          vector(:) = pack(grad, .true.)
-          m = median_nocopy(vector) !Use the gradient, the source talks about the image itself
-          !https://www.pyimagesearch.com/2015/04/06/zero-parameter-automatic-canny-edge-detection-with-python-and-opencv/
-          tthresh(1) = max(minval(grad), (1.-sigma)*m) !lower
-          tthresh(2) = min(maxval(grad), (1.+sigma)*m) !upper
-          write(logfhandle,*) 'Selected thresholds: ', tthresh
-          if (present(lp)) then
-              call canny_edge(img_in,tthresh,lp)
-          else
-              call canny_edge(img_in,tthresh)
-          endif
+            if( present(thresh) )then
+                call canny_edge(img_in, thresh)
+                return
+            endif
+            sigma = 0.33
+            allocate(grad(ldim(1),ldim(2),ldim(3)), source=0.)
+            call img_in%calc_gradient(grad)
+            allocate(vector(size(grad)), source=0.)
+            vector(:) = pack(grad, .true.)
+            m = median_nocopy(vector) !Use the gradient, the source talks about the image itself
+            !https://www.pyimagesearch.com/2015/04/06/zero-parameter-automatic-canny-edge-detection-with-python-and-opencv/
+            tthresh(1) = max(minval(grad), (1.-sigma)*m) !lower
+            tthresh(2) = min(maxval(grad), (1.+sigma)*m) !upper
+            write(logfhandle,*) 'Selected thresholds: ', tthresh
+            if( present(lp) )then
+                call canny_edge(img_in, tthresh, lp)
+            else
+                call canny_edge(img_in, tthresh)
+            endif
         endif
         deallocate(vector,grad)
     end subroutine canny
 
     ! NON_MAX_SUPPRESSION
     ! using the estimates of the Gx and Gy image gradients and the edge direction angle
-    ! determines whether the magnitude of the gradient assumes a local  maximum in the gradient direction
-    subroutine non_max_supp(mat_in,dir_mat)
+    ! determines whether the magnitude of the gradient assumes a local maximum in the gradient direction
+    subroutine non_max_supp( mat_in, dir_mat )
         real,  intent(inout) :: mat_in(:,:,:)
         real,  intent(in)    :: dir_mat(:,:,:)
         real, allocatable    :: temp_mat(:,:,:)
@@ -234,7 +234,7 @@ contains
 
     ! Edges stronger than thresh(2) are mantained, edges weaker than thresh(1)
     ! are discarded, in between edges are marked as "weak edges"
-    subroutine double_thresh(mat_in, thresh)
+    subroutine double_thresh( mat_in, thresh )
         real, intent(inout) :: mat_in(:,:,:)
         real, intent(in)    :: thresh(2)
         real, allocatable   :: tmp(:,:,:)
@@ -252,9 +252,9 @@ contains
         deallocate(tmp)
     end subroutine double_thresh
 
-    ! Canny routine for edge detection, in its classical verison.
+    ! Canny routine for edge detection, in its classical version.
     ! It requires a double threshold.
-    subroutine canny_edge(img_in, thresh, lp)
+    subroutine canny_edge( img_in, thresh, lp )
         class(image), intent(inout) :: img_in    ! input and output image
         real,            intent(in) :: thresh(2) ! low and high thresholds
         real, optional,  intent(in) :: lp(1)     ! lp filtering
@@ -267,7 +267,7 @@ contains
         smpd = img_in%get_smpd()
         allocate(grad(ldim(1),ldim(2),ldim(3)), Dc(ldim(1),ldim(2),ldim(3)), Dr(ldim(1),ldim(2),ldim(3)), &
         & source = 0.)
-        if(ldim(3) /= 1) THROW_HARD("The image has to be 2D!")
+        if(ldim(3) /= 1) THROW_HARD("The image has to be 2D!; canny_edge")
         call Gr%new(ldim,smpd)
         !STEP 1: SMOOTHING
         !Apply a lp to reduce noise (traditionally it would be Gaussian Filter)
@@ -313,6 +313,62 @@ contains
         call img_in%copy(Gr)
         deallocate(grad)
     end subroutine canny_edge
+
+    ! line Hough transform for line detection
+    subroutine hough_line( img_in, threshold )
+        class(image),      intent(inout) :: img_in
+        integer, optional, intent(in)    :: threshold
+        type(image) :: img_edge
+        integer :: thresh, ldim(3), r_size, t_size, i, x, y, t, r, curr_rho_r, draw
+        real    :: diagonal, curr_rho
+        real,    allocatable :: emat(:,:,:), rho(:), theta(:), sins(:), coss(:)
+        integer, allocatable :: line_pos(:,:), accumulator(:,:)
+        real,    parameter :: theta_step=PI/180.
+        integer, parameter :: tthresh=10, rho_step=1
+        ldim     = img_in%get_ldim()
+        if( ldim(3) /= 1 ) THROW_HARD('not yet implemented for 3D; hough_line')
+        if( .not.present(threshold) )then 
+            thresh = threshold
+        else
+            thresh = tthresh
+        endif 
+        ! pre-processing
+        call canny(img_in, img_edge)
+        emat     = img_edge%get_rmat()
+        diagonal = ceiling(sqrt(real(ldim(1))**2. + real(ldim(2))**2.))
+        r_size   = 2*diagonal
+        t_size   = nint(PI/theta_step) + 1
+        allocate(rho(r_size), theta(t_size))
+        rho      = [(-diagonal + (i - 1)*rho_step, i = 1, r_size)]
+        theta    = [(-PI + (i - 1)*theta_step, i = 1, t_size)]
+        allocate(sins(t_size), coss(t_size), source=0.)
+        allocate(accumulator(r_size, t_size), source=0)
+        sins(:)  = sin(theta(:))
+        coss(:)  = cos(theta(:))
+        do x = 1, ldim(1)
+            do y = 1, ldim(2)
+                if( emat(x, y, 1) > 0. )then
+                    do t = 1, t_size
+                        curr_rho                  = x*coss(t) + y*sins(t)
+                        curr_rho_r                = minloc(abs(rho - curr_rho), 1)
+                        accumulator(curr_rho_r,t) = accumulator(curr_rho_r,t) + 1                
+                    enddo
+                endif 
+            enddo 
+        enddo  
+        allocate(line_pos(ldim(1), ldim(2)), source=0)
+        ! finding local maxima
+        do t = 1, t_size
+            do r = 1, r_size
+                if( accumulator(r, t) > thresh .and. theta(t) > PI/2. - 0.01 .and. theta(t) < PI/2. + 0.01 )then 
+                    do draw = 0, accumulator(r,t)
+                        line_pos(1, nint(rho(r)*sins(t))) = accumulator(r,t)
+                    enddo 
+                endif 
+            enddo 
+        enddo 
+        call img_edge%kill()
+    end subroutine hough_line
 
     ! otsu binarization for images, based on the implementation
     ! of otsu algo for 1D vectors
