@@ -579,26 +579,24 @@ contains
         class(polarft_corrcalc), intent(in)  :: self
         real,                    intent(in)  :: xy(2)
         integer,                 intent(out) :: rot, k
-        real :: tan_inv, r_real, k_real
+        real :: r_real, k_real
         call self%get_polar_coord_1(xy, r_real, k_real)
         k   = nint(k_real)
         rot = nint(r_real)
     end subroutine get_polar_coord_2
 
     !>  \brief  returns polar Fourier transform of reference iref
-    function get_ref_pft( self, iref, iseven ) result( pft )
-        class(polarft_corrcalc), intent(in) :: self
-        integer,                 intent(in) :: iref
-        logical,                 intent(in) :: iseven
-        complex(sp), allocatable :: pft(:,:)
+    subroutine get_ref_pft( self, iref, iseven, pft )
+        class(polarft_corrcalc), intent(in)    :: self
+        integer,                 intent(in)    :: iref
+        logical,                 intent(in)    :: iseven
+        complex(sp),             intent(inout) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
         if( iseven )then
-            allocate(pft(self%pftsz,self%kfromto(1):self%kfromto(2)),&
-            source=self%pfts_refs_even(:,:,iref))
+            pft = self%pfts_refs_even(:,:,iref)
         else
-            allocate(pft(self%pftsz,self%kfromto(1):self%kfromto(2)),&
-            source=self%pfts_refs_odd(:,:,iref))
+            pft = self%pfts_refs_odd(:,:,iref)
         endif
-    end function get_ref_pft
+    end subroutine get_ref_pft
 
     integer function get_nrefs( self )
         class(polarft_corrcalc), intent(in) :: self
