@@ -94,9 +94,7 @@ contains
                         call pftcc%get_polar_coord(real(ixy2), target_irot, target_kpolar)
                         if( target_kpolar < pdim(2) .or. target_kpolar > pdim(3) .or. target_irot < 1 .or. target_irot > pdim(1) ) cycle
                         cnt = cnt + 1
-                        if( ixy2(1) < 0 )then
-                            target_irot = target_irot + pdim(1)
-                        endif
+                        if( ixy2(1) < 0 ) target_irot = target_irot + pdim(1)
                         all_coords%tar_find(  cnt) = i
                         all_coords%ori_inds(:,cnt) = [       irot,        kpolar]
                         all_coords%tar_inds(:,cnt) = [target_irot, target_kpolar]
