@@ -81,7 +81,7 @@ contains
         pdim = pftcc%get_pdim()
         sqlp = real((maxval(lims(:,2)))**2)
         cnt  = 0
-        do irot = 1,pdim(1)*2
+        do irot = 1,pdim(1)
             do kpolar = pdim(2),pdim(3)
                 hk    = pftcc%get_coord(irot,kpolar)
                 sqarg = dot_product(hk,hk)
