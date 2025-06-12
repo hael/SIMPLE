@@ -379,9 +379,9 @@ contains
         logical, optional, intent(in)    :: center
         real,    optional, intent(in)    :: xyz_in(3)
         real,    optional, intent(out)   :: xyz_out(3)
-        integer :: filtsz
+        integer :: k, filtsz
         real    :: frc(img_out%get_filtsz()), filter(img_out%get_filtsz())
-        real    :: xy_cavg(2), xyz(3), sharg, crop_factor
+        real    :: gaufilter(img_out%get_filtsz()), xy_cavg(2), xyz(3), sharg, crop_factor
         logical :: do_center
         filtsz      = img_in%get_filtsz()
         crop_factor = real(params_glob%box_crop) / real(params_glob%box)
@@ -429,12 +429,27 @@ contains
             if( params_glob%l_lpset.and.params_glob%l_icm )then
                 ! ICM filter only applied when lp is set and performed below, FRC filtering turned off
             else
-                ! FRC-based filtering
-                call build_glob%clsfrcs%frc_getter(icls, frc)
-                if( any(frc > 0.143) )then
-                    call fsc2optlp_sub(filtsz, frc, filter, merged=params_glob%l_lpset)
+                if(trim(params_glob%gauref).eq.'yes')then
+                    filter     = 1.0
+                    ! FRC-based optimal filter
+                    call build_glob%clsfrcs%frc_getter(icls, frc)
+                    if( any(frc > 0.143) )then
+                        call fsc2optlp_sub(filtsz, frc, filter, merged=params_glob%l_lpset)
+                    endif
+                    ! gaussian filter
+                    call gaussian_filter(params_glob%gaufreq, img_in%get_smpd(), img_in%get_box(), gaufilter)
+                    ! minimum filter
+                    forall(k = 1:filtsz) filter(k) = min(filter(k), gaufilter(k))
                     call img_in%fft() ! needs to be here in case the shift was never applied (above)
                     call img_in%apply_filter_serial(filter)
+                else
+                    ! FRC-based filtering
+                    call build_glob%clsfrcs%frc_getter(icls, frc)
+                    if( any(frc > 0.143) )then
+                        call fsc2optlp_sub(filtsz, frc, filter, merged=params_glob%l_lpset)
+                        call img_in%fft() ! needs to be here in case the shift was never applied (above)
+                        call img_in%apply_filter_serial(filter)
+                    endif
                 endif
             endif
         endif
