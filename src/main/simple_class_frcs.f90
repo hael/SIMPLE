@@ -39,7 +39,7 @@ contains
     procedure          :: estimate_res
     procedure          :: estimate_find_for_eoavg
     procedure          :: estimate_lp_for_align
-    procedure          :: pad
+    procedure          :: pad, crop
     ! I/O
     procedure          :: read
     procedure          :: write
@@ -328,7 +328,7 @@ contains
         type(class_frcs),  optional, intent(out)   :: self_out ! in/out-of-place
         type(class_frcs) :: tmp
         if( newbox < self%box4frc_calc )then
-            THROW_HARD('New <= old filter size; downsample')
+            THROW_HARD('New < old filter size; pad')
         else if( newbox == self%box4frc_calc )then
             ! copy
             if( present(self_out) )then
@@ -360,6 +360,45 @@ contains
             call tmp%kill
         endif
     end subroutine pad
+
+    ! Zero-padding of FRC vectors given new signal size
+    subroutine crop( self, newsmpd, newbox, self_out )
+        class(class_frcs),           intent(inout) :: self
+        real,                        intent(in)    :: newsmpd
+        integer,                     intent(in)    :: newbox
+        type(class_frcs),  optional, intent(out)   :: self_out ! in/out-of-place
+        type(class_frcs) :: tmp
+        if( newbox < self%box4frc_calc )then
+            if( present(self_out) )then
+                call self_out%new(self%ncls, newbox, newsmpd, self%nstates)
+                self_out%frcs(:,:,:) = self%frcs(:,:,:self_out%filtsz)
+            else
+                call tmp%new(self%ncls, newbox, newsmpd, self%nstates)
+                tmp%frcs(:,:,:) = self%frcs(:,:,:tmp%filtsz)
+            endif
+        else if( newbox == self%box4frc_calc )then
+            ! copy
+            if( present(self_out) )then
+                call self_out%new(self%ncls, newbox, newsmpd, self%nstates)
+                self_out%frcs(:,:,:) = self%frcs(:,:,:)
+            else
+                call tmp%new(self%ncls, newbox, newsmpd, self%nstates)
+                tmp%frcs(:,:,:) = self%frcs(:,:,:)
+            endif
+        else
+            ! padding
+            THROW_HARD('New > old filter size; crop')
+        endif
+        if( present(self_out) )then
+            ! done
+        else
+            ! in-place
+            call self%kill
+            call self%new(tmp%ncls, tmp%box4frc_calc, tmp%smpd, tmp%nstates)
+            self%frcs(:,:,:) = tmp%frcs(:,:,:)
+            call tmp%kill
+        endif
+    end subroutine crop
 
     ! I/O
 

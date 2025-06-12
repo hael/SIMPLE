@@ -797,11 +797,10 @@ contains
         type(parameters)          :: params
         type(builder)             :: build
         type(qsys_env)            :: qenv
-        character(len=LONGSTRLEN) :: refs, refs_even, refs_odd, str, str_iter, finalcavgs, refs_sc
-        integer                   :: iter, cnt, iptcl, ptclind, fnr, iter_switch2euclid
         type(chash)               :: job_descr
-        real                      :: frac_srch_space
-        integer                   :: nthr_here
+        character(len=LONGSTRLEN) :: refs, refs_even, refs_odd, str, str_iter, finalcavgs, refs_sc
+        real                      :: frac_srch_space, smpd_refs
+        integer                   :: ldim_refs(3), nthr_here, iter, cnt, iptcl, ptclind, fnr, iter_switch2euclid, ncls
         logical                   :: l_stream, l_switch2euclid, l_griddingset, l_converged, l_ml_reg, l_scale_inirefs
         call cline%set('prg','cluster2D')
         call set_cluster2D_defaults( cline )
@@ -877,7 +876,7 @@ contains
         call cline_cavgassemble%set('prg', 'cavgassemble')
         call cline_make_cavgs%set(  'prg', 'make_cavgs')
         call cline_calc_sigma%set(  'prg', 'calc_group_sigmas')
-        ! execute initialiser
+        ! Initial references
         if( .not. cline%defined('refs') )then
             refs             = 'start2Drefs'//params%ext
             params%refs      = trim(refs)
@@ -967,6 +966,25 @@ contains
             call copy_imgfile(trim(params%refs), trim(params%refs_even), params%smpd_crop, [1,params%ncls])
             call copy_imgfile(trim(params%refs), trim(params%refs_odd),  params%smpd_crop, [1,params%ncls])
         else
+            refs = trim(params%refs)
+            call find_ldim_nptcls(refs, ldim_refs, ncls, smpd=smpd_refs)
+            if( params%ncls /= ncls ) THROW_HARD('nrefs /= inputted ncls')
+            ldim_refs(3)     = 1
+            params%refs      = 'start2Drefs'//params%ext
+            params%refs_even = 'start2Drefs_even'//params%ext
+            params%refs_odd  = 'start2Drefs_odd'//params%ext
+            if( ldim_refs(1) == params%box_crop )then
+                call copy_imgfile(refs, params%refs, params%smpd_crop, [1,params%ncls])
+            else
+                call cline_scalerefs%set('stk',    refs)
+                call cline_scalerefs%set('outstk', params%refs)
+                call cline_scalerefs%set('smpd',   smpd_refs)
+                call cline_scalerefs%set('newbox', params%box_crop)
+                call cline_scalerefs%set('nthr',   nthr_here)
+                call xscale%execute(cline_scalerefs)
+            endif
+            call copy_imgfile(params%refs, params%refs_even, params%smpd_crop, [1,params%ncls])
+            call copy_imgfile(params%refs, params%refs_odd,  params%smpd_crop, [1,params%ncls])
             refs = trim(params%refs)
         endif
         ! variable neighbourhood size
@@ -1261,7 +1279,7 @@ contains
                     call xmake_cavgs%execute(cline_make_cavgs)
                 endif
                 call cline%set('refs', params%refs)
-                ! put back the pointer to builder (no idea why this is needed but it bugs out otherwise)
+                ! put back the pointer to builder
                 build_glob => build
             endif
             params%startit = startit

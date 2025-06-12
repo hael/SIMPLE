@@ -595,6 +595,7 @@ contains
             endif
             ! gaussian filter
             if(trim(params_glob%gauref).eq.'yes')then
+                allocate(gaufilter(filtsz),source=0.)
                 call gaussian_filter(params_glob%gaufreq, params_glob%smpd, params_glob%box, gaufilter)
                 ! take the minimum of FRC-based & gaussian filters
                 forall(k = 1:filtsz) filter(k) = min(filter(k), gaufilter(k))
@@ -677,6 +678,7 @@ contains
     ! Second integer: KFROMTO(1)
     ! Third  integer: KFROMTO(2)
     ! Fourth integer: NCLS
+    ! input/ouput in kind=dp but read/written in kind=sp
     subroutine write_pft_array( array, fname )
         complex(dp),      intent(in) :: array(pftsz,kfromto(1):kfromto(2),ncls)
         character(len=*), intent(in) :: fname
@@ -684,7 +686,7 @@ contains
         call fopen(funit, fname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
         call fileiochk("write_pft_array: "//trim(fname),io_stat)
         write(unit=funit,pos=1) [pftsz, kfromto(1), kfromto(2), ncls]
-        write(unit=funit,pos=(4*sizeof(funit)+1)) array
+        write(unit=funit,pos=(4*sizeof(funit)+1)) cmplx(array,kind=sp)
         call fclose(funit)
     end subroutine write_pft_array
 
@@ -695,14 +697,14 @@ contains
         call fopen(funit, fname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
         call fileiochk("write_pft_array: "//trim(fname),io_stat)
         write(unit=funit,pos=1) [pftsz, kfromto(1), kfromto(2), ncls]
-        write(unit=funit,pos=(4*sizeof(funit)+1)) array
+        write(unit=funit,pos=(4*sizeof(funit)+1)) real(array,kind=sp)
         call fclose(funit)
     end subroutine write_ctf2_array
 
     subroutine read_pft_array( fname, array )
         character(len=*),         intent(in)    :: fname
         complex(dp), allocatable, intent(inout) :: array(:,:,:)
-        complex(dp), allocatable :: tmp(:,:,:)
+        complex(sp), allocatable :: tmp(:,:,:)
         integer :: dims(4), funit,io_stat, k
         logical :: samedims
         if( .not.file_exists(trim(fname)) ) THROW_HARD(trim(fname)//' does not exist')
@@ -714,7 +716,9 @@ contains
         endif
         samedims = all(dims == [pftsz, kfromto(1), kfromto(2), ncls])
         if( samedims )then
-            read(unit=funit, pos=(sizeof(dims)+1)) array
+            allocate(tmp(pftsz,kfromto(1):kfromto(2),ncls))
+            read(unit=funit, pos=(sizeof(dims)+1)) tmp
+            array(:,:,:) = cmplx(tmp(:,:,:),kind=dp)
         else
             if( pftsz /= dims(1) )then
                 THROW_HARD('Incompatible PFT size in '//trim(fname)//': '//int2str(pftsz)//' vs '//int2str(dims(1)))
@@ -726,20 +730,20 @@ contains
             read(unit=funit, pos=(sizeof(dims)+1)) tmp
             do k = kfromto(1),kfromto(2)
                 if( (k >= dims(2)) .and. (k <= dims(3)) )then
-                    array(:,k,:) = tmp(:,k,:)   ! from stored array
+                    array(:,k,:) = cmplx(tmp(:,k,:),kind=dp)    ! from stored array
                 else
-                    array(:,k,:) = 0.d0         ! pad with zeros
+                    array(:,k,:) = 0.d0                         ! pad with zeros
                 endif
             enddo
-            deallocate(tmp)
         endif
+        deallocate(tmp)
         call fclose(funit)
     end subroutine read_pft_array
 
     subroutine read_ctf2_array( fname, array )
         character(len=*),      intent(in)    :: fname
         real(dp), allocatable, intent(inout) :: array(:,:,:)
-        real(dp), allocatable :: tmp(:,:,:)
+        real(sp), allocatable :: tmp(:,:,:)
         integer :: dims(4), funit,io_stat, k
         logical :: samedims
         if( .not.file_exists(trim(fname)) ) THROW_HARD(trim(fname)//' does not exist')
@@ -751,7 +755,9 @@ contains
         endif
         samedims = all(dims == [pftsz, kfromto(1), kfromto(2), ncls])
         if( samedims )then
-            read(unit=funit, pos=(sizeof(dims)+1)) array
+            allocate(tmp(pftsz,kfromto(1):kfromto(2),ncls))
+            read(unit=funit, pos=(sizeof(dims)+1)) tmp
+            array(:,:,:) = real(tmp(:,:,:),dp)
         else
             if( pftsz /= dims(1) )then
                 THROW_HARD('Incompatible PFT size in '//trim(fname)//': '//int2str(pftsz)//' vs '//int2str(dims(1)))
@@ -763,13 +769,13 @@ contains
             read(unit=funit, pos=(sizeof(dims)+1)) tmp
             do k = kfromto(1),kfromto(2)
                 if( (k >= dims(2)) .or. (k <= dims(3)) )then
-                    array(:,k,:) = tmp(:,k,:)   ! from stored array
+                    array(:,k,:) = real(tmp(:,k,:),dp)  ! from stored array
                 else
-                    array(:,k,:) = 0.d0         ! pad with zeros
+                    array(:,k,:) = 0.d0                 ! pad with zeros
                 endif
             enddo
-            deallocate(tmp)
         endif
+        deallocate(tmp)
         call fclose(funit)
     end subroutine read_ctf2_array
 
