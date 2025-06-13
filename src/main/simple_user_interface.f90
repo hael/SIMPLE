@@ -299,6 +299,7 @@ type(simple_input_param) :: ml_reg_chunk
 type(simple_input_param) :: ml_reg_pool
 type(simple_input_param) :: mul
 type(simple_input_param) :: nchunks
+type(simple_input_param) :: nchunksperset
 type(simple_input_param) :: ncls
 type(simple_input_param) :: ncls_start
 type(simple_input_param) :: neg
@@ -1304,7 +1305,8 @@ contains
         call set_param(qsys_reservation, 'qsys_reservation', 'str', 'Name of reserved partition', 'Name of reserved target partition of distributed computer system (SLURM/PBS)', 'give your part', .false., '')
         call set_param(box,            'box',          'num',    'Particle box size', 'Particle box size(in pixels)', '# pixels of box', .true., 0.)
         call set_param(box_extract,    'box_extract',  'num',    'Extracted particle image size', 'Extracted particle image size(in pixels)', 'Extracted particle image size', .false., 0.)
-        call set_param(nchunks,        'nchunks',      'num',    'Number of subsets to classify simultaneously', 'Maximum number of particles subsets (chunks) to classify simultaneously', '# of substsets', .true., 2.)
+        call set_param(nchunks,        'nchunks',      'num',    'Number of subsets to classify simultaneously', 'Maximum number of particles subsets (chunks) to classify simultaneously', '# of subsets', .true., 2.)
+        call set_param(nchunksperset,  'nchunksperset','num',    'Number of subsets to group', 'Number of particles subsets (chunks) to group into a independent set', '# of subsets per set', .false., 1.)
         call set_param(nptcls,         'nptcls',       'num',    'Number of particles', 'Number of particle images', '# particles', .true., 0.)
         call set_param(nptcls_per_cls, 'nptcls_per_cls','num',   'Number of particles per cluster', 'Initial number of particles per cluster{35}', '# initial particles per cluster{35}', .false., 500.)
         call set_param(outstk,         'outstk',       'file',   'Output stack name', 'Output images stack name', 'e.g. outstk.mrc', .false., '')
@@ -1985,13 +1987,14 @@ contains
         &'Consolidates all chunk classes into one set of cavgs',&! descr_short
         &'Consolidates all chunk classes into one set of cavgs',&! descr_long
         &'simple_exec',&                                         ! executable
-        &0, 1, 0, 0, 0, 0, 0, .true.)                            ! # entries in each group, requires sp_project
+        &0, 2, 0, 0, 0, 0, 0, .true.)                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call consolidate_chunks_cavgs%set_input('parm_ios', 1, 'dir_target', 'file', 'Target directory',&
         &'Directory where the chunks have been generated', 'e.g. 1_cluster2D_subsets', .true., '')
+        call consolidate_chunks_cavgs%set_input('parm_ios', 2, nchunksperset, gui_advanced=.false.)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2139,13 +2142,13 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &0, 0, 0,11, 2, 1, 4, .true.,&                                                            ! # entries in each group, requires sp_project
+        &0, 1, 0,10, 2, 1, 4, .true.,&                                                            ! # entries in each group, requires sp_project
         &gui_advanced=.false., gui_submenu_list = "cluster 2D,compute")                           ! GUI           
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        ! <empty>
+        call cluster2D_subsets%set_input('parm_ios', 1, nchunksperset, gui_submenu="cluster 2D", gui_advanced=.false.)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2169,7 +2172,6 @@ contains
         &'max # of particles per class', .false., real(MAXPOP_CLS), gui_submenu="search", gui_advanced=.true.)
         call cluster2D_subsets%set_input('srch_ctrls', 10, 'nsample_max', 'num', 'Maximum # of particles sampled', 'Maximum # of particles sampled with autosampling scheme',&
         &'max # particles to sample', .false., real(MAXPOP_PTCLS), gui_submenu="search", gui_advanced=.true.)
-        call cluster2D_subsets%set_input('srch_ctrls', 11, autosample, gui_submenu="search")
         ! filter controls
         call cluster2D_subsets%set_input('filt_ctrls', 1, hp, gui_submenu="cluster 2D")
         call cluster2D_subsets%set_input('filt_ctrls', 2, 'cenlp',      'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
@@ -2178,8 +2180,12 @@ contains
         ! mask controls
         call cluster2D_subsets%set_input('mask_ctrls', 1, mskdiam, gui_submenu="cluster 2D", gui_advanced=.false.)
         ! computer controls
-        call cluster2D_subsets%set_input('comp_ctrls', 1, nchunks, gui_submenu="compute", gui_advanced=.false.)
+        call cluster2D_subsets%set_input('comp_ctrls', 1, nparts, gui_submenu="compute", gui_advanced=.false.)
+        cluster2D_subsets%comp_ctrls(1)%descr_short = 'Total number of computing nodes'
         call cluster2D_subsets%set_input('comp_ctrls', 2, nparts_chunk, gui_submenu="compute", gui_advanced=.false.)
+        cluster2D_subsets%comp_ctrls(2)%required          = .true.
+        cluster2D_subsets%comp_ctrls(2)%descr_long        = 'Number of computing nodes allocated to 2D analysis of each particles subset'
+        cluster2D_subsets%comp_ctrls(2)%descr_placeholder = '# nodes per subset'
         call cluster2D_subsets%set_input('comp_ctrls', 3, nthr, gui_submenu="compute", gui_advanced=.false.)
         call cluster2D_subsets%set_input('comp_ctrls', 4, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and &
         &management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
