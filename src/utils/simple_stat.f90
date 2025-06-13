@@ -10,7 +10,8 @@ use simple_is_check_assert
 implicit none
 
 public :: avg_sdev, avg_frac_smallest, moment, moment_serial, pearsn, spear, normalize, normalize_sigm, normalize_minmax, std_mean_diff
-public :: corrs2weights, corr2distweight, analyze_smat, dmat2smat, smat2dmat, merge_smats, merge_dmats, estimate_bimodality_of_cluster
+public :: corrs2weights, corr2distweight, analyze_smat, dmat2smat, smat2dmat, scores2scores_percen, dists2scores_percen, merge_smats
+public :: merge_dmats, estimate_bimodality_of_cluster
 public :: calc_ap_pref, medoid_from_smat, medoid_ranking_from_smat, cluster_smat_bin, medoid_from_dmat, z_scores, pearsn_serial_8, kstwo
 public :: rank_sum_weights, rank_inverse_weights, rank_centroid_weights, rank_exponent_weights
 public :: conv2rank_weights, calc_stats, pearsn_serial, norm_corr, norm_corr_8, skewness, kurtosis
@@ -1046,6 +1047,19 @@ contains
             dmat = -log(dmat)
         endwhere
     end function smat2dmat
+
+    subroutine scores2scores_percen( scores )
+        real, intent(inout) :: scores(:)
+        call normalize_minmax(scores)     ! scores [0,1]
+        scores = 100. * scores            ! scores [0,100]
+    end subroutine scores2scores_percen
+
+    subroutine dists2scores_percen( dists )
+        real, intent(inout) :: dists(:)
+        call normalize_minmax(dists)     ! distances [0,1]
+        dists = -100. * (dists - 1.)     ! scores    [0,100
+        where( dists < SMALL) dists = 0. ! 4 pretty printing
+    end subroutine dists2scores_percen
 
     function merge_smats( smat1, smat2 ) result( smat )
         real, intent(in)  :: smat1(:,:), smat2(:,:)

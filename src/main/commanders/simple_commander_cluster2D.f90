@@ -2053,6 +2053,14 @@ contains
         allocate(labels(ncls_sel), i_medoids(nclust), source=0)
         call kmed%get_labels(labels)
         call kmed%get_medoids(i_medoids)
+        ! update project
+        do iclust = 1, nclust
+            do icls = 1, ncls_sel 
+                if( labels(icls) == iclust )then
+                    call spproj%os_cls2D%set(clsinds(icls),'cluster',iclust) ! project update
+                endif
+            enddo
+        enddo
         ! prep mask
         call img_msk%new([params%box,params%box,1], smpd)
         img_msk = 1.
@@ -2078,6 +2086,16 @@ contains
                 clust_order = scores2order(clust_info_arr(:)%homogeneity)
                 call rank_clusters(nclust, clust_order)
                 call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_ranked_homo', trim(params%ext))
+                call put_back_clustering_copy
+                ! rank clusters based on their clustering score
+                clust_order = scores2order(clust_info_arr(:)%clustscore)
+                call rank_clusters(nclust, clust_order)
+                call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_ranked_score', trim(params%ext))
+                call put_back_clustering_copy
+                ! rank clusters based on their spectral score
+                clust_order = scores2order(clust_info_arr(:)%specscore)
+                call rank_clusters(nclust, clust_order)
+                call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_ranked_spec', trim(params%ext))
                 call put_back_clustering_copy
                 ! rank clusters based on their histogram score
                 call copy_clustering
@@ -2118,20 +2136,15 @@ contains
                 ! make good/bad assignment
                 clust_info_arr(:)%good_bad           = 0
                 clust_info_arr(:rank_bound)%good_bad = 1
-                ! report cluster scores & resolution
+                ! report cluster info
                 do iclust = 1, nclust
-                    clust_info_arr(iclust)%score = 0.
-                    cnt = 0
-                    do icls = 1, ncls_sel 
-                        if( labels(icls) == iclust )then
-                            call spproj%os_cls2D%set(clsinds(icls),'cluster',iclust) ! project update
-                            clust_info_arr(iclust)%score = clust_info_arr(iclust)%score + corrmat(icls,i_medoids(iclust))
-                            cnt = cnt + 1
-                        endif
-                    enddo
-                    clust_info_arr(iclust)%score = clust_info_arr(iclust)%score / real(cnt)
-                    write(logfhandle,'(A,f7.3,A,f5.1,A,f5.1,A,I3)') 'cluster_ranked'//int2str_pad(iclust,2)//'.mrc, score ',&
-                    &clust_info_arr(iclust)%score, ' res ', clust_info_arr(iclust)%res, ' homogeneity(%) ', clust_info_arr(iclust)%homogeneity,&
+                    write(logfhandle,'(A,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,I3)') 'cluster_ranked'//int2str_pad(iclust,2)//'.mrc',&
+                    &' resolution(A) ',   clust_info_arr(iclust)%res,& 
+                    &' resscore(%) ',     clust_info_arr(iclust)%resscore,& 
+                    &' homogeneity(%) ',  clust_info_arr(iclust)%homogeneity,&
+                    &' clustscore(%) ',   clust_info_arr(iclust)%clustscore,&
+                    &' specscore(%) ',    clust_info_arr(iclust)%specscore,& 
+                    &' histscore(%) ',    clust_info_arr(iclust)%histscore,&
                     &' good_bad_assign ', clust_info_arr(iclust)%good_bad
                 end do
                 ! check number of particles selected
@@ -2212,31 +2225,35 @@ contains
         subroutine calc_scores
             ! HOMOGENEITY SCORE
             clust_info_arr(:)%homogeneity = clust_info_arr(:)%euclid
-            call normalize_minmax(clust_info_arr(:)%homogeneity)
-            ! invert and turn into %
-            clust_info_arr(:)%homogeneity = -100. * (clust_info_arr(:)%homogeneity - 1.)
-            where( clust_info_arr(:)%homogeneity < SMALL) clust_info_arr(:)%homogeneity = 0.
+            call dists2scores_percen(clust_info_arr(:)%homogeneity)
             ! RESOLUTION SCORE
             clust_info_arr(:)%resscore = clust_info_arr(:)%res
-            call normalize_minmax(clust_info_arr(:)%resscore)
-            ! invert and turn into %
-            clust_info_arr(:)%resscore = -100. * (clust_info_arr(:)%resscore - 1.)
-            where( clust_info_arr(:)%resscore < SMALL) clust_info_arr(:)%resscore = 0.
-            ! HISTOGRAM SCORE
+            call dists2scores_percen(clust_info_arr(:)%resscore)
+            ! FM CORR, CLUSTSCORE & HISTOGRAM SCORE
             do iclust = 1, nclust
-                clust_info_arr(iclust)%histscore = 0.
+                clust_info_arr(iclust)%corrfmscore = 0.
+                clust_info_arr(iclust)%clustscore  = 0.
+                clust_info_arr(iclust)%specscore   = 0.
+                clust_info_arr(iclust)%histscore   = 0.
                 cnt = 0
                 do icls = 1, ncls_sel 
                     if( labels(icls) == iclust )then
-                        clust_info_arr(iclust)%histscore = clust_info_arr(iclust)%histscore + dmat_hist(icls,i_medoids(iclust))
+                        clust_info_arr(iclust)%corrfmscore = clust_info_arr(iclust)%corrfmscore +   corrmat(icls,i_medoids(iclust))
+                        clust_info_arr(iclust)%clustscore  = clust_info_arr(iclust)%clustscore  +      dmat(icls,i_medoids(iclust))
+                        clust_info_arr(iclust)%specscore   = clust_info_arr(iclust)%specscore   +  dmat_pow(icls,i_medoids(iclust))
+                        clust_info_arr(iclust)%histscore   = clust_info_arr(iclust)%histscore   + dmat_hist(icls,i_medoids(iclust))
                         cnt = cnt + 1
                     endif
                 enddo
-                clust_info_arr(iclust)%histscore = clust_info_arr(iclust)%histscore / real(cnt)
+                clust_info_arr(iclust)%corrfmscore = clust_info_arr(iclust)%corrfmscore / real(cnt)
+                clust_info_arr(iclust)%clustscore  = clust_info_arr(iclust)%clustscore  / real(cnt)
+                clust_info_arr(iclust)%specscore   = clust_info_arr(iclust)%specscore   / real(cnt)
+                clust_info_arr(iclust)%histscore   = clust_info_arr(iclust)%histscore   / real(cnt)
             end do
-            call normalize_minmax(clust_info_arr(:)%histscore)
-            clust_info_arr(:)%histscore = -100. * (clust_info_arr(:)%histscore - 1.)
-            where( clust_info_arr(:)%histscore < SMALL) clust_info_arr(:)%histscore = 0.
+            call scores2scores_percen(clust_info_arr(:)%corrfmscore)
+            call dists2scores_percen(clust_info_arr(:)%clustscore)
+            call dists2scores_percen(clust_info_arr(:)%specscore)
+            call dists2scores_percen(clust_info_arr(:)%histscore)
         end subroutine calc_scores
 
         subroutine copy_clustering
