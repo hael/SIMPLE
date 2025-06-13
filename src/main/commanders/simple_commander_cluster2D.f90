@@ -1902,7 +1902,7 @@ contains
         use simple_histogram,  only: histogram
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        real,             parameter   :: HP_SPEC = 20., LP_SPEC = 6., FRAC_BEST_CAVGS=0.25
+        real,             parameter   :: HP_SPEC = 20., LP_SPEC = 6., FRAC_BEST_CAVGS=0.5, SCORE_THRES=40.
         integer,          parameter   :: NCLS_DEFAULT = 20, NCLS_SMALL_DEFAULT = 5, NHISTBINS = 128
         logical,          parameter   :: DEBUG = .true.
         type(image),      allocatable :: cavg_imgs(:), cluster_imgs(:), cluster_imgs_aligned(:)
@@ -2077,37 +2077,34 @@ contains
                 end do
                 ! calculate scores
                 call calc_scores
+                ! re-normalize scores
+                call renormalize_scores(SCORE_THRES)
                 write(logfhandle,'(A)') '>>> ROTATING & SHIFTING UNMASKED, UNFILTERED CLASS AVERAGES'
                 ! re-create cavg_imgs
                 call dealloc_imgarr(cavg_imgs)
                 cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
                 ! rank clusters based on their homogeneity
-                call copy_clustering
-                clust_order = scores2order(clust_info_arr(:)%homogeneity)
-                call rank_clusters(nclust, clust_order)
-                call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_ranked_homo', trim(params%ext))
-                call put_back_clustering_copy
+                ! call copy_clustering
+                ! clust_order = scores2order(clust_info_arr(:)%homogeneity)
+                ! call rank_clusters(nclust, clust_order)
+                ! call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_ranked_homo', trim(params%ext))
+                ! call put_back_clustering_copy
                 ! rank clusters based on their clustering score
-                clust_order = scores2order(clust_info_arr(:)%clustscore)
-                call rank_clusters(nclust, clust_order)
-                call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_ranked_score', trim(params%ext))
-                call put_back_clustering_copy
-                ! rank clusters based on their spectral score
-                clust_order = scores2order(clust_info_arr(:)%specscore)
-                call rank_clusters(nclust, clust_order)
-                call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_ranked_spec', trim(params%ext))
-                call put_back_clustering_copy
-                ! rank clusters based on their histogram score
+                ! clust_order = scores2order(clust_info_arr(:)%clustscore)
+                ! call rank_clusters(nclust, clust_order)
+                ! call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_ranked_score', trim(params%ext))
+                ! call put_back_clustering_copy
+                ! rank clusters based on their joint score
                 call copy_clustering
-                clust_order = scores2order(clust_info_arr(:)%histscore)
+                clust_order = scores2order(clust_info_arr(:)%jointscore)
                 call rank_clusters(nclust, clust_order)
-                call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_ranked_hist', trim(params%ext))
-                call put_back_clustering_copy
+                call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_ranked', trim(params%ext))
+                ! call put_back_clustering_copy
                 ! rank clusters based on their resolution score
-                call copy_clustering
-                clust_order = scores2order(clust_info_arr(:)%resscore)
-                call rank_clusters(nclust, clust_order)
-                call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_ranked_res', trim(params%ext))
+                ! call copy_clustering
+                ! clust_order = scores2order(clust_info_arr(:)%resscore)
+                ! call rank_clusters(nclust, clust_order)
+                ! call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_ranked_res', trim(params%ext))
                 if( cline%defined('res_cutoff') )then
                     ! rank boundary based on resolution cutoff
                     rank_bound = 2
@@ -2138,13 +2135,12 @@ contains
                 clust_info_arr(:rank_bound)%good_bad = 1
                 ! report cluster info
                 do iclust = 1, nclust
-                    write(logfhandle,'(A,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,I3)') 'cluster_ranked'//int2str_pad(iclust,2)//'.mrc',&
+                    write(logfhandle,'(A,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,I3)') 'cluster_ranked'//int2str_pad(iclust,2)//'.mrc',&
                     &' resolution(A) ',   clust_info_arr(iclust)%res,& 
                     &' resscore(%) ',     clust_info_arr(iclust)%resscore,& 
                     &' homogeneity(%) ',  clust_info_arr(iclust)%homogeneity,&
                     &' clustscore(%) ',   clust_info_arr(iclust)%clustscore,&
-                    &' specscore(%) ',    clust_info_arr(iclust)%specscore,& 
-                    &' histscore(%) ',    clust_info_arr(iclust)%histscore,&
+                    &' jointscore(%) ',    clust_info_arr(iclust)%jointscore,&
                     &' good_bad_assign ', clust_info_arr(iclust)%good_bad
                 end do
                 ! check number of particles selected
@@ -2233,28 +2229,36 @@ contains
             do iclust = 1, nclust
                 clust_info_arr(iclust)%corrfmscore = 0.
                 clust_info_arr(iclust)%clustscore  = 0.
-                clust_info_arr(iclust)%specscore   = 0.
-                clust_info_arr(iclust)%histscore   = 0.
                 cnt = 0
                 do icls = 1, ncls_sel 
                     if( labels(icls) == iclust )then
                         clust_info_arr(iclust)%corrfmscore = clust_info_arr(iclust)%corrfmscore +   corrmat(icls,i_medoids(iclust))
                         clust_info_arr(iclust)%clustscore  = clust_info_arr(iclust)%clustscore  +      dmat(icls,i_medoids(iclust))
-                        clust_info_arr(iclust)%specscore   = clust_info_arr(iclust)%specscore   +  dmat_pow(icls,i_medoids(iclust))
-                        clust_info_arr(iclust)%histscore   = clust_info_arr(iclust)%histscore   + dmat_hist(icls,i_medoids(iclust))
                         cnt = cnt + 1
                     endif
                 enddo
                 clust_info_arr(iclust)%corrfmscore = clust_info_arr(iclust)%corrfmscore / real(cnt)
                 clust_info_arr(iclust)%clustscore  = clust_info_arr(iclust)%clustscore  / real(cnt)
-                clust_info_arr(iclust)%specscore   = clust_info_arr(iclust)%specscore   / real(cnt)
-                clust_info_arr(iclust)%histscore   = clust_info_arr(iclust)%histscore   / real(cnt)
             end do
             call scores2scores_percen(clust_info_arr(:)%corrfmscore)
             call dists2scores_percen(clust_info_arr(:)%clustscore)
-            call dists2scores_percen(clust_info_arr(:)%specscore)
-            call dists2scores_percen(clust_info_arr(:)%histscore)
         end subroutine calc_scores
+
+        subroutine renormalize_scores( percen_thres )
+            real, intent(in) :: percen_thres
+            ! HOMOGENEITY SCORE
+            where(clust_info_arr(:)%homogeneity <= percen_thres ) clust_info_arr(:)%homogeneity = 0.
+            call scores2scores_percen(clust_info_arr(:)%homogeneity)
+            ! RESOLUTION SCORE
+            where(clust_info_arr(:)%resscore    <= percen_thres ) clust_info_arr(:)%resscore    = 0.
+            call scores2scores_percen(clust_info_arr(:)%resscore)
+            ! CLUSTSCORE 
+            where(clust_info_arr(:)%clustscore  <= percen_thres ) clust_info_arr(:)%clustscore  = 0.
+            call scores2scores_percen(clust_info_arr(:)%clustscore)
+            ! JOINT SCORE 
+            clust_info_arr(:)%jointscore = clust_info_arr(:)%homogeneity + clust_info_arr(:)%resscore + clust_info_arr(:)%clustscore
+            call scores2scores_percen(clust_info_arr(:)%jointscore)
+        end subroutine renormalize_scores
 
         subroutine copy_clustering
             clust_info_arr_copy = clust_info_arr
