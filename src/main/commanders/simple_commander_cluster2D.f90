@@ -941,7 +941,7 @@ contains
                         end do
                         call build%spproj%write_segment_inside(params%oritype, params%projfile)
                         call cline_make_cavgs%set('refs', params%refs)
-                        call xmake_cavgs%execute(cline_make_cavgs)
+                        call xmake_cavgs%execute_safe(cline_make_cavgs)
                         l_scale_inirefs = .false.
                     case DEFAULT
                         THROW_HARD('Unsupported mode of initial class generation CLS_INIT='//trim(params%cls_init))
@@ -960,31 +960,12 @@ contains
                 call cline_scalerefs%set('smpd',   params%smpd)
                 call cline_scalerefs%set('newbox', params%box_crop)
                 call cline_scalerefs%set('nthr',   nthr_here)
-                call xscale%execute(cline_scalerefs)
+                call xscale%execute_safe(cline_scalerefs)
                 call simple_rename(refs_sc, params%refs)
             endif
             call copy_imgfile(trim(params%refs), trim(params%refs_even), params%smpd_crop, [1,params%ncls])
             call copy_imgfile(trim(params%refs), trim(params%refs_odd),  params%smpd_crop, [1,params%ncls])
         else
-            refs = trim(params%refs)
-            call find_ldim_nptcls(refs, ldim_refs, ncls, smpd=smpd_refs)
-            if( params%ncls /= ncls ) THROW_HARD('nrefs /= inputted ncls')
-            ldim_refs(3)     = 1
-            params%refs      = 'start2Drefs'//params%ext
-            params%refs_even = 'start2Drefs_even'//params%ext
-            params%refs_odd  = 'start2Drefs_odd'//params%ext
-            if( ldim_refs(1) == params%box_crop )then
-                call copy_imgfile(refs, params%refs, params%smpd_crop, [1,params%ncls])
-            else
-                call cline_scalerefs%set('stk',    refs)
-                call cline_scalerefs%set('outstk', params%refs)
-                call cline_scalerefs%set('smpd',   smpd_refs)
-                call cline_scalerefs%set('newbox', params%box_crop)
-                call cline_scalerefs%set('nthr',   nthr_here)
-                call xscale%execute(cline_scalerefs)
-            endif
-            call copy_imgfile(params%refs, params%refs_even, params%smpd_crop, [1,params%ncls])
-            call copy_imgfile(params%refs, params%refs_odd,  params%smpd_crop, [1,params%ncls])
             refs = trim(params%refs)
         endif
         ! variable neighbourhood size
@@ -1162,21 +1143,23 @@ contains
         type(calc_group_sigmas_commander) :: xcalc_group_sigmas
         type(scale_commander)             :: xscale
         type(prob_tab2D_commander_distr)  :: xprob_tab2D_distr
-        type(cmdline)              :: cline_make_cavgs, cline_scalerefs, cline_prob_tab2D
-        type(parameters)           :: params
-        type(builder), target      :: build
-        type(starproject)          :: starproj
-        character(len=LONGSTRLEN)  :: finalcavgs, orig_objfun, refs_sc, fname
-        integer                    :: startit, ncls_from_refs, lfoo(3), i, cnt, iptcl, ptclind
-        integer                    :: iter_switch2euclid, j, io_stat, funit, class_ind, class_max
-        logical                    :: converged, l_stream, l_switch2euclid, l_griddingset, l_ml_reg, l_scale_inirefs
-        real,    allocatable       :: corrs(:), corrs_all(:), class_all(:)
-        integer, allocatable       :: order(:), class_cnt(:)
+        type(cmdline)             :: cline_make_cavgs, cline_scalerefs, cline_prob_tab2D
+        type(parameters)          :: params
+        type(builder),     target :: build
+        type(starproject)         :: starproj
+        character(len=LONGSTRLEN) :: finalcavgs, orig_objfun, refs, refs_sc, fname
+        real,         allocatable :: corrs(:), corrs_all(:)
+        integer,      allocatable :: order(:), class_cnt(:), class_all(:)
+        real    :: smpd_refs
+        integer :: ldim_refs(3), startit, ncls_from_refs, i, cnt, iptcl, ptclind
+        integer :: iter_switch2euclid, j, io_stat, funit, class_ind, class_max
+        logical :: converged, l_stream, l_switch2euclid, l_griddingset, l_ml_reg, l_scale_inirefs
         call cline%set('oritype', 'ptcl2D')
-        if( .not. cline%defined('maxits') ) call cline%set('maxits', 30.)
+        if( .not. cline%defined('maxits') ) call cline%set('maxits', 30)
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
         if( cline%defined('refs') )then
-            call find_ldim_nptcls(params%refs, lfoo, ncls_from_refs)
+            call find_ldim_nptcls(params%refs, ldim_refs, ncls_from_refs, smpd=smpd_refs)
+            ldim_refs(3) = 1
             ! consistency check
             if( params%ncls /=  ncls_from_refs ) THROW_HARD('nrefs /= inputted ncls')
         endif
@@ -1219,7 +1202,7 @@ contains
                             call cline%set('ncls', params%ncls)
                             call cline_make_cavgs%set('ncls', params%ncls)
                             call cline_make_cavgs%set('refs', params%refs)
-                            call xmake_cavgs%execute(cline_make_cavgs)
+                            call xmake_cavgs%execute_safe(cline_make_cavgs)
                             l_scale_inirefs  = .false.
                         else
                             if( trim(params%refine).eq.'inpl' )then
@@ -1228,7 +1211,7 @@ contains
                                 call cline_make_cavgs%set('ncls', params%ncls)
                                 call cline_make_cavgs%delete('tseries')
                                 call cline_make_cavgs%set('refs', params%refs)
-                                call xmake_cavgs%execute(cline_make_cavgs)
+                                call xmake_cavgs%execute_safe(cline_make_cavgs)
                                 l_scale_inirefs  = .false.
                             else
                                 call selection_from_tseries_imgfile(build%spproj, params%refs, params%box, params%ncls)
@@ -1256,7 +1239,7 @@ contains
                             end do
                             call build%spproj%write_segment_inside(params%oritype, params%projfile)
                             call cline_make_cavgs%set('refs', params%refs)
-                            call xmake_cavgs%execute(cline_make_cavgs)
+                            call xmake_cavgs%execute_safe(cline_make_cavgs)
                             l_scale_inirefs  = .false.
                         case DEFAULT
                             THROW_HARD('Unsupported mode of initial class generation CLS_INIT='//trim(params%cls_init))
@@ -1269,18 +1252,16 @@ contains
                         call cline_scalerefs%set('outstk', refs_sc)
                         call cline_scalerefs%set('smpd',   params%smpd)
                         call cline_scalerefs%set('newbox', params%box_crop)
-                        call xscale%execute(cline_scalerefs)
+                        call xscale%execute_safe(cline_scalerefs)
                         call simple_rename(refs_sc, params%refs)
                     endif
                     call copy_imgfile(trim(params%refs), trim(params%refs_even), params%smpd_crop, [1,params%ncls])
                     call copy_imgfile(trim(params%refs), trim(params%refs_odd),  params%smpd_crop, [1,params%ncls])
                 else
                     call cline_make_cavgs%set('refs', params%refs)
-                    call xmake_cavgs%execute(cline_make_cavgs)
+                    call xmake_cavgs%execute_safe(cline_make_cavgs)
                 endif
                 call cline%set('refs', params%refs)
-                ! put back the pointer to builder
-                build_glob => build
             endif
             params%startit = startit
             params%outfile = 'algndoc'//METADATA_EXT
@@ -1409,8 +1390,8 @@ contains
             end do
             ! print CSV file of correlation vs particle number
             if( trim(params_glob%print_corrs).eq.'yes' )then
-                class_all = build%spproj%os_ptcl2D%get_all('class')
-                class_max = int(maxval(class_all))
+                class_all = build%spproj%os_ptcl2D%get_all_asint('class')
+                class_max = maxval(class_all)
                 ! counting the number of particles in each class
                 allocate(class_cnt(class_max))
                 do class_ind = 1, class_max

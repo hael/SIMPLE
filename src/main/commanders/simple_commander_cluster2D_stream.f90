@@ -2782,8 +2782,6 @@ contains
         if( .not. cline%defined('mkdir')        ) call cline%set('mkdir',       'yes')
         if( .not. cline%defined('center')       ) call cline%set('center',      'yes')
         if( .not. cline%defined('walltime')     ) call cline%set('walltime',     29*60) ! 29 minutes
-        if( .not. cline%defined('nparts_chunk') ) call cline%set('nparts_chunk', 1)
-        if( .not. cline%defined('nchunks')      ) call cline%set('nchunks',      2)
         if( .not. cline%defined('objfun')       ) call cline%set('objfun',       'euclid')
         if( .not. cline%defined('sigma_est')    ) call cline%set('sigma_est',    'global')
         if( .not. cline%defined('reject_cls')   ) call cline%set('reject_cls',   'no')
@@ -2800,7 +2798,6 @@ contains
                     &trim(params%autosample).eq.'yes' )then
                     THROW_HARD('AUTOSAMPLE is only supported with ALGORITHM=ABINITIO2D')
                 endif
-
                 if( trim(params%cls_init).eq.'rand') THROW_HARD('cls_init=rand not supported with ALGORITHM=ABINITIO2D')
             case('ABINITIO2D')
                 ! nothing to do
@@ -2827,8 +2824,11 @@ contains
         endif
         if ( nptcls < 2*nptcls_per_chunk )then
             THROW_WARN('Not enough particles to analyze2D more than one subset')
-            THROW_HARD('Review parameters or use cleanup2D/cluster2D instead')
+            THROW_HARD('Review parameters or use abinitio2D/cleanup2D/cluster2D instead')
         endif
+        ! computational aspects
+        params%nchunks = floor(real(params%nparts)/real(params%nparts_chunk)) ! # of chunks objects used internally
+        write(logfhandle,'(A,I3)') '>>> # OF CHUNKS ANALYSED SIMULTANEOUSLY: ',params%nchunks
         ! General streaming initialization
         call init_cluster2D_stream( cline, spproj_glob, 'dummy.simple', reference_generation=.false.)
         ! Updates folllowing streaming init
@@ -2919,6 +2919,9 @@ contains
         call cline_consolidate%set('dir_target', './')
         call cline_consolidate%set('projfile',   params%projfile)
         call cline_consolidate%set('mkdir',      'no')
+        if( cline%defined('nchunksperset') )then
+            call cline_consolidate%set('nchunksperset', params%nchunksperset)
+        endif
         call xconsolidate%execute_safe(cline_consolidate)
         ! cleanup
         call simple_rmdir(STDERROUT_DIR)
