@@ -118,11 +118,13 @@ end type clust_inpl
     integer          :: good_bad    = 0
     type(clust_inpl) :: algninfo
     real             :: res         = 0.
-    real             :: score       = 0.
+    real             :: corrfmscore = 0.
     real             :: euclid      = 0.
     real             :: homogeneity = 0.
     real             :: resscore    = 0.
+    real             :: specscore   = 0.
     real             :: histscore   = 0.
+    real             :: clustscore  = 0.
     real             :: jointscore  = 0.
 end type clust_info
 
