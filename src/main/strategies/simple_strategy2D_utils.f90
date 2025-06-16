@@ -346,40 +346,25 @@ contains
         end do
     end subroutine write_junk_cavgs
 
-    subroutine write_selected_cavgs( n, imgs, labels, ext, rank_bound )
+    subroutine write_selected_cavgs( n, imgs, labels, ext )
         integer,           intent(in)    :: n
         class(image),      intent(inout) :: imgs(n)
         integer,           intent(in)    :: labels(n)
         character(len=*),  intent(in)    :: ext
-        integer, optional, intent(in)    :: rank_bound
         character(len=:), allocatable    :: fname
         integer :: i, cnt(0:1)
         cnt = 0
-        if( present(rank_bound) )then
-            do i = 1, n
-                if( labels(i) <= rank_bound )then
-                    fname = 'selected_cavgs'//trim(ext)
-                    cnt(0) = cnt(0) + 1
-                    call imgs(i)%write(fname, cnt(0))
-                else
-                    fname  = 'unselected_cavgs'//trim(ext)
-                    cnt(1) = cnt(1) + 1
-                    call imgs(i)%write(fname, cnt(1))
-                endif
-            end do
-        else
-            do i = 1, n
-                if( labels(i) == 0 )then
-                    fname = 'unselected_cavgs'//trim(ext)
-                    cnt(0) = cnt(0) + 1
-                    call imgs(i)%write(fname, cnt(0))
-                else
-                    fname  = 'selected_cavgs'//trim(ext)
-                    cnt(1) = cnt(1) + 1
-                    call imgs(i)%write(fname, cnt(1))
-                endif
-            end do
-        endif
+        do i = 1, n
+            if( labels(i) == 0 )then
+                fname = 'unselected_cavgs'//trim(ext)
+                cnt(0) = cnt(0) + 1
+                call imgs(i)%write(fname, cnt(0))
+            else
+                fname  = 'selected_cavgs'//trim(ext)
+                cnt(1) = cnt(1) + 1
+                call imgs(i)%write(fname, cnt(1))
+            endif
+        end do
     end subroutine write_selected_cavgs
 
     function align_clusters2medoids( labels, i_medoids, cavg_imgs, hp, lp, trs, l_msk ) result( clust_info_arr )
