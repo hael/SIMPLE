@@ -1372,7 +1372,7 @@ contains
         enddo
         !$omp end parallel do
         ! constructing polar common lines
-        pcomlines%legit = .true.
+        pcomlines%legit = .false.
         !$omp parallel do default(shared) private(iref,loc1_3D,loc2_3D,denom,a1,b1,jref,a2,b2,line3D,line2D,irot_real,k_real,irot_l,irot_r,w2,w1)&
         !$omp proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
@@ -1382,24 +1382,15 @@ contains
             a1      = (loc1_3D(3) * loc2_3D(2) - loc1_3D(2) * loc2_3D(3)) / denom
             b1      = (loc1_3D(1) * loc2_3D(3) - loc1_3D(3) * loc2_3D(1)) / denom
             do jref = 1, self%nrefs
-                if( jref == iref )then
-                    pcomlines(iref,jref)%legit = .false.
-                    cycle
-                endif
+                if( jref == iref )cycle
                 ! getting the 3D common line
                 loc1_3D     = loc1s(:,jref)
                 loc2_3D     = loc2s(:,jref)
                 denom       = (loc1_3D(1) * loc2_3D(2) - loc1_3D(2) * loc2_3D(1))
-                if( abs(denom) < TINY )then
-                    pcomlines(iref,jref)%legit = .false.
-                    cycle
-                endif
+                if( abs(denom) < TINY )cycle
                 a2          = (loc1_3D(3) * loc2_3D(2) - loc1_3D(2) * loc2_3D(3)) / denom
                 b2          = (loc1_3D(1) * loc2_3D(3) - loc1_3D(3) * loc2_3D(1)) / denom
-                if( abs(b1-b2) < TINY )then
-                    pcomlines(iref,jref)%legit = .false.
-                    cycle
-                endif
+                if( abs(b1-b2) < TINY )cycle
                 line3D(1:2) = [1., -(a1-a2)/(b1-b2)]
                 line3D(3)   = a2*line3D(1) + b2*line3D(2)
                 ! projecting the 3D common line to a polar line on the jref-th reference
@@ -1428,6 +1419,7 @@ contains
                 pcomlines(iref,jref)%self_irot_l = irot_l
                 pcomlines(iref,jref)%self_irot_r = irot_r
                 pcomlines(iref,jref)%self_w      = w1
+                pcomlines(iref,jref)%legit       = .true.
             enddo
         enddo
         !$omp end parallel do
@@ -1467,7 +1459,7 @@ contains
             !$omp proc_bind(close) schedule(static)
             do iref = 1, self%nrefs
                 do jref = 1, self%nrefs
-                    if( jref == iref )cycle
+                    if( .not. pcomlines(iref,jref)%legit )cycle
                     ! compute the interpolated polar common line, between irot_j and irot_j+1
                     irot_l   = pcomlines(iref,jref)%targ_irot_l
                     irot_r   = pcomlines(iref,jref)%targ_irot_r
