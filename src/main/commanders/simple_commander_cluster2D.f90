@@ -228,7 +228,7 @@ contains
         if( trim(params%oritype).eq.'ptcl3D' )then
             ! 3D class averages
             call build%eulspace%new(params%nspace, is_ptcl=.false.)
-            call build%pgrpsyms%build_refspiral(build%eulspace)
+            call build%pgrpsyms%build_refspiral(build%eulspace, test_mode=trim(params%test_mode)=='yes')
             call build%spproj%os_ptcl3D%set_projs(build%eulspace)
             call build%spproj%os_ptcl3D%proj2class
         else
@@ -1523,7 +1523,7 @@ contains
                 call build%spproj%write(params%projfile)
             case('ptcl3D')
                 call build%eulspace%new(params%nspace, is_ptcl=.false.)
-                call build%pgrpsyms%build_refspiral(build%eulspace)
+                call build%pgrpsyms%build_refspiral(build%eulspace, test_mode=trim(params%test_mode)=='yes')
                 do icls = 1,params%ncls
                     call build%spproj%os_cls3D%set_euler(icls, build%eulspace%get_euler(icls))
                 enddo
@@ -3118,7 +3118,9 @@ contains
         class(cmdline),                 intent(inout) :: cline
         integer,          allocatable :: pinds(:)
         real,             allocatable :: sigma2_noise(:,:)
+        complex,          allocatable :: pfts(:,:,:)
         type(image),      allocatable :: tmp_imgs(:), refs(:)
+        type(polar_fmap), allocatable :: pcomlines(:,:)
         type(make_cavgs_commander)    :: xmk_cavgs_shmem
         type(polarft_corrcalc)        :: pftcc
         type(builder)                 :: build
@@ -3180,6 +3182,9 @@ contains
             ! re-memoizing ptcls due to shifted ptcls
             call pftcc%memoize_ptcls
         endif
+        allocate(pcomlines(params_glob%nspace,params_glob%nspace))
+        allocate(pfts(pftcc%get_pftsz(),params_glob%kfromto(1):params_glob%kfromto(2),params_glob%nspace), source=cmplx(0.,0.))
+        call pftcc%gen_polar_comlins(build_glob%eulspace, pcomlines)
         allocate(refs(params_glob%nspace))
         params%ncls = params%nspace
         params%frcs = trim(FRCS_FILE)
@@ -3276,6 +3281,7 @@ contains
                     ! update polar refs using current alignment params
                     call pftcc%gen_polar_refs(build_glob%eulspace, build_glob%spproj_field,&
                                             &ran=(trim(params%cls_init).eq.'rand') .and. iter==1)
+                    call pftcc%add_polar_comlin_refs(pcomlines, pfts)
                     ! for visualization of polar cavgs
                     call pftcc%prefs_to_cartesian(refs)
                     do iref = 1, params_glob%nspace
