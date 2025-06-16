@@ -1346,43 +1346,54 @@ contains
         call img%ifft
     end subroutine polar_cavg
 
-    subroutine gen_polar_comlins( self, rotmats, invmats, pcomlines)
+    subroutine gen_polar_comlins( self, ref_space, pcomlines)
+        use simple_oris
         class(polarft_corrcalc), intent(inout) :: self
-        real,                    intent(in)    :: rotmats(3,3,self%nrefs)
-        real,                    intent(in)    :: invmats(3,3,self%nrefs)
+        type(oris),              intent(in)    :: ref_space
         type(polar_fmap),        intent(inout) :: pcomlines(self%nrefs, self%nrefs)
-        integer :: iref, jref, irot, kind, irot_l, irot_r
-        real    :: loc1_3D(3), loc2_3D(3), denom, a1, a2, b1, b2, line_xyz(3), irot_real, k_real, w1, w2, hk1(2), hk2(2)
-        ! randomly chosen irot, kind for generating the polar common line
+        integer :: iref, jref, irot, kind, irot_l, irot_r, errflg
+        real    :: loc1_3D(3), loc2_3D(3), denom, a1, a2, b1, b2, line2D(3), irot_real, k_real, w1, w2, hk1(2), hk2(2),&
+                  &rotmat(3,3),invmats(3,3,self%nrefs), loc1s(3,self%nrefs), loc2s(3,self%nrefs), line3D(3)
+        ! randomly chosing two sets of (irot, kind) to generate the polar common lines
         irot = 5
         kind = self%kfromto(1) + 2
         hk1  = self%get_coord(irot,kind)
         irot = 16
         kind = self%kfromto(1) + 7
         hk2  = self%get_coord(irot,kind)
-        !$omp parallel do default(shared) private(iref,loc1_3D,loc2_3D,denom,a1,b1,jref,a2,b2,line_xyz,irot_real,k_real,irot_l,irot_r,w2,w1)&
+        ! caching rotation matrices and their corresponding inverse matrices
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,rotmat)
+        do iref = 1, self%nrefs
+            rotmat = ref_space%get_mat(iref)
+            call matinv(rotmat, invmats(:,:,iref), 3, errflg)
+            loc1s(:,iref) = matmul([hk1(1), hk1(2), 0.], rotmat)
+            loc2s(:,iref) = matmul([hk2(1), hk2(2), 0.], rotmat)
+        enddo
+        !$omp end parallel do
+        ! constructing polar common lines
+        !$omp parallel do default(shared) private(iref,loc1_3D,loc2_3D,denom,a1,b1,jref,a2,b2,line3D,line2D,irot_real,k_real,irot_l,irot_r,w2,w1)&
         !$omp proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
-            loc1_3D = matmul([hk1(1), hk1(2), 0.], rotmats(:,:,iref))
-            loc2_3D = matmul([hk2(1), hk2(2), 0.], rotmats(:,:,iref))
+            loc1_3D = loc1s(:,iref)
+            loc2_3D = loc2s(:,iref)
             denom   = (loc1_3D(1) * loc2_3D(2) - loc1_3D(2) * loc2_3D(1))
             a1      = (loc1_3D(3) * loc2_3D(2) - loc1_3D(2) * loc2_3D(3)) / denom
             b1      = (loc1_3D(1) * loc2_3D(3) - loc1_3D(3) * loc2_3D(1)) / denom
             do jref = 1, self%nrefs
                 if( jref == iref )cycle
                 ! getting the 3D common line
-                loc1_3D       = matmul([hk1(1), hk1(2), 0.], rotmats(:,:,jref))
-                loc2_3D       = matmul([hk2(1), hk2(2), 0.], rotmats(:,:,jref))
-                denom         = (loc1_3D(1) * loc2_3D(2) - loc1_3D(2) * loc2_3D(1))
-                a2            = (loc1_3D(3) * loc2_3D(2) - loc1_3D(2) * loc2_3D(3)) / denom
-                b2            = (loc1_3D(1) * loc2_3D(3) - loc1_3D(3) * loc2_3D(1)) / denom
-                line_xyz(1:2) = [1., -(a1-a2)/(b1-b2)]
-                line_xyz(3)   = a2*line_xyz(1) + b2*line_xyz(2)
-                ! reproject the 3D common line to the polar line on the jref-th reference
-                line_xyz      = matmul(line_xyz, invmats(:,:,jref))
-                call self%get_polar_coord(line_xyz(1:2), irot_real, k_real)
+                loc1_3D     = loc1s(:,jref)
+                loc2_3D     = loc2s(:,jref)
+                denom       = (loc1_3D(1) * loc2_3D(2) - loc1_3D(2) * loc2_3D(1))
+                a2          = (loc1_3D(3) * loc2_3D(2) - loc1_3D(2) * loc2_3D(3)) / denom
+                b2          = (loc1_3D(1) * loc2_3D(3) - loc1_3D(3) * loc2_3D(1)) / denom
+                line3D(1:2) = [1., -(a1-a2)/(b1-b2)]
+                line3D(3)   = a2*line3D(1) + b2*line3D(2)
+                ! projecting the 3D common line to a polar line on the jref-th reference
+                line2D      = matmul(line3D, invmats(:,:,jref))
+                call self%get_polar_coord(line2D(1:2), irot_real, k_real)
                 if( irot_real < 1. ) irot_real = irot_real + real(self%pftsz)
-                ! compute the interpolated polar common line, between irot_j and irot_j+1
+                ! caching the indeces irot_j and irot_j+1 and the corresponding linear weight
                 irot_l = floor(irot_real)
                 irot_r = irot_l + 1
                 w2     = irot_real - real(irot_l)
@@ -1391,13 +1402,11 @@ contains
                 pcomlines(iref,jref)%targ_irot_l = irot_l
                 pcomlines(iref,jref)%targ_irot_r = irot_r
                 pcomlines(iref,jref)%targ_w      = w2
-                ! reproject the 3D common line to the polar line on the iref-th reference
-                line_xyz(1:2) = [1., -(a1-a2)/(b1-b2)]
-                line_xyz(3)   = a1*line_xyz(1) + b1*line_xyz(2)
-                line_xyz      = matmul(line_xyz, invmats(:,:,iref))
-                call self%get_polar_coord(line_xyz(1:2), irot_real, k_real)
+                ! projecting the 3D common line to a polar line on the iref-th reference
+                line2D = matmul(line3D, invmats(:,:,iref))
+                call self%get_polar_coord(line2D(1:2), irot_real, k_real)
                 if( irot_real < 1. ) irot_real = irot_real + real(self%pftsz)
-                ! extrapolate the interpolated polar common line to irot_i and irot_i+1 of iref-th reference
+                ! caching the indeces irot_i and irot_i+1 and the corresponding linear weight
                 irot_l = floor(irot_real)
                 irot_r = irot_l + 1
                 w1     = irot_real - real(irot_l)
@@ -1423,10 +1432,12 @@ contains
         do iref = 1, self%nrefs
             do jref = 1, self%nrefs
                 if( jref == iref )cycle
+                ! compute the interpolated polar common line, between irot_j and irot_j+1
                 irot_l   = pcomlines(iref,jref)%targ_irot_l
                 irot_r   = pcomlines(iref,jref)%targ_irot_r
                 w2       = pcomlines(iref,jref)%targ_w
                 pft_line = (1.-w2) * self%pfts_refs_even(irot_l,:,jref) + w2 * self%pfts_refs_even(irot_r,:,jref)
+                ! extrapolate the interpolated polar common line to irot_i and irot_i+1 of iref-th reference
                 irot_l   = pcomlines(iref,jref)%self_irot_l
                 irot_r   = pcomlines(iref,jref)%self_irot_r
                 w2       = pcomlines(iref,jref)%self_w
