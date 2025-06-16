@@ -154,11 +154,20 @@ type fplan_map
     integer, allocatable :: tar_four(:,:)
 end type fplan_map
 
-type polar_fmap
+type points_polar_fmap
     integer              :: n_points
     integer, allocatable :: tar_find(:)
     integer, allocatable :: ori_inds(:,:)
     integer, allocatable :: tar_inds(:,:)
+end type points_polar_fmap
+
+type polar_fmap
+    integer :: targ_irot_l
+    integer :: targ_irot_r
+    real    :: targ_w
+    integer :: self_irot_l
+    integer :: self_irot_r
+    real    :: self_w
 end type polar_fmap
 
 ! oritype enumeration

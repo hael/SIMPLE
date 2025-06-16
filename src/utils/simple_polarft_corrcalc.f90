@@ -156,7 +156,7 @@ type :: polarft_corrcalc
     procedure, private :: kill_memoized_ptcls, kill_memoized_refs
     procedure          :: allocate_ptcls_memoization, allocate_refs_memoization
     ! CALCULATORS
-    procedure          :: polar_cavg, gen_polar_refs
+    procedure          :: polar_cavg, gen_polar_refs, gen_polar_comlins, gen_polar_comlin_refs
     procedure          :: create_polar_absctfmats, calc_polar_ctf
     procedure          :: gen_shmat
     procedure, private :: gen_shmat_8
@@ -1346,10 +1346,99 @@ contains
         call img%ifft
     end subroutine polar_cavg
 
+    subroutine gen_polar_comlins( self, rotmats, invmats, pcomlines)
+        class(polarft_corrcalc), intent(inout) :: self
+        real,                    intent(in)    :: rotmats(3,3,self%nrefs)
+        real,                    intent(in)    :: invmats(3,3,self%nrefs)
+        type(polar_fmap),        intent(inout) :: pcomlines(self%nrefs, self%nrefs)
+        integer :: iref, jref, irot, kind, irot_l, irot_r
+        real    :: loc1_3D(3), loc2_3D(3), denom, a1, a2, b1, b2, line_xyz(3), irot_real, k_real, w1, w2, hk1(2), hk2(2)
+        ! randomly chosen irot, kind for generating the polar common line
+        irot = 5
+        kind = self%kfromto(1) + 2
+        hk1  = self%get_coord(irot,kind)
+        irot = 16
+        kind = self%kfromto(1) + 7
+        hk2  = self%get_coord(irot,kind)
+        !$omp parallel do default(shared) private(iref,loc1_3D,loc2_3D,denom,a1,b1,jref,a2,b2,line_xyz,irot_real,k_real,irot_l,irot_r,w2,w1)&
+        !$omp proc_bind(close) schedule(static)
+        do iref = 1, self%nrefs
+            loc1_3D = matmul([hk1(1), hk1(2), 0.], rotmats(:,:,iref))
+            loc2_3D = matmul([hk2(1), hk2(2), 0.], rotmats(:,:,iref))
+            denom   = (loc1_3D(1) * loc2_3D(2) - loc1_3D(2) * loc2_3D(1))
+            a1      = (loc1_3D(3) * loc2_3D(2) - loc1_3D(2) * loc2_3D(3)) / denom
+            b1      = (loc1_3D(1) * loc2_3D(3) - loc1_3D(3) * loc2_3D(1)) / denom
+            do jref = 1, self%nrefs
+                if( jref == iref )cycle
+                ! getting the 3D common line
+                loc1_3D       = matmul([hk1(1), hk1(2), 0.], rotmats(:,:,jref))
+                loc2_3D       = matmul([hk2(1), hk2(2), 0.], rotmats(:,:,jref))
+                denom         = (loc1_3D(1) * loc2_3D(2) - loc1_3D(2) * loc2_3D(1))
+                a2            = (loc1_3D(3) * loc2_3D(2) - loc1_3D(2) * loc2_3D(3)) / denom
+                b2            = (loc1_3D(1) * loc2_3D(3) - loc1_3D(3) * loc2_3D(1)) / denom
+                line_xyz(1:2) = [1., -(a1-a2)/(b1-b2)]
+                line_xyz(3)   = a2*line_xyz(1) + b2*line_xyz(2)
+                ! reproject the 3D common line to the polar line on the jref-th reference
+                line_xyz      = matmul(line_xyz, invmats(:,:,jref))
+                call self%get_polar_coord(line_xyz(1:2), irot_real, k_real)
+                if( irot_real < 1. ) irot_real = irot_real + real(self%pftsz)
+                ! compute the interpolated polar common line, between irot_j and irot_j+1
+                irot_l = floor(irot_real)
+                irot_r = irot_l + 1
+                w2     = irot_real - real(irot_l)
+                if( irot_l > self%pftsz ) irot_l = irot_l - self%pftsz
+                if( irot_r > self%pftsz ) irot_r = irot_r - self%pftsz
+                pcomlines(iref,jref)%targ_irot_l = irot_l
+                pcomlines(iref,jref)%targ_irot_r = irot_r
+                pcomlines(iref,jref)%targ_w      = w2
+                ! reproject the 3D common line to the polar line on the iref-th reference
+                line_xyz(1:2) = [1., -(a1-a2)/(b1-b2)]
+                line_xyz(3)   = a1*line_xyz(1) + b1*line_xyz(2)
+                line_xyz      = matmul(line_xyz, invmats(:,:,iref))
+                call self%get_polar_coord(line_xyz(1:2), irot_real, k_real)
+                if( irot_real < 1. ) irot_real = irot_real + real(self%pftsz)
+                ! extrapolate the interpolated polar common line to irot_i and irot_i+1 of iref-th reference
+                irot_l = floor(irot_real)
+                irot_r = irot_l + 1
+                w1     = irot_real - real(irot_l)
+                if( irot_l > self%pftsz ) irot_l = irot_l - self%pftsz
+                if( irot_r > self%pftsz ) irot_r = irot_r - self%pftsz
+                pcomlines(iref,jref)%self_irot_l = irot_l
+                pcomlines(iref,jref)%self_irot_r = irot_r
+                pcomlines(iref,jref)%self_w      = w1
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine gen_polar_comlins
+
+    subroutine gen_polar_comlin_refs( self, pcomlines, pfts)
+        class(polarft_corrcalc), intent(inout) :: self
+        type(polar_fmap),        intent(inout) :: pcomlines(self%nrefs, self%nrefs)
+        complex,                 intent(inout) :: pfts(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs)
+        complex :: pft_line(self%kfromto(1):self%kfromto(2))
+        integer :: iref, jref, irot_l, irot_r
+        real    :: w1, w2
+        !$omp parallel do collapse(2) default(shared) private(iref,jref,irot_l,irot_r,w1,w2,pft_line)&
+        !$omp proc_bind(close) schedule(static)
+        do iref = 1, self%nrefs
+            do jref = 1, self%nrefs
+                if( jref == iref )cycle
+                irot_l   = pcomlines(iref,jref)%targ_irot_l
+                irot_r   = pcomlines(iref,jref)%targ_irot_r
+                w2       = pcomlines(iref,jref)%targ_w
+                pft_line = (1.-w2) * self%pfts_refs_even(irot_l,:,jref) + w2 * self%pfts_refs_even(irot_r,:,jref)
+                irot_l   = pcomlines(iref,jref)%self_irot_l
+                irot_r   = pcomlines(iref,jref)%self_irot_r
+                w2       = pcomlines(iref,jref)%self_w
+                pfts(irot_l,:,iref) = pfts(irot_l,:,iref) + (1.-w1) * pft_line
+                pfts(irot_r,:,iref) = pfts(irot_r,:,iref) +     w1  * pft_line
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine gen_polar_comlin_refs
+
     subroutine gen_polar_refs( self, ref_space, ptcl_space, ran )
-        use simple_image
         use simple_oris
-        use simple_ori
         class(polarft_corrcalc), intent(inout) :: self
         type(oris),              intent(in)    :: ref_space
         type(oris),              intent(in)    :: ptcl_space

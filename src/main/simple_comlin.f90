@@ -71,8 +71,8 @@ contains
         integer,                 intent(in)    :: e_ind
         class(oris),             intent(in)    :: eall
         class(polarft_corrcalc), intent(in)    :: pftcc
-        type(polar_fmap),        intent(inout) :: polar_map
-        type(polar_fmap),        intent(inout) :: all_coords
+        type(points_polar_fmap), intent(inout) :: polar_map
+        type(points_polar_fmap), intent(inout) :: all_coords
         type(ori) :: e, e2
         integer   :: i, cnt, irot, kpolar, target_irot, target_kpolar, pdim(3), ixy2(2)
         real      :: hk(2), sqlp, sqarg
