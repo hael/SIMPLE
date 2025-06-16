@@ -228,7 +228,7 @@ contains
         if( trim(params%oritype).eq.'ptcl3D' )then
             ! 3D class averages
             call build%eulspace%new(params%nspace, is_ptcl=.false.)
-            call build%pgrpsyms%build_refspiral(build%eulspace, test_mode=trim(params%test_mode)=='yes')
+            call build%pgrpsyms%build_refspiral(build%eulspace)
             call build%spproj%os_ptcl3D%set_projs(build%eulspace)
             call build%spproj%os_ptcl3D%proj2class
         else
@@ -1523,7 +1523,7 @@ contains
                 call build%spproj%write(params%projfile)
             case('ptcl3D')
                 call build%eulspace%new(params%nspace, is_ptcl=.false.)
-                call build%pgrpsyms%build_refspiral(build%eulspace, test_mode=trim(params%test_mode)=='yes')
+                call build%pgrpsyms%build_refspiral(build%eulspace)
                 do icls = 1,params%ncls
                     call build%spproj%os_cls3D%set_euler(icls, build%eulspace%get_euler(icls))
                 enddo
