@@ -697,6 +697,15 @@ contains
         call hpsort(tmp, order)
     end function dists2order
 
+    function mask2inds( mask ) result( inds )
+        logical, intent(in)  :: mask(:)
+        integer, allocatable :: inds(:)
+        integer :: i, n
+        n = size(mask)
+        allocate(inds(n), source=(/(i,i=1,n)/))
+        inds = pack(inds, mask=mask)
+    end function mask2inds
+
     subroutine reorder_1( arr, order )
         real,    intent(inout) :: arr(:)
         integer, intent(in)    :: order(:)
