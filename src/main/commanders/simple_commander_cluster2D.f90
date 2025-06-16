@@ -1902,7 +1902,7 @@ contains
         use simple_histogram,  only: histogram
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        real,             parameter   :: HP_SPEC = 20., LP_SPEC = 6., FRAC_BEST_CAVGS=0.5, SCORE_THRES=40., RES_THRES=8., SCORE_THRES_RANK=45.
+        real,             parameter   :: HP_SPEC = 20., LP_SPEC = 6., FRAC_BEST_CAVGS=0.5, SCORE_THRES=40., SCORE_THRES_FINAL=70.
         integer,          parameter   :: NCLS_DEFAULT = 20, NCLS_SMALL_DEFAULT = 5, NHISTBINS = 128
         logical,          parameter   :: DEBUG = .true.
         type(image),      allocatable :: cavg_imgs(:), cluster_imgs(:), cluster_imgs_aligned(:)
@@ -1915,7 +1915,7 @@ contains
         real,             allocatable :: resvals(:)
         logical,          allocatable :: l_msk(:,:,:), l_non_junk(:)
         integer,          allocatable :: labels(:), clsinds(:), i_medoids(:), labels_copy(:), i_medoids_copy(:)
-        integer,          allocatable :: clust_order(:), order_homo(:), order_clustscore(:), order_resscore(:), order_jointscore(:)
+        integer,          allocatable :: clust_order(:)
         integer,          allocatable :: clspops(:), states(:)
         type(clust_info), allocatable :: clust_info_arr(:), clust_info_arr_copy(:)
         type(parameters)   :: params
@@ -2080,45 +2080,16 @@ contains
                 ! re-normalize scores
                 call renormalize_scores(SCORE_THRES)
                 ! identify good/bad
-                call identify_good_bad
+                clust_info_arr(:)%good_bad = 0
+                where( clust_info_arr(:)%jointscore >= SCORE_THRES_FINAL ) clust_info_arr(:)%good_bad = 1
                 write(logfhandle,'(A)') '>>> ROTATING & SHIFTING UNMASKED, UNFILTERED CLASS AVERAGES'
                 ! re-create cavg_imgs
                 call dealloc_imgarr(cavg_imgs)
                 cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
-
                 call copy_clustering
                 clust_order = scores2order(clust_info_arr(:)%jointscore)
                 call rank_clusters(nclust, clust_order)
                 call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_ranked', trim(params%ext))
-
-                ! if( cline%defined('res_cutoff') )then
-                !     ! rank boundary based on resolution cutoff
-                !     rank_bound = 2
-                !     do iclust = 3, nclust
-                !         if( clust_info_arr(iclust)%res <= params%res_cutoff ) rank_bound = iclust
-                !     end do
-                ! else
-                !     ! find optimal rank boundary through binary clustering of the ranked clusters
-                !     rank_bound     = 2
-                !     dist_rank      = rank_bound_cost(rank_bound)
-                !     dist_rank_best = dist_rank
-                    
-                !     print *, 'rank: ', 2, ' dist_rank: ', dist_rank
-
-                !     do rank = 3, nclust
-                !         dist_rank = rank_bound_cost(rank)
-
-                !         print *, 'rank: ', rank, ' dist_rank: ', dist_rank
-
-                !         if( dist_rank <= dist_rank_best )then
-                !             dist_rank_best = dist_rank
-                !             rank_bound     = rank
-                !         endif
-                !     end do
-                ! endif
-                ! ! make good/bad assignment
-                ! clust_info_arr(:)%good_bad           = 0
-                ! clust_info_arr(:rank_bound)%good_bad = 1
                 ! report cluster info
                 do iclust = 1, nclust
                     write(logfhandle,'(A,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,I3)') 'cluster_ranked'//int2str_pad(iclust,2)//'.mrc',&
@@ -2167,7 +2138,7 @@ contains
                     write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_bad(1)
                     write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', 0.
                 endif
-                ! zero lables of deselected classes
+                ! zero labels of deselected classes
                 do icls = 1, ncls_sel
                     if( clust_info_arr(labels(icls))%good_bad == 0 ) labels(icls) = 0
                 end do
@@ -2251,58 +2222,6 @@ contains
             call scores2scores_percen(clust_info_arr(:)%jointscore)
         end subroutine renormalize_scores
 
-        subroutine identify_good_bad
-            integer :: iclust
-            logical :: l_common(nclust)
-            integer :: rank_bound_bound, rank_bound_homo, rank_bound_clustscore, rank_bound_resscore, rank_bound_jointscore
-            integer, allocatable :: inds(:)
-            ! retrieve rank orders
-            order_homo       = scores2order(clust_info_arr(:)%homogeneity)
-            order_clustscore = scores2order(clust_info_arr(:)%clustscore)
-            order_resscore   = scores2order(clust_info_arr(:)%resscore)
-            order_jointscore = scores2order(clust_info_arr(:)%jointscore)
-            ! set initial rank boundaries
-            if( nclust < 6 )then
-                rank_bound_bound = 3
-            else if( nclust < 11 )then
-                rank_bound_bound = 5
-            else
-                rank_bound_bound = ceiling(real(nclust)/2.)
-            endif
-            rank_bound_homo       = 1
-            rank_bound_clustscore = 1
-            rank_bound_resscore   = 1
-            rank_bound_jointscore = 1
-            do iclust = 2, nclust
-                if( clust_info_arr(order_homo(iclust))%homogeneity      >= SCORE_THRES_RANK ) rank_bound_homo       = iclust
-                if( clust_info_arr(order_clustscore(iclust))%clustscore >= SCORE_THRES_RANK ) rank_bound_clustscore = iclust
-                if( clust_info_arr(order_resscore(iclust))%resscore     >= SCORE_THRES_RANK ) rank_bound_resscore   = iclust
-                if( clust_info_arr(order_jointscore(iclust))%jointscore >= SCORE_THRES_RANK ) rank_bound_jointscore = iclust
-                if( clust_info_arr(order_resscore(iclust))%res < RES_THRES )then ! resolution overrides rank boundary
-                    rank_bound_bound = iclust
-                endif
-            end do
-            rank_bound_homo       = min(rank_bound_bound,rank_bound_homo)
-            rank_bound_clustscore = min(rank_bound_bound,rank_bound_clustscore)
-            rank_bound_resscore   = min(rank_bound_bound,rank_bound_resscore)
-            rank_bound_jointscore = min(rank_bound_bound,rank_bound_jointscore)
-            ! identify overlapping candidates
-            l_common = .false.
-            do iclust = 1, nclust
-                if( any(order_homo(:rank_bound_homo)             == iclust).and.&
-                    any(order_clustscore(:rank_bound_clustscore) == iclust).and.&
-                    any(order_resscore(:rank_bound_resscore)     == iclust).and.&
-                    any(order_jointscore(:rank_bound_jointscore) == iclust)) l_common(iclust) = .true.
-            end do
-            ! convert to indices
-            inds = mask2inds(l_common)
-            ! set good/bad flags
-            clust_info_arr(:)%good_bad = 0
-            do i = 1, size(inds)
-                clust_info_arr(inds(i))%good_bad = 1
-            end do
-        end subroutine identify_good_bad
-
         subroutine copy_clustering
             clust_info_arr_copy = clust_info_arr
             labels_copy         = labels
@@ -2331,42 +2250,6 @@ contains
             clust_info_arr = clust_info_arr_ranked
             labels         = rank_assign
         end subroutine rank_clusters
-            
-        ! function ci_better_than_cj( ci, cj ) result( val )
-        !     integer, intent(in) :: ci, cj
-        !     logical :: val
-        !     ! classes with smaller resolution estimates are better
-        !     val = .false.
-        !     if( clust_info_arr(ci)%res < clust_info_arr(cj)%res ) val = .true.
-        ! end function ci_better_than_cj
-
-        ! function rank_bound_cost( rank_bound ) result( dist )
-        !     integer, intent(in) :: rank_bound
-        !     integer, allocatable :: inds(:), inds_good(:), inds_bad(:)
-        !     integer :: i, j, ngood, nbad, cnt
-        !     real    :: dist
-        !     inds      = (/(i,i=1,ncls_sel)/)
-        !     inds_good = pack(inds, mask=labels <= rank_bound)
-        !     inds_bad  = pack(inds, mask=labels >  rank_bound)
-        !     ngood     = size(inds_good)
-        !     nbad      = size(inds_bad)
-        !     dist      = 0.
-        !     cnt       = 0
-        !     do i = 1, ngood - 1
-        !         do j = i + 1, ngood
-        !             dist = dist + dmat_pow(inds_good(i),inds_good(j)) + dmat_hist(inds_good(i),inds_good(j))
-        !             cnt  = cnt  + 2 
-        !         end do
-        !     end do
-        !     do i = 1, nbad - 1
-        !         do j = i + 1, nbad
-        !             dist = dist + dmat_pow(inds_bad(i),inds_bad(j)) + dmat_hist(inds_bad(i),inds_bad(j))
-        !             cnt  = cnt  + 2
-        !         end do
-        !     end do
-        !     dist = dist / real(cnt)
-        !     deallocate(inds, inds_good, inds_bad)
-        ! end function rank_bound_cost
  
     end subroutine exec_cluster_cavgs
 
