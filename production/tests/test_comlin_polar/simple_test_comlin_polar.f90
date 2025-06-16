@@ -60,7 +60,7 @@ call vol%new(p%ldim, p%smpd)
 call vol%read(p%vols(1))
 call vol%stats('foreground', ave, sdev, maxv, minv)
 call spiral%new(NPLANES, is_ptcl=.false.)
-call spiral%spiral(no_ends=.true.)
+call spiral%spiral
 call ptcl%new(    [p%box,   p%box,   1],       p%smpd)
 call noise%new(   [p%box,   p%box ,  p%box],   p%smpd)
 call img%new(     [p%box,   p%box,   1],       p%smpd)

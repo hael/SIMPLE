@@ -693,21 +693,14 @@ contains
     end subroutine symrandomize
 
     !>  \brief  is for building a spiral INCLUDING mirror projections
-    subroutine build_refspiral( self, os, test_mode )
-        class(sym),        intent(inout) :: self
-        type(oris),        intent(inout) :: os
-        logical, optional, intent(in)    :: test_mode
+    subroutine build_refspiral( self, os )
+        class(sym), intent(inout) :: self
+        type(oris), intent(inout) :: os
         type(oris) :: tmp, os_nomirr
         integer    :: cnt, i, n, nprojs, lim, nos, nos_nomirr
         logical, allocatable :: avail(:)
         nos = os%get_noris()
         if(is_odd(nos))THROW_HARD('odd number of projections directions not supported; build_refspiral')
-        if( present(test_mode) )then
-            if( test_mode )then
-                call os%spiral(no_ends=.true.)
-                return
-            endif
-        endif
         nos_nomirr = nos/2
         call os%new(nos, is_ptcl=.false.)
         call os_nomirr%new(nos_nomirr, is_ptcl=.false.)

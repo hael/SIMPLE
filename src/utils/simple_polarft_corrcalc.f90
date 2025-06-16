@@ -1372,6 +1372,7 @@ contains
         enddo
         !$omp end parallel do
         ! constructing polar common lines
+        pcomlines%legit = .true.
         !$omp parallel do default(shared) private(iref,loc1_3D,loc2_3D,denom,a1,b1,jref,a2,b2,line3D,line2D,irot_real,k_real,irot_l,irot_r,w2,w1)&
         !$omp proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
@@ -1381,15 +1382,24 @@ contains
             a1      = (loc1_3D(3) * loc2_3D(2) - loc1_3D(2) * loc2_3D(3)) / denom
             b1      = (loc1_3D(1) * loc2_3D(3) - loc1_3D(3) * loc2_3D(1)) / denom
             do jref = 1, self%nrefs
-                if( jref == iref )cycle
+                if( jref == iref )then
+                    pcomlines(iref,jref)%legit = .false.
+                    cycle
+                endif
                 ! getting the 3D common line
                 loc1_3D     = loc1s(:,jref)
                 loc2_3D     = loc2s(:,jref)
                 denom       = (loc1_3D(1) * loc2_3D(2) - loc1_3D(2) * loc2_3D(1))
-                if( abs(denom) < TINY ) THROW_HARD('Zero division problem of denom here!')
+                if( abs(denom) < TINY )then
+                    pcomlines(iref,jref)%legit = .false.
+                    cycle
+                endif
                 a2          = (loc1_3D(3) * loc2_3D(2) - loc1_3D(2) * loc2_3D(3)) / denom
                 b2          = (loc1_3D(1) * loc2_3D(3) - loc1_3D(3) * loc2_3D(1)) / denom
-                if( abs(b1-b2) < TINY ) THROW_HARD('Zero division problem of b1-b2 here!')
+                if( abs(b1-b2) < TINY )then
+                    pcomlines(iref,jref)%legit = .false.
+                    cycle
+                endif
                 line3D(1:2) = [1., -(a1-a2)/(b1-b2)]
                 line3D(3)   = a2*line3D(1) + b2*line3D(2)
                 ! projecting the 3D common line to a polar line on the jref-th reference
@@ -1402,7 +1412,6 @@ contains
                 w2     = irot_real - real(irot_l)
                 if( irot_l > self%pftsz ) irot_l = irot_l - self%pftsz
                 if( irot_r > self%pftsz ) irot_r = irot_r - self%pftsz
-                if( irot_l == 2147483427 .or. irot_r == 2147483427 ) THROW_HARD('irot_l, irot_r are weird 1!')
                 pcomlines(iref,jref)%targ_irot_l = irot_l
                 pcomlines(iref,jref)%targ_irot_r = irot_r
                 pcomlines(iref,jref)%targ_w      = w2
@@ -1416,7 +1425,6 @@ contains
                 w1     = irot_real - real(irot_l)
                 if( irot_l > self%pftsz ) irot_l = irot_l - self%pftsz
                 if( irot_r > self%pftsz ) irot_r = irot_r - self%pftsz
-                if( irot_l == 2147483427 .or. irot_r == 2147483427 ) THROW_HARD('irot_l, irot_r are weird 2!')
                 pcomlines(iref,jref)%self_irot_l = irot_l
                 pcomlines(iref,jref)%self_irot_r = irot_r
                 pcomlines(iref,jref)%self_w      = w1
@@ -1439,12 +1447,11 @@ contains
             !$omp proc_bind(close) schedule(static)
             do iref = 1, self%nrefs
                 do jref = 1, self%nrefs
-                    if( jref == iref )cycle
+                    if( .not. pcomlines(iref,jref)%legit )cycle
                     ! compute the interpolated polar common line, between irot_j and irot_j+1
                     irot_l   = pcomlines(iref,jref)%targ_irot_l
                     irot_r   = pcomlines(iref,jref)%targ_irot_r
                     w2       = pcomlines(iref,jref)%targ_w
-                    if( irot_l == 2147483427 .or. irot_r == 2147483427 ) THROW_HARD('irot_l, irot_r are weird!')
                     pft_line = (1.-w2) * self%pfts_refs_even(irot_l,:,jref) + w2 * self%pfts_refs_even(irot_r,:,jref)
                     ! extrapolate the interpolated polar common line to irot_i and irot_i+1 of iref-th reference
                     irot_l   = pcomlines(iref,jref)%self_irot_l

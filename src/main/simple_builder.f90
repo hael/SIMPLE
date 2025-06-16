@@ -258,7 +258,7 @@ contains
         ! generate discrete projection direction spaces
         if( ddo3d )then
             call self%eulspace%new(params%nspace, is_ptcl=.false.)
-            call self%pgrpsyms%build_refspiral(self%eulspace, test_mode=trim(params%test_mode)=='yes')
+            call self%pgrpsyms%build_refspiral(self%eulspace)
             if( params%l_neigh )then
                 call eulspace_sub%new(params%nspace_sub, is_ptcl=.false.)
                 call self%pgrpsyms%build_refspiral(eulspace_sub)
