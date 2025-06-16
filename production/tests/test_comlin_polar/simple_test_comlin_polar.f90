@@ -8,7 +8,7 @@ use simple_comlin,           only: polar_comlin_map
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_polarizer,        only: polarizer
 implicit none
-integer,          parameter   :: NPLANES = 300, ORI_IND1 = 10, ORI_IND2 = 1
+integer,          parameter   :: NPLANES = 300, ORI_IND1 = 10, ORI_IND2 = 55
 character(len=:), allocatable :: cmd
 type(image),      allocatable :: pad_fplanes(:)
 complex,          allocatable :: cmat(:,:), pfts(:,:,:)
@@ -23,7 +23,7 @@ type(ori)                     :: o1, o2
 type(projector)               :: vol_pad
 type(polar_fmap)              :: pcomlines(NPLANES,NPLANES)
 integer :: ifoo, rc, i, lims(3,2), ithr, box, errflg, kfromto(2)
-real    :: ave, sdev, maxv, minv, rotmats(3,3,NPLANES), invmats(3,3,NPLANES)
+real    :: ave, sdev, maxv, minv
 logical :: mrc_exists
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)') 'ERROR! Usage: simple_test_comlin_polar smpd=xx nthr=yy vol1=volume.mrc mskdiam=zz'
@@ -115,15 +115,10 @@ do i = 1, spiral%get_noris()
     call fplane_polar%ifft
     call fplane_polar%write('fplanes_polar.mrc', i)
 enddo
-do i = 1, NPLANES
-    call spiral%get_ori(i, o2)
-    rotmats(:,:,i) = o2%get_mat()
-    call matinv(rotmats(:,:,i), invmats(:,:,i), 3, errflg)
-enddo
 ! Testing polar line generation
 call pftcc%get_refs_ptr(ref_ptrs_even, ref_ptrs_odd)
 allocate(pfts(pftcc%get_pftsz(), kfromto(1):kfromto(2), NPLANES), source=cmplx(0.,0.))
-call pftcc%gen_polar_comlins(rotmats, invmats, pcomlines)
+call pftcc%gen_polar_comlins(spiral, pcomlines)
 call pftcc%gen_polar_comlin_refs(pcomlines, pfts)
 i = ORI_IND1
 call pftcc%set_ref_pft(i, ref_ptrs_even(:,:,i), iseven=.true.)
@@ -147,4 +142,26 @@ call fplane_polar%set_cmat(cmat)
 call fplane_polar%shift_phorig()
 call fplane_polar%ifft
 call fplane_polar%write('polar_comlin.mrc', 3)
+i = ORI_IND2
+call pftcc%set_ref_pft(i, ref_ptrs_even(:,:,i), iseven=.true.)
+call pftcc%polar2cartesian(i, .true., cmat, box, box_in=p%box)
+call fplane_polar%fft
+call fplane_polar%set_cmat(cmat)
+call fplane_polar%shift_phorig()
+call fplane_polar%ifft
+call fplane_polar%write('polar_comlin.mrc', 4)
+call pftcc%set_ref_pft(i, pfts(:,:,i), iseven=.true.)
+call pftcc%polar2cartesian(i, .true., cmat, box, box_in=p%box)
+call fplane_polar%fft
+call fplane_polar%set_cmat(cmat)
+call fplane_polar%shift_phorig()
+call fplane_polar%ifft
+call fplane_polar%write('polar_comlin.mrc', 5)
+call pftcc%set_ref_pft(i, ref_ptrs_even(:,:,i) + pfts(:,:,i), iseven=.true.)
+call pftcc%polar2cartesian(i, .true., cmat, box, box_in=p%box)
+call fplane_polar%fft
+call fplane_polar%set_cmat(cmat)
+call fplane_polar%shift_phorig()
+call fplane_polar%ifft
+call fplane_polar%write('polar_comlin.mrc', 6)
 end program simple_test_comlin_polar
