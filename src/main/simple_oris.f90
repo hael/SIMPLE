@@ -3146,44 +3146,26 @@ contains
     end subroutine minmax
 
     !>  \brief  is for generating evenly distributed projection directions
-    subroutine spiral_1( self, no_ends )
-        class(oris),       intent(inout) :: self
-        logical, optional, intent(in) :: no_ends
+    subroutine spiral_1( self )
+        class(oris), intent(inout) :: self
         real    :: h, theta, psi
         integer :: k
-        logical :: l_no_ends
-        l_no_ends = .false.
-        if( present(no_ends) ) l_no_ends = no_ends
         if( self%n == 1 )then
             call self%o(1)%set_euler([0.,0.,0.])
         else if( self%n > 1 )then
-            if( l_no_ends )then
-                ! from k = 1 to self%n+2, with k = 1 and k=self%n+2 removed
-                psi = 0.
-                do k=1,self%n
-                    h     = -1.+2.*real(k)/real(self%n+1)
-                    theta = acos(h)
-                    psi   = psi+3.6/(sqrt(real(self%n+2))*sqrt(1.-real(h)**2.))
-                    do while( psi > 2.*pi )
-                        psi = psi-2.*pi
-                    end do
-                    call self%o(k)%set_euler([rad2deg(psi),rad2deg(theta),0.])
+            do k=1,self%n
+                h     = -1.+2.*real(k-1)/real(self%n-1)
+                theta = acos(h)
+                if( k == 1 .or. k == self%n )then
+                    psi = 0.
+                else
+                    psi = psi+3.6/(sqrt(real(self%n))*sqrt(1.-real(h)**2.))
+                endif
+                do while( psi > 2.*pi )
+                    psi = psi-2.*pi
                 end do
-            else
-                do k=1,self%n
-                    h     = -1.+2.*real(k-1)/real(self%n-1)
-                    theta = acos(h)
-                    if( k == 1 .or. k == self%n )then
-                        psi = 0.
-                    else
-                        psi = psi+3.6/(sqrt(real(self%n))*sqrt(1.-real(h)**2.))
-                    endif
-                    do while( psi > 2.*pi )
-                        psi = psi-2.*pi
-                    end do
-                    call self%o(k)%set_euler([rad2deg(psi),rad2deg(theta),0.])
-                end do
-            endif
+                call self%o(k)%set_euler([rad2deg(psi),rad2deg(theta),0.])
+            end do
         else
             THROW_HARD('object nonexistent; spiral_1')
         endif
