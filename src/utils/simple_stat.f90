@@ -1168,18 +1168,20 @@ contains
         tmp_min = minval(tmp)
         tmp_max = maxval(tmp)
         select case(trim(mode))
-            case('minval')
-                pref = tmp_min
-            case('maxval')
-                pref = tmp_max
-            case('median')
-                pref = median_nocopy(tmp)
-            case('min_minus_med')
-                pref = tmp_min - median_nocopy(tmp)
-            case('min_minus_diff')
-                pref = tmp_min - (tmp_max - tmp_min)
             case('min_minus_max')
                 pref = tmp_min - tmp_max
+            case('min_minus_diff')
+                pref = tmp_min - (tmp_max - tmp_min)
+            case('min_minus_med')
+                pref = tmp_min - median_nocopy(tmp)
+            case('minval')
+                pref = tmp_min
+            case('median')
+                pref = median_nocopy(tmp)
+            case('avg_max_med')
+                pref = (tmp_max + median_nocopy(tmp))/2.
+            case('maxval')
+                pref = tmp_max
             case DEFAULT
                 THROW_HARD('unsupported mode')
         end select
