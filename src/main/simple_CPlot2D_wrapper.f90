@@ -233,13 +233,14 @@ contains
         call CDataPoint__delete(point)
     end subroutine CDataSet_addpoint
 
-    subroutine plot2D( n, x, y, tmpl_fname, line, xtitle, ytitle )
+    subroutine plot2D( n, x, y, tmpl_fname, line, xtitle, ytitle, z )
         include 'simple_lib.f08'
         integer,                     intent(in) :: n
         real,                        intent(in) :: x(n), y(n)
         character(len=*),            intent(in) :: tmpl_fname
         logical,           optional, intent(in) :: line
         character(len=*),  optional, intent(in) :: xtitle, ytitle
+        real,              optional, intent(in) :: z(n)
         type(str4arr)             :: title
         type(CPlot2D_type)        :: plot
         type(CDataSet_type)       :: dataSet
@@ -266,6 +267,21 @@ contains
         end do
         call CPlot2D__AddDataSet(plot, dataset)
         call CDataSet__delete(dataset)
+        if( present(z) )then
+            call CDataSet__new(dataSet)
+            call CDataSet__SetDrawMarker(dataSet, C_TRUE)
+            call CDataSet__SetMarkerSize(dataSet, real(2.0, c_double))
+            call CDataSet__SetDrawLine(dataSet, C_FALSE)
+            if( present(line) )then
+                if( line ) call CDataSet__SetDrawLine(dataSet, C_TRUE)
+            endif
+            call CDataSet__SetDatasetColor(dataSet, 0.d0,1.d0,0.d0)
+            do k = 1,n
+                call CDataSet_addpoint(dataSet, x(k), z(k))
+            end do
+            call CPlot2D__AddDataSet(plot, dataset)
+            call CDataSet__delete(dataset)
+        endif
         title%str = 'X'//C_NULL_CHAR
         if( present(xtitle) ) title%str = trim(xtitle)//C_NULL_CHAR
         call CPlot2D__SetXAxisTitle(plot, title%str)

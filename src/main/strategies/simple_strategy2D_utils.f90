@@ -8,7 +8,7 @@ implicit none
 
 public :: read_cavgs_into_imgarr, flag_non_junk_cavgs, align_imgs2ref, rtsq_imgs, prep_cavgs4clustering
 public :: pack_imgarr, alloc_imgarr, dealloc_imgarr, write_cavgs, write_junk_cavgs, write_selected_cavgs
-public :: align_clusters2medoids, write_aligned_cavgs
+public :: align_clusters2medoids, write_aligned_cavgs, flag_overfitted_cavgs
 private
 #include "simple_local_flags.inc"
 
@@ -585,103 +585,94 @@ contains
         call dealloc_imgarr(imgs_heap)
     end function rtsq_imgs
 
-    subroutine flag_overfitted_class( cavgs, mask, msk, scores )
-        class(image), allocatable, intent(in)    :: cavgs(:)
-        logical,      allocatable, intent(in)    :: mask(:)
-        real,                      intent(in)    :: msk
-        real,         allocatable, intent(inout) :: scores(:)
+    subroutine flag_overfitted_cavgs( cavgs, labels, mask, msk, scores )
+        use CPlot2D_wrapper_module, only: plot2D
+        class(image),         intent(inout) :: cavgs(:)
+        integer, allocatable, intent(in)    :: labels(:)
+        logical, allocatable, intent(in)    :: mask(:)
+        real,                 intent(in)    :: msk
+        real,    allocatable, intent(inout) :: scores(:)
         real,        parameter   :: HP1         = 120.
-        real,        parameter   :: HP2         = 50.
-        real,        parameter   :: LP1         = 4.
-        real,        parameter   :: LP2         = 8.
+        real,        parameter   :: HP2         = 25.
+        real,        parameter   :: LP1         = 8.
+        real,        parameter   :: LP2         = 12.
         type(image), allocatable :: tmp_imgs(:)
-        real,        allocatable :: logpspecs(:,:), pspec(:), freqs(:), g(:)
-        integer :: ncls, icls,ind,i,ldim(3), ithr, fsz, khp1,khp2,klp1,klp2
-        integer :: kfirst,kend,ithrcls
-        real    :: A, smpd
-
-        ncls = size(tmp_imgs)
+        real,        allocatable :: logpspecs(:,:), pspec(:), freqs(:), g(:), env(:), cavgpspecs(:,:)
+        integer :: ncls,icls,ldim(3),n,ithr,l,fsz, nclusters
+        real    :: A,B, smpd
+        ncls = size(cavgs)
         if( size(mask) /= ncls ) THROW_HARD('Incompatible CAVGS/MASK size!')
-        do i = 1,ncls
-            if( mask(i) )then
-                ldim = cavgs(i)%get_ldim()
-                smpd = cavgs(i)%get_smpd()
-                ind  = i
+        do icls = 1,ncls
+            if( mask(icls) )then
+                ldim = cavgs(icls)%get_ldim()
+                smpd = cavgs(icls)%get_smpd()
                 exit
             endif
         enddo
         fsz = fdim(ldim(1))-1
-        allocate(pspec(fsz), logpspecs(fsz,ncls), source=0.0)
+        allocate(pspec(fsz),logpspecs(fsz,ncls),source=0.)
         A   = real(product(ldim)) ! so values will be positive after log()
         call alloc_imgarr(nthr_glob, ldim, smpd, tmp_imgs)
         !$omp parallel do default(shared) proc_bind(close) schedule(static)&
         !$omp private(icls,ithr,pspec)
         do icls = 1, ncls
+            if( .not.mask(icls) ) cycle
             ithr = omp_get_thread_num() + 1
             call tmp_imgs(ithr)%copy(cavgs(icls))
             call tmp_imgs(ithr)%div_below(0., 10.)
             call tmp_imgs(ithr)%norm
-            call tmp_imgs(ithr)%mask(msk, 'soft')
+            call tmp_imgs(ithr)%mask(msk, 'soft',backgr=0.)
             call tmp_imgs(ithr)%mul(A)
             call tmp_imgs(ithr)%fft
             call tmp_imgs(ithr)%power_spectrum(pspec)
-            logpspecs(:,icls) = log(pspec)
+            logpspecs(:,icls) = log10(pspec)
         enddo
         !$omp end parallel do
         call dealloc_imgarr(tmp_imgs)
-        ! resolution range
-        khp1  = calc_fourier_index(HP1, ldim(1), smpd)
-        khp2  = calc_fourier_index(HP2, ldim(1), smpd)
-        klp1  = calc_fourier_index(LP1, ldim(1), smpd)
-        klp2  = calc_fourier_index(LP2, ldim(1), smpd)
         freqs = get_resarr(ldim(1), smpd)
         g     = 1. / freqs
+        nclusters = maxval(labels)
+        allocate(cavgpspecs(fsz,nclusters),scores(nclusters),source=0.)
         do icls = 1,ncls
-            if( .not.mask(icls) ) cycle
-            ! optimize here
+            if( .not.mask(icls)   ) cycle
+            l = labels(icls)
+            if( l == 0 ) cycle
+            cavgpspecs(:,l) = cavgpspecs(:,l) + logpspecs(:,icls)
+        enddo
+        do l = 1,nclusters
+            n = count(labels==l)
+            if( n <= 1 )cycle
+            cavgpspecs(:,l) = cavgpspecs(:,l) / real(n)
+            pspec = cavgpspecs(:,l)
+            call min_envelope( fsz, g, pspec, 0.997, env )
+            ! call plot2D(fsz, g, env, 'plot_'//int2str(l), .true., '1/A', 'lnPspec',z=pspec )
+            A = sum(abs(pspec-env),mask=(g>1.0/HP1).and.(g<1.0/LP1))
+            B = sum(abs(pspec-env),mask=(g>1.0/HP2).and.(g<1.0/LP2))
+            scores(l) = B / (A-B+1.e-6)
         enddo
         contains
 
-            real(dp) function f( self, vec, D )
-                class(*), intent(inout) :: self
-                integer,  intent(in)    :: D
-                real(dp), intent(in)    :: vec(D)
-                real(dp) :: dk, ek
-                integer :: k
-                f = 0.d0
-                do k = kfirst,kend
-                    dk = g(k) / vec(3) + 1.d0
-                    ek = (logpspecs(k,ithrcls)-vec(1)-vec(2)*dk**(-2))
-                    f  = f + ek**2
+            subroutine min_envelope( n, g, x, alpha, z )
+                integer,              intent(in) :: n
+                real,                 intent(in) :: g(n), x(n), alpha
+                real, allocatable, intent(inout) :: z(:)
+                real    :: m
+                integer :: i, is
+                if( allocated(z) ) deallocate(z)
+                allocate(z(n),source=0.)
+                m = 0.
+                do i = 1,n
+                    is = i
+                    if( g(i) > 1./HP1 ) exit
+                    m = max(m,x(i))
                 enddo
-            end function f
-
-            subroutine fgrad( self, vec, D, f, gr )
-                class(*), intent(inout) :: self
-                integer,  intent(in)    :: D
-                real(dp), intent(in)    :: vec(D)
-                real(dp), intent(inout) :: f, gr
-                real(dp) :: dk, ek
-                integer  :: k
-                f  = 0.d0
-                gr = 0.d0
-                do k = kfirst,kend
-                    dk = g(k) / vec(3) + 1.d0
-                    ek = (logpspecs(k,ithrcls)-vec(1)-vec(2)*dk**(-2))
-                    f  = f + ek**2
-                    gr = vec(2)/3.d0 * dk**(-3) * ek
+                if( is > 1 ) z(:is-1) = m
+                do i = is,n
+                    m    = min(alpha*m,x(i))
+                    z(i) = m
                 enddo
-            end subroutine fgrad
+            end subroutine min_envelope
 
-            subroutine grad( self, vec, D, gr )
-                class(*), intent(inout) :: self
-                integer,  intent(in)    :: D
-                real(dp), intent(in)    :: vec(D)
-                real(dp), intent(inout) :: gr
-                real(dp) :: f
-                call fgrad(self, vec, D, f, gr)
-            end subroutine grad
-
-    end subroutine flag_overfitted_class
+    end subroutine flag_overfitted_cavgs
 
 end module simple_strategy2D_utils
