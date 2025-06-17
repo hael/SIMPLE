@@ -1902,7 +1902,8 @@ contains
         use simple_histogram,  only: histogram
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        real,             parameter   :: HP_SPEC = 20., LP_SPEC = 6., FRAC_BEST_CAVGS=0.5, SCORE_THRES=40., SCORE_THRES_FINAL=70.
+        real,             parameter   :: HP_SPEC = 20., LP_SPEC = 6., FRAC_BEST_CAVGS=0.3, SCORE_THRES=40.
+        real,             parameter   :: SCORE_THRES_JOINT=70., SCORE_THRES_HOMO=80., SCORE_THRES_CLUSTSCORE=80.
         integer,          parameter   :: NCLS_DEFAULT = 20, NCLS_SMALL_DEFAULT = 5, NHISTBINS = 128
         logical,          parameter   :: DEBUG = .true.
         type(image),      allocatable :: cavg_imgs(:), cluster_imgs(:), cluster_imgs_aligned(:)
@@ -2033,7 +2034,7 @@ contains
             case('hybrid')
                 call normalize_minmax(dmat_pow)
                 dmat_fm   = smat2dmat(corrmat)
-                dmat      = (dmat_hist + dmat_pow + dmat_fm) / 3.
+                dmat      = 0.2 * dmat_hist + 0.4 * dmat_pow + 0.4 * dmat_fm
             case DEFAULT
                 THROW_HARD('Unsupported clustering criterion: '//trim(params%clust_crit))
         end select
@@ -2081,7 +2082,10 @@ contains
                 call renormalize_scores(SCORE_THRES)
                 ! identify good/bad
                 clust_info_arr(:)%good_bad = 0
-                where( clust_info_arr(:)%jointscore >= SCORE_THRES_FINAL ) clust_info_arr(:)%good_bad = 1
+                where( clust_info_arr(:)%jointscore  >= SCORE_THRES_JOINT ) clust_info_arr(:)%good_bad = 1
+                where( clust_info_arr(:)%homogeneity >= SCORE_THRES_HOMO .and.&
+                       &clust_info_arr(:)%clustscore >= SCORE_THRES_CLUSTSCORE ) clust_info_arr(:)%good_bad = 1
+
                 write(logfhandle,'(A)') '>>> ROTATING & SHIFTING UNMASKED, UNFILTERED CLASS AVERAGES'
                 ! re-create cavg_imgs
                 call dealloc_imgarr(cavg_imgs)
@@ -2218,7 +2222,7 @@ contains
             ! CLUSTSCORE 
             where(clust_info_arr(:)%clustscore  <= percen_thres ) clust_info_arr(:)%clustscore  = 0.
             call scores2scores_percen(clust_info_arr(:)%clustscore)
-            ! JOINT SCORE 
+            ! JOINT SCORE
             clust_info_arr(:)%jointscore = 0.25 * clust_info_arr(:)%homogeneity + 0.5 * clust_info_arr(:)%resscore + 0.25 * clust_info_arr(:)%clustscore
             call scores2scores_percen(clust_info_arr(:)%jointscore)
         end subroutine renormalize_scores
