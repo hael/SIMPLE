@@ -3285,8 +3285,8 @@ contains
                 elseif( trim(coord_type) .eq. 'polar' )then
                     ! update polar refs using current alignment params
                     call pftcc%gen_polar_refs(build_glob%eulspace, build_glob%spproj_field,&
-                                            &ran=(trim(params%cls_init).eq.'rand') .and. iter==1)
-                    call pftcc%add_polar_comlin_refs(pcomlines, pfts)
+                                            &ran=(trim(params%cls_init).eq.'rand') .and. iter==1,&
+                                            &comlin=.true., pcomlines=pcomlines, pfts=pfts)
                     ! for visualization of polar cavgs
                     call pftcc%prefs_to_cartesian(refs)
                     do iref = 1, params_glob%nspace

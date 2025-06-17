@@ -119,7 +119,7 @@ enddo
 call pftcc%get_refs_ptr(ref_ptrs_even, ref_ptrs_odd)
 allocate(pfts(pftcc%get_pftsz(), kfromto(1):kfromto(2), NPLANES), source=cmplx(0.,0.))
 call pftcc%gen_polar_comlins(spiral, pcomlines)
-call pftcc%gen_polar_comlin_refs(pcomlines, pfts, iseven=.true.)
+call pftcc%gen_polar_comlin_pfts(pcomlines, ref_ptrs_even, pfts)
 i = ORI_IND1
 call pftcc%set_ref_pft(i, ref_ptrs_even(:,:,i), iseven=.true.)
 call pftcc%polar2cartesian(i, .true., cmat, box, box_in=p%box)
