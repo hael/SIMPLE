@@ -74,14 +74,12 @@ end type simple_program
 ! instances of this class - special
 
 type(simple_program), target :: abinitio2D
-type(simple_program), target :: abinitio_cleanup2D
 type(simple_program), target :: abinitio3D_cavgs
 type(simple_program), target :: abinitio3D_cavgs_fast
 type(simple_program), target :: abinitio3D
 type(simple_program), target :: abinitio3D_parts
 type(simple_program), target :: abinitio3D_stream
 type(simple_program), target :: analyze_pspecs
-type(simple_program), target :: autoselect_cavgs
 type(simple_program), target :: afm
 type(simple_program), target :: analysis2D_nano
 type(simple_program), target :: assign_optics_groups
@@ -124,7 +122,6 @@ type(simple_program), target :: export_starproject
 type(simple_program), target :: extract
 type(simple_program), target :: filter
 type(simple_program), target :: fsc
-type(simple_program), target :: partition_cavgs
 type(simple_program), target :: gen_pspecs_and_thumbs
 type(simple_program), target :: gen_picking_refs
 type(simple_program), target :: icm2D
@@ -136,6 +133,7 @@ type(simple_program), target :: import_particles
 type(simple_program), target :: import_starproject
 type(simple_program), target :: info_image
 type(simple_program), target :: info_stktab
+type(simple_program), target :: init_refine2D
 type(simple_program), target :: make_cavgs
 type(simple_program), target :: make_oris
 type(simple_program), target :: make_pickrefs
@@ -405,14 +403,12 @@ contains
         call set_common_params
         call set_prg_ptr_array
         call new_abinitio2D
-        call new_abinitio_cleanup2D
         call new_abinitio3D_cavgs
         call new_abinitio3D_cavgs_fast
         call new_abinitio3D
         call new_abinitio3D_parts
         call new_abinitio3D_stream
         call new_analyze_pspecs
-        call new_autoselect_cavgs
         call new_afm
         call new_analysis2D_nano
         call new_assign_optics
@@ -457,13 +453,13 @@ contains
         call new_filter
         call new_fractionate_movies
         call new_fsc
-        call new_partition_cavgs
         call new_gen_pspecs_and_thumbs
         call new_gen_picking_refs
         call new_icm2D
         call new_icm3D
         call new_info_image
         call new_info_stktab
+        call new_init_refine2D
         call new_import_boxes
         call new_import_cavgs
         call new_import_movies
@@ -558,14 +554,12 @@ contains
     subroutine set_prg_ptr_array
         n_prg_ptrs = 0        
         call push2prg_ptr_array(abinitio2D)
-        call push2prg_ptr_array(abinitio_cleanup2D)
         call push2prg_ptr_array(abinitio3D_cavgs)
         call push2prg_ptr_array(abinitio3D_cavgs_fast)
         call push2prg_ptr_array(abinitio3D)
         call push2prg_ptr_array(abinitio3D_parts)
         call push2prg_ptr_array(abinitio3D_stream)
         call push2prg_ptr_array(analyze_pspecs)
-        call push2prg_ptr_array(autoselect_cavgs)
         call push2prg_ptr_array(afm)
         call push2prg_ptr_array(analysis2D_nano)
         call push2prg_ptr_array(assign_optics_groups)
@@ -607,13 +601,13 @@ contains
         call push2prg_ptr_array(filter)
         call push2prg_ptr_array(fractionate_movies)
         call push2prg_ptr_array(fsc)
-        call push2prg_ptr_array(partition_cavgs)
         call push2prg_ptr_array(gen_pspecs_and_thumbs)
         call push2prg_ptr_array(gen_picking_refs)
         call push2prg_ptr_array(icm2D)
         call push2prg_ptr_array(icm3D)
         call push2prg_ptr_array(info_image)
         call push2prg_ptr_array(info_stktab)
+        call push2prg_ptr_array(init_refine2D)
         call push2prg_ptr_array(import_boxes)
         call push2prg_ptr_array(import_cavgs)
         call push2prg_ptr_array(import_movies)
@@ -718,8 +712,6 @@ contains
         select case(trim(which_program))
             case('abinitio2D')
                 ptr2prg => abinitio2D
-            case('abinitio_cleanup2D')
-                ptr2prg => abinitio_cleanup2D
             case('abinitio3D_cavgs')
                 ptr2prg => abinitio3D_cavgs
             case('abinitio3D_cavgs_fast')
@@ -732,8 +724,6 @@ contains
                 ptr2prg => abinitio3D_stream
              case('analyze_pspecs')
                 ptr2prg => analyze_pspecs
-            case('autoselect_cavgs')
-                ptr2prg => autoselect_cavgs
             case('afm')
                 ptr2prg => afm
             case('analysis2D_nano')
@@ -820,8 +810,6 @@ contains
                 ptr2prg => filter
             case('fsc')
                 ptr2prg => fsc
-            case('partition_cavgs')
-                ptr2prg => partition_cavgs
             case('gen_pspecs_and_thumbs')
                 ptr2prg => gen_pspecs_and_thumbs
             case('gen_picking_refs')
@@ -834,6 +822,8 @@ contains
                 ptr2prg => info_image
             case('info_stktab')
                 ptr2prg => info_stktab
+            case('init_refine2D')
+                ptr2prg => init_refine2D
             case('import_boxes')
                 ptr2prg => import_boxes
             case('import_cavgs')
@@ -1019,13 +1009,11 @@ contains
 
     subroutine list_simple_prgs_in_ui
         write(logfhandle,'(A)') abinitio2D%name
-        write(logfhandle,'(A)') abinitio_cleanup2D%name
         write(logfhandle,'(A)') abinitio3D_cavgs%name
         write(logfhandle,'(A)') abinitio3D_cavgs_fast%name
         write(logfhandle,'(A)') abinitio3D%name
         write(logfhandle,'(A)') abinitio3D_parts%name
         write(logfhandle,'(A)') analyze_pspecs%name
-        write(logfhandle,'(A)') autoselect_cavgs%name
         write(logfhandle,'(A)') afm%name
         write(logfhandle,'(A)') assign_optics_groups%name
         write(logfhandle,'(A)') automask%name
@@ -1052,12 +1040,12 @@ contains
         write(logfhandle,'(A)') export_starproject%name
         write(logfhandle,'(A)') filter%name
         write(logfhandle,'(A)') fsc%name
-        write(logfhandle,'(A)') partition_cavgs%name
         write(logfhandle,'(A)') gen_pspecs_and_thumbs%name
         write(logfhandle,'(A)') icm2D%name
         write(logfhandle,'(A)') icm3D%name
         write(logfhandle,'(A)') info_image%name
         write(logfhandle,'(A)') info_stktab%name
+        write(logfhandle,'(A)') init_refine2D%name
         write(logfhandle,'(A)') import_boxes%name
         write(logfhandle,'(A)') import_cavgs%name
         write(logfhandle,'(A)') import_movies%name
@@ -2725,44 +2713,6 @@ contains
         call fsc%set_input('comp_ctrls', 1, nthr)
     end subroutine new_fsc
 
-    subroutine new_partition_cavgs
-        ! PROGRAM SPECIFICATION
-        call partition_cavgs%new(&
-        &'partition_cavgs', &                                           ! name
-        &'Generate class averages partitions based on their simmilarity',&  ! descr_short
-        &'is an application to cluster class averages with affinity propagation',   &! descr_long
-        &'simple_exec',&                                                    ! executable
-        &0, 0, 0, 3, 3, 1, 1, .true.)                                       ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        ! <empty>
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call partition_cavgs%set_input('srch_ctrls', 1, nsearch)
-        partition_cavgs%srch_ctrls(1)%descr_long        = 'Number of clustering attempts with a range preference values{0.}'
-        partition_cavgs%srch_ctrls(1)%descr_placeholder = 'Number of clustering attempts{0.}'
-        partition_cavgs%srch_ctrls(1)%rval_default      = 0.
-        call partition_cavgs%set_input('srch_ctrls', 2, trs)
-        partition_cavgs%srch_ctrls(2)%descr_long        = 'Image alignment half-offset{15.}'
-        partition_cavgs%srch_ctrls(2)%descr_placeholder = 'Half-offset{15.}'
-        partition_cavgs%srch_ctrls(2)%rval_default      = 15.
-        call partition_cavgs%set_input('srch_ctrls', 3, mirr)
-        partition_cavgs%srch_ctrls(3)%descr_long        = 'Take into account mirror class averages(yes|no){no}'
-        partition_cavgs%srch_ctrls(3)%descr_placeholder = '(yes|no){no}'
-        ! filter controls
-        call partition_cavgs%set_input('filt_ctrls', 1, hp)
-        call partition_cavgs%set_input('filt_ctrls', 2, lp)
-        call partition_cavgs%set_input('filt_ctrls', 3, lpthres)
-        ! mask controls
-        call partition_cavgs%set_input('mask_ctrls', 1, mskdiam)
-        partition_cavgs%mask_ctrls(1)%required = .false.
-        ! computer controls
-        call partition_cavgs%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_partition_cavgs
-
     subroutine new_gen_pspecs_and_thumbs
         ! PROGRAM SPECIFICATION
         call gen_pspecs_and_thumbs%new(&
@@ -2977,6 +2927,31 @@ contains
         ! computer controls
     end subroutine new_info_stktab
 
+    subroutine new_init_refine2D
+        ! PROGRAM SPECIFICATION
+        call init_refine2D%new(&
+        &'init_refine2D', &                                                      ! name
+        &'initialization of 2D refinement by affinity propagation clustering of class averages',&                                            ! descr_short
+        &'is a program for initialization of 2D refinement',&                    ! descr_long
+        &'simple_exec',&                                                         ! executable
+        &0, 0, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
+        ! TEMPLATE
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+    end subroutine new_init_refine2D
+
     subroutine new_abinitio2D
         ! PROGRAM SPECIFICATION
         call abinitio2D%new(&
@@ -3025,55 +3000,6 @@ contains
         abinitio2D%comp_ctrls(1)%required = .false.
         call abinitio2D%set_input('comp_ctrls', 2, nthr, gui_submenu="compute", gui_advanced=.false.)
     end subroutine new_abinitio2D
-
-    subroutine new_abinitio_cleanup2D
-        ! PROGRAM SPECIFICATION
-        call abinitio_cleanup2D%new(&
-        &'abinitio_cleanup2D',&                                                                ! name
-        &'ab initio 2D analysis from particles',&                                      ! descr_short
-        &'is a distributed workflow for generating 2D class averages from particles',& ! descr_long                                                           ! descr_long
-        &'simple_exec',&                                                               ! executable
-        &0, 0, 0, 9, 5, 1, 2, .true.,&                                                 ! # entries in each group, requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute"  )       ! GUI
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        ! <empty>
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call abinitio_cleanup2D%set_input('srch_ctrls', 1, ncls, gui_submenu="search", gui_advanced=.false.)
-        call abinitio_cleanup2D%set_input('srch_ctrls', 2, 'center', 'binary', 'Center class averages', 'Center class averages by their &
-        &center of gravity and map shifts back to the particles(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
-        call abinitio_cleanup2D%set_input('srch_ctrls', 3, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
-        &for accelerated computation(yes|no){yes}','(yes|no){yes}', .false., 'yes', gui_submenu="model")
-        call abinitio_cleanup2D%set_input('srch_ctrls', 4, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc_smpl|prob|prob_smpl){snhc_smpl}',&
-        &'(snhc_smpl|prob|prob_smpl){snhc_smpl}', .false., 'snhc_smpl', gui_submenu="search")
-        call abinitio_cleanup2D%set_input('srch_ctrls', 5, sigma_est, gui_submenu="search")
-        call abinitio_cleanup2D%set_input('srch_ctrls', 6, cls_init, gui_submenu="search")
-        call abinitio_cleanup2D%set_input('srch_ctrls', 7, autosample, gui_submenu="search")
-        call abinitio_cleanup2D%set_input('srch_ctrls', 8, 'nsample_start', 'num', 'Starting # of particles per class to sample',&
-        &'Starting # of particles per class to sample', 'min # particles per class to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
-        call abinitio_cleanup2D%set_input('srch_ctrls', 9, 'nsample_stop',  'num', 'Maximum # of particles per class to sample',&
-        &'Dynamic particle sampling upper bound to sample', 'max # particles per class to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
-        ! filter controls
-        call abinitio_cleanup2D%set_input('filt_ctrls', 1, hp, gui_submenu="filter")
-        call abinitio_cleanup2D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
-        &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30., gui_submenu="filter")
-        call abinitio_cleanup2D%set_input('filt_ctrls', 3, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit for the first stage of ab-initio model generation',&
-            &'low-pass limit in Angstroms', .false., 30., gui_submenu="filter")
-        call abinitio_cleanup2D%set_input('filt_ctrls', 4, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
-            &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 6., gui_submenu="filter")
-        call abinitio_cleanup2D%set_input('filt_ctrls', 5, lp, gui_submenu="filter")
-        ! mask controls
-        call abinitio_cleanup2D%set_input('mask_ctrls', 1, mskdiam, gui_submenu="mask", gui_advanced=.false.)
-        ! computer controls
-        call abinitio_cleanup2D%set_input('comp_ctrls', 1, nparts, gui_submenu="compute", gui_advanced=.false.)
-        abinitio_cleanup2D%comp_ctrls(1)%required = .false.
-        call abinitio_cleanup2D%set_input('comp_ctrls', 2, nthr, gui_submenu="compute", gui_advanced=.false.)
-    end subroutine new_abinitio_cleanup2D
 
     subroutine new_abinitio3D_cavgs
         ! PROGRAM SPECIFICATION
@@ -3320,32 +3246,6 @@ contains
         ! computer controls
         call analyze_pspecs%set_input('comp_ctrls', 1, nthr)
     end subroutine new_analyze_pspecs
-
-    subroutine new_autoselect_cavgs
-        ! PROGRAM SPECIFICATION
-        call autoselect_cavgs%new(&
-        &'autoselect_cavgs',&                                                                   ! name
-        &'Automatically selectes class averages based on signal stats and reports to project',& ! descr_short
-        &'is a program for automated class average selection reported to the SIMPLE project',&  ! descr_long
-        &'simple_exec',&                                                                        ! executable
-        &0, 1, 0, 1, 2, 1, 0, .true.)                                                           ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call autoselect_cavgs%set_input('parm_ios', 1, prune)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call autoselect_cavgs%set_input('srch_ctrls', 1, 'ncls_spec', 'num', '# spectral clusters', '# spectral clusters(3-10)', '(3-10)', .false., 5.)
-        ! filter controls
-        call autoselect_cavgs%set_input('filt_ctrls', 1, hp)
-        call autoselect_cavgs%set_input('filt_ctrls', 2, lp)
-        ! mask controls
-        call autoselect_cavgs%set_input('mask_ctrls', 1, mskdiam)
-        ! computer controls
-        ! <empty>
-    end subroutine new_autoselect_cavgs
 
     subroutine new_import_boxes
         ! PROGRAM SPECIFICATION

@@ -733,40 +733,33 @@ contains
         call private_prgs(22)%push_opt_key('cenlp')
         call private_prgs(22)%push_opt_key('neg')
         call private_prgs(22)%push_opt_key('filter')
-        
-        ! AUTOSELECT CAVGS
-        call private_prgs(23)%set_name('autoselect_cavgs')
-        ! required keys
-        call private_prgs(23)%push_req_key('projfile')
-        call private_prgs(23)%push_req_key('stk')
-        call private_prgs(23)%push_req_key('mskdiam')
 
         ! CALC_GROUP_SIGMAS, for asssembling sigmas for refine3D
-        call private_prgs(24)%set_name('calc_group_sigmas')
+        call private_prgs(23)%set_name('calc_group_sigmas')
         ! required keys
-        call private_prgs(24)%push_req_key('nparts')
-        call private_prgs(24)%push_req_key('projfile')
-        call private_prgs(24)%push_req_key('nthr')
-        call private_prgs(24)%push_req_key('which_iter')
+        call private_prgs(23)%push_req_key('nparts')
+        call private_prgs(23)%push_req_key('projfile')
+        call private_prgs(23)%push_req_key('nthr')
+        call private_prgs(23)%push_req_key('which_iter')
 
         ! Pearson's correlation coefficient
-        call private_prgs(25)%set_name('pearsn')
+        call private_prgs(24)%set_name('pearsn')
         ! required keys
-        call private_prgs(25)%push_req_key('infile')
-        call private_prgs(25)%push_req_key('infile2')
+        call private_prgs(24)%push_req_key('infile')
+        call private_prgs(24)%push_req_key('infile2')
 
         ! check stochastic update scheme
-        call private_prgs(26)%set_name('check_stoch_update')
+        call private_prgs(25)%set_name('check_stoch_update')
         ! required keys
-        call private_prgs(26)%push_req_key('maxits')
-        call private_prgs(26)%push_req_key('nptcls')
+        call private_prgs(25)%push_req_key('maxits')
+        call private_prgs(25)%push_req_key('nptcls')
 
         ! check fractional update scheme
-        call private_prgs(27)%set_name('check_update_frac')
+        call private_prgs(26)%set_name('check_update_frac')
         ! required keys
-        call private_prgs(27)%push_req_key('nptcls')
+        call private_prgs(26)%push_req_key('nptcls')
 
-        n_private_prgs = 27
+        n_private_prgs = 26
     end subroutine new_private_prgs
 
 end module simple_private_prgs

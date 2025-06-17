@@ -60,7 +60,6 @@ type(pick_commander_distr)                  :: xpick_distr
 ! CLUSTER2D WORKFLOWS
 type(make_cavgs_commander_distr)            :: xmake_cavgs_distr
 type(abinitio2D_commander)                  :: xabinitio2D
-type(abinitio_cleanup2D_commander)          :: xabinitio_cleanup2D
 type(cluster2D_autoscale_commander)         :: xcluster2D_hlev
 type(cluster2D_commander_subsets)           :: xcluster2D_subsets
 type(cleanup2D_commander_hlev)              :: xcleanup2D_distr
@@ -69,10 +68,9 @@ type(map_cavgs_selection_commander)         :: xmap_cavgs_selection
 type(map_cavgs_states_commander)            :: xmap_cavgs_states
 type(sample_classes_commander)              :: xsample_classes
 type(cluster_cavgs_commander)               :: xcluster_cavgs
-type(partition_cavgs_commander)             :: xpartition_cavgs
+type(init_refine2D_commander)               :: xinit_refine2D
 type(score_ptcls_commander)                 :: xscore_ptcls
 type(write_classes_commander)               :: xwrite_classes
-type(autoselect_cavgs_commander)            :: xautoselect_cavgs
 type(consolidate_chunks_cavgs_commander)    :: xconsolidate_chunks_cavgs
 
 ! AB INITIO 3D RECONSTRUCTION WORKFLOW
@@ -252,8 +250,6 @@ select case(trim(prg))
         call xmake_cavgs_distr%execute(cline)
     case( 'abinitio2D' )
         call xabinitio2D%execute(cline)
-    case( 'abinitio_cleanup2D' )
-        call xabinitio_cleanup2D%execute(cline)
     case( 'cleanup2D' )
         call xcleanup2D_distr%execute(cline)
     case( 'cluster2D' )
@@ -270,14 +266,12 @@ select case(trim(prg))
         call xsample_classes%execute(cline)
     case( 'cluster_cavgs' )
         call xcluster_cavgs%execute(cline)
-    case( 'partition_cavgs' )
-        call xpartition_cavgs%execute(cline)
+    case( 'init_refine2D' )
+        call xinit_refine2D%execute(cline)
     case( 'score_ptcls' )
         call xscore_ptcls%execute(cline)
     case( 'write_classes' )
         call xwrite_classes%execute(cline)
-    case('autoselect_cavgs')
-        call xautoselect_cavgs%execute(cline)
     case('consolidate_chunks_cavgs')
         call xconsolidate_chunks_cavgs%execute(cline)
 
@@ -475,7 +469,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('30399f09')
+call simple_print_git_version('34ad4919')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
