@@ -2147,6 +2147,7 @@ contains
                 ! translate to state array
                 allocate(states(ncls), source=0)
                 do icls = 1, ncls_sel
+                    if( labels(icls) == 0 ) cycle
                     if( clust_info_arr(labels(icls))%good_bad == 1 ) states(clsinds(icls)) = 1
                 end do
                 ! map selection to project
