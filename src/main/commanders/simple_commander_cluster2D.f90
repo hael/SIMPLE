@@ -2229,7 +2229,7 @@ contains
         write(logfhandle,'(A)') '>>> PAIRWISE CORRELATIONS THROUGH FOURIER-MELLIN & SHIFT SEARCH'
         call calc_inpl_invariant_fm(cavg_imgs, params%hp, params%lp, params%trs, corrmat)
         ! calculate a preference that generates a small number of clusters
-        pref = calc_ap_pref(corrmat, 'median')
+        pref = calc_ap_pref(corrmat, 'avg_max_med')
         call aprop%new(ncls_sel, corrmat, pref=pref)
         call aprop%propagate(centers, labels, simsum)
         call aprop%kill
