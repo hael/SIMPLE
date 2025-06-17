@@ -156,7 +156,7 @@ type :: polarft_corrcalc
     procedure, private :: kill_memoized_ptcls, kill_memoized_refs
     procedure          :: allocate_ptcls_memoization, allocate_refs_memoization
     ! CALCULATORS
-    procedure          :: polar_cavg, gen_polar_refs, gen_polar_comlins, gen_polar_comlin_refs, add_polar_comlin_refs
+    procedure          :: polar_cavg, gen_polar_refs, gen_polar_comlins, gen_polar_comlin_pfts, add_polar_comlin_refs
     procedure          :: create_polar_absctfmats, calc_polar_ctf
     procedure          :: gen_shmat
     procedure, private :: gen_shmat_8
@@ -1352,7 +1352,7 @@ contains
         type(oris),              intent(in)    :: ref_space
         type(polar_fmap),        intent(inout) :: pcomlines(self%nrefs, self%nrefs)
         integer :: iref, jref, irot, kind, irot_l, irot_r, errflg
-        real    :: loc1_3D(3), loc2_3D(3), denom, a1, a2, b1, b2, line2D(3), irot_real, k_real, w1, w2, hk1(2), hk2(2),&
+        real    :: loc1_3D(3), loc2_3D(3), denom, a1, a2, b1, b2, line2D(3), irot_real, k_real, w, hk1(2), hk2(2),&
                   &rotmat(3,3),invmats(3,3,self%nrefs), loc1s(3,self%nrefs), loc2s(3,self%nrefs), line3D(3)
         ! randomly chosing two sets of (irot, kind) to generate the polar common lines
         irot = 5
@@ -1373,7 +1373,7 @@ contains
         !$omp end parallel do
         ! constructing polar common lines
         pcomlines%legit = .false.
-        !$omp parallel do default(shared) private(iref,loc1_3D,loc2_3D,denom,a1,b1,jref,a2,b2,line3D,line2D,irot_real,k_real,irot_l,irot_r,w2,w1)&
+        !$omp parallel do default(shared) private(iref,loc1_3D,loc2_3D,denom,a1,b1,jref,a2,b2,line3D,line2D,irot_real,k_real,irot_l,irot_r,w)&
         !$omp proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             loc1_3D = loc1s(:,iref)
@@ -1400,12 +1400,12 @@ contains
                 ! caching the indeces irot_j and irot_j+1 and the corresponding linear weight
                 irot_l = floor(irot_real)
                 irot_r = irot_l + 1
-                w2     = irot_real - real(irot_l)
+                w      = irot_real - real(irot_l)
                 if( irot_l > self%pftsz ) irot_l = irot_l - self%pftsz
                 if( irot_r > self%pftsz ) irot_r = irot_r - self%pftsz
                 pcomlines(iref,jref)%targ_irot_l = irot_l
                 pcomlines(iref,jref)%targ_irot_r = irot_r
-                pcomlines(iref,jref)%targ_w      = w2
+                pcomlines(iref,jref)%targ_w      = w
                 ! projecting the 3D common line to a polar line on the iref-th reference
                 line2D = matmul(line3D, invmats(:,:,iref))
                 call self%get_polar_coord(line2D(1:2), irot_real, k_real)
@@ -1413,97 +1413,80 @@ contains
                 ! caching the indeces irot_i and irot_i+1 and the corresponding linear weight
                 irot_l = floor(irot_real)
                 irot_r = irot_l + 1
-                w1     = irot_real - real(irot_l)
+                w      = irot_real - real(irot_l)
                 if( irot_l > self%pftsz ) irot_l = irot_l - self%pftsz
                 if( irot_r > self%pftsz ) irot_r = irot_r - self%pftsz
                 pcomlines(iref,jref)%self_irot_l = irot_l
                 pcomlines(iref,jref)%self_irot_r = irot_r
-                pcomlines(iref,jref)%self_w      = w1
+                pcomlines(iref,jref)%self_w      = w
                 pcomlines(iref,jref)%legit       = .true.
             enddo
         enddo
         !$omp end parallel do
     end subroutine gen_polar_comlins
 
-    subroutine gen_polar_comlin_refs( self, pcomlines, pfts, iseven)
+    subroutine gen_polar_comlin_pfts( self, pcomlines, pfts_in, pfts)
         class(polarft_corrcalc), intent(inout) :: self
-        type(polar_fmap),        intent(inout) :: pcomlines(self%nrefs, self%nrefs)
+        type(polar_fmap),        intent(in)    :: pcomlines(self%nrefs, self%nrefs)
+        complex,                 intent(in)    :: pfts_in(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs)
         complex,                 intent(inout) :: pfts(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs)
-        logical,                 intent(in)    :: iseven
         complex :: pft_line(self%kfromto(1):self%kfromto(2))
         integer :: iref, jref, irot_l, irot_r
-        real    :: w1, w2
+        real    :: w
         pfts = complex(0.,0.)
-        if( iseven )then
-            !$omp parallel do default(shared) private(iref,jref,irot_l,irot_r,w1,w2,pft_line)&
-            !$omp proc_bind(close) schedule(static)
-            do iref = 1, self%nrefs
-                do jref = 1, self%nrefs
-                    if( .not. pcomlines(iref,jref)%legit )cycle
-                    ! compute the interpolated polar common line, between irot_j and irot_j+1
-                    irot_l   = pcomlines(iref,jref)%targ_irot_l
-                    irot_r   = pcomlines(iref,jref)%targ_irot_r
-                    w2       = pcomlines(iref,jref)%targ_w
-                    pft_line = (1.-w2) * self%pfts_refs_even(irot_l,:,jref) + w2 * self%pfts_refs_even(irot_r,:,jref)
-                    ! extrapolate the interpolated polar common line to irot_i and irot_i+1 of iref-th reference
-                    irot_l   = pcomlines(iref,jref)%self_irot_l
-                    irot_r   = pcomlines(iref,jref)%self_irot_r
-                    w1       = pcomlines(iref,jref)%self_w
-                    pfts(irot_l,:,iref) = pfts(irot_l,:,iref) + (1.-w1) * pft_line
-                    pfts(irot_r,:,iref) = pfts(irot_r,:,iref) +     w1  * pft_line
-                enddo
+        !$omp parallel do default(shared) private(iref,jref,irot_l,irot_r,w,pft_line)&
+        !$omp proc_bind(close) schedule(static)
+        do iref = 1, self%nrefs
+            do jref = 1, self%nrefs
+                if( .not. pcomlines(iref,jref)%legit )cycle
+                ! compute the interpolated polar common line, between irot_j and irot_j+1
+                irot_l   = pcomlines(iref,jref)%targ_irot_l
+                irot_r   = pcomlines(iref,jref)%targ_irot_r
+                w        = pcomlines(iref,jref)%targ_w
+                pft_line = (1.-w) * pfts_in(irot_l,:,jref) + w * pfts_in(irot_r,:,jref)
+                ! extrapolate the interpolated polar common line to irot_i and irot_i+1 of iref-th reference
+                irot_l   = pcomlines(iref,jref)%self_irot_l
+                irot_r   = pcomlines(iref,jref)%self_irot_r
+                w        = pcomlines(iref,jref)%self_w
+                pfts(irot_l,:,iref) = pfts(irot_l,:,iref) + (1.-w) * pft_line
+                pfts(irot_r,:,iref) = pfts(irot_r,:,iref) +     w  * pft_line
             enddo
-            !$omp end parallel do
-        else
-            !$omp parallel do default(shared) private(iref,jref,irot_l,irot_r,w1,w2,pft_line)&
-            !$omp proc_bind(close) schedule(static)
-            do iref = 1, self%nrefs
-                do jref = 1, self%nrefs
-                    if( .not. pcomlines(iref,jref)%legit )cycle
-                    ! compute the interpolated polar common line, between irot_j and irot_j+1
-                    irot_l   = pcomlines(iref,jref)%targ_irot_l
-                    irot_r   = pcomlines(iref,jref)%targ_irot_r
-                    w2       = pcomlines(iref,jref)%targ_w
-                    pft_line = (1.-w2) * self%pfts_refs_odd(irot_l,:,jref) + w2 * self%pfts_refs_odd(irot_r,:,jref)
-                    ! extrapolate the interpolated polar common line to irot_i and irot_i+1 of iref-th reference
-                    irot_l   = pcomlines(iref,jref)%self_irot_l
-                    irot_r   = pcomlines(iref,jref)%self_irot_r
-                    w1       = pcomlines(iref,jref)%self_w
-                    pfts(irot_l,:,iref) = pfts(irot_l,:,iref) + (1.-w1) * pft_line
-                    pfts(irot_r,:,iref) = pfts(irot_r,:,iref) +     w1  * pft_line
-                enddo
-            enddo
-            !$omp end parallel do
-        endif
-    end subroutine gen_polar_comlin_refs
+        enddo
+        !$omp end parallel do
+    end subroutine gen_polar_comlin_pfts
 
     subroutine add_polar_comlin_refs( self, pcomlines, pfts)
         class(polarft_corrcalc), intent(inout) :: self
-        type(polar_fmap),        intent(inout) :: pcomlines(self%nrefs, self%nrefs)
+        type(polar_fmap),        intent(in)    :: pcomlines(self%nrefs, self%nrefs)
         complex,                 intent(inout) :: pfts(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs)
-        call self%gen_polar_comlin_refs(pcomlines, pfts, iseven=.true.)
+        call self%gen_polar_comlin_pfts(pcomlines, self%pfts_refs_even, pfts)
         self%pfts_refs_even = self%pfts_refs_even + pfts
-        call self%gen_polar_comlin_refs(pcomlines, pfts, iseven=.false.)
+        call self%gen_polar_comlin_pfts(pcomlines, self%pfts_refs_odd, pfts)
         self%pfts_refs_odd  = self%pfts_refs_odd  + pfts
     end subroutine add_polar_comlin_refs
 
-    subroutine gen_polar_refs( self, ref_space, ptcl_space, ran )
+    subroutine gen_polar_refs( self, ref_space, ptcl_space, ran, comlin, pcomlines, pfts )
         use simple_oris
-        class(polarft_corrcalc), intent(inout) :: self
-        type(oris),              intent(in)    :: ref_space
-        type(oris),              intent(in)    :: ptcl_space
-        logical,    optional,    intent(in)    :: ran
+        class(polarft_corrcalc),    intent(inout) :: self
+        type(oris),                 intent(in)    :: ref_space
+        type(oris),                 intent(in)    :: ptcl_space
+        logical,          optional, intent(in)    :: ran
+        logical,          optional, intent(in)    :: comlin
+        type(polar_fmap), optional, intent(in)    :: pcomlines(self%nrefs, self%nrefs)
+        complex,          optional, intent(inout) :: pfts(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs)
         complex(sp), pointer :: pft_ptcl(:,:)
         real(sp),    pointer :: rctf(:,:)
         type(ori) :: orientation
         integer   :: i, k, iref, irot, ithr, iptcl
-        logical   :: l_ran
+        logical   :: l_ran, l_comlin
         real(dp)  :: numer, denom1, denom2
         real      :: ctf2_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                     &ctf2_merg(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                     &ctf2_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs), frc(self%kfromto(1):self%kfromto(2))
-        l_ran = .false.
-        if( present(ran) ) l_ran = ran
+        l_ran    = .false.
+        l_comlin = .false.
+        if( present(ran) )l_ran    = ran
+        if( present(comlin) .and. present(pfts) .and. present(pcomlines) ) l_comlin = comlin
         if( l_ran )then
             do iref = 1, self%nrefs
                 do k = self%kfromto(1), self%kfromto(2)
@@ -1545,6 +1528,16 @@ contains
                 endif
             endif
         enddo
+        if( l_comlin )then
+            call self%gen_polar_comlin_pfts(pcomlines, self%pfts_refs_even, pfts)
+            self%pfts_refs_even = self%pfts_refs_even + pfts
+            call self%gen_polar_comlin_pfts(pcomlines, self%pfts_refs_odd,  pfts)
+            self%pfts_refs_odd  = self%pfts_refs_odd  + pfts
+            call self%gen_polar_comlin_pfts(pcomlines, cmplx(ctf2_even), pfts)
+            ctf2_even = ctf2_even + real(pfts)
+            call self%gen_polar_comlin_pfts(pcomlines, cmplx(ctf2_odd),  pfts)
+            ctf2_odd  = ctf2_odd  + real(pfts)
+        endif
         if( self%with_ctf )then
             where( abs(ctf2_even) > TINY ) self%pfts_refs_even = self%pfts_refs_even / ctf2_even
             where( abs(ctf2_even) < TINY ) self%pfts_refs_even = 0.
@@ -1568,12 +1561,18 @@ contains
                 self%pfts_refs_merg(:,:,iref) = self%pfts_refs_merg(:,:,iref) + pft_ptcl
             endif
         enddo
+        if( l_comlin )then
+            call self%gen_polar_comlin_pfts(pcomlines, self%pfts_refs_merg, pfts)
+            self%pfts_refs_merg = self%pfts_refs_merg + pfts
+            call self%gen_polar_comlin_pfts(pcomlines, cmplx(ctf2_merg), pfts)
+            ctf2_merg = ctf2_merg + real(pfts)
+        endif
         if( self%with_ctf )then
             where( abs(ctf2_merg) > TINY ) self%pfts_refs_merg = self%pfts_refs_merg / ctf2_merg
             where( abs(ctf2_merg) < TINY ) self%pfts_refs_merg = 0.
         endif
         ! FRC filtering
-        ! turn off FRC for now when polar common line us used
+        ! turn off FRC for now when polar common line is used
         if( .not.(trim(params_glob%test_mode)=='yes') )then
             do iref = 1, self%nrefs
                 frc = 0.
