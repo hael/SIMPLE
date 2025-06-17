@@ -1530,13 +1530,13 @@ contains
         enddo
         if( l_comlin )then
             call self%gen_polar_comlin_pfts(pcomlines, self%pfts_refs_even, pfts)
-            self%pfts_refs_even = self%pfts_refs_even + pfts
+            where( abs(pfts*conjg(pfts)) > TINY ) self%pfts_refs_even = (self%pfts_refs_even + pfts)/2.
             call self%gen_polar_comlin_pfts(pcomlines, self%pfts_refs_odd,  pfts)
-            self%pfts_refs_odd  = self%pfts_refs_odd  + pfts
+            where( abs(pfts*conjg(pfts)) > TINY ) self%pfts_refs_odd  = (self%pfts_refs_odd  + pfts)/2.
             call self%gen_polar_comlin_pfts(pcomlines, cmplx(ctf2_even), pfts)
-            ctf2_even = ctf2_even + real(pfts)
+            where( abs(pfts*conjg(pfts)) > TINY ) ctf2_even = (ctf2_even + real(pfts))/2.
             call self%gen_polar_comlin_pfts(pcomlines, cmplx(ctf2_odd),  pfts)
-            ctf2_odd  = ctf2_odd  + real(pfts)
+            where( abs(pfts*conjg(pfts)) > TINY ) ctf2_odd  = (ctf2_odd  + real(pfts))/2.
         endif
         if( self%with_ctf )then
             where( abs(ctf2_even) > TINY ) self%pfts_refs_even = self%pfts_refs_even / ctf2_even
@@ -1563,9 +1563,9 @@ contains
         enddo
         if( l_comlin )then
             call self%gen_polar_comlin_pfts(pcomlines, self%pfts_refs_merg, pfts)
-            self%pfts_refs_merg = self%pfts_refs_merg + pfts
+            where( abs(pfts*conjg(pfts)) > TINY ) self%pfts_refs_merg = (self%pfts_refs_merg + pfts)/2.
             call self%gen_polar_comlin_pfts(pcomlines, cmplx(ctf2_merg), pfts)
-            ctf2_merg = ctf2_merg + real(pfts)
+            where( abs(pfts*conjg(pfts)) > TINY ) ctf2_merg = (ctf2_merg + real(pfts))/2.
         endif
         if( self%with_ctf )then
             where( abs(ctf2_merg) > TINY ) self%pfts_refs_merg = self%pfts_refs_merg / ctf2_merg
