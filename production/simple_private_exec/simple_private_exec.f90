@@ -42,7 +42,6 @@ type(cluster2D_commander)               :: xcluster2D
 type(cluster2D_commander_distr)         :: xcluster2D_distr
 type(cavgassemble_commander)            :: xcavgassemble
 type(rank_cavgs_commander)              :: xrank_cavgs
-type(autoselect_cavgs_commander)        :: xautoselect_cavgs
 type(export_cavgs_commander)            :: xexport_cavgs
 type(prob_tab2D_commander)              :: xprob_tab2D
 
@@ -161,8 +160,6 @@ select case(prg)
         call xcavgassemble%execute(cline)
     case( 'rank_cavgs' )
         call xrank_cavgs%execute(cline)
-    case('autoselect_cavgs')
-        call xautoselect_cavgs%execute(cline)
     case( 'export_cavgs' )
         call xexport_cavgs%execute(cline)
     case( 'prob_tab2D' )

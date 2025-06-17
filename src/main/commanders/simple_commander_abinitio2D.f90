@@ -11,7 +11,7 @@ use simple_commander_euclid
 use simple_qsys_funs
 implicit none
 
-public :: abinitio2D_commander, autosample2D, abinitio_cleanup2D_commander
+public :: abinitio2D_commander, autosample2D
 private
 #include "simple_local_flags.inc"
 
@@ -19,11 +19,6 @@ type, extends(commander_base) :: abinitio2D_commander
     contains
     procedure :: execute => exec_abinitio2D
 end type abinitio2D_commander
-
-type, extends(commander_base) :: abinitio_cleanup2D_commander
-    contains
-    procedure :: execute => exec_abinitio_cleanup2D
-end type abinitio_cleanup2D_commander
 
 ! Dimensions
 real,    parameter :: SMPD_TARGET     = 2.67
@@ -717,53 +712,5 @@ contains
             endif
         endif
     end subroutine autosample2D
-
-    subroutine exec_abinitio_cleanup2D( self, cline )
-        class(abinitio_cleanup2D_commander), intent(inout) :: self
-        class(cmdline),                      intent(inout) :: cline
-        ! commanders
-        type(abinitio2D_commander)       :: xabinitio2D
-        type(autoselect_cavgs_commander) :: xautoselect_cavgs
-        ! others
-        type(parameters)                 :: params
-        type(sp_project)                 :: spproj, work_proj
-        integer, allocatable             :: states_autosel(:), states_autosel_inv(:), tmpinds(:), states_cavgs(:), clsinds(:)
-        integer, allocatable             :: pinds(:), states_prank(:), pinds_bad_ptcls(:), pinds_good_ptcls(:)
-        type(class_sample),  allocatable :: clssmp(:)
-        character(len=*),      parameter :: work_projfile = 'abinitio_cleanup2D_tmpproj.simple'
-        type(cmdline)                    :: cline_autosel_cavgs
-        integer :: nptcls
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        ! master parameters
-        call params%new(cline)
-        call cline%set('mkdir', 'no')
-        ! run first 2D
-        call xabinitio2D%execute_safe(cline)
-        ! read project
-        call spproj%read(params%projfile)
-        ! make work project
-        call simple_copy_file(params%projfile, work_projfile)
-        ! make automatic class selection
-        call cline_autosel_cavgs%set('mskdiam',  params%mskdiam)
-        call cline_autosel_cavgs%set('projfile', work_projfile)
-        call cline_autosel_cavgs%set('prune',    'no')
-        call xautoselect_cavgs%execute_safe(cline_autosel_cavgs)
-        call work_proj%read(work_projfile)
-        clsinds = work_proj%get_selected_clsinds()
-        call work_proj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
-        ! divide into two parts by splitting good classes into top/bottom ranked particles
-        nptcls  = work_proj%get_nptcls()
-        allocate(states_prank(nptcls), states_autosel(nptcls), states_autosel_inv(nptcls), source=0)
-        call work_proj%os_ptcl2D%sample_ranked_parts(clssmp, 2, states_prank)
-        where( states_prank.eq.1 )
-            states_autosel     = 1
-            states_autosel_inv = 0
-        else where
-            states_autosel     = 0
-            states_autosel_inv = 0
-        endwhere
-        deallocate(clsinds)
-        call simple_end('**** SIMPLE_ABINITIO_CLEANUP2D NORMAL STOP ****')
-    end subroutine exec_abinitio_cleanup2D
 
 end module simple_commander_abinitio2D
