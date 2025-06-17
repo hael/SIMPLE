@@ -16,6 +16,7 @@ use simple_strategy2D,             only: strategy2D, strategy2D_per_ptcl
 use simple_strategy2D_srch,        only: strategy2D_spec
 use simple_strategy2D_greedy,      only: strategy2D_greedy
 use simple_strategy2D_inpl,        only: strategy2D_inpl
+use simple_strategy2D_inpl_smpl,   only: strategy2D_inpl_smpl
 use simple_strategy2D_greedy_smpl, only: strategy2D_greedy_smpl
 use simple_strategy2D_tseries,     only: strategy2D_tseries
 use simple_strategy2D_snhc,        only: strategy2D_snhc
@@ -249,8 +250,12 @@ contains
                     if( l_prob )then
                         allocate(strategy2D_prob                    :: strategy2Dsrch(iptcl_batch)%ptr)
                     else
-                        if( trim(refine_flag).eq.'inpl' )then
-                            allocate(strategy2D_inpl                :: strategy2Dsrch(iptcl_batch)%ptr)
+                        if( str_has_substr(refine_flag,'inpl') )then
+                            if( refine_flag.eq.'inpl' )then
+                                allocate(strategy2D_inpl            :: strategy2Dsrch(iptcl_batch)%ptr)
+                            else if( refine_flag.eq.'inpl_smpl' )then
+                                allocate(strategy2D_inpl_smpl       :: strategy2Dsrch(iptcl_batch)%ptr)
+                            endif
                         else if( l_greedy .or. (updatecnt==1 .or. (.not.build_glob%spproj_field%has_been_searched(iptcl))) )then
                             ! first iteration | refine=*greedy*
                             if( trim(params_glob%tseries).eq.'yes' )then
