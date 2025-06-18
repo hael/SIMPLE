@@ -128,7 +128,7 @@ contains
         endif
     end subroutine calc_cartesian_corrmat_2
 
-    subroutine calc_inpl_invariant_fm( imgs, hp, lp, trs, corrmat )
+    subroutine calc_inpl_invariant_fm( imgs, hp, lp, trs, corrmat, l_srch_mirr )
         use simple_pftcc_shsrch_fm
         use simple_polarizer,        only: polarizer
         use simple_polarft_corrcalc, only: polarft_corrcalc
@@ -137,11 +137,15 @@ contains
         real,    allocatable,  intent(inout) :: corrmat(:,:)
         type(image),           allocatable   :: ccimgs(:,:)
         type(pftcc_shsrch_fm), allocatable   :: fm_correlators(:)
+        logical, optional,     intent(in)    :: l_srch_mirr
         type(polarizer)        :: polartransform
         type(polarft_corrcalc) :: pftcc
         real, parameter :: TRS_STEPSZ = 1.0
         integer :: n, i, j, ithr, nrots, loc(1), irot, ldim(3), box, kfromto(2)
         real    :: offset(2), offsetm(2), ang, angm, smpd, cc, ccm
+        logical :: ll_srch_mirr
+        ll_srch_mirr = .true.
+        if( present(l_srch_mirr) ) ll_srch_mirr = l_srch_mirr
         n          = size(imgs)
         ldim       = imgs(1)%get_ldim()
         box        = ldim(1)
@@ -171,31 +175,49 @@ contains
             call ccimgs(i,1)%new(ldim, smpd, wthreads=.false.)
             call ccimgs(i,2)%new(ldim, smpd, wthreads=.false.)
         enddo
-        !$omp parallel do default(shared) private(i,j,cc,ccm,ithr,offset,offsetm,ang,angm)&
-        !$omp schedule(dynamic) proc_bind(close)
-        do i = 1, n - 1
-            ithr = omp_get_thread_num()+1
-            corrmat(i,i) = 1.
-            do j = i + 1, n
-                ! reference to particle
-                call pftcc%set_eo(i,.true.)
-                call fm_correlators(ithr)%calc_phasecorr(j, i, imgs(j), imgs(i),&
-                    &ccimgs(ithr,1), ccimgs(ithr,2), cc, rotang=ang, shift=offset)
-                ! mirrored reference to particle
-                call pftcc%set_eo(i,.false.) ! switch mirror
-                call fm_correlators(ithr)%calc_phasecorr(j, i, imgs(j), imgs(i),&
-                &ccimgs(ithr,1), ccimgs(ithr,2), ccm, mirror=.true., rotang=angm, shift=offsetm)
-                ! higher correlation wins
-                if( ccm > cc )then
-                    cc     = ccm
-                    ang    = angm
-                    offset = offsetm
-                endif
-                corrmat(i,j) = cc
-                corrmat(j,i) = cc
+        if( ll_srch_mirr )then
+            !$omp parallel do default(shared) private(i,j,cc,ccm,ithr,offset,offsetm,ang,angm)&
+            !$omp schedule(dynamic) proc_bind(close)
+            do i = 1, n - 1
+                ithr = omp_get_thread_num()+1
+                corrmat(i,i) = 1.
+                do j = i + 1, n
+                    ! reference to particle
+                    call pftcc%set_eo(i,.true.)
+                    call fm_correlators(ithr)%calc_phasecorr(j, i, imgs(j), imgs(i),&
+                        &ccimgs(ithr,1), ccimgs(ithr,2), cc, rotang=ang, shift=offset)
+                    ! mirrored reference to particle
+                    call pftcc%set_eo(i,.false.) ! switch mirror
+                    call fm_correlators(ithr)%calc_phasecorr(j, i, imgs(j), imgs(i),&
+                    &ccimgs(ithr,1), ccimgs(ithr,2), ccm, mirror=.true., rotang=angm, shift=offsetm)
+                    ! higher correlation wins
+                    if( ccm > cc )then
+                        cc     = ccm
+                        ang    = angm
+                        offset = offsetm
+                    endif
+                    corrmat(i,j) = cc
+                    corrmat(j,i) = cc
+                enddo
             enddo
-        enddo
-        !$omp end parallel do
+            !$omp end parallel do
+        else
+            !$omp parallel do default(shared) private(i,j,cc,ithr,offset,ang)&
+            !$omp schedule(dynamic) proc_bind(close)
+            do i = 1, n - 1
+                ithr = omp_get_thread_num()+1
+                corrmat(i,i) = 1.
+                do j = i + 1, n
+                    ! reference to particle
+                    call pftcc%set_eo(i,.true.)
+                    call fm_correlators(ithr)%calc_phasecorr(j, i, imgs(j), imgs(i),&
+                        &ccimgs(ithr,1), ccimgs(ithr,2), cc, rotang=ang, shift=offset)
+                    corrmat(i,j) = cc
+                    corrmat(j,i) = cc
+                enddo
+            enddo
+            !$omp end parallel do
+        endif
         corrmat(n,n) = 1. ! leftover
         ! tidy
         call pftcc%kill

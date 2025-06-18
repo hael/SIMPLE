@@ -2934,7 +2934,7 @@ contains
         &'initialization of 2D refinement by affinity propagation clustering of class averages',&                                            ! descr_short
         &'is a program for initialization of 2D refinement',&                    ! descr_long
         &'simple_exec',&                                                         ! executable
-        &0, 0, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
+        &0, 0, 0, 1, 0, 0, 0, .true.)                                            ! # entries in each group, requires sp_project
         ! TEMPLATE
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2944,7 +2944,7 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        ! <empty>
+        call init_refine2D%set_input('srch_ctrls', 1, ncls, gui_submenu="search", gui_advanced=.false.)
         ! filter controls
         ! <empty>
         ! mask controls

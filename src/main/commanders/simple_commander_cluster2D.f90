@@ -2189,16 +2189,18 @@ contains
     subroutine exec_init_refine2D( self, cline )
         use simple_corrmat,  only: calc_inpl_invariant_fm
         use simple_aff_prop, only: aff_prop
+        use simple_kmedoids, only: kmedoids
         class(init_refine2D_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters)              :: params
         type(sp_project)              :: spproj
         type(aff_prop)                :: aprop
+        type(kmedoids)                :: kmed
         type(image)                   :: img_msk
         type(image),      allocatable :: cavg_imgs(:)
         logical,          allocatable :: l_non_junk(:), l_msk(:,:,:)
         integer,          allocatable :: clspops(:), clsinds(:), centers(:), labels(:)
-        real,             allocatable :: corrmat(:,:), mm(:,:)
+        real,             allocatable :: corrmat(:,:), mm(:,:), dmat(:,:)
         type(clust_info), allocatable :: clust_info_arr(:)
         integer :: ncls, ncls_sel, ldim(3), nclust, iclust
         real    :: smpd, pref, simsum
@@ -2227,14 +2229,25 @@ contains
         params%msk  = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
         ! pairwise correlation through Fourier-Mellin + shift search
         write(logfhandle,'(A)') '>>> PAIRWISE CORRELATIONS THROUGH FOURIER-MELLIN & SHIFT SEARCH'
-        call calc_inpl_invariant_fm(cavg_imgs, params%hp, params%lp, params%trs, corrmat)
-        ! calculate a preference that generates a small number of clusters
-        pref = calc_ap_pref(corrmat, 'avg_max_med')
-        call aprop%new(ncls_sel, corrmat, pref=pref)
-        call aprop%propagate(centers, labels, simsum)
-        call aprop%kill
-        nclust = size(centers)
-        write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION (AP): ', nclust
+        call calc_inpl_invariant_fm(cavg_imgs, params%hp, params%lp, params%trs, corrmat, l_srch_mirr=.false.)
+        if( cline%defined('ncls') )then
+            nclust = params%ncls
+            dmat   = smat2dmat(corrmat)
+            call kmed%new(ncls_sel, dmat, nclust)
+            call kmed%init
+            call kmed%cluster
+            allocate(labels(ncls_sel), centers(nclust), source=0)
+            call kmed%get_labels(labels)
+            call kmed%get_medoids(centers)
+        else
+            ! calculate a preference that generates a small number of clusters
+            pref = calc_ap_pref(corrmat, 'avg_max_med')
+            call aprop%new(ncls_sel, corrmat, pref=pref)
+            call aprop%propagate(centers, labels, simsum)
+            call aprop%kill
+            nclust = size(centers)
+            write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION (AP): ', nclust
+        endif
         ! prep mask
         call img_msk%new([params%box,params%box,1], params%smpd)
         img_msk = 1.
