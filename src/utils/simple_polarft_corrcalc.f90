@@ -1373,8 +1373,8 @@ contains
         !$omp end parallel do
         ! constructing polar common lines
         pcomlines%legit = .false.
-        !$omp parallel do default(shared) private(iref,loc1_3D,loc2_3D,denom,a1,b1,jref,a2,b2,line3D,line2D,irot_real,k_real,irot_l,irot_r,w)&
-        !$omp proc_bind(close) schedule(static)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+        !$omp private(iref,loc1_3D,loc2_3D,denom,a1,b1,jref,a2,b2,line3D,line2D,irot_real,k_real,irot_l,irot_r,w)
         do iref = 1, self%nrefs
             loc1_3D = loc1s(:,iref)
             loc2_3D = loc2s(:,iref)
