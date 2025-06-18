@@ -1833,8 +1833,8 @@ contains
         use simple_histogram,  only: histogram
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        real,             parameter   :: HP_SPEC = 20., LP_SPEC = 6., FRAC_BEST_CAVGS=0.3, SCORE_THRES=40.
-        real,             parameter   :: SCORE_THRES_JOINT=70., SCORE_THRES_HOMO=80., SCORE_THRES_CLUSTSCORE=80.
+        real,             parameter   :: HP_SPEC = 20., LP_SPEC = 6., FRAC_BEST_CAVGS=0.3, SCORE_THRES=40., RES_THRES=6.
+        real,             parameter   :: SCORE_THRES_JOINT=70., SCORE_THRES_HOMO=75., SCORE_THRES_CLUSTSCORE=80., SCORE_THRES_RESSCORE=80.
         integer,          parameter   :: NCLS_DEFAULT = 20, NCLS_SMALL_DEFAULT = 5, NHISTBINS = 128
         logical,          parameter   :: DEBUG = .true.
         type(image),      allocatable :: cavg_imgs(:), cluster_imgs(:), cluster_imgs_aligned(:)
@@ -2010,10 +2010,17 @@ contains
                 call renormalize_scores(SCORE_THRES)
                 ! identify good/bad
                 clust_info_arr(:)%good_bad = 0
+                ! joint score inclusion
                 where( clust_info_arr(:)%jointscore  >= SCORE_THRES_JOINT ) clust_info_arr(:)%good_bad = 1
+                ! homogeneity/clustscore inclusion
                 where( clust_info_arr(:)%homogeneity >= SCORE_THRES_HOMO .and.&
                        &clust_info_arr(:)%clustscore >= SCORE_THRES_CLUSTSCORE ) clust_info_arr(:)%good_bad = 1
-
+                ! homogeneity/resscore inclusion
+                where( clust_info_arr(:)%homogeneity >= SCORE_THRES_HOMO .and.&
+                       &clust_info_arr(:)%resscore >= SCORE_THRES_RESSCORE ) clust_info_arr(:)%good_bad = 1
+                ! resolution inclusion
+                where( clust_info_arr(:)%resscore >= SCORE_THRES_RESSCORE .and.&
+                       &clust_info_arr(:)%res <= RES_THRES ) clust_info_arr(:)%good_bad = 1
                 write(logfhandle,'(A)') '>>> ROTATING & SHIFTING UNMASKED, UNFILTERED CLASS AVERAGES'
                 ! re-create cavg_imgs
                 call dealloc_imgarr(cavg_imgs)
@@ -2114,11 +2121,16 @@ contains
 
         subroutine calc_scores
             integer :: iclust, icls, cnt
+            real    :: euclid_max, res_max, corrfmscore_min, clustscore_min
             ! HOMOGENEITY SCORE
             clust_info_arr(:)%homogeneity = clust_info_arr(:)%euclid
+            euclid_max = maxval(clust_info_arr(:)%euclid)
+            where( clust_info_arr(:)%pop < 2 ) clust_info_arr(:)%homogeneity = euclid_max
             call dists2scores_percen(clust_info_arr(:)%homogeneity)
             ! RESOLUTION SCORE
             clust_info_arr(:)%resscore = clust_info_arr(:)%res
+            res_max = maxval(clust_info_arr(:)%res)
+            where( clust_info_arr(:)%pop < 2 ) clust_info_arr(:)%resscore = res_max
             call dists2scores_percen(clust_info_arr(:)%resscore)
             ! FM CORR, CLUSTSCORE & HISTOGRAM SCORE
             do iclust = 1, nclust
@@ -2135,6 +2147,12 @@ contains
                 clust_info_arr(iclust)%corrfmscore = clust_info_arr(iclust)%corrfmscore / real(cnt)
                 clust_info_arr(iclust)%clustscore  = clust_info_arr(iclust)%clustscore  / real(cnt)
             end do
+            corrfmscore_min = minval(clust_info_arr(:)%corrfmscore)
+            clustscore_min  = minval(clust_info_arr(:)%clustscore)
+            where( clust_info_arr(:)%pop < 2 )
+                clust_info_arr(:)%corrfmscore = corrfmscore_min
+                clust_info_arr(:)%clustscore  = clustscore_min
+            endwhere
             call scores2scores_percen(clust_info_arr(:)%corrfmscore)
             call dists2scores_percen(clust_info_arr(:)%clustscore)
         end subroutine calc_scores
