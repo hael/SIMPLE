@@ -1363,6 +1363,8 @@ contains
             end select
             ! Back to real space
             call img_out%ifft
+            ! Soft-edged mask
+            call img_out%mask(params_glob%msk_crop, 'soft')
             ! gridding prep
             if( params_glob%gridding.eq.'yes' ) call build_glob%img_crop_polarizer%div_by_instrfun(img_out)
             ! return to Fourier space
