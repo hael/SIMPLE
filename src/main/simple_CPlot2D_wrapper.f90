@@ -233,13 +233,13 @@ contains
         call CDataPoint__delete(point)
     end subroutine CDataSet_addpoint
 
-    subroutine plot2D( n, x, y, tmpl_fname, line, xtitle, ytitle, z )
+    subroutine plot2D( n, x, y, tmpl_fname, line, suptitle, xtitle, ytitle, z )
         include 'simple_lib.f08'
         integer,                     intent(in) :: n
         real,                        intent(in) :: x(n), y(n)
         character(len=*),            intent(in) :: tmpl_fname
         logical,           optional, intent(in) :: line
-        character(len=*),  optional, intent(in) :: xtitle, ytitle
+        character(len=*),  optional, intent(in) :: suptitle, xtitle, ytitle
         real,              optional, intent(in) :: z(n)
         type(str4arr)             :: title
         type(CPlot2D_type)        :: plot
@@ -249,7 +249,11 @@ contains
         if( n == 0 ) THROW_HARD('Empty vectors; plot')
         fname_eps  = trim(tmpl_fname)//'.eps'
         fname_pdf  = trim(tmpl_fname)//'.pdf'
-        call CPlot2D__new(plot, trim(tmpl_fname)//C_NULL_CHAR)
+        if( present(suptitle) )then
+            call CPlot2D__new(plot, trim(suptitle)//C_NULL_CHAR)
+        else
+            call CPlot2D__new(plot, trim(tmpl_fname)//C_NULL_CHAR)
+        endif
         call CPlot2D__SetXAxisSize(plot, 400.d0)
         call CPlot2D__SetYAxisSize(plot, 400.d0)
         call CPlot2D__SetDrawLegend(plot, C_FALSE)
@@ -275,7 +279,7 @@ contains
             if( present(line) )then
                 if( line ) call CDataSet__SetDrawLine(dataSet, C_TRUE)
             endif
-            call CDataSet__SetDatasetColor(dataSet, 0.d0,1.d0,0.d0)
+            call CDataSet__SetDatasetColor(dataSet, 0.d0,0.d0,0.d0)
             do k = 1,n
                 call CDataSet_addpoint(dataSet, x(k), z(k))
             end do

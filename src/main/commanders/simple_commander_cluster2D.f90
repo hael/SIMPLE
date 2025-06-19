@@ -37,6 +37,7 @@ public :: make_cavgs_commander
 public :: cavgassemble_commander
 public :: rank_cavgs_commander
 public :: cluster_cavgs_commander
+public :: reject_cavgs_commander
 public :: init_refine2D_commander
 public :: write_classes_commander
 public :: ppca_denoise_classes_commander
@@ -99,15 +100,20 @@ type, extends(commander_base) :: rank_cavgs_commander
     procedure :: execute      => exec_rank_cavgs
 end type rank_cavgs_commander
 
-type, extends(commander_base) :: init_refine2D_commander
-  contains
-    procedure :: execute      => exec_init_refine2D
-end type init_refine2D_commander
-
 type, extends(commander_base) :: cluster_cavgs_commander
   contains
     procedure :: execute      => exec_cluster_cavgs
 end type cluster_cavgs_commander
+
+type, extends(commander_base) :: reject_cavgs_commander
+  contains
+    procedure :: execute      => exec_reject_cavgs
+end type reject_cavgs_commander
+
+type, extends(commander_base) :: init_refine2D_commander
+  contains
+    procedure :: execute      => exec_init_refine2D
+end type init_refine2D_commander
 
 type, extends(commander_base) :: write_classes_commander
   contains
@@ -1837,8 +1843,7 @@ contains
         real,             parameter   :: SCORE_THRES_JOINT=70., SCORE_THRES_HOMO=75., SCORE_THRES_CLUSTSCORE=80., SCORE_THRES_RESSCORE=80.
         integer,          parameter   :: NCLS_DEFAULT = 20, NCLS_SMALL_DEFAULT = 5, NHISTBINS = 128
         logical,          parameter   :: DEBUG = .true.
-        type(image),      allocatable :: cavg_imgs(:), cluster_imgs(:), cluster_imgs_aligned(:)
-        type(clust_inpl), allocatable :: clust_algninfo(:), clust_algninfo_ranked(:)
+        type(image),      allocatable :: cavg_imgs(:)
         type(histogram),  allocatable :: hists(:)
         real,             allocatable :: frc(:), mm(:,:)
         real,             allocatable :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:), dmat_tvd(:,:), smat_tvd(:,:), dmat_joint(:,:)
@@ -1920,6 +1925,7 @@ contains
             end do
         end do
         !$omp end parallel do
+        call hists(:)%kill
         dmat_hist = merge_dmats(dmat_tvd, dmat_jsd, dmat_hd) ! the different histogram distances are given equal weight
         ! set appropriate distance matrix for the clustering criterion given
         select case(trim(params%clust_crit))
@@ -2233,6 +2239,193 @@ contains
         end subroutine rank_clusters
  
     end subroutine exec_cluster_cavgs
+
+    subroutine exec_reject_cavgs( self, cline )
+        use simple_kmedoids,  only: kmedoids
+        use simple_corrmat,   only: calc_inpl_invariant_fm
+        use simple_histogram, only: histogram
+        class(reject_cavgs_commander), intent(inout) :: self
+        class(cmdline),                intent(inout) :: cline
+        real,            parameter   :: HP_SPEC = 20., LP_SPEC = 6., SCORE_THRES=0.9
+        integer,         parameter   :: NCLS_DEFAULT = 20, NCLS_SMALL_DEFAULT = 5, NHISTBINS = 128
+        logical,         parameter   :: DEBUG = .true.
+        type(image),     allocatable :: cavg_imgs(:)
+        type(histogram), allocatable :: hists(:)
+        real,            allocatable :: mm(:,:), scores(:), dmat_hd(:,:), dmat_hist(:,:), dmat_fm(:,:)
+        real,            allocatable :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:), dmat_tvd(:,:), smat_tvd(:,:), dmat_joint(:,:)
+        real,            allocatable :: smat_joint(:,:), dmat(:,:), dmat_jsd(:,:), smat_jsd(:,:)
+        logical,         allocatable :: l_non_junk(:), cls_mask(:)
+        integer,         allocatable :: labels(:), clsinds(:), clspops(:)
+        type(parameters)   :: params
+        type(sp_project)   :: spproj
+        type(kmedoids)     :: kmed
+        type(pspecs)       :: pows
+        real               :: oa_min, oa_max
+        integer            :: ldim(3), ncls, ncls_sel, icls, i, j, nclust, l
+        call cline%set('oritype', 'cls2D')
+        call cline%set('ctf',        'no')
+        call cline%set('objfun',     'cc')
+        call cline%set('sh_inv',    'yes') ! shift invariant search
+        call cline%set('kweight',   'all')
+        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',         'yes')
+        if( .not. cline%defined('trs')        ) call cline%set('trs',             10.)
+        if( .not. cline%defined('prune')      ) call cline%set('prune',          'no')
+        if( .not. cline%defined('clust_crit') ) call cline%set('clust_crit', 'hybrid')
+        ! master parameters
+        call params%new(cline)
+        ! read project file
+        call spproj%read(params%projfile)
+        ncls        = spproj%os_cls2D%get_noris()
+        ! prep class average stack
+        call prep_cavgs4clustering(spproj, cavg_imgs, params%mskdiam, clspops, clsinds, l_non_junk, mm, 'junk' )
+        ncls_sel    = size(cavg_imgs)
+        ! dimensions
+        params%smpd = cavg_imgs(1)%get_smpd()
+        ldim        = cavg_imgs(1)%get_ldim()
+        params%box  = ldim(1)
+        params%msk  = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
+        ! calculate overall minmax
+        oa_min      = minval(mm(:,1))
+        oa_max      = maxval(mm(:,2))
+        ! generate histograms
+        allocate(hists(ncls_sel))
+        do i = 1, ncls_sel
+            call hists(i)%new(cavg_imgs(i), NHISTBINS, minmax=[oa_min,oa_max], radius=params%msk)
+        end do
+        ! generate power spectra and associated distance/similarity matrix
+        call pows%new(cavg_imgs, spproj%os_cls2D, params%msk, HP_SPEC, LP_SPEC, params%ncls_spec, l_exclude_junk=.false.)
+        ! create a joint similarity matrix for clustering based on spectral profile and in-plane invariant correlation
+        call pows%calc_distmat(is_l1=trim(params%dist_type).eq.'l1')
+        dmat_pow = pows%get_distmat()
+        smat_pow = dmat2smat(dmat_pow)
+        call pows%kill
+        ! calculate inpl_invariant_fm corrmat
+        ! pairwise correlation through Fourier-Mellin + shift search
+        write(logfhandle,'(A)') '>>> PAIRWISE CORRELATIONS THROUGH FOURIER-MELLIN & SHIFT SEARCH'
+        call calc_inpl_invariant_fm(cavg_imgs, params%hp, params%lp, params%trs, corrmat)
+        ! calculate histogram-based distance matrices
+        allocate(dmat_tvd(ncls_sel,ncls_sel), dmat_jsd(ncls_sel,ncls_sel), dmat_hd(ncls_sel,ncls_sel), source=0.)
+        !$omp parallel do default(shared) private(i,j)&
+        !$omp schedule(dynamic) proc_bind(close)
+        do i = 1, ncls_sel - 1
+            do j = i + 1, ncls_sel
+                dmat_tvd(i,j) = hists(i)%TVD(hists(j))
+                dmat_tvd(j,i) = dmat_tvd(i,j)
+                dmat_jsd(i,j) = hists(i)%JSD(hists(j))
+                dmat_jsd(j,i) = dmat_jsd(i,j)
+                dmat_hd(i,j)  = hists(i)%HD(hists(j))
+                dmat_hd(j,i)  = dmat_hd(i,j)
+            end do
+        end do
+        !$omp end parallel do
+        call hists(:)%kill
+        dmat_hist = merge_dmats(dmat_tvd, dmat_jsd, dmat_hd) ! the different histogram distances are given equal weight
+        ! set appropriate distance matrix for the clustering criterion given
+        select case(trim(params%clust_crit))
+            case('pow')
+                dmat       = dmat_pow
+            case('powfm')
+                smat_joint = merge_smats(smat_pow,corrmat)
+                dmat       = smat2dmat(smat_joint)
+            case('fm')
+                dmat       = smat2dmat(corrmat)
+            case('tvd','tvdfm','powtvdfm') ! clustering involving total variation histogram distance
+                select case(trim(params%clust_crit))
+                    case('tvd')
+                        dmat       = dmat_tvd
+                    case('tvdfm')
+                        smat_tvd   = dmat2smat(dmat_tvd)
+                        smat_joint = merge_smats(smat_tvd,corrmat)
+                        dmat       = smat2dmat(smat_joint)
+                    case('powtvdfm')
+                        smat_jsd   = dmat2smat(dmat_tvd)
+                        dmat_joint = merge_dmats(dmat_pow,dmat_tvd)
+                        smat_pow   = dmat2smat(dmat_joint)
+                        smat_joint = merge_smats(smat_pow,corrmat)
+                        dmat       = smat2dmat(smat_joint)
+                end select
+            case('jsd','jsdfm','powjsdfm') ! clustering involving Jensen-Shannon Divergence, symmetrized K-L Divergence
+                select case(trim(params%clust_crit))
+                    case('jsd')
+                        dmat       = dmat_jsd
+                    case('jsdfm')
+                        smat_jsd   = dmat2smat(dmat_jsd)
+                        smat_joint = merge_smats(smat_jsd,corrmat)
+                        dmat       = smat2dmat(smat_joint)
+                    case('powjsdfm')
+                        smat_jsd   = dmat2smat(dmat_jsd)
+                        dmat_joint = merge_dmats(dmat_pow,dmat_jsd)
+                        smat_pow   = dmat2smat(dmat_joint)
+                        smat_joint = merge_smats(smat_pow,corrmat)
+                        dmat       = smat2dmat(smat_joint)
+                end select
+            case('hybrid')
+                call normalize_minmax(dmat_pow)
+                dmat_fm   = smat2dmat(corrmat)
+                dmat      = 0.2 * dmat_hist + 0.4 * dmat_pow + 0.4 * dmat_fm
+            case DEFAULT
+                THROW_HARD('Unsupported clustering criterion: '//trim(params%clust_crit))
+        end select
+        write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH K-MEDOIDS'
+        if( cline%defined('ncls') )then
+            nclust = params%ncls
+        else
+            if( ncls_sel < 100 )then
+                nclust = NCLS_SMALL_DEFAULT
+            else
+                nclust = NCLS_DEFAULT
+            endif
+        endif
+        call kmed%new(ncls_sel, dmat, nclust)
+        call kmed%init
+        call kmed%cluster
+        allocate(labels(ncls_sel), source=0)
+        call kmed%get_labels(labels)
+        call kmed%kill
+        ! score clusters of classes
+        call dealloc_imgarr(cavg_imgs)
+        cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
+        do l = 1,maxval(labels)
+            i = 0
+            do icls = 1, ncls_sel
+                if( labels(icls)==l )then
+                    i = i+1
+                    call cavg_imgs(icls)%write('label_'//int2str(l)//'.mrc',i)
+                endif
+            enddo
+        enddo
+        allocate(cls_mask(ncls_sel), source=.true.)
+        call flag_overfitted_cavgs(cavg_imgs, labels, cls_mask, params%msk, scores)
+        do i =1,size(scores)
+            write(logfhandle,'(A,I3,F8.3)')'>>> CLUSTER SCORE: ',i,scores(i)
+        enddo
+        ! update project
+        i = 0
+        j = 0
+        do icls = 1, ncls_sel
+            l = labels(icls)
+            call spproj%os_cls2D%set(clsinds(icls), 'cluster',    l)
+            call spproj%os_cls2D%set(clsinds(icls), 'score', scores(l))
+            if( scores(l) <= SCORE_THRES )then
+                i = i + 1
+                call cavg_imgs(icls)%write('kept.mrc',i)
+            else
+                j = j + 1
+                call cavg_imgs(icls)%write('rejected.mrc',j)
+            endif
+        enddo
+        call dealloc_imgarr(cavg_imgs)
+        call spproj%write(params%projfile)
+        ! cleanup
+        call spproj%kill
+        deallocate(dmat, l_non_junk, labels, clsinds)
+        if( allocated(corrmat)    ) deallocate(corrmat)
+        if( allocated(dmat_pow)   ) deallocate(dmat_pow)
+        if( allocated(smat_pow)   ) deallocate(smat_pow)
+        if( allocated(smat_joint) ) deallocate(smat_joint)
+        ! end gracefully
+        call simple_end('**** SIMPLE_REJECT_CAVGS NORMAL STOP ****')
+    end subroutine exec_reject_cavgs
 
     subroutine exec_init_refine2D( self, cline )
         use simple_corrmat,  only: calc_inpl_invariant_fm
