@@ -116,7 +116,7 @@ contains
         ncls      = spproj%os_cls2D%get_noris()
         cavg_imgs = read_cavgs_into_imgarr(spproj)
         if( allocated(clspops) ) deallocate(clspops)
-        clspops   = spproj%os_cls2D%get_all_asint('pop') 
+        clspops   = spproj%os_cls2D%get_all_asint('pop')
         smpd      = cavg_imgs(1)%get_smpd()
         ldim      = cavg_imgs(1)%get_ldim()
         box       = ldim(1)
@@ -160,7 +160,7 @@ contains
         ! update class populations
         clspops = pack(clspops, mask=l_non_junk)
         ! create the stuff needed in the loop
-        allocate(frcs(ncls_sel,filtsz), filter(filtsz), mm(ncls_sel,2), source=0.)
+        allocate(frcs(filtsz,ncls_sel), filter(filtsz), mm(ncls_sel,2), source=0.)
         ! prep mask
         call img_msk%new([box,box,1], smpd)
         img_msk = 1.
@@ -171,10 +171,10 @@ contains
         !$omp parallel do default(shared) private(i,j,filter) schedule(static) proc_bind(close)
         do i = 1, ncls_sel
             j = clsinds(i)
-            ! FRC-based filter 
-            call clsfrcs%frc_getter(j, frcs(i,:))
-            if( any(frcs(i,:) > 0.143) )then
-                call fsc2optlp_sub(clsfrcs%get_filtsz(), frcs(i,:), filter)
+            ! FRC-based filter
+            call clsfrcs%frc_getter(j, frcs(:,i))
+            if( any(frcs(:,i) > 0.143) )then
+                call fsc2optlp_sub(clsfrcs%get_filtsz(), frcs(:,i), filter)
                 where( filter > TINY ) filter = sqrt(filter) ! because the filter is applied to the average not the even or odd
                 call cavg_imgs(i)%fft()
                 call cavg_imgs(i)%apply_filter_serial(filter)
@@ -193,6 +193,7 @@ contains
                 call cavg_imgs(i)%write('cavgs_prepped.mrc', i)
             enddo
         endif
+        call clsfrcs%kill
     end subroutine prep_cavgs4clustering
 
     function pack_imgarr( imgs, mask ) result( imgs_packed )
@@ -214,16 +215,22 @@ contains
         end do
     end function pack_imgarr
 
-    subroutine alloc_imgarr( n, ldim, smpd, imgs ) 
-        integer,                  intent(in) :: n, ldim(3)
-        real,                     intent(in) :: smpd
+    subroutine alloc_imgarr( n, ldim, smpd, imgs, wthreads )
+        integer,                  intent(in)    :: n, ldim(3)
+        real,                     intent(in)    :: smpd
         type(image), allocatable, intent(inout) :: imgs(:)
+        logical,        optional, intent(in)    :: wthreads
         integer :: i
+        logical :: with_threads
+        with_threads = .false.
+        if( present(wthreads) ) with_threads = wthreads
         if( allocated(imgs) ) call dealloc_imgarr(imgs)
         allocate(imgs(n))
+        !$omp parallel do schedule(static) proc_bind(close) private(i) default(shared)
         do i = 1, n
-            call imgs(i)%new(ldim, smpd, wthreads=.false.)
+            call imgs(i)%new(ldim, smpd, wthreads=with_threads)
         end do
+        !$omp end parallel do
     end subroutine alloc_imgarr
 
     subroutine dealloc_imgarr( imgs )
@@ -231,9 +238,11 @@ contains
         integer :: n , i
         if( allocated(imgs) )then
             n = size(imgs)
+            !$omp parallel do schedule(static) proc_bind(close) private(i) default(shared)
             do i = 1, n
                 call imgs(i)%kill
             end do
+            !$omp end parallel do
             deallocate(imgs)
         endif
     end subroutine dealloc_imgarr
@@ -286,7 +295,7 @@ contains
             l_non_junk(icls) = .false. ! exclusion by default
             if( states(icls) == 0 )then
                 ! do nothing
-            else    
+            else
                 if( l_os2D_present )then
                     if( dynrange > DYNRANGE_THRES .and. os_cls2D%get_int(icls, 'pop') >= MINPOP )then
                         if( .not. l_dens_inoutside ) l_non_junk(icls) = .true.
@@ -317,7 +326,7 @@ contains
         integer :: i, maxlab, pad_len
         maxlab = maxval(labels)
         allocate(cnts(maxlab), source=0)
-        pad_len = 2 
+        pad_len = 2
         if( maxlab > 99 ) pad_len = 3
         do i = 1, n
             if( labels(i) > 0 )then
@@ -445,7 +454,7 @@ contains
         nclust = size(clust_info_arr)
         do iclust = 1, nclust
             cluster_imgs         = pack_imgarr(cavg_imgs, mask=labels == iclust)
-            cluster_imgs_aligned = rtsq_imgs(clust_info_arr(iclust)%pop, clust_info_arr(iclust)%algninfo%params, cluster_imgs)              
+            cluster_imgs_aligned = rtsq_imgs(clust_info_arr(iclust)%pop, clust_info_arr(iclust)%algninfo%params, cluster_imgs)
             call write_cavgs(cluster_imgs_aligned, trim(fbody)//int2str_pad(iclust,2)//trim(ext))
             call dealloc_imgarr(cluster_imgs)
             call dealloc_imgarr(cluster_imgs_aligned)
@@ -524,7 +533,7 @@ contains
             ithr = omp_get_thread_num() + 1
             call pftcc%gencorrs(1, i, inpl_corrs)
             loc  = maxloc(inpl_corrs)
-            irot = loc(1) 
+            irot = loc(1)
             call grad_shsrch_obj(ithr)%set_indices(1, i)
             cxy = grad_shsrch_obj(ithr)%minimize(irot=irot)
             if( irot == 0 )then ! no improved solution found, put back the old one
@@ -565,7 +574,7 @@ contains
         class(image),       intent(inout) :: imgs(n)
         type(image),        allocatable   :: imgs_aligned(:)
         real(kind=c_float), allocatable   :: rmat_rot(:,:,:)
-        type(image),        allocatable   :: imgs_heap(:) 
+        type(image),        allocatable   :: imgs_heap(:)
         integer :: ldim(3), i, ithr
         real    :: smpd
         ldim = imgs(1)%get_ldim()
@@ -591,7 +600,7 @@ contains
             endif
             call imgs_aligned(i)%set_rmat(rmat_rot, .false.)
         end do
-        !$omp end parallel do 
+        !$omp end parallel do
         call dealloc_imgarr(imgs_heap)
     end function rtsq_imgs
 
@@ -602,13 +611,15 @@ contains
         logical, allocatable, intent(in)    :: mask(:)
         real,                 intent(in)    :: msk
         real,    allocatable, intent(inout) :: scores(:)
-        real,        parameter   :: HP1         = 120.
-        real,        parameter   :: HP2         = 25.
-        real,        parameter   :: LP1         = 8.
-        real,        parameter   :: LP2         = 12.
+        real,        parameter   :: HP1   = 120.
+        real,        parameter   :: HP2   = 25.
+        real,        parameter   :: LP1   = 8.
+        real,        parameter   :: LP2   = 12.
+        real,        parameter   :: ALPHA = 0.997
         type(image), allocatable :: tmp_imgs(:)
         real,        allocatable :: logpspecs(:,:), pspec(:), freqs(:), g(:), env(:), cavgpspecs(:,:)
-        integer :: ncls,icls,ldim(3),n,ithr,l,fsz, nclusters
+        integer,     allocatable :: inds2(:)
+        integer :: ncls,icls,ldim(3),ithr,l,fsz,k,nclusters,n
         real    :: A,B, smpd
         ncls = size(cavgs)
         if( size(mask) /= ncls ) THROW_HARD('Incompatible CAVGS/MASK size!')
@@ -621,7 +632,7 @@ contains
         enddo
         fsz = fdim(ldim(1))-1
         allocate(pspec(fsz),logpspecs(fsz,ncls),source=0.)
-        A   = real(product(ldim)) ! so values will be positive after log()
+        A = 2.0*log10(real(product(ldim))) ! so values will be positive after log()
         call alloc_imgarr(nthr_glob, ldim, smpd, tmp_imgs)
         !$omp parallel do default(shared) proc_bind(close) schedule(static)&
         !$omp private(icls,ithr,pspec)
@@ -632,10 +643,9 @@ contains
             call tmp_imgs(ithr)%div_below(0., 10.)
             call tmp_imgs(ithr)%norm
             call tmp_imgs(ithr)%mask(msk, 'soft',backgr=0.)
-            call tmp_imgs(ithr)%mul(A)
             call tmp_imgs(ithr)%fft
             call tmp_imgs(ithr)%power_spectrum(pspec)
-            logpspecs(:,icls) = log10(pspec)
+            logpspecs(:,icls) = log10(pspec) + A
         enddo
         !$omp end parallel do
         call dealloc_imgarr(tmp_imgs)
@@ -649,16 +659,27 @@ contains
             if( l == 0 ) cycle
             cavgpspecs(:,l) = cavgpspecs(:,l) + logpspecs(:,icls)
         enddo
+        inds2 = pack((/(k,k=1,fsz)/),mask=(g>1.0/HP2).and.(g<1.0/LP2))
         do l = 1,nclusters
             n = count(labels==l)
             if( n <= 1 )cycle
             cavgpspecs(:,l) = cavgpspecs(:,l) / real(n)
             pspec = cavgpspecs(:,l)
-            call min_envelope( fsz, g, pspec, 0.997, env )
-            ! call plot2D(fsz, g, env, 'plot_'//int2str(l), .true., '1/A', 'lnPspec',z=pspec )
+            call min_envelope(fsz, g, pspec, ALPHA, env)
             A = sum(abs(pspec-env),mask=(g>1.0/HP1).and.(g<1.0/LP1))
             B = sum(abs(pspec-env),mask=(g>1.0/HP2).and.(g<1.0/LP2))
-            scores(l) = B / (A-B+1.e-6)
+            if( abs(A-B) < 0.001 )then
+                scores(l) = 0.0
+            else
+                scores(l) = B / (A-B)
+            endif
+            ! if( A < 0.001 )then
+            !     scores(l) = 0.0
+            ! else
+            !     scores(l) = B / A
+            ! endif
+            call plot2D(fsz, g, env, 'plot_'//int2str(l), .true.,xtitle='1/A', ytitle='logPW',&
+                &suptitle='Cluster '//int2str(l)//' - '//real2str(scores(l)), z=pspec )
         enddo
         contains
 
@@ -666,11 +687,21 @@ contains
                 integer,              intent(in) :: n
                 real,                 intent(in) :: g(n), x(n), alpha
                 real, allocatable, intent(inout) :: z(:)
-                real    :: m
-                integer :: i, is
-                if( allocated(z) ) deallocate(z)
-                allocate(z(n),source=0.)
-                m = 0.
+                integer, parameter :: w = 1
+                real    :: m, xmin
+                integer :: i, is, i0, i1
+                if( allocated(z) )then
+                    if( size(z) /= n )then
+                        deallocate(z)
+                        allocate(z(n))
+                    endif
+                    z(:) = 0.
+                else
+                    allocate(z(n),source=0.)
+                endif
+                xmin = minval(x)
+                m    = 0.
+                is   = 1
                 do i = 1,n
                     is = i
                     if( g(i) > 1./HP1 ) exit
@@ -678,7 +709,9 @@ contains
                 enddo
                 if( is > 1 ) z(:is-1) = m
                 do i = is,n
-                    m    = min(alpha*m,x(i))
+                    i0 = min(n,max(1,i-w))
+                    i1 = min(n,max(1,i+w))
+                    m    = max(xmin, min(alpha*m,minval(x(i0:i1))))
                     z(i) = m
                 enddo
             end subroutine min_envelope
