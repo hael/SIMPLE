@@ -1833,7 +1833,7 @@ contains
         use simple_histogram,  only: histogram
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        real,             parameter   :: HP_SPEC = 20., LP_SPEC = 6., FRAC_BEST_CAVGS=0.3, SCORE_THRES=40., RES_THRES=6.
+        real,             parameter   :: HP_SPEC = 20., LP_SPEC = 6., FRAC_BEST_CAVGS=0.3, SCORE_THRES=40., RES_THRES=6., SCORE_THRES_2NDRATE=50.
         real,             parameter   :: SCORE_THRES_JOINT=70., SCORE_THRES_HOMO=75., SCORE_THRES_CLUSTSCORE=80., SCORE_THRES_RESSCORE=80.
         integer,          parameter   :: NCLS_DEFAULT = 20, NCLS_SMALL_DEFAULT = 5, NHISTBINS = 128
         logical,          parameter   :: DEBUG = .true.
@@ -1848,16 +1848,17 @@ contains
         logical,          allocatable :: l_msk(:,:,:), l_non_junk(:)
         integer,          allocatable :: labels(:), clsinds(:), i_medoids(:), labels_copy(:), i_medoids_copy(:)
         integer,          allocatable :: clust_order(:)
-        integer,          allocatable :: clspops(:), states(:)
+        integer,          allocatable :: clspops(:), states(:), states_part(:)
         type(clust_info), allocatable :: clust_info_arr(:), clust_info_arr_copy(:)
+        character(len=:), allocatable :: projfname
         type(parameters)   :: params
-        type(sp_project)   :: spproj
+        type(sp_project)   :: spproj, spproj_part
         type(image)        :: img_msk
         type(kmedoids)     :: kmed
         type(pspecs)       :: pows
         type(stats_struct) :: res_stats
         integer            :: ncls, ncls_sel, icls, cnt, rank, nptcls, nptcls_good, loc(1), ldim(3)
-        integer            :: i, j, ii, jj, nclust, iclust
+        integer            :: i, j, ii, jj, nclust, iclust, igood_bad
         real               :: fsc_res, rfoo, frac_good, best_res, worst_res
         real               :: oa_min, oa_max, dist_rank, dist_rank_best, smpd
         ! defaults
@@ -2011,16 +2012,19 @@ contains
                 ! identify good/bad
                 clust_info_arr(:)%good_bad = 0
                 ! joint score inclusion
-                where( clust_info_arr(:)%jointscore  >= SCORE_THRES_JOINT ) clust_info_arr(:)%good_bad = 1
+                where( clust_info_arr(:)%jointscore  >= SCORE_THRES_JOINT )      clust_info_arr(:)%good_bad = 1
                 ! homogeneity/clustscore inclusion
-                where( clust_info_arr(:)%homogeneity >= SCORE_THRES_HOMO .and.&
-                       &clust_info_arr(:)%clustscore >= SCORE_THRES_CLUSTSCORE ) clust_info_arr(:)%good_bad = 1
+                where( clust_info_arr(:)%homogeneity >= SCORE_THRES_HOMO     .and.&
+                      &clust_info_arr(:)%clustscore  >= SCORE_THRES_CLUSTSCORE ) clust_info_arr(:)%good_bad = 1
                 ! homogeneity/resscore inclusion
-                where( clust_info_arr(:)%homogeneity >= SCORE_THRES_HOMO .and.&
-                       &clust_info_arr(:)%resscore >= SCORE_THRES_RESSCORE ) clust_info_arr(:)%good_bad = 1
+                where( clust_info_arr(:)%homogeneity >= SCORE_THRES_HOMO     .and.&
+                      &clust_info_arr(:)%resscore    >= SCORE_THRES_RESSCORE )   clust_info_arr(:)%good_bad = 1
                 ! resolution inclusion
-                where( clust_info_arr(:)%resscore >= SCORE_THRES_RESSCORE .and.&
-                       &clust_info_arr(:)%res <= RES_THRES ) clust_info_arr(:)%good_bad = 1
+                where( clust_info_arr(:)%resscore    >= SCORE_THRES_RESSCORE .and.&
+                      &clust_info_arr(:)%res         <= RES_THRES )              clust_info_arr(:)%good_bad = 1
+                ! label second rate classes
+                where( clust_info_arr(:)%good_bad == 0                       .and.&
+                       &clust_info_arr(:)%jointscore >= SCORE_THRES_2NDRATE )    clust_info_arr(:)%good_bad = 2
                 write(logfhandle,'(A)') '>>> ROTATING & SHIFTING UNMASKED, UNFILTERED CLASS AVERAGES'
                 ! re-create cavg_imgs
                 call dealloc_imgarr(cavg_imgs)
@@ -2046,7 +2050,7 @@ contains
                 write(logfhandle,'(a,1x,f8.2)') '% PARTICLES CLASSIFIED AS GOOD: ', frac_good * 100.
                 ! calculate resolution statistics for good/bad classes
                 res_good    = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad == 1)
-                res_bad     = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad == 0)
+                res_bad     = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad /= 1)
                 write(logfhandle,'(A)') 'RESOLUTION STATS FOR GOOD PARTITION'
                 if( size(res_good) > 1 )then
                     call calc_stats(res_good, res_stats)
@@ -2077,24 +2081,50 @@ contains
                     write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_bad(1)
                     write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', 0.
                 endif
-                ! zero labels of deselected classes
-                do icls = 1, ncls_sel
-                    if( clust_info_arr(labels(icls))%good_bad == 0 ) labels(icls) = 0
-                end do
-                ! write selection
-                call write_selected_cavgs(ncls_sel, cavg_imgs, labels, params%ext)
                 ! translate to state array
                 allocate(states(ncls), source=0)
                 do icls = 1, ncls_sel
-                    if( labels(icls) == 0 ) cycle
                     if( clust_info_arr(labels(icls))%good_bad == 1 ) states(clsinds(icls)) = 1
+                    if( clust_info_arr(labels(icls))%good_bad == 2 ) states(clsinds(icls)) = 2
                 end do
+                ! zero labels of deselected classes
+                do icls = 1, ncls_sel
+                    if( clust_info_arr(labels(icls))%good_bad /= 1 ) labels(icls) = 0
+                end do
+                ! write selection
+                call write_selected_cavgs(ncls_sel, cavg_imgs, labels, params%ext)
                 ! map selection to project
                 call spproj%map_cavgs_selection(states)
                 ! optional pruning
                 if( trim(params%prune).eq.'yes') call spproj%prune_particles
                 ! this needs to be a full write as many segments are updated
                 call spproj%write(params%projfile)
+                ! create projectes for the rank1 and rank2 particles
+                do igood_bad = 1,2
+                    ! copy project
+                    projfname = 'rank'//int2str(igood_bad)//'particles.simple'
+                    call simple_copy_file(trim(params%projfile), projfname)
+                    call spproj_part%read(projfname)
+                    ! communicate state mapping to copied project
+                    states_part = spproj_part%os_ptcl2D%get_all_asint('state')
+                    if( igood_bad == 1 )then
+                        where(states_part == 2) states_part = 0
+                    else
+                        where(states_part == 1) states_part = 0
+                        where(states_part == 2) states_part = 1
+                    endif
+                    ! communicate state mapping to copied project
+                    call spproj_part%os_ptcl2D%set_all('state', real(states_part))
+                    call spproj_part%os_ptcl3D%set_all('state', real(states_part))
+                    ! prune
+                    call spproj_part%prune_particles
+                    ! map ptcl states to classes
+                    call spproj_part%map_ptcls_state_to_cls
+                    ! write project
+                    call spproj_part%write(projfname)
+                    ! destruct
+                    call spproj_part%kill
+                end do
             case DEFAULT
                 ! re-create cavg_imgs
                 call dealloc_imgarr(cavg_imgs)
