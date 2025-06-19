@@ -114,7 +114,7 @@ message(STATUS "Making sure your C++ compiler points to the correct binary")
     message(STATUS "WARNING g++ points to Clang -- Trying other paths")
     find_file (
       CMAKE_CXX_COMPILER_NEW
-      NAMES g++- g++-14 g++-13 g++-12 g++-11 g++-10 g++-9 g++-8 g++-7 g++-6 g++-5 g++-4.9 g++-fsf-6 g++-fsf-5 g++13 g++12 g++11 g++10 g++9 g++8 g++7 g++6 g++5 g++4.9 g++
+      NAMES g++- g++-15 g++-14 g++-13 g++-12 g++-11 g++-10 g++-9 g++-8 g++-7 g++-6 g++-5 g++-4.9 g++-fsf-6 g++-fsf-5 g++13 g++12 g++11 g++10 g++9 g++8 g++7 g++6 g++5 g++4.9 g++
       PATHS ${FORTRAN_PARENT_DIR} /sw/bin /usr/local/bin /opt/local/bin /opt/homebrew/bin /usr/bin
       DOC "Searching for GNU g++ preprocessor "
 NO_DEFAULT_PATH NO_CMAKE_PATH NO_CMAKE_ENVIRONMENT_PATH NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH
