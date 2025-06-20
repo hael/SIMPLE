@@ -2895,8 +2895,14 @@ contains
             ! convergence
             call check_completed_chunks
             if( allocated(converged_chunks) )then
+                ! # of converged chunks
                 tot_nchunks_imported = tot_nchunks_imported + size(converged_chunks)
-                all_chunks_imported  = tot_nchunks_imported == ntot_chunks
+                ! processed enough?
+                if( cline%defined('maxnchunks') )then
+                    all_chunks_imported  = tot_nchunks_imported >= params%maxnchunks
+                else
+                    all_chunks_imported  = tot_nchunks_imported >= ntot_chunks
+                endif
                 do ic = 1,size(converged_chunks)
                     call converged_chunks(ic)%kill
                 enddo
@@ -3160,7 +3166,7 @@ contains
         character(len=XLONGSTRLEN), allocatable :: projfiles(:)
         real,                       allocatable :: states(:)
         integer,                    allocatable :: clsmap(:)
-        character(len=:),           allocatable :: projname, stkname, evenname, oddname, frc_fname
+        character(len=:),           allocatable :: projname, stkname, evenname, oddname, frc_fname, finished
         real    :: smpd
         integer :: ldim(3), i, ichunk, icls, ncls, nchunks, n, nallmics, nallstks, nallptcls
         integer :: fromp, fromp_glob, top, top_glob, j, iptcl_glob, nstks, nmics, nptcls, istk
@@ -3185,7 +3191,8 @@ contains
         do i = 1,n
             projname  = trim(params%dir_target)//'/'//trim(folders(i))//'/chunk.simple'
             frc_fname = trim(params%dir_target)//'/'//trim(folders(i))//'/'//trim(FRCS_FILE)
-            if( file_exists(projname) .and. file_exists(frc_fname))then
+            finished  = trim(params%dir_target)//'/'//trim(folders(i))//'/'//trim(CLUSTER2D_FINISHED)
+            if( file_exists(projname) .and. file_exists(frc_fname) .and. file_exists(finished) )then
                 nchunks      = nchunks+1
                 projfiles(i) = trim(projname)
             else
