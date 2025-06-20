@@ -2,7 +2,6 @@
        |______   |   |  |  | |_____] |      |______
        ______| __|__ |  |  | |       |_____ |______  v3b1
 
-simplecryoem.com
 https://github.com/hael/SIMPLE/releases/tag/v3.0.0
 
 ABOUT
@@ -139,7 +138,7 @@ The user can then use a browser on the machine that they SSD'd from to navigate 
 
 ### Tutorials
 
-The extensive SIMPLE manual describing the functionality of every back-end component has been replaced by the largely self-explanatory GUI that comes with embedded tutorials. When you launch the GUI you see three clickable icons in the bottom left corner. Clickling the rightmost of these - the lamp - opens the SIMPLE tutorials. The data set for the tutorials is available for download at http://simplecryoem.com/SIMPLE3.0/download.html
+The extensive SIMPLE manual describing the functionality of every back-end component has been replaced by the largely self-explanatory GUI that comes with embedded tutorials. When you launch the GUI you see three clickable icons in the bottom left corner. Clickling the rightmost of these - the lamp - opens the SIMPLE tutorials.
 
 ### Installation of FFTW
 
