@@ -1863,8 +1863,8 @@ contains
         type(pspecs)       :: pows
         type(stats_struct) :: res_stats
         integer            :: ncls, ncls_sel, icls, cnt, rank, nptcls, nptcls_good, loc(1), ldim(3)
-        integer            :: i, j, ii, jj, nclust, iclust, igood_bad
-        real               :: fsc_res, rfoo, frac_good, best_res, worst_res
+        integer            :: i, j, ii, jj, nclust, iclust, igood_bad, nptcls_maybe
+        real               :: fsc_res, rfoo, frac_good, best_res, worst_res, frac_maybe
         real               :: oa_min, oa_max, dist_rank, dist_rank_best, smpd
         ! defaults
         call cline%set('oritype', 'cls2D')
@@ -2031,6 +2031,10 @@ contains
                 ! label second rate classes
                 where( clust_info_arr(:)%good_bad == 0                       .and.&
                        &clust_info_arr(:)%jointscore >= SCORE_THRES_2NDRATE )    clust_info_arr(:)%good_bad = 2
+                if( DEBUG )then
+                    print *, 'found '//int2str(count(clust_info_arr(:)%good_bad == 1))//' 1st rate cluster(s) of class averages'
+                    print *, 'found '//int2str(count(clust_info_arr(:)%good_bad == 2))//' 2nd rate cluster(s) of class averages'
+                endif
                 write(logfhandle,'(A)') '>>> ROTATING & SHIFTING UNMASKED, UNFILTERED CLASS AVERAGES'
                 ! re-create cavg_imgs
                 call dealloc_imgarr(cavg_imgs)
@@ -2050,10 +2054,13 @@ contains
                     &' good_bad_assign ', clust_info_arr(iclust)%good_bad
                 end do
                 ! check number of particles selected
-                nptcls      = sum(clust_info_arr(:)%nptcls)
-                nptcls_good = sum(clust_info_arr(:)%nptcls, mask=clust_info_arr(:)%good_bad == 1)
-                frac_good   = real(nptcls_good) / real(nptcls)
-                write(logfhandle,'(a,1x,f8.2)') '% PARTICLES CLASSIFIED AS GOOD: ', frac_good * 100.
+                nptcls       = sum(clust_info_arr(:)%nptcls)
+                nptcls_good  = sum(clust_info_arr(:)%nptcls, mask=clust_info_arr(:)%good_bad == 1)
+                nptcls_maybe = sum(clust_info_arr(:)%nptcls, mask=clust_info_arr(:)%good_bad == 2)
+                frac_good    = real(nptcls_good)  / real(nptcls)
+                frac_maybe   = real(nptcls_maybe) / real(nptcls)
+                write(logfhandle,'(a,1x,f8.2)') '% PARTICLES CLASSIFIED AS 1ST RATE: ', frac_good  * 100.
+                write(logfhandle,'(a,1x,f8.2)') '% PARTICLES CLASSIFIED AS 2ND RATE: ', frac_maybe * 100.
                 ! calculate resolution statistics for good/bad classes
                 res_good    = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad == 1)
                 res_bad     = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad /= 1)
@@ -2107,29 +2114,32 @@ contains
                 call spproj%write(params%projfile)
                 ! create projectes for the rank1 and rank2 particles
                 do igood_bad = 1,2
-                    ! copy project
-                    projfname = 'rank'//int2str(igood_bad)//'particles.simple'
-                    call simple_copy_file(trim(params%projfile), projfname)
-                    call spproj_part%read(projfname)
-                    ! communicate state mapping to copied project
-                    states_part = spproj_part%os_ptcl2D%get_all_asint('state')
-                    if( igood_bad == 1 )then
-                        where(states_part == 2) states_part = 0
-                    else
-                        where(states_part == 1) states_part = 0
-                        where(states_part == 2) states_part = 1
+                    if( count(clust_info_arr(:)%good_bad == igood_bad) > 0 )then
+                        ! copy project
+                        projfname = 'rank'//int2str(igood_bad)//'particles.simple'
+                        call simple_copy_file(trim(params%projfile), projfname)
+                        call spproj_part%read(projfname)
+                        call spproj_part%update_projinfo(projfname)
+                        ! communicate state mapping to copied project
+                        states_part = spproj_part%os_ptcl2D%get_all_asint('state')
+                        if( igood_bad == 1 )then
+                            where(states_part == 2) states_part = 0
+                        else
+                            where(states_part == 1) states_part = 0
+                            where(states_part == 2) states_part = 1
+                        endif
+                        ! communicate state mapping to copied project
+                        call spproj_part%os_ptcl2D%set_all('state', real(states_part))
+                        call spproj_part%os_ptcl3D%set_all('state', real(states_part))
+                        ! prune
+                        call spproj_part%prune_particles
+                        ! map ptcl states to classes
+                        call spproj_part%map_ptcls_state_to_cls
+                        ! write project
+                        call spproj_part%write(projfname)
+                        ! destruct
+                        call spproj_part%kill
                     endif
-                    ! communicate state mapping to copied project
-                    call spproj_part%os_ptcl2D%set_all('state', real(states_part))
-                    call spproj_part%os_ptcl3D%set_all('state', real(states_part))
-                    ! prune
-                    call spproj_part%prune_particles
-                    ! map ptcl states to classes
-                    call spproj_part%map_ptcls_state_to_cls
-                    ! write project
-                    call spproj_part%write(projfname)
-                    ! destruct
-                    call spproj_part%kill
                 end do
             case DEFAULT
                 ! re-create cavg_imgs
@@ -2168,7 +2178,7 @@ contains
             res_max = maxval(clust_info_arr(:)%res)
             where( clust_info_arr(:)%pop < 2 ) clust_info_arr(:)%resscore = res_max
             call dists2scores_percen(clust_info_arr(:)%resscore)
-            ! FM CORR, CLUSTSCORE & HISTOGRAM SCORE
+            ! FM CORR & CLUSTSCORE
             do iclust = 1, nclust
                 clust_info_arr(iclust)%corrfmscore = 0.
                 clust_info_arr(iclust)%clustscore  = 0.
