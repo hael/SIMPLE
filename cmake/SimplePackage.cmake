@@ -34,7 +34,7 @@ The SIMPLE back-end consists of an object-oriented numerical library written in
 modern Fortran. The SIMPLE front-end consists of a few standalone, interoperable
 components developed according to the 'Unix toolkit philosophy'.
 
-HOMEPAGE: https://simplecryoem.com
+HOMEPAGE: https://github.com/hael/SIMPLE
 LICENCE: GNU Public licence (version 3 or newer)
 AUTHORS: Hans Elmlund, Dominika Elmlund, Cyril Reboul, Michael Eager, Fred Bonnet
 
@@ -121,7 +121,7 @@ AUTHORS: Hans Elmlund, Dominika Elmlund, Cyril Reboul, Michael Eager, Fred Bonne
     set(CPACK_DEBIAN_PACKAGE_OPTIONAL "nvidia-cuda-dev, libopenmpi-dev, libjpeg9-dev, libsqlite3-dev ")
     set(CPACK_DEBIAN_PACKAGE_SECTION "science")
     set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
-    set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://simplecryoem.org")
+    set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/hael/SIMPLE")
     set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "amd64")
     set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_FILE_NAME}"
       "-${CPACK_PACKAGE_VERSION}"
@@ -134,7 +134,7 @@ AUTHORS: Hans Elmlund, Dominika Elmlund, Cyril Reboul, Michael Eager, Fred Bonne
       "gcc >= 6:4.6.0, libfftw3-devel, gnuplot   ")
     set(CPACK_RPM_PACKAGE_GROUP "Applications/Engineering")
     set(CPACK_RPM_PACKAGE_LICENSE "GPL3+ ")
-    set(CPACK_RPM_PACKAGE_URL "https://simplecryoem.org")
+    set(CPACK_RPM_PACKAGE_URL "https://github.com/hael/SIMPLE")
     set(CPACK_RPM_PACKAGE_ARCHITECTURE "x86_64")
     set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_FILE_NAME}"
       "-${CPACK_PACKAGE_VERSION}"

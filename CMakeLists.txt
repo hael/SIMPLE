@@ -7,8 +7,8 @@ project(SIMPLE LANGUAGES Fortran C CXX)
 
 project(SIMPLE
         VERSION 3.0.0
-        DESCRIPTION "SIMPLE is a program package for cryo-EM image processing (https://simplecryoem.com)"
-        HOMEPAGE_URL "https://simplecryoem.com"
+        DESCRIPTION "SIMPLE is a program package for cryo-EM image processing (https://github.com/hael/SIMPLE)"
+        HOMEPAGE_URL "https://github.com/hael/SIMPLE"
         LANGUAGES Fortran C CXX)
 
 # OPTIONS
