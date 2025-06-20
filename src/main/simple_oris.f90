@@ -138,6 +138,7 @@ type :: oris
     generic            :: transfer_2Dparams => transfer_2Dparams_1, transfer_2Dparams_2
     procedure, private :: transfer_3Dparams_1, transfer_3Dparams_2
     generic            :: transfer_3Dparams => transfer_3Dparams_1, transfer_3Dparams_2
+    procedure          :: transfer_class_assignment
     procedure          :: set_euler
     procedure          :: set_shift
     procedure          :: set_state
@@ -156,6 +157,8 @@ type :: oris
     generic            :: set_all => set_all_1, set_all_2, set_all_3
     procedure, private :: set_all2single_1, set_all2single_2, set_all2single_3
     generic            :: set_all2single => set_all2single_1, set_all2single_2, set_all2single_3
+    procedure, private :: set_field2single_1, set_field2single_2, set_field2single_3
+    generic            :: set_field2single => set_field2single_1, set_field2single_2, set_field2single_3
     procedure          :: set_projs
     procedure          :: remap_projs
     procedure          :: proj2class
@@ -2297,6 +2300,42 @@ contains
         end do
     end subroutine set_all2single_3
 
+    subroutine set_field2single_1( self, field, ind, which, val )
+        class(oris),      intent(inout) :: self
+        character(len=*), intent(in)    :: field
+        integer,          intent(in)    :: ind
+        character(len=*), intent(in)    :: which
+        real,             intent(in)    :: val
+        integer :: i
+        do i=1,self%n
+            if( self%o(i)%get(trim(field)) == ind ) call self%o(i)%set(which, val)
+        end do
+    end subroutine set_field2single_1
+
+    subroutine set_field2single_2( self, field, ind, which, val )
+        class(oris),      intent(inout) :: self
+        character(len=*), intent(in)    :: field
+        integer,          intent(in)    :: ind
+        character(len=*), intent(in)    :: which
+        character(len=*), intent(in)    :: val
+        integer :: i
+        do i=1,self%n
+            if( self%o(i)%get(trim(field)) == ind ) call self%o(i)%set(which, val)
+        end do
+    end subroutine set_field2single_2
+
+    subroutine set_field2single_3( self, field, ind, which, ival )
+        class(oris),      intent(inout) :: self
+        character(len=*), intent(in)    :: field
+        integer,          intent(in)    :: ind
+        character(len=*), intent(in)    :: which
+        integer,          intent(in)    :: ival
+        integer :: i
+        do i=1,self%n
+            if( self%o(i)%get(trim(field)) == ind ) call self%o(i)%set(which, ival)
+        end do
+    end subroutine set_field2single_3
+
     subroutine set_projs( self, e_space )
         class(oris), intent(inout) :: self
         class(oris), intent(in)    :: e_space
@@ -2453,6 +2492,16 @@ contains
         class(oris), intent(in)    :: os_in
         call self%o(i)%transfer_3Dparams(os_in%o(i_in))
     end subroutine transfer_3Dparams_2
+
+    subroutine transfer_class_assignment( self_from, self_to )
+        class(oris), intent(in)    :: self_from
+        class(oris), intent(inout) :: self_to
+        integer :: i
+        if( self_from%n /= self_to%n ) THROW_HARD('Incongruent object instances')
+        do i = 1,self_from%n
+            call self_to%o(i)%set('class', self_from%o(i)%get_class())
+        end do
+    end subroutine transfer_class_assignment
 
     !>  \brief  generate random projection direction space around a given one
     subroutine rnd_proj_space( self, nsample, o_prev, thres, eullims )

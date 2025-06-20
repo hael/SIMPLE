@@ -37,6 +37,7 @@ public :: make_cavgs_commander
 public :: cavgassemble_commander
 public :: rank_cavgs_commander
 public :: cluster_cavgs_commander
+public :: select_clusters_commander
 public :: reject_cavgs_commander
 public :: init_refine2D_commander
 public :: write_classes_commander
@@ -104,6 +105,11 @@ type, extends(commander_base) :: cluster_cavgs_commander
   contains
     procedure :: execute      => exec_cluster_cavgs
 end type cluster_cavgs_commander
+
+type, extends(commander_base) :: select_clusters_commander
+  contains
+    procedure :: execute      => exec_select_clusters
+end type select_clusters_commander
 
 type, extends(commander_base) :: reject_cavgs_commander
   contains
@@ -1989,14 +1995,6 @@ contains
         allocate(labels(ncls_sel), i_medoids(nclust), source=0)
         call kmed%get_labels(labels)
         call kmed%get_medoids(i_medoids)
-        ! update project
-        do iclust = 1, nclust
-            do icls = 1, ncls_sel 
-                if( labels(icls) == iclust )then
-                    call spproj%os_cls2D%set(clsinds(icls),'cluster',iclust) ! project update
-                endif
-            enddo
-        enddo
         ! prep mask
         call img_msk%new([params%box,params%box,1], params%smpd)
         img_msk = 1.
@@ -2043,6 +2041,18 @@ contains
                 clust_order = scores2order(clust_info_arr(:)%jointscore)
                 call rank_clusters(nclust, clust_order)
                 call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_ranked', trim(params%ext))
+                ! update project
+                call spproj%os_ptcl2D%transfer_class_assignment(spproj%os_ptcl3D)
+                do iclust = 1, nclust
+                    do icls = 1, ncls_sel 
+                        if( labels(icls) == iclust )then
+                            call spproj%os_cls2D%set(clsinds(icls),'cluster',iclust)                          ! 2D class field
+                            call spproj%os_cls3D%set(clsinds(icls),'cluster',iclust)                          ! 3D class field
+                            call spproj%os_ptcl2D%set_field2single('class', clsinds(icls), 'cluster', iclust) ! 2D particle field
+                            call spproj%os_ptcl3D%set_field2single('class', clsinds(icls), 'cluster', iclust) ! 3D particle field
+                        endif
+                    enddo
+                enddo
                 ! report cluster info
                 do iclust = 1, nclust
                     write(logfhandle,'(A,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,I3)') 'cluster_ranked'//int2str_pad(iclust,2)//'.mrc',&
@@ -2249,6 +2259,57 @@ contains
         end subroutine rank_clusters
  
     end subroutine exec_cluster_cavgs
+
+    subroutine exec_select_clusters( self, cline )
+        class(select_clusters_commander), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
+        type(parameters) :: params
+        type(sp_project) :: spproj
+        integer, allocatable :: clustinds(:)
+        integer :: iclust, nclust_sel, nclust_max
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('prune') ) call cline%set('prune', 'yes')
+        ! master parameters
+        call params%new(cline)
+        if( cline%defined('clustind') )then
+            nclust_sel = 1
+            allocate(clustinds(nclust_sel), source=params%clustind)
+        else
+            clustinds = listofints2arr(params%clustinds)
+            nclust_sel = size(clustinds)
+        endif
+        do iclust = 1, nclust_sel
+            print *, 'selected cluster: ', clustinds(iclust)
+        end do
+        ! read project file
+        call spproj%read(params%projfile)
+        nclust_max = spproj%os_ptcl2D%get_n('cluster')
+        if( any(clustinds > nclust_max) ) THROW_HARD('Maximum cluster index value: '//int2str(nclust_max)//' exceeded!')
+        do iclust = 1, nclust_max
+            if( any(clustinds == iclust) )then
+                ! set state=1 to flag inclusion
+                call spproj%os_cls2D%set_field2single('cluster',  iclust, 'state', 1) ! 2D class field
+                call spproj%os_cls3D%set_field2single('cluster',  iclust, 'state', 1) ! 3D class field
+                call spproj%os_ptcl2D%set_field2single('cluster', iclust, 'state', 1) ! 2D particle field
+                call spproj%os_ptcl3D%set_field2single('cluster', iclust, 'state', 1) ! 3D particle field
+            else
+                ! set state=0 to flag exclusion
+                call spproj%os_cls2D%set_field2single('cluster',  iclust, 'state', 0) ! 2D class field
+                call spproj%os_cls3D%set_field2single('cluster',  iclust, 'state', 0) ! 3D class field
+                call spproj%os_ptcl2D%set_field2single('cluster', iclust, 'state', 0) ! 2D particle field
+                call spproj%os_ptcl3D%set_field2single('cluster', iclust, 'state', 0) ! 3D particle field
+            endif
+        end do
+        ! prune
+        if( trim(params%prune).eq.'yes') call spproj%prune_particles
+        
+        ! write project
+        call spproj%write(params%projfile)
+        ! destruct
+        call spproj%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_SELECT_CLUSTERS_CAVGS NORMAL STOP ****')
+    end subroutine exec_select_clusters
 
     subroutine exec_reject_cavgs( self, cline )
         use simple_kmedoids,  only: kmedoids

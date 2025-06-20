@@ -211,6 +211,7 @@ type :: parameters
     character(len=STDLEN)     :: boxtype='eman'
     character(len=STDLEN)     :: cls_init='ptcl'      !< Scheme to generate initial references for 2D analysis(ptcl|randcls|rand)
     character(len=STDLEN)     :: clust_crit=''        !< clustering criterion 
+    character(len=STDLEN)     :: clustinds=''         !< comma-separated cluster indices
     character(len=STDLEN)     :: coord='cart'         !< Coordinate system for cluster2D(cart|polar|both){cart}
     character(len=STDLEN)     :: cn_type='cn_std'     !< generalised coordination number (cn_gen) or stardard (cn_std)
     character(len=STDLEN)     :: ctf='no'             !< ctf flag(yes|no|flip)
@@ -285,6 +286,7 @@ type :: parameters
     integer :: cc_iters=1          !< number of iterations with objfun=cc before switching to another objective function
     integer :: class=1             !< cluster identity
     integer :: clip=0              !< clipped image box size(in pixels)
+    integer :: clustind=0          !< cluster index
     integer :: cn=8                !< fixed std coord number for atoms in nanos
     integer :: cn_max=12           !< max std coord number for atoms in nanos
     integer :: cn_min=4            !< min std coord number for atoms in nanos
@@ -614,6 +616,7 @@ contains
         call check_carg('clear',          self%clear)
         call check_carg('cls_init',       self%cls_init)
         call check_carg('clust_crit',     self%clust_crit)
+        call check_carg('clustinds',      self%clustinds)
         call check_carg('cn_type',        self%cn_type)
         call check_carg('combine_eo',     self%combine_eo)
         call check_carg('continue',       self%continue)
@@ -829,6 +832,7 @@ contains
         call check_iarg('box_extract',    self%box_extract)
         call check_iarg('cc_iters',       self%cc_iters)
         call check_iarg('clip',           self%clip)
+        call check_iarg('clustind',       self%clustind)
         call check_iarg('cn',             self%cn)
         call check_iarg('cn_max',         self%cn_max)
         call check_iarg('cn_min',         self%cn_min)

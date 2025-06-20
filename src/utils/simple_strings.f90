@@ -278,6 +278,47 @@ contains
         return
     end subroutine split
 
+    function listofints2arr( listofints ) result( iarr )
+        character(len=*), intent(in) :: listofints
+        integer, allocatable :: iarr(:)
+        character(len=:), allocatable :: str, before
+        integer :: index, cnt, iostat
+        str   = adjustl(trim(listofints))
+        index = scan(str, ',')
+        if( index == 0 )then
+            allocate(iarr(1), source=0)
+            call str2int(str, iostat, iarr(1))
+            return
+        endif
+        ! first, count commas
+        cnt = 0
+        do
+            index  = scan(str, ',')
+            if( index == 0 ) exit
+            cnt    = cnt + 1
+            before = adjustl(trim(str(1:index-1)))
+            str    = adjustl(str(index+1:))
+        end do
+        ! allocate array
+        allocate(iarr(cnt + 1), source=0)
+        str = adjustl(trim(listofints))
+        cnt = 0
+        ! parse integers
+        do
+            cnt = cnt + 1
+            index = scan(str, ',')
+            if( index == 0 )then
+                str = adjustl(str(index+1:))
+                call str2int(str, iostat, iarr(cnt))
+                exit
+            else
+                before = adjustl(trim(str(1:index-1)))
+                call str2int(before, iostat, iarr(cnt))
+                str    = adjustl(str(index+1:))
+            endif    
+        end do
+    end function listofints2arr
+
     !> \brief  removes punctuation (except comma) characters in string str
     subroutine removepunct(str)
         character(len=*), intent(inout) :: str
