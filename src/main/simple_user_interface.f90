@@ -187,6 +187,7 @@ type(simple_program), target :: reproject
 type(simple_program), target :: scale
 type(simple_program), target :: scale_project
 type(simple_program), target :: select_
+type(simple_program), target :: select_clusters
 type(simple_program), target :: sharpvol
 type(simple_program), target :: simulate_atoms
 type(simple_program), target :: simulate_movie
@@ -517,6 +518,7 @@ contains
         call new_scale
         call new_scale_project
         call new_select_
+        call new_select_clusters
         call new_sharpvol
         call new_simulate_atoms
         call new_simulate_movie
@@ -666,6 +668,7 @@ contains
         call push2prg_ptr_array(scale_project)
         call push2prg_ptr_array(score_ptcls)
         call push2prg_ptr_array(select_)
+        call push2prg_ptr_array(select_clusters)
         call push2prg_ptr_array(sharpvol)
         call push2prg_ptr_array(simulate_atoms)
         call push2prg_ptr_array(simulate_movie)
@@ -941,6 +944,8 @@ contains
                 ptr2prg => scale_project
             case('select')
                 ptr2prg => select_
+            case('select_clusters')
+                ptr2prg => select_clusters
             case('sharpvol')
                 ptr2prg => sharpvol
             case('simulate_atoms')
@@ -1103,6 +1108,7 @@ contains
         write(logfhandle,'(A)') selection%name
         write(logfhandle,'(A)') reproject%name
         write(logfhandle,'(A)') select_%name
+        write(logfhandle,'(A)') select_clusters%name
         write(logfhandle,'(A)') sharpvol%name
         write(logfhandle,'(A)') simulate_movie%name
         write(logfhandle,'(A)') simulate_noise%name
@@ -5142,6 +5148,33 @@ contains
         ! computer controls
         call select_%set_input('comp_ctrls', 1, nthr)
     end subroutine new_select_
+
+    subroutine new_select_clusters
+        ! PROGRAM SPECIFICATIONq
+        call select_clusters%new(&
+        &'select_clusters',&                                    ! name
+        &'Select clusters',&                                    ! descr_short
+        &'is a program for selecting clusters from a project',& ! descr_long
+        &'simple_exec',&                                        ! executable
+        &0, 0, 2, 0, 0, 0, 0, .true.)                           ! # entries in each group, requires sp_project
+        ! TEMPLATE
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        call select_clusters%set_input('alt_ios', 1, 'clustinds', 'str', 'Comma separated cluster indices', 'Comma separated cluster indices', 'indx1,indx2', .false., '')
+        call select_clusters%set_input('alt_ios', 2, 'clustind',  'num', 'Cluster indicex', 'Cluster indiex', 'e.g. 5', .false., 0.)
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_select_clusters
 
     subroutine new_sharpvol
         ! PROGRAM SPECIFICATION
