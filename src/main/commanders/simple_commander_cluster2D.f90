@@ -1843,6 +1843,7 @@ contains
         use simple_kmedoids,   only: kmedoids
         use simple_corrmat,    only: calc_inpl_invariant_fm
         use simple_histogram,  only: histogram
+        use simple_aff_prop,   only: aff_prop
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         real,             parameter   :: HP_SPEC = 20., LP_SPEC = 6., FRAC_BEST_CAVGS=0.3, SCORE_THRES=40., RES_THRES=6., SCORE_THRES_2NDRATE=50.
@@ -1854,7 +1855,7 @@ contains
         real,             allocatable :: frc(:), mm(:,:)
         real,             allocatable :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:), dmat_tvd(:,:), smat_tvd(:,:), dmat_joint(:,:)
         real,             allocatable :: smat_joint(:,:), dmat(:,:), res_bad(:), res_good(:), dmat_jsd(:,:), smat_jsd(:,:)
-        real,             allocatable :: dmat_hd(:,:), dmat_hist(:,:), dmat_fm(:,:)
+        real,             allocatable :: dmat_hd(:,:), dmat_hist(:,:), dmat_fm(:,:), smat(:,:)
         real,             allocatable :: resvals(:)
         logical,          allocatable :: l_msk(:,:,:), l_non_junk(:)
         integer,          allocatable :: labels(:), clsinds(:), i_medoids(:), labels_copy(:), i_medoids_copy(:)
@@ -1866,12 +1867,13 @@ contains
         type(sp_project)   :: spproj, spproj_part
         type(image)        :: img_msk
         type(kmedoids)     :: kmed
+        type(aff_prop)     :: aprop
         type(pspecs)       :: pows
         type(stats_struct) :: res_stats
         integer            :: ncls, ncls_sel, icls, cnt, rank, nptcls, nptcls_good, loc(1), ldim(3)
         integer            :: i, j, ii, jj, nclust, iclust, igood_bad, nptcls_maybe
         real               :: fsc_res, rfoo, frac_good, best_res, worst_res, frac_maybe
-        real               :: oa_min, oa_max, dist_rank, dist_rank_best, smpd
+        real               :: oa_min, oa_max, dist_rank, dist_rank_best, smpd, simsum
         ! defaults
         call cline%set('oritype', 'cls2D')
         call cline%set('ctf',        'no')
@@ -1883,6 +1885,7 @@ contains
         if( .not. cline%defined('lp')         ) call cline%set('lp',               6.)
         if( .not. cline%defined('prune')      ) call cline%set('prune',          'no')
         if( .not. cline%defined('clust_crit') ) call cline%set('clust_crit', 'hybrid')
+        if( .not. cline%defined('algorithm')  ) call cline%set('algorithm',    'kmed')
         ! master parameters
         call params%new(cline)
         ! read project file
@@ -1975,26 +1978,37 @@ contains
             case('hybrid')
                 call normalize_minmax(dmat_pow)
                 dmat_fm   = smat2dmat(corrmat)
-                dmat      = 0.2 * dmat_hist + 0.4 * dmat_pow + 0.4 * dmat_fm
+                dmat      = 0.2 * dmat_hist + 0.4 * dmat_pow + 0.4 * dmat_fm             
             case DEFAULT
                 THROW_HARD('Unsupported clustering criterion: '//trim(params%clust_crit))
         end select
-        write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH K-MEDOIDS'
-        if( cline%defined('ncls') )then
-            nclust = params%ncls
-        else
-            if( ncls_sel < 100 )then
-                nclust = NCLS_SMALL_DEFAULT
-            else
-                nclust = NCLS_DEFAULT
-            endif
-        endif
-        call kmed%new(ncls_sel, dmat, nclust)
-        call kmed%init
-        call kmed%cluster
-        allocate(labels(ncls_sel), i_medoids(nclust), source=0)
-        call kmed%get_labels(labels)
-        call kmed%get_medoids(i_medoids)
+        select case(trim(params%algorithm))
+            case('aprop')
+                write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH AFFINITY PROPAGATION'
+                smat = dmat2smat(dmat)
+                call aprop%new(ncls_sel, smat, pref=0.) ! pref=0. because this is the minimal score
+                call aprop%propagate(i_medoids, labels, simsum)
+                call aprop%kill
+                nclust = size(i_medoids)
+                write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION (AP): ', nclust
+            case('kmed')
+                write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH K-MEDOIDS'
+                if( cline%defined('ncls') )then
+                    nclust = params%ncls
+                else
+                    if( ncls_sel < 100 )then
+                        nclust = NCLS_SMALL_DEFAULT
+                    else
+                        nclust = NCLS_DEFAULT
+                    endif
+                endif
+                call kmed%new(ncls_sel, dmat, nclust)
+                call kmed%init
+                call kmed%cluster
+                allocate(labels(ncls_sel), i_medoids(nclust), source=0)
+                call kmed%get_labels(labels)
+                call kmed%get_medoids(i_medoids)
+        end select
         ! prep mask
         call img_msk%new([params%box,params%box,1], params%smpd)
         img_msk = 1.
