@@ -1846,9 +1846,10 @@ contains
         use simple_aff_prop,   only: aff_prop
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        real,             parameter   :: HP_SPEC = 20., LP_SPEC = 6., FRAC_BEST_CAVGS=0.3, SCORE_THRES=40., RES_THRES=6., SCORE_THRES_2NDRATE=50.
-        real,             parameter   :: SCORE_THRES_JOINT=70., SCORE_THRES_HOMO=75., SCORE_THRES_CLUSTSCORE=80., SCORE_THRES_RESSCORE=80.
-        integer,          parameter   :: NCLS_DEFAULT = 20, NCLS_SMALL_DEFAULT = 5, NHISTBINS = 128
+        real,             parameter   :: HP_SPEC = 20., LP_SPEC = 6., FRAC_BEST_CAVGS=0.3, SCORE_THRES=40.
+        real,             parameter   :: RES_THRES=6., SCORE_THRES_2NDRATE=50., SCORE_THRES_JOINT=70.
+        real,             parameter   :: SCORE_THRES_HOMO=75., SCORE_THRES_CLUSTSCORE=80., SCORE_THRES_RESSCORE=80.
+        integer,          parameter   :: NCLUST_DEFAULT = 20, NCLUST_SMALL_DEFAULT = 5, NHISTBINS = 128
         logical,          parameter   :: DEBUG = .true.
         type(image),      allocatable :: cavg_imgs(:)
         type(histogram),  allocatable :: hists(:)
@@ -1991,15 +1992,26 @@ contains
                 call aprop%kill
                 nclust = size(i_medoids)
                 write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION (AP): ', nclust
+                if( nclust < NCLUST_SMALL_DEFAULT )then
+                    write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH K-MEDOIDS'
+                    deallocate(i_medoids, labels)
+                    nclust = NCLUST_SMALL_DEFAULT
+                    call kmed%new(ncls_sel, dmat, nclust)
+                    call kmed%init
+                    call kmed%cluster
+                    allocate(labels(ncls_sel), i_medoids(nclust), source=0)
+                    call kmed%get_labels(labels)
+                    call kmed%get_medoids(i_medoids)
+                endif
             case('kmed')
                 write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH K-MEDOIDS'
                 if( cline%defined('ncls') )then
                     nclust = params%ncls
                 else
                     if( ncls_sel < 100 )then
-                        nclust = NCLS_SMALL_DEFAULT
+                        nclust = NCLUST_SMALL_DEFAULT
                     else
-                        nclust = NCLS_DEFAULT
+                        nclust = NCLUST_DEFAULT
                     endif
                 endif
                 call kmed%new(ncls_sel, dmat, nclust)
@@ -2027,33 +2039,16 @@ contains
                 call calc_scores
                 ! re-normalize scores
                 call renormalize_scores(SCORE_THRES)
+                ! rank clusters
+                clust_order = scores2order(clust_info_arr(:)%jointscore)
+                call rank_clusters(nclust, clust_order)
                 ! identify good/bad
-                clust_info_arr(:)%good_bad = 0
-                ! joint score inclusion
-                where( clust_info_arr(:)%jointscore  >= SCORE_THRES_JOINT )      clust_info_arr(:)%good_bad = 1
-                ! homogeneity/clustscore inclusion
-                where( clust_info_arr(:)%homogeneity >= SCORE_THRES_HOMO     .and.&
-                      &clust_info_arr(:)%clustscore  >= SCORE_THRES_CLUSTSCORE ) clust_info_arr(:)%good_bad = 1
-                ! homogeneity/resscore inclusion
-                where( clust_info_arr(:)%homogeneity >= SCORE_THRES_HOMO     .and.&
-                      &clust_info_arr(:)%resscore    >= SCORE_THRES_RESSCORE )   clust_info_arr(:)%good_bad = 1
-                ! resolution inclusion
-                where( clust_info_arr(:)%resscore    >= SCORE_THRES_RESSCORE .and.&
-                      &clust_info_arr(:)%res         <= RES_THRES )              clust_info_arr(:)%good_bad = 1
-                ! label second rate classes
-                where( clust_info_arr(:)%good_bad == 0                       .and.&
-                       &clust_info_arr(:)%jointscore >= SCORE_THRES_2NDRATE )    clust_info_arr(:)%good_bad = 2
-                if( DEBUG )then
-                    print *, 'found '//int2str(count(clust_info_arr(:)%good_bad == 1))//' 1st rate cluster(s) of class averages'
-                    print *, 'found '//int2str(count(clust_info_arr(:)%good_bad == 2))//' 2nd rate cluster(s) of class averages'
-                endif
+                call identify_good_bad_clusters
                 write(logfhandle,'(A)') '>>> ROTATING & SHIFTING UNMASKED, UNFILTERED CLASS AVERAGES'
                 ! re-create cavg_imgs
                 call dealloc_imgarr(cavg_imgs)
                 cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
-                call copy_clustering
-                clust_order = scores2order(clust_info_arr(:)%jointscore)
-                call rank_clusters(nclust, clust_order)
+                ! write ranked clusters
                 call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_ranked', trim(params%ext))
                 ! update project
                 call spproj%os_ptcl2D%transfer_class_assignment(spproj%os_ptcl3D)
@@ -2228,17 +2223,18 @@ contains
         end subroutine calc_scores
 
         subroutine renormalize_scores( percen_thres )
-            real, intent(in) :: percen_thres
-            ! HOMOGENEITY SCORE
-            where(clust_info_arr(:)%homogeneity <= percen_thres ) clust_info_arr(:)%homogeneity = 0.
+            real, intent(in), optional :: percen_thres
+            if( present(percen_thres) )then
+                ! zero low scores
+                where(clust_info_arr(:)%homogeneity <= percen_thres ) clust_info_arr(:)%homogeneity = 0.
+                where(clust_info_arr(:)%resscore    <= percen_thres ) clust_info_arr(:)%resscore    = 0.
+                where(clust_info_arr(:)%clustscore  <= percen_thres ) clust_info_arr(:)%clustscore  = 0.
+            endif
+            ! re-normalize
             call scores2scores_percen(clust_info_arr(:)%homogeneity)
-            ! RESOLUTION SCORE
-            where(clust_info_arr(:)%resscore    <= percen_thres ) clust_info_arr(:)%resscore    = 0.
             call scores2scores_percen(clust_info_arr(:)%resscore)
-            ! CLUSTSCORE 
-            where(clust_info_arr(:)%clustscore  <= percen_thres ) clust_info_arr(:)%clustscore  = 0.
             call scores2scores_percen(clust_info_arr(:)%clustscore)
-            ! JOINT SCORE
+            ! calculate joint score
             clust_info_arr(:)%jointscore = 0.25 * clust_info_arr(:)%homogeneity + 0.5 * clust_info_arr(:)%resscore + 0.25 * clust_info_arr(:)%clustscore
             call scores2scores_percen(clust_info_arr(:)%jointscore)
         end subroutine renormalize_scores
@@ -2271,6 +2267,28 @@ contains
             clust_info_arr = clust_info_arr_ranked
             labels         = rank_assign
         end subroutine rank_clusters
+
+        subroutine identify_good_bad_clusters
+            clust_info_arr(:)%good_bad = 0
+            ! joint score inclusion
+            where( clust_info_arr(:)%jointscore  >= SCORE_THRES_JOINT )        clust_info_arr(:)%good_bad = 1
+            ! homogeneity/clustscore inclusion
+            where( clust_info_arr(:)%homogeneity >= SCORE_THRES_HOMO     .and.&
+                    &clust_info_arr(:)%clustscore  >= SCORE_THRES_CLUSTSCORE ) clust_info_arr(:)%good_bad = 1
+            ! homogeneity/resscore inclusion
+            where( clust_info_arr(:)%homogeneity >= SCORE_THRES_HOMO     .and.&
+                    &clust_info_arr(:)%resscore    >= SCORE_THRES_RESSCORE )   clust_info_arr(:)%good_bad = 1
+            ! resolution inclusion
+            where( clust_info_arr(:)%resscore    >= SCORE_THRES_RESSCORE .and.&
+                    &clust_info_arr(:)%res         <= RES_THRES )              clust_info_arr(:)%good_bad = 1
+            ! label second rate classes
+            where( clust_info_arr(:)%good_bad == 0                       .and.&
+                    &clust_info_arr(:)%jointscore >= SCORE_THRES_2NDRATE )     clust_info_arr(:)%good_bad = 2
+            if( DEBUG )then
+                print *, 'found '//int2str(count(clust_info_arr(:)%good_bad == 1))//' 1st rate cluster(s) of class averages'
+                print *, 'found '//int2str(count(clust_info_arr(:)%good_bad == 2))//' 2nd rate cluster(s) of class averages'
+            endif
+        end subroutine identify_good_bad_clusters
  
     end subroutine exec_cluster_cavgs
 
@@ -2332,7 +2350,7 @@ contains
         class(reject_cavgs_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         real,            parameter   :: HP_SPEC = 20., LP_SPEC = 6., SCORE_THRES=0.9
-        integer,         parameter   :: NCLS_DEFAULT = 20, NCLS_SMALL_DEFAULT = 5, NHISTBINS = 128
+        integer,         parameter   :: NCLUST_DEFAULT = 20, NCLUST_SMALL_DEFAULT = 5, NHISTBINS = 128
         logical,         parameter   :: DEBUG = .true.
         type(image),     allocatable :: cavg_imgs(:)
         type(histogram), allocatable :: hists(:)
@@ -2456,9 +2474,9 @@ contains
             nclust = params%ncls
         else
             if( ncls_sel < 100 )then
-                nclust = NCLS_SMALL_DEFAULT
+                nclust = NCLUST_SMALL_DEFAULT
             else
-                nclust = NCLS_DEFAULT
+                nclust = NCLUST_DEFAULT
             endif
         endif
         call kmed%new(ncls_sel, dmat, nclust)

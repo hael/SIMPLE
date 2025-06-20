@@ -440,7 +440,7 @@ contains
         end do
         best_res  = minval(clust_info_arr(:)%res)
         worst_res = maxval(clust_info_arr(:)%res)
-        where( clust_info_arr(:)%res < 2 ) clust_info_arr(:)%res = worst_res ! nothing else makes sense
+        where( clust_info_arr(:)%pop < 2 ) clust_info_arr(:)%res = worst_res ! nothing else makes sense
     end function align_clusters2medoids
 
     subroutine write_aligned_cavgs( labels, cavg_imgs, clust_info_arr, fbody, ext )
