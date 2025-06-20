@@ -26,6 +26,7 @@ type kmedoids
     procedure, private   :: find_medoid
     procedure            :: assign_labels
     procedure            :: merge
+    procedure            :: merge_ranked
     procedure            :: kill
 end type kmedoids
 
@@ -215,6 +216,45 @@ contains
         ! re-assign clusters
         call self%assign_labels(nchanges)
     end subroutine merge
+
+    subroutine merge_ranked( self, ncls_new )
+        class(kmedoids), intent(inout) :: self
+        integer,         intent(in)    :: ncls_new
+        real,    allocatable :: dists_btw_meds(:,:)
+        logical, allocatable :: mask(:)
+        integer :: loc(1), imed, jmed
+        if( all(self%i_medoids == 0) ) call self%find_medoids
+        if( ncls_new >= self%ncls ) THROW_HARD('new number of clusters must be smaller than current number')
+        do
+            allocate(dists_btw_meds(self%ncls,self%ncls), source=0.)
+            ! calculate distances between medoids
+            do imed = 1, self%ncls - 1
+                do jmed = imed + 1, self%ncls
+                    dists_btw_meds(imed,jmed) = self%ptr_dmat(self%i_medoids(imed),self%i_medoids(jmed))
+                    dists_btw_meds(jmed,imed) = dists_btw_meds(imed,jmed)
+                end do
+            end do
+            ! find closest cluster
+            allocate(mask(self%ncls), source=.true.)
+            mask(self%ncls) = .false.
+            loc = minloc(dists_btw_meds(self%ncls,:), mask=mask)
+            ! re-label
+            where(self%cls_labels == self%ncls) self%cls_labels = loc(1)
+            ! identify new medoid
+            call self%find_medoid(loc(1))
+            ! update cluster population
+            self%cls_pops(loc(1)) = count(self%cls_labels == loc(1))
+            ! pack arrarys
+            self%i_medoids        = pack(self%i_medoids, mask=mask)
+            self%cls_pops         = pack(self%cls_pops,  mask=mask)
+            ! update # clusters
+            self%ncls = self%ncls - 1
+            ! deallocate arrays
+            deallocate(dists_btw_meds, mask)
+            ! exit condition
+            if( self%ncls == ncls_new ) exit
+        end do
+    end subroutine merge_ranked
 
     subroutine kill( self )
         class(kmedoids), intent(inout) :: self
