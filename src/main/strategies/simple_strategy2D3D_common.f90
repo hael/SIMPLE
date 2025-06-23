@@ -357,7 +357,11 @@ contains
         call img_out%ifft
         ! Soft-edged mask
         if( params_glob%l_focusmsk )then
-            call img_out%mask(params_glob%focusmsk*crop_factor, 'soft')
+            if( params_glob%l_needs_sigma )then
+                call img_out%mask(params_glob%focusmsk*crop_factor, 'softavg')
+            else
+                call img_out%mask(params_glob%focusmsk*crop_factor, 'soft')
+            endif
         else
             if( params_glob%l_needs_sigma )then
                 call img_out%mask(params_glob%msk_crop, 'softavg')
@@ -381,7 +385,7 @@ contains
         real,    optional, intent(out)   :: xyz_out(3)
         integer :: k, filtsz
         real    :: frc(img_out%get_filtsz()), filter(img_out%get_filtsz())
-        real    :: gaufilter(img_out%get_filtsz()), xy_cavg(2), xyz(3), sharg, crop_factor
+        real    :: xy_cavg(2), xyz(3), sharg, crop_factor
         logical :: do_center
         filtsz      = img_in%get_filtsz()
         crop_factor = real(params_glob%box_crop) / real(params_glob%box)
@@ -429,27 +433,12 @@ contains
             if( params_glob%l_lpset.and.params_glob%l_icm )then
                 ! ICM filter only applied when lp is set and performed below, FRC filtering turned off
             else
-                if(trim(params_glob%gauref).eq.'yes')then
-                    filter     = 1.0
-                    ! FRC-based optimal filter
-                    call build_glob%clsfrcs%frc_getter(icls, frc)
-                    if( any(frc > 0.143) )then
-                        call fsc2optlp_sub(filtsz, frc, filter, merged=params_glob%l_lpset)
-                    endif
-                    ! gaussian filter
-                    call gaussian_filter(params_glob%gaufreq, img_in%get_smpd(), img_in%get_box(), gaufilter)
-                    ! minimum filter
-                    forall(k = 1:filtsz) filter(k) = min(filter(k), gaufilter(k))
+                ! FRC-based filtering
+                call build_glob%clsfrcs%frc_getter(icls, frc)
+                if( any(frc > 0.143) )then
+                    call fsc2optlp_sub(filtsz, frc, filter, merged=params_glob%l_lpset)
                     call img_in%fft() ! needs to be here in case the shift was never applied (above)
                     call img_in%apply_filter_serial(filter)
-                else
-                    ! FRC-based filtering
-                    call build_glob%clsfrcs%frc_getter(icls, frc)
-                    if( any(frc > 0.143) )then
-                        call fsc2optlp_sub(filtsz, frc, filter, merged=params_glob%l_lpset)
-                        call img_in%fft() ! needs to be here in case the shift was never applied (above)
-                        call img_in%apply_filter_serial(filter)
-                    endif
                 endif
             endif
         endif

@@ -30,7 +30,7 @@ contains
         type(image),       allocatable   :: imgs(:)
         character(len=:),  allocatable   :: cavgsstk, stkpath
         type(stack_io) :: stkio_r
-        integer :: icls, ncls, n, ldim_read(3), cnt, ncls_sel
+        integer :: icls, ncls, ldim_read(3), cnt, ncls_sel
         real    :: smpd
         call spproj%get_cavgs_stk(cavgsstk, ncls, smpd, imgkind='cavg', stkpath=stkpath)
         if(.not. file_exists(cavgsstk)) cavgsstk = trim(stkpath) // '/' // trim(cavgsstk)
@@ -65,7 +65,7 @@ contains
         logical, optional, intent(in)  :: mask(:)
         type(image),       allocatable :: imgs(:)
         type(stack_io) :: stkio_r
-        integer :: icls, ncls, n, ldim_read(3), cnt, ncls_sel
+        integer :: icls, ncls, ldim_read(3), cnt, ncls_sel
         real    :: smpd
         if(.not. file_exists(cavgsstk)) THROW_HARD('cavgs stk does not exist')
         call find_ldim_nptcls(cavgsstk, ldim_read, ncls, smpd)
@@ -478,7 +478,6 @@ contains
         type(inpl_struct), allocatable  :: algninfo(:)
         integer :: ldim(3), ldim_ref(3), box, kfromto(2), ithr, i, loc(1), nrots, irot
         real    :: smpd, lims(2,2), lims_init(2,2), cxy(3)
-        logical :: l_mirr(n)
         ldim       = imgs(1)%get_ldim()
         ldim_ref   = img_ref%get_ldim()
         if( .not. all(ldim == ldim_ref) ) THROW_HARD('Incongruent logical image dimensions (imgs & img_ref)')
@@ -618,9 +617,9 @@ contains
         real,        parameter   :: ALPHA = 0.997
         type(image), allocatable :: tmp_imgs(:)
         real,        allocatable :: logpspecs(:,:), pspec(:), freqs(:), g(:), env(:), cavgpspecs(:,:)
-        integer,     allocatable :: inds2(:)
-        integer :: ncls,icls,ldim(3),ithr,l,fsz,k,nclusters,n
-        real    :: A,B, smpd
+        integer,     allocatable :: inds1(:),inds2(:)
+        integer :: ncls,icls,ldim(3),ithr,l,fsz,k,nclusters,n,n1,n2
+        real    :: A,AA,B, smpd, maxB
         ncls = size(cavgs)
         if( size(mask) /= ncls ) THROW_HARD('Incompatible CAVGS/MASK size!')
         do icls = 1,ncls
@@ -630,6 +629,7 @@ contains
                 exit
             endif
         enddo
+        ! Log-power spectrum calculation
         fsz = fdim(ldim(1))-1
         allocate(pspec(fsz),logpspecs(fsz,ncls),source=0.)
         A = 2.0*log10(real(product(ldim))) ! so values will be positive after log()
@@ -651,6 +651,7 @@ contains
         call dealloc_imgarr(tmp_imgs)
         freqs = get_resarr(ldim(1), smpd)
         g     = 1. / freqs
+        ! Average Log-power spectrum calculation
         nclusters = maxval(labels)
         allocate(cavgpspecs(fsz,nclusters),scores(nclusters),source=0.)
         do icls = 1,ncls
@@ -659,25 +660,31 @@ contains
             if( l == 0 ) cycle
             cavgpspecs(:,l) = cavgpspecs(:,l) + logpspecs(:,icls)
         enddo
+        ! Curve minimum envelope
+        inds1 = pack((/(k,k=1,fsz)/),mask=(g>1.0/HP1).and.(g<1.0/LP1))
         inds2 = pack((/(k,k=1,fsz)/),mask=(g>1.0/HP2).and.(g<1.0/LP2))
+        n1 = size(inds1)
+        n2 = size(inds2)
         do l = 1,nclusters
             n = count(labels==l)
             if( n <= 1 )cycle
             cavgpspecs(:,l) = cavgpspecs(:,l) / real(n)
             pspec = cavgpspecs(:,l)
             call min_envelope(fsz, g, pspec, ALPHA, env)
-            A = sum(abs(pspec-env),mask=(g>1.0/HP1).and.(g<1.0/LP1))
-            B = sum(abs(pspec-env),mask=(g>1.0/HP2).and.(g<1.0/LP2))
-            if( abs(A-B) < 0.001 )then
+            ! Average distance to enveloppe in region 1 including region 2
+            A = sum(abs(pspec(inds1)-env(inds1))) / real(n1)
+            ! Average distance to enveloppe in region 2
+            B    = sum(abs(pspec(inds2)-env(inds2))) / real(n2)
+            maxB = maxval(abs(pspec(inds2)-env(inds2)))
+            ! Average distance to enveloppe in region 1 excluding region2
+            AA = (A*real(n1) - B*real(n2)) / real(n1-n2)
+            ! Score
+            if( AA < 1.e-6 )then
                 scores(l) = 0.0
             else
-                scores(l) = B / (A-B)
+                ! scores(l) = B / AA
+                scores(l) = maxB / AA
             endif
-            ! if( A < 0.001 )then
-            !     scores(l) = 0.0
-            ! else
-            !     scores(l) = B / A
-            ! endif
             call plot2D(fsz, g, env, 'plot_'//int2str(l), .true.,xtitle='1/A', ytitle='logPW',&
                 &suptitle='Cluster '//int2str(l)//' - '//real2str(scores(l)), z=pspec )
         enddo
@@ -700,17 +707,17 @@ contains
                     allocate(z(n),source=0.)
                 endif
                 xmin = minval(x)
-                m    = 0.
                 is   = 1
                 do i = 1,n
                     is = i
                     if( g(i) > 1./HP1 ) exit
-                    m = max(m,x(i))
                 enddo
-                if( is > 1 ) z(:is-1) = m
-                do i = is,n
-                    i0 = min(n,max(1,i-w))
-                    i1 = min(n,max(1,i+w))
+                if( is > 1 ) z(:is-1) = x(is)
+                z(is) = x(is)
+                m     = x(is)
+                do i = is+1,n
+                    i0   = min(n,max(1,i-w))
+                    i1   = min(n,max(1,i+w))
                     m    = max(xmin, min(alpha*m,minval(x(i0:i1))))
                     z(i) = m
                 enddo

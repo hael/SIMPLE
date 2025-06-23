@@ -1553,12 +1553,10 @@ contains
             THROW_HARD('focusmsk (focused mask radius in pixels) is deprecated! Use focusmskdiam (focused mask diameter in A)')
         endif
         if( cline%defined('focusmskdiam') )then
-            if( .not.cline%defined('mskfile') )THROW_HARD('mskfile must be provided together with focusmskdiam')
             if( .not.cline%defined('mskdiam') )then
                 THROW_HARD('mskdiam must be provided together with focusmskdiam')
             endif
             self%focusmsk = round2even((self%focusmskdiam / self%smpd) / 2.)
-            if(self%focusmsk >= self%msk) THROW_HARD('focusmskdiam should be smaller than mskdiam')
             self%l_focusmsk = .true.
         else
             self%focusmsk = self%msk
