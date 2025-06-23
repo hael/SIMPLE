@@ -3132,7 +3132,7 @@ contains
                     call cavger_write(trim(params%refs_even), 'even'  )
                     call cavger_write(trim(params%refs_odd),  'odd'   )
                     call build_glob%clsfrcs%read(FRCS_FILE)
-                    call cavger_read(trim(params%refs_even), 'even' )
+                    call cavger_read(trim(params%refs_even), 'even')
                     call cavger_read(trim(params%refs_odd),  'odd' )
                     call build_glob%img_crop_polarizer%init_polarizer(pftcc, params%alpha)
                     call match_img%new([params%box_crop, params%box_crop, 1], params%smpd_crop, wthreads=.false.)
