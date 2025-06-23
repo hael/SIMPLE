@@ -69,6 +69,9 @@ type :: polarft_corrcalc
     complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (pftsz,nk,nrefs), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
     complex(sp),         allocatable :: pfts_refs_merg(:,:,:)       !< -"-, merged
+    complex(sp),         allocatable :: pfts_refs_clin(:,:,:)       !< -"-, comlin
+    complex(sp),         allocatable :: pfts_refs_clin_even(:,:,:)  !< -"-, comlin, even
+    complex(sp),         allocatable :: pfts_refs_clin_odd(:,:,:)   !< -"-, comlin, odd
     complex(sp),         allocatable :: pfts_drefs_even(:,:,:,:)    !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp),         allocatable :: pfts_drefs_odd(:,:,:,:)     !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp),         allocatable :: pfts_ptcls(:,:,:)           !< 3D complex matrix of particle sections
@@ -304,6 +307,7 @@ contains
         allocate(self%pfts_refs_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%pfts_refs_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%pfts_refs_merg(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                &self%pfts_refs_clin(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%pfts_drefs_even(self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                 &self%pfts_drefs_odd (self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                 &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
@@ -1482,10 +1486,14 @@ contains
         real(dp)  :: numer, denom1, denom2
         real      :: ctf2_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                     &ctf2_merg(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                    &ctf2_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs), frc(self%kfromto(1):self%kfromto(2))
+                    &ctf2_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                    &ctf2_clin_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                    &ctf2_clin_merg(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                    &ctf2_clin_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                    &frc_clin(self%kfromto(1):self%kfromto(2)),frc_cavg(self%kfromto(1):self%kfromto(2))
         l_ran    = .false.
         l_comlin = .false.
-        if( present(ran) )l_ran    = ran
+        if( present(ran) )l_ran = ran
         if( present(comlin) .and. present(pfts) .and. present(pcomlines) ) l_comlin = comlin
         if( l_ran )then
             do iref = 1, self%nrefs
@@ -1530,19 +1538,25 @@ contains
         enddo
         if( l_comlin )then
             call self%gen_polar_comlin_pfts(pcomlines, self%pfts_refs_even, pfts)
-            self%pfts_refs_even = pfts
+            self%pfts_refs_clin_even = pfts
             call self%gen_polar_comlin_pfts(pcomlines, self%pfts_refs_odd,  pfts)
-            self%pfts_refs_odd  = pfts
+            self%pfts_refs_clin_odd  = pfts
             call self%gen_polar_comlin_pfts(pcomlines, cmplx(ctf2_even), pfts)
-            ctf2_even = real(pfts)
+            ctf2_clin_even = real(pfts)
             call self%gen_polar_comlin_pfts(pcomlines, cmplx(ctf2_odd),  pfts)
-            ctf2_odd  = real(pfts)
+            ctf2_clin_odd  = real(pfts)
         endif
         if( self%with_ctf )then
             where( abs(ctf2_even) > TINY ) self%pfts_refs_even = self%pfts_refs_even / ctf2_even
             where( abs(ctf2_even) < TINY ) self%pfts_refs_even = 0.
             where( abs(ctf2_odd)  > TINY ) self%pfts_refs_odd  = self%pfts_refs_odd  / ctf2_odd
             where( abs(ctf2_odd)  < TINY ) self%pfts_refs_odd  = 0.
+            if( l_comlin )then
+                where( abs(ctf2_clin_even) > TINY ) self%pfts_refs_clin_even = self%pfts_refs_clin_even / ctf2_clin_even
+                where( abs(ctf2_clin_even) < TINY ) self%pfts_refs_clin_even = 0.
+                where( abs(ctf2_clin_odd)  > TINY ) self%pfts_refs_clin_odd  = self%pfts_refs_clin_odd  / ctf2_clin_odd
+                where( abs(ctf2_clin_odd)  < TINY ) self%pfts_refs_clin_odd  = 0.
+            endif
         endif
         ! merging even and odd
         self%pfts_refs_merg = complex(0., 0.)
@@ -1563,31 +1577,53 @@ contains
         enddo
         if( l_comlin )then
             call self%gen_polar_comlin_pfts(pcomlines, self%pfts_refs_merg, pfts)
-            self%pfts_refs_merg = pfts
+            self%pfts_refs_clin = pfts
             call self%gen_polar_comlin_pfts(pcomlines, cmplx(ctf2_merg), pfts)
-            ctf2_merg = real(pfts)
+            ctf2_clin_merg = real(pfts)
         endif
         if( self%with_ctf )then
             where( abs(ctf2_merg) > TINY ) self%pfts_refs_merg = self%pfts_refs_merg / ctf2_merg
             where( abs(ctf2_merg) < TINY ) self%pfts_refs_merg = 0.
+            if( l_comlin )then
+                where( abs(ctf2_clin_merg) > TINY ) self%pfts_refs_clin = self%pfts_refs_clin / ctf2_clin_merg
+                where( abs(ctf2_clin_merg) < TINY ) self%pfts_refs_clin = 0.
+            endif
         endif
         ! FRC filtering
         do iref = 1, self%nrefs
-            frc = 0.
+            frc_cavg = 0.
+            frc_clin = 0.
             do k = self%kfromto(1), self%kfromto(2)
                 numer  = sum(real(self%pfts_refs_even(:,k,iref) * conjg(self%pfts_refs_odd(:,k,iref)), kind=dp))
                 denom1 = sum( csq(self%pfts_refs_even(:,k,iref)))
                 denom2 = sum( csq(self%pfts_refs_odd( :,k,iref)))
-                if( dsqrt(denom1*denom2) > DTINY ) frc(k) = real(numer / dsqrt(denom1*denom2))
+                if( dsqrt(denom1*denom2) > DTINY ) frc_cavg(k) = real(numer / dsqrt(denom1*denom2))
+                if( l_comlin )then
+                    numer  = sum(real(self%pfts_refs_clin_even(:,k,iref) * conjg(self%pfts_refs_clin_odd(:,k,iref)), kind=dp))
+                    denom1 = sum( csq(self%pfts_refs_clin_even(:,k,iref)))
+                    denom2 = sum( csq(self%pfts_refs_clin_odd( :,k,iref)))
+                    if( dsqrt(denom1*denom2) > DTINY ) frc_clin(k) = real(numer / dsqrt(denom1*denom2))
+                endif
             enddo
-            if( any(frc > 0.143) )then
+            if( any(frc_cavg > 0.143) )then
                 do k = self%kfromto(1), self%kfromto(2)
-                    self%pfts_refs_merg(:,k,iref) = self%pfts_refs_merg(:,k,iref) * frc(k)
+                    self%pfts_refs_merg(:,k,iref) = self%pfts_refs_merg(:,k,iref) * frc_cavg(k)
                 enddo
             endif
+            if( l_comlin )then
+                if( any(frc_clin > 0.143) )then
+                    do k = self%kfromto(1), self%kfromto(2)
+                        self%pfts_refs_clin(:,k,iref) = self%pfts_refs_clin(:,k,iref) * frc_clin(k)
+                    enddo
+                endif
+            endif
         enddo
-        self%pfts_refs_even = self%pfts_refs_merg
-        self%pfts_refs_odd  = self%pfts_refs_merg
+        if( trim(params_glob%test_mode) .eq. 'yes' )then
+            self%pfts_refs_even = self%pfts_refs_merg + self%pfts_refs_clin
+        else
+            self%pfts_refs_even = self%pfts_refs_clin
+        endif
+        self%pfts_refs_odd = self%pfts_refs_even
     end subroutine gen_polar_refs
 
     subroutine create_polar_absctfmats( self, spproj, oritype, pfromto )
@@ -3672,7 +3708,8 @@ contains
             if( allocated(self%cached_vals)    ) deallocate(self%cached_vals)
             deallocate(self%sqsums_ptcls, self%ksqsums_ptcls, self%wsqsums_ptcls, self%angtab, self%argtransf,self%pfts_ptcls,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
-                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone, self%pfts_refs_merg)
+                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone, self%pfts_refs_merg,&
+                &self%pfts_refs_clin,self%pfts_refs_clin_even,self%pfts_refs_clin_odd)
             call self%kill_memoized_ptcls
             call self%kill_memoized_refs
             nullify(self%sigma2_noise, pftcc_glob)
