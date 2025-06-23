@@ -380,7 +380,7 @@ contains
             character(len=:), allocatable :: sh_first, refine, center, objfun, refs, icm, gauref
             integer :: iphase, iter, imaxits, cc_iters, minits, extr_iter
             real    :: trs, lambda, gaufreq
-            logical :: l_gauref
+            logical :: l_gauref, l_gaufreq_input
             refine = trim(params%refine)
             ! optimal & gaussian minimum filter
             l_gauref = trim(params%gauref).eq.'yes'
@@ -389,6 +389,7 @@ contains
                 l_gauref = .true.
             endif
             if( l_gauref ) params%l_icm = .false.
+            l_gaufreq_input = cline%defined('gaufreq')
             ! iteration number book-keeping
             iter = 0
             if( cline_cluster2D%defined('endit') ) iter = cline_cluster2D%get_iarg('endit')
@@ -456,7 +457,11 @@ contains
                         endif
                         if( l_gauref )then
                             gauref   = 'yes'
-                            gaufreq  = stage_parms(istage)%lp
+                            if( l_gaufreq_input )then
+                                gaufreq  = params%gaufreq
+                            else
+                                gaufreq  = stage_parms(istage)%lp
+                            endif
                         else
                             gauref   = 'no'
                         endif
@@ -480,7 +485,11 @@ contains
                         endif
                         if( l_gauref )then
                             gauref   = 'yes'
-                            gaufreq  = stage_parms(istage)%lp
+                            if( l_gaufreq_input )then
+                                gaufreq  = params%gaufreq * stage_parms(2)%lp / stage_parms(1)%lp
+                            else
+                                gaufreq  = stage_parms(istage)%lp
+                            endif
                         else
                             gauref   = 'no'
                         endif
@@ -499,7 +508,11 @@ contains
                         endif
                         if( l_gauref )then
                             gauref   = 'yes'
-                            gaufreq  = stage_parms(istage)%lp
+                            if( l_gaufreq_input )then
+                                gaufreq  = params%gaufreq * stage_parms(3)%lp / stage_parms(2)%lp
+                            else
+                                gaufreq  = stage_parms(istage)%lp
+                            endif
                         else
                             gauref   = 'no'
                         endif
