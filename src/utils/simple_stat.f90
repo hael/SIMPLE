@@ -15,7 +15,7 @@ public :: merge_dmats, estimate_bimodality_of_cluster
 public :: calc_ap_pref, medoid_from_smat, medoid_ranking_from_smat, cluster_smat_bin, medoid_from_dmat, z_scores, pearsn_serial_8, kstwo
 public :: rank_sum_weights, rank_inverse_weights, rank_centroid_weights, rank_exponent_weights
 public :: conv2rank_weights, calc_stats, pearsn_serial, norm_corr, norm_corr_8, skewness, kurtosis
-public :: median, median_nocopy, mad, mad_gau, robust_scaling, robust_z_scores, robust_normalization, robust_sigma_thres
+public :: median, median_nocopy, mad, mad_gau, robust_scaling, robust_z_scores, robust_normalization, robust_sigma_thres, robust_normalize_minmax
 private
 #include "simple_local_flags.inc"
 
@@ -818,6 +818,16 @@ contains
         delta = smax - smin
         arr   = (arr - smin)/delta
     end subroutine normalize_minmax_2
+
+    subroutine robust_normalize_minmax( arr )
+        real, intent(inout) :: arr(:)
+        real                :: smin, smax, delta
+        call robust_normalization(arr)
+        smin  = minval(arr)
+        smax  = maxval(arr)
+        delta = smax - smin
+        arr   = (arr - smin)/delta
+    end subroutine robust_normalize_minmax
 
     ! a value below 0.1 is considered a “small” difference
     pure real function std_mean_diff( avg1, avg2, sig1, sig2 )
