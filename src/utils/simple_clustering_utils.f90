@@ -1,13 +1,75 @@
 ! Tools and metrics for clustering analysis
 module simple_clustering_utils
+use simple_kmedoids, only: kmedoids
+use simple_aff_prop, only: aff_prop
 include 'simple_lib.f08'
 implicit none
 
-public :: aggregate, silhouette_score, DBIndex, DunnIndex
+public :: cluster_dmat, extract_dmat, aggregate, silhouette_score, DBIndex, DunnIndex
 private
 #include "simple_local_flags.inc"
 
 contains
+
+    subroutine cluster_dmat( dmat, algorithm, nclust, i_medoids, labels, ap_pref )
+        real,                 intent(in)    :: dmat(:,:)
+        character(len=*),     intent(in)    :: algorithm
+        integer,              intent(inout) :: nclust
+        integer, allocatable, intent(inout) :: i_medoids(:), labels(:)
+        real,    optional,    intent(in)    :: ap_pref
+        real,    allocatable :: smat(:,:)
+        type(kmedoids)       :: kmed
+        type(aff_prop)       :: aprop
+        integer :: n
+        real    :: pref, simsum
+        n = size(dmat, dim=1)
+        select case(trim(algorithm))
+            case('aprop')
+                write(logfhandle,'(A)') '>>> CLUSTERING DISTANCE MATRIX WITH AFFINITY PROPAGATION'
+                smat = dmat2smat(dmat)
+                pref = 0. ! assuming normalized distance matrix, pref=0. because this is the minimal score
+                if( present(ap_pref) ) pref = ap_pref
+                call aprop%new(n, smat, pref=pref)
+                call aprop%propagate(i_medoids, labels, simsum)
+                call aprop%kill
+                nclust = size(i_medoids)
+                write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION (AP): ', nclust
+            case('kmed')
+                write(logfhandle,'(A)') '>>> CLUSTERING DISTANCE MATRIX WITH K-MEDOIDS'
+                if( nclust < 2 ) THROW_HARD('Invalid nclust input')
+                call kmed%new(n, dmat, nclust)
+                call kmed%init
+                call kmed%cluster
+                allocate(labels(n), i_medoids(nclust), source=0)
+                call kmed%get_labels(labels)
+                call kmed%get_medoids(i_medoids)
+                call kmed%kill
+        end select
+    end subroutine cluster_dmat
+
+    subroutine extract_dmat( dmat, mask, inds, dmat_sub ) 
+        real,                 intent(in)    :: dmat(:,:)
+        logical,              intent(in)    :: mask(:) 
+        integer, allocatable, intent(inout) :: inds(:)
+        real,    allocatable, intent(inout) :: dmat_sub(:,:)
+        integer, allocatable :: itmp(:)
+        integer :: n, i, j, nsub
+        n = size(dmat, dim=1)
+        if( n /= size(mask) ) THROW_HARD('Incongrouent array dimensions, labels must have same dimension as symmetric dmat')
+        nsub = count(mask)
+        if( allocated(dmat_sub) ) deallocate(dmat_sub)
+        allocate(dmat_sub(nsub,nsub), source=0.)
+        if( allocated(inds) ) deallocate(inds)
+        allocate(itmp(n), source=(/(i,i=1,n)/))
+        inds = pack(itmp, mask=mask)    
+        do i = 1, nsub - 1
+            do j = i + 1, nsub
+                dmat_sub(i,j) = dmat(inds(i),inds(j))
+                dmat_sub(j,i) = dmat_sub(i,j)
+            end do
+        end do
+        call normalize_minmax(dmat_sub)
+    end subroutine extract_dmat
 
     !>  \brief Given labelling into k partitions and corresponding distance matrix iteratively
     !          combines the pair of clusters with lowest average inter-cluster distance,
