@@ -1361,12 +1361,14 @@ contains
         ! randomly chosing two sets of (irot, kind) to generate the polar common lines
         irot = 5
         kind = self%kfromto(1) + 5
+        if( kind >= self%kfromto(2) ) kind = self%kfromto(1)
         hk1  = self%get_coord(irot,kind)
         irot = 16
         kind = self%kfromto(1) + 15
+        if( kind >= self%kfromto(2) ) kind = self%kfromto(2)
         hk2  = self%get_coord(irot,kind)
         ! caching rotation matrices and their corresponding inverse matrices
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,rotmat)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,rotmat,errflg)
         do iref = 1, self%nrefs
             rotmat = ref_space%get_mat(iref)
             call matinv(rotmat, invmats(:,:,iref), 3, errflg)
