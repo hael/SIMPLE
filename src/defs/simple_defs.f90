@@ -124,6 +124,7 @@ end type clust_inpl
     real             :: homogeneity = 0.
     real             :: resscore    = 0.
     real             :: clustscore  = 0.
+    real             :: glcmscore   = 0.
     real             :: jointscore  = 0.
 end type clust_info
 

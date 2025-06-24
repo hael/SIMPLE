@@ -1846,12 +1846,12 @@ contains
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         real,             parameter   :: HP_SPEC = 20., LP_SPEC = 6., FRAC_BEST_CAVGS=0.3
-        real,             parameter   :: RES_THRES=6., SCORE_THRES_2NDRATE=50., SCORE_THRES_1STRATE=70.
-        integer,          parameter   :: NHISTBINS = 128
+        real,             parameter   :: RES_THRES=6., SCORE_THRES_2NDRATE=50., SCORE_THRES_1STRATE=65.
+        integer,          parameter   :: NHISTBINS = 128, NQUANTA=32
         logical,          parameter   :: DEBUG = .true.
         type(image),      allocatable :: cavg_imgs(:)
         type(histogram),  allocatable :: hists(:)
-        real,             allocatable :: frc(:), mm(:,:)
+        real,             allocatable :: frc(:), mm(:,:), glcms(:,:,:)
         real,             allocatable :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:), dmat_tvd(:,:), smat_tvd(:,:), dmat_joint(:,:)
         real,             allocatable :: smat_joint(:,:), dmat(:,:), res_bad(:), res_good(:), dmat_jsd(:,:), smat_jsd(:,:)
         real,             allocatable :: dmat_hd(:,:), dmat_hist(:,:), dmat_fm(:,:), smat(:,:)
@@ -1903,6 +1903,13 @@ contains
         do i = 1, ncls_sel
             call hists(i)%new(cavg_imgs(i), NHISTBINS, minmax=[oa_min,oa_max], radius=params%msk)
         end do
+        ! generate gray level co-occurence matrices
+        allocate(glcms(ncls_sel,NQUANTA,NQUANTA), source=0.)
+        !$omp parallel do default(shared) private(i,j) proc_bind(close) schedule(static) 
+        do i = 1, ncls_sel
+            call cavg_imgs(i)%GLCM(NQUANTA, glcms(i,:,:))
+        end do
+        !$omp end parallel do
         ! generate power spectra and associated distance/similarity matrix
         ! create pspecs object
         call pows%new(cavg_imgs, spproj%os_cls2D, params%msk, HP_SPEC, LP_SPEC, params%ncls_spec, l_exclude_junk=.false.)
@@ -1944,7 +1951,7 @@ contains
             case('hist')
                 dmat = dmat_hist
             case('histfm')
-                dmat = 0.5 * dmat_hist + 0.5 * dmat_fm 
+                dmat = 0.5 * dmat_hist + 0.5 * dmat_fm
             case('hybrid')
                 dmat = 0.2 * dmat_hist + 0.4 * dmat_pow + 0.4 * dmat_fm       
             case DEFAULT
@@ -1968,8 +1975,6 @@ contains
                 end do
                 ! calculate scores
                 call calc_scores
-                ! re-normalize scores
-                call renormalize_scores
                 ! rank clusters
                 call rank_clusters
                 ! calculate discretized joint score based on a second pass of AP clustering of score vecs
@@ -1998,11 +2003,12 @@ contains
                 enddo
                 ! report cluster info
                 do iclust = 1, nclust
-                    write(logfhandle,'(A,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,I3)') 'cluster_ranked'//int2str_pad(iclust,2)//'.mrc',&
+                    write(logfhandle,'(A,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,I3)') 'cluster_ranked'//int2str_pad(iclust,2)//'.mrc',&
                     &' resolution(A) ',   clust_info_arr(iclust)%res,& 
                     &' resscore(%) ',     clust_info_arr(iclust)%resscore,& 
                     &' homogeneity(%) ',  clust_info_arr(iclust)%homogeneity,&
                     &' clustscore(%) ',   clust_info_arr(iclust)%clustscore,&
+                    &' glcmscore(%) ',    clust_info_arr(iclust)%glcmscore,&
                     &' jointscore(%) ',   clust_info_arr(iclust)%jointscore,&
                     &' good_bad_assign ', clust_info_arr(iclust)%good_bad
                 end do
@@ -2130,20 +2136,23 @@ contains
             res_max = maxval(clust_info_arr(:)%res)
             where( clust_info_arr(:)%pop < 2 ) clust_info_arr(:)%resscore = res_max
             call dists2scores_percen(clust_info_arr(:)%resscore)
-            ! FM CORR & CLUSTSCORE
+            ! FM CORR, CLUSTSCORE, GLCMSCORE
             do iclust = 1, nclust
                 clust_info_arr(iclust)%corrfmscore = 0.
                 clust_info_arr(iclust)%clustscore  = 0.
+                clust_info_arr(iclust)%glcmscore   = 0.
                 cnt = 0
                 do icls = 1, ncls_sel 
                     if( labels(icls) == iclust )then
                         clust_info_arr(iclust)%corrfmscore = clust_info_arr(iclust)%corrfmscore +   corrmat(icls,i_medoids(iclust))
                         clust_info_arr(iclust)%clustscore  = clust_info_arr(iclust)%clustscore  +      dmat(icls,i_medoids(iclust))
+                        clust_info_arr(iclust)%glcmscore   = clust_info_arr(iclust)%glcmscore   +         sum(glcms(iclust,:,:)**2)
                         cnt = cnt + 1
                     endif
                 enddo
                 clust_info_arr(iclust)%corrfmscore = clust_info_arr(iclust)%corrfmscore / real(cnt)
                 clust_info_arr(iclust)%clustscore  = clust_info_arr(iclust)%clustscore  / real(cnt)
+                clust_info_arr(iclust)%clustscore  = clust_info_arr(iclust)%glcmscore   / real(cnt)
             end do
             corrfmscore_min = minval(clust_info_arr(:)%corrfmscore)
             clustscore_min  = minval(clust_info_arr(:)%clustscore)
@@ -2153,17 +2162,11 @@ contains
             endwhere
             call scores2scores_percen(clust_info_arr(:)%corrfmscore)
             call dists2scores_percen(clust_info_arr(:)%clustscore)
-        end subroutine calc_scores
-
-        subroutine renormalize_scores
-            ! re-normalize
-            call scores2scores_percen(clust_info_arr(:)%homogeneity)
-            call scores2scores_percen(clust_info_arr(:)%resscore)
-            call scores2scores_percen(clust_info_arr(:)%clustscore)
+            call scores2scores_percen(clust_info_arr(:)%glcmscore)
             ! calculate joint score
-            clust_info_arr(:)%jointscore = 0.25 * clust_info_arr(:)%homogeneity + 0.5 * clust_info_arr(:)%resscore + 0.25 * clust_info_arr(:)%clustscore
+            clust_info_arr(:)%jointscore = 0.35 * clust_info_arr(:)%homogeneity + 0.5 * clust_info_arr(:)%resscore + 0.15 * clust_info_arr(:)%clustscore
             call scores2scores_percen(clust_info_arr(:)%jointscore)
-        end subroutine renormalize_scores
+        end subroutine calc_scores
 
         subroutine copy_clustering
             clust_info_arr_copy = clust_info_arr
