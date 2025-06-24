@@ -49,7 +49,7 @@ interface vabs
 end interface vabs
 
 interface euclid
-    module procedure euclid_sp, euclid_dp
+    module procedure euclid_sp_1, euclid_sp_2, euclid_dp
 end interface euclid
 
 interface l1dist
@@ -1437,11 +1437,17 @@ contains
     end function hyp_4
 
     !>   calculates the euclidean distance between two vectors of dimension _n_
-    pure function euclid_sp( vec1, vec2 ) result( dist )
+    pure function euclid_sp_1( vec1, vec2 ) result( dist )
         real, intent(in) :: vec1(:), vec2(:)
         real             :: dist
         dist = sqrt(sum((vec1-vec2)**2))
-    end function euclid_sp
+    end function euclid_sp_1
+
+    pure function euclid_sp_2( vec1, vec2 ) result( dist )
+        real, intent(in) :: vec1(:,:), vec2(:,:)
+        real             :: dist
+        dist = sqrt(sum((vec1-vec2)**2))
+    end function euclid_sp_2
 
     pure function euclid_dp( vec1, vec2 ) result( dist )
         real(dp), intent(in) :: vec1(:), vec2(:)

@@ -7,6 +7,7 @@ include 'simple_lib.f08'
 use simple_ftiter,  only: ftiter
 use simple_imgfile, only: imgfile
 use simple_winfuns, only: winfuns
+use simple_neighs
 use gnufor2
 implicit none
 
@@ -218,6 +219,7 @@ contains
     procedure          :: real_space_filter
     procedure          :: NLmean2D, NLmean2D_eo, NLmean3D, NLmean3D_eo
     procedure          :: ICM2D, ICM2D_eo, ICM3D, ICM3D_eo
+    procedure          :: GLCM
     procedure          :: lpgau2D
     ! CALCULATORS
     procedure          :: minmax
@@ -4452,7 +4454,6 @@ contains
 
     ! uniform noise variance (sigma2 constant, set to 5)
     subroutine ICM2D( self, lambda, verbose )
-        use simple_neighs
         class(image),      intent(inout) :: self
         real,              intent(in)    :: lambda
         logical, optional, intent(in)    :: verbose
@@ -4511,7 +4512,6 @@ contains
 
     ! nonuniform
     subroutine ICM2D_eo( even, odd, lambda, verbose )
-        use simple_neighs
         class(image),      intent(inout) :: even, odd
         real,              intent(in)    :: lambda
         logical, optional, intent(in)    :: verbose
@@ -4592,7 +4592,6 @@ contains
 
     ! uniform noise variance (sigma2 constant, set to 5)
     subroutine ICM3D( self, lambda )
-        use simple_neighs
         class(image), intent(inout) :: self
         real,         intent(in)    :: lambda
         integer, parameter :: MAXITS    = 3
@@ -4650,7 +4649,6 @@ contains
 
     ! nonuniform
     subroutine ICM3D_eo( even, odd, lambda, l_msk )
-        use simple_neighs
         class(image),      intent(inout) :: even, odd
         real,              intent(in)    :: lambda
         logical, optional, intent(in)    :: l_msk(even%ldim(1),even%ldim(2),even%ldim(3))
@@ -4734,6 +4732,30 @@ contains
         call noise%kill
         call noise_var%kill
     end subroutine ICM3D_eo
+
+    ! generate gray level co-occurence matrix
+    subroutine GLCM( self, nquanta, pmat )
+        class(image), intent(in)    :: self
+        integer,      intent(in)    :: nquanta
+        real,         intent(inout) :: pmat(nquanta,nquanta)
+        type(image) :: img_q
+        real        :: transl_tab(nquanta)
+        integer     :: m, n, j, n_8(3,8), nsz, ipix, jpix
+        call img_q%copy(self)
+        call img_q%quantize_fwd(nquanta, transl_tab)
+        do m = 1,img_q%ldim(2)
+            do n = 1,img_q%ldim(1)
+                ipix = nint(img_q%rmat(n,m,1) + 1.)
+                call neigh_8(img_q%ldim, [n,m,1], n_8, nsz)
+                do j = 1, nsz
+                    jpix = nint(img_q%rmat(n_8(1,j),n_8(2,j),1) + 1.)
+                    if( jpix == ipix ) pmat(ipix,jpix) = pmat(ipix,jpix) + 1.
+                end do
+            end do
+        end do
+        call normalize_minmax(pmat)
+        call img_q%kill
+    end subroutine GLCM
 
     subroutine lpgau2D( self, freq )
         class(image), intent(inout) :: self
@@ -5031,7 +5053,6 @@ contains
     end function avg_loc_sdev
 
     subroutine loc_var( self, varimg, avar )
-        use simple_neighs
         class(image),   intent(in)    :: self
         class(image),   intent(inout) :: varimg
         real, optional, intent(inout) :: avar
@@ -5064,7 +5085,6 @@ contains
     end subroutine loc_var
 
     subroutine loc_var3D( self, varimg, avar )
-        use simple_neighs
         class(image),   intent(in)    :: self
         class(image),   intent(inout) :: varimg
         real, optional, intent(inout) :: avar
