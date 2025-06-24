@@ -3075,9 +3075,9 @@ contains
                     call pftcc%memoize_ptcls
                 endif
                 call build_glob%spproj_field%set_projs(build_glob%eulspace)
+                call build_glob%spproj_field%proj2class
                 if( trim(coord_type) .eq. 'cart' )then
                     ! cartesian cavgs
-                    call build_glob%spproj_field%proj2class
                     params%which_iter = iter
                     call cavger_kill()
                     call cavger_new
