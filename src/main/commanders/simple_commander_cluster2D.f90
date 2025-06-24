@@ -1852,12 +1852,12 @@ contains
         type(histogram),  allocatable :: hists(:)
         real,             allocatable :: frc(:), mm(:,:)
         real,             allocatable :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:), dmat_tvd(:,:), smat_tvd(:,:), dmat_joint(:,:)
-        real,             allocatable :: smat_joint(:,:), dmat(:,:), res_bad(:), res_good(:), dmat_jsd(:,:), smat_jsd(:,:)
+        real,             allocatable :: smat_joint(:,:), dmat(:,:), res_bad(:), res_good(:), res_maybe(:), dmat_jsd(:,:), smat_jsd(:,:)
         real,             allocatable :: dmat_hd(:,:), dmat_hist(:,:), dmat_fm(:,:), smat(:,:)
         real,             allocatable :: resvals(:)
         logical,          allocatable :: l_msk(:,:,:), l_non_junk(:)
         integer,          allocatable :: labels(:), clsinds(:), i_medoids(:), labels_copy(:), i_medoids_copy(:)
-        integer,          allocatable :: clspops(:), states(:), states_part(:)
+        integer,          allocatable :: clspops(:), states(:), states_part(:), labels4write(:)
         type(clust_info), allocatable :: clust_info_arr(:), clust_info_arr_copy(:)
         character(len=:), allocatable :: projfname
         type(parameters)   :: params
@@ -2011,9 +2011,10 @@ contains
                 frac_maybe   = real(nptcls_maybe) / real(nptcls)
                 write(logfhandle,'(a,1x,f8.2)') '% PARTICLES CLASSIFIED AS 1ST RATE: ', frac_good  * 100.
                 write(logfhandle,'(a,1x,f8.2)') '% PARTICLES CLASSIFIED AS 2ND RATE: ', frac_maybe * 100.
-                ! calculate resolution statistics for good/bad classes
-                res_good    = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad == 1)
-                res_bad     = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad /= 1)
+                ! calculate resolution statistics for good/maybe/bad classes
+                res_good     = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad == 1)
+                res_maybe    = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad == 2)
+                res_bad      = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad == 0)
                 write(logfhandle,'(A)') 'RESOLUTION STATS FOR GOOD PARTITION'
                 if( size(res_good) > 1 )then
                     call calc_stats(res_good, res_stats)
@@ -2028,6 +2029,23 @@ contains
                     write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_good(1)
                     write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_good(1)
                     write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', 0.
+                endif
+                if( allocated(res_maybe) )then
+                    write(logfhandle,'(A)') 'RESOLUTION STATS FOR MAYBE PARTITION'
+                    if( size(res_maybe) > 1 )then
+                        call calc_stats(res_maybe, res_stats)
+                        write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_stats%minv
+                        write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_stats%maxv
+                        write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_stats%avg
+                        write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_stats%med
+                        write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', res_stats%sdev
+                    else
+                        write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_maybe(1)
+                        write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_maybe(1)
+                        write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_maybe(1)
+                        write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_maybe(1)
+                        write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', 0.
+                    endif
                 endif
                 write(logfhandle,'(A)') 'RESOLUTION STATS FOR BAD  PARTITION'
                 if( size(res_bad) > 1 )then
@@ -2050,12 +2068,13 @@ contains
                     if( clust_info_arr(labels(icls))%good_bad == 1 ) states(clsinds(icls)) = 1
                     if( clust_info_arr(labels(icls))%good_bad == 2 ) states(clsinds(icls)) = 2
                 end do
-                ! zero labels of deselected classes
+                ! write selection
+                allocate(labels4write(ncls_sel), source=0)
                 do icls = 1, ncls_sel
-                    if( clust_info_arr(labels(icls))%good_bad /= 1 ) labels(icls) = 0
+                    labels4write(icls) = clust_info_arr(labels(icls))%good_bad
                 end do
                 ! write selection
-                call write_selected_cavgs(ncls_sel, cavg_imgs, labels, params%ext)
+                call write_selected_cavgs(ncls_sel, cavg_imgs, labels4write, params%ext)
                 ! map selection to project
                 call spproj%map_cavgs_selection(states)
                 ! optional pruning
@@ -2066,7 +2085,7 @@ contains
                 do igood_bad = 1,2
                     if( count(clust_info_arr(:)%good_bad == igood_bad) > 0 )then
                         ! copy project
-                        projfname = 'rank'//int2str(igood_bad)//'particles.simple'
+                        projfname = 'rank'//int2str_pad(igood_bad,2)//'particles.simple'
                         call simple_copy_file(trim(params%projfile), projfname)
                         call spproj_part%read(projfname)
                         call spproj_part%update_projinfo(projfname)

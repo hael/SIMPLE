@@ -371,7 +371,10 @@ contains
         integer,           intent(in)    :: labels(n)
         character(len=*),  intent(in)    :: ext
         character(len=:), allocatable    :: fname
-        integer :: i, cnt(0:1)
+        integer,          allocatable    :: cnt(:)
+        integer :: i, maxlab
+        maxlab = maxval(labels)
+        allocate(cnt(0:maxlab), source=0)
         cnt = 0
         do i = 1, n
             if( labels(i) == 0 )then
@@ -379,9 +382,9 @@ contains
                 cnt(0) = cnt(0) + 1
                 call imgs(i)%write(fname, cnt(0))
             else
-                fname  = 'selected_cavgs'//trim(ext)
-                cnt(1) = cnt(1) + 1
-                call imgs(i)%write(fname, cnt(1))
+                fname  = 'rank'//int2str_pad(labels(i),2)//'_cavgs'//trim(ext)
+                cnt(labels(i)) = cnt(labels(i)) + 1
+                call imgs(i)%write(fname, cnt(labels(i)))
             endif
         end do
     end subroutine write_selected_cavgs
@@ -688,6 +691,7 @@ contains
             call plot2D(fsz, g, env, 'plot_'//int2str(l), .true.,xtitle='1/A', ytitle='logPW',&
                 &suptitle='Cluster '//int2str(l)//' - '//real2str(scores(l)), z=pspec )
         enddo
+
         contains
 
             subroutine min_envelope( n, g, x, alpha, z )
