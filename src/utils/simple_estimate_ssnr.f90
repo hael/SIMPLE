@@ -113,12 +113,12 @@ contains
     subroutine gaussian_filter( freq, smpd, box, filter )
         real,    intent(in)    :: freq, smpd
         integer, intent(in)    :: box
-        real,    intent(inout) :: filter(fdim(box)-1)
+        real,    intent(inout) :: filter(:)
         real    :: A
         integer :: k
         A = freq / smpd / real(box)
         A = 0.5 * (PI * 2.0 * A / 2.35482)**2
-        do k = 1,fdim(box)-1
+        do k = 1,size(filter)
             filter(k) = real(exp(-real(k**2) * A))
         enddo
     end subroutine gaussian_filter
