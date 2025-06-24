@@ -171,7 +171,7 @@ contains
                     call img_or_vol%copy_bimg(cos_img)
                     call cos_img%kill
                 endif
-                if( cline%defined('neg')  ) call img_or_vol%bin_inv
+                if( cline%defined('neg')  ) call img_or_vol%inv_bimg
             end subroutine doit
 
     end subroutine exec_binarize
