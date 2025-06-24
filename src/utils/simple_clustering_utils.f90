@@ -23,6 +23,8 @@ contains
         integer :: n
         real    :: pref, simsum
         n = size(dmat, dim=1)
+        if( allocated(i_medoids) ) deallocate(i_medoids)
+        if( allocated(labels)    ) deallocate(labels)
         select case(trim(algorithm))
             case('aprop')
                 write(logfhandle,'(A)') '>>> CLUSTERING DISTANCE MATRIX WITH AFFINITY PROPAGATION'
