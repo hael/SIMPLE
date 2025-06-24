@@ -433,7 +433,7 @@ contains
     ! background and foreground in the bin volumes.
     ! It is very robust to salt & pepper noise. Much more than
     ! otsu_img_robust
-    subroutine otsu_robust_fast(img, is2D, noneg, thresh)
+    subroutine otsu_robust_fast( img, is2D, noneg, thresh )
         class(image), intent(inout) :: img
         logical,      intent(in)    :: is2D    ! is it a 2D image
         logical,      intent(in)    :: noneg   ! is it a nanoparticle
@@ -580,6 +580,7 @@ contains
             end do
             !$omp end parallel do
         endif
+        call img%set_rmat(rmat, .false.)
     end subroutine sauvola
 
 end module simple_segmentation
