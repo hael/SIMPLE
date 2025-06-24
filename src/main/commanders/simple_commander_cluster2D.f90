@@ -2949,108 +2949,123 @@ contains
         type(image)                   :: match_img
         type(rank_cavgs_commander)    :: xrank_cavgs
         type(cmdline)                 :: cline_rank_cavgs
+        type(qsys_env)                :: qenv
+        type(chash)                   :: job_descr
         character(len=STDLEN)         :: refs_ranked, stk
         integer :: nptcls, ithr, iref, iptcl, irot, iter, pfromto(2)
         real    :: euls(3), sh(2)
-        if( .not.cline%defined('mkdir') ) call cline%set('mkdir',  'yes')
+        if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call cline%set('stream', 'no')
-        call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-        call build%spproj_field%clean_entry('updatecnt', 'sampled')
-        call set_bp_range2D( cline, which_iter=1, frac_srch_space=1. )
-        pfromto = [1, params_glob%nptcls]
-        call sample_ptcls4update(pfromto, .true., nptcls, pinds)
-        ! communicate to project file
-        call build_glob%spproj%write_segment_inside(params_glob%oritype)
-        ! Preparing pftcc
-        call pftcc%new(params_glob%nspace * params_glob%nstates, pfromto, params_glob%kfromto)
-        print *, 'lp      = ', params_glob%lp
-        print *, 'nptcls  = ', nptcls
-        print *, 'oritype = ', trim(params_glob%oritype)
-        print *, 'noris   = ', build_glob%spproj_field%get_noris()
-        print *, 'nspace  = ', params_glob%nspace
-        print *, 'kfromto = ', params_glob%kfromto
-        ! Preparing particles
-        call prepimgbatch(nptcls)
-        call build%img_crop_polarizer%init_polarizer(pftcc, params%alpha)
-        allocate(tmp_imgs(nthr_glob))
-        !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
-        do ithr = 1,nthr_glob
-            call tmp_imgs(ithr)%new([params_glob%box_crop,params_glob%box_crop,1], params_glob%smpd_crop, wthreads=.false.)
-        enddo
-        !$omp end parallel do
-        ! allocate refs stuffs in pftcc before memoize_ptcls in build_batch_particles
-        call pftcc%allocate_refs_memoization
-        ! assign sigmas here so memoize_sqsum_ptcl will have l_sigma
-        allocate( sigma2_noise(params_glob%kfromto(1):params_glob%kfromto(2), nptcls), source=1.0 )
-        call pftcc%assign_sigma2_noise(sigma2_noise)
-        ! Build polar particle images
-        call build_glob%spproj_field%partition_eo
-        call build_glob%spproj_field%set_all2single('state', 1.)
-        if( trim(params_glob%polar_prep) .eq. 'yes' ) call build_all_particles(pftcc, nptcls, pinds, tmp_imgs)
-        ! randomize oris
-        if( trim(params_glob%continue) .eq. 'no' )then
-            call build_glob%spproj_field%rnd_oris
-            call build_glob%spproj_field%set_projs(build_glob%eulspace)
-            call build_glob%spproj_field%zero_shifts
-            call build%spproj%write_segment_inside(params%oritype, params%projfile)
-        elseif( trim(params_glob%polar_prep) .eq. 'yes' )then
-            do iptcl = pfromto(1), pfromto(2)
-                call pftcc%shift_ptcl(iptcl, -build_glob%spproj_field%get_2Dshift(iptcl))
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
+        if( cline%defined('nparts') .and. params%nparts > 1 )then
+            call cline%delete('nparts')
+            params%nparts = 1
+            call qenv%new(params_glob%nparts, nptcls=params_glob%nptcls)
+            call cline%gen_job_descr(job_descr)
+            call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
+            call qenv%kill
+            call job_descr%kill
+            call qsys_job_finished('simple_commander_cluster2D :: exec_hybrid_refine')
+            call qsys_cleanup
+            call simple_end('**** SIMPLE_HYBRID_REFINE NORMAL STOP ****', print_simple=.false.)
+        else
+            call build%spproj_field%clean_entry('updatecnt', 'sampled')
+            call set_bp_range2D( cline, which_iter=1, frac_srch_space=1. )
+            pfromto = [1, params_glob%nptcls]
+            call sample_ptcls4update(pfromto, .true., nptcls, pinds)
+            ! communicate to project file
+            call build_glob%spproj%write_segment_inside(params_glob%oritype)
+            ! Preparing pftcc
+            call pftcc%new(params_glob%nspace * params_glob%nstates, pfromto, params_glob%kfromto)
+            print *, 'lp      = ', params_glob%lp
+            print *, 'nptcls  = ', nptcls
+            print *, 'oritype = ', trim(params_glob%oritype)
+            print *, 'noris   = ', build_glob%spproj_field%get_noris()
+            print *, 'nspace  = ', params_glob%nspace
+            print *, 'kfromto = ', params_glob%kfromto
+            ! Preparing particles
+            call prepimgbatch(nptcls)
+            call build%img_crop_polarizer%init_polarizer(pftcc, params%alpha)
+            allocate(tmp_imgs(nthr_glob))
+            !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
+            do ithr = 1,nthr_glob
+                call tmp_imgs(ithr)%new([params_glob%box_crop,params_glob%box_crop,1], params_glob%smpd_crop, wthreads=.false.)
             enddo
-            ! re-memoizing ptcls due to shifted ptcls
-            call pftcc%memoize_ptcls
+            !$omp end parallel do
+            ! allocate refs stuffs in pftcc before memoize_ptcls in build_batch_particles
+            call pftcc%allocate_refs_memoization
+            ! assign sigmas here so memoize_sqsum_ptcl will have l_sigma
+            allocate( sigma2_noise(params_glob%kfromto(1):params_glob%kfromto(2), nptcls), source=1.0 )
+            call pftcc%assign_sigma2_noise(sigma2_noise)
+            ! Build polar particle images
+            call build_glob%spproj_field%partition_eo
+            call build_glob%spproj_field%set_all2single('state', 1.)
+            if( trim(params_glob%polar_prep) .eq. 'yes' ) call build_all_particles(pftcc, nptcls, pinds, tmp_imgs)
+            ! randomize oris
+            if( trim(params_glob%continue) .eq. 'no' )then
+                call build_glob%spproj_field%rnd_oris
+                call build_glob%spproj_field%set_projs(build_glob%eulspace)
+                call build_glob%spproj_field%zero_shifts
+                call build%spproj%write_segment_inside(params%oritype, params%projfile)
+            elseif( trim(params_glob%polar_prep) .eq. 'yes' )then
+                do iptcl = pfromto(1), pfromto(2)
+                    call pftcc%shift_ptcl(iptcl, -build_glob%spproj_field%get_2Dshift(iptcl))
+                enddo
+                ! re-memoizing ptcls due to shifted ptcls
+                call pftcc%memoize_ptcls
+            endif
+            allocate(pcomlines(params_glob%nspace,params_glob%nspace))
+            allocate(pfts(pftcc%get_pftsz(),params_glob%kfromto(1):params_glob%kfromto(2),params_glob%nspace), source=cmplx(0.,0.))
+            call pftcc%gen_polar_comlins(build_glob%eulspace, pcomlines)
+            allocate(refs(params_glob%nspace))
+            params%ncls = params%nspace
+            params%frcs = trim(FRCS_FILE)
+            call build_glob%clsfrcs%new(params%ncls, params%box_crop, params%smpd_crop, params%nstates)
+            if( trim(params_glob%coord) .eq. 'cart' )then
+                print *, 'CARTESIAN ALIGNMENT IN PROGRESS'
+                call exec_alignment(trim(params%coord))
+            elseif( trim(params_glob%coord) .eq. 'polar' )then
+                print *, 'POLAR ALIGNMENT IN PROGRESS'
+                call exec_alignment(trim(params%coord))
+            elseif( trim(params_glob%coord) .eq. 'both' )then
+                print *, 'CARTESIAN ALIGNMENT IN PROGRESS'
+                call tmp_oris%copy(build_glob%spproj_field)
+                call exec_alignment('cart')
+                print *, 'POLAR ALIGNMENT IN PROGRESS'
+                call build_glob%spproj_field%copy(tmp_oris)
+                call exec_alignment('polar')
+            else
+                THROW_HARD('unrecognized coordinate system!')
+            endif
+            call build%spproj%write_segment_inside(params%oritype, params%projfile)
+            call build%spproj%write_segment_inside('cls3D',        params%projfile)
+            ! converting polar to cartesian for visualization
+            if( trim(params_glob%coord) .eq. 'polar' .or. trim(params_glob%coord) .eq. 'both' )then
+                params_glob%refs = trim(CAVGS_ITER_FBODY)//'_polar'//params_glob%ext
+                call cline%set('refs',  trim(params_glob%refs))
+                call cline%set('mkdir', 'no')
+                call xmk_cavgs_shmem%execute_safe(cline)
+            else
+                params_glob%refs = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%maxits,3)//params_glob%ext
+            endif
+            ! ranking cavgs and output resolution if needed
+            if( trim(params%rank_cavgs) .eq. 'yes' )then
+                refs_ranked = 'ranked_'//trim(params_glob%refs)
+                stk         = trim(params_glob%refs)
+                call cline_rank_cavgs%set('oritype',  'cls3D')
+                call cline_rank_cavgs%set('projfile', params_glob%projfile)
+                call cline_rank_cavgs%set('stk',      stk)
+                call cline_rank_cavgs%set('outstk',   trim(refs_ranked))
+                call xrank_cavgs%execute_safe(cline_rank_cavgs)
+                call cline_rank_cavgs%kill
+            endif
+            ! cleaning up
+            call killimgbatch
+            call pftcc%kill
+            call build%kill_general_tbox
+            call qsys_job_finished('simple_commander_cluster2D :: exec_hybrid_refine')
+            call simple_end('**** SIMPLE_HYBRID_REFINE NORMAL STOP ****', print_simple=.false.)
         endif
-        allocate(pcomlines(params_glob%nspace,params_glob%nspace))
-        allocate(pfts(pftcc%get_pftsz(),params_glob%kfromto(1):params_glob%kfromto(2),params_glob%nspace), source=cmplx(0.,0.))
-        call pftcc%gen_polar_comlins(build_glob%eulspace, pcomlines)
-        allocate(refs(params_glob%nspace))
-        params%ncls = params%nspace
-        params%frcs = trim(FRCS_FILE)
-        call build_glob%clsfrcs%new(params%ncls, params%box_crop, params%smpd_crop, params%nstates)
-        if( trim(params_glob%coord) .eq. 'cart' )then
-            print *, 'CARTESIAN ALIGNMENT IN PROGRESS'
-            call exec_alignment(trim(params%coord))
-        elseif( trim(params_glob%coord) .eq. 'polar' )then
-            print *, 'POLAR ALIGNMENT IN PROGRESS'
-            call exec_alignment(trim(params%coord))
-        elseif( trim(params_glob%coord) .eq. 'both' )then
-            print *, 'CARTESIAN ALIGNMENT IN PROGRESS'
-            call tmp_oris%copy(build_glob%spproj_field)
-            call exec_alignment('cart')
-            print *, 'POLAR ALIGNMENT IN PROGRESS'
-            call build_glob%spproj_field%copy(tmp_oris)
-            call exec_alignment('polar')
-        else
-            THROW_HARD('unrecognized coordinate system!')
-        endif
-        call build%spproj%write_segment_inside(params%oritype, params%projfile)
-        call build%spproj%write_segment_inside('cls3D',        params%projfile)
-        ! converting polar to cartesian for visualization
-        if( trim(params_glob%coord) .eq. 'polar' .or. trim(params_glob%coord) .eq. 'both' )then
-            params_glob%refs = trim(CAVGS_ITER_FBODY)//'_polar'//params_glob%ext
-            call cline%set('refs',  trim(params_glob%refs))
-            call cline%set('mkdir', 'no')
-            call xmk_cavgs_shmem%execute_safe(cline)
-        else
-            params_glob%refs = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%maxits,3)//params_glob%ext
-        endif
-        ! ranking cavgs and output resolution if needed
-        if( trim(params%rank_cavgs) .eq. 'yes' )then
-            refs_ranked = 'ranked_'//trim(params_glob%refs)
-            stk         = trim(params_glob%refs)
-            call cline_rank_cavgs%set('oritype',  'cls3D')
-            call cline_rank_cavgs%set('projfile', params_glob%projfile)
-            call cline_rank_cavgs%set('stk',      stk)
-            call cline_rank_cavgs%set('outstk',   trim(refs_ranked))
-            call xrank_cavgs%execute_safe(cline_rank_cavgs)
-            call cline_rank_cavgs%kill
-        endif
-        ! cleaning up
-        call killimgbatch
-        call pftcc%kill
-        call build%kill_general_tbox
-        call qsys_job_finished('simple_commander_cluster2D :: exec_hybrid_refine')
-        call simple_end('**** SIMPLE_HYBRID_REFINE NORMAL STOP ****', print_simple=.false.)
 
       contains
 
