@@ -69,7 +69,7 @@ contains
         if( .not. cline%defined('sh_first')  ) call cline%set('sh_first',  'no')
         if( .not. cline%defined('cls_init')  ) call cline%set('cls_init',  'rand')
         if( .not. cline%defined('icm')       ) call cline%set('icm',       'yes')
-        if( .not. cline%defined('gauref')    ) call cline%set('gauref',    'no')
+        if( .not. cline%defined('gauref')    ) call cline%set('gauref',    'yes')
         if( .not. cline%defined('polar')     ) call cline%set('polar',     'no')
         if( .not. cline%defined('lambda')    ) call cline%set('lambda',    ICM_LAMBDA)
         if( .not. cline%defined('extr_lim')  ) call cline%set('extr_lim',  EXTR_LIM_LOCAL)
@@ -382,14 +382,15 @@ contains
             real    :: trs, lambda, gaufreq
             logical :: l_gauref, l_gaufreq_input
             refine = trim(params%refine)
-            ! optimal & gaussian minimum filter
-            l_gauref = trim(params%gauref).eq.'yes'
-            if( trim(params%polar).eq.'yes' .and. .not.cline%defined('gauref') )then
-                ! override the default gauref=no that is set for polar=no
-                l_gauref = .true.
+            ! filter for Fourier polar representation
+            l_gauref        = .false.
+            l_gaufreq_input = .false.
+            if( trim(params%polar).eq.'yes' )then
+                l_gauref        = trim(params%gauref).eq.'yes'
+                l_gaufreq_input = cline%defined('gaufreq')
+                ! ICM used for cartesian filtering of random refs
+                params%l_icm    = istage==1
             endif
-            if( l_gauref ) params%l_icm = .false.
-            l_gaufreq_input = cline%defined('gaufreq')
             ! iteration number book-keeping
             iter = 0
             if( cline_cluster2D%defined('endit') ) iter = cline_cluster2D%get_iarg('endit')

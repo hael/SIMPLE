@@ -383,7 +383,7 @@ contains
         logical, optional, intent(in)    :: center
         real,    optional, intent(in)    :: xyz_in(3)
         real,    optional, intent(out)   :: xyz_out(3)
-        integer :: k, filtsz
+        integer :: filtsz
         real    :: frc(img_out%get_filtsz()), filter(img_out%get_filtsz())
         real    :: xy_cavg(2), xyz(3), sharg, crop_factor
         logical :: do_center
