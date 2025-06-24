@@ -2918,7 +2918,7 @@ contains
     end subroutine masscen
 
     !> to find center of gravity in absolute, not relative, terms
-    subroutine masscen_adjusted(self, xyz, mask_in)
+    subroutine masscen_adjusted( self, xyz, mask_in )
         class(image),      intent(inout) :: self
         real        ,      intent(out)   :: xyz(3)
         logical, optional, intent(in)    :: mask_in(:,:,:)
@@ -3185,7 +3185,7 @@ contains
     end subroutine calc_principal_axes_rotmat
 
     ! generate the 3 orthogonal reprojections from a volume into a single image
-    subroutine generate_orthogonal_reprojs( self, reprojs)
+    subroutine generate_orthogonal_reprojs( self, reprojs )
         class(image), intent(in)    :: self
         class(image), intent(inout) :: reprojs
         integer, parameter :: b=3
