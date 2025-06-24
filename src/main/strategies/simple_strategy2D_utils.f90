@@ -395,7 +395,7 @@ contains
         real,             allocatable   :: frc(:)
         type(image),      allocatable   :: cluster_imgs(:), cluster_imgs_aligned(:)
         real,             allocatable   :: resvals(:), resarr(:)
-        real,             parameter     :: FRAC_BEST_CAVGS=0.25
+        real,             parameter     :: FRAC_BEST_CAVGS=0.5
         integer :: cnt, i, filtsz, ldim(3), iclust, nclust
         real    :: smpd, rfoo, best_res, worst_res
         write(logfhandle,'(A)') '>>> ALIGNING THE CLUSTERS OF CLASS AVERAGES TO THEIR MEDOIDS'

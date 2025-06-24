@@ -116,6 +116,7 @@ end type clust_inpl
     integer          :: nptcls      = 0
     integer          :: pop         = 0
     integer          :: good_bad    = 0
+    integer          :: scoreclust  = 0
     type(clust_inpl) :: algninfo
     real             :: res         = 0.
     real             :: corrfmscore = 0.
@@ -124,7 +125,6 @@ end type clust_inpl
     real             :: homogeneity = 0.
     real             :: resscore    = 0.
     real             :: clustscore  = 0.
-    real             :: glcmscore   = 0.
     real             :: jointscore  = 0.
 end type clust_info
 
