@@ -19,33 +19,34 @@ type, extends(image) :: binimage
     logical               :: bimat_is_set = .false. ! bimat set flag
   contains
     ! CONSTRUCTORS
-    procedure          :: new_bimg
     procedure          :: copy_bimg
+    procedure          :: new_bimg
     procedure          :: transfer2bimg
     ! SETTERS/GETTERS
-    procedure          :: set_imat
     procedure          :: get_imat
     procedure          :: get_nccs
     procedure          :: update_img_rmat ! for updating the rmat in the extended image class
+    procedure          :: set_imat
     ! I/O
-    procedure          :: write_bimg
     procedure          :: read_bimg
+    procedure          :: write_bimg
     ! CONNECTED COMPONENTS
-    procedure          :: find_ccs
-    procedure          :: size_ccs
+    procedure          :: diameter_cc
     procedure          :: elim_ccs
+    procedure          :: fill_holes
+    procedure          :: find_ccs
+    procedure          :: masscen_cc
     procedure          :: order_ccs
     procedure          :: polish_ccs
-    procedure          :: fill_holes
-    procedure          :: diameter_cc
-    procedure          :: masscen_cc
+    procedure          :: size_ccs
     ! BINARY IMAGE METHODS
-    procedure          :: diameter_bin
-    procedure          :: max_dist
-    procedure          :: grow_bins
-    procedure          :: cos_edge
     procedure          :: border_mask
     procedure          :: cc2bin
+    procedure          :: cos_edge
+    procedure          :: diameter_bin
+    procedure          :: inv_bimg 
+    procedure          :: grow_bins
+    procedure          :: max_dist
     ! MORPHOLOGICAL OPERATIONS
     procedure          :: dilate
     procedure          :: erode
@@ -136,7 +137,7 @@ contains
 
     ! I/O
 
-    subroutine write_bimg(self, fname, i)
+    subroutine write_bimg( self, fname, i )
         class(binimage),   intent(inout) :: self
         character(len=*),  intent(in)    :: fname
         integer, optional, intent(in)    :: i
@@ -145,7 +146,7 @@ contains
         call self%write(fname,i)
     end subroutine write_bimg
 
-    subroutine read_bimg(self, fname, i)
+    subroutine read_bimg( self, fname, i )
         class(binimage),   intent(inout) :: self
         character(len=*),  intent(in)    :: fname
         integer, optional, intent(in)    :: i
@@ -223,9 +224,9 @@ contains
             queue_last  = 0
         end subroutine empty_queue
 
-        subroutine flood_fill(init_i, init_j, init_k, iVal)
-            integer, intent(in) :: init_i,init_j,init_k,iVal
-            integer :: i,j,k
+        subroutine flood_fill( init_i, init_j, init_k, iVal )
+            integer, intent(in) :: init_i, init_j, init_k, iVal
+            integer :: i, j, k
             ! initialize the queue
             call empty_queue()
             ! adding the first node of the queue
@@ -331,7 +332,7 @@ contains
     ! after some of them have been eliminated, so that they have contiguous
     ! labelling (1,2,3..) withouty absenses (NOT 1,2,5..).
     ! Self is should be a connected component image.
-    subroutine order_ccs(self)
+    subroutine order_ccs( self )
         class(binimage), intent(inout) :: self
         integer, allocatable :: imat_aux(:,:,:)
         integer :: cnt, i
@@ -359,7 +360,7 @@ contains
     !                             < ave - 2.*stdev
     ! If present(minmax_rad(2)), it cleans up ccs more, also considering
     ! if the cc is supposed to be circular/elongated.
-    subroutine polish_ccs( self, minmax_rad, circular, elongated, min_nccs)
+    subroutine polish_ccs( self, minmax_rad, circular, elongated, min_nccs )
         class(binimage),            intent(inout) :: self
         real, optional,             intent(in)    :: minmax_rad(2)
         character(len=3), optional, intent(in)    :: circular, elongated
@@ -483,7 +484,7 @@ contains
         call self%diameter_cc(1, diam)
     end subroutine diameter_bin
 
-    subroutine max_dist( self, dist)
+    subroutine max_dist( self, dist )
         class(binimage), intent(inout) :: self
         real,            intent(out)   :: dist
         integer :: i, j, k
@@ -546,7 +547,7 @@ contains
     end subroutine dilate
 
     ! This subroutine implements the morphological operation erosion for 2D binary images
-    subroutine erode(self, label)
+    subroutine erode( self, label )
         class(binimage),   intent(inout) :: self
         integer, optional, intent(in)    :: label
         logical, allocatable :: border(:,:,:)
@@ -559,6 +560,13 @@ contains
         where(border) self%bimat = 0
         call self%update_img_rmat
     end subroutine erode
+
+    !>  \brief inv_bimg inverts a binary image
+    subroutine inv_bimg( self )
+        class(binimage), intent(inout) :: self
+        self%bimat = -1.*(self%bimat-1.)
+    end subroutine inv_bimg
+
 
     ! This subroutine builds the logical array 'border' of the same dims of
     ! the input image self. Border is true in the border pixels in the binary image self.
