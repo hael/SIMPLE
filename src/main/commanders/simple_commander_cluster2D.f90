@@ -2957,7 +2957,7 @@ contains
         if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call cline%set('stream', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
-        if( cline%defined('nparts') .and. params%nparts > 1 )then
+        if( cline%defined('nparts') .and. .not.cline%defined('part') )then
             call cline%delete('nparts')
             params%nparts = 1
             call qenv%new(params_glob%nparts, nptcls=params_glob%nptcls)
