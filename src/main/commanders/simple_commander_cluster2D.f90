@@ -1859,7 +1859,6 @@ contains
         real,             allocatable :: resvals(:)
         logical,          allocatable :: l_msk(:,:,:), l_non_junk(:)
         integer,          allocatable :: labels(:), clsinds(:), i_medoids(:), labels_copy(:), i_medoids_copy(:)
-        integer,          allocatable :: clust_order(:)
         integer,          allocatable :: clspops(:), states(:), states_part(:)
         type(clust_info), allocatable :: clust_info_arr(:), clust_info_arr_copy(:)
         character(len=:), allocatable :: projfname
@@ -1911,11 +1910,13 @@ contains
         ! create a joint similarity matrix for clustering based on spectral profile and in-plane invariant correlation
         call pows%calc_distmat(is_l1=trim(params%dist_type).eq.'l1')
         dmat_pow = pows%get_distmat()
+        call normalize_minmax(dmat_pow)
         smat_pow = dmat2smat(dmat_pow)
         ! calculate inpl_invariant_fm corrmat
         ! pairwise correlation through Fourier-Mellin + shift search
         write(logfhandle,'(A)') '>>> PAIRWISE CORRELATIONS THROUGH FOURIER-MELLIN & SHIFT SEARCH'
         call calc_inpl_invariant_fm(cavg_imgs, params%hp, params%lp, params%trs, corrmat)
+        dmat_fm = smat2dmat(corrmat)
         ! calculate histogram-based distance matrices
         allocate(dmat_tvd(ncls_sel,ncls_sel), dmat_jsd(ncls_sel,ncls_sel), dmat_hd(ncls_sel,ncls_sel), source=0.)
         !$omp parallel do default(shared) private(i,j)&
@@ -1936,46 +1937,17 @@ contains
         ! set appropriate distance matrix for the clustering criterion given
         select case(trim(params%clust_crit))
             case('pow')
-                dmat       = dmat_pow
+                dmat = dmat_pow 
             case('powfm')
-                smat_joint = merge_smats(smat_pow,corrmat)
-                dmat       = smat2dmat(smat_joint)
+                dmat = 0.5 * dmat_pow + 0.5 * dmat_fm
             case('fm')
-                dmat       = smat2dmat(corrmat)
-            case('tvd','tvdfm','powtvdfm') ! clustering involving total variation histogram distance
-                select case(trim(params%clust_crit))
-                    case('tvd')
-                        dmat       = dmat_tvd
-                    case('tvdfm')
-                        smat_tvd   = dmat2smat(dmat_tvd)
-                        smat_joint = merge_smats(smat_tvd,corrmat)
-                        dmat       = smat2dmat(smat_joint)
-                    case('powtvdfm')
-                        smat_jsd   = dmat2smat(dmat_tvd)
-                        dmat_joint = merge_dmats(dmat_pow,dmat_tvd)
-                        smat_pow   = dmat2smat(dmat_joint)
-                        smat_joint = merge_smats(smat_pow,corrmat)
-                        dmat       = smat2dmat(smat_joint)
-                end select
-            case('jsd','jsdfm','powjsdfm') ! clustering involving Jensen-Shannon Divergence, symmetrized K-L Divergence
-                select case(trim(params%clust_crit))
-                    case('jsd')
-                        dmat       = dmat_jsd
-                    case('jsdfm')
-                        smat_jsd   = dmat2smat(dmat_jsd)
-                        smat_joint = merge_smats(smat_jsd,corrmat)
-                        dmat       = smat2dmat(smat_joint)
-                    case('powjsdfm')
-                        smat_jsd   = dmat2smat(dmat_jsd)
-                        dmat_joint = merge_dmats(dmat_pow,dmat_jsd)
-                        smat_pow   = dmat2smat(dmat_joint)
-                        smat_joint = merge_smats(smat_pow,corrmat)
-                        dmat       = smat2dmat(smat_joint)
-                end select
+                dmat = dmat_fm
+            case('hist')
+                dmat = dmat_hist
+            case('histfm')
+                dmat = 0.5 * dmat_hist + 0.5 * dmat_fm 
             case('hybrid')
-                call normalize_minmax(dmat_pow)
-                dmat_fm   = smat2dmat(corrmat)
-                dmat      = 0.2 * dmat_hist + 0.4 * dmat_pow + 0.4 * dmat_fm       
+                dmat = 0.2 * dmat_hist + 0.4 * dmat_pow + 0.4 * dmat_fm       
             case DEFAULT
                 THROW_HARD('Unsupported clustering criterion: '//trim(params%clust_crit))
         end select
@@ -2000,10 +1972,11 @@ contains
                 ! re-normalize scores
                 call renormalize_scores
                 ! rank clusters
-                clust_order = scores2order(clust_info_arr(:)%jointscore)
-                call rank_clusters(nclust, clust_order)
+                call rank_clusters
                 ! identify good/bad
-                call identify_good_bad_clusters
+                call identify_good_bad_clusters_kmed
+                ! re-rank clusters
+                call rank_clusters
                 write(logfhandle,'(A)') '>>> ROTATING & SHIFTING UNMASKED, UNFILTERED CLASS AVERAGES'
                 ! re-create cavg_imgs
                 call dealloc_imgarr(cavg_imgs)
@@ -2029,7 +2002,7 @@ contains
                     &' resscore(%) ',     clust_info_arr(iclust)%resscore,& 
                     &' homogeneity(%) ',  clust_info_arr(iclust)%homogeneity,&
                     &' clustscore(%) ',   clust_info_arr(iclust)%clustscore,&
-                    &' jointscore(%) ',    clust_info_arr(iclust)%jointscore,&
+                    &' jointscore(%) ',   clust_info_arr(iclust)%jointscore,&
                     &' good_bad_assign ', clust_info_arr(iclust)%good_bad
                 end do
                 ! check number of particles selected
@@ -2203,21 +2176,23 @@ contains
             i_medoids      = i_medoids_copy 
         end subroutine put_back_clustering_copy
 
-        subroutine rank_clusters( nclust, order )
-            integer, intent(in) :: nclust, order(nclust)
-            integer             :: i_medoids_ranked(nclust), rank_assign(ncls_sel)
-            type(clust_info)    :: clust_info_arr_ranked(nclust)
-            integer             :: rank, icls
+        subroutine rank_clusters
+            integer              :: i_medoids_ranked(nclust), rank_assign(ncls_sel)
+            type(clust_info)     :: clust_info_arr_ranked(nclust)
+            integer              :: rank, icls
+            integer, allocatable :: clust_order(:)
+            clust_order = scores2order(clust_info_arr(:)%jointscore)
             do rank = 1, nclust
-                i_medoids_ranked(rank) = i_medoids(order(rank))
-                clust_info_arr_ranked(rank) = clust_info_arr(order(rank))
+                i_medoids_ranked(rank) = i_medoids(clust_order(rank))
+                clust_info_arr_ranked(rank) = clust_info_arr(clust_order(rank))
                 do icls = 1, ncls_sel
-                    if( labels(icls) == order(rank) ) rank_assign(icls) = rank
+                    if( labels(icls) == clust_order(rank) ) rank_assign(icls) = rank
                 end do
             end do
             i_medoids      = i_medoids_ranked
             clust_info_arr = clust_info_arr_ranked
             labels         = rank_assign
+            deallocate(clust_order)
         end subroutine rank_clusters
 
         subroutine identify_good_bad_clusters
@@ -2246,456 +2221,57 @@ contains
                 print *, 'found '//int2str(count(clust_info_arr(:)%good_bad == 2))//' 2nd rate cluster(s) of class averages'
             endif
         end subroutine identify_good_bad_clusters
+
+        subroutine identify_good_bad_clusters_kmed
+            real,    allocatable :: score_vecs(:,:), dmat_scores(:,:)
+            integer, allocatable :: i_medoids_score(:), labels_score(:), order(:)
+            integer :: iclust, jclust, nclust_score
+            real    :: jointscores(3)
+            clust_info_arr(:)%good_bad = 0
+            if( nclust <= 3 )then
+                clust_info_arr(:)%good_bad      = 1
+                clust_info_arr(nclust)%good_bad = 0
+            else
+                allocate(score_vecs(nclust,4))
+                do iclust = 1, nclust
+                    score_vecs(iclust,1) = clust_info_arr(iclust)%homogeneity
+                    score_vecs(iclust,2) = clust_info_arr(iclust)%resscore
+                    score_vecs(iclust,3) = clust_info_arr(iclust)%clustscore
+                    score_vecs(iclust,4) = clust_info_arr(iclust)%jointscore
+                end do
+                allocate(dmat_scores(nclust,nclust), source=0.)
+                do iclust = 1, nclust - 1
+                    do jclust = iclust + 1, nclust
+                        dmat_scores(iclust,jclust) = euclid(score_vecs(iclust,:3),score_vecs(jclust,:3))
+                        dmat_scores(jclust,iclust) = dmat_scores(iclust,jclust)
+                    end do
+                end do
+                nclust_score = 3
+                call cluster_dmat(dmat_scores, 'kmed', nclust_score, i_medoids_score, labels_score)
+                jointscores(1) = sum(score_vecs(:,4), mask=labels_score == 1) / real(count(labels_score == 1))
+                jointscores(2) = sum(score_vecs(:,4), mask=labels_score == 2) / real(count(labels_score == 2))
+                jointscores(3) = sum(score_vecs(:,4), mask=labels_score == 3) / real(count(labels_score == 3))
+                order = scores2order(jointscores)
+                do iclust = 1, nclust
+                    if( labels_score(iclust) == order(1) )then
+                        clust_info_arr(iclust)%good_bad   = 1
+                        clust_info_arr(iclust)%jointscore = jointscores(order(1))
+                    else if( labels_score(iclust) == order(2) )then
+                        clust_info_arr(iclust)%good_bad   = 2
+                        clust_info_arr(iclust)%jointscore = jointscores(order(2))
+                    else
+                        clust_info_arr(iclust)%good_bad   = 0
+                        clust_info_arr(iclust)%jointscore = jointscores(order(3))
+                    endif
+                end do
+            endif
+            if( DEBUG )then
+                print *, 'found '//int2str(count(clust_info_arr(:)%good_bad == 1))//' 1st rate cluster(s) of class averages'
+                print *, 'found '//int2str(count(clust_info_arr(:)%good_bad == 2))//' 2nd rate cluster(s) of class averages'
+            endif
+        end subroutine identify_good_bad_clusters_kmed
  
     end subroutine exec_cluster_cavgs
-
-    ! subroutine exec_cluster_cavgs( self, cline )
-    !     use simple_corrmat,          only: calc_inpl_invariant_fm
-    !     use simple_histogram,        only: histogram
-    !     use simple_clustering_utils, only: cluster_dmat, extract_dmat
-    !     class(cluster_cavgs_commander), intent(inout) :: self
-    !     class(cmdline),                 intent(inout) :: cline
-    !     real,             parameter   :: HP_SPEC = 20., LP_SPEC = 6., FRAC_BEST_CAVGS=0.3, SCORE_THRES=40.
-    !     real,             parameter   :: RES_THRES=6., SCORE_THRES_2NDRATE=50., SCORE_THRES_JOINT=70.
-    !     real,             parameter   :: SCORE_THRES_HOMO=75., SCORE_THRES_CLUSTSCORE=80., SCORE_THRES_RESSCORE=80.
-    !     integer,          parameter   :: NCLUST_DEFAULT = 20, NCLUST_SMALL_DEFAULT = 10, NHISTBINS = 128
-    !     logical,          parameter   :: DEBUG = .true., PRECLUSTER=.true.
-    !     type(image),      allocatable :: cavg_imgs(:)
-    !     type(histogram),  allocatable :: hists(:)
-    !     real,             allocatable :: frc(:), mm(:,:), dmat_1(:,:), dmat_2(:,:)
-    !     real,             allocatable :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:), dmat_tvd(:,:), smat_tvd(:,:), dmat_joint(:,:)
-    !     real,             allocatable :: smat_joint(:,:), dmat(:,:), res_bad(:), res_good(:), dmat_jsd(:,:), smat_jsd(:,:)
-    !     real,             allocatable :: dmat_hd(:,:), dmat_hist(:,:), dmat_fm(:,:), smat(:,:), dmat_spec(:,:), resvals(:)
-    !     logical,          allocatable :: l_msk(:,:,:), l_non_junk(:)
-    !     integer,          allocatable :: labels(:), labels_fm(:), labels_1(:), labels_2(:), labels_copy(:)
-    !     integer,          allocatable :: i_medoids(:), i_medoids_fm(:), i_medoids_1(:), i_medoids_2(:), i_medoids_copy(:)
-    !     integer,          allocatable :: clsinds(:), clust_order(:), clspops(:), states(:), states_part(:)
-    !     integer,          allocatable :: inds_1(:), inds_2(:)
-    !     type(clust_info), allocatable :: clust_info_arr(:), clust_info_arr_copy(:)
-    !     character(len=:), allocatable :: projfname
-    !     type(parameters)   :: params
-    !     type(sp_project)   :: spproj, spproj_part
-    !     type(image)        :: img_msk
-    !     type(pspecs)       :: pows
-    !     type(stats_struct) :: res_stats
-    !     integer            :: ncls, ncls_sel, icls, cnt, rank, nptcls, nptcls_good, loc(1), ldim(3)
-    !     integer            :: i, j, ii, jj, nclust, nclust_fm, iclust, igood_bad, nptcls_maybe, nclust_1, nclust_2
-    !     real               :: fsc_res, rfoo, frac_good, best_res, worst_res, frac_maybe
-    !     real               :: oa_min, oa_max, dist_rank, dist_rank_best, smpd, simsum
-    !     ! defaults
-    !     call cline%set('oritype', 'cls2D')
-    !     call cline%set('ctf',        'no')
-    !     call cline%set('objfun',     'cc')
-    !     call cline%set('sh_inv',    'yes') ! shift invariant search
-    !     if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',         'yes')
-    !     if( .not. cline%defined('trs')        ) call cline%set('trs',             10.)
-    !     if( .not. cline%defined('kweight')    ) call cline%set('kweight',       'all')
-    !     if( .not. cline%defined('lp')         ) call cline%set('lp',               6.)
-    !     if( .not. cline%defined('prune')      ) call cline%set('prune',          'no')
-    !     if( .not. cline%defined('clust_crit') ) call cline%set('clust_crit', 'hybrid')
-    !     if( .not. cline%defined('algorithm')  ) call cline%set('algorithm',    'aprop')
-    !     ! master parameters
-    !     call params%new(cline)
-    !     ! read project file
-    !     call spproj%read(params%projfile)
-    !     ncls        = spproj%os_cls2D%get_noris()
-    !     ! prep class average stack
-    !     call prep_cavgs4clustering(spproj, cavg_imgs, params%mskdiam, clspops, clsinds, l_non_junk, mm, 'junk' )
-    !     ncls_sel    = size(cavg_imgs)
-    !     smpd        = cavg_imgs(1)%get_smpd()
-    !     ldim        = cavg_imgs(1)%get_ldim()
-    !     ! ensure correct smpd/box in params class
-    !     params%smpd = smpd
-    !     params%box  = ldim(1)
-    !     params%msk  = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
-    !     ! calculate overall minmax
-    !     oa_min      = minval(mm(:,1))
-    !     oa_max      = maxval(mm(:,2))
-    !     ! generate histograms
-    !     allocate(hists(ncls_sel))
-    !     do i = 1, ncls_sel
-    !         call hists(i)%new(cavg_imgs(i), NHISTBINS, minmax=[oa_min,oa_max], radius=params%msk)
-    !     end do
-    !     ! generate power spectra and associated distance/similarity matrix
-    !     ! create pspecs object
-    !     call pows%new(cavg_imgs, spproj%os_cls2D, params%msk, HP_SPEC, LP_SPEC, params%ncls_spec, l_exclude_junk=.false.)
-    !     ! create a joint similarity matrix for clustering based on spectral profile and in-plane invariant correlation
-    !     call pows%calc_distmat(is_l1=trim(params%dist_type).eq.'l1')
-    !     dmat_pow = pows%get_distmat()
-    !     smat_pow = dmat2smat(dmat_pow)
-    !     ! calculate inpl_invariant_fm corrmat
-    !     ! pairwise correlation through Fourier-Mellin + shift search
-    !     write(logfhandle,'(A)') '>>> PAIRWISE CORRELATIONS THROUGH FOURIER-MELLIN & SHIFT SEARCH'
-    !     call calc_inpl_invariant_fm(cavg_imgs, params%hp, params%lp, params%trs, corrmat)
-    !     ! calculate histogram-based distance matrices
-    !     allocate(dmat_tvd(ncls_sel,ncls_sel), dmat_jsd(ncls_sel,ncls_sel), dmat_hd(ncls_sel,ncls_sel), source=0.)
-    !     !$omp parallel do default(shared) private(i,j)&
-    !     !$omp schedule(dynamic) proc_bind(close)
-    !     do i = 1, ncls_sel - 1
-    !         do j = i + 1, ncls_sel
-    !             dmat_tvd(i,j) = hists(i)%TVD(hists(j))
-    !             dmat_tvd(j,i) = dmat_tvd(i,j)
-    !             dmat_jsd(i,j) = hists(i)%JSD(hists(j))
-    !             dmat_jsd(j,i) = dmat_jsd(i,j)
-    !             dmat_hd(i,j)  = hists(i)%HD(hists(j))
-    !             dmat_hd(j,i)  = dmat_hd(i,j)
-    !         end do
-    !     end do
-    !     !$omp end parallel do
-    !     call hists(:)%kill
-    !     dmat_hist = merge_dmats(dmat_tvd, dmat_jsd, dmat_hd) ! the different histogram distances are given equal weight
-    !     ! set appropriate distance matrix for the clustering criterion given
-    !     select case(trim(params%clust_crit))
-    !         case('pow')
-    !             dmat       = dmat_pow
-    !         case('powfm')
-    !             smat_joint = merge_smats(smat_pow,corrmat)
-    !             dmat       = smat2dmat(smat_joint)
-    !         case('fm')
-    !             dmat       = smat2dmat(corrmat)
-    !         case('tvd','tvdfm','powtvdfm') ! clustering involving total variation histogram distance
-    !             select case(trim(params%clust_crit))
-    !                 case('tvd')
-    !                     dmat       = dmat_tvd
-    !                 case('tvdfm')
-    !                     smat_tvd   = dmat2smat(dmat_tvd)
-    !                     smat_joint = merge_smats(smat_tvd,corrmat)
-    !                     dmat       = smat2dmat(smat_joint)
-    !                 case('powtvdfm')
-    !                     smat_jsd   = dmat2smat(dmat_tvd)
-    !                     dmat_joint = merge_dmats(dmat_pow,dmat_tvd)
-    !                     smat_pow   = dmat2smat(dmat_joint)
-    !                     smat_joint = merge_smats(smat_pow,corrmat)
-    !                     dmat       = smat2dmat(smat_joint)
-    !             end select
-    !         case('jsd','jsdfm','powjsdfm') ! clustering involving Jensen-Shannon Divergence, symmetrized K-L Divergence
-    !             select case(trim(params%clust_crit))
-    !                 case('jsd')
-    !                     dmat       = dmat_jsd
-    !                 case('jsdfm')
-    !                     smat_jsd   = dmat2smat(dmat_jsd)
-    !                     smat_joint = merge_smats(smat_jsd,corrmat)
-    !                     dmat       = smat2dmat(smat_joint)
-    !                 case('powjsdfm')
-    !                     smat_jsd   = dmat2smat(dmat_jsd)
-    !                     dmat_joint = merge_dmats(dmat_pow,dmat_jsd)
-    !                     smat_pow   = dmat2smat(dmat_joint)
-    !                     smat_joint = merge_smats(smat_pow,corrmat)
-    !                     dmat       = smat2dmat(smat_joint)
-    !             end select
-    !         case('hybrid')
-    !             call normalize_minmax(dmat_pow)
-    !             dmat_fm   = smat2dmat(corrmat)
-    !             dmat      = 0.2 * dmat_hist + 0.4 * dmat_pow + 0.4 * dmat_fm             
-    !         case DEFAULT
-    !             THROW_HARD('Unsupported clustering criterion: '//trim(params%clust_crit))
-    !     end select
-    !     if( cline%defined('ncls') )then
-    !         nclust = params%ncls
-    !     else
-    !         if( ncls_sel < 100 )then
-    !             nclust = NCLUST_SMALL_DEFAULT
-    !         else
-    !             nclust = NCLUST_DEFAULT
-    !         endif
-    !     endif
-    !     ! cluster based on FM corr into two groups
-    !     nclust_fm = 2
-    !     call cluster_dmat(dmat_fm, NCLUST_SMALL_DEFAULT, 'kmed', nclust_fm, i_medoids_fm, labels_fm)
-    !     ! extract distance matrices
-    !     call extract_dmat(dmat, labels_fm==1, inds_1, dmat_1)
-    !     call extract_dmat(dmat, labels_fm==2, inds_2, dmat_2)
-    !     ! cluster distance matrices
-    !     call cluster_dmat(dmat_1, NCLUST_SMALL_DEFAULT, params%algorithm, nclust_1, i_medoids_1, labels_1)
-    !     call cluster_dmat(dmat_2, NCLUST_SMALL_DEFAULT, params%algorithm, nclust_2, i_medoids_2, labels_2)
-    !     ! merge the two solutions
-    !     nclust   = nclust_1 + nclust_2
-    !     labels_2 = labels_2 + nclust_1 ! to obtain unique labels
-    !     allocate(labels(ncls_sel), i_medoids(nclust), source=0)
-    !     do i = 1, size(inds_1)
-    !         labels(inds_1(i)) = labels_1(i)
-    !     end do
-    !     do i = 1, size(inds_2)
-    !         labels(inds_2(i)) = labels_2(i)
-    !     end do
-    !     cnt = 0
-    !     do i = 1, nclust_1
-    !         cnt = cnt + 1
-    !         i_medoids(cnt) = inds_1(i_medoids_1(i))
-    !     end do
-    !     do i = 1, nclust_2
-    !         cnt = cnt + 1
-    !         i_medoids(cnt) = inds_1(i_medoids_2(i))
-    !     end do
-    !     ! prep mask
-    !     call img_msk%new([params%box,params%box,1], params%smpd)
-    !     img_msk = 1.
-    !     call img_msk%mask(params%msk, 'hard')
-    !     l_msk = img_msk%bin2logical()
-    !     call img_msk%kill
-    !     select case(trim(params%clust_crit))
-    !         case('powfm','fm','tvdfm','powtvdfm','jsdfm','powjsdfm','hybrid')
-    !             ! align clusters to medoids and gather information
-    !             clust_info_arr = align_clusters2medoids( labels, i_medoids, cavg_imgs, params%hp, params%lp, params%trs, l_msk )
-    !             ! set particle populations
-    !             do iclust = 1, nclust
-    !                 clust_info_arr(iclust)%nptcls = sum(clspops, mask=labels == iclust)
-    !             end do
-    !             ! calculate scores
-    !             call calc_scores
-    !             ! re-normalize scores
-    !             call renormalize_scores(SCORE_THRES)
-    !             ! rank clusters
-    !             clust_order = scores2order(clust_info_arr(:)%jointscore)
-    !             call rank_clusters(nclust, clust_order)
-    !             ! identify good/bad
-    !             call identify_good_bad_clusters
-    !             write(logfhandle,'(A)') '>>> ROTATING & SHIFTING UNMASKED, UNFILTERED CLASS AVERAGES'
-    !             ! re-create cavg_imgs
-    !             call dealloc_imgarr(cavg_imgs)
-    !             cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
-    !             ! write ranked clusters
-    !             call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_ranked', trim(params%ext))
-    !             ! update project
-    !             call spproj%os_ptcl2D%transfer_class_assignment(spproj%os_ptcl3D)
-    !             do iclust = 1, nclust
-    !                 do icls = 1, ncls_sel 
-    !                     if( labels(icls) == iclust )then
-    !                         call spproj%os_cls2D%set(clsinds(icls),'cluster',iclust)                          ! 2D class field
-    !                         call spproj%os_cls3D%set(clsinds(icls),'cluster',iclust)                          ! 3D class field
-    !                         call spproj%os_ptcl2D%set_field2single('class', clsinds(icls), 'cluster', iclust) ! 2D particle field
-    !                         call spproj%os_ptcl3D%set_field2single('class', clsinds(icls), 'cluster', iclust) ! 3D particle field
-    !                     endif
-    !                 enddo
-    !             enddo
-    !             ! report cluster info
-    !             do iclust = 1, nclust
-    !                 write(logfhandle,'(A,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,I3)') 'cluster_ranked'//int2str_pad(iclust,2)//'.mrc',&
-    !                 &' resolution(A) ',   clust_info_arr(iclust)%res,& 
-    !                 &' resscore(%) ',     clust_info_arr(iclust)%resscore,& 
-    !                 &' homogeneity(%) ',  clust_info_arr(iclust)%homogeneity,&
-    !                 &' clustscore(%) ',   clust_info_arr(iclust)%clustscore,&
-    !                 &' jointscore(%) ',    clust_info_arr(iclust)%jointscore,&
-    !                 &' good_bad_assign ', clust_info_arr(iclust)%good_bad
-    !             end do
-    !             ! check number of particles selected
-    !             nptcls       = sum(clust_info_arr(:)%nptcls)
-    !             nptcls_good  = sum(clust_info_arr(:)%nptcls, mask=clust_info_arr(:)%good_bad == 1)
-    !             nptcls_maybe = sum(clust_info_arr(:)%nptcls, mask=clust_info_arr(:)%good_bad == 2)
-    !             frac_good    = real(nptcls_good)  / real(nptcls)
-    !             frac_maybe   = real(nptcls_maybe) / real(nptcls)
-    !             write(logfhandle,'(a,1x,f8.2)') '% PARTICLES CLASSIFIED AS 1ST RATE: ', frac_good  * 100.
-    !             write(logfhandle,'(a,1x,f8.2)') '% PARTICLES CLASSIFIED AS 2ND RATE: ', frac_maybe * 100.
-    !             ! calculate resolution statistics for good/bad classes
-    !             res_good    = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad == 1)
-    !             res_bad     = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad /= 1)
-    !             write(logfhandle,'(A)') 'RESOLUTION STATS FOR GOOD PARTITION'
-    !             if( size(res_good) > 1 )then
-    !                 call calc_stats(res_good, res_stats)
-    !                 write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_stats%minv
-    !                 write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_stats%maxv
-    !                 write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_stats%avg
-    !                 write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_stats%med
-    !                 write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', res_stats%sdev
-    !             else
-    !                 write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_good(1)
-    !                 write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_good(1)
-    !                 write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_good(1)
-    !                 write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_good(1)
-    !                 write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', 0.
-    !             endif
-    !             write(logfhandle,'(A)') 'RESOLUTION STATS FOR BAD  PARTITION'
-    !             if( size(res_bad) > 1 )then
-    !                 call calc_stats(res_bad, res_stats)
-    !                 write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_stats%minv
-    !                 write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_stats%maxv
-    !                 write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_stats%avg
-    !                 write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_stats%med
-    !                 write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', res_stats%sdev
-    !             else
-    !                 write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_bad(1)
-    !                 write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_bad(1)
-    !                 write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_bad(1)
-    !                 write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_bad(1)
-    !                 write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', 0.
-    !             endif
-    !             ! translate to state array
-    !             allocate(states(ncls), source=0)
-    !             do icls = 1, ncls_sel
-    !                 if( clust_info_arr(labels(icls))%good_bad == 1 ) states(clsinds(icls)) = 1
-    !                 if( clust_info_arr(labels(icls))%good_bad == 2 ) states(clsinds(icls)) = 2
-    !             end do
-    !             ! zero labels of deselected classes
-    !             do icls = 1, ncls_sel
-    !                 if( clust_info_arr(labels(icls))%good_bad /= 1 ) labels(icls) = 0
-    !             end do
-    !             ! write selection
-    !             call write_selected_cavgs(ncls_sel, cavg_imgs, labels, params%ext)
-    !             ! map selection to project
-    !             call spproj%map_cavgs_selection(states)
-    !             ! optional pruning
-    !             if( trim(params%prune).eq.'yes') call spproj%prune_particles
-    !             ! this needs to be a full write as many segments are updated
-    !             call spproj%write(params%projfile)
-    !             ! create projectes for the rank1 and rank2 particles
-    !             do igood_bad = 1,2
-    !                 if( count(clust_info_arr(:)%good_bad == igood_bad) > 0 )then
-    !                     ! copy project
-    !                     projfname = 'rank'//int2str(igood_bad)//'particles.simple'
-    !                     call simple_copy_file(trim(params%projfile), projfname)
-    !                     call spproj_part%read(projfname)
-    !                     call spproj_part%update_projinfo(projfname)
-    !                     ! communicate state mapping to copied project
-    !                     states_part = spproj_part%os_ptcl2D%get_all_asint('state')
-    !                     if( igood_bad == 1 )then
-    !                         where(states_part == 2) states_part = 0
-    !                     else
-    !                         where(states_part == 1) states_part = 0
-    !                         where(states_part == 2) states_part = 1
-    !                     endif
-    !                     ! communicate state mapping to copied project
-    !                     call spproj_part%os_ptcl2D%set_all('state', real(states_part))
-    !                     call spproj_part%os_ptcl3D%set_all('state', real(states_part))
-    !                     ! prune
-    !                     call spproj_part%prune_particles
-    !                     ! map ptcl states to classes
-    !                     call spproj_part%map_ptcls_state_to_cls
-    !                     ! write project
-    !                     call spproj_part%write(projfname)
-    !                     ! destruct
-    !                     call spproj_part%kill
-    !                 endif
-    !             end do
-    !         case DEFAULT
-    !             ! re-create cavg_imgs
-    !             call dealloc_imgarr(cavg_imgs)
-    !             cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
-    !             call  write_cavgs(ncls_sel, cavg_imgs, labels, 'cluster', params%ext)
-    !     end select
-    !     ! destruct
-    !     call spproj%kill
-    !     call pows%kill
-    !     do icls=1,ncls_sel
-    !         call cavg_imgs(icls)%kill
-    !     end do
-    !     ! deallocate anything not specifically allocated above
-    !     deallocate(cavg_imgs, dmat, l_msk, l_non_junk, labels, clsinds, i_medoids)
-    !     if( allocated(corrmat)    ) deallocate(corrmat)
-    !     if( allocated(dmat_pow)   ) deallocate(dmat_pow)
-    !     if( allocated(smat_pow)   ) deallocate(smat_pow)
-    !     if( allocated(smat_joint) ) deallocate(smat_joint)
-    !     ! end gracefully
-    !     call simple_end('**** SIMPLE_CLUSTER_CAVGS NORMAL STOP ****')
-
-    ! contains
-
-    !     subroutine calc_scores
-    !         integer :: iclust, icls, cnt
-    !         real    :: euclid_max, res_max, corrfmscore_min, clustscore_min
-    !         ! HOMOGENEITY SCORE
-    !         clust_info_arr(:)%homogeneity = clust_info_arr(:)%euclid
-    !         euclid_max = maxval(clust_info_arr(:)%euclid)
-    !         where( clust_info_arr(:)%pop < 2 ) clust_info_arr(:)%homogeneity = euclid_max
-    !         call dists2scores_percen(clust_info_arr(:)%homogeneity)
-    !         ! RESOLUTION SCORE
-    !         clust_info_arr(:)%resscore = clust_info_arr(:)%res
-    !         res_max = maxval(clust_info_arr(:)%res)
-    !         where( clust_info_arr(:)%pop < 2 ) clust_info_arr(:)%resscore = res_max
-    !         call dists2scores_percen(clust_info_arr(:)%resscore)
-    !         ! FM CORR & CLUSTSCORE
-    !         do iclust = 1, nclust
-    !             clust_info_arr(iclust)%corrfmscore = 0.
-    !             clust_info_arr(iclust)%clustscore  = 0.
-    !             cnt = 0
-    !             do icls = 1, ncls_sel 
-    !                 if( labels(icls) == iclust )then
-    !                     clust_info_arr(iclust)%corrfmscore = clust_info_arr(iclust)%corrfmscore +   corrmat(icls,i_medoids(iclust))
-    !                     clust_info_arr(iclust)%clustscore  = clust_info_arr(iclust)%clustscore  +      dmat(icls,i_medoids(iclust))
-    !                     cnt = cnt + 1
-    !                 endif
-    !             enddo
-    !             clust_info_arr(iclust)%corrfmscore = clust_info_arr(iclust)%corrfmscore / real(cnt)
-    !             clust_info_arr(iclust)%clustscore  = clust_info_arr(iclust)%clustscore  / real(cnt)
-    !         end do
-    !         corrfmscore_min = minval(clust_info_arr(:)%corrfmscore)
-    !         clustscore_min  = minval(clust_info_arr(:)%clustscore)
-    !         where( clust_info_arr(:)%pop < 2 )
-    !             clust_info_arr(:)%corrfmscore = corrfmscore_min
-    !             clust_info_arr(:)%clustscore  = clustscore_min
-    !         endwhere
-    !         call scores2scores_percen(clust_info_arr(:)%corrfmscore)
-    !         call dists2scores_percen(clust_info_arr(:)%clustscore)
-    !     end subroutine calc_scores
-
-    !     subroutine renormalize_scores( percen_thres )
-    !         real, intent(in), optional :: percen_thres
-    !         ! if( present(percen_thres) )then
-    !         !     ! zero low scores
-    !         !     where(clust_info_arr(:)%homogeneity <= percen_thres ) clust_info_arr(:)%homogeneity = 0.
-    !         !     where(clust_info_arr(:)%resscore    <= percen_thres ) clust_info_arr(:)%resscore    = 0.
-    !         !     where(clust_info_arr(:)%clustscore  <= percen_thres ) clust_info_arr(:)%clustscore  = 0.
-    !         ! endif
-    !         ! re-normalize
-    !         call scores2scores_percen(clust_info_arr(:)%homogeneity)
-    !         call scores2scores_percen(clust_info_arr(:)%resscore)
-    !         call scores2scores_percen(clust_info_arr(:)%clustscore)
-    !         ! calculate joint score
-    !         clust_info_arr(:)%jointscore = 0.25 * clust_info_arr(:)%homogeneity + 0.5 * clust_info_arr(:)%resscore + 0.25 * clust_info_arr(:)%clustscore
-    !         call scores2scores_percen(clust_info_arr(:)%jointscore)
-    !     end subroutine renormalize_scores
-
-    !     subroutine copy_clustering
-    !         clust_info_arr_copy = clust_info_arr
-    !         labels_copy         = labels
-    !         i_medoids_copy      = i_medoids
-    !     end subroutine copy_clustering
-
-    !     subroutine put_back_clustering_copy
-    !         clust_info_arr = clust_info_arr_copy 
-    !         labels         = labels_copy
-    !         i_medoids      = i_medoids_copy 
-    !     end subroutine put_back_clustering_copy
-
-    !     subroutine rank_clusters( nclust, order )
-    !         integer, intent(in) :: nclust, order(nclust)
-    !         integer             :: i_medoids_ranked(nclust), rank_assign(ncls_sel)
-    !         type(clust_info)    :: clust_info_arr_ranked(nclust)
-    !         integer             :: rank, icls
-    !         do rank = 1, nclust
-    !             i_medoids_ranked(rank) = i_medoids(order(rank))
-    !             clust_info_arr_ranked(rank) = clust_info_arr(order(rank))
-    !             do icls = 1, ncls_sel
-    !                 if( labels(icls) == order(rank) ) rank_assign(icls) = rank
-    !             end do
-    !         end do
-    !         i_medoids      = i_medoids_ranked
-    !         clust_info_arr = clust_info_arr_ranked
-    !         labels         = rank_assign
-    !     end subroutine rank_clusters
-
-    !     subroutine identify_good_bad_clusters
-    !         clust_info_arr(:)%good_bad = 0
-    !         ! joint score inclusion
-    !         where( clust_info_arr(:)%jointscore  >= SCORE_THRES_JOINT )        clust_info_arr(:)%good_bad = 1
-    !         ! homogeneity/clustscore inclusion
-    !         where( clust_info_arr(:)%homogeneity >= SCORE_THRES_HOMO     .and.&
-    !                 &clust_info_arr(:)%clustscore  >= SCORE_THRES_CLUSTSCORE ) clust_info_arr(:)%good_bad = 1
-    !         ! homogeneity/resscore inclusion
-    !         where( clust_info_arr(:)%homogeneity >= SCORE_THRES_HOMO     .and.&
-    !                 &clust_info_arr(:)%resscore    >= SCORE_THRES_RESSCORE )   clust_info_arr(:)%good_bad = 1
-    !         ! resolution inclusion
-    !         where( clust_info_arr(:)%resscore    >= SCORE_THRES_RESSCORE .and.&
-    !                 &clust_info_arr(:)%res         <= RES_THRES )              clust_info_arr(:)%good_bad = 1
-    !         ! label second rate classes
-    !         where( clust_info_arr(:)%good_bad == 0                       .and.&
-    !                 &clust_info_arr(:)%jointscore >= SCORE_THRES_2NDRATE )     clust_info_arr(:)%good_bad = 2
-    !         if( DEBUG )then
-    !             print *, 'found '//int2str(count(clust_info_arr(:)%good_bad == 1))//' 1st rate cluster(s) of class averages'
-    !             print *, 'found '//int2str(count(clust_info_arr(:)%good_bad == 2))//' 2nd rate cluster(s) of class averages'
-    !         endif
-    !     end subroutine identify_good_bad_clusters
- 
-    ! end subroutine exec_cluster_cavgs
 
     subroutine exec_select_clusters( self, cline )
         class(select_clusters_commander), intent(inout) :: self
