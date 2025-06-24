@@ -1329,12 +1329,6 @@ contains
             type(ctfparams) :: ctfparms
             real            :: crop_factor, sdev_noise
             crop_factor = real(params_glob%box_crop) / real(params_glob%box)
-            ! Normalise
-            if( params_glob%l_noise_norm )then
-                call img%norm_noise(build_glob%lmsk, sdev_noise)
-            else
-                call img%norm_within(build_glob%lmsk)
-            endif
             ! Fourier cropping
             call img%fft()
             call img%clip(img_out)
@@ -1352,8 +1346,6 @@ contains
             end select
             ! Back to real space
             call img_out%ifft
-            ! Soft-edged mask
-            call img_out%mask(params_glob%msk_crop, 'soft')
             ! gridding prep
             if( params_glob%gridding.eq.'yes' ) call build_glob%img_crop_polarizer%div_by_instrfun(img_out)
             ! return to Fourier space
