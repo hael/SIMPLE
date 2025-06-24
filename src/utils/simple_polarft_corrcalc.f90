@@ -3703,15 +3703,17 @@ contains
                     &self%heap_vars(ithr)%pft_dref_8,self%heap_vars(ithr)%pft_r,&
                     &self%heap_vars(ithr)%shmat_8,self%heap_vars(ithr)%pft_r1_8)
             end do
-            if( allocated(self%ctfmats)        ) deallocate(self%ctfmats)
-            if( allocated(self%npix_per_shell) ) deallocate(self%npix_per_shell)
-            if( allocated(self%has_cache)      ) deallocate(self%has_cache)
-            if( allocated(self%do_cache)       ) deallocate(self%do_cache)
-            if( allocated(self%cached_vals)    ) deallocate(self%cached_vals)
+            if( allocated(self%ctfmats)             ) deallocate(self%ctfmats)
+            if( allocated(self%npix_per_shell)      ) deallocate(self%npix_per_shell)
+            if( allocated(self%has_cache)           ) deallocate(self%has_cache)
+            if( allocated(self%do_cache)            ) deallocate(self%do_cache)
+            if( allocated(self%cached_vals)         ) deallocate(self%cached_vals)
+            if( allocated(self%pfts_refs_clin)      ) deallocate(self%pfts_refs_clin)
+            if( allocated(self%pfts_refs_clin_even) ) deallocate(self%pfts_refs_clin_even)
+            if( allocated(self%pfts_refs_clin_odd)  ) deallocate(self%pfts_refs_clin_odd)
             deallocate(self%sqsums_ptcls, self%ksqsums_ptcls, self%wsqsums_ptcls, self%angtab, self%argtransf,self%pfts_ptcls,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
-                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone, self%pfts_refs_merg,&
-                &self%pfts_refs_clin,self%pfts_refs_clin_even,self%pfts_refs_clin_odd)
+                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone, self%pfts_refs_merg)
             call self%kill_memoized_ptcls
             call self%kill_memoized_refs
             nullify(self%sigma2_noise, pftcc_glob)
