@@ -46,6 +46,22 @@ contains
                 call kmed%get_labels(labels)
                 call kmed%get_medoids(i_medoids)
                 call kmed%kill
+            case('hybrid')
+                 write(logfhandle,'(A)') '>>> PRE-CLUSTERING DISTANCE MATRIX WITH AFFINITY PROPAGATION'
+                smat = dmat2smat(dmat)
+                pref = 0. ! assuming normalized distance matrix, pref=0. because this is the minimal score
+                if( present(ap_pref) ) pref = ap_pref
+                call aprop%new(n, smat, pref=pref)
+                call aprop%propagate(i_medoids, labels, simsum)
+                call aprop%kill
+                nclust = size(i_medoids)
+                write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION (AP): ', nclust
+                write(logfhandle,'(A)') '>>> REFINING CLUSTERING WITH K-MEDOIDS'
+                call kmed%new(labels, dmat)
+                call kmed%cluster
+                call kmed%get_labels(labels)
+                call kmed%get_medoids(i_medoids)
+                call kmed%kill
         end select
     end subroutine cluster_dmat
 
