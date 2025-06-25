@@ -493,6 +493,7 @@ type :: parameters
     real    :: smpd_targets2D(2)
     real    :: snr=0.              !< signal-to-noise ratio
     real    :: snr_noise_reg=0.    !< signal to noise ratio of noise regularization
+    real    :: stoch_rate=100.     !< percentage of stoch in polar cavgs
     real    :: stream_mean_threshold=MEAN_THRESHOLD         !< stream class rejection based on image mean (relative)
     real    :: stream_rel_var_threshold=REL_VAR_THRESHOLD   !< stream class rejection based on image variance (relative)
     real    :: stream_abs_var_threshold=ABS_VAR_THRESHOLD   !< stream class rejection based on image variance (absolute)
@@ -1016,6 +1017,7 @@ contains
         call check_rarg('sigma',          self%sigma)
         call check_rarg('snr',            self%snr)
         call check_rarg('snr_noise_reg',  self%snr_noise_reg)
+        call check_rarg('stoch_rate',     self%stoch_rate)
         call check_rarg('stream_mean_threshold',    self%stream_mean_threshold)
         call check_rarg('stream_rel_var_threshold', self%stream_rel_var_threshold)
         call check_rarg('stream_abs_var_threshold', self%stream_abs_var_threshold)
