@@ -1845,7 +1845,7 @@ contains
         use simple_clustering_utils, only: cluster_dmat
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        real,             parameter   :: HP_SPEC = 20., LP_SPEC = 6., SCORE_THRES=65., RES_THRES=6.
+        real,             parameter   :: HP_SPEC = 20., LP_SPEC = 6., SCORE_THRES=65., RES_THRES=6., SCORE_THRES_REJECT=50.
         integer,          parameter   :: NHISTBINS = 128, NQUANTA=32
         logical,          parameter   :: DEBUG = .true.
         type(image),      allocatable :: cavg_imgs(:)
@@ -2203,6 +2203,8 @@ contains
                 avgscore_2    = sum(jointscores_2) / real(pop_2)
                 if( avgres_2 <= RES_THRES .or. avgscore_2 >= SCORE_THRES )then
                     where( clust_info_arr(:)%scoreclust == scoreclust_2 ) clust_info_arr(:)%good_bad = 1
+                else if( avgscore_2 < SCORE_THRES_REJECT )then
+                    where( clust_info_arr(:)%scoreclust == scoreclust_2 ) clust_info_arr(:)%good_bad = 0
                 else
                     where( clust_info_arr(:)%scoreclust == scoreclust_2 ) clust_info_arr(:)%good_bad = 2
                 endif
