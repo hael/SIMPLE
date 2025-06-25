@@ -1839,7 +1839,7 @@ contains
         use simple_clustering_utils, only: cluster_dmat
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        real,             parameter   :: HP_SPEC = 20., LP_SPEC = 6., SCORE_THRES=65., RES_THRES=6., SCORE_THRES_REJECT=50.
+        real,             parameter   :: HP_SPEC = 20., LP_SPEC = 6., RES_THRES=6., SCORE_THRES=65., SCORE_THRES_REJECT=50., SCORE_THRES_INCL=75.
         integer,          parameter   :: NHISTBINS = 128, NQUANTA=32
         logical,          parameter   :: DEBUG = .true.
         type(image),      allocatable :: cavg_imgs(:)
@@ -2179,9 +2179,10 @@ contains
         end subroutine rank_clusters
 
         subroutine identify_good_bad_clusters
-            real, allocatable :: jointscores_2(:), resvals_2(:)
-            integer           :: scoreclust_1, scoreclust_2, pop_2
-            real              :: avgres_2, avgscore_2
+            real, allocatable :: jointscores_2(:), resvals_2(:), homogeneity_2(:), clustscores_2(:)
+            integer           :: scoreclust_1, scoreclust_2
+            real              :: avgscore_2
+            logical           :: l_incl_rank2
             clust_info_arr(:)%good_bad = 0
             if( nclust <= 3 )then
                 clust_info_arr(:)%good_bad      = 1
@@ -2190,12 +2191,17 @@ contains
                 scoreclust_1  = clust_info_arr(1)%scoreclust
                 where( clust_info_arr(:)%scoreclust == scoreclust_1 ) clust_info_arr(:)%good_bad = 1
                 scoreclust_2  = clust_info_arr(count(clust_info_arr(:)%good_bad == 1) + 1)%scoreclust
-                pop_2         = count(clust_info_arr(:)%scoreclust == scoreclust_2)
-                jointscores_2 = pack(clust_info_arr(:)%jointscore, mask=clust_info_arr(:)%scoreclust == scoreclust_2)
-                resvals_2     = pack(clust_info_arr(:)%res,        mask=clust_info_arr(:)%scoreclust == scoreclust_2)
-                avgres_2      = sum(resvals_2)     / real(pop_2)
-                avgscore_2    = sum(jointscores_2) / real(pop_2)
-                if( avgres_2 <= RES_THRES .or. avgscore_2 >= SCORE_THRES )then
+                jointscores_2 = pack(clust_info_arr(:)%jointscore,  mask=clust_info_arr(:)%scoreclust == scoreclust_2)
+                homogeneity_2 = pack(clust_info_arr(:)%homogeneity, mask=clust_info_arr(:)%scoreclust == scoreclust_2)
+                clustscores_2 = pack(clust_info_arr(:)%clustscore,  mask=clust_info_arr(:)%scoreclust == scoreclust_2)
+                resvals_2     = pack(clust_info_arr(:)%res,         mask=clust_info_arr(:)%scoreclust == scoreclust_2)
+                avgscore_2    = sum(jointscores_2) / real(count(clust_info_arr(:)%scoreclust == scoreclust_2))
+                l_incl_rank2  = .false. 
+                if( any(resvals_2 <= RES_THRES) )            l_incl_rank2 = .true.
+                if( avgscore_2 >= SCORE_THRES   )            l_incl_rank2 = .true.
+                if( any(homogeneity_2 >= SCORE_THRES_INCL) .and.&
+                    any(clustscores_2 >= SCORE_THRES_INCL) ) l_incl_rank2 = .true.
+                if( l_incl_rank2 )then
                     where( clust_info_arr(:)%scoreclust == scoreclust_2 ) clust_info_arr(:)%good_bad = 1
                 else if( avgscore_2 < SCORE_THRES_REJECT )then
                     where( clust_info_arr(:)%scoreclust == scoreclust_2 ) clust_info_arr(:)%good_bad = 0
