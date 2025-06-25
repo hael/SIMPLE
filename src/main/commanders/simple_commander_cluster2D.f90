@@ -1857,16 +1857,15 @@ contains
         real,             allocatable :: resvals(:)
         logical,          allocatable :: l_msk(:,:,:), l_non_junk(:)
         integer,          allocatable :: labels(:), clsinds(:), i_medoids(:), labels_copy(:), i_medoids_copy(:)
-        integer,          allocatable :: clspops(:), states(:), states_part(:), labels4write(:)
+        integer,          allocatable :: clspops(:), states(:), labels4write(:)
         type(clust_info), allocatable :: clust_info_arr(:), clust_info_arr_copy(:)
-        character(len=:), allocatable :: projfname
         type(parameters)   :: params
-        type(sp_project)   :: spproj, spproj_part
+        type(sp_project)   :: spproj
         type(image)        :: img_msk
         type(pspecs)       :: pows
         type(stats_struct) :: res_stats
         integer            :: ncls, ncls_sel, icls, cnt, rank, nptcls, nptcls_good, loc(1), ldim(3)
-        integer            :: i, j, ii, jj, nclust, iclust, igood_bad, nptcls_maybe
+        integer            :: i, j, ii, jj, nclust, iclust, nptcls_maybe
         real               :: fsc_res, rfoo, frac_good, best_res, worst_res, frac_maybe
         real               :: oa_min, oa_max, dist_rank, dist_rank_best, smpd, simsum
         ! defaults
@@ -2081,35 +2080,6 @@ contains
                 if( trim(params%prune).eq.'yes') call spproj%prune_particles
                 ! this needs to be a full write as many segments are updated
                 call spproj%write(params%projfile)
-                ! create projectes for the rank1 and rank2 particles
-                do igood_bad = 1,2
-                    if( count(clust_info_arr(:)%good_bad == igood_bad) > 0 )then
-                        ! copy project
-                        projfname = 'rank'//int2str_pad(igood_bad,2)//'particles.simple'
-                        call simple_copy_file(trim(params%projfile), projfname)
-                        call spproj_part%read(projfname)
-                        call spproj_part%update_projinfo(projfname)
-                        ! communicate state mapping to copied project
-                        states_part = spproj_part%os_ptcl2D%get_all_asint('state')
-                        if( igood_bad == 1 )then
-                            where(states_part == 2) states_part = 0
-                        else
-                            where(states_part == 1) states_part = 0
-                            where(states_part == 2) states_part = 1
-                        endif
-                        ! communicate state mapping to copied project
-                        call spproj_part%os_ptcl2D%set_all('state', real(states_part))
-                        call spproj_part%os_ptcl3D%set_all('state', real(states_part))
-                        ! prune
-                        call spproj_part%prune_particles
-                        ! map ptcl states to classes
-                        call spproj_part%map_ptcls_state_to_cls
-                        ! write project
-                        call spproj_part%write(projfname)
-                        ! destruct
-                        call spproj_part%kill
-                    endif
-                end do
             case DEFAULT
                 ! re-create cavg_imgs
                 call dealloc_imgarr(cavg_imgs)
