@@ -1523,7 +1523,7 @@ contains
         do iptcl = self%pfromto(1), self%pfromto(2)
             if( l_stoch )then
                 ! 10% of particles to be used for testing for now
-                if( ran3() > 0.1 )then
+                if( ran3() > (1. - params_glob%stoch_rate/100.) )then
                     ptcl_mask(iptcl) = .false.
                     cycle
                 endif
