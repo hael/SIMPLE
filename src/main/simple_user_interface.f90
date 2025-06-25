@@ -140,6 +140,7 @@ type(simple_program), target :: map2model_fsc
 type(simple_program), target :: map_cavgs_selection
 type(simple_program), target :: map_cavgs_states
 type(simple_program), target :: mask
+type(simple_program), target :: match_cavgs
 type(simple_program), target :: merge_projects
 type(simple_program), target :: mkdir_
 type(simple_program), target :: map_validation
@@ -471,6 +472,7 @@ contains
         call new_map_cavgs_selection
         call new_map_cavgs_states
         call new_mask
+        call new_match_cavgs
         call new_merge_projects
         call new_mkdir_
         call new_motion_correct
@@ -620,6 +622,7 @@ contains
         call push2prg_ptr_array(map_cavgs_selection)
         call push2prg_ptr_array(map_cavgs_states)
         call push2prg_ptr_array(mask)
+        call push2prg_ptr_array(match_cavgs)
         call push2prg_ptr_array(merge_projects)
         call push2prg_ptr_array(mkdir_)
         call push2prg_ptr_array(motion_correct)
@@ -848,6 +851,8 @@ contains
                 ptr2prg => map_validation
             case('mask')
                 ptr2prg => mask
+            case('match_cavgs')
+                ptr2prg => match_cavgs
             case('merge_projects')
                 ptr2prg => merge_projects
             case('mkdir')
@@ -1059,6 +1064,7 @@ contains
         write(logfhandle,'(A)') map_validation%name
         write(logfhandle,'(A)') map2model_fsc%name
         write(logfhandle,'(A)') mask%name
+        write(logfhandle,'(A)') match_cavgs%name
         write(logfhandle,'(A)') merge_projects%name
         write(logfhandle,'(A)') mkdir_%name
         write(logfhandle,'(A)') motion_correct%name
@@ -3603,6 +3609,32 @@ contains
         ! computer controls
         call mask%set_input('comp_ctrls', 1, nthr)
     end subroutine new_mask
+
+    subroutine new_match_cavgs
+        ! PROGRAM SPECIFICATION
+        call match_cavgs%new(&
+        &'match_cavgs',&                                              ! name
+        &'Analysis of class averages with k-medoids',&                ! descr_short
+        &'is a program for analyzing class averages with k-medoids',& ! descr_long
+        &'simple_exec',&                                              ! executable
+        &0, 1, 0, 0, 2, 1, 1, .true.)                                 ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call match_cavgs%set_input('parm_ios', 1, projfile_target)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call match_cavgs%set_input('filt_ctrls', 1, hp)
+        call match_cavgs%set_input('filt_ctrls', 2, lp)
+        ! mask controls
+        call match_cavgs%set_input('mask_ctrls', 1, mskdiam)
+        ! computer controls
+        call match_cavgs%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_match_cavgs
 
     subroutine new_merge_projects
         ! PROGRAM SPECIFICATION
