@@ -16,6 +16,7 @@ use simple_guistats,           only: guistats
 use simple_stream_utils
 use simple_qsys_funs
 use simple_commander_cluster2D
+use simple_commander_cavgs
 use simple_imgproc
 use simple_nice
 use FoX_dom

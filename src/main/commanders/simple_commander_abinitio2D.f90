@@ -7,6 +7,7 @@ use simple_parameters,          only: parameters
 use simple_sp_project,          only: sp_project
 use simple_exec_helpers,        only: set_shmem_flag
 use simple_commander_cluster2D
+use simple_commander_cavgs
 use simple_commander_euclid
 use simple_qsys_funs
 implicit none
