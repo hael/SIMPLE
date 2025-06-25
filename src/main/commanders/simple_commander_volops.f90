@@ -98,7 +98,7 @@ contains
         type(parameters)  :: params
         type(builder)     :: build
         real, allocatable :: shvec(:,:)
-        real              :: xyz(3)
+        real              :: shift2d(2), xyz(3)
         integer           :: ldim(3), istate, i, nimgs
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp',   20.)
@@ -135,7 +135,8 @@ contains
                 endif
                 write(logfhandle,'(A,I4,2F6.1)')'>>> OFFSET: ',i,shvec(i,1:2)
                 call build%img%fft
-                call build%img%shift2Dserial(shvec(i,1:2))
+                shift2d = shvec(i,1:2)
+                call build%img%shift2Dserial(shift2d)
                 call build%img%ifft
                 call build%img%write(params%outstk,i)
             enddo

@@ -294,8 +294,8 @@ contains
         ccsizes = cc_img%size_ccs()
         loc     = maxloc(ccsizes,dim=1)
         ! turn it into a binary image for mask creation
-        call cc_img%cc2bin(loc)
-        call cc_img%masscen_cc(loc, cccen)
+        call cc_img%cc2bin(loc)     ! the cc's label is now "1"
+        call cc_img%masscen_cc(1, cccen)
         call cc_img%density_inoutside(msk, nin, nout, nmsk)
         call img_bin%kill_bimg
         call cc_img%kill_bimg
