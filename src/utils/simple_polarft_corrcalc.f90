@@ -1470,13 +1470,12 @@ contains
         self%pfts_refs_odd  = self%pfts_refs_odd  + pfts
     end subroutine add_polar_comlin_refs
 
-    subroutine gen_polar_refs( self, ref_space, ptcl_space, ran, comlin, pcomlines, pfts )
+    subroutine gen_polar_refs( self, ref_space, ptcl_space, ran, pcomlines, pfts )
         use simple_oris
         class(polarft_corrcalc),    intent(inout) :: self
         type(oris),                 intent(in)    :: ref_space
         type(oris),                 intent(in)    :: ptcl_space
         logical,          optional, intent(in)    :: ran
-        logical,          optional, intent(in)    :: comlin
         type(polar_fmap), optional, intent(in)    :: pcomlines(self%nrefs, self%nrefs)
         complex,          optional, intent(inout) :: pfts(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs)
         complex(sp), pointer     :: pft_ptcl(:,:)
@@ -1484,7 +1483,7 @@ contains
         integer,     allocatable :: pops(:)
         type(ori) :: orientation
         integer   :: i, k, iref, irot, ithr, iptcl
-        logical   :: l_ran, l_comlin
+        logical   :: l_ran, l_comlin, l_stoch, ptcl_mask(self%pfromto(1):self%pfromto(2))
         real(dp)  :: numer, denom1, denom2
         real      :: ctf2_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                     &ctf2_merg(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
@@ -1499,9 +1498,9 @@ contains
                     &self%pfts_refs_clin_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs))
         endif
         l_ran    = .false.
-        l_comlin = .false.
+        l_comlin = (trim(params_glob%ref_type   ).eq.'comlin' .or.  trim(params_glob%ref_type).eq.'reproj')
+        l_stoch  = (trim(params_glob%polar_stoch).eq.'yes'    .and. l_comlin)
         if( present(ran)  ) l_ran = ran
-        if( present(comlin) .and. present(pfts) .and. present(pcomlines) ) l_comlin = comlin
         if( l_ran )then
             do iref = 1, self%nrefs
                 do k = self%kfromto(1), self%kfromto(2)
@@ -1520,7 +1519,15 @@ contains
         ithr      = omp_get_thread_num() + 1
         pft_ptcl  => self%heap_vars(ithr)%pft_ref
         rctf      => self%heap_vars(ithr)%pft_r
+        if( l_stoch ) ptcl_mask = .true.
         do iptcl = self%pfromto(1), self%pfromto(2)
+            if( l_stoch )then
+                ! 10% of particles to be used for testing for now
+                if( ran3() > 0.1 )then
+                    ptcl_mask(iptcl) = .false.
+                    cycle
+                endif
+            endif
             call ptcl_space%get_ori(iptcl, orientation)
             i    = self%pinds(iptcl)
             iref = ref_space%find_closest_proj(orientation)
@@ -1579,6 +1586,7 @@ contains
         self%pfts_refs_merg = complex(0., 0.)
         ctf2_merg           = 0.
         do iptcl = self%pfromto(1), self%pfromto(2)
+            if( .not. ptcl_mask(iptcl) )cycle
             call ptcl_space%get_ori(iptcl, orientation)
             i    = self%pinds(iptcl)
             iref = ref_space%find_closest_proj(orientation)
