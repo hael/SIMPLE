@@ -133,7 +133,6 @@ type(simple_program), target :: import_particles
 type(simple_program), target :: import_starproject
 type(simple_program), target :: info_image
 type(simple_program), target :: info_stktab
-type(simple_program), target :: init_refine2D
 type(simple_program), target :: make_cavgs
 type(simple_program), target :: make_oris
 type(simple_program), target :: make_pickrefs
@@ -461,7 +460,6 @@ contains
         call new_icm3D
         call new_info_image
         call new_info_stktab
-        call new_init_refine2D
         call new_import_boxes
         call new_import_cavgs
         call new_import_movies
@@ -610,7 +608,6 @@ contains
         call push2prg_ptr_array(icm3D)
         call push2prg_ptr_array(info_image)
         call push2prg_ptr_array(info_stktab)
-        call push2prg_ptr_array(init_refine2D)
         call push2prg_ptr_array(import_boxes)
         call push2prg_ptr_array(import_cavgs)
         call push2prg_ptr_array(import_movies)
@@ -825,8 +822,6 @@ contains
                 ptr2prg => info_image
             case('info_stktab')
                 ptr2prg => info_stktab
-            case('init_refine2D')
-                ptr2prg => init_refine2D
             case('import_boxes')
                 ptr2prg => import_boxes
             case('import_cavgs')
@@ -1051,7 +1046,6 @@ contains
         write(logfhandle,'(A)') icm3D%name
         write(logfhandle,'(A)') info_image%name
         write(logfhandle,'(A)') info_stktab%name
-        write(logfhandle,'(A)') init_refine2D%name
         write(logfhandle,'(A)') import_boxes%name
         write(logfhandle,'(A)') import_cavgs%name
         write(logfhandle,'(A)') import_movies%name
@@ -2932,31 +2926,6 @@ contains
         ! <empty>
         ! computer controls
     end subroutine new_info_stktab
-
-    subroutine new_init_refine2D
-        ! PROGRAM SPECIFICATION
-        call init_refine2D%new(&
-        &'init_refine2D', &                                                      ! name
-        &'initialization of 2D refinement by affinity propagation clustering of class averages',&                                            ! descr_short
-        &'is a program for initialization of 2D refinement',&                    ! descr_long
-        &'simple_exec',&                                                         ! executable
-        &0, 0, 0, 1, 0, 0, 0, .true.)                                            ! # entries in each group, requires sp_project
-        ! TEMPLATE
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        ! <empty>
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call init_refine2D%set_input('srch_ctrls', 1, ncls, gui_submenu="search", gui_advanced=.false.)
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-    end subroutine new_init_refine2D
 
     subroutine new_abinitio2D
         ! PROGRAM SPECIFICATION

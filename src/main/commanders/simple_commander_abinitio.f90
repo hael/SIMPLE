@@ -417,7 +417,7 @@ contains
             end subroutine conv_eo_states
 
             subroutine rank_cavgs
-                use simple_commander_cluster2D, only: rank_cavgs_commander
+                use simple_commander_cavgs, only: rank_cavgs_commander
                 type(rank_cavgs_commander) :: xrank_cavgs
                 type(cmdline)              :: cline_rank_cavgs
                 call cline_rank_cavgs%set('prg',      'rank_cavgs')

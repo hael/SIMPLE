@@ -6,7 +6,7 @@ use simple_stack_io,   only: stack_io
 use simple_sp_project, only: sp_project
 implicit none
 
-public :: read_cavgs_into_imgarr, flag_non_junk_cavgs, align_imgs2ref, rtsq_imgs, prep_cavgs4clustering
+public :: read_cavgs_into_imgarr, flag_non_junk_cavgs, match_imgs2ref, match_imgs2refs, rtsq_imgs, prep_cavgs4clustering
 public :: pack_imgarr, alloc_imgarr, dealloc_imgarr, write_cavgs, write_junk_cavgs, write_selected_cavgs
 public :: align_clusters2medoids, write_aligned_cavgs
 private
@@ -93,7 +93,7 @@ contains
         call stkio_r%close
     end function read_cavgs_into_imgarr_2
 
-    subroutine prep_cavgs4clustering( spproj, cavg_imgs, mskdiam, clspops, clsinds, l_non_junk, mm, selec_crit )
+    subroutine prep_cavgs4clustering( spproj, cavg_imgs, mskdiam, clspops, clsinds, l_non_junk, mm )
         use simple_class_frcs, only: class_frcs
         class(sp_project),        intent(inout) :: spproj
         type(image), allocatable, intent(inout) :: cavg_imgs(:)
@@ -101,7 +101,6 @@ contains
         integer,     allocatable, intent(inout) :: clspops(:), clsinds(:)
         logical,     allocatable, intent(inout) :: l_non_junk(:)
         real,        allocatable, intent(inout) :: mm(:,:)
-        character(len=*),         intent(in)    :: selec_crit
         real,              parameter  :: LP_BIN = 20.
         logical,           parameter  :: DEBUG = .true.
         character(len=:), allocatable :: frcs_fname
@@ -131,15 +130,7 @@ contains
             THROW_HARD('FRC file: '//trim(frcs_fname)//' does not exist!')
         endif
         if( allocated(l_non_junk) ) deallocate(l_non_junk)
-        select case(trim(selec_crit))
-            case('state')
-                states = spproj%os_cls2D%get_all_asint('state')
-                if( .not. any(states == 0) ) THROW_HARD('No class average selections made in project; use a different selec_crit')
-                allocate(l_non_junk(size(states)), source=states > 0)
-                deallocate(states)
-            case DEFAULT
-                call flag_non_junk_cavgs(cavg_imgs, LP_BIN, mskrad, l_non_junk, spproj%os_cls2D)
-        end select
+        call flag_non_junk_cavgs(cavg_imgs, LP_BIN, mskrad, l_non_junk, spproj%os_cls2D)
         if( DEBUG )then
             cnt = 0
             do i = 1, ncls
@@ -412,7 +403,7 @@ contains
         do iclust = 1, nclust
             clust_info_arr(iclust)%pop             = count(labels == iclust)
             cluster_imgs                           = pack_imgarr(cavg_imgs, mask=labels == iclust)
-            clust_info_arr(iclust)%algninfo%params = align_imgs2ref(clust_info_arr(iclust)%pop, hp, lp, trs, cavg_imgs(i_medoids(iclust)), cluster_imgs)
+            clust_info_arr(iclust)%algninfo%params = match_imgs2ref(clust_info_arr(iclust)%pop, hp, lp, trs, cavg_imgs(i_medoids(iclust)), cluster_imgs)
             cluster_imgs_aligned                   = rtsq_imgs(clust_info_arr(iclust)%pop, clust_info_arr(iclust)%algninfo%params, cluster_imgs)
             ! estimate resolution
             cnt = 0
@@ -464,7 +455,7 @@ contains
         end do
     end subroutine write_aligned_cavgs
 
-    function align_imgs2ref( n, hp, lp, trs, img_ref, imgs ) result( algninfo )
+    function match_imgs2ref( n, hp, lp, trs, img_ref, imgs ) result( algninfo )
         use simple_polarizer,         only: polarizer
         use simple_polarft_corrcalc,  only: polarft_corrcalc
         use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
@@ -568,7 +559,119 @@ contains
         end do
         call pftcc%kill
         call polartransform%kill
-    end function align_imgs2ref
+    end function match_imgs2ref
+
+    function match_imgs2refs( nrefs, n, hp, lp, trs, refimgs, imgs ) result( algninfo )
+        use simple_polarizer,         only: polarizer
+        use simple_polarft_corrcalc,  only: polarft_corrcalc
+        use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
+        integer,                  intent(in)    :: nrefs, n
+        real,                     intent(in)    :: hp, lp, trs
+        class(image),             intent(inout) :: refimgs(nrefs), imgs(n) 
+        integer,     parameter          :: MAXITS_SH = 60
+        real,        allocatable        :: inpl_corrs(:)
+        type(image), allocatable        :: imgs_mirr(:)
+        type(pftcc_shsrch_grad)         :: grad_shsrch_obj(nthr_glob)
+        type(polarizer)                 :: polartransform
+        type(polarft_corrcalc)          :: pftcc
+        type(inpl_struct)               :: algninfo_mirr(n,nrefs)
+        type(inpl_struct), allocatable  :: algninfo(:,:)
+        integer :: ldim(3), ldim_ref(3), box, kfromto(2), ithr, i, loc(1), nrots, irot, iref
+        real    :: smpd, lims(2,2), lims_init(2,2), cxy(3)
+        ldim       = imgs(1)%get_ldim()
+        ldim_ref   = refimgs(1)%get_ldim()
+        if( .not. all(ldim == ldim_ref) ) THROW_HARD('Incongruent logical image dimensions (imgs & imgs_ref)')
+        box        = ldim(1)
+        smpd       = imgs(1)%get_smpd()
+        kfromto(1) = max(2, calc_fourier_index(hp, box, smpd))
+        kfromto(2) =        calc_fourier_index(lp, box, smpd)
+        ! create mirrored versions of the images
+        call alloc_imgarr(n, ldim, smpd, imgs_mirr)
+        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
+        do i = 1, n
+            call imgs_mirr(i)%copy(imgs(i))
+            call imgs_mirr(i)%mirror('x')
+        end do
+        !$omp end parallel do
+        ! initialize pftcc, polarizer
+        call pftcc%new(nrefs, [1,2*n], kfromto) ! 2*n because of mirroring
+        call polartransform%new([box,box,1], smpd)
+        call polartransform%init_polarizer(pftcc, KBALPHA)
+        ! ! in-plane search object objects for parallel execution
+        lims(:,1)      = -trs
+        lims(:,2)      =  trs
+        lims_init(:,1) = -SHC_INPL_TRSHWDTH
+        lims_init(:,2) =  SHC_INPL_TRSHWDTH
+        do ithr = 1, nthr_glob
+            call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier='yes',&
+            &maxits=MAXITS_SH, opt_angle=.true.)
+        end do
+        ! set the reference transforms
+        do iref = 1, nrefs
+            call polartransform%polarize(pftcc, refimgs(iref), iref, isptcl=.false., iseven=.true.)
+        enddo
+        ! set the particle transforms
+        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
+        do i = 1, 2 * n
+            if( i <= n )then
+                call imgs(i)%fft()
+                call polartransform%polarize(pftcc, imgs(i),        i, isptcl=.true., iseven=.true.)
+                call imgs(i)%ifft
+            else
+                call imgs_mirr(i-n)%fft()
+                call polartransform%polarize(pftcc, imgs_mirr(i-n), i, isptcl=.true., iseven=.true.)
+                call imgs_mirr(i-n)%ifft()
+            endif
+        end do
+        !$omp end parallel do
+        call pftcc%memoize_refs
+        call pftcc%memoize_ptcls
+        ! register imgs to references
+        nrots = pftcc%get_nrots()
+        allocate(inpl_corrs(nrots), algninfo(n,nrefs))
+        !$omp parallel do default(shared) private(i,ithr,inpl_corrs,loc,irot,cxy) schedule(static) proc_bind(close)
+        do i = 1, 2 * n
+            ithr = omp_get_thread_num() + 1
+            do iref = 1, nrefs
+                call pftcc%gencorrs(iref, i, inpl_corrs)
+                loc  = maxloc(inpl_corrs)
+                irot = loc(1)
+                call grad_shsrch_obj(ithr)%set_indices(1, i)
+                cxy = grad_shsrch_obj(ithr)%minimize(irot=irot)
+                if( irot == 0 )then ! no improved solution found, put back the old one
+                    cxy(1) = inpl_corrs(loc(1))
+                    cxy(2) = 0.
+                    cxy(3) = 0.
+                    irot   = loc(1)
+                endif
+                if( i <= n )then
+                    algninfo(i,iref)%e3            = pftcc%get_rot(irot)
+                    algninfo(i,iref)%corr          = cxy(1)
+                    algninfo(i,iref)%x             = cxy(2)
+                    algninfo(i,iref)%y             = cxy(3)
+                    algninfo(i,iref)%l_mirr        = .false.
+                else
+                    algninfo_mirr(i-n,iref)%e3     = pftcc%get_rot(irot)
+                    algninfo_mirr(i-n,iref)%corr   = cxy(1)
+                    algninfo_mirr(i-n,iref)%x      = cxy(2)
+                    algninfo_mirr(i-n,iref)%y      = cxy(3)
+                    algninfo_mirr(i-n,iref)%l_mirr = .true.
+                endif
+            end do
+        end do
+        !$omp end parallel do
+        ! set mirror flags
+        do iref = 1, nrefs
+            where( algninfo_mirr(:,iref)%corr > algninfo(:,iref)%corr ) algninfo(:,iref) = algninfo_mirr(:,iref)
+        enddo
+        ! destruct
+        call dealloc_imgarr(imgs_mirr)
+        do ithr = 1, nthr_glob
+            call grad_shsrch_obj(ithr)%kill
+        end do
+        call pftcc%kill
+        call polartransform%kill
+    end function match_imgs2refs
 
     function rtsq_imgs( n, algninfo, imgs ) result( imgs_aligned )
         integer,            intent(in)    :: n
