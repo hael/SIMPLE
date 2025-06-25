@@ -472,6 +472,7 @@ contains
         type(inpl_struct), allocatable  :: algninfo(:)
         integer :: ldim(3), ldim_ref(3), box, kfromto(2), ithr, i, loc(1), nrots, irot
         real    :: smpd, lims(2,2), lims_init(2,2), cxy(3)
+        logical :: didft
         ldim       = imgs(1)%get_ldim()
         ldim_ref   = img_ref%get_ldim()
         if( .not. all(ldim == ldim_ref) ) THROW_HARD('Incongruent logical image dimensions (imgs & img_ref)')
@@ -501,7 +502,13 @@ contains
             &maxits=MAXITS_SH, opt_angle=.true.)
         end do
         ! set the reference transform
+        didft = .false.
+        if( .not. img_ref%is_ft() )then
+            call img_ref%fft
+            didft = .true.
+        endif
         call polartransform%polarize(pftcc, img_ref, 1, isptcl=.false., iseven=.true.)
+        if( didft ) call img_ref%ifft
         ! set the particle transforms
         !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i = 1, 2 * n
@@ -610,11 +617,16 @@ contains
             &maxits=MAXITS_SH, opt_angle=.true.)
         end do
         ! set the reference transforms
+        !$omp parallel default(shared) private(i,iref)  proc_bind(close)
+        !$omp do schedule(static)
         do iref = 1, nrefs
+            call refimgs(iref)%fft
             call polartransform%polarize(pftcc, refimgs(iref), iref, isptcl=.false., iseven=.true.)
+            call refimgs(iref)%ifft
         enddo
+        !$omp end do
         ! set the particle transforms
-        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
+        !$omp do schedule(static)
         do i = 1, 2 * n
             if( i <= n )then
                 call imgs(i)%fft()
@@ -626,7 +638,8 @@ contains
                 call imgs_mirr(i-n)%ifft()
             endif
         end do
-        !$omp end parallel do
+        !$omp end do
+        !$omp end parallel
         call pftcc%memoize_refs
         call pftcc%memoize_ptcls
         ! register imgs to references

@@ -616,7 +616,7 @@ contains
         logical,           allocatable :: l_non_junk_ref(:), l_non_junk_match(:)
         real,              allocatable :: mm_ref(:,:), mm_match(:,:)
         type(inpl_struct), allocatable :: algninfo(:,:)
-        integer :: nmatch, nrefs, ldim(3)
+        integer :: nmatch, nrefs, ldim(3), i
         real    :: smpd
         ! defaults
         call cline%set('oritype', 'cls2D')
@@ -640,20 +640,12 @@ contains
         nmatch      = size(cavg_imgs_match)
         smpd        = cavg_imgs_ref(1)%get_smpd()
         ldim        = cavg_imgs_ref(1)%get_ldim()
-
-        print *, 'nrefs   ', nrefs
-        print *, 'nmatch  ', nmatch
-        print *, 'smpd    ', smpd
-        print *, 'ldim(1) ', ldim(1)
-
         ! ensure correct smpd/box in params class
         params%smpd = smpd
         params%box  = ldim(1)
         params%msk  = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
         ! do the matching
         algninfo = match_imgs2refs(nrefs, nmatch, params%hp, params%lp, params%trs, cavg_imgs_ref, cavg_imgs_match)
-        
-        print *, algninfo
 
     end subroutine exec_match_cavgs
 
