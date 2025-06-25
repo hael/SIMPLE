@@ -1641,18 +1641,36 @@ contains
                 endif
             enddo
         endif
-        if( trim(params_glob%test_mode) .eq. 'yes' )then
-            call ptcl_space%get_pops(pops, 'class')
-            do iref = 1, self%nrefs
-                if( pops(iref) < 4 )then
-                    self%pfts_refs_even(:,:,iref) = self%pfts_refs_clin(:,:,iref)
-                else
-                    self%pfts_refs_even(:,:,iref) = self%pfts_refs_merg(:,:,iref) + self%pfts_refs_clin(:,:,iref)
-                endif
-            enddo
-        else
-            self%pfts_refs_even = self%pfts_refs_clin
-        endif
+        select case(trim(params_glob%ref_type))
+            case('cavg')
+                self%pfts_refs_even = self%pfts_refs_merg
+            case('comlin')
+                self%pfts_refs_even = self%pfts_refs_clin
+            case('reproj')
+                call ptcl_space%get_pops(pops, 'class')
+                do iref = 1, self%nrefs
+                    if( pops(iref) < 4 )then
+                        self%pfts_refs_even(:,:,iref) = self%pfts_refs_clin(:,:,iref)
+                    else
+                        frc_cavg = 0.
+                        do k = self%kfromto(1), self%kfromto(2)
+                            numer  = sum(real(self%pfts_refs_merg(:,k,iref) * conjg(self%pfts_refs_clin(:,k,iref)), kind=dp))
+                            denom1 = sum( csq(self%pfts_refs_merg(:,k,iref)))
+                            denom2 = sum( csq(self%pfts_refs_clin(:,k,iref)))
+                            if( dsqrt(denom1*denom2) > DTINY ) frc_cavg(k) = real(numer / dsqrt(denom1*denom2))
+                        enddo
+                        if( any(frc_cavg > 0.143) )then
+                            do k = self%kfromto(1), self%kfromto(2)
+                                self%pfts_refs_even(:,k,iref) = (self%pfts_refs_merg(:,k,iref) + self%pfts_refs_clin(:,k,iref)) * frc_cavg(k) / 2.
+                            enddo
+                        else
+                            self%pfts_refs_even(:,:,iref) = self%pfts_refs_clin(:,:,iref)
+                        endif
+                    endif
+                enddo
+            case DEFAULT
+                THROW_HARD('Unsupported ref_type mode. It should be cavg, comlin, or reproj')
+        end select
         self%pfts_refs_odd = self%pfts_refs_even
     end subroutine gen_polar_refs
 

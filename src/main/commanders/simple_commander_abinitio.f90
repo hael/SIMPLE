@@ -1317,11 +1317,6 @@ contains
         end select
         ! turn off ML-regularization when icm is on
         if( trim(icm).eq.'yes' ) ml_reg = 'no'
-        ! in testmode, overriding icm and ml_reg with inputs from user
-        if( trim(params_glob%test_mode) .eq. 'yes' )then
-            if( cline_refine3D%defined('icm') )    icm    = trim(params_glob%icm)
-            if( cline_refine3D%defined('ml_reg') ) ml_reg = trim(params_glob%ml_reg)
-        endif
         ! projection directions
         if( cline_refine3D%defined('nspace_max') )then
             inspace = min(inspace, params_glob%nspace_max)
