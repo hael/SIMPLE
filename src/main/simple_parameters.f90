@@ -128,7 +128,6 @@ type :: parameters
     character(len=3)          :: stream='no'          !< stream (real time) execution mode(yes|no){no}
     character(len=3)          :: symrnd='no'          !< randomize over symmetry operations(yes|no){no}
     character(len=3)          :: taper_edges='no'     !< self-explanatory
-    character(len=3)          :: test_mode='no'       !< self-explanatory
     character(len=3)          :: tophat='no'          !< tophat filter(yes|no){no}
     character(len=3)          :: trail_rec='no'       !< trailing (weighted average) reconstruction when update_frac=yes 
     character(len=3)          :: trsstats='no'        !< provide origin shift statistics(yes|no){no}
@@ -259,6 +258,7 @@ type :: parameters
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2D analysis
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh){shc}
+    character(len=STDLEN)     :: ref_type='cavg'      !< polar reference type(cavg|comlin|reproj){cavg}
     character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
     character(len=STDLEN)     :: sort=''              !< key to sort oris on
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
@@ -737,6 +737,7 @@ contains
         call check_carg('rank_cavgs',     self%rank_cavgs)
         call check_carg('ranked_parts',   self%ranked_parts)
         call check_carg('real_filter',    self%real_filter)
+        call check_carg('ref_type',       self%ref_type)
         call check_carg('refine',         self%refine)
         call check_carg('refs_delin',     self%refs_delin)
         call check_carg('reject_cls',     self%reject_cls)
@@ -763,7 +764,6 @@ contains
         call check_carg('symrnd',         self%symrnd)
         call check_carg('tag',            self%tag)
         call check_carg('taper_edges',    self%taper_edges)
-        call check_carg('test_mode',      self%test_mode)
         call check_carg('tophat',         self%tophat)
         call check_carg('trail_rec',      self%trail_rec)
         call check_carg('transp_pca',     self%transp_pca)
