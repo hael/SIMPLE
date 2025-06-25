@@ -70,6 +70,7 @@ type(map_cavgs_states_commander)            :: xmap_cavgs_states
 type(sample_classes_commander)              :: xsample_classes
 type(cluster_cavgs_commander)               :: xcluster_cavgs
 type(select_clusters_commander)             :: xsel_clusts
+type(match_cavgs_commander)                 :: xmatch_cavgs
 type(score_ptcls_commander)                 :: xscore_ptcls
 type(write_classes_commander)               :: xwrite_classes
 type(consolidate_chunks_cavgs_commander)    :: xconsolidate_chunks_cavgs
@@ -269,6 +270,8 @@ select case(trim(prg))
         call xcluster_cavgs%execute(cline)
     case('select_clusters')
         call xsel_clusts%execute(cline)
+    case( 'match_cavgs' )
+        call xmatch_cavgs%execute(cline)
     case( 'score_ptcls' )
         call xscore_ptcls%execute(cline)
     case( 'write_classes' )
@@ -470,7 +473,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('50c870bc')
+call simple_print_git_version('8a840f13')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

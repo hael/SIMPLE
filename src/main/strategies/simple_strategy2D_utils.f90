@@ -130,7 +130,7 @@ contains
             THROW_HARD('FRC file: '//trim(frcs_fname)//' does not exist!')
         endif
         if( allocated(l_non_junk) ) deallocate(l_non_junk)
-        call flag_non_junk_cavgs(cavg_imgs, LP_BIN, mskrad, l_non_junk, spproj%os_cls2D)
+        call flag_non_junk_cavgs(cavg_imgs, LP_BIN, mskrad, l_non_junk)
         if( DEBUG )then
             cnt = 0
             do i = 1, ncls
@@ -491,7 +491,7 @@ contains
         call pftcc%new(1, [1,2*n], kfromto) ! 2*n because of mirroring
         call polartransform%new([box,box,1], smpd)
         call polartransform%init_polarizer(pftcc, KBALPHA)
-        ! ! in-plane search object objects for parallel execution
+        ! in-plane search object objects for parallel execution
         lims(:,1)      = -trs
         lims(:,2)      =  trs
         lims_init(:,1) = -SHC_INPL_TRSHWDTH
@@ -550,7 +550,7 @@ contains
             endif
         end do
         !$omp end parallel do
-        ! set mirror flags
+        ! select for mirroring
         where( algninfo_mirr(:)%corr > algninfo(:)%corr ) algninfo = algninfo_mirr
         ! destruct
         call dealloc_imgarr(imgs_mirr)
@@ -585,6 +585,9 @@ contains
         smpd       = imgs(1)%get_smpd()
         kfromto(1) = max(2, calc_fourier_index(hp, box, smpd))
         kfromto(2) =        calc_fourier_index(lp, box, smpd)
+
+        print *, 'kfromto: ', kfromto(1), kfromto(2)
+
         ! create mirrored versions of the images
         call alloc_imgarr(n, ldim, smpd, imgs_mirr)
         !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
@@ -597,7 +600,7 @@ contains
         call pftcc%new(nrefs, [1,2*n], kfromto) ! 2*n because of mirroring
         call polartransform%new([box,box,1], smpd)
         call polartransform%init_polarizer(pftcc, KBALPHA)
-        ! ! in-plane search object objects for parallel execution
+        ! in-plane search object objects for parallel execution
         lims(:,1)      = -trs
         lims(:,2)      =  trs
         lims_init(:,1) = -SHC_INPL_TRSHWDTH
@@ -629,7 +632,7 @@ contains
         ! register imgs to references
         nrots = pftcc%get_nrots()
         allocate(inpl_corrs(nrots), algninfo(n,nrefs))
-        !$omp parallel do default(shared) private(i,ithr,inpl_corrs,loc,irot,cxy) schedule(static) proc_bind(close)
+        !omp parallel do default(shared) private(i,ithr,iref,inpl_corrs,loc,irot,cxy) schedule(static) proc_bind(close)
         do i = 1, 2 * n
             ithr = omp_get_thread_num() + 1
             do iref = 1, nrefs
@@ -659,8 +662,8 @@ contains
                 endif
             end do
         end do
-        !$omp end parallel do
-        ! set mirror flags
+        !omp end parallel do
+        ! select for mirroring
         do iref = 1, nrefs
             where( algninfo_mirr(:,iref)%corr > algninfo(:,iref)%corr ) algninfo(:,iref) = algninfo_mirr(:,iref)
         enddo
