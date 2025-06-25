@@ -1845,7 +1845,7 @@ contains
         use simple_clustering_utils, only: cluster_dmat
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        real,             parameter   :: HP_SPEC = 20., LP_SPEC = 6.
+        real,             parameter   :: HP_SPEC = 20., LP_SPEC = 6., SCORE_THRES=65., RES_THRES=6.
         integer,          parameter   :: NHISTBINS = 128, NQUANTA=32
         logical,          parameter   :: DEBUG = .true.
         type(image),      allocatable :: cavg_imgs(:)
@@ -1865,7 +1865,7 @@ contains
         type(pspecs)       :: pows
         type(stats_struct) :: res_stats
         integer            :: ncls, ncls_sel, icls, cnt, rank, nptcls, nptcls_good, loc(1), ldim(3)
-        integer            :: i, j, ii, jj, nclust, iclust, nptcls_maybe
+        integer            :: i, j, ii, jj, nclust, iclust, nptcls_maybe, pop_good, pop_bad, pop_maybe
         real               :: fsc_res, rfoo, frac_good, best_res, worst_res, frac_maybe
         real               :: oa_min, oa_max, dist_rank, dist_rank_best, smpd, simsum
         ! defaults
@@ -1950,6 +1950,11 @@ contains
         end select
         ! cluster
         call cluster_dmat( dmat, 'aprop', nclust, i_medoids, labels)
+        if( nclust > 5 .and. nclust < 20 )then
+            nclust = 20
+            deallocate(i_medoids, labels)
+            call cluster_dmat(dmat, 'kmed', nclust, i_medoids, labels)
+        endif
         ! prep mask
         call img_msk%new([params%box,params%box,1], params%smpd)
         img_msk = 1.
@@ -2014,47 +2019,51 @@ contains
                 res_good     = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad == 1)
                 res_maybe    = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad == 2)
                 res_bad      = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad == 0)
-                write(logfhandle,'(A)') 'RESOLUTION STATS FOR GOOD PARTITION'
-                if( size(res_good) > 1 )then
+                pop_good     = count(clust_info_arr(:)%good_bad == 1)
+                pop_maybe    = count(clust_info_arr(:)%good_bad == 2)
+                pop_bad      = count(clust_info_arr(:)%good_bad == 0)
+                if( pop_good > 1 )then
+                    write(logfhandle,'(A)') 'RESOLUTION STATS FOR GOOD PARTITION'
                     call calc_stats(res_good, res_stats)
                     write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_stats%minv
                     write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_stats%maxv
                     write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_stats%avg
                     write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_stats%med
                     write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', res_stats%sdev
-                else
+                else if( pop_good == 1 )then
+                    write(logfhandle,'(A)') 'RESOLUTION STATS FOR GOOD PARTITION'
                     write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_good(1)
                     write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_good(1)
                     write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_good(1)
                     write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_good(1)
                     write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', 0.
-                endif
-                if( allocated(res_maybe) )then
+                endif                    
+                if( pop_maybe > 1 )then
                     write(logfhandle,'(A)') 'RESOLUTION STATS FOR MAYBE PARTITION'
-                    if( size(res_maybe) > 1 )then
-                        call calc_stats(res_maybe, res_stats)
-                        write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_stats%minv
-                        write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_stats%maxv
-                        write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_stats%avg
-                        write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_stats%med
-                        write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', res_stats%sdev
-                    else
-                        write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_maybe(1)
-                        write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_maybe(1)
-                        write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_maybe(1)
-                        write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_maybe(1)
-                        write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', 0.
-                    endif
+                    call calc_stats(res_maybe, res_stats)
+                    write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_stats%minv
+                    write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_stats%maxv
+                    write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_stats%avg
+                    write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_stats%med
+                    write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', res_stats%sdev
+                else if( pop_maybe == 1 )then
+                    write(logfhandle,'(A)') 'RESOLUTION STATS FOR MAYBE PARTITION'
+                    write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_maybe(1)
+                    write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_maybe(1)
+                    write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_maybe(1)
+                    write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_maybe(1)
+                    write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', 0.
                 endif
-                write(logfhandle,'(A)') 'RESOLUTION STATS FOR BAD  PARTITION'
-                if( size(res_bad) > 1 )then
+                if( pop_bad > 1 )then
+                    write(logfhandle,'(A)') 'RESOLUTION STATS FOR BAD  PARTITION'
                     call calc_stats(res_bad, res_stats)
                     write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_stats%minv
                     write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_stats%maxv
                     write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_stats%avg
                     write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_stats%med
                     write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', res_stats%sdev
-                else
+                else if( pop_bad == 1 )then
+                    write(logfhandle,'(A)') 'RESOLUTION STATS FOR BAD  PARTITION'
                     write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_bad(1)
                     write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_bad(1)
                     write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_bad(1)
@@ -2176,16 +2185,27 @@ contains
         end subroutine rank_clusters
 
         subroutine identify_good_bad_clusters
-            integer :: scoreclust_1, scoreclust_2
+            real, allocatable :: jointscores_2(:), resvals_2(:)
+            integer           :: scoreclust_1, scoreclust_2, pop_2
+            real              :: avgres_2, avgscore_2
             clust_info_arr(:)%good_bad = 0
             if( nclust <= 3 )then
                 clust_info_arr(:)%good_bad      = 1
                 clust_info_arr(nclust)%good_bad = 0
             else
-                scoreclust_1 = clust_info_arr(1)%scoreclust
+                scoreclust_1  = clust_info_arr(1)%scoreclust
                 where( clust_info_arr(:)%scoreclust == scoreclust_1 ) clust_info_arr(:)%good_bad = 1
-                scoreclust_2 = clust_info_arr(count(clust_info_arr(:)%good_bad == 1) + 1)%scoreclust
-                where( clust_info_arr(:)%scoreclust == scoreclust_2 ) clust_info_arr(:)%good_bad = 2
+                scoreclust_2  = clust_info_arr(count(clust_info_arr(:)%good_bad == 1) + 1)%scoreclust
+                pop_2         = count(clust_info_arr(:)%scoreclust == scoreclust_2)
+                jointscores_2 = pack(clust_info_arr(:)%jointscore, mask=clust_info_arr(:)%scoreclust == scoreclust_2)
+                resvals_2     = pack(clust_info_arr(:)%res,        mask=clust_info_arr(:)%scoreclust == scoreclust_2)
+                avgres_2      = sum(resvals_2)     / real(pop_2)
+                avgscore_2    = sum(jointscores_2) / real(pop_2)
+                if( avgres_2 <= RES_THRES .or. avgscore_2 >= SCORE_THRES )then
+                    where( clust_info_arr(:)%scoreclust == scoreclust_2 ) clust_info_arr(:)%good_bad = 1
+                else
+                    where( clust_info_arr(:)%scoreclust == scoreclust_2 ) clust_info_arr(:)%good_bad = 2
+                endif
             endif
             if( DEBUG )then
                 print *, 'found '//int2str(count(clust_info_arr(:)%good_bad == 1))//' 1st rate cluster(s) of class averages'
