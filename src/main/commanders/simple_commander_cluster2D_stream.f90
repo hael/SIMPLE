@@ -187,12 +187,18 @@ contains
             if( l_abinitio2D )then
                 call cline_cluster2D_chunk%set('prg', 'abinitio2D')
                 if( params_glob%nparts_chunk > 1 )then
-                    call cline_cluster2D_chunk%set('nparts', params_glob%nparts_chunk)
+                    call cline_cluster2D_chunk%set('nparts',       params_glob%nparts_chunk)
                 endif
                 if( cline%defined('cls_init') )then
-                    call cline_cluster2D_chunk%set('cls_init', params_glob%cls_init)
+                    call cline_cluster2D_chunk%set('cls_init',     params_glob%cls_init)
                 else
-                    call cline_cluster2D_chunk%set('cls_init','rand')
+                    call cline_cluster2D_chunk%set('cls_init',     'rand')
+                endif
+                if( master_cline%defined('focusmskdiam') )then
+                    call cline_cluster2D_chunk%set('focusmskdiam', params_glob%focusmskdiam)
+                endif
+                if( cline%defined('gaufreq') )then
+                    call cline_cluster2D_chunk%set('gaufreq',      params_glob%gaufreq)
                 endif
             else
                 if( params_glob%nparts_chunk > 1 )then
@@ -2845,7 +2851,7 @@ contains
                 call cline_cluster2D_chunk%set('extr_lim',  MAX_EXTRLIM2D)
                 call cline_cluster2D_chunk%set('startit',   1)
                 if( l_update_sigmas ) call cline_cluster2D_chunk%set('cc_iters', 10)
-            case('ABINITIO2D')
+            case('ABINITIO','ABINITIO2D')
                 call cline_cluster2D_chunk%delete('minits')
                 call cline_cluster2D_chunk%delete('maxits')
                 call cline_cluster2D_chunk%delete('extr_iter')
