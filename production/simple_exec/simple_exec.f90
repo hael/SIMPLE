@@ -69,7 +69,6 @@ type(map_cavgs_states_commander)            :: xmap_cavgs_states
 type(sample_classes_commander)              :: xsample_classes
 type(cluster_cavgs_commander)               :: xcluster_cavgs
 type(select_clusters_commander)             :: xsel_clusts
-type(reject_cavgs_commander)                :: xreject_cavgs
 type(init_refine2D_commander)               :: xinit_refine2D
 type(score_ptcls_commander)                 :: xscore_ptcls
 type(write_classes_commander)               :: xwrite_classes
@@ -270,8 +269,6 @@ select case(trim(prg))
         call xcluster_cavgs%execute(cline)
     case('select_clusters')
         call xsel_clusts%execute(cline)
-    case( 'reject_cavgs' )
-        call xreject_cavgs%execute(cline)
     case( 'init_refine2D' )
         call xinit_refine2D%execute(cline)
     case( 'score_ptcls' )
@@ -475,7 +472,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('058e3c22')
+call simple_print_git_version('e3478cc6')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

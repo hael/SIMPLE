@@ -178,7 +178,6 @@ type(simple_program), target :: reextract
 type(simple_program), target :: refine3D
 type(simple_program), target :: refine3D_auto
 type(simple_program), target :: refine3D_nano
-type(simple_program), target :: reject_cavgs
 type(simple_program), target :: fractionate_movies
 type(simple_program), target :: replace_project_field
 type(simple_program), target :: sample_classes
@@ -510,7 +509,6 @@ contains
         call new_refine3D
         call new_refine3D_auto
         call new_refine3D_nano
-        call new_reject_cavgs
         call new_replace_project_field
         call new_sample_classes
         call new_score_ptcls
@@ -660,7 +658,6 @@ contains
         call push2prg_ptr_array(refine3D)
         call push2prg_ptr_array(refine3D_auto)
         call push2prg_ptr_array(refine3D_nano)
-        call push2prg_ptr_array(reject_cavgs)
         call push2prg_ptr_array(replace_project_field)
         call push2prg_ptr_array(sample_classes)
         call push2prg_ptr_array(selection)
@@ -928,8 +925,6 @@ contains
                 ptr2prg => refine3D_auto
             case('refine3D_nano')
                 ptr2prg => refine3D_nano
-            case('reject_cavgs')
-                ptr2prg => reject_cavgs
             case('fractionate_movies')
                 ptr2prg => fractionate_movies
             case('replace_project_field')
@@ -1102,7 +1097,6 @@ contains
         write(logfhandle,'(A)') reextract%name
         write(logfhandle,'(A)') refine3D%name
         write(logfhandle,'(A)') refine3D_auto%name
-        write(logfhandle,'(A)') reject_cavgs%name
         write(logfhandle,'(A)') replace_project_field%name
         write(logfhandle,'(A)') sample_classes%name
         write(logfhandle,'(A)') selection%name
@@ -4930,33 +4924,6 @@ contains
         call fractionate_movies%set_input('comp_ctrls', 1, nparts)
         call fractionate_movies%set_input('comp_ctrls', 2, nthr)
     end subroutine new_fractionate_movies
-
-    subroutine new_reject_cavgs
-        ! PROGRAM SPECIFICATION
-        call reject_cavgs%new(&
-        &'reject_cavgs',&                                        ! name
-        &'Junk class averages rejection',&                       ! descr_short
-        &'is a program for rejecting undesired class averages',& ! descr_long
-        &'simple_exec',&                                         ! executable
-        &0, 2, 0, 0, 2, 1, 1, .true.)                            ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call reject_cavgs%set_input('parm_ios', 1,  'ncls', 'num', 'Number of clusters', 'Number of clusters', '# clusters', .false., 0.)
-        call reject_cavgs%set_input('parm_ios', 2, prune)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        call reject_cavgs%set_input('filt_ctrls', 1, hp)
-        call reject_cavgs%set_input('filt_ctrls', 2, lp)
-        ! mask controls
-        call reject_cavgs%set_input('mask_ctrls', 1, mskdiam)
-        ! computer controls
-        call reject_cavgs%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_reject_cavgs
 
     subroutine new_replace_project_field
         ! PROGRAM SPECIFICATION

@@ -8,7 +8,7 @@ implicit none
 
 public :: read_cavgs_into_imgarr, flag_non_junk_cavgs, align_imgs2ref, rtsq_imgs, prep_cavgs4clustering
 public :: pack_imgarr, alloc_imgarr, dealloc_imgarr, write_cavgs, write_junk_cavgs, write_selected_cavgs
-public :: align_clusters2medoids, write_aligned_cavgs, flag_overfitted_cavgs
+public :: align_clusters2medoids, write_aligned_cavgs
 private
 #include "simple_local_flags.inc"
 
@@ -605,128 +605,5 @@ contains
         !$omp end parallel do
         call dealloc_imgarr(imgs_heap)
     end function rtsq_imgs
-
-    subroutine flag_overfitted_cavgs( cavgs, labels, mask, msk, scores )
-        use CPlot2D_wrapper_module, only: plot2D
-        class(image),         intent(inout) :: cavgs(:)
-        integer, allocatable, intent(in)    :: labels(:)
-        logical, allocatable, intent(in)    :: mask(:)
-        real,                 intent(in)    :: msk
-        real,    allocatable, intent(inout) :: scores(:)
-        real,        parameter   :: HP1   = 120.
-        real,        parameter   :: HP2   = 25.
-        real,        parameter   :: LP1   = 8.
-        real,        parameter   :: LP2   = 12.
-        real,        parameter   :: ALPHA = 0.997
-        type(image), allocatable :: tmp_imgs(:)
-        real,        allocatable :: logpspecs(:,:), pspec(:), freqs(:), g(:), env(:), cavgpspecs(:,:)
-        integer,     allocatable :: inds1(:),inds2(:)
-        integer :: ncls,icls,ldim(3),ithr,l,fsz,k,nclusters,n,n1,n2
-        real    :: A,AA,B, smpd, maxB
-        ncls = size(cavgs)
-        if( size(mask) /= ncls ) THROW_HARD('Incompatible CAVGS/MASK size!')
-        do icls = 1,ncls
-            if( mask(icls) )then
-                ldim = cavgs(icls)%get_ldim()
-                smpd = cavgs(icls)%get_smpd()
-                exit
-            endif
-        enddo
-        ! Log-power spectrum calculation
-        fsz = fdim(ldim(1))-1
-        allocate(pspec(fsz),logpspecs(fsz,ncls),source=0.)
-        A = 2.0*log10(real(product(ldim))) ! so values will be positive after log()
-        call alloc_imgarr(nthr_glob, ldim, smpd, tmp_imgs)
-        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-        !$omp private(icls,ithr,pspec)
-        do icls = 1, ncls
-            if( .not.mask(icls) ) cycle
-            ithr = omp_get_thread_num() + 1
-            call tmp_imgs(ithr)%copy(cavgs(icls))
-            call tmp_imgs(ithr)%div_below(0., 10.)
-            call tmp_imgs(ithr)%norm
-            call tmp_imgs(ithr)%mask(msk, 'soft',backgr=0.)
-            call tmp_imgs(ithr)%fft
-            call tmp_imgs(ithr)%power_spectrum(pspec)
-            logpspecs(:,icls) = log10(pspec) + A
-        enddo
-        !$omp end parallel do
-        call dealloc_imgarr(tmp_imgs)
-        freqs = get_resarr(ldim(1), smpd)
-        g     = 1. / freqs
-        ! Average Log-power spectrum calculation
-        nclusters = maxval(labels)
-        allocate(cavgpspecs(fsz,nclusters),scores(nclusters),source=0.)
-        do icls = 1,ncls
-            if( .not.mask(icls)   ) cycle
-            l = labels(icls)
-            if( l == 0 ) cycle
-            cavgpspecs(:,l) = cavgpspecs(:,l) + logpspecs(:,icls)
-        enddo
-        ! Curve minimum envelope
-        inds1 = pack((/(k,k=1,fsz)/),mask=(g>1.0/HP1).and.(g<1.0/LP1))
-        inds2 = pack((/(k,k=1,fsz)/),mask=(g>1.0/HP2).and.(g<1.0/LP2))
-        n1 = size(inds1)
-        n2 = size(inds2)
-        do l = 1,nclusters
-            n = count(labels==l)
-            if( n <= 1 )cycle
-            cavgpspecs(:,l) = cavgpspecs(:,l) / real(n)
-            pspec = cavgpspecs(:,l)
-            call min_envelope(fsz, g, pspec, ALPHA, env)
-            ! Average distance to enveloppe in region 1 including region 2
-            A = sum(abs(pspec(inds1)-env(inds1))) / real(n1)
-            ! Average distance to enveloppe in region 2
-            B    = sum(abs(pspec(inds2)-env(inds2))) / real(n2)
-            maxB = maxval(abs(pspec(inds2)-env(inds2)))
-            ! Average distance to enveloppe in region 1 excluding region2
-            AA = (A*real(n1) - B*real(n2)) / real(n1-n2)
-            ! Score
-            if( AA < 1.e-6 )then
-                scores(l) = 0.0
-            else
-                ! scores(l) = B / AA
-                scores(l) = maxB / AA
-            endif
-            call plot2D(fsz, g, env, 'plot_'//int2str(l), .true.,xtitle='1/A', ytitle='logPW',&
-                &suptitle='Cluster '//int2str(l)//' - '//real2str(scores(l)), z=pspec )
-        enddo
-
-        contains
-
-            subroutine min_envelope( n, g, x, alpha, z )
-                integer,              intent(in) :: n
-                real,                 intent(in) :: g(n), x(n), alpha
-                real, allocatable, intent(inout) :: z(:)
-                integer, parameter :: w = 1
-                real    :: m, xmin
-                integer :: i, is, i0, i1
-                if( allocated(z) )then
-                    if( size(z) /= n )then
-                        deallocate(z)
-                        allocate(z(n))
-                    endif
-                    z(:) = 0.
-                else
-                    allocate(z(n),source=0.)
-                endif
-                xmin = minval(x)
-                is   = 1
-                do i = 1,n
-                    is = i
-                    if( g(i) > 1./HP1 ) exit
-                enddo
-                if( is > 1 ) z(:is-1) = x(is)
-                z(is) = x(is)
-                m     = x(is)
-                do i = is+1,n
-                    i0   = min(n,max(1,i-w))
-                    i1   = min(n,max(1,i+w))
-                    m    = max(xmin, min(alpha*m,minval(x(i0:i1))))
-                    z(i) = m
-                enddo
-            end subroutine min_envelope
-
-    end subroutine flag_overfitted_cavgs
 
 end module simple_strategy2D_utils
