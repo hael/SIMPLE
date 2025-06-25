@@ -99,7 +99,7 @@ contains
 
     ! SETTERS/GETTERS
 
-    subroutine set_imat(self, imat)
+    subroutine set_imat( self, imat )
         class(binimage),   intent(inout) :: self
         integer, optional, intent(in)    :: imat(self%bldim(1),self%bldim(2),self%bldim(3))
         real(kind=c_float), pointer      :: brmat(:,:,:)=>null()
@@ -113,14 +113,14 @@ contains
         call self%update_img_rmat
     end subroutine set_imat
 
-    subroutine get_imat(self, imat)
+    subroutine get_imat( self, imat )
         class(binimage),      intent(inout) :: self
         integer, allocatable, intent(inout) :: imat(:,:,:)
         if( allocated(imat) ) deallocate(imat)
         allocate(imat(self%bldim(1),self%bldim(2),self%bldim(3)), source=self%bimat)
     end subroutine get_imat
 
-    subroutine get_nccs(self, n)
+    subroutine get_nccs( self, n )
         class(binimage), intent(inout)  :: self
         integer,         intent(out)    :: n
         n = maxval(self%bimat)
@@ -564,9 +564,9 @@ contains
     !>  \brief inv_bimg inverts a binary image
     subroutine inv_bimg( self )
         class(binimage), intent(inout) :: self
-        self%bimat = -1.*(self%bimat-1.)
+        self%bimat = -1 * (self%bimat - 1)
+        call self%update_img_rmat
     end subroutine inv_bimg
-
 
     ! This subroutine builds the logical array 'border' of the same dims of
     ! the input image self. Border is true in the border pixels in the binary image self.
@@ -644,22 +644,24 @@ contains
     subroutine fill_holes( self )
         class(binimage), intent(inout) :: self
         type (binimage)      :: img_cc ! connected component image
-        integer, allocatable :: imat_cc(:,:,:)
-        integer :: seed
+        integer, allocatable :: imat_cc(:,:,:), ccsizes(:)
+        integer :: ind_bg
         if( self%bldim(3) > 1 ) then
-            THROW_WARN('Not implemented for volumes! fill_holes')
+            THROW_WARN('Not implemented for volumes; fill_holes')
             return
         endif
         if( .not. self%bimat_is_set ) call self%set_imat
         call self%find_ccs(img_cc, black=.true.) ! detect the connnected components in the background as well
         imat_cc = nint(img_cc%get_rmat())
-        seed    = img_cc%bimat(1,1,1) ! the pxl (1,1,1) should belong to the background
-        ! Set to foreground whatever is not background
-        where(img_cc%bimat == seed)
-            self%bimat = 0
-        elsewhere
+        ! find the biggest size connected component (background) by extracting all cc sizes (in # pixels)
+        ccsizes = img_cc%size_ccs()
+        ind_bg  = maxloc(ccsizes, dim=1)
+        ! set the biggest size connected to background and foreground whatever is not background
+        where( img_cc%bimat == ind_bg )
             self%bimat = 1
-        endwhere
+        elsewhere
+            self%bimat = 0
+        end where
         if( allocated(imat_cc) ) deallocate(imat_cc)
         call img_cc%kill_bimg
         call self%update_img_rmat
