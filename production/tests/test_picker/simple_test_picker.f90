@@ -31,6 +31,9 @@ do i = 1, nfiles
     call microg%new(ldim, smpd)
     call micbin%new_bimg(ldim, smpd)
     call microg%read(micname(i))
+    fbody      = get_fbody(basename(micname(i)),'mrc')
+    outputfile = trim(fbody)//'.mrc'
+    call microg%write(outputfile)
     ! low pass filter micrograph
     call microg%fft()
     call microg%bp(0., params_glob%lp)
@@ -39,20 +42,19 @@ do i = 1, nfiles
     call tvf%new()
     call tvf%apply_filter(microg, LAMBDA)
     call tvf%kill()
-    fbody=get_fbody(basename(micname(i)),'mrc')
-    outputfile=trim(fbody)//'_filt.mrc'
+    outputfile = trim(fbody)//'_HP_FIL.mrc'
     print *, ">>> FILTERING HIGH FREQUENCIES   ",trim(outputfile)
     call microg%write(outputfile)
     call sauvola(microg, winsz, img_sdevs)
-    outputfile=trim(fbody)//'_sau_sdevs.mrc'
+    outputfile=trim(fbody)//'_SAU_SDEVS.mrc'
     call img_sdevs%write(outputfile)
     ! binarize sdevs image with Otsu
     call otsu_img(img_sdevs)
     call micbin%transfer2bimg(img_sdevs)
     print *, ">>> SAUVOL BINARISATION          ",trim(outputfile)
-    outputfile=trim(fbody)//'_BIN_SAU_SDEVS.mrc'
+    outputfile = trim(fbody)//'_BIN_SAU_SDEVS.mrc'
     call micbin%write_bimg(outputfile)
-    outputfile=trim(fbody)//'_BIN_SAU.mrc'
+    outputfile = trim(fbody)//'_BIN_SAU.mrc'
     call microg%write(outputfile)
     call micbin%erode()
     call micbin%erode()
@@ -63,6 +65,19 @@ do i = 1, nfiles
     call img_sdevs%kill()
     call micbin%kill_bimg()
 enddo 
+
+do i = 1, nfiles
+    print *, trim(micname(i))
+    call find_ldim_nptcls(micname(i), ldim, ifoo)
+    call microg%new(ldim, smpd)
+    call microg%read(micname(i))
+    fbody      = get_fbody(basename(micname(i)),'mrc')
+    outputfile = trim(fbody)//'_SBACK.mrc'
+    print *, ">>> SUBSTRACTING BACKGROUND  ",trim(outputfile)
+    call microg%subtract_background(params_glob%lp)
+    call microg%write(outputfile)
+    call microg%kill()
+enddo
 
 do i = 1, nfiles
     print *, trim(micname(i))
@@ -79,10 +94,10 @@ do i = 1, nfiles
     call tvf%apply_filter(microg, LAMBDA)
     call tvf%kill()
     fbody=get_fbody(basename(micname(i)),'mrc')
-    outputfile=trim(fbody)//'_filt.mrc'
+    outputfile = trim(fbody)//'_filt.mrc'
     print *, ">>> FILTERING HIGH FREQUENCIES   ",trim(outputfile)
     call microg%write(outputfile)
-    outputfile=trim(fbody)//'_BIN_OTS.mrc'
+    outputfile = trim(fbody)//'_BIN_OTS.mrc'
     print *, ">>> OTSU'S BINARISATION   ",trim(outputfile)
     call otsu_img(microg,tight=.true.)
     !call otsu_img(microg)
