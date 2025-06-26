@@ -24,6 +24,8 @@ use simple_strategy3D_srch,         only: strategy3D_spec
 use simple_convergence,             only: convergence
 use simple_euclid_sigma2,           only: euclid_sigma2
 use simple_strategy2D3D_common
+use simple_polarops
+use simple_classaverager
 implicit none
 
 public :: refine3D_exec
@@ -58,20 +60,22 @@ contains
         type(strategy3D_per_ptcl), allocatable :: strategy3Dsrch(:)
         !<---- hybrid or combined search strategies can then be implemented as extensions of the
         !      relevant strategy3D base class
-        type(strategy3D_spec), allocatable :: strategy3Dspecs(:)
-        integer,               allocatable :: batches(:,:), cnt_greedy(:), cnt_all(:)
-        type(class_sample),    allocatable :: clssmp(:) 
+        type(strategy3D_spec),     allocatable :: strategy3Dspecs(:)
+        type(class_sample),        allocatable :: clssmp(:)
+        integer,                   allocatable :: batches(:,:), cnt_greedy(:), cnt_all(:)
+        real,                      allocatable :: incr_shifts(:,:)
         type(convergence) :: conv
         type(ori)         :: orientation
         real    :: frac_greedy
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz
         integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map
         integer :: ibatch
-        logical :: doprint
+        logical :: doprint, l_polar, l_alloc_read_cavgs
         if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = t_init
         endif
+        l_polar = trim(params_glob%polar).eq.'yes'
 
         ! CHECK THAT WE HAVE AN EVEN/ODD PARTITIONING
         if( build_glob%spproj_field%get_nevenodd() == 0 )then
@@ -101,6 +105,24 @@ contains
             endif
         endif
 
+        ! polar stuffs
+        if( l_polar )then
+            if( which_iter>1 )then
+                ! references are read in prep_polar_pftcc4align2D below
+                ! On first iteration the references are taken from the input images
+            else
+                l_alloc_read_cavgs = .true.
+                if( .not.l_distr_exec_glob )then
+                    l_alloc_read_cavgs = which_iter==1
+                endif
+                call cavger_new(pinds, alloccavgs=l_alloc_read_cavgs)
+                if( l_alloc_read_cavgs )then
+                    if( .not. cline%defined('refs') ) THROW_HARD('need refs to be part of command line for polar refine3D execution')
+                    call cavger_read_all
+                endif
+            endif
+        endif
+
         ! PREP BATCH ALIGNMENT
         batchsz_max = min(nptcls2update,params_glob%nthr*BATCHTHRSZ)
         nbatches    = ceiling(real(nptcls2update)/real(batchsz_max))
@@ -112,7 +134,16 @@ contains
             rt_init                    = toc(t_init)
             t_prepare_polar_references = tic()
         endif
-        call prepare_refs_sigmas_ptcls( pftcc, cline, eucl_sigma, ptcl_match_imgs, batchsz_max )
+        if( l_polar .and. which_iter>1)then
+            call prepare_polar_refs_sigmas_ptcls( pftcc, cline, eucl_sigma, ptcl_match_imgs, batchsz_max, which_iter )
+        else
+            call prepare_refs_sigmas_ptcls( pftcc, cline, eucl_sigma, ptcl_match_imgs, batchsz_max )
+        endif
+        if( l_polar )then
+            ! for restoration
+            if( which_iter == 1 ) call polar_cavger_new(pftcc)
+            call polar_cavger_zero_pft_refs
+        endif
         if( L_BENCH_GLOB )then
             rt_prepare_polar_references = toc(t_prepare_polar_references)
             t_prep_orisrch              = tic()
@@ -137,6 +168,7 @@ contains
         ! BATCH LOOP
         write(logfhandle,'(A,1X,I3)') '>>> REFINE3D SEARCH, ITERATION:', which_iter
         allocate(cnt_greedy(params_glob%nthr), cnt_all(params_glob%nthr), source=0)
+        allocate(incr_shifts(2,batchsz_max),source=0.)
         do ibatch=1,nbatches
             batch_start = batches(ibatch,1)
             batch_end   = batches(ibatch,2)
@@ -204,9 +236,16 @@ contains
                     call build_glob%spproj_field%get_ori(iptcl, orientation)
                     call eucl_sigma%calc_sigma2(pftcc, iptcl, orientation, 'proj')
                 end if
+                ! keep track of incremental shift
+                incr_shifts(:,iptcl_batch) = build_glob%spproj_field%get_2Dshift(iptcl)
             enddo ! Particles loop
             !$omp end parallel do
             if( L_BENCH_GLOB ) rt_align = rt_align + toc(t_align)
+            ! restore polar cavgs
+            if( l_polar )then
+                call polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end),&
+                    &build_glob%spproj, pftcc, incr_shifts(:,1:batchsz))
+            endif
         enddo
         ! report fraction of greedy searches
         frac_greedy = 0.
@@ -283,6 +322,41 @@ contains
                 call killimgbatch
                 if( L_BENCH_GLOB ) rt_rec = toc(t_rec)
         end select
+
+        if( l_polar )then
+            if( l_distr_exec_glob )then
+                if( trim(params_glob%restore_cavgs).eq.'yes' )then
+                    call polar_cavger_readwrite_partial_sums('write')
+                    if( params_glob%part==1 )then
+                        call polar_cavger_merge_eos_and_norm
+                        call polar_cavger_calc_and_write_frcs_and_eoavg('polar_'//FRCS_FILE)
+                        call polar_cavger_write_cartrefs(pftcc, 'polar_test', 'merged')
+                    endif
+                endif
+                call cavger_kill
+                call polar_cavger_kill
+            else
+                if( trim(params_glob%restore_cavgs).eq.'yes' )then
+                    if( cline%defined('which_iter') )then
+                        params_glob%refs      = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//params_glob%ext
+                        params_glob%refs_even = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//'_even'//params_glob%ext
+                        params_glob%refs_odd  = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//'_odd'//params_glob%ext
+                    else
+                        THROW_HARD('which_iter expected to be part of command line in shared-memory execution')
+                    endif
+                    if( which_iter == 1) call cavger_kill
+                    ! polar restoration
+                    call polar_cavger_merge_eos_and_norm
+                    call polar_cavger_calc_and_write_frcs_and_eoavg(FRCS_FILE)
+                    call polar_cavger_writeall(get_fbody(params_glob%refs,params_glob%ext,separator=.false.))
+                    call polar_cavger_write_cartrefs(pftcc, get_fbody(params_glob%refs,params_glob%ext,separator=.false.), 'merged')
+                    call polar_cavger_gen2Dclassdoc(build_glob%spproj)
+                    call polar_cavger_kill
+                    ! update command line
+                    call cline%set('refs', trim(params_glob%refs))
+                endif
+            endif
+        endif
 
         ! REPORT CONVERGENCE
         call qsys_job_finished('simple_strategy3D_matcher :: refine3D_exec')

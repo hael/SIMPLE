@@ -15,8 +15,6 @@ private
 #include "simple_local_flags.inc"
 
 type, extends(strategy3D) :: strategy3D_shc
-    type(strategy3D_srch) :: s
-    type(strategy3D_spec) :: spec
 contains
     procedure :: new         => new_shc
     procedure :: srch        => srch_shc

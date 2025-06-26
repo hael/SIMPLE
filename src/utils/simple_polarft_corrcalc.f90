@@ -1522,7 +1522,6 @@ contains
         if( l_stoch ) ptcl_mask = .true.
         do iptcl = self%pfromto(1), self%pfromto(2)
             if( l_stoch )then
-                ! 10% of particles to be used for testing for now
                 if( ran3() > (1. - params_glob%stoch_rate/100.) )then
                     ptcl_mask(iptcl) = .false.
                     cycle
@@ -1652,32 +1651,19 @@ contains
         select case(trim(params_glob%ref_type))
             case('cavg')
                 self%pfts_refs_even = self%pfts_refs_merg
-            case('comlin')
+            case('clin')
                 self%pfts_refs_even = self%pfts_refs_clin
-            case('reproj')
+            case('cavg_clin')
                 call ptcl_space%get_pops(pops, 'class')
                 do iref = 1, self%nrefs
                     if( pops(iref) < 4 )then
                         self%pfts_refs_even(:,:,iref) = self%pfts_refs_clin(:,:,iref)
                     else
-                        frc_cavg = 0.
-                        do k = self%kfromto(1), self%kfromto(2)
-                            numer  = sum(real(self%pfts_refs_merg(:,k,iref) * conjg(self%pfts_refs_clin(:,k,iref)), kind=dp))
-                            denom1 = sum( csq(self%pfts_refs_merg(:,k,iref)))
-                            denom2 = sum( csq(self%pfts_refs_clin(:,k,iref)))
-                            if( dsqrt(denom1*denom2) > DTINY ) frc_cavg(k) = real(numer / dsqrt(denom1*denom2))
-                        enddo
-                        if( any(frc_cavg > 0.143) )then
-                            do k = self%kfromto(1), self%kfromto(2)
-                                self%pfts_refs_even(:,k,iref) = (self%pfts_refs_merg(:,k,iref) + self%pfts_refs_clin(:,k,iref)) * frc_cavg(k) / 2.
-                            enddo
-                        else
-                            self%pfts_refs_even(:,:,iref) = self%pfts_refs_clin(:,:,iref)
-                        endif
+                        self%pfts_refs_even(:,:,iref) = self%pfts_refs_merg(:,:,iref) + self%pfts_refs_clin(:,:,iref) / 2.
                     endif
                 enddo
             case DEFAULT
-                THROW_HARD('Unsupported ref_type mode. It should be cavg, comlin, or reproj')
+                THROW_HARD('Unsupported ref_type mode. It should be cavg, clin, or cavg_clin')
         end select
         self%pfts_refs_odd = self%pfts_refs_even
     end subroutine gen_polar_refs

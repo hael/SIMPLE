@@ -136,6 +136,7 @@ type :: parameters
     character(len=3)          :: updated='no'         !< whether parameters has been updated
     character(len=3)          :: use_thres='yes'      !< Use contact-based thresholding(yes|no){yes}
     character(len=3)          :: vis='no'             !< visualise(yes|no)
+    character(len=3)          :: volrec='yes'         !< volume reconstruction in 3D(yes|no){yes}
     character(len=3)          :: write_cavgs='no'     !< write out cavgs
     character(len=3)          :: zero='no'            !< zeroing(yes|no){no}
     ! files & directories strings in ascending alphabetical order
@@ -259,7 +260,8 @@ type :: parameters
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2D analysis
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh){shc}
-    character(len=STDLEN)     :: ref_type='cavg'      !< polar reference type(cavg|comlin|reproj){cavg}
+    character(len=STDLEN)     :: refine_type='3D'     !< refinement mode(3D|2D|hybrid){3D}
+    character(len=STDLEN)     :: ref_type='cavg'      !< polar reference type(cavg|clin|cavg_clin){cavg}
     character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
     character(len=STDLEN)     :: sort=''              !< key to sort oris on
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
@@ -742,6 +744,7 @@ contains
         call check_carg('real_filter',    self%real_filter)
         call check_carg('ref_type',       self%ref_type)
         call check_carg('refine',         self%refine)
+        call check_carg('refine_type',    self%refine_type)
         call check_carg('refs_delin',     self%refs_delin)
         call check_carg('reject_cls',     self%reject_cls)
         call check_carg('reject_mics',    self%reject_mics)
@@ -774,6 +777,7 @@ contains
         call check_carg('tseries',        self%tseries)
         call check_carg('use_thres',      self%use_thres)
         call check_carg('vis',            self%vis)
+        call check_carg('volrec',         self%volrec)
         call check_carg('wcrit',          self%wcrit)
         call check_carg('wfun',           self%wfun)
         call check_carg('wiener',         self%wiener)
