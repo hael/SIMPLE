@@ -139,7 +139,7 @@ contains
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         real,             parameter   :: HP_SPEC = 20., LP_SPEC = 6., RES_THRES=6., SCORE_THRES=65., SCORE_THRES_REJECT=50., SCORE_THRES_INCL=75.
-        integer,          parameter   :: NHISTBINS = 128, NQUANTA=32
+        integer,          parameter   :: NHISTBINS = 128, NCLUST_MAX=50
         logical,          parameter   :: DEBUG = .true.
         type(image),      allocatable :: cavg_imgs(:)
         type(histogram),  allocatable :: hists(:)
@@ -158,8 +158,8 @@ contains
         type(pspecs)       :: pows
         type(stats_struct) :: res_stats
         integer            :: ncls, ncls_sel, icls, cnt, rank, nptcls, nptcls_good, loc(1), ldim(3)
-        integer            :: i, j, ii, jj, nclust, iclust, nptcls_maybe, pop_good, pop_bad, pop_maybe
-        real               :: fsc_res, rfoo, frac_good, best_res, worst_res, frac_maybe
+        integer            :: i, j, ii, jj, nclust, iclust, pop_good, pop_bad
+        real               :: fsc_res, rfoo, frac_good, best_res, worst_res
         real               :: oa_min, oa_max, dist_rank, dist_rank_best, smpd, simsum
         ! defaults
         call cline%set('oritype', 'cls2D')
@@ -242,7 +242,7 @@ contains
                 THROW_HARD('Unsupported clustering criterion: '//trim(params%clust_crit))
         end select
         ! cluster
-        call cluster_dmat( dmat, 'aprop', nclust, i_medoids, labels)
+        call cluster_dmat( dmat, 'aprop', nclust, i_medoids, labels, nclust_max=NCLUST_MAX)
         if( nclust > 5 .and. nclust < 20 )then
             nclust = 20
             deallocate(i_medoids, labels)
@@ -301,20 +301,15 @@ contains
                     &' good_bad_assign ', clust_info_arr(iclust)%good_bad
                 end do
                 ! check number of particles selected
-                nptcls       = sum(clust_info_arr(:)%nptcls)
-                nptcls_good  = sum(clust_info_arr(:)%nptcls, mask=clust_info_arr(:)%good_bad == 1)
-                nptcls_maybe = sum(clust_info_arr(:)%nptcls, mask=clust_info_arr(:)%good_bad == 2)
-                frac_good    = real(nptcls_good)  / real(nptcls)
-                frac_maybe   = real(nptcls_maybe) / real(nptcls)
+                nptcls      = sum(clust_info_arr(:)%nptcls)
+                nptcls_good = sum(clust_info_arr(:)%nptcls, mask=clust_info_arr(:)%good_bad == 1)
+                frac_good   = real(nptcls_good)  / real(nptcls)
                 write(logfhandle,'(a,1x,f8.2)') '% PARTICLES CLASSIFIED AS 1ST RATE: ', frac_good  * 100.
-                write(logfhandle,'(a,1x,f8.2)') '% PARTICLES CLASSIFIED AS 2ND RATE: ', frac_maybe * 100.
-                ! calculate resolution statistics for good/maybe/bad classes
-                res_good     = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad == 1)
-                res_maybe    = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad == 2)
-                res_bad      = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad == 0)
-                pop_good     = count(clust_info_arr(:)%good_bad == 1)
-                pop_maybe    = count(clust_info_arr(:)%good_bad == 2)
-                pop_bad      = count(clust_info_arr(:)%good_bad == 0)
+                ! calculate resolution statistics for good/bad classes
+                res_good    = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad == 1)
+                res_bad     = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad == 0)
+                pop_good    = count(clust_info_arr(:)%good_bad == 1)
+                pop_bad     = count(clust_info_arr(:)%good_bad == 0)
                 if( pop_good > 1 )then
                     write(logfhandle,'(A)') 'RESOLUTION STATS FOR GOOD PARTITION'
                     call calc_stats(res_good, res_stats)
@@ -329,22 +324,6 @@ contains
                     write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_good(1)
                     write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_good(1)
                     write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_good(1)
-                    write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', 0.
-                endif                    
-                if( pop_maybe > 1 )then
-                    write(logfhandle,'(A)') 'RESOLUTION STATS FOR MAYBE PARTITION'
-                    call calc_stats(res_maybe, res_stats)
-                    write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_stats%minv
-                    write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_stats%maxv
-                    write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_stats%avg
-                    write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_stats%med
-                    write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', res_stats%sdev
-                else if( pop_maybe == 1 )then
-                    write(logfhandle,'(A)') 'RESOLUTION STATS FOR MAYBE PARTITION'
-                    write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_maybe(1)
-                    write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_maybe(1)
-                    write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_maybe(1)
-                    write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_maybe(1)
                     write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', 0.
                 endif
                 if( pop_bad > 1 )then
@@ -367,7 +346,6 @@ contains
                 allocate(states(ncls), source=0)
                 do icls = 1, ncls_sel
                     if( clust_info_arr(labels(icls))%good_bad == 1 ) states(clsinds(icls)) = 1
-                    if( clust_info_arr(labels(icls))%good_bad == 2 ) states(clsinds(icls)) = 2
                 end do
                 ! write selection
                 allocate(labels4write(ncls_sel), source=0)
@@ -478,39 +456,33 @@ contains
         end subroutine rank_clusters
 
         subroutine identify_good_bad_clusters
-            real, allocatable :: jointscores_2(:), resvals_2(:), homogeneity_2(:), clustscores_2(:)
-            integer           :: scoreclust_1, scoreclust_2
-            real              :: avgscore_2
-            logical           :: l_incl_rank2
+            real, allocatable :: jointscores(:), resvals(:), homogeneity(:), clustscores(:)
+            integer           :: nscoreclust, i
+            real              :: avgjscore
+            logical           :: l_incl
             clust_info_arr(:)%good_bad = 0
             if( nclust <= 3 )then
                 clust_info_arr(:)%good_bad      = 1
                 clust_info_arr(nclust)%good_bad = 0
             else
-                scoreclust_1  = clust_info_arr(1)%scoreclust
-                where( clust_info_arr(:)%scoreclust == scoreclust_1 ) clust_info_arr(:)%good_bad = 1
-                scoreclust_2  = clust_info_arr(count(clust_info_arr(:)%good_bad == 1) + 1)%scoreclust
-                jointscores_2 = pack(clust_info_arr(:)%jointscore,  mask=clust_info_arr(:)%scoreclust == scoreclust_2)
-                homogeneity_2 = pack(clust_info_arr(:)%homogeneity, mask=clust_info_arr(:)%scoreclust == scoreclust_2)
-                clustscores_2 = pack(clust_info_arr(:)%clustscore,  mask=clust_info_arr(:)%scoreclust == scoreclust_2)
-                resvals_2     = pack(clust_info_arr(:)%res,         mask=clust_info_arr(:)%scoreclust == scoreclust_2)
-                avgscore_2    = sum(jointscores_2) / real(count(clust_info_arr(:)%scoreclust == scoreclust_2))
-                l_incl_rank2  = .false. 
-                if( any(resvals_2 <= RES_THRES) )            l_incl_rank2 = .true.
-                if( avgscore_2 >= SCORE_THRES   )            l_incl_rank2 = .true.
-                if( any(homogeneity_2 >= SCORE_THRES_INCL) .and.&
-                    any(clustscores_2 >= SCORE_THRES_INCL) ) l_incl_rank2 = .true.
-                if( l_incl_rank2 )then
-                    where( clust_info_arr(:)%scoreclust == scoreclust_2 ) clust_info_arr(:)%good_bad = 1
-                else if( avgscore_2 < SCORE_THRES_REJECT )then
-                    where( clust_info_arr(:)%scoreclust == scoreclust_2 ) clust_info_arr(:)%good_bad = 0
-                else
-                    where( clust_info_arr(:)%scoreclust == scoreclust_2 ) clust_info_arr(:)%good_bad = 2
-                endif
-            endif
-            if( DEBUG )then
-                print *, 'found '//int2str(count(clust_info_arr(:)%good_bad == 1))//' 1st rate cluster(s) of class averages'
-                print *, 'found '//int2str(count(clust_info_arr(:)%good_bad == 2))//' 2nd rate cluster(s) of class averages'
+                nscoreclust = maxval(clust_info_arr(:)%scoreclust)
+                do i = 1, nscoreclust
+                    jointscores = pack(clust_info_arr(:)%jointscore,  mask=clust_info_arr(:)%scoreclust == i)
+                    homogeneity = pack(clust_info_arr(:)%homogeneity, mask=clust_info_arr(:)%scoreclust == i)
+                    clustscores = pack(clust_info_arr(:)%clustscore,  mask=clust_info_arr(:)%scoreclust == i)
+                    resvals     = pack(clust_info_arr(:)%res,         mask=clust_info_arr(:)%scoreclust == i)
+                    avgjscore   = sum(jointscores) / real(count(clust_info_arr(:)%scoreclust == i))
+                    l_incl = .false. 
+                    if( any(resvals <= RES_THRES) ) l_incl = .true.
+                    if( avgjscore >= SCORE_THRES  ) l_incl = .true.
+                    if( any(homogeneity >= SCORE_THRES_INCL) .and.&
+                        any(clustscores >= SCORE_THRES_INCL) ) l_incl = .true.
+                    if( l_incl )then
+                        where( clust_info_arr(:)%scoreclust == i ) clust_info_arr(:)%good_bad = 1
+                    else
+                        where( clust_info_arr(:)%scoreclust == i ) clust_info_arr(:)%good_bad = 0
+                    endif
+                end do
             endif
         end subroutine identify_good_bad_clusters
 
