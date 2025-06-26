@@ -387,7 +387,7 @@ contains
         logical,          intent(in)    :: l_msk(:,:,:)
         type(clust_info), allocatable   :: clust_info_arr(:)
         real,             allocatable   :: frc(:)
-        type(image),      allocatable   :: cluster_imgs(:), cluster_imgs_aligned(:)
+        type(image),      allocatable   :: cluster_imgs(:)
         real,             allocatable   :: resvals(:), resarr(:)
         real,             parameter     :: FRAC_BEST_CAVGS=0.5
         integer :: cnt, i, filtsz, ldim(3), iclust, nclust
@@ -404,32 +404,31 @@ contains
             clust_info_arr(iclust)%pop             = count(labels == iclust)
             cluster_imgs                           = pack_imgarr(cavg_imgs, mask=labels == iclust)
             clust_info_arr(iclust)%algninfo%params = match_imgs2ref(clust_info_arr(iclust)%pop, hp, lp, trs, cavg_imgs(i_medoids(iclust)), cluster_imgs)
-            cluster_imgs_aligned                   = rtsq_imgs(clust_info_arr(iclust)%pop, clust_info_arr(iclust)%algninfo%params, cluster_imgs)
+            call rtsq_imgs(clust_info_arr(iclust)%pop, clust_info_arr(iclust)%algninfo%params, cluster_imgs)
             ! estimate resolution
             cnt = 0
             call cavg_imgs(i_medoids(iclust))%fft
             allocate(resvals(clust_info_arr(iclust)%pop), source=0.)
             do i = 1, clust_info_arr(iclust)%pop
-                call cluster_imgs_aligned(i)%fft
-                call cavg_imgs(i_medoids(iclust))%fsc(cluster_imgs_aligned(i), frc)
+                call cluster_imgs(i)%fft
+                call cavg_imgs(i_medoids(iclust))%fsc(cluster_imgs(i), frc)
                 if( .not. all(frc > 0.5) )then ! excluding the medoid
                     cnt = cnt + 1
                     call get_resolution(frc, resarr, rfoo, resvals(cnt))
                 endif
-                call cluster_imgs_aligned(i)%ifft
+                call cluster_imgs(i)%ifft
             end do
             call cavg_imgs(i_medoids(iclust))%ifft
             ! calculate Euclidean distances
             clust_info_arr(iclust)%euclid = 0.
             do i = 1, clust_info_arr(iclust)%pop
-                clust_info_arr(iclust)%euclid = clust_info_arr(iclust)%euclid + cavg_imgs(i_medoids(iclust))%sqeuclid(cluster_imgs_aligned(i), l_msk)
+                clust_info_arr(iclust)%euclid = clust_info_arr(iclust)%euclid + cavg_imgs(i_medoids(iclust))%sqeuclid(cluster_imgs(i), l_msk)
             end do
             clust_info_arr(iclust)%euclid = clust_info_arr(iclust)%euclid / real(clust_info_arr(iclust)%pop)
             ! report resolution as the average of the best agreeing 25% within a cluster
             clust_info_arr(iclust)%res = avg_frac_smallest(resvals(:cnt), FRAC_BEST_CAVGS)
             ! destruct
             call dealloc_imgarr(cluster_imgs)
-            call dealloc_imgarr(cluster_imgs_aligned)
             deallocate(resvals)
         end do
         best_res  = minval(clust_info_arr(:)%res)
@@ -442,16 +441,15 @@ contains
         class(image),     intent(inout) :: cavg_imgs(:)
         type(clust_info), intent(in)    :: clust_info_arr(:)
         character(len=*), intent(in)    :: fbody, ext
-        type(image), allocatable :: cluster_imgs(:), cluster_imgs_aligned(:)
+        type(image), allocatable :: cluster_imgs(:)
         integer :: iclust, nclust
         write(logfhandle,'(A)') '>>> ROTATING & SHIFTING CLASS AVERAGES'
         nclust = size(clust_info_arr)
         do iclust = 1, nclust
-            cluster_imgs         = pack_imgarr(cavg_imgs, mask=labels == iclust)
-            cluster_imgs_aligned = rtsq_imgs(clust_info_arr(iclust)%pop, clust_info_arr(iclust)%algninfo%params, cluster_imgs)
-            call write_cavgs(cluster_imgs_aligned, trim(fbody)//int2str_pad(iclust,2)//trim(ext))
+            cluster_imgs = pack_imgarr(cavg_imgs, mask=labels == iclust)
+            call rtsq_imgs(clust_info_arr(iclust)%pop, clust_info_arr(iclust)%algninfo%params, cluster_imgs)
+            call write_cavgs(cluster_imgs, trim(fbody)//int2str_pad(iclust,2)//trim(ext))
             call dealloc_imgarr(cluster_imgs)
-            call dealloc_imgarr(cluster_imgs_aligned)
         end do
     end subroutine write_aligned_cavgs
 
@@ -689,40 +687,26 @@ contains
         call polartransform%kill
     end function match_imgs2refs
 
-    function rtsq_imgs( n, algninfo, imgs ) result( imgs_aligned )
+    subroutine rtsq_imgs( n, algninfo, imgs )
         integer,            intent(in)    :: n
         type(inpl_struct),  intent(in)    :: algninfo(n)
         class(image),       intent(inout) :: imgs(n)
-        type(image),        allocatable   :: imgs_aligned(:)
         real(kind=c_float), allocatable   :: rmat_rot(:,:,:)
-        type(image),        allocatable   :: imgs_heap(:)
-        integer :: ldim(3), i, ithr
+        integer :: ldim(3), i
         real    :: smpd
         ldim = imgs(1)%get_ldim()
         smpd = imgs(1)%get_smpd()
-        call alloc_imgarr(n,         ldim, smpd, imgs_aligned)
-        call alloc_imgarr(nthr_glob, ldim, smpd, imgs_heap)
         allocate(rmat_rot(ldim(1),ldim(2),1), source=0.)
-        !$omp parallel do default(shared) private(i,ithr,rmat_rot) schedule(static) proc_bind(close)
+        !$omp parallel do default(shared) private(i,rmat_rot) schedule(static) proc_bind(close)
         do i = 1, n
-            if( algninfo(i)%l_mirr )then
-                ithr = omp_get_thread_num() + 1
-                call imgs_heap(ithr)%copy(imgs(i))
-                call imgs_heap(ithr)%mirror('x')
-                call imgs_heap(ithr)%fft
-                call imgs_heap(ithr)%shift2Dserial([-algninfo(i)%x,-algninfo(i)%y])
-                call imgs_heap(ithr)%ifft
-                call imgs_heap(ithr)%rtsq_serial(algninfo(i)%e3, 0., 0., rmat_rot)
-            else
-                call imgs(i)%fft
-                call imgs(i)%shift2Dserial([-algninfo(i)%x,-algninfo(i)%y])
-                call imgs(i)%ifft
-                call imgs(i)%rtsq_serial(algninfo(i)%e3, 0., 0., rmat_rot)
-            endif
-            call imgs_aligned(i)%set_rmat(rmat_rot, .false.)
+            if( algninfo(i)%l_mirr ) call imgs(i)%mirror('x')                
+            call imgs(i)%fft
+            call imgs(i)%shift2Dserial([-algninfo(i)%x,-algninfo(i)%y])
+            call imgs(i)%ifft
+            call imgs(i)%rtsq_serial(algninfo(i)%e3, 0., 0., rmat_rot)
+            call imgs(i)%set_rmat(rmat_rot, .false.)
         end do
         !$omp end parallel do
-        call dealloc_imgarr(imgs_heap)
-    end function rtsq_imgs
+    end subroutine rtsq_imgs
 
 end module simple_strategy2D_utils

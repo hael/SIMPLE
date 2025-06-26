@@ -139,7 +139,7 @@ contains
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         real,             parameter   :: HP_SPEC = 20., LP_SPEC = 6., RES_THRES=6., SCORE_THRES=65., SCORE_THRES_REJECT=50., SCORE_THRES_INCL=75.
-        integer,          parameter   :: NHISTBINS = 128, NCLUST_MAX=50
+        integer,          parameter   :: NHISTBINS = 128, NCLUST_MAX=65
         logical,          parameter   :: DEBUG = .true.
         type(image),      allocatable :: cavg_imgs(:)
         type(histogram),  allocatable :: hists(:)
@@ -272,7 +272,6 @@ contains
                 call rank_clusters
                 ! good/bad cluster identification through tresholding
                 call identify_good_bad_clusters
-                write(logfhandle,'(A)') '>>> ROTATING & SHIFTING UNMASKED, UNFILTERED CLASS AVERAGES'
                 ! re-create cavg_imgs
                 call dealloc_imgarr(cavg_imgs)
                 cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
@@ -475,14 +474,16 @@ contains
                     l_incl = .false. 
                     if( any(resvals <= RES_THRES) ) l_incl = .true.
                     if( avgjscore >= SCORE_THRES  ) l_incl = .true.
-                    if( any(homogeneity >= SCORE_THRES_INCL) .and.&
-                        any(clustscores >= SCORE_THRES_INCL) ) l_incl = .true.
+                    if( any(homogeneity >= SCORE_THRES_INCL .and. clustscores >= SCORE_THRES_INCL) ) l_incl = .true.
                     if( l_incl )then
                         where( clust_info_arr(:)%scoreclust == i ) clust_info_arr(:)%good_bad = 1
                     else
                         where( clust_info_arr(:)%scoreclust == i ) clust_info_arr(:)%good_bad = 0
                     endif
                 end do
+                if( .not. any(clust_info_arr(:)%good_bad == 1))then
+                    where(clust_info_arr(:)%scoreclust == clust_info_arr(1)%scoreclust) clust_info_arr(:)%good_bad = 1
+                endif
             endif
         end subroutine identify_good_bad_clusters
 

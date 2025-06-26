@@ -2307,9 +2307,11 @@ contains
         character(len=*), intent(in)    :: which
         real,             intent(in)    :: val
         integer :: i
+        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i=1,self%n
             if( self%o(i)%get(trim(field)) == ind ) call self%o(i)%set(which, val)
         end do
+        !$omp end parallel do 
     end subroutine set_field2single_1
 
     subroutine set_field2single_2( self, field, ind, which, val )
@@ -2319,9 +2321,11 @@ contains
         character(len=*), intent(in)    :: which
         character(len=*), intent(in)    :: val
         integer :: i
+        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i=1,self%n
             if( self%o(i)%get(trim(field)) == ind ) call self%o(i)%set(which, val)
         end do
+        !$omp end parallel do 
     end subroutine set_field2single_2
 
     subroutine set_field2single_3( self, field, ind, which, ival )
@@ -2331,9 +2335,11 @@ contains
         character(len=*), intent(in)    :: which
         integer,          intent(in)    :: ival
         integer :: i
+        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i=1,self%n
             if( self%o(i)%get(trim(field)) == ind ) call self%o(i)%set(which, ival)
         end do
+        !$omp end parallel do 
     end subroutine set_field2single_3
 
     subroutine set_projs( self, e_space )
