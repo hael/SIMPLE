@@ -5,7 +5,7 @@ include 'simple_lib.f08'
 use simple_parameters,   only: params_glob
 use simple_image,        only: image
 use simple_tvfilter,     only: tvfilter
-use simple_segmentation, only: otsu_img
+use simple_segmentation, only: otsu_img, sauvola
 use simple_binimage,     only: binimage
 use simple_syslib
 implicit none
@@ -47,7 +47,7 @@ end type pickseg
 
 contains
 
-    subroutine pick( self, micname, is_AFM, moldiam )
+    subroutine pick( self, micname, is_AFM, moldiam, winsz )
         class(pickseg),   intent(inout) :: self
         character(len=*), intent(in)    :: micname !< micrograph file name
         real,             allocatable :: diams(:)
@@ -55,15 +55,18 @@ contains
         character(len=:), allocatable :: ext
         type(tvfilter) :: tvf
         type(image)    :: img_win
+        type(binimage) :: img_sdevs
         real    :: px(3), otsu_t
         integer :: i, boxcoord(2), sz_max, sz_min, nframes, box
         logical :: outside, is_AFM_l
+        logical, optional, intent(in) :: is_AFM
         real,    optional, intent(in) :: moldiam
-        logical, optional, intent(in) :: is_AFM 
-        logical :: l_moldiam
-        is_AFM_l = .false.; l_moldiam= .false.
+        integer, optional, intent(in) :: winsz
+        logical :: l_moldiam, l_winsz
+        is_AFM_l = .false.; l_moldiam= .false.; l_winsz= .false.
         if( present(moldiam) ) l_moldiam = .true.
         if( present(is_AFM)  ) is_AFM_l  = is_AFM 
+        if( present(winsz)   ) l_winsz   = .true.
         ! set micrograph info
         call find_ldim_nptcls(micname, ldim_raw, nframes, smpd_raw)
         if( ldim_raw(3) /= 1 .or. nframes /= 1 ) THROW_HARD('Only for 2D images; pick')
@@ -102,7 +105,13 @@ contains
         call tvf%apply_filter(self%mic_shrink, LAMBDA)
         call tvf%kill
         if( L_WRITE ) call self%mic_shrink%write(fbody//'_lp_tv.mrc')
-        call otsu_img(self%mic_shrink, otsu_t, tight=.true.)
+        if( l_winsz )then
+            call sauvola(self%mic_shrink, winsz, img_sdevs)
+            call otsu_img(img_sdevs, otsu_t)
+            call self%mic_shrink%transfer2bimg(img_sdevs)
+        else
+            call otsu_img(self%mic_shrink, otsu_t, tight=.true.)
+        endif        
         call self%mic_shrink%set_imat
         if( L_WRITE ) call self%mic_shrink%write_bimg(fbody//'_lp_tv_bin.mrc')
         if( is_AFM_l )then
@@ -112,6 +121,7 @@ contains
             call self%mic_shrink%erode
             call self%mic_shrink%erode
         endif 
+        if( l_winsz ) call self%mic_shrink%fill_holes()
         if( L_WRITE ) call self%mic_shrink%write_bimg(fbody//'_lp_tv_bin_erode.mrc')
         ! identify connected components
         call self%mic_shrink%find_ccs(self%img_cc)

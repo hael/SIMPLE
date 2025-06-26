@@ -6923,7 +6923,7 @@ contains
     end subroutine upsample_square_background
 
     !>  Subtracts background, for micrographs
-    subroutine subtract_background( self, freq, mode)
+    subroutine subtract_background( self, freq, mode )
         class(image),               intent(inout) :: self
         real,                       intent(in)    :: freq
         character(len=*), optional, intent(in)    :: mode
