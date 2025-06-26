@@ -11,12 +11,13 @@ private
 
 contains
 
-    subroutine cluster_dmat( dmat, algorithm, nclust, i_medoids, labels, ap_pref )
+    subroutine cluster_dmat( dmat, algorithm, nclust, i_medoids, labels, ap_pref, nclust_max )
         real,                 intent(in)    :: dmat(:,:)
         character(len=*),     intent(in)    :: algorithm
         integer,              intent(inout) :: nclust
         integer, allocatable, intent(inout) :: i_medoids(:), labels(:)
         real,    optional,    intent(in)    :: ap_pref
+        integer, optional,    intent(in)    :: nclust_max
         real,    allocatable :: smat(:,:)
         type(kmedoids)       :: kmed
         type(aff_prop)       :: aprop
@@ -36,6 +37,7 @@ contains
                 call aprop%kill
                 nclust = size(i_medoids)
                 write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION (AP): ', nclust
+                call merge_if_necessary
             case('kmed')
                 write(logfhandle,'(A)') '>>> CLUSTERING DISTANCE MATRIX WITH K-MEDOIDS'
                 if( nclust < 2 ) THROW_HARD('Invalid nclust input')
@@ -56,13 +58,37 @@ contains
                 call aprop%kill
                 nclust = size(i_medoids)
                 write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION (AP): ', nclust
+                call merge_if_necessary
                 write(logfhandle,'(A)') '>>> REFINING CLUSTERING WITH K-MEDOIDS'
                 call kmed%new(labels, dmat)
                 call kmed%cluster
                 call kmed%get_labels(labels)
                 call kmed%get_medoids(i_medoids)
                 call kmed%kill
+            case('refine') 
+                call kmed%new(labels, dmat)
+                call kmed%cluster
+                call kmed%get_labels(labels)
+                call kmed%get_medoids(i_medoids)
+                call kmed%kill
         end select
+
+        contains
+
+            subroutine merge_if_necessary
+                if( present(nclust_max) )then
+                    if( nclust > nclust_max )then
+                        nclust = nclust_max
+                        call kmed%new(labels, dmat)
+                        call kmed%merge(nclust)
+                        deallocate(labels, i_medoids)
+                        call kmed%get_labels(labels)
+                        call kmed%get_medoids(i_medoids)
+                        call kmed%kill
+                    endif
+                endif
+            end subroutine merge_if_necessary
+
     end subroutine cluster_dmat
 
     subroutine extract_dmat( dmat, mask, inds, dmat_sub ) 
