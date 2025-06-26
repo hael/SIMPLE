@@ -1,11 +1,14 @@
 ! abstract strategy3D base class
 module simple_strategy3D
+use simple_strategy3D_srch,  only: strategy3D_srch, strategy3D_spec
 implicit none
 
 public :: strategy3D
 private
 
 type, abstract :: strategy3D
+    type(strategy3D_srch) :: s
+    type(strategy3D_spec) :: spec
 contains
     procedure(generic_new),         deferred :: new
     procedure(generic_srch),        deferred :: srch

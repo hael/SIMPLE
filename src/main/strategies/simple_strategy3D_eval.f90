@@ -11,9 +11,7 @@ public :: strategy3D_eval
 private
 
 type, extends(strategy3D) :: strategy3D_eval
-    type(strategy3D_srch) :: s
-    type(strategy3D_spec) :: spec
-  contains
+contains
     procedure :: new         => new_eval
     procedure :: srch        => srch_eval
     procedure :: oris_assign => oris_assign_eval

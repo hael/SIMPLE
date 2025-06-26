@@ -15,8 +15,6 @@ private
 #include "simple_local_flags.inc"
 
 type, extends(strategy3D) :: strategy3D_greedy_sub
-    type(strategy3D_srch) :: s
-    type(strategy3D_spec) :: spec
 contains
     procedure :: new         => new_greedy_sub
     procedure :: srch        => srch_greedy_sub
