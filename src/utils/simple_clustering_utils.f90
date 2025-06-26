@@ -78,10 +78,12 @@ contains
             subroutine merge_if_necessary
                 if( present(nclust_max) )then
                     if( nclust > nclust_max )then
-                        nclust = nclust_max
                         call kmed%new(labels, dmat)
+                        nclust = nclust_max
                         call kmed%merge(nclust)
-                        deallocate(labels, i_medoids)
+                        if( allocated(i_medoids) ) deallocate(i_medoids)
+                        if( allocated(labels)    ) deallocate(labels) 
+                        allocate(i_medoids(nclust), labels(n), source=0)
                         call kmed%get_labels(labels)
                         call kmed%get_medoids(i_medoids)
                         call kmed%kill
