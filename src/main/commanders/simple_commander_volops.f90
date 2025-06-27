@@ -93,6 +93,7 @@ contains
 
     !> centers a 3D volume and associated particle document
     subroutine exec_centervol( self, cline )
+        use simple_strategy2D_utils, only: calc_cavg_offset
         class(centervol_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(parameters)  :: params
@@ -103,7 +104,7 @@ contains
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp',   20.)
         call build%init_params_and_build_general_tbox(cline,params)
-        if( params%masscen.ne.'yes' )then
+        if( params%masscen.eq.'no' )then
             if(.not.cline%defined('oritab') .and. .not.cline%defined('projfile') )then
                 THROW_HARD('Alignments parameters are required')
             endif
@@ -115,7 +116,8 @@ contains
             do i = 1,nimgs
                 call build%img%zero_and_unflag_ft
                 call build%img%read(params%stk,i)
-                if( trim(params_glob%masscen).ne.'yes' )then
+                select case(trim(params_glob%masscen))
+                case('no')
                     xyz = 0.
                     call build%spproj_field%calc_avg_offset2D(i, xyz(1:2))
                     if( arg(xyz) < CENTHRESH )then
@@ -127,12 +129,18 @@ contains
                         if( arg(shvec(i,1:2) - xyz(1:2)) > MAXCENTHRESH2D ) shvec(i,:) = 0.
                     endif
                     call build%spproj_field%add_shift2class(i, -shvec(i,:))
-                else
+                case('new')
+                    call calc_cavg_offset(build%img, params%cenlp, params%msk, shift2d, i)
+                    shvec(i,1:2) = shift2d
+                    if( cline%defined('oritab') .or. cline%defined('projfile') )then
+                        call build%spproj_field%add_shift2class(i, -shift2d)
+                    endif
+                case DEFAULT
                     shvec(i,:) = build%img%calc_shiftcen_serial(params%cenlp, params%msk)
                     if( cline%defined('oritab') .or. cline%defined('projfile') )then
                         call build%spproj_field%add_shift2class(i, -shvec(i,:))
                     endif
-                endif
+                end select
                 write(logfhandle,'(A,I4,2F6.1)')'>>> OFFSET: ',i,shvec(i,1:2)
                 call build%img%fft
                 shift2d = shvec(i,1:2)

@@ -377,6 +377,7 @@ contains
 
     !>  \brief  prepares one cluster centre image for alignment
     subroutine prep2Dref( img_in, img_out, icls, center, xyz_in, xyz_out )
+        use simple_strategy2D_utils, only: calc_cavg_offset
         class(image),      intent(inout) :: img_in
         class(image),      intent(inout) :: img_out
         integer,           intent(in)    :: icls
@@ -401,7 +402,8 @@ contains
                     call img_in%shift2Dserial(xyz_in(1:2))
                 endif
             else
-                if( trim(params_glob%masscen).ne.'yes' )then
+                select case(trim(params_glob%masscen))
+                case('no')
                     call build_glob%spproj_field%calc_avg_offset2D(icls, xy_cavg)
                     if( arg(xy_cavg) < CENTHRESH )then
                         xyz = 0.
@@ -412,9 +414,12 @@ contains
                         xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
                         if( arg(xyz(1:2)/crop_factor - xy_cavg) > MAXCENTHRESH2D ) xyz = 0.
                     endif
-                else
+                case('new')
+                    call calc_cavg_offset(img_in, params_glob%cenlp, params_glob%msk_crop, xy_cavg)
+                    xyz = [xy_cavg(1), xy_cavg(2), 0.]
+                case DEFAULT
                     xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
-                endif
+                end select
                 sharg = arg(xyz)
                 if( sharg > CENTHRESH )then
                     ! apply shift and update the corresponding class parameters

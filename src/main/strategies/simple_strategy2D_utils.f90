@@ -8,7 +8,7 @@ implicit none
 
 public :: read_cavgs_into_imgarr, flag_non_junk_cavgs, match_imgs2ref, match_imgs2refs, rtsq_imgs, prep_cavgs4clustering
 public :: pack_imgarr, alloc_imgarr, dealloc_imgarr, write_cavgs, write_junk_cavgs, write_selected_cavgs
-public :: align_clusters2medoids, write_aligned_cavgs
+public :: align_clusters2medoids, write_aligned_cavgs, calc_cavg_offset
 private
 #include "simple_local_flags.inc"
 
@@ -106,7 +106,6 @@ contains
         character(len=:), allocatable :: frcs_fname
         real,             allocatable :: frcs(:,:), filter(:)
         logical,          allocatable :: l_msk(:,:,:)
-        integer,          allocatable :: states(:)
         type(image)                   :: img_msk
         type(class_frcs)              :: clsfrcs
         integer                       :: ncls, ldim(3), box, filtsz, ncls_sel, cnt, i, j
@@ -253,7 +252,7 @@ contains
         real,        allocatable :: pspec(:)
         integer,     allocatable :: states(:)
         integer :: ncls, icls, ldim(3), kfromto(2), ithr, nin, nout, nmsk
-        real    :: cen(2),dynrange, smpd
+        real    :: cen(2),dynrange, smpd, large_msk, ave, sdev, maxv, minv
         logical :: l_dens_inoutside, l_os2D_present
         ncls = size(cavgs)
         l_os2D_present = present(os_cls2D)
@@ -265,16 +264,22 @@ contains
         endif
         ldim = cavgs(1)%get_ldim()
         smpd = cavgs(1)%get_smpd()
+        large_msk = real(ldim(1)/2-1)
         if( allocated(l_non_junk) ) deallocate(l_non_junk)
         allocate(l_non_junk(ncls), source=.false.)
         kfromto(1) = calc_fourier_index(HP_SPEC, ldim(1), smpd)
         kfromto(2) = calc_fourier_index(LP_SPEC, ldim(1), smpd)
         call alloc_imgarr(nthr_glob, ldim, smpd, cavg_threads)
         !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-        !$omp private(icls,ithr,pspec,dynrange,l_dens_inoutside,nin,nout,nmsk,cen)
+        !$omp private(icls,ithr,pspec,dynrange,l_dens_inoutside,nin,nout,nmsk,cen,ave,sdev,maxv,minv)
         do icls = 1, ncls
             ithr = omp_get_thread_num() + 1
             call cavg_threads(ithr)%copy(cavgs(icls))
+            ! variance criterion
+            call cavg_threads(ithr)%stats('foreground', ave, sdev, maxv, minv, large_msk)
+            l_non_junk(icls) = sdev*sdev <=  ABS_VAR_THRESHOLD
+            if( .not.l_non_junk(icls) ) cycle
+            ! size & position criteria
             call cavg_threads(ithr)%div_below(0., 10.) ! reduce influence of negative values
             call cavg_threads(ithr)%norm
             call density_inoutside_mask(cavg_threads(ithr), lp_bin, msk, nin, nout, nmsk, cen)
@@ -708,5 +713,46 @@ contains
         end do
         !$omp end parallel do
     end subroutine rtsq_imgs
+
+    subroutine calc_cavg_offset( cavg, lp, msk, offset, ind )
+        use simple_segmentation, only: otsu_img
+        use simple_binimage,     only: binimage
+        class(image),   intent(in)    :: cavg
+        real,           intent(in)    :: lp, msk
+        real,           intent(inout) :: offset(2)
+        integer, optional, intent(in) :: ind
+        type(binimage)    :: bincavg, bincc
+        integer, allocatable :: ccsz(:)
+        real    :: hp
+        integer :: loc
+        if( cavg%is_ft() ) THROW_HARD('Real space only! calc_cavg_offset')
+        if( cavg%is_3D() ) THROW_HARD('2D only! calc_cavg_offset')
+        offset = 0.
+        hp     = max(1.5*lp, real(cavg%get_box()) * cavg%get_smpd() / 8.)
+        call bincavg%transfer2bimg(cavg)
+        ! band-pass
+        call bincavg%fft
+        call bincavg%bpgau2D(hp, lp)
+        call bincavg%ifft
+        ! mask
+        call bincavg%mask(msk, 'hard')
+        ! ignore negative values
+        call bincavg%zero_below(0.)
+        ! normalize
+        call bincavg%norm_minmax
+        ! threshold
+        call otsu_img(bincavg)
+        call bincavg%set_imat
+        ! find the largest connected component
+        call bincavg%find_ccs(bincc)
+        ccsz = bincc%size_ccs()
+        loc  = maxloc(ccsz,dim=1)
+        ! detemines position of center
+        call bincc%masscen_cc(loc, offset)
+        ! cleanup
+        call bincc%kill_bimg
+        call bincavg%kill_bimg
+        if( allocated(ccsz) ) deallocate(ccsz)
+    end subroutine calc_cavg_offset
 
 end module simple_strategy2D_utils
