@@ -121,18 +121,21 @@ contains
         endif
     end subroutine exec_gaupick
 
-    subroutine exec_segpick( micname, boxfile_out, nptcls, dir_out, moldiam )
-        character(len=*),           intent(in)    :: micname
-        character(len=LONGSTRLEN),  intent(out)   :: boxfile_out
-        integer,                    intent(out)   :: nptcls
-        character(len=*), optional, intent(in)    :: dir_out
-        real,             optional, intent(in)    :: moldiam
+    subroutine exec_segpick( micname, boxfile_out, nptcls, dir_out, moldiam, winsz )
+        character(len=*),           intent(in)  :: micname
+        character(len=LONGSTRLEN),  intent(out) :: boxfile_out
+        integer,                    intent(out) :: nptcls
+        character(len=*), optional, intent(in)  :: dir_out
+        real,             optional, intent(in)  :: moldiam
+        integer,          optional, intent(in)  :: winsz
         character(len=LONGSTRLEN) :: boxfile
         type(pickseg) :: picker
         boxfile = basename(fname_new_ext(trim(micname),'box'))
         if( present(dir_out) ) boxfile = trim(dir_out)//'/'//trim(boxfile)
         if( present(moldiam) )then
             call picker%pick(micname, moldiam=moldiam)
+        elseif( present(winsz) )then
+            call picker%pick(micname, winsz=winsz)
         else
             call picker%pick(micname)
         endif
