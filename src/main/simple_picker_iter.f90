@@ -68,6 +68,8 @@ contains
                 endif
                 if( cline%defined('moldiam') )then
                     call exec_segpick(moviename_intg, boxfile, nptcls_out, dir_out=dir_out, moldiam=params_glob%moldiam)
+                elseif( cline%defined('winsz') )then
+                    call exec_segpick(moviename_intg, boxfile, nptcls_out, dir_out=dir_out, moldiam=params_glob%winsz)
                 else
                     call exec_segpick(moviename_intg, boxfile, nptcls_out, dir_out=dir_out)
                 endif

@@ -382,6 +382,7 @@ type(simple_input_param) :: walltime
 type(simple_input_param) :: wcrit
 type(simple_input_param) :: width
 type(simple_input_param) :: wiener
+type(simple_input_param) :: winsz
 
 ! this is for making an array of pointers to all programs
 type simple_prg_ptr
@@ -4003,7 +4004,7 @@ contains
         &'Template-based particle picking',&                               ! descr_short
         &'is a distributed workflow for template-based particle picking',& ! descr_long
         &'simple_exec',&                                                   ! executable
-        &1, 7, 0, 4, 1, 0, 2, .true.,&                                     ! # entries in each group, requires sp_project
+        &1, 7, 0, 5, 1, 0, 2, .true.,&                                     ! # entries in each group, requires sp_project
         &gui_advanced=.false., gui_submenu_list = "picking,compute")       ! GUI         
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -4028,6 +4029,7 @@ contains
         call pick%set_input('srch_ctrls', 2, pick_roi, gui_submenu="picking")
         call pick%set_input('srch_ctrls', 3, backgr_subtr, gui_submenu="picking")
         call pick%set_input('srch_ctrls', 4, crowded, gui_submenu="picking")
+        call pick%set_input('srch_ctrls', 5, 'winsz', 'num', 'Window size for sauvol', 'Window size for local sauvol binarisation', 'winsz in pixels ', .false., 32.)
         ! filter controls
         call pick%set_input('filt_ctrls', 1, lp, gui_submenu="picking")
         ! mask controls
