@@ -2786,15 +2786,16 @@ contains
         call cline%set('nthr2D',       cline%get_iarg('nthr'))
         call cline%set('remove_chunks','no')
         call cline%set('numlen',       5)
-        if( .not. cline%defined('mkdir')        ) call cline%set('mkdir',       'yes')
-        if( .not. cline%defined('center')       ) call cline%set('center',      'yes')
-        if( .not. cline%defined('walltime')     ) call cline%set('walltime',     29*60) ! 29 minutes
-        if( .not. cline%defined('objfun')       ) call cline%set('objfun',       'euclid')
-        if( .not. cline%defined('sigma_est')    ) call cline%set('sigma_est',    'global')
-        if( .not. cline%defined('reject_cls')   ) call cline%set('reject_cls',   'no')
-        if( .not. cline%defined('rank_cavgs')   ) call cline%set('rank_cavgs',   'yes')
-        if( .not. cline%defined('algorithm')    ) call cline%set('algorithm',    'cluster2D')
-        if( .not. cline%defined('refine')       ) call cline%set('refine',       'snhc_smpl')
+        if( .not. cline%defined('mkdir')        ) call cline%set('mkdir',      'yes')
+        if( .not. cline%defined('center')       ) call cline%set('center',     'yes')
+        if( .not. cline%defined('masscen')      ) call cline%set('masscen',    'yes')
+        if( .not. cline%defined('walltime')     ) call cline%set('walltime',   29*60) ! 29 minutes
+        if( .not. cline%defined('objfun')       ) call cline%set('objfun',     'euclid')
+        if( .not. cline%defined('sigma_est')    ) call cline%set('sigma_est',  'global')
+        if( .not. cline%defined('reject_cls')   ) call cline%set('reject_cls', 'no')
+        if( .not. cline%defined('rank_cavgs')   ) call cline%set('rank_cavgs', 'yes')
+        if( .not. cline%defined('algorithm')    ) call cline%set('algorithm',  'cluster2D')
+        if( .not. cline%defined('refine')       ) call cline%set('refine',     'snhc_smpl')
         ! parse
         call params%new(cline)
         ! exception handling
@@ -2842,6 +2843,7 @@ contains
         numlen = params%numlen
         call del_file(trim(POOL_DIR)//trim(CLUSTER2D_FINISHED))
         call cline_cluster2D_chunk%set('center', params%center)
+        if( cline%defined('masscen') ) call cline_cluster2D_chunk%set('masscen', params%masscen)
         select case(alg)
             case('CLUSTER2D')
                 call cline_cluster2D_chunk%set('rank_cavgs', 'no')

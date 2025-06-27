@@ -208,6 +208,7 @@ contains
     procedure          :: apply_bfac
     procedure          :: bp
     procedure          :: lp
+    procedure          :: bpgau2D
     procedure          :: tophat
     procedure, private :: apply_filter_1, apply_filter_2
     generic            :: apply_filter => apply_filter_1, apply_filter_2
@@ -220,7 +221,6 @@ contains
     procedure          :: NLmean2D, NLmean2D_eo, NLmean3D, NLmean3D_eo
     procedure          :: ICM2D, ICM2D_eo, ICM3D, ICM3D_eo
     procedure          :: GLCM
-    procedure          :: lpgau2D
     ! CALCULATORS
     procedure          :: minmax
     procedure          :: loc_sdev
@@ -3508,7 +3508,7 @@ contains
         if( didft ) call self%ifft()
     end subroutine apply_bfac
 
-    !> \brief bp  is for band-pass filtering an image
+    !> \brief bp  is for band-pass filtering an image with a cosine filter
     subroutine bp( self, hplim, lplim, width )
         class(image), intent(inout) :: self
         real, intent(in)            :: hplim, lplim
@@ -3589,7 +3589,7 @@ contains
         if( didft ) call self%ifft()
     end subroutine bp
 
-     !> \brief lp  is for low-pass filtering an image
+     !> \brief lp  is for low-pass filtering an image with a cosine filter
     subroutine lp( self, find, width )
         class(image),   intent(inout) :: self
         integer,        intent(in)    :: find
@@ -3618,6 +3618,47 @@ contains
         end do
         !$omp end parallel do
     end subroutine lp
+
+    ! Band-pass gaussian filter, 2D images only
+    subroutine bpgau2D( self, hp, lp )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: hp, lp
+        real    :: hp_fwhm(2), hp_halfinvsigsq(2), hpa
+        real    :: lp_fwhm(2), lp_halfinvsigsq(2), lpa
+        integer :: phys(2), lims(3,2), h,k
+        logical :: l_hp, l_lp
+        if(.not.self%ft) THROW_HARD('Input image must be in the reciprocal domain')
+        if(.not.self%is_2d()) THROW_HARD('Input image must be two-dimensional')
+        lims = self%fit%loop_lims(2)
+        l_hp = .false.
+        if( hp > TINY )then
+            l_hp = .true.
+            hp_fwhm         = hp / self%smpd / real(self%ldim(1:2))
+            hp_halfinvsigsq = 0.5 * (PI * 2.0 * hp_fwhm / 2.35482)**2
+        endif
+        l_lp = .false.
+        if( lp > TINY )then
+            l_lp = .true.
+            lp_fwhm         = lp / self%smpd / real(self%ldim(1:2))
+            lp_halfinvsigsq = 0.5 * (PI * 2.0 * lp_fwhm / 2.35482)**2
+        endif
+        !$omp parallel do collapse(2) schedule(static) default(shared) proc_bind(close)&
+        !$omp private(h,k,hpa,lpa,phys)
+        do h = lims(1,1),lims(1,2)
+            do k = lims(2,1),lims(2,2)
+                phys = self%comp_addr_phys(h,k)
+                if( l_hp )then
+                    hpa  = real(h*h) * hp_halfinvsigsq(1) + real(k*k) * hp_halfinvsigsq(2)
+                    self%cmat(phys(1),phys(2),1) = self%cmat(phys(1),phys(2),1) * (1.0-exp(-hpa))
+                endif
+                if( l_lp )then
+                    lpa  = real(h*h) * lp_halfinvsigsq(1) + real(k*k) * lp_halfinvsigsq(2)
+                    self%cmat(phys(1),phys(2),1) = self%cmat(phys(1),phys(2),1) * exp(-lpa)
+                endif
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine bpgau2D
 
     !> \brief bp  is for tophat band-pass filtering an image
     subroutine tophat( self, shell, halfwidth )
@@ -4756,28 +4797,6 @@ contains
         call normalize_minmax(pmat)
         call img_q%kill
     end subroutine GLCM
-
-    subroutine lpgau2D( self, freq )
-        class(image), intent(inout) :: self
-        real,         intent(in)    :: freq ! half-width in Angs
-        real    :: fwhm(2), halfinvsigsq(2), a
-        integer :: phys(2), lims(3,2), h,k
-        if(.not.self%ft) THROW_HARD('Input image must be in the reciprocal domain')
-        if(.not.self%is_2d()) THROW_HARD('Input image must be two-dimensional')
-        fwhm         = freq / self%smpd / real(self%ldim(1:2))
-        halfinvsigsq = 0.5 * (PI * 2.0 * fwhm / 2.35482)**2
-        lims         = self%fit%loop_lims(2)
-        !$omp parallel do collapse(2) schedule(static) default(shared) proc_bind(close)&
-        !$omp private(h,k,a,phys)
-        do h = lims(1,1),lims(1,2)
-            do k = lims(2,1),lims(2,2)
-                a    = real(h*h) * halfinvsigsq(1) + real(k*k) * halfinvsigsq(2)
-                phys = self%comp_addr_phys(h,k)
-                self%cmat(phys(1),phys(2),1) = self%cmat(phys(1),phys(2),1) * exp(-a)
-            enddo
-        enddo
-        !$omp end parallel do
-    end subroutine lpgau2D
 
     ! CALCULATORS
 
@@ -6988,7 +7007,7 @@ contains
             call img_pad%new(ldim_pd, smpd_bin)
             call backgr%pad(img_pad)
             call img_pad%fft
-            call img_pad%lpgau2D(2.*freq)
+            call img_pad%bpgau2D(0., 2.*freq)
             call img_pad%ifft
             call img_pad%clip(backgr)
             ! low pass padded mask & crop
@@ -6996,7 +7015,7 @@ contains
             msk = 1.
             call msk%pad(img_pad)
             call img_pad%fft
-            call img_pad%lpgau2D(2.*freq)
+            call img_pad%bpgau2D(0., 2.*freq)
             call img_pad%ifft
             call img_pad%clip(msk)
             ! correct for padding
@@ -7019,7 +7038,7 @@ contains
             call img_pad%new(ldim_pd, self%smpd)
             call backgr%pad(img_pad)
             call img_pad%fft
-            call img_pad%lpgau2D(freq)
+            call img_pad%bpgau2D(0.,freq)
             call img_pad%ifft
             call img_pad%clip(backgr)
             ! low pass padded mask & crop
@@ -7027,7 +7046,7 @@ contains
             msk = 1.
             call msk%pad(img_pad)
             call img_pad%fft
-            call img_pad%lpgau2D(freq)
+            call img_pad%bpgau2D(0.,freq)
             call img_pad%ifft
             call img_pad%clip(msk)
             ! correct for padding
