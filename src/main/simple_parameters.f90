@@ -220,7 +220,6 @@ type :: parameters
     character(len=STDLEN)     :: detector='bin'       !< detector for edge detection (sobel|bin|otsu)
     character(len=STDLEN)     :: dfunit='microns'     !< defocus unit (A|microns){microns}
     character(len=STDLEN)     :: dir_exec=''          !< name of execution directory
-    character(len=2)          :: dist_type='l2'       !< distance type (l1, l2){l2}
     character(len=4)          :: element ='    '      !< atom kind
     character(len=STDLEN)     :: executable=''        !< name of executable
     character(len=4)          :: ext='.mrc'           !< file extension{.mrc}
@@ -326,7 +325,6 @@ type :: parameters
     integer :: nchunksperset=0
     integer :: ncunits=0           !< # computing units, can be < nparts{nparts}
     integer :: ncls=500            !< # clusters
-    integer :: ncls_spec=2         !< # spectral clusters
     integer :: ncls_start=10       !< minimum # clusters for 2D streaming
     integer :: ndiscrete=0         !< # discrete orientations
     integer :: neigs=0             !< # of eigenvectors 
@@ -633,7 +631,6 @@ contains
         call check_carg('detector',       self%detector)
         call check_carg('dfunit',         self%dfunit)
         call check_carg('dir_exec',       self%dir_exec)
-        call check_carg('dist_type',      self%dist_type)
         call check_carg('doprint',        self%doprint)
         call check_carg('dynreslim',      self%dynreslim)
         call check_carg('element',        self%element)
@@ -872,7 +869,6 @@ contains
         call check_iarg('nchunks',        self%nchunks)
         call check_iarg('nchunksperset',  self%nchunksperset)
         call check_iarg('ncls',           self%ncls)
-        call check_iarg('ncls_spec',      self%ncls_spec)
         call check_iarg('ncls_start',     self%ncls_start)
         call check_iarg('ncunits',        self%ncunits)
         call check_iarg('ndiscrete',      self%ndiscrete)
