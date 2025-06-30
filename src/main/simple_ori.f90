@@ -77,6 +77,7 @@ type :: ori
     procedure          :: get_3Dshift
     procedure          :: get_state
     procedure          :: get_class
+    procedure          :: get_proj
     procedure          :: get_dfx, get_dfy
     procedure          :: get_eo
     procedure          :: get_sampled
@@ -915,6 +916,15 @@ contains
             get_class = nint(self%htab%get('class'))
         endif
     end function get_class
+
+    elemental integer function get_proj( self )
+        class(ori), intent(in) :: self
+        if( self%is_ptcl )then
+            get_proj = nint(self%pparms(I_PROJ))
+        else
+            get_proj = nint(self%htab%get('proj'))
+        endif
+    end function get_proj
 
     elemental integer function get_eo( self )
         class(ori), intent(in) :: self

@@ -353,11 +353,6 @@ contains
             if( trim(params_glob%restore_cavgs).eq.'yes' )then
                 if( l_polar )then
                     call polar_cavger_readwrite_partial_sums('write')
-                    if( params_glob%part==1 )then
-                        call polar_cavger_merge_eos_and_norm
-                        call polar_cavger_calc_and_write_frcs_and_eoavg('polar_'//FRCS_FILE)
-                        call polar_cavger_write_cartrefs(pftcc, 'polar_test', 'merged')
-                    endif
                 else
                     call cavger_transf_oridat( build_glob%spproj )
                     call cavger_assemble_sums( l_partial_sums )

@@ -25,7 +25,6 @@ use simple_convergence,             only: convergence
 use simple_euclid_sigma2,           only: euclid_sigma2
 use simple_strategy2D3D_common
 use simple_polarops
-use simple_classaverager
 implicit none
 
 public :: refine3D_exec
@@ -70,12 +69,18 @@ contains
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz
         integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map
         integer :: ibatch
-        logical :: doprint, l_polar, l_alloc_read_cavgs
+        logical :: doprint, l_polar, l_restore
         if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = t_init
         endif
         l_polar = trim(params_glob%polar).eq.'yes'
+        select case(trim(params_glob%refine))
+            case('eval','sigma')
+                l_restore = .false.
+            case DEFAULT
+                l_restore = .true.
+        end select
 
         ! CHECK THAT WE HAVE AN EVEN/ODD PARTITIONING
         if( build_glob%spproj_field%get_nevenodd() == 0 )then
@@ -105,24 +110,6 @@ contains
             endif
         endif
 
-        ! polar stuffs
-        if( l_polar )then
-            if( which_iter>1 )then
-                ! references are read in prep_polar_pftcc4align2D below
-                ! On first iteration the references are taken from the input images
-            else
-                l_alloc_read_cavgs = .true.
-                if( .not.l_distr_exec_glob )then
-                    l_alloc_read_cavgs = which_iter==1
-                endif
-                call cavger_new(pinds, alloccavgs=l_alloc_read_cavgs)
-                if( l_alloc_read_cavgs )then
-                    if( .not. cline%defined('refs') ) THROW_HARD('need refs to be part of command line for polar refine3D execution')
-                    call cavger_read_all
-                endif
-            endif
-        endif
-
         ! PREP BATCH ALIGNMENT
         batchsz_max = min(nptcls2update,params_glob%nthr*BATCHTHRSZ)
         nbatches    = ceiling(real(nptcls2update)/real(batchsz_max))
@@ -139,10 +126,16 @@ contains
         else
             call prepare_refs_sigmas_ptcls( pftcc, cline, eucl_sigma, ptcl_match_imgs, batchsz_max )
         endif
-        if( l_polar )then
+        if( l_polar .and. l_restore )then
             ! for restoration
             if( which_iter == 1 ) call polar_cavger_new(pftcc)
             call polar_cavger_zero_pft_refs
+            if( file_exists(params_glob%frcs) )then
+                call build_glob%clsfrcs%read(params_glob%frcs)
+            else
+                call build_glob%clsfrcs%new(params_glob%nspace, params_glob%box_crop,&
+                    &params_glob%smpd_crop, params_glob%nstates)
+            endif
         endif
         if( L_BENCH_GLOB )then
             rt_prepare_polar_references = toc(t_prepare_polar_references)
@@ -242,9 +235,9 @@ contains
             !$omp end parallel do
             if( L_BENCH_GLOB ) rt_align = rt_align + toc(t_align)
             ! restore polar cavgs
-            if( l_polar )then
+            if( l_polar .and. l_restore )then
                 call polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end),&
-                    &build_glob%spproj, pftcc, incr_shifts(:,1:batchsz))
+                    &build_glob%spproj, pftcc, incr_shifts(:,1:batchsz), is3D=.true.)
             endif
         enddo
         ! report fraction of greedy searches
@@ -279,7 +272,6 @@ contains
 
         ! CLEAN
         call clean_strategy3D ! deallocate s3D singleton
-        call pftcc%kill
         call build_glob%vol%kill
         call orientation%kill
         do ithr = 1,params_glob%nthr
@@ -308,55 +300,42 @@ contains
         end select
 
         ! VOLUMETRIC 3D RECONSTRUCTION
-        select case(trim(params_glob%refine))
-            case('eval','sigma')
-                ! no reconstruction
-            case DEFAULT
-                if( L_BENCH_GLOB ) t_rec = tic()
-                if( trim(params_glob%projrec).eq.'yes' )then
-                    call calc_projdir3Drec( cline, nptcls2update, pinds )
-                else
-                    call calc_3Drec( cline, nptcls2update, pinds )
-                endif
-                call eucl_sigma%kill
-                call killimgbatch
-                if( L_BENCH_GLOB ) rt_rec = toc(t_rec)
-        end select
-
-        if( l_polar )then
-            if( l_distr_exec_glob )then
-                if( trim(params_glob%restore_cavgs).eq.'yes' )then
-                    call polar_cavger_readwrite_partial_sums('write')
-                    if( params_glob%part==1 )then
-                        call polar_cavger_merge_eos_and_norm
-                        call polar_cavger_calc_and_write_frcs_and_eoavg('polar_'//FRCS_FILE)
-                        call polar_cavger_write_cartrefs(pftcc, 'polar_test', 'merged')
-                    endif
-                endif
-                call cavger_kill
-                call polar_cavger_kill
+        if( l_restore )then
+            ! Volume
+            if( L_BENCH_GLOB ) t_rec = tic()
+            if( trim(params_glob%projrec).eq.'yes' )then
+                call calc_projdir3Drec( cline, nptcls2update, pinds )
             else
-                if( trim(params_glob%restore_cavgs).eq.'yes' )then
-                    if( cline%defined('which_iter') )then
-                        params_glob%refs      = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//params_glob%ext
-                        params_glob%refs_even = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//'_even'//params_glob%ext
-                        params_glob%refs_odd  = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//'_odd'//params_glob%ext
-                    else
-                        THROW_HARD('which_iter expected to be part of command line in shared-memory execution')
-                    endif
-                    if( which_iter == 1) call cavger_kill
+                call calc_3Drec( cline, nptcls2update, pinds )
+            endif
+            call eucl_sigma%kill
+            call killimgbatch
+            if( L_BENCH_GLOB ) rt_rec = toc(t_rec)
+            ! 2.5D Pseudo-cavgs
+            ! Both cartesian & polar restorations are performed for testing
+            ! they will be exclusive in the future
+            if( l_polar )then
+                if( l_distr_exec_glob )then
+                    call polar_cavger_readwrite_partial_sums('write')
+                    call polar_cavger_kill
+                else
                     ! polar restoration
+                    params_glob%refs = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//params_glob%ext
                     call polar_cavger_merge_eos_and_norm
                     call polar_cavger_calc_and_write_frcs_and_eoavg(FRCS_FILE)
                     call polar_cavger_writeall(get_fbody(params_glob%refs,params_glob%ext,separator=.false.))
                     call polar_cavger_write_cartrefs(pftcc, get_fbody(params_glob%refs,params_glob%ext,separator=.false.), 'merged')
-                    call polar_cavger_gen2Dclassdoc(build_glob%spproj)
+                    call polar_cavger_gen2Dclassdoc(build_glob%spproj) ! necessary??
                     call polar_cavger_kill
-                    ! update command line
-                    call cline%set('refs', trim(params_glob%refs))
+                    ! update params & command line
+                    params_glob%vols(1) = trim(params_glob%refs)
+                    call cline%set('vol1', params_glob%vols(1))
                 endif
             endif
         endif
+
+        ! MORE CLEANUP
+        call pftcc%kill
 
         ! REPORT CONVERGENCE
         call qsys_job_finished('simple_strategy3D_matcher :: refine3D_exec')

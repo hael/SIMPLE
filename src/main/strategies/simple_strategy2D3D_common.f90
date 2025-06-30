@@ -1141,6 +1141,7 @@ contains
         call build_glob%vol2%kill
     end subroutine prepare_refs_sigmas_ptcls
 
+    ! Only one state supported
     subroutine prepare_polar_refs_sigmas_ptcls( pftcc, cline, eucl_sigma, ptcl_imgs, batchsz, which_iter )
         use simple_polarops
         use simple_polarft_corrcalc,        only:  polarft_corrcalc
@@ -1152,44 +1153,45 @@ contains
         integer,                  intent(in)    :: batchsz
         integer,                  intent(in)    :: which_iter
         character(len=:), allocatable :: fname
-        integer :: ithr, icls, pop, pop_even, pop_odd
+        integer :: ithr, iproj, pop, pop_even, pop_odd, nrefs
         logical :: has_been_searched
         ! PREPARATION OF PFTCC AND REFERENCES
-        call pftcc%new(params_glob%nspace * params_glob%nstates, [1,batchsz], params_glob%kfromto)
+        nrefs = params_glob%nspace * params_glob%nstates
+        call pftcc%new(nrefs, [1,batchsz], params_glob%kfromto)
         ! Read polar references
         call polar_cavger_new(pftcc)
-        call polar_cavger_read_all(params_glob%refs)
+        call polar_cavger_read_all(params_glob%vols(1))
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
         ! PREPARATION OF REFERENCES IN PFTCC
-        !$omp parallel do default(shared) private(icls,pop,pop_even,pop_odd)&
+        !$omp parallel do default(shared) private(iproj,pop,pop_even,pop_odd)&
         !$omp schedule(static) proc_bind(close)
-        do icls=1,params_glob%ncls
+        do iproj = 1,params_glob%nspace
             ! populations
             pop      = 1
             pop_even = 0
             pop_odd  = 0
             if( has_been_searched )then
-                pop      = build_glob%spproj_field%get_pop(icls, 'class'      )
-                pop_even = build_glob%spproj_field%get_pop(icls, 'class', eo=0)
-                pop_odd  = build_glob%spproj_field%get_pop(icls, 'class', eo=1)
+                pop      = build_glob%spproj_field%get_pop(iproj, 'proj'      )
+                pop_even = build_glob%spproj_field%get_pop(iproj, 'proj', eo=0)
+                pop_odd  = build_glob%spproj_field%get_pop(iproj, 'proj', eo=1)
             endif
             if( pop > 0 )then
-                call polar_prep2Dref( icls )
+                call polar_prep2Dref(iproj)
                 ! transfer to pftcc
                 if( .not.params_glob%l_lpset )then
                     if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
                         ! transfer e/o refs to pftcc
-                        call polar_cavger_set_ref_pftcc(icls, 'even', pftcc)
-                        call polar_cavger_set_ref_pftcc(icls, 'odd',  pftcc)
+                        call polar_cavger_set_ref_pftcc(iproj, 'even', pftcc)
+                        call polar_cavger_set_ref_pftcc(iproj, 'odd',  pftcc)
                     else
                         ! put the merged class average in both even and odd positions
-                        call polar_cavger_set_ref_pftcc(icls, 'merged', pftcc)
-                        call pftcc%cp_even2odd_ref(icls)
+                        call polar_cavger_set_ref_pftcc(iproj, 'merged', pftcc)
+                        call pftcc%cp_even2odd_ref(iproj)
                     endif
                 else
                     ! put the merged class average in both even and odd positions
-                    call polar_cavger_set_ref_pftcc(icls, 'merged', pftcc)
-                    call pftcc%cp_even2odd_ref(icls)
+                    call polar_cavger_set_ref_pftcc(iproj, 'merged', pftcc)
+                    call pftcc%cp_even2odd_ref(iproj)
                 endif
             endif
         end do

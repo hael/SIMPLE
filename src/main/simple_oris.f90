@@ -57,6 +57,7 @@ type :: oris
     procedure          :: get_dfx, get_dfy
     procedure          :: get_state
     procedure          :: get_class
+    procedure          :: get_proj
     procedure          :: get_label_inds
     procedure          :: get_eo
     procedure          :: get_fromp, get_top
@@ -570,6 +571,12 @@ contains
         integer,     intent(in) :: i
         get_class = self%o(i)%get_class()
     end function get_class
+
+    pure integer function get_proj( self, i )
+        class(oris), intent(in) :: self
+        integer,     intent(in) :: i
+        get_proj = self%o(i)%get_proj()
+    end function get_proj
 
     function get_label_inds( self, label ) result( inds )
         class(oris),      intent(in) :: self
