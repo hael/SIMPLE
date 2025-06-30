@@ -308,22 +308,16 @@ contains
         call dealloc_imgarr(cavg_threads)
     end subroutine flag_non_junk_cavgs
 
-    function cluster_cavg_imgs( params, cavg_imgs, oa_minmax, clspops, labels, i_medoids, l_prelim ) result( clust_info_arr )
+    function calc_cluster_cavgs_dmat( params, cavg_imgs, oa_minmax  ) result( dmat )
         use simple_corrmat,          only: calc_inpl_invariant_fm
         use simple_histogram,        only: histogram
-        use simple_clustering_utils, only: cluster_dmat
         use simple_pspecs,           only: pspecs
         class(parameters),    intent(in)    :: params
         class(image),         intent(inout) :: cavg_imgs(:)
         real,                 intent(in)    :: oa_minmax(2)
-        integer,              intent(in)    :: clspops(:)
-        integer, allocatable, intent(inout) :: labels(:), i_medoids(:)
-        logical,              intent(in)    :: l_prelim
-        integer,              parameter     :: NHISTBINS = 128, NCLUST_MAX = 65
+        integer,              parameter     :: NHISTBINS = 128
         real,                 parameter     :: HP_SPEC=20., LP_SPEC=6.
-        real,                 parameter     :: RES_THRES=6., SCORE_THRES=65., SCORE_THRES_REJECT=50., SCORE_THRES_INCL=75.
         type(histogram),      allocatable   :: hists(:)
-        type(clust_info),     allocatable   :: clust_info_arr(:)
         real,                 allocatable   :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:), dmat_tvd(:,:), smat_tvd(:,:)
         real,                 allocatable   :: dmat_joint(:,:), smat_joint(:,:), dmat(:,:), dmat_jsd(:,:), smat_jsd(:,:)
         real,                 allocatable   :: dmat_hd(:,:), dmat_hist(:,:), dmat_fm(:,:), smat(:,:)
@@ -384,6 +378,28 @@ contains
             case DEFAULT
                 THROW_HARD('Unsupported clustering criterion: '//trim(params%clust_crit))
         end select
+        ! destruct
+        call pows%kill
+        do i = 1, ncls_sel
+            call hists(i)%kill
+        end do
+    end function calc_cluster_cavgs_dmat
+
+    function cluster_cavg_imgs( params, dmat, cavg_imgs, clspops, labels, i_medoids, l_prelim ) result( clust_info_arr )
+        use simple_clustering_utils, only: cluster_dmat
+        class(parameters),    intent(in)    :: params
+        real,                 intent(in)    :: dmat(:,:)
+        class(image),         intent(inout) :: cavg_imgs(:)
+        integer,              intent(in)    :: clspops(:)
+        integer, allocatable, intent(inout) :: labels(:), i_medoids(:)
+        logical,              intent(in)    :: l_prelim
+        integer,              parameter     :: NCLUST_MAX = 65
+        real,                 parameter     :: RES_THRES=6., SCORE_THRES=65., SCORE_THRES_REJECT=50., SCORE_THRES_INCL=75.
+        type(clust_info),     allocatable   :: clust_info_arr(:)
+        logical,              allocatable   :: l_msk(:,:,:)
+        type(image)  :: img_msk 
+        integer      :: ncls_sel, i, j, nclust, iclust
+        ncls_sel = size(cavg_imgs)        
         ! cluster
         call cluster_dmat( dmat, 'aprop', nclust, i_medoids, labels, nclust_max=NCLUST_MAX)
         if( nclust > 5 .and. nclust < 20 )then
@@ -414,17 +430,12 @@ contains
         call rank_clusters
         ! good/bad cluster identification through tresholding
         call identify_good_bad_clusters
-        ! destruct
-        call pows%kill
-        do i = 1, ncls_sel
-            call hists(i)%kill
-        end do
 
     contains
 
         subroutine calc_scores
             integer :: iclust, icls, cnt
-            real    :: euclid_max, res_max, corrfmscore_min, clustscore_min
+            real    :: euclid_max, res_max, clustscore_min
             ! HOMOGENEITY SCORE
             clust_info_arr(:)%homogeneity = clust_info_arr(:)%euclid
             euclid_max = maxval(clust_info_arr(:)%euclid)
@@ -435,28 +446,22 @@ contains
             res_max = maxval(clust_info_arr(:)%res)
             where( clust_info_arr(:)%pop < 2 ) clust_info_arr(:)%resscore = res_max
             call dists2scores_percen(clust_info_arr(:)%resscore)
-            ! FM CORR, CLUSTSCORE
+            ! CLUSTSCORE
             do iclust = 1, nclust
-                clust_info_arr(iclust)%corrfmscore = 0.
                 clust_info_arr(iclust)%clustscore  = 0.
                 cnt = 0
                 do icls = 1, ncls_sel 
                     if( labels(icls) == iclust )then
-                        clust_info_arr(iclust)%corrfmscore = clust_info_arr(iclust)%corrfmscore +   corrmat(icls,i_medoids(iclust))
                         clust_info_arr(iclust)%clustscore  = clust_info_arr(iclust)%clustscore  +      dmat(icls,i_medoids(iclust))
                         cnt = cnt + 1
                     endif
                 enddo
-                clust_info_arr(iclust)%corrfmscore = clust_info_arr(iclust)%corrfmscore / real(cnt)
                 clust_info_arr(iclust)%clustscore  = clust_info_arr(iclust)%clustscore  / real(cnt)
             end do
-            corrfmscore_min = minval(clust_info_arr(:)%corrfmscore)
             clustscore_min  = minval(clust_info_arr(:)%clustscore)
             where( clust_info_arr(:)%pop < 2 )
-                clust_info_arr(:)%corrfmscore = corrfmscore_min
                 clust_info_arr(:)%clustscore  = clustscore_min
             endwhere
-            call scores2scores_percen(clust_info_arr(:)%corrfmscore)
             call dists2scores_percen(clust_info_arr(:)%clustscore)
             ! JOINT SCORE
             clust_info_arr(:)%jointscore = 0.35 * clust_info_arr(:)%homogeneity + 0.5 * clust_info_arr(:)%resscore + 0.15 * clust_info_arr(:)%clustscore
@@ -666,19 +671,29 @@ contains
             clust_info_arr(iclust)%algninfo%params = match_imgs2ref(clust_info_arr(iclust)%pop, hp, lp, trs, cavg_imgs(i_medoids(iclust)), cluster_imgs)
             call rtsq_imgs(clust_info_arr(iclust)%pop, clust_info_arr(iclust)%algninfo%params, cluster_imgs)
             ! estimate resolution
+            ! FWD FT
+            !$omp parallel do default(shared) private(i) proc_bind(close) schedule(static) 
+            do i = 1, size(cavg_imgs)
+                if( i <= clust_info_arr(iclust)%pop ) call cluster_imgs(i)%fft
+                call cavg_imgs(i)%fft
+            end do
+            !$omp end parallel do
             cnt = 0
-            call cavg_imgs(i_medoids(iclust))%fft
             allocate(resvals(clust_info_arr(iclust)%pop), source=0.)
             do i = 1, clust_info_arr(iclust)%pop
-                call cluster_imgs(i)%fft
                 call cavg_imgs(i_medoids(iclust))%fsc(cluster_imgs(i), frc)
                 if( .not. all(frc > 0.5) )then ! excluding the medoid
                     cnt = cnt + 1
                     call get_resolution(frc, resarr, rfoo, resvals(cnt))
                 endif
-                call cluster_imgs(i)%ifft
             end do
-            call cavg_imgs(i_medoids(iclust))%ifft
+            ! BWD FT
+            !$omp parallel do default(shared) private(i) proc_bind(close) schedule(static) 
+            do i = 1, size(cavg_imgs)
+                if( i <= clust_info_arr(iclust)%pop ) call cluster_imgs(i)%ifft
+                call cavg_imgs(i)%ifft
+            end do
+            !$omp end parallel do
             ! calculate Euclidean distances
             clust_info_arr(iclust)%euclid = 0.
             do i = 1, clust_info_arr(iclust)%pop

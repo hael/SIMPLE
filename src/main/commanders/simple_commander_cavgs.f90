@@ -135,19 +135,21 @@ contains
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         logical,          parameter   :: DEBUG = .true.
-        type(image),      allocatable :: cavg_imgs(:)
-        real,             allocatable :: frc(:), mm(:,:)
+        real,             parameter   :: SCORE_THRES_INCL=75.
+        type(image),      allocatable :: cavg_imgs(:), cavg_imgs_sel(:)
+        real,             allocatable :: frc(:), mm(:,:), jointscores(:), dmat(:,:), dmat_sel(:,:)
         real,             allocatable :: resvals(:), res_bad(:), res_good(:), res_maybe(:)
-        logical,          allocatable :: l_non_junk(:)
-        integer,          allocatable :: labels(:), clsinds(:), i_medoids(:), labels_copy(:), i_medoids_copy(:)
-        integer,          allocatable :: clspops(:), states(:), labels4write(:)
-        type(clust_info), allocatable :: clust_info_arr(:)
+        logical,          allocatable :: l_non_junk(:), good_mask(:)
+        integer,          allocatable :: labels(:), clsinds(:), i_medoids(:), inds(:), inds_sel(:)
+        integer,          allocatable :: labels_sel(:), clsinds_sel(:), i_medoids_sel(:)
+        integer,          allocatable :: clspops(:), clspops_sel(:), states(:), labels4write(:)
+        type(clust_info), allocatable :: clust_info_arr(:), clust_info_arr_sel(:), clust_info_arr_merged(:)
         type(parameters)              :: params
         type(sp_project)              :: spproj
         type(stats_struct)            :: res_stats
-        integer                       :: ncls, ncls_sel, icls, cnt, rank, nptcls, nptcls_good, loc(1), ldim(3)
-        integer                       :: i, j, ii, jj, nclust, iclust, pop_good, pop_bad
-        real                          :: fsc_res, rfoo, frac_good, best_res, worst_res
+        integer                       :: ncls, ncls_sel, icls, cnt, rank, nptcls, nptcls_good, loc(1), ldim(3), cnt_clust
+        integer                       :: i, j, ii, jj, nclust, iclust, pop_good, pop_bad, nclust_sel, ngood, minv_labels
+        real                          :: fsc_res, rfoo, frac_good, best_res, worst_res, res_max
         real                          :: oa_min, oa_max, dist_rank, dist_rank_best, smpd, simsum
         ! defaults
         call cline%set('oritype', 'cls2D')
@@ -177,15 +179,82 @@ contains
         ! calculate overall minmax
         oa_min         = minval(mm(:,1))
         oa_max         = maxval(mm(:,2))
-        clust_info_arr = cluster_cavg_imgs(params, cavg_imgs, [oa_min,oa_max], clspops, labels, i_medoids, l_prelim=.false. )
+        dmat           = calc_cluster_cavgs_dmat(params, cavg_imgs, [oa_min,oa_max])
+        clust_info_arr = cluster_cavg_imgs(params, dmat, cavg_imgs, clspops, labels, i_medoids, l_prelim=.true.)
         nclust         = maxval(labels)
+
+        print *, 'nclust:                           ', nclust
+        print *, 'count(clust_info_arr(:)%good_bad: ', count(clust_info_arr(:)%good_bad == 1)
+
+        jointscores    = pack(clust_info_arr(:)%jointscore, mask=clust_info_arr(:)%good_bad == 1)
+        if( all(jointscores >= SCORE_THRES_INCL) )then
+            ! if all the selected class averages score that high, we are done
+            clust_info_arr_merged = clust_info_arr
+        else
+            ! create good_mask
+            allocate(good_mask(ncls_sel), source=.false.)
+            do icls = 1, ncls_sel
+                if( clust_info_arr(labels(icls))%good_bad == 1 )then
+                    good_mask(icls) = .true.
+                endif
+            end do
+            ngood = count(good_mask)
+            ! re-cluster
+            allocate(inds(ncls_sel),source=(/(i,i=1,ncls_sel)/))
+            inds_sel           = pack(inds,             mask=good_mask)
+            cavg_imgs_sel      = pack_imgarr(cavg_imgs, mask=good_mask)
+            clspops_sel        = pack(clspops,          mask=good_mask)
+            dmat_sel           = calc_cluster_cavgs_dmat(params, cavg_imgs_sel, [oa_min,oa_max])
+            clust_info_arr_sel = cluster_cavg_imgs(params, dmat_sel, cavg_imgs_sel, clspops_sel, labels_sel, i_medoids_sel, l_prelim=.false.)
+            nclust_sel         = maxval(labels_sel)
+            ! index adjustment of deselected
+            minv_labels = minval(labels, mask=.not.good_mask)
+            where(     good_mask ) labels = 0
+            where(.not.good_mask ) labels = labels + nclust_sel - minv_labels + 1
+            ! merge labels
+            do i = 1, ngood
+                if( labels(inds_sel(i)) == 0 )then
+                    labels(inds_sel(i)) = labels_sel(i)
+                else
+                    THROW_HARD('Index logic error')
+                endif
+            end do
+            allocate(clust_info_arr_merged(maxval(labels)))
+            
+            cnt_clust = 0
+
+            do i = 1, nclust_sel
+                cnt_clust = cnt_clust + 1
+                clust_info_arr_merged(cnt_clust) = clust_info_arr_sel(i)
+                print *, 'taking index: '//int2str(i)//' from selected solution'
+            end do
+
+            
+            do i = count(clust_info_arr(:)%good_bad == 1) + 1, nclust
+                cnt_clust = cnt_clust + 1
+                clust_info_arr_merged(cnt_clust) = clust_info_arr(i)
+                print *, 'taking index: '//int2str(i)//' from initial solution'
+            end do
+
+            print *, 'cnt_clust: ', cnt_clust, 'maxval(labels): ', maxval(labels)
+
+
+
+        endif
+
+        print *, labels
+
+        nclust = maxval(labels)
+
+        print *, 'nclust ', nclust
+
         select case(trim(params%clust_crit))
             case('powfm','fm','histfm','hybrid')
                 ! re-create cavg_imgs
                 call dealloc_imgarr(cavg_imgs)
                 cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
                 ! write ranked clusters
-                call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_ranked', trim(params%ext))
+                call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr_merged, 'cluster_ranked', trim(params%ext))
                 ! update project
                 call spproj%os_ptcl2D%transfer_class_assignment(spproj%os_ptcl3D)
                 do iclust = 1, nclust
@@ -201,23 +270,23 @@ contains
                 ! report cluster info
                 do iclust = 1, nclust
                     write(logfhandle,'(A,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,I3)') 'cluster_ranked'//int2str_pad(iclust,2)//'.mrc',&
-                    &' resolution(A) ',   clust_info_arr(iclust)%res,& 
-                    &' resscore(%) ',     clust_info_arr(iclust)%resscore,& 
-                    &' homogeneity(%) ',  clust_info_arr(iclust)%homogeneity,&
-                    &' clustscore(%) ',   clust_info_arr(iclust)%clustscore,&
-                    &' jointscore(%) ',   clust_info_arr(iclust)%jointscore,&
-                    &' good_bad_assign ', clust_info_arr(iclust)%good_bad
+                    &' resolution(A) ',   clust_info_arr_merged(iclust)%res,& 
+                    &' resscore(%) ',     clust_info_arr_merged(iclust)%resscore,& 
+                    &' homogeneity(%) ',  clust_info_arr_merged(iclust)%homogeneity,&
+                    &' clustscore(%) ',   clust_info_arr_merged(iclust)%clustscore,&
+                    &' jointscore(%) ',   clust_info_arr_merged(iclust)%jointscore,&
+                    &' good_bad_assign ', clust_info_arr_merged(iclust)%good_bad
                 end do
                 ! check number of particles selected
-                nptcls      = sum(clust_info_arr(:)%nptcls)
-                nptcls_good = sum(clust_info_arr(:)%nptcls, mask=clust_info_arr(:)%good_bad == 1)
+                nptcls      = sum(clust_info_arr_merged(:)%nptcls)
+                nptcls_good = sum(clust_info_arr_merged(:)%nptcls, mask=clust_info_arr_merged(:)%good_bad == 1)
                 frac_good   = real(nptcls_good)  / real(nptcls)
                 write(logfhandle,'(a,1x,f8.2)') '% PARTICLES CLASSIFIED AS 1ST RATE: ', frac_good  * 100.
                 ! calculate resolution statistics for good/bad classes
-                res_good    = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad == 1)
-                res_bad     = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad == 0)
-                pop_good    = count(clust_info_arr(:)%good_bad == 1)
-                pop_bad     = count(clust_info_arr(:)%good_bad == 0)
+                res_good    = pack(clust_info_arr_merged(:)%res, mask=clust_info_arr_merged(:)%good_bad == 1)
+                res_bad     = pack(clust_info_arr_merged(:)%res, mask=clust_info_arr_merged(:)%good_bad == 0)
+                pop_good    = count(clust_info_arr_merged(:)%good_bad == 1)
+                pop_bad     = count(clust_info_arr_merged(:)%good_bad == 0)
                 if( pop_good > 1 )then
                     write(logfhandle,'(A)') 'RESOLUTION STATS FOR GOOD PARTITION'
                     call calc_stats(res_good, res_stats)
@@ -253,12 +322,12 @@ contains
                 ! translate to state array
                 allocate(states(ncls), source=0)
                 do icls = 1, ncls_sel
-                    if( clust_info_arr(labels(icls))%good_bad == 1 ) states(clsinds(icls)) = 1
+                    if( clust_info_arr_merged(labels(icls))%good_bad == 1 ) states(clsinds(icls)) = 1
                 end do
                 ! write selection
                 allocate(labels4write(ncls_sel), source=0)
                 do icls = 1, ncls_sel
-                    labels4write(icls) = clust_info_arr(labels(icls))%good_bad
+                    labels4write(icls) = clust_info_arr_merged(labels(icls))%good_bad
                 end do
                 ! write selection
                 call write_selected_cavgs(ncls_sel, cavg_imgs, labels4write, params%ext)
