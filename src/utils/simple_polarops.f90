@@ -46,7 +46,7 @@ contains
         kfromto = pftcc%get_kfromto()
         ! dimensions
         smpd    = params_glob%smpd
-        allocate(prev_eo_pops(ncls,2), eo_pops(ncls,2), source=0)
+        allocate(prev_eo_pops(2,ncls), eo_pops(2,ncls), source=0)
         ! Arrays        
         allocate(pfts_even(pftsz,kfromto(1):kfromto(2),ncls),pfts_odd(pftsz,kfromto(1):kfromto(2),ncls),&
                 &ctf2_even(pftsz,kfromto(1):kfromto(2),ncls),ctf2_odd(pftsz,kfromto(1):kfromto(2),ncls),&
@@ -79,8 +79,8 @@ contains
     subroutine polar_cavger_calc_pops( spproj )
         class(sp_project), target, intent(in) :: spproj
         class(oris), pointer :: ptcl_field, cls_field
-        integer  :: i, icls, iptcl, eo
-        logical  :: l_3D
+        integer :: i, icls, iptcl, eo
+        logical :: l_3D
         l_3D = .false.
         select case(trim(params_glob%oritype))
         case('ptcl2D')
@@ -100,13 +100,13 @@ contains
         do iptcl = 1,ptcl_field%get_noris()
             if( ptcl_field%get_state(iptcl) == 0  ) cycle
             if( ptcl_field%get(iptcl,'w') < SMALL ) cycle
-            eo   = ptcl_field%get_eo(iptcl)+1
+            eo = ptcl_field%get_eo(iptcl)+1
             if( l_3D )then
                 icls = ptcl_field%get_proj(iptcl)
             else
                 icls = ptcl_field%get_class(iptcl)
             endif
-            eo_pops(icls,eo) = eo_pops(icls,eo) + 1
+            eo_pops(eo,icls) = eo_pops(eo,icls) + 1
         enddo
         !$omp end parallel do
         prev_eo_pops = 0
@@ -118,8 +118,8 @@ contains
                     icls = ptcl_field%get_class(i)
                 endif
                 if( .not.cls_field%isthere(i,'prev_pop_even') ) cycle
-                prev_eo_pops(icls,1) = cls_field%get_int(i,'prev_pop_even')
-                prev_eo_pops(icls,2) = cls_field%get_int(i,'prev_pop_odd')
+                prev_eo_pops(1,icls) = cls_field%get_int(i,'prev_pop_even')
+                prev_eo_pops(2,icls) = cls_field%get_int(i,'prev_pop_odd')
             enddo
         endif
         eo_pops = eo_pops + prev_eo_pops
@@ -212,7 +212,7 @@ contains
         !$omp parallel do default(shared), schedule(static) proc_bind(close)&
         !$omp private(icls,eo_pop,pop,numerator,denominator)
         do icls = 1,ncls
-            eo_pop = prev_eo_pops(icls,:) + eo_pops(icls,:) ! eo_pops has to be calculated differently
+            eo_pop = prev_eo_pops(:,icls) + eo_pops(:,icls) ! eo_pops has to be calculated differently
             pop    = sum(eo_pop)
             if(pop == 0)then
                 pfts_even(:,:,icls) = DCMPLX_ZERO
@@ -246,7 +246,7 @@ contains
         allocate(frc(filtsz),source=0.)
         !$omp parallel do default(shared) private(icls,frc,find,pop,eo_pop) schedule(static) proc_bind(close)
         do icls = 1,ncls
-            eo_pop = prev_eo_pops(icls,:) + eo_pops(icls,:)
+            eo_pop = prev_eo_pops(:,icls) + eo_pops(:,icls)
             pop    = sum(eo_pop)
             if( pop == 0 )then
                 frc = 0.
@@ -353,11 +353,11 @@ contains
     subroutine polar_cavger_assemble_sums_from_parts
         use simple_imgfile, only: imgfile
         character(len=:), allocatable :: cae, cao, cte, cto
-        complex(dp), allocatable :: pfte(:,:,:), pfto(:,:,:)
-        real(dp),    allocatable :: ctf2e(:,:,:), ctf2o(:,:,:)
+        complex(dp),      allocatable :: pfte(:,:,:), pfto(:,:,:)
+        real(dp),         allocatable :: ctf2e(:,:,:), ctf2o(:,:,:)
         integer :: ipart
-        allocate(pfte(pftsz,kfromto(1):kfromto(2),ncls), pfto(pftsz,kfromto(1):kfromto(2),ncls),&
-            &ctf2e(pftsz,kfromto(1):kfromto(2),ncls), ctf2o(pftsz,kfromto(1):kfromto(2),ncls))
+        allocate(pfte(pftsz,kfromto(1):kfromto(2),ncls),  pfto(pftsz,kfromto(1):kfromto(2),ncls),&
+               &ctf2e(pftsz,kfromto(1):kfromto(2),ncls), ctf2o(pftsz,kfromto(1):kfromto(2),ncls))
         call polar_cavger_zero_pft_refs
         do ipart = 1,params_glob%nparts
             cae = 'cavgs_even_part'    //int2str_pad(ipart,params_glob%numlen)//BIN_EXT
