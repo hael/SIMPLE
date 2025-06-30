@@ -526,113 +526,115 @@ contains
                 rt_merge_algndocs = toc(t_merge_algndocs)
                 t_volassemble = tic()
             endif
-            ! ASSEMBLE VOLUMES
-            select case(trim(params%refine))
-                case('eval')
-                    ! nothing to do
-                case DEFAULT
-                    cline_volassemble = cline ! transfer run-time command-line
-                    call cline_volassemble%set('which_iter', params%which_iter)
-                    call cline_volassemble%set('nthr',       nthr_here)
-                    call xvolassemble%execute_safe(cline_volassemble)
-                    ! rename & add volumes to project & update job_descr
-                    call build%spproj_field%get_pops(state_pops, 'state')
-                    do state = 1,params%nstates
-                        str_state = int2str_pad(state,2)
-                        if( state_pops(state) == 0 )then
-                            ! cleanup for empty state
-                            vol = 'vol'//trim(int2str(state))
-                            call cline%delete( vol )
-                            call job_descr%delete( vol )
-                            if( trim(params%oritype).eq.'cls3D' )then
-                                call build%spproj%remove_entry_from_osout('vol_cavg', state)
-                            else
-                                call build%spproj%remove_entry_from_osout('vol', state)
-                            endif
-                            call build%spproj%remove_entry_from_osout('fsc', state)
-                        else
-                            ! rename state volume
-                            vol       = trim(VOL_FBODY)//trim(str_state)//params%ext
-                            vol_iter  = trim(vol)
-                            fsc_file  = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
-                            call build%spproj%add_fsc2os_out(fsc_file, state, params%box)
-                            ! generate FSC pdf
-                            res       = get_resarr(params%box_crop, params%smpd_crop)
-                            fsc       = file2rarr(fsc_file)
-                            fsc_templ = 'fsc_state'//trim(str_state)//'_iter'//trim(str_iter)
-                            call plot_fsc(size(fsc), fsc, res, params%smpd_crop, fsc_templ)
-                            ! add state volume to os_out
-                            if( trim(params%oritype).eq.'cls3D' )then
-                                call build%spproj%add_vol2os_out(vol_iter, params%smpd_crop, state, 'vol_cavg')
-                            else
-                                call build%spproj%add_vol2os_out(vol_iter, params%smpd_crop, state, 'vol')
-                            endif
-                            ! updates cmdlines & job description
-                            vol = 'vol'//trim(int2str(state))
-                            call job_descr%set( vol, vol_iter )
-                            call cline%set(vol, vol_iter)
-                        endif
-                    enddo
-                    ! volume mask, one for all states
-                    if( cline%defined('mskfile') )then
-                        if( file_exists(trim(params%mskfile)) )then
-                            call build%spproj%add_vol2os_out(trim(params%mskfile), params%smpd, 1, 'vol_msk')
-                        endif
-                    endif
-                    ! writes os_out
-                    call build%spproj%write_segment_inside('out')
-                    ! per state post-process
-                    do state = 1,params%nstates
-                        str_state = int2str_pad(state,2)
-                        if( state_pops(state) == 0 ) cycle
-                        call cline_postprocess%set('state',    state)
-                        call cline_postprocess%set('nthr', nthr_here)
-                        if( cline%defined('lp') ) call cline_postprocess%set('lp', params%lp)
-                        call xpostprocess%execute_safe(cline_postprocess)         
-                        volpproc = trim(VOL_FBODY)//trim(str_state)//PPROC_SUFFIX//params%ext
-                        vollp    = trim(VOL_FBODY)//trim(str_state)//LP_SUFFIX//params%ext
-                        if( l_automsk )then
-                            do_automsk = .false.
-                            if( niters == 1 .and. .not.params%l_filemsk )then
-                                do_automsk = .true.
-                            else if( mod(iter,AMSK_FREQ)==0 )then
-                                do_automsk = .true.
-                            endif
-                            if( do_automsk )then
-                                call build%spproj%get_vol('vol', state, fname_vol, smpd, box)
-                                fname_even = add2fbody(trim(fname_vol), params%ext, '_even')
-                                fname_odd  = add2fbody(trim(fname_vol), params%ext, '_odd' )
-                                call vol_e%new([box,box,box], smpd)
-                                call vol_e%read(fname_even)
-                                call vol_o%new([box,box,box], smpd)
-                                call vol_o%read(fname_odd)
-                                if( cline%defined('thres') )then
-                                    call mskvol%automask3D(vol_e, vol_o, trim(params%automsk).eq.'tight', params%thres)
+            if( trim(params%volrec).eq.'yes' )then
+                ! ASSEMBLE VOLUMES
+                select case(trim(params%refine))
+                    case('eval')
+                        ! nothing to do
+                    case DEFAULT
+                        cline_volassemble = cline ! transfer run-time command-line
+                        call cline_volassemble%set('which_iter', params%which_iter)
+                        call cline_volassemble%set('nthr',       nthr_here)
+                        call xvolassemble%execute_safe(cline_volassemble)
+                        ! rename & add volumes to project & update job_descr
+                        call build%spproj_field%get_pops(state_pops, 'state')
+                        do state = 1,params%nstates
+                            str_state = int2str_pad(state,2)
+                            if( state_pops(state) == 0 )then
+                                ! cleanup for empty state
+                                vol = 'vol'//trim(int2str(state))
+                                call cline%delete( vol )
+                                call job_descr%delete( vol )
+                                if( trim(params%oritype).eq.'cls3D' )then
+                                    call build%spproj%remove_entry_from_osout('vol_cavg', state)
                                 else
-                                    call mskvol%automask3D(vol_e, vol_o, trim(params%automsk).eq.'tight')
+                                    call build%spproj%remove_entry_from_osout('vol', state)
                                 endif
-                                call mskvol%write(MSKVOL_FILE)
-                                params%mskfile   = MSKVOL_FILE
-                                params%l_filemsk = .true.
-                                call cline%set('mskfile', MSKVOL_FILE)
-                                call job_descr%set('mskfile', MSKVOL_FILE)
-                                call mskvol%kill_bimg
-                                call vol_e%kill
-                                call vol_o%kill
+                                call build%spproj%remove_entry_from_osout('fsc', state)
+                            else
+                                ! rename state volume
+                                vol       = trim(VOL_FBODY)//trim(str_state)//params%ext
+                                vol_iter  = trim(vol)
+                                fsc_file  = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
+                                call build%spproj%add_fsc2os_out(fsc_file, state, params%box)
+                                ! generate FSC pdf
+                                res       = get_resarr(params%box_crop, params%smpd_crop)
+                                fsc       = file2rarr(fsc_file)
+                                fsc_templ = 'fsc_state'//trim(str_state)//'_iter'//trim(str_iter)
+                                call plot_fsc(size(fsc), fsc, res, params%smpd_crop, fsc_templ)
+                                ! add state volume to os_out
+                                if( trim(params%oritype).eq.'cls3D' )then
+                                    call build%spproj%add_vol2os_out(vol_iter, params%smpd_crop, state, 'vol_cavg')
+                                else
+                                    call build%spproj%add_vol2os_out(vol_iter, params%smpd_crop, state, 'vol')
+                                endif
+                                ! updates cmdlines & job description
+                                vol = 'vol'//trim(int2str(state))
+                                call job_descr%set( vol, vol_iter )
+                                call cline%set(vol, vol_iter)
+                            endif
+                        enddo
+                        ! volume mask, one for all states
+                        if( cline%defined('mskfile') )then
+                            if( file_exists(trim(params%mskfile)) )then
+                                call build%spproj%add_vol2os_out(trim(params%mskfile), params%smpd, 1, 'vol_msk')
                             endif
                         endif
-                        vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter,3)//PPROC_SUFFIX//params%ext
-                        call simple_copy_file(volpproc, vol_iter)
-                        vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter,3)//LP_SUFFIX//params%ext
-                        call simple_copy_file(vollp, vol_iter)
-                        if( iter > 1 .and. params%keepvol.eq.'no' )then
-                            vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter-1,3)//PPROC_SUFFIX//params%ext
-                            call del_file(vol_iter)
-                            vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter-1,3)//LP_SUFFIX//params%ext
-                            call del_file(vol_iter)
-                        endif
-                    enddo
-            end select
+                        ! writes os_out
+                        call build%spproj%write_segment_inside('out')
+                        ! per state post-process
+                        do state = 1,params%nstates
+                            str_state = int2str_pad(state,2)
+                            if( state_pops(state) == 0 ) cycle
+                            call cline_postprocess%set('state',    state)
+                            call cline_postprocess%set('nthr', nthr_here)
+                            if( cline%defined('lp') ) call cline_postprocess%set('lp', params%lp)
+                            call xpostprocess%execute_safe(cline_postprocess)
+                            volpproc = trim(VOL_FBODY)//trim(str_state)//PPROC_SUFFIX//params%ext
+                            vollp    = trim(VOL_FBODY)//trim(str_state)//LP_SUFFIX//params%ext
+                            if( l_automsk )then
+                                do_automsk = .false.
+                                if( niters == 1 .and. .not.params%l_filemsk )then
+                                    do_automsk = .true.
+                                else if( mod(iter,AMSK_FREQ)==0 )then
+                                    do_automsk = .true.
+                                endif
+                                if( do_automsk )then
+                                    call build%spproj%get_vol('vol', state, fname_vol, smpd, box)
+                                    fname_even = add2fbody(trim(fname_vol), params%ext, '_even')
+                                    fname_odd  = add2fbody(trim(fname_vol), params%ext, '_odd' )
+                                    call vol_e%new([box,box,box], smpd)
+                                    call vol_e%read(fname_even)
+                                    call vol_o%new([box,box,box], smpd)
+                                    call vol_o%read(fname_odd)
+                                    if( cline%defined('thres') )then
+                                        call mskvol%automask3D(vol_e, vol_o, trim(params%automsk).eq.'tight', params%thres)
+                                    else
+                                        call mskvol%automask3D(vol_e, vol_o, trim(params%automsk).eq.'tight')
+                                    endif
+                                    call mskvol%write(MSKVOL_FILE)
+                                    params%mskfile   = MSKVOL_FILE
+                                    params%l_filemsk = .true.
+                                    call cline%set('mskfile', MSKVOL_FILE)
+                                    call job_descr%set('mskfile', MSKVOL_FILE)
+                                    call mskvol%kill_bimg
+                                    call vol_e%kill
+                                    call vol_o%kill
+                                endif
+                            endif
+                            vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter,3)//PPROC_SUFFIX//params%ext
+                            call simple_copy_file(volpproc, vol_iter)
+                            vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter,3)//LP_SUFFIX//params%ext
+                            call simple_copy_file(vollp, vol_iter)
+                            if( iter > 1 .and. params%keepvol.eq.'no' )then
+                                vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter-1,3)//PPROC_SUFFIX//params%ext
+                                call del_file(vol_iter)
+                                vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter-1,3)//LP_SUFFIX//params%ext
+                                call del_file(vol_iter)
+                            endif
+                        enddo
+                end select
+            endif
             if( L_BENCH_GLOB ) rt_volassemble = toc(t_volassemble)
             ! CONVERGENCE
             converged = .false.
