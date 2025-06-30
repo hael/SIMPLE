@@ -121,7 +121,10 @@ contains
             call self%mic_shrink%erode
             call self%mic_shrink%erode
         endif 
-        if( l_winsz ) call self%mic_shrink%fill_holes()
+        if( l_winsz )then 
+            call self%mic_shrink%fill_holes()
+            call self%mic_shrink%inv_bimg()
+        endif
         if( L_WRITE ) call self%mic_shrink%write_bimg(fbody//'_lp_tv_bin_erode.mrc')
         ! identify connected components
         call self%mic_shrink%find_ccs(self%img_cc)
