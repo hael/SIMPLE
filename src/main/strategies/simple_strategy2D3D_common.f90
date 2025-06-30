@@ -1158,9 +1158,11 @@ contains
         ! PREPARATION OF PFTCC AND REFERENCES
         nrefs = params_glob%nspace * params_glob%nstates
         call pftcc%new(nrefs, [1,batchsz], params_glob%kfromto)
+        call build_glob%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
         ! Read polar references
         call polar_cavger_new(pftcc)
-        call polar_cavger_read_all(params_glob%vols(1))
+        call polar_cavger_read_all(trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter-1,3)//params_glob%ext)
+        call build_glob%clsfrcs%read(FRCS_FILE)
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
         ! PREPARATION OF REFERENCES IN PFTCC
         !$omp parallel do default(shared) private(iproj,pop,pop_even,pop_odd)&

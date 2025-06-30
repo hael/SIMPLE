@@ -317,19 +317,9 @@ contains
             if( l_polar )then
                 if( l_distr_exec_glob )then
                     call polar_cavger_readwrite_partial_sums('write')
-                    call polar_cavger_kill
+                    if( params_glob%part==1 ) call polar_restoration
                 else
-                    ! polar restoration
-                    params_glob%refs = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//params_glob%ext
-                    call polar_cavger_merge_eos_and_norm
-                    call polar_cavger_calc_and_write_frcs_and_eoavg(FRCS_FILE)
-                    call polar_cavger_writeall(get_fbody(params_glob%refs,params_glob%ext,separator=.false.))
-                    call polar_cavger_write_cartrefs(pftcc, get_fbody(params_glob%refs,params_glob%ext,separator=.false.), 'merged')
-                    call polar_cavger_gen2Dclassdoc(build_glob%spproj) ! necessary??
-                    call polar_cavger_kill
-                    ! update params & command line
-                    params_glob%vols(1) = trim(params_glob%refs)
-                    call cline%set('vol1', params_glob%vols(1))
+                    call polar_restoration
                 endif
             endif
         endif
@@ -372,6 +362,19 @@ contains
                 call fclose(fnr)
             endif
         endif
+
+      contains
+
+        subroutine polar_restoration()
+            ! polar restoration
+            params_glob%refs = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//params_glob%ext
+            call polar_cavger_merge_eos_and_norm
+            call polar_cavger_calc_and_write_frcs_and_eoavg(FRCS_FILE)
+            call polar_cavger_writeall(get_fbody(params_glob%refs,params_glob%ext,separator=.false.))
+            call polar_cavger_write_cartrefs(pftcc, get_fbody(params_glob%refs,params_glob%ext,separator=.false.), 'merged')
+            call polar_cavger_kill
+        end subroutine polar_restoration
+
     end subroutine refine3D_exec
     
 end module simple_strategy3D_matcher
