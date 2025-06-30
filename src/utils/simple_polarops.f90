@@ -39,9 +39,9 @@ contains
 
     !> Module initialization
     subroutine polar_cavger_new( pftcc )
-        class(polarft_corrcalc), target, intent(in) :: pftcc
+        class(polarft_corrcalc), intent(in) :: pftcc
         call polar_cavger_kill
-        ncls    = params_glob%ncls
+        ncls    = pftcc%get_nrefs()
         pftsz   = pftcc%get_pftsz()
         kfromto = pftcc%get_kfromto()
         ! dimensions
@@ -80,6 +80,8 @@ contains
         class(sp_project), target, intent(in) :: spproj
         class(oris), pointer :: ptcl_field, cls_field
         integer  :: i, icls, iptcl, eo
+        logical  :: l_3D
+        l_3D = .false.
         select case(trim(params_glob%oritype))
         case('ptcl2D')
             ptcl_field => spproj%os_ptcl2D
@@ -87,6 +89,7 @@ contains
         case('ptcl3D')
             ptcl_field => spproj%os_ptcl3D
             cls_field  => spproj%os_cls3D
+            l_3D       = .true.
         case DEFAULT
             THROW_HARD('Unsupported ORITYPE: '//trim(params_glob%oritype))
         end select
@@ -98,14 +101,22 @@ contains
             if( ptcl_field%get_state(iptcl) == 0  ) cycle
             if( ptcl_field%get(iptcl,'w') < SMALL ) cycle
             eo   = ptcl_field%get_eo(iptcl)+1
-            icls = ptcl_field%get_class(iptcl)
+            if( l_3D )then
+                icls = ptcl_field%get_proj(iptcl)
+            else
+                icls = ptcl_field%get_class(iptcl)
+            endif
             eo_pops(icls,eo) = eo_pops(icls,eo) + 1
         enddo
         !$omp end parallel do
         prev_eo_pops = 0
         if( cls_field%get_noris() == ncls )then
             do i = 1,ncls
-                icls = cls_field%get_class(i)
+                if( l_3D )then
+                    icls = ptcl_field%get_proj(i)
+                else
+                    icls = ptcl_field%get_class(i)
+                endif
                 if( .not.cls_field%isthere(i,'prev_pop_even') ) cycle
                 prev_eo_pops(icls,1) = cls_field%get_int(i,'prev_pop_even')
                 prev_eo_pops(icls,2) = cls_field%get_int(i,'prev_pop_odd')
@@ -115,19 +126,22 @@ contains
     end subroutine polar_cavger_calc_pops
 
     !>  \brief  Updates Fourier components and normalization matrices with new particles
-    subroutine polar_cavger_update_sums( nptcls, pinds, spproj, pftcc, incr_shifts )
+    subroutine polar_cavger_update_sums( nptcls, pinds, spproj, pftcc, incr_shifts, is3D )
         integer,                         intent(in)    :: nptcls
         integer,                         intent(in)    :: pinds(nptcls)
         class(sp_project),               intent(inout) :: spproj
         class(polarft_corrcalc), target, intent(inout) :: pftcc
         real,                            intent(in)    :: incr_shifts(2,nptcls)
+        logical,               optional, intent(in)    :: is3d
         class(oris), pointer :: spproj_field
         complex(sp), pointer :: pptcls(:,:,:), rptcl(:,:)
         real(sp),    pointer :: pctfmats(:,:,:), rctf(:,:)
         real(dp) :: w
         real     :: incr_shift(2)
         integer  :: eopops(ncls,2), i, icls, iptcl, irot
-        logical  :: l_ctf, l_even
+        logical  :: l_ctf, l_even, l_3D
+        l_3D = .false.
+        if( present(is3D) ) l_3D = is3D
         ! retrieve particle info & pointers
         call spproj%ptr2oritype(params_glob%oritype, spproj_field)
         call pftcc%get_ptcls_ptr(pptcls)
@@ -145,7 +159,11 @@ contains
             w = real(spproj_field%get(iptcl,'w'),dp)
             if( w < DSMALL ) cycle
             l_even = spproj_field%get_eo(iptcl)==0
-            icls   = spproj_field%get_class(iptcl)
+            if( l_3D )then
+                icls = spproj_field%get_proj(iptcl)
+            else
+                icls = spproj_field%get_class(iptcl)
+            endif
             irot   = pftcc%get_roind(spproj_field%e3get(iptcl))
             incr_shift = incr_shifts(:,i)
             ! weighted restoration
@@ -451,7 +469,9 @@ contains
         endif
         refs_even = get_fbody(refs,BIN_EXT,separator=.false.)//'_even'//BIN_EXT
         refs_odd  = get_fbody(refs,BIN_EXT,separator=.false.)//'_odd'//BIN_EXT
-        if( .not. file_exists(refs) ) THROW_HARD('Polar references do not exist in cwd')
+        if( .not. file_exists(refs) )then
+            THROW_HARD('Polar references do not exist in cwd: '//trim(refs))
+        endif
         call polar_cavger_read(refs, 'merged')
         if( file_exists(refs_even) )then
             call polar_cavger_read(refs_even, 'even')
@@ -502,8 +522,19 @@ contains
         real(dp) :: corrs(ncls), ws(ncls)
         real     :: frc05, frc0143, rstate, w
         integer  :: iptcl, icls, pop, nptcls
-        ptcl_field => spproj%os_ptcl2D
-        cls_field  => spproj%os_cls2D
+        logical  :: l_3D
+        l_3D = .false.
+        select case(trim(params_glob%oritype))
+        case('ptcl2D')
+            ptcl_field => spproj%os_ptcl2D
+            cls_field  => spproj%os_cls2D
+        case('ptcl3D')
+            ptcl_field => spproj%os_ptcl3D
+            cls_field  => spproj%os_cls3D
+            l_3D       = .true.
+        case DEFAULT
+            THROW_HARD('Unsupported ORITYPE: '//trim(params_glob%oritype))
+        end select
         nptcls = ptcl_field%get_noris()
         pops   = 0
         corrs  = 0.d0
@@ -515,7 +546,11 @@ contains
             if( rstate < 0.5 ) cycle
             w = ptcl_field%get(iptcl,'w')
             if( w < SMALL ) cycle
-            icls = ptcl_field%get_class(iptcl)
+            if( l_3D )then
+                icls = ptcl_field%get_proj(iptcl)
+            else
+                icls = ptcl_field%get_class(iptcl)
+            endif
             if( icls<1 .or. icls>params_glob%ncls )cycle
             pops(icls)  = pops(icls)  + 1
             corrs(icls) = corrs(icls) + real(ptcl_field%get(iptcl,'corr'),dp)
@@ -533,7 +568,11 @@ contains
         do icls=1,ncls
             pop = pops(icls)
             call build_glob%clsfrcs%estimate_res(icls, frc05, frc0143)
-            call cls_field%set(icls, 'class',     icls)
+            if( l_3D )then
+                call cls_field%set(icls, 'proj',  icls)
+            else
+                call cls_field%set(icls, 'class', icls)
+            endif
             call cls_field%set(icls, 'pop',       pop)
             call cls_field%set(icls, 'res',       frc0143)
             call cls_field%set(icls, 'corr',      corrs(icls))
