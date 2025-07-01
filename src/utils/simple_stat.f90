@@ -1037,7 +1037,6 @@ contains
         real, allocatable :: smat(:,:)
         integer :: n
         n = size(dmat,1)
-        if( n /= size(dmat,2) ) THROW_HARD('symmetric distance matrix assumed')
         allocate(smat(n,n), source=dmat)
         call normalize_minmax(smat)
         smat = exp(-smat)
@@ -1048,7 +1047,6 @@ contains
         real, allocatable :: dmat(:,:)
         integer :: n
         n = size(smat,1)
-        if( n /= size(smat,2) ) THROW_HARD('symmetric similarity matrix assumed')
         allocate(dmat(n,n), source=smat)
         call normalize_minmax(dmat)
         where( dmat < TINY )
@@ -1080,7 +1078,6 @@ contains
         sz2_1 = size(smat2,1)
         sz2_2 = size(smat2,2)
         if( sz1_1 /= sz2_1 .or. sz1_2 /= sz2_2 ) THROW_HARD('identical similarity matrices assumed')
-        if( sz1_1 /= sz1_2 .or. sz2_1 /= sz2_2 ) THROW_HARD('symmetric similarity matrices assumed')
         n = sz1_1
         allocate(smat(n,n),   source=smat1)
         allocate(tmpmat(n,n), source=smat2)
@@ -1098,7 +1095,6 @@ contains
         sz2_1 = size(dmat2,1)
         sz2_2 = size(dmat2,2)
         if( sz1_1 /= sz2_1 .or. sz1_2 /= sz2_2 ) THROW_HARD('identical similarity matrices assumed')
-        if( sz1_1 /= sz1_2 .or. sz2_1 /= sz2_2 ) THROW_HARD('symmetric similarity matrices assumed')
         n = sz1_1
         allocate(dmat(n,n),   source=dmat1)
         allocate(tmpmat(n,n), source=dmat2)
@@ -1119,7 +1115,6 @@ contains
         sz3_2 = size(dmat3,2)
         if( sz1_1 /= sz2_1 .or. sz1_2 /= sz2_2 ) THROW_HARD('identical similarity matrices assumed')
         if( sz1_1 /= sz3_1 .or. sz1_2 /= sz3_2 ) THROW_HARD('identical similarity matrices assumed')
-        if( sz1_1 /= sz1_2 .or. sz2_1 /= sz2_2 ) THROW_HARD('symmetric similarity matrices assumed')
         n = sz1_1
         allocate(dmat(n,n),    source=dmat1)
         allocate(tmpmat1(n,n), source=dmat2)

@@ -349,25 +349,31 @@ contains
     end subroutine exec_select_clusters
 
     subroutine exec_match_cavgs( self, cline )
+        use simple_kmedoids, only: kmedoids
         class(match_cavgs_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj_ref, spproj_match
-        type(image),       allocatable :: cavg_imgs_ref(:), cavg_imgs_match(:)
-        integer,           allocatable :: clspops_ref(:), clsinds_ref(:), clspops_match(:), clsinds_match(:)
-        logical,           allocatable :: l_non_junk_ref(:), l_non_junk_match(:)
-        real,              allocatable :: mm_ref(:,:), mm_match(:,:)
+        type(kmedoids)   :: kmed
+        type(image),       allocatable :: cavg_imgs_ref(:), cavg_imgs_match(:), cavg_imgs_ref_med(:)
+        integer,           allocatable :: clspops_ref(:), clsinds_ref(:), clspops_match(:), clsinds_match(:), labels(:)
+        integer,           allocatable :: i_medoids_ref(:), states(:), labels_match(:), states_map(:)
+        logical,           allocatable :: l_non_junk_ref(:), l_non_junk_match(:), l_med_msk(:)
+        real,              allocatable :: mm_ref(:,:), mm_match(:,:), corrmat(:,:), dmat_ref(:,:), dmat(:,:)
         type(inpl_struct), allocatable :: algninfo(:,:)
-        integer :: nmatch, nrefs, ldim(3), i
-        real    :: smpd
+        integer :: nmatch, nrefs, ldim(3), i, nmedoids, ncls_match, nclust, icls, iclust
+        real    :: smpd, oa_minmax(2)
         ! defaults
         call cline%set('oritype', 'cls2D')
         call cline%set('ctf',        'no')
         call cline%set('objfun',     'cc')
-        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
-        if( .not. cline%defined('trs')     ) call cline%set('trs',       10.)
-        if( .not. cline%defined('kweight') ) call cline%set('kweight', 'all')
-        if( .not. cline%defined('lp')      ) call cline%set('lp',         6.)
+        call cline%set('sh_inv',    'yes') ! shift invariant search
+        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',         'yes')
+        if( .not. cline%defined('trs')        ) call cline%set('trs',             10.)
+        if( .not. cline%defined('kweight')    ) call cline%set('kweight',       'all')
+        if( .not. cline%defined('lp')         ) call cline%set('lp',               6.)
+        if( .not. cline%defined('prune')      ) call cline%set('prune',          'no')
+        if( .not. cline%defined('clust_crit') ) call cline%set('clust_crit', 'hybrid')
         ! master parameters
         call params%new(cline)
         ! read base project file
@@ -386,8 +392,77 @@ contains
         params%smpd = smpd
         params%box  = ldim(1)
         params%msk  = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
-        ! do the matching
-        algninfo = match_imgs2refs(nrefs, nmatch, params%hp, params%lp, params%trs, cavg_imgs_ref, cavg_imgs_match)
+        ! extract nonzero cluster labels
+        labels = spproj_ref%os_cls2D%get_all_asint('cluster')
+        labels = pack(labels, mask=labels > 0)
+        states = spproj_ref%os_cls2D%get_all_asint('state')
+        states = pack(states, mask=labels > 0)
+        ! calculate overall minmax
+        oa_minmax(1) = minval(mm_ref(:,1))
+        oa_minmax(2) = maxval(mm_ref(:,2))
+        ! calculate distance matrix for references 
+        dmat_ref = calc_cluster_cavgs_dmat(params, cavg_imgs_ref, oa_minmax)
+
+        do i = 1, size(cavg_imgs_ref)
+            print *, cavg_imgs_ref(i)%is_ft()
+        end do
+
+        ! identify medoids
+        nmedoids = maxval(labels)
+        nclust   = nmedoids
+        call kmed%new(labels, dmat_ref)
+        call kmed%find_medoids
+        allocate(i_medoids_ref(nmedoids), source=0)
+        call kmed%get_medoids(i_medoids_ref)
+        if( size(i_medoids_ref) /= nmedoids ) THROW_HARD('Incongruence!')
+        ! create image array of medoids
+        allocate(l_med_msk(nrefs), source=.false.)
+        do i = 1, nmedoids
+            l_med_msk(i_medoids_ref(i)) = .true.
+        end do
+        cavg_imgs_ref_med = pack_imgarr(cavg_imgs_ref, mask=l_med_msk)
+        ! generate matching distance matrix
+        dmat = calc_match_cavgs_dmat(params, cavg_imgs_ref_med, cavg_imgs_match, oa_minmax)
+        allocate(labels_match(nmatch), source=0)
+        labels_match = minloc(dmat, dim=1)
+        ! update project
+        call spproj_match%os_ptcl2D%transfer_class_assignment(spproj_match%os_ptcl3D)
+        do iclust = 1, nclust
+            do icls = 1, nmatch
+                if( labels_match(icls) == iclust )then
+                    call spproj_match%os_cls2D%set(clsinds_match(icls),'cluster',iclust)                          ! 2D class field
+                    call spproj_match%os_cls3D%set(clsinds_match(icls),'cluster',iclust)                          ! 3D class field
+                    call spproj_match%os_ptcl2D%set_field2single('class', clsinds_match(icls), 'cluster', iclust) ! 2D particle field
+                    call spproj_match%os_ptcl3D%set_field2single('class', clsinds_match(icls), 'cluster', iclust) ! 3D particle field
+                endif
+            enddo
+        enddo
+        ! translate to state array
+        ncls_match = spproj_match%os_cls2D%get_noris()
+        allocate(states_map(ncls_match), source=0)
+        do icls = 1, nmatch
+            states_map(clsinds_match(icls)) = find_label_state(labels_match(icls))
+        end do
+        ! map selection to project
+        call spproj_match%map_cavgs_selection(states)
+        ! optional pruning
+        if( trim(params%prune).eq.'yes') call spproj_match%prune_particles
+        ! this needs to be a full write as many segments are updated
+        call spproj_match%write(params%projfile_target)
+
+    contains
+        
+        function find_label_state( label ) result( state )
+            integer, intent(in) :: label
+            integer :: state
+            state = 1
+            do i = 1, nrefs
+                if( labels(i) == label )then
+                    state = states(i)
+                    return
+                endif
+            end do
+        end function find_label_state
 
     end subroutine exec_match_cavgs
 
