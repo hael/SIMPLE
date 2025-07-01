@@ -27,19 +27,23 @@ private
 #include "simple_local_flags.inc"
 
 
-complex(dp), allocatable :: pfts_even(:,:,:), pfts_odd(:,:,:), pfts_refs(:,:,:) ! PFTs arrays
-real(dp),    allocatable :: ctf2_even(:,:,:), ctf2_odd(:,:,:)                   ! PFT-size CTF2 arrays
-integer,     allocatable :: prev_eo_pops(:,:), eo_pops(:,:)                     ! Class populations
-real                     :: smpd       = 0.                                     ! Pixel size
-integer                  :: ncls       = 0                                      ! # classes
-integer                  :: kfromto(2) = 0                                      ! Resolution range
-integer                  :: pftsz      = 0                                      ! Size of PFT in pftcc along rotation dimension
+complex(dp), allocatable :: pfts_even(:,:,:),      pfts_odd(:,:,:),      pfts_cavg(:,:,:) ! PFTs arrays
+complex(dp), allocatable :: pfts_clin_even(:,:,:), pfts_clin_odd(:,:,:), pfts_clin(:,:,:) ! clin PFTs arrays
+real(dp),    allocatable :: ctf2_even(:,:,:),      ctf2_odd(:,:,:)                        ! PFT-size CTF2 arrays
+real(dp),    allocatable :: ctf2_clin_even(:,:,:), ctf2_clin_odd(:,:,:)                   ! clin PFT-size CTF2 arrays
+integer,     allocatable :: prev_eo_pops(:,:), eo_pops(:,:)                               ! Class populations
+real                     :: smpd       = 0.                                               ! Pixel size
+integer                  :: ncls       = 0                                                ! # classes
+integer                  :: kfromto(2) = 0                                                ! Resolution range
+integer                  :: pftsz      = 0                                                ! Size of PFT in pftcc along rotation dimension
+logical                  :: l_comlin   = .false.                                          ! Whether to have common line refs
 
 contains
 
     !> Module initialization
     subroutine polar_cavger_new( pftcc )
         class(polarft_corrcalc), intent(in) :: pftcc
+        l_comlin = (trim(params_glob%ref_type).eq.'clin' .or. trim(params_glob%ref_type).eq.'cavg_clin')
         call polar_cavger_kill
         ncls    = pftcc%get_nrefs()
         pftsz   = pftcc%get_pftsz()
@@ -50,9 +54,14 @@ contains
         ! Arrays        
         allocate(pfts_even(pftsz,kfromto(1):kfromto(2),ncls),pfts_odd(pftsz,kfromto(1):kfromto(2),ncls),&
                 &ctf2_even(pftsz,kfromto(1):kfromto(2),ncls),ctf2_odd(pftsz,kfromto(1):kfromto(2),ncls),&
-                &pfts_refs(pftsz,kfromto(1):kfromto(2),ncls))
+                &pfts_cavg(pftsz,kfromto(1):kfromto(2),ncls))
+        if( l_comlin )then
+            allocate(pfts_clin_even(pftsz,kfromto(1):kfromto(2),ncls),pfts_clin_odd(pftsz,kfromto(1):kfromto(2),ncls),&
+                    &ctf2_clin_even(pftsz,kfromto(1):kfromto(2),ncls),ctf2_clin_odd(pftsz,kfromto(1):kfromto(2),ncls),&
+                    &pfts_clin(pftsz,kfromto(1):kfromto(2),ncls))
+        endif
         call polar_cavger_zero_pft_refs
-        pfts_refs = DCMPLX_ZERO
+        pfts_cavg = DCMPLX_ZERO
     end subroutine polar_cavger_new
 
     subroutine polar_cavger_zero_pft_refs
@@ -68,7 +77,7 @@ contains
         class(polarft_corrcalc), intent(inout) :: pftcc
         select case(trim(which))
         case('merged')
-            call pftcc%set_ref_pft(icls, cmplx(pfts_refs(:,:,icls),kind=sp), .true.)
+            call pftcc%set_ref_pft(icls, cmplx(pfts_cavg(:,:,icls),kind=sp), .true.)
         case('even')
             call pftcc%set_ref_pft(icls, cmplx(pfts_even(:,:,icls),kind=sp), .true.)
         case('odd')
@@ -203,38 +212,90 @@ contains
     end subroutine polar_cavger_update_sums
 
     !>  \brief  Restores class-averages
-    subroutine polar_cavger_merge_eos_and_norm
+    subroutine polar_cavger_merge_eos_and_norm( pcomlines )
+        use simple_comlin, only: polar_comlin_pfts
+        type(polar_fmap), optional, intent(in) :: pcomlines(ncls,ncls)
         real, parameter :: EPSILON = 0.1
+        complex     :: pfts(pftsz,kfromto(1):kfromto(2),ncls)
         complex(dp) :: numerator(pftsz,kfromto(1):kfromto(2))
         real(dp)    :: denominator(pftsz,kfromto(1):kfromto(2))
         integer     :: icls, eo_pop(2), pop
-        pfts_refs = DCMPLX_ZERO
-        !$omp parallel do default(shared), schedule(static) proc_bind(close)&
-        !$omp private(icls,eo_pop,pop,numerator,denominator)
-        do icls = 1,ncls
-            eo_pop = prev_eo_pops(:,icls) + eo_pops(:,icls) ! eo_pops has to be calculated differently
-            pop    = sum(eo_pop)
-            if(pop == 0)then
-                pfts_even(:,:,icls) = DCMPLX_ZERO
-                pfts_odd(:,:,icls)  = DCMPLX_ZERO
-                ctf2_even(:,:,icls) = 0.d0
-                ctf2_odd(:,:,icls)  = 0.d0
-            else
-                if(pop > 1)then
+        if( l_comlin .and. present(pcomlines) )then
+            call polar_comlin_pfts(pcomlines, cmplx(pfts_even), pfts)
+            pfts_clin_even = cmplx(pfts, kind=dp)
+            call polar_comlin_pfts(pcomlines, cmplx(pfts_odd),  pfts)
+            pfts_clin_odd  = cmplx(pfts, kind=dp)
+            call polar_comlin_pfts(pcomlines, cmplx(ctf2_even), pfts)
+            ctf2_clin_even = real(pfts,dp)
+            call polar_comlin_pfts(pcomlines, cmplx(ctf2_odd),  pfts)
+            ctf2_clin_odd  = real(pfts,dp)
+        endif
+        pfts_cavg = DCMPLX_ZERO
+        select case(trim(params_glob%ref_type))
+            case('cavg')
+                !$omp parallel do default(shared), schedule(static) proc_bind(close)&
+                !$omp private(icls,eo_pop,pop,numerator,denominator)
+                do icls = 1,ncls
+                    eo_pop = prev_eo_pops(:,icls) + eo_pops(:,icls) ! eo_pops has to be calculated differently
+                    pop    = sum(eo_pop)
+                    if(pop == 0)then
+                        pfts_even(:,:,icls) = DCMPLX_ZERO
+                        pfts_odd(:,:,icls)  = DCMPLX_ZERO
+                        ctf2_even(:,:,icls) = 0.d0
+                        ctf2_odd(:,:,icls)  = 0.d0
+                    else
+                        if(pop > 1)then
+                            numerator   = pfts_even(:,:,icls) + pfts_odd(:,:,icls)
+                            denominator = ctf2_even(:,:,icls) + ctf2_odd(:,:,icls)
+                            if( pop <= 5 ) denominator = denominator + real(EPSILON/real(pop),dp)
+                            where( abs(denominator) > DSMALL ) pfts_cavg(:,:,icls) = numerator / denominator
+                        endif
+                        if(eo_pop(1) > 1)then
+                            where( abs(ctf2_even(:,:,icls)) > DSMALL ) pfts_even(:,:,icls) = pfts_even(:,:,icls) / ctf2_even(:,:,icls)
+                        endif
+                        if(eo_pop(2) > 1)then
+                            where( abs(ctf2_odd(:,:,icls)) > DSMALL )  pfts_odd(:,:,icls)  = pfts_odd(:,:,icls)  / ctf2_odd(:,:,icls)
+                        endif
+                    endif
+                end do
+                !$omp end parallel do
+            case('clin')
+                !$omp parallel do default(shared), schedule(static) proc_bind(close)&
+                !$omp private(icls,numerator,denominator)
+                do icls = 1,ncls
+                    numerator   = pfts_clin_even(:,:,icls) + pfts_clin_odd(:,:,icls)
+                    denominator = ctf2_clin_even(:,:,icls) + ctf2_clin_odd(:,:,icls)
+                    where( abs(denominator)              > DSMALL ) pfts_cavg(:,:,icls) = numerator / denominator
+                    where( abs(ctf2_clin_even(:,:,icls)) > DSMALL ) pfts_even(:,:,icls) = pfts_clin_even(:,:,icls) / ctf2_clin_even(:,:,icls)
+                    where( abs(ctf2_clin_odd( :,:,icls)) > DSMALL ) pfts_odd( :,:,icls) = pfts_clin_odd( :,:,icls) / ctf2_clin_odd( :,:,icls)
+                end do
+                !$omp end parallel do
+            case('cavg_clin')
+                !$omp parallel do default(shared), schedule(static) proc_bind(close)&
+                !$omp private(icls,eo_pop,pop,numerator,denominator)
+                do icls = 1,ncls
+                    eo_pop = prev_eo_pops(:,icls) + eo_pops(:,icls) ! eo_pops has to be calculated differently
+                    pop    = sum(eo_pop)
+                    if(pop == 0)then
+                        pfts_even(:,:,icls) = DCMPLX_ZERO
+                        pfts_odd(:,:,icls)  = DCMPLX_ZERO
+                        ctf2_even(:,:,icls) = 0.d0
+                        ctf2_odd(:,:,icls)  = 0.d0
+                    endif
+                    pfts_even(:,:,icls) = pfts_even(:,:,icls) + pfts_clin_even(:,:,icls)
+                    pfts_odd( :,:,icls) = pfts_odd( :,:,icls) + pfts_clin_odd( :,:,icls)
+                    ctf2_even(:,:,icls) = ctf2_even(:,:,icls) + ctf2_clin_even(:,:,icls)
+                    ctf2_odd( :,:,icls) = ctf2_odd( :,:,icls) + ctf2_clin_odd( :,:,icls)
                     numerator   = pfts_even(:,:,icls) + pfts_odd(:,:,icls)
                     denominator = ctf2_even(:,:,icls) + ctf2_odd(:,:,icls)
-                    if( pop <= 5 ) denominator = denominator + real(EPSILON/real(pop),dp)
-                    where( abs(denominator) > DSMALL ) pfts_refs(:,:,icls) = numerator / denominator
-                endif
-                if(eo_pop(1) > 1)then
+                    where( abs(denominator)         > DSMALL ) pfts_cavg(:,:,icls) = numerator / denominator
                     where( abs(ctf2_even(:,:,icls)) > DSMALL ) pfts_even(:,:,icls) = pfts_even(:,:,icls) / ctf2_even(:,:,icls)
-                endif
-                if(eo_pop(2) > 1)then
-                    where( abs(ctf2_odd(:,:,icls)) > DSMALL )  pfts_odd(:,:,icls)  = pfts_odd(:,:,icls)  / ctf2_odd(:,:,icls)
-                endif
-            endif
-        end do
-        !$omp end parallel do
+                    where( abs(ctf2_odd( :,:,icls)) > DSMALL ) pfts_odd( :,:,icls) = pfts_odd( :,:,icls) / ctf2_odd( :,:,icls)
+                end do
+                !$omp end parallel do
+            case DEFAULT
+                THROW_HARD('Unsupported ref_type mode. It should be cavg, clin, or cavg_clin')
+        end select
     end subroutine polar_cavger_merge_eos_and_norm
 
     !>  \brief  calculates Fourier ring correlations
@@ -259,8 +320,8 @@ contains
                 find = min(kfromto(2), build_glob%clsfrcs%estimate_find_for_eoavg(icls, 1))
                 ! find = min(build_glob%clsfrcs%estimate_find_for_eoavg(icls, 1, frc4eoavg=0.9), kfromto(2))
                 if( find >= kfromto(1) )then
-                    pfts_even(:,kfromto(1):find,icls) = pfts_refs(:,kfromto(1):find,icls)
-                    pfts_odd(:,kfromto(1):find,icls)  = pfts_refs(:,kfromto(1):find,icls)
+                    pfts_even(:,kfromto(1):find,icls) = pfts_cavg(:,kfromto(1):find,icls)
+                    pfts_odd(:,kfromto(1):find,icls)  = pfts_cavg(:,kfromto(1):find,icls)
                 endif
             endif
         end do
@@ -292,7 +353,7 @@ contains
             case('odd')
                 pft = pfts_odd(1:pftsz,kfromto(1):kfromto(2),icls)
             case('merged')
-                pft = pfts_refs(1:pftsz,kfromto(1):kfromto(2),icls)
+                pft = pfts_cavg(1:pftsz,kfromto(1):kfromto(2),icls)
             end select
             ! Bi-linear interpolation
             cmat = DCMPLX_ZERO
@@ -392,7 +453,7 @@ contains
             case('odd')
                 call write_pft_array(pfts_odd,  fname_here)
             case('merged')
-                call write_pft_array(pfts_refs, fname_here)
+                call write_pft_array(pfts_cavg, fname_here)
             case DEFAULT
                 THROW_HARD('unsupported which flag')
         end select
@@ -449,7 +510,7 @@ contains
             case('odd')
                 call read_pft_array(fname_here, pfts_odd)
             case('merged')
-                call read_pft_array(fname_here, pfts_refs)
+                call read_pft_array(fname_here, pfts_cavg)
             case DEFAULT
                 THROW_HARD('unsupported which flag')
         end select
@@ -656,7 +717,10 @@ contains
 
     subroutine polar_cavger_kill
         if( allocated(pfts_even) )then
-            deallocate(pfts_even,pfts_odd,ctf2_even,ctf2_odd,pfts_refs,eo_pops,prev_eo_pops)
+            deallocate(pfts_even,pfts_odd,ctf2_even,ctf2_odd,pfts_cavg,eo_pops,prev_eo_pops)
+        endif
+        if( allocated(pfts_clin_even) )then
+            deallocate(pfts_clin_even,pfts_clin_odd,ctf2_clin_even,ctf2_clin_odd,pfts_clin)
         endif
         smpd       = 0.
         ncls       = 0
@@ -676,7 +740,7 @@ contains
             THROW_HARD('Incompatible filter size!; polar_cavger_filterref')
         endif
         do k = kfromto(1),kfromto(2)
-            pfts_refs(:,k,icls) = filter(k) * pfts_refs(:,k,icls)
+            pfts_cavg(:,k,icls) = filter(k) * pfts_cavg(:,k,icls)
             pfts_even(:,k,icls) = filter(k) * pfts_even(:,k,icls)
             pfts_odd(:,k,icls)  = filter(k) * pfts_odd(:,k,icls)
         enddo
@@ -693,7 +757,7 @@ contains
         halfinvsigsq = 0.5d0 * (DPI * 2.d0 * fwhm / 2.35482d0)**2
         do k = kfromto(1),kfromto(2)
             g = exp(-real(k**2,dp) * halfinvsigsq)
-            pfts_refs(:,k,icls) = g * pfts_refs(:,k,icls)
+            pfts_cavg(:,k,icls) = g * pfts_cavg(:,k,icls)
             pfts_even(:,k,icls) = g * pfts_even(:,k,icls)
             pfts_odd(:,k,icls)  = g * pfts_odd(:,k,icls)
         enddo

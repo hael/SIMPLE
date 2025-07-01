@@ -98,7 +98,7 @@ type :: parameters
     character(len=3)          :: polar='no'           !< To use polar FT representation(yes|no){no}
     character(len=3)          :: polar_prep='no'      !< ptcl polarization is done once with ctf phase-flipping, without norm/mask(yes|no){no}
     character(len=3)          :: polar_msk='no'       !< polar ptcl mask (yes|no){no}
-    character(len=3)          :: polar_stoch='no'     !< stochastic ptcl sampling when ref_type=comlin (yes|no){no}
+    character(len=3)          :: polar_stoch='no'     !< stochastic ptcl sampling when ref_type=clin (yes|no){no}
     character(len=3)          :: pre_norm='no'        !< pre-normalize images for PCA analysis
     character(len=3)          :: print_corrs='no'     !< exporting corrs during the refinement(yes|no){no}
     character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes
