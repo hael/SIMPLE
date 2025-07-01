@@ -361,7 +361,7 @@ contains
         logical,           allocatable :: l_non_junk_ref(:), l_non_junk_match(:), l_med_msk(:)
         real,              allocatable :: mm_ref(:,:), mm_match(:,:), corrmat(:,:), dmat_ref(:,:), dmat(:,:)
         type(inpl_struct), allocatable :: algninfo(:,:)
-        integer :: nmatch, nrefs, ldim(3), i, nmedoids, ncls_match, nclust, icls, iclust
+        integer :: nmatch, nrefs, ldim(3), i, j, nmedoids, ncls_match, nclust, icls, iclust
         real    :: smpd, oa_minmax(2)
         ! defaults
         call cline%set('oritype', 'cls2D')
@@ -394,31 +394,29 @@ contains
         params%msk  = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
         ! extract nonzero cluster labels
         labels = spproj_ref%os_cls2D%get_all_asint('cluster')
-        labels = pack(labels, mask=labels > 0)
+        labels = pack(labels, l_non_junk_ref .eqv. .true.)
         states = spproj_ref%os_cls2D%get_all_asint('state')
-        states = pack(states, mask=labels > 0)
+        states = pack(states, states > 0)
         ! calculate overall minmax
         oa_minmax(1) = minval(mm_ref(:,1))
         oa_minmax(2) = maxval(mm_ref(:,2))
         ! calculate distance matrix for references 
         dmat_ref = calc_cluster_cavgs_dmat(params, cavg_imgs_ref, oa_minmax)
-
-        do i = 1, size(cavg_imgs_ref)
-            print *, cavg_imgs_ref(i)%is_ft()
-        end do
-
         ! identify medoids
-        nmedoids = maxval(labels)
+        nmedoids = maxval(labels) + 1
         nclust   = nmedoids
         call kmed%new(labels, dmat_ref)
-        call kmed%find_medoids
         allocate(i_medoids_ref(nmedoids), source=0)
         call kmed%get_medoids(i_medoids_ref)
         if( size(i_medoids_ref) /= nmedoids ) THROW_HARD('Incongruence!')
         ! create image array of medoids
         allocate(l_med_msk(nrefs), source=.false.)
         do i = 1, nmedoids
-            l_med_msk(i_medoids_ref(i)) = .true.
+            do j = 1, nrefs
+                if( labels(j) == i-1 )then
+                    l_med_msk(j) = .true.
+                endif
+            enddo
         end do
         cavg_imgs_ref_med = pack_imgarr(cavg_imgs_ref, mask=l_med_msk)
         ! generate matching distance matrix

@@ -49,7 +49,7 @@ contains
         class(kmedoids), intent(inout) :: self
         integer,         intent(in)    :: cls_labels(:)
         real, target,    intent(in)    :: dmat(size(cls_labels),size(cls_labels))
-        call self%new_1(size(cls_labels), dmat, maxval(cls_labels))
+        call self%new_1(size(cls_labels), dmat, maxval(cls_labels)+1)
         self%cls_labels = cls_labels
         call self%find_medoids
     end subroutine new_2
@@ -121,8 +121,7 @@ contains
 
     subroutine find_medoids( self )
         class(kmedoids), intent(inout) :: self
-        real    :: dists(self%n)
-        integer :: icls, i, j, loc(1)
+        integer :: icls
         !$omp parallel do default(shared) private(icls) proc_bind(close)
         do icls = 1, self%ncls
             call self%find_medoid(icls)
