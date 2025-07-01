@@ -335,8 +335,7 @@ contains
         ! create pspecs object
         call pows%new(cavg_imgs, params%msk, HP_SPEC, LP_SPEC)
         ! create a joint similarity matrix for clustering based on spectral profile and in-plane invariant correlation
-        call pows%calc_distmat
-        dmat_pow = pows%get_distmat()
+        dmat_pow = pows%calc_distmat()
         call normalize_minmax(dmat_pow)
         smat_pow = dmat2smat(dmat_pow)
         ! calculate inpl_invariant_fm corrmat
@@ -384,6 +383,83 @@ contains
             call hists(i)%kill
         end do
     end function calc_cluster_cavgs_dmat
+
+    function calc_match_cavgs_dmat( params, cavg_imgs_ref, cavg_imgs_match, oa_minmax  ) result( dmat )
+        use simple_corrmat,          only: calc_inpl_invariant_fm
+        use simple_histogram,        only: histogram
+        use simple_pspecs,           only: pspecs
+        class(parameters),    intent(in)    :: params
+        class(image),         intent(inout) :: cavg_imgs_ref(:), cavg_imgs_match(:)
+        real,                 intent(in)    :: oa_minmax(2)
+        integer,              parameter     :: NHISTBINS = 128
+        real,                 parameter     :: HP_SPEC=20., LP_SPEC=6.
+        type(histogram),      allocatable   :: hists_ref(:), hists_match(:)
+        real,                 allocatable   :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:), dmat_tvd(:,:), smat_tvd(:,:)
+        real,                 allocatable   :: dmat_joint(:,:), smat_joint(:,:), dmat(:,:), dmat_jsd(:,:), smat_jsd(:,:)
+        real,                 allocatable   :: dmat_hd(:,:), dmat_hist(:,:), dmat_cc(:,:), smat(:,:)
+        logical,              allocatable   :: l_msk(:,:,:)
+        type(inpl_struct),    allocatable   :: algninfo(:,:)
+        type(pspecs) :: pows_ref, pows_match
+        type(image)  :: img_msk 
+        integer      :: ncls_ref, ncls_match, i, j, nclust, iclust
+        ncls_ref   = size(cavg_imgs_ref)
+        ncls_match = size(cavg_imgs_match)
+        ! generate histograms
+        allocate(hists_ref(ncls_ref), hists_match(ncls_match))
+        do i = 1, ncls_ref
+            call hists_ref(i)%new(cavg_imgs_ref(i),   NHISTBINS, minmax=oa_minmax, radius=params%msk)
+        end do
+        do i = 1, ncls_match
+            call hists_match(i)%new(cavg_imgs_match(i), NHISTBINS, minmax=oa_minmax, radius=params%msk)
+        end do
+        ! generate power spectra and associated distance/similarity matrix
+        ! create pspecs object
+        call pows_ref%new(cavg_imgs_ref,     params%msk, HP_SPEC, LP_SPEC)
+        call pows_match%new(cavg_imgs_match, params%msk, HP_SPEC, LP_SPEC)
+        ! create a joint similarity matrix for clustering based on spectral profile and in-plane invariant correlation
+        dmat_pow = pows_ref%calc_distmat(pows_match)
+        call normalize_minmax(dmat_pow)
+        smat_pow = dmat2smat(dmat_pow)
+        ! do the matching
+        algninfo = match_imgs2refs(ncls_ref, ncls_match, params%hp, params%lp, params%trs, cavg_imgs_ref, cavg_imgs_match)
+        allocate(corrmat(ncls_ref,ncls_match), source=algninfo(:,:)%corr)
+        dmat_cc  = smat2dmat(corrmat)        
+        ! calculate histogram-based distance matrices
+        allocate(dmat_tvd(ncls_ref,ncls_match), dmat_jsd(ncls_ref,ncls_match), dmat_hd(ncls_ref,ncls_match), source=0.)
+        !$omp parallel do default(shared) private(i,j)&
+        !$omp schedule(static) proc_bind(close)
+        do i = 1, ncls_ref
+            do j = 1, ncls_match 
+                dmat_tvd(i,j) = hists_ref(i)%TVD(hists_match(j))
+                dmat_jsd(i,j) = hists_ref(i)%JSD(hists_match(j))
+                dmat_hd(i,j)  = hists_ref(i)%HD(hists_match(j))
+            end do
+        end do
+        !$omp end parallel do
+        dmat_hist = merge_dmats(dmat_tvd, dmat_jsd, dmat_hd) ! the different histogram distances are given equal weight
+        ! set appropriate distance matrix for the clustering criterion given
+        select case(trim(params%clust_crit))
+            case('pow')
+                dmat = dmat_pow 
+            case('powfm')
+                dmat = 0.5 * dmat_pow + 0.5 * dmat_cc
+            case('fm')
+                dmat = dmat_cc
+            case('hist')
+                dmat = dmat_hist
+            case('histfm')
+                dmat = 0.5 * dmat_hist + 0.5 * dmat_cc
+            case('hybrid')
+                dmat = 0.2 * dmat_hist + 0.4 * dmat_pow + 0.4 * dmat_cc       
+            case DEFAULT
+                THROW_HARD('Unsupported clustering criterion: '//trim(params%clust_crit))
+        end select
+        ! destruct
+        call pows_ref%kill
+        call pows_match%kill
+        call hists_ref(:)%kill
+        call hists_match(:)%kill
+    end function calc_match_cavgs_dmat
 
     function align_and_score_cavg_clusters( params, dmat, cavg_imgs, clspops, i_medoids, labels ) result( clust_info_arr )
         use simple_clustering_utils, only: cluster_dmat

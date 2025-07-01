@@ -289,8 +289,7 @@ contains
             self%iseven = .true.
         endif
         ! generate the argument transfer constants for shifting reference polarfts
-        allocate( self%argtransf(self%nrots,self%kfromto(1):self%kfromto(2)),&
-            &self%argtransf_shellone(self%nrots) )
+        allocate( self%argtransf(self%nrots,self%kfromto(1):self%kfromto(2)), self%argtransf_shellone(self%nrots) )
         A = DPI / real(self%ldim(1:2)/2,dp) ! argument transfer matrix normalization constant
         ! shell = 1
         self%argtransf_shellone(:self%pftsz  ) = real(polar_here(:self%pftsz),dp)                        * A(1) ! x-part

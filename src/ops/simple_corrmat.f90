@@ -219,6 +219,12 @@ contains
             !$omp end parallel do
         endif
         corrmat(n,n) = 1. ! leftover
+        ! BWD FT
+        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
+        do i = 1, n
+            call imgs(i)%ifft()
+        end do
+        !$omp end parallel do
         ! tidy
         call pftcc%kill
         call polartransform%kill_polarizer

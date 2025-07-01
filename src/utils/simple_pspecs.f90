@@ -5,8 +5,6 @@ include 'simple_lib.f08'
 use simple_image,    only: image
 use simple_fsc,      only: plot_fsc
 use simple_oris,     only: oris
-use simple_aff_prop, only: aff_prop
-use simple_kmedoids, only: kmedoids
 implicit none
 
 public :: pspecs
@@ -16,7 +14,6 @@ private
 type pspecs
     private
     real, allocatable :: pspecs(:,:)  ! matrix of power spectra
-    real, allocatable :: distmat(:,:) ! distance matrix 
     real    :: smpd       = 0.        ! sampling distance
     real    :: hp         = 0.        ! high-pass limit
     real    :: lp         = 0.        ! low-pass limit
@@ -27,14 +24,14 @@ type pspecs
     logical :: exists     = .false.   ! existence flag
 contains
     ! constructor
-    procedure :: new
+    procedure          :: new
     ! getters & setters
-    procedure :: get_nspecs
-    procedure :: get_distmat
+    procedure          :: get_nspecs
     ! clustering
-    procedure :: calc_distmat
+    procedure, private :: calc_distmat_1, calc_distmat_2
+    generic            :: calc_distmat => calc_distmat_1, calc_distmat_2
     ! destructor
-    procedure :: kill
+    procedure          :: kill
 end type pspecs
 
 contains
@@ -60,7 +57,7 @@ contains
         self%kfromto(2) = calc_fourier_index(self%lp, self%box, self%smpd)
         self%sz         = self%kfromto(2) - self%kfromto(1) + 1
         ! allocate arrays
-        allocate(self%pspecs(self%nspecs,self%sz), self%distmat(self%nspecs,self%nspecs), source=0.)
+        allocate(self%pspecs(self%nspecs,self%sz), source=0.)
         ! fill-up the instance
         allocate(cavg_threads(nthr_glob))
         do ithr = 1, nthr_glob
@@ -93,50 +90,43 @@ contains
         nspecs = self%nspecs
     end function get_nspecs
 
-    function get_distmat( self ) result( distmat )
-        class(pspecs), intent(in) :: self
-        real, allocatable :: distmat(:,:)
-        allocate(distmat(self%nspecs,self%nspecs), source=self%distmat)
-    end function get_distmat
-
     ! clustering
 
-    subroutine calc_distmat( self, is_l1 )
-        class(pspecs),     intent(inout) :: self
-        logical, optional, intent(in)    :: is_l1
-        logical :: ll1
+    function calc_distmat_1( self ) result( distmat )
+        class(pspecs), intent(inout) :: self
+        real, allocatable :: distmat(:,:)
         integer :: i, j
-        ll1          = .false.
-        self%distmat = 0.
-        if( present(is_l1) ) ll1 = is_l1
-        if( ll1 )then
-            !$omp parallel do default(shared) private(i,j) proc_bind(close) schedule(dynamic)
-            do i = 1, self%nspecs - 1
-                do j = i + 1, self%nspecs
-                    self%distmat(i,j) = l1dist(self%pspecs(i,:),self%pspecs(j,:))
-                    self%distmat(j,i) = self%distmat(i,j)
-                end do
+        allocate(distmat(self%nspecs,self%nspecs), source=0.)
+        !$omp parallel do default(shared) private(i,j) proc_bind(close) schedule(dynamic)
+        do i = 1, self%nspecs - 1
+            do j = i + 1, self%nspecs
+                distmat(i,j) = euclid(self%pspecs(i,:),self%pspecs(j,:))
+                distmat(j,i) = distmat(i,j)
             end do
-            !$omp end parallel do
-        else
-            !$omp parallel do default(shared) private(i,j) proc_bind(close) schedule(dynamic)
-            do i = 1, self%nspecs - 1
-                do j = i + 1, self%nspecs
-                    self%distmat(i,j) = euclid(self%pspecs(i,:),self%pspecs(j,:))
-                    self%distmat(j,i) = self%distmat(i,j)
-                end do
+        end do
+        !$omp end parallel do
+    end function calc_distmat_1
+
+    function calc_distmat_2( self1, self2 ) result( distmat )
+        class(pspecs), intent(inout) :: self1, self2
+        real, allocatable :: distmat(:,:)
+        integer :: i, j
+        allocate(distmat(self1%nspecs,self2%nspecs), source=0.)      
+        !$omp parallel do default(shared) private(i,j) proc_bind(close) schedule(dynamic)
+        do i = 1, self1%nspecs
+            do j = 1, self2%nspecs
+                distmat(i,j) = euclid(self1%pspecs(i,:),self2%pspecs(j,:))
             end do
-            !$omp end parallel do
-        endif
-    end subroutine calc_distmat
+        end do
+        !$omp end parallel do
+    end function calc_distmat_2 
 
     ! destructor
 
     subroutine kill( self )
         class(pspecs), intent(inout) :: self
         if( self%exists )then
-            if( allocated(self%pspecs)  ) deallocate(self%pspecs)
-            if( allocated(self%distmat) ) deallocate(self%distmat)
+            if( allocated(self%pspecs) ) deallocate(self%pspecs)
             self%exists = .false.
         endif
     end subroutine kill
