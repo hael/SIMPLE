@@ -385,14 +385,13 @@ contains
         end do
     end function calc_cluster_cavgs_dmat
 
-    function align_and_score_cavg_clusters( params, dmat, cavg_imgs, clspops, i_medoids, labels, l_prelim ) result( clust_info_arr )
+    function align_and_score_cavg_clusters( params, dmat, cavg_imgs, clspops, i_medoids, labels ) result( clust_info_arr )
         use simple_clustering_utils, only: cluster_dmat
         class(parameters),    intent(in)    :: params
         real,                 intent(in)    :: dmat(:,:)
         class(image),         intent(inout) :: cavg_imgs(:)
         integer,              intent(in)    :: clspops(:)
         integer,              intent(inout) :: i_medoids(:), labels(:)
-        logical,              intent(in)    :: l_prelim
         real,                 parameter     :: RES_THRES=6., SCORE_THRES=65., SCORE_THRES_REJECT=50., SCORE_THRES_INCL=75.
         type(clust_info),     allocatable   :: clust_info_arr(:)
         logical,              allocatable   :: l_msk(:,:,:)
@@ -482,7 +481,7 @@ contains
         subroutine identify_good_bad_clusters
             real, allocatable :: jointscores(:), resvals(:), homogeneity(:), clustscores(:)
             integer           :: nscoreclust, i, cnt_incl
-            real              :: avgjscore, scoreclust_2
+            real              :: avgjscore
             logical           :: l_incl
             clust_info_arr(:)%good_bad = 0
             if( nclust <= 5 )then
@@ -510,13 +509,6 @@ contains
                 end do
                 if( .not. any(clust_info_arr(:)%good_bad == 1))then
                     where(clust_info_arr(:)%scoreclust == clust_info_arr(1)%scoreclust) clust_info_arr(:)%good_bad = 1
-                    cnt_incl = cnt_incl + 1
-                endif
-            endif
-            if( l_prelim )then
-                if( cnt_incl == 1 )then
-                    scoreclust_2 = clust_info_arr(count(clust_info_arr(:)%good_bad == 1) + 1)%scoreclust
-                    where(clust_info_arr(:)%scoreclust == scoreclust_2) clust_info_arr(:)%good_bad = 1
                     cnt_incl = cnt_incl + 1
                 endif
             endif
@@ -658,11 +650,6 @@ contains
         nclust = maxval(labels)
         allocate(frc(filtsz), clust_info_arr(nclust))
         nclust = maxval(labels)
-
-        print *, 'size(cavg_imgs) ', size(cavg_imgs)
-        print *, 'size(labels)    ', size(labels)
-        print *, 'size(i_medoids) ', size(i_medoids)
-
         do iclust = 1, nclust
             clust_info_arr(iclust)%pop             = count(labels == iclust)
             cluster_imgs                           = pack_imgarr(cavg_imgs, mask=labels == iclust)
