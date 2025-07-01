@@ -2085,6 +2085,7 @@ contains
         use simple_polarft_corrcalc,    only: polarft_corrcalc
         use simple_euclid_sigma2,       only: euclid_sigma2
         use simple_eul_prob_tab,        only: eul_prob_tab
+        use simple_comlin,              only: gen_polar_comlins
         use simple_ori
         use simple_oris
         class(hybrid_refine_commander), intent(inout) :: self
@@ -2171,7 +2172,7 @@ contains
             endif
             allocate(pcomlines(params_glob%nspace,params_glob%nspace))
             allocate(pfts(pftcc%get_pftsz(),params_glob%kfromto(1):params_glob%kfromto(2),params_glob%nspace), source=cmplx(0.,0.))
-            call pftcc%gen_polar_comlins(build_glob%eulspace, pcomlines)
+            call gen_polar_comlins(pftcc, build_glob%eulspace, pcomlines)
             allocate(refs(params_glob%nspace))
             params%ncls = params%nspace
             params%frcs = trim(FRCS_FILE)
@@ -2267,9 +2268,9 @@ contains
                     enddo
                 elseif( trim(coord_type) .eq. 'polar' )then
                     ! update polar refs using current alignment params
-                    call pftcc%gen_polar_refs(build_glob%eulspace, build_glob%spproj_field,&
-                                            &ran=(trim(params%cls_init).eq.'rand') .and. iter==1,&
-                                            &pcomlines=pcomlines, pfts=pfts)
+                    ! call pftcc%gen_polar_refs(build_glob%eulspace, build_glob%spproj_field,&
+                    !                         &ran=(trim(params%cls_init).eq.'rand') .and. iter==1,&
+                    !                         &pcomlines=pcomlines, pfts=pfts)
                     ! for visualization of polar cavgs
                     call pftcc%prefs_to_cartesian(refs)
                     do iref = 1, params_glob%nspace

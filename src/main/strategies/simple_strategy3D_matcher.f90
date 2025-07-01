@@ -25,6 +25,7 @@ use simple_convergence,             only: convergence
 use simple_euclid_sigma2,           only: euclid_sigma2
 use simple_strategy2D3D_common
 use simple_polarops
+use simple_comlin
 implicit none
 
 public :: refine3D_exec
@@ -61,6 +62,7 @@ contains
         !      relevant strategy3D base class
         type(strategy3D_spec),     allocatable :: strategy3Dspecs(:)
         type(class_sample),        allocatable :: clssmp(:)
+        type(polar_fmap),          allocatable :: pcomlines(:,:)
         integer,                   allocatable :: batches(:,:), cnt_greedy(:), cnt_all(:)
         real,                      allocatable :: incr_shifts(:,:)
         type(convergence) :: conv
@@ -125,6 +127,10 @@ contains
             call prepare_polar_refs_sigmas_ptcls( pftcc, cline, eucl_sigma, ptcl_match_imgs, batchsz_max, which_iter )
         else
             call prepare_refs_sigmas_ptcls( pftcc, cline, eucl_sigma, ptcl_match_imgs, batchsz_max )
+        endif
+        if( (trim(params_glob%ref_type).eq.'clin' .or. trim(params_glob%ref_type).eq.'cavg_clin') )then
+            if( .not. allocated(pcomlines) ) allocate(pcomlines(params_glob%nspace,params_glob%nspace))
+            call gen_polar_comlins(pftcc, build_glob%eulspace, pcomlines)
         endif
         if( l_polar .and. l_restore )then
             ! for restoration
@@ -370,7 +376,11 @@ contains
         subroutine polar_restoration()
             ! polar restoration
             params_glob%refs = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//params_glob%ext
-            call polar_cavger_merge_eos_and_norm
+            if( trim(params_glob%ref_type).eq.'clin' .or. trim(params_glob%ref_type).eq.'cavg_clin' )then
+                call polar_cavger_merge_eos_and_norm(pcomlines)
+            else
+                call polar_cavger_merge_eos_and_norm
+            endif
             call polar_cavger_calc_and_write_frcs_and_eoavg(FRCS_FILE)
             call polar_cavger_writeall(get_fbody(params_glob%refs,params_glob%ext,separator=.false.))
             call polar_cavger_write_cartrefs(pftcc, get_fbody(params_glob%refs,params_glob%ext,separator=.false.), 'merged')

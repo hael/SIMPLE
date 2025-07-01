@@ -4,9 +4,9 @@ use simple_cmdline,          only: cmdline
 use simple_parameters,       only: parameters
 use simple_image,            only: image
 use simple_projector,        only: projector
-use simple_comlin,           only: polar_comlin_map
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_polarizer,        only: polarizer
+use simple_comlin,           only: polar_comlin_pfts, gen_polar_comlins
 implicit none
 integer,          parameter   :: NPLANES = 300, ORI_IND1 = 10, ORI_IND2 = 55
 character(len=:), allocatable :: cmd
@@ -118,8 +118,8 @@ enddo
 ! Testing polar line generation
 call pftcc%get_refs_ptr(ref_ptrs_even, ref_ptrs_odd)
 allocate(pfts(pftcc%get_pftsz(), kfromto(1):kfromto(2), NPLANES), source=cmplx(0.,0.))
-call pftcc%gen_polar_comlins(spiral, pcomlines)
-call pftcc%gen_polar_comlin_pfts(pcomlines, ref_ptrs_even, pfts)
+call gen_polar_comlins(pftcc, spiral, pcomlines)
+call polar_comlin_pfts(pcomlines, ref_ptrs_even, pfts)
 i = ORI_IND1
 call pftcc%set_ref_pft(i, ref_ptrs_even(:,:,i), iseven=.true.)
 call pftcc%polar2cartesian(i, .true., cmat, box, box_in=p%box)

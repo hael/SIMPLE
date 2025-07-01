@@ -68,10 +68,6 @@ type :: polarft_corrcalc
     real(dp),            allocatable :: argtransf_shellone(:)       !< one dimensional argument transfer constants (shell k=1) for shifting the references
     complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (pftsz,nk,nrefs), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
-    complex(sp),         allocatable :: pfts_refs_merg(:,:,:)       !< -"-, merged
-    complex(sp),         allocatable :: pfts_refs_clin(:,:,:)       !< -"-, comlin
-    complex(sp),         allocatable :: pfts_refs_clin_even(:,:,:)  !< -"-, comlin, even
-    complex(sp),         allocatable :: pfts_refs_clin_odd(:,:,:)   !< -"-, comlin, odd
     complex(sp),         allocatable :: pfts_drefs_even(:,:,:,:)    !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp),         allocatable :: pfts_drefs_odd(:,:,:,:)     !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp),         allocatable :: pfts_ptcls(:,:,:)           !< 3D complex matrix of particle sections
@@ -159,7 +155,6 @@ type :: polarft_corrcalc
     procedure, private :: kill_memoized_ptcls, kill_memoized_refs
     procedure          :: allocate_ptcls_memoization, allocate_refs_memoization
     ! CALCULATORS
-    procedure          :: polar_cavg, gen_polar_refs, gen_polar_comlins, gen_polar_comlin_pfts, add_polar_comlin_refs
     procedure          :: create_polar_absctfmats, calc_polar_ctf
     procedure          :: gen_shmat
     procedure, private :: gen_shmat_8
@@ -306,7 +301,6 @@ contains
         ! allocate others
         allocate(self%pfts_refs_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%pfts_refs_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                &self%pfts_refs_merg(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%pfts_drefs_even(self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                 &self%pfts_drefs_odd (self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                 &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
@@ -331,7 +325,6 @@ contains
         end do
         self%pfts_refs_even = zero
         self%pfts_refs_odd  = zero
-        self%pfts_refs_merg = zero
         self%pfts_ptcls     = zero
         self%sqsums_ptcls   = 0.d0
         self%ksqsums_ptcls  = 0.d0
@@ -601,7 +594,7 @@ contains
         endif
     end subroutine get_ref_pft
 
-    integer function get_nrefs( self )
+    pure integer function get_nrefs( self )
         class(polarft_corrcalc), intent(in) :: self
         get_nrefs = self%nrefs
     end function get_nrefs
@@ -1321,352 +1314,6 @@ contains
     end subroutine allocate_refs_memoization
 
     ! CALCULATORS
-
-    subroutine polar_cavg( self, img )
-        use simple_image
-        class(polarft_corrcalc), intent(inout) :: self
-        type(image),             intent(inout) :: img
-        complex, allocatable :: cmat(:,:)
-        integer :: box, i, k
-        real    :: ctf2(self%pftsz,self%kfromto(1):self%kfromto(2))
-        self%pfts_refs_even(:,:,1) = 0.
-        ctf2 = 0.
-        do i = 1,self%nptcls
-            do k = self%kfromto(1),self%kfromto(2)
-                if( self%with_ctf )then
-                    self%pfts_refs_even(:,k,1) = self%pfts_refs_even(:,k,1) + self%pfts_ptcls(:,k,i) * self%ctfmats(:,k,i)
-                    ctf2(:,k)                  = ctf2(:,k)                  +                          self%ctfmats(:,k,i)**2
-                else
-                    self%pfts_refs_even(:,k,1) = self%pfts_refs_even(:,k,1) + self%pfts_ptcls(:,k,i)
-                endif
-            enddo
-        enddo
-        if( self%with_ctf ) self%pfts_refs_even(:,:,1) = self%pfts_refs_even(:,:,1) / ctf2
-        call self%polar2cartesian(1,.true.,cmat,box)
-        call img%new([box,box,1],1.0)
-        call img%set_cmat(cmat)
-        call img%shift_phorig()
-        call img%ifft
-    end subroutine polar_cavg
-
-    subroutine gen_polar_comlins( self, ref_space, pcomlines)
-        use simple_oris
-        class(polarft_corrcalc), intent(inout) :: self
-        type(oris),              intent(in)    :: ref_space
-        type(polar_fmap),        intent(inout) :: pcomlines(self%nrefs, self%nrefs)
-        integer :: iref, jref, irot, kind, irot_l, irot_r, errflg
-        real    :: loc1_3D(3), loc2_3D(3), denom, a1, a2, b1, b2, line2D(3), irot_real, k_real, w, hk1(2), hk2(2),&
-                  &rotmat(3,3),invmats(3,3,self%nrefs), loc1s(3,self%nrefs), loc2s(3,self%nrefs), line3D(3)
-        ! randomly chosing two sets of (irot, kind) to generate the polar common lines
-        irot = 5
-        kind = self%kfromto(1) + 5
-        if( kind >= self%kfromto(2) ) kind = self%kfromto(1)
-        hk1  = self%get_coord(irot,kind)
-        irot = 16
-        kind = self%kfromto(1) + 15
-        if( kind >= self%kfromto(2) ) kind = self%kfromto(2)
-        hk2  = self%get_coord(irot,kind)
-        ! caching rotation matrices and their corresponding inverse matrices
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,rotmat,errflg)
-        do iref = 1, self%nrefs
-            rotmat = ref_space%get_mat(iref)
-            call matinv(rotmat, invmats(:,:,iref), 3, errflg)
-            if( errflg < 0 ) THROW_HARD('matrix inversion causes problem here!')
-            loc1s(:,iref) = matmul([hk1(1), hk1(2), 0.], rotmat)
-            loc2s(:,iref) = matmul([hk2(1), hk2(2), 0.], rotmat)
-        enddo
-        !$omp end parallel do
-        ! constructing polar common lines
-        pcomlines%legit = .false.
-        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-        !$omp private(iref,loc1_3D,loc2_3D,denom,a1,b1,jref,a2,b2,line3D,line2D,irot_real,k_real,irot_l,irot_r,w)
-        do iref = 1, self%nrefs
-            loc1_3D = loc1s(:,iref)
-            loc2_3D = loc2s(:,iref)
-            denom   = (loc1_3D(1) * loc2_3D(2) - loc1_3D(2) * loc2_3D(1))
-            a1      = (loc1_3D(3) * loc2_3D(2) - loc1_3D(2) * loc2_3D(3)) / denom
-            b1      = (loc1_3D(1) * loc2_3D(3) - loc1_3D(3) * loc2_3D(1)) / denom
-            do jref = 1, self%nrefs
-                if( jref == iref )cycle
-                ! getting the 3D common line
-                loc1_3D     = loc1s(:,jref)
-                loc2_3D     = loc2s(:,jref)
-                denom       = (loc1_3D(1) * loc2_3D(2) - loc1_3D(2) * loc2_3D(1))
-                if( abs(denom) < TINY )cycle
-                a2          = (loc1_3D(3) * loc2_3D(2) - loc1_3D(2) * loc2_3D(3)) / denom
-                b2          = (loc1_3D(1) * loc2_3D(3) - loc1_3D(3) * loc2_3D(1)) / denom
-                if( abs(b1-b2) < TINY )cycle
-                line3D(1:2) = [1., -(a1-a2)/(b1-b2)]
-                line3D(3)   = a2*line3D(1) + b2*line3D(2)
-                ! projecting the 3D common line to a polar line on the jref-th reference
-                line2D      = matmul(line3D, invmats(:,:,jref))
-                call self%get_polar_coord(line2D(1:2), irot_real, k_real)
-                if( irot_real < 1. ) irot_real = irot_real + real(self%pftsz)
-                ! caching the indeces irot_j and irot_j+1 and the corresponding linear weight
-                irot_l = floor(irot_real)
-                irot_r = irot_l + 1
-                w      = irot_real - real(irot_l)
-                if( irot_l > self%pftsz ) irot_l = irot_l - self%pftsz
-                if( irot_r > self%pftsz ) irot_r = irot_r - self%pftsz
-                pcomlines(iref,jref)%targ_irot_l = irot_l
-                pcomlines(iref,jref)%targ_irot_r = irot_r
-                pcomlines(iref,jref)%targ_w      = w
-                ! projecting the 3D common line to a polar line on the iref-th reference
-                line2D = matmul(line3D, invmats(:,:,iref))
-                call self%get_polar_coord(line2D(1:2), irot_real, k_real)
-                if( irot_real < 1. ) irot_real = irot_real + real(self%pftsz)
-                ! caching the indeces irot_i and irot_i+1 and the corresponding linear weight
-                irot_l = floor(irot_real)
-                irot_r = irot_l + 1
-                w      = irot_real - real(irot_l)
-                if( irot_l > self%pftsz ) irot_l = irot_l - self%pftsz
-                if( irot_r > self%pftsz ) irot_r = irot_r - self%pftsz
-                pcomlines(iref,jref)%self_irot_l = irot_l
-                pcomlines(iref,jref)%self_irot_r = irot_r
-                pcomlines(iref,jref)%self_w      = w
-                pcomlines(iref,jref)%legit       = .true.
-            enddo
-        enddo
-        !$omp end parallel do
-    end subroutine gen_polar_comlins
-
-    subroutine gen_polar_comlin_pfts( self, pcomlines, pfts_in, pfts)
-        class(polarft_corrcalc), intent(inout) :: self
-        type(polar_fmap),        intent(in)    :: pcomlines(self%nrefs, self%nrefs)
-        complex,                 intent(in)    :: pfts_in(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs)
-        complex,                 intent(inout) :: pfts(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs)
-        complex :: pft_line(self%kfromto(1):self%kfromto(2))
-        integer :: iref, jref, irot_l, irot_r
-        real    :: w
-        pfts = complex(0.,0.)
-        !$omp parallel do default(shared) private(iref,jref,irot_l,irot_r,w,pft_line)&
-        !$omp proc_bind(close) schedule(static)
-        do iref = 1, self%nrefs
-            do jref = 1, self%nrefs
-                if( .not. pcomlines(iref,jref)%legit )cycle
-                ! compute the interpolated polar common line, between irot_j and irot_j+1
-                irot_l   = pcomlines(iref,jref)%targ_irot_l
-                irot_r   = pcomlines(iref,jref)%targ_irot_r
-                w        = pcomlines(iref,jref)%targ_w
-                pft_line = (1.-w) * pfts_in(irot_l,:,jref) + w * pfts_in(irot_r,:,jref)
-                ! extrapolate the interpolated polar common line to irot_i and irot_i+1 of iref-th reference
-                irot_l   = pcomlines(iref,jref)%self_irot_l
-                irot_r   = pcomlines(iref,jref)%self_irot_r
-                w        = pcomlines(iref,jref)%self_w
-                pfts(irot_l,:,iref) = pfts(irot_l,:,iref) + (1.-w) * pft_line
-                pfts(irot_r,:,iref) = pfts(irot_r,:,iref) +     w  * pft_line
-            enddo
-        enddo
-        !$omp end parallel do
-    end subroutine gen_polar_comlin_pfts
-
-    subroutine add_polar_comlin_refs( self, pcomlines, pfts)
-        class(polarft_corrcalc), intent(inout) :: self
-        type(polar_fmap),        intent(in)    :: pcomlines(self%nrefs, self%nrefs)
-        complex,                 intent(inout) :: pfts(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs)
-        call self%gen_polar_comlin_pfts(pcomlines, self%pfts_refs_even, pfts)
-        self%pfts_refs_even = self%pfts_refs_even + pfts
-        call self%gen_polar_comlin_pfts(pcomlines, self%pfts_refs_odd, pfts)
-        self%pfts_refs_odd  = self%pfts_refs_odd  + pfts
-    end subroutine add_polar_comlin_refs
-
-    subroutine gen_polar_refs( self, ref_space, ptcl_space, ran, pcomlines, pfts )
-        use simple_oris
-        class(polarft_corrcalc),    intent(inout) :: self
-        type(oris),                 intent(in)    :: ref_space
-        type(oris),                 intent(in)    :: ptcl_space
-        logical,          optional, intent(in)    :: ran
-        type(polar_fmap), optional, intent(in)    :: pcomlines(self%nrefs, self%nrefs)
-        complex,          optional, intent(inout) :: pfts(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs)
-        complex(sp), pointer     :: pft_ptcl(:,:)
-        real(sp),    pointer     :: rctf(:,:)
-        integer,     allocatable :: pops(:)
-        type(ori) :: orientation
-        integer   :: i, k, iref, irot, ithr, iptcl
-        logical   :: l_ran, l_comlin, l_stoch, ptcl_mask(self%pfromto(1):self%pfromto(2))
-        real(dp)  :: numer, denom1, denom2
-        real      :: ctf2_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                    &ctf2_merg(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                    &ctf2_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                    &ctf2_clin_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                    &ctf2_clin_merg(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                    &ctf2_clin_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                    &frc_clin(self%kfromto(1):self%kfromto(2)),frc_cavg(self%kfromto(1):self%kfromto(2))
-        if( .not.(allocated(self%pfts_refs_clin)) )then
-            allocate(self%pfts_refs_clin(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                    &self%pfts_refs_clin_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                    &self%pfts_refs_clin_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs))
-        endif
-        l_ran    = .false.
-        l_comlin = (trim(params_glob%ref_type   ).eq.'comlin' .or.  trim(params_glob%ref_type).eq.'reproj')
-        l_stoch  = (trim(params_glob%polar_stoch).eq.'yes'    .and. l_comlin)
-        if( present(ran)  ) l_ran = ran
-        if( l_ran )then
-            do iref = 1, self%nrefs
-                do k = self%kfromto(1), self%kfromto(2)
-                    do irot = 1, self%pftsz
-                        self%pfts_refs_even(irot,k,iref) = complex(ran3(), ran3())
-                        self%pfts_refs_odd( irot,k,iref) = complex(ran3(), ran3())
-                    enddo
-                enddo
-            enddo
-            return
-        endif
-        self%pfts_refs_even = complex(0., 0.)
-        self%pfts_refs_odd  = complex(0., 0.)
-        ctf2_even = 0.
-        ctf2_odd  = 0.
-        ithr      = omp_get_thread_num() + 1
-        pft_ptcl  => self%heap_vars(ithr)%pft_ref
-        rctf      => self%heap_vars(ithr)%pft_r
-        if( l_stoch ) ptcl_mask = .true.
-        do iptcl = self%pfromto(1), self%pfromto(2)
-            if( l_stoch )then
-                if( ran3() > (1. - params_glob%stoch_rate/100.) )then
-                    ptcl_mask(iptcl) = .false.
-                    cycle
-                endif
-            endif
-            call ptcl_space%get_ori(iptcl, orientation)
-            i    = self%pinds(iptcl)
-            iref = ref_space%find_closest_proj(orientation)
-            irot = self%get_roind(orientation%e3get())
-            call self%rotate_pft(self%pfts_ptcls(:,:,i), irot, pft_ptcl)
-            if( self%with_ctf )then
-                call self%rotate_pft(self%ctfmats(:,:,i), irot, rctf)
-                if( self%iseven(i) )then
-                    self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + pft_ptcl * cmplx(rctf)
-                    ctf2_even(:,:,iref)           = ctf2_even(:,:,iref)           + rctf**2
-                else
-                    self%pfts_refs_odd(:,:,iref)  = self%pfts_refs_odd(:,:,iref)  + pft_ptcl * cmplx(rctf)
-                    ctf2_odd(:,:,iref)            = ctf2_odd(:,:,iref)            + rctf**2
-                endif
-            else
-                if( self%iseven(i) )then
-                    self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + pft_ptcl
-                else
-                    self%pfts_refs_odd(:,:,iref)  = self%pfts_refs_odd(:,:,iref)  + pft_ptcl
-                endif
-            endif
-        enddo
-        if( l_comlin )then
-            call self%gen_polar_comlin_pfts(pcomlines, self%pfts_refs_even, pfts)
-            self%pfts_refs_clin_even = pfts
-            call self%gen_polar_comlin_pfts(pcomlines, self%pfts_refs_odd,  pfts)
-            self%pfts_refs_clin_odd  = pfts
-            call self%gen_polar_comlin_pfts(pcomlines, cmplx(ctf2_even), pfts)
-            ctf2_clin_even = real(pfts)
-            call self%gen_polar_comlin_pfts(pcomlines, cmplx(ctf2_odd),  pfts)
-            ctf2_clin_odd  = real(pfts)
-            where( abs(ctf2_clin_even) > TINY )
-                self%pfts_refs_clin_even = self%pfts_refs_clin_even / ctf2_clin_even
-            elsewhere
-                self%pfts_refs_clin_even = 0.
-            endwhere
-            where( abs(ctf2_clin_odd)  > TINY )
-                self%pfts_refs_clin_odd  = self%pfts_refs_clin_odd  / ctf2_clin_odd
-            elsewhere
-                self%pfts_refs_clin_odd  = 0.
-            endwhere
-        endif
-        if( self%with_ctf )then
-            where( abs(ctf2_even) > TINY )
-                self%pfts_refs_even = self%pfts_refs_even / ctf2_even
-            elsewhere
-                self%pfts_refs_even = 0.
-            endwhere
-            where( abs(ctf2_odd)  > TINY )
-                self%pfts_refs_odd  = self%pfts_refs_odd  / ctf2_odd
-            elsewhere
-                self%pfts_refs_odd  = 0.
-            endwhere
-        endif
-        ! merging even and odd
-        self%pfts_refs_merg = complex(0., 0.)
-        ctf2_merg           = 0.
-        do iptcl = self%pfromto(1), self%pfromto(2)
-            if( .not. ptcl_mask(iptcl) )cycle
-            call ptcl_space%get_ori(iptcl, orientation)
-            i    = self%pinds(iptcl)
-            iref = ref_space%find_closest_proj(orientation)
-            irot = self%get_roind(orientation%e3get())
-            call self%rotate_pft(self%pfts_ptcls(:,:,i), irot, pft_ptcl)
-            if( self%with_ctf )then
-                call self%rotate_pft(self%ctfmats(:,:,i), irot, rctf)
-                self%pfts_refs_merg(:,:,iref) = self%pfts_refs_merg(:,:,iref) + pft_ptcl * cmplx(rctf)
-                ctf2_merg(:,:,iref)           = ctf2_merg(:,:,iref)           + rctf**2
-            else
-                self%pfts_refs_merg(:,:,iref) = self%pfts_refs_merg(:,:,iref) + pft_ptcl
-            endif
-        enddo
-        if( l_comlin )then
-            call self%gen_polar_comlin_pfts(pcomlines, self%pfts_refs_merg, pfts)
-            self%pfts_refs_clin = pfts
-            call self%gen_polar_comlin_pfts(pcomlines, cmplx(ctf2_merg), pfts)
-            ctf2_clin_merg = real(pfts)
-            where( abs(ctf2_clin_merg) > TINY )
-                self%pfts_refs_clin = self%pfts_refs_clin / ctf2_clin_merg
-            elsewhere
-                self%pfts_refs_clin = 0.
-            endwhere
-        endif
-        if( self%with_ctf )then
-            where( abs(ctf2_merg) > TINY )
-                self%pfts_refs_merg = self%pfts_refs_merg / ctf2_merg
-            elsewhere
-                self%pfts_refs_merg = 0.
-            endwhere
-        endif
-        ! FRC filtering
-        do iref = 1, self%nrefs
-            frc_cavg = 0.
-            do k = self%kfromto(1), self%kfromto(2)
-                numer  = sum(real(self%pfts_refs_even(:,k,iref) * conjg(self%pfts_refs_odd(:,k,iref)), kind=dp))
-                denom1 = sum( csq(self%pfts_refs_even(:,k,iref)))
-                denom2 = sum( csq(self%pfts_refs_odd( :,k,iref)))
-                if( dsqrt(denom1*denom2) > DTINY ) frc_cavg(k) = real(numer / dsqrt(denom1*denom2))
-            enddo
-            if( any(frc_cavg > 0.143) )then
-                do k = self%kfromto(1), self%kfromto(2)
-                    self%pfts_refs_merg(:,k,iref) = self%pfts_refs_merg(:,k,iref) * frc_cavg(k)
-                enddo
-            endif
-        enddo
-        if( l_comlin )then
-            do iref = 1, self%nrefs
-                frc_clin = 0.
-                do k = self%kfromto(1), self%kfromto(2)
-                    numer  = sum(real(self%pfts_refs_clin_even(:,k,iref) * conjg(self%pfts_refs_clin_odd(:,k,iref)), kind=dp))
-                    denom1 = sum( csq(self%pfts_refs_clin_even(:,k,iref)))
-                    denom2 = sum( csq(self%pfts_refs_clin_odd( :,k,iref)))
-                    if( dsqrt(denom1*denom2) > DTINY ) frc_clin(k) = real(numer / dsqrt(denom1*denom2))
-                enddo
-                if( any(frc_clin > 0.143) )then
-                    do k = self%kfromto(1), self%kfromto(2)
-                        self%pfts_refs_clin(:,k,iref) = self%pfts_refs_clin(:,k,iref) * frc_clin(k)
-                    enddo
-                endif
-            enddo
-        endif
-        select case(trim(params_glob%ref_type))
-            case('cavg')
-                self%pfts_refs_even = self%pfts_refs_merg
-            case('clin')
-                self%pfts_refs_even = self%pfts_refs_clin
-            case('cavg_clin')
-                call ptcl_space%get_pops(pops, 'class')
-                do iref = 1, self%nrefs
-                    if( pops(iref) < 4 )then
-                        self%pfts_refs_even(:,:,iref) = self%pfts_refs_clin(:,:,iref)
-                    else
-                        self%pfts_refs_even(:,:,iref) = self%pfts_refs_merg(:,:,iref) + self%pfts_refs_clin(:,:,iref) / 2.
-                    endif
-                enddo
-            case DEFAULT
-                THROW_HARD('Unsupported ref_type mode. It should be cavg, clin, or cavg_clin')
-        end select
-        self%pfts_refs_odd = self%pfts_refs_even
-    end subroutine gen_polar_refs
 
     subroutine create_polar_absctfmats( self, spproj, oritype, pfromto )
         use simple_ctf,        only: ctf
@@ -3743,17 +3390,14 @@ contains
                     &self%heap_vars(ithr)%pft_dref_8,self%heap_vars(ithr)%pft_r,&
                     &self%heap_vars(ithr)%shmat_8,self%heap_vars(ithr)%pft_r1_8)
             end do
-            if( allocated(self%ctfmats)             ) deallocate(self%ctfmats)
-            if( allocated(self%npix_per_shell)      ) deallocate(self%npix_per_shell)
-            if( allocated(self%has_cache)           ) deallocate(self%has_cache)
-            if( allocated(self%do_cache)            ) deallocate(self%do_cache)
-            if( allocated(self%cached_vals)         ) deallocate(self%cached_vals)
-            if( allocated(self%pfts_refs_clin)      ) deallocate(self%pfts_refs_clin)
-            if( allocated(self%pfts_refs_clin_even) ) deallocate(self%pfts_refs_clin_even)
-            if( allocated(self%pfts_refs_clin_odd)  ) deallocate(self%pfts_refs_clin_odd)
+            if( allocated(self%ctfmats)        ) deallocate(self%ctfmats)
+            if( allocated(self%npix_per_shell) ) deallocate(self%npix_per_shell)
+            if( allocated(self%has_cache)      ) deallocate(self%has_cache)
+            if( allocated(self%do_cache)       ) deallocate(self%do_cache)
+            if( allocated(self%cached_vals)    ) deallocate(self%cached_vals)
             deallocate(self%sqsums_ptcls, self%ksqsums_ptcls, self%wsqsums_ptcls, self%angtab, self%argtransf,self%pfts_ptcls,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
-                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone, self%pfts_refs_merg)
+                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone)
             call self%kill_memoized_ptcls
             call self%kill_memoized_refs
             nullify(self%sigma2_noise, pftcc_glob)
