@@ -163,7 +163,6 @@ contains
             print *, 'max size: ', self%sz_stats%maxv
         endif
         allocate(diams(self%nboxes), source=0.)
-        !call calc_stats(diams, self%diam_stats)
         do i = 1, self%nboxes
             call self%img_cc%diameter_cc(i, diams(i))
         enddo

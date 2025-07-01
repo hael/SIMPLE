@@ -3799,7 +3799,7 @@ contains
         call motion_correct%set_input('parm_ios', 6, pspecsz, gui_submenu="motion correction")
         call motion_correct%set_input('parm_ios', 7, eer_fraction, gui_submenu="data")
         call motion_correct%set_input('parm_ios', 8, eer_upsampling, gui_submenu="data")
-        call motion_correct%set_input('parm_ios', 9,  flipgain, gui_submenu="motion correction")
+        call motion_correct%set_input('parm_ios', 9, flipgain, gui_submenu="motion correction")
         ! alternative inputs
         ! <empty>
         ! search controls
