@@ -385,28 +385,20 @@ contains
         end do
     end function calc_cluster_cavgs_dmat
 
-    function cluster_cavg_imgs( params, dmat, cavg_imgs, clspops, labels, i_medoids, l_prelim ) result( clust_info_arr )
+    function align_and_score_cavg_clusters( params, dmat, cavg_imgs, clspops, i_medoids, labels, l_prelim ) result( clust_info_arr )
         use simple_clustering_utils, only: cluster_dmat
         class(parameters),    intent(in)    :: params
         real,                 intent(in)    :: dmat(:,:)
         class(image),         intent(inout) :: cavg_imgs(:)
         integer,              intent(in)    :: clspops(:)
-        integer, allocatable, intent(inout) :: labels(:), i_medoids(:)
+        integer,              intent(inout) :: i_medoids(:), labels(:)
         logical,              intent(in)    :: l_prelim
-        integer,              parameter     :: NCLUST_MAX = 65
         real,                 parameter     :: RES_THRES=6., SCORE_THRES=65., SCORE_THRES_REJECT=50., SCORE_THRES_INCL=75.
         type(clust_info),     allocatable   :: clust_info_arr(:)
         logical,              allocatable   :: l_msk(:,:,:)
         type(image)  :: img_msk 
         integer      :: ncls_sel, i, j, nclust, iclust
-        ncls_sel = size(cavg_imgs)        
-        ! cluster
-        call cluster_dmat( dmat, 'aprop', nclust, i_medoids, labels, nclust_max=NCLUST_MAX)
-        if( nclust > 5 .and. nclust < 20 )then
-            nclust = 20
-            deallocate(i_medoids, labels)
-            call cluster_dmat(dmat, 'kmed', nclust, i_medoids, labels)
-        endif
+        ncls_sel = size(cavg_imgs)
         ! prep mask
         call img_msk%new([params%box,params%box,1], params%smpd)
         img_msk = 1.
@@ -414,7 +406,7 @@ contains
         l_msk = img_msk%bin2logical()
         call img_msk%kill
         ! align clusters to medoids and gather information
-        clust_info_arr = align_clusters2medoids( labels, i_medoids, cavg_imgs, params%hp, params%lp, params%trs, l_msk )
+        clust_info_arr = align_clusters2medoids(i_medoids, labels, cavg_imgs, params%hp, params%lp, params%trs, l_msk )
         nclust         = maxval(labels)
         ! set particle populations
         do iclust = 1, nclust
@@ -493,7 +485,7 @@ contains
             real              :: avgjscore, scoreclust_2
             logical           :: l_incl
             clust_info_arr(:)%good_bad = 0
-            if( nclust <= 3 )then
+            if( nclust <= 5 )then
                 clust_info_arr(:)%good_bad      = 1
                 clust_info_arr(nclust)%good_bad = 0
             else
@@ -556,6 +548,7 @@ contains
             call cluster_dmat(dmat_scores, 'aprop', nclust_score, i_medoids_score, labels_score)
             if( nclust_score < 3 )then
                 nclust_score = 3
+                deallocate(i_medoids_score, labels_score)
                 call cluster_dmat(dmat_scores, 'kmed', nclust_score, i_medoids_score, labels_score)
             endif
             ! calculate discretized joint scores
@@ -570,7 +563,7 @@ contains
             end do
         end subroutine calc_jointscore
 
-    end function cluster_cavg_imgs
+    end function align_and_score_cavg_clusters
 
     subroutine write_cavgs_1( n, imgs, labels, fbody, ext )
         integer,          intent(in)    :: n
@@ -645,8 +638,8 @@ contains
         end do
     end subroutine write_selected_cavgs
 
-    function align_clusters2medoids( labels, i_medoids, cavg_imgs, hp, lp, trs, l_msk ) result( clust_info_arr )
-        integer,          intent(in)    :: labels(:), i_medoids(:)
+    function align_clusters2medoids( i_medoids, labels, cavg_imgs, hp, lp, trs, l_msk ) result( clust_info_arr )
+        integer,          intent(in)    :: i_medoids(:), labels(:)
         class(image),     intent(inout) :: cavg_imgs(:)
         real,             intent(in)    :: hp, lp, trs
         logical,          intent(in)    :: l_msk(:,:,:)
@@ -665,6 +658,11 @@ contains
         nclust = maxval(labels)
         allocate(frc(filtsz), clust_info_arr(nclust))
         nclust = maxval(labels)
+
+        print *, 'size(cavg_imgs) ', size(cavg_imgs)
+        print *, 'size(labels)    ', size(labels)
+        print *, 'size(i_medoids) ', size(i_medoids)
+
         do iclust = 1, nclust
             clust_info_arr(iclust)%pop             = count(labels == iclust)
             cluster_imgs                           = pack_imgarr(cavg_imgs, mask=labels == iclust)

@@ -132,10 +132,12 @@ contains
     end subroutine exec_rank_cavgs
 
     subroutine exec_cluster_cavgs( self, cline )
+        use simple_clustering_utils, only: cluster_dmat
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         logical,          parameter   :: DEBUG = .true.
-        real,             parameter   :: SCORE_THRES_INCL=75.
+        real,             parameter   :: SCORE_THRES_INCL = 75.
+        integer,          parameter   :: NCLUST_MAX = 65
         type(image),      allocatable :: cavg_imgs(:), cavg_imgs_sel(:)
         real,             allocatable :: frc(:), mm(:,:), jointscores(:), dmat(:,:), dmat_sel(:,:)
         real,             allocatable :: resvals(:), res_bad(:), res_good(:), res_maybe(:)
@@ -179,67 +181,65 @@ contains
         ! calculate overall minmax
         oa_min         = minval(mm(:,1))
         oa_max         = maxval(mm(:,2))
+        ! calculate distance matrrix
         dmat           = calc_cluster_cavgs_dmat(params, cavg_imgs, [oa_min,oa_max])
-        clust_info_arr = cluster_cavg_imgs(params, dmat, cavg_imgs, clspops, labels, i_medoids, l_prelim=.true.)
-        nclust         = maxval(labels)
-
-        print *, 'nclust:                           ', nclust
-        print *, 'count(clust_info_arr(:)%good_bad: ', count(clust_info_arr(:)%good_bad == 1)
-
-        jointscores    = pack(clust_info_arr(:)%jointscore, mask=clust_info_arr(:)%good_bad == 1)
-        if( all(jointscores >= SCORE_THRES_INCL) )then
-            ! if all the selected class averages score that high, we are done
-            clust_info_arr_merged = clust_info_arr
+        ! cluster
+        call cluster_cavg_imgs(dmat, nclust, i_medoids, labels)
+        if( nclust <= 5 )then
+            clust_info_arr_merged = align_and_score_cavg_clusters(params, dmat, cavg_imgs, clspops, i_medoids, labels, l_prelim=.false.)
         else
-            ! create good_mask
-            allocate(good_mask(ncls_sel), source=.false.)
-            do icls = 1, ncls_sel
-                if( clust_info_arr(labels(icls))%good_bad == 1 )then
-                    good_mask(icls) = .true.
-                endif
-            end do
-            ngood = count(good_mask)
-            ! re-cluster
-            allocate(inds(ncls_sel),source=(/(i,i=1,ncls_sel)/))
-            inds_sel           = pack(inds,             mask=good_mask)
-            cavg_imgs_sel      = pack_imgarr(cavg_imgs, mask=good_mask)
-            clspops_sel        = pack(clspops,          mask=good_mask)
-            dmat_sel           = calc_cluster_cavgs_dmat(params, cavg_imgs_sel, [oa_min,oa_max])
-            clust_info_arr_sel = cluster_cavg_imgs(params, dmat_sel, cavg_imgs_sel, clspops_sel, labels_sel, i_medoids_sel, l_prelim=.false.)
-            nclust_sel         = maxval(labels_sel)
-            ! index adjustment of deselected
-            minv_labels = minval(labels, mask=.not.good_mask)
-            where(     good_mask ) labels = 0
-            where(.not.good_mask ) labels = labels + nclust_sel - minv_labels + 1
-            ! merge labels
-            do i = 1, ngood
-                if( labels(inds_sel(i)) == 0 )then
-                    labels(inds_sel(i)) = labels_sel(i)
-                else
-                    THROW_HARD('Index logic error')
-                endif
-            end do
-            allocate(clust_info_arr_merged(maxval(labels)))
-            
-            cnt_clust = 0
+            clust_info_arr = align_and_score_cavg_clusters(params, dmat, cavg_imgs, clspops, i_medoids, labels, l_prelim=.true.)
+            jointscores    = pack(clust_info_arr(:)%jointscore, mask=clust_info_arr(:)%good_bad == 1)
+            if( all(jointscores >= SCORE_THRES_INCL) )then
+                ! if all the selected class averages score that high, we are done
+                clust_info_arr_merged = clust_info_arr
+            else
+                ! create good mask
+                allocate(good_mask(ncls_sel), source=.false.)
+                do icls = 1, ncls_sel
+                    if( clust_info_arr(labels(icls))%good_bad == 1 )then
+                        good_mask(icls) = .true.
+                    endif
+                end do
+                ngood = count(good_mask)
+                ! re-cluster
+                allocate(inds(ncls_sel),source=(/(i,i=1,ncls_sel)/))
+                inds_sel           = pack(inds,             mask=good_mask)
+                cavg_imgs_sel      = pack_imgarr(cavg_imgs, mask=good_mask)
+                clspops_sel        = pack(clspops,          mask=good_mask)
+                dmat_sel           = calc_cluster_cavgs_dmat(params, cavg_imgs_sel, [oa_min,oa_max])
+                call cluster_cavg_imgs(dmat_sel, nclust_sel, i_medoids_sel, labels_sel)
 
-            do i = 1, nclust_sel
-                cnt_clust = cnt_clust + 1
-                clust_info_arr_merged(cnt_clust) = clust_info_arr_sel(i)
-                print *, 'taking index: '//int2str(i)//' from selected solution'
-            end do
+                print *, 'size(cavg_imgs_sel) ', size(cavg_imgs_sel)
+                print *, 'size(labels_sel)    ', size(labels_sel)
 
-            
-            do i = count(clust_info_arr(:)%good_bad == 1) + 1, nclust
-                cnt_clust = cnt_clust + 1
-                clust_info_arr_merged(cnt_clust) = clust_info_arr(i)
-                print *, 'taking index: '//int2str(i)//' from initial solution'
-            end do
-
-            print *, 'cnt_clust: ', cnt_clust, 'maxval(labels): ', maxval(labels)
-
-
-
+                clust_info_arr_sel = align_and_score_cavg_clusters(params, dmat_sel, cavg_imgs_sel, clspops_sel, i_medoids_sel, labels_sel, l_prelim=.false.)
+                ! index adjustment of deselected
+                minv_labels = minval(labels, mask=.not.good_mask)
+                where(     good_mask ) labels = 0
+                where(.not.good_mask ) labels = labels + nclust_sel - minv_labels + 1
+                ! merge labels
+                do i = 1, ngood
+                    if( labels(inds_sel(i)) == 0 )then
+                        labels(inds_sel(i)) = labels_sel(i)
+                    else
+                        THROW_HARD('Index logic error')
+                    endif
+                end do
+                allocate(clust_info_arr_merged(maxval(labels)))
+                cnt_clust = 0
+                do i = 1, nclust_sel
+                    cnt_clust = cnt_clust + 1
+                    clust_info_arr_merged(cnt_clust) = clust_info_arr_sel(i)
+                    print *, 'taking index: '//int2str(i)//' from selected solution'
+                end do
+                do i = count(clust_info_arr(:)%good_bad == 1) + 1, nclust
+                    cnt_clust = cnt_clust + 1
+                    clust_info_arr_merged(cnt_clust) = clust_info_arr(i)
+                    print *, 'taking index: '//int2str(i)//' from initial solution'
+                end do
+                print *, 'cnt_clust: ', cnt_clust, 'maxval(labels): ', maxval(labels)
+            endif
         endif
 
         print *, labels
@@ -353,6 +353,22 @@ contains
         deallocate(cavg_imgs, l_non_junk, labels, clsinds, i_medoids)
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER_CAVGS NORMAL STOP ****')
+
+
+    contains
+
+        subroutine cluster_cavg_imgs( dmat, nclust, i_medoids, labels )
+            real,                 intent(in)    :: dmat(:,:)
+            integer,              intent(inout) :: nclust
+            integer, allocatable, intent(inout) :: i_medoids(:), labels(:)
+            call cluster_dmat( dmat, 'aprop', nclust, i_medoids, labels, nclust_max=NCLUST_MAX)
+            if( nclust > 5 .and. nclust < 20 )then
+                nclust = 20
+                deallocate(i_medoids, labels)
+                call cluster_dmat(dmat, 'kmed', nclust, i_medoids, labels)
+            endif
+        end subroutine cluster_cavg_imgs
+
     end subroutine exec_cluster_cavgs
 
     subroutine exec_select_clusters( self, cline )
