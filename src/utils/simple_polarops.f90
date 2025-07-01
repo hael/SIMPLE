@@ -138,7 +138,7 @@ contains
         real(sp),    pointer :: pctfmats(:,:,:), rctf(:,:)
         real(dp) :: w
         real     :: incr_shift(2)
-        integer  :: eopops(ncls,2), i, icls, iptcl, irot
+        integer  :: eopops(2,ncls), i, icls, iptcl, irot
         logical  :: l_ctf, l_even, l_3D
         l_3D = .false.
         if( present(is3D) ) l_3D = is3D
@@ -191,9 +191,9 @@ contains
             endif
             ! total population
             if( l_even )then
-                eopops(icls,1) = eopops(icls,1) + 1
+                eopops(1,icls) = eopops(1,icls) + 1
             else
-                eopops(icls,2) = eopops(icls,2) + 1
+                eopops(2,icls) = eopops(2,icls) + 1
             endif
         enddo
         !$omp end parallel do
