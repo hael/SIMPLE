@@ -11,7 +11,7 @@ implicit none
 integer,          parameter   :: NPLANES = 300, ORI_IND1 = 10, ORI_IND2 = 55
 character(len=:), allocatable :: cmd
 type(image),      allocatable :: pad_fplanes(:)
-complex,          allocatable :: cmat(:,:), pfts(:,:,:)
+complex,          allocatable :: cmat(:,:), pfts(:,:,:), even_pfts(:,:,:)
 complex,          pointer     :: ref_ptrs_even(:,:,:), ref_ptrs_odd(:,:,:)
 type(parameters)              :: p
 type(polarft_corrcalc)        :: pftcc
@@ -117,25 +117,26 @@ enddo
 ! Testing polar line generation
 call pftcc%get_refs_ptr(ref_ptrs_even, ref_ptrs_odd)
 allocate(pfts(pftcc%get_pftsz(), kfromto(1):kfromto(2), NPLANES), source=cmplx(0.,0.))
+allocate(even_pfts(pftcc%get_pftsz(), kfromto(1):kfromto(2), NPLANES), source=ref_ptrs_even) ! backup
 call gen_polar_comlins(pftcc, spiral, pcomlines)
 call polar_comlin_pfts(pcomlines, ref_ptrs_even, pfts)
 i = ORI_IND1
-call pftcc%set_ref_pft(i, ref_ptrs_even(:,:,i), iseven=.true.)
+call pftcc%set_ref_pft(i, ref_ptrs_even(:,:,i), iseven=.true.) ! not necessay as ref_ptrs_even => pftcc%refs_pfts_even
 call pftcc%polar2cartesian(i, .true., cmat, box, box_in=p%box)
 call fplane_polar%zero_and_flag_ft
 call fplane_polar%set_cmat(cmat)
 call fplane_polar%shift_phorig()
 call fplane_polar%ifft
 call fplane_polar%write('polar_comlin.mrc', 1)
-call pftcc%set_ref_pft(i, pfts(:,:,i), iseven=.true.)
+call pftcc%set_ref_pft(i, pfts(:,:,i), iseven=.true.) ! this sets refs_pfts_even to pfts
 call pftcc%polar2cartesian(i, .true., cmat, box, box_in=p%box)
 call fplane_polar%zero_and_flag_ft
 call fplane_polar%set_cmat(cmat)
 call fplane_polar%shift_phorig()
 call fplane_polar%ifft
 call fplane_polar%write('polar_comlin.mrc', 2)
-where( sqrt(real(pfts(:,:,i)*conjg(pfts(:,:,i)))) > TINY ) ref_ptrs_even(:,:,i) = (ref_ptrs_even(:,:,i) + pfts(:,:,i))/2.
-call pftcc%set_ref_pft(i, ref_ptrs_even(:,:,i), iseven=.true.)
+where( sqrt(real(pfts(:,:,i)*conjg(pfts(:,:,i)))) > TINY ) even_pfts(:,:,i) = (even_pfts(:,:,i) + pfts(:,:,i))/2.
+call pftcc%set_ref_pft(i, even_pfts(:,:,i), iseven=.true.)
 call pftcc%polar2cartesian(i, .true., cmat, box, box_in=p%box)
 call fplane_polar%zero_and_flag_ft
 call fplane_polar%set_cmat(cmat)
@@ -157,8 +158,8 @@ call fplane_polar%set_cmat(cmat)
 call fplane_polar%shift_phorig()
 call fplane_polar%ifft
 call fplane_polar%write('polar_comlin.mrc', 5)
-where( sqrt(real(pfts(:,:,i)*conjg(pfts(:,:,i)))) > TINY ) ref_ptrs_even(:,:,i) = (ref_ptrs_even(:,:,i) + pfts(:,:,i))/2.
-call pftcc%set_ref_pft(i, ref_ptrs_even(:,:,i), iseven=.true.)
+where( sqrt(real(pfts(:,:,i)*conjg(pfts(:,:,i)))) > TINY ) even_pfts(:,:,i) = (even_pfts(:,:,i) + pfts(:,:,i))/2.
+call pftcc%set_ref_pft(i, even_pfts(:,:,i), iseven=.true.)
 call pftcc%polar2cartesian(i, .true., cmat, box, box_in=p%box)
 call fplane_polar%zero_and_flag_ft
 call fplane_polar%set_cmat(cmat)

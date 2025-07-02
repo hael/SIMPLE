@@ -115,7 +115,7 @@ contains
         class(polarft_corrcalc), intent(in)    :: pftcc
         type(oris),              intent(in)    :: ref_space
         type(polar_fmap),        intent(inout) :: pcomlines(:,:)
-        integer :: iref, jref, irot, kind, irot_l, irot_r, errflg, nrefs, pftsz
+        integer :: iref, jref, irot, kind, irot_l, irot_r, nrefs, pftsz
         real    :: loc1_3D(3), loc2_3D(3), denom, a1, a2, b1, b2, line2D(3), irot_real, k_real, w, hk1(2), hk2(2),&
                   &rotmat(3,3),invmats(3,3,pftcc%get_nrefs()), loc1s(3,pftcc%get_nrefs()), loc2s(3,pftcc%get_nrefs()), line3D(3)
         nrefs = pftcc%get_nrefs()
@@ -130,7 +130,7 @@ contains
         if( kind >= params_glob%kfromto(2) ) kind = params_glob%kfromto(2)
         hk2   = pftcc%get_coord(irot,kind)
         ! caching rotation matrices and their corresponding inverse matrices
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,rotmat,errflg)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,rotmat)
         do iref = 1, nrefs
             rotmat = ref_space%get_mat(iref)
             invmats(:,:,iref) = transpose(rotmat)
