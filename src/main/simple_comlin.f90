@@ -75,7 +75,7 @@ contains
         integer,      intent(inout) :: xy2(2)
         logical,      intent(out)   :: good_coord
         real    :: e1_rotmat(3,3), e2_rotmat(3,3), e2_inv(3,3), loc1_3D(3), loc2_3D(3), e1_inv(3,3)
-        integer :: errflg, xy(3), sqlp
+        integer :: xy(3), sqlp
         good_coord = .false.
         if( all(xy1 == 0) )return
         sqlp      = (maxval(lims(:,2)))**2
@@ -84,10 +84,9 @@ contains
         ! rotating coordinates xy1 of the first plane
         loc1_3D   = matmul(real([xy1(1),xy1(2),0]), e1_rotmat)
         ! inversely rotating rotated xy1 to the second plane
-        call matinv(e2_rotmat, e2_inv, 3, errflg)
-        if( errflg < 0 ) return
-        xy  = nint(matmul(loc1_3D, e2_inv))
-        xy2 = xy(1:2)
+        e2_inv    = transpose(e2_rotmat)
+        xy        = nint(matmul(loc1_3D, e2_inv))
+        xy2       = xy(1:2)
         if( all(xy2 == 0) ) return
         ! checking the inversely rotated coords make sense
         if( xy(1) >= lims(1,1) .and. xy(1) <= lims(1,2) .and. &
@@ -99,9 +98,8 @@ contains
         endif
         ! reverse checking
         loc2_3D = matmul(real([xy2(1),xy2(2),0]), e2_rotmat)
-        call matinv(e1_rotmat, e1_inv, 3, errflg)
-        if( errflg < 0 ) return
-        xy = nint(matmul(loc2_3D, e1_inv))
+        e1_inv  = transpose(e1_rotmat)
+        xy      = nint(matmul(loc2_3D, e1_inv))
         ! checking the inversely rotated coords make sense
         if( xy(1) >= lims(1,1) .and. xy(1) <= lims(1,2) .and. &
            &xy(2) >= lims(2,1) .and. xy(2) <= lims(2,2) .and. &
@@ -123,19 +121,19 @@ contains
         ! randomly chosing two sets of (irot, kind) to generate the polar common lines
         irot  = 5
         kind  = params_glob%kfromto(1) + 5
-        if( kind >= params_glob%kfromto(2) ) kind = params_glob%kfromto(1) ! kfromto(2)?
+        if( kind >= params_glob%kfromto(2) ) kind = params_glob%kfromto(1) ! using kfromto(1) as kind in the first set of (irot,kind)
         hk1   = pftcc%get_coord(irot,kind)
         irot  = 16
         kind  = params_glob%kfromto(1) + 15
-        if( kind >= params_glob%kfromto(2) ) kind = params_glob%kfromto(2)
+        if( kind >= params_glob%kfromto(2) ) kind = params_glob%kfromto(2) ! using kfromto(2) as kind in the second set of (irot,kind)
         hk2   = pftcc%get_coord(irot,kind)
         ! caching rotation matrices and their corresponding inverse matrices
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,rotmat)
         do iref = 1, nrefs
-            rotmat = ref_space%get_mat(iref)
+            rotmat            = ref_space%get_mat(iref)
             invmats(:,:,iref) = transpose(rotmat)
-            loc1s(:,iref) = matmul([hk1(1), hk1(2), 0.], rotmat)
-            loc2s(:,iref) = matmul([hk2(1), hk2(2), 0.], rotmat)
+            loc1s(:,iref)     = matmul([hk1(1), hk1(2), 0.], rotmat)
+            loc2s(:,iref)     = matmul([hk2(1), hk2(2), 0.], rotmat)
         enddo
         !$omp end parallel do
         ! constructing polar common lines
@@ -177,7 +175,7 @@ contains
                 line2D = matmul(line3D, invmats(:,:,iref))
                 call pftcc%get_polar_coord(line2D(1:2), irot_real, k_real)
                 if( irot_real < 1. ) irot_real = irot_real + real(pftsz)
-                ! caching the indeces irot_i and irot_i+1 and the corresponding linear weight
+                ! caching the indices irot_i and irot_i+1 and the corresponding linear weight
                 irot_l = floor(irot_real)
                 irot_r = irot_l + 1
                 w      = irot_real - real(irot_l)
