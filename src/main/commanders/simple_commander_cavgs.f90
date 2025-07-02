@@ -378,7 +378,7 @@ contains
         call params%new(cline)
         ! read base project file
         call spproj_ref%read(params%projfile)
-        if( .not. spproj_ref%os_cls2D%isthere('cluster') ) THROW_HARD('Base project lacks clustering information in cls2D field')
+        if( .not. spproj_ref%os_cls2D%isthere('cluster') ) THROW_HARD('Reference project lacks clustering information in cls2D field')
         ! read match project file
         call spproj_match%read(params%projfile_target)
         ! prepare class averages
@@ -419,6 +419,7 @@ contains
         dmat = calc_match_cavgs_dmat(params, cavg_imgs_ref_med, cavg_imgs_match, oa_minmax)
         allocate(labels_match(nmatch), source=0)
         labels_match = minloc(dmat, dim=1)
+        call  write_cavgs(nmatch, cavg_imgs_match, labels_match, 'cluster_match', params%ext)
         ! update project
         call spproj_match%os_ptcl2D%transfer_class_assignment(spproj_match%os_ptcl3D)
         do iclust = 1, nclust
