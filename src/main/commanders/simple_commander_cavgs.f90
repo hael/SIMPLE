@@ -355,13 +355,13 @@ contains
         type(parameters) :: params
         type(sp_project) :: spproj_ref, spproj_match
         type(kmedoids)   :: kmed
-        type(image),       allocatable :: cavg_imgs_ref(:), cavg_imgs_match(:), cavg_imgs_ref_med(:)
+        type(image),       allocatable :: cavg_imgs_ref(:), cavg_imgs_match(:)
         integer,           allocatable :: clspops_ref(:), clsinds_ref(:), clspops_match(:), clsinds_match(:), labels(:)
         integer,           allocatable :: i_medoids_ref(:), states(:), labels_match(:), states_map(:)
         logical,           allocatable :: l_non_junk_ref(:), l_non_junk_match(:), l_med_msk(:)
-        real,              allocatable :: mm_ref(:,:), mm_match(:,:), corrmat(:,:), dmat_ref(:,:), dmat(:,:)
+        real,              allocatable :: mm_ref(:,:), mm_match(:,:), corrmat(:,:), dmat_clust(:,:), dmat(:,:)
         type(inpl_struct), allocatable :: algninfo(:,:)
-        integer :: nmatch, nrefs, ldim(3), i, j, nmedoids, ncls_match, nclust, icls, iclust
+        integer :: nmatch, nrefs, ldim(3), i, j, ncls_match, nclust, icls, iclust, imatch
         real    :: smpd, oa_minmax(2)
         ! defaults
         call cline%set('oritype', 'cls2D')
@@ -395,30 +395,23 @@ contains
         ! extract nonzero cluster labels
         labels = spproj_ref%os_cls2D%get_all_asint('cluster')
         labels = pack(labels, mask=l_non_junk_ref)
+        nclust = maxval(labels)
         states = spproj_ref%os_cls2D%get_all_asint('state')
         states = pack(states, mask=l_non_junk_ref)
         ! calculate overall minmax
         oa_minmax(1) = minval(mm_ref(:,1))
         oa_minmax(2) = maxval(mm_ref(:,2))
-        ! calculate distance matrix for references 
-        dmat_ref = calc_cluster_cavgs_dmat(params, cavg_imgs_ref, oa_minmax)
-        ! identify medoids
-        nmedoids = maxval(labels)
-        nclust   = nmedoids
-        call kmed%new(labels, dmat_ref)
-        allocate(i_medoids_ref(nmedoids), source=0)
-        call kmed%get_medoids(i_medoids_ref)
-        if( size(i_medoids_ref) /= nmedoids ) THROW_HARD('Incongruence!')
-        ! create image array of medoids
-        allocate(l_med_msk(nrefs), source=.false.)
-        do i =1, nmedoids
-            l_med_msk(i_medoids_ref(i)) = .true.
-        end do
-        cavg_imgs_ref_med = pack_imgarr(cavg_imgs_ref, mask=l_med_msk)
         ! generate matching distance matrix
-        dmat = calc_match_cavgs_dmat(params, cavg_imgs_ref_med, cavg_imgs_match, oa_minmax)
+        dmat = calc_match_cavgs_dmat(params, cavg_imgs_ref, cavg_imgs_match, oa_minmax)
+        ! genrate cluster distance matrix
+        allocate(dmat_clust(nclust,nmatch), source=0.)
+        do iclust = 1, nclust
+            do imatch = 1, nmatch
+                dmat_clust(iclust,imatch) = sum(dmat(:,imatch), mask=labels == iclust) / real(count(labels == iclust))
+            end do
+        end do
         allocate(labels_match(nmatch), source=0)
-        labels_match = minloc(dmat, dim=1)
+        labels_match = minloc(dmat_clust, dim=1)
         call  write_cavgs(nmatch, cavg_imgs_match, labels_match, 'cluster_match', params%ext)
         ! update project
         call spproj_match%os_ptcl2D%transfer_class_assignment(spproj_match%os_ptcl3D)

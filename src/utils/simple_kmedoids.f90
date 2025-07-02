@@ -49,7 +49,7 @@ contains
         class(kmedoids), intent(inout) :: self
         integer,         intent(in)    :: cls_labels(:)
         real, target,    intent(in)    :: dmat(size(cls_labels),size(cls_labels))
-        call self%new_1(size(cls_labels), dmat, maxval(cls_labels)+1)
+        call self%new_1(size(cls_labels), dmat, maxval(cls_labels))
         self%cls_labels = cls_labels
         call self%find_medoids
     end subroutine new_2
