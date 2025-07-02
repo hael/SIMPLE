@@ -64,7 +64,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('b2071dbc')
+call simple_print_git_version('3d0c3242')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

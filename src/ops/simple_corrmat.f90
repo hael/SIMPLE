@@ -14,6 +14,11 @@ interface calc_cartesian_corrmat
     module procedure calc_cartesian_corrmat_2
 end interface calc_cartesian_corrmat
 
+interface calc_inpl_invariant_fm
+    module procedure calc_inpl_invariant_fm_1
+    module procedure calc_inpl_invariant_fm_2
+end interface calc_inpl_invariant_fm
+
 type(image)          :: mskimg
 integer, allocatable :: pairs(:,:)
 integer              :: nptcls, ntot, npix, norig, nsel
@@ -128,7 +133,7 @@ contains
         endif
     end subroutine calc_cartesian_corrmat_2
 
-    subroutine calc_inpl_invariant_fm( imgs, hp, lp, trs, corrmat, l_srch_mirr )
+    subroutine calc_inpl_invariant_fm_1( imgs, hp, lp, trs, corrmat, l_srch_mirr )
         use simple_pftcc_shsrch_fm
         use simple_polarizer,        only: polarizer
         use simple_polarft_corrcalc, only: polarft_corrcalc
@@ -234,7 +239,105 @@ contains
             call ccimgs(i,1)%kill
             call ccimgs(i,2)%kill
         enddo
-    end subroutine calc_inpl_invariant_fm
+    end subroutine calc_inpl_invariant_fm_1
+
+    subroutine calc_inpl_invariant_fm_2( refimgs, imgs, hp, lp, trs, corrmat )
+        use simple_pftcc_shsrch_fm
+        use simple_polarizer,        only: polarizer
+        use simple_polarft_corrcalc, only: polarft_corrcalc
+        class(image),          intent(inout) :: refimgs(:), imgs(:)
+        real,                  intent(in)    :: hp, lp, trs
+        real,    allocatable,  intent(inout) :: corrmat(:,:)
+        type(image),           allocatable   :: ccimgs(:,:)
+        type(pftcc_shsrch_fm), allocatable   :: fm_correlators(:)
+        type(polarizer)        :: polartransform
+        type(polarft_corrcalc) :: pftcc
+        real, parameter :: TRS_STEPSZ = 1.0
+        integer :: n, i, j, ithr, nrots, loc(1), irot, ldim(3), box, kfromto(2), iref, nrefs
+        real    :: offset(2), offsetm(2), ang, angm, smpd, cc, ccm
+        n          = size(imgs)
+        nrefs      = size(refimgs)
+        ldim       = imgs(1)%get_ldim()
+        box        = ldim(1)
+        smpd       = imgs(1)%get_smpd()
+        kfromto(1) = max(2, calc_fourier_index(hp, box, smpd))
+        kfromto(2) =        calc_fourier_index(lp, box, smpd)
+        ! initialize pftcc, polarizer
+        call pftcc%new(nrefs, [1,n], kfromto)
+        call polartransform%new([box,box,1], smpd)
+        call polartransform%init_polarizer(pftcc, KBALPHA)
+        if( allocated(corrmat) ) deallocate(corrmat)
+        allocate(corrmat(nrefs,n), source=-1.)
+        !$omp parallel default(shared) private(i,iref) proc_bind(close)
+        !$omp do schedule(static) 
+        do iref = 1, nrefs
+            call refimgs(iref)%fft()
+            call polartransform%polarize(pftcc, refimgs(iref), iref, isptcl=.false., iseven=.true.)
+        end do
+        !$omp end do
+        !$omp do schedule(static) 
+        do i = 1, n
+            call imgs(i)%fft()
+            call polartransform%polarize(pftcc, imgs(i), i, isptcl=.true., iseven=.true.)
+        end do
+        !$omp end do
+        !$omp end parallel
+        call pftcc%memoize_refs
+        call pftcc%memoize_ptcls
+        ! correlation matrix calculation
+        allocate(fm_correlators(nthr_glob),ccimgs(nthr_glob,2))
+        do i = 1,nthr_glob
+            call fm_correlators(i)%new(trs,TRS_STEPSZ,opt_angle=.false.)
+            call ccimgs(i,1)%new(ldim, smpd, wthreads=.false.)
+            call ccimgs(i,2)%new(ldim, smpd, wthreads=.false.)
+        enddo
+        do iref = 1, nrefs
+            !$omp parallel do default(shared) private(i,cc,ccm,ithr,offset,offsetm,ang,angm)&
+            !$omp schedule(static) proc_bind(close)
+            do i = 1, n
+                ithr = omp_get_thread_num() + 1
+                ! reference to particle
+                call pftcc%set_eo(i,.true.)
+                call fm_correlators(ithr)%calc_phasecorr(iref, i, refimgs(iref), imgs(i),&
+                    &ccimgs(ithr,1), ccimgs(ithr,2), cc, rotang=ang, shift=offset)
+                ! mirrored reference to particle
+                call pftcc%mirror_ref_pft(iref) ! switch mirror
+                call fm_correlators(ithr)%calc_phasecorr(iref, i, refimgs(iref), imgs(i),&
+                &ccimgs(ithr,1), ccimgs(ithr,2), ccm, mirror=.true., rotang=angm, shift=offsetm)
+                ! higher correlation wins
+                if( ccm > cc )then
+                    cc     = ccm
+                    ang    = angm
+                    offset = offsetm
+                endif
+                corrmat(iref,i) = cc
+                call pftcc%mirror_ref_pft(iref) ! switch mirror
+            enddo
+            !$omp end parallel do
+        enddo
+        ! BWD FT
+        !$omp parallel default(shared) private(i,iref) proc_bind(close)
+        !$omp do schedule(static) 
+        do iref = 1, nrefs
+            call refimgs(iref)%ifft()
+        end do
+        !$omp end do
+        !$omp do schedule(static) 
+        do i = 1, n
+            call imgs(i)%ifft()
+        end do
+        !$omp end do
+        !$omp end parallel
+        ! tidy
+        call pftcc%kill
+        call polartransform%kill_polarizer
+        call polartransform%kill
+        do i = 1,nthr_glob
+            call fm_correlators(i)%kill
+            call ccimgs(i,1)%kill
+            call ccimgs(i,2)%kill
+        enddo
+    end subroutine calc_inpl_invariant_fm_2
 
 end module simple_corrmat
     
