@@ -976,7 +976,7 @@ contains
         ! register imgs to references
         nrots = pftcc%get_nrots()
         allocate(inpl_corrs(nrots), algninfo(nrefs,n))
-        !omp parallel do default(shared) private(i,ithr,iref,inpl_corrs,loc,irot,cxy) schedule(static) proc_bind(close)
+        !$omp parallel do default(shared) private(i,ithr,iref,inpl_corrs,loc,irot,cxy) schedule(static) proc_bind(close)
         do i = 1, 2 * n
             ithr = omp_get_thread_num() + 1
             do iref = 1, nrefs
@@ -1006,7 +1006,7 @@ contains
                 endif
             end do
         end do
-        !omp end parallel do
+        !$omp end parallel do
         ! select for mirroring
         do iref = 1, nrefs
             where( algninfo_mirr(iref,:)%corr > algninfo(iref,:)%corr ) algninfo(iref,:) = algninfo_mirr(iref,:)
