@@ -41,13 +41,19 @@ logical                  :: l_comlin   = .false.                                
 contains
 
     !> Module initialization
-    subroutine polar_cavger_new( pftcc )
+    subroutine polar_cavger_new( pftcc, nrefs )
         class(polarft_corrcalc), intent(in) :: pftcc
+        integer,       optional, intent(in) :: nrefs
         l_comlin = (trim(params_glob%ref_type).eq.'clin' .or. trim(params_glob%ref_type).eq.'cavg_clin')
         call polar_cavger_kill
         ncls    = pftcc%get_nrefs()
         pftsz   = pftcc%get_pftsz()
         kfromto = pftcc%get_kfromto()
+        if( present(nrefs) )then
+            ncls = nrefs
+        else
+            ncls = pftcc%get_nrefs()
+        endif
         ! dimensions
         smpd    = params_glob%smpd
         allocate(prev_eo_pops(2,ncls), eo_pops(2,ncls), source=0)
@@ -745,23 +751,6 @@ contains
             pfts_odd(:,k,icls)  = filter(k) * pfts_odd(:,k,icls)
         enddo
     end subroutine filterrefs
-
-    !>  \brief  Gaussian-filter references
-    subroutine gaurefs( icls, freq )
-        integer, intent(in) :: icls
-        real,    intent(in) :: freq
-        real(dp) :: g, halfinvsigsq, fwhm
-        integer  :: k
-        if( freq < 0. ) return
-        fwhm = real(freq,dp) / real(smpd,dp) / real(params_glob%box,dp)
-        halfinvsigsq = 0.5d0 * (DPI * 2.d0 * fwhm / 2.35482d0)**2
-        do k = kfromto(1),kfromto(2)
-            g = exp(-real(k**2,dp) * halfinvsigsq)
-            pfts_cavg(:,k,icls) = g * pfts_cavg(:,k,icls)
-            pfts_even(:,k,icls) = g * pfts_even(:,k,icls)
-            pfts_odd(:,k,icls)  = g * pfts_odd(:,k,icls)
-        enddo
-    end subroutine gaurefs
 
     subroutine calc_frc( pft1, pft2, n, frc )
         complex(dp), intent(in)    :: pft1(pftsz,kfromto(1):kfromto(2)), pft2(pftsz,kfromto(1):kfromto(2))
