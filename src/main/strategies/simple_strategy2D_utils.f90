@@ -396,7 +396,7 @@ contains
         type(histogram),      allocatable   :: hists_ref(:), hists_match(:)
         real,                 allocatable   :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:), dmat_tvd(:,:), smat_tvd(:,:)
         real,                 allocatable   :: dmat_joint(:,:), smat_joint(:,:), dmat(:,:), dmat_jsd(:,:), smat_jsd(:,:)
-        real,                 allocatable   :: dmat_hd(:,:), dmat_hist(:,:), dmat_cc(:,:), smat(:,:)
+        real,                 allocatable   :: dmat_hd(:,:), dmat_hist(:,:), dmat_fm(:,:), smat(:,:)
         logical,              allocatable   :: l_msk(:,:,:)
         type(inpl_struct),    allocatable   :: algninfo(:,:)
         type(pspecs) :: pows_ref, pows_match
@@ -420,10 +420,11 @@ contains
         dmat_pow = pows_ref%calc_distmat(pows_match)
         call normalize_minmax(dmat_pow)
         smat_pow = dmat2smat(dmat_pow)
-        ! do the matching
-        algninfo = match_imgs2refs(ncls_ref, ncls_match, params%hp, params%lp, params%trs, cavg_imgs_ref, cavg_imgs_match)
-        allocate(corrmat(ncls_ref,ncls_match), source=algninfo(:,:)%corr)
-        dmat_cc  = smat2dmat(corrmat)        
+        ! calculate inpl_invariant_fm corrmat
+        ! correlation through Fourier-Mellin + shift search
+        write(logfhandle,'(A)') '>>> CORRELATIONS THROUGH FOURIER-MELLIN & SHIFT SEARCH'
+        call calc_inpl_invariant_fm(cavg_imgs_ref, cavg_imgs_match, params%hp, params%lp, params%trs, corrmat)
+        dmat_fm = smat2dmat(corrmat)
         ! calculate histogram-based distance matrices
         allocate(dmat_tvd(ncls_ref,ncls_match), dmat_jsd(ncls_ref,ncls_match), dmat_hd(ncls_ref,ncls_match), source=0.)
         !$omp parallel do default(shared) private(i,j)&
@@ -442,15 +443,15 @@ contains
             case('pow')
                 dmat = dmat_pow 
             case('powfm')
-                dmat = 0.5 * dmat_pow + 0.5 * dmat_cc
+                dmat = 0.5 * dmat_pow + 0.5 * dmat_fm
             case('fm')
-                dmat = dmat_cc
+                dmat = dmat_fm
             case('hist')
                 dmat = dmat_hist
             case('histfm')
-                dmat = 0.5 * dmat_hist + 0.5 * dmat_cc
+                dmat = 0.5 * dmat_hist + 0.5 * dmat_fm
             case('hybrid')
-                dmat = 0.2 * dmat_hist + 0.4 * dmat_pow + 0.4 * dmat_cc       
+                dmat = 0.2 * dmat_hist + 0.4 * dmat_pow + 0.4 * dmat_fm       
             case DEFAULT
                 THROW_HARD('Unsupported clustering criterion: '//trim(params%clust_crit))
         end select
@@ -901,124 +902,6 @@ contains
         call pftcc%kill
         call polartransform%kill
     end function match_imgs2ref
-
-    function match_imgs2refs( nrefs, n, hp, lp, trs, refimgs, imgs ) result( algninfo )
-        use simple_polarizer,         only: polarizer
-        use simple_polarft_corrcalc,  only: polarft_corrcalc
-        use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
-        integer,                  intent(in)    :: nrefs, n
-        real,                     intent(in)    :: hp, lp, trs
-        class(image),             intent(inout) :: refimgs(nrefs), imgs(n) 
-        integer,     parameter          :: MAXITS_SH = 60
-        real,        allocatable        :: inpl_corrs(:)
-        type(image), allocatable        :: imgs_mirr(:)
-        type(pftcc_shsrch_grad)         :: grad_shsrch_obj(nthr_glob)
-        type(polarizer)                 :: polartransform
-        type(polarft_corrcalc)          :: pftcc
-        type(inpl_struct)               :: algninfo_mirr(nrefs,n)
-        type(inpl_struct), allocatable  :: algninfo(:,:)
-        integer :: ldim(3), ldim_ref(3), box, kfromto(2), ithr, i, loc(1), nrots, irot, iref
-        real    :: smpd, lims(2,2), lims_init(2,2), cxy(3)
-        ldim       = imgs(1)%get_ldim()
-        ldim_ref   = refimgs(1)%get_ldim()
-        if( .not. all(ldim == ldim_ref) ) THROW_HARD('Incongruent logical image dimensions (imgs & imgs_ref)')
-        box        = ldim(1)
-        smpd       = imgs(1)%get_smpd()
-        kfromto(1) = max(2, calc_fourier_index(hp, box, smpd))
-        kfromto(2) =        calc_fourier_index(lp, box, smpd)
-        ! create mirrored versions of the images
-        call alloc_imgarr(n, ldim, smpd, imgs_mirr)
-        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
-        do i = 1, n
-            call imgs_mirr(i)%copy(imgs(i))
-            call imgs_mirr(i)%mirror('x')
-        end do
-        !$omp end parallel do
-        ! initialize pftcc, polarizer
-        call pftcc%new(nrefs, [1,2*n], kfromto) ! 2*n because of mirroring
-        call polartransform%new([box,box,1], smpd)
-        call polartransform%init_polarizer(pftcc, KBALPHA)
-        ! in-plane search object objects for parallel execution
-        lims(:,1)      = -trs
-        lims(:,2)      =  trs
-        lims_init(:,1) = -SHC_INPL_TRSHWDTH
-        lims_init(:,2) =  SHC_INPL_TRSHWDTH
-        do ithr = 1, nthr_glob
-            call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier='yes',&
-            &maxits=MAXITS_SH, opt_angle=.true.)
-        end do
-        ! set the reference transforms
-        !$omp parallel default(shared) private(i,iref)  proc_bind(close)
-        !$omp do schedule(static)
-        do iref = 1, nrefs
-            call refimgs(iref)%fft
-            call polartransform%polarize(pftcc, refimgs(iref), iref, isptcl=.false., iseven=.true.)
-            call refimgs(iref)%ifft
-        enddo
-        !$omp end do
-        ! set the particle transforms
-        !$omp do schedule(static)
-        do i = 1, 2 * n
-            if( i <= n )then
-                call imgs(i)%fft()
-                call polartransform%polarize(pftcc, imgs(i),        i, isptcl=.true., iseven=.true.)
-                call imgs(i)%ifft
-            else
-                call imgs_mirr(i-n)%fft()
-                call polartransform%polarize(pftcc, imgs_mirr(i-n), i, isptcl=.true., iseven=.true.)
-                call imgs_mirr(i-n)%ifft()
-            endif
-        end do
-        !$omp end do
-        !$omp end parallel
-        call pftcc%memoize_refs
-        call pftcc%memoize_ptcls
-        ! register imgs to references
-        nrots = pftcc%get_nrots()
-        allocate(inpl_corrs(nrots), algninfo(nrefs,n))
-        !$omp parallel do default(shared) private(i,ithr,iref,inpl_corrs,loc,irot,cxy) schedule(static) proc_bind(close)
-        do i = 1, 2 * n
-            ithr = omp_get_thread_num() + 1
-            do iref = 1, nrefs
-                call pftcc%gencorrs(iref, i, inpl_corrs)
-                loc  = maxloc(inpl_corrs)
-                irot = loc(1)
-                call grad_shsrch_obj(ithr)%set_indices(1, i)
-                cxy = grad_shsrch_obj(ithr)%minimize(irot=irot)
-                if( irot == 0 )then ! no improved solution found, put back the old one
-                    cxy(1) = inpl_corrs(loc(1))
-                    cxy(2) = 0.
-                    cxy(3) = 0.
-                    irot   = loc(1)
-                endif
-                if( i <= n )then
-                    algninfo(iref,i)%e3            = pftcc%get_rot(irot)
-                    algninfo(iref,i)%corr          = cxy(1)
-                    algninfo(iref,i)%x             = cxy(2)
-                    algninfo(iref,i)%y             = cxy(3)
-                    algninfo(iref,i)%l_mirr        = .false.
-                else
-                    algninfo_mirr(iref,i-n)%e3     = pftcc%get_rot(irot)
-                    algninfo_mirr(iref,i-n)%corr   = cxy(1)
-                    algninfo_mirr(iref,i-n)%x      = cxy(2)
-                    algninfo_mirr(iref,i-n)%y      = cxy(3)
-                    algninfo_mirr(iref,i-n)%l_mirr = .true.
-                endif
-            end do
-        end do
-        !$omp end parallel do
-        ! select for mirroring
-        do iref = 1, nrefs
-            where( algninfo_mirr(iref,:)%corr > algninfo(iref,:)%corr ) algninfo(iref,:) = algninfo_mirr(iref,:)
-        enddo
-        ! destruct
-        call dealloc_imgarr(imgs_mirr)
-        do ithr = 1, nthr_glob
-            call grad_shsrch_obj(ithr)%kill
-        end do
-        call pftcc%kill
-        call polartransform%kill
-    end function match_imgs2refs
 
     subroutine rtsq_imgs( n, algninfo, imgs )
         integer,            intent(in)    :: n
