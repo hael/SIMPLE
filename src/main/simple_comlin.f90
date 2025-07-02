@@ -123,7 +123,7 @@ contains
         ! randomly chosing two sets of (irot, kind) to generate the polar common lines
         irot  = 5
         kind  = params_glob%kfromto(1) + 5
-        if( kind >= params_glob%kfromto(2) ) kind = params_glob%kfromto(1)
+        if( kind >= params_glob%kfromto(2) ) kind = params_glob%kfromto(1) ! kfromto(2)?
         hk1   = pftcc%get_coord(irot,kind)
         irot  = 16
         kind  = params_glob%kfromto(1) + 15
@@ -133,7 +133,7 @@ contains
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,rotmat,errflg)
         do iref = 1, nrefs
             rotmat = ref_space%get_mat(iref)
-            call matinv(rotmat, invmats(:,:,iref), 3, errflg)
+            invmats(:,:,iref) = transpose(rotmat)
             loc1s(:,iref) = matmul([hk1(1), hk1(2), 0.], rotmat)
             loc2s(:,iref) = matmul([hk2(1), hk2(2), 0.], rotmat)
         enddo
@@ -164,7 +164,7 @@ contains
                 line2D      = matmul(line3D, invmats(:,:,jref))
                 call pftcc%get_polar_coord(line2D(1:2), irot_real, k_real)
                 if( irot_real < 1. ) irot_real = irot_real + real(pftsz)
-                ! caching the indeces irot_j and irot_j+1 and the corresponding linear weight
+                ! caching the indices irot_j and irot_j+1 and the corresponding linear weight
                 irot_l = floor(irot_real)
                 irot_r = irot_l + 1
                 w      = irot_real - real(irot_l)
