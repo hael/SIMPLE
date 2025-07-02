@@ -915,7 +915,7 @@ contains
         type(pftcc_shsrch_grad)         :: grad_shsrch_obj(nthr_glob)
         type(polarizer)                 :: polartransform
         type(polarft_corrcalc)          :: pftcc
-        type(inpl_struct)               :: algninfo_mirr(n,nrefs)
+        type(inpl_struct)               :: algninfo_mirr(nrefs,n)
         type(inpl_struct), allocatable  :: algninfo(:,:)
         integer :: ldim(3), ldim_ref(3), box, kfromto(2), ithr, i, loc(1), nrots, irot, iref
         real    :: smpd, lims(2,2), lims_init(2,2), cxy(3)
@@ -975,7 +975,7 @@ contains
         call pftcc%memoize_ptcls
         ! register imgs to references
         nrots = pftcc%get_nrots()
-        allocate(inpl_corrs(nrots), algninfo(n,nrefs))
+        allocate(inpl_corrs(nrots), algninfo(nrefs,n))
         !omp parallel do default(shared) private(i,ithr,iref,inpl_corrs,loc,irot,cxy) schedule(static) proc_bind(close)
         do i = 1, 2 * n
             ithr = omp_get_thread_num() + 1
@@ -992,24 +992,24 @@ contains
                     irot   = loc(1)
                 endif
                 if( i <= n )then
-                    algninfo(i,iref)%e3            = pftcc%get_rot(irot)
-                    algninfo(i,iref)%corr          = cxy(1)
-                    algninfo(i,iref)%x             = cxy(2)
-                    algninfo(i,iref)%y             = cxy(3)
-                    algninfo(i,iref)%l_mirr        = .false.
+                    algninfo(iref,i)%e3            = pftcc%get_rot(irot)
+                    algninfo(iref,i)%corr          = cxy(1)
+                    algninfo(iref,i)%x             = cxy(2)
+                    algninfo(iref,i)%y             = cxy(3)
+                    algninfo(iref,i)%l_mirr        = .false.
                 else
-                    algninfo_mirr(i-n,iref)%e3     = pftcc%get_rot(irot)
-                    algninfo_mirr(i-n,iref)%corr   = cxy(1)
-                    algninfo_mirr(i-n,iref)%x      = cxy(2)
-                    algninfo_mirr(i-n,iref)%y      = cxy(3)
-                    algninfo_mirr(i-n,iref)%l_mirr = .true.
+                    algninfo_mirr(iref,i-n)%e3     = pftcc%get_rot(irot)
+                    algninfo_mirr(iref,i-n)%corr   = cxy(1)
+                    algninfo_mirr(iref,i-n)%x      = cxy(2)
+                    algninfo_mirr(iref,i-n)%y      = cxy(3)
+                    algninfo_mirr(iref,i-n)%l_mirr = .true.
                 endif
             end do
         end do
         !omp end parallel do
         ! select for mirroring
         do iref = 1, nrefs
-            where( algninfo_mirr(:,iref)%corr > algninfo(:,iref)%corr ) algninfo(:,iref) = algninfo_mirr(:,iref)
+            where( algninfo_mirr(iref,:)%corr > algninfo(iref,:)%corr ) algninfo(iref,:) = algninfo_mirr(iref,:)
         enddo
         ! destruct
         call dealloc_imgarr(imgs_mirr)
