@@ -224,8 +224,8 @@ contains
         real, parameter :: EPSILON = 0.1
         complex     :: pfts(pftsz,kfromto(1):kfromto(2),ncls)
         complex(dp) :: numerator(pftsz,kfromto(1):kfromto(2))
-        real(dp)    :: denominator(pftsz,kfromto(1):kfromto(2))
-        integer     :: icls, eo_pop(2), pop
+        real(dp)    :: denominator(pftsz,kfromto(1):kfromto(2)), frc(kfromto(1):kfromto(2)), numer, denom1, denom2
+        integer     :: icls, eo_pop(2), pop, k
         if( l_comlin .and. present(pcomlines) )then
             call polar_comlin_pfts(pcomlines, cmplx(pfts_even), pfts)
             pfts_clin_even = cmplx(pfts, kind=dp)
@@ -237,6 +237,7 @@ contains
             ctf2_clin_odd  = real(pfts,dp)
         endif
         pfts_cavg = DCMPLX_ZERO
+        pfts_clin = DCMPLX_ZERO
         select case(trim(params_glob%ref_type))
             case('cavg')
                 !$omp parallel do default(shared), schedule(static) proc_bind(close)&
@@ -273,10 +274,13 @@ contains
                     denominator = ctf2_clin_even(:,:,icls) + ctf2_clin_odd(:,:,icls)
                     where( abs(denominator)              > DSMALL ) pfts_cavg(:,:,icls) = numerator / denominator
                     where( abs(ctf2_clin_even(:,:,icls)) > DSMALL ) pfts_even(:,:,icls) = pfts_clin_even(:,:,icls) / ctf2_clin_even(:,:,icls)
+                    where( abs(ctf2_clin_even(:,:,icls)) < DSMALL ) pfts_even(:,:,icls) = DCMPLX_ZERO
                     where( abs(ctf2_clin_odd( :,:,icls)) > DSMALL ) pfts_odd( :,:,icls) = pfts_clin_odd( :,:,icls) / ctf2_clin_odd( :,:,icls)
+                    where( abs(ctf2_clin_odd( :,:,icls)) < DSMALL ) pfts_odd( :,:,icls) = DCMPLX_ZERO
                 end do
                 !$omp end parallel do
             case('cavg_clin')
+                ! cavg refs
                 !$omp parallel do default(shared), schedule(static) proc_bind(close)&
                 !$omp private(icls,eo_pop,pop,numerator,denominator)
                 do icls = 1,ncls
@@ -287,18 +291,75 @@ contains
                         pfts_odd(:,:,icls)  = DCMPLX_ZERO
                         ctf2_even(:,:,icls) = 0.d0
                         ctf2_odd(:,:,icls)  = 0.d0
+                    else
+                        if(pop > 1)then
+                            numerator   = pfts_even(:,:,icls) + pfts_odd(:,:,icls)
+                            denominator = ctf2_even(:,:,icls) + ctf2_odd(:,:,icls)
+                            if( pop <= 5 ) denominator = denominator + real(EPSILON/real(pop),dp)
+                            where( abs(denominator) > DSMALL ) pfts_cavg(:,:,icls) = numerator / denominator
+                            where( abs(denominator) < DSMALL ) pfts_cavg(:,:,icls) = DCMPLX_ZERO
+                        endif
+                        if(eo_pop(1) > 1)then
+                            where( abs(ctf2_even(:,:,icls)) > DSMALL ) pfts_even(:,:,icls) = pfts_even(:,:,icls) / ctf2_even(:,:,icls)
+                            where( abs(ctf2_even(:,:,icls)) < DSMALL ) pfts_even(:,:,icls) = DCMPLX_ZERO
+                        endif
+                        if(eo_pop(2) > 1)then
+                            where( abs(ctf2_odd(:,:,icls)) > DSMALL )  pfts_odd(:,:,icls)  = pfts_odd(:,:,icls)  / ctf2_odd(:,:,icls)
+                            where( abs(ctf2_odd(:,:,icls)) < DSMALL )  pfts_odd(:,:,icls)  = DCMPLX_ZERO
+                        endif
                     endif
-                    pfts_even(:,:,icls) = pfts_even(:,:,icls) + pfts_clin_even(:,:,icls)
-                    pfts_odd( :,:,icls) = pfts_odd( :,:,icls) + pfts_clin_odd( :,:,icls)
-                    ctf2_even(:,:,icls) = ctf2_even(:,:,icls) + ctf2_clin_even(:,:,icls)
-                    ctf2_odd( :,:,icls) = ctf2_odd( :,:,icls) + ctf2_clin_odd( :,:,icls)
-                    numerator   = pfts_even(:,:,icls) + pfts_odd(:,:,icls)
-                    denominator = ctf2_even(:,:,icls) + ctf2_odd(:,:,icls)
-                    where( abs(denominator)         > DSMALL ) pfts_cavg(:,:,icls) = numerator / denominator
-                    where( abs(ctf2_even(:,:,icls)) > DSMALL ) pfts_even(:,:,icls) = pfts_even(:,:,icls) / ctf2_even(:,:,icls)
-                    where( abs(ctf2_odd( :,:,icls)) > DSMALL ) pfts_odd( :,:,icls) = pfts_odd( :,:,icls) / ctf2_odd( :,:,icls)
                 end do
                 !$omp end parallel do
+                ! clin refs
+                !$omp parallel do default(shared), schedule(static) proc_bind(close)&
+                !$omp private(icls,numerator,denominator)
+                do icls = 1,ncls
+                    numerator   = pfts_clin_even(:,:,icls) + pfts_clin_odd(:,:,icls)
+                    denominator = ctf2_clin_even(:,:,icls) + ctf2_clin_odd(:,:,icls)
+                    where( abs(denominator)              > DSMALL ) pfts_clin(:,:,icls)      = numerator / denominator
+                    where( abs(denominator)              < DSMALL ) pfts_clin(:,:,icls)      = DCMPLX_ZERO
+                    where( abs(ctf2_clin_even(:,:,icls)) > DSMALL ) pfts_clin_even(:,:,icls) = pfts_clin_even(:,:,icls) / ctf2_clin_even(:,:,icls)
+                    where( abs(ctf2_clin_even(:,:,icls)) < DSMALL ) pfts_clin_even(:,:,icls) = DCMPLX_ZERO
+                    where( abs(ctf2_clin_odd( :,:,icls)) > DSMALL ) pfts_clin_odd( :,:,icls) = pfts_clin_odd( :,:,icls) / ctf2_clin_odd( :,:,icls)
+                    where( abs(ctf2_clin_odd( :,:,icls)) < DSMALL ) pfts_clin_odd( :,:,icls) = DCMPLX_ZERO
+                end do
+                !$omp end parallel do
+                ! FRC filtering
+                !$omp parallel do default(shared), schedule(static) proc_bind(close)&
+                !$omp private(icls,frc,k,numer,denom1,denom2)
+                do icls = 1, ncls
+                    ! cavg
+                    frc = 0._dp
+                    do k = kfromto(1), kfromto(2)
+                        numer  = sum(    pfts_even(:,k,icls) * conjg(pfts_odd(:,k,icls)))
+                        denom1 = sum(csq(pfts_even(:,k,icls)))
+                        denom2 = sum(csq(pfts_odd( :,k,icls)))
+                        if( dsqrt(denom1*denom2) > DTINY ) frc(k) = numer / dsqrt(denom1*denom2)
+                    enddo
+                    if( any(frc > 0.143_dp) )then
+                        do k = kfromto(1), kfromto(2)
+                            pfts_cavg(:,k,icls) = pfts_cavg(:,k,icls) * frc(k)
+                        enddo
+                    endif
+                    ! clin
+                    frc = 0._dp
+                    do k = kfromto(1), kfromto(2)
+                        numer  = sum(    pfts_clin_even(:,k,icls) * conjg(pfts_clin_odd(:,k,icls)))
+                        denom1 = sum(csq(pfts_clin_even(:,k,icls)))
+                        denom2 = sum(csq(pfts_clin_odd( :,k,icls)))
+                        if( dsqrt(denom1*denom2) > DTINY ) frc(k) = numer / dsqrt(denom1*denom2)
+                    enddo
+                    if( any(frc > 0.143_dp) )then
+                        do k = kfromto(1), kfromto(2)
+                            pfts_clin(:,k,icls) = pfts_clin(:,k,icls) * frc(k)
+                        enddo
+                    endif
+                enddo
+                !$omp end parallel do
+                ! summing cavg refs and clin refs
+                pfts_cavg = pfts_cavg + pfts_clin
+                pfts_even = pfts_even + pfts_clin_even
+                pfts_odd  = pfts_odd  + pfts_clin_odd
             case DEFAULT
                 THROW_HARD('Unsupported ref_type mode. It should be cavg, clin, or cavg_clin')
         end select
@@ -696,7 +757,7 @@ contains
         ! Filtering
         if( params_glob%l_ml_reg )then
             ! no filtering, not supported yet
-        else
+        elseif( trim(params_glob%ref_type).ne.'cavg_clin' )then   ! cavg_clin handling the filtering differently
             ! FRC-based optimal filter
             filtsz = build_glob%clsfrcs%get_filtsz()
             allocate(frc(filtsz),filter(filtsz),source=0.)
