@@ -8,15 +8,6 @@ use simple_error, only: simple_exception
 use simple_srch_sort_loc
 use simple_is_check_assert
 implicit none
-
-public :: avg_sdev, avg_frac_smallest, moment, moment_serial, pearsn, spear, normalize, normalize_sigm, normalize_minmax, std_mean_diff
-public :: corrs2weights, corr2distweight, analyze_smat, dmat2smat, smat2dmat, scores2scores_percen, dists2scores_percen, merge_smats
-public :: merge_dmats, estimate_bimodality_of_cluster
-public :: calc_ap_pref, medoid_from_smat, medoid_ranking_from_smat, cluster_smat_bin, medoid_from_dmat, z_scores, pearsn_serial_8, kstwo
-public :: rank_sum_weights, rank_inverse_weights, rank_centroid_weights, rank_exponent_weights
-public :: conv2rank_weights, calc_stats, pearsn_serial, norm_corr, norm_corr_8, skewness, kurtosis
-public :: median, median_nocopy, mad, mad_gau, robust_scaling, robust_z_scores, robust_normalization, robust_sigma_thres, robust_normalize_minmax
-private
 #include "simple_local_flags.inc"
 
 interface avg_sdev
@@ -1035,9 +1026,10 @@ contains
     function dmat2smat( dmat ) result( smat )
         real, intent(in)  :: dmat(:,:)
         real, allocatable :: smat(:,:)
-        integer :: n
-        n = size(dmat,1)
-        allocate(smat(n,n), source=dmat)
+        integer :: n1, n2
+        n1 = size(dmat,1)
+        n2 = size(dmat,2)
+        allocate(smat(n1,n2), source=dmat)
         call normalize_minmax(smat)
         smat = exp(-smat)
     end function dmat2smat
@@ -1045,9 +1037,10 @@ contains
     function smat2dmat( smat ) result( dmat )
         real, intent(in)  :: smat(:,:)
         real, allocatable :: dmat(:,:)
-        integer :: n
-        n = size(smat,1)
-        allocate(dmat(n,n), source=smat)
+        integer :: n1, n2
+        n1 = size(smat,1)
+        n2 = size(smat,2)
+        allocate(dmat(n1,n2), source=smat)
         call normalize_minmax(dmat)
         where( dmat < TINY )
             dmat = 1.
@@ -1072,15 +1065,16 @@ contains
     function merge_smats( smat1, smat2 ) result( smat )
         real, intent(in)  :: smat1(:,:), smat2(:,:)
         real, allocatable :: smat(:,:), tmpmat(:,:)
-        integer :: sz1_1, sz1_2, sz2_1, sz2_2, n
+        integer :: sz1_1, sz1_2, sz2_1, sz2_2, n1, n2
         sz1_1 = size(smat1,1)
         sz1_2 = size(smat1,2)
         sz2_1 = size(smat2,1)
         sz2_2 = size(smat2,2)
         if( sz1_1 /= sz2_1 .or. sz1_2 /= sz2_2 ) THROW_HARD('identical similarity matrices assumed')
-        n = sz1_1
-        allocate(smat(n,n),   source=smat1)
-        allocate(tmpmat(n,n), source=smat2)
+        n1 = sz1_1
+        n2 = sz1_2
+        allocate(smat(n1,n2),   source=smat1)
+        allocate(tmpmat(n1,n2), source=smat2)
         call normalize_minmax(smat)
         call normalize_minmax(tmpmat)
         smat = 0.5 * (smat + tmpmat)
@@ -1089,15 +1083,16 @@ contains
     function merge_dmats_1( dmat1, dmat2 ) result( dmat )
         real, intent(in)  :: dmat1(:,:), dmat2(:,:)
         real, allocatable :: dmat(:,:), tmpmat(:,:)
-        integer :: sz1_1, sz1_2, sz2_1, sz2_2, n
+        integer :: sz1_1, sz1_2, sz2_1, sz2_2, n1, n2
         sz1_1 = size(dmat1,1)
         sz1_2 = size(dmat1,2)
         sz2_1 = size(dmat2,1)
         sz2_2 = size(dmat2,2)
         if( sz1_1 /= sz2_1 .or. sz1_2 /= sz2_2 ) THROW_HARD('identical similarity matrices assumed')
-        n = sz1_1
-        allocate(dmat(n,n),   source=dmat1)
-        allocate(tmpmat(n,n), source=dmat2)
+        n1 = sz1_1
+        n2 = sz1_2
+        allocate(dmat(n1,n2),   source=dmat1)
+        allocate(tmpmat(n1,n2), source=dmat2)
         call normalize_minmax(dmat)
         call normalize_minmax(tmpmat)
         dmat = 0.5 * (dmat + tmpmat)
@@ -1106,7 +1101,7 @@ contains
     function merge_dmats_2( dmat1, dmat2, dmat3 ) result( dmat )
         real, intent(in)  :: dmat1(:,:), dmat2(:,:), dmat3(:,:)
         real, allocatable :: dmat(:,:), tmpmat1(:,:), tmpmat2(:,:)
-        integer :: sz1_1, sz1_2, sz2_1, sz2_2, sz3_1, sz3_2, n
+        integer :: sz1_1, sz1_2, sz2_1, sz2_2, sz3_1, sz3_2, n1, n2
         sz1_1 = size(dmat1,1)
         sz1_2 = size(dmat1,2)
         sz2_1 = size(dmat2,1)
@@ -1115,44 +1110,16 @@ contains
         sz3_2 = size(dmat3,2)
         if( sz1_1 /= sz2_1 .or. sz1_2 /= sz2_2 ) THROW_HARD('identical similarity matrices assumed')
         if( sz1_1 /= sz3_1 .or. sz1_2 /= sz3_2 ) THROW_HARD('identical similarity matrices assumed')
-        n = sz1_1
-        allocate(dmat(n,n),    source=dmat1)
-        allocate(tmpmat1(n,n), source=dmat2)
-        allocate(tmpmat2(n,n), source=dmat3)
+        n1 = sz1_1
+        n2 = sz1_2
+        allocate(dmat(n1,n2),    source=dmat1)
+        allocate(tmpmat1(n1,n2), source=dmat2)
+        allocate(tmpmat2(n1,n2), source=dmat3)
         call normalize_minmax(dmat)
         call normalize_minmax(tmpmat1)
         call normalize_minmax(tmpmat2)
         dmat = (dmat + tmpmat1 + tmpmat2) / 3.
     end function merge_dmats_2
-
-    function estimate_bimodality_of_cluster( n, smat, labels, icls ) result( bim )
-        integer, intent(in)  :: n, labels(n), icls
-        real,    intent(in)  :: smat(n,n)
-        integer, allocatable :: inds(:), inds_cls(:)
-        real,    allocatable :: smat_vals(:)
-        real    :: bim, s_t, avg1, avg2, sdev1, sdev2
-        integer :: pop, cnt, i, j, npairs
-        inds     = (/(i,i=1,n)/)
-        pop      = count(labels == icls)
-        if( pop < 2 )then
-            bim = 0.
-            return
-        endif
-        inds_cls = pack(inds, mask=labels == icls)
-        npairs   = (pop*(pop-1))/2
-        allocate(smat_vals(npairs), source=0.)
-        cnt = 0
-        do i = 1, pop - 1
-            do j = i + 1, pop
-                cnt = cnt + 1
-                smat_vals(cnt) = smat(i,j)
-            end do
-        end do
-        call otsu(npairs, smat_vals, s_t)
-        call avg_sdev(smat_vals, avg1, sdev1, mask=smat_vals >= s_t)
-        call avg_sdev(smat_vals, avg2, sdev2, mask=smat_vals <  s_t)
-        bim = std_mean_diff( avg1, avg2, sdev1, sdev2 )
-    end function estimate_bimodality_of_cluster
 
     function calc_ap_pref( smat, mode ) result( pref )
         real,             intent(inout) :: smat(:,:)
@@ -1229,24 +1196,6 @@ contains
         call hpsort(sims, rank)
         call reverse(rank)
     end subroutine medoid_ranking_from_smat
-
-    subroutine cluster_smat_bin( smat, mask )
-        real,                 intent(in)    :: smat(:,:)
-        logical, allocatable, intent(inout) :: mask(:)
-        real,    allocatable :: sims(:), tmp(:)
-        integer :: i_medoid, i, n
-        real    :: otsu_t, s_max
-        call medoid_from_smat(smat, i_medoid)
-        n = size(smat,1)
-        allocate(sims(n), source=smat(i_medoid,:))
-        ! remove the diagonal element
-        s_max = maxval(sims)
-        tmp   = pack(sims, mask=sims < s_max)
-        ! Otsu
-        call otsu(size(tmp), tmp, otsu_t)
-        if( allocated(mask) ) deallocate(mask)
-        allocate(mask(n), source=sims >= otsu_t)
-    end subroutine cluster_smat_bin
 
     subroutine medoid_from_dmat( dmat, i_medoid ) !, ddev )
         real,    intent(in)  :: dmat(:,:)
@@ -1398,37 +1347,6 @@ contains
         x   = (x-med) / (q75-q25)
         deallocate(y)
     end subroutine robust_scaling
-
-    subroutine expweights_from_scores( n, scores, weights )
-        integer, intent(in)    :: n
-        real,    intent(in)    :: scores(n)
-        real,    intent(inout) :: weights(n)
-        real(dp) :: best_score, sumw,  diffs(n), sigma, cnt
-        integer  :: i, loc(1)
-        loc        = maxloc(scores)
-        best_score = real(scores(loc(1)),kind=dp)
-        sigma      = 0.d0
-        cnt        = 0.d0
-        do i = 1,n
-            ! the argument to the exponential function is always negative
-            diffs(i) = real(scores(i),kind=dp) - best_score
-            sigma    = sigma + diffs(i) * diffs(i)
-            cnt      = cnt   + 1.d0
-        end do
-        sigma = sqrt(sigma / (cnt - 1.d0))
-        sumw  = 0.d0
-        do i = 1,n
-            ! for the best score the exponent will be 1 and < 1 for all others
-            if( i == loc(1) )then
-                sumw  = sumw + 1.d0
-            else if( diffs(i) < 0.d0 )then
-                sumw  = sumw + exp(diffs(i) / sigma)
-            endif
-        end do
-        do i = 1,n
-            weights(i) = max(0.,min(1.,real(diffs(i) / sumw)))
-        end do
-    end subroutine expweights_from_scores
 
     ! RANK STUFF
 
