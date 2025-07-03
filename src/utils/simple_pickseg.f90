@@ -141,16 +141,20 @@ contains
             print *, 'min size: ', self%sz_stats%minv
             print *, 'max size: ', self%sz_stats%maxv
         endif
-        sz_min = nint(self%sz_stats%avg - params_glob%ndev * self%sz_stats%sdev)
-        sz_max = nint(self%sz_stats%avg + params_glob%ndev * self%sz_stats%sdev)
-        ! optimal molecular diameter is inputted
-        if( l_moldiam )then
-            box      = nint(PI*(moldiam/2.)**2 / smpd_raw**2)
-            sz_min   = box / 4
-            sz_max   = box * 4
-            !write(logfhandle,'("selecting cc [",i0," : ",i0,"]" )') sz_min, sz_max
+        if( l_winsz )then
+            ! elimination of connected components that are too small or too big with sauvola is not needed
+        else
+            sz_min = nint(self%sz_stats%avg - params_glob%ndev * self%sz_stats%sdev)
+            sz_max = nint(self%sz_stats%avg + params_glob%ndev * self%sz_stats%sdev)
+            ! optimal molecular diameter is inputted
+            if( l_moldiam )then
+                box      = nint(PI*(moldiam/2.)**2 / smpd_raw**2)
+                sz_min   = box / 4
+                sz_max   = box * 4
+                !write(logfhandle,'("selecting cc [",i0," : ",i0,"]" )') sz_min, sz_max
+            endif
+            call self%img_cc%elim_ccs([sz_min,sz_max])
         endif
-        call self%img_cc%elim_ccs([sz_min,sz_max])
         call self%img_cc%get_nccs(self%nboxes)
         sz = self%img_cc%size_ccs()
         call calc_stats(real(sz), self%sz_stats)
