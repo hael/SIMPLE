@@ -177,7 +177,7 @@ contains
             else
                 icls = spproj_field%get_class(iptcl)
             endif
-            irot   = pftcc%get_roind(spproj_field%e3get(iptcl))
+            irot       = pftcc%get_roind(spproj_field%e3get(iptcl))
             incr_shift = incr_shifts(:,i)
             ! weighted restoration
             if( any(abs(incr_shift) > 1.e-6) ) call pftcc%shift_ptcl(iptcl, -incr_shift)
