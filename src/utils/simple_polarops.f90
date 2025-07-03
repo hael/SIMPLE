@@ -237,7 +237,7 @@ contains
             ctf2_clin_odd  = real(pfts,dp)
         endif
         pfts_cavg = DCMPLX_ZERO
-        pfts_clin = DCMPLX_ZERO
+        if( l_comlin ) pfts_clin = DCMPLX_ZERO
         select case(trim(params_glob%ref_type))
             case('cavg')
                 !$omp parallel do default(shared), schedule(static) proc_bind(close)&
