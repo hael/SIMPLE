@@ -939,7 +939,7 @@ contains
         if( cavg%is_ft() ) THROW_HARD('Real space only! calc_cavg_offset')
         if( cavg%is_3D() ) THROW_HARD('2D only! calc_cavg_offset')
         offset = 0.
-        hp     = max(1.5*lp, real(cavg%get_box()) * cavg%get_smpd() / 8.)
+        hp     = max(1.5*lp, 2.*msk*cavg%get_smpd())
         call bincavg%transfer2bimg(cavg)
         ! band-pass
         call bincavg%fft
