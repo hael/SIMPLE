@@ -36,7 +36,6 @@ real                     :: smpd       = 0.                                     
 integer                  :: ncls       = 0                                                ! # classes
 integer                  :: kfromto(2) = 0                                                ! Resolution range
 integer                  :: pftsz      = 0                                                ! Size of PFT in pftcc along rotation dimension
-logical                  :: l_comlin   = .false.                                          ! Whether to have common line refs
 
 contains
 
@@ -44,7 +43,6 @@ contains
     subroutine polar_cavger_new( pftcc, nrefs )
         class(polarft_corrcalc), intent(in) :: pftcc
         integer,       optional, intent(in) :: nrefs
-        l_comlin = (trim(params_glob%ref_type).eq.'clin' .or. trim(params_glob%ref_type).eq.'cavg_clin')
         call polar_cavger_kill
         ncls    = pftcc%get_nrefs()
         pftsz   = pftcc%get_pftsz()
@@ -61,7 +59,7 @@ contains
         allocate(pfts_even(pftsz,kfromto(1):kfromto(2),ncls),pfts_odd(pftsz,kfromto(1):kfromto(2),ncls),&
                 &ctf2_even(pftsz,kfromto(1):kfromto(2),ncls),ctf2_odd(pftsz,kfromto(1):kfromto(2),ncls),&
                 &pfts_cavg(pftsz,kfromto(1):kfromto(2),ncls))
-        if( l_comlin )then
+        if( params_glob%l_comlin )then
             allocate(pfts_clin_even(pftsz,kfromto(1):kfromto(2),ncls),pfts_clin_odd(pftsz,kfromto(1):kfromto(2),ncls),&
                     &ctf2_clin_even(pftsz,kfromto(1):kfromto(2),ncls),ctf2_clin_odd(pftsz,kfromto(1):kfromto(2),ncls),&
                     &pfts_clin(pftsz,kfromto(1):kfromto(2),ncls))
@@ -226,7 +224,7 @@ contains
         complex(dp) :: numerator(pftsz,kfromto(1):kfromto(2))
         real(dp)    :: denominator(pftsz,kfromto(1):kfromto(2)), frc(kfromto(1):kfromto(2)), numer, denom1, denom2
         integer     :: icls, eo_pop(2), pop, k
-        if( l_comlin .and. present(pcomlines) )then
+        if( params_glob%l_comlin .and. present(pcomlines) )then
             call polar_comlin_pfts(pcomlines, cmplx(pfts_even), pfts)
             pfts_clin_even = cmplx(pfts, kind=dp)
             call polar_comlin_pfts(pcomlines, cmplx(pfts_odd),  pfts)
@@ -237,7 +235,7 @@ contains
             ctf2_clin_odd  = real(pfts,dp)
         endif
         pfts_cavg = DCMPLX_ZERO
-        if( l_comlin ) pfts_clin = DCMPLX_ZERO
+        if( params_glob%l_comlin ) pfts_clin = DCMPLX_ZERO
         select case(trim(params_glob%ref_type))
             case('cavg')
                 !$omp parallel do default(shared), schedule(static) proc_bind(close)&

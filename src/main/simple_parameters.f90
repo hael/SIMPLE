@@ -517,6 +517,7 @@ type :: parameters
     ! logical variables in (roughly) ascending alphabetical order
     logical :: l_autoscale    = .false.
     logical :: l_bfac         = .false.
+    logical :: l_comlin       = .false.
     logical :: l_corrw        = .false.
     logical :: l_distr_exec   = .false.
     logical :: l_dose_weight  = .false.
@@ -1514,6 +1515,8 @@ contains
             if( .not.file_exists(trim(self%mskfile)) ) THROW_HARD('Inputted mask file '//trim(self%mskfile)//' does not exist')
             self%l_filemsk = .true.  ! indicate file is inputted
         endif
+        ! comlin generation
+        self%l_comlin = (trim(self%ref_type).eq.'clin' .or. trim(self%ref_type).eq.'cavg_clin')
         ! image normalization
         self%l_noise_norm = trim(self%noise_norm).eq.'yes'
         ! set lpset flag

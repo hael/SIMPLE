@@ -64,7 +64,6 @@ type(abinitio2D_commander)                  :: xabinitio2D
 type(cluster2D_autoscale_commander)         :: xcluster2D_hlev
 type(cluster2D_commander_subsets)           :: xcluster2D_subsets
 type(cleanup2D_commander_hlev)              :: xcleanup2D_distr
-type(hybrid_refine_commander)               :: xhybrid_refine
 type(map_cavgs_selection_commander)         :: xmap_cavgs_selection
 type(map_cavgs_states_commander)            :: xmap_cavgs_states
 type(sample_classes_commander)              :: xsample_classes
@@ -258,8 +257,6 @@ select case(trim(prg))
         call xcluster2D_hlev%execute(cline)
     case( 'cluster2D_subsets' )
         call xcluster2D_subsets%execute(cline)
-    case( 'hybrid_refine' )
-        call xhybrid_refine%execute(cline)
     case( 'map_cavgs_selection' )
         call xmap_cavgs_selection%execute(cline)
     case( 'map_cavgs_states' )
@@ -473,7 +470,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('3d0c3242')
+call simple_print_git_version('100604cb')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
