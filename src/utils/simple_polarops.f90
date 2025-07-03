@@ -217,25 +217,18 @@ contains
 
     !>  \brief  Restores class-averages
     subroutine polar_cavger_merge_eos_and_norm( pcomlines )
-        use simple_comlin, only: polar_comlin_pfts
         type(polar_fmap), optional, intent(in) :: pcomlines(ncls,ncls)
         real, parameter :: EPSILON = 0.1
         complex     :: pfts(pftsz,kfromto(1):kfromto(2),ncls)
         complex(dp) :: numerator(pftsz,kfromto(1):kfromto(2))
         real(dp)    :: denominator(pftsz,kfromto(1):kfromto(2)), frc(kfromto(1):kfromto(2)), numer, denom1, denom2
         integer     :: icls, eo_pop(2), pop, k
-        if( params_glob%l_comlin .and. present(pcomlines) )then
-            call polar_comlin_pfts(pcomlines, cmplx(pfts_even), pfts)
-            pfts_clin_even = cmplx(pfts, kind=dp)
-            call polar_comlin_pfts(pcomlines, cmplx(pfts_odd),  pfts)
-            pfts_clin_odd  = cmplx(pfts, kind=dp)
-            call polar_comlin_pfts(pcomlines, cmplx(ctf2_even), pfts)
-            ctf2_clin_even = real(pfts,dp)
-            call polar_comlin_pfts(pcomlines, cmplx(ctf2_odd),  pfts)
-            ctf2_clin_odd  = real(pfts,dp)
+        if( params_glob%l_comlin )then
+            if( .not. present(pcomlines) ) THROW_HARD('pcomlines needs to be inputted in polar_cavger_merge_eos_and_norm')
+            call comlin_pfts
+            pfts_clin = DCMPLX_ZERO
         endif
         pfts_cavg = DCMPLX_ZERO
-        if( params_glob%l_comlin ) pfts_clin = DCMPLX_ZERO
         select case(trim(params_glob%ref_type))
             case('cavg')
                 !$omp parallel do default(shared), schedule(static) proc_bind(close)&
@@ -265,18 +258,15 @@ contains
                 end do
                 !$omp end parallel do
             case('clin')
-                !$omp parallel do default(shared), schedule(static) proc_bind(close)&
-                !$omp private(icls,numerator,denominator)
-                do icls = 1,ncls
-                    numerator   = pfts_clin_even(:,:,icls) + pfts_clin_odd(:,:,icls)
-                    denominator = ctf2_clin_even(:,:,icls) + ctf2_clin_odd(:,:,icls)
-                    where( abs(denominator)              > DSMALL ) pfts_cavg(:,:,icls) = numerator / denominator
-                    where( abs(ctf2_clin_even(:,:,icls)) > DSMALL ) pfts_even(:,:,icls) = pfts_clin_even(:,:,icls) / ctf2_clin_even(:,:,icls)
-                    where( abs(ctf2_clin_even(:,:,icls)) < DSMALL ) pfts_even(:,:,icls) = DCMPLX_ZERO
-                    where( abs(ctf2_clin_odd( :,:,icls)) > DSMALL ) pfts_odd( :,:,icls) = pfts_clin_odd( :,:,icls) / ctf2_clin_odd( :,:,icls)
-                    where( abs(ctf2_clin_odd( :,:,icls)) < DSMALL ) pfts_odd( :,:,icls) = DCMPLX_ZERO
-                end do
-                !$omp end parallel do
+                !$omp workshare
+                pfts_cavg = ctf2_clin_even + ctf2_clin_odd
+                where( abs(pfts_cavg     ) < DSMALL ) pfts_cavg = DCMPLX_ZERO
+                where( abs(ctf2_clin_even) < DSMALL ) pfts_even = DCMPLX_ZERO
+                where( abs(ctf2_clin_odd ) < DSMALL ) pfts_odd  = DCMPLX_ZERO
+                where( abs(pfts_cavg     ) > DSMALL ) pfts_cavg = (pfts_clin_even + pfts_clin_odd)/pfts_cavg
+                where( abs(ctf2_clin_even) > DSMALL ) pfts_even = pfts_clin_even / ctf2_clin_even
+                where( abs(ctf2_clin_odd ) > DSMALL ) pfts_odd  = pfts_clin_odd  / ctf2_clin_odd
+                !$omp end workshare
             case('cavg_clin')
                 ! cavg refs
                 !$omp parallel do default(shared), schedule(static) proc_bind(close)&
@@ -361,6 +351,52 @@ contains
             case DEFAULT
                 THROW_HARD('Unsupported ref_type mode. It should be cavg, clin, or cavg_clin')
         end select
+
+      contains
+
+        subroutine comlin_pfts
+            complex(dp) :: pft_line_c(params_glob%kfromto(1):params_glob%kfromto(2))
+            real(dp)    :: pft_line_r(params_glob%kfromto(1):params_glob%kfromto(2))
+            integer     :: iref, jref, ori_irot_l, ori_irot_r, tar_irot_l, tar_irot_r
+            real        :: tar_w, ori_w
+            pfts_clin_even = DCMPLX_ZERO
+            pfts_clin_odd  = DCMPLX_ZERO
+            ctf2_clin_even = 0._dp
+            ctf2_clin_odd  = 0._dp
+            !$omp parallel do default(shared) private(iref,jref,ori_irot_l,ori_irot_r,tar_irot_l,tar_irot_r,tar_w,ori_w,pft_line_c,pft_line_r)&
+            !$omp proc_bind(close) schedule(static)
+            do iref = 1, ncls
+                do jref = 1, ncls
+                    if( .not. pcomlines(jref,iref)%legit )cycle
+                    ! compute the interpolated polar common line, between irot_j and irot_j+1
+                    tar_irot_l = pcomlines(jref,iref)%targ_irot_l
+                    tar_irot_r = pcomlines(jref,iref)%targ_irot_r
+                    tar_w      = pcomlines(jref,iref)%targ_w
+                    ! extrapolate the interpolated polar common line to irot_i and irot_i+1 of iref-th reference
+                    ori_irot_l = pcomlines(jref,iref)%self_irot_l
+                    ori_irot_r = pcomlines(jref,iref)%self_irot_r
+                    ori_w      = pcomlines(jref,iref)%self_w
+                    !
+                    pft_line_c = dcmplx(1.-tar_w) * pfts_even(tar_irot_l,:,jref) + dcmplx(tar_w) * pfts_even(tar_irot_r,:,jref)
+                    pfts_clin_even(ori_irot_l,:,iref) = pfts_clin_even(ori_irot_l,:,iref) + dcmplx(1.-ori_w) * pft_line_c
+                    pfts_clin_even(ori_irot_r,:,iref) = pfts_clin_even(ori_irot_r,:,iref) + dcmplx(   ori_w) * pft_line_c
+                    !
+                    pft_line_c = dcmplx(1.-tar_w) * pfts_odd(tar_irot_l,:,jref) + dcmplx(tar_w) * pfts_odd(tar_irot_r,:,jref)
+                    pfts_clin_odd(ori_irot_l,:,iref) = pfts_clin_odd(ori_irot_l,:,iref) + dcmplx(1.-ori_w) * pft_line_c
+                    pfts_clin_odd(ori_irot_r,:,iref) = pfts_clin_odd(ori_irot_r,:,iref) + dcmplx(   ori_w) * pft_line_c
+                    !
+                    pft_line_r = real(1.-tar_w,dp) * ctf2_even(tar_irot_l,:,jref) + real(tar_w,dp) * ctf2_even(tar_irot_r,:,jref)
+                    ctf2_clin_even(ori_irot_l,:,iref) = ctf2_clin_even(ori_irot_l,:,iref) + real(1.-ori_w,dp) * pft_line_r
+                    ctf2_clin_even(ori_irot_r,:,iref) = ctf2_clin_even(ori_irot_r,:,iref) + real(   ori_w,dp) * pft_line_r
+                    !
+                    pft_line_r = real(1.-tar_w,dp) * ctf2_odd(tar_irot_l,:,jref) + real(tar_w,dp) * ctf2_odd(tar_irot_r,:,jref)
+                    ctf2_clin_odd(ori_irot_l,:,iref) = ctf2_clin_odd(ori_irot_l,:,iref) + real(1.-ori_w,dp) * pft_line_r
+                    ctf2_clin_odd(ori_irot_r,:,iref) = ctf2_clin_odd(ori_irot_r,:,iref) + real(   ori_w,dp) * pft_line_r
+                enddo
+            enddo
+            !$omp end parallel do
+        end subroutine comlin_pfts
+
     end subroutine polar_cavger_merge_eos_and_norm
 
     !>  \brief  calculates Fourier ring correlations

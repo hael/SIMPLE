@@ -168,9 +168,9 @@ contains
                 w      = irot_real - real(irot_l)
                 if( irot_l > pftsz ) irot_l = irot_l - pftsz
                 if( irot_r > pftsz ) irot_r = irot_r - pftsz
-                pcomlines(iref,jref)%targ_irot_l = irot_l
-                pcomlines(iref,jref)%targ_irot_r = irot_r
-                pcomlines(iref,jref)%targ_w      = w
+                pcomlines(jref,iref)%targ_irot_l = irot_l
+                pcomlines(jref,iref)%targ_irot_r = irot_r
+                pcomlines(jref,iref)%targ_w      = w
                 ! projecting the 3D common line to a polar line on the iref-th reference
                 line2D = matmul(line3D, invmats(:,:,iref))
                 call pftcc%get_polar_coord(line2D(1:2), irot_real, k_real)
@@ -181,10 +181,10 @@ contains
                 w      = irot_real - real(irot_l)
                 if( irot_l > pftsz ) irot_l = irot_l - pftsz
                 if( irot_r > pftsz ) irot_r = irot_r - pftsz
-                pcomlines(iref,jref)%self_irot_l = irot_l
-                pcomlines(iref,jref)%self_irot_r = irot_r
-                pcomlines(iref,jref)%self_w      = w
-                pcomlines(iref,jref)%legit       = .true.
+                pcomlines(jref,iref)%self_irot_l = irot_l
+                pcomlines(jref,iref)%self_irot_r = irot_r
+                pcomlines(jref,iref)%self_w      = w
+                pcomlines(jref,iref)%legit       = .true.
             enddo
         enddo
         !$omp end parallel do
@@ -203,16 +203,16 @@ contains
         !$omp proc_bind(close) schedule(static)
         do iref = 1, nrefs
             do jref = 1, nrefs
-                if( .not. pcomlines(iref,jref)%legit )cycle
+                if( .not. pcomlines(jref,iref)%legit )cycle
                 ! compute the interpolated polar common line, between irot_j and irot_j+1
-                irot_l   = pcomlines(iref,jref)%targ_irot_l
-                irot_r   = pcomlines(iref,jref)%targ_irot_r
-                w        = pcomlines(iref,jref)%targ_w
+                irot_l   = pcomlines(jref,iref)%targ_irot_l
+                irot_r   = pcomlines(jref,iref)%targ_irot_r
+                w        = pcomlines(jref,iref)%targ_w
                 pft_line = (1.-w) * pfts_in(irot_l,:,jref) + w * pfts_in(irot_r,:,jref)
                 ! extrapolate the interpolated polar common line to irot_i and irot_i+1 of iref-th reference
-                irot_l   = pcomlines(iref,jref)%self_irot_l
-                irot_r   = pcomlines(iref,jref)%self_irot_r
-                w        = pcomlines(iref,jref)%self_w
+                irot_l   = pcomlines(jref,iref)%self_irot_l
+                irot_r   = pcomlines(jref,iref)%self_irot_r
+                w        = pcomlines(jref,iref)%self_w
                 pfts(irot_l,:,iref) = pfts(irot_l,:,iref) + (1.-w) * pft_line
                 pfts(irot_r,:,iref) = pfts(irot_r,:,iref) +     w  * pft_line
             enddo
