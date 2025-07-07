@@ -824,12 +824,13 @@ contains
         class(cmdline),                  intent(inout) :: cline
         type(parameters)                :: params
         type(sp_project)                :: spproj, spproj_part
-        integer,            allocatable :: states(:), tmpinds(:), clsinds(:), states_map(:)
+        integer,            allocatable :: states(:), tmpinds(:), clsinds(:), states_map(:), clustinds(:)
         real,               allocatable :: rstates(:)
+        logical,            allocatable :: clustmask(:)
         type(class_sample), allocatable :: clssmp(:)
         character(len=:),   allocatable :: projfname, fbody
         integer(kind=kind(ENUM_ORISEG)) :: iseg
-        integer                         :: noris,i,noris_in_state,ncls,icls
+        integer                         :: noris,i,noris_in_state,ncls,icls,iclust,nclust
         integer                         :: state,nstates,nptcls,ipart
         call cline%set('oritype', 'cls2D')
         if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',           'yes')
@@ -848,8 +849,20 @@ contains
         clsinds = pack(tmpinds, mask=rstates > 0.5)
         allocate(states(nptcls), states_map(nptcls), source=0)
         if( trim(params%partition).eq.'yes' )then
+            clustinds = spproj%os_cls2D%get_all_asint('cluster')
+            clustinds = pack(clustinds, mask=rstates > 0.5)
+            nclust    = maxval(clustinds)
+            allocate(clustmask(nclust), source=.false.)
+            do iclust = 1, nclust
+                if( count(clustinds == iclust) > 0 ) clustmask(iclust) = .true.
+            end do
+            tmpinds = (/(iclust,iclust=1,nclust)/)
+            clsinds = pack(tmpinds, mask=clustmask)
             call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp, label='cluster')
         else
+            ncls    = spproj%os_cls2D%get_noris()
+            tmpinds = (/(icls,icls=1,ncls)/)
+            clsinds = pack(tmpinds, mask=rstates > 0.5)
             call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
         endif
         if( cline%defined('nparts') )then
