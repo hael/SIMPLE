@@ -99,6 +99,7 @@ character(len=*), parameter :: DIR_SNAPSHOT         = './snapshots/'
 character(len=*), parameter :: SNAPSHOT_REQUEST     = 'SNAPSHOT'
 character(len=*), parameter :: GUISTATS_FILE        = '.guistats'
 character(len=*), parameter :: POOLSTATS_FILE       = '.poolstats'
+character(len=*), parameter :: USER_PARAMS          = 'stream_user_params.txt'
 ! STARFILES
 character(len=*), parameter :: MICS_STAR_BODY       = 'micrographs'
 character(len=*), parameter :: PTCL2D_STAR_BODY     = 'particles2D'
