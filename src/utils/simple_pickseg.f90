@@ -122,7 +122,7 @@ contains
             call self%mic_shrink%erode
         endif 
         if( l_winsz )then 
-            call self%mic_shrink%fill_holes()
+            call self%mic_shrink%set_largestcc2background
             call self%mic_shrink%inv_bimg()
         endif
         if( L_WRITE ) call self%mic_shrink%write_bimg(fbody//'_lp_tv_bin_erode.mrc')

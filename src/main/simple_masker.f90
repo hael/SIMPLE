@@ -378,7 +378,7 @@ contains
                     ! if( l_write ) call cc_img(i)%write(BIN_OTSU_MED, i)
                 endif
                 ! fill-in holes
-                call cc_img(i)%fill_holes
+                call cc_img(i)%set_edgecc2background
                 ! if( l_write ) call cc_img(i)%write(BIN_OTSU_HOLES_FILL, i)
             endif
             ! apply cosine egde to soften mask (to avoid Fourier artefacts)

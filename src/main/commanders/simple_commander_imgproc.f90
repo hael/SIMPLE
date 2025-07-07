@@ -120,7 +120,7 @@ contains
             do iptcl=1,params%nptcls
                 call img_or_vol%read(params%stk, iptcl)
                 call doit( otsu )
-                if( fill_holes ) call img_or_vol%fill_holes
+                if( fill_holes ) call img_or_vol%set_edgecc2background
                 if( l_sauvola  ) call img_sdevs%write('local_sdevs.mrc', iptcl)
                 call img_or_vol%write(params%outstk, iptcl)
             end do
