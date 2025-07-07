@@ -33,7 +33,8 @@ type, extends(image) :: binimage
     ! CONNECTED COMPONENTS
     procedure          :: diameter_cc
     procedure          :: elim_ccs
-    procedure          :: fill_holes
+    procedure          :: set_largestcc2background
+    procedure          :: set_edgecc2background
     procedure          :: find_ccs
     procedure          :: masscen_cc
     procedure          :: order_ccs
@@ -639,20 +640,19 @@ contains
     ! This subroutine fills the holes in a binary image
     ! Idea: A hole is a set of background pixels that cannot be
     ! reached by filling in the background from the edge of the image.
-    ! Find the cc to which the background belongs. Whatever is not background,
-    ! set it to foreground.
-    subroutine fill_holes( self )
+    ! The largest CC in considered background and set to zero.
+    ! Everything else is set to foreground
+    subroutine set_largestcc2background( self )
         class(binimage), intent(inout) :: self
         type (binimage)      :: img_cc ! connected component image
-        integer, allocatable :: imat_cc(:,:,:), ccsizes(:)
+        integer, allocatable :: ccsizes(:)
         integer :: ind_bg
         if( self%bldim(3) > 1 ) then
-            THROW_WARN('Not implemented for volumes; fill_holes')
+            THROW_WARN('Not implemented for volumes; set_largest_cc2background')
             return
         endif
         if( .not. self%bimat_is_set ) call self%set_imat
         call self%find_ccs(img_cc, black=.true.) ! detect the connnected components in the background as well
-        imat_cc = nint(img_cc%get_rmat())
         ! find the biggest size connected component (background) by extracting all cc sizes (in # pixels)
         ccsizes = img_cc%size_ccs()
         ind_bg  = maxloc(ccsizes, dim=1)
@@ -662,10 +662,30 @@ contains
         elsewhere
             self%bimat = 0
         end where
-        if( allocated(imat_cc) ) deallocate(imat_cc)
         call img_cc%kill_bimg
         call self%update_img_rmat
-    end subroutine fill_holes
+    end subroutine set_largestcc2background
+
+    ! Sets the CC present at the upper left corner as backgound and everything else to foreground
+    subroutine set_edgecc2background( self )
+        class(binimage), intent(inout) :: self
+        type (binimage) :: img_cc ! connected component image
+        integer         :: seed
+        if(self%bldim(3) > 1) then
+            THROW_WARN('Not implemented for volumes! set_edge_cc2background')
+            return
+        endif
+        call self%find_ccs(img_cc, black=.true.)
+        seed = img_cc%bimat(1,1,1) ! Corner pixel should belong to the background
+        ! Set to foreground whatever is not background
+        where(img_cc%bimat == seed)
+            self%bimat = 0
+        elsewhere
+            self%bimat = 1
+        endwhere
+        call img_cc%kill_bimg
+        call self%update_img_rmat
+    end subroutine set_edgecc2background
 
     !> \brief grow_bins adds nlayers of pixels bordering the background in a binary image
     subroutine grow_bins( self, nlayers )

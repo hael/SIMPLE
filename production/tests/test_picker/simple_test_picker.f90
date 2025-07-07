@@ -63,7 +63,7 @@ do i = 1, nfiles
     call microg%write_bimg(outputfile)
     call microg%erode()
     call microg%erode()
-    call microg%fill_holes()
+    call microg%set_largestcc2background()
     call microg%inv_bimg()
     outputfile=trim(fbody)//'_BIN_SAU_SDEVS_FH.mrc'
     call microg%write_bimg(outputfile)
