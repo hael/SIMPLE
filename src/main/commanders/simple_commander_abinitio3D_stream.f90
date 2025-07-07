@@ -15,9 +15,9 @@ public :: check_processes
 private
 #include "simple_local_flags.inc"
 
-character(len=STDLEN), parameter :: USER_PARAMS  = 'stream3D_user_params.txt'
-character(len=STDLEN), parameter :: EXECDIR      = 'run_'
-character(len=STDLEN), parameter :: DIR_ALGNVOLS = 'alignedvolumes/'
+character(len=STDLEN), parameter :: USER_PARAMS3D = 'stream3D_user_params.txt'
+character(len=STDLEN), parameter :: EXECDIR       = 'run_'
+character(len=STDLEN), parameter :: DIR_ALGNVOLS  = 'alignedvolumes/'
 
 type(procrecord),    allocatable :: procrecs(:)             ! records of all jobs
 real,                allocatable :: algnvols_corrmat(:,:)   ! Volumes alignment correlation matrix
@@ -360,8 +360,8 @@ contains
         integer :: nptcls
         updated = .false.
         call os%new(1, is_ptcl=.false.)
-        if( file_exists(USER_PARAMS) )then
-            call os%read(USER_PARAMS)
+        if( file_exists(USER_PARAMS3D) )then
+            call os%read(USER_PARAMS3D)
             if( os%isthere(1,'nptcls') )then
                 nptcls = os%get_int(1,'nptcls')
                 if( nptcls > 0 )then
@@ -394,7 +394,7 @@ contains
                     THROW_WARN('Invalid PGRP_START!')
                 endif
             endif
-            call del_file(USER_PARAMS)
+            call del_file(USER_PARAMS3D)
         endif
         call os%kill
     end subroutine update_user_params3D
@@ -403,7 +403,7 @@ contains
         character(len=LONGSTRLEN), allocatable :: files(:)
         character(len=STDLEN),     allocatable :: folders(:)
         integer :: i
-        call del_file(USER_PARAMS)
+        call del_file(USER_PARAMS3D)
         call del_file(TERM_STREAM)
         call simple_list_files_regexp('.', '\.mrc$|\.mrcs$|\.txt$|\.star$|\.eps$|\.jpeg$|\.jpg$|\.dat$|\.bin$', files)
         if( allocated(files) )then
