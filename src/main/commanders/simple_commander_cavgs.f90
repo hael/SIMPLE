@@ -138,19 +138,19 @@ contains
         logical,          parameter   :: DEBUG = .true.
         real,             parameter   :: SCORE_THRES_INCL = 75.
         integer,          parameter   :: NCLUST_MAX = 65
-        type(image),      allocatable :: cavg_imgs(:), cavg_imgs_sel(:)
+        type(image),      allocatable :: cavg_imgs(:), cluster_imgs(:)
         real,             allocatable :: frc(:), mm(:,:), jointscores(:), dmat(:,:), dmat_sel(:,:)
-        real,             allocatable :: resvals(:), res_bad(:), res_good(:), res_maybe(:)
+        real,             allocatable :: resvals(:), res_bad(:), res_good(:), res_maybe(:), clustscores(:)
         logical,          allocatable :: l_non_junk(:), good_mask(:)
-        integer,          allocatable :: labels(:), clsinds(:), i_medoids(:), inds(:), inds_sel(:)
-        integer,          allocatable :: labels_sel(:), clsinds_sel(:), i_medoids_sel(:)
+        integer,          allocatable :: labels(:), clsinds(:), i_medoids(:), inds(:), cluster_inds(:)
         integer,          allocatable :: clspops(:), clspops_sel(:), states(:), labels4write(:)
         type(clust_info), allocatable :: clust_info_arr(:)
         type(parameters)              :: params
         type(sp_project)              :: spproj
         type(stats_struct)            :: res_stats
-        integer                       :: ncls, ncls_sel, icls, cnt, rank, nptcls, nptcls_good, loc(1), ldim(3), cnt_clust
-        integer                       :: i, j, ii, jj, nclust, iclust, pop_good, pop_bad, nclust_sel, ngood, minv_labels
+        integer                       :: ncls, ncls_sel, icls, cnt, rank, nptcls, nptcls_good, loc(1)
+        integer                       :: i, j, ii, jj, nclust, iclust, pop_good, pop_bad, nclust_sel
+        integer                       :: ngood, minv_labels, ind, ldim(3), cnt_clust, pop
         real                          :: fsc_res, rfoo, frac_good, best_res, worst_res, res_max
         real                          :: oa_min, oa_max, dist_rank, dist_rank_best, smpd, simsum
         ! defaults
@@ -158,134 +158,149 @@ contains
         call cline%set('ctf',        'no')
         call cline%set('objfun',     'cc')
         call cline%set('sh_inv',    'yes') ! shift invariant search
-        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',         'yes')
-        if( .not. cline%defined('trs')        ) call cline%set('trs',             10.)
-        if( .not. cline%defined('kweight')    ) call cline%set('kweight',       'all')
-        if( .not. cline%defined('lp')         ) call cline%set('lp',               6.)
-        if( .not. cline%defined('prune')      ) call cline%set('prune',          'no')
-        if( .not. cline%defined('clust_crit') ) call cline%set('clust_crit', 'hybrid')
+        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',   'yes')
+        if( .not. cline%defined('trs')        ) call cline%set('trs',       10.)
+        if( .not. cline%defined('kweight')    ) call cline%set('kweight', 'all')
+        if( .not. cline%defined('lp')         ) call cline%set('lp',         6.)
+        if( .not. cline%defined('prune')      ) call cline%set('prune',    'no')
         ! master parameters
         call params%new(cline)
         ! read project file
         call spproj%read(params%projfile)
-        ncls           = spproj%os_cls2D%get_noris()
+        ncls        = spproj%os_cls2D%get_noris()
         ! prep class average stack
         call prep_cavgs4clustering(spproj, cavg_imgs, params%mskdiam, clspops, clsinds, l_non_junk, mm )
-        ncls_sel       = size(cavg_imgs)
-        smpd           = cavg_imgs(1)%get_smpd()
-        ldim           = cavg_imgs(1)%get_ldim()
+        ncls_sel    = size(cavg_imgs)
+        smpd        = cavg_imgs(1)%get_smpd()
+        ldim        = cavg_imgs(1)%get_ldim()
         ! ensure correct smpd/box in params class
-        params%smpd    = smpd
-        params%box     = ldim(1)
-        params%msk     = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
+        params%smpd = smpd
+        params%box  = ldim(1)
+        params%msk  = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
         ! calculate overall minmax
-        oa_min         = minval(mm(:,1))
-        oa_max         = maxval(mm(:,2))
-        ! calculate distance matrix
-        dmat           = calc_cluster_cavgs_dmat(params, cavg_imgs, [oa_min,oa_max])
-        ! cluster
-        call cluster_dmat( dmat, 'aprop', nclust, i_medoids, labels, nclust_max=NCLUST_MAX)
-        if( nclust > 5 .and. nclust < 20 )then
-            nclust = 20
-            deallocate(i_medoids, labels)
-            call cluster_dmat(dmat, 'kmed', nclust, i_medoids, labels)
+        oa_min      = minval(mm(:,1))
+        oa_max      = maxval(mm(:,2))
+        if( trim(params%have_clustering).eq.'yes' )then
+            labels  = spproj%os_cls2D%get_all_asint('cluster')
+            labels  = pack(labels, mask=l_non_junk)
+            if( all(labels == 0) ) THROW_HARD('Invalid clustering solution in cls2D field')
+            nclust  = maxval(labels)
+            allocate(i_medoids(nclust),   source=0)
+            allocate(clustscores(nclust), source=0.)
+            allocate(inds(ncls_sel), source=(/(i,i=1,ncls_sel)/))
+            do iclust = 1, nclust
+                pop = count(labels == iclust)
+                if( pop > 0 )then
+                    cluster_inds = pack(inds, mask=labels == iclust)
+                    cluster_imgs = pack_imgarr(cavg_imgs, mask=labels == iclust)
+                    dmat         = calc_cluster_cavgs_dmat(params, cluster_imgs, [oa_min,oa_max])
+                    call medoid_from_dmat(dmat, ind)
+                    clustscores(iclust) = sum(dmat(ind,:)) / real(pop)
+                    i_medoids(iclust) = cluster_inds(ind)
+                    deallocate(cluster_inds, dmat)
+                    call dealloc_imgarr(cluster_imgs)
+                endif
+            end do
+            clust_info_arr = align_and_score_cavg_clusters( params, dmat, cavg_imgs, clspops, i_medoids, labels, clustscores )
+        else
+            ! calculate distance matrix
+            dmat = calc_cluster_cavgs_dmat(params, cavg_imgs, [oa_min,oa_max])
+            ! cluster
+            call cluster_dmat( dmat, 'aprop', nclust, i_medoids, labels, nclust_max=NCLUST_MAX)
+            if( nclust > 5 .and. nclust < 20 )then
+                nclust = 20
+                deallocate(i_medoids, labels)
+                call cluster_dmat(dmat, 'kmed', nclust, i_medoids, labels)
+            endif
+            clust_info_arr = align_and_score_cavg_clusters( params, dmat, cavg_imgs, clspops, i_medoids, labels )
         endif
-        clust_info_arr = align_and_score_cavg_clusters( params, dmat, cavg_imgs, clspops, i_medoids, labels )
-        select case(trim(params%clust_crit))
-            case('powfm','fm','histfm','hybrid')
-                ! re-create cavg_imgs
-                call dealloc_imgarr(cavg_imgs)
-                cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
-                ! write ranked clusters
-                call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_ranked', trim(params%ext))
-                ! update project
-                call spproj%os_ptcl2D%transfer_class_assignment(spproj%os_ptcl3D)
-                do iclust = 1, nclust
-                    do icls = 1, ncls_sel 
-                        if( labels(icls) == iclust )then
-                            call spproj%os_cls2D%set(clsinds(icls),'cluster',iclust)                          ! 2D class field
-                            call spproj%os_cls3D%set(clsinds(icls),'cluster',iclust)                          ! 3D class field
-                            call spproj%os_ptcl2D%set_field2single('class', clsinds(icls), 'cluster', iclust) ! 2D particle field
-                            call spproj%os_ptcl3D%set_field2single('class', clsinds(icls), 'cluster', iclust) ! 3D particle field
-                        endif
-                    enddo
-                enddo
-                ! report cluster info
-                do iclust = 1, nclust
-                    write(logfhandle,'(A,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,I3)') 'cluster_ranked'//int2str_pad(iclust,2)//'.mrc',&
-                    &' resolution(A) ',   clust_info_arr(iclust)%res,& 
-                    &' resscore(%) ',     clust_info_arr(iclust)%resscore,& 
-                    &' homogeneity(%) ',  clust_info_arr(iclust)%homogeneity,&
-                    &' clustscore(%) ',   clust_info_arr(iclust)%clustscore,&
-                    &' jointscore(%) ',   clust_info_arr(iclust)%jointscore,&
-                    &' good_bad_assign ', clust_info_arr(iclust)%good_bad
-                end do
-                ! check number of particles selected
-                nptcls      = sum(clust_info_arr(:)%nptcls)
-                nptcls_good = sum(clust_info_arr(:)%nptcls, mask=clust_info_arr(:)%good_bad == 1)
-                frac_good   = real(nptcls_good)  / real(nptcls)
-                write(logfhandle,'(a,1x,f8.2)') '% PARTICLES CLASSIFIED AS 1ST RATE: ', frac_good  * 100.
-                ! calculate resolution statistics for good/bad classes
-                res_good    = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad == 1)
-                res_bad     = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad == 0)
-                pop_good    = count(clust_info_arr(:)%good_bad == 1)
-                pop_bad     = count(clust_info_arr(:)%good_bad == 0)
-                if( pop_good > 1 )then
-                    write(logfhandle,'(A)') 'RESOLUTION STATS FOR GOOD PARTITION'
-                    call calc_stats(res_good, res_stats)
-                    write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_stats%minv
-                    write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_stats%maxv
-                    write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_stats%avg
-                    write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_stats%med
-                    write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', res_stats%sdev
-                else if( pop_good == 1 )then
-                    write(logfhandle,'(A)') 'RESOLUTION STATS FOR GOOD PARTITION'
-                    write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_good(1)
-                    write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_good(1)
-                    write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_good(1)
-                    write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_good(1)
-                    write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', 0.
+        ! re-create cavg_imgs
+        call dealloc_imgarr(cavg_imgs)
+        cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
+        ! write ranked clusters
+        call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_ranked', trim(params%ext))
+        ! update project
+        call spproj%os_ptcl2D%transfer_class_assignment(spproj%os_ptcl3D)
+        do iclust = 1, nclust
+            do icls = 1, ncls_sel 
+                if( labels(icls) == iclust )then
+                    call spproj%os_cls2D%set(clsinds(icls),'cluster',iclust)                          ! 2D class field
+                    call spproj%os_cls3D%set(clsinds(icls),'cluster',iclust)                          ! 3D class field
+                    call spproj%os_ptcl2D%set_field2single('class', clsinds(icls), 'cluster', iclust) ! 2D particle field
+                    call spproj%os_ptcl3D%set_field2single('class', clsinds(icls), 'cluster', iclust) ! 3D particle field
                 endif
-                if( pop_bad > 1 )then
-                    write(logfhandle,'(A)') 'RESOLUTION STATS FOR BAD  PARTITION'
-                    call calc_stats(res_bad, res_stats)
-                    write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_stats%minv
-                    write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_stats%maxv
-                    write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_stats%avg
-                    write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_stats%med
-                    write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', res_stats%sdev
-                else if( pop_bad == 1 )then
-                    write(logfhandle,'(A)') 'RESOLUTION STATS FOR BAD  PARTITION'
-                    write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_bad(1)
-                    write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_bad(1)
-                    write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_bad(1)
-                    write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_bad(1)
-                    write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', 0.
-                endif
-                ! translate to state array
-                allocate(states(ncls), source=0)
-                do icls = 1, ncls_sel
-                    if( clust_info_arr(labels(icls))%good_bad == 1 ) states(clsinds(icls)) = 1
-                end do
-                ! write selection
-                allocate(labels4write(ncls_sel), source=0)
-                do icls = 1, ncls_sel
-                    labels4write(icls) = clust_info_arr(labels(icls))%good_bad
-                end do
-                ! write selection
-                call write_selected_cavgs(ncls_sel, cavg_imgs, labels4write, params%ext)
-                ! map selection to project
-                call spproj%map_cavgs_selection(states)
-                ! optional pruning
-                if( trim(params%prune).eq.'yes') call spproj%prune_particles
-                ! this needs to be a full write as many segments are updated
-                call spproj%write(params%projfile)
-            case DEFAULT
-                ! re-create cavg_imgs
-                call dealloc_imgarr(cavg_imgs)
-                cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
-                call  write_cavgs(ncls_sel, cavg_imgs, labels, 'cluster', params%ext)
-        end select
+            enddo
+        enddo
+        ! report cluster info
+        do iclust = 1, nclust
+            write(logfhandle,'(A,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,I3)') 'cluster_ranked'//int2str_pad(iclust,2)//'.mrc',&
+            &' resolution(A) ',   clust_info_arr(iclust)%res,& 
+            &' resscore(%) ',     clust_info_arr(iclust)%resscore,& 
+            &' homogeneity(%) ',  clust_info_arr(iclust)%homogeneity,&
+            &' clustscore(%) ',   clust_info_arr(iclust)%clustscore,&
+            &' jointscore(%) ',   clust_info_arr(iclust)%jointscore,&
+            &' good_bad_assign ', clust_info_arr(iclust)%good_bad
+        end do
+        ! check number of particles selected
+        nptcls      = sum(clust_info_arr(:)%nptcls)
+        nptcls_good = sum(clust_info_arr(:)%nptcls, mask=clust_info_arr(:)%good_bad == 1)
+        frac_good   = real(nptcls_good)  / real(nptcls)
+        write(logfhandle,'(a,1x,f8.2)') '% PARTICLES CLASSIFIED AS 1ST RATE: ', frac_good  * 100.
+        ! calculate resolution statistics for good/bad classes
+        res_good    = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad == 1)
+        res_bad     = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad == 0)
+        pop_good    = count(clust_info_arr(:)%good_bad == 1)
+        pop_bad     = count(clust_info_arr(:)%good_bad == 0)
+        if( pop_good > 1 )then
+            write(logfhandle,'(A)') 'RESOLUTION STATS FOR GOOD PARTITION'
+            call calc_stats(res_good, res_stats)
+            write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_stats%minv
+            write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_stats%maxv
+            write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_stats%avg
+            write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_stats%med
+            write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', res_stats%sdev
+        else if( pop_good == 1 )then
+            write(logfhandle,'(A)') 'RESOLUTION STATS FOR GOOD PARTITION'
+            write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_good(1)
+            write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_good(1)
+            write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_good(1)
+            write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_good(1)
+            write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', 0.
+        endif
+        if( pop_bad > 1 )then
+            write(logfhandle,'(A)') 'RESOLUTION STATS FOR BAD  PARTITION'
+            call calc_stats(res_bad, res_stats)
+            write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_stats%minv
+            write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_stats%maxv
+            write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_stats%avg
+            write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_stats%med
+            write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', res_stats%sdev
+        else if( pop_bad == 1 )then
+            write(logfhandle,'(A)') 'RESOLUTION STATS FOR BAD  PARTITION'
+            write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_bad(1)
+            write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_bad(1)
+            write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_bad(1)
+            write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_bad(1)
+            write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', 0.
+        endif
+        ! translate to state array
+        allocate(states(ncls), source=0)
+        do icls = 1, ncls_sel
+            if( clust_info_arr(labels(icls))%good_bad == 1 ) states(clsinds(icls)) = 1
+        end do
+        ! write selection
+        allocate(labels4write(ncls_sel), source=0)
+        do icls = 1, ncls_sel
+            labels4write(icls) = clust_info_arr(labels(icls))%good_bad
+        end do
+        ! write selection
+        call write_selected_cavgs(ncls_sel, cavg_imgs, labels4write, params%ext)
+        ! map selection to project
+        call spproj%map_cavgs_selection(states)
+        ! optional pruning
+        if( trim(params%prune).eq.'yes') call spproj%prune_particles
+        ! this needs to be a full write as many segments are updated
+        call spproj%write(params%projfile)
         ! destruct
         call spproj%kill
         ! call pows%kill
@@ -368,12 +383,11 @@ contains
         call cline%set('ctf',        'no')
         call cline%set('objfun',     'cc')
         call cline%set('sh_inv',    'yes') ! shift invariant search
-        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',         'yes')
-        if( .not. cline%defined('trs')        ) call cline%set('trs',             10.)
-        if( .not. cline%defined('kweight')    ) call cline%set('kweight',       'all')
-        if( .not. cline%defined('lp')         ) call cline%set('lp',               6.)
-        if( .not. cline%defined('prune')      ) call cline%set('prune',          'no')
-        if( .not. cline%defined('clust_crit') ) call cline%set('clust_crit', 'hybrid')
+        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',   'yes')
+        if( .not. cline%defined('trs')        ) call cline%set('trs',       10.)
+        if( .not. cline%defined('kweight')    ) call cline%set('kweight', 'all')
+        if( .not. cline%defined('lp')         ) call cline%set('lp',         6.)
+        if( .not. cline%defined('prune')      ) call cline%set('prune',    'no')
         ! master parameters
         call params%new(cline)
         ! read base project file

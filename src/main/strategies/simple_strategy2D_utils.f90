@@ -18,6 +18,9 @@ interface write_cavgs
     module procedure write_cavgs_2
 end interface
 
+! objective function weights
+real, private, parameter :: W_HIST=0.2, W_POW=0.4, W_FM=0.4
+
 contains
 
     function read_cavgs_into_imgarr_1( spproj, mask ) result( imgs )
@@ -360,23 +363,7 @@ contains
         !$omp end parallel do
         call hists(:)%kill
         dmat_hist = merge_dmats(dmat_tvd, dmat_jsd, dmat_hd) ! the different histogram distances are given equal weight
-        ! set appropriate distance matrix for the clustering criterion given
-        select case(trim(params%clust_crit))
-            case('pow')
-                dmat = dmat_pow 
-            case('powfm')
-                dmat = 0.5 * dmat_pow + 0.5 * dmat_fm
-            case('fm')
-                dmat = dmat_fm
-            case('hist')
-                dmat = dmat_hist
-            case('histfm')
-                dmat = 0.5 * dmat_hist + 0.5 * dmat_fm
-            case('hybrid')
-                dmat = 0.2 * dmat_hist + 0.4 * dmat_pow + 0.4 * dmat_fm       
-            case DEFAULT
-                THROW_HARD('Unsupported clustering criterion: '//trim(params%clust_crit))
-        end select
+        dmat      = W_HIST * dmat_hist + W_POW * dmat_pow + W_FM * dmat_fm
         ! destruct
         call pows%kill
         do i = 1, ncls_sel
@@ -438,23 +425,7 @@ contains
         end do
         !$omp end parallel do
         dmat_hist = merge_dmats(dmat_tvd, dmat_jsd, dmat_hd) ! the different histogram distances are given equal weight
-        ! set appropriate distance matrix for the clustering criterion given
-        select case(trim(params%clust_crit))
-            case('pow')
-                dmat = dmat_pow 
-            case('powfm')
-                dmat = 0.5 * dmat_pow + 0.5 * dmat_fm
-            case('fm')
-                dmat = dmat_fm
-            case('hist')
-                dmat = dmat_hist
-            case('histfm')
-                dmat = 0.5 * dmat_hist + 0.5 * dmat_fm
-            case('hybrid')
-                dmat = 0.2 * dmat_hist + 0.4 * dmat_pow + 0.4 * dmat_fm       
-            case DEFAULT
-                THROW_HARD('Unsupported clustering criterion: '//trim(params%clust_crit))
-        end select
+        dmat      = W_HIST * dmat_hist + W_POW * dmat_pow + W_FM * dmat_fm       
         ! destruct
         call pows_ref%kill
         call pows_match%kill
@@ -462,13 +433,14 @@ contains
         call hists_match(:)%kill
     end function calc_match_cavgs_dmat
 
-    function align_and_score_cavg_clusters( params, dmat, cavg_imgs, clspops, i_medoids, labels ) result( clust_info_arr )
+    function align_and_score_cavg_clusters( params, dmat, cavg_imgs, clspops, i_medoids, labels, clustscores ) result( clust_info_arr )
         use simple_clustering_utils, only: cluster_dmat
         class(parameters),    intent(in)    :: params
         real,                 intent(in)    :: dmat(:,:)
         class(image),         intent(inout) :: cavg_imgs(:)
         integer,              intent(in)    :: clspops(:)
         integer,              intent(inout) :: i_medoids(:), labels(:)
+        real, optional,       intent(in)    :: clustscores(:)
         real,                 parameter     :: RES_THRES=6., SCORE_THRES=65., SCORE_THRES_REJECT=50., SCORE_THRES_INCL=75.
         type(clust_info),     allocatable   :: clust_info_arr(:)
         logical,              allocatable   :: l_msk(:,:,:)
@@ -515,17 +487,23 @@ contains
             where( clust_info_arr(:)%pop < 2 ) clust_info_arr(:)%resscore = res_max
             call dists2scores_percen(clust_info_arr(:)%resscore)
             ! CLUSTSCORE
-            do iclust = 1, nclust
-                clust_info_arr(iclust)%clustscore  = 0.
-                cnt = 0
-                do icls = 1, ncls_sel 
-                    if( labels(icls) == iclust )then
-                        clust_info_arr(iclust)%clustscore  = clust_info_arr(iclust)%clustscore  +      dmat(icls,i_medoids(iclust))
-                        cnt = cnt + 1
-                    endif
-                enddo
-                clust_info_arr(iclust)%clustscore  = clust_info_arr(iclust)%clustscore  / real(cnt)
-            end do
+            if( present(clustscores) )then
+                do iclust = 1, nclust
+                    clust_info_arr(iclust)%clustscore = clustscores(iclust)
+                end do
+            else
+                do iclust = 1, nclust
+                    clust_info_arr(iclust)%clustscore  = 0.
+                    cnt = 0
+                    do icls = 1, ncls_sel 
+                        if( labels(icls) == iclust )then
+                            clust_info_arr(iclust)%clustscore  = clust_info_arr(iclust)%clustscore  +      dmat(icls,i_medoids(iclust))
+                            cnt = cnt + 1
+                        endif
+                    enddo
+                    clust_info_arr(iclust)%clustscore  = clust_info_arr(iclust)%clustscore  / real(cnt)
+                end do
+            endif
             clustscore_min  = minval(clust_info_arr(:)%clustscore)
             where( clust_info_arr(:)%pop < 2 )
                 clust_info_arr(:)%clustscore  = clustscore_min
@@ -810,7 +788,11 @@ contains
         logical :: didft
         ldim       = imgs(1)%get_ldim()
         ldim_ref   = img_ref%get_ldim()
-        if( .not. all(ldim == ldim_ref) ) THROW_HARD('Incongruent logical image dimensions (imgs & img_ref)')
+        if( .not. all(ldim == ldim_ref) )then
+            print *, 'ldim     ', ldim
+            print *, 'ldim_ref ', ldim_ref
+            THROW_HARD('Incongruent logical image dimensions (imgs & img_ref)')
+        endif
         box        = ldim(1)
         smpd       = imgs(1)%get_smpd()
         kfromto(1) = max(2, calc_fourier_index(hp, box, smpd))
