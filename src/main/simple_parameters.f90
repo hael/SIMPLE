@@ -58,6 +58,7 @@ type :: parameters
     character(len=3)          :: greedy_sampling='yes' !< greedy class sampling or not (referring to objective function)
     character(len=3)          :: gridding='no'        !< to test gridding correction
     character(len=3)          :: groupframes='no'     !< Whether to perform weighted frames averaging during motion correction(yes|no){no}
+    character(len=3)          :: have_clustering='no' !< to flag that clustering solution exists in field os_cls2D (cluster_cavgs)
     character(len=3)          :: hist='no'            !< whether to print histogram
     character(len=3)          :: icm='no'             !< whether to apply ICM filter to reference
     character(len=3)          :: incrreslim='no'      !< Whether to add ten shells to the FSC resolution limit
@@ -212,7 +213,6 @@ type :: parameters
     character(len=STDLEN)     :: bin_cls='yes'        !< binary clustering applied(yes|no){yes}
     character(len=STDLEN)     :: boxtype='eman'
     character(len=STDLEN)     :: cls_init='ptcl'      !< Scheme to generate initial references for 2D analysis(ptcl|randcls|rand)
-    character(len=STDLEN)     :: clust_crit=''        !< clustering criterion 
     character(len=STDLEN)     :: clustinds=''         !< comma-separated cluster indices
     character(len=STDLEN)     :: coord='cart'         !< Coordinate system for cluster2D(cart|polar|both){cart}
     character(len=STDLEN)     :: cn_type='cn_std'     !< generalised coordination number (cn_gen) or stardard (cn_std)
@@ -619,7 +619,6 @@ contains
         call check_carg('classtats',      self%classtats)
         call check_carg('clear',          self%clear)
         call check_carg('cls_init',       self%cls_init)
-        call check_carg('clust_crit',     self%clust_crit)
         call check_carg('clustinds',      self%clustinds)
         call check_carg('cn_type',        self%cn_type)
         call check_carg('combine_eo',     self%combine_eo)
@@ -655,6 +654,7 @@ contains
         call check_carg('greedy_sampling',self%greedy_sampling)
         call check_carg('gridding',       self%gridding)
         call check_carg('groupframes',    self%groupframes)
+        call check_carg('have_clustering', self%have_clustering)
         call check_carg('hist',           self%hist)
         call check_carg('icm',            self%icm)
         call check_carg('imgkind',        self%imgkind)
