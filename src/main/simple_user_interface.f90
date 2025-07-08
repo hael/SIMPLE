@@ -99,7 +99,7 @@ type(simple_program), target :: center
 type(simple_program), target :: cleanup2D
 type(simple_program), target :: center2D_nano
 type(simple_program), target :: check_states
-type(simple_program), target :: consolidate_chunks_cavgs
+type(simple_program), target :: consolidate_chunks
 type(simple_program), target :: conv_atom_denoise
 type(simple_program), target :: cluster2D
 type(simple_program), target :: cluster2D_nano
@@ -430,7 +430,7 @@ contains
         call new_cleanup2D
         call new_center2D_nano
         call new_check_states
-        call new_consolidate_chunks_cavgs
+        call new_consolidate_chunks
         call new_conv_atom_denoise
         call new_cluster2D
         call new_cluster2D_nano
@@ -580,7 +580,7 @@ contains
         call push2prg_ptr_array(cleanup2D)
         call push2prg_ptr_array(center2D_nano)
         call push2prg_ptr_array(check_states)
-        call push2prg_ptr_array(consolidate_chunks_cavgs)
+        call push2prg_ptr_array(consolidate_chunks)
         call push2prg_ptr_array(conv_atom_denoise)
         call push2prg_ptr_array(cluster2D)
         call push2prg_ptr_array(cluster2D_nano)
@@ -763,8 +763,8 @@ contains
                 ptr2prg => center2D_nano
             case('check_states')
                 ptr2prg => check_states
-            case('consolidate_chunks_cavgs')
-                ptr2prg => consolidate_chunks_cavgs
+            case('consolidate_chunks')
+                ptr2prg => consolidate_chunks
             case('conv_atom_denoise')
                 ptr2prg => conv_atom_denoise
             case('cluster2D')
@@ -1024,7 +1024,7 @@ contains
         write(logfhandle,'(A)') calc_pspec%name
         write(logfhandle,'(A)') center%name
         write(logfhandle,'(A)') check_states%name
-        write(logfhandle,'(A)') consolidate_chunks_cavgs%name
+        write(logfhandle,'(A)') consolidate_chunks%name
         write(logfhandle,'(A)') cleanup2D%name
         write(logfhandle,'(A)') cluster_cavgs%name
         write(logfhandle,'(A)') cluster2D%name
@@ -1970,10 +1970,10 @@ contains
         call check_states%set_input('comp_ctrls', 1, nthr)
     end subroutine new_check_states
 
-    subroutine new_consolidate_chunks_cavgs
+    subroutine new_consolidate_chunks
         ! PROGRAM SPECIFICATION
-        call consolidate_chunks_cavgs%new(&
-        &'consolidate_chunks_cavgs',&                            ! name
+        call consolidate_chunks%new(&
+        &'consolidate_chunks',&                            ! name
         &'Consolidates all chunk classes into one set of cavgs',&! descr_short
         &'Consolidates all chunk classes into one set of cavgs',&! descr_long
         &'simple_exec',&                                         ! executable
@@ -1982,9 +1982,9 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call consolidate_chunks_cavgs%set_input('parm_ios', 1, 'dir_target', 'file', 'Target directory',&
+        call consolidate_chunks%set_input('parm_ios', 1, 'dir_target', 'file', 'Target directory',&
         &'Directory where the chunks have been generated', 'e.g. 1_cluster2D_subsets', .true., '')
-        call consolidate_chunks_cavgs%set_input('parm_ios', 2, nchunksperset, gui_advanced=.false.)
+        call consolidate_chunks%set_input('parm_ios', 2, nchunksperset, gui_advanced=.false.)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -1995,7 +1995,7 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
-    end subroutine new_consolidate_chunks_cavgs
+    end subroutine new_consolidate_chunks
 
     subroutine new_conv_atom_denoise
         ! PROGRAM SPECIFICATION

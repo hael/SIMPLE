@@ -3,28 +3,16 @@ module simple_commander_stream2D
 include 'simple_lib.f08'
 use simple_cmdline,            only: cmdline
 use simple_commander_base,     only: commander_base
-use simple_parameters,         only: parameters, params_glob
+use simple_parameters,         only: parameters
 use simple_sp_project,         only: sp_project
-use simple_qsys_env,           only: qsys_env
-use simple_image,              only: image
-use simple_class_frcs,         only: class_frcs
-use simple_stack_io,           only: stack_io
-use simple_starproject,        only: starproject
-use simple_starproject_stream, only: starproject_stream
-use simple_euclid_sigma2,      only: sigma2_star_from_iter
 use simple_guistats,           only: guistats
 use simple_stream_utils
 use simple_qsys_funs
-use simple_commander_cluster2D
 use simple_commander_cluster2D_stream
 use simple_commander_cavgs
 use simple_moviewatcher
 use simple_progress
-! use simple_imgproc
 use simple_nice
-use FoX_dom
-use json_kinds
-use json_module
 implicit none
 
 private
@@ -66,9 +54,7 @@ contains
         integer                                :: nmics_rejected_glob, nchunks_imported_glob, nchunks_imported, nprojects, iter
         integer                                :: n_imported, n_imported_prev, n_added, nptcls_glob, n_failed_jobs, ncls_in
         integer                                :: i
-        integer,                   allocatable :: snapshot_selection(:)
         logical                                :: l_nchunks_maxed, l_pause, l_params_updated
-        real,                      allocatable :: res_hist(:)
         real                                   :: nptcls_pool, moldiam
         nullify(snapshot_json)
         call cline%set('oritype',      'mic')
@@ -80,13 +66,12 @@ contains
         call cline%set('prune',        'no')
         call cline%set('wiener',       'full')
         call cline%set('reject_cls',   'no')
+        call cline%set('remove_chunks','no')
         if( .not. cline%defined('dir_target')   ) THROW_HARD('DIR_TARGET must be defined!')
         if( .not. cline%defined('walltime')     ) call cline%set('walltime',     29*60) ! 29 minutes
-        if( .not. cline%defined('ndev')         ) call cline%set('ndev',         CLS_REJECT_STD)
         if( .not. cline%defined('objfun')       ) call cline%set('objfun',       'euclid')
         if( .not. cline%defined('ml_reg')       ) call cline%set('ml_reg',       'no')
         if( .not. cline%defined('tau')          ) call cline%set('tau',          5)
-        if( .not. cline%defined('remove_chunks')) call cline%set('remove_chunks','yes')
         if( .not. cline%defined('refine')       ) call cline%set('refine',       'snhc_smpl')
         if( .not. cline%defined('dynreslim')    ) call cline%set('dynreslim',    'no')
         if( .not. cline%defined('cavg_ini')     ) call cline%set('cavg_ini',     'no')
@@ -128,8 +113,6 @@ contains
             call del_file(micspproj_fname)
             call cleanup_root_folder
         endif
-        ! needed for stream3d
-        call simple_mkdir(DIR_SNAPSHOT)
         ! mskdiam
         if( .not. cline%defined('mskdiam') ) then
             ! nice communicator status
@@ -155,17 +138,9 @@ contains
             write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER SET TO', params%mskdiam
         endif
         ! Resolution based class rejection
-        if( .not.cline%defined('lpthres') )then
-            call mskdiam2streamresthreshold(params%mskdiam, params%lpthres)
-            call cline%set('lpthres', params%lpthres)
-            call set_lpthres_type("auto")
-        else if(params%lpthres .gt. LOWRES_REJECT_THRESHOLD) then
-            call set_lpthres_type("off")
-        else
-            call set_lpthres_type("manual")
-        endif
+        call set_lpthres_type("off")
         ! Number of particles per class
-        if(params%nptcls_per_cls == 0) write(logfhandle,'(A)')   '>>> # PARTICLES PER CLASS WILL BE AUTO DETERMINED AFTER 100 IMPORTED MICROGRAPHS'
+        if(params%nptcls_per_cls == 0) write(logfhandle,'(A)')'>>> # PARTICLES PER CLASS WILL BE AUTO DETERMINED AFTER 100 IMPORTED MICROGRAPHS'
         ! initialise progress monitor
         call progressfile_init()
         ! master project file
@@ -232,7 +207,6 @@ contains
                 call gui_stats%set('particles', 'particles_imported', int2commastr(nptcls_glob), primary=.true.)
                 call gui_stats%set_now('particles', 'last_particles_imported')
                 call nice_communicator%update_cls2D(particles_imported=nptcls_glob, last_particles_imported=.true.)
-
                 ! update progress monitor
                 call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
                 time_last_import = time8()
@@ -270,9 +244,7 @@ contains
                 if( l_pause )then
                     ! Whether to flush particles
                     if( (time8()-time_last_import > FLUSH_TIMELIMIT) .and. all_chunks_available() )then
-                        ! Remaining unclassified particles will join the pool directly if already paused,
-                        ! and all chunks are inactive and no new particles are being imported
-                        call flush_remaining_particles(projrecords)
+                        ! Remaining unclassified particles: TBD
                     endif
                 endif
                 ! 2D analyses
@@ -292,13 +264,8 @@ contains
                 nice_communicator%stat_root%stage = "paused pool 2D analysis"
                 nice_communicator%stat_root%user_input = .true.
             else if(get_nchunks() > 0) then
-                if(get_pool_iter() < 1) then
-                    nice_communicator%stat_root%stage = "classifying initial chunks"
-                    nice_communicator%stat_root%user_input = .false.
-                else
-                    nice_communicator%stat_root%stage = "classifying pool and new chunks"
-                    nice_communicator%stat_root%user_input = .true.
-                end if
+                nice_communicator%stat_root%stage = "classifying chunks"
+                nice_communicator%stat_root%user_input = .false.
             end if
             call nice_communicator%update_cls2D(iteration=get_pool_iter()-1 , number_classes=get_pool_n_classes(), number_classes_rejected=get_pool_n_classes_rejected(),&
             number_particles_assigned=get_pool_assigned(), number_particles_rejected=get_pool_rejected(), maximum_resolution=get_pool_res(), &
@@ -314,12 +281,10 @@ contains
             call nice_communicator%update_cls2D(stats_mask=get_pool_cavgs_mask(), stats_resolution=get_pool_cavgs_res(), stats_population=get_pool_cavgs_pop(), rejection_params=get_rejection_params())
             call nice_communicator%update_cls2D(snapshot_id=get_last_snapshot_id(), snapshot_time=get_last_snapshot())
             call nice_communicator%view_cls2D%res_histogram%zero()
-            res_hist = get_pool_cavgs_res()
-            do i = 1, size(res_hist)
-                call nice_communicator%view_cls2D%res_histogram%update(res_hist(i))
+            do i = 1, get_pool_n_classes()
+                call nice_communicator%view_cls2D%res_histogram%update(get_pool_cavgs_res_at(i))
             enddo
-            if(allocated(res_hist)) deallocate(res_hist)
-            nice_communicator%view_cls2D%cutoff_res = get_lpthres()
+            nice_communicator%view_cls2D%cutoff_res = params%lpthres
             nice_communicator%view_cls2D%cutoff_type = get_lpthres_type()
             ! project snapshot
             if(get_pool_iter() .gt. 0 .and. trim(params%snapshot) .ne. "") then

@@ -15,6 +15,7 @@ use simple_nice
 implicit none
 
 public :: stream_chunk, DIR_CHUNK, merge_chunks, update_user_params
+public :: chunks_list
 public :: projrecord, projrecords2proj, class_rejection
 public :: procrecord, append_procrecord, kill_procrecords
 private
@@ -47,6 +48,16 @@ type procrecord
     logical                       :: included  = .false.    ! has been post-processed/analyzed
 end type procrecord
 
+! Conveniebce type to keep track of converged chunks
+type chunks_list
+    integer                                :: n = 0         ! # of elements in list
+    character(len=LONGSTRLEN), allocatable :: projfiles(:)  ! project file filenames
+    integer,                   allocatable :: ids(:)        ! unique ID
+  contains
+    procedure :: append
+    procedure :: kill_list
+end type chunks_list
+
 ! Type to handle a single chunk
 type stream_chunk
     type(sp_project)                       :: spproj                ! master project
@@ -63,7 +74,7 @@ type stream_chunk
     logical                                :: available  = .true.   ! has been initialized but no 2D analysis peformed
   contains
     procedure          :: init_chunk
-    procedure          :: copy
+    procedure, private :: copy
     procedure, private :: assign
     generic            :: assignment(=) => assign
     procedure          :: generate
@@ -611,6 +622,39 @@ contains
         self%available  = .false.
     end subroutine kill
 
+    ! Chunks list type
+
+    subroutine append( self, fname, id )
+        class(chunks_list), intent(inout) :: self
+        character(len=*),   intent(in)    :: fname
+        integer,            intent(in)    :: id
+        character(len=LONGSTRLEN), allocatable :: tmpstr(:)
+        integer,                   allocatable :: tmpint(:)
+        if( self%n == 0 )then
+            allocate(self%projfiles(1),source=[trim(fname)])
+            allocate(self%ids(1),source=[id])
+            self%n = 1
+        else
+            call move_alloc(self%projfiles, tmpstr)
+            call move_alloc(self%ids,       tmpint)
+            allocate(self%projfiles(self%n+1), self%ids(self%n+1))
+            self%projfiles(1:self%n) = tmpstr(:)
+            self%projfiles(self%n+1) = trim(fname)
+            self%ids(1:self%n)       = tmpint(:)
+            self%ids(self%n+1)       = id
+            self%n = self%n + 1
+            deallocate(tmpstr,tmpint)
+        endif
+    end subroutine append
+
+    subroutine kill_list( self )
+        class(chunks_list), intent(inout) :: self
+        if( self%n > 0 )then
+            deallocate(self%projfiles,self%ids)
+            self%n = 0
+        endif
+    end subroutine kill_list
+
     ! Public Utility to handle the type projrecord
 
     !> convert a list of projects into one project
@@ -909,7 +953,7 @@ contains
                 call json%get(update_arguments, 'icefracthreshold', icefracthreshold_dp, found)
                 if(found) then
                     if( abs(icefracthreshold_dp-params_glob%icefracthreshold) > 0.001) then
-                        params_glob%icefracthreshold = icefracthreshold_dp
+                        params_glob%icefracthreshold = real(icefracthreshold_dp)
                         params_glob%updated        = 'yes'
                         write(logfhandle,'(A,F8.2)')'>>> ICE FRACTION THRESHOLD UPDATED TO: ', icefracthreshold_dp
                     end if
@@ -920,11 +964,12 @@ contains
     end subroutine update_user_params
 
     ! To merge a list of chunks and write the resulting project into a dedicated folder
-    subroutine merge_chunks( chunk_fnames, folder, merged_proj )
+    subroutine merge_chunks( chunk_fnames, folder, merged_proj, projname_out )
         use simple_class_frcs
-        character(len=*),  intent(in)    :: chunk_fnames(:) ! List of projects
-        character(len=*),  intent(in)    :: folder          ! output folder
-        class(sp_project), intent(inout) :: merged_proj     ! output project, assumed to have compuational env info
+        character(len=*),           intent(in)    :: chunk_fnames(:) ! List of projects
+        character(len=*),           intent(in)    :: folder          ! output folder
+        class(sp_project),          intent(inout) :: merged_proj     ! output project, assumed to have compuational env info
+        character(len=*), optional, intent(in)    :: projname_out    ! name for output project file
         type(sp_project), allocatable :: chunks(:)
         type(class_frcs)              :: frcs, frcs_chunk
         type(image)                   :: img
@@ -985,7 +1030,7 @@ contains
                 call chunks(ic)%read_segment('mic', projname)
                 do i = 1,chunks(ic)%os_mic%get_noris()
                     j = j+1
-                    call merged_proj%os_mic%transfer_ori(i, chunks(ic)%os_mic, i)
+                    call merged_proj%os_mic%transfer_ori(j, chunks(ic)%os_mic, i)
                 enddo
                 call chunks(ic)%os_mic%kill
             enddo
@@ -1016,7 +1061,7 @@ contains
                 icls      = icls+1
                 clsmap(i) = icls
                 call merged_proj%os_cls2D%transfer_ori(icls,   chunks(ic)%os_cls2D, i)
-                call merged_proj%os_cls2D%set(icls,'class',    icls)
+                call merged_proj%os_cls2D%set_class(icls, icls)
                 call merged_proj%os_cls2D%set(icls,'origclass',i)
                 call merged_proj%os_cls2D%set(icls,'chunk',    projname)
                 call frcs%set_frc(icls, frcs_chunk%get_frc(i,  box4frc))
@@ -1030,14 +1075,14 @@ contains
                 do j = fromp,top
                     iptcl_glob = iptcl_glob + 1
                     if( chunks(ic)%os_ptcl2D%get_state(j) > 0 )then
-                        call chunks(ic)%os_ptcl2D%set(j, 'class', clsmap(chunks(ic)%os_ptcl2D%get_class(j)))
+                        call chunks(ic)%os_ptcl2D%set_class(j, clsmap(chunks(ic)%os_ptcl2D%get_class(j)))
                     endif
                     call chunks(ic)%os_ptcl2D%set_stkind(j, istk)
                     call merged_proj%os_ptcl2D%transfer_ori(iptcl_glob, chunks(ic)%os_ptcl2D, j)
                 enddo
                 top_glob = fromp_glob + top - fromp
-                call chunks(ic)%os_stk%set(i,'fromp',fromp_glob)
-                call chunks(ic)%os_stk%set(i,'top',  top_glob)
+                call chunks(ic)%os_stk%set(i, 'fromp', fromp_glob)
+                call chunks(ic)%os_stk%set(i, 'top',   top_glob)
                 fromp_glob = top_glob+1
                 call merged_proj%os_stk%transfer_ori(istk, chunks(ic)%os_stk, i)
             enddo
@@ -1046,15 +1091,19 @@ contains
         enddo
         deallocate(chunks)
         ! add classes, frcs and write project
-        call frcs%write(FRCS_FILE)
-        call merged_proj%add_frcs2os_out(FRCS_FILE, 'frc2D')
+        call frcs%write(dir//trim(FRCS_FILE))
+        call merged_proj%add_frcs2os_out(dir//trim(FRCS_FILE), 'frc2D')
         call merged_proj%add_cavgs2os_out(cavgs, smpd, imgkind='cavg')
         states = merged_proj%os_cls2D%get_all('state')
         call merged_proj%os_cls3D%new(ncls_tot, .false.)
         call merged_proj%os_cls3D%set_all('state', states)
         merged_proj%os_ptcl3D = merged_proj%os_ptcl2D
         call merged_proj%os_ptcl3D%delete_2Dclustering
-        call merged_proj%write(dir//trim(PROJNAME_CHUNK)//METADATA_EXT)
+        if( present(projname_out) )then
+            call merged_proj%write(dir//trim(projname_out)//METADATA_EXT)
+        else
+            call merged_proj%write(dir//'set'//METADATA_EXT)
+        endif
     end subroutine merge_chunks
 
     ! Class rejection routine based on image moments & Total Variation Distance

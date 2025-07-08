@@ -2595,7 +2595,6 @@ contains
         integer                                :: pool_iter_last_chunk, pool_iter_max_chunk_imported, i
         integer,                   allocatable :: snapshot_selection(:)
         logical                                :: l_nchunks_maxed, l_pause, l_params_updated
-        real,                      allocatable :: res_hist(:)
         real                                   :: nptcls_pool, moldiam
         nullify(snapshot_json)
         call cline%set('oritype',      'mic')
@@ -2870,12 +2869,10 @@ contains
             call nice_communicator%update_cls2D(stats_mask=get_pool_cavgs_mask(), stats_resolution=get_pool_cavgs_res(), stats_population=get_pool_cavgs_pop(), rejection_params=get_rejection_params())
             call nice_communicator%update_cls2D(snapshot_id=get_last_snapshot_id(), snapshot_time=get_last_snapshot())
             call nice_communicator%view_cls2D%res_histogram%zero()
-            res_hist = get_pool_cavgs_res()
-            do i = 1, size(res_hist)
-                call nice_communicator%view_cls2D%res_histogram%update(res_hist(i))
+            do i = 1, get_pool_n_classes()
+                call nice_communicator%view_cls2D%res_histogram%update(get_pool_cavgs_res_at(i))
             enddo
-            if(allocated(res_hist)) deallocate(res_hist)
-            nice_communicator%view_cls2D%cutoff_res = get_lpthres()
+            nice_communicator%view_cls2D%cutoff_res = params%lpthres
             nice_communicator%view_cls2D%cutoff_type = get_lpthres_type()
             ! project snapshot
             if(get_pool_iter() .gt. 0 .and. trim(params%snapshot) .ne. "") then

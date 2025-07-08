@@ -87,7 +87,7 @@ type :: oris
     procedure          :: get_nevenodd
     procedure          :: get_neven
     procedure          :: get_nodd
-    procedure          :: print_
+    procedure          :: print
     procedure          :: print_matrices
     procedure          :: select_particles_set
     procedure          :: sample4rec
@@ -1278,11 +1278,11 @@ contains
         get_nevenodd = self%get_neven() + self%get_nodd()
     end function get_nevenodd
 
-    subroutine print_( self, i )
+    subroutine print( self, i )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
         call self%o(i)%print_ori()
-    end subroutine print_
+    end subroutine print
 
     subroutine print_matrices( self )
         class(oris), intent(inout) :: self
@@ -4204,12 +4204,12 @@ contains
             call os%rnd_oris(5.)
             write(logfhandle,*) '********'
             do i=1,100
-                call os%print_(i)
+                call os%print(i)
             end do
             call os2%rnd_oris(5.)
             write(logfhandle,*) '********'
             do i=1,100
-                call os2%print_(i)
+                call os2%print(i)
             end do
         endif
         write(logfhandle,'(a)') '**info(simple_oris_unit_test, part2): testing assignment'
@@ -4267,7 +4267,7 @@ contains
         order = os%order()
         if( doprint )then
             do i=1,100
-                call os%print_(order(i))
+                call os%print(order(i))
             end do
             write(logfhandle,*) 'median:', os%median('lp')
         endif

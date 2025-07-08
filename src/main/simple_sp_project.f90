@@ -2528,7 +2528,7 @@ contains
         if( ptcl_field%isthere(iptcl, 'dfx') )then
             ctfvars%dfx = ptcl_field%get_dfx(iptcl)
         else
-            call ptcl_field%print_(iptcl)
+            call ptcl_field%print(iptcl)
             THROW_HARD('dfx (defocus in x) lacking in ptcl_field; get_ctfparams')
         endif
         ! defocus in y
@@ -2546,7 +2546,7 @@ contains
             if( dfy_was_there )then
                 print *, 'iptcl: ', iptcl
                 print *, 'oritype in get_ctfparams ', trim(oritype)
-                call ptcl_field%print_(iptcl)
+                call ptcl_field%print(iptcl)
                 THROW_HARD('astigmatic CTF model requires angast (angle of astigmatism) lacking in os_stk field; get_ctfparams')
             else
                 ctfvars%angast = 0.
@@ -3350,7 +3350,7 @@ contains
                 top    = self%os_stk%get_top(istk)
                 nptcls = self%os_stk%get_int(istk,'nptcls')
                 if(top-fromp+1 /= nptcls)then
-                    call self%os_stk%print_(istk)
+                    call self%os_stk%print(istk)
                     THROW_HARD('Incorrect # number of particles in stack '//int2str(istk)//'; report_state2stk')
                 endif
                 if( states(istk) > 0 )then
