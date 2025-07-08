@@ -2040,7 +2040,7 @@ contains
         endif
         write(logfhandle,'(A)')'>>> SYMMETRY OPERATORS EULER ANGLES:'
         do isym=1, se%get_nsym()
-            call se%e_sym%print_(isym)
+            call se%e_sym%print(isym)
         enddo
         ! cleanup
         call se%kill

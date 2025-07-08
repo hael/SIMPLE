@@ -389,7 +389,7 @@ contains
             else
                 if(file_exists(GUISTATS_FILE)) call del_file(GUISTATS_FILE)
                 do i = 1, self%stats%get_noris()
-                    call self%stats%print_(i)
+                    call self%stats%print(i)
                 enddo
                 call self%stats%write(GUISTATS_FILE)
             end if
