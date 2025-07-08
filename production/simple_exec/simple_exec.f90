@@ -72,7 +72,7 @@ type(select_clusters_commander)             :: xsel_clusts
 type(match_cavgs_commander)                 :: xmatch_cavgs
 type(score_ptcls_commander)                 :: xscore_ptcls
 type(write_classes_commander)               :: xwrite_classes
-type(consolidate_chunks_cavgs_commander)    :: xconsolidate_chunks_cavgs
+type(consolidate_chunks_commander)          :: xconsolidate_chunks
 
 ! AB INITIO 3D RECONSTRUCTION WORKFLOW
 type(estimate_lpstages_commander)           :: xestimate_lpstages
@@ -273,8 +273,8 @@ select case(trim(prg))
         call xscore_ptcls%execute(cline)
     case( 'write_classes' )
         call xwrite_classes%execute(cline)
-    case('consolidate_chunks_cavgs')
-        call xconsolidate_chunks_cavgs%execute(cline)
+    case('consolidate_chunks')
+        call xconsolidate_chunks%execute(cline)
 
     ! AB INITIO 3D RECONSTRUCTION WORKFLOW
     case('estimate_lpstages')
@@ -470,7 +470,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('fad13f8a')
+call simple_print_git_version('c1d54add')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
