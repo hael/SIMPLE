@@ -100,7 +100,6 @@ logical                          :: l_no_chunks                       ! for not 
 type(stream_chunk),        allocatable :: chunks(:), converged_chunks(:)
 type(cmdline)                          :: cline_cluster2D_chunk             ! master chunk 2D analysis command line
 type(scaled_dims)                      :: chunk_dims                        ! crop dimensions used for chunks
-character(len=LONGSTRLEN), allocatable :: complete_chunks(:)                ! List of completed chunks
 integer                                :: glob_chunk_id                     ! ID book-keeping
 ! Book-keeping
 class(cmdline),          pointer :: master_cline
@@ -2771,16 +2770,14 @@ contains
         class(cmdline),                     intent(inout) :: cline
         character(len=STDLEN),       parameter :: DIR_PROJS   = trim(PATH_HERE)//'spprojs/'
         integer,                     parameter :: WAITTIME    = 5
-        type(consolidate_chunks_commander)     :: xconsolidate
         type(projrecord),          allocatable :: micproj_records(:)
-        character(len=:),          allocatable :: alg
-        character(len=LONGSTRLEN), allocatable :: tmpstr(:)
-        type(parameters) :: params
-        type(sp_project) :: spproj_glob
-        type(cmdline)    :: cline_consolidate
-        integer          :: ichunk, nstks, nptcls, nptcls_tot, ntot_chunks, ic, j, nc, nj
-        integer          :: tot_nchunks_imported, nsplit
-        logical          :: all_chunks_submitted, all_chunks_imported, l_makecavgs
+        character(len=:),          allocatable :: alg, fname
+        type(parameters)  :: params
+        type(sp_project)  :: spproj_glob
+        type(chunks_list) :: chunkslist, setslist
+        integer           :: ichunk, nstks, nptcls, nptcls_tot, ntot_chunks, ic
+        integer           :: tot_nchunks_imported, nsplit, id, nc
+        logical           :: all_chunks_submitted, all_chunks_imported, l_makecavgs
         call cline%set('oritype',      'ptcl2D')
         call cline%set('wiener',       'full')
         call cline%set('kweight_chunk','default')
@@ -2791,16 +2788,16 @@ contains
         call cline%set('nthr2D',       cline%get_iarg('nthr'))
         call cline%set('remove_chunks','no')
         call cline%set('numlen',       5)
-        if( .not. cline%defined('mkdir')         ) call cline%set('mkdir',        'yes')
-        if( .not. cline%defined('center')        ) call cline%set('center',       'yes')
-        if( .not. cline%defined('masscen')       ) call cline%set('masscen',      'yes')
-        if( .not. cline%defined('walltime')      ) call cline%set('walltime',     29*60) ! 29 minutes
-        if( .not. cline%defined('objfun')        ) call cline%set('objfun',       'euclid')
-        if( .not. cline%defined('sigma_est')     ) call cline%set('sigma_est',    'global')
-        if( .not. cline%defined('reject_cls')    ) call cline%set('reject_cls',   'no')
-        if( .not. cline%defined('rank_cavgs')    ) call cline%set('rank_cavgs',   'yes')
-        if( .not. cline%defined('algorithm')     ) call cline%set('algorithm',    'cluster2D')
-        if( .not. cline%defined('refine')        ) call cline%set('refine',       'snhc_smpl')
+        if( .not. cline%defined('mkdir')         ) call cline%set('mkdir',      'yes')
+        if( .not. cline%defined('center')        ) call cline%set('center',     'yes')
+        if( .not. cline%defined('masscen')       ) call cline%set('masscen',    'yes')
+        if( .not. cline%defined('walltime')      ) call cline%set('walltime',   29*60) ! 29 minutes
+        if( .not. cline%defined('objfun')        ) call cline%set('objfun',     'euclid')
+        if( .not. cline%defined('sigma_est')     ) call cline%set('sigma_est',  'global')
+        if( .not. cline%defined('reject_cls')    ) call cline%set('reject_cls', 'no')
+        if( .not. cline%defined('rank_cavgs')    ) call cline%set('rank_cavgs', 'yes')
+        if( .not. cline%defined('algorithm')     ) call cline%set('algorithm',  'cluster2D')
+        if( .not. cline%defined('refine')        ) call cline%set('refine',     'snhc_smpl')
         ! parse
         call params%new(cline)
         ! exception handling
@@ -2906,23 +2903,12 @@ contains
                 tot_nchunks_imported = tot_nchunks_imported + nc
                 ! processed enough?
                 all_chunks_imported  = tot_nchunks_imported >= ntot_chunks
-                ! update global list of completed chunks
-                if( allocated(complete_chunks) )then
-                    nj = size(complete_chunks)
-                    call move_alloc(complete_chunks, tmpstr)
-                    allocate(complete_chunks(nj+nc))
-                    complete_chunks(1:nj) = tmpstr(:)
-                    deallocate(tmpstr)
-                    j = nj
-                else
-                    allocate(complete_chunks(nc))
-                    j = 0
-                endif
+                ! update global list
                 do ic = 1,nc
-                    ! global list
-                    j = j + 1
-                    complete_chunks(j) = trim(converged_chunks(ic)%get_projfile_fname())
-                    !cleanup
+                    fname = trim(converged_chunks(ic)%get_projfile_fname())
+                    id    = converged_chunks(ic)%get_id()
+                    call chunkslist%append(fname, id)
+                    ! cleanup
                     call converged_chunks(ic)%kill
                 enddo
                 deallocate(converged_chunks)
@@ -2934,14 +2920,14 @@ contains
             endif
             call sleep(WAITTIME)
         end do
-        ! consolidate
-        call cline_consolidate%set('prg',        'consolidate_chunks')
-        call cline_consolidate%set('dir_target', './')
-        call cline_consolidate%set('projfile',   params%projfile)
-        call cline_consolidate%set('mkdir',      'no')
-        call cline_consolidate%set('nchunksperset', params%nchunksperset)
-        call xconsolidate%execute_safe(cline_consolidate)
+        ! consolidate: merge chunks, write project(s) & splits into sets
+        ! spproj_glob is destroyed on output
+        call consolidate_chunks
+        ! ! Cluster & match classes & write final project
+        ! call cluster_and_match_sets
         ! cleanup
+        call chunkslist%kill_list
+        call setslist%kill_list
         call simple_rmdir(STDERROUT_DIR)
         call simple_rmdir(DIR_PROJS)
         call simple_rmdir(DIR_SNAPSHOT)
@@ -3142,6 +3128,72 @@ contains
             enddo
             call spproj%kill
         end subroutine generate_chunk_projects
+
+        subroutine consolidate_chunks
+            character(len=:), allocatable :: tmpl
+            integer                       :: i,j,k
+            ! combines all chunks
+            fname = get_fbody(basename(params%projfile), METADATA_EXT, separator=.false.)
+            call merge_chunks(chunkslist%projfiles(:), './', spproj_glob, projname_out=fname)
+            ! optionally consolidate chunks into sets
+            if( cline%defined('nchunksperset') )then
+                j = 0
+                do i = 1,chunkslist%n,params%nchunksperset
+                    j    = j + 1
+                    k    = min(i+params%nchunksperset-1,chunkslist%n)
+                    tmpl = 'set_'//int2str(j)
+                    call simple_mkdir(tmpl)
+                    call merge_chunks(chunkslist%projfiles(i:k), tmpl, spproj_glob, projname_out=tmpl)
+                    call setslist%append(tmpl//'/'//tmpl//METADATA_EXT, j)
+                    write(*,'(A,I4,A,I8,A)')'>>> GENERATED SET',j,' WITH',spproj_glob%get_nptcls(),' PARTICLES'
+                enddo
+            endif
+        end subroutine consolidate_chunks
+
+        subroutine cluster_and_match_sets
+            type(cmdline)                 :: cline_cluster_cavgs, cline_match_cavgs
+            character(len=:), allocatable :: path
+            character(len=XLONGSTRLEN)    :: cwd
+            if( setslist%n == 0 )return
+            ! first set is for clustercavgs
+            cline_cluster_cavgs = cline
+            call cline_cluster_cavgs%set('mkdir',   'no')
+            call cline_cluster_cavgs%set('prg',     'cluster_cavgs')
+            call cline_cluster_cavgs%set('projfile', setslist%projfiles(1))
+            call cline_cluster_cavgs%delete('nparts')
+            call cline_cluster_cavgs%delete('nparts_chunk')
+            path = stemname(setslist%projfiles(1))
+            call chdir(path)
+            call simple_getcwd(cwd)
+            cwd_glob = trim(cwd)
+            ! execute cluster_cavgs here
+            call chdir('..')
+            call simple_getcwd(cwd_glob)
+            if( setslist%n ==1 )return
+            ! run match_cavgs on all other with setslist%projfiles(1) as reference
+            cline_match_cavgs = cline
+            call cline_match_cavgs%set('mkdir',          'no')
+            call cline_match_cavgs%set('prg',            'cluster_cavgs')
+            call cline_match_cavgs%set('projfile_target',setslist%projfiles(1))
+            call cline_match_cavgs%delete('nparts')
+            call cline_match_cavgs%delete('nparts_chunk')
+            do ic = 2,setslist%n
+                call cline_match_cavgs%set('projfile', setslist%projfiles(ic))
+                path = stemname(setslist%projfiles(ic))
+                call chdir(path)
+                call simple_getcwd(cwd)
+                cwd_glob = trim(cwd)
+                ! execute match_cavgs here
+                call chdir('..')
+                call simple_getcwd(cwd_glob)
+            enddo
+            ! need to re-consolidate projects into final project
+            fname = get_fbody(basename(params%projfile), METADATA_EXT, separator=.false.)
+            call merge_chunks(setslist%projfiles(:), './', spproj_glob, projname_out=fname)
+            ! cleanup
+            call cline_cluster_cavgs%kill
+            call cline_match_cavgs%kill
+        end subroutine cluster_and_match_sets
 
     end subroutine exec_cluster2D_subsets
 

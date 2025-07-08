@@ -78,6 +78,7 @@ type stream_chunk
     procedure, private :: assign
     generic            :: assignment(=) => assign
     procedure          :: generate
+    procedure          :: get_id
     procedure          :: get_projfile_fname
     procedure          :: calc_sigma2
     procedure          :: analyze2D
@@ -196,6 +197,11 @@ contains
         enddo
         call debug_print('end chunk%generate_2 '//int2str(self%id))
     end subroutine generate
+
+    integer function get_id( self )
+        class(stream_chunk), intent(in) :: self
+        get_id = self%id
+    end function get_id
 
     function get_projfile_fname( self )result( fname )
         class(stream_chunk), intent(in) :: self
@@ -631,8 +637,10 @@ contains
         character(len=LONGSTRLEN), allocatable :: tmpstr(:)
         integer,                   allocatable :: tmpint(:)
         if( self%n == 0 )then
-            allocate(self%projfiles(1),source=[trim(fname)])
-            allocate(self%ids(1),source=[id])
+            allocate(self%projfiles(1))
+            self%projfiles(1) = trim(fname)
+            allocate(self%ids(1))
+            self%ids(1) = id
             self%n = 1
         else
             call move_alloc(self%projfiles, tmpstr)
