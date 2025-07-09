@@ -3203,7 +3203,7 @@ contains
         ! <empty>
         ! parameter input/output
         call import_boxes%set_input('parm_ios', 1, 'boxtab', 'file', 'List of box files', &
-            'List of per-micrograph box files (*.box) to import', 'e.g. boxes.txt', .true., '')
+            'List of per-micrograph box files (*.box) to import', 'e.g. boxes.txt', .false., '')
         ! alternative inputs
         ! <empty>
         ! search controls

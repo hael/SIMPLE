@@ -7,6 +7,7 @@ use simple_starproject,    only: starproject
 use simple_binoris_io,     only: binread_nlines, binread_oritab
 use simple_parameters,     only: parameters, params_glob
 use simple_jiffys,         only: simple_end
+use simple_nice
 implicit none
 
 public :: import_starproject_commander
@@ -173,43 +174,64 @@ contains
         call simple_end('**** IMPORT_STARPROJECT NORMAL STOP ****')
     end subroutine exec_import_starproject
 
+    ! subroutine exec_export_starproject( self, cline )
+    !     class(export_starproject_commander), intent(inout) :: self
+    !     class(cmdline),                      intent(inout) :: cline
+    !     type(starproject) :: starproj
+    !     type(parameters)  :: params
+    !     type(sp_project)  :: spproj
+    !     !show output. Defaults to false for streaming
+    !     call starproj%set_verbose
+    !     if(.not. cline%defined("mkdir")) then
+    !         call cline%set('mkdir', 'yes')
+    !     end if
+    !     if(.not. cline%defined("beamtilt")) then
+    !         call cline%set('beamtilt', 'yes')
+    !     end if
+    !     call params%new(cline)
+    !     call spproj%read(params%projfile)
+    !     if (spproj%os_optics%get_noris() == 0) then
+    !         write(logfhandle,*) ''
+    !         write(logfhandle,*) char(9), "no optics groups are set in the project file. Auto assigning optics groups. You may wish to run assign_optics_groups prior to export_starproject"
+    !         write(logfhandle,*) ''
+    !         if(cline%get_rarg("tilt_thres") == 0) then
+    !             call cline%set("tilt_thres", 0.05)
+    !         end if
+    !         call starproj%assign_optics(cline, spproj)
+    !         call spproj%write(basename(params%projfile))
+    !     end if
+    !     if (spproj%os_mic%get_noris() > 0) then
+    !         call starproj%export_mics(spproj)
+    !     end if
+    !     if (spproj%os_cls2D%get_noris() > 0) then
+    !         call starproj%export_cls2D(spproj)
+    !     end if
+    !     if (spproj%os_ptcl2D%get_noris() > 0) then
+    !         call starproj%export_ptcls2D(spproj)
+    !     end if
+    !     call spproj%kill
+    !     call starproj%kill
+    !     call simple_end('**** EXPORT_STARPROJECT NORMAL STOP ****')
+    ! end subroutine exec_export_starproject
+
     subroutine exec_export_starproject( self, cline )
         class(export_starproject_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
-        type(starproject) :: starproj
-        type(parameters)  :: params
-        type(sp_project)  :: spproj
-        !show output. Defaults to false for streaming
-        call starproj%set_verbose
+        type(simple_nice_communicator) :: nice_communicator
+        type(parameters)               :: params
+        type(sp_project)               :: spproj
         if(.not. cline%defined("mkdir")) then
             call cline%set('mkdir', 'yes')
         end if
-        if(.not. cline%defined("beamtilt")) then
-            call cline%set('beamtilt', 'yes')
-        end if
         call params%new(cline)
+        ! nice communicator init
+        call nice_communicator%init(params%niceprocid, params%niceserver)
+        call nice_communicator%cycle()
         call spproj%read(params%projfile)
-        if (spproj%os_optics%get_noris() == 0) then
-            write(logfhandle,*) ''
-            write(logfhandle,*) char(9), "no optics groups are set in the project file. Auto assigning optics groups. You may wish to run assign_optics_groups prior to export_starproject"
-            write(logfhandle,*) ''
-            if(cline%get_rarg("tilt_thres") == 0) then
-                call cline%set("tilt_thres", 0.05)
-            end if
-            call starproj%assign_optics(cline, spproj)
-            call spproj%write(basename(params%projfile))
-        end if
-        if (spproj%os_mic%get_noris() > 0) then
-            call starproj%export_mics(spproj)
-        end if
-        if (spproj%os_cls2D%get_noris() > 0) then
-            call starproj%export_cls2D(spproj)
-        end if
-        if (spproj%os_ptcl2D%get_noris() > 0) then
-            call starproj%export_ptcls2D(spproj)
-        end if
+        call spproj%write_mics_star()
+        call spproj%write_ptcl2D_star()
         call spproj%kill
-        call starproj%kill
+        call nice_communicator%terminate()
         call simple_end('**** EXPORT_STARPROJECT NORMAL STOP ****')
     end subroutine exec_export_starproject
 

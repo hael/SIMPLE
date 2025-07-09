@@ -18,6 +18,7 @@ use simple_commander_cluster2D
 use simple_nanoparticle
 use simple_qsys_funs
 use simple_binoris_io
+use simple_nice
 implicit none
 
 public :: tseries_import_commander
@@ -629,6 +630,7 @@ contains
         type(estimate_diam_commander)  :: xest_diam
         type(simulate_atoms_commander) :: xsim_atms
         ! other variables
+        type(simple_nice_communicator) :: nice_communicator
         type(parameters)               :: params
         type(sp_project)               :: spproj
         type(cmdline)                  :: cline_est_diam, cline_sim_atms, cline_copy
@@ -641,6 +643,9 @@ contains
         if( .not. cline%defined('objfun')  ) call cline%set('objfun', 'cc') ! best objfun
         if( .not. cline%defined('ml_reg')  ) call cline%set('ml_reg', 'no') ! ml_reg=yes -> too few atoms 
         call params%new(cline)
+        ! nice communicator init
+        call nice_communicator%init(params%niceprocid, params%niceserver)
+        call nice_communicator%cycle()
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         cline_copy = cline
@@ -682,6 +687,7 @@ contains
         call cline%set('center', 'no')
         call xcluster2D%execute(cline)
         ! end gracefully
+        call nice_communicator%terminate()
         call simple_end('**** SIMPLE_ANALYSIS2D_NANO NORMAL STOP ****')
     end subroutine exec_analysis2D_nano
 

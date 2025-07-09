@@ -8,6 +8,7 @@ use simple_commander_base, only: commander_base
 use simple_image,          only: image
 use simple_binimage,       only: binimage
 use simple_stack_io,       only: stack_io
+use simple_nice
 implicit none
 
 public :: binarize_commander
@@ -545,18 +546,24 @@ contains
         use simple_image,      only: image
         class(ppca_denoise_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        integer,     parameter   :: MAXPCAITS = 15
-        class(pca),  pointer     :: pca_ptr  => null()
-        type(image), allocatable :: imgs(:)
-        real,        allocatable :: avg(:), gen(:), pcavecs(:,:), tmpvec(:)
-        type(parameters)  :: params
-        type(builder)     :: build
-        integer           :: npix, iptcl, j
-        logical           :: l_transp_pca
+        integer,           parameter   :: MAXPCAITS = 15
+        class(pca),        pointer     :: pca_ptr  => null()
+        type(image),       allocatable :: imgs(:)
+        real,              allocatable :: avg(:), gen(:), pcavecs(:,:), tmpvec(:)
+        type(simple_nice_communicator) :: nice_communicator
+        type(parameters)               :: params
+        type(builder)                  :: build
+        integer                        :: npix, iptcl, j
+        logical                        :: l_transp_pca
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
         if( .not. cline%defined('outstk') ) call cline%set('outstk', 'ppca_denoised'//trim(STK_EXT))
+        ! doesn't work if projfile given - may need to mod in future
+        if(cline%defined('projfile')) call cline%delete('projfile')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         if( .not.file_exists(params%stk) ) THROW_HARD('cannot find input stack (stk)')
+        ! nice communicator init
+        call nice_communicator%init(params%niceprocid, params%niceserver)
+        call nice_communicator%cycle()
         allocate(imgs(params%nptcls))
         do iptcl = 1, params%nptcls
             call imgs(iptcl)%new([params%box,params%box,1], params%smpd)
@@ -604,6 +611,7 @@ contains
         deallocate(imgs)
         call build%kill_general_tbox
         ! end gracefully
+        call nice_communicator%terminate()
         call simple_end('**** SIMPLE_PPCA_DENOISE NORMAL STOP ****')
     end subroutine exec_ppca_denoise
 
