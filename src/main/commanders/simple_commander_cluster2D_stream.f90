@@ -40,6 +40,8 @@ public :: get_last_snapshot, get_last_snapshot_id, get_rejection_params, get_sna
 ! Chunks
 public :: update_chunks, analyze2D_new_chunks, import_chunks_into_pool
 public :: flush_remaining_particles, all_chunks_available
+! New implementation
+public :: memoize_chunks
 ! Abinitio3D
 public :: generate_snapshot_for_abinitio
 ! Utilities
@@ -2440,6 +2442,23 @@ contains
         call debug_print('end import_chunks_into_pool')
     end subroutine import_chunks_into_pool
 
+    ! Chunks Book-keeping
+    subroutine memoize_chunks( list, nchunks_imported )
+        class(projs_list), intent(inout) :: list
+        integer,           intent(out)   :: nchunks_imported
+        character(len=:), allocatable :: fname
+        integer :: i, id, nchunks2import
+        nchunks_imported = 0
+        if( .not.allocated(converged_chunks) ) return
+        nchunks2import = size(converged_chunks)
+        do i = 1,nchunks2import
+            fname = trim(converged_chunks(i)%get_projfile_fname())
+            id    = converged_chunks(i)%get_id()
+            call list%append(fname, id, .true.)
+        enddo
+        nchunks_imported = nchunks2import
+    end subroutine memoize_chunks
+
     !>  Transfers references & partial arrays from a chunk to the pool
     subroutine transfer_cavg( refs_in, dir, indin, refs_out, indout )
         character(len=*),  intent(in) :: refs_in, dir, refs_out
@@ -2772,12 +2791,12 @@ contains
         integer,                     parameter :: WAITTIME    = 5
         type(projrecord),          allocatable :: micproj_records(:)
         character(len=:),          allocatable :: alg, fname
-        type(parameters)  :: params
-        type(sp_project)  :: spproj_glob
-        type(chunks_list) :: chunkslist, setslist
-        integer           :: ichunk, nstks, nptcls, nptcls_tot, ntot_chunks, ic
-        integer           :: tot_nchunks_imported, nsplit, id, nc
-        logical           :: all_chunks_submitted, all_chunks_imported, l_makecavgs
+        type(parameters) :: params
+        type(sp_project) :: spproj_glob
+        type(projs_list) :: chunkslist, setslist
+        integer          :: ichunk, nstks, nptcls, nptcls_tot, ntot_chunks, ic
+        integer          :: tot_nchunks_imported, nsplit, id, nc
+        logical          :: all_chunks_submitted, all_chunks_imported, l_makecavgs
         call cline%set('oritype',      'ptcl2D')
         call cline%set('wiener',       'full')
         call cline%set('kweight_chunk','default')
@@ -2798,6 +2817,7 @@ contains
         if( .not. cline%defined('rank_cavgs')    ) call cline%set('rank_cavgs', 'yes')
         if( .not. cline%defined('algorithm')     ) call cline%set('algorithm',  'cluster2D')
         if( .not. cline%defined('refine')        ) call cline%set('refine',     'snhc_smpl')
+        if( .not. cline%defined('cluster')       ) call cline%set('cluster',    'yes')
         ! parse
         call params%new(cline)
         ! exception handling
@@ -2907,7 +2927,7 @@ contains
                 do ic = 1,nc
                     fname = trim(converged_chunks(ic)%get_projfile_fname())
                     id    = converged_chunks(ic)%get_id()
-                    call chunkslist%append(fname, id)
+                    call chunkslist%append(fname, id, .true.)
                     ! cleanup
                     call converged_chunks(ic)%kill
                 enddo
@@ -2923,9 +2943,11 @@ contains
         ! consolidate: merge chunks, write project(s) & splits into sets
         ! spproj_glob is destroyed on output
         call consolidate_chunks
-        ! ! Cluster & match classes & write final project
-        ! call cluster_and_match_sets
+        ! Cluster & match classes & write final project
+        if( trim(params%cluster).eq.'yes' ) call cluster_and_match_sets
         ! cleanup
+        call kill_projrecords(micproj_records)
+        call spproj_glob%kill
         call chunkslist%kill_list
         call setslist%kill_list
         call simple_rmdir(STDERROUT_DIR)
@@ -3144,52 +3166,67 @@ contains
                     tmpl = 'set_'//int2str(j)
                     call simple_mkdir(tmpl)
                     call merge_chunks(chunkslist%projfiles(i:k), tmpl, spproj_glob, projname_out=tmpl)
-                    call setslist%append(tmpl//'/'//tmpl//METADATA_EXT, j)
+                    call setslist%append(tmpl//'/'//tmpl//METADATA_EXT, j, .false.)
                     write(*,'(A,I4,A,I8,A)')'>>> GENERATED SET',j,' WITH',spproj_glob%get_nptcls(),' PARTICLES'
                 enddo
             endif
         end subroutine consolidate_chunks
 
         subroutine cluster_and_match_sets
+            type(cluster_cavgs_commander) :: xcluster_cavgs
+            type(match_cavgs_commander)   :: xmatch_cavgs
             type(cmdline)                 :: cline_cluster_cavgs, cline_match_cavgs
-            character(len=:), allocatable :: path
+            character(len=:), allocatable :: path, projfile_ref
             character(len=XLONGSTRLEN)    :: cwd
             if( setslist%n == 0 )return
             ! first set is for clustercavgs
             cline_cluster_cavgs = cline
             call cline_cluster_cavgs%set('mkdir',   'no')
             call cline_cluster_cavgs%set('prg',     'cluster_cavgs')
-            call cline_cluster_cavgs%set('projfile', setslist%projfiles(1))
+            call cline_cluster_cavgs%set('projfile', basename(setslist%projfiles(1)))
             call cline_cluster_cavgs%delete('nparts')
             call cline_cluster_cavgs%delete('nparts_chunk')
             path = stemname(setslist%projfiles(1))
             call chdir(path)
             call simple_getcwd(cwd)
             cwd_glob = trim(cwd)
-            ! execute cluster_cavgs here
+            call cline_cluster_cavgs%printline
+            call xcluster_cavgs%execute_safe(cline_cluster_cavgs)
             call chdir('..')
             call simple_getcwd(cwd_glob)
-            if( setslist%n ==1 )return
-            ! run match_cavgs on all other with setslist%projfiles(1) as reference
-            cline_match_cavgs = cline
-            call cline_match_cavgs%set('mkdir',          'no')
-            call cline_match_cavgs%set('prg',            'cluster_cavgs')
-            call cline_match_cavgs%set('projfile_target',setslist%projfiles(1))
-            call cline_match_cavgs%delete('nparts')
-            call cline_match_cavgs%delete('nparts_chunk')
-            do ic = 2,setslist%n
-                call cline_match_cavgs%set('projfile', setslist%projfiles(ic))
-                path = stemname(setslist%projfiles(ic))
-                call chdir(path)
-                call simple_getcwd(cwd)
-                cwd_glob = trim(cwd)
-                ! execute match_cavgs here
-                call chdir('..')
-                call simple_getcwd(cwd_glob)
-            enddo
-            ! need to re-consolidate projects into final project
-            fname = get_fbody(basename(params%projfile), METADATA_EXT, separator=.false.)
-            call merge_chunks(setslist%projfiles(:), './', spproj_glob, projname_out=fname)
+            if( setslist%n == 1 )then
+                ! update & write final project
+                fname = get_fbody(basename(params%projfile), METADATA_EXT, separator=.false.)
+                call merge_chunks(setslist%projfiles(1:1), './', spproj_glob, projname_out=fname)
+                setslist%processed(1) = .true.
+            else
+                ! run match_cavgs on all other with setslist%projfiles(1) as reference
+                projfile_ref      = simple_abspath(setslist%projfiles(1) ,"in cluster_and_match_sets")
+                cline_match_cavgs = cline
+                call cline_match_cavgs%set('mkdir',    'no')
+                call cline_match_cavgs%set('prg',      'cluster_cavgs')
+                call cline_match_cavgs%set('projfile', projfile_ref)
+                call cline_match_cavgs%delete('nparts')
+                call cline_match_cavgs%delete('nparts_chunk')
+                do ic = 2,setslist%n
+                    call cline_match_cavgs%set('projfile_target', basename(setslist%projfiles(ic)))
+                    path = stemname(setslist%projfiles(ic))
+                    call chdir(path)
+                    call simple_getcwd(cwd)
+                    cwd_glob = trim(cwd)
+                    call xmatch_cavgs%execute_safe(cline_match_cavgs)
+                    call chdir('..')
+                    call simple_getcwd(cwd_glob)
+                    setslist%processed(ic) = .true.
+                enddo
+                ! need to re-consolidate projects into final project
+                fname = get_fbody(basename(params%projfile), METADATA_EXT, separator=.false.)
+                call merge_chunks(setslist%projfiles(:), './', spproj_glob, projname_out=fname)
+                ! final re-clustering
+                call cline_cluster_cavgs%set('projfile',        params%projfile)
+                call cline_cluster_cavgs%set('have_clustering', 'yes')
+                call xcluster_cavgs%execute_safe(cline_cluster_cavgs)
+            endif
             ! cleanup
             call cline_cluster_cavgs%kill
             call cline_match_cavgs%kill

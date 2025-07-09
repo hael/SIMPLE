@@ -35,7 +35,8 @@ type :: parameters
     character(len=3)          :: center_pdb='no'      !< move PDB atomic center to the center of the box(yes|no){no}
     character(len=3)          :: chunk='no'           !< indicates whether we are within a chunk(yes|no){no}
     character(len=3)          :: classtats='no'       !< calculate class population statistics(yes|no){no}
-    character(len=3)          :: clear='no'           !< clear exising processing upon start (stream) 
+    character(len=3)          :: clear='no'           !< clear exising processing upon start (stream)
+    character(len=3)          :: cluster='no'         !< do perform clustering
     character(len=3)          :: combine_eo='no'      !< Whether combined e/o volumes have been used for alignment(yes|no){no}
     character(len=3)          :: continue='no'        !< continue previous refinement(yes|no){no}
     character(len=3)          :: crowded='yes'        !< wheter picking is done in crowded micrographs or not (yes|no){yes}
@@ -210,7 +211,6 @@ type :: parameters
     character(len=STDLEN)     :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
     character(len=4)          :: automatic='no'       !< automatic thres for edge detect (yes|no){no}
     character(len=5)          :: automsk='no'         !< automatic envelope masking (yes|tight|no){no}
-    character(len=STDLEN)     :: bin_cls='yes'        !< binary clustering applied(yes|no){yes}
     character(len=STDLEN)     :: boxtype='eman'
     character(len=STDLEN)     :: cls_init='ptcl'      !< Scheme to generate initial references for 2D analysis(ptcl|randcls|rand)
     character(len=STDLEN)     :: clustinds=''         !< comma-separated cluster indices
@@ -608,7 +608,6 @@ contains
         call check_carg('backgr_subtr',   self%backgr_subtr)
         call check_carg('balance',        self%balance)
         call check_carg('bin',            self%bin)
-        call check_carg('bin_cls',        self%bin_cls)
         call check_carg('boxtype',        self%boxtype)
         call check_carg('cavg_ini',       self%cavg_ini)
         call check_carg('cavg_ini_ext',   self%cavg_ini_ext)
@@ -618,6 +617,7 @@ contains
         call check_carg('chunk',          self%chunk)
         call check_carg('classtats',      self%classtats)
         call check_carg('clear',          self%clear)
+        call check_carg('cluster',        self%cluster)
         call check_carg('cls_init',       self%cls_init)
         call check_carg('clustinds',      self%clustinds)
         call check_carg('cn_type',        self%cn_type)

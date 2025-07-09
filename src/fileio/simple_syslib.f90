@@ -898,11 +898,11 @@ contains
     end subroutine simple_dump_mem_usage
 
     function simple_abspath(infile,errmsg,status,check_exists) result(absolute_name)
-        character(len=*),              intent(in)  :: infile
-        integer,          optional,    intent(out) :: status
-        character(len=*), optional,    intent(in)  :: errmsg
+        character(len=*),              intent(in)    :: infile
+        integer,          optional,    intent(out)   :: status
+        character(len=*), optional,    intent(in)    :: errmsg
+        logical,          optional,    intent(in)    :: check_exists
         character(len=:), allocatable :: absolute_name
-        logical,          optional,    intent(in)  :: check_exists
         type(c_ptr)                          :: cstring
         character(len=LINE_MAX_LEN), target  :: fstr
         character(kind=c_char,len=LONGSTRLEN):: infilename_c
@@ -913,6 +913,7 @@ contains
         if( present(check_exists) )check_exists_here = check_exists
         if( check_exists_here )then
             if( .not.file_exists(trim(infile)) )then
+                write(logfhandle,*) errmsg
                 write(logfhandle,*)' cwd: '//trim(CWD_GLOB)
                 THROW_ERROR('file: '//trim(infile)//' does not exist')
             endif
@@ -920,7 +921,7 @@ contains
         lengthin     = len_trim(infile)
         cstring      = c_loc(fstr)
         infilename_c = trim(infile)//achar(0)
-        status_here  = get_absolute_pathname(trim(adjustl(infilename_c)), lengthin, outfilename_c, lengthout )
+        status_here  = get_absolute_pathname(trim(adjustl(infilename_c)), lengthin, outfilename_c, lengthout)
         call syslib_c2fortran_string(outfilename_c)
         if(allocated(absolute_name)) deallocate(absolute_name)
         if( lengthout > 1)then
